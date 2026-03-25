@@ -4020,13 +4020,13 @@
 
         // Mensaje personalizado según la etapa actual de la OT
         const mensajes = {
-            cotizacion: `Hola ${nombre} 👋, hemos registrado tu cotización N°${numOT} en Cortinas Rolzzo. En breve te contactamos con los detalles. ¡Gracias por elegirnos!`,
-            esperando:  `Hola ${nombre}, tu cotización N°${numOT} está lista y esperamos tu confirmación para continuar. Cualquier consulta estamos a tu disposición. — Cortinas Rolzzo`,
-            terreno:    `Hola ${nombre}, hemos coordinado la visita de terreno para tu pedido N°${numOT}. Nuestro equipo se pondrá en contacto contigo para confirmar la fecha y hora. — Cortinas Rolzzo`,
-            aprobada:   `Hola ${nombre} ✅, tu pedido N°${numOT} ha sido aprobado y ya está ingresado a nuestro sistema de producción. Te avisamos cuando esté listo. — Cortinas Rolzzo`,
-            produccion: `Hola ${nombre} 🔧, tu pedido N°${numOT} está en fabricación. Estamos trabajando en él y te notificaremos cuando esté terminado. — Cortinas Rolzzo`,
-            lista:      `Hola ${nombre} 🎉, ¡buenas noticias! Tu pedido N°${numOT} está listo. Nos pondremos en contacto para coordinar la instalación. — Cortinas Rolzzo`,
-            instalada:  `Hola ${nombre}, tu pedido N°${numOT} ha sido instalado correctamente. Esperamos que estés muy contento/a con el resultado. ¡Gracias por confiar en Cortinas Rolzzo! 🏠`
+            cotizacion: `Hola ${nombre}, hemos registrado tu cotizacion N°${numOT} en Cortinas Rolzzo. En breve te contactamos con los detalles. Gracias por elegirnos!`,
+            esperando:  `Hola ${nombre}, tu cotizacion N°${numOT} esta lista y esperamos tu confirmacion para continuar. Cualquier consulta estamos a tu disposicion. - Cortinas Rolzzo`,
+            terreno:    `Hola ${nombre}, hemos coordinado la visita de terreno para tu pedido N°${numOT}. Nuestro equipo se pondra en contacto contigo para confirmar la fecha y hora. - Cortinas Rolzzo`,
+            aprobada:   `Hola ${nombre}, tu pedido N°${numOT} ha sido aprobado y ya esta ingresado a nuestro sistema de produccion. Te avisamos cuando este listo. - Cortinas Rolzzo`,
+            produccion: `Hola ${nombre}, tu pedido N°${numOT} esta en fabricacion. Estamos trabajando en el y te notificaremos cuando este terminado. - Cortinas Rolzzo`,
+            lista:      `Hola ${nombre}, buenas noticias! Tu pedido N°${numOT} esta listo. Nos pondremos en contacto para coordinar la instalacion. - Cortinas Rolzzo`,
+            instalada:  `Hola ${nombre}, tu pedido N°${numOT} ha sido instalado correctamente. Esperamos que estes muy contento/a con el resultado. Gracias por confiar en Cortinas Rolzzo!`
         };
 
         const mensaje = mensajes[estado] || `Hola ${nombre}, hay una actualización en tu pedido N°${numOT}. — Cortinas Rolzzo`;
