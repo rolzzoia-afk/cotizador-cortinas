@@ -4008,6 +4008,48 @@
         actualizarIndicadorOTActiva();
     }
 
+    // ── WHATSAPP ────────────────────────────────────────────────────────────
+    function enviarWhatsApp(otId) {
+        const ot = storeOTs.find(o => o.id === otId);
+        if (!ot) return;
+
+        const dg    = ot.datosGenerales || {};
+        const nombre = dg.cliente || 'cliente';
+        const numOT  = dg.ot     || '—';
+        const estado = ot.estado;
+
+        // Mensaje personalizado según la etapa actual de la OT
+        const mensajes = {
+            cotizacion: `Hola ${nombre} 👋, hemos registrado tu cotización N°${numOT} en Cortinas Rolzzo. En breve te contactamos con los detalles. ¡Gracias por elegirnos!`,
+            esperando:  `Hola ${nombre}, tu cotización N°${numOT} está lista y esperamos tu confirmación para continuar. Cualquier consulta estamos a tu disposición. — Cortinas Rolzzo`,
+            terreno:    `Hola ${nombre}, hemos coordinado la visita de terreno para tu pedido N°${numOT}. Nuestro equipo se pondrá en contacto contigo para confirmar la fecha y hora. — Cortinas Rolzzo`,
+            aprobada:   `Hola ${nombre} ✅, tu pedido N°${numOT} ha sido aprobado y ya está ingresado a nuestro sistema de producción. Te avisamos cuando esté listo. — Cortinas Rolzzo`,
+            produccion: `Hola ${nombre} 🔧, tu pedido N°${numOT} está en fabricación. Estamos trabajando en él y te notificaremos cuando esté terminado. — Cortinas Rolzzo`,
+            lista:      `Hola ${nombre} 🎉, ¡buenas noticias! Tu pedido N°${numOT} está listo. Nos pondremos en contacto para coordinar la instalación. — Cortinas Rolzzo`,
+            instalada:  `Hola ${nombre}, tu pedido N°${numOT} ha sido instalado correctamente. Esperamos que estés muy contento/a con el resultado. ¡Gracias por confiar en Cortinas Rolzzo! 🏠`
+        };
+
+        const mensaje = mensajes[estado] || `Hola ${nombre}, hay una actualización en tu pedido N°${numOT}. — Cortinas Rolzzo`;
+
+        // Formatear teléfono para Chile (+56 9 XXXX XXXX → 569XXXXXXXX)
+        let telefono = (dg.telefono || '').replace(/\D/g, ''); // solo dígitos
+        if (telefono.startsWith('0')) telefono = telefono.slice(1);
+        if (telefono.startsWith('56')) {
+            // ya tiene código de país
+        } else if (telefono.startsWith('9') && telefono.length === 9) {
+            telefono = '56' + telefono;
+        } else if (telefono.length === 8) {
+            telefono = '569' + telefono;
+        }
+
+        const url = telefono.length >= 11
+            ? `https://wa.me/${telefono}?text=${encodeURIComponent(mensaje)}`
+            : `https://wa.me/?text=${encodeURIComponent(mensaje)}`;  // sin número: elige contacto
+
+        window.open(url, '_blank');
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     function moverOTEstado(id, nuevoEstado) {
         const ot = storeOTs.find(o => o.id === id);
         if (!ot) return;
@@ -4131,6 +4173,7 @@
                     if (prevEst)  btns += `<button class="btn btn-sm btn-outline-secondary" onclick="moverOTEstado(${ot.id},'${prevEst}')" title="Retroceder">◀</button>`;
                     if (nextEst)  btns += `<button class="btn btn-sm btn-premium-success" onclick="moverOTEstado(${ot.id},'${nextEst}')" title="Avanzar">▶</button>`;
                     btns += `<button class="btn btn-sm btn-outline-secondary" onclick="archivarOT(${ot.id})" title="Guardar como incompleta / archivar">📦</button>`;
+                    btns += `<button class="btn btn-sm" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#25d366;" onclick="enviarWhatsApp(${ot.id})" title="Notificar al cliente por WhatsApp">📲</button>`;
                     if (enEtapaInicial) {
                         btns += `<button class="btn btn-sm btn-outline-danger" onclick="eliminarOTDefinitivo(${ot.id})" title="Eliminar cotización">🗑</button>`;
                     }
