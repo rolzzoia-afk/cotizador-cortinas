@@ -609,6 +609,35 @@
             .ot-card-cliente { font-size: 0.78rem; }
         }
 
+        /* ── PLAN DE CORTE — COLMENA ───────────────────────────── */
+        .pc-seccion-titulo {
+            font-size: 0.7rem; font-weight: 700; letter-spacing: .07em;
+            text-transform: uppercase; color: var(--text-secondary);
+            display: flex; align-items: center; gap: 8px; margin: 20px 0 10px;
+        }
+        .pc-seccion-titulo::after { content:''; flex:1; height:1px; background:var(--border-glass); }
+        .pc-card { background:rgba(0,0,0,0.3); border:1px solid var(--border-glass); border-radius:12px; padding:14px 16px; margin-bottom:12px; }
+        .pc-card.desde-sob  { border-color:rgba(34,197,94,0.3); }
+        .pc-card.desde-rollo{ border-color:rgba(59,130,246,0.3); }
+        .pc-card.sin-stock  { border-color:rgba(240,68,56,0.3); }
+        .pc-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px; flex-wrap:wrap; gap:6px; }
+        .pc-cod  { font-size:1rem; font-weight:700; font-family:monospace; }
+        .pc-ubic { display:inline-flex; align-items:center; gap:5px; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:3px 10px; font-size:0.72rem; font-weight:700; color:#f59e0b; }
+        .pc-dims { font-size:0.75rem; color:var(--text-secondary); margin-top:2px; }
+        .pc-efic { font-size:0.75rem; font-weight:600; }
+        .pc-efic.alta  { color:#22c55e; } .pc-efic.media{ color:#f59e0b; } .pc-efic.baja{ color:#f87171; }
+        .pc-piezas-lista { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+        .pc-pieza-tag { background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.12); border-radius:5px; padding:3px 9px; font-size:0.68rem; white-space:nowrap; }
+        .pc-canvas-wrap { overflow-x:auto; background:rgba(0,0,0,0.2); border-radius:8px; padding:8px; margin-bottom:10px; }
+        .pc-canvas-wrap canvas { border-radius:4px; display:block; }
+        .pc-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+        .pc-resumen-bar { display:flex; gap:16px; flex-wrap:wrap; background:rgba(0,0,0,0.2); border-radius:8px; padding:10px 14px; margin-bottom:16px; }
+        .pc-resumen-item { display:flex; flex-direction:column; gap:2px; }
+        .pc-resumen-label { font-size:0.62rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-secondary); }
+        .pc-resumen-val   { font-size:1.1rem; font-weight:700; }
+        .pc-agregar-sob { background:rgba(34,197,94,0.08); border:1px dashed rgba(34,197,94,0.3); border-radius:10px; padding:12px 16px; margin-top:14px; }
+        .pc-agregar-sob h6 { font-size:0.72rem; color:#22c55e; font-weight:700; margin-bottom:10px; }
+
         /* ── EMPTY STATE ─────────────────────────────────────── */
         .kanban-empty-state {
             display: flex; flex-direction: column; align-items: center;
@@ -1173,6 +1202,23 @@
                                             <tbody id="f4-optimizador-tabla">
                                             </tbody>
                                         </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ══ PLAN DE CORTE DESDE COLMENA ══ -->
+                            <div class="glass-card mb-3" id="card-plan-corte" style="display:none;border-color:rgba(34,197,94,0.25);">
+                                <div class="section-header d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(34,197,94,0.03));">
+                                    <strong><i class="bi bi-scissors"></i> Plan de Corte — Colmena</strong>
+                                    <div id="pc-colmena-estado" style="font-size:0.72rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+                                        <span id="pc-colmena-dot" style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+                                        <span id="pc-colmena-txt">Cargando Colmena...</span>
+                                    </div>
+                                </div>
+                                <div class="p-3" id="pc-contenido">
+                                    <div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:0.8rem;">
+                                        <i class="bi bi-hourglass-split" style="font-size:1.5rem;display:block;margin-bottom:8px;opacity:0.4;"></i>
+                                        Presiona <strong>Cargar</strong> para generar el plan de corte.
                                     </div>
                                 </div>
                             </div>
@@ -2764,6 +2810,10 @@
         // Kanban: avanzar estado a "produccion" con sub-etapa inicial
         avanzarEstadoOT('produccion', 'Estructura');
 
+        // Mostrar y generar Plan de Corte desde Colmena
+        document.getElementById('card-plan-corte').style.display = 'block';
+        setTimeout(() => generarYRenderizarPlanCorte(), 200);
+
         // Clear all tables
         document.getElementById('f4-optimizador-tabla').innerHTML = '';
         document.getElementById('f4-tablaPanos').innerHTML = '';
@@ -3940,6 +3990,9 @@
             if (isNaN(activeOTId)) activeOTId = null;
         } catch(e) { activeOTId = null; }
 
+        // Iniciar carga de Colmena en paralelo
+        cargarColmena();
+
         // Escuchar en tiempo real la colección 'cortinas_ots'
         // Cada vez que cualquier usuario guarde o cambie una OT, todos los
         // dispositivos conectados reciben la actualización automáticamente
@@ -4436,6 +4489,430 @@
     function filtrarOTs(query) {
         otSearchQuery = (query || '').toLowerCase().trim();
         renderKanban();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // COLMENA — carga desde Firebase + Plan de Corte Inteligente
+    // ═══════════════════════════════════════════════════════════════════════
+
+    let storeColmena       = [];   // paños disponibles cargados desde Firebase
+    let colmenaLoaded      = false;
+    let planCorteActual    = null; // último plan generado
+
+    // ── Carga en tiempo real (solo disponibles) ──────────────────────────
+    function cargarColmena() {
+        db.collection('colmena_panos')
+          .where('disponible', '==', true)
+          .onSnapshot(snapshot => {
+              storeColmena = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
+              colmenaLoaded = true;
+              const dot = document.getElementById('pc-colmena-dot');
+              const txt = document.getElementById('pc-colmena-txt');
+              if (dot) { dot.style.background = '#22c55e'; }
+              if (txt) { txt.textContent = storeColmena.length + ' sobrantes disponibles'; }
+          }, () => {
+              const txt = document.getElementById('pc-colmena-txt');
+              if (txt) { txt.textContent = 'Sin conexión (usando caché)'; }
+          });
+    }
+
+    // ── MaxRects BSSF (Best Short Side Fit) ─────────────────────────────
+    function mxFit(item, F) {
+        let bs = Infinity, bF = null, bW = 0, bH = 0, bR = false;
+        for (const fr of F) {
+            if (item.w <= fr.w && item.h <= fr.h) {
+                const s = Math.min(fr.w - item.w, fr.h - item.h);
+                if (s < bs) { bs = s; bF = fr; bW = item.w; bH = item.h; bR = false; }
+            }
+            if (item.h <= fr.w && item.w <= fr.h) {
+                const s = Math.min(fr.w - item.h, fr.h - item.w);
+                if (s < bs) { bs = s; bF = fr; bW = item.h; bH = item.w; bR = true; }
+            }
+        }
+        if (!bF) return null;
+        return { ...item, px: bF.x, py: bF.y, pw: bW, ph: bH, rot: bR, failed: false };
+    }
+    function mxSplit(F, p) {
+        const out = [];
+        for (const fr of F) {
+            if (p.px >= fr.x+fr.w || p.px+p.pw <= fr.x || p.py >= fr.y+fr.h || p.py+p.ph <= fr.y) { out.push(fr); continue; }
+            if (p.px > fr.x)             out.push({ x:fr.x,      y:fr.y,      w:p.px-fr.x,              h:fr.h });
+            if (p.px+p.pw < fr.x+fr.w)  out.push({ x:p.px+p.pw, y:fr.y,      w:fr.x+fr.w-(p.px+p.pw),  h:fr.h });
+            if (p.py > fr.y)             out.push({ x:fr.x,      y:fr.y,      w:fr.w,                    h:p.py-fr.y });
+            if (p.py+p.ph < fr.y+fr.h)  out.push({ x:fr.x,      y:p.py+p.ph, w:fr.w,                    h:fr.y+fr.h-(p.py+p.ph) });
+        }
+        return out.filter((a,i) => !out.some((b,j) => j!==i && b.x<=a.x && b.y<=a.y && b.x+b.w>=a.x+a.w && b.y+b.h>=a.y+a.h));
+    }
+    function mxPack(items, uw, uh) {
+        let F = [{ x:0, y:0, w:uw, h:uh }];
+        const placed = [];
+        const sorted = [...items].sort((a,b) => (b.w*b.h)-(a.w*a.h));
+        for (const item of sorted) {
+            const r = mxFit(item, F);
+            if (r) { placed.push(r); F = mxSplit(F, r); }
+            else   placed.push({ ...item, px:-1, py:-1, pw:item.w, ph:item.h, rot:false, failed:true });
+        }
+        return placed;
+    }
+
+    // ── Algoritmo principal ──────────────────────────────────────────────
+    function generarYRenderizarPlanCorte() {
+        const contenido = document.getElementById('pc-contenido');
+        if (!contenido) return;
+
+        // Obtener ventanas de la OT activa
+        const ot = storeOTs.find(o => o.id === activeOTId);
+        const ventanas = (ot && ot.storeVentanas && ot.storeVentanas.length)
+            ? ot.storeVentanas
+            : storeVentanas;
+
+        if (!ventanas || ventanas.length === 0) {
+            contenido.innerHTML = '<div style="text-align:center;padding:20px;color:#f59e0b;font-size:0.8rem;"><i class="bi bi-exclamation-triangle" style="display:block;font-size:1.5rem;margin-bottom:6px;"></i>No hay ventanas medidas. Completa Fase 2 primero.</div>';
+            return;
+        }
+
+        // Construir lista de piezas (en cm)
+        const piezas = [];
+        const EXTRA_CM = 25; // 25 cm extra para roller
+        const MARGEN   = 1;  // 1 cm de margen por lado
+
+        ventanas.forEach(v => {
+            if (!v.panos || v.panos.length === 0) return;
+            const altoBase = Math.round(parseFloat(v.alto) * 100) + EXTRA_CM;
+            const isDuo    = (v.producto || '').toUpperCase().includes('DUO');
+            const altoCm   = isDuo ? altoBase * 2 : altoBase;
+
+            v.panos.forEach((p, pi) => {
+                const anchoCm = Math.round(parseFloat(p.ancho) * 100);
+                if (!anchoCm || !altoCm) return;
+                const label = v.ubicacion + (v.panos.length > 1 ? ` — Paño ${pi+1}` : '');
+                piezas.push({
+                    id:      `${v.id}_p${pi}`,
+                    nombre:  label,
+                    codInt:  (v.codInt || '').toUpperCase().trim(),
+                    w:       anchoCm,
+                    h:       altoCm
+                });
+            });
+        });
+
+        if (piezas.length === 0) {
+            contenido.innerHTML = '<div style="color:#f59e0b;font-size:0.8rem;padding:16px;">Las ventanas no tienen paños con medidas completas.</div>';
+            return;
+        }
+
+        // Agrupar por COD_INT
+        const porCod = {};
+        piezas.forEach(p => {
+            if (!porCod[p.codInt]) porCod[p.codInt] = [];
+            porCod[p.codInt].push(p);
+        });
+
+        const plan = { sobrantes: [], rollo: [], sinStock: [] };
+        const ROLL_W_UTIL = 300 - MARGEN * 2; // 298 cm útiles del rollo
+
+        Object.entries(porCod).forEach(([codInt, grupo]) => {
+            const disponibles = storeColmena
+                .filter(s => (s.cod || '').toUpperCase().trim() === codInt)
+                .sort((a,b) => (a.ancho*a.alto) - (b.ancho*b.alto)); // menor primero
+
+            const sinCubrir = [...grupo];
+            const sobUsados = [];
+
+            for (const sob of disponibles) {
+                if (!sinCubrir.length) break;
+                const uw = Math.max(0, sob.ancho - MARGEN * 2);
+                const uh = Math.max(0, sob.alto  - MARGEN * 2);
+                if (uw <= 0 || uh <= 0) continue;
+
+                const resultado = mxPack(sinCubrir.map(p => ({...p})), uw, uh);
+                const exitos    = resultado.filter(r => !r.failed);
+                if (!exitos.length) continue;
+
+                sobUsados.push({ sobrante: sob, placed: exitos, uw, uh });
+                const cubiertos = new Set(exitos.map(e => e.id));
+                sinCubrir.splice(0, sinCubrir.length, ...sinCubrir.filter(p => !cubiertos.has(p.id)));
+            }
+
+            if (sobUsados.length) plan.sobrantes.push(...sobUsados);
+
+            // Piezas que no caben en sobrantes → desde rollo
+            if (sinCubrir.length) {
+                // Buscar altura mínima para el paño de 300cm
+                const maxH = sinCubrir.reduce((s,p) => s + Math.max(p.w,p.h), 0) + 50;
+                const minH = Math.max(...sinCubrir.map(p => Math.min(p.w,p.h)));
+                let lo = minH, hi = maxH, bestPl = null, bestH = maxH;
+                for (let i = 0; i < 18; i++) {
+                    const mid = Math.floor((lo+hi)/2);
+                    const pl  = mxPack(sinCubrir.map(p=>({...p})), ROLL_W_UTIL, mid);
+                    if (pl.every(r => !r.failed)) {
+                        const usedH = pl.reduce((m,r) => Math.max(m, r.py+r.ph), 0);
+                        if (usedH < bestH) { bestH = usedH; bestPl = pl; }
+                        hi = mid;
+                    } else { lo = mid + 1; }
+                }
+                if (bestPl) {
+                    const altoCorte = bestH + MARGEN * 2;
+                    const efic = Math.round(bestPl.reduce((s,r) => s+r.pw*r.ph, 0) / (ROLL_W_UTIL * bestH) * 100);
+                    plan.rollo.push({ codInt, placed: bestPl, anchoUtil: ROLL_W_UTIL, altoUtil: bestH, anchoCorte: 300, altoCorte, efic });
+                } else {
+                    plan.sinStock.push({ codInt, piezas: sinCubrir });
+                }
+            }
+        });
+
+        planCorteActual = plan;
+        renderPlanCorte(plan, contenido);
+    }
+
+    // ── Paleta de colores para piezas en canvas ──────────────────────────
+    const PC_PALETTE = ['#4080ff','#20d164','#f5a623','#14d4c0','#a855f7','#f97316','#06b6d4','#ec4899','#84cc16','#fb923c'];
+
+    // ── Render del plan completo ─────────────────────────────────────────
+    function renderPlanCorte(plan, contenido) {
+        const totalPiezas  = [...plan.sobrantes, ...plan.rollo].reduce((s,g) => s + (g.placed||[]).filter(r=>!r.failed).length, 0)
+                           + plan.sinStock.reduce((s,g) => s + (g.piezas||[]).length, 0);
+        const desdeSob     = plan.sobrantes.reduce((s,g) => s + (g.placed||[]).filter(r=>!r.failed).length, 0);
+        const desdeRollo   = plan.rollo.reduce((s,g)    => s + (g.placed||[]).filter(r=>!r.failed).length, 0);
+        const sinStock     = plan.sinStock.reduce((s,g) => s + (g.piezas||[]).length, 0);
+
+        let html = `
+        <div class="pc-resumen-bar">
+            <div class="pc-resumen-item"><span class="pc-resumen-label">Total piezas</span><span class="pc-resumen-val" style="color:var(--text-primary)">${totalPiezas}</span></div>
+            <div class="pc-resumen-item"><span class="pc-resumen-label">Desde sobrante</span><span class="pc-resumen-val" style="color:#22c55e">${desdeSob}</span></div>
+            <div class="pc-resumen-item"><span class="pc-resumen-label">Desde rollo nuevo</span><span class="pc-resumen-val" style="color:#60a5fa">${desdeRollo}</span></div>
+            ${sinStock ? `<div class="pc-resumen-item"><span class="pc-resumen-label">Sin stock</span><span class="pc-resumen-val" style="color:#f87171">${sinStock}</span></div>` : ''}
+        </div>`;
+
+        // ── Sección: Desde Colmena ──
+        if (plan.sobrantes.length) {
+            html += `<div class="pc-seccion-titulo"><i class="bi bi-archive"></i> Usar sobrantes de la Colmena</div>`;
+            plan.sobrantes.forEach((grupo, gi) => {
+                const sob    = grupo.sobrante;
+                const piezas = grupo.placed.filter(r => !r.failed);
+                const efic   = Math.round(piezas.reduce((s,r) => s+r.pw*r.ph, 0) / (grupo.uw*grupo.uh) * 100);
+                const efCls  = efic >= 70 ? 'alta' : efic >= 40 ? 'media' : 'baja';
+                const canvId = `pc-cv-sob-${gi}`;
+
+                html += `
+                <div class="pc-card desde-sob">
+                    <div class="pc-card-header">
+                        <div>
+                            <div class="pc-cod">${sob.cod}</div>
+                            <div class="pc-dims">${sob.ancho} × ${sob.alto} cm</div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+                            <span class="pc-ubic"><i class="bi bi-geo-alt-fill"></i> ${sob.ubicacion || '—'}</span>
+                            <span class="pc-efic ${efCls}">Aprovechamiento: ${efic}%</span>
+                        </div>
+                    </div>
+                    <div class="pc-piezas-lista">
+                        ${piezas.map((r,i) => `<span class="pc-pieza-tag" style="border-color:${PC_PALETTE[i%PC_PALETTE.length]}55;color:${PC_PALETTE[i%PC_PALETTE.length]};">${r.nombre}${r.rot ? ' ↺':''} — ${r.pw}×${r.ph}cm</span>`).join('')}
+                    </div>
+                    <div class="pc-canvas-wrap"><canvas id="${canvId}"></canvas></div>
+                    <div class="pc-actions">
+                        <button class="btn btn-sm btn-premium-success" onclick="marcarUsoSobrante('${sob._docId}','${canvId}')">
+                            <i class="bi bi-check2-circle"></i> Confirmar uso de este sobrante
+                        </button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // ── Sección: Desde Rollo ──
+        if (plan.rollo.length) {
+            html += `<div class="pc-seccion-titulo"><i class="bi bi-rulers"></i> Cortar desde rollo nuevo</div>`;
+            plan.rollo.forEach((grupo, gi) => {
+                const piezas = grupo.placed.filter(r => !r.failed);
+                const canvId = `pc-cv-rollo-${gi}`;
+                const efCls  = grupo.efic >= 70 ? 'alta' : grupo.efic >= 40 ? 'media' : 'baja';
+
+                html += `
+                <div class="pc-card desde-rollo">
+                    <div class="pc-card-header">
+                        <div>
+                            <div class="pc-cod">${grupo.codInt}</div>
+                            <div class="pc-dims">Paño a cortar: <strong>${grupo.anchoCorte} × ${grupo.altoCorte} cm</strong> del rollo</div>
+                        </div>
+                        <span class="pc-efic ${efCls}">Aprovechamiento: ${grupo.efic}%</span>
+                    </div>
+                    <div class="pc-piezas-lista">
+                        ${piezas.map((r,i) => `<span class="pc-pieza-tag" style="border-color:${PC_PALETTE[i%PC_PALETTE.length]}55;color:${PC_PALETTE[i%PC_PALETTE.length]};">${r.nombre}${r.rot ? ' ↺':''} — ${r.pw}×${r.ph}cm</span>`).join('')}
+                    </div>
+                    <div class="pc-canvas-wrap"><canvas id="${canvId}"></canvas></div>
+                    <div class="pc-actions">
+                        <button class="btn btn-sm btn-outline-primary" onclick="registrarSobranteDespuesDeCorte('${grupo.codInt}',${grupo.anchoCorte},${grupo.altoCorte})">
+                            <i class="bi bi-plus-circle"></i> Registrar sobrante generado
+                        </button>
+                    </div>
+                </div>`;
+            });
+        }
+
+        // ── Sección: Sin stock ──
+        if (plan.sinStock.length) {
+            html += `<div class="pc-seccion-titulo"><i class="bi bi-exclamation-triangle"></i> Sin sobrantes disponibles (verificar stock)</div>`;
+            plan.sinStock.forEach(grupo => {
+                html += `
+                <div class="pc-card sin-stock">
+                    <div class="pc-cod" style="color:#f87171;">${grupo.codInt}</div>
+                    <div class="pc-dims mt-1">No hay sobrantes disponibles. Verificar stock de rollos.</div>
+                    <div class="pc-piezas-lista mt-2">${(grupo.piezas||[]).map(p => `<span class="pc-pieza-tag">${p.nombre} — ${p.w}×${p.h}cm</span>`).join('')}</div>
+                </div>`;
+            });
+        }
+
+        // ── Formulario agregar sobrante nuevo ──
+        html += `
+        <div class="pc-agregar-sob">
+            <h6><i class="bi bi-plus-circle"></i> Registrar sobrante nuevo en la Colmena</h6>
+            <div class="row g-2">
+                <div class="col-6 col-md-2"><label class="form-label form-label-sm mb-1">COD_INT</label>
+                    <input type="text" class="form-control form-control-sm" id="ns-cod" placeholder="BK 18" style="text-transform:uppercase;"></div>
+                <div class="col-6 col-md-2"><label class="form-label form-label-sm mb-1">Ancho (cm)</label>
+                    <input type="number" class="form-control form-control-sm" id="ns-ancho" placeholder="150"></div>
+                <div class="col-6 col-md-2"><label class="form-label form-label-sm mb-1">Alto (cm)</label>
+                    <input type="number" class="form-control form-control-sm" id="ns-alto" placeholder="200"></div>
+                <div class="col-6 col-md-2"><label class="form-label form-label-sm mb-1">Ubicación</label>
+                    <input type="text" class="form-control form-control-sm" id="ns-ubic" placeholder="A-54" style="text-transform:uppercase;"></div>
+                <div class="col-12 col-md-4 d-flex align-items-end">
+                    <button class="btn btn-sm w-100" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;" onclick="guardarNuevoSobrante()">
+                        <i class="bi bi-cloud-upload"></i> Guardar en Colmena
+                    </button>
+                </div>
+            </div>
+        </div>`;
+
+        contenido.innerHTML = html;
+
+        // Dibujar canvas después de que el HTML esté en el DOM
+        requestAnimationFrame(() => {
+            plan.sobrantes.forEach((grupo, gi) => {
+                const c = document.getElementById(`pc-cv-sob-${gi}`);
+                if (c) dibujarCanvas(c, grupo.placed.filter(r=>!r.failed), grupo.uw, grupo.uh, grupo.sobrante.ancho, grupo.sobrante.alto);
+            });
+            plan.rollo.forEach((grupo, gi) => {
+                const c = document.getElementById(`pc-cv-rollo-${gi}`);
+                if (c) dibujarCanvas(c, grupo.placed.filter(r=>!r.failed), grupo.anchoUtil, grupo.altoUtil, grupo.anchoCorte, grupo.altoCorte);
+            });
+        });
+    }
+
+    // ── Canvas: dibuja el layout de corte ───────────────────────────────
+    function dibujarCanvas(canvas, piezas, uw, uh, wTotal, hTotal) {
+        const SCALE = Math.min(420 / wTotal, 320 / hTotal, 1.2);
+        const W = Math.round(wTotal * SCALE);
+        const H = Math.round(hTotal * SCALE);
+        canvas.width  = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        // Fondo del paño
+        ctx.fillStyle = '#1a2236';
+        ctx.fillRect(0, 0, W, H);
+
+        // Área útil (sin margen)
+        const mg = Math.round(1 * SCALE);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(mg, mg, Math.round(uw*SCALE), Math.round(uh*SCALE));
+
+        // Piezas
+        piezas.forEach((r, i) => {
+            const x = Math.round(mg + r.px * SCALE);
+            const y = Math.round(mg + r.py * SCALE);
+            const w = Math.round(r.pw * SCALE);
+            const h = Math.round(r.ph * SCALE);
+            const col = PC_PALETTE[i % PC_PALETTE.length];
+            ctx.fillStyle = col + '33';
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeStyle = col;
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+            // Texto
+            ctx.fillStyle = col;
+            ctx.font = `bold ${Math.max(8, Math.round(9*SCALE))}px monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const label = r.rot ? `↺ ${r.nombre}` : r.nombre;
+            const maxW  = w - 4;
+            ctx.save();
+            ctx.rect(x+2, y+2, w-4, h-4);
+            ctx.clip();
+            ctx.fillText(label, x + w/2, y + h/2, maxW);
+            ctx.restore();
+        });
+
+        // Borde externo
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(0.5, 0.5, W-1, H-1);
+
+        // Leyenda de dimensiones
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.fillText(`${wTotal}×${hTotal}cm`, 3, 3);
+    }
+
+    // ── Marcar sobrante como usado en Firebase ───────────────────────────
+    function marcarUsoSobrante(docId, canvId) {
+        if (!confirm('¿Confirmar uso de este sobrante? Quedará marcado como utilizado en la Colmena.')) return;
+        const ot   = storeOTs.find(o => o.id === activeOTId);
+        const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
+
+        db.collection('colmena_panos').doc(docId).update({
+            disponible:   false,
+            ot_asignada:  otNr,
+            fechaUso:     new Date().toISOString()
+        }).then(() => {
+            showToast('Sobrante marcado como usado en la Colmena');
+            const card = document.getElementById(canvId)?.closest('.pc-card');
+            if (card) {
+                card.style.opacity = '0.4';
+                card.style.pointerEvents = 'none';
+                const btn = card.querySelector('button');
+                if (btn) { btn.textContent = '✓ Confirmado'; btn.disabled = true; }
+            }
+        }).catch(() => showToast('Error al actualizar la Colmena', 'error'));
+    }
+
+    // ── Pre-llenar el formulario con los datos del sobrante generado ─────
+    function registrarSobranteDespuesDeCorte(cod, anchoCorte, altoCorte) {
+        document.getElementById('ns-cod').value   = cod;
+        document.getElementById('ns-ancho').value = anchoCorte;
+        document.getElementById('ns-alto').value  = altoCorte;
+        document.getElementById('ns-ubic').focus();
+        document.getElementById('ns-ubic').scrollIntoView({ behavior:'smooth', block:'center' });
+    }
+
+    // ── Guardar nuevo sobrante en Firebase ───────────────────────────────
+    function guardarNuevoSobrante() {
+        const cod   = (document.getElementById('ns-cod').value   || '').trim().toUpperCase();
+        const ancho = parseFloat(document.getElementById('ns-ancho').value);
+        const alto  = parseFloat(document.getElementById('ns-alto').value);
+        const ubic  = (document.getElementById('ns-ubic').value  || '').trim().toUpperCase();
+
+        if (!cod)           { showToast('Ingresa el COD_INT', 'error'); return; }
+        if (!ancho || !alto){ showToast('Ingresa las medidas', 'error'); return; }
+        if (!ubic)          { showToast('Ingresa la ubicación (ej: A-54)', 'error'); return; }
+
+        const ot   = storeOTs.find(o => o.id === activeOTId);
+        const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
+
+        db.collection('colmena_panos').add({
+            cod, ancho, alto,
+            ubicacion:   ubic,
+            tipo:        'SOBRANTE',
+            disponible:  true,
+            ot_asignada: null,
+            fuente:      'GALPON_ROLZZO',
+            ot_origen:   otNr,
+            creadoEn:    new Date().toISOString()
+        }).then(() => {
+            showToast(`Sobrante ${cod} ${ancho}×${alto}cm guardado en la Colmena`);
+            ['ns-cod','ns-ancho','ns-alto','ns-ubic'].forEach(id => document.getElementById(id).value = '');
+        }).catch(() => showToast('Error al guardar el sobrante', 'error'));
     }
 
     // ── BOTTOM NAV MÓVIL ────────────────────────────────────────────────────
