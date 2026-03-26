@@ -535,6 +535,11 @@
         .kanban-count-badge { background:rgba(255,255,255,0.1); border-radius:999px; padding:1px 8px; font-size:0.68rem; font-weight:700; }
         .ot-card-actions { display:flex; gap:3px; margin-top:7px; flex-wrap:wrap; }
         .ot-card-actions button { font-size:0.67rem; padding:2px 7px; border-radius:5px; line-height:1.3; }
+        .ot-progress-wrap { margin-top:6px; }
+        .ot-progress-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
+        .ot-progress-pct { font-size:0.7rem; font-weight:700; }
+        .ot-progress-track { height:5px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; }
+        .ot-progress-fill { height:100%; border-radius:999px; transition:width 0.5s ease; }
         .archive-section { margin-top:14px; border:1px solid var(--border-glass); border-radius:12px; overflow:hidden; }
         .archive-header { padding:10px 14px; background:rgba(255,255,255,0.03); cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:0.82rem; user-select:none; }
         .archive-body { padding:12px; display:none; background:rgba(0,0,0,0.2); }
@@ -4130,6 +4135,37 @@
         banner.classList.add('d-none');
     }
 
+    function calcularPorcentaje(ot) {
+        const pctPorEstado = {
+            cotizacion: 10,
+            esperando:  20,
+            terreno:    35,
+            aprobada:   50,
+            lista:      95,
+            instalada:  100
+        };
+        const pctPorSubEtapa = {
+            'Estructura':   55,
+            'Paños':        62,
+            'Dimensionado': 69,
+            'Armado':       76,
+            'Prueba':       83,
+            'Lista':        90
+        };
+
+        if (ot.estado === 'produccion') {
+            return pctPorSubEtapa[ot.subEtapa] || 55;
+        }
+        return pctPorEstado[ot.estado] || 0;
+    }
+
+    function colorProgreso(pct) {
+        if (pct <= 20)  return '#818cf8'; // violeta — cotización
+        if (pct <= 50)  return '#f59e0b'; // amarillo — terreno/aprobada
+        if (pct <= 89)  return '#3b82f6'; // azul — producción
+        return '#22c55e';                 // verde — lista/instalada
+    }
+
     function renderKanban() {
         const board = document.getElementById('kanban-board');
         if (!board) return;
@@ -4188,12 +4224,26 @@
                         ? `🛍 ${itemCount} cortina${itemCount !== 1 ? 's' : ''} cotizada${itemCount !== 1 ? 's' : ''}`
                         : `🪟 ${itemCount} ventana${itemCount !== 1 ? 's' : ''}`;
 
+                    const pct   = calcularPorcentaje(ot);
+                    const color = colorProgreso(pct);
+                    const progressHtml = `
+                        <div class="ot-progress-wrap">
+                            <div class="ot-progress-header">
+                                <span style="font-size:0.62rem;color:var(--text-secondary);">Avance</span>
+                                <span class="ot-progress-pct" style="color:${color};">${pct}%</span>
+                            </div>
+                            <div class="ot-progress-track">
+                                <div class="ot-progress-fill" style="width:${pct}%;background:${color};"></div>
+                            </div>
+                        </div>`;
+
                     cardsHtml += `
                     <div class="ot-card${esActiva ? ' active-ot' : ''}">
                         <div class="ot-card-ot">OT ${dg.ot || '—'} ${esActiva ? '⚡' : ''}</div>
                         <div class="ot-card-cliente">${dg.cliente || '(sin cliente)'}</div>
                         <div class="ot-card-fecha">${fechaStr}</div>
                         <div class="ot-card-ventanas">${itemLabel}</div>
+                        ${progressHtml}
                         ${subHtml}
                         ${btns}
                     </div>`;
