@@ -4623,38 +4623,54 @@
         const contenido = document.getElementById('pc-contenido');
         if (!contenido) return;
 
-        // Obtener ventanas de la OT activa
-        const ot = storeOTs.find(o => o.id === activeOTId);
-        const ventanas = (ot && ot.storeVentanas && ot.storeVentanas.length)
-            ? ot.storeVentanas
-            : storeVentanas;
+        // ── Recopilar todas las OTs en estado 'produccion' ──────────────
+        // Si no hay ninguna en produccion, usar la OT activa como fallback
+        let otsEnProduccion = storeOTs.filter(o => o.estado === 'produccion' && (o.storeVentanas || []).length > 0);
+        if (otsEnProduccion.length === 0) {
+            const otActiva = storeOTs.find(o => o.id === activeOTId);
+            if (otActiva) otsEnProduccion = [otActiva];
+        }
 
-        if (!ventanas || ventanas.length === 0) {
-            contenido.innerHTML = '<div style="text-align:center;padding:20px;color:#f59e0b;font-size:0.8rem;"><i class="bi bi-exclamation-triangle" style="display:block;font-size:1.5rem;margin-bottom:6px;"></i>No hay ventanas medidas. Completa Fase 2 primero.</div>';
+        if (otsEnProduccion.length === 0) {
+            contenido.innerHTML = '<div style="text-align:center;padding:20px;color:#f59e0b;font-size:0.8rem;"><i class="bi bi-exclamation-triangle" style="display:block;font-size:1.5rem;margin-bottom:6px;"></i>No hay OTs en producción con ventanas medidas.</div>';
             return;
         }
 
-        // Construir lista de piezas (en cm)
+        const multiOT = otsEnProduccion.length > 1;
+
+        // Construir lista de piezas (en cm) combinando todas las OTs
         const piezas = [];
         const EXTRA_CM = 25; // 25 cm extra para roller
         const MARGEN   = 1;  // 1 cm de margen por lado
 
-        ventanas.forEach(v => {
-            if (!v.panos || v.panos.length === 0) return;
-            const altoBase = Math.round(parseFloat(v.alto) * 100) + EXTRA_CM;
-            const isDuo    = (v.producto || '').toUpperCase().includes('DUO');
-            const altoCm   = isDuo ? altoBase * 2 : altoBase;
+        otsEnProduccion.forEach(otItem => {
+            const ventanas = (otItem.storeVentanas && otItem.storeVentanas.length)
+                ? otItem.storeVentanas
+                : (otItem.id === activeOTId ? storeVentanas : []);
+            const otNum = (otItem.datosGenerales || {}).ot || String(otItem.id);
 
-            v.panos.forEach((p, pi) => {
-                const anchoCm = Math.round(parseFloat(p.ancho) * 100);
-                if (!anchoCm || !altoCm) return;
-                const label = v.ubicacion + (v.panos.length > 1 ? ` — Paño ${pi+1}` : '');
-                piezas.push({
-                    id:      `${v.id}_p${pi}`,
-                    nombre:  label,
-                    codInt:  (v.codInt || '').toUpperCase().trim(),
-                    w:       anchoCm,
-                    h:       altoCm
+            ventanas.forEach(v => {
+                if (!v.panos || v.panos.length === 0) return;
+                const altoBase = Math.round(parseFloat(v.alto) * 100) + EXTRA_CM;
+                const isDuo    = (v.producto || '').toUpperCase().includes('DUO');
+                const altoCm   = isDuo ? altoBase * 2 : altoBase;
+
+                v.panos.forEach((p, pi) => {
+                    const anchoCm = Math.round(parseFloat(p.ancho) * 100);
+                    if (!anchoCm || !altoCm) return;
+                    const panoSuffix = v.panos.length > 1 ? ` P${pi+1}` : '';
+                    const label = multiOT
+                        ? `OT${otNum}·${v.ubicacion}${panoSuffix}`
+                        : `${v.ubicacion}${panoSuffix}`;
+                    piezas.push({
+                        id:     `${otItem.id}_${v.id}_p${pi}`,
+                        nombre: label,
+                        codInt: (v.codInt || '').toUpperCase().trim(),
+                        otId:   otItem.id,
+                        otNum:  otNum,
+                        w:      anchoCm,
+                        h:      altoCm
+                    });
                 });
             });
         });
@@ -4724,6 +4740,11 @@
             }
         });
 
+        plan.otsIncluidas = otsEnProduccion.map(o => ({
+            id:      o.id,
+            num:     (o.datosGenerales || {}).ot      || '—',
+            cliente: (o.datosGenerales || {}).cliente || '—'
+        }));
         planCorteActual = plan;
         renderPlanCorte(plan, contenido);
     }
@@ -4739,7 +4760,17 @@
         const desdeRollo   = plan.rollo.reduce((s,g)    => s + (g.placed||[]).filter(r=>!r.failed).length, 0);
         const sinStock     = plan.sinStock.reduce((s,g) => s + (g.piezas||[]).length, 0);
 
-        let html = `
+        // Banner de OTs incluidas en el plan
+        const otsIncluidas = plan.otsIncluidas || [];
+        const bannerOTs = otsIncluidas.length > 1
+            ? `<div style="background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.25);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:0.75rem;color:#93c5fd;">
+                <i class="bi bi-diagram-3" style="margin-right:6px;"></i>
+                <strong>Plan combinado · ${otsIncluidas.length} OTs en producción:</strong>
+                ${otsIncluidas.map(o => `<span style="margin-left:8px;background:rgba(96,165,250,0.15);padding:2px 7px;border-radius:12px;">OT${o.num} — ${o.cliente}</span>`).join('')}
+               </div>`
+            : '';
+
+        let html = bannerOTs + `
         <div class="pc-resumen-bar">
             <div class="pc-resumen-item"><span class="pc-resumen-label">Total piezas</span><span class="pc-resumen-val" style="color:var(--text-primary)">${totalPiezas}</span></div>
             <div class="pc-resumen-item"><span class="pc-resumen-label">Desde sobrante</span><span class="pc-resumen-val" style="color:#22c55e">${desdeSob}</span></div>
@@ -4891,17 +4922,30 @@
             ctx.strokeStyle = col;
             ctx.lineWidth = 1.5;
             ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-            // Texto
+            // Texto — dos líneas si el nombre incluye OT prefix (tiene "·")
             ctx.fillStyle = col;
-            ctx.font = `bold ${Math.max(8, Math.round(9*SCALE))}px monospace`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            const label = r.rot ? `↺ ${r.nombre}` : r.nombre;
-            const maxW  = w - 4;
             ctx.save();
             ctx.rect(x+2, y+2, w-4, h-4);
             ctx.clip();
-            ctx.fillText(label, x + w/2, y + h/2, maxW);
+            ctx.textAlign = 'center';
+            const maxW = w - 4;
+            const nombreBase = r.rot ? `↺ ${r.nombre}` : r.nombre;
+            const dotIdx = nombreBase.indexOf('·');
+            if (dotIdx !== -1 && h > 28) {
+                // Dos líneas: "OT-xxx" arriba, ubicacion abajo
+                const linea1 = nombreBase.slice(0, dotIdx).trim();
+                const linea2 = nombreBase.slice(dotIdx + 1).trim();
+                const fs = Math.max(7, Math.round(8*SCALE));
+                ctx.font = `bold ${fs}px monospace`;
+                ctx.textBaseline = 'middle';
+                ctx.fillText(linea1, x + w/2, y + h/2 - fs * 0.7, maxW);
+                ctx.font = `${fs}px monospace`;
+                ctx.fillText(linea2, x + w/2, y + h/2 + fs * 0.7, maxW);
+            } else {
+                ctx.font = `bold ${Math.max(8, Math.round(9*SCALE))}px monospace`;
+                ctx.textBaseline = 'middle';
+                ctx.fillText(nombreBase, x + w/2, y + h/2, maxW);
+            }
             ctx.restore();
         });
 
