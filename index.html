@@ -4710,8 +4710,8 @@
                         ${piezas.map((r,i) => `<span class="pc-pieza-tag" style="border-color:${PC_PALETTE[i%PC_PALETTE.length]}55;color:${PC_PALETTE[i%PC_PALETTE.length]};">${r.nombre}${r.rot ? ' ↺':''} — ${r.pw}×${r.ph}cm</span>`).join('')}
                     </div>
                     <div class="pc-canvas-wrap"><canvas id="${canvId}"></canvas></div>
-                    <div class="pc-actions">
-                        <button class="btn btn-sm btn-premium-success" onclick="marcarUsoSobrante('${sob._docId}','${canvId}')">
+                    <div class="pc-actions" id="pc-acc-sob-${gi}">
+                        <button class="btn btn-sm btn-premium-success" onclick="marcarUsoSobrante(${gi},'${canvId}')">
                             <i class="bi bi-check2-circle"></i> Confirmar uso de este sobrante
                         </button>
                     </div>
@@ -4740,9 +4740,9 @@
                         ${piezas.map((r,i) => `<span class="pc-pieza-tag" style="border-color:${PC_PALETTE[i%PC_PALETTE.length]}55;color:${PC_PALETTE[i%PC_PALETTE.length]};">${r.nombre}${r.rot ? ' ↺':''} — ${r.pw}×${r.ph}cm</span>`).join('')}
                     </div>
                     <div class="pc-canvas-wrap"><canvas id="${canvId}"></canvas></div>
-                    <div class="pc-actions">
-                        <button class="btn btn-sm btn-outline-primary" onclick="registrarSobranteDespuesDeCorte('${grupo.codInt}',${grupo.anchoCorte},${grupo.altoCorte})">
-                            <i class="bi bi-plus-circle"></i> Registrar sobrante generado
+                    <div class="pc-actions" id="pc-acc-rollo-${gi}">
+                        <button class="btn btn-sm btn-premium-success" onclick="confirmarCorteRollo(${gi},'${canvId}')">
+                            <i class="bi bi-check2-circle"></i> Confirmar corte realizado
                         </button>
                     </div>
                 </div>`;
@@ -4765,7 +4765,7 @@
         // ── Formulario agregar sobrante nuevo ──
         html += `
         <div class="pc-agregar-sob">
-            <h6><i class="bi bi-plus-circle"></i> Registrar sobrante nuevo en la Colmena</h6>
+            <h6><i class="bi bi-plus-circle"></i> Registrar sobrante manualmente (opcional)</h6>
             <div class="row g-2">
                 <div class="col-6 col-md-2"><label class="form-label form-label-sm mb-1">COD_INT</label>
                     <input type="text" class="form-control form-control-sm" id="ns-cod" placeholder="BK 18" style="text-transform:uppercase;"></div>
@@ -4855,64 +4855,155 @@
         ctx.fillText(`${wTotal}×${hTotal}cm`, 3, 3);
     }
 
-    // ── Marcar sobrante como usado en Firebase ───────────────────────────
-    function marcarUsoSobrante(docId, canvId) {
-        if (!confirm('¿Confirmar uso de este sobrante? Quedará marcado como utilizado en la Colmena.')) return;
+    // ── Confirmar uso de sobrante de la Colmena ─────────────────────────
+    // Paso 1: calcula el resto y muestra input de ubicación inline
+    function marcarUsoSobrante(gi, canvId) {
+        const grupo   = planCorteActual.sobrantes[gi];
+        const sob     = grupo.sobrante;
+        const placed  = grupo.placed.filter(r => !r.failed);
+        const MARGEN  = 1;
+        const MIN_CM  = 30; // mínimo útil
+
+        const maxY        = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+        const altoResto   = Math.round(sob.alto - (maxY + MARGEN * 2));
+        const hayResto    = altoResto >= MIN_CM;
+        const accEl       = document.getElementById(`pc-acc-sob-${gi}`);
+        if (!accEl) return;
+
+        if (hayResto) {
+            accEl.innerHTML = `
+                <div style="font-size:0.78rem;color:#22c55e;margin-bottom:8px;">
+                    <i class="bi bi-arrow-return-right"></i>
+                    Sobrante generado: <strong>${sob.cod} ${sob.ancho}×${altoResto}cm</strong>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <span style="font-size:0.72rem;color:var(--text-secondary);">¿Dónde se guarda?</span>
+                    <input type="text" id="pc-ubic-sob-${gi}" class="form-control form-control-sm"
+                        placeholder="A-54" style="max-width:110px;text-transform:uppercase;"
+                        onkeydown="if(event.key==='Enter') confirmarUsoConSobrante(${gi},'${canvId}',${sob.ancho},${altoResto})">
+                    <button class="btn btn-sm btn-premium-success"
+                        onclick="confirmarUsoConSobrante(${gi},'${canvId}',${sob.ancho},${altoResto})">
+                        <i class="bi bi-check2"></i> Confirmar
+                    </button>
+                </div>`;
+            document.getElementById(`pc-ubic-sob-${gi}`)?.focus();
+        } else {
+            // Sin resto útil — confirmar directo
+            confirmarUsoSinSobrante(sob._docId, canvId,
+                altoResto > 0 ? ` (${altoResto}cm restantes, no útil)` : '');
+        }
+    }
+
+    // Paso 2a: guarda en Firebase sobrante original como usado + nuevo sobrante
+    function confirmarUsoConSobrante(gi, canvId, anchoNuevo, altoNuevo) {
+        const grupo = planCorteActual.sobrantes[gi];
+        const sob   = grupo.sobrante;
+        const ubic  = (document.getElementById(`pc-ubic-sob-${gi}`)?.value || '').trim().toUpperCase();
+        if (!ubic) { showToast('Ingresa la ubicación donde se guardará el sobrante', 'error'); return; }
+
         const ot   = storeOTs.find(o => o.id === activeOTId);
         const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
+        const now  = new Date().toISOString();
 
-        db.collection('colmena_panos').doc(docId).update({
-            disponible:   false,
-            ot_asignada:  otNr,
-            fechaUso:     new Date().toISOString()
-        }).then(() => {
-            showToast('Sobrante marcado como usado en la Colmena');
-            const card = document.getElementById(canvId)?.closest('.pc-card');
-            if (card) {
-                card.style.opacity = '0.4';
-                card.style.pointerEvents = 'none';
-                const btn = card.querySelector('button');
-                if (btn) { btn.textContent = '✓ Confirmado'; btn.disabled = true; }
-            }
+        Promise.all([
+            db.collection('colmena_panos').doc(sob._docId).update({ disponible:false, ot_asignada:otNr, fechaUso:now }),
+            db.collection('colmena_panos').add({ cod:sob.cod, ancho:anchoNuevo, alto:altoNuevo,
+                ubicacion:ubic, tipo:'SOBRANTE', disponible:true, ot_asignada:null,
+                fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now })
+        ]).then(() => {
+            showToast(`Confirmado. Sobrante ${sob.cod} ${anchoNuevo}×${altoNuevo}cm guardado en ${ubic}`);
+            _desvanecerCard(canvId);
         }).catch(() => showToast('Error al actualizar la Colmena', 'error'));
     }
 
-    // ── Pre-llenar el formulario con los datos del sobrante generado ─────
-    function registrarSobranteDespuesDeCorte(cod, anchoCorte, altoCorte) {
-        document.getElementById('ns-cod').value   = cod;
-        document.getElementById('ns-ancho').value = anchoCorte;
-        document.getElementById('ns-alto').value  = altoCorte;
-        document.getElementById('ns-ubic').focus();
-        document.getElementById('ns-ubic').scrollIntoView({ behavior:'smooth', block:'center' });
+    // Paso 2b: sin sobrante útil — solo marcar como usado
+    function confirmarUsoSinSobrante(docId, canvId, nota) {
+        const ot   = storeOTs.find(o => o.id === activeOTId);
+        const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
+        db.collection('colmena_panos').doc(docId).update({ disponible:false, ot_asignada:otNr, fechaUso:new Date().toISOString() })
+          .then(() => { showToast('Sobrante marcado como usado' + (nota||'')); _desvanecerCard(canvId); })
+          .catch(() => showToast('Error al actualizar la Colmena', 'error'));
     }
 
-    // ── Guardar nuevo sobrante en Firebase ───────────────────────────────
-    function guardarNuevoSobrante() {
-        const cod   = (document.getElementById('ns-cod').value   || '').trim().toUpperCase();
-        const ancho = parseFloat(document.getElementById('ns-ancho').value);
-        const alto  = parseFloat(document.getElementById('ns-alto').value);
-        const ubic  = (document.getElementById('ns-ubic').value  || '').trim().toUpperCase();
+    // ── Confirmar corte desde rollo ──────────────────────────────────────
+    function confirmarCorteRollo(gi, canvId) {
+        const grupo  = planCorteActual.rollo[gi];
+        const placed = grupo.placed.filter(r => !r.failed);
+        const MARGEN = 1;
+        const MIN_CM = 30;
 
-        if (!cod)           { showToast('Ingresa el COD_INT', 'error'); return; }
-        if (!ancho || !alto){ showToast('Ingresa las medidas', 'error'); return; }
-        if (!ubic)          { showToast('Ingresa la ubicación (ej: A-54)', 'error'); return; }
+        const maxY      = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+        const altoResto = Math.round(grupo.altoCorte - (maxY + MARGEN * 2));
+        const hayResto  = altoResto >= MIN_CM;
+        const accEl     = document.getElementById(`pc-acc-rollo-${gi}`);
+        if (!accEl) return;
+
+        if (hayResto) {
+            accEl.innerHTML = `
+                <div style="font-size:0.78rem;color:#22c55e;margin-bottom:8px;">
+                    <i class="bi bi-arrow-return-right"></i>
+                    Sobrante del paño: <strong>${grupo.codInt} ${grupo.anchoCorte}×${altoResto}cm</strong>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+                    <span style="font-size:0.72rem;color:var(--text-secondary);">¿Dónde se guarda?</span>
+                    <input type="text" id="pc-ubic-rollo-${gi}" class="form-control form-control-sm"
+                        placeholder="A-54" style="max-width:110px;text-transform:uppercase;"
+                        onkeydown="if(event.key==='Enter') guardarSobranteRollo(${gi},'${canvId}',${grupo.anchoCorte},${altoResto})">
+                    <button class="btn btn-sm btn-premium-success"
+                        onclick="guardarSobranteRollo(${gi},'${canvId}',${grupo.anchoCorte},${altoResto})">
+                        <i class="bi bi-check2"></i> Confirmar
+                    </button>
+                </div>`;
+            document.getElementById(`pc-ubic-rollo-${gi}`)?.focus();
+        } else {
+            showToast(`Corte de ${grupo.codInt} confirmado. Sin sobrante útil (${altoResto}cm).`);
+            _desvanecerCard(canvId);
+        }
+    }
+
+    function guardarSobranteRollo(gi, canvId, anchoNuevo, altoNuevo) {
+        const grupo = planCorteActual.rollo[gi];
+        const ubic  = (document.getElementById(`pc-ubic-rollo-${gi}`)?.value || '').trim().toUpperCase();
+        if (!ubic) { showToast('Ingresa la ubicación', 'error'); return; }
 
         const ot   = storeOTs.find(o => o.id === activeOTId);
         const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
 
         db.collection('colmena_panos').add({
-            cod, ancho, alto,
-            ubicacion:   ubic,
-            tipo:        'SOBRANTE',
-            disponible:  true,
-            ot_asignada: null,
-            fuente:      'GALPON_ROLZZO',
-            ot_origen:   otNr,
-            creadoEn:    new Date().toISOString()
+            cod: grupo.codInt, ancho: anchoNuevo, alto: altoNuevo,
+            ubicacion: ubic, tipo: 'SOBRANTE', disponible: true,
+            ot_asignada: null, fuente: 'GALPON_ROLZZO',
+            ot_origen: otNr, creadoEn: new Date().toISOString()
         }).then(() => {
-            showToast(`Sobrante ${cod} ${ancho}×${alto}cm guardado en la Colmena`);
-            ['ns-cod','ns-ancho','ns-alto','ns-ubic'].forEach(id => document.getElementById(id).value = '');
-        }).catch(() => showToast('Error al guardar el sobrante', 'error'));
+            showToast(`Sobrante ${grupo.codInt} ${anchoNuevo}×${altoNuevo}cm guardado en ${ubic}`);
+            _desvanecerCard(canvId);
+        }).catch(() => showToast('Error al guardar sobrante', 'error'));
+    }
+
+    // ── Guardar sobrante manual (formulario de respaldo) ─────────────────
+    function guardarNuevoSobrante() {
+        const cod   = (document.getElementById('ns-cod').value   || '').trim().toUpperCase();
+        const ancho = parseFloat(document.getElementById('ns-ancho').value);
+        const alto  = parseFloat(document.getElementById('ns-alto').value);
+        const ubic  = (document.getElementById('ns-ubic').value  || '').trim().toUpperCase();
+        if (!cod)            { showToast('Ingresa el COD_INT', 'error'); return; }
+        if (!ancho || !alto) { showToast('Ingresa las medidas', 'error'); return; }
+        if (!ubic)           { showToast('Ingresa la ubicación (ej: A-54)', 'error'); return; }
+        const ot   = storeOTs.find(o => o.id === activeOTId);
+        const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
+        db.collection('colmena_panos').add({ cod, ancho, alto, ubicacion:ubic, tipo:'SOBRANTE',
+            disponible:true, ot_asignada:null, fuente:'GALPON_ROLZZO', ot_origen:otNr,
+            creadoEn:new Date().toISOString() })
+          .then(() => {
+              showToast(`Sobrante ${cod} ${ancho}×${alto}cm guardado en la Colmena`);
+              ['ns-cod','ns-ancho','ns-alto','ns-ubic'].forEach(id => document.getElementById(id).value = '');
+          }).catch(() => showToast('Error al guardar el sobrante', 'error'));
+    }
+
+    // ── Helper: desvanecer tarjeta confirmada ────────────────────────────
+    function _desvanecerCard(canvId) {
+        const card = document.getElementById(canvId)?.closest('.pc-card');
+        if (card) { card.style.opacity = '0.35'; card.style.pointerEvents = 'none'; }
     }
 
     // ── BOTTOM NAV MÓVIL ────────────────────────────────────────────────────
