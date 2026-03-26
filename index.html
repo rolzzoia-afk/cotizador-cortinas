@@ -2,7 +2,12 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Rolzzo">
+    <meta name="description" content="Sistema de gestión de órdenes de trabajo - Cortinas Rolzzo">
     <title>Cotizador Inteligente - Cortinas Roller</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -539,7 +544,83 @@
         .ot-progress-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:3px; }
         .ot-progress-pct { font-size:0.7rem; font-weight:700; }
         .ot-progress-track { height:5px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; }
-        .ot-progress-fill { height:100%; border-radius:999px; transition:width 0.5s ease; }
+        .ot-progress-fill { height:100%; border-radius:999px; transition:width 0.6s cubic-bezier(.4,0,.2,1); }
+
+        /* ── MICRO-ANIMACIONES ───────────────────────────────── */
+        .btn-premium, .btn-premium-success, .btn { transition: all 0.18s cubic-bezier(.4,0,.2,1) !important; }
+        .btn:active { transform: scale(0.95) !important; }
+        .ot-card { transition: transform 0.2s cubic-bezier(.4,0,.2,1), box-shadow 0.2s, border-color 0.2s; }
+        .ot-card:active { transform: scale(0.98); }
+
+        /* ── TOAST NOTIFICACIÓN ──────────────────────────────── */
+        .app-toast {
+            position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+            background: rgba(24,24,27,0.95); border: 1px solid var(--border-glass);
+            backdrop-filter: blur(16px); color: var(--text-primary);
+            padding: 10px 20px; border-radius: 999px; font-size: 0.82rem; font-weight: 500;
+            z-index: 9999; opacity: 0; transition: all 0.28s cubic-bezier(.4,0,.2,1);
+            display: flex; align-items: center; gap: 8px; white-space: nowrap;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+        }
+        .app-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+        .app-toast.success { border-color: rgba(34,197,94,0.4); }
+        .app-toast.error   { border-color: rgba(239,68,68,0.4); }
+        .app-toast.info    { border-color: rgba(59,130,246,0.4); }
+
+        /* ── BOTTOM NAV MÓVIL ────────────────────────────────── */
+        .mobile-bottom-nav {
+            display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 1050;
+            background: rgba(9,9,11,0.95); backdrop-filter: blur(16px);
+            border-top: 1px solid var(--border-glass);
+            padding: 6px 0 env(safe-area-inset-bottom, 6px);
+        }
+        .mobile-bottom-nav .nav-items { display: flex; justify-content: space-around; align-items: center; }
+        .mobile-bottom-nav button {
+            background: none; border: none; color: var(--text-secondary);
+            display: flex; flex-direction: column; align-items: center; gap: 2px;
+            padding: 4px 8px; border-radius: 10px; transition: all 0.18s ease;
+            font-size: 0.6rem; min-width: 52px;
+        }
+        .mobile-bottom-nav button i { font-size: 1.25rem; }
+        .mobile-bottom-nav button.active { color: var(--primary-500); }
+        .mobile-bottom-nav button.active i { filter: drop-shadow(0 0 6px rgba(59,130,246,0.6)); }
+        .mobile-bottom-nav button:active { transform: scale(0.9); }
+
+        /* ── RESPONSIVE MÓVIL ────────────────────────────────── */
+        @media (max-width: 768px) {
+            .container-fluid { padding-left: 12px !important; padding-right: 12px !important; }
+            #fasesTab { display: none !important; }
+            .mobile-bottom-nav { display: block; }
+            .tab-content { padding-bottom: 75px; }
+            .kanban-board { gap: 10px; padding-bottom: 8px; }
+            .kanban-col { min-width: 175px; max-width: 190px; }
+            .glass-card { border-radius: 12px; }
+            .ficha-grid { grid-template-columns: 1fr !important; }
+            .ficha-bloque-full { grid-column: 1 !important; }
+            .row.g-2 > [class*="col-md"] { flex: 0 0 100%; max-width: 100%; }
+            .col-lg-8, .col-lg-4 { flex: 0 0 100%; max-width: 100%; }
+            h2.text-premium { font-size: 1.1rem; }
+            .section-header { flex-wrap: wrap; gap: 6px; font-size: 0.85rem; }
+            .btn-premium, .btn-premium-success { font-size: 0.82rem; padding: 8px 14px; }
+            #preview-multi { max-height: 180px; }
+        }
+        @media (max-width: 480px) {
+            .kanban-col { min-width: 155px; }
+            .ot-card-cliente { font-size: 0.78rem; }
+        }
+
+        /* ── EMPTY STATE ─────────────────────────────────────── */
+        .kanban-empty-state {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 24px 12px; text-align: center; gap: 6px;
+        }
+        .kanban-empty-state i { font-size: 1.8rem; opacity: 0.25; }
+        .kanban-empty-state span { font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7; }
+
+        /* ── BUSCADOR OTs ────────────────────────────────────── */
+        .ot-search-wrap { position: relative; }
+        .ot-search-wrap input { padding-left: 30px !important; font-size: 0.8rem !important; }
+        .ot-search-wrap i { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); font-size: 0.8rem; pointer-events: none; }
         .archive-section { margin-top:14px; border:1px solid var(--border-glass); border-radius:12px; overflow:hidden; }
         .archive-header { padding:10px 14px; background:rgba(255,255,255,0.03); cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-weight:600; font-size:0.82rem; user-select:none; }
         .archive-body { padding:12px; display:none; background:rgba(0,0,0,0.2); }
@@ -658,6 +739,11 @@
                     </div>
                 </div>
                 <div class="p-3">
+                    <!-- Buscador de OTs -->
+                    <div class="ot-search-wrap mb-3">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control form-control-sm" placeholder="Buscar por cliente, OT o dirección..." oninput="filtrarOTs(this.value)" style="border-radius:999px;">
+                    </div>
                     <!-- Indicador OT activa -->
                     <div id="panel-ot-activa" class="ot-activa-banner d-none">
                         <i class="bi bi-lightning-fill text-accent"></i>
@@ -2173,7 +2259,7 @@
             tipoVentana = 1;
             document.querySelectorAll('.tipo-ventana-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.tipo) === 1));
             renderTabs(); renderFicha(); renderPreview();
-            alert('✓ Fichas del grupo guardadas correctamente.');
+            showToast('Fichas del grupo guardadas correctamente.');
             return;
         }
 
@@ -2219,7 +2305,7 @@
         renderPreview();
 
         grupoIdActivo = null;
-        alert(`✓ Ventana "${ubicacion}" guardada correctamente.\n\nPuedes editar otra ventana de la lista o agregar una nueva.`);
+        showToast(`Ventana "${ubicacion}" guardada correctamente.`);
     }
 
     function editarVentanaTerreno(id) {
@@ -3832,12 +3918,12 @@
     // Cada OT es un documento en la colección 'cortinas_ots'
     // (colección separada de cualquier dato existente en el proyecto Firebase)
 
-    function guardarOT(ot) {
-        // Guarda (o sobreescribe) un único documento en Firestore
+    function guardarOT(ot, mostrarToast = false) {
         db.collection('cortinas_ots')
           .doc(String(ot.id))
           .set(ot)
-          .catch(e => console.error('Error guardando OT en Firestore:', e));
+          .then(() => { if (mostrarToast) showToast('OT guardada correctamente'); })
+          .catch(e => { console.error('Error guardando OT en Firestore:', e); showToast('Error al guardar', 'error'); });
     }
 
     function guardarOTs() {
@@ -4169,14 +4255,40 @@
     function renderKanban() {
         const board = document.getElementById('kanban-board');
         if (!board) return;
-        const activas = storeOTs.filter(o => o.estado !== 'archivada');
+        let activas = storeOTs.filter(o => o.estado !== 'archivada');
+
+        // Filtrar por búsqueda si hay query activo
+        if (otSearchQuery) {
+            activas = activas.filter(o => {
+                const dg = o.datosGenerales || {};
+                return (dg.cliente || '').toLowerCase().includes(otSearchQuery)
+                    || (dg.ot || '').toLowerCase().includes(otSearchQuery)
+                    || (dg.telefono || '').includes(otSearchQuery);
+            });
+        }
+
+        const emptyMsgs = {
+            cotizacion: { icon: 'bi-pencil-square',  msg: 'Sin cotizaciones activas' },
+            esperando:  { icon: 'bi-hourglass-split', msg: 'Ninguna en espera de aprobación' },
+            terreno:    { icon: 'bi-geo-alt',          msg: 'Sin visitas de terreno' },
+            aprobada:   { icon: 'bi-check2-circle',    msg: 'Ninguna aprobada aún' },
+            produccion: { icon: 'bi-gear',             msg: 'Nada en fabricación' },
+            lista:      { icon: 'bi-box-seam',         msg: 'Ninguna lista para entrega' },
+            instalada:  { icon: 'bi-house-check',      msg: 'Sin instalaciones recientes' },
+        };
 
         let html = '';
         for (const [estado, meta] of Object.entries(OT_ESTADO_META)) {
             const ots = activas.filter(o => o.estado === estado);
             let cardsHtml = '';
             if (ots.length === 0) {
-                cardsHtml = `<div class="kanban-empty">Sin OTs</div>`;
+                const em = emptyMsgs[estado] || { icon: 'bi-inbox', msg: 'Sin OTs' };
+                const searchNote = otSearchQuery ? `<span style="font-size:0.65rem;opacity:0.5;">No coincide con "${otSearchQuery}"</span>` : '';
+                cardsHtml = `<div class="kanban-empty-state">
+                    <i class="bi ${em.icon}"></i>
+                    <span>${em.msg}</span>
+                    ${searchNote}
+                </div>`;
             } else {
                 ots.forEach(ot => {
                     const dg = ot.datosGenerales || {};
@@ -4307,6 +4419,68 @@
             chevron.classList.toggle('bi-chevron-up');
         }
     }
+
+    // ── TOAST ───────────────────────────────────────────────────────────────
+    function showToast(msg, tipo = 'success') {
+        const iconos = { success: '✓', error: '✕', info: 'ℹ' };
+        const t = document.createElement('div');
+        t.className = `app-toast ${tipo}`;
+        t.innerHTML = `<span style="color:${tipo==='success'?'#22c55e':tipo==='error'?'#ef4444':'#3b82f6'}">${iconos[tipo]||'•'}</span> ${msg}`;
+        document.body.appendChild(t);
+        requestAnimationFrame(() => { requestAnimationFrame(() => t.classList.add('show')); });
+        setTimeout(() => { t.classList.remove('show'); setTimeout(() => t.remove(), 320); }, 2600);
+    }
+
+    // ── BÚSQUEDA DE OTs ─────────────────────────────────────────────────────
+    let otSearchQuery = '';
+    function filtrarOTs(query) {
+        otSearchQuery = (query || '').toLowerCase().trim();
+        renderKanban();
+    }
+
+    // ── BOTTOM NAV MÓVIL ────────────────────────────────────────────────────
+    function switchTab(tabId) {
+        const tab = document.getElementById(tabId + '-tab');
+        if (tab) tab.click();
+        document.querySelectorAll('.mobile-bottom-nav button').forEach(b => {
+            b.classList.toggle('active', b.dataset.tab === tabId);
+        });
+    }
+    // Sincronizar bottom nav con los tabs de Bootstrap
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+            tab.addEventListener('shown.bs.tab', e => {
+                const target = e.target.id.replace('-tab','');
+                document.querySelectorAll('.mobile-bottom-nav button').forEach(b => {
+                    b.classList.toggle('active', b.dataset.tab === target);
+                });
+            });
+        });
+        // Activar "Panel" por defecto en bottom nav
+        const defaultBtn = document.querySelector('.mobile-bottom-nav button[data-tab="panel"]');
+        if (defaultBtn) defaultBtn.classList.add('active');
+    });
 </script>
+
+<!-- Barra de navegación inferior para móvil -->
+<nav class="mobile-bottom-nav">
+    <div class="nav-items">
+        <button data-tab="panel" onclick="switchTab('panel')">
+            <i class="bi bi-kanban-fill"></i><span>Panel</span>
+        </button>
+        <button data-tab="fase1" onclick="switchTab('fase1')">
+            <i class="bi bi-1-circle-fill"></i><span>Cotizar</span>
+        </button>
+        <button data-tab="fase2" onclick="switchTab('fase2')">
+            <i class="bi bi-2-circle-fill"></i><span>Terreno</span>
+        </button>
+        <button data-tab="fase3" onclick="switchTab('fase3')">
+            <i class="bi bi-3-circle-fill"></i><span>Final</span>
+        </button>
+        <button data-tab="fase4" onclick="switchTab('fase4')">
+            <i class="bi bi-4-circle-fill"></i><span>Prod.</span>
+        </button>
+    </div>
+</nav>
 </body>
 </html>
