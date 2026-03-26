@@ -1496,6 +1496,28 @@
             });
         }
 
+        // Auto-poblar Fase 3 al abrir la pestaña (si hay datos y la tabla está vacía)
+        const tabFase3El = document.getElementById('fase3-tab');
+        if (tabFase3El) {
+            tabFase3El.addEventListener('shown.bs.tab', () => {
+                const tabla = document.getElementById('tablaResumen');
+                if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) {
+                    poblarTablaFase3();
+                }
+            });
+        }
+
+        // Auto-poblar Fase 4 al abrir la pestaña (si hay datos y la tabla está vacía)
+        const tabFase4El = document.getElementById('fase4-tab');
+        if (tabFase4El) {
+            tabFase4El.addEventListener('shown.bs.tab', () => {
+                const tabla = document.getElementById('f4-optimizador-tabla');
+                if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) {
+                    poblarTablaFase4();
+                }
+            });
+        }
+
         // Si ya hay ventanas guardadas, mostrarlas en Fase 2
         if (storeVentanas.length > 0) {
             sincronizarResumenFase2();
@@ -1509,9 +1531,18 @@
         actualizarIndicadorOTActiva();
     };
 
-    // Guardar storeVentanas en localStorage cada vez que cambia
+    // Guardar storeVentanas en localStorage Y en Firebase (OT activa)
     function guardarStore() {
         localStorage.setItem('storeVentanas', JSON.stringify(storeVentanas));
+        // Sincronizar con Firebase si hay OT activa
+        if (activeOTId !== null && typeof storeOTs !== 'undefined') {
+            const ot = storeOTs.find(o => o.id === activeOTId);
+            if (ot) {
+                ot.storeVentanas = JSON.parse(JSON.stringify(storeVentanas));
+                ot.fechaModificacion = new Date().toISOString();
+                guardarOT(ot);
+            }
+        }
     }
 
     // Función para Cargar el Archivo CSV
@@ -2410,12 +2441,11 @@
         if (row) row.remove();
     }
 
-    function exportarAFase3() {
-        if (storeVentanas.length === 0) { alert('No hay ventanas guardadas.'); return; }
-        // Kanban: avanzar estado a "aprobada"
-        avanzarEstadoOT('aprobada');
-        // Populate Fase 3 from store
+    // Poblar tabla Fase 3 sin cambiar estado Kanban (usada por tab listener y exportarAFase3)
+    function poblarTablaFase3() {
+        if (storeVentanas.length === 0) return;
         const tabla = document.getElementById('tablaResumen');
+        if (!tabla) return;
         tabla.innerHTML = '';
         storeVentanas.forEach(v => {
             if (!v.panos || v.panos.length === 0) return;
@@ -2439,6 +2469,13 @@
             tabla.appendChild(tr);
         });
         actualizarTotales();
+    }
+
+    function exportarAFase3() {
+        if (storeVentanas.length === 0) { alert('No hay ventanas guardadas.'); return; }
+        // Kanban: avanzar estado a "aprobada"
+        avanzarEstadoOT('aprobada');
+        poblarTablaFase3();
         // Switch to Fase 3
         document.getElementById('fase3-tab').click();
     }
@@ -2801,14 +2838,21 @@
         return 2.98; // Default
     }
 
+    // Populate optimizer table (sin avanzar estado Kanban — para auto-carga en tab switch)
+    function poblarTablaFase4() {
+        if (storeVentanas.length === 0) return;
+        cargarProduccion(true); // true = skipAvanzar
+    }
+
     // Populate optimizer table
-    function cargarProduccion() {
+    // skipAvanzar=true cuando se llama desde tab switch (no cambia estado Kanban)
+    function cargarProduccion(skipAvanzar = false) {
         const ot = document.getElementById('otCliente').value || '—';
         const cliente = document.getElementById('clienteNombre').value || '—';
         document.getElementById('f4-ot').value = ot;
         document.getElementById('f4-cliente').value = cliente;
-        // Kanban: avanzar estado a "produccion" con sub-etapa inicial
-        avanzarEstadoOT('produccion', 'Estructura');
+        // Kanban: avanzar estado a "produccion" con sub-etapa inicial (solo si no es auto-carga)
+        if (!skipAvanzar) avanzarEstadoOT('produccion', 'Estructura');
 
         // Mostrar y generar Plan de Corte desde Colmena
         document.getElementById('card-plan-corte').style.display = 'block';
@@ -2824,7 +2868,7 @@
         document.getElementById('f4-tablaInventario').innerHTML = '';
 
         if (storeVentanas.length === 0) {
-            alert("No hay ventanas en el store. Completa Fase 2 primero.");
+            if (!skipAvanzar) alert("No hay ventanas en el store. Completa Fase 2 primero.");
             return;
         }
 
@@ -3993,6 +4037,9 @@
         // Iniciar carga de Colmena en paralelo
         cargarColmena();
 
+        // Flag para restaurar datos al primer disparo de onSnapshot
+        let primerasCarga = true;
+
         // Escuchar en tiempo real la colección 'cortinas_ots'
         // Cada vez que cualquier usuario guarde o cambie una OT, todos los
         // dispositivos conectados reciben la actualización automáticamente
@@ -4008,6 +4055,22 @@
             // Verificar que activeOTId sigue existiendo
             if (activeOTId !== null && !storeOTs.find(o => o.id === activeOTId)) {
                 activeOTId = null;
+            }
+
+            // ── Auto-restaurar OT activa al primer disparo (después de recargar página) ──
+            if (primerasCarga) {
+                primerasCarga = false;
+                if (activeOTId !== null) {
+                    const ot = storeOTs.find(o => o.id === activeOTId);
+                    if (ot) {
+                        // Restaurar formulario Fase 1
+                        cargarDatosGenerales(ot.datosGenerales);
+                        // Restaurar ventanas desde Firebase (más confiable que localStorage)
+                        storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
+                        guardarStore();
+                        sincronizarResumenFase2();
+                    }
+                }
             }
 
             // Actualizar UI sin interrumpir el formulario activo
