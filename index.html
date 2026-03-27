@@ -3609,25 +3609,99 @@
             ]);
         });
 
-        // ── Generar y descargar el archivo Excel ─────────────────────────────
-        const wb  = XLSX.utils.book_new();
-        const ws  = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
-
-        // Ancho de columnas orientativo
+        // ── Generar workbook ─────────────────────────────────────────────────
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
         ws['!cols'] = [
-            {wch:8},{wch:14},{wch:12},{wch:12},{wch:16},{wch:10},
+            {wch:8},{wch:14},{wch:12},{wch:12},{wch:10},
             {wch:30},{wch:12},{wch:22},{wch:14},{wch:16},
             {wch:8},{wch:8},{wch:14},{wch:10},
             {wch:8},{wch:10},{wch:8},
             {wch:26},{wch:26},
             {wch:16},{wch:14},{wch:18},{wch:16},{wch:16}
         ];
-
         XLSX.utils.book_append_sheet(wb, ws, 'Hoja1');
-        const fecha = new Date().toISOString().split('T')[0];
-        XLSX.writeFile(wb, `Ordenes_Estructura_OT${ot}_${fecha}.xlsx`);
 
-        showToast(`Excel generado: ${dataRows.length} fila(s) para el Optimizador de Estructura`);
+        // Escribir como ArrayBuffer para poder pasarlo al iframe Y descargarlo
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const fecha    = new Date().toISOString().split('T')[0];
+        const filename = `Ordenes_Estructura_OT${ot}_${fecha}.xlsx`;
+
+        // ── 1. Descargar el archivo de órdenes ───────────────────────────────
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+
+        // ── 2. Cambiar al tab Estructura ─────────────────────────────────────
+        document.getElementById('estructura-tab').click();
+
+        // ── 3. Cargar el iframe si aún no está y luego procesar ───────────────
+        const iframe = document.getElementById('iframe-estructura');
+
+        async function procesarEnOptimizador() {
+            const iWin = iframe.contentWindow;
+
+            // Verificar auth del optimizador
+            if (!iWin.firebaseAuth || !iWin.firebaseAuth.currentUser) {
+                showToast('Iniciá sesión en el tab Estructura para que cargue automáticamente', 'error');
+                return;
+            }
+
+            // Crear File a partir del buffer
+            const file = new File([new Uint8Array(excelBuffer)], filename, {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+
+            showToast('Cargando órdenes en el Optimizador de Estructura…');
+
+            // Cargar órdenes
+            await iWin.cargarOrdenes({ target: { files: [file] } });
+
+            // Esperar a que btnEjecutar esté habilitado (inventario de Firebase listo)
+            await new Promise((resolve, reject) => {
+                let elapsed = 0;
+                const check = setInterval(() => {
+                    elapsed += 400;
+                    const btn = iWin.document.getElementById('btnEjecutar');
+                    if (btn && !btn.disabled) { clearInterval(check); resolve(); }
+                    if (elapsed > 20000) { clearInterval(check); reject(new Error('Tiempo de espera agotado — verificá que el inventario esté cargado en Estructura')); }
+                }, 400);
+            });
+
+            showToast('Calculando plan de corte…');
+
+            // Ejecutar optimización
+            await iWin.ejecutarOptimizacion();
+
+            // Esperar a que btnExportar esté habilitado (optimización terminada)
+            await new Promise((resolve, reject) => {
+                let elapsed = 0;
+                const check = setInterval(() => {
+                    elapsed += 400;
+                    const btn = iWin.document.getElementById('btnExportar');
+                    if (btn && !btn.disabled) { clearInterval(check); resolve(); }
+                    if (elapsed > 20000) { clearInterval(check); reject(new Error('La optimización tardó demasiado o no encontró resultado')); }
+                }, 400);
+            });
+
+            // Descargar el Excel del plan de corte
+            iWin.exportarResultados();
+            showToast('✅ Plan de corte calculado y descargado');
+        }
+
+        if (!iframe.getAttribute('src')) {
+            // Iframe no cargado aún: cargarlo y esperar init de Firebase (3s)
+            iframe.addEventListener('load', function onLoad() {
+                iframe.removeEventListener('load', onLoad);
+                setTimeout(() => procesarEnOptimizador().catch(e => showToast('⚠ ' + e.message, 'error')), 3000);
+            });
+            iframe.src = 'optimizador.html';
+        } else {
+            // Iframe ya cargado
+            setTimeout(() => procesarEnOptimizador().catch(e => showToast('⚠ ' + e.message, 'error')), 500);
+        }
     }
 
     function exportarRegistroCorte() {
