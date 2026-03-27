@@ -586,6 +586,31 @@
         .mobile-bottom-nav button.active i { filter: drop-shadow(0 0 6px rgba(59,130,246,0.6)); }
         .mobile-bottom-nav button:active { transform: scale(0.9); }
 
+        /* ── IFRAME TABS (Estructura / Ojo de Dios) ─────────── */
+        .iframe-tab-pane {
+            height: calc(100vh - 130px);
+            min-height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+            position: relative;
+            background: #0a0a0f;
+        }
+        .iframe-tab-pane iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 12px;
+        }
+        .iframe-loading {
+            position: absolute; inset: 0; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; gap: 16px; color: #64748b;
+        }
+        .iframe-loading .spinner-border { color: var(--primary-500); width: 2.5rem; height: 2.5rem; }
+        @media (max-width: 768px) {
+            .iframe-tab-pane { height: calc(100vh - 75px); border-radius: 0; }
+            .iframe-tab-pane iframe { border-radius: 0; }
+        }
+
         /* ── RESPONSIVE MÓVIL ────────────────────────────────── */
         @media (max-width: 768px) {
             .container-fluid { padding-left: 12px !important; padding-right: 12px !important; }
@@ -893,6 +918,12 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="fase4-tab" data-bs-toggle="tab" data-bs-target="#fase4" type="button" role="tab" aria-controls="fase4" aria-selected="false"><i class="bi bi-4-circle"></i> Fase 4: Producción</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="estructura-tab" data-bs-toggle="tab" data-bs-target="#estructura" type="button" role="tab" aria-controls="estructura" aria-selected="false"><i class="bi bi-tools"></i> Estructura</button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ojodedios-tab" data-bs-toggle="tab" data-bs-target="#ojodedios" type="button" role="tab" aria-controls="ojodedios" aria-selected="false"><i class="bi bi-eye-fill"></i> Ojo de Dios</button>
         </li>
     </ul>
 
@@ -1565,6 +1596,30 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- ESTRUCTURA: Optimizador de Tubos (iframe lazy) -->
+        <div class="tab-pane fade" id="estructura" role="tabpanel" aria-labelledby="estructura-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="estructura-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Optimizador de Estructura...</span>
+                </div>
+                <iframe id="iframe-estructura" src="" title="Optimizador Rolzzo — Estructura" style="display:none;"
+                        onload="document.getElementById('estructura-loading').style.display='none'; this.style.display='block';"></iframe>
+            </div>
+        </div>
+
+        <!-- OJO DE DIOS: Panel Admin (iframe lazy) -->
+        <div class="tab-pane fade" id="ojodedios" role="tabpanel" aria-labelledby="ojodedios-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="ojodedios-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Panel de Administración...</span>
+                </div>
+                <iframe id="iframe-ojodedios" src="" title="Ojo de Dios — Admin" style="display:none;"
+                        onload="document.getElementById('ojodedios-loading').style.display='none'; this.style.display='block';"></iframe>
             </div>
         </div>
 
@@ -5641,6 +5696,16 @@
         // Activar "Panel" por defecto en bottom nav
         const defaultBtn = document.querySelector('.mobile-bottom-nav button[data-tab="panel"]');
         if (defaultBtn) defaultBtn.classList.add('active');
+
+        // ── Lazy loading de iframes al activar los tabs ──
+        document.getElementById('estructura-tab').addEventListener('shown.bs.tab', () => {
+            const iframe = document.getElementById('iframe-estructura');
+            if (!iframe.src) iframe.src = 'optimizador.html';
+        });
+        document.getElementById('ojodedios-tab').addEventListener('shown.bs.tab', () => {
+            const iframe = document.getElementById('iframe-ojodedios');
+            if (!iframe.src) iframe.src = 'admin_panel.html';
+        });
     });
 </script>
 
@@ -5661,6 +5726,12 @@
         </button>
         <button data-tab="fase4" onclick="switchTab('fase4')">
             <i class="bi bi-4-circle-fill"></i><span>Prod.</span>
+        </button>
+        <button data-tab="estructura" onclick="switchTab('estructura')">
+            <i class="bi bi-tools"></i><span>Tubos</span>
+        </button>
+        <button data-tab="ojodedios" onclick="switchTab('ojodedios')">
+            <i class="bi bi-eye-fill"></i><span>Admin</span>
         </button>
     </div>
 </nav>
