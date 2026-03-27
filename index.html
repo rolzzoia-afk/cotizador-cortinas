@@ -3643,11 +3643,21 @@
         async function procesarEnOptimizador() {
             const iWin = iframe.contentWindow;
 
-            // Verificar auth del optimizador
-            if (!iWin.firebaseAuth || !iWin.firebaseAuth.currentUser) {
-                showToast('Iniciá sesión en el tab Estructura para que cargue automáticamente', 'error');
-                return;
-            }
+            // Esperar a que Firebase restaure la sesión (puede tardar unos segundos)
+            showToast('Verificando sesión en Estructura…');
+            await new Promise((resolve, reject) => {
+                let elapsed = 0;
+                const check = setInterval(() => {
+                    elapsed += 300;
+                    if (iWin.firebaseAuth && iWin.firebaseAuth.currentUser) {
+                        clearInterval(check); resolve();
+                    }
+                    if (elapsed > 12000) {
+                        clearInterval(check);
+                        reject(new Error('No se detectó sesión activa en el Optimizador — iniciá sesión en el tab Estructura'));
+                    }
+                }, 300);
+            });
 
             // Crear File a partir del buffer
             const file = new File([new Uint8Array(excelBuffer)], filename, {
