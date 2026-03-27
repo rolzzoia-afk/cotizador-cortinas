@@ -578,8 +578,8 @@
         .mobile-bottom-nav button {
             background: none; border: none; color: var(--text-secondary);
             display: flex; flex-direction: column; align-items: center; gap: 2px;
-            padding: 4px 8px; border-radius: 10px; transition: all 0.18s ease;
-            font-size: 0.6rem; min-width: 52px;
+            padding: 6px 8px; border-radius: 10px; transition: all 0.18s ease;
+            font-size: 0.6rem; min-width: 52px; min-height: 52px;
         }
         .mobile-bottom-nav button i { font-size: 1.25rem; }
         .mobile-bottom-nav button.active { color: var(--primary-500); }
@@ -603,10 +603,152 @@
             .section-header { flex-wrap: wrap; gap: 6px; font-size: 0.85rem; }
             .btn-premium, .btn-premium-success { font-size: 0.82rem; padding: 8px 14px; }
             #preview-multi { max-height: 180px; }
+
+            /* ── TOUCH TARGETS ≥ 48px (WCAG 2.5.5 / Material Design) ── */
+
+            /* Nav bottom bar: cada botón exactamente 48px de alto */
+            .mobile-bottom-nav button {
+                min-height: 48px;
+                min-width: 48px;
+                padding: 6px 10px;
+            }
+
+            /* Tabs de fases (usados en tablet cuando se muestran) */
+            .nav-tabs .nav-link {
+                min-height: 48px;
+                padding: 12px 16px;
+                display: inline-flex;
+                align-items: center;
+            }
+
+            /* Tabs de paños (Izquierdo / Derecho / etc.) */
+            .pano-tab {
+                min-height: 48px;
+                padding: 10px 16px;
+                font-size: 0.85rem;
+            }
+
+            /* Botones tipo-ventana (Simple / Doble / Triple…) */
+            .tipo-ventana-btn {
+                min-height: 48px;
+                min-width: 48px;
+                padding: 10px 14px;
+                font-size: 0.82rem;
+                justify-content: center;
+            }
+
+            /* Radio pills de la ficha técnica (INT/EXT, SCR/BK/DU…) */
+            .ficha-radio + label {
+                min-height: 44px;
+                min-width: 44px;
+                height: auto;
+                padding: 8px 12px;
+                font-size: 0.78rem;
+                border-radius: 8px;
+            }
+
+            /* Inputs mini de la ficha (cantidad manillas, retiro…) */
+            .ficha-input-mini {
+                height: 44px;
+                font-size: 0.82rem;
+                padding: 6px 8px;
+                width: 72px;
+            }
+
+            /* Labels de ficha-radio-group (motor, cenefa, mecanismo…) */
+            .ficha-radio-group label {
+                min-height: 44px;
+                padding: 10px 14px;
+                font-size: 0.82rem;
+                display: inline-flex;
+                align-items: center;
+            }
+
+            /* Todos los form-control y form-select */
+            .form-control, .form-select {
+                min-height: 48px;
+                font-size: 1rem;
+            }
+            .form-control-sm, .form-select-sm {
+                min-height: 44px;
+                font-size: 0.9rem;
+                padding: 8px 10px;
+            }
+
+            /* Botones btn-sm de las tablas y acciones inline */
+            .btn-sm {
+                min-height: 44px;
+                min-width: 44px;
+                padding: 8px 12px !important;
+                font-size: 0.8rem;
+            }
+
+            /* Botones de acción en tarjetas OT del kanban */
+            .ot-card-actions { gap: 6px; }
+            .ot-card-actions button {
+                min-height: 44px;
+                min-width: 44px;
+                padding: 8px 10px;
+                font-size: 0.78rem;
+            }
+
+            /* Fila de la ficha: más espacio entre opciones */
+            .ficha-row {
+                min-height: 44px;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-bottom: 4px;
+            }
+            .ficha-opciones { gap: 6px; }
+
+            /* Checkboxes y radios nativos: área de toque mayor */
+            .form-check-input {
+                width: 22px;
+                height: 22px;
+                margin-top: 0;
+                cursor: pointer;
+            }
+            .form-check-label {
+                padding-left: 6px;
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                cursor: pointer;
+            }
+
+            /* Botones grandes premium */
+            .btn-premium, .btn-premium-success, .btn-premium-warning {
+                min-height: 48px;
+                padding: 12px 18px;
+            }
+
+            /* Ficha textarea: cómoda en móvil */
+            .ficha-textarea { min-height: 72px; font-size: 0.9rem; }
         }
+
         @media (max-width: 480px) {
             .kanban-col { min-width: 155px; }
             .ot-card-cliente { font-size: 0.78rem; }
+            /* En pantallas muy pequeñas los radio pills se apilan más */
+            .ficha-radio + label { min-width: 40px; }
+            .tipo-ventana-btn { padding: 10px 10px; font-size: 0.78rem; }
+        }
+
+        /* ── TABLET (769px – 1024px): touch targets medianos ── */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .ficha-radio + label {
+                min-height: 40px;
+                min-width: 40px;
+                height: auto;
+                padding: 6px 10px;
+                font-size: 0.75rem;
+            }
+            .ficha-input-mini { height: 40px; }
+            .tipo-ventana-btn { min-height: 40px; padding: 8px 12px; }
+            .pano-tab { min-height: 40px; padding: 8px 14px; }
+            .btn-sm { min-height: 40px; padding: 6px 10px !important; }
+            .ot-card-actions button { min-height: 40px; min-width: 40px; }
+            .form-control-sm, .form-select-sm { min-height: 40px; }
         }
 
         /* ── PLAN DE CORTE — COLMENA ───────────────────────────── */
