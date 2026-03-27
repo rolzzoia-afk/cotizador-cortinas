@@ -4672,12 +4672,14 @@
                 if (!v.panos || v.panos.length === 0) return;
                 const extraCm = extraCmPorTipo(v);                          // Regla 7
                 const isDuo   = (v.producto || '').toUpperCase().includes('DUO');
-                const altoBase = Math.round(parseFloat(v.alto) * 100) + extraCm;
-                const altoCm   = isDuo
-                    ? Math.round(parseFloat(v.alto) * 100) * 2 + extraCm   // DUO: alto×2 + 10cm
-                    : altoBase;
 
                 v.panos.forEach((p, pi) => {
+                    // Cada paño puede tener su propio alto (ventana con alturas distintas por lado)
+                    const altoFuente = parseFloat(p.alto || v.alto) || 0;
+                    const altoBase = Math.round(altoFuente * 100) + extraCm;
+                    const altoCm   = isDuo
+                        ? Math.round(altoFuente * 100) * 2 + extraCm       // DUO: alto×2 + 10cm
+                        : altoBase;
                     const anchoCm = Math.round(parseFloat(p.ancho) * 100) + BORDE; // +4cm Regla 5
                     if (!anchoCm || !altoCm) return;
                     const panoSuffix = v.panos.length > 1 ? ` P${pi+1}` : '';
