@@ -4580,14 +4580,14 @@
     }
 
     // ── MaxRects BSSF (Best Short Side Fit) ─────────────────────────────
-    function mxFit(item, F) {
+    function mxFit(item, F, allowRot = true) {
         let bs = Infinity, bF = null, bW = 0, bH = 0, bR = false;
         for (const fr of F) {
             if (item.w <= fr.w && item.h <= fr.h) {
                 const s = Math.min(fr.w - item.w, fr.h - item.h);
                 if (s < bs) { bs = s; bF = fr; bW = item.w; bH = item.h; bR = false; }
             }
-            if (item.h <= fr.w && item.w <= fr.h) {
+            if (allowRot && item.h <= fr.w && item.w <= fr.h) {
                 const s = Math.min(fr.w - item.h, fr.h - item.w);
                 if (s < bs) { bs = s; bF = fr; bW = item.h; bH = item.w; bR = true; }
             }
@@ -4606,12 +4606,12 @@
         }
         return out.filter((a,i) => !out.some((b,j) => j!==i && b.x<=a.x && b.y<=a.y && b.x+b.w>=a.x+a.w && b.y+b.h>=a.y+a.h));
     }
-    function mxPack(items, uw, uh) {
+    function mxPack(items, uw, uh, allowRot = true) {
         let F = [{ x:0, y:0, w:uw, h:uh }];
         const placed = [];
         const sorted = [...items].sort((a,b) => (b.w*b.h)-(a.w*a.h));
         for (const item of sorted) {
-            const r = mxFit(item, F);
+            const r = mxFit(item, F, allowRot);
             if (r) { placed.push(r); F = mxSplit(F, r); }
             else   placed.push({ ...item, px:-1, py:-1, pw:item.w, ph:item.h, rot:false, failed:true });
         }
@@ -4789,32 +4789,67 @@
 
             // Piezas que no caben en sobrantes → desde rollo
             if (sinCubrir.length) {
-                const piezasOrd = porAltura(sinCubrir); // mayor→menor para corte ordenado
+                const piezasOrd = porAltura(sinCubrir);
                 const maxH = piezasOrd.reduce((s,p) => s + Math.max(p.w,p.h), 0) + 50;
                 const minH = Math.max(...piezasOrd.map(p => Math.min(p.w,p.h)));
-                let lo = minH, hi = maxH, bestPl = null, bestH = maxH;
+                const MIN_SOB = 30;
+
+                // ── Pasada A: sin rotación (Estrategia B — vertical, sin consulta) ──
+                let loA = minH, hiA = maxH, plA = null, hA = maxH;
                 for (let i = 0; i < 18; i++) {
-                    const mid = Math.floor((lo+hi)/2);
-                    const pl  = mxPack(piezasOrd.map(p=>({...p})), ROLL_W_UTIL, mid);
+                    const mid = Math.floor((loA+hiA)/2);
+                    const pl  = mxPack(piezasOrd.map(p=>({...p})), ROLL_W_UTIL, mid, false);
                     if (pl.every(r => !r.failed)) {
                         const usedH = pl.reduce((m,r) => Math.max(m, r.py+r.ph), 0);
-                        if (usedH < bestH) { bestH = usedH; bestPl = pl; }
-                        hi = mid;
-                    } else { lo = mid + 1; }
+                        if (usedH < hA) { hA = usedH; plA = pl; }
+                        hiA = mid;
+                    } else { loA = mid + 1; }
                 }
-                if (bestPl) {
-                    const altoCorte = bestH + MARGEN * 2;
-                    const efic = Math.round(bestPl.reduce((s,r) => s+r.pw*r.ph, 0) / (ROLL_W_UTIL * bestH) * 100);
 
-                    // ── Sobrante interno: franja derecha no usada dentro del área de corte ──
-                    const MIN_SOB = 30; // mínimo útil en cm
-                    const maxX    = bestPl.reduce((m, r) => Math.max(m, r.px + r.pw), 0);
-                    const anchoFranja = ROLL_W_UTIL - maxX; // cm libres a la derecha
-                    const sobInterno  = anchoFranja >= MIN_SOB
+                // ── Pasada B: con rotación (Estrategia A — óptima, requiere auth si hay rot) ──
+                let loB = minH, hiB = maxH, plB = null, hB = maxH;
+                for (let i = 0; i < 18; i++) {
+                    const mid = Math.floor((loB+hiB)/2);
+                    const pl  = mxPack(piezasOrd.map(p=>({...p})), ROLL_W_UTIL, mid, true);
+                    if (pl.every(r => !r.failed)) {
+                        const usedH = pl.reduce((m,r) => Math.max(m, r.py+r.ph), 0);
+                        if (usedH < hB) { hB = usedH; plB = pl; }
+                        hiB = mid;
+                    } else { loB = mid + 1; }
+                }
+
+                // Usar Pasada B como layout principal; Pasada A como fallback sin rotación
+                const bestPl = plB || plA;
+                const bestH  = plB ? hB : hA;
+
+                if (bestPl) {
+                    const altoCorte  = bestH + MARGEN * 2;
+                    const efic       = Math.round(bestPl.reduce((s,r) => s+r.pw*r.ph, 0) / (ROLL_W_UTIL * bestH) * 100);
+                    const maxX       = bestPl.reduce((m,r) => Math.max(m, r.px+r.pw), 0);
+                    const anchoFranja = ROLL_W_UTIL - maxX;
+                    const sobInterno = anchoFranja >= MIN_SOB
                         ? { ancho: Math.round(anchoFranja), alto: Math.round(altoCorte) }
                         : null;
 
-                    plan.rollo.push({ codInt, placed: bestPl, anchoUtil: ROLL_W_UTIL, altoUtil: bestH, anchoCorte: 300, altoCorte, efic, sobInterno });
+                    // Piezas rotadas → requieren autorización del cliente
+                    const piezasRotadas  = bestPl.filter(r => r.rot && !r.failed);
+                    const tieneRotaciones = piezasRotadas.length > 0;
+
+                    // Layout vertical pre-calculado (para cuando el cliente rechace)
+                    const altoVertical = plA ? hA + MARGEN * 2 : null;
+                    const eficVertical = plA ? Math.round(plA.reduce((s,r) => s+r.pw*r.ph, 0) / (ROLL_W_UTIL * hA) * 100) : 0;
+                    const maxXv = plA ? plA.reduce((m,r) => Math.max(m, r.px+r.pw), 0) : 0;
+                    const sobInternoV = plA && (ROLL_W_UTIL - maxXv) >= MIN_SOB
+                        ? { ancho: Math.round(ROLL_W_UTIL - maxXv), alto: Math.round(altoVertical) }
+                        : null;
+
+                    plan.rollo.push({
+                        codInt, placed: bestPl,
+                        anchoUtil: ROLL_W_UTIL, altoUtil: bestH, anchoCorte: 300, altoCorte, efic, sobInterno,
+                        tieneRotaciones, piezasRotadas,
+                        layoutVertical: plA, altoVertical, eficVertical, sobInternoV,
+                        decisiones: {}
+                    });
                 } else {
                     plan.sinStock.push({ codInt, piezas: sinCubrir });
                 }
@@ -4921,23 +4956,59 @@
                        </span>`
                     : '';
 
+                // Panel de autorización de inversión (si hay piezas rotadas)
+                let panelRot = '';
+                let botonConfirmar = `
+                    <button class="btn btn-sm btn-premium-success" onclick="confirmarCorteRollo(${gi},'${canvId}')">
+                        <i class="bi bi-check2-circle"></i> Confirmar corte realizado
+                    </button>`;
+
+                if (grupo.tieneRotaciones) {
+                    panelRot = `
+                    <div id="pc-rot-${gi}" style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
+                        <div style="font-size:0.78rem;color:#f97316;font-weight:600;margin-bottom:8px;">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            ${grupo.piezasRotadas.length} pieza(s) requieren inversión de tela — consultar al cliente
+                        </div>
+                        ${grupo.piezasRotadas.map(r => `
+                        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
+                            <span style="font-size:0.74rem;color:#fed7aa;min-width:160px;">↺ ${r.nombre} — ${r.pw}×${r.ph}cm</span>
+                            <button id="btn-si-${gi}-${r.id.replace(/[^a-z0-9]/gi,'_')}"
+                                class="btn btn-sm"
+                                style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;padding:2px 10px;"
+                                onclick="decidirRotacion(${gi},'${r.id}',true,'${canvId}')">
+                                ✓ Autoriza
+                            </button>
+                            <button id="btn-no-${gi}-${r.id.replace(/[^a-z0-9]/gi,'_')}"
+                                class="btn btn-sm"
+                                style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;padding:2px 10px;"
+                                onclick="decidirRotacion(${gi},'${r.id}',false,'${canvId}')">
+                                ✗ Rechaza
+                            </button>
+                        </div>`).join('')}
+                    </div>`;
+                    botonConfirmar = `
+                    <div id="pc-rot-pending-${gi}" style="font-size:0.72rem;color:var(--text-secondary);padding:6px 0;">
+                        <i class="bi bi-hourglass-split"></i> Esperando decisión del cliente sobre la inversión...
+                    </div>`;
+                }
+
                 html += `
-                <div class="pc-card desde-rollo">
+                <div class="pc-card desde-rollo" id="pc-card-rollo-${gi}">
                     <div class="pc-card-header">
                         <div>
                             <div class="pc-cod">${grupo.codInt}</div>
-                            <div class="pc-dims">Paño a cortar: <strong>${grupo.anchoCorte} × ${grupo.altoCorte} cm</strong> del rollo ${badgeSI}</div>
+                            <div class="pc-dims" id="pc-dims-rollo-${gi}">Paño a cortar: <strong>${grupo.anchoCorte} × ${grupo.altoCorte} cm</strong> del rollo ${badgeSI}</div>
                         </div>
-                        <span class="pc-efic ${efCls}">Aprovechamiento: ${grupo.efic}%</span>
+                        <span class="pc-efic ${efCls}" id="pc-efic-rollo-${gi}">Aprovechamiento: ${grupo.efic}%</span>
                     </div>
                     <div class="pc-piezas-lista">
-                        ${piezas.map((r,i) => `<span class="pc-pieza-tag" style="border-color:${PC_PALETTE[i%PC_PALETTE.length]}55;color:${PC_PALETTE[i%PC_PALETTE.length]};">${r.nombre}${r.rot ? ' ↺':''} — ${r.pw}×${r.ph}cm</span>`).join('')}
+                        ${piezas.map((r,i) => `<span class="pc-pieza-tag" style="border-color:${r.rot ? '#f9731655' : PC_PALETTE[i%PC_PALETTE.length]+'55'};color:${r.rot ? '#f97316' : PC_PALETTE[i%PC_PALETTE.length]};">${r.nombre}${r.rot ? ' ↺':''} — ${r.pw}×${r.ph}cm</span>`).join('')}
                     </div>
                     <div class="pc-canvas-wrap"><canvas id="${canvId}"></canvas></div>
+                    ${panelRot}
                     <div class="pc-actions" id="pc-acc-rollo-${gi}">
-                        <button class="btn btn-sm btn-premium-success" onclick="confirmarCorteRollo(${gi},'${canvId}')">
-                            <i class="bi bi-check2-circle"></i> Confirmar corte realizado
-                        </button>
+                        ${botonConfirmar}
                     </div>
                 </div>`;
             });
@@ -5016,7 +5087,8 @@
             const y = Math.round(mg + r.py * SCALE);
             const w = Math.round(r.pw * SCALE);
             const h = Math.round(r.ph * SCALE);
-            const col = PC_PALETTE[i % PC_PALETTE.length];
+            // Piezas rotadas en naranja (requieren autorización del cliente)
+            const col = r.rot ? '#f97316' : PC_PALETTE[i % PC_PALETTE.length];
             ctx.fillStyle = col + '33';
             ctx.fillRect(x, y, w, h);
             ctx.strokeStyle = col;
@@ -5175,6 +5247,85 @@
         db.collection('colmena_panos').doc(docId).update({ disponible:false, ot_asignada:otNr, fechaUso:new Date().toISOString() })
           .then(() => { showToast('Sobrante marcado como usado' + (nota||'')); _desvanecerCard(canvId); })
           .catch(() => showToast('Error al actualizar la Colmena', 'error'));
+    }
+
+    // ── Gestión de inversión de tela ─────────────────────────────────────
+    function decidirRotacion(gi, piezaId, autoriza, canvId) {
+        const grupo = planCorteActual.rollo[gi];
+        grupo.decisiones[piezaId] = autoriza;
+
+        // Feedback visual en los botones
+        const safeId = piezaId.replace(/[^a-z0-9]/gi, '_');
+        const btnSi  = document.getElementById(`btn-si-${gi}-${safeId}`);
+        const btnNo  = document.getElementById(`btn-no-${gi}-${safeId}`);
+        if (btnSi) btnSi.style.opacity = autoriza  ? '1' : '0.35';
+        if (btnNo) btnNo.style.opacity = !autoriza ? '1' : '0.35';
+
+        // Verificar si todas las piezas rotadas tienen decisión
+        const todasDecididas = grupo.piezasRotadas.every(r => grupo.decisiones[r.id] !== undefined);
+        if (!todasDecididas) return;
+
+        const algunRechazado = grupo.piezasRotadas.some(r => !grupo.decisiones[r.id]);
+
+        if (algunRechazado) {
+            aplicarEstrategiaB(gi, canvId);
+        } else {
+            // Todas autorizadas → habilitar confirmar
+            document.getElementById(`pc-rot-${gi}`)?.remove();
+            document.getElementById(`pc-acc-rollo-${gi}`).innerHTML = `
+                <button class="btn btn-sm btn-premium-success" onclick="confirmarCorteRollo(${gi},'${canvId}')">
+                    <i class="bi bi-check2-circle"></i> Confirmar corte realizado (con inversión autorizada)
+                </button>`;
+        }
+    }
+
+    function aplicarEstrategiaB(gi, canvId) {
+        const grupo = planCorteActual.rollo[gi];
+        const MARGEN = 1;
+
+        if (!grupo.layoutVertical || grupo.layoutVertical.some(r => r.failed)) {
+            showToast('No es posible cortar sin inversión en este rollo', 'error');
+            return;
+        }
+
+        // Actualizar grupo con el layout vertical (sin rotaciones)
+        grupo.placed       = grupo.layoutVertical;
+        grupo.altoCorte    = grupo.altoVertical;
+        grupo.efic         = grupo.eficVertical;
+        grupo.sobInterno   = grupo.sobInternoV;
+        grupo.tieneRotaciones = false;
+
+        // Actualizar texto de dims y eficiencia
+        const si = grupo.sobInterno;
+        const badgeSI = si
+            ? `<span style="font-size:0.7rem;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:2px 7px;border-radius:10px;margin-left:8px;">
+                   <i class="bi bi-scissors"></i> Franja: ${si.ancho}×${si.alto}cm → Colmena
+               </span>`
+            : '';
+        const dimsEl = document.getElementById(`pc-dims-rollo-${gi}`);
+        if (dimsEl) dimsEl.innerHTML =
+            `Paño a cortar: <strong>${grupo.anchoCorte} × ${grupo.altoCorte} cm</strong> del rollo (sin inversión) ${badgeSI}`;
+        const eficEl = document.getElementById(`pc-efic-rollo-${gi}`);
+        if (eficEl) {
+            const cls = grupo.efic >= 70 ? 'alta' : grupo.efic >= 40 ? 'media' : 'baja';
+            eficEl.className = `pc-efic ${cls}`;
+            eficEl.textContent = `Aprovechamiento: ${grupo.efic}%`;
+        }
+
+        // Quitar panel de autorización y mostrar botón confirmar
+        document.getElementById(`pc-rot-${gi}`)?.remove();
+        document.getElementById(`pc-acc-rollo-${gi}`).innerHTML = `
+            <div style="font-size:0.72rem;color:#22c55e;margin-bottom:6px;">
+                <i class="bi bi-check-circle"></i> Layout ajustado sin inversión — corte más largo pero sin girar la tela
+            </div>
+            <button class="btn btn-sm btn-premium-success" onclick="confirmarCorteRollo(${gi},'${canvId}')">
+                <i class="bi bi-check2-circle"></i> Confirmar corte realizado
+            </button>`;
+
+        // Redibujar canvas con el nuevo layout
+        const c = document.getElementById(canvId);
+        if (c) dibujarCanvas(c, grupo.placed.filter(r => !r.failed),
+            grupo.anchoUtil, grupo.altoCorte - MARGEN * 2, grupo.anchoCorte, grupo.altoCorte);
     }
 
     // ── Confirmar corte desde rollo ──────────────────────────────────────
