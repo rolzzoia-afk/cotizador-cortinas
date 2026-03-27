@@ -14,6 +14,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <!-- Firebase compat (funciona sin módulos ES) -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
@@ -1592,6 +1593,7 @@
                                 <button class="btn btn-premium fw-bold" onclick="generarPDFProduccion()"><i class="bi bi-file-earmark-pdf"></i> Generar PDF Producción</button>
                                 <button class="btn btn-premium-success fw-bold" onclick="generarEtiquetasPDF()"><i class="bi bi-printer"></i> Imprimir Etiquetas</button>
                                 <button class="btn btn-sm fw-bold" style="background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;" onclick="exportarRegistroCorte()"><i class="bi bi-journal-check"></i> Paso 27 — Exportar Registro de Corte (Stock)</button>
+                                <button class="btn btn-sm fw-bold" style="background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.5);color:#14b8a6;" onclick="exportarOrdenesEstructura()"><i class="bi bi-tools"></i> Exportar Órdenes → Optimizador de Estructura</button>
                             </div>
                         </div>
                     </div>
@@ -3521,6 +3523,113 @@
     // ===================================================
     // PASO 27 — Exportar Registro de Corte (CSV)
     // ===================================================
+    // ═══════════════════════════════════════════════════════════════════
+    // EXPORTAR ÓRDENES → OPTIMIZADOR DE ESTRUCTURA (TUBERÍA)
+    // Genera el Excel en el formato exacto que espera app.js del optimizador
+    // ═══════════════════════════════════════════════════════════════════
+    function exportarOrdenesEstructura() {
+        if (!window.optimizerRows || window.optimizerRows.length === 0) {
+            showToast('Cargá los datos de producción primero (botón Cargar en Fase 4)', 'error');
+            return;
+        }
+        if (typeof XLSX === 'undefined') {
+            showToast('Error: librería XLSX no disponible', 'error');
+            return;
+        }
+
+        const ot      = document.getElementById('f4-ot').value     || '—';
+        const cliente = document.getElementById('f4-cliente').value || '—';
+
+        // ── Mapa de tipos de tubo → { código Excel, offset en cm } ──────────
+        // offset = valor que se resta al ANCHO REAL para obtener la medida del tubo
+        const TUBE_MAP = {
+            'E02':   { tuberia: '38mm_1,2_E02',  offset: 3.8 },
+            'E53':   { tuberia: '40mm_2mm_E53',  offset: 3.3 },
+            'E05':   { tuberia: '45mm_E05',       offset: 4.0 },
+            'E47':   { tuberia: '63mm_E47',       offset: 5.0 },
+            'VELCRO':{ tuberia: 'VELCRO',         offset: 0   },
+        };
+
+        // ── Encabezados del Excel (igual que el archivo de ejemplo) ──────────
+        const headers = [
+            'OT','CLIENTE','ANCHO REAL','ALTO REAL','CADENA','SENTIDO',
+            'COD SEC','COD_INT','TUBERIA','UBIC.','COLOR ACCESORIOS',
+            'TUBO','PESO','CENEFA OVALADA','CON TIRA',
+            'PESO U','PESO INTERNO','PLETINA',
+            'PERFIL [CORTINA VERTICAL]','VARILLA [CORTINA VERTICAL]',
+            'PERFIL (IZQ) INT','COLOR PERFIL','SEPARADOR SUPERIOR',
+            'SEPARADOR LATERAL','PERFIL (DER) INT'
+        ];
+
+        const dataRows = [];
+
+        window.optimizerRows.forEach(row => {
+            const p        = row.pano || {};
+            const codInt   = row.codInt || '?';
+            const esVertical = String(codInt).toUpperCase().endsWith('-V') ||
+                               String(row.tipo || '').toUpperCase().includes('VERTICAL');
+
+            // Dimensiones en cm
+            const anchoReal = Math.round(parseFloat(row.anchoCm || row.ancho * 100) * 10) / 10;
+            const altoReal  = Math.round(parseFloat(row.altoCm  || row.alto  * 100) * 10) / 10;
+
+            // Tubo
+            const tubeInfo = TUBE_MAP[p.tuberia] || null;
+            let tuberia    = esVertical ? 'CABEZAL_ROLZZO' : (tubeInfo ? tubeInfo.tuberia : (p.tuberia || '—'));
+            let tubo       = 0;
+            let peso       = 0;
+            if (!esVertical && tubeInfo && tubeInfo.offset > 0) {
+                tubo = Math.round((anchoReal - tubeInfo.offset) * 10) / 10;
+                peso = Math.round((tubo - 0.4) * 10) / 10;
+            }
+
+            // Cenefa ovalada
+            const tieneCenefa = !!(p.cenefaOvalada);
+            const cenefa      = tieneCenefa ? Math.round((anchoReal - 1.5) * 10) / 10 : 0;
+            const conTira     = tieneCenefa ? 'CON TIRA' : 0;
+
+            // COD SEC
+            let codSec = 'ROL';
+            if (esVertical)    codSec = 'VERTICAL';
+            if (tieneCenefa)   codSec = 'ROL_MANUAL_CENEFA_OVALADA_38mm';
+
+            // Cadena y sentido
+            const cadena  = p.cadena  ? `CAD [${String(p.cadena).toUpperCase()}]` : '—';
+            const sentido = p.sentido ? String(p.sentido).toUpperCase() : 'EXTERNO';
+            const color   = p.color   || '—';
+
+            dataRows.push([
+                ot, cliente, anchoReal, altoReal, cadena, sentido,
+                codSec, codInt, tuberia, row.ubicacion || '—', color,
+                tubo, peso, cenefa, conTira,
+                0, 0, 0,   // PESO U, PESO INTERNO, PLETINA
+                0, 0,      // PERFIL CORTINA VERTICAL, VARILLA
+                0, 0, 0,   // PERFIL IZQ, COLOR PERFIL, SEP. SUPERIOR
+                0, 0       // SEP. LATERAL, PERFIL DER
+            ]);
+        });
+
+        // ── Generar y descargar el archivo Excel ─────────────────────────────
+        const wb  = XLSX.utils.book_new();
+        const ws  = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+
+        // Ancho de columnas orientativo
+        ws['!cols'] = [
+            {wch:8},{wch:14},{wch:12},{wch:12},{wch:16},{wch:10},
+            {wch:30},{wch:12},{wch:22},{wch:14},{wch:16},
+            {wch:8},{wch:8},{wch:14},{wch:10},
+            {wch:8},{wch:10},{wch:8},
+            {wch:26},{wch:26},
+            {wch:16},{wch:14},{wch:18},{wch:16},{wch:16}
+        ];
+
+        XLSX.utils.book_append_sheet(wb, ws, 'Hoja1');
+        const fecha = new Date().toISOString().split('T')[0];
+        XLSX.writeFile(wb, `Ordenes_Estructura_OT${ot}_${fecha}.xlsx`);
+
+        showToast(`Excel generado: ${dataRows.length} fila(s) para el Optimizador de Estructura`);
+    }
+
     function exportarRegistroCorte() {
         if (!window.optimizerRows || window.optimizerRows.length === 0) {
             alert('Carga los datos primero.'); return;
