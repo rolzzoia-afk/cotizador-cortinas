@@ -4825,9 +4825,11 @@
                     } else { loB = mid + 1; }
                 }
 
-                // Usar Pasada B como layout principal; Pasada A como fallback sin rotación
-                const bestPl = plB || plA;
-                const bestH  = plB ? hB : hA;
+                // Preferir siempre Pasada A (sin rotación).
+                // Solo usar Pasada B (con rotación) cuando plA falla, es decir,
+                // cuando las piezas son físicamente más anchas que el rollo y no hay otra opción.
+                const bestPl = plA || plB;
+                const bestH  = plA ? hA : hB;
 
                 if (bestPl) {
                     const altoCorte  = bestH + MARGEN * 2;
@@ -4838,9 +4840,10 @@
                         ? { ancho: Math.round(anchoFranja), alto: Math.round(altoCorte) }
                         : null;
 
-                    // Piezas rotadas → requieren autorización del cliente
-                    const piezasRotadas  = bestPl.filter(r => r.rot && !r.failed);
-                    const tieneRotaciones = piezasRotadas.length > 0;
+                    // Piezas rotadas: solo relevante cuando plA falló (inversión obligatoria).
+                    // Si plA funcionó, bestPl=plA y no hay rotaciones (allowRot=false en plA).
+                    const piezasRotadas   = bestPl.filter(r => r.rot && !r.failed);
+                    const tieneRotaciones = !plA && piezasRotadas.length > 0; // obligatorio = plA no pudo
 
                     // Layout vertical pre-calculado (para cuando el cliente rechace)
                     const altoVertical = plA ? hA + MARGEN * 2 : null;
@@ -4973,9 +4976,13 @@
                 if (grupo.tieneRotaciones) {
                     panelRot = `
                     <div id="pc-rot-${gi}" style="background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.3);border-radius:8px;padding:10px 12px;margin-bottom:10px;">
-                        <div style="font-size:0.78rem;color:#f97316;font-weight:600;margin-bottom:8px;">
+                        <div style="font-size:0.78rem;color:#f97316;font-weight:600;margin-bottom:4px;">
                             <i class="bi bi-exclamation-triangle-fill"></i>
-                            ${grupo.piezasRotadas.length} pieza(s) requieren inversión de tela — consultar al cliente
+                            Inversión obligatoria — las piezas superan el ancho del rollo
+                        </div>
+                        <div style="font-size:0.7rem;color:#fed7aa;margin-bottom:8px;">
+                            No es posible cortar sin invertir la tela. Consultar al cliente antes de confirmar.
+                            Si rechaza, no se podrá realizar el corte desde este rollo.
                         </div>
                         ${grupo.piezasRotadas.map(r => `
                         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px;">
