@@ -3541,18 +3541,19 @@
         const cliente = document.getElementById('f4-cliente').value || '—';
 
         // ── Mapa de tipos de tubo → { código Excel, offset en cm } ──────────
+        // Las claves son los valores exactos que guarda p.tuberia (valor del radio button)
         // offset = valor que se resta al ANCHO REAL para obtener la medida del tubo
         const TUBE_MAP = {
-            'E02':   { tuberia: '38mm_1,2_E02',  offset: 3.8 },
-            'E53':   { tuberia: '40mm_2mm_E53',  offset: 3.3 },
-            'E05':   { tuberia: '45mm_E05',       offset: 4.0 },
-            'E47':   { tuberia: '63mm_E47',       offset: 5.0 },
-            'VELCRO':{ tuberia: 'VELCRO',         offset: 0   },
+            '0,38mm [E02] 1,2mm': { tuberia: '38mm_1,2_E02', offset: 3.8 },
+            '0,40mm - 2mm [E53]': { tuberia: '40mm_2mm_E53', offset: 3.3 },
+            '0,45mm [E05]':       { tuberia: '45mm_E05',      offset: 4.0 },
+            '0,63mm [E47]':       { tuberia: '63mm_E47',      offset: 5.0 },
+            'VELCRO':             { tuberia: 'VELCRO',         offset: 0   },
         };
 
-        // ── Encabezados del Excel (igual que el archivo de ejemplo) ──────────
+        // ── Encabezados del Excel (CADENA eliminada — no pertenece a estructura) ──
         const headers = [
-            'OT','CLIENTE','ANCHO REAL','ALTO REAL','CADENA','SENTIDO',
+            'OT','CLIENTE','ANCHO REAL','ALTO REAL','SENTIDO',
             'COD SEC','COD_INT','TUBERIA','UBIC.','COLOR ACCESORIOS',
             'TUBO','PESO','CENEFA OVALADA','CON TIRA',
             'PESO U','PESO INTERNO','PLETINA',
@@ -3573,7 +3574,7 @@
             const anchoReal = Math.round(parseFloat(row.anchoCm || row.ancho * 100) * 10) / 10;
             const altoReal  = Math.round(parseFloat(row.altoCm  || row.alto  * 100) * 10) / 10;
 
-            // Tubo
+            // Tubo — buscar en el mapa por el valor exacto almacenado en p.tuberia
             const tubeInfo = TUBE_MAP[p.tuberia] || null;
             let tuberia    = esVertical ? 'CABEZAL_ROLZZO' : (tubeInfo ? tubeInfo.tuberia : (p.tuberia || '—'));
             let tubo       = 0;
@@ -3593,13 +3594,12 @@
             if (esVertical)    codSec = 'VERTICAL';
             if (tieneCenefa)   codSec = 'ROL_MANUAL_CENEFA_OVALADA_38mm';
 
-            // Cadena y sentido
-            const cadena  = p.cadena  ? `CAD [${String(p.cadena).toUpperCase()}]` : '—';
+            // Sentido y color (cadena eliminada)
             const sentido = p.sentido ? String(p.sentido).toUpperCase() : 'EXTERNO';
             const color   = p.color   || '—';
 
             dataRows.push([
-                ot, cliente, anchoReal, altoReal, cadena, sentido,
+                ot, cliente, anchoReal, altoReal, sentido,
                 codSec, codInt, tuberia, row.ubicacion || '—', color,
                 tubo, peso, cenefa, conTira,
                 0, 0, 0,   // PESO U, PESO INTERNO, PLETINA
