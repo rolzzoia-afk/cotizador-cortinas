@@ -1606,8 +1606,8 @@
                     <div class="spinner-border" role="status"></div>
                     <span>Cargando Optimizador de Estructura...</span>
                 </div>
-                <iframe id="iframe-estructura" src="" title="Optimizador Rolzzo — Estructura" style="display:none;"
-                        onload="document.getElementById('estructura-loading').style.display='none'; this.style.display='block';"></iframe>
+                <iframe id="iframe-estructura" title="Optimizador Rolzzo — Estructura" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('estructura-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -1618,8 +1618,8 @@
                     <div class="spinner-border" role="status"></div>
                     <span>Cargando Panel de Administración...</span>
                 </div>
-                <iframe id="iframe-ojodedios" src="" title="Ojo de Dios — Admin" style="display:none;"
-                        onload="document.getElementById('ojodedios-loading').style.display='none'; this.style.display='block';"></iframe>
+                <iframe id="iframe-ojodedios" title="Ojo de Dios — Admin" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('ojodedios-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -5700,11 +5700,11 @@
         // ── Lazy loading de iframes al activar los tabs ──
         document.getElementById('estructura-tab').addEventListener('shown.bs.tab', () => {
             const iframe = document.getElementById('iframe-estructura');
-            if (!iframe.src) iframe.src = 'optimizador.html';
+            if (!iframe.getAttribute('src')) iframe.src = 'optimizador.html';
         });
         document.getElementById('ojodedios-tab').addEventListener('shown.bs.tab', () => {
             const iframe = document.getElementById('iframe-ojodedios');
-            if (!iframe.src) iframe.src = 'admin_panel.html';
+            if (!iframe.getAttribute('src')) iframe.src = 'admin_panel.html';
         });
     });
 </script>
