@@ -4618,6 +4618,25 @@
         return placed;
     }
 
+    // ── Prioridad de tipos de Colmena (Regla 3) ─────────────────────────
+    // Actualizar cuando llegue el archivo con los valores exactos del campo 'tipo'
+    const COLMENA_TIPO_PRIO = {
+        'FALLA':       0,
+        'ERROR CORTE': 1,
+        'CANCELACION': 2,
+        'SOBRANTE':    3
+    };
+    const _tipoPrio = t => COLMENA_TIPO_PRIO[(t || '').toUpperCase().trim()] ?? 99;
+
+    // ── Extra cm al largo según tipo de producto (Regla 7) ───────────────
+    function extraCmPorTipo(v) {
+        const prod = (v.producto || '').toUpperCase();
+        const tipo = (v.tipo    || '').toUpperCase();
+        if (prod.includes('DUO'))                            return 10;
+        if (prod.includes('VERTICAL') || tipo.includes('VERTICAL')) return 5;
+        return 25; // Rollers SC, BK y otros
+    }
+
     // ── Algoritmo principal ──────────────────────────────────────────────
     function generarYRenderizarPlanCorte() {
         const contenido = document.getElementById('pc-contenido');
@@ -4639,9 +4658,9 @@
         const multiOT = otsEnProduccion.length > 1;
 
         // Construir lista de piezas (en cm) combinando todas las OTs
-        const piezas = [];
-        const EXTRA_CM = 25; // 25 cm extra para roller
-        const MARGEN   = 1;  // 1 cm de margen por lado
+        const piezas  = [];
+        const MARGEN  = 1;  // 1 cm de margen por lado
+        const BORDE   = 4;  // 4 cm de limpieza de bordes al ancho (Regla 5, 2cm c/lado)
 
         otsEnProduccion.forEach(otItem => {
             const ventanas = (otItem.storeVentanas && otItem.storeVentanas.length)
@@ -4651,12 +4670,15 @@
 
             ventanas.forEach(v => {
                 if (!v.panos || v.panos.length === 0) return;
-                const altoBase = Math.round(parseFloat(v.alto) * 100) + EXTRA_CM;
-                const isDuo    = (v.producto || '').toUpperCase().includes('DUO');
-                const altoCm   = isDuo ? altoBase * 2 : altoBase;
+                const extraCm = extraCmPorTipo(v);                          // Regla 7
+                const isDuo   = (v.producto || '').toUpperCase().includes('DUO');
+                const altoBase = Math.round(parseFloat(v.alto) * 100) + extraCm;
+                const altoCm   = isDuo
+                    ? Math.round(parseFloat(v.alto) * 100) * 2 + extraCm   // DUO: alto×2 + 10cm
+                    : altoBase;
 
                 v.panos.forEach((p, pi) => {
-                    const anchoCm = Math.round(parseFloat(p.ancho) * 100);
+                    const anchoCm = Math.round(parseFloat(p.ancho) * 100) + BORDE; // +4cm Regla 5
                     if (!anchoCm || !altoCm) return;
                     const panoSuffix = v.panos.length > 1 ? ` P${pi+1}` : '';
                     const label = multiOT
@@ -4668,7 +4690,7 @@
                         codInt: (v.codInt || '').toUpperCase().trim(),
                         otId:   otItem.id,
                         otNum:  otNum,
-                        w:      anchoCm,
+                        w:      anchoCm,  // ya incluye los 4cm de borde
                         h:      altoCm
                     });
                 });
@@ -4701,22 +4723,69 @@
             // Ordenar piezas de mayor a menor (lado largo) para mejor aprovechamiento
             const porAltura = (arr) => [...arr].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
 
-            for (const sob of disponibles) {
-                if (!sinCubrir.length) break;
-                const uw = Math.max(0, sob.ancho - MARGEN * 2);
-                const uh = Math.max(0, sob.alto  - MARGEN * 2);
-                if (uw <= 0 || uh <= 0) continue;
+            // ── Busqueda en Colmena con reglas de prioridad (Reglas 1-4) ──────
+            // Ordenar sobrantes: tipo priority (Regla 3) → FIFO por creadoEn (Regla 4)
+            const disponiblesOrdenados = storeColmena
+                .filter(s => (s.cod || '').toUpperCase().trim() === codInt)
+                .sort((a, b) => {
+                    const dp = _tipoPrio(a.tipo) - _tipoPrio(b.tipo);
+                    if (dp !== 0) return dp;
+                    return new Date(a.creadoEn || 0) - new Date(b.creadoEn || 0);
+                });
 
-                const resultado = mxPack(porAltura(sinCubrir), uw, uh);
-                const exitos    = resultado.filter(r => !r.failed);
-                if (!exitos.length) continue;
+            const usadosEnPlan = new Set(); // evitar usar el mismo sobrante dos veces
 
-                sobUsados.push({ sobrante: sob, placed: exitos, uw, uh });
-                const cubiertos = new Set(exitos.map(e => e.id));
-                sinCubrir.splice(0, sinCubrir.length, ...sinCubrir.filter(p => !cubiertos.has(p.id)));
-            }
+            sinCubrir.forEach((pieza, idx) => {
+                // Regla 1: misma cod + ancho exacto + alto exacto
+                let match = disponiblesOrdenados.find(s =>
+                    !usadosEnPlan.has(s._docId) &&
+                    s.ancho === pieza.w &&
+                    s.alto  === pieza.h
+                );
+                let regla = 1;
 
-            if (sobUsados.length) plan.sobrantes.push(...sobUsados);
+                // Regla 2: misma cod + ancho >= req (sin tope) + alto en [req, req+10]
+                if (!match) {
+                    match = disponiblesOrdenados.find(s =>
+                        !usadosEnPlan.has(s._docId) &&
+                        s.ancho >= pieza.w &&
+                        s.alto  >= pieza.h &&
+                        s.alto  <= pieza.h + 10
+                    );
+                    regla = 2;
+                }
+
+                if (match) {
+                    usadosEnPlan.add(match._docId);
+                    const MIN_SOB = 30;
+                    // Sobrante de ancho: si el paño es más ancho que la pieza (Regla 2)
+                    const anchoExceso = match.ancho - pieza.w;
+                    const sobranteAncho = (regla === 2 && anchoExceso >= MIN_SOB)
+                        ? { cod: codInt, ancho: Math.round(anchoExceso), alto: Math.round(match.alto) }
+                        : null;
+
+                    // Pieza colocada en posición 0,0 del sobrante (compatible con canvas)
+                    const placed = [{
+                        ...pieza,
+                        px: 0, py: 0,
+                        pw: pieza.w, ph: pieza.h,
+                        rot: false, failed: false
+                    }];
+
+                    plan.sobrantes.push({
+                        sobrante: match,
+                        placed, regla, sobranteAncho,
+                        uw: match.ancho, uh: match.alto
+                    });
+                    // Marcar como cubierta para el loop (no va a sinCubrir)
+                    sinCubrir[idx] = null;
+                }
+            });
+
+            // Filtrar piezas no cubiertas → van al corte de rollo
+            sinCubrir.splice(0, sinCubrir.length, ...sinCubrir.filter(p => p !== null));
+
+            if (plan.sobrantes.length) {} // ya se fueron acumulando arriba
 
             // Piezas que no caben en sobrantes → desde rollo
             if (sinCubrir.length) {
@@ -4800,12 +4869,24 @@
                 const efCls  = efic >= 70 ? 'alta' : efic >= 40 ? 'media' : 'baja';
                 const canvId = `pc-cv-sob-${gi}`;
 
+                // Badge de regla aplicada
+                const reglaBadge = grupo.regla === 1
+                    ? `<span style="font-size:0.68rem;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.35);color:#22c55e;padding:1px 7px;border-radius:10px;">✓ Regla 1 — Coincidencia exacta</span>`
+                    : `<span style="font-size:0.68rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:#f59e0b;padding:1px 7px;border-radius:10px;">≈ Regla 2 — Ajuste (±10cm)</span>`;
+
+                // Aviso de sobrante de ancho generado por Regla 2
+                const avisoAncho = grupo.sobranteAncho
+                    ? `<div style="font-size:0.7rem;color:#4ade80;margin-top:4px;">
+                           <i class="bi bi-scissors"></i> Franja sobrante: <strong>${grupo.sobranteAncho.ancho}×${grupo.sobranteAncho.alto}cm</strong> → se registrará en Colmena al confirmar
+                       </div>`
+                    : '';
+
                 html += `
                 <div class="pc-card desde-sob">
                     <div class="pc-card-header">
                         <div>
-                            <div class="pc-cod">${sob.cod}</div>
-                            <div class="pc-dims">${sob.ancho} × ${sob.alto} cm</div>
+                            <div class="pc-cod">${sob.cod} ${reglaBadge}</div>
+                            <div class="pc-dims">${sob.ancho} × ${sob.alto} cm${avisoAncho}</div>
                         </div>
                         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
                             <span class="pc-ubic"><i class="bi bi-geo-alt-fill"></i> ${sob.ubicacion || '—'}</span>
@@ -4982,64 +5063,109 @@
     }
 
     // ── Confirmar uso de sobrante de la Colmena ─────────────────────────
-    // Paso 1: calcula el resto y muestra input de ubicación inline
+    // Paso 1: calcula los restos (alto y ancho) y muestra inputs inline
     function marcarUsoSobrante(gi, canvId) {
-        const grupo   = planCorteActual.sobrantes[gi];
-        const sob     = grupo.sobrante;
-        const placed  = grupo.placed.filter(r => !r.failed);
-        const MARGEN  = 1;
-        const MIN_CM  = 30; // mínimo útil
+        const grupo  = planCorteActual.sobrantes[gi];
+        const sob    = grupo.sobrante;
+        const placed = grupo.placed.filter(r => !r.failed);
+        const MARGEN = 1;
+        const MIN_CM = 30;
 
-        const maxY        = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-        const altoResto   = Math.round(sob.alto - (maxY + MARGEN * 2));
-        const hayResto    = altoResto >= MIN_CM;
-        const accEl       = document.getElementById(`pc-acc-sob-${gi}`);
+        const maxY      = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+        const altoResto = Math.round(sob.alto - (maxY + MARGEN * 2));
+        const hayAlto   = altoResto >= MIN_CM;
+        const sobAncho  = grupo.sobranteAncho; // franja de ancho (Regla 2)
+        const accEl     = document.getElementById(`pc-acc-sob-${gi}`);
         if (!accEl) return;
 
-        if (hayResto) {
-            accEl.innerHTML = `
-                <div style="font-size:0.78rem;color:#22c55e;margin-bottom:8px;">
-                    <i class="bi bi-arrow-return-right"></i>
-                    Sobrante generado: <strong>${sob.cod} ${sob.ancho}×${altoResto}cm</strong>
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <span style="font-size:0.72rem;color:var(--text-secondary);">¿Dónde se guarda?</span>
-                    <input type="text" id="pc-ubic-sob-${gi}" class="form-control form-control-sm"
-                        placeholder="A-54" style="max-width:110px;text-transform:uppercase;"
-                        onkeydown="if(event.key==='Enter') confirmarUsoConSobrante(${gi},'${canvId}',${sob.ancho},${altoResto})">
-                    <button class="btn btn-sm btn-premium-success"
-                        onclick="confirmarUsoConSobrante(${gi},'${canvId}',${sob.ancho},${altoResto})">
-                        <i class="bi bi-check2"></i> Confirmar
-                    </button>
-                </div>`;
-            document.getElementById(`pc-ubic-sob-${gi}`)?.focus();
-        } else {
-            // Sin resto útil — confirmar directo
+        if (!hayAlto && !sobAncho) {
             confirmarUsoSinSobrante(sob._docId, canvId,
                 altoResto > 0 ? ` (${altoResto}cm restantes, no útil)` : '');
+            return;
         }
+
+        let html = '';
+
+        // Sobrante de alto (debajo de la pieza)
+        if (hayAlto) {
+            html += `
+            <div style="font-size:0.78rem;color:#22c55e;margin-bottom:6px;">
+                <i class="bi bi-arrow-down-circle"></i>
+                <strong>Sobrante alto:</strong> ${sob.cod} ${sob.ancho}×${altoResto}cm
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                <span style="font-size:0.72rem;color:var(--text-secondary);">Ubicación:</span>
+                <input type="text" id="pc-ubic-sob-${gi}" class="form-control form-control-sm"
+                    placeholder="A-54" style="max-width:110px;text-transform:uppercase;">
+            </div>`;
+        }
+
+        // Sobrante de ancho (franja lateral, Regla 2)
+        if (sobAncho) {
+            html += `
+            <div style="font-size:0.78rem;color:#4ade80;margin-bottom:6px;">
+                <i class="bi bi-scissors"></i>
+                <strong>Franja ancho:</strong> ${sobAncho.cod} ${sobAncho.ancho}×${sobAncho.alto}cm
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">
+                <span style="font-size:0.72rem;color:var(--text-secondary);">Ubicación:</span>
+                <input type="text" id="pc-ubic-sancho-${gi}" class="form-control form-control-sm"
+                    placeholder="B-12" style="max-width:110px;text-transform:uppercase;">
+            </div>`;
+        }
+
+        html += `
+        <button class="btn btn-sm btn-premium-success"
+            onclick="confirmarUsoConSobrante(${gi},'${canvId}',${hayAlto},${!!sobAncho},${sob.ancho},${altoResto})">
+            <i class="bi bi-check2"></i> Confirmar y guardar sobrantes
+        </button>`;
+
+        accEl.innerHTML = html;
+        document.getElementById(`pc-ubic-sob-${gi}`)?.focus() ||
+        document.getElementById(`pc-ubic-sancho-${gi}`)?.focus();
     }
 
-    // Paso 2a: guarda en Firebase sobrante original como usado + nuevo sobrante
-    function confirmarUsoConSobrante(gi, canvId, anchoNuevo, altoNuevo) {
-        const grupo = planCorteActual.sobrantes[gi];
-        const sob   = grupo.sobrante;
-        const ubic  = (document.getElementById(`pc-ubic-sob-${gi}`)?.value || '').trim().toUpperCase();
-        if (!ubic) { showToast('Ingresa la ubicación donde se guardará el sobrante', 'error'); return; }
+    // Paso 2a: guarda sobrante original como usado + nuevos sobrantes (alto y/o ancho)
+    function confirmarUsoConSobrante(gi, canvId, hayAlto, haySobAncho, anchoAlto, altoResto) {
+        const grupo  = planCorteActual.sobrantes[gi];
+        const sob    = grupo.sobrante;
+        const ot     = storeOTs.find(o => o.id === activeOTId);
+        const otNr   = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
+        const now    = new Date().toISOString();
+        const saves  = [
+            db.collection('colmena_panos').doc(sob._docId).update({ disponible:false, ot_asignada:otNr, fechaUso:now })
+        ];
+        const msgs = [];
 
-        const ot   = storeOTs.find(o => o.id === activeOTId);
-        const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
-        const now  = new Date().toISOString();
+        if (hayAlto) {
+            const ubic = (document.getElementById(`pc-ubic-sob-${gi}`)?.value || '').trim().toUpperCase();
+            if (!ubic) { showToast('Ingresa la ubicación del sobrante de alto', 'error'); return; }
+            saves.push(db.collection('colmena_panos').add({
+                cod:sob.cod, ancho:anchoAlto, alto:altoResto,
+                ubicacion:ubic, tipo:'SOBRANTE', disponible:true,
+                ot_asignada:null, fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now
+            }));
+            msgs.push(`alto ${anchoAlto}×${altoResto}cm → ${ubic}`);
+        }
 
-        Promise.all([
-            db.collection('colmena_panos').doc(sob._docId).update({ disponible:false, ot_asignada:otNr, fechaUso:now }),
-            db.collection('colmena_panos').add({ cod:sob.cod, ancho:anchoNuevo, alto:altoNuevo,
-                ubicacion:ubic, tipo:'SOBRANTE', disponible:true, ot_asignada:null,
-                fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now })
-        ]).then(() => {
-            showToast(`Confirmado. Sobrante ${sob.cod} ${anchoNuevo}×${altoNuevo}cm guardado en ${ubic}`);
-            _desvanecerCard(canvId);
-        }).catch(() => showToast('Error al actualizar la Colmena', 'error'));
+        if (haySobAncho && grupo.sobranteAncho) {
+            const sa   = grupo.sobranteAncho;
+            const ubic = (document.getElementById(`pc-ubic-sancho-${gi}`)?.value || '').trim().toUpperCase();
+            if (!ubic) { showToast('Ingresa la ubicación de la franja de ancho', 'error'); return; }
+            saves.push(db.collection('colmena_panos').add({
+                cod:sa.cod, ancho:sa.ancho, alto:sa.alto,
+                ubicacion:ubic, tipo:'SOBRANTE', disponible:true,
+                ot_asignada:null, fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now
+            }));
+            msgs.push(`ancho ${sa.ancho}×${sa.alto}cm → ${ubic}`);
+        }
+
+        Promise.all(saves)
+            .then(() => {
+                showToast(`Confirmado. Sobrantes guardados: ${msgs.join(' | ') || 'ninguno'}`);
+                _desvanecerCard(canvId);
+            })
+            .catch(() => showToast('Error al actualizar la Colmena', 'error'));
     }
 
     // Paso 2b: sin sobrante útil — solo marcar como usado
