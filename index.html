@@ -4698,13 +4698,16 @@
             const sinCubrir = [...grupo];
             const sobUsados = [];
 
+            // Ordenar piezas de mayor a menor (lado largo) para mejor aprovechamiento
+            const porAltura = (arr) => [...arr].sort((a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h));
+
             for (const sob of disponibles) {
                 if (!sinCubrir.length) break;
                 const uw = Math.max(0, sob.ancho - MARGEN * 2);
                 const uh = Math.max(0, sob.alto  - MARGEN * 2);
                 if (uw <= 0 || uh <= 0) continue;
 
-                const resultado = mxPack(sinCubrir.map(p => ({...p})), uw, uh);
+                const resultado = mxPack(porAltura(sinCubrir), uw, uh);
                 const exitos    = resultado.filter(r => !r.failed);
                 if (!exitos.length) continue;
 
@@ -4717,13 +4720,13 @@
 
             // Piezas que no caben en sobrantes → desde rollo
             if (sinCubrir.length) {
-                // Buscar altura mínima para el paño de 300cm
-                const maxH = sinCubrir.reduce((s,p) => s + Math.max(p.w,p.h), 0) + 50;
-                const minH = Math.max(...sinCubrir.map(p => Math.min(p.w,p.h)));
+                const piezasOrd = porAltura(sinCubrir); // mayor→menor para corte ordenado
+                const maxH = piezasOrd.reduce((s,p) => s + Math.max(p.w,p.h), 0) + 50;
+                const minH = Math.max(...piezasOrd.map(p => Math.min(p.w,p.h)));
                 let lo = minH, hi = maxH, bestPl = null, bestH = maxH;
                 for (let i = 0; i < 18; i++) {
                     const mid = Math.floor((lo+hi)/2);
-                    const pl  = mxPack(sinCubrir.map(p=>({...p})), ROLL_W_UTIL, mid);
+                    const pl  = mxPack(piezasOrd.map(p=>({...p})), ROLL_W_UTIL, mid);
                     if (pl.every(r => !r.failed)) {
                         const usedH = pl.reduce((m,r) => Math.max(m, r.py+r.ph), 0);
                         if (usedH < bestH) { bestH = usedH; bestPl = pl; }
@@ -4733,7 +4736,16 @@
                 if (bestPl) {
                     const altoCorte = bestH + MARGEN * 2;
                     const efic = Math.round(bestPl.reduce((s,r) => s+r.pw*r.ph, 0) / (ROLL_W_UTIL * bestH) * 100);
-                    plan.rollo.push({ codInt, placed: bestPl, anchoUtil: ROLL_W_UTIL, altoUtil: bestH, anchoCorte: 300, altoCorte, efic });
+
+                    // ── Sobrante interno: franja derecha no usada dentro del área de corte ──
+                    const MIN_SOB = 30; // mínimo útil en cm
+                    const maxX    = bestPl.reduce((m, r) => Math.max(m, r.px + r.pw), 0);
+                    const anchoFranja = ROLL_W_UTIL - maxX; // cm libres a la derecha
+                    const sobInterno  = anchoFranja >= MIN_SOB
+                        ? { ancho: Math.round(anchoFranja), alto: Math.round(altoCorte) }
+                        : null;
+
+                    plan.rollo.push({ codInt, placed: bestPl, anchoUtil: ROLL_W_UTIL, altoUtil: bestH, anchoCorte: 300, altoCorte, efic, sobInterno });
                 } else {
                     plan.sinStock.push({ codInt, piezas: sinCubrir });
                 }
@@ -4821,12 +4833,19 @@
                 const canvId = `pc-cv-rollo-${gi}`;
                 const efCls  = grupo.efic >= 70 ? 'alta' : grupo.efic >= 40 ? 'media' : 'baja';
 
+                const si = grupo.sobInterno;
+                const badgeSI = si
+                    ? `<span style="font-size:0.7rem;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;padding:2px 7px;border-radius:10px;margin-left:8px;">
+                           <i class="bi bi-scissors"></i> Franja interna: ${si.ancho}×${si.alto}cm → Colmena
+                       </span>`
+                    : '';
+
                 html += `
                 <div class="pc-card desde-rollo">
                     <div class="pc-card-header">
                         <div>
                             <div class="pc-cod">${grupo.codInt}</div>
-                            <div class="pc-dims">Paño a cortar: <strong>${grupo.anchoCorte} × ${grupo.altoCorte} cm</strong> del rollo</div>
+                            <div class="pc-dims">Paño a cortar: <strong>${grupo.anchoCorte} × ${grupo.altoCorte} cm</strong> del rollo ${badgeSI}</div>
                         </div>
                         <span class="pc-efic ${efCls}">Aprovechamiento: ${grupo.efic}%</span>
                     </div>
@@ -5042,49 +5061,104 @@
         const maxY      = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
         const altoResto = Math.round(grupo.altoCorte - (maxY + MARGEN * 2));
         const hayResto  = altoResto >= MIN_CM;
+        const si        = grupo.sobInterno; // franja derecha interna
         const accEl     = document.getElementById(`pc-acc-rollo-${gi}`);
         if (!accEl) return;
 
-        if (hayResto) {
-            accEl.innerHTML = `
-                <div style="font-size:0.78rem;color:#22c55e;margin-bottom:8px;">
-                    <i class="bi bi-arrow-return-right"></i>
-                    Sobrante del paño: <strong>${grupo.codInt} ${grupo.anchoCorte}×${altoResto}cm</strong>
-                </div>
-                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-                    <span style="font-size:0.72rem;color:var(--text-secondary);">¿Dónde se guarda?</span>
-                    <input type="text" id="pc-ubic-rollo-${gi}" class="form-control form-control-sm"
-                        placeholder="A-54" style="max-width:110px;text-transform:uppercase;"
-                        onkeydown="if(event.key==='Enter') guardarSobranteRollo(${gi},'${canvId}',${grupo.anchoCorte},${altoResto})">
-                    <button class="btn btn-sm btn-premium-success"
-                        onclick="guardarSobranteRollo(${gi},'${canvId}',${grupo.anchoCorte},${altoResto})">
-                        <i class="bi bi-check2"></i> Confirmar
-                    </button>
-                </div>`;
-            document.getElementById(`pc-ubic-rollo-${gi}`)?.focus();
-        } else {
-            showToast(`Corte de ${grupo.codInt} confirmado. Sin sobrante útil (${altoResto}cm).`);
+        if (!hayResto && !si) {
+            showToast(`Corte de ${grupo.codInt} confirmado. Sin sobrantes útiles.`);
             _desvanecerCard(canvId);
+            return;
         }
+
+        // Construir formulario de sobrantes
+        let html = '';
+
+        // Sobrante 1: rollo restante debajo del corte
+        if (hayResto) {
+            html += `
+            <div style="font-size:0.78rem;color:#22c55e;margin-bottom:6px;">
+                <i class="bi bi-arrow-down-circle"></i>
+                <strong>Rollo restante:</strong> ${grupo.codInt} ${grupo.anchoCorte}×${altoResto}cm
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+                <span style="font-size:0.72rem;color:var(--text-secondary);">Ubicación rollo:</span>
+                <input type="text" id="pc-ubic-rollo-${gi}" class="form-control form-control-sm"
+                    placeholder="A-54" style="max-width:110px;text-transform:uppercase;">
+            </div>`;
+        }
+
+        // Sobrante 2: franja derecha interna dentro del área de corte
+        if (si) {
+            html += `
+            <div style="font-size:0.78rem;color:#4ade80;margin-bottom:6px;">
+                <i class="bi bi-scissors"></i>
+                <strong>Franja interna:</strong> ${grupo.codInt} ${si.ancho}×${si.alto}cm
+                <span style="font-size:0.7rem;color:var(--text-secondary);"> (franja derecha del paño cortado)</span>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+                <span style="font-size:0.72rem;color:var(--text-secondary);">Ubicación franja:</span>
+                <input type="text" id="pc-ubic-si-${gi}" class="form-control form-control-sm"
+                    placeholder="B-12" style="max-width:110px;text-transform:uppercase;">
+            </div>`;
+        }
+
+        html += `
+        <button class="btn btn-sm btn-premium-success"
+            onclick="guardarSobrantesRollo(${gi},'${canvId}',${hayResto},${!!si})">
+            <i class="bi bi-check2"></i> Confirmar y guardar sobrantes
+        </button>`;
+
+        accEl.innerHTML = html;
+        document.getElementById(`pc-ubic-rollo-${gi}`)?.focus() || document.getElementById(`pc-ubic-si-${gi}`)?.focus();
     }
 
-    function guardarSobranteRollo(gi, canvId, anchoNuevo, altoNuevo) {
-        const grupo = planCorteActual.rollo[gi];
-        const ubic  = (document.getElementById(`pc-ubic-rollo-${gi}`)?.value || '').trim().toUpperCase();
-        if (!ubic) { showToast('Ingresa la ubicación', 'error'); return; }
+    function guardarSobrantesRollo(gi, canvId, hayResto, haySI) {
+        const grupo   = planCorteActual.rollo[gi];
+        const placed  = grupo.placed.filter(r => !r.failed);
+        const MARGEN  = 1;
+        const maxY    = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+        const altoResto = Math.round(grupo.altoCorte - (maxY + MARGEN * 2));
+        const si      = grupo.sobInterno;
 
         const ot   = storeOTs.find(o => o.id === activeOTId);
         const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
 
-        db.collection('colmena_panos').add({
-            cod: grupo.codInt, ancho: anchoNuevo, alto: altoNuevo,
-            ubicacion: ubic, tipo: 'SOBRANTE', disponible: true,
-            ot_asignada: null, fuente: 'GALPON_ROLZZO',
-            ot_origen: otNr, creadoEn: new Date().toISOString()
-        }).then(() => {
-            showToast(`Sobrante ${grupo.codInt} ${anchoNuevo}×${altoNuevo}cm guardado en ${ubic}`);
-            _desvanecerCard(canvId);
-        }).catch(() => showToast('Error al guardar sobrante', 'error'));
+        const saves = [];
+
+        // Sobrante 1 — rollo restante
+        if (hayResto) {
+            const ubic = (document.getElementById(`pc-ubic-rollo-${gi}`)?.value || '').trim().toUpperCase();
+            if (!ubic) { showToast('Ingresa la ubicación del rollo restante', 'error'); return; }
+            saves.push(db.collection('colmena_panos').add({
+                cod: grupo.codInt, ancho: grupo.anchoCorte, alto: altoResto,
+                ubicacion: ubic, tipo: 'SOBRANTE', disponible: true,
+                ot_asignada: null, fuente: 'GALPON_ROLZZO',
+                ot_origen: otNr, creadoEn: new Date().toISOString()
+            }));
+        }
+
+        // Sobrante 2 — franja interna derecha
+        if (haySI && si) {
+            const ubicSI = (document.getElementById(`pc-ubic-si-${gi}`)?.value || '').trim().toUpperCase();
+            if (!ubicSI) { showToast('Ingresa la ubicación de la franja interna', 'error'); return; }
+            saves.push(db.collection('colmena_panos').add({
+                cod: grupo.codInt, ancho: si.ancho, alto: si.alto,
+                ubicacion: ubicSI, tipo: 'SOBRANTE', disponible: true,
+                ot_asignada: null, fuente: 'GALPON_ROLZZO',
+                ot_origen: otNr, creadoEn: new Date().toISOString()
+            }));
+        }
+
+        Promise.all(saves)
+            .then(() => {
+                const msgs = [];
+                if (hayResto) msgs.push(`rollo ${grupo.anchoCorte}×${altoResto}cm`);
+                if (haySI && si) msgs.push(`franja ${si.ancho}×${si.alto}cm`);
+                showToast(`${grupo.codInt}: ${msgs.join(' + ')} guardados en Colmena`);
+                _desvanecerCard(canvId);
+            })
+            .catch(() => showToast('Error al guardar sobrantes', 'error'));
     }
 
     // ── Guardar sobrante manual (formulario de respaldo) ─────────────────
