@@ -333,8 +333,8 @@
         /* List group items */
         .list-group-item { color: var(--text-primary); }
         .list-group-item strong { color: var(--text-primary); }
-        /* Fase 4 tablas inyectadas por JS */
-        #fase4 td, #fase4 th { color: var(--text-primary) !important; }
+        /* Fase 4 y Tela: tablas inyectadas por JS */
+        #fase4 td, #fase4 th, #tela td, #tela th { color: var(--text-primary) !important; }
         /* Glass footer */
         .glass-footer, .glass-footer span, .glass-footer strong, .glass-footer div { color: var(--text-primary); }
         /* Ficha técnica: NO sobreescribir los radio labels */
@@ -921,6 +921,9 @@
             <button class="nav-link" id="fase4-tab" data-bs-toggle="tab" data-bs-target="#fase4" type="button" role="tab" aria-controls="fase4" aria-selected="false"><i class="bi bi-4-circle"></i> Fase 4: Producción</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tela-tab" data-bs-toggle="tab" data-bs-target="#tela" type="button" role="tab" aria-controls="tela" aria-selected="false"><i class="bi bi-scissors"></i> Tela</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="estructura-tab" data-bs-toggle="tab" data-bs-target="#estructura" type="button" role="tab" aria-controls="estructura" aria-selected="false"><i class="bi bi-tools"></i> Estructura</button>
         </li>
         <li class="nav-item" role="presentation">
@@ -1345,92 +1348,6 @@
                                 </div>
                             </div>
 
-                            <!-- OPTIMIZADOR DE CORTE (NEW) -->
-                            <div class="glass-card mb-3" style="border-color:rgba(245,158,11,0.2);">
-                                <div class="section-header"><strong><i class="bi bi-shuffle"></i> Optimizador de Corte</strong></div>
-                                <div class="p-3">
-                                    <div class="d-flex gap-2 mb-2">
-                                        <button class="btn btn-premium-warning btn-sm" onclick="autoOptimizarCorte()"><i class="bi bi-magic"></i> Auto-Optimizar</button>
-                                    </div>
-                                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
-                                        <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.75rem;">
-                                            <thead>
-                                                <tr>
-                                                    <th>COD</th>
-                                                    <th>CANT</th>
-                                                    <th>PRODUCTO</th>
-                                                    <th>COD_INT</th>
-                                                    <th>TIPO</th>
-                                                    <th>ANCHO (m)</th>
-                                                    <th>ALTO (m)</th>
-                                                    <th>EXTRA (m)</th>
-                                                    <th>ALTO+EXTRA (m)</th>
-                                                    <th>ALTO REAL (m)</th>
-                                                    <th>M²</th>
-                                                    <th>ANCHO ROLLO (m)</th>
-                                                    <th>ANCHO PAÑO (m)</th>
-                                                    <th>N° PAÑO</th>
-                                                    <th>JUNTO</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="f4-optimizador-tabla">
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- ══ PLAN DE CORTE DESDE COLMENA ══ -->
-                            <div class="glass-card mb-3" id="card-plan-corte" style="display:none;border-color:rgba(34,197,94,0.25);">
-                                <div class="section-header d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(34,197,94,0.03));">
-                                    <strong><i class="bi bi-scissors"></i> Plan de Corte — Colmena</strong>
-                                    <div id="pc-colmena-estado" style="font-size:0.72rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
-                                        <span id="pc-colmena-dot" style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
-                                        <span id="pc-colmena-txt">Cargando Colmena...</span>
-                                    </div>
-                                </div>
-                                <div class="p-3" id="pc-contenido">
-                                    <div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:0.8rem;">
-                                        <i class="bi bi-hourglass-split" style="font-size:1.5rem;display:block;margin-bottom:8px;opacity:0.4;"></i>
-                                        Presiona <strong>Cargar</strong> para generar el plan de corte.
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Tabla de Paños / Cortes (ENHANCED) -->
-                            <div class="glass-card mb-3" style="border-color:rgba(168,85,247,0.2);">
-                                <div class="section-header"><strong><i class="bi bi-scissors"></i> Cálculo de Paños (Cortes de Tela)</strong></div>
-                                <div class="p-0">
-                                    <div class="table-responsive">
-                                        <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.78rem;">
-                                            <thead>
-                                                <tr>
-                                                    <th>#</th>
-                                                    <th>COD</th>
-                                                    <th>CANT</th>
-                                                    <th>PRODUCTO</th>
-                                                    <th>COD_INT</th>
-                                                    <th>TIPO</th>
-                                                    <th>ANCHO CORTE TELA</th>
-                                                    <th>CORTE -3.5 cm</th>
-                                                    <th>ALTO</th>
-                                                    <th>EXTRA</th>
-                                                    <th>ALTO+EXTRA</th>
-                                                    <th>ALTO CORTE</th>
-                                                    <th>ALTO REAL</th>
-                                                    <th>M²</th>
-                                                    <th>ANCHO PAÑO OPT</th>
-                                                    <th>PAÑO #</th>
-                                                    <th>JUNTO</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="f4-tablaPanos"></tbody>
-                                            <tfoot id="f4-tablaPanos-foot" style="font-weight:bold;border-top:2px solid rgba(168,85,247,0.5);"></tfoot>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Etiquetas de Tubería (ENHANCED) -->
                             <div class="glass-card mb-3" style="border-color:rgba(59,130,246,0.2);">
                                 <div class="section-header"><strong><i class="bi bi-tag"></i> Etiquetas de Tubería</strong></div>
@@ -1595,6 +1512,122 @@
                                 <button class="btn btn-sm fw-bold" style="background:rgba(245,158,11,0.2);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;" onclick="exportarRegistroCorte()"><i class="bi bi-journal-check"></i> Paso 27 — Exportar Registro de Corte (Stock)</button>
                                 <button class="btn btn-sm fw-bold" style="background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.5);color:#14b8a6;" onclick="exportarOrdenesEstructura()"><i class="bi bi-tools"></i> Exportar Órdenes → Optimizador de Estructura</button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TELA: Optimización de Paños (Corte de Tela) -->
+        <div class="tab-pane fade" id="tela" role="tabpanel" aria-labelledby="tela-tab">
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="glass-card mb-3">
+                        <div class="section-header" style="background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(99,102,241,0.05));">
+                            <strong><i class="bi bi-scissors"></i> Optimización de Paños — Corte de Tela</strong>
+                            <span class="float-end text-muted small">Datos desde Fase 3</span>
+                        </div>
+                        <div class="p-3">
+                            <div class="row g-2 mb-3">
+                                <div class="col-md-3">
+                                    <label class="form-label form-label-sm mb-0 fw-bold">OT</label>
+                                    <input type="text" class="form-control form-control-sm" id="tela-ot" readonly style="opacity:0.7;">
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label form-label-sm mb-0 fw-bold">Cliente</label>
+                                    <input type="text" class="form-control form-control-sm" id="tela-cliente" readonly style="opacity:0.7;">
+                                </div>
+                                <div class="col-md-2 d-flex align-items-end">
+                                    <button class="btn btn-premium w-100" onclick="cargarProduccion()"><i class="bi bi-arrow-down-circle"></i> Cargar</button>
+                                </div>
+                            </div>
+
+                            <!-- OPTIMIZADOR DE CORTE -->
+                            <div class="glass-card mb-3" style="border-color:rgba(245,158,11,0.2);">
+                                <div class="section-header"><strong><i class="bi bi-shuffle"></i> Optimizador de Corte</strong></div>
+                                <div class="p-3">
+                                    <div class="d-flex gap-2 mb-2">
+                                        <button class="btn btn-premium-warning btn-sm" onclick="autoOptimizarCorte()"><i class="bi bi-magic"></i> Auto-Optimizar</button>
+                                    </div>
+                                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                                        <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.75rem;">
+                                            <thead>
+                                                <tr>
+                                                    <th>COD</th>
+                                                    <th>CANT</th>
+                                                    <th>PRODUCTO</th>
+                                                    <th>COD_INT</th>
+                                                    <th>TIPO</th>
+                                                    <th>ANCHO (m)</th>
+                                                    <th>ALTO (m)</th>
+                                                    <th>EXTRA (m)</th>
+                                                    <th>ALTO+EXTRA (m)</th>
+                                                    <th>ALTO REAL (m)</th>
+                                                    <th>M²</th>
+                                                    <th>ANCHO ROLLO (m)</th>
+                                                    <th>ANCHO PAÑO (m)</th>
+                                                    <th>N° PAÑO</th>
+                                                    <th>JUNTO</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="f4-optimizador-tabla">
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- ══ PLAN DE CORTE DESDE COLMENA ══ -->
+                            <div class="glass-card mb-3" id="card-plan-corte" style="display:none;border-color:rgba(34,197,94,0.25);">
+                                <div class="section-header d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,rgba(34,197,94,0.15),rgba(34,197,94,0.03));">
+                                    <strong><i class="bi bi-scissors"></i> Plan de Corte — Colmena</strong>
+                                    <div id="pc-colmena-estado" style="font-size:0.72rem;color:var(--text-secondary);display:flex;align-items:center;gap:6px;">
+                                        <span id="pc-colmena-dot" style="width:7px;height:7px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+                                        <span id="pc-colmena-txt">Cargando Colmena...</span>
+                                    </div>
+                                </div>
+                                <div class="p-3" id="pc-contenido">
+                                    <div style="text-align:center;padding:24px;color:var(--text-secondary);font-size:0.8rem;">
+                                        <i class="bi bi-hourglass-split" style="font-size:1.5rem;display:block;margin-bottom:8px;opacity:0.4;"></i>
+                                        Presiona <strong>Cargar</strong> para generar el plan de corte.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Tabla de Paños / Cortes -->
+                            <div class="glass-card mb-3" style="border-color:rgba(168,85,247,0.2);">
+                                <div class="section-header"><strong><i class="bi bi-scissors"></i> Cálculo de Paños (Cortes de Tela)</strong></div>
+                                <div class="p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.78rem;">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>COD</th>
+                                                    <th>CANT</th>
+                                                    <th>PRODUCTO</th>
+                                                    <th>COD_INT</th>
+                                                    <th>TIPO</th>
+                                                    <th>ANCHO CORTE TELA</th>
+                                                    <th>CORTE -3.5 cm</th>
+                                                    <th>ALTO</th>
+                                                    <th>EXTRA</th>
+                                                    <th>ALTO+EXTRA</th>
+                                                    <th>ALTO CORTE</th>
+                                                    <th>ALTO REAL</th>
+                                                    <th>M²</th>
+                                                    <th>ANCHO PAÑO OPT</th>
+                                                    <th>PAÑO #</th>
+                                                    <th>JUNTO</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="f4-tablaPanos"></tbody>
+                                            <tfoot id="f4-tablaPanos-foot" style="font-weight:bold;border-top:2px solid rgba(168,85,247,0.5);"></tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -3055,6 +3088,8 @@
         const cliente = document.getElementById('clienteNombre').value || '—';
         document.getElementById('f4-ot').value = ot;
         document.getElementById('f4-cliente').value = cliente;
+        document.getElementById('tela-ot').value = ot;
+        document.getElementById('tela-cliente').value = cliente;
         // Kanban: avanzar estado a "produccion" con sub-etapa inicial (solo si no es auto-carga)
         if (!skipAvanzar) avanzarEstadoOT('produccion', 'Estructura');
 
@@ -5919,6 +5954,9 @@
         </button>
         <button data-tab="fase4" onclick="switchTab('fase4')">
             <i class="bi bi-4-circle-fill"></i><span>Prod.</span>
+        </button>
+        <button data-tab="tela" onclick="switchTab('tela')">
+            <i class="bi bi-scissors"></i><span>Tela</span>
         </button>
         <button data-tab="estructura" onclick="switchTab('estructura')">
             <i class="bi bi-tools"></i><span>Tubos</span>
