@@ -1842,6 +1842,7 @@
     }
 
     function setTipoVentana(n) {
+        guardarPanoActual(); // guardar datos actuales antes de cambiar el número de paños
         tipoVentana = n;
         document.querySelectorAll('.tipo-ventana-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.tipo) === n));
         while (panosData.length < n) panosData.push(crearPanoVacio());
@@ -1882,8 +1883,12 @@
         const p = panosData[panoActivo];
         if (!p) return;
         // Alto y ancho son por paño (cada paño tiene su propia altura)
-        p.alto  = el('pano-alto');
-        p.ancho = el('pano-ancho'); p.color = el('pano-color');
+        // Si el input existe en DOM lo leemos; si no, el oninput ya lo mantuvo actualizado en panosData
+        const domAlto  = document.getElementById('pano-alto');
+        const domAncho = document.getElementById('pano-ancho');
+        if (domAlto)  p.alto  = domAlto.value;
+        if (domAncho) p.ancho = domAncho.value;
+        p.color = el('pano-color');
         p.armado = rd('p-armado'); p.tipoTela = rd('p-tipoTela'); p.largoCadena = rd('p-largoCadena'); p.cierreVert = rd('p-cierreVert');
         p.manillaCant = parseInt(el('p-manillaCant'))||0; p.manillaColor = rd('p-manillaColor');
         p.colorPeso = rd('p-colorPeso'); p.colorCadena = rd('p-colorCadena'); p.colorMecanismo = rd('p-colorMecanismo');
@@ -1989,12 +1994,12 @@
         const panoLabel = tipoVentana > 1 ? ` Paño ${panoActivo+1}` : '';
         h += `<div class="col-4">`;
         h += `<label class="form-label form-label-sm mb-1 fw-bold" style="color:#ef4444;font-size:0.75rem;">Alto${panoLabel} (metros)</label>`;
-        h += `<input type="number" class="form-control form-control-sm border-danger" id="pano-alto" step="0.01" value="${p.alto||''}" placeholder="Ej: 1.80" onchange="onFichaChange();" style="font-size:1rem;font-weight:bold;">`;
+        h += `<input type="number" class="form-control form-control-sm border-danger" id="pano-alto" step="0.01" value="${p.alto||''}" placeholder="Ej: 1.80" oninput="if(panosData[panoActivo])panosData[panoActivo].alto=this.value;" onchange="onFichaChange();" style="font-size:1rem;font-weight:bold;">`;
         h += `</div>`;
         // Ancho — campo por paño
         h += `<div class="col-4">`;
         h += `<label class="form-label form-label-sm mb-1 fw-bold" style="color:${titleCol};font-size:0.75rem;">Ancho Paño ${tipoVentana>1?(panoActivo+1):''} (metros)</label>`;
-        h += `<input type="number" class="form-control form-control-sm" id="pano-ancho" step="0.01" placeholder="Ej: 1.50" value="${p.ancho}" style="border-color:${borderCol};font-size:1rem;font-weight:bold;" onchange="onFichaChange()">`;
+        h += `<input type="number" class="form-control form-control-sm" id="pano-ancho" step="0.01" placeholder="Ej: 1.50" value="${p.ancho}" style="border-color:${borderCol};font-size:1rem;font-weight:bold;" oninput="if(panosData[panoActivo])panosData[panoActivo].ancho=this.value;" onchange="onFichaChange()">`;
         h += `</div>`;
         // Color accesorios
         h += `<div class="col-4">`;
