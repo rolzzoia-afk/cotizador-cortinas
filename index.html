@@ -1826,7 +1826,7 @@
 
     function crearPanoVacio() {
         return {
-            ancho:'', armado:'Interno', tipoTela:'SCR', largoCadena:'', cierreVert:'Derecha',
+            ancho:'', alto:'', armado:'Interno', tipoTela:'SCR', largoCadena:'', cierreVert:'Derecha',
             manillaCant:0, manillaColor:'', colorPeso:'BCO', colorCadena:'BCO', colorMecanismo:'BCO',
             cenefa:'No', colorTapa:'', cenefaTapa:'SIN_TAPA', retiro:0,
             superficie:'', materialTipo:'',
@@ -1881,12 +1881,8 @@
         const cb = (id) => { const e = document.getElementById(id); return e ? e.checked : false; };
         const p = panosData[panoActivo];
         if (!p) return;
-        // Sync ficha-alto-display → fase2-alto (global field)
-        const fichaAlto = document.getElementById('ficha-alto-display');
-        if (fichaAlto && fichaAlto.value) {
-            const altoInput = document.getElementById('fase2-alto');
-            if (altoInput) altoInput.value = fichaAlto.value;
-        }
+        // Alto y ancho son por paño (cada paño tiene su propia altura)
+        p.alto  = el('pano-alto');
         p.ancho = el('pano-ancho'); p.color = el('pano-color');
         p.armado = rd('p-armado'); p.tipoTela = rd('p-tipoTela'); p.largoCadena = rd('p-largoCadena'); p.cierreVert = rd('p-cierreVert');
         p.manillaCant = parseInt(el('p-manillaCant'))||0; p.manillaColor = rd('p-manillaColor');
@@ -1959,7 +1955,6 @@
 
         const R = (n,v,l) => radioHtml(n,v,l,p[n.replace('p-','')]===v);
         const Rv = (n,v,l,curVal) => radioHtml(n,v,l,curVal===v);
-        const altoGlobal = document.getElementById('fase2-alto')?.value || '';
         let h = '';
 
         h += `<div class="ficha-grid">`;
@@ -1990,10 +1985,11 @@
         h += `<div class="ficha-bloque ficha-bloque-full" style="border-color:${borderCol};background:rgba(168,85,247,0.06);">`;
         h += `<div class="ficha-bloque-titulo" style="color:${titleCol};border-color:${borderCol}"><i class="bi bi-rulers"></i> MEDIDAS</div>`;
         h += `<div class="row g-2 align-items-end py-1">`;
-        // Alto — campo global, se refleja en fase2-alto oculto
+        // Alto — campo por paño (cada paño puede tener altura distinta)
+        const panoLabel = tipoVentana > 1 ? ` Paño ${panoActivo+1}` : '';
         h += `<div class="col-4">`;
-        h += `<label class="form-label form-label-sm mb-1 fw-bold" style="color:#ef4444;font-size:0.75rem;">Alto Ventana (metros) <span style="font-size:0.65rem;color:var(--text-secondary)">— igual para todos los paños</span></label>`;
-        h += `<input type="number" class="form-control form-control-sm border-danger" id="ficha-alto-display" step="0.01" value="${altoGlobal}" placeholder="Ej: 1.80" onchange="document.getElementById('fase2-alto').value=this.value; onFichaChange();" style="font-size:1rem;font-weight:bold;">`;
+        h += `<label class="form-label form-label-sm mb-1 fw-bold" style="color:#ef4444;font-size:0.75rem;">Alto${panoLabel} (metros)</label>`;
+        h += `<input type="number" class="form-control form-control-sm border-danger" id="pano-alto" step="0.01" value="${p.alto||''}" placeholder="Ej: 1.80" onchange="onFichaChange();" style="font-size:1rem;font-weight:bold;">`;
         h += `</div>`;
         // Ancho — campo por paño
         h += `<div class="col-4">`;
@@ -2172,7 +2168,8 @@
     function renderPreview() {
         const svg = document.getElementById('preview-multi');
         if (!svg) return;
-        const alto = parseFloat(document.getElementById('fase2-alto').value) || 1.80; // metros
+        // Alto del preview = el máximo entre los paños (para que no se corte ninguno)
+        const alto = Math.max(...panosData.slice(0,tipoVentana).map(pd => parseFloat(pd.alto)||1.80));
         const telaMap = {
             'SCR':{fill:'rgba(180,195,210,0.18)',stroke:'#8899aa',name:'SCR'},
             'BK':{fill:'rgba(20,20,30,0.85)',stroke:'#555566',name:'BK'},
@@ -2196,7 +2193,7 @@
             const pc = PANO_COLORS[i];
             const tc = telaMap[p.tipoTela] || telaMap['SCR'];
             const aw = (parseFloat(p.ancho) || 100) * ratio;
-            const ah = alto * ratio;
+            const ah = (parseFloat(p.alto) || alto) * ratio;  // cada paño usa su propio alto
             const isActive = i === panoActivo;
 
             if (isActive) {
@@ -2285,13 +2282,13 @@
     // ===================================================
     function guardarVentanaFase2() {
         const ubicacion = document.getElementById('fase2-ubicacion').value;
-        const alto = document.getElementById('fase2-alto').value;
-        if (!ubicacion || !alto) { alert('Completa Ubicación y Alto.'); return; }
+        if (!ubicacion) { alert('Completa la Ubicación.'); return; }
 
         guardarPanoActual();
 
         for (let i = 0; i < tipoVentana; i++) {
             if (!panosData[i].ancho) { alert(`Falta el ancho del paño ${i+1}.`); seleccionarPano(i); return; }
+            if (!panosData[i].alto)  { alert(`Falta el alto del paño ${i+1}.`);  seleccionarPano(i); return; }
         }
 
         const codInt    = document.getElementById('fase2-codInt').value;
@@ -2315,7 +2312,7 @@
                     delete panoLimpio._grupoMiembroId;
                     delete panoLimpio._grupoMiembroNombre;
                     destino.panos = [panoLimpio];
-                    destino.alto  = parseFloat(alto);
+                    destino.alto  = parseFloat(panoLimpio.alto) || parseFloat(destino.alto) || 0;
                     destino.fase  = 'terreno';
                 }
             });
@@ -2344,9 +2341,11 @@
         const existingStoreId = document.getElementById('fase2-ubicacion').getAttribute('data-store-id');
         let ventana = existingStoreId ? storeVentanas.find(v => v.id === parseInt(existingStoreId)) : null;
 
+        // v.alto = alto del primer paño (compat con resumen, PDF, etc.)
+        const altoV1 = parseFloat(panosCompletos[0]?.alto) || 0;
         if (ventana) {
             ventana.ubicacion = ubicacion;
-            ventana.alto = parseFloat(alto);
+            ventana.alto = altoV1;
             ventana.fase = 'terreno';
             ventana.panos = panosCompletos;
             ventana.categoria = categoria;
@@ -2354,7 +2353,7 @@
             ventana = {
                 id: nuevoId(), ubicacion, codInt, producto: baseDatosProductos[codInt]?.producto || codInt,
                 tipo: baseDatosProductos[codInt]?.tipo || '', descripcion: baseDatosProductos[codInt]?.descripcion || '',
-                color: panosCompletos[0]?.color || '', alto: parseFloat(alto),
+                color: panosCompletos[0]?.color || '', alto: altoV1,
                 precio: baseDatosProductos[codInt]?.precio || 0, cantidad: 1, subtotal: 0, fase: 'terreno',
                 categoria: categoria, grupoId: null, grupoOrden: 0,
                 panos: panosCompletos
@@ -2392,10 +2391,11 @@
         document.getElementById('fase2-ubicacion').value = v.ubicacion;
         document.getElementById('fase2-ubicacion').setAttribute('data-store-id', v.id);
         document.getElementById('fase2-codInt').value = v.codInt || '';
-        document.getElementById('fase2-alto').value = v.alto;
         const catSel = document.getElementById('fase2-categoria');
         if (catSel) catSel.value = v.categoria || '';
         panosData = JSON.parse(JSON.stringify(v.panos));
+        // Fallback: si los paños viejos no tienen alto propio, heredan el de la ventana
+        panosData.forEach(p => { if (!p.alto) p.alto = v.alto; });
         panoActivo = 0;
         setTipoVentana(v.panos.length);
         document.getElementById('ficha-pano-activo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2415,17 +2415,17 @@
         document.getElementById('fase2-ubicacion').value = ubicCombinada;
         document.getElementById('fase2-ubicacion').setAttribute('data-store-id', miembros[0].id);
         document.getElementById('fase2-codInt').value = miembros[0].codInt || '';
-        document.getElementById('fase2-alto').value = miembros[0].alto;
         const catSel = document.getElementById('fase2-categoria');
         if (catSel) catSel.value = miembros[0].categoria || '';
 
         // Un paño por cada miembro del grupo (copiando su panos[0])
         panosData = miembros.map(m => JSON.parse(JSON.stringify(m.panos?.[0] || crearPanoVacio())));
 
-        // Etiquetar cada paño con el nombre de su ventana fuente
+        // Etiquetar cada paño y aplicar fallback de alto si no lo trae el paño
         panosData.forEach((p, i) => {
             p._grupoMiembroId    = miembros[i].id;
             p._grupoMiembroNombre = miembros[i].ubicacion;
+            if (!p.alto) p.alto = miembros[i].alto;
         });
 
         panoActivo = 0;
