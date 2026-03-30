@@ -1708,10 +1708,16 @@
                             <div class="d-flex align-items-center gap-2 mb-2">
                                 <span style="font-size:1rem;">🟢</span>
                                 <strong style="font-size:0.85rem;color:#a5b4fc;">Actividad en tiempo real</strong>
-                                <span class="text-muted ms-auto" style="font-size:0.7rem;" id="odios-actividad-actualizado"></span>
+                                <div class="ms-auto d-flex align-items-center gap-2">
+                                    <span class="text-muted" style="font-size:0.68rem;" id="odios-actividad-actualizado"></span>
+                                    <button onclick="odiosRefreshPresencia()" title="Refrescar" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#a5b4fc;padding:1px 7px;font-size:0.75rem;cursor:pointer;">↻</button>
+                                </div>
+                            </div>
+                            <div id="odios-actividad-error" style="display:none;font-size:0.72rem;color:#fca5a5;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;">
+                                ⚠ Sin acceso a <strong>cortinas_presencia</strong> en Firestore. Revisa las reglas de seguridad.
                             </div>
                             <div id="odios-actividad-lista" style="font-size:0.78rem;color:var(--text-secondary);">
-                                <span class="text-muted">Sin actividad registrada</span>
+                                <span class="text-muted">Cargando actividad…</span>
                             </div>
                         </div>
 
@@ -6337,13 +6343,16 @@
     function abrirModalOperario() {
         const modal = document.getElementById('modal-operario');
         if (modal) {
+            // Pre-cargar el nombre actual si ya existe
+            const inputNombre = document.getElementById('input-operario-nombre');
+            if (inputNombre && _presenciaNombre) inputNombre.value = _presenciaNombre;
             modal.style.display = 'flex';
-            setTimeout(() => document.getElementById('input-operario-nombre')?.focus(), 100);
+            setTimeout(() => inputNombre?.focus(), 150);
         }
     }
 
     function confirmarOperario() {
-        const input = document.getElementById('input-operario-nombre');
+        const input  = document.getElementById('input-operario-nombre');
         const nombre = (input?.value || '').trim();
         if (!nombre) { input?.focus(); return; }
         _presenciaNombre = nombre;
@@ -6355,31 +6364,43 @@
 
     // Escribe la actividad actual en Firestore (cortinas_presencia/{deviceId})
     function presenciaActualizar(accion, detalle) {
-        if (!_presenciaDeviceId || !_presenciaNombre) return;
+        if (!_presenciaDeviceId) return;
         if (typeof db === 'undefined') return;
+
+        // Si no hay nombre asignado aún, usar un placeholder temporal para no perder el registro
+        const nombre = _presenciaNombre || '(sin nombre)';
+
         const ot = (typeof storeOTs !== 'undefined' && typeof activeOTId !== 'undefined')
             ? storeOTs.find(o => o.id === activeOTId)
             : null;
         const otInfo = ot
             ? `OT ${ot.datosGenerales?.ot || activeOTId} — ${ot.datosGenerales?.cliente || ''}`
-            : null;
+            : '';
 
         db.collection('cortinas_presencia').doc(_presenciaDeviceId).set({
-            nombre:     _presenciaNombre,
-            deviceId:   _presenciaDeviceId,
-            accion:     accion,
-            detalle:    detalle || '',
-            otActiva:   otInfo || '',
-            timestamp:  new Date().toISOString(),
-            activo:     true
-        }).catch(() => {}); // silencioso si falla
+            nombre:    nombre,
+            deviceId:  _presenciaDeviceId,
+            accion:    accion,
+            detalle:   detalle || '',
+            otActiva:  otInfo,
+            timestamp: new Date().toISOString(),
+            activo:    true
+        }).catch(err => {
+            // Mostrar error una sola vez para no spamear
+            if (!window._presenciaErrorMostrado) {
+                window._presenciaErrorMostrado = true;
+                console.warn('[Presencia] Error Firestore:', err.code, err.message);
+                if (err.code === 'permission-denied') {
+                    showToast('⚠ Activa la colección "cortinas_presencia" en las reglas de Firestore para ver actividad en tiempo real.', 'error');
+                }
+            }
+        });
     }
 
     // Marca el dispositivo como offline al salir
     function presenciaLimpiar() {
         if (!_presenciaDeviceId) return;
         if (typeof db === 'undefined') return;
-        // Usar sendBeacon si está disponible para mayor confiabilidad al cerrar
         try {
             db.collection('cortinas_presencia').doc(_presenciaDeviceId).update({
                 activo:    false,
@@ -6436,10 +6457,35 @@
     function odiosIniciarPresencia() {
         if (_odiosUnsubPresencia) return;
         _odiosUnsubPresencia = db.collection('cortinas_presencia')
-            .onSnapshot(snap => {
-                const docs = snap.docs.map(d => d.data());
-                odiosRenderActividad(docs);
-            }, () => {});
+            .onSnapshot(
+                snap => {
+                    // Limpiar error si se resolvió
+                    const errEl = document.getElementById('odios-actividad-error');
+                    if (errEl) errEl.style.display = 'none';
+                    const docs = snap.docs.map(d => d.data());
+                    odiosRenderActividad(docs);
+                },
+                err => {
+                    console.warn('[OdD] Error suscripción presencia:', err.code, err.message);
+                    // Mostrar aviso de reglas en el panel
+                    const errEl = document.getElementById('odios-actividad-error');
+                    if (errEl) errEl.style.display = '';
+                    const lista = document.getElementById('odios-actividad-lista');
+                    if (lista) lista.innerHTML = '<span class="text-muted" style="font-size:0.72rem;">No se puede leer la actividad — revisa las reglas de Firestore.</span>';
+                }
+            );
+    }
+
+    // Fuerza una lectura manual desde Firestore (para el botón ↻)
+    function odiosRefreshPresencia() {
+        if (_odiosUnsubPresencia) {
+            // Si ya hay suscripción activa, la desuscribimos y reiniciamos para forzar refresh
+            _odiosUnsubPresencia();
+            _odiosUnsubPresencia = null;
+        }
+        odiosIniciarPresencia();
+        const tiempo = document.getElementById('odios-actividad-actualizado');
+        if (tiempo) tiempo.textContent = 'Actualizando…';
     }
 
     function odiosRenderActividad(docs) {
@@ -6448,30 +6494,37 @@
         if (!lista) return;
 
         const ahora = Date.now();
-        // Considerar activo si la última actividad fue hace menos de 15 min
-        const activos = docs.filter(d => {
-            if (!d.activo) return false;
-            const t = new Date(d.timestamp||0).getTime();
-            return (ahora - t) < 15 * 60 * 1000;
-        });
+        const VENTANA_ACTIVO_MS = 20 * 60 * 1000; // 20 minutos
 
-        if (!activos.length) {
-            lista.innerHTML = '<span class="text-muted">Sin operarios activos ahora mismo</span>';
+        // Todos los dispositivos con actividad reciente, activos o no
+        const recientes = docs
+            .filter(d => {
+                const t = new Date(d.timestamp||0).getTime();
+                return (ahora - t) < VENTANA_ACTIVO_MS;
+            })
+            .sort((a, b) => new Date(b.timestamp||0) - new Date(a.timestamp||0));
+
+        if (!recientes.length) {
+            lista.innerHTML = '<span class="text-muted">Sin operarios activos en los últimos 20 minutos</span>';
         } else {
             const iconos = {
-                cotizador:   '📋', tela: '✂️', estructura: '🏗️',
+                cotizador: '📋', tela: '✂️', estructura: '🏗️',
                 online: '🟢', offline: '⭕'
             };
-            lista.innerHTML = activos.map(d => {
-                const hace   = Math.round((ahora - new Date(d.timestamp||0).getTime()) / 60000);
-                const icono  = iconos[d.accion] || '👤';
+            lista.innerHTML = recientes.map(d => {
+                const hace      = Math.round((ahora - new Date(d.timestamp||0).getTime()) / 60000);
+                const icono     = d.activo === false ? '⭕' : (iconos[d.accion] || '👤');
                 const hacelabel = hace <= 1 ? 'ahora mismo' : `hace ${hace} min`;
-                return `<div class="d-flex align-items-start gap-2 py-1" style="border-bottom:1px solid rgba(255,255,255,0.04);">
-                    <span style="font-size:1rem;margin-top:1px;">${icono}</span>
-                    <div>
-                        <span style="font-weight:700;color:#e2e8f0;">${d.nombre||'Operario'}</span>
-                        <span class="text-muted"> · ${hacelabel}</span><br>
-                        <span style="color:#94a3b8;font-size:0.72rem;">${d.detalle||d.accion||'—'}</span>
+                const colorNom  = d.activo === false ? '#64748b' : '#e2e8f0';
+                const colorTxt  = d.activo === false ? '#475569' : '#94a3b8';
+                return `<div class="d-flex align-items-start gap-2 py-2" style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <span style="font-size:1.1rem;margin-top:1px;line-height:1;">${icono}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div class="d-flex justify-content-between">
+                            <span style="font-weight:700;color:${colorNom};">${d.nombre||'Operario'}</span>
+                            <span class="text-muted" style="font-size:0.68rem;white-space:nowrap;">${hacelabel}</span>
+                        </div>
+                        <div style="color:${colorTxt};font-size:0.71rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${d.detalle||d.accion||'—'}</div>
                     </div>
                 </div>`;
             }).join('');
