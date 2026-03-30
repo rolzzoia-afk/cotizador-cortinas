@@ -1863,8 +1863,10 @@
                     </div>
 
                     <!-- ═══ MODAL: DETALLE DE OT ═══ -->
-                    <div id="odios-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;overflow-y:auto;padding:20px;" onclick="if(event.target===this)odiosModalCerrar()">
-                        <div style="max-width:780px;margin:auto;background:#18181b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;position:relative;">
+                    <div id="odios-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;overflow-y:auto;padding:20px;" onclick="if(event.target===this)odiosModalCerrar()">
+                        <div style="max-width:860px;margin:auto;background:#18181b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;position:relative;">
+
+                            <!-- Header -->
                             <div class="d-flex justify-content-between align-items-start mb-3">
                                 <div>
                                     <h5 id="odios-modal-titulo" style="margin:0;color:#3b82f6;"></h5>
@@ -1872,9 +1874,17 @@
                                 </div>
                                 <button onclick="odiosModalCerrar()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:8px;padding:4px 10px;cursor:pointer;"><i class="bi bi-x-lg"></i></button>
                             </div>
+
                             <!-- Info general -->
                             <div class="row g-2 mb-3" id="odios-modal-info" style="font-size:0.8rem;"></div>
-                            <!-- Nota admin editable -->
+
+                            <!-- ⚠️ Detector de problemas -->
+                            <div id="odios-problemas-banner" style="display:none;" class="mb-3 p-3" style="border-radius:8px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);">
+                                <div class="fw-bold mb-1" style="color:#ef4444;font-size:0.82rem;"><i class="bi bi-exclamation-triangle-fill"></i> Problemas detectados</div>
+                                <ul id="odios-problemas-lista" style="margin:0;padding-left:18px;font-size:0.78rem;color:#fca5a5;"></ul>
+                            </div>
+
+                            <!-- Nota admin -->
                             <div class="mb-3">
                                 <label class="form-label form-label-sm mb-1 fw-bold"><i class="bi bi-pencil-square"></i> Nota Administrativa</label>
                                 <div class="d-flex gap-2">
@@ -1882,26 +1892,49 @@
                                     <button class="btn btn-sm" style="background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#3b82f6;white-space:nowrap;" onclick="odiosGuardarNota()"><i class="bi bi-floppy"></i><br><small>Guardar</small></button>
                                 </div>
                             </div>
-                            <!-- Cambiar estado -->
+
+                            <!-- Cambiar estado + acciones -->
                             <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
                                 <span class="text-muted small fw-bold">Mover a:</span>
                                 <button class="btn btn-sm py-0" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;font-size:0.75rem;" onclick="odiosCambiarEstado('cotizacion')">Cotización</button>
                                 <button class="btn btn-sm py-0" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.75rem;" onclick="odiosCambiarEstado('terreno')">Terreno</button>
                                 <button class="btn btn-sm py-0" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-size:0.75rem;" onclick="odiosCambiarEstado('produccion')">Producción</button>
                                 <button class="btn btn-sm py-0" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-size:0.75rem;" onclick="odiosCambiarEstado('entregado')">Entregado</button>
-                                <div class="ms-auto d-flex gap-2">
-                                    <button class="btn btn-sm py-0" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;font-size:0.75rem;" onclick="odiosAbrirEnCotizador()">📂 Abrir en Cotizador</button>
+                                <div class="ms-auto d-flex gap-2 flex-wrap">
+                                    <button class="btn btn-sm py-0" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;font-size:0.75rem;" onclick="odiosAbrirEnCotizador()">📂 Cotizador</button>
                                     <button class="btn btn-sm py-0" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:0.75rem;" onclick="odiosEliminarOT()">🗑 Eliminar</button>
                                 </div>
                             </div>
-                            <!-- Ventanas -->
-                            <div class="text-muted small fw-bold mb-1">VENTANAS</div>
+
+                            <!-- VENTANAS EDITABLES -->
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small fw-bold"><i class="bi bi-pencil"></i> VENTANAS — editá los campos y guardá</span>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm py-0 fw-bold" style="background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#3b82f6;font-size:0.75rem;" onclick="odiosGuardarVentanas()">
+                                        <i class="bi bi-floppy"></i> Guardar cambios
+                                    </button>
+                                    <button class="btn btn-sm py-0 fw-bold" style="background:rgba(34,197,94,0.2);border:1px solid rgba(34,197,94,0.4);color:#22c55e;font-size:0.75rem;" onclick="odiosReprocesar()">
+                                        <i class="bi bi-arrow-repeat"></i> Guardar y Re-procesar
+                                    </button>
+                                </div>
+                            </div>
                             <div class="table-responsive">
-                                <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.74rem;">
-                                    <thead><tr><th>#</th><th>UBICACIÓN</th><th>TIPO</th><th>ANCHO</th><th>ALTO</th><th>TELA</th><th>MECANISMO</th><th>TUBERÍA</th></tr></thead>
+                                <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.73rem;">
+                                    <thead><tr>
+                                        <th>#</th>
+                                        <th>UBICACIÓN</th>
+                                        <th>ANCHO (m)</th>
+                                        <th>ALTO (m)</th>
+                                        <th>TELA (cod)</th>
+                                        <th>MECANISMO</th>
+                                        <th>TUBERÍA</th>
+                                        <th style="color:#ef4444;">⚠</th>
+                                    </tr></thead>
                                     <tbody id="odios-modal-ventanas"></tbody>
                                 </table>
                             </div>
+                            <div class="text-muted mt-1" style="font-size:0.68rem;"><i class="bi bi-info-circle"></i> Los cambios solo se aplican al hacer clic en "Guardar cambios" o "Guardar y Re-procesar".</div>
+
                         </div>
                     </div>
 
@@ -6569,6 +6602,52 @@
     }
 
     // ── MODAL: DETALLE DE OT ──────────────────────────────────────────
+    // Opciones de mecanismo disponibles en el sistema
+    const ODIOS_MECANISMOS = [
+        'Manual derecha','Manual izquierda','Manual centro',
+        'Cadena derecha','Cadena izquierda','Cadena centro',
+        'Motor derecha','Motor izquierda',
+        'Sin mecanismo'
+    ];
+    // Opciones de tubería
+    const ODIOS_TUBERIAS = [
+        '0,38mm [E02] 1,2mm','0,40mm - 2mm [E53]','0,45mm [E05]',
+        '0,63mm [E47]','VELCRO'
+    ];
+
+    function odiosDetectarProblemas(vents) {
+        const problemas = [];
+        const tubCounts = {}; // "tuberia|ancho" → [indices]
+        vents.forEach((v, i) => {
+            const p0    = (v.panos||[])[0] || {};
+            const ancho = parseFloat(p0.ancho || v.ancho || 0);
+            const alto  = parseFloat(v.alto  || p0.alto  || 0);
+            const cod   = (v.codInt || p0.tipoTela || '').trim();
+            const mec   = (p0.mecanismo || v.mecanismo || '').trim();
+            const tub   = (p0.tuberia || '').trim();
+            const num   = i + 1;
+
+            if (!ancho || ancho <= 0)  problemas.push(`Ventana ${num} (${v.ubicacion||'?'}): ancho es 0 o vacío.`);
+            if (!alto  || alto  <= 0)  problemas.push(`Ventana ${num} (${v.ubicacion||'?'}): alto es 0 o vacío.`);
+            if (!cod)                  problemas.push(`Ventana ${num} (${v.ubicacion||'?'}): sin código de tela.`);
+            if (!mec)                  problemas.push(`Ventana ${num} (${v.ubicacion||'?'}): sin mecanismo asignado.`);
+
+            if (tub && ancho > 0) {
+                const key = `${tub}|${ancho}`;
+                if (!tubCounts[key]) tubCounts[key] = [];
+                tubCounts[key].push(num);
+            }
+        });
+        // Duplicados de tubería + ancho (mismo tubo del mismo tamaño → posible conflicto de corte)
+        Object.entries(tubCounts).forEach(([key, nums]) => {
+            if (nums.length > 1) {
+                const [tub, ancho] = key.split('|');
+                problemas.push(`⚠ Tubería "${tub}" con ancho ${ancho}m se repite en ventanas: ${nums.join(', ')}. Verificar si es intencional.`);
+            }
+        });
+        return problemas;
+    }
+
     function odiosVerDetalle(id) {
         const ot = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === id);
         if (!ot) return;
@@ -6599,38 +6678,143 @@
         // Nota admin
         document.getElementById('odios-modal-nota').value = ot.notaAdmin || '';
 
-        // Ventanas — ancho y mecanismo viven dentro de panos[0]
+        // Ventanas — editable (ancho/mecanismo/tuberia viven en panos[0])
         const vents = ot.storeVentanas || [];
         const ventsTbody = document.getElementById('odios-modal-ventanas');
+
         if (!vents.length) {
             ventsTbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center py-2"><small>Sin ventanas registradas</small></td></tr>';
         } else {
-            ventsTbody.innerHTML = vents.map((v,i) => {
-                const p0     = (v.panos||[])[0] || {};
-                const ancho  = p0.ancho  || v.ancho  || '—';
-                const alto   = v.alto    || p0.alto  || '—';
-                const codInt = v.codInt  || p0.tipoTela || '—';
-                const mec    = p0.mecanismo || v.mecanismo || '—';
-                const tub    = p0.tuberia   || '—';
+            const mecOpts = ODIOS_MECANISMOS.map(m =>
+                `<option value="${m}">${m}</option>`).join('');
+            const tubOpts = ODIOS_TUBERIAS.map(t =>
+                `<option value="${t}">${t}</option>`).join('');
+
+            ventsTbody.innerHTML = vents.map((v, i) => {
+                const p0    = (v.panos||[])[0] || {};
+                const ancho = p0.ancho  || v.ancho  || '';
+                const alto  = v.alto    || p0.alto  || '';
+                const cod   = v.codInt  || p0.tipoTela || '';
+                const mec   = p0.mecanismo || v.mecanismo || '';
+                const tub   = p0.tuberia || '';
                 const nPanos = (v.panos||[]).length;
                 const panosTag = nPanos > 1
-                    ? `<span style="background:rgba(168,85,247,0.2);color:#a855f7;padding:1px 5px;border-radius:4px;font-size:0.65rem;">${nPanos} paños</span>`
+                    ? `<span style="background:rgba(168,85,247,0.2);color:#a855f7;padding:1px 5px;border-radius:4px;font-size:0.62rem;display:block;">${nPanos} paños</span>`
                     : '';
-                return `<tr>
-                    <td>${i+1}</td>
-                    <td>${v.ubicacion||'—'} ${panosTag}</td>
-                    <td>${v.tipo||'—'}</td>
-                    <td>${ancho} m</td>
-                    <td>${alto} m</td>
-                    <td>${codInt}</td>
-                    <td style="font-size:0.7rem;">${mec}</td>
-                    <td style="font-size:0.7rem;color:var(--text-secondary);">${tub}</td>
+
+                const mecSel = ODIOS_MECANISMOS.map(m =>
+                    `<option value="${m}"${m===mec?' selected':''}>${m}</option>`).join('');
+                const tubSel = ODIOS_TUBERIAS.map(t =>
+                    `<option value="${t}"${t===tub?' selected':''}>${t}</option>`).join('');
+
+                const inputStyle = 'width:100%;background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text-primary);padding:2px 5px;font-size:0.75rem;';
+                const selStyle   = inputStyle + 'cursor:pointer;';
+
+                return `<tr data-idx="${i}" style="border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <td style="font-size:0.75rem;color:var(--text-secondary);text-align:center;vertical-align:middle;">${i+1}${panosTag}</td>
+                    <td style="vertical-align:middle;min-width:80px;">
+                        <input type="text" class="odios-edit-ubicacion" data-idx="${i}"
+                            value="${v.ubicacion||''}" placeholder="ej. Living"
+                            style="${inputStyle}" />
+                    </td>
+                    <td style="vertical-align:middle;min-width:65px;">
+                        <input type="number" class="odios-edit-ancho" data-idx="${i}"
+                            value="${ancho}" placeholder="m" step="0.01" min="0"
+                            style="${inputStyle}" />
+                    </td>
+                    <td style="vertical-align:middle;min-width:65px;">
+                        <input type="number" class="odios-edit-alto" data-idx="${i}"
+                            value="${alto}" placeholder="m" step="0.01" min="0"
+                            style="${inputStyle}" />
+                    </td>
+                    <td style="vertical-align:middle;min-width:80px;">
+                        <input type="text" class="odios-edit-cod" data-idx="${i}"
+                            value="${cod}" placeholder="cod. tela"
+                            style="${inputStyle}" />
+                    </td>
+                    <td style="vertical-align:middle;min-width:130px;">
+                        <select class="odios-edit-mec" data-idx="${i}" style="${selStyle}">
+                            <option value="">— sin —</option>${mecSel}
+                        </select>
+                    </td>
+                    <td style="vertical-align:middle;min-width:130px;">
+                        <select class="odios-edit-tub" data-idx="${i}" style="${selStyle}">
+                            <option value="">— sin —</option>${tubSel}
+                        </select>
+                    </td>
+                    <td id="odios-fila-warn-${i}" style="text-align:center;vertical-align:middle;font-size:0.9rem;"></td>
                 </tr>`;
             }).join('');
+
+            // Escuchar cambios en tiempo real para actualizar el detector
+            ventsTbody.querySelectorAll('input,select').forEach(el => {
+                el.addEventListener('change', () => odiosActualizarProblemas());
+                el.addEventListener('input',  () => odiosActualizarProblemas());
+            });
         }
+
+        // Detector de problemas inicial
+        odiosActualizarProblemas();
 
         document.getElementById('odios-modal-overlay').style.display = 'block';
         document.body.style.overflow = 'hidden';
+    }
+
+    // Lee el estado actual de los inputs y actualiza el banner de problemas
+    function odiosActualizarProblemas() {
+        const vents = _odiosLeerInputsVentanas();
+        const probs = odiosDetectarProblemas(vents);
+        const banner = document.getElementById('odios-problemas-banner');
+        const lista  = document.getElementById('odios-problemas-lista');
+        if (!banner || !lista) return;
+
+        // Limpiar iconos de advertencia por fila
+        document.querySelectorAll('[id^="odios-fila-warn-"]').forEach(el => el.textContent = '');
+
+        if (probs.length) {
+            lista.innerHTML = probs.map(p => `<li>${p}</li>`).join('');
+            banner.style.display = '';
+
+            // Marcar filas con problema
+            probs.forEach(p => {
+                const match = p.match(/Ventana (\d+)/);
+                if (match) {
+                    const idx = parseInt(match[1]) - 1;
+                    const warn = document.getElementById(`odios-fila-warn-${idx}`);
+                    if (warn) warn.textContent = '⚠️';
+                }
+            });
+        } else {
+            lista.innerHTML = '';
+            banner.style.display = 'none';
+        }
+    }
+
+    // Lee todos los inputs del modal y devuelve array de ventanas con cambios aplicados
+    function _odiosLeerInputsVentanas() {
+        const ot = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === _odiosModalOTId);
+        if (!ot) return [];
+        const vents = JSON.parse(JSON.stringify(ot.storeVentanas || [])); // copia profunda
+
+        vents.forEach((v, i) => {
+            const qUbic = document.querySelector(`.odios-edit-ubicacion[data-idx="${i}"]`);
+            const qAncho= document.querySelector(`.odios-edit-ancho[data-idx="${i}"]`);
+            const qAlto = document.querySelector(`.odios-edit-alto[data-idx="${i}"]`);
+            const qCod  = document.querySelector(`.odios-edit-cod[data-idx="${i}"]`);
+            const qMec  = document.querySelector(`.odios-edit-mec[data-idx="${i}"]`);
+            const qTub  = document.querySelector(`.odios-edit-tub[data-idx="${i}"]`);
+
+            if (qUbic)  v.ubicacion = qUbic.value.trim();
+            if (qAlto)  v.alto      = parseFloat(qAlto.value) || 0;
+            if (qCod)   v.codInt    = qCod.value.trim();
+
+            if (!v.panos) v.panos = [{}];
+            if (!v.panos[0]) v.panos[0] = {};
+            if (qAncho) v.panos[0].ancho     = parseFloat(qAncho.value) || 0;
+            if (qMec)   v.panos[0].mecanismo = qMec.value;
+            if (qTub)   v.panos[0].tuberia   = qTub.value;
+        });
+        return vents;
     }
 
     function odiosModalCerrar() {
@@ -6679,6 +6863,66 @@
         odiosModalCerrar();
         abrirOT(_odiosModalOTId);
         switchTab('panel');
+    }
+
+    // Guarda los cambios editados en el modal directamente a Firebase
+    async function odiosGuardarVentanas() {
+        if (!_odiosModalOTId) return;
+        const ot = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === _odiosModalOTId);
+        if (!ot) return;
+
+        const ventasActualizadas = _odiosLeerInputsVentanas();
+        ot.storeVentanas = ventasActualizadas;
+        ot.fechaModificacion = new Date().toISOString();
+
+        try {
+            await guardarOT(ot);
+            showToast('✅ Ventanas guardadas correctamente');
+            // Actualizar la info de cantidad de ventanas en el modal
+            const infoDiv = document.getElementById('odios-modal-info');
+            if (infoDiv) {
+                const spans = infoDiv.querySelectorAll('div[style]');
+                // Refrescar solo el campo "Ventanas"
+                // (más simple: re-renderizar toda la info)
+                const dg = ot.datosGenerales || {};
+                const infoFields = [
+                    ['OT #', dg.ot||'—'], ['Cliente', dg.cliente||'—'],
+                    ['Creada', (ot.fechaCreacion||'').slice(0,10)||'—'],
+                    ['Modificada', (ot.fechaModificacion||'').slice(0,10)||'—'],
+                    ['Ventanas', (ot.storeVentanas||[]).length],
+                    ['Dirección', dg.direccion||dg.dir||'—'],
+                    ['Teléfono', dg.telefono||dg.tel||'—'],
+                ];
+                infoDiv.innerHTML = infoFields.map(([k,v]) =>
+                    `<div class="col-6 col-md-4"><div style="background:rgba(0,0,0,0.25);border-radius:6px;padding:6px 10px;">
+                        <div class="text-muted" style="font-size:0.65rem;text-transform:uppercase;">${k}</div>
+                        <div style="font-size:0.8rem;font-weight:600;">${v}</div>
+                    </div></div>`
+                ).join('');
+            }
+            // Volver a correr el detector con los datos guardados
+            odiosActualizarProblemas();
+            odiosRenderTablaOTs();
+        } catch(e) {
+            showToast('❌ Error al guardar: ' + e.message, 'error');
+        }
+    }
+
+    // Guarda cambios y re-procesa la OT en el cotizador (tab Tela)
+    async function odiosReprocesar() {
+        if (!_odiosModalOTId) return;
+        // 1. Primero guardar
+        await odiosGuardarVentanas();
+        // 2. Cerrar modal
+        odiosModalCerrar();
+        // 3. Cargar la OT en el cotizador
+        await abrirOT(_odiosModalOTId);
+        // 4. Ir a tab Tela y procesar
+        switchTab('tela');
+        setTimeout(() => {
+            cargarProduccion();
+            showToast('🔄 OT re-procesada en tab Tela');
+        }, 600);
     }
 
     // ── REPORTES ───────────────────────────────────────────────────────
