@@ -1898,7 +1898,7 @@
                             <div class="text-muted small fw-bold mb-1">VENTANAS</div>
                             <div class="table-responsive">
                                 <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.74rem;">
-                                    <thead><tr><th>#</th><th>UBICACIÓN</th><th>TIPO</th><th>ANCHO</th><th>ALTO</th><th>TELA</th><th>MECANISMO</th></tr></thead>
+                                    <thead><tr><th>#</th><th>UBICACIÓN</th><th>TIPO</th><th>ANCHO</th><th>ALTO</th><th>TELA</th><th>MECANISMO</th><th>TUBERÍA</th></tr></thead>
                                     <tbody id="odios-modal-ventanas"></tbody>
                                 </table>
                             </div>
@@ -6599,22 +6599,32 @@
         // Nota admin
         document.getElementById('odios-modal-nota').value = ot.notaAdmin || '';
 
-        // Ventanas
+        // Ventanas — ancho y mecanismo viven dentro de panos[0]
         const vents = ot.storeVentanas || [];
         const ventsTbody = document.getElementById('odios-modal-ventanas');
         if (!vents.length) {
-            ventsTbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-2"><small>Sin ventanas registradas</small></td></tr>';
+            ventsTbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center py-2"><small>Sin ventanas registradas</small></td></tr>';
         } else {
             ventsTbody.innerHTML = vents.map((v,i) => {
-                const p = v.pano || v; // support various structures
+                const p0     = (v.panos||[])[0] || {};
+                const ancho  = p0.ancho  || v.ancho  || '—';
+                const alto   = v.alto    || p0.alto  || '—';
+                const codInt = v.codInt  || p0.tipoTela || '—';
+                const mec    = p0.mecanismo || v.mecanismo || '—';
+                const tub    = p0.tuberia   || '—';
+                const nPanos = (v.panos||[]).length;
+                const panosTag = nPanos > 1
+                    ? `<span style="background:rgba(168,85,247,0.2);color:#a855f7;padding:1px 5px;border-radius:4px;font-size:0.65rem;">${nPanos} paños</span>`
+                    : '';
                 return `<tr>
                     <td>${i+1}</td>
-                    <td>${v.ubicacion||v.ubic||p.ubicacion||'—'}</td>
-                    <td>${v.tipo||p.tipo||'—'}</td>
-                    <td>${v.ancho||p.ancho||'—'}</td>
-                    <td>${v.alto||p.alto||'—'}</td>
-                    <td>${v.tela||p.tela||v.codInt||p.codInt||'—'}</td>
-                    <td>${v.mecanismo||p.mecanismo||'—'}</td>
+                    <td>${v.ubicacion||'—'} ${panosTag}</td>
+                    <td>${v.tipo||'—'}</td>
+                    <td>${ancho} m</td>
+                    <td>${alto} m</td>
+                    <td>${codInt}</td>
+                    <td style="font-size:0.7rem;">${mec}</td>
+                    <td style="font-size:0.7rem;color:var(--text-secondary);">${tub}</td>
                 </tr>`;
             }).join('');
         }
