@@ -1662,6 +1662,7 @@
                                 <li class="nav-item"><button class="nav-link active py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('dashboard')" id="odios-btn-dashboard"><i class="bi bi-speedometer2"></i> Dashboard</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('clientes')" id="odios-btn-clientes"><i class="bi bi-people"></i> Clientes</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('stock')" id="odios-btn-stock"><i class="bi bi-layers"></i> Stock Telas</button></li>
+                                <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('reportes')" id="odios-btn-reportes"><i class="bi bi-bar-chart-line"></i> Reportes</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('control')" id="odios-btn-control"><i class="bi bi-gear"></i> Control</button></li>
                             </ul>
                         </div>
@@ -1696,6 +1697,21 @@
                             </div>
                         </div>
 
+                        <!-- Alertas de OTs estancadas -->
+                        <div id="odios-alertas-banner" class="glass-card p-3 mb-3" style="display:none;border-color:rgba(245,158,11,0.4);">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span style="font-size:1.1rem;">⚠️</span>
+                                <strong style="font-size:0.85rem;color:#f59e0b;">OTs Estancadas</strong>
+                                <span class="text-muted small" id="odios-alertas-subtitulo"></span>
+                                <div class="ms-auto d-flex align-items-center gap-2">
+                                    <label class="form-label mb-0 text-muted" style="font-size:0.75rem;white-space:nowrap;">Alerta después de</label>
+                                    <input type="number" class="form-control form-control-sm" id="odios-dias-alerta" value="5" min="1" max="60" style="width:60px;" onchange="odiosRenderDashboard()">
+                                    <span class="text-muted" style="font-size:0.75rem;">días</span>
+                                </div>
+                            </div>
+                            <div id="odios-alertas-lista" style="font-size:0.78rem;"></div>
+                        </div>
+
                         <div class="glass-card p-3 mb-3">
                             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
                                 <strong style="font-size:0.85rem;"><i class="bi bi-list-ul"></i> Todas las OTs</strong>
@@ -1717,7 +1733,7 @@
                                 <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.77rem;">
                                     <thead><tr>
                                         <th>OT #</th><th>CLIENTE</th><th>ESTADO</th>
-                                        <th>VENTANAS</th><th>CREADA</th><th>MODIFICADA</th><th>ACCIÓN</th>
+                                        <th>VENTS</th><th>DÍAS</th><th>NOTA ADMIN</th><th>ACCIONES</th>
                                     </tr></thead>
                                     <tbody id="odios-tabla-ots"></tbody>
                                 </table>
@@ -1802,6 +1818,88 @@
                                     <tbody id="odios-tabla-stock">
                                         <tr><td colspan="7" class="text-muted text-center py-3"><small>Cargando inventario...</small></td></tr>
                                     </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══ REPORTES ═══ -->
+                    <div id="odios-section-reportes" style="display:none;">
+                        <div class="glass-card p-3 mb-3" style="border-color:rgba(99,102,241,0.2);">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-bar-chart-line"></i> Estadísticas de Producción</strong>
+                                <div class="d-flex gap-2">
+                                    <select class="form-select form-select-sm" id="rep-periodo" onchange="odiosRenderReportes()" style="width:160px;">
+                                        <option value="30">Últimos 30 días</option>
+                                        <option value="60">Últimos 60 días</option>
+                                        <option value="90">Últimos 90 días</option>
+                                        <option value="365">Último año</option>
+                                        <option value="0">Todo el historial</option>
+                                    </select>
+                                    <button class="btn btn-sm" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);color:#22c55e;white-space:nowrap;" onclick="odiosExportarExcel()">
+                                        <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- KPIs del período -->
+                            <div class="row g-2 mb-4" id="rep-kpis"></div>
+                            <!-- Gráfico OTs por mes -->
+                            <div class="mb-4">
+                                <div class="text-muted small mb-2" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">OTs por Mes</div>
+                                <div id="rep-grafico-meses" style="font-size:0.78rem;"></div>
+                            </div>
+                            <!-- Distribución por estado -->
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <div class="text-muted small mb-2" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Distribución por Estado</div>
+                                    <div id="rep-grafico-estados" style="font-size:0.78rem;"></div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="text-muted small mb-2" style="font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Top Clientes (por OTs)</div>
+                                    <div id="rep-grafico-clientes" style="font-size:0.78rem;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══ MODAL: DETALLE DE OT ═══ -->
+                    <div id="odios-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;overflow-y:auto;padding:20px;" onclick="if(event.target===this)odiosModalCerrar()">
+                        <div style="max-width:780px;margin:auto;background:#18181b;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;position:relative;">
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+                                <div>
+                                    <h5 id="odios-modal-titulo" style="margin:0;color:#3b82f6;"></h5>
+                                    <span id="odios-modal-badge" style="font-size:0.75rem;"></span>
+                                </div>
+                                <button onclick="odiosModalCerrar()" style="background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:8px;padding:4px 10px;cursor:pointer;"><i class="bi bi-x-lg"></i></button>
+                            </div>
+                            <!-- Info general -->
+                            <div class="row g-2 mb-3" id="odios-modal-info" style="font-size:0.8rem;"></div>
+                            <!-- Nota admin editable -->
+                            <div class="mb-3">
+                                <label class="form-label form-label-sm mb-1 fw-bold"><i class="bi bi-pencil-square"></i> Nota Administrativa</label>
+                                <div class="d-flex gap-2">
+                                    <textarea class="form-control form-control-sm" id="odios-modal-nota" rows="2" placeholder="Escribí una nota interna sobre esta OT..."></textarea>
+                                    <button class="btn btn-sm" style="background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#3b82f6;white-space:nowrap;" onclick="odiosGuardarNota()"><i class="bi bi-floppy"></i><br><small>Guardar</small></button>
+                                </div>
+                            </div>
+                            <!-- Cambiar estado -->
+                            <div class="mb-3 d-flex gap-2 align-items-center flex-wrap">
+                                <span class="text-muted small fw-bold">Mover a:</span>
+                                <button class="btn btn-sm py-0" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;font-size:0.75rem;" onclick="odiosCambiarEstado('cotizacion')">Cotización</button>
+                                <button class="btn btn-sm py-0" style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;font-size:0.75rem;" onclick="odiosCambiarEstado('terreno')">Terreno</button>
+                                <button class="btn btn-sm py-0" style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;font-size:0.75rem;" onclick="odiosCambiarEstado('produccion')">Producción</button>
+                                <button class="btn btn-sm py-0" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);color:#22c55e;font-size:0.75rem;" onclick="odiosCambiarEstado('entregado')">Entregado</button>
+                                <div class="ms-auto d-flex gap-2">
+                                    <button class="btn btn-sm py-0" style="background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;font-size:0.75rem;" onclick="odiosAbrirEnCotizador()">📂 Abrir en Cotizador</button>
+                                    <button class="btn btn-sm py-0" style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;font-size:0.75rem;" onclick="odiosEliminarOT()">🗑 Eliminar</button>
+                                </div>
+                            </div>
+                            <!-- Ventanas -->
+                            <div class="text-muted small fw-bold mb-1">VENTANAS</div>
+                            <div class="table-responsive">
+                                <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.74rem;">
+                                    <thead><tr><th>#</th><th>UBICACIÓN</th><th>TIPO</th><th>ANCHO</th><th>ALTO</th><th>TELA</th><th>MECANISMO</th></tr></thead>
+                                    <tbody id="odios-modal-ventanas"></tbody>
                                 </table>
                             </div>
                         </div>
@@ -6145,6 +6243,7 @@
     let _odiosUnsubStock   = null;
     let _odiosVersionActual = null;
     let _odiosTelasCache   = [];
+    let _odiosModalOTId    = null; // ID de la OT abierta en el modal
 
     // Colores y etiquetas por estado
     const ODIOS_ESTADOS = {
@@ -6156,13 +6255,15 @@
     };
 
     function odiosTab(section) {
-        ['dashboard','clientes','stock','control'].forEach(s => {
-            document.getElementById('odios-section-' + s).style.display = s === section ? '' : 'none';
+        ['dashboard','clientes','stock','reportes','control'].forEach(s => {
+            const el = document.getElementById('odios-section-' + s);
+            if (el) el.style.display = s === section ? '' : 'none';
             const btn = document.getElementById('odios-btn-' + s);
             if (btn) btn.classList.toggle('active', s === section);
         });
         if (section === 'dashboard') odiosRenderDashboard();
         if (section === 'clientes')  odiosRenderClientes();
+        if (section === 'reportes')  odiosRenderReportes();
         if (section === 'control')   odiosRenderControl();
     }
 
@@ -6177,24 +6278,23 @@
     // ── DASHBOARD ──────────────────────────────────────────────────────
     function odiosRenderDashboard() {
         const ots = (typeof storeOTs !== 'undefined') ? storeOTs : [];
-        const total       = ots.length;
-        const enProd      = ots.filter(o => o.estado === 'produccion').length;
-        const entregadas  = ots.filter(o => o.estado === 'entregado').length;
-        const clientes    = new Set(ots.map(o => ((o.datosGenerales||{}).cliente||'').trim().toLowerCase()).filter(Boolean)).size;
+        const total      = ots.length;
+        const enProd     = ots.filter(o => o.estado === 'produccion').length;
+        const entregadas = ots.filter(o => o.estado === 'entregado').length;
+        const clientes   = new Set(ots.map(o => ((o.datosGenerales||{}).cliente||'').trim().toLowerCase()).filter(Boolean)).size;
 
-        document.getElementById('odios-kpi-total').textContent      = total;
-        document.getElementById('odios-kpi-activas').textContent     = enProd;
-        document.getElementById('odios-kpi-entregadas').textContent  = entregadas;
-        document.getElementById('odios-kpi-clientes').textContent    = clientes;
+        document.getElementById('odios-kpi-total').textContent     = total;
+        document.getElementById('odios-kpi-activas').textContent   = enProd;
+        document.getElementById('odios-kpi-entregadas').textContent= entregadas;
+        document.getElementById('odios-kpi-clientes').textContent  = clientes;
 
         // Barras de estado
         const conteos = {};
-        ots.forEach(o => { conteos[o.estado || 'sin_estado'] = (conteos[o.estado || 'sin_estado'] || 0) + 1; });
+        ots.forEach(o => { const k = o.estado||'sin_estado'; conteos[k] = (conteos[k]||0)+1; });
         const max = Math.max(...Object.values(conteos), 1);
         const barrasHtml = Object.entries(ODIOS_ESTADOS).map(([k, cfg]) => {
-            const n = conteos[k] || 0;
-            if (!n) return '';
-            const pct = Math.round((n / max) * 100);
+            const n = conteos[k] || 0; if (!n) return '';
+            const pct = Math.round((n/max)*100);
             return `<div class="d-flex align-items-center gap-2 mb-1">
                 <span style="min-width:90px;color:${cfg.color};font-size:0.72rem;font-weight:600;">${cfg.label}</span>
                 <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:14px;overflow:hidden;">
@@ -6205,47 +6305,93 @@
         }).join('');
         document.getElementById('odios-barras').innerHTML = barrasHtml || '<span class="text-muted small">Sin datos</span>';
 
+        // Alertas de OTs estancadas
+        const dias = parseInt(document.getElementById('odios-dias-alerta')?.value || 5);
+        const ahora = Date.now();
+        const ESTADOS_ACTIVOS = ['cotizacion','terreno','produccion'];
+        const estancadas = ots.filter(o => {
+            if (!ESTADOS_ACTIVOS.includes(o.estado)) return false;
+            const mod = new Date(o.fechaModificacion||o.fechaCreacion||0).getTime();
+            return (ahora - mod) > (dias * 86400000);
+        }).sort((a,b) => (a.fechaModificacion||'') < (b.fechaModificacion||'') ? -1 : 1);
+
+        const banner = document.getElementById('odios-alertas-banner');
+        if (estancadas.length > 0) {
+            banner.style.display = '';
+            document.getElementById('odios-alertas-subtitulo').textContent = `(${estancadas.length} OT${estancadas.length>1?'s':''} sin movimiento hace más de ${dias} días)`;
+            document.getElementById('odios-alertas-lista').innerHTML = estancadas.map(o => {
+                const dg   = o.datosGenerales||{};
+                const dias_sin = Math.floor((ahora - new Date(o.fechaModificacion||o.fechaCreacion||0).getTime())/86400000);
+                const ecfg = ODIOS_ESTADOS[o.estado]||{label:o.estado,color:'#94a3b8'};
+                return `<div class="d-flex align-items-center gap-2 mb-1 p-2" style="background:rgba(245,158,11,0.08);border-radius:6px;">
+                    <span style="color:#f59e0b;font-weight:700;">${dg.ot||'—'}</span>
+                    <span class="text-muted">—</span>
+                    <span>${dg.cliente||'—'}</span>
+                    <span style="background:${ecfg.bg||'rgba(148,163,184,0.1)'};color:${ecfg.color};padding:1px 6px;border-radius:99px;font-size:0.68rem;">${ecfg.label}</span>
+                    <span class="text-muted ms-auto" style="font-size:0.72rem;">hace ${dias_sin} días</span>
+                    <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;" onclick="odiosVerDetalle(${o.id})">Ver</button>
+                </div>`;
+            }).join('');
+        } else {
+            banner.style.display = 'none';
+        }
+
         odiosRenderTablaOTs();
     }
 
+    function _odiosDiasDesde(fechaStr) {
+        if (!fechaStr) return '—';
+        const d = Math.floor((Date.now() - new Date(fechaStr).getTime()) / 86400000);
+        return d === 0 ? 'hoy' : d === 1 ? '1 día' : `${d} días`;
+    }
+
     function odiosRenderTablaOTs() {
-        const ots  = (typeof storeOTs !== 'undefined') ? storeOTs : [];
-        const txt  = (document.getElementById('odios-filtro-texto')?.value || '').toLowerCase();
-        const est  = document.getElementById('odios-filtro-estado')?.value || '';
+        const ots   = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const txt   = (document.getElementById('odios-filtro-texto')?.value||'').toLowerCase();
+        const est   = document.getElementById('odios-filtro-estado')?.value||'';
         const tbody = document.getElementById('odios-tabla-ots');
         if (!tbody) return;
 
+        const diasAlerta = parseInt(document.getElementById('odios-dias-alerta')?.value||5);
+        const ahora = Date.now();
+        const ACTIVOS = ['cotizacion','terreno','produccion'];
+
         let filtradas = ots.filter(o => {
-            const dg = o.datosGenerales || {};
-            const ok_txt = !txt || (dg.ot||'').toLowerCase().includes(txt) || (dg.cliente||'').toLowerCase().includes(txt);
-            const ok_est = !est || o.estado === est;
+            const dg = o.datosGenerales||{};
+            const ok_txt = !txt||(dg.ot||'').toLowerCase().includes(txt)||(dg.cliente||'').toLowerCase().includes(txt);
+            const ok_est = !est||o.estado===est;
             return ok_txt && ok_est;
         });
-        filtradas.sort((a,b) => (b.fechaModificacion||'') > (a.fechaModificacion||'') ? 1 : -1);
+        filtradas.sort((a,b) => (b.fechaModificacion||'')>(a.fechaModificacion||'')?1:-1);
 
         if (!filtradas.length) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-3"><small>Sin resultados</small></td></tr>';
             return;
         }
-        const cfg = ODIOS_ESTADOS;
         tbody.innerHTML = filtradas.map(o => {
-            const dg = o.datosGenerales || {};
-            const est = o.estado || 'sin_estado';
-            const ecfg = cfg[est] || { label: est, color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
-            const badge = `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 8px;border-radius:99px;font-size:0.68rem;font-weight:700;white-space:nowrap;">${ecfg.label}</span>`;
-            const fechaC = (o.fechaCreacion||'').slice(0,10) || '—';
-            const fechaM = (o.fechaModificacion||'').slice(0,10) || '—';
+            const dg    = o.datosGenerales||{};
+            const est   = o.estado||'sin_estado';
+            const ecfg  = ODIOS_ESTADOS[est]||{label:est,color:'#94a3b8',bg:'rgba(148,163,184,0.1)'};
+            const badge = `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 7px;border-radius:99px;font-size:0.67rem;font-weight:700;">${ecfg.label}</span>`;
             const vents = (o.storeVentanas||[]).length;
-            return `<tr>
-                <td><strong style="color:#3b82f6;">${dg.ot||'—'}</strong></td>
+            const dias  = _odiosDiasDesde(o.fechaModificacion||o.fechaCreacion);
+            const mod   = new Date(o.fechaModificacion||o.fechaCreacion||0).getTime();
+            const estancada = ACTIVOS.includes(est) && (ahora-mod)>(diasAlerta*86400000);
+            const rowStyle  = estancada ? 'background:rgba(245,158,11,0.06);' : '';
+            const alerta    = estancada ? '⚠️ ' : '';
+            const nota      = (o.notaAdmin||'').slice(0,40) + ((o.notaAdmin||'').length>40?'…':'');
+            return `<tr style="${rowStyle}">
+                <td><strong style="color:#3b82f6;">${alerta}${dg.ot||'—'}</strong></td>
                 <td>${dg.cliente||'—'}</td>
                 <td>${badge}</td>
-                <td>${vents}</td>
-                <td style="color:var(--text-secondary);">${fechaC}</td>
-                <td style="color:var(--text-secondary);">${fechaM}</td>
+                <td style="text-align:center;">${vents}</td>
+                <td style="color:${estancada?'#f59e0b':'var(--text-secondary)'};font-size:0.72rem;">${dias}</td>
+                <td style="color:var(--text-secondary);font-size:0.72rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${o.notaAdmin||''}">${nota||'—'}</td>
                 <td>
-                    <button class="btn btn-sm py-0" style="font-size:0.7rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;"
-                        onclick="abrirOT(${o.id}); switchTab('panel');">📂 Abrir</button>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;" onclick="odiosVerDetalle(${o.id})" title="Ver detalle">🔍</button>
+                        <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;" onclick="abrirOT(${o.id});switchTab('panel');" title="Abrir en cotizador">📂</button>
+                    </div>
                 </td>
             </tr>`;
         }).join('');
@@ -6420,6 +6566,230 @@
         db.collection('cortinas_telas').doc(id).delete()
             .then(() => showToast(`Tela "${nombre}" eliminada`))
             .catch(e => showToast('Error: ' + e.message, 'error'));
+    }
+
+    // ── MODAL: DETALLE DE OT ──────────────────────────────────────────
+    function odiosVerDetalle(id) {
+        const ot = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === id);
+        if (!ot) return;
+        _odiosModalOTId = id;
+        const dg   = ot.datosGenerales || {};
+        const ecfg = ODIOS_ESTADOS[ot.estado] || {label:ot.estado||'—',color:'#94a3b8',bg:'rgba(148,163,184,0.1)'};
+
+        document.getElementById('odios-modal-titulo').textContent = `OT ${dg.ot||'—'} — ${dg.cliente||'—'}`;
+        document.getElementById('odios-modal-badge').innerHTML =
+            `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 10px;border-radius:99px;font-size:0.75rem;font-weight:700;">${ecfg.label}</span>`;
+
+        // Info general
+        const infoFields = [
+            ['OT #', dg.ot||'—'], ['Cliente', dg.cliente||'—'],
+            ['Creada', (ot.fechaCreacion||'').slice(0,10)||'—'],
+            ['Modificada', (ot.fechaModificacion||'').slice(0,10)||'—'],
+            ['Ventanas', (ot.storeVentanas||[]).length],
+            ['Dirección', dg.direccion||dg.dir||'—'],
+            ['Teléfono', dg.telefono||dg.tel||'—'],
+        ];
+        document.getElementById('odios-modal-info').innerHTML = infoFields.map(([k,v]) =>
+            `<div class="col-6 col-md-4"><div style="background:rgba(0,0,0,0.25);border-radius:6px;padding:6px 10px;">
+                <div class="text-muted" style="font-size:0.65rem;text-transform:uppercase;">${k}</div>
+                <div style="font-size:0.8rem;font-weight:600;">${v}</div>
+            </div></div>`
+        ).join('');
+
+        // Nota admin
+        document.getElementById('odios-modal-nota').value = ot.notaAdmin || '';
+
+        // Ventanas
+        const vents = ot.storeVentanas || [];
+        const ventsTbody = document.getElementById('odios-modal-ventanas');
+        if (!vents.length) {
+            ventsTbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-2"><small>Sin ventanas registradas</small></td></tr>';
+        } else {
+            ventsTbody.innerHTML = vents.map((v,i) => {
+                const p = v.pano || v; // support various structures
+                return `<tr>
+                    <td>${i+1}</td>
+                    <td>${v.ubicacion||v.ubic||p.ubicacion||'—'}</td>
+                    <td>${v.tipo||p.tipo||'—'}</td>
+                    <td>${v.ancho||p.ancho||'—'}</td>
+                    <td>${v.alto||p.alto||'—'}</td>
+                    <td>${v.tela||p.tela||v.codInt||p.codInt||'—'}</td>
+                    <td>${v.mecanismo||p.mecanismo||'—'}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        document.getElementById('odios-modal-overlay').style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function odiosModalCerrar() {
+        document.getElementById('odios-modal-overlay').style.display = 'none';
+        document.body.style.overflow = '';
+        _odiosModalOTId = null;
+    }
+
+    function odiosGuardarNota() {
+        if (!_odiosModalOTId) return;
+        const nota = document.getElementById('odios-modal-nota')?.value || '';
+        const ot   = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === _odiosModalOTId);
+        if (!ot) return;
+        ot.notaAdmin = nota;
+        ot.fechaModificacion = new Date().toISOString();
+        guardarOT(ot);
+        showToast('Nota guardada');
+        odiosRenderTablaOTs();
+    }
+
+    function odiosCambiarEstado(nuevoEstado) {
+        if (!_odiosModalOTId) return;
+        moverOTEstado(_odiosModalOTId, nuevoEstado);
+        // Actualizar badge en modal
+        const ot   = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === _odiosModalOTId);
+        if (ot) {
+            const ecfg = ODIOS_ESTADOS[nuevoEstado]||{label:nuevoEstado,color:'#94a3b8',bg:'rgba(148,163,184,0.1)'};
+            document.getElementById('odios-modal-badge').innerHTML =
+                `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 10px;border-radius:99px;font-size:0.75rem;font-weight:700;">${ecfg.label}</span>`;
+        }
+        odiosRenderTablaOTs();
+        showToast(`Estado cambiado a ${ODIOS_ESTADOS[nuevoEstado]?.label || nuevoEstado}`);
+    }
+
+    function odiosEliminarOT() {
+        if (!_odiosModalOTId) return;
+        const ot = (typeof storeOTs !== 'undefined' ? storeOTs : []).find(o => o.id === _odiosModalOTId);
+        const nombre = ot?.datosGenerales?.cliente || 'esta OT';
+        if (!confirm(`⚠ Eliminar definitivamente la OT de "${nombre}"?\nEsta acción NO se puede deshacer.`)) return;
+        odiosModalCerrar();
+        eliminarOTDefinitivo(_odiosModalOTId);
+    }
+
+    function odiosAbrirEnCotizador() {
+        if (!_odiosModalOTId) return;
+        odiosModalCerrar();
+        abrirOT(_odiosModalOTId);
+        switchTab('panel');
+    }
+
+    // ── REPORTES ───────────────────────────────────────────────────────
+    function odiosRenderReportes() {
+        const ots    = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const dias   = parseInt(document.getElementById('rep-periodo')?.value || 30);
+        const ahora  = Date.now();
+        const filtro = dias > 0 ? ots.filter(o => {
+            const t = new Date(o.fechaCreacion||o.fechaModificacion||0).getTime();
+            return (ahora - t) <= (dias * 86400000);
+        }) : ots;
+
+        // KPIs del período
+        const kpisEl = document.getElementById('rep-kpis');
+        const totalM2 = filtro.reduce((acc, o) => {
+            return acc + (o.storeVentanas||[]).reduce((s,v) => {
+                const a = parseFloat(v.ancho||0)/100, h = parseFloat(v.alto||0)/100;
+                return s + (a*h);
+            }, 0);
+        }, 0);
+        const kpiData = [
+            { label: 'OTs en período', val: filtro.length, color: '#3b82f6' },
+            { label: 'Clientes únicos', val: new Set(filtro.map(o => ((o.datosGenerales||{}).cliente||'').trim().toLowerCase()).filter(Boolean)).size, color: '#a855f7' },
+            { label: 'Ventanas totales', val: filtro.reduce((s,o)=>s+(o.storeVentanas||[]).length,0), color: '#f59e0b' },
+            { label: 'M² aprox.', val: totalM2.toFixed(1)+' m²', color: '#22c55e' },
+        ];
+        if (kpisEl) kpisEl.innerHTML = kpiData.map(k =>
+            `<div class="col-6 col-md-3"><div class="glass-card p-2 text-center" style="border-color:${k.color}33;">
+                <div style="font-size:1.5rem;font-weight:800;color:${k.color};">${k.val}</div>
+                <div class="text-muted" style="font-size:0.72rem;">${k.label}</div>
+            </div></div>`
+        ).join('');
+
+        // Gráfico OTs por mes
+        const porMes = {};
+        filtro.forEach(o => {
+            const d = new Date(o.fechaCreacion||o.fechaModificacion||0);
+            const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            porMes[k] = (porMes[k]||0)+1;
+        });
+        const meses = Object.keys(porMes).sort();
+        const maxM  = Math.max(...Object.values(porMes), 1);
+        const grafMeses = document.getElementById('rep-grafico-meses');
+        if (grafMeses) grafMeses.innerHTML = meses.length ? meses.map(m => {
+            const n = porMes[m]; const pct = Math.round((n/maxM)*100);
+            const [yr,mo] = m.split('-');
+            const label = new Date(yr,parseInt(mo)-1,1).toLocaleString('es',{month:'short',year:'2-digit'});
+            return `<div class="d-flex align-items-center gap-2 mb-1">
+                <span style="min-width:52px;font-size:0.72rem;color:var(--text-secondary);">${label}</span>
+                <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:16px;overflow:hidden;">
+                    <div style="width:${pct}%;height:100%;background:#6366f1;opacity:0.75;border-radius:4px;"></div>
+                </div>
+                <span style="min-width:20px;font-size:0.75rem;font-weight:700;color:#818cf8;">${n}</span>
+            </div>`;
+        }).join('') : '<span class="text-muted small">Sin datos en el período</span>';
+
+        // Distribución por estado
+        const porEstado = {};
+        filtro.forEach(o => { const k=o.estado||'—'; porEstado[k]=(porEstado[k]||0)+1; });
+        const maxE = Math.max(...Object.values(porEstado),1);
+        const grafEst = document.getElementById('rep-grafico-estados');
+        if (grafEst) grafEst.innerHTML = Object.entries(porEstado).sort((a,b)=>b[1]-a[1]).map(([k,n]) => {
+            const cfg = ODIOS_ESTADOS[k]||{label:k,color:'#94a3b8'};
+            const pct = Math.round((n/maxE)*100);
+            return `<div class="d-flex align-items-center gap-2 mb-1">
+                <span style="min-width:80px;color:${cfg.color};font-size:0.72rem;font-weight:600;">${cfg.label}</span>
+                <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:14px;overflow:hidden;">
+                    <div style="width:${pct}%;height:100%;background:${cfg.color};opacity:0.7;border-radius:4px;"></div>
+                </div>
+                <span style="font-size:0.75rem;font-weight:700;color:${cfg.color};">${n}</span>
+            </div>`;
+        }).join('') || '<span class="text-muted small">Sin datos</span>';
+
+        // Top clientes
+        const porCliente = {};
+        filtro.forEach(o => { const c=((o.datosGenerales||{}).cliente||'Sin nombre').trim(); porCliente[c]=(porCliente[c]||0)+1; });
+        const topC = Object.entries(porCliente).sort((a,b)=>b[1]-a[1]).slice(0,8);
+        const maxC = Math.max(...topC.map(x=>x[1]),1);
+        const grafCli = document.getElementById('rep-grafico-clientes');
+        if (grafCli) grafCli.innerHTML = topC.length ? topC.map(([nom,n]) => {
+            const pct = Math.round((n/maxC)*100);
+            return `<div class="d-flex align-items-center gap-2 mb-1">
+                <span style="min-width:100px;font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${nom}">${nom}</span>
+                <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:14px;overflow:hidden;">
+                    <div style="width:${pct}%;height:100%;background:#14b8a6;opacity:0.7;border-radius:4px;"></div>
+                </div>
+                <span style="font-size:0.75rem;font-weight:700;color:#14b8a6;">${n}</span>
+            </div>`;
+        }).join('') : '<span class="text-muted small">Sin datos</span>';
+    }
+
+    function odiosExportarExcel() {
+        if (typeof XLSX === 'undefined') { showToast('SheetJS no disponible', 'error'); return; }
+        const ots = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const filas = [['OT #','CLIENTE','ESTADO','VENTANAS','CREADA','MODIFICADA','NOTA ADMIN']];
+        ots.sort((a,b)=>(b.fechaCreacion||'')>(a.fechaCreacion||'')?1:-1).forEach(o => {
+            const dg = o.datosGenerales||{};
+            filas.push([
+                dg.ot||'—', dg.cliente||'—',
+                ODIOS_ESTADOS[o.estado]?.label||o.estado||'—',
+                (o.storeVentanas||[]).length,
+                (o.fechaCreacion||'').slice(0,10)||'—',
+                (o.fechaModificacion||'').slice(0,10)||'—',
+                o.notaAdmin||''
+            ]);
+        });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filas), 'OTs');
+        // Hoja de stock
+        if (_odiosTelasCache.length) {
+            const filasStock = [['CÓDIGO','NOMBRE','ANCHO ROLLO (m)','M DISPONIBLES','ALERTA MÍNIMO','ACTUALIZADO']];
+            _odiosTelasCache.forEach(t => filasStock.push([t.codigo||'',t.nombre||'',t.ancho_m||'',t.metros_disponibles||0,t.alerta_minimo||10,(t.fechaActualizacion||'').slice(0,10)]));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(filasStock), 'Stock Telas');
+        }
+        const buf = XLSX.write(wb, {bookType:'xlsx',type:'array'});
+        const blob = new Blob([buf], {type:'application/octet-stream'});
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = `Reporte_OdD_${new Date().toISOString().slice(0,10)}.xlsx`;
+        a.click(); URL.revokeObjectURL(url);
+        showToast('Reporte exportado a Excel');
     }
 
     // ── CONTROL (VERSION) ──────────────────────────────────────────────
