@@ -1004,6 +1004,9 @@ async function guardarSerialesEnFirestore() {
         }
         
         // ── FASE 2: Insertar los nuevos documentos (en batches de 499) ──
+        // Acumulamos todos los batches en un array de promesas para luego
+        // esperarlos todos juntos con Promise.all, evitando pérdida silenciosa de datos.
+        const batchPromesas = [];
         batch = window.firebaseWriteBatch(db);
         opCount = 0;
 
@@ -1017,15 +1020,16 @@ async function guardarSerialesEnFirestore() {
             });
             opCount++;
             if (opCount >= 499) {
-                // Crear promesa y resetear (no await dentro de forEach)
-                batch.commit();
+                batchPromesas.push(batch.commit()); // acumular promesa sin await
                 batch = window.firebaseWriteBatch(db);
                 opCount = 0;
             }
         });
         if (opCount > 0) {
-            await batch.commit();
+            batchPromesas.push(batch.commit());
         }
+        // Esperar que TODOS los batches completen antes de continuar
+        await Promise.all(batchPromesas);
         
         console.log(`✅ ${SistemaInventario.seriales.length} seriales guardados en Firestore`);
         log(`✅ ${SistemaInventario.seriales.length} seriales guardados en Firestore`, "success");
@@ -2458,12 +2462,20 @@ function ejecutarOptimizacion() {
         }
     }
 
-    // Guardar copias inmutables para poder recalcular sin recargar Excel
+    // Guardar copias inmutables para poder recalcular sin recargar Excel.
+    // IMPORTANTE: las tres copias deben tomarse aquí, no solo al cargar el Excel,
+    // porque cuando las colmenas vienen de Firebase (no de un archivo manual)
+    // colmenaCruda nunca se inicializa en cargarColmenas().
     if (SistemaInventario.ordenesCrudas.length === 0) {
         SistemaInventario.ordenesCrudas = JSON.parse(JSON.stringify(SistemaInventario.ordenes));
     }
     if (SistemaInventario.serialesCrudos.length === 0 && SistemaInventario.seriales.length > 0) {
         SistemaInventario.serialesCrudos = JSON.parse(JSON.stringify(SistemaInventario.seriales));
+    }
+    // colmenaCruda: capturar SIEMPRE el estado actual de colmenas al inicio de la
+    // optimización, independientemente de si vinieron de Firebase o de un Excel manual.
+    if (SistemaInventario.colmenaCruda.length === 0 && SistemaInventario.colmenas.length > 0) {
+        SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
     }
 
     log(`ℹ️ Fuente de colmenas: ${usandoColmenaManual ? 'Archivo manual' : 'Firebase (sincronizado)'}`, 'info');
@@ -3156,6 +3168,17 @@ async function confirmarYGuardarStaging() {
     guardarSistema();
     await guardarColmenaFinalEnFirestore();
 
+    // ── PASO 3c: Persistir seriales con estado actualizado (disponible → ocupado) ──
+    // CRÍTICO: sin este paso, los seriales marcados como 'ocupado' durante la
+    // optimización solo existen en memoria y se revierten al recargar la página,
+    // permitiendo que el mismo tubo sea asignado dos veces en sesiones futuras.
+    try {
+        await guardarSerialesEnFirestore();
+        log('🏷️ Estados de seriales sincronizados con Firebase', 'info');
+    } catch (e) {
+        log('❌ Error al guardar seriales en Firebase: ' + e.message, 'error');
+    }
+
     // ── PASO 3b: Marcar OTs como procesadas hoy (protección anti-duplicados) ──
     const hoy = new Date().toISOString().split('T')[0];
     const otsProcesadas = JSON.parse(localStorage.getItem('ots_procesadas_hoy') || '{}');
@@ -3197,6 +3220,7 @@ async function confirmarYGuardarStaging() {
         }
     } catch (e) {
         console.warn("No se pudo guardar último plan en Firebase:", e.message);
+        log('⚠️ No se pudo guardar el último plan en la nube: ' + e.message, 'warn');
     }
 
     // ── Exportar Excel ANTES de limpiar (usa resultadosOptimizacion que aún tiene datos) ──
