@@ -7512,6 +7512,7 @@
 
     let _corrEmailOptimizer  = null;   // email leído desde Firebase
     let _corrPlanData        = null;   // último plan cargado (array de líneas)
+    let _corrOrdenesData     = [];     // órdenes de referencia del último plan
     let _corrPlanPendientes  = {};     // { idx: { tipo, nuevos campos, nota } }
     let _corrTubosData       = null;   // colmena_final cargada
     let _corrEditorIdx       = null;   // índice de la línea en edición
@@ -7568,25 +7569,22 @@
                 return;
             }
             const data = snap.data();
-            // El plan puede estar en data.plan (array) o data.resultado (objeto con .cortes)
+            // El optimizador guarda `resultados` como JSON string de [{resultado:{...}, orden:{...}}]
             let lineas = [];
-            if (Array.isArray(data.plan)) {
-                lineas = data.plan;
-            } else if (data.resultado && Array.isArray(data.resultado.cortes)) {
-                lineas = data.resultado.cortes;
-            } else if (data.resultado && Array.isArray(data.resultado)) {
-                lineas = data.resultado;
-            } else {
-                // intentar buscar cualquier array en el objeto
-                for (const val of Object.values(data)) {
-                    if (Array.isArray(val) && val.length > 0) { lineas = val; break; }
-                }
+            if (data.resultados) {
+                try { lineas = JSON.parse(data.resultados); } catch(e) {}
+            }
+            // Guardar también las ordenes para referencia cruzada
+            _corrOrdenesData = [];
+            if (data.ordenes) {
+                try { _corrOrdenesData = JSON.parse(data.ordenes); } catch(e) {}
             }
             _corrPlanData = lineas;
             _corrPlanPendientes = {};
+            const fecha = data.fecha ? new Date(data.fecha).toLocaleString('es-CL') : '';
             statusEl.textContent = lineas.length > 0
-                ? `✅ ${lineas.length} líneas cargadas`
-                : '⚠ El plan está vacío o tiene formato desconocido.';
+                ? `✅ ${lineas.length} cortes cargados${fecha ? ' — ' + fecha : ''}`
+                : '⚠ El plan no tiene cortes registrados.';
             corrRenderPlan(lineas);
             document.getElementById('corr-aplicar-wrap').style.display = 'none';
         } catch(e) {
@@ -7601,26 +7599,26 @@
             wrap.innerHTML = '<p class="text-muted small">Sin líneas para mostrar.</p>';
             return;
         }
-        // Detectar campos disponibles dinámicamente
-        const campos = ['serial','tuberia','largo','cantidad','ubicacion','descripcion','pano'];
         let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
             <thead><tr style="color:#94a3b8;">
-                <th>#</th><th>Serial / Tubo</th><th>Largo (mm)</th><th>Cant.</th><th>Descripción</th><th></th>
+                <th>#</th><th>OT / Ubic.</th><th>Código tubo</th><th>Medida (cm)</th><th>Colmena</th><th></th>
             </tr></thead><tbody>`;
-        lineas.forEach((l, i) => {
-            const serial = l.serial || l.tubo || l.id || '—';
-            const largo  = l.largo  !== undefined ? l.largo  : (l.longitud !== undefined ? l.longitud : '—');
-            const cant   = l.cantidad !== undefined ? l.cantidad : (l.qty !== undefined ? l.qty : '—');
-            const desc   = l.descripcion || l.pano || l.ubicacion || '';
+        lineas.forEach((item, i) => {
+            const res = item.resultado || item;
+            const ord = item.orden || {};
+            const codigo   = res.codigo || res.codigo_original || ord.cod || '—';
+            const medida   = res.medida_cm !== undefined ? res.medida_cm + ' cm' : '—';
+            const colmena  = res.colmena || '—';
+            const otUbic   = [ord.ot, ord.ubic].filter(Boolean).join(' · ') || '—';
             const tieneCorr = _corrPlanPendientes[i];
-            const rowStyle = tieneCorr ? 'background:rgba(251,191,36,0.12);' : '';
-            const badge   = tieneCorr ? ' <span style="font-size:0.65rem;background:#fbbf24;color:#1e293b;padding:1px 5px;border-radius:9px;vertical-align:middle;">✏</span>' : '';
+            const rowStyle  = tieneCorr ? 'background:rgba(251,191,36,0.12);' : '';
+            const badge     = tieneCorr ? ' <span style="font-size:0.65rem;background:#fbbf24;color:#1e293b;padding:1px 5px;border-radius:9px;vertical-align:middle;">✏</span>' : '';
             html += `<tr style="${rowStyle}">
                 <td style="color:#64748b;">${i+1}</td>
-                <td style="font-family:monospace;">${serial}${badge}</td>
-                <td>${largo}</td>
-                <td>${cant}</td>
-                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}</td>
+                <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${otUbic}</td>
+                <td style="font-family:monospace;">${codigo}${badge}</td>
+                <td>${medida}</td>
+                <td>${colmena}</td>
                 <td><button class="btn btn-sm py-0 px-1" style="font-size:0.7rem;background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);" onclick="corrMostrarEditor(${i})"><i class="bi bi-pencil"></i></button></td>
             </tr>`;
         });
@@ -7631,14 +7629,19 @@
     // ─── Mostrar editor inline para una línea ───────────────────
     function corrMostrarEditor(idx) {
         _corrEditorIdx = idx;
-        const l = _corrPlanData[idx];
-        document.getElementById('corr-editor-idx').textContent = idx + 1;
-        // Pre-rellenar con corrección pendiente si existe
+        const item = _corrPlanData[idx];
+        const res  = item.resultado || item;
+        const ord  = item.orden || {};
+        document.getElementById('corr-editor-idx').textContent =
+            `${idx + 1} — OT ${ord.ot || '?'} · ${ord.ubic || '?'}`;
         const pend = _corrPlanPendientes[idx] || {};
         document.getElementById('corr-tipo-error').value = pend.tipo || '';
-        document.getElementById('corr-nuevo-largo').value  = pend.nuevoLargo  !== undefined ? pend.nuevoLargo  : (l.largo || l.longitud || '');
-        document.getElementById('corr-nueva-cant').value   = pend.nuevaCant   !== undefined ? pend.nuevaCant   : (l.cantidad || l.qty || '');
-        document.getElementById('corr-nuevo-serial').value = pend.nuevoSerial !== undefined ? pend.nuevoSerial : (l.serial || l.tubo || '');
+        // Medida actual (en cm)
+        document.getElementById('corr-nuevo-largo').value =
+            pend.nuevaMedida !== undefined ? pend.nuevaMedida : (res.medida_cm || '');
+        // Código de tubo actual
+        document.getElementById('corr-nuevo-serial').value =
+            pend.nuevoCodigo !== undefined ? pend.nuevoCodigo : (res.codigo || res.codigo_original || '');
         document.getElementById('corr-nota').value = pend.nota || '';
         corrMostrarCampos();
         document.getElementById('corr-editor').style.display = '';
@@ -7652,21 +7655,18 @@
             (tipo === 'medida_erronea') ? '' : 'none';
         document.getElementById('corr-campos-tubo').style.display =
             (tipo === 'tubo_equivocado') ? '' : 'none';
-        // Para tubo_inexistente y tubo_danado solo se usa la nota
     }
 
     // ─── Guardar corrección para una línea ──────────────────────
     function corrGuardarLinea() {
         const tipo = document.getElementById('corr-tipo-error').value;
         if (!tipo) { showToast('Selecciona el tipo de error', 'error'); return; }
-        const nota      = document.getElementById('corr-nota').value.trim();
-        const nuevoLargo  = parseFloat(document.getElementById('corr-nuevo-largo').value)  || null;
-        const nuevaCant   = parseInt(document.getElementById('corr-nueva-cant').value, 10) || null;
-        const nuevoSerial = document.getElementById('corr-nuevo-serial').value.trim() || null;
-        _corrPlanPendientes[_corrEditorIdx] = { tipo, nuevoLargo, nuevaCant, nuevoSerial, nota };
+        const nota       = document.getElementById('corr-nota').value.trim();
+        const nuevaMedida  = parseFloat(document.getElementById('corr-nuevo-largo').value) || null;
+        const nuevoCodigo  = document.getElementById('corr-nuevo-serial').value.trim() || null;
+        _corrPlanPendientes[_corrEditorIdx] = { tipo, nuevaMedida, nuevoCodigo, nota };
         corrCerrarEditor();
         corrRenderPlan(_corrPlanData);
-        // Mostrar botón de aplicar
         if (Object.keys(_corrPlanPendientes).length > 0) {
             document.getElementById('corr-aplicar-wrap').style.display = '';
         }
@@ -7686,46 +7686,44 @@
         if (!_corrPlanData || Object.keys(_corrPlanPendientes).length === 0) {
             showToast('No hay correcciones pendientes', 'error'); return;
         }
-
-        // Clonar plan y aplicar correcciones
         const planCorregido = JSON.parse(JSON.stringify(_corrPlanData));
         const registros = [];
         const ahora = new Date().toISOString();
 
         Object.entries(_corrPlanPendientes).forEach(([idxStr, corr]) => {
-            const idx = parseInt(idxStr, 10);
-            const linea = planCorregido[idx];
-            const original = JSON.parse(JSON.stringify(linea));
+            const idx  = parseInt(idxStr, 10);
+            const item = planCorregido[idx];
+            const res  = item.resultado || item;
+            const original = JSON.parse(JSON.stringify(item));
 
-            if (corr.tipo === 'medida_erronea') {
-                if (corr.nuevoLargo  !== null) { linea.largo    = corr.nuevoLargo;  linea.longitud = corr.nuevoLargo; }
-                if (corr.nuevaCant   !== null) { linea.cantidad = corr.nuevaCant;   linea.qty      = corr.nuevaCant; }
-            } else if (corr.tipo === 'tubo_equivocado') {
-                if (corr.nuevoSerial !== null) { linea.serial = corr.nuevoSerial; linea.tubo = corr.nuevoSerial; }
+            if (corr.tipo === 'medida_erronea' && corr.nuevaMedida !== null) {
+                res.medida_cm = corr.nuevaMedida;
+            } else if (corr.tipo === 'tubo_equivocado' && corr.nuevoCodigo !== null) {
+                res.codigo = corr.nuevoCodigo;
+                res.codigo_original = corr.nuevoCodigo;
             } else if (corr.tipo === 'tubo_inexistente' || corr.tipo === 'tubo_danado') {
-                linea._error = corr.tipo;
-                linea._nota  = corr.nota;
+                res._error = corr.tipo;
+                res._nota  = corr.nota;
             }
 
             registros.push({
                 idx, tipo: corr.tipo, nota: corr.nota || '',
-                original, corregido: JSON.parse(JSON.stringify(linea)),
+                ot: (item.orden||{}).ot || '—', ubic: (item.orden||{}).ubic || '—',
+                original, corregido: JSON.parse(JSON.stringify(item)),
                 timestamp: ahora,
                 operario: (typeof _presenciaNombre !== 'undefined' ? _presenciaNombre : null) || 'Admin'
             });
         });
 
         try {
-            // 1) Guardar plan corregido en Firebase del optimizador
+            // Guardar resultados corregidos como JSON string (igual que el optimizador)
             await db.collection('usuarios').doc(email)
                 .collection('ultimo_plan').doc('datos')
-                .set({ plan: planCorregido, fechaCorreccion: ahora }, { merge: true });
+                .set({ resultados: JSON.stringify(planCorregido), fechaCorreccion: ahora }, { merge: true });
 
-            // 2) Registrar correcciones en cortinas_correcciones
             const batch = db.batch();
             registros.forEach(reg => {
-                const ref = db.collection('cortinas_correcciones').doc();
-                batch.set(ref, reg);
+                batch.set(db.collection('cortinas_correcciones').doc(), reg);
             });
             await batch.commit();
 
@@ -7733,7 +7731,8 @@
             _corrPlanPendientes = {};
             corrRenderPlan(planCorregido);
             document.getElementById('corr-aplicar-wrap').style.display = 'none';
-            document.getElementById('corr-plan-status').textContent = `✅ ${registros.length} corrección(es) aplicada(s) — ${ahora.slice(0,10)}`;
+            document.getElementById('corr-plan-status').textContent =
+                `✅ ${registros.length} corrección(es) aplicada(s) — ${ahora.slice(0,10)}`;
             showToast('✅ Correcciones aplicadas al plan');
         } catch(e) {
             showToast('❌ Error al aplicar: ' + e.message, 'error');
@@ -7754,20 +7753,14 @@
                 return;
             }
             const data = snap.data();
-            // Puede estar en data.tubos, data.colmena, data.items o directamente como array bajo data.datos
+            // El optimizador guarda `data` como JSON string de [{n_colmena, medida_mm, medida_cm, cod, serial}]
             let tubos = [];
-            if (Array.isArray(data.tubos))   tubos = data.tubos;
-            else if (Array.isArray(data.colmena)) tubos = data.colmena;
-            else if (Array.isArray(data.items))   tubos = data.items;
-            else if (Array.isArray(data.datos))   tubos = data.datos;
-            else {
-                // último recurso: buscar cualquier array
-                for (const val of Object.values(data)) {
-                    if (Array.isArray(val) && val.length > 0) { tubos = val; break; }
-                }
+            if (data.data) {
+                try { tubos = JSON.parse(data.data); } catch(e) {}
             }
-            _corrTubosData = { tubos, campoRaiz: Array.isArray(data.tubos) ? 'tubos' : Array.isArray(data.colmena) ? 'colmena' : Array.isArray(data.items) ? 'items' : Array.isArray(data.datos) ? 'datos' : null };
-            statusEl.textContent = `✅ ${tubos.length} tubos cargados`;
+            _corrTubosData = { tubos, fechaActualizacion: data.fechaActualizacion || null };
+            statusEl.textContent = `✅ ${tubos.length} tubos cargados` +
+                (data.fechaActualizacion ? ' — ' + new Date(data.fechaActualizacion).toLocaleString('es-CL') : '');
             corrRenderTubos(tubos);
         } catch(e) {
             statusEl.textContent = '❌ Error: ' + e.message;
@@ -7782,15 +7775,17 @@
             return;
         }
         let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
-            <thead><tr style="color:#94a3b8;"><th>Serial</th><th>Largo</th><th>Diám.</th><th>Colmena</th><th></th></tr></thead><tbody>`;
+            <thead><tr style="color:#94a3b8;"><th>Colmena</th><th>Cód.</th><th>Medida (cm)</th><th>Serial</th><th></th></tr></thead><tbody>`;
         tubos.forEach((t, i) => {
-            const serial  = t.serial  || t.id   || '—';
-            const largo   = t.largo   !== undefined ? t.largo   : (t.longitud || '—');
-            const diam    = t.diametro || t.diam || t.tipo || '—';
-            const colmena = t.colmena || t.posicion || '—';
+            const colmena = t.n_colmena !== undefined ? t.n_colmena : '—';
+            const cod     = t.cod   || '—';
+            const medida  = t.medida_cm !== undefined ? t.medida_cm + ' cm' : (t.medida_mm !== undefined ? (t.medida_mm/10).toFixed(1) + ' cm' : '—');
+            const serial  = t.serial || '—';
             html += `<tr>
-                <td style="font-family:monospace;">${serial}</td>
-                <td>${largo}</td><td>${diam}</td><td>${colmena}</td>
+                <td>${colmena}</td>
+                <td style="font-family:monospace;">${cod}</td>
+                <td>${medida}</td>
+                <td style="font-family:monospace;font-size:0.68rem;">${serial}</td>
                 <td><button class="btn btn-sm py-0 px-1" style="font-size:0.65rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
                     onclick="corrEliminarTubo(${i})"><i class="bi bi-trash"></i></button></td>
             </tr>`;
@@ -7805,27 +7800,28 @@
             showToast('Primero carga el inventario (configura el email)', 'error'); return;
         }
         document.getElementById('corr-form-tubo').style.display = '';
-        document.getElementById('corr-tubo-serial').value  = '';
-        document.getElementById('corr-tubo-largo').value   = '';
-        document.getElementById('corr-tubo-diam').value    = '';
-        document.getElementById('corr-tubo-colmena').value = '';
+        ['corr-tubo-serial','corr-tubo-largo','corr-tubo-diam','corr-tubo-colmena'].forEach(id => {
+            const el = document.getElementById(id); if (el) el.value = '';
+        });
     }
 
     // ─── Agregar tubo al inventario ──────────────────────────────
     async function corrAgregarTubo() {
-        const email   = _corrEmailOptimizer;
-        const serial  = document.getElementById('corr-tubo-serial').value.trim();
-        const largo   = parseFloat(document.getElementById('corr-tubo-largo').value) || 0;
-        const diam    = document.getElementById('corr-tubo-diam').value.trim();
-        const colmena = document.getElementById('corr-tubo-colmena').value.trim();
-        if (!serial) { showToast('El serial es obligatorio', 'error'); return; }
-        const nuevoTubo = { serial, largo, diametro: diam, colmena, agregadoPorAdmin: true, timestamp: new Date().toISOString() };
-        if (!_corrTubosData) _corrTubosData = { tubos: [], campoRaiz: 'tubos' };
+        const email      = _corrEmailOptimizer;
+        const serial     = document.getElementById('corr-tubo-serial').value.trim();
+        const medida_cm  = parseFloat(document.getElementById('corr-tubo-largo').value) || 0;
+        const cod        = document.getElementById('corr-tubo-diam').value.trim();
+        const n_colmena  = document.getElementById('corr-tubo-colmena').value.trim();
+        if (!cod) { showToast('El código del tubo es obligatorio', 'error'); return; }
+        const nuevoTubo = {
+            n_colmena, medida_cm, medida_mm: medida_cm * 10,
+            cod, serial: serial || null, agregadoPorAdmin: true
+        };
+        if (!_corrTubosData) _corrTubosData = { tubos: [] };
         _corrTubosData.tubos.push(nuevoTubo);
         try {
-            const campoRaiz = _corrTubosData.campoRaiz || 'tubos';
             await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos')
-                .set({ [campoRaiz]: _corrTubosData.tubos }, { merge: true });
+                .set({ data: JSON.stringify(_corrTubosData.tubos), fechaActualizacion: new Date().toISOString() }, { merge: true });
             document.getElementById('corr-form-tubo').style.display = 'none';
             document.getElementById('corr-tubos-status').textContent = `✅ ${_corrTubosData.tubos.length} tubos`;
             corrRenderTubos(_corrTubosData.tubos);
@@ -7841,12 +7837,11 @@
         const email = _corrEmailOptimizer;
         if (!email || !_corrTubosData) return;
         const tubo = _corrTubosData.tubos[idx];
-        if (!confirm(`¿Eliminar tubo "${tubo.serial || idx}"?`)) return;
+        if (!confirm(`¿Eliminar tubo "${tubo.cod || idx}" de colmena ${tubo.n_colmena || '?'}?`)) return;
         _corrTubosData.tubos.splice(idx, 1);
         try {
-            const campoRaiz = _corrTubosData.campoRaiz || 'tubos';
             await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos')
-                .set({ [campoRaiz]: _corrTubosData.tubos }, { merge: true });
+                .set({ data: JSON.stringify(_corrTubosData.tubos), fechaActualizacion: new Date().toISOString() }, { merge: true });
             document.getElementById('corr-tubos-status').textContent = `✅ ${_corrTubosData.tubos.length} tubos`;
             corrRenderTubos(_corrTubosData.tubos);
             showToast('🗑 Tubo eliminado');
