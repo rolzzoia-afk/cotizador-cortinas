@@ -4785,6 +4785,10 @@
     // =====================================================
     let storeOTs = [];
     let activeOTId = null;
+    // Timestamp de la última vez que escribimos localmente en Firestore.
+    // Permite distinguir entre nuestros propios writes y cambios externos
+    // (Ojo de Dios, otro dispositivo), evitando sobreescrituras.
+    let _ultimaEscrituraLocalMs = 0;
 
     const OT_ESTADOS = ['cotizacion','esperando','terreno','aprobada','produccion','lista','instalada'];
     const OT_ESTADO_META = {
@@ -4853,12 +4857,29 @@
                 if (activeOTId !== null) {
                     const ot = storeOTs.find(o => o.id === activeOTId);
                     if (ot) {
-                        // Restaurar formulario Fase 1
                         cargarDatosGenerales(ot.datosGenerales);
-                        // Restaurar ventanas desde Firebase (más confiable que localStorage)
                         storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
                         guardarStore();
                         sincronizarResumenFase2();
+                    }
+                }
+            } else {
+                // ── Detectar cambios externos en la OT activa ──────────────────────
+                // Si no escribimos localmente en los últimos 3 segundos, cualquier
+                // diferencia en Firestore proviene de Ojo de Dios u otro dispositivo.
+                // En ese caso actualizamos storeVentanas para evitar sobreescritura.
+                const msSinceWrite = Date.now() - _ultimaEscrituraLocalMs;
+                if (activeOTId !== null && msSinceWrite > 3000) {
+                    const otActiva = storeOTs.find(o => o.id === activeOTId);
+                    if (otActiva) {
+                        const ventsFirestore = JSON.stringify(otActiva.storeVentanas || []);
+                        const ventsLocal     = JSON.stringify(storeVentanas || []);
+                        if (ventsFirestore !== ventsLocal) {
+                            storeVentanas = JSON.parse(JSON.stringify(otActiva.storeVentanas || []));
+                            guardarStore();
+                            sincronizarResumenFase2();
+                            showToast('🔄 Ventanas actualizadas desde otra sesión');
+                        }
                     }
                 }
             }
@@ -4917,11 +4938,9 @@
     // Registra / actualiza la OT activa con el estado actual del formulario y storeVentanas
     function sincronizarOTActiva() {
         const datos = obtenerDatosGenerales();
-        // Contar cortinas cotizadas en Fase 1 (tabla HTML) y ventanas en storeVentanas
         const cotizacionCount = document.querySelectorAll('#fase1-tablaResumen tr').length;
 
         if (activeOTId === null) {
-            // Solo crear una nueva OT si hay al menos un dato identificador
             if (!datos.cliente && !datos.ot) return;
             const nueva = {
                 id: Date.now(),
@@ -4936,17 +4955,20 @@
             };
             storeOTs.push(nueva);
             activeOTId = nueva.id;
+            _ultimaEscrituraLocalMs = Date.now();
+            guardarOT(nueva);
         } else {
-            // Actualizar la OT existente
             const ot = storeOTs.find(o => o.id === activeOTId);
             if (ot) {
                 ot.datosGenerales = datos;
                 ot.storeVentanas = JSON.parse(JSON.stringify(storeVentanas));
                 ot.cotizacionCount = cotizacionCount;
                 ot.fechaModificacion = new Date().toISOString();
+                _ultimaEscrituraLocalMs = Date.now();
+                guardarOT(ot); // ← solo guarda la OT activa, no todas
             }
         }
-        guardarOTs();
+        localStorage.setItem('activeOTId', activeOTId !== null ? String(activeOTId) : '');
     }
 
     function nuevaOT() {
@@ -4954,7 +4976,7 @@
         activeOTId = null;
         storeVentanas = [];
         guardarStore();
-        guardarOTs();
+        localStorage.setItem('activeOTId', '');
         // Limpiar formulario
         const limpiar = (id) => { const el=document.getElementById(id); if(el) el.value=''; };
         ['clienteNombre','clienteRut','clienteMail','clienteTelefono','clienteDireccion','otCliente'].forEach(limpiar);
@@ -4973,13 +4995,13 @@
     }
 
     function abrirOT(id) {
-        sincronizarOTActiva(); // guardar estado actual
+        sincronizarOTActiva(); // guardar estado actual antes de cambiar
         const ot = storeOTs.find(o => o.id === id);
         if (!ot) return;
         activeOTId = id;
+        // Cargar storeVentanas desde la OT (fuente de verdad = Firestore)
         storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
         guardarStore();
-        guardarOTs();
         cargarDatosGenerales(ot.datosGenerales);
         sincronizarResumenFase2();
         actualizarIndicadorOTActiva();
@@ -4995,7 +5017,6 @@
         if (activeOTId === null) return;
         const ot = storeOTs.find(o => o.id === activeOTId);
         if (!ot) return;
-        // Solo avanzar (no retroceder automáticamente)
         const idxActual = OT_ESTADOS.indexOf(ot.estado);
         const idxNuevo  = OT_ESTADOS.indexOf(nuevoEstado);
         if (idxNuevo > idxActual) {
@@ -5003,7 +5024,8 @@
             ot.subEtapa = subEtapa || (nuevoEstado === 'produccion' ? 'Estructura' : null);
         }
         ot.fechaModificacion = new Date().toISOString();
-        guardarOTs();
+        _ultimaEscrituraLocalMs = Date.now();
+        guardarOT(ot); // ← solo guarda esta OT
         renderKanban();
         actualizarIndicadorOTActiva();
     }
@@ -5057,7 +5079,8 @@
         if (nuevoEstado === 'produccion' && !ot.subEtapa) ot.subEtapa = 'Estructura';
         if (nuevoEstado !== 'produccion') ot.subEtapa = null;
         ot.fechaModificacion = new Date().toISOString();
-        guardarOTs();
+        _ultimaEscrituraLocalMs = Date.now();
+        guardarOT(ot); // ← solo guarda esta OT
         renderKanban();
     }
 
@@ -5066,7 +5089,8 @@
         if (!ot) return;
         ot.subEtapa = subEtapa;
         ot.fechaModificacion = new Date().toISOString();
-        guardarOTs();
+        _ultimaEscrituraLocalMs = Date.now();
+        guardarOT(ot); // ← solo guarda esta OT
         renderKanban();
     }
 
@@ -5077,8 +5101,12 @@
         if (!confirm(`¿Archivar la OT de "${nombre}"?\nPodrás restaurarla desde el Historial.`)) return;
         ot.estado = 'archivada';
         ot.fechaModificacion = new Date().toISOString();
-        if (activeOTId === id) { activeOTId = null; guardarOTs(); }
-        guardarOTs();
+        if (activeOTId === id) {
+            activeOTId = null;
+            localStorage.setItem('activeOTId', '');
+        }
+        _ultimaEscrituraLocalMs = Date.now();
+        guardarOT(ot); // ← solo guarda esta OT
         renderKanban();
         actualizarIndicadorOTActiva();
     }
@@ -5088,7 +5116,8 @@
         if (!ot) return;
         ot.estado = 'cotizacion';
         ot.fechaModificacion = new Date().toISOString();
-        guardarOTs();
+        _ultimaEscrituraLocalMs = Date.now();
+        guardarOT(ot); // ← solo guarda esta OT
         renderKanban();
         renderArchive();
     }
@@ -7101,14 +7130,21 @@
         ot.fechaModificacion = new Date().toISOString();
 
         try {
+            _ultimaEscrituraLocalMs = Date.now(); // marcar write externo para que onSnapshot no sobreescriba
             await guardarOT(ot);
+
+            // Si la OT editada desde Ojo de Dios ES la OT activa en el cotizador,
+            // actualizar storeVentanas para que sincronizarOTActiva() no la revierta
+            if (_odiosModalOTId === activeOTId) {
+                storeVentanas = JSON.parse(JSON.stringify(ventasActualizadas));
+                guardarStore();
+                sincronizarResumenFase2();
+            }
+
             showToast('✅ Ventanas guardadas correctamente');
-            // Actualizar la info de cantidad de ventanas en el modal
+            // Refrescar info del modal
             const infoDiv = document.getElementById('odios-modal-info');
             if (infoDiv) {
-                const spans = infoDiv.querySelectorAll('div[style]');
-                // Refrescar solo el campo "Ventanas"
-                // (más simple: re-renderizar toda la info)
                 const dg = ot.datosGenerales || {};
                 const infoFields = [
                     ['OT #', dg.ot||'—'], ['Cliente', dg.cliente||'—'],
@@ -7125,7 +7161,6 @@
                     </div></div>`
                 ).join('');
             }
-            // Volver a correr el detector con los datos guardados
             odiosActualizarProblemas();
             odiosRenderTablaOTs();
         } catch(e) {
