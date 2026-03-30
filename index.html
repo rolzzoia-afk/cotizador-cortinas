@@ -1670,6 +1670,7 @@
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('stock')" id="odios-btn-stock"><i class="bi bi-layers"></i> Stock Telas</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('reportes')" id="odios-btn-reportes"><i class="bi bi-bar-chart-line"></i> Reportes</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('control')" id="odios-btn-control"><i class="bi bi-gear"></i> Control</button></li>
+                                <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('correcciones')" id="odios-btn-correcciones"><i class="bi bi-bandaid"></i> Correcciones</button></li>
                             </ul>
                         </div>
                     </div>
@@ -2008,6 +2009,128 @@
                             </div>
                         </div>
                     </div>
+
+                    <!-- ═══════════ CORRECCIONES TAB ═══════════ -->
+                    <div id="odios-section-correcciones" style="display:none;">
+
+                        <!-- Config optimizador -->
+                        <div class="glass-card mb-3 p-3" style="border-color:rgba(251,191,36,0.3);">
+                            <strong style="font-size:0.85rem;"><i class="bi bi-gear"></i> Configuración del Optimizador</strong>
+                            <div class="d-flex gap-2 mt-2">
+                                <input type="email" id="corr-email-optimizer" class="form-control form-control-sm" placeholder="Email del optimizador de estructura" style="background:rgba(0,0,0,0.3);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                <button class="btn btn-sm btn-warning" onclick="corrGuardarConfig()" style="white-space:nowrap;"><i class="bi bi-save"></i> Guardar</button>
+                            </div>
+                            <div id="corr-config-status" class="text-muted small mt-1"></div>
+                        </div>
+
+                        <!-- Plan de corte -->
+                        <div class="glass-card mb-3 p-3" style="border-color:rgba(59,130,246,0.3);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-scissors"></i> Plan de Corte Activo</strong>
+                                <button class="btn btn-sm" style="background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);" onclick="corrCargarPlan()"><i class="bi bi-arrow-clockwise"></i> Cargar</button>
+                            </div>
+                            <div id="corr-plan-status" class="text-muted small mb-2"></div>
+                            <div id="corr-plan-tabla" style="max-height:320px;overflow-y:auto;"></div>
+
+                            <!-- Editor inline de una línea -->
+                            <div id="corr-editor" style="display:none;background:rgba(0,0,0,0.35);border:1px solid rgba(251,191,36,0.4);border-radius:8px;padding:12px;margin-top:10px;">
+                                <div class="d-flex justify-content-between mb-2">
+                                    <strong style="font-size:0.82rem;color:#fbbf24;"><i class="bi bi-pencil-square"></i> Editar línea <span id="corr-editor-idx"></span></strong>
+                                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="corrCerrarEditor()">✕</button>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="text-muted" style="font-size:0.75rem;">Tipo de error</label>
+                                    <select id="corr-tipo-error" class="form-select form-select-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" onchange="corrMostrarCampos()">
+                                        <option value="">— Seleccionar —</option>
+                                        <option value="medida_erronea">Medida errónea</option>
+                                        <option value="tubo_equivocado">Tubo equivocado</option>
+                                        <option value="tubo_inexistente">Tubo no existe en colmena</option>
+                                        <option value="tubo_danado">Tubo dañado / inutilizable</option>
+                                    </select>
+                                </div>
+                                <div id="corr-campos-medida" style="display:none;">
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-6">
+                                            <label class="text-muted" style="font-size:0.75rem;">Largo correcto (mm)</label>
+                                            <input type="number" id="corr-nuevo-largo" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" step="0.1">
+                                        </div>
+                                        <div class="col-6">
+                                            <label class="text-muted" style="font-size:0.75rem;">Cantidad</label>
+                                            <input type="number" id="corr-nueva-cant" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" min="1">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div id="corr-campos-tubo" style="display:none;">
+                                    <div class="mb-2">
+                                        <label class="text-muted" style="font-size:0.75rem;">Tubo correcto (serial)</label>
+                                        <input type="text" id="corr-nuevo-serial" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" placeholder="Ej: T-001-A">
+                                    </div>
+                                </div>
+                                <div class="mb-2">
+                                    <label class="text-muted" style="font-size:0.75rem;">Nota (opcional)</label>
+                                    <input type="text" id="corr-nota" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" placeholder="Descripción del problema">
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm btn-warning" onclick="corrGuardarLinea()"><i class="bi bi-check-lg"></i> Guardar corrección</button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="corrCerrarEditor()">Cancelar</button>
+                                </div>
+                            </div>
+
+                            <!-- Botón aplicar todo -->
+                            <div id="corr-aplicar-wrap" style="display:none;margin-top:10px;">
+                                <button class="btn btn-sm btn-success w-100" onclick="corrAplicarTodo()"><i class="bi bi-check-all"></i> Aplicar todas las correcciones al plan</button>
+                            </div>
+                        </div>
+
+                        <!-- Inventario de tubos (colmena) -->
+                        <div class="glass-card mb-3 p-3" style="border-color:rgba(20,184,166,0.3);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-archive"></i> Inventario de Tubos</strong>
+                                <div class="d-flex gap-1">
+                                    <button class="btn btn-sm" style="background:rgba(20,184,166,0.2);color:#2dd4bf;border:1px solid rgba(20,184,166,0.3);" onclick="corrCargarTubos()"><i class="bi bi-arrow-clockwise"></i></button>
+                                    <button class="btn btn-sm" style="background:rgba(20,184,166,0.2);color:#2dd4bf;border:1px solid rgba(20,184,166,0.3);" onclick="corrMostrarAgregarTubo()"><i class="bi bi-plus-lg"></i> Agregar</button>
+                                </div>
+                            </div>
+                            <div id="corr-tubos-status" class="text-muted small mb-2"></div>
+                            <!-- Formulario agregar tubo -->
+                            <div id="corr-form-tubo" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(20,184,166,0.3);border-radius:8px;padding:10px;margin-bottom:10px;">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="text-muted" style="font-size:0.75rem;">Serial</label>
+                                        <input type="text" id="corr-tubo-serial" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" placeholder="Ej: T-001-A">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted" style="font-size:0.75rem;">Largo (mm)</label>
+                                        <input type="number" id="corr-tubo-largo" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" step="0.1">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted" style="font-size:0.75rem;">Diámetro</label>
+                                        <input type="text" id="corr-tubo-diam" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" placeholder="Ej: 38mm">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="text-muted" style="font-size:0.75rem;">Colmena</label>
+                                        <input type="text" id="corr-tubo-colmena" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" placeholder="Ej: A">
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-sm" style="background:#0d9488;color:white;border:none;" onclick="corrAgregarTubo()"><i class="bi bi-plus"></i> Agregar tubo</button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('corr-form-tubo').style.display='none'">Cancelar</button>
+                                </div>
+                            </div>
+                            <div id="corr-tubos-tabla" style="max-height:240px;overflow-y:auto;"></div>
+                        </div>
+
+                        <!-- Historial de correcciones -->
+                        <div class="glass-card p-3" style="border-color:rgba(168,85,247,0.3);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-clock-history"></i> Historial de Correcciones</strong>
+                                <button class="btn btn-sm" style="background:rgba(168,85,247,0.2);color:#c084fc;border:1px solid rgba(168,85,247,0.3);" onclick="corrCargarHistorial()"><i class="bi bi-arrow-clockwise"></i></button>
+                            </div>
+                            <div id="corr-historial-lista" style="max-height:200px;overflow-y:auto;" class="text-muted small">Carga el historial para ver correcciones anteriores.</div>
+                        </div>
+
+                    </div>
+                    <!-- /odios-section-correcciones -->
 
                 </div>
             </div>
@@ -6319,13 +6442,40 @@
 
         // ── Lazy loading de iframe Estructura ──
         document.getElementById('estructura-tab').addEventListener('shown.bs.tab', () => {
-            const iframe = document.getElementById('iframe-estructura');
-            if (!iframe.getAttribute('src')) iframe.src = 'optimizador.html';
-            // Registrar presencia
-            const ot = (typeof storeOTs !== 'undefined' && typeof activeOTId !== 'undefined')
-                ? storeOTs.find(o => o.id === activeOTId) : null;
-            const label = ot ? `OT ${ot.datosGenerales?.ot||activeOTId}` : 'sin OT';
-            presenciaActualizar('estructura', `Usando Optimizador de Estructura — ${label}`);
+            try {
+                const iframe  = document.getElementById('iframe-estructura');
+                const loading = document.getElementById('estructura-loading');
+
+                if (!iframe.getAttribute('src')) {
+                    // ── Primera carga: poner timeout por si el archivo no se encuentra ──
+                    let _loadTimeout = setTimeout(() => {
+                        if (loading && loading.style.display !== 'none') {
+                            loading.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#94a3b8;">
+                                    <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+                                    <p style="font-size:0.9rem;margin-bottom:8px;">El optimizador tardó en cargar.</p>
+                                    <p style="font-size:0.8rem;color:#64748b;">Asegúrate de que <strong>optimizador.html</strong> esté en la misma carpeta que este archivo.</p>
+                                    <button onclick="document.getElementById('iframe-estructura').src='optimizador.html'" style="margin-top:12px;padding:6px 16px;background:rgba(59,130,246,0.3);color:#60a5fa;border:1px solid rgba(59,130,246,0.4);border-radius:6px;cursor:pointer;font-size:0.82rem;">🔄 Reintentar</button>
+                                </div>`;
+                        }
+                    }, 12000);
+
+                    iframe.addEventListener('load', function onFirstLoad() {
+                        iframe.removeEventListener('load', onFirstLoad);
+                        clearTimeout(_loadTimeout);
+                    }, { once: true });
+
+                    iframe.src = 'optimizador.html';
+                }
+
+                // Registrar presencia
+                const ot = (typeof storeOTs !== 'undefined' && typeof activeOTId !== 'undefined')
+                    ? storeOTs.find(o => o.id === activeOTId) : null;
+                const label = ot ? `OT ${ot.datosGenerales?.ot || activeOTId}` : 'sin OT';
+                presenciaActualizar('estructura', `Usando Optimizador de Estructura — ${label}`);
+            } catch(e) {
+                console.error('[estructura-tab] Error al cargar iframe:', e);
+            }
         });
 
         // ── Inicializar Ojo de Dios nativo al activar el tab ──
@@ -6459,16 +6609,17 @@
     };
 
     function odiosTab(section) {
-        ['dashboard','clientes','stock','reportes','control'].forEach(s => {
+        ['dashboard','clientes','stock','reportes','control','correcciones'].forEach(s => {
             const el = document.getElementById('odios-section-' + s);
             if (el) el.style.display = s === section ? '' : 'none';
             const btn = document.getElementById('odios-btn-' + s);
             if (btn) btn.classList.toggle('active', s === section);
         });
-        if (section === 'dashboard') odiosRenderDashboard();
-        if (section === 'clientes')  odiosRenderClientes();
-        if (section === 'reportes')  odiosRenderReportes();
-        if (section === 'control')   odiosRenderControl();
+        if (section === 'dashboard')    odiosRenderDashboard();
+        if (section === 'clientes')     odiosRenderClientes();
+        if (section === 'reportes')     odiosRenderReportes();
+        if (section === 'control')      odiosRenderControl();
+        if (section === 'correcciones') corrIniciar();
     }
 
     let _odiosUnsubPresencia = null;
@@ -7354,6 +7505,392 @@
         const actEl = document.getElementById('ctrl-stat-actividad');
         if (actEl && sorted[0]) actEl.textContent = (sorted[0].fechaModificacion||'').slice(0,10)||'—';
     }
+
+    // ═══════════════════════════════════════════════════════════════
+    // CORRECCIONES — Gestión de errores del plan de corte y tubos
+    // ═══════════════════════════════════════════════════════════════
+
+    let _corrEmailOptimizer  = null;   // email leído desde Firebase
+    let _corrPlanData        = null;   // último plan cargado (array de líneas)
+    let _corrPlanPendientes  = {};     // { idx: { tipo, nuevos campos, nota } }
+    let _corrTubosData       = null;   // colmena_final cargada
+    let _corrEditorIdx       = null;   // índice de la línea en edición
+
+    // ─── Inicializar sección ─────────────────────────────────────
+    async function corrIniciar() {
+        // Cargar email desde Firebase si todavía no está en el input
+        const inp = document.getElementById('corr-email-optimizer');
+        if (!_corrEmailOptimizer) {
+            try {
+                const snap = await db.collection('configuracion').doc('optimizer_config').get();
+                if (snap.exists) {
+                    _corrEmailOptimizer = snap.data().email || null;
+                    if (inp && _corrEmailOptimizer) inp.value = _corrEmailOptimizer;
+                    document.getElementById('corr-config-status').textContent = _corrEmailOptimizer
+                        ? '✅ Optimizador: ' + _corrEmailOptimizer
+                        : '';
+                }
+            } catch(e) {
+                document.getElementById('corr-config-status').textContent = '⚠ No se pudo leer la configuración';
+            }
+        } else if (inp) {
+            inp.value = _corrEmailOptimizer;
+        }
+    }
+
+    // ─── Guardar email del optimizador ──────────────────────────
+    async function corrGuardarConfig() {
+        const email = (document.getElementById('corr-email-optimizer').value || '').trim().toLowerCase();
+        if (!email || !email.includes('@')) {
+            showToast('Ingresa un email válido', 'error'); return;
+        }
+        try {
+            await db.collection('configuracion').doc('optimizer_config').set({ email }, { merge: true });
+            _corrEmailOptimizer = email;
+            document.getElementById('corr-config-status').textContent = '✅ Guardado: ' + email;
+            showToast('✅ Email del optimizador guardado');
+        } catch(e) {
+            showToast('Error al guardar: ' + e.message, 'error');
+        }
+    }
+
+    // ─── Cargar el último plan desde Firebase del optimizador ───
+    async function corrCargarPlan() {
+        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
+        if (!email) { showToast('Primero configura el email del optimizador', 'error'); return; }
+        const statusEl = document.getElementById('corr-plan-status');
+        statusEl.textContent = '⏳ Cargando plan...';
+        try {
+            const snap = await db.collection('usuarios').doc(email).collection('ultimo_plan').doc('datos').get();
+            if (!snap.exists) {
+                statusEl.textContent = '⚠ No hay plan guardado para este optimizador.';
+                document.getElementById('corr-plan-tabla').innerHTML = '';
+                return;
+            }
+            const data = snap.data();
+            // El plan puede estar en data.plan (array) o data.resultado (objeto con .cortes)
+            let lineas = [];
+            if (Array.isArray(data.plan)) {
+                lineas = data.plan;
+            } else if (data.resultado && Array.isArray(data.resultado.cortes)) {
+                lineas = data.resultado.cortes;
+            } else if (data.resultado && Array.isArray(data.resultado)) {
+                lineas = data.resultado;
+            } else {
+                // intentar buscar cualquier array en el objeto
+                for (const val of Object.values(data)) {
+                    if (Array.isArray(val) && val.length > 0) { lineas = val; break; }
+                }
+            }
+            _corrPlanData = lineas;
+            _corrPlanPendientes = {};
+            statusEl.textContent = lineas.length > 0
+                ? `✅ ${lineas.length} líneas cargadas`
+                : '⚠ El plan está vacío o tiene formato desconocido.';
+            corrRenderPlan(lineas);
+            document.getElementById('corr-aplicar-wrap').style.display = 'none';
+        } catch(e) {
+            statusEl.textContent = '❌ Error: ' + e.message;
+        }
+    }
+
+    // ─── Renderizar tabla del plan ───────────────────────────────
+    function corrRenderPlan(lineas) {
+        const wrap = document.getElementById('corr-plan-tabla');
+        if (!lineas || lineas.length === 0) {
+            wrap.innerHTML = '<p class="text-muted small">Sin líneas para mostrar.</p>';
+            return;
+        }
+        // Detectar campos disponibles dinámicamente
+        const campos = ['serial','tuberia','largo','cantidad','ubicacion','descripcion','pano'];
+        let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
+            <thead><tr style="color:#94a3b8;">
+                <th>#</th><th>Serial / Tubo</th><th>Largo (mm)</th><th>Cant.</th><th>Descripción</th><th></th>
+            </tr></thead><tbody>`;
+        lineas.forEach((l, i) => {
+            const serial = l.serial || l.tubo || l.id || '—';
+            const largo  = l.largo  !== undefined ? l.largo  : (l.longitud !== undefined ? l.longitud : '—');
+            const cant   = l.cantidad !== undefined ? l.cantidad : (l.qty !== undefined ? l.qty : '—');
+            const desc   = l.descripcion || l.pano || l.ubicacion || '';
+            const tieneCorr = _corrPlanPendientes[i];
+            const rowStyle = tieneCorr ? 'background:rgba(251,191,36,0.12);' : '';
+            const badge   = tieneCorr ? ' <span style="font-size:0.65rem;background:#fbbf24;color:#1e293b;padding:1px 5px;border-radius:9px;vertical-align:middle;">✏</span>' : '';
+            html += `<tr style="${rowStyle}">
+                <td style="color:#64748b;">${i+1}</td>
+                <td style="font-family:monospace;">${serial}${badge}</td>
+                <td>${largo}</td>
+                <td>${cant}</td>
+                <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${desc}</td>
+                <td><button class="btn btn-sm py-0 px-1" style="font-size:0.7rem;background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);" onclick="corrMostrarEditor(${i})"><i class="bi bi-pencil"></i></button></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+    }
+
+    // ─── Mostrar editor inline para una línea ───────────────────
+    function corrMostrarEditor(idx) {
+        _corrEditorIdx = idx;
+        const l = _corrPlanData[idx];
+        document.getElementById('corr-editor-idx').textContent = idx + 1;
+        // Pre-rellenar con corrección pendiente si existe
+        const pend = _corrPlanPendientes[idx] || {};
+        document.getElementById('corr-tipo-error').value = pend.tipo || '';
+        document.getElementById('corr-nuevo-largo').value  = pend.nuevoLargo  !== undefined ? pend.nuevoLargo  : (l.largo || l.longitud || '');
+        document.getElementById('corr-nueva-cant').value   = pend.nuevaCant   !== undefined ? pend.nuevaCant   : (l.cantidad || l.qty || '');
+        document.getElementById('corr-nuevo-serial').value = pend.nuevoSerial !== undefined ? pend.nuevoSerial : (l.serial || l.tubo || '');
+        document.getElementById('corr-nota').value = pend.nota || '';
+        corrMostrarCampos();
+        document.getElementById('corr-editor').style.display = '';
+        document.getElementById('corr-editor').scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    // ─── Mostrar/ocultar campos según tipo de error ─────────────
+    function corrMostrarCampos() {
+        const tipo = document.getElementById('corr-tipo-error').value;
+        document.getElementById('corr-campos-medida').style.display =
+            (tipo === 'medida_erronea') ? '' : 'none';
+        document.getElementById('corr-campos-tubo').style.display =
+            (tipo === 'tubo_equivocado') ? '' : 'none';
+        // Para tubo_inexistente y tubo_danado solo se usa la nota
+    }
+
+    // ─── Guardar corrección para una línea ──────────────────────
+    function corrGuardarLinea() {
+        const tipo = document.getElementById('corr-tipo-error').value;
+        if (!tipo) { showToast('Selecciona el tipo de error', 'error'); return; }
+        const nota      = document.getElementById('corr-nota').value.trim();
+        const nuevoLargo  = parseFloat(document.getElementById('corr-nuevo-largo').value)  || null;
+        const nuevaCant   = parseInt(document.getElementById('corr-nueva-cant').value, 10) || null;
+        const nuevoSerial = document.getElementById('corr-nuevo-serial').value.trim() || null;
+        _corrPlanPendientes[_corrEditorIdx] = { tipo, nuevoLargo, nuevaCant, nuevoSerial, nota };
+        corrCerrarEditor();
+        corrRenderPlan(_corrPlanData);
+        // Mostrar botón de aplicar
+        if (Object.keys(_corrPlanPendientes).length > 0) {
+            document.getElementById('corr-aplicar-wrap').style.display = '';
+        }
+        showToast('✏ Corrección guardada (pendiente de aplicar)');
+    }
+
+    // ─── Cerrar editor ───────────────────────────────────────────
+    function corrCerrarEditor() {
+        document.getElementById('corr-editor').style.display = 'none';
+        _corrEditorIdx = null;
+    }
+
+    // ─── Aplicar todas las correcciones al plan en Firebase ─────
+    async function corrAplicarTodo() {
+        const email = _corrEmailOptimizer;
+        if (!email) { showToast('Configura primero el email del optimizador', 'error'); return; }
+        if (!_corrPlanData || Object.keys(_corrPlanPendientes).length === 0) {
+            showToast('No hay correcciones pendientes', 'error'); return;
+        }
+
+        // Clonar plan y aplicar correcciones
+        const planCorregido = JSON.parse(JSON.stringify(_corrPlanData));
+        const registros = [];
+        const ahora = new Date().toISOString();
+
+        Object.entries(_corrPlanPendientes).forEach(([idxStr, corr]) => {
+            const idx = parseInt(idxStr, 10);
+            const linea = planCorregido[idx];
+            const original = JSON.parse(JSON.stringify(linea));
+
+            if (corr.tipo === 'medida_erronea') {
+                if (corr.nuevoLargo  !== null) { linea.largo    = corr.nuevoLargo;  linea.longitud = corr.nuevoLargo; }
+                if (corr.nuevaCant   !== null) { linea.cantidad = corr.nuevaCant;   linea.qty      = corr.nuevaCant; }
+            } else if (corr.tipo === 'tubo_equivocado') {
+                if (corr.nuevoSerial !== null) { linea.serial = corr.nuevoSerial; linea.tubo = corr.nuevoSerial; }
+            } else if (corr.tipo === 'tubo_inexistente' || corr.tipo === 'tubo_danado') {
+                linea._error = corr.tipo;
+                linea._nota  = corr.nota;
+            }
+
+            registros.push({
+                idx, tipo: corr.tipo, nota: corr.nota || '',
+                original, corregido: JSON.parse(JSON.stringify(linea)),
+                timestamp: ahora,
+                operario: (typeof _presenciaNombre !== 'undefined' ? _presenciaNombre : null) || 'Admin'
+            });
+        });
+
+        try {
+            // 1) Guardar plan corregido en Firebase del optimizador
+            await db.collection('usuarios').doc(email)
+                .collection('ultimo_plan').doc('datos')
+                .set({ plan: planCorregido, fechaCorreccion: ahora }, { merge: true });
+
+            // 2) Registrar correcciones en cortinas_correcciones
+            const batch = db.batch();
+            registros.forEach(reg => {
+                const ref = db.collection('cortinas_correcciones').doc();
+                batch.set(ref, reg);
+            });
+            await batch.commit();
+
+            _corrPlanData = planCorregido;
+            _corrPlanPendientes = {};
+            corrRenderPlan(planCorregido);
+            document.getElementById('corr-aplicar-wrap').style.display = 'none';
+            document.getElementById('corr-plan-status').textContent = `✅ ${registros.length} corrección(es) aplicada(s) — ${ahora.slice(0,10)}`;
+            showToast('✅ Correcciones aplicadas al plan');
+        } catch(e) {
+            showToast('❌ Error al aplicar: ' + e.message, 'error');
+        }
+    }
+
+    // ─── Cargar inventario de tubos (colmena_final) ─────────────
+    async function corrCargarTubos() {
+        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
+        if (!email) { showToast('Configura el email del optimizador', 'error'); return; }
+        const statusEl = document.getElementById('corr-tubos-status');
+        statusEl.textContent = '⏳ Cargando...';
+        try {
+            const snap = await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos').get();
+            if (!snap.exists) {
+                statusEl.textContent = '⚠ No se encontró inventario de tubos.';
+                document.getElementById('corr-tubos-tabla').innerHTML = '';
+                return;
+            }
+            const data = snap.data();
+            // Puede estar en data.tubos, data.colmena, data.items o directamente como array bajo data.datos
+            let tubos = [];
+            if (Array.isArray(data.tubos))   tubos = data.tubos;
+            else if (Array.isArray(data.colmena)) tubos = data.colmena;
+            else if (Array.isArray(data.items))   tubos = data.items;
+            else if (Array.isArray(data.datos))   tubos = data.datos;
+            else {
+                // último recurso: buscar cualquier array
+                for (const val of Object.values(data)) {
+                    if (Array.isArray(val) && val.length > 0) { tubos = val; break; }
+                }
+            }
+            _corrTubosData = { tubos, campoRaiz: Array.isArray(data.tubos) ? 'tubos' : Array.isArray(data.colmena) ? 'colmena' : Array.isArray(data.items) ? 'items' : Array.isArray(data.datos) ? 'datos' : null };
+            statusEl.textContent = `✅ ${tubos.length} tubos cargados`;
+            corrRenderTubos(tubos);
+        } catch(e) {
+            statusEl.textContent = '❌ Error: ' + e.message;
+        }
+    }
+
+    // ─── Renderizar tabla de tubos ───────────────────────────────
+    function corrRenderTubos(tubos) {
+        const wrap = document.getElementById('corr-tubos-tabla');
+        if (!tubos || tubos.length === 0) {
+            wrap.innerHTML = '<p class="text-muted small">Sin tubos para mostrar.</p>';
+            return;
+        }
+        let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
+            <thead><tr style="color:#94a3b8;"><th>Serial</th><th>Largo</th><th>Diám.</th><th>Colmena</th><th></th></tr></thead><tbody>`;
+        tubos.forEach((t, i) => {
+            const serial  = t.serial  || t.id   || '—';
+            const largo   = t.largo   !== undefined ? t.largo   : (t.longitud || '—');
+            const diam    = t.diametro || t.diam || t.tipo || '—';
+            const colmena = t.colmena || t.posicion || '—';
+            html += `<tr>
+                <td style="font-family:monospace;">${serial}</td>
+                <td>${largo}</td><td>${diam}</td><td>${colmena}</td>
+                <td><button class="btn btn-sm py-0 px-1" style="font-size:0.65rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
+                    onclick="corrEliminarTubo(${i})"><i class="bi bi-trash"></i></button></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        wrap.innerHTML = html;
+    }
+
+    // ─── Mostrar formulario agregar tubo ────────────────────────
+    function corrMostrarAgregarTubo() {
+        if (!_corrEmailOptimizer) {
+            showToast('Primero carga el inventario (configura el email)', 'error'); return;
+        }
+        document.getElementById('corr-form-tubo').style.display = '';
+        document.getElementById('corr-tubo-serial').value  = '';
+        document.getElementById('corr-tubo-largo').value   = '';
+        document.getElementById('corr-tubo-diam').value    = '';
+        document.getElementById('corr-tubo-colmena').value = '';
+    }
+
+    // ─── Agregar tubo al inventario ──────────────────────────────
+    async function corrAgregarTubo() {
+        const email   = _corrEmailOptimizer;
+        const serial  = document.getElementById('corr-tubo-serial').value.trim();
+        const largo   = parseFloat(document.getElementById('corr-tubo-largo').value) || 0;
+        const diam    = document.getElementById('corr-tubo-diam').value.trim();
+        const colmena = document.getElementById('corr-tubo-colmena').value.trim();
+        if (!serial) { showToast('El serial es obligatorio', 'error'); return; }
+        const nuevoTubo = { serial, largo, diametro: diam, colmena, agregadoPorAdmin: true, timestamp: new Date().toISOString() };
+        if (!_corrTubosData) _corrTubosData = { tubos: [], campoRaiz: 'tubos' };
+        _corrTubosData.tubos.push(nuevoTubo);
+        try {
+            const campoRaiz = _corrTubosData.campoRaiz || 'tubos';
+            await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos')
+                .set({ [campoRaiz]: _corrTubosData.tubos }, { merge: true });
+            document.getElementById('corr-form-tubo').style.display = 'none';
+            document.getElementById('corr-tubos-status').textContent = `✅ ${_corrTubosData.tubos.length} tubos`;
+            corrRenderTubos(_corrTubosData.tubos);
+            showToast('✅ Tubo agregado al inventario');
+        } catch(e) {
+            _corrTubosData.tubos.pop();
+            showToast('❌ Error: ' + e.message, 'error');
+        }
+    }
+
+    // ─── Eliminar tubo del inventario ────────────────────────────
+    async function corrEliminarTubo(idx) {
+        const email = _corrEmailOptimizer;
+        if (!email || !_corrTubosData) return;
+        const tubo = _corrTubosData.tubos[idx];
+        if (!confirm(`¿Eliminar tubo "${tubo.serial || idx}"?`)) return;
+        _corrTubosData.tubos.splice(idx, 1);
+        try {
+            const campoRaiz = _corrTubosData.campoRaiz || 'tubos';
+            await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos')
+                .set({ [campoRaiz]: _corrTubosData.tubos }, { merge: true });
+            document.getElementById('corr-tubos-status').textContent = `✅ ${_corrTubosData.tubos.length} tubos`;
+            corrRenderTubos(_corrTubosData.tubos);
+            showToast('🗑 Tubo eliminado');
+        } catch(e) {
+            _corrTubosData.tubos.splice(idx, 0, tubo);
+            showToast('❌ Error: ' + e.message, 'error');
+        }
+    }
+
+    // ─── Cargar historial de correcciones ────────────────────────
+    async function corrCargarHistorial() {
+        const wrap = document.getElementById('corr-historial-lista');
+        wrap.textContent = '⏳ Cargando...';
+        try {
+            const snap = await db.collection('cortinas_correcciones')
+                .orderBy('timestamp', 'desc').limit(50).get();
+            if (snap.empty) {
+                wrap.textContent = 'Sin correcciones registradas.';
+                return;
+            }
+            let html = '';
+            snap.forEach(doc => {
+                const d = doc.data();
+                const ts = (d.timestamp||'').slice(0,16).replace('T',' ');
+                const tipoLabel = {
+                    medida_erronea: 'Medida errónea',
+                    tubo_equivocado: 'Tubo equivocado',
+                    tubo_inexistente: 'Tubo inexistente',
+                    tubo_danado: 'Tubo dañado'
+                }[d.tipo] || d.tipo;
+                html += `<div style="border-bottom:1px solid rgba(255,255,255,0.07);padding:5px 0;">
+                    <span style="color:#fbbf24;">${tipoLabel}</span>
+                    &nbsp;·&nbsp;Línea ${(d.idx||0)+1}
+                    &nbsp;·&nbsp;<span style="color:#94a3b8;">${d.operario||'Admin'}</span>
+                    &nbsp;·&nbsp;<span style="color:#64748b;">${ts}</span>
+                    ${d.nota ? `<br><span style="color:#94a3b8;font-style:italic;">${d.nota}</span>` : ''}
+                </div>`;
+            });
+            wrap.innerHTML = html || 'Sin correcciones.';
+        } catch(e) {
+            wrap.textContent = '❌ Error: ' + e.message;
+        }
+    }
+
 </script>
 
 <!-- Barra de navegación inferior para móvil -->
