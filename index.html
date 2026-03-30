@@ -1646,15 +1646,215 @@
             </div>
         </div>
 
-        <!-- OJO DE DIOS: Panel Admin (iframe lazy) -->
+        <!-- OJO DE DIOS: Panel Admin (nativo, mismo Firebase del cotizador) -->
         <div class="tab-pane fade" id="ojodedios" role="tabpanel" aria-labelledby="ojodedios-tab">
-            <div class="iframe-tab-pane mt-2">
-                <div class="iframe-loading" id="ojodedios-loading">
-                    <div class="spinner-border" role="status"></div>
-                    <span>Cargando Panel de Administración...</span>
+            <div class="row mt-3">
+                <div class="col-12">
+
+                    <!-- Header + sub-nav -->
+                    <div class="glass-card mb-3" style="border-color:rgba(239,68,68,0.2);">
+                        <div class="section-header d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,rgba(239,68,68,0.15),rgba(239,68,68,0.03));">
+                            <strong><i class="bi bi-eye-fill" style="color:#ef4444;"></i> Ojo de Dios — Panel Administrativo</strong>
+                            <span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);padding:2px 10px;border-radius:99px;font-size:0.72rem;font-family:monospace;" id="odios-sys-badge">v—</span>
+                        </div>
+                        <div class="px-3 pt-2 pb-1">
+                            <ul class="nav nav-pills gap-1" id="odios-pills">
+                                <li class="nav-item"><button class="nav-link active py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('dashboard')" id="odios-btn-dashboard"><i class="bi bi-speedometer2"></i> Dashboard</button></li>
+                                <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('clientes')" id="odios-btn-clientes"><i class="bi bi-people"></i> Clientes</button></li>
+                                <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('stock')" id="odios-btn-stock"><i class="bi bi-layers"></i> Stock Telas</button></li>
+                                <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('control')" id="odios-btn-control"><i class="bi bi-gear"></i> Control</button></li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- ═══ DASHBOARD ═══ -->
+                    <div id="odios-section-dashboard">
+                        <div class="row g-3 mb-3">
+                            <div class="col-6 col-md-3">
+                                <div class="glass-card p-3 text-center" style="border-color:rgba(59,130,246,0.3);">
+                                    <div style="font-size:2.2rem;font-weight:800;color:#3b82f6;" id="odios-kpi-total">—</div>
+                                    <div class="text-muted" style="font-size:0.73rem;">OTs Totales</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="glass-card p-3 text-center" style="border-color:rgba(245,158,11,0.3);">
+                                    <div style="font-size:2.2rem;font-weight:800;color:#f59e0b;" id="odios-kpi-activas">—</div>
+                                    <div class="text-muted" style="font-size:0.73rem;">En Producción</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="glass-card p-3 text-center" style="border-color:rgba(34,197,94,0.3);">
+                                    <div style="font-size:2.2rem;font-weight:800;color:#22c55e;" id="odios-kpi-entregadas">—</div>
+                                    <div class="text-muted" style="font-size:0.73rem;">Entregadas</div>
+                                </div>
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <div class="glass-card p-3 text-center" style="border-color:rgba(168,85,247,0.3);">
+                                    <div style="font-size:2.2rem;font-weight:800;color:#a855f7;" id="odios-kpi-clientes">—</div>
+                                    <div class="text-muted" style="font-size:0.73rem;">Clientes Únicos</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-list-ul"></i> Todas las OTs</strong>
+                                <div class="d-flex gap-2 flex-wrap">
+                                    <input type="text" class="form-control form-control-sm" id="odios-filtro-texto" placeholder="🔍 OT o cliente..." oninput="odiosRenderTablaOTs()" style="width:170px;">
+                                    <select class="form-select form-select-sm" id="odios-filtro-estado" onchange="odiosRenderTablaOTs()" style="width:150px;">
+                                        <option value="">Todos los estados</option>
+                                        <option value="cotizacion">Cotización</option>
+                                        <option value="terreno">Terreno</option>
+                                        <option value="produccion">Producción</option>
+                                        <option value="entregado">Entregado</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- Barras de estado -->
+                            <div id="odios-barras" class="mb-3" style="font-size:0.78rem;"></div>
+                            <!-- Tabla de OTs -->
+                            <div class="table-responsive">
+                                <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.77rem;">
+                                    <thead><tr>
+                                        <th>OT #</th><th>CLIENTE</th><th>ESTADO</th>
+                                        <th>VENTANAS</th><th>CREADA</th><th>MODIFICADA</th><th>ACCIÓN</th>
+                                    </tr></thead>
+                                    <tbody id="odios-tabla-ots"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══ CLIENTES ═══ -->
+                    <div id="odios-section-clientes" style="display:none;">
+                        <div class="glass-card p-3 mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-people"></i> Historial por Cliente</strong>
+                                <input type="text" class="form-control form-control-sm" id="odios-filtro-cliente" placeholder="🔍 Buscar cliente..." oninput="odiosRenderClientes()" style="width:220px;">
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.78rem;">
+                                    <thead><tr>
+                                        <th>CLIENTE</th><th>TOTAL OTs</th><th>ÚLTIMA OT</th>
+                                        <th>ÚLTIMO ESTADO</th><th>VENTANAS</th><th>DETALLE</th>
+                                    </tr></thead>
+                                    <tbody id="odios-tabla-clientes"></tbody>
+                                </table>
+                            </div>
+                            <!-- Panel de detalle expandible -->
+                            <div id="odios-detalle-cliente" style="display:none;" class="mt-3 p-3" style="background:rgba(0,0,0,0.2);border-radius:8px;border:1px solid rgba(59,130,246,0.2);">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong id="odios-detalle-nombre" style="color:#3b82f6;font-size:0.85rem;"></strong>
+                                    <button onclick="document.getElementById('odios-detalle-cliente').style.display='none'" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;"><i class="bi bi-x-lg"></i></button>
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.75rem;">
+                                        <thead><tr><th>OT #</th><th>ESTADO</th><th>VENTANAS</th><th>FECHA</th><th>ABRIR</th></tr></thead>
+                                        <tbody id="odios-detalle-tabla"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══ STOCK TELAS ═══ -->
+                    <div id="odios-section-stock" style="display:none;">
+                        <div class="glass-card mb-3 p-3" style="border-color:rgba(20,184,166,0.2);">
+                            <strong style="font-size:0.85rem;"><i class="bi bi-plus-circle"></i> Agregar / Actualizar Tela</strong>
+                            <div class="row g-2 mt-2">
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label form-label-sm mb-0">Código</label>
+                                    <input type="text" class="form-control form-control-sm" id="stock-cod" placeholder="BL001">
+                                </div>
+                                <div class="col-12 col-md-3">
+                                    <label class="form-label form-label-sm mb-0">Nombre Tela</label>
+                                    <input type="text" class="form-control form-control-sm" id="stock-nombre" placeholder="Blackout Blanco 2.80m">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label form-label-sm mb-0">Ancho Rollo (m)</label>
+                                    <input type="number" class="form-control form-control-sm" id="stock-ancho" placeholder="2.80" step="0.01" min="0">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label form-label-sm mb-0">Metros disponibles</label>
+                                    <input type="number" class="form-control form-control-sm" id="stock-metros" placeholder="50.0" step="0.5" min="0">
+                                </div>
+                                <div class="col-6 col-md-2">
+                                    <label class="form-label form-label-sm mb-0">Alerta mínimo (m)</label>
+                                    <input type="number" class="form-control form-control-sm" id="stock-alerta" placeholder="10" step="1" min="0" value="10">
+                                </div>
+                                <div class="col-6 col-md-1 d-flex align-items-end">
+                                    <button class="btn btn-sm w-100" style="background:rgba(20,184,166,0.2);border:1px solid rgba(20,184,166,0.5);color:#14b8a6;" onclick="stockGuardar()"><i class="bi bi-floppy"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-3" style="border-color:rgba(20,184,166,0.15);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-layers"></i> Inventario de Telas</strong>
+                                <span id="odios-stock-stats" style="font-size:0.75rem;color:var(--text-secondary);"></span>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.78rem;">
+                                    <thead><tr>
+                                        <th>CÓDIGO</th><th>NOMBRE</th><th>ANCHO ROLLO</th>
+                                        <th>M DISPONIBLES</th><th>ESTADO STOCK</th><th>ACTUALIZADO</th><th>ACCIÓN</th>
+                                    </tr></thead>
+                                    <tbody id="odios-tabla-stock">
+                                        <tr><td colspan="7" class="text-muted text-center py-3"><small>Cargando inventario...</small></td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══ CONTROL ═══ -->
+                    <div id="odios-section-control" style="display:none;">
+                        <div class="glass-card mb-3 p-3" style="border-color:rgba(239,68,68,0.2);">
+                            <strong style="font-size:0.85rem;"><i class="bi bi-broadcast"></i> Control de Versión</strong>
+                            <p class="text-muted small mt-1 mb-3">Incrementar la versión mínima fuerza una recarga en todos los dispositivos del taller conectados.</p>
+                            <div class="d-flex align-items-center gap-3 flex-wrap">
+                                <div style="background:rgba(10,61,98,0.5);color:#00d2ff;font-size:1.8rem;font-weight:700;padding:10px 24px;border-radius:8px;border:2px solid rgba(0,210,255,0.3);font-family:monospace;" id="odios-version-display">v—</div>
+                                <div>
+                                    <div class="text-muted small mb-1">Versión activa en Firebase</div>
+                                    <button class="btn btn-sm" style="background:linear-gradient(135deg,#c0392b,#e74c3c);color:white;border:none;padding:8px 20px;font-weight:bold;" id="odios-btn-forzar" onclick="odiosForzarActualizacion()" disabled>
+                                        <i class="bi bi-broadcast"></i> Forzar Actualización en Taller
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="glass-card p-3" style="border-color:rgba(59,130,246,0.2);">
+                            <strong style="font-size:0.85rem;"><i class="bi bi-activity"></i> Estado del Sistema</strong>
+                            <div class="row g-3 mt-1">
+                                <div class="col-6 col-md-3">
+                                    <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;text-align:center;">
+                                        <div style="font-size:1.4rem;font-weight:700;color:#3b82f6;" id="ctrl-stat-ots">—</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">OTs en Firebase</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;text-align:center;">
+                                        <div style="font-size:1.4rem;font-weight:700;color:#14b8a6;" id="ctrl-stat-telas">—</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">Telas en Stock</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;text-align:center;">
+                                        <div style="font-size:1.4rem;font-weight:700;color:#f59e0b;" id="ctrl-stat-actividad">—</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">Última Actividad</div>
+                                    </div>
+                                </div>
+                                <div class="col-6 col-md-3">
+                                    <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;text-align:center;">
+                                        <div style="font-size:1.4rem;" id="ctrl-stat-conexion">🟢</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">Firebase Online</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
-                <iframe id="iframe-ojodedios" title="Ojo de Dios — Admin" style="display:none;"
-                        onload="if(this.getAttribute('src')){document.getElementById('ojodedios-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -5925,16 +6125,351 @@
         const defaultBtn = document.querySelector('.mobile-bottom-nav button[data-tab="panel"]');
         if (defaultBtn) defaultBtn.classList.add('active');
 
-        // ── Lazy loading de iframes al activar los tabs ──
+        // ── Lazy loading de iframe Estructura ──
         document.getElementById('estructura-tab').addEventListener('shown.bs.tab', () => {
             const iframe = document.getElementById('iframe-estructura');
             if (!iframe.getAttribute('src')) iframe.src = 'optimizador.html';
         });
+
+        // ── Inicializar Ojo de Dios nativo al activar el tab ──
         document.getElementById('ojodedios-tab').addEventListener('shown.bs.tab', () => {
-            const iframe = document.getElementById('iframe-ojodedios');
-            if (!iframe.getAttribute('src')) iframe.src = 'admin_panel.html';
+            odiosIniciar();
         });
     });
+
+    // ══════════════════════════════════════════════════════════════════
+    // OJO DE DIOS — Panel Administrativo Nativo
+    // ══════════════════════════════════════════════════════════════════
+    let _odiosIniciado = false;
+    let _odiosUnsubVersion = null;
+    let _odiosUnsubStock   = null;
+    let _odiosVersionActual = null;
+    let _odiosTelasCache   = [];
+
+    // Colores y etiquetas por estado
+    const ODIOS_ESTADOS = {
+        cotizacion:  { label: 'Cotización',  color: '#3b82f6',  bg: 'rgba(59,130,246,0.15)' },
+        terreno:     { label: 'Terreno',      color: '#f59e0b',  bg: 'rgba(245,158,11,0.15)'  },
+        produccion:  { label: 'Producción',   color: '#a855f7',  bg: 'rgba(168,85,247,0.15)'  },
+        entregado:   { label: 'Entregado',    color: '#22c55e',  bg: 'rgba(34,197,94,0.15)'   },
+        archivado:   { label: 'Archivado',    color: '#94a3b8',  bg: 'rgba(148,163,184,0.1)'  },
+    };
+
+    function odiosTab(section) {
+        ['dashboard','clientes','stock','control'].forEach(s => {
+            document.getElementById('odios-section-' + s).style.display = s === section ? '' : 'none';
+            const btn = document.getElementById('odios-btn-' + s);
+            if (btn) btn.classList.toggle('active', s === section);
+        });
+        if (section === 'dashboard') odiosRenderDashboard();
+        if (section === 'clientes')  odiosRenderClientes();
+        if (section === 'control')   odiosRenderControl();
+    }
+
+    function odiosIniciar() {
+        if (_odiosIniciado) { odiosRenderDashboard(); return; }
+        _odiosIniciado = true;
+        odiosIniciarVersion();
+        odiosIniciarStock();
+        odiosRenderDashboard();
+    }
+
+    // ── DASHBOARD ──────────────────────────────────────────────────────
+    function odiosRenderDashboard() {
+        const ots = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const total       = ots.length;
+        const enProd      = ots.filter(o => o.estado === 'produccion').length;
+        const entregadas  = ots.filter(o => o.estado === 'entregado').length;
+        const clientes    = new Set(ots.map(o => ((o.datosGenerales||{}).cliente||'').trim().toLowerCase()).filter(Boolean)).size;
+
+        document.getElementById('odios-kpi-total').textContent      = total;
+        document.getElementById('odios-kpi-activas').textContent     = enProd;
+        document.getElementById('odios-kpi-entregadas').textContent  = entregadas;
+        document.getElementById('odios-kpi-clientes').textContent    = clientes;
+
+        // Barras de estado
+        const conteos = {};
+        ots.forEach(o => { conteos[o.estado || 'sin_estado'] = (conteos[o.estado || 'sin_estado'] || 0) + 1; });
+        const max = Math.max(...Object.values(conteos), 1);
+        const barrasHtml = Object.entries(ODIOS_ESTADOS).map(([k, cfg]) => {
+            const n = conteos[k] || 0;
+            if (!n) return '';
+            const pct = Math.round((n / max) * 100);
+            return `<div class="d-flex align-items-center gap-2 mb-1">
+                <span style="min-width:90px;color:${cfg.color};font-size:0.72rem;font-weight:600;">${cfg.label}</span>
+                <div style="flex:1;background:rgba(255,255,255,0.06);border-radius:4px;height:14px;overflow:hidden;">
+                    <div style="width:${pct}%;height:100%;background:${cfg.color};opacity:0.7;border-radius:4px;transition:width 0.5s;"></div>
+                </div>
+                <span style="min-width:24px;text-align:right;font-size:0.75rem;font-weight:700;color:${cfg.color};">${n}</span>
+            </div>`;
+        }).join('');
+        document.getElementById('odios-barras').innerHTML = barrasHtml || '<span class="text-muted small">Sin datos</span>';
+
+        odiosRenderTablaOTs();
+    }
+
+    function odiosRenderTablaOTs() {
+        const ots  = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const txt  = (document.getElementById('odios-filtro-texto')?.value || '').toLowerCase();
+        const est  = document.getElementById('odios-filtro-estado')?.value || '';
+        const tbody = document.getElementById('odios-tabla-ots');
+        if (!tbody) return;
+
+        let filtradas = ots.filter(o => {
+            const dg = o.datosGenerales || {};
+            const ok_txt = !txt || (dg.ot||'').toLowerCase().includes(txt) || (dg.cliente||'').toLowerCase().includes(txt);
+            const ok_est = !est || o.estado === est;
+            return ok_txt && ok_est;
+        });
+        filtradas.sort((a,b) => (b.fechaModificacion||'') > (a.fechaModificacion||'') ? 1 : -1);
+
+        if (!filtradas.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-3"><small>Sin resultados</small></td></tr>';
+            return;
+        }
+        const cfg = ODIOS_ESTADOS;
+        tbody.innerHTML = filtradas.map(o => {
+            const dg = o.datosGenerales || {};
+            const est = o.estado || 'sin_estado';
+            const ecfg = cfg[est] || { label: est, color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
+            const badge = `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 8px;border-radius:99px;font-size:0.68rem;font-weight:700;white-space:nowrap;">${ecfg.label}</span>`;
+            const fechaC = (o.fechaCreacion||'').slice(0,10) || '—';
+            const fechaM = (o.fechaModificacion||'').slice(0,10) || '—';
+            const vents = (o.storeVentanas||[]).length;
+            return `<tr>
+                <td><strong style="color:#3b82f6;">${dg.ot||'—'}</strong></td>
+                <td>${dg.cliente||'—'}</td>
+                <td>${badge}</td>
+                <td>${vents}</td>
+                <td style="color:var(--text-secondary);">${fechaC}</td>
+                <td style="color:var(--text-secondary);">${fechaM}</td>
+                <td>
+                    <button class="btn btn-sm py-0" style="font-size:0.7rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;"
+                        onclick="abrirOT(${o.id}); switchTab('panel');">📂 Abrir</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ── CLIENTES ───────────────────────────────────────────────────────
+    function odiosRenderClientes() {
+        const ots  = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const txt  = (document.getElementById('odios-filtro-cliente')?.value || '').toLowerCase();
+
+        // Agrupar por cliente
+        const mapa = {};
+        ots.forEach(o => {
+            const dg   = o.datosGenerales || {};
+            const name = (dg.cliente || '(Sin nombre)').trim();
+            if (!mapa[name]) mapa[name] = [];
+            mapa[name].push(o);
+        });
+
+        let entradas = Object.entries(mapa);
+        if (txt) entradas = entradas.filter(([n]) => n.toLowerCase().includes(txt));
+        entradas.sort((a,b) => {
+            const ua = a[1].sort((x,y) => (y.fechaModificacion||'') > (x.fechaModificacion||'') ? 1 : -1)[0];
+            const ub = b[1].sort((x,y) => (y.fechaModificacion||'') > (x.fechaModificacion||'') ? 1 : -1)[0];
+            return (ub.fechaModificacion||'') > (ua.fechaModificacion||'') ? 1 : -1;
+        });
+
+        const tbody = document.getElementById('odios-tabla-clientes');
+        if (!tbody) return;
+        if (!entradas.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center py-3"><small>Sin clientes</small></td></tr>';
+            return;
+        }
+
+        const cfg = ODIOS_ESTADOS;
+        tbody.innerHTML = entradas.map(([nombre, ots_c]) => {
+            const sorted  = [...ots_c].sort((a,b) => (b.fechaModificacion||'') > (a.fechaModificacion||'') ? 1 : -1);
+            const ultimo  = sorted[0];
+            const dg      = ultimo.datosGenerales || {};
+            const est     = ultimo.estado || '—';
+            const ecfg    = cfg[est] || { label: est, color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
+            const badge   = `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 7px;border-radius:99px;font-size:0.68rem;font-weight:700;">${ecfg.label}</span>`;
+            const totalV  = ots_c.reduce((s,o) => s + (o.storeVentanas||[]).length, 0);
+            const fechaU  = (ultimo.fechaModificacion||'').slice(0,10) || '—';
+            const nomEnc  = encodeURIComponent(nombre);
+            return `<tr>
+                <td><strong>${nombre}</strong></td>
+                <td style="text-align:center;">${ots_c.length}</td>
+                <td style="color:var(--text-secondary);">${dg.ot||'—'} <span class="text-muted">(${fechaU})</span></td>
+                <td>${badge}</td>
+                <td style="text-align:center;">${totalV}</td>
+                <td><button class="btn btn-sm py-0" style="font-size:0.7rem;background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);color:#a855f7;"
+                    onclick="odiosExpandirCliente('${nomEnc}')">Ver historial</button></td>
+            </tr>`;
+        }).join('');
+    }
+
+    function odiosExpandirCliente(nomEnc) {
+        const nombre = decodeURIComponent(nomEnc);
+        const ots = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const otsCliente = ots.filter(o => ((o.datosGenerales||{}).cliente||'').trim() === nombre)
+                              .sort((a,b) => (b.fechaModificacion||'') > (a.fechaModificacion||'') ? 1 : -1);
+        document.getElementById('odios-detalle-nombre').textContent = nombre;
+        const cfg = ODIOS_ESTADOS;
+        document.getElementById('odios-detalle-tabla').innerHTML = otsCliente.map(o => {
+            const dg   = o.datosGenerales || {};
+            const ecfg = cfg[o.estado] || { label: o.estado||'—', color:'#94a3b8', bg:'rgba(148,163,184,0.1)' };
+            const badge = `<span style="background:${ecfg.bg};color:${ecfg.color};padding:2px 6px;border-radius:99px;font-size:0.67rem;">${ecfg.label}</span>`;
+            return `<tr>
+                <td><strong style="color:#3b82f6;">${dg.ot||'—'}</strong></td>
+                <td>${badge}</td>
+                <td>${(o.storeVentanas||[]).length}</td>
+                <td style="color:var(--text-secondary);">${(o.fechaModificacion||'').slice(0,10)||'—'}</td>
+                <td><button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;"
+                    onclick="abrirOT(${o.id}); switchTab('panel');">📂</button></td>
+            </tr>`;
+        }).join('');
+        const panel = document.getElementById('odios-detalle-cliente');
+        panel.style.display = '';
+        panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }
+
+    // ── STOCK TELAS ────────────────────────────────────────────────────
+    function odiosIniciarStock() {
+        if (_odiosUnsubStock) return;
+        _odiosUnsubStock = db.collection('cortinas_telas')
+            .orderBy('codigo', 'asc')
+            .onSnapshot(snap => {
+                _odiosTelasCache = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+                odiosRenderStock();
+                // Actualizar stat de Control
+                const el = document.getElementById('ctrl-stat-telas');
+                if (el) el.textContent = _odiosTelasCache.length;
+            }, err => {
+                console.warn('Ojo de Dios — stock listener:', err.message);
+                const tbody = document.getElementById('odios-tabla-stock');
+                if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-muted text-center py-2"><small>Sin conexión al inventario</small></td></tr>`;
+            });
+    }
+
+    function odiosRenderStock() {
+        const tbody = document.getElementById('odios-tabla-stock');
+        if (!tbody) return;
+        if (!_odiosTelasCache.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-3"><small>No hay telas en el inventario. Agregá la primera arriba.</small></td></tr>';
+            document.getElementById('odios-stock-stats').textContent = '';
+            return;
+        }
+        const bajoStock = _odiosTelasCache.filter(t => (t.metros_disponibles||0) <= (t.alerta_minimo||10)).length;
+        document.getElementById('odios-stock-stats').textContent =
+            `${_odiosTelasCache.length} telas · ${bajoStock > 0 ? '⚠️ ' + bajoStock + ' con stock bajo' : '✅ Stock OK'}`;
+
+        tbody.innerHTML = _odiosTelasCache.map(t => {
+            const m    = parseFloat(t.metros_disponibles || 0);
+            const alerta = parseFloat(t.alerta_minimo || 10);
+            const bajoBadge = m <= alerta
+                ? `<span style="background:rgba(239,68,68,0.2);color:#ef4444;padding:2px 8px;border-radius:99px;font-size:0.68rem;font-weight:700;">⚠️ BAJO STOCK</span>`
+                : `<span style="background:rgba(34,197,94,0.15);color:#22c55e;padding:2px 8px;border-radius:99px;font-size:0.68rem;font-weight:700;">OK</span>`;
+            const fecha = t.fechaActualizacion ? t.fechaActualizacion.slice(0,10) : '—';
+            return `<tr>
+                <td><strong style="color:#14b8a6;">${t.codigo||'—'}</strong></td>
+                <td>${t.nombre||'—'}</td>
+                <td>${t.ancho_m ? t.ancho_m + ' m' : '—'}</td>
+                <td><strong>${m.toFixed(1)} m</strong></td>
+                <td>${bajoBadge}</td>
+                <td style="color:var(--text-secondary);">${fecha}</td>
+                <td class="d-flex gap-1">
+                    <button class="btn btn-sm py-0" style="font-size:0.7rem;background:rgba(20,184,166,0.15);border:1px solid rgba(20,184,166,0.3);color:#14b8a6;"
+                        onclick="stockEditar('${t._id}')">✏️</button>
+                    <button class="btn btn-sm py-0" style="font-size:0.7rem;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);color:#ef4444;"
+                        onclick="stockEliminar('${t._id}','${(t.nombre||t.codigo||'esta tela').replace(/'/g,'')}')" >🗑</button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    function stockGuardar() {
+        const cod    = (document.getElementById('stock-cod')?.value||'').trim().toUpperCase();
+        const nombre = (document.getElementById('stock-nombre')?.value||'').trim();
+        const ancho  = parseFloat(document.getElementById('stock-ancho')?.value||0);
+        const metros = parseFloat(document.getElementById('stock-metros')?.value||0);
+        const alerta = parseFloat(document.getElementById('stock-alerta')?.value||10);
+        if (!cod || !nombre) { showToast('Completá el código y nombre de la tela', 'error'); return; }
+        db.collection('cortinas_telas').doc(cod).set({
+            codigo: cod, nombre, ancho_m: ancho, metros_disponibles: metros,
+            alerta_minimo: alerta, fechaActualizacion: new Date().toISOString()
+        }).then(() => {
+            showToast(`Tela "${cod}" guardada`);
+            ['stock-cod','stock-nombre','stock-ancho','stock-metros'].forEach(id => {
+                const el = document.getElementById(id); if (el) el.value = '';
+            });
+            const alertaEl = document.getElementById('stock-alerta'); if (alertaEl) alertaEl.value = '10';
+        }).catch(e => showToast('Error al guardar: ' + e.message, 'error'));
+    }
+
+    function stockEditar(id) {
+        const t = _odiosTelasCache.find(x => x._id === id);
+        if (!t) return;
+        const setCampo = (eid, v) => { const el = document.getElementById(eid); if (el) el.value = v; };
+        setCampo('stock-cod', t.codigo||'');
+        setCampo('stock-nombre', t.nombre||'');
+        setCampo('stock-ancho', t.ancho_m||'');
+        setCampo('stock-metros', t.metros_disponibles||'');
+        setCampo('stock-alerta', t.alerta_minimo||10);
+        // Scroll al form
+        document.getElementById('stock-cod')?.scrollIntoView({ behavior:'smooth', block:'center' });
+        showToast(`Editando "${t.codigo}" — modificá los valores y guardá`);
+    }
+
+    function stockEliminar(id, nombre) {
+        if (!confirm(`¿Eliminar la tela "${nombre}" del inventario?`)) return;
+        db.collection('cortinas_telas').doc(id).delete()
+            .then(() => showToast(`Tela "${nombre}" eliminada`))
+            .catch(e => showToast('Error: ' + e.message, 'error'));
+    }
+
+    // ── CONTROL (VERSION) ──────────────────────────────────────────────
+    function odiosIniciarVersion() {
+        if (_odiosUnsubVersion) return;
+        _odiosUnsubVersion = db.collection('configuracion').doc('version_minima')
+            .onSnapshot(snap => {
+                if (snap.exists) {
+                    const v = snap.data().version || '—';
+                    _odiosVersionActual = v;
+                    const d = document.getElementById('odios-version-display');
+                    const b = document.getElementById('odios-sys-badge');
+                    if (d) d.textContent = `v${v}`;
+                    if (b) b.textContent = `v${v}`;
+                    const btn = document.getElementById('odios-btn-forzar');
+                    if (btn) btn.disabled = false;
+                }
+            }, err => console.warn('Ojo de Dios — version listener:', err.message));
+    }
+
+    async function odiosForzarActualizacion() {
+        const btn = document.getElementById('odios-btn-forzar');
+        let nueva;
+        if (_odiosVersionActual) {
+            const n = parseFloat(_odiosVersionActual);
+            nueva = (Math.round((n + 0.1) * 10) / 10).toFixed(1);
+        } else { nueva = '1.0'; }
+        if (!confirm(`¿Subir versión de "${_odiosVersionActual||'N/A'}" a "${nueva}"?\nEsto forzará una recarga en TODOS los dispositivos del taller.`)) return;
+        btn.disabled = true; btn.textContent = 'Actualizando...';
+        try {
+            await db.collection('configuracion').doc('version_minima').set({
+                version: nueva, fechaActualizacion: new Date().toISOString()
+            });
+            showToast(`Versión actualizada a v${nueva}. Todos los dispositivos se recargarán.`);
+        } catch(e) {
+            showToast('Error: ' + e.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = '📡 Forzar Actualización en Taller';
+        }
+    }
+
+    function odiosRenderControl() {
+        const ots = (typeof storeOTs !== 'undefined') ? storeOTs : [];
+        const ctrl = document.getElementById('ctrl-stat-ots');
+        if (ctrl) ctrl.textContent = ots.length;
+        // Última modificación
+        const sorted = [...ots].sort((a,b) => (b.fechaModificacion||'') > (a.fechaModificacion||'') ? 1 : -1);
+        const actEl = document.getElementById('ctrl-stat-actividad');
+        if (actEl && sorted[0]) actEl.textContent = (sorted[0].fechaModificacion||'').slice(0,10)||'—';
+    }
 </script>
 
 <!-- Barra de navegación inferior para móvil -->
