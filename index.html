@@ -5496,13 +5496,13 @@
                     const nextEst = OT_ESTADOS[idxEstado + 1] || null;
                     const enEtapaInicial = (estado === 'cotizacion' || estado === 'esperando');
                     let btns = `<div class="ot-card-actions">`;
-                    if (!esActiva) btns += `<button class="btn btn-sm btn-outline-primary" onclick="abrirOT(${ot.id})">📂 Abrir</button>`;
-                    if (prevEst)  btns += `<button class="btn btn-sm btn-outline-secondary" onclick="moverOTEstado(${ot.id},'${prevEst}')" title="Retroceder">◀</button>`;
-                    if (nextEst)  btns += `<button class="btn btn-sm btn-premium-success" onclick="moverOTEstado(${ot.id},'${nextEst}')" title="Avanzar">▶</button>`;
-                    btns += `<button class="btn btn-sm btn-outline-secondary" onclick="archivarOT(${ot.id})" title="Guardar como incompleta / archivar">📦</button>`;
-                    btns += `<button class="btn btn-sm" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#25d366;" onclick="enviarWhatsApp(${ot.id})" title="Notificar al cliente por WhatsApp">📲</button>`;
+                    if (!esActiva) btns += `<button class="btn btn-sm btn-outline-primary" onclick="abrirOT('${ot.id}')">📂 Abrir</button>`;
+                    if (prevEst)  btns += `<button class="btn btn-sm btn-outline-secondary" onclick="moverOTEstado('${ot.id}','${prevEst}')" title="Retroceder">◀</button>`;
+                    if (nextEst)  btns += `<button class="btn btn-sm btn-premium-success" onclick="moverOTEstado('${ot.id}','${nextEst}')" title="Avanzar">▶</button>`;
+                    btns += `<button class="btn btn-sm btn-outline-secondary" onclick="archivarOT('${ot.id}')" title="Guardar como incompleta / archivar">📦</button>`;
+                    btns += `<button class="btn btn-sm" style="background:rgba(37,211,102,0.15);border:1px solid rgba(37,211,102,0.4);color:#25d366;" onclick="enviarWhatsApp('${ot.id}')" title="Notificar al cliente por WhatsApp">📲</button>`;
                     if (enEtapaInicial) {
-                        btns += `<button class="btn btn-sm btn-outline-danger" onclick="eliminarOTDefinitivo(${ot.id})" title="Eliminar cotización">🗑</button>`;
+                        btns += `<button class="btn btn-sm btn-outline-danger" onclick="eliminarOTDefinitivo('${ot.id}')" title="Eliminar cotización">🗑</button>`;
                     }
                     btns += `</div>`;
 
@@ -5580,8 +5580,8 @@
                     <td>${(ot.fechaCreacion||'').slice(0,10)}</td>
                     <td>${(ot.fechaModificacion||'').slice(0,10)}</td>
                     <td class="d-flex gap-1">
-                        <button class="btn btn-sm btn-outline-primary py-0" style="font-size:0.7rem" onclick="restaurarOT(${ot.id})">Restaurar</button>
-                        <button class="btn btn-sm btn-outline-danger py-0"  style="font-size:0.7rem" onclick="eliminarOTDefinitivo(${ot.id})">Eliminar</button>
+                        <button class="btn btn-sm btn-outline-primary py-0" style="font-size:0.7rem" onclick="restaurarOT('${ot.id}')">Restaurar</button>
+                        <button class="btn btn-sm btn-outline-danger py-0"  style="font-size:0.7rem" onclick="eliminarOTDefinitivo('${ot.id}')">Eliminar</button>
                     </td>
                 </tr>`;
             }).join('')}</tbody>
