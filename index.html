@@ -7953,17 +7953,27 @@
         if (!tubos || tubos.length === 0) {
             wrap.innerHTML = '<p class="text-muted small">Sin tubos para mostrar.</p>'; return;
         }
-        let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
-            <thead><tr style="color:#94a3b8;"><th>Colmena</th><th>Cód.</th><th>Medida (cm)</th><th>Serial</th><th></th></tr></thead><tbody>`;
+        const tdStyle = 'style="color:#e2e8f0;background:transparent;"';
+        const tdMono  = 'style="color:#e2e8f0;background:transparent;font-family:monospace;"';
+        let html = `<table class="table table-sm" style="font-size:0.75rem;">
+            <thead><tr style="color:#94a3b8;background:transparent;">
+                <th style="background:transparent;">Colmena</th>
+                <th style="background:transparent;">Cód.</th>
+                <th style="background:transparent;">Medida (cm)</th>
+                <th style="background:transparent;">Serial</th>
+                <th style="background:transparent;"></th>
+            </tr></thead><tbody>`;
         tubos.forEach((t) => {
             const colmena = t.n_colmena || '—';
             const cod     = t.cod       || '—';
             const medida  = t.medida_cm !== undefined ? t.medida_cm + ' cm' : (t.medida_mm !== undefined ? (t.medida_mm/10).toFixed(1) + ' cm' : '—');
             const serial  = t.serial    || '—';
-            html += `<tr>
-                <td>${colmena}</td><td style="font-family:monospace;">${cod}</td>
-                <td>${medida}</td><td style="font-family:monospace;font-size:0.68rem;">${serial}</td>
-                <td><button class="btn btn-sm py-0 px-1" style="font-size:0.65rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
+            html += `<tr style="background:transparent;">
+                <td ${tdStyle}>${colmena}</td>
+                <td ${tdMono}>${cod}</td>
+                <td ${tdStyle}>${medida}</td>
+                <td ${tdMono}>${serial}</td>
+                <td ${tdStyle}><button class="btn btn-sm py-0 px-1" style="font-size:0.65rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
                     onclick="corrEliminarTubo('${t.id}','${(t.cod||'').replace(/'/g,'')}',${t.n_colmena||0})">
                     <i class="bi bi-trash"></i></button></td>
             </tr>`;
