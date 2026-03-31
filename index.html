@@ -36,6 +36,25 @@
             }
         });
 
+        // ── Helpers para iframes (optimizador usa estas funciones vía window.parent) ──
+        window.guardarConfigEnSupabase = async function(clave, valor) {
+            const { error } = await sb.from('configuracion').upsert({
+                empresa_id: EMPRESA_ID,
+                clave:      clave,
+                valor:      valor
+            }, { onConflict: 'empresa_id,clave' });
+            if (error) throw error;
+            return true;
+        };
+        window.leerConfigDeSupabase = async function(clave) {
+            const { data, error } = await sb.from('configuracion')
+                .select('valor')
+                .eq('empresa_id', EMPRESA_ID)
+                .eq('clave', clave)
+                .single();
+            return (!error && data) ? data.valor : null;
+        };
+
         // ── Helpers: convertir entre formato app ↔ formato Supabase ─────────
 
         function rowToOT(row) {
