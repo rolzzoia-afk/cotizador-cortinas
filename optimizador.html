@@ -661,9 +661,25 @@ function cargarDesdeFirestore() {
                     const datos = JSON.parse(docData.data);
                     // Preservar colmenas si ya están gestionadas por el listener de colmena_final
                     const colmenasActuales = SistemaInventario.colmenas;
+                    // Preservar catálogo si ya fue cargado desde Supabase (tiene prioridad sobre Firebase)
+                    const estadoCatEl = document.getElementById('estadoCatalogo');
+                    const catEsDeSupabase = estadoCatEl && estadoCatEl.textContent.includes('(BD)');
+                    const catBackup = catEsDeSupabase ? {
+                        catalogoReemplazos: Object.assign({}, SistemaInventario.catalogoReemplazos),
+                        catalogoColores:    Object.assign({}, SistemaInventario.catalogoColores),
+                        catalogoMedidas:    Object.assign({}, SistemaInventario.catalogoMedidas),
+                        catalogoAccesorios: Object.assign({}, SistemaInventario.catalogoAccesorios)
+                    } : null;
                     Object.assign(SistemaInventario, datos);
                     if (colmenaActual && colmenaActual.length > 0) {
                         SistemaInventario.colmenas = colmenasActuales;
+                    }
+                    // Restaurar catálogo de Supabase si fue sobreescrito por Firebase
+                    if (catBackup && Object.keys(catBackup.catalogoReemplazos).length > 0) {
+                        SistemaInventario.catalogoReemplazos = catBackup.catalogoReemplazos;
+                        SistemaInventario.catalogoColores    = catBackup.catalogoColores;
+                        SistemaInventario.catalogoMedidas    = catBackup.catalogoMedidas;
+                        SistemaInventario.catalogoAccesorios = catBackup.catalogoAccesorios;
                     }
 
                     // Actualizar UI solo si no se está procesando un Excel
@@ -1242,11 +1258,11 @@ function cargarSerialesDesdeFirestore() {
         coleccionRef,
         { includeMetadataChanges: false },
         (querySnapshot) => {
-            SistemaInventario.seriales = [];
+            const serialesFirebase = [];
 
             querySnapshot.forEach(doc => {
                 const data = doc.data();
-                SistemaInventario.seriales.push({
+                serialesFirebase.push({
                     fecha: data.fecha,
                     codigo: data.codigo,
                     lote: data.lote,
@@ -1256,19 +1272,33 @@ function cargarSerialesDesdeFirestore() {
                 });
             });
 
-            ordenarSeriales(SistemaInventario.seriales);
-
-            // Actualizar UI solo si no se está procesando un Excel
-            if (!procesandoExcel) {
-                actualizarTablaSeriales();
-                verificarAlertasStock();
-            }
-
+            // Si Firebase tiene datos → usarlos (fuente principal)
+            // Si Firebase está vacío → preservar lo que Supabase haya cargado
             const estadoEl = document.getElementById('estadoEstructura');
-            if (estadoEl) {
-                estadoEl.textContent = `✓ ${SistemaInventario.seriales.length} seriales (sincronizados)`;
-                estadoEl.className = 'estado-archivo estado-ok';
+            const serialesYaDesdeSupabase = estadoEl && estadoEl.textContent.includes('(BD)');
+            if (serialesFirebase.length > 0) {
+                SistemaInventario.seriales = serialesFirebase;
+                ordenarSeriales(SistemaInventario.seriales);
+                if (!procesandoExcel) {
+                    actualizarTablaSeriales();
+                    verificarAlertasStock();
+                }
+                if (estadoEl) {
+                    estadoEl.textContent = `✓ ${SistemaInventario.seriales.length} seriales (sincronizados)`;
+                    estadoEl.className = 'estado-archivo estado-ok';
+                }
+            } else if (!serialesYaDesdeSupabase) {
+                // Firebase vacío y Supabase aún no cargó → mostrar 0
+                SistemaInventario.seriales = [];
+                if (!procesandoExcel) {
+                    actualizarTablaSeriales();
+                }
+                if (estadoEl) {
+                    estadoEl.textContent = `✓ 0 seriales (sincronizados)`;
+                    estadoEl.className = 'estado-archivo estado-ok';
+                }
             }
+            // Si Firebase vacío pero Supabase ya cargó → no hacer nada (preservar datos de Supabase)
 
             if (!serialesCargados) {
                 serialesCargados = true;
