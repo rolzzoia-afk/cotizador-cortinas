@@ -2153,20 +2153,60 @@
     let storeVentanas = [];
     let storeIdCounter = 0;
     function nuevoId() { return ++storeIdCounter; }
+    // Sincroniza el contador al máximo ID existente en storeVentanas
+    // para evitar IDs duplicados al agregar ítems en una OT ya cargada
+    function sincronizarContadorId() {
+        if (!storeVentanas || storeVentanas.length === 0) return;
+        const maxId = Math.max(...storeVentanas.map(v => v.id || 0));
+        if (maxId > storeIdCounter) storeIdCounter = maxId;
+    }
     const formateadorMoneda = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
 
     // ── Agrupación de ventanas ──────────────────────────────
     let modoAgrupacion = false;           // true cuando el usuario está seleccionando ventanas para agrupar
     let grupoIdActivo  = null;            // grupoId del grupo que está siendo editado en la ficha
 
-    window.onload = function() {
+    // ── Catálogo de productos: guardar y cargar desde Firebase ──────────────
+    // Siempre guarda en Firebase además de localStorage para que nunca se pierda
+    async function guardarCatalogoFirebase() {
+        try {
+            await db.collection('configuracion').doc('catalogo_productos').set({
+                data: JSON.stringify(baseDatosProductos),
+                fechaActualizacion: new Date().toISOString()
+            });
+        } catch(e) {
+            console.warn('[Catálogo] No se pudo guardar en Firebase:', e.message);
+        }
+    }
+
+    async function cargarCatalogoFirebase() {
+        try {
+            const snap = await db.collection('configuracion').doc('catalogo_productos').get();
+            if (snap.exists && snap.data().data) {
+                const remoto = JSON.parse(snap.data().data);
+                // Usar Firebase como fuente principal (más reciente y compartida)
+                baseDatosProductos = remoto;
+                localStorage.setItem('productosRollerDB', JSON.stringify(remoto));
+                actualizarDatalist();
+                return true;
+            }
+        } catch(e) {
+            console.warn('[Catálogo] No se pudo cargar desde Firebase, usando localStorage:', e.message);
+        }
+        return false;
+    }
+
+    window.onload = async function() {
         document.getElementById("fechaCotizacion").value = new Date().toISOString().split('T')[0];
 
-        // Recuperar base de datos si ya se subió antes
-        const dbGuardada = localStorage.getItem('productosRollerDB');
-        if(dbGuardada) {
-            baseDatosProductos = JSON.parse(dbGuardada);
-            actualizarDatalist();
+        // Recuperar catálogo desde Firebase (fuente principal) o localStorage (fallback)
+        const cargadoDeFirebase = await cargarCatalogoFirebase();
+        if (!cargadoDeFirebase) {
+            const dbGuardada = localStorage.getItem('productosRollerDB');
+            if(dbGuardada) {
+                baseDatosProductos = JSON.parse(dbGuardada);
+                actualizarDatalist();
+            }
         }
 
         // Restaurar storeVentanas desde localStorage
@@ -2362,6 +2402,7 @@
                     } else {
                         localStorage.setItem('productosRollerDB', JSON.stringify(baseDatosProductos));
                         actualizarDatalist();
+                        guardarCatalogoFirebase(); // Backup en Firebase
                         alert(`OK: Se cargaron ${contador} productos.`);
                     }
                 }
@@ -4982,6 +5023,7 @@
                     if (ot) {
                         cargarDatosGenerales(ot.datosGenerales);
                         storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
+                        sincronizarContadorId(); // evitar IDs duplicados en ítems nuevos
                         guardarStore();
                         sincronizarResumenFase2();
                     }
@@ -5124,6 +5166,7 @@
         activeOTId = id;
         // Cargar storeVentanas desde la OT (fuente de verdad = Firestore)
         storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
+        sincronizarContadorId(); // evitar IDs duplicados en ítems nuevos
         guardarStore();
         cargarDatosGenerales(ot.datosGenerales);
         sincronizarResumenFase2();
