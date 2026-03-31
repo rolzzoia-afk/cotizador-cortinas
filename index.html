@@ -16,27 +16,71 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- Firebase compat (funciona sin módulos ES) -->
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyBUQVqyC3ti4hLbuBT8U4zINUWU3u07Dmw",
-            authDomain: "inventario-colmenas.firebaseapp.com",
-            projectId: "inventario-colmenas",
-            storageBucket: "inventario-colmenas.firebasestorage.app",
-            messagingSenderId: "412114089031",
-            appId: "1:412114089031:web:9362ba1928b48449ae6d62"
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+        // ══════════════════════════════════════════════════════════════════
+        // CONFIGURACIÓN SUPABASE — Completar con los datos de tu proyecto
+        // Settings → API para obtener URL y Legacy anon key
+        // ══════════════════════════════════════════════════════════════════
+        const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+        const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9'; // ← UUID de Rolzzo
 
-        // Persistencia offline: si el vendedor pierde señal en terreno,
-        // los cambios quedan guardados localmente y se sincronizan al reconectar
-        db.enablePersistence({ synchronizeTabs: true }).catch(e => {
-            if (e.code === 'failed-precondition') console.warn('Firebase: múltiples pestañas, persistencia activa en una sola.');
-            else if (e.code === 'unimplemented') console.warn('Firebase: este navegador no soporta persistencia offline.');
-        });
+        const { createClient } = supabase;
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // ── Helpers: convertir entre formato app ↔ formato Supabase ─────────
+
+        function rowToOT(row) {
+            const dg = row.datos_generales || {};
+            return {
+                id:                row.id,
+                estado:            row.estado || 'cotizacion',
+                subEtapa:          dg.subEtapa || null,
+                datosGenerales:    dg,
+                storeVentanas:     row.items || [],
+                cotizacionCount:   dg.cotizacionCount || 0,
+                fechaCreacion:     row.fecha_creacion,
+                fechaModificacion: row.fecha_modificacion,
+                notas:             dg.notas || '',
+                totalConIva:       row.total || 0,
+            };
+        }
+
+        function otToRow(ot) {
+            const dg = { ...(ot.datosGenerales || {}) };
+            dg.subEtapa        = ot.subEtapa        || null;
+            dg.notas           = ot.notas            || '';
+            dg.cotizacionCount = ot.cotizacionCount  || 0;
+            return {
+                id:                 ot.id,
+                empresa_id:         EMPRESA_ID,
+                numero_ot:          dg.ot || 'OT',
+                estado:             ot.estado || 'cotizacion',
+                datos_generales:    dg,
+                items:              ot.storeVentanas || [],
+                total:              ot.totalConIva || ot.total || 0,
+                fecha_modificacion: ot.fechaModificacion || new Date().toISOString(),
+                fecha_creacion:     ot.fechaCreacion     || new Date().toISOString(),
+                fecha_entrega:      dg.fechaEntrega || null,
+            };
+        }
+
+        function rowToPano(row) {
+            return {
+                _docId:     row.id,
+                cod:        row.codigo       || '',
+                ancho:      row.medida_ancho || 0,
+                alto:       row.medida_alto  || 0,
+                ubicacion:  row.ubicacion    || '',
+                tipo:       row.tipo         || '',
+                disponible: row.disponible   !== false,
+                ot_asignada: row.ot_asignada || null,
+                fechaUso:   row.fecha_uso    || null,
+                empresa_id: row.empresa_id,
+            };
+        }
     </script>
 
     <style>
@@ -1715,7 +1759,7 @@
                                 </div>
                             </div>
                             <div id="odios-actividad-error" style="display:none;font-size:0.72rem;color:#fca5a5;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;padding:6px 10px;margin-bottom:8px;">
-                                ⚠ Sin acceso a <strong>cortinas_presencia</strong> en Firestore. Revisa las reglas de seguridad.
+                                ⚠ Sin acceso a la tabla <strong>presencia</strong> en Supabase. Verifica la conexión.
                             </div>
                             <div id="odios-actividad-lista" style="font-size:0.78rem;color:var(--text-secondary);">
                                 <span class="text-muted">Cargando actividad…</span>
@@ -1971,7 +2015,7 @@
                             <div class="d-flex align-items-center gap-3 flex-wrap">
                                 <div style="background:rgba(10,61,98,0.5);color:#00d2ff;font-size:1.8rem;font-weight:700;padding:10px 24px;border-radius:8px;border:2px solid rgba(0,210,255,0.3);font-family:monospace;" id="odios-version-display">v—</div>
                                 <div>
-                                    <div class="text-muted small mb-1">Versión activa en Firebase</div>
+                                    <div class="text-muted small mb-1">Versión activa en Supabase</div>
                                     <button class="btn btn-sm" style="background:linear-gradient(135deg,#c0392b,#e74c3c);color:white;border:none;padding:8px 20px;font-weight:bold;" id="odios-btn-forzar" onclick="odiosForzarActualizacion()" disabled>
                                         <i class="bi bi-broadcast"></i> Forzar Actualización en Taller
                                     </button>
@@ -1985,7 +2029,7 @@
                                 <div class="col-6 col-md-3">
                                     <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;text-align:center;">
                                         <div style="font-size:1.4rem;font-weight:700;color:#3b82f6;" id="ctrl-stat-ots">—</div>
-                                        <div class="text-muted" style="font-size:0.72rem;">OTs en Firebase</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">OTs en Supabase</div>
                                     </div>
                                 </div>
                                 <div class="col-6 col-md-3">
@@ -2003,7 +2047,7 @@
                                 <div class="col-6 col-md-3">
                                     <div style="background:rgba(0,0,0,0.25);border-radius:8px;padding:12px;text-align:center;">
                                         <div style="font-size:1.4rem;" id="ctrl-stat-conexion">🟢</div>
-                                        <div class="text-muted" style="font-size:0.72rem;">Firebase Online</div>
+                                        <div class="text-muted" style="font-size:0.72rem;">Supabase Online</div>
                                     </div>
                                 </div>
                             </div>
@@ -2166,128 +2210,139 @@
     let modoAgrupacion = false;           // true cuando el usuario está seleccionando ventanas para agrupar
     let grupoIdActivo  = null;            // grupoId del grupo que está siendo editado en la ficha
 
-    // ── Catálogo de productos: guardar y cargar desde Firebase ──────────────
-    // Siempre guarda en Firebase además de localStorage para que nunca se pierda
+    // ── Catálogo de productos: guardar y cargar desde Supabase ──────────────
+    // Siempre guarda en Supabase además de localStorage para que nunca se pierda
     async function guardarCatalogoFirebase() {
         try {
-            await db.collection('configuracion').doc('catalogo_productos').set({
-                data: JSON.stringify(baseDatosProductos),
-                fechaActualizacion: new Date().toISOString()
-            });
+            await sb.from('configuracion').upsert({
+                empresa_id: EMPRESA_ID,
+                clave: 'catalogo_productos_data',
+                valor: JSON.stringify(baseDatosProductos)
+            }, { onConflict: 'empresa_id,clave' });
         } catch(e) {
-            console.warn('[Catálogo] No se pudo guardar en Firebase:', e.message);
+            console.warn('[Catálogo] No se pudo guardar en Supabase:', e.message);
         }
     }
 
     async function cargarCatalogoFirebase() {
         try {
-            const snap = await db.collection('configuracion').doc('catalogo_productos').get();
-            if (snap.exists && snap.data().data) {
-                const remoto = JSON.parse(snap.data().data);
-                // Usar Firebase como fuente principal (más reciente y compartida)
+            const { data, error } = await sb.from('configuracion')
+                .select('valor')
+                .eq('empresa_id', EMPRESA_ID)
+                .eq('clave', 'catalogo_productos_data')
+                .maybeSingle();
+            if (!error && data?.valor) {
+                const remoto = JSON.parse(data.valor);
                 baseDatosProductos = remoto;
                 localStorage.setItem('productosRollerDB', JSON.stringify(remoto));
                 actualizarDatalist();
                 return true;
             }
         } catch(e) {
-            console.warn('[Catálogo] No se pudo cargar desde Firebase, usando localStorage:', e.message);
+            console.warn('[Catálogo] No se pudo cargar desde Supabase, usando localStorage:', e.message);
         }
         return false;
     }
 
-    window.onload = async function() {
+    // ── Inicialización principal (llamada después del login) ─────────────────
+    async function inicializarApp() {
+        // Cargar perfil del usuario logueado
+        try {
+            const { data: { user } } = await sb.auth.getUser();
+            if (user) {
+                const { data: perfil } = await sb.from('perfiles')
+                    .select('nombre, rol')
+                    .eq('id', user.id)
+                    .maybeSingle();
+                if (perfil?.nombre) {
+                    _presenciaNombre = perfil.nombre;
+                    localStorage.setItem('rolzzo_operario', perfil.nombre);
+                    const badge = document.getElementById('badge-operario-nombre');
+                    if (badge) badge.textContent = perfil.nombre;
+                }
+            }
+        } catch(e) { console.warn('[Auth] No se pudo cargar perfil:', e); }
+
         document.getElementById("fechaCotizacion").value = new Date().toISOString().split('T')[0];
 
-        // Recuperar catálogo desde Firebase (fuente principal) o localStorage (fallback)
-        const cargadoDeFirebase = await cargarCatalogoFirebase();
-        if (!cargadoDeFirebase) {
+        // Catálogo desde Supabase o localStorage
+        const cargadoDeSupabase = await cargarCatalogoFirebase();
+        if (!cargadoDeSupabase) {
             const dbGuardada = localStorage.getItem('productosRollerDB');
-            if(dbGuardada) {
-                baseDatosProductos = JSON.parse(dbGuardada);
-                actualizarDatalist();
-            }
+            if (dbGuardada) { baseDatosProductos = JSON.parse(dbGuardada); actualizarDatalist(); }
         }
 
         // Restaurar storeVentanas desde localStorage
         const storeGuardado = localStorage.getItem('storeVentanas');
-        if(storeGuardado) {
+        if (storeGuardado) {
             try {
                 storeVentanas = JSON.parse(storeGuardado);
-                // Migración: agregar grupoId/grupoOrden si no existen
-                storeVentanas.forEach((v, i) => {
-                    if (v.grupoId === undefined) v.grupoId = null;
+                storeVentanas.forEach((v) => {
+                    if (v.grupoId    === undefined) v.grupoId    = null;
                     if (v.grupoOrden === undefined) v.grupoOrden = 0;
                 });
-            } catch(e) {
-                storeVentanas = [];
-            }
+            } catch(e) { storeVentanas = []; }
         }
 
-        // Iniciar sistema de presencia (identificación del operario)
+        // Presencia y OTs
         presenciaIniciar();
-
-        // Cargar storeOTs (multi-OT Kanban)
         cargarOTs();
 
-        // Escuchar pestaña Panel para re-renderizar kanban
-        const tabPanelEl = document.getElementById('panel-tab');
-        if (tabPanelEl) {
-            tabPanelEl.addEventListener('shown.bs.tab', () => {
-                renderKanban();
-            });
-        }
+        // Escuchar pestañas
+        document.getElementById('panel-tab')?.addEventListener('shown.bs.tab', () => renderKanban());
+        document.getElementById('fase2-tab')?.addEventListener('shown.bs.tab', () => {
+            sincronizarResumenFase2(); renderTabs(); renderFicha(); renderPreview();
+        });
+        document.getElementById('fase3-tab')?.addEventListener('shown.bs.tab', () => {
+            const tabla = document.getElementById('tablaResumen');
+            if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) poblarTablaFase3();
+        });
+        document.getElementById('fase4-tab')?.addEventListener('shown.bs.tab', () => {
+            const tabla = document.getElementById('f4-optimizador-tabla');
+            if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) poblarTablaFase4();
+        });
 
-        // Sincronizar Fase 2 resumen al abrir la pestaña
-        const tabFase2El = document.getElementById('fase2-tab');
-        if (tabFase2El) {
-            tabFase2El.addEventListener('shown.bs.tab', () => {
-                sincronizarResumenFase2();
-                renderTabs();
-                renderFicha();
-                renderPreview();
-            });
-        }
-
-        // Auto-poblar Fase 3 al abrir la pestaña (si hay datos y la tabla está vacía)
-        const tabFase3El = document.getElementById('fase3-tab');
-        if (tabFase3El) {
-            tabFase3El.addEventListener('shown.bs.tab', () => {
-                const tabla = document.getElementById('tablaResumen');
-                if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) {
-                    poblarTablaFase3();
-                }
-            });
-        }
-
-        // Auto-poblar Fase 4 al abrir la pestaña (si hay datos y la tabla está vacía)
-        const tabFase4El = document.getElementById('fase4-tab');
-        if (tabFase4El) {
-            tabFase4El.addEventListener('shown.bs.tab', () => {
-                const tabla = document.getElementById('f4-optimizador-tabla');
-                if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) {
-                    poblarTablaFase4();
-                }
-            });
-        }
-
-        // Si ya hay ventanas guardadas, mostrarlas en Fase 2
-        if (storeVentanas.length > 0) {
-            sincronizarResumenFase2();
-        }
-
-        renderTabs();
-        renderFicha();
-        renderPreview();
-        // Render kanban inicial
+        // Render inicial
+        if (storeVentanas.length > 0) sincronizarResumenFase2();
+        renderTabs(); renderFicha(); renderPreview();
         renderKanban();
         actualizarIndicadorOTActiva();
+    }
+
+    // ── Login con Supabase ───────────────────────────────────────────────────
+    async function loginConSupabase() {
+        const email = (document.getElementById('login-email').value || '').trim();
+        const pass  = document.getElementById('login-password').value;
+        const errEl = document.getElementById('login-error');
+        const btn   = document.getElementById('btn-login');
+        if (!email || !pass) { errEl.textContent = 'Ingresa email y contraseña.'; errEl.style.display = ''; return; }
+        btn.disabled = true; btn.textContent = 'Entrando...';
+        try {
+            const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+            if (error) throw error;
+            document.getElementById('modal-login').style.display = 'none';
+            await inicializarApp();
+        } catch(e) {
+            errEl.textContent = e.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos.' : (e.message || 'Error al iniciar sesión.');
+            errEl.style.display = '';
+            btn.disabled = false; btn.textContent = 'Entrar';
+        }
+    }
+
+    window.onload = async function() {
+        // Verificar si hay sesión activa
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) {
+            document.getElementById('modal-login').style.display = 'flex';
+            return;
+        }
+        await inicializarApp();
     };
 
-    // Guardar storeVentanas en localStorage Y en Firebase (OT activa)
+    // Guardar storeVentanas en localStorage Y en Supabase (OT activa)
     function guardarStore() {
         localStorage.setItem('storeVentanas', JSON.stringify(storeVentanas));
-        // Sincronizar con Firebase si hay OT activa
+        // Sincronizar con Supabase si hay OT activa
         if (activeOTId !== null && typeof storeOTs !== 'undefined') {
             const ot = storeOTs.find(o => o.id === activeOTId);
             if (ot) {
@@ -2402,7 +2457,7 @@
                     } else {
                         localStorage.setItem('productosRollerDB', JSON.stringify(baseDatosProductos));
                         actualizarDatalist();
-                        guardarCatalogoFirebase(); // Backup en Firebase
+                        guardarCatalogoFirebase(); // Backup en Supabase
                         alert(`OK: Se cargaron ${contador} productos.`);
                     }
                 }
@@ -4966,99 +5021,113 @@
     };
     const SUB_ETAPAS_PROD = ['Estructura','Paños','Dimensionado','Armado','Prueba','Lista'];
 
-    // ── FIRESTORE: guardar / escuchar OTs ───────────────────────────────────
-    // Cada OT es un documento en la colección 'cortinas_ots'
-    // (colección separada de cualquier dato existente en el proyecto Firebase)
+    // ── SUPABASE: guardar / escuchar OTs ────────────────────────────────────
 
-    function guardarOT(ot, mostrarToast = false) {
-        db.collection('cortinas_ots')
-          .doc(String(ot.id))
-          .set(ot)
-          .then(() => { if (mostrarToast) showToast('OT guardada correctamente'); })
-          .catch(e => { console.error('Error guardando OT en Firestore:', e); showToast('Error al guardar', 'error'); });
+    async function guardarOT(ot, mostrarToast = false) {
+        try {
+            const { error } = await sb.from('ots').upsert(otToRow(ot), { onConflict: 'id' });
+            if (error) throw error;
+            if (mostrarToast) showToast('OT guardada correctamente');
+        } catch(e) {
+            console.error('Error guardando OT en Supabase:', e);
+            showToast('Error al guardar', 'error');
+        }
     }
 
     function guardarOTs() {
-        // Guarda todas las OTs actuales + persiste activeOTId en localStorage
         storeOTs.forEach(ot => guardarOT(ot));
         localStorage.setItem('activeOTId', activeOTId !== null ? String(activeOTId) : '');
     }
 
-    function cargarOTs() {
-        // Restaurar activeOTId desde localStorage (es local a cada dispositivo)
+    async function cargarOTs() {
+        // Restaurar activeOTId desde localStorage
         try {
             const a = localStorage.getItem('activeOTId');
-            activeOTId = a ? parseInt(a) : null;
-            if (isNaN(activeOTId)) activeOTId = null;
+            activeOTId = a || null;
         } catch(e) { activeOTId = null; }
 
         // Iniciar carga de Colmena en paralelo
         cargarColmena();
 
-        // Flag para restaurar datos al primer disparo de onSnapshot
-        let primerasCarga = true;
+        // ── Carga inicial ───────────────────────────────────────────────────
+        try {
+            const { data, error } = await sb.from('ots').select('*').eq('empresa_id', EMPRESA_ID);
+            if (error) throw error;
 
-        // Escuchar en tiempo real la colección 'cortinas_ots'
-        // Cada vez que cualquier usuario guarde o cambie una OT, todos los
-        // dispositivos conectados reciben la actualización automáticamente
-        db.collection('cortinas_ots').onSnapshot(snapshot => {
-            storeOTs = snapshot.docs.map(doc => doc.data());
-
-            // Limpiar OTs anónimas
-            storeOTs = storeOTs.filter(o => {
+            storeOTs = data.map(rowToOT).filter(o => {
                 const dg = o.datosGenerales || {};
                 return (dg.cliente || '').trim() || (dg.ot || '').trim();
             });
 
-            // Verificar que activeOTId sigue existiendo
-            if (activeOTId !== null && !storeOTs.find(o => o.id === activeOTId)) {
-                activeOTId = null;
-            }
+            if (activeOTId !== null && !storeOTs.find(o => o.id === activeOTId)) activeOTId = null;
 
-            // ── Auto-restaurar OT activa al primer disparo (después de recargar página) ──
-            if (primerasCarga) {
-                primerasCarga = false;
-                if (activeOTId !== null) {
-                    const ot = storeOTs.find(o => o.id === activeOTId);
-                    if (ot) {
-                        cargarDatosGenerales(ot.datosGenerales);
-                        storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
-                        sincronizarContadorId(); // evitar IDs duplicados en ítems nuevos
-                        guardarStore();
-                        sincronizarResumenFase2();
-                    }
-                }
-            } else {
-                // ── Detectar cambios externos en la OT activa ──────────────────────
-                // Si no escribimos localmente en los últimos 3 segundos, cualquier
-                // diferencia en Firestore proviene de Ojo de Dios u otro dispositivo.
-                // En ese caso actualizamos storeVentanas para evitar sobreescritura.
-                const msSinceWrite = Date.now() - _ultimaEscrituraLocalMs;
-                if (activeOTId !== null && msSinceWrite > 3000) {
-                    const otActiva = storeOTs.find(o => o.id === activeOTId);
-                    if (otActiva) {
-                        const ventsFirestore = JSON.stringify(otActiva.storeVentanas || []);
-                        const ventsLocal     = JSON.stringify(storeVentanas || []);
-                        if (ventsFirestore !== ventsLocal) {
-                            storeVentanas = JSON.parse(JSON.stringify(otActiva.storeVentanas || []));
-                            guardarStore();
-                            sincronizarResumenFase2();
-                            showToast('🔄 Ventanas actualizadas desde otra sesión');
-                        }
-                    }
+            // Auto-restaurar OT activa al cargar la página
+            if (activeOTId !== null) {
+                const ot = storeOTs.find(o => o.id === activeOTId);
+                if (ot) {
+                    cargarDatosGenerales(ot.datosGenerales);
+                    storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
+                    sincronizarContadorId();
+                    guardarStore();
+                    sincronizarResumenFase2();
                 }
             }
 
-            // Actualizar UI sin interrumpir el formulario activo
             renderKanban();
             actualizarIndicadorOTActiva();
             actualizarIndicadorConexion(true);
-
-        }, error => {
-            // Sin conexión: Firestore usa caché local automáticamente
-            console.warn('Firestore onSnapshot error (probablemente offline):', error);
+        } catch(e) {
+            console.warn('[OTs] Error al cargar:', e);
             actualizarIndicadorConexion(false);
-        });
+        }
+
+        // ── Realtime: escuchar cambios en tiempo real ───────────────────────
+        sb.channel('ots-realtime')
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: 'ots',
+                filter: `empresa_id=eq.${EMPRESA_ID}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    const ot = rowToOT(payload.new);
+                    const dg = ot.datosGenerales || {};
+                    if (((dg.cliente||'').trim() || (dg.ot||'').trim()) && !storeOTs.find(o => o.id === ot.id))
+                        storeOTs.push(ot);
+
+                } else if (payload.eventType === 'UPDATE') {
+                    const ot = rowToOT(payload.new);
+                    const idx = storeOTs.findIndex(o => o.id === ot.id);
+                    const msSinceWrite = Date.now() - _ultimaEscrituraLocalMs;
+                    if (idx >= 0) {
+                        if (msSinceWrite > 3000) {
+                            const ventsNuevo = JSON.stringify(ot.storeVentanas || []);
+                            const ventsLocal = JSON.stringify(storeOTs[idx].storeVentanas || []);
+                            storeOTs[idx] = ot;
+                            if (activeOTId === ot.id && ventsNuevo !== ventsLocal) {
+                                storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
+                                guardarStore();
+                                sincronizarResumenFase2();
+                                showToast('🔄 Ventanas actualizadas desde otra sesión');
+                            }
+                        }
+                    } else { storeOTs.push(ot); }
+
+                } else if (payload.eventType === 'DELETE') {
+                    storeOTs = storeOTs.filter(o => o.id !== payload.old.id);
+                    if (activeOTId === payload.old.id) {
+                        activeOTId = null;
+                        localStorage.setItem('activeOTId', '');
+                        actualizarIndicadorOTActiva();
+                    }
+                }
+
+                renderKanban();
+                actualizarIndicadorOTActiva();
+                actualizarIndicadorConexion(true);
+            })
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') actualizarIndicadorConexion(true);
+                else if (status === 'CHANNEL_ERROR') actualizarIndicadorConexion(false);
+            });
     }
 
     // ── Indicador de conexión ───────────────────────────────────────────────
@@ -5108,7 +5177,7 @@
         if (activeOTId === null) {
             if (!datos.cliente && !datos.ot) return;
             const nueva = {
-                id: Date.now(),
+                id: crypto.randomUUID(),
                 estado: 'cotizacion',
                 subEtapa: null,
                 datosGenerales: datos,
@@ -5293,9 +5362,9 @@
         const nombre = ot?.datosGenerales?.cliente || 'esta OT';
         if (!confirm(`⚠ Eliminar definitivamente la cotización de "${nombre}"?\nEsta acción NO se puede deshacer.`)) return;
 
-        // Eliminar documento de Firestore (el onSnapshot actualizará storeOTs automáticamente)
-        db.collection('cortinas_ots').doc(String(id)).delete()
-          .catch(e => console.error('Error eliminando OT de Firestore:', e));
+        // Eliminar registro de Supabase (el Realtime actualizará storeOTs automáticamente)
+        sb.from('ots').delete().eq('id', id)
+          .then(({ error }) => { if (error) console.error('Error eliminando OT de Supabase:', error); });
 
         // Limpiar localmente de inmediato para respuesta rápida en UI
         storeOTs = storeOTs.filter(o => o.id !== id);
@@ -5543,28 +5612,53 @@
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    // COLMENA — carga desde Firebase + Plan de Corte Inteligente
+    // COLMENA — carga desde Supabase + Plan de Corte Inteligente
     // ═══════════════════════════════════════════════════════════════════════
 
-    let storeColmena       = [];   // paños disponibles cargados desde Firebase
+    let storeColmena       = [];   // paños disponibles cargados desde Supabase
     let colmenaLoaded      = false;
     let planCorteActual    = null; // último plan generado
 
-    // ── Carga en tiempo real (solo disponibles) ──────────────────────────
-    function cargarColmena() {
-        db.collection('colmena_panos')
-          .where('disponible', '==', true)
-          .onSnapshot(snapshot => {
-              storeColmena = snapshot.docs.map(doc => ({ _docId: doc.id, ...doc.data() }));
-              colmenaLoaded = true;
-              const dot = document.getElementById('pc-colmena-dot');
-              const txt = document.getElementById('pc-colmena-txt');
-              if (dot) { dot.style.background = '#22c55e'; }
-              if (txt) { txt.textContent = storeColmena.length + ' sobrantes disponibles'; }
-          }, () => {
-              const txt = document.getElementById('pc-colmena-txt');
-              if (txt) { txt.textContent = 'Sin conexión (usando caché)'; }
-          });
+    // ── Carga inicial + Realtime (solo disponibles) ──────────────────────
+    async function cargarColmena() {
+        const setUI = (n) => {
+            const dot = document.getElementById('pc-colmena-dot');
+            const txt = document.getElementById('pc-colmena-txt');
+            if (dot) dot.style.background = n >= 0 ? '#22c55e' : '#ef4444';
+            if (txt) txt.textContent = n >= 0 ? n + ' sobrantes disponibles' : 'Sin conexión (usando caché)';
+        };
+
+        try {
+            const { data, error } = await sb.from('colmena_panos')
+                .select('*').eq('empresa_id', EMPRESA_ID).eq('disponible', true);
+            if (error) throw error;
+            storeColmena = data.map(rowToPano);
+            colmenaLoaded = true;
+            setUI(storeColmena.length);
+        } catch(e) {
+            console.warn('[Colmena] Error cargando:', e);
+            setUI(-1);
+        }
+
+        // Realtime: actualizar cuando cambia un paño
+        sb.channel('colmena-realtime')
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: 'colmena_panos',
+                filter: `empresa_id=eq.${EMPRESA_ID}`
+            }, (payload) => {
+                if (payload.eventType === 'INSERT') {
+                    const p = rowToPano(payload.new);
+                    if (p.disponible) storeColmena.push(p);
+                } else if (payload.eventType === 'UPDATE') {
+                    const p = rowToPano(payload.new);
+                    storeColmena = storeColmena.filter(x => x._docId !== p._docId);
+                    if (p.disponible) storeColmena.push(p);
+                } else if (payload.eventType === 'DELETE') {
+                    storeColmena = storeColmena.filter(x => x._docId !== payload.old.id);
+                }
+                setUI(storeColmena.length);
+            })
+            .subscribe();
     }
 
     // ── MaxRects BSSF (Best Short Side Fit) ─────────────────────────────
@@ -6202,17 +6296,17 @@
         const otNr   = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
         const now    = new Date().toISOString();
         const saves  = [
-            db.collection('colmena_panos').doc(sob._docId).update({ disponible:false, ot_asignada:otNr, fechaUso:now })
+            sb.from('colmena_panos').update({ disponible:false, ot_asignada:otNr, fecha_uso:now }).eq('id', sob._docId)
         ];
         const msgs = [];
 
         if (hayAlto) {
             const ubic = (document.getElementById(`pc-ubic-sob-${gi}`)?.value || '').trim().toUpperCase();
             if (!ubic) { showToast('Ingresa la ubicación del sobrante de alto', 'error'); return; }
-            saves.push(db.collection('colmena_panos').add({
-                cod:sob.cod, ancho:anchoAlto, alto:altoResto,
+            saves.push(sb.from('colmena_panos').insert({
+                empresa_id:EMPRESA_ID, codigo:sob.cod, medida_ancho:anchoAlto, medida_alto:altoResto,
                 ubicacion:ubic, tipo:'SOBRANTE', disponible:true,
-                ot_asignada:null, fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now
+                ot_asignada:null, datos_extra:{fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now}
             }));
             msgs.push(`alto ${anchoAlto}×${altoResto}cm → ${ubic}`);
         }
@@ -6221,10 +6315,10 @@
             const sa   = grupo.sobranteAncho;
             const ubic = (document.getElementById(`pc-ubic-sancho-${gi}`)?.value || '').trim().toUpperCase();
             if (!ubic) { showToast('Ingresa la ubicación de la franja de ancho', 'error'); return; }
-            saves.push(db.collection('colmena_panos').add({
-                cod:sa.cod, ancho:sa.ancho, alto:sa.alto,
+            saves.push(sb.from('colmena_panos').insert({
+                empresa_id:EMPRESA_ID, codigo:sa.cod, medida_ancho:sa.ancho, medida_alto:sa.alto,
                 ubicacion:ubic, tipo:'SOBRANTE', disponible:true,
-                ot_asignada:null, fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now
+                ot_asignada:null, datos_extra:{fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:now}
             }));
             msgs.push(`ancho ${sa.ancho}×${sa.alto}cm → ${ubic}`);
         }
@@ -6241,7 +6335,7 @@
     function confirmarUsoSinSobrante(docId, canvId, nota) {
         const ot   = storeOTs.find(o => o.id === activeOTId);
         const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
-        db.collection('colmena_panos').doc(docId).update({ disponible:false, ot_asignada:otNr, fechaUso:new Date().toISOString() })
+        sb.from('colmena_panos').update({ disponible:false, ot_asignada:otNr, fecha_uso:new Date().toISOString() }).eq('id', docId)
           .then(() => { showToast('Sobrante marcado como usado' + (nota||'')); _desvanecerCard(canvId); })
           .catch(() => showToast('Error al actualizar la Colmena', 'error'));
     }
@@ -6404,11 +6498,10 @@
         if (hayResto) {
             const ubic = (document.getElementById(`pc-ubic-rollo-${gi}`)?.value || '').trim().toUpperCase();
             if (!ubic) { showToast('Ingresa la ubicación del rollo restante', 'error'); return; }
-            saves.push(db.collection('colmena_panos').add({
-                cod: grupo.codInt, ancho: grupo.anchoCorte, alto: altoResto,
-                ubicacion: ubic, tipo: 'SOBRANTE', disponible: true,
-                ot_asignada: null, fuente: 'GALPON_ROLZZO',
-                ot_origen: otNr, creadoEn: new Date().toISOString()
+            saves.push(sb.from('colmena_panos').insert({
+                empresa_id:EMPRESA_ID, codigo:grupo.codInt, medida_ancho:grupo.anchoCorte, medida_alto:altoResto,
+                ubicacion:ubic, tipo:'SOBRANTE', disponible:true,
+                ot_asignada:null, datos_extra:{fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:new Date().toISOString()}
             }));
         }
 
@@ -6416,11 +6509,10 @@
         if (haySI && si) {
             const ubicSI = (document.getElementById(`pc-ubic-si-${gi}`)?.value || '').trim().toUpperCase();
             if (!ubicSI) { showToast('Ingresa la ubicación de la franja interna', 'error'); return; }
-            saves.push(db.collection('colmena_panos').add({
-                cod: grupo.codInt, ancho: si.ancho, alto: si.alto,
-                ubicacion: ubicSI, tipo: 'SOBRANTE', disponible: true,
-                ot_asignada: null, fuente: 'GALPON_ROLZZO',
-                ot_origen: otNr, creadoEn: new Date().toISOString()
+            saves.push(sb.from('colmena_panos').insert({
+                empresa_id:EMPRESA_ID, codigo:grupo.codInt, medida_ancho:si.ancho, medida_alto:si.alto,
+                ubicacion:ubicSI, tipo:'SOBRANTE', disponible:true,
+                ot_asignada:null, datos_extra:{fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:new Date().toISOString()}
             }));
         }
 
@@ -6446,9 +6538,11 @@
         if (!ubic)           { showToast('Ingresa la ubicación (ej: A-54)', 'error'); return; }
         const ot   = storeOTs.find(o => o.id === activeOTId);
         const otNr = ot ? (ot.datosGenerales || {}).ot || String(ot.id) : '—';
-        db.collection('colmena_panos').add({ cod, ancho, alto, ubicacion:ubic, tipo:'SOBRANTE',
-            disponible:true, ot_asignada:null, fuente:'GALPON_ROLZZO', ot_origen:otNr,
-            creadoEn:new Date().toISOString() })
+        sb.from('colmena_panos').insert({
+            empresa_id:EMPRESA_ID, codigo:cod, medida_ancho:ancho, medida_alto:alto,
+            ubicacion:ubic, tipo:'SOBRANTE', disponible:true, ot_asignada:null,
+            datos_extra:{fuente:'GALPON_ROLZZO', ot_origen:otNr, creadoEn:new Date().toISOString()}
+          })
           .then(() => {
               showToast(`Sobrante ${cod} ${ancho}×${alto}cm guardado en la Colmena`);
               ['ns-cod','ns-ancho','ns-alto','ns-ubic'].forEach(id => document.getElementById(id).value = '');
@@ -6584,51 +6678,40 @@
         presenciaActualizar('online', 'Inicio de sesión');
     }
 
-    // Escribe la actividad actual en Firestore (cortinas_presencia/{deviceId})
-    function presenciaActualizar(accion, detalle) {
+    // Escribe la actividad actual en Supabase (presencia upsert por dispositivo_id)
+    async function presenciaActualizar(accion, detalle) {
         if (!_presenciaDeviceId) return;
-        if (typeof db === 'undefined') return;
-
-        // Si no hay nombre asignado aún, usar un placeholder temporal para no perder el registro
         const nombre = _presenciaNombre || '(sin nombre)';
-
         const ot = (typeof storeOTs !== 'undefined' && typeof activeOTId !== 'undefined')
-            ? storeOTs.find(o => o.id === activeOTId)
-            : null;
+            ? storeOTs.find(o => o.id === activeOTId) : null;
         const otInfo = ot
-            ? `OT ${ot.datosGenerales?.ot || activeOTId} — ${ot.datosGenerales?.cliente || ''}`
-            : '';
-
-        db.collection('cortinas_presencia').doc(_presenciaDeviceId).set({
-            nombre:    nombre,
-            deviceId:  _presenciaDeviceId,
-            accion:    accion,
-            detalle:   detalle || '',
-            otActiva:  otInfo,
-            timestamp: new Date().toISOString(),
-            activo:    true
-        }).catch(err => {
-            // Mostrar error una sola vez para no spamear
+            ? `OT ${ot.datosGenerales?.ot || ''} — ${ot.datosGenerales?.cliente || ''}` : '';
+        try {
+            await sb.from('presencia').upsert({
+                empresa_id:      EMPRESA_ID,
+                dispositivo_id:  _presenciaDeviceId,
+                nombre_operario: nombre,
+                actividad:       accion + (detalle ? ': ' + detalle : ''),
+                seccion:         otInfo,
+                timestamp:       new Date().toISOString(),
+                activo:          true
+            }, { onConflict: 'empresa_id,dispositivo_id' });
+        } catch(err) {
             if (!window._presenciaErrorMostrado) {
                 window._presenciaErrorMostrado = true;
-                console.warn('[Presencia] Error Firestore:', err.code, err.message);
-                if (err.code === 'permission-denied') {
-                    showToast('⚠ Activa la colección "cortinas_presencia" en las reglas de Firestore para ver actividad en tiempo real.', 'error');
-                }
+                console.warn('[Presencia] Error Supabase:', err.message);
             }
-        });
+        }
     }
 
     // Marca el dispositivo como offline al salir
-    function presenciaLimpiar() {
+    async function presenciaLimpiar() {
         if (!_presenciaDeviceId) return;
-        if (typeof db === 'undefined') return;
         try {
-            db.collection('cortinas_presencia').doc(_presenciaDeviceId).update({
-                activo:    false,
-                accion:    'offline',
-                timestamp: new Date().toISOString()
-            }).catch(() => {});
+            await sb.from('presencia')
+                .update({ activo: false, actividad: 'offline', timestamp: new Date().toISOString() })
+                .eq('empresa_id', EMPRESA_ID)
+                .eq('dispositivo_id', _presenciaDeviceId);
         } catch(e) {}
     }
 
@@ -6676,34 +6759,43 @@
         odiosRenderDashboard();
     }
 
-    // Suscripción en tiempo real a cortinas_presencia
-    function odiosIniciarPresencia() {
+    // Suscripción en tiempo real a presencia (Supabase Realtime)
+    async function odiosIniciarPresencia() {
         if (_odiosUnsubPresencia) return;
-        _odiosUnsubPresencia = db.collection('cortinas_presencia')
-            .onSnapshot(
-                snap => {
-                    // Limpiar error si se resolvió
-                    const errEl = document.getElementById('odios-actividad-error');
-                    if (errEl) errEl.style.display = 'none';
-                    const docs = snap.docs.map(d => d.data());
-                    odiosRenderActividad(docs);
-                },
-                err => {
-                    console.warn('[OdD] Error suscripción presencia:', err.code, err.message);
-                    // Mostrar aviso de reglas en el panel
-                    const errEl = document.getElementById('odios-actividad-error');
-                    if (errEl) errEl.style.display = '';
-                    const lista = document.getElementById('odios-actividad-lista');
-                    if (lista) lista.innerHTML = '<span class="text-muted" style="font-size:0.72rem;">No se puede leer la actividad — revisa las reglas de Firestore.</span>';
-                }
-            );
+
+        // Carga inicial
+        const { data, error } = await sb.from('presencia').select('*').eq('empresa_id', EMPRESA_ID);
+        if (!error) {
+            const errEl = document.getElementById('odios-actividad-error');
+            if (errEl) errEl.style.display = 'none';
+            odiosRenderActividad(data.map(r => ({
+                nombre: r.nombre_operario, accion: r.actividad,
+                detalle: '', otActiva: r.seccion,
+                timestamp: r.timestamp, activo: r.activo
+            })));
+        }
+
+        // Realtime
+        _odiosUnsubPresencia = sb.channel('presencia-realtime')
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: 'presencia',
+                filter: `empresa_id=eq.${EMPRESA_ID}`
+            }, async () => {
+                // Recargamos toda la tabla para simplicidad
+                const { data: docs } = await sb.from('presencia').select('*').eq('empresa_id', EMPRESA_ID);
+                if (docs) odiosRenderActividad(docs.map(r => ({
+                    nombre: r.nombre_operario, accion: r.actividad,
+                    detalle: '', otActiva: r.seccion,
+                    timestamp: r.timestamp, activo: r.activo
+                })));
+            })
+            .subscribe();
     }
 
-    // Fuerza una lectura manual desde Firestore (para el botón ↻)
-    function odiosRefreshPresencia() {
+    // Fuerza una lectura manual (para el botón ↻)
+    async function odiosRefreshPresencia() {
         if (_odiosUnsubPresencia) {
-            // Si ya hay suscripción activa, la desuscribimos y reiniciamos para forzar refresh
-            _odiosUnsubPresencia();
+            await sb.removeChannel(_odiosUnsubPresencia);
             _odiosUnsubPresencia = null;
         }
         odiosIniciarPresencia();
@@ -6956,21 +7048,35 @@
     }
 
     // ── STOCK TELAS ────────────────────────────────────────────────────
-    function odiosIniciarStock() {
+    async function odiosIniciarStock() {
         if (_odiosUnsubStock) return;
-        _odiosUnsubStock = db.collection('cortinas_telas')
-            .orderBy('codigo', 'asc')
-            .onSnapshot(snap => {
-                _odiosTelasCache = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+
+        const cargarTelas = async () => {
+            const { data, error } = await sb.from('telas')
+                .select('*').eq('empresa_id', EMPRESA_ID).order('codigo');
+            if (!error && data) {
+                _odiosTelasCache = data.map(d => ({
+                    _id: d.id, codigo: d.codigo, nombre: d.nombre,
+                    ancho_m: d.ancho_m, metros_disponibles: d.metros_disponibles,
+                    alerta_minimo: d.alerta_minimo, fechaActualizacion: d.fecha_actualizacion
+                }));
                 odiosRenderStock();
-                // Actualizar stat de Control
                 const el = document.getElementById('ctrl-stat-telas');
                 if (el) el.textContent = _odiosTelasCache.length;
-            }, err => {
-                console.warn('Ojo de Dios — stock listener:', err.message);
+            } else {
                 const tbody = document.getElementById('odios-tabla-stock');
                 if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-muted text-center py-2"><small>Sin conexión al inventario</small></td></tr>`;
-            });
+            }
+        };
+
+        await cargarTelas();
+
+        _odiosUnsubStock = sb.channel('telas-realtime')
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: 'telas',
+                filter: `empresa_id=eq.${EMPRESA_ID}`
+            }, cargarTelas)
+            .subscribe();
     }
 
     function odiosRenderStock() {
@@ -7016,10 +7122,11 @@
         const metros = parseFloat(document.getElementById('stock-metros')?.value||0);
         const alerta = parseFloat(document.getElementById('stock-alerta')?.value||10);
         if (!cod || !nombre) { showToast('Completá el código y nombre de la tela', 'error'); return; }
-        db.collection('cortinas_telas').doc(cod).set({
-            codigo: cod, nombre, ancho_m: ancho, metros_disponibles: metros,
-            alerta_minimo: alerta, fechaActualizacion: new Date().toISOString()
-        }).then(() => {
+        sb.from('telas').upsert({
+            empresa_id: EMPRESA_ID, codigo: cod, nombre, ancho_m: ancho,
+            metros_disponibles: metros, alerta_minimo: alerta,
+            fecha_actualizacion: new Date().toISOString()
+        }, { onConflict: 'empresa_id,codigo' }).then(() => {
             showToast(`Tela "${cod}" guardada`);
             ['stock-cod','stock-nombre','stock-ancho','stock-metros'].forEach(id => {
                 const el = document.getElementById(id); if (el) el.value = '';
@@ -7044,7 +7151,7 @@
 
     function stockEliminar(id, nombre) {
         if (!confirm(`¿Eliminar la tela "${nombre}" del inventario?`)) return;
-        db.collection('cortinas_telas').doc(id).delete()
+        sb.from('telas').delete().eq('id', id)
             .then(() => showToast(`Tela "${nombre}" eliminada`))
             .catch(e => showToast('Error: ' + e.message, 'error'));
     }
@@ -7501,21 +7608,36 @@
     }
 
     // ── CONTROL (VERSION) ──────────────────────────────────────────────
-    function odiosIniciarVersion() {
+    async function odiosIniciarVersion() {
         if (_odiosUnsubVersion) return;
-        _odiosUnsubVersion = db.collection('configuracion').doc('version_minima')
-            .onSnapshot(snap => {
-                if (snap.exists) {
-                    const v = snap.data().version || '—';
-                    _odiosVersionActual = v;
-                    const d = document.getElementById('odios-version-display');
-                    const b = document.getElementById('odios-sys-badge');
-                    if (d) d.textContent = `v${v}`;
-                    if (b) b.textContent = `v${v}`;
-                    const btn = document.getElementById('odios-btn-forzar');
-                    if (btn) btn.disabled = false;
-                }
-            }, err => console.warn('Ojo de Dios — version listener:', err.message));
+
+        const actualizarVersion = (valor) => {
+            if (!valor) return;
+            _odiosVersionActual = valor;
+            const d = document.getElementById('odios-version-display');
+            const b = document.getElementById('odios-sys-badge');
+            if (d) d.textContent = `v${valor}`;
+            if (b) b.textContent = `v${valor}`;
+            const btn = document.getElementById('odios-btn-forzar');
+            if (btn) btn.disabled = false;
+        };
+
+        // Carga inicial
+        const { data } = await sb.from('configuracion')
+            .select('valor').eq('empresa_id', EMPRESA_ID).eq('clave', 'version_minima_version').maybeSingle();
+        if (data?.valor) actualizarVersion(data.valor);
+
+        // Realtime
+        _odiosUnsubVersion = sb.channel('version-realtime')
+            .on('postgres_changes', {
+                event: '*', schema: 'public', table: 'configuracion',
+                filter: `empresa_id=eq.${EMPRESA_ID}`
+            }, async () => {
+                const { data: d2 } = await sb.from('configuracion')
+                    .select('valor').eq('empresa_id', EMPRESA_ID).eq('clave', 'version_minima_version').maybeSingle();
+                if (d2?.valor) actualizarVersion(d2.valor);
+            })
+            .subscribe();
     }
 
     async function odiosForzarActualizacion() {
@@ -7528,9 +7650,11 @@
         if (!confirm(`¿Subir versión de "${_odiosVersionActual||'N/A'}" a "${nueva}"?\nEsto forzará una recarga en TODOS los dispositivos del taller.`)) return;
         btn.disabled = true; btn.textContent = 'Actualizando...';
         try {
-            await db.collection('configuracion').doc('version_minima').set({
-                version: nueva, fechaActualizacion: new Date().toISOString()
-            });
+            await sb.from('configuracion').upsert({
+                empresa_id: EMPRESA_ID,
+                clave: 'version_minima_version',
+                valor: nueva
+            }, { onConflict: 'empresa_id,clave' });
             showToast(`Versión actualizada a v${nueva}. Todos los dispositivos se recargarán.`);
         } catch(e) {
             showToast('Error: ' + e.message, 'error');
@@ -7553,7 +7677,8 @@
     // CORRECCIONES — Gestión de errores del plan de corte y tubos
     // ═══════════════════════════════════════════════════════════════
 
-    let _corrEmailOptimizer  = null;   // email leído desde Firebase
+    let _corrEmailOptimizer  = null;   // email del optimizador
+    let _corrPlanId          = null;   // UUID del plan en Supabase
     let _corrPlanData        = null;   // último plan cargado (array de líneas)
     let _corrOrdenesData     = [];     // órdenes de referencia del último plan
     let _corrPlanPendientes  = {};     // { idx: { tipo, nuevos campos, nota } }
@@ -7562,77 +7687,67 @@
 
     // ─── Inicializar sección ─────────────────────────────────────
     async function corrIniciar() {
-        // Cargar email desde Firebase si todavía no está en el input
         const inp = document.getElementById('corr-email-optimizer');
         if (!_corrEmailOptimizer) {
             try {
-                const snap = await db.collection('configuracion').doc('optimizer_config').get();
-                if (snap.exists) {
-                    _corrEmailOptimizer = snap.data().email || null;
-                    if (inp && _corrEmailOptimizer) inp.value = _corrEmailOptimizer;
-                    document.getElementById('corr-config-status').textContent = _corrEmailOptimizer
-                        ? '✅ Optimizador: ' + _corrEmailOptimizer
-                        : '';
+                const { data } = await sb.from('configuracion')
+                    .select('valor').eq('empresa_id', EMPRESA_ID)
+                    .eq('clave', 'optimizer_config_email').maybeSingle();
+                if (data?.valor) {
+                    _corrEmailOptimizer = data.valor;
+                    if (inp) inp.value = _corrEmailOptimizer;
+                    document.getElementById('corr-config-status').textContent = '✅ Optimizador: ' + _corrEmailOptimizer;
                 }
             } catch(e) {
                 document.getElementById('corr-config-status').textContent = '⚠ No se pudo leer la configuración';
             }
-        } else if (inp) {
-            inp.value = _corrEmailOptimizer;
-        }
+        } else if (inp) { inp.value = _corrEmailOptimizer; }
     }
 
     // ─── Guardar email del optimizador ──────────────────────────
     async function corrGuardarConfig() {
         const email = (document.getElementById('corr-email-optimizer').value || '').trim().toLowerCase();
-        if (!email || !email.includes('@')) {
-            showToast('Ingresa un email válido', 'error'); return;
-        }
+        if (!email || !email.includes('@')) { showToast('Ingresa un email válido', 'error'); return; }
         try {
-            await db.collection('configuracion').doc('optimizer_config').set({ email }, { merge: true });
+            await sb.from('configuracion').upsert({
+                empresa_id: EMPRESA_ID, clave: 'optimizer_config_email', valor: email
+            }, { onConflict: 'empresa_id,clave' });
             _corrEmailOptimizer = email;
             document.getElementById('corr-config-status').textContent = '✅ Guardado: ' + email;
             showToast('✅ Email del optimizador guardado');
-        } catch(e) {
-            showToast('Error al guardar: ' + e.message, 'error');
-        }
+        } catch(e) { showToast('Error al guardar: ' + e.message, 'error'); }
     }
 
-    // ─── Cargar el último plan desde Firebase del optimizador ───
+    // ─── Cargar el último plan desde Supabase ───────────────────
     async function corrCargarPlan() {
         const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
         if (!email) { showToast('Primero configura el email del optimizador', 'error'); return; }
         const statusEl = document.getElementById('corr-plan-status');
         statusEl.textContent = '⏳ Cargando plan...';
         try {
-            const snap = await db.collection('usuarios').doc(email).collection('ultimo_plan').doc('datos').get();
-            if (!snap.exists) {
+            const { data, error } = await sb.from('planes_corte')
+                .select('*').eq('empresa_id', EMPRESA_ID)
+                .eq('optimizer_email', email)
+                .order('fecha', { ascending: false }).limit(1).maybeSingle();
+            if (error) throw error;
+            if (!data) {
                 statusEl.textContent = '⚠ No hay plan guardado para este optimizador.';
-                document.getElementById('corr-plan-tabla').innerHTML = '';
-                return;
+                document.getElementById('corr-plan-tabla').innerHTML = ''; return;
             }
-            const data = snap.data();
-            // El optimizador guarda `resultados` como JSON string de [{resultado:{...}, orden:{...}}]
-            let lineas = [];
-            if (data.resultados) {
-                try { lineas = JSON.parse(data.resultados); } catch(e) {}
-            }
-            // Guardar también las ordenes para referencia cruzada
-            _corrOrdenesData = [];
-            if (data.ordenes) {
-                try { _corrOrdenesData = JSON.parse(data.ordenes); } catch(e) {}
-            }
+            let lineas = data.resultados || [];
+            if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(e) { lineas = []; } }
+            _corrOrdenesData = data.ordenes || [];
+            if (typeof _corrOrdenesData === 'string') { try { _corrOrdenesData = JSON.parse(_corrOrdenesData); } catch(e) { _corrOrdenesData = []; } }
             _corrPlanData = lineas;
             _corrPlanPendientes = {};
+            _corrPlanId = data.id;  // guardar UUID para actualizar después
             const fecha = data.fecha ? new Date(data.fecha).toLocaleString('es-CL') : '';
             statusEl.textContent = lineas.length > 0
                 ? `✅ ${lineas.length} cortes cargados${fecha ? ' — ' + fecha : ''}`
                 : '⚠ El plan no tiene cortes registrados.';
             corrRenderPlan(lineas);
             document.getElementById('corr-aplicar-wrap').style.display = 'none';
-        } catch(e) {
-            statusEl.textContent = '❌ Error: ' + e.message;
-        }
+        } catch(e) { statusEl.textContent = '❌ Error: ' + e.message; }
     }
 
     // ─── Renderizar tabla del plan ───────────────────────────────
@@ -7759,16 +7874,26 @@
         });
 
         try {
-            // Guardar resultados corregidos como JSON string (igual que el optimizador)
-            await db.collection('usuarios').doc(email)
-                .collection('ultimo_plan').doc('datos')
-                .set({ resultados: JSON.stringify(planCorregido), fechaCorreccion: ahora }, { merge: true });
+            // Actualizar plan corregido en Supabase
+            if (_corrPlanId) {
+                await sb.from('planes_corte').update({
+                    resultados: planCorregido,
+                    fecha_correccion: ahora
+                }).eq('id', _corrPlanId);
+            }
 
-            const batch = db.batch();
-            registros.forEach(reg => {
-                batch.set(db.collection('cortinas_correcciones').doc(), reg);
-            });
-            await batch.commit();
+            // Insertar registros de corrección
+            const corrRows = registros.map(reg => ({
+                empresa_id: EMPRESA_ID,
+                plan_id: _corrPlanId || null,
+                tipo: reg.tipo,
+                linea_idx: reg.idx,
+                nota: reg.nota,
+                timestamp: reg.timestamp
+            }));
+            if (corrRows.length > 0) {
+                await sb.from('correcciones').insert(corrRows);
+            }
 
             _corrPlanData = planCorregido;
             _corrPlanPendientes = {};
@@ -7782,55 +7907,40 @@
         }
     }
 
-    // ─── Cargar inventario de tubos (colmena_final) ─────────────
+    // ─── Cargar inventario de tubos (colmena_tubos) ─────────────
     async function corrCargarTubos() {
-        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
-        if (!email) { showToast('Configura el email del optimizador', 'error'); return; }
+        if (!_corrEmailOptimizer) { showToast('Configura el email del optimizador', 'error'); return; }
         const statusEl = document.getElementById('corr-tubos-status');
         statusEl.textContent = '⏳ Cargando...';
         try {
-            const snap = await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos').get();
-            if (!snap.exists) {
-                statusEl.textContent = '⚠ No se encontró inventario de tubos.';
-                document.getElementById('corr-tubos-tabla').innerHTML = '';
-                return;
-            }
-            const data = snap.data();
-            // El optimizador guarda `data` como JSON string de [{n_colmena, medida_mm, medida_cm, cod, serial}]
-            let tubos = [];
-            if (data.data) {
-                try { tubos = JSON.parse(data.data); } catch(e) {}
-            }
-            _corrTubosData = { tubos, fechaActualizacion: data.fechaActualizacion || null };
-            statusEl.textContent = `✅ ${tubos.length} tubos cargados` +
-                (data.fechaActualizacion ? ' — ' + new Date(data.fechaActualizacion).toLocaleString('es-CL') : '');
-            corrRenderTubos(tubos);
-        } catch(e) {
-            statusEl.textContent = '❌ Error: ' + e.message;
-        }
+            const { data, error } = await sb.from('colmena_tubos')
+                .select('*').eq('empresa_id', EMPRESA_ID).order('created_at');
+            if (error) throw error;
+            _corrTubosData = { tubos: data };
+            statusEl.textContent = `✅ ${data.length} tubos cargados`;
+            corrRenderTubos(data);
+        } catch(e) { statusEl.textContent = '❌ Error: ' + e.message; }
     }
 
     // ─── Renderizar tabla de tubos ───────────────────────────────
     function corrRenderTubos(tubos) {
         const wrap = document.getElementById('corr-tubos-tabla');
         if (!tubos || tubos.length === 0) {
-            wrap.innerHTML = '<p class="text-muted small">Sin tubos para mostrar.</p>';
-            return;
+            wrap.innerHTML = '<p class="text-muted small">Sin tubos para mostrar.</p>'; return;
         }
         let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
             <thead><tr style="color:#94a3b8;"><th>Colmena</th><th>Cód.</th><th>Medida (cm)</th><th>Serial</th><th></th></tr></thead><tbody>`;
-        tubos.forEach((t, i) => {
-            const colmena = t.n_colmena !== undefined ? t.n_colmena : '—';
-            const cod     = t.cod   || '—';
+        tubos.forEach((t) => {
+            const colmena = t.n_colmena || '—';
+            const cod     = t.cod       || '—';
             const medida  = t.medida_cm !== undefined ? t.medida_cm + ' cm' : (t.medida_mm !== undefined ? (t.medida_mm/10).toFixed(1) + ' cm' : '—');
-            const serial  = t.serial || '—';
+            const serial  = t.serial    || '—';
             html += `<tr>
-                <td>${colmena}</td>
-                <td style="font-family:monospace;">${cod}</td>
-                <td>${medida}</td>
-                <td style="font-family:monospace;font-size:0.68rem;">${serial}</td>
+                <td>${colmena}</td><td style="font-family:monospace;">${cod}</td>
+                <td>${medida}</td><td style="font-family:monospace;font-size:0.68rem;">${serial}</td>
                 <td><button class="btn btn-sm py-0 px-1" style="font-size:0.65rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
-                    onclick="corrEliminarTubo(${i})"><i class="bi bi-trash"></i></button></td>
+                    onclick="corrEliminarTubo('${t.id}','${(t.cod||'').replace(/'/g,'')}',${t.n_colmena||0})">
+                    <i class="bi bi-trash"></i></button></td>
             </tr>`;
         });
         html += '</tbody></table>';
@@ -7839,9 +7949,7 @@
 
     // ─── Mostrar formulario agregar tubo ────────────────────────
     function corrMostrarAgregarTubo() {
-        if (!_corrEmailOptimizer) {
-            showToast('Primero carga el inventario (configura el email)', 'error'); return;
-        }
+        if (!_corrEmailOptimizer) { showToast('Primero configura el email del optimizador', 'error'); return; }
         document.getElementById('corr-form-tubo').style.display = '';
         ['corr-tubo-serial','corr-tubo-largo','corr-tubo-diam','corr-tubo-colmena'].forEach(id => {
             const el = document.getElementById(id); if (el) el.value = '';
@@ -7850,48 +7958,30 @@
 
     // ─── Agregar tubo al inventario ──────────────────────────────
     async function corrAgregarTubo() {
-        const email      = _corrEmailOptimizer;
         const serial     = document.getElementById('corr-tubo-serial').value.trim();
         const medida_cm  = parseFloat(document.getElementById('corr-tubo-largo').value) || 0;
         const cod        = document.getElementById('corr-tubo-diam').value.trim();
         const n_colmena  = document.getElementById('corr-tubo-colmena').value.trim();
         if (!cod) { showToast('El código del tubo es obligatorio', 'error'); return; }
-        const nuevoTubo = {
-            n_colmena, medida_cm, medida_mm: medida_cm * 10,
-            cod, serial: serial || null, agregadoPorAdmin: true
-        };
-        if (!_corrTubosData) _corrTubosData = { tubos: [] };
-        _corrTubosData.tubos.push(nuevoTubo);
         try {
-            await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos')
-                .set({ data: JSON.stringify(_corrTubosData.tubos), fechaActualizacion: new Date().toISOString() }, { merge: true });
+            await sb.from('colmena_tubos').insert({
+                empresa_id: EMPRESA_ID, n_colmena, medida_cm, medida_mm: medida_cm * 10,
+                cod, serial: serial || null, agregado_por_admin: true
+            });
             document.getElementById('corr-form-tubo').style.display = 'none';
-            document.getElementById('corr-tubos-status').textContent = `✅ ${_corrTubosData.tubos.length} tubos`;
-            corrRenderTubos(_corrTubosData.tubos);
             showToast('✅ Tubo agregado al inventario');
-        } catch(e) {
-            _corrTubosData.tubos.pop();
-            showToast('❌ Error: ' + e.message, 'error');
-        }
+            corrCargarTubos(); // recarga la tabla
+        } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
     }
 
     // ─── Eliminar tubo del inventario ────────────────────────────
-    async function corrEliminarTubo(idx) {
-        const email = _corrEmailOptimizer;
-        if (!email || !_corrTubosData) return;
-        const tubo = _corrTubosData.tubos[idx];
-        if (!confirm(`¿Eliminar tubo "${tubo.cod || idx}" de colmena ${tubo.n_colmena || '?'}?`)) return;
-        _corrTubosData.tubos.splice(idx, 1);
+    async function corrEliminarTubo(tuboId, cod, colmena) {
+        if (!confirm(`¿Eliminar tubo "${cod}" de colmena ${colmena}?`)) return;
         try {
-            await db.collection('usuarios').doc(email).collection('colmena_final').doc('datos')
-                .set({ data: JSON.stringify(_corrTubosData.tubos), fechaActualizacion: new Date().toISOString() }, { merge: true });
-            document.getElementById('corr-tubos-status').textContent = `✅ ${_corrTubosData.tubos.length} tubos`;
-            corrRenderTubos(_corrTubosData.tubos);
+            await sb.from('colmena_tubos').delete().eq('id', tuboId);
             showToast('🗑 Tubo eliminado');
-        } catch(e) {
-            _corrTubosData.tubos.splice(idx, 0, tubo);
-            showToast('❌ Error: ' + e.message, 'error');
-        }
+            corrCargarTubos();
+        } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
     }
 
     // ─── Cargar historial de correcciones ────────────────────────
@@ -7899,34 +7989,25 @@
         const wrap = document.getElementById('corr-historial-lista');
         wrap.textContent = '⏳ Cargando...';
         try {
-            const snap = await db.collection('cortinas_correcciones')
-                .orderBy('timestamp', 'desc').limit(50).get();
-            if (snap.empty) {
-                wrap.textContent = 'Sin correcciones registradas.';
-                return;
-            }
-            let html = '';
-            snap.forEach(doc => {
-                const d = doc.data();
+            const { data, error } = await sb.from('correcciones')
+                .select('*').eq('empresa_id', EMPRESA_ID)
+                .order('timestamp', { ascending: false }).limit(50);
+            if (error) throw error;
+            if (!data || data.length === 0) { wrap.textContent = 'Sin correcciones registradas.'; return; }
+            const tipoLabels = {
+                medida_erronea: 'Medida errónea', tubo_equivocado: 'Tubo equivocado',
+                tubo_inexistente: 'Tubo inexistente', tubo_danado: 'Tubo dañado'
+            };
+            wrap.innerHTML = data.map(d => {
                 const ts = (d.timestamp||'').slice(0,16).replace('T',' ');
-                const tipoLabel = {
-                    medida_erronea: 'Medida errónea',
-                    tubo_equivocado: 'Tubo equivocado',
-                    tubo_inexistente: 'Tubo inexistente',
-                    tubo_danado: 'Tubo dañado'
-                }[d.tipo] || d.tipo;
-                html += `<div style="border-bottom:1px solid rgba(255,255,255,0.07);padding:5px 0;">
-                    <span style="color:#fbbf24;">${tipoLabel}</span>
-                    &nbsp;·&nbsp;Línea ${(d.idx||0)+1}
-                    &nbsp;·&nbsp;<span style="color:#94a3b8;">${d.operario||'Admin'}</span>
+                return `<div style="border-bottom:1px solid rgba(255,255,255,0.07);padding:5px 0;">
+                    <span style="color:#fbbf24;">${tipoLabels[d.tipo] || d.tipo || '—'}</span>
+                    &nbsp;·&nbsp;Línea ${(d.linea_idx||0)+1}
                     &nbsp;·&nbsp;<span style="color:#64748b;">${ts}</span>
                     ${d.nota ? `<br><span style="color:#94a3b8;font-style:italic;">${d.nota}</span>` : ''}
                 </div>`;
-            });
-            wrap.innerHTML = html || 'Sin correcciones.';
-        } catch(e) {
-            wrap.textContent = '❌ Error: ' + e.message;
-        }
+            }).join('');
+        } catch(e) { wrap.textContent = '❌ Error: ' + e.message; }
     }
 
 </script>
@@ -7962,6 +8043,28 @@
 </nav>
 
 <!-- ══ MODAL: IDENTIFICACIÓN DE OPERARIO ══ -->
+<!-- ══ MODAL LOGIN SUPABASE ══════════════════════════════════════════════ -->
+<div id="modal-login" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:100000;align-items:center;justify-content:center;">
+    <div style="background:#18181b;border:1px solid rgba(59,130,246,0.4);border-radius:16px;padding:36px 32px;max-width:380px;width:90%;text-align:center;">
+        <div style="font-size:2.5rem;margin-bottom:12px;">🔐</div>
+        <div style="font-size:1.15rem;font-weight:700;color:#93c5fd;margin-bottom:4px;">Cortinas Rolzzo</div>
+        <div class="text-muted small mb-4">Ingresa con tu cuenta para continuar</div>
+        <input type="email" id="login-email" placeholder="email@ejemplo.com"
+            class="form-control mb-3"
+            style="text-align:center;font-size:0.9rem;background:rgba(0,0,0,0.4);border-color:rgba(59,130,246,0.3);color:var(--text-primary);">
+        <input type="password" id="login-password" placeholder="Contraseña"
+            class="form-control mb-4"
+            style="text-align:center;font-size:0.9rem;background:rgba(0,0,0,0.4);border-color:rgba(59,130,246,0.3);color:var(--text-primary);"
+            onkeydown="if(event.key==='Enter')loginConSupabase()">
+        <button id="btn-login" class="btn w-100 fw-bold"
+            style="background:rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;"
+            onclick="loginConSupabase()">
+            Entrar
+        </button>
+        <p id="login-error" style="color:#ef4444;font-size:0.82rem;margin-top:12px;display:none;"></p>
+    </div>
+</div>
+
 <div id="modal-operario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;">
     <div style="background:#18181b;border:1px solid rgba(99,102,241,0.5);border-radius:16px;padding:32px 28px;max-width:380px;width:90%;text-align:center;">
         <div style="font-size:2.5rem;margin-bottom:12px;">👷</div>
