@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Visualizador del Optimizador Rolzzo V54</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #1a1a2e; color: #eee; }
@@ -323,6 +324,61 @@
 </script>
 
 <script>
+// ── Supabase: cliente para guardar/cargar catálogo ─────────────────────────
+const SUPABASE_URL_OPT      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY_OPT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID_OPT        = '67c635a5-152c-4780-a066-23f5081175a9';
+const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
+    auth: { storage: sessionStorage, persistSession: false, autoRefreshToken: false }
+});
+
+async function guardarCatalogoEnSupabase() {
+    try {
+        const datos = {
+            catalogoReemplazos: SistemaInventario.catalogoReemplazos,
+            catalogoColores:    SistemaInventario.catalogoColores,
+            catalogoMedidas:    SistemaInventario.catalogoMedidas,
+            catalogoAccesorios: SistemaInventario.catalogoAccesorios
+        };
+        const { error } = await sbOpt.from('configuracion').upsert({
+            empresa_id: EMPRESA_ID_OPT,
+            clave:      'catalogo_reemplazos_data',
+            valor:      JSON.stringify(datos)
+        }, { onConflict: 'empresa_id,clave' });
+        if (error) throw error;
+        log(`✅ Catálogo guardado en la base de datos (${Object.keys(SistemaInventario.catalogoReemplazos).length} reemplazos)`, 'success');
+    } catch(e) {
+        console.warn('Error guardando catálogo en Supabase:', e.message);
+    }
+}
+
+async function cargarCatalogoDesdeSupabase() {
+    try {
+        const { data, error } = await sbOpt.from('configuracion')
+            .select('valor')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .eq('clave', 'catalogo_reemplazos_data')
+            .single();
+        if (error || !data) return;
+        const cat = JSON.parse(data.valor);
+        if (cat.catalogoReemplazos && Object.keys(cat.catalogoReemplazos).length > 0) {
+            SistemaInventario.catalogoReemplazos = cat.catalogoReemplazos;
+            SistemaInventario.catalogoColores    = cat.catalogoColores    || {};
+            SistemaInventario.catalogoMedidas    = cat.catalogoMedidas    || {};
+            SistemaInventario.catalogoAccesorios = cat.catalogoAccesorios || {};
+            const nReemp = Object.keys(SistemaInventario.catalogoReemplazos).length;
+            document.getElementById('estadoCatalogo').textContent = `✓ ${nReemp} reemplazos (BD)`;
+            document.getElementById('estadoCatalogo').className = 'estado-archivo estado-ok';
+            actualizarTablaCatalogo();
+            verificarListo();
+            log(`✅ Catálogo cargado desde la base de datos: ${nReemp} reemplazos`, 'success');
+        }
+    } catch(e) {
+        console.warn('Error cargando catálogo desde Supabase:', e.message);
+    }
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 // Función para limpiar números y manejar tanto comas como puntos decimales
 function limpiarNumero(valor) {
     if (valor === null || valor === undefined) return 0;
@@ -431,6 +487,7 @@ document.addEventListener("DOMContentLoaded", () => {
           // Suscribir listeners en tiempo real (onSnapshot)
           cargarDesdeFirestore();
           cargarSerialesDesdeFirestore();
+          cargarCatalogoDesdeSupabase(); // Cargar catálogo guardado desde Supabase
 
           // 🔐 Logout
           const btn = document.getElementById("btnLogout");
@@ -557,6 +614,19 @@ function cargarDesdeFirestore() {
                         actualizarTablaOrdenes();
                         actualizarTablaCatalogo();
                         verificarListo();
+                        // Mostrar en la UI que los datos vienen de la base de datos
+                        if (SistemaInventario.ordenes && SistemaInventario.ordenes.length > 0) {
+                            document.getElementById('estadoOrdenes').textContent = `✓ ${SistemaInventario.ordenes.length} órdenes (BD)`;
+                            document.getElementById('estadoOrdenes').className = 'estado-archivo estado-ok';
+                        }
+                        if (SistemaInventario.catalogoReemplazos && Object.keys(SistemaInventario.catalogoReemplazos).length > 0) {
+                            const nReemp = Object.keys(SistemaInventario.catalogoReemplazos).length;
+                            const estadoCat = document.getElementById('estadoCatalogo');
+                            if (estadoCat && !estadoCat.textContent.includes('(BD)')) {
+                                estadoCat.textContent = `✓ ${nReemp} reemplazos (BD)`;
+                                estadoCat.className = 'estado-archivo estado-ok';
+                            }
+                        }
                     }
 
                     if (!inventarioCargado) {
@@ -674,6 +744,8 @@ async function cargarColmenaFinalDesdeFirestore() {
                     actualizarTablaColmenas();
                     actualizarIndicadorFuente(false);
                     verificarListo();
+                    document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
+                    document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
                     console.log("🔄 Colmena final actualizada desde Firebase:", colmenaActual.length, "registros");
                 }
             } else if (!snap.exists()) {
@@ -682,6 +754,8 @@ async function cargarColmenaFinalDesdeFirestore() {
                     colmenaActual = SistemaInventario.colmenas;
                     actualizarIndicadorFuente(false);
                     verificarListo();
+                    document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
+                    document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
                     console.log(`ℹ️ Sin colmena_final en Firebase. Usando colmenas del inventario (${colmenaActual.length})`);
                 } else {
                     console.log("ℹ️ No hay colmena_final ni colmenas en inventario aún.");
@@ -705,6 +779,8 @@ async function cargarColmenaFinalDesdeFirestore() {
                 actualizarTablaColmenas();
                 actualizarIndicadorFuente(false);
                 verificarListo();
+                document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
+                document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
                 console.log(`✅ Colmena final cargada desde servidor: ${colmenaActual.length} registros`);
             }
         }
@@ -1873,6 +1949,7 @@ async function cargarCatalogo(event) {
         document.getElementById('estadoCatalogo').textContent = `✓ ${Object.keys(SistemaInventario.catalogoReemplazos).length} reemplazos`;
         document.getElementById('estadoCatalogo').className = 'estado-archivo estado-ok';
         guardarSistema();
+        guardarCatalogoEnSupabase(); // Guardar en Supabase para persistencia entre sesiones
         actualizarTablaOrdenes(); // Refrescar tabla para mostrar colores en órdenes ya cargadas
     } catch (e) { alert('Error: ' + e.message); }
     finally { procesandoExcel = false; }
