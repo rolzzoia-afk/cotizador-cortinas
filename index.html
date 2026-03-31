@@ -7782,9 +7782,16 @@
             wrap.innerHTML = '<p class="text-muted small">Sin líneas para mostrar.</p>';
             return;
         }
-        let html = `<table class="table table-sm" style="font-size:0.75rem;color:#e2e8f0;">
-            <thead><tr style="color:#94a3b8;">
-                <th>#</th><th>OT / Ubic.</th><th>Código tubo</th><th>Medida (cm)</th><th>Colmena</th><th></th>
+        const tdC = 'style="color:#e2e8f0;background:transparent;"';
+        const tdM = 'style="color:#e2e8f0;background:transparent;font-family:monospace;"';
+        let html = `<table class="table table-sm" style="font-size:0.75rem;">
+            <thead><tr>
+                <th style="color:#94a3b8;background:transparent;">#</th>
+                <th style="color:#94a3b8;background:transparent;">OT / Ubic.</th>
+                <th style="color:#94a3b8;background:transparent;">Código tubo</th>
+                <th style="color:#94a3b8;background:transparent;">Medida (cm)</th>
+                <th style="color:#94a3b8;background:transparent;">Colmena</th>
+                <th style="background:transparent;"></th>
             </tr></thead><tbody>`;
         lineas.forEach((item, i) => {
             const res = item.resultado || item;
@@ -7794,15 +7801,15 @@
             const colmena  = res.colmena || '—';
             const otUbic   = [ord.ot, ord.ubic].filter(Boolean).join(' · ') || '—';
             const tieneCorr = _corrPlanPendientes[i];
-            const rowStyle  = tieneCorr ? 'background:rgba(251,191,36,0.12);' : '';
+            const rowBg     = tieneCorr ? 'background:rgba(251,191,36,0.12);' : 'background:transparent;';
             const badge     = tieneCorr ? ' <span style="font-size:0.65rem;background:#fbbf24;color:#1e293b;padding:1px 5px;border-radius:9px;vertical-align:middle;">✏</span>' : '';
-            html += `<tr style="${rowStyle}">
-                <td style="color:#64748b;">${i+1}</td>
-                <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${otUbic}</td>
-                <td style="font-family:monospace;">${codigo}${badge}</td>
-                <td>${medida}</td>
-                <td>${colmena}</td>
-                <td><button class="btn btn-sm py-0 px-1" style="font-size:0.7rem;background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);" onclick="corrMostrarEditor(${i})"><i class="bi bi-pencil"></i></button></td>
+            html += `<tr style="${rowBg}">
+                <td style="color:#64748b;background:transparent;">${i+1}</td>
+                <td ${tdC} style="color:#e2e8f0;background:transparent;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${otUbic}</td>
+                <td ${tdM}>${codigo}${badge}</td>
+                <td ${tdC}>${medida}</td>
+                <td ${tdC}>${colmena}</td>
+                <td style="background:transparent;"><button class="btn btn-sm py-0 px-1" style="font-size:0.7rem;background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);" onclick="corrMostrarEditor(${i})"><i class="bi bi-pencil"></i></button></td>
             </tr>`;
         });
         html += '</tbody></table>';
