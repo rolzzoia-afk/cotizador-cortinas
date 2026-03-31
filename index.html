@@ -3399,8 +3399,8 @@
         // Kanban: avanzar estado a "terreno"
         avanzarEstadoOT('terreno');
 
-        // Clear storeVentanas and repopulate from Fase 1 data
-        storeVentanas = [];
+        // NO borrar storeVentanas — conservar cortinas ya guardadas de sesiones anteriores
+        // Solo AGREGAR las nuevas cortinas de la tabla de Fase 1
 
         filas.forEach((fila, idx) => {
             const codint = fila.getAttribute('data-codint');
