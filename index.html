@@ -28,7 +28,13 @@
         const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9'; // ← UUID de Rolzzo
 
         const { createClient } = supabase;
-        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: {
+                storage: sessionStorage,
+                persistSession: true,
+                autoRefreshToken: true
+            }
+        });
 
         // ── Helpers: convertir entre formato app ↔ formato Supabase ─────────
 
