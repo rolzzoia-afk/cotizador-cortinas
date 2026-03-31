@@ -3062,6 +3062,43 @@ function ejecutarOptimizacion() {
         if (otA !== otB) return otA.localeCompare(otB, undefined, { numeric: true });
         return String(a.orden.ubic || '').localeCompare(String(b.orden.ubic || ''), undefined, { numeric: true });
     });
+
+    // ── Corregir dependencias MESA: el productor siempre antes que el consumidor ──
+    // El sort anterior puede dejar un corte que usa MESA antes del corte que crea ese sobrante.
+    // Recorremos el array y si encontramos un consumidor cuyo productor viene después, lo movemos.
+    (function corregirDependenciasMesa() {
+        const arr = SistemaInventario.resultadosOptimizacion;
+        for (let i = 0; i < arr.length; i++) {
+            const res = arr[i].resultado;
+            if (!res || res.colmena !== 'MESA') continue;
+
+            // El consumidor usa un sobrante de tamaño res.medida_origen con código res.codigo
+            const codigoCons = (res.codigo || res.codigo_original || '').split('→')[0].trim();
+            const medidaNecesaria = Number(res.medida_origen);
+            if (isNaN(medidaNecesaria) || medidaNecesaria <= 0) continue;
+
+            // Buscar el productor: un corte POSTERIOR que genera ese sobrante exacto
+            let productorIdx = -1;
+            for (let j = i + 1; j < arr.length; j++) {
+                const pr = arr[j].resultado;
+                if (!pr || pr.es_desecho) continue;
+                const codigoProd = (pr.codigo || pr.codigo_original || '').split('→')[0].trim();
+                if (codigoProd === codigoCons &&
+                    Math.abs(Number(pr.sobrante_cm) - medidaNecesaria) < 0.5) {
+                    productorIdx = j;
+                    break;
+                }
+            }
+
+            if (productorIdx !== -1) {
+                // Mover el productor justo antes del consumidor
+                const productor = arr.splice(productorIdx, 1)[0];
+                arr.splice(i, 0, productor);
+                log(`🔀 Orden corregido: productor (${codigoCons} ${medidaNecesaria}cm) movido antes del consumidor de MESA`, 'info');
+                // No incrementar i: ahora el productor está en i, el consumidor en i+1
+            }
+        }
+    })();
     // También re-ordenar las órdenes para que el staging las muestre por kit
     SistemaInventario.ordenes.sort((a, b) => {
         const otA = String(a.ot || a.otAsignada || '');
