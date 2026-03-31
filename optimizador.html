@@ -324,23 +324,37 @@
 </script>
 
 <script>
-// ── Supabase: cliente para guardar/cargar catálogo ─────────────────────────
+// ── Supabase: cliente para guardar/cargar datos en la BD ──────────────────
 const SUPABASE_URL_OPT      = 'https://izelewwgeamktnzkiwvl.supabase.co';
 const SUPABASE_ANON_KEY_OPT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
 const EMPRESA_ID_OPT        = '67c635a5-152c-4780-a066-23f5081175a9';
-const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
+
+// Cliente de respaldo (anon, para cuando corre standalone)
+const _sbOptLocal = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
     auth: { storage: sessionStorage, persistSession: false, autoRefreshToken: false }
 });
 
+// Usa el cliente autenticado del cotizador padre si está disponible (iframe)
+// De lo contrario usa el cliente local anónimo
+function getSupabaseClient() {
+    try {
+        if (window.parent && window.parent !== window && window.parent.sb) {
+            return window.parent.sb; // cliente autenticado del cotizador
+        }
+    } catch(e) {}
+    return _sbOptLocal;
+}
+
 async function guardarCatalogoEnSupabase() {
     try {
+        const sb = getSupabaseClient();
         const datos = {
             catalogoReemplazos: SistemaInventario.catalogoReemplazos,
             catalogoColores:    SistemaInventario.catalogoColores,
             catalogoMedidas:    SistemaInventario.catalogoMedidas,
             catalogoAccesorios: SistemaInventario.catalogoAccesorios
         };
-        const { error } = await sbOpt.from('configuracion').upsert({
+        const { error } = await sb.from('configuracion').upsert({
             empresa_id: EMPRESA_ID_OPT,
             clave:      'catalogo_reemplazos_data',
             valor:      JSON.stringify(datos)
@@ -349,12 +363,14 @@ async function guardarCatalogoEnSupabase() {
         log(`✅ Catálogo guardado en la base de datos (${Object.keys(SistemaInventario.catalogoReemplazos).length} reemplazos)`, 'success');
     } catch(e) {
         console.warn('Error guardando catálogo en Supabase:', e.message);
+        log(`⚠️ No se pudo guardar el catálogo: ${e.message}`, 'error');
     }
 }
 
 async function cargarCatalogoDesdeSupabase() {
     try {
-        const { data, error } = await sbOpt.from('configuracion')
+        const sb = getSupabaseClient();
+        const { data, error } = await sb.from('configuracion')
             .select('valor')
             .eq('empresa_id', EMPRESA_ID_OPT)
             .eq('clave', 'catalogo_reemplazos_data')
@@ -375,6 +391,52 @@ async function cargarCatalogoDesdeSupabase() {
         }
     } catch(e) {
         console.warn('Error cargando catálogo desde Supabase:', e.message);
+    }
+}
+
+async function guardarSerialesEnSupabase() {
+    try {
+        const sb = getSupabaseClient();
+        const { error } = await sb.from('configuracion').upsert({
+            empresa_id: EMPRESA_ID_OPT,
+            clave:      'maestro_seriales_data',
+            valor:      JSON.stringify(SistemaInventario.seriales)
+        }, { onConflict: 'empresa_id,clave' });
+        if (error) throw error;
+        log(`✅ Seriales guardados en la base de datos (${SistemaInventario.seriales.length} registros)`, 'success');
+    } catch(e) {
+        console.warn('Error guardando seriales en Supabase:', e.message);
+        log(`⚠️ No se pudo guardar seriales: ${e.message}`, 'error');
+    }
+}
+
+async function cargarSerialesDesdeSupabase() {
+    try {
+        const sb = getSupabaseClient();
+        const { data, error } = await sb.from('configuracion')
+            .select('valor')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .eq('clave', 'maestro_seriales_data')
+            .single();
+        if (error || !data) return false;
+        const seriales = JSON.parse(data.valor);
+        if (Array.isArray(seriales) && seriales.length > 0) {
+            SistemaInventario.seriales = seriales;
+            ordenarSeriales(SistemaInventario.seriales);
+            actualizarTablaSeriales();
+            verificarAlertasStock();
+            const estadoEl = document.getElementById('estadoEstructura');
+            if (estadoEl) {
+                estadoEl.textContent = `✓ ${seriales.length} seriales (BD)`;
+                estadoEl.className = 'estado-archivo estado-ok';
+            }
+            log(`✅ Seriales cargados desde la base de datos: ${seriales.length} registros`, 'success');
+            return true;
+        }
+        return false;
+    } catch(e) {
+        console.warn('Error cargando seriales desde Supabase:', e.message);
+        return false;
     }
 }
 // ──────────────────────────────────────────────────────────────────────────────
@@ -487,7 +549,13 @@ document.addEventListener("DOMContentLoaded", () => {
           // Suscribir listeners en tiempo real (onSnapshot)
           cargarDesdeFirestore();
           cargarSerialesDesdeFirestore();
-          cargarCatalogoDesdeSupabase(); // Cargar catálogo guardado desde Supabase
+          cargarCatalogoDesdeSupabase(); // Cargar catálogo desde Supabase
+          // Cargar seriales desde Supabase (como respaldo si Firebase retorna 0)
+          setTimeout(async () => {
+              if (SistemaInventario.seriales.length === 0) {
+                  await cargarSerialesDesdeSupabase();
+              }
+          }, 3000); // esperar 3 seg para que Firebase tenga tiempo de responder primero
 
           // 🔐 Logout
           const btn = document.getElementById("btnLogout");
@@ -992,9 +1060,10 @@ async function cargarEstructuraInventario(event) {
         document.getElementById('estadoEstructura').className = 'estado-archivo estado-ok';
         
         log(`🏷️ Estructura de inventario cargada: ${SistemaInventario.seriales.length} seriales`, 'success');
-        
-        // Guardar en Firebase
+
+        // Guardar en Firebase y en Supabase
         await guardarSerialesEnFirestore();
+        await guardarSerialesEnSupabase();
         
     } catch (e) {
         alert('Error: ' + e.message);
@@ -3255,9 +3324,10 @@ async function confirmarYGuardarStaging() {
     // permitiendo que el mismo tubo sea asignado dos veces en sesiones futuras.
     try {
         await guardarSerialesEnFirestore();
-        log('🏷️ Estados de seriales sincronizados con Firebase', 'info');
+        await guardarSerialesEnSupabase();
+        log('🏷️ Estados de seriales sincronizados con Firebase y Supabase', 'info');
     } catch (e) {
-        log('❌ Error al guardar seriales en Firebase: ' + e.message, 'error');
+        log('❌ Error al guardar seriales: ' + e.message, 'error');
     }
 
     // ── PASO 3b: Marcar OTs como procesadas hoy (protección anti-duplicados) ──
