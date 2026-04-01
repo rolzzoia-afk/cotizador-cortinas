@@ -3075,48 +3075,56 @@
 
         let s = `<defs>
           <linearGradient id="pvWall" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#ddd8d0"/>
-            <stop offset="100%" stop-color="#ece7df"/>
+            <stop offset="0%" stop-color="#1c1f28"/>
+            <stop offset="100%" stop-color="#22252f"/>
           </linearGradient>
           <linearGradient id="pvCeil" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#f5f2ee"/>
-            <stop offset="100%" stop-color="#e4e0d8"/>
+            <stop offset="0%" stop-color="#181b22"/>
+            <stop offset="100%" stop-color="#1e2028"/>
           </linearGradient>
           <linearGradient id="pvSky" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#5bb8e8"/>
-            <stop offset="55%" stop-color="#9dd4ef"/>
-            <stop offset="100%" stop-color="#cde9f5"/>
+            <stop offset="0%" stop-color="#3a7bbf"/>
+            <stop offset="55%" stop-color="#6aaad8"/>
+            <stop offset="100%" stop-color="#a8d4ee"/>
           </linearGradient>
           <linearGradient id="pvFrame" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="#cdc8c0"/>
-            <stop offset="35%" stop-color="#edeae4"/>
-            <stop offset="100%" stop-color="#c4bfb8"/>
+            <stop offset="0%" stop-color="#3a3e50"/>
+            <stop offset="40%" stop-color="#50556a"/>
+            <stop offset="100%" stop-color="#32364a"/>
           </linearGradient>
           <linearGradient id="pvFrameV" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#d8d4cc"/>
-            <stop offset="100%" stop-color="#bfbcb5"/>
+            <stop offset="0%" stop-color="#484c60"/>
+            <stop offset="100%" stop-color="#333648"/>
           </linearGradient>
           <linearGradient id="pvSill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#e0dcd4"/>
-            <stop offset="100%" stop-color="#b0aca4"/>
+            <stop offset="0%" stop-color="#424658"/>
+            <stop offset="100%" stop-color="#2e3040"/>
+          </linearGradient>
+          <linearGradient id="pvFloor" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1a1c24"/>
+            <stop offset="100%" stop-color="#141620"/>
           </linearGradient>
           <filter id="pvShadow" x="-15%" y="-15%" width="130%" height="130%">
-            <feDropShadow dx="1" dy="3" stdDeviation="4" flood-color="rgba(0,0,0,0.28)"/>
+            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="rgba(0,0,0,0.55)"/>
           </filter>
           <clipPath id="pvGlass">
             <rect x="${glL}" y="${glT}" width="${winW}" height="${winH}"/>
           </clipPath>
         </defs>`;
 
-        // Room background
+        // Room background — dark interior to match app theme
         s += `<rect width="340" height="320" fill="url(#pvWall)"/>`;
+        // Ceiling (slightly darker top band)
         s += `<rect width="340" height="${CEIL_H}" fill="url(#pvCeil)"/>`;
-        s += `<line x1="0" y1="${CEIL_H}" x2="340" y2="${CEIL_H}" stroke="#c0bbb2" stroke-width="0.6" opacity="0.6"/>`;
-        // Floor hint
-        s += `<rect x="0" y="300" width="340" height="20" fill="#bab5ad" opacity="0.35"/>`;
-        s += `<line x1="0" y1="300" x2="340" y2="300" stroke="#a8a4a0" stroke-width="0.5" opacity="0.4"/>`;
+        // Ceiling/wall transition line (subtle molding)
+        s += `<line x1="0" y1="${CEIL_H}" x2="340" y2="${CEIL_H}" stroke="#2e3240" stroke-width="1.2" opacity="0.8"/>`;
+        s += `<line x1="0" y1="${CEIL_H+1.5}" x2="340" y2="${CEIL_H+1.5}" stroke="#404560" stroke-width="0.5" opacity="0.3"/>`;
+        // Floor
+        const floorY = Math.min(sillB + 38, 292);
+        s += `<rect x="0" y="${floorY}" width="340" height="${320 - floorY}" fill="url(#pvFloor)"/>`;
+        s += `<line x1="0" y1="${floorY}" x2="340" y2="${floorY}" stroke="#303448" stroke-width="0.8" opacity="0.7"/>`;
         // Baseboard
-        s += `<rect x="0" y="296" width="340" height="4" fill="#c8c3bc" opacity="0.3"/>`;
+        s += `<rect x="0" y="${floorY}" width="340" height="5" rx="1" fill="#282c3a" opacity="0.8"/>`;
 
         // Window outer shadow
         s += `<rect x="${fL-2}" y="${fT+4}" width="${fR-fL+4}" height="${sillB-fT+4}" rx="4" fill="rgba(0,0,0,0.18)" filter="url(#pvShadow)"/>`;
@@ -3204,13 +3212,31 @@
                 s += `<text x="${bx}" y="${by+2.5}" text-anchor="middle" fill="${sc}" font-size="5.5" font-family="Inter" font-weight="700" clip-path="url(#pvGlass)">${p.softDark}</text>`;
             }
 
-            // Manilla handle
+            // Manilla handle — color from p.manillaColor field
             if (p.manillaCant && parseInt(p.manillaCant) > 0) {
                 const mIzq = (p.cierreVert === 'Izquierda');
                 const mX = mIzq ? px + 8 : px + pw - 14;
                 const mY = fabY + fabH * 0.55;
-                s += `<rect x="${mX}" y="${mY}" width="6" height="22" rx="2.5" fill="#c8a455" stroke="#a07830" stroke-width="0.6" clip-path="url(#pvGlass)"/>`;
-                s += `<rect x="${mX-4}" y="${mY+7}" width="14" height="3.5" rx="1.8" fill="#d4aa60" stroke="#a07830" stroke-width="0.5" clip-path="url(#pvGlass)"/>`;
+                // Map manillaColor to visual fill
+                const mColRaw = (p.manillaColor || '').toUpperCase();
+                const mFill   = mColRaw === 'NEG'  ? '#2a2a35'
+                              : mColRaw === 'CAFÉ' ? '#6b4226'
+                              : '#dcdcdc'; // BCO or default
+                const mStroke = mColRaw === 'NEG'  ? '#555570'
+                              : mColRaw === 'CAFÉ' ? '#4a2c18'
+                              : 'rgba(0,0,0,0.30)';
+                const mShine  = mColRaw === 'NEG'  ? 'rgba(255,255,255,0.10)'
+                              : mColRaw === 'CAFÉ' ? 'rgba(255,255,255,0.12)'
+                              : 'rgba(255,255,255,0.45)';
+                // Shadow
+                s += `<rect x="${mX+1}" y="${mY+1}" width="6" height="22" rx="2.5" fill="rgba(0,0,0,0.35)" clip-path="url(#pvGlass)"/>`;
+                // Body
+                s += `<rect x="${mX}" y="${mY}" width="6" height="22" rx="2.5" fill="${mFill}" stroke="${mStroke}" stroke-width="0.8" clip-path="url(#pvGlass)"/>`;
+                // Shine on body
+                s += `<rect x="${mX+1}" y="${mY+2}" width="2.5" height="8" rx="1.2" fill="${mShine}" clip-path="url(#pvGlass)"/>`;
+                // Horizontal bar (the handle grip)
+                s += `<rect x="${mX-5}" y="${mY+8}" width="16" height="4" rx="2" fill="${mFill}" stroke="${mStroke}" stroke-width="0.7" clip-path="url(#pvGlass)"/>`;
+                s += `<rect x="${mX-4}" y="${mY+9}" width="14" height="1.5" rx="0.8" fill="${mShine}" clip-path="url(#pvGlass)"/>`;
             }
 
             // === Chain or Motor ===
@@ -3370,7 +3396,11 @@
             pills.push(pill(ap.softDark, 'rgba(0,0,0,0.4)', sc, sc));
         }
         if (ap.color && ap.color !== 'N/A') pills.push(pill('🎨 '+ap.color, 'rgba(255,255,255,0.05)', '#c8c8c8'));
-        if (ap.manillaCant && parseInt(ap.manillaCant)>0) pills.push(pill('🖐 '+ap.manillaCant+' manilla'+(ap.manillaCant>1?'s':''), 'rgba(200,164,85,0.15)', '#c8a455'));
+        if (ap.manillaCant && parseInt(ap.manillaCant)>0) {
+            const mc = (ap.manillaColor||'').toUpperCase();
+            const mPillFg = mc==='NEG'?'#9090b0': mc==='CAFÉ'?'#c8906a':'#d0d0d0';
+            pills.push(pill('🖐 '+ap.manillaCant+' manilla'+(ap.manillaCant>1?'s':'')+' '+mc, 'rgba(255,255,255,0.05)', mPillFg));
+        }
 
         document.getElementById('preview-leyenda-multi').innerHTML =
             `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">${pills.join('')}</div>`;
