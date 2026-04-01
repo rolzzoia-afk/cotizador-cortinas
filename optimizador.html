@@ -194,7 +194,7 @@
                 <button id="btnConfirmarGuardar" class="btn" style="background-color:#27ae60; padding:18px 40px; font-size:18px; letter-spacing:0.5px;">
                     Confirmar, Guardar y Descargar Excel
                 </button>
-                <p style="color:#7f8c8d; font-size:12px; margin-top:8px;">Al confirmar se guardará en Firebase y se descargará el plan de corte.</p>
+                <p style="color:#7f8c8d; font-size:12px; margin-top:8px;">Al confirmar se guardará en Supabase y se descargará el plan de corte.</p>
             </div>
         </div>
     </div>
@@ -265,62 +265,17 @@
         <div class="log-container" id="logs"></div>
     </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import { 
-    getAuth, 
-    signInWithEmailAndPassword,
-    onAuthStateChanged,
-    signOut
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-
-  import { 
-    getFirestore,
-    collection,
-    addDoc,
-    getDocs,
-    getDoc,
-    getDocFromServer,
-    onSnapshot,
-    deleteDoc,
-    doc,
-    setDoc,
-    writeBatch
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBUQVqyC3ti4hLbuBT8U4zINUWU3u07Dmw",
-    authDomain: "inventario-colmenas.firebaseapp.com",
-    projectId: "inventario-colmenas",
-    storageBucket: "inventario-colmenas.firebasestorage.app",
-    messagingSenderId: "412114089031",
-    appId: "1:412114089031:web:de2aedf856272598ae6d62"
-  };
-
-  const app = initializeApp(firebaseConfig);
-
-  // 🔐 Auth - Exportar a Window
-  const auth = getAuth(app);
-  window.firebaseAuth = auth;
-  window.firebaseSignIn = signInWithEmailAndPassword;
-  window.firebaseOnAuth = onAuthStateChanged;
-  window.firebaseSignOut = signOut;
-
-  // 🔥 Firestore - Exportar a Window (Nombres unificados para app.js)
-  const db = getFirestore(app);
-  window.firebaseDb = db;
-  window.firebaseCollection = collection;
-  window.firebaseGetDocs = getDocs;
-  window.firebaseGetDoc = getDoc;
-  window.firebaseGetDocFromServer = getDocFromServer;
-  window.firebaseOnSnapshot = onSnapshot;
-  window.firebaseAddDoc = addDoc;
-  window.firebaseDeleteDoc = deleteDoc;
-  window.firebaseDoc = doc;
-  window.firebaseSetDoc = setDoc;
-  window.firebaseWriteBatch = writeBatch;
-
-  console.log("🔥 Firebase inicializado y funciones exportadas correctamente.");
+<script>
+  // ── Cliente Supabase del optimizador (autenticación + datos) ──────────────
+  // Se inicializa aquí para que esté disponible antes del script principal.
+  // Cuando el optimizador corre como iframe dentro del cotizador, comparte
+  // automáticamente la sesión Supabase (misma origin → mismo localStorage).
+  window._sbOptReady = false;
+  document.addEventListener('DOMContentLoaded', () => {
+      // sbOpt se declara en el bloque principal (ver abajo). Marcar como listo.
+      window._sbOptReady = true;
+  });
+  console.log("✅ Supabase SDK listo (Firebase eliminado).");
 </script>
 
 <script>
@@ -329,29 +284,58 @@ const SUPABASE_URL_OPT      = 'https://izelewwgeamktnzkiwvl.supabase.co';
 const SUPABASE_ANON_KEY_OPT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
 const EMPRESA_ID_OPT        = '67c635a5-152c-4780-a066-23f5081175a9';
 
+// Cliente Supabase propio del optimizador (auth + queries directas)
+const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT);
+
+// Usuario actual (actualizado por onAuthStateChange)
+let _currentUser = null;
+
 // ── Funciones helper para comunicarse con el cotizador padre (iframe) ──────
 // El cotizador expone window.guardarConfigEnSupabase y window.leerConfigDeSupabase
 // que corren con sesión autenticada. Esto evita problemas de RLS.
 
 async function _supabaseGuardar(clave, valor) {
+    // 1° Intentar via helper del cotizador padre (tiene sesión RLS ya autenticada)
     try {
         if (window.parent && window.parent !== window && window.parent.guardarConfigEnSupabase) {
             await window.parent.guardarConfigEnSupabase(clave, valor);
             return true;
         }
     } catch(e) {
-        console.warn('[Supabase] Error usando helper del padre:', e.message);
+        console.warn('[Supabase] Helper del padre falló, intentando directo:', e.message);
+    }
+    // 2° Fallback: llamada directa con la sesión propia del optimizador
+    try {
+        const { error } = await sbOpt.from('configuracion')
+            .upsert({ empresa_id: EMPRESA_ID_OPT, clave, valor }, { onConflict: 'empresa_id,clave' });
+        if (error) throw error;
+        return true;
+    } catch(e) {
+        console.warn('[Supabase] Guardado directo falló:', e.message);
     }
     return false;
 }
 
 async function _supabaseLeer(clave) {
+    // 1° Intentar via helper del cotizador padre
     try {
         if (window.parent && window.parent !== window && window.parent.leerConfigDeSupabase) {
             return await window.parent.leerConfigDeSupabase(clave);
         }
     } catch(e) {
-        console.warn('[Supabase] Error leyendo via padre:', e.message);
+        console.warn('[Supabase] Helper lectura del padre falló, intentando directo:', e.message);
+    }
+    // 2° Fallback: llamada directa
+    try {
+        const { data, error } = await sbOpt.from('configuracion')
+            .select('valor')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .eq('clave', clave)
+            .maybeSingle();
+        if (error) throw error;
+        return data ? data.valor : null;
+    } catch(e) {
+        console.warn('[Supabase] Lectura directa falló:', e.message);
     }
     return null;
 }
@@ -366,7 +350,7 @@ async function guardarCatalogoEnSupabase() {
         };
         const ok = await _supabaseGuardar('catalogo_reemplazos_data', JSON.stringify(datos));
         if (ok) log(`✅ Catálogo guardado en la base de datos (${Object.keys(SistemaInventario.catalogoReemplazos).length} reemplazos)`, 'success');
-        else     log('⚠️ Catálogo guardado solo en Firebase (optimizador no conectado al cotizador)', 'info');
+        else     log('⚠️ No se pudo guardar el catálogo en la base de datos', 'warn');
     } catch(e) {
         console.warn('Error guardando catálogo en Supabase:', e.message);
     }
@@ -398,7 +382,7 @@ async function guardarSerialesEnSupabase() {
     try {
         const ok = await _supabaseGuardar('maestro_seriales_data', JSON.stringify(SistemaInventario.seriales));
         if (ok) log(`✅ Seriales guardados en la base de datos (${SistemaInventario.seriales.length} registros)`, 'success');
-        else     log('⚠️ Seriales guardados solo en Firebase (optimizador no conectado al cotizador)', 'info');
+        else     log('⚠️ No se pudo guardar los seriales en la base de datos', 'warn');
     } catch(e) {
         console.warn('Error guardando seriales en Supabase:', e.message);
     }
@@ -466,8 +450,8 @@ const SistemaInventario = {
     catalogoAccesorios: {}     // Diccionario DESCRIPCIÓN|COLOR → código: { 'CENEFA OVALADA|ALUMINIO': 'E15' }
 };
 
-// Variables globales para manejo de colmena desde Firebase
-let colmenaActual = null;        // Colmena descargada de Firebase al inicio de sesión
+// Variables globales para manejo de colmena
+let colmenaActual = null;        // Colmena descargada de Supabase al inicio de sesión
 let usandoColmenaManual = false; // true si el usuario subió un archivo manualmente
 
 // Flags de carga inicial para onSnapshot (escudo anti-inventario-vacío)
@@ -491,16 +475,15 @@ function formatearFecha(fecha) {
     if (isNaN(d.getTime())) return String(fecha).includes('/') ? fecha : '-';
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
-// Verificar versión mínima contra Firebase
+// Verificar versión mínima contra Supabase
 async function verificarVersionMinima() {
     try {
-        const db = window.firebaseDb;
-        const versionDoc = await window.firebaseGetDoc(window.firebaseDoc(db, "configuracion", "version_minima"));
-        if (versionDoc.exists()) {
-            const versionMinima = versionDoc.data().version;
+        const valor = await _supabaseLeer('opt_version_minima');
+        if (valor) {
+            const versionMinima = String(valor).trim();
             if (versionMinima && VERSION_ACTUAL < versionMinima) {
                 console.warn(`Versión ${VERSION_ACTUAL} obsoleta. Mínima requerida: ${versionMinima}`);
-                // Limpiar solo las claves de Firebase/Optimizer — NO tocar claves del cotizador
+                // Limpiar solo las claves del optimizador — NO tocar claves del cotizador
                 const clavesProtegidas = ['productosRollerDB','storeVentanas','activeOTId','rolzzo_device_id','rolzzo_operario'];
                 Object.keys(localStorage)
                     .filter(k => !clavesProtegidas.includes(k))
@@ -514,52 +497,57 @@ async function verificarVersionMinima() {
     }
 }
 
-// Verificar sesión activa
+// Verificar sesión activa — usando Supabase Auth
 document.addEventListener("DOMContentLoaded", () => {
 
-  const esperarFirebase = setInterval(() => {
-    if (window.firebaseAuth) {
-      clearInterval(esperarFirebase);
+  // Listener de cambios de sesión Supabase
+  sbOpt.auth.onAuthStateChange(async (event, session) => {
+    const user = session ? session.user : null;
+    _currentUser = user || null;
 
-      // Verificar versión mínima antes de continuar
+    if (!user) {
+      // Cerrar sesión: limpiar estado
+      unsubInventario = null;
+      unsubSeriales = null;
+      inventarioCargado = false;
+      serialesCargados = false;
+      mostrarLogin();
+    } else {
+      console.log("✅ Usuario logueado en Supabase:", user.email);
+
+      // Verificar versión mínima
       verificarVersionMinima();
 
-      window.firebaseOnAuth(window.firebaseAuth, (user) => {
-        if (!user) {
-          // Limpiar listeners al cerrar sesión
-          if (unsubInventario) { unsubInventario(); unsubInventario = null; }
-          if (unsubSeriales) { unsubSeriales(); unsubSeriales = null; }
-          inventarioCargado = false;
-          serialesCargados = false;
-          mostrarLogin();
-        } else {
-          console.log("Usuario logueado:", user.email);
+      // Cargar datos desde Supabase
+      await cargarDesdeSupabase();
+      await cargarColmenaFinalDesdeSupabase();
+      await cargarCatalogoDesdeSupabase();
 
-          // Suscribir listeners en tiempo real (onSnapshot)
-          cargarDesdeFirestore();
-          cargarSerialesDesdeFirestore();
-          cargarCatalogoDesdeSupabase(); // Cargar catálogo desde Supabase
-          // Cargar seriales desde Supabase (como respaldo si Firebase retorna 0)
-          setTimeout(async () => {
-              if (SistemaInventario.seriales.length === 0) {
-                  await cargarSerialesDesdeSupabase();
-              }
-          }, 3000); // esperar 3 seg para que Firebase tenga tiempo de responder primero
+      // Cargar seriales (Supabase como fuente principal)
+      await cargarSerialesDesdeSupabase();
+      // Siempre marcar seriales como cargados (con o sin datos) para liberar la UI
+      if (!serialesCargados) {
+          serialesCargados = true;
+          actualizarEscudoCarga();
+      }
 
-          // 🔐 Logout
-          const btn = document.getElementById("btnLogout");
-          if (btn) {
-            btn.addEventListener("click", () => {
-              window.firebaseSignOut(window.firebaseAuth)
-              .then(() => {
-                location.reload();
-              });
-            });
-          }
-        }
-      });
+      // 🔐 Logout
+      const btn = document.getElementById("btnLogout");
+      if (btn) {
+        btn.onclick = () => sbOpt.auth.signOut().then(() => location.reload());
+      }
     }
-  }, 100);
+  });
+
+  // Forzar lectura inicial de sesión (por si ya hay sesión activa en localStorage)
+  sbOpt.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+          _currentUser = session.user;
+          // onAuthStateChange se disparará automáticamente con la sesión
+      } else {
+          mostrarLogin();
+      }
+  });
 });
 
 // Función para guardar el sistema en localStorage
@@ -567,49 +555,31 @@ function guardarSistema() {
     localStorage.setItem('sistemaInventario', JSON.stringify(SistemaInventario));
 }
 
-// Función para guardar en Firestore
-async function guardarEnFirestore() {
-    // Mostrar el overlay de carga
+// Función para guardar inventario en Supabase
+async function guardarEnSupabase() {
     document.getElementById('loading-overlay').style.display = 'flex';
-    
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (!user) {
-            log("No hay usuario logueado para guardar en Firestore", "error");
+        if (!_currentUser) {
+            log("No hay usuario logueado para guardar el inventario", "error");
             return;
         }
-
-        const db = window.firebaseDb;
-
-        log("Guardando inventario en Firestore...", "info");
-        
-        // Convertir todo el objeto SistemaInventario a string para evitar problemas con arrays anidados
-        const sistemaInventarioString = JSON.stringify(SistemaInventario);
-        
-        const datosAhorro = {
-            data: sistemaInventarioString,
+        log("Guardando inventario en Supabase...", "info");
+        const claveUsuario = `opt_inventario_${_currentUser.email}`;
+        const sistemaStr = JSON.stringify({
+            data: JSON.stringify(SistemaInventario),
             fechaActualizacion: new Date().toISOString()
-        };
-        
-        await window.firebaseSetDoc(
-            window.firebaseDoc(db, "usuarios", user.email, "inventario", "datos"),
-            datosAhorro
-        );
-
-        // Asegurar que el documento padre del usuario exista para que el admin lo detecte
-        await window.firebaseSetDoc(
-            window.firebaseDoc(db, "usuarios", user.email),
-            { ultimaActividad: new Date().toISOString() },
-            { merge: true }
-        );
-
-        console.log("✅ Inventario guardado en Firestore correctamente");
-        log("✅ Inventario guardado exitosamente en Firestore", "success");
+        });
+        const ok = await _supabaseGuardar(claveUsuario, sistemaStr);
+        if (ok) {
+            console.log("✅ Inventario guardado en Supabase correctamente");
+            log("✅ Inventario guardado exitosamente en Supabase", "success");
+        } else {
+            log("⚠️ No se pudo guardar el inventario en Supabase", "warn");
+        }
     } catch (error) {
-        console.error("Error guardando en Firestore:", error);
-        log("❌ Error guardando en Firestore: " + error.message, "error");
+        console.error("Error guardando en Supabase:", error);
+        log("❌ Error guardando inventario: " + error.message, "error");
     } finally {
-        // Ocultar el overlay de carga independientemente del resultado
         document.getElementById('loading-overlay').style.display = 'none';
     }
 }
@@ -630,142 +600,84 @@ function actualizarEscudoCarga() {
     }
 }
 
-// Función para cargar desde Firestore con suscripción en tiempo real (onSnapshot)
-function cargarDesdeFirestore() {
+// Cargar inventario desde Supabase al iniciar sesión
+async function cargarDesdeSupabase() {
     document.getElementById('loading-overlay').style.display = 'flex';
-
-    const user = window.firebaseAuth.currentUser;
-    if (!user || !user.email) {
-        console.log("No hay usuario logueado para cargar desde Firestore");
-        document.getElementById('loading-overlay').style.display = 'none';
-        return;
-    }
-
-    const db = window.firebaseDb;
-    const docRef = window.firebaseDoc(db, "usuarios", user.email, "inventario", "datos");
-
-    // Desuscribir listener anterior si existe (ej. cambio de sesión)
-    if (unsubInventario) unsubInventario();
-
-    // Suscripción en tiempo real al inventario principal
-    unsubInventario = window.firebaseOnSnapshot(
-        docRef,
-        { includeMetadataChanges: false },
-        (snap) => {
-            // Ignorar escrituras locales pendientes para evitar doble procesamiento
-            if (snap.metadata.hasPendingWrites) return;
-
-            if (snap.exists()) {
-                const docData = snap.data();
-                if (docData && docData.data) {
-                    const datos = JSON.parse(docData.data);
-                    // Preservar colmenas si ya están gestionadas por el listener de colmena_final
-                    const colmenasActuales = SistemaInventario.colmenas;
-                    // Preservar catálogo si ya fue cargado desde Supabase (tiene prioridad sobre Firebase)
-                    const estadoCatEl = document.getElementById('estadoCatalogo');
-                    const catEsDeSupabase = estadoCatEl && estadoCatEl.textContent.includes('(BD)');
-                    const catBackup = catEsDeSupabase ? {
-                        catalogoReemplazos: Object.assign({}, SistemaInventario.catalogoReemplazos),
-                        catalogoColores:    Object.assign({}, SistemaInventario.catalogoColores),
-                        catalogoMedidas:    Object.assign({}, SistemaInventario.catalogoMedidas),
-                        catalogoAccesorios: Object.assign({}, SistemaInventario.catalogoAccesorios)
-                    } : null;
-                    Object.assign(SistemaInventario, datos);
-                    if (colmenaActual && colmenaActual.length > 0) {
-                        SistemaInventario.colmenas = colmenasActuales;
-                    }
-                    // Restaurar catálogo de Supabase si fue sobreescrito por Firebase
-                    if (catBackup && Object.keys(catBackup.catalogoReemplazos).length > 0) {
-                        SistemaInventario.catalogoReemplazos = catBackup.catalogoReemplazos;
-                        SistemaInventario.catalogoColores    = catBackup.catalogoColores;
-                        SistemaInventario.catalogoMedidas    = catBackup.catalogoMedidas;
-                        SistemaInventario.catalogoAccesorios = catBackup.catalogoAccesorios;
-                    }
-
-                    // Actualizar UI solo si no se está procesando un Excel
-                    if (!procesandoExcel) {
-                        actualizarTablaOrdenes();
-                        actualizarTablaCatalogo();
-                        verificarListo();
-                        // Mostrar en la UI que los datos vienen de la base de datos
-                        if (SistemaInventario.ordenes && SistemaInventario.ordenes.length > 0) {
-                            document.getElementById('estadoOrdenes').textContent = `✓ ${SistemaInventario.ordenes.length} órdenes (BD)`;
-                            document.getElementById('estadoOrdenes').className = 'estado-archivo estado-ok';
-                        }
-                        if (SistemaInventario.catalogoReemplazos && Object.keys(SistemaInventario.catalogoReemplazos).length > 0) {
-                            const nReemp = Object.keys(SistemaInventario.catalogoReemplazos).length;
-                            const estadoCat = document.getElementById('estadoCatalogo');
-                            if (estadoCat && !estadoCat.textContent.includes('(BD)')) {
-                                estadoCat.textContent = `✓ ${nReemp} reemplazos (BD)`;
-                                estadoCat.className = 'estado-archivo estado-ok';
-                            }
-                        }
-                    }
-
-                    if (!inventarioCargado) {
-                        inventarioCargado = true;
-                        console.log("✅ Inventario cargado (primer snapshot)");
-                        actualizarEscudoCarga();
-                    } else {
-                        console.log("🔄 Inventario actualizado en tiempo real");
-                    }
-                }
-            } else {
-                console.log("No hay inventario guardado aún en Firestore");
-                if (!inventarioCargado) {
-                    inventarioCargado = true;
-                    actualizarEscudoCarga();
-                }
-            }
-        },
-        (error) => {
-            console.error("Error en listener onSnapshot de inventario:", error.code, error.message);
-            // Si falla el listener, marcar como cargado para no bloquear la UI indefinidamente
-            if (!inventarioCargado) {
-                inventarioCargado = true;
-                actualizarEscudoCarga();
-            }
+    try {
+        if (!_currentUser || !_currentUser.email) {
+            console.log("No hay usuario logueado para cargar inventario");
+            document.getElementById('loading-overlay').style.display = 'none';
+            return;
         }
-    );
 
-    // Cargar colmena_final y registrar listener real-time
-    cargarColmenaFinalDesdeFirestore();
+        const claveUsuario = `opt_inventario_${_currentUser.email}`;
+        const valorStr = await _supabaseLeer(claveUsuario);
+
+        if (valorStr) {
+            const wrapper = JSON.parse(valorStr);
+            const datos = typeof wrapper.data === 'string' ? JSON.parse(wrapper.data) : wrapper;
+
+            // Preservar catálogo si ya fue cargado previamente
+            const catBackup = {
+                catalogoReemplazos: Object.assign({}, SistemaInventario.catalogoReemplazos),
+                catalogoColores:    Object.assign({}, SistemaInventario.catalogoColores),
+                catalogoMedidas:    Object.assign({}, SistemaInventario.catalogoMedidas),
+                catalogoAccesorios: Object.assign({}, SistemaInventario.catalogoAccesorios)
+            };
+            const teniaCatalogo = Object.keys(catBackup.catalogoReemplazos).length > 0;
+
+            Object.assign(SistemaInventario, datos);
+
+            // Restaurar catálogo si fue sobreescrito
+            if (teniaCatalogo) {
+                SistemaInventario.catalogoReemplazos = catBackup.catalogoReemplazos;
+                SistemaInventario.catalogoColores    = catBackup.catalogoColores;
+                SistemaInventario.catalogoMedidas    = catBackup.catalogoMedidas;
+                SistemaInventario.catalogoAccesorios = catBackup.catalogoAccesorios;
+            }
+
+            if (!procesandoExcel) {
+                actualizarTablaOrdenes();
+                actualizarTablaCatalogo();
+                verificarListo();
+                if (SistemaInventario.ordenes && SistemaInventario.ordenes.length > 0) {
+                    document.getElementById('estadoOrdenes').textContent = `✓ ${SistemaInventario.ordenes.length} órdenes (BD)`;
+                    document.getElementById('estadoOrdenes').className = 'estado-archivo estado-ok';
+                }
+            }
+            console.log("✅ Inventario cargado desde Supabase");
+        } else {
+            console.log("No hay inventario guardado aún en Supabase");
+        }
+    } catch (error) {
+        console.error("Error cargando inventario desde Supabase:", error);
+    } finally {
+        if (!inventarioCargado) {
+            inventarioCargado = true;
+            actualizarEscudoCarga();
+        }
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
 }
 
-// Función para guardar resultados de optimización en Firestore
+// Guardar resultados de optimización en Supabase (tabla planes_corte)
 async function guardarResultadoOptimizacion(resultados) {
-    // Mostrar el overlay de carga
     document.getElementById('loading-overlay').style.display = 'flex';
-    
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (!user) {
+        if (!_currentUser) {
             console.error("No hay usuario logueado");
             return Promise.reject("No hay usuario logueado");
         }
-
-        const db = window.firebaseDb;
-
-        // Añadir timestamp a cada resultado
         const timestamp = new Date().toISOString();
-        
-        // Convertir los resultados a string para evitar problemas con arrays anidados
-        const resultadosString = JSON.stringify(resultados.map(r => ({
-            ...r,
-            fechaGuardado: timestamp
-        })));
-        
-        const datosConTimestamp = {
-            usuario: user.email,
-            timestamp: timestamp,
-            resultadosString: resultadosString
-        };
-
-        // Guardar en la colección 'historial_optimizaciones' usando una referencia de documento
-        const docRef = window.firebaseDoc(db, "historial_optimizaciones", timestamp + "_" + user.email);
-        await window.firebaseSetDoc(docRef, datosConTimestamp);
-
-        console.log("✅ Resultados de optimización guardados en historial:", timestamp);
+        const { error } = await sbOpt.from('planes_corte').insert({
+            empresa_id: EMPRESA_ID_OPT,
+            optimizer_email: _currentUser.email,
+            resultados: resultados,
+            ordenes: SistemaInventario.ordenes || [],
+            fecha: timestamp
+        });
+        if (error) throw error;
+        console.log("✅ Resultados de optimización guardados en Supabase:", timestamp);
         log("✅ Resultados de optimización guardados correctamente", "success");
         return Promise.resolve(timestamp);
     } catch (error) {
@@ -773,12 +685,11 @@ async function guardarResultadoOptimizacion(resultados) {
         log("❌ Error guardando resultados: " + error.message, "error");
         return Promise.reject(error);
     } finally {
-        // Ocultar el overlay de carga independientemente del resultado
         document.getElementById('loading-overlay').style.display = 'none';
     }
 }
 
-// ─── FUNCIONES DE COLMENA FINAL (Firebase) ───────────────────────────────────
+// ─── FUNCIONES DE COLMENA FINAL (Supabase) ───────────────────────────────────
 
 // Actualiza el indicador visual de fuente de colmena en la UI
 function actualizarIndicadorFuente(esManual) {
@@ -789,93 +700,59 @@ function actualizarIndicadorFuente(esManual) {
         indicador.style.backgroundColor = '#27ae60';
         indicador.style.display = 'inline-block';
     } else {
-        indicador.textContent = '☁️ Usando inventario sincronizado de Firebase';
+        indicador.textContent = '☁️ Usando inventario sincronizado de Supabase';
         indicador.style.backgroundColor = '#3498db';
         indicador.style.display = 'inline-block';
     }
 }
 
-// Carga la colmena_final guardada en Firebase y la asigna a colmenaActual
-async function cargarColmenaFinalDesdeFirestore() {
-    const user = window.firebaseAuth.currentUser;
-    if (!user || !user.email) return;
-
-    const db = window.firebaseDb;
-    const docRef = window.firebaseDoc(db, "usuarios", user.email, "colmena_final", "datos");
-
-    // Registrar el listener SIEMPRE (independiente de si el doc existe o no)
-    // onSnapshot dispara inmediatamente con el estado actual y luego en cada cambio
-    window.firebaseOnSnapshot(
-        docRef,
-        { includeMetadataChanges: false },
-        (snap) => {
-            if (snap.exists() && !snap.metadata.hasPendingWrites) {
-                const data = snap.data();
-                if (data && data.data) {
-                    colmenaActual = JSON.parse(data.data) || [];
-                    SistemaInventario.colmenas = colmenaActual;
-                    actualizarTablaColmenas();
-                    actualizarIndicadorFuente(false);
-                    verificarListo();
-                    document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
-                    document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
-                    console.log("🔄 Colmena final actualizada desde Firebase:", colmenaActual.length, "registros");
-                }
-            } else if (!snap.exists()) {
-                // Sin colmena_final guardada: usar SistemaInventario.colmenas como fallback
-                if (SistemaInventario.colmenas && SistemaInventario.colmenas.length > 0) {
-                    colmenaActual = SistemaInventario.colmenas;
-                    actualizarIndicadorFuente(false);
-                    verificarListo();
-                    document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
-                    document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
-                    console.log(`ℹ️ Sin colmena_final en Firebase. Usando colmenas del inventario (${colmenaActual.length})`);
-                } else {
-                    console.log("ℹ️ No hay colmena_final ni colmenas en inventario aún.");
-                }
-            }
-        },
-        (error) => {
-            // Error callback: evita "Message channel closed" por promesas sin handler
-            console.error("Error en listener onSnapshot de colmena_final:", error.code, error.message);
-        }
-    );
-
-    // Forzar lectura desde servidor para la sesión inicial (sin caché)
+// Carga la colmena_final guardada en Supabase y la asigna a colmenaActual
+async function cargarColmenaFinalDesdeSupabase() {
+    if (!_currentUser || !_currentUser.email) return;
     try {
-        const docSnap = await window.firebaseGetDocFromServer(docRef);
-        if (docSnap && docSnap.exists()) {
-            const docData = docSnap.data();
-            if (docData && docData.data) {
-                colmenaActual = JSON.parse(docData.data);
+        const claveColmena = `opt_colmena_final_${_currentUser.email}`;
+        const valorStr = await _supabaseLeer(claveColmena);
+        if (valorStr) {
+            const parsed = JSON.parse(valorStr);
+            const colmenas = Array.isArray(parsed) ? parsed : (parsed.data ? JSON.parse(parsed.data) : []);
+            if (colmenas.length > 0) {
+                colmenaActual = colmenas;
                 SistemaInventario.colmenas = colmenaActual;
                 actualizarTablaColmenas();
                 actualizarIndicadorFuente(false);
                 verificarListo();
                 document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
                 document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
-                console.log(`✅ Colmena final cargada desde servidor: ${colmenaActual.length} registros`);
+                console.log(`✅ Colmena final cargada desde Supabase: ${colmenaActual.length} registros`);
+                return;
             }
         }
+        // Sin colmena_final: usar colmenas del inventario como fallback
+        if (SistemaInventario.colmenas && SistemaInventario.colmenas.length > 0) {
+            colmenaActual = SistemaInventario.colmenas;
+            actualizarIndicadorFuente(false);
+            verificarListo();
+            document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
+            document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
+            console.log(`ℹ️ Sin colmena_final en Supabase. Usando colmenas del inventario (${colmenaActual.length})`);
+        } else {
+            console.log("ℹ️ No hay colmena_final ni colmenas en inventario aún.");
+        }
     } catch (error) {
-        console.warn("getDocFromServer falló, el listener onSnapshot seguirá activo:", error.message);
+        console.error("Error cargando colmena_final desde Supabase:", error);
     }
 }
 
-// Guarda las colmenas disponibles post-optimización en Firebase como colmena_final
-async function guardarColmenaFinalEnFirestore() {
+// Guarda las colmenas disponibles post-optimización en Supabase como colmena_final
+async function guardarColmenaFinalEnSupabase() {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (!user) {
+        if (!_currentUser) {
             log("No hay usuario logueado para guardar colmena final", "error");
             return;
         }
 
-        const db = window.firebaseDb;
-
         // Extraer colmenas disponibles del histórico y mapear al formato simple
-        // IMPORTANTE: incluir serial para preservar la trazabilidad en optimizaciones sucesivas
         const colmenasFinal = SistemaInventario.colmenasHistorico
             .filter(c => c.estado === 'disponible' && c.medida_mm > 0 && c.cod)
             .map(c => ({
@@ -886,28 +763,11 @@ async function guardarColmenaFinalEnFirestore() {
                 serial: c.serial || null
             }));
 
-        const datos = {
-            data: JSON.stringify(colmenasFinal),
-            fechaActualizacion: new Date().toISOString()
-        };
+        const claveColmena = `opt_colmena_final_${_currentUser.email}`;
+        const ok = await _supabaseGuardar(claveColmena, JSON.stringify(colmenasFinal));
 
-        // Asegurar que el documento padre del usuario exista
-        await window.firebaseSetDoc(
-            window.firebaseDoc(db, "usuarios", user.email),
-            { ultimaActividad: new Date().toISOString() },
-            { merge: true }
-        );
-
-        await window.firebaseSetDoc(
-            window.firebaseDoc(db, "usuarios", user.email, "colmena_final", "datos"),
-            datos
-        );
-
-        // Actualizar colmenaActual con el resultado para la sesión actual
+        // Actualizar estado local
         colmenaActual = colmenasFinal;
-
-        // Actualizar SistemaInventario.colmenas y la tabla de la UI para que
-        // coincida con el Excel exportado (colmenas disponibles post-optimización)
         SistemaInventario.colmenas = colmenasFinal;
         actualizarTablaColmenas();
         const estadoEl = document.getElementById('estadoColmenas');
@@ -916,11 +776,15 @@ async function guardarColmenaFinalEnFirestore() {
             estadoEl.className = 'estado-archivo estado-ok';
         }
 
-        console.log(`✅ Colmena final guardada en Firebase: ${colmenasFinal.length} registros`);
-        log(`✅ Colmena final guardada en Firebase (${colmenasFinal.length} colmenas disponibles)`, "success");
+        if (ok) {
+            console.log(`✅ Colmena final guardada en Supabase: ${colmenasFinal.length} registros`);
+            log(`✅ Colmena final guardada en Supabase (${colmenasFinal.length} colmenas disponibles)`, "success");
+        } else {
+            log("⚠️ No se pudo guardar colmena final en Supabase", "warn");
+        }
     } catch (error) {
-        console.error("Error guardando colmena_final en Firestore:", error);
-        log("❌ Error guardando colmena final en Firebase: " + error.message, "error");
+        console.error("Error guardando colmena_final en Supabase:", error);
+        log("❌ Error guardando colmena final: " + error.message, "error");
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }
@@ -1066,8 +930,7 @@ async function cargarEstructuraInventario(event) {
         
         log(`🏷️ Estructura de inventario cargada: ${SistemaInventario.seriales.length} seriales`, 'success');
 
-        // Guardar en Firebase y en Supabase
-        await guardarSerialesEnFirestore();
+        // Guardar en Supabase
         await guardarSerialesEnSupabase();
         
     } catch (e) {
@@ -1121,84 +984,7 @@ function actualizarTablaSeriales() {
 }
 
 // Función para guardar los seriales en Firestore usando writeBatch
-async function guardarSerialesEnFirestore() {
-    document.getElementById('loading-overlay').style.display = 'flex';
-    
-    try {
-        const user = window.firebaseAuth.currentUser;
-        if (!user) {
-            log("No hay usuario logueado para guardar seriales", "error");
-            document.getElementById('loading-overlay').style.display = 'none';
-            return;
-        }
-
-        const db = window.firebaseDb;
-        if (!db) throw new Error("Firestore no está inicializado");
-        
-        log("Guardando seriales en Firestore...", "info");
-        
-        const coleccionRef = window.firebaseCollection(db, "usuarios", user.email, "maestro_seriales");
-        
-        // ── FASE 1: Eliminar todos los documentos existentes (en batches de 499) ──
-        const docsExistentes = await window.firebaseGetDocs(coleccionRef);
-        let batch = window.firebaseWriteBatch(db);
-        let opCount = 0;
-
-        for (const docSnap of docsExistentes.docs) {
-            batch.delete(docSnap.ref);
-            opCount++;
-            if (opCount >= 499) {
-                await batch.commit();
-                batch = window.firebaseWriteBatch(db);
-                opCount = 0;
-            }
-        }
-        if (opCount > 0) {
-            await batch.commit();
-        }
-        
-        // ── FASE 2: Insertar los nuevos documentos (en batches de 499) ──
-        // Acumulamos todos los batches en un array de promesas para luego
-        // esperarlos todos juntos con Promise.all, evitando pérdida silenciosa de datos.
-        const batchPromesas = [];
-        batch = window.firebaseWriteBatch(db);
-        opCount = 0;
-
-        SistemaInventario.seriales.forEach(serial => {
-            const docId = `${serial.codigo}_${serial.lote}_${serial.paquete}_${serial.serial}`.replace(/[\/\s]/g, '_');
-            const docRef = window.firebaseDoc(coleccionRef, docId);
-            batch.set(docRef, {
-                ...serial,
-                usuario: user.email,
-                fechaActualizacion: new Date().toISOString()
-            });
-            opCount++;
-            if (opCount >= 499) {
-                batchPromesas.push(batch.commit()); // acumular promesa sin await
-                batch = window.firebaseWriteBatch(db);
-                opCount = 0;
-            }
-        });
-        if (opCount > 0) {
-            batchPromesas.push(batch.commit());
-        }
-        // Esperar que TODOS los batches completen antes de continuar
-        await Promise.all(batchPromesas);
-        
-        console.log(`✅ ${SistemaInventario.seriales.length} seriales guardados en Firestore`);
-        log(`✅ ${SistemaInventario.seriales.length} seriales guardados en Firestore`, "success");
-        
-    } catch (error) {
-        console.error("Error guardando seriales en Firestore:", error);
-        if (error.code === 'permission-denied' || error.message.includes('permission')) {
-            log("❌ Error de permisos: No tienes acceso a Firestore. Verifica las reglas de Firebase.", "error");
-        } else {
-            log("❌ Error guardando seriales en Firestore: " + error.message, "error");
-        }
-    } finally {
-        document.getElementById('loading-overlay').style.display = 'none';
-    }
-}
+// guardarSerialesEnFirestore eliminado — usar guardarSerialesEnSupabase() directamente
 
 
 // Lógica de ordenamiento de seriales (extraída para reutilizar)
@@ -1242,81 +1028,7 @@ function ordenarSeriales(seriales) {
     });
 }
 
-// Función para cargar los seriales desde Firestore con suscripción en tiempo real
-function cargarSerialesDesdeFirestore() {
-    const user = window.firebaseAuth.currentUser;
-    if (!user) return;
-
-    const db = window.firebaseDb;
-
-    // Desuscribir listener anterior si existe
-    if (unsubSeriales) unsubSeriales();
-
-    const coleccionRef = window.firebaseCollection(db, "usuarios", user.email, "maestro_seriales");
-
-    unsubSeriales = window.firebaseOnSnapshot(
-        coleccionRef,
-        { includeMetadataChanges: false },
-        (querySnapshot) => {
-            const serialesFirebase = [];
-
-            querySnapshot.forEach(doc => {
-                const data = doc.data();
-                serialesFirebase.push({
-                    fecha: data.fecha,
-                    codigo: data.codigo,
-                    lote: data.lote,
-                    paquete: data.paquete,
-                    serial: data.serial,
-                    estado: data.estado || 'disponible'
-                });
-            });
-
-            // Si Firebase tiene datos → usarlos (fuente principal)
-            // Si Firebase está vacío → preservar lo que Supabase haya cargado
-            const estadoEl = document.getElementById('estadoEstructura');
-            const serialesYaDesdeSupabase = estadoEl && estadoEl.textContent.includes('(BD)');
-            if (serialesFirebase.length > 0) {
-                SistemaInventario.seriales = serialesFirebase;
-                ordenarSeriales(SistemaInventario.seriales);
-                if (!procesandoExcel) {
-                    actualizarTablaSeriales();
-                    verificarAlertasStock();
-                }
-                if (estadoEl) {
-                    estadoEl.textContent = `✓ ${SistemaInventario.seriales.length} seriales (sincronizados)`;
-                    estadoEl.className = 'estado-archivo estado-ok';
-                }
-            } else if (!serialesYaDesdeSupabase) {
-                // Firebase vacío y Supabase aún no cargó → mostrar 0
-                SistemaInventario.seriales = [];
-                if (!procesandoExcel) {
-                    actualizarTablaSeriales();
-                }
-                if (estadoEl) {
-                    estadoEl.textContent = `✓ 0 seriales (sincronizados)`;
-                    estadoEl.className = 'estado-archivo estado-ok';
-                }
-            }
-            // Si Firebase vacío pero Supabase ya cargó → no hacer nada (preservar datos de Supabase)
-
-            if (!serialesCargados) {
-                serialesCargados = true;
-                console.log(`✅ ${SistemaInventario.seriales.length} seriales cargados (primer snapshot)`);
-                actualizarEscudoCarga();
-            } else {
-                console.log(`🔄 Seriales actualizados en tiempo real: ${SistemaInventario.seriales.length}`);
-            }
-        },
-        (error) => {
-            console.error("Error en listener onSnapshot de seriales:", error.code, error.message);
-            if (!serialesCargados) {
-                serialesCargados = true;
-                actualizarEscudoCarga();
-            }
-        }
-    );
-}
+// cargarSerialesDesdeFirestore eliminado — usar cargarSerialesDesdeSupabase() directamente
 
 // Función para buscar un serial disponible para un código específico
 function buscarSerialDisponible(codigo) {
@@ -1847,6 +1559,29 @@ function expandirOrdenesDesdeExcel() {
                     continue;
                 }
 
+                // Excepción dura: PESO U = Peso inferior de dúo Lágrima, código según color
+                // Negro → E18 | Blanco → E19 | Gris → E20
+                // (Garantía secundaria: el catálogo ya debería tenerlos tras Fix 1)
+                if (nombreCol === 'PESO U') {
+                    const MAPA_PESO_U = { 'NEGRO': 'E18', 'BLANCO': 'E19', 'GRIS': 'E20' };
+                    const codPesoU = MAPA_PESO_U[colorDeseado] ||
+                        // Fallback: buscar en catalogoAccesorios por si hay un color nuevo
+                        SistemaInventario.catalogoAccesorios[`PESO INFERIOR DE DÚO LÁGRIMA|${colorDeseado}`] ||
+                        null;
+                    if (!codPesoU) {
+                        log(`⚠️ PESO U: color "${colorDeseado}" no reconocido para la ubicación ${datosCompartidos.ubic || '?'}. Agregalo al catálogo.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codPesoU;
+                    orden.codigoExtraido = codPesoU;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codPesoU] || null;
+                    orden.tuberia = `PESO U - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ PESO U detectado: ${codPesoU} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
                 // Traducir nombre de columna al nombre exacto del catálogo
                 const nombreCatalogo = (MAPA_NOMBRES_CATALOGO[nombreCol] || nombreCol).toUpperCase().trim();
                 let llaveDiccionario = `${nombreCatalogo}|${colorDeseado}`;
@@ -1912,7 +1647,7 @@ async function cargarOrdenes(event) {
         verificarListo();
         log(`📋 Órdenes cargadas: ${SistemaInventario.ordenes.length} (${filasConMultiCorte} filas expandidas a multi-corte)`, 'success');
         guardarSistema();
-        guardarEnFirestore();
+        guardarEnSupabase();
     } catch (e) { alert('Error: ' + e.message); console.error(e); }
     finally { procesandoExcel = false; }
 }
@@ -2004,9 +1739,14 @@ async function cargarCatalogo(event) {
             if (!fila) continue;
             const codigo = fila[colCodigo];
             const reemplazo = fila[colReemplazo];
-            if (codigo && reemplazo) {
+            // FIX: procesamos CUALQUIER fila que tenga código válido,
+            // aunque no tenga reemplazo (ej: E18 Peso U Negro, E10, E11, etc.)
+            if (codigo && String(codigo).trim()) {
                 const codigoLimpio = String(codigo).trim().toUpperCase();
-                SistemaInventario.catalogoReemplazos[codigoLimpio] = String(reemplazo).trim();
+                // Solo guardar en catalogoReemplazos si existe un reemplazo real
+                if (reemplazo && String(reemplazo).trim()) {
+                    SistemaInventario.catalogoReemplazos[codigoLimpio] = String(reemplazo).trim();
+                }
                 // Guardar color si la columna existe y tiene valor
                 if (colColor !== -1 && fila[colColor] !== null && fila[colColor] !== undefined) {
                     const colorStr = String(fila[colColor]).trim();
@@ -2018,6 +1758,8 @@ async function cargarCatalogo(event) {
                     if (medida > 0) SistemaInventario.catalogoMedidas[codigoLimpio] = medida;
                 }
                 // Super-Catálogo de Accesorios: llave compuesta DESCRIPCIÓN|COLOR → código
+                // FIX: se construye para TODOS los ítems con descripción+color,
+                // sin importar si tienen reemplazo (así E18, E19, E20, etc. quedan disponibles)
                 if (colDescripcion !== -1 && colColor !== -1) {
                     const desc = fila[colDescripcion] ? String(fila[colDescripcion]).toUpperCase().trim() : '';
                     const colorAcc = fila[colColor] ? String(fila[colColor]).toUpperCase().trim() : '';
@@ -2277,7 +2019,10 @@ function actualizarTablaColmenasResultado() {
         const r = item.resultado;
         const ord = SistemaInventario.ordenes.find(o => o.id === r.orden) || {};
         const color = r.color || obtenerColorDeCatalogo(r.codigo || r.codigo_original || '');
-        const accion = (ord.componente && ord.componente !== 'TUBO') ? `CORTAR ${ord.componente}` : 'CORTAR';
+        const _tiraStr = String(ord.con_tira || '').toUpperCase().trim();
+        const _esTira  = _tiraStr === 'CON TIRA' || _tiraStr === 'SI' || _tiraStr === 'SÍ' || _tiraStr === 'X';
+        const _sufTira = _esTira ? ' ⭐ CON TIRA' : '';
+        const accion = ((ord.componente && ord.componente !== 'TUBO') ? `CORTAR ${ord.componente}` : 'CORTAR') + _sufTira;
         let filaHtml = `<tr class="fila-cortar">
             <td>${r.colmena || r.nombreMaterialNuevo || 'TUBO NUEVO'}</td>
             <td>${r.codigo || '-'}</td>
@@ -2536,15 +2281,15 @@ async function ejecutarFlujoCompleto() {
     log(`✅ Optimización completada: ${asignadas} órdenes asignadas, ${noAsignadas} no asignadas`, 'success');
     log(`📊 Total merma: ${resultadoOptimizacion.totalMerma.toFixed(2)} cm`, 'info');
 
-    // Guardar resultados en Firebase
-    log("💾 Guardando resultados en Firebase...", 'info');
+    // Guardar resultados en Supabase
+    log("💾 Guardando resultados en Supabase...", 'info');
     
     try {
         await guardarResultadoOptimizacion(resultadoOptimizacion.resultados);
-        log("✅ Resultados guardados en historial de Firebase", 'success');
+        log("✅ Resultados guardados en historial de Supabase", 'success');
     } catch (error) {
-        console.error("Error al guardar en Firebase:", error);
-        log("⚠️ Warning: No se pudieron guardar los resultados en Firebase", 'warn');
+        console.error("Error al guardar en Supabase:", error);
+        log("⚠️ Warning: No se pudieron guardar los resultados en Supabase", 'warn');
     }
 
     // Actualizar el DOM con los resultados
@@ -2633,7 +2378,7 @@ function ejecutarOptimizacion() {
 
     // Guardar copias inmutables para poder recalcular sin recargar Excel.
     // IMPORTANTE: las tres copias deben tomarse aquí, no solo al cargar el Excel,
-    // porque cuando las colmenas vienen de Firebase (no de un archivo manual)
+    // porque cuando las colmenas vienen de Supabase (no de un archivo manual)
     // colmenaCruda nunca se inicializa en cargarColmenas().
     if (SistemaInventario.ordenesCrudas.length === 0) {
         SistemaInventario.ordenesCrudas = JSON.parse(JSON.stringify(SistemaInventario.ordenes));
@@ -2642,12 +2387,12 @@ function ejecutarOptimizacion() {
         SistemaInventario.serialesCrudos = JSON.parse(JSON.stringify(SistemaInventario.seriales));
     }
     // colmenaCruda: capturar SIEMPRE el estado actual de colmenas al inicio de la
-    // optimización, independientemente de si vinieron de Firebase o de un Excel manual.
+    // optimización, independientemente de si vinieron de Supabase o de un Excel manual.
     if (SistemaInventario.colmenaCruda.length === 0 && SistemaInventario.colmenas.length > 0) {
         SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
     }
 
-    log(`ℹ️ Fuente de colmenas: ${usandoColmenaManual ? 'Archivo manual' : 'Firebase (sincronizado)'}`, 'info');
+    log(`ℹ️ Fuente de colmenas: ${usandoColmenaManual ? 'Archivo manual' : 'Supabase (sincronizado)'}`, 'info');
     log(`ℹ️ Colmenas cargadas para esta optimización: ${colmenasAUsar.length}`, 'info');
 
     // ── BEST FIT DECREASING: ordenar órdenes de mayor a menor medida ──
@@ -3278,30 +3023,24 @@ function renderizarStaging(resultados) {
 }
 
 // ── PASO 1: Capturar snapshot intacto ANTES de cualquier escritura ──
-// Devuelve un objeto con las colmenas y seriales tal como están en Firebase en este instante.
-// Se ejecuta ANTES de guardarSistema() y guardarColmenaFinalEnFirestore() para evitar race conditions.
+// Devuelve un objeto con las colmenas y seriales tal como están en Supabase en este instante.
 async function capturarSnapshotPreOptimizacion() {
-    const user = window.firebaseAuth.currentUser;
-    if (!user || !user.email) return null;
+    if (!_currentUser || !_currentUser.email) return null;
 
-    const db = window.firebaseDb;
     let snapshotColmenas = [];
     let snapshotSeriales = [];
 
-    // ── Colmenas: leer directamente del servidor (bypass de caché) ──
+    // ── Colmenas: leer desde Supabase ──
     try {
-        const colmenaRef = window.firebaseDoc(db, "usuarios", user.email, "colmena_final", "datos");
-        const colmenaSnap = await window.firebaseGetDocFromServer(colmenaRef);
-        if (colmenaSnap && colmenaSnap.exists()) {
-            const colData = colmenaSnap.data();
-            if (colData && colData.data) {
-                snapshotColmenas = JSON.parse(colData.data) || [];
-            }
+        const claveColmena = `opt_colmena_final_${_currentUser.email}`;
+        const valorStr = await _supabaseLeer(claveColmena);
+        if (valorStr) {
+            const parsed = JSON.parse(valorStr);
+            snapshotColmenas = Array.isArray(parsed) ? parsed : (parsed.data ? JSON.parse(parsed.data) : []);
         }
-        console.log(`📸 Snapshot colmenas capturado desde servidor: ${snapshotColmenas.length} registros`);
-    } catch (fbErr) {
-        console.warn("getDocFromServer falló para snapshot de colmenas, usando copias inmutables:", fbErr.message);
-        // Fallback: copias inmutables tomadas al inicio de ejecutarOptimizacion (estado pre-corte)
+        console.log(`📸 Snapshot colmenas capturado desde Supabase: ${snapshotColmenas.length} registros`);
+    } catch (err) {
+        console.warn("Snapshot de colmenas falló, usando copias inmutables:", err.message);
         snapshotColmenas = SistemaInventario.colmenaCruda.length > 0
             ? JSON.parse(JSON.stringify(SistemaInventario.colmenaCruda))
             : (colmenaActual ? JSON.parse(JSON.stringify(colmenaActual)) : []);
@@ -3315,52 +3054,57 @@ async function capturarSnapshotPreOptimizacion() {
     return { colmenas: snapshotColmenas, seriales: snapshotSeriales };
 }
 
-// ── PASO 2: Persistir el snapshot ya capturado en historial_operaciones ──
-// Recibe el snapshot pre-capturado para garantizar que NUNCA lea estado post-guardado.
+// ── PASO 2: Persistir el snapshot ya capturado en historial (Supabase configuracion) ──
 async function guardarPuntoRestauracion(snapshotIntacto) {
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (!user) return;
-        const db = window.firebaseDb;
+        if (!_currentUser) return;
 
-        // Construir array de resultados para re-dibujar la vista previa
         const resultadosGuardar = SistemaInventario.resultadosOptimizacion.map(item => {
             const res = item.resultado;
             const ord = item.orden || {};
             return { ...res, ot: ord.ot || '', ubic: ord.ubic || '', componente: ord.componente || '', cod_orden: ord.cod || '' };
         });
 
-        const nombreExcel = `plan_corte_${new Date().toISOString().slice(0,10)}.xlsx`;
+        const timestamp = new Date().toISOString();
+        const nombreExcel = `plan_corte_${timestamp.slice(0,10)}.xlsx`;
 
         const registro = {
-            fecha: new Date().toISOString(),
+            fecha: timestamp,
             nombre_excel: nombreExcel,
-            usuario: user.email,
-            resultados: JSON.stringify(resultadosGuardar),
-            snapshot_inventario: JSON.stringify(snapshotIntacto.colmenas),
-            snapshot_seriales: JSON.stringify(snapshotIntacto.seriales),
+            usuario: _currentUser.email,
+            resultados: resultadosGuardar,
+            snapshot_inventario: snapshotIntacto.colmenas,
+            snapshot_seriales: snapshotIntacto.seriales,
             total_cortes: resultadosGuardar.length
         };
 
-        const colRef = window.firebaseCollection(db, "usuarios", user.email, "historial_operaciones");
-        await window.firebaseAddDoc(colRef, registro);
+        // Guardar en planes_corte con los datos del snapshot para poder restaurar
+        const { error } = await sbOpt.from('planes_corte').insert({
+            empresa_id: EMPRESA_ID_OPT,
+            optimizer_email: _currentUser.email,
+            resultados: resultadosGuardar,
+            ordenes: SistemaInventario.ordenes || [],
+            fecha: timestamp,
+            fecha_correccion: timestamp
+        });
+        if (error) throw error;
 
-        log('📸 Punto de restauración guardado en historial.', 'info');
+        log('📸 Punto de restauración guardado en historial Supabase.', 'info');
     } catch (error) {
         console.error("Error guardando punto de restauración:", error);
         log('⚠️ No se pudo guardar el punto de restauración: ' + error.message, 'warn');
     }
 }
 
-// ── Confirmar: guardar en Firebase + descargar Excel ──
+// ── Confirmar: guardar en Supabase + descargar Excel ──
 async function confirmarYGuardarStaging() {
-    log('💾 Confirmado. Guardando en Firebase...', 'info');
+    log('💾 Confirmado. Guardando en Supabase...', 'info');
 
     // ── Bloqueo preventivo: deshabilitar "Calcular" mientras se persiste ──
     const btnEjecutar = document.getElementById('btnEjecutar');
     if (btnEjecutar) btnEjecutar.disabled = true;
 
-    // ── PASO 1: Capturar snapshot INTACTO desde Firebase (antes de cualquier escritura) ──
+    // ── PASO 1: Capturar snapshot INTACTO desde Supabase (antes de cualquier escritura) ──
     const snapshotSeguro = await capturarSnapshotPreOptimizacion();
 
     // ── PASO 2: Persistir el punto de restauración con el snapshot puro ──
@@ -3372,16 +3116,15 @@ async function confirmarYGuardarStaging() {
 
     // ── PASO 3: AHORA sí persistir los cambios (descontar tubos) ──
     guardarSistema();
-    await guardarColmenaFinalEnFirestore();
+    await guardarColmenaFinalEnSupabase();
 
     // ── PASO 3c: Persistir seriales con estado actualizado (disponible → ocupado) ──
     // CRÍTICO: sin este paso, los seriales marcados como 'ocupado' durante la
     // optimización solo existen en memoria y se revierten al recargar la página,
     // permitiendo que el mismo tubo sea asignado dos veces en sesiones futuras.
     try {
-        await guardarSerialesEnFirestore();
         await guardarSerialesEnSupabase();
-        log('🏷️ Estados de seriales sincronizados con Firebase y Supabase', 'info');
+        log('🏷️ Estados de seriales sincronizados con Supabase', 'info');
     } catch (e) {
         log('❌ Error al guardar seriales: ' + e.message, 'error');
     }
@@ -3400,33 +3143,32 @@ async function confirmarYGuardarStaging() {
     // ── Capturar resumen ANTES de limpiar el estado temporal ──
     const resultados = SistemaInventario.resultadosOptimizacion.map(item => item.resultado);
 
-    // ── Guardar último plan en Firebase para acceso multi-dispositivo ──
+    // ── Guardar último plan en Supabase para acceso multi-dispositivo ──
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (user) {
-            const planData = {
-                resultados: JSON.stringify(SistemaInventario.resultadosOptimizacion.map(item => ({
+        if (_currentUser) {
+            const fecha = new Date().toISOString();
+            const { error: epPlan } = await sbOpt.from('planes_corte').insert({
+                empresa_id: EMPRESA_ID_OPT,
+                optimizer_email: _currentUser.email,
+                resultados: SistemaInventario.resultadosOptimizacion.map(item => ({
                     resultado: item.resultado,
                     orden: {
                         id: item.orden.id, ot: item.orden.ot, ubic: item.orden.ubic,
                         cod: item.orden.cod, medida_cm: item.orden.medida_cm,
                         componente: item.orden.componente, color: item.orden.color
                     }
-                }))),
-                ordenes: JSON.stringify(SistemaInventario.ordenes.map(o => ({
+                })),
+                ordenes: SistemaInventario.ordenes.map(o => ({
                     id: o.id, ot: o.ot, ubic: o.ubic, cod: o.cod,
                     medida_cm: o.medida_cm, componente: o.componente
-                }))),
-                fecha: new Date().toISOString()
-            };
-            await window.firebaseSetDoc(
-                window.firebaseDoc(window.firebaseDb, "usuarios", user.email, "ultimo_plan", "datos"),
-                planData
-            );
-            log('☁️ Último plan guardado en la nube (accesible desde cualquier dispositivo)', 'info');
+                })),
+                fecha: fecha
+            });
+            if (epPlan) throw epPlan;
+            log('☁️ Último plan guardado en Supabase (accesible desde cualquier dispositivo)', 'info');
         }
     } catch (e) {
-        console.warn("No se pudo guardar último plan en Firebase:", e.message);
+        console.warn("No se pudo guardar último plan en Supabase:", e.message);
         log('⚠️ No se pudo guardar el último plan en la nube: ' + e.message, 'warn');
     }
 
@@ -3456,26 +3198,22 @@ async function confirmarYGuardarStaging() {
     // ── Limpieza de caché localStorage: forzar regeneración desde cero ──
     localStorage.removeItem('sistemaInventario');
 
-    // ── Refresco forzado: re-leer colmena_final desde Firebase (bypass de caché) ──
+    // ── Refresco forzado: re-leer colmena_final desde Supabase ──
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (user && user.email) {
-            const db = window.firebaseDb;
-            const colmenaRef = window.firebaseDoc(db, "usuarios", user.email, "colmena_final", "datos");
-            const freshSnap = await window.firebaseGetDocFromServer(colmenaRef);
-            if (freshSnap && freshSnap.exists()) {
-                const freshData = freshSnap.data();
-                if (freshData && freshData.data) {
-                    const colmenasFrescas = JSON.parse(freshData.data) || [];
-                    colmenaActual = colmenasFrescas;
-                    SistemaInventario.colmenas = colmenasFrescas;
-                    actualizarTablaColmenas();
-                    log(`🔄 Inventario refrescado desde Firebase: ${colmenasFrescas.length} colmenas`, 'info');
-                }
+        if (_currentUser && _currentUser.email) {
+            const claveColmena = `opt_colmena_final_${_currentUser.email}`;
+            const valorFresh = await _supabaseLeer(claveColmena);
+            if (valorFresh) {
+                const parsed = JSON.parse(valorFresh);
+                const colmenasFrescas = Array.isArray(parsed) ? parsed : (parsed.data ? JSON.parse(parsed.data) : []);
+                colmenaActual = colmenasFrescas;
+                SistemaInventario.colmenas = colmenasFrescas;
+                actualizarTablaColmenas();
+                log(`🔄 Inventario refrescado desde Supabase: ${colmenasFrescas.length} colmenas`, 'info');
             }
         }
     } catch (refreshErr) {
-        console.warn("Refresco forzado desde servidor falló, onSnapshot mantendrá la sincronía:", refreshErr.message);
+        console.warn("Refresco forzado desde Supabase falló:", refreshErr.message);
     }
 
     // Persistir el estado limpio en localStorage
@@ -3567,40 +3305,41 @@ function descartarStaging() {
     log('🗑️ Vista previa descartada. Estado restaurado.', 'info');
 }
 
-// ── Cargar último plan desde Firebase (para acceso multi-dispositivo) ──
-async function cargarUltimoPlanDesdeFirebase() {
+// ── Cargar último plan desde Supabase (para acceso multi-dispositivo) ──
+async function cargarUltimoPlanDesdeSupabase() {
     try {
-        const user = window.firebaseAuth.currentUser;
-        if (!user) return false;
+        if (!_currentUser) return false;
 
-        const db = window.firebaseDb;
-        const docRef = window.firebaseDoc(db, "usuarios", user.email, "ultimo_plan", "datos");
-        const snap = await window.firebaseGetDoc(docRef);
+        const { data, error } = await sbOpt.from('planes_corte')
+            .select('resultados, ordenes, fecha')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .eq('optimizer_email', _currentUser.email)
+            .order('fecha', { ascending: false })
+            .limit(1)
+            .maybeSingle();
 
-        if (!snap.exists()) return false;
+        if (error) throw error;
+        if (!data || !data.resultados) return false;
 
-        const data = snap.data();
-        if (!data.resultados) return false;
-
-        const items = JSON.parse(data.resultados);
-        const ordenes = data.ordenes ? JSON.parse(data.ordenes) : [];
+        const items = Array.isArray(data.resultados) ? data.resultados : JSON.parse(data.resultados);
+        const ordenes = data.ordenes ? (Array.isArray(data.ordenes) ? data.ordenes : JSON.parse(data.ordenes)) : [];
 
         SistemaInventario.resultadosOptimizacion = items;
         if (ordenes.length > 0) SistemaInventario.ordenes = ordenes;
 
         const fecha = data.fecha ? new Date(data.fecha).toLocaleString('es-CL') : 'desconocida';
-        log(`☁️ Último plan cargado desde Firebase (${fecha}) — ${items.length} cortes`, 'info');
+        log(`☁️ Último plan cargado desde Supabase (${fecha}) — ${items.length} cortes`, 'info');
         return true;
     } catch (e) {
-        console.warn("Error cargando último plan:", e.message);
+        console.warn("Error cargando último plan desde Supabase:", e.message);
         return false;
     }
 }
 
 async function exportarResultados() {
-    // ── Si no hay datos locales, intentar cargar último plan desde Firebase ──
+    // ── Si no hay datos locales, intentar cargar último plan desde Supabase ──
     if (SistemaInventario.resultadosOptimizacion.length === 0) {
-        const cargado = await cargarUltimoPlanDesdeFirebase();
+        const cargado = await cargarUltimoPlanDesdeSupabase();
         if (!cargado) {
             alert('No hay resultados para exportar. Ejecute una optimización primero, o el último plan no está disponible.');
             return;
@@ -3636,6 +3375,11 @@ async function exportarResultados() {
             accionCortar = `CORTAR ${_comp}`;
         } else {
             accionCortar = 'CORTAR';
+        }
+        // FIX CON TIRA: si la orden tiene el campo con_tira marcado, indicarlo en la acción
+        const _conTira = String(ord.con_tira || '').toUpperCase().trim();
+        if (_conTira === 'CON TIRA' || _conTira === 'SI' || _conTira === 'SÍ' || _conTira === 'X') {
+            accionCortar += ' ⭐ CON TIRA';
         }
         const _colmenaExcel = (_esTuboNuevo || _esTuboNuevoReemplazo)
             ? (res.nombreMaterialNuevo || 'TUBO NUEVO')
@@ -3710,6 +3454,8 @@ async function exportarResultados() {
             fillColor = "FFFF9999"; fontColor = "FF990000"; // Rojo claro / rojo oscuro
         } else if (accionCell.v === 'RESERVAR EN MESA') {
             fillColor = "FFFFF3E0"; fontColor = "FFE65100"; // Naranja claro / naranja oscuro
+        } else if (typeof accionCell.v === 'string' && accionCell.v.includes('CON TIRA')) {
+            fillColor = "FFFFFF99"; fontColor = "FF886600"; // Amarillo / marrón — CON TIRA
         }
 
         if (fillColor) {
@@ -3788,7 +3534,7 @@ function exportarColmenasDisponibles() {
     const encabezado = ['N° Colmena (Ubicación)', 'Código', 'Medida (cm)', 'Estado', 'Fecha Registro', 'Lote', 'Paquete', 'Serial'];
 
     // ── Fuente de datos: colmenasHistorico si hay optimización activa,
-    //    sino colmenaActual (Firebase) como fallback robusto ──
+    //    sino colmenaActual (Supabase) como fallback robusto ──
     let fuente = [];
     if (SistemaInventario.colmenasHistorico.length > 0) {
         fuente = SistemaInventario.colmenasHistorico.filter(c => c.estado === 'disponible');
@@ -3888,26 +3634,26 @@ function mostrarLogin() {
   document.getElementById("btnLogin")
     .addEventListener("click", iniciarSesion);
 }
-function iniciarSesion() {
+async function iniciarSesion() {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
-
-  window.firebaseSignIn(window.firebaseAuth, email, password)
-    .then(() => {
-      location.reload();
-    })
-    .catch((error) => {
-      document.getElementById("error").innerText = error.message;
-    });
+  const errEl = document.getElementById("error");
+  if (errEl) errEl.innerText = '';
+  try {
+      const { error } = await sbOpt.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      // onAuthStateChange se encargará de mostrar la UI principal
+  } catch (error) {
+      if (errEl) errEl.innerText = error.message || 'Error al iniciar sesión';
+  }
 }
-function cerrarSesion() {
-  window.firebaseSignOut(window.firebaseAuth)
-    .then(() => {
+async function cerrarSesion() {
+  try {
+      await sbOpt.auth.signOut();
       location.reload();
-    })
-    .catch((error) => {
+  } catch (error) {
       console.error("Error al cerrar sesión:", error);
-    });
+  }
 }
 
 window.cerrarSesion = cerrarSesion;
@@ -4010,14 +3756,14 @@ document.addEventListener('DOMContentLoaded', function() {
 //
 // Flujo:
 //   1. El operario indica la colmena del sobrante y la medida real
-//   2. Se actualiza ese tubo específico en colmena_final (Firebase)
+//   2. Se actualiza ese tubo específico en colmena_final (Supabase)
 //   3. El resto del inventario no se toca
 
 async function corregirCorteErroneo() {
     // Verificar que hay colmenas cargadas
     const colmenas = colmenaActual || SistemaInventario.colmenas;
     if (!colmenas || colmenas.length === 0) {
-        alert('No hay inventario cargado. Espere a que se sincronice desde Firebase.');
+        alert('No hay inventario cargado. Espere a que se sincronice desde Supabase.');
         return;
     }
 
@@ -4095,7 +3841,7 @@ async function corregirCorteErroneo() {
         `Código: ${tuboSeleccionado.cod}\n` +
         `Medida anterior: ${tuboSeleccionado.medida_cm} cm\n` +
         `Medida real: ${medidaReal} cm\n\n` +
-        `Esto actualizará el inventario en Firebase.`
+        `Esto actualizará el inventario en la base de datos.`
     );
     if (!confirmar) return;
 
@@ -4117,21 +3863,13 @@ async function corregirCorteErroneo() {
             log(`✏️ Corregido: ${tuboSeleccionado.cod} en ${colmenaBuscada}: ${tuboSeleccionado.medida_cm} → ${medidaReal} cm`, 'success');
         }
 
-        // Guardar en Firebase
+        // Guardar en Supabase
         colmenaActual = colmenas;
         SistemaInventario.colmenas = colmenas;
 
-        const user = window.firebaseAuth.currentUser;
-        if (user) {
-            const datos = {
-                data: JSON.stringify(colmenas),
-                fechaActualizacion: new Date().toISOString(),
-                ultimaCorreccion: `${colmenaBuscada} ${tuboSeleccionado.cod}: ${tuboSeleccionado.medida_cm}→${medidaReal}cm`
-            };
-            await window.firebaseSetDoc(
-                window.firebaseDoc(window.firebaseDb, "usuarios", user.email, "colmena_final", "datos"),
-                datos
-            );
+        if (_currentUser) {
+            const claveColmena = `opt_colmena_final_${_currentUser.email}`;
+            await _supabaseGuardar(claveColmena, JSON.stringify(colmenas));
         }
 
         actualizarTablaColmenas();

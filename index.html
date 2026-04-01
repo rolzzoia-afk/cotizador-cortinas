@@ -1741,6 +1741,7 @@
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('reportes')" id="odios-btn-reportes"><i class="bi bi-bar-chart-line"></i> Reportes</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('control')" id="odios-btn-control"><i class="bi bi-gear"></i> Control</button></li>
                                 <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('correcciones')" id="odios-btn-correcciones"><i class="bi bi-bandaid"></i> Correcciones</button></li>
+                                <li class="nav-item"><button class="nav-link py-1 px-3" style="font-size:0.8rem;" onclick="odiosTab('colmena')" id="odios-btn-colmena"><i class="bi bi-grid-3x3-gap-fill"></i> Colmena</button></li>
                             </ul>
                         </div>
                     </div>
@@ -2080,6 +2081,149 @@
                         </div>
                     </div>
 
+                    <!-- ═══════════ COLMENA TAB ═══════════ -->
+                    <div id="odios-section-colmena" style="display:none;">
+
+                        <!-- Sub-tabs Tubos / Paños -->
+                        <div class="glass-card mb-3 p-3" style="border-color:rgba(16,185,129,0.25);">
+                            <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+                                <button class="btn btn-sm active" id="col-btn-tubos" onclick="colmenaSubTab('tubos')" style="background:rgba(16,185,129,0.2);border:1px solid rgba(16,185,129,0.4);color:#34d399;">
+                                    <i class="bi bi-rulers"></i> Tubos
+                                </button>
+                                <button class="btn btn-sm" id="col-btn-panos" onclick="colmenaSubTab('panos')" style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#818cf8;">
+                                    <i class="bi bi-grid-3x3-gap"></i> Paños de Tela
+                                </button>
+                                <div class="ms-auto">
+                                    <button class="btn btn-sm" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:#34d399;" onclick="colmenaRefrescar()">
+                                        <i class="bi bi-arrow-clockwise"></i> Refrescar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- ─── SUBTAB: TUBOS ─── -->
+                            <div id="col-section-tubos">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <strong style="font-size:0.85rem;"><i class="bi bi-rulers"></i> Inventario de Tubos (colmena_tubos)</strong>
+                                    <div class="d-flex gap-2">
+                                        <input type="text" id="col-filtro-tubos" class="form-control form-control-sm" placeholder="🔍 Colmena, código..." oninput="colmenaFiltrarTubos()" style="width:180px;">
+                                        <button class="btn btn-sm" style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.4);" onclick="colmenaAbrirFormTubo(null)">
+                                            <i class="bi bi-plus-lg"></i> Agregar
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="col-tubos-stats" class="text-muted small mb-2"></div>
+
+                                <!-- Formulario Agregar/Editar Tubo -->
+                                <div id="col-form-tubo" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(16,185,129,0.35);border-radius:10px;padding:14px;margin-bottom:12px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong style="font-size:0.82rem;color:#34d399;" id="col-form-tubo-titulo"><i class="bi bi-pencil-square"></i> Nuevo Tubo</strong>
+                                        <button class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('col-form-tubo').style.display='none'">✕</button>
+                                    </div>
+                                    <input type="hidden" id="col-edit-tubo-id">
+                                    <div class="row g-2">
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">N° Colmena *</label>
+                                            <input type="text" id="col-tubo-colmena" class="form-control form-control-sm" placeholder="Ej: A1, B2, 7..." style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Código (diámetro) *</label>
+                                            <input type="text" id="col-tubo-cod" class="form-control form-control-sm" placeholder="Ej: 38mm, 50mm..." style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Medida (cm) *</label>
+                                            <input type="number" id="col-tubo-medida" class="form-control form-control-sm" placeholder="Ej: 145.5" step="0.1" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Serial</label>
+                                            <input type="text" id="col-tubo-serial" class="form-control form-control-sm" placeholder="Ej: T-001-A" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button class="btn btn-sm" style="background:#059669;color:white;border:none;" onclick="colmenaGuardarTubo()"><i class="bi bi-floppy"></i> Guardar tubo</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('col-form-tubo').style.display='none'">Cancelar</button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                                    <table class="table table-sm table-dark-premium table-borderless mb-0" style="font-size:0.77rem;" id="col-tabla-tubos-el">
+                                        <thead><tr style="color:#94a3b8;">
+                                            <th>Colmena</th><th>Código</th><th>Medida</th><th>Serial</th><th>Admin</th><th>Acciones</th>
+                                        </tr></thead>
+                                        <tbody id="col-tabla-tubos">
+                                            <tr><td colspan="6" class="text-muted text-center py-3">Cargando tubos...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- ─── SUBTAB: PAÑOS ─── -->
+                            <div id="col-section-panos" style="display:none;">
+                                <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                    <strong style="font-size:0.85rem;"><i class="bi bi-grid-3x3-gap"></i> Paños de Tela (colmena_panos)</strong>
+                                    <div class="d-flex gap-2">
+                                        <input type="text" id="col-filtro-panos" class="form-control form-control-sm" placeholder="🔍 Código, OT..." oninput="colmenaFiltrarPanos()" style="width:180px;">
+                                        <select id="col-filtro-panos-disp" class="form-select form-select-sm" onchange="colmenaFiltrarPanos()" style="width:140px;">
+                                            <option value="">Todos</option>
+                                            <option value="true">Disponibles</option>
+                                            <option value="false">Usados</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div id="col-panos-stats" class="text-muted small mb-2"></div>
+
+                                <!-- Formulario Editar Paño -->
+                                <div id="col-form-pano" style="display:none;background:rgba(0,0,0,0.3);border:1px solid rgba(99,102,241,0.35);border-radius:10px;padding:14px;margin-bottom:12px;">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <strong style="font-size:0.82rem;color:#818cf8;"><i class="bi bi-pencil-square"></i> Editar Paño</strong>
+                                        <button class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('col-form-pano').style.display='none'">✕</button>
+                                    </div>
+                                    <input type="hidden" id="col-edit-pano-id">
+                                    <div class="row g-2">
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Código</label>
+                                            <input type="text" id="col-pano-cod" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Ancho (m)</label>
+                                            <input type="number" id="col-pano-ancho" class="form-control form-control-sm" step="0.001" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Alto (m)</label>
+                                            <input type="number" id="col-pano-alto" class="form-control form-control-sm" step="0.001" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-6 col-md-3">
+                                            <label class="text-muted" style="font-size:0.75rem;">Estado</label>
+                                            <select id="col-pano-disp" class="form-select form-select-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                                <option value="true">Disponible</option>
+                                                <option value="false">Usado</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="text-muted" style="font-size:0.75rem;">OT Asignada</label>
+                                            <input type="text" id="col-pano-ot" class="form-control form-control-sm" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);" placeholder="Número de OT">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2 mt-2">
+                                        <button class="btn btn-sm" style="background:#4f46e5;color:white;border:none;" onclick="colmenaGuardarPano()"><i class="bi bi-floppy"></i> Guardar paño</button>
+                                        <button class="btn btn-sm btn-outline-secondary" onclick="document.getElementById('col-form-pano').style.display='none'">Cancelar</button>
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive" style="max-height:400px;overflow-y:auto;">
+                                    <table class="table table-sm table-dark-premium table-borderless mb-0" style="font-size:0.77rem;">
+                                        <thead><tr style="color:#94a3b8;">
+                                            <th>Código</th><th>Ancho</th><th>Alto</th><th>Estado</th><th>OT</th><th>Fecha uso</th><th>Acciones</th>
+                                        </tr></thead>
+                                        <tbody id="col-tabla-panos">
+                                            <tr><td colspan="7" class="text-muted text-center py-3">Cargando paños...</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- /odios-section-colmena -->
+
                     <!-- ═══════════ CORRECCIONES TAB ═══════════ -->
                     <div id="odios-section-correcciones" style="display:none;">
 
@@ -2191,12 +2335,41 @@
                         </div>
 
                         <!-- Historial de correcciones -->
-                        <div class="glass-card p-3" style="border-color:rgba(168,85,247,0.3);">
+                        <div class="glass-card p-3 mb-3" style="border-color:rgba(168,85,247,0.3);">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <strong style="font-size:0.85rem;"><i class="bi bi-clock-history"></i> Historial de Correcciones</strong>
                                 <button class="btn btn-sm" style="background:rgba(168,85,247,0.2);color:#c084fc;border:1px solid rgba(168,85,247,0.3);" onclick="corrCargarHistorial()"><i class="bi bi-arrow-clockwise"></i></button>
                             </div>
                             <div id="corr-historial-lista" style="max-height:200px;overflow-y:auto;" class="text-muted small">Carga el historial para ver correcciones anteriores.</div>
+                        </div>
+
+                        <!-- ── HISTORIAL DE PLANES DE CORTE ── -->
+                        <div class="glass-card p-3" style="border-color:rgba(239,68,68,0.3);">
+                            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+                                <strong style="font-size:0.85rem;"><i class="bi bi-journal-text"></i> Historial de Planes de Corte</strong>
+                                <div class="d-flex gap-2">
+                                    <span class="text-muted small" style="align-self:center;">Podés restaurar cualquier plan anterior</span>
+                                    <button class="btn btn-sm" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3);" onclick="planHistorialCargar()"><i class="bi bi-arrow-clockwise"></i> Cargar historial</button>
+                                </div>
+                            </div>
+                            <div id="plan-historial-lista" style="max-height:340px;overflow-y:auto;" class="text-muted small">
+                                <div class="text-center py-3" style="color:#64748b;">Hacé clic en "Cargar historial" para ver todos los planes guardados.</div>
+                            </div>
+
+                            <!-- Modal preview de plan histórico -->
+                            <div id="plan-preview-modal" style="display:none;margin-top:12px;background:rgba(0,0,0,0.4);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:14px;">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <strong style="font-size:0.82rem;color:#f87171;"><i class="bi bi-eye"></i> Vista previa del plan</strong>
+                                    <button class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('plan-preview-modal').style.display='none'">✕</button>
+                                </div>
+                                <div id="plan-preview-fecha" class="text-muted small mb-2"></div>
+                                <div id="plan-preview-tabla" style="max-height:220px;overflow-y:auto;font-size:0.74rem;"></div>
+                                <div class="mt-2">
+                                    <button class="btn btn-sm" style="background:rgba(239,68,68,0.25);color:#f87171;border:1px solid rgba(239,68,68,0.4);" onclick="planRestaurarConfirmar()">
+                                        <i class="bi bi-arrow-counterclockwise"></i> Restaurar este plan como activo
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                     </div>
@@ -7134,7 +7307,7 @@
     };
 
     function odiosTab(section) {
-        ['dashboard','clientes','stock','reportes','control','correcciones'].forEach(s => {
+        ['dashboard','clientes','stock','reportes','control','correcciones','colmena'].forEach(s => {
             const el = document.getElementById('odios-section-' + s);
             if (el) el.style.display = s === section ? '' : 'none';
             const btn = document.getElementById('odios-btn-' + s);
@@ -7145,6 +7318,7 @@
         if (section === 'reportes')     odiosRenderReportes();
         if (section === 'control')      odiosRenderControl();
         if (section === 'correcciones') corrIniciar();
+        if (section === 'colmena')      colmenaIniciar();
     }
 
     let _odiosUnsubPresencia = null;
@@ -8317,13 +8491,19 @@
         });
 
         try {
-            // Actualizar plan corregido en Supabase
-            if (_corrPlanId) {
-                await sb.from('planes_corte').update({
-                    resultados: planCorregido,
-                    fecha_correccion: ahora
-                }).eq('id', _corrPlanId);
-            }
+            // ── NUEVO: Insertar plan corregido como nuevo registro (crea historial) ──
+            const email = _corrEmailOptimizer;
+            const { data: nuevoplan, error: epInsert } = await sb.from('planes_corte').insert({
+                empresa_id: EMPRESA_ID,
+                optimizer_email: email,
+                resultados: planCorregido,
+                ordenes: _corrOrdenesData || [],
+                fecha: ahora,
+                fecha_correccion: ahora
+            }).select('id').maybeSingle();
+            if (epInsert) throw epInsert;
+            // Actualizar el id del plan activo al recién insertado
+            if (nuevoplan?.id) _corrPlanId = nuevoplan.id;
 
             // Insertar registros de corrección
             const corrRows = registros.map(reg => ({
@@ -8435,6 +8615,397 @@
             showToast('🗑 Tubo eliminado');
             corrCargarTubos();
         } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // MÓDULO COLMENA — Control absoluto de tubos y paños
+    // ══════════════════════════════════════════════════════════════════
+    let _colmenaTubosCache = [];
+    let _colmenaPanosCache = [];
+    let _colmenaIniciado   = false;
+
+    function colmenaIniciar() {
+        colmenaSubTab('tubos');
+        colmenaCargarTubos();
+    }
+
+    function colmenaRefrescar() {
+        const activo = document.getElementById('col-section-panos').style.display === '' ? 'panos' : 'tubos';
+        if (activo === 'panos') colmenaCargarPanos();
+        else colmenaCargarTubos();
+    }
+
+    function colmenaSubTab(sub) {
+        document.getElementById('col-section-tubos').style.display = sub === 'tubos' ? '' : 'none';
+        document.getElementById('col-section-panos').style.display = sub === 'panos' ? '' : 'none';
+        document.getElementById('col-btn-tubos').classList.toggle('active', sub === 'tubos');
+        document.getElementById('col-btn-panos').classList.toggle('active', sub === 'panos');
+        document.getElementById('col-btn-tubos').style.background = sub === 'tubos' ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.1)';
+        document.getElementById('col-btn-panos').style.background = sub === 'panos' ? 'rgba(99,102,241,0.3)' : 'rgba(99,102,241,0.1)';
+        if (sub === 'panos') colmenaCargarPanos();
+        else colmenaCargarTubos();
+    }
+
+    // ─── TUBOS: Cargar ───────────────────────────────────────────
+    async function colmenaCargarTubos() {
+        const tbody = document.getElementById('col-tabla-tubos');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center py-3">⏳ Cargando...</td></tr>';
+        try {
+            const { data, error } = await sb.from('colmena_tubos')
+                .select('*').eq('empresa_id', EMPRESA_ID).order('n_colmena').order('created_at');
+            if (error) throw error;
+            _colmenaTubosCache = data || [];
+            const statsEl = document.getElementById('col-tubos-stats');
+            if (statsEl) statsEl.textContent = `${_colmenaTubosCache.length} tubo(s) en inventario`;
+            colmenaRenderTubos(_colmenaTubosCache);
+        } catch(e) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">❌ ${e.message}</td></tr>`;
+        }
+    }
+
+    function colmenaFiltrarTubos() {
+        const q = (document.getElementById('col-filtro-tubos')?.value || '').toLowerCase();
+        if (!q) { colmenaRenderTubos(_colmenaTubosCache); return; }
+        const filtrados = _colmenaTubosCache.filter(t =>
+            (t.n_colmena || '').toString().toLowerCase().includes(q) ||
+            (t.cod || '').toLowerCase().includes(q) ||
+            (t.serial || '').toLowerCase().includes(q)
+        );
+        colmenaRenderTubos(filtrados);
+    }
+
+    // ─── TUBOS: Renderizar tabla ─────────────────────────────────
+    function colmenaRenderTubos(tubos) {
+        const tbody = document.getElementById('col-tabla-tubos');
+        if (!tbody) return;
+        if (!tubos || tubos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-muted text-center py-3">Sin tubos para mostrar.</td></tr>'; return;
+        }
+        tbody.innerHTML = tubos.map(t => {
+            const medida = t.medida_cm !== undefined
+                ? parseFloat(t.medida_cm).toFixed(1) + ' cm'
+                : (t.medida_mm !== undefined ? (t.medida_mm / 10).toFixed(1) + ' cm' : '—');
+            const esAdmin = t.agregado_por_admin
+                ? '<span style="color:#fbbf24;font-size:0.7rem;">✔ Admin</span>'
+                : '<span style="color:#64748b;font-size:0.7rem;">Auto</span>';
+            return `<tr>
+                <td style="color:#34d399;font-weight:600;">${t.n_colmena || '—'}</td>
+                <td style="font-family:monospace;color:#e2e8f0;">${t.cod || '—'}</td>
+                <td style="color:#e2e8f0;">${medida}</td>
+                <td style="font-family:monospace;color:#94a3b8;">${t.serial || '—'}</td>
+                <td>${esAdmin}</td>
+                <td>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm py-0 px-1" style="font-size:0.68rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);"
+                            onclick="colmenaAbrirFormTubo('${t.id}','${(t.n_colmena||'').toString().replace(/'/g,'').replace(/"/g,'')}','${(t.cod||'').replace(/'/g,'').replace(/"/g,'')}',${t.medida_cm||0},'${(t.serial||'').replace(/'/g,'').replace(/"/g,'')}')">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn btn-sm py-0 px-1" style="font-size:0.68rem;background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
+                            onclick="colmenaEliminarTubo('${t.id}','${(t.cod||'').replace(/'/g,'')}','${(t.n_colmena||'').toString().replace(/'/g,'')}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ─── TUBOS: Abrir formulario agregar/editar ──────────────────
+    function colmenaAbrirFormTubo(id, colmena, cod, medida, serial) {
+        const form = document.getElementById('col-form-tubo');
+        const titulo = document.getElementById('col-form-tubo-titulo');
+        if (!form) return;
+        document.getElementById('col-edit-tubo-id').value    = id || '';
+        document.getElementById('col-tubo-colmena').value    = colmena || '';
+        document.getElementById('col-tubo-cod').value        = cod || '';
+        document.getElementById('col-tubo-medida').value     = medida || '';
+        document.getElementById('col-tubo-serial').value     = serial || '';
+        titulo.innerHTML = id
+            ? '<i class="bi bi-pencil-square"></i> Editar Tubo'
+            : '<i class="bi bi-plus-circle"></i> Nuevo Tubo';
+        form.style.display = '';
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ─── TUBOS: Guardar (crear o editar) ────────────────────────
+    async function colmenaGuardarTubo() {
+        const id       = document.getElementById('col-edit-tubo-id').value.trim();
+        const colmena  = document.getElementById('col-tubo-colmena').value.trim();
+        const cod      = document.getElementById('col-tubo-cod').value.trim();
+        const medidaCm = parseFloat(document.getElementById('col-tubo-medida').value) || 0;
+        const serial   = document.getElementById('col-tubo-serial').value.trim() || null;
+
+        if (!colmena) { showToast('El número de colmena es obligatorio', 'error'); return; }
+        if (!cod)     { showToast('El código del tubo es obligatorio', 'error'); return; }
+        if (!medidaCm) { showToast('La medida es obligatoria', 'error'); return; }
+
+        const payload = {
+            empresa_id: EMPRESA_ID,
+            n_colmena:  colmena,
+            cod,
+            medida_cm:  medidaCm,
+            medida_mm:  medidaCm * 10,
+            serial,
+            agregado_por_admin: true
+        };
+
+        try {
+            if (id) {
+                // EDITAR tubo existente
+                const { error } = await sb.from('colmena_tubos').update(payload).eq('id', id);
+                if (error) throw error;
+                showToast('✅ Tubo actualizado correctamente');
+            } else {
+                // CREAR nuevo tubo
+                const { error } = await sb.from('colmena_tubos').insert(payload);
+                if (error) throw error;
+                showToast('✅ Tubo agregado al inventario');
+            }
+            document.getElementById('col-form-tubo').style.display = 'none';
+            colmenaCargarTubos();
+        } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
+    }
+
+    // ─── TUBOS: Eliminar ─────────────────────────────────────────
+    async function colmenaEliminarTubo(id, cod, colmena) {
+        if (!confirm(`¿Eliminar tubo "${cod}" de colmena ${colmena}?\n\nEsta acción no se puede deshacer.`)) return;
+        try {
+            const { error } = await sb.from('colmena_tubos').delete().eq('id', id);
+            if (error) throw error;
+            showToast('🗑 Tubo eliminado');
+            colmenaCargarTubos();
+        } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
+    }
+
+    // ─── PAÑOS: Cargar ───────────────────────────────────────────
+    async function colmenaCargarPanos() {
+        const tbody = document.getElementById('col-tabla-panos');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-3">⏳ Cargando...</td></tr>';
+        try {
+            const { data, error } = await sb.from('colmena_panos')
+                .select('*').eq('empresa_id', EMPRESA_ID).order('codigo');
+            if (error) throw error;
+            _colmenaPanosCache = data || [];
+            const statsEl = document.getElementById('col-panos-stats');
+            const disponibles = _colmenaPanosCache.filter(p => p.disponible).length;
+            if (statsEl) statsEl.textContent = `${_colmenaPanosCache.length} paños — ${disponibles} disponibles, ${_colmenaPanosCache.length - disponibles} usados`;
+            colmenaRenderPanos(_colmenaPanosCache);
+        } catch(e) {
+            if (tbody) tbody.innerHTML = `<tr><td colspan="7" class="text-danger text-center">❌ ${e.message}</td></tr>`;
+        }
+    }
+
+    function colmenaFiltrarPanos() {
+        const q    = (document.getElementById('col-filtro-panos')?.value || '').toLowerCase();
+        const disp = document.getElementById('col-filtro-panos-disp')?.value;
+        let filtrados = _colmenaPanosCache;
+        if (q) filtrados = filtrados.filter(p =>
+            (p.codigo || '').toLowerCase().includes(q) ||
+            (p.ot_asignada || '').toString().toLowerCase().includes(q)
+        );
+        if (disp !== '') filtrados = filtrados.filter(p => String(p.disponible) === disp);
+        colmenaRenderPanos(filtrados);
+    }
+
+    // ─── PAÑOS: Renderizar tabla ─────────────────────────────────
+    function colmenaRenderPanos(panos) {
+        const tbody = document.getElementById('col-tabla-panos');
+        if (!tbody) return;
+        if (!panos || panos.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-muted text-center py-3">Sin paños para mostrar.</td></tr>'; return;
+        }
+        tbody.innerHTML = panos.map(p => {
+            const disp   = p.disponible
+                ? '<span style="color:#22c55e;font-size:0.73rem;">● Disponible</span>'
+                : '<span style="color:#f59e0b;font-size:0.73rem;">● Usado</span>';
+            const fechaUso = p.fecha_uso ? p.fecha_uso.slice(0, 10) : '—';
+            const ancho = p.medida_ancho !== undefined ? parseFloat(p.medida_ancho).toFixed(2) + ' m' : '—';
+            const alto  = p.medida_alto  !== undefined ? parseFloat(p.medida_alto).toFixed(2)  + ' m' : '—';
+            return `<tr>
+                <td style="font-family:monospace;color:#e2e8f0;">${p.codigo || '—'}</td>
+                <td style="color:#e2e8f0;">${ancho}</td>
+                <td style="color:#e2e8f0;">${alto}</td>
+                <td>${disp}</td>
+                <td style="color:#94a3b8;">${p.ot_asignada || '—'}</td>
+                <td style="color:#64748b;font-size:0.72rem;">${fechaUso}</td>
+                <td>
+                    <button class="btn btn-sm py-0 px-1" style="font-size:0.68rem;background:rgba(99,102,241,0.2);color:#818cf8;border:1px solid rgba(99,102,241,0.3);"
+                        onclick="colmenaAbrirFormPano('${p.id}')">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    // ─── PAÑOS: Abrir formulario editar ─────────────────────────
+    function colmenaAbrirFormPano(id) {
+        const p = _colmenaPanosCache.find(x => x.id === id);
+        if (!p) { showToast('Paño no encontrado', 'error'); return; }
+        document.getElementById('col-edit-pano-id').value = p.id;
+        document.getElementById('col-pano-cod').value     = p.codigo || '';
+        document.getElementById('col-pano-ancho').value   = p.medida_ancho || '';
+        document.getElementById('col-pano-alto').value    = p.medida_alto  || '';
+        document.getElementById('col-pano-disp').value    = p.disponible ? 'true' : 'false';
+        document.getElementById('col-pano-ot').value      = p.ot_asignada || '';
+        const form = document.getElementById('col-form-pano');
+        form.style.display = '';
+        form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ─── PAÑOS: Guardar edición ──────────────────────────────────
+    async function colmenaGuardarPano() {
+        const id    = document.getElementById('col-edit-pano-id').value.trim();
+        const cod   = document.getElementById('col-pano-cod').value.trim();
+        const ancho = parseFloat(document.getElementById('col-pano-ancho').value) || null;
+        const alto  = parseFloat(document.getElementById('col-pano-alto').value) || null;
+        const disp  = document.getElementById('col-pano-disp').value === 'true';
+        const ot    = document.getElementById('col-pano-ot').value.trim() || null;
+        if (!id) return;
+        const payload = { codigo: cod, medida_ancho: ancho, medida_alto: alto, disponible: disp, ot_asignada: ot };
+        try {
+            const { error } = await sb.from('colmena_panos').update(payload).eq('id', id);
+            if (error) throw error;
+            showToast('✅ Paño actualizado');
+            document.getElementById('col-form-pano').style.display = 'none';
+            colmenaCargarPanos();
+        } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // HISTORIAL DE PLANES DE CORTE — Restauración de planes anteriores
+    // ══════════════════════════════════════════════════════════════════
+    let _planHistorialCache = [];
+    let _planPreviewActual  = null;
+
+    async function planHistorialCargar() {
+        const lista = document.getElementById('plan-historial-lista');
+        if (!lista) return;
+        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
+        if (!email) {
+            lista.innerHTML = '<div style="color:#fbbf24;" class="text-center py-2">⚠ Primero configurá el email del optimizador en la sección de arriba.</div>';
+            return;
+        }
+        lista.innerHTML = '<div class="text-center py-3 text-muted">⏳ Cargando historial...</div>';
+        try {
+            const { data, error } = await sb.from('planes_corte')
+                .select('id, fecha, fecha_correccion, resultados')
+                .eq('empresa_id', EMPRESA_ID)
+                .eq('optimizer_email', email)
+                .order('fecha', { ascending: false })
+                .limit(30);
+            if (error) throw error;
+            _planHistorialCache = data || [];
+            if (!_planHistorialCache.length) {
+                lista.innerHTML = '<div class="text-center py-3 text-muted">Sin planes guardados para este optimizador.</div>'; return;
+            }
+            lista.innerHTML = _planHistorialCache.map((plan, i) => {
+                const fecha = plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '—';
+                const corr  = plan.fecha_correccion ? ' <span style="color:#fbbf24;font-size:0.68rem;">(corregido)</span>' : '';
+                let lineas  = plan.resultados || [];
+                if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
+                const nCortes = Array.isArray(lineas) ? lineas.length : 0;
+                const esActivo = i === 0 ? ' <span style="color:#22c55e;font-size:0.68rem;background:rgba(34,197,94,0.15);padding:1px 6px;border-radius:9px;">● Activo</span>' : '';
+                return `<div style="border-bottom:1px solid rgba(255,255,255,0.07);padding:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:160px;">
+                        <span style="color:#e2e8f0;font-size:0.8rem;">${fecha}</span>${corr}${esActivo}
+                        <br><span style="color:#64748b;font-size:0.72rem;">${nCortes} corte(s)</span>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button class="btn btn-sm py-0" style="font-size:0.72rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);"
+                            onclick="planPrevisualizar('${plan.id}')">
+                            <i class="bi bi-eye"></i> Ver
+                        </button>
+                        ${i > 0 ? `<button class="btn btn-sm py-0" style="font-size:0.72rem;background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3);"
+                            onclick="planRestaurar('${plan.id}')">
+                            <i class="bi bi-arrow-counterclockwise"></i> Restaurar
+                        </button>` : '<span style="font-size:0.7rem;color:#22c55e;align-self:center;">Plan vigente</span>'}
+                    </div>
+                </div>`;
+            }).join('');
+        } catch(e) {
+            lista.innerHTML = `<div class="text-danger text-center py-2">❌ ${e.message}</div>`;
+        }
+    }
+
+    // ─── Previsualizar un plan histórico ────────────────────────
+    function planPrevisualizar(planId) {
+        const plan = _planHistorialCache.find(p => p.id === planId);
+        if (!plan) return;
+        _planPreviewActual = plan;
+        const modal    = document.getElementById('plan-preview-modal');
+        const fechaEl  = document.getElementById('plan-preview-fecha');
+        const tablaEl  = document.getElementById('plan-preview-tabla');
+        const fecha    = plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '—';
+        fechaEl.textContent = `Plan del ${fecha}`;
+        let lineas = plan.resultados || [];
+        if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
+        if (!lineas.length) { tablaEl.innerHTML = '<p class="text-muted">Sin cortes en este plan.</p>'; }
+        else {
+            tablaEl.innerHTML = `<table class="table table-sm" style="font-size:0.73rem;">
+                <thead><tr style="color:#94a3b8;">
+                    <th style="background:transparent;">#</th>
+                    <th style="background:transparent;">OT / Ubic.</th>
+                    <th style="background:transparent;">Código tubo</th>
+                    <th style="background:transparent;">Medida (cm)</th>
+                    <th style="background:transparent;">Colmena</th>
+                </tr></thead><tbody>
+                ${lineas.map((item, i) => {
+                    const res = item.resultado || item;
+                    const ord = item.orden || {};
+                    const codigo   = res.codigo || res.codigo_original || ord.cod || '—';
+                    const medida   = res.medida_cm !== undefined ? parseFloat(res.medida_cm).toFixed(1) + ' cm' : '—';
+                    const colmena  = res.colmena || '—';
+                    const otUbic   = [ord.ot, ord.ubic].filter(Boolean).join(' · ') || '—';
+                    return `<tr style="background:transparent;">
+                        <td style="color:#64748b;background:transparent;">${i+1}</td>
+                        <td style="color:#e2e8f0;background:transparent;">${otUbic}</td>
+                        <td style="font-family:monospace;color:#e2e8f0;background:transparent;">${codigo}</td>
+                        <td style="font-weight:600;color:#e2e8f0;background:transparent;">${medida}</td>
+                        <td style="color:#e2e8f0;background:transparent;">${colmena}</td>
+                    </tr>`;
+                }).join('')}
+                </tbody></table>`;
+        }
+        modal.style.display = '';
+        modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ─── Restaurar un plan anterior ─────────────────────────────
+    async function planRestaurar(planId) {
+        const plan = _planHistorialCache.find(p => p.id === planId);
+        if (!plan) return;
+        const fecha = plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '—';
+        if (!confirm(`¿Restaurar el plan del ${fecha} como plan ACTIVO?\n\nEsto creará una copia de ese plan como el más reciente. El plan actual no se borrará.`)) return;
+        _planPreviewActual = plan;
+        await planRestaurarConfirmar();
+    }
+
+    async function planRestaurarConfirmar() {
+        if (!_planPreviewActual) { showToast('No hay plan seleccionado para restaurar', 'error'); return; }
+        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
+        if (!email) { showToast('Primero configurá el email del optimizador', 'error'); return; }
+        try {
+            let lineas = _planPreviewActual.resultados || [];
+            if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
+            let ordenes = _planPreviewActual.ordenes || [];
+            if (typeof ordenes === 'string') { try { ordenes = JSON.parse(ordenes); } catch(_){ordenes=[];} }
+            const ahora = new Date().toISOString();
+            const { error } = await sb.from('planes_corte').insert({
+                empresa_id: EMPRESA_ID,
+                optimizer_email: email,
+                resultados: lineas,
+                ordenes: ordenes,
+                fecha: ahora,
+                fecha_correccion: null
+            });
+            if (error) throw error;
+            showToast('✅ Plan restaurado como activo. Ya podés cargarlo en "Plan de Corte Activo".');
+            document.getElementById('plan-preview-modal').style.display = 'none';
+            _planPreviewActual = null;
+            // Refrescar la lista de historial
+            planHistorialCargar();
+        } catch(e) { showToast('❌ Error al restaurar: ' + e.message, 'error'); }
     }
 
     // ─── Cargar historial de correcciones ────────────────────────
