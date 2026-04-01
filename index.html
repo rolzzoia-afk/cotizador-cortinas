@@ -1623,6 +1623,7 @@
                                 <div class="p-3">
                                     <div class="d-flex gap-2 mb-2">
                                         <button class="btn btn-premium-warning btn-sm" onclick="autoOptimizarCorte()"><i class="bi bi-magic"></i> Auto-Optimizar</button>
+                                        <button class="btn btn-premium btn-sm" onclick="guardarPlanOptimizador()"><i class="bi bi-floppy"></i> Guardar Plan</button>
                                     </div>
                                     <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
                                         <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.75rem;">
@@ -2318,13 +2319,22 @@
         document.getElementById('fase2-tab')?.addEventListener('shown.bs.tab', () => {
             sincronizarResumenFase2(); renderTabs(); renderFicha(); renderPreview();
         });
+        // Al salir de Fase 2 hacia otro tab, guardar el paño activo automáticamente
+        document.getElementById('fase2-tab')?.addEventListener('hide.bs.tab', () => {
+            guardarPanoActual(); // captura últimos valores del DOM antes de salir
+        });
         document.getElementById('fase3-tab')?.addEventListener('shown.bs.tab', () => {
-            const tabla = document.getElementById('tablaResumen');
-            if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) poblarTablaFase3();
+            // Siempre re-renderizar Fase 3 para reflejar el estado actual de storeVentanas
+            if (storeVentanas.length > 0) poblarTablaFase3();
         });
         document.getElementById('fase4-tab')?.addEventListener('shown.bs.tab', () => {
+            // Renderizar si hay datos y no hay plan cargado aún (evitar recalcular si ya está)
             const tabla = document.getElementById('f4-optimizador-tabla');
             if (tabla && tabla.children.length === 0 && storeVentanas.length > 0) poblarTablaFase4();
+        });
+        // Al salir de Fase 4, auto-guardar el plan si fue modificado
+        document.getElementById('fase4-tab')?.addEventListener('hide.bs.tab', () => {
+            if (window.optimizerRows && activeOTId) guardarPlanOptimizador();
         });
 
         // Render inicial
@@ -2615,7 +2625,7 @@
             <td>${(ancho*100).toFixed(0)}×${(alto*100).toFixed(0)} cm</td>
             <td>${totalM2.toFixed(2)} m²</td>
             <td><strong>${formateadorMoneda.format(subtotal)}</strong></td>
-            <td><button class="btn btn-sm btn-outline-danger py-0" onclick="this.closest('tr').remove(); totalAcumulado -= ${subtotal};">×</button></td>
+            <td><button class="btn btn-sm btn-outline-danger py-0" onclick="this.closest('tr').remove(); totalAcumulado -= ${subtotal}; if(activeOTId) sincronizarOTActiva();">×</button></td>
         `;
         tabla.appendChild(nuevaFila);
 
@@ -3061,7 +3071,7 @@
             s += `<rect x="${ox}" y="${tY+tH}" width="${aw}" height="4" rx="1.5" fill="${colMap[p.colorPeso]||'#e8e8e8'}" opacity="0.85"/>`;
 
             // Cadena o Motor
-            const tieneMotor = p.motor;
+            const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
             const cadIzq = p.cierreVert === 'Izquierda';
             if (!tieneMotor) {
                 const cx = cadIzq ? ox+4 : ox+aw-4;
@@ -3109,7 +3119,7 @@
         l += `<strong style="color:${apc.hex};">${tipoVentana>1?(tipoVentana===2?(panoActivo===0?'Izquierdo':'Derecho'):'Paño '+(panoActivo+1)):'Cortina'}</strong> `;
         l += `<span>${ap.armado} · ${ap.tipoTela} · ${ap.cierreVert||'?'}</span><br>`;
         l += `<span>Mec: ${(ap.mecanismo||'').match(/\[(.+)\]/)?.[1]||'?'} · Tub: ${(ap.tuberia||'').substring(0,4)||'?'}</span>`;
-        if (ap.motor) l += ` · <span style="color:#fb0;">⚡${(ap.motorTipo||'').substring(0,6)} (${ap.ladoMotor||'?'})</span>`;
+        if (ap.motorTipo) l += ` · <span style="color:#fb0;">⚡${(ap.motorTipo||'').substring(0,6)} (${ap.ladoMotor||'?'})</span>`;
         if (ap.cenefa && ap.cenefa!=='No') l += ` · Cenefa:${ap.cenefa}`;
         if (ap.softDark && ap.softDark!=='N/A') l += ` · ${ap.softDark}`;
         l += `</div>`;
@@ -3188,6 +3198,8 @@
             ventana.fase = 'terreno';
             ventana.panos = panosCompletos;
             ventana.categoria = categoria;
+            ventana.color = panosCompletos[0]?.color || ventana.color || ''; // sincronizar color
+            ventana.codInt = codInt || ventana.codInt; // mantener codInt actualizado
         } else {
             ventana = {
                 id: nuevoId(), ubicacion, codInt, producto: baseDatosProductos[codInt]?.producto || codInt,
@@ -3280,21 +3292,30 @@
         if (row) row.remove();
     }
 
+    // Eliminar ventana desde Fase 3 → actualiza storeVentanas y persiste en Supabase
+    function eliminarVentanaFase3(ventanaId) {
+        storeVentanas = storeVentanas.filter(v => v.id !== ventanaId);
+        guardarStore(); // persiste en Supabase
+        poblarTablaFase3(); // regenera tabla desde storeVentanas
+    }
+
     // Poblar tabla Fase 3 sin cambiar estado Kanban (usada por tab listener y exportarAFase3)
     function poblarTablaFase3() {
-        if (storeVentanas.length === 0) return;
         const tabla = document.getElementById('tablaResumen');
         if (!tabla) return;
         tabla.innerHTML = '';
+        if (storeVentanas.length === 0) { actualizarTotales(); return; }
         storeVentanas.forEach(v => {
             if (!v.panos || v.panos.length === 0) return;
             const totalAncho = v.panos.reduce((sum, p) => sum + (parseFloat(p.ancho)||0), 0); // metros
-            const m2Raw = totalAncho * (parseFloat(v.alto) || 0);  // metros × metros = m²
+            const m2Raw = totalAncho * (parseFloat(v.alto) || parseFloat(v.panos[0]?.alto) || 0);
             const m2 = Math.max(m2Raw, 1.5);
             const subtotal = m2 * (v.precio || 0);
             const anchoCmDisp = (totalAncho * 100).toFixed(0);
-            const altoCmDisp  = ((parseFloat(v.alto)||0) * 100).toFixed(0);
+            const altoRef = parseFloat(v.alto) || parseFloat(v.panos[0]?.alto) || 0;
+            const altoCmDisp = (altoRef * 100).toFixed(0);
             const tr = document.createElement('tr');
+            tr.setAttribute('data-id', v.id);
             tr.innerHTML = `
                 <td><strong>1</strong></td>
                 <td>${v.ubicacion}</td>
@@ -3303,7 +3324,7 @@
                 <td>${m2.toFixed(2)} m²</td>
                 <td>${formateadorMoneda.format(v.precio||0)}/m²</td>
                 <td><strong>${formateadorMoneda.format(subtotal)}</strong></td>
-                <td><button class="btn btn-sm btn-outline-danger py-0" onclick="this.closest('tr').remove(); actualizarTotales();">×</button></td>
+                <td><button class="btn btn-sm btn-outline-danger py-0" onclick="eliminarVentanaFase3(${v.id})" title="Eliminar de cotización">×</button></td>
             `;
             tabla.appendChild(tr);
         });
@@ -3404,6 +3425,16 @@
         document.getElementById('totalSubtotal').innerText = formateadorMoneda.format(subtotal);
         document.getElementById('totalIVA').innerText = formateadorMoneda.format(iva);
         document.getElementById('totalFinal').innerText = formateadorMoneda.format(total);
+
+        // Persistir el total en la OT activa (Supabase)
+        if (activeOTId !== null && typeof storeOTs !== 'undefined') {
+            const ot = storeOTs.find(o => o.id === activeOTId);
+            if (ot && Math.abs((ot.totalConIva || 0) - total) > 1) {
+                ot.totalConIva = total;
+                ot.fechaModificacion = new Date().toISOString();
+                guardarOT(ot);
+            }
+        }
     }
 
     function enviarFase1AFase2() {
@@ -3582,7 +3613,7 @@
                     const p = m.panos?.[0];
                     return p ? `${p.ancho ? (parseFloat(p.ancho)*100).toFixed(0) : '?'}cm·${p.tipoTela||'?'}` : '?';
                 }).join(' | ');
-                const alto = ((parseFloat(miembros[0].alto)||0)*100).toFixed(0);
+                const alto = ((parseFloat(miembros[0].alto)||parseFloat(miembros[0].panos?.[0]?.alto)||0)*100).toFixed(0);
 
                 const tr = document.createElement('tr');
                 tr.style.borderLeft = '3px solid #3b82f6';
@@ -3596,7 +3627,7 @@
                                 ${m.ubicacion}</td>
                             <td>${catBadge(m.categoria)}</td>
                             <td><span class="badge bg-info text-dark" style="font-size:0.68rem;">Parte de grupo</span></td>
-                            <td>${((parseFloat(m.alto)||0)*100).toFixed(0)} cm</td>
+                            <td>${((parseFloat(m.alto)||parseFloat(m.panos?.[0]?.alto)||0)*100).toFixed(0)} cm</td>
                             <td style="font-size:0.72rem;">${m.panos?.[0]?.ancho ? (parseFloat(m.panos[0].ancho)*100).toFixed(0)+'cm·'+(m.panos[0].tipoTela||'?') : '—'}</td>
                             <td></td>`;
                         tbody.appendChild(tr2);
@@ -3632,7 +3663,7 @@
                         ${v.ubicacion}</td>
                     <td>${catBadge(v.categoria)}</td>
                     <td>${tipoLabel} (${v.panos?.length||1})</td>
-                    <td>${((parseFloat(v.alto)||0)*100).toFixed(0)} cm</td>
+                    <td>${((parseFloat(v.alto)||parseFloat(v.panos?.[0]?.alto)||0)*100).toFixed(0)} cm</td>
                     <td style="font-size:0.72rem;">${resumen}</td>
                     <td></td>`;
             } else {
@@ -3640,7 +3671,7 @@
                     <td>${v.ubicacion}</td>
                     <td>${catBadge(v.categoria)}</td>
                     <td>${tipoLabel} (${v.panos?.length||1})</td>
-                    <td>${((parseFloat(v.alto)||0)*100).toFixed(0)} cm</td>
+                    <td>${((parseFloat(v.alto)||parseFloat(v.panos?.[0]?.alto)||0)*100).toFixed(0)} cm</td>
                     <td style="font-size:0.72rem;">${resumen}</td>
                     <td>
                         <button class="btn btn-sm btn-outline-primary py-0 me-1" onclick="editarVentanaTerreno(${v.id})" title="Completar ficha técnica"><i class="bi bi-pencil"></i></button>
@@ -3794,8 +3825,29 @@
             tableOptimizer.appendChild(tr);
         });
 
-        // Store optimizer rows for later use
+        // Store optimizer rows (y restaurar plan guardado si existe)
         window.optimizerRows = optimizerRows;
+        const otActiva = storeOTs?.find(o => o.id === activeOTId);
+        const planGuardado = otActiva?.datosGenerales?.optimizerRows;
+        if (planGuardado && Array.isArray(planGuardado) && planGuardado.length === optimizerRows.length) {
+            // Restaurar campos editables del plan guardado (anchoPano, numeroPano, junto)
+            planGuardado.forEach((rowG, i) => {
+                if (window.optimizerRows[i]) {
+                    window.optimizerRows[i].anchoPano  = rowG.anchoPano  ?? window.optimizerRows[i].anchoPano;
+                    window.optimizerRows[i].numeroPano = rowG.numeroPano ?? window.optimizerRows[i].numeroPano;
+                    window.optimizerRows[i].junto      = rowG.junto      ?? window.optimizerRows[i].junto;
+                }
+            });
+            // Actualizar inputs de la tabla con los valores restaurados
+            const trs = tableOptimizer.querySelectorAll('tr');
+            window.optimizerRows.forEach((row, idx) => {
+                const tr = trs[idx]; if (!tr) return;
+                const inputs = tr.querySelectorAll('input');
+                if (inputs[0]) inputs[0].value = row.anchoPano.toFixed(4);
+                if (inputs[1]) inputs[1].value = row.numeroPano;
+                if (inputs[2]) inputs[2].value = row.junto;
+            });
+        }
 
         // Now populate the other tables based on storeVentanas and optimizer data
         populateAllTables(ot, cliente);
@@ -3805,6 +3857,20 @@
         if (window.optimizerRows && window.optimizerRows[idx]) {
             window.optimizerRows[idx][field] = field === 'cant' || field === 'numeroPano' ? parseInt(value) || 0 : parseFloat(value) || 0;
         }
+    }
+
+    // Persiste el plan de optimizador (anchoPano, numeroPano, junto) en la OT activa
+    function guardarPlanOptimizador() {
+        if (!window.optimizerRows || activeOTId === null) return;
+        const ot = storeOTs?.find(o => o.id === activeOTId);
+        if (!ot) return;
+        if (!ot.datosGenerales) ot.datosGenerales = {};
+        ot.datosGenerales.optimizerRows = JSON.parse(JSON.stringify(window.optimizerRows));
+        ot.fechaModificacion = new Date().toISOString();
+        _ultimaEscrituraLocalMs = Date.now();
+        guardarOT(ot);
+        const btn = document.querySelector('#fase4 .btn-premium.btn-sm');
+        if (btn) { const orig = btn.innerHTML; btn.innerHTML = '<i class="bi bi-check-lg"></i> Guardado'; setTimeout(() => btn.innerHTML = orig, 2000); }
     }
 
     function autoOptimizarCorte() {
@@ -5178,7 +5244,8 @@
             direccion: document.getElementById('clienteDireccion')?.value|| '',
             ot:        document.getElementById('otCliente')?.value        || '',
             canal:     document.getElementById('canalContacto')?.value   || '',
-            fecha:     document.getElementById('fechaCotizacion')?.value  || ''
+            fecha:     document.getElementById('fechaCotizacion')?.value  || '',
+            postInstalacion: postInstalacionData  // ← persiste checklist y encuesta de post-instalación
         };
     }
 
@@ -5193,6 +5260,12 @@
         s('otCliente',     datos.ot);
         s('canalContacto', datos.canal);
         s('fechaCotizacion', datos.fecha || new Date().toISOString().split('T')[0]);
+        // Restaurar datos post-instalación si existen en la OT
+        if (datos.postInstalacion) {
+            postInstalacionData = datos.postInstalacion;
+        } else {
+            postInstalacionData = { checks: Array(11).fill(false), encuesta: Array(6).fill(''), observaciones: '' };
+        }
     }
 
     // Registra / actualiza la OT activa con el estado actual del formulario y storeVentanas
@@ -5235,6 +5308,8 @@
         sincronizarOTActiva(); // guardar estado actual antes de crear nueva
         activeOTId = null;
         storeVentanas = [];
+        postInstalacionData = { checks: Array(11).fill(false), encuesta: Array(6).fill(''), observaciones: '' };
+        window.optimizerRows = null;
         guardarStore();
         localStorage.setItem('activeOTId', '');
         // Limpiar formulario
@@ -5259,11 +5334,13 @@
         const ot = storeOTs.find(o => o.id === id);
         if (!ot) return;
         activeOTId = id;
-        // Cargar storeVentanas desde la OT (fuente de verdad = Firestore)
+        // Resetear estado de Fase 4 antes de cargar nueva OT
+        window.optimizerRows = null;
+        // Cargar storeVentanas desde la OT (fuente de verdad = Supabase)
         storeVentanas = JSON.parse(JSON.stringify(ot.storeVentanas || []));
         sincronizarContadorId(); // evitar IDs duplicados en ítems nuevos
         guardarStore();
-        cargarDatosGenerales(ot.datosGenerales);
+        cargarDatosGenerales(ot.datosGenerales); // también restaura postInstalacionData
         sincronizarResumenFase2();
         actualizarIndicadorOTActiva();
         renderKanban();
@@ -5281,12 +5358,20 @@
         const idxActual = OT_ESTADOS.indexOf(ot.estado);
         const idxNuevo  = OT_ESTADOS.indexOf(nuevoEstado);
         if (idxNuevo > idxActual) {
+            const estadoPrev = ot.estado;
             ot.estado = nuevoEstado;
             ot.subEtapa = subEtapa || (nuevoEstado === 'produccion' ? 'Estructura' : null);
+            // Registrar historial de transición
+            if (!ot.datosGenerales) ot.datosGenerales = {};
+            if (!ot.datosGenerales.historialEstados) ot.datosGenerales.historialEstados = [];
+            ot.datosGenerales.historialEstados.push({
+                de: estadoPrev, a: nuevoEstado,
+                fecha: new Date().toISOString()
+            });
         }
         ot.fechaModificacion = new Date().toISOString();
         _ultimaEscrituraLocalMs = Date.now();
-        guardarOT(ot); // ← solo guarda esta OT
+        guardarOT(ot);
         renderKanban();
         actualizarIndicadorOTActiva();
     }
@@ -5336,12 +5421,20 @@
     function moverOTEstado(id, nuevoEstado) {
         const ot = storeOTs.find(o => o.id === id);
         if (!ot) return;
+        const estadoPrev = ot.estado;
         ot.estado = nuevoEstado;
         if (nuevoEstado === 'produccion' && !ot.subEtapa) ot.subEtapa = 'Estructura';
         if (nuevoEstado !== 'produccion') ot.subEtapa = null;
         ot.fechaModificacion = new Date().toISOString();
+        // Registrar historial de transiciones en datos_generales
+        if (!ot.datosGenerales) ot.datosGenerales = {};
+        if (!ot.datosGenerales.historialEstados) ot.datosGenerales.historialEstados = [];
+        ot.datosGenerales.historialEstados.push({
+            de: estadoPrev, a: nuevoEstado,
+            fecha: new Date().toISOString()
+        });
         _ultimaEscrituraLocalMs = Date.now();
-        guardarOT(ot); // ← solo guarda esta OT
+        guardarOT(ot);
         renderKanban();
     }
 
