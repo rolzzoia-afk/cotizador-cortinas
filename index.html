@@ -3149,14 +3149,14 @@
             const fabric = telaFill(p.color || p.colorTapa, p.tipoTela);
             const fabOp = p.tipoTela==='BK' ? 0.96 : (p.tipoTela==='DU' ? 0.90 : 0.78);
 
-            // Tube (roller)
+            // Tube (roller) — always stroked so white tube is distinguishable
             const tubeH = 8;
             const tubeCol = mecCol(p.colorMecanismo);
-            s += `<rect x="${px}" y="${glT}" width="${pw}" height="${tubeH}" rx="4" fill="${tubeCol}" clip-path="url(#pvGlass)"/>`;
-            s += `<rect x="${px+2}" y="${glT+1.5}" width="${pw-4}" height="2.5" rx="1.2" fill="rgba(255,255,255,0.2)" clip-path="url(#pvGlass)"/>`;
+            s += `<rect x="${px}" y="${glT}" width="${pw}" height="${tubeH}" rx="4" fill="${tubeCol}" stroke="rgba(0,0,0,0.28)" stroke-width="0.8" clip-path="url(#pvGlass)"/>`;
+            s += `<rect x="${px+2}" y="${glT+1.5}" width="${pw-4}" height="2.5" rx="1.2" fill="rgba(255,255,255,0.28)" clip-path="url(#pvGlass)"/>`;
             // tube end caps
-            s += `<circle cx="${px}" cy="${glT+tubeH/2}" r="${tubeH/2}" fill="${tubeCol}" clip-path="url(#pvGlass)"/>`;
-            s += `<circle cx="${px+pw}" cy="${glT+tubeH/2}" r="${tubeH/2}" fill="${tubeCol}" clip-path="url(#pvGlass)"/>`;
+            s += `<circle cx="${px}" cy="${glT+tubeH/2}" r="${tubeH/2}" fill="${tubeCol}" stroke="rgba(0,0,0,0.25)" stroke-width="0.7" clip-path="url(#pvGlass)"/>`;
+            s += `<circle cx="${px+pw}" cy="${glT+tubeH/2}" r="${tubeH/2}" fill="${tubeCol}" stroke="rgba(0,0,0,0.25)" stroke-width="0.7" clip-path="url(#pvGlass)"/>`;
 
             // Cenefa (3D box above tube)
             if (p.cenefa && p.cenefa !== 'No') {
@@ -3190,10 +3190,11 @@
             s += `<rect x="${px}" y="${fabY}" width="4" height="${fabH}" fill="rgba(0,0,0,0.10)" clip-path="url(#pvGlass)"/>`;
             s += `<rect x="${px+pw-4}" y="${fabY}" width="4" height="${fabH}" fill="rgba(0,0,0,0.10)" clip-path="url(#pvGlass)"/>`;
 
-            // Peso (weight bar)
+            // Peso (weight bar) — always outlined so white/light colors are visible
             const pesoCol = mecCol(p.colorPeso);
-            s += `<rect x="${px}" y="${fabY+fabH}" width="${pw}" height="5" rx="2.5" fill="${pesoCol}" opacity="0.92" clip-path="url(#pvGlass)"/>`;
-            s += `<rect x="${px+2}" y="${fabY+fabH+1}" width="${pw-4}" height="1.8" rx="0.9" fill="rgba(255,255,255,0.2)" clip-path="url(#pvGlass)"/>`;
+            s += `<rect x="${px}" y="${fabY+fabH+1}" width="${pw}" height="5" rx="2" fill="rgba(0,0,0,0.18)" clip-path="url(#pvGlass)"/>`;
+            s += `<rect x="${px}" y="${fabY+fabH}" width="${pw}" height="6" rx="2.5" fill="${pesoCol}" stroke="rgba(0,0,0,0.32)" stroke-width="0.8" clip-path="url(#pvGlass)"/>`;
+            s += `<rect x="${px+2}" y="${fabY+fabH+1.5}" width="${pw-4}" height="2" rx="1" fill="rgba(255,255,255,0.28)" clip-path="url(#pvGlass)"/>`;
 
             // Soft/Dark badge
             if (p.softDark && p.softDark !== 'N/A') {
@@ -3216,39 +3217,63 @@
             const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
             const cadIzq = (p.cierreVert === 'Izquierda');
             if (!tieneMotor) {
-                // Chain: two parallel strands forming a loop
-                const chainCol = mecCol(p.colorCadena||p.colorMecanismo);
+                // Chain: realistically hung loop with visible links
+                // Raw color; if white/very light, use a contrasting stroke so it's always visible
+                const cRaw = mecCol(p.colorCadena || p.colorMecanismo);
+                // Determine if the chain color is "light" → need dark outlines
+                const lightColors = ['#e2e2e2','#999','#b8b8c8'];
+                const chainIsLight = lightColors.includes(cRaw) || cRaw.startsWith('#e') || cRaw.startsWith('#d') || cRaw.startsWith('#f');
+                const chainCol   = cRaw;
+                const chainStrok = chainIsLight ? 'rgba(0,0,0,0.50)' : 'rgba(255,255,255,0.25)';
                 const cPx = chainPxLen(p.largoCadena, ph);
-                const strand1X = cadIzq ? px + 5  : px + pw - 9;
-                const strand2X = strand1X + 4;
-                // Down strands
-                for (let j = 0; j < cPx; j += 5) {
-                    const op = Math.max(0.18, 0.80 - (j/cPx)*0.55);
-                    s += `<ellipse cx="${strand1X}" cy="${glT+tubeH+j}" rx="1.6" ry="2.2" fill="${chainCol}" stroke="rgba(0,0,0,0.3)" stroke-width="0.4" opacity="${op}"/>`;
-                    s += `<ellipse cx="${strand2X}" cy="${glT+tubeH+j+2.5}" rx="1.6" ry="2.2" fill="${chainCol}" stroke="rgba(0,0,0,0.3)" stroke-width="0.4" opacity="${op*0.85}"/>`;
+                // Chain hangs outside the pane edge (in front of the blind), visible on the wall
+                const baseX = cadIzq ? px - 1 : px + pw + 1;
+                const s1X = cadIzq ? baseX - 5 : baseX + 1;   // left strand
+                const s2X = cadIzq ? baseX - 1 : baseX + 5;   // right strand (4px gap)
+                const chainStartY = glT + tubeH - 2;
+                const chainEndY   = chainStartY + cPx;
+
+                // Background channel (dark slot) so chain is always visible
+                const cChanX = Math.min(s1X, s2X) - 2;
+                const cChanW = Math.abs(s2X - s1X) + 8;
+                s += `<rect x="${cChanX}" y="${chainStartY - 2}" width="${cChanW}" height="${cPx + 8}" rx="3" fill="rgba(0,0,0,0.18)" stroke="rgba(0,0,0,0.12)" stroke-width="0.5"/>`;
+
+                // Strand 1 links (going down)
+                for (let j = 0; j < cPx; j += 6) {
+                    const op = Math.max(0.55, 1.0 - (j / cPx) * 0.35);
+                    s += `<ellipse cx="${s1X}" cy="${chainStartY + j}" rx="2.2" ry="3" fill="${chainCol}" stroke="${chainStrok}" stroke-width="0.9" opacity="${op}"/>`;
                 }
-                // Loop connector at bottom
-                const loopY = glT + tubeH + cPx;
-                s += `<path d="M${strand1X} ${loopY} Q${strand1X+2} ${loopY+5} ${strand2X} ${loopY}" fill="none" stroke="${chainCol}" stroke-width="1.2" opacity="0.5"/>`;
-                // Side indicator arrow
-                const arrowX = cadIzq ? px + 12 : px + pw - 12;
-                s += `<text x="${arrowX}" y="${glT+tubeH+20}" text-anchor="middle" fill="${pc.hex}" font-size="8" opacity="0.55">${cadIzq?'◀':'▶'}</text>`;
+                // Strand 2 links (offset by 3px so they interlock visually)
+                for (let j = 3; j < cPx; j += 6) {
+                    const op = Math.max(0.45, 0.90 - (j / cPx) * 0.35);
+                    s += `<ellipse cx="${s2X}" cy="${chainStartY + j}" rx="2.2" ry="3" fill="${chainCol}" stroke="${chainStrok}" stroke-width="0.9" opacity="${op}"/>`;
+                }
+                // Bottom loop connector
+                s += `<path d="M${s1X} ${chainEndY} Q${(s1X+s2X)/2} ${chainEndY+7} ${s2X} ${chainEndY}" fill="none" stroke="${chainCol}" stroke-width="2" stroke-linecap="round" opacity="0.7"/>`;
+
+                // Side direction arrow on fabric
+                const arrowX = cadIzq ? px + pw * 0.15 : px + pw * 0.85;
+                s += `<text x="${arrowX}" y="${glT + tubeH + 18}" text-anchor="middle" fill="${pc.hex}" font-size="9" opacity="0.65" clip-path="url(#pvGlass)">${cadIzq ? '◀' : '▶'}</text>`;
+
                 // Chain length label
-                const chainLabel = p.largoCadena ? `${p.largoCadena}m` : '';
-                if (chainLabel) {
-                    const clX = cadIzq ? px + 14 : px + pw - 14;
-                    s += `<text x="${clX}" y="${glT+tubeH+cPx+14}" text-anchor="middle" fill="${chainCol}" font-size="5.5" font-family="Inter" opacity="0.7">${chainLabel}</text>`;
+                if (p.largoCadena) {
+                    const clLabelX = cadIzq ? s1X - 8 : s2X + 8;
+                    const anchor   = cadIzq ? 'end' : 'start';
+                    s += `<text x="${clLabelX}" y="${chainStartY + cPx + 12}" text-anchor="${anchor}" fill="${chainCol}" font-size="6" font-family="Inter" font-weight="700" stroke="rgba(0,0,0,0.3)" stroke-width="2.5" paint-order="stroke">${p.largoCadena}m</text>`;
                 }
             } else {
                 // Motor housing
-                let motX = cadIzq ? px - 2 : px + pw - 12;
-                if (p.ladoMotor==='IZQUIERDA') motX = px - 2;
-                else if (p.ladoMotor==='DERECHA') motX = px + pw - 12;
-                s += `<rect x="${motX}" y="${glT-3}" width="13" height="16" rx="3.5" fill="#1a1c2c" stroke="#4a4c6a" stroke-width="0.8"/>`;
-                s += `<rect x="${motX+1}" y="${glT-2}" width="11" height="4" rx="2" fill="rgba(255,255,255,0.08)"/>`;
-                s += `<text x="${motX+6.5}" y="${glT+10}" text-anchor="middle" fill="#fbbf24" font-size="8">⚡</text>`;
-                // Motor cable
-                s += `<line x1="${motX+6.5}" y1="${glT-3}" x2="${motX+6.5}" y2="${fT+2}" stroke="#3a3a50" stroke-width="1.2" stroke-dasharray="2.5,2"/>`;
+                const cadIzqMot = (p.cierreVert === 'Izquierda');
+                let motX = cadIzqMot ? px - 2 : px + pw - 12;
+                if (p.ladoMotor === 'IZQUIERDA') motX = px - 2;
+                else if (p.ladoMotor === 'DERECHA') motX = px + pw - 12;
+                // Shadow
+                s += `<rect x="${motX+1}" y="${glT}" width="13" height="16" rx="3.5" fill="rgba(0,0,0,0.25)"/>`;
+                s += `<rect x="${motX}" y="${glT-3}" width="13" height="16" rx="3.5" fill="#1a1c2c" stroke="#5a5c7a" stroke-width="0.9"/>`;
+                s += `<rect x="${motX+1}" y="${glT-2}" width="11" height="4" rx="2" fill="rgba(255,255,255,0.10)"/>`;
+                s += `<text x="${motX+6.5}" y="${glT+10}" text-anchor="middle" fill="#fbbf24" font-size="9">⚡</text>`;
+                // Motor cable going up
+                s += `<line x1="${motX+6.5}" y1="${glT-3}" x2="${motX+6.5}" y2="${fT}" stroke="#4a4a60" stroke-width="1.5" stroke-dasharray="3,2"/>`;
             }
 
             curX += pw;
