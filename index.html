@@ -8139,11 +8139,48 @@
             if (typeof _corrOrdenesData === 'string') { try { _corrOrdenesData = JSON.parse(_corrOrdenesData); } catch(e) { _corrOrdenesData = []; } }
             _corrPlanData = lineas;
             _corrPlanPendientes = {};
-            _corrPlanId = data.id;  // guardar UUID para actualizar después
-            const fecha = data.fecha ? new Date(data.fecha).toLocaleString('es-CL') : '';
-            statusEl.textContent = lineas.length > 0
-                ? `✅ ${lineas.length} cortes cargados${fecha ? ' — ' + fecha : ''}`
-                : '⚠ El plan no tiene cortes registrados.';
+            _corrPlanId = data.id;
+            const fecha    = data.fecha ? new Date(data.fecha) : null;
+            const fechaStr = fecha ? fecha.toLocaleString('es-CL') : '';
+
+            // ── Detectar si el plan está desactualizado vs la OT activa ──
+            let desactualizado = false;
+            let razonDesact    = '';
+
+            // 1. Contar paños actuales en storeVentanas
+            const panosActuales = storeVentanas.reduce((n, v) => n + (v.panos?.length || 1), 0);
+            // Contar paños en el plan (cada línea es un paño)
+            const panosEnPlan = lineas.length;
+            if (panosActuales > 0 && panosEnPlan !== panosActuales) {
+                desactualizado = true;
+                razonDesact = `Plan tiene ${panosEnPlan} corte(s) pero la OT actual tiene ${panosActuales} paño(s)`;
+            }
+
+            // 2. Comparar fecha del plan vs último cambio de la OT en Supabase
+            if (!desactualizado && fecha && activeOTId !== null) {
+                try {
+                    const { data: otRow } = await sb.from('ots')
+                        .select('updated_at').eq('id', activeOTId).maybeSingle();
+                    if (otRow?.updated_at) {
+                        const otUpd = new Date(otRow.updated_at);
+                        if (otUpd > fecha) {
+                            desactualizado = true;
+                            razonDesact = `OT modificada el ${otUpd.toLocaleString('es-CL')} (plan es del ${fechaStr})`;
+                        }
+                    }
+                } catch(_) {}
+            }
+
+            if (lineas.length === 0) {
+                statusEl.innerHTML = '⚠ El plan no tiene cortes registrados.';
+            } else if (desactualizado) {
+                statusEl.innerHTML = `
+                    <span style="color:#fbbf24;">⚠ Plan desactualizado</span>
+                    <span style="font-size:0.68rem;color:#94a3b8;margin-left:6px;">${razonDesact}</span>
+                    <br><span style="font-size:0.68rem;color:#64748b;">Último plan guardado: ${fechaStr} — ${lineas.length} corte(s)</span>`;
+            } else {
+                statusEl.innerHTML = `✅ ${lineas.length} cortes cargados${fechaStr ? ' — ' + fechaStr : ''}`;
+            }
             corrRenderPlan(lineas);
             document.getElementById('corr-aplicar-wrap').style.display = 'none';
         } catch(e) { statusEl.textContent = '❌ Error: ' + e.message; }
@@ -8171,7 +8208,7 @@
             const res = item.resultado || item;
             const ord = item.orden || {};
             const codigo   = res.codigo || res.codigo_original || ord.cod || '—';
-            const medida   = res.medida_cm !== undefined ? res.medida_cm + ' cm' : '—';
+            const medida   = res.medida_cm !== undefined ? parseFloat(res.medida_cm).toFixed(1) + ' cm' : '—';
             const colmena  = res.colmena || '—';
             const otUbic   = [ord.ot, ord.ubic].filter(Boolean).join(' · ') || '—';
             const tieneCorr = _corrPlanPendientes[i];
@@ -8180,8 +8217,8 @@
             html += `<tr style="${rowBg}">
                 <td style="color:#64748b;background:transparent;">${i+1}</td>
                 <td ${tdC} style="color:#e2e8f0;background:transparent;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${otUbic}</td>
-                <td ${tdM}>${codigo}${badge}</td>
-                <td ${tdC}>${medida}</td>
+                <td ${tdM} style="color:#e2e8f0;background:transparent;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;" title="${codigo}">${codigo}${badge}</td>
+                <td ${tdC} style="color:#e2e8f0;background:transparent;font-weight:600;">${medida}</td>
                 <td ${tdC}>${colmena}</td>
                 <td style="background:transparent;"><button class="btn btn-sm py-0 px-1" style="font-size:0.7rem;background:rgba(251,191,36,0.2);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);" onclick="corrMostrarEditor(${i})"><i class="bi bi-pencil"></i></button></td>
             </tr>`;
@@ -8347,7 +8384,7 @@
         tubos.forEach((t) => {
             const colmena = t.n_colmena || '—';
             const cod     = t.cod       || '—';
-            const medida  = t.medida_cm !== undefined ? t.medida_cm + ' cm' : (t.medida_mm !== undefined ? (t.medida_mm/10).toFixed(1) + ' cm' : '—');
+            const medida  = t.medida_cm !== undefined ? parseFloat(t.medida_cm).toFixed(1) + ' cm' : (t.medida_mm !== undefined ? (t.medida_mm/10).toFixed(1) + ' cm' : '—');
             const serial  = t.serial    || '—';
             html += `<tr style="background:transparent;">
                 <td ${tdStyle}>${colmena}</td>
