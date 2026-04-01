@@ -2675,8 +2675,8 @@
         };
     }
 
-    function setTipoVentana(n) {
-        guardarPanoActual(); // guardar datos actuales antes de cambiar el número de paños
+    function setTipoVentana(n, skipGuardar = false) {
+        if (!skipGuardar) guardarPanoActual(); // guardar datos actuales antes de cambiar el número de paños
         tipoVentana = n;
         document.querySelectorAll('.tipo-ventana-btn').forEach(b => b.classList.toggle('active', parseInt(b.dataset.tipo) === n));
         while (panosData.length < n) panosData.push(crearPanoVacio());
@@ -3236,7 +3236,7 @@
         // Fallback: si los paños viejos no tienen alto propio, heredan el de la ventana
         panosData.forEach(p => { if (!p.alto) p.alto = v.alto; });
         panoActivo = 0;
-        setTipoVentana(v.panos.length);
+        setTipoVentana(v.panos.length, true); // true = no leer DOM, panosData ya está listo
         document.getElementById('ficha-pano-activo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -3268,7 +3268,7 @@
         });
 
         panoActivo = 0;
-        setTipoVentana(miembros.length);
+        setTipoVentana(miembros.length, true); // true = no leer DOM, panosData ya está listo
         document.getElementById('ficha-pano-activo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
@@ -3436,6 +3436,7 @@
                 // Create a proper ventana with panos[] array matching Fase 2 structure
                 const panoDefault = crearPanoVacio();
                 panoDefault.ancho = ancho; // ancho en metros
+                panoDefault.alto  = alto;  // alto en metros (para que Fase 2 lo muestre correctamente)
                 panoDefault.color = color;
 
                 const ventana = {
