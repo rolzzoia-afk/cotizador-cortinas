@@ -8275,6 +8275,14 @@
                 document.getElementById('corr-config-status').textContent = '⚠ No se pudo leer la configuración';
             }
         } else if (inp) { inp.value = _corrEmailOptimizer; }
+
+        // ── Cargar todas las secciones automáticamente al abrir el tab ──
+        if (_corrEmailOptimizer) {
+            corrCargarPlan();
+            corrCargarTubos();
+            corrCargarHistorial();
+            planHistorialCargar();
+        }
     }
 
     // ─── Guardar email del optimizador ──────────────────────────
@@ -8323,11 +8331,15 @@
 
             // 1. Contar paños actuales en storeVentanas
             const panosActuales = storeVentanas.reduce((n, v) => n + (v.panos?.length || 1), 0);
-            // Contar paños en el plan (cada línea es un paño)
-            const panosEnPlan = lineas.length;
+            // Contar ubicaciones únicas en las ÓRDENES del plan (no en lineas, que incluye
+            // múltiples componentes por paño: TUBO + PESO INTERNO + PESO U en productos DÚO)
+            const ubicacionesEnPlan = new Set(
+                (_corrOrdenesData || []).map(o => `${o.ot||''}|${o.ubic||''}`)
+            ).size;
+            const panosEnPlan = ubicacionesEnPlan || lineas.length;
             if (panosActuales > 0 && panosEnPlan !== panosActuales) {
                 desactualizado = true;
-                razonDesact = `Plan tiene ${panosEnPlan} corte(s) pero la OT actual tiene ${panosActuales} paño(s)`;
+                razonDesact = `Plan tiene ${panosEnPlan} ubicación(es) pero la OT actual tiene ${panosActuales} paño(s)`;
             }
 
             // 2. Comparar fecha del plan vs último cambio de la OT en Supabase
