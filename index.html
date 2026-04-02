@@ -8329,26 +8329,23 @@
             let desactualizado = false;
             let razonDesact    = '';
 
-            // 1. Contar paños actuales en storeVentanas
-            const panosActuales = storeVentanas.reduce((n, v) => n + (v.panos?.length || 1), 0);
-            // Contar ubicaciones únicas en las ÓRDENES del plan (no en lineas, que incluye
-            // múltiples componentes por paño: TUBO + PESO INTERNO + PESO U en productos DÚO)
-            const ubicacionesEnPlan = new Set(
-                (_corrOrdenesData || []).map(o => `${o.ot||''}|${o.ubic||''}`)
-            ).size;
-            const panosEnPlan = ubicacionesEnPlan || lineas.length;
-            if (panosActuales > 0 && panosEnPlan !== panosActuales) {
-                desactualizado = true;
-                razonDesact = `Plan tiene ${panosEnPlan} ubicación(es) pero la OT actual tiene ${panosActuales} paño(s)`;
-            }
+            // Extraer la OT del plan (primera orden disponible)
+            const otEnPlan = String((_corrOrdenesData || [])[0]?.ot || '').trim();
 
-            // 2. Comparar fecha del plan vs último cambio de la OT en Supabase
-            if (!desactualizado && fecha && activeOTId !== null) {
+            // ── Comparar solo si hay una OT activa cargada Y coincide con la del plan ──
+            // Esto evita falsos positivos cuando el plan es de OT X pero en el app
+            // se tiene cargada otra OT Y con distinto número de paños.
+            if (fecha && activeOTId !== null) {
                 try {
-                    const { data: otRow } = await sb.from('ots')
-                        .select('updated_at').eq('id', activeOTId).maybeSingle();
-                    if (otRow?.updated_at) {
-                        const otUpd = new Date(otRow.updated_at);
+                    // Usar storeOTs (ya en memoria) — evita consulta extra a la BD
+                    const otActiva = typeof storeOTs !== 'undefined'
+                        ? storeOTs.find(o => o.id === activeOTId)
+                        : null;
+                    const otActivaNum = String(otActiva?.numero_ot || '').trim();
+                    // Solo marcar desactualizado si la OT activa es la misma que la del plan
+                    const mismaOT = !otEnPlan || !otActivaNum || otEnPlan === otActivaNum;
+                    if (mismaOT && otActiva?.updated_at) {
+                        const otUpd = new Date(otActiva.updated_at);
                         if (otUpd > fecha) {
                             desactualizado = true;
                             razonDesact = `OT modificada el ${otUpd.toLocaleString('es-CL')} (plan es del ${fechaStr})`;
