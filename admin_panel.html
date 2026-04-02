@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Panel de Administrador - Ojo de Dios</title>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
@@ -26,6 +28,10 @@
             border-radius: 5px; cursor: pointer; font-size: 13px;
         }
         .btn-logout:hover { background: #c0392b; }
+        .badge-supabase {
+            background: #3ecf8e; color: #1a1a2e; font-size: 10px; padding: 2px 8px;
+            border-radius: 3px; font-weight: bold; margin-left: 10px; letter-spacing: 0.5px;
+        }
 
         /* Layout */
         .main { max-width: 1400px; margin: 0 auto; padding: 25px; }
@@ -123,7 +129,7 @@
 <div id="app-container" style="display:none;">
     <!-- Navbar -->
     <nav class="navbar">
-        <h1>Panel de Administrador — <span>Ojo de Dios</span></h1>
+        <h1>Panel de Administrador — <span>Ojo de Dios</span> <span class="badge-supabase">SUPABASE</span></h1>
         <div style="display:flex; align-items:center; gap:15px;">
             <span class="navbar-user" id="adminEmail"></span>
             <button class="btn-logout" id="btnLogout">Cerrar sesión</button>
@@ -136,7 +142,7 @@
             <h2>Control de Sistema</h2>
             <div class="version-display">
                 <div>
-                    <div class="version-label">Versión mínima requerida en Firebase</div>
+                    <div class="version-label">Versión mínima requerida en Supabase</div>
                     <div class="version-badge" id="versionActual">...</div>
                 </div>
                 <button class="btn-danger" id="btnForzarUpdate" disabled>
@@ -145,60 +151,68 @@
             </div>
         </div>
 
-        <!-- Sección 2: Inventario en Vivo -->
+        <!-- Sección 2: Inventario en Vivo (colmena_tubos) -->
         <div class="panel">
-            <h2>Inventario en Vivo</h2>
-
-            <div class="user-selector">
-                <label>Usuario del taller:</label>
-                <select id="selectUsuario">
-                    <option value="">Cargando usuarios...</option>
-                </select>
-            </div>
+            <h2>Inventario en Vivo — Colmena de Tubos</h2>
 
             <div class="stats-bar" id="statsBar">
                 <div class="stat-card"><div class="num" id="statTotal">0</div><div class="lbl">Tubos Total</div></div>
                 <div class="stat-card"><div class="num" id="statDisponibles">0</div><div class="lbl">Disponibles</div></div>
-                <div class="stat-card"><div class="num" id="statOcupados">0</div><div class="lbl">Ocupados</div></div>
-                <div class="stat-card"><div class="num" id="statCodigos">0</div><div class="lbl">Códigos</div></div>
+                <div class="stat-card"><div class="num" id="statAdmin">0</div><div class="lbl">Agregados por Admin</div></div>
+                <div class="stat-card"><div class="num" id="statCodigos">0</div><div class="lbl">Códigos únicos</div></div>
+            </div>
+
+            <div style="margin-bottom:10px;">
+                <input type="text" id="filtroTubos" placeholder="Buscar por código, colmena..."
+                       oninput="filtrarTubos()"
+                       style="background:#0a1628; color:#eee; border:1px solid #2c3e6e; padding:8px 12px; border-radius:5px; font-size:13px; width:300px;">
             </div>
 
             <div class="tabla-container">
                 <table>
                     <thead>
                         <tr>
+                            <th>N° Colmena</th>
                             <th>Código</th>
                             <th>Medida (cm)</th>
-                            <th>Colmena</th>
-                            <th>Lote</th>
+                            <th>Medida (mm)</th>
                             <th>Serial</th>
+                            <th>Admin</th>
                             <th>Fecha</th>
-                            <th>Estado</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyInventario">
-                        <tr><td colspan="7" class="loading-msg">Seleccione un usuario para ver su inventario</td></tr>
+                        <tr><td colspan="7" class="loading-msg">Cargando inventario...</td></tr>
                     </tbody>
                 </table>
             </div>
         </div>
 
-        <!-- Sección 3: Historial de Operaciones -->
+        <!-- Sección 3: Historial de Planes de Corte -->
         <div class="panel">
-            <h2>Historial de Operaciones</h2>
-            <p style="color:#aaa;font-size:13px;margin-bottom:15px;">Puntos de restauración guardados automáticamente en cada optimización confirmada.</p>
+            <h2>Historial de Planes de Corte</h2>
+            <p style="color:#aaa;font-size:13px;margin-bottom:15px;">Planes de corte generados por el optimizador, guardados automáticamente en Supabase.</p>
+
+            <div class="user-selector">
+                <label>Email del optimizador:</label>
+                <select id="selectOptimizer">
+                    <option value="">Cargando...</option>
+                </select>
+            </div>
+
             <div class="tabla-container" style="max-height:400px;">
                 <table>
                     <thead>
                         <tr>
                             <th>Fecha / Hora</th>
-                            <th>Archivo</th>
+                            <th>Email</th>
                             <th>Cortes</th>
+                            <th>Corregido</th>
                             <th>Acciones</th>
                         </tr>
                     </thead>
                     <tbody id="tbodyHistorial">
-                        <tr><td colspan="4" class="loading-msg">Seleccione un usuario para ver su historial</td></tr>
+                        <tr><td colspan="5" class="loading-msg">Seleccione un optimizador para ver su historial</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -210,7 +224,7 @@
 <div id="modalHistorial" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:1000; overflow-y:auto;">
     <div style="max-width:1200px; margin:30px auto; background:#16213e; border-radius:12px; border:1px solid #1a1a4e; padding:25px; position:relative;">
         <button id="btnCerrarModal" style="position:absolute; top:15px; right:20px; background:none; border:none; color:#aaa; font-size:24px; cursor:pointer;">&times;</button>
-        <h2 style="color:#ecf0f1; margin-bottom:5px;" id="modalTitulo">Detalle de Operación</h2>
+        <h2 style="color:#ecf0f1; margin-bottom:5px;" id="modalTitulo">Detalle del Plan de Corte</h2>
         <p style="color:#aaa; font-size:13px; margin-bottom:20px;" id="modalSubtitulo"></p>
 
         <div class="tabla-container" style="max-height:500px; margin-bottom:20px;">
@@ -231,8 +245,8 @@
         </div>
 
         <div style="display:flex; gap:15px; justify-content:flex-end; flex-wrap:wrap;">
-            <button class="btn-danger" id="btnRollback" style="font-size:14px; padding:12px 24px;">
-                ❌ Anular esta operación (y restaurar inventario previo)
+            <button class="btn-danger" id="btnRestaurar" style="font-size:14px; padding:12px 24px;">
+                Restaurar este plan como activo
             </button>
             <button id="btnCerrarModal2" style="background:#2c3e6e; color:#eee; border:none; padding:12px 24px; border-radius:8px; cursor:pointer; font-size:14px;">
                 Cerrar
@@ -241,201 +255,175 @@
     </div>
 </div>
 
-<!-- Firebase SDK -->
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-  import {
-    getAuth,
-    signInWithEmailAndPassword,
-    onAuthStateChanged,
-    signOut
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-  import {
-    getFirestore,
-    collection,
-    getDocs,
-    getDoc,
-    onSnapshot,
-    doc,
-    setDoc,
-    updateDoc,
-    deleteDoc,
-    writeBatch,
-    query,
-    orderBy,
-    where,
-    addDoc
-  } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyBUQVqyC3ti4hLbuBT8U4zINUWU3u07Dmw",
-    authDomain: "inventario-colmenas.firebaseapp.com",
-    projectId: "inventario-colmenas",
-    storageBucket: "inventario-colmenas.firebasestorage.app",
-    messagingSenderId: "412114089031",
-    appId: "1:412114089031:web:de2aedf856272598ae6d62"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
-  const db = getFirestore(app);
-
-  // Exportar para admin.js
-  window.fbAuth = auth;
-  window.fbDb = db;
-  window.fbSignIn = signInWithEmailAndPassword;
-  window.fbOnAuth = onAuthStateChanged;
-  window.fbSignOut = signOut;
-  window.fbCollection = collection;
-  window.fbGetDocs = getDocs;
-  window.fbGetDoc = getDoc;
-  window.fbOnSnapshot = onSnapshot;
-  window.fbDoc = doc;
-  window.fbSetDoc = setDoc;
-  window.fbUpdateDoc = updateDoc;
-  window.fbDeleteDoc = deleteDoc;
-  window.fbWriteBatch = writeBatch;
-  window.fbQuery = query;
-  window.fbOrderBy = orderBy;
-  window.fbWhere = where;
-  window.fbAddDoc = addDoc;
-
-  console.log("🔥 Firebase Admin inicializado.");
-</script>
-
 <script>
 // ═══════════════════════════════════════════════════════════════════
-// admin.js — Panel de Administrador "Ojo de Dios"
-// Solo lectura del inventario + control de versión del sistema
+// admin_panel.js — Panel de Administrador "Ojo de Dios"
+// MIGRADO A SUPABASE — Ya no depende de Firebase
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Lista de emails con acceso de administrador ──
-// Agregar aquí los emails autorizados para usar el panel admin.
-// Idealmente esto debería leerse de Firestore (colección "configuracion/admins"),
-// pero como respaldo mínimo se valida localmente.
-const ADMINS_AUTORIZADOS = [
-    // Agregar emails de administradores aquí, ej:
-    // "admin@empresa.com",
-    // "jefe@empresa.com"
-];
+// ── Configuración Supabase (misma que index.html) ──────────────────
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
 
-let unsubVersion = null;
-let unsubColmena = null;
-let unsubSeriales = null;
-let unsubHistorial = null;
-let versionActualFirebase = null;    // Valor actual en Firebase
-let usuarioSeleccionado = null;      // Email del usuario actualmente seleccionado
-let historialOperaciones = [];       // Cache local del historial
-let operacionSeleccionada = null;    // Operación activa en el modal
-
-// ─── ESPERAR A QUE FIREBASE ESTÉ LISTO ──────────────────────────────────────
-
-document.addEventListener("DOMContentLoaded", () => {
-    const esperar = setInterval(() => {
-        if (window.fbAuth) {
-            clearInterval(esperar);
-
-            window.fbOnAuth(window.fbAuth, async (user) => {
-                if (!user) {
-                    mostrarLogin();
-                } else {
-                    // ── Validación de rol admin ──
-                    const esAdmin = await verificarRolAdmin(user.email);
-                    if (!esAdmin) {
-                        alert("⛔ Acceso denegado. Tu cuenta no tiene permisos de administrador.");
-                        window.fbSignOut(window.fbAuth).then(() => location.reload());
-                        return;
-                    }
-                    document.getElementById("app-container").style.display = "block";
-                    document.getElementById("adminEmail").textContent = user.email;
-                    inicializarPanel();
-                }
-            });
-        }
-    }, 100);
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+        storage: sessionStorage,
+        persistSession: true,
+        autoRefreshToken: true
+    }
 });
 
-// Verificar si el email tiene rol de admin (primero Firestore, luego lista local)
-async function verificarRolAdmin(email) {
-    // Intento 1: verificar en Firestore (colección configuracion/admins)
-    try {
-        const docRef = window.fbDoc(window.fbDb, "configuracion", "admins");
-        const snap = await window.fbGetDoc(docRef);
-        if (snap.exists()) {
-            const data = snap.data();
-            const listaAdmins = data.emails || [];
-            if (listaAdmins.includes(email)) return true;
-            if (listaAdmins.length > 0) return false; // Lista existe pero el email no está
-        }
-    } catch (e) {
-        console.warn("No se pudo verificar admins en Firestore:", e.message);
+// ── Estado local ───────────────────────────────────────────────────
+let versionActual = null;
+let tubosCargados = [];
+let planesHistorial = [];
+let planSeleccionado = null;
+let realtimeChannel = null;
+
+// ─── ARRANQUE ──────────────────────────────────────────────────────
+
+document.addEventListener("DOMContentLoaded", async () => {
+    // Verificar sesión activa en Supabase
+    const { data: { session } } = await sb.auth.getSession();
+
+    if (!session) {
+        mostrarLogin();
+        return;
     }
 
-    // Intento 2: lista local hardcodeada (fallback)
-    if (ADMINS_AUTORIZADOS.length > 0) {
-        return ADMINS_AUTORIZADOS.includes(email);
+    await verificarYArrancar(session.user);
+});
+
+async function verificarYArrancar(user) {
+    // Verificar que sea admin consultando la tabla perfiles
+    const esAdmin = await verificarRolAdmin(user);
+    if (!esAdmin) {
+        alert("Acceso denegado. Tu cuenta no tiene permisos de administrador.");
+        await sb.auth.signOut();
+        location.reload();
+        return;
+    }
+
+    document.getElementById("app-container").style.display = "block";
+    document.getElementById("adminEmail").textContent = user.email;
+    inicializarPanel();
+}
+
+// ── Verificar rol admin en la tabla perfiles de Supabase ───────────
+async function verificarRolAdmin(user) {
+    try {
+        const { data, error } = await sb.from('perfiles')
+            .select('nombre, rol')
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (error) {
+            console.warn("Error verificando perfil:", error.message);
+            // Si no existe tabla perfiles o hay error, verificar con configuracion
+            return await verificarAdminPorConfiguracion(user.email);
+        }
+
+        if (data?.rol === 'admin' || data?.rol === 'superadmin') {
+            return true;
+        }
+
+        // Fallback: verificar en tabla configuracion
+        return await verificarAdminPorConfiguracion(user.email);
+    } catch (e) {
+        console.warn("Error en verificación de admin:", e.message);
+        return false;
+    }
+}
+
+async function verificarAdminPorConfiguracion(email) {
+    try {
+        const { data } = await sb.from('configuracion')
+            .select('valor')
+            .eq('empresa_id', EMPRESA_ID)
+            .eq('clave', 'admins_emails')
+            .maybeSingle();
+
+        if (data?.valor) {
+            const lista = typeof data.valor === 'string' ? JSON.parse(data.valor) : data.valor;
+            if (Array.isArray(lista) && lista.includes(email)) return true;
+            if (lista.length > 0) return false;
+        }
+    } catch (e) {
+        console.warn("No se pudo verificar admins en configuracion:", e.message);
     }
 
     // Si no hay lista configurada en ningún lado, permitir acceso (compatibilidad)
-    console.warn("⚠️ No hay lista de admins configurada. Cualquier usuario autenticado tiene acceso.");
+    console.warn("No hay lista de admins configurada. Cualquier usuario autenticado tiene acceso.");
     return true;
 }
 
-// ─── LOGIN ──────────────────────────────────────────────────────────────────
+// ─── LOGIN ─────────────────────────────────────────────────────────
 
 function mostrarLogin() {
     document.getElementById("app-container").style.display = "none";
     document.body.insertAdjacentHTML("afterbegin", `
         <div class="login-container" id="loginBox">
             <h2>Admin — Ojo de Dios</h2>
+            <p style="color:#aaa; font-size:12px; margin-bottom:5px;">Conectado a Supabase</p>
             <input type="email" id="email" placeholder="Correo del administrador" />
             <input type="password" id="password" placeholder="Contraseña" />
             <button id="btnLogin">Ingresar</button>
             <p class="error" id="loginError"></p>
         </div>
     `);
-    document.getElementById("btnLogin").addEventListener("click", () => {
+    document.getElementById("btnLogin").addEventListener("click", async () => {
         const email = document.getElementById("email").value;
         const pass = document.getElementById("password").value;
-        window.fbSignIn(window.fbAuth, email, pass)
-            .then(() => {
-                const box = document.getElementById("loginBox");
-                if (box) box.remove();
-            })
-            .catch(err => {
-                document.getElementById("loginError").textContent = err.message;
-            });
+        const errEl = document.getElementById("loginError");
+        errEl.textContent = '';
+
+        try {
+            const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+            if (error) throw error;
+
+            const box = document.getElementById("loginBox");
+            if (box) box.remove();
+            await verificarYArrancar(data.user);
+        } catch (err) {
+            errEl.textContent = err.message === 'Invalid login credentials'
+                ? 'Email o contraseña incorrectos.'
+                : (err.message || 'Error al iniciar sesión.');
+        }
     });
 }
 
-// ─── INICIALIZAR PANEL ──────────────────────────────────────────────────────
+// ─── INICIALIZAR PANEL ─────────────────────────────────────────────
 
 function inicializarPanel() {
     // Logout
-    document.getElementById("btnLogout").addEventListener("click", () => {
+    document.getElementById("btnLogout").addEventListener("click", async () => {
         limpiarListeners();
-        window.fbSignOut(window.fbAuth).then(() => location.reload());
+        await sb.auth.signOut();
+        location.reload();
     });
 
-    // Monitor de versión en tiempo real
-    iniciarMonitorVersion();
+    // Monitor de versión
+    cargarVersion();
+    iniciarRealtimeVersion();
 
-    // Cargar lista de usuarios
-    cargarUsuarios();
+    // Cargar inventario de tubos
+    cargarInventarioTubos();
+    iniciarRealtimeTubos();
+
+    // Cargar emails de optimizadores para el historial
+    cargarOptimizadores();
 
     // Botón de forzar actualización
     document.getElementById("btnForzarUpdate").addEventListener("click", forzarActualizacion);
 
-    // Selector de usuario
-    document.getElementById("selectUsuario").addEventListener("change", (e) => {
+    // Selector de optimizador
+    document.getElementById("selectOptimizer").addEventListener("change", (e) => {
         const email = e.target.value;
         if (email) {
-            usuarioSeleccionado = email;
-            suscribirInventarioUsuario(email);
-            suscribirHistorialUsuario(email);
+            cargarHistorialPlanes(email);
         } else {
-            usuarioSeleccionado = null;
-            limpiarTablaInventario();
             limpiarTablaHistorial();
         }
     });
@@ -443,45 +431,66 @@ function inicializarPanel() {
     // Modal: botones de cerrar
     document.getElementById("btnCerrarModal").addEventListener("click", cerrarModal);
     document.getElementById("btnCerrarModal2").addEventListener("click", cerrarModal);
-    document.getElementById("btnRollback").addEventListener("click", ejecutarRollback);
+    document.getElementById("btnRestaurar").addEventListener("click", ejecutarRestauracion);
 }
 
-// ─── MONITOR DE VERSIÓN (onSnapshot) ────────────────────────────────────────
+// ─── MONITOR DE VERSIÓN ────────────────────────────────────────────
 
-function iniciarMonitorVersion() {
-    const docRef = window.fbDoc(window.fbDb, "configuracion", "version_minima");
+async function cargarVersion() {
+    try {
+        const { data, error } = await sb.from('configuracion')
+            .select('valor')
+            .eq('empresa_id', EMPRESA_ID)
+            .eq('clave', 'version_minima_version')
+            .maybeSingle();
 
-    unsubVersion = window.fbOnSnapshot(docRef, (snap) => {
-        if (snap.exists()) {
-            versionActualFirebase = snap.data().version;
-            document.getElementById("versionActual").textContent = `v${versionActualFirebase}`;
+        if (data?.valor) {
+            versionActual = data.valor;
+            document.getElementById("versionActual").textContent = `v${versionActual}`;
             document.getElementById("btnForzarUpdate").disabled = false;
         } else {
             document.getElementById("versionActual").textContent = "Sin configurar";
-            versionActualFirebase = null;
+            versionActual = null;
             document.getElementById("btnForzarUpdate").disabled = false;
         }
-    }, (error) => {
-        console.error("Error monitor versión:", error);
+    } catch (error) {
+        console.error("Error cargando versión:", error);
         document.getElementById("versionActual").textContent = "Error";
-    });
+    }
 }
 
-// ─── FORZAR ACTUALIZACIÓN (subir versión) ───────────────────────────────────
+function iniciarRealtimeVersion() {
+    // Escuchar cambios en la tabla configuracion para actualizar la versión en vivo
+    const channel = sb.channel('admin-version-monitor')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'configuracion',
+            filter: `empresa_id=eq.${EMPRESA_ID}`
+        }, async (payload) => {
+            // Recargar versión cuando cambie la configuración
+            await cargarVersion();
+        })
+        .subscribe();
+
+    realtimeChannel = channel;
+}
+
+// ─── FORZAR ACTUALIZACIÓN (subir versión) ──────────────────────────
 
 async function forzarActualizacion() {
     const btn = document.getElementById("btnForzarUpdate");
 
     let nuevaVersion;
-    if (versionActualFirebase) {
-        const num = parseFloat(versionActualFirebase);
+    if (versionActual) {
+        const num = parseFloat(versionActual);
         nuevaVersion = (Math.round((num + 0.1) * 10) / 10).toFixed(1);
     } else {
         nuevaVersion = "1.0";
     }
 
     const confirmar = confirm(
-        `¿Estás seguro de subir la versión de "${versionActualFirebase || 'N/A'}" a "${nuevaVersion}"?\n\n` +
+        `¿Estás seguro de subir la versión de "${versionActual || 'N/A'}" a "${nuevaVersion}"?\n\n` +
         `Esto forzará una recarga inmediata en TODOS los navegadores del taller.`
     );
     if (!confirmar) return;
@@ -490,13 +499,16 @@ async function forzarActualizacion() {
     btn.textContent = "Actualizando...";
 
     try {
-        const docRef = window.fbDoc(window.fbDb, "configuracion", "version_minima");
-        await window.fbSetDoc(docRef, {
-            version: nuevaVersion,
-            actualizadoPor: window.fbAuth.currentUser.email,
-            fechaActualizacion: new Date().toISOString()
-        });
-        // El onSnapshot actualizará la UI automáticamente
+        const { error } = await sb.from('configuracion').upsert({
+            empresa_id: EMPRESA_ID,
+            clave: 'version_minima_version',
+            valor: nuevaVersion
+        }, { onConflict: 'empresa_id,clave' });
+
+        if (error) throw error;
+
+        // El realtime actualizará la UI automáticamente
+        alert(`Versión actualizada a v${nuevaVersion}.\nTodos los dispositivos del taller se recargarán.`);
     } catch (error) {
         console.error("Error actualizando versión:", error);
         alert("Error al actualizar la versión: " + error.message);
@@ -506,321 +518,174 @@ async function forzarActualizacion() {
     }
 }
 
-// ─── CARGAR USUARIOS ────────────────────────────────────────────────────────
+// ─── INVENTARIO DE TUBOS (colmena_tubos) ───────────────────────────
 
-// Lista conocida de emails de taller (fallback cuando Firestore no lista documentos padre)
-const USUARIOS_CONOCIDOS = [];
-
-async function cargarUsuarios() {
-    const select = document.getElementById("selectUsuario");
-    let usuarios = [];
-
-    try {
-        // Intento 1: leer documentos directos de la colección "usuarios"
-        console.log("🔍 Consultando colección 'usuarios'...");
-        const colRef = window.fbCollection(window.fbDb, "usuarios");
-        const snapshot = await window.fbGetDocs(colRef);
-        console.log("📊 Documentos encontrados en 'usuarios':", snapshot.size);
-
-        snapshot.forEach(docSnap => {
-            console.log("  → doc:", docSnap.id);
-            usuarios.push(docSnap.id);
-        });
-    } catch (error) {
-        console.error("❌ Error leyendo colección 'usuarios':", error.code, error.message);
-    }
-
-    // Intento 2: si no encontró nada, usar el email del admin logueado como primer candidato
-    if (usuarios.length === 0) {
-        console.log("⚠️ 0 documentos en 'usuarios'. Activando detección alternativa...");
-
-        // Agregar usuarios conocidos configurados manualmente
-        usuarios = [...USUARIOS_CONOCIDOS];
-
-        // Agregar el propio email del admin como candidato
-        const adminEmail = window.fbAuth.currentUser?.email;
-        if (adminEmail && !usuarios.includes(adminEmail)) {
-            usuarios.push(adminEmail);
-        }
-
-        // Intentar descubrir usuarios probando rutas de inventario conocidas
-        if (usuarios.length > 0) {
-            const usuariosVerificados = [];
-            for (const email of usuarios) {
-                try {
-                    const invRef = window.fbDoc(window.fbDb, "usuarios", email, "inventario", "datos");
-                    const invSnap = await window.fbGetDoc(invRef);
-                    if (invSnap.exists()) {
-                        usuariosVerificados.push(email);
-                        console.log("  ✅ Verificado (tiene inventario):", email);
-                    } else {
-                        // Probar colmena_final
-                        const colRef = window.fbDoc(window.fbDb, "usuarios", email, "colmena_final", "datos");
-                        const colSnap = await window.fbGetDoc(colRef);
-                        if (colSnap.exists()) {
-                            usuariosVerificados.push(email);
-                            console.log("  ✅ Verificado (tiene colmena_final):", email);
-                        } else {
-                            console.log("  ⚪ Sin datos:", email);
-                            // Aún así incluirlo para que pueda intentar
-                            usuariosVerificados.push(email);
-                        }
-                    }
-                } catch (e) {
-                    console.warn("  ⚠️ Error verificando", email, ":", e.message);
-                    usuariosVerificados.push(email); // incluir de todos modos
-                }
-            }
-            usuarios = usuariosVerificados;
-        }
-
-        console.log("📋 Usuarios detectados (fallback):", usuarios);
-    }
-
-    // Poblar el selector
-    select.innerHTML = '<option value="">-- Seleccionar usuario --</option>';
-    usuarios.sort();
-    usuarios.forEach(email => {
-        const opt = document.createElement("option");
-        opt.value = email;
-        opt.textContent = email;
-        select.appendChild(opt);
-    });
-
-    // Si solo hay 1 usuario, seleccionarlo automáticamente y cargar inventario
-    if (usuarios.length === 1) {
-        select.value = usuarios[0];
-        usuarioSeleccionado = usuarios[0];
-        console.log("👁️ Auto-seleccionando único usuario:", usuarios[0]);
-        suscribirInventarioUsuario(usuarios[0]);
-        suscribirHistorialUsuario(usuarios[0]);
-    } else if (usuarios.length === 0) {
-        console.warn("⚠️ No se detectaron usuarios. Cargando inventario del admin como fallback global...");
-        select.innerHTML = '<option value="">Sin usuarios detectados (mostrando global)</option>';
-        // Fallback global: usar el email del admin logueado
-        const adminEmail = window.fbAuth.currentUser?.email;
-        if (adminEmail) {
-            usuarioSeleccionado = adminEmail;
-            suscribirInventarioUsuario(adminEmail);
-            suscribirHistorialUsuario(adminEmail);
-        }
-    }
-}
-
-// ─── SUSCRIPCIÓN AL INVENTARIO DE UN USUARIO (onSnapshot) ───────────────────
-
-function suscribirInventarioUsuario(email) {
-    // Limpiar listeners anteriores
-    if (unsubColmena) { unsubColmena(); unsubColmena = null; }
-    if (unsubSeriales) { unsubSeriales(); unsubSeriales = null; }
-
+async function cargarInventarioTubos() {
     const tbody = document.getElementById("tbodyInventario");
     tbody.innerHTML = '<tr><td colspan="7" class="loading-msg">Cargando inventario...</td></tr>';
 
-    let colmenas = [];
-    let seriales = [];
-    let colmenaCargada = false;
-    let serialesCargados = false;
+    try {
+        const { data, error } = await sb.from('colmena_tubos')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID)
+            .order('n_colmena')
+            .order('created_at');
 
-    // Listener de colmena_final
-    const colmenaRef = window.fbDoc(window.fbDb, "usuarios", email, "colmena_final", "datos");
-    unsubColmena = window.fbOnSnapshot(colmenaRef, (snap) => {
-        if (snap.exists() && snap.data().data) {
-            colmenas = JSON.parse(snap.data().data) || [];
-        } else {
-            colmenas = [];
-        }
-        colmenaCargada = true;
-        if (serialesCargados) renderizarInventario(colmenas, seriales);
-    }, (error) => {
-        console.error("Error listener colmena:", error);
-        colmenaCargada = true;
-        if (serialesCargados) renderizarInventario(colmenas, seriales);
-    });
+        if (error) throw error;
 
-    // Listener de seriales
-    const serialesRef = window.fbCollection(window.fbDb, "usuarios", email, "maestro_seriales");
-    unsubSeriales = window.fbOnSnapshot(serialesRef, (querySnap) => {
-        seriales = [];
-        querySnap.forEach(docSnap => {
-            seriales.push(docSnap.data());
-        });
-        serialesCargados = true;
-        if (colmenaCargada) renderizarInventario(colmenas, seriales);
-    }, (error) => {
-        console.error("Error listener seriales:", error);
-        serialesCargados = true;
-        if (colmenaCargada) renderizarInventario(colmenas, seriales);
-    });
+        tubosCargados = data || [];
+        renderizarInventario(tubosCargados);
+    } catch (error) {
+        console.error("Error cargando inventario:", error);
+        tbody.innerHTML = '<tr><td colspan="7" class="loading-msg">Error cargando inventario</td></tr>';
+    }
 }
 
-// ─── RENDERIZAR TABLA DE INVENTARIO ─────────────────────────────────────────
+function iniciarRealtimeTubos() {
+    sb.channel('admin-tubos-monitor')
+        .on('postgres_changes', {
+            event: '*',
+            schema: 'public',
+            table: 'colmena_tubos',
+            filter: `empresa_id=eq.${EMPRESA_ID}`
+        }, () => {
+            // Recargar cuando cambie el inventario
+            cargarInventarioTubos();
+        })
+        .subscribe();
+}
 
-function renderizarInventario(colmenas, seriales) {
+function renderizarInventario(tubos) {
     const tbody = document.getElementById("tbodyInventario");
 
-    // Construir mapa de seriales por código para cruzar con colmenas
-    const serialesPorCodigo = {};
-    seriales.forEach(s => {
-        const cod = (s.codigo || "").toUpperCase().trim();
-        if (!serialesPorCodigo[cod]) serialesPorCodigo[cod] = [];
-        serialesPorCodigo[cod].push(s);
-    });
-
-    // Construir filas combinando colmenas + seriales
-    const filas = [];
-
-    // Filas de colmenas con su serial asociado si existe
-    colmenas.forEach(c => {
-        const cod = (c.cod || "").toUpperCase().trim();
-        const serial = c.serial || null;
-        filas.push({
-            codigo: c.cod || "-",
-            medida_cm: c.medida_cm || (c.medida_mm ? (c.medida_mm / 10).toFixed(1) : "-"),
-            colmena: c.n_colmena || "-",
-            lote: serial ? serial.lote : "-",
-            serial: serial ? serial.serial : "-",
-            fecha: serial ? serial.fecha : "-",
-            estado: serial ? serial.estado : "disponible"
-        });
-    });
-
-    // Si no hay colmenas, mostrar seriales directamente
-    if (colmenas.length === 0 && seriales.length > 0) {
-        seriales.forEach(s => {
-            filas.push({
-                codigo: s.codigo || "-",
-                medida_cm: "-",
-                colmena: "-",
-                lote: s.lote || "-",
-                serial: s.serial || "-",
-                fecha: s.fecha || "-",
-                estado: s.estado || "disponible"
-            });
-        });
-    }
-
     // Stats
-    const totalDisponibles = filas.filter(f => f.estado === "disponible").length;
-    const totalOcupados = filas.filter(f => f.estado === "ocupado").length;
-    const codigosUnicos = new Set(filas.map(f => f.codigo)).size;
+    const total = tubos.length;
+    const admin = tubos.filter(t => t.agregado_por_admin).length;
+    const codigosUnicos = new Set(tubos.map(t => (t.cod || '').toUpperCase())).size;
 
-    document.getElementById("statTotal").textContent = filas.length;
-    document.getElementById("statDisponibles").textContent = totalDisponibles;
-    document.getElementById("statOcupados").textContent = totalOcupados;
+    document.getElementById("statTotal").textContent = total;
+    document.getElementById("statDisponibles").textContent = total; // todos están disponibles en colmena_tubos
+    document.getElementById("statAdmin").textContent = admin;
     document.getElementById("statCodigos").textContent = codigosUnicos;
 
-    if (filas.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="loading-msg">Este usuario no tiene inventario</td></tr>';
+    if (tubos.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="loading-msg">No hay tubos en el inventario</td></tr>';
         return;
     }
 
-    tbody.innerHTML = filas.map(f => {
-        const estadoBadge = f.estado === "ocupado"
-            ? '<span class="badge-ocupado">OCUPADO</span>'
-            : '<span class="badge-disponible">DISPONIBLE</span>';
+    tbody.innerHTML = tubos.map(t => {
+        const fecha = t.created_at ? formatearFecha(t.created_at) : '-';
+        const adminBadge = t.agregado_por_admin
+            ? '<span style="background:#e67e22;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">ADMIN</span>'
+            : '-';
         return `<tr>
-            <td>${f.codigo}</td>
-            <td>${f.medida_cm}</td>
-            <td>${f.colmena}</td>
-            <td>${f.lote}</td>
-            <td>${f.serial}</td>
-            <td>${formatearFecha(f.fecha)}</td>
-            <td>${estadoBadge}</td>
+            <td>${t.n_colmena || '-'}</td>
+            <td>${t.cod || '-'}</td>
+            <td>${t.medida_cm || '-'}</td>
+            <td>${t.medida_mm || '-'}</td>
+            <td>${t.serial || '-'}</td>
+            <td>${adminBadge}</td>
+            <td>${fecha}</td>
         </tr>`;
     }).join("");
 }
 
-// ─── UTILIDADES ─────────────────────────────────────────────────────────────
-
-function formatearFecha(fecha) {
-    if (!fecha || fecha === "-" || fecha === "undefined" || fecha === null) return "-";
-    if (typeof fecha === "number" && fecha > 40000) {
-        const d = new Date((fecha - 25569) * 86400 * 1000);
-        return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+function filtrarTubos() {
+    const filtro = (document.getElementById("filtroTubos").value || '').toLowerCase().trim();
+    if (!filtro) {
+        renderizarInventario(tubosCargados);
+        return;
     }
-    const d = new Date(fecha);
-    if (isNaN(d.getTime())) return String(fecha).includes("/") ? fecha : "-";
-    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
-}
-
-function limpiarTablaInventario() {
-    document.getElementById("tbodyInventario").innerHTML =
-        '<tr><td colspan="7" class="loading-msg">Seleccione un usuario para ver su inventario</td></tr>';
-    document.getElementById("statTotal").textContent = "0";
-    document.getElementById("statDisponibles").textContent = "0";
-    document.getElementById("statOcupados").textContent = "0";
-    document.getElementById("statCodigos").textContent = "0";
-}
-
-function limpiarTablaHistorial() {
-    if (unsubHistorial) { unsubHistorial(); unsubHistorial = null; }
-    historialOperaciones = [];
-    document.getElementById("tbodyHistorial").innerHTML =
-        '<tr><td colspan="4" class="loading-msg">Seleccione un usuario para ver su historial</td></tr>';
-}
-
-// ─── HISTORIAL DE OPERACIONES (onSnapshot) ──────────────────────────────────
-
-function suscribirHistorialUsuario(email) {
-    if (unsubHistorial) { unsubHistorial(); unsubHistorial = null; }
-
-    const tbody = document.getElementById("tbodyHistorial");
-    tbody.innerHTML = '<tr><td colspan="4" class="loading-msg">Cargando historial...</td></tr>';
-
-    const colRef = window.fbCollection(window.fbDb, "usuarios", email, "historial_operaciones");
-    const q = window.fbQuery(colRef, window.fbOrderBy("fecha", "desc"));
-
-    unsubHistorial = window.fbOnSnapshot(q, (querySnap) => {
-        historialOperaciones = [];
-        querySnap.forEach(docSnap => {
-            historialOperaciones.push({ id: docSnap.id, ...docSnap.data() });
-        });
-        renderizarHistorial();
-    }, (error) => {
-        console.error("Error listener historial:", error);
-        tbody.innerHTML = '<tr><td colspan="4" class="loading-msg">Error cargando historial</td></tr>';
+    const filtrados = tubosCargados.filter(t => {
+        const texto = `${t.n_colmena || ''} ${t.cod || ''} ${t.serial || ''} ${t.medida_cm || ''}`.toLowerCase();
+        return texto.includes(filtro);
     });
+    renderizarInventario(filtrados);
+}
+
+// ─── HISTORIAL DE PLANES DE CORTE (planes_corte) ──────────────────
+
+async function cargarOptimizadores() {
+    const select = document.getElementById("selectOptimizer");
+    try {
+        // Obtener emails únicos de la tabla planes_corte
+        const { data, error } = await sb.from('planes_corte')
+            .select('optimizer_email')
+            .eq('empresa_id', EMPRESA_ID)
+            .order('fecha', { ascending: false });
+
+        if (error) throw error;
+
+        const emails = [...new Set((data || []).map(d => d.optimizer_email).filter(Boolean))];
+
+        select.innerHTML = '<option value="">-- Seleccionar optimizador --</option>';
+        emails.forEach(email => {
+            const opt = document.createElement("option");
+            opt.value = email;
+            opt.textContent = email;
+            select.appendChild(opt);
+        });
+
+        // Auto-seleccionar si solo hay uno
+        if (emails.length === 1) {
+            select.value = emails[0];
+            cargarHistorialPlanes(emails[0]);
+        }
+    } catch (error) {
+        console.error("Error cargando optimizadores:", error);
+        select.innerHTML = '<option value="">Error cargando</option>';
+    }
+}
+
+async function cargarHistorialPlanes(email) {
+    const tbody = document.getElementById("tbodyHistorial");
+    tbody.innerHTML = '<tr><td colspan="5" class="loading-msg">Cargando historial...</td></tr>';
+
+    try {
+        const { data, error } = await sb.from('planes_corte')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID)
+            .eq('optimizer_email', email)
+            .order('fecha', { ascending: false })
+            .limit(30);
+
+        if (error) throw error;
+
+        planesHistorial = data || [];
+        renderizarHistorial();
+    } catch (error) {
+        console.error("Error cargando historial:", error);
+        tbody.innerHTML = '<tr><td colspan="5" class="loading-msg">Error cargando historial</td></tr>';
+    }
 }
 
 function renderizarHistorial() {
     const tbody = document.getElementById("tbodyHistorial");
 
-    if (historialOperaciones.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" class="loading-msg">Sin operaciones registradas</td></tr>';
+    if (planesHistorial.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="loading-msg">Sin planes registrados</td></tr>';
         return;
     }
 
-    tbody.innerHTML = historialOperaciones.map((op, idx) => {
-        const fecha = new Date(op.fecha);
+    tbody.innerHTML = planesHistorial.map((plan, idx) => {
+        const fecha = new Date(plan.fecha);
         const fechaStr = `${String(fecha.getDate()).padStart(2,"0")}/${String(fecha.getMonth()+1).padStart(2,"0")}/${fecha.getFullYear()} ${String(fecha.getHours()).padStart(2,"0")}:${String(fecha.getMinutes()).padStart(2,"0")}`;
-        const esRevertido = op.estado === "REVERTIDO";
-        const esCascada = op.estado === "ANULADO_POR_CASCADA";
-        const esAnulado = esRevertido || esCascada;
-        const rowStyle = esAnulado ? 'style="background:rgba(231,76,60,0.15);"' : '';
-        let badgeHtml = '';
-        if (esRevertido) {
-            badgeHtml = `<span style="background:#e74c3c;color:white;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:bold;margin-left:8px;">❌ REVERTIDO</span>`;
-        } else if (esCascada) {
-            badgeHtml = `<span style="background:#e67e22;color:white;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:bold;margin-left:8px;">⚠️ ANULADO (CASCADA)</span>`;
-        }
-        const motivoHtml = esAnulado && op.motivo_error
-            ? `<div style="font-size:10px;color:#e57373;margin-top:3px;font-style:italic;">Motivo: ${op.motivo_error}</div>`
-            : '';
-        // Diagnóstico: mostrar cuántas colmenas tiene el snapshot guardado
-        let snapshotInfo = '-';
-        try {
-            const snapColmenas = JSON.parse(op.snapshot_inventario || '[]');
-            const snapSeriales = JSON.parse(op.snapshot_seriales || '[]');
-            const disponibles = snapSeriales.filter(s => s.estado === 'disponible').length;
-            snapshotInfo = `<span style="font-size:10px;color:#00d2ff;">${snapColmenas.length} colmenas / ${disponibles} tubos</span>`;
-        } catch(e) { snapshotInfo = '<span style="color:#e74c3c;font-size:10px;">⚠️ Sin snapshot</span>'; }
 
-        return `<tr ${rowStyle}>
-            <td>${fechaStr}${badgeHtml}</td>
-            <td>${op.nombre_excel || '-'}${motivoHtml}</td>
-            <td>${op.total_cortes || '-'}</td>
-            <td>${snapshotInfo}</td>
+        let resultados = [];
+        try {
+            resultados = typeof plan.resultados === 'string' ? JSON.parse(plan.resultados) : (plan.resultados || []);
+        } catch(e) { resultados = []; }
+
+        const totalCortes = resultados.length;
+        const corregido = plan.fecha_correccion
+            ? `<span style="background:#27ae60;color:white;padding:2px 6px;border-radius:3px;font-size:10px;">Corregido</span>`
+            : '-';
+
+        return `<tr>
+            <td>${fechaStr}</td>
+            <td>${plan.optimizer_email || '-'}</td>
+            <td>${totalCortes}</td>
+            <td>${corregido}</td>
             <td>
                 <button onclick="abrirModalHistorial(${idx})" style="background:#3498db;color:white;border:none;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:11px;">Ver Detalle</button>
             </td>
@@ -828,22 +693,28 @@ function renderizarHistorial() {
     }).join("");
 }
 
-// ─── MODAL DE DETALLE + ROLLBACK ────────────────────────────────────────────
+// ─── MODAL DE DETALLE + RESTAURACIÓN ───────────────────────────────
 
 function abrirModalHistorial(idx) {
-    operacionSeleccionada = historialOperaciones[idx];
-    if (!operacionSeleccionada) return;
+    planSeleccionado = planesHistorial[idx];
+    if (!planSeleccionado) return;
 
-    const fecha = new Date(operacionSeleccionada.fecha);
+    const fecha = new Date(planSeleccionado.fecha);
     const fechaStr = `${String(fecha.getDate()).padStart(2,"0")}/${String(fecha.getMonth()+1).padStart(2,"0")}/${fecha.getFullYear()} ${String(fecha.getHours()).padStart(2,"0")}:${String(fecha.getMinutes()).padStart(2,"0")}:${String(fecha.getSeconds()).padStart(2,"0")}`;
 
-    document.getElementById("modalTitulo").textContent = `Operación: ${operacionSeleccionada.nombre_excel || 'Sin nombre'}`;
-    document.getElementById("modalSubtitulo").textContent = `Fecha: ${fechaStr} | Cortes: ${operacionSeleccionada.total_cortes || 0} | Usuario: ${operacionSeleccionada.usuario || '-'}`;
+    let resultados = [];
+    try {
+        resultados = typeof planSeleccionado.resultados === 'string'
+            ? JSON.parse(planSeleccionado.resultados)
+            : (planSeleccionado.resultados || []);
+    } catch(e) { resultados = []; }
 
-    // Parsear resultados y renderizar tabla
+    document.getElementById("modalTitulo").textContent = `Plan de Corte — ${fechaStr}`;
+    document.getElementById("modalSubtitulo").textContent = `Email: ${planSeleccionado.optimizer_email || '-'} | Cortes: ${resultados.length} | ID: ${planSeleccionado.id}`;
+
+    // Renderizar tabla
     const tbodyPlan = document.getElementById("tbodyModalPlan");
     try {
-        const resultados = JSON.parse(operacionSeleccionada.resultados || '[]');
         tbodyPlan.innerHTML = resultados.map(r => {
             const codigoReal = r.codigo || r.codigo_original || '';
             const codigoDisplay = (r.codigo_original && r.codigo && r.codigo_original !== r.codigo)
@@ -897,160 +768,85 @@ function abrirModalHistorial(idx) {
 
 function cerrarModal() {
     document.getElementById("modalHistorial").style.display = "none";
-    operacionSeleccionada = null;
+    planSeleccionado = null;
 }
 
-async function ejecutarRollback() {
-    if (!operacionSeleccionada || !usuarioSeleccionado) {
-        alert("No hay operación seleccionada o usuario activo.");
+async function ejecutarRestauracion() {
+    if (!planSeleccionado) {
+        alert("No hay plan seleccionado.");
         return;
     }
 
-    const fecha = new Date(operacionSeleccionada.fecha);
+    const fecha = new Date(planSeleccionado.fecha);
     const fechaStr = `${String(fecha.getDate()).padStart(2,"0")}/${String(fecha.getMonth()+1).padStart(2,"0")}/${fecha.getFullYear()} ${String(fecha.getHours()).padStart(2,"0")}:${String(fecha.getMinutes()).padStart(2,"0")}`;
 
-    // Pedir motivo del error (dato para futura IA)
-    const motivoError = prompt(
-        `⚠️ ROLLBACK — ${fechaStr}\n\n` +
-        `¿Cuál fue el error?\n` +
-        `(Este dato entrenará a la IA en el futuro)\n\n` +
-        `Describe brevemente qué salió mal:`
-    );
-    if (motivoError === null || motivoError.trim() === "") {
-        alert("Rollback cancelado. Debes ingresar un motivo para continuar.");
-        return;
-    }
-
     const confirmar = confirm(
-        `⚠️ OPERACIÓN DESTRUCTIVA ⚠️\n\n` +
-        `Vas a REVERTIR el inventario de "${usuarioSeleccionado}" al estado previo a la operación del ${fechaStr}.\n\n` +
-        `Motivo: "${motivoError.trim()}"\n\n` +
-        `Esto SOBREESCRIBIRÁ:\n` +
-        `• Colmenas (colmena_final)\n` +
-        `• Maestro de Seriales (maestro_seriales)\n\n` +
-        `¿Estás absolutamente seguro?`
+        `¿Restaurar el plan de corte del ${fechaStr} como plan activo?\n\n` +
+        `Esto creará una copia del plan como el más reciente para el optimizador "${planSeleccionado.optimizer_email}".`
     );
     if (!confirmar) return;
 
-    const btnRollback = document.getElementById("btnRollback");
-    btnRollback.disabled = true;
-    btnRollback.textContent = "Revirtiendo...";
+    const btn = document.getElementById("btnRestaurar");
+    btn.disabled = true;
+    btn.textContent = "Restaurando...";
 
     try {
-        const db = window.fbDb;
+        // Obtener resultados y órdenes del plan seleccionado
+        let resultados = planSeleccionado.resultados;
+        let ordenes = planSeleccionado.ordenes;
 
-        // 1. Restaurar colmena_final
-        const snapshotColmenas = JSON.parse(operacionSeleccionada.snapshot_inventario || '[]');
-        await window.fbSetDoc(
-            window.fbDoc(db, "usuarios", usuarioSeleccionado, "colmena_final", "datos"),
-            {
-                data: JSON.stringify(snapshotColmenas),
-                fechaActualizacion: new Date().toISOString(),
-                restauradoPor: window.fbAuth.currentUser.email,
-                esRollback: true
-            }
-        );
-        console.log(`✅ colmena_final restaurada: ${snapshotColmenas.length} registros`);
+        // Insertar como nuevo plan (copia)
+        const { error } = await sb.from('planes_corte').insert({
+            empresa_id: EMPRESA_ID,
+            optimizer_email: planSeleccionado.optimizer_email,
+            resultados: resultados,
+            ordenes: ordenes,
+            fecha: new Date().toISOString(),
+            fecha_correccion: null
+        });
 
-        // 2. Restaurar maestro_seriales (borrar todos + re-crear)
-        const snapshotSeriales = JSON.parse(operacionSeleccionada.snapshot_seriales || '[]');
+        if (error) throw error;
 
-        // 2a. Borrar todos los documentos actuales del maestro_seriales
-        const serialesRef = window.fbCollection(db, "usuarios", usuarioSeleccionado, "maestro_seriales");
-        const serialesActuales = await window.fbGetDocs(serialesRef);
-
-        // Usar batches de 500 (límite de Firestore)
-        let batch = window.fbWriteBatch(db);
-        let batchCount = 0;
-
-        for (const docSnap of serialesActuales.docs) {
-            batch.delete(docSnap.ref);
-            batchCount++;
-            if (batchCount === 499) {
-                await batch.commit();
-                batch = window.fbWriteBatch(db);
-                batchCount = 0;
-            }
-        }
-        if (batchCount > 0) await batch.commit();
-        console.log(`🗑️ ${serialesActuales.size} seriales eliminados`);
-
-        // 2b. Re-crear seriales del snapshot
-        let batchInsert = window.fbWriteBatch(db);
-        let insertCount = 0;
-
-        for (let i = 0; i < snapshotSeriales.length; i++) {
-            const s = snapshotSeriales[i];
-            const docId = `${s.codigo}_${s.lote}_${s.paquete}_${s.serial}`.replace(/[\/\s]/g, '_');
-            const docRef = window.fbDoc(db, "usuarios", usuarioSeleccionado, "maestro_seriales", docId);
-            batchInsert.set(docRef, s);
-            insertCount++;
-            if (insertCount === 499) {
-                await batchInsert.commit();
-                batchInsert = window.fbWriteBatch(db);
-                insertCount = 0;
-            }
-        }
-        if (insertCount > 0) await batchInsert.commit();
-        console.log(`✅ ${snapshotSeriales.length} seriales restaurados`);
-
-        // 3. Anulación en cascada: etiquetar esta operación + todas las posteriores
-        const fechaReversion = new Date().toISOString();
-        const adminEmail = window.fbAuth.currentUser.email;
-        const fechaOperacion = operacionSeleccionada.fecha;
-
-        // Consultar todas las operaciones con fecha >= a la seleccionada
-        const histColRef = window.fbCollection(db, "usuarios", usuarioSeleccionado, "historial_operaciones");
-        const cascadaQuery = window.fbQuery(histColRef, window.fbWhere("fecha", ">=", fechaOperacion));
-        const cascadaSnap = await window.fbGetDocs(cascadaQuery);
-
-        let contadorRevertido = 0;
-        let contadorCascada = 0;
-
-        for (const docSnap of cascadaSnap.docs) {
-            const docRef = window.fbDoc(db, "usuarios", usuarioSeleccionado, "historial_operaciones", docSnap.id);
-            if (docSnap.id === operacionSeleccionada.id) {
-                // El documento clickeado: REVERTIDO
-                await window.fbUpdateDoc(docRef, {
-                    estado: "REVERTIDO",
-                    motivo_error: motivoError.trim(),
-                    fecha_reversion: fechaReversion,
-                    revertido_por: adminEmail
-                });
-                contadorRevertido++;
-            } else {
-                // Documentos posteriores: ANULADO_POR_CASCADA
-                await window.fbUpdateDoc(docRef, {
-                    estado: "ANULADO_POR_CASCADA",
-                    motivo_error: "Anulado automáticamente porque se revirtió una operación anterior en la línea de tiempo.",
-                    fecha_reversion: fechaReversion,
-                    revertido_por: "SISTEMA"
-                });
-                contadorCascada++;
-            }
-        }
-        console.log(`🏷️ Historial etiquetado — REVERTIDO: ${contadorRevertido}, CASCADA: ${contadorCascada}`);
-
-        const cascadaMsg = contadorCascada > 0
-            ? `\n• ${contadorCascada} operación(es) posterior(es) anulada(s) por cascada`
-            : '';
-        alert(`Rollback completado exitosamente.\n\nMotivo: "${motivoError.trim()}"\n\n• ${snapshotColmenas.length} colmenas restauradas\n• ${snapshotSeriales.length} seriales restaurados${cascadaMsg}`);
+        alert(`Plan restaurado exitosamente.\nSe creó una copia del plan del ${fechaStr} como el plan más reciente.`);
         cerrarModal();
 
+        // Recargar historial
+        cargarHistorialPlanes(planSeleccionado.optimizer_email);
+
     } catch (error) {
-        console.error("Error en rollback:", error);
-        alert("Error durante el rollback: " + error.message);
+        console.error("Error en restauración:", error);
+        alert("Error durante la restauración: " + error.message);
     } finally {
-        btnRollback.disabled = false;
-        btnRollback.textContent = "❌ Anular esta operación (y restaurar inventario previo)";
+        btn.disabled = false;
+        btn.textContent = "Restaurar este plan como activo";
     }
 }
 
+// ─── UTILIDADES ────────────────────────────────────────────────────
+
+function formatearFecha(fecha) {
+    if (!fecha || fecha === "-" || fecha === "undefined" || fecha === null) return "-";
+    if (typeof fecha === "number" && fecha > 40000) {
+        const d = new Date((fecha - 25569) * 86400 * 1000);
+        return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+    }
+    const d = new Date(fecha);
+    if (isNaN(d.getTime())) return String(fecha).includes("/") ? fecha : "-";
+    return `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}/${d.getFullYear()}`;
+}
+
+function limpiarTablaHistorial() {
+    planesHistorial = [];
+    document.getElementById("tbodyHistorial").innerHTML =
+        '<tr><td colspan="5" class="loading-msg">Seleccione un optimizador para ver su historial</td></tr>';
+}
+
 function limpiarListeners() {
-    if (unsubVersion) { unsubVersion(); unsubVersion = null; }
-    if (unsubColmena) { unsubColmena(); unsubColmena = null; }
-    if (unsubSeriales) { unsubSeriales(); unsubSeriales = null; }
-    if (unsubHistorial) { unsubHistorial(); unsubHistorial = null; }
+    if (realtimeChannel) {
+        sb.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+    }
+    // Supabase limpia los canales automáticamente al cerrar sesión
 }
 </script>
 </body>
