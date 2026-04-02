@@ -649,6 +649,31 @@ async function cargarDesdeSupabase() {
         } else {
             console.log("No hay inventario guardado aún en Supabase");
         }
+
+        // Intentar cargar órdenes desde clave dedicada (más confiable que el blob grande)
+        try {
+            const claveOrdenes = `opt_ordenes_${_currentUser.email}`;
+            const ordenesStr = await _supabaseLeer(claveOrdenes);
+            if (ordenesStr) {
+                const ordenesGuardadas = JSON.parse(ordenesStr);
+                if (Array.isArray(ordenesGuardadas) && ordenesGuardadas.length > 0) {
+                    // Usar la clave dedicada si tiene más órdenes o el blob no tenía órdenes
+                    if (!SistemaInventario.ordenes || SistemaInventario.ordenes.length === 0 ||
+                        ordenesGuardadas.length >= SistemaInventario.ordenes.length) {
+                        SistemaInventario.ordenes = ordenesGuardadas;
+                        if (!procesandoExcel) {
+                            actualizarTablaOrdenes();
+                            verificarListo();
+                        }
+                        document.getElementById('estadoOrdenes').textContent = `✓ ${ordenesGuardadas.length} órdenes (BD)`;
+                        document.getElementById('estadoOrdenes').className = 'estado-archivo estado-ok';
+                        console.log(`✅ Órdenes cargadas desde clave dedicada: ${ordenesGuardadas.length}`);
+                    }
+                }
+            }
+        } catch (errOrd) {
+            console.warn("No se pudo cargar clave dedicada de órdenes:", errOrd.message);
+        }
     } catch (error) {
         console.error("Error cargando inventario desde Supabase:", error);
     } finally {
@@ -1648,6 +1673,10 @@ async function cargarOrdenes(event) {
         log(`📋 Órdenes cargadas: ${SistemaInventario.ordenes.length} (${filasConMultiCorte} filas expandidas a multi-corte)`, 'success');
         guardarSistema();
         guardarEnSupabase();
+        // Guardar órdenes también por separado para mayor confiabilidad
+        if (_currentUser && _currentUser.email) {
+            _supabaseGuardar(`opt_ordenes_${_currentUser.email}`, JSON.stringify(SistemaInventario.ordenes));
+        }
     } catch (e) { alert('Error: ' + e.message); console.error(e); }
     finally { procesandoExcel = false; }
 }
