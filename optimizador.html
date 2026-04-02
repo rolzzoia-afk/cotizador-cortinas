@@ -115,8 +115,14 @@
         </div>
         <div class="archivo-item">
             <label><strong>Archivo de Colmenas:</strong></label>
-            <input type="file" id="fileColmenas" accept=".xlsx,.xlsm" class="file-input" onchange="cargarColmenas(event)">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <input type="file" id="fileColmenas" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarColmenas(event)">
+                <button class="btn" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="background:#3498db; padding:8px 16px; font-size:12px; white-space:nowrap;">
+                    Cargar desde Supabase
+                </button>
+            </div>
             <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
+            <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
         </div>
         <div class="archivo-item">
             <label><strong>Archivo de Catálogo de Reemplazos:</strong></label>
@@ -125,7 +131,12 @@
         </div>
         <div class="archivo-item">
             <label><strong>Archivo de Estructura de Inventario:</strong></label>
-            <input type="file" id="fileEstructura" accept=".xlsx,.xlsm" class="file-input" onchange="cargarEstructuraInventario(event)">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <input type="file" id="fileEstructura" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarEstructuraInventario(event)">
+                <button class="btn" id="btnCargarSerialesDB" onclick="cargarSerialesDesdeTablaDirecta()" style="background:#3498db; padding:8px 16px; font-size:12px; white-space:nowrap;">
+                    Cargar desde Supabase
+                </button>
+            </div>
             <span id="estadoEstructura" class="estado-archivo estado-pendiente">Sin cargar</span>
         </div>
 
@@ -804,6 +815,8 @@ async function guardarColmenaFinalEnSupabase() {
         if (ok) {
             console.log(`✅ Colmena final guardada en Supabase: ${colmenasFinal.length} registros`);
             log(`✅ Colmena final guardada en Supabase (${colmenasFinal.length} colmenas disponibles)`, "success");
+            // Sincronizar también la tabla colmena_tubos (fuente única de verdad)
+            await sincronizarColmenaFinalConTabla(colmenasFinal);
         } else {
             log("⚠️ No se pudo guardar colmena final en Supabase", "warn");
         }
@@ -812,6 +825,109 @@ async function guardarColmenaFinalEnSupabase() {
         log("❌ Error guardando colmena final: " + error.message, "error");
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
+    }
+}
+
+// ─── CARGA DIRECTA DESDE TABLAS SUPABASE (colmena_tubos) ────────────────────
+// Estas funciones leen directamente de las tablas reales de Supabase,
+// la misma fuente de verdad que usa el cotizador principal (index.html).
+// Se ofrecen como alternativa al upload manual de Excel.
+
+async function cargarColmenasDesdeTabla() {
+    const btn = document.getElementById('btnCargarColmenaDB');
+    if (btn) { btn.disabled = true; btn.textContent = 'Cargando...'; }
+    try {
+        const { data, error } = await sbOpt.from('colmena_tubos')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .order('n_colmena')
+            .order('created_at');
+
+        if (error) throw error;
+        if (!data || data.length === 0) {
+            log('La tabla colmena_tubos está vacía. Cargá colmenas manualmente o desde la colmena_final.', 'warn');
+            return;
+        }
+
+        // Convertir al formato que el optimizador espera
+        SistemaInventario.colmenas = data.map(t => ({
+            n_colmena: t.n_colmena || '-',
+            medida_mm: t.medida_mm || (t.medida_cm ? Math.round(t.medida_cm * 10) : 0),
+            medida_cm: t.medida_cm || (t.medida_mm ? (t.medida_mm / 10) : 0),
+            cod: (t.cod || '').toUpperCase().trim(),
+            serial: t.serial || null
+        })).filter(c => c.medida_mm > 0 && c.cod);
+
+        colmenaActual = SistemaInventario.colmenas;
+        usandoColmenaManual = false;
+        SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
+
+        actualizarTablaColmenas();
+        actualizarIndicadorFuente(false);
+        verificarListo();
+
+        document.getElementById('estadoColmenas').textContent = `✓ ${SistemaInventario.colmenas.length} colmenas (tabla Supabase)`;
+        document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
+
+        log(`✅ Colmenas cargadas desde tabla colmena_tubos: ${SistemaInventario.colmenas.length} registros`, 'success');
+        guardarSistema();
+    } catch (e) {
+        console.error('Error cargando colmenas desde tabla:', e);
+        log('Error cargando colmenas desde Supabase: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Cargar desde Supabase'; }
+    }
+}
+
+async function cargarSerialesDesdeTablaDirecta() {
+    const btn = document.getElementById('btnCargarSerialesDB');
+    if (btn) { btn.disabled = true; btn.textContent = 'Cargando...'; }
+    try {
+        // Intentar cargar desde la clave de Supabase (maestro_seriales_data)
+        const cargado = await cargarSerialesDesdeSupabase();
+        if (cargado) {
+            log('Seriales cargados desde Supabase exitosamente.', 'success');
+        } else {
+            log('No hay seriales guardados en Supabase. Subí el archivo de Estructura manualmente.', 'warn');
+        }
+    } catch (e) {
+        console.error('Error cargando seriales:', e);
+        log('Error cargando seriales: ' + e.message, 'error');
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = 'Cargar desde Supabase'; }
+    }
+}
+
+// También sincronizar colmena_final → colmena_tubos al guardar
+// Esto asegura que cuando el optimizador guarda sus resultados,
+// la tabla colmena_tubos se actualice también (fuente única de verdad)
+async function sincronizarColmenaFinalConTabla(colmenasFinal) {
+    try {
+        // 1. Borrar tubos actuales de la empresa
+        const { error: delError } = await sbOpt.from('colmena_tubos')
+            .delete()
+            .eq('empresa_id', EMPRESA_ID_OPT);
+        if (delError) throw delError;
+
+        // 2. Insertar los nuevos tubos (en lotes de 500)
+        const loteSize = 500;
+        for (let i = 0; i < colmenasFinal.length; i += loteSize) {
+            const lote = colmenasFinal.slice(i, i + loteSize).map(c => ({
+                empresa_id: EMPRESA_ID_OPT,
+                n_colmena: c.n_colmena || '-',
+                cod: (c.cod || '').toUpperCase().trim(),
+                medida_cm: typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
+                medida_mm: c.medida_mm || 0,
+                serial: c.serial || null,
+                agregado_por_admin: false
+            }));
+            const { error: insError } = await sbOpt.from('colmena_tubos').insert(lote);
+            if (insError) throw insError;
+        }
+        console.log(`✅ Tabla colmena_tubos sincronizada: ${colmenasFinal.length} registros`);
+    } catch (e) {
+        console.warn('No se pudo sincronizar colmena_tubos:', e.message);
+        // No es fatal — la colmena_final en configuracion sigue funcionando como respaldo
     }
 }
 
