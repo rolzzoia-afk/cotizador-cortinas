@@ -1700,6 +1700,40 @@ function expandirOrdenesDesdeExcel() {
                     continue;
                 }
 
+                // Excepción dura: CENEFA OVALADA → buscar en catálogo, si no hay match usar fallback
+                // La cenefa SIEMPRE debe aparecer en el plan de corte, nunca se descarta
+                if (nombreCol === 'CENEFA OVALADA') {
+                    const nombreCatCenefa = 'CENEFA OVALADA';
+                    let codCenefa = null;
+                    // Intento 1: catálogo con color exacto
+                    if (colorDeseado) {
+                        codCenefa = SistemaInventario.catalogoAccesorios[`${nombreCatCenefa}|${colorDeseado}`] || null;
+                    }
+                    // Intento 2: catálogo con ALUMINIO
+                    if (!codCenefa) codCenefa = SistemaInventario.catalogoAccesorios[`${nombreCatCenefa}|ALUMINIO`] || null;
+                    // Intento 3: catálogo sin color
+                    if (!codCenefa) codCenefa = SistemaInventario.catalogoAccesorios[`${nombreCatCenefa}|`] || null;
+                    // Intento 4: buscar cualquier entrada que contenga CENEFA OVALADA
+                    if (!codCenefa) {
+                        for (const [llave, val] of Object.entries(SistemaInventario.catalogoAccesorios)) {
+                            if (llave.startsWith('CENEFA OVALADA')) { codCenefa = val; break; }
+                        }
+                    }
+                    // Fallback final: generar código temporal para que la cenefa NO se pierda
+                    if (!codCenefa) {
+                        codCenefa = codTubo || 'CENEFA-' + (colorDeseado || 'SIN-COD');
+                        log(`⚠️ CENEFA OVALADA: sin código en catálogo para color "${colorDeseado}". Usando fallback: ${codCenefa}. Agregar cenefa al catálogo para mayor precisión.`, 'warn');
+                    }
+                    orden.cod = codCenefa;
+                    orden.codigoExtraido = codCenefa;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codCenefa] || null;
+                    orden.tuberia = `CENEFA OVALADA - ${colorDeseado || 'SIN COLOR'}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ CENEFA OVALADA detectada: ${codCenefa} (${colorDeseado || 'SIN COLOR'}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
                 // Excepción dura: PESO U = Peso inferior de dúo Lágrima, código según color
                 // Negro → E18 | Blanco → E19 | Gris → E20
                 // (Garantía secundaria: el catálogo ya debería tenerlos tras Fix 1)
@@ -2166,7 +2200,8 @@ function actualizarTablaColmenasResultado() {
         const color = r.color || obtenerColorDeCatalogo(r.codigo || r.codigo_original || '');
         const _tiraStr = String(ord.con_tira || '').toUpperCase().trim();
         const _esTira  = _tiraStr === 'CON TIRA' || _tiraStr === 'SI' || _tiraStr === 'SÍ' || _tiraStr === 'X';
-        const _sufTira = _esTira ? ' ⭐ CON TIRA' : '';
+        // CON TIRA solo aplica a CENEFA OVALADA, no a otros componentes
+        const _sufTira = (_esTira && ord.componente === 'CENEFA OVALADA') ? ' CON TIRA' : '';
         const accion = ((ord.componente && ord.componente !== 'TUBO') ? `CORTAR ${ord.componente}` : 'CORTAR') + _sufTira;
         let filaHtml = `<tr class="fila-cortar">
             <td>${r.colmena || r.nombreMaterialNuevo || 'TUBO NUEVO'}</td>
@@ -2976,28 +3011,58 @@ function ejecutarOptimizacion() {
     // ── Re-ordenar resultados por OT + Ubicación para el operario ──
     // La optimización procesó de mayor a menor (Best Fit Decreasing),
     // pero el plan de corte se muestra agrupado por kit de armado.
+    // Orden de componentes: TUBO primero, luego accesorios agrupados por ubicación
+    // Así el operario corta TUBO + PESO + accesorios de la misma ubicación seguidos
+    const ORDEN_COMPONENTE = {
+        'TUBO': 0, 'PESO': 1, 'PESO U': 2, 'PESO INTERNO': 3,
+        'CENEFA OVALADA': 4, 'PLETINA': 5, 'PERFIL [CORTINA VERTICAL]': 6,
+        'VARILLA [CORTINA VERTICAL]': 7, 'PERFIL (IZQ) INT': 8, 'PERFIL (DER) INT': 9,
+        'PERFIL BASE': 10, 'CENEFA DELANTERA': 11, 'CENEFA TRASERA': 12, 'PESO SOFT LIGHT': 13
+    };
     SistemaInventario.resultadosOptimizacion.sort((a, b) => {
         const otA = String(a.orden.ot || a.orden.otAsignada || '');
         const otB = String(b.orden.ot || b.orden.otAsignada || '');
         if (otA !== otB) return otA.localeCompare(otB, undefined, { numeric: true });
-        return String(a.orden.ubic || '').localeCompare(String(b.orden.ubic || ''), undefined, { numeric: true });
+        const ubicA = String(a.orden.ubic || '');
+        const ubicB = String(b.orden.ubic || '');
+        if (ubicA !== ubicB) return ubicA.localeCompare(ubicB, undefined, { numeric: true });
+        // Dentro de la misma ubicación: TUBO → PESO → PESO U → PESO INTERNO → CENEFA...
+        const compA = ORDEN_COMPONENTE[a.orden.componente] ?? 99;
+        const compB = ORDEN_COMPONENTE[b.orden.componente] ?? 99;
+        return compA - compB;
     });
 
-    // ── Corregir dependencias MESA: el productor siempre antes que el consumidor ──
-    // El sort anterior puede dejar un corte que usa MESA antes del corte que crea ese sobrante.
-    // Recorremos el array y si encontramos un consumidor cuyo productor viene después, lo movemos.
+    // ── Corregir dependencias MESA: mover BLOQUES COMPLETOS de ubicación ──
+    // Si un corte usa MESA y su productor está en una ubicación posterior,
+    // movemos TODO el bloque de esa ubicación antes del bloque consumidor.
+    // Así se respeta el agrupamiento por kit (TUBO+PESO+CENEFA juntos).
     (function corregirDependenciasMesa() {
         const arr = SistemaInventario.resultadosOptimizacion;
-        for (let i = 0; i < arr.length; i++) {
+
+        // Función auxiliar: encontrar inicio y fin del bloque de ubicación
+        function encontrarBloqueUbic(idx) {
+            const ubic = String(arr[idx].orden.ubic || '');
+            const ot = String(arr[idx].orden.ot || arr[idx].orden.otAsignada || '');
+            let inicio = idx, fin = idx;
+            while (inicio > 0 && String(arr[inicio - 1].orden.ubic || '') === ubic &&
+                   String(arr[inicio - 1].orden.ot || arr[inicio - 1].orden.otAsignada || '') === ot) inicio--;
+            while (fin < arr.length - 1 && String(arr[fin + 1].orden.ubic || '') === ubic &&
+                   String(arr[fin + 1].orden.ot || arr[fin + 1].orden.otAsignada || '') === ot) fin++;
+            return { inicio, fin, ubic, ot };
+        }
+
+        let intentos = 0;
+        const maxIntentos = arr.length * 2; // protección anti-loop
+        for (let i = 0; i < arr.length && intentos < maxIntentos; i++) {
+            intentos++;
             const res = arr[i].resultado;
             if (!res || res.colmena !== 'MESA') continue;
 
-            // El consumidor usa un sobrante de tamaño res.medida_origen con código res.codigo
             const codigoCons = (res.codigo || res.codigo_original || '').split('→')[0].trim();
             const medidaNecesaria = Number(res.medida_origen);
             if (isNaN(medidaNecesaria) || medidaNecesaria <= 0) continue;
 
-            // Buscar el productor: un corte POSTERIOR que genera ese sobrante exacto
+            // Buscar el productor POSTERIOR
             let productorIdx = -1;
             for (let j = i + 1; j < arr.length; j++) {
                 const pr = arr[j].resultado;
@@ -3010,13 +3075,30 @@ function ejecutarOptimizacion() {
                 }
             }
 
-            if (productorIdx !== -1) {
-                // Mover el productor justo antes del consumidor
+            if (productorIdx === -1) continue;
+
+            const bloqueConsumidor = encontrarBloqueUbic(i);
+            const bloqueProductor = encontrarBloqueUbic(productorIdx);
+
+            // Si están en el mismo bloque de ubicación, no hay que mover nada entre bloques
+            if (bloqueConsumidor.inicio === bloqueProductor.inicio) {
+                // Solo mover el item individual dentro del mismo bloque
                 const productor = arr.splice(productorIdx, 1)[0];
                 arr.splice(i, 0, productor);
-                log(`🔀 Orden corregido: productor (${codigoCons} ${medidaNecesaria}cm) movido antes del consumidor de MESA`, 'info');
-                // No incrementar i: ahora el productor está en i, el consumidor en i+1
+                log(`🔀 Reordenado dentro de ${bloqueConsumidor.ubic}: productor antes de consumidor MESA`, 'info');
+                continue;
             }
+
+            // Mover el BLOQUE COMPLETO del productor justo antes del bloque del consumidor
+            const bloqueMover = arr.splice(bloqueProductor.inicio, bloqueProductor.fin - bloqueProductor.inicio + 1);
+            // Recalcular posición del consumidor (pudo moverse si el productor estaba antes)
+            const nuevoInicioCons = bloqueProductor.inicio < bloqueConsumidor.inicio
+                ? bloqueConsumidor.inicio - bloqueMover.length
+                : bloqueConsumidor.inicio;
+            arr.splice(nuevoInicioCons, 0, ...bloqueMover);
+            log(`🔀 Bloque "${bloqueProductor.ubic}" movido antes de "${bloqueConsumidor.ubic}" por dependencia MESA`, 'info');
+            // Reiniciar desde el inicio del bloque movido para verificar nuevas dependencias
+            i = Math.max(0, nuevoInicioCons - 1);
         }
     })();
     // También re-ordenar las órdenes para que el staging las muestre por kit
@@ -3521,10 +3603,10 @@ async function exportarResultados() {
         } else {
             accionCortar = 'CORTAR';
         }
-        // FIX CON TIRA: si la orden tiene el campo con_tira marcado, indicarlo en la acción
+        // FIX CON TIRA: solo aplica a CENEFA OVALADA, no a otros componentes
         const _conTira = String(ord.con_tira || '').toUpperCase().trim();
-        if (_conTira === 'CON TIRA' || _conTira === 'SI' || _conTira === 'SÍ' || _conTira === 'X') {
-            accionCortar += ' ⭐ CON TIRA';
+        if ((_conTira === 'CON TIRA' || _conTira === 'SI' || _conTira === 'SÍ' || _conTira === 'X') && _comp === 'CENEFA OVALADA') {
+            accionCortar += ' CON TIRA';
         }
         const _colmenaExcel = (_esTuboNuevo || _esTuboNuevoReemplazo)
             ? (res.nombreMaterialNuevo || 'TUBO NUEVO')
