@@ -1592,16 +1592,16 @@ async function importarExcelInventario(event) {
         }
 
         // 3. Importar posiciones de rack desde LIBERADO
-        // Estructura del Excel: Row 7 tiene letras de columna, Rows 8+ tienen datos
-        // Rack 1 (DÚO): cols Excel 2-7 → letras A,B,C,D,E,S | fila# en col 1
-        // Rack 2 (SCREEN): cols Excel 10-15 → letras G,H,I,J,K | fila# en col 9
-        // Rack 3 (BK/SC): cols Excel 18-22 → letras L,M,N,O,P | fila# en col 17
-        // Rack 4 (BLACKOUT): cols Excel 25-29 → letras Q,R,S,T,U | fila# en col 24
+        // Estructura confirmada por diagnóstico (índices 0-based del array):
+        // RACK 1 DÚO:        fila# en col [0], datos en cols [1-6]  → letras A,B,C,D,E,S
+        // RACK 2 SCREEN:     fila# en col [8], datos en cols [9-13] → letras G,H,I,J,K
+        // RACK 3 BK/SCREEN:  fila# en col [17], datos en cols [18-22] → letras L,M,N,O,P
+        // RACK 4 BLACKOUT:   fila# en col [24], datos en cols [25-29] → letras Q,R,S,T,U
         const RACKS_LIBERADO = [
-            { nombre: 'RACK 1 - DÚO', colFila: 1, cols: [{excel:2,letra:'A'},{excel:3,letra:'B'},{excel:4,letra:'C'},{excel:5,letra:'D'},{excel:6,letra:'E'},{excel:7,letra:'S'}] },
-            { nombre: 'RACK 2 - SCREEN', colFila: 9, cols: [{excel:10,letra:'G'},{excel:11,letra:'H'},{excel:12,letra:'I'},{excel:13,letra:'J'},{excel:14,letra:'K'}] },
+            { nombre: 'RACK 1 - DÚO',            colFila: 0,  cols: [{excel:1,letra:'A'},{excel:2,letra:'B'},{excel:3,letra:'C'},{excel:4,letra:'D'},{excel:5,letra:'E'},{excel:6,letra:'S'}] },
+            { nombre: 'RACK 2 - SCREEN',          colFila: 8,  cols: [{excel:9,letra:'G'},{excel:10,letra:'H'},{excel:11,letra:'I'},{excel:12,letra:'J'},{excel:13,letra:'K'}] },
             { nombre: 'RACK 3 - BLACKOUT/SCREEN', colFila: 17, cols: [{excel:18,letra:'L'},{excel:19,letra:'M'},{excel:20,letra:'N'},{excel:21,letra:'O'},{excel:22,letra:'P'}] },
-            { nombre: 'RACK 4 - BLACKOUT', colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'}] }
+            { nombre: 'RACK 4 - BLACKOUT',        colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'}] }
         ];
 
         async function importarRackDesdeHoja(nombreHojas, almacen, configRacks) {
@@ -1672,18 +1672,29 @@ async function importarExcelInventario(event) {
             return posiciones;
         }
 
+        // Limpiar rack existente para evitar mezcla con datos viejos
+        logInv('Limpiando posiciones de rack anteriores...', 'info');
+        await sbInv.from('ubicaciones_rack').delete().eq('empresa_id', EMPRESA_ID);
+
         // Importar LIBERADO — intentar con 'LIBERADO - MAPA' primero, luego 'LIBERADO'
         const posLib = await importarRackDesdeHoja(['LIBERADO - MAPA', 'LIBERADO'], 'LIBERADO', RACKS_LIBERADO);
         logInv(`LIBERADO: ${posLib} posiciones importadas`, posLib > 0 ? 'success' : 'warn');
 
         // Importar MATERIAS PRIMAS
+        // Estructura confirmada por diagnóstico (índices 0-based):
+        // DÚO:    fila# en [0],  datos en [1-6]    → letras A-F
+        // SCREEN: fila# en [8],  datos en [9-13]   → letras G-K
+        // MIX:    fila# en [15], datos en [16-21]  → letras L,M,N,O,P,P2
+        // MP 1:   fila# en [23], datos en [24-29]  → letras Q-V
+        // MP 2:   fila# en [31], datos en [32-37]  → letras Q-V
+        // MP 3:   fila# en [39], datos en [40-45]  → letras Q-V
         const RACKS_MP = [
-            { nombre: 'RACK MP - DÚO', colFila: 1, cols: [{excel:2,letra:'A'},{excel:3,letra:'B'},{excel:4,letra:'C'},{excel:5,letra:'D'},{excel:6,letra:'E'},{excel:7,letra:'F'}] },
-            { nombre: 'RACK MP - SCREEN', colFila: 9, cols: [{excel:10,letra:'G'},{excel:11,letra:'H'},{excel:12,letra:'I'},{excel:13,letra:'J'},{excel:14,letra:'K'}] },
-            { nombre: 'RACK MP - MIX', colFila: 16, cols: [{excel:17,letra:'L'},{excel:18,letra:'M'},{excel:19,letra:'N'},{excel:20,letra:'O'},{excel:21,letra:'P'},{excel:22,letra:'P2'}] },
-            { nombre: 'RACK MP 1', colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'},{excel:30,letra:'V'}] },
-            { nombre: 'RACK MP 2', colFila: 32, cols: [{excel:33,letra:'Q'},{excel:34,letra:'R'},{excel:35,letra:'S'},{excel:36,letra:'T'},{excel:37,letra:'U'},{excel:38,letra:'V'}] },
-            { nombre: 'RACK MP 3', colFila: 40, cols: [{excel:41,letra:'Q'},{excel:42,letra:'R'},{excel:43,letra:'S'},{excel:44,letra:'T'},{excel:45,letra:'U'},{excel:46,letra:'V'}] }
+            { nombre: 'RACK MP - DÚO',    colFila: 0,  cols: [{excel:1,letra:'A'},{excel:2,letra:'B'},{excel:3,letra:'C'},{excel:4,letra:'D'},{excel:5,letra:'E'},{excel:6,letra:'F'}] },
+            { nombre: 'RACK MP - SCREEN', colFila: 8,  cols: [{excel:9,letra:'G'},{excel:10,letra:'H'},{excel:11,letra:'I'},{excel:12,letra:'J'},{excel:13,letra:'K'}] },
+            { nombre: 'RACK MP - MIX',    colFila: 15, cols: [{excel:16,letra:'L'},{excel:17,letra:'M'},{excel:18,letra:'N'},{excel:19,letra:'O'},{excel:20,letra:'P'},{excel:21,letra:'P2'}] },
+            { nombre: 'RACK MP 1',        colFila: 23, cols: [{excel:24,letra:'Q'},{excel:25,letra:'R'},{excel:26,letra:'S'},{excel:27,letra:'T'},{excel:28,letra:'U'},{excel:29,letra:'V'}] },
+            { nombre: 'RACK MP 2',        colFila: 31, cols: [{excel:32,letra:'Q'},{excel:33,letra:'R'},{excel:34,letra:'S'},{excel:35,letra:'T'},{excel:36,letra:'U'},{excel:37,letra:'V'}] },
+            { nombre: 'RACK MP 3',        colFila: 39, cols: [{excel:40,letra:'Q'},{excel:41,letra:'R'},{excel:42,letra:'S'},{excel:43,letra:'T'},{excel:44,letra:'U'},{excel:45,letra:'V'}] }
         ];
         const posMP = await importarRackDesdeHoja(['MATERIAS PRIMAS', 'MATERIA_PRIMA 2024'], 'MATERIAS_PRIMAS', RACKS_MP);
         logInv(`MATERIAS PRIMAS: ${posMP} posiciones importadas`, posMP > 0 ? 'success' : 'warn');
