@@ -1475,18 +1475,38 @@ async function importarExcelInventario(event) {
         const wb = XLSX.read(buffer, { type: 'array' });
         logInv(`Hojas encontradas: ${wb.SheetNames.join(', ')}`, 'info');
 
-        // 1. Importar INVENTARIO
+        // Helper: enviar en lotes de N registros
+        async function upsertEnLotes(tabla, registros, conflictKey, labelLog) {
+            const LOTE = 100;
+            let ok = 0, err = 0;
+            for (let i = 0; i < registros.length; i += LOTE) {
+                const lote = registros.slice(i, i + LOTE);
+                const { error } = await sbInv.from(tabla).upsert(lote, { onConflict: conflictKey });
+                if (error) {
+                    logInv(`⚠️ Error lote ${i}-${i+lote.length} en ${tabla}: ${error.message}`, 'warn');
+                    err += lote.length;
+                } else {
+                    ok += lote.length;
+                }
+                // Progreso cada 200 registros
+                if ((i + LOTE) % 200 === 0 || i + LOTE >= registros.length) {
+                    logInv(`${labelLog}: ${ok} de ${registros.length}...`, 'info');
+                }
+            }
+            return { ok, err };
+        }
+
+        // 1. Importar INVENTARIO (en lotes)
         const wsInv = wb.Sheets['INVENTARIO'];
         if (wsInv) {
             const datosInv = XLSX.utils.sheet_to_json(wsInv, { range: 9, defval: '' });
-            logInv(`INVENTARIO: ${datosInv.length} filas detectadas`, 'info');
+            logInv(`INVENTARIO: ${datosInv.length} filas detectadas, procesando en lotes...`, 'info');
 
-            let importados = 0, errores = 0;
+            const registrosInv = [];
             for (const fila of datosInv) {
                 const cod = String(fila['COD'] || '').trim().toUpperCase();
                 if (!cod) continue;
-
-                const registro = {
+                registrosInv.push({
                     empresa_id: EMPRESA_ID,
                     cod,
                     categoria: fila['CATEGORIA'] || '',
@@ -1508,33 +1528,35 @@ async function importarExcelInventario(event) {
                     costo: parseFloat(fila['COSTO']) || 0,
                     costo_iva: parseFloat(fila['COSTO + IVA']) || 0,
                     comentarios: fila['COMENTARIOS'] || ''
-                };
-
-                const { error } = await sbInv.from('insumos').upsert(registro, { onConflict: 'empresa_id,cod' });
-                if (error) {
-                    logInv(`Error importando ${cod}: ${error.message}`, 'error');
-                    errores++;
-                } else {
-                    importados++;
-                }
+                });
             }
-            logInv(`INVENTARIO: ${importados} importados, ${errores} errores`, importados > 0 ? 'success' : 'warn');
+            const resInv = await upsertEnLotes('insumos', registrosInv, 'empresa_id,cod', 'INVENTARIO');
+            logInv(`INVENTARIO: ${resInv.ok} importados, ${resInv.err} errores`, resInv.ok > 0 ? 'success' : 'warn');
         }
 
-        // 2. Importar ENTRADA Y SALIDA
+        // 2. Importar ENTRADA Y SALIDA (limpiar primero para evitar duplicados, luego lote)
         const wsES = wb.Sheets['ENTRADA Y SALIDA'];
         if (wsES) {
             const datosES = XLSX.utils.sheet_to_json(wsES, { range: 5, defval: '' });
-            logInv(`ENTRADA Y SALIDA: ${datosES.length} filas detectadas`, 'info');
+            logInv(`ENTRADA Y SALIDA: ${datosES.length} filas detectadas, limpiando duplicados...`, 'info');
 
-            let movImportados = 0;
+            // Limpiar movimientos previos de esta empresa para evitar duplicados
+            await sbInv.from('movimientos_insumos').delete().eq('empresa_id', EMPRESA_ID);
+
+            const registrosMov = [];
             for (const fila of datosES) {
                 const codigo = String(fila['CODIGO'] || '').trim().toUpperCase();
                 if (!codigo) continue;
-
-                const mov = {
+                let fechaISO = null;
+                try {
+                    if (fila['FECHA']) {
+                        const d = new Date(fila['FECHA']);
+                        if (!isNaN(d.getTime())) fechaISO = d.toISOString();
+                    }
+                } catch(e) {}
+                registrosMov.push({
                     empresa_id: EMPRESA_ID,
-                    fecha: fila['FECHA'] ? new Date(fila['FECHA']).toISOString() : new Date().toISOString(),
+                    fecha: fechaISO || new Date().toISOString(),
                     mes: fila['MES'] || '',
                     tipo: fila['TIPO'] || 'NUEVO INGRESO',
                     tipo_doc: fila['TIPO DE DOC.'] || '',
@@ -1554,12 +1576,19 @@ async function importarExcelInventario(event) {
                     verificado: fila['VERIFICADO'] === 'SI' || fila['VERIFICADO'] === true,
                     persona_verifica: fila['PERSONA QUE VERIFICA'] || '',
                     bitacora: fila['BITACORA'] || ''
-                };
-
-                const { error } = await sbInv.from('movimientos_insumos').insert(mov);
-                if (!error) movImportados++;
+                });
             }
-            logInv(`ENTRADA Y SALIDA: ${movImportados} movimientos importados`, 'success');
+            const LOTE_MOV = 100;
+            let movOk = 0;
+            for (let i = 0; i < registrosMov.length; i += LOTE_MOV) {
+                const lote = registrosMov.slice(i, i + LOTE_MOV);
+                const { error } = await sbInv.from('movimientos_insumos').insert(lote);
+                if (!error) movOk += lote.length;
+                if ((i + LOTE_MOV) % 300 === 0 || i + LOTE_MOV >= registrosMov.length) {
+                    logInv(`ENTRADA Y SALIDA: ${movOk} de ${registrosMov.length}...`, 'info');
+                }
+            }
+            logInv(`ENTRADA Y SALIDA: ${movOk} movimientos importados`, 'success');
         }
 
         // 3. Importar posiciones de rack desde LIBERADO
