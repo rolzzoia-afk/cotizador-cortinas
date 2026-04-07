@@ -120,8 +120,8 @@
                 <button class="btn" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="background:#3498db; padding:8px 16px; font-size:12px; white-space:nowrap;">
                     Cargar desde Supabase
                 </button>
-                <button class="btn" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" disabled
-                    style="background:#27ae60; padding:8px 16px; font-size:12px; white-space:nowrap; display:none;">
+                <button class="btn" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()"
+                    style="background:#27ae60; padding:8px 16px; font-size:12px; white-space:nowrap;">
                     ☁️ Guardar en Supabase
                 </button>
             </div>
@@ -1998,9 +1998,7 @@ async function cargarColmenas(event) {
         // Guardar copia inmutable de colmenas para poder recalcular sin recargar Excel
         SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
         guardarSistema();
-        // Mostrar botón de guardado directo en Supabase
-        const btnGuardar = document.getElementById('btnGuardarColmenaDB');
-        if (btnGuardar) { btnGuardar.style.display = ''; btnGuardar.disabled = false; }
+        // (botón ☁️ Guardar en Supabase siempre visible)
     } catch (e) { alert('Error: ' + e.message); }
     finally { procesandoExcel = false; }
 }
