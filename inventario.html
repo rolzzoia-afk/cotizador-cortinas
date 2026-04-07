@@ -780,22 +780,29 @@ const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
 const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
 
+// ── Almacenamiento seguro: fallback a memoria si sessionStorage está bloqueado ──
+const _memStorage = { _data: {}, getItem(k) { return this._data[k] || null; }, setItem(k,v) { this._data[k] = v; }, removeItem(k) { delete this._data[k]; } };
+let _storage = _memStorage;
+try { sessionStorage.setItem('_test', '1'); sessionStorage.removeItem('_test'); _storage = sessionStorage; } catch(e) { console.warn('[INV] sessionStorage bloqueado, usando memoria'); }
+
 let sbInv;
+let _usandoParent = false;
 try {
-    // Si está dentro de iframe, intentar usar el Supabase del padre
-    if (window.parent && window.parent.sb) {
+    // Si está dentro de iframe, intentar usar el Supabase del padre (ya autenticado)
+    if (window.parent && window.parent !== window && window.parent.sb) {
         sbInv = window.parent.sb;
-    } else {
-        const { createClient } = supabase;
-        sbInv = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-            auth: { storage: sessionStorage, persistSession: true, autoRefreshToken: true }
-        });
+        _usandoParent = true;
+        console.log('[INV] Usando Supabase del parent (iframe mode)');
     }
 } catch (e) {
+    console.warn('[INV] No se pudo acceder al parent:', e.message);
+}
+if (!sbInv) {
     const { createClient } = supabase;
     sbInv = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: { storage: sessionStorage, persistSession: true, autoRefreshToken: true }
+        auth: { storage: _storage, persistSession: true, autoRefreshToken: true }
     });
+    console.log('[INV] Supabase propio creado (standalone mode)');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -850,9 +857,19 @@ function logInv(msg, tipo = 'info') {
 async function inicializar() {
     document.getElementById('estadoConexion').textContent = 'Cargando...';
     try {
+        // Verificar autenticación
+        const { data: { user } } = await sbInv.auth.getUser();
+        if (user) {
+            document.getElementById('usuarioActual').textContent = user.email;
+            console.log('[INV] Usuario:', user.email);
+        } else {
+            console.warn('[INV] No hay usuario autenticado');
+        }
+
         // Cargar validadores
-        const { data: vals } = await sbInv.from('validadores_insumos')
+        const { data: vals, error: errVal } = await sbInv.from('validadores_insumos')
             .select('*').eq('empresa_id', EMPRESA_ID).order('orden');
+        if (errVal) console.error('[INV] Error cargando validadores:', errVal.message);
         if (vals) {
             INV.validadores = {};
             vals.forEach(v => {
@@ -863,19 +880,30 @@ async function inicializar() {
         }
 
         // Cargar insumos
-        const { data: ins } = await sbInv.from('insumos')
+        const { data: ins, error: errIns } = await sbInv.from('insumos')
             .select('*').eq('empresa_id', EMPRESA_ID).order('cod');
+        if (errIns) console.error('[INV] Error cargando insumos:', errIns.message);
         INV.insumos = ins || [];
+        console.log(`[INV] Insumos cargados: ${INV.insumos.length}`);
 
         // Cargar movimientos (últimos 500)
-        const { data: movs } = await sbInv.from('movimientos_insumos')
+        const { data: movs, error: errMov } = await sbInv.from('movimientos_insumos')
             .select('*').eq('empresa_id', EMPRESA_ID).order('fecha', { ascending: false }).limit(500);
+        if (errMov) console.error('[INV] Error cargando movimientos:', errMov.message);
         INV.movimientos = movs || [];
+        console.log(`[INV] Movimientos cargados: ${INV.movimientos.length}`);
 
         // Cargar ubicaciones rack
-        const { data: ubics } = await sbInv.from('ubicaciones_rack')
+        const { data: ubics, error: errUbic } = await sbInv.from('ubicaciones_rack')
             .select('*').eq('empresa_id', EMPRESA_ID);
+        if (errUbic) {
+            console.error('[INV] Error cargando ubicaciones rack:', errUbic.message);
+            if (errUbic.message.includes('does not exist') || errUbic.code === '42P01') {
+                console.error('[INV] La tabla ubicaciones_rack no existe. Ejecuta supabase_inventario.sql en el SQL Editor de Supabase.');
+            }
+        }
         INV.ubicaciones = ubics || [];
+        console.log(`[INV] Ubicaciones rack cargadas: ${INV.ubicaciones.length}`);
 
         // Calcular alertas
         calcularAlertas();
@@ -889,13 +917,8 @@ async function inicializar() {
         document.getElementById('estadoConexion').textContent = '● Conectado';
         document.getElementById('estadoConexion').style.color = 'var(--success)';
 
-        // Mostrar usuario
-        const { data: { user } } = await sbInv.auth.getUser();
-        if (user) {
-            document.getElementById('usuarioActual').textContent = user.email;
-        }
     } catch (e) {
-        console.error('Error inicializando:', e);
+        console.error('[INV] Error inicializando:', e);
         document.getElementById('estadoConexion').textContent = '● Error';
         document.getElementById('estadoConexion').style.color = 'var(--danger)';
     }
