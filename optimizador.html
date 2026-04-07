@@ -316,6 +316,40 @@ const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
 // Usuario actual (actualizado por onAuthStateChange)
 let _currentUser = null;
 
+// ── Helper REST directo: evita el lock de auth del cliente sbOpt ──────────────
+// Cuando el optimizador corre en un iframe, el cliente sb del padre (index.html)
+// y sbOpt compiten por el mismo lock de localStorage. Para operaciones de escritura
+// en colmena_tubos usamos fetch() puro con el token leído directamente de LS.
+function _getAccessToken() {
+    try {
+        const k = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+        if (!k) return null;
+        const raw = JSON.parse(localStorage.getItem(k));
+        return raw?.access_token || null;
+    } catch(e) { return null; }
+}
+
+async function _sbRest(method, path, body) {
+    const token = _getAccessToken();
+    const headers = {
+        'apikey':        SUPABASE_ANON_KEY_OPT,
+        'Content-Type':  'application/json',
+        'Prefer':        'return=minimal',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${SUPABASE_URL_OPT}/rest/v1/${path}`, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const j = await res.json(); msg = j.message || j.error || msg; } catch(e) {}
+        throw new Error(msg);
+    }
+    return res;
+}
+
 // ── Funciones helper para comunicarse con el cotizador padre (iframe) ──────
 // El cotizador expone window.guardarConfigEnSupabase y window.leerConfigDeSupabase
 // que corren con sesión autenticada. Esto evita problemas de RLS.
@@ -712,20 +746,23 @@ async function cargarDesdeSupabase() {
 }
 
 // Guardar resultados de optimización en Supabase (tabla planes_corte)
+// Usa _sbRest (fetch directo) para evitar el lock de auth entre sb e sbOpt
 async function guardarResultadoOptimizacion(resultados) {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
-        // Si _currentUser es null (puede pasar por lock contention del auth token),
-        // intentar recuperar la sesión activa antes de rendirse
+        // Recuperar usuario: primero _currentUser, luego localStorage directo (sin lock)
         if (!_currentUser) {
-            const { data: sessionData } = await sbOpt.auth.getSession();
-            if (sessionData?.session?.user) {
-                _currentUser = sessionData.session.user;
-                console.log('[guardar] Sesión recuperada:', _currentUser.email);
-            } else {
-                log("❌ No hay sesión activa. Inicia sesión y vuelve a calcular.", "error");
-                return Promise.reject("No hay usuario logueado");
-            }
+            try {
+                const k = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+                if (k) {
+                    const raw = JSON.parse(localStorage.getItem(k));
+                    if (raw?.user) _currentUser = raw.user;
+                }
+            } catch(e) {}
+        }
+        if (!_currentUser) {
+            log("❌ No hay sesión activa. Inicia sesión y vuelve a calcular.", "error");
+            return Promise.reject("No hay usuario logueado");
         }
 
         const timestamp = new Date().toISOString();
@@ -737,18 +774,19 @@ async function guardarResultadoOptimizacion(resultados) {
             fecha: timestamp
         };
 
-        // Intentar hasta 3 veces (el lock puede causar fallos transitorios)
+        // Intentar hasta 3 veces con _sbRest (sin lock de auth)
         let lastError = null;
         for (let intento = 1; intento <= 3; intento++) {
-            const { error } = await sbOpt.from('planes_corte').insert(payload);
-            if (!error) {
+            try {
+                await _sbRest('POST', 'planes_corte', payload);
                 console.log(`✅ Resultados guardados en Supabase (intento ${intento}):`, timestamp);
                 log("✅ Resultados guardados en historial de Supabase", "success");
                 return Promise.resolve(timestamp);
+            } catch(e) {
+                lastError = e;
+                console.warn(`[guardar planes_corte] Intento ${intento} falló:`, e.message);
+                if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
             }
-            lastError = error;
-            console.warn(`[guardar] Intento ${intento} falló:`, error.message);
-            if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
         }
         throw lastError;
     } catch (error) {
@@ -912,29 +950,29 @@ async function guardarColmenaEnSupabaseDirecto() {
             agregado_por_admin: false
         }));
 
-        // Guardar con reintentos
+        // Guardar con reintentos — usa _sbRest (fetch directo, sin lock de auth)
         for (let intento = 1; intento <= 3; intento++) {
             try {
+                if (btn) btn.textContent = `⏳ Guardando... (${intento}/3)`;
+
                 // Borrar inventario actual y reemplazar con el nuevo
-                const { error: delErr } = await sbOpt.from('colmena_tubos')
-                    .delete().eq('empresa_id', EMPRESA_ID_OPT);
-                if (delErr) throw delErr;
+                await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}`);
 
                 // Insertar en lotes de 500
                 for (let i = 0; i < colmenas.length; i += 500) {
-                    const { error: insErr } = await sbOpt.from('colmena_tubos')
-                        .insert(colmenas.slice(i, i + 500));
-                    if (insErr) throw insErr;
+                    await _sbRest('POST', 'colmena_tubos', colmenas.slice(i, i + 500));
                 }
 
                 // También guardar en configuracion como caché de sesión
-                const clave = `opt_colmena_final_${_currentUser.email}`;
+                const email = _currentUser?.email || 'desconocido';
+                const clave = `opt_colmena_final_${email}`;
                 await _supabaseGuardar(clave, JSON.stringify(SistemaInventario.colmenas));
 
-                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos (por ${_currentUser.email})`, 'success');
+                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos (por ${email})`, 'success');
                 if (btn) { btn.textContent = '✅ Guardado'; setTimeout(() => { if (btn) { btn.textContent = '☁️ Guardar en Supabase'; btn.disabled = false; } }, 3000); }
                 return;
             } catch (e) {
+                console.warn(`[guardarColmena] Intento ${intento} falló: ${e.message}`);
                 if (intento < 3) {
                     await new Promise(r => setTimeout(r, 800 * intento));
                 } else {
@@ -1035,19 +1073,16 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
         agregado_por_admin: false
     }));
 
-    // Reintentar hasta 3 veces (el lock puede causar fallos transitorios)
+    // Reintentar hasta 3 veces
+    // Usa _sbRest (fetch directo) para evitar el lock de auth entre sb e sbOpt
     for (let intento = 1; intento <= 3; intento++) {
         try {
-            // 1. Borrar tubos actuales de la empresa
-            const { error: delError } = await sbOpt.from('colmena_tubos')
-                .delete().eq('empresa_id', EMPRESA_ID_OPT);
-            if (delError) throw delError;
+            // 1. Borrar tubos actuales de la empresa (REST DELETE con query param)
+            await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}`);
 
-            // 2. Insertar los nuevos tubos en lotes
+            // 2. Insertar los nuevos tubos en lotes (REST POST)
             for (let i = 0; i < filas.length; i += loteSize) {
-                const { error: insError } = await sbOpt.from('colmena_tubos')
-                    .insert(filas.slice(i, i + loteSize));
-                if (insError) throw insError;
+                await _sbRest('POST', 'colmena_tubos', filas.slice(i, i + loteSize));
             }
             console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros`);
             return; // éxito
@@ -3436,7 +3471,8 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
         };
 
         // Guardar en planes_corte con los datos del snapshot para poder restaurar
-        const { error } = await sbOpt.from('planes_corte').insert({
+        // Usa _sbRest (fetch directo) para evitar el lock de auth
+        await _sbRest('POST', 'planes_corte', {
             empresa_id: EMPRESA_ID_OPT,
             optimizer_email: _currentUser.email,
             resultados: resultadosGuardar,
@@ -3444,7 +3480,6 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
             fecha: timestamp,
             fecha_correccion: timestamp
         });
-        if (error) throw error;
 
         log('📸 Punto de restauración guardado en historial Supabase.', 'info');
     } catch (error) {
@@ -3528,12 +3563,16 @@ async function confirmarYGuardarStaging() {
                 })),
                 fecha: fecha
             };
+            // Usa _sbRest (fetch directo) para evitar el lock de auth
             let epPlan = null;
             for (let intento = 1; intento <= 3; intento++) {
-                const { error } = await sbOpt.from('planes_corte').insert(payload);
-                if (!error) { epPlan = null; break; }
-                epPlan = error;
-                if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+                try {
+                    await _sbRest('POST', 'planes_corte', payload);
+                    epPlan = null; break;
+                } catch(e) {
+                    epPlan = e;
+                    if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+                }
             }
             if (epPlan) throw epPlan;
             log('☁️ Último plan guardado en Supabase (accesible desde cualquier dispositivo)', 'info');
