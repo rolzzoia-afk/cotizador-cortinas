@@ -1002,6 +1002,9 @@
             <button class="nav-link" id="estructura-tab" data-bs-toggle="tab" data-bs-target="#estructura" type="button" role="tab" aria-controls="estructura" aria-selected="false"><i class="bi bi-tools"></i> Estructura</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false"><i class="bi bi-box-seam"></i> Inventario</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="ojodedios-tab" data-bs-toggle="tab" data-bs-target="#ojodedios" type="button" role="tab" aria-controls="ojodedios" aria-selected="false"><i class="bi bi-eye-fill"></i> Ojo de Dios</button>
         </li>
     </ul>
@@ -1719,6 +1722,18 @@
                 </div>
                 <iframe id="iframe-estructura" title="Optimizador Rolzzo — Estructura" style="display:none;"
                         onload="if(this.getAttribute('src')){document.getElementById('estructura-loading').style.display='none'; this.style.display='block';}"></iframe>
+            </div>
+        </div>
+
+        <!-- INVENTARIO: Módulo de Control de Stock (iframe lazy) -->
+        <div class="tab-pane fade" id="inventario" role="tabpanel" aria-labelledby="inventario-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="inventario-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Inventario...</span>
+                </div>
+                <iframe id="iframe-inventario" title="Inventario Rolzzo" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('inventario-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -7184,6 +7199,39 @@
                 presenciaActualizar('estructura', `Usando Optimizador de Estructura — ${label}`);
             } catch(e) {
                 console.error('[estructura-tab] Error al cargar iframe:', e);
+            }
+        });
+
+        // ── Lazy loading de iframe Inventario ──
+        document.getElementById('inventario-tab').addEventListener('shown.bs.tab', () => {
+            try {
+                const iframe  = document.getElementById('iframe-inventario');
+                const loading = document.getElementById('inventario-loading');
+
+                if (!iframe.getAttribute('src')) {
+                    let _loadTimeout = setTimeout(() => {
+                        if (loading && loading.style.display !== 'none') {
+                            loading.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#94a3b8;">
+                                    <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+                                    <p style="font-size:0.9rem;margin-bottom:8px;">El inventario tardó en cargar.</p>
+                                    <p style="font-size:0.8rem;color:#64748b;">Asegúrate de que <strong>inventario.html</strong> esté en la misma carpeta que este archivo.</p>
+                                    <button onclick="document.getElementById('iframe-inventario').src='inventario.html'" style="margin-top:12px;padding:6px 16px;background:rgba(59,130,246,0.3);color:#60a5fa;border:1px solid rgba(59,130,246,0.4);border-radius:6px;cursor:pointer;font-size:0.82rem;">Reintentar</button>
+                                </div>`;
+                        }
+                    }, 12000);
+
+                    iframe.addEventListener('load', function onFirstLoad() {
+                        iframe.removeEventListener('load', onFirstLoad);
+                        clearTimeout(_loadTimeout);
+                    }, { once: true });
+
+                    iframe.src = 'inventario.html';
+                }
+
+                presenciaActualizar('inventario', 'Módulo de Inventario');
+            } catch(e) {
+                console.error('[inventario-tab] Error al cargar iframe:', e);
             }
         });
 

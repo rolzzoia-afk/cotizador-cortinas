@@ -1,0 +1,1605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventario — Rolzzo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-primary: #09090b;
+            --bg-secondary: #18181b;
+            --bg-card: #1c1c21;
+            --border: #2e2e33;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --primary-500: #6366f1;
+            --primary-600: #4f46e5;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ── NAV TABS ── */
+        .inv-header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .inv-header h5 { margin: 0; font-weight: 600; font-size: 1.1rem; }
+        .inv-tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 3px;
+        }
+        .inv-tab {
+            padding: 7px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .inv-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.05); }
+        .inv-tab.active { background: var(--primary-500); color: white; }
+        .inv-tab .badge-count {
+            background: var(--danger);
+            color: white;
+            font-size: 0.7rem;
+            padding: 1px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+
+        /* ── ALERTAS HEADER ── */
+        .alert-bar {
+            background: linear-gradient(135deg, rgba(239,68,68,0.1), rgba(239,68,68,0.03));
+            border-bottom: 1px solid rgba(239,68,68,0.2);
+            padding: 8px 20px;
+            display: none;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85rem;
+        }
+        .alert-bar.visible { display: flex; }
+        .alert-bar i { color: var(--danger); }
+
+        /* ── CONTENT AREA ── */
+        .inv-content {
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        .inv-panel { display: none; }
+        .inv-panel.active { display: block; }
+
+        /* ── GLASS CARDS ── */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .glass-card h6 {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 16px;
+        }
+
+        /* ── STATS ROW ── */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .stat-card .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary-500);
+        }
+        .stat-card .stat-label {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .stat-card.danger .stat-value { color: var(--danger); }
+        .stat-card.warning .stat-value { color: var(--warning); }
+        .stat-card.success .stat-value { color: var(--success); }
+
+        /* ── TABLE ── */
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.82rem;
+        }
+        thead th {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.05em;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+        }
+        thead th:hover { color: var(--text-primary); }
+        tbody td {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            color: var(--text-primary);
+        }
+        tbody tr:hover { background: rgba(99,102,241,0.06); }
+
+        /* ── TAGS ── */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .tag-ok { background: rgba(34,197,94,0.15); color: var(--success); }
+        .tag-warn { background: rgba(245,158,11,0.15); color: var(--warning); }
+        .tag-danger { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .tag-info { background: rgba(59,130,246,0.15); color: var(--info); }
+        .tag-muted { background: rgba(113,113,122,0.15); color: var(--text-muted); }
+
+        /* ── SEARCH & FILTERS ── */
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .search-input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 12px 8px 36px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            flex: 1;
+            min-width: 200px;
+        }
+        .search-input:focus { outline: none; border-color: var(--primary-500); }
+        .search-wrapper {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+        }
+        .search-wrapper i {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+        select.filter-select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+        }
+
+        /* ── BUTTONS ── */
+        .btn-inv {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+        .btn-primary-inv { background: var(--primary-500); color: white; }
+        .btn-primary-inv:hover { background: var(--primary-600); }
+        .btn-success-inv { background: var(--success); color: white; }
+        .btn-success-inv:hover { opacity: 0.9; }
+        .btn-danger-inv { background: var(--danger); color: white; }
+        .btn-danger-inv:hover { opacity: 0.9; }
+        .btn-outline-inv {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+        }
+        .btn-outline-inv:hover { border-color: var(--primary-500); color: var(--primary-500); }
+
+        /* ── RACK MAP ── */
+        .rack-grid {
+            display: grid;
+            gap: 20px;
+        }
+        .rack-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+        .rack-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-bottom: 12px;
+            color: var(--primary-500);
+            text-transform: uppercase;
+        }
+        .rack-cells {
+            display: grid;
+            gap: 3px;
+        }
+        .rack-cell {
+            min-height: 36px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.68rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+        }
+        .rack-cell.ocupado {
+            background: rgba(99,102,241,0.15);
+            color: var(--primary-500);
+            border-color: rgba(99,102,241,0.3);
+        }
+        .rack-cell.vacio {
+            background: rgba(255,255,255,0.03);
+            color: var(--text-muted);
+            border-color: var(--border);
+        }
+        .rack-cell.alerta {
+            background: rgba(239,68,68,0.15);
+            color: var(--danger);
+            border-color: rgba(239,68,68,0.3);
+            animation: pulse-alert 2s infinite;
+        }
+        .rack-cell.header-cell {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-weight: 700;
+            cursor: default;
+            font-size: 0.75rem;
+        }
+        .rack-cell:not(.header-cell):hover {
+            transform: scale(1.05);
+            border-color: var(--primary-500);
+            z-index: 1;
+        }
+
+        @keyframes pulse-alert {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* ── MODAL ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+        .modal-box h5 { margin-bottom: 16px; font-weight: 700; }
+        .modal-box label {
+            display: block;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            margin-top: 12px;
+            font-weight: 500;
+        }
+        .modal-box input, .modal-box select, .modal-box textarea {
+            width: 100%;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+        }
+        .modal-box input:focus, .modal-box select:focus, .modal-box textarea:focus {
+            outline: none;
+            border-color: var(--primary-500);
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        /* ── MOVIMIENTOS TIMELINE ── */
+        .mov-card {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            margin-bottom: 8px;
+            align-items: flex-start;
+        }
+        .mov-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-size: 1.1rem;
+        }
+        .mov-icon.entrada { background: rgba(34,197,94,0.15); color: var(--success); }
+        .mov-icon.salida { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .mov-icon.ajuste { background: rgba(245,158,11,0.15); color: var(--warning); }
+        .mov-info { flex: 1; }
+        .mov-info .mov-title { font-weight: 600; font-size: 0.85rem; }
+        .mov-info .mov-detail { font-size: 0.78rem; color: var(--text-secondary); }
+        .mov-info .mov-date { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .inv-header { padding: 10px 12px; }
+            .inv-content { padding: 12px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .filter-row { flex-direction: column; }
+            .search-wrapper { width: 100%; }
+        }
+
+        /* ── IMPORTAR EXCEL ── */
+        .import-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .import-zone:hover { border-color: var(--primary-500); background: rgba(99,102,241,0.05); }
+        .import-zone i { font-size: 2rem; color: var(--text-muted); }
+        .import-zone p { color: var(--text-secondary); margin-top: 8px; font-size: 0.85rem; }
+
+        /* ── LOGS ── */
+        #logs-inv {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: none;
+        }
+        #logs-inv.visible { display: block; }
+    </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="inv-header">
+    <h5><i class="bi bi-box-seam"></i> Inventario</h5>
+    <div class="inv-tabs">
+        <button class="inv-tab active" onclick="switchPanel('catalogo')">
+            <i class="bi bi-list-ul"></i> Catálogo
+        </button>
+        <button class="inv-tab" onclick="switchPanel('rack')">
+            <i class="bi bi-grid-3x3-gap"></i> Mapa Rack
+        </button>
+        <button class="inv-tab" onclick="switchPanel('movimientos')">
+            <i class="bi bi-arrow-left-right"></i> Movimientos
+        </button>
+        <button class="inv-tab" onclick="switchPanel('alertas')">
+            <i class="bi bi-bell"></i> Alertas
+            <span class="badge-count" id="alertas-count" style="display:none;">0</span>
+        </button>
+        <button class="inv-tab" onclick="switchPanel('importar')">
+            <i class="bi bi-cloud-upload"></i> Importar
+        </button>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <span id="estadoConexion" style="font-size:0.75rem; color:var(--text-muted);">Conectando...</span>
+        <span id="usuarioActual" style="font-size:0.75rem; color:var(--text-secondary);"></span>
+    </div>
+</div>
+
+<!-- Barra de alertas rápida -->
+<div class="alert-bar" id="alertBar">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span id="alertBarText">3 productos bajo stock mínimo</span>
+    <button class="btn-inv btn-outline-inv" onclick="switchPanel('alertas')" style="padding:4px 10px; font-size:0.75rem;">Ver alertas</button>
+</div>
+
+<!-- ═══ CONTENIDO ═══ -->
+<div class="inv-content">
+
+    <!-- ━━━ PANEL: CATÁLOGO ━━━ -->
+    <div class="inv-panel active" id="panel-catalogo">
+        <!-- Stats -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">0</div>
+                <div class="stat-label">Total Productos</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value" id="stat-stock">0</div>
+                <div class="stat-label">Con Stock</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value" id="stat-sinstock">0</div>
+                <div class="stat-label">Sin Stock</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value" id="stat-bajomin">0</div>
+                <div class="stat-label">Bajo Mínimo</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="stat-categorias">0</div>
+                <div class="stat-label">Categorías</div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-row">
+            <div class="search-wrapper">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarProducto" placeholder="Buscar por código, nombre, color..." oninput="filtrarCatalogo()">
+            </div>
+            <select class="filter-select" id="filtroCategoria" onchange="filtrarCatalogo()">
+                <option value="">Todas las categorías</option>
+            </select>
+            <select class="filter-select" id="filtroSubCategoria" onchange="filtrarCatalogo()">
+                <option value="">Todas las sub-categorías</option>
+            </select>
+            <select class="filter-select" id="filtroEstado" onchange="filtrarCatalogo()">
+                <option value="">Todos los estados</option>
+                <option value="con_stock">Con stock</option>
+                <option value="sin_stock">Sin stock</option>
+                <option value="bajo_minimo">Bajo mínimo</option>
+            </select>
+            <button class="btn-inv btn-primary-inv" onclick="abrirModalInsumo()">
+                <i class="bi bi-plus-lg"></i> Nuevo
+            </button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-container" style="max-height: 60vh; overflow-y: auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th onclick="ordenarCatalogo('cod')">Código</th>
+                        <th onclick="ordenarCatalogo('nemotecnico')">Nombre</th>
+                        <th onclick="ordenarCatalogo('categoria')">Categoría</th>
+                        <th onclick="ordenarCatalogo('sub_categoria')">Sub-Cat.</th>
+                        <th onclick="ordenarCatalogo('color')">Color</th>
+                        <th onclick="ordenarCatalogo('stock_total')" style="text-align:center;">Stock Total</th>
+                        <th style="text-align:center;">MP</th>
+                        <th style="text-align:center;">Liberado</th>
+                        <th onclick="ordenarCatalogo('minimo')" style="text-align:center;">Mínimo</th>
+                        <th style="text-align:center;">Estado</th>
+                        <th style="text-align:center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyCatalogo"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ━━━ PANEL: MAPA RACK ━━━ -->
+    <div class="inv-panel" id="panel-rack">
+        <div class="filter-row">
+            <select class="filter-select" id="filtroAlmacen" onchange="renderizarRacks()">
+                <option value="LIBERADO">Liberado (Disponible para corte)</option>
+                <option value="MATERIAS_PRIMAS">Materias Primas (Stock restringido)</option>
+            </select>
+            <div class="search-wrapper" style="max-width:300px;">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarRack" placeholder="Buscar código en rack..." oninput="resaltarEnRack()">
+            </div>
+            <button class="btn-inv btn-outline-inv" onclick="toggleLeyendaRack()">
+                <i class="bi bi-info-circle"></i> Leyenda
+            </button>
+        </div>
+        <div id="leyendaRack" style="display:none; margin-bottom:16px;">
+            <div class="glass-card" style="padding:12px; display:flex; gap:20px; flex-wrap:wrap; font-size:0.8rem;">
+                <span><span class="rack-cell ocupado" style="display:inline-block; width:18px; height:18px; vertical-align:middle;"></span> Ocupado</span>
+                <span><span class="rack-cell vacio" style="display:inline-block; width:18px; height:18px; vertical-align:middle;"></span> Vacío</span>
+                <span><span class="rack-cell alerta" style="display:inline-block; width:18px; height:18px; vertical-align:middle;"></span> Stock bajo</span>
+            </div>
+        </div>
+        <div class="rack-grid" id="rackGrid"></div>
+    </div>
+
+    <!-- ━━━ PANEL: MOVIMIENTOS ━━━ -->
+    <div class="inv-panel" id="panel-movimientos">
+        <div class="filter-row">
+            <button class="btn-inv btn-success-inv" onclick="abrirModalMovimiento('NUEVO INGRESO')">
+                <i class="bi bi-box-arrow-in-down"></i> Nueva Entrada
+            </button>
+            <button class="btn-inv btn-danger-inv" onclick="abrirModalMovimiento('SALIDA PRODUCCION')">
+                <i class="bi bi-box-arrow-up"></i> Nueva Salida
+            </button>
+            <button class="btn-inv btn-outline-inv" onclick="abrirModalMovimiento('AJUSTE')">
+                <i class="bi bi-pencil-square"></i> Ajuste
+            </button>
+            <div style="flex:1;"></div>
+            <select class="filter-select" id="filtroTipoMov" onchange="filtrarMovimientos()">
+                <option value="">Todos los tipos</option>
+                <option value="NUEVO INGRESO">Entradas</option>
+                <option value="SALIDA PRODUCCION">Salidas</option>
+                <option value="DEVOLUCION">Devoluciones</option>
+                <option value="AJUSTE">Ajustes</option>
+            </select>
+            <div class="search-wrapper" style="max-width:250px;">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarMov" placeholder="Buscar movimiento..." oninput="filtrarMovimientos()">
+            </div>
+        </div>
+        <div id="listaMovimientos"></div>
+        <div style="text-align:center; padding:20px; color:var(--text-muted); font-size:0.85rem;" id="movVacio">
+            <i class="bi bi-clock-history" style="font-size:2rem;"></i>
+            <p>No hay movimientos registrados</p>
+        </div>
+    </div>
+
+    <!-- ━━━ PANEL: ALERTAS ━━━ -->
+    <div class="inv-panel" id="panel-alertas">
+        <div class="glass-card">
+            <h6><i class="bi bi-exclamation-triangle"></i> Alertas de Stock</h6>
+            <div id="listaAlertas"></div>
+            <div style="text-align:center; padding:20px; color:var(--text-muted);" id="alertasVacio">
+                <i class="bi bi-check-circle" style="font-size:2rem; color:var(--success);"></i>
+                <p>Todo en orden, no hay alertas pendientes</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ━━━ PANEL: IMPORTAR ━━━ -->
+    <div class="inv-panel" id="panel-importar">
+        <div class="glass-card">
+            <h6><i class="bi bi-cloud-upload"></i> Importar desde Excel</h6>
+            <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:16px;">
+                Importa tu archivo Excel de inventario actual para cargar todos los productos y movimientos de una vez.
+                El formato esperado es el mismo del archivo "Control Stock INSUMOS".
+            </p>
+            <div class="import-zone" onclick="document.getElementById('inputExcelImport').click()">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                <p>Haz clic aquí o arrastra tu archivo Excel (.xlsx / .xlsm)</p>
+                <input type="file" id="inputExcelImport" accept=".xlsx,.xlsm" style="display:none;" onchange="importarExcelInventario(event)">
+            </div>
+        </div>
+        <div class="glass-card" style="margin-top:16px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <h6 style="margin:0;"><i class="bi bi-terminal"></i> Log de importación</h6>
+                <button class="btn-inv btn-outline-inv" onclick="document.getElementById('logs-inv').classList.toggle('visible')" style="padding:3px 10px; font-size:0.72rem;">
+                    Mostrar/Ocultar
+                </button>
+            </div>
+            <div id="logs-inv"></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ═══ MODAL: INSUMO ═══ -->
+<div class="modal-overlay" id="modalInsumo">
+    <div class="modal-box">
+        <h5 id="modalInsumoTitulo">Nuevo Insumo</h5>
+        <input type="hidden" id="insumo-id">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+            <div>
+                <label>Código *</label>
+                <input type="text" id="insumo-cod" placeholder="BRA01">
+            </div>
+            <div>
+                <label>Nemotécnico (nombre corto) *</label>
+                <input type="text" id="insumo-nemotecnico" placeholder="Bracket Corto">
+            </div>
+            <div>
+                <label>Categoría</label>
+                <select id="insumo-categoria"></select>
+            </div>
+            <div>
+                <label>Sub-Categoría</label>
+                <select id="insumo-sub_categoria"></select>
+            </div>
+            <div>
+                <label>Producto</label>
+                <select id="insumo-producto"></select>
+            </div>
+            <div>
+                <label>Proveedor</label>
+                <select id="insumo-proveedor"></select>
+            </div>
+            <div>
+                <label>Compra</label>
+                <select id="insumo-compra"></select>
+            </div>
+            <div>
+                <label>Color</label>
+                <select id="insumo-color"></select>
+            </div>
+            <div>
+                <label>Stock Mínimo</label>
+                <input type="number" id="insumo-minimo" value="0" min="0">
+            </div>
+            <div>
+                <label>Cant. x Paquete</label>
+                <input type="number" id="insumo-can_x_paquete" value="1" min="1">
+            </div>
+            <div>
+                <label>Costo (sin IVA)</label>
+                <input type="number" id="insumo-costo" value="0" step="0.01" min="0">
+            </div>
+            <div>
+                <label>Ubicación</label>
+                <select id="insumo-ubicacion"></select>
+            </div>
+        </div>
+        <label>Descriptor Proveedor</label>
+        <input type="text" id="insumo-descriptor_proveedor" placeholder="Descripción larga del proveedor">
+        <label>Comentarios</label>
+        <textarea id="insumo-comentarios" rows="2"></textarea>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalInsumo')">Cancelar</button>
+            <button class="btn-inv btn-primary-inv" onclick="guardarInsumo()">
+                <i class="bi bi-check-lg"></i> Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: MOVIMIENTO ═══ -->
+<div class="modal-overlay" id="modalMovimiento">
+    <div class="modal-box">
+        <h5 id="modalMovTitulo">Nuevo Movimiento</h5>
+        <input type="hidden" id="mov-tipo-base">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+            <div>
+                <label>Código Insumo *</label>
+                <select id="mov-codigo"></select>
+            </div>
+            <div>
+                <label>Cantidad *</label>
+                <input type="number" id="mov-cantidad" value="1" min="1">
+            </div>
+            <div>
+                <label>Almacén</label>
+                <select id="mov-almacen">
+                    <option value="MP">Materias Primas</option>
+                    <option value="LIBERADO">Liberado</option>
+                </select>
+            </div>
+            <div>
+                <label>OT (opcional)</label>
+                <input type="text" id="mov-ot" placeholder="#OT">
+            </div>
+            <div>
+                <label>Responsable Entrega</label>
+                <select id="mov-responsable"></select>
+            </div>
+            <div>
+                <label>Recepción</label>
+                <select id="mov-recepcion"></select>
+            </div>
+        </div>
+        <label>Bitácora / Notas</label>
+        <textarea id="mov-bitacora" rows="2" placeholder="Detalle del movimiento..."></textarea>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalMovimiento')">Cancelar</button>
+            <button class="btn-inv btn-primary-inv" onclick="guardarMovimiento()">
+                <i class="bi bi-check-lg"></i> Registrar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: DETALLE RACK CELL ═══ -->
+<div class="modal-overlay" id="modalRackCell">
+    <div class="modal-box" style="max-width:450px;">
+        <h5 id="rackCellTitulo">Posición A1 - RACK 1</h5>
+        <div id="rackCellContenido"></div>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalRackCell')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN
+// ══════════════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+
+let sbInv;
+try {
+    // Si está dentro de iframe, intentar usar el Supabase del padre
+    if (window.parent && window.parent.sb) {
+        sbInv = window.parent.sb;
+    } else {
+        const { createClient } = supabase;
+        sbInv = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+            auth: { storage: sessionStorage, persistSession: true, autoRefreshToken: true }
+        });
+    }
+} catch (e) {
+    const { createClient } = supabase;
+    sbInv = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { storage: sessionStorage, persistSession: true, autoRefreshToken: true }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════
+const INV = {
+    insumos: [],
+    movimientos: [],
+    ubicaciones: [],
+    validadores: {},
+    alertas: [],
+    sortCol: 'cod',
+    sortDir: 'asc'
+};
+
+// ══════════════════════════════════════════════════════════════════
+// NAVEGACIÓN
+// ══════════════════════════════════════════════════════════════════
+function switchPanel(nombre) {
+    document.querySelectorAll('.inv-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
+    const panel = document.getElementById('panel-' + nombre);
+    if (panel) panel.classList.add('active');
+    const tabs = document.querySelectorAll('.inv-tab');
+    const map = { catalogo: 0, rack: 1, movimientos: 2, alertas: 3, importar: 4 };
+    if (map[nombre] !== undefined && tabs[map[nombre]]) tabs[map[nombre]].classList.add('active');
+}
+
+function cerrarModal(id) {
+    document.getElementById(id).classList.remove('visible');
+}
+
+function toggleLeyendaRack() {
+    const el = document.getElementById('leyendaRack');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════════════════════════════
+function logInv(msg, tipo = 'info') {
+    const el = document.getElementById('logs-inv');
+    const color = tipo === 'error' ? '#ef4444' : tipo === 'success' ? '#22c55e' : tipo === 'warn' ? '#f59e0b' : '#a1a1aa';
+    el.innerHTML += `<div style="color:${color}; margin-bottom:2px;">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+    console.log(`[INV ${tipo}] ${msg}`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CARGA INICIAL
+// ══════════════════════════════════════════════════════════════════
+async function inicializar() {
+    document.getElementById('estadoConexion').textContent = 'Cargando...';
+    try {
+        // Cargar validadores
+        const { data: vals } = await sbInv.from('validadores_insumos')
+            .select('*').eq('empresa_id', EMPRESA_ID).order('orden');
+        if (vals) {
+            INV.validadores = {};
+            vals.forEach(v => {
+                if (!INV.validadores[v.campo]) INV.validadores[v.campo] = [];
+                INV.validadores[v.campo].push(v.valor);
+            });
+            poblarSelectsValidadores();
+        }
+
+        // Cargar insumos
+        const { data: ins } = await sbInv.from('insumos')
+            .select('*').eq('empresa_id', EMPRESA_ID).order('cod');
+        INV.insumos = ins || [];
+
+        // Cargar movimientos (últimos 500)
+        const { data: movs } = await sbInv.from('movimientos_insumos')
+            .select('*').eq('empresa_id', EMPRESA_ID).order('fecha', { ascending: false }).limit(500);
+        INV.movimientos = movs || [];
+
+        // Cargar ubicaciones rack
+        const { data: ubics } = await sbInv.from('ubicaciones_rack')
+            .select('*').eq('empresa_id', EMPRESA_ID);
+        INV.ubicaciones = ubics || [];
+
+        // Calcular alertas
+        calcularAlertas();
+
+        // Renderizar todo
+        renderizarCatalogo();
+        renderizarMovimientos();
+        renderizarRacks();
+        renderizarAlertas();
+
+        document.getElementById('estadoConexion').textContent = '● Conectado';
+        document.getElementById('estadoConexion').style.color = 'var(--success)';
+
+        // Mostrar usuario
+        const { data: { user } } = await sbInv.auth.getUser();
+        if (user) {
+            document.getElementById('usuarioActual').textContent = user.email;
+        }
+    } catch (e) {
+        console.error('Error inicializando:', e);
+        document.getElementById('estadoConexion').textContent = '● Error';
+        document.getElementById('estadoConexion').style.color = 'var(--danger)';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VALIDADORES → SELECTS
+// ══════════════════════════════════════════════════════════════════
+function poblarSelectsValidadores() {
+    const mapCampoSelect = {
+        'CATEGORIA': ['insumo-categoria', 'filtroCategoria'],
+        'SUB_CATEGORIA': ['insumo-sub_categoria', 'filtroSubCategoria'],
+        'PRODUCTO': ['insumo-producto'],
+        'PROVEEDOR': ['insumo-proveedor'],
+        'COMPRA': ['insumo-compra'],
+        'COLOR': ['insumo-color'],
+        'UBICACION': ['insumo-ubicacion'],
+        'RESPONSABLE': ['mov-responsable', 'mov-recepcion']
+    };
+    for (const [campo, selectIds] of Object.entries(mapCampoSelect)) {
+        const opciones = INV.validadores[campo] || [];
+        for (const selectId of selectIds) {
+            const sel = document.getElementById(selectId);
+            if (!sel) continue;
+            const valorActual = sel.value;
+            // Mantener la primera opción (placeholder)
+            const primera = sel.options[0] ? sel.options[0].outerHTML : '<option value="">--</option>';
+            sel.innerHTML = primera;
+            opciones.forEach(v => {
+                const opt = document.createElement('option');
+                opt.value = v;
+                opt.textContent = v;
+                sel.appendChild(opt);
+            });
+            sel.value = valorActual;
+        }
+    }
+    // Poblar select de código en movimientos
+    const selCod = document.getElementById('mov-codigo');
+    if (selCod) {
+        selCod.innerHTML = '<option value="">Seleccionar insumo...</option>';
+        INV.insumos.forEach(ins => {
+            const opt = document.createElement('option');
+            opt.value = ins.cod;
+            opt.textContent = `${ins.cod} — ${ins.nemotecnico || ins.descriptor_proveedor || ''}`;
+            selCod.appendChild(opt);
+        });
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CATÁLOGO: RENDERIZAR
+// ══════════════════════════════════════════════════════════════════
+function renderizarCatalogo() {
+    let datos = [...INV.insumos];
+
+    // Stats
+    const total = datos.length;
+    const conStock = datos.filter(i => (i.stock_total || (i.stock_mp||0) + (i.stock_liberado||0)) > 0).length;
+    const sinStock = datos.filter(i => ((i.stock_total || (i.stock_mp||0) + (i.stock_liberado||0)) || 0) <= 0).length;
+    const bajoMin = datos.filter(i => i.minimo > 0 && ((i.stock_total || (i.stock_mp||0) + (i.stock_liberado||0)) || 0) < i.minimo).length;
+    const categorias = new Set(datos.map(i => i.categoria).filter(Boolean)).size;
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-stock').textContent = conStock;
+    document.getElementById('stat-sinstock').textContent = sinStock;
+    document.getElementById('stat-bajomin').textContent = bajoMin;
+    document.getElementById('stat-categorias').textContent = categorias;
+
+    filtrarCatalogo();
+}
+
+function getStockTotal(ins) {
+    return ins.stock_total || ((ins.stock_mp || 0) + (ins.stock_liberado || 0));
+}
+
+function filtrarCatalogo() {
+    let datos = [...INV.insumos];
+    const busq = (document.getElementById('buscarProducto').value || '').toUpperCase();
+    const cat = document.getElementById('filtroCategoria').value;
+    const subcat = document.getElementById('filtroSubCategoria').value;
+    const estado = document.getElementById('filtroEstado').value;
+
+    if (busq) datos = datos.filter(i =>
+        (i.cod || '').toUpperCase().includes(busq) ||
+        (i.nemotecnico || '').toUpperCase().includes(busq) ||
+        (i.color || '').toUpperCase().includes(busq) ||
+        (i.descriptor_proveedor || '').toUpperCase().includes(busq)
+    );
+    if (cat) datos = datos.filter(i => i.categoria === cat);
+    if (subcat) datos = datos.filter(i => i.sub_categoria === subcat);
+    if (estado === 'con_stock') datos = datos.filter(i => getStockTotal(i) > 0);
+    if (estado === 'sin_stock') datos = datos.filter(i => getStockTotal(i) <= 0);
+    if (estado === 'bajo_minimo') datos = datos.filter(i => i.minimo > 0 && getStockTotal(i) < i.minimo);
+
+    // Sort
+    datos.sort((a, b) => {
+        let va = a[INV.sortCol], vb = b[INV.sortCol];
+        if (typeof va === 'number' && typeof vb === 'number') {
+            return INV.sortDir === 'asc' ? va - vb : vb - va;
+        }
+        va = String(va || ''); vb = String(vb || '');
+        return INV.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+
+    const tbody = document.getElementById('tbodyCatalogo');
+    tbody.innerHTML = datos.map(i => {
+        const st = getStockTotal(i);
+        const bajo = i.minimo > 0 && st < i.minimo;
+        const sin = st <= 0;
+        let tagEstado = '<span class="tag tag-ok">OK</span>';
+        if (sin) tagEstado = '<span class="tag tag-danger">SIN STOCK</span>';
+        else if (bajo) tagEstado = '<span class="tag tag-warn">BAJO MIN</span>';
+
+        return `<tr>
+            <td><strong>${i.cod || ''}</strong></td>
+            <td>${i.nemotecnico || i.descriptor_proveedor || '-'}</td>
+            <td><span class="tag tag-info">${i.categoria || '-'}</span></td>
+            <td>${i.sub_categoria || '-'}</td>
+            <td>${i.color || '-'}</td>
+            <td style="text-align:center; font-weight:700; color:${sin ? 'var(--danger)' : bajo ? 'var(--warning)' : 'var(--text-primary)'};">${st}</td>
+            <td style="text-align:center;">${i.stock_mp || 0}</td>
+            <td style="text-align:center;">${i.stock_liberado || 0}</td>
+            <td style="text-align:center;">${i.minimo || 0}</td>
+            <td style="text-align:center;">${tagEstado}</td>
+            <td style="text-align:center;">
+                <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem;" onclick="editarInsumo('${i.id}')">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function ordenarCatalogo(col) {
+    if (INV.sortCol === col) {
+        INV.sortDir = INV.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        INV.sortCol = col;
+        INV.sortDir = 'asc';
+    }
+    filtrarCatalogo();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CATÁLOGO: CRUD
+// ══════════════════════════════════════════════════════════════════
+function abrirModalInsumo() {
+    document.getElementById('modalInsumoTitulo').textContent = 'Nuevo Insumo';
+    document.getElementById('insumo-id').value = '';
+    ['cod','nemotecnico','descriptor_proveedor','comentarios'].forEach(f =>
+        document.getElementById('insumo-' + f).value = '');
+    ['categoria','sub_categoria','producto','proveedor','compra','color','ubicacion'].forEach(f =>
+        document.getElementById('insumo-' + f).selectedIndex = 0);
+    document.getElementById('insumo-minimo').value = '0';
+    document.getElementById('insumo-can_x_paquete').value = '1';
+    document.getElementById('insumo-costo').value = '0';
+    document.getElementById('modalInsumo').classList.add('visible');
+}
+
+function editarInsumo(id) {
+    const ins = INV.insumos.find(i => i.id === id);
+    if (!ins) return;
+    document.getElementById('modalInsumoTitulo').textContent = 'Editar Insumo: ' + ins.cod;
+    document.getElementById('insumo-id').value = ins.id;
+    document.getElementById('insumo-cod').value = ins.cod || '';
+    document.getElementById('insumo-nemotecnico').value = ins.nemotecnico || '';
+    document.getElementById('insumo-categoria').value = ins.categoria || '';
+    document.getElementById('insumo-sub_categoria').value = ins.sub_categoria || '';
+    document.getElementById('insumo-producto').value = ins.producto || '';
+    document.getElementById('insumo-proveedor').value = ins.proveedor || '';
+    document.getElementById('insumo-compra').value = ins.compra || '';
+    document.getElementById('insumo-color').value = ins.color || '';
+    document.getElementById('insumo-minimo').value = ins.minimo || 0;
+    document.getElementById('insumo-can_x_paquete').value = ins.can_x_paquete || 1;
+    document.getElementById('insumo-costo').value = ins.costo || 0;
+    document.getElementById('insumo-ubicacion').value = ins.ubicacion || '';
+    document.getElementById('insumo-descriptor_proveedor').value = ins.descriptor_proveedor || '';
+    document.getElementById('insumo-comentarios').value = ins.comentarios || '';
+    document.getElementById('modalInsumo').classList.add('visible');
+}
+
+async function guardarInsumo() {
+    const id = document.getElementById('insumo-id').value;
+    const cod = document.getElementById('insumo-cod').value.trim().toUpperCase();
+    if (!cod) { alert('El código es obligatorio'); return; }
+
+    const datos = {
+        empresa_id: EMPRESA_ID,
+        cod,
+        nemotecnico: document.getElementById('insumo-nemotecnico').value.trim(),
+        categoria: document.getElementById('insumo-categoria').value,
+        sub_categoria: document.getElementById('insumo-sub_categoria').value,
+        producto: document.getElementById('insumo-producto').value,
+        proveedor: document.getElementById('insumo-proveedor').value,
+        compra: document.getElementById('insumo-compra').value,
+        color: document.getElementById('insumo-color').value,
+        minimo: parseInt(document.getElementById('insumo-minimo').value) || 0,
+        can_x_paquete: parseInt(document.getElementById('insumo-can_x_paquete').value) || 1,
+        costo: parseFloat(document.getElementById('insumo-costo').value) || 0,
+        costo_iva: (parseFloat(document.getElementById('insumo-costo').value) || 0) * 1.19,
+        ubicacion: document.getElementById('insumo-ubicacion').value,
+        descriptor_proveedor: document.getElementById('insumo-descriptor_proveedor').value.trim(),
+        comentarios: document.getElementById('insumo-comentarios').value.trim()
+    };
+
+    try {
+        if (id) {
+            const { error } = await sbInv.from('insumos').update(datos).eq('id', id);
+            if (error) throw error;
+            const idx = INV.insumos.findIndex(i => i.id === id);
+            if (idx !== -1) Object.assign(INV.insumos[idx], datos);
+        } else {
+            const { data, error } = await sbInv.from('insumos').insert(datos).select().single();
+            if (error) throw error;
+            INV.insumos.push(data);
+        }
+        cerrarModal('modalInsumo');
+        renderizarCatalogo();
+        poblarSelectsValidadores(); // Actualizar select de mov-codigo
+        calcularAlertas();
+        renderizarAlertas();
+    } catch (e) {
+        alert('Error guardando: ' + e.message);
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MOVIMIENTOS
+// ══════════════════════════════════════════════════════════════════
+function renderizarMovimientos() {
+    filtrarMovimientos();
+}
+
+function filtrarMovimientos() {
+    let datos = [...INV.movimientos];
+    const tipo = document.getElementById('filtroTipoMov').value;
+    const busq = (document.getElementById('buscarMov').value || '').toUpperCase();
+
+    if (tipo) datos = datos.filter(m => m.tipo === tipo);
+    if (busq) datos = datos.filter(m =>
+        (m.codigo || '').toUpperCase().includes(busq) ||
+        (m.producto || '').toUpperCase().includes(busq) ||
+        (m.ot || '').toUpperCase().includes(busq)
+    );
+
+    const lista = document.getElementById('listaMovimientos');
+    const vacio = document.getElementById('movVacio');
+
+    if (datos.length === 0) {
+        lista.innerHTML = '';
+        vacio.style.display = 'block';
+        return;
+    }
+    vacio.style.display = 'none';
+
+    lista.innerHTML = datos.slice(0, 100).map(m => {
+        const esEntrada = m.tipo === 'NUEVO INGRESO' || m.tipo === 'DEVOLUCION';
+        const esAjuste = m.tipo === 'AJUSTE';
+        const iconClass = esAjuste ? 'ajuste' : esEntrada ? 'entrada' : 'salida';
+        const icon = esAjuste ? 'bi-pencil-square' : esEntrada ? 'bi-box-arrow-in-down' : 'bi-box-arrow-up';
+        const signo = esEntrada ? '+' : '-';
+        const fecha = m.fecha ? new Date(m.fecha).toLocaleDateString('es-CL') : '-';
+        const hora = m.fecha ? new Date(m.fecha).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '';
+
+        return `<div class="mov-card">
+            <div class="mov-icon ${iconClass}"><i class="bi ${icon}"></i></div>
+            <div class="mov-info">
+                <div class="mov-title">${m.tipo}: ${m.codigo} — ${m.producto || ''}</div>
+                <div class="mov-detail">
+                    <strong>${signo}${m.cantidad}</strong> unidades
+                    ${m.almacen ? ` → ${m.almacen}` : ''}
+                    ${m.ot ? ` | OT: ${m.ot}` : ''}
+                    ${m.responsable_entrega ? ` | ${m.responsable_entrega}` : ''}
+                </div>
+                <div class="mov-date">${fecha} ${hora}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function abrirModalMovimiento(tipo) {
+    document.getElementById('modalMovTitulo').textContent =
+        tipo === 'NUEVO INGRESO' ? 'Registrar Entrada' :
+        tipo === 'SALIDA PRODUCCION' ? 'Registrar Salida' : 'Ajuste de Inventario';
+    document.getElementById('mov-tipo-base').value = tipo;
+    document.getElementById('mov-codigo').selectedIndex = 0;
+    document.getElementById('mov-cantidad').value = '1';
+    document.getElementById('mov-ot').value = '';
+    document.getElementById('mov-bitacora').value = '';
+    document.getElementById('mov-responsable').selectedIndex = 0;
+    document.getElementById('mov-recepcion').selectedIndex = 0;
+    document.getElementById('modalMovimiento').classList.add('visible');
+}
+
+async function guardarMovimiento() {
+    const tipo = document.getElementById('mov-tipo-base').value;
+    const codigo = document.getElementById('mov-codigo').value;
+    const cantidad = parseInt(document.getElementById('mov-cantidad').value) || 0;
+    const almacen = document.getElementById('mov-almacen').value;
+
+    if (!codigo) { alert('Selecciona un insumo'); return; }
+    if (cantidad <= 0) { alert('La cantidad debe ser mayor a 0'); return; }
+
+    const insumo = INV.insumos.find(i => i.cod === codigo);
+    const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+
+    const mov = {
+        empresa_id: EMPRESA_ID,
+        fecha: new Date().toISOString(),
+        mes: meses[new Date().getMonth()],
+        tipo,
+        codigo,
+        producto: insumo ? (insumo.nemotecnico || insumo.descriptor_proveedor || '') : '',
+        almacen,
+        cantidad,
+        ot: document.getElementById('mov-ot').value.trim(),
+        responsable_entrega: document.getElementById('mov-responsable').value,
+        recepcion: document.getElementById('mov-recepcion').value,
+        bitacora: document.getElementById('mov-bitacora').value.trim()
+    };
+
+    try {
+        // Guardar movimiento
+        const { data, error } = await sbInv.from('movimientos_insumos').insert(mov).select().single();
+        if (error) throw error;
+        INV.movimientos.unshift(data);
+
+        // Actualizar stock del insumo
+        if (insumo) {
+            const campoStock = almacen === 'MP' ? 'stock_mp' : 'stock_liberado';
+            const esEntrada = tipo === 'NUEVO INGRESO' || tipo === 'DEVOLUCION';
+            const nuevoStock = (insumo[campoStock] || 0) + (esEntrada ? cantidad : -cantidad);
+            const { error: errUp } = await sbInv.from('insumos')
+                .update({ [campoStock]: Math.max(0, nuevoStock) })
+                .eq('id', insumo.id);
+            if (errUp) throw errUp;
+            insumo[campoStock] = Math.max(0, nuevoStock);
+        }
+
+        cerrarModal('modalMovimiento');
+        renderizarMovimientos();
+        renderizarCatalogo();
+        calcularAlertas();
+        renderizarAlertas();
+    } catch (e) {
+        alert('Error registrando movimiento: ' + e.message);
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RACK MAP
+// ══════════════════════════════════════════════════════════════════
+function renderizarRacks() {
+    const almacen = document.getElementById('filtroAlmacen').value;
+    const grid = document.getElementById('rackGrid');
+
+    // Definir estructura de racks según el Excel
+    const CONFIG_RACKS = almacen === 'LIBERADO' ? [
+        { nombre: 'RACK 1 - DÚO', filas: 9, columnas: ['A','B','C','D','E','S'] },
+        { nombre: 'RACK 2 - SCREEN', filas: 10, columnas: ['A','B','C','D','E'] },
+        { nombre: 'RACK 3 - BLACKOUT', filas: 10, columnas: ['A','B','C','D'] },
+        { nombre: 'RACK 4 - BLACKOUT', filas: 12, columnas: ['A','B','C','D'] }
+    ] : [
+        { nombre: 'RACK MP 1', filas: 10, columnas: ['A','B','C','D','E'] },
+        { nombre: 'RACK MP 2', filas: 10, columnas: ['A','B','C','D','E'] }
+    ];
+
+    // Crear mapa de ubicaciones cargadas
+    const mapaUbic = {};
+    INV.ubicaciones.filter(u => u.almacen === almacen).forEach(u => {
+        mapaUbic[`${u.rack}|${u.fila}|${u.columna}`] = u;
+    });
+
+    grid.innerHTML = '';
+    grid.style.gridTemplateColumns = `repeat(${Math.min(CONFIG_RACKS.length, 2)}, 1fr)`;
+
+    CONFIG_RACKS.forEach(rack => {
+        const container = document.createElement('div');
+        container.className = 'rack-container';
+        container.innerHTML = `<div class="rack-title">${rack.nombre}</div>`;
+
+        const cells = document.createElement('div');
+        cells.className = 'rack-cells';
+        cells.style.gridTemplateColumns = `40px repeat(${rack.columnas.length}, 1fr)`;
+
+        // Header row
+        cells.innerHTML = '<div class="rack-cell header-cell">#</div>';
+        rack.columnas.forEach(col => {
+            cells.innerHTML += `<div class="rack-cell header-cell">${col}</div>`;
+        });
+
+        // Data rows
+        for (let fila = 1; fila <= rack.filas; fila++) {
+            cells.innerHTML += `<div class="rack-cell header-cell">${fila}</div>`;
+            rack.columnas.forEach(col => {
+                const key = `${rack.nombre}|${fila}|${col}`;
+                const ubic = mapaUbic[key];
+                const codigo = ubic ? ubic.codigo_insumo : null;
+                const insumo = codigo ? INV.insumos.find(i => i.cod === codigo) : null;
+                const bajo = insumo && insumo.minimo > 0 && getStockTotal(insumo) < insumo.minimo;
+
+                const claseEstado = codigo ? (bajo ? 'alerta' : 'ocupado') : 'vacio';
+                const texto = codigo || '';
+                cells.innerHTML += `<div class="rack-cell ${claseEstado}" onclick="verCeldaRack('${rack.nombre}','${fila}','${col}')" title="${texto}">${texto}</div>`;
+            });
+        }
+
+        container.appendChild(cells);
+        grid.appendChild(container);
+    });
+}
+
+function resaltarEnRack() {
+    const busq = (document.getElementById('buscarRack').value || '').toUpperCase();
+    document.querySelectorAll('.rack-cell.ocupado, .rack-cell.alerta').forEach(cell => {
+        if (!busq) {
+            cell.style.opacity = '1';
+            cell.style.transform = '';
+        } else if (cell.textContent.toUpperCase().includes(busq)) {
+            cell.style.opacity = '1';
+            cell.style.transform = 'scale(1.15)';
+            cell.style.zIndex = '2';
+        } else {
+            cell.style.opacity = '0.25';
+            cell.style.transform = '';
+        }
+    });
+}
+
+function verCeldaRack(rack, fila, col) {
+    const ubic = INV.ubicaciones.find(u =>
+        u.rack === rack && String(u.fila) === String(fila) && u.columna === col);
+    const titulo = `${col}${fila} — ${rack}`;
+    document.getElementById('rackCellTitulo').textContent = titulo;
+
+    const contenido = document.getElementById('rackCellContenido');
+    if (!ubic || !ubic.codigo_insumo) {
+        contenido.innerHTML = `<p style="color:var(--text-muted); text-align:center; padding:20px;">
+            <i class="bi bi-inbox" style="font-size:2rem;"></i><br>Posición vacía
+        </p>`;
+    } else {
+        const ins = INV.insumos.find(i => i.cod === ubic.codigo_insumo);
+        contenido.innerHTML = `
+            <div style="padding:12px; background:var(--bg-secondary); border-radius:8px; margin-bottom:12px;">
+                <div style="font-size:1.1rem; font-weight:700; color:var(--primary-500);">${ubic.codigo_insumo}</div>
+                <div style="font-size:0.9rem; margin-top:4px;">${ins ? (ins.nemotecnico || ins.descriptor_proveedor || '') : 'Sin datos'}</div>
+            </div>
+            ${ins ? `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:0.85rem;">
+                    <div><strong>Stock Total:</strong> ${getStockTotal(ins)}</div>
+                    <div><strong>Mínimo:</strong> ${ins.minimo || 0}</div>
+                    <div><strong>Color:</strong> ${ins.color || '-'}</div>
+                    <div><strong>Categoría:</strong> ${ins.categoria || '-'}</div>
+                </div>
+            ` : ''}
+        `;
+    }
+    document.getElementById('modalRackCell').classList.add('visible');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ALERTAS
+// ══════════════════════════════════════════════════════════════════
+function calcularAlertas() {
+    INV.alertas = [];
+    INV.insumos.forEach(ins => {
+        const st = getStockTotal(ins);
+        if (st <= 0 && ins.status !== 'DESCONTINUADO') {
+            INV.alertas.push({
+                tipo: 'SIN_STOCK',
+                codigo: ins.cod,
+                nombre: ins.nemotecnico || ins.descriptor_proveedor || '',
+                mensaje: `${ins.cod} — SIN STOCK (${ins.nemotecnico || ''})`,
+                severity: 'danger'
+            });
+        } else if (ins.minimo > 0 && st < ins.minimo) {
+            INV.alertas.push({
+                tipo: 'STOCK_BAJO',
+                codigo: ins.cod,
+                nombre: ins.nemotecnico || ins.descriptor_proveedor || '',
+                mensaje: `${ins.cod} — Stock: ${st} / Mínimo: ${ins.minimo} (${ins.nemotecnico || ''})`,
+                severity: 'warning'
+            });
+        }
+    });
+
+    // Badge
+    const badge = document.getElementById('alertas-count');
+    if (INV.alertas.length > 0) {
+        badge.textContent = INV.alertas.length;
+        badge.style.display = 'inline';
+    } else {
+        badge.style.display = 'none';
+    }
+
+    // Alert bar
+    const bar = document.getElementById('alertBar');
+    if (INV.alertas.length > 0) {
+        bar.classList.add('visible');
+        const sinStock = INV.alertas.filter(a => a.tipo === 'SIN_STOCK').length;
+        const bajoMin = INV.alertas.filter(a => a.tipo === 'STOCK_BAJO').length;
+        let texto = [];
+        if (sinStock) texto.push(`${sinStock} sin stock`);
+        if (bajoMin) texto.push(`${bajoMin} bajo mínimo`);
+        document.getElementById('alertBarText').textContent = texto.join(', ');
+    } else {
+        bar.classList.remove('visible');
+    }
+}
+
+function renderizarAlertas() {
+    const lista = document.getElementById('listaAlertas');
+    const vacio = document.getElementById('alertasVacio');
+
+    if (INV.alertas.length === 0) {
+        lista.innerHTML = '';
+        vacio.style.display = 'block';
+        return;
+    }
+    vacio.style.display = 'none';
+
+    lista.innerHTML = INV.alertas.map(a => {
+        const icon = a.severity === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill';
+        const color = a.severity === 'danger' ? 'var(--danger)' : 'var(--warning)';
+        return `<div class="mov-card" style="border-color:${color}20;">
+            <div class="mov-icon" style="background:${color}20; color:${color};">
+                <i class="bi ${icon}"></i>
+            </div>
+            <div class="mov-info">
+                <div class="mov-title" style="color:${color};">${a.tipo === 'SIN_STOCK' ? 'Sin Stock' : 'Stock Bajo'}</div>
+                <div class="mov-detail">${a.mensaje}</div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// IMPORTAR EXCEL
+// ══════════════════════════════════════════════════════════════════
+async function importarExcelInventario(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    document.getElementById('logs-inv').classList.add('visible');
+    logInv(`Importando: ${file.name}`, 'info');
+
+    try {
+        const buffer = await file.arrayBuffer();
+        const wb = XLSX.read(buffer, { type: 'array' });
+        logInv(`Hojas encontradas: ${wb.SheetNames.join(', ')}`, 'info');
+
+        // 1. Importar INVENTARIO
+        const wsInv = wb.Sheets['INVENTARIO'];
+        if (wsInv) {
+            const datosInv = XLSX.utils.sheet_to_json(wsInv, { range: 9, defval: '' });
+            logInv(`INVENTARIO: ${datosInv.length} filas detectadas`, 'info');
+
+            let importados = 0, errores = 0;
+            for (const fila of datosInv) {
+                const cod = String(fila['COD'] || '').trim().toUpperCase();
+                if (!cod) continue;
+
+                const registro = {
+                    empresa_id: EMPRESA_ID,
+                    cod,
+                    categoria: fila['CATEGORIA'] || '',
+                    sub_categoria: fila['SUB_CATEGORIA'] || '',
+                    proveedor: fila['PROVEEDOR'] || '',
+                    producto: fila['PRODUCTO'] || '',
+                    compra: fila['COMPRA'] || '',
+                    nemotecnico: fila['NEMOTÉCNICO'] || fila['NEMOTECNICO'] || '',
+                    cod_proveedor: String(fila['COD. PROVEEDOR'] || ''),
+                    descriptor_proveedor: fila['DESCRIPTOR PROVEEDOR'] || '',
+                    can_x_paquete: parseInt(fila['CAN X PAQUETE']) || 1,
+                    color: fila['COLOR'] || '',
+                    status: fila['STATUS'] || 'OK',
+                    minimo: parseInt(fila['MINIMO']) || 0,
+                    stock_mp: parseInt(fila['MP']) || 0,
+                    stock_liberado: parseInt(fila['LIBERADO']) || 0,
+                    ubicacion: fila['UBICACION'] || '',
+                    estado_inventario: fila['ESTADO INVENTARIO'] || '',
+                    costo: parseFloat(fila['COSTO']) || 0,
+                    costo_iva: parseFloat(fila['COSTO + IVA']) || 0,
+                    comentarios: fila['COMENTARIOS'] || ''
+                };
+
+                const { error } = await sbInv.from('insumos').upsert(registro, { onConflict: 'empresa_id,cod' });
+                if (error) {
+                    logInv(`Error importando ${cod}: ${error.message}`, 'error');
+                    errores++;
+                } else {
+                    importados++;
+                }
+            }
+            logInv(`INVENTARIO: ${importados} importados, ${errores} errores`, importados > 0 ? 'success' : 'warn');
+        }
+
+        // 2. Importar ENTRADA Y SALIDA
+        const wsES = wb.Sheets['ENTRADA Y SALIDA'];
+        if (wsES) {
+            const datosES = XLSX.utils.sheet_to_json(wsES, { range: 5, defval: '' });
+            logInv(`ENTRADA Y SALIDA: ${datosES.length} filas detectadas`, 'info');
+
+            let movImportados = 0;
+            for (const fila of datosES) {
+                const codigo = String(fila['CODIGO'] || '').trim().toUpperCase();
+                if (!codigo) continue;
+
+                const mov = {
+                    empresa_id: EMPRESA_ID,
+                    fecha: fila['FECHA'] ? new Date(fila['FECHA']).toISOString() : new Date().toISOString(),
+                    mes: fila['MES'] || '',
+                    tipo: fila['TIPO'] || 'NUEVO INGRESO',
+                    tipo_doc: fila['TIPO DE DOC.'] || '',
+                    n_folio: String(fila['N° FOLIO'] || ''),
+                    estado: fila['ESTADO'] || '',
+                    ot: String(fila['#OT'] || ''),
+                    codigo,
+                    producto: fila['PRODUCTO'] || '',
+                    almacen: fila['ALMACEN'] || 'MP',
+                    cantidad: parseInt(fila['CANTIDAD']) || 0,
+                    entrega: fila['ENTREGA'] || '',
+                    nombre_cliente: fila['NOMBRE CLIENTE'] || '',
+                    responsable_entrega: fila['RESPONSABLE ENTREGA'] || '',
+                    recepcion: fila['RECEPCIÓN'] || fila['RECEPCION'] || '',
+                    devolucion: fila['DEVOLUCION'] || '',
+                    estatus: fila['ESTATUS'] || '',
+                    verificado: fila['VERIFICADO'] === 'SI' || fila['VERIFICADO'] === true,
+                    persona_verifica: fila['PERSONA QUE VERIFICA'] || '',
+                    bitacora: fila['BITACORA'] || ''
+                };
+
+                const { error } = await sbInv.from('movimientos_insumos').insert(mov);
+                if (!error) movImportados++;
+            }
+            logInv(`ENTRADA Y SALIDA: ${movImportados} movimientos importados`, 'success');
+        }
+
+        // 3. Importar posiciones de rack desde LIBERADO
+        const wsLib = wb.Sheets['LIBERADO'];
+        if (wsLib) {
+            const datosLib = XLSX.utils.sheet_to_json(wsLib, { header: 1, defval: '' });
+            logInv('Procesando mapa LIBERADO...', 'info');
+            let posicionesImportadas = 0;
+
+            // La estructura del rack está en filas/columnas del Excel
+            // Fila 5 tiene nombres de racks, fila 7 tiene letras de columnas
+            // Filas 8+ tienen los datos con número de fila en col 0
+            const columnaLetras = ['A', 'B', 'C', 'D', 'E', 'S'];
+            const racks = [
+                { nombre: 'RACK 1 - DÚO', colInicio: 1, colFin: 6, filaInicio: 7 },
+            ];
+
+            for (let f = 7; f < Math.min(datosLib.length, 25); f++) {
+                const fila = datosLib[f];
+                if (!fila) continue;
+                const numFila = parseInt(fila[0]) || parseInt(fila[1]);
+                if (!numFila) continue;
+
+                for (let c = 1; c <= 6; c++) {
+                    const valor = String(fila[c] || '').trim().toUpperCase();
+                    if (!valor || valor === '.') continue;
+                    const colLetra = columnaLetras[c - 1] || 'X';
+
+                    const pos = {
+                        empresa_id: EMPRESA_ID,
+                        almacen: 'LIBERADO',
+                        rack: 'RACK 1 - DÚO',
+                        fila: numFila,
+                        columna: colLetra,
+                        codigo_insumo: valor,
+                        estado: 'ocupado'
+                    };
+                    await sbInv.from('ubicaciones_rack').upsert(pos, {
+                        onConflict: 'empresa_id,almacen,rack,fila,columna'
+                    });
+                    posicionesImportadas++;
+                }
+            }
+            logInv(`LIBERADO: ${posicionesImportadas} posiciones importadas`, 'success');
+        }
+
+        logInv('Importación completada. Recargando datos...', 'success');
+
+        // Recargar todo
+        await inicializar();
+
+    } catch (e) {
+        logInv(`Error fatal: ${e.message}`, 'error');
+        console.error(e);
+    }
+
+    // Reset input
+    event.target.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INICIAR
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    inicializar();
+});
+</script>
+
+</body>
+</html>
