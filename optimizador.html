@@ -120,6 +120,10 @@
                 <button class="btn" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="background:#3498db; padding:8px 16px; font-size:12px; white-space:nowrap;">
                     Cargar desde Supabase
                 </button>
+                <button class="btn" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" disabled
+                    style="background:#27ae60; padding:8px 16px; font-size:12px; white-space:nowrap; display:none;">
+                    ☁️ Guardar en Supabase
+                </button>
             </div>
             <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
             <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
@@ -803,8 +807,13 @@ async function cargarColmenaFinalDesdeSupabase() {
 async function guardarColmenaFinalEnSupabase() {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
+        // Recuperar sesión si _currentUser es null por lock contention
         if (!_currentUser) {
-            log("No hay usuario logueado para guardar colmena final", "error");
+            const { data: sd } = await sbOpt.auth.getSession();
+            if (sd?.session?.user) _currentUser = sd.session.user;
+        }
+        if (!_currentUser) {
+            log("❌ Sin sesión activa — no se puede guardar el inventario en Supabase.", "error");
             return;
         }
 
@@ -819,6 +828,11 @@ async function guardarColmenaFinalEnSupabase() {
                 serial: c.serial || null
             }));
 
+        // ── PASO 1: Sincronizar colmena_tubos (fuente única de verdad) ──────────
+        // Se hace SIEMPRE, independiente del guardado en configuracion
+        await sincronizarColmenaFinalConTabla(colmenasFinal);
+
+        // ── PASO 2: Guardar copia en configuracion (para restaurar sesión) ──────
         const claveColmena = `opt_colmena_final_${_currentUser.email}`;
         const ok = await _supabaseGuardar(claveColmena, JSON.stringify(colmenasFinal));
 
@@ -834,15 +848,84 @@ async function guardarColmenaFinalEnSupabase() {
 
         if (ok) {
             console.log(`✅ Colmena final guardada en Supabase: ${colmenasFinal.length} registros`);
-            log(`✅ Colmena final guardada en Supabase (${colmenasFinal.length} colmenas disponibles)`, "success");
-            // Sincronizar también la tabla colmena_tubos (fuente única de verdad)
-            await sincronizarColmenaFinalConTabla(colmenasFinal);
+            log(`✅ Inventario guardado en Supabase (${colmenasFinal.length} colmenas disponibles)`, "success");
         } else {
-            log("⚠️ No se pudo guardar colmena final en Supabase", "warn");
+            // colmena_tubos sí se actualizó; solo falló el caché en configuracion
+            log(`✅ Inventario guardado en colmena_tubos (${colmenasFinal.length} colmenas). Caché de sesión no disponible.`, "success");
         }
     } catch (error) {
         console.error("Error guardando colmena_final en Supabase:", error);
         log("❌ Error guardando colmena final: " + error.message, "error");
+    } finally {
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+}
+
+// ─── GUARDAR COLMENA EN SUPABASE DIRECTO (sin necesidad de plan de corte) ────
+async function guardarColmenaEnSupabaseDirecto() {
+    const btn = document.getElementById('btnGuardarColmenaDB');
+    if (!SistemaInventario.colmenas || SistemaInventario.colmenas.length === 0) {
+        log('⚠️ No hay colmenas cargadas. Carga primero el archivo Excel.', 'warn');
+        return;
+    }
+
+    // Recuperar sesión si es necesario
+    if (!_currentUser) {
+        const { data: sd } = await sbOpt.auth.getSession();
+        if (sd?.session?.user) _currentUser = sd.session.user;
+    }
+    if (!_currentUser) {
+        log('❌ Sin sesión activa. Inicia sesión antes de guardar.', 'error');
+        return;
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Guardando...'; }
+    document.getElementById('loading-overlay').style.display = 'flex';
+
+    try {
+        const colmenas = SistemaInventario.colmenas.map(c => ({
+            empresa_id: EMPRESA_ID_OPT,
+            n_colmena:  String(c.n_colmena || '-'),
+            cod:        (c.cod || '').toUpperCase().trim(),
+            medida_cm:  typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
+            medida_mm:  c.medida_mm || Math.round((parseFloat(c.medida_cm) || 0) * 10),
+            serial:     c.serial || null,
+            agregado_por_admin: false
+        }));
+
+        // Guardar con reintentos
+        for (let intento = 1; intento <= 3; intento++) {
+            try {
+                // Borrar inventario actual y reemplazar con el nuevo
+                const { error: delErr } = await sbOpt.from('colmena_tubos')
+                    .delete().eq('empresa_id', EMPRESA_ID_OPT);
+                if (delErr) throw delErr;
+
+                // Insertar en lotes de 500
+                for (let i = 0; i < colmenas.length; i += 500) {
+                    const { error: insErr } = await sbOpt.from('colmena_tubos')
+                        .insert(colmenas.slice(i, i + 500));
+                    if (insErr) throw insErr;
+                }
+
+                // También guardar en configuracion como caché de sesión
+                const clave = `opt_colmena_final_${_currentUser.email}`;
+                await _supabaseGuardar(clave, JSON.stringify(SistemaInventario.colmenas));
+
+                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos (por ${_currentUser.email})`, 'success');
+                if (btn) { btn.textContent = '✅ Guardado'; setTimeout(() => { if (btn) { btn.textContent = '☁️ Guardar en Supabase'; btn.disabled = false; } }, 3000); }
+                return;
+            } catch (e) {
+                if (intento < 3) {
+                    await new Promise(r => setTimeout(r, 800 * intento));
+                } else {
+                    throw e;
+                }
+            }
+        }
+    } catch (e) {
+        log(`❌ Error al guardar en Supabase: ${e.message}`, 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '☁️ Guardar en Supabase'; }
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }
@@ -922,32 +1005,40 @@ async function cargarSerialesDesdeTablaDirecta() {
 // Esto asegura que cuando el optimizador guarda sus resultados,
 // la tabla colmena_tubos se actualice también (fuente única de verdad)
 async function sincronizarColmenaFinalConTabla(colmenasFinal) {
-    try {
-        // 1. Borrar tubos actuales de la empresa
-        const { error: delError } = await sbOpt.from('colmena_tubos')
-            .delete()
-            .eq('empresa_id', EMPRESA_ID_OPT);
-        if (delError) throw delError;
+    const loteSize = 500;
+    const filas = colmenasFinal.map(c => ({
+        empresa_id: EMPRESA_ID_OPT,
+        n_colmena:  c.n_colmena || '-',
+        cod:        (c.cod || '').toUpperCase().trim(),
+        medida_cm:  typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
+        medida_mm:  c.medida_mm || 0,
+        serial:     c.serial || null,
+        agregado_por_admin: false
+    }));
 
-        // 2. Insertar los nuevos tubos (en lotes de 500)
-        const loteSize = 500;
-        for (let i = 0; i < colmenasFinal.length; i += loteSize) {
-            const lote = colmenasFinal.slice(i, i + loteSize).map(c => ({
-                empresa_id: EMPRESA_ID_OPT,
-                n_colmena: c.n_colmena || '-',
-                cod: (c.cod || '').toUpperCase().trim(),
-                medida_cm: typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
-                medida_mm: c.medida_mm || 0,
-                serial: c.serial || null,
-                agregado_por_admin: false
-            }));
-            const { error: insError } = await sbOpt.from('colmena_tubos').insert(lote);
-            if (insError) throw insError;
+    // Reintentar hasta 3 veces (el lock puede causar fallos transitorios)
+    for (let intento = 1; intento <= 3; intento++) {
+        try {
+            // 1. Borrar tubos actuales de la empresa
+            const { error: delError } = await sbOpt.from('colmena_tubos')
+                .delete().eq('empresa_id', EMPRESA_ID_OPT);
+            if (delError) throw delError;
+
+            // 2. Insertar los nuevos tubos en lotes
+            for (let i = 0; i < filas.length; i += loteSize) {
+                const { error: insError } = await sbOpt.from('colmena_tubos')
+                    .insert(filas.slice(i, i + loteSize));
+                if (insError) throw insError;
+            }
+            console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros`);
+            return; // éxito
+        } catch (e) {
+            console.warn(`[colmena_tubos] Intento ${intento} falló: ${e.message}`);
+            if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+            else {
+                log(`❌ No se pudo actualizar inventario en Supabase después de 3 intentos: ${e.message}`, 'error');
+            }
         }
-        console.log(`✅ Tabla colmena_tubos sincronizada: ${colmenasFinal.length} registros`);
-    } catch (e) {
-        console.warn('No se pudo sincronizar colmena_tubos:', e.message);
-        // No es fatal — la colmena_final en configuracion sigue funcionando como respaldo
     }
 }
 
@@ -1907,6 +1998,9 @@ async function cargarColmenas(event) {
         // Guardar copia inmutable de colmenas para poder recalcular sin recargar Excel
         SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
         guardarSistema();
+        // Mostrar botón de guardado directo en Supabase
+        const btnGuardar = document.getElementById('btnGuardarColmenaDB');
+        if (btnGuardar) { btnGuardar.style.display = ''; btnGuardar.disabled = false; }
     } catch (e) { alert('Error: ' + e.message); }
     finally { procesandoExcel = false; }
 }
