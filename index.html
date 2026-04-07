@@ -7388,7 +7388,11 @@
     let _odiosUnsubPlanes    = null;
 
     function odiosIniciar() {
-        if (_odiosIniciado) { odiosRenderDashboard(); return; }
+        if (_odiosIniciado) {
+            odiosRenderDashboard();
+            odiosIniciarPlanes(); // siempre refresca la lista de planes al volver al tab
+            return;
+        }
         _odiosIniciado = true;
         odiosIniciarVersion();
         odiosIniciarStock();
@@ -7442,47 +7446,49 @@
     }
 
     // ── PLANES DE CORTE — Suscripción en tiempo real ──────────────────────────
-    async function odiosIniciarPlanes() {
-        if (_odiosUnsubPlanes) return;
-
-        // Carga inicial: últimos 10 planes
+    async function _odiosPlanesQuery() {
         const { data, error } = await sb.from('planes_corte')
             .select('optimizer_email, fecha, ordenes, resultados')
             .eq('empresa_id', EMPRESA_ID)
             .order('fecha', { ascending: false })
             .limit(10);
-
         if (error) {
+            console.error('[Ojo de Dios] planes_corte query error:', error);
             const lista = document.getElementById('odios-planes-lista');
             if (lista) lista.innerHTML = '<span class="text-muted small">Sin acceso a planes de corte</span>';
-            return;
+            return false;
         }
         odiosRenderPlanes(data || []);
+        return true;
+    }
 
-        // Suscripción realtime — INSERT en planes_corte
+    async function odiosIniciarPlanes() {
+        // Siempre hacer una consulta fresca al abrir
+        await _odiosPlanesQuery();
+
+        // Suscripción realtime — solo una vez
+        if (_odiosUnsubPlanes) return;
+
+        // Sin filtro en el canal para evitar problemas con replica identity
+        // El filtro por empresa_id se aplica al re-consultar, no al evento
         _odiosUnsubPlanes = sb.channel('planes-corte-realtime')
             .on('postgres_changes', {
-                event: 'INSERT', schema: 'public', table: 'planes_corte',
-                filter: `empresa_id=eq.${EMPRESA_ID}`
-            }, async () => {
-                const { data: docs } = await sb.from('planes_corte')
-                    .select('optimizer_email, fecha, ordenes, resultados')
-                    .eq('empresa_id', EMPRESA_ID)
-                    .order('fecha', { ascending: false })
-                    .limit(10);
-                if (docs) odiosRenderPlanes(docs);
+                event: 'INSERT', schema: 'public', table: 'planes_corte'
+            }, async (payload) => {
+                // Ignorar registros de otras empresas
+                if (payload.new && payload.new.empresa_id !== EMPRESA_ID) return;
+                await _odiosPlanesQuery();
             })
-            .subscribe();
+            .subscribe((status, err) => {
+                if (err) console.error('[Ojo de Dios] planes_corte realtime error:', err);
+                console.log('[Ojo de Dios] planes_corte realtime status:', status);
+            });
     }
 
     async function odiosRefreshPlanes() {
-        if (_odiosUnsubPlanes) {
-            await sb.removeChannel(_odiosUnsubPlanes);
-            _odiosUnsubPlanes = null;
-        }
-        odiosIniciarPlanes();
         const tiempo = document.getElementById('odios-planes-actualizado');
         if (tiempo) tiempo.textContent = 'Actualizando…';
+        await _odiosPlanesQuery();
     }
 
     function odiosRenderPlanes(planes) {
