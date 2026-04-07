@@ -7452,12 +7452,23 @@
             .eq('empresa_id', EMPRESA_ID)
             .order('fecha', { ascending: false })
             .limit(10);
+
         if (error) {
-            console.error('[Ojo de Dios] planes_corte query error:', error);
+            console.error('[Ojo de Dios] planes_corte query ERROR:', error);
             const lista = document.getElementById('odios-planes-lista');
-            if (lista) lista.innerHTML = '<span class="text-muted small">Sin acceso a planes de corte</span>';
+            if (lista) lista.innerHTML = `<span class="text-muted small">Error: ${error.message}</span>`;
             return false;
         }
+
+        console.log(`[Ojo de Dios] planes_corte: ${data?.length ?? 0} registros devueltos`);
+        if (data?.length) {
+            data.forEach((p, i) => console.log(`  [${i}] email=${p.optimizer_email} fecha=${p.fecha} resultados=${Array.isArray(p.resultados) ? p.resultados.length : typeof p.resultados}`));
+        } else {
+            // Si no hay datos con filtro, intentar sin filtro para diagnosticar
+            const { data: sinFiltro } = await sb.from('planes_corte').select('empresa_id, optimizer_email, fecha').limit(5);
+            console.warn('[Ojo de Dios] SIN empresa_id filter, muestra:', sinFiltro);
+        }
+
         odiosRenderPlanes(data || []);
         return true;
     }
