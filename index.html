@@ -7447,7 +7447,7 @@
 
         // Carga inicial: últimos 10 planes
         const { data, error } = await sb.from('planes_corte')
-            .select('optimizer_email, fecha, ordenes, resultados, total_cortes')
+            .select('optimizer_email, fecha, ordenes, resultados')
             .eq('empresa_id', EMPRESA_ID)
             .order('fecha', { ascending: false })
             .limit(10);
@@ -7466,7 +7466,7 @@
                 filter: `empresa_id=eq.${EMPRESA_ID}`
             }, async () => {
                 const { data: docs } = await sb.from('planes_corte')
-                    .select('optimizer_email, fecha, ordenes, resultados, total_cortes')
+                    .select('optimizer_email, fecha, ordenes, resultados')
                     .eq('empresa_id', EMPRESA_ID)
                     .order('fecha', { ascending: false })
                     .limit(10);
@@ -7503,9 +7503,8 @@
                     : mins < 1440 ? `hace ${Math.floor(mins/60)}h`
                     : fecha.toLocaleDateString('es-CL');
                 const email = (p.optimizer_email || '—').split('@')[0];
-                // Contar cortes: preferir total_cortes, sino longitud de resultados
-                let nCortes = p.total_cortes;
-                if (!nCortes && Array.isArray(p.resultados)) nCortes = p.resultados.length;
+                // Contar cortes desde el array de resultados
+                let nCortes = Array.isArray(p.resultados) ? p.resultados.length : '?';
                 nCortes = nCortes || '?';
                 // Contar OTs únicas
                 const nOTs = Array.isArray(p.ordenes)
