@@ -1291,14 +1291,18 @@ function renderizarRacks() {
         { nombre: 'PARED 3',            filas: 10, columnas: ['Q','R','S','T','U','V','Q2','R2','S2','V2'] },
         { nombre: 'RACK 10',            filas: 10, columnas: ['Q','R','S','T','U','V'] }
     ] : [
-        // MATERIAS PRIMAS: estructura pendiente de confirmar con diagnóstico
-        // Se actualizará con los nombres reales (DETRAS ENTRADA FRONTAL, PARTE DE ADELANTE, RACK 1, RACK 2, MOVILERO)
-        { nombre: 'RACK MP - DÚO',    filas: 12, columnas: ['A','B','C','D','E','F'] },
-        { nombre: 'RACK MP - SCREEN', filas: 12, columnas: ['G','H','I','J','K'] },
-        { nombre: 'RACK MP - MIX',    filas: 10, columnas: ['L','M','N','O','P','P2'] },
-        { nombre: 'RACK MP 1',        filas: 10, columnas: ['Q','R','S','T','U','V'] },
-        { nombre: 'RACK MP 2',        filas: 10, columnas: ['Q','R','S','T','U','V'] },
-        { nombre: 'RACK MP 3',        filas: 10, columnas: ['Q','R','S','T','U','V'] }
+        // MATERIAS PRIMAS (bodega cerrada) — estructura de MATERIA_PRIMA 2024
+        { nombre: 'DETRAS ENT. FRONTAL', filas: 10, columnas: ['Q','R','S','T'] },
+        { nombre: 'PARTE ADELANTE',      filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 1',              filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 2',              filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'MOVIL 1',             filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'MOVIL 2',             filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'PARED FONDO',         filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 3',              filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 4',              filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 7-A',            filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 7-B',            filas: 10, columnas: ['Q','R','S','T','U','V'] }
     ];
 
     // Crear mapa de ubicaciones cargadas
@@ -1716,23 +1720,27 @@ async function importarExcelInventario(event) {
         const posLib = await importarRackDesdeHoja(['LIBERADO - MAPA'], 'LIBERADO', RACKS_LIBERADO);
         logInv(`LIBERADO: ${posLib} posiciones importadas`, posLib > 0 ? 'success' : 'warn');
 
-        // Importar MATERIAS PRIMAS
-        // Estructura confirmada por diagnóstico (índices 0-based):
-        // DÚO:    fila# en [0],  datos en [1-6]    → letras A-F
-        // SCREEN: fila# en [8],  datos en [9-13]   → letras G-K
-        // MIX:    fila# en [15], datos en [16-21]  → letras L,M,N,O,P,P2
-        // MP 1:   fila# en [23], datos en [24-29]  → letras Q-V
-        // MP 2:   fila# en [31], datos en [32-37]  → letras Q-V
-        // MP 3:   fila# en [39], datos en [40-45]  → letras Q-V
+        // Importar MATERIA_PRIMA 2024 (bodega cerrada: accesorios con STOCK RESTRINGIDO)
+        // NOTA: la hoja 'MATERIAS PRIMAS' tiene TELA (BK/DU/SC), no accesorios — la ignoramos
+        // Estructura confirmada por diagnóstico de MATERIA_PRIMA 2024 (índices 0-based):
+        // Fila 4-5 (nombres): DETRAS ENT FRONTAL [0], PARTE ADELANTE [6], RACK 1 [14],
+        //   RACK 2 [22], MOVIL 1 [30], MOVIL 2 [38], PARED FONDO [46],
+        //   RACK 3 [54], RACK 4 [62], RACK 7-A [70], RACK 7-B [78]
+        // Fila 7 (letras): cada sección tiene #,Q,R,S,T,U,V (excepto DETRAS que solo Q,R,S,T)
         const RACKS_MP = [
-            { nombre: 'RACK MP - DÚO',    colFila: 0,  cols: [{excel:1,letra:'A'},{excel:2,letra:'B'},{excel:3,letra:'C'},{excel:4,letra:'D'},{excel:5,letra:'E'},{excel:6,letra:'F'}] },
-            { nombre: 'RACK MP - SCREEN', colFila: 8,  cols: [{excel:9,letra:'G'},{excel:10,letra:'H'},{excel:11,letra:'I'},{excel:12,letra:'J'},{excel:13,letra:'K'}] },
-            { nombre: 'RACK MP - MIX',    colFila: 15, cols: [{excel:16,letra:'L'},{excel:17,letra:'M'},{excel:18,letra:'N'},{excel:19,letra:'O'},{excel:20,letra:'P'},{excel:21,letra:'P2'}] },
-            { nombre: 'RACK MP 1',        colFila: 23, cols: [{excel:24,letra:'Q'},{excel:25,letra:'R'},{excel:26,letra:'S'},{excel:27,letra:'T'},{excel:28,letra:'U'},{excel:29,letra:'V'}] },
-            { nombre: 'RACK MP 2',        colFila: 31, cols: [{excel:32,letra:'Q'},{excel:33,letra:'R'},{excel:34,letra:'S'},{excel:35,letra:'T'},{excel:36,letra:'U'},{excel:37,letra:'V'}] },
-            { nombre: 'RACK MP 3',        colFila: 39, cols: [{excel:40,letra:'Q'},{excel:41,letra:'R'},{excel:42,letra:'S'},{excel:43,letra:'T'},{excel:44,letra:'U'},{excel:45,letra:'V'}] }
+            { nombre: 'DETRAS ENT. FRONTAL', colFila: 0,  cols: [{excel:1,letra:'Q'},{excel:2,letra:'R'},{excel:3,letra:'S'},{excel:4,letra:'T'}] },
+            { nombre: 'PARTE ADELANTE',      colFila: 6,  cols: [{excel:7,letra:'Q'},{excel:8,letra:'R'},{excel:9,letra:'S'},{excel:10,letra:'T'},{excel:11,letra:'U'},{excel:12,letra:'V'}] },
+            { nombre: 'RACK 1',              colFila: 14, cols: [{excel:15,letra:'Q'},{excel:16,letra:'R'},{excel:17,letra:'S'},{excel:18,letra:'T'},{excel:19,letra:'U'},{excel:20,letra:'V'}] },
+            { nombre: 'RACK 2',              colFila: 22, cols: [{excel:23,letra:'Q'},{excel:24,letra:'R'},{excel:25,letra:'S'},{excel:26,letra:'T'},{excel:27,letra:'U'},{excel:28,letra:'V'}] },
+            { nombre: 'MOVIL 1',             colFila: 30, cols: [{excel:31,letra:'Q'},{excel:32,letra:'R'},{excel:33,letra:'S'},{excel:34,letra:'T'},{excel:35,letra:'U'},{excel:36,letra:'V'}] },
+            { nombre: 'MOVIL 2',             colFila: 38, cols: [{excel:39,letra:'Q'},{excel:40,letra:'R'},{excel:41,letra:'S'},{excel:42,letra:'T'},{excel:43,letra:'U'},{excel:44,letra:'V'}] },
+            { nombre: 'PARED FONDO',         colFila: 46, cols: [{excel:47,letra:'Q'},{excel:48,letra:'R'},{excel:49,letra:'S'},{excel:50,letra:'T'},{excel:51,letra:'U'},{excel:52,letra:'V'}] },
+            { nombre: 'RACK 3',              colFila: 54, cols: [{excel:55,letra:'Q'},{excel:56,letra:'R'},{excel:57,letra:'S'},{excel:58,letra:'T'},{excel:59,letra:'U'},{excel:60,letra:'V'}] },
+            { nombre: 'RACK 4',              colFila: 62, cols: [{excel:63,letra:'Q'},{excel:64,letra:'R'},{excel:65,letra:'S'},{excel:66,letra:'T'},{excel:67,letra:'U'},{excel:68,letra:'V'}] },
+            { nombre: 'RACK 7-A',            colFila: 70, cols: [{excel:71,letra:'Q'},{excel:72,letra:'R'},{excel:73,letra:'S'},{excel:74,letra:'T'},{excel:75,letra:'U'},{excel:76,letra:'V'}] },
+            { nombre: 'RACK 7-B',            colFila: 78, cols: [{excel:79,letra:'Q'},{excel:80,letra:'R'},{excel:81,letra:'S'},{excel:82,letra:'T'},{excel:83,letra:'U'},{excel:84,letra:'V'}] }
         ];
-        const posMP = await importarRackDesdeHoja(['MATERIAS PRIMAS', 'MATERIA_PRIMA 2024'], 'MATERIAS_PRIMAS', RACKS_MP);
+        const posMP = await importarRackDesdeHoja(['MATERIA_PRIMA 2024'], 'MATERIAS_PRIMAS', RACKS_MP);
         logInv(`MATERIAS PRIMAS: ${posMP} posiciones importadas`, posMP > 0 ? 'success' : 'warn');
 
         logInv('Importación completada. Recargando datos...', 'success');
