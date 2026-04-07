@@ -1672,6 +1672,39 @@ async function importarExcelInventario(event) {
             return posiciones;
         }
 
+        // ── DIAGNÓSTICO DE STOCK RESTRINGIDO ──
+        // Busca la fila donde dice "STOCK RESTRINGIDO" en LIBERADO - MAPA y muestra las siguientes 25 filas
+        const wsLibMapa = wb.Sheets['LIBERADO - MAPA'];
+        if (wsLibMapa) {
+            const todosLib = XLSX.utils.sheet_to_json(wsLibMapa, { header: 1, defval: '' });
+            let filaStock = -1;
+            for (let i = 0; i < todosLib.length; i++) {
+                const rowStr = todosLib[i].join(' ').toUpperCase();
+                if (rowStr.includes('STOCK RESTRINGIDO') || rowStr.includes('DETRAS') || rowStr.includes('ENTRADA FRONTAL')) {
+                    filaStock = i; break;
+                }
+            }
+            if (filaStock >= 0) {
+                console.group(`[INV DIAGNÓSTICO] STOCK RESTRINGIDO empieza en fila ${filaStock}`);
+                for (let d = filaStock; d < Math.min(todosLib.length, filaStock + 25); d++) {
+                    const f = todosLib[d];
+                    const resumen = f ? f.map((v,i) => v !== '' ? `[${i}]${v}` : null).filter(Boolean).join('  ') : '(vacía)';
+                    console.warn(`  Fila ${d}: ${resumen}`);
+                }
+                console.groupEnd();
+            } else {
+                console.warn('[INV DIAGNÓSTICO] No se encontró "STOCK RESTRINGIDO" en LIBERADO - MAPA. Total filas:', todosLib.length);
+                // Mostrar filas 15-35 para buscar manualmente
+                console.group('[INV DIAGNÓSTICO] Filas 15-40 de LIBERADO - MAPA');
+                for (let d = 15; d < Math.min(todosLib.length, 40); d++) {
+                    const f = todosLib[d];
+                    const resumen = f ? f.map((v,i) => v !== '' ? `[${i}]${v}` : null).filter(Boolean).join('  ') : '(vacía)';
+                    if (resumen !== '(vacía)') console.warn(`  Fila ${d}: ${resumen}`);
+                }
+                console.groupEnd();
+            }
+        }
+
         // Limpiar rack existente para evitar mezcla con datos viejos
         logInv('Limpiando posiciones de rack anteriores...', 'info');
         await sbInv.from('ubicaciones_rack').delete().eq('empresa_id', EMPRESA_ID);
