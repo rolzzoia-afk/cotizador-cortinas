@@ -1575,15 +1575,34 @@ async function importarExcelInventario(event) {
             { nombre: 'RACK 4 - BLACKOUT', colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'}] }
         ];
 
-        async function importarRackDesdeHoja(nombreHoja, almacen, configRacks) {
-            const wsRack = wb.Sheets[nombreHoja];
-            if (!wsRack) return 0;
+        async function importarRackDesdeHoja(nombreHojas, almacen, configRacks) {
+            // Acepta string o array de nombres de hojas (intenta en orden)
+            const nombresArr = Array.isArray(nombreHojas) ? nombreHojas : [nombreHojas];
+            let wsRack = null;
+            let hojaUsada = null;
+            for (const nh of nombresArr) {
+                if (wb.Sheets[nh]) { wsRack = wb.Sheets[nh]; hojaUsada = nh; break; }
+            }
+            if (!wsRack) {
+                logInv(`⚠️ Hoja(s) no encontrada(s): ${nombresArr.join(', ')}`, 'warn');
+                return 0;
+            }
             const datosRack = XLSX.utils.sheet_to_json(wsRack, { header: 1, defval: '' });
-            logInv(`Procesando mapa ${nombreHoja}...`, 'info');
-            let posiciones = 0;
+            logInv(`Procesando mapa desde hoja "${hojaUsada}" (${datosRack.length} filas)...`, 'info');
 
-            // Filas de datos empiezan en row index 8 (row 8 del Excel = index 7 en array)
-            for (let f = 7; f < Math.min(datosRack.length, 25); f++) {
+            // Diagnóstico: mostrar las primeras 12 filas en consola para verificar estructura
+            console.group(`[INV DIAGNÓSTICO] Primeras filas de "${hojaUsada}"`);
+            for (let d = 0; d < Math.min(datosRack.length, 12); d++) {
+                const f = datosRack[d];
+                const resumen = f ? f.slice(0, 35).map((v,i) => v !== '' ? `[${i}]${v}` : null).filter(Boolean).join('  ') : '(vacía)';
+                console.log(`  Fila ${d}: ${resumen}`);
+            }
+            console.groupEnd();
+
+            let posiciones = 0;
+            let errores = 0;
+
+            for (let f = 0; f < datosRack.length; f++) {
                 const fila = datosRack[f];
                 if (!fila) continue;
 
@@ -1596,6 +1615,8 @@ async function importarExcelInventario(event) {
                         if (!valor || valor === '.' || valor === 'COLUMNA1' || valor === 'S') continue;
                         // Saltar si es un texto descriptivo (no un código de insumo)
                         if (valor.includes('LIBERADO') || valor.includes('RACK') || valor.includes('CONFIABLE')) continue;
+                        // Saltar encabezados o valores que claramente no son códigos
+                        if (valor.length < 3 || /^[A-Z]{1,2}$/.test(valor)) continue;
 
                         const pos = {
                             empresa_id: EMPRESA_ID,
@@ -1609,15 +1630,21 @@ async function importarExcelInventario(event) {
                         const { error } = await sbInv.from('ubicaciones_rack').upsert(pos, {
                             onConflict: 'empresa_id,almacen,rack,fila,columna'
                         });
-                        if (!error) posiciones++;
+                        if (!error) {
+                            posiciones++;
+                        } else {
+                            errores++;
+                            if (errores <= 3) logInv(`Error guardando ${rack.nombre} F${numFila}${col.letra}: ${error.message}`, 'warn');
+                        }
                     }
                 }
             }
+            logInv(`${hojaUsada}: ${posiciones} posiciones guardadas${errores > 0 ? `, ${errores} errores` : ''}`, posiciones > 0 ? 'success' : 'warn');
             return posiciones;
         }
 
-        // Importar LIBERADO
-        const posLib = await importarRackDesdeHoja('LIBERADO', 'LIBERADO', RACKS_LIBERADO);
+        // Importar LIBERADO — intentar con 'LIBERADO - MAPA' primero, luego 'LIBERADO'
+        const posLib = await importarRackDesdeHoja(['LIBERADO - MAPA', 'LIBERADO'], 'LIBERADO', RACKS_LIBERADO);
         logInv(`LIBERADO: ${posLib} posiciones importadas`, posLib > 0 ? 'success' : 'warn');
 
         // Importar MATERIAS PRIMAS
@@ -1629,7 +1656,7 @@ async function importarExcelInventario(event) {
             { nombre: 'RACK MP 2', colFila: 32, cols: [{excel:33,letra:'Q'},{excel:34,letra:'R'},{excel:35,letra:'S'},{excel:36,letra:'T'},{excel:37,letra:'U'},{excel:38,letra:'V'}] },
             { nombre: 'RACK MP 3', colFila: 40, cols: [{excel:41,letra:'Q'},{excel:42,letra:'R'},{excel:43,letra:'S'},{excel:44,letra:'T'},{excel:45,letra:'U'},{excel:46,letra:'V'}] }
         ];
-        const posMP = await importarRackDesdeHoja('MATERIAS PRIMAS', 'MATERIAS_PRIMAS', RACKS_MP);
+        const posMP = await importarRackDesdeHoja(['MATERIAS PRIMAS', 'MATERIA_PRIMA 2024'], 'MATERIAS_PRIMAS', RACKS_MP);
         logInv(`MATERIAS PRIMAS: ${posMP} posiciones importadas`, posMP > 0 ? 'success' : 'warn');
 
         logInv('Importación completada. Recargando datos...', 'success');
