@@ -1277,18 +1277,28 @@ function renderizarRacks() {
     const grid = document.getElementById('rackGrid');
 
     // Definir estructura de racks según el Excel
+    // CONFIG_RACKS: estructura real confirmada por diagnóstico del Excel
     const CONFIG_RACKS = almacen === 'LIBERADO' ? [
-        { nombre: 'RACK 1 - DÚO', filas: 9, columnas: ['A','B','C','D','E','S'] },
-        { nombre: 'RACK 2 - SCREEN', filas: 10, columnas: ['G','H','I','J','K'] },
-        { nombre: 'RACK 3 - BLACKOUT/SCREEN', filas: 10, columnas: ['L','M','N','O','P'] },
-        { nombre: 'RACK 4 - BLACKOUT', filas: 12, columnas: ['Q','R','S','T','U'] }
+        { nombre: 'RACK 1-A',           filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 2-B',           filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK 3-C',           filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'MOVIL LIB-1 FRENTE', filas: 10, columnas: ['Q','R','S','T','V'] },
+        { nombre: 'MOVIL LIB-1 DETRAS', filas: 10, columnas: ['Q','R','S','T','U'] },
+        { nombre: 'MOVIL LIB-2 FRENTE', filas: 10, columnas: ['Q','R','S','T','V'] },
+        { nombre: 'MOVIL LIB-2 DETRAS', filas: 10, columnas: ['Q','R','S','T','U'] },
+        { nombre: 'PARED 1',            filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'PARED 2',            filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'PARED 3',            filas: 10, columnas: ['Q','R','S','T','U','V','Q2','R2','S2','V2'] },
+        { nombre: 'RACK 10',            filas: 10, columnas: ['Q','R','S','T','U','V'] }
     ] : [
-        { nombre: 'RACK MP - DÚO', filas: 12, columnas: ['A','B','C','D','E','F'] },
+        // MATERIAS PRIMAS: estructura pendiente de confirmar con diagnóstico
+        // Se actualizará con los nombres reales (DETRAS ENTRADA FRONTAL, PARTE DE ADELANTE, RACK 1, RACK 2, MOVILERO)
+        { nombre: 'RACK MP - DÚO',    filas: 12, columnas: ['A','B','C','D','E','F'] },
         { nombre: 'RACK MP - SCREEN', filas: 12, columnas: ['G','H','I','J','K'] },
-        { nombre: 'RACK MP - MIX', filas: 10, columnas: ['L','M','N','O','P','P2'] },
-        { nombre: 'RACK MP 1', filas: 10, columnas: ['Q','R','S','T','U','V'] },
-        { nombre: 'RACK MP 2', filas: 10, columnas: ['Q','R','S','T','U','V'] },
-        { nombre: 'RACK MP 3', filas: 10, columnas: ['Q','R','S','T','U','V'] }
+        { nombre: 'RACK MP - MIX',    filas: 10, columnas: ['L','M','N','O','P','P2'] },
+        { nombre: 'RACK MP 1',        filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK MP 2',        filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK MP 3',        filas: 10, columnas: ['Q','R','S','T','U','V'] }
     ];
 
     // Crear mapa de ubicaciones cargadas
@@ -1591,17 +1601,26 @@ async function importarExcelInventario(event) {
             logInv(`ENTRADA Y SALIDA: ${movOk} movimientos importados`, 'success');
         }
 
-        // 3. Importar posiciones de rack desde LIBERADO
-        // Estructura confirmada por diagnóstico (índices 0-based del array):
-        // RACK 1 DÚO:        fila# en col [0], datos en cols [1-6]  → letras A,B,C,D,E,S
-        // RACK 2 SCREEN:     fila# en col [8], datos en cols [9-13] → letras G,H,I,J,K
-        // RACK 3 BK/SCREEN:  fila# en col [17], datos en cols [18-22] → letras L,M,N,O,P
-        // RACK 4 BLACKOUT:   fila# en col [24], datos en cols [25-29] → letras Q,R,S,T,U
+        // 3. Importar posiciones de rack desde LIBERADO - MAPA (bodega abierta)
+        // Estructura confirmada por diagnóstico completo de la hoja:
+        // Fila 5 (nombres): RACK 1-A [0], RACK 2-B [8], RACK 3-C [16],
+        //   MOVIL LIB-1 FRENTE [24], MOVIL LIB-1 DETRAS [31],
+        //   MOVIL LIB-2 FRENTE [38], MOVIL LIB-2 DETRAS [45],
+        //   PARED [52], (sin nombre) [60], (sin nombre) [68], RACK 10 [80]
+        // Fila 7 (letras): cada sección usa Q,R,S,T,U,V como labels de columna
+        // Datos: filas 8-17 (10 filas, fila# 1-10)
         const RACKS_LIBERADO = [
-            { nombre: 'RACK 1 - DÚO',            colFila: 0,  cols: [{excel:1,letra:'A'},{excel:2,letra:'B'},{excel:3,letra:'C'},{excel:4,letra:'D'},{excel:5,letra:'E'},{excel:6,letra:'S'}] },
-            { nombre: 'RACK 2 - SCREEN',          colFila: 8,  cols: [{excel:9,letra:'G'},{excel:10,letra:'H'},{excel:11,letra:'I'},{excel:12,letra:'J'},{excel:13,letra:'K'}] },
-            { nombre: 'RACK 3 - BLACKOUT/SCREEN', colFila: 17, cols: [{excel:18,letra:'L'},{excel:19,letra:'M'},{excel:20,letra:'N'},{excel:21,letra:'O'},{excel:22,letra:'P'}] },
-            { nombre: 'RACK 4 - BLACKOUT',        colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'}] }
+            { nombre: 'RACK 1-A',            colFila: 0,  cols: [{excel:1,letra:'Q'},{excel:2,letra:'R'},{excel:3,letra:'S'},{excel:4,letra:'T'},{excel:5,letra:'U'},{excel:6,letra:'V'}] },
+            { nombre: 'RACK 2-B',            colFila: 8,  cols: [{excel:9,letra:'Q'},{excel:10,letra:'R'},{excel:11,letra:'S'},{excel:12,letra:'T'},{excel:13,letra:'U'},{excel:14,letra:'V'}] },
+            { nombre: 'RACK 3-C',            colFila: 16, cols: [{excel:17,letra:'Q'},{excel:18,letra:'R'},{excel:19,letra:'S'},{excel:20,letra:'T'},{excel:21,letra:'U'},{excel:22,letra:'V'}] },
+            { nombre: 'MOVIL LIB-1 FRENTE',  colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'V'}] },
+            { nombre: 'MOVIL LIB-1 DETRAS',  colFila: 31, cols: [{excel:32,letra:'Q'},{excel:33,letra:'R'},{excel:34,letra:'S'},{excel:35,letra:'T'},{excel:36,letra:'U'}] },
+            { nombre: 'MOVIL LIB-2 FRENTE',  colFila: 38, cols: [{excel:39,letra:'Q'},{excel:40,letra:'R'},{excel:41,letra:'S'},{excel:42,letra:'T'},{excel:43,letra:'V'}] },
+            { nombre: 'MOVIL LIB-2 DETRAS',  colFila: 45, cols: [{excel:46,letra:'Q'},{excel:47,letra:'R'},{excel:48,letra:'S'},{excel:49,letra:'T'},{excel:50,letra:'U'}] },
+            { nombre: 'PARED 1',             colFila: 52, cols: [{excel:53,letra:'Q'},{excel:54,letra:'R'},{excel:55,letra:'S'},{excel:56,letra:'T'},{excel:57,letra:'U'},{excel:58,letra:'V'}] },
+            { nombre: 'PARED 2',             colFila: 60, cols: [{excel:61,letra:'Q'},{excel:62,letra:'R'},{excel:63,letra:'S'},{excel:64,letra:'T'},{excel:65,letra:'U'},{excel:66,letra:'V'}] },
+            { nombre: 'PARED 3',             colFila: 68, cols: [{excel:69,letra:'Q'},{excel:70,letra:'R'},{excel:71,letra:'S'},{excel:72,letra:'T'},{excel:73,letra:'U'},{excel:74,letra:'V'},{excel:75,letra:'Q2'},{excel:76,letra:'R2'},{excel:77,letra:'S2'},{excel:78,letra:'V2'}] },
+            { nombre: 'RACK 10',             colFila: 80, cols: [{excel:81,letra:'Q'},{excel:82,letra:'R'},{excel:83,letra:'S'},{excel:84,letra:'T'},{excel:85,letra:'U'},{excel:86,letra:'V'}] }
         ];
 
         async function importarRackDesdeHoja(nombreHojas, almacen, configRacks) {
@@ -1672,38 +1691,21 @@ async function importarExcelInventario(event) {
             return posiciones;
         }
 
-        // ── DIAGNÓSTICO DE STOCK RESTRINGIDO ──
-        // Busca la fila donde dice "STOCK RESTRINGIDO" en LIBERADO - MAPA y muestra las siguientes 25 filas
-        const wsLibMapa = wb.Sheets['LIBERADO - MAPA'];
-        if (wsLibMapa) {
-            const todosLib = XLSX.utils.sheet_to_json(wsLibMapa, { header: 1, defval: '' });
-            let filaStock = -1;
-            for (let i = 0; i < todosLib.length; i++) {
-                const rowStr = todosLib[i].join(' ').toUpperCase();
-                if (rowStr.includes('STOCK RESTRINGIDO') || rowStr.includes('DETRAS') || rowStr.includes('ENTRADA FRONTAL')) {
-                    filaStock = i; break;
-                }
+        // ── DIAGNÓSTICO: ESTRUCTURA DE HOJA MATERIAS PRIMAS ──
+        function diagnosticarHoja(hoja, nombreHoja) {
+            if (!hoja) { console.warn(`[INV DIAG] Hoja "${nombreHoja}" no encontrada`); return; }
+            const filas = XLSX.utils.sheet_to_json(hoja, { header: 1, defval: '' });
+            console.group(`[INV DIAGNÓSTICO] "${nombreHoja}" — ${filas.length} filas totales`);
+            // Mostrar filas 0-15 que tengan contenido
+            for (let d = 0; d < Math.min(filas.length, 16); d++) {
+                const f = filas[d];
+                const resumen = f ? f.map((v,i) => v !== '' ? `[${i}]${v}` : null).filter(Boolean).join('  ') : '';
+                if (resumen) console.warn(`  Fila ${d}: ${resumen}`);
             }
-            if (filaStock >= 0) {
-                console.group(`[INV DIAGNÓSTICO] STOCK RESTRINGIDO empieza en fila ${filaStock}`);
-                for (let d = filaStock; d < Math.min(todosLib.length, filaStock + 25); d++) {
-                    const f = todosLib[d];
-                    const resumen = f ? f.map((v,i) => v !== '' ? `[${i}]${v}` : null).filter(Boolean).join('  ') : '(vacía)';
-                    console.warn(`  Fila ${d}: ${resumen}`);
-                }
-                console.groupEnd();
-            } else {
-                console.warn('[INV DIAGNÓSTICO] No se encontró "STOCK RESTRINGIDO" en LIBERADO - MAPA. Total filas:', todosLib.length);
-                // Mostrar filas 15-35 para buscar manualmente
-                console.group('[INV DIAGNÓSTICO] Filas 15-40 de LIBERADO - MAPA');
-                for (let d = 15; d < Math.min(todosLib.length, 40); d++) {
-                    const f = todosLib[d];
-                    const resumen = f ? f.map((v,i) => v !== '' ? `[${i}]${v}` : null).filter(Boolean).join('  ') : '(vacía)';
-                    if (resumen !== '(vacía)') console.warn(`  Fila ${d}: ${resumen}`);
-                }
-                console.groupEnd();
-            }
+            console.groupEnd();
         }
+        diagnosticarHoja(wb.Sheets['MATERIAS PRIMAS'], 'MATERIAS PRIMAS');
+        diagnosticarHoja(wb.Sheets['MATERIA_PRIMA 2024'], 'MATERIA_PRIMA 2024');
 
         // Limpiar rack existente para evitar mezcla con datos viejos
         logInv('Limpiando posiciones de rack anteriores...', 'info');
