@@ -300,14 +300,15 @@ const SUPABASE_ANON_KEY_OPT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJz
 const EMPRESA_ID_OPT        = '67c635a5-152c-4780-a066-23f5081175a9';
 
 // Cliente Supabase propio del optimizador (auth + queries directas)
-// Cuando corre dentro de un iframe (index.html), usa sessionStorage para evitar
-// el conflicto de lock con el cliente sb del padre que usa localStorage.
+// Cuando corre dentro de un iframe (index.html), desactivar autoRefreshToken para
+// evitar el conflicto de lock con el cliente sb del padre.
+// Ambos comparten la misma sesión en localStorage, pero solo el padre la refresca.
 const _enIframe = window.self !== window.top;
 const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
     auth: {
-        storage:          _enIframe ? sessionStorage : localStorage,
-        persistSession:   true,
-        autoRefreshToken: true,
+        storage:            localStorage,
+        persistSession:     true,
+        autoRefreshToken:   !_enIframe,  // en iframe: no auto-refresh (evita lock)
         detectSessionInUrl: false,
     }
 });
@@ -817,10 +818,12 @@ async function cargarColmenaFinalDesdeSupabase() {
 async function guardarColmenaFinalEnSupabase() {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
-        // Recuperar sesión si _currentUser es null por lock contention
+        // Recuperar usuario sin llamar getSession() (evita lock)
         if (!_currentUser) {
-            const { data: sd } = await sbOpt.auth.getSession();
-            if (sd?.session?.user) _currentUser = sd.session.user;
+            try {
+                const lsKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+                if (lsKey) { const raw = JSON.parse(localStorage.getItem(lsKey)); if (raw?.user) _currentUser = raw.user; }
+            } catch(e) { /* ignorar */ }
         }
         if (!_currentUser) {
             log("❌ Sin sesión activa — no se puede guardar el inventario en Supabase.", "error");
@@ -879,10 +882,16 @@ async function guardarColmenaEnSupabaseDirecto() {
         return;
     }
 
-    // Recuperar sesión si es necesario
+    // Recuperar usuario — evitar getSession() que puede triggear lock
+    // Leer directamente del localStorage si _currentUser está vacío
     if (!_currentUser) {
-        const { data: sd } = await sbOpt.auth.getSession();
-        if (sd?.session?.user) _currentUser = sd.session.user;
+        try {
+            const lsKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+            if (lsKey) {
+                const raw = JSON.parse(localStorage.getItem(lsKey));
+                if (raw?.user) _currentUser = raw.user;
+            }
+        } catch(e) { /* ignorar */ }
     }
     if (!_currentUser) {
         log('❌ Sin sesión activa. Inicia sesión antes de guardar.', 'error');
@@ -3493,10 +3502,12 @@ async function confirmarYGuardarStaging() {
 
     // ── Guardar último plan en Supabase para acceso multi-dispositivo ──
     try {
-        // Recuperar sesión si _currentUser es null por lock contention
+        // Recuperar usuario sin llamar getSession() (evita lock)
         if (!_currentUser) {
-            const { data: sd } = await sbOpt.auth.getSession();
-            if (sd?.session?.user) _currentUser = sd.session.user;
+            try {
+                const lsKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+                if (lsKey) { const raw = JSON.parse(localStorage.getItem(lsKey)); if (raw?.user) _currentUser = raw.user; }
+            } catch(e) { /* ignorar */ }
         }
         if (_currentUser) {
             const fecha = new Date().toISOString();
