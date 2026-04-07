@@ -1256,12 +1256,16 @@ function renderizarRacks() {
     // Definir estructura de racks según el Excel
     const CONFIG_RACKS = almacen === 'LIBERADO' ? [
         { nombre: 'RACK 1 - DÚO', filas: 9, columnas: ['A','B','C','D','E','S'] },
-        { nombre: 'RACK 2 - SCREEN', filas: 10, columnas: ['A','B','C','D','E'] },
-        { nombre: 'RACK 3 - BLACKOUT', filas: 10, columnas: ['A','B','C','D'] },
-        { nombre: 'RACK 4 - BLACKOUT', filas: 12, columnas: ['A','B','C','D'] }
+        { nombre: 'RACK 2 - SCREEN', filas: 10, columnas: ['G','H','I','J','K'] },
+        { nombre: 'RACK 3 - BLACKOUT/SCREEN', filas: 10, columnas: ['L','M','N','O','P'] },
+        { nombre: 'RACK 4 - BLACKOUT', filas: 12, columnas: ['Q','R','S','T','U'] }
     ] : [
-        { nombre: 'RACK MP 1', filas: 10, columnas: ['A','B','C','D','E'] },
-        { nombre: 'RACK MP 2', filas: 10, columnas: ['A','B','C','D','E'] }
+        { nombre: 'RACK MP - DÚO', filas: 12, columnas: ['A','B','C','D','E','F'] },
+        { nombre: 'RACK MP - SCREEN', filas: 12, columnas: ['G','H','I','J','K'] },
+        { nombre: 'RACK MP - MIX', filas: 10, columnas: ['L','M','N','O','P','P2'] },
+        { nombre: 'RACK MP 1', filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK MP 2', filas: 10, columnas: ['Q','R','S','T','U','V'] },
+        { nombre: 'RACK MP 3', filas: 10, columnas: ['Q','R','S','T','U','V'] }
     ];
 
     // Crear mapa de ubicaciones cargadas
@@ -1536,48 +1540,74 @@ async function importarExcelInventario(event) {
         }
 
         // 3. Importar posiciones de rack desde LIBERADO
-        const wsLib = wb.Sheets['LIBERADO'];
-        if (wsLib) {
-            const datosLib = XLSX.utils.sheet_to_json(wsLib, { header: 1, defval: '' });
-            logInv('Procesando mapa LIBERADO...', 'info');
-            let posicionesImportadas = 0;
+        // Estructura del Excel: Row 7 tiene letras de columna, Rows 8+ tienen datos
+        // Rack 1 (DÚO): cols Excel 2-7 → letras A,B,C,D,E,S | fila# en col 1
+        // Rack 2 (SCREEN): cols Excel 10-15 → letras G,H,I,J,K | fila# en col 9
+        // Rack 3 (BK/SC): cols Excel 18-22 → letras L,M,N,O,P | fila# en col 17
+        // Rack 4 (BLACKOUT): cols Excel 25-29 → letras Q,R,S,T,U | fila# en col 24
+        const RACKS_LIBERADO = [
+            { nombre: 'RACK 1 - DÚO', colFila: 1, cols: [{excel:2,letra:'A'},{excel:3,letra:'B'},{excel:4,letra:'C'},{excel:5,letra:'D'},{excel:6,letra:'E'},{excel:7,letra:'S'}] },
+            { nombre: 'RACK 2 - SCREEN', colFila: 9, cols: [{excel:10,letra:'G'},{excel:11,letra:'H'},{excel:12,letra:'I'},{excel:13,letra:'J'},{excel:14,letra:'K'}] },
+            { nombre: 'RACK 3 - BLACKOUT/SCREEN', colFila: 17, cols: [{excel:18,letra:'L'},{excel:19,letra:'M'},{excel:20,letra:'N'},{excel:21,letra:'O'},{excel:22,letra:'P'}] },
+            { nombre: 'RACK 4 - BLACKOUT', colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'}] }
+        ];
 
-            // La estructura del rack está en filas/columnas del Excel
-            // Fila 5 tiene nombres de racks, fila 7 tiene letras de columnas
-            // Filas 8+ tienen los datos con número de fila en col 0
-            const columnaLetras = ['A', 'B', 'C', 'D', 'E', 'S'];
-            const racks = [
-                { nombre: 'RACK 1 - DÚO', colInicio: 1, colFin: 6, filaInicio: 7 },
-            ];
+        async function importarRackDesdeHoja(nombreHoja, almacen, configRacks) {
+            const wsRack = wb.Sheets[nombreHoja];
+            if (!wsRack) return 0;
+            const datosRack = XLSX.utils.sheet_to_json(wsRack, { header: 1, defval: '' });
+            logInv(`Procesando mapa ${nombreHoja}...`, 'info');
+            let posiciones = 0;
 
-            for (let f = 7; f < Math.min(datosLib.length, 25); f++) {
-                const fila = datosLib[f];
+            // Filas de datos empiezan en row index 8 (row 8 del Excel = index 7 en array)
+            for (let f = 7; f < Math.min(datosRack.length, 25); f++) {
+                const fila = datosRack[f];
                 if (!fila) continue;
-                const numFila = parseInt(fila[0]) || parseInt(fila[1]);
-                if (!numFila) continue;
 
-                for (let c = 1; c <= 6; c++) {
-                    const valor = String(fila[c] || '').trim().toUpperCase();
-                    if (!valor || valor === '.') continue;
-                    const colLetra = columnaLetras[c - 1] || 'X';
+                for (const rack of configRacks) {
+                    const numFila = parseInt(fila[rack.colFila]);
+                    if (!numFila || isNaN(numFila)) continue;
 
-                    const pos = {
-                        empresa_id: EMPRESA_ID,
-                        almacen: 'LIBERADO',
-                        rack: 'RACK 1 - DÚO',
-                        fila: numFila,
-                        columna: colLetra,
-                        codigo_insumo: valor,
-                        estado: 'ocupado'
-                    };
-                    await sbInv.from('ubicaciones_rack').upsert(pos, {
-                        onConflict: 'empresa_id,almacen,rack,fila,columna'
-                    });
-                    posicionesImportadas++;
+                    for (const col of rack.cols) {
+                        const valor = String(fila[col.excel] || '').trim().toUpperCase();
+                        if (!valor || valor === '.' || valor === 'COLUMNA1' || valor === 'S') continue;
+                        // Saltar si es un texto descriptivo (no un código de insumo)
+                        if (valor.includes('LIBERADO') || valor.includes('RACK') || valor.includes('CONFIABLE')) continue;
+
+                        const pos = {
+                            empresa_id: EMPRESA_ID,
+                            almacen: almacen,
+                            rack: rack.nombre,
+                            fila: numFila,
+                            columna: col.letra,
+                            codigo_insumo: valor,
+                            estado: 'ocupado'
+                        };
+                        const { error } = await sbInv.from('ubicaciones_rack').upsert(pos, {
+                            onConflict: 'empresa_id,almacen,rack,fila,columna'
+                        });
+                        if (!error) posiciones++;
+                    }
                 }
             }
-            logInv(`LIBERADO: ${posicionesImportadas} posiciones importadas`, 'success');
+            return posiciones;
         }
+
+        // Importar LIBERADO
+        const posLib = await importarRackDesdeHoja('LIBERADO', 'LIBERADO', RACKS_LIBERADO);
+        logInv(`LIBERADO: ${posLib} posiciones importadas`, posLib > 0 ? 'success' : 'warn');
+
+        // Importar MATERIAS PRIMAS
+        const RACKS_MP = [
+            { nombre: 'RACK MP - DÚO', colFila: 1, cols: [{excel:2,letra:'A'},{excel:3,letra:'B'},{excel:4,letra:'C'},{excel:5,letra:'D'},{excel:6,letra:'E'},{excel:7,letra:'F'}] },
+            { nombre: 'RACK MP - SCREEN', colFila: 9, cols: [{excel:10,letra:'G'},{excel:11,letra:'H'},{excel:12,letra:'I'},{excel:13,letra:'J'},{excel:14,letra:'K'}] },
+            { nombre: 'RACK MP - MIX', colFila: 16, cols: [{excel:17,letra:'L'},{excel:18,letra:'M'},{excel:19,letra:'N'},{excel:20,letra:'O'},{excel:21,letra:'P'},{excel:22,letra:'P2'}] },
+            { nombre: 'RACK MP 1', colFila: 24, cols: [{excel:25,letra:'Q'},{excel:26,letra:'R'},{excel:27,letra:'S'},{excel:28,letra:'T'},{excel:29,letra:'U'},{excel:30,letra:'V'}] },
+            { nombre: 'RACK MP 2', colFila: 32, cols: [{excel:33,letra:'Q'},{excel:34,letra:'R'},{excel:35,letra:'S'},{excel:36,letra:'T'},{excel:37,letra:'U'},{excel:38,letra:'V'}] },
+            { nombre: 'RACK MP 3', colFila: 40, cols: [{excel:41,letra:'Q'},{excel:42,letra:'R'},{excel:43,letra:'S'},{excel:44,letra:'T'},{excel:45,letra:'U'},{excel:46,letra:'V'}] }
+        ];
+        const posMP = await importarRackDesdeHoja('MATERIAS PRIMAS', 'MATERIAS_PRIMAS', RACKS_MP);
+        logInv(`MATERIAS PRIMAS: ${posMP} posiciones importadas`, posMP > 0 ? 'success' : 'warn');
 
         logInv('Importación completada. Recargando datos...', 'success');
 
