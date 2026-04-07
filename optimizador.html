@@ -300,7 +300,17 @@ const SUPABASE_ANON_KEY_OPT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJz
 const EMPRESA_ID_OPT        = '67c635a5-152c-4780-a066-23f5081175a9';
 
 // Cliente Supabase propio del optimizador (auth + queries directas)
-const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT);
+// Cuando corre dentro de un iframe (index.html), usa sessionStorage para evitar
+// el conflicto de lock con el cliente sb del padre que usa localStorage.
+const _enIframe = window.self !== window.top;
+const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
+    auth: {
+        storage:          _enIframe ? sessionStorage : localStorage,
+        persistSession:   true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+    }
+});
 
 // Usuario actual (actualizado por onAuthStateChange)
 let _currentUser = null;
