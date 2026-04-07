@@ -3663,17 +3663,75 @@ async function exportarResultados() {
         }
     });
 
-    // ─── Los RESERVAR EN MESA ya están posicionados correctamente por el primer loop ───
-    // (cuando res.es_intermedio === true, se generó RESERVAR EN MESA junto al corte)
-    // Solo necesitamos etiquetar los CORTAR que consumen desde MESA con colmena='MESA'
-    // Eso ya fue hecho en ejecutarOptimizacion. No hay nada más que hacer aquí.
+    // ─── Reordenar grupos: RESERVAR EN MESA debe preceder al CORTAR(MESA) que lo consume ──
+    // El optimizador puede generar el sobrante intermedio (RESERVAR EN MESA) en una fila
+    // posterior al corte que lo consume (CORTAR colmena=MESA). Esto confunde al cortador
+    // porque llega al corte MESA antes de haber reservado el sobrante.
+    // Solución: parsear en grupos (corte + sobrante) y reordenar hasta que no haya
+    // ningún CORTAR(MESA) que aparezca antes de su RESERVAR EN MESA correspondiente.
+    {
+        const ACCIONES_SOBRANTE = new Set(['RESERVAR EN MESA', 'GUARDAR SOBRANTE', 'DESECHAR MERMA']);
+
+        // Parsear filas en grupos: [fila_corte, fila_sobrante?]
+        const grupos = [];
+        let idx = 1; // saltar encabezado
+        while (idx < datosExcel.length) {
+            const g = [datosExcel[idx]];
+            idx++;
+            if (idx < datosExcel.length && ACCIONES_SOBRANTE.has(datosExcel[idx][2])) {
+                g.push(datosExcel[idx]);
+                idx++;
+            }
+            grupos.push(g);
+        }
+
+        // Mapa clave (codigo|medida) → índice de grupo que produce ese sobrante
+        const productorDe = new Map();
+        grupos.forEach((g, gi) => {
+            g.forEach(row => {
+                if (row[2] === 'RESERVAR EN MESA') {
+                    productorDe.set(`${row[4]}|${row[6]}`, gi); // codigo|medida
+                }
+            });
+        });
+
+        // Mover productores hacia adelante cuando aparecen después de su consumidor
+        let cambiado = true;
+        while (cambiado) {
+            cambiado = false;
+            for (let ci = 0; ci < grupos.length; ci++) {
+                const corte = grupos[ci][0];
+                if (corte[3] !== 'MESA') continue;         // no consume desde mesa
+                const clave = `${corte[4]}|${corte[7]}`; // codigo|tuboOrigen
+                const pi    = productorDe.get(clave);
+                if (pi === undefined || pi <= ci) continue; // ya está antes o no existe
+
+                // Productor está después del consumidor → moverlo justo antes
+                const [productor] = grupos.splice(pi, 1);
+                grupos.splice(ci, 0, productor);
+
+                // Actualizar índices en el mapa tras el movimiento
+                productorDe.forEach((oldIdx, k) => {
+                    if (oldIdx === pi)            productorDe.set(k, ci);
+                    else if (oldIdx >= ci && oldIdx < pi) productorDe.set(k, oldIdx + 1);
+                });
+                cambiado = true;
+                break; // reiniciar el scan desde el principio
+            }
+        }
+
+        // Reconstruir datosExcel (manteniendo el encabezado)
+        datosExcel.splice(1);
+        grupos.forEach(g => g.forEach(row => datosExcel.push(row)));
+    }
 
     const ws = XLSX.utils.aoa_to_sheet(datosExcel);
 
     // Aplicar estilos visuales a filas especiales
     const range = XLSX.utils.decode_range(ws['!ref']);
     for (let R = 1; R <= range.e.r; ++R) {
-        const accionCell = ws[XLSX.utils.encode_cell({r: R, c: 2})]; // Columna "Acción"
+        const accionCell  = ws[XLSX.utils.encode_cell({r: R, c: 2})]; // Columna "Acción"
+        const colmenaCell = ws[XLSX.utils.encode_cell({r: R, c: 3})]; // Columna "Colmena"
         if (!accionCell) continue;
 
         let fillColor = null, fontColor = null;
@@ -3681,6 +3739,8 @@ async function exportarResultados() {
             fillColor = "FFFF9999"; fontColor = "FF990000"; // Rojo claro / rojo oscuro
         } else if (accionCell.v === 'RESERVAR EN MESA') {
             fillColor = "FFFFF3E0"; fontColor = "FFE65100"; // Naranja claro / naranja oscuro
+        } else if (colmenaCell && colmenaCell.v === 'MESA') {
+            fillColor = "FFE3F2FD"; fontColor = "FF0D47A1"; // Azul claro / azul oscuro — corte desde sobrante en mesa
         } else if (typeof accionCell.v === 'string' && accionCell.v.includes('CON TIRA')) {
             fillColor = "FFFFFF99"; fontColor = "FF886600"; // Amarillo / marrón — CON TIRA
         }

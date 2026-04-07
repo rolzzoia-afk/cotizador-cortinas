@@ -1808,6 +1808,21 @@
                             </div>
                         </div>
 
+                        <!-- Optimizador de Corte — planes en tiempo real -->
+                        <div class="glass-card p-3 mb-3" style="border-color:rgba(234,179,8,0.35);">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span style="font-size:1rem;">✂️</span>
+                                <strong style="font-size:0.85rem;color:#fde68a;">Optimizador de Corte</strong>
+                                <div class="ms-auto d-flex align-items-center gap-2">
+                                    <span class="text-muted" style="font-size:0.68rem;" id="odios-planes-actualizado"></span>
+                                    <button onclick="odiosRefreshPlanes()" title="Refrescar" style="background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.3);border-radius:5px;color:#fde68a;padding:1px 7px;font-size:0.75rem;cursor:pointer;">↻</button>
+                                </div>
+                            </div>
+                            <div id="odios-planes-lista" style="font-size:0.78rem;color:var(--text-secondary);">
+                                <span class="text-muted">Cargando planes…</span>
+                            </div>
+                        </div>
+
                         <!-- Alertas de OTs estancadas -->
                         <div id="odios-alertas-banner" class="glass-card p-3 mb-3" style="display:none;border-color:rgba(245,158,11,0.4);">
                             <div class="d-flex align-items-center gap-2 mb-2">
@@ -7370,6 +7385,7 @@
     }
 
     let _odiosUnsubPresencia = null;
+    let _odiosUnsubPlanes    = null;
 
     function odiosIniciar() {
         if (_odiosIniciado) { odiosRenderDashboard(); return; }
@@ -7377,6 +7393,7 @@
         odiosIniciarVersion();
         odiosIniciarStock();
         odiosIniciarPresencia();
+        odiosIniciarPlanes();
         odiosRenderDashboard();
     }
 
@@ -7422,6 +7439,93 @@
         odiosIniciarPresencia();
         const tiempo = document.getElementById('odios-actividad-actualizado');
         if (tiempo) tiempo.textContent = 'Actualizando…';
+    }
+
+    // ── PLANES DE CORTE — Suscripción en tiempo real ──────────────────────────
+    async function odiosIniciarPlanes() {
+        if (_odiosUnsubPlanes) return;
+
+        // Carga inicial: últimos 10 planes
+        const { data, error } = await sb.from('planes_corte')
+            .select('optimizer_email, fecha, ordenes, resultados, total_cortes')
+            .eq('empresa_id', EMPRESA_ID)
+            .order('fecha', { ascending: false })
+            .limit(10);
+
+        if (error) {
+            const lista = document.getElementById('odios-planes-lista');
+            if (lista) lista.innerHTML = '<span class="text-muted small">Sin acceso a planes de corte</span>';
+            return;
+        }
+        odiosRenderPlanes(data || []);
+
+        // Suscripción realtime — INSERT en planes_corte
+        _odiosUnsubPlanes = sb.channel('planes-corte-realtime')
+            .on('postgres_changes', {
+                event: 'INSERT', schema: 'public', table: 'planes_corte',
+                filter: `empresa_id=eq.${EMPRESA_ID}`
+            }, async () => {
+                const { data: docs } = await sb.from('planes_corte')
+                    .select('optimizer_email, fecha, ordenes, resultados, total_cortes')
+                    .eq('empresa_id', EMPRESA_ID)
+                    .order('fecha', { ascending: false })
+                    .limit(10);
+                if (docs) odiosRenderPlanes(docs);
+            })
+            .subscribe();
+    }
+
+    async function odiosRefreshPlanes() {
+        if (_odiosUnsubPlanes) {
+            await sb.removeChannel(_odiosUnsubPlanes);
+            _odiosUnsubPlanes = null;
+        }
+        odiosIniciarPlanes();
+        const tiempo = document.getElementById('odios-planes-actualizado');
+        if (tiempo) tiempo.textContent = 'Actualizando…';
+    }
+
+    function odiosRenderPlanes(planes) {
+        const lista  = document.getElementById('odios-planes-lista');
+        const tiempo = document.getElementById('odios-planes-actualizado');
+        if (!lista) return;
+
+        if (!planes.length) {
+            lista.innerHTML = '<span class="text-muted">Sin planes de corte registrados</span>';
+        } else {
+            const ahora = Date.now();
+            lista.innerHTML = planes.map(p => {
+                const fecha = new Date(p.fecha);
+                const diff  = ahora - fecha.getTime();
+                const mins  = Math.round(diff / 60000);
+                const hacelabel = mins <= 1 ? 'ahora mismo'
+                    : mins < 60   ? `hace ${mins} min`
+                    : mins < 1440 ? `hace ${Math.floor(mins/60)}h`
+                    : fecha.toLocaleDateString('es-CL');
+                const email = (p.optimizer_email || '—').split('@')[0];
+                // Contar cortes: preferir total_cortes, sino longitud de resultados
+                let nCortes = p.total_cortes;
+                if (!nCortes && Array.isArray(p.resultados)) nCortes = p.resultados.length;
+                nCortes = nCortes || '?';
+                // Contar OTs únicas
+                const nOTs = Array.isArray(p.ordenes)
+                    ? new Set(p.ordenes.map(o => o.ot).filter(Boolean)).size
+                    : '?';
+                const esMuyReciente = diff < 5 * 60000; // menos de 5 min
+                return `<div class="d-flex align-items-start gap-2 py-2" style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <span style="font-size:1.1rem;margin-top:1px;line-height:1;">${esMuyReciente ? '🔔' : '✂️'}</span>
+                    <div style="flex:1;min-width:0;">
+                        <div class="d-flex justify-content-between">
+                            <span style="font-weight:700;color:${esMuyReciente ? '#fde68a' : '#e2e8f0'};">${email}</span>
+                            <span class="text-muted" style="font-size:0.68rem;white-space:nowrap;">${hacelabel}</span>
+                        </div>
+                        <div style="color:#94a3b8;font-size:0.71rem;">${nCortes} corte${nCortes !== 1 ? 's' : ''} · ${nOTs} OT${nOTs !== 1 ? 's' : ''}</div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        if (tiempo) tiempo.textContent = 'Actualizado ' + new Date().toLocaleTimeString('es-CL', {hour:'2-digit',minute:'2-digit'});
     }
 
     function odiosRenderActividad(docs) {
