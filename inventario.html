@@ -1676,8 +1676,9 @@ async function importarExcelInventario(event) {
         logInv('Limpiando posiciones de rack anteriores...', 'info');
         await sbInv.from('ubicaciones_rack').delete().eq('empresa_id', EMPRESA_ID);
 
-        // Importar LIBERADO — intentar con 'LIBERADO - MAPA' primero, luego 'LIBERADO'
-        const posLib = await importarRackDesdeHoja(['LIBERADO - MAPA', 'LIBERADO'], 'LIBERADO', RACKS_LIBERADO);
+        // Importar LIBERADO - MAPA (bodega abierta: motores, cadenas, herramientas, etc.)
+        // NOTA: la hoja 'LIBERADO' tiene tela (DU/SC/BK) — eso lo maneja el optimizador, NO este módulo
+        const posLib = await importarRackDesdeHoja(['LIBERADO - MAPA'], 'LIBERADO', RACKS_LIBERADO);
         logInv(`LIBERADO: ${posLib} posiciones importadas`, posLib > 0 ? 'success' : 'warn');
 
         // Importar MATERIAS PRIMAS
