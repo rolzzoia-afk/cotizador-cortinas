@@ -700,25 +700,45 @@ async function cargarDesdeSupabase() {
 async function guardarResultadoOptimizacion(resultados) {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
+        // Si _currentUser es null (puede pasar por lock contention del auth token),
+        // intentar recuperar la sesión activa antes de rendirse
         if (!_currentUser) {
-            console.error("No hay usuario logueado");
-            return Promise.reject("No hay usuario logueado");
+            const { data: sessionData } = await sbOpt.auth.getSession();
+            if (sessionData?.session?.user) {
+                _currentUser = sessionData.session.user;
+                console.log('[guardar] Sesión recuperada:', _currentUser.email);
+            } else {
+                log("❌ No hay sesión activa. Inicia sesión y vuelve a calcular.", "error");
+                return Promise.reject("No hay usuario logueado");
+            }
         }
+
         const timestamp = new Date().toISOString();
-        const { error } = await sbOpt.from('planes_corte').insert({
+        const payload = {
             empresa_id: EMPRESA_ID_OPT,
             optimizer_email: _currentUser.email,
             resultados: resultados,
             ordenes: SistemaInventario.ordenes || [],
             fecha: timestamp
-        });
-        if (error) throw error;
-        console.log("✅ Resultados de optimización guardados en Supabase:", timestamp);
-        log("✅ Resultados de optimización guardados correctamente", "success");
-        return Promise.resolve(timestamp);
+        };
+
+        // Intentar hasta 3 veces (el lock puede causar fallos transitorios)
+        let lastError = null;
+        for (let intento = 1; intento <= 3; intento++) {
+            const { error } = await sbOpt.from('planes_corte').insert(payload);
+            if (!error) {
+                console.log(`✅ Resultados guardados en Supabase (intento ${intento}):`, timestamp);
+                log("✅ Resultados guardados en historial de Supabase", "success");
+                return Promise.resolve(timestamp);
+            }
+            lastError = error;
+            console.warn(`[guardar] Intento ${intento} falló:`, error.message);
+            if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+        }
+        throw lastError;
     } catch (error) {
         console.error("Error guardando resultados de optimización:", error);
-        log("❌ Error guardando resultados: " + error.message, "error");
+        log(`❌ No se pudo guardar en Supabase: ${error.message || error}. El plan de corte fue descargado correctamente, pero NO quedó registrado en el historial.`, "error");
         return Promise.reject(error);
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
@@ -2466,10 +2486,9 @@ async function ejecutarFlujoCompleto() {
     
     try {
         await guardarResultadoOptimizacion(resultadoOptimizacion.resultados);
-        log("✅ Resultados guardados en historial de Supabase", 'success');
     } catch (error) {
-        console.error("Error al guardar en Supabase:", error);
-        log("⚠️ Warning: No se pudieron guardar los resultados en Supabase", 'warn');
+        // El error ya fue logueado dentro de guardarResultadoOptimizacion con mensaje claro
+        console.error("Error al guardar en Supabase (después de reintentos):", error);
     }
 
     // Actualizar el DOM con los resultados
@@ -3372,9 +3391,14 @@ async function confirmarYGuardarStaging() {
 
     // ── Guardar último plan en Supabase para acceso multi-dispositivo ──
     try {
+        // Recuperar sesión si _currentUser es null por lock contention
+        if (!_currentUser) {
+            const { data: sd } = await sbOpt.auth.getSession();
+            if (sd?.session?.user) _currentUser = sd.session.user;
+        }
         if (_currentUser) {
             const fecha = new Date().toISOString();
-            const { error: epPlan } = await sbOpt.from('planes_corte').insert({
+            const payload = {
                 empresa_id: EMPRESA_ID_OPT,
                 optimizer_email: _currentUser.email,
                 resultados: SistemaInventario.resultadosOptimizacion.map(item => ({
@@ -3390,13 +3414,22 @@ async function confirmarYGuardarStaging() {
                     medida_cm: o.medida_cm, componente: o.componente
                 })),
                 fecha: fecha
-            });
+            };
+            let epPlan = null;
+            for (let intento = 1; intento <= 3; intento++) {
+                const { error } = await sbOpt.from('planes_corte').insert(payload);
+                if (!error) { epPlan = null; break; }
+                epPlan = error;
+                if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+            }
             if (epPlan) throw epPlan;
             log('☁️ Último plan guardado en Supabase (accesible desde cualquier dispositivo)', 'info');
+        } else {
+            log('⚠️ Sin sesión activa — el plan NO quedó registrado en el historial.', 'warn');
         }
     } catch (e) {
         console.warn("No se pudo guardar último plan en Supabase:", e.message);
-        log('⚠️ No se pudo guardar el último plan en la nube: ' + e.message, 'warn');
+        log('❌ No se pudo guardar el plan en la nube: ' + e.message, 'error');
     }
 
     // ── Exportar Excel ANTES de limpiar (usa resultadosOptimizacion que aún tiene datos) ──
