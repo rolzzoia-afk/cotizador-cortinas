@@ -1666,6 +1666,8 @@ async function importarExcelInventario(event) {
                             fotoHyperlinkMap[cod] = url;
                     }
                     logInv(`Columna FOTO: ${Object.keys(fotoHyperlinkMap).length} URLs extraídas por código`, 'info');
+                    // Diagnóstico: mostrar resultado para BRA01 específicamente
+                    logInv(`DEBUG BRA01 foto: "${fotoHyperlinkMap['BRA01'] || '(no encontrada)'}"`, 'info');
                 } else {
                     logInv(`⚠️ Columnas no encontradas: COD idx=${codColIdx}, FOTO idx=${fotoColIdx}`, 'warn');
                 }
