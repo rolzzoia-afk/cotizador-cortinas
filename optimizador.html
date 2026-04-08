@@ -308,8 +308,13 @@ const sbOpt = supabase.createClient(SUPABASE_URL_OPT, SUPABASE_ANON_KEY_OPT, {
     auth: {
         storage:            localStorage,
         persistSession:     true,
-        autoRefreshToken:   !_enIframe,  // en iframe: no auto-refresh (evita lock)
+        autoRefreshToken:   !_enIframe,    // en iframe: no auto-refresh
         detectSessionInUrl: false,
+        // En iframe: desactivar el sistema de locks del Web Locks API.
+        // El padre (index.html) ya maneja la sesión; sbOpt solo la lee.
+        // Sin este override, la llamada initialize() compite con sb y genera
+        // el error "Lock was released because another request stole it".
+        ..._enIframe && { lock: (name, acquireTimeout, fn) => fn() },
     }
 });
 
@@ -329,12 +334,27 @@ function _getAccessToken() {
     } catch(e) { return null; }
 }
 
-async function _sbRest(method, path, body) {
+async function _sbRest(method, path, body, extraHeaders) {
     const token = _getAccessToken();
+
+    // Detectar token expirado antes de enviarlo
+    if (token) {
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
+                throw new Error('Sesión expirada. Recargá la página para renovar la sesión.');
+            }
+        } catch(e) {
+            if (e.message.includes('expirada')) throw e;
+            // Si no se puede decodificar el JWT, continuar igual
+        }
+    }
+
     const headers = {
         'apikey':        SUPABASE_ANON_KEY_OPT,
         'Content-Type':  'application/json',
         'Prefer':        'return=minimal',
+        ...extraHeaders,
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(`${SUPABASE_URL_OPT}/rest/v1/${path}`, {
@@ -348,6 +368,29 @@ async function _sbRest(method, path, body) {
         throw new Error(msg);
     }
     return res;
+}
+
+// Contar filas en una tabla (para verificar inserts)
+async function _sbCount(tabla, filtro) {
+    const token = _getAccessToken();
+    const headers = {
+        'apikey':        SUPABASE_ANON_KEY_OPT,
+        'Accept':        'application/json',
+        'Prefer':        'count=exact',
+    };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(`${SUPABASE_URL_OPT}/rest/v1/${tabla}?select=*&${filtro}&limit=0`, {
+        method: 'GET',
+        headers,
+    });
+    if (!res.ok) return null;
+    // El conteo viene en el header Content-Range: 0-0/592
+    const range = res.headers.get('Content-Range');
+    if (range) {
+        const m = range.match(/\/(\d+)$/);
+        if (m) return parseInt(m[1]);
+    }
+    return null;
 }
 
 // ── Funciones helper para comunicarse con el cotizador padre (iframe) ──────
@@ -364,11 +407,15 @@ async function _supabaseGuardar(clave, valor) {
     } catch(e) {
         console.warn('[Supabase] Helper del padre falló, intentando directo:', e.message);
     }
-    // 2° Fallback: llamada directa con la sesión propia del optimizador
+    // 2° Fallback: _sbRest (fetch directo, sin lock de auth)
+    // Usar upsert vía POST con ?on_conflict=... y Prefer: resolution=merge-duplicates
     try {
-        const { error } = await sbOpt.from('configuracion')
-            .upsert({ empresa_id: EMPRESA_ID_OPT, clave, valor }, { onConflict: 'empresa_id,clave' });
-        if (error) throw error;
+        await _sbRest(
+            'POST',
+            'configuracion?on_conflict=empresa_id,clave',
+            { empresa_id: EMPRESA_ID_OPT, clave, valor },
+            { 'Prefer': 'return=minimal,resolution=merge-duplicates' }
+        );
         return true;
     } catch(e) {
         console.warn('[Supabase] Guardado directo falló:', e.message);
@@ -951,24 +998,38 @@ async function guardarColmenaEnSupabaseDirecto() {
         }));
 
         // Guardar con reintentos — usa _sbRest (fetch directo, sin lock de auth)
+        // Batch de 100 filas para evitar payloads grandes y detectar fallos parciales
+        const BATCH = 100;
         for (let intento = 1; intento <= 3; intento++) {
             try {
-                if (btn) btn.textContent = `⏳ Guardando... (${intento}/3)`;
+                if (btn) btn.textContent = `⏳ Borrando inventario anterior...`;
 
-                // Borrar inventario actual y reemplazar con el nuevo
+                // Borrar inventario actual
                 await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}`);
 
-                // Insertar en lotes de 500
-                for (let i = 0; i < colmenas.length; i += 500) {
-                    await _sbRest('POST', 'colmena_tubos', colmenas.slice(i, i + 500));
+                // Insertar en lotes pequeños con progreso visible
+                let insertados = 0;
+                for (let i = 0; i < colmenas.length; i += BATCH) {
+                    const lote = colmenas.slice(i, i + BATCH);
+                    await _sbRest('POST', 'colmena_tubos', lote);
+                    insertados += lote.length;
+                    if (btn) btn.textContent = `⏳ Guardando... ${insertados}/${colmenas.length}`;
                 }
 
-                // También guardar en configuracion como caché de sesión
+                // ── Verificación: contar filas reales en Supabase ──────────────
+                if (btn) btn.textContent = `⏳ Verificando...`;
+                const conteoReal = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+                if (conteoReal !== null && conteoReal < colmenas.length) {
+                    throw new Error(`Solo se guardaron ${conteoReal} de ${colmenas.length} tubos. Posible problema de permisos en Supabase.`);
+                }
+
+                // Guardar en configuracion como caché de sesión
                 const email = _currentUser?.email || 'desconocido';
                 const clave = `opt_colmena_final_${email}`;
                 await _supabaseGuardar(clave, JSON.stringify(SistemaInventario.colmenas));
 
-                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos (por ${email})`, 'success');
+                const confirmado = conteoReal !== null ? ` (verificado: ${conteoReal} en BD)` : '';
+                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos${confirmado} (por ${email})`, 'success');
                 if (btn) { btn.textContent = '✅ Guardado'; setTimeout(() => { if (btn) { btn.textContent = '☁️ Guardar en Supabase'; btn.disabled = false; } }, 3000); }
                 return;
             } catch (e) {
@@ -1075,16 +1136,23 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
 
     // Reintentar hasta 3 veces
     // Usa _sbRest (fetch directo) para evitar el lock de auth entre sb e sbOpt
+    const BATCH = 100; // lotes pequeños para evitar payloads grandes
     for (let intento = 1; intento <= 3; intento++) {
         try {
             // 1. Borrar tubos actuales de la empresa (REST DELETE con query param)
             await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}`);
 
-            // 2. Insertar los nuevos tubos en lotes (REST POST)
-            for (let i = 0; i < filas.length; i += loteSize) {
-                await _sbRest('POST', 'colmena_tubos', filas.slice(i, i + loteSize));
+            // 2. Insertar los nuevos tubos en lotes
+            for (let i = 0; i < filas.length; i += BATCH) {
+                await _sbRest('POST', 'colmena_tubos', filas.slice(i, i + BATCH));
             }
-            console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros`);
+
+            // 3. Verificar conteo real en BD
+            const conteoReal = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+            if (conteoReal !== null && conteoReal < filas.length) {
+                throw new Error(`Verificación falló: ${conteoReal}/${filas.length} tubos en BD`);
+            }
+            console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros${conteoReal !== null ? ` — BD confirma: ${conteoReal}` : ''}`);
             return; // éxito
         } catch (e) {
             console.warn(`[colmena_tubos] Intento ${intento} falló: ${e.message}`);
