@@ -580,8 +580,8 @@
         </div>
 
         <!-- Table -->
-        <div class="table-container" style="max-height: 60vh; overflow-y: auto;">
-            <table>
+        <div class="table-container" style="max-height: 60vh; overflow-y: auto; overflow-x: auto;">
+            <table style="min-width: 1600px;">
                 <thead>
                     <tr>
                         <th style="width:48px;">📷</th>
@@ -589,12 +589,21 @@
                         <th onclick="ordenarCatalogo('nemotecnico')">Nombre</th>
                         <th onclick="ordenarCatalogo('categoria')">Categoría</th>
                         <th onclick="ordenarCatalogo('sub_categoria')">Sub-Cat.</th>
+                        <th onclick="ordenarCatalogo('proveedor')">Proveedor</th>
+                        <th onclick="ordenarCatalogo('producto')">Producto</th>
+                        <th onclick="ordenarCatalogo('compra')">Compra</th>
                         <th onclick="ordenarCatalogo('color')">Color</th>
+                        <th onclick="ordenarCatalogo('ubicacion')">Ubicación</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('can_x_paquete')">Can. x Paq.</th>
                         <th onclick="ordenarCatalogo('stock_total')" style="text-align:center;">Stock Total</th>
                         <th style="text-align:center;">MP</th>
                         <th style="text-align:center;">Liberado</th>
                         <th onclick="ordenarCatalogo('minimo')" style="text-align:center;">Mínimo</th>
+                        <th onclick="ordenarCatalogo('costo')" style="text-align:right;">Costo</th>
+                        <th onclick="ordenarCatalogo('costo_iva')" style="text-align:right;">Costo+IVA</th>
+                        <th style="text-align:right;">Costo Total</th>
                         <th style="text-align:center;">Estado</th>
+                        <th onclick="ordenarCatalogo('comentarios')">Comentarios</th>
                         <th style="text-align:center;">Acciones</th>
                     </tr>
                 </thead>
@@ -1095,9 +1104,12 @@ function exportarInventarioExcel() {
 
     // Encabezados
     const encabezados = [
-        'Código', 'Nombre / Nemotécnico', 'Descripción Proveedor',
-        'Categoría', 'Sub-Categoría', 'Color',
-        'Stock Total', 'Stock MP', 'Stock Liberado', 'Mínimo', 'Estado'
+        'Código', 'Nemotécnico', 'Descriptor Proveedor',
+        'Categoría', 'Sub-Categoría', 'Proveedor', 'Producto', 'Compra',
+        'Cód. Proveedor', 'Color', 'Cant. x Paquete', 'Ubicación',
+        'Stock Total', 'Stock MP', 'Stock Liberado', 'Mínimo',
+        'Costo', 'Costo + IVA', 'Costo Total Inventario',
+        'Estado', 'Estado Inventario', 'Comentarios'
     ];
 
     // Filas
@@ -1106,18 +1118,30 @@ function exportarInventarioExcel() {
         let estado = 'OK';
         if (st <= 0) estado = 'SIN STOCK';
         else if (i.minimo > 0 && st < i.minimo) estado = 'BAJO MÍNIMO';
+        const costoTotal = (i.costo || 0) * st;
         return [
             i.cod || '',
             i.nemotecnico || '',
             i.descriptor_proveedor || '',
             i.categoria || '',
             i.sub_categoria || '',
+            i.proveedor || '',
+            i.producto || '',
+            i.compra || '',
+            i.cod_proveedor || '',
             i.color || '',
+            i.can_x_paquete || '',
+            i.ubicacion || '',
             st,
             i.stock_mp || 0,
             i.stock_liberado || 0,
             i.minimo || 0,
-            estado
+            i.costo || 0,
+            i.costo_iva || 0,
+            costoTotal,
+            estado,
+            i.estado_inventario || '',
+            i.comentarios || ''
         ];
     });
 
@@ -1133,9 +1157,12 @@ function exportarInventarioExcel() {
 
     // Anchos de columna
     ws['!cols'] = [
-        { wch: 10 }, { wch: 28 }, { wch: 30 },
-        { wch: 18 }, { wch: 18 }, { wch: 12 },
-        { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 13 }
+        { wch: 10 }, { wch: 28 }, { wch: 36 },
+        { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 11 },
+        { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
+        { wch: 11 }, { wch: 9 }, { wch: 11 }, { wch: 9 },
+        { wch: 11 }, { wch: 12 }, { wch: 20 },
+        { wch: 12 }, { wch: 16 }, { wch: 30 }
     ];
 
     // Estilo encabezado (fila 1 en negrita)
@@ -1190,18 +1217,29 @@ function filtrarCatalogo() {
         if (sin) tagEstado = '<span class="tag tag-danger">SIN STOCK</span>';
         else if (bajo) tagEstado = '<span class="tag tag-warn">BAJO MIN</span>';
 
+        const costoTotal = (i.costo || 0) * st;
+        const fmtNum = v => v ? Number(v).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-';
         return `<tr>
             <td style="text-align:center; padding:4px 8px;">${renderFotoCell(i.foto_url)}</td>
             <td><strong>${i.cod || ''}</strong></td>
-            <td>${i.nemotecnico || i.descriptor_proveedor || '-'}</td>
+            <td style="white-space:nowrap;">${i.nemotecnico || i.descriptor_proveedor || '-'}</td>
             <td><span class="tag tag-info">${i.categoria || '-'}</span></td>
             <td>${i.sub_categoria || '-'}</td>
+            <td>${i.proveedor || '-'}</td>
+            <td>${i.producto || '-'}</td>
+            <td>${i.compra || '-'}</td>
             <td>${i.color || '-'}</td>
+            <td>${i.ubicacion || '-'}</td>
+            <td style="text-align:center;">${i.can_x_paquete || '-'}</td>
             <td style="text-align:center; font-weight:700; color:${sin ? 'var(--danger)' : bajo ? 'var(--warning)' : 'var(--text-primary)'};">${st}</td>
             <td style="text-align:center;">${i.stock_mp || 0}</td>
             <td style="text-align:center;">${i.stock_liberado || 0}</td>
             <td style="text-align:center;">${i.minimo || 0}</td>
+            <td style="text-align:right;">${fmtNum(i.costo)}</td>
+            <td style="text-align:right;">${fmtNum(i.costo_iva)}</td>
+            <td style="text-align:right; font-weight:600;">${fmtNum(costoTotal)}</td>
             <td style="text-align:center;">${tagEstado}</td>
+            <td style="font-size:0.78rem; color:var(--text-secondary); max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${(i.comentarios||'').replace(/"/g,"'")}">${i.comentarios || '-'}</td>
             <td style="text-align:center;">
                 <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem;" onclick="editarInsumo('${i.id}')">
                     <i class="bi bi-pencil"></i>
