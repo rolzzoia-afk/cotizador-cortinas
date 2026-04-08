@@ -1638,33 +1638,36 @@ async function importarExcelInventario(event) {
         // 1. Importar INVENTARIO (en lotes)
         const wsInv = wb.Sheets['INVENTARIO'];
         if (wsInv) {
-            // ── Leer hipervínculos de la columna FOTO directamente del worksheet ──
-            // (sheet_to_json devuelve el texto visible, no la URL del hipervínculo)
-            const fotoHyperlinkMap = {};
+            // ── Leer hipervínculos de la columna FOTO indexados por COD ──
+            // (sheet_to_json puede saltearse filas vacías, desincronizando el índice
+            //  de fila; indexar por COD es robusto ante esos huecos)
+            const fotoHyperlinkMap = {}; // { 'BRA01': 'https://...', ... }
             try {
                 const sheetRange = XLSX.utils.decode_range(wsInv['!ref'] || 'A1:ZZ9999');
                 const HEADER_ROW_IDX = 9; // 0-based, coincide con range:9
-                let fotoColIdx = -1;
+                let fotoColIdx = -1, codColIdx = -1;
                 for (let c = sheetRange.s.c; c <= sheetRange.e.c; c++) {
                     const hCell = wsInv[XLSX.utils.encode_cell({ r: HEADER_ROW_IDX, c })];
-                    if (hCell && String(hCell.v || '').trim().toUpperCase() === 'FOTO') {
-                        fotoColIdx = c;
-                        break;
-                    }
+                    if (!hCell) continue;
+                    const hVal = String(hCell.v || '').trim().toUpperCase();
+                    if (hVal === 'FOTO') fotoColIdx = c;
+                    if (hVal === 'COD')  codColIdx  = c;
                 }
-                if (fotoColIdx >= 0) {
+                if (fotoColIdx >= 0 && codColIdx >= 0) {
                     for (let r = HEADER_ROW_IDX + 1; r <= sheetRange.e.r; r++) {
-                        const cell = wsInv[XLSX.utils.encode_cell({ r, c: fotoColIdx })];
-                        if (cell) {
-                            // Prioridad: hipervínculo > valor de celda
-                            const url = (cell.l?.Target) || String(cell.v || '').trim();
-                            if (url && (url.startsWith('http') || url.startsWith('//')))
-                                fotoHyperlinkMap[r] = url;
-                        }
+                        const codCell  = wsInv[XLSX.utils.encode_cell({ r, c: codColIdx })];
+                        const fotoCell = wsInv[XLSX.utils.encode_cell({ r, c: fotoColIdx })];
+                        if (!codCell || !fotoCell) continue;
+                        const cod = String(codCell.v || '').trim().toUpperCase();
+                        if (!cod) continue;
+                        // Prioridad: hipervínculo (.l.Target) > valor de celda
+                        const url = (fotoCell.l?.Target) || String(fotoCell.v || '').trim();
+                        if (url && (url.startsWith('http') || url.startsWith('//')))
+                            fotoHyperlinkMap[cod] = url;
                     }
-                    logInv(`Columna FOTO: ${Object.keys(fotoHyperlinkMap).length} URLs extraídas`, 'info');
+                    logInv(`Columna FOTO: ${Object.keys(fotoHyperlinkMap).length} URLs extraídas por código`, 'info');
                 } else {
-                    logInv('⚠️ Columna FOTO no encontrada en fila de encabezados.', 'warn');
+                    logInv(`⚠️ Columnas no encontradas: COD idx=${codColIdx}, FOTO idx=${fotoColIdx}`, 'warn');
                 }
             } catch(eHyp) {
                 logInv(`⚠️ Error al leer hipervínculos FOTO: ${eHyp.message}`, 'warn');
@@ -1679,9 +1682,8 @@ async function importarExcelInventario(event) {
                 const fila = datosInv[idx];
                 const cod = String(fila['COD'] || '').trim().toUpperCase();
                 if (!cod) continue;
-                // Fila Excel 0-based: encabezado en fila 9, datos desde fila 10
-                const excelRowIdx = 10 + idx;
-                const fotoUrl = fotoHyperlinkMap[excelRowIdx]
+                // Buscar URL por COD (robusto ante filas vacías intercaladas)
+                const fotoUrl = fotoHyperlinkMap[cod]
                     || String(fila['FOTO'] || '').trim()
                     || null;
                 registrosInv.push({
