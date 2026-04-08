@@ -1158,7 +1158,8 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
             console.warn(`[colmena_tubos] Intento ${intento} falló: ${e.message}`);
             if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
             else {
-                log(`❌ No se pudo actualizar inventario en Supabase después de 3 intentos: ${e.message}`, 'error');
+                // Lanzar el error para que el llamador sepa que la BD no se actualizó
+                throw new Error(`No se pudo actualizar inventario en Supabase (${e.message})`);
             }
         }
     }
@@ -3576,7 +3577,15 @@ async function confirmarYGuardarStaging() {
 
     // ── PASO 3: AHORA sí persistir los cambios (descontar tubos) ──
     guardarSistema();
-    await guardarColmenaFinalEnSupabase();
+    let colmenaSincronizadaOK = false;
+    try {
+        await guardarColmenaFinalEnSupabase();
+        colmenaSincronizadaOK = true;
+    } catch (errColmena) {
+        // El error ya fue logueado en guardarColmenaFinalEnSupabase.
+        // No bloqueamos el flujo (el Excel se exporta igual) pero avisamos claramente.
+        log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Volvé a abrirla y usá el botón ☁️ Guardar para corregirlo.', 'error');
+    }
 
     // ── PASO 3c: Persistir seriales con estado actualizado (disponible → ocupado) ──
     // CRÍTICO: sin este paso, los seriales marcados como 'ocupado' durante la
@@ -3654,6 +3663,13 @@ async function confirmarYGuardarStaging() {
 
     // ── Exportar Excel ANTES de limpiar (usa resultadosOptimizacion que aún tiene datos) ──
     exportarResultados();
+
+    // ── Aviso visual si la colmena no se sincronizó ──
+    if (!colmenaSincronizadaOK) {
+        setTimeout(() => {
+            alert('⚠️ ATENCIÓN: El plan de corte fue exportado, pero el inventario NO se actualizó en Supabase.\n\nPara corregirlo:\n1. Recargá esta página\n2. Cargá la colmena desde Supabase\n3. Usá el botón ☁️ Guardar en Supabase');
+        }, 500);
+    }
 
     // ── Limpieza de estado temporal para que el siguiente Excel parta limpio ──
     SistemaInventario.resultadosOptimizacion = [];

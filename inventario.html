@@ -314,6 +314,17 @@
             cursor: default;
             font-size: 0.75rem;
         }
+        .rack-cell.encontrado {
+            background: rgba(234,179,8,0.25) !important;
+            color: #fde047 !important;
+            border-color: #fde047 !important;
+            box-shadow: 0 0 10px rgba(234,179,8,0.5), 0 0 20px rgba(234,179,8,0.2);
+            animation: pulse-encontrado 1.2s ease-in-out infinite;
+        }
+        @keyframes pulse-encontrado {
+            0%, 100% { box-shadow: 0 0 8px rgba(234,179,8,0.5), 0 0 16px rgba(234,179,8,0.2); }
+            50%       { box-shadow: 0 0 16px rgba(234,179,8,0.8), 0 0 32px rgba(234,179,8,0.4); }
+        }
         .rack-cell:not(.header-cell):hover {
             transform: scale(1.05);
             border-color: var(--primary-500);
@@ -572,6 +583,7 @@
                 <span><span class="rack-cell ocupado" style="display:inline-block; width:18px; height:18px; vertical-align:middle;"></span> Ocupado</span>
                 <span><span class="rack-cell vacio" style="display:inline-block; width:18px; height:18px; vertical-align:middle;"></span> Vacío</span>
                 <span><span class="rack-cell alerta" style="display:inline-block; width:18px; height:18px; vertical-align:middle;"></span> Stock bajo</span>
+                <span><span class="rack-cell encontrado" style="display:inline-block; width:18px; height:18px; vertical-align:middle; animation:none;"></span> Resultado búsqueda</span>
             </div>
         </div>
         <div class="rack-grid" id="rackGrid"></div>
@@ -1351,18 +1363,23 @@ function renderizarRacks() {
 }
 
 function resaltarEnRack() {
-    const busq = (document.getElementById('buscarRack').value || '').toUpperCase();
+    const busq = (document.getElementById('buscarRack').value || '').toUpperCase().trim();
     document.querySelectorAll('.rack-cell.ocupado, .rack-cell.alerta').forEach(cell => {
         if (!busq) {
+            cell.classList.remove('encontrado');
             cell.style.opacity = '1';
             cell.style.transform = '';
+            cell.style.zIndex = '';
         } else if (cell.textContent.toUpperCase().includes(busq)) {
+            cell.classList.add('encontrado');
             cell.style.opacity = '1';
-            cell.style.transform = 'scale(1.15)';
-            cell.style.zIndex = '2';
+            cell.style.transform = 'scale(1.18)';
+            cell.style.zIndex = '5';
         } else {
-            cell.style.opacity = '0.25';
+            cell.classList.remove('encontrado');
+            cell.style.opacity = '0.15';
             cell.style.transform = '';
+            cell.style.zIndex = '';
         }
     });
 }
