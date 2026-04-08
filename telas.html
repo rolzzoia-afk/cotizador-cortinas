@@ -1876,44 +1876,44 @@ async function importarExcelTelas(event) {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            // raw:true para no perder datos; sin cellDates para que las fechas lleguen como strings
             const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array', raw: false });
-            logTel(`Hojas encontradas: ${wb.SheetNames.join(', ')}`, 'info');
+            logTel(`Hojas: ${wb.SheetNames.join(', ')}`, 'info');
 
-            // ── 1. VALIDADORES ──
+            // ── 1. VALIDADORES (dropdowns) ──
             if (wb.SheetNames.includes('VALIDADORES')) {
                 await importarValidadores(wb.Sheets['VALIDADORES']);
             }
 
-            // ── 2. TELAS desde LIBERADO + MATERIAS PRIMAS (mapas visuales) ──
-            let telasImportadas = 0;
-            // También leer hojas alternativas del mismo archivo
-            const hojasLib = wb.SheetNames.filter(n => n.toUpperCase().includes('LIBERADO'));
-            const hojasMp  = wb.SheetNames.filter(n => n.toUpperCase().includes('MATERIAS') || n.toUpperCase().includes('MATERIA_P') || n.toUpperCase().includes('MATERIA PRIMA'));
-
-            for (const hoja of hojasLib) {
-                const n = await importarTelaHoja(wb.Sheets[hoja], 'LIBERADO');
-                telasImportadas += n;
-            }
-            for (const hoja of hojasMp) {
-                const n = await importarTelaHoja(wb.Sheets[hoja], 'MATERIAS PRIMAS');
-                telasImportadas += n;
-            }
-            logTel(`Total telas únicas extraídas: ${telasImportadas}`, 'success');
-
-            // ── 3. MAPA-COLMENA ──
-            if (wb.SheetNames.includes('MAPA-COLMENA')) {
-                const n = await importarColmena(wb.Sheets['MAPA-COLMENA']);
-                logTel(`Posiciones rack mapeadas: ${n}`, 'success');
+            // ── 2. CATÁLOGO desde VALIDADOR (GARANTIAS) → código + nemotécnico ──
+            const sheetGar = wb.Sheets['VALIDADOR (GARANTIAS)'];
+            if (sheetGar) {
+                const n = await importarCatalogoDesdeGarantias(sheetGar, wb);
+                logTel(`Catálogo: ${n} telas con nemotécnico importadas`, 'success');
+            } else {
+                // Fallback: escanear grillas para extraer códigos únicos
+                const hojasLib = wb.SheetNames.filter(n => n.toUpperCase().includes('LIBERADO'));
+                const hojasMp  = wb.SheetNames.filter(n => /MATERIA(S)?\s*(PRIMA|_PRIMA)/i.test(n));
+                for (const h of [...hojasLib, ...hojasMp]) {
+                    await importarCodigosDesdeGrilla(wb.Sheets[h],
+                        hojasLib.includes(h) ? 'LIBERADO' : 'MATERIAS PRIMAS');
+                }
             }
 
-            // ── 4. ROLLOS FALLA ──
-            if (wb.SheetNames.includes('ROLLOS FALLA')) {
+            // ── 3. ACTUALIZAR ALMACÉN desde las grillas LIBERADO / MATERIAS PRIMAS ──
+            await importarAlmacenDesdeGrillas(wb);
+
+            // ── 4. POSICIONES: cruzar LIBERADO ↔ MAPA-COLMENA por coordenada de celda ──
+            if (wb.Sheets['LIBERADO'] && wb.Sheets['MAPA-COLMENA']) {
+                const n = await importarPosicionesRack(wb.Sheets['LIBERADO'], wb.Sheets['MAPA-COLMENA'], 'LIBERADO');
+                logTel(`Posiciones asignadas: ${n}`, 'success');
+            }
+
+            // ── 5. ROLLOS FALLA ──
+            if (wb.Sheets['ROLLOS FALLA']) {
                 const n = await importarFallas(wb.Sheets['ROLLOS FALLA']);
                 logTel(`Fallas importadas: ${n}`, 'success');
             }
 
-            // Recargar todo
             await cargarTelas();
             await cargarFallas();
             actualizarStats();
@@ -1921,7 +1921,7 @@ async function importarExcelTelas(event) {
             renderizarFallas();
             logTel('─── Importación completada ✓ ───', 'success');
         } catch(err) {
-            logTel('Error durante importación: ' + err.message, 'error');
+            logTel('Error: ' + err.message, 'error');
             console.error('[TELAS IMPORT]', err);
         }
     };
@@ -1929,127 +1929,142 @@ async function importarExcelTelas(event) {
     event.target.value = '';
 }
 
-async function importarValidadores(sheet) {
-    const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
-    const batch = [];
-    // VALIDADORES tiene encabezados en fila 1, grupos en columnas
-    // Detectamos columnas con contenido
-    if (rows.length < 2) return;
-    const headers = rows[0];
-    for (let col = 0; col < headers.length; col++) {
-        const campo = (headers[col]||'').toString().trim().toUpperCase().replace(/\s+/g,'_');
-        if (!campo) continue;
-        for (let row = 1; row < rows.length; row++) {
-            const val = (rows[row][col]||'').toString().trim();
-            if (!val) continue;
-            batch.push({ empresa_id: EMPRESA_ID, campo, valor: val, orden: row });
-        }
+// ── Importar catálogo desde VALIDADOR (GARANTIAS) ─────────────────
+// Columnas: CODIGO (col 5), NEMOTÉCNICO (col 6), TIPO DE PRODUCTO (col 7)
+async function importarCatalogoDesdeGarantias(sheet, wb) {
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    // Buscar fila de encabezado (tiene 'CODIGO' en alguna celda)
+    let headerRow = -1;
+    let colCod = 5, colNemo = 6, colTipoProd = 7; // defaults observados
+    for (let r = 0; r < Math.min(rows.length, 10); r++) {
+        const row = rows[r] || [];
+        const idx = row.findIndex(c => c && c.toString().toUpperCase().includes('CODIGO'));
+        if (idx >= 0) { headerRow = r; colCod = idx; colNemo = idx + 1; colTipoProd = idx + 2; break; }
     }
-    if (!batch.length) return;
-    // Upsert: borrar existentes y reinsertar
-    await sb.from('validadores_telas').delete().eq('empresa_id', EMPRESA_ID);
-    const { error } = await sb.from('validadores_telas').insert(batch);
-    if (error) logTel('Error validadores: ' + error.message, 'warn');
-    else { logTel(`Validadores: ${batch.length} opciones importadas`, 'success'); await cargarValidadores(); }
-}
 
-async function importarTelaHoja(sheet, almacen) {
-    // LIBERADO y MATERIAS PRIMAS son mapas visuales (grilla), NO tablas con encabezados.
-    // Estrategia: escanear todas las celdas buscando el patrón BK/DU/SC + número.
-    const rawGrid = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
-
-    const codePattern = /^(BK|DU|SC)\s*\d+$/i;
-    const found = new Map(); // codigo_normalizado → objeto tela
-
-    rawGrid.forEach(row => {
-        if (!row) return;
-        row.forEach(cell => {
-            if (cell === null || cell === undefined) return;
-            const val = cell.toString().trim();
-            if (!codePattern.test(val)) return;
-            // Normalizar: "sc 04" → "SC 04", "BK  45" → "BK 45"
-            const normalized = val.toUpperCase().replace(/\s+/, ' ');
-            if (!found.has(normalized)) {
-                const tipo = normalized.startsWith('BK') ? 'BK'
-                           : normalized.startsWith('DU') ? 'DU'
-                           : normalized.startsWith('SC') ? 'SC' : null;
-                found.set(normalized, {
-                    empresa_id: EMPRESA_ID,
-                    codigo:     normalized,
-                    tipo,
-                    almacen:    almacen === 'LIBERADO' ? 'LIBERADO' : 'MATERIAS PRIMAS',
-                    estado:     'CARGADO'
-                });
-            }
+    const TELA_PAT = /^(BK|DU|SC)\s+\d+$/i;
+    const telas = [];
+    const startRow = headerRow >= 0 ? headerRow + 1 : 3;
+    for (let r = startRow; r < rows.length; r++) {
+        const row = rows[r] || [];
+        const cod = row[colCod] ? row[colCod].toString().trim() : null;
+        if (!cod || !TELA_PAT.test(cod)) continue;
+        const normalized = cod.toUpperCase().replace(/\s+/, ' ');
+        const tipo = normalized.startsWith('BK') ? 'BK'
+                   : normalized.startsWith('DU') ? 'DU'
+                   : normalized.startsWith('SC') ? 'SC' : null;
+        const nemo = row[colNemo] ? row[colNemo].toString().trim() : null;
+        telas.push({
+            empresa_id:  EMPRESA_ID,
+            codigo:      normalized,
+            tipo,
+            nemotecnico: nemo,
+            estado:      'CARGADO'
         });
-    });
-
-    if (!found.size) { logTel(`${almacen}: ningún código BK/DU/SC encontrado en las celdas`, 'warn'); return 0; }
-
-    const telas = Array.from(found.values());
-    // ignoreDuplicates: true para no pisar datos ya cargados
-    const { error } = await sb.from('telas_catalogo').upsert(telas, { onConflict: 'empresa_id,codigo', ignoreDuplicates: true });
-    if (error) { logTel(`Error telas (${almacen}): ${error.message}`, 'error'); return 0; }
-    logTel(`${almacen}: ${telas.length} códigos únicos extraídos`, 'info');
+    }
+    if (!telas.length) return 0;
+    // Upsert — actualiza nemotécnico si ya existe
+    const { error } = await sb.from('telas_catalogo')
+        .upsert(telas, { onConflict: 'empresa_id,codigo', ignoreDuplicates: false });
+    if (error) { logTel('Error catálogo garantías: ' + error.message, 'error'); return 0; }
     return telas.length;
 }
 
-function detectarTipo(codigo, tipoCell) {
-    const c = codigo.toUpperCase();
-    if (tipoCell) {
-        const t = tipoCell.toString().toUpperCase();
-        if (t.includes('BK') || t.includes('BLACKOUT')) return 'BK';
-        if (t.includes('DU') || t.includes('DUO')) return 'DU';
-        if (t.includes('SC') || t.includes('SCREEN')) return 'SC';
-    }
-    if (c.startsWith('BK')) return 'BK';
-    if (c.startsWith('DU') || c.startsWith('DUO')) return 'DU';
-    if (c.startsWith('SC')) return 'SC';
-    return null;
-}
-
-async function importarColmena(sheet) {
-    // MAPA-COLMENA: las celdas contienen códigos de posición tipo "A 56", "B 30".
-    // La hoja LIBERADO tiene la misma grilla visual donde las celdas contienen el código de tela.
-    // Como ambas grillas usan distinto offset de columna, hacemos el cruce por coordenada de celda
-    // usando la referencia de celda (address) de XLSX para obtener las coordenadas exactas.
-
-    const slotPattern = /^([AB])\s+(\d{1,2})$/i;  // "A 56", "B 30"
-    const codePattern = /^(BK|DU|SC)\s*\d+$/i;
-
-    // Leer MAPA-COLMENA y LIBERADO como objetos de celda para obtener coordenadas exactas
-    const colmenaRef = {};  // { "C9": "A56", "D9": "A55", ... }
-    const liberadoRef = {}; // { "C9": "DU04", "D9": "DU10", ... }
-
-    // Iterar sobre celdas de MAPA-COLMENA
+// ── Fallback: extraer códigos únicos escaneando celdas ────────────
+async function importarCodigosDesdeGrilla(sheet, almacen) {
+    const CODE_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const found = new Map();
     Object.keys(sheet).forEach(addr => {
         if (addr[0] === '!') return;
-        const cell = sheet[addr];
-        if (!cell || !cell.v) return;
-        const val = cell.v.toString().trim();
-        const m = val.match(slotPattern);
-        if (m) {
-            const normalized = (m[1] + ' ' + m[2].padStart(2,'0')).toUpperCase();
-            colmenaRef[addr] = normalized;
+        const val = (sheet[addr].v || '').toString().trim();
+        if (!CODE_PAT.test(val)) return;
+        const n = val.toUpperCase().replace(/\s+/, ' ');
+        if (!found.has(n)) {
+            const tipo = n.startsWith('BK')?'BK': n.startsWith('DU')?'DU': n.startsWith('SC')?'SC':null;
+            found.set(n, { empresa_id:EMPRESA_ID, codigo:n, tipo, almacen, estado:'CARGADO' });
+        }
+    });
+    if (!found.size) return 0;
+    const { error } = await sb.from('telas_catalogo')
+        .upsert([...found.values()], { onConflict:'empresa_id,codigo', ignoreDuplicates:true });
+    if (error) logTel('Error grilla: ' + error.message, 'error');
+    return found.size;
+}
+
+// ── Actualizar almacén: LIBERADO vs MATERIAS PRIMAS ───────────────
+async function importarAlmacenDesdeGrillas(wb) {
+    const CODE_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const libCodes = new Set();
+    const mpCodes  = new Set();
+
+    const escanear = (sheetName, set) => {
+        const s = wb.Sheets[sheetName];
+        if (!s) return;
+        Object.keys(s).forEach(addr => {
+            if (addr[0] === '!') return;
+            const val = (s[addr].v || '').toString().trim();
+            if (CODE_PAT.test(val)) set.add(val.toUpperCase().replace(/\s+/, ' '));
+        });
+    };
+
+    wb.SheetNames.filter(n => n.toUpperCase().includes('LIBERADO')).forEach(h => escanear(h, libCodes));
+    wb.SheetNames.filter(n => /MATERIA(S)?\s*(PRIMA|_PRIMA)/i.test(n) || n === 'MP - MAPA').forEach(h => escanear(h, mpCodes));
+
+    // Códigos que están SOLO en MP (no en liberado) → actualizar almacén
+    const soloMp = [...mpCodes].filter(c => !libCodes.has(c));
+    for (let i = 0; i < soloMp.length; i += 50) {
+        const lote = soloMp.slice(i, i + 50);
+        await sb.from('telas_catalogo')
+            .update({ almacen: 'MATERIAS PRIMAS' })
+            .eq('empresa_id', EMPRESA_ID)
+            .in('codigo', lote);
+    }
+    logTel(`Almacén: ${libCodes.size} lib, ${soloMp.length} solo-MP actualizados`, 'info');
+}
+
+// ── Posiciones: cruce por coordenada de celda LIBERADO ↔ MAPA-COLMENA ──
+// Mismo Excel: las celdas en la misma dirección (ej D10) contienen
+// el código de tela en LIBERADO y el código de slot en MAPA-COLMENA.
+async function importarPosicionesRack(sheetLib, sheetMap, almacen) {
+    const CODE_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const SLOT_PAT = /^([AB])\s+(\d{1,2})$/;
+
+    const libCodes = {};   // addr → "BK 01"
+    const mapSlots = {};   // addr → "A27"  (sin espacio)
+
+    Object.keys(sheetLib).forEach(addr => {
+        if (addr[0] === '!') return;
+        const val = (sheetLib[addr].v || '').toString().trim();
+        if (CODE_PAT.test(val)) libCodes[addr] = val.toUpperCase().replace(/\s+/, ' ');
+    });
+    Object.keys(sheetMap).forEach(addr => {
+        if (addr[0] === '!') return;
+        const val = (sheetMap[addr].v || '').toString().trim();
+        const m = val.match(SLOT_PAT);
+        if (m) mapSlots[addr] = m[1].toUpperCase() + m[2].padStart(2, '0'); // "A27"
+    });
+
+    // Cruce: misma coordenada → fabric en LIBERADO = slot en MAPA-COLMENA
+    const updates = [];
+    Object.keys(libCodes).forEach(addr => {
+        if (mapSlots[addr]) {
+            updates.push({ codigo: libCodes[addr], posicion: mapSlots[addr], almacen });
         }
     });
 
-    if (!Object.keys(colmenaRef).length) {
-        logTel('MAPA-COLMENA: no se encontraron códigos de posición (A 56, B 30...)', 'warn');
-        return 0;
+    if (!updates.length) { logTel('Sin coincidencias de posición por coordenada', 'warn'); return 0; }
+
+    // Batch update 20 a la vez
+    for (let i = 0; i < updates.length; i += 20) {
+        const lote = updates.slice(i, i + 20);
+        await Promise.all(lote.map(u =>
+            sb.from('telas_catalogo')
+              .update({ posicion: u.posicion, almacen: u.almacen })
+              .eq('empresa_id', EMPRESA_ID)
+              .eq('codigo', u.codigo)
+        ));
     }
-
-    // Leer LIBERADO y MATERIAS PRIMAS para obtener códigos de tela por coordenada
-    // (ya cargadas antes en la importación, así que usamos el catálogo en memoria como respaldo)
-    // Intentar cruzar: buscar en cada hoja si está disponible en wb
-    // Como no tenemos acceso directo al wb aquí, usamos una heurística:
-    // Los slot codes en MAPA-COLMENA están en celdas fijas; los códigos de tela
-    // están en las mismas posiciones del mapa en LIBERADO.
-    // Sin el workbook completo disponible aquí, reportamos los slots encontrados.
-
-    logTel(`MAPA-COLMENA: ${Object.keys(colmenaRef).length} posiciones encontradas (A 01–B 88)`, 'info');
-    logTel('Nota: asignación de posición por código se realiza manualmente desde la vista Colmena', 'info');
-    return Object.keys(colmenaRef).length;
+    return updates.length;
 }
 
 async function importarFallas(sheet) {
