@@ -510,6 +510,9 @@
         <button class="inv-tab" onclick="switchPanel('importar')">
             <i class="bi bi-cloud-upload"></i> Importar
         </button>
+        <button class="inv-tab" onclick="switchPanel('listas')">
+            <i class="bi bi-sliders"></i> Listas
+        </button>
     </div>
     <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
         <span id="estadoConexion" style="font-size:0.75rem; color:var(--text-muted);">Conectando...</span>
@@ -707,6 +710,50 @@
         </div>
     </div>
 
+    <!-- ━━━ PANEL: LISTAS ━━━ -->
+    <div class="inv-panel" id="panel-listas">
+        <div class="glass-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h6 style="margin:0;"><i class="bi bi-sliders"></i> Gestión de Listas</h6>
+                    <p style="color:var(--text-secondary); font-size:0.82rem; margin:4px 0 0;">
+                        Administra las opciones de los selectores del catálogo. Los cambios se guardan en la nube y se reflejan de inmediato.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Selector de campo -->
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap;">
+                <label style="font-weight:600; white-space:nowrap;">Campo:</label>
+                <select id="listas-campo" onchange="listasMostrarCampo()" style="padding:6px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); font-size:0.88rem;">
+                    <option value="CATEGORIA">Categoría</option>
+                    <option value="SUB_CATEGORIA">Sub-Categoría</option>
+                    <option value="PRODUCTO">Producto</option>
+                    <option value="PROVEEDOR">Proveedor</option>
+                    <option value="COMPRA">Compra</option>
+                    <option value="COLOR">Color</option>
+                    <option value="UBICACION">Ubicación</option>
+                    <option value="RESPONSABLE">Responsable</option>
+                </select>
+            </div>
+
+            <!-- Agregar nueva opción -->
+            <div style="display:flex; gap:8px; margin-bottom:16px;">
+                <input type="text" id="listas-nuevo-valor" placeholder="Nueva opción..." style="flex:1; padding:7px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary);"
+                    onkeydown="if(event.key==='Enter') listasAgregar()">
+                <button class="btn-inv btn-primary-inv" onclick="listasAgregar()">
+                    <i class="bi bi-plus-lg"></i> Agregar
+                </button>
+            </div>
+
+            <!-- Lista de opciones actuales -->
+            <div id="listas-items" style="display:flex; flex-direction:column; gap:6px; max-height:400px; overflow-y:auto;"></div>
+            <div id="listas-vacio" style="display:none; color:var(--text-secondary); text-align:center; padding:24px; font-size:0.88rem;">
+                No hay opciones para este campo. Agrega la primera arriba.
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <!-- ═══ LIGHTBOX FOTO ═══ -->
@@ -768,6 +815,18 @@
             <div>
                 <label>Ubicación</label>
                 <select id="insumo-ubicacion"></select>
+            </div>
+            <div>
+                <label>Cód. Proveedor</label>
+                <input type="text" id="insumo-cod_proveedor" placeholder="N/A">
+            </div>
+            <div>
+                <label>Estado Inventario</label>
+                <select id="insumo-estado_inventario">
+                    <option value="ACTIVO">ACTIVO</option>
+                    <option value="INACTIVO">INACTIVO</option>
+                    <option value="DISCONTINUADO">DISCONTINUADO</option>
+                </select>
             </div>
         </div>
         <label>Descriptor Proveedor</label>
@@ -928,8 +987,9 @@ function switchPanel(nombre) {
     const panel = document.getElementById('panel-' + nombre);
     if (panel) panel.classList.add('active');
     const tabs = document.querySelectorAll('.inv-tab');
-    const map = { catalogo: 0, rack: 1, movimientos: 2, alertas: 3, importar: 4 };
+    const map = { catalogo: 0, rack: 1, movimientos: 2, alertas: 3, importar: 4, listas: 5 };
     if (map[nombre] !== undefined && tabs[map[nombre]]) tabs[map[nombre]].classList.add('active');
+    if (nombre === 'listas') listasMostrarCampo();
 }
 
 function cerrarModal(id) {
@@ -1068,6 +1128,70 @@ function poblarSelectsValidadores() {
             selCod.appendChild(opt);
         });
     }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PANEL LISTAS: gestión manual de validadores
+
+function listasMostrarCampo() {
+    const campo = document.getElementById('listas-campo').value;
+    const opciones = INV.validadores[campo] || [];
+    const cont = document.getElementById('listas-items');
+    const vacio = document.getElementById('listas-vacio');
+
+    if (opciones.length === 0) {
+        cont.innerHTML = '';
+        vacio.style.display = 'block';
+        return;
+    }
+    vacio.style.display = 'none';
+    cont.innerHTML = opciones.map((v, idx) => `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--bg-primary); border-radius:6px; border:1px solid var(--border);">
+            <span style="font-size:0.9rem;">${v}</span>
+            <button class="btn-inv btn-danger-inv" onclick="listasEliminar('${campo}', '${v.replace(/'/g,"\\'")}', ${idx})"
+                style="padding:2px 10px; font-size:0.75rem;">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>`).join('');
+}
+
+async function listasAgregar() {
+    const campo = document.getElementById('listas-campo').value;
+    const input = document.getElementById('listas-nuevo-valor');
+    const valor = input.value.trim().toUpperCase();
+    if (!valor) return;
+
+    // Verificar duplicado
+    if ((INV.validadores[campo] || []).includes(valor)) {
+        alert(`"${valor}" ya existe en ${campo}.`);
+        return;
+    }
+
+    const orden = (INV.validadores[campo] || []).length;
+    const { error } = await sbInv.from('validadores_insumos')
+        .insert({ empresa_id: EMPRESA_ID, campo, valor, orden });
+    if (error) { alert('Error al guardar: ' + error.message); return; }
+
+    if (!INV.validadores[campo]) INV.validadores[campo] = [];
+    INV.validadores[campo].push(valor);
+    input.value = '';
+    listasMostrarCampo();
+    poblarSelectsValidadores();
+}
+
+async function listasEliminar(campo, valor, idx) {
+    if (!confirm(`¿Eliminar "${valor}" de ${campo}?`)) return;
+
+    const { error } = await sbInv.from('validadores_insumos')
+        .delete()
+        .eq('empresa_id', EMPRESA_ID)
+        .eq('campo', campo)
+        .eq('valor', valor);
+    if (error) { alert('Error al eliminar: ' + error.message); return; }
+
+    INV.validadores[campo].splice(idx, 1);
+    listasMostrarCampo();
+    poblarSelectsValidadores();
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -1278,9 +1402,9 @@ function previsualizarFotoModal() {
 function abrirModalInsumo() {
     document.getElementById('modalInsumoTitulo').textContent = 'Nuevo Insumo';
     document.getElementById('insumo-id').value = '';
-    ['cod','nemotecnico','descriptor_proveedor','comentarios','foto_url'].forEach(f =>
+    ['cod','nemotecnico','cod_proveedor','descriptor_proveedor','comentarios','foto_url'].forEach(f =>
         document.getElementById('insumo-' + f).value = '');
-    ['categoria','sub_categoria','producto','proveedor','compra','color','ubicacion'].forEach(f =>
+    ['categoria','sub_categoria','producto','proveedor','compra','color','ubicacion','estado_inventario'].forEach(f =>
         document.getElementById('insumo-' + f).selectedIndex = 0);
     document.getElementById('insumo-minimo').value = '0';
     document.getElementById('insumo-can_x_paquete').value = '1';
@@ -1306,6 +1430,8 @@ function editarInsumo(id) {
     document.getElementById('insumo-can_x_paquete').value = ins.can_x_paquete || 1;
     document.getElementById('insumo-costo').value = ins.costo || 0;
     document.getElementById('insumo-ubicacion').value = ins.ubicacion || '';
+    document.getElementById('insumo-cod_proveedor').value = ins.cod_proveedor || '';
+    document.getElementById('insumo-estado_inventario').value = ins.estado_inventario || 'ACTIVO';
     document.getElementById('insumo-descriptor_proveedor').value = ins.descriptor_proveedor || '';
     document.getElementById('insumo-comentarios').value = ins.comentarios || '';
     document.getElementById('insumo-foto_url').value = ins.foto_url || '';
@@ -1333,6 +1459,8 @@ async function guardarInsumo() {
         costo: parseFloat(document.getElementById('insumo-costo').value) || 0,
         costo_iva: (parseFloat(document.getElementById('insumo-costo').value) || 0) * 1.19,
         ubicacion: document.getElementById('insumo-ubicacion').value,
+        cod_proveedor: document.getElementById('insumo-cod_proveedor').value.trim(),
+        estado_inventario: document.getElementById('insumo-estado_inventario').value,
         descriptor_proveedor: document.getElementById('insumo-descriptor_proveedor').value.trim(),
         comentarios: document.getElementById('insumo-comentarios').value.trim(),
         foto_url: document.getElementById('insumo-foto_url').value.trim() || null
@@ -1739,6 +1867,50 @@ async function importarExcelInventario(event) {
                 }
             }
             return { ok, err };
+        }
+
+        // 0. Importar VALIDADORES (opciones de los selects del modal)
+        const wsVal = wb.Sheets['VALIDADORES'];
+        if (wsVal) {
+            // Los campos que nos interesan y su nombre en la tabla
+            const CAMPOS_VALIDADORES = {
+                'CATEGORIA': 'CATEGORIA',
+                'SUB_CATEGORIA': 'SUB_CATEGORIA',
+                'PRODUCTO': 'PRODUCTO',
+                'COMPRA': 'COMPRA',
+                'PROVEEDOR': 'PROVEEDOR',
+                'COLOR': 'COLOR',
+                'UBICACION': 'UBICACION',
+                'RESPONSABLE': 'RESPONSABLE'
+            };
+            const datosVal = XLSX.utils.sheet_to_json(wsVal, { header: 1, defval: '' });
+            // Fila 0 es el encabezado; leer columnas pares (0,2,4,6...)
+            const headers = datosVal[0] || [];
+            const registrosVal = [];
+            for (const [excelHeader, campo] of Object.entries(CAMPOS_VALIDADORES)) {
+                // Buscar la columna de este campo en la fila de encabezados
+                const colIdx = headers.findIndex(h => String(h).trim().toUpperCase() === excelHeader);
+                if (colIdx === -1) continue;
+                let orden = 0;
+                for (let r = 1; r < datosVal.length; r++) {
+                    const valor = String(datosVal[r][colIdx] || '').trim();
+                    if (!valor) continue;
+                    registrosVal.push({ empresa_id: EMPRESA_ID, campo, valor, orden: orden++ });
+                }
+            }
+            // Limpiar y reinsertar para que quede siempre sincronizado con el Excel
+            await sbInv.from('validadores_insumos').delete().eq('empresa_id', EMPRESA_ID);
+            const resVal = await upsertEnLotes('validadores_insumos', registrosVal, 'empresa_id,campo,valor', 'VALIDADORES');
+            logInv(`VALIDADORES: ${resVal.ok} opciones importadas`, resVal.ok > 0 ? 'success' : 'warn');
+            // Recargar en memoria para que los selects se actualicen sin recargar la página
+            INV.validadores = {};
+            registrosVal.forEach(v => {
+                if (!INV.validadores[v.campo]) INV.validadores[v.campo] = [];
+                INV.validadores[v.campo].push(v.valor);
+            });
+            poblarSelectsValidadores();
+        } else {
+            logInv('⚠️ Hoja VALIDADORES no encontrada — los selects no se actualizaron', 'warn');
         }
 
         // 1. Importar INVENTARIO (en lotes)
