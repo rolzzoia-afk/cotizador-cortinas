@@ -112,17 +112,25 @@
         :root {
             --bg-primary: #09090b;
             --bg-secondary: #18181b;
-            --primary-500: #3b82f6;
-            --primary-glow: rgba(59, 130, 246, 0.4);
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --border-glass: rgba(255, 255, 255, 0.1);
-            --glass-bg: rgba(24, 24, 27, 0.6);
+            --bg-card: #1c1c21;
+            --border: #2e2e33;
+            --primary-500: #6366f1;
+            --primary-600: #4f46e5;
+            --primary-glow: rgba(99, 102, 241, 0.35);
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --text-muted: #71717a;
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --glass-bg: rgba(28, 28, 33, 0.7);
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
         }
 
         body {
             background-color: var(--bg-primary);
-            background-image: radial-gradient(circle at 50% 0%, rgba(59, 130, 246, 0.15), transparent 50%);
+            background-image: radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.12), transparent 50%);
             color: var(--text-primary);
             font-family: 'Inter', system-ui, sans-serif;
             min-height: 100vh;
@@ -177,7 +185,7 @@
 
         /* Premium Glow Buttons */
         .btn-premium {
-            background: linear-gradient(135deg, var(--primary-500), #2563eb);
+            background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
             color: white;
             border: none;
             border-radius: 8px;
@@ -269,18 +277,18 @@
         .nav-tabs .nav-link:hover {
             color: var(--text-primary);
             border-color: transparent;
-            background: rgba(59, 130, 246, 0.1);
+            background: rgba(99, 102, 241, 0.1);
         }
         .nav-tabs .nav-link.active {
             color: white !important;
-            background: linear-gradient(135deg, var(--primary-500), #2563eb) !important;
+            background: linear-gradient(135deg, var(--primary-500), var(--primary-600)) !important;
             border-color: transparent !important;
             box-shadow: 0 0 15px var(--primary-glow);
         }
 
         /* Section headers inside glass cards */
         .section-header {
-            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.05));
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(99, 102, 241, 0.04));
             border-radius: 12px 12px 0 0;
             padding: 10px 16px;
             border-bottom: 1px solid var(--border-glass);
@@ -296,7 +304,7 @@
             color: var(--text-primary);
         }
         .list-group-item:hover {
-            background-color: rgba(59, 130, 246, 0.1);
+            background-color: rgba(99, 102, 241, 0.1);
         }
 
         /* Labels */
@@ -314,11 +322,11 @@
 
         /* Badge overrides */
         .badge.bg-secondary {
-            background: rgba(59, 130, 246, 0.2) !important;
+            background: rgba(99, 102, 241, 0.2) !important;
             color: var(--primary-500) !important;
         }
         .badge.bg-primary {
-            background: linear-gradient(135deg, var(--primary-500), #2563eb) !important;
+            background: linear-gradient(135deg, var(--primary-500), var(--primary-600)) !important;
         }
 
         /* Tech blocks inside Fase 2 */

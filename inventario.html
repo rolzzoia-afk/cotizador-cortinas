@@ -492,7 +492,12 @@
 
 <!-- ═══ HEADER ═══ -->
 <div class="inv-header">
-    <h5><i class="bi bi-box-seam"></i> Inventario</h5>
+    <div style="display:flex; align-items:center; gap:10px;">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,var(--primary-500),var(--primary-600));border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <i class="bi bi-box-seam" style="color:white;font-size:0.9rem;"></i>
+        </div>
+        <h5>Inventario — Rolzzo</h5>
+    </div>
     <div class="inv-tabs">
         <button class="inv-tab active" onclick="switchPanel('catalogo')">
             <i class="bi bi-list-ul"></i> Catálogo

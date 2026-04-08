@@ -3,100 +3,374 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visualizador del Optimizador Rolzzo V54</title>
+    <title>Optimizador — Rolzzo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
+        :root {
+            --bg-primary:    #09090b;
+            --bg-secondary:  #18181b;
+            --bg-card:       #1c1c21;
+            --border:        #2e2e33;
+            --text-primary:  #fafafa;
+            --text-secondary:#a1a1aa;
+            --text-muted:    #71717a;
+            --primary:       #6366f1;
+            --primary-dark:  #4f46e5;
+            --primary-glow:  rgba(99,102,241,0.35);
+            --success:       #22c55e;
+            --warning:       #f59e0b;
+            --danger:        #ef4444;
+            --info:          #3b82f6;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; max-width: 1400px; margin: 0 auto; padding: 20px; background: #1a1a2e; color: #eee; }
-        h1 { color: #fff; text-align: center; border-bottom: 3px solid #3498db; padding-bottom: 10px; margin-bottom: 5px; }
-        h2 { color: #ecf0f1; margin-top: 20px; }
-        h3 { color: #aaa; }
-        .container { display: flex; gap: 20px; margin-top: 20px; }
-        .panel { flex: 1; background: #16213e; padding: 20px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); border: 1px solid #1a1a4e; overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 8px; text-align: left; border-bottom: 1px solid #1a1a4e; font-size: 12px; }
-        th { background-color: #0a3d62; color: #00d2ff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 1; }
-        tr:hover td { background: rgba(0, 210, 255, 0.05); }
-        .btn { background-color: #27ae60; color: white; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin: 8px 5px; font-weight: 500; transition: all 0.2s; }
-        .btn:hover:not(:disabled) { transform: scale(1.02); filter: brightness(1.1); }
-        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-        .btn:disabled::after { content: attr(data-tooltip); }
-        .btn-exportar { background-color: #3498db; }
-        .btn-exportar:hover:not(:disabled) { background-color: #2980b9; }
-        .file-input { margin: 10px 0; padding: 10px; border: 2px dashed #2c3e6e; border-radius: 5px; width: 100%; box-sizing: border-box; background: #0a1628; color: #eee; }
-        .file-input:disabled { opacity: 0.4; }
-        .log-container { background-color: #0a1628; color: #ecf0f1; padding: 15px; border-radius: 8px; max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; border: 1px solid #1a1a4e; }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ── TOP BAR ── */
+        .opt-topbar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .opt-topbar .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .opt-topbar .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: white;
+        }
+        .opt-topbar h1 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin: 0;
+            border: none;
+            padding: 0;
+            text-align: left;
+        }
+        .opt-topbar .version-tag {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            font-weight: 400;
+            letter-spacing: 0.04em;
+            text-align: left;
+            margin: 0;
+        }
+
+        /* ── MAIN CONTENT ── */
+        .opt-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 24px 20px;
+        }
+
+        /* ── GLASS CARDS ── */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .glass-card h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 16px;
+            margin-top: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .glass-card h3 {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin: 16px 0 8px;
+        }
+
+        /* ── TABLES ── */
+        table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+        th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: 12px; }
+        th {
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        td { color: var(--text-primary); }
+        tr:hover td { background: rgba(99,102,241,0.04); }
+
+        /* ── BUTTONS ── */
+        .btn {
+            background: var(--primary);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            margin: 6px 4px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn:hover:not(:disabled) { background: var(--primary-dark); transform: translateY(-1px); }
+        .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+        .btn-success  { background: var(--success); }
+        .btn-success:hover:not(:disabled)  { background: #16a34a; }
+        .btn-exportar { background: var(--info); }
+        .btn-exportar:hover:not(:disabled) { background: #2563eb; }
+        .btn-warning  { background: var(--warning); color: #1a1a1a; }
+        .btn-warning:hover:not(:disabled)  { background: #d97706; }
+        .btn-danger   { background: var(--danger); }
+        .btn-danger:hover:not(:disabled)   { background: #dc2626; }
+        .btn-purple   { background: #8b5cf6; }
+        .btn-purple:hover:not(:disabled)   { background: #7c3aed; }
+        .btn-sm { padding: 7px 14px; font-size: 12px; }
+
+        /* ── LOGOUT BUTTON ── */
+        #btnLogout {
+            background: rgba(239,68,68,0.15);
+            color: var(--danger);
+            border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 8px;
+            padding: 7px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        #btnLogout:hover { background: rgba(239,68,68,0.25); }
+
+        /* ── FILE INPUT ── */
+        .file-input {
+            margin: 8px 0;
+            padding: 8px 12px;
+            border: 1.5px dashed var(--border);
+            border-radius: 8px;
+            width: 100%;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            transition: border-color 0.2s;
+        }
+        .file-input:focus { border-color: var(--primary); outline: none; }
+        .file-input:disabled { opacity: 0.35; }
+        .file-input:hover:not(:disabled) { border-color: var(--primary); }
+
+        /* ── ESTADO BADGES ── */
+        .estado-archivo { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; margin-left: 8px; font-weight: 500; }
+        .estado-ok       { background: rgba(34,197,94,0.15);  color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+        .estado-pendiente{ background: rgba(113,113,122,0.15); color: var(--text-muted); border: 1px solid var(--border); }
+        .estado-error    { background: rgba(239,68,68,0.15);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
+
+        /* ── PROGRESS BAR ── */
+        .progress-bar-container { margin: 12px 0; padding: 12px 16px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); }
+        .progress-bar-track { height: 6px; background: var(--border); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); border-radius: 4px; transition: width 0.4s ease; }
+        .progress-label { font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; }
+
+        /* ── ARCHIVO ITEM ── */
+        .archivo-item { margin: 10px 0; padding: 12px 16px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); }
+        .archivo-item label { color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+
+        /* ── STAT CARDS (resumen ahorro) ── */
+        .resumen-ahorro { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            padding: 12px 20px;
+            border-radius: 10px;
+            text-align: center;
+            min-width: 110px;
+        }
+        .stat-card .num { font-size: 22px; font-weight: 700; color: var(--primary); }
+        .stat-card .lbl { font-size: 10px; color: var(--text-muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* ── BADGES ── */
+        .badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .badge-merma    { background: rgba(239,68,68,0.2);  color: var(--danger); }
+        .badge-nueva    { background: rgba(245,158,11,0.2); color: var(--warning); }
+        .badge-reemplazo{ background: rgba(59,130,246,0.2); color: var(--info); }
+
+        /* ── PLAN DE CORTE ROWS ── */
+        .fila-cortar { background: rgba(99,102,241,0.06); }
+        .fila-guardar { background: rgba(34,197,94,0.06); }
+        .fila-merma   { background: rgba(239,68,68,0.06); }
+        .fila-mesa    { background: rgba(245,158,11,0.06); }
+
+        /* ── TAGS DE ACCIÓN ── */
+        .tag-accion  { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
+        .tag-cortar  { background: rgba(99,102,241,0.2);  color: #a5b4fc; }
+        .tag-guardar { background: rgba(34,197,94,0.2);   color: #86efac; }
+        .tag-merma   { background: rgba(239,68,68,0.2);   color: #fca5a5; }
+        .tag-mesa    { background: rgba(245,158,11,0.2);  color: #fcd34d; }
+
+        /* ── TABLA SCROLL ── */
+        .tabla-scroll { max-height: 300px; overflow-y: auto; border-radius: 8px; border: 1px solid var(--border); }
+
+        /* ── LOG CONTAINER ── */
+        .log-container {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            padding: 14px;
+            border-radius: 8px;
+            max-height: 280px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            border: 1px solid var(--border);
+        }
         .log-entry { margin: 3px 0; }
-        .carga-archivos { background: #16213e; padding: 20px; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.3); border: 1px solid #1a1a4e; }
-        .archivo-item { margin: 12px 0; padding: 12px 15px; background: #0a1628; border-radius: 8px; border: 1px solid #1a1a4e; }
-        .archivo-item label { color: #aaa; }
-        .estado-archivo { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; margin-left: 10px; font-weight: 500; }
-        .estado-ok { background-color: #27ae60; color: white; }
-        .estado-pendiente { background-color: #2c3e6e; color: #7f8c8d; }
-        .estado-error { background-color: #e74c3c; color: white; }
-        .resumen-resultado { background: linear-gradient(135deg, #0f0c29, #302b63); color: white; padding: 20px; border-radius: 10px; margin-top: 20px; border: 1px solid #534ab7; }
-        .badge { background-color: #534ab7; color: white; padding: 3px 8px; border-radius: 3px; font-size: 11px; }
-        .badge-merma { background-color: #e67e22; }
-        .badge-nueva { background-color: #f39c12; }
-        .badge-reemplazo { background-color: #3498db; }
-        .tabla-scroll { max-height: 300px; overflow-y: auto; }
-        #btnLogout { float: right; background-color: #e74c3c; color: white; border: none; padding: 8px 18px; border-radius: 5px; cursor: pointer; font-size: 13px; }
-        #btnLogout:hover { background-color: #c0392b; }
 
-        /* Barra de progreso de archivos */
-        .progress-bar-container { margin: 15px 0; padding: 10px 15px; background: #0a1628; border-radius: 8px; border: 1px solid #1a1a4e; }
-        .progress-bar-track { height: 8px; background: #2c3e6e; border-radius: 4px; overflow: hidden; margin-top: 8px; }
-        .progress-bar-fill { height: 100%; background: linear-gradient(90deg, #3498db, #27ae60); border-radius: 4px; transition: width 0.4s ease; }
-        .progress-label { font-size: 12px; color: #aaa; display: flex; justify-content: space-between; }
+        /* ── 3-COLUMN LAYOUT ── */
+        .container { display: flex; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
+        .panel { flex: 1; min-width: 280px; background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); overflow-x: auto; }
+        .panel h2 { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 12px; margin-top: 0; }
+        .panel h3 { font-size: 0.75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
 
-        /* Resumen de ahorro */
-        .resumen-ahorro { display: flex; gap: 12px; flex-wrap: wrap; margin: 15px 0; }
-        .stat-card { background: #0a3d62; padding: 10px 18px; border-radius: 8px; text-align: center; min-width: 110px; border: 1px solid #1a4a7a; }
-        .stat-card .num { font-size: 22px; font-weight: bold; color: #00d2ff; }
-        .stat-card .lbl { font-size: 10px; color: #aaa; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+        /* ── VISTA PREVIA ── */
+        .preview-header {
+            background: linear-gradient(135deg, rgba(245,158,11,0.2), rgba(245,158,11,0.08));
+            border: 1px solid rgba(245,158,11,0.3);
+            border-radius: 12px 12px 0 0;
+            padding: 14px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .preview-header h2 { font-size: 1rem; font-weight: 600; color: var(--warning); margin: 0; text-transform: none; letter-spacing: 0; }
+        .preview-body {
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: 0 0 12px 12px;
+            border: 1px solid var(--border);
+            border-top: none;
+        }
+        details summary {
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            padding: 10px 0;
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        details summary::-webkit-details-marker { display: none; }
+        details summary::before { content: '▶'; font-size: 10px; color: var(--text-muted); transition: transform 0.2s; }
+        details[open] summary::before { transform: rotate(90deg); }
 
-        /* Filas de plan de corte con colores por acción */
-        .fila-cortar { background: rgba(52, 152, 219, 0.08); }
-        .fila-guardar { background: rgba(39, 174, 96, 0.12); }
-        .fila-merma { background: rgba(231, 76, 60, 0.12); }
-        .fila-mesa { background: rgba(243, 156, 18, 0.12); }
+        /* ── ALERTS PANEL ── */
+        #panelAlertasStock { margin-top: 12px; }
 
-        /* Tags de acción */
-        .tag-accion { padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
-        .tag-cortar { background: #2980b9; color: #fff; }
-        .tag-guardar { background: #27ae60; color: #fff; }
-        .tag-merma { background: #c0392b; color: #fff; }
-        .tag-mesa { background: #e67e22; color: #fff; }
+        /* ── SCROLLBAR ── */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #1a1a2e; }
-        ::-webkit-scrollbar-thumb { background: #2c3e6e; border-radius: 4px; }
+        /* ── CARGA ARCHIVOS ── */
+        .carga-archivos {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .carga-archivos h2 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 14px;
+            margin-top: 0;
+        }
 
-        /* Version badge */
-        .version-tag { font-size: 12px; color: #534ab7; text-align: center; margin-bottom: 15px; }
+        /* ── RESUMEN RESULTADO ── */
+        .resumen-resultado {
+            background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05));
+            border: 1px solid rgba(99,102,241,0.25);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        /* ── INDICADOR FUENTE COLMENA ── */
+        #indicadorFuenteColmena { font-family: 'Inter', sans-serif; }
     </style>
 </head>
 <body>
-    <div id="loading-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.7); z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
-      <div class="spinner" style="width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-      <p style="color: white; margin-top: 15px; font-family: Arial, sans-serif; font-size: 16px;">Sincronizando con la nube de Rolzzo...</p>
+    <style>
+      @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+
+    <div id="loading-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(9,9,11,0.85); z-index:9999; justify-content:center; align-items:center; flex-direction:column; backdrop-filter:blur(4px);">
+      <div class="spinner" style="width:44px; height:44px; border:3px solid rgba(99,102,241,0.2); border-top:3px solid #6366f1; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+      <p style="color:#a1a1aa; margin-top:16px; font-family:'Inter',sans-serif; font-size:14px; font-weight:500;">Sincronizando con la nube de Rolzzo...</p>
     </div>
 
-    <style>
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    </style>
-    
-    <button id="btnLogout" onclick="cerrarSesion()">Cerrar sesión</button>
-    <h1>Optimizador Rolzzo</h1>
-    <div class="version-tag">v2.0 — Best Fit Decreasing</div>
-    
+    <!-- TOP BAR -->
+    <div class="opt-topbar">
+        <div class="brand">
+            <div class="brand-icon"><i class="bi bi-scissors"></i></div>
+            <div>
+                <h1>Optimizador Rolzzo</h1>
+                <div class="version-tag">v2.0 — Best Fit Decreasing</div>
+            </div>
+        </div>
+        <button id="btnLogout" onclick="cerrarSesion()"><i class="bi bi-box-arrow-right"></i> Cerrar sesión</button>
+    </div>
+
+    <div class="opt-content">
     <div class="carga-archivos">
-        <h2>Cargar Archivos Excel</h2>
+        <h2><i class="bi bi-folder2-open" style="color:var(--primary);"></i> Cargar Archivos Excel</h2>
 
         <!-- Barra de progreso -->
         <div class="progress-bar-container">
@@ -117,12 +391,11 @@
             <label><strong>Archivo de Colmenas:</strong></label>
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <input type="file" id="fileColmenas" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarColmenas(event)">
-                <button class="btn" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="background:#3498db; padding:8px 16px; font-size:12px; white-space:nowrap;">
-                    Cargar desde Supabase
+                <button class="btn btn-exportar btn-sm" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="white-space:nowrap;">
+                    <i class="bi bi-cloud-download"></i> Cargar desde Supabase
                 </button>
-                <button class="btn" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()"
-                    style="background:#27ae60; padding:8px 16px; font-size:12px; white-space:nowrap;">
-                    ☁️ Guardar en Supabase
+                <button class="btn btn-success btn-sm" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" style="white-space:nowrap;">
+                    <i class="bi bi-cloud-upload"></i> Guardar en Supabase
                 </button>
             </div>
             <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
@@ -137,40 +410,40 @@
             <label><strong>Archivo de Estructura de Inventario:</strong></label>
             <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                 <input type="file" id="fileEstructura" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarEstructuraInventario(event)">
-                <button class="btn" id="btnCargarSerialesDB" onclick="cargarSerialesDesdeTablaDirecta()" style="background:#3498db; padding:8px 16px; font-size:12px; white-space:nowrap;">
-                    Cargar desde Supabase
+                <button class="btn btn-exportar btn-sm" id="btnCargarSerialesDB" onclick="cargarSerialesDesdeTablaDirecta()" style="white-space:nowrap;">
+                    <i class="bi bi-cloud-download"></i> Cargar desde Supabase
                 </button>
             </div>
             <span id="estadoEstructura" class="estado-archivo estado-pendiente">Sin cargar</span>
         </div>
 
-        <button class="btn" onclick="ejecutarOptimizacion()" id="btnEjecutar" disabled>Calcular Vista Previa</button>
-        <button class="btn btn-exportar" onclick="exportarResultados()" id="btnExportar" disabled>Exportar a Excel</button>
-        <button class="btn btn-exportar" onclick="exportarColmenasDisponibles()" id="btnExportarDisponibles" disabled>Exportar Colmenas Disponibles</button>
-        <button class="btn btn-exportar" onclick="exportarInventarioActualizado()" style="background-color:#27ae60;">Descargar Inventario Actual</button>
-        <button id="btnRectificar" class="btn" style="background-color:#e67e22; color:#fff;">Rectificar Tubos Nuevos</button>
-        <button id="btnCorregirCorte" class="btn" style="background-color:#9b59b6; color:#fff;">Corregir Corte Erróneo</button>
+        <div style="margin-top:16px; display:flex; flex-wrap:wrap; gap:4px;">
+            <button class="btn btn-success" onclick="ejecutarOptimizacion()" id="btnEjecutar" disabled><i class="bi bi-play-fill"></i> Calcular Vista Previa</button>
+            <button class="btn btn-exportar" onclick="exportarResultados()" id="btnExportar" disabled><i class="bi bi-file-earmark-excel"></i> Exportar Plan</button>
+            <button class="btn btn-exportar" onclick="exportarColmenasDisponibles()" id="btnExportarDisponibles" disabled><i class="bi bi-grid-3x3"></i> Exportar Colmenas</button>
+            <button class="btn btn-success" onclick="exportarInventarioActualizado()"><i class="bi bi-download"></i> Inventario Actual</button>
+            <button id="btnRectificar" class="btn btn-warning"><i class="bi bi-wrench"></i> Rectificar Tubos Nuevos</button>
+            <button id="btnCorregirCorte" class="btn btn-purple"><i class="bi bi-pencil-square"></i> Corregir Corte Erróneo</button>
+        </div>
 
-        <div id="panelAlertasStock" style="display:none;"></div>
+        <div id="panelAlertasStock" style="display:none; margin-top:12px;"></div>
     </div>
 
     <!-- ═══ PANEL DE VISTA PREVIA (STAGING) ═══ -->
     <div id="panel-vista-previa" style="display:none; margin-top:20px;">
-        <div style="background: linear-gradient(135deg, #e67e22, #d35400); color: white; padding: 15px 25px; border-radius: 10px 10px 0 0; display: flex; justify-content: space-between; align-items: center;">
-            <h2 style="margin:0;">Vista Previa — Revisar antes de guardar</h2>
-            <button id="btnDescartarPreview" class="btn" style="background:#e74c3c; padding:8px 20px; font-size:13px;">Descartar</button>
+        <div class="preview-header">
+            <h2><i class="bi bi-eye" style="color:var(--warning);"></i> Vista Previa — Revisar antes de guardar</h2>
+            <button id="btnDescartarPreview" class="btn btn-danger btn-sm"><i class="bi bi-x-lg"></i> Descartar</button>
         </div>
-        <div style="background: #16213e; padding: 20px; border-radius: 0 0 10px 10px; border: 1px solid #1a1a4e; border-top: none;">
+        <div class="preview-body">
 
-            <!-- Resumen de ahorro (se llena dinámicamente) -->
+            <!-- Resumen de ahorro -->
             <div class="resumen-ahorro" id="resumenAhorro"></div>
 
             <!-- Sección A: Órdenes de Entrada -->
             <details open>
-                <summary style="cursor:pointer; font-size:15px; font-weight:500; color:#ecf0f1; padding:10px 0;">
-                    Órdenes de Entrada
-                </summary>
-                <div class="tabla-scroll" style="max-height:250px;">
+                <summary>Órdenes de Entrada</summary>
+                <div class="tabla-scroll" style="max-height:220px; margin-top:8px;">
                     <table>
                         <thead><tr><th>#</th><th>OT</th><th>Ubicación</th><th>Código</th><th>Medida (cm)</th><th>Componente</th></tr></thead>
                         <tbody id="tbodyStagingOrdenes"></tbody>
@@ -179,11 +452,9 @@
             </details>
 
             <!-- Sección B: Inventario a Consumir -->
-            <details open style="margin-top:15px;">
-                <summary style="cursor:pointer; font-size:15px; font-weight:500; color:#ecf0f1; padding:10px 0;">
-                    Inventario a Consumir
-                </summary>
-                <div class="tabla-scroll" style="max-height:250px;">
+            <details open style="margin-top:12px;">
+                <summary>Inventario a Consumir</summary>
+                <div class="tabla-scroll" style="max-height:220px; margin-top:8px;">
                     <table>
                         <thead><tr><th>Colmena</th><th>Código</th><th>Medida Origen (cm)</th><th>Destino</th><th>Tipo</th></tr></thead>
                         <tbody id="tbodyStagingConsumo"></tbody>
@@ -192,11 +463,9 @@
             </details>
 
             <!-- Sección C: Resultado del Plan -->
-            <details open style="margin-top:15px;">
-                <summary style="cursor:pointer; font-size:15px; font-weight:500; color:#ecf0f1; padding:10px 0;">
-                    Resultado del Plan de Corte
-                </summary>
-                <div class="tabla-scroll" style="max-height:350px;">
+            <details open style="margin-top:12px;">
+                <summary>Resultado del Plan de Corte</summary>
+                <div class="tabla-scroll" style="max-height:320px; margin-top:8px;">
                     <table>
                         <thead><tr><th>Colmena</th><th>Código</th><th>Color</th><th>Medida a Cortar (cm)</th><th>Tubo Origen (cm)</th><th>Sobrante (cm)</th><th>Acción</th></tr></thead>
                         <tbody id="tbodyStagingPlan"></tbody>
@@ -205,80 +474,74 @@
             </details>
 
             <!-- Botón de Confirmación -->
-            <div style="text-align:center; margin-top:25px; padding-top:20px; border-top: 2px dashed #2c3e6e;">
-                <button id="btnConfirmarGuardar" class="btn" style="background-color:#27ae60; padding:18px 40px; font-size:18px; letter-spacing:0.5px;">
-                    Confirmar, Guardar y Descargar Excel
+            <div style="text-align:center; margin-top:24px; padding-top:20px; border-top:1px dashed var(--border);">
+                <button id="btnConfirmarGuardar" class="btn btn-success" style="padding:14px 40px; font-size:16px; letter-spacing:0.3px;">
+                    <i class="bi bi-cloud-upload"></i> Confirmar, Guardar y Descargar Excel
                 </button>
-                <p style="color:#7f8c8d; font-size:12px; margin-top:8px;">Al confirmar se guardará en Supabase y se descargará el plan de corte.</p>
+                <p style="color:var(--text-muted); font-size:12px; margin-top:8px;">Al confirmar se guardará en Supabase y se descargará el plan de corte.</p>
             </div>
         </div>
     </div>
 
     <div class="container">
         <div class="panel">
-            <h2>Datos</h2>
+            <h2><i class="bi bi-table" style="color:var(--primary);"></i> Datos de Entrada</h2>
             <h3>Órdenes</h3>
             <div class="tabla-scroll">
-                <table id="tablaOrdenes"><thead><tr id="headerOrdenes"></tr></thead><tbody id="tbodyOrdenes"><tr><td>Sin datos</td></tr></tbody></table>
+                <table id="tablaOrdenes"><thead><tr id="headerOrdenes"></tr></thead><tbody id="tbodyOrdenes"><tr><td style="color:var(--text-muted)">Sin datos</td></tr></tbody></table>
             </div>
             <h3>Colmenas</h3>
             <div class="tabla-scroll">
-                <table id="tablaColmenas"><thead><tr><th>N° Colmena</th><th>Código</th><th>Medida (cm)</th></tr></thead><tbody id="tbodyColmenas"><tr><td>Sin datos</td></tr></tbody></table>
+                <table id="tablaColmenas"><thead><tr><th>N° Colmena</th><th>Código</th><th>Medida (cm)</th></tr></thead><tbody id="tbodyColmenas"><tr><td style="color:var(--text-muted)">Sin datos</td></tr></tbody></table>
             </div>
             <h3>Catálogo de Reemplazos</h3>
             <div class="tabla-scroll">
-                <table id="tablaReemplazos"><thead><tr><th>Código</th><th>Reemplazo</th></tr></thead><tbody id="tbodyReemplazos"><tr><td>Sin datos</td></tr></tbody></table>
+                <table id="tablaReemplazos"><thead><tr><th>Código</th><th>Reemplazo</th></tr></thead><tbody id="tbodyReemplazos"><tr><td style="color:var(--text-muted)">Sin datos</td></tr></tbody></table>
             </div>
             <h3>Seriales Disponibles</h3>
             <div class="tabla-scroll">
                 <table id="tablaSeriales">
-                    <thead>
-                        <tr><th>Código</th><th>Fecha</th><th>Lote</th><th>Paquete</th><th>Serial</th><th>Estado</th></tr>
-                    </thead>
-                    <tbody id="tbodySeriales"><tr><td colspan="6">Sin datos</td></tr></tbody>
+                    <thead><tr><th>Código</th><th>Fecha</th><th>Lote</th><th>Paquete</th><th>Serial</th><th>Estado</th></tr></thead>
+                    <tbody id="tbodySeriales"><tr><td colspan="6" style="color:var(--text-muted)">Sin datos</td></tr></tbody>
                 </table>
             </div>
         </div>
-        
+
         <div class="panel">
-            <h2>Resultados de Optimización</h2>
-            
+            <h2><i class="bi bi-check2-circle" style="color:var(--success);"></i> Resultados</h2>
             <h3>Colmenas Resultantes</h3>
             <div class="tabla-scroll">
                 <table>
-                    <thead>
-                        <tr><th>Ubicación/Origen</th><th>Código Material</th><th>Color</th><th>Medida a Cortar (cm)</th><th>Tubo Origen (cm)</th><th>Acción</th></tr>
-                    </thead>
+                    <thead><tr><th>Ubicación/Origen</th><th>Código Material</th><th>Color</th><th>Medida a Cortar (cm)</th><th>Tubo Origen (cm)</th><th>Acción</th></tr></thead>
                     <tbody id="tbodyColmenasResultado"></tbody>
                 </table>
             </div>
-
             <h3>Reporte de Mermas</h3>
             <div class="tabla-scroll">
                 <table>
-                    <thead>
-                        <tr><th>OT</th><th>Ubicación Original</th><th>Código</th><th>Medida Merma (cm)</th></tr>
-                    </thead>
+                    <thead><tr><th>OT</th><th>Ubicación Original</th><th>Código</th><th>Medida Merma (cm)</th></tr></thead>
                     <tbody id="tbodyMermas"></tbody>
                 </table>
             </div>
         </div>
-        
+
         <div class="panel">
-            <h2>Proceso</h2>
-            <div id="proceso"></div>
+            <h2><i class="bi bi-cpu" style="color:var(--info);"></i> Proceso</h2>
+            <div id="proceso" style="font-size:12px; color:var(--text-secondary);"></div>
         </div>
     </div>
 
-    <div class="panel" style="margin-top:20px;">
-        <h2>Resultados</h2>
+    <div class="panel" style="margin-top:16px;">
+        <h2><i class="bi bi-bar-chart" style="color:var(--warning);"></i> Resultados Generales</h2>
         <div id="resultados"></div>
     </div>
 
-    <div class="panel" style="margin-top:20px;">
-        <h2>Logs</h2>
+    <div class="panel" style="margin-top:16px;">
+        <h2><i class="bi bi-terminal" style="color:var(--text-muted);"></i> Logs</h2>
         <div class="log-container" id="logs"></div>
     </div>
+
+    </div><!-- /opt-content -->
 
 <script>
   // ── Cliente Supabase del optimizador (autenticación + datos) ──────────────
@@ -1335,11 +1598,11 @@ function actualizarTablaSeriales() {
     tbody.innerHTML = serialesAMostrar.map(s => {
         let estadoBadge = '';
         switch(s.estado) {
-            case 'disponible': 
-                estadoBadge = '<span style="background-color: #27ae60; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px;">DISPONIBLE</span>';
+            case 'disponible':
+                estadoBadge = '<span style="background:rgba(34,197,94,0.15); color:#22c55e; border:1px solid rgba(34,197,94,0.3); padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;">DISPONIBLE</span>';
                 break;
-            case 'ocupado': 
-                estadoBadge = '<span style="background-color: #e74c3c; color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px;">OCUPADO</span>';
+            case 'ocupado':
+                estadoBadge = '<span style="background:rgba(239,68,68,0.15); color:#ef4444; border:1px solid rgba(239,68,68,0.3); padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600;">OCUPADO</span>';
                 break;
             default: 
                 estadoBadge = s.estado || '';
@@ -2310,8 +2573,8 @@ function log(mensaje, tipo) {
 function agregarPaso(numero, titulo, descripcion) {
     const procesoDiv = document.getElementById('proceso');
     const paso = document.createElement('div');
-    paso.style.cssText = 'background:#0a1628; padding:8px; margin:3px 0; border-radius:3px; border-left:3px solid #3498db; font-size:12px; color:#ddd;';
-    paso.innerHTML = `<strong style="color:#00d2ff;">${numero}. ${titulo}</strong> <span style="color:#aaa;">- ${descripcion}</span>`;
+    paso.style.cssText = 'background:var(--bg-secondary); padding:8px; margin:3px 0; border-radius:6px; border-left:3px solid var(--primary); font-size:12px; color:var(--text-secondary);';
+    paso.innerHTML = `<strong style="color:var(--primary);">${numero}. ${titulo}</strong> <span style="color:var(--text-muted);">— ${descripcion}</span>`;
     procesoDiv.appendChild(paso);
 }
 
@@ -2510,8 +2773,8 @@ function renderizarAlertasStock(alertas) {
 
     panel.style.display = 'block';
     panel.innerHTML = `
-        <div style="background:#1a1a2e; border:1px solid #e67e22; border-left:4px solid #f39c12; border-radius:6px; padding:12px 16px; margin:10px 0;">
-            <strong style="color:#f39c12; font-size:13px;">ALERTA DE STOCK MÍNIMO — Materiales con ≤${STOCK_MINIMO} tubos disponibles:</strong>
+        <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-left:4px solid var(--warning); border-radius:8px; padding:12px 16px; margin:10px 0;">
+            <strong style="color:var(--warning); font-size:13px;"><i class="bi bi-exclamation-triangle"></i> ALERTA DE STOCK MÍNIMO — Materiales con ≤${STOCK_MINIMO} tubos disponibles:</strong>
             <div style="margin-top:8px; line-height:2;">${items}</div>
         </div>
     `;
@@ -3405,11 +3668,11 @@ function renderizarStaging(resultados) {
         const pct = total > 0 ? Math.round((stats.reutilizados / total) * 100) : 0;
         resumenDiv.innerHTML = `
             <div class="stat-card"><div class="num">${total}</div><div class="lbl">Cortes totales</div></div>
-            <div class="stat-card"><div class="num" style="color:#f39c12">${stats.nuevos}</div><div class="lbl">Tubos nuevos</div></div>
-            <div class="stat-card"><div class="num" style="color:#27ae60">${stats.reutilizados}</div><div class="lbl">Sobrantes usados</div></div>
-            <div class="stat-card"><div class="num" style="color:#3498db">${stats.reemplazos}</div><div class="lbl">Reemplazos</div></div>
-            <div class="stat-card"><div class="num" style="color:#e74c3c">${stats.merma.toFixed(1)}</div><div class="lbl">Merma (cm)</div></div>
-            <div class="stat-card"><div class="num" style="color:${pct >= 50 ? '#27ae60' : '#e67e22'}">${pct}%</div><div class="lbl">Reutilización</div></div>
+            <div class="stat-card"><div class="num" style="color:var(--warning)">${stats.nuevos}</div><div class="lbl">Tubos nuevos</div></div>
+            <div class="stat-card"><div class="num" style="color:var(--success)">${stats.reutilizados}</div><div class="lbl">Sobrantes usados</div></div>
+            <div class="stat-card"><div class="num" style="color:var(--info)">${stats.reemplazos}</div><div class="lbl">Reemplazos</div></div>
+            <div class="stat-card"><div class="num" style="color:var(--danger)">${stats.merma.toFixed(1)}</div><div class="lbl">Merma (cm)</div></div>
+            <div class="stat-card"><div class="num" style="color:${pct >= 50 ? 'var(--success)' : 'var(--warning)'}">${pct}%</div><div class="lbl">Reutilización</div></div>
         `;
     }
 
@@ -3429,8 +3692,8 @@ function renderizarStaging(resultados) {
     const consumidos = SistemaInventario.colmenasHistorico.filter(c => c.estado === 'usada' || c.origen.includes('MERMA'));
     tbodyConsumo.innerHTML = consumidos.map(c => {
         let tipo = '';
-        if (c.origen.includes('MERMA')) tipo = '<span style="color:#e74c3c;">MERMA</span>';
-        else tipo = '<span style="color:#00d2ff;">CORTE</span>';
+        if (c.origen.includes('MERMA')) tipo = '<span style="color:var(--danger);">MERMA</span>';
+        else tipo = '<span style="color:var(--primary);">CORTE</span>';
         return `<tr>
             <td>${c.n_colmena || '-'}</td>
             <td>${c.cod || '-'}</td>
@@ -3452,10 +3715,10 @@ function renderizarStaging(resultados) {
 
         // Acción con tag de color
         let accionTag = '';
-        if (r.fuente === 'tubo_nuevo') accionTag = '<span class="tag-accion" style="background:#f39c12;color:#fff;">TUBO NUEVO</span>';
-        else if (r.fuente === 'reemplazo') accionTag = '<span class="tag-accion" style="background:#3498db;color:#fff;">REEMPLAZO</span>';
-        else if (r.fuente === 'merma') accionTag = '<span class="tag-accion" style="background:#e74c3c;color:#fff;">MERMA</span>';
-        else accionTag = '<span class="tag-accion" style="background:#534ab7;color:#fff;">COLMENA</span>';
+        if (r.fuente === 'tubo_nuevo') accionTag = '<span class="tag-accion badge-nueva">TUBO NUEVO</span>';
+        else if (r.fuente === 'reemplazo') accionTag = '<span class="tag-accion badge-reemplazo">REEMPLAZO</span>';
+        else if (r.fuente === 'merma') accionTag = '<span class="tag-accion badge-merma">MERMA</span>';
+        else accionTag = '<span class="tag-accion" style="background:rgba(99,102,241,0.2);color:#a5b4fc;">COLMENA</span>';
 
         let filas = `<tr class="fila-cortar">
             <td>${r.colmena || r.nombreMaterialNuevo || '-'}</td>
@@ -3758,7 +4021,7 @@ async function confirmarYGuardarStaging() {
 
         let infoReemplazo = '';
         if (r.fuente === 'reemplazo' && r.codigo_original && r.codigo_reemplazo) {
-            infoReemplazo = ` <span style="color: #3498db;">[${r.codigo_original} → ${r.codigo_reemplazo}]</span>`;
+            infoReemplazo = ` <span style="color:var(--info);">[${r.codigo_original} → ${r.codigo_reemplazo}]</span>`;
         }
 
         html += `<p><strong>${tituloOrden}</strong>${ubic ? ` [${ubic}]` : ''}${color ? ` [${color}]` : ''}: ${formatearValor(r.medida_cm)}cm ${codigo ? `(${codigo})` : ''}${infoReemplazo} → <span class="${badge}">${clasificacion}</span> | Sobrante: ${formatearValor(r.sobrante_cm)}cm</p>`;
@@ -4159,48 +4422,49 @@ function mostrarLogin() {
   document.body.innerHTML = `
     <div style="
       min-height:100vh;
-      background:linear-gradient(135deg,#0a0a0f 0%,#0d1b2e 50%,#0a0a0f 100%);
+      background:#09090b;
       display:flex; justify-content:center; align-items:center;
-      font-family:'Segoe UI',Arial,sans-serif;
+      font-family:'Inter',system-ui,sans-serif;
     ">
       <div style="
-        background:rgba(255,255,255,0.05);
-        border:1px solid rgba(0,210,255,0.2);
+        background:#1c1c21;
+        border:1px solid #2e2e33;
         border-radius:16px;
         padding:36px 32px;
         width:100%; max-width:360px;
-        box-shadow:0 20px 60px rgba(0,0,0,0.6);
+        box-shadow:0 20px 60px rgba(0,0,0,0.5);
       ">
         <div style="text-align:center;margin-bottom:24px;">
-          <div style="font-size:2rem;margin-bottom:8px;">⚙️</div>
-          <h2 style="color:#e2e8f0;font-size:1.2rem;font-weight:700;margin:0;">Optimizador de Estructura</h2>
-          <p style="color:#64748b;font-size:0.8rem;margin:6px 0 0;">Inicia sesión para acceder al sistema</p>
+          <div style="width:48px;height:48px;background:linear-gradient(135deg,#6366f1,#4f46e5);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;margin:0 auto 12px;">✂️</div>
+          <h2 style="color:#fafafa;font-size:1.2rem;font-weight:700;margin:0;">Optimizador Rolzzo</h2>
+          <p style="color:#71717a;font-size:0.8rem;margin:6px 0 0;">Inicia sesión para acceder al sistema</p>
         </div>
         <div style="margin-bottom:14px;">
-          <label style="color:#94a3b8;font-size:0.78rem;display:block;margin-bottom:5px;">Correo electrónico</label>
+          <label style="color:#a1a1aa;font-size:0.78rem;display:block;margin-bottom:5px;">Correo electrónico</label>
           <input type="email" id="email" placeholder="tu@correo.com" style="
             width:100%; padding:10px 12px; border-radius:8px;
-            background:rgba(0,0,0,0.4); color:#e2e8f0;
-            border:1px solid rgba(255,255,255,0.15); font-size:0.9rem;
-            outline:none; box-sizing:border-box;
+            background:#18181b; color:#fafafa;
+            border:1px solid #2e2e33; font-size:0.9rem;
+            outline:none; box-sizing:border-box; font-family:'Inter',sans-serif;
           " />
         </div>
         <div style="margin-bottom:20px;">
-          <label style="color:#94a3b8;font-size:0.78rem;display:block;margin-bottom:5px;">Contraseña</label>
+          <label style="color:#a1a1aa;font-size:0.78rem;display:block;margin-bottom:5px;">Contraseña</label>
           <input type="password" id="password" placeholder="••••••••" style="
             width:100%; padding:10px 12px; border-radius:8px;
-            background:rgba(0,0,0,0.4); color:#e2e8f0;
-            border:1px solid rgba(255,255,255,0.15); font-size:0.9rem;
-            outline:none; box-sizing:border-box;
+            background:#18181b; color:#fafafa;
+            border:1px solid #2e2e33; font-size:0.9rem;
+            outline:none; box-sizing:border-box; font-family:'Inter',sans-serif;
           " />
         </div>
         <button id="btnLogin" style="
           width:100%; padding:11px; border-radius:8px; border:none; cursor:pointer;
-          background:linear-gradient(135deg,#0a3d62,#1a6fa3);
+          background:linear-gradient(135deg,#6366f1,#4f46e5);
           color:white; font-size:0.95rem; font-weight:600;
-          letter-spacing:0.3px;
+          letter-spacing:0.3px; font-family:'Inter',sans-serif;
+          transition:all 0.2s;
         ">Ingresar</button>
-        <p id="error" style="color:#f87171;font-size:0.8rem;text-align:center;margin-top:12px;min-height:18px;"></p>
+        <p id="error" style="color:#ef4444;font-size:0.8rem;text-align:center;margin-top:12px;min-height:18px;"></p>
       </div>
     </div>
   `;
