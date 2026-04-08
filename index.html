@@ -8469,15 +8469,12 @@
 
     // ─── Cargar el último plan desde Supabase ───────────────────
     async function corrCargarPlan() {
-        const emailFiltro = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
         const statusEl = document.getElementById('corr-plan-status');
         statusEl.textContent = '⏳ Cargando plan...';
         try {
-            // Sin filtro de email: traer el plan más reciente de cualquier optimizador
-            let query = sb.from('planes_corte')
-                .select('*').eq('empresa_id', EMPRESA_ID);
-            if (emailFiltro) query = query.eq('optimizer_email', emailFiltro);
-            const { data, error } = await query
+            // Siempre el más reciente de cualquier optimizador — sin filtro de email
+            const { data, error } = await sb.from('planes_corte')
+                .select('*').eq('empresa_id', EMPRESA_ID)
                 .order('fecha', { ascending: false }).limit(1).maybeSingle();
             if (error) throw error;
             if (!data) {
