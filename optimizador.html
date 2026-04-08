@@ -342,7 +342,7 @@ async function _sbRest(method, path, body, extraHeaders) {
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
             if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) {
-                throw new Error('Sesión expirada. Recargá la página para renovar la sesión.');
+                throw new Error('Sesión expirada. Recarga la página para renovar la sesión.');
             }
         } catch(e) {
             if (e.message.includes('expirada')) throw e;
@@ -1066,7 +1066,7 @@ async function cargarColmenasDesdeTabla() {
 
         if (error) throw error;
         if (!data || data.length === 0) {
-            log('La tabla colmena_tubos está vacía. Cargá colmenas manualmente o desde la colmena_final.', 'warn');
+            log('La tabla colmena_tubos está vacía. Carga las colmenas manualmente o desde la colmena_final.', 'warn');
             return;
         }
 
@@ -1978,7 +1978,7 @@ function expandirOrdenesDesdeExcel() {
                         SistemaInventario.catalogoAccesorios[`PESO INFERIOR DE DÚO LÁGRIMA|${colorDeseado}`] ||
                         null;
                     if (!codPesoU) {
-                        log(`⚠️ PESO U: color "${colorDeseado}" no reconocido para la ubicación ${datosCompartidos.ubic || '?'}. Agregalo al catálogo.`, 'warn');
+                        log(`⚠️ PESO U: color "${colorDeseado}" no reconocido para la ubicación ${datosCompartidos.ubic || '?'}. Agrégalo al catálogo.`, 'warn');
                         continue;
                     }
                     orden.cod = codPesoU;
@@ -3599,7 +3599,7 @@ async function confirmarYGuardarStaging() {
     } catch (errColmena) {
         // El error ya fue logueado en guardarColmenaFinalEnSupabase.
         // No bloqueamos el flujo (el Excel se exporta igual) pero avisamos claramente.
-        log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Volvé a abrirla y usá el botón ☁️ Guardar para corregirlo.', 'error');
+        log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
     }
 
     // ── PASO 3c: Persistir seriales con estado actualizado (disponible → ocupado) ──
@@ -3682,7 +3682,7 @@ async function confirmarYGuardarStaging() {
     // ── Aviso visual si la colmena no se sincronizó ──
     if (!colmenaSincronizadaOK) {
         setTimeout(() => {
-            alert('⚠️ ATENCIÓN: El plan de corte fue exportado, pero el inventario NO se actualizó en Supabase.\n\nPara corregirlo:\n1. Recargá esta página\n2. Cargá la colmena desde Supabase\n3. Usá el botón ☁️ Guardar en Supabase');
+            alert('⚠️ ATENCIÓN: El plan de corte fue exportado, pero el inventario NO se actualizó en Supabase.\n\nPara corregirlo:\n1. Recarga esta página\n2. Carga la colmena desde Supabase\n3. Usa el botón ☁️ Guardar en Supabase');
         }, 500);
     }
 

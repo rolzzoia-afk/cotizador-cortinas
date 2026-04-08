@@ -2014,7 +2014,7 @@
                             <div class="mb-3">
                                 <label class="form-label form-label-sm mb-1 fw-bold"><i class="bi bi-pencil-square"></i> Nota Administrativa</label>
                                 <div class="d-flex gap-2">
-                                    <textarea class="form-control form-control-sm" id="odios-modal-nota" rows="2" placeholder="Escribí una nota interna sobre esta OT..."></textarea>
+                                    <textarea class="form-control form-control-sm" id="odios-modal-nota" rows="2" placeholder="Escribe una nota interna sobre esta OT..."></textarea>
                                     <button class="btn btn-sm" style="background:rgba(59,130,246,0.2);border:1px solid rgba(59,130,246,0.4);color:#3b82f6;white-space:nowrap;" onclick="odiosGuardarNota()"><i class="bi bi-floppy"></i><br><small>Guardar</small></button>
                                 </div>
                             </div>
@@ -2378,12 +2378,12 @@
                             <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                                 <strong style="font-size:0.85rem;"><i class="bi bi-journal-text"></i> Historial de Planes de Corte</strong>
                                 <div class="d-flex gap-2">
-                                    <span class="text-muted small" style="align-self:center;">Podés restaurar cualquier plan anterior</span>
+                                    <span class="text-muted small" style="align-self:center;">Puedes restaurar cualquier plan anterior</span>
                                     <button class="btn btn-sm" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3);" onclick="planHistorialCargar()"><i class="bi bi-arrow-clockwise"></i> Cargar historial</button>
                                 </div>
                             </div>
                             <div id="plan-historial-lista" style="max-height:340px;overflow-y:auto;" class="text-muted small">
-                                <div class="text-center py-3" style="color:#64748b;">Hacé clic en "Cargar historial" para ver todos los planes guardados.</div>
+                                <div class="text-center py-3" style="color:#64748b;">Haz clic en "Cargar historial" para ver todos los planes guardados.</div>
                             </div>
 
                             <!-- Modal preview de plan histórico -->
@@ -4718,7 +4718,7 @@
     // ═══════════════════════════════════════════════════════════════════
     function exportarOrdenesEstructura() {
         if (!window.optimizerRows || window.optimizerRows.length === 0) {
-            showToast('Cargá los datos de producción primero (botón Cargar en Fase 4)', 'error');
+            showToast('Carga los datos de producción primero (botón Cargar en Fase 4)', 'error');
             return;
         }
         if (typeof XLSX === 'undefined') {
@@ -9175,7 +9175,7 @@
                 fecha_correccion: null
             });
             if (error) throw error;
-            showToast('✅ Plan restaurado como activo. Ya podés cargarlo en "Plan de Corte Activo".');
+            showToast('✅ Plan restaurado como activo. Ya puedes cargarlo en "Plan de Corte Activo".');
             document.getElementById('plan-preview-modal').style.display = 'none';
             _planPreviewActual = null;
             // Refrescar la lista de historial
