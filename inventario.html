@@ -1715,6 +1715,11 @@ async function importarExcelInventario(event) {
             }
             const resInv = await upsertEnLotes('insumos', registrosInv, 'empresa_id,cod', 'INVENTARIO');
             logInv(`INVENTARIO: ${resInv.ok} importados, ${resInv.err} errores`, resInv.ok > 0 ? 'success' : 'warn');
+            // Debug: verificar BRA01 directamente en Supabase post-upsert
+            try {
+                const { data: dbgRow } = await sbInv.from('insumos').select('cod,foto_url').eq('empresa_id', EMPRESA_ID).eq('cod', 'BRA01').single();
+                logInv(`DEBUG Supabase BRA01 foto_url: "${dbgRow?.foto_url || '(null/vacío)'}"`, 'info');
+            } catch(eDbg) { logInv(`DEBUG error: ${eDbg.message}`, 'warn'); }
         }
 
         // 2. Importar ENTRADA Y SALIDA (limpiar primero para evitar duplicados, luego lote)
