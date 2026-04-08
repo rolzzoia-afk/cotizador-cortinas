@@ -1611,7 +1611,7 @@ async function importarExcelInventario(event) {
 
     try {
         const buffer = await file.arrayBuffer();
-        const wb = XLSX.read(buffer, { type: 'array' });
+        const wb = XLSX.read(buffer, { type: 'array', cellLinks: true });
         logInv(`Hojas encontradas: ${wb.SheetNames.join(', ')}`, 'info');
 
         // Helper: enviar en lotes de N registros
@@ -1638,13 +1638,52 @@ async function importarExcelInventario(event) {
         // 1. Importar INVENTARIO (en lotes)
         const wsInv = wb.Sheets['INVENTARIO'];
         if (wsInv) {
+            // ── Leer hipervínculos de la columna FOTO directamente del worksheet ──
+            // (sheet_to_json devuelve el texto visible, no la URL del hipervínculo)
+            const fotoHyperlinkMap = {};
+            try {
+                const sheetRange = XLSX.utils.decode_range(wsInv['!ref'] || 'A1:ZZ9999');
+                const HEADER_ROW_IDX = 9; // 0-based, coincide con range:9
+                let fotoColIdx = -1;
+                for (let c = sheetRange.s.c; c <= sheetRange.e.c; c++) {
+                    const hCell = wsInv[XLSX.utils.encode_cell({ r: HEADER_ROW_IDX, c })];
+                    if (hCell && String(hCell.v || '').trim().toUpperCase() === 'FOTO') {
+                        fotoColIdx = c;
+                        break;
+                    }
+                }
+                if (fotoColIdx >= 0) {
+                    for (let r = HEADER_ROW_IDX + 1; r <= sheetRange.e.r; r++) {
+                        const cell = wsInv[XLSX.utils.encode_cell({ r, c: fotoColIdx })];
+                        if (cell) {
+                            // Prioridad: hipervínculo > valor de celda
+                            const url = (cell.l?.Target) || String(cell.v || '').trim();
+                            if (url && (url.startsWith('http') || url.startsWith('//')))
+                                fotoHyperlinkMap[r] = url;
+                        }
+                    }
+                    logInv(`Columna FOTO: ${Object.keys(fotoHyperlinkMap).length} URLs extraídas`, 'info');
+                } else {
+                    logInv('⚠️ Columna FOTO no encontrada en fila de encabezados.', 'warn');
+                }
+            } catch(eHyp) {
+                logInv(`⚠️ Error al leer hipervínculos FOTO: ${eHyp.message}`, 'warn');
+            }
+            // ────────────────────────────────────────────────────────────────────
+
             const datosInv = XLSX.utils.sheet_to_json(wsInv, { range: 9, defval: '' });
             logInv(`INVENTARIO: ${datosInv.length} filas detectadas, procesando en lotes...`, 'info');
 
             const registrosInv = [];
-            for (const fila of datosInv) {
+            for (let idx = 0; idx < datosInv.length; idx++) {
+                const fila = datosInv[idx];
                 const cod = String(fila['COD'] || '').trim().toUpperCase();
                 if (!cod) continue;
+                // Fila Excel 0-based: encabezado en fila 9, datos desde fila 10
+                const excelRowIdx = 10 + idx;
+                const fotoUrl = fotoHyperlinkMap[excelRowIdx]
+                    || String(fila['FOTO'] || '').trim()
+                    || null;
                 registrosInv.push({
                     empresa_id: EMPRESA_ID,
                     cod,
@@ -1667,7 +1706,7 @@ async function importarExcelInventario(event) {
                     costo: parseFloat(fila['COSTO']) || 0,
                     costo_iva: parseFloat(fila['COSTO + IVA']) || 0,
                     comentarios: fila['COMENTARIOS'] || '',
-                    foto_url: fila['FOTO'] || ''
+                    foto_url: fotoUrl
                 });
             }
             const resInv = await upsertEnLotes('insumos', registrosInv, 'empresa_id,cod', 'INVENTARIO');
