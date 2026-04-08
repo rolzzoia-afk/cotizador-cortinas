@@ -2950,6 +2950,7 @@ function ejecutarOptimizacion() {
                             codigo: tuboReemplazo.colmena.cod,
                             codigo_original: codOrden,
                             codigo_reemplazo: tuboReemplazo.colmena.cod,
+                            es_reemplazo_desde_colmena: true,
                             sobrante_cm: tuboReemplazo.sobrante_mm / 10,
                             medida_origen: tuboReemplazo.medidaOriginal / 10,
                             serial: tuboReemplazo.colmena.serial || null,
@@ -3547,7 +3548,8 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
             resultados: resultadosGuardar,
             ordenes: SistemaInventario.ordenes || [],
             fecha: timestamp,
-            fecha_correccion: timestamp
+            fecha_correccion: timestamp,
+            tipo: 'respaldo'
         });
 
         log('📸 Punto de restauración guardado en historial Supabase.', 'info');
@@ -3860,7 +3862,8 @@ async function exportarResultados() {
         const _comp = (ord.componente && ord.componente !== 'TUBO') ? ord.componente : '';
         const _esTuboNuevoReemplazo = res.fuente === 'reemplazo'
             && res.codigo_original && res.codigo && res.codigo !== res.codigo_original
-            && res.codigo_reemplazo;
+            && res.codigo_reemplazo
+            && !res.es_reemplazo_desde_colmena;
         const _esTuboNuevo = res.fuente === 'tubo_nuevo';
         let accionCortar;
         if (_esTuboNuevoReemplazo) {

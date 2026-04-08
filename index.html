@@ -9060,9 +9060,12 @@
         lista.innerHTML = '<div class="text-center py-3 text-muted">⏳ Cargando historial...</div>';
         try {
             // Todos los planes de la empresa, sin filtro de email
+            // Excluir respaldos automáticos (tipo='respaldo') — son solo puntos de restauración internos
+            // Usar or() para incluir planes con tipo=NULL (planes viejos sin tipo)
             const { data, error } = await sb.from('planes_corte')
-                .select('id, fecha, fecha_correccion, resultados, optimizer_email')
+                .select('id, fecha, fecha_correccion, resultados, optimizer_email, tipo')
                 .eq('empresa_id', EMPRESA_ID)
+                .or('tipo.is.null,tipo.neq.respaldo')
                 .order('fecha', { ascending: false })
                 .limit(30);
             if (error) throw error;
@@ -9072,7 +9075,7 @@
             }
             lista.innerHTML = _planHistorialCache.map((plan, i) => {
                 const fecha = plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '—';
-                const corr  = plan.fecha_correccion ? ' <span style="color:#fbbf24;font-size:0.68rem;">(corregido)</span>' : '';
+                const corr  = plan.fecha_correccion ? ' <span style="color:#86efac;font-size:0.68rem;">(corregido por admin)</span>' : '';
                 let lineas  = plan.resultados || [];
                 if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
                 const nCortes = Array.isArray(lineas) ? lineas.length : 0;
