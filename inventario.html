@@ -574,6 +574,9 @@
             <button class="btn-inv btn-primary-inv" onclick="abrirModalInsumo()">
                 <i class="bi bi-plus-lg"></i> Nuevo
             </button>
+            <button class="btn-inv btn-success-inv" onclick="exportarInventarioExcel()" title="Descargar inventario completo en Excel">
+                <i class="bi bi-download"></i> Descargar Excel
+            </button>
         </div>
 
         <!-- Table -->
@@ -1082,6 +1085,71 @@ function renderizarCatalogo() {
 
 function getStockTotal(ins) {
     return ins.stock_total || ((ins.stock_mp || 0) + (ins.stock_liberado || 0));
+}
+
+function exportarInventarioExcel() {
+    if (!INV.insumos || INV.insumos.length === 0) {
+        alert('No hay datos de inventario cargados.');
+        return;
+    }
+
+    // Encabezados
+    const encabezados = [
+        'Código', 'Nombre / Nemotécnico', 'Descripción Proveedor',
+        'Categoría', 'Sub-Categoría', 'Color',
+        'Stock Total', 'Stock MP', 'Stock Liberado', 'Mínimo', 'Estado'
+    ];
+
+    // Filas
+    const filas = INV.insumos.map(i => {
+        const st = getStockTotal(i);
+        let estado = 'OK';
+        if (st <= 0) estado = 'SIN STOCK';
+        else if (i.minimo > 0 && st < i.minimo) estado = 'BAJO MÍNIMO';
+        return [
+            i.cod || '',
+            i.nemotecnico || '',
+            i.descriptor_proveedor || '',
+            i.categoria || '',
+            i.sub_categoria || '',
+            i.color || '',
+            st,
+            i.stock_mp || 0,
+            i.stock_liberado || 0,
+            i.minimo || 0,
+            estado
+        ];
+    });
+
+    // Ordenar por categoría → código
+    filas.sort((a, b) => {
+        const catCmp = String(a[3]).localeCompare(String(b[3]));
+        if (catCmp !== 0) return catCmp;
+        return String(a[0]).localeCompare(String(b[0]));
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([encabezados, ...filas]);
+
+    // Anchos de columna
+    ws['!cols'] = [
+        { wch: 10 }, { wch: 28 }, { wch: 30 },
+        { wch: 18 }, { wch: 18 }, { wch: 12 },
+        { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 13 }
+    ];
+
+    // Estilo encabezado (fila 1 en negrita)
+    const rango = XLSX.utils.decode_range(ws['!ref']);
+    for (let c = rango.s.c; c <= rango.e.c; c++) {
+        const celda = XLSX.utils.encode_cell({ r: 0, c });
+        if (!ws[celda]) continue;
+        ws[celda].s = { font: { bold: true }, fill: { fgColor: { rgb: '1E3A5F' } }, fontColor: { rgb: 'FFFFFF' } };
+    }
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
+
+    const fecha = new Date().toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-');
+    XLSX.writeFile(wb, `inventario_${fecha}.xlsx`);
 }
 
 function filtrarCatalogo() {
