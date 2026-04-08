@@ -1929,6 +1929,28 @@ async function importarExcelTelas(event) {
     event.target.value = '';
 }
 
+// ── Importar validadores (dropdowns) desde hoja VALIDADORES ──────
+async function importarValidadores(sheet) {
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+    if (rows.length < 2) return;
+    const headers = rows[0];
+    const batch = [];
+    for (let col = 0; col < headers.length; col++) {
+        const campo = (headers[col] || '').toString().trim().toUpperCase().replace(/\s+/g, '_');
+        if (!campo) continue;
+        for (let row = 1; row < rows.length; row++) {
+            const val = (rows[row][col] || '').toString().trim();
+            if (!val) continue;
+            batch.push({ empresa_id: EMPRESA_ID, campo, valor: val, orden: row });
+        }
+    }
+    if (!batch.length) return;
+    await sb.from('validadores_telas').delete().eq('empresa_id', EMPRESA_ID);
+    const { error } = await sb.from('validadores_telas').insert(batch);
+    if (error) logTel('Error validadores: ' + error.message, 'warn');
+    else { logTel(`Validadores: ${batch.length} opciones importadas`, 'success'); await cargarValidadores(); }
+}
+
 // ── Importar catálogo desde VALIDADOR (GARANTIAS) ─────────────────
 // Columnas: CODIGO (col 5), NEMOTÉCNICO (col 6), TIPO DE PRODUCTO (col 7)
 async function importarCatalogoDesdeGarantias(sheet, wb) {
