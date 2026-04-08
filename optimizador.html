@@ -2842,6 +2842,7 @@ function ejecutarOptimizacion() {
 
     log('=== INICIO OPTIMIZACIÓN ===', 'info');
     const resultados = [];
+    let _pesoSlotIdx = 0; // Índice rotativo para distribuir pesos entre A27, A28, A29
 
     SistemaInventario.ordenes.forEach((orden, idx) => {
         const numPaso = idx + 1;
@@ -3057,17 +3058,16 @@ function ejecutarOptimizacion() {
                 // Calcular posición nueva ANTES de crear el resultado para poder incluirla en res.colmena
                 const posicionesOcupadas = new Set(SistemaInventario.colmenasHistorico.map(c => c.n_colmena));
                 let posicionNueva = null;
-                // ── REGLA PESOS: A27, A28, A29 reservadas exclusivamente para pesos ──
+                // ── REGLA PESOS: A27, A28, A29 son bins físicos compartidos para pesos ──
+                // Múltiples pesos pueden coexistir en el mismo bin.
+                // Se distribuyen en rotación: A27 → A28 → A29 → A27 → ...
                 const _TIPOS_PESO = new Set(['PESO', 'PESO U', 'PESO INTERNO', 'PESO SOFT LIGHT']);
-                const _SLOTS_PESO = ['A27', 'A28', 'A29']; // orden de llenado
+                const _SLOTS_PESO = ['A27', 'A28', 'A29'];
                 const _SLOTS_PESO_SET = new Set(_SLOTS_PESO);
                 if (_TIPOS_PESO.has(orden.componente)) {
-                    // Pesos: intentar A27 → A28 → A29
-                    for (const pos of _SLOTS_PESO) {
-                        if (!posicionesOcupadas.has(pos)) { posicionNueva = pos; break; }
-                    }
-                }
-                if (!posicionNueva) {
+                    posicionNueva = _SLOTS_PESO[_pesoSlotIdx % _SLOTS_PESO.length];
+                    _pesoSlotIdx++;
+                } else {
                     // Tubos/accesorios generales: omitir A27-A29 (reservados para pesos)
                     for (let i = 1; i <= colmenasAUsar.length + 100; i++) {
                         const pos = 'A' + i;
