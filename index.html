@@ -378,6 +378,63 @@
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
+        /* ══ FONDO AURORA ANIMADO ══ */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(ellipse at 10% 20%, rgba(99,102,241,0.2) 0%, transparent 45%),
+                radial-gradient(ellipse at 90% 80%, rgba(139,92,246,0.15) 0%, transparent 45%),
+                radial-gradient(ellipse at 50% 60%, rgba(99,102,241,0.07) 0%, transparent 40%);
+            animation: auroraShift 16s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        @keyframes auroraShift {
+            0%   { opacity: 1;    transform: scale(1)    translate(0,    0);   }
+            33%  { opacity: 0.85; transform: scale(1.05) translate(2%,   1%); }
+            66%  { opacity: 0.95; transform: scale(0.97) translate(-1%,  2%); }
+            100% { opacity: 1;    transform: scale(1.03) translate(1%,  -1%); }
+        }
+
+        /* ── MOTIVO LAMAS ROLLER ── */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: repeating-linear-gradient(
+                90deg,
+                transparent 0px, transparent 58px,
+                rgba(99,102,241,0.022) 58px, rgba(99,102,241,0.022) 60px
+            );
+            pointer-events: none;
+        }
+
+        /* ── ANIMACIONES DE ENTRADA ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .glass-card { animation: fadeInUp 0.4s ease-out both; }
+        .container-fluid { animation: fadeInUp 0.35s ease-out both; }
+
+        /* ── GLASS CARD PREMIUM TOP LINE ── */
+        .glass-card { position: relative; overflow: hidden; }
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent);
+        }
+
+        /* ── NAV TABS GLOW WHEN ACTIVE ── */
+        .nav-tabs .nav-link.active {
+            box-shadow: 0 0 16px var(--primary-glow), 0 2px 8px rgba(0,0,0,0.3) !important;
+        }
+
         /* Text colors */
         .text-danger { color: #ef4444 !important; }
         .text-success { color: #22c55e !important; }

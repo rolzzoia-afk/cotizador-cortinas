@@ -315,6 +315,115 @@
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
+        /* ══ FONDO AURORA ANIMADO ══ */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(ellipse at 15% 25%, rgba(99,102,241,0.18) 0%, transparent 45%),
+                radial-gradient(ellipse at 85% 75%, rgba(139,92,246,0.14) 0%, transparent 45%),
+                radial-gradient(ellipse at 60% 10%, rgba(99,102,241,0.08) 0%, transparent 40%);
+            animation: auroraShift 14s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        @keyframes auroraShift {
+            0%   { opacity: 1;   transform: scale(1)    translate(0,    0);    }
+            33%  { opacity: 0.85; transform: scale(1.05) translate(2%,  1%);   }
+            66%  { opacity: 0.95; transform: scale(0.97) translate(-1%, 2%);   }
+            100% { opacity: 1;   transform: scale(1.03) translate(1%,  -1%);  }
+        }
+
+        /* ── MOTIVO LAMAS ROLLER (patrón vertical sutil) ── */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: repeating-linear-gradient(
+                90deg,
+                transparent 0px,
+                transparent 58px,
+                rgba(99,102,241,0.025) 58px,
+                rgba(99,102,241,0.025) 60px
+            );
+            pointer-events: none;
+        }
+
+        /* ── ANIMACIONES DE ENTRADA ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(18px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .opt-topbar   { animation: fadeInDown 0.4s ease-out; }
+        .carga-archivos { animation: fadeInUp 0.45s ease-out 0.05s both; }
+        .container .panel:nth-child(1) { animation: fadeInUp 0.4s ease-out 0.1s both; }
+        .container .panel:nth-child(2) { animation: fadeInUp 0.4s ease-out 0.18s both; }
+        .container .panel:nth-child(3) { animation: fadeInUp 0.4s ease-out 0.26s both; }
+
+        /* ── GRADIENTES EN TARJETAS STAT ── */
+        .stat-card { position: relative; overflow: hidden; }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary), #8b5cf6);
+        }
+
+        /* ── GLASS CARD PREMIUM ── */
+        .glass-card {
+            position: relative;
+            overflow: hidden;
+        }
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent);
+        }
+
+        /* ── PANEL GRADIENT ACCENT ── */
+        .panel {
+            position: relative;
+            overflow: hidden;
+        }
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, var(--primary), transparent);
+        }
+
+        /* ── BRAND ICON GLOW ── */
+        .brand-icon {
+            box-shadow: 0 0 20px rgba(99,102,241,0.4), 0 0 40px rgba(99,102,241,0.15);
+        }
+
+        /* ── PREVIEW HEADER PULSE ── */
+        #panel-vista-previa .preview-header {
+            position: relative;
+            overflow: hidden;
+        }
+        #panel-vista-previa .preview-header::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, rgba(245,158,11,0.08), transparent);
+            animation: shimmer 3s ease-in-out infinite;
+        }
+        @keyframes shimmer {
+            0%   { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
         /* ── CARGA ARCHIVOS ── */
         .carga-archivos {
             background: var(--bg-card);

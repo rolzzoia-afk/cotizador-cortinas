@@ -450,6 +450,97 @@
         .mov-info .mov-detail { font-size: 0.78rem; color: var(--text-secondary); }
         .mov-info .mov-date { font-size: 0.72rem; color: var(--text-muted); margin-top: 4px; }
 
+        /* ══ FONDO AURORA ANIMADO ══ */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(ellipse at 15% 25%, rgba(99,102,241,0.18) 0%, transparent 45%),
+                radial-gradient(ellipse at 85% 75%, rgba(139,92,246,0.14) 0%, transparent 45%),
+                radial-gradient(ellipse at 60% 10%, rgba(99,102,241,0.08) 0%, transparent 40%);
+            animation: auroraShift 14s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        @keyframes auroraShift {
+            0%   { opacity: 1;    transform: scale(1)    translate(0,    0);   }
+            33%  { opacity: 0.85; transform: scale(1.05) translate(2%,   1%); }
+            66%  { opacity: 0.95; transform: scale(0.97) translate(-1%,  2%); }
+            100% { opacity: 1;    transform: scale(1.03) translate(1%,  -1%); }
+        }
+
+        /* ── MOTIVO LAMAS ROLLER ── */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: repeating-linear-gradient(
+                90deg,
+                transparent 0px, transparent 58px,
+                rgba(99,102,241,0.025) 58px, rgba(99,102,241,0.025) 60px
+            );
+            pointer-events: none;
+        }
+
+        /* ── ANIMACIONES DE ENTRADA ── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .inv-header  { animation: fadeInDown 0.35s ease-out; }
+        .alert-bar   { animation: fadeInDown 0.35s ease-out 0.1s both; }
+        .glass-card  { animation: fadeInUp 0.4s ease-out 0.08s both; }
+        .stats-row .stat-card:nth-child(1) { animation: fadeInUp 0.4s ease-out 0.05s both; }
+        .stats-row .stat-card:nth-child(2) { animation: fadeInUp 0.4s ease-out 0.10s both; }
+        .stats-row .stat-card:nth-child(3) { animation: fadeInUp 0.4s ease-out 0.15s both; }
+        .stats-row .stat-card:nth-child(4) { animation: fadeInUp 0.4s ease-out 0.20s both; }
+        .stats-row .stat-card:nth-child(5) { animation: fadeInUp 0.4s ease-out 0.25s both; }
+
+        /* ── STAT CARDS CON GRADIENTE ── */
+        .stat-card {
+            position: relative;
+            overflow: hidden;
+            background: linear-gradient(135deg, var(--bg-card) 0%, rgba(28,28,33,0.8) 100%);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--primary-500), #8b5cf6);
+        }
+        .stat-card.danger::before  { background: linear-gradient(90deg, var(--danger),  #f87171); }
+        .stat-card.warning::before { background: linear-gradient(90deg, var(--warning), #fcd34d); }
+        .stat-card.success::before { background: linear-gradient(90deg, var(--success), #86efac); }
+
+        /* ── GLASS CARD PREMIUM SHIMMER ── */
+        .glass-card { position: relative; overflow: hidden; }
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(99,102,241,0.5), transparent);
+        }
+
+        /* ── NAV HEADER BRAND GLOW ── */
+        .inv-header > div > div:first-child {
+            box-shadow: 0 0 18px rgba(99,102,241,0.4), 0 0 36px rgba(99,102,241,0.12);
+        }
+
+        /* ── IMPORT ZONE HOVER ── */
+        .import-zone:hover {
+            border-color: var(--primary-500);
+            background: rgba(99,102,241,0.05);
+            box-shadow: 0 0 20px rgba(99,102,241,0.1);
+        }
+
         /* ── RESPONSIVE ── */
         @media (max-width: 768px) {
             .inv-header { padding: 10px 12px; }
