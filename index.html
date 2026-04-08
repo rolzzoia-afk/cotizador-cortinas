@@ -8469,14 +8469,15 @@
 
     // ─── Cargar el último plan desde Supabase ───────────────────
     async function corrCargarPlan() {
-        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
-        if (!email) { showToast('Primero configura el email del optimizador', 'error'); return; }
+        const emailFiltro = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer').value||'').trim().toLowerCase();
         const statusEl = document.getElementById('corr-plan-status');
         statusEl.textContent = '⏳ Cargando plan...';
         try {
-            const { data, error } = await sb.from('planes_corte')
-                .select('*').eq('empresa_id', EMPRESA_ID)
-                .eq('optimizer_email', email)
+            // Sin filtro de email: traer el plan más reciente de cualquier optimizador
+            let query = sb.from('planes_corte')
+                .select('*').eq('empresa_id', EMPRESA_ID);
+            if (emailFiltro) query = query.eq('optimizer_email', emailFiltro);
+            const { data, error } = await query
                 .order('fecha', { ascending: false }).limit(1).maybeSingle();
             if (error) throw error;
             if (!data) {
@@ -8492,6 +8493,7 @@
             _corrPlanId = data.id;
             const fecha    = data.fecha ? new Date(data.fecha) : null;
             const fechaStr = fecha ? fecha.toLocaleString('es-CL') : '';
+            const optimizerLabel = data.optimizer_email ? ` · <span style="color:#fbbf24;">${data.optimizer_email}</span>` : '';
 
             // ── Detectar si el plan está desactualizado vs la OT activa ──
             let desactualizado = false;
@@ -8528,9 +8530,9 @@
                 statusEl.innerHTML = `
                     <span style="color:#fbbf24;">⚠ Plan desactualizado</span>
                     <span style="font-size:0.68rem;color:#94a3b8;margin-left:6px;">${razonDesact}</span>
-                    <br><span style="font-size:0.68rem;color:#64748b;">Último plan guardado: ${fechaStr} — ${lineas.length} corte(s)</span>`;
+                    <br><span style="font-size:0.68rem;color:#64748b;">Último plan guardado: ${fechaStr} — ${lineas.length} corte(s)${optimizerLabel}</span>`;
             } else {
-                statusEl.innerHTML = `✅ ${lineas.length} cortes cargados${fechaStr ? ' — ' + fechaStr : ''}`;
+                statusEl.innerHTML = `✅ ${lineas.length} cortes cargados${fechaStr ? ' — ' + fechaStr : ''}${optimizerLabel}`;
             }
             corrRenderPlan(lineas);
             document.getElementById('corr-aplicar-wrap').style.display = 'none';
@@ -9058,17 +9060,15 @@
     async function planHistorialCargar() {
         const lista = document.getElementById('plan-historial-lista');
         if (!lista) return;
-        const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
-        if (!email) {
-            lista.innerHTML = '<div style="color:#fbbf24;" class="text-center py-2">⚠ Primero configurá el email del optimizador en la sección de arriba.</div>';
-            return;
-        }
+        const emailFiltro = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
         lista.innerHTML = '<div class="text-center py-3 text-muted">⏳ Cargando historial...</div>';
         try {
-            const { data, error } = await sb.from('planes_corte')
-                .select('id, fecha, fecha_correccion, resultados')
-                .eq('empresa_id', EMPRESA_ID)
-                .eq('optimizer_email', email)
+            // Traer planes de TODOS los optimizadores (o filtrar si hay email configurado)
+            let query = sb.from('planes_corte')
+                .select('id, fecha, fecha_correccion, resultados, optimizer_email')
+                .eq('empresa_id', EMPRESA_ID);
+            if (emailFiltro) query = query.eq('optimizer_email', emailFiltro);
+            const { data, error } = await query
                 .order('fecha', { ascending: false })
                 .limit(30);
             if (error) throw error;
@@ -9083,10 +9083,11 @@
                 if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
                 const nCortes = Array.isArray(lineas) ? lineas.length : 0;
                 const esActivo = i === 0 ? ' <span style="color:#22c55e;font-size:0.68rem;background:rgba(34,197,94,0.15);padding:1px 6px;border-radius:9px;">● Activo</span>' : '';
+                const optimEmail = plan.optimizer_email ? `<span style="color:#fbbf24;font-size:0.68rem;"> · ${plan.optimizer_email}</span>` : '';
                 return `<div style="border-bottom:1px solid rgba(255,255,255,0.07);padding:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <div style="flex:1;min-width:160px;">
                         <span style="color:#e2e8f0;font-size:0.8rem;">${fecha}</span>${corr}${esActivo}
-                        <br><span style="color:#64748b;font-size:0.72rem;">${nCortes} corte(s)</span>
+                        <br><span style="color:#64748b;font-size:0.72rem;">${nCortes} corte(s)</span>${optimEmail}
                     </div>
                     <div class="d-flex gap-1">
                         <button class="btn btn-sm py-0" style="font-size:0.72rem;background:rgba(59,130,246,0.2);color:#60a5fa;border:1px solid rgba(59,130,246,0.3);"
