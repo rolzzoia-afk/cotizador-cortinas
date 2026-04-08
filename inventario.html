@@ -336,6 +336,42 @@
             50% { opacity: 0.6; }
         }
 
+        /* ── FOTOS ── */
+        .foto-thumb {
+            width: 36px; height: 36px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            cursor: pointer;
+            transition: transform 0.15s;
+            vertical-align: middle;
+        }
+        .foto-thumb:hover { transform: scale(1.15); border-color: var(--primary-500); }
+        .foto-link-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 36px; height: 36px;
+            background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3);
+            border-radius: 4px; color: var(--info); font-size: 1rem;
+            cursor: pointer; text-decoration: none;
+            transition: background 0.15s;
+        }
+        .foto-link-icon:hover { background: rgba(59,130,246,0.2); }
+        /* Lightbox */
+        #fotoLightbox {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(0,0,0,0.85); align-items: center; justify-content: center;
+        }
+        #fotoLightbox.visible { display: flex; }
+        #fotoLightbox img {
+            max-width: 90vw; max-height: 85vh;
+            border-radius: 8px; box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+        }
+        #fotoLightbox .close-lb {
+            position: absolute; top: 20px; right: 28px;
+            color: white; font-size: 2rem; cursor: pointer; line-height: 1;
+            background: none; border: none;
+        }
+
         /* ── MODAL ── */
         .modal-overlay {
             display: none;
@@ -545,6 +581,7 @@
             <table>
                 <thead>
                     <tr>
+                        <th style="width:48px;">📷</th>
                         <th onclick="ordenarCatalogo('cod')">Código</th>
                         <th onclick="ordenarCatalogo('nemotecnico')">Nombre</th>
                         <th onclick="ordenarCatalogo('categoria')">Categoría</th>
@@ -660,6 +697,12 @@
 
 </div>
 
+<!-- ═══ LIGHTBOX FOTO ═══ -->
+<div id="fotoLightbox" onclick="cerrarLightbox()">
+    <button class="close-lb" onclick="cerrarLightbox()">×</button>
+    <img id="fotoLightboxImg" src="" alt="Foto insumo">
+</div>
+
 <!-- ═══ MODAL: INSUMO ═══ -->
 <div class="modal-overlay" id="modalInsumo">
     <div class="modal-box">
@@ -719,6 +762,17 @@
         <input type="text" id="insumo-descriptor_proveedor" placeholder="Descripción larga del proveedor">
         <label>Comentarios</label>
         <textarea id="insumo-comentarios" rows="2"></textarea>
+
+        <!-- FOTO -->
+        <label style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+            <i class="bi bi-camera"></i> URL de Foto
+        </label>
+        <input type="url" id="insumo-foto_url" placeholder="https://..." oninput="previsualizarFotoModal()">
+        <div id="insumo-foto-preview" style="margin-top:8px; display:none;">
+            <img id="insumo-foto-img" src="" alt="Preview"
+                style="max-width:100%; max-height:200px; border-radius:6px; border:1px solid var(--border); object-fit:contain;">
+        </div>
+
         <div class="modal-actions">
             <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalInsumo')">Cancelar</button>
             <button class="btn-inv btn-primary-inv" onclick="guardarInsumo()">
@@ -833,6 +887,29 @@ const INV = {
 // ══════════════════════════════════════════════════════════════════
 // NAVEGACIÓN
 // ══════════════════════════════════════════════════════════════════
+// ── HELPERS DE FOTO ─────────────────────────────────────────────────────────
+function esFotoDirecta(url) {
+    if (!url) return false;
+    return /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url);
+}
+function renderFotoCell(url) {
+    if (!url) return '<span style="color:var(--text-muted);font-size:0.75rem;">—</span>';
+    if (esFotoDirecta(url)) {
+        return `<img class="foto-thumb" src="${url}" alt="foto"
+            onclick="abrirLightbox('${url.replace(/'/g,"\\'")}')">`;
+    }
+    return `<a class="foto-link-icon" href="${url}" target="_blank" title="Ver en web">
+        <i class="bi bi-box-arrow-up-right"></i></a>`;
+}
+function abrirLightbox(url) {
+    document.getElementById('fotoLightboxImg').src = url;
+    document.getElementById('fotoLightbox').classList.add('visible');
+}
+function cerrarLightbox() {
+    document.getElementById('fotoLightbox').classList.remove('visible');
+    document.getElementById('fotoLightboxImg').src = '';
+}
+
 function switchPanel(nombre) {
     document.querySelectorAll('.inv-panel').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
@@ -1046,6 +1123,7 @@ function filtrarCatalogo() {
         else if (bajo) tagEstado = '<span class="tag tag-warn">BAJO MIN</span>';
 
         return `<tr>
+            <td style="text-align:center; padding:4px 8px;">${renderFotoCell(i.foto_url)}</td>
             <td><strong>${i.cod || ''}</strong></td>
             <td>${i.nemotecnico || i.descriptor_proveedor || '-'}</td>
             <td><span class="tag tag-info">${i.categoria || '-'}</span></td>
@@ -1078,16 +1156,30 @@ function ordenarCatalogo(col) {
 // ══════════════════════════════════════════════════════════════════
 // CATÁLOGO: CRUD
 // ══════════════════════════════════════════════════════════════════
+function previsualizarFotoModal() {
+    const url = (document.getElementById('insumo-foto_url').value || '').trim();
+    const preview = document.getElementById('insumo-foto-preview');
+    const img = document.getElementById('insumo-foto-img');
+    if (url && esFotoDirecta(url)) {
+        img.src = url;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+        img.src = '';
+    }
+}
+
 function abrirModalInsumo() {
     document.getElementById('modalInsumoTitulo').textContent = 'Nuevo Insumo';
     document.getElementById('insumo-id').value = '';
-    ['cod','nemotecnico','descriptor_proveedor','comentarios'].forEach(f =>
+    ['cod','nemotecnico','descriptor_proveedor','comentarios','foto_url'].forEach(f =>
         document.getElementById('insumo-' + f).value = '');
     ['categoria','sub_categoria','producto','proveedor','compra','color','ubicacion'].forEach(f =>
         document.getElementById('insumo-' + f).selectedIndex = 0);
     document.getElementById('insumo-minimo').value = '0';
     document.getElementById('insumo-can_x_paquete').value = '1';
     document.getElementById('insumo-costo').value = '0';
+    document.getElementById('insumo-foto-preview').style.display = 'none';
     document.getElementById('modalInsumo').classList.add('visible');
 }
 
@@ -1110,6 +1202,8 @@ function editarInsumo(id) {
     document.getElementById('insumo-ubicacion').value = ins.ubicacion || '';
     document.getElementById('insumo-descriptor_proveedor').value = ins.descriptor_proveedor || '';
     document.getElementById('insumo-comentarios').value = ins.comentarios || '';
+    document.getElementById('insumo-foto_url').value = ins.foto_url || '';
+    previsualizarFotoModal();
     document.getElementById('modalInsumo').classList.add('visible');
 }
 
@@ -1134,7 +1228,8 @@ async function guardarInsumo() {
         costo_iva: (parseFloat(document.getElementById('insumo-costo').value) || 0) * 1.19,
         ubicacion: document.getElementById('insumo-ubicacion').value,
         descriptor_proveedor: document.getElementById('insumo-descriptor_proveedor').value.trim(),
-        comentarios: document.getElementById('insumo-comentarios').value.trim()
+        comentarios: document.getElementById('insumo-comentarios').value.trim(),
+        foto_url: document.getElementById('insumo-foto_url').value.trim() || null
     };
 
     try {
@@ -1397,7 +1492,20 @@ function verCeldaRack(rack, fila, col) {
         </p>`;
     } else {
         const ins = INV.insumos.find(i => i.cod === ubic.codigo_insumo);
+        const fotoHtml = ins?.foto_url ? `
+            <div style="margin-bottom:12px; text-align:center;">
+                ${esFotoDirecta(ins.foto_url)
+                    ? `<img src="${ins.foto_url}" alt="foto"
+                        style="max-width:100%; max-height:180px; border-radius:6px; border:1px solid var(--border); object-fit:contain; cursor:pointer;"
+                        onclick="abrirLightbox('${ins.foto_url.replace(/'/g,"\\'")}')">
+                       <div style="font-size:0.7rem; color:var(--text-muted); margin-top:4px;">Clic para ampliar</div>`
+                    : `<a href="${ins.foto_url}" target="_blank" class="btn-inv btn-outline-inv" style="font-size:0.8rem;">
+                        <i class="bi bi-box-arrow-up-right"></i> Ver foto en web
+                       </a>`
+                }
+            </div>` : '';
         contenido.innerHTML = `
+            ${fotoHtml}
             <div style="padding:12px; background:var(--bg-secondary); border-radius:8px; margin-bottom:12px;">
                 <div style="font-size:1.1rem; font-weight:700; color:var(--primary-500);">${ubic.codigo_insumo}</div>
                 <div style="font-size:0.9rem; margin-top:4px;">${ins ? (ins.nemotecnico || ins.descriptor_proveedor || '') : 'Sin datos'}</div>
@@ -1558,7 +1666,8 @@ async function importarExcelInventario(event) {
                     estado_inventario: fila['ESTADO INVENTARIO'] || '',
                     costo: parseFloat(fila['COSTO']) || 0,
                     costo_iva: parseFloat(fila['COSTO + IVA']) || 0,
-                    comentarios: fila['COMENTARIOS'] || ''
+                    comentarios: fila['COMENTARIOS'] || '',
+                    foto_url: fila['FOTO'] || ''
                 });
             }
             const resInv = await upsertEnLotes('insumos', registrosInv, 'empresa_id,cod', 'INVENTARIO');
