@@ -9057,15 +9057,12 @@
     async function planHistorialCargar() {
         const lista = document.getElementById('plan-historial-lista');
         if (!lista) return;
-        const emailFiltro = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
         lista.innerHTML = '<div class="text-center py-3 text-muted">⏳ Cargando historial...</div>';
         try {
-            // Traer planes de TODOS los optimizadores (o filtrar si hay email configurado)
-            let query = sb.from('planes_corte')
+            // Todos los planes de la empresa, sin filtro de email
+            const { data, error } = await sb.from('planes_corte')
                 .select('id, fecha, fecha_correccion, resultados, optimizer_email')
-                .eq('empresa_id', EMPRESA_ID);
-            if (emailFiltro) query = query.eq('optimizer_email', emailFiltro);
-            const { data, error } = await query
+                .eq('empresa_id', EMPRESA_ID)
                 .order('fecha', { ascending: false })
                 .limit(30);
             if (error) throw error;
