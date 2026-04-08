@@ -1713,7 +1713,14 @@ async function importarExcelInventario(event) {
                     foto_url: fotoUrl
                 });
             }
-            const resInv = await upsertEnLotes('insumos', registrosInv, 'empresa_id,cod', 'INVENTARIO');
+            // Deduplicar por cod — el Excel puede tener filas repetidas y PostgreSQL
+            // rechaza el upsert si dos filas del mismo lote tienen el mismo conflict key
+            const mapaDedup = new Map();
+            for (const reg of registrosInv) mapaDedup.set(reg.cod, reg); // el último gana
+            const registrosInvDedup = Array.from(mapaDedup.values());
+            if (registrosInvDedup.length < registrosInv.length)
+                logInv(`⚠️ Duplicados removidos: ${registrosInv.length - registrosInvDedup.length} filas con código repetido`, 'warn');
+            const resInv = await upsertEnLotes('insumos', registrosInvDedup, 'empresa_id,cod', 'INVENTARIO');
             logInv(`INVENTARIO: ${resInv.ok} importados, ${resInv.err} errores`, resInv.ok > 0 ? 'success' : 'warn');
             // Debug: verificar BRA01 directamente en Supabase post-upsert
             try {
