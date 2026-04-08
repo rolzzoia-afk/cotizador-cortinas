@@ -916,8 +916,10 @@ async function guardarColmenaFinalEnSupabase() {
         }
 
         // Extraer colmenas disponibles del histórico y mapear al formato simple
+        // Posiciones virtuales que no corresponden a slots físicos de la rack
+        const _POSICIONES_VIRTUALES = new Set(['LIBERADO', 'MESA', 'TUBO NUEVO', 'PESO NUEVO']);
         const colmenasFinal = SistemaInventario.colmenasHistorico
-            .filter(c => c.estado === 'disponible' && c.medida_mm > 0 && c.cod)
+            .filter(c => c.estado === 'disponible' && c.medida_mm > 0 && c.cod && !_POSICIONES_VIRTUALES.has(c.n_colmena))
             .map(c => ({
                 n_colmena: c.n_colmena,
                 medida_mm: c.medida_mm,
