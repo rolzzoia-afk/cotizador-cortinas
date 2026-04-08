@@ -1,0 +1,2180 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telas — Rolzzo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --bg-primary:    #0A0A0B;
+            --bg-secondary:  #141415;
+            --bg-card:       #1A1A1C;
+            --border:        rgba(255,255,255,0.07);
+            --border-mid:    rgba(255,255,255,0.12);
+            --text-primary:  #FAFAF8;
+            --text-secondary:#A8A8A6;
+            --text-muted:    #6B6B69;
+            --primary-500:   #7C75F0;
+            --primary-600:   #5850D4;
+            --primary-glow:  rgba(124,117,240,0.3);
+            --accent-dim:    rgba(124,117,240,0.12);
+            --warm:          #C8A96E;
+            --warm-dim:      rgba(200,169,110,0.12);
+            --success:       #4ADE80;
+            --warning:       #FBBF24;
+            --danger:        #F87171;
+            --info:          #60A5FA;
+            --bk-color:      #818CF8;
+            --du-color:      #FB923C;
+            --sc-color:      #34D399;
+            --radius-sm:     8px;
+            --radius-md:     14px;
+            --radius-lg:     20px;
+            --radius-xl:     28px;
+            --serif:         'DM Serif Display', Georgia, serif;
+            --sans:          'Plus Jakarta Sans', system-ui, sans-serif;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: var(--sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+        }
+        h1, h2, h3, h4, h5 {
+            font-family: var(--serif);
+            letter-spacing: -0.02em;
+        }
+
+        /* ══ FONDO AURORA ANIMADO ══ */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -2;
+            background:
+                radial-gradient(ellipse at 15% 25%, rgba(124,117,240,0.18) 0%, transparent 45%),
+                radial-gradient(ellipse at 85% 75%, rgba(139,92,246,0.14) 0%, transparent 45%),
+                radial-gradient(ellipse at 60% 10%, rgba(52,211,153,0.06) 0%, transparent 40%);
+            animation: auroraShift 16s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        @keyframes auroraShift {
+            0%   { opacity: 1;    transform: scale(1)    translate(0,    0); }
+            33%  { opacity: 0.85; transform: scale(1.05) translate(2%,   1%); }
+            66%  { opacity: 0.95; transform: scale(0.97) translate(-1%,  2%); }
+            100% { opacity: 1;    transform: scale(1.03) translate(1%,  -1%); }
+        }
+        /* ── MOTIVO LAMAS ROLLER ── */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image: repeating-linear-gradient(
+                90deg,
+                transparent 0px,
+                transparent 58px,
+                rgba(124,117,240,0.025) 58px,
+                rgba(124,117,240,0.025) 60px
+            );
+            pointer-events: none;
+        }
+
+        /* ── NAV HEADER ── */
+        .inv-header {
+            background: rgba(10,10,11,0.88);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border);
+            padding: 14px 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .inv-header h5 {
+            margin: 0;
+            font-family: var(--serif);
+            font-weight: 400;
+            font-size: 1.15rem;
+            letter-spacing: -0.01em;
+            color: var(--text-primary);
+        }
+        .brand-icon {
+            width: 32px; height: 32px;
+            background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 0 18px rgba(124,117,240,0.4), 0 0 36px rgba(124,117,240,0.12);
+        }
+        .inv-tabs {
+            display: flex;
+            gap: 2px;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            padding: 3px;
+        }
+        .inv-tab {
+            padding: 6px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            border-radius: 100px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 500;
+            font-family: var(--sans);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: 0.01em;
+        }
+        .inv-tab:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+        .inv-tab.active {
+            background: var(--primary-500);
+            color: white;
+            box-shadow: 0 0 16px var(--primary-glow);
+        }
+        .inv-tab .badge-count {
+            background: var(--danger);
+            color: white;
+            font-size: 0.65rem;
+            padding: 1px 6px;
+            border-radius: 100px;
+            font-weight: 600;
+        }
+
+        /* ── CONTENT AREA ── */
+        .inv-content {
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .inv-panel { display: none; }
+        .inv-panel.active { display: block; }
+
+        /* ── GLASS CARDS ── */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s, transform 0.3s;
+        }
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(124,117,240,0.5), transparent);
+        }
+        .glass-card h6 {
+            font-family: var(--sans);
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 16px;
+        }
+
+        /* ── STATS ROW ── */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.3s, transform 0.3s;
+        }
+        .stat-card:hover { border-color: rgba(124,117,240,0.25); transform: translateY(-2px); }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, var(--primary-500), #8b5cf6);
+        }
+        .stat-card.danger::before  { background: linear-gradient(90deg, var(--danger),  #f87171); }
+        .stat-card.warning::before { background: linear-gradient(90deg, var(--warning), #fcd34d); }
+        .stat-card.success::before { background: linear-gradient(90deg, var(--success), #86efac); }
+        .stat-card.bk::before      { background: linear-gradient(90deg, var(--bk-color), #c4b5fd); }
+        .stat-card.du::before      { background: linear-gradient(90deg, var(--du-color), #fdba74); }
+        .stat-card.sc::before      { background: linear-gradient(90deg, var(--sc-color), #6ee7b7); }
+        .stat-card .stat-value { font-size: 1.8rem; font-weight: 700; color: var(--primary-500); }
+        .stat-card .stat-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 4px; }
+        .stat-card.danger .stat-value  { color: var(--danger); }
+        .stat-card.warning .stat-value { color: var(--warning); }
+        .stat-card.success .stat-value { color: var(--success); }
+        .stat-card.bk .stat-value      { color: var(--bk-color); }
+        .stat-card.du .stat-value      { color: var(--du-color); }
+        .stat-card.sc .stat-value      { color: var(--sc-color); }
+
+        /* ── TABLE ── */
+        .table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+        thead th {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            letter-spacing: 0.05em;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            cursor: pointer;
+        }
+        thead th:hover { color: var(--text-primary); }
+        tbody td {
+            padding: 8px 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            color: var(--text-primary);
+        }
+        tbody tr:hover { background: rgba(124,117,240,0.06); }
+
+        /* ── TAGS / BADGES ── */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+        .tag-ok    { background: rgba(74,222,128,0.15); color: var(--success); }
+        .tag-warn  { background: rgba(251,191,36,0.15); color: var(--warning); }
+        .tag-danger{ background: rgba(248,113,113,0.15); color: var(--danger); }
+        .tag-info  { background: rgba(96,165,250,0.15); color: var(--info); }
+        .tag-muted { background: rgba(107,107,105,0.15); color: var(--text-muted); }
+        .tag-bk    { background: rgba(129,140,248,0.15); color: var(--bk-color); }
+        .tag-du    { background: rgba(251,146,60,0.15);  color: var(--du-color); }
+        .tag-sc    { background: rgba(52,211,153,0.15);  color: var(--sc-color); }
+
+        /* ── SEARCH & FILTERS ── */
+        .filter-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .search-input {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 12px 8px 36px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            flex: 1;
+            min-width: 200px;
+        }
+        .search-input:focus { outline: none; border-color: var(--primary-500); }
+        .search-wrapper { position: relative; flex: 1; min-width: 200px; }
+        .search-wrapper i {
+            position: absolute;
+            left: 12px; top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+        }
+        select.filter-select {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+        }
+        select.filter-select option { background: var(--bg-secondary); }
+
+        /* ── BUTTONS ── */
+        .btn-inv {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            font-family: var(--sans);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.25s cubic-bezier(0.25,0.46,0.45,0.94);
+            letter-spacing: 0.01em;
+        }
+        .btn-primary-inv {
+            background: var(--primary-500);
+            color: white;
+            box-shadow: 0 0 20px var(--primary-glow);
+        }
+        .btn-primary-inv:hover { background: var(--primary-600); transform: translateY(-1px); box-shadow: 0 0 30px var(--primary-glow); }
+        .btn-success-inv { background: rgba(74,222,128,0.15); color: var(--success); border: 1px solid rgba(74,222,128,0.25); }
+        .btn-success-inv:hover { background: rgba(74,222,128,0.25); transform: translateY(-1px); }
+        .btn-danger-inv  { background: rgba(248,113,113,0.15); color: var(--danger);  border: 1px solid rgba(248,113,113,0.25); }
+        .btn-danger-inv:hover { background: rgba(248,113,113,0.25); transform: translateY(-1px); }
+        .btn-warning-inv { background: rgba(251,191,36,0.15);  color: var(--warning); border: 1px solid rgba(251,191,36,0.25); }
+        .btn-warning-inv:hover { background: rgba(251,191,36,0.25); transform: translateY(-1px); }
+        .btn-outline-inv {
+            background: transparent;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-mid);
+        }
+        .btn-outline-inv:hover { border-color: var(--primary-500); color: var(--primary-500); background: var(--accent-dim); }
+
+        /* ── RACK / COLMENA MAP ── */
+        .rack-grid { display: grid; gap: 20px; }
+        .rack-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+        }
+        .rack-section::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(124,117,240,0.4), transparent);
+        }
+        .rack-title {
+            font-family: var(--serif);
+            font-size: 1rem;
+            font-weight: 400;
+            margin-bottom: 12px;
+            color: var(--primary-500);
+            letter-spacing: -0.01em;
+        }
+        .rack-cells {
+            display: grid;
+            gap: 3px;
+        }
+        .rack-cell {
+            min-height: 40px;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.62rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-transform: uppercase;
+            border: 1px solid transparent;
+            padding: 2px;
+            text-align: center;
+            line-height: 1.2;
+        }
+        .rack-cell.bk {
+            background: rgba(129,140,248,0.15);
+            color: var(--bk-color);
+            border-color: rgba(129,140,248,0.3);
+        }
+        .rack-cell.du {
+            background: rgba(251,146,60,0.15);
+            color: var(--du-color);
+            border-color: rgba(251,146,60,0.3);
+        }
+        .rack-cell.sc {
+            background: rgba(52,211,153,0.15);
+            color: var(--sc-color);
+            border-color: rgba(52,211,153,0.3);
+        }
+        .rack-cell.vacio {
+            background: rgba(255,255,255,0.03);
+            color: var(--text-muted);
+            border-color: var(--border);
+        }
+        .rack-cell.falla {
+            background: rgba(248,113,113,0.15);
+            color: var(--danger);
+            border-color: rgba(248,113,113,0.3);
+            animation: pulse-alert 2s infinite;
+        }
+        .rack-cell.header-cell {
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-weight: 700;
+            cursor: default;
+            font-size: 0.7rem;
+            border-radius: 4px;
+        }
+        .rack-cell.encontrado {
+            background: rgba(234,179,8,0.25) !important;
+            color: #fde047 !important;
+            border-color: #fde047 !important;
+            box-shadow: 0 0 10px rgba(234,179,8,0.5), 0 0 20px rgba(234,179,8,0.2);
+            animation: pulse-encontrado 1.2s ease-in-out infinite;
+        }
+        @keyframes pulse-encontrado {
+            0%, 100% { box-shadow: 0 0 8px rgba(234,179,8,0.5), 0 0 16px rgba(234,179,8,0.2); }
+            50%       { box-shadow: 0 0 16px rgba(234,179,8,0.8), 0 0 32px rgba(234,179,8,0.4); }
+        }
+        @keyframes pulse-alert {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0.6; }
+        }
+        .rack-cell:not(.header-cell):hover {
+            transform: scale(1.05);
+            z-index: 1;
+            position: relative;
+        }
+        .slot-code { font-size: 0.58rem; color: inherit; opacity: 0.7; }
+
+        /* ── MODAL ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-overlay.visible { display: flex; }
+        .modal-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-mid);
+            border-radius: var(--radius-xl);
+            padding: 28px;
+            width: 90%;
+            max-width: 640px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+        }
+        .modal-box h5 {
+            margin-bottom: 20px;
+            font-family: var(--serif);
+            font-weight: 400;
+            font-size: 1.4rem;
+            letter-spacing: -0.02em;
+        }
+        .modal-box label {
+            display: block;
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 6px;
+            margin-top: 14px;
+        }
+        .modal-box input, .modal-box select, .modal-box textarea {
+            width: 100%;
+            background: rgba(255,255,255,0.04);
+            border: 1px solid var(--border-mid);
+            color: var(--text-primary);
+            padding: 10px 14px;
+            border-radius: var(--radius-md);
+            font-size: 0.85rem;
+            font-family: var(--sans);
+        }
+        .modal-box input:focus, .modal-box select:focus, .modal-box textarea:focus {
+            outline: none;
+            border-color: var(--primary-500);
+        }
+        .modal-box select option { background: var(--bg-secondary); }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border);
+        }
+
+        /* ── FALLA TIMELINE CARDS ── */
+        .falla-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 16px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            gap: 12px;
+            align-items: start;
+        }
+        .falla-icon {
+            width: 40px; height: 40px;
+            border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem;
+            flex-shrink: 0;
+        }
+        .falla-icon.resuelto { background: rgba(74,222,128,0.15); color: var(--success); }
+        .falla-icon.pendiente { background: rgba(248,113,113,0.15); color: var(--danger); }
+        .falla-icon.en-proceso { background: rgba(251,191,36,0.15); color: var(--warning); }
+
+        /* ── IMPORT ZONE ── */
+        .import-zone {
+            border: 2px dashed var(--border);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .import-zone:hover { border-color: var(--primary-500); background: rgba(124,117,240,0.05); box-shadow: 0 0 20px rgba(124,117,240,0.1); }
+        .import-zone i { font-size: 2rem; color: var(--text-muted); }
+        .import-zone p { color: var(--text-secondary); margin-top: 8px; font-size: 0.85rem; }
+
+        /* ── LOGS ── */
+        #logs-telas {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: none;
+        }
+        #logs-telas.visible { display: block; }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 768px) {
+            .inv-header { padding: 10px 12px; }
+            .inv-content { padding: 12px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+            .filter-row { flex-direction: column; }
+            .search-wrapper { width: 100%; }
+        }
+
+        /* ── ENTRANCE ANIMATION ── */
+        .inv-panel.active .glass-card,
+        .inv-panel.active .stat-card,
+        .inv-panel.active .rack-section {
+            animation: fadeInUp 0.4s ease both;
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(16px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══ HEADER ═══ -->
+<div class="inv-header">
+    <div style="display:flex; align-items:center; gap:10px;">
+        <div class="brand-icon">
+            <i class="bi bi-textile-fill" style="color:white; font-size:0.9rem;"></i>
+        </div>
+        <h5>Telas — Rolzzo</h5>
+    </div>
+    <div class="inv-tabs">
+        <button class="inv-tab active" onclick="switchPanel('catalogo')">
+            <i class="bi bi-list-ul"></i> Catálogo
+        </button>
+        <button class="inv-tab" onclick="switchPanel('rack')">
+            <i class="bi bi-grid-3x3-gap"></i> Colmena
+        </button>
+        <button class="inv-tab" onclick="switchPanel('movimientos')">
+            <i class="bi bi-arrow-left-right"></i> Movimientos
+        </button>
+        <button class="inv-tab" onclick="switchPanel('fallas')">
+            <i class="bi bi-exclamation-triangle"></i> Fallas
+            <span class="badge-count" id="fallas-count" style="display:none;">0</span>
+        </button>
+        <button class="inv-tab" onclick="switchPanel('importar')">
+            <i class="bi bi-cloud-upload"></i> Importar
+        </button>
+        <button class="inv-tab" onclick="switchPanel('listas')">
+            <i class="bi bi-sliders"></i> Listas
+        </button>
+    </div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <span id="estadoConexion" style="font-size:0.75rem; color:var(--text-muted);">Conectando...</span>
+        <span id="usuarioActual" style="font-size:0.75rem; color:var(--text-secondary);"></span>
+    </div>
+</div>
+
+<!-- ═══ CONTENIDO ═══ -->
+<div class="inv-content">
+
+    <!-- ━━━ PANEL: CATÁLOGO ━━━ -->
+    <div class="inv-panel active" id="panel-catalogo">
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="stat-total">—</div>
+                <div class="stat-label">Total Telas</div>
+            </div>
+            <div class="stat-card bk">
+                <div class="stat-value" id="stat-bk">—</div>
+                <div class="stat-label">Blackout (BK)</div>
+            </div>
+            <div class="stat-card du">
+                <div class="stat-value" id="stat-du">—</div>
+                <div class="stat-label">Duo (DU)</div>
+            </div>
+            <div class="stat-card sc">
+                <div class="stat-value" id="stat-sc">—</div>
+                <div class="stat-label">Screen (SC)</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value" id="stat-liberado">—</div>
+                <div class="stat-label">Rollos Liberados</div>
+            </div>
+            <div class="stat-card warning">
+                <div class="stat-value" id="stat-mp">—</div>
+                <div class="stat-label">Rollos MP</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value" id="stat-fallas">—</div>
+                <div class="stat-label">Con Falla</div>
+            </div>
+        </div>
+
+        <div class="filter-row">
+            <div class="search-wrapper">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarTela" placeholder="Buscar por código, nemotécnico, proveedor..." oninput="filtrarCatalogo()">
+            </div>
+            <select class="filter-select" id="filtroTipo" onchange="filtrarCatalogo()">
+                <option value="">Todos los tipos</option>
+                <option value="BK">Blackout (BK)</option>
+                <option value="DU">Duo (DU)</option>
+                <option value="SC">Screen (SC)</option>
+            </select>
+            <select class="filter-select" id="filtroGrupo" onchange="filtrarCatalogo()">
+                <option value="">Todos los grupos</option>
+            </select>
+            <select class="filter-select" id="filtroEstado" onchange="filtrarCatalogo()">
+                <option value="">Todos los estados</option>
+                <option value="CARGADO">Cargado</option>
+                <option value="X CARGAR">Por cargar</option>
+                <option value="LIBERADO">Liberado</option>
+            </select>
+            <button class="btn-inv btn-primary-inv" onclick="abrirModalTela()">
+                <i class="bi bi-plus-lg"></i> Nueva Tela
+            </button>
+            <button class="btn-inv btn-success-inv" onclick="exportarTelaExcel()">
+                <i class="bi bi-download"></i> Exportar
+            </button>
+        </div>
+
+        <div class="table-container" style="max-height:60vh; overflow-y:auto; overflow-x:auto;">
+            <table style="min-width:1400px;">
+                <thead>
+                    <tr>
+                        <th onclick="ordenarCatalogo('codigo')">Código</th>
+                        <th onclick="ordenarCatalogo('tipo')">Tipo</th>
+                        <th onclick="ordenarCatalogo('grupo')">Grupo</th>
+                        <th onclick="ordenarCatalogo('nemotecnico')">Nemotécnico</th>
+                        <th onclick="ordenarCatalogo('proveedor')">Proveedor</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('ancho')">Ancho (cm)</th>
+                        <th style="text-align:center;">Metros Rollo</th>
+                        <th onclick="ordenarCatalogo('posicion')">Posición</th>
+                        <th onclick="ordenarCatalogo('almacen')">Almacén</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('estado')">Estado</th>
+                        <th onclick="ordenarCatalogo('proveedor_codigo')">Cód. Proveedor</th>
+                        <th onclick="ordenarCatalogo('comentarios')">Observaciones</th>
+                        <th style="text-align:center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyCatalogo"></tbody>
+            </table>
+        </div>
+        <div style="padding:8px 4px; font-size:0.75rem; color:var(--text-muted);" id="catalogoCount"></div>
+    </div>
+
+    <!-- ━━━ PANEL: COLMENA (MAPA RACK) ━━━ -->
+    <div class="inv-panel" id="panel-rack">
+        <div class="filter-row">
+            <select class="filter-select" id="filtroAlmacenRack" onchange="renderizarRacks()">
+                <option value="">Todos los almacenes</option>
+                <option value="LIBERADO">Liberado (disponible para corte)</option>
+                <option value="MATERIAS PRIMAS">Materias Primas (stock restringido)</option>
+            </select>
+            <select class="filter-select" id="filtroTipoRack" onchange="renderizarRacks()">
+                <option value="">Todos los tipos</option>
+                <option value="BK">Blackout</option>
+                <option value="DU">Duo</option>
+                <option value="SC">Screen</option>
+            </select>
+            <div class="search-wrapper" style="max-width:300px;">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarRack" placeholder="Buscar código en rack..." oninput="resaltarEnRack()">
+            </div>
+            <button class="btn-inv btn-outline-inv" onclick="toggleLeyenda()">
+                <i class="bi bi-info-circle"></i> Leyenda
+            </button>
+        </div>
+        <div id="leyendaRack" style="display:none; margin-bottom:16px;">
+            <div class="glass-card" style="padding:12px; display:flex; gap:20px; flex-wrap:wrap; font-size:0.8rem;">
+                <span><span class="rack-cell bk" style="display:inline-block;width:18px;height:18px;vertical-align:middle;border-radius:3px;"></span> Blackout</span>
+                <span><span class="rack-cell du" style="display:inline-block;width:18px;height:18px;vertical-align:middle;border-radius:3px;"></span> Duo</span>
+                <span><span class="rack-cell sc" style="display:inline-block;width:18px;height:18px;vertical-align:middle;border-radius:3px;"></span> Screen</span>
+                <span><span class="rack-cell vacio" style="display:inline-block;width:18px;height:18px;vertical-align:middle;border-radius:3px;"></span> Vacío</span>
+                <span><span class="rack-cell falla" style="display:inline-block;width:18px;height:18px;vertical-align:middle;border-radius:3px;animation:none;"></span> Con falla</span>
+                <span><span class="rack-cell encontrado" style="display:inline-block;width:18px;height:18px;vertical-align:middle;border-radius:3px;animation:none;"></span> Búsqueda</span>
+            </div>
+        </div>
+        <div class="rack-grid" id="rackGrid"></div>
+    </div>
+
+    <!-- ━━━ PANEL: MOVIMIENTOS ━━━ -->
+    <div class="inv-panel" id="panel-movimientos">
+        <div class="filter-row">
+            <button class="btn-inv btn-success-inv" onclick="abrirModalMovimiento('INGRESO')">
+                <i class="bi bi-box-arrow-in-down"></i> Nueva Entrada
+            </button>
+            <button class="btn-inv btn-danger-inv" onclick="abrirModalMovimiento('SALIDA')">
+                <i class="bi bi-box-arrow-up"></i> Nueva Salida
+            </button>
+            <button class="btn-inv btn-warning-inv" onclick="abrirModalMovimiento('TRASLADO')">
+                <i class="bi bi-arrow-left-right"></i> Traslado MP↔Lib.
+            </button>
+            <button class="btn-inv btn-outline-inv" onclick="abrirModalMovimiento('AJUSTE')">
+                <i class="bi bi-pencil-square"></i> Ajuste
+            </button>
+            <div style="flex:1;"></div>
+            <select class="filter-select" id="filtroTipoMov" onchange="filtrarMovimientos()">
+                <option value="">Todos los tipos</option>
+                <option value="INGRESO">Entradas</option>
+                <option value="SALIDA">Salidas</option>
+                <option value="TRASLADO">Traslados</option>
+                <option value="AJUSTE">Ajustes</option>
+            </select>
+            <div class="search-wrapper" style="max-width:240px;">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarMov" placeholder="Buscar movimiento..." oninput="filtrarMovimientos()">
+            </div>
+        </div>
+        <div id="listaMovimientos"></div>
+        <div style="text-align:center; padding:30px; color:var(--text-muted); font-size:0.85rem;" id="movVacio">
+            <i class="bi bi-clock-history" style="font-size:2rem; display:block; margin-bottom:8px;"></i>
+            No hay movimientos registrados aún
+        </div>
+    </div>
+
+    <!-- ━━━ PANEL: FALLAS ━━━ -->
+    <div class="inv-panel" id="panel-fallas">
+        <div class="filter-row">
+            <button class="btn-inv btn-danger-inv" onclick="abrirModalFalla()">
+                <i class="bi bi-plus-lg"></i> Reportar Falla
+            </button>
+            <div style="flex:1;"></div>
+            <select class="filter-select" id="filtroResuelto" onchange="filtrarFallas()">
+                <option value="">Todos</option>
+                <option value="NO">Pendientes</option>
+                <option value="EN PROCESO">En proceso</option>
+                <option value="SI">Resueltas</option>
+            </select>
+            <select class="filter-select" id="filtroTipoFalla" onchange="filtrarFallas()">
+                <option value="">Todos los tipos de falla</option>
+            </select>
+            <div class="search-wrapper" style="max-width:250px;">
+                <i class="bi bi-search"></i>
+                <input type="text" class="search-input" id="buscarFalla" placeholder="Buscar falla..." oninput="filtrarFallas()">
+            </div>
+        </div>
+
+        <!-- Tabla de fallas -->
+        <div class="table-container" style="max-height:65vh; overflow-y:auto; overflow-x:auto;">
+            <table style="min-width:1600px;">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Tipo</th>
+                        <th>Grupo</th>
+                        <th>Proveedor</th>
+                        <th>Nemotécnico</th>
+                        <th style="text-align:center;">Ancho</th>
+                        <th style="text-align:center;">Alto (m)</th>
+                        <th>Observaciones</th>
+                        <th>Tipo de Falla</th>
+                        <th style="text-align:center;">Metraje (m)</th>
+                        <th>Fecha Reporte</th>
+                        <th>Responsable</th>
+                        <th>Informado a</th>
+                        <th>Solución</th>
+                        <th>Fecha Res.</th>
+                        <th style="text-align:center;">Estado</th>
+                        <th style="text-align:center;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tbodyFallas"></tbody>
+            </table>
+        </div>
+        <div style="text-align:center; padding:30px; color:var(--text-muted);" id="fallasVacio">
+            <i class="bi bi-check-circle" style="font-size:2rem; display:block; margin-bottom:8px; color:var(--success);"></i>
+            Sin fallas pendientes — todo en orden
+        </div>
+    </div>
+
+    <!-- ━━━ PANEL: IMPORTAR ━━━ -->
+    <div class="inv-panel" id="panel-importar">
+        <div class="glass-card">
+            <h6><i class="bi bi-cloud-upload"></i> Importar desde Excel</h6>
+            <p style="color:var(--text-secondary); font-size:0.85rem; margin-bottom:16px;">
+                Importa el archivo <strong style="color:var(--text-primary);">Control Stock TELAS</strong> para cargar el catálogo,
+                el mapa de rack (MAPA-COLMENA) y los rollos con falla (ROLLOS FALLA) de una vez.
+                Se leen las hojas: <em>LIBERADO</em>, <em>MATERIAS PRIMAS</em>, <em>MAPA-COLMENA</em>, <em>ROLLOS FALLA</em> y <em>VALIDADORES</em>.
+            </p>
+            <div class="import-zone" onclick="document.getElementById('inputExcelTelas').click()">
+                <i class="bi bi-file-earmark-spreadsheet"></i>
+                <p>Haz clic aquí o arrastra tu archivo <strong>Control Stock TELAS.xlsm</strong></p>
+                <input type="file" id="inputExcelTelas" accept=".xlsx,.xlsm" style="display:none;" onchange="importarExcelTelas(event)">
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <h6 style="margin:0;"><i class="bi bi-terminal"></i> Log de importación</h6>
+                <button class="btn-inv btn-outline-inv" onclick="document.getElementById('logs-telas').classList.toggle('visible')" style="padding:3px 10px; font-size:0.72rem;">
+                    Mostrar/Ocultar
+                </button>
+                <button class="btn-inv btn-outline-inv" onclick="limpiarLogs()" style="padding:3px 10px; font-size:0.72rem;">
+                    Limpiar
+                </button>
+            </div>
+            <div id="logs-telas"></div>
+        </div>
+    </div>
+
+    <!-- ━━━ PANEL: LISTAS ━━━ -->
+    <div class="inv-panel" id="panel-listas">
+        <div class="glass-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <h6 style="margin:0;"><i class="bi bi-sliders"></i> Gestión de Listas</h6>
+                    <p style="color:var(--text-secondary); font-size:0.82rem; margin:4px 0 0;">
+                        Administra las opciones de los selectores del catálogo de telas. Los cambios se guardan en la nube.
+                    </p>
+                </div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center; margin-bottom:20px; flex-wrap:wrap;">
+                <label style="font-weight:600; white-space:nowrap; font-size:0.85rem;">Campo:</label>
+                <select id="listas-campo" onchange="listasMostrarCampo()"
+                    style="padding:6px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); font-size:0.88rem;">
+                    <option value="TIPO">Tipo de Tela</option>
+                    <option value="GRUPO">Grupo</option>
+                    <option value="PROVEEDOR">Proveedor</option>
+                    <option value="TIPO_FALLA">Tipo de Falla</option>
+                    <option value="OPERARIO">Operario</option>
+                    <option value="RESPONSABLE">Responsable Carga</option>
+                    <option value="ESTATUS">Estatus</option>
+                </select>
+            </div>
+            <div style="display:flex; gap:8px; margin-bottom:16px;">
+                <input type="text" id="listas-nuevo-valor" placeholder="Nueva opción..."
+                    style="flex:1; padding:7px 12px; border-radius:6px; border:1px solid var(--border); background:var(--bg-card); color:var(--text-primary); font-family:var(--sans);"
+                    onkeydown="if(event.key==='Enter') listasAgregar()">
+                <button class="btn-inv btn-primary-inv" onclick="listasAgregar()">
+                    <i class="bi bi-plus-lg"></i> Agregar
+                </button>
+            </div>
+            <div id="listas-items" style="display:flex; flex-direction:column; gap:6px; max-height:400px; overflow-y:auto;"></div>
+            <div id="listas-vacio" style="display:none; color:var(--text-secondary); text-align:center; padding:24px; font-size:0.88rem;">
+                No hay opciones para este campo. Agrega la primera arriba.
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ═══ MODAL: TELA ═══ -->
+<div class="modal-overlay" id="modalTela">
+    <div class="modal-box">
+        <h5 id="modalTelaTitulo">Nueva Tela</h5>
+        <input type="hidden" id="tela-id">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+            <div>
+                <label>Código *</label>
+                <input type="text" id="tela-codigo" placeholder="BK 32">
+            </div>
+            <div>
+                <label>Tipo *</label>
+                <select id="tela-tipo">
+                    <option value="BK">Blackout (BK)</option>
+                    <option value="DU">Duo (DU)</option>
+                    <option value="SC">Screen (SC)</option>
+                </select>
+            </div>
+            <div>
+                <label>Grupo</label>
+                <select id="tela-grupo"></select>
+            </div>
+            <div>
+                <label>Nemotécnico</label>
+                <input type="text" id="tela-nemotecnico" placeholder="BK Blanco Perla">
+            </div>
+            <div>
+                <label>Proveedor</label>
+                <select id="tela-proveedor"></select>
+            </div>
+            <div>
+                <label>Ancho (cm)</label>
+                <input type="number" id="tela-ancho" placeholder="270" min="1">
+            </div>
+            <div>
+                <label>Metros por rollo</label>
+                <input type="number" id="tela-metros_rollo" placeholder="50" step="0.1" min="0">
+            </div>
+            <div>
+                <label>Posición Rack</label>
+                <input type="text" id="tela-posicion" placeholder="A01">
+            </div>
+            <div>
+                <label>Almacén</label>
+                <select id="tela-almacen">
+                    <option value="LIBERADO">Liberado</option>
+                    <option value="MATERIAS PRIMAS">Materias Primas</option>
+                </select>
+            </div>
+            <div>
+                <label>Estado</label>
+                <select id="tela-estado">
+                    <option value="CARGADO">Cargado</option>
+                    <option value="X CARGAR">Por cargar</option>
+                    <option value="INACTIVO">Inactivo</option>
+                </select>
+            </div>
+            <div>
+                <label>Código Proveedor</label>
+                <input type="text" id="tela-proveedor_codigo" placeholder="COD-PROV">
+            </div>
+            <div>
+                <label>Responsable Carga</label>
+                <select id="tela-responsable"></select>
+            </div>
+        </div>
+        <label>Observaciones</label>
+        <textarea id="tela-observaciones" rows="2" placeholder="Notas sobre esta tela..."></textarea>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalTela')">Cancelar</button>
+            <button class="btn-inv btn-danger-inv" id="btnEliminarTela" onclick="eliminarTela()" style="display:none;">
+                <i class="bi bi-trash"></i> Eliminar
+            </button>
+            <button class="btn-inv btn-primary-inv" onclick="guardarTela()">
+                <i class="bi bi-check-lg"></i> Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: MOVIMIENTO ═══ -->
+<div class="modal-overlay" id="modalMovimiento">
+    <div class="modal-box" style="max-width:520px;">
+        <h5 id="modalMovTitulo">Nuevo Movimiento</h5>
+        <input type="hidden" id="mov-tipo-base">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+            <div>
+                <label>Código Tela *</label>
+                <select id="mov-codigo"></select>
+            </div>
+            <div>
+                <label>Metros *</label>
+                <input type="number" id="mov-metros" value="1" min="0.1" step="0.1">
+            </div>
+            <div>
+                <label>Almacén</label>
+                <select id="mov-almacen">
+                    <option value="LIBERADO">Liberado</option>
+                    <option value="MATERIAS PRIMAS">Materias Primas</option>
+                </select>
+            </div>
+            <div>
+                <label>OT (opcional)</label>
+                <input type="text" id="mov-ot" placeholder="#OT-001">
+            </div>
+            <div>
+                <label>Responsable</label>
+                <select id="mov-responsable"></select>
+            </div>
+            <div>
+                <label>Operario</label>
+                <select id="mov-operario"></select>
+            </div>
+        </div>
+        <label>Notas / Bitácora</label>
+        <textarea id="mov-notas" rows="2" placeholder="Detalle del movimiento..."></textarea>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalMovimiento')">Cancelar</button>
+            <button class="btn-inv btn-primary-inv" onclick="guardarMovimiento()">
+                <i class="bi bi-check-lg"></i> Registrar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: FALLA ═══ -->
+<div class="modal-overlay" id="modalFalla">
+    <div class="modal-box">
+        <h5 id="modalFallaTitulo">Reportar Falla</h5>
+        <input type="hidden" id="falla-id">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+            <div>
+                <label>Código Tela *</label>
+                <select id="falla-codigo"></select>
+            </div>
+            <div>
+                <label>Tipo de Falla *</label>
+                <select id="falla-tipo_falla"></select>
+            </div>
+            <div>
+                <label>Ancho (cm)</label>
+                <input type="number" id="falla-ancho" placeholder="270">
+            </div>
+            <div>
+                <label>Alto / Metraje (m)</label>
+                <input type="number" id="falla-alto" placeholder="2.5" step="0.01">
+            </div>
+            <div>
+                <label>Cantidad de Metraje afectado (m)</label>
+                <input type="number" id="falla-metraje" placeholder="0.5" step="0.01">
+            </div>
+            <div>
+                <label>Fecha Reporte</label>
+                <input type="date" id="falla-fecha_reporte">
+            </div>
+            <div>
+                <label>Responsable Reporte</label>
+                <select id="falla-responsable"></select>
+            </div>
+            <div>
+                <label>Informado a</label>
+                <input type="text" id="falla-informado" placeholder="Nombre o cargo">
+            </div>
+        </div>
+        <label>Observaciones</label>
+        <textarea id="falla-observaciones" rows="2" placeholder="Detalle de la falla..."></textarea>
+        <label>Solución</label>
+        <textarea id="falla-solucion" rows="2" placeholder="Qué se hizo para resolver..."></textarea>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+            <div>
+                <label>Fecha Resolución</label>
+                <input type="date" id="falla-fecha_resolucion">
+            </div>
+            <div>
+                <label>¿Resuelto?</label>
+                <select id="falla-resuelto">
+                    <option value="NO">No</option>
+                    <option value="EN PROCESO">En proceso</option>
+                    <option value="SI">Sí</option>
+                </select>
+            </div>
+        </div>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalFalla')">Cancelar</button>
+            <button class="btn-inv btn-primary-inv" onclick="guardarFalla()">
+                <i class="bi bi-check-lg"></i> Guardar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══ MODAL: DETALLE RACK CELL ═══ -->
+<div class="modal-overlay" id="modalRackCell">
+    <div class="modal-box" style="max-width:420px;">
+        <h5 id="rackCellTitulo">Posición —</h5>
+        <div id="rackCellContenido"></div>
+        <div class="modal-actions">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalRackCell')">Cerrar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN SUPABASE
+// ══════════════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+
+const _memStorage = { _d:{}, getItem(k){return this._d[k]||null;}, setItem(k,v){this._d[k]=v;}, removeItem(k){delete this._d[k];} };
+let _storage = _memStorage;
+try { sessionStorage.setItem('_t','1'); sessionStorage.removeItem('_t'); _storage = sessionStorage; } catch(e) {}
+
+let sb;
+try {
+    if (window.parent && window.parent !== window && window.parent.sb) {
+        sb = window.parent.sb;
+    }
+} catch(e) {}
+if (!sb) {
+    const { createClient } = supabase;
+    sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { storage: _storage, persistSession: true, autoRefreshToken: true }
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════
+const TEL = {
+    telas: [],
+    movimientos: [],
+    fallas: [],
+    validadores: {},
+    colmena: {},        // { slot: { codigo, tipo, almacen } }
+    sortCol: 'codigo',
+    sortDir: 'asc',
+    editandoTelaId: null,
+    editandoFallaId: null
+};
+
+// ══════════════════════════════════════════════════════════════════
+// NAVEGACIÓN
+// ══════════════════════════════════════════════════════════════════
+function switchPanel(nombre) {
+    document.querySelectorAll('.inv-panel').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.inv-tab').forEach(t => t.classList.remove('active'));
+    const panel = document.getElementById('panel-' + nombre);
+    if (panel) panel.classList.add('active');
+    const map = { catalogo:0, rack:1, movimientos:2, fallas:3, importar:4, listas:5 };
+    const tabs = document.querySelectorAll('.inv-tab');
+    if (map[nombre] !== undefined && tabs[map[nombre]]) tabs[map[nombre]].classList.add('active');
+    if (nombre === 'rack') renderizarRacks();
+    if (nombre === 'listas') listasMostrarCampo();
+}
+
+function cerrarModal(id) {
+    document.getElementById(id).classList.remove('visible');
+}
+
+function toggleLeyenda() {
+    const el = document.getElementById('leyendaRack');
+    el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LOG
+// ══════════════════════════════════════════════════════════════════
+function logTel(msg, tipo='info') {
+    const el = document.getElementById('logs-telas');
+    if (!el) return;
+    el.classList.add('visible');
+    const c = tipo==='error'?'#ef4444': tipo==='success'?'#22c55e': tipo==='warn'?'#f59e0b':'#a1a1aa';
+    el.innerHTML += `<div style="color:${c}; margin-bottom:2px;">[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+}
+function limpiarLogs() {
+    const el = document.getElementById('logs-telas');
+    if (el) { el.innerHTML = ''; el.classList.remove('visible'); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INICIALIZAR
+// ══════════════════════════════════════════════════════════════════
+async function inicializar() {
+    document.getElementById('estadoConexion').textContent = 'Cargando...';
+    try {
+        const { data: { user } } = await sb.auth.getUser();
+        if (user) document.getElementById('usuarioActual').textContent = user.email;
+
+        await cargarValidadores();
+        await cargarTelas();
+        await cargarMovimientos();
+        await cargarFallas();
+
+        document.getElementById('estadoConexion').textContent = '● Conectado';
+        document.getElementById('estadoConexion').style.color = 'var(--success)';
+        actualizarStats();
+        renderizarCatalogo();
+        renderizarMovimientos();
+        renderizarFallas();
+    } catch(err) {
+        document.getElementById('estadoConexion').textContent = '✕ Error';
+        document.getElementById('estadoConexion').style.color = 'var(--danger)';
+        console.error('[TELAS] Error inicializando:', err);
+    }
+}
+
+async function cargarValidadores() {
+    const { data, error } = await sb.from('validadores_telas')
+        .select('*').eq('empresa_id', EMPRESA_ID).order('orden');
+    if (error) {
+        if (error.code === '42P01') {
+            logTel('La tabla validadores_telas no existe. Ejecuta el SQL en Supabase.', 'warn');
+        } else {
+            logTel('Error validadores: ' + error.message, 'warn');
+        }
+        return;
+    }
+    TEL.validadores = {};
+    (data||[]).forEach(v => {
+        if (!TEL.validadores[v.campo]) TEL.validadores[v.campo] = [];
+        TEL.validadores[v.campo].push(v.valor);
+    });
+    poblarSelectsValidadores();
+}
+
+function poblarSelectsValidadores() {
+    const campos = {
+        'tela-grupo':       'GRUPO',
+        'tela-proveedor':   'PROVEEDOR',
+        'tela-responsable': 'RESPONSABLE',
+        'mov-responsable':  'RESPONSABLE',
+        'mov-operario':     'OPERARIO',
+        'falla-responsable':'RESPONSABLE',
+        'falla-tipo_falla': 'TIPO_FALLA',
+        'filtroGrupo':      'GRUPO',
+        'filtroTipoFalla':  'TIPO_FALLA'
+    };
+    Object.entries(campos).forEach(([selId, campo]) => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        const vals = TEL.validadores[campo] || [];
+        const isFilter = selId.startsWith('filtro');
+        sel.innerHTML = isFilter ? `<option value="">Todos ${campo.toLowerCase()}s</option>` : `<option value="">— Seleccionar —</option>`;
+        vals.forEach(v => {
+            const opt = document.createElement('option');
+            opt.value = v; opt.textContent = v;
+            sel.appendChild(opt);
+        });
+    });
+
+    // Select de tela en modales
+    actualizarSelectTelas();
+}
+
+function actualizarSelectTelas() {
+    ['mov-codigo','falla-codigo'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel) return;
+        sel.innerHTML = '<option value="">— Seleccionar tela —</option>';
+        TEL.telas.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.codigo;
+            opt.textContent = `${t.codigo} — ${t.nemotecnico || ''}`;
+            sel.appendChild(opt);
+        });
+    });
+}
+
+async function cargarTelas() {
+    const { data, error } = await sb.from('telas_catalogo')
+        .select('*').eq('empresa_id', EMPRESA_ID).order('codigo');
+    if (error) {
+        if (error.code === '42P01') {
+            logTel('La tabla telas_catalogo no existe. Ejecuta supabase_telas.sql primero.', 'error');
+        } else {
+            logTel('Error cargando telas: ' + error.message, 'error');
+        }
+        TEL.telas = [];
+        return;
+    }
+    TEL.telas = data || [];
+    actualizarSelectTelas();
+
+    // Construir mapa de colmena desde telas
+    TEL.colmena = {};
+    TEL.telas.forEach(t => {
+        if (t.posicion) {
+            TEL.colmena[t.posicion.toUpperCase()] = {
+                codigo: t.codigo,
+                tipo: t.tipo,
+                nemotecnico: t.nemotecnico,
+                almacen: t.almacen,
+                id: t.id
+            };
+        }
+    });
+}
+
+async function cargarMovimientos() {
+    const { data, error } = await sb.from('movimientos_telas')
+        .select('*').eq('empresa_id', EMPRESA_ID).order('fecha', { ascending: false }).limit(500);
+    if (error && error.code !== '42P01') {
+        logTel('Error movimientos: ' + error.message, 'warn');
+    }
+    TEL.movimientos = data || [];
+}
+
+async function cargarFallas() {
+    const { data, error } = await sb.from('telas_fallas')
+        .select('*').eq('empresa_id', EMPRESA_ID).order('fecha_reporte', { ascending: false });
+    if (error && error.code !== '42P01') {
+        logTel('Error fallas: ' + error.message, 'warn');
+    }
+    TEL.fallas = data || [];
+
+    const pendientes = TEL.fallas.filter(f => f.resuelto === 'NO').length;
+    const badge = document.getElementById('fallas-count');
+    if (pendientes > 0) {
+        badge.textContent = pendientes;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATS
+// ══════════════════════════════════════════════════════════════════
+function actualizarStats() {
+    const t = TEL.telas;
+    document.getElementById('stat-total').textContent = t.length;
+    document.getElementById('stat-bk').textContent = t.filter(x => x.tipo==='BK').length;
+    document.getElementById('stat-du').textContent = t.filter(x => x.tipo==='DU').length;
+    document.getElementById('stat-sc').textContent = t.filter(x => x.tipo==='SC').length;
+    document.getElementById('stat-liberado').textContent = t.filter(x => x.almacen==='LIBERADO').length;
+    document.getElementById('stat-mp').textContent = t.filter(x => x.almacen==='MATERIAS PRIMAS').length;
+    document.getElementById('stat-fallas').textContent = TEL.fallas.filter(f => f.resuelto==='NO').length;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CATÁLOGO — RENDER & FILTROS
+// ══════════════════════════════════════════════════════════════════
+function tipoBadge(tipo) {
+    if (!tipo) return '<span class="tag tag-muted">—</span>';
+    const cls = { BK:'bk', DU:'du', SC:'sc' }[tipo] || 'muted';
+    return `<span class="tag tag-${cls}">${tipo}</span>`;
+}
+
+function estadoBadge(estado, almacen) {
+    if (almacen === 'LIBERADO') return `<span class="tag tag-ok">Liberado</span>`;
+    if (almacen === 'MATERIAS PRIMAS') return `<span class="tag tag-info">MP</span>`;
+    if (estado === 'CARGADO')  return `<span class="tag tag-ok">Cargado</span>`;
+    if (estado === 'X CARGAR') return `<span class="tag tag-warn">× Cargar</span>`;
+    if (estado === 'INACTIVO') return `<span class="tag tag-muted">Inactivo</span>`;
+    return `<span class="tag tag-muted">${estado||'—'}</span>`;
+}
+
+function filtrarCatalogo() {
+    const q    = (document.getElementById('buscarTela').value || '').toLowerCase();
+    const tipo = document.getElementById('filtroTipo').value;
+    const grupo= document.getElementById('filtroGrupo').value;
+    const est  = document.getElementById('filtroEstado').value;
+
+    return TEL.telas.filter(t => {
+        const matchQ = !q || [t.codigo,t.nemotecnico,t.proveedor,t.grupo,t.posicion,t.proveedor_codigo]
+            .some(v => (v||'').toLowerCase().includes(q));
+        const matchTipo  = !tipo  || t.tipo  === tipo;
+        const matchGrupo = !grupo || t.grupo === grupo;
+        const matchEst   = !est   || t.estado === est || t.almacen === est;
+        return matchQ && matchTipo && matchGrupo && matchEst;
+    });
+}
+
+function ordenarCatalogo(col) {
+    if (TEL.sortCol === col) {
+        TEL.sortDir = TEL.sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        TEL.sortCol = col; TEL.sortDir = 'asc';
+    }
+    renderizarCatalogo();
+}
+
+function renderizarCatalogo() {
+    let lista = filtrarCatalogo();
+    const { sortCol: col, sortDir: dir } = TEL;
+    lista.sort((a,b) => {
+        const va = (a[col]||'').toString().toLowerCase();
+        const vb = (b[col]||'').toString().toLowerCase();
+        return dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+
+    const tbody = document.getElementById('tbodyCatalogo');
+    if (!lista.length) {
+        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:24px; color:var(--text-muted);">
+            <i class="bi bi-search"></i> Sin resultados
+        </td></tr>`;
+        document.getElementById('catalogoCount').textContent = '';
+        return;
+    }
+
+    tbody.innerHTML = lista.map(t => `
+        <tr>
+            <td><strong>${t.codigo||'—'}</strong></td>
+            <td>${tipoBadge(t.tipo)}</td>
+            <td style="color:var(--text-secondary);">${t.grupo||'—'}</td>
+            <td>${t.nemotecnico||'—'}</td>
+            <td style="color:var(--text-secondary);">${t.proveedor||'—'}</td>
+            <td style="text-align:center;">${t.ancho||'—'}</td>
+            <td style="text-align:center;">${t.metros_rollo ? t.metros_rollo+'m' : '—'}</td>
+            <td><code style="font-size:0.78rem; background:rgba(124,117,240,0.1); padding:2px 6px; border-radius:4px; color:var(--primary-500);">${t.posicion||'—'}</code></td>
+            <td>${estadoBadge(null, t.almacen)}</td>
+            <td style="text-align:center;">${estadoBadge(t.estado, null)}</td>
+            <td style="color:var(--text-muted); font-size:0.75rem;">${t.proveedor_codigo||'—'}</td>
+            <td style="color:var(--text-secondary); font-size:0.78rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.observaciones||'—'}</td>
+            <td style="text-align:center; white-space:nowrap;">
+                <button class="btn-inv btn-outline-inv" onclick="abrirModalTela('${t.id}')" style="padding:4px 10px; font-size:0.72rem;">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+    document.getElementById('catalogoCount').textContent = `Mostrando ${lista.length} de ${TEL.telas.length} telas`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODAL TELA
+// ══════════════════════════════════════════════════════════════════
+function abrirModalTela(id = null) {
+    TEL.editandoTelaId = id;
+    const titulo = document.getElementById('modalTelaTitulo');
+    const btnElim = document.getElementById('btnEliminarTela');
+
+    if (id) {
+        const t = TEL.telas.find(x => x.id === id);
+        if (!t) return;
+        titulo.textContent = `Editar — ${t.codigo}`;
+        btnElim.style.display = 'inline-flex';
+        document.getElementById('tela-id').value = t.id;
+        document.getElementById('tela-codigo').value = t.codigo || '';
+        document.getElementById('tela-tipo').value = t.tipo || 'BK';
+        document.getElementById('tela-nemotecnico').value = t.nemotecnico || '';
+        document.getElementById('tela-proveedor').value = t.proveedor || '';
+        document.getElementById('tela-ancho').value = t.ancho || '';
+        document.getElementById('tela-metros_rollo').value = t.metros_rollo || '';
+        document.getElementById('tela-posicion').value = t.posicion || '';
+        document.getElementById('tela-almacen').value = t.almacen || 'LIBERADO';
+        document.getElementById('tela-estado').value = t.estado || 'CARGADO';
+        document.getElementById('tela-proveedor_codigo').value = t.proveedor_codigo || '';
+        document.getElementById('tela-responsable').value = t.responsable || '';
+        document.getElementById('tela-observaciones').value = t.observaciones || '';
+        setSelectValue('tela-grupo', t.grupo);
+    } else {
+        titulo.textContent = 'Nueva Tela';
+        btnElim.style.display = 'none';
+        document.getElementById('tela-id').value = '';
+        ['tela-codigo','tela-nemotecnico','tela-proveedor','tela-ancho','tela-metros_rollo',
+         'tela-posicion','tela-proveedor_codigo','tela-observaciones'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('tela-tipo').value = 'BK';
+        document.getElementById('tela-almacen').value = 'LIBERADO';
+        document.getElementById('tela-estado').value = 'CARGADO';
+    }
+    document.getElementById('modalTela').classList.add('visible');
+}
+
+function setSelectValue(selId, val) {
+    const sel = document.getElementById(selId);
+    if (!sel || !val) return;
+    // Try to find matching option, else add it
+    let found = Array.from(sel.options).some(o => o.value === val);
+    if (!found) {
+        const opt = document.createElement('option');
+        opt.value = val; opt.textContent = val;
+        sel.appendChild(opt);
+    }
+    sel.value = val;
+}
+
+async function guardarTela() {
+    const codigo = document.getElementById('tela-codigo').value.trim();
+    if (!codigo) { alert('El código es obligatorio'); return; }
+
+    const payload = {
+        empresa_id:       EMPRESA_ID,
+        codigo:           codigo,
+        tipo:             document.getElementById('tela-tipo').value,
+        grupo:            document.getElementById('tela-grupo').value || null,
+        nemotecnico:      document.getElementById('tela-nemotecnico').value.trim() || null,
+        proveedor:        document.getElementById('tela-proveedor').value || null,
+        ancho:            parseFloat(document.getElementById('tela-ancho').value) || null,
+        metros_rollo:     parseFloat(document.getElementById('tela-metros_rollo').value) || null,
+        posicion:         document.getElementById('tela-posicion').value.trim().toUpperCase() || null,
+        almacen:          document.getElementById('tela-almacen').value,
+        estado:           document.getElementById('tela-estado').value,
+        proveedor_codigo: document.getElementById('tela-proveedor_codigo').value.trim() || null,
+        responsable:      document.getElementById('tela-responsable').value || null,
+        observaciones:    document.getElementById('tela-observaciones').value.trim() || null
+    };
+
+    let error;
+    if (TEL.editandoTelaId) {
+        ({ error } = await sb.from('telas_catalogo').update(payload).eq('id', TEL.editandoTelaId));
+    } else {
+        ({ error } = await sb.from('telas_catalogo').insert(payload));
+    }
+
+    if (error) {
+        alert('Error guardando: ' + error.message);
+        return;
+    }
+    cerrarModal('modalTela');
+    await cargarTelas();
+    actualizarStats();
+    renderizarCatalogo();
+}
+
+async function eliminarTela() {
+    if (!TEL.editandoTelaId) return;
+    if (!confirm('¿Eliminar esta tela del catálogo? Esta acción no se puede deshacer.')) return;
+    const { error } = await sb.from('telas_catalogo').delete().eq('id', TEL.editandoTelaId);
+    if (error) { alert('Error: ' + error.message); return; }
+    cerrarModal('modalTela');
+    await cargarTelas();
+    actualizarStats();
+    renderizarCatalogo();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MAPA RACK / COLMENA
+// ══════════════════════════════════════════════════════════════════
+const RACK_LAYOUT = {
+    'RACK 1':  { prefix:'A', start:1,  end:24 },
+    'RACK 2':  { prefix:'A', start:25, end:48 },
+    'RACK 3':  { prefix:'A', start:49, end:84 },
+    'RACK 4':  { prefix:'B', start:1,  end:44 },
+    'COLMENA 5':{ prefix:'B', start:45, end:88 }
+};
+const COLS_PER_ROW = 8;
+
+function renderizarRacks() {
+    const filtroAlm  = document.getElementById('filtroAlmacenRack').value;
+    const filtroTipo = document.getElementById('filtroTipoRack').value;
+    const grid = document.getElementById('rackGrid');
+    grid.innerHTML = '';
+
+    Object.entries(RACK_LAYOUT).forEach(([nombre, cfg]) => {
+        const section = document.createElement('div');
+        section.className = 'rack-section';
+
+        const title = document.createElement('div');
+        title.className = 'rack-title';
+        title.textContent = nombre;
+        section.appendChild(title);
+
+        const slots = [];
+        for (let i = cfg.start; i <= cfg.end; i++) {
+            const code = cfg.prefix + String(i).padStart(2,'0');
+            slots.push(code);
+        }
+
+        const cellsDiv = document.createElement('div');
+        cellsDiv.className = 'rack-cells';
+        cellsDiv.style.gridTemplateColumns = `repeat(${COLS_PER_ROW}, 1fr)`;
+
+        slots.forEach(slot => {
+            const info = TEL.colmena[slot];
+            const cell = document.createElement('div');
+            cell.className = 'rack-cell';
+            cell.dataset.slot = slot;
+
+            // Apply type filters
+            let show = true;
+            if (filtroAlm && info && info.almacen !== filtroAlm) show = false;
+            if (filtroTipo && info && info.tipo !== filtroTipo) show = false;
+            if (!info && (filtroAlm || filtroTipo)) show = false;
+
+            if (!show) {
+                cell.classList.add('vacio');
+                cell.style.opacity = '0.2';
+                cell.innerHTML = `<span class="slot-code">${slot}</span>`;
+            } else if (info) {
+                const hasFalla = TEL.fallas.some(f => f.codigo === info.codigo && f.resuelto === 'NO');
+                if (hasFalla) {
+                    cell.classList.add('falla');
+                } else {
+                    const cls = { BK:'bk', DU:'du', SC:'sc' }[info.tipo] || 'vacio';
+                    cell.classList.add(cls);
+                }
+                cell.innerHTML = `
+                    <span>${info.codigo}</span>
+                    <span class="slot-code">${slot}</span>
+                `;
+                cell.onclick = () => mostrarDetalleCell(slot, info);
+            } else {
+                cell.classList.add('vacio');
+                cell.innerHTML = `<span class="slot-code">${slot}</span>`;
+                cell.onclick = () => abrirModalTelaEnPosicion(slot);
+            }
+
+            cellsDiv.appendChild(cell);
+        });
+
+        section.appendChild(cellsDiv);
+        grid.appendChild(section);
+    });
+}
+
+function resaltarEnRack() {
+    const q = (document.getElementById('buscarRack').value || '').toLowerCase().trim();
+    document.querySelectorAll('.rack-cell').forEach(cell => {
+        cell.classList.remove('encontrado');
+        if (q && cell.textContent.toLowerCase().includes(q) && !cell.classList.contains('header-cell')) {
+            cell.classList.add('encontrado');
+        }
+    });
+}
+
+function mostrarDetalleCell(slot, info) {
+    const tela = TEL.telas.find(t => t.codigo === info.codigo);
+    const fallas = TEL.fallas.filter(f => f.codigo === info.codigo && f.resuelto === 'NO');
+    document.getElementById('rackCellTitulo').textContent = `Posición ${slot}`;
+    document.getElementById('rackCellContenido').innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:10px;">
+            <div>${tipoBadge(info.tipo)} <strong style="margin-left:8px;">${info.codigo}</strong></div>
+            ${tela ? `<div style="font-size:0.85rem; color:var(--text-secondary);">${tela.nemotecnico||''}</div>` : ''}
+            ${tela ? `<div style="font-size:0.82rem;"><span style="color:var(--text-muted);">Ancho:</span> ${tela.ancho||'—'} cm</div>` : ''}
+            ${tela ? `<div style="font-size:0.82rem;"><span style="color:var(--text-muted);">Metros/rollo:</span> ${tela.metros_rollo||'—'} m</div>` : ''}
+            <div style="font-size:0.82rem;">${estadoBadge(null, info.almacen)}</div>
+            ${fallas.length ? `<div style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); border-radius:8px; padding:10px; font-size:0.8rem; color:var(--danger);">
+                <i class="bi bi-exclamation-triangle"></i> ${fallas.length} falla(s) pendiente(s)
+            </div>` : ''}
+        </div>
+    `;
+    document.getElementById('modalRackCell').classList.add('visible');
+}
+
+function abrirModalTelaEnPosicion(slot) {
+    abrirModalTela(null);
+    setTimeout(() => { document.getElementById('tela-posicion').value = slot; }, 100);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MOVIMIENTOS
+// ══════════════════════════════════════════════════════════════════
+function abrirModalMovimiento(tipo) {
+    document.getElementById('mov-tipo-base').value = tipo;
+    const titulos = { INGRESO:'Nueva Entrada de Tela', SALIDA:'Salida de Tela a Producción', TRASLADO:'Traslado MP ↔ Liberado', AJUSTE:'Ajuste de Inventario' };
+    document.getElementById('modalMovTitulo').textContent = titulos[tipo] || 'Movimiento';
+    document.getElementById('mov-metros').value = '1';
+    document.getElementById('mov-ot').value = '';
+    document.getElementById('mov-notas').value = '';
+    document.getElementById('modalMovimiento').classList.add('visible');
+}
+
+async function guardarMovimiento() {
+    const codigo = document.getElementById('mov-codigo').value;
+    const metros = parseFloat(document.getElementById('mov-metros').value);
+    if (!codigo || !metros) { alert('Código y metros son obligatorios'); return; }
+
+    const { error } = await sb.from('movimientos_telas').insert({
+        empresa_id:  EMPRESA_ID,
+        codigo:      codigo,
+        tipo:        document.getElementById('mov-tipo-base').value,
+        metros:      metros,
+        almacen:     document.getElementById('mov-almacen').value,
+        ot:          document.getElementById('mov-ot').value || null,
+        responsable: document.getElementById('mov-responsable').value || null,
+        operario:    document.getElementById('mov-operario').value || null,
+        notas:       document.getElementById('mov-notas').value || null,
+        fecha:       new Date().toISOString()
+    });
+    if (error) { alert('Error: ' + error.message); return; }
+    cerrarModal('modalMovimiento');
+    await cargarMovimientos();
+    renderizarMovimientos();
+}
+
+function filtrarMovimientos() {
+    renderizarMovimientos();
+}
+
+function renderizarMovimientos() {
+    const q    = (document.getElementById('buscarMov').value || '').toLowerCase();
+    const tipo = document.getElementById('filtroTipoMov').value;
+    const lista = TEL.movimientos.filter(m => {
+        const matchQ = !q || [m.codigo,m.tipo,m.responsable,m.ot,m.notas].some(v => (v||'').toLowerCase().includes(q));
+        const matchT = !tipo || m.tipo === tipo;
+        return matchQ && matchT;
+    });
+
+    const cont = document.getElementById('listaMovimientos');
+    const vacio = document.getElementById('movVacio');
+
+    if (!lista.length) {
+        cont.innerHTML = '';
+        vacio.style.display = 'block';
+        return;
+    }
+    vacio.style.display = 'none';
+
+    const iconos = { INGRESO:'bi-box-arrow-in-down', SALIDA:'bi-box-arrow-up', TRASLADO:'bi-arrow-left-right', AJUSTE:'bi-pencil-square' };
+    const colores = { INGRESO:'entrada', SALIDA:'salida', TRASLADO:'ajuste', AJUSTE:'ajuste' };
+
+    cont.innerHTML = lista.map(m => {
+        const fecha = m.fecha ? new Date(m.fecha).toLocaleString('es-AR') : '—';
+        const tela = TEL.telas.find(t => t.codigo === m.codigo);
+        const cls = colores[m.tipo] || 'ajuste';
+        const ico = iconos[m.tipo] || 'bi-circle';
+        return `
+        <div style="background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px; margin-bottom:8px; display:grid; grid-template-columns:40px 1fr auto; gap:12px; align-items:start;">
+            <div style="width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;"
+                class="mov-icon ${cls}">
+                <i class="bi ${ico}"></i>
+            </div>
+            <div>
+                <div style="font-weight:600; font-size:0.88rem;">${m.tipo} — <strong>${m.codigo}</strong> ${tela ? `<span style="color:var(--text-muted); font-weight:400;">(${tela.nemotecnico||''})</span>` : ''}</div>
+                <div style="font-size:0.78rem; color:var(--text-secondary); margin-top:2px;">
+                    ${m.metros}m · ${m.almacen||'—'} ${m.ot ? `· OT: ${m.ot}` : ''} ${m.responsable ? `· ${m.responsable}` : ''}
+                </div>
+                ${m.notas ? `<div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${m.notas}</div>` : ''}
+            </div>
+            <div style="font-size:0.72rem; color:var(--text-muted); white-space:nowrap;">${fecha}</div>
+        </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FALLAS
+// ══════════════════════════════════════════════════════════════════
+function abrirModalFalla(id = null) {
+    TEL.editandoFallaId = id;
+    document.getElementById('modalFallaTitulo').textContent = id ? 'Editar Falla' : 'Reportar Falla';
+    document.getElementById('falla-fecha_reporte').value = new Date().toISOString().slice(0,10);
+
+    if (id) {
+        const f = TEL.fallas.find(x => x.id === id);
+        if (!f) return;
+        document.getElementById('falla-id').value = f.id;
+        document.getElementById('falla-codigo').value = f.codigo || '';
+        document.getElementById('falla-tipo_falla').value = f.tipo_falla || '';
+        document.getElementById('falla-ancho').value = f.ancho || '';
+        document.getElementById('falla-alto').value = f.alto || '';
+        document.getElementById('falla-metraje').value = f.metraje || '';
+        document.getElementById('falla-fecha_reporte').value = f.fecha_reporte || '';
+        document.getElementById('falla-responsable').value = f.responsable || '';
+        document.getElementById('falla-informado').value = f.informado || '';
+        document.getElementById('falla-observaciones').value = f.observaciones || '';
+        document.getElementById('falla-solucion').value = f.solucion || '';
+        document.getElementById('falla-fecha_resolucion').value = f.fecha_resolucion || '';
+        document.getElementById('falla-resuelto').value = f.resuelto || 'NO';
+    } else {
+        ['falla-id','falla-ancho','falla-alto','falla-metraje','falla-informado',
+         'falla-observaciones','falla-solucion','falla-fecha_resolucion'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('falla-resuelto').value = 'NO';
+    }
+    document.getElementById('modalFalla').classList.add('visible');
+}
+
+async function guardarFalla() {
+    const codigo = document.getElementById('falla-codigo').value;
+    if (!codigo) { alert('El código de tela es obligatorio'); return; }
+
+    const tela = TEL.telas.find(t => t.codigo === codigo);
+    const payload = {
+        empresa_id:       EMPRESA_ID,
+        codigo:           codigo,
+        tipo:             tela?.tipo || null,
+        grupo:            tela?.grupo || null,
+        proveedor:        tela?.proveedor || null,
+        nemotecnico:      tela?.nemotecnico || null,
+        ancho:            parseFloat(document.getElementById('falla-ancho').value) || tela?.ancho || null,
+        alto:             parseFloat(document.getElementById('falla-alto').value) || null,
+        tipo_falla:       document.getElementById('falla-tipo_falla').value || null,
+        metraje:          parseFloat(document.getElementById('falla-metraje').value) || null,
+        fecha_reporte:    document.getElementById('falla-fecha_reporte').value || null,
+        responsable:      document.getElementById('falla-responsable').value || null,
+        informado:        document.getElementById('falla-informado').value.trim() || null,
+        observaciones:    document.getElementById('falla-observaciones').value.trim() || null,
+        solucion:         document.getElementById('falla-solucion').value.trim() || null,
+        fecha_resolucion: document.getElementById('falla-fecha_resolucion').value || null,
+        resuelto:         document.getElementById('falla-resuelto').value
+    };
+
+    let error;
+    if (TEL.editandoFallaId) {
+        ({ error } = await sb.from('telas_fallas').update(payload).eq('id', TEL.editandoFallaId));
+    } else {
+        ({ error } = await sb.from('telas_fallas').insert(payload));
+    }
+    if (error) { alert('Error: ' + error.message); return; }
+    cerrarModal('modalFalla');
+    await cargarFallas();
+    actualizarStats();
+    renderizarFallas();
+}
+
+function filtrarFallas() { renderizarFallas(); }
+
+function renderizarFallas() {
+    const q        = (document.getElementById('buscarFalla').value || '').toLowerCase();
+    const resuelto = document.getElementById('filtroResuelto').value;
+    const tipoF    = document.getElementById('filtroTipoFalla').value;
+
+    const lista = TEL.fallas.filter(f => {
+        const matchQ  = !q || [f.codigo,f.nemotecnico,f.tipo_falla,f.proveedor,f.observaciones].some(v => (v||'').toLowerCase().includes(q));
+        const matchR  = !resuelto || f.resuelto === resuelto;
+        const matchTF = !tipoF || f.tipo_falla === tipoF;
+        return matchQ && matchR && matchTF;
+    });
+
+    const tbody = document.getElementById('tbodyFallas');
+    const vacio = document.getElementById('fallasVacio');
+
+    if (!lista.length) {
+        tbody.innerHTML = '';
+        vacio.style.display = 'block';
+        return;
+    }
+    vacio.style.display = 'none';
+
+    tbody.innerHTML = lista.map(f => {
+        const res = f.resuelto === 'SI' ? `<span class="tag tag-ok">Resuelto</span>`
+            : f.resuelto === 'EN PROCESO' ? `<span class="tag tag-warn">En proceso</span>`
+            : `<span class="tag tag-danger">Pendiente</span>`;
+        return `
+        <tr>
+            <td><strong>${f.codigo||'—'}</strong></td>
+            <td>${tipoBadge(f.tipo)}</td>
+            <td style="color:var(--text-secondary);">${f.grupo||'—'}</td>
+            <td style="color:var(--text-secondary);">${f.proveedor||'—'}</td>
+            <td>${f.nemotecnico||'—'}</td>
+            <td style="text-align:center;">${f.ancho||'—'}</td>
+            <td style="text-align:center;">${f.alto||'—'}</td>
+            <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.78rem; color:var(--text-secondary);">${f.observaciones||'—'}</td>
+            <td><span class="tag tag-warn" style="font-size:0.7rem;">${f.tipo_falla||'—'}</span></td>
+            <td style="text-align:center;">${f.metraje||'—'}m</td>
+            <td style="font-size:0.78rem; white-space:nowrap;">${f.fecha_reporte||'—'}</td>
+            <td style="font-size:0.78rem;">${f.responsable||'—'}</td>
+            <td style="font-size:0.78rem;">${f.informado||'—'}</td>
+            <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:0.78rem; color:var(--text-secondary);">${f.solucion||'—'}</td>
+            <td style="font-size:0.78rem; white-space:nowrap;">${f.fecha_resolucion||'—'}</td>
+            <td style="text-align:center;">${res}</td>
+            <td style="text-align:center;">
+                <button class="btn-inv btn-outline-inv" onclick="abrirModalFalla('${f.id}')" style="padding:4px 10px; font-size:0.72rem;">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// IMPORTAR EXCEL
+// ══════════════════════════════════════════════════════════════════
+async function importarExcelTelas(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    logTel(`Leyendo archivo: ${file.name}`, 'info');
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const wb = XLSX.read(new Uint8Array(e.target.result), { type:'array', cellDates:true });
+            logTel(`Hojas encontradas: ${wb.SheetNames.join(', ')}`, 'info');
+
+            // ── 1. VALIDADORES ──
+            if (wb.SheetNames.includes('VALIDADORES')) {
+                await importarValidadores(wb.Sheets['VALIDADORES']);
+            }
+
+            // ── 2. TELAS desde LIBERADO + MATERIAS PRIMAS ──
+            let telasImportadas = 0;
+            for (const hoja of ['LIBERADO', 'MATERIAS PRIMAS']) {
+                if (wb.SheetNames.includes(hoja)) {
+                    const n = await importarTelaHoja(wb.Sheets[hoja], hoja);
+                    telasImportadas += n;
+                }
+            }
+            logTel(`Telas importadas: ${telasImportadas}`, 'success');
+
+            // ── 3. MAPA-COLMENA ──
+            if (wb.SheetNames.includes('MAPA-COLMENA')) {
+                const n = await importarColmena(wb.Sheets['MAPA-COLMENA']);
+                logTel(`Posiciones rack actualizadas: ${n}`, 'success');
+            }
+
+            // ── 4. ROLLOS FALLA ──
+            if (wb.SheetNames.includes('ROLLOS FALLA')) {
+                const n = await importarFallas(wb.Sheets['ROLLOS FALLA']);
+                logTel(`Fallas importadas: ${n}`, 'success');
+            }
+
+            // Recargar todo
+            await cargarTelas();
+            await cargarFallas();
+            actualizarStats();
+            renderizarCatalogo();
+            renderizarFallas();
+            logTel('Importación completada con éxito ✓', 'success');
+        } catch(err) {
+            logTel('Error durante importación: ' + err.message, 'error');
+            console.error(err);
+        }
+    };
+    reader.readAsArrayBuffer(file);
+    event.target.value = '';
+}
+
+async function importarValidadores(sheet) {
+    const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+    const batch = [];
+    // VALIDADORES tiene encabezados en fila 1, grupos en columnas
+    // Detectamos columnas con contenido
+    if (rows.length < 2) return;
+    const headers = rows[0];
+    for (let col = 0; col < headers.length; col++) {
+        const campo = (headers[col]||'').toString().trim().toUpperCase().replace(/\s+/g,'_');
+        if (!campo) continue;
+        for (let row = 1; row < rows.length; row++) {
+            const val = (rows[row][col]||'').toString().trim();
+            if (!val) continue;
+            batch.push({ empresa_id: EMPRESA_ID, campo, valor: val, orden: row });
+        }
+    }
+    if (!batch.length) return;
+    // Upsert: borrar existentes y reinsertar
+    await sb.from('validadores_telas').delete().eq('empresa_id', EMPRESA_ID);
+    const { error } = await sb.from('validadores_telas').insert(batch);
+    if (error) logTel('Error validadores: ' + error.message, 'warn');
+    else { logTel(`Validadores: ${batch.length} opciones importadas`, 'success'); await cargarValidadores(); }
+}
+
+async function importarTelaHoja(sheet, almacen) {
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval:'' });
+    if (!rows.length) return 0;
+
+    // Intentar detectar columnas clave
+    const firstRow = rows[0];
+    const keys = Object.keys(firstRow);
+
+    const find = (...candidates) => keys.find(k => candidates.some(c => k.toUpperCase().includes(c.toUpperCase()))) || null;
+    const colCodigo   = find('CODIGO','COD');
+    const colTipo     = find('TIPO','TYPE');
+    const colGrupo    = find('GRUPO','GRUPO');
+    const colNemo     = find('NEMOT','NOMBRE','NAME');
+    const colProv     = find('PROVEEDOR','PROV');
+    const colAncho    = find('ANCHO','WIDTH');
+    const colPos      = find('POSICION','SLOT','POS');
+    const colEstado   = find('ESTATUS','ESTADO','STATUS');
+
+    const telas = rows.map(r => {
+        const cod = (r[colCodigo]||'').toString().trim();
+        if (!cod) return null;
+        const tipo = detectarTipo(cod, r[colTipo]);
+        return {
+            empresa_id: EMPRESA_ID,
+            codigo:     cod,
+            tipo,
+            grupo:      colGrupo ? (r[colGrupo]||'').toString().trim() || null : null,
+            nemotecnico: colNemo ? (r[colNemo]||'').toString().trim() || null : null,
+            proveedor:  colProv ? (r[colProv]||'').toString().trim() || null : null,
+            ancho:      colAncho ? parseFloat(r[colAncho]) || null : null,
+            posicion:   colPos ? (r[colPos]||'').toString().trim().toUpperCase() || null : null,
+            almacen:    almacen === 'LIBERADO' ? 'LIBERADO' : 'MATERIAS PRIMAS',
+            estado:     colEstado ? (r[colEstado]||'CARGADO').toString().trim() : 'CARGADO'
+        };
+    }).filter(Boolean);
+
+    if (!telas.length) return 0;
+
+    // Upsert por código
+    const { error } = await sb.from('telas_catalogo').upsert(telas, { onConflict: 'empresa_id,codigo', ignoreDuplicates: false });
+    if (error) { logTel(`Error telas (${almacen}): ${error.message}`, 'error'); return 0; }
+    return telas.length;
+}
+
+function detectarTipo(codigo, tipoCell) {
+    const c = codigo.toUpperCase();
+    if (tipoCell) {
+        const t = tipoCell.toString().toUpperCase();
+        if (t.includes('BK') || t.includes('BLACKOUT')) return 'BK';
+        if (t.includes('DU') || t.includes('DUO')) return 'DU';
+        if (t.includes('SC') || t.includes('SCREEN')) return 'SC';
+    }
+    if (c.startsWith('BK')) return 'BK';
+    if (c.startsWith('DU') || c.startsWith('DUO')) return 'DU';
+    if (c.startsWith('SC')) return 'SC';
+    return null;
+}
+
+async function importarColmena(sheet) {
+    const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+    // MAPA-COLMENA: filas son posiciones, celdas tienen el código de tela
+    // Buscamos patrones tipo A01, A02... B01, B02...
+    let count = 0;
+    const updates = [];
+    for (let r = 0; r < rows.length; r++) {
+        for (let c = 0; c < rows[r].length; c++) {
+            const cell = rows[r][c];
+            if (!cell) continue;
+            const val = cell.toString().trim();
+            // Detectar si es un slot (A## o B##)
+            const slotMatch = val.match(/^([AB])(\d{2})$/i);
+            if (slotMatch) {
+                // La celda adyacente podría ser el código
+                const nextVal = (rows[r][c+1]||'').toString().trim();
+                if (nextVal && !nextVal.match(/^([AB])(\d{2})$/i)) {
+                    const slot = val.toUpperCase();
+                    updates.push({ slot, codigo: nextVal });
+                    count++;
+                }
+            }
+        }
+    }
+
+    // Actualizar posición en telas_catalogo
+    for (const u of updates) {
+        await sb.from('telas_catalogo')
+            .update({ posicion: u.slot })
+            .eq('empresa_id', EMPRESA_ID)
+            .eq('codigo', u.codigo);
+    }
+    return count;
+}
+
+async function importarFallas(sheet) {
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval:'' });
+    if (!rows.length) return 0;
+
+    const fallas = rows.map(r => {
+        const get = (...keys) => {
+            for (const k of keys) {
+                const found = Object.keys(r).find(rk => rk.toUpperCase().replace(/\s+/g,'').includes(k.toUpperCase().replace(/\s+/g,'')));
+                if (found && r[found] !== '') return r[found].toString().trim();
+            }
+            return null;
+        };
+        const cod = get('CODIGO','COD');
+        if (!cod) return null;
+        return {
+            empresa_id:       EMPRESA_ID,
+            codigo:           cod,
+            tipo:             get('TIPO'),
+            grupo:            get('GRUPO'),
+            proveedor:        get('PROVEEDOR'),
+            nemotecnico:      get('NEMOT'),
+            ancho:            parseFloat(get('ANCHO')) || null,
+            alto:             parseFloat(get('ALTO')) || null,
+            tipo_falla:       get('TIPOFALLA','TIPO DE FALLA','FALLA'),
+            metraje:          parseFloat(get('METRAJE','CANTIDADDE')) || null,
+            fecha_reporte:    parseFecha(get('FECHAREPORTE','FECHAREP')),
+            responsable:      get('RESPONSABLE'),
+            informado:        get('AQUIENSEI','INFORMO','AQUISEI'),
+            observaciones:    get('OBSERVA'),
+            solucion:         get('SOLUCION'),
+            fecha_resolucion: parseFecha(get('FECHA')),
+            resuelto:         (get('RESUELTO')||'NO').toString().toUpperCase().startsWith('S') ? 'SI' : 'NO'
+        };
+    }).filter(Boolean);
+
+    if (!fallas.length) return 0;
+    const { error } = await sb.from('telas_fallas').insert(fallas);
+    if (error) { logTel('Error fallas: ' + error.message, 'error'); return 0; }
+    return fallas.length;
+}
+
+function parseFecha(val) {
+    if (!val) return null;
+    if (val instanceof Date) return val.toISOString().slice(0,10);
+    const str = val.toString().trim();
+    if (!str) return null;
+    // Try DD/MM/YYYY
+    const m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    return str.slice(0,10) || null;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXPORTAR EXCEL
+// ══════════════════════════════════════════════════════════════════
+function exportarTelaExcel() {
+    const lista = filtrarCatalogo();
+    const data = lista.map(t => ({
+        Código: t.codigo,
+        Tipo: t.tipo,
+        Grupo: t.grupo,
+        Nemotécnico: t.nemotecnico,
+        Proveedor: t.proveedor,
+        'Ancho (cm)': t.ancho,
+        'Metros/Rollo': t.metros_rollo,
+        Posición: t.posicion,
+        Almacén: t.almacen,
+        Estado: t.estado,
+        'Cód. Proveedor': t.proveedor_codigo,
+        Observaciones: t.observaciones
+    }));
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Catálogo Telas');
+    XLSX.writeFile(wb, `inventario_telas_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LISTAS / VALIDADORES
+// ══════════════════════════════════════════════════════════════════
+function listasMostrarCampo() {
+    const campo = document.getElementById('listas-campo').value;
+    const items = TEL.validadores[campo] || [];
+    const cont  = document.getElementById('listas-items');
+    const vacio = document.getElementById('listas-vacio');
+
+    if (!items.length) {
+        cont.innerHTML = '';
+        vacio.style.display = 'block';
+        return;
+    }
+    vacio.style.display = 'none';
+    cont.innerHTML = items.map((v, i) => `
+        <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--bg-secondary); border-radius:8px; border:1px solid var(--border);">
+            <span style="flex:1; font-size:0.85rem;">${v}</span>
+            <button class="btn-inv btn-danger-inv" onclick="listasEliminar('${campo}', ${i})" style="padding:3px 8px; font-size:0.72rem;">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+async function listasAgregar() {
+    const campo = document.getElementById('listas-campo').value;
+    const val   = document.getElementById('listas-nuevo-valor').value.trim();
+    if (!val) return;
+
+    const { error } = await sb.from('validadores_telas').insert({
+        empresa_id: EMPRESA_ID,
+        campo,
+        valor: val,
+        orden: (TEL.validadores[campo]||[]).length + 1
+    });
+    if (error) { alert('Error: ' + error.message); return; }
+
+    document.getElementById('listas-nuevo-valor').value = '';
+    await cargarValidadores();
+    listasMostrarCampo();
+}
+
+async function listasEliminar(campo, idx) {
+    const val = (TEL.validadores[campo]||[])[idx];
+    if (!val) return;
+    if (!confirm(`¿Eliminar "${val}" de ${campo}?`)) return;
+
+    const { error } = await sb.from('validadores_telas')
+        .delete().eq('empresa_id', EMPRESA_ID).eq('campo', campo).eq('valor', val);
+    if (error) { alert('Error: ' + error.message); return; }
+    await cargarValidadores();
+    listasMostrarCampo();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INICIO
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', inicializar);
+</script>
+</body>
+</html>
