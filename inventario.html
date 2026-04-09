@@ -2769,7 +2769,22 @@ let _qrInsumoActual = null; // { cod, nemo, ubicacion }
 
 function mostrarQRInsumo(cod, nemo) {
     const ins = INV.insumos.find(i => i.cod === cod);
-    _qrInsumoActual = { cod, nemo, ubicacion: ins?.ubicacion || '' };
+
+    // ── Ubicación real: primero buscar en el mapa de rack, luego campo general ──
+    // ubicaciones_rack tiene: { rack, fila, columna, codigo_insumo, almacen }
+    const rackEntry = (INV.ubicaciones || []).find(u =>
+        (u.codigo_insumo || '').toUpperCase() === (cod || '').toUpperCase()
+    );
+    let ubicacion = '';
+    if (rackEntry) {
+        // Formato legible: "RACK 1 · 3-A"
+        ubicacion = `${rackEntry.rack} · ${rackEntry.fila}-${rackEntry.columna}`;
+    } else if (ins?.ubicacion) {
+        // Fallback: campo general del catálogo (ej: "2DA AV.", "BODEGA MP")
+        ubicacion = ins.ubicacion;
+    }
+
+    _qrInsumoActual = { cod, nemo, ubicacion };
 
     document.getElementById('qr-insumo-titulo').textContent = nemo;
     document.getElementById('qr-insumo-cod').textContent = `Código: ${cod}`;
@@ -2788,12 +2803,12 @@ function mostrarQRInsumo(cod, nemo) {
         correctLevel: QRCode.CorrectLevel.M
     });
 
-    // QR de la ubicación: LOC:{ubicacion}
-    const ubicacion = ins?.ubicacion || '';
+    // QR de la ubicación: LOC:{ubicacion_rack}
     const secUbic = document.getElementById('qr-ubicacion-section');
     if (ubicacion) {
         secUbic.style.display = 'block';
-        document.getElementById('qr-ubicacion-label').textContent = ubicacion;
+        document.getElementById('qr-ubicacion-label').textContent =
+            rackEntry ? `${ubicacion}  (${rackEntry.almacen || ''})` : ubicacion;
         new QRCode(canvasLoc, {
             text: `LOC:${ubicacion}`,
             width: 150, height: 150,

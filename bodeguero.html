@@ -397,9 +397,10 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let _otsData    = [];       // OTs cargadas
 let _otActual   = null;     // OT seleccionada
 let _bomItems   = [];       // BOM de la OT actual
-let _insumos    = [];       // Catálogo de insumos
-let _telasCat   = [];       // Catálogo de telas (telas_catalogo)
-let _telasSlots = [];       // Posiciones de telas (telas_slots)
+let _insumos         = [];   // Catálogo de insumos
+let _telasCat        = [];   // Catálogo de telas (telas_catalogo)
+let _telasSlots      = [];   // Posiciones de telas (telas_slots)
+let _ubicacionesRack = [];   // Mapa físico de rack de insumos (ubicaciones_rack)
 let _scanner    = null;     // Instancia Html5Qrcode
 let _scanItemIdx = -1;      // Índice del ítem BOM que se está despachando
 let _scanFase    = 'loc';   // 'loc' | 'item'
@@ -440,7 +441,7 @@ async function cargarOTs() {
     // Estados visibles para el bodeguero: produccion, lista (lista p/ entrega), pendiente_firma
     const ESTADOS_BODEGUERO = ['produccion', 'lista', 'pendiente_firma'];
 
-    const [{ data: ots, error }, { data: ins }, { data: telCat }, { data: telSlots }] = await Promise.all([
+    const [{ data: ots, error }, { data: ins }, { data: telCat }, { data: telSlots }, { data: racks }] = await Promise.all([
         sb.from('ots')
             .select('id, numero_ot, estado, datos_generales, items, fecha_creacion, fecha_entrega')
             .eq('empresa_id', EMPRESA_ID)
@@ -454,6 +455,9 @@ async function cargarOTs() {
             .eq('empresa_id', EMPRESA_ID),
         sb.from('telas_slots')
             .select('posicion,codigo,almacen')
+            .eq('empresa_id', EMPRESA_ID),
+        sb.from('ubicaciones_rack')
+            .select('rack,fila,columna,codigo_insumo,almacen')
             .eq('empresa_id', EMPRESA_ID)
     ]);
 
@@ -473,10 +477,11 @@ async function cargarOTs() {
         return;
     }
 
-    _otsData    = ots    || [];
-    _insumos    = ins    || [];
-    _telasCat   = telCat || [];
-    _telasSlots = telSlots || [];
+    _otsData         = ots      || [];
+    _insumos         = ins      || [];
+    _telasCat        = telCat   || [];
+    _telasSlots      = telSlots || [];
+    _ubicacionesRack = racks    || [];
 
     if (!_otsData.length) {
         document.getElementById('lista-ots').innerHTML =
@@ -640,6 +645,20 @@ function extraerTelasBOM(ot) {
     });
 }
 
+// ══════════════════════════════════════════════════════════════════
+// UBICACIÓN FÍSICA EN RACK — fuente de verdad para insumos
+// Busca en ubicaciones_rack por codigo_insumo y devuelve "RACK 1 · 3-A"
+// ══════════════════════════════════════════════════════════════════
+function getRackUbicacion(cod) {
+    if (!cod || !_ubicacionesRack.length) return null;
+    const codUp = cod.toUpperCase().trim();
+    const u = _ubicacionesRack.find(r =>
+        (r.codigo_insumo || '').toUpperCase().trim() === codUp
+    );
+    if (!u) return null;
+    return `${u.rack} · ${u.fila}-${u.columna}`;
+}
+
 function buscarTelaSlot(codInt) {
     const cod = (codInt || '').toUpperCase();
     // Buscar en telas_slots primero (más preciso — tiene posición física real)
@@ -666,14 +685,14 @@ function renderBOMItems() {
         const completo = cnt.estado === 'completo';
         const enProceso = cnt.pickeado > 0 && !completo;
 
-        // Localización: telas usan _ubicacion_rack; insumos buscan en catálogo
+        // Localización: telas usan _ubicacion_rack; insumos usan ubicaciones_rack
         let locText = '', stockInfo = '';
         if (item._es_tela) {
             const ubic = item._ubicacion_rack;
             locText   = ubic ? `📍 Rack: ${ubic}` : '📍 Sin posición registrada';
         } else {
             const insMatch = buscarInsumoMatchBOM(item);
-            locText   = insMatch ? `📍 ${insMatch.ubicacion || 'Sin ubicación'}` : '';
+            locText   = getUbicacionBOM(item);
             stockInfo = insMatch ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}` : '';
         }
 
@@ -757,6 +776,19 @@ function buscarInsumoMatchBOM(item) {
     }) || null;
 }
 
+// Devuelve la ubicación de rack del insumo que coincide con el item BOM.
+// Primero intenta ubicaciones_rack (real), luego ins.ubicacion (fallback).
+function getUbicacionBOM(item) {
+    const ins = buscarInsumoMatchBOM(item);
+    if (!ins) return '';
+    // Fuente primaria: posición física en rack
+    const rackPos = getRackUbicacion(ins.cod);
+    if (rackPos) return `📍 ${rackPos}`;
+    // Fallback: campo ubicacion del catálogo (puede ser bodega general)
+    if (ins.ubicacion) return `📦 ${ins.ubicacion}`;
+    return '';
+}
+
 // ══════════════════════════════════════════════════════════════════
 // SCANNER — Iniciar despacho de un ítem
 // ══════════════════════════════════════════════════════════════════
@@ -771,8 +803,8 @@ function iniciarScanItem(idx) {
     document.getElementById('scan-item-desc').textContent = item.descripcion;
     document.getElementById('scan-item-spec').textContent = [item.especificacion, item.color].filter(Boolean).join(' · ');
 
-    const insMatch = buscarInsumoMatchBOM(item);
-    document.getElementById('scan-item-loc').textContent = insMatch?.ubicacion ? `📍 ${insMatch.ubicacion}` : '⚠ Ubicación desconocida';
+    const locReal = item._es_tela ? (item._ubicacion_rack ? `📍 Rack: ${item._ubicacion_rack}` : '') : getUbicacionBOM(item);
+    document.getElementById('scan-item-loc').textContent = locReal || '⚠ Ubicación desconocida';
     document.getElementById('scan-contador').textContent  = cnt.pickeado;
     document.getElementById('scan-requerido').textContent = cnt.requerido;
     document.getElementById('scanner-titulo').textContent = item.descripcion;
@@ -847,19 +879,35 @@ async function onQRScan(decoded) {
 
     if (_scanFase === 'loc') {
         // Esperando escaneo de ubicación (LOC:...)
+        // La ubicación real viene del rack (ubicaciones_rack), no del campo ins.ubicacion
         const insMatch = buscarInsumoMatchBOM(item);
-        const locEsperada = insMatch?.ubicacion ? `LOC:${insMatch.ubicacion}` : null;
+        let locEsperada = null;
+        let locLabel    = '';
+        if (item._es_tela && item._ubicacion_rack) {
+            locEsperada = `LOC:${item._ubicacion_rack}`;
+            locLabel    = item._ubicacion_rack;
+        } else if (insMatch) {
+            const rackPos = getRackUbicacion(insMatch.cod);
+            if (rackPos) {
+                locEsperada = `LOC:${rackPos}`;
+                locLabel    = rackPos;
+            } else if (insMatch.ubicacion) {
+                locEsperada = `LOC:${insMatch.ubicacion}`;
+                locLabel    = insMatch.ubicacion;
+            }
+        }
 
         if (locEsperada && decoded !== locEsperada) {
             // Ubicación incorrecta
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Ubicación incorrecta';
-            document.getElementById('scan-sub').textContent = `Vas a la ubicación: ${insMatch.ubicacion}`;
+            document.getElementById('scan-sub').textContent = `Vas a la ubicación: ${locLabel}`;
             setTimeout(() => setScanEstado('loc'), 2500);
             return;
         }
         // Si no hay ubicación registrada O coincide → pasar a escaneo de item
         setScanEstado(null, 'ok');
+        if (locLabel) document.getElementById('scan-sub').textContent = `Ubicación: ${locLabel}`;
         _scanFase = 'item';
         setTimeout(() => setScanEstado('item'), 1200);
 
