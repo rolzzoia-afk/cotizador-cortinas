@@ -722,17 +722,34 @@
             border-top: 1px solid var(--border-glass);
             padding: 6px 0 env(safe-area-inset-bottom, 6px);
         }
-        .mobile-bottom-nav .nav-items { display: flex; justify-content: space-around; align-items: center; }
+        .mobile-bottom-nav .nav-items {
+            display: flex;
+            align-items: center;
+            overflow-x: auto;
+            overflow-y: hidden;
+            -webkit-overflow-scrolling: touch;
+            scroll-snap-type: x proximity;
+            scrollbar-width: none;
+            /* Padding para que el primer y último botón no queden pegados al borde */
+            padding: 0 4px;
+        }
+        .mobile-bottom-nav .nav-items::-webkit-scrollbar { display: none; }
         .mobile-bottom-nav button {
             background: none; border: none; color: var(--text-secondary);
             display: flex; flex-direction: column; align-items: center; gap: 2px;
             padding: 6px 8px; border-radius: 10px; transition: all 0.18s ease;
-            font-size: 0.6rem; min-width: 52px; min-height: 52px;
+            font-size: 0.6rem; min-width: 58px; flex-shrink: 0;
+            min-height: 52px; scroll-snap-align: start;
         }
         .mobile-bottom-nav button i { font-size: 1.25rem; }
         .mobile-bottom-nav button.active { color: var(--primary-500); }
         .mobile-bottom-nav button.active i { filter: drop-shadow(0 0 6px rgba(59,130,246,0.6)); }
         .mobile-bottom-nav button:active { transform: scale(0.9); }
+        /* Separador visual entre grupos de tabs */
+        .mobile-bottom-nav .nav-sep {
+            width: 1px; height: 32px; background: var(--border-glass);
+            flex-shrink: 0; margin: 0 4px;
+        }
 
         /* ── IFRAME TABS (Estructura / Ojo de Dios) ─────────── */
         .iframe-tab-pane {
@@ -782,7 +799,7 @@
             /* Nav bottom bar: cada botón exactamente 48px de alto */
             .mobile-bottom-nav button {
                 min-height: 48px;
-                min-width: 48px;
+                min-width: 58px;
                 padding: 6px 10px;
             }
 
@@ -9655,6 +9672,7 @@
 <!-- Barra de navegación inferior para móvil -->
 <nav class="mobile-bottom-nav">
     <div class="nav-items">
+        <!-- ── Flujo cotización ── -->
         <button data-tab="panel" onclick="switchTab('panel')">
             <i class="bi bi-kanban-fill"></i><span>Panel</span>
         </button>
@@ -9675,6 +9693,18 @@
         </button>
         <button data-tab="estructura" onclick="switchTab('estructura')">
             <i class="bi bi-tools"></i><span>Tubos</span>
+        </button>
+        <!-- ── Separador ── -->
+        <div class="nav-sep"></div>
+        <!-- ── Módulos de producción / bodega ── -->
+        <button data-tab="inventario" onclick="switchTab('inventario')">
+            <i class="bi bi-box-seam"></i><span>Insumos</span>
+        </button>
+        <button data-tab="telas" onclick="switchTab('telas')">
+            <i class="bi bi-textile-fill"></i><span>Telas</span>
+        </button>
+        <button data-tab="bodeguero" onclick="switchTab('bodeguero')">
+            <i class="bi bi-boxes"></i><span>Bodega</span>
         </button>
         <button data-tab="ojodedios" onclick="switchTab('ojodedios')">
             <i class="bi bi-eye-fill"></i><span>Admin</span>
