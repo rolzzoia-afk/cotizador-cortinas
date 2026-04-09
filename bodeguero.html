@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Bodeguero — Rolzzo</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root {
+    --bg:       #0A0A0B;
+    --bg2:      #141415;
+    --bg3:      #1A1A1C;
+    --border:   rgba(255,255,255,0.08);
+    --text:     #FAFAF8;
+    --text2:    #A8A8A6;
+    --primary:  #7c75f0;
+    --success:  #22c55e;
+    --warning:  #f59e0b;
+    --danger:   #ef4444;
+    --radius:   14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+
+/* ── Layout ── */
+.view { display: none; min-height: 100dvh; flex-direction: column; }
+.view.active { display: flex; }
+.topbar { padding: 14px 16px; background: var(--bg2); border-bottom: 1px solid var(--border);
+          display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 10; }
+.topbar h1 { font-size: 1rem; font-weight: 700; flex: 1; }
+.scroll-area { flex: 1; overflow-y: auto; padding: 12px; }
+
+/* ── Cards ── */
+.card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+        padding: 14px; margin-bottom: 10px; }
+.card-title { font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+.card-sub   { font-size: 0.75rem; color: var(--text2); }
+
+/* ── Botones ── */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 11px 18px;
+       border-radius: 10px; border: none; font-size: 0.85rem; font-weight: 600;
+       cursor: pointer; transition: opacity .15s; }
+.btn:active { opacity: .7; }
+.btn-primary  { background: var(--primary); color: #fff; }
+.btn-success  { background: var(--success); color: #fff; }
+.btn-danger   { background: var(--danger);  color: #fff; }
+.btn-outline  { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn-block    { width: 100%; justify-content: center; margin-top: 8px; }
+.btn-lg       { padding: 14px 20px; font-size: 0.95rem; border-radius: 12px; }
+
+/* ── Badge ── */
+.badge { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 2px 8px;
+         border-radius: 20px; }
+.badge-warn    { background: rgba(245,158,11,.2);  color: var(--warning); }
+.badge-ok      { background: rgba(34,197,94,.2);   color: var(--success); }
+.badge-info    { background: rgba(124,117,240,.2); color: var(--primary); }
+.badge-danger  { background: rgba(239,68,68,.2);   color: var(--danger); }
+
+/* ── Items BOM ── */
+.bom-item { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px;
+            padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+.bom-item.completado  { border-color: rgba(34,197,94,.35); }
+.bom-item.en_proceso  { border-color: rgba(124,117,240,.4); }
+.bom-item-info { flex: 1; }
+.bom-item-cat  { font-size: 0.67rem; color: var(--primary); font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+.bom-item-desc { font-size: 0.88rem; font-weight: 600; }
+.bom-item-spec { font-size: 0.73rem; color: var(--text2); margin-top: 2px; }
+.bom-item-loc  { font-size: 0.72rem; color: var(--warning); margin-top: 3px; }
+.bom-item-cnt  { text-align: center; min-width: 52px; }
+.bom-item-cnt .num   { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+.bom-item-cnt .denom { font-size: 0.7rem; color: var(--text2); }
+
+/* ── Scanner ── */
+#scanner-container { width: 100%; max-width: 360px; margin: 0 auto; border-radius: 12px; overflow: hidden; }
+#html5-qrcode-button-camera-stop, #html5-qrcode-button-camera-start { display: none !important; }
+
+/* ── Firma ── */
+#firma-canvas { background: #fff; border-radius: 10px; touch-action: none; cursor: crosshair;
+                display: block; width: 100%; height: 200px; }
+
+/* ── Separador ── */
+.sep { height: 1px; background: var(--border); margin: 12px 0; }
+
+/* ── Estado escaneo ── */
+.scan-state { border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 12px; }
+.scan-state.esperando { background: rgba(245,158,11,.08); border: 1px solid rgba(245,158,11,.25); }
+.scan-state.ok        { background: rgba(34,197,94,.08);  border: 1px solid rgba(34,197,94,.25); }
+.scan-state.error     { background: rgba(239,68,68,.08);  border: 1px solid rgba(239,68,68,.25); }
+.scan-state .icon { font-size: 2rem; }
+.scan-state .msg  { font-size: 0.85rem; margin-top: 6px; font-weight: 600; }
+.scan-state .sub  { font-size: 0.73rem; color: var(--text2); margin-top: 3px; }
+
+/* ── Loading ── */
+.loading { display: flex; align-items: center; justify-content: center; gap: 10px;
+           padding: 40px; color: var(--text2); font-size: 0.85rem; }
+
+/* ── Ad-hoc input ── */
+.input-field { width: 100%; padding: 11px 14px; background: var(--bg2); border: 1px solid var(--border);
+               border-radius: 10px; color: var(--text); font-size: 0.9rem; margin-bottom: 8px; }
+.input-field:focus { outline: none; border-color: var(--primary); }
+label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display: block; }
+
+/* ── Bottom nav ── */
+.bottom-nav { background: var(--bg2); border-top: 1px solid var(--border); padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+              display: flex; }
+.bottom-nav button { flex: 1; background: none; border: none; color: var(--text2); font-size: 0.65rem;
+                     padding: 6px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.bottom-nav button i { font-size: 1.2rem; }
+.bottom-nav button.active { color: var(--primary); }
+
+/* ── Toast ── */
+#toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+         background: var(--bg3); border: 1px solid var(--border); border-radius: 10px;
+         padding: 10px 18px; font-size: 0.82rem; z-index: 999; opacity: 0;
+         transition: all .25s; white-space: nowrap; }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════
+     VIEW 1: Lista de OTs en producción
+════════════════════════════════════════════ -->
+<div id="view-ots" class="view active">
+    <div class="topbar">
+        <i class="bi bi-boxes" style="color:var(--primary);font-size:1.2rem;"></i>
+        <h1>Bodeguero — Rolzzo</h1>
+        <a href="inventario.html" target="_blank" class="btn btn-outline" style="padding:6px 10px;font-size:0.75rem;text-decoration:none;" title="Ver inventario">
+            <i class="bi bi-box-seam"></i>
+        </a>
+        <button class="btn btn-outline" style="padding:6px 10px;font-size:0.75rem;" onclick="mostrarAdHoc()">
+            <i class="bi bi-plus-circle"></i> Ad-hoc
+        </button>
+    </div>
+    <div class="scroll-area">
+        <div style="font-size:0.75rem;color:var(--text2);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+            <span>Órdenes en producción</span>
+            <button onclick="cargarOTs()" style="background:none;border:none;color:var(--primary);font-size:0.75rem;cursor:pointer;"><i class="bi bi-arrow-clockwise"></i> Actualizar</button>
+        </div>
+        <div id="lista-ots">
+            <div class="loading"><i class="bi bi-hourglass-split"></i> Cargando órdenes...</div>
+        </div>
+    </div>
+    <div class="bottom-nav">
+        <button class="active"><i class="bi bi-list-task"></i> OTs</button>
+        <button onclick="mostrarAdHoc()"><i class="bi bi-plus-circle"></i> Ad-hoc</button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     VIEW 2: Detalle de OT — BOM y despacho
+════════════════════════════════════════════ -->
+<div id="view-despacho" class="view">
+    <div class="topbar">
+        <button onclick="volverOTs()" style="background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer;"><i class="bi bi-arrow-left"></i></button>
+        <h1 id="despacho-titulo">OT #1234</h1>
+        <span id="despacho-badge" class="badge badge-warn">Pendiente</span>
+    </div>
+    <div class="scroll-area">
+        <div id="despacho-info" class="card" style="margin-bottom:12px;"></div>
+        <div style="font-size:0.75rem;color:var(--text2);margin-bottom:8px;font-weight:600;">
+            MATERIALES A DESPACHAR
+        </div>
+        <div id="bom-items-list"></div>
+        <div id="despacho-actions" style="padding-bottom:20px; display:none;">
+            <div class="sep"></div>
+            <button class="btn btn-success btn-block btn-lg" onclick="iniciarFirma()">
+                <i class="bi bi-pen"></i> Confirmar despacho y firmar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     VIEW 3: Scanner QR
+════════════════════════════════════════════ -->
+<div id="view-scanner" class="view">
+    <div class="topbar">
+        <button onclick="cerrarScanner()" style="background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer;"><i class="bi bi-x-lg"></i></button>
+        <h1 id="scanner-titulo">Escanear</h1>
+    </div>
+    <div class="scroll-area" style="display:flex;flex-direction:column;align-items:center;padding:16px;">
+        <!-- Estado del escaneo -->
+        <div id="scan-estado" class="scan-state esperando" style="width:100%;max-width:360px;">
+            <div class="icon">📍</div>
+            <div class="msg" id="scan-msg">Escaneá el QR de la ubicación</div>
+            <div class="sub" id="scan-sub">Buscá el QR pegado en el estante</div>
+        </div>
+
+        <!-- Visor de cámara -->
+        <div id="scanner-container">
+            <div id="reader"></div>
+        </div>
+
+        <!-- Info del ítem actual -->
+        <div id="scan-item-info" class="card" style="width:100%;max-width:360px;margin-top:12px;">
+            <div class="bom-item-cat" id="scan-item-cat"></div>
+            <div class="bom-item-desc" id="scan-item-desc" style="font-size:1rem;"></div>
+            <div class="bom-item-spec" id="scan-item-spec"></div>
+            <div class="bom-item-loc" id="scan-item-loc"></div>
+            <div style="margin-top:10px;display:flex;align-items:center;gap:8px;">
+                <span style="font-size:2rem;font-weight:800;" id="scan-contador">0</span>
+                <span style="font-size:1rem;color:var(--text2);">/</span>
+                <span style="font-size:1.3rem;color:var(--text2);" id="scan-requerido">0</span>
+                <span style="font-size:0.75rem;color:var(--text2);margin-left:4px;">unidades</span>
+            </div>
+        </div>
+
+        <button onclick="cerrarScanner()" class="btn btn-outline btn-block" style="max-width:360px;margin-top:12px;">
+            <i class="bi bi-arrow-left"></i> Cancelar
+        </button>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     VIEW 4: Firma digital
+════════════════════════════════════════════ -->
+<div id="view-firma" class="view">
+    <div class="topbar">
+        <button onclick="volverDespacho()" style="background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer;"><i class="bi bi-arrow-left"></i></button>
+        <h1>Firma de recepción</h1>
+    </div>
+    <div class="scroll-area">
+        <div class="card" style="margin-bottom:12px;">
+            <div class="card-sub" style="margin-bottom:6px;">Resumen del despacho</div>
+            <div id="firma-resumen" style="font-size:0.82rem;"></div>
+        </div>
+
+        <div class="card">
+            <div class="card-title" style="margin-bottom:8px;">
+                <i class="bi bi-pen"></i> Firma del receptor
+            </div>
+            <div class="card-sub" style="margin-bottom:10px;">Quién retira los materiales firma abajo</div>
+            <canvas id="firma-canvas"></canvas>
+            <div style="display:flex;gap:8px;margin-top:8px;">
+                <button onclick="limpiarFirma()" class="btn btn-outline" style="flex:1;padding:8px;">
+                    <i class="bi bi-eraser"></i> Limpiar
+                </button>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:4px;">
+            <label class="lbl">Nombre de quien recibe *</label>
+            <input type="text" id="firma-nombre" class="input-field" placeholder="Nombre del instalador o responsable">
+        </div>
+
+        <button id="btn-confirmar-firma" class="btn btn-success btn-block btn-lg" onclick="confirmarDespacho()">
+            <i class="bi bi-check-circle"></i> Confirmar entrega y descontar stock
+        </button>
+        <div style="height:20px;"></div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     VIEW 5: Despacho Ad-hoc (brackets, topes, etc.)
+════════════════════════════════════════════ -->
+<div id="view-adhoc" class="view">
+    <div class="topbar">
+        <button onclick="mostrarOTs()" style="background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer;"><i class="bi bi-arrow-left"></i></button>
+        <h1>Despacho Ad-hoc</h1>
+    </div>
+    <div class="scroll-area">
+        <div class="card" style="margin-bottom:4px;">
+            <div class="card-title"><i class="bi bi-info-circle" style="color:var(--primary);"></i> Para brackets, topes y otros</div>
+            <div class="card-sub" style="margin-top:4px;">Escaneá el QR del insumo o buscá por código. El movimiento queda registrado a nombre del instalador.</div>
+        </div>
+
+        <div class="card">
+            <label class="lbl">Insumo (escaneá o ingresá código)</label>
+            <div style="display:flex;gap:8px;margin-bottom:8px;">
+                <input type="text" id="adhoc-cod" class="input-field" placeholder="Código del insumo" style="flex:1;margin-bottom:0;">
+                <button onclick="iniciarScannerAdHoc()" class="btn btn-outline" style="padding:11px 14px;"><i class="bi bi-qr-code-scan"></i></button>
+            </div>
+            <div id="adhoc-insumo-info" style="display:none; padding:10px; background:var(--bg2); border-radius:8px; margin-bottom:8px; font-size:0.82rem;">
+                <!-- Info del insumo encontrado -->
+            </div>
+            <label class="lbl">Cantidad a retirar</label>
+            <input type="number" id="adhoc-cantidad" class="input-field" placeholder="1" min="1" value="1">
+            <label class="lbl">Nombre del instalador que retira *</label>
+            <input type="text" id="adhoc-instalador" class="input-field" placeholder="Nombre del instalador">
+            <label class="lbl">OT asociada (opcional)</label>
+            <input type="text" id="adhoc-ot" class="input-field" placeholder="OT-1234">
+        </div>
+
+        <button onclick="confirmarAdHoc()" class="btn btn-primary btn-block btn-lg">
+            <i class="bi bi-box-arrow-up"></i> Registrar salida de stock
+        </button>
+        <div style="height:20px;"></div>
+    </div>
+</div>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN SUPABASE
+// ══════════════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ══════════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════
+let _otsData    = [];       // OTs cargadas
+let _otActual   = null;     // OT seleccionada
+let _bomItems   = [];       // BOM de la OT actual
+let _insumos    = [];       // Catálogo de insumos
+let _scanner    = null;     // Instancia Html5Qrcode
+let _scanItemIdx = -1;      // Índice del ítem BOM que se está despachando
+let _scanFase    = 'loc';   // 'loc' | 'item'
+let _contadores  = {};      // { idx: { pickeado: 0, requerido: N, estado: 'pendiente'|'completo' } }
+let _firmaCtx    = null;    // Canvas context para firma
+let _firmaDibujando = false;
+
+// ══════════════════════════════════════════════════════════════════
+// NAVEGACIÓN
+// ══════════════════════════════════════════════════════════════════
+function mostrarVista(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    window.scrollTo(0, 0);
+}
+function mostrarOTs()     { mostrarVista('view-ots'); }
+function mostrarAdHoc()   { mostrarVista('view-adhoc'); }
+function volverOTs()      { detenerScanner(); mostrarVista('view-ots'); }
+function volverDespacho() { mostrarVista('view-despacho'); }
+
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
+function toast(msg, dur = 2500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), dur);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CARGA DE OTs
+// ══════════════════════════════════════════════════════════════════
+async function cargarOTs() {
+    document.getElementById('lista-ots').innerHTML =
+        '<div class="loading"><i class="bi bi-hourglass-split"></i> Cargando...</div>';
+
+    const { data: ots, error } = await sb.from('ots')
+        .select('id, numero_ot, estado, datos_generales, fecha_creacion, fecha_entrega')
+        .eq('empresa_id', EMPRESA_ID)
+        .in('estado', ['produccion', 'pendiente_firma'])
+        .order('fecha_creacion', { ascending: false });
+
+    if (error) {
+        document.getElementById('lista-ots').innerHTML =
+            `<div class="card" style="color:var(--danger);">Error: ${error.message}</div>`;
+        return;
+    }
+
+    _otsData = ots || [];
+
+    // Cargar catálogo de insumos
+    const { data: ins } = await sb.from('insumos').select('cod,nemotecnico,categoria,color,ubicacion,stock_actual,stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID);
+    _insumos = ins || [];
+
+    if (!_otsData.length) {
+        document.getElementById('lista-ots').innerHTML =
+            '<div class="card" style="text-align:center;color:var(--text2);">No hay órdenes en producción</div>';
+        return;
+    }
+
+    document.getElementById('lista-ots').innerHTML = _otsData.map(ot => {
+        const dg = ot.datos_generales || {};
+        const cliente = dg.cliente || '—';
+        const estadoBadge = ot.estado === 'pendiente_firma'
+            ? '<span class="badge badge-warn">Pendiente firma</span>'
+            : '<span class="badge badge-info">En producción</span>';
+        const bomCount = dg.bom ? dg.bom.length : '?';
+        return `
+        <div class="card" onclick="abrirOT('${ot.id}')" style="cursor:pointer;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                <div class="card-title" style="font-size:1rem;">OT ${ot.numero_ot || ot.id.slice(-6)}</div>
+                ${estadoBadge}
+            </div>
+            <div class="card-sub">${cliente}</div>
+            <div style="margin-top:6px;display:flex;gap:12px;font-size:0.72rem;color:var(--text2);">
+                <span><i class="bi bi-box-seam"></i> ${bomCount} materiales</span>
+                ${ot.fecha_entrega ? `<span><i class="bi bi-calendar2"></i> ${ot.fecha_entrega.slice(0,10)}</span>` : ''}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ABRIR OT — Cargar BOM y mostrar
+// ══════════════════════════════════════════════════════════════════
+async function abrirOT(otId) {
+    _otActual = _otsData.find(o => o.id === otId);
+    if (!_otActual) return;
+
+    const dg = _otActual.datos_generales || {};
+    document.getElementById('despacho-titulo').textContent = `OT ${_otActual.numero_ot || otId.slice(-6)}`;
+    document.getElementById('despacho-badge').textContent = _otActual.estado === 'pendiente_firma' ? 'Pendiente firma' : 'En producción';
+
+    document.getElementById('despacho-info').innerHTML = `
+        <div style="display:flex;gap:16px;flex-wrap:wrap;">
+            <div><div class="card-sub">Cliente</div><div style="font-weight:600;">${dg.cliente || '—'}</div></div>
+            <div><div class="card-sub">OT</div><div style="font-weight:600;">${_otActual.numero_ot || '—'}</div></div>
+            ${dg.fechaEntrega ? `<div><div class="card-sub">Entrega</div><div style="font-weight:600;">${dg.fechaEntrega}</div></div>` : ''}
+        </div>`;
+
+    // Intentar cargar BOM desde orden_materiales primero
+    const { data: bomDB } = await sb.from('orden_materiales')
+        .select('*')
+        .eq('empresa_id', EMPRESA_ID)
+        .eq('ot_id', otId)
+        .order('orden');
+
+    _bomItems = bomDB && bomDB.length
+        ? bomDB.map(r => ({
+            id: r.id, categoria: r.categoria, descripcion: r.descripcion,
+            especificacion: r.especificacion || '', color: r.color || '',
+            cantidad_req: r.cantidad_req, unidad: r.unidad || 'unid.',
+            cantidad_despachada: r.cantidad_despachada || 0, estado: r.estado || 'pendiente'
+          }))
+        : (dg.bom || []).map((b, i) => ({ ...b, id: i, cantidad_req: b.cantidad, cantidad_despachada: 0, estado: 'pendiente' }));
+
+    // Inicializar contadores
+    _contadores = {};
+    _bomItems.forEach((item, idx) => {
+        _contadores[idx] = {
+            pickeado: item.cantidad_despachada || 0,
+            requerido: item.cantidad_req || 1,
+            estado: item.estado === 'completado' ? 'completo' : 'pendiente'
+        };
+    });
+
+    renderBOMItems();
+    mostrarVista('view-despacho');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RENDER BOM ITEMS
+// ══════════════════════════════════════════════════════════════════
+function renderBOMItems() {
+    const container = document.getElementById('bom-items-list');
+    if (!_bomItems.length) {
+        container.innerHTML = '<div class="card" style="text-align:center;color:var(--text2);">No hay BOM para esta OT.<br><small>Generá Fase 4 en el cotizador primero.</small></div>';
+        document.getElementById('despacho-actions').style.display = 'none';
+        return;
+    }
+
+    container.innerHTML = _bomItems.map((item, idx) => {
+        const cnt = _contadores[idx];
+        const completo = cnt.estado === 'completo';
+        const enProceso = cnt.pickeado > 0 && !completo;
+
+        // Buscar insumo relacionado por categoría + color
+        const insMatch = buscarInsumoMatchBOM(item);
+        const locText = insMatch ? `📍 ${insMatch.ubicacion || 'Sin ubicación'}` : '';
+        const stockInfo = insMatch ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}` : '';
+
+        const estadoIcon = completo ? '✅' : enProceso ? '🔄' : '⬜';
+
+        return `
+        <div class="bom-item ${completo ? 'completado' : enProceso ? 'en_proceso' : ''}"
+             onclick="${completo ? '' : `iniciarScanItem(${idx})`}"
+             style="cursor:${completo ? 'default' : 'pointer'};">
+            <div style="font-size:1.5rem;min-width:32px;text-align:center;">${estadoIcon}</div>
+            <div class="bom-item-info">
+                <div class="bom-item-cat">${item.categoria}</div>
+                <div class="bom-item-desc">${item.descripcion}</div>
+                <div class="bom-item-spec">${[item.especificacion, item.color].filter(Boolean).join(' · ')}${stockInfo}</div>
+                ${locText ? `<div class="bom-item-loc">${locText}</div>` : ''}
+            </div>
+            <div class="bom-item-cnt">
+                <div class="num" style="color:${completo ? 'var(--success)' : 'var(--text)'};">${cnt.pickeado}</div>
+                <div class="denom">/${cnt.requerido} ${item.unidad || 'unid.'}</div>
+            </div>
+        </div>`;
+    }).join('');
+
+    // Mostrar botón de completar si todos los ítems están completos
+    const todosCompletos = Object.values(_contadores).every(c => c.estado === 'completo');
+    document.getElementById('despacho-actions').style.display = todosCompletos ? 'block' : 'none';
+}
+
+function buscarInsumoMatchBOM(item) {
+    // Intenta encontrar un insumo que coincida con el ítem del BOM por categoría
+    const cat = (item.categoria || '').toLowerCase();
+    const color = (item.color || '').toLowerCase();
+    return _insumos.find(ins => {
+        const inscat = (ins.categoria || '').toLowerCase();
+        const inscolor = (ins.color || '').toLowerCase();
+        return inscat.includes(cat) || cat.includes(inscat)
+            || (color && (inscolor.includes(color) || color.includes(inscolor)));
+    });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SCANNER — Iniciar despacho de un ítem
+// ══════════════════════════════════════════════════════════════════
+function iniciarScanItem(idx) {
+    _scanItemIdx = idx;
+    _scanFase    = 'loc';
+    const item   = _bomItems[idx];
+    const cnt    = _contadores[idx];
+
+    // Poblar info del ítem
+    document.getElementById('scan-item-cat').textContent  = item.categoria;
+    document.getElementById('scan-item-desc').textContent = item.descripcion;
+    document.getElementById('scan-item-spec').textContent = [item.especificacion, item.color].filter(Boolean).join(' · ');
+
+    const insMatch = buscarInsumoMatchBOM(item);
+    document.getElementById('scan-item-loc').textContent = insMatch?.ubicacion ? `📍 ${insMatch.ubicacion}` : '⚠ Ubicación desconocida';
+    document.getElementById('scan-contador').textContent  = cnt.pickeado;
+    document.getElementById('scan-requerido').textContent = cnt.requerido;
+    document.getElementById('scanner-titulo').textContent = item.descripcion;
+
+    setScanEstado('loc');
+    mostrarVista('view-scanner');
+    iniciarCamara();
+}
+
+function setScanEstado(fase, resultado = null) {
+    const el    = document.getElementById('scan-estado');
+    const msg   = document.getElementById('scan-msg');
+    const sub   = document.getElementById('scan-sub');
+    el.className = 'scan-state';
+
+    if (resultado === 'error') {
+        el.classList.add('error');
+        msg.textContent = '❌ QR incorrecto';
+        sub.textContent = 'Ese no es el material correcto. Intentá de nuevo.';
+    } else if (resultado === 'ok') {
+        el.classList.add('ok');
+        msg.textContent = '✅ ¡Correcto!';
+        sub.textContent = 'Continuando...';
+    } else if (fase === 'loc') {
+        el.classList.add('esperando');
+        document.querySelector('#scan-estado .icon').textContent = '📍';
+        msg.textContent = 'Escaneá el QR de la ubicación';
+        sub.textContent = 'El QR está pegado en el estante';
+    } else if (fase === 'item') {
+        el.classList.add('esperando');
+        document.querySelector('#scan-estado .icon').textContent = '📦';
+        msg.textContent = 'Ahora escaneá el QR del contenedor';
+        sub.textContent = 'El QR está en la caja/bolsa del insumo';
+    }
+}
+
+async function iniciarCamara() {
+    if (_scanner) { try { await _scanner.stop(); } catch(e) {} }
+    _scanner = new Html5Qrcode('reader');
+    try {
+        await _scanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 280, height: 280 } },
+            onQRScan,
+            () => {} // error silencioso
+        );
+    } catch(e) {
+        document.getElementById('reader').innerHTML =
+            `<div style="padding:20px;text-align:center;color:var(--danger);">
+                <i class="bi bi-camera-video-off" style="font-size:2rem;"></i><br>
+                <div style="margin-top:8px;font-size:0.8rem;">No se pudo acceder a la cámara.<br>Verificá los permisos.</div>
+             </div>`;
+    }
+}
+
+async function detenerScanner() {
+    if (_scanner) {
+        try { await _scanner.stop(); } catch(e) {}
+        _scanner = null;
+    }
+}
+
+function cerrarScanner() {
+    detenerScanner();
+    mostrarVista('view-despacho');
+}
+
+// ── Lógica de escaneo ──
+async function onQRScan(decoded) {
+    const item = _bomItems[_scanItemIdx];
+    const cnt  = _contadores[_scanItemIdx];
+
+    if (_scanFase === 'loc') {
+        // Esperando escaneo de ubicación (LOC:...)
+        const insMatch = buscarInsumoMatchBOM(item);
+        const locEsperada = insMatch?.ubicacion ? `LOC:${insMatch.ubicacion}` : null;
+
+        if (locEsperada && decoded !== locEsperada) {
+            // Ubicación incorrecta
+            setScanEstado(null, 'error');
+            document.getElementById('scan-msg').textContent = '❌ Ubicación incorrecta';
+            document.getElementById('scan-sub').textContent = `Vas a la ubicación: ${insMatch.ubicacion}`;
+            setTimeout(() => setScanEstado('loc'), 2500);
+            return;
+        }
+        // Si no hay ubicación registrada O coincide → pasar a escaneo de item
+        setScanEstado(null, 'ok');
+        _scanFase = 'item';
+        setTimeout(() => setScanEstado('item'), 1200);
+
+    } else if (_scanFase === 'item') {
+        // Esperando escaneo del insumo (INS:cod)
+        if (!decoded.startsWith('INS:')) {
+            setScanEstado(null, 'error');
+            setTimeout(() => setScanEstado('item'), 2000);
+            return;
+        }
+        const codEscaneado = decoded.replace('INS:', '');
+        const insMatch = buscarInsumoMatchBOM(item);
+
+        // Verificar si el insumo escaneado coincide con lo esperado
+        if (insMatch && insMatch.cod !== codEscaneado) {
+            setScanEstado(null, 'error');
+            document.getElementById('scan-msg').textContent = '❌ Insumo incorrecto';
+            document.getElementById('scan-sub').textContent = `Ese es ${codEscaneado}, necesitás ${insMatch.cod}`;
+            setTimeout(() => setScanEstado('item'), 2500);
+            return;
+        }
+
+        // ✅ Correcto — incrementar contador
+        cnt.pickeado++;
+        document.getElementById('scan-contador').textContent = cnt.pickeado;
+
+        if (cnt.pickeado >= cnt.requerido) {
+            // Completado
+            cnt.estado = 'completo';
+            setScanEstado(null, 'ok');
+            document.getElementById('scan-msg').textContent = `✅ Completo (${cnt.requerido}/${cnt.requerido})`;
+            document.getElementById('scan-sub').textContent = '¡Todos los insumos recogidos!';
+            toast(`✅ ${item.descripcion} completado`);
+            await detenerScanner();
+            setTimeout(() => {
+                renderBOMItems();
+                mostrarVista('view-despacho');
+            }, 1800);
+        } else {
+            // Necesita más unidades
+            setScanEstado(null, 'ok');
+            document.getElementById('scan-msg').textContent = `✅ ${cnt.pickeado}/${cnt.requerido} — Seguí escaneando`;
+            document.getElementById('scan-sub').textContent = `Faltan ${cnt.requerido - cnt.pickeado} unidades más`;
+            setTimeout(() => setScanEstado('item'), 1200);
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FIRMA DIGITAL
+// ══════════════════════════════════════════════════════════════════
+function iniciarFirma() {
+    const resumen = _bomItems.map((item, idx) => {
+        const cnt = _contadores[idx];
+        return `<div style="padding:4px 0;border-bottom:1px solid var(--border);">
+            <strong>${item.descripcion}</strong>
+            <span style="float:right;color:var(--success);">${cnt.pickeado} ${item.unidad}</span>
+        </div>`;
+    }).join('');
+    document.getElementById('firma-resumen').innerHTML = resumen;
+
+    // Inicializar canvas de firma
+    const canvas = document.getElementById('firma-canvas');
+    _firmaCtx = canvas.getContext('2d');
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = 200;
+    _firmaCtx.fillStyle = '#fff';
+    _firmaCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+    setupFirmaCanvas(canvas);
+    mostrarVista('view-firma');
+}
+
+function setupFirmaCanvas(canvas) {
+    const getPos = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const source = e.touches ? e.touches[0] : e;
+        return { x: source.clientX - rect.left, y: source.clientY - rect.top };
+    };
+    const draw = (e) => {
+        if (!_firmaDibujando) return;
+        e.preventDefault();
+        const pos = getPos(e);
+        _firmaCtx.lineTo(pos.x, pos.y);
+        _firmaCtx.stroke();
+    };
+    canvas.addEventListener('mousedown', (e) => {
+        _firmaDibujando = true;
+        const pos = getPos(e);
+        _firmaCtx.beginPath();
+        _firmaCtx.moveTo(pos.x, pos.y);
+        _firmaCtx.strokeStyle = '#000';
+        _firmaCtx.lineWidth = 2.5;
+        _firmaCtx.lineCap = 'round';
+    });
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', () => { _firmaDibujando = false; });
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        _firmaDibujando = true;
+        const pos = getPos(e);
+        _firmaCtx.beginPath();
+        _firmaCtx.moveTo(pos.x, pos.y);
+        _firmaCtx.strokeStyle = '#000';
+        _firmaCtx.lineWidth = 3;
+        _firmaCtx.lineCap = 'round';
+    }, { passive: false });
+    canvas.addEventListener('touchmove', draw, { passive: false });
+    canvas.addEventListener('touchend', () => { _firmaDibujando = false; });
+}
+
+function limpiarFirma() {
+    const canvas = document.getElementById('firma-canvas');
+    _firmaCtx.fillStyle = '#fff';
+    _firmaCtx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+async function confirmarDespacho() {
+    const nombre = document.getElementById('firma-nombre').value.trim();
+    if (!nombre) { toast('⚠ Ingresá el nombre del receptor'); return; }
+
+    const canvas = document.getElementById('firma-canvas');
+    const firmaB64 = canvas.toDataURL('image/png');
+
+    document.getElementById('btn-confirmar-firma').disabled = true;
+    document.getElementById('btn-confirmar-firma').textContent = 'Guardando...';
+
+    try {
+        // 1. Guardar firma y actualizar estado OT
+        const { error: otErr } = await sb.from('ots')
+            .update({
+                estado: 'entregado',
+                datos_generales: {
+                    ..._otActual.datos_generales,
+                    firma: firmaB64,
+                    firma_nombre: nombre,
+                    firma_fecha: new Date().toISOString(),
+                    bom_despachado: _bomItems.map((it, i) => ({ ...it, cantidad_despachada: _contadores[i].pickeado }))
+                }
+            })
+            .eq('id', _otActual.id);
+        if (otErr) throw otErr;
+
+        // 2. Descontar stock de insumos
+        for (let idx = 0; idx < _bomItems.length; idx++) {
+            const item = _bomItems[idx];
+            const cnt  = _contadores[idx];
+            if (cnt.pickeado <= 0) continue;
+
+            const ins = buscarInsumoMatchBOM(item);
+            if (!ins) continue;
+
+            // Leer stock actual
+            const { data: insActual } = await sb.from('insumos')
+                .select('stock_mp,stock_liberado,stock_actual')
+                .eq('empresa_id', EMPRESA_ID)
+                .eq('cod', ins.cod)
+                .single();
+
+            if (!insActual) continue;
+
+            // Descontar primero de stock_liberado, luego de stock_mp
+            let resta = cnt.pickeado;
+            const libActual = insActual.stock_liberado || 0;
+            const mpActual  = insActual.stock_mp || 0;
+            const descLib   = Math.min(resta, libActual);
+            resta -= descLib;
+            const descMp    = Math.min(resta, mpActual);
+            const nuevoLib  = libActual - descLib;
+            const nuevoMp   = mpActual  - descMp;
+
+            await sb.from('insumos')
+                .update({
+                    stock_mp:       nuevoMp,
+                    stock_liberado: nuevoLib,
+                    stock_actual:   Math.max(0, (insActual.stock_actual || 0) - cnt.pickeado)
+                })
+                .eq('empresa_id', EMPRESA_ID)
+                .eq('cod', ins.cod);
+
+            // Registrar movimiento (schema alineado con inventario.html)
+            const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+                           'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+            await sb.from('movimientos_insumos').insert({
+                empresa_id: EMPRESA_ID,
+                fecha: new Date().toISOString(),
+                mes: meses[new Date().getMonth()],
+                tipo: 'SALIDA PRODUCCION',
+                codigo: ins.cod,
+                producto: ins.nemotecnico || ins.descriptor_proveedor || '',
+                almacen: 'MP',
+                cantidad: cnt.pickeado,
+                ot: _otActual.numero_ot || _otActual.id.slice(-6),
+                responsable_entrega: nombre,
+                bitacora: `Despacho OT ${_otActual.numero_ot || _otActual.id.slice(-6)}`
+            });
+        }
+
+        // 3. Actualizar orden_materiales
+        for (let idx = 0; idx < _bomItems.length; idx++) {
+            const item = _bomItems[idx];
+            const cnt  = _contadores[idx];
+            if (item.id && typeof item.id === 'string' && item.id.length > 10) {
+                await sb.from('orden_materiales')
+                    .update({ cantidad_despachada: cnt.pickeado, estado: cnt.estado === 'completo' ? 'completado' : 'parcial' })
+                    .eq('id', item.id);
+            }
+        }
+
+        toast('✅ Despacho confirmado y stock actualizado', 3000);
+        setTimeout(() => {
+            cargarOTs();
+            mostrarVista('view-ots');
+        }, 1500);
+
+    } catch (err) {
+        toast('❌ Error: ' + err.message, 4000);
+        document.getElementById('btn-confirmar-firma').disabled = false;
+        document.getElementById('btn-confirmar-firma').textContent = '✓ Confirmar entrega y descontar stock';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DESPACHO AD-HOC
+// ══════════════════════════════════════════════════════════════════
+let _adhocScanner = null;
+
+async function iniciarScannerAdHoc() {
+    if (_adhocScanner) { try { await _adhocScanner.stop(); } catch(e) {} }
+    // Usar un div temporal para el scanner
+    const div = document.getElementById('adhoc-cod');
+    _adhocScanner = new Html5Qrcode('reader-adhoc-temp');
+    // Si no existe el div, crearlo
+    if (!document.getElementById('reader-adhoc-temp')) {
+        const tmp = document.createElement('div');
+        tmp.id = 'reader-adhoc-temp';
+        tmp.style.cssText = 'width:100%;height:0;overflow:hidden;';
+        document.body.appendChild(tmp);
+    }
+    try {
+        await _adhocScanner.start(
+            { facingMode: 'environment' },
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            (decoded) => {
+                if (decoded.startsWith('INS:')) {
+                    const cod = decoded.replace('INS:', '');
+                    document.getElementById('adhoc-cod').value = cod;
+                    buscarInsumoAdHoc(cod);
+                    _adhocScanner.stop().catch(() => {});
+                }
+            },
+            () => {}
+        );
+    } catch(e) { toast('No se pudo acceder a la cámara'); }
+}
+
+async function buscarInsumoAdHoc(cod) {
+    const ins = _insumos.find(i => i.cod === cod) ||
+                _insumos.find(i => (i.cod || '').toUpperCase() === (cod || '').toUpperCase());
+    const infoDiv = document.getElementById('adhoc-insumo-info');
+    if (!ins) {
+        // Intentar cargar desde Supabase
+        const { data } = await sb.from('insumos').select('cod,nemotecnico,ubicacion,stock_actual,stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+        if (data) {
+            _insumos.push(data);
+            mostrarInfoAdHoc(data);
+        } else {
+            infoDiv.style.display = 'block';
+            infoDiv.innerHTML = `<span style="color:var(--danger);">❌ Insumo "${cod}" no encontrado en inventario</span>`;
+        }
+        return;
+    }
+    mostrarInfoAdHoc(ins);
+}
+
+function mostrarInfoAdHoc(ins) {
+    const stockTotal = (ins.stock_mp || 0) + (ins.stock_liberado || 0) + (ins.stock_actual || 0);
+    const infoDiv = document.getElementById('adhoc-insumo-info');
+    infoDiv.style.display = 'block';
+    infoDiv.innerHTML = `
+        <strong>${ins.nemotecnico || ins.cod}</strong><br>
+        <span style="color:var(--text2);">Cod: ${ins.cod} · Ubic: ${ins.ubicacion || '—'} · Stock: ${stockTotal}</span>`;
+}
+
+async function confirmarAdHoc() {
+    const cod       = document.getElementById('adhoc-cod').value.trim();
+    const cantidad  = parseInt(document.getElementById('adhoc-cantidad').value) || 0;
+    const nombre    = document.getElementById('adhoc-instalador').value.trim();
+    const otRef     = document.getElementById('adhoc-ot').value.trim();
+
+    if (!cod)     { toast('⚠ Ingresá el código del insumo'); return; }
+    if (cantidad <= 0) { toast('⚠ Cantidad debe ser mayor a 0'); return; }
+    if (!nombre)  { toast('⚠ Ingresá el nombre del instalador'); return; }
+
+    const ins = _insumos.find(i => i.cod === cod);
+
+    // Descontar stock (primero stock_liberado, luego stock_mp, también stock_actual)
+    if (ins) {
+        const { data: insActual } = await sb.from('insumos')
+            .select('stock_mp,stock_liberado,stock_actual').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+        if (insActual) {
+            let resta   = cantidad;
+            const lib   = insActual.stock_liberado || 0;
+            const mp    = insActual.stock_mp  || 0;
+            const descLib = Math.min(resta, lib); resta -= descLib;
+            const descMp  = Math.min(resta, mp);
+            await sb.from('insumos').update({
+                stock_mp:       mp  - descMp,
+                stock_liberado: lib - descLib,
+                stock_actual:   Math.max(0, (insActual.stock_actual || 0) - cantidad)
+            }).eq('empresa_id', EMPRESA_ID).eq('cod', cod);
+        }
+    }
+
+    // Registrar movimiento (schema alineado con inventario.html)
+    const mesesA = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+                    'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+    const insNemo = _insumos.find(i => i.cod === cod);
+    await sb.from('movimientos_insumos').insert({
+        empresa_id: EMPRESA_ID,
+        fecha: new Date().toISOString(),
+        mes: mesesA[new Date().getMonth()],
+        tipo: 'SALIDA PRODUCCION',
+        codigo: cod,
+        producto: insNemo ? (insNemo.nemotecnico || insNemo.descriptor_proveedor || '') : '',
+        almacen: 'MP',
+        cantidad,
+        ot: otRef || '',
+        responsable_entrega: nombre,
+        bitacora: `Despacho ad-hoc instalador: ${nombre}${otRef ? ' OT ' + otRef : ''}`
+    });
+
+    toast(`✅ Salida de ${cantidad}x ${cod} registrada para ${nombre}`, 3000);
+    document.getElementById('adhoc-cod').value = '';
+    document.getElementById('adhoc-cantidad').value = '1';
+    document.getElementById('adhoc-instalador').value = '';
+    document.getElementById('adhoc-ot').value = '';
+    document.getElementById('adhoc-insumo-info').style.display = 'none';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INICIAR
+// ══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', () => {
+    cargarOTs();
+
+    // Buscar insumo cuando el usuario escribe el código manualmente
+    document.getElementById('adhoc-cod').addEventListener('blur', (e) => {
+        const cod = e.target.value.trim();
+        if (cod) buscarInsumoAdHoc(cod);
+    });
+});
+</script>
+</body>
+</html>

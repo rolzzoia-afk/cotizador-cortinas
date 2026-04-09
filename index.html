@@ -1086,6 +1086,9 @@
             <button class="nav-link" id="telas-tab" data-bs-toggle="tab" data-bs-target="#telas" type="button" role="tab" aria-controls="telas" aria-selected="false"><i class="bi bi-textile-fill"></i> Telas</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="bodeguero-tab" data-bs-toggle="tab" data-bs-target="#bodeguero" type="button" role="tab" aria-controls="bodeguero" aria-selected="false"><i class="bi bi-boxes"></i> Bodeguero</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="ojodedios-tab" data-bs-toggle="tab" data-bs-target="#ojodedios" type="button" role="tab" aria-controls="ojodedios" aria-selected="false"><i class="bi bi-eye-fill"></i> Ojo de Dios</button>
         </li>
     </ul>
@@ -1855,6 +1858,18 @@
                 </div>
                 <iframe id="iframe-telas" title="Inventario Telas Rolzzo" style="display:none;"
                         onload="if(this.getAttribute('src')){document.getElementById('telas-loading').style.display='none'; this.style.display='block';}"></iframe>
+            </div>
+        </div>
+
+        <!-- BODEGUERO: Módulo de despacho de materiales (iframe lazy) -->
+        <div class="tab-pane fade" id="bodeguero" role="tabpanel" aria-labelledby="bodeguero-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="bodeguero-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Bodeguero...</span>
+                </div>
+                <iframe id="iframe-bodeguero" title="Bodeguero Rolzzo" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('bodeguero-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -7644,6 +7659,35 @@
                 presenciaActualizar('telas', 'Módulo de Telas');
             } catch(e) {
                 console.error('[telas-tab] Error al cargar iframe:', e);
+            }
+        });
+
+        // ── Lazy loading de iframe Bodeguero ──
+        document.getElementById('bodeguero-tab').addEventListener('shown.bs.tab', () => {
+            try {
+                const iframe  = document.getElementById('iframe-bodeguero');
+                const loading = document.getElementById('bodeguero-loading');
+                if (!iframe.getAttribute('src')) {
+                    const timeout = setTimeout(() => {
+                        if (loading.style.display !== 'none') {
+                            loading.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#94a3b8;">
+                                    <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+                                    <p style="font-size:0.9rem;margin-bottom:8px;">El módulo bodeguero tardó en cargar.</p>
+                                    <p style="font-size:0.8rem;color:#64748b;">Asegúrate de que <strong>bodeguero.html</strong> esté en la misma carpeta.</p>
+                                    <button onclick="document.getElementById('iframe-bodeguero').src='bodeguero.html'" style="margin-top:12px;padding:6px 16px;background:rgba(124,117,240,0.3);color:#7C75F0;border:1px solid rgba(124,117,240,0.4);border-radius:6px;cursor:pointer;font-size:0.82rem;">Reintentar</button>
+                                </div>`;
+                        }
+                    }, 12000);
+                    iframe.addEventListener('load', function onFirstLoad() {
+                        clearTimeout(timeout);
+                        iframe.removeEventListener('load', onFirstLoad);
+                    }, { once: true });
+                    iframe.src = 'bodeguero.html';
+                }
+                presenciaActualizar('bodeguero', 'Módulo Bodeguero');
+            } catch(e) {
+                console.error('[bodeguero-tab] Error al cargar iframe:', e);
             }
         });
 

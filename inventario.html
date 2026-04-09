@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-primary:    #0A0A0B;
@@ -700,6 +701,12 @@
         </button>
     </div>
     <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+        <a href="bodeguero.html" target="_blank" class="btn-inv btn-outline-inv" style="padding:5px 11px; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px;" title="Abrir módulo Bodeguero">
+            <i class="bi bi-boxes"></i> <span class="d-none d-sm-inline">Bodeguero</span>
+        </a>
+        <a href="index.html" target="_blank" class="btn-inv btn-outline-inv" style="padding:5px 11px; font-size:0.75rem; text-decoration:none; display:inline-flex; align-items:center; gap:5px;" title="Volver al cotizador">
+            <i class="bi bi-house"></i>
+        </a>
         <span id="estadoConexion" style="font-size:0.75rem; color:var(--text-muted);">Conectando...</span>
         <span id="usuarioActual" style="font-size:0.75rem; color:var(--text-secondary);"></span>
     </div>
@@ -1083,6 +1090,38 @@
     </div>
 </div>
 
+<!-- ═══ MODAL: QR INSUMO ═══ -->
+<div class="modal-overlay" id="modalQRInsumo">
+    <div class="modal-box" style="max-width:420px; text-align:center;">
+        <h5 id="qr-insumo-titulo" style="margin-bottom:4px;">QR del Insumo</h5>
+        <p id="qr-insumo-cod" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:16px;"></p>
+        <div style="display:flex; gap:24px; justify-content:center; flex-wrap:wrap;">
+            <!-- QR Item (INS:cod) -->
+            <div>
+                <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:6px;">
+                    <i class="bi bi-box-seam"></i> QR del Contenedor/Caja
+                </div>
+                <div id="qr-canvas-item" style="display:inline-block; background:#fff; padding:10px; border-radius:8px;"></div>
+                <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:4px;">Pegar en la caja/contenedor</div>
+            </div>
+            <!-- QR Location (LOC:ubicacion) -->
+            <div id="qr-ubicacion-section">
+                <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:6px;">
+                    <i class="bi bi-geo-alt"></i> QR de Ubicación
+                </div>
+                <div id="qr-canvas-loc" style="display:inline-block; background:#fff; padding:10px; border-radius:8px;"></div>
+                <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:4px; font-weight:600;" id="qr-ubicacion-label">Pegar en el estante</div>
+            </div>
+        </div>
+        <div class="modal-actions" style="margin-top:20px;">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalQRInsumo')">Cerrar</button>
+            <button class="btn-inv btn-primary-inv" onclick="imprimirQRInsumo()">
+                <i class="bi bi-printer"></i> Imprimir etiquetas
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- ═══ MODAL: DETALLE RACK CELL ═══ -->
 <div class="modal-overlay" id="modalRackCell">
     <div class="modal-box" style="max-width:450px;">
@@ -1262,6 +1301,37 @@ async function inicializar() {
 
         document.getElementById('estadoConexion').textContent = '● Conectado';
         document.getElementById('estadoConexion').style.color = 'var(--success)';
+
+        // ── Realtime: actualizar alertas cuando el bodeguero modifica stock ──
+        try {
+            sbInv.channel('insumos-cambios')
+                .on('postgres_changes', {
+                    event: '*',
+                    schema: 'public',
+                    table: 'insumos',
+                    filter: `empresa_id=eq.${EMPRESA_ID}`
+                }, async (payload) => {
+                    // Actualizar solo el insumo cambiado en memoria
+                    if (payload.new && payload.new.cod) {
+                        const idx = INV.insumos.findIndex(i => i.cod === payload.new.cod);
+                        if (idx >= 0) INV.insumos[idx] = { ...INV.insumos[idx], ...payload.new };
+                        else INV.insumos.push(payload.new);
+                    }
+                    if (payload.eventType === 'DELETE' && payload.old && payload.old.cod) {
+                        INV.insumos = INV.insumos.filter(i => i.cod !== payload.old.cod);
+                    }
+                    calcularAlertas();
+                    renderizarAlertas();
+                    renderizarCatalogo();
+                    // Mostrar notificación discreta si hay nuevas alertas
+                    if (INV.alertas.length > 0) {
+                        mostrarToastInv(`Stock actualizado — ${INV.alertas.length} alerta(s)`, 'warn');
+                    }
+                })
+                .subscribe();
+        } catch(e) {
+            console.warn('[INV] Realtime no disponible:', e.message);
+        }
 
     } catch (e) {
         console.error('[INV] Error inicializando:', e);
@@ -1549,9 +1619,12 @@ function filtrarCatalogo() {
             <td style="text-align:right; font-weight:600;">${fmtNum(costoTotal)}</td>
             <td style="text-align:center;">${tagEstado}</td>
             <td style="font-size:0.78rem; color:var(--text-secondary); max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${(i.comentarios||'').replace(/"/g,"'")}">${i.comentarios || '-'}</td>
-            <td style="text-align:center;">
+            <td style="text-align:center; white-space:nowrap;">
                 <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem;" onclick="editarInsumo('${i.id}')">
                     <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem; margin-left:4px;" onclick="mostrarQRInsumo('${i.cod}','${(i.nemotecnico||i.descriptor_proveedor||i.cod).replace(/'/g,"\\'")}')" title="Ver QR del insumo">
+                    <i class="bi bi-qr-code"></i>
                 </button>
             </td>
         </tr>`;
@@ -2003,19 +2076,118 @@ function renderizarAlertas() {
     }
     vacio.style.display = 'none';
 
-    lista.innerHTML = INV.alertas.map(a => {
-        const icon = a.severity === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill';
+    // Ordenar: SIN_STOCK primero, luego STOCK_BAJO
+    const sorted = [...INV.alertas].sort((a,b) => {
+        if (a.severity === 'danger' && b.severity !== 'danger') return -1;
+        if (b.severity === 'danger' && a.severity !== 'danger') return 1;
+        return (a.codigo || '').localeCompare(b.codigo || '');
+    });
+
+    lista.innerHTML = sorted.map(a => {
+        const icon  = a.severity === 'danger' ? 'bi-x-circle-fill' : 'bi-exclamation-triangle-fill';
         const color = a.severity === 'danger' ? 'var(--danger)' : 'var(--warning)';
-        return `<div class="mov-card" style="border-color:${color}20;">
+        const ins   = INV.insumos.find(i => i.cod === a.codigo);
+        const st    = ins ? getStockTotal(ins) : 0;
+        const min   = ins ? (ins.minimo || 0) : 0;
+        const falta = min > 0 ? Math.max(0, min - st) : 0;
+        const ubic  = ins ? (ins.ubicacion || '—') : '—';
+        return `<div class="mov-card" style="border-color:${color}20; margin-bottom:8px;">
             <div class="mov-icon" style="background:${color}20; color:${color};">
                 <i class="bi ${icon}"></i>
             </div>
-            <div class="mov-info">
-                <div class="mov-title" style="color:${color};">${a.tipo === 'SIN_STOCK' ? 'Sin Stock' : 'Stock Bajo'}</div>
-                <div class="mov-detail">${a.mensaje}</div>
+            <div class="mov-info" style="flex:1;">
+                <div class="mov-title" style="color:${color}; display:flex; justify-content:space-between; align-items:center;">
+                    <span>${a.tipo === 'SIN_STOCK' ? 'Sin Stock' : 'Stock Bajo'}</span>
+                    <span style="font-size:0.72rem; font-weight:400; color:var(--text-muted);">${a.codigo}</span>
+                </div>
+                <div class="mov-detail" style="margin-bottom:6px;">${a.mensaje}</div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; font-size:0.72rem; color:var(--text-muted); margin-bottom:8px;">
+                    <span><i class="bi bi-geo-alt"></i> ${ubic}</span>
+                    <span><i class="bi bi-stack"></i> Stock: <strong style="color:${color};">${st}</strong></span>
+                    ${min > 0 ? `<span><i class="bi bi-arrow-down-circle"></i> Mínimo: ${min}</span>` : ''}
+                    ${falta > 0 ? `<span style="color:${color};font-weight:700;"><i class="bi bi-cart-plus"></i> Reponer: ${falta}</span>` : ''}
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <button class="btn-inv btn-outline-inv" style="padding:4px 10px; font-size:0.72rem;"
+                        onclick="verEnCatalogo('${a.codigo}')">
+                        <i class="bi bi-search"></i> Ver ítem
+                    </button>
+                    <button class="btn-inv" style="padding:4px 10px; font-size:0.72rem; background:${color}20; color:${color}; border:1px solid ${color}40;"
+                        onclick="registrarReposicion('${a.codigo}', ${falta || 1})">
+                        <i class="bi bi-clipboard-plus"></i> Registrar pedido
+                    </button>
+                </div>
             </div>
         </div>`;
     }).join('');
+}
+
+// Ir al catálogo y resaltar el ítem
+function verEnCatalogo(cod) {
+    switchPanel('catalogo');
+    document.getElementById('filtroCatalogo').value = cod;
+    filtrarCatalogo();
+}
+
+// Registrar movimiento de reposición (pedido de compra)
+async function registrarReposicion(cod, cantidad) {
+    const ins = INV.insumos.find(i => i.cod === cod);
+    if (!ins) return;
+    const nemo = ins.nemotecnico || ins.descriptor_proveedor || cod;
+
+    // Modal simple de confirmación con cantidad editable
+    const input = prompt(`Registrar pedido de reposición\n\n${nemo}\n\nCantidad a pedir:`, cantidad);
+    if (input === null) return;
+    const cant = parseInt(input, 10);
+    if (isNaN(cant) || cant <= 0) { alert('Cantidad inválida'); return; }
+
+    try {
+        const mesesRep = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO',
+                          'AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+        const { error } = await sbInv.from('movimientos_insumos').insert({
+            empresa_id: EMPRESA_ID,
+            fecha: new Date().toISOString(),
+            mes: mesesRep[new Date().getMonth()],
+            tipo: 'PEDIDO REPOSICION',
+            codigo: cod,
+            producto: nemo,
+            almacen: 'MP',
+            cantidad: cant,
+            responsable_entrega: document.getElementById('usuarioActual')?.textContent || 'Inventario',
+            bitacora: `Pedido de reposición: ${nemo}`
+        });
+        if (error && error.code !== '42P01') throw error;
+        mostrarToastInv(`Pedido registrado: ${cant} unid. de ${nemo}`, 'success');
+        // Recargar movimientos para reflejar el nuevo pedido
+        const { data: movs } = await sbInv.from('movimientos_insumos')
+            .select('*').eq('empresa_id', EMPRESA_ID).order('fecha', { ascending: false }).limit(500);
+        INV.movimientos = movs || [];
+        renderizarMovimientos();
+    } catch(e) {
+        console.error('[reposicion]', e);
+        mostrarToastInv('Error al registrar pedido: ' + e.message, 'warn');
+    }
+}
+
+// Toast simple para inventario
+function mostrarToastInv(msg, tipo) {
+    let toast = document.getElementById('toastInv');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toastInv';
+        toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--bg-card);border:1px solid var(--border-mid);border-radius:10px;padding:10px 20px;font-size:0.82rem;z-index:9999;opacity:0;transition:all .25s;white-space:nowrap;pointer-events:none;';
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.borderColor = tipo === 'success' ? 'rgba(74,222,128,.4)' : 'rgba(251,191,36,.4)';
+    toast.style.color = tipo === 'success' ? 'var(--success)' : 'var(--warning)';
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(-50%) translateY(20px)';
+    }, 3000);
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2399,6 +2571,99 @@ async function importarExcelInventario(event) {
 
     // Reset input
     event.target.value = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// QR — Generar y mostrar QR para insumos y ubicaciones
+// ══════════════════════════════════════════════════════════════════
+let _qrInsumoActual = null; // { cod, nemo, ubicacion }
+
+function mostrarQRInsumo(cod, nemo) {
+    const ins = INV.insumos.find(i => i.cod === cod);
+    _qrInsumoActual = { cod, nemo, ubicacion: ins?.ubicacion || '' };
+
+    document.getElementById('qr-insumo-titulo').textContent = nemo;
+    document.getElementById('qr-insumo-cod').textContent = `Código: ${cod}`;
+
+    // Limpiar canvases previos
+    const canvasItem = document.getElementById('qr-canvas-item');
+    const canvasLoc  = document.getElementById('qr-canvas-loc');
+    canvasItem.innerHTML = '';
+    canvasLoc.innerHTML  = '';
+
+    // QR del contenedor/insumo: INS:{cod}
+    new QRCode(canvasItem, {
+        text: `INS:${cod}`,
+        width: 150, height: 150,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // QR de la ubicación: LOC:{ubicacion}
+    const ubicacion = ins?.ubicacion || '';
+    const secUbic = document.getElementById('qr-ubicacion-section');
+    if (ubicacion) {
+        secUbic.style.display = 'block';
+        document.getElementById('qr-ubicacion-label').textContent = ubicacion;
+        new QRCode(canvasLoc, {
+            text: `LOC:${ubicacion}`,
+            width: 150, height: 150,
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    } else {
+        secUbic.style.display = 'none';
+    }
+
+    document.getElementById('modalQRInsumo').classList.add('visible');
+}
+
+function imprimirQRInsumo() {
+    const { cod, nemo, ubicacion } = _qrInsumoActual || {};
+    if (!cod) return;
+
+    // Obtener imágenes base64 de los canvas
+    const canvasItem = document.querySelector('#qr-canvas-item canvas');
+    const canvasLoc  = document.querySelector('#qr-canvas-loc canvas');
+    const imgItem = canvasItem ? canvasItem.toDataURL() : '';
+    const imgLoc  = canvasLoc  ? canvasLoc.toDataURL()  : '';
+
+    const html = `
+    <html><head><title>QR ${cod}</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; }
+        .etiqueta { display: inline-block; border: 2px solid #000; border-radius: 8px; padding: 12px 16px;
+                    margin: 8px; text-align: center; width: 180px; vertical-align: top; }
+        .etiqueta img { width: 150px; height: 150px; display: block; margin: 0 auto 6px; }
+        .etiqueta .titulo { font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+        .etiqueta .sub { font-size: 9px; color: #555; }
+        .etiqueta .tipo { font-size: 9px; background: #f0f0f0; border-radius: 3px; padding: 1px 5px; margin-bottom: 4px; display: inline-block; }
+        @media print { body { padding: 0; } }
+    </style></head>
+    <body>
+        ${imgItem ? `
+        <div class="etiqueta">
+            <div class="tipo">📦 CAJA / CONTENEDOR</div>
+            <img src="${imgItem}" alt="QR Item">
+            <div class="titulo">${nemo || cod}</div>
+            <div class="sub">Código: ${cod}</div>
+            <div class="sub">INS:${cod}</div>
+        </div>` : ''}
+        ${imgLoc && ubicacion ? `
+        <div class="etiqueta">
+            <div class="tipo">📍 UBICACIÓN</div>
+            <img src="${imgLoc}" alt="QR Loc">
+            <div class="titulo">${ubicacion}</div>
+            <div class="sub">Insumo: ${cod}</div>
+            <div class="sub">LOC:${ubicacion}</div>
+        </div>` : ''}
+    </body></html>`;
+
+    const w = window.open('', '_blank', 'width=500,height=400');
+    w.document.write(html);
+    w.document.close();
+    w.focus();
+    setTimeout(() => { w.print(); }, 500);
 }
 
 // ══════════════════════════════════════════════════════════════════
