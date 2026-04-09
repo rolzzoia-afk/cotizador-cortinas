@@ -2,7 +2,10 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Inventario">
     <title>Inventario — Rolzzo</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -631,13 +634,96 @@
             box-shadow: 0 0 20px rgba(99,102,241,0.1);
         }
 
-        /* ── RESPONSIVE ── */
+        /* ══════════════════════════════════════════════════════
+           SAFE AREA — iPhone notch / Dynamic Island
+        ══════════════════════════════════════════════════════ */
+        .inv-header {
+            padding-top: max(14px, env(safe-area-inset-top));
+            padding-left: max(24px, env(safe-area-inset-left));
+            padding-right: max(24px, env(safe-area-inset-right));
+        }
+
+        /* ══════════════════════════════════════════════════════
+           TOUCH TARGETS — mínimo 44px
+        ══════════════════════════════════════════════════════ */
+        .inv-tab            { min-height: 44px; }
+        .btn-inv            { min-height: 44px; display: inline-flex; align-items: center; }
+        .form-control,
+        .form-select,
+        input[type="text"],
+        input[type="number"],
+        input[type="search"],
+        select              { min-height: 44px; font-size: 1rem; }
+        .form-control-sm,
+        .form-select-sm     { min-height: 40px; font-size: 0.9rem; }
+        .btn-sm             { min-height: 40px; min-width: 40px; }
+
+        /* ══════════════════════════════════════════════════════
+           MÓVIL ≤ 768px
+        ══════════════════════════════════════════════════════ */
         @media (max-width: 768px) {
-            .inv-header { padding: 10px 12px; }
-            .inv-content { padding: 12px; }
+            .inv-header {
+                padding: max(10px, env(safe-area-inset-top)) 12px 10px;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            /* Tabs: scroll horizontal en lugar de wrap */
+            .inv-tabs {
+                order: 10;          /* Mueve los tabs a la segunda fila */
+                width: 100%;
+                overflow-x: auto;
+                overflow-y: hidden;
+                border-radius: 12px;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                gap: 2px;
+            }
+            .inv-tabs::-webkit-scrollbar { display: none; }
+            .inv-tab {
+                flex-shrink: 0;     /* Evita que se compriman */
+                padding: 8px 14px;
+                font-size: 0.75rem;
+            }
+            /* Nav links (Bodeguero / Home) compactos */
+            .inv-header > div:last-child { margin-left: 0; }
+
+            .inv-content { padding: 12px 10px; }
+            .stats-row { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+            .filter-row { flex-direction: column; gap: 8px; }
+            .search-wrapper { width: 100%; min-width: unset; }
+
+            /* Tabla: scroll horizontal */
+            .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+            /* Cards de rack más compactas */
+            .rack-section { padding: 10px; }
+            .stat-card { padding: 14px 12px; }
+            .stat-value { font-size: 1.6rem; }
+
+            /* Alertas: full width */
+            .alert-bar { padding: 8px 12px; font-size: 0.8rem; flex-wrap: wrap; gap: 6px; }
+        }
+
+        /* ══════════════════════════════════════════════════════
+           MÓVIL PEQUEÑO ≤ 480px
+        ══════════════════════════════════════════════════════ */
+        @media (max-width: 480px) {
             .stats-row { grid-template-columns: repeat(2, 1fr); }
-            .filter-row { flex-direction: column; }
-            .search-wrapper { width: 100%; }
+            .inv-header h5 { font-size: 0.95rem; }
+            .stat-value { font-size: 1.4rem; }
+            .glass-card { border-radius: 10px; padding: 12px; }
+        }
+
+        /* ══════════════════════════════════════════════════════
+           TABLET 769px – 1100px
+        ══════════════════════════════════════════════════════ */
+        @media (min-width: 769px) and (max-width: 1100px) {
+            .stats-row { grid-template-columns: repeat(3, 1fr); }
+            .inv-tabs { overflow-x: auto; scrollbar-width: none; }
+            .inv-tabs::-webkit-scrollbar { display: none; }
+            .inv-tab { padding: 7px 14px; font-size: 0.78rem; }
+            .filter-row { flex-wrap: wrap; gap: 8px; }
         }
 
         /* ── IMPORTAR EXCEL ── */
