@@ -2097,9 +2097,11 @@ async function importarExcelTelas(event) {
             // ── 3. ACTUALIZAR ALMACÉN desde las grillas LIBERADO / MATERIAS PRIMAS ──
             await importarAlmacenDesdeGrillas(wb);
 
-            // ── 4. POSICIONES: cruzar LIBERADO ↔ MAPA-COLMENA por coordenada de celda ──
-            if (wb.Sheets['LIBERADO'] && wb.Sheets['MAPA-COLMENA']) {
-                const n = await importarPosicionesRack(wb.Sheets['LIBERADO'], wb.Sheets['MAPA-COLMENA'], 'LIBERADO');
+            // ── 4. POSICIONES: cruzar LIBERADO-ROLZZO ↔ MAPA-COLMENA por coordenada de celda ──
+            // "LIBERADO - ROLZZO" comparte el mismo sistema de coords que MAPA-COLMENA (Q,R,S,T,U,V)
+            const sheetLibRolzzo = wb.Sheets['LIBERADO - ROLZZO'] || wb.Sheets['LIBERADO'];
+            if (sheetLibRolzzo && wb.Sheets['MAPA-COLMENA']) {
+                const n = await importarPosicionesRack(sheetLibRolzzo, wb.Sheets['MAPA-COLMENA'], 'LIBERADO');
                 logTel(`Posiciones asignadas: ${n}`, 'success');
             }
 
