@@ -696,8 +696,9 @@
                         <th onclick="ordenarCatalogo('grupo')">Grupo</th>
                         <th onclick="ordenarCatalogo('nemotecnico')">Nemotécnico</th>
                         <th onclick="ordenarCatalogo('proveedor')">Proveedor</th>
-                        <th style="text-align:center;" onclick="ordenarCatalogo('ancho')">Ancho (cm)</th>
-                        <th style="text-align:center;">Metros Rollo</th>
+                        <th onclick="ordenarCatalogo('cod_ext')">Cód. Externo</th>
+                        <th onclick="ordenarCatalogo('descriptor')">Descriptor</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('ancho')">Ancho (m)</th>
                         <th onclick="ordenarCatalogo('posicion')">Posición</th>
                         <th onclick="ordenarCatalogo('almacen')">Almacén</th>
                         <th style="text-align:center;" onclick="ordenarCatalogo('estado')">Estado</th>
@@ -939,12 +940,16 @@
                 <select id="tela-proveedor"></select>
             </div>
             <div>
-                <label>Ancho (cm)</label>
-                <input type="number" id="tela-ancho" placeholder="270" min="1">
+                <label>Cód. Externo</label>
+                <input type="text" id="tela-cod_ext" placeholder="ROB 085">
             </div>
             <div>
-                <label>Metros por rollo</label>
-                <input type="number" id="tela-metros_rollo" placeholder="50" step="0.1" min="0">
+                <label>Descriptor</label>
+                <input type="text" id="tela-descriptor" placeholder="BLANCO ESTANDAR">
+            </div>
+            <div>
+                <label>Ancho (m)</label>
+                <input type="number" id="tela-ancho" placeholder="2.8" step="0.01" min="0">
             </div>
             <div>
                 <label>Posición Rack</label>
@@ -1048,8 +1053,8 @@
                 <select id="falla-tipo_falla"></select>
             </div>
             <div>
-                <label>Ancho (cm)</label>
-                <input type="number" id="falla-ancho" placeholder="270">
+                <label>Ancho (m)</label>
+                <input type="number" id="falla-ancho" placeholder="2.8" step="0.01">
             </div>
             <div>
                 <label>Alto / Metraje (m)</label>
@@ -1375,7 +1380,7 @@ function filtrarCatalogo() {
     const est  = document.getElementById('filtroEstado').value;
 
     return TEL.telas.filter(t => {
-        const matchQ = !q || [t.codigo,t.nemotecnico,t.proveedor,t.grupo,t.posicion,t.proveedor_codigo]
+        const matchQ = !q || [t.codigo,t.nemotecnico,t.proveedor,t.grupo,t.posicion,t.proveedor_codigo,t.cod_ext,t.descriptor]
             .some(v => (v||'').toLowerCase().includes(q));
         const matchTipo  = !tipo  || t.tipo  === tipo;
         const matchGrupo = !grupo || t.grupo === grupo;
@@ -1404,7 +1409,7 @@ function renderizarCatalogo() {
 
     const tbody = document.getElementById('tbodyCatalogo');
     if (!lista.length) {
-        tbody.innerHTML = `<tr><td colspan="13" style="text-align:center; padding:24px; color:var(--text-muted);">
+        tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:24px; color:var(--text-muted);">
             <i class="bi bi-search"></i> Sin resultados
         </td></tr>`;
         document.getElementById('catalogoCount').textContent = '';
@@ -1418,8 +1423,9 @@ function renderizarCatalogo() {
             <td style="color:var(--text-secondary);">${t.grupo||'—'}</td>
             <td>${t.nemotecnico||'—'}</td>
             <td style="color:var(--text-secondary);">${t.proveedor||'—'}</td>
+            <td style="color:var(--text-muted); font-size:0.75rem;">${t.cod_ext||'—'}</td>
+            <td style="color:var(--text-secondary); font-size:0.78rem; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${t.descriptor||''}">${t.descriptor||'—'}</td>
             <td style="text-align:center;">${t.ancho||'—'}</td>
-            <td style="text-align:center;">${t.metros_rollo ? t.metros_rollo+'m' : '—'}</td>
             <td><code style="font-size:0.78rem; background:rgba(124,117,240,0.1); padding:2px 6px; border-radius:4px; color:var(--primary-500);">${t.posicion||'—'}</code></td>
             <td>${estadoBadge(null, t.almacen)}</td>
             <td style="text-align:center;">${estadoBadge(t.estado, null)}</td>
@@ -1453,8 +1459,9 @@ function abrirModalTela(id = null) {
         document.getElementById('tela-tipo').value = t.tipo || 'BK';
         document.getElementById('tela-nemotecnico').value = t.nemotecnico || '';
         document.getElementById('tela-proveedor').value = t.proveedor || '';
+        document.getElementById('tela-cod_ext').value = t.cod_ext || '';
+        document.getElementById('tela-descriptor').value = t.descriptor || '';
         document.getElementById('tela-ancho').value = t.ancho || '';
-        document.getElementById('tela-metros_rollo').value = t.metros_rollo || '';
         document.getElementById('tela-posicion').value = t.posicion || '';
         document.getElementById('tela-almacen').value = t.almacen || 'LIBERADO';
         document.getElementById('tela-estado').value = t.estado || 'CARGADO';
@@ -1466,7 +1473,8 @@ function abrirModalTela(id = null) {
         titulo.textContent = 'Nueva Tela';
         btnElim.style.display = 'none';
         document.getElementById('tela-id').value = '';
-        ['tela-codigo','tela-nemotecnico','tela-proveedor','tela-ancho','tela-metros_rollo',
+        ['tela-codigo','tela-nemotecnico','tela-proveedor','tela-ancho',
+         'tela-cod_ext','tela-descriptor',
          'tela-posicion','tela-proveedor_codigo','tela-observaciones'].forEach(id => {
             document.getElementById(id).value = '';
         });
@@ -1502,7 +1510,8 @@ async function guardarTela() {
         nemotecnico:      document.getElementById('tela-nemotecnico').value.trim() || null,
         proveedor:        document.getElementById('tela-proveedor').value || null,
         ancho:            parseFloat(document.getElementById('tela-ancho').value) || null,
-        metros_rollo:     parseFloat(document.getElementById('tela-metros_rollo').value) || null,
+        cod_ext:          document.getElementById('tela-cod_ext').value.trim() || null,
+        descriptor:       document.getElementById('tela-descriptor').value.trim() || null,
         posicion:         document.getElementById('tela-posicion').value.trim().toUpperCase() || null,
         almacen:          document.getElementById('tela-almacen').value,
         estado:           document.getElementById('tela-estado').value,
@@ -1637,8 +1646,8 @@ function mostrarDetalleCell(slot, info) {
         <div style="display:flex; flex-direction:column; gap:10px;">
             <div>${tipoBadge(info.tipo)} <strong style="margin-left:8px;">${info.codigo}</strong></div>
             ${tela ? `<div style="font-size:0.85rem; color:var(--text-secondary);">${tela.nemotecnico||''}</div>` : ''}
-            ${tela ? `<div style="font-size:0.82rem;"><span style="color:var(--text-muted);">Ancho:</span> ${tela.ancho||'—'} cm</div>` : ''}
-            ${tela ? `<div style="font-size:0.82rem;"><span style="color:var(--text-muted);">Metros/rollo:</span> ${tela.metros_rollo||'—'} m</div>` : ''}
+            ${tela ? `<div style="font-size:0.82rem;"><span style="color:var(--text-muted);">Ancho:</span> ${tela.ancho||'—'} m</div>` : ''}
+            ${tela?.descriptor ? `<div style="font-size:0.8rem; color:var(--text-muted);">${tela.descriptor}</div>` : ''}
             <div style="font-size:0.82rem;">${estadoBadge(null, info.almacen)}</div>
             ${fallas.length ? `<div style="background:rgba(248,113,113,0.1); border:1px solid rgba(248,113,113,0.2); border-radius:8px; padding:10px; font-size:0.8rem; color:var(--danger);">
                 <i class="bi bi-exclamation-triangle"></i> ${fallas.length} falla(s) pendiente(s)
@@ -2009,16 +2018,19 @@ async function importarDesdeInventario(sheet) {
     // Buscar fila de encabezado: la que tenga 'COD' y 'GRUPO'
     let headerRow = -1;
     let colCod = -1, colNemo = -1, colGrupo = -1, colProv = -1, colAncho = -1;
+    let colCodExt = -1, colDescriptor = -1;
     for (let r = 0; r < Math.min(rows.length, 12); r++) {
         const row = (rows[r] || []).map(c => c ? c.toString().trim().toUpperCase().replace(/\s+/g,' ') : '');
         const iCod = row.findIndex(c => c === 'COD' || c === 'CODIGO');
         if (iCod >= 0 && row.includes('GRUPO')) {
-            headerRow = r;
-            colCod   = iCod;
-            colNemo  = row.findIndex(c => c.includes('NEMOT'));
-            colGrupo = row.findIndex(c => c === 'GRUPO');
-            colProv  = row.findIndex(c => c === 'PROVEEDOR');
-            colAncho = row.findIndex(c => c.includes('ANCHO'));
+            headerRow    = r;
+            colCod       = iCod;
+            colNemo      = row.findIndex(c => c.includes('NEMOT'));
+            colGrupo     = row.findIndex(c => c === 'GRUPO');
+            colProv      = row.findIndex(c => c === 'PROVEEDOR');
+            colAncho     = row.findIndex(c => c.includes('ANCHO'));
+            colCodExt    = row.findIndex(c => c.includes('COD') && c.includes('EXT'));
+            colDescriptor= row.findIndex(c => c === 'DESCRIPTOR');
             break;
         }
     }
@@ -2039,9 +2051,11 @@ async function importarDesdeInventario(sheet) {
         const tipo = pfx === 'BK' ? 'BK' : pfx === 'DU' ? 'DU' : pfx === 'SC' ? 'SC' : null;
 
         const obj = { empresa_id: EMPRESA_ID, codigo: normalized, tipo };
-        if (colNemo  >= 0 && row[colNemo])  obj.nemotecnico = row[colNemo].toString().trim();
-        if (colGrupo >= 0 && row[colGrupo]) obj.grupo       = row[colGrupo].toString().trim();
-        if (colProv  >= 0 && row[colProv])  obj.proveedor   = row[colProv].toString().trim();
+        if (colNemo      >= 0 && row[colNemo])      obj.nemotecnico = row[colNemo].toString().trim();
+        if (colGrupo     >= 0 && row[colGrupo])     obj.grupo       = row[colGrupo].toString().trim();
+        if (colProv      >= 0 && row[colProv])      obj.proveedor   = row[colProv].toString().trim();
+        if (colCodExt    >= 0 && row[colCodExt])    obj.cod_ext     = row[colCodExt].toString().trim();
+        if (colDescriptor>= 0 && row[colDescriptor])obj.descriptor  = row[colDescriptor].toString().trim();
         if (colAncho >= 0 && row[colAncho] !== null && row[colAncho] !== '') {
             const a = parseFloat(row[colAncho]);
             if (!isNaN(a)) obj.ancho = a;
@@ -2256,8 +2270,9 @@ function exportarTelaExcel() {
         Grupo: t.grupo,
         Nemotécnico: t.nemotecnico,
         Proveedor: t.proveedor,
-        'Ancho (cm)': t.ancho,
-        'Metros/Rollo': t.metros_rollo,
+        'Ancho (m)': t.ancho,
+        'Cod. Ext': t.cod_ext,
+        'Descriptor': t.descriptor,
         Posición: t.posicion,
         Almacén: t.almacen,
         Estado: t.estado,
