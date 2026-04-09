@@ -675,9 +675,10 @@
             </select>
             <select class="filter-select" id="filtroEstado" onchange="filtrarCatalogo()">
                 <option value="">Todos los estados</option>
-                <option value="CARGADO">Cargado</option>
-                <option value="X CARGAR">Por cargar</option>
+                <option value="ACTIVO">Activo</option>
+                <option value="DESCONTINUADO">Descontinuado</option>
                 <option value="LIBERADO">Liberado</option>
+                <option value="MATERIAS PRIMAS">Mat. Primas</option>
             </select>
             <button class="btn-inv btn-primary-inv" onclick="abrirModalTela()">
                 <i class="bi bi-plus-lg"></i> Nueva Tela
@@ -699,6 +700,12 @@
                         <th onclick="ordenarCatalogo('cod_ext')">Cód. Externo</th>
                         <th onclick="ordenarCatalogo('descriptor')">Descriptor</th>
                         <th style="text-align:center;" onclick="ordenarCatalogo('ancho')">Ancho (m)</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('calidad')">Calidad</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('status_stock')">Status</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('stock_minimo')">Mínimo</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('stock_total')">Total</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('stock_mp')">MP</th>
+                        <th style="text-align:center;" onclick="ordenarCatalogo('stock_liberado')">Liberado</th>
                         <th onclick="ordenarCatalogo('posicion')">Posición</th>
                         <th onclick="ordenarCatalogo('almacen')">Almacén</th>
                         <th style="text-align:center;" onclick="ordenarCatalogo('estado')">Estado</th>
@@ -952,6 +959,35 @@
                 <input type="number" id="tela-ancho" placeholder="2.8" step="0.01" min="0">
             </div>
             <div>
+                <label>Calidad</label>
+                <input type="text" id="tela-calidad" placeholder="PREMIUM">
+            </div>
+            <div>
+                <label>Status Stock</label>
+                <select id="tela-status_stock">
+                    <option value="">—</option>
+                    <option value="OK">OK</option>
+                    <option value="CRITICO">Crítico</option>
+                    <option value="AGOTADO">Agotado</option>
+                </select>
+            </div>
+            <div>
+                <label>Stock Mínimo</label>
+                <input type="number" id="tela-stock_minimo" placeholder="0" step="0.1" min="0">
+            </div>
+            <div>
+                <label>Stock Total</label>
+                <input type="number" id="tela-stock_total" placeholder="0" step="0.01" min="0">
+            </div>
+            <div>
+                <label>Stock MP</label>
+                <input type="number" id="tela-stock_mp" placeholder="0" step="0.01" min="0">
+            </div>
+            <div>
+                <label>Stock Liberado</label>
+                <input type="number" id="tela-stock_liberado" placeholder="0" step="0.01" min="0">
+            </div>
+            <div>
                 <label>Posición Rack</label>
                 <input type="text" id="tela-posicion" placeholder="A01">
             </div>
@@ -965,7 +1001,8 @@
             <div>
                 <label>Estado</label>
                 <select id="tela-estado">
-                    <option value="CARGADO">Cargado</option>
+                    <option value="ACTIVO">Activo</option>
+                    <option value="DESCONTINUADO">Descontinuado</option>
                     <option value="X CARGAR">Por cargar</option>
                     <option value="INACTIVO">Inactivo</option>
                 </select>
@@ -1367,10 +1404,19 @@ function tipoBadge(tipo) {
 function estadoBadge(estado, almacen) {
     if (almacen === 'LIBERADO') return `<span class="tag tag-ok">Liberado</span>`;
     if (almacen === 'MATERIAS PRIMAS') return `<span class="tag tag-info">MP</span>`;
-    if (estado === 'CARGADO')  return `<span class="tag tag-ok">Cargado</span>`;
-    if (estado === 'X CARGAR') return `<span class="tag tag-warn">× Cargar</span>`;
-    if (estado === 'INACTIVO') return `<span class="tag tag-muted">Inactivo</span>`;
+    if (estado === 'ACTIVO')         return `<span class="tag tag-ok">Activo</span>`;
+    if (estado === 'DESCONTINUADO')  return `<span class="tag tag-muted">Descontinuado</span>`;
+    if (estado === 'CARGADO')        return `<span class="tag tag-ok">Cargado</span>`;
+    if (estado === 'X CARGAR')       return `<span class="tag tag-warn">× Cargar</span>`;
+    if (estado === 'INACTIVO')       return `<span class="tag tag-muted">Inactivo</span>`;
     return `<span class="tag tag-muted">${estado||'—'}</span>`;
+}
+function statusStockBadge(s) {
+    if (!s) return '—';
+    if (s === 'OK')      return `<span class="tag tag-ok">OK</span>`;
+    if (s === 'CRITICO') return `<span class="tag tag-warn">Crítico</span>`;
+    if (s === 'AGOTADO') return `<span class="tag tag-danger">Agotado</span>`;
+    return `<span class="tag tag-muted">${s}</span>`;
 }
 
 function filtrarCatalogo() {
@@ -1409,7 +1455,7 @@ function renderizarCatalogo() {
 
     const tbody = document.getElementById('tbodyCatalogo');
     if (!lista.length) {
-        tbody.innerHTML = `<tr><td colspan="14" style="text-align:center; padding:24px; color:var(--text-muted);">
+        tbody.innerHTML = `<tr><td colspan="20" style="text-align:center; padding:24px; color:var(--text-muted);">
             <i class="bi bi-search"></i> Sin resultados
         </td></tr>`;
         document.getElementById('catalogoCount').textContent = '';
@@ -1426,6 +1472,12 @@ function renderizarCatalogo() {
             <td style="color:var(--text-muted); font-size:0.75rem;">${t.cod_ext||'—'}</td>
             <td style="color:var(--text-secondary); font-size:0.78rem; max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${t.descriptor||''}">${t.descriptor||'—'}</td>
             <td style="text-align:center;">${t.ancho||'—'}</td>
+            <td style="text-align:center; font-size:0.75rem; color:var(--text-muted);">${t.calidad||'—'}</td>
+            <td style="text-align:center;">${statusStockBadge(t.status_stock)}</td>
+            <td style="text-align:center; color:var(--text-secondary);">${t.stock_minimo??'—'}</td>
+            <td style="text-align:center; font-weight:600;">${t.stock_total??'—'}</td>
+            <td style="text-align:center; color:var(--text-secondary);">${t.stock_mp??'—'}</td>
+            <td style="text-align:center; color:var(--text-secondary);">${t.stock_liberado??'—'}</td>
             <td><code style="font-size:0.78rem; background:rgba(124,117,240,0.1); padding:2px 6px; border-radius:4px; color:var(--primary-500);">${t.posicion||'—'}</code></td>
             <td>${estadoBadge(null, t.almacen)}</td>
             <td style="text-align:center;">${estadoBadge(t.estado, null)}</td>
@@ -1462,9 +1514,15 @@ function abrirModalTela(id = null) {
         document.getElementById('tela-cod_ext').value = t.cod_ext || '';
         document.getElementById('tela-descriptor').value = t.descriptor || '';
         document.getElementById('tela-ancho').value = t.ancho || '';
+        document.getElementById('tela-calidad').value = t.calidad || '';
+        document.getElementById('tela-status_stock').value = t.status_stock || '';
+        document.getElementById('tela-stock_minimo').value = t.stock_minimo ?? '';
+        document.getElementById('tela-stock_total').value = t.stock_total ?? '';
+        document.getElementById('tela-stock_mp').value = t.stock_mp ?? '';
+        document.getElementById('tela-stock_liberado').value = t.stock_liberado ?? '';
         document.getElementById('tela-posicion').value = t.posicion || '';
         document.getElementById('tela-almacen').value = t.almacen || 'LIBERADO';
-        document.getElementById('tela-estado').value = t.estado || 'CARGADO';
+        document.getElementById('tela-estado').value = t.estado || 'ACTIVO';
         document.getElementById('tela-proveedor_codigo').value = t.proveedor_codigo || '';
         document.getElementById('tela-responsable').value = t.responsable || '';
         document.getElementById('tela-observaciones').value = t.observaciones || '';
@@ -1474,13 +1532,15 @@ function abrirModalTela(id = null) {
         btnElim.style.display = 'none';
         document.getElementById('tela-id').value = '';
         ['tela-codigo','tela-nemotecnico','tela-proveedor','tela-ancho',
-         'tela-cod_ext','tela-descriptor',
+         'tela-cod_ext','tela-descriptor','tela-calidad',
+         'tela-stock_minimo','tela-stock_total','tela-stock_mp','tela-stock_liberado',
          'tela-posicion','tela-proveedor_codigo','tela-observaciones'].forEach(id => {
             document.getElementById(id).value = '';
         });
         document.getElementById('tela-tipo').value = 'BK';
         document.getElementById('tela-almacen').value = 'LIBERADO';
-        document.getElementById('tela-estado').value = 'CARGADO';
+        document.getElementById('tela-estado').value = 'ACTIVO';
+        document.getElementById('tela-status_stock').value = '';
     }
     document.getElementById('modalTela').classList.add('visible');
 }
@@ -1512,6 +1572,12 @@ async function guardarTela() {
         ancho:            parseFloat(document.getElementById('tela-ancho').value) || null,
         cod_ext:          document.getElementById('tela-cod_ext').value.trim() || null,
         descriptor:       document.getElementById('tela-descriptor').value.trim() || null,
+        calidad:          document.getElementById('tela-calidad').value.trim() || null,
+        status_stock:     document.getElementById('tela-status_stock').value || null,
+        stock_minimo:     parseFloat(document.getElementById('tela-stock_minimo').value) ?? null,
+        stock_total:      parseFloat(document.getElementById('tela-stock_total').value) ?? null,
+        stock_mp:         parseFloat(document.getElementById('tela-stock_mp').value) ?? null,
+        stock_liberado:   parseFloat(document.getElementById('tela-stock_liberado').value) ?? null,
         posicion:         document.getElementById('tela-posicion').value.trim().toUpperCase() || null,
         almacen:          document.getElementById('tela-almacen').value,
         estado:           document.getElementById('tela-estado').value,
@@ -1997,7 +2063,7 @@ async function importarCatalogoDesdeGarantias(sheet, wb) {
             codigo:      normalized,
             tipo,
             nemotecnico: nemo,
-            estado:      'CARGADO'
+            estado:      'ACTIVO'
         });
     }
     if (!telas.length) return 0;
@@ -2009,34 +2075,51 @@ async function importarCatalogoDesdeGarantias(sheet, wb) {
 }
 
 // ── Importar detalles completos desde hoja INVENTARIO ─────────────
-// Lee GRUPO, PROVEEDOR, ANCHO (y nemotecnico de respaldo) para cada código.
-// NO sobreescribe 'tipo' para no romper la lógica BK/DU/SC del rack.
+// Lee todas las columnas de catálogo: grupo, proveedor, cod_ext, descriptor,
+// ancho, calidad, status_stock, stocks, estado (de ESTADO INVENTARIO).
+// tipo siempre se deriva del prefijo BK/DU/SC para no romper la colmena.
 async function importarDesdeInventario(sheet) {
     if (!sheet) return 0;
     const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
 
     // Buscar fila de encabezado: la que tenga 'COD' y 'GRUPO'
     let headerRow = -1;
-    let colCod = -1, colNemo = -1, colGrupo = -1, colProv = -1, colAncho = -1;
-    let colCodExt = -1, colDescriptor = -1;
+    let colCod=-1, colNemo=-1, colGrupo=-1, colProv=-1, colAncho=-1;
+    let colCodExt=-1, colDescriptor=-1, colCalidad=-1, colStatus=-1;
+    let colMinimo=-1, colTotal=-1, colMp=-1, colLiberado=-1, colEstado=-1;
+
     for (let r = 0; r < Math.min(rows.length, 12); r++) {
         const row = (rows[r] || []).map(c => c ? c.toString().trim().toUpperCase().replace(/\s+/g,' ') : '');
         const iCod = row.findIndex(c => c === 'COD' || c === 'CODIGO');
         if (iCod >= 0 && row.includes('GRUPO')) {
-            headerRow    = r;
-            colCod       = iCod;
-            colNemo      = row.findIndex(c => c.includes('NEMOT'));
-            colGrupo     = row.findIndex(c => c === 'GRUPO');
-            colProv      = row.findIndex(c => c === 'PROVEEDOR');
-            colAncho     = row.findIndex(c => c.includes('ANCHO'));
-            colCodExt    = row.findIndex(c => c.includes('COD') && c.includes('EXT'));
-            colDescriptor= row.findIndex(c => c === 'DESCRIPTOR');
+            headerRow     = r;
+            colCod        = iCod;
+            colNemo       = row.findIndex(c => c.includes('NEMOT'));
+            colGrupo      = row.findIndex(c => c === 'GRUPO');
+            colProv       = row.findIndex(c => c === 'PROVEEDOR');
+            colAncho      = row.findIndex(c => c.includes('ANCHO'));
+            colCodExt     = row.findIndex(c => c.includes('COD') && c.includes('EXT'));
+            colDescriptor = row.findIndex(c => c === 'DESCRIPTOR');
+            colCalidad    = row.findIndex(c => c === 'CALIDAD');
+            colStatus     = row.findIndex(c => c === 'STATUS');
+            colMinimo     = row.findIndex(c => c === 'MINIMO');
+            colTotal      = row.findIndex(c => c === 'TOTAL');
+            // LIBERADO_2 también existe — tomamos el primero (índice más bajo)
+            const libIdxs = row.reduce((a,v,i)=>{ if(v==='LIBERADO') a.push(i); return a; },[]);
+            colLiberado   = libIdxs.length ? libIdxs[0] : -1;
+            const mpIdxs  = row.reduce((a,v,i)=>{ if(v==='MP') a.push(i); return a; },[]);
+            colMp         = mpIdxs.length ? mpIdxs[0] : -1;
+            // ESTADO INVENTARIO — puede aparecer como 'ESTADO INVENTARIO'
+            colEstado     = row.findIndex(c => c.includes('ESTADO') && c.includes('INVENTARIO'));
             break;
         }
     }
     if (headerRow < 0) { logTel('INVENTARIO: no se encontró fila de encabezado', 'warn'); return 0; }
 
     const TELA_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+    const str = v => v ? v.toString().trim() || null : null;
+
     const batch = [];
     for (let r = headerRow + 1; r < rows.length; r++) {
         const row = rows[r] || [];
@@ -2046,20 +2129,24 @@ async function importarDesdeInventario(sheet) {
         if (!TELA_PAT.test(cod)) continue;
         const normalized = cod.toUpperCase().replace(/\s+/, ' ');
 
-        // tipo se deriva siempre del prefijo del código (BK/DU/SC) para no romper el rack
         const pfx = normalized.slice(0,2);
         const tipo = pfx === 'BK' ? 'BK' : pfx === 'DU' ? 'DU' : pfx === 'SC' ? 'SC' : null;
 
         const obj = { empresa_id: EMPRESA_ID, codigo: normalized, tipo };
-        if (colNemo      >= 0 && row[colNemo])      obj.nemotecnico = row[colNemo].toString().trim();
-        if (colGrupo     >= 0 && row[colGrupo])     obj.grupo       = row[colGrupo].toString().trim();
-        if (colProv      >= 0 && row[colProv])      obj.proveedor   = row[colProv].toString().trim();
-        if (colCodExt    >= 0 && row[colCodExt])    obj.cod_ext     = row[colCodExt].toString().trim();
-        if (colDescriptor>= 0 && row[colDescriptor])obj.descriptor  = row[colDescriptor].toString().trim();
-        if (colAncho >= 0 && row[colAncho] !== null && row[colAncho] !== '') {
-            const a = parseFloat(row[colAncho]);
-            if (!isNaN(a)) obj.ancho = a;
-        }
+        if (colNemo      >= 0) { const v = str(row[colNemo]);      if(v) obj.nemotecnico  = v; }
+        if (colGrupo     >= 0) { const v = str(row[colGrupo]);     if(v) obj.grupo        = v; }
+        if (colProv      >= 0) { const v = str(row[colProv]);      if(v) obj.proveedor    = v; }
+        if (colCodExt    >= 0) { const v = str(row[colCodExt]);    if(v) obj.cod_ext      = v; }
+        if (colDescriptor>= 0) { const v = str(row[colDescriptor]);if(v) obj.descriptor   = v; }
+        if (colCalidad   >= 0) { const v = str(row[colCalidad]);   if(v) obj.calidad      = v; }
+        if (colStatus    >= 0) { const v = str(row[colStatus]);    if(v) obj.status_stock = v; }
+        if (colAncho     >= 0) { const v = num(row[colAncho]);     if(v) obj.ancho        = v; }
+        if (colMinimo    >= 0) { const v = num(row[colMinimo]);    if(v !== null) obj.stock_minimo   = v; }
+        if (colTotal     >= 0) { const v = num(row[colTotal]);     if(v !== null) obj.stock_total    = v; }
+        if (colMp        >= 0) { const v = num(row[colMp]);        if(v !== null) obj.stock_mp       = v; }
+        if (colLiberado  >= 0) { const v = num(row[colLiberado]);  if(v !== null) obj.stock_liberado = v; }
+        // ESTADO INVENTARIO → campo 'estado' (ACTIVO / DESCONTINUADO)
+        if (colEstado    >= 0) { const v = str(row[colEstado]);    if(v) obj.estado = v; }
         batch.push(obj);
     }
 
@@ -2087,7 +2174,7 @@ async function importarCodigosDesdeGrilla(sheet, almacen) {
         const n = val.toUpperCase().replace(/\s+/, ' ');
         if (!found.has(n)) {
             const tipo = n.startsWith('BK')?'BK': n.startsWith('DU')?'DU': n.startsWith('SC')?'SC':null;
-            found.set(n, { empresa_id:EMPRESA_ID, codigo:n, tipo, almacen, estado:'CARGADO' });
+            found.set(n, { empresa_id:EMPRESA_ID, codigo:n, tipo, almacen, estado:'ACTIVO' });
         }
     });
     if (!found.size) return 0;
@@ -2270,9 +2357,15 @@ function exportarTelaExcel() {
         Grupo: t.grupo,
         Nemotécnico: t.nemotecnico,
         Proveedor: t.proveedor,
+        'Cód. Ext': t.cod_ext,
+        Descriptor: t.descriptor,
         'Ancho (m)': t.ancho,
-        'Cod. Ext': t.cod_ext,
-        'Descriptor': t.descriptor,
+        Calidad: t.calidad,
+        Status: t.status_stock,
+        Mínimo: t.stock_minimo,
+        Total: t.stock_total,
+        MP: t.stock_mp,
+        Liberado: t.stock_liberado,
         Posición: t.posicion,
         Almacén: t.almacen,
         Estado: t.estado,
