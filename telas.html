@@ -2098,11 +2098,28 @@ async function importarExcelTelas(event) {
             await importarAlmacenDesdeGrillas(wb);
 
             // ── 4. POSICIONES: cruzar LIBERADO-ROLZZO ↔ MAPA-COLMENA por coordenada de celda ──
+            // Primero limpiar TODAS las posiciones existentes para evitar datos viejos
+            await sb.from('telas_catalogo')
+                .update({ posicion: null })
+                .eq('empresa_id', EMPRESA_ID);
+            logTel('Posiciones previas limpiadas', 'info');
+
             // "LIBERADO - ROLZZO" comparte el mismo sistema de coords que MAPA-COLMENA (Q,R,S,T,U,V)
-            const sheetLibRolzzo = wb.Sheets['LIBERADO - ROLZZO'] || wb.Sheets['LIBERADO'];
+            // Buscar la hoja correcta — el nombre puede variar levemente
+            const nombreLibRolzzo = wb.SheetNames.find(n =>
+                n.replace(/\s+/g,' ').trim().toUpperCase() === 'LIBERADO - ROLZZO'
+            ) || wb.SheetNames.find(n => n.toUpperCase().includes('ROLZZO'));
+            logTel(`Hoja LIBERADO usada: ${nombreLibRolzzo || '(fallback LIBERADO)'}`, 'info');
+
+            const sheetLibRolzzo = nombreLibRolzzo
+                ? wb.Sheets[nombreLibRolzzo]
+                : wb.Sheets['LIBERADO'];
+
             if (sheetLibRolzzo && wb.Sheets['MAPA-COLMENA']) {
                 const n = await importarPosicionesRack(sheetLibRolzzo, wb.Sheets['MAPA-COLMENA'], 'LIBERADO');
                 logTel(`Posiciones asignadas: ${n}`, 'success');
+            } else {
+                logTel('No se encontró hoja LIBERADO-ROLZZO ni MAPA-COLMENA', 'warn');
             }
 
             // ── 5. ROLLOS FALLA ──
@@ -2363,6 +2380,7 @@ async function importarPosicionesRack(sheetLib, sheetMap, almacen) {
         }
     });
 
+    logTel(`Cruce: ${Object.keys(libCodes).length} telas en hoja, ${Object.keys(mapSlots).length} slots en MAPA-COLMENA, ${updates.length} coincidencias`, 'info');
     if (!updates.length) { logTel('Sin coincidencias de posición por coordenada', 'warn'); return 0; }
 
     // Batch update 20 a la vez
