@@ -64,8 +64,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
             padding: 12px 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
 .bom-item.completado  { border-color: rgba(34,197,94,.35); }
 .bom-item.en_proceso  { border-color: rgba(124,117,240,.4); }
+.bom-item.tela-item   { border-color: rgba(200,169,110,.35); background: rgba(200,169,110,.05); }
 .bom-item-info { flex: 1; }
 .bom-item-cat  { font-size: 0.67rem; color: var(--primary); font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+.bom-item-cat.tela-cat { color: #c8a96e; }
 .bom-item-desc { font-size: 0.88rem; font-weight: 600; }
 .bom-item-spec { font-size: 0.73rem; color: var(--text2); margin-top: 2px; }
 .bom-item-loc  { font-size: 0.72rem; color: var(--warning); margin-top: 3px; }
@@ -313,6 +315,8 @@ let _otsData    = [];       // OTs cargadas
 let _otActual   = null;     // OT seleccionada
 let _bomItems   = [];       // BOM de la OT actual
 let _insumos    = [];       // Catálogo de insumos
+let _telasCat   = [];       // Catálogo de telas (telas_catalogo)
+let _telasSlots = [];       // Posiciones de telas (telas_slots)
 let _scanner    = null;     // Instancia Html5Qrcode
 let _scanItemIdx = -1;      // Índice del ítem BOM que se está despachando
 let _scanFase    = 'loc';   // 'loc' | 'item'
@@ -350,11 +354,22 @@ async function cargarOTs() {
     document.getElementById('lista-ots').innerHTML =
         '<div class="loading"><i class="bi bi-hourglass-split"></i> Cargando...</div>';
 
-    const { data: ots, error } = await sb.from('ots')
-        .select('id, numero_ot, estado, datos_generales, fecha_creacion, fecha_entrega')
-        .eq('empresa_id', EMPRESA_ID)
-        .in('estado', ['produccion', 'pendiente_firma'])
-        .order('fecha_creacion', { ascending: false });
+    const [{ data: ots, error }, { data: ins }, { data: telCat }, { data: telSlots }] = await Promise.all([
+        sb.from('ots')
+            .select('id, numero_ot, estado, datos_generales, items, fecha_creacion, fecha_entrega')
+            .eq('empresa_id', EMPRESA_ID)
+            .in('estado', ['produccion', 'pendiente_firma'])
+            .order('fecha_creacion', { ascending: false }),
+        sb.from('insumos')
+            .select('cod,nemotecnico,descriptor_proveedor,categoria,color,ubicacion,stock_actual,stock_mp,stock_liberado')
+            .eq('empresa_id', EMPRESA_ID),
+        sb.from('telas_catalogo')
+            .select('codigo,nemotecnico,tipo,almacen,posicion')
+            .eq('empresa_id', EMPRESA_ID),
+        sb.from('telas_slots')
+            .select('posicion,codigo,almacen')
+            .eq('empresa_id', EMPRESA_ID)
+    ]);
 
     if (error) {
         document.getElementById('lista-ots').innerHTML =
@@ -362,11 +377,10 @@ async function cargarOTs() {
         return;
     }
 
-    _otsData = ots || [];
-
-    // Cargar catálogo de insumos
-    const { data: ins } = await sb.from('insumos').select('cod,nemotecnico,categoria,color,ubicacion,stock_actual,stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID);
-    _insumos = ins || [];
+    _otsData    = ots    || [];
+    _insumos    = ins    || [];
+    _telasCat   = telCat || [];
+    _telasSlots = telSlots || [];
 
     if (!_otsData.length) {
         document.getElementById('lista-ots').innerHTML =
@@ -381,6 +395,7 @@ async function cargarOTs() {
             ? '<span class="badge badge-warn">Pendiente firma</span>'
             : '<span class="badge badge-info">En producción</span>';
         const bomCount = dg.bom ? dg.bom.length : '?';
+        const telaCount = (ot.items || []).reduce((s, v) => s + (v.panos ? v.panos.length : 1), 0);
         return `
         <div class="card" onclick="abrirOT('${ot.id}')" style="cursor:pointer;">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
@@ -389,7 +404,8 @@ async function cargarOTs() {
             </div>
             <div class="card-sub">${cliente}</div>
             <div style="margin-top:6px;display:flex;gap:12px;font-size:0.72rem;color:var(--text2);">
-                <span><i class="bi bi-box-seam"></i> ${bomCount} materiales</span>
+                <span><i class="bi bi-box-seam"></i> ${bomCount} insumos</span>
+                ${telaCount ? `<span style="color:#c8a96e;"><i class="bi bi-scissors"></i> ${telaCount} paño(s)</span>` : ''}
                 ${ot.fecha_entrega ? `<span><i class="bi bi-calendar2"></i> ${ot.fecha_entrega.slice(0,10)}</span>` : ''}
             </div>
         </div>`;
@@ -430,6 +446,11 @@ async function abrirOT(otId) {
           }))
         : (dg.bom || []).map((b, i) => ({ ...b, id: i, cantidad_req: b.cantidad, cantidad_despachada: 0, estado: 'pendiente' }));
 
+    // ── Agregar telas al BOM (extraídas de los ventanas/panos de la OT) ──
+    const telaItems = extraerTelasBOM(_otActual);
+    // Anteponer telas al BOM (al principio, antes de insumos)
+    _bomItems = [...telaItems, ..._bomItems];
+
     // Inicializar contadores
     _contadores = {};
     _bomItems.forEach((item, idx) => {
@@ -442,6 +463,91 @@ async function abrirOT(otId) {
 
     renderBOMItems();
     mostrarVista('view-despacho');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXTRAER TELAS DEL BOM — desde ventanas/panos de la OT
+// ══════════════════════════════════════════════════════════════════
+function extraerTelasBOM(ot) {
+    const dg     = ot.datos_generales || {};
+    const acc    = new Map(); // codInt → { codInt, producto, metros, panos, anchos[] }
+
+    // Intento 1: desde optimizerRows (guardado al correr Fase 4)
+    const rows = dg.optimizerRows || [];
+    if (rows.length) {
+        rows.forEach(row => {
+            const cod = (row.codInt || row.cod || '').trim().toUpperCase();
+            if (!cod) return;
+            const anchoM = parseFloat(row.ancho || (row.anchoCm ? row.anchoCm / 100 : 0)) || 0;
+            const altoM  = parseFloat(row.altoReal || ((row.alto || 0) + 0.25)) || 0;
+            if (!acc.has(cod)) {
+                acc.set(cod, { codInt: cod, producto: row.producto || cod, metros: 0, panos: 0, anchos: [] });
+            }
+            const t = acc.get(cod);
+            t.metros += altoM;
+            t.panos  += 1;
+            if (anchoM) t.anchos.push(anchoM.toFixed(2) + 'm');
+        });
+    }
+
+    // Intento 2: desde items (storeVentanas), si no había optimizerRows
+    if (!acc.size) {
+        const ventanas = ot.items || [];
+        ventanas.forEach(v => {
+            const cod = (v.codInt || '').trim().toUpperCase();
+            if (!cod) return;
+            const panos = Array.isArray(v.panos) && v.panos.length ? v.panos : [{}];
+            panos.forEach(p => {
+                const anchoM = parseFloat(p.ancho || v.ancho || 0) || 0;
+                const altoM  = (parseFloat(v.alto || 0) + 0.25);
+                if (!acc.has(cod)) {
+                    acc.set(cod, { codInt: cod, producto: v.producto || cod, metros: 0, panos: 0, anchos: [] });
+                }
+                const t = acc.get(cod);
+                t.metros += altoM;
+                t.panos  += 1;
+                if (anchoM) t.anchos.push(anchoM.toFixed(2) + 'm');
+            });
+        });
+    }
+
+    // Convertir a items BOM con ubicación del rack
+    return [...acc.values()].map(t => {
+        const slot = buscarTelaSlot(t.codInt);
+        const cat  = _telasCat.find(c => (c.codigo || '').toUpperCase() === t.codInt);
+        const nemo = cat?.nemotecnico || t.producto || t.codInt;
+        const tipo = cat?.tipo || '';
+        const ubic = slot ? slot.posicion : (cat?.posicion || '');
+        const spec = [
+            t.panos > 1 ? `${t.panos} paños` : '1 paño',
+            t.anchos.length ? `Anchos: ${[...new Set(t.anchos)].join(', ')}` : '',
+            t.metros > 0 ? `${t.metros.toFixed(2)}m alto total` : ''
+        ].filter(Boolean).join(' · ');
+
+        return {
+            id:                `TELA|${t.codInt}`,
+            categoria:         'TELA',
+            descripcion:       nemo,
+            especificacion:    `${t.codInt}${tipo ? ' — ' + tipo : ''}`,
+            color:             spec,
+            cantidad_req:      t.panos,     // cantidad = número de paños
+            unidad:            'paño(s)',
+            cantidad_despachada: 0,
+            estado:            'pendiente',
+            _es_tela:          true,
+            _ubicacion_rack:   ubic          // para mostrar en la tarjeta
+        };
+    });
+}
+
+function buscarTelaSlot(codInt) {
+    const cod = (codInt || '').toUpperCase();
+    // Buscar en telas_slots primero (más preciso — tiene posición física real)
+    const slot = _telasSlots.find(s => (s.codigo || '').toUpperCase() === cod);
+    if (slot) return slot;
+    // Fallback al catálogo
+    const cat = _telasCat.find(c => (c.codigo || '').toUpperCase() === cod);
+    return cat ? { posicion: cat.posicion || '', almacen: cat.almacen || '' } : null;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -460,26 +566,33 @@ function renderBOMItems() {
         const completo = cnt.estado === 'completo';
         const enProceso = cnt.pickeado > 0 && !completo;
 
-        // Buscar insumo relacionado por categoría + color
-        const insMatch = buscarInsumoMatchBOM(item);
-        const locText = insMatch ? `📍 ${insMatch.ubicacion || 'Sin ubicación'}` : '';
-        const stockInfo = insMatch ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}` : '';
+        // Localización: telas usan _ubicacion_rack; insumos buscan en catálogo
+        let locText = '', stockInfo = '';
+        if (item._es_tela) {
+            const ubic = item._ubicacion_rack;
+            locText   = ubic ? `📍 Rack: ${ubic}` : '📍 Sin posición registrada';
+        } else {
+            const insMatch = buscarInsumoMatchBOM(item);
+            locText   = insMatch ? `📍 ${insMatch.ubicacion || 'Sin ubicación'}` : '';
+            stockInfo = insMatch ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}` : '';
+        }
 
         const estadoIcon = completo ? '✅' : enProceso ? '🔄' : '⬜';
 
+        const esTela = !!item._es_tela;
         return `
-        <div class="bom-item ${completo ? 'completado' : enProceso ? 'en_proceso' : ''}"
+        <div class="bom-item ${completo ? 'completado' : enProceso ? 'en_proceso' : ''} ${esTela ? 'tela-item' : ''}"
              onclick="${completo ? '' : `iniciarScanItem(${idx})`}"
              style="cursor:${completo ? 'default' : 'pointer'};">
-            <div style="font-size:1.5rem;min-width:32px;text-align:center;">${estadoIcon}</div>
+            <div style="font-size:1.5rem;min-width:32px;text-align:center;">${esTela ? '🧵' : estadoIcon}</div>
             <div class="bom-item-info">
-                <div class="bom-item-cat">${item.categoria}</div>
+                <div class="bom-item-cat ${esTela ? 'tela-cat' : ''}">${item.categoria}</div>
                 <div class="bom-item-desc">${item.descripcion}</div>
                 <div class="bom-item-spec">${[item.especificacion, item.color].filter(Boolean).join(' · ')}${stockInfo}</div>
                 ${locText ? `<div class="bom-item-loc">${locText}</div>` : ''}
             </div>
             <div class="bom-item-cnt">
-                <div class="num" style="color:${completo ? 'var(--success)' : 'var(--text)'};">${cnt.pickeado}</div>
+                <div class="num" style="color:${completo ? 'var(--success)' : esTela ? '#c8a96e' : 'var(--text)'};">${cnt.pickeado}</div>
                 <div class="denom">/${cnt.requerido} ${item.unidad || 'unid.'}</div>
             </div>
         </div>`;

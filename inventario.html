@@ -724,11 +724,11 @@
 
     <!-- ━━━ PANEL: CATÁLOGO ━━━ -->
     <div class="inv-panel active" id="panel-catalogo">
-        <!-- Stats -->
+        <!-- Stats Insumos -->
         <div class="stats-row">
             <div class="stat-card">
                 <div class="stat-value" id="stat-total">0</div>
-                <div class="stat-label">Total Productos</div>
+                <div class="stat-label">Total Insumos</div>
             </div>
             <div class="stat-card success">
                 <div class="stat-value" id="stat-stock">0</div>
@@ -746,6 +746,35 @@
                 <div class="stat-value" id="stat-categorias">0</div>
                 <div class="stat-label">Categorías</div>
             </div>
+        </div>
+
+        <!-- Stats Telas — resumen rápido de bodega de telas -->
+        <div id="telas-stats-row" style="display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+            <div class="glass-card" style="flex:1; min-width:140px; padding:12px 16px; border-color:rgba(200,169,110,.25); background:rgba(200,169,110,.04); display:flex; align-items:center; gap:12px;">
+                <i class="bi bi-scissors" style="font-size:1.4rem; color:#c8a96e;"></i>
+                <div>
+                    <div style="font-size:1.3rem; font-weight:700; color:#c8a96e;" id="telas-stat-total">—</div>
+                    <div style="font-size:0.72rem; color:var(--text-muted);">Telas en catálogo</div>
+                </div>
+            </div>
+            <div class="glass-card" style="flex:1; min-width:140px; padding:12px 16px; border-color:rgba(200,169,110,.25); background:rgba(200,169,110,.04); display:flex; align-items:center; gap:12px;">
+                <i class="bi bi-grid-3x3-gap" style="font-size:1.4rem; color:#c8a96e;"></i>
+                <div>
+                    <div style="font-size:1.3rem; font-weight:700; color:#c8a96e;" id="telas-stat-slots">—</div>
+                    <div style="font-size:0.72rem; color:var(--text-muted);">Posiciones ocupadas</div>
+                </div>
+            </div>
+            <div class="glass-card" style="flex:1; min-width:140px; padding:12px 16px; border-color:rgba(200,169,110,.25); background:rgba(200,169,110,.04); display:flex; align-items:center; gap:12px;">
+                <i class="bi bi-boxes" style="font-size:1.4rem; color:#c8a96e;"></i>
+                <div>
+                    <div style="font-size:1.3rem; font-weight:700; color:#c8a96e;" id="telas-stat-liberado">—</div>
+                    <div style="font-size:0.72rem; color:var(--text-muted);">En Área Liberado</div>
+                </div>
+            </div>
+            <a href="telas.html" target="_blank" class="glass-card" style="flex:0; min-width:120px; padding:12px 16px; border-color:rgba(200,169,110,.3); background:rgba(200,169,110,.08); display:flex; align-items:center; gap:8px; text-decoration:none; color:inherit; cursor:pointer;">
+                <i class="bi bi-box-arrow-up-right" style="color:#c8a96e;"></i>
+                <span style="font-size:0.78rem; font-weight:600; color:#c8a96e;">Ver Telas</span>
+            </a>
         </div>
 
         <!-- Filters -->
@@ -1301,6 +1330,9 @@ async function inicializar() {
 
         document.getElementById('estadoConexion').textContent = '● Conectado';
         document.getElementById('estadoConexion').style.color = 'var(--success)';
+
+        // ── Cargar stats de telas en paralelo (no bloquea si falla) ──
+        cargarTelaStats();
 
         // ── Realtime: actualizar alertas cuando el bodeguero modifica stock ──
         try {
@@ -2169,6 +2201,30 @@ async function registrarReposicion(cod, cantidad) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// STATS DE TELAS (resumen bodega de telas en panel catálogo)
+// ══════════════════════════════════════════════════════════════════
+async function cargarTelaStats() {
+    try {
+        const [{ data: cat, error: e1 }, { data: slots, error: e2 }] = await Promise.all([
+            sbInv.from('telas_catalogo').select('codigo,almacen').eq('empresa_id', EMPRESA_ID),
+            sbInv.from('telas_slots').select('posicion,almacen').eq('empresa_id', EMPRESA_ID)
+        ]);
+        if (e1 && e1.code === '42P01') return; // tablas no existen aún
+
+        const total    = (cat || []).length;
+        const slotsN   = (slots || []).length;
+        const liberado = (slots || []).filter(s => (s.almacen || '').toUpperCase() === 'LIBERADO').length;
+
+        const el = id => document.getElementById(id);
+        if (el('telas-stat-total'))    el('telas-stat-total').textContent    = total;
+        if (el('telas-stat-slots'))    el('telas-stat-slots').textContent    = slotsN;
+        if (el('telas-stat-liberado')) el('telas-stat-liberado').textContent = liberado;
+    } catch(e) {
+        console.warn('[INV] telas stats:', e.message);
+    }
+}
+
 // Toast simple para inventario
 function mostrarToastInv(msg, tipo) {
     let toast = document.getElementById('toastInv');
@@ -2271,15 +2327,31 @@ async function importarExcelInventario(event) {
         }
 
         // 1. Importar INVENTARIO (en lotes)
-        const wsInv = wb.Sheets['INVENTARIO'];
+        // Acepta también la hoja con nombre del archivo o cualquier variante
+        const wsInv = wb.Sheets['INVENTARIO']
+                   || wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes('INSUMO') || n.toUpperCase().includes('INVENTARIO') || n.toUpperCase() === 'CATALOGO')]
+                   || wb.Sheets[wb.SheetNames[0]]; // fallback: primera hoja
         if (wsInv) {
+            // ── Auto-detectar fila de encabezados buscando la columna "COD" ──────
+            // Busca en las primeras 25 filas para tolerar cualquier cantidad de
+            // filas de título antes del encabezado real.
+            const sheetRange = XLSX.utils.decode_range(wsInv['!ref'] || 'A1:ZZ9999');
+            let HEADER_ROW_IDX = 9; // default para el formato original
+            for (let r = 0; r <= Math.min(24, sheetRange.e.r); r++) {
+                for (let c = sheetRange.s.c; c <= Math.min(sheetRange.e.c, 5); c++) {
+                    const cell = wsInv[XLSX.utils.encode_cell({ r, c })];
+                    if (cell && String(cell.v || '').trim().toUpperCase() === 'COD') {
+                        HEADER_ROW_IDX = r;
+                        break;
+                    }
+                }
+                if (HEADER_ROW_IDX !== 9 || r === 9) break; // encontrado o llegamos al default
+            }
+            logInv(`Encabezados detectados en fila ${HEADER_ROW_IDX + 1} (Excel)`, 'info');
+
             // ── Leer hipervínculos de la columna FOTO indexados por COD ──
-            // (sheet_to_json puede saltearse filas vacías, desincronizando el índice
-            //  de fila; indexar por COD es robusto ante esos huecos)
             const fotoHyperlinkMap = {}; // { 'BRA01': 'https://...', ... }
             try {
-                const sheetRange = XLSX.utils.decode_range(wsInv['!ref'] || 'A1:ZZ9999');
-                const HEADER_ROW_IDX = 9; // 0-based, coincide con range:9
                 let fotoColIdx = -1, codColIdx = -1;
                 for (let c = sheetRange.s.c; c <= sheetRange.e.c; c++) {
                     const hCell = wsInv[XLSX.utils.encode_cell({ r: HEADER_ROW_IDX, c })];
@@ -2295,57 +2367,65 @@ async function importarExcelInventario(event) {
                         if (!codCell || !fotoCell) continue;
                         const cod = String(codCell.v || '').trim().toUpperCase();
                         if (!cod) continue;
-                        // Prioridad: hipervínculo (.l.Target) > valor de celda
                         const url = (fotoCell.l?.Target) || String(fotoCell.v || '').trim();
                         if (url && (url.startsWith('http') || url.startsWith('//')))
                             fotoHyperlinkMap[cod] = url;
                     }
-                    logInv(`Columna FOTO: ${Object.keys(fotoHyperlinkMap).length} URLs extraídas por código`, 'info');
-                    // Diagnóstico: mostrar resultado para BRA01 específicamente
-                    logInv(`DEBUG BRA01 foto: "${fotoHyperlinkMap['BRA01'] || '(no encontrada)'}"`, 'info');
-                } else {
-                    logInv(`⚠️ Columnas no encontradas: COD idx=${codColIdx}, FOTO idx=${fotoColIdx}`, 'warn');
+                    logInv(`Columna FOTO: ${Object.keys(fotoHyperlinkMap).length} URLs extraídas`, 'info');
                 }
             } catch(eHyp) {
                 logInv(`⚠️ Error al leer hipervínculos FOTO: ${eHyp.message}`, 'warn');
             }
-            // ────────────────────────────────────────────────────────────────────
+            // ─────────────────────────────────────────────────────────────────────
 
-            const datosInv = XLSX.utils.sheet_to_json(wsInv, { range: 9, defval: '' });
+            const datosInv = XLSX.utils.sheet_to_json(wsInv, { range: HEADER_ROW_IDX, defval: '' });
             logInv(`INVENTARIO: ${datosInv.length} filas detectadas, procesando en lotes...`, 'info');
+
+            // ── Helper: buscar campo por variantes de nombre ──────────────────
+            const get = (fila, ...keys) => {
+                for (const k of keys) {
+                    const found = Object.keys(fila).find(
+                        f => f.trim().toUpperCase() === k.toUpperCase()
+                    );
+                    if (found && fila[found] !== '' && fila[found] !== undefined) return fila[found];
+                }
+                return '';
+            };
+            const getInt = (fila, ...keys) => parseInt(get(fila, ...keys)) || 0;
+            const getFlt = (fila, ...keys) => parseFloat(get(fila, ...keys)) || 0;
+            // ─────────────────────────────────────────────────────────────────────
 
             const registrosInv = [];
             for (let idx = 0; idx < datosInv.length; idx++) {
                 const fila = datosInv[idx];
-                const cod = String(fila['COD'] || '').trim().toUpperCase();
+                const cod = String(get(fila, 'COD', 'CODIGO', 'CÓDIGO', 'ID') || '').trim().toUpperCase();
                 if (!cod) continue;
-                // Buscar URL por COD (robusto ante filas vacías intercaladas)
                 const fotoUrl = fotoHyperlinkMap[cod]
-                    || String(fila['FOTO'] || '').trim()
+                    || String(get(fila, 'FOTO', 'FOTO_URL', 'IMAGEN') || '').trim()
                     || null;
                 registrosInv.push({
                     empresa_id: EMPRESA_ID,
                     cod,
-                    categoria: fila['CATEGORIA'] || '',
-                    sub_categoria: fila['SUB_CATEGORIA'] || '',
-                    proveedor: fila['PROVEEDOR'] || '',
-                    producto: fila['PRODUCTO'] || '',
-                    compra: fila['COMPRA'] || '',
-                    nemotecnico: fila['NEMOTÉCNICO'] || fila['NEMOTECNICO'] || '',
-                    cod_proveedor: String(fila['COD. PROVEEDOR'] || ''),
-                    descriptor_proveedor: fila['DESCRIPTOR PROVEEDOR'] || '',
-                    can_x_paquete: parseInt(fila['CAN X PAQUETE']) || 1,
-                    color: fila['COLOR'] || '',
-                    status: fila['STATUS'] || 'OK',
-                    minimo: parseInt(fila['MINIMO']) || 0,
-                    stock_mp: parseInt(fila['MP']) || 0,
-                    stock_liberado: parseInt(fila['LIBERADO']) || 0,
-                    ubicacion: fila['UBICACION'] || '',
-                    estado_inventario: fila['ESTADO INVENTARIO'] || '',
-                    costo: parseFloat(fila['COSTO']) || 0,
-                    costo_iva: parseFloat(fila['COSTO + IVA']) || 0,
-                    comentarios: fila['COMENTARIOS'] || '',
-                    foto_url: fotoUrl
+                    categoria:            String(get(fila, 'CATEGORIA', 'CATEGORÍA', 'CATEGORY') || ''),
+                    sub_categoria:        String(get(fila, 'SUB_CATEGORIA', 'SUBCATEGORIA', 'SUBCATEGORÍA', 'SUB CATEGORIA') || ''),
+                    proveedor:            String(get(fila, 'PROVEEDOR', 'SUPPLIER') || ''),
+                    producto:             String(get(fila, 'PRODUCTO', 'PRODUCT', 'NOMBRE', 'NOMBRE PRODUCTO') || ''),
+                    compra:               String(get(fila, 'COMPRA', 'UNIDAD COMPRA', 'UNIDAD DE COMPRA') || ''),
+                    nemotecnico:          String(get(fila, 'NEMOTÉCNICO', 'NEMOTECNICO', 'NEMO', 'NOMBRE CORTO') || ''),
+                    cod_proveedor:        String(get(fila, 'COD. PROVEEDOR', 'COD PROVEEDOR', 'CODIGO PROVEEDOR') || ''),
+                    descriptor_proveedor: String(get(fila, 'DESCRIPTOR PROVEEDOR', 'DESCRIPCION PROVEEDOR', 'DESCRIPCIÓN') || ''),
+                    can_x_paquete:        getInt(fila, 'CAN X PAQUETE', 'CANT X PAQUETE', 'CANT/PAQUETE', 'UNIDADES POR CAJA'),
+                    color:                String(get(fila, 'COLOR') || ''),
+                    status:               String(get(fila, 'STATUS', 'ESTADO', 'ACTIVO') || 'OK'),
+                    minimo:               getInt(fila, 'MINIMO', 'MÍNIMO', 'STOCK MINIMO', 'STOCK MÍNIMO'),
+                    stock_mp:             getInt(fila, 'MP', 'STOCK MP', 'BODEGA MP', 'STOCK BODEGA'),
+                    stock_liberado:       getInt(fila, 'LIBERADO', 'STOCK LIBERADO', 'AREA LIBERADO'),
+                    ubicacion:            String(get(fila, 'UBICACION', 'UBICACIÓN', 'POSICION', 'POSICIÓN', 'RACK') || ''),
+                    estado_inventario:    String(get(fila, 'ESTADO INVENTARIO', 'ESTADO_INVENTARIO') || ''),
+                    costo:                getFlt(fila, 'COSTO', 'PRECIO', 'PRECIO NETO', 'VALOR'),
+                    costo_iva:            getFlt(fila, 'COSTO + IVA', 'COSTO+IVA', 'PRECIO IVA', 'PRECIO CON IVA'),
+                    comentarios:          String(get(fila, 'COMENTARIOS', 'NOTAS', 'OBSERVACIONES') || ''),
+                    foto_url:             fotoUrl || null
                 });
             }
             // Deduplicar por cod — el Excel puede tener filas repetidas y PostgreSQL
@@ -2365,47 +2445,70 @@ async function importarExcelInventario(event) {
         }
 
         // 2. Importar ENTRADA Y SALIDA (limpiar primero para evitar duplicados, luego lote)
-        const wsES = wb.Sheets['ENTRADA Y SALIDA'];
+        const wsES = wb.Sheets['ENTRADA Y SALIDA']
+                  || wb.Sheets[wb.SheetNames.find(n => n.toUpperCase().includes('ENTRADA') || n.toUpperCase().includes('MOVIMIENTO') || n.toUpperCase().includes('SALIDA'))];
         if (wsES) {
-            const datosES = XLSX.utils.sheet_to_json(wsES, { range: 5, defval: '' });
-            logInv(`ENTRADA Y SALIDA: ${datosES.length} filas detectadas, limpiando duplicados...`, 'info');
+            // Auto-detectar fila encabezado buscando "CODIGO" o "TIPO"
+            const esRange = XLSX.utils.decode_range(wsES['!ref'] || 'A1:ZZ9999');
+            let ES_HDR = 5;
+            for (let r = 0; r <= Math.min(12, esRange.e.r); r++) {
+                for (let c = 0; c <= Math.min(esRange.e.c, 4); c++) {
+                    const cell = wsES[XLSX.utils.encode_cell({ r, c })];
+                    if (cell && ['CODIGO','TIPO','MES','FECHA'].includes(String(cell.v||'').trim().toUpperCase())) {
+                        ES_HDR = r; break;
+                    }
+                }
+                if (ES_HDR !== 5) break;
+            }
+            const datosES = XLSX.utils.sheet_to_json(wsES, { range: ES_HDR, defval: '' });
+            logInv(`ENTRADA Y SALIDA: ${datosES.length} filas detectadas (encabezado fila ${ES_HDR+1}), limpiando...`, 'info');
 
             // Limpiar movimientos previos de esta empresa para evitar duplicados
             await sbInv.from('movimientos_insumos').delete().eq('empresa_id', EMPRESA_ID);
 
+            // Reusar helper get() definido arriba en el bloque INVENTARIO
+            const getM = (fila, ...keys) => {
+                for (const k of keys) {
+                    const found = Object.keys(fila).find(f => f.trim().toUpperCase() === k.toUpperCase());
+                    if (found && fila[found] !== '' && fila[found] !== undefined) return fila[found];
+                }
+                return '';
+            };
+
             const registrosMov = [];
             for (const fila of datosES) {
-                const codigo = String(fila['CODIGO'] || '').trim().toUpperCase();
+                const codigo = String(getM(fila, 'CODIGO','CÓDIGO','COD','COD.') || '').trim().toUpperCase();
                 if (!codigo) continue;
                 let fechaISO = null;
                 try {
-                    if (fila['FECHA']) {
-                        const d = new Date(fila['FECHA']);
+                    const fechaVal = getM(fila, 'FECHA', 'DATE');
+                    if (fechaVal) {
+                        const d = new Date(fechaVal);
                         if (!isNaN(d.getTime())) fechaISO = d.toISOString();
                     }
                 } catch(e) {}
                 registrosMov.push({
                     empresa_id: EMPRESA_ID,
                     fecha: fechaISO || new Date().toISOString(),
-                    mes: fila['MES'] || '',
-                    tipo: fila['TIPO'] || 'NUEVO INGRESO',
-                    tipo_doc: fila['TIPO DE DOC.'] || '',
-                    n_folio: String(fila['N° FOLIO'] || ''),
-                    estado: fila['ESTADO'] || '',
-                    ot: String(fila['#OT'] || ''),
+                    mes: String(getM(fila, 'MES', 'MONTH') || ''),
+                    tipo: String(getM(fila, 'TIPO', 'TYPE', 'TIPO MOVIMIENTO') || 'NUEVO INGRESO'),
+                    tipo_doc: String(getM(fila, 'TIPO DE DOC.', 'TIPO DOC') || ''),
+                    n_folio: String(getM(fila, 'N° FOLIO', 'FOLIO', 'N FOLIO') || ''),
+                    estado: String(getM(fila, 'ESTADO') || ''),
+                    ot: String(getM(fila, '#OT', 'OT', 'NRO OT') || ''),
                     codigo,
-                    producto: fila['PRODUCTO'] || '',
-                    almacen: fila['ALMACEN'] || 'MP',
-                    cantidad: parseInt(fila['CANTIDAD']) || 0,
-                    entrega: fila['ENTREGA'] || '',
-                    nombre_cliente: fila['NOMBRE CLIENTE'] || '',
-                    responsable_entrega: fila['RESPONSABLE ENTREGA'] || '',
-                    recepcion: fila['RECEPCIÓN'] || fila['RECEPCION'] || '',
-                    devolucion: fila['DEVOLUCION'] || '',
-                    estatus: fila['ESTATUS'] || '',
-                    verificado: fila['VERIFICADO'] === 'SI' || fila['VERIFICADO'] === true,
-                    persona_verifica: fila['PERSONA QUE VERIFICA'] || '',
-                    bitacora: fila['BITACORA'] || ''
+                    producto: String(getM(fila, 'PRODUCTO', 'NOMBRE', 'DESCRIPCION') || ''),
+                    almacen: String(getM(fila, 'ALMACEN', 'ALMACÉN', 'BODEGA') || 'MP'),
+                    cantidad: parseInt(getM(fila, 'CANTIDAD', 'CANT', 'QTY') || 0) || 0,
+                    entrega: String(getM(fila, 'ENTREGA') || ''),
+                    nombre_cliente: String(getM(fila, 'NOMBRE CLIENTE', 'CLIENTE') || ''),
+                    responsable_entrega: String(getM(fila, 'RESPONSABLE ENTREGA','RESPONSABLE_ENTREGA','RESPONSABLE') || ''),
+                    recepcion: String(getM(fila, 'RECEPCIÓN', 'RECEPCION') || ''),
+                    devolucion: String(getM(fila, 'DEVOLUCION', 'DEVOLUCIÓN') || ''),
+                    estatus: String(getM(fila, 'ESTATUS', 'ESTADO MOV') || ''),
+                    verificado: ['SI', 'YES', 'TRUE', '1'].includes(String(getM(fila,'VERIFICADO') || '').toUpperCase()),
+                    persona_verifica: String(getM(fila, 'PERSONA QUE VERIFICA', 'VERIFICA') || ''),
+                    bitacora: String(getM(fila, 'BITACORA', 'BITÁCORA', 'NOTAS', 'COMENTARIOS') || '')
                 });
             }
             const LOTE_MOV = 100;
