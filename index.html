@@ -1611,29 +1611,57 @@
                                 </div>
                             </div>
 
-                            <!-- Inventario / Lista de Materiales (ENHANCED) -->
-                            <div class="glass-card mb-3" style="border-color:rgba(245,158,11,0.2);">
-                                <div class="section-header"><strong><i class="bi bi-box-seam"></i> Lista de Materiales (Inventario)</strong></div>
+                            <!-- ═══ BOM — Lista de Materiales Agregada ═══ -->
+                            <div class="glass-card mb-3" id="bom-card" style="border-color:rgba(245,158,11,0.3);">
+                                <div class="section-header" style="background:linear-gradient(135deg,rgba(245,158,11,0.15),rgba(245,158,11,0.03)); display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+                                    <strong><i class="bi bi-clipboard2-check"></i> Lista de Materiales — BOM</strong>
+                                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                        <span id="bom-estado-badge" class="badge" style="background:rgba(245,158,11,0.2);color:#f59e0b;font-size:0.7rem;">Sin guardar</span>
+                                        <button class="btn btn-sm" id="bom-btn-agregar"
+                                            onclick="bomAgregarFila()"
+                                            style="padding:3px 10px;font-size:0.72rem;background:rgba(124,117,240,0.15);color:#a78bfa;border:1px solid rgba(124,117,240,0.3);border-radius:6px;">
+                                            <i class="bi bi-plus-lg"></i> Agregar ítem
+                                        </button>
+                                        <button class="btn btn-sm" id="bom-btn-guardar"
+                                            onclick="bomGuardar()"
+                                            style="padding:3px 10px;font-size:0.72rem;background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);border-radius:6px;">
+                                            <i class="bi bi-cloud-arrow-up"></i> Guardar BOM
+                                        </button>
+                                    </div>
+                                </div>
                                 <div class="p-0">
                                     <div class="table-responsive">
-                                        <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.78rem;">
+                                        <table class="table table-dark-premium table-borderless mb-0" id="bom-tabla" style="font-size:0.78rem;">
                                             <thead>
                                                 <tr>
-                                                    <th>ID</th>
-                                                    <th>PRODUCTO</th>
-                                                    <th>TIPO</th>
-                                                    <th>COD MECANISMO</th>
-                                                    <th>TUBERÍA</th>
-                                                    <th>ADICIONAL</th>
-                                                    <th>ACCIONAMIENTO</th>
-                                                    <th>PESO CADENA</th>
-                                                    <th>MANILLAS</th>
-                                                    <th>UBIC</th>
-                                                    <th>ANCHO (m)</th>
-                                                    <th>ALTO (m)</th>
+                                                    <th style="width:40px;">#</th>
+                                                    <th>CATEGORÍA</th>
+                                                    <th>DESCRIPCIÓN</th>
+                                                    <th>ESPECIFICACIÓN</th>
+                                                    <th>COLOR</th>
+                                                    <th style="width:80px;">CANT.</th>
+                                                    <th style="width:60px;">UNIDAD</th>
+                                                    <th style="width:32px;"></th>
                                                 </tr>
                                             </thead>
-                                            <tbody id="f4-tablaInventario"></tbody>
+                                            <tbody id="f4-tablaInventario">
+                                                <tr><td colspan="8" class="text-muted text-center py-3"><small>Cargá los datos primero (Fase 2 completa → botón "Ir a Producción")</small></td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div id="bom-detail-toggle" style="padding:6px 12px; border-top:1px solid rgba(255,255,255,0.06);">
+                                        <button onclick="bomToggleDetalle()" style="background:none;border:none;color:var(--text-secondary);font-size:0.72rem;cursor:pointer;">
+                                            <i class="bi bi-list-ul"></i> Ver detalle por paño
+                                        </button>
+                                    </div>
+                                    <div id="bom-detalle-pano" style="display:none; padding:8px 12px; border-top:1px solid rgba(255,255,255,0.06);">
+                                        <table class="table table-dark-premium table-borderless mb-0" style="font-size:0.73rem;">
+                                            <thead>
+                                                <tr style="opacity:0.7;">
+                                                    <th>#</th><th>Ubicación</th><th>Producto</th><th>Mecanismo</th><th>Tubería</th><th>Cadena</th><th>Motor</th><th>Manillas</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="bom-detalle-tbody"></tbody>
                                         </table>
                                     </div>
                                 </div>
@@ -4427,6 +4455,14 @@
 
         // Now populate the other tables based on storeVentanas and optimizer data
         populateAllTables(ot, cliente);
+
+        // ── Auto-guardar BOM inmediatamente al generar producción ────────────
+        // Se hace en el próximo tick para que populateAllTables termine primero
+        setTimeout(async () => {
+            if (window._bomItems && window._bomItems.length > 0) {
+                await bomGuardar();
+            }
+        }, 300);
     }
 
     function actualizarOptimizerRow(idx, field, value) {
@@ -4756,30 +4792,269 @@
             });
         }
 
-        // Populate Inventario
-        const tablaInventario = document.getElementById('f4-tablaInventario');
-        let invIdx = 0;
-        window.optimizerRows.forEach(row => {
-            invIdx++;
-            const mecLabel = row.pano?.mecanismo?.match(/\[(.+)\]/)?.[1] || row.pano?.mecanismo || '—';
-            const tubLabel = row.pano?.tuberia?.match(/\[(.+)\]/)?.[1] || row.pano?.tuberia || '—';
+        // ── BOM: calcular y renderizar ──────────────────────────────────────────
+        window._bomItems = calcularBOM(window.optimizerRows);
+        renderBOM(window._bomItems);
+        renderBOMDetalle(window.optimizerRows);
+        // Marcar como no guardado (se modificaron los datos)
+        bomSetEstado('pendiente');
+    }
+
+    // ── Calcular BOM desde optimizerRows ────────────────────────────────────
+    function calcularBOM(rows) {
+        // Acumulador: clave → { categoria, descripcion, especificacion, color, cantidad, unidad }
+        const acc = new Map();
+        const add = (key, cat, desc, spec, color, cant, unit) => {
+            if (acc.has(key)) {
+                acc.get(key).cantidad += cant;
+            } else {
+                acc.set(key, { categoria: cat, descripcion: desc, especificacion: spec || '', color: color || '', cantidad: cant, unidad: unit });
+            }
+        };
+
+        rows.forEach(row => {
+            const p = row.pano || {};
+            const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
+
+            // ── Tubo ──────────────────────────────────────────────────────────
+            const tubSpec = p.tuberia?.match(/\[(.+)\]/)?.[1] || p.tuberia || '';
+            const tubLargo = ((parseFloat(row.anchoCm || row.ancho * 100) - 3.8) / 100).toFixed(2);
+            const tubKey = `TUB|${tubSpec}`;
+            add(tubKey, 'TUBERÍA', 'Tubo', tubSpec, `${tubLargo}m`, 1, 'unid.');
+
+            if (!tieneMotor) {
+                // ── Mecanismo ─────────────────────────────────────────────────
+                const mecSpec = p.mecanismo?.match(/\[(.+)\]/)?.[1] || p.mecanismo || '';
+                const mecColor = p.colorMecanismo || '';
+                const mecKey = `MEC|${mecSpec}|${mecColor}`;
+                add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
+
+                // ── Cadena ────────────────────────────────────────────────────
+                const cadLargo = p.largoCadena || '';
+                const cadColor = p.colorCadena || '';
+                if (cadLargo && cadLargo !== '') {
+                    const cadKey = `CAD|${cadLargo}|${cadColor}`;
+                    add(cadKey, 'CADENA', 'Cadena', cadLargo, cadColor, 1, 'unid.');
+                }
+
+                // ── Peso de cadena ────────────────────────────────────────────
+                const pesoColor = p.colorPeso || '';
+                if (pesoColor) {
+                    const pesoKey = `PESO|${pesoColor}`;
+                    add(pesoKey, 'CADENA', 'Peso de cadena', '', pesoColor, 1, 'unid.');
+                }
+            } else {
+                // ── Motor ──────────────────────────────────────────────────────
+                const motKey = `MOT|${p.motorTipo}`;
+                add(motKey, 'MOTOR', 'Motor', p.motorTipo, '', 1, 'unid.');
+
+                if (p.motorControlAdic) add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
+                if (p.motorHubUsb)      add('MOT-HUB',  'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
+            }
+
+            // ── Manillas ───────────────────────────────────────────────────────
+            const manCant = parseInt(p.manillaCant) || 0;
+            if (manCant > 0) {
+                const manColor = p.manillaColor || '';
+                const manKey = `MAN|${manColor}`;
+                add(manKey, 'MANILLA', 'Manilla', '', manColor, manCant, 'unid.');
+            }
+
+            // ── Cenefa ─────────────────────────────────────────────────────────
+            const cenefaTipo = p.cenefa || 'No';
+            if (cenefaTipo && cenefaTipo !== 'No') {
+                const cenColor = p.colorTapa || '';
+                const cenKey = `CENEFA|${cenefaTipo}|${cenColor}`;
+                add(cenKey, 'CENEFA', `Cenefa ${cenefaTipo}`, cenefaTipo, cenColor, 1, 'unid.');
+
+                // Tapas de cenefa
+                const tapasCount = p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
+                if (tapasCount > 0) {
+                    const tapKey = `TAPA|${cenColor}`;
+                    add(tapKey, 'CENEFA', 'Tapa de cenefa', '', cenColor, tapasCount, 'unid.');
+                }
+            }
+        });
+
+        // Convertir a array ordenado por categoría
+        const catOrder = ['TUBERÍA', 'MECANISMO', 'CADENA', 'MOTOR', 'MANILLA', 'CENEFA', 'OTRO'];
+        return [...acc.values()].sort((a, b) => {
+            const ia = catOrder.indexOf(a.categoria);
+            const ib = catOrder.indexOf(b.categoria);
+            return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+        });
+    }
+
+    // ── Renderizar BOM en la tabla ───────────────────────────────────────────
+    function renderBOM(items) {
+        const tbody = document.getElementById('f4-tablaInventario');
+        tbody.innerHTML = '';
+        if (!items || !items.length) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-muted text-center py-3"><small>Sin materiales calculados</small></td></tr>';
+            return;
+        }
+        items.forEach((it, idx) => {
+            const tr = document.createElement('tr');
+            tr.setAttribute('data-bom-idx', idx);
+            tr.innerHTML = `
+                <td style="opacity:0.5;">${idx+1}</td>
+                <td><span style="font-size:0.68rem;padding:2px 7px;border-radius:10px;background:rgba(124,117,240,0.15);color:#a78bfa;">${it.categoria}</span></td>
+                <td contenteditable="true" class="bom-editable" data-field="descripcion">${it.descripcion}</td>
+                <td contenteditable="true" class="bom-editable" data-field="especificacion" style="color:var(--text-secondary);">${it.especificacion}</td>
+                <td contenteditable="true" class="bom-editable" data-field="color" style="color:var(--text-secondary);">${it.color}</td>
+                <td>
+                    <input type="number" class="bom-cant-input" value="${it.cantidad}" min="0" step="1"
+                        style="width:64px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:inherit;padding:2px 6px;font-size:0.78rem;text-align:center;"
+                        oninput="bomEditarCantidad(${idx}, this.value)">
+                </td>
+                <td style="opacity:0.6;">${it.unidad}</td>
+                <td>
+                    <button onclick="bomEliminarFila(${idx})" style="background:none;border:none;color:#ef4444;cursor:pointer;padding:0 4px;opacity:0.5;" title="Eliminar">
+                        <i class="bi bi-x-lg" style="font-size:0.7rem;"></i>
+                    </button>
+                </td>
+            `;
+            // Marcar como pendiente al editar texto
+            tr.querySelectorAll('.bom-editable').forEach(cell => {
+                cell.addEventListener('blur', () => {
+                    const field = cell.dataset.field;
+                    if (window._bomItems[idx]) window._bomItems[idx][field] = cell.textContent.trim();
+                    bomSetEstado('pendiente');
+                });
+            });
+            tbody.appendChild(tr);
+        });
+    }
+
+    // ── Renderizar detalle por paño ──────────────────────────────────────────
+    function renderBOMDetalle(rows) {
+        const tbody = document.getElementById('bom-detalle-tbody');
+        tbody.innerHTML = '';
+        rows.forEach((row, i) => {
+            const p = row.pano || {};
+            const mec = p.mecanismo?.match(/\[(.+)\]/)?.[1] || p.mecanismo || '—';
+            const tub = p.tuberia?.match(/\[(.+)\]/)?.[1] || p.tuberia || '—';
+            const cad = p.largoCadena ? `${p.largoCadena} (${p.colorCadena || '?'})` : '—';
+            const mot = p.motorTipo || '—';
+            const man = p.manillaCant > 0 ? `${p.manillaCant}x ${p.manillaColor}` : '—';
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${invIdx}</td>
-                <td>${row.producto}</td>
-                <td>${row.tipo}</td>
-                <td>${mecLabel}</td>
-                <td>${tubLabel}</td>
-                <td>${row.pano?.colorMecanismo || '—'}</td>
-                <td>${row.pano?.cierreVert || '—'}</td>
-                <td>${row.pano?.colorPeso || '—'}</td>
-                <td>${row.pano?.manillaCant > 0 ? row.pano.manillaCant + 'x ' + row.pano.manillaColor : '—'}</td>
+                <td style="opacity:0.4;">${i+1}</td>
                 <td>${row.ubicacion}</td>
-                <td>${(row.ancho).toFixed(4)}</td>
-                <td>${(row.alto).toFixed(4)}</td>
+                <td style="font-size:0.7rem;">${row.producto}</td>
+                <td>${mec}</td>
+                <td>${tub}</td>
+                <td>${cad}</td>
+                <td>${mot !== '—' ? `<span style="color:#fbbf24;">${mot}</span>` : '—'}</td>
+                <td>${man}</td>
             `;
-            tablaInventario.appendChild(tr);
+            tbody.appendChild(tr);
         });
+    }
+
+    // ── Helpers BOM ──────────────────────────────────────────────────────────
+    function bomToggleDetalle() {
+        const el = document.getElementById('bom-detalle-pano');
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function bomSetEstado(estado) {
+        const badge = document.getElementById('bom-estado-badge');
+        if (!badge) return;
+        if (estado === 'guardado') {
+            badge.textContent = '✓ Guardado en Supabase';
+            badge.style.background = 'rgba(34,197,94,0.15)';
+            badge.style.color = '#22c55e';
+        } else if (estado === 'pendiente') {
+            badge.textContent = 'Sin guardar';
+            badge.style.background = 'rgba(245,158,11,0.2)';
+            badge.style.color = '#f59e0b';
+        } else if (estado === 'guardando') {
+            badge.textContent = '⏳ Guardando...';
+            badge.style.background = 'rgba(124,117,240,0.15)';
+            badge.style.color = '#a78bfa';
+        }
+    }
+
+    function bomEditarCantidad(idx, val) {
+        if (window._bomItems[idx]) {
+            window._bomItems[idx].cantidad = parseFloat(val) || 0;
+            bomSetEstado('pendiente');
+        }
+    }
+
+    function bomEliminarFila(idx) {
+        window._bomItems.splice(idx, 1);
+        renderBOM(window._bomItems);
+        bomSetEstado('pendiente');
+    }
+
+    function bomAgregarFila() {
+        if (!window._bomItems) window._bomItems = [];
+        window._bomItems.push({ categoria: 'OTRO', descripcion: 'Nuevo ítem', especificacion: '', color: '', cantidad: 1, unidad: 'unid.' });
+        renderBOM(window._bomItems);
+        bomSetEstado('pendiente');
+        // Scroll al último ítem
+        document.getElementById('f4-tablaInventario').lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    // ── Guardar BOM en Supabase ──────────────────────────────────────────────
+    async function bomGuardar() {
+        const ot = storeOTs.find(o => o.id === activeOTId)
+               || storeOTs.find(o => o.estado === 'produccion')
+               || storeOTs[storeOTs.length - 1];
+        if (!ot || !window._bomItems) {
+            alert('No hay OT activa o BOM vacío.'); return;
+        }
+        bomSetEstado('guardando');
+
+        // Guardar BOM en datos_generales de la OT
+        if (!ot.datosGenerales) ot.datosGenerales = {};
+        ot.datosGenerales.bom = window._bomItems;
+        ot.datosGenerales.bomFecha = new Date().toISOString();
+
+        // Guardar en tabla orden_materiales (una fila por ítem de BOM)
+        const otId = ot.id;
+        const bom = window._bomItems;
+
+        // Intentar escribir en orden_materiales
+        const rows = bom.map((it, i) => ({
+            empresa_id:       EMPRESA_ID,
+            ot_id:            otId,
+            orden:            i + 1,
+            categoria:        it.categoria,
+            descripcion:      it.descripcion,
+            especificacion:   it.especificacion || null,
+            color:            it.color || null,
+            cantidad_req:     it.cantidad,
+            unidad:           it.unidad,
+            cantidad_despachada: 0,
+            estado:           'pendiente'
+        }));
+
+        // Primero borrar BOM anterior de esta OT, luego insertar
+        const { error: delErr } = await sb.from('orden_materiales')
+            .delete().eq('empresa_id', EMPRESA_ID).eq('ot_id', otId);
+
+        if (delErr && delErr.code === '42P01') {
+            // Tabla no existe — guardar solo en datos_generales de la OT
+            guardarOT(ot, true);
+            bomSetEstado('guardado');
+            console.warn('[BOM] Tabla orden_materiales no existe. BOM guardado en datos_generales de la OT.');
+            return;
+        }
+
+        const { error: insErr } = await sb.from('orden_materiales').insert(rows);
+        if (insErr) {
+            console.error('[BOM] Error insertando orden_materiales:', insErr.message);
+            // Fallback: guardar en datos_generales
+            guardarOT(ot, true);
+            bomSetEstado('guardado');
+            return;
+        }
+
+        guardarOT(ot, true);
+        bomSetEstado('guardado');
     }
 
     // ===================================================
