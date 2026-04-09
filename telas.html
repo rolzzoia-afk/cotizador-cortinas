@@ -1899,6 +1899,12 @@ async function importarExcelTelas(event) {
                 }
             }
 
+            // ── 2b. DETALLES desde INVENTARIO → grupo, proveedor, ancho ──
+            if (wb.Sheets['INVENTARIO']) {
+                const n = await importarDesdeInventario(wb.Sheets['INVENTARIO']);
+                logTel(`Inventario: ${n} telas con grupo/proveedor/ancho actualizadas`, 'success');
+            }
+
             // ── 3. ACTUALIZAR ALMACÉN desde las grillas LIBERADO / MATERIAS PRIMAS ──
             await importarAlmacenDesdeGrillas(wb);
 
@@ -1919,6 +1925,7 @@ async function importarExcelTelas(event) {
             actualizarStats();
             renderizarCatalogo();
             renderizarFallas();
+            renderizarRacks();  // Actualiza colmena aunque el usuario esté en otra pestaña
             logTel('─── Importación completada ✓ ───', 'success');
         } catch(err) {
             logTel('Error: ' + err.message, 'error');
@@ -1990,6 +1997,69 @@ async function importarCatalogoDesdeGarantias(sheet, wb) {
         .upsert(telas, { onConflict: 'empresa_id,codigo', ignoreDuplicates: false });
     if (error) { logTel('Error catálogo garantías: ' + error.message, 'error'); return 0; }
     return telas.length;
+}
+
+// ── Importar detalles completos desde hoja INVENTARIO ─────────────
+// Lee GRUPO, PROVEEDOR, ANCHO (y nemotecnico de respaldo) para cada código.
+// NO sobreescribe 'tipo' para no romper la lógica BK/DU/SC del rack.
+async function importarDesdeInventario(sheet) {
+    if (!sheet) return 0;
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: false });
+
+    // Buscar fila de encabezado: la que tenga 'COD' y 'GRUPO'
+    let headerRow = -1;
+    let colCod = -1, colNemo = -1, colGrupo = -1, colProv = -1, colAncho = -1;
+    for (let r = 0; r < Math.min(rows.length, 12); r++) {
+        const row = (rows[r] || []).map(c => c ? c.toString().trim().toUpperCase().replace(/\s+/g,' ') : '');
+        const iCod = row.findIndex(c => c === 'COD' || c === 'CODIGO');
+        if (iCod >= 0 && row.includes('GRUPO')) {
+            headerRow = r;
+            colCod   = iCod;
+            colNemo  = row.findIndex(c => c.includes('NEMOT'));
+            colGrupo = row.findIndex(c => c === 'GRUPO');
+            colProv  = row.findIndex(c => c === 'PROVEEDOR');
+            colAncho = row.findIndex(c => c.includes('ANCHO'));
+            break;
+        }
+    }
+    if (headerRow < 0) { logTel('INVENTARIO: no se encontró fila de encabezado', 'warn'); return 0; }
+
+    const TELA_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const batch = [];
+    for (let r = headerRow + 1; r < rows.length; r++) {
+        const row = rows[r] || [];
+        const rawCod = row[colCod];
+        if (!rawCod) continue;
+        const cod = rawCod.toString().trim();
+        if (!TELA_PAT.test(cod)) continue;
+        const normalized = cod.toUpperCase().replace(/\s+/, ' ');
+
+        // tipo se deriva siempre del prefijo del código (BK/DU/SC) para no romper el rack
+        const pfx = normalized.slice(0,2);
+        const tipo = pfx === 'BK' ? 'BK' : pfx === 'DU' ? 'DU' : pfx === 'SC' ? 'SC' : null;
+
+        const obj = { empresa_id: EMPRESA_ID, codigo: normalized, tipo };
+        if (colNemo  >= 0 && row[colNemo])  obj.nemotecnico = row[colNemo].toString().trim();
+        if (colGrupo >= 0 && row[colGrupo]) obj.grupo       = row[colGrupo].toString().trim();
+        if (colProv  >= 0 && row[colProv])  obj.proveedor   = row[colProv].toString().trim();
+        if (colAncho >= 0 && row[colAncho] !== null && row[colAncho] !== '') {
+            const a = parseFloat(row[colAncho]);
+            if (!isNaN(a)) obj.ancho = a;
+        }
+        batch.push(obj);
+    }
+
+    if (!batch.length) return 0;
+    // Upsert en lotes de 50 — crea o actualiza grupo/proveedor/ancho/nemotecnico/tipo
+    let total = 0;
+    for (let i = 0; i < batch.length; i += 50) {
+        const lote = batch.slice(i, i + 50);
+        const { error } = await sb.from('telas_catalogo')
+            .upsert(lote, { onConflict: 'empresa_id,codigo', ignoreDuplicates: false });
+        if (error) { logTel('Error inventario upsert: ' + error.message, 'error'); break; }
+        total += lote.length;
+    }
+    return total;
 }
 
 // ── Fallback: extraer códigos únicos escaneando celdas ────────────
