@@ -478,6 +478,21 @@
             overflow-y: auto;
             box-shadow: 0 24px 80px rgba(0,0,0,0.6);
         }
+        /* Modal adaptado a móvil */
+        @media (max-width: 768px) {
+            .modal-overlay { align-items: flex-end; }
+            .modal-box {
+                width: 100%;
+                max-width: 100%;
+                max-height: 92vh;
+                border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+                padding: 20px 16px max(20px, env(safe-area-inset-bottom));
+            }
+            /* Grid de 2 columnas → 1 columna en móvil */
+            .modal-box > div[style*="grid-template-columns:1fr 1fr"] {
+                grid-template-columns: 1fr !important;
+            }
+        }
         .modal-box h5 {
             margin-bottom: 20px;
             font-family: var(--serif);
@@ -632,6 +647,34 @@
             border-color: var(--primary-500);
             background: rgba(99,102,241,0.05);
             box-shadow: 0 0 20px rgba(99,102,241,0.1);
+        }
+
+        /* ══════════════════════════════════════════════════════
+           FAB — Botón flotante "Nuevo insumo" para móvil
+        ══════════════════════════════════════════════════════ */
+        .fab-nuevo {
+            display: none; /* solo visible en móvil */
+            position: fixed;
+            bottom: max(24px, env(safe-area-inset-bottom, 24px));
+            right: 20px;
+            z-index: 900;
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            background: var(--primary-500);
+            color: #fff;
+            border: none;
+            font-size: 1.5rem;
+            box-shadow: 0 4px 16px rgba(124,117,240,0.45);
+            cursor: pointer;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .fab-nuevo:active { transform: scale(0.92); box-shadow: 0 2px 8px rgba(124,117,240,0.3); }
+        /* Mostrar solo en pantallas ≤ 768px cuando el panel catálogo está activo */
+        @media (max-width: 768px) {
+            .fab-nuevo { display: flex; }
         }
 
         /* ══════════════════════════════════════════════════════
@@ -1248,6 +1291,11 @@
     </div>
 </div>
 
+<!-- ════ FAB: Nuevo insumo (visible solo en móvil) ════ -->
+<button class="fab-nuevo" id="fabNuevoInsumo" onclick="abrirModalInsumo()" title="Agregar nuevo insumo" style="display:none;">
+    <i class="bi bi-plus-lg"></i>
+</button>
+
 <script>
 // ══════════════════════════════════════════════════════════════════
 // CONFIGURACIÓN
@@ -1329,6 +1377,10 @@ function switchPanel(nombre) {
     const map = { catalogo: 0, rack: 1, movimientos: 2, alertas: 3, importar: 4, listas: 5 };
     if (map[nombre] !== undefined && tabs[map[nombre]]) tabs[map[nombre]].classList.add('active');
     if (nombre === 'listas') listasMostrarCampo();
+
+    // FAB "Nuevo insumo": visible solo en catálogo (en móvil el CSS lo activa)
+    const fab = document.getElementById('fabNuevoInsumo');
+    if (fab) fab.style.display = nombre === 'catalogo' ? '' : 'none';
 }
 
 function cerrarModal(id) {
@@ -1416,6 +1468,9 @@ async function inicializar() {
 
         document.getElementById('estadoConexion').textContent = '● Conectado';
         document.getElementById('estadoConexion').style.color = 'var(--success)';
+        // Mostrar FAB en el panel inicial (catálogo)
+        const fab = document.getElementById('fabNuevoInsumo');
+        if (fab) fab.style.display = '';
 
         // ── Cargar stats de telas en paralelo (no bloquea si falla) ──
         cargarTelaStats();
