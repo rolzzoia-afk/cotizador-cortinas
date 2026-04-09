@@ -647,14 +647,29 @@ function extraerTelasBOM(ot) {
 
 // ══════════════════════════════════════════════════════════════════
 // UBICACIÓN FÍSICA EN RACK — fuente de verdad para insumos
-// Busca en ubicaciones_rack por codigo_insumo y devuelve "RACK 1 · 3-A"
 // ══════════════════════════════════════════════════════════════════
+
+// Busca por cod exacto del insumo (ej: "MEC14")
 function getRackUbicacion(cod) {
     if (!cod || !_ubicacionesRack.length) return null;
-    const codUp = cod.toUpperCase().trim();
-    const u = _ubicacionesRack.find(r =>
-        (r.codigo_insumo || '').toUpperCase().trim() === codUp
-    );
+    const codNorm = cod.toUpperCase().replace(/\s/g, '');
+    const u = _ubicacionesRack.find(r => {
+        const rc = (r.codigo_insumo || '').toUpperCase().replace(/\s/g, '');
+        return rc === codNorm;
+    });
+    if (!u) return null;
+    return `${u.rack} · ${u.fila}-${u.columna}`;
+}
+
+// Busca DIRECTAMENTE por el spec del BOM (ej: "MEC 14") sin pasar por insumos
+// Útil cuando la categoría/nemotécnico no matchea pero el código sí está en el rack
+function getRackUbicacionPorSpec(spec) {
+    if (!spec || !_ubicacionesRack.length) return null;
+    const specNorm = spec.toUpperCase().replace(/\s/g, '');
+    const u = _ubicacionesRack.find(r => {
+        const rc = (r.codigo_insumo || '').toUpperCase().replace(/\s/g, '');
+        return rc === specNorm || rc.includes(specNorm) || specNorm.includes(rc);
+    });
     if (!u) return null;
     return `${u.rack} · ${u.fila}-${u.columna}`;
 }
@@ -692,7 +707,8 @@ function renderBOMItems() {
             locText   = ubic ? `📍 Rack: ${ubic}` : '📍 Sin posición registrada';
         } else {
             const insMatch = buscarInsumoMatchBOM(item);
-            locText   = getUbicacionBOM(item);
+            const ubic = getUbicacionBOM(item);
+            locText   = ubic || (_ubicacionesRack.length ? '⚠ Sin rack asignado' : '');
             stockInfo = insMatch ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}` : '';
         }
 
@@ -777,15 +793,27 @@ function buscarInsumoMatchBOM(item) {
 }
 
 // Devuelve la ubicación de rack del insumo que coincide con el item BOM.
-// Primero intenta ubicaciones_rack (real), luego ins.ubicacion (fallback).
+// Cascada: spec→rack directo → insumo.cod→rack → insumo.ubicacion → vacío
 function getUbicacionBOM(item) {
+    const spec = (item.especificacion || '').trim();
+
+    // ── Camino 1: spec del BOM → rack directo (sin pasar por catálogo de insumos)
+    //    Ej: spec "MEC 14" busca codigo_insumo "MEC14" en ubicaciones_rack
+    if (spec) {
+        const rackDirecto = getRackUbicacionPorSpec(spec);
+        if (rackDirecto) return `📍 ${rackDirecto}`;
+    }
+
+    // ── Camino 2: buscar insumo por fuzzy match, luego su posición de rack
     const ins = buscarInsumoMatchBOM(item);
-    if (!ins) return '';
-    // Fuente primaria: posición física en rack
-    const rackPos = getRackUbicacion(ins.cod);
-    if (rackPos) return `📍 ${rackPos}`;
-    // Fallback: campo ubicacion del catálogo (puede ser bodega general)
-    if (ins.ubicacion) return `📦 ${ins.ubicacion}`;
+    if (ins) {
+        const rackPos = getRackUbicacion(ins.cod);
+        if (rackPos) return `📍 ${rackPos}`;
+        // ── Camino 3: campo ubicacion general del catálogo (ej: "2DA AV.", "BODEGA MP")
+        if (ins.ubicacion) return `📦 ${ins.ubicacion}`;
+    }
+
+    // Sin información de ubicación
     return '';
 }
 
@@ -803,8 +831,18 @@ function iniciarScanItem(idx) {
     document.getElementById('scan-item-desc').textContent = item.descripcion;
     document.getElementById('scan-item-spec').textContent = [item.especificacion, item.color].filter(Boolean).join(' · ');
 
-    const locReal = item._es_tela ? (item._ubicacion_rack ? `📍 Rack: ${item._ubicacion_rack}` : '') : getUbicacionBOM(item);
-    document.getElementById('scan-item-loc').textContent = locReal || '⚠ Ubicación desconocida';
+    let locReal = '';
+    if (item._es_tela) {
+        locReal = item._ubicacion_rack ? `📍 Rack: ${item._ubicacion_rack}` : '⚠ Sin posición de rack';
+    } else {
+        locReal = getUbicacionBOM(item);
+        if (!locReal) {
+            locReal = _ubicacionesRack.length
+                ? '⚠ Sin rack asignado — buscar manualmente'
+                : '⚠ Importá el mapa de rack en Inventario';
+        }
+    }
+    document.getElementById('scan-item-loc').textContent = locReal;
     document.getElementById('scan-contador').textContent  = cnt.pickeado;
     document.getElementById('scan-requerido').textContent = cnt.requerido;
     document.getElementById('scanner-titulo').textContent = item.descripcion;
@@ -879,22 +917,32 @@ async function onQRScan(decoded) {
 
     if (_scanFase === 'loc') {
         // Esperando escaneo de ubicación (LOC:...)
-        // La ubicación real viene del rack (ubicaciones_rack), no del campo ins.ubicacion
+        // Prioridad: rack directo por spec → rack por cod insumo → ubicacion general
+        const spec     = (item.especificacion || '').trim();
         const insMatch = buscarInsumoMatchBOM(item);
         let locEsperada = null;
         let locLabel    = '';
+
         if (item._es_tela && item._ubicacion_rack) {
             locEsperada = `LOC:${item._ubicacion_rack}`;
             locLabel    = item._ubicacion_rack;
-        } else if (insMatch) {
-            const rackPos = getRackUbicacion(insMatch.cod);
-            if (rackPos) {
-                locEsperada = `LOC:${rackPos}`;
-                locLabel    = rackPos;
-            } else if (insMatch.ubicacion) {
-                locEsperada = `LOC:${insMatch.ubicacion}`;
-                locLabel    = insMatch.ubicacion;
+        } else {
+            // Intentar camino directo spec → rack
+            const rackDirecto = spec ? getRackUbicacionPorSpec(spec) : null;
+            if (rackDirecto) {
+                locEsperada = `LOC:${rackDirecto}`;
+                locLabel    = rackDirecto;
+            } else if (insMatch) {
+                const rackPos = getRackUbicacion(insMatch.cod);
+                if (rackPos) {
+                    locEsperada = `LOC:${rackPos}`;
+                    locLabel    = rackPos;
+                } else if (insMatch.ubicacion) {
+                    locEsperada = `LOC:${insMatch.ubicacion}`;
+                    locLabel    = insMatch.ubicacion;
+                }
             }
+            // Si no hay ubicación conocida → omitir validación (no bloquear al bodeguero)
         }
 
         if (locEsperada && decoded !== locEsperada) {
