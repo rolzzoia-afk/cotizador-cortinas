@@ -1728,25 +1728,27 @@ const RACK_MAP = {
 };
 
 // ── Generador de mapas de rack para Materias Primas ─────────────────────────
-// Bodega 1: 4 racks, 6 cols (Q-V), 10 filas
+// Bodega 1: 7 racks, 6 cols (Q-V), 10 filas
 // Bodega 2: 4 racks, 6 cols (Q-V) racks 1-3 / 7 cols (Q-V,X) rack 4, 12 filas
-function _generarMPRackMap(prefix, rack4Cols, maxRows) {
+// rack4Cols: columnas especiales para el rack 4 (B2 tiene col extra X)
+// numRacks:  cantidad total de racks en esta bodega
+function _generarMPRackMap(prefix, rack4Cols, numRacks, maxRows) {
     const stdCols = ['Q','R','S','T','U','V'];
     const maps = {};
-    for (let r = 1; r <= 4; r++) {
+    for (let r = 1; r <= numRacks; r++) {
         const cols = (r === 4) ? rack4Cols : stdCols;
         const rows = [];
         for (let row = 1; row <= maxRows; row++) {
             rows.push({ num: row, slots: cols.map(c =>
-                row <= maxRows ? `${prefix}R${r}${c}${String(row).padStart(2,'0')}` : null
+                `${prefix}R${r}${c}${String(row).padStart(2,'0')}`
             )});
         }
         maps[`RACK ${r}`] = { cols, rows };
     }
     return maps;
 }
-const B1_RACK_MAP = _generarMPRackMap('B1', ['Q','R','S','T','U','V'], 10);
-const B2_RACK_MAP = _generarMPRackMap('B2', ['Q','R','S','T','U','V','X'], 12);
+const B1_RACK_MAP = _generarMPRackMap('B1', ['Q','R','S','T','U','V'], 7, 10);
+const B2_RACK_MAP = _generarMPRackMap('B2', ['Q','R','S','T','U','V','X'], 4, 12);
 
 function renderizarRacks() {
     const filtroAlm  = document.getElementById('filtroAlmacenRack').value;
@@ -2359,7 +2361,7 @@ async function importarDesdeInventario(sheet) {
 
 // ── Fallback: extraer códigos únicos escaneando celdas ────────────
 async function importarCodigosDesdeGrilla(sheet, almacen) {
-    const CODE_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const CODE_PAT = /^(BK|DU|SC|TR)\s*\d+$/i;
     const found = new Map();
     Object.keys(sheet).forEach(addr => {
         if (addr[0] === '!') return;
@@ -2380,7 +2382,7 @@ async function importarCodigosDesdeGrilla(sheet, almacen) {
 
 // ── Actualizar almacén: LIBERADO vs MATERIAS PRIMAS ───────────────
 async function importarAlmacenDesdeGrillas(wb) {
-    const CODE_PAT = /^(BK|DU|SC)\s*\d+$/i;
+    const CODE_PAT = /^(BK|DU|SC|TR)\s*\d+$/i;
     const libCodes = new Set();
     const mpCodes  = new Set();
 
@@ -2419,12 +2421,17 @@ async function importarPosicionesMP(wb) {
     const BODEGAS = [
         {
             prefix: 'B1',
-            // BODEGA 1 columnas (1-indexed): RACK1=Q(2)..V(7), RACK2=Q(10)..V(15), RACK3=Q(18)..V(23), RACK4=Q(26)..V(31)
+            // BODEGA 1 columnas (1-indexed): cada rack ocupa 6 cols + 2 separadoras = 8 por rack
+            // RACK1=Q(2)..V(7), RACK2=Q(10)..V(15), RACK3=Q(18)..V(23), RACK4=Q(26)..V(31)
+            // RACK5=Q(34)..V(39), RACK6=Q(42)..V(47), RACK7=Q(50)..V(55)
             racks: [
-                { rack:1, colStart:2, cols:['Q','R','S','T','U','V'] },
+                { rack:1, colStart:2,  cols:['Q','R','S','T','U','V'] },
                 { rack:2, colStart:10, cols:['Q','R','S','T','U','V'] },
                 { rack:3, colStart:18, cols:['Q','R','S','T','U','V'] },
                 { rack:4, colStart:26, cols:['Q','R','S','T','U','V'] },
+                { rack:5, colStart:34, cols:['Q','R','S','T','U','V'] },
+                { rack:6, colStart:42, cols:['Q','R','S','T','U','V'] },
+                { rack:7, colStart:50, cols:['Q','R','S','T','U','V'] },
             ],
             excelRowStart: 9, numRows: 10,
             sheetFinder: n => n.replace(/\s+/g,' ').trim() === 'MATERIA_PRIMA - BODEGA 1'
@@ -2446,12 +2453,21 @@ async function importarPosicionesMP(wb) {
     const updates = [];
 
     for (const bod of BODEGAS) {
+        // Mostrar todos los nombres de hojas para ayudar a diagnosticar
+        const candidatas = wb.SheetNames.filter(n => n.toUpperCase().includes('BODEGA') || n.toUpperCase().includes('MATERIA'));
+        logTel(`${bod.prefix} – hojas candidatas: ${candidatas.join(' | ') || '(ninguna)'}`, 'info');
+
         const sheetName = wb.SheetNames.find(bod.sheetFinder);
-        if (!sheetName) { logTel(`Hoja ${bod.prefix} no encontrada`, 'warn'); continue; }
+        if (!sheetName) {
+            logTel(`⚠ Hoja ${bod.prefix} no encontrada. Hojas disponibles: ${wb.SheetNames.join(', ')}`, 'warn');
+            continue;
+        }
+        logTel(`${bod.prefix} → usando hoja: "${sheetName}"`, 'info');
         const sheet = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:null, raw:false });
 
         for (const rackCfg of bod.racks) {
+            let rackFound = 0;
             for (let rowIdx = 0; rowIdx < bod.numRows; rowIdx++) {
                 const excelRowIdx = (bod.excelRowStart - 1) + rowIdx; // 0-based
                 const sheetRow = rows[excelRowIdx] || [];
@@ -2468,27 +2484,43 @@ async function importarPosicionesMP(wb) {
                     // Si el mismo código aparece varias veces, tomamos el primero
                     if (!updates.find(u => u.codigo === cod)) {
                         updates.push({ codigo: cod, posicion, almacen: 'MATERIAS PRIMAS' });
+                        rackFound++;
                     }
                 });
             }
+            if (rackFound > 0) logTel(`  ${bod.prefix} RACK ${rackCfg.rack}: ${rackFound} telas`, 'info');
         }
-        logTel(`${sheetName}: ${updates.filter(u=>u.posicion.startsWith(bod.prefix)).length} telas`, 'info');
+        const bodTotal = updates.filter(u=>u.posicion.startsWith(bod.prefix)).length;
+        logTel(`${sheetName}: ${bodTotal} telas encontradas en total`, bodTotal > 0 ? 'info' : 'warn');
     }
 
-    if (!updates.length) { logTel('Sin telas MP encontradas', 'warn'); return 0; }
+    if (!updates.length) { logTel('⚠ Sin telas MP encontradas en ninguna bodega', 'warn'); return 0; }
 
-    // Batch update
+    // Batch update con conteo de filas realmente actualizadas
+    let actualizadas = 0;
     for (let i = 0; i < updates.length; i += 20) {
         const lote = updates.slice(i, i + 20);
-        await Promise.all(lote.map(u =>
+        const resultados = await Promise.all(lote.map(u =>
             sb.from('telas_catalogo')
               .update({ posicion: u.posicion, almacen: u.almacen })
               .eq('empresa_id', EMPRESA_ID)
               .eq('codigo', u.codigo)
+              .select('codigo')
         ));
+        actualizadas += resultados.filter(r => r.data && r.data.length > 0).length;
     }
-    logTel(`Posiciones MP asignadas: ${updates.length}`, 'success');
-    return updates.length;
+
+    if (actualizadas < updates.length) {
+        const noEncontrados = updates
+            .filter((u, i) => {
+                // Aproximación: identificar cuáles no se actualizaron
+                return true; // log general
+            }).map(u => u.codigo);
+        logTel(`⚠ MP: ${updates.length} encontradas en Excel, solo ${actualizadas} existían en catálogo. ` +
+               `Códigos no encontrados: ${updates.slice(0,5).map(u=>u.codigo).join(', ')}...`, 'warn');
+    }
+    logTel(`Posiciones MP asignadas: ${actualizadas} de ${updates.length}`, actualizadas > 0 ? 'success' : 'warn');
+    return actualizadas;
 }
 
 // ── Posiciones: cruce por coordenada de celda LIBERADO ↔ MAPA-COLMENA ──
