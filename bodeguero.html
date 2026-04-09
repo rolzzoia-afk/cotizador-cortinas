@@ -704,15 +704,57 @@ function renderBOMItems() {
 }
 
 function buscarInsumoMatchBOM(item) {
-    // Intenta encontrar un insumo que coincida con el ítem del BOM por categoría
-    const cat = (item.categoria || '').toLowerCase();
-    const color = (item.color || '').toLowerCase();
+    if (!_insumos.length) return null;
+
+    const spec  = (item.especificacion || '').toUpperCase().trim();
+    const desc  = (item.descripcion    || '').toUpperCase().trim();
+    const cat   = (item.categoria      || '').toUpperCase().trim();
+    const color = (item.color          || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+    // ── Paso 1: coincidencia por código exacto (MEC 14, TUB 6, etc.) ─────────
+    // El spec viene del BOM como "MEC 14", "TUB 6", "CON CABLE", etc.
+    // El insumo tiene nemotecnico como "LZ50 SFLX BCO [MEC 14]" o cod "MEC14"
+    if (spec) {
+        const specNorm = spec.replace(/\s/g, '');
+        const found = _insumos.find(ins => {
+            const nemo = (ins.nemotecnico || '').toUpperCase();
+            const cod  = (ins.cod || '').toUpperCase().replace(/\s/g, '');
+            // Busca el código entre corchetes o como subcadena
+            const nemoMatch = nemo.match(/\[([^\]]+)\]/);
+            const codBracket = nemoMatch ? nemoMatch[1].replace(/\s/g,'') : '';
+            return cod === specNorm
+                || cod.includes(specNorm) || specNorm.includes(cod)
+                || codBracket === specNorm
+                || nemo.includes(spec);
+        });
+        if (found) return found;
+    }
+
+    // ── Paso 2: coincidencia por descripción + color ───────────────────────
+    // Útil para "Motor / CON CABLE BCO" o "Manilla / BCO"
+    if (desc && color.length >= 2) {
+        const found = _insumos.find(ins => {
+            const nemo     = (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase();
+            const insColor = (ins.color || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+            return nemo.includes(desc) && (insColor.includes(color.slice(0,3)) || color.includes(insColor.slice(0,3)));
+        });
+        if (found) return found;
+    }
+
+    // ── Paso 3: coincidencia por descripción sola ──────────────────────────
+    if (desc) {
+        const found = _insumos.find(ins => {
+            const nemo = (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase();
+            return nemo.includes(desc) || desc.includes(nemo);
+        });
+        if (found) return found;
+    }
+
+    // ── Paso 4: fallback por categoría ────────────────────────────────────
     return _insumos.find(ins => {
-        const inscat = (ins.categoria || '').toLowerCase();
-        const inscolor = (ins.color || '').toLowerCase();
-        return inscat.includes(cat) || cat.includes(inscat)
-            || (color && (inscolor.includes(color) || color.includes(inscolor)));
-    });
+        const inscat = (ins.categoria || '').toUpperCase();
+        return inscat.includes(cat) || cat.includes(inscat);
+    }) || null;
 }
 
 // ══════════════════════════════════════════════════════════════════

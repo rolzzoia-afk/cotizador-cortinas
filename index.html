@@ -4849,18 +4849,22 @@
             const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
 
             // ── Tubo ──────────────────────────────────────────────────────────
-            const tubSpec = p.tuberia?.match(/\[(.+)\]/)?.[1] || p.tuberia || '';
-            const tubLargo = ((parseFloat(row.anchoCm || row.ancho * 100) - 3.8) / 100).toFixed(2);
-            const tubKey = `TUB|${tubSpec}`;
-            add(tubKey, 'TUBERÍA', 'Tubo', tubSpec, `${tubLargo}m`, 1, 'unid.');
+            // Clave incluye el largo para que tubos con distintos largos aparezcan
+            // como filas separadas (no se mezclan 1.25m con 1.80m)
+            const tubSpec  = p.tuberia?.match(/\[(.+)\]/)?.[1] || p.tuberia || '';
+            const tubLargoM = ((parseFloat(row.anchoCm || row.ancho * 100) - 3.8) / 100).toFixed(2);
+            const tubKey   = `TUB|${tubSpec}|${tubLargoM}`;
+            add(tubKey, 'TUBERÍA', 'Tubo', tubSpec, `${tubLargoM}m`, 1, 'unid.');
 
-            if (!tieneMotor) {
-                // ── Mecanismo ─────────────────────────────────────────────────
-                const mecSpec = p.mecanismo?.match(/\[(.+)\]/)?.[1] || p.mecanismo || '';
-                const mecColor = p.colorMecanismo || '';
+            // ── Mecanismo — siempre requerido (con o sin motor) ───────────────
+            const mecSpec  = p.mecanismo?.match(/\[(.+)\]/)?.[1] || p.mecanismo || '';
+            const mecColor = p.colorMecanismo || '';
+            if (mecSpec) {
                 const mecKey = `MEC|${mecSpec}|${mecColor}`;
                 add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
+            }
 
+            if (!tieneMotor) {
                 // ── Cadena ────────────────────────────────────────────────────
                 const cadLargo = p.largoCadena || '';
                 const cadColor = p.colorCadena || '';
@@ -4877,11 +4881,20 @@
                 }
             } else {
                 // ── Motor ──────────────────────────────────────────────────────
-                const motKey = `MOT|${p.motorTipo}`;
-                add(motKey, 'MOTOR', 'Motor', p.motorTipo, '', 1, 'unid.');
+                // Incluir: tipo + lado + color mecanismo (el motor se monta sobre el mecanismo)
+                const ladoMot  = p.ladoMotor || '';
+                const motEspec = [p.motorTipo, ladoMot ? `Lado ${ladoMot}` : ''].filter(Boolean).join(' — ');
+                const motKey   = `MOT|${p.motorTipo}|${mecColor}|${ladoMot}`;
+                add(motKey, 'MOTOR', 'Motor', motEspec, mecColor, 1, 'unid.');
 
                 if (p.motorControlAdic) add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
                 if (p.motorHubUsb)      add('MOT-HUB',  'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
+            }
+
+            // ── Mecanismo Dual ─────────────────────────────────────────────────
+            if (p.dual) {
+                const dualKey = `DUAL|${mecColor}`;
+                add(dualKey, 'MECANISMO', 'Mecanismo Dual', mecSpec || '', mecColor, 1, 'unid.');
             }
 
             // ── Manillas ───────────────────────────────────────────────────────
