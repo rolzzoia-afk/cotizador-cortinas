@@ -2445,13 +2445,19 @@ async function importarAlmacenDesdeGrillas(wb) {
 // Si la tabla no existe en Supabase, lanza un error con el SQL para crearla.
 async function escribirSlots(slots) {
     if (!slots.length) return;
-    for (let i = 0; i < slots.length; i += 50) {
-        const lote = slots.slice(i, i + 50).map(s => ({
+    // Deduplicar por posicion antes de upsert: si el mismo slot aparece dos veces
+    // en MAPA-COLMENA o en el Excel, PostgreSQL rechaza el batch. El último gana.
+    const deduped = [...new Map(
+        slots.map(s => [s.posicion.toUpperCase(), {
             empresa_id: EMPRESA_ID,
             posicion:   s.posicion.toUpperCase(),
             codigo:     s.codigo,
             almacen:    s.almacen || null
-        }));
+        }])
+    ).values()];
+
+    for (let i = 0; i < deduped.length; i += 50) {
+        const lote = deduped.slice(i, i + 50);
         const { error } = await sb.from('telas_slots')
             .upsert(lote, { onConflict: 'empresa_id,posicion' });
         if (error) {
