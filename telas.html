@@ -1375,19 +1375,41 @@ async function cargarTelas() {
     TEL.telas = data || [];
     actualizarSelectTelas();
 
-    // Construir mapa de colmena desde telas
+    // ── Construir mapa de colmena ──
+    // Primero desde telas_catalogo.posicion (posición principal / fallback)
     TEL.colmena = {};
     TEL.telas.forEach(t => {
         if (t.posicion) {
             TEL.colmena[t.posicion.toUpperCase()] = {
-                codigo: t.codigo,
-                tipo: t.tipo,
-                nemotecnico: t.nemotecnico,
-                almacen: t.almacen,
-                id: t.id
+                codigo: t.codigo, tipo: t.tipo,
+                nemotecnico: t.nemotecnico, almacen: t.almacen, id: t.id
             };
         }
     });
+
+    // Luego desde telas_slots (todos los slots físicos, una fila por slot)
+    // Si la tabla existe, sobreescribe/amplía TEL.colmena con datos completos
+    const { data: slots, error: slotErr } = await sb.from('telas_slots')
+        .select('posicion,codigo,almacen').eq('empresa_id', EMPRESA_ID);
+    if (slots && slots.length) {
+        // Construir lookup rápido de telas_catalogo para agregar tipo/nemotecnico/id
+        const catMap = {};
+        TEL.telas.forEach(t => { catMap[t.codigo] = t; });
+        // Reemplazar TEL.colmena completamente con los datos de telas_slots
+        TEL.colmena = {};
+        slots.forEach(s => {
+            if (!s.posicion || !s.codigo) return;
+            const cat = catMap[s.codigo] || {};
+            TEL.colmena[s.posicion.toUpperCase()] = {
+                codigo: s.codigo,
+                tipo: cat.tipo || null,
+                nemotecnico: cat.nemotecnico || null,
+                almacen: s.almacen || cat.almacen || null,
+                id: cat.id || null
+            };
+        });
+    }
+    // Si slotErr y la tabla no existe (42P01), no pasa nada — se usa el fallback de arriba
 }
 
 async function cargarMovimientos() {
@@ -2157,10 +2179,16 @@ async function importarExcelTelas(event) {
             await importarAlmacenDesdeGrillas(wb);
 
             // ── 4. POSICIONES: cruzar LIBERADO-ROLZZO ↔ MAPA-COLMENA por coordenada de celda ──
-            // Primero limpiar TODAS las posiciones existentes para evitar datos viejos
-            await sb.from('telas_catalogo')
-                .update({ posicion: null })
-                .eq('empresa_id', EMPRESA_ID);
+            // Limpiar posiciones previas en ambas tablas para evitar datos viejos
+            await sb.from('telas_catalogo').update({ posicion: null }).eq('empresa_id', EMPRESA_ID);
+            // telas_slots guarda TODOS los slots físicos; limpiar con delete
+            const { error: delSlotErr } = await sb.from('telas_slots').delete().eq('empresa_id', EMPRESA_ID);
+            if (delSlotErr && delSlotErr.code === '42P01') {
+                logTel('⚠ La tabla "telas_slots" no existe en Supabase. ' +
+                    'Creala con este SQL para ver todos los slots correctamente:\n' +
+                    'CREATE TABLE telas_slots (empresa_id text NOT NULL, posicion text NOT NULL, ' +
+                    'codigo text, almacen text, PRIMARY KEY (empresa_id, posicion));', 'warn');
+            }
             logTel('Posiciones previas limpiadas', 'info');
 
             // "LIBERADO - ROLZZO" comparte el mismo sistema de coords que MAPA-COLMENA (Q,R,S,T,U,V)
@@ -2411,8 +2439,34 @@ async function importarAlmacenDesdeGrillas(wb) {
     logTel(`Almacén: ${libCodes.size} lib, ${soloMp.length} solo-MP actualizados`, 'info');
 }
 
-// ── Posiciones: cruce por coordenada de celda LIBERADO ↔ MAPA-COLMENA ──
-// Mismo Excel: las celdas en la misma dirección (ej D10) contienen
+// ── Helper: escribir slots físicos en telas_slots ────────────────────────────
+// slots: [{ posicion, codigo, almacen }]
+// La tabla tiene clave primaria (empresa_id, posicion) → upsert sobreescribe si ya existe.
+// Si la tabla no existe en Supabase, lanza un error con el SQL para crearla.
+async function escribirSlots(slots) {
+    if (!slots.length) return;
+    for (let i = 0; i < slots.length; i += 50) {
+        const lote = slots.slice(i, i + 50).map(s => ({
+            empresa_id: EMPRESA_ID,
+            posicion:   s.posicion.toUpperCase(),
+            codigo:     s.codigo,
+            almacen:    s.almacen || null
+        }));
+        const { error } = await sb.from('telas_slots')
+            .upsert(lote, { onConflict: 'empresa_id,posicion' });
+        if (error) {
+            if (error.code === '42P01') {
+                throw new Error(
+                    'La tabla telas_slots no existe. Ejecutá este SQL en Supabase → SQL Editor:\n' +
+                    'CREATE TABLE telas_slots (empresa_id text NOT NULL, posicion text NOT NULL, ' +
+                    'codigo text, almacen text, PRIMARY KEY (empresa_id, posicion));'
+                );
+            }
+            logTel('Error escribiendo slots: ' + error.message, 'warn');
+        }
+    }
+}
+
 // ── Posiciones de Materias Primas: leer directamente desde BODEGA 1 y BODEGA 2 ──
 async function importarPosicionesMP(wb) {
     const CODE_PAT = /^(BK|DU|SC|TR)\s*\d+$/i;
@@ -2450,56 +2504,58 @@ async function importarPosicionesMP(wb) {
         }
     ];
 
-    const updates = [];
+    // slots: todos los slots físicos (puede haber muchos slots del mismo código)
+    // firstPos: primera posición vista para cada código (para actualizar telas_catalogo.posicion)
+    const slots = [];
+    const firstPos = {}; // codigo → posicion (primer slot encontrado)
 
     for (const bod of BODEGAS) {
-        // Mostrar todos los nombres de hojas para ayudar a diagnosticar
-        const candidatas = wb.SheetNames.filter(n => n.toUpperCase().includes('BODEGA') || n.toUpperCase().includes('MATERIA'));
-        logTel(`${bod.prefix} – hojas candidatas: ${candidatas.join(' | ') || '(ninguna)'}`, 'info');
-
         const sheetName = wb.SheetNames.find(bod.sheetFinder);
         if (!sheetName) {
             logTel(`⚠ Hoja ${bod.prefix} no encontrada. Hojas disponibles: ${wb.SheetNames.join(', ')}`, 'warn');
             continue;
         }
-        logTel(`${bod.prefix} → usando hoja: "${sheetName}"`, 'info');
+        logTel(`${bod.prefix} → hoja: "${sheetName}"`, 'info');
         const sheet = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:null, raw:false });
 
         for (const rackCfg of bod.racks) {
             let rackFound = 0;
             for (let rowIdx = 0; rowIdx < bod.numRows; rowIdx++) {
-                const excelRowIdx = (bod.excelRowStart - 1) + rowIdx; // 0-based
+                const excelRowIdx = (bod.excelRowStart - 1) + rowIdx;
                 const sheetRow = rows[excelRowIdx] || [];
                 const physRow = rowIdx + 1;
 
                 rackCfg.cols.forEach((colLetter, colIdx) => {
-                    const colNum = rackCfg.colStart - 1 + colIdx; // 0-based
+                    const colNum = rackCfg.colStart - 1 + colIdx;
                     const raw = sheetRow[colNum];
                     if (!raw) return;
                     const val = raw.toString().trim();
                     if (!CODE_PAT.test(val)) return;
                     const cod = val.toUpperCase().replace(/\s+/, ' ');
                     const posicion = `${bod.prefix}R${rackCfg.rack}${colLetter}${String(physRow).padStart(2,'0')}`;
-                    // Si el mismo código aparece varias veces, tomamos el primero
-                    if (!updates.find(u => u.codigo === cod)) {
-                        updates.push({ codigo: cod, posicion, almacen: 'MATERIAS PRIMAS' });
-                        rackFound++;
-                    }
+                    // Cada slot es único → siempre se agrega (no hay dedup por slot)
+                    slots.push({ codigo: cod, posicion, almacen: 'MATERIAS PRIMAS' });
+                    if (!firstPos[cod]) firstPos[cod] = posicion;
+                    rackFound++;
                 });
             }
-            if (rackFound > 0) logTel(`  ${bod.prefix} RACK ${rackCfg.rack}: ${rackFound} telas`, 'info');
+            if (rackFound > 0) logTel(`  ${bod.prefix} RACK ${rackCfg.rack}: ${rackFound} slots`, 'info');
         }
-        const bodTotal = updates.filter(u=>u.posicion.startsWith(bod.prefix)).length;
-        logTel(`${sheetName}: ${bodTotal} telas encontradas en total`, bodTotal > 0 ? 'info' : 'warn');
+        const bodTotal = slots.filter(s => s.posicion.startsWith(bod.prefix)).length;
+        logTel(`${sheetName}: ${bodTotal} slots en total`, bodTotal > 0 ? 'info' : 'warn');
     }
 
-    if (!updates.length) { logTel('⚠ Sin telas MP encontradas en ninguna bodega', 'warn'); return 0; }
+    if (!slots.length) { logTel('⚠ Sin telas MP encontradas en ninguna bodega', 'warn'); return 0; }
 
-    // Batch update con conteo de filas realmente actualizadas
+    // 1. Escribir TODOS los slots en telas_slots (sin deduplicar)
+    await escribirSlots(slots);
+
+    // 2. Actualizar telas_catalogo.posicion con la primera posición de cada código
+    const primeras = Object.entries(firstPos).map(([codigo, posicion]) => ({ codigo, posicion, almacen: 'MATERIAS PRIMAS' }));
     let actualizadas = 0;
-    for (let i = 0; i < updates.length; i += 20) {
-        const lote = updates.slice(i, i + 20);
+    for (let i = 0; i < primeras.length; i += 20) {
+        const lote = primeras.slice(i, i + 20);
         const resultados = await Promise.all(lote.map(u =>
             sb.from('telas_catalogo')
               .update({ posicion: u.posicion, almacen: u.almacen })
@@ -2510,17 +2566,13 @@ async function importarPosicionesMP(wb) {
         actualizadas += resultados.filter(r => r.data && r.data.length > 0).length;
     }
 
-    if (actualizadas < updates.length) {
-        const noEncontrados = updates
-            .filter((u, i) => {
-                // Aproximación: identificar cuáles no se actualizaron
-                return true; // log general
-            }).map(u => u.codigo);
-        logTel(`⚠ MP: ${updates.length} encontradas en Excel, solo ${actualizadas} existían en catálogo. ` +
-               `Códigos no encontrados: ${updates.slice(0,5).map(u=>u.codigo).join(', ')}...`, 'warn');
+    const codigosUnicos = Object.keys(firstPos).length;
+    if (actualizadas < codigosUnicos) {
+        logTel(`⚠ MP: ${codigosUnicos} códigos únicos, solo ${actualizadas} existían en catálogo. ` +
+               `Verificá: ${Object.keys(firstPos).slice(0,5).join(', ')}...`, 'warn');
     }
-    logTel(`Posiciones MP asignadas: ${actualizadas} de ${updates.length}`, actualizadas > 0 ? 'success' : 'warn');
-    return actualizadas;
+    logTel(`Slots MP: ${slots.length} slots / ${codigosUnicos} códigos únicos / ${actualizadas} en catálogo`, 'success');
+    return slots.length;
 }
 
 // ── Posiciones: cruce por coordenada de celda LIBERADO ↔ MAPA-COLMENA ──
@@ -2574,7 +2626,10 @@ async function importarPosicionesRack(sheetLib, sheetMap, almacen) {
     logTel(`Cruce: ${Object.keys(libCodes).length} telas en hoja, ${Object.keys(mapSlots).length} slots en MAPA-COLMENA, ${updates.length} coincidencias (incl. suplementario RACK4-F11)`, 'info');
     if (!updates.length) { logTel('Sin coincidencias de posición por coordenada', 'warn'); return 0; }
 
-    // Batch update 20 a la vez
+    // Escribir en telas_slots (tabla de slots físicos, sin deduplicar)
+    await escribirSlots(updates);
+
+    // También actualizar posicion en telas_catalogo (campo legado / posición principal)
     for (let i = 0; i < updates.length; i += 20) {
         const lote = updates.slice(i, i + 20);
         await Promise.all(lote.map(u =>
