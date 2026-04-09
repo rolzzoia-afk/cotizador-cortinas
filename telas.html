@@ -1658,6 +1658,8 @@ const RACK_MAP = {
             { num:8,  slots:['A11','A12','A13','A14','A15','A16'] },
             { num:9,  slots:['A10','A09','A08','A07','A06', null ] },
             { num:10, slots:['A01','A02','A03','A04','A05', null ] },
+            { num:11, slots:[ null, null, null, null, null, null ] },
+            { num:12, slots:[ null, null, null, null, null, null ] },
         ]
     },
     'RACK 2': {
@@ -1673,6 +1675,8 @@ const RACK_MAP = {
             { num:8,  slots:['A67','A68','A69','A70','A71','A72'] },
             { num:9,  slots:['A66','A65','A64','A63','A62', null ] },
             { num:10, slots:['A57','A58','A59','A60','A61', null ] },
+            { num:11, slots:[ null, null, null, null, null, null ] },
+            { num:12, slots:[ null, null, null, null, null, null ] },
         ]
     },
     'RACK 3': {
@@ -1688,6 +1692,8 @@ const RACK_MAP = {
             { num:8,  slots:['B43','B44','B45','B46','B47','B48'] },
             { num:9,  slots:['B42','B41','B40','B39','B38','B37'] },
             { num:10, slots:['B31','B32','B33','B34','B35','B36'] },
+            { num:11, slots:[ null, null, null, null, null, null ] },
+            { num:12, slots:[ null, null, null, null, null, null ] },
         ]
     },
     'RACK 4': {
@@ -1703,6 +1709,8 @@ const RACK_MAP = {
             { num:8,  slots:[ null,  null, 'VR17','VR16','VR14','VR13','VR12'] },
             { num:9,  slots:['VR07','VR08','VR09','VR10','VR11', null,  null ] },
             { num:10, slots:['VR06','VR05','VR04','VR03','VR02','VR01', null ] },
+            { num:11, slots:['VR58','VR59','VR60','VR61','VR62', null, null ] },
+            { num:12, slots:[ null,  null,  null,  null,  null, null, null ] },
         ]
     }
 };
@@ -2380,7 +2388,24 @@ async function importarPosicionesRack(sheetLib, sheetMap, almacen) {
         }
     });
 
-    logTel(`Cruce: ${Object.keys(libCodes).length} telas en hoja, ${Object.keys(mapSlots).length} slots en MAPA-COLMENA, ${updates.length} coincidencias`, 'info');
+    // Suplementario: RACK 4 fila 11 — MAPA-COLMENA no tiene slots para esta fila.
+    // La hoja LIBERADO-ROLZZO usa celdas AB19–AF19 para las 5 posiciones de la fila 11.
+    // Les asignamos códigos VR58–VR62 (continuación del esquema VR).
+    const RACK4_F11 = { 'AB19':'VR58', 'AC19':'VR59', 'AD19':'VR60', 'AE19':'VR61', 'AF19':'VR62' };
+    Object.entries(RACK4_F11).forEach(([addr, slot]) => {
+        const cell = sheetLib[addr];
+        if (!cell) return;
+        const val = (cell.v || '').toString().trim();
+        if (CODE_PAT.test(val)) {
+            const cod = val.toUpperCase().replace(/\s+/, ' ');
+            // Evitar duplicados si ya fue capturado por el cruce principal
+            if (!updates.find(u => u.codigo === cod)) {
+                updates.push({ codigo: cod, posicion: slot, almacen });
+            }
+        }
+    });
+
+    logTel(`Cruce: ${Object.keys(libCodes).length} telas en hoja, ${Object.keys(mapSlots).length} slots en MAPA-COLMENA, ${updates.length} coincidencias (incl. suplementario RACK4-F11)`, 'info');
     if (!updates.length) { logTel('Sin coincidencias de posición por coordenada', 'warn'); return 0; }
 
     // Batch update 20 a la vez
