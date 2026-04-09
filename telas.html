@@ -349,6 +349,18 @@
         .btn-outline-inv:hover { border-color: var(--primary-500); color: var(--primary-500); background: var(--accent-dim); }
 
         /* ── RACK / COLMENA MAP ── */
+        .rack-bodega-header {
+            grid-column: 1 / -1;
+            font-family: var(--serif);
+            font-size: 0.78rem;
+            font-weight: 600;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            padding: 6px 4px 2px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 4px;
+        }
         .rack-grid { display: grid; gap: 20px; }
         .rack-section {
             background: var(--bg-card);
@@ -1715,13 +1727,51 @@ const RACK_MAP = {
     }
 };
 
+// ── Generador de mapas de rack para Materias Primas ─────────────────────────
+// Bodega 1: 4 racks, 6 cols (Q-V), 10 filas
+// Bodega 2: 4 racks, 6 cols (Q-V) racks 1-3 / 7 cols (Q-V,X) rack 4, 12 filas
+function _generarMPRackMap(prefix, rack4Cols, maxRows) {
+    const stdCols = ['Q','R','S','T','U','V'];
+    const maps = {};
+    for (let r = 1; r <= 4; r++) {
+        const cols = (r === 4) ? rack4Cols : stdCols;
+        const rows = [];
+        for (let row = 1; row <= maxRows; row++) {
+            rows.push({ num: row, slots: cols.map(c =>
+                row <= maxRows ? `${prefix}R${r}${c}${String(row).padStart(2,'0')}` : null
+            )});
+        }
+        maps[`RACK ${r}`] = { cols, rows };
+    }
+    return maps;
+}
+const B1_RACK_MAP = _generarMPRackMap('B1', ['Q','R','S','T','U','V'], 10);
+const B2_RACK_MAP = _generarMPRackMap('B2', ['Q','R','S','T','U','V','X'], 12);
+
 function renderizarRacks() {
     const filtroAlm  = document.getElementById('filtroAlmacenRack').value;
     const filtroTipo = document.getElementById('filtroTipoRack').value;
     const grid = document.getElementById('rackGrid');
     grid.innerHTML = '';
 
-    Object.entries(RACK_MAP).forEach(([nombre, cfg]) => {
+    // Elegir mapas según filtro
+    const esMP = filtroAlm === 'MATERIAS PRIMAS';
+    const bodegas = esMP
+        ? [{ label: 'BODEGA 1', map: B1_RACK_MAP }, { label: 'BODEGA 2', map: B2_RACK_MAP }]
+        : [{ label: null, map: RACK_MAP }];
+
+    bodegas.forEach(({ label, map }) => {
+        if (label) {
+            const hdr = document.createElement('div');
+            hdr.className = 'rack-bodega-header';
+            hdr.textContent = label;
+            grid.appendChild(hdr);
+        }
+        Object.entries(map).forEach(([nombre, cfg]) => _renderRackSection(nombre, cfg, filtroAlm, filtroTipo, grid));
+    });
+}
+
+function _renderRackSection(nombre, cfg, filtroAlm, filtroTipo, grid) {
         const section = document.createElement('div');
         section.className = 'rack-section';
 
@@ -1813,7 +1863,6 @@ function renderizarRacks() {
         table.appendChild(tbody);
         section.appendChild(table);
         grid.appendChild(section);
-    });
 }
 
 function resaltarEnRack() {
@@ -2125,10 +2174,14 @@ async function importarExcelTelas(event) {
 
             if (sheetLibRolzzo && wb.Sheets['MAPA-COLMENA']) {
                 const n = await importarPosicionesRack(sheetLibRolzzo, wb.Sheets['MAPA-COLMENA'], 'LIBERADO');
-                logTel(`Posiciones asignadas: ${n}`, 'success');
+                logTel(`Posiciones LIBERADO asignadas: ${n}`, 'success');
             } else {
                 logTel('No se encontró hoja LIBERADO-ROLZZO ni MAPA-COLMENA', 'warn');
             }
+
+            // ── 4b. POSICIONES MATERIAS PRIMAS desde BODEGA 1 y BODEGA 2 ──
+            const nMP = await importarPosicionesMP(wb);
+            logTel(`Posiciones MP asignadas: ${nMP}`, 'success');
 
             // ── 5. ROLLOS FALLA ──
             if (wb.Sheets['ROLLOS FALLA']) {
@@ -2358,6 +2411,87 @@ async function importarAlmacenDesdeGrillas(wb) {
 
 // ── Posiciones: cruce por coordenada de celda LIBERADO ↔ MAPA-COLMENA ──
 // Mismo Excel: las celdas en la misma dirección (ej D10) contienen
+// ── Posiciones de Materias Primas: leer directamente desde BODEGA 1 y BODEGA 2 ──
+async function importarPosicionesMP(wb) {
+    const CODE_PAT = /^(BK|DU|SC|TR)\s*\d+$/i;
+
+    // Definición de bodegas: cómo leer cada hoja
+    const BODEGAS = [
+        {
+            prefix: 'B1',
+            // BODEGA 1 columnas (1-indexed): RACK1=Q(2)..V(7), RACK2=Q(10)..V(15), RACK3=Q(18)..V(23), RACK4=Q(26)..V(31)
+            racks: [
+                { rack:1, colStart:2, cols:['Q','R','S','T','U','V'] },
+                { rack:2, colStart:10, cols:['Q','R','S','T','U','V'] },
+                { rack:3, colStart:18, cols:['Q','R','S','T','U','V'] },
+                { rack:4, colStart:26, cols:['Q','R','S','T','U','V'] },
+            ],
+            excelRowStart: 9, numRows: 10,
+            sheetFinder: n => n.replace(/\s+/g,' ').trim() === 'MATERIA_PRIMA - BODEGA 1'
+        },
+        {
+            prefix: 'B2',
+            // BODEGA 2 columnas (1-indexed): RACK1=Q(4)..V(9), RACK2=Q(12)..V(17), RACK3=Q(20)..V(25), RACK4=Q(28)..X(34)
+            racks: [
+                { rack:1, colStart:4,  cols:['Q','R','S','T','U','V'] },
+                { rack:2, colStart:12, cols:['Q','R','S','T','U','V'] },
+                { rack:3, colStart:20, cols:['Q','R','S','T','U','V'] },
+                { rack:4, colStart:28, cols:['Q','R','S','T','U','V','X'] },
+            ],
+            excelRowStart: 9, numRows: 12,
+            sheetFinder: n => n.replace(/\s+/g,' ').trim().toUpperCase().includes('BODEGA 2')
+        }
+    ];
+
+    const updates = [];
+
+    for (const bod of BODEGAS) {
+        const sheetName = wb.SheetNames.find(bod.sheetFinder);
+        if (!sheetName) { logTel(`Hoja ${bod.prefix} no encontrada`, 'warn'); continue; }
+        const sheet = wb.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:null, raw:false });
+
+        for (const rackCfg of bod.racks) {
+            for (let rowIdx = 0; rowIdx < bod.numRows; rowIdx++) {
+                const excelRowIdx = (bod.excelRowStart - 1) + rowIdx; // 0-based
+                const sheetRow = rows[excelRowIdx] || [];
+                const physRow = rowIdx + 1;
+
+                rackCfg.cols.forEach((colLetter, colIdx) => {
+                    const colNum = rackCfg.colStart - 1 + colIdx; // 0-based
+                    const raw = sheetRow[colNum];
+                    if (!raw) return;
+                    const val = raw.toString().trim();
+                    if (!CODE_PAT.test(val)) return;
+                    const cod = val.toUpperCase().replace(/\s+/, ' ');
+                    const posicion = `${bod.prefix}R${rackCfg.rack}${colLetter}${String(physRow).padStart(2,'0')}`;
+                    // Si el mismo código aparece varias veces, tomamos el primero
+                    if (!updates.find(u => u.codigo === cod)) {
+                        updates.push({ codigo: cod, posicion, almacen: 'MATERIAS PRIMAS' });
+                    }
+                });
+            }
+        }
+        logTel(`${sheetName}: ${updates.filter(u=>u.posicion.startsWith(bod.prefix)).length} telas`, 'info');
+    }
+
+    if (!updates.length) { logTel('Sin telas MP encontradas', 'warn'); return 0; }
+
+    // Batch update
+    for (let i = 0; i < updates.length; i += 20) {
+        const lote = updates.slice(i, i + 20);
+        await Promise.all(lote.map(u =>
+            sb.from('telas_catalogo')
+              .update({ posicion: u.posicion, almacen: u.almacen })
+              .eq('empresa_id', EMPRESA_ID)
+              .eq('codigo', u.codigo)
+        ));
+    }
+    logTel(`Posiciones MP asignadas: ${updates.length}`, 'success');
+    return updates.length;
+}
+
+// ── Posiciones: cruce por coordenada de celda LIBERADO ↔ MAPA-COLMENA ──
 // el código de tela en LIBERADO y el código de slot en MAPA-COLMENA.
 async function importarPosicionesRack(sheetLib, sheetMap, almacen) {
     const CODE_PAT = /^(BK|DU|SC)\s*\d+$/i;
