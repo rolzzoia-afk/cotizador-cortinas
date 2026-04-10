@@ -780,6 +780,24 @@
             </div>
         </div>
 
+        <!-- ERRORES DE CORTE -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-exclamation-triangle-fill" style="color:#ef4444;"></i> Errores de corte — por motivo</h6>
+                <span class="count-badge" id="errores-corte-count" style="background:rgba(239,68,68,0.2);color:#ef4444;">0</span>
+            </div>
+            <div class="card-body-pad">
+                <div id="errores-corte-empty" style="display:none;text-align:center;padding:18px;color:var(--text-muted);font-size:0.8rem;">
+                    <i class="bi bi-check-circle" style="font-size:1.5rem;display:block;margin-bottom:6px;color:#22c55e;"></i>
+                    Sin errores registrados aún.
+                </div>
+                <div id="errores-corte-chart-wrap" class="chart-wrap" style="height:160px;margin-bottom:12px;">
+                    <canvas id="erroresCorteChart"></canvas>
+                </div>
+                <div id="errores-corte-list"></div>
+            </div>
+        </div>
+
         <!-- SUGERENCIAS DE RESTOCK -->
         <div class="glass-card">
             <div class="card-header-bar">
@@ -898,7 +916,8 @@ let _ots       = [];
 let _insumos   = [];
 let _movs      = [];
 let _racks     = [];
-let _consumoChart = null;
+let _consumoChart      = null;
+let _erroresCorteChart = null;
 
 // ══════════════════════════════════════════════════════════════════
 // DIAGNÓSTICO IA — Genera el reporte completo para pegar en Claude
@@ -1365,6 +1384,7 @@ async function cargarTodo() {
         renderOTRisk();
         renderConsumo();
         renderRestock();
+        await renderErroresCorte();
         renderActivity();
         renderInsights();
         renderStockGeneral();
@@ -2076,6 +2096,131 @@ function renderStockGeneral() {
 function filtrarStockCat(cat) {
     _stockFiltroCategoria = cat;
     renderStockGeneral();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ERRORES DE CORTE
+// ══════════════════════════════════════════════════════════════════
+async function renderErroresCorte() {
+    const { data: errores, error } = await sb
+        .from('errores_corte')
+        .select('motivo, created_at, ot, cod_original, medida_cm, reemplazo_cod, reemplazo_colmena, registrado_por')
+        .eq('empresa_id', EMPRESA_ID)
+        .order('created_at', { ascending: false })
+        .limit(200);
+
+    if (error || !errores) return;
+
+    const total = errores.length;
+    document.getElementById('errores-corte-count').textContent = total;
+
+    const empty     = document.getElementById('errores-corte-empty');
+    const chartWrap = document.getElementById('errores-corte-chart-wrap');
+    const listEl    = document.getElementById('errores-corte-list');
+
+    if (!total) {
+        empty.style.display     = 'block';
+        chartWrap.style.display = 'none';
+        listEl.innerHTML        = '';
+        return;
+    }
+    empty.style.display     = 'none';
+    chartWrap.style.display = 'block';
+
+    // Agrupar por motivo
+    const conteo = {};
+    errores.forEach(e => { conteo[e.motivo] = (conteo[e.motivo] || 0) + 1; });
+    const motivosOrdenados = Object.entries(conteo).sort((a, b) => b[1] - a[1]);
+
+    // Colores por motivo
+    const COLORES = {
+        'Error de corte (operario)': '#ef4444',
+        'Falla en el tubo':          '#f97316',
+        'Error del vendedor':        '#f59e0b',
+        'Error del instalador':      '#3b82f6',
+        'Medida incorrecta en plano':'#8b5cf6',
+        'Material defectuoso':       '#22c55e',
+        'Otro':                      '#a1a1aa'
+    };
+    const colores = motivosOrdenados.map(([m]) => COLORES[m] || '#a1a1aa');
+
+    // Gráfico de barras horizontales
+    if (_erroresCorteChart) _erroresCorteChart.destroy();
+    const ctx = document.getElementById('erroresCorteChart').getContext('2d');
+    _erroresCorteChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: motivosOrdenados.map(([m]) => m),
+            datasets: [{
+                data:            motivosOrdenados.map(([, v]) => v),
+                backgroundColor: colores,
+                borderRadius:    5,
+                borderSkipped:   false
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ` ${ctx.parsed.x} caso${ctx.parsed.x !== 1 ? 's' : ''}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#71717a', stepSize: 1 },
+                    grid:  { color: 'rgba(255,255,255,0.04)' },
+                    beginAtZero: true
+                },
+                y: {
+                    ticks: { color: '#a1a1aa', font: { size: 10 } },
+                    grid:  { display: false }
+                }
+            }
+        }
+    });
+
+    // Ajustar altura del canvas según cantidad de motivos
+    document.getElementById('errores-corte-chart-wrap').style.height =
+        Math.max(120, motivosOrdenados.length * 36) + 'px';
+
+    // Lista de últimos 5 errores
+    const ultimos5 = errores.slice(0, 5);
+    listEl.innerHTML = `
+        <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
+            letter-spacing:0.08em;color:var(--text-muted);padding:8px 0 4px;">
+            Últimos registros
+        </div>
+        ${ultimos5.map(e => {
+            const fecha = new Date(e.created_at).toLocaleDateString('es-AR',
+                { day: '2-digit', month: '2-digit' });
+            const color = COLORES[e.motivo] || '#a1a1aa';
+            const reemplazo = e.reemplazo_cod
+                ? `→ ${e.reemplazo_cod} Col.${e.reemplazo_colmena}`
+                : '';
+            return `
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 0;
+                border-bottom:1px solid var(--border-glass);">
+                <div style="width:8px;height:8px;border-radius:50%;
+                    background:${color};flex-shrink:0;"></div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.78rem;font-weight:600;
+                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        ${e.motivo}
+                    </div>
+                    <div style="font-size:0.68rem;color:var(--text-muted);">
+                        ${e.ot || '—'} · ${e.cod_original || '—'}
+                        ${e.medida_cm != null ? '· ' + Number(e.medida_cm).toFixed(1) + ' cm' : ''}
+                        ${reemplazo ? '· ' + reemplazo : ''}
+                    </div>
+                </div>
+                <div style="font-size:0.68rem;color:var(--text-muted);flex-shrink:0;">${fecha}</div>
+            </div>`;
+        }).join('')}`;
 }
 
 // ══════════════════════════════════════════════════════════════════
