@@ -320,13 +320,16 @@ body {
     <input id="carga-responsable" class="form-input-rolzzo mb-10" placeholder="Nombre del instalador o bodeguero" style="margin-bottom:12px;"/>
 
     <div class="section-title">Insumos disponibles en bodega</div>
-    <div id="carga-insumos-list"></div>
+    <div id="carga-insumos-list" style="
+        max-height: calc(100vh - 280px);
+        overflow-y: auto;
+        padding-right: 4px;
+        margin-bottom: 14px;
+    "></div>
 
-    <div class="mt-20">
-        <button class="btn-primary-rolzzo" onclick="confirmarCarga()">
-            <i class="bi bi-check-circle-fill"></i> Confirmar carga
-        </button>
-    </div>
+    <button class="btn-primary-rolzzo" onclick="confirmarCarga()" style="position:sticky;bottom:16px;">
+        <i class="bi bi-check-circle-fill"></i> Confirmar carga
+    </button>
 </div>
 
 <!-- ══════════════════════════════════════════
