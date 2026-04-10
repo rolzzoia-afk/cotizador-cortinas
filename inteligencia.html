@@ -929,7 +929,7 @@ function abrirDiagnostico() {
 
     if (_ots.length === 0 && _insumos.length === 0) {
         document.getElementById('diagTexto').value =
-            'Primero presioná "Actualizar" para cargar los datos, y después generá el diagnóstico.';
+            'Primero presiona "Actualizar" para cargar los datos, y después genera el diagnóstico.';
         return;
     }
     generarDiagnostico();
@@ -2106,8 +2106,8 @@ async function renderErroresCorte() {
         .from('errores_corte')
         .select('motivo, created_at, ot, cod_original, medida_cm, reemplazo_cod, reemplazo_colmena, registrado_por')
         .eq('empresa_id', EMPRESA_ID)
-        .order('created_at', { ascending: false })
-        .limit(200);
+        .order('created_at', { ascending: true })
+        .limit(500);
 
     if (error || !errores) return;
 
@@ -2127,11 +2127,6 @@ async function renderErroresCorte() {
     empty.style.display     = 'none';
     chartWrap.style.display = 'block';
 
-    // Agrupar por motivo
-    const conteo = {};
-    errores.forEach(e => { conteo[e.motivo] = (conteo[e.motivo] || 0) + 1; });
-    const motivosOrdenados = Object.entries(conteo).sort((a, b) => b[1] - a[1]);
-
     // Colores por motivo
     const COLORES = {
         'Error de corte (operario)': '#ef4444',
@@ -2142,54 +2137,89 @@ async function renderErroresCorte() {
         'Material defectuoso':       '#22c55e',
         'Otro':                      '#a1a1aa'
     };
-    const colores = motivosOrdenados.map(([m]) => COLORES[m] || '#a1a1aa');
 
-    // Gráfico de barras horizontales
+    // ── Agrupar por día × motivo ──
+    // Construir lista de días únicos (últimos 30 días con errores)
+    const porDia = {}; // { 'DD/MM': { motivo: count } }
+    errores.forEach(e => {
+        const dia = new Date(e.created_at).toLocaleDateString('es-AR',
+            { day: '2-digit', month: '2-digit' });
+        if (!porDia[dia]) porDia[dia] = {};
+        const m = e.motivo || 'Otro';
+        porDia[dia][m] = (porDia[dia][m] || 0) + 1;
+    });
+
+    const dias    = Object.keys(porDia);               // labels eje X
+    const motivos = [...new Set(errores.map(e => e.motivo || 'Otro'))]; // todos los motivos presentes
+
+    // Un dataset por motivo (stacked)
+    const datasets = motivos.map(m => ({
+        label:           m,
+        data:            dias.map(d => porDia[d][m] || 0),
+        backgroundColor: COLORES[m] || '#a1a1aa',
+        borderRadius:    3,
+        borderSkipped:   false,
+        stack:           'errores'
+    }));
+
+    // Gráfico de barras verticales apiladas por día
     if (_erroresCorteChart) _erroresCorteChart.destroy();
     const ctx = document.getElementById('erroresCorteChart').getContext('2d');
     _erroresCorteChart = new Chart(ctx, {
         type: 'bar',
-        data: {
-            labels: motivosOrdenados.map(([m]) => m),
-            datasets: [{
-                data:            motivosOrdenados.map(([, v]) => v),
-                backgroundColor: colores,
-                borderRadius:    5,
-                borderSkipped:   false
-            }]
-        },
+        data: { labels: dias, datasets },
         options: {
-            indexAxis: 'y',
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: { display: false },
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        color: '#a1a1aa',
+                        font: { size: 9, family: 'Plus Jakarta Sans' },
+                        boxWidth: 10,
+                        padding: 10,
+                        usePointStyle: true,
+                        pointStyle: 'circle'
+                    }
+                },
                 tooltip: {
+                    mode: 'index',
                     callbacks: {
-                        label: ctx => ` ${ctx.parsed.x} caso${ctx.parsed.x !== 1 ? 's' : ''}`
+                        title: items => `📅 ${items[0].label}`,
+                        label: ctx => {
+                            const v = ctx.parsed.y;
+                            return v > 0 ? ` ${ctx.dataset.label}: ${v} caso${v !== 1 ? 's' : ''}` : null;
+                        },
+                        footer: items => {
+                            const total = items.reduce((s, i) => s + i.parsed.y, 0);
+                            return `Total del día: ${total}`;
+                        }
                     }
                 }
             },
             scales: {
                 x: {
-                    ticks: { color: '#71717a', stepSize: 1 },
-                    grid:  { color: 'rgba(255,255,255,0.04)' },
-                    beginAtZero: true
+                    stacked: true,
+                    ticks: { color: '#71717a', font: { size: 10 } },
+                    grid:  { color: 'rgba(255,255,255,0.04)' }
                 },
                 y: {
-                    ticks: { color: '#a1a1aa', font: { size: 10 } },
-                    grid:  { display: false }
+                    stacked: true,
+                    ticks: { color: '#71717a', stepSize: 1, precision: 0 },
+                    grid:  { color: 'rgba(255,255,255,0.04)' },
+                    beginAtZero: true
                 }
             }
         }
     });
 
-    // Ajustar altura del canvas según cantidad de motivos
-    document.getElementById('errores-corte-chart-wrap').style.height =
-        Math.max(120, motivosOrdenados.length * 36) + 'px';
+    // Altura fija cómoda para las barras verticales
+    document.getElementById('errores-corte-chart-wrap').style.height = '220px';
 
-    // Lista de últimos 5 errores
-    const ultimos5 = errores.slice(0, 5);
+    // Lista de últimos 5 errores (orden DESC)
+    const ultimos5 = [...errores].reverse().slice(0, 5);
     listEl.innerHTML = `
         <div style="font-size:0.68rem;font-weight:700;text-transform:uppercase;
             letter-spacing:0.08em;color:var(--text-muted);padding:8px 0 4px;">

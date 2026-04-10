@@ -1333,7 +1333,8 @@ async function guardarColmenaFinalEnSupabase() {
                 medida_mm: c.medida_mm,
                 medida_cm: c.medida_cm,
                 cod: c.cod,
-                serial: c.serial || null
+                serial: c.serial || null,
+                tubo_raiz_id: c.tubo_raiz_id || null  // preservar linaje entre sesiones
             }));
 
         // ── PASO 1: Sincronizar colmena_tubos (fuente única de verdad) ──────────
@@ -1535,12 +1536,13 @@ async function cargarSerialesDesdeTablaDirecta() {
 async function sincronizarColmenaFinalConTabla(colmenasFinal) {
     const loteSize = 500;
     const filas = colmenasFinal.map(c => ({
-        empresa_id: EMPRESA_ID_OPT,
-        n_colmena:  c.n_colmena || '-',
-        cod:        (c.cod || '').toUpperCase().trim(),
-        medida_cm:  typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
-        medida_mm:  c.medida_mm || 0,
-        serial:     c.serial || null,
+        empresa_id:    EMPRESA_ID_OPT,
+        n_colmena:     c.n_colmena || '-',
+        cod:           (c.cod || '').toUpperCase().trim(),
+        medida_cm:     typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
+        medida_mm:     c.medida_mm || 0,
+        serial:        c.serial || null,
+        tubo_raiz_id:  c.tubo_raiz_id || null,  // linaje persistente
         agregado_por_admin: false
     }));
 
@@ -3246,8 +3248,8 @@ function ejecutarOptimizacion() {
     SistemaInventario.mermas = [];
 
     colmenasAUsar.forEach((col) => {
-        // Incluir serial para que los sobrantes hereden la trazabilidad del tubo original
-        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null });
+        // Incluir serial y tubo_raiz_id para trazabilidad completa del linaje
+        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: col.tubo_raiz_id || null });
     });
 
     log('=== INICIO OPTIMIZACIÓN ===', 'info');
@@ -3332,7 +3334,11 @@ function ejecutarOptimizacion() {
                     origen: 'Sobrante orden ' + orden.id,
                     posicionOriginal: nColmenaDestino,
                     serial: tuboEncontrado.colmena.serial || orden.serial || null,
-                    fecha: tuboEncontrado.colmena.serial ? tuboEncontrado.colmena.serial.fecha : null
+                    fecha: tuboEncontrado.colmena.serial ? tuboEncontrado.colmena.serial.fecha : null,
+                    // Linaje: el sobrante genera su propio tubo_raiz_id para el siguiente ciclo,
+                    // pero guarda referencia al tubo padre para trazabilidad
+                    tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null,
+                    tubo_parent_raiz_id: tuboEncontrado.colmena.tubo_raiz_id || null
                 });
                 }
                 SistemaInventario.colmenasDisponibles.splice(tuboEncontrado.indice, 1);
@@ -3982,6 +3988,107 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// LOG DE HISTORIAL DE TUBOS
+// ══════════════════════════════════════════════════════════════════
+async function logEventosTubos() {
+    try {
+        if (!SistemaInventario.resultadosOptimizacion || !SistemaInventario.resultadosOptimizacion.length) return;
+
+        const eventos = [];
+        const now = new Date().toISOString();
+        const usuario = _currentUser?.email || null;
+
+        SistemaInventario.resultadosOptimizacion.forEach(item => {
+            const res = item.resultado;
+            const ord = item.orden;
+            if (!res || !res.colmena || !res.codigo) return;
+
+            const ot          = String(ord?.ot || ord?.id || '');
+            const esMerma     = !!res.es_desecho;
+            const tieneSobrante = !esMerma && res.sobrante_cm > 0;
+
+            // ID de linaje del tubo en colmenasHistorico (heredado del tubo original)
+            const entradaHistorico = SistemaInventario.colmenasHistorico.find(c =>
+                c.n_colmena === res.colmena && c.cod === res.codigo && c.estado === 'usada'
+            );
+            const tubo_raiz_id = entradaHistorico?.tubo_raiz_id ||
+                ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+
+            // ── Evento: CORTE (tubo consumido) ──
+            eventos.push({
+                empresa_id:          EMPRESA_ID_OPT,
+                tubo_raiz_id,
+                n_colmena:           res.colmena,
+                cod:                 res.codigo,
+                medida_cm:           res.medida_origen || res.medida_cm,   // tamaño original del tubo
+                medida_resultado_cm: tieneSobrante ? res.sobrante_cm : 0,  // sobrante o 0
+                evento:              'corte',
+                ot,
+                notas: `Corte de ${res.medida_cm}cm para OT ${ot}` +
+                       (tieneSobrante ? ` — sobrante ${res.sobrante_cm}cm` : '') +
+                       (esMerma ? ' — MERMA' : ''),
+                registrado_por: usuario,
+                created_at: now
+            });
+
+            // ── Evento: MERMA (sobrante demasiado chico para usar) ──
+            if (esMerma && res.sobrante_cm > 0) {
+                eventos.push({
+                    empresa_id:          EMPRESA_ID_OPT,
+                    tubo_raiz_id,
+                    n_colmena:           res.colmena,
+                    cod:                 res.codigo,
+                    medida_cm:           res.sobrante_cm,
+                    medida_resultado_cm: 0,
+                    evento:              'merma',
+                    ot,
+                    notas: `Merma de ${res.sobrante_cm}cm — descartada (< ${MERMA_MAX_MM/10}cm)`,
+                    registrado_por: usuario,
+                    created_at: now
+                });
+            }
+
+            // ── Evento: SOBRANTE (vuelve a colmena) ──
+            if (tieneSobrante) {
+                const colmenaDestino = res.colmena_sobrante || res.colmena;
+                // El sobrante tiene su propio tubo_raiz_id (generado en la optimización)
+                const entradaSobrante = SistemaInventario.colmenasHistorico.find(c =>
+                    c.n_colmena === colmenaDestino && c.cod === res.codigo &&
+                    c.estado === 'disponible' && c.origen && c.origen.includes(String(ord?.id || ot))
+                );
+                const sobrante_raiz_id = entradaSobrante?.tubo_raiz_id ||
+                    ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+
+                eventos.push({
+                    empresa_id:          EMPRESA_ID_OPT,
+                    tubo_raiz_id:        sobrante_raiz_id,
+                    n_colmena:           colmenaDestino,
+                    cod:                 res.codigo,
+                    medida_cm:           res.sobrante_cm,
+                    medida_resultado_cm: res.sobrante_cm,
+                    evento:              'sobrante',
+                    ot,
+                    notas: `Sobrante de corte OT ${ot} — queda en colmena ${colmenaDestino}`,
+                    registrado_por: usuario,
+                    created_at: now
+                });
+            }
+        });
+
+        if (!eventos.length) return;
+
+        const BATCH = 100;
+        for (let i = 0; i < eventos.length; i += BATCH) {
+            await _sbRest('POST', 'tubos_historial', eventos.slice(i, i + BATCH));
+        }
+        log(`📋 Historial de tubos: ${eventos.length} eventos registrados`, 'info');
+    } catch (e) {
+        console.warn('[tubos_historial] Error registrando eventos:', e.message);
+        // No crítico — no bloquear el flujo principal
+    }
+}
+
 // ── Confirmar: guardar en Supabase + descargar Excel ──
 async function confirmarYGuardarStaging() {
     log('💾 Confirmado. Guardando en Supabase...', 'info');
@@ -4006,6 +4113,8 @@ async function confirmarYGuardarStaging() {
     try {
         await guardarColmenaFinalEnSupabase();
         colmenaSincronizadaOK = true;
+        // Registrar historial de tubos (cortes, sobrantes, mermas)
+        await logEventosTubos();
     } catch (errColmena) {
         // El error ya fue logueado en guardarColmenaFinalEnSupabase.
         // No bloqueamos el flujo (el Excel se exporta igual) pero avisamos claramente.

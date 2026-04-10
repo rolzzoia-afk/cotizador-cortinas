@@ -1115,6 +1115,9 @@
             <button class="nav-link" id="camionetas-tab" data-bs-toggle="tab" data-bs-target="#camionetas" type="button" role="tab" aria-controls="camionetas" aria-selected="false"><i class="bi bi-truck"></i> Camionetas</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="historial-tubos-tab" data-bs-toggle="tab" data-bs-target="#historial-tubos" type="button" role="tab" aria-controls="historial-tubos" aria-selected="false"><i class="bi bi-rulers"></i> Tubos</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="inteligencia-tab" data-bs-toggle="tab" data-bs-target="#inteligencia" type="button" role="tab" aria-controls="inteligencia" aria-selected="false"><i class="bi bi-cpu-fill"></i> Inteligencia</button>
         </li>
     </ul>
@@ -1920,6 +1923,18 @@
                 </div>
                 <iframe id="iframe-camionetas" title="Camionetas Rolzzo" style="display:none;"
                         onload="if(this.getAttribute('src')){document.getElementById('camionetas-loading').style.display='none'; this.style.display='block';}"></iframe>
+            </div>
+        </div>
+
+        <!-- HISTORIAL TUBOS: Trazabilidad + merma mensual (iframe lazy) -->
+        <div class="tab-pane fade" id="historial-tubos" role="tabpanel" aria-labelledby="historial-tubos-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="historial-tubos-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Historial de Tubos...</span>
+                </div>
+                <iframe id="iframe-historial-tubos" title="Historial Tubos Rolzzo" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('historial-tubos-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -7809,6 +7824,34 @@
             }
         });
 
+        // ── Lazy loading de iframe Historial Tubos ──
+        document.getElementById('historial-tubos-tab').addEventListener('shown.bs.tab', () => {
+            try {
+                const iframe  = document.getElementById('iframe-historial-tubos');
+                const loading = document.getElementById('historial-tubos-loading');
+                if (!iframe.getAttribute('src')) {
+                    const timeout = setTimeout(() => {
+                        if (loading.style.display !== 'none') {
+                            loading.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#94a3b8;">
+                                    <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+                                    <p style="font-size:0.9rem;margin-bottom:8px;">El módulo tardó en cargar.</p>
+                                    <button onclick="document.getElementById('iframe-historial-tubos').src='historial_tubos.html'" style="margin-top:12px;padding:6px 16px;background:rgba(124,117,240,0.3);color:#7c75f0;border:1px solid rgba(124,117,240,0.4);border-radius:6px;cursor:pointer;font-size:0.82rem;">🔄 Reintentar</button>
+                                </div>`;
+                        }
+                    }, 12000);
+                    iframe.addEventListener('load', function onFirstLoad() {
+                        clearTimeout(timeout);
+                        iframe.removeEventListener('load', onFirstLoad);
+                    }, { once: true });
+                    iframe.src = 'historial_tubos.html';
+                }
+                presenciaActualizar('historial-tubos', 'Historial de Tubos');
+            } catch(e) {
+                console.error('[historial-tubos-tab] Error al cargar iframe:', e);
+            }
+        });
+
         // ── Lazy loading de iframe Inteligencia ──
         document.getElementById('inteligencia-tab').addEventListener('shown.bs.tab', () => {
             try {
@@ -9353,6 +9396,23 @@
         });
     }
 
+    // ─── Helper: loggear evento de tubo ─────────────────────────
+    async function _logTuboEvento(evento, tubo) {
+        try {
+            await sb.from('tubos_historial').insert({
+                empresa_id:          EMPRESA_ID,
+                tubo_raiz_id:        tubo.tubo_raiz_id || null,
+                n_colmena:           tubo.n_colmena,
+                cod:                 tubo.cod,
+                medida_cm:           tubo.medida_cm,
+                medida_resultado_cm: tubo.medida_resultado_cm ?? tubo.medida_cm,
+                evento,
+                notas:               tubo.notas || null,
+                registrado_por:      _usuario?.email || null
+            });
+        } catch(e) { console.warn('[tubos_historial]', e.message); }
+    }
+
     // ─── Agregar tubo al inventario ──────────────────────────────
     async function corrAgregarTubo() {
         const serial     = document.getElementById('corr-tubo-serial').value.trim();
@@ -9361,13 +9421,15 @@
         const n_colmena  = document.getElementById('corr-tubo-colmena').value.trim();
         if (!cod) { showToast('El código del tubo es obligatorio', 'error'); return; }
         try {
-            await sb.from('colmena_tubos').insert({
+            const { data: ins } = await sb.from('colmena_tubos').insert({
                 empresa_id: EMPRESA_ID, n_colmena, medida_cm, medida_mm: medida_cm * 10,
                 cod, serial: serial || null, agregado_por_admin: true
-            });
+            }).select('tubo_raiz_id').single();
+            // Loggear ingreso
+            await _logTuboEvento('ingreso', { tubo_raiz_id: ins?.tubo_raiz_id, n_colmena, cod, medida_cm, notas: 'Ingreso manual (cotización)' });
             document.getElementById('corr-form-tubo').style.display = 'none';
             showToast('✅ Tubo agregado al inventario');
-            corrCargarTubos(); // recarga la tabla
+            corrCargarTubos();
         } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
     }
 
@@ -9375,7 +9437,10 @@
     async function corrEliminarTubo(tuboId, cod, colmena) {
         if (!confirm(`¿Eliminar tubo "${cod}" de colmena ${colmena}?`)) return;
         try {
+            // Obtener datos antes de eliminar
+            const { data: t } = await sb.from('colmena_tubos').select('*').eq('id', tuboId).single();
             await sb.from('colmena_tubos').delete().eq('id', tuboId);
+            await _logTuboEvento('eliminado', { tubo_raiz_id: t?.tubo_raiz_id, n_colmena: colmena, cod, medida_cm: t?.medida_cm, notas: 'Eliminación manual (cotización)' });
             showToast('🗑 Tubo eliminado');
             corrCargarTubos();
         } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }
@@ -9516,13 +9581,25 @@
         try {
             if (id) {
                 // EDITAR tubo existente
+                const { data: ant } = await sb.from('colmena_tubos').select('*').eq('id', id).single();
                 const { error } = await sb.from('colmena_tubos').update(payload).eq('id', id);
                 if (error) throw error;
+                await _logTuboEvento('ajuste', {
+                    tubo_raiz_id: ant?.tubo_raiz_id,
+                    n_colmena: colmena, cod, medida_cm: medidaCm,
+                    medida_resultado_cm: medidaCm,
+                    notas: `Ajuste admin — antes: ${ant?.medida_cm}cm → ahora: ${medidaCm}cm`
+                });
                 showToast('✅ Tubo actualizado correctamente');
             } else {
                 // CREAR nuevo tubo
-                const { error } = await sb.from('colmena_tubos').insert(payload);
+                const { data: ins, error } = await sb.from('colmena_tubos').insert(payload).select('tubo_raiz_id').single();
                 if (error) throw error;
+                await _logTuboEvento('ingreso', {
+                    tubo_raiz_id: ins?.tubo_raiz_id,
+                    n_colmena: colmena, cod, medida_cm: medidaCm,
+                    notas: 'Ingreso manual (módulo colmena)'
+                });
                 showToast('✅ Tubo agregado al inventario');
             }
             document.getElementById('col-form-tubo').style.display = 'none';
@@ -9534,8 +9611,15 @@
     async function colmenaEliminarTubo(id, cod, colmena) {
         if (!confirm(`¿Eliminar tubo "${cod}" de colmena ${colmena}?\n\nEsta acción no se puede deshacer.`)) return;
         try {
+            const { data: t } = await sb.from('colmena_tubos').select('*').eq('id', id).single();
             const { error } = await sb.from('colmena_tubos').delete().eq('id', id);
             if (error) throw error;
+            await _logTuboEvento('eliminado', {
+                tubo_raiz_id: t?.tubo_raiz_id,
+                n_colmena: colmena, cod, medida_cm: t?.medida_cm,
+                medida_resultado_cm: 0,
+                notas: 'Eliminación manual (módulo colmena)'
+            });
             showToast('🗑 Tubo eliminado');
             colmenaCargarTubos();
         } catch(e) { showToast('❌ Error: ' + e.message, 'error'); }

@@ -314,7 +314,7 @@ body {
 ════════════════════════════════════════════ -->
 <div id="view-carga" class="view">
     <p class="text-muted-sm" style="margin-bottom:14px;">
-        Seleccioná los insumos y la cantidad que cargás en la camioneta. El stock se descontará de bodega.
+        Selecciona los insumos y la cantidad que cargas en la camioneta. El stock se descontará de bodega.
     </p>
     <label class="form-label-rolzzo">¿Quién carga?</label>
     <input id="carga-responsable" class="form-input-rolzzo mb-10" placeholder="Nombre del instalador o bodeguero" style="margin-bottom:12px;"/>
@@ -653,8 +653,8 @@ async function confirmarCarga() {
     const responsable = document.getElementById('carga-responsable').value.trim();
     const items = Object.entries(_cargaItems).filter(([,qty]) => qty > 0);
 
-    if (!items.length) { toast('Seleccioná al menos un insumo', '#ef4444'); return; }
-    if (!responsable)  { toast('Ingresá el nombre de quien carga', '#f59e0b'); return; }
+    if (!items.length) { toast('Selecciona al menos un insumo', '#ef4444'); return; }
+    if (!responsable)  { toast('Ingresa el nombre de quien carga', '#f59e0b'); return; }
 
     // Insertar movimientos
     const movs = items.map(([insumo_id, cantidad]) => ({
@@ -735,9 +735,9 @@ async function confirmarSwap() {
     const motivo      = document.getElementById('swap-motivo').value.trim();
     const responsable = document.getElementById('swap-responsable').value.trim();
 
-    if (!salida || !entrada)  { toast('Seleccioná ambos insumos', '#ef4444'); return; }
+    if (!salida || !entrada)  { toast('Selecciona ambos insumos', '#ef4444'); return; }
     if (salida === entrada)   { toast('Los insumos deben ser diferentes', '#f59e0b'); return; }
-    if (!responsable)         { toast('Ingresá el nombre del instalador', '#f59e0b'); return; }
+    if (!responsable)         { toast('Ingresa el nombre del instalador', '#f59e0b'); return; }
 
     const base = { empresa_id: EMPRESA_ID, camioneta_id: _camionetaActual.id, registrado_por: responsable, motivo };
 
@@ -838,7 +838,7 @@ function setDevEstado(insId, estado) {
 
 async function confirmarDevolucion() {
     const responsable = document.getElementById('dev-responsable').value.trim();
-    if (!responsable) { toast('Ingresá el nombre del bodeguero', '#f59e0b'); return; }
+    if (!responsable) { toast('Ingresa el nombre del bodeguero', '#f59e0b'); return; }
 
     const stockConQty = _stockCamioneta.filter(s => s.cantidad > 0);
     if (!stockConQty.length) { toast('No hay insumos para devolver', '#f59e0b'); return; }
@@ -959,7 +959,7 @@ async function guardarNuevaCamioneta() {
     const patente   = document.getElementById('nueva-patente').value.trim();
     const instalador= document.getElementById('nueva-instalador').value.trim();
 
-    if (!nombre) { toast('Ingresá un nombre para la camioneta', '#f59e0b'); return; }
+    if (!nombre) { toast('Ingresa un nombre para la camioneta', '#f59e0b'); return; }
 
     const { error } = await sb.from('camionetas').insert({
         empresa_id: EMPRESA_ID, nombre, patente, instalador

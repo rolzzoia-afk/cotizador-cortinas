@@ -386,8 +386,8 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
         <!-- Estado del escaneo -->
         <div id="scan-estado" class="scan-state esperando" style="width:100%;max-width:360px;">
             <div class="icon">📍</div>
-            <div class="msg" id="scan-msg">Escaneá el QR de la ubicación</div>
-            <div class="sub" id="scan-sub">Buscá el QR pegado en el estante</div>
+            <div class="msg" id="scan-msg">Escanea el QR de la ubicación</div>
+            <div class="sub" id="scan-sub">Busca el QR pegado en el estante</div>
         </div>
 
         <!-- Visor de cámara -->
@@ -1110,7 +1110,7 @@ function saltarUbicacion() {
     _scanFase = 'item';
     setScanEstado(null, 'ok');
     document.getElementById('scan-msg').textContent = '↩ Rack salteado';
-    document.getElementById('scan-sub').textContent = 'Tomá el insumo y presioná el botón';
+    document.getElementById('scan-sub').textContent = 'Toma el insumo y presiona el botón';
     document.getElementById('btn-saltar-loc').style.display = 'none';
     document.getElementById('btn-escanear-insumo').style.display = 'block';
     // Detener cámara para evitar que relea el QR de rack en loop
@@ -1278,7 +1278,7 @@ async function onQRScan(decoded) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Ubicación incorrecta';
             document.getElementById('scan-sub').textContent =
-                `Buscá: ${locLabel}  |  Escaneaste: ${decoded.replace('LOC:','').replace(/\|/g,' · ')}`;
+                `Busca: ${locLabel}  |  Escaneaste: ${decoded.replace('LOC:','').replace(/\|/g,' · ')}`;
             scanStartCooldown(SCAN_COOLDOWN_ERR);
             setTimeout(() => { if (!_scanCooldown) setScanEstado('loc'); else setTimeout(() => setScanEstado('loc'), 200); }, SCAN_COOLDOWN_ERR);
             return;
@@ -1289,8 +1289,8 @@ async function onQRScan(decoded) {
         setScanEstado(null, 'ok');
         document.getElementById('scan-msg').textContent = '✅ Ubicación confirmada';
         document.getElementById('scan-sub').textContent = locLabel
-            ? `${locLabel} — Ahora tomá el insumo`
-            : 'Sin rack registrado — Tomá el insumo';
+            ? `${locLabel} — Ahora toma el insumo`
+            : 'Sin rack registrado — Toma el insumo';
         _scanFase = 'item';
         actualizarPasos(2); // avanzar al paso 2
         scanDebounceReset();
@@ -1500,7 +1500,7 @@ function limpiarFirma() {
 
 async function confirmarDespacho() {
     const nombre = document.getElementById('firma-nombre').value.trim();
-    if (!nombre) { toast('⚠ Ingresá el nombre del receptor'); return; }
+    if (!nombre) { toast('⚠ Ingresa el nombre del receptor'); return; }
 
     const canvas = document.getElementById('firma-canvas');
     const firmaB64 = canvas.toDataURL('image/png');
@@ -1671,9 +1671,9 @@ async function confirmarAdHoc() {
     const nombre    = document.getElementById('adhoc-instalador').value.trim();
     const otRef     = document.getElementById('adhoc-ot').value.trim();
 
-    if (!cod)     { toast('⚠ Ingresá el código del insumo'); return; }
-    if (cantidad <= 0) { toast('⚠ Cantidad debe ser mayor a 0'); return; }
-    if (!nombre)  { toast('⚠ Ingresá el nombre del instalador'); return; }
+    if (!cod)     { toast('⚠ Ingresa el código del insumo'); return; }
+    if (cantidad <= 0) { toast('⚠ La cantidad debe ser mayor a 0'); return; }
+    if (!nombre)  { toast('⚠ Ingresa el nombre del instalador'); return; }
 
     const ins = _insumos.find(i => i.cod === cod);
 
