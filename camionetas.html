@@ -552,7 +552,7 @@ async function refrescarStockDetalle() {
 
     const { data: stock } = await sb
         .from('inventario_camioneta')
-        .select('*, insumos(nombre, unidad)')
+        .select('*, insumos(nemotecnico, cod)')
         .eq('camioneta_id', _camionetaActual.id)
         .gt('cantidad', 0)
         .order('cantidad', { ascending: false });
@@ -565,14 +565,13 @@ async function refrescarStockDetalle() {
     }
 
     cont.innerHTML = _stockCamioneta.map(s => {
-        const nombre = s.insumos?.nombre ?? 'Insumo';
-        const unidad = s.insumos?.unidad ?? 'u';
+        const nombre = s.insumos?.nemotecnico ?? s.insumos?.cod ?? 'Insumo';
         const cls = s.cantidad === 0 ? 'zero' : s.cantidad <= 2 ? 'low' : '';
         return `
         <div class="stock-row">
             <div>
                 <div class="sr-nombre">${nombre}</div>
-                <div class="text-muted-sm">${unidad}</div>
+                <div class="text-muted-sm">${s.insumos?.cod ?? ''}</div>
             </div>
             <div class="sr-qty ${cls}">${s.cantidad}</div>
         </div>`;
@@ -591,10 +590,10 @@ async function mostrarCarga() {
 
     const { data } = await sb
         .from('insumos')
-        .select('id, nombre, unidad, stock_actual')
+        .select('id, nemotecnico, cod, stock_actual')
         .eq('empresa_id', EMPRESA_ID)
         .gt('stock_actual', 0)
-        .order('nombre');
+        .order('nemotecnico');
 
     _insumosBodega = data || [];
 
@@ -613,8 +612,8 @@ function renderCargaList() {
         return `
         <div class="insumo-select-item ${qty > 0 ? 'selected' : ''}" id="carga-row-${ins.id}">
             <div>
-                <div class="isi-nombre">${ins.nombre}</div>
-                <div class="text-muted-sm">Stock bodega: ${ins.stock_actual} ${ins.unidad}</div>
+                <div class="isi-nombre">${ins.nemotecnico ?? ins.cod}</div>
+                <div class="text-muted-sm">Stock bodega: ${ins.stock_actual}</div>
             </div>
             <div class="isi-qty-controls">
                 <button class="qty-btn" onclick="ajustarCarga('${ins.id}', -1, ${ins.stock_actual})">−</button>
@@ -696,20 +695,21 @@ async function mostrarSwap() {
     // Cargar todos los insumos para los selects
     const { data } = await sb
         .from('insumos')
-        .select('id, nombre')
+        .select('id, nemotecnico, cod')
         .eq('empresa_id', EMPRESA_ID)
-        .order('nombre');
+        .order('nemotecnico');
 
     const todosInsumos = data || [];
+    const labelIns = i => i.nemotecnico ?? i.cod ?? i.id;
 
     // Opciones del select de salida: solo los que tiene la camioneta
     const stockIds = _stockCamioneta.filter(s => s.cantidad > 0);
 
     const optsSalida = stockIds.length
-        ? stockIds.map(s => `<option value="${s.insumo_id}">${s.insumos?.nombre ?? s.insumo_id}</option>`).join('')
-        : todosInsumos.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
+        ? stockIds.map(s => `<option value="${s.insumo_id}">${s.insumos?.nemotecnico ?? s.insumos?.cod ?? s.insumo_id}</option>`).join('')
+        : todosInsumos.map(i => `<option value="${i.id}">${labelIns(i)}</option>`).join('');
 
-    const optsEntrada = todosInsumos.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
+    const optsEntrada = todosInsumos.map(i => `<option value="${i.id}">${labelIns(i)}</option>`).join('');
 
     document.getElementById('swap-salida').innerHTML  = optsSalida;
     document.getElementById('swap-entrada').innerHTML = optsEntrada;
@@ -788,7 +788,7 @@ function mostrarDevolucion() {
     cont.innerHTML = _stockCamioneta
         .filter(s => s.cantidad > 0)
         .map(s => {
-            const nombre = s.insumos?.nombre ?? s.insumo_id;
+            const nombre = s.insumos?.nemotecnico ?? s.insumos?.cod ?? s.insumo_id;
             return `
             <div class="dev-row">
                 <div class="dev-nombre">${nombre} <span class="text-muted-sm">(${s.cantidad} u.)</span></div>
@@ -890,7 +890,7 @@ async function mostrarHistorial() {
 
     const { data } = await sb
         .from('movimientos_camioneta')
-        .select('*, insumos(nombre)')
+        .select('*, insumos(nemotecnico, cod)')
         .eq('camioneta_id', _camionetaActual.id)
         .order('created_at', { ascending: false })
         .limit(80);
@@ -910,7 +910,7 @@ async function mostrarHistorial() {
     }
 
     cont.innerHTML = data.map(m => {
-        const nombre = m.insumos?.nombre ?? m.insumo_id;
+        const nombre = m.insumos?.nemotecnico ?? m.insumos?.cod ?? m.insumo_id;
         const fecha  = new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
         return `
         <div class="hist-row tipo-${m.tipo}">
