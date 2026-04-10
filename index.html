@@ -1109,6 +1109,9 @@
             <button class="nav-link" id="ojodedios-tab" data-bs-toggle="tab" data-bs-target="#ojodedios" type="button" role="tab" aria-controls="ojodedios" aria-selected="false"><i class="bi bi-eye-fill"></i> Ojo de Dios</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="historial-corte-tab" data-bs-toggle="tab" data-bs-target="#historial-corte" type="button" role="tab" aria-controls="historial-corte" aria-selected="false"><i class="bi bi-scissors"></i> Historial Corte</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="camionetas-tab" data-bs-toggle="tab" data-bs-target="#camionetas" type="button" role="tab" aria-controls="camionetas" aria-selected="false"><i class="bi bi-truck"></i> Camionetas</button>
         </li>
         <li class="nav-item" role="presentation">
@@ -1893,6 +1896,18 @@
                 </div>
                 <iframe id="iframe-bodeguero" title="Bodeguero Rolzzo" style="display:none;"
                         onload="if(this.getAttribute('src')){document.getElementById('bodeguero-loading').style.display='none'; this.style.display='block';}"></iframe>
+            </div>
+        </div>
+
+        <!-- HISTORIAL CORTE: Planes de corte + errores (iframe lazy) -->
+        <div class="tab-pane fade" id="historial-corte" role="tabpanel" aria-labelledby="historial-corte-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="historial-corte-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Historial de Corte...</span>
+                </div>
+                <iframe id="iframe-historial-corte" title="Historial de Corte Rolzzo" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('historial-corte-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -7751,6 +7766,20 @@
             }
         });
 
+        // ── Lazy loading de iframe Historial Corte ──
+        document.getElementById('historial-corte-tab').addEventListener('shown.bs.tab', () => {
+            try {
+                const iframe  = document.getElementById('iframe-historial-corte');
+                const loading = document.getElementById('historial-corte-loading');
+                if (!iframe.getAttribute('src')) {
+                    iframe.src = 'historial_corte.html';
+                }
+                presenciaActualizar('historial-corte', 'Historial de Corte');
+            } catch(e) {
+                console.error('[historial-corte-tab] Error al cargar iframe:', e);
+            }
+        });
+
         // ── Lazy loading de iframe Camionetas ──
         document.getElementById('camionetas-tab').addEventListener('shown.bs.tab', () => {
             try {
@@ -9809,6 +9838,9 @@
         </button>
         <button data-tab="ojodedios" onclick="switchTab('ojodedios')">
             <i class="bi bi-eye-fill"></i><span>Admin</span>
+        </button>
+        <button data-tab="historial-corte" onclick="switchTab('historial-corte')">
+            <i class="bi bi-scissors"></i><span>Cortes</span>
         </button>
         <button data-tab="camionetas" onclick="switchTab('camionetas')">
             <i class="bi bi-truck"></i><span>Camionetas</span>
