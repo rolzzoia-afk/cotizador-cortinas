@@ -302,12 +302,50 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
         </button>
 
         <!-- Botón "Escanear insumo" — aparece después de confirmar ubicación -->
-        <!-- La cámara se detiene entre fases para evitar que relea el mismo QR -->
         <button id="btn-escanear-insumo" onclick="activarFaseItem()"
             class="btn btn-block"
             style="max-width:360px;margin-top:8px;display:none;background:var(--accent);color:#fff;font-size:0.95rem;padding:14px;font-weight:700;border:none;border-radius:12px;">
             <i class="bi bi-qr-code-scan"></i> Escanear QR del insumo
         </button>
+
+        <!-- Panel de confirmación de cantidad — aparece después de escanear insumo correcto -->
+        <div id="scan-confirm-panel" style="display:none;width:100%;max-width:360px;margin-top:10px;">
+            <!-- Cabecera OK -->
+            <div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.35);border-radius:12px;padding:14px 16px;margin-bottom:10px;text-align:center;">
+                <div style="font-size:1.6rem;">✅</div>
+                <div style="font-weight:700;font-size:0.95rem;color:#22c55e;margin-top:4px;">Insumo correcto</div>
+                <div id="scan-confirm-nombre" style="font-size:0.82rem;color:var(--text2);margin-top:2px;"></div>
+            </div>
+            <!-- Stepper de cantidad -->
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:0.75rem;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;font-weight:600;">
+                    Confirmá la cantidad a retirar
+                </div>
+                <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:6px;">
+                    <button onclick="ajustarConfirm(-1)"
+                        style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.07);border:1px solid var(--border);color:var(--text);font-size:1.6rem;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;">
+                        −
+                    </button>
+                    <div>
+                        <div id="scan-confirm-qty" style="font-size:3rem;font-weight:900;color:var(--accent);line-height:1;">1</div>
+                        <div id="scan-confirm-unidad" style="font-size:0.75rem;color:var(--text2);">unid.</div>
+                    </div>
+                    <button onclick="ajustarConfirm(+1)"
+                        style="width:52px;height:52px;border-radius:50%;background:rgba(255,255,255,0.07);border:1px solid var(--border);color:var(--text);font-size:1.6rem;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;">
+                        +
+                    </button>
+                </div>
+                <div id="scan-confirm-requerido" style="font-size:0.75rem;color:var(--text2);margin-bottom:14px;"></div>
+                <button onclick="confirmarUnidades()"
+                    style="width:100%;padding:14px;background:var(--success);color:#fff;border:none;border-radius:10px;font-size:1rem;font-weight:700;cursor:pointer;">
+                    <i class="bi bi-check-circle-fill"></i> Confirmar retiro
+                </button>
+                <button onclick="volver_a_escanear_item()"
+                    style="width:100%;margin-top:8px;padding:10px;background:transparent;color:var(--text2);border:1px solid var(--border);border-radius:10px;font-size:0.82rem;cursor:pointer;">
+                    <i class="bi bi-arrow-repeat"></i> Escanear de nuevo
+                </button>
+            </div>
+        </div>
 
         <button onclick="cerrarScanner()" class="btn btn-outline btn-block" style="max-width:360px;margin-top:8px;">
             <i class="bi bi-arrow-left"></i> Cancelar
@@ -924,7 +962,11 @@ function iniciarScanItem(idx) {
     // Resetear debounce y botones al empezar un nuevo scan
     scanDebounceReset();
     _scanCooldown = false;
-    document.getElementById('btn-escanear-insumo').style.display = 'none';
+    document.getElementById('btn-escanear-insumo').style.display  = 'none';
+    document.getElementById('scan-confirm-panel').style.display   = 'none';
+    document.getElementById('scan-estado').style.display          = '';
+    document.getElementById('scanner-container').style.display    = '';
+    document.getElementById('scan-item-info').style.display       = '';
 
     mostrarVista('view-scanner');
     iniciarCamara();
@@ -1146,43 +1188,109 @@ async function onQRScan(decoded) {
         }
 
         const codEscaneado = decoded.replace('INS:', '').trim();
-        const insMatch = buscarInsumoMatchBOM(item);
-        const normCod  = s => (s || '').trim().toUpperCase().replace(/\s+/g, '');
+        const insMatch     = buscarInsumoMatchBOM(item);
+        const normCod      = s => (s || '').trim().toUpperCase().replace(/\s+/g, '');
 
         if (insMatch && normCod(insMatch.cod) !== normCod(codEscaneado)) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Insumo incorrecto';
-            document.getElementById('scan-sub').textContent = `Escaneaste: ${codEscaneado}  |  Necesitás: ${insMatch.cod}`;
+            document.getElementById('scan-sub').textContent =
+                `Escaneaste: ${codEscaneado}  |  Necesitás: ${insMatch.cod}`;
             scanStartCooldown(SCAN_COOLDOWN_ERR);
             setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_ERR);
             return;
         }
 
-        // ✅ Correcto — incrementar contador
-        cnt.pickeado++;
-        document.getElementById('scan-contador').textContent = cnt.pickeado;
+        // ✅ Insumo correcto — detener cámara y mostrar panel de confirmación de cantidad
+        scanDebounceReset();
+        _scanCooldown = true;
+        await detenerScanner();
+        _scanCooldown = false;
 
-        if (cnt.pickeado >= cnt.requerido) {
-            cnt.estado = 'completo';
-            setScanEstado(null, 'ok');
-            document.getElementById('scan-msg').textContent = `✅ Completo (${cnt.requerido}/${cnt.requerido})`;
-            document.getElementById('scan-sub').textContent = '¡Todos los insumos recogidos!';
-            toast(`✅ ${item.descripcion} completado`);
-            scanStartCooldown(SCAN_COOLDOWN_OK);
-            await detenerScanner();
-            setTimeout(() => {
-                renderBOMItems();
-                mostrarVista('view-despacho');
-            }, SCAN_COOLDOWN_OK);
-        } else {
-            // Necesita más unidades — cooldown corto y seguir escaneando
-            setScanEstado(null, 'ok');
-            document.getElementById('scan-msg').textContent = `✅ ${cnt.pickeado}/${cnt.requerido} — Seguí escaneando`;
-            document.getElementById('scan-sub').textContent = `Faltan ${cnt.requerido - cnt.pickeado} unidades más`;
-            scanStartCooldown(SCAN_COOLDOWN_OK);
-            setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_OK);
-        }
+        mostrarConfirmPanel(item, cnt);
     }
+}
+
+// ── Muestra el panel de confirmación de cantidad ──────────────────
+function mostrarConfirmPanel(item, cnt) {
+    const restante = cnt.requerido - cnt.pickeado;
+
+    // Poblar datos del panel
+    document.getElementById('scan-confirm-nombre').textContent  = item.descripcion;
+    document.getElementById('scan-confirm-unidad').textContent  = item.unidad || 'unid.';
+    document.getElementById('scan-confirm-qty').textContent     = restante;
+    document.getElementById('scan-confirm-requerido').textContent =
+        `El sistema requiere ${restante} ${item.unidad || 'unid.'} para esta OT`;
+
+    // Guardar restante como máximo/referencia en el dataset del panel
+    document.getElementById('scan-confirm-panel').dataset.max       = restante;
+    document.getElementById('scan-confirm-panel').dataset.min       = 1;
+    document.getElementById('scan-confirm-panel').dataset.itemIdx   = _scanItemIdx;
+
+    // Mostrar panel, ocultar todo lo demás
+    document.getElementById('scan-estado').style.display        = 'none';
+    document.getElementById('scanner-container').style.display  = 'none';
+    document.getElementById('scan-item-info').style.display     = 'none';
+    document.getElementById('btn-escanear-insumo').style.display = 'none';
+    document.getElementById('btn-saltar-loc').style.display      = 'none';
+    document.getElementById('scan-confirm-panel').style.display  = 'block';
+}
+
+// ── Ajusta la cantidad en el stepper ─────────────────────────────
+function ajustarConfirm(delta) {
+    const panel   = document.getElementById('scan-confirm-panel');
+    const qtyEl   = document.getElementById('scan-confirm-qty');
+    const max     = parseInt(panel.dataset.max) || 1;
+    const min     = parseInt(panel.dataset.min) || 1;
+    let   actual  = parseInt(qtyEl.textContent) || 1;
+    actual = Math.max(min, Math.min(max, actual + delta));
+    qtyEl.textContent = actual;
+}
+
+// ── Confirma el retiro con la cantidad indicada ───────────────────
+function confirmarUnidades() {
+    const panel    = document.getElementById('scan-confirm-panel');
+    const idx      = parseInt(panel.dataset.itemIdx);
+    const cantidad = parseInt(document.getElementById('scan-confirm-qty').textContent) || 1;
+    const item     = _bomItems[idx];
+    const cnt      = _contadores[idx];
+
+    cnt.pickeado += cantidad;
+    document.getElementById('scan-contador').textContent  = cnt.pickeado;
+    document.getElementById('scan-requerido').textContent = cnt.requerido;
+
+    // Cerrar panel y restaurar vista
+    _ocultarConfirmPanel();
+
+    if (cnt.pickeado >= cnt.requerido) {
+        cnt.estado = 'completo';
+        toast(`✅ ${item.descripcion} — ${cnt.requerido} ${item.unidad || 'unid.'} completado`);
+        renderBOMItems();
+        mostrarVista('view-despacho');
+    } else {
+        // Parcial: quedan unidades → volver al BOM para que el operario decida
+        const faltan = cnt.requerido - cnt.pickeado;
+        toast(`🔄 ${item.descripcion}: faltan ${faltan} ${item.unidad || 'unid.'} más`);
+        renderBOMItems();
+        mostrarVista('view-despacho');
+    }
+}
+
+// ── Volver a escanear si el operario quiere intentar de nuevo ─────
+function volver_a_escanear_item() {
+    _ocultarConfirmPanel();
+    setScanEstado('item');
+    scanDebounceReset();
+    _scanCooldown = false;
+    iniciarCamara();
+}
+
+// ── Restaura la UI del scanner a estado normal ────────────────────
+function _ocultarConfirmPanel() {
+    document.getElementById('scan-confirm-panel').style.display  = 'none';
+    document.getElementById('scan-estado').style.display         = '';
+    document.getElementById('scanner-container').style.display   = '';
+    document.getElementById('scan-item-info').style.display      = '';
 }
 
 // ══════════════════════════════════════════════════════════════════
