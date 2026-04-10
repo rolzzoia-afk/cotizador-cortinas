@@ -307,8 +307,23 @@ body { background: var(--bg-base); color: var(--text-primary);
             </div>
         </div>
         <div id="reemplazo-seleccionado" style="display:none;font-size:0.8rem;
-            color:var(--green);margin-bottom:14px;padding:6px 10px;
+            color:var(--green);margin-bottom:10px;padding:6px 10px;
             background:rgba(34,197,94,0.1);border-radius:8px;">
+        </div>
+
+        <!-- Sobrante del tubo de reemplazo -->
+        <div id="sobrante-box" style="display:none;
+            background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);
+            border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+            <label class="form-label-r" style="color:var(--yellow);margin-bottom:6px;">
+                ¿Cuánto sobró del tubo de reemplazo? (cm)
+            </label>
+            <p style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:8px;">
+                Si sobró material, se guardará de vuelta en la colmena con la nueva medida.
+                Si no sobró nada, dejá en 0.
+            </p>
+            <input id="err-sobrante" class="form-input-r" type="number" min="0" step="0.1"
+                placeholder="Ej: 45.5" style="margin-bottom:0;"/>
         </div>
 
         <!-- Registrado por -->
@@ -608,7 +623,9 @@ async function abrirModalError(pi, idx) {
     document.getElementById('err-comentario').value = '';
     document.getElementById('err-buscar-tubo').value = '';
     document.getElementById('err-responsable').value = '';
+    document.getElementById('err-sobrante').value = '';
     document.getElementById('reemplazo-seleccionado').style.display = 'none';
+    document.getElementById('sobrante-box').style.display = 'none';
 
     document.getElementById('modal-error').style.display = 'flex';
 
@@ -664,12 +681,23 @@ function seleccionarTubo(id) {
     _reemplazoSel = _tubosColmena.find(t => t.id === id) || null;
     renderTubosList(document.getElementById('err-buscar-tubo').value);
 
-    const el = document.getElementById('reemplazo-seleccionado');
+    const el  = document.getElementById('reemplazo-seleccionado');
+    const box = document.getElementById('sobrante-box');
+    const inp = document.getElementById('err-sobrante');
+
     if (_reemplazoSel) {
-        el.textContent = `✅ Colmena ${_reemplazoSel.n_colmena} · ${_reemplazoSel.cod} · ${Number(_reemplazoSel.medida_cm||0).toFixed(1)} cm`;
+        const medida = Number(_reemplazoSel.medida_cm || 0).toFixed(1);
+        el.textContent = `✅ Colmena ${_reemplazoSel.n_colmena} · ${_reemplazoSel.cod} · ${medida} cm`;
         el.style.display = 'block';
+        box.style.display = 'block';
+        // Sugerir sobrante = medida tubo - medida a cortar
+        if (_modalCorte?.r?.medida_cm != null) {
+            const sugerido = Number(_reemplazoSel.medida_cm) - Number(_modalCorte.r.medida_cm);
+            inp.value = sugerido > 0 ? sugerido.toFixed(1) : 0;
+        }
     } else {
         el.style.display = 'none';
+        box.style.display = 'none';
     }
 }
 
@@ -677,6 +705,7 @@ async function confirmarError() {
     const motivo      = document.getElementById('err-motivo').value;
     const comentario  = document.getElementById('err-comentario').value.trim();
     const responsable = document.getElementById('err-responsable').value.trim();
+    const sobranteVal = parseFloat(document.getElementById('err-sobrante').value) || 0;
 
     if (!motivo)      { toast('Seleccioná un motivo', '#f59e0b'); return; }
     if (!responsable) { toast('Ingresá tu nombre', '#f59e0b'); return; }
@@ -685,6 +714,7 @@ async function confirmarError() {
     const { r, ord, planId, planFecha, idx } = _modalCorte;
     const s = r.serial && typeof r.serial === 'object' ? r.serial : {};
 
+    // 1. Guardar registro del error
     const payload = {
         empresa_id:           EMPRESA_ID,
         plan_id:              planId || null,
@@ -709,18 +739,57 @@ async function confirmarError() {
     const { error } = await sb.from('errores_corte').insert(payload);
     if (error) { toast(`Error: ${error.message}`, '#ef4444'); return; }
 
-    // Actualizar estado local
+    // 2. Actualizar colmena si se eligió un tubo de reemplazo
+    if (_reemplazoSel) {
+        // Eliminar el tubo de reemplazo de la colmena (fue consumido)
+        const { error: errDel } = await sb
+            .from('colmena_tubos')
+            .delete()
+            .eq('id', _reemplazoSel.id);
+
+        if (errDel) {
+            toast(`⚠️ Error guardado pero no se pudo actualizar la colmena: ${errDel.message}`, '#f59e0b');
+        } else {
+            // Quitar del cache local también
+            _tubosColmena = _tubosColmena.filter(t => t.id !== _reemplazoSel.id);
+
+            // Si quedó sobrante > 0, reingresarlo a la colmena con la nueva medida
+            if (sobranteVal > 0) {
+                const nuevoTubo = {
+                    empresa_id:  EMPRESA_ID,
+                    n_colmena:   _reemplazoSel.n_colmena,
+                    cod:         _reemplazoSel.cod,
+                    medida_cm:   sobranteVal,
+                    agregado_por_admin: false
+                };
+                const { data: tuboNuevo, error: errIns } = await sb
+                    .from('colmena_tubos')
+                    .insert(nuevoTubo)
+                    .select()
+                    .single();
+
+                if (errIns) {
+                    toast(`⚠️ Error registrado pero no se pudo reingresar el sobrante: ${errIns.message}`, '#f59e0b');
+                } else {
+                    if (tuboNuevo) _tubosColmena.push(tuboNuevo);
+                    toast(`✅ Error registrado · Colmena ${_reemplazoSel.n_colmena} actualizada · Sobrante ${sobranteVal} cm reingresado`);
+                }
+            } else {
+                toast(`✅ Error registrado · Tubo consumido de Colmena ${_reemplazoSel.n_colmena}`);
+            }
+        }
+    } else {
+        toast('✅ Error registrado correctamente');
+    }
+
+    // 3. Actualizar estado local y re-renderizar
     if (planId) {
         if (!_erroresPorPlan[planId]) _erroresPorPlan[planId] = [];
         _erroresPorPlan[planId].push({ linea_idx: idx, motivo });
     }
 
     document.getElementById('modal-error').style.display = 'none';
-    toast('✅ Error registrado correctamente');
-
-    // Re-renderizar planes para que el botón se actualice
     renderPlanes();
-    // Reabrir el plan que estaba abierto
     const pi = _planes.findIndex(p => p.id === planId);
     if (pi >= 0) document.getElementById(`plan-card-${pi}`)?.classList.add('expanded');
 }
