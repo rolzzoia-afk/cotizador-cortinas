@@ -301,6 +301,14 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
             <i class="bi bi-skip-forward"></i> No encuentro el QR de rack — ir directo al insumo
         </button>
 
+        <!-- Botón "Escanear insumo" — aparece después de confirmar ubicación -->
+        <!-- La cámara se detiene entre fases para evitar que relea el mismo QR -->
+        <button id="btn-escanear-insumo" onclick="activarFaseItem()"
+            class="btn btn-block"
+            style="max-width:360px;margin-top:8px;display:none;background:var(--accent);color:#fff;font-size:0.95rem;padding:14px;font-weight:700;border:none;border-radius:12px;">
+            <i class="bi bi-qr-code-scan"></i> Escanear QR del insumo
+        </button>
+
         <button onclick="cerrarScanner()" class="btn btn-outline btn-block" style="max-width:360px;margin-top:8px;">
             <i class="bi bi-arrow-left"></i> Cancelar
         </button>
@@ -913,18 +921,34 @@ function iniciarScanItem(idx) {
         _scanFase = 'loc';
         setScanEstado('loc');
     }
-    // Resetear debounce al empezar un nuevo scan
+    // Resetear debounce y botones al empezar un nuevo scan
     scanDebounceReset();
     _scanCooldown = false;
+    document.getElementById('btn-escanear-insumo').style.display = 'none';
 
     mostrarVista('view-scanner');
     iniciarCamara();
 }
 
 function saltarUbicacion() {
+    // El usuario no encuentra el QR de rack → ir directo al insumo
     _scanFase = 'item';
+    setScanEstado(null, 'ok');
+    document.getElementById('scan-msg').textContent = '↩ Rack salteado';
+    document.getElementById('scan-sub').textContent = 'Tomá el insumo y presioná el botón';
+    document.getElementById('btn-saltar-loc').style.display = 'none';
+    document.getElementById('btn-escanear-insumo').style.display = 'block';
+    // Detener cámara para evitar que relea el QR de rack en loop
+    detenerScanner();
+}
+
+// El usuario tocó "Escanear QR del insumo" → reiniciar cámara en fase item
+function activarFaseItem() {
+    document.getElementById('btn-escanear-insumo').style.display = 'none';
+    scanDebounceReset();
+    _scanCooldown = false;
     setScanEstado('item');
-    document.getElementById('scan-sub').textContent = 'Escaneá ahora el QR del insumo/caja';
+    iniciarCamara();
 }
 
 function setScanEstado(fase, resultado = null) {
@@ -1084,12 +1108,21 @@ async function onQRScan(decoded) {
             return;
         }
 
-        // ✅ Ubicación correcta (o sin ubicación → saltar directo)
+        // ✅ Ubicación correcta — detener cámara y esperar que el usuario
+        //    toque "Escanear insumo". Así no relee el mismo QR al cambiar de fase.
         setScanEstado(null, 'ok');
-        if (locLabel) document.getElementById('scan-sub').textContent = `Ubicación: ${locLabel}`;
+        document.getElementById('scan-msg').textContent = '✅ Ubicación confirmada';
+        document.getElementById('scan-sub').textContent = locLabel
+            ? `${locLabel} — Ahora tomá el insumo`
+            : 'Sin rack registrado — Tomá el insumo';
         _scanFase = 'item';
-        scanStartCooldown(SCAN_COOLDOWN_OK);
-        setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_OK);
+        scanDebounceReset();
+        _scanCooldown = true;              // bloquear mientras cámara se detiene
+        await detenerScanner();            // apagar cámara completamente
+        _scanCooldown = false;
+        // Ocultar botón de saltar loc, mostrar botón de escanear insumo
+        document.getElementById('btn-saltar-loc').style.display = 'none';
+        document.getElementById('btn-escanear-insumo').style.display = 'block';
 
     } else if (_scanFase === 'item') {
         // Esperando escaneo del insumo (INS:cod)
