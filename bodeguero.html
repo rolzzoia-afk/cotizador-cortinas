@@ -665,13 +665,13 @@ function extraerTelasBOM(ot) {
 // Formato visual (lo que se muestra en pantalla):   Rack 1 · 3-A
 
 function rackToQRContent(rack, fila, col) {
-    // Solo ASCII imprimible, sin espacios ni Unicode
-    const ascii = s => (s || '').trim().replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '');
+    // String() antes de trim() — fila/columna pueden llegar como número desde Supabase
+    const ascii = s => String(s ?? '').trim().replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '');
     return `LOC:${ascii(rack)}|${ascii(fila)}|${ascii(col)}`;
 }
 
 function rackToDisplayLabel(rack, fila, col) {
-    return `${(rack||'').trim()} · ${(fila||'').trim()}-${(col||'').trim()}`;
+    return `${String(rack ?? '').trim()} · ${String(fila ?? '').trim()}-${String(col ?? '').trim()}`;
 }
 
 // Busca por cod exacto del insumo — retorna objeto { display, qr } o null

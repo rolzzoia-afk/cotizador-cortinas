@@ -2828,14 +2828,15 @@ let _qrInsumoActual = null; // { cod, nemo, ubicacion }
 // Formato QR:  LOC:RACK|FILA|COL   ej: LOC:RACK1|3|A
 // Formato visual (pantalla/etiqueta): Rack 1 · 3-A
 function rackToQRContent(rack, fila, col) {
-    const ascii = s => (s || '').trim()
-        // reemplazar caracteres no-ASCII por nada
+    // Convertir a string primero (fila/columna pueden llegar como número desde Supabase)
+    const ascii = s => String(s ?? '').trim()
         .replace(/[^\x20-\x7E]/g, '')
         .replace(/\s+/g, '');
     return `LOC:${ascii(rack)}|${ascii(fila)}|${ascii(col)}`;
 }
 function rackToDisplayLabel(rack, fila, col) {
-    return `${(rack||'').trim()} · ${(fila||'').trim()}-${(col||'').trim()}`;
+    // String() antes de trim() para manejar valores numéricos
+    return `${String(rack ?? '').trim()} · ${String(fila ?? '').trim()}-${String(col ?? '').trim()}`;
 }
 
 function mostrarQRInsumo(cod, nemo) {
