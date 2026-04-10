@@ -1,0 +1,1566 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#09090b">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Panel de Inteligencia — Rolzzo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    <style>
+        :root {
+            --bg-base:        #09090b;
+            --bg-card:        rgba(24,24,27,0.85);
+            --bg-card-hover:  rgba(30,30,33,0.95);
+            --border-glass:   rgba(255,255,255,0.07);
+            --border-accent:  rgba(124,117,240,0.35);
+            --text-primary:   #f4f4f5;
+            --text-secondary: #a1a1aa;
+            --text-muted:     #71717a;
+            --accent:         #7C75F0;
+            --accent-soft:    rgba(124,117,240,0.15);
+            --success:        #22c55e;
+            --warning:        #f59e0b;
+            --danger:         #ef4444;
+            --info:           #3b82f6;
+            --gold:           #f59e0b;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: var(--bg-base);
+            color: var(--text-primary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        /* ─── HEADER ──────────────────────────────────────────────── */
+        .intel-header {
+            background: linear-gradient(135deg, rgba(124,117,240,0.12), rgba(30,30,33,0.98));
+            border-bottom: 1px solid var(--border-accent);
+            padding: 14px 20px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .intel-header-title {
+            font-size: 1.05rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .intel-header-title .brain-icon {
+            font-size: 1.3rem;
+        }
+        .intel-badge {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border: 1px solid var(--border-accent);
+            padding: 2px 10px;
+            border-radius: 99px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+        }
+        .intel-refresh-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .btn-refresh {
+            background: var(--accent-soft);
+            border: 1px solid var(--border-accent);
+            color: var(--accent);
+            border-radius: 8px;
+            padding: 5px 12px;
+            font-size: 0.78rem;
+            cursor: pointer;
+            transition: all 0.18s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-refresh:hover { background: rgba(124,117,240,0.25); }
+        .btn-refresh.loading { opacity: 0.6; pointer-events: none; }
+        #last-update {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* ─── MAIN LAYOUT ─────────────────────────────────────────── */
+        .intel-body {
+            padding: 16px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* ─── GLASS CARD ──────────────────────────────────────────── */
+        .glass-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 0;
+            overflow: hidden;
+        }
+        .card-header-bar {
+            padding: 10px 14px 8px;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+        .card-header-bar h6 {
+            margin: 0;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .card-body-pad {
+            padding: 12px 14px;
+        }
+
+        /* ─── KPI CARDS ───────────────────────────────────────────── */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        @media (min-width: 600px) {
+            .kpi-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .kpi-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+            transition: border-color 0.2s;
+        }
+        .kpi-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+        }
+        .kpi-card.kpi-blue::before   { background: var(--info); }
+        .kpi-card.kpi-amber::before  { background: var(--warning); }
+        .kpi-card.kpi-red::before    { background: var(--danger); }
+        .kpi-card.kpi-green::before  { background: var(--success); }
+        .kpi-card.kpi-purple::before { background: var(--accent); }
+
+        .kpi-value {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+        .kpi-card.kpi-blue   .kpi-value { color: var(--info); }
+        .kpi-card.kpi-amber  .kpi-value { color: var(--warning); }
+        .kpi-card.kpi-red    .kpi-value { color: var(--danger); }
+        .kpi-card.kpi-green  .kpi-value { color: var(--success); }
+        .kpi-card.kpi-purple .kpi-value { color: var(--accent); }
+
+        .kpi-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .kpi-sub {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        .kpi-icon {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            font-size: 1.4rem;
+            opacity: 0.15;
+        }
+
+        /* ─── ALERT ITEMS ─────────────────────────────────────────── */
+        .alert-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-glass);
+        }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            flex-shrink: 0;
+            margin-top: 5px;
+        }
+        .alert-dot.red    { background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+        .alert-dot.amber  { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+        .alert-dot.green  { background: var(--success); box-shadow: 0 0 6px var(--success); }
+        .alert-dot.blue   { background: var(--info); box-shadow: 0 0 6px var(--info); }
+        .alert-dot.purple { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+        .alert-text { flex: 1; min-width: 0; }
+        .alert-title {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .alert-detail {
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+        .alert-badge {
+            flex-shrink: 0;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-size: 0.68rem;
+            font-weight: 700;
+        }
+        .badge-red    { background: rgba(239,68,68,0.15);   color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+        .badge-amber  { background: rgba(245,158,11,0.15);  color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+        .badge-green  { background: rgba(34,197,94,0.15);   color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+        .badge-blue   { background: rgba(59,130,246,0.15);  color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+        .badge-purple { background: rgba(124,117,240,0.15); color: #7C75F0; border: 1px solid rgba(124,117,240,0.3); }
+
+        /* ─── PROGRESS BARS ───────────────────────────────────────── */
+        .stock-bar-wrap { width: 100%; margin-top: 4px; }
+        .stock-bar-bg {
+            background: rgba(255,255,255,0.06);
+            border-radius: 99px;
+            height: 5px;
+            overflow: hidden;
+        }
+        .stock-bar-fill {
+            height: 100%;
+            border-radius: 99px;
+            transition: width 0.4s ease;
+        }
+
+        /* ─── MAIN GRID ───────────────────────────────────────────── */
+        .intel-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 14px;
+        }
+        @media (min-width: 768px) {
+            .intel-grid-2 {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+        @media (min-width: 1100px) {
+            .intel-grid-3 {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+        }
+
+        /* ─── SUMMARY BANNER ──────────────────────────────────────── */
+        .summary-banner {
+            background: linear-gradient(135deg, rgba(124,117,240,0.12), rgba(30,30,33,0.7));
+            border: 1px solid var(--border-accent);
+            border-radius: 14px;
+            padding: 14px 18px;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .summary-banner .sum-icon {
+            font-size: 1.8rem;
+            flex-shrink: 0;
+        }
+        .summary-banner p {
+            margin: 0;
+            font-size: 0.83rem;
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+        .summary-banner p strong {
+            color: #c4b5fd;
+        }
+
+        /* ─── SPINNER / EMPTY ─────────────────────────────────────── */
+        .intel-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 32px 16px;
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            gap: 10px;
+        }
+        .intel-empty {
+            text-align: center;
+            padding: 24px 12px;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+        .intel-empty .empty-icon { font-size: 1.8rem; margin-bottom: 6px; opacity: 0.4; }
+
+        /* ─── CONSUMPTION TABLE ───────────────────────────────────── */
+        .cons-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 0;
+            border-bottom: 1px solid var(--border-glass);
+        }
+        .cons-row:last-child { border-bottom: none; }
+        .cons-rank {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: var(--text-muted);
+            width: 20px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .cons-info { flex: 1; min-width: 0; }
+        .cons-name {
+            font-size: 0.78rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .cons-cat {
+            font-size: 0.67rem;
+            color: var(--text-muted);
+        }
+        .cons-qty {
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+
+        /* ─── RESTOCK LIST ────────────────────────────────────────── */
+        .restock-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-glass);
+        }
+        .restock-row:last-child { border-bottom: none; }
+        .restock-icon { font-size: 1rem; flex-shrink: 0; }
+        .restock-info { flex: 1; min-width: 0; }
+        .restock-name {
+            font-size: 0.78rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .restock-detail { font-size: 0.68rem; color: var(--text-muted); }
+        .restock-qty {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: var(--warning);
+            flex-shrink: 0;
+            text-align: right;
+        }
+        .restock-unit { font-size: 0.65rem; color: var(--text-muted); font-weight: 400; }
+
+        /* ─── OT RISK CARD ────────────────────────────────────────── */
+        .ot-risk-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            border-left: 3px solid transparent;
+        }
+        .ot-risk-item.risk-high   { border-left-color: var(--danger); }
+        .ot-risk-item.risk-medium { border-left-color: var(--warning); }
+        .ot-risk-item.risk-low    { border-left-color: var(--info); }
+        .ot-risk-item:last-child  { margin-bottom: 0; }
+        .ot-risk-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+        .ot-risk-name {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .ot-risk-detail {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* ─── ACTIVITY FEED ───────────────────────────────────────── */
+        .feed-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-glass);
+        }
+        .feed-item:last-child { border-bottom: none; }
+        .feed-time {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            flex-shrink: 0;
+            padding-top: 2px;
+            min-width: 55px;
+        }
+        .feed-icon {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            flex-shrink: 0;
+        }
+        .feed-icon.entrada  { background: rgba(34,197,94,0.15); color: #22c55e; }
+        .feed-icon.salida   { background: rgba(239,68,68,0.15); color: #ef4444; }
+        .feed-icon.ajuste   { background: rgba(245,158,11,0.15); color: #f59e0b; }
+        .feed-icon.otro     { background: rgba(124,117,240,0.15); color: #7C75F0; }
+        .feed-text { flex: 1; min-width: 0; }
+        .feed-main { font-size: 0.78rem; font-weight: 600; color: var(--text-primary); }
+        .feed-sub  { font-size: 0.68rem; color: var(--text-muted); }
+
+        /* ─── CHART WRAPPER ───────────────────────────────────────── */
+        .chart-wrap {
+            position: relative;
+            width: 100%;
+            height: 160px;
+        }
+
+        /* ─── INSIGHTS ────────────────────────────────────────────── */
+        .insight-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 8px;
+            font-size: 0.73rem;
+            margin: 3px 3px 3px 0;
+        }
+        .insight-chip.warning { background: rgba(245,158,11,0.12); color: #f59e0b; border: 1px solid rgba(245,158,11,0.25); }
+        .insight-chip.danger  { background: rgba(239,68,68,0.12);  color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
+        .insight-chip.success { background: rgba(34,197,94,0.12);  color: #22c55e; border: 1px solid rgba(34,197,94,0.25); }
+        .insight-chip.info    { background: rgba(59,130,246,0.12); color: #3b82f6; border: 1px solid rgba(59,130,246,0.25); }
+
+        /* ─── SCROLLABLE PANEL BODY ───────────────────────────────── */
+        .scroll-body {
+            max-height: 300px;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(124,117,240,0.3) transparent;
+        }
+        .scroll-body::-webkit-scrollbar { width: 4px; }
+        .scroll-body::-webkit-scrollbar-track { background: transparent; }
+        .scroll-body::-webkit-scrollbar-thumb { background: rgba(124,117,240,0.3); border-radius: 99px; }
+
+        /* ─── SECTION TITLE ───────────────────────────────────────── */
+        .section-sep {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin: 14px 0 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-sep::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border-glass);
+        }
+
+        /* ─── COUNT BADGE ─────────────────────────────────────────── */
+        .count-badge {
+            background: var(--accent-soft);
+            color: var(--accent);
+            border: 1px solid var(--border-accent);
+            padding: 1px 7px;
+            border-radius: 99px;
+            font-size: 0.67rem;
+            font-weight: 700;
+        }
+
+        /* ─── TREND INDICATOR ─────────────────────────────────────── */
+        .trend-up   { color: var(--danger);  font-size: 0.75rem; }
+        .trend-down { color: var(--success); font-size: 0.75rem; }
+        .trend-flat { color: var(--text-muted); font-size: 0.75rem; }
+    </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="intel-header">
+    <div class="intel-header-title">
+        <span class="brain-icon">🧠</span>
+        Panel de Inteligencia
+        <span class="intel-badge">ROLZZO</span>
+    </div>
+    <div class="intel-refresh-row">
+        <span id="last-update">—</span>
+        <button class="btn-refresh" id="btnRefresh" onclick="cargarTodo()">
+            <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
+            Actualizar
+        </button>
+    </div>
+</div>
+
+<!-- BODY -->
+<div class="intel-body">
+
+    <!-- RESUMEN EJECUTIVO -->
+    <div class="summary-banner" id="summaryBanner">
+        <div class="sum-icon">📊</div>
+        <p id="summaryText">Cargando análisis del día...</p>
+    </div>
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+        <div class="kpi-card kpi-blue">
+            <i class="bi bi-kanban kpi-icon"></i>
+            <div class="kpi-value" id="kpi-ots-activas">—</div>
+            <div class="kpi-label">OTs activas</div>
+            <div class="kpi-sub" id="kpi-ots-sub">—</div>
+        </div>
+        <div class="kpi-card kpi-red">
+            <i class="bi bi-exclamation-triangle kpi-icon"></i>
+            <div class="kpi-value" id="kpi-alertas">—</div>
+            <div class="kpi-label">Alertas de stock</div>
+            <div class="kpi-sub" id="kpi-alertas-sub">insumos bajo mínimo</div>
+        </div>
+        <div class="kpi-card kpi-amber">
+            <i class="bi bi-clock-history kpi-icon"></i>
+            <div class="kpi-value" id="kpi-riesgo">—</div>
+            <div class="kpi-label">OTs en riesgo</div>
+            <div class="kpi-sub" id="kpi-riesgo-sub">sin movimiento reciente</div>
+        </div>
+        <div class="kpi-card kpi-green">
+            <i class="bi bi-arrow-down-circle kpi-icon"></i>
+            <div class="kpi-value" id="kpi-movs">—</div>
+            <div class="kpi-label">Movimientos hoy</div>
+            <div class="kpi-sub" id="kpi-movs-sub">en inventario</div>
+        </div>
+    </div>
+
+    <!-- FILA 1: Alertas cruzadas + OTs en riesgo -->
+    <div class="intel-grid intel-grid-2" style="margin-bottom:14px;">
+
+        <!-- ALERTAS CRUZADAS -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-exclamation-triangle-fill" style="color:#ef4444;"></i> Stock crítico cruzado con producción</h6>
+                <span class="count-badge" id="cross-count">0</span>
+            </div>
+            <div class="card-body-pad scroll-body" id="cross-alerts-body">
+                <div class="intel-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <span>Analizando...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- OTs EN RIESGO -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-clock-history" style="color:#f59e0b;"></i> OTs en riesgo operativo</h6>
+                <span class="count-badge" id="risk-count">0</span>
+            </div>
+            <div class="card-body-pad scroll-body" id="ot-risk-body">
+                <div class="intel-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <span>Analizando...</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FILA 2: Consumo + Restock + Actividad -->
+    <div class="intel-grid intel-grid-2" style="margin-bottom:14px;">
+
+        <!-- CONSUMO ÚLTIMOS 30 DÍAS -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-bar-chart-fill" style="color:#7C75F0;"></i> Top insumos — últimos 30 días</h6>
+            </div>
+            <div class="card-body-pad">
+                <div id="consumo-chart-wrap" class="chart-wrap" style="height:140px;margin-bottom:10px;">
+                    <canvas id="consumoChart"></canvas>
+                </div>
+                <div id="consumo-list-body">
+                    <div class="intel-loading">
+                        <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SUGERENCIAS DE RESTOCK -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-cart-plus-fill" style="color:#22c55e;"></i> Sugerencias de reposición</h6>
+                <span class="count-badge" id="restock-count">0</span>
+            </div>
+            <div class="card-body-pad scroll-body" id="restock-body">
+                <div class="intel-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <span>Calculando...</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FILA 3: Actividad reciente + Insights -->
+    <div class="intel-grid intel-grid-2" style="margin-bottom:14px;">
+
+        <!-- ACTIVIDAD RECIENTE -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-activity" style="color:#3b82f6;"></i> Últimos movimientos de bodega</h6>
+            </div>
+            <div class="card-body-pad scroll-body" id="activity-feed-body">
+                <div class="intel-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <span>Cargando...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- INSIGHTS AUTOMÁTICOS -->
+        <div class="glass-card">
+            <div class="card-header-bar">
+                <h6><i class="bi bi-lightbulb-fill" style="color:#f59e0b;"></i> Insights automáticos</h6>
+            </div>
+            <div class="card-body-pad" id="insights-body">
+                <div class="intel-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <span>Procesando...</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- FILA 4: Stock general -->
+    <div class="glass-card" style="margin-bottom:14px;">
+        <div class="card-header-bar">
+            <h6><i class="bi bi-boxes" style="color:#7C75F0;"></i> Estado general del stock</h6>
+            <span id="stock-filter-chips" style="display:flex;gap:5px;flex-wrap:wrap;"></span>
+        </div>
+        <div class="card-body-pad">
+            <div id="stock-general-body">
+                <div class="intel-loading">
+                    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+                    <span>Cargando inventario...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div><!-- /intel-body -->
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN — mismos datos que index.html
+// ══════════════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { storage: sessionStorage, persistSession: false }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ══════════════════════════════════════════════════════════════════
+let _ots       = [];
+let _insumos   = [];
+let _movs      = [];
+let _racks     = [];
+let _consumoChart = null;
+
+// ══════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════
+function fmt(n) {
+    if (n === null || n === undefined) return '—';
+    return Number(n).toLocaleString('es-AR', { maximumFractionDigits: 1 });
+}
+
+function diasDesde(fechaStr) {
+    if (!fechaStr) return 999;
+    const d = new Date(fechaStr);
+    const now = new Date();
+    return Math.floor((now - d) / (1000 * 60 * 60 * 24));
+}
+
+function diasHasta(fechaStr) {
+    if (!fechaStr) return null;
+    const d = new Date(fechaStr);
+    const now = new Date();
+    return Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+}
+
+function fmtFecha(fechaStr) {
+    if (!fechaStr) return '—';
+    const d = new Date(fechaStr);
+    return d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+}
+
+function fmtFechaHora(fechaStr) {
+    if (!fechaStr) return '—';
+    const d = new Date(fechaStr);
+    return d.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit' }) + ' ' +
+           d.toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+}
+
+function escapeHtml(s) {
+    return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Estados productivos (no archivados)
+const ESTADOS_ACTIVOS   = ['cotizacion','medicion','aprobado','produccion','listo','instalacion'];
+const ESTADOS_PRODUCCION = ['aprobado','produccion','listo','instalacion'];
+const ESTADOS_TERMINADOS = ['entregado','archivado','cancelado'];
+
+// ══════════════════════════════════════════════════════════════════
+// CARGA DE DATOS
+// ══════════════════════════════════════════════════════════════════
+async function cargarTodo() {
+    const btn  = document.getElementById('btnRefresh');
+    const icon = document.getElementById('refreshIcon');
+    btn.classList.add('loading');
+    icon.className = 'bi bi-arrow-repeat spin';
+
+    try {
+        const hace30dias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const hoy        = new Date().toISOString().split('T')[0];
+
+        const [rOts, rIns, rMovs, rRacks, rMovsHoy] = await Promise.all([
+            sb.from('ots')
+              .select('id,estado,datos_generales,items,fecha_creacion,fecha_modificacion,total')
+              .eq('empresa_id', EMPRESA_ID)
+              .order('fecha_modificacion', { ascending: false }),
+
+            sb.from('insumos')
+              .select('cod,desc,stock_actual,stock_minimo,categoria,subcategoria,unidad,ubicacion')
+              .eq('empresa_id', EMPRESA_ID)
+              .order('desc'),
+
+            sb.from('movimientos_insumos')
+              .select('*')
+              .eq('empresa_id', EMPRESA_ID)
+              .gte('fecha', hace30dias)
+              .order('fecha', { ascending: false }),
+
+            sb.from('ubicaciones_rack')
+              .select('rack,fila,columna,codigo_insumo,almacen')
+              .eq('empresa_id', EMPRESA_ID),
+
+            sb.from('movimientos_insumos')
+              .select('id,tipo,cantidad,fecha,insumo_cod,insumo_desc,ot_id,observaciones')
+              .eq('empresa_id', EMPRESA_ID)
+              .gte('fecha', hoy)
+              .order('fecha', { ascending: false })
+              .limit(50)
+        ]);
+
+        _ots     = rOts.data    || [];
+        _insumos = rIns.data    || [];
+        _movs    = rMovs.data   || [];
+        _racks   = rRacks.data  || [];
+
+        const movsHoy = rMovsHoy.data || [];
+
+        // Actualizar timestamp
+        document.getElementById('last-update').textContent =
+            'Actualizado ' + new Date().toLocaleTimeString('es-AR', { hour:'2-digit', minute:'2-digit' });
+
+        // Renderizar todo
+        renderKPIs(movsHoy);
+        renderSummary();
+        renderCrossAlerts();
+        renderOTRisk();
+        renderConsumo();
+        renderRestock();
+        renderActivity();
+        renderInsights();
+        renderStockGeneral();
+
+    } catch(err) {
+        console.error('[Inteligencia] Error cargando datos:', err);
+        document.getElementById('summaryText').textContent =
+            '⚠ Error al cargar datos. Revisá la conexión con Supabase.';
+    } finally {
+        btn.classList.remove('loading');
+        icon.className = 'bi bi-arrow-clockwise';
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// KPI CARDS
+// ══════════════════════════════════════════════════════════════════
+function renderKPIs(movsHoy) {
+    const otsActivas    = _ots.filter(o => ESTADOS_ACTIVOS.includes(o.estado));
+    const otsProduccion = _ots.filter(o => ESTADOS_PRODUCCION.includes(o.estado));
+    const stockBajo     = _insumos.filter(ins =>
+        ins.stock_minimo != null && ins.stock_actual != null &&
+        Number(ins.stock_actual) <= Number(ins.stock_minimo)
+    );
+    const otsSinMovimiento = _ots.filter(o =>
+        ESTADOS_PRODUCCION.includes(o.estado) && diasDesde(o.fecha_modificacion) >= 3
+    );
+
+    document.getElementById('kpi-ots-activas').textContent = otsActivas.length;
+    document.getElementById('kpi-ots-sub').textContent     = otsProduccion.length + ' en producción';
+    document.getElementById('kpi-alertas').textContent     = stockBajo.length;
+    document.getElementById('kpi-alertas-sub').textContent = stockBajo.length === 0 ? 'Todo en orden ✓' : 'insumos bajo mínimo';
+    document.getElementById('kpi-riesgo').textContent      = otsSinMovimiento.length;
+    document.getElementById('kpi-riesgo-sub').textContent  = '≥3 días sin movimiento';
+    document.getElementById('kpi-movs').textContent        = movsHoy.length;
+
+    const entradas = movsHoy.filter(m => (m.tipo||'').toLowerCase() === 'entrada').length;
+    const salidas  = movsHoy.filter(m => (m.tipo||'').toLowerCase() === 'salida').length;
+    document.getElementById('kpi-movs-sub').textContent = `${entradas} entradas · ${salidas} salidas`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RESUMEN EJECUTIVO
+// ══════════════════════════════════════════════════════════════════
+function renderSummary() {
+    const otsActivas    = _ots.filter(o => ESTADOS_ACTIVOS.includes(o.estado));
+    const otsProduccion = _ots.filter(o => ESTADOS_PRODUCCION.includes(o.estado));
+    const stockBajo     = _insumos.filter(ins =>
+        ins.stock_minimo != null && ins.stock_actual != null &&
+        Number(ins.stock_actual) <= Number(ins.stock_minimo)
+    );
+    const otsSinMovimiento = _ots.filter(o =>
+        ESTADOS_PRODUCCION.includes(o.estado) && diasDesde(o.fecha_modificacion) >= 3
+    );
+
+    const hoy = new Date().toLocaleDateString('es-AR', { weekday:'long', day:'numeric', month:'long' });
+    let partes = [];
+
+    partes.push(`Hoy, ${hoy}.`);
+
+    if (otsActivas.length === 0) {
+        partes.push('No hay órdenes de trabajo activas.');
+    } else {
+        partes.push(`Hay <strong>${otsActivas.length} OT${otsActivas.length > 1 ? 's' : ''} activa${otsActivas.length > 1 ? 's' : ''}</strong>, de las cuales <strong>${otsProduccion.length}</strong> están en producción.`);
+    }
+
+    if (stockBajo.length > 0) {
+        partes.push(`⚠ <strong>${stockBajo.length} insumo${stockBajo.length > 1 ? 's' : ''}</strong> ${stockBajo.length > 1 ? 'están' : 'está'} por debajo del stock mínimo.`);
+    } else {
+        partes.push('✅ El stock de insumos está en niveles normales.');
+    }
+
+    if (otsSinMovimiento.length > 0) {
+        partes.push(`🔴 <strong>${otsSinMovimiento.length} OT${otsSinMovimiento.length > 1 ? 's' : ''}</strong> sin movimiento hace 3+ días — revisar urgente.`);
+    }
+
+    document.getElementById('summaryText').innerHTML = partes.join(' ');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ALERTAS CRUZADAS — Stock bajo + OTs en producción
+// ══════════════════════════════════════════════════════════════════
+function renderCrossAlerts() {
+    const body = document.getElementById('cross-alerts-body');
+    const otsEnProd = _ots.filter(o => ESTADOS_PRODUCCION.includes(o.estado));
+
+    // Insumos con stock bajo
+    const stockBajo = _insumos.filter(ins =>
+        ins.stock_minimo != null && ins.stock_actual != null &&
+        Number(ins.stock_actual) <= Number(ins.stock_minimo)
+    );
+
+    if (stockBajo.length === 0) {
+        document.getElementById('cross-count').textContent = '0';
+        body.innerHTML = `<div class="intel-empty">
+            <div class="empty-icon">✅</div>
+            <div>Todos los insumos tienen stock suficiente</div>
+        </div>`;
+        return;
+    }
+
+    // Para cada insumo con stock bajo, buscar si hay OTs en producción que lo necesiten
+    // Analizamos los items/BOM de las OTs
+    const cruces = [];
+
+    for (const ins of stockBajo) {
+        const codIns  = (ins.cod  || '').toUpperCase().trim();
+        const descIns = (ins.desc || '').toUpperCase().trim();
+
+        // Buscar OTs que mencionan este insumo en sus items
+        const otsAfectadas = [];
+        for (const ot of otsEnProd) {
+            const dg    = ot.datos_generales || {};
+            const items = ot.items || [];
+            const otId  = dg.ot || ot.id || '—';
+            const cli   = dg.nombre_cliente || dg.cliente || 'Sin nombre';
+
+            let encontrado = false;
+
+            // Buscar en los movimientos del mes — si esta OT usó este insumo
+            const movsOT = _movs.filter(m => {
+                const mc = (m.insumo_cod || '').toUpperCase().trim();
+                const md = (m.insumo_desc || '').toUpperCase().trim();
+                const otM = String(m.ot_id || '');
+                return otM === String(ot.id) && (mc === codIns || md.includes(descIns.substring(0, 10)));
+            });
+
+            if (movsOT.length > 0) encontrado = true;
+
+            // También buscar en los items de la OT (telas, mecanismos, tubos)
+            for (const item of items) {
+                const tela = (item.tela || '').toUpperCase();
+                const mec  = (item.mecanismo || '').toUpperCase();
+                if (tela.includes(descIns.substring(0, 8)) || mec.includes(descIns.substring(0, 8))) {
+                    encontrado = true;
+                }
+            }
+
+            if (movsOT.length > 0) {
+                otsAfectadas.push({ otId, cli, movs: movsOT.length });
+            }
+        }
+
+        const stock     = Number(ins.stock_actual);
+        const minimo    = Number(ins.stock_minimo);
+        const pct       = minimo > 0 ? Math.max(0, Math.min(100, (stock / minimo) * 100)) : 0;
+        const nivel     = stock <= 0 ? 'red' : stock < minimo * 0.5 ? 'red' : 'amber';
+        const nivelTxt  = stock <= 0 ? 'Sin stock' : 'Bajo mínimo';
+        const rack      = _racks.find(r => (r.codigo_insumo||'').toUpperCase() === codIns);
+        const posicion  = rack ? `${rack.rack} · ${rack.fila}-${rack.columna}` : ins.ubicacion || '—';
+
+        cruces.push({
+            ins, stock, minimo, pct, nivel, nivelTxt, posicion,
+            otsAfectadas
+        });
+    }
+
+    // Ordenar: primero sin stock, luego por % más bajo
+    cruces.sort((a, b) => a.pct - b.pct);
+
+    document.getElementById('cross-count').textContent = cruces.length;
+
+    let html = '';
+    for (const c of cruces) {
+        const barColor = c.nivel === 'red' ? '#ef4444' : '#f59e0b';
+        html += `
+        <div class="alert-item">
+            <div class="alert-dot ${c.nivel}"></div>
+            <div class="alert-text">
+                <div class="alert-title">${escapeHtml(c.ins.desc || c.ins.cod)}</div>
+                <div class="alert-detail">
+                    📦 Stock: <strong>${fmt(c.stock)}</strong> / mín ${fmt(c.minimo)} ${escapeHtml(c.ins.unidad||'')}
+                    ${c.posicion !== '—' ? ` &nbsp;·&nbsp; 📍 ${escapeHtml(c.posicion)}` : ''}
+                    ${c.otsAfectadas.length > 0
+                        ? `<br>🔗 OTs recientes: ${c.otsAfectadas.slice(0,2).map(o=>`<em>${escapeHtml(o.otId)}</em>`).join(', ')}`
+                        : ''}
+                </div>
+                <div class="stock-bar-wrap">
+                    <div class="stock-bar-bg">
+                        <div class="stock-bar-fill" style="width:${c.pct}%;background:${barColor};"></div>
+                    </div>
+                </div>
+            </div>
+            <span class="alert-badge badge-${c.nivel}">${c.nivelTxt}</span>
+        </div>`;
+    }
+
+    body.innerHTML = html || `<div class="intel-empty"><div class="empty-icon">✅</div><div>Sin alertas de stock</div></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// OTs EN RIESGO
+// ══════════════════════════════════════════════════════════════════
+function renderOTRisk() {
+    const body = document.getElementById('ot-risk-body');
+
+    const candidatas = _ots.filter(o => ESTADOS_ACTIVOS.includes(o.estado));
+
+    const riesgos = candidatas.map(ot => {
+        const dg        = ot.datos_generales || {};
+        const otId      = dg.ot || '#' + String(ot.id).slice(-4);
+        const cliente   = dg.nombre_cliente || dg.cliente || 'Sin nombre';
+        const estado    = ot.estado || '—';
+        const diasSinMov = diasDesde(ot.fecha_modificacion);
+        const fechaEntr  = dg.fecha_entrega || dg.fechaEntrega || null;
+        const diasParaEntr = fechaEntr ? diasHasta(fechaEntr) : null;
+
+        // Calcular nivel de riesgo
+        let riesco = 0;
+        let motivos = [];
+
+        if (ESTADOS_PRODUCCION.includes(estado)) {
+            if (diasSinMov >= 5) { riesco += 3; motivos.push(`${diasSinMov}d sin movimiento`); }
+            else if (diasSinMov >= 3) { riesco += 2; motivos.push(`${diasSinMov}d sin actividad`); }
+        }
+
+        if (diasParaEntr !== null) {
+            if (diasParaEntr <= 0) { riesco += 4; motivos.push('¡Entrega vencida!'); }
+            else if (diasParaEntr <= 2) { riesco += 3; motivos.push(`Entrega en ${diasParaEntr}d`); }
+            else if (diasParaEntr <= 5) { riesco += 2; motivos.push(`Entrega en ${diasParaEntr}d`); }
+            else if (diasParaEntr <= 10) { riesco += 1; motivos.push(`Entrega en ${diasParaEntr}d`); }
+        }
+
+        return { ot, otId, cliente, estado, diasSinMov, diasParaEntr, riesco, motivos };
+    }).filter(r => r.riesco > 0);
+
+    // Ordenar por riesgo descendente
+    riesgos.sort((a, b) => b.riesco - a.riesco);
+
+    document.getElementById('risk-count').textContent = riesgos.length;
+
+    if (riesgos.length === 0) {
+        body.innerHTML = `<div class="intel-empty">
+            <div class="empty-icon">✅</div>
+            <div>No hay OTs en situación de riesgo</div>
+        </div>`;
+        return;
+    }
+
+    let html = '';
+    for (const r of riesgos.slice(0, 10)) {
+        const cls = r.riesco >= 4 ? 'risk-high' : r.riesco >= 2 ? 'risk-medium' : 'risk-low';
+        const estadoBadge = {
+            cotizacion: { txt: 'Cotización', cls: 'badge-blue' },
+            medicion:   { txt: 'Medición',   cls: 'badge-blue' },
+            aprobado:   { txt: 'Aprobado',   cls: 'badge-purple' },
+            produccion: { txt: 'Producción', cls: 'badge-amber' },
+            listo:      { txt: 'Listo',      cls: 'badge-green' },
+            instalacion:{ txt: 'Instalación',cls: 'badge-green' },
+        }[r.estado] || { txt: r.estado, cls: 'badge-blue' };
+
+        html += `
+        <div class="ot-risk-item ${cls}">
+            <div class="ot-risk-header">
+                <span class="ot-risk-name">📋 ${escapeHtml(r.otId)} — ${escapeHtml(r.cliente)}</span>
+                <span class="alert-badge ${estadoBadge.cls}">${estadoBadge.txt}</span>
+            </div>
+            <div class="ot-risk-detail">
+                ${r.motivos.map(m => `⚠ ${escapeHtml(m)}`).join('  ·  ')}
+                ${r.diasParaEntr !== null ? `<br>📅 Entrega: ${r.diasParaEntr <= 0 ? '<strong style="color:#ef4444">VENCIDA</strong>' : fmtFecha(r.ot.datos_generales?.fecha_entrega || r.ot.datos_generales?.fechaEntrega)}` : ''}
+            </div>
+        </div>`;
+    }
+
+    body.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CONSUMO — Top insumos últimos 30 días
+// ══════════════════════════════════════════════════════════════════
+function renderConsumo() {
+    const listBody = document.getElementById('consumo-list-body');
+
+    // Filtrar solo salidas (consumo real)
+    const salidas = _movs.filter(m => (m.tipo || '').toLowerCase() === 'salida' || (m.tipo || '').toLowerCase() === 'despacho');
+
+    if (salidas.length === 0) {
+        document.getElementById('consumo-chart-wrap').style.display = 'none';
+        listBody.innerHTML = `<div class="intel-empty"><div class="empty-icon">📊</div><div>Sin movimientos de salida en los últimos 30 días</div></div>`;
+        return;
+    }
+
+    // Agrupar por insumo
+    const mapa = {};
+    for (const m of salidas) {
+        const key  = (m.insumo_cod || '').trim() || (m.insumo_desc || '?').trim();
+        const desc = (m.insumo_desc || m.insumo_cod || '?').trim();
+        if (!mapa[key]) mapa[key] = { desc, cantidad: 0, movs: 0 };
+        mapa[key].cantidad += Number(m.cantidad) || 0;
+        mapa[key].movs++;
+    }
+
+    // Top 5
+    const top = Object.entries(mapa)
+        .sort((a, b) => b[1].cantidad - a[1].cantidad)
+        .slice(0, 7);
+
+    // Chart
+    if (_consumoChart) _consumoChart.destroy();
+    const canvas = document.getElementById('consumoChart');
+    const ctx = canvas.getContext('2d');
+
+    const top5 = top.slice(0, 5);
+    _consumoChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: top5.map(([k, v]) => v.desc.length > 16 ? v.desc.slice(0, 14) + '…' : v.desc),
+            datasets: [{
+                data: top5.map(([k, v]) => v.cantidad),
+                backgroundColor: [
+                    'rgba(124,117,240,0.7)',
+                    'rgba(59,130,246,0.7)',
+                    'rgba(34,197,94,0.7)',
+                    'rgba(245,158,11,0.7)',
+                    'rgba(239,68,68,0.7)',
+                ],
+                borderRadius: 6,
+                borderWidth: 0,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ' ' + fmt(ctx.raw) + ' unid.'
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    ticks: { color: '#71717a', font: { size: 10 } },
+                    grid: { display: false }
+                },
+                y: {
+                    ticks: { color: '#71717a', font: { size: 10 } },
+                    grid: { color: 'rgba(255,255,255,0.04)' }
+                }
+            }
+        }
+    });
+
+    // Lista
+    let html = '';
+    for (let i = 0; i < top.length; i++) {
+        const [key, val] = top[i];
+        const ins = _insumos.find(x => (x.cod||'').toUpperCase() === key.toUpperCase());
+        const cat = ins?.categoria || ins?.subcategoria || '';
+
+        // Tasa de consumo diaria
+        const tasaDiaria = val.cantidad / 30;
+        const stockAct   = ins?.stock_actual != null ? Number(ins.stock_actual) : null;
+        const diasStock  = (stockAct !== null && tasaDiaria > 0) ? Math.floor(stockAct / tasaDiaria) : null;
+
+        html += `<div class="cons-row">
+            <span class="cons-rank">#${i+1}</span>
+            <div class="cons-info">
+                <div class="cons-name">${escapeHtml(val.desc)}</div>
+                <div class="cons-cat">${escapeHtml(cat)}${diasStock !== null ? ` · ${diasStock}d de stock` : ''}</div>
+            </div>
+            <span class="cons-qty">${fmt(val.cantidad)}<br><span style="font-size:0.6rem;color:var(--text-muted);font-weight:400;">${val.movs} mov.</span></span>
+        </div>`;
+    }
+
+    listBody.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SUGERENCIAS DE RESTOCK
+// ══════════════════════════════════════════════════════════════════
+function renderRestock() {
+    const body = document.getElementById('restock-body');
+
+    // Insumos con stock bajo (bajo mínimo) + insumos con alta rotación y poco stock
+    const salidas = _movs.filter(m => (m.tipo || '').toLowerCase() === 'salida' || (m.tipo || '').toLowerCase() === 'despacho');
+
+    // Mapa de consumo por cod
+    const consumoMap = {};
+    for (const m of salidas) {
+        const key = (m.insumo_cod || '').trim();
+        if (!key) continue;
+        if (!consumoMap[key]) consumoMap[key] = 0;
+        consumoMap[key] += Number(m.cantidad) || 0;
+    }
+
+    const sugerencias = [];
+
+    for (const ins of _insumos) {
+        const cod  = (ins.cod || '').trim();
+        const stock = ins.stock_actual != null ? Number(ins.stock_actual) : null;
+        const min   = ins.stock_minimo  != null ? Number(ins.stock_minimo)  : null;
+        const consumo30d = consumoMap[cod] || 0;
+        const tasaDiaria = consumo30d / 30;
+
+        let urgencia = 0;
+        let motivo   = '';
+        let cantSugerida = 0;
+
+        // Caso 1: Stock bajo mínimo
+        if (stock !== null && min !== null && stock <= min) {
+            urgencia = stock <= 0 ? 3 : stock < min * 0.5 ? 2 : 1;
+            const deficitMin = min - stock;
+            // Agregar 30 días de consumo
+            cantSugerida = Math.ceil(deficitMin + consumo30d);
+            motivo = stock <= 0 ? 'Sin stock' : `Stock bajo mínimo (${fmt(stock)}/${fmt(min)})`;
+        }
+        // Caso 2: Stock suficiente pero con alta rotación y menos de 15 días de stock
+        else if (stock !== null && tasaDiaria > 0) {
+            const diasRestantes = stock / tasaDiaria;
+            if (diasRestantes < 15 && stock > 0) {
+                urgencia = diasRestantes < 7 ? 2 : 1;
+                cantSugerida = Math.ceil(consumo30d * 1.5); // 45 días de cobertura
+                motivo = `${Math.floor(diasRestantes)}d de stock al ritmo actual`;
+            }
+        }
+
+        if (urgencia > 0) {
+            sugerencias.push({
+                ins, stock, min, consumo30d, tasaDiaria,
+                urgencia, motivo, cantSugerida
+            });
+        }
+    }
+
+    // Ordenar por urgencia
+    sugerencias.sort((a, b) => b.urgencia - a.urgencia);
+
+    document.getElementById('restock-count').textContent = sugerencias.length;
+
+    if (sugerencias.length === 0) {
+        body.innerHTML = `<div class="intel-empty">
+            <div class="empty-icon">✅</div>
+            <div>No hay necesidades de reposición urgentes</div>
+        </div>`;
+        return;
+    }
+
+    let html = '';
+    for (const s of sugerencias.slice(0, 10)) {
+        const icon  = s.urgencia >= 3 ? '🔴' : s.urgencia >= 2 ? '🟡' : '🟢';
+        const unidad = s.ins.unidad || 'u.';
+
+        html += `<div class="restock-row">
+            <span class="restock-icon">${icon}</span>
+            <div class="restock-info">
+                <div class="restock-name">${escapeHtml(s.ins.desc || s.ins.cod)}</div>
+                <div class="restock-detail">${escapeHtml(s.motivo)}</div>
+            </div>
+            <div class="restock-qty">
+                ${fmt(s.cantSugerida)}
+                <div class="restock-unit">${escapeHtml(unidad)}</div>
+            </div>
+        </div>`;
+    }
+
+    body.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ACTIVIDAD RECIENTE
+// ══════════════════════════════════════════════════════════════════
+function renderActivity() {
+    const body = document.getElementById('activity-feed-body');
+
+    const recientes = _movs.slice(0, 20);
+
+    if (recientes.length === 0) {
+        body.innerHTML = `<div class="intel-empty"><div class="empty-icon">📭</div><div>Sin movimientos en los últimos 30 días</div></div>`;
+        return;
+    }
+
+    let html = '';
+    for (const m of recientes) {
+        const tipo = (m.tipo || '').toLowerCase();
+        const iconCls = tipo === 'entrada' ? 'entrada' : tipo === 'salida' || tipo === 'despacho' ? 'salida' : tipo === 'ajuste' ? 'ajuste' : 'otro';
+        const iconChar = tipo === 'entrada' ? '+' : tipo === 'salida' || tipo === 'despacho' ? '−' : tipo === 'ajuste' ? '≈' : '·';
+        const desc = m.insumo_desc || m.insumo_cod || 'Insumo sin nombre';
+        const cant = m.cantidad !== undefined ? `${tipo === 'salida' || tipo === 'despacho' ? '-' : '+'}${fmt(m.cantidad)}` : '—';
+        const otRef = m.ot_id ? ` · OT ${m.ot_id}` : '';
+        const obs = m.observaciones || '';
+
+        html += `<div class="feed-item">
+            <span class="feed-time">${fmtFechaHora(m.fecha)}</span>
+            <div class="feed-icon ${iconCls}">${iconChar}</div>
+            <div class="feed-text">
+                <div class="feed-main">${escapeHtml(desc)} <span style="color:var(--text-muted);font-weight:400;">${cant}</span></div>
+                <div class="feed-sub">${escapeHtml(tipo.charAt(0).toUpperCase() + tipo.slice(1))}${otRef}${obs ? ' · ' + obs : ''}</div>
+            </div>
+        </div>`;
+    }
+
+    body.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INSIGHTS AUTOMÁTICOS
+// ══════════════════════════════════════════════════════════════════
+function renderInsights() {
+    const body = document.getElementById('insights-body');
+    const insights = [];
+
+    // 1. Días pico de actividad
+    const diasSemana = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+    const actividadPorDia = [0,0,0,0,0,0,0];
+    for (const m of _movs) {
+        if (!m.fecha) continue;
+        const d = new Date(m.fecha).getDay();
+        actividadPorDia[d]++;
+    }
+    const diaPico = actividadPorDia.indexOf(Math.max(...actividadPorDia));
+    if (Math.max(...actividadPorDia) > 0) {
+        insights.push({ tipo: 'info', txt: `El día con más movimientos es el <strong>${diasSemana[diaPico]}</strong>` });
+    }
+
+    // 2. OTs con más ventanas
+    const topOT = _ots
+        .filter(o => ESTADOS_ACTIVOS.includes(o.estado))
+        .map(o => ({ ot: o, cant: (o.items || []).length }))
+        .sort((a, b) => b.cant - a.cant)[0];
+    if (topOT && topOT.cant > 0) {
+        const dg = topOT.ot.datos_generales || {};
+        const cli = dg.nombre_cliente || dg.cliente || 'un cliente';
+        insights.push({ tipo: 'info', txt: `La OT más grande es de <strong>${escapeHtml(cli)}</strong> con ${topOT.cant} ventana${topOT.cant > 1 ? 's' : ''}` });
+    }
+
+    // 3. Insumos sin movimiento hace 30 días pero con stock
+    const codsConMovimiento = new Set(_movs.map(m => (m.insumo_cod||'').trim().toUpperCase()));
+    const insDetenidos = _insumos.filter(ins =>
+        ins.stock_actual != null && Number(ins.stock_actual) > 0 &&
+        !codsConMovimiento.has((ins.cod||'').toUpperCase())
+    );
+    if (insDetenidos.length > 0) {
+        insights.push({ tipo: 'warning', txt: `<strong>${insDetenidos.length} insumos</strong> tienen stock pero sin movimiento en 30 días` });
+    }
+
+    // 4. Estado de OTs que llevan mucho tiempo en cotización
+    const cotizacionAntigua = _ots.filter(o =>
+        o.estado === 'cotizacion' && diasDesde(o.fecha_creacion) >= 14
+    );
+    if (cotizacionAntigua.length > 0) {
+        insights.push({ tipo: 'warning', txt: `<strong>${cotizacionAntigua.length} cotización${cotizacionAntigua.length > 1 ? 'es' : ''}</strong> llevan 14+ días sin aprobar` });
+    }
+
+    // 5. Porcentaje de OTs terminadas este mes
+    const inicioMes = new Date();
+    inicioMes.setDate(1); inicioMes.setHours(0,0,0,0);
+    const entregadasMes = _ots.filter(o =>
+        o.estado === 'entregado' && new Date(o.fecha_modificacion) >= inicioMes
+    ).length;
+    if (entregadasMes > 0) {
+        insights.push({ tipo: 'success', txt: `<strong>${entregadasMes} OT${entregadasMes > 1 ? 's' : ''}</strong> entregada${entregadasMes > 1 ? 's' : ''} este mes` });
+    }
+
+    // 6. Insumos con mayor variación de stock (mucho consumo vs stock actual)
+    const salidas = _movs.filter(m => (m.tipo||'').toLowerCase() === 'salida' || (m.tipo||'').toLowerCase() === 'despacho');
+    const consumoMap = {};
+    for (const m of salidas) {
+        const k = (m.insumo_cod||'').trim().toUpperCase();
+        if (!k) continue;
+        consumoMap[k] = (consumoMap[k] || 0) + (Number(m.cantidad) || 0);
+    }
+    // Insumo que más porcentaje de su stock actual consumió
+    let insTop = null, pctMaxConsumido = 0;
+    for (const ins of _insumos) {
+        const k    = (ins.cod||'').toUpperCase();
+        const cons = consumoMap[k] || 0;
+        const stk  = Number(ins.stock_actual) || 0;
+        if (cons > 0 && stk > 0) {
+            const pct = cons / stk;
+            if (pct > pctMaxConsumido) { pctMaxConsumido = pct; insTop = ins; }
+        }
+    }
+    if (insTop && pctMaxConsumido > 1.5) {
+        insights.push({ tipo: 'danger', txt: `<strong>${escapeHtml(insTop.desc||insTop.cod)}</strong> consumió ${Math.round(pctMaxConsumido * 100)}% de su stock actual en 30 días` });
+    }
+
+    if (insights.length === 0) {
+        body.innerHTML = `<div class="intel-empty"><div class="empty-icon">💡</div><div>Acumulá más datos para ver insights</div></div>`;
+        return;
+    }
+
+    const chips = insights.map(i =>
+        `<div class="insight-chip ${i.tipo}"><i class="bi bi-${i.tipo === 'danger' ? 'exclamation-triangle-fill' : i.tipo === 'warning' ? 'exclamation-circle-fill' : i.tipo === 'success' ? 'check-circle-fill' : 'info-circle-fill'}"></i><span>${i.txt}</span></div>`
+    ).join('');
+
+    body.innerHTML = chips;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STOCK GENERAL
+// ══════════════════════════════════════════════════════════════════
+let _stockFiltroCategoria = null;
+
+function renderStockGeneral() {
+    const body = document.getElementById('stock-general-body');
+    const chipsWrap = document.getElementById('stock-filter-chips');
+
+    if (_insumos.length === 0) {
+        body.innerHTML = `<div class="intel-empty"><div class="empty-icon">📦</div><div>Sin insumos en el catálogo</div></div>`;
+        return;
+    }
+
+    // Categorías únicas
+    const categorias = [...new Set(_insumos.map(i => i.categoria || 'Sin categoría').filter(Boolean))].sort();
+
+    // Chips de filtro
+    chipsWrap.innerHTML = `<span class="insight-chip info" style="cursor:pointer;${!_stockFiltroCategoria?'font-weight:700;':''}" onclick="filtrarStockCat(null)">Todos</span>` +
+        categorias.map(c =>
+            `<span class="insight-chip info" style="cursor:pointer;${_stockFiltroCategoria===c?'font-weight:700;':''}" onclick="filtrarStockCat('${escapeHtml(c)}')">${escapeHtml(c)}</span>`
+        ).join('');
+
+    const insumosFilt = _stockFiltroCategoria
+        ? _insumos.filter(i => i.categoria === _stockFiltroCategoria)
+        : _insumos;
+
+    // Columnas responsivas
+    const cols = [
+        { key: 'desc',          label: 'Insumo' },
+        { key: 'cod',           label: 'Código' },
+        { key: 'stock_actual',  label: 'Stock' },
+        { key: 'stock_minimo',  label: 'Mínimo' },
+        { key: 'estado',        label: 'Estado' },
+        { key: 'ubicacion',     label: 'Ubic.' },
+    ];
+
+    // Calcular consumoMap para tendencias
+    const salidas = _movs.filter(m => (m.tipo||'').toLowerCase() === 'salida' || (m.tipo||'').toLowerCase() === 'despacho');
+    const consumoMap = {};
+    for (const m of salidas) {
+        const k = (m.insumo_cod||'').trim().toUpperCase();
+        if (!k) continue;
+        consumoMap[k] = (consumoMap[k] || 0) + (Number(m.cantidad) || 0);
+    }
+
+    let html = `<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+    <table style="width:100%;border-collapse:collapse;font-size:0.75rem;">
+    <thead>
+        <tr style="border-bottom:1px solid var(--border-glass);">
+            <th style="text-align:left;padding:6px 8px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Insumo</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Stock</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Mínimo</th>
+            <th style="text-align:center;padding:6px 8px;color:var(--text-muted);font-weight:600;white-space:nowrap;">Estado</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-weight:600;white-space:nowrap;display:none;" class="col-ubic">Rack</th>
+            <th style="text-align:right;padding:6px 8px;color:var(--text-muted);font-weight:600;white-space:nowrap;display:none;" class="col-tendencia">30d</th>
+        </tr>
+    </thead>
+    <tbody>`;
+
+    for (const ins of insumosFilt) {
+        const stock  = ins.stock_actual != null ? Number(ins.stock_actual) : null;
+        const min    = ins.stock_minimo  != null ? Number(ins.stock_minimo)  : null;
+        const cod    = (ins.cod||'').toUpperCase();
+        const cons30 = consumoMap[cod] || 0;
+
+        let estadoBadge = '';
+        let rowStyle    = '';
+        if (stock === null) {
+            estadoBadge = '<span class="alert-badge badge-blue">Sin dato</span>';
+        } else if (stock <= 0) {
+            estadoBadge = '<span class="alert-badge badge-red">Sin stock</span>';
+            rowStyle    = 'background:rgba(239,68,68,0.04);';
+        } else if (min !== null && stock <= min) {
+            estadoBadge = '<span class="alert-badge badge-amber">Bajo min</span>';
+            rowStyle    = 'background:rgba(245,158,11,0.04);';
+        } else {
+            estadoBadge = '<span class="alert-badge badge-green">OK</span>';
+        }
+
+        // Posición en rack
+        const rack = _racks.find(r => (r.codigo_insumo||'').toUpperCase() === cod);
+        const pos  = rack ? `${rack.rack}·${rack.fila}-${rack.columna}` : (ins.ubicacion || '—');
+
+        // Tendencia 30d
+        let tendHtml = '';
+        if (cons30 > 0) {
+            const tasaDiaria = cons30 / 30;
+            const diasRest   = stock !== null && tasaDiaria > 0 ? Math.floor(stock / tasaDiaria) : null;
+            tendHtml = diasRest !== null
+                ? `<span style="color:${diasRest < 7 ? '#ef4444' : diasRest < 15 ? '#f59e0b' : '#22c55e'};font-size:0.68rem;">${diasRest}d</span>`
+                : `<span style="color:var(--text-muted);">${fmt(cons30)}</span>`;
+        } else {
+            tendHtml = `<span style="color:var(--text-muted);">—</span>`;
+        }
+
+        html += `<tr style="border-bottom:1px solid var(--border-glass);${rowStyle}">
+            <td style="padding:6px 8px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                <span title="${escapeHtml(ins.desc||'')}"><strong>${escapeHtml(ins.desc||ins.cod||'—')}</strong></span>
+                <div style="font-size:0.65rem;color:var(--text-muted);">${escapeHtml(ins.cod||'')} · ${escapeHtml(ins.categoria||ins.subcategoria||'')}</div>
+            </td>
+            <td style="text-align:right;padding:6px 8px;font-weight:700;color:${stock===null?'var(--text-muted)':stock<=0?'#ef4444':min!==null&&stock<=min?'#f59e0b':'var(--text-primary)'};">${fmt(stock)} <span style="font-size:0.65rem;color:var(--text-muted);">${escapeHtml(ins.unidad||'')}</span></td>
+            <td style="text-align:right;padding:6px 8px;color:var(--text-muted);">${fmt(min)}</td>
+            <td style="text-align:center;padding:6px 8px;">${estadoBadge}</td>
+            <td style="text-align:right;padding:6px 4px;font-size:0.68rem;color:var(--text-muted);display:none;" class="col-ubic">${escapeHtml(pos)}</td>
+            <td style="text-align:right;padding:6px 8px;display:none;" class="col-tendencia">${tendHtml}</td>
+        </tr>`;
+    }
+
+    html += `</tbody></table></div>`;
+    body.innerHTML = html;
+
+    // Mostrar columnas extra en pantallas grandes
+    if (window.innerWidth >= 600) {
+        document.querySelectorAll('.col-ubic, .col-tendencia').forEach(el => el.style.display = '');
+    }
+}
+
+function filtrarStockCat(cat) {
+    _stockFiltroCategoria = cat;
+    renderStockGeneral();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', () => {
+    cargarTodo();
+
+    // Auto-refresh cada 5 minutos
+    setInterval(cargarTodo, 5 * 60 * 1000);
+});
+</script>
+
+<style>
+@keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.spin { animation: spin 0.8s linear infinite; display: inline-block; }
+</style>
+
+</body>
+</html>

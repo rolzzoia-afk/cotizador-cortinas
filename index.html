@@ -1108,6 +1108,9 @@
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="ojodedios-tab" data-bs-toggle="tab" data-bs-target="#ojodedios" type="button" role="tab" aria-controls="ojodedios" aria-selected="false"><i class="bi bi-eye-fill"></i> Ojo de Dios</button>
         </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="inteligencia-tab" data-bs-toggle="tab" data-bs-target="#inteligencia" type="button" role="tab" aria-controls="inteligencia" aria-selected="false"><i class="bi bi-cpu-fill"></i> Inteligencia</button>
+        </li>
     </ul>
 
     <!-- Contenido de las Pestañas -->
@@ -1887,6 +1890,18 @@
                 </div>
                 <iframe id="iframe-bodeguero" title="Bodeguero Rolzzo" style="display:none;"
                         onload="if(this.getAttribute('src')){document.getElementById('bodeguero-loading').style.display='none'; this.style.display='block';}"></iframe>
+            </div>
+        </div>
+
+        <!-- INTELIGENCIA: Panel de análisis operacional (iframe lazy) -->
+        <div class="tab-pane fade" id="inteligencia" role="tabpanel" aria-labelledby="inteligencia-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="inteligencia-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Panel de Inteligencia...</span>
+                </div>
+                <iframe id="iframe-inteligencia" title="Panel Inteligencia Rolzzo" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('inteligencia-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -7721,6 +7736,35 @@
             }
         });
 
+        // ── Lazy loading de iframe Inteligencia ──
+        document.getElementById('inteligencia-tab').addEventListener('shown.bs.tab', () => {
+            try {
+                const iframe  = document.getElementById('iframe-inteligencia');
+                const loading = document.getElementById('inteligencia-loading');
+                if (!iframe.getAttribute('src')) {
+                    const timeout = setTimeout(() => {
+                        if (loading.style.display !== 'none') {
+                            loading.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#94a3b8;">
+                                    <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+                                    <p style="font-size:0.9rem;margin-bottom:8px;">El panel de inteligencia tardó en cargar.</p>
+                                    <p style="font-size:0.8rem;color:#64748b;">Asegúrate de que <strong>inteligencia.html</strong> esté en la misma carpeta.</p>
+                                    <button onclick="document.getElementById('iframe-inteligencia').src='inteligencia.html'" style="margin-top:12px;padding:6px 16px;background:rgba(124,117,240,0.3);color:#7C75F0;border:1px solid rgba(124,117,240,0.4);border-radius:6px;cursor:pointer;font-size:0.82rem;">🔄 Reintentar</button>
+                                </div>`;
+                        }
+                    }, 12000);
+                    iframe.addEventListener('load', function onFirstLoad() {
+                        clearTimeout(timeout);
+                        iframe.removeEventListener('load', onFirstLoad);
+                    }, { once: true });
+                    iframe.src = 'inteligencia.html';
+                }
+                presenciaActualizar('inteligencia', 'Panel de Inteligencia Operacional');
+            } catch(e) {
+                console.error('[inteligencia-tab] Error al cargar iframe:', e);
+            }
+        });
+
         // ── Inicializar Ojo de Dios nativo al activar el tab ──
         document.getElementById('ojodedios-tab').addEventListener('shown.bs.tab', () => {
             odiosIniciar();
@@ -9721,6 +9765,9 @@
         </button>
         <button data-tab="ojodedios" onclick="switchTab('ojodedios')">
             <i class="bi bi-eye-fill"></i><span>Admin</span>
+        </button>
+        <button data-tab="inteligencia" onclick="switchTab('inteligencia')">
+            <i class="bi bi-cpu-fill"></i><span>IA</span>
         </button>
     </div>
 </nav>
