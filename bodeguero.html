@@ -469,7 +469,7 @@ let _firmaDibujando = false;
 let _scanLastVal   = '';    // último valor decodificado
 let _scanRepCount  = 0;     // cuántas veces seguidas llegó ese mismo valor
 let _scanCooldown  = false; // true = ignorar lecturas hasta que pase el cooldown
-const SCAN_CONFIRM = 2;     // lecturas iguales consecutivas para confirmar
+const SCAN_CONFIRM = 1;     // 1 lectura confirma — el panel de cantidad es la seguridad real
 const SCAN_COOLDOWN_OK  = 1800; // ms de pausa tras un scan CORRECTO
 const SCAN_COOLDOWN_ERR = 1400; // ms de pausa tras un scan INCORRECTO
 
