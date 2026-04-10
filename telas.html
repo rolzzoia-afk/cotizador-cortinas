@@ -1549,7 +1549,7 @@ function renderizarCatalogo() {
                 <button class="btn-inv btn-outline-inv" onclick="abrirModalTela('${t.id}')" style="padding:4px 10px; font-size:0.72rem;" title="Editar tela">
                     <i class="bi bi-pencil"></i>
                 </button>
-                <button class="btn-inv btn-outline-inv" onclick="mostrarQRTela('${t.codigo}','${(t.nemotecnico||t.codigo).replace(/'/g,"\\'")}','${(t.posicion||'').replace(/'/g,"\\'")}','${(t.almacen||'').replace(/'/g,"\\'")}','${(t.tipo||'').replace(/'/g,"\\'")}')" style="padding:4px 10px; font-size:0.72rem; border-color:rgba(139,92,246,0.4); color:#a78bfa;" title="Ver QR">
+                <button class="btn-inv btn-outline-inv" onclick="mostrarQRTela('${t.codigo}','${(t.nemotecnico||t.codigo).replace(/'/g,"\\'")}','${(t.tipo||'').replace(/'/g,"\\'")}')" style="padding:4px 10px; font-size:0.72rem; border-color:rgba(139,92,246,0.4); color:#a78bfa;" title="Ver QR">
                     <i class="bi bi-qr-code"></i>
                 </button>
             </td>
@@ -2840,7 +2840,19 @@ function telaToQRContent(posicion, almacen) {
     return `TEL_LOC:${ascii(posicion)}|${ascii(almacen)}`;
 }
 
-function mostrarQRTela(codigo, nemo, posicion, almacen, tipo) {
+function mostrarQRTela(codigo, nemo, tipo) {
+    // Buscar la posición física real en TEL.colmena (fuente de verdad: telas_slots)
+    let posicion = null, almacen = null;
+    if (TEL.colmena && typeof TEL.colmena === 'object') {
+        const entrada = Object.entries(TEL.colmena).find(([pos, data]) =>
+            data && (data.codigo === codigo || data.cod === codigo)
+        );
+        if (entrada) {
+            posicion = entrada[0];
+            almacen  = entrada[1].almacen || entrada[1].ubicacion || '';
+        }
+    }
+
     _qrTelaActual = { codigo, nemo, posicion, almacen, tipo };
 
     document.getElementById('qr-tela-titulo').textContent = nemo || codigo;
@@ -2859,12 +2871,12 @@ function mostrarQRTela(codigo, nemo, posicion, almacen, tipo) {
         correctLevel: QRCode.CorrectLevel.M
     });
 
-    // QR de ubicación (posición en colmena + almacén)
+    // QR de ubicación (posición real en colmena desde telas_slots)
     const secLoc = document.getElementById('qr-tela-ubicacion-section');
     if (posicion) {
         secLoc.style.display = 'block';
         document.getElementById('qr-tela-loc-label').textContent =
-            `Pos. ${posicion}  ·  ${almacen || ''}`;
+            `Pos. ${posicion}${almacen ? '  ·  ' + almacen : ''}`;
         new QRCode(document.getElementById('qr-tela-canvas-loc'), {
             text: telaToQRContent(posicion, almacen),
             width: 150, height: 150,
