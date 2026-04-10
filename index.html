@@ -1109,6 +1109,9 @@
             <button class="nav-link" id="ojodedios-tab" data-bs-toggle="tab" data-bs-target="#ojodedios" type="button" role="tab" aria-controls="ojodedios" aria-selected="false"><i class="bi bi-eye-fill"></i> Ojo de Dios</button>
         </li>
         <li class="nav-item" role="presentation">
+            <button class="nav-link" id="camionetas-tab" data-bs-toggle="tab" data-bs-target="#camionetas" type="button" role="tab" aria-controls="camionetas" aria-selected="false"><i class="bi bi-truck"></i> Camionetas</button>
+        </li>
+        <li class="nav-item" role="presentation">
             <button class="nav-link" id="inteligencia-tab" data-bs-toggle="tab" data-bs-target="#inteligencia" type="button" role="tab" aria-controls="inteligencia" aria-selected="false"><i class="bi bi-cpu-fill"></i> Inteligencia</button>
         </li>
     </ul>
@@ -1890,6 +1893,18 @@
                 </div>
                 <iframe id="iframe-bodeguero" title="Bodeguero Rolzzo" style="display:none;"
                         onload="if(this.getAttribute('src')){document.getElementById('bodeguero-loading').style.display='none'; this.style.display='block';}"></iframe>
+            </div>
+        </div>
+
+        <!-- CAMIONETAS: Inventario móvil (iframe lazy) -->
+        <div class="tab-pane fade" id="camionetas" role="tabpanel" aria-labelledby="camionetas-tab">
+            <div class="iframe-tab-pane mt-2">
+                <div class="iframe-loading" id="camionetas-loading">
+                    <div class="spinner-border" role="status"></div>
+                    <span>Cargando Camionetas...</span>
+                </div>
+                <iframe id="iframe-camionetas" title="Camionetas Rolzzo" style="display:none;"
+                        onload="if(this.getAttribute('src')){document.getElementById('camionetas-loading').style.display='none'; this.style.display='block';}"></iframe>
             </div>
         </div>
 
@@ -7736,6 +7751,35 @@
             }
         });
 
+        // ── Lazy loading de iframe Camionetas ──
+        document.getElementById('camionetas-tab').addEventListener('shown.bs.tab', () => {
+            try {
+                const iframe  = document.getElementById('iframe-camionetas');
+                const loading = document.getElementById('camionetas-loading');
+                if (!iframe.getAttribute('src')) {
+                    const timeout = setTimeout(() => {
+                        if (loading.style.display !== 'none') {
+                            loading.innerHTML = `
+                                <div style="text-align:center;padding:24px;color:#94a3b8;">
+                                    <div style="font-size:2rem;margin-bottom:12px;">⚠️</div>
+                                    <p style="font-size:0.9rem;margin-bottom:8px;">El módulo de camionetas tardó en cargar.</p>
+                                    <p style="font-size:0.8rem;color:#64748b;">Asegúrate de que <strong>camionetas.html</strong> esté en la misma carpeta.</p>
+                                    <button onclick="document.getElementById('iframe-camionetas').src='camionetas.html'" style="margin-top:12px;padding:6px 16px;background:rgba(139,92,246,0.3);color:#8b5cf6;border:1px solid rgba(139,92,246,0.4);border-radius:6px;cursor:pointer;font-size:0.82rem;">🔄 Reintentar</button>
+                                </div>`;
+                        }
+                    }, 12000);
+                    iframe.addEventListener('load', function onFirstLoad() {
+                        clearTimeout(timeout);
+                        iframe.removeEventListener('load', onFirstLoad);
+                    }, { once: true });
+                    iframe.src = 'camionetas.html';
+                }
+                presenciaActualizar('camionetas', 'Módulo Camionetas');
+            } catch(e) {
+                console.error('[camionetas-tab] Error al cargar iframe:', e);
+            }
+        });
+
         // ── Lazy loading de iframe Inteligencia ──
         document.getElementById('inteligencia-tab').addEventListener('shown.bs.tab', () => {
             try {
@@ -9765,6 +9809,9 @@
         </button>
         <button data-tab="ojodedios" onclick="switchTab('ojodedios')">
             <i class="bi bi-eye-fill"></i><span>Admin</span>
+        </button>
+        <button data-tab="camionetas" onclick="switchTab('camionetas')">
+            <i class="bi bi-truck"></i><span>Camionetas</span>
         </button>
         <button data-tab="inteligencia" onclick="switchTab('inteligencia')">
             <i class="bi bi-cpu-fill"></i><span>IA</span>

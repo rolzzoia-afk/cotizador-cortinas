@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>Camionetas — Rolzzo</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+    --bg-base:      #09090b;
+    --bg-card:      #18181b;
+    --bg-hover:     #27272a;
+    --border-glass: rgba(255,255,255,0.07);
+    --text-primary: #f4f4f5;
+    --text-secondary:#a1a1aa;
+    --primary-500:  #3b82f6;
+    --primary-glow: rgba(59,130,246,0.35);
+    --accent:       #8b5cf6;
+    --accent-glow:  rgba(139,92,246,0.35);
+    --green:        #22c55e;
+    --yellow:       #f59e0b;
+    --red:          #ef4444;
+    --orange:       #f97316;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: var(--bg-base); color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+}
+
+/* ── HEADER ── */
+.app-header {
+    position: sticky; top: 0; z-index: 100;
+    background: rgba(9,9,11,0.92); backdrop-filter: blur(16px);
+    border-bottom: 1px solid var(--border-glass);
+    padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+}
+.app-header h1 { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); flex: 1; }
+.app-header .badge-count {
+    background: var(--accent); color: #fff;
+    border-radius: 20px; padding: 2px 10px; font-size: 0.75rem; font-weight: 700;
+}
+
+/* ── VISTAS ── */
+.view { display: none; padding: 16px; max-width: 600px; margin: 0 auto; }
+.view.active { display: block; }
+
+/* ── CARDS CAMIONETA ── */
+.cam-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass);
+    border-radius: 16px; padding: 16px; margin-bottom: 12px;
+    cursor: pointer; transition: border-color 0.2s, transform 0.15s;
+}
+.cam-card:active { transform: scale(0.98); }
+.cam-card:hover { border-color: rgba(139,92,246,0.35); }
+.cam-card .cam-nombre { font-size: 1rem; font-weight: 700; }
+.cam-card .cam-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+.cam-card .cam-badges { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.cam-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: rgba(255,255,255,0.05); border-radius: 8px;
+    padding: 4px 10px; font-size: 0.78rem;
+}
+.cam-badge.ok   { color: var(--green); }
+.cam-badge.warn { color: var(--yellow); }
+.cam-badge.empty{ color: var(--text-secondary); }
+
+/* ── BOTONES ── */
+.btn-primary-rolzzo {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 12px; padding: 14px 20px;
+    font-size: 0.95rem; font-weight: 700; width: 100%;
+    cursor: pointer; transition: opacity 0.15s;
+}
+.btn-primary-rolzzo:hover { opacity: 0.85; }
+.btn-outline-rolzzo {
+    background: transparent; color: var(--text-primary);
+    border: 1px solid var(--border-glass); border-radius: 12px;
+    padding: 12px 20px; font-size: 0.9rem; font-weight: 600; width: 100%;
+    cursor: pointer; transition: background 0.15s;
+}
+.btn-outline-rolzzo:hover { background: var(--bg-hover); }
+.btn-danger-rolzzo {
+    background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 12px; padding: 12px 20px;
+    font-size: 0.9rem; font-weight: 600; width: 100%; cursor: pointer;
+}
+.btn-sm-action {
+    background: var(--bg-hover); color: var(--text-primary);
+    border: 1px solid var(--border-glass); border-radius: 8px;
+    padding: 8px 14px; font-size: 0.82rem; cursor: pointer;
+}
+.btn-back {
+    background: none; border: none; color: var(--text-secondary);
+    font-size: 0.9rem; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    padding: 4px 0;
+}
+.btn-back:hover { color: var(--text-primary); }
+
+/* ── SECTION TITLE ── */
+.section-title {
+    font-size: 0.72rem; font-weight: 700; letter-spacing: 0.1em;
+    color: var(--text-secondary); text-transform: uppercase; margin-bottom: 10px;
+    padding-top: 4px;
+}
+
+/* ── STOCK LIST ── */
+.stock-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; background: var(--bg-card);
+    border: 1px solid var(--border-glass); border-radius: 12px; margin-bottom: 8px;
+}
+.stock-row .sr-nombre { font-size: 0.9rem; font-weight: 600; }
+.stock-row .sr-qty {
+    font-size: 1.1rem; font-weight: 800;
+    color: var(--green); min-width: 48px; text-align: right;
+}
+.stock-row .sr-qty.low { color: var(--yellow); }
+.stock-row .sr-qty.zero { color: var(--red); }
+
+/* ── INSUMO SELECTOR ── */
+.insumo-select-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 14px; background: var(--bg-card);
+    border: 1px solid var(--border-glass); border-radius: 12px; margin-bottom: 8px;
+    cursor: pointer; transition: border-color 0.15s;
+}
+.insumo-select-item:hover { border-color: rgba(59,130,246,0.4); }
+.insumo-select-item.selected { border-color: var(--primary-500); background: rgba(59,130,246,0.08); }
+.isi-nombre { font-size: 0.88rem; font-weight: 600; }
+.isi-qty-controls { display: flex; align-items: center; gap: 8px; }
+.qty-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border-glass);
+    background: var(--bg-hover); color: var(--text-primary);
+    font-size: 1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.qty-val { font-size: 1rem; font-weight: 800; min-width: 24px; text-align: center; }
+
+/* ── SWAP FORM ── */
+.swap-arrow { text-align: center; font-size: 1.5rem; color: var(--yellow); margin: 8px 0; }
+.form-label-rolzzo { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; display: block; }
+.form-select-rolzzo {
+    width: 100%; background: var(--bg-card); color: var(--text-primary);
+    border: 1px solid var(--border-glass); border-radius: 10px;
+    padding: 12px 14px; font-size: 0.9rem;
+}
+.form-select-rolzzo:focus { outline: none; border-color: var(--accent); }
+.form-input-rolzzo {
+    width: 100%; background: var(--bg-card); color: var(--text-primary);
+    border: 1px solid var(--border-glass); border-radius: 10px;
+    padding: 12px 14px; font-size: 0.9rem;
+}
+.form-input-rolzzo:focus { outline: none; border-color: var(--accent); }
+
+/* ── DEVOLUCION ── */
+.dev-row {
+    padding: 12px 14px; background: var(--bg-card);
+    border: 1px solid var(--border-glass); border-radius: 12px; margin-bottom: 8px;
+}
+.dev-row .dev-nombre { font-size: 0.9rem; font-weight: 600; margin-bottom: 8px; }
+.dev-row .dev-options { display: flex; gap: 8px; flex-wrap: wrap; }
+.dev-btn {
+    flex: 1; min-width: 90px; padding: 8px 10px; border-radius: 8px;
+    font-size: 0.78rem; font-weight: 700; border: 1px solid transparent; cursor: pointer;
+    transition: opacity 0.15s;
+}
+.dev-btn.ok    { background: rgba(34,197,94,0.15); color: var(--green); border-color: rgba(34,197,94,0.3); }
+.dev-btn.defec { background: rgba(239,68,68,0.15); color: var(--red); border-color: rgba(239,68,68,0.3); }
+.dev-btn.queda { background: rgba(245,158,11,0.15); color: var(--yellow); border-color: rgba(245,158,11,0.3); }
+.dev-btn.selected { opacity: 1; font-weight: 900; transform: scale(1.03); }
+.dev-btn:not(.selected) { opacity: 0.5; }
+
+/* ── HISTORIAL ── */
+.hist-row {
+    padding: 10px 14px; border-radius: 10px;
+    border-left: 3px solid var(--border-glass); margin-bottom: 8px;
+    background: var(--bg-card);
+}
+.hist-row .hist-tipo { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+.hist-row .hist-desc { font-size: 0.85rem; margin-top: 2px; }
+.hist-row .hist-date { font-size: 0.72rem; color: var(--text-secondary); margin-top: 2px; }
+.tipo-carga       { border-color: var(--primary-500) !important; }
+.tipo-uso         { border-color: var(--green) !important; }
+.tipo-swap_salida { border-color: var(--orange) !important; }
+.tipo-swap_entrada{ border-color: var(--yellow) !important; }
+.tipo-devolucion  { border-color: #a78bfa !important; }
+.tipo-defectuoso  { border-color: var(--red) !important; }
+
+/* ── MODAL NUEVA CAMIONETA ── */
+.modal-overlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+    display: flex; align-items: flex-end; justify-content: center;
+}
+.modal-sheet {
+    background: var(--bg-card); border-radius: 20px 20px 0 0;
+    padding: 24px 20px 40px; width: 100%; max-width: 600px;
+    border: 1px solid var(--border-glass);
+}
+.modal-sheet h3 { font-size: 1rem; font-weight: 700; margin-bottom: 18px; }
+.modal-sheet .close-btn {
+    float: right; background: none; border: none; color: var(--text-secondary);
+    font-size: 1.3rem; cursor: pointer; margin-top: -4px;
+}
+
+/* ── TOAST ── */
+#toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #1e1e2e; color: var(--text-primary);
+    border: 1px solid var(--border-glass); border-radius: 12px;
+    padding: 12px 20px; font-size: 0.88rem; font-weight: 600;
+    z-index: 9999; transition: opacity 0.3s; opacity: 0; pointer-events: none;
+    white-space: nowrap;
+}
+
+/* ── FAB ── */
+.fab {
+    position: fixed; bottom: 24px; right: 20px; z-index: 500;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none;
+    font-size: 1.6rem; cursor: pointer;
+    box-shadow: 0 4px 20px rgba(139,92,246,0.5);
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s;
+}
+.fab:active { transform: scale(0.92); }
+
+/* ── UTILS ── */
+.mt-10 { margin-top: 10px; }
+.mt-14 { margin-top: 14px; }
+.mt-20 { margin-top: 20px; }
+.mb-10 { margin-bottom: 10px; }
+.gap-10 { gap: 10px; }
+.text-muted-sm { font-size: 0.78rem; color: var(--text-secondary); }
+.chip-tipo {
+    display: inline-block; border-radius: 6px; padding: 2px 8px;
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+}
+.chip-carga        { background: rgba(59,130,246,0.15); color: var(--primary-500); }
+.chip-uso          { background: rgba(34,197,94,0.15); color: var(--green); }
+.chip-swap_salida  { background: rgba(249,115,22,0.15); color: var(--orange); }
+.chip-swap_entrada { background: rgba(245,158,11,0.15); color: var(--yellow); }
+.chip-devolucion   { background: rgba(167,139,250,0.15); color: #a78bfa; }
+.chip-defectuoso   { background: rgba(239,68,68,0.15); color: var(--red); }
+
+.empty-state {
+    text-align: center; padding: 40px 20px;
+    color: var(--text-secondary); font-size: 0.9rem;
+}
+.empty-state i { font-size: 2.5rem; display: block; margin-bottom: 10px; opacity: 0.4; }
+
+.spinner-sm {
+    display: inline-block; width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.2); border-top-color: #fff;
+    border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<div class="app-header">
+    <div id="header-back-btn" style="display:none;">
+        <button class="btn-back" onclick="volverMain()">
+            <i class="bi bi-chevron-left"></i>
+        </button>
+    </div>
+    <h1 id="header-title"><i class="bi bi-truck" style="color:var(--accent)"></i> Camionetas</h1>
+    <span id="header-subtitle" style="font-size:0.75rem;color:var(--text-secondary);"></span>
+</div>
+
+<!-- ══════════════════════════════════════════
+     VISTA PRINCIPAL — Lista de camionetas
+════════════════════════════════════════════ -->
+<div id="view-main" class="view active">
+    <div id="lista-camionetas">
+        <div class="empty-state">
+            <span class="spinner-sm"></span>
+            <span style="margin-left:8px">Cargando...</span>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     VISTA DETALLE — Stock de una camioneta
+════════════════════════════════════════════ -->
+<div id="view-detalle" class="view">
+    <div class="section-title">Stock actual</div>
+    <div id="detalle-stock"></div>
+
+    <div class="mt-20" style="display:flex;flex-direction:column;gap:10px;">
+        <button class="btn-primary-rolzzo" onclick="mostrarCarga()">
+            <i class="bi bi-box-arrow-in-down-right"></i> Cargar camioneta
+        </button>
+        <button class="btn-outline-rolzzo" onclick="mostrarSwap()">
+            <i class="bi bi-arrow-left-right"></i> Registrar cambio/swap en obra
+        </button>
+        <button class="btn-outline-rolzzo" onclick="mostrarDevolucion()">
+            <i class="bi bi-box-arrow-up-right"></i> Registrar devolución a bodega
+        </button>
+        <button class="btn-sm-action" onclick="mostrarHistorial()" style="margin-top:4px;">
+            <i class="bi bi-clock-history"></i> Ver historial de movimientos
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     VISTA CARGA — Pre-viaje
+════════════════════════════════════════════ -->
+<div id="view-carga" class="view">
+    <p class="text-muted-sm" style="margin-bottom:14px;">
+        Seleccioná los insumos y la cantidad que cargás en la camioneta. El stock se descontará de bodega.
+    </p>
+    <label class="form-label-rolzzo">¿Quién carga?</label>
+    <input id="carga-responsable" class="form-input-rolzzo mb-10" placeholder="Nombre del instalador o bodeguero" style="margin-bottom:12px;"/>
+
+    <div class="section-title">Insumos disponibles en bodega</div>
+    <div id="carga-insumos-list"></div>
+
+    <div class="mt-20">
+        <button class="btn-primary-rolzzo" onclick="confirmarCarga()">
+            <i class="bi bi-check-circle-fill"></i> Confirmar carga
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     VISTA SWAP — Cambio en obra
+════════════════════════════════════════════ -->
+<div id="view-swap" class="view">
+    <p class="text-muted-sm" style="margin-bottom:14px;">
+        Registrá cuando un insumo fue reemplazado por otro en obra (ej: mec 14 malo → usamos mec 13).
+    </p>
+
+    <label class="form-label-rolzzo">¿Qué insumo se sacó? (el que no sirvió)</label>
+    <select id="swap-salida" class="form-select-rolzzo" style="margin-bottom:14px;"></select>
+
+    <div class="swap-arrow"><i class="bi bi-arrow-down-circle-fill"></i></div>
+
+    <label class="form-label-rolzzo">¿Qué insumo se puso en su lugar?</label>
+    <select id="swap-entrada" class="form-select-rolzzo" style="margin-bottom:14px;"></select>
+
+    <label class="form-label-rolzzo">Motivo</label>
+    <input id="swap-motivo" class="form-input-rolzzo" placeholder="Ej: mecanismo defectuoso, cliente cambió de tipo, etc."
+        style="margin-bottom:14px;"/>
+
+    <label class="form-label-rolzzo">Registrado por</label>
+    <input id="swap-responsable" class="form-input-rolzzo" placeholder="Nombre del instalador"
+        style="margin-bottom:18px;"/>
+
+    <button class="btn-primary-rolzzo" onclick="confirmarSwap()">
+        <i class="bi bi-arrow-left-right"></i> Registrar cambio
+    </button>
+</div>
+
+<!-- ══════════════════════════════════════════
+     VISTA DEVOLUCIÓN — Al volver
+════════════════════════════════════════════ -->
+<div id="view-devolucion" class="view">
+    <p class="text-muted-sm" style="margin-bottom:14px;">
+        Al volver a la industria, indicá qué pasó con cada insumo que tenía la camioneta.
+    </p>
+
+    <label class="form-label-rolzzo">Registrado por</label>
+    <input id="dev-responsable" class="form-input-rolzzo" placeholder="Nombre del bodeguero"
+        style="margin-bottom:16px;"/>
+
+    <div class="section-title">Estado de cada insumo</div>
+    <div id="devolucion-list"></div>
+
+    <div class="mt-20">
+        <button class="btn-primary-rolzzo" onclick="confirmarDevolucion()">
+            <i class="bi bi-check-circle-fill"></i> Confirmar devolución
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════
+     VISTA HISTORIAL
+════════════════════════════════════════════ -->
+<div id="view-historial" class="view">
+    <div id="historial-list"></div>
+</div>
+
+<!-- ── FAB nueva camioneta (solo en main) ── -->
+<button class="fab" id="fab-nueva" onclick="abrirModalNueva()" title="Nueva camioneta">
+    <i class="bi bi-plus-lg"></i>
+</button>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<!-- ── MODAL NUEVA CAMIONETA ── -->
+<div id="modal-nueva" class="modal-overlay" style="display:none;" onclick="cerrarModalNueva(event)">
+    <div class="modal-sheet" onclick="event.stopPropagation()">
+        <button class="close-btn" onclick="cerrarModalNueva()">×</button>
+        <h3><i class="bi bi-truck" style="color:var(--accent)"></i> Nueva camioneta</h3>
+
+        <label class="form-label-rolzzo">Nombre / alias</label>
+        <input id="nueva-nombre" class="form-input-rolzzo" placeholder="Ej: Camioneta 1, Van Norte" style="margin-bottom:12px;"/>
+
+        <label class="form-label-rolzzo">Patente (opcional)</label>
+        <input id="nueva-patente" class="form-input-rolzzo" placeholder="Ej: ABCD-12" style="margin-bottom:12px;"/>
+
+        <label class="form-label-rolzzo">Instalador responsable (opcional)</label>
+        <input id="nueva-instalador" class="form-input-rolzzo" placeholder="Nombre" style="margin-bottom:20px;"/>
+
+        <button class="btn-primary-rolzzo" onclick="guardarNuevaCamioneta()">
+            <i class="bi bi-check-circle-fill"></i> Crear camioneta
+        </button>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     JAVASCRIPT
+════════════════════════════════════════════════════════════════ -->
+<script>
+// ── Supabase ──────────────────────────────────────────────────────
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+
+const { createClient } = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── Estado global ─────────────────────────────────────────────────
+let _camionetaActual = null;  // objeto completo de la camioneta seleccionada
+let _insumosBodega   = [];    // cache de insumos
+let _stockCamioneta  = [];    // cache de stock de la camioneta actual
+let _cargaItems      = {};    // {insumo_id: cantidad} para la vista carga
+
+// ── Navegación de vistas ──────────────────────────────────────────
+function mostrarVista(id, titulo = null, subTitulo = null) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+
+    const esMain = id === 'view-main';
+    document.getElementById('header-back-btn').style.display = esMain ? 'none' : '';
+    document.getElementById('fab-nueva').style.display        = esMain ? '' : 'none';
+    document.getElementById('header-title').textContent       = titulo ?? 'Camionetas';
+    document.getElementById('header-subtitle').textContent    = subTitulo ?? '';
+
+    if (id === 'view-main') {
+        document.getElementById('header-title').innerHTML =
+            '<i class="bi bi-truck" style="color:var(--accent)"></i> Camionetas';
+    }
+}
+
+function volverMain() {
+    _camionetaActual = null;
+    _cargaItems = {};
+    mostrarVista('view-main');
+}
+
+// ── Toast ──────────────────────────────────────────────────────────
+let _toastTimer;
+function toast(msg, color = '#22c55e') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.borderColor = color;
+    el.style.opacity = '1';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.style.opacity = '0'; }, 3000);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISTA MAIN — cargar lista de camionetas
+// ══════════════════════════════════════════════════════════════════
+async function cargarCamionetas() {
+    const cont = document.getElementById('lista-camionetas');
+
+    const { data: cams, error } = await sb
+        .from('camionetas')
+        .select('*')
+        .eq('empresa_id', EMPRESA_ID)
+        .eq('activa', true)
+        .order('nombre');
+
+    if (error) {
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-exclamation-triangle"></i>Error cargando camionetas</div>`;
+        return;
+    }
+
+    if (!cams.length) {
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-truck"></i>No hay camionetas registradas.<br>Tocá + para agregar la primera.</div>`;
+        return;
+    }
+
+    // Para cada camioneta, traer su stock
+    const camIds = cams.map(c => c.id);
+    const { data: stocks } = await sb
+        .from('inventario_camioneta')
+        .select('camioneta_id, cantidad, insumo_id')
+        .in('camioneta_id', camIds);
+
+    cont.innerHTML = cams.map(cam => {
+        const stockCam = (stocks || []).filter(s => s.camioneta_id === cam.id);
+        const totalItems = stockCam.reduce((sum, s) => sum + s.cantidad, 0);
+        const tipos = stockCam.length;
+
+        let badgesHtml = '';
+        if (tipos === 0) {
+            badgesHtml = `<span class="cam-badge empty"><i class="bi bi-box"></i> Vacía</span>`;
+        } else {
+            badgesHtml = `
+                <span class="cam-badge ok"><i class="bi bi-boxes"></i> ${tipos} tipo${tipos>1?'s':''}</span>
+                <span class="cam-badge ok"><i class="bi bi-stack"></i> ${totalItems} unidades</span>
+            `;
+        }
+
+        return `
+        <div class="cam-card" onclick="abrirCamioneta('${cam.id}')">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div style="font-size:1.8rem;">🚐</div>
+                <div>
+                    <div class="cam-nombre">${cam.nombre}</div>
+                    <div class="cam-sub">
+                        ${cam.patente ? `<i class="bi bi-car-front"></i> ${cam.patente}` : ''}
+                        ${cam.instalador ? ` &nbsp;·&nbsp; <i class="bi bi-person"></i> ${cam.instalador}` : ''}
+                    </div>
+                </div>
+                <div style="margin-left:auto;color:var(--text-secondary);font-size:1.1rem;">
+                    <i class="bi bi-chevron-right"></i>
+                </div>
+            </div>
+            <div class="cam-badges">${badgesHtml}</div>
+        </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISTA DETALLE — stock de una camioneta
+// ══════════════════════════════════════════════════════════════════
+async function abrirCamioneta(camId) {
+    const { data: cams } = await sb.from('camionetas').select('*').eq('id', camId).single();
+    _camionetaActual = cams;
+
+    mostrarVista('view-detalle', `🚐 ${cams.nombre}`,
+        cams.patente ? cams.patente : '');
+
+    await refrescarStockDetalle();
+}
+
+async function refrescarStockDetalle() {
+    const cont = document.getElementById('detalle-stock');
+    cont.innerHTML = `<div class="text-muted-sm"><span class="spinner-sm"></span> Cargando stock...</div>`;
+
+    const { data: stock } = await sb
+        .from('inventario_camioneta')
+        .select('*, insumos(nombre, unidad)')
+        .eq('camioneta_id', _camionetaActual.id)
+        .gt('cantidad', 0)
+        .order('cantidad', { ascending: false });
+
+    _stockCamioneta = stock || [];
+
+    if (!_stockCamioneta.length) {
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-box"></i>La camioneta está vacía.</div>`;
+        return;
+    }
+
+    cont.innerHTML = _stockCamioneta.map(s => {
+        const nombre = s.insumos?.nombre ?? 'Insumo';
+        const unidad = s.insumos?.unidad ?? 'u';
+        const cls = s.cantidad === 0 ? 'zero' : s.cantidad <= 2 ? 'low' : '';
+        return `
+        <div class="stock-row">
+            <div>
+                <div class="sr-nombre">${nombre}</div>
+                <div class="text-muted-sm">${unidad}</div>
+            </div>
+            <div class="sr-qty ${cls}">${s.cantidad}</div>
+        </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISTA CARGA — Pre-viaje
+// ══════════════════════════════════════════════════════════════════
+async function mostrarCarga() {
+    mostrarVista('view-carga', `Cargar — ${_camionetaActual.nombre}`, 'Pre-viaje');
+    _cargaItems = {};
+
+    const cont = document.getElementById('carga-insumos-list');
+    cont.innerHTML = `<div class="text-muted-sm"><span class="spinner-sm"></span> Cargando insumos...</div>`;
+
+    const { data } = await sb
+        .from('insumos')
+        .select('id, nombre, unidad, stock_actual')
+        .eq('empresa_id', EMPRESA_ID)
+        .gt('stock_actual', 0)
+        .order('nombre');
+
+    _insumosBodega = data || [];
+
+    if (!_insumosBodega.length) {
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-box"></i>Sin stock en bodega.</div>`;
+        return;
+    }
+
+    renderCargaList();
+}
+
+function renderCargaList() {
+    const cont = document.getElementById('carga-insumos-list');
+    cont.innerHTML = _insumosBodega.map(ins => {
+        const qty = _cargaItems[ins.id] || 0;
+        return `
+        <div class="insumo-select-item ${qty > 0 ? 'selected' : ''}" id="carga-row-${ins.id}">
+            <div>
+                <div class="isi-nombre">${ins.nombre}</div>
+                <div class="text-muted-sm">Stock bodega: ${ins.stock_actual} ${ins.unidad}</div>
+            </div>
+            <div class="isi-qty-controls">
+                <button class="qty-btn" onclick="ajustarCarga('${ins.id}', -1, ${ins.stock_actual})">−</button>
+                <span class="qty-val" id="carga-qty-${ins.id}">${qty}</span>
+                <button class="qty-btn" onclick="ajustarCarga('${ins.id}', 1, ${ins.stock_actual})">+</button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function ajustarCarga(insId, delta, maxStock) {
+    const actual = _cargaItems[insId] || 0;
+    const nuevo  = Math.max(0, Math.min(maxStock, actual + delta));
+    _cargaItems[insId] = nuevo;
+
+    document.getElementById(`carga-qty-${insId}`).textContent = nuevo;
+    const row = document.getElementById(`carga-row-${insId}`);
+    if (nuevo > 0) row.classList.add('selected');
+    else row.classList.remove('selected');
+}
+
+async function confirmarCarga() {
+    const responsable = document.getElementById('carga-responsable').value.trim();
+    const items = Object.entries(_cargaItems).filter(([,qty]) => qty > 0);
+
+    if (!items.length) { toast('Seleccioná al menos un insumo', '#ef4444'); return; }
+    if (!responsable)  { toast('Ingresá el nombre de quien carga', '#f59e0b'); return; }
+
+    // Insertar movimientos
+    const movs = items.map(([insumo_id, cantidad]) => ({
+        empresa_id:   EMPRESA_ID,
+        camioneta_id: _camionetaActual.id,
+        insumo_id, cantidad,
+        tipo: 'carga',
+        registrado_por: responsable
+    }));
+
+    const { error: errMov } = await sb.from('movimientos_camioneta').insert(movs);
+    if (errMov) { toast('Error al registrar movimientos', '#ef4444'); return; }
+
+    // Actualizar inventario_camioneta (upsert)
+    for (const [insumo_id, cantidad] of items) {
+        const { data: existing } = await sb
+            .from('inventario_camioneta')
+            .select('id, cantidad')
+            .eq('camioneta_id', _camionetaActual.id)
+            .eq('insumo_id', insumo_id)
+            .maybeSingle();
+
+        if (existing) {
+            await sb.from('inventario_camioneta')
+                .update({ cantidad: existing.cantidad + cantidad })
+                .eq('id', existing.id);
+        } else {
+            await sb.from('inventario_camioneta')
+                .insert({ camioneta_id: _camionetaActual.id, insumo_id, cantidad });
+        }
+
+        // Descontar de bodega
+        const ins = _insumosBodega.find(i => i.id === insumo_id);
+        if (ins) {
+            await sb.from('insumos')
+                .update({ stock_actual: ins.stock_actual - cantidad })
+                .eq('id', insumo_id);
+        }
+    }
+
+    toast(`✅ ${items.length} insumo${items.length>1?'s':''} cargado${items.length>1?'s':''}`);
+    await refrescarStockDetalle();
+    mostrarVista('view-detalle', `🚐 ${_camionetaActual.nombre}`, _camionetaActual.patente || '');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISTA SWAP — Cambio en obra
+// ══════════════════════════════════════════════════════════════════
+async function mostrarSwap() {
+    mostrarVista('view-swap', `Swap — ${_camionetaActual.nombre}`, 'Cambio en obra');
+
+    // Cargar todos los insumos para los selects
+    const { data } = await sb
+        .from('insumos')
+        .select('id, nombre')
+        .eq('empresa_id', EMPRESA_ID)
+        .order('nombre');
+
+    const todosInsumos = data || [];
+
+    // Opciones del select de salida: solo los que tiene la camioneta
+    const stockIds = _stockCamioneta.filter(s => s.cantidad > 0);
+
+    const optsSalida = stockIds.length
+        ? stockIds.map(s => `<option value="${s.insumo_id}">${s.insumos?.nombre ?? s.insumo_id}</option>`).join('')
+        : todosInsumos.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
+
+    const optsEntrada = todosInsumos.map(i => `<option value="${i.id}">${i.nombre}</option>`).join('');
+
+    document.getElementById('swap-salida').innerHTML  = optsSalida;
+    document.getElementById('swap-entrada').innerHTML = optsEntrada;
+}
+
+async function confirmarSwap() {
+    const salida      = document.getElementById('swap-salida').value;
+    const entrada     = document.getElementById('swap-entrada').value;
+    const motivo      = document.getElementById('swap-motivo').value.trim();
+    const responsable = document.getElementById('swap-responsable').value.trim();
+
+    if (!salida || !entrada)  { toast('Seleccioná ambos insumos', '#ef4444'); return; }
+    if (salida === entrada)   { toast('Los insumos deben ser diferentes', '#f59e0b'); return; }
+    if (!responsable)         { toast('Ingresá el nombre del instalador', '#f59e0b'); return; }
+
+    const base = { empresa_id: EMPRESA_ID, camioneta_id: _camionetaActual.id, registrado_por: responsable, motivo };
+
+    const movs = [
+        { ...base, insumo_id: salida,  tipo: 'swap_salida',  insumo_reemplazo_id: entrada },
+        { ...base, insumo_id: entrada, tipo: 'swap_entrada', insumo_reemplazo_id: salida  }
+    ];
+
+    const { error } = await sb.from('movimientos_camioneta').insert(movs);
+    if (error) { toast('Error al registrar swap', '#ef4444'); return; }
+
+    // Actualizar inventario: restar el que salió, sumar el que entró (de bodega)
+    // 1. Restar insumo que salió de camioneta
+    const stockSalida = _stockCamioneta.find(s => s.insumo_id === salida);
+    if (stockSalida && stockSalida.cantidad > 0) {
+        await sb.from('inventario_camioneta')
+            .update({ cantidad: Math.max(0, stockSalida.cantidad - 1) })
+            .eq('id', stockSalida.id);
+    }
+
+    // 2. Sumar insumo que entró a camioneta (tomado de bodega)
+    const stockEntrada = _stockCamioneta.find(s => s.insumo_id === entrada);
+    if (stockEntrada) {
+        await sb.from('inventario_camioneta')
+            .update({ cantidad: stockEntrada.cantidad + 1 })
+            .eq('id', stockEntrada.id);
+    } else {
+        await sb.from('inventario_camioneta')
+            .insert({ camioneta_id: _camionetaActual.id, insumo_id: entrada, cantidad: 1 });
+    }
+
+    // 3. Descontar de bodega el insumo que entró a la camioneta
+    const ins = _insumosBodega.find(i => i.id === entrada) ||
+                (await sb.from('insumos').select('id,stock_actual').eq('id',entrada).single()).data;
+    if (ins) {
+        await sb.from('insumos')
+            .update({ stock_actual: Math.max(0, (ins.stock_actual ?? 0) - 1) })
+            .eq('id', entrada);
+    }
+
+    toast('✅ Cambio registrado');
+    await refrescarStockDetalle();
+    mostrarVista('view-detalle', `🚐 ${_camionetaActual.nombre}`, _camionetaActual.patente || '');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISTA DEVOLUCIÓN
+// ══════════════════════════════════════════════════════════════════
+let _devEstados = {}; // {insumo_id: 'ok' | 'defectuoso' | 'queda'}
+
+function mostrarDevolucion() {
+    mostrarVista('view-devolucion', `Devolución — ${_camionetaActual.nombre}`, 'Al volver');
+    _devEstados = {};
+
+    const cont = document.getElementById('devolucion-list');
+
+    if (!_stockCamioneta.filter(s => s.cantidad > 0).length) {
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-box"></i>La camioneta no tiene insumos registrados.</div>`;
+        return;
+    }
+
+    cont.innerHTML = _stockCamioneta
+        .filter(s => s.cantidad > 0)
+        .map(s => {
+            const nombre = s.insumos?.nombre ?? s.insumo_id;
+            return `
+            <div class="dev-row">
+                <div class="dev-nombre">${nombre} <span class="text-muted-sm">(${s.cantidad} u.)</span></div>
+                <div class="dev-options">
+                    <button class="dev-btn ok selected" id="dev-${s.insumo_id}-ok"
+                        onclick="setDevEstado('${s.insumo_id}','ok')">
+                        ✅ Vuelve OK
+                    </button>
+                    <button class="dev-btn defec" id="dev-${s.insumo_id}-defectuoso"
+                        onclick="setDevEstado('${s.insumo_id}','defectuoso')">
+                        ❌ Defectuoso
+                    </button>
+                    <button class="dev-btn queda" id="dev-${s.insumo_id}-queda"
+                        onclick="setDevEstado('${s.insumo_id}','queda')">
+                        🚐 Se queda
+                    </button>
+                </div>
+            </div>`;
+        }).join('');
+
+    // Default: todos vuelven OK
+    _stockCamioneta.filter(s => s.cantidad > 0).forEach(s => {
+        _devEstados[s.insumo_id] = 'ok';
+    });
+}
+
+function setDevEstado(insId, estado) {
+    _devEstados[insId] = estado;
+    ['ok','defectuoso','queda'].forEach(e => {
+        const btn = document.getElementById(`dev-${insId}-${e}`);
+        if (btn) btn.classList.toggle('selected', e === estado);
+    });
+}
+
+async function confirmarDevolucion() {
+    const responsable = document.getElementById('dev-responsable').value.trim();
+    if (!responsable) { toast('Ingresá el nombre del bodeguero', '#f59e0b'); return; }
+
+    const stockConQty = _stockCamioneta.filter(s => s.cantidad > 0);
+    if (!stockConQty.length) { toast('No hay insumos para devolver', '#f59e0b'); return; }
+
+    const movs = [];
+
+    for (const s of stockConQty) {
+        const estado = _devEstados[s.insumo_id] ?? 'ok';
+        if (estado === 'queda') continue; // se queda en la camioneta, no hacer nada
+
+        movs.push({
+            empresa_id:     EMPRESA_ID,
+            camioneta_id:   _camionetaActual.id,
+            insumo_id:      s.insumo_id,
+            cantidad:       s.cantidad,
+            tipo:           estado === 'ok' ? 'devolucion' : 'defectuoso',
+            registrado_por: responsable
+        });
+    }
+
+    if (movs.length) {
+        const { error } = await sb.from('movimientos_camioneta').insert(movs);
+        if (error) { toast('Error al registrar devolución', '#ef4444'); return; }
+    }
+
+    // Actualizar inventarios
+    for (const s of stockConQty) {
+        const estado = _devEstados[s.insumo_id] ?? 'ok';
+        if (estado === 'queda') continue;
+
+        // Vaciar de camioneta
+        await sb.from('inventario_camioneta')
+            .update({ cantidad: 0 })
+            .eq('id', s.id);
+
+        // Si vuelve OK, sumar al stock de bodega
+        if (estado === 'ok') {
+            const { data: ins } = await sb.from('insumos')
+                .select('stock_actual').eq('id', s.insumo_id).single();
+            if (ins) {
+                await sb.from('insumos')
+                    .update({ stock_actual: ins.stock_actual + s.cantidad })
+                    .eq('id', s.insumo_id);
+            }
+        }
+        // Si es defectuoso → queda en 0, no vuelve a bodega (ya descartado)
+    }
+
+    toast('✅ Devolución registrada');
+    await refrescarStockDetalle();
+    mostrarVista('view-detalle', `🚐 ${_camionetaActual.nombre}`, _camionetaActual.patente || '');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// VISTA HISTORIAL
+// ══════════════════════════════════════════════════════════════════
+async function mostrarHistorial() {
+    mostrarVista('view-historial', `Historial — ${_camionetaActual.nombre}`, '');
+
+    const cont = document.getElementById('historial-list');
+    cont.innerHTML = `<div class="text-muted-sm"><span class="spinner-sm"></span> Cargando...</div>`;
+
+    const { data } = await sb
+        .from('movimientos_camioneta')
+        .select('*, insumos(nombre)')
+        .eq('camioneta_id', _camionetaActual.id)
+        .order('created_at', { ascending: false })
+        .limit(80);
+
+    const tiposLabel = {
+        carga: 'Carga',
+        uso: 'Uso en obra',
+        swap_salida: 'Swap — salida',
+        swap_entrada: 'Swap — entrada',
+        devolucion: 'Devolución',
+        defectuoso: 'Defectuoso'
+    };
+
+    if (!data?.length) {
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-clock-history"></i>Sin movimientos aún.</div>`;
+        return;
+    }
+
+    cont.innerHTML = data.map(m => {
+        const nombre = m.insumos?.nombre ?? m.insumo_id;
+        const fecha  = new Date(m.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+        return `
+        <div class="hist-row tipo-${m.tipo}">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="chip-tipo chip-${m.tipo}">${tiposLabel[m.tipo]}</span>
+                <span class="text-muted-sm">×${m.cantidad}</span>
+            </div>
+            <div class="hist-desc">${nombre}</div>
+            ${m.motivo ? `<div class="text-muted-sm" style="font-style:italic;">"${m.motivo}"</div>` : ''}
+            <div class="hist-date">${fecha}${m.registrado_por ? ` · ${m.registrado_por}` : ''}</div>
+        </div>`;
+    }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MODAL NUEVA CAMIONETA
+// ══════════════════════════════════════════════════════════════════
+function abrirModalNueva() {
+    document.getElementById('modal-nueva').style.display = 'flex';
+    document.getElementById('nueva-nombre').value = '';
+    document.getElementById('nueva-patente').value = '';
+    document.getElementById('nueva-instalador').value = '';
+    setTimeout(() => document.getElementById('nueva-nombre').focus(), 100);
+}
+
+function cerrarModalNueva(e) {
+    if (e && e.target !== document.getElementById('modal-nueva')) return;
+    document.getElementById('modal-nueva').style.display = 'none';
+}
+
+async function guardarNuevaCamioneta() {
+    const nombre    = document.getElementById('nueva-nombre').value.trim();
+    const patente   = document.getElementById('nueva-patente').value.trim();
+    const instalador= document.getElementById('nueva-instalador').value.trim();
+
+    if (!nombre) { toast('Ingresá un nombre para la camioneta', '#f59e0b'); return; }
+
+    const { error } = await sb.from('camionetas').insert({
+        empresa_id: EMPRESA_ID, nombre, patente, instalador
+    });
+
+    if (error) { toast('Error al crear camioneta', '#ef4444'); return; }
+
+    document.getElementById('modal-nueva').style.display = 'none';
+    toast(`✅ Camioneta "${nombre}" creada`);
+    await cargarCamionetas();
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+cargarCamionetas();
+</script>
+</body>
+</html>
