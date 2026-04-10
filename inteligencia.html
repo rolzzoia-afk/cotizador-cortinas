@@ -311,6 +311,144 @@
             color: #c4b5fd;
         }
 
+        /* ─── MODAL DIAGNÓSTICO ───────────────────────────────────── */
+        .diag-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.88);
+            z-index: 9999;
+            align-items: flex-start;
+            justify-content: center;
+            padding: 16px;
+            overflow-y: auto;
+        }
+        .diag-overlay.open { display: flex; }
+        .diag-modal {
+            background: #111113;
+            border: 1px solid var(--border-accent);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 760px;
+            margin: auto;
+            overflow: hidden;
+        }
+        .diag-modal-header {
+            background: linear-gradient(135deg, rgba(124,117,240,0.18), rgba(30,30,33,0.98));
+            padding: 16px 20px 14px;
+            border-bottom: 1px solid var(--border-accent);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .diag-modal-header h5 {
+            margin: 0;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .diag-modal-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .btn-diag-copy {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 7px 16px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+        .btn-diag-copy:hover { opacity: 0.85; }
+        .btn-diag-copy.copied { background: var(--success); }
+        .btn-diag-close {
+            background: rgba(255,255,255,0.07);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            padding: 7px 12px;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .diag-instruccion {
+            background: rgba(124,117,240,0.08);
+            border-left: 3px solid var(--accent);
+            padding: 12px 16px;
+            margin: 14px 16px 0;
+            border-radius: 0 8px 8px 0;
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        .diag-instruccion strong { color: #c4b5fd; }
+        .diag-prompt-chips {
+            padding: 10px 16px 0;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .diag-chip {
+            background: rgba(59,130,246,0.1);
+            border: 1px solid rgba(59,130,246,0.25);
+            color: #93c5fd;
+            padding: 4px 10px;
+            border-radius: 99px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .diag-chip:hover { background: rgba(59,130,246,0.22); }
+        .diag-textarea {
+            display: block;
+            width: calc(100% - 32px);
+            margin: 12px 16px 16px;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            color: var(--text-secondary);
+            font-family: 'Courier New', monospace;
+            font-size: 0.72rem;
+            line-height: 1.55;
+            padding: 14px;
+            height: 360px;
+            resize: vertical;
+            outline: none;
+        }
+        .diag-textarea:focus {
+            border-color: var(--border-accent);
+        }
+
+        /* ─── BTN DIAGNÓSTICO EN HEADER ───────────────────────────── */
+        .btn-ia {
+            background: linear-gradient(135deg, #7C75F0, #a78bfa);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 0.78rem;
+            font-weight: 700;
+            padding: 6px 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity 0.18s, transform 0.12s;
+            white-space: nowrap;
+        }
+        .btn-ia:hover  { opacity: 0.88; transform: translateY(-1px); }
+        .btn-ia:active { transform: translateY(0); }
+        .btn-ia.generando { opacity: 0.6; pointer-events: none; }
+
         /* ─── SPINNER / EMPTY ─────────────────────────────────────── */
         .intel-loading {
             display: flex;
@@ -542,6 +680,9 @@
     </div>
     <div class="intel-refresh-row">
         <span id="last-update">—</span>
+        <button class="btn-ia" id="btnDiag" onclick="abrirDiagnostico()">
+            <i class="bi bi-robot"></i> Diagnóstico IA
+        </button>
         <button class="btn-refresh" id="btnRefresh" onclick="cargarTodo()">
             <i class="bi bi-arrow-clockwise" id="refreshIcon"></i>
             Actualizar
@@ -704,6 +845,39 @@
 
 </div><!-- /intel-body -->
 
+<!-- ══ MODAL DIAGNÓSTICO IA ══════════════════════════════════════════ -->
+<div class="diag-overlay" id="diagOverlay" onclick="if(event.target===this) cerrarDiagnostico()">
+    <div class="diag-modal">
+        <div class="diag-modal-header">
+            <h5><i class="bi bi-robot" style="color:#a78bfa;"></i> Diagnóstico para Claude</h5>
+            <div class="diag-modal-actions">
+                <button class="btn-diag-copy" id="btnCopiar" onclick="copiarDiagnostico()">
+                    <i class="bi bi-clipboard"></i> Copiar todo
+                </button>
+                <button class="btn-diag-close" onclick="cerrarDiagnostico()">✕ Cerrar</button>
+            </div>
+        </div>
+
+        <div class="diag-instruccion">
+            <strong>¿Cómo usarlo?</strong> Copiá el texto, abrí una nueva conversación con Claude y pegalo.
+            Luego escribí tu pregunta o problema. Claude va a tener todo el contexto de tu empresa para ayudarte.
+        </div>
+
+        <!-- Chips de preguntas sugeridas -->
+        <div class="diag-prompt-chips" id="diagChips">
+            <span class="diag-chip" onclick="agregarPregunta('¿Qué OTs están en riesgo y qué debería hacer hoy?')">🎯 ¿Qué hacer hoy?</span>
+            <span class="diag-chip" onclick="agregarPregunta('¿Qué insumos tengo que comprar esta semana y cuánto?')">🛒 ¿Qué comprar?</span>
+            <span class="diag-chip" onclick="agregarPregunta('¿Hay algún problema o inconsistencia en mis datos que debería corregir?')">🔍 Revisá mis datos</span>
+            <span class="diag-chip" onclick="agregarPregunta('¿Qué mejoras le harías a mi sistema de gestión basándote en estos datos?')">💡 Ideas de mejora</span>
+            <span class="diag-chip" onclick="agregarPregunta('¿Cuáles son los insumos más críticos para la producción actual y cómo optimizo el stock?')">📦 Optimizar stock</span>
+            <span class="diag-chip" onclick="agregarPregunta('¿Qué patrones ves en mis movimientos de inventario que debería atender?')">📊 Analizar patrones</span>
+        </div>
+
+        <textarea class="diag-textarea" id="diagTexto" readonly
+            placeholder="Generando diagnóstico..."></textarea>
+    </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════════════════════
 // CONFIGURACIÓN — mismos datos que index.html
@@ -725,6 +899,367 @@ let _insumos   = [];
 let _movs      = [];
 let _racks     = [];
 let _consumoChart = null;
+
+// ══════════════════════════════════════════════════════════════════
+// DIAGNÓSTICO IA — Genera el reporte completo para pegar en Claude
+// ══════════════════════════════════════════════════════════════════
+function abrirDiagnostico() {
+    document.getElementById('diagOverlay').classList.add('open');
+    document.getElementById('btnCopiar').classList.remove('copied');
+    document.getElementById('btnCopiar').innerHTML = '<i class="bi bi-clipboard"></i> Copiar todo';
+
+    if (_ots.length === 0 && _insumos.length === 0) {
+        document.getElementById('diagTexto').value =
+            'Primero presioná "Actualizar" para cargar los datos, y después generá el diagnóstico.';
+        return;
+    }
+    generarDiagnostico();
+}
+
+function cerrarDiagnostico() {
+    document.getElementById('diagOverlay').classList.remove('open');
+}
+
+function copiarDiagnostico() {
+    const txt = document.getElementById('diagTexto').value;
+    navigator.clipboard.writeText(txt).then(() => {
+        const btn = document.getElementById('btnCopiar');
+        btn.classList.add('copied');
+        btn.innerHTML = '<i class="bi bi-check2"></i> ¡Copiado!';
+        setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.innerHTML = '<i class="bi bi-clipboard"></i> Copiar todo';
+        }, 2500);
+    }).catch(() => {
+        document.getElementById('diagTexto').select();
+        document.execCommand('copy');
+    });
+}
+
+function agregarPregunta(pregunta) {
+    const ta = document.getElementById('diagTexto');
+    // Poner la pregunta al final, después de una línea separadora
+    const actual = ta.value;
+    const separador = '\n\n══════════════════════════════════════\nMI PREGUNTA PARA CLAUDE:\n══════════════════════════════════════\n';
+    if (actual.includes('MI PREGUNTA PARA CLAUDE:')) {
+        ta.value = actual.replace(/\n\n══+\nMI PREGUNTA[\s\S]*$/, separador + pregunta);
+    } else {
+        ta.value = actual + separador + pregunta;
+    }
+    ta.scrollTop = ta.scrollHeight;
+}
+
+function generarDiagnostico() {
+    const lineas = [];
+    const ahora  = new Date().toLocaleString('es-AR');
+
+    // ─── ENCABEZADO ───────────────────────────────────────────────
+    lineas.push('═══════════════════════════════════════════════════════');
+    lineas.push('   DIAGNÓSTICO OPERACIONAL — CORTINAS ROLZZO');
+    lineas.push(`   Generado: ${ahora}`);
+    lineas.push('   Sistema: App de gestión de cortinas roller (Supabase)');
+    lineas.push('═══════════════════════════════════════════════════════');
+    lineas.push('');
+    lineas.push('Contexto: Soy dueño/operario de una empresa de cortinas roller.');
+    lineas.push('Tengo una app web propia conectada a Supabase que gestiona:');
+    lineas.push('órdenes de trabajo (OTs), inventario de insumos, stock de telas,');
+    lineas.push('bodeguero/despacho con QR, optimizador de corte de tubos y este panel.');
+    lineas.push('');
+
+    // ─── SECCIÓN 1: ÓRDENES DE TRABAJO ────────────────────────────
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('1. ESTADO DE LAS ÓRDENES DE TRABAJO (OTs)');
+    lineas.push('───────────────────────────────────────────────────────');
+
+    const porEstado = {};
+    for (const ot of _ots) {
+        const e = ot.estado || 'sin estado';
+        porEstado[e] = (porEstado[e] || 0) + 1;
+    }
+    lineas.push(`Total OTs en el sistema: ${_ots.length}`);
+    for (const [est, cant] of Object.entries(porEstado)) {
+        lineas.push(`  · ${est}: ${cant}`);
+    }
+    lineas.push('');
+
+    // OTs activas con detalle
+    const ACTIVOS = ['cotizacion','medicion','aprobado','produccion','listo','instalacion'];
+    const PROD    = ['aprobado','produccion','listo','instalacion'];
+    const otsActivas = _ots.filter(o => ACTIVOS.includes(o.estado));
+
+    lineas.push(`OTs activas (${otsActivas.length}):`);
+    for (const ot of otsActivas.slice(0, 20)) {
+        const dg   = ot.datos_generales || {};
+        const otId = dg.ot || '#' + String(ot.id).slice(-6);
+        const cli  = dg.nombre_cliente || dg.cliente || '(sin nombre)';
+        const items = (ot.items || []).length;
+        const dias  = diasDesde(ot.fecha_modificacion);
+        const fe    = dg.fecha_entrega || dg.fechaEntrega || null;
+        const dEntr = fe ? diasHasta(fe) : null;
+        let flags = '';
+        if (PROD.includes(ot.estado) && dias >= 3) flags += ` ⚠ ${dias}d sin movimiento`;
+        if (dEntr !== null && dEntr <= 5)           flags += ` 🔴 entrega en ${dEntr}d`;
+        else if (dEntr !== null && dEntr <= 0)      flags += ' 🔴 ENTREGA VENCIDA';
+        lineas.push(`  OT ${otId} | ${cli} | ${ot.estado} | ${items} ventana(s)${flags}`);
+    }
+    if (otsActivas.length > 20) lineas.push(`  ... y ${otsActivas.length - 20} más`);
+    lineas.push('');
+
+    // OTs en riesgo
+    const enRiesgo = otsActivas.filter(o => {
+        const dias = diasDesde(o.fecha_modificacion);
+        const dg   = o.datos_generales || {};
+        const fe   = dg.fecha_entrega || dg.fechaEntrega || null;
+        const dEntr = fe ? diasHasta(fe) : null;
+        return (PROD.includes(o.estado) && dias >= 3) ||
+               (dEntr !== null && dEntr <= 5);
+    });
+    lineas.push(`OTs en riesgo: ${enRiesgo.length}`);
+    for (const ot of enRiesgo) {
+        const dg   = ot.datos_generales || {};
+        const otId = dg.ot || '#' + String(ot.id).slice(-6);
+        const dias = diasDesde(ot.fecha_modificacion);
+        lineas.push(`  ⚠ OT ${otId} — ${ot.estado} — ${dias}d sin cambio`);
+    }
+    lineas.push('');
+
+    // ─── SECCIÓN 2: INVENTARIO Y STOCK ────────────────────────────
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('2. INVENTARIO DE INSUMOS');
+    lineas.push('───────────────────────────────────────────────────────');
+
+    lineas.push(`Total insumos en catálogo: ${_insumos.length}`);
+    lineas.push(`Posiciones de rack cargadas: ${_racks.length}`);
+
+    const sinStock   = _insumos.filter(i => i.stock_actual !== null && Number(i.stock_actual) <= 0);
+    const bajoMinimo = _insumos.filter(i =>
+        i.stock_minimo != null && i.stock_actual != null &&
+        Number(i.stock_actual) > 0 && Number(i.stock_actual) <= Number(i.stock_minimo)
+    );
+    const sinMinimo  = _insumos.filter(i => i.stock_minimo == null || Number(i.stock_minimo) === 0);
+    const sinUbicacion = _insumos.filter(i => {
+        const cod = (i.cod || '').toUpperCase();
+        return !_racks.find(r => (r.codigo_insumo||'').toUpperCase() === cod) && !i.ubicacion;
+    });
+
+    lineas.push(`Sin stock (stock_actual = 0 o null): ${sinStock.length}`);
+    lineas.push(`Bajo stock mínimo: ${bajoMinimo.length}`);
+    lineas.push(`Sin stock mínimo definido: ${sinMinimo.length}`);
+    lineas.push(`Sin ubicación asignada (rack ni campo): ${sinUbicacion.length}`);
+    lineas.push('');
+
+    if (sinStock.length > 0) {
+        lineas.push('Insumos SIN STOCK:');
+        for (const i of sinStock.slice(0, 15)) {
+            lineas.push(`  · [${i.cod}] ${i.desc} — ${i.categoria || '—'}`);
+        }
+        if (sinStock.length > 15) lineas.push(`  ... y ${sinStock.length - 15} más`);
+        lineas.push('');
+    }
+
+    if (bajoMinimo.length > 0) {
+        lineas.push('Insumos BAJO MÍNIMO:');
+        for (const i of bajoMinimo.slice(0, 15)) {
+            const pct = Math.round((Number(i.stock_actual) / Number(i.stock_minimo)) * 100);
+            lineas.push(`  · [${i.cod}] ${i.desc} — stock: ${i.stock_actual} / mín: ${i.stock_minimo} (${pct}%)`);
+        }
+        if (bajoMinimo.length > 15) lineas.push(`  ... y ${bajoMinimo.length - 15} más`);
+        lineas.push('');
+    }
+
+    // Categorías
+    const cats = {};
+    for (const i of _insumos) {
+        const c = i.categoria || 'Sin categoría';
+        cats[c] = (cats[c] || 0) + 1;
+    }
+    lineas.push('Categorías de insumos:');
+    for (const [c, n] of Object.entries(cats).sort((a,b)=>b[1]-a[1])) {
+        lineas.push(`  · ${c}: ${n} ítems`);
+    }
+    lineas.push('');
+
+    // ─── SECCIÓN 3: MOVIMIENTOS Y CONSUMO ─────────────────────────
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('3. MOVIMIENTOS DE INVENTARIO (últimos 30 días)');
+    lineas.push('───────────────────────────────────────────────────────');
+
+    lineas.push(`Total movimientos en 30 días: ${_movs.length}`);
+
+    const tiposCont = {};
+    for (const m of _movs) {
+        const t = (m.tipo || 'sin tipo').toLowerCase();
+        tiposCont[t] = (tiposCont[t] || 0) + 1;
+    }
+    for (const [t, n] of Object.entries(tiposCont)) {
+        lineas.push(`  · ${t}: ${n} movimientos`);
+    }
+    lineas.push('');
+
+    // Top consumo
+    const salidas = _movs.filter(m => ['salida','despacho'].includes((m.tipo||'').toLowerCase()));
+    const consumoMap = {};
+    for (const m of salidas) {
+        const k = (m.insumo_cod || m.insumo_desc || '?').trim();
+        consumoMap[k] = (consumoMap[k] || 0) + (Number(m.cantidad) || 0);
+    }
+    const topCons = Object.entries(consumoMap)
+        .sort((a,b)=>b[1]-a[1]).slice(0, 10);
+
+    if (topCons.length > 0) {
+        lineas.push('Top 10 insumos más consumidos (salidas):');
+        for (const [cod, cant] of topCons) {
+            const ins = _insumos.find(x => (x.cod||'').toUpperCase() === cod.toUpperCase());
+            const desc = ins?.desc || cod;
+            const stk  = ins?.stock_actual != null ? ` | stock actual: ${ins.stock_actual}` : '';
+            const diasRest = (ins?.stock_actual && cant > 0)
+                ? ` | ~${Math.floor(Number(ins.stock_actual) / (cant/30))}d de stock`
+                : '';
+            lineas.push(`  · ${desc}: ${cant} unid. consumidas${stk}${diasRest}`);
+        }
+        lineas.push('');
+    }
+
+    // Insumos sin movimiento pero con stock
+    const codConMov = new Set(_movs.map(m => (m.insumo_cod||'').trim().toUpperCase()));
+    const sinMov = _insumos.filter(i =>
+        Number(i.stock_actual) > 0 &&
+        !codConMov.has((i.cod||'').toUpperCase())
+    );
+    if (sinMov.length > 0) {
+        lineas.push(`Insumos con stock pero SIN movimiento en 30 días: ${sinMov.length}`);
+        for (const i of sinMov.slice(0, 8)) {
+            lineas.push(`  · [${i.cod}] ${i.desc} — stock: ${i.stock_actual} ${i.unidad||''}`);
+        }
+        if (sinMov.length > 8) lineas.push(`  ... y ${sinMov.length - 8} más`);
+        lineas.push('');
+    }
+
+    // ─── SECCIÓN 4: ANÁLISIS DE DATOS / INCONSISTENCIAS ───────────
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('4. INCONSISTENCIAS Y PROBLEMAS DETECTADOS EN LOS DATOS');
+    lineas.push('───────────────────────────────────────────────────────');
+
+    const problemas = [];
+
+    // Insumos sin código
+    const sinCod = _insumos.filter(i => !i.cod || i.cod.trim() === '');
+    if (sinCod.length > 0) problemas.push(`${sinCod.length} insumo(s) sin código (campo "cod" vacío)`);
+
+    // Insumos con descripción duplicada
+    const descs = _insumos.map(i => (i.desc||'').toLowerCase().trim()).filter(Boolean);
+    const descSet = new Set();
+    const descDuplicadas = new Set();
+    for (const d of descs) {
+        if (descSet.has(d)) descDuplicadas.add(d);
+        descSet.add(d);
+    }
+    if (descDuplicadas.size > 0) problemas.push(`${descDuplicadas.size} descripcion(es) de insumo duplicadas`);
+
+    // OTs sin items
+    const otsSinItems = _ots.filter(o => ACTIVOS.includes(o.estado) && (!o.items || o.items.length === 0));
+    if (otsSinItems.length > 0) problemas.push(`${otsSinItems.length} OT(s) activa(s) sin ventanas/items cargados`);
+
+    // Movimientos sin cod de insumo
+    const movsSinCod = _movs.filter(m => !m.insumo_cod && !m.insumo_desc);
+    if (movsSinCod.length > 0) problemas.push(`${movsSinCod.length} movimiento(s) sin código ni descripción de insumo`);
+
+    // Racks con cod que no existe en insumos
+    const codInsumos = new Set(_insumos.map(i => (i.cod||'').toUpperCase()));
+    const racksSinInsumo = _racks.filter(r => !codInsumos.has((r.codigo_insumo||'').toUpperCase()));
+    if (racksSinInsumo.length > 0) problemas.push(`${racksSinInsumo.length} posición(es) de rack apuntan a códigos que no existen en insumos`);
+
+    // Stock negativo
+    const stockNeg = _insumos.filter(i => i.stock_actual !== null && Number(i.stock_actual) < 0);
+    if (stockNeg.length > 0) problemas.push(`${stockNeg.length} insumo(s) con STOCK NEGATIVO (posible error de movimientos)`);
+
+    if (problemas.length === 0) {
+        lineas.push('No se detectaron inconsistencias evidentes en los datos.');
+    } else {
+        for (const p of problemas) lineas.push(`  ⚠ ${p}`);
+    }
+    lineas.push('');
+
+    // ─── SECCIÓN 5: CONTEXTO TÉCNICO DE LA APP ────────────────────
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('5. CONTEXTO TÉCNICO DE LA APLICACIÓN');
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('Stack: HTML/CSS/JS puro + Supabase (PostgreSQL) + Supabase Auth (anon key)');
+    lineas.push('Archivos principales: index.html, bodeguero.html, inventario.html,');
+    lineas.push('  inteligencia.html, telas.html, optimizador.html, admin_panel.html');
+    lineas.push('');
+    lineas.push('Módulos de la app:');
+    lineas.push('  · Panel Kanban: seguimiento de OTs por estado');
+    lineas.push('  · Cotizador (Fases 1-4): cotización → medición → aprobación → producción');
+    lineas.push('  · Bodeguero: escaneo QR para despachar materiales por OT');
+    lineas.push('  · Inventario: catálogo de insumos con rack (ubicaciones_rack)');
+    lineas.push('  · Telas: gestión de stock de telas');
+    lineas.push('  · Optimizador: algoritmo de corte de tubos por OT');
+    lineas.push('  · Inteligencia: este panel de análisis (archivo actual)');
+    lineas.push('');
+    lineas.push('Tablas en Supabase:');
+    lineas.push('  · ots (id, estado, datos_generales jsonb, items jsonb[], total, fecha_*)');
+    lineas.push('  · insumos (cod, desc, stock_actual, stock_minimo, categoria, ubicacion)');
+    lineas.push('  · ubicaciones_rack (rack, fila, columna, codigo_insumo, almacen)');
+    lineas.push('  · movimientos_insumos (tipo, cantidad, insumo_cod, insumo_desc, ot_id, fecha)');
+    lineas.push('  · configuracion (clave, valor, empresa_id)');
+    lineas.push('  · presencia (dispositivo, nombre, modulo, ultima_actividad)');
+    lineas.push('');
+    lineas.push('RLS: El rol "anon" tiene SELECT en todas las tablas listadas.');
+    lineas.push('Las escrituras (INSERT/UPDATE) también usan anon key (no hay auth de usuarios).');
+    lineas.push('');
+    lineas.push('Problema conocido con QR / Escáner:');
+    lineas.push('  El módulo bodeguero usa la cámara del celular para escanear QR de insumos.');
+    lineas.push('  Los QR contienen el código del insumo. Al escanear, busca:');
+    lineas.push('  1. Coincidencia exacta en ubicaciones_rack por codigo_insumo');
+    lineas.push('  2. Coincidencia en insumos por cod');
+    lineas.push('  3. Fallback a ins.ubicacion (campo texto general)');
+    lineas.push('  Problemas reportados: a veces no encuentra la ubicación o da error.');
+    lineas.push('  La librería de escaneo QR usada es la API de la cámara del navegador.');
+
+    lineas.push('');
+
+    // ─── SECCIÓN 6: MÉTRICAS ADICIONALES ──────────────────────────
+    lineas.push('───────────────────────────────────────────────────────');
+    lineas.push('6. MÉTRICAS RÁPIDAS');
+    lineas.push('───────────────────────────────────────────────────────');
+
+    // Valor total de OTs activas
+    const valorPipeline = otsActivas.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+    lineas.push(`Valor total OTs activas: $${valorPipeline.toLocaleString('es-AR')}`);
+
+    // OT más grande
+    const topOT = [...otsActivas].sort((a,b)=>((b.items||[]).length)-(a.items||[]).length)[0];
+    if (topOT) {
+        const dg = topOT.datos_generales || {};
+        lineas.push(`OT más grande: ${dg.ot || topOT.id} — ${dg.nombre_cliente||'—'} — ${(topOT.items||[]).length} ventanas`);
+    }
+
+    // Días promedio de OTs en producción
+    const diasProd = _ots
+        .filter(o => PROD.includes(o.estado) && o.fecha_modificacion)
+        .map(o => diasDesde(o.fecha_modificacion));
+    if (diasProd.length > 0) {
+        const promDias = Math.round(diasProd.reduce((a,b)=>a+b,0) / diasProd.length);
+        lineas.push(`Promedio días sin cambio (OTs en producción): ${promDias} días`);
+    }
+
+    const hace7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const movsUltima = _movs.filter(m => m.fecha && new Date(m.fecha) >= hace7);
+    lineas.push(`Movimientos últimos 7 días: ${movsUltima.length}`);
+
+    lineas.push('');
+
+    // ─── PIE ──────────────────────────────────────────────────────
+    lineas.push('═══════════════════════════════════════════════════════');
+    lineas.push('FIN DEL DIAGNÓSTICO — Podés preguntarme cualquier cosa');
+    lineas.push('sobre estos datos, pedir mejoras, detectar bugs, analizar');
+    lineas.push('patrones o pedirme que corrija algo específico.');
+    lineas.push('═══════════════════════════════════════════════════════');
+
+    document.getElementById('diagTexto').value = lineas.join('\n');
+}
+
 
 // ══════════════════════════════════════════════════════════════════
 // HELPERS

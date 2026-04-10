@@ -294,7 +294,14 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
             </div>
         </div>
 
-        <button onclick="cerrarScanner()" class="btn btn-outline btn-block" style="max-width:360px;margin-top:12px;">
+        <!-- Botón saltar ubicación (solo visible en fase loc) -->
+        <button id="btn-saltar-loc" onclick="saltarUbicacion()"
+            class="btn btn-outline btn-block"
+            style="max-width:360px;margin-top:8px;display:none;font-size:0.8rem;padding:9px;border-color:rgba(245,158,11,0.4);color:#f59e0b;">
+            <i class="bi bi-skip-forward"></i> No encuentro el QR de rack — ir directo al insumo
+        </button>
+
+        <button onclick="cerrarScanner()" class="btn btn-outline btn-block" style="max-width:360px;margin-top:8px;">
             <i class="bi bi-arrow-left"></i> Cancelar
         </button>
     </div>
@@ -847,16 +854,35 @@ function iniciarScanItem(idx) {
     document.getElementById('scan-requerido').textContent = cnt.requerido;
     document.getElementById('scanner-titulo').textContent = item.descripcion;
 
-    setScanEstado('loc');
+    // Si no hay ubicación conocida para este ítem → saltar directo a escaneo de ítem
+    const tieneUbicacion = !!locReal && !locReal.startsWith('⚠');
+    if (!tieneUbicacion) {
+        _scanFase = 'item';
+        setScanEstado('item');
+        document.getElementById('scan-sub').textContent = 'Sin rack asignado — escaneá el QR del insumo directamente';
+    } else {
+        _scanFase = 'loc';
+        setScanEstado('loc');
+    }
     mostrarVista('view-scanner');
     iniciarCamara();
 }
 
+function saltarUbicacion() {
+    _scanFase = 'item';
+    setScanEstado('item');
+    document.getElementById('scan-sub').textContent = 'Escaneá ahora el QR del insumo/caja';
+}
+
 function setScanEstado(fase, resultado = null) {
-    const el    = document.getElementById('scan-estado');
-    const msg   = document.getElementById('scan-msg');
-    const sub   = document.getElementById('scan-sub');
+    const el       = document.getElementById('scan-estado');
+    const msg      = document.getElementById('scan-msg');
+    const sub      = document.getElementById('scan-sub');
+    const btnSaltar = document.getElementById('btn-saltar-loc');
     el.className = 'scan-state';
+
+    // Mostrar botón saltar solo cuando esperando ubicación
+    if (btnSaltar) btnSaltar.style.display = (fase === 'loc' && !resultado) ? 'block' : 'none';
 
     if (resultado === 'error') {
         el.classList.add('error');
@@ -880,21 +906,47 @@ function setScanEstado(fase, resultado = null) {
 }
 
 async function iniciarCamara() {
-    if (_scanner) { try { await _scanner.stop(); } catch(e) {} }
+    // Detener scanner previo limpiamente
+    if (_scanner) {
+        try { await _scanner.stop(); } catch(e) {}
+        try { _scanner.clear(); } catch(e) {}
+        _scanner = null;
+    }
+    // Limpiar el div del lector para evitar elementos duplicados
+    const readerEl = document.getElementById('reader');
+    readerEl.innerHTML = '';
+
     _scanner = new Html5Qrcode('reader');
     try {
         await _scanner.start(
             { facingMode: 'environment' },
-            { fps: 10, qrbox: { width: 280, height: 280 } },
+            { fps: 10, qrbox: { width: 260, height: 260 } },
             onQRScan,
-            () => {} // error silencioso
+            () => {} // errores de frame silenciosos (normales mientras enfoca)
         );
     } catch(e) {
-        document.getElementById('reader').innerHTML =
-            `<div style="padding:20px;text-align:center;color:var(--danger);">
-                <i class="bi bi-camera-video-off" style="font-size:2rem;"></i><br>
-                <div style="margin-top:8px;font-size:0.8rem;">No se pudo acceder a la cámara.<br>Verificá los permisos.</div>
-             </div>`;
+        // Intentar con la cámara por defecto si la trasera falla
+        try {
+            await _scanner.start(
+                {},
+                { fps: 10, qrbox: { width: 260, height: 260 } },
+                onQRScan,
+                () => {}
+            );
+        } catch(e2) {
+            readerEl.innerHTML =
+                `<div style="padding:20px;text-align:center;color:var(--danger);">
+                    <i class="bi bi-camera-video-off" style="font-size:2.5rem;"></i>
+                    <div style="margin-top:10px;font-size:0.85rem;font-weight:600;">Sin acceso a cámara</div>
+                    <div style="margin-top:4px;font-size:0.75rem;color:#94a3b8;">
+                        Verificá que el sitio tiene permiso de cámara.<br>
+                        En Chrome: 🔒 → Permisos → Cámara → Permitir
+                    </div>
+                    <button onclick="iniciarCamara()" style="margin-top:12px;padding:8px 18px;background:rgba(124,117,240,0.25);color:#7C75F0;border:1px solid rgba(124,117,240,0.4);border-radius:8px;cursor:pointer;font-size:0.82rem;">
+                        🔄 Reintentar
+                    </button>
+                </div>`;
+        }
     }
 }
 
@@ -945,12 +997,20 @@ async function onQRScan(decoded) {
             // Si no hay ubicación conocida → omitir validación (no bloquear al bodeguero)
         }
 
-        if (locEsperada && decoded !== locEsperada) {
+        // Normalizar para comparación: trim + lowercase + colapsar espacios múltiples
+        const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const decodedOk = locEsperada && (
+            norm(decoded) === norm(locEsperada) ||
+            // También aceptar si el QR escaneado contiene el valor esperado (sin prefijo LOC:)
+            norm(decoded) === norm(locLabel) ||
+            norm(decoded) === norm('LOC:' + locLabel)
+        );
+        if (locEsperada && !decodedOk) {
             // Ubicación incorrecta
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Ubicación incorrecta';
-            document.getElementById('scan-sub').textContent = `Vas a la ubicación: ${locLabel}`;
-            setTimeout(() => setScanEstado('loc'), 2500);
+            document.getElementById('scan-sub').textContent = `Buscá: ${locLabel} | Escaneaste: ${decoded.replace('LOC:','')}`;
+            setTimeout(() => setScanEstado('loc'), 2800);
             return;
         }
         // Si no hay ubicación registrada O coincide → pasar a escaneo de item
@@ -961,20 +1021,31 @@ async function onQRScan(decoded) {
 
     } else if (_scanFase === 'item') {
         // Esperando escaneo del insumo (INS:cod)
-        if (!decoded.startsWith('INS:')) {
+        // Si escanearon una ubicación por error → avisarlo claramente
+        if (decoded.startsWith('LOC:')) {
             setScanEstado(null, 'error');
-            setTimeout(() => setScanEstado('item'), 2000);
+            document.getElementById('scan-msg').textContent = '❌ Eso es una ubicación';
+            document.getElementById('scan-sub').textContent = 'Ya pasamos la ubicación — escaneá el QR de la caja/insumo';
+            setTimeout(() => setScanEstado('item'), 2500);
             return;
         }
-        const codEscaneado = decoded.replace('INS:', '');
+        if (!decoded.startsWith('INS:')) {
+            setScanEstado(null, 'error');
+            document.getElementById('scan-msg').textContent = '❌ QR no reconocido';
+            document.getElementById('scan-sub').textContent = `El QR debe ser de un insumo (empieza con INS:). Escaneaste: "${decoded.substring(0,20)}..."`;
+            setTimeout(() => setScanEstado('item'), 2500);
+            return;
+        }
+        const codEscaneado = decoded.replace('INS:', '').trim();
         const insMatch = buscarInsumoMatchBOM(item);
 
-        // Verificar si el insumo escaneado coincide con lo esperado
-        if (insMatch && insMatch.cod !== codEscaneado) {
+        // Normalizar comparación de códigos
+        const normCod = s => (s || '').trim().toUpperCase().replace(/\s+/g, '');
+        if (insMatch && normCod(insMatch.cod) !== normCod(codEscaneado)) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Insumo incorrecto';
-            document.getElementById('scan-sub').textContent = `Ese es ${codEscaneado}, necesitás ${insMatch.cod}`;
-            setTimeout(() => setScanEstado('item'), 2500);
+            document.getElementById('scan-sub').textContent = `Escaneaste: ${codEscaneado} | Necesitás: ${insMatch.cod}`;
+            setTimeout(() => setScanEstado('item'), 2800);
             return;
         }
 
