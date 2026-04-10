@@ -415,6 +415,28 @@ let _contadores  = {};      // { idx: { pickeado: 0, requerido: N, estado: 'pend
 let _firmaCtx    = null;    // Canvas context para firma
 let _firmaDibujando = false;
 
+// ── Debounce del escáner ──────────────────────────────────────────
+// El escáner lee ~10 cuadros/seg y puede decodificar diferente entre
+// cuadros. Para evitar que "correcto" y "error" se alternen, exigimos
+// que el mismo valor aparezca N veces consecutivas antes de procesarlo,
+// y bloqueamos nuevas lecturas durante un cooldown tras cada acción.
+let _scanLastVal   = '';    // último valor decodificado
+let _scanRepCount  = 0;     // cuántas veces seguidas llegó ese mismo valor
+let _scanCooldown  = false; // true = ignorar lecturas hasta que pase el cooldown
+const SCAN_CONFIRM = 2;     // lecturas iguales consecutivas para confirmar
+const SCAN_COOLDOWN_OK  = 1800; // ms de pausa tras un scan CORRECTO
+const SCAN_COOLDOWN_ERR = 1400; // ms de pausa tras un scan INCORRECTO
+
+function scanDebounceReset() {
+    _scanLastVal  = '';
+    _scanRepCount = 0;
+}
+function scanStartCooldown(ms) {
+    _scanCooldown = true;
+    scanDebounceReset();
+    setTimeout(() => { _scanCooldown = false; }, ms);
+}
+
 // ══════════════════════════════════════════════════════════════════
 // NAVEGACIÓN
 // ══════════════════════════════════════════════════════════════════
@@ -891,6 +913,10 @@ function iniciarScanItem(idx) {
         _scanFase = 'loc';
         setScanEstado('loc');
     }
+    // Resetear debounce al empezar un nuevo scan
+    scanDebounceReset();
+    _scanCooldown = false;
+
     mostrarVista('view-scanner');
     iniciarCamara();
 }
@@ -991,6 +1017,23 @@ function cerrarScanner() {
 
 // ── Lógica de escaneo ──
 async function onQRScan(decoded) {
+    // ── Debounce: ignorar si estamos en cooldown ──────────────────
+    if (_scanCooldown) return;
+
+    // Acumular lecturas iguales consecutivas
+    if (decoded === _scanLastVal) {
+        _scanRepCount++;
+    } else {
+        _scanLastVal  = decoded;
+        _scanRepCount = 1;
+    }
+
+    // Todavía no hay suficientes lecturas iguales — esperar más cuadros
+    if (_scanRepCount < SCAN_CONFIRM) return;
+
+    // Confirmado: resetear contador y procesar
+    scanDebounceReset();
+
     const item = _bomItems[_scanItemIdx];
     const cnt  = _contadores[_scanItemIdx];
 
@@ -1036,42 +1079,49 @@ async function onQRScan(decoded) {
             document.getElementById('scan-msg').textContent = '❌ Ubicación incorrecta';
             document.getElementById('scan-sub').textContent =
                 `Buscá: ${locLabel}  |  Escaneaste: ${decoded.replace('LOC:','').replace(/\|/g,' · ')}`;
-            setTimeout(() => setScanEstado('loc'), 2800);
+            scanStartCooldown(SCAN_COOLDOWN_ERR);
+            setTimeout(() => { if (!_scanCooldown) setScanEstado('loc'); else setTimeout(() => setScanEstado('loc'), 200); }, SCAN_COOLDOWN_ERR);
             return;
         }
-        // Si no hay ubicación registrada O coincide → pasar a escaneo de item
+
+        // ✅ Ubicación correcta (o sin ubicación → saltar directo)
         setScanEstado(null, 'ok');
         if (locLabel) document.getElementById('scan-sub').textContent = `Ubicación: ${locLabel}`;
         _scanFase = 'item';
-        setTimeout(() => setScanEstado('item'), 1200);
+        scanStartCooldown(SCAN_COOLDOWN_OK);
+        setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_OK);
 
     } else if (_scanFase === 'item') {
         // Esperando escaneo del insumo (INS:cod)
-        // Si escanearon una ubicación por error → avisarlo claramente
+
+        // Escanearon QR de ubicación por error
         if (decoded.startsWith('LOC:')) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Eso es una ubicación';
             document.getElementById('scan-sub').textContent = 'Ya pasamos la ubicación — escaneá el QR de la caja/insumo';
-            setTimeout(() => setScanEstado('item'), 2500);
+            scanStartCooldown(SCAN_COOLDOWN_ERR);
+            setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_ERR);
             return;
         }
         if (!decoded.startsWith('INS:')) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ QR no reconocido';
-            document.getElementById('scan-sub').textContent = `El QR debe ser de un insumo (empieza con INS:). Escaneaste: "${decoded.substring(0,20)}..."`;
-            setTimeout(() => setScanEstado('item'), 2500);
+            document.getElementById('scan-sub').textContent = `Esperaba INS:... · Escaneaste: "${decoded.substring(0,20)}"`;
+            scanStartCooldown(SCAN_COOLDOWN_ERR);
+            setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_ERR);
             return;
         }
+
         const codEscaneado = decoded.replace('INS:', '').trim();
         const insMatch = buscarInsumoMatchBOM(item);
+        const normCod  = s => (s || '').trim().toUpperCase().replace(/\s+/g, '');
 
-        // Normalizar comparación de códigos
-        const normCod = s => (s || '').trim().toUpperCase().replace(/\s+/g, '');
         if (insMatch && normCod(insMatch.cod) !== normCod(codEscaneado)) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Insumo incorrecto';
-            document.getElementById('scan-sub').textContent = `Escaneaste: ${codEscaneado} | Necesitás: ${insMatch.cod}`;
-            setTimeout(() => setScanEstado('item'), 2800);
+            document.getElementById('scan-sub').textContent = `Escaneaste: ${codEscaneado}  |  Necesitás: ${insMatch.cod}`;
+            scanStartCooldown(SCAN_COOLDOWN_ERR);
+            setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_ERR);
             return;
         }
 
@@ -1080,23 +1130,24 @@ async function onQRScan(decoded) {
         document.getElementById('scan-contador').textContent = cnt.pickeado;
 
         if (cnt.pickeado >= cnt.requerido) {
-            // Completado
             cnt.estado = 'completo';
             setScanEstado(null, 'ok');
             document.getElementById('scan-msg').textContent = `✅ Completo (${cnt.requerido}/${cnt.requerido})`;
             document.getElementById('scan-sub').textContent = '¡Todos los insumos recogidos!';
             toast(`✅ ${item.descripcion} completado`);
+            scanStartCooldown(SCAN_COOLDOWN_OK);
             await detenerScanner();
             setTimeout(() => {
                 renderBOMItems();
                 mostrarVista('view-despacho');
-            }, 1800);
+            }, SCAN_COOLDOWN_OK);
         } else {
-            // Necesita más unidades
+            // Necesita más unidades — cooldown corto y seguir escaneando
             setScanEstado(null, 'ok');
             document.getElementById('scan-msg').textContent = `✅ ${cnt.pickeado}/${cnt.requerido} — Seguí escaneando`;
             document.getElementById('scan-sub').textContent = `Faltan ${cnt.requerido - cnt.pickeado} unidades más`;
-            setTimeout(() => setScanEstado('item'), 1200);
+            scanStartCooldown(SCAN_COOLDOWN_OK);
+            setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_OK);
         }
     }
 }
