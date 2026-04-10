@@ -79,6 +79,83 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 /* ── Scanner ── */
 #scanner-container { width: 100%; max-width: 360px; margin: 0 auto; border-radius: 12px; overflow: hidden; }
+
+/* ── INSTRUCCIONES DE PASOS ─────────────────────────────────── */
+#scan-pasos { user-select: none; }
+.scan-paso {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    flex: 1;
+    position: relative;
+}
+.paso-circulo {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.3);
+    font-size: 0.8rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+    position: relative;
+    z-index: 1;
+}
+.paso-linea {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    width: 100%;
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    transition: background 0.3s ease;
+}
+.paso-linea-last { display: none; }
+.paso-texto {
+    text-align: center;
+    margin-top: 6px;
+    padding: 0 2px;
+}
+.paso-titulo {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255,255,255,0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    transition: color 0.3s ease;
+}
+.paso-desc {
+    font-size: 0.62rem;
+    color: rgba(255,255,255,0.18);
+    margin-top: 1px;
+    line-height: 1.3;
+    transition: color 0.3s ease;
+}
+
+/* Estado: activo */
+.scan-paso.activo .paso-circulo {
+    border-color: var(--accent);
+    background: rgba(124,117,240,0.2);
+    color: #a78bfa;
+    box-shadow: 0 0 0 4px rgba(124,117,240,0.15);
+}
+.scan-paso.activo .paso-titulo { color: #a78bfa; }
+.scan-paso.activo .paso-desc   { color: rgba(167,139,250,0.7); }
+
+/* Estado: completado */
+.scan-paso.completo .paso-circulo {
+    border-color: var(--success);
+    background: rgba(34,197,94,0.15);
+    color: #22c55e;
+}
+.scan-paso.completo .paso-linea  { background: rgba(34,197,94,0.35); }
+.scan-paso.completo .paso-titulo { color: #22c55e; }
+.scan-paso.completo .paso-desc   { color: rgba(34,197,94,0.6); }
 #html5-qrcode-button-camera-stop, #html5-qrcode-button-camera-start { display: none !important; }
 
 /* ── Firma ── */
@@ -268,6 +345,44 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
         <h1 id="scanner-titulo">Escanear</h1>
     </div>
     <div class="scroll-area" style="display:flex;flex-direction:column;align-items:center;padding:16px;">
+
+        <!-- ── INSTRUCCIONES DE PASOS ─────────────────────────── -->
+        <div id="scan-pasos" style="width:100%;max-width:360px;margin-bottom:12px;">
+            <div style="display:flex;align-items:stretch;gap:0;">
+
+                <!-- Paso 1: Ubicación -->
+                <div class="scan-paso" id="paso-1" data-paso="1">
+                    <div class="paso-circulo">1</div>
+                    <div class="paso-linea"></div>
+                    <div class="paso-texto">
+                        <div class="paso-titulo">Ubicación</div>
+                        <div class="paso-desc">Escaneá el QR del estante o rack</div>
+                    </div>
+                </div>
+
+                <!-- Paso 2: Insumo -->
+                <div class="scan-paso" id="paso-2" data-paso="2">
+                    <div class="paso-circulo">2</div>
+                    <div class="paso-linea"></div>
+                    <div class="paso-texto">
+                        <div class="paso-titulo">Insumo</div>
+                        <div class="paso-desc">Escaneá el QR de la caja o bolsa</div>
+                    </div>
+                </div>
+
+                <!-- Paso 3: Confirmar -->
+                <div class="scan-paso" id="paso-3" data-paso="3">
+                    <div class="paso-circulo">3</div>
+                    <div class="paso-linea paso-linea-last"></div>
+                    <div class="paso-texto">
+                        <div class="paso-titulo">Confirmar</div>
+                        <div class="paso-desc">Verificá y confirmá la cantidad</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
         <!-- Estado del escaneo -->
         <div id="scan-estado" class="scan-state esperando" style="width:100%;max-width:360px;">
             <div class="icon">📍</div>
@@ -967,9 +1082,27 @@ function iniciarScanItem(idx) {
     document.getElementById('scan-estado').style.display          = '';
     document.getElementById('scanner-container').style.display    = '';
     document.getElementById('scan-item-info').style.display       = '';
+    actualizarPasos(1); // siempre empieza en paso 1
 
     mostrarVista('view-scanner');
     iniciarCamara();
+}
+
+// ── Actualiza el indicador visual de pasos ────────────────────────
+// pasoActivo: 1 = ubicación, 2 = insumo, 3 = confirmar
+function actualizarPasos(pasoActivo) {
+    for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`paso-${i}`);
+        if (!el) continue;
+        el.classList.remove('activo', 'completo');
+        if (i < pasoActivo)      el.classList.add('completo');
+        else if (i === pasoActivo) el.classList.add('activo');
+        // Los pasos futuros quedan sin clase (apagados)
+
+        // Cambiar el círculo a ✓ si está completo
+        const circ = el.querySelector('.paso-circulo');
+        if (circ) circ.textContent = i < pasoActivo ? '✓' : i;
+    }
 }
 
 function saltarUbicacion() {
@@ -982,6 +1115,7 @@ function saltarUbicacion() {
     document.getElementById('btn-escanear-insumo').style.display = 'block';
     // Detener cámara para evitar que relea el QR de rack en loop
     detenerScanner();
+    actualizarPasos(2); // el paso 1 queda como "salteado" (avanzar igual)
 }
 
 // El usuario tocó "Escanear QR del insumo" → reiniciar cámara en fase item
@@ -1158,6 +1292,7 @@ async function onQRScan(decoded) {
             ? `${locLabel} — Ahora tomá el insumo`
             : 'Sin rack registrado — Tomá el insumo';
         _scanFase = 'item';
+        actualizarPasos(2); // avanzar al paso 2
         scanDebounceReset();
         _scanCooldown = true;              // bloquear mientras cámara se detiene
         await detenerScanner();            // apagar cámara completamente
@@ -1202,6 +1337,7 @@ async function onQRScan(decoded) {
         }
 
         // ✅ Insumo correcto — detener cámara y mostrar panel de confirmación de cantidad
+        actualizarPasos(3); // avanzar al paso 3
         scanDebounceReset();
         _scanCooldown = true;
         await detenerScanner();
