@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         :root {
             --bg-primary:    #0A0A0B;
@@ -1544,9 +1545,12 @@ function renderizarCatalogo() {
             <td style="text-align:center;">${estadoBadge(t.estado, null)}</td>
             <td style="color:var(--text-muted); font-size:0.75rem;">${t.proveedor_codigo||'—'}</td>
             <td style="color:var(--text-secondary); font-size:0.78rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${t.observaciones||'—'}</td>
-            <td style="text-align:center; white-space:nowrap;">
-                <button class="btn-inv btn-outline-inv" onclick="abrirModalTela('${t.id}')" style="padding:4px 10px; font-size:0.72rem;">
+            <td style="text-align:center; white-space:nowrap; display:flex; gap:4px; justify-content:center;">
+                <button class="btn-inv btn-outline-inv" onclick="abrirModalTela('${t.id}')" style="padding:4px 10px; font-size:0.72rem;" title="Editar tela">
                     <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-inv btn-outline-inv" onclick="mostrarQRTela('${t.codigo}','${(t.nemotecnico||t.codigo).replace(/'/g,"\\'")}','${(t.posicion||'').replace(/'/g,"\\'")}','${(t.almacen||'').replace(/'/g,"\\'")}','${(t.tipo||'').replace(/'/g,"\\'")}')" style="padding:4px 10px; font-size:0.72rem; border-color:rgba(139,92,246,0.4); color:#a78bfa;" title="Ver QR">
+                    <i class="bi bi-qr-code"></i>
                 </button>
             </td>
         </tr>
@@ -2825,6 +2829,147 @@ async function listasEliminar(campo, idx) {
 // INICIO
 // ══════════════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', inicializar);
+
+// ══════════════════════════════════════════════════════════════════
+// QR TELAS
+// ══════════════════════════════════════════════════════════════════
+let _qrTelaActual = null;
+
+function telaToQRContent(posicion, almacen) {
+    const ascii = s => String(s ?? '').trim().replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '_');
+    return `TEL_LOC:${ascii(posicion)}|${ascii(almacen)}`;
+}
+
+function mostrarQRTela(codigo, nemo, posicion, almacen, tipo) {
+    _qrTelaActual = { codigo, nemo, posicion, almacen, tipo };
+
+    document.getElementById('qr-tela-titulo').textContent = nemo || codigo;
+    document.getElementById('qr-tela-cod').textContent    = `Código: ${codigo}  ·  Tipo: ${tipo}`;
+
+    // Limpiar canvases previos
+    document.getElementById('qr-tela-canvas-cod').innerHTML = '';
+    document.getElementById('qr-tela-canvas-loc').innerHTML = '';
+
+    // QR del código de tela: TEL:{codigo} — solo ASCII
+    const codQR = (codigo || '').replace(/[^\x20-\x7E]/g, '').trim();
+    new QRCode(document.getElementById('qr-tela-canvas-cod'), {
+        text: `TEL:${codQR}`,
+        width: 150, height: 150,
+        colorDark: '#000000', colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.M
+    });
+
+    // QR de ubicación (posición en colmena + almacén)
+    const secLoc = document.getElementById('qr-tela-ubicacion-section');
+    if (posicion) {
+        secLoc.style.display = 'block';
+        document.getElementById('qr-tela-loc-label').textContent =
+            `Pos. ${posicion}  ·  ${almacen || ''}`;
+        new QRCode(document.getElementById('qr-tela-canvas-loc'), {
+            text: telaToQRContent(posicion, almacen),
+            width: 150, height: 150,
+            colorDark: '#000000', colorLight: '#ffffff',
+            correctLevel: QRCode.CorrectLevel.M
+        });
+    } else {
+        secLoc.style.display = 'none';
+    }
+
+    document.getElementById('modalQRTela').classList.add('visible');
+}
+
+function cerrarQRTela() {
+    document.getElementById('modalQRTela').classList.remove('visible');
+}
+
+function imprimirQRTela() {
+    if (!_qrTelaActual) return;
+    const { codigo, nemo, posicion, almacen, tipo } = _qrTelaActual;
+
+    const getCodImg = () => {
+        const img = document.querySelector('#qr-tela-canvas-cod img');
+        return img ? img.src : '';
+    };
+    const getLocImg = () => {
+        const img = document.querySelector('#qr-tela-canvas-loc img');
+        return img ? img.src : '';
+    };
+
+    const etiqCod = `
+        <div class="etiqueta">
+            <div class="etiq-titulo">${nemo || codigo}</div>
+            <div class="etiq-sub">${codigo}  ·  ${tipo}</div>
+            <img src="${getCodImg()}" class="etiq-qr"/>
+            <div class="etiq-hint">Pegar en el rollo / contenedor</div>
+        </div>`;
+
+    const etiqLoc = posicion ? `
+        <div class="etiqueta">
+            <div class="etiq-titulo">Posición ${posicion}</div>
+            <div class="etiq-sub">${almacen || ''}</div>
+            <img src="${getLocImg()}" class="etiq-qr"/>
+            <div class="etiq-hint">Pegar en el estante / lugar</div>
+        </div>` : '';
+
+    const win = window.open('', '_blank');
+    win.document.write(`
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>QR Tela ${codigo}</title>
+    <style>
+        body { margin:0; padding:16px; font-family:Arial,sans-serif; background:#fff; }
+        .contenedor { display:flex; gap:20px; flex-wrap:wrap; }
+        .etiqueta { border:1px solid #ccc; border-radius:8px; padding:16px; text-align:center;
+            width:200px; display:inline-block; }
+        .etiq-titulo { font-size:13px; font-weight:700; margin-bottom:2px; }
+        .etiq-sub    { font-size:10px; color:#666; margin-bottom:10px; }
+        .etiq-qr     { width:150px; height:150px; display:block; margin:0 auto 8px; }
+        .etiq-hint   { font-size:9px; color:#999; }
+        @media print { body { padding:8px; } }
+    </style>
+    </head><body>
+    <div class="contenedor">${etiqCod}${etiqLoc}</div>
+    <script>window.onload=()=>window.print();<\/script>
+    </body></html>`);
+    win.document.close();
+}
 </script>
+
+<!-- ═══ MODAL: QR TELA ═══ -->
+<div class="modal-overlay" id="modalQRTela" onclick="if(event.target===this) cerrarQRTela()">
+    <div class="modal-box" style="max-width:460px; text-align:center;">
+        <h5 id="qr-tela-titulo" style="margin-bottom:4px;">QR de la Tela</h5>
+        <p id="qr-tela-cod" style="font-size:0.8rem; color:var(--text-secondary); margin-bottom:18px;"></p>
+
+        <div style="display:flex; gap:24px; justify-content:center; flex-wrap:wrap;">
+
+            <!-- QR del código de tela -->
+            <div>
+                <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:6px;">
+                    <i class="bi bi-scissors"></i> QR del Rollo / Contenedor
+                </div>
+                <div id="qr-tela-canvas-cod" style="display:inline-block; background:#fff; padding:10px; border-radius:8px;"></div>
+                <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:4px;">Pegar en el rollo o contenedor</div>
+            </div>
+
+            <!-- QR de ubicación -->
+            <div id="qr-tela-ubicacion-section">
+                <div style="font-size:0.72rem; color:var(--text-secondary); margin-bottom:6px;">
+                    <i class="bi bi-geo-alt"></i> QR de Ubicación
+                </div>
+                <div id="qr-tela-canvas-loc" style="display:inline-block; background:#fff; padding:10px; border-radius:8px;"></div>
+                <div style="font-size:0.65rem; color:var(--text-secondary); margin-top:4px; font-weight:600;" id="qr-tela-loc-label"></div>
+            </div>
+
+        </div>
+
+        <div class="modal-actions" style="margin-top:20px;">
+            <button class="btn-inv btn-outline-inv" onclick="cerrarQRTela()">Cerrar</button>
+            <button class="btn-inv btn-primary-inv" onclick="imprimirQRTela()">
+                <i class="bi bi-printer"></i> Imprimir etiquetas
+            </button>
+        </div>
+    </div>
+</div>
+
 </body>
 </html>
