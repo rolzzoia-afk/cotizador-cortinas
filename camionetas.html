@@ -588,16 +588,28 @@ async function mostrarCarga() {
     const cont = document.getElementById('carga-insumos-list');
     cont.innerHTML = `<div class="text-muted-sm"><span class="spinner-sm"></span> Cargando insumos...</div>`;
 
-    const { data } = await sb
+    const { data, error: errIns } = await sb
         .from('insumos')
         .select('id, nemotecnico, cod, stock_actual')
         .eq('empresa_id', EMPRESA_ID)
         .order('nemotecnico');
 
+    if (errIns) {
+        cont.innerHTML = `<div class="empty-state" style="color:var(--red);">
+            <i class="bi bi-exclamation-triangle"></i>
+            Error al cargar insumos:<br>
+            <code style="font-size:0.75rem;">${errIns.message ?? JSON.stringify(errIns)}</code>
+        </div>`;
+        return;
+    }
+
     _insumosBodega = data || [];
 
     if (!_insumosBodega.length) {
-        cont.innerHTML = `<div class="empty-state"><i class="bi bi-box"></i>No hay insumos registrados en el sistema.</div>`;
+        cont.innerHTML = `<div class="empty-state"><i class="bi bi-box"></i>
+            No hay insumos registrados en el sistema.<br>
+            <span style="font-size:0.75rem;">empresa_id: ${EMPRESA_ID}</span>
+        </div>`;
         return;
     }
 
