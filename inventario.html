@@ -2822,24 +2822,45 @@ async function importarExcelInventario(event) {
 // ══════════════════════════════════════════════════════════════════
 let _qrInsumoActual = null; // { cod, nemo, ubicacion }
 
+// ── Convierte una posición de rack en texto ASCII puro para el QR ──────────
+// El `·` y otros caracteres Unicode se codifican diferente en cada librería
+// y aparecen como emojis raros al escanear. Usamos solo ASCII simple.
+// Formato QR:  LOC:RACK|FILA|COL   ej: LOC:RACK1|3|A
+// Formato visual (pantalla/etiqueta): Rack 1 · 3-A
+function rackToQRContent(rack, fila, col) {
+    const ascii = s => (s || '').trim()
+        // reemplazar caracteres no-ASCII por nada
+        .replace(/[^\x20-\x7E]/g, '')
+        .replace(/\s+/g, '');
+    return `LOC:${ascii(rack)}|${ascii(fila)}|${ascii(col)}`;
+}
+function rackToDisplayLabel(rack, fila, col) {
+    return `${(rack||'').trim()} · ${(fila||'').trim()}-${(col||'').trim()}`;
+}
+
 function mostrarQRInsumo(cod, nemo) {
     const ins = INV.insumos.find(i => i.cod === cod);
 
     // ── Ubicación real: primero buscar en el mapa de rack, luego campo general ──
-    // ubicaciones_rack tiene: { rack, fila, columna, codigo_insumo, almacen }
     const rackEntry = (INV.ubicaciones || []).find(u =>
         (u.codigo_insumo || '').toUpperCase() === (cod || '').toUpperCase()
     );
-    let ubicacion = '';
+
+    // Texto para mostrar al humano (con el punto medio bonito)
+    let ubicacionDisplay = '';
+    // Contenido del QR (solo ASCII, sin Unicode)
+    let ubicacionQR = '';
+
     if (rackEntry) {
-        // Formato legible: "RACK 1 · 3-A"
-        ubicacion = `${rackEntry.rack} · ${rackEntry.fila}-${rackEntry.columna}`;
+        ubicacionDisplay = rackToDisplayLabel(rackEntry.rack, rackEntry.fila, rackEntry.columna);
+        ubicacionQR      = rackToQRContent(rackEntry.rack, rackEntry.fila, rackEntry.columna);
     } else if (ins?.ubicacion) {
-        // Fallback: campo general del catálogo (ej: "2DA AV.", "BODEGA MP")
-        ubicacion = ins.ubicacion;
+        // Fallback: campo texto general — también limpiar de Unicode
+        ubicacionDisplay = ins.ubicacion;
+        ubicacionQR      = `LOC:${ins.ubicacion.replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim()}`;
     }
 
-    _qrInsumoActual = { cod, nemo, ubicacion };
+    _qrInsumoActual = { cod, nemo, ubicacion: ubicacionDisplay, ubicacionQR };
 
     document.getElementById('qr-insumo-titulo').textContent = nemo;
     document.getElementById('qr-insumo-cod').textContent = `Código: ${cod}`;
@@ -2850,22 +2871,27 @@ function mostrarQRInsumo(cod, nemo) {
     canvasItem.innerHTML = '';
     canvasLoc.innerHTML  = '';
 
-    // QR del contenedor/insumo: INS:{cod}
+    // QR del contenedor/insumo: INS:{cod}  — el cod suele ser ASCII, pero lo limpiamos igual
+    const codQR = (cod || '').replace(/[^\x20-\x7E]/g, '').trim();
     new QRCode(canvasItem, {
-        text: `INS:${cod}`,
+        text: `INS:${codQR}`,
         width: 150, height: 150,
         colorDark: '#000000', colorLight: '#ffffff',
         correctLevel: QRCode.CorrectLevel.M
     });
 
-    // QR de la ubicación: LOC:{ubicacion_rack}
+    // QR de la ubicación — SIEMPRE ASCII puro
     const secUbic = document.getElementById('qr-ubicacion-section');
-    if (ubicacion) {
+    if (ubicacionQR) {
         secUbic.style.display = 'block';
+        // Label visual muestra formato bonito + almacén
         document.getElementById('qr-ubicacion-label').textContent =
-            rackEntry ? `${ubicacion}  (${rackEntry.almacen || ''})` : ubicacion;
+            rackEntry
+                ? `${ubicacionDisplay}  (${rackEntry.almacen || ''})`
+                : ubicacionDisplay;
+        // El QR en sí lleva el formato ASCII
         new QRCode(canvasLoc, {
-            text: `LOC:${ubicacion}`,
+            text: ubicacionQR,          // ← ASCII puro, sin Unicode
             width: 150, height: 150,
             colorDark: '#000000', colorLight: '#ffffff',
             correctLevel: QRCode.CorrectLevel.M

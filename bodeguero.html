@@ -656,7 +656,25 @@ function extraerTelasBOM(ot) {
 // UBICACIÓN FÍSICA EN RACK — fuente de verdad para insumos
 // ══════════════════════════════════════════════════════════════════
 
-// Busca por cod exacto del insumo (ej: "MEC14")
+// ── Formatos de rack ──────────────────────────────────────────────
+// IMPORTANTE: El contenido del QR debe ser ASCII puro.
+// El carácter · (U+00B7) se decodifica diferente en cada librería
+// y aparece como caracteres extraños al escanear.
+//
+// Formato QR    (lo que se guarda en el código QR): LOC:RACK1|3|A
+// Formato visual (lo que se muestra en pantalla):   Rack 1 · 3-A
+
+function rackToQRContent(rack, fila, col) {
+    // Solo ASCII imprimible, sin espacios ni Unicode
+    const ascii = s => (s || '').trim().replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '');
+    return `LOC:${ascii(rack)}|${ascii(fila)}|${ascii(col)}`;
+}
+
+function rackToDisplayLabel(rack, fila, col) {
+    return `${(rack||'').trim()} · ${(fila||'').trim()}-${(col||'').trim()}`;
+}
+
+// Busca por cod exacto del insumo — retorna objeto { display, qr } o null
 function getRackUbicacion(cod) {
     if (!cod || !_ubicacionesRack.length) return null;
     const codNorm = cod.toUpperCase().replace(/\s/g, '');
@@ -665,11 +683,13 @@ function getRackUbicacion(cod) {
         return rc === codNorm;
     });
     if (!u) return null;
-    return `${u.rack} · ${u.fila}-${u.columna}`;
+    return {
+        display: rackToDisplayLabel(u.rack, u.fila, u.columna),
+        qr:      rackToQRContent(u.rack, u.fila, u.columna)
+    };
 }
 
-// Busca DIRECTAMENTE por el spec del BOM (ej: "MEC 14") sin pasar por insumos
-// Útil cuando la categoría/nemotécnico no matchea pero el código sí está en el rack
+// Busca DIRECTAMENTE por el spec del BOM — retorna objeto { display, qr } o null
 function getRackUbicacionPorSpec(spec) {
     if (!spec || !_ubicacionesRack.length) return null;
     const specNorm = spec.toUpperCase().replace(/\s/g, '');
@@ -678,7 +698,10 @@ function getRackUbicacionPorSpec(spec) {
         return rc === specNorm || rc.includes(specNorm) || specNorm.includes(rc);
     });
     if (!u) return null;
-    return `${u.rack} · ${u.fila}-${u.columna}`;
+    return {
+        display: rackToDisplayLabel(u.rack, u.fila, u.columna),
+        qr:      rackToQRContent(u.rack, u.fila, u.columna)
+    };
 }
 
 function buscarTelaSlot(codInt) {
@@ -715,7 +738,7 @@ function renderBOMItems() {
         } else {
             const insMatch = buscarInsumoMatchBOM(item);
             const ubic = getUbicacionBOM(item);
-            locText   = ubic || (_ubicacionesRack.length ? '⚠ Sin rack asignado' : '');
+            locText   = ubic ? ubic.display : (_ubicacionesRack.length ? '⚠ Sin rack asignado' : '');
             stockInfo = insMatch ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}` : '';
         }
 
@@ -799,29 +822,32 @@ function buscarInsumoMatchBOM(item) {
     }) || null;
 }
 
-// Devuelve la ubicación de rack del insumo que coincide con el item BOM.
-// Cascada: spec→rack directo → insumo.cod→rack → insumo.ubicacion → vacío
+// Devuelve objeto { display, qr } con la ubicación del ítem BOM.
+// Cascada: spec→rack directo → insumo.cod→rack → insumo.ubicacion → null
+// display = texto bonito para mostrar al usuario
+// qr      = contenido ASCII puro para el QR y la comparación de escaneo
 function getUbicacionBOM(item) {
     const spec = (item.especificacion || '').trim();
 
-    // ── Camino 1: spec del BOM → rack directo (sin pasar por catálogo de insumos)
-    //    Ej: spec "MEC 14" busca codigo_insumo "MEC14" en ubicaciones_rack
+    // ── Camino 1: spec del BOM → rack directo
     if (spec) {
-        const rackDirecto = getRackUbicacionPorSpec(spec);
-        if (rackDirecto) return `📍 ${rackDirecto}`;
+        const r = getRackUbicacionPorSpec(spec);
+        if (r) return { display: `📍 ${r.display}`, qr: r.qr };
     }
 
-    // ── Camino 2: buscar insumo por fuzzy match, luego su posición de rack
+    // ── Camino 2: fuzzy match al catálogo de insumos → posición de rack
     const ins = buscarInsumoMatchBOM(item);
     if (ins) {
-        const rackPos = getRackUbicacion(ins.cod);
-        if (rackPos) return `📍 ${rackPos}`;
-        // ── Camino 3: campo ubicacion general del catálogo (ej: "2DA AV.", "BODEGA MP")
-        if (ins.ubicacion) return `📦 ${ins.ubicacion}`;
+        const r = getRackUbicacion(ins.cod);
+        if (r) return { display: `📍 ${r.display}`, qr: r.qr };
+        // ── Camino 3: campo texto general (sin rack formal)
+        if (ins.ubicacion) {
+            const qrFallback = `LOC:${(ins.ubicacion).replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim()}`;
+            return { display: `📦 ${ins.ubicacion}`, qr: qrFallback };
+        }
     }
 
-    // Sin información de ubicación
-    return '';
+    return null;
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -838,18 +864,19 @@ function iniciarScanItem(idx) {
     document.getElementById('scan-item-desc').textContent = item.descripcion;
     document.getElementById('scan-item-spec').textContent = [item.especificacion, item.color].filter(Boolean).join(' · ');
 
-    let locReal = '';
+    let locDisplay = '';
     if (item._es_tela) {
-        locReal = item._ubicacion_rack ? `📍 Rack: ${item._ubicacion_rack}` : '⚠ Sin posición de rack';
+        locDisplay = item._ubicacion_rack ? `📍 Rack: ${item._ubicacion_rack}` : '⚠ Sin posición de rack';
     } else {
-        locReal = getUbicacionBOM(item);
-        if (!locReal) {
-            locReal = _ubicacionesRack.length
+        const ubicBOM = getUbicacionBOM(item);
+        locDisplay = ubicBOM ? ubicBOM.display : (
+            _ubicacionesRack.length
                 ? '⚠ Sin rack asignado — buscar manualmente'
-                : '⚠ Importá el mapa de rack en Inventario';
-        }
+                : '⚠ Importá el mapa de rack en Inventario'
+        );
     }
-    document.getElementById('scan-item-loc').textContent = locReal;
+    document.getElementById('scan-item-loc').textContent = locDisplay;
+    const locReal = locDisplay; // alias para el check de tieneUbicacion
     document.getElementById('scan-contador').textContent  = cnt.pickeado;
     document.getElementById('scan-requerido').textContent = cnt.requerido;
     document.getElementById('scanner-titulo').textContent = item.descripcion;
@@ -969,47 +996,46 @@ async function onQRScan(decoded) {
 
     if (_scanFase === 'loc') {
         // Esperando escaneo de ubicación (LOC:...)
-        // Prioridad: rack directo por spec → rack por cod insumo → ubicacion general
+        // locEsperada = contenido ASCII del QR (formato rackToQRContent)
+        // locLabel    = texto para mostrar al usuario (formato display bonito)
         const spec     = (item.especificacion || '').trim();
         const insMatch = buscarInsumoMatchBOM(item);
-        let locEsperada = null;
-        let locLabel    = '';
+        let locEsperada = null;   // contenido QR esperado (ASCII puro)
+        let locLabel    = '';     // texto para mostrar al usuario
 
         if (item._es_tela && item._ubicacion_rack) {
-            locEsperada = `LOC:${item._ubicacion_rack}`;
+            // Telas: la ubicación ya viene como texto plano
+            const ascii = s => (s||'').replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,'');
+            locEsperada = `LOC:${ascii(item._ubicacion_rack)}`;
             locLabel    = item._ubicacion_rack;
         } else {
-            // Intentar camino directo spec → rack
+            // Insumos: usar las funciones que devuelven { display, qr }
             const rackDirecto = spec ? getRackUbicacionPorSpec(spec) : null;
             if (rackDirecto) {
-                locEsperada = `LOC:${rackDirecto}`;
-                locLabel    = rackDirecto;
+                locEsperada = rackDirecto.qr;       // ← ASCII puro: "LOC:RACK1|3|A"
+                locLabel    = rackDirecto.display;  // ← bonito: "Rack 1 · 3-A"
             } else if (insMatch) {
                 const rackPos = getRackUbicacion(insMatch.cod);
                 if (rackPos) {
-                    locEsperada = `LOC:${rackPos}`;
-                    locLabel    = rackPos;
+                    locEsperada = rackPos.qr;
+                    locLabel    = rackPos.display;
                 } else if (insMatch.ubicacion) {
-                    locEsperada = `LOC:${insMatch.ubicacion}`;
+                    const ascii = s => (s||'').replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim();
+                    locEsperada = `LOC:${ascii(insMatch.ubicacion)}`;
                     locLabel    = insMatch.ubicacion;
                 }
             }
-            // Si no hay ubicación conocida → omitir validación (no bloquear al bodeguero)
         }
 
-        // Normalizar para comparación: trim + lowercase + colapsar espacios múltiples
-        const norm = s => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const decodedOk = locEsperada && (
-            norm(decoded) === norm(locEsperada) ||
-            // También aceptar si el QR escaneado contiene el valor esperado (sin prefijo LOC:)
-            norm(decoded) === norm(locLabel) ||
-            norm(decoded) === norm('LOC:' + locLabel)
-        );
+        // Comparación exacta (ambos son ASCII ahora, no hay problema de encoding)
+        const norm = s => (s || '').trim().toUpperCase();
+        const decodedOk = locEsperada && norm(decoded) === norm(locEsperada);
+
         if (locEsperada && !decodedOk) {
-            // Ubicación incorrecta
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Ubicación incorrecta';
-            document.getElementById('scan-sub').textContent = `Buscá: ${locLabel} | Escaneaste: ${decoded.replace('LOC:','')}`;
+            document.getElementById('scan-sub').textContent =
+                `Buscá: ${locLabel}  |  Escaneaste: ${decoded.replace('LOC:','').replace(/\|/g,' · ')}`;
             setTimeout(() => setScanEstado('loc'), 2800);
             return;
         }
