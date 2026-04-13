@@ -437,7 +437,7 @@ body { background: var(--bg-base); color: var(--text-primary);
 
         <!-- Lista de todos los disponibles -->
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
-            <input id="err-buscar-tubo" class="form-input-r" placeholder="Filtrar por código o colmena..."
+            <input id="err-buscar-tubo" class="form-input-r" placeholder="Buscar otro código o colmena..."
                 oninput="filtrarTubos(this.value)" style="margin-bottom:0;flex:1;"/>
         </div>
         <div style="font-size:0.68rem;color:var(--text-muted);margin-bottom:4px;"
@@ -990,15 +990,31 @@ function renderTubosList(q) {
         ? _tubosColmena.filter(t => t.id !== _tuboSugerido.id)
         : _tubosColmena;
 
-    const filtrados = q
-        ? sinSugerido.filter(t =>
-            (t.cod || '').toLowerCase().includes(q.toLowerCase()) ||
-            String(t.n_colmena || '').includes(q))
-        : sinSugerido;
+    // Código del corte actual (para pre-filtrar por defecto)
+    const codCorte = _modalCorte
+        ? (_modalCorte.r.codigo || _modalCorte.r.codigo_original || '').toUpperCase().trim()
+        : '';
+
+    let filtrados;
+    if (q) {
+        // Con búsqueda activa: mostrar cualquier tubo que coincida (código o colmena)
+        const ql = q.toLowerCase();
+        filtrados = sinSugerido.filter(t =>
+            (t.cod || '').toLowerCase().includes(ql) ||
+            String(t.n_colmena || '').toLowerCase().includes(ql));
+    } else if (codCorte) {
+        // Sin búsqueda: solo tubos del mismo código que el corte
+        filtrados = sinSugerido.filter(t =>
+            (t.cod || '').toUpperCase().trim() === codCorte);
+    } else {
+        filtrados = sinSugerido;
+    }
 
     if (label) label.textContent = q
         ? `Resultados para "${q}" (${filtrados.length})`
-        : `Otros disponibles en colmena (${filtrados.length})`;
+        : codCorte
+            ? `${codCorte} disponibles (${filtrados.length})`
+            : `Disponibles en colmena (${filtrados.length})`;
 
     if (!filtrados.length) {
         cont.innerHTML = `<div style="padding:14px;text-align:center;color:var(--text-secondary);font-size:0.82rem;">
