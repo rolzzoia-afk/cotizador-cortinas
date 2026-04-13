@@ -32,7 +32,7 @@
         const { createClient } = supabase;
         const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
             auth: {
-                storage: sessionStorage,
+                storage: localStorage,
                 persistSession: true,
                 autoRefreshToken: true
             }

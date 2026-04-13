@@ -1204,7 +1204,7 @@ const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
 
 const _memStorage = { _d:{}, getItem(k){return this._d[k]||null;}, setItem(k,v){this._d[k]=v;}, removeItem(k){delete this._d[k];} };
 let _storage = _memStorage;
-try { sessionStorage.setItem('_t','1'); sessionStorage.removeItem('_t'); _storage = sessionStorage; } catch(e) {}
+try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); _storage = localStorage; } catch(e) {}
 
 let sb;
 try {

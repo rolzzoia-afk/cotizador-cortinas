@@ -1315,10 +1315,10 @@ const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
 const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
 
-// ── Almacenamiento seguro: fallback a memoria si sessionStorage está bloqueado ──
+// ── Almacenamiento: localStorage para compartir sesión con iframes del mismo origen ──
 const _memStorage = { _data: {}, getItem(k) { return this._data[k] || null; }, setItem(k,v) { this._data[k] = v; }, removeItem(k) { delete this._data[k]; } };
 let _storage = _memStorage;
-try { sessionStorage.setItem('_test', '1'); sessionStorage.removeItem('_test'); _storage = sessionStorage; } catch(e) { console.warn('[INV] sessionStorage bloqueado, usando memoria'); }
+try { localStorage.setItem('_test', '1'); localStorage.removeItem('_test'); _storage = localStorage; } catch(e) { console.warn('[INV] localStorage bloqueado, usando memoria'); }
 
 let sbInv;
 let _usandoParent = false;
