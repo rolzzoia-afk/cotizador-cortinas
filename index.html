@@ -998,6 +998,15 @@
 
     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
         <div class="d-flex align-items-center gap-3">
+            <a href="landing.html" title="Volver al inicio"
+                style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.05);
+                border:1px solid rgba(255,255,255,0.1);border-radius:8px;padding:5px 10px;
+                color:rgba(255,255,255,0.5);font-size:0.72rem;font-weight:600;text-decoration:none;
+                transition:all 0.2s;white-space:nowrap;"
+                onmouseover="this.style.background='rgba(255,255,255,0.1)';this.style.color='#fff';"
+                onmouseout="this.style.background='rgba(255,255,255,0.05)';this.style.color='rgba(255,255,255,0.5)';">
+                <i class="bi bi-grid-3x3-gap-fill"></i> Inicio
+            </a>
             <img src="C:\Users\corti\OneDrive\Desktop\proyecto\logo_roller.png" alt="Rolzzo" style="height: 50px;">
             <div>
                 <h2 class="text-premium mb-0">Generador de Cotizaciones</h2>
@@ -1007,6 +1016,9 @@
                             <span id="conexion-dot">●</span> Conectando…
                         </span>
                     </div>
+                    <span id="rol-badge" style="display:none;background:rgba(99,102,241,0.2);
+                        color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);border-radius:6px;
+                        font-size:0.7rem;padding:2px 8px;font-weight:600;"></span>
                     <button onclick="abrirModalOperario()" title="Cambiar operario"
                         style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.35);border-radius:6px;color:#a5b4fc;font-size:0.7rem;padding:2px 8px;cursor:pointer;white-space:nowrap;">
                         <i class="bi bi-person-circle"></i> <span id="badge-operario-nombre">—</span>
@@ -9974,6 +9986,98 @@
         <div class="text-muted mt-3" style="font-size:0.7rem;">Puedes cambiar tu nombre luego desde el botón <i class="bi bi-person-circle"></i> en la barra superior.</div>
     </div>
 </div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// FILTRADO DE TABS POR ROL
+// Tabs disponibles según el parámetro ?rol= en la URL
+// ══════════════════════════════════════════════════════════════════
+(function() {
+    const ROL_TABS = {
+        bodeguero:    ['bodeguero'],
+        ventas:       ['panel', 'fase1', 'fase2', 'fase3', 'fase4', 'camionetas'],
+        produccion:   ['estructura', 'historial-corte', 'historial-tubos'],
+        telas:        ['telas'],
+        dimensionado: ['tela', 'historial-corte'],
+        pruebas:      ['panel'],
+        admin:        null   // null = todos los tabs visibles
+    };
+
+    const ROL_LABEL = {
+        bodeguero:    '📦 Bodeguero',
+        ventas:       '💼 Ventas / Oficina',
+        produccion:   '🔧 Producción',
+        telas:        '🎨 Telas',
+        dimensionado: '📐 Dimensionado',
+        pruebas:      '✅ Pruebas',
+        admin:        '🔐 Administrador'
+    };
+
+    const params = new URLSearchParams(window.location.search);
+    const rol    = (params.get('rol') || '').toLowerCase();
+
+    if (!rol || !(rol in ROL_TABS)) return;   // sin filtro si no hay param o es inválido
+
+    const permitidos = ROL_TABS[rol];
+
+    // Mostrar badge del rol en el header
+    const badge = document.getElementById('rol-badge');
+    if (badge) {
+        badge.textContent = ROL_LABEL[rol] || rol;
+        badge.style.display = 'inline';
+    }
+
+    if (permitidos === null) return;   // admin → no filtrar
+
+    // Ocultar tabs no permitidos y sus paneles
+    const todosLosTabs = document.querySelectorAll('#fasesTab .nav-item');
+    let primerPermitido = null;
+
+    todosLosTabs.forEach(item => {
+        const btn    = item.querySelector('.nav-link');
+        if (!btn) return;
+        const target = btn.getAttribute('data-bs-target')?.replace('#', '');   // ej: "panel"
+
+        if (!target || !permitidos.includes(target)) {
+            item.style.display = 'none';
+            // Ocultar también el panel de contenido
+            const pane = document.getElementById(target);
+            if (pane) pane.style.display = 'none';
+        } else {
+            if (!primerPermitido) primerPermitido = { btn, target };
+        }
+    });
+
+    // Activar el primer tab permitido
+    if (primerPermitido) {
+        // Quitar active de todos
+        document.querySelectorAll('#fasesTab .nav-link').forEach(b => {
+            b.classList.remove('active');
+            b.setAttribute('aria-selected', 'false');
+        });
+        document.querySelectorAll('#fasesTabContent .tab-pane').forEach(p => {
+            p.classList.remove('show', 'active');
+        });
+
+        primerPermitido.btn.classList.add('active');
+        primerPermitido.btn.setAttribute('aria-selected', 'true');
+
+        const pane = document.getElementById(primerPermitido.target);
+        if (pane) {
+            pane.style.display = '';
+            pane.classList.add('show', 'active');
+            // Disparar carga lazy del iframe si aplica
+            const loader = document.getElementById(`${primerPermitido.target}-loading`);
+            const iframe = pane.querySelector('iframe[data-src]');
+            if (iframe && loader) {
+                iframe.src = iframe.getAttribute('data-src');
+                iframe.removeAttribute('data-src');
+                iframe.addEventListener('load', () => loader.style.display = 'none', { once: true });
+            }
+        }
+    }
+})();
+</script>
 
 </body>
 </html>
