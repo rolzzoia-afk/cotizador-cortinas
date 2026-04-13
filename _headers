@@ -26,7 +26,7 @@
   # ── CORS ─────────────────────────────────────────────────────────────────
   # Reemplazar TU_DOMINIO por el dominio real en producción
   # (ej: https://rolzzo.com). En desarrollo se puede usar *
-  Access-Control-Allow-Origin: https://rolzzoia-afk.github.io
+  Access-Control-Allow-Origin: https://cotizador-cortinas.pages.dev
   Access-Control-Allow-Methods: GET, POST, OPTIONS
   Access-Control-Allow-Headers: Content-Type, Authorization
 
