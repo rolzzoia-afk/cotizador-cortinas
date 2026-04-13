@@ -747,8 +747,7 @@ async function abrirModalError(pi, idx) {
         b.style.borderColor = id === 'btn-merma-orig' ? 'rgba(239,68,68,0.3)' : 'rgba(99,102,241,0.3)';
     });
 
-    // Info del tubo original
-    const { r } = { r: _modalPlan.resultados[idx]?.resultado ?? _modalPlan.resultados[idx] };
+    // Info del tubo original (usa la variable r ya declarada al inicio de la función)
     const codOrig   = r?.codigo || r?.codigo_original || '—';
     const colOrig   = r?.colmena ?? '—';
     const medOrigen = r?.medida_origen != null ? `${Number(r.medida_origen).toFixed(1)} cm` : '—';
