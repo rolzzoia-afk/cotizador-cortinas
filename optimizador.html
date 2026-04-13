@@ -1337,6 +1337,48 @@ async function guardarColmenaFinalEnSupabase() {
                 tubo_raiz_id: c.tubo_raiz_id || null  // preservar linaje entre sesiones
             }));
 
+        // ── PASO 0.5: Consolidar PESOS en bins dedicados A27 / A28 / A29 ────────
+        // Los pesos siempre deben guardarse en esos 3 slots, sin importar:
+        //   · si venían de una colmena incorrecta (desordenados)
+        //   · si son pesos nuevos (TUBO NUEVO path → estado 'usada' → excluidos del filtro)
+        //   · si ya estaban en A27/A28/A29 pero marcados 'usada' al ser consumidos
+        // Estrategia: usar resultadosOptimizacion (que tiene orden.componente) para
+        // identificar pesos y reasignarlos en round-robin sobre A27→A28→A29.
+        {
+            const _TIPOS_PESO_G   = new Set(['PESO', 'PESO U', 'PESO INTERNO', 'PESO SOFT LIGHT']);
+            const _SLOTS_PESO_G   = ['A27', 'A28', 'A29'];
+            const _SLOTS_PESO_SET = new Set(_SLOTS_PESO_G);
+
+            // 1. Quitar de colmenasFinal cualquier entrada que ya esté en A27/A28/A29
+            //    (evitar duplicados si por alguna razón quedaron como 'disponible')
+            for (let i = colmenasFinal.length - 1; i >= 0; i--) {
+                if (_SLOTS_PESO_SET.has(colmenasFinal[i].n_colmena)) colmenasFinal.splice(i, 1);
+            }
+
+            // 2. Recoger todos los resultados de pesos de esta sesión
+            const resultadosPeso = (SistemaInventario.resultadosOptimizacion || [])
+                .filter(item => item.orden && _TIPOS_PESO_G.has(item.orden.componente) && item.resultado);
+
+            // 3. Mapear cada peso a A27/A28/A29 en round-robin y agregar a colmenasFinal
+            resultadosPeso.forEach((item, i) => {
+                const slot = _SLOTS_PESO_G[i % _SLOTS_PESO_G.length];
+                const r    = item.resultado;
+                colmenasFinal.push({
+                    n_colmena:    slot,
+                    medida_cm:    r.medida_origen || r.medida_cm || 0,
+                    medida_mm:    (r.medida_origen || r.medida_cm || 0) * 10,
+                    cod:          (r.codigo || r.codigo_original || '').toUpperCase().trim(),
+                    serial:       (r.serial && typeof r.serial === 'object' ? r.serial.serial : r.serial) || null,
+                    tubo_raiz_id: null
+                });
+            });
+
+            if (resultadosPeso.length > 0) {
+                console.log(`⚖️ Pesos consolidados en colmena: ${resultadosPeso.map((it, i) =>
+                    `${_SLOTS_PESO_G[i % _SLOTS_PESO_G.length]}=${it.resultado?.codigo}`).join(', ')}`);
+            }
+        }
+
         // ── PASO 1: Sincronizar colmena_tubos (fuente única de verdad) ──────────
         // Se hace SIEMPRE, independiente del guardado en configuracion
         await sincronizarColmenaFinalConTabla(colmenasFinal);
