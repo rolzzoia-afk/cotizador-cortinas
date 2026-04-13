@@ -580,11 +580,31 @@ async function cargarPlanes() {
         return;
     }
 
-    _planes = (planes || []).map(p => ({
+    const _planesRaw = (planes || []).map(p => ({
         ...p,
         resultados: Array.isArray(p.resultados) ? p.resultados : tryParse(p.resultados, []),
         ordenes:    Array.isArray(p.ordenes)    ? p.ordenes    : tryParse(p.ordenes, [])
     }));
+
+    // ── Deduplicar: si dos planes comparten las mismas OTs, mismo nº de cortes
+    // y la misma fecha (redondeada al minuto), es el doble guardado automático.
+    // Conservamos solo el de mayor id (el guardado definitivo) para no confundir
+    // al administrador. Los datos en BD quedan intactos.
+    const _dedupMap = new Map();
+    _planesRaw.forEach(p => {
+        const ots  = [...new Set((p.resultados || []).map(item => {
+            const r   = item.resultado ?? item;
+            const ord = (item.orden && typeof item.orden === 'object')
+                ? item.orden : ((p.ordenes || []).find(o => o.id === (r.orden || item.orden)) || {});
+            return String(ord.ot || ord.numero_ot || r.orden || '-').trim();
+        }).filter(ot => ot && ot !== '-'))].sort().join(',');
+        const minuto = p.fecha ? p.fecha.slice(0, 16) : 'sin-fecha'; // "2026-04-10T17:18"
+        const clave  = `${ots}__${p.resultados.length}__${minuto}`;
+        const prev   = _dedupMap.get(clave);
+        if (!prev || (p.id > prev.id)) _dedupMap.set(clave, p);
+    });
+    _planes = [..._dedupMap.values()].sort((a, b) =>
+        (b.fecha || '').localeCompare(a.fecha || ''));
 
     if (!_planes.length) {
         cont.innerHTML = `<div class="empty-state"><i class="bi bi-scissors"></i>
