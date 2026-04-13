@@ -1793,8 +1793,11 @@ function filtrarCatalogo() {
             <td style="text-align:center;">${tagEstado}</td>
             <td style="font-size:0.78rem; color:var(--text-secondary); max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${(i.comentarios||'').replace(/"/g,"'")}">${i.comentarios || '-'}</td>
             <td style="text-align:center; white-space:nowrap;">
-                <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem;" onclick="editarInsumo('${i.id}')">
+                <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem;" onclick="editarInsumo('${i.id}')" title="Editar insumo">
                     <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-inv btn-success-inv" style="padding:3px 8px; font-size:0.72rem; margin-left:4px;" onclick="abrirModalMovimientoCod('${i.cod}')" title="Agregar stock">
+                    <i class="bi bi-plus-lg"></i>
                 </button>
                 <button class="btn-inv btn-outline-inv" style="padding:3px 8px; font-size:0.72rem; margin-left:4px;" onclick="mostrarQRInsumo('${i.cod}','${(i.nemotecnico||i.descriptor_proveedor||i.cod).replace(/'/g,"\\'")}')" title="Ver QR del insumo">
                     <i class="bi bi-qr-code"></i>
@@ -1984,6 +1987,14 @@ function abrirModalMovimiento(tipo) {
     document.getElementById('mov-responsable').selectedIndex = 0;
     document.getElementById('mov-recepcion').selectedIndex = 0;
     document.getElementById('modalMovimiento').classList.add('visible');
+}
+
+function abrirModalMovimientoCod(cod) {
+    abrirModalMovimiento('NUEVO INGRESO');
+    // Pre-seleccionar el producto en el select
+    const sel = document.getElementById('mov-codigo');
+    const opt = [...sel.options].find(o => o.value === cod);
+    if (opt) sel.value = cod;
 }
 
 async function guardarMovimiento() {
