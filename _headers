@@ -1,0 +1,34 @@
+# =============================================================================
+# ROLZZO · SECURITY HEADERS
+# Formato Netlify (_headers). Para otros hosts ver vercel.json / server.js
+# =============================================================================
+
+/*
+  # ── Framing ──────────────────────────────────────────────────────────────
+  # SAMEORIGIN permite iframes internos (historial_corte, optimizador, etc.)
+  X-Frame-Options: SAMEORIGIN
+
+  # ── Tipo de contenido ────────────────────────────────────────────────────
+  X-Content-Type-Options: nosniff
+
+  # ── XSS legacy ───────────────────────────────────────────────────────────
+  X-XSS-Protection: 1; mode=block
+
+  # ── Referrer ─────────────────────────────────────────────────────────────
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # ── HSTS (solo cuando el dominio tenga HTTPS definitivo) ─────────────────
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+
+  # ── Permisos del navegador ────────────────────────────────────────────────
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+
+  # ── CORS ─────────────────────────────────────────────────────────────────
+  # Reemplazar TU_DOMINIO por el dominio real en producción
+  # (ej: https://rolzzo.com). En desarrollo se puede usar *
+  Access-Control-Allow-Origin: https://rolzzoia-afk.github.io
+  Access-Control-Allow-Methods: GET, POST, OPTIONS
+  Access-Control-Allow-Headers: Content-Type, Authorization
+
+  # ── Content Security Policy ───────────────────────────────────────────────
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com cdn.jsdelivr.net data:; img-src 'self' data: blob:; connect-src 'self' https://izelewwgeamktnzkiwvl.supabase.co wss://izelewwgeamktnzkiwvl.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';
