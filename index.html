@@ -10055,39 +10055,34 @@
         }
     });
 
-    // ── Activar el primer tab usando la API de Bootstrap para disparar shown.bs.tab ──
-    // (necesario para que los iframes con carga lazy reciban el evento y asignen su src)
+    // ── Activar el primer tab DESPUÉS de DOMContentLoaded ──
+    // Es crítico esperar a DOMContentLoaded porque los listeners de shown.bs.tab
+    // (que asignan el src de cada iframe) se registran dentro de ese evento.
+    // Si activamos antes, el evento se dispara pero nadie lo escucha todavía.
     if (primerBtnPermitido) {
-        // Esperar a que Bootstrap esté listo
-        const activar = () => {
-            try {
-                // Quitar active del tab por defecto (panel)
-                document.querySelectorAll('#fasesTab .nav-link').forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-selected', 'false');
-                });
-                document.querySelectorAll('#fasesTabContent .tab-pane').forEach(p => {
-                    p.classList.remove('show', 'active');
-                });
-
-                // Usar Bootstrap Tab API → dispara shown.bs.tab → activa lazy loaders
-                const bsTab = new bootstrap.Tab(primerBtnPermitido);
-                bsTab.show();
-            } catch(e) {
-                // Fallback: activar manualmente si Bootstrap no está disponible
-                primerBtnPermitido.classList.add('active');
-                const target = primerBtnPermitido.getAttribute('data-bs-target').replace('#','');
-                const pane   = document.getElementById(target);
-                if (pane) { pane.style.display = ''; pane.classList.add('show','active'); }
-            }
-        };
-
-        if (typeof bootstrap !== 'undefined') {
-            activar();
-        } else {
-            // Bootstrap carga después → esperar
-            window.addEventListener('load', activar);
-        }
+        document.addEventListener('DOMContentLoaded', function() {
+            // Pequeño delay para que todos los DOMContentLoaded listeners
+            // del resto de la app terminen de registrarse primero.
+            setTimeout(function() {
+                try {
+                    new bootstrap.Tab(primerBtnPermitido).show();
+                } catch(e) {
+                    // Fallback manual si Bootstrap falla
+                    document.querySelectorAll('#fasesTab .nav-link').forEach(b => {
+                        b.classList.remove('active');
+                        b.setAttribute('aria-selected', 'false');
+                    });
+                    document.querySelectorAll('#fasesTabContent .tab-pane').forEach(p => {
+                        p.classList.remove('show', 'active');
+                    });
+                    primerBtnPermitido.classList.add('active');
+                    primerBtnPermitido.setAttribute('aria-selected', 'true');
+                    const target = primerBtnPermitido.getAttribute('data-bs-target').replace('#', '');
+                    const pane = document.getElementById(target);
+                    if (pane) { pane.style.display = ''; pane.classList.add('show', 'active'); }
+                }
+            }, 80);
+        });
     }
 })();
 </script>
