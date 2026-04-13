@@ -571,6 +571,7 @@ let _insumos         = [];   // Catálogo de insumos
 let _telasCat        = [];   // Catálogo de telas (telas_catalogo)
 let _telasSlots      = [];   // Posiciones de telas (telas_slots)
 let _ubicacionesRack = [];   // Mapa físico de rack de insumos (ubicaciones_rack)
+let _tubosColmena    = [];   // Tubos con su colmena asignada (colmena_tubos)
 let _scanner    = null;     // Instancia Html5Qrcode
 let _scanItemIdx = -1;      // Índice del ítem BOM que se está despachando
 let _scanFase    = 'loc';   // 'loc' | 'item'
@@ -633,7 +634,7 @@ async function cargarOTs() {
     // Estados visibles para el bodeguero: produccion, lista (lista p/ entrega), pendiente_firma
     const ESTADOS_BODEGUERO = ['produccion', 'lista', 'pendiente_firma'];
 
-    const [{ data: ots, error }, { data: ins }, { data: telCat }, { data: telSlots }, { data: racks }] = await Promise.all([
+    const [{ data: ots, error }, { data: ins }, { data: telCat }, { data: telSlots }, { data: racks }, { data: tubos }] = await Promise.all([
         sb.from('ots')
             .select('id, numero_ot, estado, datos_generales, items, fecha_creacion, fecha_entrega')
             .eq('empresa_id', EMPRESA_ID)
@@ -650,6 +651,9 @@ async function cargarOTs() {
             .eq('empresa_id', EMPRESA_ID),
         sb.from('ubicaciones_rack')
             .select('rack,fila,columna,codigo_insumo,almacen')
+            .eq('empresa_id', EMPRESA_ID),
+        sb.from('colmena_tubos')
+            .select('cod,n_colmena,medida_cm')
             .eq('empresa_id', EMPRESA_ID)
     ]);
 
@@ -674,6 +678,7 @@ async function cargarOTs() {
     _telasCat        = telCat   || [];
     _telasSlots      = telSlots || [];
     _ubicacionesRack = racks    || [];
+    _tubosColmena    = tubos    || [];
 
     if (!_otsData.length) {
         document.getElementById('lista-ots').innerHTML =
@@ -920,6 +925,11 @@ function renderBOMItems() {
         if (item._es_tela) {
             const ubic = item._ubicacion_rack;
             locText   = ubic ? `📍 Rack: ${ubic}` : '📍 Sin posición registrada';
+        } else if ((item.categoria || '').toUpperCase().includes('TUBER')) {
+            // Tubos: la ubicación viene de la colmena, no del rack
+            const cod = (item.especificacion || '').split('·')[0].trim().toUpperCase();
+            const colmenas = getColmenaPorCodTubo(cod);
+            locText = colmenas ? `🗄 Colmena: ${colmenas}` : '⚠ Sin colmena asignada';
         } else {
             const insMatch = buscarInsumoMatchBOM(item);
             const ubic = getUbicacionBOM(item);
@@ -951,6 +961,18 @@ function renderBOMItems() {
     // Mostrar botón de completar si todos los ítems están completos
     const todosCompletos = Object.values(_contadores).every(c => c.estado === 'completo');
     document.getElementById('despacho-actions').style.display = todosCompletos ? 'block' : 'none';
+}
+
+// Devuelve las colmenas (n_colmena) donde está guardado un tubo por código
+function getColmenaPorCodTubo(cod) {
+    if (!cod || !_tubosColmena.length) return null;
+    const codU = cod.toUpperCase().trim();
+    const colmenas = [...new Set(
+        _tubosColmena
+            .filter(t => (t.cod || '').toUpperCase().trim() === codU)
+            .map(t => t.n_colmena)
+    )].filter(Boolean).sort();
+    return colmenas.length ? colmenas.join(', ') : null;
 }
 
 function buscarInsumoMatchBOM(item) {
