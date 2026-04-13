@@ -736,8 +736,17 @@
             .filter-row { flex-direction: column; gap: 8px; }
             .search-wrapper { width: 100%; min-width: unset; }
 
-            /* Tabla: scroll horizontal */
-            .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            /* Tabla catálogo: scroll horizontal + reducir ancho mínimo en móvil */
+            .table-container {
+                overflow-x: auto;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                max-height: 55vh;
+            }
+            /* La tabla principal (1600px en desktop) se recorta a 900px en móvil
+               mostrando solo las columnas más importantes */
+            .table-container table { min-width: 900px !important; font-size: 0.75rem; }
+            .table-container th, .table-container td { padding: 6px 8px !important; white-space: nowrap; }
 
             /* Cards de rack más compactas */
             .rack-section { padding: 10px; }

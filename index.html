@@ -771,9 +771,28 @@
             align-items: center; justify-content: center; gap: 16px; color: #64748b;
         }
         .iframe-loading .spinner-border { color: var(--primary-500); width: 2.5rem; height: 2.5rem; }
+
+        /* ── Móvil: iframe a pantalla completa con scroll táctil ── */
         @media (max-width: 768px) {
-            .iframe-tab-pane { height: calc(100vh - 75px); border-radius: 0; }
-            .iframe-tab-pane iframe { border-radius: 0; }
+            .iframe-tab-pane {
+                height: calc(100vh - 120px);   /* nav bottom 65px + topbar ~55px */
+                min-height: unset;
+                border-radius: 0;
+                /* Permitir scroll táctil dentro del iframe en iOS/Android */
+                -webkit-overflow-scrolling: touch;
+                overflow: auto;
+            }
+            .iframe-tab-pane iframe {
+                border-radius: 0;
+                /* Touch scroll para el propio iframe en iOS */
+                -webkit-overflow-scrolling: touch;
+                overflow-y: auto;
+            }
+            /* Sin margen superior en los contenedores de iframe */
+            .iframe-tab-pane.mt-2 { margin-top: 0 !important; }
+        }
+        @media (max-width: 480px) {
+            .iframe-tab-pane { height: calc(100vh - 108px); }
         }
 
         /* ── RESPONSIVE MÓVIL ────────────────────────────────── */

@@ -194,6 +194,113 @@ body { background: var(--bg-base); color: var(--text-primary);
     background:#1e1e2e; color:var(--text-primary); border:1px solid var(--border-glass);
     border-radius:12px; padding:11px 20px; font-size:0.85rem; font-weight:600;
     z-index:9999; transition:opacity 0.3s; opacity:0; pointer-events:none; }
+
+/* ══════════════════════════════════════════════════════
+   📱 RESPONSIVE — TABLET & MÓVIL
+   ══════════════════════════════════════════════════════ */
+
+/* ── Tablet (≤ 1024px) ── */
+@media (max-width: 1024px) {
+    .modal-box { max-width: 92vw; }
+}
+
+/* ── Móvil (≤ 768px) ── */
+@media (max-width: 768px) {
+    /* Header compacto */
+    .app-header { padding: 10px 14px; gap: 8px; }
+    .app-header h1 { font-size: 0.95rem; }
+
+    /* Tabs scrollables en horizontal (nunca se cortan) */
+    .tabs-bar {
+        padding: 10px 14px 0;
+        gap: 4px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+        scrollbar-width: none;
+    }
+    .tabs-bar::-webkit-scrollbar { display: none; }
+    .tab-btn {
+        white-space: nowrap;
+        flex-shrink: 0;
+        padding: 8px 14px;
+        font-size: 0.82rem;
+        min-height: 44px;
+    }
+
+    /* Vistas con padding reducido */
+    .view { padding: 12px 12px; }
+
+    /* Tarjetas de plan */
+    .plan-card-header { padding: 12px 14px; gap: 8px; flex-wrap: wrap; }
+    .plan-fecha { font-size: 0.88rem; }
+    .plan-meta  { font-size: 0.72rem; }
+
+    /* Tabla del plan: scrollable en plan-body (overflow-x:auto ya existe) */
+    .plan-body { -webkit-overflow-scrolling: touch; }
+    .tabla-plan { min-width: 680px; font-size: 0.72rem; }
+    .tabla-plan th, .tabla-plan td { padding: 6px 8px; }
+
+    /* Tabla de errores */
+    .errores-table { min-width: 560px; font-size: 0.75rem; }
+    .errores-table th, .errores-table td { padding: 7px 8px; }
+    /* Añadir scroll al contenedor de errores en móvil */
+    #view-errores .tabla-scroll,
+    .errores-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* Modal: sube desde el fondo en móvil (sheet style) */
+    .modal-overlay {
+        padding: 0;
+        align-items: flex-end;
+    }
+    .modal-box {
+        max-width: 100%;
+        width: 100%;
+        border-radius: 20px 20px 0 0;
+        max-height: 92vh;
+        padding: 20px 16px 32px;
+    }
+
+    /* Chips de info en modal */
+    .modal-info-row { gap: 6px; }
+    .info-chip { font-size: 0.73rem; padding: 4px 8px; }
+
+    /* Botones del modal con toque mínimo */
+    .btn-confirm { min-height: 48px; font-size: 0.95rem; }
+    .btn-cancel  { min-height: 44px; }
+    .btn-error-fila {
+        min-height: 40px;
+        padding: 6px 10px;
+        font-size: 0.74rem;
+    }
+
+    /* Lista de reemplazos */
+    .reemplazo-list { max-height: 160px; }
+
+    /* Gráfico */
+    .chart-card { padding: 14px; }
+
+    /* Toast: separar del borde inferior */
+    #toast {
+        bottom: 16px;
+        font-size: 0.8rem;
+        padding: 9px 16px;
+        max-width: 90vw;
+        text-align: center;
+    }
+}
+
+/* ── Móvil pequeño (≤ 480px) ── */
+@media (max-width: 480px) {
+    .app-header h1  { font-size: 0.88rem; }
+    .tab-btn        { padding: 8px 10px; font-size: 0.78rem; }
+    .plan-fecha     { font-size: 0.82rem; }
+    .tabla-plan     { min-width: 580px; font-size: 0.68rem; }
+    .tabla-plan th, .tabla-plan td { padding: 5px 6px; }
+    .modal-box      { padding: 16px 12px 28px; }
+    .reemplazo-list { max-height: 130px; }
+    .form-select-r, .form-input-r { font-size: 1rem; min-height: 44px; }
+}
 </style>
 </head>
 <body>

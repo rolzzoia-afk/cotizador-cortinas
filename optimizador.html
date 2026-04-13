@@ -489,6 +489,70 @@
 
         /* ── INDICADOR FUENTE COLMENA ── */
         #indicadorFuenteColmena { font-family: 'Inter', sans-serif; }
+
+        /* ══════════════════════════════════════════════════════
+           📱  RESPONSIVE — TABLET & MÓVIL
+           ══════════════════════════════════════════════════════ */
+
+        /* ── Tablet (769–1024px) ── */
+        @media (max-width: 1024px) {
+            .opt-topbar { padding: 10px 16px; }
+            .container { gap: 12px; }
+            .panel { padding: 16px; min-width: 240px; }
+        }
+
+        /* ── Móvil (≤ 768px) ── */
+        @media (max-width: 768px) {
+            /* Top bar compacto */
+            .opt-topbar { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
+            .opt-topbar h1 { font-size: 1rem; }
+            .opt-topbar .version-tag { display: none; }
+
+            /* Layout de paneles: una columna */
+            .container {
+                flex-direction: column;
+                gap: 10px;
+                margin-top: 12px;
+            }
+            .panel {
+                min-width: unset;
+                width: 100%;
+                padding: 14px 12px;
+                border-radius: 10px;
+            }
+            .panel h2 { font-size: 0.8rem; margin-bottom: 10px; }
+
+            /* Tablas: scroll horizontal */
+            .tabla-scroll {
+                max-height: 260px;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+            }
+            table { min-width: 480px; font-size: 0.75rem; }
+            th, td { padding: 5px 7px !important; font-size: 0.72rem; }
+
+            /* Log compacto */
+            .log-container { max-height: 200px; font-size: 10px; padding: 10px; }
+
+            /* Preview header / body */
+            .preview-header { padding: 12px 14px; }
+            .preview-header h2 { font-size: 0.9rem; }
+            .preview-body { padding: 14px 12px; }
+
+            /* Botones del topbar */
+            .opt-topbar button, .opt-topbar .btn { font-size: 0.8rem; padding: 6px 12px; }
+
+            /* Colmenas tabla */
+            #tbodyColmenas td, #tbodyColmenas th { font-size: 0.7rem; padding: 5px 6px; }
+            #tbodyColmenasResultado td, #tbodyColmenasResultado th { font-size: 0.7rem; padding: 5px 6px; }
+        }
+
+        /* ── Móvil pequeño (≤ 480px) ── */
+        @media (max-width: 480px) {
+            .opt-topbar h1 { font-size: 0.9rem; }
+            .panel { padding: 12px 10px; }
+            table { min-width: 380px; }
+        }
     </style>
 </head>
 <body>
@@ -541,6 +605,12 @@
                 </button>
                 <button class="btn btn-success btn-sm" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" style="white-space:nowrap;">
                     <i class="bi bi-cloud-upload"></i> Guardar en Supabase
+                </button>
+                <button class="btn btn-sm" id="btnImportarE66C2"
+                    onclick="importarE66desdeC2()"
+                    style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:#f59e0b;white-space:nowrap;"
+                    title="Elimina todos los E66 actuales en Supabase e importa los 20 registros de la Colmena 2">
+                    <i class="bi bi-arrow-repeat"></i> Reemplazar E66 (C2)
                 </button>
             </div>
             <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
@@ -1497,6 +1567,84 @@ async function guardarColmenaEnSupabaseDirecto() {
     } catch (e) {
         log(`❌ Error al guardar en Supabase: ${e.message}`, 'error');
         if (btn) { btn.disabled = false; btn.textContent = '☁️ Guardar en Supabase'; }
+    } finally {
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+}
+
+// ─── IMPORTAR E66 DESDE COLMENA 2 ───────────────────────────────────────────
+async function importarE66desdeC2() {
+    const btn = document.getElementById('btnImportarE66C2');
+
+    const ok = confirm(
+        '⚠️ ATENCIÓN\n\n' +
+        'Esta acción va a:\n' +
+        '  1. Eliminar TODOS los tubos E66 actuales en Supabase\n' +
+        '  2. Insertar los 20 registros de la Colmena 2\n\n' +
+        '¿Confirmas? Esta operación NO se puede deshacer.'
+    );
+    if (!ok) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Importando...'; }
+    document.getElementById('loading-overlay').style.display = 'flex';
+
+    try {
+        // ── 1. Eliminar todos los E66 actuales ──────────────────────────────
+        log('🗑️ Eliminando tubos E66 existentes en Supabase...', 'info');
+        await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}&cod=eq.E66`);
+
+        // ── 2. Construir los 20 registros de la Colmena 2 ───────────────────
+        const registros = [
+            // A30 (6 tubos)
+            { n_colmena: 'A30', medida_cm: 139.0,  medida_mm: 1390 },
+            { n_colmena: 'A30', medida_cm: 139.8,  medida_mm: 1398 },
+            { n_colmena: 'A30', medida_cm: 152.2,  medida_mm: 1522 },
+            { n_colmena: 'A30', medida_cm: 171.5,  medida_mm: 1715 },
+            { n_colmena: 'A30', medida_cm: 219.1,  medida_mm: 2191 },
+            { n_colmena: 'A30', medida_cm: 218.2,  medida_mm: 2182 },
+            // A31 (5 tubos)
+            { n_colmena: 'A31', medida_cm: 197.0,  medida_mm: 1970 },
+            { n_colmena: 'A31', medida_cm: 191.1,  medida_mm: 1911 },
+            { n_colmena: 'A31', medida_cm: 190.9,  medida_mm: 1909 },
+            { n_colmena: 'A31', medida_cm: 186.9,  medida_mm: 1869 },
+            { n_colmena: 'A31', medida_cm: 182.3,  medida_mm: 1823 },
+            // L02 (9 tubos — todos > 300 cm)
+            { n_colmena: 'L02', medida_cm: 354.7,  medida_mm: 3547 },
+            { n_colmena: 'L02', medida_cm: 345.1,  medida_mm: 3451 },
+            { n_colmena: 'L02', medida_cm: 345.3,  medida_mm: 3453 },
+            { n_colmena: 'L02', medida_cm: 308.5,  medida_mm: 3085 },
+            { n_colmena: 'L02', medida_cm: 188.0,  medida_mm: 1880 },
+            { n_colmena: 'L02', medida_cm: 346.7,  medida_mm: 3467 },
+            { n_colmena: 'L02', medida_cm: 329.0,  medida_mm: 3290 },
+            { n_colmena: 'L02', medida_cm: 580.0,  medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0,  medida_mm: 5800 },
+        ].map(r => ({
+            empresa_id: EMPRESA_ID_OPT,
+            n_colmena:  r.n_colmena,
+            cod:        'E66',
+            medida_cm:  r.medida_cm,
+            medida_mm:  r.medida_mm,
+            serial:     null,
+            agregado_por_admin: false
+        }));
+
+        // ── 3. Insertar los 20 registros ─────────────────────────────────────
+        log(`📥 Insertando ${registros.length} tubos E66 (Colmena 2)...`, 'info');
+        await _sbRest('POST', 'colmena_tubos', registros);
+
+        // ── 4. Verificar conteo real ──────────────────────────────────────────
+        const conteo = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}&cod=eq.E66`);
+        if (conteo !== null && conteo !== registros.length) {
+            throw new Error(`Se esperaban ${registros.length} tubos E66 pero Supabase reporta ${conteo}.`);
+        }
+        const confirmado = conteo !== null ? ` (verificado: ${conteo} en BD)` : '';
+        log(`✅ E66 importados correctamente desde Colmena 2: ${registros.length} tubos${confirmado}`, 'success');
+        if (btn) { btn.textContent = '✅ Importado'; setTimeout(() => { if (btn) { btn.textContent = '↺ Reemplazar E66 (C2)'; btn.disabled = false; } }, 3500); }
+
+    } catch (e) {
+        log(`❌ Error al importar E66: ${e.message}`, 'error');
+        console.error('[importarE66desdeC2]', e);
+        if (btn) { btn.disabled = false; btn.textContent = '↺ Reemplazar E66 (C2)'; }
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }

@@ -249,18 +249,32 @@
 
         /* ── Responsive ── */
         @media (max-width: 860px) {
-            .roles-grid { grid-template-columns: repeat(2, 1fr); }
+            .roles-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
             .role-card.admin-card { flex-direction: column; grid-column: 1 / -1; }
+            .page { padding: 40px 18px 36px; }
+        }
+        @media (max-width: 640px) {
+            .roles-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .role-card { padding: 16px 14px; border-radius: 16px; }
+            .card-icon { width: 40px; height: 40px; font-size: 1.1rem; }
+            .card-name { font-size: 0.9rem; }
+            .card-modules { display: none; }   /* Ocultar submódulos en móvil para ahorrar espacio */
+            .card-arrow  { font-size: 0.8rem; }
         }
         @media (max-width: 540px) {
-            .page { padding: 36px 14px 32px; }
-            .roles-grid { grid-template-columns: 1fr; }
+            .page { padding: 28px 12px 28px; }
+            .roles-grid { grid-template-columns: 1fr; gap: 10px; }
             .role-card.admin-card { grid-column: 1; }
-            .logo-wrap img { height: 56px; }
-            .logo-text-fallback { font-size: 3rem; }
-            .header-title { font-size: 1.25rem; }
-            .header { margin-bottom: 36px; }
+            .role-card { padding: 16px 14px; min-height: 72px; }
+            .logo-wrap img { height: 50px; }
+            .logo-text-fallback { font-size: 2.6rem; }
+            .header-title { font-size: 1.1rem; }
+            .header-sub { font-size: 0.78rem; }
+            .header { margin-bottom: 28px; gap: 12px; }
             .clock { display: none; }
+            /* Admin card horizontal en una columna */
+            .role-card.admin-card { flex-direction: row; align-items: center; }
+            .role-card.admin-card .card-icon { width: 44px; height: 44px; font-size: 1.2rem; flex-shrink: 0; }
         }
     </style>
 </head>
