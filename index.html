@@ -7817,8 +7817,9 @@
             try {
                 const iframe  = document.getElementById('iframe-historial-corte');
                 const loading = document.getElementById('historial-corte-loading');
-                if (!iframe.getAttribute('src')) {
-                    iframe.src = 'historial_corte.html';
+                const _hcVer  = 'v=2';
+                if (!iframe.getAttribute('src') || !iframe.src.includes(_hcVer)) {
+                    iframe.src = 'historial_corte.html?' + _hcVer;
                 }
                 presenciaActualizar('historial-corte', 'Historial de Corte');
             } catch(e) {
