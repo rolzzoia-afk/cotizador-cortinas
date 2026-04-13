@@ -612,6 +612,12 @@
                     title="Elimina todos los E66 actuales en Supabase e importa los 20 registros de la Colmena 2">
                     <i class="bi bi-arrow-repeat"></i> Reemplazar E66 (C2)
                 </button>
+                <button class="btn btn-sm" id="btnImportarE02C2"
+                    onclick="importarE02desdeC2()"
+                    style="background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);color:#8b5cf6;white-space:nowrap;"
+                    title="Elimina todos los E02 actuales en Supabase e importa los 41 registros de la Colmena 2">
+                    <i class="bi bi-arrow-repeat"></i> Reemplazar E02 (C2)
+                </button>
             </div>
             <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
             <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
@@ -1645,6 +1651,106 @@ async function importarE66desdeC2() {
         log(`❌ Error al importar E66: ${e.message}`, 'error');
         console.error('[importarE66desdeC2]', e);
         if (btn) { btn.disabled = false; btn.textContent = '↺ Reemplazar E66 (C2)'; }
+    } finally {
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+}
+
+// ─── IMPORTAR E02 DESDE COLMENA 2 ───────────────────────────────────────────
+async function importarE02desdeC2() {
+    const btn = document.getElementById('btnImportarE02C2');
+
+    const ok = confirm(
+        '⚠️ ATENCIÓN\n\n' +
+        'Esta acción va a:\n' +
+        '  1. Eliminar TODOS los tubos E02 actuales en Supabase\n' +
+        '  2. Insertar los 41 registros de la Colmena 2\n\n' +
+        '¿Confirmas? Esta operación NO se puede deshacer.'
+    );
+    if (!ok) return;
+
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Importando...'; }
+    document.getElementById('loading-overlay').style.display = 'flex';
+
+    try {
+        // ── 1. Eliminar todos los E02 actuales ──────────────────────────────
+        log('🗑️ Eliminando tubos E02 existentes en Supabase...', 'info');
+        await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}&cod=eq.E02`);
+
+        // ── 2. Construir los 41 registros de la Colmena 2 ───────────────────
+        const registros = [
+            // A32 (7 tubos)
+            { n_colmena: 'A32', medida_cm: 177.3, medida_mm: 1773 },
+            { n_colmena: 'A32', medida_cm: 179.9, medida_mm: 1799 },
+            { n_colmena: 'A32', medida_cm: 175.3, medida_mm: 1753 },
+            { n_colmena: 'A32', medida_cm: 175.3, medida_mm: 1753 },
+            { n_colmena: 'A32', medida_cm: 166.6, medida_mm: 1666 },
+            { n_colmena: 'A32', medida_cm: 130.8, medida_mm: 1308 },
+            { n_colmena: 'A32', medida_cm:  97.2, medida_mm:  972 },
+            // A33 (9 tubos)
+            { n_colmena: 'A33', medida_cm: 217.1, medida_mm: 2171 },
+            { n_colmena: 'A33', medida_cm: 216.6, medida_mm: 2166 },
+            { n_colmena: 'A33', medida_cm: 216.4, medida_mm: 2164 },
+            { n_colmena: 'A33', medida_cm: 214.0, medida_mm: 2140 },
+            { n_colmena: 'A33', medida_cm: 201.9, medida_mm: 2019 },
+            { n_colmena: 'A33', medida_cm: 178.2, medida_mm: 1782 },
+            { n_colmena: 'A33', medida_cm:  97.6, medida_mm:  976 },
+            { n_colmena: 'A33', medida_cm:  98.2, medida_mm:  982 },
+            { n_colmena: 'A33', medida_cm:  97.9, medida_mm:  979 },
+            // A34 (5 tubos)
+            { n_colmena: 'A34', medida_cm: 251.9, medida_mm: 2519 },
+            { n_colmena: 'A34', medida_cm: 239.1, medida_mm: 2391 },
+            { n_colmena: 'A34', medida_cm: 228.8, medida_mm: 2288 },
+            { n_colmena: 'A34', medida_cm: 217.8, medida_mm: 2178 },
+            { n_colmena: 'A34', medida_cm: 202.0, medida_mm: 2020 },
+            // L02 (20 tubos)
+            { n_colmena: 'L02', medida_cm: 197.0, medida_mm: 1970 },
+            { n_colmena: 'L02', medida_cm: 196.3, medida_mm: 1963 },
+            { n_colmena: 'L02', medida_cm: 159.2, medida_mm: 1592 },
+            { n_colmena: 'L02', medida_cm: 153.2, medida_mm: 1532 },
+            { n_colmena: 'L02', medida_cm: 133.5, medida_mm: 1335 },
+            { n_colmena: 'L02', medida_cm: 132.6, medida_mm: 1326 },
+            { n_colmena: 'L02', medida_cm: 130.2, medida_mm: 1302 },
+            { n_colmena: 'L02', medida_cm: 130.0, medida_mm: 1300 },
+            { n_colmena: 'L02', medida_cm: 351.9, medida_mm: 3519 },
+            { n_colmena: 'L02', medida_cm: 350.0, medida_mm: 3500 },
+            { n_colmena: 'L02', medida_cm: 433.0, medida_mm: 4330 },
+            { n_colmena: 'L02', medida_cm: 229.0, medida_mm: 2290 },
+            { n_colmena: 'L02', medida_cm: 286.6, medida_mm: 2866 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+            { n_colmena: 'L02', medida_cm: 580.0, medida_mm: 5800 },
+        ].map(r => ({
+            empresa_id: EMPRESA_ID_OPT,
+            n_colmena:  r.n_colmena,
+            cod:        'E02',
+            medida_cm:  r.medida_cm,
+            medida_mm:  r.medida_mm,
+            serial:     null,
+            agregado_por_admin: false
+        }));
+
+        // ── 3. Insertar los 41 registros ─────────────────────────────────────
+        log(`📥 Insertando ${registros.length} tubos E02 (Colmena 2)...`, 'info');
+        await _sbRest('POST', 'colmena_tubos', registros);
+
+        // ── 4. Verificar conteo real ──────────────────────────────────────────
+        const conteo = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}&cod=eq.E02`);
+        if (conteo !== null && conteo !== registros.length) {
+            throw new Error(`Se esperaban ${registros.length} tubos E02 pero Supabase reporta ${conteo}.`);
+        }
+        const confirmado = conteo !== null ? ` (verificado: ${conteo} en BD)` : '';
+        log(`✅ E02 importados correctamente desde Colmena 2: ${registros.length} tubos${confirmado}`, 'success');
+        if (btn) { btn.textContent = '✅ Importado'; setTimeout(() => { if (btn) { btn.textContent = '↺ Reemplazar E02 (C2)'; btn.disabled = false; } }, 3500); }
+
+    } catch (e) {
+        log(`❌ Error al importar E02: ${e.message}`, 'error');
+        console.error('[importarE02desdeC2]', e);
+        if (btn) { btn.disabled = false; btn.textContent = '↺ Reemplazar E02 (C2)'; }
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }
