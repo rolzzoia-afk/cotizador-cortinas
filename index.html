@@ -1037,7 +1037,7 @@
         </div>
     </div>
 
-    <div class="glass-card mb-3">
+    <div class="glass-card mb-3" id="datos-generales-card">
         <div class="section-header">
             <strong><i class="bi bi-person-badge"></i> 1. Datos Generales de la Cotización</strong>
         </div>
@@ -10013,67 +10013,80 @@
         admin:        '🔐 Administrador'
     };
 
+    // Roles que necesitan ver el formulario "Datos Generales de la Cotización"
+    const ROL_CON_DATOS_GENERALES = ['ventas', 'admin'];
+
     const params = new URLSearchParams(window.location.search);
     const rol    = (params.get('rol') || '').toLowerCase();
 
-    if (!rol || !(rol in ROL_TABS)) return;   // sin filtro si no hay param o es inválido
+    if (!rol || !(rol in ROL_TABS)) return;   // sin filtro si no hay param válido
 
-    const permitidos = ROL_TABS[rol];
-
-    // Mostrar badge del rol en el header
+    // ── Badge del rol en el header ──
     const badge = document.getElementById('rol-badge');
     if (badge) {
         badge.textContent = ROL_LABEL[rol] || rol;
         badge.style.display = 'inline';
     }
 
-    if (permitidos === null) return;   // admin → no filtrar
+    // ── Ocultar "Datos Generales de la Cotización" si el rol no lo necesita ──
+    if (!ROL_CON_DATOS_GENERALES.includes(rol)) {
+        const cardDG = document.getElementById('datos-generales-card');
+        if (cardDG) cardDG.style.display = 'none';
+    }
 
-    // Ocultar tabs no permitidos y sus paneles
+    const permitidos = ROL_TABS[rol];
+    if (permitidos === null) return;   // admin → mostrar todo, sin filtrar tabs
+
+    // ── Ocultar tabs no permitidos ──
     const todosLosTabs = document.querySelectorAll('#fasesTab .nav-item');
-    let primerPermitido = null;
+    let primerBtnPermitido = null;
 
     todosLosTabs.forEach(item => {
         const btn    = item.querySelector('.nav-link');
         if (!btn) return;
-        const target = btn.getAttribute('data-bs-target')?.replace('#', '');   // ej: "panel"
+        const target = (btn.getAttribute('data-bs-target') || '').replace('#', '');
 
         if (!target || !permitidos.includes(target)) {
             item.style.display = 'none';
-            // Ocultar también el panel de contenido
             const pane = document.getElementById(target);
             if (pane) pane.style.display = 'none';
         } else {
-            if (!primerPermitido) primerPermitido = { btn, target };
+            if (!primerBtnPermitido) primerBtnPermitido = btn;
         }
     });
 
-    // Activar el primer tab permitido
-    if (primerPermitido) {
-        // Quitar active de todos
-        document.querySelectorAll('#fasesTab .nav-link').forEach(b => {
-            b.classList.remove('active');
-            b.setAttribute('aria-selected', 'false');
-        });
-        document.querySelectorAll('#fasesTabContent .tab-pane').forEach(p => {
-            p.classList.remove('show', 'active');
-        });
+    // ── Activar el primer tab usando la API de Bootstrap para disparar shown.bs.tab ──
+    // (necesario para que los iframes con carga lazy reciban el evento y asignen su src)
+    if (primerBtnPermitido) {
+        // Esperar a que Bootstrap esté listo
+        const activar = () => {
+            try {
+                // Quitar active del tab por defecto (panel)
+                document.querySelectorAll('#fasesTab .nav-link').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-selected', 'false');
+                });
+                document.querySelectorAll('#fasesTabContent .tab-pane').forEach(p => {
+                    p.classList.remove('show', 'active');
+                });
 
-        primerPermitido.btn.classList.add('active');
-        primerPermitido.btn.setAttribute('aria-selected', 'true');
-
-        const pane = document.getElementById(primerPermitido.target);
-        if (pane) {
-            pane.style.display = '';
-            pane.classList.add('show', 'active');
-            // Disparar carga lazy del iframe si aplica
-            const loader = document.getElementById(`${primerPermitido.target}-loading`);
-            const iframe = pane.querySelector('iframe[data-src]');
-            if (iframe && loader) {
-                iframe.src = iframe.getAttribute('data-src');
-                iframe.removeAttribute('data-src');
-                iframe.addEventListener('load', () => loader.style.display = 'none', { once: true });
+                // Usar Bootstrap Tab API → dispara shown.bs.tab → activa lazy loaders
+                const bsTab = new bootstrap.Tab(primerBtnPermitido);
+                bsTab.show();
+            } catch(e) {
+                // Fallback: activar manualmente si Bootstrap no está disponible
+                primerBtnPermitido.classList.add('active');
+                const target = primerBtnPermitido.getAttribute('data-bs-target').replace('#','');
+                const pane   = document.getElementById(target);
+                if (pane) { pane.style.display = ''; pane.classList.add('show','active'); }
             }
+        };
+
+        if (typeof bootstrap !== 'undefined') {
+            activar();
+        } else {
+            // Bootstrap carga después → esperar
+            window.addEventListener('load', activar);
         }
     }
 })();
