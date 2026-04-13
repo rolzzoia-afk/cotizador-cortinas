@@ -877,15 +877,15 @@
         </div>
 
         <div class="diag-instruccion">
-            <strong>¿Cómo usarlo?</strong> Copiá el texto, abrí una nueva conversación con Claude y pegalo.
-            Luego escribí tu pregunta o problema. Claude va a tener todo el contexto de tu empresa para ayudarte.
+            <strong>¿Cómo usarlo?</strong> Copia el texto, abre una nueva conversación con Claude y pégalo.
+            Luego escribe tu pregunta o problema. Claude va a tener todo el contexto de tu empresa para ayudarte.
         </div>
 
         <!-- Chips de preguntas sugeridas -->
         <div class="diag-prompt-chips" id="diagChips">
             <span class="diag-chip" onclick="agregarPregunta('¿Qué OTs están en riesgo y qué debería hacer hoy?')">🎯 ¿Qué hacer hoy?</span>
             <span class="diag-chip" onclick="agregarPregunta('¿Qué insumos tengo que comprar esta semana y cuánto?')">🛒 ¿Qué comprar?</span>
-            <span class="diag-chip" onclick="agregarPregunta('¿Hay algún problema o inconsistencia en mis datos que debería corregir?')">🔍 Revisá mis datos</span>
+            <span class="diag-chip" onclick="agregarPregunta('¿Hay algún problema o inconsistencia en mis datos que debería corregir?')">🔍 Revisa mis datos</span>
             <span class="diag-chip" onclick="agregarPregunta('¿Qué mejoras le harías a mi sistema de gestión basándote en estos datos?')">💡 Ideas de mejora</span>
             <span class="diag-chip" onclick="agregarPregunta('¿Cuáles son los insumos más críticos para la producción actual y cómo optimizo el stock?')">📦 Optimizar stock</span>
             <span class="diag-chip" onclick="agregarPregunta('¿Qué patrones ves en mis movimientos de inventario que debería atender?')">📊 Analizar patrones</span>
@@ -1050,18 +1050,18 @@ function generarDiagnostico() {
     lineas.push(`Total insumos en catálogo: ${_insumos.length}`);
     lineas.push(`Posiciones de rack cargadas: ${_racks.length}`);
 
-    const sinStock   = _insumos.filter(i => i.stock_actual !== null && Number(i.stock_actual) <= 0);
+    const sinStock   = _insumos.filter(i => i.stock_total !== null && Number(i.stock_total) <= 0);
     const bajoMinimo = _insumos.filter(i =>
-        i.stock_minimo != null && i.stock_actual != null &&
-        Number(i.stock_actual) > 0 && Number(i.stock_actual) <= Number(i.stock_minimo)
+        i.minimo != null && i.stock_total != null &&
+        Number(i.stock_total) > 0 && Number(i.stock_total) <= Number(i.minimo)
     );
-    const sinMinimo  = _insumos.filter(i => i.stock_minimo == null || Number(i.stock_minimo) === 0);
+    const sinMinimo  = _insumos.filter(i => i.minimo == null || Number(i.minimo) === 0);
     const sinUbicacion = _insumos.filter(i => {
         const cod = (i.cod || '').toUpperCase();
         return !_racks.find(r => (r.codigo_insumo||'').toUpperCase() === cod) && !i.ubicacion;
     });
 
-    lineas.push(`Sin stock (stock_actual = 0 o null): ${sinStock.length}`);
+    lineas.push(`Sin stock (stock_total = 0 o nulo): ${sinStock.length}`);
     lineas.push(`Bajo stock mínimo: ${bajoMinimo.length}`);
     lineas.push(`Sin stock mínimo definido: ${sinMinimo.length}`);
     lineas.push(`Sin ubicación asignada (rack ni campo): ${sinUbicacion.length}`);
@@ -1070,7 +1070,7 @@ function generarDiagnostico() {
     if (sinStock.length > 0) {
         lineas.push('Insumos SIN STOCK:');
         for (const i of sinStock.slice(0, 15)) {
-            lineas.push(`  · [${i.cod}] ${i.desc} — ${i.categoria || '—'}`);
+            lineas.push(`  · [${i.cod}] ${i.nemotecnico || i.cod} — ${i.categoria || '—'}`);
         }
         if (sinStock.length > 15) lineas.push(`  ... y ${sinStock.length - 15} más`);
         lineas.push('');
@@ -1079,8 +1079,8 @@ function generarDiagnostico() {
     if (bajoMinimo.length > 0) {
         lineas.push('Insumos BAJO MÍNIMO:');
         for (const i of bajoMinimo.slice(0, 15)) {
-            const pct = Math.round((Number(i.stock_actual) / Number(i.stock_minimo)) * 100);
-            lineas.push(`  · [${i.cod}] ${i.desc} — stock: ${i.stock_actual} / mín: ${i.stock_minimo} (${pct}%)`);
+            const pct = Math.round((Number(i.stock_total) / Number(i.minimo)) * 100);
+            lineas.push(`  · [${i.cod}] ${i.nemotecnico || i.cod} — stock: ${i.stock_total} / mín: ${i.minimo} (${pct}%)`);
         }
         if (bajoMinimo.length > 15) lineas.push(`  ... y ${bajoMinimo.length - 15} más`);
         lineas.push('');
@@ -1129,10 +1129,10 @@ function generarDiagnostico() {
         lineas.push('Top 10 insumos más consumidos (salidas):');
         for (const [cod, cant] of topCons) {
             const ins = _insumos.find(x => (x.cod||'').toUpperCase() === cod.toUpperCase());
-            const desc = ins?.desc || cod;
-            const stk  = ins?.stock_actual != null ? ` | stock actual: ${ins.stock_actual}` : '';
-            const diasRest = (ins?.stock_actual && cant > 0)
-                ? ` | ~${Math.floor(Number(ins.stock_actual) / (cant/30))}d de stock`
+            const desc = ins?.nemotecnico || ins?.cod || cod;
+            const stk  = ins?.stock_total != null ? ` | stock actual: ${ins.stock_total}` : '';
+            const diasRest = (ins?.stock_total && cant > 0)
+                ? ` | ~${Math.floor(Number(ins.stock_total) / (cant/30))}d de stock`
                 : '';
             lineas.push(`  · ${desc}: ${cant} unid. consumidas${stk}${diasRest}`);
         }
@@ -1142,13 +1142,13 @@ function generarDiagnostico() {
     // Insumos sin movimiento pero con stock
     const codConMov = new Set(_movs.map(m => (m.insumo_cod||'').trim().toUpperCase()));
     const sinMov = _insumos.filter(i =>
-        Number(i.stock_actual) > 0 &&
+        Number(i.stock_total) > 0 &&
         !codConMov.has((i.cod||'').toUpperCase())
     );
     if (sinMov.length > 0) {
         lineas.push(`Insumos con stock pero SIN movimiento en 30 días: ${sinMov.length}`);
         for (const i of sinMov.slice(0, 8)) {
-            lineas.push(`  · [${i.cod}] ${i.desc} — stock: ${i.stock_actual} ${i.unidad||''}`);
+            lineas.push(`  · [${i.cod}] ${i.nemotecnico || i.cod} — stock: ${i.stock_total} ${i.unidad||''}`);
         }
         if (sinMov.length > 8) lineas.push(`  ... y ${sinMov.length - 8} más`);
         lineas.push('');
@@ -1166,7 +1166,7 @@ function generarDiagnostico() {
     if (sinCod.length > 0) problemas.push(`${sinCod.length} insumo(s) sin código (campo "cod" vacío)`);
 
     // Insumos con descripción duplicada
-    const descs = _insumos.map(i => (i.desc||'').toLowerCase().trim()).filter(Boolean);
+    const descs = _insumos.map(i => (i.nemotecnico||'').toLowerCase().trim()).filter(Boolean);
     const descSet = new Set();
     const descDuplicadas = new Set();
     for (const d of descs) {
@@ -1189,7 +1189,7 @@ function generarDiagnostico() {
     if (racksSinInsumo.length > 0) problemas.push(`${racksSinInsumo.length} posición(es) de rack apuntan a códigos que no existen en insumos`);
 
     // Stock negativo
-    const stockNeg = _insumos.filter(i => i.stock_actual !== null && Number(i.stock_actual) < 0);
+    const stockNeg = _insumos.filter(i => i.stock_total !== null && Number(i.stock_total) < 0);
     if (stockNeg.length > 0) problemas.push(`${stockNeg.length} insumo(s) con STOCK NEGATIVO (posible error de movimientos)`);
 
     if (problemas.length === 0) {
@@ -1218,7 +1218,7 @@ function generarDiagnostico() {
     lineas.push('');
     lineas.push('Tablas en Supabase:');
     lineas.push('  · ots (id, estado, datos_generales jsonb, items jsonb[], total, fecha_*)');
-    lineas.push('  · insumos (cod, desc, stock_actual, stock_minimo, categoria, ubicacion)');
+    lineas.push('  · insumos (cod, nemotecnico, stock_total, minimo, categoria, subcategoria, unidad, ubicacion)');
     lineas.push('  · ubicaciones_rack (rack, fila, columna, codigo_insumo, almacen)');
     lineas.push('  · movimientos_insumos (tipo, cantidad, insumo_cod, insumo_desc, ot_id, fecha)');
     lineas.push('  · configuracion (clave, valor, empresa_id)');
@@ -1344,9 +1344,9 @@ async function cargarTodo() {
               .order('fecha_modificacion', { ascending: false }),
 
             sb.from('insumos')
-              .select('cod,desc,stock_actual,stock_minimo,categoria,subcategoria,unidad,ubicacion')
+              .select('cod,nemotecnico,stock_total,minimo,categoria,subcategoria,unidad,ubicacion')
               .eq('empresa_id', EMPRESA_ID)
-              .order('desc'),
+              .order('nemotecnico'),
 
             sb.from('movimientos_insumos')
               .select('*')
@@ -1392,7 +1392,7 @@ async function cargarTodo() {
     } catch(err) {
         console.error('[Inteligencia] Error cargando datos:', err);
         document.getElementById('summaryText').textContent =
-            '⚠ Error al cargar datos. Revisá la conexión con Supabase.';
+            '⚠ Error al cargar datos. Revisa la conexión con Supabase.';
     } finally {
         btn.classList.remove('loading');
         icon.className = 'bi bi-arrow-clockwise';

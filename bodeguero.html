@@ -518,11 +518,11 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
     <div class="scroll-area">
         <div class="card" style="margin-bottom:4px;">
             <div class="card-title"><i class="bi bi-info-circle" style="color:var(--primary);"></i> Para brackets, topes y otros</div>
-            <div class="card-sub" style="margin-top:4px;">Escaneá el QR del insumo o buscá por código. El movimiento queda registrado a nombre del instalador.</div>
+            <div class="card-sub" style="margin-top:4px;">Escanea el QR del insumo o busca por código. El movimiento queda registrado a nombre del instalador.</div>
         </div>
 
         <div class="card">
-            <label class="lbl">Insumo (escaneá o ingresá código)</label>
+            <label class="lbl">Insumo (escanea o ingresa código)</label>
             <div style="display:flex;gap:8px;margin-bottom:8px;">
                 <input type="text" id="adhoc-cod" class="input-field" placeholder="Código del insumo" style="flex:1;margin-bottom:0;">
                 <button onclick="iniciarScannerAdHoc()" class="btn btn-outline" style="padding:11px 14px;"><i class="bi bi-qr-code-scan"></i></button>
@@ -1069,7 +1069,7 @@ function iniciarScanItem(idx) {
     if (!tieneUbicacion) {
         _scanFase = 'item';
         setScanEstado('item');
-        document.getElementById('scan-sub').textContent = 'Sin rack asignado — escaneá el QR del insumo directamente';
+        document.getElementById('scan-sub').textContent = 'Sin rack asignado — escanea el QR del insumo directamente';
     } else {
         _scanFase = 'loc';
         setScanEstado('loc');
@@ -1153,7 +1153,7 @@ function setScanEstado(fase, resultado = null) {
     } else if (fase === 'item') {
         el.classList.add('esperando');
         document.querySelector('#scan-estado .icon').textContent = '📦';
-        msg.textContent = 'Ahora escaneá el QR del contenedor';
+        msg.textContent = 'Ahora escanea el QR del contenedor';
         sub.textContent = 'El QR está en la caja/bolsa del insumo';
     }
 }
@@ -1308,7 +1308,7 @@ async function onQRScan(decoded) {
         if (decoded.startsWith('LOC:')) {
             setScanEstado(null, 'error');
             document.getElementById('scan-msg').textContent = '❌ Eso es una ubicación';
-            document.getElementById('scan-sub').textContent = 'Ya pasamos la ubicación — escaneá el QR de la caja/insumo';
+            document.getElementById('scan-sub').textContent = 'Ya pasamos la ubicación — escanea el QR de la caja/insumo';
             scanStartCooldown(SCAN_COOLDOWN_ERR);
             setTimeout(() => setScanEstado('item'), SCAN_COOLDOWN_ERR);
             return;

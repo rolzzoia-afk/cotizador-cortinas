@@ -360,6 +360,44 @@ body { background: var(--bg-base); color: var(--text-primary);
                 placeholder="Ej: 45.5" style="margin-bottom:0;"/>
         </div>
 
+        <!-- Destino del tubo original -->
+        <div id="tubo-original-box"
+            style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);
+            border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+            <label class="form-label-r" style="color:#818cf8;margin-bottom:6px;">
+                ¿Qué pasó con el tubo original?
+            </label>
+            <p id="tubo-original-info"
+                style="font-size:0.75rem;color:var(--text-secondary);margin-bottom:10px;"></p>
+            <div style="display:flex;gap:8px;margin-bottom:10px;">
+                <button id="btn-merma-orig" onclick="setDestinoOriginal('merma')"
+                    style="flex:1;padding:8px 6px;border-radius:8px;
+                    border:1px solid rgba(239,68,68,0.3);background:transparent;
+                    color:var(--text-secondary);font-size:0.79rem;cursor:pointer;
+                    font-family:var(--sans);transition:all 0.15s;">
+                    🗑 Merma — se descarta
+                </button>
+                <button id="btn-recuperar-orig" onclick="setDestinoOriginal('recuperar')"
+                    style="flex:1;padding:8px 6px;border-radius:8px;
+                    border:1px solid rgba(99,102,241,0.3);background:transparent;
+                    color:var(--text-secondary);font-size:0.79rem;cursor:pointer;
+                    font-family:var(--sans);transition:all 0.15s;">
+                    ♻️ Volver a colmena
+                </button>
+            </div>
+            <div id="recuperar-medida-box" style="display:none;">
+                <label class="form-label-r" style="font-size:0.78rem;margin-bottom:4px;">
+                    Medida real del tubo (cm)
+                </label>
+                <p style="font-size:0.72rem;color:var(--text-secondary);margin-bottom:6px;">
+                    Ingresa la medida real del tubo tal como quedó después del corte erróneo.
+                    Se va a reingresar a la misma colmena con esa medida.
+                </p>
+                <input id="orig-medida-recuperar" class="form-input-r" type="number"
+                    min="0" step="0.1" placeholder="Ej: 125" style="margin-bottom:0;"/>
+            </div>
+        </div>
+
         <!-- Registrado por -->
         <label class="form-label-r">Registrado por *</label>
         <input id="err-responsable" class="form-input-r" placeholder="Tu nombre"/>
@@ -391,6 +429,7 @@ let _tubosColmena   = [];       // tubos disponibles en colmena
 let _modalCorte     = null;     // corte seleccionado para registrar error
 let _modalPlan      = null;     // plan al que pertenece el corte
 let _reemplazoSel   = null;     // tubo elegido como reemplazo
+let _destinoOriginal = null;    // 'merma' | 'recuperar' | null
 let _erroresPorPlan = {};       // {plan_id: [errores]}
 let _chartMotivos   = null;
 
@@ -694,8 +733,27 @@ async function abrirModalError(pi, idx) {
     document.getElementById('err-buscar-tubo').value = '';
     document.getElementById('err-responsable').value = '';
     document.getElementById('err-sobrante').value = '';
+    document.getElementById('orig-medida-recuperar').value = '';
     document.getElementById('reemplazo-seleccionado').style.display = 'none';
     document.getElementById('sobrante-box').style.display = 'none';
+    document.getElementById('recuperar-medida-box').style.display = 'none';
+
+    // Reset destino tubo original
+    _destinoOriginal = null;
+    ['btn-merma-orig','btn-recuperar-orig'].forEach(id => {
+        const b = document.getElementById(id);
+        b.style.background  = 'transparent';
+        b.style.color       = 'var(--text-secondary)';
+        b.style.borderColor = id === 'btn-merma-orig' ? 'rgba(239,68,68,0.3)' : 'rgba(99,102,241,0.3)';
+    });
+
+    // Info del tubo original
+    const { r } = { r: _modalPlan.resultados[idx]?.resultado ?? _modalPlan.resultados[idx] };
+    const codOrig   = r?.codigo || r?.codigo_original || '—';
+    const colOrig   = r?.colmena ?? '—';
+    const medOrigen = r?.medida_origen != null ? `${Number(r.medida_origen).toFixed(1)} cm` : '—';
+    document.getElementById('tubo-original-info').textContent =
+        `Colmena ${colOrig} · Código ${codOrig} · Medida original ${medOrigen}`;
 
     document.getElementById('modal-error').style.display = 'flex';
 
@@ -841,6 +899,38 @@ function renderTubosList(q) {
     }).join('');
 }
 
+function setDestinoOriginal(destino) {
+    _destinoOriginal = destino;
+    const btnM  = document.getElementById('btn-merma-orig');
+    const btnR  = document.getElementById('btn-recuperar-orig');
+    const boxR  = document.getElementById('recuperar-medida-box');
+
+    // Reset estilos
+    btnM.style.background   = 'transparent';
+    btnM.style.color        = 'var(--text-secondary)';
+    btnM.style.borderColor  = 'rgba(239,68,68,0.3)';
+    btnR.style.background   = 'transparent';
+    btnR.style.color        = 'var(--text-secondary)';
+    btnR.style.borderColor  = 'rgba(99,102,241,0.3)';
+
+    if (destino === 'merma') {
+        btnM.style.background  = 'rgba(239,68,68,0.15)';
+        btnM.style.color       = '#f87171';
+        btnM.style.borderColor = 'rgba(239,68,68,0.5)';
+        boxR.style.display     = 'none';
+    } else {
+        btnR.style.background  = 'rgba(99,102,241,0.15)';
+        btnR.style.color       = '#818cf8';
+        btnR.style.borderColor = 'rgba(99,102,241,0.5)';
+        boxR.style.display     = 'block';
+        // Pre-cargar con la medida de origen (el tubo antes del corte)
+        const medOrigen = _modalCorte?.r?.medida_origen;
+        if (medOrigen != null) {
+            document.getElementById('orig-medida-recuperar').value = Number(medOrigen).toFixed(1);
+        }
+    }
+}
+
 function seleccionarTubo(id) {
     _reemplazoSel = _tubosColmena.find(t => t.id === id) || null;
     renderTubosList(document.getElementById('err-buscar-tubo').value);
@@ -979,7 +1069,68 @@ async function confirmarError() {
         toast('✅ Error registrado correctamente');
     }
 
-    // 3. Actualizar estado local y re-renderizar
+    // 3. Destino del tubo original (merma o recuperar a colmena)
+    if (_destinoOriginal) {
+        const origColmena = r.colmena != null ? Number(r.colmena) : null;
+        const origCod     = r.codigo || r.codigo_original || null;
+        const origOrigen  = r.medida_origen ?? null;
+
+        if (_destinoOriginal === 'merma') {
+            try {
+                await sb.from('tubos_historial').insert({
+                    empresa_id:          EMPRESA_ID,
+                    n_colmena:           String(origColmena ?? ''),
+                    cod:                 origCod,
+                    medida_cm:           origOrigen,
+                    medida_resultado_cm: 0,
+                    evento:              'merma',
+                    ot:                  String(payload.ot || ''),
+                    notas:               `Tubo original descartado como merma — error: ${motivo}`,
+                    registrado_por:      responsable
+                });
+            } catch(eLog) { console.warn('[tubos_historial] merma original:', eLog.message); }
+
+        } else if (_destinoOriginal === 'recuperar') {
+            const medRecup = parseFloat(document.getElementById('orig-medida-recuperar').value) || 0;
+            if (medRecup > 0) {
+                const tuboRecuperado = {
+                    empresa_id:         EMPRESA_ID,
+                    n_colmena:          origColmena,
+                    cod:                origCod,
+                    medida_cm:          medRecup,
+                    agregado_por_admin: false
+                };
+                const { data: tuboNuevoOrig, error: errRecup } = await sb
+                    .from('colmena_tubos')
+                    .insert(tuboRecuperado)
+                    .select()
+                    .single();
+
+                if (!errRecup) {
+                    if (tuboNuevoOrig) _tubosColmena.push(tuboNuevoOrig);
+                    try {
+                        await sb.from('tubos_historial').insert({
+                            empresa_id:          EMPRESA_ID,
+                            tubo_raiz_id:        tuboNuevoOrig?.tubo_raiz_id || null,
+                            n_colmena:           String(origColmena ?? ''),
+                            cod:                 origCod,
+                            medida_cm:           medRecup,
+                            medida_resultado_cm: medRecup,
+                            evento:              'ajuste',
+                            ot:                  String(payload.ot || ''),
+                            notas:               `Tubo original recuperado tras error (${motivo}) — reingresado ${medRecup}cm en colmena ${origColmena}`,
+                            registrado_por:      responsable
+                        });
+                    } catch(eLog) { console.warn('[tubos_historial] ajuste recuperado:', eLog.message); }
+                    toast(`♻️ Tubo original reingresado a colmena ${origColmena} · ${medRecup} cm`);
+                } else {
+                    toast(`⚠️ No se pudo reingresar el tubo original: ${errRecup.message}`, '#f59e0b');
+                }
+            }
+        }
+    }
+
+    // 4. Actualizar estado local y re-renderizar
     if (planId) {
         if (!_erroresPorPlan[planId]) _erroresPorPlan[planId] = [];
         _erroresPorPlan[planId].push({ linea_idx: idx, motivo });
