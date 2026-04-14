@@ -4603,94 +4603,158 @@ async function logEventosTubos() {
         return;
     }
 
-    const eventos = [];
-    const now = new Date().toISOString();
-    const usuario = _currentUser?.email || null;
-    let saltados = 0;
+    // Timestamps: ingreso 3 segundos antes que corte/merma/sobrante
+    // para que aparezca primero en la línea de tiempo (orden por created_at ASC)
+    const tsCorte   = new Date().toISOString();
+    const tsIngreso = new Date(Date.now() - 3000).toISOString();
+    const usuario   = _currentUser?.email || null;
+    let saltados    = 0;
+
+    // ── PASO 1: Construir eventos de CORTE / MERMA / SOBRANTE ──────────────
+    // También recolectamos raiz_id → datos del tubo para el chequeo de ingreso
+    const eventosCorte = [];
+    const raizADatos   = {}; // raiz_id → { n_colmena, cod, medida_cm }
 
     SistemaInventario.resultadosOptimizacion.forEach(item => {
-            const res = item.resultado;
-            const ord = item.orden;
-            if (!res || !res.colmena || !res.codigo) { saltados++; return; }
+        const res = item.resultado;
+        const ord = item.orden;
+        if (!res || !res.colmena || !res.codigo) { saltados++; return; }
 
-            const ot          = String(ord?.ot || ord?.id || '');
-            const esMerma     = !!res.es_desecho;
-            const tieneSobrante = !esMerma && res.sobrante_cm > 0;
+        const ot            = String(ord?.ot || ord?.id || '');
+        const esMerma       = !!res.es_desecho;
+        const tieneSobrante = !esMerma && res.sobrante_cm > 0;
 
-            // ID de linaje del tubo en colmenasHistorico (heredado del tubo original)
-            const entradaHistorico = SistemaInventario.colmenasHistorico.find(c =>
-                c.n_colmena === res.colmena && c.cod === res.codigo && c.estado === 'usada'
-            );
-            const tubo_raiz_id = entradaHistorico?.tubo_raiz_id ||
-                ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+        // ID de linaje del tubo en colmenasHistorico (heredado del tubo original)
+        const entradaHistorico = SistemaInventario.colmenasHistorico.find(c =>
+            c.n_colmena === res.colmena && c.cod === res.codigo && c.estado === 'usada'
+        );
+        const tubo_raiz_id = entradaHistorico?.tubo_raiz_id ||
+            ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
 
-            // ── Evento: CORTE (tubo consumido) ──
-            eventos.push({
+        // Guardar datos para detección de primer uso
+        if (tubo_raiz_id && !raizADatos[tubo_raiz_id]) {
+            raizADatos[tubo_raiz_id] = {
+                n_colmena: res.colmena,
+                cod:       res.codigo,
+                medida_cm: res.medida_origen || res.medida_cm
+            };
+        }
+
+        // ── Evento: CORTE (tubo consumido) ──
+        eventosCorte.push({
+            empresa_id:          EMPRESA_ID_OPT,
+            tubo_raiz_id,
+            n_colmena:           res.colmena,
+            cod:                 res.codigo,
+            medida_cm:           res.medida_origen || res.medida_cm,
+            medida_resultado_cm: tieneSobrante ? res.sobrante_cm : 0,
+            evento:              'corte',
+            ot,
+            notas: `Corte de ${res.medida_cm}cm para OT ${ot}` +
+                   (tieneSobrante ? ` — sobrante ${res.sobrante_cm}cm` : '') +
+                   (esMerma ? ' — MERMA' : ''),
+            registrado_por: usuario,
+            created_at:     tsCorte
+        });
+
+        // ── Evento: MERMA (sobrante demasiado chico para usar) ──
+        if (esMerma && res.sobrante_cm > 0) {
+            eventosCorte.push({
                 empresa_id:          EMPRESA_ID_OPT,
                 tubo_raiz_id,
                 n_colmena:           res.colmena,
                 cod:                 res.codigo,
-                medida_cm:           res.medida_origen || res.medida_cm,   // tamaño original del tubo
-                medida_resultado_cm: tieneSobrante ? res.sobrante_cm : 0,  // sobrante o 0
-                evento:              'corte',
+                medida_cm:           res.sobrante_cm,
+                medida_resultado_cm: 0,
+                evento:              'merma',
                 ot,
-                notas: `Corte de ${res.medida_cm}cm para OT ${ot}` +
-                       (tieneSobrante ? ` — sobrante ${res.sobrante_cm}cm` : '') +
-                       (esMerma ? ' — MERMA' : ''),
-                registrado_por: usuario
+                notas: `Merma de ${res.sobrante_cm}cm — descartada (< ${MERMA_MAX_MM/10}cm)`,
+                registrado_por: usuario,
+                created_at:     tsCorte
             });
+        }
 
-            // ── Evento: MERMA (sobrante demasiado chico para usar) ──
-            if (esMerma && res.sobrante_cm > 0) {
-                eventos.push({
-                    empresa_id:          EMPRESA_ID_OPT,
-                    tubo_raiz_id,
-                    n_colmena:           res.colmena,
-                    cod:                 res.codigo,
-                    medida_cm:           res.sobrante_cm,
-                    medida_resultado_cm: 0,
-                    evento:              'merma',
-                    ot,
-                    notas: `Merma de ${res.sobrante_cm}cm — descartada (< ${MERMA_MAX_MM/10}cm)`,
-                    registrado_por: usuario
-                });
-            }
+        // ── Evento: SOBRANTE (vuelve a colmena) ──
+        if (tieneSobrante) {
+            const colmenaDestino = res.colmena_sobrante || res.colmena;
+            const entradaSobrante = SistemaInventario.colmenasHistorico.find(c =>
+                c.n_colmena === colmenaDestino && c.cod === res.codigo &&
+                c.estado === 'disponible' && c.origen && c.origen.includes(String(ord?.id || ot))
+            );
+            const sobrante_raiz_id = entradaSobrante?.tubo_raiz_id ||
+                ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
 
-            // ── Evento: SOBRANTE (vuelve a colmena) ──
-            if (tieneSobrante) {
-                const colmenaDestino = res.colmena_sobrante || res.colmena;
-                // El sobrante tiene su propio tubo_raiz_id (generado en la optimización)
-                const entradaSobrante = SistemaInventario.colmenasHistorico.find(c =>
-                    c.n_colmena === colmenaDestino && c.cod === res.codigo &&
-                    c.estado === 'disponible' && c.origen && c.origen.includes(String(ord?.id || ot))
-                );
-                const sobrante_raiz_id = entradaSobrante?.tubo_raiz_id ||
-                    ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
-
-                eventos.push({
-                    empresa_id:          EMPRESA_ID_OPT,
-                    tubo_raiz_id:        sobrante_raiz_id,
-                    n_colmena:           colmenaDestino,
-                    cod:                 res.codigo,
-                    medida_cm:           res.sobrante_cm,
-                    medida_resultado_cm: res.sobrante_cm,
-                    evento:              'sobrante',
-                    ot,
-                    notas: `Sobrante de corte OT ${ot} — queda en colmena ${colmenaDestino}`,
-                    registrado_por: usuario
-                });
-            }
-        });
+            eventosCorte.push({
+                empresa_id:          EMPRESA_ID_OPT,
+                tubo_raiz_id:        sobrante_raiz_id,
+                n_colmena:           colmenaDestino,
+                cod:                 res.codigo,
+                medida_cm:           res.sobrante_cm,
+                medida_resultado_cm: res.sobrante_cm,
+                evento:              'sobrante',
+                ot,
+                notas: `Sobrante de corte OT ${ot} — queda en colmena ${colmenaDestino}`,
+                registrado_por: usuario,
+                created_at:     tsCorte
+            });
+        }
+    });
 
     if (saltados > 0) {
         log(`⚠️ Historial tubos: ${saltados} item(s) saltados por colmena/código nulo.`, 'warn');
     }
+
+    // ── PASO 2: Detectar tubos sin historial previo → agregar evento INGRESO ──
+    // Un tubo "sin historial" es el que aparece por primera vez en el optimizador
+    // (fue cargado en colmena antes de que existiera el sistema de historial,
+    //  o simplemente es un tubo nuevo que nunca se cortó).
+    const eventosIngreso = [];
+    const raizIds = Object.keys(raizADatos);
+
+    if (raizIds.length > 0) {
+        log(`🔍 Historial tubos: verificando primer uso de ${raizIds.length} tubo(s)...`, 'info');
+        const { data: previos } = await sbOpt
+            .from('tubos_historial')
+            .select('tubo_raiz_id')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .in('tubo_raiz_id', raizIds);
+
+        const conHistorial = new Set((previos || []).map(r => r.tubo_raiz_id));
+        let nuevos = 0;
+
+        raizIds.forEach(raizId => {
+            if (conHistorial.has(raizId)) return; // ya tiene historial → no agregar ingreso
+            const d = raizADatos[raizId];
+            eventosIngreso.push({
+                empresa_id:          EMPRESA_ID_OPT,
+                tubo_raiz_id:        raizId,
+                n_colmena:           d.n_colmena,
+                cod:                 d.cod,
+                medida_cm:           d.medida_cm,
+                medida_resultado_cm: d.medida_cm,
+                evento:              'ingreso',
+                ot:                  null,
+                notas:               `Tubo de ${d.medida_cm}cm en colmena ${d.n_colmena} — primer uso registrado`,
+                registrado_por:      usuario,
+                created_at:          tsIngreso  // 3s antes del corte → aparece primero en timeline
+            });
+            nuevos++;
+        });
+
+        if (nuevos > 0) {
+            log(`📥 Historial tubos: ${nuevos} tubo(s) sin historial previo → se registrará ingreso automático.`, 'info');
+        }
+    }
+
+    // Ingresos primero, luego cortes/mermas/sobrantes
+    const eventos = [...eventosIngreso, ...eventosCorte];
+
     if (!eventos.length) {
         log('ℹ️ Historial tubos: sin eventos para registrar (todos los items fueron saltados).', 'info');
         return;
     }
 
-    log(`📋 Historial tubos: registrando ${eventos.length} evento(s)...`, 'info');
+    log(`📋 Historial tubos: registrando ${eventos.length} evento(s) (${eventosIngreso.length} ingresos + ${eventosCorte.length} cortes/mermas)...`, 'info');
 
     // Usar sbOpt (cliente JS con sesión en memoria) en vez de _sbRest,
     // para evitar el problema de Tracking Prevention que bloquea localStorage
