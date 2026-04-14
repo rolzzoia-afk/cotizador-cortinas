@@ -1220,7 +1220,7 @@ function generarDiagnostico() {
     lineas.push('');
     lineas.push('Tablas en Supabase:');
     lineas.push('  · ots (id, estado, datos_generales jsonb, items jsonb[], total, fecha_*)');
-    lineas.push('  · insumos (cod, nemotecnico, stock_total, minimo, categoria, subcategoria, unidad, ubicacion)');
+    lineas.push('  · insumos (cod, nemotecnico, stock_mp, stock_liberado, minimo, categoria, subcategoria, unidad, ubicacion)');
     lineas.push('  · ubicaciones_rack (rack, fila, columna, codigo_insumo, almacen)');
     lineas.push('  · movimientos_insumos (tipo, cantidad, insumo_cod, insumo_desc, ot_id, fecha)');
     lineas.push('  · configuracion (clave, valor, empresa_id)');
@@ -1346,7 +1346,7 @@ async function cargarTodo() {
               .order('fecha_modificacion', { ascending: false }),
 
             sb.from('insumos')
-              .select('cod,nemotecnico,stock_total,minimo,categoria,subcategoria,unidad,ubicacion')
+              .select('cod,nemotecnico,stock_mp,stock_liberado,minimo,categoria,subcategoria,unidad,ubicacion')
               .eq('empresa_id', EMPRESA_ID)
               .order('nemotecnico'),
 
@@ -1369,7 +1369,10 @@ async function cargarTodo() {
         ]);
 
         _ots     = rOts.data    || [];
-        _insumos = rIns.data    || [];
+        _insumos = (rIns.data || []).map(i => ({
+            ...i,
+            stock_total: (i.stock_mp || 0) + (i.stock_liberado || 0)
+        }));
         _movs    = rMovs.data   || [];
         _racks   = rRacks.data  || [];
 
