@@ -3470,7 +3470,231 @@ async function ejecutarFlujoCompleto() {
     console.log("🚀 Flujo completo terminado", resultadoOptimizacion);
 }
 
-function ejecutarOptimizacion() {
+// ══════════════════════════════════════════════════════════════════
+// VALIDACIÓN DE GRUPOS DE AMBIENTE (color consistente por grupo)
+// ══════════════════════════════════════════════════════════════════
+
+const _conflictoGrupo = {
+    conflictos:   [],
+    _submodalCb:  null
+};
+
+function _extraerGrupo(ubic) {
+    if (!ubic) return null;
+    const m = String(ubic).toUpperCase().match(/-\s*G(\d+)\s*$/);
+    return m ? `G${m[1]}` : null;
+}
+
+function _extraerAmbiente(ubic) {
+    if (!ubic) return '';
+    return String(ubic).replace(/-\s*G\d+\s*$/i, '').trim();
+}
+
+function detectarConflictosGrupo(ordenes) {
+    const grupos = {};
+    for (const o of ordenes) {
+        const comp = (o.componente || '').toUpperCase();
+        if (!comp.includes('TUBER') && !comp.includes('TUBO')) continue;
+        const grupo = _extraerGrupo(o.ubic);
+        if (!grupo) continue;
+        if (!grupos[grupo]) grupos[grupo] = [];
+        grupos[grupo].push(o);
+    }
+    const conflictos = [];
+    for (const [grupo, ords] of Object.entries(grupos)) {
+        const conteo = {};
+        for (const o of ords) {
+            const c = (o.color || 'SIN COLOR').trim().toUpperCase();
+            conteo[c] = (conteo[c] || 0) + 1;
+        }
+        const coloresDistintos = Object.keys(conteo);
+        if (coloresDistintos.length <= 1) continue;
+        const colorMayoria = coloresDistintos.reduce((a, b) => conteo[a] >= conteo[b] ? a : b);
+        const ambiente = _extraerAmbiente(ords[0].ubic);
+        const ordenesConflicto = ords
+            .filter(o => (o.color || 'SIN COLOR').trim().toUpperCase() !== colorMayoria)
+            .map(o => ({ orden: o, colorGrupo: colorMayoria, resolucion: 'tubo_nuevo', tuboElegido: null }));
+        if (ordenesConflicto.length) {
+            conflictos.push({ grupo, ambiente, colorMayoria, conteo, ordenes: ordenesConflicto });
+        }
+    }
+    return conflictos;
+}
+
+function mostrarModalConflictos(conflictos) {
+    return new Promise(resolve => {
+        _conflictoGrupo.conflictos = conflictos;
+        _renderConflictos();
+        const el = document.getElementById('modal-conflictos-grupo');
+        el.style.display = 'flex';
+        el._resolve = resolve;
+    });
+}
+
+function cerrarModalConflictos() {
+    const el = document.getElementById('modal-conflictos-grupo');
+    el.style.display = 'none';
+    if (el._resolve) { el._resolve(false); el._resolve = null; }
+}
+
+function _renderConflictos() {
+    const cuerpo = document.getElementById('conflictos-cuerpo');
+    let html = '';
+    _conflictoGrupo.conflictos.forEach((conf, ci) => {
+        const conteoStr = Object.entries(conf.conteo)
+            .map(([c, n]) => `${c.charAt(0)+c.slice(1).toLowerCase()} (${n})`).join(' · ');
+        html += `<div style="background:var(--bg-secondary); border:1px solid var(--border);
+             border-radius:var(--radius-md); padding:16px; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+            <span style="background:var(--warning); color:#000; font-size:0.7rem; font-weight:700;
+                  padding:2px 8px; border-radius:20px;">${conf.grupo}</span>
+            <span style="font-weight:600;">${conf.ambiente || conf.grupo}</span>
+            <span style="font-size:0.75rem; color:var(--text-muted);">— ${conteoStr}</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:10px;">
+            Color del grupo: <strong style="color:var(--success);">${conf.colorMayoria.charAt(0)+conf.colorMayoria.slice(1).toLowerCase()}</strong> · Las siguientes órdenes difieren:
+          </div>`;
+        conf.ordenes.forEach((item, oi) => {
+            const o = item.orden;
+            const colorOrden = (o.color || 'SIN COLOR').trim();
+            const r = item.resolucion;
+            html += `<div style="background:var(--bg-card); border:1px solid rgba(251,191,36,0.3);
+               border-radius:10px; padding:12px; margin-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+              <span style="font-size:0.8rem; font-weight:600; color:var(--warning);">⚠ ${o.ubic||'-'}</span>
+              <span style="font-size:0.75rem; color:var(--text-secondary);">${o.cod||'-'} · ${colorOrden} · ${o.medida_cm||'-'} cm</span>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:6px;">
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;
+                     background:var(--bg-secondary); border-radius:8px; padding:9px 12px;
+                     border:2px solid ${r==='colmena'?'var(--primary)':'var(--border)'};"
+                     onclick="_seleccionarResolucion(${ci},${oi},'colmena')">
+                <input type="radio" name="res-${ci}-${oi}" value="colmena" ${r==='colmena'?'checked':''} style="accent-color:var(--primary);" onchange="_seleccionarResolucion(${ci},${oi},'colmena')">
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:0.8rem; font-weight:600;">🗄 Elegir tubo de colmena</div>
+                  <div style="font-size:0.72rem; color:var(--text-muted);">Tubos disponibles con código ${o.cod||'?'}, sin reemplazos</div>
+                </div>
+                ${r==='colmena' && item.tuboElegido
+                  ? `<span style="font-size:0.72rem; color:var(--success); font-weight:600;">✓ ${item.tuboElegido.n_colmena} — ${item.tuboElegido.medida_cm}cm</span>`
+                  : `<button type="button" onclick="abrirSubmodalTubo(event,${ci},${oi})"
+                       style="font-size:0.72rem; padding:4px 10px; border-radius:7px;
+                              border:1px solid var(--primary); background:var(--accent-dim);
+                              color:var(--primary); cursor:pointer; white-space:nowrap;">Ver disponibles</button>`}
+              </label>
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;
+                     background:var(--bg-secondary); border-radius:8px; padding:9px 12px;
+                     border:2px solid ${r==='tubo_nuevo'?'var(--primary)':'var(--border)'};"
+                     onclick="_seleccionarResolucion(${ci},${oi},'tubo_nuevo')">
+                <input type="radio" name="res-${ci}-${oi}" value="tubo_nuevo" ${r==='tubo_nuevo'?'checked':''} style="accent-color:var(--primary);" onchange="_seleccionarResolucion(${ci},${oi},'tubo_nuevo')">
+                <div>
+                  <div style="font-size:0.8rem; font-weight:600;">🆕 Usar tubo nuevo</div>
+                  <div style="font-size:0.72rem; color:var(--text-muted);">Se asignará un tubo nuevo con código ${o.cod||'?'}</div>
+                </div>
+              </label>
+              <label style="display:flex; align-items:center; gap:10px; cursor:pointer;
+                     background:var(--bg-secondary); border-radius:8px; padding:9px 12px;
+                     border:2px solid ${r==='forzar'?'var(--danger)':'var(--border)'};"
+                     onclick="_seleccionarResolucion(${ci},${oi},'forzar')">
+                <input type="radio" name="res-${ci}-${oi}" value="forzar" ${r==='forzar'?'checked':''} style="accent-color:var(--danger);" onchange="_seleccionarResolucion(${ci},${oi},'forzar')">
+                <div>
+                  <div style="font-size:0.8rem; font-weight:600; color:var(--danger);">⚡ Forzar corte igual</div>
+                  <div style="font-size:0.72rem; color:var(--text-muted);">Se corta con ${colorOrden}, ignorando el conflicto</div>
+                </div>
+              </label>
+            </div></div>`;
+        });
+        html += `</div>`;
+    });
+    cuerpo.innerHTML = html;
+}
+
+function _seleccionarResolucion(ci, oi, valor) {
+    _conflictoGrupo.conflictos[ci].ordenes[oi].resolucion = valor;
+    if (valor !== 'colmena') _conflictoGrupo.conflictos[ci].ordenes[oi].tuboElegido = null;
+    _renderConflictos();
+}
+
+function abrirSubmodalTubo(event, ci, oi) {
+    event.stopPropagation();
+    const item = _conflictoGrupo.conflictos[ci].ordenes[oi];
+    const cod = (item.orden.cod || '').toUpperCase().trim();
+    const tubosDisponibles = SistemaInventario.colmenasDisponibles.filter(c =>
+        (c.cod || '').toUpperCase().trim() === cod
+    );
+    document.getElementById('elegir-tubo-subtitulo').textContent =
+        `Código: ${cod} · Ubicación: ${item.orden.ubic || '-'}`;
+    const lista = document.getElementById('elegir-tubo-lista');
+    if (!tubosDisponibles.length) {
+        lista.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:0.82rem;">
+            No hay tubos con código ${cod} disponibles en colmena.</div>`;
+    } else {
+        lista.innerHTML = tubosDisponibles.map((t, ti) => `
+            <div onclick="_elegirTuboDeColmena(${ci},${oi},${ti})"
+                 style="display:flex; align-items:center; justify-content:space-between;
+                        padding:10px 12px; border-radius:9px; cursor:pointer; margin-bottom:6px;
+                        background:var(--bg-secondary); border:1px solid var(--border);
+                        transition:border-color 0.15s;"
+                 onmouseover="this.style.borderColor='var(--primary)'"
+                 onmouseout="this.style.borderColor='var(--border)'">
+              <div>
+                <div style="font-size:0.82rem; font-weight:600;">${t.n_colmena} — ${t.cod}</div>
+                <div style="font-size:0.72rem; color:var(--text-muted);">${t.medida_cm} cm disponibles</div>
+              </div>
+              <span style="font-size:0.72rem; color:var(--primary); font-weight:600;">Seleccionar →</span>
+            </div>`).join('');
+        // Guardar referencia a los tubos disponibles para selección por índice
+        _conflictoGrupo._tubosSubmodal = tubosDisponibles;
+    }
+    _conflictoGrupo._submodalCb = { ci, oi };
+    document.getElementById('modal-elegir-tubo').style.display = 'flex';
+}
+
+function _elegirTuboDeColmena(ci, oi, ti) {
+    const tubo = _conflictoGrupo._tubosSubmodal[ti];
+    _conflictoGrupo.conflictos[ci].ordenes[oi].tuboElegido = tubo;
+    _conflictoGrupo.conflictos[ci].ordenes[oi].resolucion  = 'colmena';
+    cerrarSubmodalTubo();
+    _renderConflictos();
+}
+
+function cerrarSubmodalTubo() {
+    document.getElementById('modal-elegir-tubo').style.display = 'none';
+    _conflictoGrupo._submodalCb = null;
+}
+
+function aplicarResolucionesYEjecutar() {
+    for (const conf of _conflictoGrupo.conflictos) {
+        for (const item of conf.ordenes) {
+            const o = item.orden;
+            if (item.resolucion === 'colmena' && item.tuboElegido) {
+                o._preAsignado = {
+                    n_colmena: item.tuboElegido.n_colmena,
+                    cod:       item.tuboElegido.cod,
+                    medida_mm: item.tuboElegido.medida_mm || Math.round((item.tuboElegido.medida_cm || 0) * 10)
+                };
+                o._forzarNuevo = false;
+            } else if (item.resolucion === 'tubo_nuevo') {
+                o._forzarNuevo = true;
+                o._preAsignado = null;
+            }
+            // 'forzar' → no se modifica la orden
+        }
+    }
+    const el = document.getElementById('modal-conflictos-grupo');
+    el.style.display = 'none';
+    if (el._resolve) { el._resolve(true); el._resolve = null; }
+}
+
+// ══════════════════════════════════════════════════════════════════
+
+async function ejecutarOptimizacion() {
+    // ── Verificar conflictos de grupo ANTES de calcular ──
+    const conflictos = detectarConflictosGrupo(SistemaInventario.ordenes);
+    if (conflictos.length > 0) {
+        const continuar = await mostrarModalConflictos(conflictos);
+        if (!continuar) return; // usuario canceló
+    }
+
     // ── RESETEO MANDATORIO: limpiar TODO el estado residual de optimizaciones previas ──
     SistemaInventario.colmenasDisponibles = [];
     SistemaInventario.colmenasHistorico = [];
@@ -3568,8 +3792,39 @@ function ejecutarOptimizacion() {
         const numPaso = idx + 1;
         const codOrden = orden.cod;
         let resultado = null;
-        
-        const tuboEncontrado = buscarTubosParaOrden(codOrden, orden.medida_mm, codOrden);
+
+        // ── Pre-asignación / forzar nuevo (resolución de conflicto de grupo) ──
+        let tuboEncontrado;
+        if (orden._preAsignado) {
+            // Buscar el tubo específico elegido por el usuario
+            const pa = orden._preAsignado;
+            const idxPre = SistemaInventario.colmenasDisponibles.findIndex(c =>
+                c.n_colmena === pa.n_colmena &&
+                normalizarCodigo(c.cod) === normalizarCodigo(pa.cod)
+            );
+            if (idxPre !== -1) {
+                const tuboPre = SistemaInventario.colmenasDisponibles[idxPre];
+                const sobrantePre = tuboPre.medida_mm - orden.medida_mm - MM_KERF;
+                tuboEncontrado = {
+                    colmena:       tuboPre,
+                    sobrante_mm:   Math.max(0, sobrantePre),
+                    indice:        idxPre,
+                    clasificacion: evaluarSobrante(Math.max(0, sobrantePre)),
+                    medidaOriginal: tuboPre.medida_mm,
+                    esReemplazo:   false
+                };
+                log(`🎯 Pre-asignado: colmena ${pa.n_colmena} (${pa.cod}) para "${orden.ubic||'-'}" — resolución conflicto de grupo`, 'info');
+            } else {
+                log(`⚠️ Tubo pre-asignado ${pa.n_colmena}/${pa.cod} ya no disponible — buscando alternativa.`, 'warn');
+                tuboEncontrado = buscarTubosParaOrden(codOrden, orden.medida_mm, codOrden);
+            }
+        } else if (orden._forzarNuevo) {
+            // Saltar búsqueda en colmena y reemplazos — ir directo a tubo nuevo
+            tuboEncontrado = null;
+            log(`🆕 Forzando tubo nuevo para "${orden.ubic||'-'}" (${codOrden}) — resolución conflicto de grupo`, 'info');
+        } else {
+            tuboEncontrado = buscarTubosParaOrden(codOrden, orden.medida_mm, codOrden);
+        }
         
         if (tuboEncontrado && tuboEncontrado.sobrante_mm === 0) {
             resultado = {
@@ -3673,7 +3928,8 @@ function ejecutarOptimizacion() {
                 });
             }
         } else {
-            const listaReemplazos = buscarReemplazos(codOrden);
+            // Si se forzó tubo nuevo, saltar búsqueda de reemplazos
+            const listaReemplazos = orden._forzarNuevo ? null : buscarReemplazos(codOrden);
             if (listaReemplazos) {
                 for (const codReemplazo of listaReemplazos) {
                     const tuboReemplazo = buscarTubosParaOrden(codReemplazo, orden.medida_mm, codOrden);
@@ -5332,5 +5588,81 @@ async function corregirCorteErroneo() {
     }
 }
 </script>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     MODAL: CONFLICTOS DE COLOR EN GRUPOS DE AMBIENTE
+     ══════════════════════════════════════════════════════════════════ -->
+<div id="modal-conflictos-grupo" style="display:none; position:fixed; inset:0; z-index:9999;
+     background:rgba(0,0,0,0.75); backdrop-filter:blur(6px);
+     align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--bg-card); border:1px solid var(--border-mid);
+       border-radius:var(--radius-xl); width:100%; max-width:680px;
+       max-height:90vh; overflow:hidden; display:flex; flex-direction:column;
+       box-shadow:0 24px 80px rgba(0,0,0,0.6);">
+
+    <!-- Encabezado -->
+    <div style="padding:24px 28px 0; flex-shrink:0;">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+        <span style="font-size:1.6rem;">⚠️</span>
+        <div>
+          <div style="font-family:var(--serif); font-size:1.25rem; color:var(--warning);">
+            Conflicto de colores en grupos de ambiente
+          </div>
+          <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
+            Hay órdenes con colores distintos dentro del mismo espacio físico. Elegí cómo resolver cada una antes de calcular.
+          </div>
+        </div>
+      </div>
+      <hr style="border:none; border-top:1px solid var(--border); margin:16px 0 0;">
+    </div>
+
+    <!-- Cuerpo scrollable con los conflictos -->
+    <div id="conflictos-cuerpo" style="overflow-y:auto; padding:16px 28px; flex:1;"></div>
+
+    <!-- Pie -->
+    <div style="padding:16px 28px 24px; flex-shrink:0; display:flex; gap:10px; justify-content:flex-end;
+         border-top:1px solid var(--border); background:var(--bg-secondary);">
+      <button onclick="cerrarModalConflictos()"
+              style="padding:9px 20px; border-radius:10px; border:1px solid var(--border-mid);
+                     background:transparent; color:var(--text-secondary); cursor:pointer;
+                     font-family:var(--sans); font-size:0.85rem;">
+        Cancelar
+      </button>
+      <button onclick="aplicarResolucionesYEjecutar()"
+              style="padding:9px 22px; border-radius:10px; border:none;
+                     background:var(--primary); color:#fff; cursor:pointer;
+                     font-family:var(--sans); font-size:0.85rem; font-weight:600;">
+        ✅ Resolver y calcular
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Sub-modal: elegir tubo de colmena para una orden conflictiva -->
+<div id="modal-elegir-tubo" style="display:none; position:fixed; inset:0; z-index:10000;
+     background:rgba(0,0,0,0.6); align-items:center; justify-content:center; padding:20px;">
+  <div style="background:var(--bg-card); border:1px solid var(--border-mid);
+       border-radius:var(--radius-lg); width:100%; max-width:480px;
+       max-height:70vh; overflow:hidden; display:flex; flex-direction:column;
+       box-shadow:0 16px 60px rgba(0,0,0,0.5);">
+    <div style="padding:20px 24px 0; flex-shrink:0;">
+      <div style="font-family:var(--serif); font-size:1.1rem; margin-bottom:4px;">
+        Elegir tubo de colmena
+      </div>
+      <div id="elegir-tubo-subtitulo" style="font-size:0.78rem; color:var(--text-secondary); margin-bottom:12px;"></div>
+      <hr style="border:none; border-top:1px solid var(--border); margin-bottom:0;">
+    </div>
+    <div id="elegir-tubo-lista" style="overflow-y:auto; padding:12px 24px; flex:1;"></div>
+    <div style="padding:12px 24px 20px; flex-shrink:0; border-top:1px solid var(--border);">
+      <button onclick="cerrarSubmodalTubo()"
+              style="padding:8px 18px; border-radius:9px; border:1px solid var(--border-mid);
+                     background:transparent; color:var(--text-secondary); cursor:pointer;
+                     font-family:var(--sans); font-size:0.82rem;">
+        Cancelar
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
