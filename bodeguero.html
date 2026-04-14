@@ -931,11 +931,39 @@ function renderBOMItems() {
             const colmenas = getColmenaPorCodTubo(cod);
             locText = colmenas ? `🗄 Colmena: ${colmenas}` : '⚠ Sin colmena asignada';
         } else if ((item.categoria || '').toUpperCase().includes('CENEF')) {
-            // Cenefas: el BOM no trae el código E-xx — se obtiene desde el catálogo de insumos
-            const insMatch = buscarInsumoMatchBOM(item);
-            const codCenefa = (insMatch?.cod || '').trim().toUpperCase();
-            const colmenas = codCenefa ? getColmenaPorCodTubo(codCenefa) : null;
-            locText = colmenas ? `🗄 Colmena: ${colmenas}` : '⚠ Sin colmena asignada';
+            // Cenefas: el BOM guarda "Ovalada"/"Cuadrada" + color, no el código E-xx.
+            // Buscamos en _insumos el insumo de categoría CENEFA cuyo nemotécnico
+            // contenga el tipo (Ovalada/Cuadrada) y cuyo cod esté en colmena_tubos.
+            const cenTipo  = (item.especificacion || item.descripcion || '').toUpperCase().replace('CENEFA','').trim();
+            const cenColor = (item.color || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+            // 1. Intentar coincidencia por tipo + color
+            let insCenefa = _insumos.find(ins => {
+                const cat  = (ins.categoria || '').toUpperCase();
+                const nemo = (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase();
+                const col  = (ins.color || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+                if (!cat.includes('CENEF')) return false;
+                if (cenTipo && !nemo.includes(cenTipo)) return false;
+                if (cenColor && col && !col.startsWith(cenColor.slice(0,3)) && !cenColor.startsWith(col.slice(0,3))) return false;
+                return true;
+            });
+            // 2. Fallback: cualquier insumo CENEFA con ese tipo
+            if (!insCenefa && cenTipo) {
+                insCenefa = _insumos.find(ins =>
+                    (ins.categoria || '').toUpperCase().includes('CENEF') &&
+                    (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase().includes(cenTipo)
+                );
+            }
+            // 3. Fallback: primer insumo CENEFA disponible
+            if (!insCenefa) {
+                insCenefa = _insumos.find(ins => (ins.categoria || '').toUpperCase().includes('CENEF'));
+            }
+
+            const codCenefa = (insCenefa?.cod || '').trim().toUpperCase();
+            const colmenas  = codCenefa ? getColmenaPorCodTubo(codCenefa) : null;
+            locText = colmenas
+                ? `🗄 Colmena: ${colmenas}`
+                : (codCenefa ? `⚠ Sin colmena (${codCenefa})` : '⚠ Sin colmena asignada');
         } else {
             const insMatch = buscarInsumoMatchBOM(item);
             const ubic = getUbicacionBOM(item);
