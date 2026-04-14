@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com cdn.jsdelivr.net data:; img-src 'self' data: blob: https://cdn.shopify.com; connect-src 'self' https://izelewwgeamktnzkiwvl.supabase.co wss://izelewwgeamktnzkiwvl.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com cdn.jsdelivr.net data:; img-src 'self' data: blob: https://cdn.shopify.com https://izelewwgeamktnzkiwvl.supabase.co; connect-src 'self' https://izelewwgeamktnzkiwvl.supabase.co wss://izelewwgeamktnzkiwvl.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1169,6 +1169,14 @@
                 <label>Cant. x Paquete</label>
                 <input type="number" id="insumo-can_x_paquete" value="1" min="1">
             </div>
+            <div id="stock-inicial-row">
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <i class="bi bi-box-arrow-in-down" style="color:var(--success);"></i>
+                    Stock Inicial
+                    <span style="font-size:0.7rem; color:var(--text-muted); font-weight:400;">(al crear)</span>
+                </label>
+                <input type="number" id="insumo-stock_inicial" value="0" min="0" placeholder="0">
+            </div>
             <div>
                 <label>Costo (sin IVA)</label>
                 <input type="number" id="insumo-costo" value="0" step="0.01" min="0">
@@ -1197,12 +1205,28 @@
 
         <!-- FOTO -->
         <label style="display:flex; align-items:center; gap:6px; margin-top:4px;">
-            <i class="bi bi-camera"></i> URL de Foto
+            <i class="bi bi-camera"></i> Foto del Insumo
         </label>
-        <input type="url" id="insumo-foto_url" placeholder="https://..." oninput="previsualizarFotoModal()">
-        <div id="insumo-foto-preview" style="margin-top:8px; display:none;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+            <button type="button" class="btn-inv btn-outline-inv" onclick="document.getElementById('insumo-foto-camara').click()" style="font-size:0.82rem; padding:7px 14px; display:flex; align-items:center; gap:6px;">
+                <i class="bi bi-camera-fill"></i> Tomar Foto
+            </button>
+            <button type="button" class="btn-inv btn-outline-inv" onclick="document.getElementById('insumo-foto-galeria').click()" style="font-size:0.82rem; padding:7px 14px; display:flex; align-items:center; gap:6px;">
+                <i class="bi bi-image"></i> Desde Galería
+            </button>
+            <span id="insumo-foto-estado" style="font-size:0.78rem; color:var(--text-muted);"></span>
+        </div>
+        <!-- input cámara: captura directa (móvil/tablet) -->
+        <input type="file" id="insumo-foto-camara" accept="image/*" capture="environment" style="display:none;" onchange="procesarFotoCapturada(this)">
+        <!-- input galería: sin capture, abre selector de archivos -->
+        <input type="file" id="insumo-foto-galeria" accept="image/*" style="display:none;" onchange="procesarFotoCapturada(this)">
+        <!-- campo oculto que guarda la URL final -->
+        <input type="hidden" id="insumo-foto_url">
+        <div id="insumo-foto-preview" style="margin-top:6px; display:none; position:relative; display:none;">
             <img id="insumo-foto-img" src="" alt="Preview"
-                style="max-width:100%; max-height:200px; border-radius:6px; border:1px solid var(--border); object-fit:contain;">
+                style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid var(--border); object-fit:contain; display:block;">
+            <button type="button" onclick="quitarFotoModal()" title="Quitar foto"
+                style="position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.6); border:none; color:var(--danger); border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; line-height:1;">✕</button>
         </div>
 
         <div class="modal-actions">
@@ -1831,16 +1855,72 @@ function ordenarCatalogo(col) {
 // ══════════════════════════════════════════════════════════════════
 // CATÁLOGO: CRUD
 // ══════════════════════════════════════════════════════════════════
-function previsualizarFotoModal() {
-    const url = (document.getElementById('insumo-foto_url').value || '').trim();
+function previsualizarFotoModal(url) {
     const preview = document.getElementById('insumo-foto-preview');
     const img = document.getElementById('insumo-foto-img');
-    if (url && esFotoDirecta(url)) {
-        img.src = url;
+    const src = url || (document.getElementById('insumo-foto_url').value || '').trim();
+    if (src) {
+        img.src = src;
         preview.style.display = 'block';
     } else {
         preview.style.display = 'none';
         img.src = '';
+    }
+}
+
+function quitarFotoModal() {
+    document.getElementById('insumo-foto_url').value = '';
+    document.getElementById('insumo-foto-estado').textContent = '';
+    document.getElementById('insumo-foto-preview').style.display = 'none';
+    document.getElementById('insumo-foto-img').src = '';
+    // Limpiar los inputs de archivo para que puedan volver a seleccionar el mismo archivo
+    document.getElementById('insumo-foto-camara').value = '';
+    document.getElementById('insumo-foto-galeria').value = '';
+}
+
+async function procesarFotoCapturada(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const estado = document.getElementById('insumo-foto-estado');
+    estado.textContent = '⏳ Subiendo foto…';
+    estado.style.color = 'var(--warning)';
+
+    // Mostrar preview local inmediatamente mientras sube
+    const reader = new FileReader();
+    reader.onload = e => previsualizarFotoModal(e.target.result);
+    reader.readAsDataURL(file);
+
+    try {
+        // Nombre único: empresa/cod-timestamp.ext
+        const ext = file.name.split('.').pop() || 'jpg';
+        const codVal = (document.getElementById('insumo-cod').value || 'insumo').trim().toUpperCase();
+        const path = `${EMPRESA_ID}/${codVal}_${Date.now()}.${ext}`;
+
+        const { error: upErr } = await sbInv.storage
+            .from('fotos-insumos')
+            .upload(path, file, { upsert: true, contentType: file.type });
+
+        if (upErr) throw upErr;
+
+        const { data: urlData } = sbInv.storage
+            .from('fotos-insumos')
+            .getPublicUrl(path);
+
+        const publicUrl = urlData?.publicUrl;
+        if (!publicUrl) throw new Error('No se pudo obtener la URL pública');
+
+        document.getElementById('insumo-foto_url').value = publicUrl;
+        previsualizarFotoModal(publicUrl);
+        estado.textContent = '✓ Foto guardada';
+        estado.style.color = 'var(--success)';
+
+    } catch (e) {
+        console.error('[FOTO]', e);
+        // Si el bucket no existe o hay error, usar data URL como fallback (solo preview)
+        estado.textContent = '⚠ No se pudo subir: ' + e.message;
+        estado.style.color = 'var(--danger)';
+        // Dejar foto_url vacía pero mantener el preview local
     }
 }
 
@@ -1854,7 +1934,16 @@ function abrirModalInsumo() {
     document.getElementById('insumo-minimo').value = '0';
     document.getElementById('insumo-can_x_paquete').value = '1';
     document.getElementById('insumo-costo').value = '0';
+    // Stock inicial (solo al crear)
+    document.getElementById('insumo-stock_inicial').value = '0';
+    document.getElementById('stock-inicial-row').style.display = '';
+    // Foto
+    document.getElementById('insumo-foto_url').value = '';
+    document.getElementById('insumo-foto-estado').textContent = '';
+    document.getElementById('insumo-foto-camara').value = '';
+    document.getElementById('insumo-foto-galeria').value = '';
     document.getElementById('insumo-foto-preview').style.display = 'none';
+    document.getElementById('insumo-foto-img').src = '';
     document.getElementById('modalInsumo').classList.add('visible');
 }
 
@@ -1879,8 +1968,16 @@ function editarInsumo(id) {
     document.getElementById('insumo-estado_inventario').value = ins.estado_inventario || 'ACTIVO';
     document.getElementById('insumo-descriptor_proveedor').value = ins.descriptor_proveedor || '';
     document.getElementById('insumo-comentarios').value = ins.comentarios || '';
+    // Stock inicial: ocultar al editar (ya existe en BD)
+    document.getElementById('stock-inicial-row').style.display = 'none';
+    document.getElementById('insumo-stock_inicial').value = '0';
+    // Foto
     document.getElementById('insumo-foto_url').value = ins.foto_url || '';
-    previsualizarFotoModal();
+    document.getElementById('insumo-foto-estado').textContent = ins.foto_url ? '✓ Foto guardada' : '';
+    document.getElementById('insumo-foto-estado').style.color = 'var(--success)';
+    document.getElementById('insumo-foto-camara').value = '';
+    document.getElementById('insumo-foto-galeria').value = '';
+    previsualizarFotoModal(ins.foto_url || '');
     document.getElementById('modalInsumo').classList.add('visible');
 }
 
@@ -1911,16 +2008,51 @@ async function guardarInsumo() {
         foto_url: document.getElementById('insumo-foto_url').value.trim() || null
     };
 
+    const stockInicial = parseInt(document.getElementById('insumo-stock_inicial').value) || 0;
+
     try {
         if (id) {
+            // ── Edición ──
             const { error } = await sbInv.from('insumos').update(datos).eq('id', id);
             if (error) throw error;
             const idx = INV.insumos.findIndex(i => i.id === id);
             if (idx !== -1) Object.assign(INV.insumos[idx], datos);
         } else {
+            // ── Creación ──
             const { data, error } = await sbInv.from('insumos').insert(datos).select().single();
             if (error) throw error;
             INV.insumos.push(data);
+
+            // Si hay stock inicial, registrar como NUEVO INGRESO en MP
+            if (stockInicial > 0) {
+                const meses = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
+                const mov = {
+                    empresa_id: EMPRESA_ID,
+                    fecha: new Date().toISOString(),
+                    mes: meses[new Date().getMonth()],
+                    tipo: 'NUEVO INGRESO',
+                    codigo: datos.cod,
+                    producto: datos.nemotecnico || datos.descriptor_proveedor || '',
+                    almacen: 'MP',
+                    cantidad: stockInicial,
+                    ot: '',
+                    responsable_entrega: '',
+                    recepcion: '',
+                    bitacora: 'Stock inicial al crear insumo'
+                };
+                const { data: movData, error: movErr } = await sbInv.from('movimientos_insumos').insert(mov).select().single();
+                if (movErr) console.warn('[INV] Error creando stock inicial:', movErr.message);
+                else INV.movimientos.unshift(movData);
+
+                // Actualizar stock_mp en el registro recién creado
+                await sbInv.from('insumos')
+                    .update({ stock_mp: stockInicial })
+                    .eq('id', data.id);
+                data.stock_mp = stockInicial;
+                data.stock_total = (data.stock_mp || 0) + (data.stock_liberado || 0);
+                const localIdx = INV.insumos.findIndex(i => i.id === data.id);
+                if (localIdx !== -1) INV.insumos[localIdx] = data;
+            }
         }
         cerrarModal('modalInsumo');
         renderizarCatalogo();
