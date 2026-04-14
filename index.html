@@ -2724,6 +2724,7 @@
         try {
             const { data: { user } } = await sb.auth.getUser();
             if (user) {
+                _usuario = user;   // ← disponible globalmente para _logTuboEvento y otros
                 const { data: perfil } = await sb.from('perfiles')
                     .select('nombre, rol')
                     .eq('id', user.id)
@@ -7957,6 +7958,7 @@
     let _presenciaUnsubscribe = null;
     let _presenciaDeviceId    = null;
     let _presenciaNombre      = null;
+    let _usuario              = null;   // Usuario Supabase activo (se asigna en inicializarApp)
 
     // Genera o recupera un ID de dispositivo único (por navegador)
     function _presenciaGetDeviceId() {
