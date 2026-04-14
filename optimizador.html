@@ -1506,6 +1506,9 @@ async function guardarColmenaEnSupabaseDirecto() {
     document.getElementById('loading-overlay').style.display = 'flex';
 
     try {
+        const ahora   = new Date().toISOString();
+        const usuario = _currentUser?.email || 'desconocido';
+
         const colmenas = SistemaInventario.colmenas.map(c => ({
             empresa_id: EMPRESA_ID_OPT,
             n_colmena:  String(c.n_colmena || '-'),
@@ -1516,21 +1519,25 @@ async function guardarColmenaEnSupabaseDirecto() {
             agregado_por_admin: false
         }));
 
-        // Guardar con reintentos — usa _sbRest (fetch directo, sin lock de auth)
-        // Batch de 100 filas para evitar payloads grandes y detectar fallos parciales
+        // Guardar con reintentos — usa sbOpt (sesión en memoria, evita Tracking Prevention)
         const BATCH = 100;
         for (let intento = 1; intento <= 3; intento++) {
             try {
                 if (btn) btn.textContent = `⏳ Borrando inventario anterior...`;
 
-                // Borrar inventario actual
-                await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}`);
+                // Borrar inventario actual con sbOpt para evitar fallos silenciosos de RLS
+                const { error: errDel } = await sbOpt
+                    .from('colmena_tubos')
+                    .delete()
+                    .eq('empresa_id', EMPRESA_ID_OPT);
+                if (errDel) throw new Error('Error al borrar inventario anterior: ' + errDel.message);
 
                 // Insertar en lotes pequeños con progreso visible
                 let insertados = 0;
                 for (let i = 0; i < colmenas.length; i += BATCH) {
                     const lote = colmenas.slice(i, i + BATCH);
-                    await _sbRest('POST', 'colmena_tubos', lote);
+                    const { error: errIns } = await sbOpt.from('colmena_tubos').insert(lote);
+                    if (errIns) throw new Error(`Error al insertar tubos (lote ${i}-${i+BATCH}): ` + errIns.message);
                     insertados += lote.length;
                     if (btn) btn.textContent = `⏳ Guardando... ${insertados}/${colmenas.length}`;
                 }
@@ -1542,13 +1549,53 @@ async function guardarColmenaEnSupabaseDirecto() {
                     throw new Error(`Solo se guardaron ${conteoReal} de ${colmenas.length} tubos. Posible problema de permisos en Supabase.`);
                 }
 
+                // ── Registrar eventos de ingreso para todos los tubos cargados ──
+                // Los nuevos tubos tienen tubo_raiz_id asignado por Supabase (uuid default).
+                // Los buscamos para poder registrar el historial correcto.
+                if (btn) btn.textContent = `⏳ Registrando historial de carga...`;
+                try {
+                    const { data: tubosInsertados } = await sbOpt
+                        .from('colmena_tubos')
+                        .select('n_colmena, cod, medida_cm, tubo_raiz_id')
+                        .eq('empresa_id', EMPRESA_ID_OPT);
+
+                    if (tubosInsertados && tubosInsertados.length > 0) {
+                        const tsIngreso = new Date(Date.now() - 1000).toISOString(); // 1s antes para orden correcto
+                        const eventosIngreso = tubosInsertados.map(t => ({
+                            empresa_id:          EMPRESA_ID_OPT,
+                            tubo_raiz_id:        t.tubo_raiz_id || null,
+                            n_colmena:           t.n_colmena,
+                            cod:                 t.cod,
+                            medida_cm:           t.medida_cm,
+                            medida_resultado_cm: t.medida_cm,
+                            evento:              'ingreso',
+                            notas:               `Carga masiva desde Excel — ${tubosInsertados.length} tubos cargados por ${usuario}`,
+                            registrado_por:      usuario,
+                            created_at:          tsIngreso
+                        }));
+
+                        for (let i = 0; i < eventosIngreso.length; i += BATCH) {
+                            const { error: errHist } = await sbOpt
+                                .from('tubos_historial')
+                                .insert(eventosIngreso.slice(i, i + BATCH));
+                            if (errHist) {
+                                // No bloquear la carga por error en historial, pero avisar
+                                log(`⚠️ Historial de carga: error al registrar eventos (${errHist.message}). La colmena quedó guardada igual.`, 'warn');
+                                break;
+                            }
+                        }
+                        log(`📥 Historial: ${eventosIngreso.length} eventos de ingreso registrados para la carga.`, 'info');
+                    }
+                } catch(eHist) {
+                    log(`⚠️ No se pudo registrar historial de carga: ${eHist.message}`, 'warn');
+                }
+
                 // Guardar en configuracion como caché de sesión
-                const email = _currentUser?.email || 'desconocido';
-                const clave = `opt_colmena_final_${email}`;
+                const clave = `opt_colmena_final_${usuario}`;
                 await _supabaseGuardar(clave, JSON.stringify(SistemaInventario.colmenas));
 
                 const confirmado = conteoReal !== null ? ` (verificado: ${conteoReal} en BD)` : '';
-                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos${confirmado} (por ${email})`, 'success');
+                log(`✅ Colmena guardada en Supabase: ${colmenas.length} tubos${confirmado} (por ${usuario})`, 'success');
                 if (btn) { btn.textContent = '✅ Guardado'; setTimeout(() => { if (btn) { btn.textContent = '☁️ Guardar en Supabase'; btn.disabled = false; } }, 3000); }
                 return;
             } catch (e) {
