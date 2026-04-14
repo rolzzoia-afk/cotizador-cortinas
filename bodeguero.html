@@ -641,7 +641,7 @@ async function cargarOTs() {
             .in('estado', ESTADOS_BODEGUERO)
             .order('fecha_creacion', { ascending: false }),
         sb.from('insumos')
-            .select('cod,nemotecnico,descriptor_proveedor,categoria,color,ubicacion,stock_actual,stock_mp,stock_liberado')
+            .select('cod,nemotecnico,descriptor_proveedor,categoria,color,ubicacion,stock_mp,stock_liberado')
             .eq('empresa_id', EMPRESA_ID),
         sb.from('telas_catalogo')
             .select('codigo,nemotecnico,tipo,almacen,posicion')
@@ -1593,7 +1593,7 @@ async function confirmarDespacho() {
 
             // Leer stock actual
             const { data: insActual } = await sb.from('insumos')
-                .select('stock_mp,stock_liberado,stock_actual')
+                .select('stock_mp,stock_liberado')
                 .eq('empresa_id', EMPRESA_ID)
                 .eq('cod', ins.cod)
                 .single();
@@ -1613,8 +1613,7 @@ async function confirmarDespacho() {
             await sb.from('insumos')
                 .update({
                     stock_mp:       nuevoMp,
-                    stock_liberado: nuevoLib,
-                    stock_actual:   Math.max(0, (insActual.stock_actual || 0) - cnt.pickeado)
+                    stock_liberado: nuevoLib
                 })
                 .eq('empresa_id', EMPRESA_ID)
                 .eq('cod', ins.cod);
@@ -1701,7 +1700,7 @@ async function buscarInsumoAdHoc(cod) {
     const infoDiv = document.getElementById('adhoc-insumo-info');
     if (!ins) {
         // Intentar cargar desde Supabase
-        const { data } = await sb.from('insumos').select('cod,nemotecnico,ubicacion,stock_actual,stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+        const { data } = await sb.from('insumos').select('cod,nemotecnico,ubicacion,stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
         if (data) {
             _insumos.push(data);
             mostrarInfoAdHoc(data);
@@ -1715,7 +1714,7 @@ async function buscarInsumoAdHoc(cod) {
 }
 
 function mostrarInfoAdHoc(ins) {
-    const stockTotal = (ins.stock_mp || 0) + (ins.stock_liberado || 0) + (ins.stock_actual || 0);
+    const stockTotal = (ins.stock_mp || 0) + (ins.stock_liberado || 0);
     const infoDiv = document.getElementById('adhoc-insumo-info');
     infoDiv.style.display = 'block';
     infoDiv.innerHTML = `
@@ -1735,10 +1734,10 @@ async function confirmarAdHoc() {
 
     const ins = _insumos.find(i => i.cod === cod);
 
-    // Descontar stock (primero stock_liberado, luego stock_mp, también stock_actual)
+    // Descontar stock (primero stock_liberado, luego stock_mp)
     if (ins) {
         const { data: insActual } = await sb.from('insumos')
-            .select('stock_mp,stock_liberado,stock_actual').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+            .select('stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
         if (insActual) {
             let resta   = cantidad;
             const lib   = insActual.stock_liberado || 0;
@@ -1747,8 +1746,7 @@ async function confirmarAdHoc() {
             const descMp  = Math.min(resta, mp);
             await sb.from('insumos').update({
                 stock_mp:       mp  - descMp,
-                stock_liberado: lib - descLib,
-                stock_actual:   Math.max(0, (insActual.stock_actual || 0) - cantidad)
+                stock_liberado: lib - descLib
             }).eq('empresa_id', EMPRESA_ID).eq('cod', cod);
         }
     }
