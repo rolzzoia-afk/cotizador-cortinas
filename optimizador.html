@@ -611,6 +611,7 @@
             </div>
             <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
             <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
+            <span id="colmena-freshness" style="display:none; font-size:0.72rem; margin-left:8px;"></span>
         </div>
         <div class="archivo-item">
             <label><strong>Archivo de Catálogo de Reemplazos:</strong></label>
@@ -1815,13 +1816,22 @@ async function cargarColmenasDesdeTabla() {
         }
 
         // Convertir al formato que el optimizador espera
+        // ⚠️ IMPORTANTE: incluir tubo_raiz_id para la verificación de integridad pre-guardado
         SistemaInventario.colmenas = data.map(t => ({
-            n_colmena: t.n_colmena || '-',
-            medida_mm: t.medida_mm || (t.medida_cm ? Math.round(t.medida_cm * 10) : 0),
-            medida_cm: t.medida_cm || (t.medida_mm ? (t.medida_mm / 10) : 0),
-            cod: (t.cod || '').toUpperCase().trim(),
-            serial: t.serial || null
+            n_colmena:    t.n_colmena || '-',
+            medida_mm:    t.medida_mm || (t.medida_cm ? Math.round(t.medida_cm * 10) : 0),
+            medida_cm:    t.medida_cm || (t.medida_mm ? (t.medida_mm / 10) : 0),
+            cod:          (t.cod || '').toUpperCase().trim(),
+            serial:       t.serial || null,
+            tubo_raiz_id: t.tubo_raiz_id || null   // ← esencial para verificación de integridad
         })).filter(c => c.medida_mm > 0 && c.cod);
+
+        // Registrar momento de carga para detectar colmenas desactualizadas
+        _colmenaLoadedAt = new Date();
+        _colmenaSnapshotMedidas = {};
+        SistemaInventario.colmenas.forEach(c => {
+            if (c.tubo_raiz_id) _colmenaSnapshotMedidas[c.tubo_raiz_id] = c.medida_cm;
+        });
 
         colmenaActual = SistemaInventario.colmenas;
         usandoColmenaManual = false;
@@ -1829,6 +1839,7 @@ async function cargarColmenasDesdeTabla() {
 
         actualizarTablaColmenas();
         actualizarIndicadorFuente(false);
+        _actualizarFreshnessColmena();
         verificarListo();
 
         document.getElementById('estadoColmenas').textContent = `✓ ${SistemaInventario.colmenas.length} colmenas (tabla Supabase)`;
@@ -2880,6 +2891,10 @@ async function cargarColmenas(event) {
         actualizarIndicadorFuente(true);
         // Guardar copia inmutable de colmenas para poder recalcular sin recargar Excel
         SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
+        // Registrar timestamp de carga (Excel no tiene tubo_raiz_id así que snapshot de medidas queda vacío)
+        _colmenaLoadedAt = new Date();
+        _colmenaSnapshotMedidas = {};
+        _actualizarFreshnessColmena();
         guardarSistema();
         // (botón ☁️ Guardar en Supabase siempre visible)
     } catch (e) { alert('Error: ' + e.message); }
@@ -3735,6 +3750,25 @@ function aplicarResolucionesYEjecutar() {
 // ══════════════════════════════════════════════════════════════════
 
 async function ejecutarOptimizacion() {
+    // ── Advertencia de colmena desactualizada ──────────────────────────────
+    if (_colmenaLoadedAt) {
+        const mins = Math.floor((Date.now() - _colmenaLoadedAt.getTime()) / 60000);
+        if (mins >= 30) {
+            const continuar = confirm(
+                `⚠️ ATENCIÓN: La colmena fue cargada hace ${mins} minutos.\n\n` +
+                `Si otro usuario usó el optimizador en ese tiempo, los tubos pueden estar desactualizados ` +
+                `y podrías generar un plan con tubos que ya fueron cortados.\n\n` +
+                `¿Querés RECARGAR la colmena ahora antes de optimizar?\n\n` +
+                `[Aceptar] = Recargar colmena (recomendado)\n` +
+                `[Cancelar] = Continuar de todas formas (riesgo de conflicto)`
+            );
+            if (continuar) {
+                await cargarColmenasDesdeTabla();
+                return; // el usuario recarga y vuelve a calcular
+            }
+        }
+    }
+
     // ── Verificar conflictos de grupo ANTES de calcular ──
     const conflictos = detectarConflictosGrupo(SistemaInventario.ordenes);
     if (conflictos.length > 0) {
@@ -4815,13 +4849,164 @@ async function logEventosTubos() {
     log(`✅ Historial de tubos: ${eventos.length} evento(s) guardados correctamente.`, 'info');
 }
 
+// ══════════════════════════════════════════════════════════════════
+// SISTEMA DE INTEGRIDAD DE TUBOS
+// ══════════════════════════════════════════════════════════════════
+
+// Momento en que se cargó la colmena desde Supabase
+let _colmenaLoadedAt = null;
+// Mapa tubo_raiz_id → medida_cm al momento de la carga
+let _colmenaSnapshotMedidas = {};
+// Intervalo para actualizar el indicador de frescura
+let _freshnessInterval = null;
+
+// Actualiza el indicador visual de antigüedad de la colmena
+function _actualizarFreshnessColmena() {
+    if (_freshnessInterval) clearInterval(_freshnessInterval);
+    const el = document.getElementById('colmena-freshness');
+    if (!el) return;
+
+    function _render() {
+        if (!_colmenaLoadedAt) { el.style.display = 'none'; return; }
+        const mins = Math.floor((Date.now() - _colmenaLoadedAt.getTime()) / 60000);
+        el.style.display = '';
+        if (mins < 5) {
+            el.style.color = '#4ade80';
+            el.textContent = `⬤ Colmena actualizada hace ${mins < 1 ? 'unos segundos' : mins + ' min'}`;
+        } else if (mins < 30) {
+            el.style.color = '#fbbf24';
+            el.textContent = `⬤ Colmena cargada hace ${mins} min — considerá recargar`;
+        } else {
+            el.style.color = '#f87171';
+            el.textContent = `⚠ Colmena cargada hace ${mins} min — puede estar desactualizada`;
+        }
+    }
+    _render();
+    _freshnessInterval = setInterval(_render, 60000);
+}
+
+// ── VERIFICACIÓN PRE-GUARDADO ────────────────────────────────────
+// Compara los tubos que el plan va a usar contra el estado ACTUAL
+// de colmena_tubos en Supabase. Si algún tubo fue modificado o
+// consumido por otro plan, bloquea el guardado y avisa.
+async function verificarIntegridadPreGuardado() {
+    const usados = SistemaInventario.colmenasHistorico.filter(c => c.estado === 'usada');
+    if (!usados.length) return { ok: true };
+
+    // 1. Detectar tubos duplicados en el mismo plan
+    const vistosEnPlan = {};
+    const duplicados = [];
+    usados.forEach(c => {
+        const key = `${c.n_colmena}__${normalizarCodigo(c.cod)}`;
+        if (vistosEnPlan[key]) {
+            duplicados.push({ n_colmena: c.n_colmena, cod: c.cod });
+        } else {
+            vistosEnPlan[key] = true;
+        }
+    });
+    if (duplicados.length > 0) {
+        const lista = duplicados.map(d => `• Colmena ${d.n_colmena} (${d.cod})`).join('\n');
+        return {
+            ok: false,
+            tipo: 'duplicado_interno',
+            mensaje: `El plan usa el mismo tubo más de una vez:\n${lista}\n\nEsto indica un error en la optimización. No se guardará.`
+        };
+    }
+
+    // 2. Verificar contra Supabase: ¿los tubos siguen igual?
+    const raizIds = usados.map(c => c.tubo_raiz_id).filter(Boolean);
+    if (!raizIds.length) return { ok: true }; // sin raiz_id no podemos verificar
+
+    log('🔒 Verificando integridad de tubos contra Supabase...', 'info');
+
+    const { data: actuales, error } = await sbOpt
+        .from('colmena_tubos')
+        .select('tubo_raiz_id, n_colmena, cod, medida_cm')
+        .eq('empresa_id', EMPRESA_ID_OPT)
+        .in('tubo_raiz_id', raizIds);
+
+    if (error) {
+        log(`⚠️ No se pudo verificar integridad: ${error.message}. Procediendo con precaución.`, 'warn');
+        return { ok: true }; // si no podemos verificar, dejamos pasar con advertencia
+    }
+
+    const mapaActual = {};
+    (actuales || []).forEach(t => { mapaActual[t.tubo_raiz_id] = t; });
+
+    const conflictos = [];
+
+    usados.forEach(c => {
+        if (!c.tubo_raiz_id) return;
+        const enDB = mapaActual[c.tubo_raiz_id];
+
+        if (!enDB) {
+            // El tubo ya no existe en colmena — fue consumido por otro plan
+            conflictos.push({
+                n_colmena: c.n_colmena,
+                cod:       c.cod,
+                tipo:      'desaparecido',
+                medidaCargada: c.medida_cm,
+                medidaActual:  null
+            });
+        } else {
+            const diff = Math.abs((enDB.medida_cm || 0) - (c.medida_cm || 0));
+            if (diff > 0.5) {
+                // El tubo tiene una medida diferente — fue cortado o editado
+                conflictos.push({
+                    n_colmena:     c.n_colmena,
+                    cod:           c.cod,
+                    tipo:          'modificado',
+                    medidaCargada: c.medida_cm,
+                    medidaActual:  enDB.medida_cm
+                });
+            }
+        }
+    });
+
+    if (conflictos.length > 0) {
+        const lista = conflictos.map(c => {
+            if (c.tipo === 'desaparecido')
+                return `• Colmena ${c.n_colmena} (${c.cod}) — ya no existe en inventario (fue consumido por otro plan)`;
+            return `• Colmena ${c.n_colmena} (${c.cod}) — tenías ${c.medidaCargada}cm, ahora mide ${c.medidaActual}cm`;
+        }).join('\n');
+
+        return {
+            ok: false,
+            tipo: 'conflicto_supabase',
+            conflictos,
+            mensaje: `⚠️ CONFLICTO DE INVENTARIO\n\nLos siguientes tubos fueron modificados por otro plan desde que cargaste la colmena:\n\n${lista}\n\nDebés recargar la colmena y volver a optimizar para no duplicar ni inventar tubos.`
+        };
+    }
+
+    log('✅ Integridad verificada: todos los tubos están disponibles y sin cambios.', 'info');
+    return { ok: true };
+}
+
 // ── Confirmar: guardar en Supabase + descargar Excel ──
 async function confirmarYGuardarStaging() {
-    log('💾 Confirmado. Guardando en Supabase...', 'info');
+    log('💾 Confirmado. Verificando integridad antes de guardar...', 'info');
 
     // ── Bloqueo preventivo: deshabilitar "Calcular" mientras se persiste ──
     const btnEjecutar = document.getElementById('btnEjecutar');
     if (btnEjecutar) btnEjecutar.disabled = true;
+
+    // ── PASO 0: VERIFICACIÓN DE INTEGRIDAD — antes de tocar nada ──────────
+    // Detecta: tubos duplicados en el plan, tubos ya consumidos por otro plan,
+    // tubos con medida modificada desde que se cargó la colmena.
+    try {
+        const integridad = await verificarIntegridadPreGuardado();
+        if (!integridad.ok) {
+            // Bloquear el guardado y mostrar el problema claramente
+            log(`🚫 GUARDADO BLOQUEADO — ${integridad.mensaje}`, 'error');
+            alert(integridad.mensaje + '\n\n→ Recargá la colmena desde Supabase y volvé a optimizar.');
+            if (btnEjecutar) btnEjecutar.disabled = false;
+            return; // ← No se guarda nada
+        }
+    } catch(eInteg) {
+        log(`⚠️ No se pudo completar la verificación de integridad: ${eInteg.message}. Procediendo.`, 'warn');
+    }
+
+    log('✅ Integridad OK. Guardando en Supabase...', 'info');
 
     // ── PASO 1: Capturar snapshot INTACTO desde Supabase (antes de cualquier escritura) ──
     const snapshotSeguro = await capturarSnapshotPreOptimizacion();
@@ -4840,9 +5025,29 @@ async function confirmarYGuardarStaging() {
         await guardarColmenaFinalEnSupabase();
         colmenaSincronizadaOK = true;
     } catch (errColmena) {
-        // El error ya fue logueado en guardarColmenaFinalEnSupabase.
-        // No bloqueamos el flujo (el Excel se exporta igual) pero avisamos claramente.
         log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
+    }
+
+    // ── PASO 3a.5: Verificación POST-guardado ─────────────────────────────
+    // Confirma que la cantidad de tubos en Supabase es la esperada.
+    if (colmenaSincronizadaOK) {
+        try {
+            const tubosEsperados = SistemaInventario.colmenasHistorico.filter(
+                c => c.estado === 'disponible' && c.medida_mm > 0 && c.cod
+            ).length;
+            const conteoReal = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+            if (conteoReal !== null && Math.abs(conteoReal - tubosEsperados) > 2) {
+                log(`⚠️ POST-GUARDADO: Se esperaban ~${tubosEsperados} tubos en Supabase pero hay ${conteoReal}. Puede haber una inconsistencia. Verificá la colmena.`, 'warn');
+            } else {
+                log(`✅ Post-verificación OK: ${conteoReal} tubos en Supabase.`, 'info');
+            }
+            // Actualizar timestamp de carga para reflejar el nuevo estado
+            _colmenaLoadedAt = new Date();
+            _colmenaSnapshotMedidas = {};
+            _actualizarFreshnessColmena();
+        } catch(ePost) {
+            log(`⚠️ No se pudo verificar el estado post-guardado: ${ePost.message}`, 'warn');
+        }
     }
 
     // ── PASO 3b: Registrar historial de tubos — independiente del sync de colmena ──
