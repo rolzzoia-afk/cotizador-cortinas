@@ -4577,6 +4577,38 @@
             });
         }
 
+        // Auto-asignar junto si no hay plan guardado con junto ya definido
+        const tieneJuntoGuardado = window.optimizerRows.some(r => r.junto && r.junto !== '' && r.junto !== '?');
+        if (!tieneJuntoGuardado) {
+            // Mismo algoritmo que autoOptimizarCorte() pero sin reordenar las filas
+            let jCode = 64;
+            let curCodInt = null, curAlto = -1, accW = 0;
+            window.optimizerRows.forEach(row => {
+                const exceeds = (accW + row.ancho) > row.anchoRollo;
+                const newGroup = row.codInt !== curCodInt ||
+                    Math.abs(row.altoReal - curAlto) > 0.0001 || exceeds;
+                if (newGroup) {
+                    jCode++;
+                    if (jCode > 90) jCode = 65;
+                    curCodInt = row.codInt;
+                    curAlto   = row.altoReal;
+                    accW      = row.ancho;
+                } else {
+                    accW += row.ancho;
+                }
+                row.junto     = row.ancho > row.anchoRollo ? 'RR' : String.fromCharCode(jCode);
+                row.anchoPano = accW;
+            });
+            // Actualizar inputs de la tabla con los valores calculados
+            const trsOpt = document.querySelectorAll('#f4-optimizador-tabla tr');
+            window.optimizerRows.forEach((row, idx) => {
+                const tr = trsOpt[idx]; if (!tr) return;
+                const inputs = tr.querySelectorAll('input');
+                if (inputs[0]) inputs[0].value = row.anchoPano.toFixed(4);
+                if (inputs[2]) inputs[2].value = row.junto;
+            });
+        }
+
         // Now populate the other tables based on storeVentanas and optimizer data
         populateAllTables(ot, cliente);
 
