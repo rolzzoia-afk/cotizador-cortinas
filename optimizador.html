@@ -4570,16 +4570,19 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
             total_cortes: resultadosGuardar.length
         };
 
-        // Guardar en planes_corte con los datos del snapshot para poder restaurar
-        // Usa _sbRest (fetch directo) para evitar el lock de auth
+        // Guardar en planes_corte con snapshot completo para viaje en el tiempo
+        // snapshot_inventario = estado de colmena_tubos ANTES de este plan
+        // snapshot_seriales   = estado de seriales ANTES de este plan
         await _sbRest('POST', 'planes_corte', {
-            empresa_id: EMPRESA_ID_OPT,
-            optimizer_email: _currentUser.email,
-            resultados: resultadosGuardar,
-            ordenes: SistemaInventario.ordenes || [],
-            fecha: timestamp,
-            fecha_correccion: timestamp,
-            tipo: 'respaldo'
+            empresa_id:          EMPRESA_ID_OPT,
+            optimizer_email:     _currentUser.email,
+            resultados:          resultadosGuardar,
+            ordenes:             SistemaInventario.ordenes || [],
+            fecha:               timestamp,
+            fecha_correccion:    timestamp,
+            tipo:                'respaldo',
+            snapshot_inventario: snapshotIntacto.colmenas  || [],
+            snapshot_seriales:   snapshotIntacto.seriales  || []
         });
 
         log('📸 Punto de restauración guardado en historial Supabase.', 'info');

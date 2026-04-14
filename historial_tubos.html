@@ -202,7 +202,7 @@
 // ══════════════════════════════════════════════════════════════════
 const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
-const EMPRESA_ID        = 'rolzzo';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ══════════════════════════════════════════════════════════════════
@@ -216,7 +216,8 @@ const EV = {
     error_reemplazo:  { color:'#fb923c', bg:'rgba(251,146,60,0.15)', icon:'bi-arrow-repeat',        label:'Reemplazo error' },
     sobrante_error:   { color:'#c084fc', bg:'rgba(192,132,252,0.15)',icon:'bi-arrow-return-left',   label:'Sobrante error' },
     ajuste:           { color:'#fbbf24', bg:'rgba(251,191,36,0.15)', icon:'bi-pencil',              label:'Ajuste admin' },
-    eliminado:        { color:'#71717a', bg:'rgba(113,113,122,0.15)',icon:'bi-x-circle',            label:'Eliminado' }
+    eliminado:        { color:'#71717a', bg:'rgba(113,113,122,0.15)',icon:'bi-x-circle',            label:'Eliminado' },
+    restauracion:     { color:'#e879f9', bg:'rgba(232,121,249,0.18)',icon:'bi-clock-history',       label:'⏱ Restauración', esRestauracion: true }
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -325,21 +326,36 @@ function renderEventoTL(e) {
         : '—';
     const medida   = e.medida_cm != null ? `${Number(e.medida_cm).toFixed(1)} cm` : '—';
     const resultado= e.medida_resultado_cm != null ? `→ ${Number(e.medida_resultado_cm).toFixed(1)} cm` : '';
+    const esRest   = ev.esRestauracion === true;
+
+    // Fila con estilo especial para eventos de restauración
+    const rowStyle = esRest
+        ? `background:rgba(232,121,249,0.07);border-radius:10px;margin:4px 8px;padding:10px 8px;
+           border:1px solid rgba(232,121,249,0.25);position:relative;`
+        : '';
+
+    // Separador visual antes de una restauración
+    const separador = esRest
+        ? `<div style="margin:6px 16px 2px;border-top:1px dashed rgba(232,121,249,0.35);
+               display:flex;align-items:center;gap:8px;">
+               <span style="font-size:0.65rem;color:#e879f9;white-space:nowrap;background:var(--bg-primary);
+                   padding:0 6px;">— PUNTO DE RESTAURACIÓN —</span>
+           </div>`
+        : '';
 
     return `
-    <div class="tl-item">
-        <div class="tl-dot" style="background:${ev.bg};color:${ev.color};">
+    ${separador}
+    <div class="tl-item" style="${rowStyle}">
+        <div class="tl-dot" style="background:${ev.bg};color:${ev.color};${esRest ? 'box-shadow:0 0 8px rgba(232,121,249,0.4);' : ''}">
             <i class="bi ${ev.icon}"></i>
         </div>
         <div class="tl-content">
             <div class="tl-evento">
                 <span class="ev-chip" style="background:${ev.bg};color:${ev.color};">${ev.label}</span>
-                &nbsp;<span style="font-weight:400;color:var(--text-secondary);font-size:0.78rem;">
-                    ${medida} ${resultado}
-                </span>
+                ${esRest ? '' : `&nbsp;<span style="font-weight:400;color:var(--text-secondary);font-size:0.78rem;">${medida} ${resultado}</span>`}
             </div>
-            ${e.ot ? `<div class="tl-detail">OT: <strong>${e.ot}</strong> · Colmena: ${e.n_colmena || '—'}</div>` : `<div class="tl-detail">Colmena: ${e.n_colmena || '—'}</div>`}
-            ${e.notas ? `<div class="tl-notas">${e.notas}</div>` : ''}
+            ${e.ot ? `<div class="tl-detail">OT: <strong>${e.ot}</strong> · Colmena: ${e.n_colmena || '—'}</div>` : (e.n_colmena ? `<div class="tl-detail">Colmena: ${e.n_colmena}</div>` : '')}
+            ${e.notas ? `<div class="tl-notas" style="${esRest ? 'color:#e879f9;font-style:normal;font-size:0.72rem;' : ''}">${e.notas}</div>` : ''}
             <div class="tl-fecha">${fecha}${e.registrado_por ? ` · ${e.registrado_por}` : ''}</div>
         </div>
     </div>`;

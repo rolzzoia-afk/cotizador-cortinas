@@ -9801,7 +9801,7 @@
             // Excluir respaldos automáticos (tipo='respaldo') — son solo puntos de restauración internos
             // Usar or() para incluir planes con tipo=NULL (planes viejos sin tipo)
             const { data, error } = await sb.from('planes_corte')
-                .select('id, fecha, fecha_correccion, resultados, optimizer_email, tipo')
+                .select('id, fecha, fecha_correccion, resultados, ordenes, optimizer_email, tipo, snapshot_inventario, snapshot_seriales')
                 .eq('empresa_id', EMPRESA_ID)
                 .or('tipo.is.null,tipo.neq.respaldo')
                 .order('fecha', { ascending: false })
@@ -9819,9 +9819,29 @@
                 const nCortes = Array.isArray(lineas) ? lineas.length : 0;
                 const esActivo = i === 0 ? ' <span style="color:#22c55e;font-size:0.68rem;background:rgba(34,197,94,0.15);padding:1px 6px;border-radius:9px;">● Activo</span>' : '';
                 const optimEmail = plan.optimizer_email ? `<span style="color:#fbbf24;font-size:0.68rem;"> · ${plan.optimizer_email}</span>` : '';
-                return `<div style="border-bottom:1px solid rgba(255,255,255,0.07);padding:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+
+                // Badge de restauración
+                const esRestauracion = plan.tipo === 'restauracion';
+                const badgeRest = esRestauracion
+                    ? ' <span style="color:#c084fc;font-size:0.68rem;background:rgba(192,132,252,0.15);padding:1px 7px;border-radius:9px;border:1px solid rgba(192,132,252,0.3);">⏱ Restaurado</span>'
+                    : '';
+
+                // Indicador de snapshot disponible
+                let snapSnap = plan.snapshot_inventario || [];
+                if (typeof snapSnap === 'string') { try { snapSnap = JSON.parse(snapSnap); } catch(_){ snapSnap = []; } }
+                const tieneSnap = Array.isArray(snapSnap) && snapSnap.length > 0;
+                const badgeSnap = !esRestauracion && tieneSnap
+                    ? ` <span style="color:#60a5fa;font-size:0.65rem;" title="Tiene snapshot — puede restaurar colmena completa">📸</span>`
+                    : (!tieneSnap && i > 0 ? ` <span style="color:#6b7280;font-size:0.65rem;" title="Sin snapshot — solo restaura el listado de cortes">⚠</span>` : '');
+
+                // Fondo especial para planes restaurados
+                const bgRow = esRestauracion
+                    ? 'background:rgba(192,132,252,0.05);border-radius:8px;padding:8px;margin-bottom:2px;border:1px solid rgba(192,132,252,0.15);'
+                    : 'border-bottom:1px solid rgba(255,255,255,0.07);padding:8px 0;';
+
+                return `<div style="${bgRow}display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                     <div style="flex:1;min-width:160px;">
-                        <span style="color:#e2e8f0;font-size:0.8rem;">${fecha}</span>${corr}${esActivo}
+                        <span style="color:#e2e8f0;font-size:0.8rem;">${fecha}</span>${corr}${esActivo}${badgeRest}${badgeSnap}
                         <br><span style="color:#64748b;font-size:0.72rem;">${nCortes} corte(s)</span>${optimEmail}
                     </div>
                     <div class="d-flex gap-1">
@@ -9884,12 +9904,28 @@
         modal.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
-    // ─── Restaurar un plan anterior ─────────────────────────────
+    // ─── Restaurar un plan anterior (viaje en el tiempo) ────────
     async function planRestaurar(planId) {
         const plan = _planHistorialCache.find(p => p.id === planId);
         if (!plan) return;
         const fecha = plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '—';
-        if (!confirm(`¿Restaurar el plan del ${fecha} como plan ACTIVO?\n\nEsto creará una copia de ese plan como el más reciente. El plan actual no se borrará.`)) return;
+
+        // Parsear snapshot para mostrar info al usuario
+        let snapInv = plan.snapshot_inventario || [];
+        if (typeof snapInv === 'string') { try { snapInv = JSON.parse(snapInv); } catch(_){ snapInv = []; } }
+
+        const tieneSnapshot = Array.isArray(snapInv) && snapInv.length > 0;
+        const msgInventario = tieneSnapshot
+            ? `\n🗄 Colmena: se restaurarán ${snapInv.length} tubos al estado anterior a este plan.`
+            : `\n⚠️ Este plan no tiene snapshot de colmena guardado (fue creado antes de esta función). Solo se restaurará el listado de cortes.`;
+
+        if (!confirm(
+            `⏱ VIAJE EN EL TIEMPO\n\n` +
+            `Vas a volver al estado del: ${fecha}\n` +
+            `${msgInventario}\n\n` +
+            `¿Confirmás la restauración? Esta acción actualiza el inventario físico de tubos.`
+        )) return;
+
         _planPreviewActual = plan;
         await planRestaurarConfirmar();
     }
@@ -9898,26 +9934,92 @@
         if (!_planPreviewActual) { showToast('No hay plan seleccionado para restaurar', 'error'); return; }
         const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
         if (!email) { showToast('Primero configurá el email del optimizador', 'error'); return; }
+
         try {
-            let lineas = _planPreviewActual.resultados || [];
-            if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
-            let ordenes = _planPreviewActual.ordenes || [];
-            if (typeof ordenes === 'string') { try { ordenes = JSON.parse(ordenes); } catch(_){ordenes=[];} }
+            const plan = _planPreviewActual;
             const ahora = new Date().toISOString();
-            const { error } = await sb.from('planes_corte').insert({
-                empresa_id: EMPRESA_ID,
-                optimizer_email: email,
-                resultados: lineas,
-                ordenes: ordenes,
-                fecha: ahora,
-                fecha_correccion: null
+
+            // ── Parsear datos del plan ──
+            let lineas = plan.resultados || [];
+            if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
+            let ordenes = plan.ordenes || [];
+            if (typeof ordenes === 'string') { try { ordenes = JSON.parse(ordenes); } catch(_){ordenes=[];} }
+
+            // ── Parsear snapshot de inventario ──
+            let snapInv = plan.snapshot_inventario || [];
+            if (typeof snapInv === 'string') { try { snapInv = JSON.parse(snapInv); } catch(_){ snapInv = []; } }
+            let snapSer = plan.snapshot_seriales || [];
+            if (typeof snapSer === 'string') { try { snapSer = JSON.parse(snapSer); } catch(_){ snapSer = []; } }
+
+            // ── PASO 1: Restaurar colmena_tubos si hay snapshot ──
+            if (Array.isArray(snapInv) && snapInv.length > 0) {
+                // Borrar inventario actual
+                const { error: errDel } = await sb
+                    .from('colmena_tubos')
+                    .delete()
+                    .eq('empresa_id', EMPRESA_ID);
+                if (errDel) throw new Error('Error borrando colmena actual: ' + errDel.message);
+
+                // Preparar filas para reinsertar
+                const filas = snapInv.map(c => ({
+                    empresa_id:  EMPRESA_ID,
+                    n_colmena:   c.n_colmena || '-',
+                    cod:         (c.cod || '').toUpperCase().trim(),
+                    medida_cm:   typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
+                    medida_mm:   c.medida_mm || Math.round((parseFloat(c.medida_cm) || 0) * 10),
+                    serial:      c.serial || null,
+                    tubo_raiz_id: c.tubo_raiz_id || null,
+                    agregado_por_admin: c.agregado_por_admin || false
+                }));
+
+                // Insertar en lotes de 100
+                const BATCH = 100;
+                for (let i = 0; i < filas.length; i += BATCH) {
+                    const { error: errIns } = await sb
+                        .from('colmena_tubos')
+                        .insert(filas.slice(i, i + BATCH));
+                    if (errIns) throw new Error('Error restaurando tubos: ' + errIns.message);
+                }
+            }
+
+            // ── PASO 2: Registrar evento de restauración en tubos_historial ──
+            try {
+                await sb.from('tubos_historial').insert({
+                    empresa_id:          EMPRESA_ID,
+                    n_colmena:           '-',
+                    cod:                 '-',
+                    medida_cm:           0,
+                    medida_resultado_cm: 0,
+                    evento:              'restauracion',
+                    ot:                  '',
+                    notas:               `Restauración al plan del ${plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '?'} — ${snapInv.length} tubos restaurados`,
+                    registrado_por:      email
+                });
+            } catch(_) { /* no crítico */ }
+
+            // ── PASO 3: Guardar el plan restaurado como el activo en planes_corte ──
+            const { error: errPlan } = await sb.from('planes_corte').insert({
+                empresa_id:          EMPRESA_ID,
+                optimizer_email:     email,
+                resultados:          lineas,
+                ordenes:             ordenes,
+                fecha:               ahora,
+                fecha_correccion:    null,
+                tipo:                'restauracion',   // ← marca visual en el historial
+                snapshot_inventario: snapInv,
+                snapshot_seriales:   snapSer
             });
-            if (error) throw error;
-            showToast('✅ Plan restaurado como activo. Ya puedes cargarlo en "Plan de Corte Activo".');
+            if (errPlan) throw errPlan;
+
+            const msgFinal = snapInv.length > 0
+                ? `✅ Viaje en el tiempo completado. Colmena restaurada con ${snapInv.length} tubos al estado del ${plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '?'}.`
+                : `✅ Plan restaurado como activo (sin snapshot de colmena).`;
+
+            showToast(msgFinal);
             document.getElementById('plan-preview-modal').style.display = 'none';
             _planPreviewActual = null;
-            // Refrescar la lista de historial
             planHistorialCargar();
+
         } catch(e) { showToast('❌ Error al restaurar: ' + e.message, 'error'); }
     }
 
