@@ -925,8 +925,9 @@ function renderBOMItems() {
         if (item._es_tela) {
             const ubic = item._ubicacion_rack;
             locText   = ubic ? `📍 Rack: ${ubic}` : '📍 Sin posición registrada';
-        } else if ((item.categoria || '').toUpperCase().includes('TUBER')) {
-            // Tubos: la ubicación viene de la colmena, no del rack
+        } else if ((item.categoria || '').toUpperCase().includes('TUBER') ||
+                   (item.categoria || '').toUpperCase().includes('CENEF')) {
+            // Tubos y Cenefas: la ubicación viene de la colmena (colmena_tubos)
             const cod = (item.especificacion || '').split('·')[0].trim().toUpperCase();
             const colmenas = getColmenaPorCodTubo(cod);
             locText = colmenas ? `🗄 Colmena: ${colmenas}` : '⚠ Sin colmena asignada';
