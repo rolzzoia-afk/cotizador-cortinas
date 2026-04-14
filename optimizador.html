@@ -4337,17 +4337,22 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
 // LOG DE HISTORIAL DE TUBOS
 // ══════════════════════════════════════════════════════════════════
 async function logEventosTubos() {
-    try {
-        if (!SistemaInventario.resultadosOptimizacion || !SistemaInventario.resultadosOptimizacion.length) return;
+    // ⚠️ Sin try-catch interno: los errores suben al bloque independiente en
+    // confirmarYGuardarStaging(), donde se muestran en la UI con log().
+    if (!SistemaInventario.resultadosOptimizacion || !SistemaInventario.resultadosOptimizacion.length) {
+        log('ℹ️ Historial tubos: sin resultados de optimización para registrar.', 'info');
+        return;
+    }
 
-        const eventos = [];
-        const now = new Date().toISOString();
-        const usuario = _currentUser?.email || null;
+    const eventos = [];
+    const now = new Date().toISOString();
+    const usuario = _currentUser?.email || null;
+    let saltados = 0;
 
-        SistemaInventario.resultadosOptimizacion.forEach(item => {
+    SistemaInventario.resultadosOptimizacion.forEach(item => {
             const res = item.resultado;
             const ord = item.orden;
-            if (!res || !res.colmena || !res.codigo) return;
+            if (!res || !res.colmena || !res.codigo) { saltados++; return; }
 
             const ot          = String(ord?.ot || ord?.id || '');
             const esMerma     = !!res.es_desecho;
@@ -4373,8 +4378,7 @@ async function logEventosTubos() {
                 notas: `Corte de ${res.medida_cm}cm para OT ${ot}` +
                        (tieneSobrante ? ` — sobrante ${res.sobrante_cm}cm` : '') +
                        (esMerma ? ' — MERMA' : ''),
-                registrado_por: usuario,
-                created_at: now
+                registrado_por: usuario
             });
 
             // ── Evento: MERMA (sobrante demasiado chico para usar) ──
@@ -4389,8 +4393,7 @@ async function logEventosTubos() {
                     evento:              'merma',
                     ot,
                     notas: `Merma de ${res.sobrante_cm}cm — descartada (< ${MERMA_MAX_MM/10}cm)`,
-                    registrado_por: usuario,
-                    created_at: now
+                    registrado_por: usuario
                 });
             }
 
@@ -4415,23 +4418,25 @@ async function logEventosTubos() {
                     evento:              'sobrante',
                     ot,
                     notas: `Sobrante de corte OT ${ot} — queda en colmena ${colmenaDestino}`,
-                    registrado_por: usuario,
-                    created_at: now
+                    registrado_por: usuario
                 });
             }
         });
 
-        if (!eventos.length) return;
-
-        const BATCH = 100;
-        for (let i = 0; i < eventos.length; i += BATCH) {
-            await _sbRest('POST', 'tubos_historial', eventos.slice(i, i + BATCH));
-        }
-        log(`📋 Historial de tubos: ${eventos.length} eventos registrados`, 'info');
-    } catch (e) {
-        console.warn('[tubos_historial] Error registrando eventos:', e.message);
-        // No crítico — no bloquear el flujo principal
+    if (saltados > 0) {
+        log(`⚠️ Historial tubos: ${saltados} item(s) saltados por colmena/código nulo.`, 'warn');
     }
+    if (!eventos.length) {
+        log('ℹ️ Historial tubos: sin eventos para registrar (todos los items fueron saltados).', 'info');
+        return;
+    }
+
+    log(`📋 Historial tubos: registrando ${eventos.length} evento(s)...`, 'info');
+    const BATCH = 100;
+    for (let i = 0; i < eventos.length; i += BATCH) {
+        await _sbRest('POST', 'tubos_historial', eventos.slice(i, i + BATCH));
+    }
+    log(`✅ Historial de tubos: ${eventos.length} evento(s) guardados correctamente.`, 'info');
 }
 
 // ── Confirmar: guardar en Supabase + descargar Excel ──
@@ -4458,12 +4463,19 @@ async function confirmarYGuardarStaging() {
     try {
         await guardarColmenaFinalEnSupabase();
         colmenaSincronizadaOK = true;
-        // Registrar historial de tubos (cortes, sobrantes, mermas)
-        await logEventosTubos();
     } catch (errColmena) {
         // El error ya fue logueado en guardarColmenaFinalEnSupabase.
         // No bloqueamos el flujo (el Excel se exporta igual) pero avisamos claramente.
         log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
+    }
+
+    // ── PASO 3b: Registrar historial de tubos — independiente del sync de colmena ──
+    // Se ejecuta SIEMPRE, aunque guardarColmenaFinalEnSupabase falle,
+    // para que el historial quede registrado sin importar el estado de la colmena.
+    try {
+        await logEventosTubos();
+    } catch (errHistorial) {
+        log(`⚠️ No se pudo registrar el historial de tubos: ${errHistorial.message}`, 'warn');
     }
 
     // ── PASO 3c: Persistir seriales con estado actualizado (disponible → ocupado) ──
