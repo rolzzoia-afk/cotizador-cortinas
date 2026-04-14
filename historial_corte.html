@@ -914,23 +914,54 @@ async function cargarTubos() {
 // ── Sugerencia de mejor tubo ──────────────────────────────────────
 let _tuboSugerido = null;
 
+// Devuelve el Set de n_colmena ya usados en el plan actual,
+// excluyendo la fila que estamos corrigiendo.
+function _colmenasYaUsadasEnPlan() {
+    const usadas = new Set();
+    if (!_modalPlan || !_modalCorte) return usadas;
+
+    const idxActual = _modalCorte.idx;
+    const resultados = _modalPlan.resultados || [];
+
+    resultados.forEach((item, idx) => {
+        if (idx === idxActual) return; // no excluir la fila que estamos corrigiendo
+        const r = item?.resultado ?? item;
+        // Solo contar filas que son cortes reales (tienen colmena asignada)
+        if (r?.colmena && r.colmena !== 'TUBO NUEVO' && r.colmena !== 'LIBERADO') {
+            usadas.add(String(r.colmena).toUpperCase().trim());
+        }
+        // También excluir sobrantes guardados (colmena_sobrante)
+        if (r?.colmena_sobrante) {
+            usadas.add(String(r.colmena_sobrante).toUpperCase().trim());
+        }
+    });
+
+    return usadas;
+}
+
 function calcularSugerencia() {
     if (!_modalCorte || !_tubosColmena.length) return null;
 
-    const codNecesario   = (_modalCorte.r.codigo || _modalCorte.r.codigo_original || '').toUpperCase().trim();
+    const codNecesario    = (_modalCorte.r.codigo || _modalCorte.r.codigo_original || '').toUpperCase().trim();
     const medidaNecesaria = Number(_modalCorte.r.medida_cm || 0);
     if (!medidaNecesaria) return null;
 
-    // Candidatos: tubos que tienen suficiente largo para hacer el corte
-    const candidatos = _tubosColmena.filter(t => Number(t.medida_cm || 0) >= medidaNecesaria);
+    // Excluir tubos ya usados en el mismo plan
+    const colmenasOcupadas = _colmenasYaUsadasEnPlan();
+
+    // Candidatos: largo suficiente Y no usados en este plan
+    const candidatos = _tubosColmena.filter(t => {
+        if (Number(t.medida_cm || 0) < medidaNecesaria) return false;
+        const col = String(t.n_colmena || '').toUpperCase().trim();
+        if (colmenasOcupadas.has(col)) return false; // ← ya usado en este plan
+        return true;
+    });
+
     if (!candidatos.length) return null;
 
-    // Ordenar por prioridad:
-    // 1. Mismo código (ideal)
-    // 2. Menor sobrante (menos desperdicio)
     const conPuntaje = candidatos.map(t => {
-        const mismoCod  = (t.cod || '').toUpperCase().trim() === codNecesario;
-        const sobrante  = Number(t.medida_cm) - medidaNecesaria;
+        const mismoCod = (t.cod || '').toUpperCase().trim() === codNecesario;
+        const sobrante = Number(t.medida_cm) - medidaNecesaria;
         return { tubo: t, mismoCod, sobrante };
     });
 
@@ -987,35 +1018,41 @@ function renderTubosList(q) {
     const cont  = document.getElementById('reemplazo-list');
     const label = document.getElementById('reemplazo-list-label');
 
-    // Excluir el sugerido de la lista general para no duplicar
-    const sinSugerido = _tuboSugerido
-        ? _tubosColmena.filter(t => t.id !== _tuboSugerido.id)
-        : _tubosColmena;
+    // Excluir el sugerido Y los ya usados en el mismo plan
+    const colmenasOcupadas = _colmenasYaUsadasEnPlan();
+    const base = _tubosColmena.filter(t => {
+        if (_tuboSugerido && t.id === _tuboSugerido.id) return false; // no duplicar sugerido
+        const col = String(t.n_colmena || '').toUpperCase().trim();
+        if (colmenasOcupadas.has(col)) return false; // ya usado en este plan
+        return true;
+    });
 
     // Código del corte actual (para pre-filtrar por defecto)
     const codCorte = _modalCorte
         ? (_modalCorte.r.codigo || _modalCorte.r.codigo_original || '').toUpperCase().trim()
         : '';
+    const medidaNecesaria = Number(_modalCorte?.r?.medida_cm || 0);
 
     let filtrados;
     if (q) {
-        // Con búsqueda activa: mostrar cualquier tubo que coincida (código o colmena)
         const ql = q.toLowerCase();
-        filtrados = sinSugerido.filter(t =>
+        filtrados = base.filter(t =>
             (t.cod || '').toLowerCase().includes(ql) ||
             String(t.n_colmena || '').toLowerCase().includes(ql));
     } else if (codCorte) {
-        // Sin búsqueda: solo tubos del mismo código que el corte
-        filtrados = sinSugerido.filter(t =>
-            (t.cod || '').toUpperCase().trim() === codCorte);
+        // Sin búsqueda: mismo código y largo suficiente
+        filtrados = base.filter(t =>
+            (t.cod || '').toUpperCase().trim() === codCorte &&
+            Number(t.medida_cm || 0) >= medidaNecesaria);
     } else {
-        filtrados = sinSugerido;
+        filtrados = base;
     }
 
+    const ocupadasCount = colmenasOcupadas.size;
     if (label) label.textContent = q
         ? `Resultados para "${q}" (${filtrados.length})`
         : codCorte
-            ? `${codCorte} disponibles (${filtrados.length})`
+            ? `${codCorte} disponibles (${filtrados.length})${ocupadasCount ? ` · ${ocupadasCount} excluidos por uso en este plan` : ''}`
             : `Disponibles en colmena (${filtrados.length})`;
 
     if (!filtrados.length) {
