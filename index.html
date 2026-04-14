@@ -2379,8 +2379,11 @@
                             <div id="col-section-tubos">
                                 <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
                                     <strong style="font-size:0.85rem;"><i class="bi bi-rulers"></i> Inventario de Tubos (colmena_tubos)</strong>
-                                    <div class="d-flex gap-2">
+                                    <div class="d-flex gap-2 flex-wrap">
                                         <input type="text" id="col-filtro-tubos" class="form-control form-control-sm" placeholder="🔍 Colmena, código..." oninput="colmenaFiltrarTubos()" style="width:180px;">
+                                        <button class="btn btn-sm" style="background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3);" onclick="colmenaReconciliarHistorial()" title="Registra un evento de ingreso para los tubos que no tienen historial">
+                                            <i class="bi bi-clock-history"></i> Reconciliar
+                                        </button>
                                         <button class="btn btn-sm" style="background:rgba(16,185,129,0.2);color:#34d399;border:1px solid rgba(16,185,129,0.4);" onclick="colmenaAbrirFormTubo(null)">
                                             <i class="bi bi-plus-lg"></i> Agregar
                                         </button>
@@ -2411,6 +2414,10 @@
                                         <div class="col-6 col-md-3">
                                             <label class="text-muted" style="font-size:0.75rem;">Serial</label>
                                             <input type="text" id="col-tubo-serial" class="form-control form-control-sm" placeholder="Ej: T-001-A" style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
+                                        </div>
+                                        <div class="col-12 col-md-6">
+                                            <label class="text-muted" style="font-size:0.75rem;">Procedencia <span style="color:#6b7280;">(de dónde viene)</span></label>
+                                            <input type="text" id="col-tubo-procedencia" class="form-control form-control-sm" placeholder="Ej: Proveedor X, devuelto de obra, sobrante de otro proyecto..." style="background:rgba(0,0,0,0.4);color:#e2e8f0;border-color:rgba(255,255,255,0.15);">
                                         </div>
                                     </div>
                                     <div class="d-flex gap-2 mt-2">
@@ -9464,19 +9471,104 @@
 
     // ─── Helper: loggear evento de tubo ─────────────────────────
     async function _logTuboEvento(evento, tubo) {
+        const { error } = await sb.from('tubos_historial').insert({
+            empresa_id:          EMPRESA_ID,
+            tubo_raiz_id:        tubo.tubo_raiz_id || null,
+            n_colmena:           tubo.n_colmena,
+            cod:                 tubo.cod,
+            medida_cm:           tubo.medida_cm,
+            medida_resultado_cm: tubo.medida_resultado_cm ?? tubo.medida_cm,
+            evento,
+            notas:               tubo.notas || null,
+            registrado_por:      _usuario?.email || null
+        });
+        if (error) {
+            // Error visible: no más silencio
+            console.error('[tubos_historial] Error al registrar evento:', error.message);
+            showToast(`⚠️ No se pudo registrar el historial del tubo (${evento}): ${error.message}`, 'error');
+        }
+    }
+
+    // ─── Reconciliar historial: estampar ingreso a tubos huérfanos ──
+    // Un tubo "huérfano" es el que existe en colmena_tubos pero no tiene
+    // ningún evento en tubos_historial. Puede ser porque fue cargado
+    // antes de que existiera el sistema de historial, o por algún error.
+    async function colmenaReconciliarHistorial() {
+        if (!confirm('¿Registrar ingreso para los tubos que no tienen historial?\n\nEsto solo crea eventos para tubos sin ningún registro previo. No modifica ni duplica nada existente.')) return;
+
+        showToast('⏳ Analizando tubos sin historial...', 'info');
+
         try {
-            await sb.from('tubos_historial').insert({
-                empresa_id:          EMPRESA_ID,
-                tubo_raiz_id:        tubo.tubo_raiz_id || null,
-                n_colmena:           tubo.n_colmena,
-                cod:                 tubo.cod,
-                medida_cm:           tubo.medida_cm,
-                medida_resultado_cm: tubo.medida_resultado_cm ?? tubo.medida_cm,
-                evento,
-                notas:               tubo.notas || null,
-                registrado_por:      _usuario?.email || null
+            // 1. Obtener todos los tubos actuales con su tubo_raiz_id
+            const { data: tubos, error: errTubos } = await sb
+                .from('colmena_tubos')
+                .select('id, n_colmena, cod, medida_cm, tubo_raiz_id')
+                .eq('empresa_id', EMPRESA_ID);
+            if (errTubos) throw errTubos;
+            if (!tubos || !tubos.length) { showToast('No hay tubos en la colmena', 'info'); return; }
+
+            const conRaiz = tubos.filter(t => t.tubo_raiz_id);
+            const sinRaiz = tubos.filter(t => !t.tubo_raiz_id);
+            const raizIds = conRaiz.map(t => t.tubo_raiz_id);
+
+            // 2. Buscar cuáles ya tienen historial
+            const conHistorial = new Set();
+            if (raizIds.length > 0) {
+                const CHUNK = 100;
+                for (let i = 0; i < raizIds.length; i += CHUNK) {
+                    const { data: prev } = await sb
+                        .from('tubos_historial')
+                        .select('tubo_raiz_id')
+                        .eq('empresa_id', EMPRESA_ID)
+                        .in('tubo_raiz_id', raizIds.slice(i, i + CHUNK));
+                    (prev || []).forEach(r => conHistorial.add(r.tubo_raiz_id));
+                }
+            }
+
+            // 3. Construir eventos de ingreso para huérfanos
+            const ahora   = new Date().toISOString();
+            const usuario = _usuario?.email || null;
+            const eventos = [];
+
+            conRaiz.forEach(t => {
+                if (conHistorial.has(t.tubo_raiz_id)) return;
+                eventos.push({
+                    empresa_id:          EMPRESA_ID,
+                    tubo_raiz_id:        t.tubo_raiz_id,
+                    n_colmena:           t.n_colmena,
+                    cod:                 t.cod,
+                    medida_cm:           t.medida_cm,
+                    medida_resultado_cm: t.medida_cm,
+                    evento:              'ingreso',
+                    notas:               `Tubo en colmena ${t.n_colmena} (${t.medida_cm}cm) — ingreso registrado por reconciliación de historial`,
+                    registrado_por:      usuario,
+                    created_at:          ahora
+                });
             });
-        } catch(e) { console.warn('[tubos_historial]', e.message); }
+
+            if (sinRaiz.length > 0) {
+                console.warn(`[Reconciliación] ${sinRaiz.length} tubo(s) sin tubo_raiz_id — no se pueden rastrear`);
+            }
+
+            if (!eventos.length) {
+                showToast(`✅ Todos los tubos ya tienen historial. No se encontraron huérfanos.`, 'success');
+                return;
+            }
+
+            // 4. Insertar en lotes
+            const BATCH = 100;
+            for (let i = 0; i < eventos.length; i += BATCH) {
+                const { error: errIns } = await sb.from('tubos_historial').insert(eventos.slice(i, i + BATCH));
+                if (errIns) throw errIns;
+            }
+
+            const msgSinRaiz = sinRaiz.length ? ` (${sinRaiz.length} tubo(s) sin ID de raíz, ignorados)` : '';
+            showToast(`✅ Reconciliación completa: ${eventos.length} tubo(s) registrados.${msgSinRaiz}`, 'success');
+
+        } catch(e) {
+            showToast('❌ Error en reconciliación: ' + e.message, 'error');
+            console.error('[Reconciliación]', e);
+        }
     }
 
     // ─── Agregar tubo al inventario ──────────────────────────────
@@ -9615,6 +9707,7 @@
         document.getElementById('col-tubo-cod').value        = cod || '';
         document.getElementById('col-tubo-medida').value     = medida || '';
         document.getElementById('col-tubo-serial').value     = serial || '';
+        document.getElementById('col-tubo-procedencia').value = '';
         titulo.innerHTML = id
             ? '<i class="bi bi-pencil-square"></i> Editar Tubo'
             : '<i class="bi bi-plus-circle"></i> Nuevo Tubo';
@@ -9624,11 +9717,12 @@
 
     // ─── TUBOS: Guardar (crear o editar) ────────────────────────
     async function colmenaGuardarTubo() {
-        const id       = document.getElementById('col-edit-tubo-id').value.trim();
-        const colmena  = document.getElementById('col-tubo-colmena').value.trim();
-        const cod      = document.getElementById('col-tubo-cod').value.trim();
-        const medidaCm = parseFloat(document.getElementById('col-tubo-medida').value) || 0;
-        const serial   = document.getElementById('col-tubo-serial').value.trim() || null;
+        const id          = document.getElementById('col-edit-tubo-id').value.trim();
+        const colmena     = document.getElementById('col-tubo-colmena').value.trim();
+        const cod         = document.getElementById('col-tubo-cod').value.trim();
+        const medidaCm    = parseFloat(document.getElementById('col-tubo-medida').value) || 0;
+        const serial      = document.getElementById('col-tubo-serial').value.trim() || null;
+        const procedencia = document.getElementById('col-tubo-procedencia').value.trim() || null;
 
         if (!colmena) { showToast('El número de colmena es obligatorio', 'error'); return; }
         if (!cod)     { showToast('El código del tubo es obligatorio', 'error'); return; }
@@ -9654,7 +9748,8 @@
                     tubo_raiz_id: ant?.tubo_raiz_id,
                     n_colmena: colmena, cod, medida_cm: medidaCm,
                     medida_resultado_cm: medidaCm,
-                    notas: `Ajuste admin — antes: ${ant?.medida_cm}cm → ahora: ${medidaCm}cm`
+                    notas: `Ajuste admin — antes: ${ant?.medida_cm}cm → ahora: ${medidaCm}cm` +
+                           (procedencia ? ` | Procedencia: ${procedencia}` : '')
                 });
                 showToast('✅ Tubo actualizado correctamente');
             } else {
@@ -9664,7 +9759,8 @@
                 await _logTuboEvento('ingreso', {
                     tubo_raiz_id: ins?.tubo_raiz_id,
                     n_colmena: colmena, cod, medida_cm: medidaCm,
-                    notas: 'Ingreso manual (módulo colmena)'
+                    notas: 'Ingreso manual' +
+                           (procedencia ? ` — Procedencia: ${procedencia}` : ' — sin procedencia indicada')
                 });
                 showToast('✅ Tubo agregado al inventario');
             }
