@@ -2621,6 +2621,21 @@ function expandirOrdenesDesdeExcel() {
                     colorDeseado = valFallback ? String(valFallback).toUpperCase().trim() : '';
                 }
 
+                // ── Normalizar color: eliminar plural español para tolerar "NEGROS", "BLANCOS", "GRISES"
+                // Operarios a veces escriben el color en plural porque describen varios accesorios.
+                // Tabla de singularización: OS→O, AS→A, ES→E (excepto colores que terminan en ES de por sí)
+                if (colorDeseado) {
+                    const _COLORES_PLURALES = {
+                        'NEGROS':'NEGRO','BLANCOS':'BLANCO','GRISES':'GRIS','DORADOS':'DORADO',
+                        'PLATEADOS':'PLATEADO','CAFES':'CAFÉ','CAFÉS':'CAFÉ','MARRONES':'MARRÓN',
+                        'PLATEADOS':'PLATEADO','CROMADOS':'CROMADO','ALUMINIOS':'ALUMINIO',
+                        'BRONCES':'BRONCE','CHAMPAGNES':'CHAMPAGNE'
+                    };
+                    if (_COLORES_PLURALES[colorDeseado]) {
+                        colorDeseado = _COLORES_PLURALES[colorDeseado];
+                    }
+                }
+
                 // Excepción dura: PESO INTERNO siempre es E13, sin importar color
                 if (nombreCol === 'PESO INTERNO') {
                     orden.cod = 'E13';
