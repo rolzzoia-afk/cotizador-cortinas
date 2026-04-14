@@ -4688,9 +4688,15 @@ async function logEventosTubos() {
     }
 
     log(`📋 Historial tubos: registrando ${eventos.length} evento(s)...`, 'info');
+
+    // Usar sbOpt (cliente JS con sesión en memoria) en vez de _sbRest,
+    // para evitar el problema de Tracking Prevention que bloquea localStorage
+    // y deja _getAccessToken() sin token → 403 de RLS.
     const BATCH = 100;
     for (let i = 0; i < eventos.length; i += BATCH) {
-        await _sbRest('POST', 'tubos_historial', eventos.slice(i, i + BATCH));
+        const lote = eventos.slice(i, i + BATCH);
+        const { error: errInsert } = await sbOpt.from('tubos_historial').insert(lote);
+        if (errInsert) throw new Error(errInsert.message || JSON.stringify(errInsert));
     }
     log(`✅ Historial de tubos: ${eventos.length} evento(s) guardados correctamente.`, 'info');
 }
