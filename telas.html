@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com cdn.jsdelivr.net data:; img-src 'self' data: blob:; connect-src 'self' https://izelewwgeamktnzkiwvl.supabase.co wss://izelewwgeamktnzkiwvl.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com cdn.jsdelivr.net data:; img-src 'self' data: blob: https://cdn.shopify.com https://izelewwgeamktnzkiwvl.supabase.co; connect-src 'self' https://izelewwgeamktnzkiwvl.supabase.co wss://izelewwgeamktnzkiwvl.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
     <meta name="referrer" content="strict-origin-when-cross-origin">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Telas — Rolzzo</title>
@@ -1060,6 +1060,30 @@
         </div>
         <label>Observaciones</label>
         <textarea id="tela-observaciones" rows="2" placeholder="Notas sobre esta tela..."></textarea>
+
+        <!-- FOTO -->
+        <label style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+            <i class="bi bi-camera"></i> Foto de la Tela
+        </label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:6px;">
+            <button type="button" class="btn-inv btn-outline-inv" onclick="document.getElementById('tela-foto-camara').click()" style="font-size:0.82rem; padding:7px 14px; display:flex; align-items:center; gap:6px;">
+                <i class="bi bi-camera-fill"></i> Tomar Foto
+            </button>
+            <button type="button" class="btn-inv btn-outline-inv" onclick="document.getElementById('tela-foto-galeria').click()" style="font-size:0.82rem; padding:7px 14px; display:flex; align-items:center; gap:6px;">
+                <i class="bi bi-image"></i> Desde Galería
+            </button>
+            <span id="tela-foto-estado" style="font-size:0.78rem; color:var(--text-muted);"></span>
+        </div>
+        <input type="file" id="tela-foto-camara" accept="image/*" capture="environment" style="display:none;" onchange="procesarFotoTela(this)">
+        <input type="file" id="tela-foto-galeria" accept="image/*" style="display:none;" onchange="procesarFotoTela(this)">
+        <input type="hidden" id="tela-foto_url">
+        <div id="tela-foto-preview" style="margin-top:6px; display:none; position:relative;">
+            <img id="tela-foto-img" src="" alt="Preview"
+                style="max-width:100%; max-height:200px; border-radius:8px; border:1px solid var(--border); object-fit:contain; display:block;">
+            <button type="button" onclick="quitarFotoTela()" title="Quitar foto"
+                style="position:absolute; top:6px; right:6px; background:rgba(0,0,0,0.6); border:none; color:var(--danger); border-radius:50%; width:28px; height:28px; cursor:pointer; font-size:1rem; display:flex; align-items:center; justify-content:center; line-height:1;">✕</button>
+        </div>
+
         <div class="modal-actions">
             <button class="btn-inv btn-outline-inv" onclick="cerrarModal('modalTela')">Cancelar</button>
             <button class="btn-inv btn-danger-inv" id="btnEliminarTela" onclick="eliminarTela()" style="display:none;">
@@ -1561,6 +1585,73 @@ function renderizarCatalogo() {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// FOTO TELA
+// ══════════════════════════════════════════════════════════════════
+function previsualizarFotoTela(url) {
+    const preview = document.getElementById('tela-foto-preview');
+    const img = document.getElementById('tela-foto-img');
+    if (url) {
+        img.src = url;
+        preview.style.display = 'block';
+    } else {
+        preview.style.display = 'none';
+        img.src = '';
+    }
+}
+
+function quitarFotoTela() {
+    document.getElementById('tela-foto_url').value = '';
+    document.getElementById('tela-foto-estado').textContent = '';
+    document.getElementById('tela-foto-preview').style.display = 'none';
+    document.getElementById('tela-foto-img').src = '';
+    document.getElementById('tela-foto-camara').value = '';
+    document.getElementById('tela-foto-galeria').value = '';
+}
+
+async function procesarFotoTela(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+
+    const estado = document.getElementById('tela-foto-estado');
+    estado.textContent = '⏳ Subiendo foto…';
+    estado.style.color = 'var(--warning)';
+
+    // Preview local inmediato mientras sube
+    const reader = new FileReader();
+    reader.onload = e => previsualizarFotoTela(e.target.result);
+    reader.readAsDataURL(file);
+
+    try {
+        const ext = file.name.split('.').pop() || 'jpg';
+        const codigoVal = (document.getElementById('tela-codigo').value || 'tela').trim().toUpperCase().replace(/\s+/g, '_');
+        const path = `${EMPRESA_ID}/${codigoVal}_${Date.now()}.${ext}`;
+
+        const { error: upErr } = await sb.storage
+            .from('fotos-telas')
+            .upload(path, file, { upsert: true, contentType: file.type });
+
+        if (upErr) throw upErr;
+
+        const { data: urlData } = sb.storage
+            .from('fotos-telas')
+            .getPublicUrl(path);
+
+        const publicUrl = urlData?.publicUrl;
+        if (!publicUrl) throw new Error('No se pudo obtener la URL pública');
+
+        document.getElementById('tela-foto_url').value = publicUrl;
+        previsualizarFotoTela(publicUrl);
+        estado.textContent = '✓ Foto guardada';
+        estado.style.color = 'var(--success)';
+
+    } catch (e) {
+        console.error('[FOTO TELA]', e);
+        estado.textContent = '⚠ No se pudo subir: ' + e.message;
+        estado.style.color = 'var(--danger)';
+    }
+}
+
 // MODAL TELA
 // ══════════════════════════════════════════════════════════════════
 function abrirModalTela(id = null) {
@@ -1594,6 +1685,14 @@ function abrirModalTela(id = null) {
         document.getElementById('tela-responsable').value = t.responsable || '';
         document.getElementById('tela-observaciones').value = t.observaciones || '';
         setSelectValue('tela-grupo', t.grupo);
+        // Foto al editar
+        document.getElementById('tela-foto_url').value = t.foto_url || '';
+        document.getElementById('tela-foto-camara').value = '';
+        document.getElementById('tela-foto-galeria').value = '';
+        const estadoFoto = document.getElementById('tela-foto-estado');
+        estadoFoto.textContent = t.foto_url ? '✓ Foto guardada' : '';
+        estadoFoto.style.color = 'var(--success)';
+        previsualizarFotoTela(t.foto_url || '');
     } else {
         titulo.textContent = 'Nueva Tela';
         btnElim.style.display = 'none';
@@ -1608,6 +1707,13 @@ function abrirModalTela(id = null) {
         document.getElementById('tela-almacen').value = 'LIBERADO';
         document.getElementById('tela-estado').value = 'ACTIVO';
         document.getElementById('tela-status_stock').value = '';
+        // Foto al crear
+        document.getElementById('tela-foto_url').value = '';
+        document.getElementById('tela-foto-camara').value = '';
+        document.getElementById('tela-foto-galeria').value = '';
+        document.getElementById('tela-foto-estado').textContent = '';
+        document.getElementById('tela-foto-preview').style.display = 'none';
+        document.getElementById('tela-foto-img').src = '';
     }
     document.getElementById('modalTela').classList.add('visible');
 }
@@ -1650,7 +1756,8 @@ async function guardarTela() {
         estado:           document.getElementById('tela-estado').value,
         proveedor_codigo: document.getElementById('tela-proveedor_codigo').value.trim() || null,
         responsable:      document.getElementById('tela-responsable').value || null,
-        observaciones:    document.getElementById('tela-observaciones').value.trim() || null
+        observaciones:    document.getElementById('tela-observaciones').value.trim() || null,
+        foto_url:         document.getElementById('tela-foto_url').value.trim() || null
     };
 
     let error;
