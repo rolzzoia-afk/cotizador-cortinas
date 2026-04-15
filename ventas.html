@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>KPI Ventas — Rolzzo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg:        #0d0f1a;
+            --surface:   #141726;
+            --surface2:  #1c2035;
+            --border:    rgba(255,255,255,0.07);
+            --accent:    #6366f1;
+            --accent2:   #818cf8;
+            --green:     #22c55e;
+            --yellow:    #f59e0b;
+            --red:       #ef4444;
+            --text:      #e2e8f0;
+            --muted:     #64748b;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; }
+
+        /* ── TOPBAR ── */
+        .topbar {
+            background:var(--surface);
+            border-bottom:1px solid var(--border);
+            padding:14px 20px;
+            display:flex; align-items:center; justify-content:space-between; gap:12px;
+            flex-wrap:wrap;
+            position:sticky; top:0; z-index:100;
+        }
+        .topbar-left { display:flex; align-items:center; gap:14px; }
+        .topbar-back {
+            background:rgba(255,255,255,0.06); border:1px solid var(--border);
+            color:var(--text); border-radius:8px; padding:7px 12px;
+            cursor:pointer; font-size:14px; text-decoration:none;
+            display:flex; align-items:center; gap:6px; transition:background .2s;
+        }
+        .topbar-back:hover { background:rgba(255,255,255,0.11); }
+        .topbar-title { font-size:16px; font-weight:700; color:#fff; }
+        .topbar-badge {
+            font-size:10px; padding:3px 8px; border-radius:20px;
+            background:rgba(99,102,241,0.2); color:var(--accent2); border:1px solid rgba(99,102,241,0.3);
+        }
+        .topbar-right { display:flex; align-items:center; gap:10px; }
+        .btn-config {
+            background:rgba(255,255,255,0.06); border:1px solid var(--border);
+            color:var(--text); border-radius:8px; padding:7px 14px;
+            cursor:pointer; font-size:13px; display:flex; align-items:center; gap:6px; transition:background .2s;
+        }
+        .btn-config:hover { background:rgba(255,255,255,0.11); }
+        .btn-guardar {
+            background:var(--accent); border:none; color:#fff;
+            border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600;
+            cursor:pointer; display:flex; align-items:center; gap:6px; transition:opacity .2s;
+        }
+        .btn-guardar:hover { opacity:0.85; }
+        .btn-guardar:disabled { opacity:0.4; cursor:not-allowed; }
+
+        /* ── DATE BAR ── */
+        .datebar {
+            background:var(--surface2);
+            border-bottom:1px solid var(--border);
+            padding:10px 20px;
+            display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+        }
+        .datebar-label { font-size:12px; color:var(--muted); }
+        .datebar input[type=date] {
+            background:var(--surface); border:1px solid var(--border); color:var(--text);
+            border-radius:7px; padding:6px 10px; font-size:13px; cursor:pointer;
+        }
+        .datebar input[type=date]:focus { outline:none; border-color:var(--accent); }
+        .period-btns { display:flex; gap:6px; margin-left:auto; }
+        .period-btn {
+            background:transparent; border:1px solid var(--border); color:var(--muted);
+            border-radius:7px; padding:5px 13px; font-size:12px; cursor:pointer; transition:all .2s;
+        }
+        .period-btn.active, .period-btn:hover {
+            background:rgba(99,102,241,0.15); border-color:var(--accent); color:var(--accent2);
+        }
+
+        /* ── MAIN ── */
+        .main { max-width:1200px; margin:0 auto; padding:24px 20px; display:flex; flex-direction:column; gap:20px; }
+
+        /* ── SECTION HEADER ── */
+        .section-hdr {
+            display:flex; align-items:center; gap:10px; margin-bottom:16px;
+        }
+        .section-hdr-icon {
+            width:34px; height:34px; border-radius:9px;
+            display:flex; align-items:center; justify-content:center;
+            font-size:15px; flex-shrink:0;
+        }
+        .section-hdr-text { flex:1; }
+        .section-hdr-title { font-size:15px; font-weight:700; color:#fff; }
+        .section-hdr-sub { font-size:12px; color:var(--muted); margin-top:2px; }
+        .section-total {
+            font-size:22px; font-weight:800; color:#fff; text-align:right;
+        }
+        .section-total small { font-size:11px; font-weight:400; color:var(--muted); display:block; }
+
+        /* ── CARD ── */
+        .card {
+            background:var(--surface);
+            border:1px solid var(--border);
+            border-radius:14px;
+            padding:20px;
+        }
+
+        /* ── BLOQUE 1: CANALES ── */
+        .canales-grid {
+            display:grid;
+            grid-template-columns:repeat(auto-fill, minmax(140px, 1fr));
+            gap:12px;
+        }
+        .canal-card {
+            background:var(--surface2);
+            border:1px solid var(--border);
+            border-radius:10px;
+            padding:14px 12px;
+            text-align:center;
+        }
+        .canal-name {
+            font-size:11px; color:var(--muted); margin-bottom:10px;
+            display:flex; align-items:center; justify-content:center; gap:5px;
+        }
+        .canal-input {
+            width:100%; background:transparent; border:none; border-bottom:2px solid var(--border);
+            color:#fff; font-size:28px; font-weight:800; text-align:center;
+            padding:4px 0; transition:border-color .2s; -moz-appearance:textfield;
+        }
+        .canal-input::-webkit-inner-spin-button, .canal-input::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .canal-input:focus { outline:none; border-bottom-color:var(--accent); }
+        .canal-pct { font-size:11px; color:var(--muted); margin-top:6px; }
+
+        /* Chart container */
+        .chart-wrap { width:120px; height:120px; margin:0 auto; }
+
+        /* ── BLOQUE 2: LLAMADAS ── */
+        .vendedor-grid {
+            display:grid;
+            grid-template-columns:repeat(auto-fill, minmax(175px, 1fr));
+            gap:12px;
+        }
+        .vendedor-card {
+            background:var(--surface2);
+            border:1px solid var(--border);
+            border-radius:10px;
+            padding:14px;
+            display:flex; flex-direction:column; gap:10px;
+        }
+        .vendedor-header { display:flex; align-items:center; gap:8px; }
+        .vendedor-avatar {
+            width:32px; height:32px; border-radius:50%;
+            background:linear-gradient(135deg, var(--accent), var(--accent2));
+            display:flex; align-items:center; justify-content:center;
+            font-size:13px; font-weight:700; color:#fff; flex-shrink:0;
+        }
+        .vendedor-name { font-size:13px; font-weight:600; }
+        .vendedor-inputs { display:flex; flex-direction:column; gap:8px; }
+        .input-row { display:flex; flex-direction:column; gap:3px; }
+        .input-label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+        .input-num {
+            background:var(--surface); border:1px solid var(--border); border-radius:7px;
+            color:#fff; font-size:20px; font-weight:700; text-align:center;
+            padding:6px 4px; width:100%; -moz-appearance:textfield;
+        }
+        .input-num::-webkit-inner-spin-button, .input-num::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .input-num:focus { outline:none; border-color:var(--accent); }
+        .vendedor-badge {
+            font-size:10px; padding:3px 7px; border-radius:20px; text-align:center;
+            font-weight:600;
+        }
+        .badge-green { background:rgba(34,197,94,0.15); color:var(--green); border:1px solid rgba(34,197,94,0.3); }
+        .badge-yellow { background:rgba(245,158,11,0.15); color:var(--yellow); border:1px solid rgba(245,158,11,0.3); }
+        .badge-red { background:rgba(239,68,68,0.15); color:var(--red); border:1px solid rgba(239,68,68,0.3); }
+
+        /* ── BLOQUE 3: META VISITAS ── */
+        .meta-grid {
+            display:grid;
+            grid-template-columns:repeat(auto-fill, minmax(190px, 1fr));
+            gap:12px;
+        }
+        .meta-card {
+            background:var(--surface2);
+            border:1px solid var(--border);
+            border-radius:10px;
+            padding:14px;
+        }
+        .meta-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+        .meta-name { font-size:13px; font-weight:600; }
+        .meta-num-wrap { display:flex; align-items:center; gap:6px; }
+        .meta-input {
+            background:var(--surface); border:1px solid var(--border); border-radius:7px;
+            color:#fff; font-size:22px; font-weight:800; text-align:center;
+            padding:4px; width:64px; -moz-appearance:textfield;
+        }
+        .meta-input::-webkit-inner-spin-button, .meta-input::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .meta-input:focus { outline:none; border-color:var(--accent); }
+        .meta-slash { font-size:18px; color:var(--muted); }
+        .meta-target { font-size:16px; font-weight:700; color:var(--muted); }
+        .progress-bar-wrap { height:8px; background:rgba(255,255,255,0.07); border-radius:4px; overflow:hidden; }
+        .progress-bar-fill { height:100%; border-radius:4px; transition:width .5s, background .5s; }
+
+        /* ── BLOQUE 4: CIERRE ── */
+        .cierre-grid {
+            display:grid;
+            grid-template-columns:1fr 1fr;
+            gap:16px;
+        }
+        .cierre-stat {
+            background:var(--surface2);
+            border:1px solid var(--border);
+            border-radius:10px;
+            padding:16px;
+            text-align:center;
+        }
+        .cierre-stat .big-num {
+            font-size:48px; font-weight:800; color:#fff; line-height:1;
+        }
+        .cierre-stat .lbl { font-size:12px; color:var(--muted); margin-top:4px; }
+        .cierre-stat .input-big {
+            background:transparent; border:none; border-bottom:2px solid var(--border);
+            color:#fff; font-size:48px; font-weight:800; text-align:center;
+            width:100%; -moz-appearance:textfield; line-height:1;
+        }
+        .cierre-stat .input-big::-webkit-inner-spin-button, .cierre-stat .input-big::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .cierre-stat .input-big:focus { outline:none; border-bottom-color:var(--accent); }
+        .gauge-wrap { position:relative; width:160px; height:80px; margin:0 auto; overflow:hidden; }
+        .gauge-canvas { width:160px; height:160px; position:absolute; top:0; left:0; }
+        .gauge-label {
+            position:absolute; bottom:0; left:50%; transform:translateX(-50%);
+            font-size:22px; font-weight:800; text-align:center; line-height:1; white-space:nowrap;
+        }
+        .gauge-sub { font-size:11px; color:var(--muted); text-align:center; margin-top:6px; }
+        .cierre-full {
+            grid-column:span 2;
+            background:var(--surface2); border:1px solid var(--border);
+            border-radius:10px; padding:16px;
+            display:flex; align-items:center; justify-content:space-around; gap:20px;
+            flex-wrap:wrap;
+        }
+
+        /* ── BLOQUE 5: TERRENO ── */
+        .terreno-table { width:100%; border-collapse:collapse; }
+        .terreno-table thead th {
+            font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px;
+            padding:8px 12px; border-bottom:1px solid var(--border); text-align:left;
+        }
+        .terreno-table tbody tr { border-bottom:1px solid var(--border); transition:background .15s; }
+        .terreno-table tbody tr:hover { background:rgba(255,255,255,0.03); }
+        .terreno-table tbody td { padding:10px 12px; font-size:13px; }
+        .rank-badge {
+            display:inline-flex; align-items:center; justify-content:center;
+            width:22px; height:22px; border-radius:50%; font-size:11px; font-weight:700;
+        }
+        .rank-1 { background:rgba(245,158,11,0.2); color:#f59e0b; }
+        .rank-2 { background:rgba(148,163,184,0.15); color:#94a3b8; }
+        .rank-3 { background:rgba(180,83,9,0.2); color:#b45309; }
+        .terreno-input {
+            background:var(--surface); border:1px solid var(--border); border-radius:6px;
+            color:#fff; font-size:16px; font-weight:700; text-align:center;
+            padding:4px 6px; width:60px; -moz-appearance:textfield;
+        }
+        .terreno-input::-webkit-inner-spin-button, .terreno-input::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .terreno-input:focus { outline:none; border-color:var(--accent); }
+        .pct-pill {
+            display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:700;
+        }
+
+        /* ── HISTORIAL CHART ── */
+        .chart-container { height:220px; position:relative; }
+
+        /* ── MODAL CONFIG ── */
+        .modal-overlay {
+            position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:200;
+            display:flex; align-items:center; justify-content:center; padding:20px;
+        }
+        .modal-overlay.hidden { display:none; }
+        .modal {
+            background:var(--surface); border:1px solid var(--border);
+            border-radius:16px; width:100%; max-width:500px; max-height:85vh;
+            overflow-y:auto; padding:24px;
+        }
+        .modal-title { font-size:16px; font-weight:700; margin-bottom:20px; display:flex; align-items:center; gap:8px; }
+        .modal-section { margin-bottom:20px; }
+        .modal-section-title { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }
+        .chip-list { display:flex; flex-wrap:wrap; gap:8px; }
+        .chip {
+            background:var(--surface2); border:1px solid var(--border);
+            border-radius:20px; padding:5px 12px; font-size:12px;
+            display:flex; align-items:center; gap:6px;
+        }
+        .chip-del {
+            cursor:pointer; color:var(--red); font-size:14px; line-height:1;
+            background:none; border:none; padding:0;
+        }
+        .add-row { display:flex; gap:8px; margin-top:8px; }
+        .add-input {
+            flex:1; background:var(--surface2); border:1px solid var(--border);
+            border-radius:8px; color:var(--text); padding:8px 12px; font-size:13px;
+        }
+        .add-input:focus { outline:none; border-color:var(--accent); }
+        .btn-add {
+            background:var(--accent); border:none; color:#fff;
+            border-radius:8px; padding:8px 14px; font-size:13px; cursor:pointer;
+        }
+        .meta-config-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+        .meta-config-label { font-size:13px; }
+        .meta-config-input {
+            background:var(--surface2); border:1px solid var(--border);
+            border-radius:8px; color:#fff; font-size:16px; font-weight:700;
+            text-align:center; padding:6px; width:72px; -moz-appearance:textfield;
+        }
+        .meta-config-input::-webkit-inner-spin-button, .meta-config-input::-webkit-outer-spin-button { -webkit-appearance:none; }
+        .meta-config-input:focus { outline:none; border-color:var(--accent); }
+        .modal-footer { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; }
+        .btn-cancel { background:transparent; border:1px solid var(--border); color:var(--text); border-radius:8px; padding:8px 18px; cursor:pointer; font-size:13px; }
+        .btn-save { background:var(--accent); border:none; color:#fff; border-radius:8px; padding:8px 18px; font-size:13px; font-weight:600; cursor:pointer; }
+
+        /* ── TOAST ── */
+        .toast {
+            position:fixed; bottom:24px; right:24px; z-index:300;
+            background:var(--surface2); border:1px solid var(--border);
+            border-radius:10px; padding:12px 18px;
+            font-size:13px; color:var(--text);
+            box-shadow:0 8px 32px rgba(0,0,0,0.4);
+            transform:translateY(80px); opacity:0;
+            transition:all .3s;
+        }
+        .toast.show { transform:translateY(0); opacity:1; }
+        .toast.ok { border-color:rgba(34,197,94,0.4); }
+        .toast.err { border-color:rgba(239,68,68,0.4); }
+
+        /* ── RESPONSIVE ── */
+        @media(max-width:600px) {
+            .cierre-grid { grid-template-columns:1fr; }
+            .cierre-full { grid-column:span 1; }
+            .topbar { gap:8px; }
+            .topbar-title { font-size:14px; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div class="topbar">
+    <div class="topbar-left">
+        <a class="topbar-back" href="landing.html">
+            <i class="bi bi-arrow-left"></i> Inicio
+        </a>
+        <div>
+            <div class="topbar-title">KPI Ventas <span class="topbar-badge">DIARIO</span></div>
+        </div>
+    </div>
+    <div class="topbar-right">
+        <button class="btn-config" onclick="abrirConfig()">
+            <i class="bi bi-gear-fill"></i> Configurar
+        </button>
+        <button class="btn-guardar" id="btnGuardar" onclick="guardarTodo()">
+            <i class="bi bi-cloud-upload-fill"></i> Guardar
+        </button>
+    </div>
+</div>
+
+<!-- DATE BAR -->
+<div class="datebar">
+    <span class="datebar-label"><i class="bi bi-calendar3"></i> Fecha:</span>
+    <input type="date" id="fechaSelector" onchange="cambiarFecha()">
+    <div class="period-btns">
+        <button class="period-btn active" onclick="cambiarPeriodo('dia',this)">Hoy</button>
+        <button class="period-btn" onclick="cambiarPeriodo('semana',this)">Semana</button>
+        <button class="period-btn" onclick="cambiarPeriodo('mes',this)">Mes</button>
+    </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+    <!-- BLOQUE 1: FUENTE DE COTIZACIONES -->
+    <div class="card" id="bloque-canales">
+        <div class="section-hdr">
+            <div class="section-hdr-icon" style="background:rgba(99,102,241,0.15); color:#818cf8;">
+                <i class="bi bi-chat-dots-fill"></i>
+            </div>
+            <div class="section-hdr-text">
+                <div class="section-hdr-title">Fuente de cotizaciones</div>
+                <div class="section-hdr-sub">Cantidad de mensajes recibidos por canal hoy</div>
+            </div>
+            <div class="section-total" id="total-canales">
+                0 <small>total</small>
+            </div>
+        </div>
+        <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+            <div class="canales-grid" id="canales-grid" style="flex:1; min-width:200px;"></div>
+            <div style="width:130px; flex-shrink:0;">
+                <canvas id="chartCanales" width="130" height="130"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOQUE 2: LLAMADAS DIARIAS -->
+    <div class="card" id="bloque-llamadas">
+        <div class="section-hdr">
+            <div class="section-hdr-icon" style="background:rgba(245,158,11,0.15); color:#f59e0b;">
+                <i class="bi bi-telephone-fill"></i>
+            </div>
+            <div class="section-hdr-text">
+                <div class="section-hdr-title">Llamadas diarias</div>
+                <div class="section-hdr-sub">Cotizaciones atendidas por vendedora</div>
+            </div>
+            <div class="section-total" id="total-llamadas">
+                0 <small>llamadas</small>
+            </div>
+        </div>
+        <div class="vendedor-grid" id="llamadas-grid"></div>
+    </div>
+
+    <!-- BLOQUE 3: META DE VISITAS DIARIAS -->
+    <div class="card" id="bloque-meta">
+        <div class="section-hdr">
+            <div class="section-hdr-icon" style="background:rgba(34,197,94,0.15); color:#22c55e;">
+                <i class="bi bi-bullseye"></i>
+            </div>
+            <div class="section-hdr-text">
+                <div class="section-hdr-title">Meta de visitas diarias</div>
+                <div class="section-hdr-sub">Progreso de cada asesora vs meta de <strong id="meta-label">3</strong> visitas</div>
+            </div>
+        </div>
+        <div class="meta-grid" id="meta-grid"></div>
+    </div>
+
+    <!-- BLOQUE 4: CIERRE DE VENTAS -->
+    <div class="card" id="bloque-cierre">
+        <div class="section-hdr">
+            <div class="section-hdr-icon" style="background:rgba(239,68,68,0.15); color:#ef4444;">
+                <i class="bi bi-clipboard2-check-fill"></i>
+            </div>
+            <div class="section-hdr-text">
+                <div class="section-hdr-title">Cierre de ventas</div>
+                <div class="section-hdr-sub">Cotizaciones enviadas vs cerradas definitivamente</div>
+            </div>
+        </div>
+        <div class="cierre-grid">
+            <div class="cierre-stat">
+                <div class="lbl">Cotizaciones enviadas</div>
+                <input class="input-big" type="number" id="cierre-enviadas" min="0" value="0" oninput="recalcularCierre()">
+            </div>
+            <div class="cierre-stat">
+                <div class="lbl">Cotizaciones cerradas</div>
+                <input class="input-big" type="number" id="cierre-cerradas" min="0" value="0" oninput="recalcularCierre()">
+            </div>
+            <div class="cierre-full">
+                <div style="text-align:center;">
+                    <div class="gauge-wrap">
+                        <canvas class="gauge-canvas" id="gaugeCanvas" width="160" height="160"></canvas>
+                        <div class="gauge-label" id="gaugePct">—</div>
+                    </div>
+                    <div class="gauge-sub">% de cierre real</div>
+                </div>
+                <div style="text-align:center; padding:12px;">
+                    <div style="font-size:13px; color:var(--muted); margin-bottom:6px;">Meta de cierre</div>
+                    <div style="font-size:32px; font-weight:800;" id="meta-cierre-display">50%</div>
+                    <div id="cierre-status" style="font-size:12px; margin-top:8px;"></div>
+                </div>
+                <div style="text-align:center; padding:12px;">
+                    <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">Cotizaciones para llegar a meta</div>
+                    <div style="font-size:36px; font-weight:800; color:var(--accent2);" id="cierre-faltante">—</div>
+                    <div style="font-size:11px; color:var(--muted);">cierres pendientes</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BLOQUE 5: VENDEDORES EN TERRENO -->
+    <div class="card" id="bloque-terreno">
+        <div class="section-hdr">
+            <div class="section-hdr-icon" style="background:rgba(14,165,233,0.15); color:#38bdf8;">
+                <i class="bi bi-geo-alt-fill"></i>
+            </div>
+            <div class="section-hdr-text">
+                <div class="section-hdr-title">Vendedores en terreno</div>
+                <div class="section-hdr-sub">Visitas del día y tasa de cierre por vendedor</div>
+            </div>
+        </div>
+        <table class="terreno-table">
+            <thead>
+                <tr>
+                    <th style="width:36px;">#</th>
+                    <th>Vendedor</th>
+                    <th style="text-align:center;">Visitas totales</th>
+                    <th style="text-align:center;">Visitas cerradas</th>
+                    <th style="text-align:center;">% Cierre</th>
+                    <th style="text-align:center;">Estado</th>
+                </tr>
+            </thead>
+            <tbody id="terreno-tbody"></tbody>
+        </table>
+    </div>
+
+    <!-- BLOQUE HISTORIAL (semana/mes) -->
+    <div class="card" id="bloque-historial" style="display:none;">
+        <div class="section-hdr">
+            <div class="section-hdr-icon" style="background:rgba(99,102,241,0.15); color:#818cf8;">
+                <i class="bi bi-graph-up-arrow"></i>
+            </div>
+            <div class="section-hdr-text">
+                <div class="section-hdr-title" id="historial-title">Evolución semanal</div>
+                <div class="section-hdr-sub">Mensajes recibidos, llamadas y cierres</div>
+            </div>
+        </div>
+        <div class="chart-container">
+            <canvas id="chartHistorial"></canvas>
+        </div>
+    </div>
+
+</div><!-- /main -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- MODAL CONFIGURACIÓN -->
+<div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal">
+        <div class="modal-title"><i class="bi bi-gear-fill"></i> Configuración KPI Ventas</div>
+
+        <!-- Metas -->
+        <div class="modal-section">
+            <div class="modal-section-title">Metas</div>
+            <div class="meta-config-row">
+                <span class="meta-config-label">Meta de visitas por asesora (diario)</span>
+                <input type="number" class="meta-config-input" id="cfg-meta-visitas" min="1" value="3">
+            </div>
+            <div class="meta-config-row">
+                <span class="meta-config-label">Meta % cierre de cotizaciones</span>
+                <input type="number" class="meta-config-input" id="cfg-meta-cierre" min="1" max="100" value="50">
+            </div>
+        </div>
+
+        <!-- Canales -->
+        <div class="modal-section">
+            <div class="modal-section-title">Canales de contacto</div>
+            <div class="chip-list" id="cfg-canales-list"></div>
+            <div class="add-row">
+                <input type="text" class="add-input" id="cfg-canal-nuevo" placeholder="Nuevo canal (ej: TikTok)">
+                <button class="btn-add" onclick="agregarCanal()"><i class="bi bi-plus-lg"></i></button>
+            </div>
+        </div>
+
+        <!-- Vendedores llamadas -->
+        <div class="modal-section">
+            <div class="modal-section-title">Equipo — Llamadas / cotizaciones</div>
+            <div class="chip-list" id="cfg-llamadas-list"></div>
+            <div class="add-row">
+                <input type="text" class="add-input" id="cfg-llamada-nueva" placeholder="Nombre vendedora">
+                <button class="btn-add" onclick="agregarVendedora('llamadas')"><i class="bi bi-plus-lg"></i></button>
+            </div>
+        </div>
+
+        <!-- Vendedores terreno -->
+        <div class="modal-section">
+            <div class="modal-section-title">Equipo — Terreno</div>
+            <div class="chip-list" id="cfg-terreno-list"></div>
+            <div class="add-row">
+                <input type="text" class="add-input" id="cfg-terreno-nuevo" placeholder="Nombre vendedor/a terreno">
+                <button class="btn-add" onclick="agregarVendedora('terreno')"><i class="bi bi-plus-lg"></i></button>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button class="btn-cancel" onclick="cerrarConfig()">Cancelar</button>
+            <button class="btn-save" onclick="guardarConfig()">Guardar configuración</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  SUPABASE
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
+const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+const { createClient }  = supabase;
+const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ═══════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ═══════════════════════════════════════════════════════════
+let _config = {
+    meta_visitas: 3,
+    meta_cierre_pct: 50,
+    canales:    ['Instagram', 'WhatsApp 1', 'WhatsApp 2', 'WhatsApp 3', 'Shopify'],
+    vendedoras: ['Génesis', 'María C.', 'Luisanna', 'Adriana', 'Analí'],
+    terreno:    ['Alan', 'Antonio', 'Lourdes']
+};
+
+let _fechaActiva = hoyISO();
+let _periodo = 'dia';
+let _chartCanales = null;
+let _chartHistorial = null;
+let _gaugeCtx = null;
+
+// ═══════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════
+function hoyISO() {
+    return new Date().toISOString().split('T')[0];
+}
+
+function toast(msg, tipo = 'ok') {
+    const el = document.getElementById('toast');
+    el.textContent = (tipo === 'ok' ? '✓ ' : '⚠ ') + msg;
+    el.className = 'toast ' + tipo + ' show';
+    setTimeout(() => el.className = 'toast', 3000);
+}
+
+function iniciales(nombre) {
+    return (nombre || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+}
+
+function colorPct(pct, meta) {
+    if (pct >= meta) return 'var(--green)';
+    if (pct >= meta * 0.7) return 'var(--yellow)';
+    return 'var(--red)';
+}
+
+// ═══════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+    document.getElementById('fechaSelector').value = _fechaActiva;
+    await cargarConfig();
+    await cargarDiaActivo();
+    renderizarTodo();
+});
+
+// ═══════════════════════════════════════════════════════════
+//  SUPABASE: CARGA CONFIG
+// ═══════════════════════════════════════════════════════════
+async function cargarConfig() {
+    try {
+        const { data } = await sb.from('kpi_config')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID)
+            .single();
+        if (data) {
+            _config.meta_visitas   = data.meta_visitas   || 3;
+            _config.meta_cierre_pct= data.meta_cierre_pct|| 50;
+            _config.canales        = data.canales        || _config.canales;
+            _config.vendedoras     = data.vendedoras     || _config.vendedoras;
+            _config.terreno        = data.terreno        || _config.terreno;
+        }
+    } catch(e) {
+        // Tabla no existe aún: usar defaults + guardar localmente
+        console.warn('[KPI] kpi_config no disponible — usando defaults');
+        const local = localStorage.getItem('kpi_config');
+        if (local) Object.assign(_config, JSON.parse(local));
+    }
+}
+
+async function guardarConfigSupabase() {
+    const payload = {
+        empresa_id:      EMPRESA_ID,
+        meta_visitas:    _config.meta_visitas,
+        meta_cierre_pct: _config.meta_cierre_pct,
+        canales:         _config.canales,
+        vendedoras:      _config.vendedoras,
+        terreno:         _config.terreno,
+        updated_at:      new Date().toISOString()
+    };
+    try {
+        const { error } = await sb.from('kpi_config')
+            .upsert(payload, { onConflict: 'empresa_id' });
+        if (error) throw error;
+    } catch(e) {
+        localStorage.setItem('kpi_config', JSON.stringify(_config));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  SUPABASE: REGISTROS DIARIOS
+// ═══════════════════════════════════════════════════════════
+let _registros = {}; // {clave: valor}
+
+async function cargarDiaActivo() {
+    _registros = {};
+    try {
+        const { data } = await sb.from('kpi_registros')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID)
+            .eq('fecha', _fechaActiva);
+        if (data) {
+            data.forEach(r => { _registros[r.clave] = r.valor; });
+        }
+    } catch(e) {
+        // Tabla no existe: leer de localStorage
+        const local = localStorage.getItem('kpi_' + _fechaActiva);
+        if (local) _registros = JSON.parse(local);
+    }
+}
+
+async function guardarTodo() {
+    const btn = document.getElementById('btnGuardar');
+    btn.disabled = true;
+
+    // Recopilar todos los inputs
+    const ahora = new Date().toISOString();
+    const registros = [];
+
+    // Canales
+    _config.canales.forEach(canal => {
+        const el = document.getElementById('canal-' + slugify(canal));
+        if (el) registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'canal_'+slugify(canal), valor:Number(el.value)||0, updated_at:ahora });
+    });
+    // Llamadas
+    _config.vendedoras.forEach(v => {
+        const ll = document.getElementById('ll-llamadas-' + slugify(v));
+        const cot = document.getElementById('ll-cotz-' + slugify(v));
+        if (ll)  registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'ll_llamadas_'+slugify(v), valor:Number(ll.value)||0, updated_at:ahora });
+        if (cot) registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'ll_cotz_'+slugify(v), valor:Number(cot.value)||0, updated_at:ahora });
+    });
+    // Meta visitas
+    _config.vendedoras.forEach(v => {
+        const el = document.getElementById('meta-' + slugify(v));
+        if (el) registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'meta_'+slugify(v), valor:Number(el.value)||0, updated_at:ahora });
+    });
+    // Cierre
+    const env = document.getElementById('cierre-enviadas');
+    const cer = document.getElementById('cierre-cerradas');
+    if (env) registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'cierre_enviadas', valor:Number(env.value)||0, updated_at:ahora });
+    if (cer) registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'cierre_cerradas', valor:Number(cer.value)||0, updated_at:ahora });
+    // Terreno
+    _config.terreno.forEach(v => {
+        const tot = document.getElementById('ter-total-' + slugify(v));
+        const cer2 = document.getElementById('ter-cerradas-' + slugify(v));
+        if (tot)  registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'ter_total_'+slugify(v), valor:Number(tot.value)||0, updated_at:ahora });
+        if (cer2) registros.push({ empresa_id:EMPRESA_ID, fecha:_fechaActiva, clave:'ter_cerradas_'+slugify(v), valor:Number(cer2.value)||0, updated_at:ahora });
+    });
+
+    // Guardar en Supabase (o fallback localStorage)
+    let ok = false;
+    try {
+        const { error } = await sb.from('kpi_registros')
+            .upsert(registros, { onConflict: 'empresa_id,fecha,clave' });
+        if (error) throw error;
+        ok = true;
+    } catch(e) {
+        const map = {};
+        registros.forEach(r => { map[r.clave] = r.valor; });
+        localStorage.setItem('kpi_' + _fechaActiva, JSON.stringify(map));
+        ok = true;
+    }
+
+    btn.disabled = false;
+    if (ok) toast('Datos guardados correctamente');
+    else toast('Error al guardar', 'err');
+}
+
+function slugify(str) {
+    return String(str).toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+}
+
+function getVal(clave, def = 0) {
+    return Number(_registros[clave] ?? def);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  RENDER PRINCIPAL
+// ═══════════════════════════════════════════════════════════
+function renderizarTodo() {
+    renderCanales();
+    renderLlamadas();
+    renderMetaVisitas();
+    renderCierre();
+    renderTerreno();
+    if (_periodo !== 'dia') renderHistorial();
+}
+
+// ──────────────────────────────────────
+//  BLOQUE 1: CANALES
+// ──────────────────────────────────────
+const CANAL_COLORS = ['#6366f1','#f59e0b','#22c55e','#ef4444','#38bdf8','#a855f7','#f97316','#ec4899'];
+
+function renderCanales() {
+    const grid = document.getElementById('canales-grid');
+    const vals = _config.canales.map(c => getVal('canal_' + slugify(c)));
+    const total = vals.reduce((a,b) => a+b, 0);
+    document.getElementById('total-canales').innerHTML = `${total} <small>total</small>`;
+
+    grid.innerHTML = _config.canales.map((canal, i) => {
+        const v = vals[i];
+        const pct = total > 0 ? Math.round(v / total * 100) : 0;
+        const color = CANAL_COLORS[i % CANAL_COLORS.length];
+        return `<div class="canal-card">
+            <div class="canal-name" style="color:${color}">
+                <i class="bi bi-circle-fill" style="font-size:8px;"></i> ${canal}
+            </div>
+            <input class="canal-input" type="number" id="canal-${slugify(canal)}"
+                min="0" value="${v}" oninput="actualizarGraficoCanales()">
+            <div class="canal-pct">${pct}% del total</div>
+        </div>`;
+    }).join('');
+
+    actualizarGraficoCanales();
+}
+
+function actualizarGraficoCanales() {
+    const vals = _config.canales.map(c => {
+        const el = document.getElementById('canal-' + slugify(c));
+        return el ? (Number(el.value) || 0) : 0;
+    });
+    const total = vals.reduce((a,b) => a+b, 0);
+    document.getElementById('total-canales').innerHTML = `${total} <small>total</small>`;
+
+    // Actualizar % bajo cada input
+    _config.canales.forEach((c, i) => {
+        const wrap = document.getElementById('canal-' + slugify(c))?.closest('.canal-card');
+        if (wrap) {
+            const pct = total > 0 ? Math.round(vals[i] / total * 100) : 0;
+            const pctEl = wrap.querySelector('.canal-pct');
+            if (pctEl) pctEl.textContent = pct + '% del total';
+        }
+    });
+
+    const ctx = document.getElementById('chartCanales').getContext('2d');
+    if (_chartCanales) _chartCanales.destroy();
+    if (total === 0) return;
+    _chartCanales = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: _config.canales,
+            datasets: [{
+                data: vals,
+                backgroundColor: CANAL_COLORS.slice(0, _config.canales.length),
+                borderWidth: 0, hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: false, cutout: '68%',
+            plugins: { legend: { display: false }, tooltip: {
+                callbacks: { label: ctx2 => ` ${ctx2.label}: ${ctx2.raw}` }
+            }}
+        }
+    });
+}
+
+// ──────────────────────────────────────
+//  BLOQUE 2: LLAMADAS
+// ──────────────────────────────────────
+function renderLlamadas() {
+    const totalCanales = _config.canales.reduce((s,c) => {
+        const el = document.getElementById('canal-' + slugify(c));
+        return s + (el ? (Number(el.value)||0) : getVal('canal_'+slugify(c)));
+    }, 0);
+
+    const grid = document.getElementById('llamadas-grid');
+    let totalLlamadas = 0;
+
+    grid.innerHTML = _config.vendedoras.map(v => {
+        const ll  = getVal('ll_llamadas_' + slugify(v));
+        const cot = getVal('ll_cotz_' + slugify(v));
+        totalLlamadas += ll;
+        const pctCot = totalCanales > 0 ? Math.round(cot / totalCanales * 100) : 0;
+        let badgeClass = pctCot >= 70 ? 'badge-green' : pctCot >= 40 ? 'badge-yellow' : 'badge-red';
+        let badgeTxt = cot > 0 ? `${pctCot}% de cotizaciones` : 'Sin cotizaciones aún';
+        return `<div class="vendedor-card">
+            <div class="vendedor-header">
+                <div class="vendedor-avatar">${iniciales(v)}</div>
+                <div class="vendedor-name">${v}</div>
+            </div>
+            <div class="vendedor-inputs">
+                <div class="input-row">
+                    <div class="input-label">Llamadas del día</div>
+                    <input class="input-num" type="number" id="ll-llamadas-${slugify(v)}"
+                        min="0" value="${ll}" oninput="actualizarTotalLlamadas()">
+                </div>
+                <div class="input-row">
+                    <div class="input-label">Cotizaciones atendidas</div>
+                    <input class="input-num" type="number" id="ll-cotz-${slugify(v)}"
+                        min="0" value="${cot}" oninput="actualizarTotalLlamadas()">
+                </div>
+            </div>
+            <div class="vendedor-badge ${badgeClass}" id="badge-${slugify(v)}">${badgeTxt}</div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('total-llamadas').innerHTML = `${totalLlamadas} <small>llamadas</small>`;
+}
+
+function actualizarTotalLlamadas() {
+    let total = 0;
+    _config.vendedoras.forEach(v => {
+        const el = document.getElementById('ll-llamadas-' + slugify(v));
+        if (el) total += Number(el.value) || 0;
+    });
+    document.getElementById('total-llamadas').innerHTML = `${total} <small>llamadas</small>`;
+}
+
+// ──────────────────────────────────────
+//  BLOQUE 3: META VISITAS
+// ──────────────────────────────────────
+function renderMetaVisitas() {
+    document.getElementById('meta-label').textContent = _config.meta_visitas;
+    const grid = document.getElementById('meta-grid');
+    grid.innerHTML = _config.vendedoras.map(v => {
+        const visitas = getVal('meta_' + slugify(v));
+        const meta = _config.meta_visitas;
+        const pct = Math.min(Math.round(visitas / meta * 100), 100);
+        const color = visitas >= meta ? 'var(--green)' : visitas >= meta * 0.6 ? 'var(--yellow)' : 'var(--red)';
+        return `<div class="meta-card">
+            <div class="meta-top">
+                <div class="meta-name">${v}</div>
+                <div class="meta-num-wrap">
+                    <input class="meta-input" type="number" id="meta-${slugify(v)}"
+                        min="0" value="${visitas}" oninput="actualizarMeta('${slugify(v)}', ${meta})">
+                    <span class="meta-slash">/</span>
+                    <span class="meta-target">${meta}</span>
+                </div>
+            </div>
+            <div class="progress-bar-wrap">
+                <div class="progress-bar-fill" id="prog-${slugify(v)}"
+                    style="width:${pct}%; background:${color};"></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function actualizarMeta(slug, meta) {
+    const el = document.getElementById('meta-' + slug);
+    const prog = document.getElementById('prog-' + slug);
+    if (!el || !prog) return;
+    const v = Number(el.value) || 0;
+    const pct = Math.min(Math.round(v / meta * 100), 100);
+    const color = v >= meta ? 'var(--green)' : v >= meta * 0.6 ? 'var(--yellow)' : 'var(--red)';
+    prog.style.width = pct + '%';
+    prog.style.background = color;
+}
+
+// ──────────────────────────────────────
+//  BLOQUE 4: CIERRE
+// ──────────────────────────────────────
+function renderCierre() {
+    document.getElementById('cierre-enviadas').value = getVal('cierre_enviadas');
+    document.getElementById('cierre-cerradas').value = getVal('cierre_cerradas');
+    document.getElementById('meta-cierre-display').textContent = _config.meta_cierre_pct + '%';
+    recalcularCierre();
+}
+
+function recalcularCierre() {
+    const env = Number(document.getElementById('cierre-enviadas').value) || 0;
+    const cer = Number(document.getElementById('cierre-cerradas').value) || 0;
+    const meta = _config.meta_cierre_pct;
+
+    const pctReal = env > 0 ? Math.round(cer / env * 100) : 0;
+    const faltante = env > 0 ? Math.max(0, Math.ceil(env * meta / 100) - cer) : 0;
+
+    document.getElementById('gaugePct').textContent = pctReal + '%';
+    document.getElementById('gaugePct').style.color = colorPct(pctReal, meta);
+    document.getElementById('cierre-faltante').textContent = faltante;
+
+    const status = document.getElementById('cierre-status');
+    if (pctReal >= meta) {
+        status.textContent = '✓ Sobre la meta';
+        status.style.color = 'var(--green)';
+    } else {
+        status.textContent = `⚠ ${meta - pctReal}pts bajo la meta`;
+        status.style.color = 'var(--yellow)';
+    }
+
+    dibujarGauge(pctReal, meta);
+}
+
+function dibujarGauge(pct, meta) {
+    const canvas = document.getElementById('gaugeCanvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 160, 160);
+    const cx = 80, cy = 80, r = 64;
+    const start = Math.PI, end = 2 * Math.PI;
+
+    // Fondo
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, start, end);
+    ctx.lineWidth = 16;
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+    ctx.stroke();
+
+    // Meta (línea gris claro)
+    const metaAngle = start + (meta / 100) * Math.PI;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, start, metaAngle);
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 16;
+    ctx.stroke();
+
+    // Real
+    const realAngle = start + Math.min(pct / 100, 1) * Math.PI;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, start, realAngle);
+    ctx.lineWidth = 16;
+    ctx.strokeStyle = colorPct(pct, meta);
+    ctx.stroke();
+}
+
+// ──────────────────────────────────────
+//  BLOQUE 5: TERRENO
+// ──────────────────────────────────────
+function renderTerreno() {
+    const tbody = document.getElementById('terreno-tbody');
+    const datos = _config.terreno.map(v => ({
+        nombre: v,
+        total:   getVal('ter_total_'   + slugify(v)),
+        cerradas: getVal('ter_cerradas_' + slugify(v))
+    }));
+
+    // Calcular % y ordenar por ranking
+    datos.forEach(d => {
+        d.pct = d.total > 0 ? Math.round(d.cerradas / d.total * 100) : 0;
+    });
+    datos.sort((a,b) => b.pct - a.pct);
+
+    tbody.innerHTML = datos.map((d, i) => {
+        const rank = i + 1;
+        const rankClass = rank <= 3 ? `rank-${rank}` : '';
+        const color = colorPct(d.pct, 60); // umbral 60% para terreno
+        const pctClass = d.pct >= 60 ? 'badge-green' : d.pct >= 30 ? 'badge-yellow' : 'badge-red';
+        return `<tr>
+            <td><span class="rank-badge ${rankClass}">${rank}</span></td>
+            <td><strong>${d.nombre}</strong></td>
+            <td style="text-align:center;">
+                <input class="terreno-input" type="number"
+                    id="ter-total-${slugify(d.nombre)}"
+                    min="0" value="${d.total}"
+                    oninput="actualizarPctTerreno('${slugify(d.nombre)}')">
+            </td>
+            <td style="text-align:center;">
+                <input class="terreno-input" type="number"
+                    id="ter-cerradas-${slugify(d.nombre)}"
+                    min="0" value="${d.cerradas}"
+                    oninput="actualizarPctTerreno('${slugify(d.nombre)}')">
+            </td>
+            <td style="text-align:center;">
+                <span class="pct-pill ${pctClass}" id="pct-${slugify(d.nombre)}">${d.pct}%</span>
+            </td>
+            <td style="text-align:center;">
+                ${d.total === 0 ? '<span style="color:var(--muted);font-size:12px;">Sin datos</span>'
+                    : d.pct >= 60 ? '🔥 Excelente' : d.pct >= 30 ? '📈 En progreso' : '⚠️ Bajo rendimiento'}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function actualizarPctTerreno(slug) {
+    const totEl = document.getElementById('ter-total-' + slug);
+    const cerEl = document.getElementById('ter-cerradas-' + slug);
+    const pctEl = document.getElementById('pct-' + slug);
+    if (!totEl || !cerEl || !pctEl) return;
+    const tot = Number(totEl.value) || 0;
+    const cer = Number(cerEl.value) || 0;
+    const pct = tot > 0 ? Math.round(cer / tot * 100) : 0;
+    pctEl.textContent = pct + '%';
+    pctEl.className = 'pct-pill ' + (pct >= 60 ? 'badge-green' : pct >= 30 ? 'badge-yellow' : 'badge-red');
+}
+
+// ──────────────────────────────────────
+//  HISTORIAL (semana/mes)
+// ──────────────────────────────────────
+async function renderHistorial() {
+    const bloque = document.getElementById('bloque-historial');
+    bloque.style.display = '';
+
+    const hoy = new Date(_fechaActiva + 'T12:00:00');
+    let fechas = [];
+    let diasAtras = _periodo === 'semana' ? 6 : 29;
+    document.getElementById('historial-title').textContent =
+        _periodo === 'semana' ? 'Evolución de la semana' : 'Evolución del mes';
+
+    for (let i = diasAtras; i >= 0; i--) {
+        const d = new Date(hoy); d.setDate(d.getDate() - i);
+        fechas.push(d.toISOString().split('T')[0]);
+    }
+
+    let rows = [];
+    try {
+        const { data } = await sb.from('kpi_registros')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID)
+            .gte('fecha', fechas[0])
+            .lte('fecha', fechas[fechas.length-1]);
+        rows = data || [];
+    } catch(e) {}
+
+    // Agrupar por fecha
+    const porFecha = {};
+    fechas.forEach(f => { porFecha[f] = {}; });
+    rows.forEach(r => { if (porFecha[r.fecha]) porFecha[r.fecha][r.clave] = r.valor; });
+
+    const labels = fechas.map(f => {
+        const d = new Date(f + 'T12:00:00');
+        return d.toLocaleDateString('es-CL', { day:'numeric', month:'short' });
+    });
+
+    const mensajes = fechas.map(f =>
+        _config.canales.reduce((s,c) => s + Number(porFecha[f]['canal_'+slugify(c)]||0), 0)
+    );
+    const llamadas = fechas.map(f =>
+        _config.vendedoras.reduce((s,v) => s + Number(porFecha[f]['ll_llamadas_'+slugify(v)]||0), 0)
+    );
+    const cierres = fechas.map(f => Number(porFecha[f]['cierre_cerradas']||0));
+
+    const ctx = document.getElementById('chartHistorial').getContext('2d');
+    if (_chartHistorial) _chartHistorial.destroy();
+    _chartHistorial = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label:'Mensajes', data:mensajes, borderColor:'#6366f1', backgroundColor:'rgba(99,102,241,0.1)', tension:.3, fill:true },
+                { label:'Llamadas', data:llamadas, borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.1)', tension:.3, fill:true },
+                { label:'Cierres',  data:cierres,  borderColor:'#22c55e', backgroundColor:'rgba(34,197,94,0.1)',  tension:.3, fill:true }
+            ]
+        },
+        options: {
+            responsive:true, maintainAspectRatio:false,
+            plugins: { legend: { labels: { color:'#94a3b8', boxWidth:12, font:{size:11} }}},
+            scales: {
+                x: { grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#64748b', font:{size:10} }},
+                y: { grid:{ color:'rgba(255,255,255,0.05)' }, ticks:{ color:'#64748b', font:{size:10} }, beginAtZero:true }
+            }
+        }
+    });
+}
+
+// ═══════════════════════════════════════════════════════════
+//  FECHA Y PERIODO
+// ═══════════════════════════════════════════════════════════
+async function cambiarFecha() {
+    _fechaActiva = document.getElementById('fechaSelector').value;
+    await cargarDiaActivo();
+    renderizarTodo();
+}
+
+async function cambiarPeriodo(p, btn) {
+    _periodo = p;
+    document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const bloque = document.getElementById('bloque-historial');
+    if (p === 'dia') {
+        bloque.style.display = 'none';
+        if (_chartHistorial) { _chartHistorial.destroy(); _chartHistorial = null; }
+    } else {
+        await renderHistorial();
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MODAL CONFIGURACIÓN
+// ═══════════════════════════════════════════════════════════
+function abrirConfig() {
+    document.getElementById('cfg-meta-visitas').value   = _config.meta_visitas;
+    document.getElementById('cfg-meta-cierre').value    = _config.meta_cierre_pct;
+
+    renderChips('cfg-canales-list',  _config.canales,    'canal');
+    renderChips('cfg-llamadas-list', _config.vendedoras, 'vendedora');
+    renderChips('cfg-terreno-list',  _config.terreno,    'terreno');
+
+    document.getElementById('modalOverlay').classList.remove('hidden');
+}
+
+function cerrarConfig() {
+    document.getElementById('modalOverlay').classList.add('hidden');
+}
+
+function renderChips(containerId, lista, tipo) {
+    const c = document.getElementById(containerId);
+    c.innerHTML = lista.map((item, i) =>
+        `<div class="chip">
+            ${item}
+            <button class="chip-del" onclick="eliminar('${tipo}',${i})">×</button>
+        </div>`
+    ).join('');
+}
+
+function eliminar(tipo, idx) {
+    if (tipo === 'canal')    _config.canales.splice(idx, 1);
+    if (tipo === 'vendedora') _config.vendedoras.splice(idx, 1);
+    if (tipo === 'terreno')  _config.terreno.splice(idx, 1);
+    abrirConfig(); // re-render modal
+}
+
+function agregarCanal() {
+    const inp = document.getElementById('cfg-canal-nuevo');
+    const val = inp.value.trim();
+    if (!val) return;
+    _config.canales.push(val);
+    inp.value = '';
+    renderChips('cfg-canales-list', _config.canales, 'canal');
+}
+
+function agregarVendedora(tipo) {
+    const id  = tipo === 'llamadas' ? 'cfg-llamada-nueva' : 'cfg-terreno-nuevo';
+    const inp = document.getElementById(id);
+    const val = inp.value.trim();
+    if (!val) return;
+    if (tipo === 'llamadas') _config.vendedoras.push(val);
+    else _config.terreno.push(val);
+    inp.value = '';
+    renderChips(tipo === 'llamadas' ? 'cfg-llamadas-list' : 'cfg-terreno-list',
+                tipo === 'llamadas' ? _config.vendedoras : _config.terreno,
+                tipo === 'llamadas' ? 'vendedora' : 'terreno');
+}
+
+async function guardarConfig() {
+    _config.meta_visitas   = Number(document.getElementById('cfg-meta-visitas').value) || 3;
+    _config.meta_cierre_pct= Number(document.getElementById('cfg-meta-cierre').value)  || 50;
+    await guardarConfigSupabase();
+    cerrarConfig();
+    renderizarTodo();
+    toast('Configuración guardada');
+}
+</script>
+</body>
+</html>
