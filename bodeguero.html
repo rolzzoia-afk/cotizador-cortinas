@@ -191,12 +191,16 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
 #salida-scanner-box video { width:100%; display:block; }
 .salida-fase { display:none; }
 .salida-fase.activa { display:block; }
-.qty-control { display:flex; align-items:center; justify-content:center; gap:0; margin: 16px 0; }
-.qty-btn { width:64px; height:64px; border-radius:50%; border:2px solid var(--primary);
-           background:rgba(124,117,240,0.12); color:var(--primary); font-size:2rem; cursor:pointer;
-           display:flex; align-items:center; justify-content:center; line-height:1; }
-.qty-btn:active { background:rgba(124,117,240,0.3); }
-#salida-qty-num { font-size:3rem; font-weight:800; width:100px; text-align:center; color:var(--text); }
+.qty-control { display:flex; align-items:center; justify-content:center; margin: 16px 0; }
+.qty-wrap { display:inline-flex; align-items:center; background:var(--bg2);
+            border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+.qty-btn { width:52px; height:52px; border:none; background:none;
+           color:var(--primary); font-size:1.5rem; font-weight:700; cursor:pointer;
+           display:flex; align-items:center; justify-content:center; transition:background .15s; }
+.qty-btn:active { background:rgba(124,117,240,0.2); }
+.qty-sep { width:1px; height:28px; background:var(--border); }
+.qty-num { font-size:1.6rem; font-weight:800; min-width:64px; text-align:center;
+           color:var(--text); padding: 0 4px; }
 .salida-card-item { background:var(--bg2); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:12px; }
 .salida-cod  { font-size:0.75rem; color:var(--text2); margin-bottom:2px; }
 .salida-nemo { font-size:1.1rem; font-weight:700; color:var(--text); }
@@ -573,11 +577,15 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
             </div>
 
             <div style="text-align:center;">
-                <div style="font-size:0.8rem; color:var(--text2); margin-bottom:4px;">Cantidad a retirar</div>
+                <div style="font-size:0.8rem; color:var(--text2); margin-bottom:10px;">Cantidad a retirar</div>
                 <div class="qty-control">
-                    <button class="qty-btn" onclick="salida_cambiarQty(-1)">−</button>
-                    <div id="salida-qty-num">1</div>
-                    <button class="qty-btn" onclick="salida_cambiarQty(+1)">+</button>
+                    <div class="qty-wrap">
+                        <button class="qty-btn" onclick="salida_cambiarQty(-1)">−</button>
+                        <div class="qty-sep"></div>
+                        <div class="qty-num" id="salida-qty-num">1</div>
+                        <div class="qty-sep"></div>
+                        <button class="qty-btn" onclick="salida_cambiarQty(+1)">+</button>
+                    </div>
                 </div>
             </div>
 
@@ -650,11 +658,15 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
             </div>
 
             <div style="text-align:center;">
-                <div style="font-size:0.8rem; color:var(--text2); margin-bottom:4px;">Cantidad a ingresar</div>
+                <div style="font-size:0.8rem; color:var(--text2); margin-bottom:10px;">Cantidad a ingresar</div>
                 <div class="qty-control">
-                    <button class="qty-btn" onclick="entrada_cambiarQty(-1)">−</button>
-                    <div id="entrada-qty-num">1</div>
-                    <button class="qty-btn" onclick="entrada_cambiarQty(+1)">+</button>
+                    <div class="qty-wrap">
+                        <button class="qty-btn" onclick="entrada_cambiarQty(-1)">−</button>
+                        <div class="qty-sep"></div>
+                        <div class="qty-num" id="entrada-qty-num">1</div>
+                        <div class="qty-sep"></div>
+                        <button class="qty-btn" onclick="entrada_cambiarQty(+1)">+</button>
+                    </div>
                 </div>
             </div>
 
