@@ -545,7 +545,7 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
             <div style="text-align:center; padding: 12px 0 8px;">
                 <div style="font-size:0.82rem; color:var(--text2); margin-bottom:10px;">Apuntá la cámara al QR del insumo</div>
                 <div id="salida-scanner-box">
-                    <div id="salida-qr-reader" style="width:100%;"></div>
+                    <div id="salida-qr-reader" style="width:100%; min-height:260px;"></div>
                 </div>
                 <div id="salida-scan-estado" style="margin-top:10px; font-size:0.82rem; color:var(--text2);">
                     <i class="bi bi-qr-code-scan"></i> Esperando escaneo...
@@ -1774,7 +1774,8 @@ function mostrarAdHoc() {
         salida_editarNombre();
         return;
     }
-    salida_iniciarEscaner();
+    // Esperar a que el DOM renderice el div con dimensiones reales antes de iniciar la cámara
+    setTimeout(() => salida_iniciarEscaner(), 300);
 }
 
 function salida_cerrar() {
@@ -1787,7 +1788,7 @@ function salida_volver() {
     _salidaQty = 1;
     document.getElementById('salida-ot').value = '';
     salida_mostrarFase('scan');
-    salida_iniciarEscaner();
+    setTimeout(() => salida_iniciarEscaner(), 200);
 }
 
 function salida_mostrarFase(fase) {
