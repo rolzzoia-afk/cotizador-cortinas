@@ -801,7 +801,7 @@ function renderCanales() {
                 <i class="bi bi-circle-fill" style="font-size:8px;"></i> ${canal}
             </div>
             <input class="canal-input" type="number" id="canal-${slugify(canal)}"
-                min="0" value="${v}" oninput="actualizarGraficoCanales()">
+                min="0" value="${v}" oninput="actualizarGraficoCanales(); actualizarTotalLlamadas();">
             <div class="canal-pct">${pct}% del total</div>
         </div>`;
     }).join('');
@@ -894,10 +894,34 @@ function renderLlamadas() {
 
 function actualizarTotalLlamadas() {
     let total = 0;
+
+    // Recalcular total de canales desde los inputs actuales (no desde _registros)
+    const totalCanales = _config.canales.reduce((s, c) => {
+        const el = document.getElementById('canal-' + slugify(c));
+        return s + (el ? (Number(el.value) || 0) : getVal('canal_' + slugify(c)));
+    }, 0);
+
     _config.vendedoras.forEach(v => {
-        const el = document.getElementById('ll-llamadas-' + slugify(v));
-        if (el) total += Number(el.value) || 0;
+        const elLl  = document.getElementById('ll-llamadas-' + slugify(v));
+        const elCot = document.getElementById('ll-cotz-'     + slugify(v));
+        const badge = document.getElementById('badge-'       + slugify(v));
+
+        const ll  = elLl  ? (Number(elLl.value)  || 0) : 0;
+        const cot = elCot ? (Number(elCot.value) || 0) : 0;
+        total += ll;
+
+        // Actualizar badge dinámicamente
+        if (badge) {
+            const pctCot   = totalCanales > 0 ? Math.round(cot / totalCanales * 100) : (cot > 0 ? 100 : 0);
+            const badgeCls = pctCot >= 70 ? 'badge-green' : pctCot >= 40 ? 'badge-yellow' : 'badge-red';
+            const badgeTxt = cot > 0
+                ? `${pctCot}% de cotizaciones (${cot}/${totalCanales || cot})`
+                : ll > 0 ? '0 cotizaciones asignadas' : 'Sin datos aún';
+            badge.className  = 'vendedor-badge ' + badgeCls;
+            badge.textContent = badgeTxt;
+        }
     });
+
     document.getElementById('total-llamadas').innerHTML = `${total} <small>llamadas</small>`;
 }
 
