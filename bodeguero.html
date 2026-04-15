@@ -1103,10 +1103,19 @@ function renderBOMItems() {
             const cenColor = (item.color || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
             // Todos los insumos que son cenefas del mismo tipo
-            const candidatas = _insumos.filter(ins =>
-                (ins.categoria || '').toUpperCase().includes('CENEF') &&
-                (!cenTipo || (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase().includes(cenTipo))
-            );
+            // La categoría puede ser "INSUMO" con "CENEFA" en el nemotécnico
+            const candidatas = _insumos.filter(ins => {
+                const nemo = (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase();
+                const cat  = (ins.categoria || '').toUpperCase();
+                const esCenefa = cat.includes('CENEF') || nemo.includes('CENEF');
+                if (!esCenefa) return false;
+                if (cenTipo) {
+                    // cenTipo puede ser "OVALADA · BCO" o "OVALADA" — queda con la parte antes del ·
+                    const tipoBase = cenTipo.split('·')[0].split('-')[0].trim();
+                    if (tipoBase && !nemo.includes(tipoBase)) return false;
+                }
+                return true;
+            });
 
             // Ordenar: primero las que coinciden también en color
             candidatas.sort((a, b) => {
