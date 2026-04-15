@@ -329,6 +329,7 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
     <div class="bottom-nav">
         <button class="active"><i class="bi bi-list-task"></i> OTs</button>
         <button onclick="mostrarAdHoc()"><i class="bi bi-box-arrow-up"></i> Retirar insumo</button>
+        <button onclick="mostrarEntrada()"><i class="bi bi-box-arrow-in-down"></i> Ingresar insumo</button>
     </div>
 </div>
 
@@ -597,6 +598,88 @@ label.lbl { font-size: 0.75rem; color: var(--text2); margin-bottom: 4px; display
             <div style="font-size:0.82rem; color:var(--text2); margin-top:6px;" id="salida-ok-sub"></div>
             <button onclick="salida_volver()" class="btn btn-primary btn-block btn-lg" style="margin-top:28px;">
                 <i class="bi bi-qr-code-scan"></i> Registrar otra salida
+            </button>
+        </div>
+
+        <div style="height:20px;"></div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════
+     VIEW 6: Ingreso de Insumos
+════════════════════════════════════════════ -->
+<div id="view-entrada" class="view">
+    <div class="topbar">
+        <button onclick="entrada_cerrar()" style="background:none;border:none;color:var(--text2);font-size:1.1rem;cursor:pointer;"><i class="bi bi-arrow-left"></i></button>
+        <h1>Ingreso de Insumos</h1>
+        <button onclick="salida_editarNombre()" style="background:none;border:none;color:var(--text2);font-size:0.78rem;cursor:pointer;">
+            <i class="bi bi-person-circle"></i> <span id="entrada-nombre-label">Quién ingresa</span>
+        </button>
+    </div>
+    <div class="scroll-area">
+
+        <!-- FASE 1: Escáner -->
+        <div id="entrada-fase-scan" class="salida-fase activa">
+            <div style="text-align:center; padding: 12px 0 8px;">
+                <div style="font-size:0.82rem; color:var(--text2); margin-bottom:10px;">Apuntá la cámara al QR del insumo</div>
+                <div id="entrada-scanner-box" style="width:100%;border-radius:12px;overflow:hidden;background:#000;min-height:260px;">
+                    <div id="entrada-qr-reader" style="width:100%; min-height:260px;"></div>
+                </div>
+                <div id="entrada-scan-estado" style="margin-top:10px; font-size:0.82rem; color:var(--text2);">
+                    <i class="bi bi-qr-code-scan"></i> Esperando escaneo...
+                </div>
+            </div>
+            <div style="margin-top:12px;">
+                <div style="font-size:0.72rem; color:var(--text2); text-align:center; margin-bottom:6px;">— o ingresá el código manualmente —</div>
+                <div style="display:flex;gap:8px;">
+                    <input type="text" id="entrada-cod-manual" class="input-field" placeholder="Ej: BRA01" style="flex:1;margin-bottom:0;text-transform:uppercase;">
+                    <button onclick="entrada_buscarManual()" class="btn btn-outline" style="padding:11px 18px;">Buscar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- FASE 2: Confirmar cantidad -->
+        <div id="entrada-fase-confirm" class="salida-fase">
+            <div class="salida-card-item">
+                <div class="salida-cod" id="entrada-info-cod"></div>
+                <div class="salida-nemo" id="entrada-info-nemo"></div>
+                <div id="entrada-info-stock"></div>
+            </div>
+
+            <div style="text-align:center;">
+                <div style="font-size:0.8rem; color:var(--text2); margin-bottom:4px;">Cantidad a ingresar</div>
+                <div class="qty-control">
+                    <button class="qty-btn" onclick="entrada_cambiarQty(-1)">−</button>
+                    <div id="entrada-qty-num">1</div>
+                    <button class="qty-btn" onclick="entrada_cambiarQty(+1)">+</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom:8px;">
+                <label class="lbl">Proveedor (opcional)</label>
+                <input type="text" id="entrada-proveedor" class="input-field" placeholder="Nombre del proveedor">
+            </div>
+            <div style="margin-bottom:12px;">
+                <label class="lbl">N° documento (opcional)</label>
+                <input type="text" id="entrada-doc" class="input-field" placeholder="Factura, guía, OC...">
+            </div>
+
+            <button onclick="entrada_confirmar()" class="btn btn-success btn-block btn-lg" id="btn-entrada-confirmar"
+                style="background:linear-gradient(135deg,#22c55e,#16a34a);border-color:#22c55e;">
+                <i class="bi bi-check-circle"></i> Confirmar ingreso
+            </button>
+            <button onclick="entrada_volver()" class="btn btn-outline btn-block" style="margin-top:8px;">
+                <i class="bi bi-arrow-left"></i> Escanear otro
+            </button>
+        </div>
+
+        <!-- FASE 3: Éxito -->
+        <div id="entrada-fase-ok" class="salida-fase" style="text-align:center; padding:30px 0;">
+            <div style="font-size:3.5rem; margin-bottom:12px;">📦</div>
+            <div style="font-size:1.1rem; font-weight:700;" id="entrada-ok-msg"></div>
+            <div style="font-size:0.82rem; color:var(--text2); margin-top:6px;" id="entrada-ok-sub"></div>
+            <button onclick="entrada_volver()" class="btn btn-success btn-block btn-lg" style="margin-top:28px;background:linear-gradient(135deg,#22c55e,#16a34a);border-color:#22c55e;">
+                <i class="bi bi-qr-code-scan"></i> Registrar otro ingreso
             </button>
         </div>
 
@@ -1953,9 +2036,190 @@ async function salida_confirmar() {
 }
 
 // ── Compatibilidad con código legacy ─────────────────────────────
-// (Las funciones viejas ya no se usan pero se mantienen por si hay referencias)
 function iniciarScannerAdHoc() { salida_iniciarEscaner(); }
 function confirmarAdHoc() { salida_confirmar(); }
+
+// ══════════════════════════════════════════════════════════════════
+// INGRESO RÁPIDO DE INSUMOS
+// ══════════════════════════════════════════════════════════════════
+let _entradaScanner = null;
+let _entradaInsumo  = null;
+let _entradaQty     = 1;
+
+function entrada_actualizarChipNombre() {
+    const n = salida_getNombre(); // reutiliza el mismo nombre guardado
+    const lbl = document.getElementById('entrada-nombre-label');
+    if (lbl) lbl.textContent = n || 'Quién ingresa';
+}
+
+function mostrarEntrada() {
+    mostrarVista('view-entrada');
+    entrada_actualizarChipNombre();
+    if (!salida_getNombre()) { salida_editarNombre(); return; }
+    setTimeout(() => entrada_iniciarEscaner(), 300);
+}
+
+function entrada_cerrar() {
+    entrada_detenerEscaner();
+    mostrarOTs();
+}
+
+function entrada_volver() {
+    _entradaInsumo = null;
+    _entradaQty = 1;
+    document.getElementById('entrada-proveedor').value = '';
+    document.getElementById('entrada-doc').value = '';
+    entrada_mostrarFase('scan');
+    setTimeout(() => entrada_iniciarEscaner(), 200);
+}
+
+function entrada_mostrarFase(fase) {
+    ['scan','confirm','ok'].forEach(f => {
+        document.getElementById(`entrada-fase-${f}`).classList.toggle('activa', f === fase);
+    });
+}
+
+// ── Escáner ──────────────────────────────────────────────────────
+async function entrada_iniciarEscaner() {
+    entrada_detenerEscaner();
+    entrada_mostrarFase('scan');
+    document.getElementById('entrada-scan-estado').innerHTML =
+        '<i class="bi bi-qr-code-scan"></i> Esperando escaneo...';
+    try {
+        _entradaScanner = new Html5Qrcode('entrada-qr-reader');
+        await _entradaScanner.start(
+            { facingMode: 'environment' },
+            { fps: 12, qrbox: { width: 240, height: 240 } },
+            async (decoded) => {
+                const cod = decoded.startsWith('INS:') ? decoded.slice(4) : decoded.trim().toUpperCase();
+                entrada_detenerEscaner();
+                document.getElementById('entrada-scan-estado').innerHTML =
+                    `<i class="bi bi-check-circle" style="color:var(--success)"></i> Código detectado: <strong>${cod}</strong>`;
+                await entrada_cargarInsumo(cod);
+            },
+            () => {}
+        );
+    } catch(e) {
+        document.getElementById('entrada-scan-estado').innerHTML =
+            `<i class="bi bi-exclamation-triangle" style="color:var(--warning)"></i> Cámara no disponible — usá el campo manual`;
+    }
+}
+
+async function entrada_detenerEscaner() {
+    if (_entradaScanner) {
+        try { await _entradaScanner.stop(); } catch(e) {}
+        _entradaScanner = null;
+    }
+}
+
+async function entrada_buscarManual() {
+    const cod = (document.getElementById('entrada-cod-manual').value || '').trim().toUpperCase();
+    if (!cod) { toast('⚠ Ingresá un código'); return; }
+    entrada_detenerEscaner();
+    await entrada_cargarInsumo(cod);
+}
+
+async function entrada_cargarInsumo(cod) {
+    let ins = _insumos.find(i => (i.cod||'').toUpperCase() === cod.toUpperCase());
+    if (!ins) {
+        const { data } = await sb.from('insumos')
+            .select('cod,nemotecnico,descriptor_proveedor,ubicacion,stock_mp,stock_liberado,proveedor')
+            .eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+        if (data) { _insumos.push(data); ins = data; }
+    }
+    if (!ins) {
+        toast(`❌ Insumo "${cod}" no encontrado`);
+        entrada_iniciarEscaner();
+        return;
+    }
+    // Refrescar stock
+    const { data: fresh } = await sb.from('insumos')
+        .select('stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+    if (fresh) { ins.stock_mp = fresh.stock_mp; ins.stock_liberado = fresh.stock_liberado; }
+
+    _entradaInsumo = ins;
+    _entradaQty = 1;
+
+    // Pre-completar proveedor si el insumo tiene uno
+    if (ins.proveedor) document.getElementById('entrada-proveedor').value = ins.proveedor;
+
+    entrada_renderConfirm();
+    entrada_mostrarFase('confirm');
+    document.getElementById('entrada-cod-manual').value = '';
+}
+
+function entrada_renderConfirm() {
+    const ins = _entradaInsumo;
+    const stock = (ins.stock_mp || 0) + (ins.stock_liberado || 0);
+    document.getElementById('entrada-info-cod').textContent = `Código: ${ins.cod}`;
+    document.getElementById('entrada-info-nemo').textContent = ins.nemotecnico || ins.descriptor_proveedor || ins.cod;
+    document.getElementById('entrada-info-stock').innerHTML =
+        `<span style="color:var(--text2);font-size:0.82rem;"><i class="bi bi-archive"></i> Stock actual: ${stock} unidades</span>`;
+    document.getElementById('entrada-qty-num').textContent = _entradaQty;
+}
+
+function entrada_cambiarQty(delta) {
+    _entradaQty = Math.max(1, _entradaQty + delta);
+    document.getElementById('entrada-qty-num').textContent = _entradaQty;
+}
+
+async function entrada_confirmar() {
+    if (!_entradaInsumo) return;
+    const nombre    = salida_getNombre();
+    if (!nombre) { salida_editarNombre(); return; }
+
+    const cod       = _entradaInsumo.cod;
+    const cantidad  = _entradaQty;
+    const proveedor = (document.getElementById('entrada-proveedor').value || '').trim();
+    const doc       = (document.getElementById('entrada-doc').value || '').trim();
+    const btn       = document.getElementById('btn-entrada-confirmar');
+
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    try {
+        // Leer stock actualizado y sumar al stock_mp
+        const { data: insActual } = await sb.from('insumos')
+            .select('stock_mp,stock_liberado').eq('empresa_id', EMPRESA_ID).eq('cod', cod).single();
+
+        const mpActual  = insActual ? (insActual.stock_mp  || 0) : (_entradaInsumo.stock_mp  || 0);
+        const libActual = insActual ? (insActual.stock_liberado || 0) : (_entradaInsumo.stock_liberado || 0);
+
+        const { error: errUpd } = await sb.from('insumos').update({
+            stock_mp: mpActual + cantidad
+        }).eq('empresa_id', EMPRESA_ID).eq('cod', cod);
+        if (errUpd) throw new Error(errUpd.message);
+
+        // Registrar movimiento
+        const { error: errMov } = await sb.from('movimientos_insumos').insert({
+            empresa_id: EMPRESA_ID,
+            fecha: new Date().toISOString(),
+            mes: MESES_A[new Date().getMonth()],
+            tipo: 'NUEVO INGRESO',
+            codigo: cod,
+            producto: _entradaInsumo.nemotecnico || _entradaInsumo.descriptor_proveedor || '',
+            almacen: 'MP',
+            cantidad,
+            responsable_entrega: nombre,
+            recepcion: nombre,
+            bitacora: `Ingreso rápido — ${nombre}${proveedor ? ' · Proveedor: ' + proveedor : ''}${doc ? ' · Doc: ' + doc : ''}`
+        });
+        if (errMov) throw new Error(errMov.message);
+
+        const stockNuevo = mpActual + libActual + cantidad;
+        document.getElementById('entrada-ok-msg').textContent =
+            `+${cantidad}× ${_entradaInsumo.nemotecnico || cod}`;
+        document.getElementById('entrada-ok-sub').textContent =
+            `Registrado por ${nombre}${proveedor ? ' · ' + proveedor : ''}${doc ? ' · ' + doc : ''} · Stock nuevo: ${stockNuevo}`;
+        entrada_mostrarFase('ok');
+
+    } catch(e) {
+        toast(`❌ Error: ${e.message}`);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-check-circle"></i> Confirmar ingreso';
+    }
+}
 
 // ══════════════════════════════════════════════════════════════════
 // INICIAR
@@ -1964,9 +2228,12 @@ document.addEventListener('DOMContentLoaded', () => {
     cargarOTs();
     salida_actualizarChipNombre();
 
-    // Enter en campo manual de salida
+    // Enter en campos manuales
     document.getElementById('salida-cod-manual').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') salida_buscarManual();
+    });
+    document.getElementById('entrada-cod-manual').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') entrada_buscarManual();
     });
     // Cerrar modal nombre con Enter
     document.getElementById('modal-nombre-input').addEventListener('keydown', (e) => {
