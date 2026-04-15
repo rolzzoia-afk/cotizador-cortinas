@@ -2557,6 +2557,7 @@ async function importarExcelInventario(event) {
         logInv(`Hojas encontradas: ${wb.SheetNames.join(', ')}`, 'info');
 
         // Helper: enviar en lotes de N registros
+        const _erroresCriticos = []; // acumula errores de Supabase para mostrar al final
         async function upsertEnLotes(tabla, registros, conflictKey, labelLog) {
             const LOTE = 100;
             let ok = 0, err = 0;
@@ -2566,6 +2567,10 @@ async function importarExcelInventario(event) {
                 if (error) {
                     logInv(`⚠️ Error lote ${i}-${i+lote.length} en ${tabla}: ${error.message}`, 'warn');
                     err += lote.length;
+                    // Guardar error crítico (solo una vez por tabla)
+                    if (!_erroresCriticos.find(e => e.tabla === tabla)) {
+                        _erroresCriticos.push({ tabla, mensaje: error.message, code: error.code });
+                    }
                 } else {
                     ok += lote.length;
                 }
@@ -2957,7 +2962,22 @@ async function importarExcelInventario(event) {
         const posMP = await importarRackDesdeHoja(['MATERIA_PRIMA 2024'], 'MATERIAS_PRIMAS', RACKS_MP);
         logInv(`MATERIAS PRIMAS: ${posMP} posiciones importadas`, posMP > 0 ? 'success' : 'warn');
 
-        logInv('Importación completada. Recargando datos...', 'success');
+        // ── Verificación post-importación: contar filas en Supabase ──
+        try {
+            const { count: cntIns } = await sbInv.from('insumos').select('*', { count: 'exact', head: true }).eq('empresa_id', EMPRESA_ID);
+            const { count: cntRack } = await sbInv.from('ubicaciones_rack').select('*', { count: 'exact', head: true }).eq('empresa_id', EMPRESA_ID);
+            const { count: cntMov } = await sbInv.from('movimientos_insumos').select('*', { count: 'exact', head: true }).eq('empresa_id', EMPRESA_ID);
+            logInv(`✅ Verificación Supabase → insumos: ${cntIns ?? '?'} filas | rack: ${cntRack ?? '?'} filas | movimientos: ${cntMov ?? '?'} filas`, cntIns > 0 ? 'success' : 'warn');
+        } catch(eV) { logInv(`Verificación post-import: ${eV.message}`, 'warn'); }
+
+        // ── Mostrar alerta si hubo errores críticos de Supabase ──
+        if (_erroresCriticos.length > 0) {
+            const resumen = _erroresCriticos.map(e => `• ${e.tabla}: ${e.mensaje}`).join('\n');
+            logInv('🚨 ERRORES CRÍTICOS — algunos datos NO se guardaron en Supabase', 'error');
+            alert(`⚠️ IMPORTACIÓN CON ERRORES\n\nAlgunos datos no se pudieron guardar en Supabase:\n\n${resumen}\n\nSi el error dice "infinite recursion" o "stack depth", la política RLS de esa tabla necesita arreglarse.\nContacta al administrador y aplica el SQL de corrección de RLS.`);
+        } else {
+            logInv('✅ Importación completada sin errores de Supabase. Recargando datos...', 'success');
+        }
 
         // Recargar todo
         await inicializar();
