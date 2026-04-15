@@ -1096,39 +1096,47 @@ function renderBOMItems() {
             const colmenas = getColmenaPorCodTubo(cod);
             locText = colmenas ? `🗄 Colmena: ${colmenas}` : '⚠ Sin colmena asignada';
         } else if ((item.categoria || '').toUpperCase().includes('CENEF')) {
-            // Cenefas: el BOM guarda "Ovalada"/"Cuadrada" + color, no el código E-xx.
-            // Buscamos en _insumos el insumo de categoría CENEFA cuyo nemotécnico
-            // contenga el tipo (Ovalada/Cuadrada) y cuyo cod esté en colmena_tubos.
+            // Cenefas: los códigos en colmena_tubos (E60,E61,E62...) pueden ser distintos
+            // a los del catálogo de insumos (E28...). Buscamos TODOS los códigos de
+            // cenefas que coincidan en tipo+color y verificamos cuál está en colmena_tubos.
             const cenTipo  = (item.especificacion || item.descripcion || '').toUpperCase().replace('CENEFA','').trim();
             const cenColor = (item.color || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-            // 1. Intentar coincidencia por tipo + color
-            let insCenefa = _insumos.find(ins => {
-                const cat  = (ins.categoria || '').toUpperCase();
-                const nemo = (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase();
-                const col  = (ins.color || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-                if (!cat.includes('CENEF')) return false;
-                if (cenTipo && !nemo.includes(cenTipo)) return false;
-                if (cenColor && col && !col.startsWith(cenColor.slice(0,3)) && !cenColor.startsWith(col.slice(0,3))) return false;
-                return true;
+            // Todos los insumos que son cenefas del mismo tipo
+            const candidatas = _insumos.filter(ins =>
+                (ins.categoria || '').toUpperCase().includes('CENEF') &&
+                (!cenTipo || (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase().includes(cenTipo))
+            );
+
+            // Ordenar: primero las que coinciden también en color
+            candidatas.sort((a, b) => {
+                const colA = (a.color || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+                const colB = (b.color || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+                const matchA = cenColor && colA && (colA.startsWith(cenColor.slice(0,3)) || cenColor.startsWith(colA.slice(0,3)));
+                const matchB = cenColor && colB && (colB.startsWith(cenColor.slice(0,3)) || cenColor.startsWith(colB.slice(0,3)));
+                return (matchB ? 1 : 0) - (matchA ? 1 : 0);
             });
-            // 2. Fallback: cualquier insumo CENEFA con ese tipo
-            if (!insCenefa && cenTipo) {
-                insCenefa = _insumos.find(ins =>
-                    (ins.categoria || '').toUpperCase().includes('CENEF') &&
-                    (ins.nemotecnico || ins.descriptor_proveedor || '').toUpperCase().includes(cenTipo)
-                );
-            }
-            // 3. Fallback: primer insumo CENEFA disponible
-            if (!insCenefa) {
-                insCenefa = _insumos.find(ins => (ins.categoria || '').toUpperCase().includes('CENEF'));
+
+            // Buscar cuál de esos códigos existe en colmena_tubos
+            let enColmena = null, codUsado = '';
+            for (const ins of candidatas) {
+                const cod = (ins.cod || '').trim().toUpperCase();
+                const col = getColmenaPorCodTubo(cod);
+                if (col) { enColmena = col; codUsado = cod; break; }
             }
 
-            const codCenefa = (insCenefa?.cod || '').trim().toUpperCase();
-            const colmenas  = codCenefa ? getColmenaPorCodTubo(codCenefa) : null;
-            locText = colmenas
-                ? `🗄 Colmena: ${colmenas}`
-                : (codCenefa ? `⚠ Sin colmena (${codCenefa})` : '⚠ Sin colmena asignada');
+            if (enColmena) {
+                locText = `🗄 Colmena: ${enColmena}`;
+            } else {
+                // Fallback: rack de insumos
+                const ubicRack = getUbicacionBOM(item);
+                if (ubicRack) {
+                    locText = ubicRack.display;
+                } else {
+                    const primCod = candidatas[0]?.cod || '';
+                    locText = primCod ? `⚠ Sin ubicación (${primCod})` : '⚠ Sin ubicación asignada';
+                }
+            }
         } else {
             const insMatch = buscarInsumoMatchBOM(item);
             const ubic = getUbicacionBOM(item);
