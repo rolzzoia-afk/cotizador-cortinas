@@ -3878,7 +3878,9 @@ async function ejecutarOptimizacion() {
 
     colmenasAUsar.forEach((col) => {
         // Incluir serial y tubo_raiz_id para trazabilidad completa del linaje
-        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: col.tubo_raiz_id || null });
+        const _raizCargada = col.tubo_raiz_id || null;
+        const _raizFresh   = !_raizCargada; // UUID generado localmente: el tubo no tenía UUID en Supabase
+        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: _raizCargada || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null), _raizFresh });
     });
 
     log('=== INICIO OPTIMIZACIÓN ===', 'info');
@@ -5117,6 +5119,7 @@ async function verificarIntegridadPreGuardado() {
 
     usados.forEach(c => {
         if (!c.tubo_raiz_id) return;
+        if (c._raizFresh) return; // UUID asignado localmente (tubo sin UUID en Supabase): no verificar contra BD
         const enDB = mapaActual[c.tubo_raiz_id];
 
         if (!enDB) {
