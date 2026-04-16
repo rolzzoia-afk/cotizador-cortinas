@@ -641,6 +641,9 @@
         <div id="panelAlertasStock" style="display:none; margin-top:12px;"></div>
     </div>
 
+    <!-- ═══ PANEL DE RESERVAS ACTIVAS ═══ -->
+    <div id="panel-reservas-activas" style="display:none; margin-top:16px;"></div>
+
     <!-- ═══ PANEL DE VISTA PREVIA (STAGING) ═══ -->
     <div id="panel-vista-previa" style="display:none; margin-top:20px;">
         <div class="preview-header">
@@ -1036,6 +1039,14 @@ const SistemaInventario = {
 let colmenaActual = null;        // Colmena descargada de Supabase al inicio de sesión
 let usandoColmenaManual = false; // true si el usuario subió un archivo manualmente
 
+// ── Sistema de reservas de tubos por plan ─────────────────────────────────────
+// Cuando se genera un plan (staging), la colmena se pre-sincroniza inmediatamente
+// en Supabase para que el siguiente plan no "robe" tubos ya comprometidos.
+// La clave 'reservas_activas' en configuracion guarda los planes pendientes de confirmar.
+// La clave 'reserva_rollback_PLANID' guarda el snapshot de la colmena anterior (para descartar).
+let _reservaActualId  = null;   // planId del plan en staging (para confirmar/descartar)
+let _colmenaPreSyncOK = false;  // true si la colmena ya fue sincronizada en staging
+
 // Flags de carga inicial para onSnapshot (escudo anti-inventario-vacío)
 let inventarioCargado = false;
 let serialesCargados = false;
@@ -1104,6 +1115,8 @@ document.addEventListener("DOMContentLoaded", () => {
       await cargarDesdeSupabase();
       await cargarColmenaFinalDesdeSupabase();
       await cargarCatalogoDesdeSupabase();
+      // Mostrar reservas pendientes de sesiones anteriores
+      renderizarPanelReservas();
 
       // Cargar seriales (Supabase como fuente principal)
       await cargarSerialesDesdeSupabase();
@@ -4475,8 +4488,153 @@ async function ejecutarOptimizacion() {
     // Renderizar panel de staging (vista previa)
     renderizarStaging(resultados);
 
+    // ── Pre-sincronizar colmena en Supabase para bloquear tubos ──────────
+    // Esto garantiza que el próximo plan no use los mismos tubos aunque
+    // este plan todavía no haya sido confirmado formalmente.
+    _reservaActualId  = new Date().toISOString();
+    _colmenaPreSyncOK = false;
+    autoReservarPlan(_reservaActualId);  // async no bloqueante — resultados en el log
+
     // Actualizar alertas de stock (informativo, aún no guardado)
     verificarAlertasStock();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE RESERVAS — pre-sincronización por plan
+// Cada plan reserva sus tubos inmediatamente al generarse (antes de confirmar)
+// para que optimizaciones posteriores no los reutilicen.
+// ══════════════════════════════════════════════════════════════════════════
+
+async function cargarReservasActivas() {
+    try {
+        const raw = await _supabaseLeer('reservas_activas');
+        if (raw) return JSON.parse(raw);
+    } catch(e) { console.warn('reservas_activas no disponibles:', e.message); }
+    return [];
+}
+
+async function renderizarPanelReservas() {
+    const panel = document.getElementById('panel-reservas-activas');
+    if (!panel) return;
+    const reservas = await cargarReservasActivas();
+    if (!reservas.length) {
+        panel.style.display = 'none';
+        return;
+    }
+    panel.style.display = 'block';
+    panel.innerHTML = `
+        <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);border-radius:10px;padding:14px 18px;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+                <i class="bi bi-lock-fill" style="color:var(--warning);font-size:1rem;"></i>
+                <strong style="color:var(--warning);font-size:0.9rem;">Planes con tubos reservados</strong>
+                <span style="font-size:0.75rem;color:var(--text-muted);margin-left:4px;">(estos tubos ya están comprometidos en la colmena)</span>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+                ${reservas.map(r => `
+                    <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:8px 12px;font-size:0.78rem;display:flex;align-items:center;gap:10px;">
+                        <div>
+                            <div style="font-weight:600;color:var(--text-primary);">Plan del ${r.fecha}</div>
+                            <div style="color:var(--text-muted);">${r.nOrdenes} órdenes · ${r.tubosConsumidos?.length ?? '?'} tubos</div>
+                        </div>
+                        <button onclick="liberarReservaPlan('${r.planId}')" class="btn btn-sm" style="background:rgba(239,68,68,0.2);color:#f87171;border:1px solid rgba(239,68,68,0.3);padding:3px 9px;font-size:0.72rem;">
+                            <i class="bi bi-unlock"></i> Liberar
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:8px;">
+                ⚠️ Libera un plan solo si vas a descartar ese plan de corte. La colmena volverá al estado anterior.
+            </div>
+        </div>`;
+}
+
+async function autoReservarPlan(planId) {
+    log('⏳ Pre-sincronizando colmena para bloquear tubos de este plan...', 'info');
+    try {
+        const _POSICIONES_VIRTUALES = new Set(['LIBERADO', 'MESA', 'TUBO NUEVO', 'PESO NUEVO']);
+
+        // Tubos restantes después de este plan
+        const colmenaFinal = SistemaInventario.colmenasHistorico
+            .filter(c => c.estado === 'disponible' && c.medida_mm > 0 && c.cod && !_POSICIONES_VIRTUALES.has(c.n_colmena))
+            .map(c => ({
+                n_colmena:    c.n_colmena,
+                medida_mm:    c.medida_mm,
+                medida_cm:    c.medida_cm || +(c.medida_mm / 10).toFixed(1),
+                cod:          c.cod,
+                serial:       c.serial || null,
+                tubo_raiz_id: c.tubo_raiz_id || null
+            }));
+
+        // Tubos que se consumieron en este plan (para mostrar en UI)
+        const colmenaFinalIds = new Set(colmenaFinal.map(c => c.tubo_raiz_id || c.n_colmena));
+        const tubosConsumidos = SistemaInventario.colmenas
+            .filter(c => {
+                const id = c.tubo_raiz_id || c.n_colmena;
+                return !colmenaFinalIds.has(id);
+            })
+            .map(c => c.n_colmena);
+
+        // Guardar snapshot de colmena ORIGINAL para poder hacer rollback si se descarta
+        await _supabaseGuardar(
+            `reserva_rollback_${planId}`,
+            JSON.stringify(SistemaInventario.colmenas.map(c => ({
+                n_colmena: c.n_colmena, medida_mm: c.medida_mm,
+                medida_cm: c.medida_cm, cod: c.cod,
+                serial: c.serial || null, tubo_raiz_id: c.tubo_raiz_id || null
+            })))
+        );
+
+        // Agregar esta reserva a la lista de activas
+        const reservas = await cargarReservasActivas();
+        // Limpiar reserva anterior del mismo planId si existe
+        const reservasActualizadas = reservas.filter(r => r.planId !== planId);
+        reservasActualizadas.push({
+            planId,
+            fecha: planId.slice(0, 10),
+            nOrdenes: SistemaInventario.ordenes.length,
+            tubosConsumidos
+        });
+        await _supabaseGuardar('reservas_activas', JSON.stringify(reservasActualizadas));
+
+        // Sincronizar colmena_tubos con el estado POST-plan (la clave del sistema)
+        await sincronizarColmenaFinalConTabla(colmenaFinal);
+
+        _colmenaPreSyncOK = true;
+        log(`✅ Colmena sincronizada: ${tubosConsumidos.length} tubos reservados para este plan. Los próximos planes verán solo los ${colmenaFinal.length} tubos restantes.`, 'success');
+        await renderizarPanelReservas();
+
+    } catch(e) {
+        console.error('Error en autoReservarPlan:', e);
+        log(`⚠️ Pre-sincronización falló: ${e.message}. La colmena se sincronizará al confirmar.`, 'warn');
+        _colmenaPreSyncOK = false;
+    }
+}
+
+async function liberarReservaPlan(planId) {
+    if (!confirm(`¿Liberar la reserva del plan del ${planId.slice(0,10)}?\n\nEsto restaurará la colmena al estado ANTERIOR a ese plan. Solo hazlo si vas a descartar ese plan de corte.\n\nAtención: si hay planes posteriores que ya se generaron usando los tubos de este plan, tendrás que re-optimizarlos.`)) return;
+
+    try {
+        // 1. Restaurar colmena original desde el snapshot
+        const rollbackRaw = await _supabaseLeer(`reserva_rollback_${planId}`);
+        if (rollbackRaw) {
+            const colmenaOriginal = JSON.parse(rollbackRaw);
+            await sincronizarColmenaFinalConTabla(colmenaOriginal);
+            log(`✅ Colmena restaurada al estado anterior (${colmenaOriginal.length} tubos).`, 'success');
+        } else {
+            log('⚠️ No se encontró snapshot de rollback para este plan. La colmena no fue modificada.', 'warn');
+        }
+
+        // 2. Limpiar registro de reserva y snapshot
+        const reservas = await cargarReservasActivas();
+        await _supabaseGuardar('reservas_activas', JSON.stringify(reservas.filter(r => r.planId !== planId)));
+        await _supabaseGuardar(`reserva_rollback_${planId}`, 'null');
+
+        await renderizarPanelReservas();
+        log(`🔓 Reserva del plan ${planId.slice(0,10)} liberada.`, 'info');
+    } catch(e) {
+        console.error('Error liberando reserva:', e);
+        log(`❌ Error al liberar reserva: ${e.message}`, 'error');
+    }
 }
 
 // ═══ STAGING: VISTA PREVIA ANTES DE GUARDAR ═══════════════════════════════
@@ -5021,11 +5179,29 @@ async function confirmarYGuardarStaging() {
     // ── PASO 3: AHORA sí persistir los cambios (descontar tubos) ──
     guardarSistema();
     let colmenaSincronizadaOK = false;
-    try {
-        await guardarColmenaFinalEnSupabase();
+    if (_colmenaPreSyncOK) {
+        // La colmena ya fue sincronizada en staging (autoReservarPlan).
+        // No hay que volver a hacerlo — solo verificar que esté OK.
+        log('ℹ️ Colmena ya pre-sincronizada al generar el plan. Saltando re-sincronización.', 'info');
         colmenaSincronizadaOK = true;
-    } catch (errColmena) {
-        log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
+    } else {
+        try {
+            await guardarColmenaFinalEnSupabase();
+            colmenaSincronizadaOK = true;
+        } catch (errColmena) {
+            log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
+        }
+    }
+    // Limpiar registro de reserva (plan confirmado, ya no se puede descartar)
+    if (_reservaActualId) {
+        try {
+            const reservas = await cargarReservasActivas();
+            await _supabaseGuardar('reservas_activas', JSON.stringify(reservas.filter(r => r.planId !== _reservaActualId)));
+            await _supabaseGuardar(`reserva_rollback_${_reservaActualId}`, 'null');
+            _reservaActualId  = null;
+            _colmenaPreSyncOK = false;
+            await renderizarPanelReservas();
+        } catch(e) { console.warn('No se pudo limpiar reserva:', e.message); }
     }
 
     // ── PASO 3a.5: Verificación POST-guardado ─────────────────────────────
@@ -5228,7 +5404,7 @@ async function confirmarYGuardarStaging() {
 }
 
 // ── Descartar: volver al estado previo sin guardar ──
-function descartarStaging() {
+async function descartarStaging() {
     if (!confirm('¿Descartar la vista previa? Los cambios calculados se perderán.')) return;
 
     document.getElementById('panel-vista-previa').style.display = 'none';
@@ -5236,7 +5412,32 @@ function descartarStaging() {
     document.getElementById('btnExportar').disabled = true;
     document.getElementById('btnExportarDisponibles').disabled = true;
 
-    // Restaurar estado pre-optimización
+    // ── Si la colmena fue pre-sincronizada, restaurar en Supabase ────────
+    if (_colmenaPreSyncOK && _reservaActualId) {
+        try {
+            log('⏳ Restaurando colmena al estado anterior al plan descartado...', 'info');
+            const rollbackRaw = await _supabaseLeer(`reserva_rollback_${_reservaActualId}`);
+            if (rollbackRaw && rollbackRaw !== 'null') {
+                const colmenaOriginal = JSON.parse(rollbackRaw);
+                await sincronizarColmenaFinalConTabla(colmenaOriginal);
+                log(`✅ Colmena restaurada (${colmenaOriginal.length} tubos).`, 'success');
+                // Restaurar en memoria también
+                SistemaInventario.colmenas = JSON.parse(JSON.stringify(colmenaOriginal));
+            }
+            // Limpiar registros de reserva
+            const reservas = await cargarReservasActivas();
+            await _supabaseGuardar('reservas_activas', JSON.stringify(reservas.filter(r => r.planId !== _reservaActualId)));
+            await _supabaseGuardar(`reserva_rollback_${_reservaActualId}`, 'null');
+            await renderizarPanelReservas();
+        } catch(e) {
+            console.error('Error restaurando colmena:', e);
+            log('⚠️ No se pudo restaurar la colmena automáticamente: ' + e.message, 'warn');
+        }
+        _reservaActualId  = null;
+        _colmenaPreSyncOK = false;
+    }
+
+    // Restaurar estado pre-optimización en memoria
     if (SistemaInventario.ordenesCrudas.length > 0) {
         SistemaInventario.ordenes = JSON.parse(JSON.stringify(SistemaInventario.ordenesCrudas));
     }
