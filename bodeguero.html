@@ -1087,16 +1087,15 @@ function extraerInsumosBOM(ot) {
             const mecCod = (mec.match(/\[([^\]]+)\]/)?.[1] || '').replace(/\s+/g, '').toUpperCase(); // → 'MEC14'
             if (mec) {
                 // Buscar en catálogo de insumos para obtener nombre real y ubicación
-                const insRec = mecCod ? _insumos.find(i => (i.cod||'').toUpperCase() === mecCod) : null;
-                const mecDesc    = insRec ? (insRec.nemotecnico || insRec.descriptor_proveedor || mec) : mec;
-                const mecUbicacion = insRec ? (insRec.ubicacion || '') : '';
+                const insRec    = mecCod ? _insumos.find(i => (i.cod||'').toUpperCase() === mecCod) : null;
+                const mecDesc   = insRec ? (insRec.nemotecnico || insRec.descriptor_proveedor || mec) : mec;
                 const mecRackLoc = mecCod ? buscarUbicacionRack(mecCod) : null;
                 add(`MEC|${mecCod||mec}`, 'MECANISMO',
                     mecDesc,
                     mecCod ? `[${mecCod}]` : mec,
                     '',
                     1, 'unid.',
-                    mecRackLoc || mecUbicacion
+                    mecRackLoc  // solo posición de rack, nunca insRec.ubicacion (esa es zona de bodega)
                 );
             }
 
@@ -1156,10 +1155,10 @@ function extraerInsumosBOM(ot) {
                 const insRec2   = mecCod2 ? _insumos.find(i => (i.cod||'').toUpperCase() === mecCod2) : null;
                 const mecDesc2  = insRec2 ? (insRec2.nemotecnico || mec2) : mec2;
                 const mecRack2  = mecCod2 ? buscarUbicacionRack(mecCod2) : null;
-                const mecUbic2  = insRec2 ? (insRec2.ubicacion || '') : '';
                 add(`MEC|${mecCod2||mec2}`, 'MECANISMO',
                     mecDesc2, mecCod2 ? `[${mecCod2}]` : mec2, '', 1, 'unid.',
-                    mecRack2 || mecUbic2);
+                    mecRack2  // solo posición de rack, nunca insRec2.ubicacion (esa es zona de bodega)
+                );
             }
 
             const cenefa   = p.cenefa || '';
@@ -1434,7 +1433,8 @@ function buscarInsumoMatchBOM(item) {
 }
 
 // Devuelve objeto { display, qr } con la ubicación del ítem BOM.
-// Cascada: spec→rack directo → insumo.cod→rack → insumo.ubicacion → null
+// Cascada: spec→rack directo → insumo.cod→rack → null
+// NOTA: insumo.ubicacion NO se usa — es zona general de bodega, no posición de rack.
 // display = texto bonito para mostrar al usuario
 // qr      = contenido ASCII puro para el QR y la comparación de escaneo
 function getUbicacionBOM(item) {
@@ -1451,11 +1451,7 @@ function getUbicacionBOM(item) {
     if (ins) {
         const r = getRackUbicacion(ins.cod);
         if (r) return { display: `📍 ${r.display}`, qr: r.qr };
-        // ── Camino 3: campo texto general (sin rack formal)
-        if (ins.ubicacion) {
-            const qrFallback = `LOC:${(ins.ubicacion).replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim()}`;
-            return { display: `📦 ${ins.ubicacion}`, qr: qrFallback };
-        }
+        // ins.ubicacion es zona general de bodega (ej. "2DA AV."), no sirve para picking
     }
 
     return null;
@@ -1690,11 +1686,8 @@ async function onQRScan(decoded) {
                 if (rackPos) {
                     locEsperada = rackPos.qr;
                     locLabel    = rackPos.display;
-                } else if (insMatch.ubicacion) {
-                    const ascii = s => (s||'').replace(/[^\x20-\x7E]/g,'').replace(/\s+/g,' ').trim();
-                    locEsperada = `LOC:${ascii(insMatch.ubicacion)}`;
-                    locLabel    = insMatch.ubicacion;
                 }
+                // insMatch.ubicacion es zona general de bodega, no posición de rack — no usar
             }
         }
 
