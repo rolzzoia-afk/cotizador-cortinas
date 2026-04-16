@@ -3758,7 +3758,7 @@ async function ejecutarOptimizacion() {
                 `⚠️ ATENCIÓN: La colmena fue cargada hace ${mins} minutos.\n\n` +
                 `Si otro usuario usó el optimizador en ese tiempo, los tubos pueden estar desactualizados ` +
                 `y podrías generar un plan con tubos que ya fueron cortados.\n\n` +
-                `¿Querés RECARGAR la colmena ahora antes de optimizar?\n\n` +
+                `¿Deseas recargar la colmena ahora antes de optimizar?\n\n` +
                 `[Aceptar] = Recargar colmena (recomendado)\n` +
                 `[Cancelar] = Continuar de todas formas (riesgo de conflicto)`
             );
@@ -4998,7 +4998,7 @@ async function confirmarYGuardarStaging() {
         if (!integridad.ok) {
             // Bloquear el guardado y mostrar el problema claramente
             log(`🚫 GUARDADO BLOQUEADO — ${integridad.mensaje}`, 'error');
-            alert(integridad.mensaje + '\n\n→ Recargá la colmena desde Supabase y volvé a optimizar.');
+            alert(integridad.mensaje + '\n\n→ Recarga la colmena desde Supabase e intenta optimizar de nuevo.');
             if (btnEjecutar) btnEjecutar.disabled = false;
             return; // ← No se guarda nada
         }
