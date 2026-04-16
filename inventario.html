@@ -934,6 +934,8 @@
                 <option value="con_stock">Con stock</option>
                 <option value="sin_stock">Sin stock</option>
                 <option value="bajo_minimo">Bajo mínimo</option>
+                <option value="sin_minimo">Sin mínimo definido</option>
+                <option value="sin_ubicacion">Sin ubicación</option>
             </select>
             <button class="btn-inv btn-primary-inv" onclick="abrirModalInsumo()">
                 <i class="bi bi-plus-lg"></i> Nuevo
@@ -941,6 +943,27 @@
             <button class="btn-inv btn-success-inv" onclick="exportarInventarioExcel()" title="Descargar inventario completo en Excel">
                 <i class="bi bi-download"></i> Descargar Excel
             </button>
+            <button class="btn-inv" id="btnModoCompletar" onclick="toggleModoCompletar()"
+                style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.35); color:#fbbf24; gap:6px;">
+                <i class="bi bi-pencil-square"></i> Completar datos faltantes
+            </button>
+        </div>
+
+        <!-- Barra modo completar -->
+        <div id="barraCompletar" style="display:none; background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.3); border-radius:10px; padding:10px 16px; margin-bottom:10px; display:none; align-items:center; gap:12px; flex-wrap:wrap;">
+            <i class="bi bi-pencil-square" style="color:#fbbf24; font-size:1.1rem;"></i>
+            <span style="color:#fbbf24; font-size:0.85rem; font-weight:600;">Modo edición masiva activo</span>
+            <span style="color:var(--text-secondary); font-size:0.82rem;">Editá el <strong>Mínimo</strong> y la <strong>Ubicación</strong> directamente en la tabla. Los cambios se guardan juntos al presionar el botón.</span>
+            <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+                <span id="contadorCambios" style="font-size:0.8rem; color:var(--text-muted);">0 cambios</span>
+                <button class="btn-inv" onclick="guardarCambiosMasivos()"
+                    style="background:rgba(74,222,128,0.15); border:1px solid rgba(74,222,128,0.4); color:#4ade80; font-weight:700; gap:6px;">
+                    <i class="bi bi-cloud-check-fill"></i> Guardar todo
+                </button>
+                <button class="btn-inv btn-outline-inv" onclick="toggleModoCompletar()" style="font-size:0.78rem;">
+                    Cancelar
+                </button>
+            </div>
         </div>
 
         <!-- Table -->
@@ -1781,9 +1804,13 @@ function filtrarCatalogo() {
     );
     if (cat) datos = datos.filter(i => i.categoria === cat);
     if (subcat) datos = datos.filter(i => i.sub_categoria === subcat);
-    if (estado === 'con_stock') datos = datos.filter(i => getStockTotal(i) > 0);
-    if (estado === 'sin_stock') datos = datos.filter(i => getStockTotal(i) <= 0);
-    if (estado === 'bajo_minimo') datos = datos.filter(i => i.minimo > 0 && getStockTotal(i) < i.minimo);
+    if (estado === 'con_stock')    datos = datos.filter(i => getStockTotal(i) > 0);
+    if (estado === 'sin_stock')    datos = datos.filter(i => getStockTotal(i) <= 0);
+    if (estado === 'bajo_minimo')  datos = datos.filter(i => i.minimo > 0 && getStockTotal(i) < i.minimo);
+    if (estado === 'sin_minimo')   datos = datos.filter(i => !i.minimo || i.minimo === 0);
+    if (estado === 'sin_ubicacion')datos = datos.filter(i => !i.ubicacion || i.ubicacion.trim() === '');
+    // En modo completar, mostrar solo los que tienen algún dato faltante
+    if (_modoCompletar && estado === '') datos = datos.filter(i => !i.minimo || i.minimo === 0 || !i.ubicacion || i.ubicacion.trim() === '');
 
     // Sort
     datos.sort((a, b) => {
@@ -1816,12 +1843,27 @@ function filtrarCatalogo() {
             <td>${i.producto || '-'}</td>
             <td>${i.compra || '-'}</td>
             <td>${i.color || '-'}</td>
-            <td>${i.ubicacion || '-'}</td>
+            <td>${_modoCompletar
+                ? `<input class="celda-editable" type="text"
+                    data-cod="${i.cod}" data-campo="ubicacion"
+                    value="${(i.ubicacion||'').replace(/"/g,'&quot;')}"
+                    placeholder="Ej: Rack A-3"
+                    oninput="marcarCambio(this)"
+                    style="width:120px; background:${!i.ubicacion||i.ubicacion.trim()==='' ? 'rgba(251,191,36,0.08)' : 'transparent'}; border:1px solid ${!i.ubicacion||i.ubicacion.trim()==='' ? 'rgba(251,191,36,0.5)' : 'var(--border)'}; border-radius:6px; color:var(--text-primary); padding:4px 7px; font-size:0.78rem;">`
+                : (i.ubicacion || '-')}${_modoCompletar ? '</input>' : ''}</td>
             <td style="text-align:center;">${i.can_x_paquete || '-'}</td>
             <td style="text-align:center; font-weight:700; color:${sin ? 'var(--danger)' : bajo ? 'var(--warning)' : 'var(--text-primary)'};">${st}</td>
             <td style="text-align:center;">${i.stock_mp || 0}</td>
             <td style="text-align:center;">${i.stock_liberado || 0}</td>
-            <td style="text-align:center;">${i.minimo || 0}</td>
+            <td style="text-align:center;">${_modoCompletar
+                ? `<input class="celda-editable" type="number"
+                    data-cod="${i.cod}" data-campo="minimo"
+                    value="${i.minimo || ''}"
+                    placeholder="0"
+                    min="0"
+                    oninput="marcarCambio(this)"
+                    style="width:68px; background:${!i.minimo||i.minimo===0 ? 'rgba(251,191,36,0.08)' : 'transparent'}; border:1px solid ${!i.minimo||i.minimo===0 ? 'rgba(251,191,36,0.5)' : 'var(--border)'}; border-radius:6px; color:var(--text-primary); padding:4px 7px; font-size:0.82rem; text-align:center;">`
+                : (i.minimo || 0)}${_modoCompletar ? '</input>' : ''}</td>
             <td style="text-align:right;">${fmtNum(i.costo)}</td>
             <td style="text-align:right;">${fmtNum(i.costo_iva)}</td>
             <td style="text-align:right; font-weight:600;">${fmtNum(costoTotal)}</td>
@@ -3132,6 +3174,148 @@ function imprimirQRInsumo() {
 document.addEventListener('DOMContentLoaded', () => {
     inicializar();
 });
+
+// ══════════════════════════════════════════════════════════════════
+// MODO COMPLETAR DATOS FALTANTES
+// ══════════════════════════════════════════════════════════════════
+let _modoCompletar = false;
+let _cambiosPendientes = {}; // { cod: { minimo: X, ubicacion: Y } }
+
+function toggleModoCompletar() {
+    _modoCompletar = !_modoCompletar;
+    _cambiosPendientes = {};
+
+    const btn    = document.getElementById('btnModoCompletar');
+    const barra  = document.getElementById('barraCompletar');
+
+    if (_modoCompletar) {
+        btn.style.background = 'rgba(251,191,36,0.25)';
+        btn.style.borderColor = 'rgba(251,191,36,0.7)';
+        btn.innerHTML = '<i class="bi bi-x-lg"></i> Salir del modo edición';
+        barra.style.display = 'flex';
+
+        // Forzar filtro "sin minimo o sin ubicacion" al entrar al modo
+        const sel = document.getElementById('filtroEstado');
+        if (sel.value === '') filtrarCatalogo();
+        else filtrarCatalogo();
+
+        actualizarContadorCambios();
+    } else {
+        btn.style.background = 'rgba(251,191,36,0.12)';
+        btn.style.borderColor = 'rgba(251,191,36,0.35)';
+        btn.innerHTML = '<i class="bi bi-pencil-square"></i> Completar datos faltantes';
+        barra.style.display = 'none';
+        filtrarCatalogo();
+    }
+}
+
+function marcarCambio(input) {
+    const cod    = input.dataset.cod;
+    const campo  = input.dataset.campo;
+    const valor  = input.value.trim();
+
+    if (!_cambiosPendientes[cod]) _cambiosPendientes[cod] = {};
+    _cambiosPendientes[cod][campo] = valor;
+
+    // Feedback visual: borde verde cuando tiene valor
+    if (valor !== '' && valor !== '0') {
+        input.style.borderColor  = 'rgba(74,222,128,0.6)';
+        input.style.background   = 'rgba(74,222,128,0.06)';
+    } else {
+        input.style.borderColor  = 'rgba(251,191,36,0.5)';
+        input.style.background   = 'rgba(251,191,36,0.08)';
+    }
+
+    actualizarContadorCambios();
+}
+
+function actualizarContadorCambios() {
+    const n = Object.keys(_cambiosPendientes).length;
+    const el = document.getElementById('contadorCambios');
+    if (el) el.textContent = n === 0 ? '0 cambios' : `${n} insumo${n !== 1 ? 's' : ''} modificado${n !== 1 ? 's' : ''}`;
+}
+
+async function guardarCambiosMasivos() {
+    const codigos = Object.keys(_cambiosPendientes);
+    if (codigos.length === 0) {
+        mostrarToastInv('No hay cambios para guardar', 'warn');
+        return;
+    }
+
+    const btnGuardar = document.querySelector('#barraCompletar .btn-inv[onclick="guardarCambiosMasivos()"]');
+    if (btnGuardar) { btnGuardar.disabled = true; btnGuardar.textContent = 'Guardando…'; }
+
+    let ok = 0, errores = 0;
+
+    for (const cod of codigos) {
+        const cambios = _cambiosPendientes[cod];
+        const payload = {};
+
+        if ('minimo' in cambios) payload.minimo = cambios.minimo === '' ? 0 : Number(cambios.minimo);
+        if ('ubicacion' in cambios) payload.ubicacion = cambios.ubicacion;
+
+        if (Object.keys(payload).length === 0) continue;
+
+        try {
+            const { error } = await sbInv.from('insumos').update(payload).eq('cod', cod).eq('empresa_id', EMPRESA_ID);
+            if (error) throw error;
+
+            // Actualizar en memoria local
+            const idx = INV.insumos.findIndex(i => i.cod === cod);
+            if (idx !== -1) Object.assign(INV.insumos[idx], payload);
+            ok++;
+        } catch(e) {
+            console.error(`[Completar] Error en ${cod}:`, e.message);
+            errores++;
+        }
+    }
+
+    if (btnGuardar) {
+        btnGuardar.disabled = false;
+        btnGuardar.innerHTML = '<i class="bi bi-cloud-check-fill"></i> Guardar todo';
+    }
+
+    _cambiosPendientes = {};
+    actualizarContadorCambios();
+
+    if (errores === 0) {
+        mostrarToastInv(`✓ ${ok} insumo${ok !== 1 ? 's' : ''} actualizado${ok !== 1 ? 's' : ''} correctamente`, 'ok');
+    } else {
+        mostrarToastInv(`⚠ ${ok} guardados, ${errores} con error`, 'warn');
+    }
+
+    // Re-renderizar para reflejar los nuevos valores
+    filtrarCatalogo();
+}
+
+function mostrarToastInv(msg, tipo = 'ok') {
+    // Reusar el sistema de notificaciones existente si está, o crear toast simple
+    let toast = document.getElementById('toastInv');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'toastInv';
+        toast.style.cssText = `
+            position:fixed; bottom:24px; right:24px; z-index:9999;
+            padding:12px 20px; border-radius:10px; font-size:0.85rem;
+            font-family:var(--sans); font-weight:600;
+            box-shadow:0 8px 32px rgba(0,0,0,0.4);
+            transition: all 0.3s; opacity:0; transform:translateY(16px);
+            border: 1px solid;
+        `;
+        document.body.appendChild(toast);
+    }
+    toast.textContent = msg;
+    toast.style.background = tipo === 'ok' ? 'rgba(74,222,128,0.15)' : 'rgba(251,191,36,0.15)';
+    toast.style.borderColor = tipo === 'ok' ? 'rgba(74,222,128,0.5)' : 'rgba(251,191,36,0.5)';
+    toast.style.color       = tipo === 'ok' ? '#4ade80' : '#fbbf24';
+    toast.style.opacity = '1';
+    toast.style.transform = 'translateY(0)';
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(16px)';
+    }, 3500);
+}
 </script>
 
 </body>
