@@ -1903,7 +1903,7 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
         medida_cm:     typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
         medida_mm:     c.medida_mm || 0,
         serial:        c.serial || null,
-        tubo_raiz_id:  c.tubo_raiz_id || null,  // linaje persistente
+        tubo_raiz_id:  c.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null),  // linaje persistente (genera UUID si el snapshot era previo al fix)
         agregado_por_admin: false
     }));
 
