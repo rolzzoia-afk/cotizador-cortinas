@@ -8,6 +8,7 @@
     <title>Panel de Administrador - Ojo de Dios</title>
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; }
@@ -301,10 +302,7 @@
 // MIGRADO A SUPABASE — Ya no depende de Firebase
 // ═══════════════════════════════════════════════════════════════════
 
-// ── Configuración Supabase (misma que index.html) ──────────────────
-const SUPABASE_URL      = 'https://izelewwgeamktnzkiwvl.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml6ZWxld3dnZWFta3Ruemtpd3ZsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5NTg3NDAsImV4cCI6MjA5MDUzNDc0MH0.86i0fBjj2721SiJhNLZ1Z2uKiLg8ydM0f3_pXr8opZw';
-const EMPRESA_ID        = '67c635a5-152c-4780-a066-23f5081175a9';
+// ── Configuración Supabase  (credenciales en config.js) ───────────
 
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
