@@ -463,14 +463,14 @@
                     <div class="gauge-sub">% de cierre real</div>
                 </div>
                 <div style="text-align:center; padding:12px;">
-                    <div style="font-size:13px; color:var(--muted); margin-bottom:6px;">Meta de cierre</div>
-                    <div style="font-size:32px; font-weight:800;" id="meta-cierre-display">50%</div>
-                    <div id="cierre-status" style="font-size:12px; margin-top:8px;"></div>
+                    <div style="font-size:13px; color:var(--muted); margin-bottom:6px;">Tasa de cierre</div>
+                    <div style="font-size:32px; font-weight:800;" id="meta-cierre-display">—</div>
+                    <div style="font-size:11px; color:var(--muted); margin-top:6px;">de las cotizaciones se cerraron</div>
                 </div>
                 <div style="text-align:center; padding:12px;">
-                    <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">Cotizaciones para llegar a meta</div>
+                    <div style="font-size:13px; color:var(--muted); margin-bottom:4px;">Cotizaciones pendientes</div>
                     <div style="font-size:36px; font-weight:800; color:var(--accent2);" id="cierre-faltante">—</div>
-                    <div style="font-size:11px; color:var(--muted);">cierres pendientes</div>
+                    <div style="font-size:11px; color:var(--muted);">sin cerrar aún</div>
                 </div>
             </div>
         </div>
@@ -971,32 +971,22 @@ function actualizarMeta(slug, meta) {
 function renderCierre() {
     document.getElementById('cierre-enviadas').value = getVal('cierre_enviadas');
     document.getElementById('cierre-cerradas').value = getVal('cierre_cerradas');
-    document.getElementById('meta-cierre-display').textContent = _config.meta_cierre_pct + '%';
     recalcularCierre();
 }
 
 function recalcularCierre() {
     const env = Number(document.getElementById('cierre-enviadas').value) || 0;
     const cer = Number(document.getElementById('cierre-cerradas').value) || 0;
-    const meta = _config.meta_cierre_pct;
 
     const pctReal = env > 0 ? Math.round(cer / env * 100) : 0;
-    const faltante = env > 0 ? Math.max(0, Math.ceil(env * meta / 100) - cer) : 0;
+    const pendientes = Math.max(0, env - cer);
 
-    document.getElementById('gaugePct').textContent = pctReal + '%';
-    document.getElementById('gaugePct').style.color = colorPct(pctReal, meta);
-    document.getElementById('cierre-faltante').textContent = faltante;
+    document.getElementById('gaugePct').textContent = env > 0 ? pctReal + '%' : '—';
+    document.getElementById('gaugePct').style.color = colorPct(pctReal, 50);
+    document.getElementById('meta-cierre-display').textContent = env > 0 ? pctReal + '%' : '—';
+    document.getElementById('cierre-faltante').textContent = env > 0 ? pendientes : '—';
 
-    const status = document.getElementById('cierre-status');
-    if (pctReal >= meta) {
-        status.textContent = '✓ Sobre la meta';
-        status.style.color = 'var(--green)';
-    } else {
-        status.textContent = `⚠ ${meta - pctReal}pts bajo la meta`;
-        status.style.color = 'var(--yellow)';
-    }
-
-    dibujarGauge(pctReal, meta);
+    dibujarGauge(pctReal, 50);
 }
 
 function dibujarGauge(pct, meta) {
