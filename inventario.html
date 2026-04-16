@@ -1866,7 +1866,7 @@ function filtrarCatalogo() {
 
         const costoTotal = (i.costo || 0) * st;
         const fmtNum = v => v ? Number(v).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-';
-        return `<tr onclick="seleccionarFila(this)"
+        return `<tr onclick="seleccionarFila(this)">`
             <td style="text-align:center; padding:4px 8px;">${renderFotoCell(i.foto_url)}</td>
             <td><strong>${i.cod || ''}</strong></td>
             <td style="white-space:nowrap;">${i.nemotecnico || i.descriptor_proveedor || '-'}</td>
