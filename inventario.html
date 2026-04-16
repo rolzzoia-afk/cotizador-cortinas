@@ -949,6 +949,11 @@
             <button class="btn-inv btn-success-inv" onclick="exportarInventarioExcel()" title="Descargar inventario completo en Excel">
                 <i class="bi bi-download"></i> Descargar Excel
             </button>
+            <button class="btn-inv" onclick="imprimirTodosQR()"
+                style="background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.35); color:#60a5fa; gap:6px;"
+                title="Imprimir QR de todos los insumos (6 por hoja)">
+                <i class="bi bi-printer"></i> Imprimir todos los QR
+            </button>
             <button class="btn-inv" id="btnModoCompletar" onclick="toggleModoCompletar()"
                 style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.35); color:#fbbf24; gap:6px;">
                 <i class="bi bi-pencil-square"></i> Completar datos faltantes
@@ -3199,6 +3204,160 @@ function imprimirQRInsumo() {
     w.document.close();
     w.focus();
     setTimeout(() => { w.print(); }, 500);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// IMPRIMIR TODOS LOS QR — 2 columnas × 3 filas (6 por hoja)
+// ══════════════════════════════════════════════════════════════════
+async function imprimirTodosQR() {
+    const insumos = (INV.insumos || []).filter(i => i.cod);
+    if (!insumos.length) {
+        alert('No hay insumos cargados todavía.');
+        return;
+    }
+
+    // ── Generar una imagen QR base64 para cada insumo ─────────────
+    // Usamos un canvas oculto temporal para renderizar cada QR
+    const imgs = await Promise.all(insumos.map(ins => new Promise(resolve => {
+        const tmp = document.createElement('div');
+        tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;visibility:hidden;';
+        document.body.appendChild(tmp);
+        try {
+            const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
+            new QRCode(tmp, {
+                text: `INS:${codQR}`,
+                width: 200, height: 200,
+                colorDark: '#000000', colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.M
+            });
+            setTimeout(() => {
+                const canvas = tmp.querySelector('canvas');
+                const src = canvas ? canvas.toDataURL('image/png') : '';
+                document.body.removeChild(tmp);
+                resolve({ ins, src });
+            }, 80);
+        } catch(e) {
+            document.body.removeChild(tmp);
+            resolve({ ins, src: '' });
+        }
+    })));
+
+    // ── Construir HTML de impresión ───────────────────────────────
+    const estilos = `
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; }
+
+        /* 2 columnas × 3 filas = 6 por hoja */
+        .pagina {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 14mm 12mm;
+            page-break-after: always;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(3, 1fr);
+            gap: 10mm 12mm;
+            align-items: stretch;
+        }
+        .pagina:last-child { page-break-after: avoid; }
+
+        .etiqueta {
+            border: 1.5px solid #1a1a1a;
+            border-radius: 8px;
+            padding: 12px 14px 10px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            page-break-inside: avoid;
+        }
+        .chip {
+            display: inline-block;
+            background: #f1f5f9;
+            color: #475569;
+            font-size: 7px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 2px 8px;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 8px;
+        }
+        .etiqueta img {
+            width: 170px;
+            height: 170px;
+            display: block;
+            margin-bottom: 8px;
+        }
+        .sep {
+            width: 100%;
+            border: none;
+            border-top: 1px dashed #e2e8f0;
+            margin: 6px 0;
+        }
+        .nombre {
+            font-size: 10.5px;
+            font-weight: 700;
+            color: #1e293b;
+            line-height: 1.35;
+            margin-bottom: 3px;
+            word-break: break-word;
+        }
+        .codigo {
+            font-size: 9.5px;
+            color: #475569;
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .qr-txt {
+            font-size: 7.5px;
+            color: #94a3b8;
+            font-family: 'Courier New', monospace;
+        }
+        @media print {
+            @page { size: A4; margin: 0; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    `;
+
+    const POR_HOJA = 6;
+    let paginasHTML = '';
+    for (let i = 0; i < imgs.length; i += POR_HOJA) {
+        const lote = imgs.slice(i, i + POR_HOJA);
+        const etiquetasHTML = lote.map(({ ins, src }) => {
+            const nemo = ins.nemotecnico || ins.descriptor_proveedor || ins.cod;
+            const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
+            return `
+            <div class="etiqueta">
+                <div class="chip">📦 Contenedor / Caja</div>
+                ${src ? `<img src="${src}" alt="QR ${ins.cod}">` : `<div style="width:170px;height:170px;background:#f8f8f8;border:1px dashed #ccc;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999;">Sin QR</div>`}
+                <hr class="sep">
+                <div class="nombre">${nemo}</div>
+                <div class="codigo">${ins.cod}</div>
+                <div class="qr-txt">INS:${codQR}</div>
+            </div>`;
+        }).join('');
+        paginasHTML += `<div class="pagina">${etiquetasHTML}</div>`;
+    }
+
+    const html = `<!DOCTYPE html>
+<html lang="es"><head>
+<meta charset="UTF-8">
+<title>QR Inventario — ${insumos.length} insumos</title>
+<style>${estilos}</style>
+</head><body>
+${paginasHTML}
+<script>window.onload = () => { setTimeout(() => window.print(), 400); }<\/script>
+</body></html>`;
+
+    const w = window.open('', '_blank');
+    if (!w) { alert('Permitir ventanas emergentes para imprimir.'); return; }
+    w.document.write(html);
+    w.document.close();
 }
 
 // ══════════════════════════════════════════════════════════════════
