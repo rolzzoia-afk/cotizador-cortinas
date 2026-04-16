@@ -230,6 +230,12 @@
             color: var(--text-primary);
         }
         tbody tr:hover { background: rgba(99,102,241,0.06); }
+        tbody tr.fila-seleccionada {
+            background: rgba(124,117,240,0.18) !important;
+            outline: 1px solid rgba(124,117,240,0.45);
+            outline-offset: -1px;
+        }
+        tbody tr.fila-seleccionada td { color: #fff; }
 
         /* ── TAGS ── */
         .tag {
@@ -1807,6 +1813,15 @@ function exportarInventarioExcel() {
     XLSX.writeFile(wb, `inventario_${fecha}.xlsx`);
 }
 
+function seleccionarFila(tr) {
+    const yaSeleccionada = tr.classList.contains('fila-seleccionada');
+    // Quitar selección anterior
+    document.querySelectorAll('#tbodyCatalogo tr.fila-seleccionada')
+        .forEach(r => r.classList.remove('fila-seleccionada'));
+    // Si no estaba seleccionada, seleccionar
+    if (!yaSeleccionada) tr.classList.add('fila-seleccionada');
+}
+
 function filtrarCatalogo() {
     let datos = [...INV.insumos];
     const busq = (document.getElementById('buscarProducto').value || '').toUpperCase();
@@ -1851,7 +1866,7 @@ function filtrarCatalogo() {
 
         const costoTotal = (i.costo || 0) * st;
         const fmtNum = v => v ? Number(v).toLocaleString('es-CL', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '-';
-        return `<tr>
+        return `<tr onclick="seleccionarFila(this)"
             <td style="text-align:center; padding:4px 8px;">${renderFotoCell(i.foto_url)}</td>
             <td><strong>${i.cod || ''}</strong></td>
             <td style="white-space:nowrap;">${i.nemotecnico || i.descriptor_proveedor || '-'}</td>
