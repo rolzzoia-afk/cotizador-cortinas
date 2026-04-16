@@ -15,6 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
     <style>
         :root {
             --bg-primary:    #0A0A0B;
@@ -949,10 +950,10 @@
             <button class="btn-inv btn-success-inv" onclick="exportarInventarioExcel()" title="Descargar inventario completo en Excel">
                 <i class="bi bi-download"></i> Descargar Excel
             </button>
-            <button class="btn-inv" onclick="imprimirTodosQR()"
+            <button class="btn-inv" id="btnQRWord" onclick="descargarQRWord()"
                 style="background:rgba(96,165,250,0.12); border:1px solid rgba(96,165,250,0.35); color:#60a5fa; gap:6px;"
-                title="Imprimir QR de todos los insumos (6 por hoja)">
-                <i class="bi bi-printer"></i> Imprimir todos los QR
+                title="Descargar Word con todos los QR (6 por hoja, listo para imprimir)">
+                <i class="bi bi-file-earmark-word"></i> Descargar QR en Word
             </button>
             <button class="btn-inv" id="btnModoCompletar" onclick="toggleModoCompletar()"
                 style="background:rgba(251,191,36,0.12); border:1px solid rgba(251,191,36,0.35); color:#fbbf24; gap:6px;">
@@ -3207,157 +3208,182 @@ function imprimirQRInsumo() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// IMPRIMIR TODOS LOS QR — 2 columnas × 3 filas (6 por hoja)
+// DESCARGAR TODOS LOS QR EN WORD — 2 columnas × 3 filas (6 por hoja)
 // ══════════════════════════════════════════════════════════════════
-async function imprimirTodosQR() {
+async function descargarQRWord() {
+    const btn = document.getElementById('btnQRWord');
     const insumos = (INV.insumos || []).filter(i => i.cod);
-    if (!insumos.length) {
-        alert('No hay insumos cargados todavía.');
-        return;
-    }
+    if (!insumos.length) { alert('No hay insumos cargados todavía.'); return; }
+    if (typeof docx === 'undefined') { alert('La librería Word no está lista. Recargá la página.'); return; }
 
-    // ── Generar una imagen QR base64 para cada insumo ─────────────
-    // Usamos un canvas oculto temporal para renderizar cada QR
-    const imgs = await Promise.all(insumos.map(ins => new Promise(resolve => {
-        const tmp = document.createElement('div');
-        tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;visibility:hidden;';
-        document.body.appendChild(tmp);
-        try {
-            const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
-            new QRCode(tmp, {
-                text: `INS:${codQR}`,
-                width: 200, height: 200,
-                colorDark: '#000000', colorLight: '#ffffff',
-                correctLevel: QRCode.CorrectLevel.M
-            });
-            setTimeout(() => {
-                const canvas = tmp.querySelector('canvas');
-                const src = canvas ? canvas.toDataURL('image/png') : '';
+    // ── Estado del botón ──────────────────────────────────────────
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando…'; }
+
+    try {
+        const { Document, Packer, Paragraph, Table, TableRow, TableCell,
+                ImageRun, TextRun, AlignmentType, WidthType, BorderStyle,
+                VerticalAlign, ShadingType } = docx;
+
+        // ── 1. Generar QR PNG (ArrayBuffer) para cada insumo ─────
+        const items = await Promise.all(insumos.map(ins => new Promise(resolve => {
+            const tmp = document.createElement('div');
+            tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
+            document.body.appendChild(tmp);
+            try {
+                const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
+                new QRCode(tmp, {
+                    text: `INS:${codQR}`,
+                    width: 220, height: 220,
+                    colorDark: '#000000', colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+                setTimeout(() => {
+                    const canvas = tmp.querySelector('canvas');
+                    let buffer = null;
+                    if (canvas) {
+                        const b64 = canvas.toDataURL('image/png').split(',')[1];
+                        const bin = atob(b64);
+                        const bytes = new Uint8Array(bin.length);
+                        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                        buffer = bytes.buffer;
+                    }
+                    document.body.removeChild(tmp);
+                    resolve({ ins, buffer });
+                }, 90);
+            } catch(e) {
                 document.body.removeChild(tmp);
-                resolve({ ins, src });
-            }, 80);
-        } catch(e) {
-            document.body.removeChild(tmp);
-            resolve({ ins, src: '' });
-        }
-    })));
+                resolve({ ins, buffer: null });
+            }
+        })));
 
-    // ── Construir HTML de impresión ───────────────────────────────
-    const estilos = `
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Arial, sans-serif; background: #fff; }
+        // ── 2. Helper: construir una celda de etiqueta ────────────
+        // A4: 11906 DXA ancho. Márgenes 850 DXA c/u → contenido 10206 DXA.
+        // 2 columnas iguales: 5100 DXA c/u (total tabla 10200 DXA).
+        const COL_W   = 5100;   // DXA por columna
+        const IMG_PX  = 165;    // píxeles para el QR en el .docx (~4.4cm a 96dpi)
+        const borde   = { style: BorderStyle.SINGLE, size: 6, color: '1a1a1a' };
+        const sinBord = { style: BorderStyle.NONE,   size: 0, color: 'FFFFFF' };
 
-        /* 2 columnas × 3 filas = 6 por hoja */
-        .pagina {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 14mm 12mm;
-            page-break-after: always;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: repeat(3, 1fr);
-            gap: 10mm 12mm;
-            align-items: stretch;
-        }
-        .pagina:last-child { page-break-after: avoid; }
+        const celdaEtiqueta = ({ ins, buffer }) => {
+            const nemo   = (ins.nemotecnico || ins.descriptor_proveedor || ins.cod).slice(0, 60);
+            const codQR  = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
+            const hijos  = [];
 
-        .etiqueta {
-            border: 1.5px solid #1a1a1a;
-            border-radius: 8px;
-            padding: 12px 14px 10px;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0;
-            page-break-inside: avoid;
-        }
-        .chip {
-            display: inline-block;
-            background: #f1f5f9;
-            color: #475569;
-            font-size: 7px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            padding: 2px 8px;
-            border-radius: 20px;
-            border: 1px solid #e2e8f0;
-            margin-bottom: 8px;
-        }
-        .etiqueta img {
-            width: 170px;
-            height: 170px;
-            display: block;
-            margin-bottom: 8px;
-        }
-        .sep {
-            width: 100%;
-            border: none;
-            border-top: 1px dashed #e2e8f0;
-            margin: 6px 0;
-        }
-        .nombre {
-            font-size: 10.5px;
-            font-weight: 700;
-            color: #1e293b;
-            line-height: 1.35;
-            margin-bottom: 3px;
-            word-break: break-word;
-        }
-        .codigo {
-            font-size: 9.5px;
-            color: #475569;
-            font-family: 'Courier New', monospace;
-            font-weight: 600;
-            margin-bottom: 2px;
-        }
-        .qr-txt {
-            font-size: 7.5px;
-            color: #94a3b8;
-            font-family: 'Courier New', monospace;
-        }
-        @media print {
-            @page { size: A4; margin: 0; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
-    `;
+            // Chip tipo
+            hijos.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 50 },
+                children: [new TextRun({ text: 'CONTENEDOR / CAJA', size: 13,
+                    font: 'Arial', color: '64748B', bold: true })]
+            }));
 
-    const POR_HOJA = 6;
-    let paginasHTML = '';
-    for (let i = 0; i < imgs.length; i += POR_HOJA) {
-        const lote = imgs.slice(i, i + POR_HOJA);
-        const etiquetasHTML = lote.map(({ ins, src }) => {
-            const nemo = ins.nemotecnico || ins.descriptor_proveedor || ins.cod;
-            const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
-            return `
-            <div class="etiqueta">
-                <div class="chip">📦 Contenedor / Caja</div>
-                ${src ? `<img src="${src}" alt="QR ${ins.cod}">` : `<div style="width:170px;height:170px;background:#f8f8f8;border:1px dashed #ccc;margin-bottom:8px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999;">Sin QR</div>`}
-                <hr class="sep">
-                <div class="nombre">${nemo}</div>
-                <div class="codigo">${ins.cod}</div>
-                <div class="qr-txt">INS:${codQR}</div>
-            </div>`;
-        }).join('');
-        paginasHTML += `<div class="pagina">${etiquetasHTML}</div>`;
+            // Imagen QR
+            hijos.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 30, after: 80 },
+                children: buffer ? [new ImageRun({
+                    type: 'png', data: buffer,
+                    transformation: { width: IMG_PX, height: IMG_PX },
+                    altText: { title: ins.cod, description: `QR INS:${ins.cod}`, name: ins.cod }
+                })] : [new TextRun({ text: '[QR no disponible]', size: 16, color: '999999' })]
+            }));
+
+            // Línea separadora (borde inferior del párrafo)
+            hijos.push(new Paragraph({
+                spacing: { before: 0, after: 60 },
+                border: { bottom: { style: BorderStyle.DASHED, size: 4, color: 'e2e8f0', space: 1 } },
+                children: []
+            }));
+
+            // Nombre
+            hijos.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 30 },
+                children: [new TextRun({ text: nemo, bold: true, size: 20, font: 'Arial', color: '1e293b' })]
+            }));
+
+            // Código
+            hijos.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 20 },
+                children: [new TextRun({ text: ins.cod, size: 18, font: 'Courier New', color: '334155' })]
+            }));
+
+            // Contenido QR
+            hijos.push(new Paragraph({
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 0, after: 0 },
+                children: [new TextRun({ text: `INS:${codQR}`, size: 14, font: 'Courier New', color: '94A3B8' })]
+            }));
+
+            return new TableCell({
+                width: { size: COL_W, type: WidthType.DXA },
+                borders: { top: borde, bottom: borde, left: borde, right: borde },
+                verticalAlign: VerticalAlign.CENTER,
+                margins: { top: 120, bottom: 120, left: 160, right: 160 },
+                children: hijos
+            });
+        };
+
+        // Celda vacía para completar fila impar
+        const celdaVacia = () => new TableCell({
+            width: { size: COL_W, type: WidthType.DXA },
+            borders: { top: sinBord, bottom: sinBord, left: sinBord, right: sinBord },
+            children: [new Paragraph({ children: [] })]
+        });
+
+        // ── 3. Armar secciones (1 sección = 1 página = tabla 2×3) ─
+        const POR_HOJA = 6;
+        const secciones = [];
+
+        for (let i = 0; i < items.length; i += POR_HOJA) {
+            const lote = items.slice(i, i + POR_HOJA);
+
+            // Rellenar hasta múltiplo de 2
+            const filas = [];
+            for (let r = 0; r < lote.length; r += 2) {
+                filas.push(new TableRow({
+                    children: [
+                        celdaEtiqueta(lote[r]),
+                        lote[r + 1] ? celdaEtiqueta(lote[r + 1]) : celdaVacia()
+                    ]
+                }));
+            }
+
+            const tabla = new Table({
+                width: { size: COL_W * 2, type: WidthType.DXA },
+                columnWidths: [COL_W, COL_W],
+                rows: filas
+            });
+
+            secciones.push({
+                properties: {
+                    page: {
+                        size: { width: 11906, height: 16838 },        // A4
+                        margin: { top: 850, right: 853, bottom: 850, left: 853 }  // ~15mm
+                    }
+                },
+                children: [tabla]
+            });
+        }
+
+        // ── 4. Crear documento y descargar ────────────────────────
+        const doc = new Document({ sections: secciones });
+        const blob = await Packer.toBlob(doc);
+        const url  = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const fecha = new Date().toLocaleDateString('es-CL').replace(/\//g, '-');
+        link.href = url;
+        link.download = `QR_Inventario_${fecha}.docx`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+
+    } catch(err) {
+        console.error('[descargarQRWord]', err);
+        alert(`Error al generar el Word: ${err.message}`);
+    } finally {
+        if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-file-earmark-word"></i> Descargar QR en Word'; }
     }
-
-    const html = `<!DOCTYPE html>
-<html lang="es"><head>
-<meta charset="UTF-8">
-<title>QR Inventario — ${insumos.length} insumos</title>
-<style>${estilos}</style>
-</head><body>
-${paginasHTML}
-<script>window.onload = () => { setTimeout(() => window.print(), 400); }<\/script>
-</body></html>`;
-
-    const w = window.open('', '_blank');
-    if (!w) { alert('Permitir ventanas emergentes para imprimir.'); return; }
-    w.document.write(html);
-    w.document.close();
 }
 
 // ══════════════════════════════════════════════════════════════════
