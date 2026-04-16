@@ -319,14 +319,43 @@ async function buscarTubo() {
     cont.innerHTML = html;
 }
 
+// Chip de fuente para eventos de ingreso
+const FUENTE_CFG = {
+    excel:             { label:'Carga Excel',        icon:'bi-file-earmark-excel', color:'#4ade80', bg:'rgba(74,222,128,0.12)' },
+    optimizador_nuevo: { label:'Tubo nuevo (opt.)',  icon:'bi-stars',              color:'#60a5fa', bg:'rgba(96,165,250,0.12)' },
+    retroactivo:       { label:'Registro retroactivo',icon:'bi-clock-history',     color:'#fbbf24', bg:'rgba(251,191,36,0.12)' },
+    manual:            { label:'Ingreso manual',     icon:'bi-pencil-square',      color:'#a78bfa', bg:'rgba(167,139,250,0.12)' },
+};
+
 function renderEventoTL(e) {
     const ev       = EV[e.evento] || { color:'#a1a1aa', bg:'rgba(161,161,170,0.15)', icon:'bi-circle', label:e.evento };
     const fecha    = e.created_at
-        ? new Date(e.created_at).toLocaleString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+        ? new Date(e.created_at).toLocaleString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
         : '—';
     const medida   = e.medida_cm != null ? `${Number(e.medida_cm).toFixed(1)} cm` : '—';
     const resultado= e.medida_resultado_cm != null ? `→ ${Number(e.medida_resultado_cm).toFixed(1)} cm` : '';
     const esRest   = ev.esRestauracion === true;
+
+    // Chip de fuente: solo en eventos de ingreso
+    let chipFuente = '';
+    if (e.evento === 'ingreso' && e.fuente) {
+        const fc = FUENTE_CFG[e.fuente] || { label: e.fuente, icon:'bi-question-circle', color:'#a1a1aa', bg:'rgba(161,161,170,0.15)' };
+        chipFuente = `<span style="display:inline-flex;align-items:center;gap:4px;
+            background:${fc.bg};color:${fc.color};
+            font-size:0.67rem;font-weight:600;padding:2px 7px;border-radius:6px;
+            border:1px solid ${fc.color}33;margin-left:4px;">
+            <i class="bi ${fc.icon}" style="font-size:0.65rem;"></i>${fc.label}
+        </span>`;
+    }
+    // Ingreso sin fuente (datos anteriores a esta versión) → chip genérico
+    else if (e.evento === 'ingreso' && !e.fuente) {
+        chipFuente = `<span style="display:inline-flex;align-items:center;gap:4px;
+            background:rgba(251,191,36,0.12);color:#fbbf24;
+            font-size:0.67rem;font-weight:600;padding:2px 7px;border-radius:6px;
+            border:1px solid rgba(251,191,36,0.2);margin-left:4px;">
+            <i class="bi bi-question-circle" style="font-size:0.65rem;"></i>Origen desconocido
+        </span>`;
+    }
 
     // Fila con estilo especial para eventos de restauración
     const rowStyle = esRest
@@ -353,6 +382,7 @@ function renderEventoTL(e) {
             <div class="tl-evento">
                 <span class="ev-chip" style="background:${ev.bg};color:${ev.color};">${ev.label}</span>
                 ${esRest ? '' : `&nbsp;<span style="font-weight:400;color:var(--text-secondary);font-size:0.78rem;">${medida} ${resultado}</span>`}
+                ${chipFuente}
             </div>
             ${e.ot ? `<div class="tl-detail">OT: <strong>${e.ot}</strong> · Colmena: ${e.n_colmena || '—'}</div>` : (e.n_colmena ? `<div class="tl-detail">Colmena: ${e.n_colmena}</div>` : '')}
             ${e.notas ? `<div class="tl-notas" style="${esRest ? 'color:#e879f9;font-style:normal;font-size:0.72rem;' : ''}">${e.notas}</div>` : ''}

@@ -1575,6 +1575,7 @@ async function guardarColmenaEnSupabaseDirecto() {
 
                     if (tubosInsertados && tubosInsertados.length > 0) {
                         const tsIngreso = new Date(Date.now() - 1000).toISOString(); // 1s antes para orden correcto
+                        const fechaLegible = new Date().toLocaleDateString('es-CL', { day:'2-digit', month:'2-digit', year:'numeric' });
                         const eventosIngreso = tubosInsertados.map(t => ({
                             empresa_id:          EMPRESA_ID_OPT,
                             tubo_raiz_id:        t.tubo_raiz_id || null,
@@ -1583,7 +1584,8 @@ async function guardarColmenaEnSupabaseDirecto() {
                             medida_cm:           t.medida_cm,
                             medida_resultado_cm: t.medida_cm,
                             evento:              'ingreso',
-                            notas:               `Carga masiva desde Excel — ${tubosInsertados.length} tubos cargados por ${usuario}`,
+                            fuente:              'excel',
+                            notas:               `Carga desde Excel el ${fechaLegible} — lote de ${tubosInsertados.length} tubos · ${usuario}`,
                             registrado_por:      usuario,
                             created_at:          tsIngreso
                         }));
@@ -4871,11 +4873,16 @@ async function logEventosTubos() {
             ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
 
         // Guardar datos para detección de primer uso
+        // fuente: 'optimizador_nuevo' si fue propuesto como tubo nuevo/reemplazo,
+        //         'retroactivo' si ya existía en colmena antes del historial.
         if (tubo_raiz_id && !raizADatos[tubo_raiz_id]) {
+            const esNuevo = (res.fuente === 'tubo_nuevo' || res.fuente === 'reemplazo');
             raizADatos[tubo_raiz_id] = {
                 n_colmena: res.colmena,
                 cod:       res.codigo,
-                medida_cm: res.medida_origen || res.medida_cm
+                medida_cm: res.medida_origen || res.medida_cm,
+                fuente:    esNuevo ? 'optimizador_nuevo' : 'retroactivo',
+                ot:        ot
             };
         }
 
@@ -4964,6 +4971,7 @@ async function logEventosTubos() {
         raizIds.forEach(raizId => {
             if (conHistorial.has(raizId)) return; // ya tiene historial → no agregar ingreso
             const d = raizADatos[raizId];
+            const esNuevo = d.fuente === 'optimizador_nuevo';
             eventosIngreso.push({
                 empresa_id:          EMPRESA_ID_OPT,
                 tubo_raiz_id:        raizId,
@@ -4972,8 +4980,11 @@ async function logEventosTubos() {
                 medida_cm:           d.medida_cm,
                 medida_resultado_cm: d.medida_cm,
                 evento:              'ingreso',
-                ot:                  null,
-                notas:               `Tubo de ${d.medida_cm}cm en colmena ${d.n_colmena} — primer uso registrado`,
+                fuente:              d.fuente || 'retroactivo',
+                ot:                  esNuevo ? (d.ot || null) : null,
+                notas:               esNuevo
+                    ? `Tubo nuevo propuesto por el optimizador para OT ${d.ot} — ingresó directamente al corte.`
+                    : `Registro retroactivo — el tubo ya estaba en colmena antes de implementarse el historial. Fecha de ingreso original desconocida.`,
                 registrado_por:      usuario,
                 created_at:          tsIngreso  // 3s antes del corte → aparece primero en timeline
             });
