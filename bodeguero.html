@@ -1120,10 +1120,11 @@ function extraerInsumosBOM(ot) {
             }
 
             // ── Motor ──
-            const motTipo = p.motorTipo || '';
+            const motTipo  = p.motorTipo  || '';
+            const motColor = p.motorColor || p.color || '';
             if (motTipo && motTipo !== '') {
                 add(`MOT|${motTipo}`, 'MOTOR',
-                    'Motor', motTipo, mecColor, 1, 'unid.');
+                    'Motor', motTipo, motColor, 1, 'unid.');
                 if (p.motorControlAdic)
                     add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
                 if (p.motorHubUsb)
