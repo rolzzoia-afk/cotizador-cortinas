@@ -333,8 +333,27 @@
             transition:all .3s;
         }
         .toast.show { transform:translateY(0); opacity:1; }
-        .toast.ok { border-color:rgba(34,197,94,0.4); }
-        .toast.err { border-color:rgba(239,68,68,0.4); }
+        .toast.ok    { border-color:rgba(34,197,94,0.4);  background:rgba(34,197,94,0.08); }
+        .toast.local { border-color:rgba(245,158,11,0.5); background:rgba(245,158,11,0.08); }
+        .toast.err   { border-color:rgba(239,68,68,0.4);  background:rgba(239,68,68,0.08); }
+
+        /* ── LOADING OVERLAY ── */
+        #loading-overlay {
+            position:fixed; inset:0; z-index:500;
+            background:var(--bg);
+            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+            transition:opacity .4s;
+        }
+        #loading-overlay.oculto { opacity:0; pointer-events:none; }
+        .spinner {
+            width:36px; height:36px;
+            border:3px solid rgba(99,102,241,0.2);
+            border-top-color:var(--accent);
+            border-radius:50%;
+            animation:spin .7s linear infinite;
+        }
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .loading-txt { font-size:13px; color:var(--muted); }
 
         /* ── RESPONSIVE ── */
         @media(max-width:600px) {
@@ -347,6 +366,12 @@
 </head>
 <body>
 
+<!-- LOADING OVERLAY -->
+<div id="loading-overlay">
+    <div class="spinner"></div>
+    <div class="loading-txt">Cargando datos...</div>
+</div>
+
 <!-- TOPBAR -->
 <div class="topbar">
     <div class="topbar-left">
@@ -358,6 +383,12 @@
         </div>
     </div>
     <div class="topbar-right">
+        <div id="ultima-actualizacion" style="font-size:11px; color:var(--muted); display:none; text-align:right; line-height:1.4;">
+            <div style="display:flex; align-items:center; gap:4px;">
+                <i class="bi bi-cloud-check" style="color:var(--green);"></i>
+                <span id="ua-texto">—</span>
+            </div>
+        </div>
         <button class="btn-config" onclick="abrirConfig()">
             <i class="bi bi-gear-fill"></i> Configurar
         </button>
@@ -453,6 +484,9 @@
             <div class="cierre-stat">
                 <div class="lbl">Cotizaciones cerradas</div>
                 <input class="input-big" type="number" id="cierre-cerradas" min="0" value="0" oninput="recalcularCierre()">
+                <div id="cierre-error" style="font-size:11px; color:var(--red); margin-top:4px; display:none;">
+                    <i class="bi bi-exclamation-circle-fill"></i> No puede superar las enviadas
+                </div>
             </div>
             <div class="cierre-full">
                 <div style="text-align:center;">
@@ -614,9 +648,19 @@ function hoyISO() {
 
 function toast(msg, tipo = 'ok') {
     const el = document.getElementById('toast');
-    el.textContent = (tipo === 'ok' ? '✓ ' : '⚠ ') + msg;
+    const icon = tipo === 'ok' ? '<i class="bi bi-cloud-check-fill"></i>'
+               : tipo === 'local' ? '<i class="bi bi-exclamation-triangle-fill"></i>'
+               : '<i class="bi bi-x-circle-fill"></i>';
+    el.innerHTML = icon + ' ' + msg;
     el.className = 'toast ' + tipo + ' show';
-    setTimeout(() => el.className = 'toast', 3000);
+    setTimeout(() => el.className = 'toast', 4000);
+}
+
+function actualizarTimestampGuardado() {
+    const ahora = new Date();
+    const hora = ahora.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+    document.getElementById('ua-texto').textContent = 'Guardado hoy ' + hora;
+    document.getElementById('ultima-actualizacion').style.display = 'block';
 }
 
 function iniciales(nombre) {
@@ -637,6 +681,9 @@ window.addEventListener('DOMContentLoaded', async () => {
     await cargarConfig();
     await cargarDiaActivo();
     renderizarTodo();
+    const overlay = document.getElementById('loading-overlay');
+    overlay.classList.add('oculto');
+    setTimeout(() => overlay.style.display = 'none', 450);
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -743,22 +790,25 @@ async function guardarTodo() {
     });
 
     // Guardar en Supabase (o fallback localStorage)
-    let ok = false;
+    let guardadoEnNube = false;
     try {
         const { error } = await sb.from('kpi_registros')
             .upsert(registros, { onConflict: 'empresa_id,fecha,clave' });
         if (error) throw error;
-        ok = true;
+        guardadoEnNube = true;
     } catch(e) {
         const map = {};
         registros.forEach(r => { map[r.clave] = r.valor; });
         localStorage.setItem('kpi_' + _fechaActiva, JSON.stringify(map));
-        ok = true;
     }
 
     btn.disabled = false;
-    if (ok) toast('Datos guardados correctamente');
-    else toast('Error al guardar', 'err');
+    if (guardadoEnNube) {
+        toast('Guardado en la nube', 'ok');
+        actualizarTimestampGuardado();
+    } else {
+        toast('Sin conexión — guardado localmente', 'local');
+    }
 }
 
 function slugify(str) {
@@ -867,7 +917,12 @@ function renderLlamadas() {
         totalLlamadas += ll;
         const pctCot = totalCanales > 0 ? Math.round(cot / totalCanales * 100) : 0;
         let badgeClass = pctCot >= 70 ? 'badge-green' : pctCot >= 40 ? 'badge-yellow' : 'badge-red';
-        let badgeTxt = cot > 0 ? `${pctCot}% de cotizaciones` : 'Sin cotizaciones aún';
+        const badgeIcon = cot > 0
+            ? (pctCot >= 70 ? 'bi-check-circle-fill' : pctCot >= 40 ? 'bi-arrow-up-circle-fill' : 'bi-exclamation-circle-fill')
+            : 'bi-hourglass-split';
+        let badgeTxt = cot > 0
+            ? `<i class="bi ${badgeIcon}"></i> ${pctCot}% de cotizaciones`
+            : `<i class="bi ${badgeIcon}"></i> Sin cotizaciones aún`;
         return `<div class="vendedor-card">
             <div class="vendedor-header">
                 <div class="vendedor-avatar">${iniciales(v)}</div>
@@ -914,11 +969,17 @@ function actualizarTotalLlamadas() {
         if (badge) {
             const pctCot   = totalCanales > 0 ? Math.round(cot / totalCanales * 100) : (cot > 0 ? 100 : 0);
             const badgeCls = pctCot >= 70 ? 'badge-green' : pctCot >= 40 ? 'badge-yellow' : 'badge-red';
-            const badgeTxt = cot > 0
-                ? `${pctCot}% de cotizaciones (${cot}/${totalCanales || cot})`
-                : ll > 0 ? '0 cotizaciones asignadas' : 'Sin datos aún';
+            let badgeHtml;
+            if (cot > 0) {
+                const icon = pctCot >= 70 ? 'bi-check-circle-fill' : pctCot >= 40 ? 'bi-arrow-up-circle-fill' : 'bi-exclamation-circle-fill';
+                badgeHtml = `<i class="bi ${icon}"></i> ${pctCot}% de cotizaciones (${cot}/${totalCanales || cot})`;
+            } else if (ll > 0) {
+                badgeHtml = '<i class="bi bi-dash-circle"></i> 0 cotizaciones asignadas';
+            } else {
+                badgeHtml = '<i class="bi bi-hourglass-split"></i> Sin datos aún';
+            }
             badge.className  = 'vendedor-badge ' + badgeCls;
-            badge.textContent = badgeTxt;
+            badge.innerHTML  = badgeHtml;
         }
     });
 
@@ -975,48 +1036,66 @@ function renderCierre() {
 }
 
 function recalcularCierre() {
-    const env = Number(document.getElementById('cierre-enviadas').value) || 0;
-    const cer = Number(document.getElementById('cierre-cerradas').value) || 0;
+    const envInput = document.getElementById('cierre-enviadas');
+    const cerInput = document.getElementById('cierre-cerradas');
+    const errorEl  = document.getElementById('cierre-error');
+
+    let env = Math.max(0, Number(envInput.value) || 0);
+    let cer = Math.max(0, Number(cerInput.value) || 0);
+
+    // Corregir negativos silenciosamente
+    if (Number(envInput.value) < 0) envInput.value = 0;
+    if (Number(cerInput.value) < 0) cerInput.value = 0;
+
+    // Validar cerradas ≤ enviadas
+    const hayError = cer > env && env > 0;
+    errorEl.style.display = hayError ? 'block' : 'none';
+    cerInput.style.borderColor = hayError ? 'var(--red)' : '';
+    if (hayError) cer = env; // usar máximo válido para el cálculo
 
     const pctReal = env > 0 ? Math.round(cer / env * 100) : 0;
     const pendientes = Math.max(0, env - cer);
 
     document.getElementById('gaugePct').textContent = env > 0 ? pctReal + '%' : '—';
-    document.getElementById('gaugePct').style.color = colorPct(pctReal, 50);
+    document.getElementById('gaugePct').style.color = env > 0 ? colorPct(pctReal, 50) : 'var(--muted)';
     document.getElementById('meta-cierre-display').textContent = env > 0 ? pctReal + '%' : '—';
     document.getElementById('cierre-faltante').textContent = env > 0 ? pendientes : '—';
 
-    dibujarGauge(pctReal, 50);
+    dibujarGauge(pctReal, env);
 }
 
-function dibujarGauge(pct, meta) {
+function dibujarGauge(pct, env) {
     const canvas = document.getElementById('gaugeCanvas');
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, 160, 160);
     const cx = 80, cy = 80, r = 64;
     const start = Math.PI, end = 2 * Math.PI;
 
-    // Fondo
+    // Sin datos: arco punteado gris neutro
+    if (env === 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, start, end);
+        ctx.lineWidth = 16;
+        ctx.setLineDash([6, 6]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+        ctx.stroke();
+        ctx.setLineDash([]);
+        return;
+    }
+
+    // Fondo sólido
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, end);
     ctx.lineWidth = 16;
     ctx.strokeStyle = 'rgba(255,255,255,0.07)';
     ctx.stroke();
 
-    // Meta (línea gris claro)
-    const metaAngle = start + (meta / 100) * Math.PI;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, start, metaAngle);
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 16;
-    ctx.stroke();
-
-    // Real
+    // Real (rellena según % real)
     const realAngle = start + Math.min(pct / 100, 1) * Math.PI;
     ctx.beginPath();
     ctx.arc(cx, cy, r, start, realAngle);
     ctx.lineWidth = 16;
-    ctx.strokeStyle = colorPct(pct, meta);
+    ctx.strokeStyle = colorPct(pct, 50);
     ctx.stroke();
 }
 
@@ -1061,8 +1140,13 @@ function renderTerreno() {
                 <span class="pct-pill ${pctClass}" id="pct-${slugify(d.nombre)}">${d.pct}%</span>
             </td>
             <td style="text-align:center;">
-                ${d.total === 0 ? '<span style="color:var(--muted);font-size:12px;">Sin datos</span>'
-                    : d.pct >= 60 ? '🔥 Excelente' : d.pct >= 30 ? '📈 En progreso' : '⚠️ Bajo rendimiento'}
+                ${d.total === 0
+                    ? '<span style="color:var(--muted);font-size:12px;"><i class="bi bi-dash-circle"></i> Sin datos</span>'
+                    : d.pct >= 60
+                        ? '<span style="color:var(--green);font-size:12px;font-weight:600;"><i class="bi bi-check-circle-fill"></i> Excelente</span>'
+                        : d.pct >= 30
+                            ? '<span style="color:var(--yellow);font-size:12px;font-weight:600;"><i class="bi bi-arrow-up-circle-fill"></i> En progreso</span>'
+                            : '<span style="color:var(--red);font-size:12px;font-weight:600;"><i class="bi bi-exclamation-circle-fill"></i> Bajo</span>'}
             </td>
         </tr>`;
     }).join('');
