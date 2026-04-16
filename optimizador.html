@@ -4108,7 +4108,7 @@ async function ejecutarOptimizacion() {
                             } else {
                                 const idxInsertar = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === tuboReemplazo.colmena.n_colmena && c.cod === tuboReemplazo.colmena.cod && c.medida_mm === tuboReemplazo.colmena.medida_mm);
                                 if (idxInsertar !== -1) {
-                                    SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, { n_colmena: _nColmFallbackR, medida_cm: sobrante / 10, medida_mm: sobrante, cod: tuboReemplazo.colmena.cod, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: _nColmFallbackR, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null });
+                                    SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, { n_colmena: _nColmFallbackR, medida_cm: sobrante / 10, medida_mm: sobrante, cod: tuboReemplazo.colmena.cod, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: _nColmFallbackR, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null });
                                 }
                                 SistemaInventario.colmenasDisponibles.splice(tuboReemplazo.indice, 1);
                                 SistemaInventario.colmenasDisponibles.push({
@@ -4223,16 +4223,17 @@ async function ejecutarOptimizacion() {
                 const infoSerial = serialDisponible ? 
                     ` (Serial: ${serialDisponible.lote}-${serialDisponible.paquete}-${serialDisponible.serial})` : '';
                 
-                SistemaInventario.colmenasHistorico.push({ 
-                    n_colmena: posicionNueva, 
+                SistemaInventario.colmenasHistorico.push({
+                    n_colmena: posicionNueva,
                     medida_cm: medidaNuevoCm,
                     medida_mm: medidaNuevoMm,
-                    cod: codigoTuboNuevo, 
-                    codigo_original: codOrden, 
-                    estado: 'usada', 
-                    origen: `Orden ${orden.id} (Tubo nuevo)${infoSerial}`, 
+                    cod: codigoTuboNuevo,
+                    codigo_original: codOrden,
+                    estado: 'usada',
+                    origen: `Orden ${orden.id} (Tubo nuevo)${infoSerial}`,
                     posicionOriginal: posicionNueva,
-                    serial: serialDisponible || null
+                    serial: serialDisponible || null,
+                    tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null
                 });
                 
                 const clasificacion = evaluarSobrante(sobranteNuevo);
@@ -4264,7 +4265,8 @@ async function ejecutarOptimizacion() {
                                 origen: `Sobrante tubo nuevo orden ${orden.id}${infoSerial}`,
                                 posicionOriginal: colmenaExistente.n_colmena,
                                 serial: serialDisponible || null,
-                                fecha: serialDisponible ? serialDisponible.fecha : null
+                                fecha: serialDisponible ? serialDisponible.fecha : null,
+                                tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null
                             });
                         }
                         SistemaInventario.colmenasDisponibles.push({
@@ -4285,7 +4287,8 @@ async function ejecutarOptimizacion() {
                             origen: `Sobrante tubo nuevo orden ${orden.id}${infoSerial}`,
                             posicionOriginal: _posicionSobrante,
                             serial: serialDisponible || null,
-                            fecha: serialDisponible ? serialDisponible.fecha : null
+                            fecha: serialDisponible ? serialDisponible.fecha : null,
+                            tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null
                         });
                         SistemaInventario.colmenasDisponibles.push({
                             n_colmena: _posicionSobrante,
@@ -5065,10 +5068,16 @@ async function verificarIntegridadPreGuardado() {
     if (!usados.length) return { ok: true };
 
     // 1. Detectar tubos duplicados en el mismo plan
+    // Cada fragmento físico tiene su propio tubo_raiz_id (UUID).
+    // Si el mismo UUID aparece dos veces en usados → mismo tubo asignado a dos órdenes.
+    // Fallback cuando tubo_raiz_id es null: n_colmena + cod + medida_mm
+    // (distingue el tubo original de su sobrante aunque compartan el mismo slot).
     const vistosEnPlan = {};
     const duplicados = [];
     usados.forEach(c => {
-        const key = `${c.n_colmena}__${normalizarCodigo(c.cod)}`;
+        const key = c.tubo_raiz_id
+            ? `raiz__${c.tubo_raiz_id}`
+            : `${c.n_colmena}__${normalizarCodigo(c.cod)}__${c.medida_mm}`;
         if (vistosEnPlan[key]) {
             duplicados.push({ n_colmena: c.n_colmena, cod: c.cod });
         } else {
