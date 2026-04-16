@@ -1406,16 +1406,34 @@ const INV = {
 // ── HELPERS DE FOTO ─────────────────────────────────────────────────────────
 function esFotoDirecta(url) {
     if (!url) return false;
-    return /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url);
+    // Imagen directa: extensión conocida O URL de Supabase Storage
+    return /\.(jpg|jpeg|png|gif|webp|svg)(\?.*)?$/i.test(url) ||
+           url.includes('/storage/v1/object/public/');
 }
 function renderFotoCell(url) {
     if (!url) return '<span style="color:var(--text-muted);font-size:0.75rem;">—</span>';
+    const urlSafe = url.replace(/'/g, "\\'").replace(/"/g, '&quot;');
     if (esFotoDirecta(url)) {
         return `<img class="foto-thumb" src="${url}" alt="foto"
-            onclick="abrirLightbox('${url.replace(/'/g,"\\'")}')">`;
+            onclick="abrirLightbox('${urlSafe}')"
+            onerror="this.replaceWith(crearLinkFoto('${urlSafe}'))"
+            title="Ver foto">`;
     }
+    return crearLinkFotoHTML(url);
+}
+function crearLinkFotoHTML(url) {
     return `<a class="foto-link-icon" href="${url}" target="_blank" title="Ver en web">
         <i class="bi bi-box-arrow-up-right"></i></a>`;
+}
+// Llamado desde onerror (el img falló) → reemplazar por ícono de link
+function crearLinkFoto(url) {
+    const a = document.createElement('a');
+    a.className = 'foto-link-icon';
+    a.href = url;
+    a.target = '_blank';
+    a.title = 'Imagen no disponible — abrir link';
+    a.innerHTML = '<i class="bi bi-image" style="color:var(--warning); opacity:0.7;"></i>';
+    return a;
 }
 function abrirLightbox(url) {
     document.getElementById('fotoLightboxImg').src = url;
