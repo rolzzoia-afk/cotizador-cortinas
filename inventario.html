@@ -15,7 +15,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-    <script src="https://unpkg.com/docx@8.5.0/build/index.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         :root {
             --bg-primary:    #0A0A0B;
@@ -3209,167 +3209,194 @@ function imprimirQRInsumo() {
 
 // ══════════════════════════════════════════════════════════════════
 // DESCARGAR TODOS LOS QR EN WORD — 2 columnas × 3 filas (6 por hoja)
+// Usa JSZip + XML directo (sin dependencias de Node.js)
 // ══════════════════════════════════════════════════════════════════
 async function descargarQRWord() {
     const btn = document.getElementById('btnQRWord');
     const insumos = (INV.insumos || []).filter(i => i.cod);
     if (!insumos.length) { alert('No hay insumos cargados todavía.'); return; }
-    if (typeof docx === 'undefined') { alert('La librería Word no está lista. Recargá la página.'); return; }
+    if (typeof JSZip === 'undefined') { alert('Librería no disponible. Recargá la página.'); return; }
 
-    // ── Estado del botón ──────────────────────────────────────────
     if (btn) { btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Generando…'; }
 
     try {
-        const { Document, Packer, Paragraph, Table, TableRow, TableCell,
-                ImageRun, TextRun, AlignmentType, WidthType, BorderStyle,
-                VerticalAlign, ShadingType } = docx;
-
-        // ── 1. Generar QR PNG (ArrayBuffer) para cada insumo ─────
-        const items = await Promise.all(insumos.map(ins => new Promise(resolve => {
+        // ── 1. Generar QR como PNG base64 para cada insumo ───────
+        const items = await Promise.all(insumos.map((ins, idx) => new Promise(resolve => {
             const tmp = document.createElement('div');
             tmp.style.cssText = 'position:fixed;left:-9999px;top:-9999px;';
             document.body.appendChild(tmp);
-            try {
-                const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
-                new QRCode(tmp, {
-                    text: `INS:${codQR}`,
-                    width: 220, height: 220,
-                    colorDark: '#000000', colorLight: '#ffffff',
-                    correctLevel: QRCode.CorrectLevel.M
-                });
-                setTimeout(() => {
-                    const canvas = tmp.querySelector('canvas');
-                    let buffer = null;
-                    if (canvas) {
-                        const b64 = canvas.toDataURL('image/png').split(',')[1];
-                        const bin = atob(b64);
-                        const bytes = new Uint8Array(bin.length);
-                        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-                        buffer = bytes.buffer;
-                    }
-                    document.body.removeChild(tmp);
-                    resolve({ ins, buffer });
-                }, 90);
-            } catch(e) {
+            const codQR = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
+            new QRCode(tmp, { text: `INS:${codQR}`, width: 220, height: 220,
+                colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.M });
+            setTimeout(() => {
+                const canvas = tmp.querySelector('canvas');
+                const b64 = canvas ? canvas.toDataURL('image/png').split(',')[1] : '';
                 document.body.removeChild(tmp);
-                resolve({ ins, buffer: null });
-            }
+                resolve({ ins, b64, n: idx + 1 }); // n = relId para la imagen
+            }, 90);
         })));
 
-        // ── 2. Helper: construir una celda de etiqueta ────────────
-        // A4: 11906 DXA ancho. Márgenes 850 DXA c/u → contenido 10206 DXA.
-        // 2 columnas iguales: 5100 DXA c/u (total tabla 10200 DXA).
-        const COL_W   = 5100;   // DXA por columna
-        const IMG_PX  = 165;    // píxeles para el QR en el .docx (~4.4cm a 96dpi)
-        const borde   = { style: BorderStyle.SINGLE, size: 6, color: '1a1a1a' };
-        const sinBord = { style: BorderStyle.NONE,   size: 0, color: 'FFFFFF' };
+        // ── 2. Helpers XML ────────────────────────────────────────
+        const esc = s => String(s)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
-        const celdaEtiqueta = ({ ins, buffer }) => {
-            const nemo   = (ins.nemotecnico || ins.descriptor_proveedor || ins.cod).slice(0, 60);
-            const codQR  = (ins.cod || '').replace(/[^\x20-\x7E]/g, '').trim();
-            const hijos  = [];
+        // Dimensiones: A4=11906 DXA, márgenes 850 c/u → contenido 10206 → 2 cols de 5100 c/u
+        const COL = 5100;
+        // Imagen: ~4.3cm = 1.69 pulgadas = 1.69 × 914400 EMU ≈ 1,545,000 EMU
+        const EMU = 1545000;
 
-            // Chip tipo
-            hijos.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 0, after: 50 },
-                children: [new TextRun({ text: 'CONTENEDOR / CAJA', size: 13,
-                    font: 'Arial', color: '64748B', bold: true })]
-            }));
+        const xmlImg = (n) =>
+`<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="40" w:after="80"/></w:pPr><w:r>
+<w:drawing><wp:inline>
+<wp:extent cx="${EMU}" cy="${EMU}"/>
+<wp:docPr id="${n}" name="img${n}"/>
+<a:graphic>
+<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+<pic:pic>
+<pic:nvPicPr><pic:cNvPr id="${n}" name="img${n}"/><pic:cNvPicPr/></pic:nvPicPr>
+<pic:blipFill><a:blip r:embed="rId${n}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+<pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${EMU}" cy="${EMU}"/></a:xfrm>
+<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+</pic:pic></a:graphicData></a:graphic>
+</wp:inline></w:drawing></w:r></w:p>`;
 
-            // Imagen QR
-            hijos.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 30, after: 80 },
-                children: buffer ? [new ImageRun({
-                    type: 'png', data: buffer,
-                    transformation: { width: IMG_PX, height: IMG_PX },
-                    altText: { title: ins.cod, description: `QR INS:${ins.cod}`, name: ins.cod }
-                })] : [new TextRun({ text: '[QR no disponible]', size: 16, color: '999999' })]
-            }));
+        const BORD = `<w:top w:val="single" w:sz="6" w:space="0" w:color="1a1a1a"/>
+<w:left w:val="single" w:sz="6" w:space="0" w:color="1a1a1a"/>
+<w:bottom w:val="single" w:sz="6" w:space="0" w:color="1a1a1a"/>
+<w:right w:val="single" w:sz="6" w:space="0" w:color="1a1a1a"/>`;
+        const NOBORD = `<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>`;
 
-            // Línea separadora (borde inferior del párrafo)
-            hijos.push(new Paragraph({
-                spacing: { before: 0, after: 60 },
-                border: { bottom: { style: BorderStyle.DASHED, size: 4, color: 'e2e8f0', space: 1 } },
-                children: []
-            }));
+        const xmlCelda = (item) => {
+            if (!item) return `<w:tc><w:tcPr>
+<w:tcW w:w="${COL}" w:type="dxa"/>
+<w:tcBorders>${NOBORD}</w:tcBorders></w:tcPr><w:p/></w:tc>`;
 
-            // Nombre
-            hijos.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 0, after: 30 },
-                children: [new TextRun({ text: nemo, bold: true, size: 20, font: 'Arial', color: '1e293b' })]
-            }));
+            const { ins, b64, n } = item;
+            const nemo  = esc((ins.nemotecnico || ins.descriptor_proveedor || ins.cod).slice(0,60));
+            const cod   = esc(ins.cod);
+            const codQR = esc((ins.cod || '').replace(/[^\x20-\x7E]/g,'').trim());
 
-            // Código
-            hijos.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 0, after: 20 },
-                children: [new TextRun({ text: ins.cod, size: 18, font: 'Courier New', color: '334155' })]
-            }));
-
-            // Contenido QR
-            hijos.push(new Paragraph({
-                alignment: AlignmentType.CENTER,
-                spacing: { before: 0, after: 0 },
-                children: [new TextRun({ text: `INS:${codQR}`, size: 14, font: 'Courier New', color: '94A3B8' })]
-            }));
-
-            return new TableCell({
-                width: { size: COL_W, type: WidthType.DXA },
-                borders: { top: borde, bottom: borde, left: borde, right: borde },
-                verticalAlign: VerticalAlign.CENTER,
-                margins: { top: 120, bottom: 120, left: 160, right: 160 },
-                children: hijos
-            });
+            return `<w:tc><w:tcPr>
+<w:tcW w:w="${COL}" w:type="dxa"/>
+<w:tcBorders>${BORD}</w:tcBorders>
+<w:tcMar>
+  <w:top w:w="120" w:type="dxa"/><w:left w:w="160" w:type="dxa"/>
+  <w:bottom w:w="120" w:type="dxa"/><w:right w:w="160" w:type="dxa"/>
+</w:tcMar>
+<w:vAlign w:val="center"/>
+</w:tcPr>
+<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="50"/></w:pPr>
+<w:r><w:rPr><w:b/><w:sz w:val="13"/><w:color w:val="64748B"/></w:rPr>
+<w:t>CONTENEDOR / CAJA</w:t></w:r></w:p>
+${b64 ? xmlImg(n) : `<w:p><w:pPr><w:jc w:val="center"/></w:pPr>
+<w:r><w:t>[QR no disponible]</w:t></w:r></w:p>`}
+<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="30"/>
+<w:pBdr><w:top w:val="dashed" w:sz="4" w:space="1" w:color="CBD5E1"/></w:pBdr></w:pPr></w:p>
+<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="30"/></w:pPr>
+<w:r><w:rPr><w:b/><w:sz w:val="20"/><w:color w:val="1E293B"/></w:rPr>
+<w:t xml:space="preserve">${nemo}</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="20"/></w:pPr>
+<w:r><w:rPr><w:sz w:val="18"/><w:color w:val="334155"/></w:rPr>
+<w:t>${cod}</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr>
+<w:r><w:rPr><w:sz w:val="14"/><w:color w:val="94A3B8"/></w:rPr>
+<w:t>INS:${codQR}</w:t></w:r></w:p>
+</w:tc>`;
         };
 
-        // Celda vacía para completar fila impar
-        const celdaVacia = () => new TableCell({
-            width: { size: COL_W, type: WidthType.DXA },
-            borders: { top: sinBord, bottom: sinBord, left: sinBord, right: sinBord },
-            children: [new Paragraph({ children: [] })]
-        });
-
-        // ── 3. Armar secciones (1 sección = 1 página = tabla 2×3) ─
-        const POR_HOJA = 6;
-        const secciones = [];
-
-        for (let i = 0; i < items.length; i += POR_HOJA) {
-            const lote = items.slice(i, i + POR_HOJA);
-
-            // Rellenar hasta múltiplo de 2
-            const filas = [];
+        const xmlTabla = (lote) => {
+            let filas = '';
             for (let r = 0; r < lote.length; r += 2) {
-                filas.push(new TableRow({
-                    children: [
-                        celdaEtiqueta(lote[r]),
-                        lote[r + 1] ? celdaEtiqueta(lote[r + 1]) : celdaVacia()
-                    ]
-                }));
+                filas += `<w:tr>
+${xmlCelda(lote[r])}
+${xmlCelda(lote[r+1] || null)}
+</w:tr>`;
             }
+            return `<w:tbl>
+<w:tblPr>
+<w:tblW w:w="${COL*2}" w:type="dxa"/>
+<w:tblBorders>
+<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+<w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
+</w:tblBorders>
+</w:tblPr>
+<w:tblGrid><w:gridCol w:w="${COL}"/><w:gridCol w:w="${COL}"/></w:tblGrid>
+${filas}</w:tbl>`;
+        };
 
-            const tabla = new Table({
-                width: { size: COL_W * 2, type: WidthType.DXA },
-                columnWidths: [COL_W, COL_W],
-                rows: filas
-            });
-
-            secciones.push({
-                properties: {
-                    page: {
-                        size: { width: 11906, height: 16838 },        // A4
-                        margin: { top: 850, right: 853, bottom: 850, left: 853 }  // ~15mm
-                    }
-                },
-                children: [tabla]
-            });
+        // ── 3. Armar cuerpo del documento ─────────────────────────
+        const POR_HOJA = 6;
+        let cuerpo = '';
+        for (let i = 0; i < items.length; i += POR_HOJA) {
+            if (i > 0) cuerpo += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>\n`;
+            cuerpo += xmlTabla(items.slice(i, i + POR_HOJA)) + '\n';
         }
 
-        // ── 4. Crear documento y descargar ────────────────────────
-        const doc = new Document({ sections: secciones });
-        const blob = await Packer.toBlob(doc);
+        // ── 4. document.xml ───────────────────────────────────────
+        const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document
+  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+  xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+  xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+<w:body>
+${cuerpo}
+<w:p/>
+<w:sectPr>
+  <w:pgSz w:w="11906" w:h="16838"/>
+  <w:pgMar w:top="850" w:right="853" w:bottom="850" w:left="853"/>
+</w:sectPr>
+</w:body></w:document>`;
+
+        // ── 5. Relationships ──────────────────────────────────────
+        const rels = items
+            .filter(it => it.b64)
+            .map(it => `<Relationship Id="rId${it.n}" `+
+                `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" `+
+                `Target="media/image${it.n}.png"/>`)
+            .join('\n');
+
+        const relsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${rels}
+</Relationships>`;
+
+        // ── 6. [Content_Types].xml ────────────────────────────────
+        const ctXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml"  ContentType="application/xml"/>
+<Default Extension="png"  ContentType="image/png"/>
+<Override PartName="/word/document.xml"
+  ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`;
+
+        // ── 7. _rels/.rels ────────────────────────────────────────
+        const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1"
+  Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
+  Target="word/document.xml"/>
+</Relationships>`;
+
+        // ── 8. Ensamblar ZIP y descargar ──────────────────────────
+        const zip = new JSZip();
+        zip.file('[Content_Types].xml', ctXml);
+        zip.file('_rels/.rels', rootRels);
+        zip.file('word/document.xml', docXml);
+        zip.file('word/_rels/document.xml.rels', relsXml);
+        items.forEach(({ b64, n }) => {
+            if (b64) zip.file(`word/media/image${n}.png`, b64, { base64: true });
+        });
+
+        const blob = await zip.generateAsync({
+            type: 'blob',
+            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        });
         const url  = URL.createObjectURL(blob);
         const link = document.createElement('a');
         const fecha = new Date().toLocaleDateString('es-CL').replace(/\//g, '-');
