@@ -918,6 +918,24 @@ async function abrirOT(otId) {
     // Anteponer telas al BOM (al principio, antes de insumos)
     _bomItems = [...telaItems, ..._bomItems];
 
+    // ── Completar insumos faltantes desde panos (cadena, mecanismo, peso, cenefa, manillas, motor) ──
+    // Si el BOM no tiene alguna de estas categorías, se extraen directamente de los panos guardados.
+    // Esto cubre OTs antiguas, OTs sin Fase 4 completa, y el caso donde dg.bom estaba vacío.
+    const categoriasYaEnBOM = new Set(_bomItems.map(b => (b.categoria || '').toUpperCase()));
+    const categoriasCriticas = ['CADENA','MECANISMO','CENEFA','MANILLA','MOTOR'];
+    const faltanCategorias = categoriasCriticas.some(c => !categoriasYaEnBOM.has(c));
+
+    if (faltanCategorias || _bomItems.filter(b => !b._es_tela).length === 0) {
+        const insumoPanos = extraerInsumosBOM(_otActual);
+        // Solo agregar las categorías que no estén ya en el BOM
+        const insumosFiltrados = insumoPanos.filter(i => !categoriasYaEnBOM.has((i.categoria||'').toUpperCase()));
+        if (insumosFiltrados.length > 0) {
+            _bomItems = [..._bomItems, ...insumosFiltrados];
+            console.log(`[BOM] Agregados ${insumosFiltrados.length} insumo(s) extraídos de panos:`,
+                insumosFiltrados.map(i => i.descripcion));
+        }
+    }
+
     // Inicializar contadores
     _contadores = {};
     _bomItems.forEach((item, idx) => {
@@ -1005,6 +1023,176 @@ function extraerTelasBOM(ot) {
             _ubicacion_rack:   ubic          // para mostrar en la tarjeta
         };
     });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXTRAER INSUMOS DEL BOM — cadena, mecanismo, peso, cenefa, manillas, motor
+// Lee directamente desde los panos guardados en ot.items
+// ══════════════════════════════════════════════════════════════════
+function extraerInsumosBOM(ot) {
+    const acc = new Map(); // clave → item BOM
+
+    function add(key, cat, desc, spec, color, qty, unit, ubicacion) {
+        if (acc.has(key)) {
+            acc.get(key).cantidad_req += qty;
+        } else {
+            acc.set(key, {
+                id:                 `PANO|${key}`,
+                categoria:          cat,
+                descripcion:        desc,
+                especificacion:     spec || '',
+                color:              color || '',
+                cantidad_req:       qty,
+                unidad:             unit,
+                cantidad_despachada:0,
+                estado:             'pendiente',
+                _extraido_panos:    true,
+                _ubicacion_rack:    ubicacion || ''
+            });
+        }
+    }
+
+    // Helper: buscar ubicación rack para un código de insumo
+    function buscarUbicacionRack(cod) {
+        if (!cod || !_ubicacionesRack || !_ubicacionesRack.length) return null;
+        const codUp = cod.toUpperCase();
+        const rack = _ubicacionesRack.find(r => (r.codigo_insumo||'').toUpperCase() === codUp);
+        if (rack) return rackToDisplayLabel(rack.rack, rack.fila, rack.columna);
+        return null;
+    }
+
+    // Fuente 1: optimizerRows (más completo, incluye tubería calculada)
+    const dg   = ot.datos_generales || {};
+    const rows = dg.optimizerRows   || [];
+
+    if (rows.length) {
+        rows.forEach(row => {
+            const p = row.pano || {};
+
+            // ── Cadena ──
+            const cadLargo = p.largoCadena || '';
+            const cadColor = p.colorCadena || 'BCO';
+            if (cadLargo && cadLargo !== '') {
+                add(`CAD|${cadLargo}|${cadColor}`, 'CADENA',
+                    `Cadena ${cadLargo}`, cadLargo, cadColor, 1, 'unid.');
+                // Peso de cadena (siempre va con la cadena)
+                const pesoColor = p.colorPeso || cadColor;
+                add(`PESO|${pesoColor}`, 'CADENA',
+                    'Peso de cadena', '', pesoColor, 1, 'unid.');
+            }
+
+            // ── Mecanismo ──
+            // p.mecanismo = 'LZ50 SFLX BCO [MEC 14]' → extraer código entre corchetes
+            const mec    = p.mecanismo || '';
+            const mecCod = (mec.match(/\[([^\]]+)\]/)?.[1] || '').replace(/\s+/g, '').toUpperCase(); // → 'MEC14'
+            if (mec) {
+                // Buscar en catálogo de insumos para obtener nombre real y ubicación
+                const insRec = mecCod ? _insumos.find(i => (i.cod||'').toUpperCase() === mecCod) : null;
+                const mecDesc    = insRec ? (insRec.nemotecnico || insRec.descriptor_proveedor || mec) : mec;
+                const mecUbicacion = insRec ? (insRec.ubicacion || '') : '';
+                const mecRackLoc = mecCod ? buscarUbicacionRack(mecCod) : null;
+                add(`MEC|${mecCod||mec}`, 'MECANISMO',
+                    mecDesc,
+                    mecCod ? `[${mecCod}]` : mec,
+                    '',
+                    1, 'unid.',
+                    mecRackLoc || mecUbicacion
+                );
+            }
+
+            // ── Cenefa ──
+            const cenefa   = p.cenefa || '';
+            const cenColor = p.color  || '';
+            if (cenefa && cenefa !== 'No' && cenefa !== '') {
+                add(`CEN|${cenefa}|${cenColor}`, 'CENEFA',
+                    `Cenefa ${cenefa}`, cenefa, cenColor, 1, 'unid.');
+                // Tapas de cenefa (2 por cortina)
+                const tapColor = p.colorTapa || cenColor;
+                add(`TAPA|${cenefa}|${tapColor}`, 'CENEFA',
+                    `Tapa cenefa ${cenefa}`, cenefa, tapColor, 2, 'unid.');
+            }
+
+            // ── Manillas ──
+            const manCant  = parseInt(p.manillaCant) || 0;
+            const manColor = p.manillaColor || '';
+            if (manCant > 0) {
+                add(`MAN|${manColor}`, 'MANILLA',
+                    'Manilla', '', manColor, manCant, 'unid.');
+            }
+
+            // ── Motor ──
+            const motTipo = p.motorTipo || '';
+            if (motTipo && motTipo !== '') {
+                add(`MOT|${motTipo}`, 'MOTOR',
+                    'Motor', motTipo, mecColor, 1, 'unid.');
+                if (p.motorControlAdic)
+                    add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
+                if (p.motorHubUsb)
+                    add('MOT-HUB', 'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
+            }
+        });
+        return [...acc.values()];
+    }
+
+    // Fuente 2: items directos (OTs sin optimizerRows — Fase 4 no completada)
+    const ventanas = ot.items || [];
+    ventanas.forEach(v => {
+        const panos = Array.isArray(v.panos) && v.panos.length ? v.panos : [v];
+        panos.forEach(p => {
+            const cadLargo = p.largoCadena || '';
+            const cadColor = p.colorCadena || 'BCO';
+            if (cadLargo && cadLargo !== '') {
+                add(`CAD|${cadLargo}|${cadColor}`, 'CADENA',
+                    `Cadena ${cadLargo}`, cadLargo, cadColor, 1, 'unid.');
+                const pesoColor = p.colorPeso || cadColor;
+                add(`PESO|${pesoColor}`, 'CADENA',
+                    'Peso de cadena', '', pesoColor, 1, 'unid.');
+            }
+
+            // Mecanismo — extraer código de corchetes: 'LZ50 SFLX BCO [MEC 14]' → 'MEC14'
+            const mec2    = p.mecanismo || '';
+            const mecCod2 = (mec2.match(/\[([^\]]+)\]/)?.[1] || '').replace(/\s+/g, '').toUpperCase();
+            if (mec2) {
+                const insRec2   = mecCod2 ? _insumos.find(i => (i.cod||'').toUpperCase() === mecCod2) : null;
+                const mecDesc2  = insRec2 ? (insRec2.nemotecnico || mec2) : mec2;
+                const mecRack2  = mecCod2 ? buscarUbicacionRack(mecCod2) : null;
+                const mecUbic2  = insRec2 ? (insRec2.ubicacion || '') : '';
+                add(`MEC|${mecCod2||mec2}`, 'MECANISMO',
+                    mecDesc2, mecCod2 ? `[${mecCod2}]` : mec2, '', 1, 'unid.',
+                    mecRack2 || mecUbic2);
+            }
+
+            const cenefa   = p.cenefa || '';
+            const cenColor = p.color  || '';
+            if (cenefa && cenefa !== 'No' && cenefa !== '') {
+                add(`CEN|${cenefa}|${cenColor}`, 'CENEFA',
+                    `Cenefa ${cenefa}`, cenefa, cenColor, 1, 'unid.');
+                const tapColor = p.colorTapa || cenColor;
+                add(`TAPA|${cenefa}|${tapColor}`, 'CENEFA',
+                    `Tapa cenefa ${cenefa}`, cenefa, tapColor, 2, 'unid.');
+            }
+
+            const manCant  = parseInt(p.manillaCant) || 0;
+            const manColor = p.manillaColor || '';
+            if (manCant > 0) {
+                add(`MAN|${manColor}`, 'MANILLA',
+                    'Manilla', '', manColor, manCant, 'unid.');
+            }
+
+            const motTipo  = p.motorTipo || '';
+            const mecColor = p.colorMecanismo || 'BCO';
+            if (motTipo && motTipo !== '') {
+                add(`MOT|${motTipo}`, 'MOTOR',
+                    'Motor', motTipo, mecColor, 1, 'unid.');
+                if (p.motorControlAdic)
+                    add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
+                if (p.motorHubUsb)
+                    add('MOT-HUB', 'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
+            }
+        });
+    });
+
+    return [...acc.values()];
 }
 
 // ══════════════════════════════════════════════════════════════════
