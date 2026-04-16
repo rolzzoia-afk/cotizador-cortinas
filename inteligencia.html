@@ -1121,7 +1121,7 @@ function generarDiagnostico() {
     const salidas = _movs.filter(m => ['salida','despacho'].includes((m.tipo||'').toLowerCase()));
     const consumoMap = {};
     for (const m of salidas) {
-        const k = (m.insumo_cod || m.insumo_desc || '?').trim();
+        const k = (m.codigo || m.producto || '?').trim();
         consumoMap[k] = (consumoMap[k] || 0) + (Number(m.cantidad) || 0);
     }
     const topCons = Object.entries(consumoMap)
@@ -1142,7 +1142,7 @@ function generarDiagnostico() {
     }
 
     // Insumos sin movimiento pero con stock
-    const codConMov = new Set(_movs.map(m => (m.insumo_cod||'').trim().toUpperCase()));
+    const codConMov = new Set(_movs.map(m => (m.codigo||'').trim().toUpperCase()));
     const sinMov = _insumos.filter(i =>
         Number(i.stock_total) > 0 &&
         !codConMov.has((i.cod||'').toUpperCase())
@@ -1182,7 +1182,7 @@ function generarDiagnostico() {
     if (otsSinItems.length > 0) problemas.push(`${otsSinItems.length} OT(s) activa(s) sin ventanas/items cargados`);
 
     // Movimientos sin cod de insumo
-    const movsSinCod = _movs.filter(m => !m.insumo_cod && !m.insumo_desc);
+    const movsSinCod = _movs.filter(m => !m.codigo && !m.producto);
     if (movsSinCod.length > 0) problemas.push(`${movsSinCod.length} movimiento(s) sin código ni descripción de insumo`);
 
     // Racks con cod que no existe en insumos
@@ -1222,7 +1222,7 @@ function generarDiagnostico() {
     lineas.push('  · ots (id, estado, datos_generales jsonb, items jsonb[], total, fecha_*)');
     lineas.push('  · insumos (cod, nemotecnico, stock_mp, stock_liberado, minimo, categoria, sub_categoria, ubicacion, proveedor, producto, costo)');
     lineas.push('  · ubicaciones_rack (rack, fila, columna, codigo_insumo, almacen)');
-    lineas.push('  · movimientos_insumos (tipo, cantidad, insumo_cod, insumo_desc, ot_id, fecha)');
+    lineas.push('  · movimientos_insumos (tipo, cantidad, codigo, producto, ot, almacen, responsable_entrega, fecha)');
     lineas.push('  · configuracion (clave, valor, empresa_id)');
     lineas.push('  · presencia (dispositivo, nombre, modulo, ultima_actividad)');
     lineas.push('');
@@ -1361,7 +1361,7 @@ async function cargarTodo() {
               .eq('empresa_id', EMPRESA_ID),
 
             sb.from('movimientos_insumos')
-              .select('id,tipo,cantidad,fecha,insumo_cod,insumo_desc,ot_id,observaciones')
+              .select('id,tipo,cantidad,fecha,codigo,producto,ot,almacen,responsable_entrega,observaciones')
               .eq('empresa_id', EMPRESA_ID)
               .gte('fecha', hoy)
               .order('fecha', { ascending: false })
@@ -1514,9 +1514,9 @@ function renderCrossAlerts() {
 
             // Buscar en los movimientos del mes — si esta OT usó este insumo
             const movsOT = _movs.filter(m => {
-                const mc = (m.insumo_cod || '').toUpperCase().trim();
-                const md = (m.insumo_desc || '').toUpperCase().trim();
-                const otM = String(m.ot_id || '');
+                const mc = (m.codigo || '').toUpperCase().trim();
+                const md = (m.producto || '').toUpperCase().trim();
+                const otM = String(m.ot || '');
                 return otM === String(ot.id) && (mc === codIns || md.includes(descIns.substring(0, 10)));
             });
 
@@ -1678,8 +1678,8 @@ function renderConsumo() {
     // Agrupar por insumo
     const mapa = {};
     for (const m of salidas) {
-        const key  = (m.insumo_cod || '').trim() || (m.insumo_desc || '?').trim();
-        const desc = (m.insumo_desc || m.insumo_cod || '?').trim();
+        const key  = (m.codigo || '').trim() || (m.producto || '?').trim();
+        const desc = (m.producto || m.codigo || '?').trim();
         if (!mapa[key]) mapa[key] = { desc, cantidad: 0, movs: 0 };
         mapa[key].cantidad += Number(m.cantidad) || 0;
         mapa[key].movs++;
@@ -1774,7 +1774,7 @@ function renderRestock() {
     // Mapa de consumo por cod
     const consumoMap = {};
     for (const m of salidas) {
-        const key = (m.insumo_cod || '').trim();
+        const key = (m.codigo || '').trim();
         if (!key) continue;
         if (!consumoMap[key]) consumoMap[key] = 0;
         consumoMap[key] += Number(m.cantidad) || 0;
@@ -1868,20 +1868,43 @@ function renderActivity() {
 
     let html = '';
     for (const m of recientes) {
-        const tipo = (m.tipo || '').toLowerCase();
-        const iconCls = tipo === 'entrada' ? 'entrada' : tipo === 'salida' || tipo === 'despacho' ? 'salida' : tipo === 'ajuste' ? 'ajuste' : 'otro';
-        const iconChar = tipo === 'entrada' ? '+' : tipo === 'salida' || tipo === 'despacho' ? '−' : tipo === 'ajuste' ? '≈' : '·';
-        const desc = m.insumo_desc || m.insumo_cod || 'Insumo sin nombre';
-        const cant = m.cantidad !== undefined ? `${tipo === 'salida' || tipo === 'despacho' ? '-' : '+'}${fmt(m.cantidad)}` : '—';
-        const otRef = m.ot_id ? ` · OT ${m.ot_id}` : '';
-        const obs = m.observaciones || '';
+        const tipoRaw = (m.tipo || '').trim();
+        const tipo    = tipoRaw.toLowerCase();
+        const esEntrada  = tipo === 'entrada' || tipoRaw === 'NUEVO INGRESO' || tipoRaw === 'DEVOLUCION';
+        const esSalida   = tipo === 'salida' || tipo === 'despacho' || tipoRaw === 'SALIDA PRODUCCION';
+        const esAjuste   = tipo === 'ajuste';
+
+        const iconCls  = esEntrada ? 'entrada' : esSalida ? 'salida' : esAjuste ? 'ajuste' : 'otro';
+        const iconChar = esEntrada ? '<i class="bi bi-box-arrow-in-down"></i>'
+                       : esSalida  ? '<i class="bi bi-box-arrow-up"></i>'
+                       : esAjuste  ? '<i class="bi bi-pencil"></i>'
+                       : '·';
+        const signo    = esEntrada ? '+' : esSalida ? '−' : '';
+
+        // Nombre: buscar en catálogo si no viene en el movimiento
+        const codInsumo = (m.codigo || '').trim();
+        const nomInsumo = (m.producto || '').trim();
+        const insRec = codInsumo ? _insumos.find(i => (i.cod||'').toUpperCase() === codInsumo.toUpperCase()) : null;
+        const nombreFinal = nomInsumo || insRec?.nemotecnico || '—';
+
+        // Línea principal: TIPO · COD — NOMBRE
+        const titulo = [tipoRaw || 'Movimiento', codInsumo && nombreFinal ? `${codInsumo} — ${nombreFinal}` : codInsumo || nombreFinal || 'Insumo sin nombre']
+            .filter(Boolean).join(': ');
+
+        // Detalle: cantidad · almacen · OT · responsable
+        const cantStr  = m.cantidad !== undefined ? `${signo}${fmt(m.cantidad)} uds.` : '';
+        const almacen  = m.almacen ? ` → ${m.almacen}` : '';
+        const otRef    = m.ot ? ` | OT ${m.ot}` : '';
+        const resp     = m.responsable_entrega ? ` | ${m.responsable_entrega}` : '';
+        const obs      = m.observaciones ? ` · ${m.observaciones}` : '';
+        const detalle  = `${cantStr}${almacen}${otRef}${resp}${obs}`;
 
         html += `<div class="feed-item">
             <span class="feed-time">${fmtFechaHora(m.fecha)}</span>
             <div class="feed-icon ${iconCls}">${iconChar}</div>
             <div class="feed-text">
-                <div class="feed-main">${escapeHtml(desc)} <span style="color:var(--text-muted);font-weight:400;">${cant}</span></div>
-                <div class="feed-sub">${escapeHtml(tipo.charAt(0).toUpperCase() + tipo.slice(1))}${otRef}${obs ? ' · ' + obs : ''}</div>
+                <div class="feed-main">${escapeHtml(titulo)}</div>
+                ${detalle ? `<div class="feed-sub">${escapeHtml(detalle)}</div>` : ''}
             </div>
         </div>`;
     }
@@ -1921,7 +1944,7 @@ function renderInsights() {
     }
 
     // 3. Insumos sin movimiento hace 30 días pero con stock
-    const codsConMovimiento = new Set(_movs.map(m => (m.insumo_cod||'').trim().toUpperCase()));
+    const codsConMovimiento = new Set(_movs.map(m => (m.codigo||'').trim().toUpperCase()));
     const insDetenidos = _insumos.filter(ins =>
         ins.stock_actual != null && Number(ins.stock_actual) > 0 &&
         !codsConMovimiento.has((ins.cod||'').toUpperCase())
@@ -1952,7 +1975,7 @@ function renderInsights() {
     const salidas = _movs.filter(m => (m.tipo||'').toLowerCase() === 'salida' || (m.tipo||'').toLowerCase() === 'despacho');
     const consumoMap = {};
     for (const m of salidas) {
-        const k = (m.insumo_cod||'').trim().toUpperCase();
+        const k = (m.codigo||'').trim().toUpperCase();
         if (!k) continue;
         consumoMap[k] = (consumoMap[k] || 0) + (Number(m.cantidad) || 0);
     }
@@ -2024,7 +2047,7 @@ function renderStockGeneral() {
     const salidas = _movs.filter(m => (m.tipo||'').toLowerCase() === 'salida' || (m.tipo||'').toLowerCase() === 'despacho');
     const consumoMap = {};
     for (const m of salidas) {
-        const k = (m.insumo_cod||'').trim().toUpperCase();
+        const k = (m.codigo||'').trim().toUpperCase();
         if (!k) continue;
         consumoMap[k] = (consumoMap[k] || 0) + (Number(m.cantidad) || 0);
     }
