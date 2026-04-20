@@ -3926,7 +3926,10 @@ async function ejecutarOptimizacion() {
         // Incluir serial y tubo_raiz_id para trazabilidad completa del linaje
         const _raizCargada = col.tubo_raiz_id || null;
         const _raizFresh   = !_raizCargada; // UUID generado localmente: el tubo no tenía UUID en Supabase
-        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: _raizCargada || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null), _raizFresh });
+        // _esOriginal: marca entradas cargadas al inicio (existen en BD). Las entradas
+        // creadas durante la optimización (sobrantes, tubos nuevos) NO tienen este flag
+        // y por lo tanto no se verifican contra la BD en verificarIntegridadPreGuardado.
+        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: _raizCargada || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null), _raizFresh, _esOriginal: true });
     });
 
     log('=== INICIO OPTIMIZACIÓN ===', 'info');
@@ -5189,13 +5192,12 @@ async function verificarIntegridadPreGuardado() {
         if (!c.tubo_raiz_id) return;
         if (c._raizFresh) return; // UUID asignado localmente (tubo sin UUID en Supabase): no verificar contra BD
 
-        // ── Detectar si la entrada es un sobrante/tubo nuevo/merma desechada ──
-        // Estos NO son tubos originales cargados desde la BD, sino entradas
-        // creadas o modificadas durante la optimización. No deben verificarse.
-        const origen = c.origen || '';
-        const esSobranteNuevo = origen.includes('Sobrante') || origen.includes('Tubo nuevo');
-        if (esSobranteNuevo) return;
+        // Solo verificar tubos que existían en la BD al inicio de la optimización.
+        // Sobrantes y tubos nuevos creados durante la optimización NO se verifican
+        // (sus UUIDs son locales y aún no están sincronizados con la BD).
+        if (!c._esOriginal) return;
 
+        const origen = c.origen || '';
         const esMermaDesechada = origen.includes('MERMA desechada') || (c.cod === '' && c.medida_cm === 0);
 
         const enDB = mapaActual[c.tubo_raiz_id];
