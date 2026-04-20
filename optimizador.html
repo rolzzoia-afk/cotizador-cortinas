@@ -1372,26 +1372,42 @@ function actualizarIndicadorFuente(esManual) {
     }
 }
 
-// Carga la colmena_final guardada en Supabase y la asigna a colmenaActual
+// Carga la colmena desde Supabase al iniciar sesión.
+// FUENTE DE VERDAD: tabla colmena_tubos (NO el snapshot opt_colmena_final_*,
+// que puede contener tubos fantasma de sesiones anteriores).
 async function cargarColmenaFinalDesdeSupabase() {
     if (!_currentUser || !_currentUser.email) return;
     try {
-        const claveColmena = `opt_colmena_final_${_currentUser.email}`;
-        const valorStr = await _supabaseLeer(claveColmena);
-        if (valorStr) {
-            const parsed = JSON.parse(valorStr);
-            const colmenas = Array.isArray(parsed) ? parsed : (parsed.data ? JSON.parse(parsed.data) : []);
-            if (colmenas.length > 0) {
-                colmenaActual = colmenas;
-                SistemaInventario.colmenas = colmenaActual;
-                actualizarTablaColmenas();
-                actualizarIndicadorFuente(false);
-                verificarListo();
-                document.getElementById('estadoColmenas').textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
-                document.getElementById('estadoColmenas').className = 'estado-archivo estado-ok';
-                console.log(`✅ Colmena final cargada desde Supabase: ${colmenaActual.length} registros`);
-                return;
+        // Leer directamente desde colmena_tubos (fuente autoritativa)
+        const { data, error } = await sbOpt.from('colmena_tubos')
+            .select('*')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .order('n_colmena')
+            .order('created_at');
+
+        if (!error && data && data.length > 0) {
+            const colmenas = data.map(t => ({
+                n_colmena:    t.n_colmena || '-',
+                medida_mm:    t.medida_mm || (t.medida_cm ? Math.round(t.medida_cm * 10) : 0),
+                medida_cm:    t.medida_cm || (t.medida_mm ? (t.medida_mm / 10) : 0),
+                cod:          (t.cod || '').toUpperCase().trim(),
+                serial:       t.serial || null,
+                tubo_raiz_id: t.tubo_raiz_id || null
+            })).filter(c => c.medida_mm > 0 && c.cod);
+
+            colmenaActual = colmenas;
+            SistemaInventario.colmenas = colmenaActual;
+            SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(colmenas));
+            actualizarTablaColmenas();
+            actualizarIndicadorFuente(false);
+            verificarListo();
+            const estadoEl = document.getElementById('estadoColmenas');
+            if (estadoEl) {
+                estadoEl.textContent = `✓ ${colmenaActual.length} colmenas (BD)`;
+                estadoEl.className = 'estado-archivo estado-ok';
             }
+            console.log(`✅ Colmena cargada desde colmena_tubos: ${colmenaActual.length} registros`);
+            return;
         }
         // Sin colmena_final: usar colmenas del inventario como fallback
         if (SistemaInventario.colmenas && SistemaInventario.colmenas.length > 0) {
