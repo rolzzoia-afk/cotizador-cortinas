@@ -3113,6 +3113,8 @@ const UMBRAL_LARGO_CM  = 300;               // > 300 cm → L01/L02/L03
 const UMBRAL_LARGO_MM  = UMBRAL_LARGO_CM * 10;
 const _SLOTS_LARGO     = ['L01', 'L02', 'L03'];
 const _SLOTS_LARGO_SET = new Set(_SLOTS_LARGO);
+const _SLOTS_PESO      = ['A27', 'A28', 'A29'];
+const _SLOTS_PESO_SET  = new Set(_SLOTS_PESO);
 
 function evaluarSobrante(sobrante) {
     if (sobrante < 0) return { estado: 'prohibido' };
