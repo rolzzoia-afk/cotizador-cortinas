@@ -1896,32 +1896,27 @@ async function cargarSerialesDesdeTablaDirecta() {
 // Esto asegura que cuando el optimizador guarda sus resultados,
 // la tabla colmena_tubos se actualice también (fuente única de verdad)
 async function sincronizarColmenaFinalConTabla(colmenasFinal) {
-    const loteSize = 500;
     const filas = colmenasFinal.map(c => ({
-        empresa_id:    EMPRESA_ID_OPT,
         n_colmena:     c.n_colmena || '-',
         cod:           (c.cod || '').toUpperCase().trim(),
         medida_cm:     typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
         medida_mm:     c.medida_mm || 0,
         serial:        c.serial || null,
-        tubo_raiz_id:  c.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null),  // linaje persistente (genera UUID si el snapshot era previo al fix)
+        tubo_raiz_id:  c.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null),
         agregado_por_admin: false
     }));
 
-    // Reintentar hasta 3 veces
-    // Usa _sbRest (fetch directo) para evitar el lock de auth entre sb e sbOpt
-    const BATCH = 100; // lotes pequeños para evitar payloads grandes
+    // Usa RPC sync_colmena_tubos: hace DELETE+INSERT en una transacción
+    // con app.sync_active=true para que el trigger NO registre "eliminado".
     for (let intento = 1; intento <= 3; intento++) {
         try {
-            // 1. Borrar tubos actuales de la empresa (REST DELETE con query param)
-            await _sbRest('DELETE', `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}`);
+            const { error } = await sbOpt.rpc('sync_colmena_tubos', {
+                p_empresa_id: EMPRESA_ID_OPT,
+                p_tubos:      filas
+            });
+            if (error) throw new Error(error.message || JSON.stringify(error));
 
-            // 2. Insertar los nuevos tubos en lotes
-            for (let i = 0; i < filas.length; i += BATCH) {
-                await _sbRest('POST', 'colmena_tubos', filas.slice(i, i + BATCH));
-            }
-
-            // 3. Verificar conteo real en BD
+            // Verificar conteo real en BD
             const conteoReal = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
             if (conteoReal !== null && conteoReal < filas.length) {
                 throw new Error(`Verificación falló: ${conteoReal}/${filas.length} tubos en BD`);
@@ -1932,7 +1927,6 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
             console.warn(`[colmena_tubos] Intento ${intento} falló: ${e.message}`);
             if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
             else {
-                // Lanzar el error para que el llamador sepa que la BD no se actualizó
                 throw new Error(`No se pudo actualizar inventario en Supabase (${e.message})`);
             }
         }
@@ -5097,6 +5091,14 @@ async function verificarIntegridadPreGuardado() {
     }
 
     // 2. Verificar contra Supabase: ¿los tubos siguen igual?
+    // Si la colmena ya fue pre-sincronizada (autoReservarPlan), los tubos consumidos
+    // fueron removidos de colmena_tubos por NUESTRO plan → no verificar contra BD
+    // (la verificación de duplicados internos del paso 1 ya corrió).
+    if (_colmenaPreSyncOK) {
+        log('✅ Colmena ya pre-sincronizada — verificación de integridad OK (tubos reservados por este plan).', 'info');
+        return { ok: true };
+    }
+
     const raizIds = usados.map(c => c.tubo_raiz_id).filter(Boolean);
     if (!raizIds.length) return { ok: true }; // sin raiz_id no podemos verificar
 
