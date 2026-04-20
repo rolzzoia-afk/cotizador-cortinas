@@ -4553,7 +4553,10 @@ async function ejecutarOptimizacion() {
     // este plan todavía no haya sido confirmado formalmente.
     _reservaActualId  = new Date().toISOString();
     _colmenaPreSyncOK = false;
-    autoReservarPlan(_reservaActualId);  // async no bloqueante — resultados en el log
+    // ❌ DESACTIVADO: autoReservarPlan sincronizaba sobrantes a colmena_tubos en cada
+    // vista previa, corrompiendo la BD si el usuario descartaba el plan.
+    // La sincronización ahora se hace SOLO cuando el usuario confirma.
+    // autoReservarPlan(_reservaActualId);
 
     // Actualizar alertas de stock (informativo, aún no guardado)
     verificarAlertasStock();
