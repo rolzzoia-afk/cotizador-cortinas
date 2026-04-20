@@ -5188,6 +5188,16 @@ async function verificarIntegridadPreGuardado() {
     usados.forEach(c => {
         if (!c.tubo_raiz_id) return;
         if (c._raizFresh) return; // UUID asignado localmente (tubo sin UUID en Supabase): no verificar contra BD
+
+        // ── Detectar si la entrada es un sobrante/tubo nuevo/merma desechada ──
+        // Estos NO son tubos originales cargados desde la BD, sino entradas
+        // creadas o modificadas durante la optimización. No deben verificarse.
+        const origen = c.origen || '';
+        const esSobranteNuevo = origen.includes('Sobrante') || origen.includes('Tubo nuevo');
+        if (esSobranteNuevo) return;
+
+        const esMermaDesechada = origen.includes('MERMA desechada') || (c.cod === '' && c.medida_cm === 0);
+
         const enDB = mapaActual[c.tubo_raiz_id];
 
         if (!enDB) {
@@ -5199,10 +5209,10 @@ async function verificarIntegridadPreGuardado() {
                 medidaCargada: c.medida_cm,
                 medidaActual:  null
             });
-        } else {
+        } else if (!esMermaDesechada) {
+            // Solo comparar medida si NO es merma desechada (que tiene medida_cm=0 por diseño)
             const diff = Math.abs((enDB.medida_cm || 0) - (c.medida_cm || 0));
             if (diff > 0.5) {
-                // El tubo tiene una medida diferente — fue cortado o editado
                 conflictos.push({
                     n_colmena:     c.n_colmena,
                     cod:           c.cod,
