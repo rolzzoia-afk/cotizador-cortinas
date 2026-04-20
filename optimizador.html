@@ -1109,7 +1109,16 @@ document.addEventListener("DOMContentLoaded", () => {
       serialesCargados = false;
       mostrarLogin();
     } else {
-      console.log("✅ Usuario logueado en Supabase:", user.email);
+      console.log("✅ Usuario logueado en Supabase:", user.email, 'evento:', event);
+
+      // ⚠️ CRÍTICO: solo cargar datos en el login inicial.
+      // TOKEN_REFRESHED y USER_UPDATED disparan este handler cada ~1h, y si
+      // recargamos desde Supabase sobrescribimos el resultado del plan en memoria
+      // (que no se persiste hasta que el usuario confirma). Eso dejaba el
+      // Excel vacío porque resultadosOptimizacion se reseteaba.
+      if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN') {
+          return;
+      }
 
       // Verificar versión mínima
       verificarVersionMinima();
