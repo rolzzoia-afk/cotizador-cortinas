@@ -1821,6 +1821,20 @@ async function cargarColmenasDesdeTabla() {
     const btn = document.getElementById('btnCargarColmenaDB');
     if (btn) { btn.disabled = true; btn.textContent = 'Cargando...'; }
     try {
+        // ── RESETEO COMPLETO: limpiar TODO estado residual antes de cargar fresh ──
+        // Esto previene que optimizaciones previas con tubos fantasma contaminen
+        // el próximo plan y sobrescriban la BD con datos corruptos.
+        SistemaInventario.colmenas           = [];
+        SistemaInventario.colmenasDisponibles = [];
+        SistemaInventario.colmenasHistorico   = [];
+        SistemaInventario.colmenaCruda        = [];
+        SistemaInventario.resultadosOptimizacion = [];
+        SistemaInventario.mermas              = [];
+        colmenaActual                         = null;
+        usandoColmenaManual                   = false;
+        _colmenaSnapshotMedidas               = {};
+        try { localStorage.removeItem('sistemaInventario'); } catch(e) {}
+
         const { data, error } = await sbOpt.from('colmena_tubos')
             .select('*')
             .eq('empresa_id', EMPRESA_ID_OPT)
