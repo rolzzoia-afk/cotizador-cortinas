@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net cdnjs.cloudflare.com unpkg.com; style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; font-src 'self' fonts.gstatic.com cdn.jsdelivr.net data:; img-src 'self' data: blob:; connect-src 'self' https://izelewwgeamktnzkiwvl.supabase.co wss://izelewwgeamktnzkiwvl.supabase.co; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self';">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear cuenta — Rolzzo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="config.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #09090b;
+            color: #e4e4e7;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card {
+            background: #18181b;
+            border: 1px solid rgba(59,130,246,0.3);
+            border-radius: 16px;
+            padding: 36px 32px;
+            max-width: 400px;
+            width: 90%;
+            text-align: center;
+        }
+        .card-icon { font-size: 2.2rem; margin-bottom: 10px; }
+        .card-brand { font-size: 1.2rem; font-weight: 700; color: #93c5fd; margin-bottom: 4px; }
+        .card-sub { font-size: 0.82rem; color: #71717a; margin-bottom: 22px; }
+        .campo { display: block; width: 100%; padding: 10px 14px; margin-bottom: 10px; font-size: 0.88rem; font-family: inherit; text-align: center; background: rgba(0,0,0,0.4); border: 1px solid rgba(59,130,246,0.22); border-radius: 8px; color: #e4e4e7; outline: none; transition: border-color 0.2s; }
+        .campo:focus { border-color: rgba(59,130,246,0.6); }
+        .campo::placeholder { color: #52525b; }
+        .btn { display: block; width: 100%; padding: 10px; margin-top: 10px; font-size: 0.92rem; font-weight: 600; font-family: inherit; background: rgba(59,130,246,0.2); border: 1px solid rgba(59,130,246,0.45); border-radius: 8px; color: #93c5fd; cursor: pointer; transition: background 0.2s; }
+        .btn:hover { background: rgba(59,130,246,0.35); }
+        .btn:disabled { opacity: 0.5; cursor: default; }
+        .error { color: #ef4444; font-size: 0.8rem; margin-top: 12px; display: none; }
+        .link { color: #93c5fd; text-decoration: none; font-size: 0.82rem; }
+        .link:hover { text-decoration: underline; }
+
+        /* Pantalla de éxito */
+        .exito { display: none; }
+        .exito-icon { font-size: 3rem; margin-bottom: 12px; }
+        .exito-titulo { font-size: 1.1rem; font-weight: 700; color: #4ade80; margin-bottom: 8px; }
+        .exito-texto { font-size: 0.85rem; color: #a1a1aa; line-height: 1.5; margin-bottom: 18px; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <!-- ══ FORMULARIO ══ -->
+    <div id="form-registro">
+        <div class="card-icon">🚀</div>
+        <div class="card-brand">Crear cuenta en Rolzzo</div>
+        <div class="card-sub">Registrá tu empresa y empezá a usar el sistema</div>
+
+        <input type="text" id="reg-empresa" class="campo" placeholder="Nombre de tu empresa" autocomplete="organization">
+        <input type="text" id="reg-nombre" class="campo" placeholder="Tu nombre" autocomplete="name">
+        <input type="email" id="reg-email" class="campo" placeholder="Email" autocomplete="email">
+        <input type="password" id="reg-password" class="campo" placeholder="Contraseña (mín. 6 caracteres)" autocomplete="new-password">
+
+        <button id="btn-registro" class="btn">Crear cuenta</button>
+        <p id="reg-error" class="error"></p>
+
+        <p style="margin-top:18px;">
+            <a href="login.html" class="link">¿Ya tenés cuenta? Iniciar sesión</a>
+        </p>
+    </div>
+
+    <!-- ══ ÉXITO ══ -->
+    <div id="pantalla-exito" class="exito">
+        <div class="exito-icon">📬</div>
+        <div class="exito-titulo">Revisá tu email</div>
+        <div class="exito-texto">
+            Te enviamos un link de activación a <strong id="exito-email"></strong>.<br>
+            Hacé click en el link para activar tu cuenta y después ingresá desde el login.
+        </div>
+        <a href="login.html" class="btn" style="text-decoration:none; display:inline-block;">Ir al login</a>
+    </div>
+</div>
+
+<script>
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function registrar() {
+        const empresa  = (document.getElementById('reg-empresa').value || '').trim();
+        const nombre   = (document.getElementById('reg-nombre').value || '').trim();
+        const email    = (document.getElementById('reg-email').value || '').trim();
+        const password = document.getElementById('reg-password').value;
+        const errEl    = document.getElementById('reg-error');
+        const btn      = document.getElementById('btn-registro');
+
+        // Validaciones
+        if (!empresa || !nombre || !email || !password) {
+            errEl.textContent = 'Completá todos los campos.';
+            errEl.style.display = '';
+            return;
+        }
+        if (password.length < 6) {
+            errEl.textContent = 'La contraseña debe tener al menos 6 caracteres.';
+            errEl.style.display = '';
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Creando cuenta...';
+        errEl.style.display = 'none';
+
+        try {
+            // 1. Crear usuario en Supabase Auth
+            const { data, error } = await sb.auth.signUp({ email, password });
+            if (error) throw error;
+
+            const userId = data.user?.id;
+            if (!userId) throw new Error('No se pudo obtener el ID del usuario.');
+
+            // 2. Crear tenant + perfil admin (RPC atómica)
+            const { data: tenantId, error: rpcErr } = await sb.rpc('registrar_tenant', {
+                p_nombre_empresa: empresa,
+                p_user_id:        userId,
+                p_user_nombre:    nombre,
+                p_user_email:     email
+            });
+            if (rpcErr) throw new Error(rpcErr.message || 'Error creando la empresa.');
+
+            // 3. Guardar tenant_id para el primer login
+            if (tenantId) {
+                localStorage.setItem('rolzzo_tenant_id', tenantId);
+            }
+
+            // 4. Mostrar pantalla de éxito
+            document.getElementById('exito-email').textContent = email;
+            document.getElementById('form-registro').style.display = 'none';
+            document.getElementById('pantalla-exito').style.display = 'block';
+
+        } catch (e) {
+            let msg = e.message || 'Error al registrarse.';
+            if (msg.includes('already registered')) msg = 'Ese email ya está registrado. ¿Querés iniciar sesión?';
+            errEl.textContent = msg;
+            errEl.style.display = '';
+            btn.disabled = false;
+            btn.textContent = 'Crear cuenta';
+        }
+    }
+
+    // Eventos
+    document.getElementById('btn-registro').addEventListener('click', registrar);
+    document.getElementById('reg-password').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') registrar();
+    });
+</script>
+
+</body>
+</html>

@@ -3994,9 +3994,7 @@ async function ejecutarOptimizacion() {
                     log(`📦 Sobrante reubicado en colmena ${nColmenaDestino} (código ${tuboEncontrado.colmena.cod}). Medida sobrante: ${sobrante / 10}cm`, 'info');
                 }
 
-                const idxInsertar = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === nColmenaDestino && c.cod === tuboEncontrado.colmena.cod && c.medida_mm === tuboEncontrado.colmena.medida_mm);
-                if (idxInsertar !== -1) {
-                SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, {
+                const _sobranteEntry = {
                     n_colmena: nColmenaDestino,
                     medida_cm: sobrante / 10,
                     medida_mm: sobrante,
@@ -4007,11 +4005,15 @@ async function ejecutarOptimizacion() {
                     posicionOriginal: nColmenaDestino,
                     serial: tuboEncontrado.colmena.serial || orden.serial || null,
                     fecha: tuboEncontrado.colmena.serial ? tuboEncontrado.colmena.serial.fecha : null,
-                    // Linaje: el sobrante genera su propio tubo_raiz_id para el siguiente ciclo,
-                    // pero guarda referencia al tubo padre para trazabilidad
                     tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null,
                     tubo_parent_raiz_id: tuboEncontrado.colmena.tubo_raiz_id || null
-                });
+                };
+                // Insertar junto al tubo consumido si es posible, o al final si el sobrante va a otro slot
+                const idxInsertar = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === nColmenaDestino && c.cod === tuboEncontrado.colmena.cod && c.medida_mm === tuboEncontrado.colmena.medida_mm);
+                if (idxInsertar !== -1) {
+                    SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, _sobranteEntry);
+                } else {
+                    SistemaInventario.colmenasHistorico.push(_sobranteEntry);
                 }
                 SistemaInventario.colmenasDisponibles.splice(tuboEncontrado.indice, 1);
                 SistemaInventario.colmenasDisponibles.push({
@@ -4103,9 +4105,12 @@ async function ejecutarOptimizacion() {
                                     serial: tuboReemplazo.colmena.serial || null
                                 });
                             } else {
+                                const _sobReempEntry = { n_colmena: _nColmFallbackR, medida_cm: sobrante / 10, medida_mm: sobrante, cod: tuboReemplazo.colmena.cod, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: _nColmFallbackR, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null };
                                 const idxInsertar = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === tuboReemplazo.colmena.n_colmena && c.cod === tuboReemplazo.colmena.cod && c.medida_mm === tuboReemplazo.colmena.medida_mm);
                                 if (idxInsertar !== -1) {
-                                    SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, { n_colmena: _nColmFallbackR, medida_cm: sobrante / 10, medida_mm: sobrante, cod: tuboReemplazo.colmena.cod, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: _nColmFallbackR, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null });
+                                    SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, _sobReempEntry);
+                                } else {
+                                    SistemaInventario.colmenasHistorico.push(_sobReempEntry);
                                 }
                                 SistemaInventario.colmenasDisponibles.splice(tuboReemplazo.indice, 1);
                                 SistemaInventario.colmenasDisponibles.push({

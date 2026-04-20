@@ -54,6 +54,20 @@ window._authReady = new Promise(function (resolve) { _authResolve = resolve; });
             return;
         }
 
+        // ── Verificar onboarding (solo si no estamos ya en setup.html) ──
+        var currentPage = window.location.pathname.split('/').pop() || '';
+        if (currentPage !== 'setup.html') {
+            var onbResult = await _guardSb.from('configuracion')
+                .select('valor')
+                .eq('empresa_id', window.EMPRESA_ID)
+                .eq('clave', 'onboarding_completado')
+                .maybeSingle();
+            if (!onbResult.data || onbResult.data.valor !== 'true') {
+                window.location.replace('setup.html');
+                return;
+            }
+        }
+
         // ── Sesión y tenant válidos — exponer datos y mostrar página ──
         window._authUser = session.user;
         window._authPerfil = perfil || null;
