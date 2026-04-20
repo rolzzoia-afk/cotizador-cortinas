@@ -1233,6 +1233,16 @@ async function cargarDesdeSupabase() {
             };
             const teniaCatalogo = Object.keys(catBackup.catalogoReemplazos).length > 0;
 
+            // ⚠️ NO cargar campos de colmena desde este snapshot — la fuente de verdad
+            // es `colmena_tubos` (vía cargarColmenasDesdeTabla). Si los cargamos aquí,
+            // un snapshot viejo con tubos fantasma sobrescribe la colmena fresca.
+            delete datos.colmenas;
+            delete datos.colmenasDisponibles;
+            delete datos.colmenasHistorico;
+            delete datos.colmenaCruda;
+            delete datos.resultadosOptimizacion;
+            delete datos.mermas;
+
             Object.assign(SistemaInventario, datos);
 
             // Restaurar catálogo si fue sobreescrito
