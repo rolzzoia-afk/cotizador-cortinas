@@ -5163,15 +5163,21 @@ async function verificarIntegridadPreGuardado() {
 
     log('🔒 Verificando integridad de tubos contra Supabase...', 'info');
 
-    const { data: actuales, error } = await sbOpt
-        .from('colmena_tubos')
-        .select('tubo_raiz_id, n_colmena, cod, medida_cm')
-        .eq('empresa_id', EMPRESA_ID_OPT)
-        .in('tubo_raiz_id', raizIds);
-
-    if (error) {
-        log(`⚠️ No se pudo verificar integridad: ${error.message}. Procediendo con precaución.`, 'warn');
-        return { ok: true }; // si no podemos verificar, dejamos pasar con advertencia
+    // Usar _sbRest (fetch directo) en vez de sbOpt — evita el lock de auth
+    // que cuelga la query indefinidamente cuando el optimizador corre en iframe.
+    let actuales = [];
+    try {
+        const idsStr = raizIds.map(id => `"${id}"`).join(',');
+        const res = await _sbRest(
+            'GET',
+            `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}&tubo_raiz_id=in.(${idsStr})&select=tubo_raiz_id,n_colmena,cod,medida_cm`,
+            undefined,
+            { 'Prefer': 'return=representation' }
+        );
+        actuales = await res.json();
+    } catch (err) {
+        log(`⚠️ No se pudo verificar integridad: ${err.message}. Procediendo con precaución.`, 'warn');
+        return { ok: true };
     }
 
     const mapaActual = {};
