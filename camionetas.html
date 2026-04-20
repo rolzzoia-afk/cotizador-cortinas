@@ -1017,7 +1017,7 @@ async function eliminarCamioneta() {
 }
 
 // ── Init ──────────────────────────────────────────────────────────
-cargarCamionetas();
+window._authReady.then(() => cargarCamionetas());
 </script>
 </body>
 </html>

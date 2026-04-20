@@ -2437,7 +2437,8 @@ async function entrada_confirmar() {
 // ══════════════════════════════════════════════════════════════════
 // INICIAR
 // ══════════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await window._authReady;
     cargarOTs();
     salida_actualizarChipNombre();
 

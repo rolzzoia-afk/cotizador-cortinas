@@ -1415,7 +1415,7 @@ function renderTablaErrores(errores) {
 }
 
 // ── Init ─────────────────────────────────────────────────────────
-cargarPlanes();
+window._authReady.then(() => cargarPlanes());
 </script>
 </body>
 </html>

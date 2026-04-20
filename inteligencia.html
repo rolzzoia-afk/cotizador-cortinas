@@ -2286,7 +2286,8 @@ async function renderErroresCorte() {
 // ══════════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════════
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
+    await window._authReady;
     cargarTodo();
 
     // Auto-refresh cada 5 minutos

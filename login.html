@@ -154,6 +154,16 @@
         try {
             const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
             if (error) throw error;
+
+            // Obtener tenant_id del perfil y guardarlo para acceso sincrónico
+            const { data: perfil } = await sb.from('perfiles')
+                .select('empresa_id')
+                .eq('id', data.user.id)
+                .maybeSingle();
+            if (perfil?.empresa_id) {
+                localStorage.setItem('rolzzo_tenant_id', perfil.empresa_id);
+            }
+
             window.location.replace(decodeURIComponent(returnTo));
         } catch (e) {
             errEl.textContent = e.message === 'Invalid login credentials'

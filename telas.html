@@ -2936,7 +2936,7 @@ async function listasEliminar(campo, idx) {
 // ══════════════════════════════════════════════════════════════════
 // INICIO
 // ══════════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', inicializar);
+document.addEventListener('DOMContentLoaded', async () => { await window._authReady; inicializar(); });
 
 // ══════════════════════════════════════════════════════════════════
 // QR TELAS

@@ -3415,7 +3415,8 @@ ${rels}
 // ══════════════════════════════════════════════════════════════════
 // INICIAR
 // ══════════════════════════════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await window._authReady;
     inicializar();
 });
 

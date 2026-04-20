@@ -2803,7 +2803,8 @@
     }
 
     window.onload = async function() {
-        // La sesión ya fue verificada por auth-guard.js (redirige a login.html si no hay)
+        // Esperar a que auth-guard.js resuelva sesión + EMPRESA_ID dinámico
+        await window._authReady;
         await inicializarApp();
     };
 

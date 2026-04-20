@@ -676,6 +676,7 @@ function colorPct(pct, meta) {
 //  INIT
 // ═══════════════════════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
+    await window._authReady;
     document.getElementById('fechaSelector').value = _fechaActiva;
     await cargarConfig();
     await cargarDiaActivo();
