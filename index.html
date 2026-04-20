@@ -21,6 +21,7 @@
     <!-- Supabase JS Client -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="config.js"></script>
+    <script src="auth-guard.js"></script>
     <script>
         // ══════════════════════════════════════════════════════════════════
         // CONFIGURACIÓN SUPABASE  (credenciales en config.js)
@@ -2801,33 +2802,8 @@
         actualizarIndicadorOTActiva();
     }
 
-    // ── Login con Supabase ───────────────────────────────────────────────────
-    async function loginConSupabase() {
-        const email = (document.getElementById('login-email').value || '').trim();
-        const pass  = document.getElementById('login-password').value;
-        const errEl = document.getElementById('login-error');
-        const btn   = document.getElementById('btn-login');
-        if (!email || !pass) { errEl.textContent = 'Ingresa email y contraseña.'; errEl.style.display = ''; return; }
-        btn.disabled = true; btn.textContent = 'Entrando...';
-        try {
-            const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
-            if (error) throw error;
-            document.getElementById('modal-login').style.display = 'none';
-            await inicializarApp();
-        } catch(e) {
-            errEl.textContent = e.message === 'Invalid login credentials' ? 'Email o contraseña incorrectos.' : (e.message || 'Error al iniciar sesión.');
-            errEl.style.display = '';
-            btn.disabled = false; btn.textContent = 'Entrar';
-        }
-    }
-
     window.onload = async function() {
-        // Verificar si hay sesión activa
-        const { data: { session } } = await sb.auth.getSession();
-        if (!session) {
-            document.getElementById('modal-login').style.display = 'flex';
-            return;
-        }
+        // La sesión ya fue verificada por auth-guard.js (redirige a login.html si no hay)
         await inicializarApp();
     };
 
@@ -10205,28 +10181,6 @@
 </nav>
 
 <!-- ══ MODAL: IDENTIFICACIÓN DE OPERARIO ══ -->
-<!-- ══ MODAL LOGIN SUPABASE ══════════════════════════════════════════════ -->
-<div id="modal-login" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:100000;align-items:center;justify-content:center;">
-    <div style="background:#18181b;border:1px solid rgba(59,130,246,0.4);border-radius:16px;padding:36px 32px;max-width:380px;width:90%;text-align:center;">
-        <div style="font-size:2.5rem;margin-bottom:12px;">🔐</div>
-        <div style="font-size:1.15rem;font-weight:700;color:#93c5fd;margin-bottom:4px;">Cortinas Rolzzo</div>
-        <div class="text-muted small mb-4">Ingresa con tu cuenta para continuar</div>
-        <input type="email" id="login-email" placeholder="email@ejemplo.com"
-            class="form-control mb-3"
-            style="text-align:center;font-size:0.9rem;background:rgba(0,0,0,0.4);border-color:rgba(59,130,246,0.3);color:var(--text-primary);">
-        <input type="password" id="login-password" placeholder="Contraseña"
-            class="form-control mb-4"
-            style="text-align:center;font-size:0.9rem;background:rgba(0,0,0,0.4);border-color:rgba(59,130,246,0.3);color:var(--text-primary);"
-            onkeydown="if(event.key==='Enter')loginConSupabase()">
-        <button id="btn-login" class="btn w-100 fw-bold"
-            style="background:rgba(59,130,246,0.25);border:1px solid rgba(59,130,246,0.5);color:#93c5fd;"
-            onclick="loginConSupabase()">
-            Entrar
-        </button>
-        <p id="login-error" style="color:#ef4444;font-size:0.82rem;margin-top:12px;display:none;"></p>
-    </div>
-</div>
-
 <div id="modal-operario" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:99999;align-items:center;justify-content:center;">
     <div style="background:#18181b;border:1px solid rgba(99,102,241,0.5);border-radius:16px;padding:32px 28px;max-width:380px;width:90%;text-align:center;">
         <div style="font-size:2.5rem;margin-bottom:12px;">👷</div>
