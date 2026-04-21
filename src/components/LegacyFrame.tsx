@@ -33,6 +33,7 @@ export function LegacyFrame({ src, title }: Props) {
       title={title ?? 'Legacy'}
       className="h-[calc(100vh-4rem)] w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"
+      allow="camera; microphone; geolocation; clipboard-read; clipboard-write; fullscreen"
     />
   );
 }
