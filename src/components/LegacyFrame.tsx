@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 type Props = {
   src: string;
@@ -9,6 +9,7 @@ type Props = {
 export function LegacyFrame({ src, title }: Props) {
   const ref = useRef<HTMLIFrameElement>(null);
   const navigate = useNavigate();
+  const { search } = useLocation();
 
   useEffect(() => {
     const handler = (ev: MessageEvent) => {
@@ -22,10 +23,13 @@ export function LegacyFrame({ src, title }: Props) {
     return () => window.removeEventListener('message', handler);
   }, [navigate]);
 
+  // Propagar query string de la ruta al iframe: /ventas?mes=01 → src/ventas.html?mes=01
+  const finalSrc = search ? `${src}${src.includes('?') ? '&' : '?'}${search.slice(1)}` : src;
+
   return (
     <iframe
       ref={ref}
-      src={src}
+      src={finalSrc}
       title={title ?? 'Legacy'}
       className="h-[calc(100vh-4rem)] w-full border-0"
       sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads allow-modals"

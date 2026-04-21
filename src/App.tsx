@@ -5,6 +5,7 @@ import { LegacyFrame } from '@/components/LegacyFrame';
 import { Login } from '@/pages/Login';
 import { Registro } from '@/pages/Registro';
 import { Setup } from '@/pages/Setup';
+import { Landing } from '@/pages/Landing';
 
 function Shell() {
   return (
@@ -23,7 +24,7 @@ export function App() {
       {/* Públicas — todas apuntan a legacy por ahora */}
       <Route path="/login" element={<Login />} />
       <Route path="/registro" element={<Registro />} />
-      <Route path="/landing" element={<LegacyFrame src="/legacy/landing.html" title="Landing" />} />
+      <Route path="/landing" element={<Landing />} />
 
       {/* Setup (requiere sesión pero no onboarding — sin Shell/TopBar) */}
       <Route
