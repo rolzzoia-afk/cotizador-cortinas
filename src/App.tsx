@@ -10,6 +10,7 @@ import { AdminPanel } from '@/pages/AdminPanel';
 import { HistorialTubos } from '@/pages/HistorialTubos';
 import { Camionetas } from '@/pages/Camionetas';
 import { Ventas } from '@/pages/Ventas';
+import { Inteligencia } from '@/pages/Inteligencia';
 
 function Shell() {
   return (
@@ -50,10 +51,7 @@ export function App() {
       >
         <Route index element={<LegacyFrame src="/legacy/index.html" title="Inicio" />} />
         <Route path="ventas" element={<Ventas />} />
-        <Route
-          path="inteligencia"
-          element={<LegacyFrame src="/legacy/inteligencia.html" title="Inteligencia" />}
-        />
+        <Route path="inteligencia" element={<Inteligencia />} />
         <Route path="telas" element={<LegacyFrame src="/legacy/telas.html" title="Telas" />} />
         <Route
           path="inventario"
