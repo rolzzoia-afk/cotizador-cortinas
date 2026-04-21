@@ -10028,94 +10028,35 @@
     async function planRestaurarConfirmar() {
         if (!_planPreviewActual) { showToast('No hay plan seleccionado para restaurar', 'error'); return; }
         const email = _corrEmailOptimizer || (document.getElementById('corr-email-optimizer')?.value || '').trim().toLowerCase();
-        if (!email) { showToast('Primero configurá el email del optimizador', 'error'); return; }
+        if (!email) { showToast('Primero configura el email del optimizador', 'error'); return; }
+
+        const btn = document.querySelector('button[onclick="planRestaurarConfirmar()"]');
+        if (btn) { btn.disabled = true; btn.textContent = 'Restaurando...'; }
 
         try {
-            const plan = _planPreviewActual;
-            const ahora = new Date().toISOString();
-
-            // ── Parsear datos del plan ──
-            let lineas = plan.resultados || [];
-            if (typeof lineas === 'string') { try { lineas = JSON.parse(lineas); } catch(_){lineas=[];} }
-            let ordenes = plan.ordenes || [];
-            if (typeof ordenes === 'string') { try { ordenes = JSON.parse(ordenes); } catch(_){ordenes=[];} }
-
-            // ── Parsear snapshot de inventario ──
-            let snapInv = plan.snapshot_inventario || [];
-            if (typeof snapInv === 'string') { try { snapInv = JSON.parse(snapInv); } catch(_){ snapInv = []; } }
-            let snapSer = plan.snapshot_seriales || [];
-            if (typeof snapSer === 'string') { try { snapSer = JSON.parse(snapSer); } catch(_){ snapSer = []; } }
-
-            // ── PASO 1: Restaurar colmena_tubos si hay snapshot ──
-            if (Array.isArray(snapInv) && snapInv.length > 0) {
-                // Borrar inventario actual
-                const { error: errDel } = await sb
-                    .from('colmena_tubos')
-                    .delete()
-                    .eq('empresa_id', EMPRESA_ID);
-                if (errDel) throw new Error('Error borrando colmena actual: ' + errDel.message);
-
-                // Preparar filas para reinsertar
-                const filas = snapInv.map(c => ({
-                    empresa_id:  EMPRESA_ID,
-                    n_colmena:   c.n_colmena || '-',
-                    cod:         (c.cod || '').toUpperCase().trim(),
-                    medida_cm:   typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
-                    medida_mm:   c.medida_mm || Math.round((parseFloat(c.medida_cm) || 0) * 10),
-                    serial:      c.serial || null,
-                    tubo_raiz_id: c.tubo_raiz_id || null,
-                    agregado_por_admin: c.agregado_por_admin || false
-                }));
-
-                // Insertar en lotes de 100
-                const BATCH = 100;
-                for (let i = 0; i < filas.length; i += BATCH) {
-                    const { error: errIns } = await sb
-                        .from('colmena_tubos')
-                        .insert(filas.slice(i, i + BATCH));
-                    if (errIns) throw new Error('Error restaurando tubos: ' + errIns.message);
-                }
-            }
-
-            // ── PASO 2: Registrar evento de restauración en tubos_historial ──
-            try {
-                await sb.from('tubos_historial').insert({
-                    empresa_id:          EMPRESA_ID,
-                    n_colmena:           '-',
-                    cod:                 '-',
-                    medida_cm:           0,
-                    medida_resultado_cm: 0,
-                    evento:              'restauracion',
-                    ot:                  '',
-                    notas:               `Restauración al plan del ${plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '?'} — ${snapInv.length} tubos restaurados`,
-                    registrado_por:      email
-                });
-            } catch(_) { /* no crítico */ }
-
-            // ── PASO 3: Guardar el plan restaurado como el activo en planes_corte ──
-            const { error: errPlan } = await sb.from('planes_corte').insert({
-                empresa_id:          EMPRESA_ID,
-                optimizer_email:     email,
-                resultados:          lineas,
-                ordenes:             ordenes,
-                fecha:               ahora,
-                fecha_correccion:    null,
-                tipo:                'restauracion',   // ← marca visual en el historial
-                snapshot_inventario: snapInv,
-                snapshot_seriales:   snapSer
+            // Llamada atómica al RPC: hace snapshot pre-restauración,
+            // borra+reinsera colmena, registra evento en historial y
+            // guarda el plan restaurado. Todo en una transacción.
+            const { data, error } = await sb.rpc('restaurar_plan_de_corte', {
+                p_plan_id: _planPreviewActual.id,
+                p_email:   email
             });
-            if (errPlan) throw errPlan;
+            if (error) throw error;
 
-            const msgFinal = snapInv.length > 0
-                ? `✅ Viaje en el tiempo completado. Colmena restaurada con ${snapInv.length} tubos al estado del ${plan.fecha ? new Date(plan.fecha).toLocaleString('es-CL') : '?'}.`
-                : `✅ Plan restaurado como activo (sin snapshot de colmena).`;
+            const res  = data || {};
+            const msg  = `✅ Restauración completada. ${res.count_despues} tubos restaurados ` +
+                         `(antes había ${res.count_antes}). Snapshot pre-restauración guardado.`;
+            showToast(msg);
 
-            showToast(msgFinal);
             document.getElementById('plan-preview-modal').style.display = 'none';
             _planPreviewActual = null;
             planHistorialCargar();
 
-        } catch(e) { showToast('❌ Error al restaurar: ' + e.message, 'error'); }
+        } catch(e) {
+            showToast('❌ Error al restaurar: ' + (e.message || e), 'error');
+        } finally {
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i> Restaurar este plan como activo'; }
+        }
     }
 
     // ─── Cargar historial de correcciones ────────────────────────
