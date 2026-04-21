@@ -2,6 +2,7 @@ import { Routes, Route, Outlet } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { TopBar } from '@/components/TopBar';
 import { LegacyFrame } from '@/components/LegacyFrame';
+import { Login } from '@/pages/Login';
 
 function Shell() {
   return (
@@ -18,7 +19,7 @@ export function App() {
   return (
     <Routes>
       {/* Públicas — todas apuntan a legacy por ahora */}
-      <Route path="/login" element={<LegacyFrame src="/legacy/login.html" title="Login" />} />
+      <Route path="/login" element={<Login />} />
       <Route path="/registro" element={<LegacyFrame src="/legacy/registro.html" title="Registro" />} />
       <Route path="/landing" element={<LegacyFrame src="/legacy/landing.html" title="Landing" />} />
 
