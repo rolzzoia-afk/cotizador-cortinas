@@ -13,8 +13,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const schema = z.object({
-  empresa: z.string().trim().min(1, 'Ingresá el nombre de la empresa'),
-  nombre: z.string().trim().min(1, 'Ingresá tu nombre'),
+  empresa: z.string().trim().min(1, 'Ingresa el nombre de la empresa'),
+  nombre: z.string().trim().min(1, 'Ingresa tu nombre'),
   email: z.string().trim().email('Email inválido'),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
 });
@@ -23,7 +23,7 @@ type FormValues = z.infer<typeof schema>;
 
 function mapError(message: string): string {
   if (message.includes('already registered')) {
-    return 'Ese email ya está registrado. ¿Querés iniciar sesión?';
+    return 'Ese email ya está registrado. ¿Quieres iniciar sesión?';
   }
   return message || 'Error al registrarse.';
 }
@@ -87,11 +87,11 @@ export function Registro() {
             <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <Mail className="h-6 w-6 text-primary" />
             </div>
-            <CardTitle className="text-xl">Revisá tu email</CardTitle>
+            <CardTitle className="text-xl">Revisa tu correo</CardTitle>
             <CardDescription>
-              Te enviamos un link de activación a{' '}
-              <strong className="text-foreground">{emailEnviado}</strong>. Hacé click en el link
-              para activar tu cuenta y después ingresá desde el login.
+              Enviamos un enlace de activación a{' '}
+              <strong className="text-foreground">{emailEnviado}</strong>. Haz clic en el enlace
+              para activar tu cuenta y después inicia sesión.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -112,7 +112,7 @@ export function Registro() {
             <Rocket className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-xl">Crear cuenta en Rolzzo</CardTitle>
-          <CardDescription>Registrá tu empresa y empezá a usar el sistema</CardDescription>
+          <CardDescription>Registra tu empresa y empieza a usar el sistema</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
@@ -182,7 +182,7 @@ export function Registro() {
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            ¿Ya tenés cuenta?{' '}
+            ¿Ya tienes cuenta?{' '}
             <Link to="/login" className="font-medium text-primary hover:underline">
               Iniciar sesión
             </Link>

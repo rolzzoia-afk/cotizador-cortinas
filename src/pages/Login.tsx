@@ -14,7 +14,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const schema = z.object({
   email: z.string().email('Email inválido'),
-  password: z.string().min(1, 'Ingresá tu contraseña'),
+  password: z.string().min(1, 'Ingresa tu contraseña'),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -71,13 +71,13 @@ export function Login() {
             <Lock className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-xl">Cortinas Rolzzo</CardTitle>
-          <CardDescription>Ingresá con tu cuenta para continuar</CardDescription>
+          <CardDescription>Ingresa con tu cuenta para continuar</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {expired && (
             <Alert variant="warning">
               <AlertDescription>
-                Tu sesión expiró. Ingresá de nuevo para continuar.
+                Tu sesión expiró. Ingresa de nuevo para continuar.
               </AlertDescription>
             </Alert>
           )}
@@ -125,9 +125,9 @@ export function Login() {
           </form>
 
           <p className="text-center text-sm text-muted-foreground">
-            ¿No tenés cuenta?{' '}
+            ¿No tienes cuenta?{' '}
             <Link to="/registro" className="font-medium text-primary hover:underline">
-              Registrate
+              Regístrate
             </Link>
           </p>
         </CardContent>

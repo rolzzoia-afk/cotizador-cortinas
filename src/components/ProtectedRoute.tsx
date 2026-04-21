@@ -21,7 +21,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!empresaId) {
     return (
       <div className="flex h-screen items-center justify-center p-6 text-center">
-        Tu cuenta no tiene una empresa asignada. Contactá al administrador.
+        Tu cuenta no tiene una empresa asignada. Contacta al administrador.
       </div>
     );
   }

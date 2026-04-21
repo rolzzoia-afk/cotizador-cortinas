@@ -97,7 +97,7 @@ export function Setup() {
             <Settings2 className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-xl">Configuración inicial</CardTitle>
-          <CardDescription>Configurá lo básico para empezar a usar Rolzzo</CardDescription>
+          <CardDescription>Configura lo básico para empezar a usar Rolzzo</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Indicador de pasos */}
@@ -147,7 +147,7 @@ export function Setup() {
 
           {paso === 2 && (
             <div className="space-y-4">
-              <Label>¿Qué canales de venta usás? (seleccioná los que apliquen)</Label>
+              <Label>¿Qué canales de venta usas? (selecciona los que apliquen)</Label>
               <div className="grid grid-cols-2 gap-2">
                 {CANALES.map((c) => {
                   const selected = canales.has(c.id);
