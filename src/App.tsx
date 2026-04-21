@@ -3,6 +3,8 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { TopBar } from '@/components/TopBar';
 import { LegacyFrame } from '@/components/LegacyFrame';
 import { Login } from '@/pages/Login';
+import { Registro } from '@/pages/Registro';
+import { Setup } from '@/pages/Setup';
 
 function Shell() {
   return (
@@ -20,13 +22,17 @@ export function App() {
     <Routes>
       {/* Públicas — todas apuntan a legacy por ahora */}
       <Route path="/login" element={<Login />} />
-      <Route path="/registro" element={<LegacyFrame src="/legacy/registro.html" title="Registro" />} />
+      <Route path="/registro" element={<Registro />} />
       <Route path="/landing" element={<LegacyFrame src="/legacy/landing.html" title="Landing" />} />
 
-      {/* Setup (requiere sesión pero no onboarding) */}
+      {/* Setup (requiere sesión pero no onboarding — sin Shell/TopBar) */}
       <Route
         path="/setup"
-        element={<LegacyFrame src="/legacy/setup.html" title="Setup" />}
+        element={
+          <ProtectedRoute>
+            <Setup />
+          </ProtectedRoute>
+        }
       />
 
       {/* Protegidas — todas pasan por iframe a legacy */}
