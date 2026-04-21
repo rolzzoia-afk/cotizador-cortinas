@@ -209,6 +209,108 @@ function ErrorDialog({
   existingError: { linea_idx: number; motivo: string } | null;
   onSuccess: (planId: string, idx: number, motivo: string) => void;
 }) {
+  if (!open || !ctx) return null;
+  if (existingError) {
+    return (
+      <ExistingErrorDialog
+        open={open}
+        onOpenChange={onOpenChange}
+        ctx={ctx}
+        existingError={existingError}
+      />
+    );
+  }
+  return (
+    <RegisterErrorDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      ctx={ctx}
+      tubosDisponibles={tubosDisponibles}
+      plan={plan}
+      onSuccess={onSuccess}
+    />
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Modal read-only (fila con error ya registrado)
+// ─────────────────────────────────────────────────────────────
+function ExistingErrorDialog({
+  open,
+  onOpenChange,
+  ctx,
+  existingError,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  ctx: CorteCtx;
+  existingError: { linea_idx: number; motivo: string };
+}) {
+  const { r, ord } = ctx;
+  const chips = [
+    { label: 'OT', val: ord.ot || ord.numero_ot || r.orden || '-' },
+    { label: 'Código', val: r.codigo || r.codigo_original || '—' },
+    { label: 'Colmena', val: String(r.colmena ?? 'TUBO NUEVO') },
+    {
+      label: 'Medida',
+      val: r.medida_cm != null ? `${Number(r.medida_cm).toFixed(1)} cm` : '-',
+    },
+  ];
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md border-white/10 bg-zinc-900 text-zinc-200">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <AlertTriangle className="h-5 w-5 text-red-500" /> Error ya registrado
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-wrap gap-1.5">
+          {chips.map((c) => (
+            <div
+              key={c.label}
+              className="rounded-md border border-white/10 bg-zinc-800 px-2 py-1 text-[11px]"
+            >
+              <strong className="mr-1 text-zinc-400">{c.label}</strong>
+              {c.val}
+            </div>
+          ))}
+        </div>
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-red-400">
+            Motivo registrado
+          </div>
+          <div className="text-sm font-semibold text-red-200">{existingError.motivo}</div>
+        </div>
+        <p className="text-[11px] text-zinc-500">
+          No se puede registrar otro error sobre la misma línea. Si el registro original es
+          incorrecto, revísalo desde la pestaña "Errores registrados".
+        </p>
+        <DialogFooter>
+          <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Modal registrar error (flujo completo)
+// ─────────────────────────────────────────────────────────────
+function RegisterErrorDialog({
+  open,
+  onOpenChange,
+  ctx,
+  tubosDisponibles,
+  plan,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  ctx: CorteCtx;
+  tubosDisponibles: Tubo[];
+  plan: Plan | null;
+  onSuccess: (planId: string, idx: number, motivo: string) => void;
+}) {
   const [motivo, setMotivo] = useState('');
   const [comentario, setComentario] = useState('');
   const [responsable, setResponsable] = useState('');
@@ -231,56 +333,7 @@ function ErrorDialog({
     setBuscarTubo('');
   }, [open]);
 
-  if (!open || !ctx) return null;
   const { r, ord, planId, idx } = ctx;
-
-  // ── Si ya existe un error registrado → modal read-only
-  if (existingError) {
-    const chipsRO = [
-      { label: 'OT', val: ord.ot || ord.numero_ot || r.orden || '-' },
-      { label: 'Código', val: r.codigo || r.codigo_original || '—' },
-      { label: 'Colmena', val: String(r.colmena ?? 'TUBO NUEVO') },
-      {
-        label: 'Medida',
-        val: r.medida_cm != null ? `${Number(r.medida_cm).toFixed(1)} cm` : '-',
-      },
-    ];
-    return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-md border-white/10 bg-zinc-900 text-zinc-200">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-white">
-              <AlertTriangle className="h-5 w-5 text-red-500" /> Error ya registrado
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-wrap gap-1.5">
-            {chipsRO.map((c) => (
-              <div
-                key={c.label}
-                className="rounded-md border border-white/10 bg-zinc-800 px-2 py-1 text-[11px]"
-              >
-                <strong className="mr-1 text-zinc-400">{c.label}</strong>
-                {c.val}
-              </div>
-            ))}
-          </div>
-          <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-red-400">
-              Motivo registrado
-            </div>
-            <div className="text-sm font-semibold text-red-200">{existingError.motivo}</div>
-          </div>
-          <p className="text-[11px] text-zinc-500">
-            No se puede registrar otro error sobre la misma línea. Si el registro original es
-            incorrecto, revísalo desde la pestaña "Errores registrados".
-          </p>
-          <DialogFooter>
-            <Button onClick={() => onOpenChange(false)}>Cerrar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   // ── Colmenas ya ocupadas en el plan (para excluirlas)
   const colmenasOcupadas = useMemo(() => {
