@@ -7,12 +7,13 @@ import { Registro } from '@/pages/Registro';
 import { Setup } from '@/pages/Setup';
 import { Landing } from '@/pages/Landing';
 import { AdminPanel } from '@/pages/AdminPanel';
+import { HistorialTubos } from '@/pages/HistorialTubos';
 
 function Shell() {
   return (
     <div className="flex h-screen flex-col">
       <TopBar />
-      <main className="flex-1 overflow-hidden">
+      <main className="flex-1 overflow-auto">
         <Outlet />
       </main>
     </div>
@@ -72,10 +73,7 @@ export function App() {
           path="historial-corte"
           element={<LegacyFrame src="/legacy/historial_corte.html" title="Historial corte" />}
         />
-        <Route
-          path="historial-tubos"
-          element={<LegacyFrame src="/legacy/historial_tubos.html" title="Historial tubos" />}
-        />
+        <Route path="historial-tubos" element={<HistorialTubos />} />
         <Route path="admin" element={<AdminPanel />} />
       </Route>
 
