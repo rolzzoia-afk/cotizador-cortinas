@@ -6,6 +6,7 @@ import { Login } from '@/pages/Login';
 import { Registro } from '@/pages/Registro';
 import { Setup } from '@/pages/Setup';
 import { Landing } from '@/pages/Landing';
+import { AdminPanel } from '@/pages/AdminPanel';
 
 function Shell() {
   return (
@@ -75,10 +76,7 @@ export function App() {
           path="historial-tubos"
           element={<LegacyFrame src="/legacy/historial_tubos.html" title="Historial tubos" />}
         />
-        <Route
-          path="admin"
-          element={<LegacyFrame src="/legacy/admin_panel.html" title="Admin" />}
-        />
+        <Route path="admin" element={<AdminPanel />} />
       </Route>
 
       <Route path="*" element={<div className="p-8">404 · Ruta no encontrada</div>} />

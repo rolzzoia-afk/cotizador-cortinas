@@ -8338,7 +8338,7 @@
                     <span>${dg.cliente||'—'}</span>
                     <span style="background:${ecfg.bg||'rgba(148,163,184,0.1)'};color:${ecfg.color};padding:1px 6px;border-radius:99px;font-size:0.68rem;">${ecfg.label}</span>
                     <span class="text-muted ms-auto" style="font-size:0.72rem;">hace ${dias_sin} días</span>
-                    <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;" onclick="odiosVerDetalle(${o.id})">Ver</button>
+                    <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#f59e0b;" onclick="odiosVerDetalle('${o.id}')">Ver</button>
                 </div>`;
             }).join('');
         } else {
@@ -8398,8 +8398,8 @@
                 <td style="color:var(--text-secondary);font-size:0.72rem;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${o.notaAdmin||''}">${nota||'—'}</td>
                 <td>
                     <div class="d-flex gap-1">
-                        <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;" onclick="odiosVerDetalle(${o.id})" title="Ver detalle">🔍</button>
-                        <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;" onclick="abrirOT(${o.id});switchTab('panel');" title="Abrir en cotizador">📂</button>
+                        <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#818cf8;" onclick="odiosVerDetalle('${o.id}')" title="Ver detalle">🔍</button>
+                        <button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;" onclick="abrirOT('${o.id}');switchTab('panel');" title="Abrir en cotizador">📂</button>
                     </div>
                 </td>
             </tr>`;
@@ -8475,7 +8475,7 @@
                 <td>${(o.storeVentanas||[]).length}</td>
                 <td style="color:var(--text-secondary);">${(o.fechaModificacion||'').slice(0,10)||'—'}</td>
                 <td><button class="btn btn-sm py-0" style="font-size:0.68rem;background:rgba(59,130,246,0.15);border:1px solid rgba(59,130,246,0.3);color:#3b82f6;"
-                    onclick="abrirOT(${o.id}); switchTab('panel');">📂</button></td>
+                    onclick="abrirOT('${o.id}'); switchTab('panel');">📂</button></td>
             </tr>`;
         }).join('');
         const panel = document.getElementById('odios-detalle-cliente');
@@ -8748,7 +8748,13 @@
         // Detector de problemas inicial
         odiosActualizarProblemas();
 
-        document.getElementById('odios-modal-overlay').style.display = 'block';
+        const _overlay = document.getElementById('odios-modal-overlay');
+        // Fix: algún ancestro con transform rompe position:fixed →
+        // reparentamos al body para que el fixed sea relativo al viewport real.
+        if (_overlay.parentElement !== document.body) {
+            document.body.appendChild(_overlay);
+        }
+        _overlay.style.setProperty('display', 'block', 'important');
         document.body.style.overflow = 'hidden';
     }
 
@@ -8810,7 +8816,7 @@
     }
 
     function odiosModalCerrar() {
-        document.getElementById('odios-modal-overlay').style.display = 'none';
+        document.getElementById('odios-modal-overlay').style.setProperty('display', 'none', 'important');
         document.body.style.overflow = '';
         _odiosModalOTId = null;
     }
