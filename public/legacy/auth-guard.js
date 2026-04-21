@@ -84,14 +84,12 @@ window._authReady = new Promise(function (resolve) { _authResolve = resolve; });
     }
 
     function _redirigirALogin() {
-        var currentPage = window.location.pathname.split('/').pop() || 'index.html';
-        var target = 'login.html?returnTo=' + encodeURIComponent(currentPage);
-
-        // Si estamos en un iframe (optimizador), redirigir la ventana principal
+        // Si estamos dentro del shell React (iframe), pedirle al padre que navegue
         if (window.top !== window.self) {
-            window.top.location.replace(target);
-        } else {
-            window.location.replace(target);
+            try { window.parent.postMessage({ navigate: '/login' }, '*'); } catch (e) {}
+            return;
         }
+        // Acceso directo a /legacy/*.html — ir al shell React
+        window.location.replace('/login');
     }
 })();

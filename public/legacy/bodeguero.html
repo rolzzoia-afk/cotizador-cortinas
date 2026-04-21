@@ -2115,8 +2115,9 @@ async function salida_iniciarEscaner() {
             () => {}
         );
     } catch(e) {
+        console.error('[salida-escaner] fallo al iniciar:', e);
         document.getElementById('salida-scan-estado').innerHTML =
-            `<i class="bi bi-exclamation-triangle" style="color:var(--warning)"></i> Cámara no disponible — usá el campo manual`;
+            `<i class="bi bi-exclamation-triangle" style="color:var(--warning)"></i> Cámara no disponible (${e.name || 'error'}: ${e.message || e}) — usá el campo manual`;
     }
 }
 
@@ -2313,8 +2314,9 @@ async function entrada_iniciarEscaner() {
             () => {}
         );
     } catch(e) {
+        console.error('[entrada-escaner] fallo al iniciar:', e);
         document.getElementById('entrada-scan-estado').innerHTML =
-            `<i class="bi bi-exclamation-triangle" style="color:var(--warning)"></i> Cámara no disponible — usá el campo manual`;
+            `<i class="bi bi-exclamation-triangle" style="color:var(--warning)"></i> Cámara no disponible (${e.name || 'error'}: ${e.message || e}) — usá el campo manual`;
     }
 }
 
