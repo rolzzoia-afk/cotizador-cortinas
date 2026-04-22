@@ -13,6 +13,7 @@ import { Ventas } from '@/pages/Ventas';
 import { Inteligencia } from '@/pages/Inteligencia';
 import { HistorialCorte } from '@/pages/HistorialCorte';
 import { Bodeguero } from '@/pages/Bodeguero';
+import { Telas } from '@/pages/Telas';
 
 function Shell() {
   return (
@@ -54,7 +55,7 @@ export function App() {
         <Route index element={<LegacyFrame src="/legacy/index.html" title="Inicio" />} />
         <Route path="ventas" element={<Ventas />} />
         <Route path="inteligencia" element={<Inteligencia />} />
-        <Route path="telas" element={<LegacyFrame src="/legacy/telas.html" title="Telas" />} />
+        <Route path="telas" element={<Telas />} />
         <Route
           path="inventario"
           element={<LegacyFrame src="/legacy/inventario.html" title="Inventario" />}

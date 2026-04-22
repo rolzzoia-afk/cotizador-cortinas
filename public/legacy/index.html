@@ -1139,7 +1139,7 @@
             <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false"><i class="bi bi-box-seam"></i> Insumos</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="telas-tab" data-bs-toggle="tab" data-bs-target="#telas" type="button" role="tab" aria-controls="telas" aria-selected="false"><i class="bi bi-textile-fill"></i> Telas</button>
+            <button class="nav-link" id="telas-tab" type="button" onclick="window.parent.postMessage({navigate:'/telas'},'*')"><i class="bi bi-textile-fill"></i> Telas</button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="bodeguero-tab" type="button" onclick="window.parent.postMessage({navigate:'/bodeguero'},'*')"><i class="bi bi-boxes"></i> Bodeguero</button>
