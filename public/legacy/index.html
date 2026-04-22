@@ -10234,22 +10234,14 @@
             // Pequeño delay para que todos los DOMContentLoaded listeners
             // del resto de la app terminen de registrarse primero.
             setTimeout(function() {
+                // Usar .click() en vez de bootstrap.Tab(...).show():
+                //   - Tabs legacy con data-bs-toggle: Bootstrap activa el pane igual.
+                //   - Tabs portados a React (sin data-bs-toggle, solo onclick=postMessage):
+                //     dispara el postMessage y el shell React navega a la ruta correcta.
                 try {
-                    new bootstrap.Tab(primerBtnPermitido).show();
+                    primerBtnPermitido.click();
                 } catch(e) {
-                    // Fallback manual si Bootstrap falla
-                    document.querySelectorAll('#fasesTab .nav-link').forEach(b => {
-                        b.classList.remove('active');
-                        b.setAttribute('aria-selected', 'false');
-                    });
-                    document.querySelectorAll('#fasesTabContent .tab-pane').forEach(p => {
-                        p.classList.remove('show', 'active');
-                    });
-                    primerBtnPermitido.classList.add('active');
-                    primerBtnPermitido.setAttribute('aria-selected', 'true');
-                    const target = primerBtnPermitido.getAttribute('data-bs-target').replace('#', '');
-                    const pane = document.getElementById(target);
-                    if (pane) { pane.style.display = ''; pane.classList.add('show', 'active'); }
+                    console.error('[rol-filter] no se pudo activar primer tab:', e);
                 }
             }, 80);
         });
