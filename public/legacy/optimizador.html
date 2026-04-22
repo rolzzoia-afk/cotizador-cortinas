@@ -4185,7 +4185,7 @@ async function ejecutarOptimizacion() {
                                 log(`📦 Sobrante agregado como nueva fila para colmena ${colmenaExistente.n_colmena} (código ${codReemplazo}). Medida sobrante: ${sobrante / 10}cm`, 'info');
                                 const idxHistoricoExistente = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === colmenaExistente.n_colmena);
                                 if (idxHistoricoExistente !== -1) {
-                                    SistemaInventario.colmenasHistorico.splice(idxHistoricoExistente + 1, 0, { n_colmena: colmenaExistente.n_colmena, medida_cm: sobrante / 10, medida_mm: sobrante, cod: codReemplazo, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: colmenaExistente.n_colmena, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null });
+                                    SistemaInventario.colmenasHistorico.splice(idxHistoricoExistente + 1, 0, { n_colmena: colmenaExistente.n_colmena, medida_cm: sobrante / 10, medida_mm: sobrante, cod: codReemplazo, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: colmenaExistente.n_colmena, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null, tubo_parent_raiz_id: tuboReemplazo.colmena.tubo_raiz_id || null });
                                 }
                                 SistemaInventario.colmenasDisponibles.splice(tuboReemplazo.indice, 1);
                                 SistemaInventario.colmenasDisponibles.push({
@@ -5171,10 +5171,20 @@ async function verificarIntegridadPreGuardado() {
     const vistosEnPlan = {};
     const duplicados = [];
     const _dupLog = [];
-    usados.forEach(c => {
-        const key = c.tubo_raiz_id
-            ? `raiz__${c.tubo_raiz_id}`
-            : `${c.n_colmena}__${normalizarCodigo(c.cod)}__${c.medida_mm}`;
+    let _mermaDesechadaCtr = 0;
+    usados.forEach((c, idx) => {
+        // MERMA desechada: tubo fully consumed (medida_mm=0, cod=''). Múltiples
+        // MERMA desechadas en el mismo slot son físicamente distintas — nunca
+        // deben colisionar. Si no hay UUID, usar un contador único por entrada.
+        const esMermaDesechada = c.medida_mm === 0 && !c.cod;
+        let key;
+        if (c.tubo_raiz_id) {
+            key = `raiz__${c.tubo_raiz_id}`;
+        } else if (esMermaDesechada) {
+            key = `merma_desechada__${c.n_colmena}__${_mermaDesechadaCtr++}__${idx}`;
+        } else {
+            key = `${c.n_colmena}__${normalizarCodigo(c.cod)}__${c.medida_mm}`;
+        }
         if (vistosEnPlan[key]) {
             duplicados.push({ n_colmena: c.n_colmena, cod: c.cod });
             _dupLog.push({
