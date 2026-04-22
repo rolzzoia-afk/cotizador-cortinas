@@ -5133,17 +5133,50 @@ async function verificarIntegridadPreGuardado() {
     // (distingue el tubo original de su sobrante aunque compartan el mismo slot).
     const vistosEnPlan = {};
     const duplicados = [];
+    // ── DIAGNÓSTICO TEMPORAL ─────────────────────────────────────
+    // Traza cada entrada 'usada' para ver exactamente por qué colapsa la key.
+    // Se puede quitar después de resolver el bug de duplicación.
+    console.groupCollapsed('[DUP-DIAG] usados →', usados.length);
+    const _diagDump = usados.map(c => ({
+        n_colmena: c.n_colmena,
+        cod: c.cod,
+        medida_cm: c.medida_cm,
+        medida_mm: c.medida_mm,
+        tubo_raiz_id: c.tubo_raiz_id,
+        origen: c.origen,
+        _esOriginal: c._esOriginal,
+        _raizFresh: c._raizFresh,
+        estado: c.estado
+    }));
+    console.table(_diagDump);
+    console.groupEnd();
+    // ─────────────────────────────────────────────────────────────
+    const _dupLog = [];
     usados.forEach(c => {
+        const usaFallback = !c.tubo_raiz_id;
         const key = c.tubo_raiz_id
             ? `raiz__${c.tubo_raiz_id}`
             : `${c.n_colmena}__${normalizarCodigo(c.cod)}__${c.medida_mm}`;
         if (vistosEnPlan[key]) {
             duplicados.push({ n_colmena: c.n_colmena, cod: c.cod });
+            _dupLog.push({
+                colision_key: key,
+                por_fallback: usaFallback,
+                dup_entry: { ...c },
+                original_entry: vistosEnPlan[key]
+            });
         } else {
-            vistosEnPlan[key] = true;
+            vistosEnPlan[key] = { ...c };
         }
     });
     if (duplicados.length > 0) {
+        console.group('%c[DUP-DIAG] colisiones detectadas', 'color:#f87171;font-weight:bold');
+        _dupLog.forEach((d, i) => {
+            console.log(`#${i + 1} key="${d.colision_key}" por_fallback=${d.por_fallback}`);
+            console.log('  original:', d.original_entry);
+            console.log('  duplicado:', d.dup_entry);
+        });
+        console.groupEnd();
         const lista = duplicados.map(d => `• Colmena ${d.n_colmena} (${d.cod})`).join('\n');
         return {
             ok: false,
