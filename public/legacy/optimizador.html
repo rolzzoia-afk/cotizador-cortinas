@@ -3859,6 +3859,30 @@ async function ejecutarOptimizacion() {
 
     if (SistemaInventario.ordenes.length === 0 || colmenasAUsar.length === 0) { alert('Cargue órdenes y colmenas'); return; }
 
+    // ── Dedup por UUID en la fuente: si colmenasAUsar trae el mismo tubo físico
+    // dos veces (bug de carga, estado residual, race condition), nos quedamos
+    // con uno solo antes de poblar colmenasDisponibles y colmenasHistorico.
+    // Ambas estructuras se derivan de colmenasAUsar, por lo que dedupar acá
+    // cura el problema en los dos lados de una sola vez.
+    {
+        const _vistosFuente = new Set();
+        const _deduped = [];
+        let _skipped = 0;
+        for (const c of colmenasAUsar) {
+            if (c.tubo_raiz_id && _vistosFuente.has(c.tubo_raiz_id)) {
+                _skipped++;
+                console.warn(`[OPT] ⚠️ Duplicado en fuente: raiz_id=${c.tubo_raiz_id} (${c.n_colmena}/${c.cod}/${c.medida_cm}cm) — descartado`);
+                continue;
+            }
+            if (c.tubo_raiz_id) _vistosFuente.add(c.tubo_raiz_id);
+            _deduped.push(c);
+        }
+        if (_skipped > 0) {
+            log(`⚠️ ${_skipped} tubo(s) duplicados por UUID descartados antes de optimizar. Revisá consola para detalle.`, 'warn');
+            colmenasAUsar = _deduped;
+        }
+    }
+
     // ── ALERTA DE OT DUPLICADA: detectar si estas órdenes ya fueron procesadas ──
     const otsEnOrden = [...new Set(SistemaInventario.ordenes.map(o => String(o.ot || '')).filter(ot => ot && ot !== '-'))];
     if (otsEnOrden.length > 0) {
@@ -3922,14 +3946,47 @@ async function ejecutarOptimizacion() {
     SistemaInventario.resultadosOptimizacion = [];
     SistemaInventario.mermas = [];
 
+    // ── DIAGNÓSTICO: detectar UUIDs duplicados en la fuente antes del forEach ──
+    {
+        const _conteoRaiz = {};
+        colmenasAUsar.forEach(c => {
+            const r = c.tubo_raiz_id;
+            if (r) _conteoRaiz[r] = (_conteoRaiz[r] || 0) + 1;
+        });
+        const _dupsEnFuente = Object.entries(_conteoRaiz).filter(([, n]) => n > 1);
+        if (_dupsEnFuente.length > 0) {
+            console.group(`%c[OPT-DUP-FUENTE] ${_dupsEnFuente.length} UUIDs duplicados en colmenasAUsar`, 'color:#f87171;font-weight:bold');
+            _dupsEnFuente.forEach(([uuid, n]) => {
+                const filas = colmenasAUsar.filter(c => c.tubo_raiz_id === uuid);
+                console.log(`raiz_id=${uuid} aparece ${n} veces →`, filas);
+            });
+            console.groupEnd();
+        } else {
+            console.log(`[OPT-DUP-FUENTE] ${colmenasAUsar.length} tubos, 0 UUIDs duplicados en fuente`);
+        }
+    }
+
+    // ── DEDUP al pushear: evitar que histórico tenga 2 entradas con mismo UUID ──
+    // Si la fuente trae el mismo tubo dos veces (bug de carga, estado residual,
+    // o race condition), descartamos el duplicado y logueamos warning.
+    const _uuidsEnHistorico = new Set();
     colmenasAUsar.forEach((col) => {
-        // Incluir serial y tubo_raiz_id para trazabilidad completa del linaje
         const _raizCargada = col.tubo_raiz_id || null;
-        const _raizFresh   = !_raizCargada; // UUID generado localmente: el tubo no tenía UUID en Supabase
+
+        // Red de seguridad: si este UUID ya está en histórico, skip.
+        if (_raizCargada && _uuidsEnHistorico.has(_raizCargada)) {
+            console.warn(`[OPT] ⚠️ Tubo con raiz_id ${_raizCargada} (${col.n_colmena}/${col.cod}/${col.medida_cm}cm) ya está en histórico — duplicado descartado`);
+            return;
+        }
+
+        const _raizFresh = !_raizCargada; // UUID generado localmente: el tubo no tenía UUID en Supabase
+        const _raizFinal = _raizCargada || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+        if (_raizFinal) _uuidsEnHistorico.add(_raizFinal);
+
         // _esOriginal: marca entradas cargadas al inicio (existen en BD). Las entradas
         // creadas durante la optimización (sobrantes, tubos nuevos) NO tienen este flag
         // y por lo tanto no se verifican contra la BD en verificarIntegridadPreGuardado.
-        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: _raizCargada || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null), _raizFresh, _esOriginal: true });
+        SistemaInventario.colmenasHistorico.push({ n_colmena: col.n_colmena, medida_cm: col.medida_cm, medida_mm: col.medida_mm, cod: col.cod, codigo_original: col.cod, estado: 'disponible', origen: 'Original', posicionOriginal: col.n_colmena, serial: col.serial || null, tubo_raiz_id: _raizFinal, _raizFresh, _esOriginal: true });
     });
 
     log('=== INICIO OPTIMIZACIÓN ===', 'info');
