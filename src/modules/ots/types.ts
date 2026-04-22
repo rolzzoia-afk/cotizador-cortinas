@@ -58,6 +58,7 @@ export type DatosGenerales = {
   historialEstados?: HistorialEstado[];
   bom?: BomItem[];
   bomFecha?: string | null;
+  optimizerRows?: unknown[];
 };
 
 // Estructura mínima de una ventana/ítem dentro de OT.items. El cotizador

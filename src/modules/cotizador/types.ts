@@ -7,6 +7,7 @@ export type Producto = {
   descripcion: string;
   precio: number;
   colorGrupo?: string;
+  anchoRollo?: number | string;
 };
 
 // Mapa de catálogo: COD_INT → Producto. Se guarda en Supabase `configuracion`

@@ -20,6 +20,7 @@ import { CotizadorFase1 } from '@/pages/CotizadorFase1';
 import { CotizadorFase2 } from '@/pages/CotizadorFase2';
 import { CotizadorFase3 } from '@/pages/CotizadorFase3';
 import { CotizadorFase4 } from '@/pages/CotizadorFase4';
+import { CotizadorTela } from '@/pages/CotizadorTela';
 import { OjoDeDios } from '@/pages/OjoDeDios';
 
 function Shell() {
@@ -64,6 +65,7 @@ export function App() {
         <Route path="ots/:id/fase2" element={<CotizadorFase2 />} />
         <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
         <Route path="ots/:id/fase4" element={<CotizadorFase4 />} />
+        <Route path="ots/:id/tela" element={<CotizadorTela />} />
         <Route
           path="cotizador"
           element={<LegacyFrame src="/legacy/index.html" title="Cotizador" />}

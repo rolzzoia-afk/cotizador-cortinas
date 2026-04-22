@@ -70,11 +70,9 @@ export function CotizadorFase4() {
     }
   };
 
-  const abrirTelaLegacy = () => {
+  const abrirTelaReact = () => {
     if (!ot) return;
-    localStorage.setItem('activeOTId', ot.id);
-    localStorage.setItem('rolzzo_goto_tab', 'tela-tab');
-    navigate('/cotizador');
+    navigate(`/ots/${ot.id}/tela`);
   };
 
   const abrirFase4Legacy = () => {
@@ -263,24 +261,27 @@ export function CotizadorFase4() {
           )}
         </div>
 
-        {/* Integraciones legacy */}
+        {/* Integraciones */}
         <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Scissors className="h-4 w-4 text-blue-300" />
-            <span className="text-sm font-medium text-blue-200">Plan de corte y optimización</span>
+            <span className="text-sm font-medium text-blue-200">Optimización de paños y plan de corte</span>
           </div>
           <p className="mb-3 text-xs text-zinc-400">
-            El plan de corte, la integración con colmena de sobrantes y el optimizador de paños siguen
-            en la vista legacy. Abrilos desde acá sin perder la OT actual.
+            El optimizador de paños está en React. El BOM/etiquetas/PDF siguen en legacy hasta Fase 6.
           </p>
           <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              onClick={abrirTelaReact}
+              className="gap-1.5 bg-indigo-600 hover:bg-indigo-500"
+            >
+              <Scissors className="h-3.5 w-3.5" />
+              Abrir Tela (optimizador de paños)
+            </Button>
             <Button variant="outline" size="sm" onClick={abrirFase4Legacy} className="gap-1.5">
               <ExternalLink className="h-3.5 w-3.5" />
               Abrir Fase 4 legacy (BOM + etiquetas + PDF)
-            </Button>
-            <Button variant="outline" size="sm" onClick={abrirTelaLegacy} className="gap-1.5">
-              <ExternalLink className="h-3.5 w-3.5" />
-              Abrir tab Tela (plan de corte)
             </Button>
           </div>
         </div>
