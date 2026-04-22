@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Eye, ExternalLink, Wifi, WifiOff } from 'lucide-react';
+import { Eye, Wifi, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { useOTs } from '@/modules/ots/hooks';
 import { useTelas } from '@/modules/admin/hooks';
 import { Dashboard } from '@/components/ojo-de-dios/Dashboard';
@@ -10,8 +9,16 @@ import { Stock } from '@/components/ojo-de-dios/Stock';
 import { Reportes } from '@/components/ojo-de-dios/Reportes';
 import { Control } from '@/components/ojo-de-dios/Control';
 import { Colmena } from '@/components/ojo-de-dios/Colmena';
+import { Correcciones } from '@/components/ojo-de-dios/Correcciones';
 
-type Tab = 'dashboard' | 'clientes' | 'stock' | 'reportes' | 'colmena' | 'control';
+type Tab =
+  | 'dashboard'
+  | 'clientes'
+  | 'stock'
+  | 'reportes'
+  | 'colmena'
+  | 'correcciones'
+  | 'control';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'dashboard', label: 'Dashboard' },
@@ -19,6 +26,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'stock', label: 'Stock Telas' },
   { id: 'reportes', label: 'Reportes' },
   { id: 'colmena', label: 'Colmena' },
+  { id: 'correcciones', label: 'Correcciones' },
   { id: 'control', label: 'Control' },
 ];
 
@@ -26,11 +34,6 @@ export function OjoDeDios() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const { ots, online } = useOTs();
   const { telas } = useTelas();
-
-  const abrirLegacyCorrecciones = () => {
-    localStorage.setItem('rolzzo_goto_tab', 'ojodedios-tab');
-    window.location.href = '/cotizador';
-  };
 
   return (
     <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
@@ -55,10 +58,6 @@ export function OjoDeDios() {
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
             {online ? 'Online' : 'Offline'}
           </div>
-          <Button variant="outline" size="sm" onClick={abrirLegacyCorrecciones} className="gap-1">
-            <ExternalLink className="h-3.5 w-3.5" />
-            Abrir Correcciones (legacy)
-          </Button>
         </div>
       </div>
 
@@ -87,6 +86,7 @@ export function OjoDeDios() {
         {tab === 'stock' && <Stock />}
         {tab === 'reportes' && <Reportes ots={ots} telas={telas} />}
         {tab === 'colmena' && <Colmena />}
+        {tab === 'correcciones' && <Correcciones />}
         {tab === 'control' && <Control ots={ots} telas={telas} online={online} />}
       </div>
     </div>
