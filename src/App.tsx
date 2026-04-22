@@ -17,6 +17,7 @@ import { Telas } from '@/pages/Telas';
 import { Inventario } from '@/pages/Inventario';
 import { Panel } from '@/pages/Panel';
 import { CotizadorFase1 } from '@/pages/CotizadorFase1';
+import { CotizadorFase2 } from '@/pages/CotizadorFase2';
 import { CotizadorFase3 } from '@/pages/CotizadorFase3';
 
 function Shell() {
@@ -58,6 +59,7 @@ export function App() {
       >
         <Route index element={<Panel />} />
         <Route path="ots/:id/fase1" element={<CotizadorFase1 />} />
+        <Route path="ots/:id/fase2" element={<CotizadorFase2 />} />
         <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
         <Route
           path="cotizador"

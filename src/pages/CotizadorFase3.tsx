@@ -141,17 +141,14 @@ export function CotizadorFase3() {
       <div className="flex-1 overflow-auto px-4 py-4">
         <div className="mb-3 flex items-center gap-2 text-sm text-zinc-400">
           <Pencil className="h-3.5 w-3.5" />
-          Para editar los paños (medidas reales), usá el cotizador legacy en Fase 2 (
+          Para editar los paños (medidas reales y ficha técnica),{' '}
           <button
             className="text-indigo-300 hover:underline"
-            onClick={() => {
-              localStorage.setItem('activeOTId', ot.id);
-              navigate('/cotizador?tab=fase2');
-            }}
+            onClick={() => navigate(`/ots/${ot.id}/fase2`)}
           >
             abrir Fase 2
           </button>
-          ).
+          .
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-white/10 bg-zinc-900/40">

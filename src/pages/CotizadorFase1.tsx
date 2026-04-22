@@ -154,9 +154,7 @@ export function CotizadorFase1() {
         cotizacionCount: (ot.cotizacionCount || 0) + items.length,
       });
       toast.success(`${items.length} ítem(s) enviados a Terreno`);
-      // El resto de Fase 2 sigue en legacy
-      localStorage.setItem('activeOTId', ot.id);
-      navigate('/cotizador?tab=fase2');
+      navigate(`/ots/${ot.id}/fase2`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error al enviar: ' + msg);

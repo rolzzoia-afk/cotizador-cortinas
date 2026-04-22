@@ -128,7 +128,7 @@ export function Panel() {
     } else if (ot.estado === 'aprobada' || ot.estado === 'lista' || ot.estado === 'instalada') {
       navigate(`/ots/${ot.id}/fase3`);
     } else if (ot.estado === 'terreno') {
-      navigate('/cotizador?tab=fase2');
+      navigate(`/ots/${ot.id}/fase2`);
     } else if (ot.estado === 'produccion') {
       navigate('/cotizador?tab=fase4');
     } else {
