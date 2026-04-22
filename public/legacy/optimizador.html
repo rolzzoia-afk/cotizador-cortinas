@@ -3946,40 +3946,20 @@ async function ejecutarOptimizacion() {
     SistemaInventario.resultadosOptimizacion = [];
     SistemaInventario.mermas = [];
 
-    // ── DIAGNÓSTICO: detectar UUIDs duplicados en la fuente antes del forEach ──
-    {
-        const _conteoRaiz = {};
-        colmenasAUsar.forEach(c => {
-            const r = c.tubo_raiz_id;
-            if (r) _conteoRaiz[r] = (_conteoRaiz[r] || 0) + 1;
-        });
-        const _dupsEnFuente = Object.entries(_conteoRaiz).filter(([, n]) => n > 1);
-        if (_dupsEnFuente.length > 0) {
-            console.group(`%c[OPT-DUP-FUENTE] ${_dupsEnFuente.length} UUIDs duplicados en colmenasAUsar`, 'color:#f87171;font-weight:bold');
-            _dupsEnFuente.forEach(([uuid, n]) => {
-                const filas = colmenasAUsar.filter(c => c.tubo_raiz_id === uuid);
-                console.log(`raiz_id=${uuid} aparece ${n} veces →`, filas);
-            });
-            console.groupEnd();
-        } else {
-            console.log(`[OPT-DUP-FUENTE] ${colmenasAUsar.length} tubos, 0 UUIDs duplicados en fuente`);
-        }
-    }
-
-    // ── DEDUP al pushear: evitar que histórico tenga 2 entradas con mismo UUID ──
-    // Si la fuente trae el mismo tubo dos veces (bug de carga, estado residual,
-    // o race condition), descartamos el duplicado y logueamos warning.
+    // Red de seguridad: evitar que colmenasHistorico tenga 2 entradas con mismo UUID.
+    // Si algún día la fuente vuelve a traer duplicados, los descartamos acá y
+    // logueamos warning (no debería pasar — hay unique constraint en BD —
+    // pero lo dejamos como cinturón y tiradores).
     const _uuidsEnHistorico = new Set();
     colmenasAUsar.forEach((col) => {
         const _raizCargada = col.tubo_raiz_id || null;
 
-        // Red de seguridad: si este UUID ya está en histórico, skip.
         if (_raizCargada && _uuidsEnHistorico.has(_raizCargada)) {
             console.warn(`[OPT] ⚠️ Tubo con raiz_id ${_raizCargada} (${col.n_colmena}/${col.cod}/${col.medida_cm}cm) ya está en histórico — duplicado descartado`);
             return;
         }
 
-        const _raizFresh = !_raizCargada; // UUID generado localmente: el tubo no tenía UUID en Supabase
+        const _raizFresh = !_raizCargada;
         const _raizFinal = _raizCargada || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
         if (_raizFinal) _uuidsEnHistorico.add(_raizFinal);
 
@@ -5190,27 +5170,8 @@ async function verificarIntegridadPreGuardado() {
     // (distingue el tubo original de su sobrante aunque compartan el mismo slot).
     const vistosEnPlan = {};
     const duplicados = [];
-    // ── DIAGNÓSTICO TEMPORAL ─────────────────────────────────────
-    // Traza cada entrada 'usada' para ver exactamente por qué colapsa la key.
-    // Se puede quitar después de resolver el bug de duplicación.
-    console.groupCollapsed('[DUP-DIAG] usados →', usados.length);
-    const _diagDump = usados.map(c => ({
-        n_colmena: c.n_colmena,
-        cod: c.cod,
-        medida_cm: c.medida_cm,
-        medida_mm: c.medida_mm,
-        tubo_raiz_id: c.tubo_raiz_id,
-        origen: c.origen,
-        _esOriginal: c._esOriginal,
-        _raizFresh: c._raizFresh,
-        estado: c.estado
-    }));
-    console.table(_diagDump);
-    console.groupEnd();
-    // ─────────────────────────────────────────────────────────────
     const _dupLog = [];
     usados.forEach(c => {
-        const usaFallback = !c.tubo_raiz_id;
         const key = c.tubo_raiz_id
             ? `raiz__${c.tubo_raiz_id}`
             : `${c.n_colmena}__${normalizarCodigo(c.cod)}__${c.medida_mm}`;
@@ -5218,7 +5179,7 @@ async function verificarIntegridadPreGuardado() {
             duplicados.push({ n_colmena: c.n_colmena, cod: c.cod });
             _dupLog.push({
                 colision_key: key,
-                por_fallback: usaFallback,
+                por_fallback: !c.tubo_raiz_id,
                 dup_entry: { ...c },
                 original_entry: vistosEnPlan[key]
             });
@@ -5227,7 +5188,8 @@ async function verificarIntegridadPreGuardado() {
         }
     });
     if (duplicados.length > 0) {
-        console.group('%c[DUP-DIAG] colisiones detectadas', 'color:#f87171;font-weight:bold');
+        // Log detallado solo cuando realmente hay colisión — útil para debug si vuelve a pasar.
+        console.group('%c[OPT] colisiones de UUID en validación pre-guardado', 'color:#f87171;font-weight:bold');
         _dupLog.forEach((d, i) => {
             console.log(`#${i + 1} key="${d.colision_key}" por_fallback=${d.por_fallback}`);
             console.log('  original:', d.original_entry);
