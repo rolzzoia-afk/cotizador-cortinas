@@ -116,12 +116,12 @@ export function Panel() {
   }, [activas]);
 
   const abrirOT = (ot: OT) => {
-    // Routing según estado:
-    //   - cotizacion / esperando → Fase 1 React
-    //   - aprobada                → Fase 3 React
-    //   - lista / instalada       → Fase 3 React (read-only)
-    //   - terreno                 → legacy Fase 2 (no portado aún)
-    //   - produccion              → legacy Fase 4 (no portado aún)
+    // Routing según estado (todo React):
+    //   cotizacion / esperando → Fase 1
+    //   terreno                → Fase 2
+    //   aprobada               → Fase 3
+    //   produccion             → Fase 4 (sub-etapas + BOM, plan de corte queda en tab Tela legacy)
+    //   lista / instalada      → Fase 3 read-only
     localStorage.setItem('activeOTId', ot.id);
     if (ot.estado === 'cotizacion' || ot.estado === 'esperando') {
       navigate(`/ots/${ot.id}/fase1`);
@@ -130,7 +130,7 @@ export function Panel() {
     } else if (ot.estado === 'terreno') {
       navigate(`/ots/${ot.id}/fase2`);
     } else if (ot.estado === 'produccion') {
-      navigate('/cotizador?tab=fase4');
+      navigate(`/ots/${ot.id}/fase4`);
     } else {
       navigate('/cotizador?tab=fase1');
     }

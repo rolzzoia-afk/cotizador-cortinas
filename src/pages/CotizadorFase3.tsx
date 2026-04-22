@@ -71,9 +71,8 @@ export function CotizadorFase3() {
         totalConIva: totales.total,
       });
       toast.success('OT enviada a Producción');
-      // Fase 4 sigue en legacy por ahora
       localStorage.setItem('activeOTId', ot.id);
-      navigate('/cotizador?tab=fase4');
+      navigate(`/ots/${ot.id}/fase4`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error al avanzar: ' + msg);

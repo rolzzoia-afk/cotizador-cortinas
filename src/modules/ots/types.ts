@@ -31,6 +31,15 @@ export type PostInstalacion = {
   observaciones: string;
 };
 
+export type BomItem = {
+  categoria: string;
+  descripcion: string;
+  especificacion?: string;
+  color?: string;
+  cantidad: number;
+  unidad: string;
+};
+
 export type DatosGenerales = {
   cliente?: string;
   rut?: string;
@@ -47,6 +56,8 @@ export type DatosGenerales = {
   fechaEntrega?: string | null;
   postInstalacion?: PostInstalacion;
   historialEstados?: HistorialEstado[];
+  bom?: BomItem[];
+  bomFecha?: string | null;
 };
 
 // Estructura mínima de una ventana/ítem dentro de OT.items. El cotizador
