@@ -58,11 +58,13 @@ export function useOTs(): UseOTs {
     cargar();
   }, [cargar]);
 
-  // Realtime: INSERT/UPDATE/DELETE sobre `ots` de esta empresa
+  // Realtime: INSERT/UPDATE/DELETE sobre `ots` de esta empresa.
+  // Channel name único por mount (StrictMode-safe).
   useEffect(() => {
     if (!empresaId) return;
+    const channelName = `ots-realtime-${crypto.randomUUID()}`;
     const ch = supabase
-      .channel('ots-realtime-react')
+      .channel(channelName)
       .on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         'postgres_changes' as any,

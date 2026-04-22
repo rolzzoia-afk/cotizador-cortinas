@@ -60,8 +60,12 @@ export function useTelas(): {
 
   useEffect(() => {
     if (!empresaId) return;
+    // Channel name único por mount: en React StrictMode el efecto corre 2x;
+    // si reutilizamos el mismo nombre, el segundo .on() después del primer
+    // .subscribe() tira "cannot add postgres_changes callbacks after subscribe()".
+    const channelName = `telas-realtime-${crypto.randomUUID()}`;
     const ch = supabase
-      .channel('telas-realtime')
+      .channel(channelName)
       .on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         'postgres_changes' as any,
@@ -142,8 +146,10 @@ export function useVersionMinima(): {
 
   useEffect(() => {
     if (!empresaId) return;
+    // Ver useTelas: channel name único para evitar conflicto en StrictMode.
+    const channelName = `version-realtime-${crypto.randomUUID()}`;
     const ch = supabase
-      .channel('version-realtime')
+      .channel(channelName)
       .on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         'postgres_changes' as any,
