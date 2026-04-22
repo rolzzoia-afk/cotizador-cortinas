@@ -16,6 +16,8 @@ import { Bodeguero } from '@/pages/Bodeguero';
 import { Telas } from '@/pages/Telas';
 import { Inventario } from '@/pages/Inventario';
 import { Panel } from '@/pages/Panel';
+import { CotizadorFase1 } from '@/pages/CotizadorFase1';
+import { CotizadorFase3 } from '@/pages/CotizadorFase3';
 
 function Shell() {
   return (
@@ -55,6 +57,8 @@ export function App() {
         }
       >
         <Route index element={<Panel />} />
+        <Route path="ots/:id/fase1" element={<CotizadorFase1 />} />
+        <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
         <Route
           path="cotizador"
           element={<LegacyFrame src="/legacy/index.html" title="Cotizador" />}

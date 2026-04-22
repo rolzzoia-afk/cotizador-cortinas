@@ -115,12 +115,25 @@ export function Panel() {
     return m;
   }, [activas]);
 
-  const abrirOT = (id: string) => {
-    // Bridge al legacy: el cotizador (fase1-4, tela, ojodedios) todavía corre
-    // en el HTML legacy. Setear activeOTId en localStorage y navegar al
-    // iframe con ?tab=fase1 — legacy lo lee en cargarOTs() y activa Fase 1.
-    localStorage.setItem('activeOTId', id);
-    navigate('/cotizador?tab=fase1');
+  const abrirOT = (ot: OT) => {
+    // Routing según estado:
+    //   - cotizacion / esperando → Fase 1 React
+    //   - aprobada                → Fase 3 React
+    //   - lista / instalada       → Fase 3 React (read-only)
+    //   - terreno                 → legacy Fase 2 (no portado aún)
+    //   - produccion              → legacy Fase 4 (no portado aún)
+    localStorage.setItem('activeOTId', ot.id);
+    if (ot.estado === 'cotizacion' || ot.estado === 'esperando') {
+      navigate(`/ots/${ot.id}/fase1`);
+    } else if (ot.estado === 'aprobada' || ot.estado === 'lista' || ot.estado === 'instalada') {
+      navigate(`/ots/${ot.id}/fase3`);
+    } else if (ot.estado === 'terreno') {
+      navigate('/cotizador?tab=fase2');
+    } else if (ot.estado === 'produccion') {
+      navigate('/cotizador?tab=fase4');
+    } else {
+      navigate('/cotizador?tab=fase1');
+    }
   };
 
   const handleCrear = async () => {
@@ -136,9 +149,9 @@ export function Panel() {
       toast.success('OT creada');
       setNuevoOpen(false);
       setNuevoForm({ ...EMPTY_FORM, fecha: new Date().toISOString().split('T')[0] });
-      // Al crear, abrir directamente en el cotizador legacy sobre Fase 1
+      // Al crear, abrir directamente en Fase 1 React
       localStorage.setItem('activeOTId', ot.id);
-      navigate('/cotizador?tab=fase1');
+      navigate(`/ots/${ot.id}/fase1`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error al crear: ' + msg);
@@ -305,7 +318,7 @@ export function Panel() {
                       <OTCard
                         key={ot.id}
                         ot={ot}
-                        onAbrir={() => abrirOT(ot.id)}
+                        onAbrir={() => abrirOT(ot)}
                         onMoverEstado={(est) => handleMoverEstado(ot.id, est)}
                         onMoverSub={(sub) => moverSubEtapa(ot.id, sub)}
                         onArchivar={() => handleArchivar(ot)}

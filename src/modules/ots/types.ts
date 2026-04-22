@@ -49,7 +49,34 @@ export type DatosGenerales = {
   historialEstados?: HistorialEstado[];
 };
 
-export type VentanaItem = Record<string, unknown>;
+// Estructura mínima de una ventana/ítem dentro de OT.items. El cotizador
+// define tipos más ricos (cotizador/types), pero acá mantenemos la forma
+// compatible con el legacy: un objeto con id + medidas + paños + datos del
+// producto cotizado. Los fields exactos están en @/modules/cotizador/types.
+export type VentanaItem = {
+  id: string | number;
+  ubicacion?: string;
+  codInt?: string;
+  producto?: string;
+  tipo?: string;
+  descripcion?: string;
+  color?: string;
+  alto?: number;
+  precio?: number;
+  cantidad?: number;
+  subtotal?: number;
+  fase?: string;
+  categoria?: string;
+  grupoId?: string | null;
+  grupoOrden?: number;
+  panos?: Array<{
+    ancho: number | string;
+    alto: number | string;
+    color?: string;
+    [k: string]: unknown;
+  }>;
+  [k: string]: unknown;
+};
 
 export type OT = {
   id: string;

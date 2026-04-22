@@ -227,3 +227,73 @@ export function useOTs(): UseOTs {
     refresh: cargar,
   };
 }
+
+// Hook de una OT específica por ID. Carga directo desde Supabase + permite
+// guardar parches parciales. Útil para páginas de Fase 1/3 que editan una OT.
+export function useOT(id: string | undefined): {
+  ot: OT | null;
+  loading: boolean;
+  guardar: (patch: Partial<OT>) => Promise<void>;
+  guardarCompleto: (ot: OT) => Promise<void>;
+} {
+  const { empresaId } = useAuth();
+  const [ot, setOt] = useState<OT | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!id || !empresaId) {
+      setOt(null);
+      setLoading(false);
+      return;
+    }
+    let cancelado = false;
+    (async () => {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('ots')
+        .select('*')
+        .eq('id', id)
+        .eq('empresa_id', empresaId)
+        .maybeSingle<OTRow>();
+      if (!cancelado) {
+        if (error) {
+          console.warn('[useOT] error:', error);
+          setOt(null);
+        } else {
+          setOt(data ? rowToOT(data) : null);
+        }
+        setLoading(false);
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, [id, empresaId]);
+
+  const guardarCompleto = useCallback(
+    async (nueva: OT) => {
+      if (!empresaId) throw new Error('Empresa no resuelta');
+      const { error } = await supabase
+        .from('ots')
+        .upsert(otToRow(nueva, empresaId), { onConflict: 'id' });
+      if (error) throw error;
+      setOt(nueva);
+    },
+    [empresaId],
+  );
+
+  const guardar = useCallback(
+    async (patch: Partial<OT>) => {
+      if (!ot) return;
+      const nueva = {
+        ...ot,
+        ...patch,
+        fechaModificacion: new Date().toISOString(),
+      } as OT;
+      await guardarCompleto(nueva);
+    },
+    [ot, guardarCompleto],
+  );
+
+  return { ot, loading, guardar, guardarCompleto };
+}
