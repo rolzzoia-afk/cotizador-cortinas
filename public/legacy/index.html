@@ -10249,5 +10249,35 @@
 })();
 </script>
 
+<script>
+// ══════════════════════════════════════════════════════════════════
+// BRIDGE REACT → LEGACY: auto-abrir tab específico al cargar
+// Cuando el shell React navega a /cotizador?tab=fase1 (o setea
+// localStorage.rolzzo_goto_tab antes de navegar), activamos ese
+// tab automáticamente tras la carga.
+// ══════════════════════════════════════════════════════════════════
+(function() {
+    const params = new URLSearchParams(window.location.search);
+    let tabObjetivo = params.get('tab');
+    if (!tabObjetivo) {
+        try { tabObjetivo = localStorage.getItem('rolzzo_goto_tab'); } catch(e) {}
+        if (tabObjetivo) {
+            try { localStorage.removeItem('rolzzo_goto_tab'); } catch(e) {}
+        }
+    }
+    if (!tabObjetivo) return;
+    document.addEventListener('DOMContentLoaded', function() {
+        // Retraso mayor que el del rol-filter para que corra DESPUÉS
+        // y no pise su decisión cuando ambos están activos.
+        setTimeout(function() {
+            const btn = document.getElementById(tabObjetivo + '-tab');
+            if (btn) {
+                try { btn.click(); } catch(e) { console.error('[tab-bridge] no se pudo abrir tab:', e); }
+            }
+        }, 150);
+    });
+})();
+</script>
+
 </body>
 </html>

@@ -15,6 +15,7 @@ import { HistorialCorte } from '@/pages/HistorialCorte';
 import { Bodeguero } from '@/pages/Bodeguero';
 import { Telas } from '@/pages/Telas';
 import { Inventario } from '@/pages/Inventario';
+import { Panel } from '@/pages/Panel';
 
 function Shell() {
   return (
@@ -53,7 +54,11 @@ export function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<LegacyFrame src="/legacy/index.html" title="Inicio" />} />
+        <Route index element={<Panel />} />
+        <Route
+          path="cotizador"
+          element={<LegacyFrame src="/legacy/index.html" title="Cotizador" />}
+        />
         <Route path="ventas" element={<Ventas />} />
         <Route path="inteligencia" element={<Inteligencia />} />
         <Route path="telas" element={<Telas />} />

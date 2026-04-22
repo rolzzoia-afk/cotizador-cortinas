@@ -4,7 +4,8 @@ import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
 const links = [
-  { to: '/', label: 'Inicio' },
+  { to: '/', label: 'Panel' },
+  { to: '/cotizador', label: 'Cotizador' },
   { to: '/ventas', label: 'Ventas' },
   { to: '/inteligencia', label: 'Inteligencia' },
   { to: '/telas', label: 'Telas' },
