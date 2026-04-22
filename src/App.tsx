@@ -14,6 +14,7 @@ import { Inteligencia } from '@/pages/Inteligencia';
 import { HistorialCorte } from '@/pages/HistorialCorte';
 import { Bodeguero } from '@/pages/Bodeguero';
 import { Telas } from '@/pages/Telas';
+import { Inventario } from '@/pages/Inventario';
 
 function Shell() {
   return (
@@ -56,10 +57,7 @@ export function App() {
         <Route path="ventas" element={<Ventas />} />
         <Route path="inteligencia" element={<Inteligencia />} />
         <Route path="telas" element={<Telas />} />
-        <Route
-          path="inventario"
-          element={<LegacyFrame src="/legacy/inventario.html" title="Inventario" />}
-        />
+        <Route path="inventario" element={<Inventario />} />
         <Route
           path="optimizador"
           element={<LegacyFrame src="/legacy/optimizador.html" title="Optimizador" />}

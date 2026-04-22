@@ -1136,7 +1136,7 @@
             <button class="nav-link" id="estructura-tab" data-bs-toggle="tab" data-bs-target="#estructura" type="button" role="tab" aria-controls="estructura" aria-selected="false"><i class="bi bi-tools"></i> Estructura</button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link" id="inventario-tab" data-bs-toggle="tab" data-bs-target="#inventario" type="button" role="tab" aria-controls="inventario" aria-selected="false"><i class="bi bi-box-seam"></i> Insumos</button>
+            <button class="nav-link" id="inventario-tab" type="button" onclick="window.parent.postMessage({navigate:'/inventario'},'*')"><i class="bi bi-box-seam"></i> Insumos</button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="telas-tab" type="button" onclick="window.parent.postMessage({navigate:'/telas'},'*')"><i class="bi bi-textile-fill"></i> Telas</button>
