@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowDownCircle,
   ArrowLeft,
+  ArrowUpCircle,
   Calendar,
   Camera,
   Check,
@@ -10,12 +12,16 @@ import {
   ClipboardList,
   Eraser,
   FileSignature,
+  KeyRound,
   Loader2,
   MapPin,
   Minus,
   Package,
+  Pencil,
   Plus,
+  QrCode,
   Scissors,
+  User,
   X,
 } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
@@ -46,7 +52,7 @@ import {
 // ─────────────────────────────────────────────────────────────
 // Tipos locales
 // ─────────────────────────────────────────────────────────────
-type Vista = 'lista' | 'despacho' | 'scanner' | 'firma';
+type Vista = 'lista' | 'despacho' | 'scanner' | 'firma' | 'salida' | 'entrada';
 type ScanFase = 'loc' | 'item';
 type ScanEstado = 'esperando' | 'ok' | 'error';
 
@@ -283,6 +289,22 @@ export function Bodeguero() {
           ots={ots}
           onBack={() => navigate('/landing')}
           onSelect={abrirOT}
+          onSalida={() => setVista('salida')}
+          onEntrada={() => setVista('entrada')}
+        />
+      )}
+      {vista === 'salida' && (
+        <AdHocView
+          modo="salida"
+          empresaId={empresaId || ''}
+          onCerrar={() => setVista('lista')}
+        />
+      )}
+      {vista === 'entrada' && (
+        <AdHocView
+          modo="entrada"
+          empresaId={empresaId || ''}
+          onCerrar={() => setVista('lista')}
         />
       )}
       {vista === 'despacho' && otActual && (
@@ -332,10 +354,14 @@ function ListaOTs({
   ots,
   onBack,
   onSelect,
+  onSalida,
+  onEntrada,
 }: {
   ots: OT[];
   onBack: () => void;
   onSelect: (ot: OT) => void;
+  onSalida: () => void;
+  onEntrada: () => void;
 }) {
   return (
     <>
@@ -346,10 +372,35 @@ function ListaOTs({
         >
           <ArrowLeft className="h-4 w-4" /> Inicio
         </button>
-        <h1 className="flex-1 text-base font-bold">Bodeguero · Despacho por OT</h1>
+        <h1 className="flex-1 text-base font-bold">Bodeguero</h1>
       </div>
 
       <div className="mx-auto max-w-3xl p-4">
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <Button
+            onClick={onSalida}
+            className="h-auto flex-col gap-1 border border-red-500/30 bg-red-500/10 py-3 text-red-300 hover:bg-red-500/20"
+            variant="outline"
+          >
+            <ArrowUpCircle className="h-5 w-5" />
+            <span className="text-sm font-semibold">Salida rápida</span>
+            <span className="text-[10px] opacity-80">Descontar insumo sin OT</span>
+          </Button>
+          <Button
+            onClick={onEntrada}
+            className="h-auto flex-col gap-1 border border-emerald-500/30 bg-emerald-500/10 py-3 text-emerald-300 hover:bg-emerald-500/20"
+            variant="outline"
+          >
+            <ArrowDownCircle className="h-5 w-5" />
+            <span className="text-sm font-semibold">Entrada rápida</span>
+            <span className="text-[10px] opacity-80">Ingresar stock nuevo</span>
+          </Button>
+        </div>
+
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          Despacho por OT
+        </div>
+
         {ots.length === 0 ? (
           <div className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-8 text-center text-sm text-zinc-400">
             No hay órdenes en producción
@@ -1173,5 +1224,472 @@ function FirmaView({
   );
 }
 
-// Silencia warning de imports no usados en desarrollo
-export type __Unused = typeof FileSignature | typeof MapPin | typeof X;
+// ─────────────────────────────────────────────────────────────
+// AdHoc: salida y entrada rápida
+// ─────────────────────────────────────────────────────────────
+const NOMBRE_KEY = 'rolzzo_bodeguero_nombre';
+
+type AdHocFase = 'scan' | 'confirm' | 'ok';
+
+type InsumoAdHoc = {
+  cod: string;
+  nemotecnico: string | null;
+  descriptor_proveedor: string | null;
+  stock_mp: number | null;
+  stock_liberado: number | null;
+  proveedor?: string | null;
+};
+
+function AdHocView({
+  modo,
+  empresaId,
+  onCerrar,
+}: {
+  modo: 'salida' | 'entrada';
+  empresaId: string;
+  onCerrar: () => void;
+}) {
+  const [nombre, setNombre] = useState<string>(
+    () => localStorage.getItem(NOMBRE_KEY) || '',
+  );
+  const [modalNombre, setModalNombre] = useState(false);
+  const [nombreInput, setNombreInput] = useState(nombre);
+  const [fase, setFase] = useState<AdHocFase>('scan');
+  const [scanMsg, setScanMsg] = useState('Esperando escaneo…');
+  const [codManual, setCodManual] = useState('');
+  const [insumo, setInsumo] = useState<InsumoAdHoc | null>(null);
+  const [qty, setQty] = useState(1);
+  const [otRef, setOtRef] = useState('');
+  const [proveedor, setProveedor] = useState('');
+  const [docRef, setDocRef] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [resumen, setResumen] = useState<{ msg: string; sub: string } | null>(null);
+
+  const titulo = modo === 'salida' ? 'Salida rápida' : 'Entrada rápida';
+  const colorAccent = modo === 'salida' ? '#ef4444' : '#22c55e';
+  const labelNombre = modo === 'salida' ? 'Quién retira' : 'Quién ingresa';
+
+  const cargarInsumo = async (cod: string) => {
+    const norm = cod.trim().toUpperCase();
+    if (!norm) {
+      toast.warning('Ingresa un código');
+      return;
+    }
+    await scanner.stop();
+    const { data } = await supabase
+      .from('insumos')
+      .select(
+        'cod,nemotecnico,descriptor_proveedor,stock_mp,stock_liberado,proveedor',
+      )
+      .eq('empresa_id', empresaId)
+      .eq('cod', norm)
+      .maybeSingle();
+    if (!data) {
+      toast.error(`Insumo "${norm}" no encontrado`);
+      scanner.start('adhoc-reader');
+      return;
+    }
+    setInsumo(data as InsumoAdHoc);
+    setQty(1);
+    if (modo === 'entrada' && data.proveedor) setProveedor(data.proveedor);
+    setCodManual('');
+    setFase('confirm');
+  };
+
+  const scanner = useQRScanner({
+    onScan: async (decoded) => {
+      const cod = decoded.startsWith('INS:')
+        ? decoded.slice(4)
+        : decoded.trim().toUpperCase();
+      setScanMsg(`Código detectado: ${cod}`);
+      await cargarInsumo(cod);
+    },
+  });
+
+  // Al montar, si no hay nombre → abrir modal, sino iniciar cámara
+  useEffect(() => {
+    if (!nombre) {
+      setModalNombre(true);
+      return;
+    }
+    // pequeño delay para que el div tenga dimensiones
+    const t = setTimeout(() => scanner.start('adhoc-reader'), 200);
+    return () => {
+      clearTimeout(t);
+      scanner.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nombre]);
+
+  // Relanzar cámara al volver a fase scan
+  useEffect(() => {
+    if (fase !== 'scan' || !nombre) return;
+    setScanMsg('Esperando escaneo…');
+    const t = setTimeout(() => scanner.start('adhoc-reader'), 200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fase]);
+
+  const guardarNombre = () => {
+    const n = nombreInput.trim();
+    if (!n) {
+      toast.warning('Ingresa tu nombre');
+      return;
+    }
+    localStorage.setItem(NOMBRE_KEY, n);
+    setNombre(n);
+    setModalNombre(false);
+    toast.success(`Guardado como "${n}"`);
+  };
+
+  const stockActual = insumo
+    ? (insumo.stock_mp || 0) + (insumo.stock_liberado || 0)
+    : 0;
+
+  const confirmar = async () => {
+    if (!insumo) return;
+    if (!nombre) {
+      setModalNombre(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: insActual } = await supabase
+        .from('insumos')
+        .select('stock_mp,stock_liberado')
+        .eq('empresa_id', empresaId)
+        .eq('cod', insumo.cod)
+        .single();
+
+      if (modo === 'salida') {
+        if (insActual) {
+          const lib = Number(insActual.stock_liberado) || 0;
+          const mp = Number(insActual.stock_mp) || 0;
+          let resta = qty;
+          const descLib = Math.min(resta, lib);
+          resta -= descLib;
+          const descMp = Math.min(resta, mp);
+          const { error } = await supabase
+            .from('insumos')
+            .update({
+              stock_mp: mp - descMp,
+              stock_liberado: lib - descLib,
+            })
+            .eq('empresa_id', empresaId)
+            .eq('cod', insumo.cod);
+          if (error) throw error;
+        }
+
+        const { error: errMov } = await supabase
+          .from('movimientos_insumos')
+          .insert({
+            empresa_id: empresaId,
+            fecha: new Date().toISOString(),
+            mes: MESES_A[new Date().getMonth()],
+            tipo: 'SALIDA PRODUCCION',
+            codigo: insumo.cod,
+            producto: insumo.nemotecnico || insumo.descriptor_proveedor || '',
+            almacen: 'MP',
+            cantidad: qty,
+            ot: otRef.trim(),
+            responsable_entrega: nombre,
+            bitacora: `Salida rápida — ${nombre}${otRef.trim() ? ' · OT ' + otRef.trim() : ''}`,
+          });
+        if (errMov) throw errMov;
+
+        const stockRestante = Math.max(0, stockActual - qty);
+        setResumen({
+          msg: `${qty}× ${insumo.nemotecnico || insumo.cod}`,
+          sub: `Registrado a nombre de ${nombre}${otRef.trim() ? ' · OT ' + otRef.trim() : ''} · Stock restante: ${stockRestante}`,
+        });
+      } else {
+        // entrada
+        const mpActual = insActual ? Number(insActual.stock_mp) || 0 : 0;
+        const libActual = insActual ? Number(insActual.stock_liberado) || 0 : 0;
+        const { error } = await supabase
+          .from('insumos')
+          .update({ stock_mp: mpActual + qty })
+          .eq('empresa_id', empresaId)
+          .eq('cod', insumo.cod);
+        if (error) throw error;
+
+        const { error: errMov } = await supabase
+          .from('movimientos_insumos')
+          .insert({
+            empresa_id: empresaId,
+            fecha: new Date().toISOString(),
+            mes: MESES_A[new Date().getMonth()],
+            tipo: 'NUEVO INGRESO',
+            codigo: insumo.cod,
+            producto: insumo.nemotecnico || insumo.descriptor_proveedor || '',
+            almacen: 'MP',
+            cantidad: qty,
+            responsable_entrega: nombre,
+            recepcion: nombre,
+            bitacora: `Ingreso rápido — ${nombre}${proveedor.trim() ? ' · Proveedor: ' + proveedor.trim() : ''}${docRef.trim() ? ' · Doc: ' + docRef.trim() : ''}`,
+          });
+        if (errMov) throw errMov;
+
+        const stockNuevo = mpActual + libActual + qty;
+        setResumen({
+          msg: `+${qty}× ${insumo.nemotecnico || insumo.cod}`,
+          sub: `Registrado por ${nombre}${proveedor.trim() ? ' · ' + proveedor.trim() : ''}${docRef.trim() ? ' · ' + docRef.trim() : ''} · Stock nuevo: ${stockNuevo}`,
+        });
+      }
+      setFase('ok');
+    } catch (e) {
+      const err = e as Error;
+      toast.error('Error: ' + err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const nuevoItem = () => {
+    setInsumo(null);
+    setQty(1);
+    setOtRef('');
+    setProveedor('');
+    setDocRef('');
+    setResumen(null);
+    setFase('scan');
+  };
+
+  return (
+    <div className="min-h-full bg-zinc-950 text-zinc-100">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+        <button
+          onClick={async () => {
+            await scanner.stop();
+            onCerrar();
+          }}
+          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          <ArrowLeft className="h-4 w-4" /> Volver
+        </button>
+        <h1 className="flex-1 text-base font-bold" style={{ color: colorAccent }}>
+          {titulo}
+        </h1>
+        <button
+          onClick={() => {
+            setNombreInput(nombre);
+            setModalNombre(true);
+          }}
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-300 hover:bg-white/10"
+        >
+          <User className="h-3.5 w-3.5" />
+          {nombre || labelNombre}
+          <Pencil className="h-3 w-3 opacity-60" />
+        </button>
+      </div>
+
+      <div className="mx-auto max-w-md p-4">
+        {fase === 'scan' && (
+          <>
+            <div
+              id="adhoc-reader"
+              className="mx-auto mb-3 aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border border-white/[0.07] bg-black"
+            />
+            <div className="mb-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-center text-sm text-indigo-300">
+              <QrCode className="mx-auto mb-1 h-5 w-5" />
+              {scanMsg}
+            </div>
+            {scanner.error && (
+              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-300">
+                <Camera className="mx-auto mb-1 h-5 w-5" />
+                <div className="font-semibold">Cámara no disponible</div>
+                <div className="mt-1 text-[11px] text-zinc-400">{scanner.error}</div>
+                <Button
+                  onClick={() => scanner.start('adhoc-reader')}
+                  size="sm"
+                  className="mt-2"
+                >
+                  Reintentar
+                </Button>
+              </div>
+            )}
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+              O escribí el código manualmente
+            </div>
+            <div className="flex gap-2">
+              <Input
+                value={codManual}
+                onChange={(e) => setCodManual(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && cargarInsumo(codManual)}
+                placeholder="Ej: MEC14"
+                className="border-white/10 bg-zinc-900"
+              />
+              <Button onClick={() => cargarInsumo(codManual)} className="gap-1.5">
+                <KeyRound className="h-4 w-4" /> Buscar
+              </Button>
+            </div>
+          </>
+        )}
+
+        {fase === 'confirm' && insumo && (
+          <>
+            <div className="mb-4 rounded-2xl border border-white/[0.07] bg-zinc-900 p-4">
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                Código: {insumo.cod}
+              </div>
+              <div className="text-base font-semibold">
+                {insumo.nemotecnico || insumo.descriptor_proveedor || insumo.cod}
+              </div>
+              <div className="mt-2 text-xs">
+                {modo === 'salida' ? (
+                  stockActual <= 0 ? (
+                    <span className="text-red-400">
+                      <AlertTriangle className="mr-1 inline h-3 w-3" /> Sin stock disponible
+                    </span>
+                  ) : stockActual <= 5 ? (
+                    <span className="text-amber-400">
+                      <AlertTriangle className="mr-1 inline h-3 w-3" /> Stock bajo:{' '}
+                      {stockActual} unidades
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400">
+                      <CheckCircle2 className="mr-1 inline h-3 w-3" /> Stock disponible:{' '}
+                      {stockActual} unidades
+                    </span>
+                  )
+                ) : (
+                  <span className="text-zinc-400">
+                    Stock actual: {stockActual} unidades
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <Label className="mb-1 text-xs">Cantidad</Label>
+            <div className="mb-4 flex items-center justify-center gap-4 rounded-xl border border-white/[0.07] bg-zinc-900 p-3">
+              <Button
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+              >
+                <Minus className="h-5 w-5" />
+              </Button>
+              <div className="min-w-[70px] text-center text-5xl font-bold">{qty}</div>
+              <Button
+                onClick={() => setQty((q) => q + 1)}
+                variant="outline"
+                size="icon"
+                className="h-11 w-11"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
+
+            {modo === 'salida' && (
+              <>
+                <Label className="mb-1 text-xs">OT (opcional)</Label>
+                <Input
+                  value={otRef}
+                  onChange={(e) => setOtRef(e.target.value)}
+                  placeholder="Ej: 12345"
+                  className="mb-4 border-white/10 bg-zinc-900"
+                />
+              </>
+            )}
+
+            {modo === 'entrada' && (
+              <>
+                <Label className="mb-1 text-xs">Proveedor (opcional)</Label>
+                <Input
+                  value={proveedor}
+                  onChange={(e) => setProveedor(e.target.value)}
+                  placeholder="Ej: Meriggi"
+                  className="mb-3 border-white/10 bg-zinc-900"
+                />
+                <Label className="mb-1 text-xs">N° de documento (opcional)</Label>
+                <Input
+                  value={docRef}
+                  onChange={(e) => setDocRef(e.target.value)}
+                  placeholder="Ej: Factura 1234"
+                  className="mb-4 border-white/10 bg-zinc-900"
+                />
+              </>
+            )}
+
+            <Button
+              onClick={confirmar}
+              disabled={saving || (modo === 'salida' && stockActual <= 0)}
+              className={cn(
+                'mb-2 h-12 w-full gap-2 text-base',
+                modo === 'salida'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-emerald-600 hover:bg-emerald-700',
+              )}
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" /> Guardando…
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-5 w-5" />
+                  {modo === 'salida' ? 'Confirmar salida' : 'Confirmar ingreso'}
+                </>
+              )}
+            </Button>
+            <Button onClick={nuevoItem} variant="outline" className="w-full">
+              Volver a escanear
+            </Button>
+          </>
+        )}
+
+        {fase === 'ok' && resumen && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
+            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-400" />
+            <div className="mb-1 text-lg font-bold text-white">{resumen.msg}</div>
+            <div className="mb-4 text-xs text-zinc-400">{resumen.sub}</div>
+            <Button onClick={nuevoItem} className="w-full gap-1.5">
+              <QrCode className="h-4 w-4" />{' '}
+              {modo === 'salida' ? 'Otra salida' : 'Otra entrada'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Modal nombre */}
+      {modalNombre && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900 p-5">
+            <div className="mb-3 flex items-center gap-2 text-base font-semibold text-white">
+              <User className="h-5 w-5 text-indigo-400" /> ¿Quién {modo === 'salida' ? 'retira' : 'ingresa'}?
+            </div>
+            <p className="mb-3 text-xs text-zinc-400">
+              Este nombre se usa para todos los movimientos que registres desde este
+              dispositivo. Queda guardado en el celular.
+            </p>
+            <Input
+              value={nombreInput}
+              onChange={(e) => setNombreInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && guardarNombre()}
+              placeholder="Tu nombre"
+              autoFocus
+              className="mb-3 border-white/10 bg-zinc-800"
+            />
+            <div className="flex justify-end gap-2">
+              {nombre && (
+                <Button variant="outline" onClick={() => setModalNombre(false)}>
+                  Cancelar
+                </Button>
+              )}
+              <Button onClick={guardarNombre}>Guardar</Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Silencia warning de imports no usados
+export type __Unused =
+  | typeof FileSignature
+  | typeof MapPin
+  | typeof X
+  | typeof ArrowDownCircle
+  | typeof ArrowUpCircle;
