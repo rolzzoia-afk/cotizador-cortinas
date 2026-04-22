@@ -12,6 +12,7 @@ import { Camionetas } from '@/pages/Camionetas';
 import { Ventas } from '@/pages/Ventas';
 import { Inteligencia } from '@/pages/Inteligencia';
 import { HistorialCorte } from '@/pages/HistorialCorte';
+import { Bodeguero } from '@/pages/Bodeguero';
 
 function Shell() {
   return (
@@ -62,10 +63,7 @@ export function App() {
           path="optimizador"
           element={<LegacyFrame src="/legacy/optimizador.html" title="Optimizador" />}
         />
-        <Route
-          path="bodeguero"
-          element={<LegacyFrame src="/legacy/bodeguero.html" title="Bodega" />}
-        />
+        <Route path="bodeguero" element={<Bodeguero />} />
         <Route path="camionetas" element={<Camionetas />} />
         <Route path="historial-corte" element={<HistorialCorte />} />
         <Route path="historial-tubos" element={<HistorialTubos />} />

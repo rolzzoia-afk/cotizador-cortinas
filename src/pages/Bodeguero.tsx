@@ -1,0 +1,1177 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Calendar,
+  Camera,
+  Check,
+  CheckCircle2,
+  ClipboardList,
+  Eraser,
+  FileSignature,
+  Loader2,
+  MapPin,
+  Minus,
+  Package,
+  Plus,
+  Scissors,
+  X,
+} from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
+import { toast } from 'sonner';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useQRScanner } from '@/modules/bodega/useQRScanner';
+import {
+  type BOMItem,
+  type Insumo,
+  type OT,
+  type Rack,
+  type TelaCatalogo,
+  type TelaSlot,
+  type TuboColmena,
+  buscarInsumoMatchBOM,
+  construirBOM,
+  getColmenaPorCodTubo,
+  getRackUbicacionPorSpec,
+  getRackUbicacion,
+  getUbicacionBOM,
+} from '@/modules/bodega/bomUtils';
+
+// ─────────────────────────────────────────────────────────────
+// Tipos locales
+// ─────────────────────────────────────────────────────────────
+type Vista = 'lista' | 'despacho' | 'scanner' | 'firma';
+type ScanFase = 'loc' | 'item';
+type ScanEstado = 'esperando' | 'ok' | 'error';
+
+type Contador = {
+  pickeado: number;
+  requerido: number;
+  estado: 'pendiente' | 'parcial' | 'completo';
+};
+
+const ESTADOS_BODEGUERO = ['produccion', 'lista', 'pendiente_firma'];
+const SCAN_COOLDOWN_OK = 1800;
+const SCAN_COOLDOWN_ERR = 1400;
+
+const MESES_A = [
+  'ENERO',
+  'FEBRERO',
+  'MARZO',
+  'ABRIL',
+  'MAYO',
+  'JUNIO',
+  'JULIO',
+  'AGOSTO',
+  'SEPTIEMBRE',
+  'OCTUBRE',
+  'NOVIEMBRE',
+  'DICIEMBRE',
+];
+
+// ─────────────────────────────────────────────────────────────
+// Vista principal: router de vistas
+// ─────────────────────────────────────────────────────────────
+export function Bodeguero() {
+  const { empresaId } = useAuth();
+  const navigate = useNavigate();
+  const [vista, setVista] = useState<Vista>('lista');
+  const [ots, setOts] = useState<OT[]>([]);
+  const [insumos, setInsumos] = useState<Insumo[]>([]);
+  const [telasCat, setTelasCat] = useState<TelaCatalogo[]>([]);
+  const [telasSlots, setTelasSlots] = useState<TelaSlot[]>([]);
+  const [racks, setRacks] = useState<Rack[]>([]);
+  const [tubos, setTubos] = useState<TuboColmena[]>([]);
+  const [otActual, setOtActual] = useState<OT | null>(null);
+  const [bomItems, setBomItems] = useState<BOMItem[]>([]);
+  const [contadores, setContadores] = useState<Record<number, Contador>>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Scanner state
+  const [scanItemIdx, setScanItemIdx] = useState<number>(-1);
+  const [scanFase, setScanFase] = useState<ScanFase>('loc');
+
+  const cargar = async () => {
+    if (!empresaId) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [rOts, rIns, rTelCat, rTelSlots, rRacks, rTubos] = await Promise.all([
+        supabase
+          .from('ots')
+          .select('id, numero_ot, estado, datos_generales, items, fecha_creacion, fecha_entrega')
+          .eq('empresa_id', empresaId)
+          .in('estado', ESTADOS_BODEGUERO)
+          .order('fecha_creacion', { ascending: false }),
+        supabase
+          .from('insumos')
+          .select('cod,nemotecnico,descriptor_proveedor,categoria,color,ubicacion,stock_mp,stock_liberado')
+          .eq('empresa_id', empresaId),
+        supabase
+          .from('telas_catalogo')
+          .select('codigo,nemotecnico,tipo,almacen,posicion')
+          .eq('empresa_id', empresaId),
+        supabase
+          .from('telas_slots')
+          .select('posicion,codigo,almacen')
+          .eq('empresa_id', empresaId),
+        supabase
+          .from('ubicaciones_rack')
+          .select('rack,fila,columna,codigo_insumo,almacen')
+          .eq('empresa_id', empresaId),
+        supabase
+          .from('colmena_tubos')
+          .select('cod,n_colmena,medida_cm')
+          .eq('empresa_id', empresaId),
+      ]);
+
+      if (rOts.error) {
+        const esRLS =
+          rOts.error.message?.includes('policy') ||
+          rOts.error.message?.includes('permission') ||
+          rOts.error.code === '42501';
+        setError(
+          esRLS
+            ? 'Sin permisos para cargar órdenes. Revisa las políticas RLS de la tabla `ots`.'
+            : rOts.error.message,
+        );
+        return;
+      }
+
+      setOts((rOts.data as OT[]) || []);
+      setInsumos((rIns.data as Insumo[]) || []);
+      setTelasCat((rTelCat.data as TelaCatalogo[]) || []);
+      setTelasSlots((rTelSlots.data as TelaSlot[]) || []);
+      setRacks((rRacks.data as Rack[]) || []);
+      setTubos((rTubos.data as TuboColmena[]) || []);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId]);
+
+  const abrirOT = async (ot: OT) => {
+    if (!empresaId) return;
+    setOtActual(ot);
+
+    const { data: bomDB } = await supabase
+      .from('orden_materiales')
+      .select('*')
+      .eq('empresa_id', empresaId)
+      .eq('ot_id', ot.id)
+      .order('orden');
+
+    const bom = construirBOM(
+      ot,
+      (bomDB as Parameters<typeof construirBOM>[1]) || [],
+      insumos,
+      racks,
+      telasSlots,
+      telasCat,
+    );
+    setBomItems(bom);
+
+    const cnt: Record<number, Contador> = {};
+    bom.forEach((item, idx) => {
+      cnt[idx] = {
+        pickeado: item.cantidad_despachada || 0,
+        requerido: item.cantidad_req || 1,
+        estado: item.estado === 'completado' ? 'completo' : 'pendiente',
+      };
+    });
+    setContadores(cnt);
+    setVista('despacho');
+  };
+
+  const volverLista = () => {
+    setVista('lista');
+    setOtActual(null);
+    setBomItems([]);
+    setContadores({});
+    cargar();
+  };
+
+  const iniciarScanItem = (idx: number) => {
+    setScanItemIdx(idx);
+    const item = bomItems[idx];
+    // Si no hay ubicación conocida → ir directo a escanear item
+    let tieneUbicacion = false;
+    if (item._es_tela) {
+      tieneUbicacion = !!item._ubicacion_rack;
+    } else {
+      tieneUbicacion = !!getUbicacionBOM(item, insumos, racks);
+    }
+    setScanFase(tieneUbicacion ? 'loc' : 'item');
+    setVista('scanner');
+  };
+
+  const onConfirmItem = (idx: number, cantidad: number) => {
+    setContadores((prev) => {
+      const cnt = prev[idx];
+      const nuevoPick = cnt.pickeado + cantidad;
+      const completo = nuevoPick >= cnt.requerido;
+      const next = {
+        ...prev,
+        [idx]: {
+          ...cnt,
+          pickeado: nuevoPick,
+          estado: (completo ? 'completo' : 'parcial') as Contador['estado'],
+        },
+      };
+      return next;
+    });
+    const item = bomItems[idx];
+    const cnt = contadores[idx];
+    const nuevoPick = cnt.pickeado + cantidad;
+    if (nuevoPick >= cnt.requerido) {
+      toast.success(`${item.descripcion} — ${cnt.requerido} ${item.unidad} completado`);
+    } else {
+      const faltan = cnt.requerido - nuevoPick;
+      toast(`${item.descripcion}: faltan ${faltan} ${item.unidad}`);
+    }
+    setVista('despacho');
+  };
+
+  const todosCompletos = useMemo(
+    () =>
+      Object.values(contadores).length > 0 &&
+      Object.values(contadores).every((c) => c.estado === 'completo'),
+    [contadores],
+  );
+
+  // ── Render
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center bg-zinc-950 text-zinc-500">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="mx-auto max-w-xl p-6">
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
+          <div className="mb-2 flex items-center gap-2 font-semibold">
+            <AlertTriangle className="h-5 w-5" /> No se pudo cargar
+          </div>
+          <div className="text-sm">{error}</div>
+          <Button onClick={cargar} className="mt-4">
+            Reintentar
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-full bg-zinc-950 text-zinc-100">
+      {vista === 'lista' && (
+        <ListaOTs
+          ots={ots}
+          onBack={() => navigate('/landing')}
+          onSelect={abrirOT}
+        />
+      )}
+      {vista === 'despacho' && otActual && (
+        <DespachoView
+          ot={otActual}
+          bomItems={bomItems}
+          contadores={contadores}
+          insumos={insumos}
+          racks={racks}
+          tubos={tubos}
+          todosCompletos={todosCompletos}
+          onBack={volverLista}
+          onIniciarScan={iniciarScanItem}
+          onIrAFirma={() => setVista('firma')}
+        />
+      )}
+      {vista === 'scanner' && otActual && scanItemIdx >= 0 && (
+        <ScannerView
+          item={bomItems[scanItemIdx]}
+          contador={contadores[scanItemIdx]}
+          insumos={insumos}
+          racks={racks}
+          initialFase={scanFase}
+          onCerrar={() => setVista('despacho')}
+          onConfirm={(cant) => onConfirmItem(scanItemIdx, cant)}
+        />
+      )}
+      {vista === 'firma' && otActual && (
+        <FirmaView
+          ot={otActual}
+          bomItems={bomItems}
+          contadores={contadores}
+          insumos={insumos}
+          empresaId={empresaId || ''}
+          onBack={() => setVista('despacho')}
+          onDone={volverLista}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Lista de OTs
+// ─────────────────────────────────────────────────────────────
+function ListaOTs({
+  ots,
+  onBack,
+  onSelect,
+}: {
+  ots: OT[];
+  onBack: () => void;
+  onSelect: (ot: OT) => void;
+}) {
+  return (
+    <>
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          <ArrowLeft className="h-4 w-4" /> Inicio
+        </button>
+        <h1 className="flex-1 text-base font-bold">Bodeguero · Despacho por OT</h1>
+      </div>
+
+      <div className="mx-auto max-w-3xl p-4">
+        {ots.length === 0 ? (
+          <div className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-8 text-center text-sm text-zinc-400">
+            No hay órdenes en producción
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {ots.map((ot) => {
+              const dg = (ot.datos_generales || {}) as Record<string, unknown>;
+              const cliente = (dg.cliente as string) || '—';
+              const bomCount = Array.isArray(dg.bom)
+                ? (dg.bom as unknown[]).length
+                : '?';
+              const telaCount = (ot.items || []).reduce(
+                (s: number, v: Record<string, unknown>) =>
+                  s + (Array.isArray(v.panos) ? (v.panos as unknown[]).length : 1),
+                0,
+              );
+              const badge =
+                ot.estado === 'pendiente_firma'
+                  ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30', txt: 'Pendiente firma' }
+                  : ot.estado === 'lista'
+                    ? { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', txt: 'Lista p/ entrega' }
+                    : { cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30', txt: 'En producción' };
+
+              return (
+                <button
+                  key={ot.id}
+                  onClick={() => onSelect(ot)}
+                  className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-4 text-left transition hover:border-indigo-500/40 hover:bg-zinc-900/80"
+                >
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="text-base font-bold">
+                      OT {ot.numero_ot || ot.id.slice(-6)}
+                    </span>
+                    <span
+                      className={cn(
+                        'rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+                        badge.cls,
+                      )}
+                    >
+                      {badge.txt}
+                    </span>
+                  </div>
+                  <div className="text-sm text-zinc-400">{cliente}</div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-zinc-500">
+                    <span className="flex items-center gap-1">
+                      <Package className="h-3 w-3" /> {bomCount} insumos
+                    </span>
+                    {telaCount > 0 && (
+                      <span className="flex items-center gap-1 text-amber-500">
+                        <Scissors className="h-3 w-3" /> {telaCount} paño(s)
+                      </span>
+                    )}
+                    {ot.fecha_entrega && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" /> {ot.fecha_entrega.slice(0, 10)}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Despacho por OT (lista de BOM)
+// ─────────────────────────────────────────────────────────────
+function DespachoView({
+  ot,
+  bomItems,
+  contadores,
+  insumos,
+  racks,
+  tubos,
+  todosCompletos,
+  onBack,
+  onIniciarScan,
+  onIrAFirma,
+}: {
+  ot: OT;
+  bomItems: BOMItem[];
+  contadores: Record<number, Contador>;
+  insumos: Insumo[];
+  racks: Rack[];
+  tubos: TuboColmena[];
+  todosCompletos: boolean;
+  onBack: () => void;
+  onIniciarScan: (idx: number) => void;
+  onIrAFirma: () => void;
+}) {
+  const dg = (ot.datos_generales || {}) as Record<string, unknown>;
+  const cliente = (dg.cliente as string) || '—';
+  const fechaEntrega = dg.fechaEntrega as string | undefined;
+  const badge =
+    ot.estado === 'pendiente_firma'
+      ? 'Pendiente firma'
+      : ot.estado === 'lista'
+        ? 'Lista p/ entrega'
+        : 'En producción';
+
+  return (
+    <>
+      <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          >
+            <ArrowLeft className="h-4 w-4" /> OTs
+          </button>
+          <h1 className="flex-1 text-base font-bold">
+            OT {ot.numero_ot || ot.id.slice(-6)}
+          </h1>
+          <span className="rounded-full border border-indigo-500/30 bg-indigo-500/15 px-2 py-0.5 text-[11px] font-semibold text-indigo-300">
+            {badge}
+          </span>
+        </div>
+      </div>
+
+      <div className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
+        <div className="rounded-xl border border-white/[0.07] bg-zinc-900 p-4">
+          <div className="flex flex-wrap gap-4 text-sm">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                Cliente
+              </div>
+              <div className="font-semibold">{cliente}</div>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-zinc-500">OT</div>
+              <div className="font-semibold">{ot.numero_ot || '—'}</div>
+            </div>
+            {fechaEntrega && (
+              <div>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                  Entrega
+                </div>
+                <div className="font-semibold">{fechaEntrega}</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          BOM — Tocá un ítem para escanear
+        </div>
+
+        {bomItems.length === 0 ? (
+          <div className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-6 text-center text-sm text-zinc-400">
+            No hay BOM para esta OT.
+            <br />
+            <span className="text-[11px] text-zinc-500">
+              Generá Fase 4 en el cotizador primero.
+            </span>
+          </div>
+        ) : (
+          bomItems.map((item, idx) => {
+            const cnt = contadores[idx];
+            const completo = cnt?.estado === 'completo';
+            const enProceso = cnt?.pickeado > 0 && !completo;
+            const esTela = !!item._es_tela;
+
+            let locText = '';
+            let stockInfo = '';
+            if (esTela) {
+              locText = item._ubicacion_rack
+                ? `📍 Rack: ${item._ubicacion_rack}`
+                : '⚠ Sin posición registrada';
+            } else if ((item.categoria || '').toUpperCase().includes('TUBER')) {
+              const cod = (item.especificacion || '').split('·')[0].trim().toUpperCase();
+              const col = getColmenaPorCodTubo(cod, tubos);
+              locText = col ? `🗄 Colmena: ${col}` : '⚠ Sin colmena asignada';
+            } else {
+              const ubic = getUbicacionBOM(item, insumos, racks);
+              locText = ubic ? ubic.display : racks.length ? '⚠ Sin rack asignado' : '';
+              const insMatch = buscarInsumoMatchBOM(item, insumos);
+              stockInfo = insMatch
+                ? ` · Stock: ${(insMatch.stock_mp || 0) + (insMatch.stock_liberado || 0)}`
+                : '';
+            }
+
+            return (
+              <button
+                key={idx}
+                disabled={completo}
+                onClick={() => !completo && onIniciarScan(idx)}
+                className={cn(
+                  'flex items-center gap-3 rounded-xl border bg-zinc-900 p-3.5 text-left transition',
+                  completo
+                    ? 'border-emerald-500/30 bg-emerald-500/5 opacity-70'
+                    : enProceso
+                      ? 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50'
+                      : 'border-white/[0.07] hover:border-indigo-500/40',
+                  esTela && !completo && 'border-amber-500/20',
+                )}
+              >
+                <div className="flex-shrink-0 text-2xl">
+                  {esTela ? '🧵' : completo ? '✅' : enProceso ? '🔄' : '⬜'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div
+                    className={cn(
+                      'text-[10px] font-bold uppercase tracking-wider',
+                      esTela ? 'text-amber-500' : 'text-zinc-500',
+                    )}
+                  >
+                    {item.categoria}
+                  </div>
+                  <div className="truncate text-sm font-semibold">{item.descripcion}</div>
+                  <div className="truncate text-[11px] text-zinc-500">
+                    {[item.especificacion, item.color].filter(Boolean).join(' · ')}
+                    {stockInfo}
+                  </div>
+                  {locText && (
+                    <div className="mt-0.5 text-[11px] text-zinc-400">{locText}</div>
+                  )}
+                </div>
+                <div className="flex-shrink-0 text-right">
+                  <div
+                    className={cn(
+                      'text-xl font-bold',
+                      completo
+                        ? 'text-emerald-500'
+                        : esTela
+                          ? 'text-amber-500'
+                          : 'text-zinc-100',
+                    )}
+                  >
+                    {cnt?.pickeado || 0}
+                  </div>
+                  <div className="text-[10px] text-zinc-500">
+                    /{cnt?.requerido} {item.unidad}
+                  </div>
+                </div>
+              </button>
+            );
+          })
+        )}
+
+        {todosCompletos && (
+          <Button
+            onClick={onIrAFirma}
+            className="mt-2 h-12 gap-2 bg-emerald-600 text-base hover:bg-emerald-700"
+          >
+            <FileSignature className="h-5 w-5" /> Firmar y confirmar entrega
+          </Button>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Scanner (state machine: loc → item → confirm)
+// ─────────────────────────────────────────────────────────────
+function ScannerView({
+  item,
+  contador,
+  insumos,
+  racks,
+  initialFase,
+  onCerrar,
+  onConfirm,
+}: {
+  item: BOMItem;
+  contador: Contador;
+  insumos: Insumo[];
+  racks: Rack[];
+  initialFase: ScanFase;
+  onCerrar: () => void;
+  onConfirm: (cantidad: number) => void;
+}) {
+  const [fase, setFase] = useState<ScanFase>(initialFase);
+  const [estado, setEstado] = useState<ScanEstado>('esperando');
+  const [mensaje, setMensaje] = useState('');
+  const [submensaje, setSubmensaje] = useState('');
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [needItemScanTap, setNeedItemScanTap] = useState(false);
+  const [qty, setQty] = useState<number>(0);
+  const [maxQty, setMaxQty] = useState<number>(1);
+
+  // Ubicación esperada
+  const ubicacionInfo = useMemo(() => {
+    if (item._es_tela && item._ubicacion_rack) {
+      const ascii = (s: string) => s.replace(/[^\x20-\x7E]/g, '').replace(/\s+/g, '');
+      return {
+        display: item._ubicacion_rack,
+        qr: `LOC:${ascii(item._ubicacion_rack)}`,
+      };
+    }
+    const spec = (item.especificacion || '').trim();
+    if (spec) {
+      const r = getRackUbicacionPorSpec(spec, racks);
+      if (r) return r;
+    }
+    const ins = buscarInsumoMatchBOM(item, insumos);
+    if (ins) {
+      const r = getRackUbicacion(ins.cod, racks);
+      if (r) return r;
+    }
+    return null;
+  }, [item, racks, insumos]);
+
+  const locDisplay = ubicacionInfo
+    ? `📍 ${ubicacionInfo.display}`
+    : '⚠ Sin rack asignado — escanea directo el insumo';
+
+  const insumoEsperado = useMemo(() => buscarInsumoMatchBOM(item, insumos), [item, insumos]);
+
+  // Inicializar mensajes según fase
+  useEffect(() => {
+    if (fase === 'loc') {
+      setEstado('esperando');
+      setMensaje('Escanea el QR de la ubicación');
+      setSubmensaje('El QR está pegado en el estante');
+    } else {
+      setEstado('esperando');
+      setMensaje('Escanea el QR del contenedor');
+      setSubmensaje('El QR está en la caja/bolsa del insumo');
+    }
+  }, [fase]);
+
+  const scanner = useQRScanner({
+    onScan: (decoded) => handleScan(decoded),
+  });
+
+  const handleScan = async (decoded: string) => {
+    if (fase === 'loc') {
+      const norm = (s: string) => s.trim().toUpperCase();
+      const ok = ubicacionInfo && norm(decoded) === norm(ubicacionInfo.qr);
+      if (ubicacionInfo && !ok) {
+        setEstado('error');
+        setMensaje('❌ Ubicación incorrecta');
+        setSubmensaje(
+          `Busca: ${ubicacionInfo.display}  |  Escaneaste: ${decoded.replace('LOC:', '').replace(/\|/g, ' · ')}`,
+        );
+        scanner.startCooldown(SCAN_COOLDOWN_ERR);
+        setTimeout(() => {
+          setEstado('esperando');
+          setMensaje('Escanea el QR de la ubicación');
+          setSubmensaje('El QR está pegado en el estante');
+        }, SCAN_COOLDOWN_ERR);
+        return;
+      }
+      // OK
+      setEstado('ok');
+      setMensaje('✅ Ubicación confirmada');
+      setSubmensaje(
+        ubicacionInfo
+          ? `${ubicacionInfo.display} — Ahora toma el insumo`
+          : 'Sin rack — toma el insumo',
+      );
+      scanner.startCooldown(SCAN_COOLDOWN_OK);
+      await scanner.stop();
+      setFase('item');
+      setNeedItemScanTap(true);
+      return;
+    }
+
+    // fase === 'item'
+    if (decoded.startsWith('LOC:')) {
+      setEstado('error');
+      setMensaje('❌ Eso es una ubicación');
+      setSubmensaje('Ya pasamos la ubicación — escanea la caja/insumo');
+      scanner.startCooldown(SCAN_COOLDOWN_ERR);
+      setTimeout(() => {
+        setEstado('esperando');
+        setMensaje('Escanea el QR del contenedor');
+        setSubmensaje('El QR está en la caja/bolsa del insumo');
+      }, SCAN_COOLDOWN_ERR);
+      return;
+    }
+    if (!decoded.startsWith('INS:')) {
+      setEstado('error');
+      setMensaje('❌ QR no reconocido');
+      setSubmensaje(`Esperaba INS:... · Escaneaste: "${decoded.substring(0, 20)}"`);
+      scanner.startCooldown(SCAN_COOLDOWN_ERR);
+      setTimeout(() => {
+        setEstado('esperando');
+        setMensaje('Escanea el QR del contenedor');
+        setSubmensaje('El QR está en la caja/bolsa del insumo');
+      }, SCAN_COOLDOWN_ERR);
+      return;
+    }
+
+    const codEscaneado = decoded.replace('INS:', '').trim();
+    const normCod = (s: string) => (s || '').trim().toUpperCase().replace(/\s+/g, '');
+    if (insumoEsperado && normCod(insumoEsperado.cod || '') !== normCod(codEscaneado)) {
+      setEstado('error');
+      setMensaje('❌ Insumo incorrecto');
+      setSubmensaje(`Escaneaste: ${codEscaneado}  |  Necesitás: ${insumoEsperado.cod}`);
+      scanner.startCooldown(SCAN_COOLDOWN_ERR);
+      setTimeout(() => {
+        setEstado('esperando');
+        setMensaje('Escanea el QR del contenedor');
+        setSubmensaje('El QR está en la caja/bolsa del insumo');
+      }, SCAN_COOLDOWN_ERR);
+      return;
+    }
+
+    // Insumo correcto → panel confirmar
+    await scanner.stop();
+    const restante = contador.requerido - contador.pickeado;
+    setMaxQty(restante);
+    setQty(restante);
+    setShowConfirm(true);
+  };
+
+  // Iniciar cámara cuando la vista se muestra y no estamos en "needItemScanTap"
+  useEffect(() => {
+    if (!needItemScanTap && !showConfirm) {
+      scanner.start('reader-bodega');
+    }
+    return () => {
+      scanner.stop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fase, showConfirm]);
+
+  const saltarUbicacion = async () => {
+    await scanner.stop();
+    setFase('item');
+    setNeedItemScanTap(true);
+    setEstado('ok');
+    setMensaje('↩ Rack salteado');
+    setSubmensaje('Toma el insumo y presiona el botón');
+  };
+
+  const activarFaseItem = () => {
+    setNeedItemScanTap(false);
+    setEstado('esperando');
+    setMensaje('Escanea el QR del contenedor');
+    setSubmensaje('El QR está en la caja/bolsa del insumo');
+    scanner.start('reader-bodega');
+  };
+
+  const volverAEscanearItem = () => {
+    setShowConfirm(false);
+    setEstado('esperando');
+    setMensaje('Escanea el QR del contenedor');
+    setSubmensaje('El QR está en la caja/bolsa del insumo');
+    scanner.start('reader-bodega');
+  };
+
+  const paso = showConfirm ? 3 : fase === 'item' ? 2 : 1;
+
+  return (
+    <div className="min-h-full bg-zinc-950">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+        <button
+          onClick={async () => {
+            await scanner.stop();
+            onCerrar();
+          }}
+          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          <ArrowLeft className="h-4 w-4" /> Cerrar
+        </button>
+        <h1 className="flex-1 truncate text-base font-bold">{item.descripcion}</h1>
+      </div>
+
+      <div className="mx-auto max-w-md p-4">
+        {/* Pasos */}
+        <div className="mb-4 flex items-center justify-between gap-2">
+          {(['Ubicación', 'Insumo', 'Confirmar'] as const).map((label, i) => {
+            const n = i + 1;
+            const completo = n < paso;
+            const activo = n === paso;
+            return (
+              <div key={label} className="flex-1 text-center">
+                <div
+                  className={cn(
+                    'mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold',
+                    completo
+                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                      : activo
+                        ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
+                        : 'border-white/10 bg-zinc-900 text-zinc-600',
+                  )}
+                >
+                  {completo ? '✓' : n}
+                </div>
+                <div
+                  className={cn(
+                    'text-[10px] uppercase',
+                    activo ? 'text-indigo-300' : 'text-zinc-500',
+                  )}
+                >
+                  {label}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Info del ítem */}
+        {!showConfirm && (
+          <div className="mb-3 rounded-xl border border-white/[0.07] bg-zinc-900 p-3 text-sm">
+            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              {item.categoria}
+            </div>
+            <div className="font-semibold">{item.descripcion}</div>
+            <div className="text-[11px] text-zinc-500">
+              {[item.especificacion, item.color].filter(Boolean).join(' · ')}
+            </div>
+            <div className="mt-2 text-[12px] text-zinc-300">{locDisplay}</div>
+            <div className="mt-1 text-[11px] text-zinc-500">
+              Progreso: {contador.pickeado} / {contador.requerido} {item.unidad}
+            </div>
+          </div>
+        )}
+
+        {/* Estado scanner */}
+        {!showConfirm && (
+          <div
+            className={cn(
+              'mb-3 rounded-xl border p-3 text-center text-sm',
+              estado === 'error'
+                ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                : estado === 'ok'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                  : 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300',
+            )}
+          >
+            <div className="text-base font-semibold">{mensaje}</div>
+            <div className="mt-0.5 text-[11px] opacity-80">{submensaje}</div>
+          </div>
+        )}
+
+        {/* Reader */}
+        {!showConfirm && !needItemScanTap && (
+          <div
+            id="reader-bodega"
+            className="mx-auto mb-3 aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border border-white/[0.07] bg-black"
+          />
+        )}
+
+        {scanner.error && !showConfirm && (
+          <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-300">
+            <Camera className="mx-auto mb-1 h-6 w-6" />
+            <div className="font-semibold">Sin acceso a cámara</div>
+            <div className="mt-1 text-[11px] text-zinc-400">{scanner.error}</div>
+            <Button
+              onClick={() => scanner.start('reader-bodega')}
+              size="sm"
+              className="mt-2 gap-1.5"
+            >
+              <Camera className="h-3.5 w-3.5" /> Reintentar
+            </Button>
+          </div>
+        )}
+
+        {/* Botones según fase */}
+        {!showConfirm && fase === 'loc' && estado === 'esperando' && (
+          <Button onClick={saltarUbicacion} variant="outline" className="w-full">
+            No encuentro el QR de ubicación
+          </Button>
+        )}
+        {!showConfirm && needItemScanTap && (
+          <Button onClick={activarFaseItem} className="w-full gap-2">
+            <Camera className="h-4 w-4" /> Escanear QR del insumo
+          </Button>
+        )}
+
+        {/* Panel confirmar */}
+        {showConfirm && (
+          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
+            <div className="mb-1 text-xs uppercase tracking-wider text-emerald-400">
+              Confirmar cantidad
+            </div>
+            <div className="mb-0.5 text-base font-semibold">{item.descripcion}</div>
+            <div className="mb-4 text-xs text-zinc-400">
+              El sistema requiere {maxQty} {item.unidad} para esta OT
+            </div>
+            <div className="mb-4 flex items-center justify-center gap-4">
+              <Button
+                onClick={() => setQty((q) => Math.max(1, q - 1))}
+                variant="outline"
+                size="icon"
+                className="h-12 w-12"
+              >
+                <Minus className="h-5 w-5" />
+              </Button>
+              <div className="min-w-[80px] text-center text-5xl font-bold">{qty}</div>
+              <Button
+                onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
+                variant="outline"
+                size="icon"
+                className="h-12 w-12"
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
+            <Button
+              onClick={() => onConfirm(qty)}
+              className="mb-2 h-12 w-full gap-2 bg-emerald-600 text-base hover:bg-emerald-700"
+            >
+              <Check className="h-5 w-5" /> Confirmar {qty} {item.unidad}
+            </Button>
+            <Button onClick={volverAEscanearItem} variant="outline" className="w-full">
+              Volver a escanear
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Vista firma + confirmación
+// ─────────────────────────────────────────────────────────────
+function FirmaView({
+  ot,
+  bomItems,
+  contadores,
+  insumos,
+  empresaId,
+  onBack,
+  onDone,
+}: {
+  ot: OT;
+  bomItems: BOMItem[];
+  contadores: Record<number, Contador>;
+  insumos: Insumo[];
+  empresaId: string;
+  onBack: () => void;
+  onDone: () => void;
+}) {
+  const sigRef = useRef<SignatureCanvas>(null);
+  const [nombre, setNombre] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const limpiar = () => {
+    sigRef.current?.clear();
+  };
+
+  const confirmar = async () => {
+    if (!nombre.trim()) {
+      toast.warning('Ingresa el nombre del receptor');
+      return;
+    }
+    if (sigRef.current?.isEmpty()) {
+      toast.warning('La firma está vacía');
+      return;
+    }
+    setSaving(true);
+    const firmaB64 = sigRef.current!.toDataURL('image/png');
+
+    try {
+      // 1. Actualizar OT con firma + estado entregado
+      const dg = (ot.datos_generales || {}) as Record<string, unknown>;
+      const bomDespachado = bomItems.map((it, i) => ({
+        ...it,
+        cantidad_despachada: contadores[i]?.pickeado || 0,
+      }));
+      const { error: otErr } = await supabase
+        .from('ots')
+        .update({
+          estado: 'entregado',
+          datos_generales: {
+            ...dg,
+            firma: firmaB64,
+            firma_nombre: nombre.trim(),
+            firma_fecha: new Date().toISOString(),
+            bom_despachado: bomDespachado,
+          },
+        })
+        .eq('id', ot.id);
+      if (otErr) throw otErr;
+
+      // 2. Descontar stock + registrar movimientos
+      for (let idx = 0; idx < bomItems.length; idx++) {
+        const item = bomItems[idx];
+        const cnt = contadores[idx];
+        if (!cnt || cnt.pickeado <= 0) continue;
+        const ins = buscarInsumoMatchBOM(item, insumos);
+        if (!ins) continue;
+
+        const { data: insActual } = await supabase
+          .from('insumos')
+          .select('stock_mp,stock_liberado')
+          .eq('empresa_id', empresaId)
+          .eq('cod', ins.cod!)
+          .single();
+        if (!insActual) continue;
+
+        const libActual = Number(insActual.stock_liberado) || 0;
+        const mpActual = Number(insActual.stock_mp) || 0;
+        let resta = cnt.pickeado;
+        const descLib = Math.min(resta, libActual);
+        resta -= descLib;
+        const descMp = Math.min(resta, mpActual);
+
+        await supabase
+          .from('insumos')
+          .update({
+            stock_mp: mpActual - descMp,
+            stock_liberado: libActual - descLib,
+          })
+          .eq('empresa_id', empresaId)
+          .eq('cod', ins.cod!);
+
+        await supabase.from('movimientos_insumos').insert({
+          empresa_id: empresaId,
+          fecha: new Date().toISOString(),
+          mes: MESES_A[new Date().getMonth()],
+          tipo: 'SALIDA PRODUCCION',
+          codigo: ins.cod,
+          producto: ins.nemotecnico || ins.descriptor_proveedor || '',
+          almacen: 'MP',
+          cantidad: cnt.pickeado,
+          ot: ot.numero_ot || ot.id.slice(-6),
+          responsable_entrega: nombre.trim(),
+          bitacora: `Despacho OT ${ot.numero_ot || ot.id.slice(-6)}`,
+        });
+      }
+
+      // 3. Actualizar orden_materiales (filas con id UUID)
+      for (let idx = 0; idx < bomItems.length; idx++) {
+        const item = bomItems[idx];
+        const cnt = contadores[idx];
+        if (typeof item.id === 'string' && item.id.length > 10) {
+          await supabase
+            .from('orden_materiales')
+            .update({
+              cantidad_despachada: cnt.pickeado,
+              estado: cnt.estado === 'completo' ? 'completado' : 'parcial',
+            })
+            .eq('id', item.id);
+        }
+      }
+
+      toast.success('Despacho confirmado y stock actualizado');
+      setTimeout(() => onDone(), 1200);
+    } catch (e) {
+      const err = e as Error;
+      toast.error('Error: ' + err.message);
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="min-h-full bg-zinc-950 text-zinc-100">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+        >
+          <ArrowLeft className="h-4 w-4" /> Volver
+        </button>
+        <h1 className="flex-1 text-base font-bold">Firma de conformidad</h1>
+      </div>
+
+      <div className="mx-auto max-w-md p-4">
+        <div className="mb-4 rounded-xl border border-white/[0.07] bg-zinc-900 p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+            <ClipboardList className="h-3.5 w-3.5" /> Resumen del despacho
+          </div>
+          <div className="flex flex-col gap-1 text-sm">
+            {bomItems.map((item, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between border-b border-white/[0.05] py-1 last:border-0"
+              >
+                <span>{item.descripcion}</span>
+                <span className="font-semibold text-emerald-400">
+                  {contadores[i]?.pickeado || 0} {item.unidad}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Label className="text-xs">Nombre del receptor *</Label>
+        <Input
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+          placeholder="Ej: Juan Pérez"
+          className="mb-4 border-white/10 bg-zinc-900"
+        />
+
+        <Label className="text-xs">Firma</Label>
+        <div className="mb-2 overflow-hidden rounded-xl bg-white">
+          <SignatureCanvas
+            ref={sigRef}
+            canvasProps={{
+              className: 'w-full',
+              width: 400,
+              height: 200,
+              style: { width: '100%', height: 200, display: 'block' },
+            }}
+          />
+        </div>
+        <Button onClick={limpiar} variant="outline" size="sm" className="mb-4 gap-1.5">
+          <Eraser className="h-3.5 w-3.5" /> Limpiar firma
+        </Button>
+
+        <Button
+          onClick={confirmar}
+          disabled={saving}
+          className="h-12 w-full gap-2 bg-emerald-600 text-base hover:bg-emerald-700"
+        >
+          {saving ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" /> Guardando…
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="h-5 w-5" /> Confirmar entrega y descontar stock
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// Silencia warning de imports no usados en desarrollo
+export type __Unused = typeof FileSignature | typeof MapPin | typeof X;
