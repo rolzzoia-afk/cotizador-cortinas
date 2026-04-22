@@ -1477,7 +1477,10 @@ async function guardarColmenaFinalEnSupabase() {
             const resultadosPeso = (SistemaInventario.resultadosOptimizacion || [])
                 .filter(item => item.orden && _TIPOS_PESO_G.has(item.orden.componente) && item.resultado);
 
-            // 3. Mapear cada peso a A27/A28/A29 en round-robin y agregar a colmenasFinal
+            // 3. Mapear cada peso a A27/A28/A29 en round-robin y agregar a colmenasFinal.
+            //    tubo_raiz_id: preferir el del resultado (preserva linaje entre sesiones);
+            //    si no hay, generar UUID fresco ACÁ (no en sincronizarColmenaFinalConTabla)
+            //    para que la identidad sea estable entre retries y guardados sucesivos.
             resultadosPeso.forEach((item, i) => {
                 const slot = _SLOTS_PESO_G[i % _SLOTS_PESO_G.length];
                 const r    = item.resultado;
@@ -1487,7 +1490,7 @@ async function guardarColmenaFinalEnSupabase() {
                     medida_mm:    (r.medida_origen || r.medida_cm || 0) * 10,
                     cod:          (r.codigo || r.codigo_original || '').toUpperCase().trim(),
                     serial:       (r.serial && typeof r.serial === 'object' ? r.serial.serial : r.serial) || null,
-                    tubo_raiz_id: null
+                    tubo_raiz_id: r.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null)
                 });
             });
 
@@ -1561,15 +1564,38 @@ async function guardarColmenaEnSupabaseDirecto() {
         const ahora   = new Date().toISOString();
         const usuario = _currentUser?.email || 'desconocido';
 
-        const colmenas = SistemaInventario.colmenas.map(c => ({
+        // Normalizar filas + generar UUID client-side (no delegar a BD default)
+        // para que los duplicados físicos sean detectables antes del INSERT.
+        const colmenasRaw = SistemaInventario.colmenas.map(c => ({
             empresa_id: EMPRESA_ID_OPT,
             n_colmena:  String(c.n_colmena || '-'),
             cod:        (c.cod || '').toUpperCase().trim(),
             medida_cm:  typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
             medida_mm:  c.medida_mm || Math.round((parseFloat(c.medida_cm) || 0) * 10),
             serial:     c.serial || null,
+            tubo_raiz_id: c.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null),
             agregado_por_admin: false
         }));
+
+        // Dedup por identidad física: si el Excel trae la misma (n_colmena,
+        // cod, medida_mm, serial) repetida N veces (habitual en catálogos
+        // humanos), insertamos sólo una. Esto es la causa raíz de los
+        // duplicados masivos de tubos nuevos observados antes del fix.
+        const colmenas = [];
+        const _dupCheck = new Set();
+        let _dupExcel = 0;
+        for (const c of colmenasRaw) {
+            const serialKey = (c.serial && typeof c.serial === 'object')
+                ? `${c.serial.lote || ''}|${c.serial.paquete || ''}|${c.serial.serial || ''}`
+                : String(c.serial || '');
+            const key = `${c.n_colmena}|${c.cod}|${c.medida_mm}|${serialKey}`;
+            if (_dupCheck.has(key)) { _dupExcel++; continue; }
+            _dupCheck.add(key);
+            colmenas.push(c);
+        }
+        if (_dupExcel > 0) {
+            log(`ℹ️ Excel trae ${_dupExcel} fila(s) duplicadas por identidad física — se insertará una sola por tubo.`, 'info');
+        }
 
         // Guardar con reintentos — usa sbOpt (sesión en memoria, evita Tracking Prevention)
         const BATCH = 100;
@@ -1945,7 +1971,32 @@ async function cargarSerialesDesdeTablaDirecta() {
 // Esto asegura que cuando el optimizador guarda sus resultados,
 // la tabla colmena_tubos se actualice también (fuente única de verdad)
 async function sincronizarColmenaFinalConTabla(colmenasFinal) {
-    const filas = colmenasFinal.map(c => ({
+    // Dedup defensivo: aunque el dedup al inicio de optimizar ya debería
+    // haber limpiado duplicados físicos, protegemos acá por si colmenasFinal
+    // llega con duplicados por otra ruta (rollback, descarte de vista previa,
+    // etc.). Si un mismo (n_colmena, cod, medida_mm, serial) aparece 2 veces
+    // con UUIDs distintos, es inequívocamente un duplicado físico — nos
+    // quedamos con uno solo.
+    const _vistosFisico = new Set();
+    const _vistosUuid = new Set();
+    const colmenasDedupeadas = [];
+    let _dupFisico = 0, _dupUuid = 0;
+    for (const c of colmenasFinal) {
+        if (c.tubo_raiz_id && _vistosUuid.has(c.tubo_raiz_id)) { _dupUuid++; continue; }
+        const serialKey = (c.serial && typeof c.serial === 'object')
+            ? `${c.serial.lote || ''}|${c.serial.paquete || ''}|${c.serial.serial || ''}`
+            : String(c.serial || '');
+        const fisicoKey = `${c.n_colmena || '-'}|${(c.cod || '').toUpperCase().trim()}|${c.medida_mm || 0}|${serialKey}`;
+        if (_vistosFisico.has(fisicoKey)) { _dupFisico++; continue; }
+        if (c.tubo_raiz_id) _vistosUuid.add(c.tubo_raiz_id);
+        _vistosFisico.add(fisicoKey);
+        colmenasDedupeadas.push(c);
+    }
+    if (_dupFisico + _dupUuid > 0) {
+        console.warn(`[sync] ⚠️ Dedup defensivo descartó ${_dupFisico + _dupUuid} filas (${_dupUuid} UUID, ${_dupFisico} físico) antes de sync_colmena_tubos.`);
+    }
+
+    const filas = colmenasDedupeadas.map(c => ({
         n_colmena:     c.n_colmena || '-',
         cod:           (c.cod || '').toUpperCase().trim(),
         medida_cm:     typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
@@ -1965,10 +2016,12 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
             });
             if (error) throw new Error(error.message || JSON.stringify(error));
 
-            // Verificar conteo real en BD
+            // Verificación simétrica: conteo real debe coincidir EXACTO con filas.length.
+            // Antes solo detectaba filas faltantes (<) — ahora también detecta excesos,
+            // lo que dispara un retry (que vuelve a DELETE + INSERT y arregla duplicados).
             const conteoReal = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
-            if (conteoReal !== null && conteoReal < filas.length) {
-                throw new Error(`Verificación falló: ${conteoReal}/${filas.length} tubos en BD`);
+            if (conteoReal !== null && conteoReal !== filas.length) {
+                throw new Error(`Verificación falló: ${conteoReal} en BD vs ${filas.length} enviados (${conteoReal > filas.length ? 'exceso' : 'faltan'})`);
             }
             console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros${conteoReal !== null ? ` — BD confirma: ${conteoReal}` : ''}`);
             return; // éxito
@@ -3859,26 +3912,46 @@ async function ejecutarOptimizacion() {
 
     if (SistemaInventario.ordenes.length === 0 || colmenasAUsar.length === 0) { alert('Cargue órdenes y colmenas'); return; }
 
-    // ── Dedup por UUID en la fuente: si colmenasAUsar trae el mismo tubo físico
-    // dos veces (bug de carga, estado residual, race condition), nos quedamos
-    // con uno solo antes de poblar colmenasDisponibles y colmenasHistorico.
-    // Ambas estructuras se derivan de colmenasAUsar, por lo que dedupar acá
-    // cura el problema en los dos lados de una sola vez.
+    // ── Dedup en la fuente: si colmenasAUsar trae el mismo tubo físico dos
+    // veces (bug de carga, duplicados en BD de sesiones anteriores, race
+    // condition), nos quedamos con uno solo antes de poblar
+    // colmenasDisponibles y colmenasHistorico. Ambas estructuras se derivan
+    // de colmenasAUsar, por lo que dedupar acá cura el problema en los dos
+    // lados de una sola vez.
+    //
+    // Criterio de identidad: primero UUID (si existe). Si el mismo UUID
+    // aparece 2 veces es inequívocamente duplicado. PERO TAMBIÉN la misma
+    // identidad física — (n_colmena, cod, medida_mm, serial) — con UUIDs
+    // distintos es duplicado: dos filas distintas en BD pero 1 solo tubo
+    // real. Esto pasa cuando Excel upload o la RPC insertó filas sin
+    // preservar raiz_id y BD generó UUIDs frescos.
     {
         const _vistosFuente = new Set();
+        const _vistosFisico = new Set();
         const _deduped = [];
-        let _skipped = 0;
+        let _skippedUuid = 0, _skippedFisico = 0;
         for (const c of colmenasAUsar) {
             if (c.tubo_raiz_id && _vistosFuente.has(c.tubo_raiz_id)) {
-                _skipped++;
-                console.warn(`[OPT] ⚠️ Duplicado en fuente: raiz_id=${c.tubo_raiz_id} (${c.n_colmena}/${c.cod}/${c.medida_cm}cm) — descartado`);
+                _skippedUuid++;
+                console.warn(`[OPT] ⚠️ Duplicado UUID en fuente: raiz_id=${c.tubo_raiz_id} (${c.n_colmena}/${c.cod}/${c.medida_cm}cm) — descartado`);
+                continue;
+            }
+            const serialKey = (c.serial && typeof c.serial === 'object')
+                ? `${c.serial.lote || ''}|${c.serial.paquete || ''}|${c.serial.serial || ''}`
+                : String(c.serial || '');
+            const fisicoKey = `${c.n_colmena}|${(c.cod || '').toUpperCase().trim()}|${c.medida_mm || 0}|${serialKey}`;
+            if (_vistosFisico.has(fisicoKey)) {
+                _skippedFisico++;
+                console.warn(`[OPT] ⚠️ Duplicado físico en fuente: ${c.n_colmena}/${c.cod}/${c.medida_cm}cm (raiz_id=${c.tubo_raiz_id || 'null'}) — descartado (ya hay otra fila con misma identidad física)`);
                 continue;
             }
             if (c.tubo_raiz_id) _vistosFuente.add(c.tubo_raiz_id);
+            _vistosFisico.add(fisicoKey);
             _deduped.push(c);
         }
-        if (_skipped > 0) {
-            log(`⚠️ ${_skipped} tubo(s) duplicados por UUID descartados antes de optimizar. Revisá consola para detalle.`, 'warn');
+        const _totalSkipped = _skippedUuid + _skippedFisico;
+        if (_totalSkipped > 0) {
+            log(`⚠️ ${_totalSkipped} tubo(s) duplicados descartados antes de optimizar (${_skippedUuid} por UUID, ${_skippedFisico} por identidad física). Revisá consola.`, 'warn');
             colmenasAUsar = _deduped;
         }
     }
