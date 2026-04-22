@@ -3,7 +3,7 @@
 // desde Colmena" (4 reglas que matchean contra colmena_panos) sigue en
 // legacy — se accede por el botón "Abrir Plan de Corte (legacy)".
 
-import type { CatalogoProductos } from './types';
+import type { CatalogoProductos, Pano } from './types';
 import type { VentanaItem } from '@/modules/ots/types';
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -53,6 +53,7 @@ export type OptimizerRow = {
   ubicacion: string;
   ventanaId: string | number;
   panoIndex: number;
+  pano?: Pano;
 };
 
 // Construye las filas del optimizador desde las ventanas de la OT.
@@ -101,6 +102,7 @@ export function buildOptimizerRows(
         ubicacion: (v.ubicacion || '') + panoLabel,
         ventanaId: v.id,
         panoIndex: pi,
+        pano: p as unknown as Pano,
       });
     });
   }

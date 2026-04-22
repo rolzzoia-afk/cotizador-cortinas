@@ -6,27 +6,51 @@ import {
   CheckCircle2,
   ExternalLink,
   Factory,
+  FileDown,
   Loader2,
   Package,
+  Printer,
   Scissors,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useOT } from '@/modules/ots/hooks';
+import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
 import { SUB_ETAPA_META, colorCategoria } from '@/modules/cotizador/fase4';
 import { formatCLP } from '@/modules/cotizador/calculos';
+import {
+  asignarJuntoEnOrden,
+  buildOptimizerRows,
+  restorePlanGuardado,
+} from '@/modules/cotizador/tela';
+import {
+  generarEtiquetasPDF,
+  generarPDFProduccion,
+  validarDatosParaEtiquetas,
+} from '@/modules/cotizador/pdfProduccion';
 import type { SubEtapaProd } from '@/modules/ots/types';
 
 export function CotizadorFase4() {
   const { id: otId } = useParams();
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
+  const { catalogo, loading: loadingCat } = useCatalogoProductos();
   const [avanzando, setAvanzando] = useState(false);
   const [cambiandoSub, setCambiandoSub] = useState(false);
 
   const bom = useMemo(() => ot?.datosGenerales?.bom || [], [ot]);
+
+  const pdfRows = useMemo(() => {
+    if (!ot || loadingCat) return null;
+    const fresh = buildOptimizerRows(ot.storeVentanas, catalogo);
+    if (fresh.length === 0) return [];
+    const guardado = ot.datosGenerales?.optimizerRows;
+    const restored = restorePlanGuardado(fresh, guardado);
+    const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
+    return tieneJunto ? restored : asignarJuntoEnOrden(restored);
+  }, [ot, loadingCat, catalogo]);
 
   const cambiarSubEtapa = async (sub: SubEtapaProd) => {
     if (!ot || cambiandoSub) return;
@@ -73,6 +97,49 @@ export function CotizadorFase4() {
   const abrirTelaReact = () => {
     if (!ot) return;
     navigate(`/ots/${ot.id}/tela`);
+  };
+
+  const metaPDF = () => ({
+    ot: ot?.datosGenerales.ot || '—',
+    cliente: ot?.datosGenerales.cliente || '—',
+    fecha: new Date().toISOString().split('T')[0],
+  });
+
+  const onGenerarPDF = () => {
+    if (!pdfRows || pdfRows.length === 0) {
+      toast.error('No hay paños. Agregá ventanas en Fase 2 primero.');
+      return;
+    }
+    try {
+      generarPDFProduccion(pdfRows, metaPDF(), catalogo);
+      toast.success('PDF de Producción generado');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error generando PDF: ' + msg);
+    }
+  };
+
+  const onImprimirEtiquetas = () => {
+    if (!pdfRows || pdfRows.length === 0) {
+      toast.error('No hay paños. Agregá ventanas en Fase 2 primero.');
+      return;
+    }
+    const faltantes = validarDatosParaEtiquetas(pdfRows);
+    if (faltantes.length > 0) {
+      const continuar = confirm(
+        'Faltan campos importantes para etiquetas detalladas:\n\n' +
+          faltantes.join('\n') +
+          '\n\n¿Querés imprimir de todos modos con los datos disponibles?',
+      );
+      if (!continuar) return;
+    }
+    try {
+      generarEtiquetasPDF(pdfRows, metaPDF(), catalogo);
+      toast.success('Etiquetas generadas');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error generando etiquetas: ' + msg);
+    }
   };
 
   const abrirFase4Legacy = () => {
@@ -265,10 +332,13 @@ export function CotizadorFase4() {
         <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Scissors className="h-4 w-4 text-blue-300" />
-            <span className="text-sm font-medium text-blue-200">Optimización de paños y plan de corte</span>
+            <span className="text-sm font-medium text-blue-200">
+              Optimización, PDF de producción y etiquetas
+            </span>
           </div>
           <p className="mb-3 text-xs text-zinc-400">
-            El optimizador de paños está en React. El BOM/etiquetas/PDF siguen en legacy hasta Fase 6.
+            El optimizador, el PDF de producción y las etiquetas Brother 62×100 corren en React.
+            El BOM y el plan de corte desde colmena quedan en legacy.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -277,11 +347,29 @@ export function CotizadorFase4() {
               className="gap-1.5 bg-indigo-600 hover:bg-indigo-500"
             >
               <Scissors className="h-3.5 w-3.5" />
-              Abrir Tela (optimizador de paños)
+              Abrir Tela (optimizador)
+            </Button>
+            <Button
+              size="sm"
+              onClick={onGenerarPDF}
+              disabled={!pdfRows || pdfRows.length === 0}
+              className="gap-1.5 bg-purple-600 hover:bg-purple-500"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              Generar PDF Producción
+            </Button>
+            <Button
+              size="sm"
+              onClick={onImprimirEtiquetas}
+              disabled={!pdfRows || pdfRows.length === 0}
+              className="gap-1.5 bg-emerald-600 hover:bg-emerald-500"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Imprimir etiquetas
             </Button>
             <Button variant="outline" size="sm" onClick={abrirFase4Legacy} className="gap-1.5">
               <ExternalLink className="h-3.5 w-3.5" />
-              Abrir Fase 4 legacy (BOM + etiquetas + PDF)
+              Fase 4 legacy (BOM)
             </Button>
           </div>
         </div>
