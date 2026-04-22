@@ -12,6 +12,7 @@ const links = [
   { to: '/inventario', label: 'Inventario' },
   { to: '/optimizador', label: 'Optimizador' },
   { to: '/bodeguero', label: 'Bodega' },
+  { to: '/ojo-de-dios', label: 'Ojo de Dios' },
 ];
 
 export function TopBar() {

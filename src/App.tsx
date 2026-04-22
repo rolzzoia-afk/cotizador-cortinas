@@ -20,6 +20,7 @@ import { CotizadorFase1 } from '@/pages/CotizadorFase1';
 import { CotizadorFase2 } from '@/pages/CotizadorFase2';
 import { CotizadorFase3 } from '@/pages/CotizadorFase3';
 import { CotizadorFase4 } from '@/pages/CotizadorFase4';
+import { OjoDeDios } from '@/pages/OjoDeDios';
 
 function Shell() {
   return (
@@ -80,6 +81,7 @@ export function App() {
         <Route path="historial-corte" element={<HistorialCorte />} />
         <Route path="historial-tubos" element={<HistorialTubos />} />
         <Route path="admin" element={<AdminPanel />} />
+        <Route path="ojo-de-dios" element={<OjoDeDios />} />
       </Route>
 
       <Route path="*" element={<div className="p-8">404 · Ruta no encontrada</div>} />
