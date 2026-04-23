@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { setSentryUser } from './sentry';
 
 type Perfil = {
   id: string;
@@ -60,6 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setEmpresaId(null);
       setOnboarding(false);
       localStorage.removeItem(TENANT_KEY);
+      setSentryUser(null);
       setLoading(false);
       return;
     }
@@ -75,6 +77,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(TENANT_KEY);
       setOnboarding(false);
     }
+    setSentryUser({
+      id: s.user.id,
+      email: s.user.email,
+      nombre: p?.nombre ?? null,
+      empresaId: p?.empresa_id ?? null,
+    });
     setLoading(false);
   };
 
