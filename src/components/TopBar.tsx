@@ -11,7 +11,11 @@ const links = [
   { to: '/inventario', label: 'Inventario' },
   { to: '/optimizador', label: 'Optimizador' },
   { to: '/bodeguero', label: 'Bodega' },
+  { to: '/camionetas', label: 'Camionetas' },
+  { to: '/historial-corte', label: 'Historial Corte' },
+  { to: '/historial-tubos', label: 'Historial Tubos' },
   { to: '/ojo-de-dios', label: 'Ojo de Dios' },
+  { to: '/admin', label: 'Admin' },
 ];
 
 export function TopBar() {
