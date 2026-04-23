@@ -821,15 +821,24 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
         .eq('estado', 'produccion');
       if (otsErr) throw otsErr;
 
-      const otsProd = ((otsData as Array<{ id: string; items: unknown; datos_generales: unknown }>) || [])
-        .map(
-          (row) =>
-            ({
-              id: row.id,
-              storeVentanas: (row.items || []) as OT['storeVentanas'],
-              datosGenerales: (row.datos_generales || {}) as OT['datosGenerales'],
-            }) as OT,
-        )
+      const otsProd = (
+        (otsData as Array<{
+          id: string;
+          items: unknown;
+          datos_generales: unknown;
+          numero_ot: string | null;
+        }>) || []
+      )
+        .map((row) => {
+          const dg = (row.datos_generales || {}) as OT['datosGenerales'];
+          // Fallback al numero_ot de la columna si datosGenerales.ot no está
+          if (!dg.ot && row.numero_ot) dg.ot = row.numero_ot;
+          return {
+            id: row.id,
+            storeVentanas: (row.items || []) as OT['storeVentanas'],
+            datosGenerales: dg,
+          } as OT;
+        })
         .filter((o) => (o.storeVentanas || []).length > 0);
 
       // Si la OT actual no está en producción (fallback), incluirla igual
