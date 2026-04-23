@@ -132,7 +132,8 @@ export function Panel() {
     } else if (ot.estado === 'produccion') {
       navigate(`/ots/${ot.id}/fase4`);
     } else {
-      navigate('/cotizador?tab=fase1');
+      // archivada u otros estados → Fase 1 por defecto
+      navigate(`/ots/${ot.id}/fase1`);
     }
   };
 

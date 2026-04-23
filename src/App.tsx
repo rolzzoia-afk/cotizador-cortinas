@@ -66,10 +66,6 @@ export function App() {
         <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
         <Route path="ots/:id/fase4" element={<CotizadorFase4 />} />
         <Route path="ots/:id/tela" element={<CotizadorTela />} />
-        <Route
-          path="cotizador"
-          element={<LegacyFrame src="/legacy/index.html" title="Cotizador" />}
-        />
         <Route path="ventas" element={<Ventas />} />
         <Route path="inteligencia" element={<Inteligencia />} />
         <Route path="telas" element={<Telas />} />
