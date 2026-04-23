@@ -32,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { AuditLogSection } from '@/components/admin/AuditLogSection';
 
 type Tubo = {
   id: string;
@@ -503,6 +504,9 @@ export function AdminPanel() {
           </Table>
         </div>
       </section>
+
+      {/* Audit log */}
+      <AuditLogSection />
 
       {/* Modal detalle */}
       <Dialog open={!!planDetalle} onOpenChange={(o) => !o && setPlanDetalle(null)}>
