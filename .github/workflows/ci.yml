@@ -23,11 +23,14 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          # Node 22 trae npm 10.9+ que entiende el lock generado por npm 11.
-          # Con node 20 (npm 10.5) falla con "Missing esbuild@... from lock file"
-          # por cambios en cómo se resuelven peer deps opcionales.
           node-version: '22'
           cache: 'npm'
+
+      - name: Upgrade npm to v11
+        # Node 22 trae npm 10.9 que no respeta constraints de `os` en deps
+        # opcionales (intenta instalar @esbuild/netbsd-arm64 en linux).
+        # npm 11 lo maneja bien.
+        run: npm install -g npm@11
 
       - name: Install dependencies
         run: npm ci
