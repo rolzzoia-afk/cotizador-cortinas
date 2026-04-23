@@ -980,21 +980,33 @@ function ScannerView({
             <div className="mb-4 text-xs text-zinc-400">
               El sistema requiere {maxQty} {item.unidad} para esta OT
             </div>
-            <div className="mb-4 flex items-center justify-center gap-4">
+            <div className="mb-4 flex items-center justify-center gap-3">
               <Button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
                 variant="outline"
                 size="icon"
-                className="h-12 w-12"
+                className="h-12 w-12 shrink-0"
               >
                 <Minus className="h-5 w-5" />
               </Button>
-              <div className="min-w-[80px] text-center text-5xl font-bold">{qty}</div>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={maxQty}
+                value={qty}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  if (Number.isFinite(n)) setQty(Math.max(1, Math.min(maxQty, n)));
+                }}
+                onFocus={(e) => e.currentTarget.select()}
+                className="h-12 w-24 text-center text-3xl font-bold"
+              />
               <Button
                 onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
                 variant="outline"
                 size="icon"
-                className="h-12 w-12"
+                className="h-12 w-12 shrink-0"
               >
                 <Plus className="h-5 w-5" />
               </Button>
@@ -1561,21 +1573,32 @@ function AdHocView({
             </div>
 
             <Label className="mb-1 text-xs">Cantidad</Label>
-            <div className="mb-4 flex items-center justify-center gap-4 rounded-xl border border-white/[0.07] bg-zinc-900 p-3">
+            <div className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-white/[0.07] bg-zinc-900 p-3">
               <Button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
                 variant="outline"
                 size="icon"
-                className="h-11 w-11"
+                className="h-11 w-11 shrink-0"
               >
                 <Minus className="h-5 w-5" />
               </Button>
-              <div className="min-w-[70px] text-center text-5xl font-bold">{qty}</div>
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={qty}
+                onChange={(e) => {
+                  const n = parseInt(e.target.value, 10);
+                  if (Number.isFinite(n)) setQty(Math.max(1, n));
+                }}
+                onFocus={(e) => e.currentTarget.select()}
+                className="h-11 w-24 text-center text-3xl font-bold"
+              />
               <Button
                 onClick={() => setQty((q) => q + 1)}
                 variant="outline"
                 size="icon"
-                className="h-11 w-11"
+                className="h-11 w-11 shrink-0"
               >
                 <Plus className="h-5 w-5" />
               </Button>

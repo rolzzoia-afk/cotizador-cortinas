@@ -15,11 +15,14 @@ import {
   Pencil,
   PencilRuler,
   Plus,
+  Printer,
+  QrCode,
   Search,
   Tags,
   X,
   XCircle,
 } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -169,6 +172,7 @@ export function Inventario() {
   const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
   const [ubicaciones, setUbicaciones] = useState<UbicacionRack[]>([]);
   const [validadores, setValidadores] = useState<ValidadoresMap>({});
+  const [qrInsumo, setQrInsumo] = useState<Insumo | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
@@ -975,6 +979,13 @@ export function Inventario() {
                               <Pencil className="h-3 w-3" />
                             </button>
                             <button
+                              onClick={() => setQrInsumo(i)}
+                              className="rounded border border-indigo-500/30 bg-indigo-500/10 p-1 text-indigo-300 hover:bg-indigo-500/20"
+                              title="Ver / imprimir QR"
+                            >
+                              <QrCode className="h-3 w-3" />
+                            </button>
+                            <button
                               onClick={() =>
                                 abrirNuevoMov('NUEVO INGRESO', i.cod || '')
                               }
@@ -1724,6 +1735,13 @@ export function Inventario() {
             })()}
         </DialogContent>
       </Dialog>
+
+      {/* QR insumo dialog */}
+      <QRInsumoDialog
+        insumo={qrInsumo}
+        ubicaciones={ubicaciones}
+        onClose={() => setQrInsumo(null)}
+      />
     </div>
   );
 }
@@ -1874,5 +1892,157 @@ function InfoCell({ label, children }: { label: string; children: React.ReactNod
       <div className="text-[0.65rem] uppercase text-zinc-500">{label}</div>
       <div className="text-sm font-medium">{children}</div>
     </div>
+  );
+}
+
+// ── QR del insumo (INS:cod + LOC:rack|fila|col) ─────────────────
+// Formato idéntico a legacy (public/legacy/inventario.html) para que los QRs
+// físicos ya pegados en el taller sigan funcionando sin re-imprimir.
+
+const asciiPuro = (s: string | number | null | undefined): string =>
+  String(s ?? '')
+    .trim()
+    .replace(/[^\x20-\x7E]/g, '')
+    .replace(/\s+/g, '');
+
+function rackToQRContent(rack: string, fila: string | number, col: string): string {
+  return `LOC:${asciiPuro(rack)}|${asciiPuro(fila)}|${asciiPuro(col)}`;
+}
+
+function rackToDisplayLabel(rack: string, fila: string | number, col: string): string {
+  return `${String(rack ?? '').trim()} · ${String(fila ?? '').trim()}-${String(col ?? '').trim()}`;
+}
+
+function QRInsumoDialog({
+  insumo,
+  ubicaciones,
+  onClose,
+}: {
+  insumo: Insumo | null;
+  ubicaciones: UbicacionRack[];
+  onClose: () => void;
+}) {
+  if (!insumo) return null;
+
+  const rackEntry = ubicaciones.find(
+    (u) => (u.codigo_insumo || '').toUpperCase() === (insumo.cod || '').toUpperCase(),
+  );
+
+  let ubicacionDisplay = '';
+  let ubicacionQR = '';
+  if (rackEntry) {
+    ubicacionDisplay = rackToDisplayLabel(rackEntry.rack, rackEntry.fila, rackEntry.columna);
+    ubicacionQR = rackToQRContent(rackEntry.rack, rackEntry.fila, rackEntry.columna);
+  } else if (insumo.ubicacion) {
+    ubicacionDisplay = insumo.ubicacion;
+    ubicacionQR = `LOC:${asciiPuro(insumo.ubicacion)}`;
+  }
+
+  const codQR = asciiPuro(insumo.cod);
+  const nombre = insumo.nemotecnico || insumo.descriptor_proveedor || insumo.cod || '';
+
+  const imprimir = () => {
+    const canvasItem = document.getElementById('qr-canvas-item') as HTMLCanvasElement | null;
+    const canvasLoc = document.getElementById('qr-canvas-loc') as HTMLCanvasElement | null;
+    const imgItem = canvasItem?.toDataURL() || '';
+    const imgLoc = canvasLoc?.toDataURL() || '';
+    const w = window.open('', '_blank', 'width=640,height=480');
+    if (!w) {
+      toast.error('El navegador bloqueó la ventana de impresión. Habilitá popups.');
+      return;
+    }
+    const html = `<!doctype html><html><head><title>QR ${insumo.cod}</title>
+<style>
+body { font-family: sans-serif; margin: 0; padding: 20px; }
+.etiqueta { display: inline-block; border: 2px solid #000; border-radius: 8px; padding: 12px 16px;
+            margin: 8px; text-align: center; width: 180px; vertical-align: top; }
+.etiqueta img { width: 150px; height: 150px; display: block; margin: 0 auto 6px; }
+.etiqueta .titulo { font-size: 11px; font-weight: bold; margin-bottom: 2px; }
+.etiqueta .sub { font-size: 9px; color: #555; }
+.etiqueta .tipo { font-size: 9px; background: #f0f0f0; border-radius: 3px; padding: 1px 5px; margin-bottom: 4px; display: inline-block; }
+@media print { body { padding: 0; } }
+</style></head>
+<body>
+${imgItem ? `<div class="etiqueta">
+  <div class="tipo">CAJA / CONTENEDOR</div>
+  <img src="${imgItem}" alt="QR Item">
+  <div class="titulo">${nombre}</div>
+  <div class="sub">Código: ${insumo.cod}</div>
+  <div class="sub">INS:${insumo.cod}</div>
+</div>` : ''}
+${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
+  <div class="tipo">UBICACIÓN</div>
+  <img src="${imgLoc}" alt="QR Loc">
+  <div class="titulo">${ubicacionDisplay}</div>
+  <div class="sub">Insumo: ${insumo.cod}</div>
+  <div class="sub">${ubicacionQR}</div>
+</div>` : ''}
+<script>window.onload = () => setTimeout(() => { window.print(); window.close(); }, 250);</script>
+</body></html>`;
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  };
+
+  return (
+    <Dialog open={!!insumo} onOpenChange={(v) => (v ? null : onClose())}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{nombre}</DialogTitle>
+          <p className="text-xs text-zinc-400">Código: {insumo.cod}</p>
+        </DialogHeader>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-zinc-900/40 p-3">
+            <div className="text-[0.68rem] font-semibold uppercase text-indigo-300">
+              QR del contenedor
+            </div>
+            <div className="rounded bg-white p-2">
+              <QRCodeCanvas
+                id="qr-canvas-item"
+                value={`INS:${codQR}`}
+                size={150}
+                level="M"
+              />
+            </div>
+            <div className="font-mono text-[0.68rem] text-zinc-400">INS:{codQR}</div>
+          </div>
+          {ubicacionQR && (
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-zinc-900/40 p-3">
+              <div className="text-[0.68rem] font-semibold uppercase text-amber-300">
+                QR de ubicación
+              </div>
+              <div className="rounded bg-white p-2">
+                <QRCodeCanvas
+                  id="qr-canvas-loc"
+                  value={ubicacionQR}
+                  size={150}
+                  level="M"
+                />
+              </div>
+              <div className="text-center text-[0.68rem] text-zinc-400">
+                {ubicacionDisplay}
+                {rackEntry?.almacen && (
+                  <div className="opacity-70">({rackEntry.almacen})</div>
+                )}
+              </div>
+            </div>
+          )}
+          {!ubicacionQR && (
+            <div className="flex flex-col items-center justify-center rounded-lg border border-white/10 bg-zinc-900/40 p-3 text-center text-[0.7rem] text-zinc-500">
+              Sin ubicación asignada — solo se imprime el QR de contenedor.
+            </div>
+          )}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cerrar
+          </Button>
+          <Button onClick={imprimir} className="gap-1.5 bg-indigo-600 hover:bg-indigo-500">
+            <Printer className="h-3.5 w-3.5" />
+            Imprimir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
