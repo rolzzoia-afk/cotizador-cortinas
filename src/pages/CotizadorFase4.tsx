@@ -1,20 +1,26 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  ExternalLink,
   Factory,
   FileDown,
   Loader2,
   Package,
+  Plus,
   Printer,
+  RefreshCw,
+  Save,
   Scissors,
+  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
@@ -25,22 +31,27 @@ import {
   buildOptimizerRows,
   restorePlanGuardado,
 } from '@/modules/cotizador/tela';
+import { bomToOrdenMaterialesRows, calcularBOM } from '@/modules/cotizador/bom';
 import {
   generarEtiquetasPDF,
   generarPDFProduccion,
   validarDatosParaEtiquetas,
 } from '@/modules/cotizador/pdfProduccion';
-import type { SubEtapaProd } from '@/modules/ots/types';
+import type { BomItem, SubEtapaProd } from '@/modules/ots/types';
+
+type BomEstado = 'guardado' | 'pendiente' | 'guardando';
 
 export function CotizadorFase4() {
   const { id: otId } = useParams();
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
+  const { empresaId } = useAuth();
   const [avanzando, setAvanzando] = useState(false);
   const [cambiandoSub, setCambiandoSub] = useState(false);
-
-  const bom = useMemo(() => ot?.datosGenerales?.bom || [], [ot]);
+  const [bomItems, setBomItems] = useState<BomItem[] | null>(null);
+  const [bomEstado, setBomEstado] = useState<BomEstado>('guardado');
+  const [bomSaving, setBomSaving] = useState(false);
 
   const pdfRows = useMemo(() => {
     if (!ot || loadingCat) return null;
@@ -51,6 +62,19 @@ export function CotizadorFase4() {
     const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
     return tieneJunto ? restored : asignarJuntoEnOrden(restored);
   }, [ot, loadingCat, catalogo]);
+
+  // Inicializar BOM: usa lo guardado en la OT si existe, si no calcula desde pdfRows
+  useEffect(() => {
+    if (!ot || bomItems !== null) return;
+    const saved = ot.datosGenerales?.bom;
+    if (saved && saved.length > 0) {
+      setBomItems(saved);
+      setBomEstado('guardado');
+    } else if (pdfRows && pdfRows.length > 0) {
+      setBomItems(calcularBOM(pdfRows));
+      setBomEstado('pendiente');
+    }
+  }, [ot, pdfRows, bomItems]);
 
   const cambiarSubEtapa = async (sub: SubEtapaProd) => {
     if (!ot || cambiandoSub) return;
@@ -142,11 +166,87 @@ export function CotizadorFase4() {
     }
   };
 
-  const abrirFase4Legacy = () => {
-    if (!ot) return;
-    localStorage.setItem('activeOTId', ot.id);
-    localStorage.setItem('rolzzo_goto_tab', 'fase4-tab');
-    navigate('/cotizador');
+  // ── BOM: handlers ──────────────────────────────────────────
+  const setBomField = (idx: number, field: keyof BomItem, value: string | number) => {
+    setBomItems((prev) => {
+      if (!prev) return prev;
+      const next = [...prev];
+      next[idx] = { ...next[idx], [field]: value };
+      return next;
+    });
+    setBomEstado('pendiente');
+  };
+
+  const addBomRow = () => {
+    setBomItems((prev) => [
+      ...(prev || []),
+      {
+        categoria: 'OTRO',
+        descripcion: 'Nuevo ítem',
+        especificacion: '',
+        color: '',
+        cantidad: 1,
+        unidad: 'unid.',
+      },
+    ]);
+    setBomEstado('pendiente');
+  };
+
+  const removeBomRow = (idx: number) => {
+    setBomItems((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev));
+    setBomEstado('pendiente');
+  };
+
+  const recomputarBom = () => {
+    if (!pdfRows || pdfRows.length === 0) {
+      toast.error('No hay paños en el optimizador para recalcular.');
+      return;
+    }
+    if (bomItems && bomItems.length > 0) {
+      if (!confirm('Esto sobrescribe el BOM actual con uno fresco desde el optimizador. ¿Continuar?'))
+        return;
+    }
+    setBomItems(calcularBOM(pdfRows));
+    setBomEstado('pendiente');
+    toast.success('BOM recalculado desde el optimizador');
+  };
+
+  const guardarBom = async () => {
+    if (!ot || !bomItems || !empresaId) return;
+    setBomSaving(true);
+    setBomEstado('guardando');
+    try {
+      const dg = {
+        ...(ot.datosGenerales || {}),
+        bom: bomItems,
+        bomFecha: new Date().toISOString(),
+      };
+      await guardar({ datosGenerales: dg });
+
+      // Sincronizar orden_materiales (lo consume Bodeguero)
+      const rows = bomToOrdenMaterialesRows(bomItems, empresaId, ot.id);
+      const { error: delErr } = await supabase
+        .from('orden_materiales')
+        .delete()
+        .eq('empresa_id', empresaId)
+        .eq('ot_id', ot.id);
+      if (delErr && delErr.code !== '42P01') {
+        console.warn('[BOM] Error borrando orden_materiales:', delErr.message);
+      }
+      if (!delErr || delErr.code !== '42P01') {
+        const { error: insErr } = await supabase.from('orden_materiales').insert(rows);
+        if (insErr) console.warn('[BOM] Error insertando orden_materiales:', insErr.message);
+      }
+
+      setBomEstado('guardado');
+      toast.success('BOM guardado');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error guardando BOM: ' + msg);
+      setBomEstado('pendiente');
+    } finally {
+      setBomSaving(false);
+    }
   };
 
   if (loading) {
@@ -263,9 +363,9 @@ export function CotizadorFase4() {
           />
         </div>
 
-        {/* BOM read-only */}
+        {/* BOM editable */}
         <div className="mb-4 rounded-lg border border-white/10 bg-zinc-900/40">
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <div className="flex items-center gap-2">
               <Package className="h-4 w-4 text-amber-300" />
               <span className="text-sm font-medium text-zinc-200">Lista de materiales (BOM)</span>
@@ -274,15 +374,52 @@ export function CotizadorFase4() {
                   · Guardado {new Date(ot.datosGenerales.bomFecha).toLocaleString('es-CL')}
                 </span>
               )}
+              <BomEstadoBadge estado={bomEstado} />
             </div>
-            <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[0.68rem] text-zinc-400">
-              Solo lectura — se edita en tab Tela legacy
-            </span>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={recomputarBom}
+                disabled={!pdfRows || pdfRows.length === 0 || readOnly}
+                className="h-7 gap-1 text-[0.7rem]"
+                title="Recalcula desde optimizador (sobrescribe)"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Recalcular
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={addBomRow}
+                disabled={readOnly}
+                className="h-7 gap-1 text-[0.7rem]"
+              >
+                <Plus className="h-3 w-3" />
+                Agregar fila
+              </Button>
+              <Button
+                size="sm"
+                onClick={guardarBom}
+                disabled={!bomItems || bomSaving || bomEstado === 'guardado' || readOnly}
+                className="h-7 gap-1 bg-emerald-600 text-[0.7rem] hover:bg-emerald-500"
+              >
+                {bomSaving ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <Save className="h-3 w-3" />
+                )}
+                Guardar BOM
+              </Button>
+            </div>
           </div>
-          {bom.length === 0 ? (
+          {!bomItems ? (
             <div className="px-4 py-8 text-center text-sm text-zinc-500">
-              No hay BOM generado todavía. Abrí <strong className="text-zinc-300">Tab Tela (legacy)</strong> y presioná{' '}
-              <em>Guardar BOM</em> para persistirla.
+              Cargando BOM…
+            </div>
+          ) : bomItems.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-zinc-500">
+              No hay materiales. Completá los paños en Fase 2 o presioná <em>Recalcular</em>.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -296,10 +433,11 @@ export function CotizadorFase4() {
                     <th className="p-2 text-left">Color</th>
                     <th className="p-2 text-right">Cantidad</th>
                     <th className="p-2 text-left">Unidad</th>
+                    <th className="w-8" />
                   </tr>
                 </thead>
                 <tbody>
-                  {bom.map((it, idx) => (
+                  {bomItems.map((it, idx) => (
                     <tr key={idx} className="border-t border-white/5 hover:bg-white/5">
                       <td className="p-2 text-zinc-500">{idx + 1}</td>
                       <td className="p-2">
@@ -313,13 +451,54 @@ export function CotizadorFase4() {
                           {it.categoria}
                         </span>
                       </td>
-                      <td className="p-2 text-zinc-200">{it.descripcion}</td>
-                      <td className="p-2 text-zinc-400">{it.especificacion || '—'}</td>
-                      <td className="p-2 text-zinc-400">{it.color || '—'}</td>
-                      <td className="p-2 text-right font-semibold text-emerald-300">
-                        {it.cantidad}
+                      <td className="p-2">
+                        <Input
+                          value={it.descripcion}
+                          onChange={(e) => setBomField(idx, 'descripcion', e.target.value)}
+                          disabled={readOnly}
+                          className="h-6 text-xs"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          value={it.especificacion || ''}
+                          onChange={(e) => setBomField(idx, 'especificacion', e.target.value)}
+                          disabled={readOnly}
+                          className="h-6 text-xs"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          value={it.color || ''}
+                          onChange={(e) => setBomField(idx, 'color', e.target.value)}
+                          disabled={readOnly}
+                          className="h-6 text-xs"
+                        />
+                      </td>
+                      <td className="p-2">
+                        <Input
+                          type="number"
+                          value={it.cantidad}
+                          onChange={(e) =>
+                            setBomField(idx, 'cantidad', parseFloat(e.target.value) || 0)
+                          }
+                          disabled={readOnly}
+                          min={0}
+                          step={1}
+                          className="h-6 w-16 text-right text-xs"
+                        />
                       </td>
                       <td className="p-2 text-zinc-500">{it.unidad}</td>
+                      <td className="p-2">
+                        <button
+                          onClick={() => removeBomRow(idx)}
+                          disabled={readOnly}
+                          className="text-red-400 opacity-50 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20"
+                          title="Eliminar fila"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -337,8 +516,7 @@ export function CotizadorFase4() {
             </span>
           </div>
           <p className="mb-3 text-xs text-zinc-400">
-            El optimizador, el PDF de producción y las etiquetas Brother 62×100 corren en React.
-            El BOM y el plan de corte desde colmena quedan en legacy.
+            Todo corre en React. El plan de corte desde colmena queda en legacy (Fase 6 pendiente).
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -366,10 +544,6 @@ export function CotizadorFase4() {
             >
               <Printer className="h-3.5 w-3.5" />
               Imprimir etiquetas
-            </Button>
-            <Button variant="outline" size="sm" onClick={abrirFase4Legacy} className="gap-1.5">
-              <ExternalLink className="h-3.5 w-3.5" />
-              Fase 4 legacy (BOM)
             </Button>
           </div>
         </div>
@@ -412,5 +586,21 @@ function Card({ label, value, hint }: { label: string; value: string; hint?: str
       <div className="mt-1 text-lg font-semibold text-zinc-100">{value}</div>
       {hint && <div className="mt-1 text-[0.68rem] text-zinc-500">{hint}</div>}
     </div>
+  );
+}
+
+function BomEstadoBadge({ estado }: { estado: BomEstado }) {
+  const cfg = {
+    guardado: { label: '✓ Guardado', bg: 'rgba(34,197,94,0.15)', color: '#22c55e' },
+    pendiente: { label: 'Sin guardar', bg: 'rgba(245,158,11,0.2)', color: '#f59e0b' },
+    guardando: { label: 'Guardando…', bg: 'rgba(124,117,240,0.15)', color: '#a78bfa' },
+  }[estado];
+  return (
+    <span
+      className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
+      style={{ backgroundColor: cfg.bg, color: cfg.color }}
+    >
+      {cfg.label}
+    </span>
   );
 }
