@@ -52,7 +52,22 @@ import {
 // ─────────────────────────────────────────────────────────────
 // Tipos locales
 // ─────────────────────────────────────────────────────────────
-type Vista = 'lista' | 'despacho' | 'scanner' | 'firma' | 'salida' | 'entrada';
+type Vista =
+  | 'lista'
+  | 'despacho'
+  | 'scanner'
+  | 'firma'
+  | 'salida'
+  | 'entrada'
+  | 'devolucion';
+
+const MOTIVOS_DEVOLUCION = [
+  'Error de picking',
+  'Material defectuoso',
+  'No se usó',
+  'Otro',
+] as const;
+type MotivoDevolucion = (typeof MOTIVOS_DEVOLUCION)[number];
 type ScanFase = 'loc' | 'item';
 type ScanEstado = 'esperando' | 'ok' | 'error';
 
@@ -291,6 +306,7 @@ export function Bodeguero() {
           onSelect={abrirOT}
           onSalida={() => setVista('salida')}
           onEntrada={() => setVista('entrada')}
+          onDevolucion={() => setVista('devolucion')}
         />
       )}
       {vista === 'salida' && (
@@ -303,6 +319,13 @@ export function Bodeguero() {
       {vista === 'entrada' && (
         <AdHocView
           modo="entrada"
+          empresaId={empresaId || ''}
+          onCerrar={() => setVista('lista')}
+        />
+      )}
+      {vista === 'devolucion' && (
+        <AdHocView
+          modo="devolucion"
           empresaId={empresaId || ''}
           onCerrar={() => setVista('lista')}
         />
@@ -356,12 +379,14 @@ function ListaOTs({
   onSelect,
   onSalida,
   onEntrada,
+  onDevolucion,
 }: {
   ots: OT[];
   onBack: () => void;
   onSelect: (ot: OT) => void;
   onSalida: () => void;
   onEntrada: () => void;
+  onDevolucion: () => void;
 }) {
   return (
     <>
@@ -376,7 +401,7 @@ function ListaOTs({
       </div>
 
       <div className="mx-auto max-w-3xl p-4">
-        <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="mb-4 grid grid-cols-3 gap-2">
           <Button
             onClick={onSalida}
             className="h-auto flex-col gap-1 border border-red-500/30 bg-red-500/10 py-3 text-red-300 hover:bg-red-500/20"
@@ -384,7 +409,7 @@ function ListaOTs({
           >
             <ArrowUpCircle className="h-5 w-5" />
             <span className="text-sm font-semibold">Salida rápida</span>
-            <span className="text-[10px] opacity-80">Descontar insumo sin OT</span>
+            <span className="text-[10px] opacity-80">Sin OT</span>
           </Button>
           <Button
             onClick={onEntrada}
@@ -393,7 +418,16 @@ function ListaOTs({
           >
             <ArrowDownCircle className="h-5 w-5" />
             <span className="text-sm font-semibold">Entrada rápida</span>
-            <span className="text-[10px] opacity-80">Ingresar stock nuevo</span>
+            <span className="text-[10px] opacity-80">Stock nuevo</span>
+          </Button>
+          <Button
+            onClick={onDevolucion}
+            className="h-auto flex-col gap-1 border border-amber-500/30 bg-amber-500/10 py-3 text-amber-300 hover:bg-amber-500/20"
+            variant="outline"
+          >
+            <ArrowLeft className="h-5 w-5" />
+            <span className="text-sm font-semibold">Devolución</span>
+            <span className="text-[10px] opacity-80">Devolver de OT</span>
           </Button>
         </div>
 
@@ -1257,7 +1291,7 @@ function AdHocView({
   empresaId,
   onCerrar,
 }: {
-  modo: 'salida' | 'entrada';
+  modo: 'salida' | 'entrada' | 'devolucion';
   empresaId: string;
   onCerrar: () => void;
 }) {
@@ -1274,12 +1308,20 @@ function AdHocView({
   const [otRef, setOtRef] = useState('');
   const [proveedor, setProveedor] = useState('');
   const [docRef, setDocRef] = useState('');
+  const [motivo, setMotivo] = useState<MotivoDevolucion>('Error de picking');
   const [saving, setSaving] = useState(false);
   const [resumen, setResumen] = useState<{ msg: string; sub: string } | null>(null);
 
-  const titulo = modo === 'salida' ? 'Salida rápida' : 'Entrada rápida';
-  const colorAccent = modo === 'salida' ? '#ef4444' : '#22c55e';
-  const labelNombre = modo === 'salida' ? 'Quién retira' : 'Quién ingresa';
+  const titulo =
+    modo === 'salida'
+      ? 'Salida rápida'
+      : modo === 'entrada'
+        ? 'Entrada rápida'
+        : 'Devolución desde OT';
+  const colorAccent =
+    modo === 'salida' ? '#ef4444' : modo === 'entrada' ? '#22c55e' : '#f59e0b';
+  const labelNombre =
+    modo === 'salida' ? 'Quién retira' : modo === 'entrada' ? 'Quién ingresa' : 'Quién devuelve';
 
   const cargarInsumo = async (cod: string) => {
     const norm = cod.trim().toUpperCase();
@@ -1414,8 +1456,7 @@ function AdHocView({
           msg: `${qty}× ${insumo.nemotecnico || insumo.cod}`,
           sub: `Registrado a nombre de ${nombre}${otRef.trim() ? ' · OT ' + otRef.trim() : ''} · Stock restante: ${stockRestante}`,
         });
-      } else {
-        // entrada
+      } else if (modo === 'entrada') {
         const mpActual = insActual ? Number(insActual.stock_mp) || 0 : 0;
         const libActual = insActual ? Number(insActual.stock_liberado) || 0 : 0;
         const { error } = await supabase
@@ -1447,6 +1488,44 @@ function AdHocView({
           msg: `+${qty}× ${insumo.nemotecnico || insumo.cod}`,
           sub: `Registrado por ${nombre}${proveedor.trim() ? ' · ' + proveedor.trim() : ''}${docRef.trim() ? ' · ' + docRef.trim() : ''} · Stock nuevo: ${stockNuevo}`,
         });
+      } else {
+        // devolucion: vuelve el stock a MP y registra trazabilidad con OT + motivo
+        if (!otRef.trim()) {
+          toast.warning('Ingresá la OT de origen');
+          setSaving(false);
+          return;
+        }
+        const mpActual = insActual ? Number(insActual.stock_mp) || 0 : 0;
+        const libActual = insActual ? Number(insActual.stock_liberado) || 0 : 0;
+        const { error } = await supabase
+          .from('insumos')
+          .update({ stock_mp: mpActual + qty })
+          .eq('empresa_id', empresaId)
+          .eq('cod', insumo.cod);
+        if (error) throw error;
+
+        const { error: errMov } = await supabase
+          .from('movimientos_insumos')
+          .insert({
+            empresa_id: empresaId,
+            fecha: new Date().toISOString(),
+            mes: MESES_A[new Date().getMonth()],
+            tipo: 'DEVOLUCION',
+            codigo: insumo.cod,
+            producto: insumo.nemotecnico || insumo.descriptor_proveedor || '',
+            almacen: 'MP',
+            cantidad: qty,
+            ot: otRef.trim(),
+            responsable_entrega: nombre,
+            bitacora: `Devolución — Motivo: ${motivo} · Devolvió: ${nombre}`,
+          });
+        if (errMov) throw errMov;
+
+        const stockNuevo = mpActual + libActual + qty;
+        setResumen({
+          msg: `+${qty}× ${insumo.nemotecnico || insumo.cod}`,
+          sub: `Devuelto a stock por ${nombre} · OT ${otRef.trim()} · ${motivo} · Stock nuevo: ${stockNuevo}`,
+        });
       }
       setFase('ok');
     } catch (e) {
@@ -1463,6 +1542,7 @@ function AdHocView({
     setOtRef('');
     setProveedor('');
     setDocRef('');
+    setMotivo('Error de picking');
     setResumen(null);
     setFase('scan');
   };
@@ -1635,14 +1715,44 @@ function AdHocView({
               </>
             )}
 
+            {modo === 'devolucion' && (
+              <>
+                <Label className="mb-1 text-xs">OT de origen</Label>
+                <Input
+                  value={otRef}
+                  onChange={(e) => setOtRef(e.target.value)}
+                  placeholder="Ej: 12345"
+                  className="mb-3 border-white/10 bg-zinc-900"
+                />
+                <Label className="mb-1 text-xs">Motivo</Label>
+                <select
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value as MotivoDevolucion)}
+                  className="mb-4 w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                >
+                  {MOTIVOS_DEVOLUCION.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
+
             <Button
               onClick={confirmar}
-              disabled={saving || (modo === 'salida' && stockActual <= 0)}
+              disabled={
+                saving ||
+                (modo === 'salida' && stockActual <= 0) ||
+                (modo === 'devolucion' && !otRef.trim())
+              }
               className={cn(
                 'mb-2 h-12 w-full gap-2 text-base',
                 modo === 'salida'
                   ? 'bg-red-600 hover:bg-red-700'
-                  : 'bg-emerald-600 hover:bg-emerald-700',
+                  : modo === 'entrada'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-amber-600 hover:bg-amber-700',
               )}
             >
               {saving ? (
@@ -1652,7 +1762,11 @@ function AdHocView({
               ) : (
                 <>
                   <CheckCircle2 className="h-5 w-5" />
-                  {modo === 'salida' ? 'Confirmar salida' : 'Confirmar ingreso'}
+                  {modo === 'salida'
+                    ? 'Confirmar salida'
+                    : modo === 'entrada'
+                      ? 'Confirmar ingreso'
+                      : 'Confirmar devolución'}
                 </>
               )}
             </Button>
@@ -1669,7 +1783,11 @@ function AdHocView({
             <div className="mb-4 text-xs text-zinc-400">{resumen.sub}</div>
             <Button onClick={nuevoItem} className="w-full gap-1.5">
               <QrCode className="h-4 w-4" />{' '}
-              {modo === 'salida' ? 'Otra salida' : 'Otra entrada'}
+              {modo === 'salida'
+                ? 'Otra salida'
+                : modo === 'entrada'
+                  ? 'Otra entrada'
+                  : 'Otra devolución'}
             </Button>
           </div>
         )}
@@ -1680,7 +1798,13 @@ function AdHocView({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900 p-5">
             <div className="mb-3 flex items-center gap-2 text-base font-semibold text-white">
-              <User className="h-5 w-5 text-indigo-400" /> ¿Quién {modo === 'salida' ? 'retira' : 'ingresa'}?
+              <User className="h-5 w-5 text-indigo-400" /> ¿Quién{' '}
+              {modo === 'salida'
+                ? 'retira'
+                : modo === 'entrada'
+                  ? 'ingresa'
+                  : 'devuelve'}
+              ?
             </div>
             <p className="mb-3 text-xs text-zinc-400">
               Este nombre se usa para todos los movimientos que registres desde este
