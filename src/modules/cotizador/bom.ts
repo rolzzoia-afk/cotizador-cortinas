@@ -40,16 +40,20 @@ export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
     const p = row.pano || EMPTY_PANO;
     const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
 
-    // Tubo — clave incluye el largo para separar tubos con largos distintos
+    // Mecanismo (con o sin motor) — calculado antes para que el tubo use el mismo color
+    const mecSpec = extraerSpec(p.mecanismo);
+    const mecColor = p.colorMecanismo || '';
+
+    // Tubo — clave incluye el largo para separar tubos con largos distintos.
+    // El color del tubo = colorMecanismo || color (van pintados juntos),
+    // el largo va en especificación como "E02 · 1.42m".
     const tubSpec = extraerSpec(p.tuberia);
     const anchoCm = row.anchoCm || row.ancho * 100;
     const tubLargoM = ((anchoCm - 3.8) / 100).toFixed(2);
-    const tubKey = `TUB|${tubSpec}|${tubLargoM}`;
-    add(tubKey, 'TUBERÍA', 'Tubo', tubSpec, `${tubLargoM}m`, 1, 'unid.');
-
-    // Mecanismo (con o sin motor)
-    const mecSpec = extraerSpec(p.mecanismo);
-    const mecColor = p.colorMecanismo || '';
+    const tubColor = mecColor || p.color || '';
+    const tubEspec = tubSpec ? `${tubSpec} · ${tubLargoM}m` : `${tubLargoM}m`;
+    const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
+    add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
     if (mecSpec) {
       const mecKey = `MEC|${mecSpec}|${mecColor}`;
       add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
