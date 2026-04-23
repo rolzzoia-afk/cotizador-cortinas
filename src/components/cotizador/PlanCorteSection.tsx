@@ -21,6 +21,9 @@ import {
 } from '@/modules/cotizador/planCorte';
 import type { ColmenaPano } from '@/modules/admin/colmena';
 import type { OT } from '@/modules/ots/types';
+import type { Database } from '@/types/database';
+
+type ColmenaPanoInsert = Database['public']['Tables']['colmena_panos']['Insert'];
 
 const PC_PALETTE = [
   '#4080ff',
@@ -207,8 +210,9 @@ function CardSobrante({
         .eq('id', grupo.sobrante._docId);
       if (updErr) throw updErr;
 
-      const inserts: Array<Record<string, unknown>> = [];
       const { empresaId } = authRef;
+      if (!empresaId) throw new Error('Empresa no resuelta');
+      const inserts: ColmenaPanoInsert[] = [];
       const msgs: string[] = [];
 
       if (hayAlto) {
@@ -485,8 +489,9 @@ function CardRollo({
     }
     setSaving(true);
     try {
+      if (!empresaId) throw new Error('Empresa no resuelta');
       const now = new Date().toISOString();
-      const inserts: Array<Record<string, unknown>> = [];
+      const inserts: ColmenaPanoInsert[] = [];
       const msgs: string[] = [];
 
       if (hayResto) {
@@ -699,6 +704,7 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
     if (!c) return toast.error('Ingresá el COD_INT');
     if (!a || !al) return toast.error('Ingresá las medidas');
     if (!u) return toast.error('Ingresá la ubicación (ej: A-54)');
+    if (!empresaId) return toast.error('Empresa no resuelta');
     setSaving(true);
     try {
       const { error } = await supabase.from('colmena_panos').insert({

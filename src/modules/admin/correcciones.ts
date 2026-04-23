@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import type { Json } from '@/types/database';
 
 // ── Tipos compartidos ───────────────────────────────────────────────
 export type TipoError =
@@ -272,8 +273,8 @@ export function usePlanActivo(): {
       .insert({
         empresa_id: empresaId,
         optimizer_email: plan.optimizer_email,
-        resultados: planCorregido,
-        ordenes: plan.ordenes,
+        resultados: planCorregido as unknown as Json,
+        ordenes: plan.ordenes as unknown as Json,
         fecha: ahora,
         fecha_correccion: ahora,
       })

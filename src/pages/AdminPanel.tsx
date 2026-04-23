@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import type { Json } from '@/types/database';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatDateTime } from '@/lib/formatters';
 import { Button } from '@/components/ui/button';
@@ -279,8 +280,8 @@ export function AdminPanel() {
     const { error } = await supabase.from('planes_corte').insert({
       empresa_id: empresaId,
       optimizer_email: planDetalle.optimizer_email,
-      resultados: planDetalle.resultados,
-      ordenes: planDetalle.ordenes,
+      resultados: planDetalle.resultados as Json,
+      ordenes: planDetalle.ordenes as Json,
       fecha: new Date().toISOString(),
       fecha_correccion: null,
     });

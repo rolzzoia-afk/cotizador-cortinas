@@ -463,23 +463,25 @@ function RegisterErrorDialog({
         ? (r.serial as { serial?: string })
         : {};
 
+    // Los tipos generados exigen string/number no-null, pero la función plpgsql
+    // acepta NULL en texto/numérico. Cast controlado para no perder el null.
     const { data, error } = await supabase.rpc('registrar_error_corte', {
       p_plan_id: planId,
-      p_plan_fecha: ctx.planFecha,
+      p_plan_fecha: ctx.planFecha as string,
       p_linea_idx: idx,
-      p_ot: ord.ot || ord.numero_ot || r.orden || null,
-      p_ubicacion: ord.ubic || ord.ubicacion || null,
-      p_colmena_original: r.colmena != null ? String(r.colmena) : null,
-      p_cod_original: r.codigo || r.codigo_original || null,
-      p_medida_cm: r.medida_cm ?? null,
-      p_medida_origen_cm: r.medida_origen ?? null,
-      p_color: r.color || null,
-      p_serial: s.serial || null,
+      p_ot: (ord.ot || ord.numero_ot || r.orden || null) as string,
+      p_ubicacion: (ord.ubic || ord.ubicacion || null) as string,
+      p_colmena_original: (r.colmena != null ? String(r.colmena) : null) as string,
+      p_cod_original: (r.codigo || r.codigo_original || null) as string,
+      p_medida_cm: (r.medida_cm ?? null) as number,
+      p_medida_origen_cm: (r.medida_origen ?? null) as number,
+      p_color: (r.color || null) as string,
+      p_serial: (s.serial || null) as string,
       p_motivo: motivo,
-      p_comentario: comentario.trim() || null,
-      p_reemplazo_id: reemplazo?.id || null,
+      p_comentario: (comentario.trim() || null) as string,
+      p_reemplazo_id: (reemplazo?.id || null) as string,
       p_sobrante_cm: sobranteVal,
-      p_destino_original: destino,
+      p_destino_original: destino as string,
       p_med_recuperar: medRecupVal,
       p_responsable: responsable.trim(),
     });
@@ -1012,7 +1014,8 @@ export function HistorialCorte() {
         .select('plan_id, linea_idx, motivo')
         .in('plan_id', planIds);
       const acc: Record<string, { linea_idx: number; motivo: string }[]> = {};
-      (errs || []).forEach((e: { plan_id: string; linea_idx: number; motivo: string }) => {
+      (errs || []).forEach((e) => {
+        if (!e.plan_id) return;
         if (!acc[e.plan_id]) acc[e.plan_id] = [];
         acc[e.plan_id].push({ linea_idx: e.linea_idx, motivo: e.motivo });
       });

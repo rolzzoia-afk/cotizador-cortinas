@@ -72,9 +72,14 @@ export function useColmenaTubos(): {
       medida_resultado_cm?: number;
       notas?: string | null;
     }) => {
+      if (!t.tubo_raiz_id) {
+        console.warn('[tubos_historial] Skip: tubo_raiz_id nulo', { evento, cod: t.cod });
+        return;
+      }
+      if (!empresaId) return;
       const { error } = await supabase.from('tubos_historial').insert({
         empresa_id: empresaId,
-        tubo_raiz_id: t.tubo_raiz_id || null,
+        tubo_raiz_id: t.tubo_raiz_id,
         n_colmena: t.n_colmena,
         cod: t.cod,
         medida_cm: t.medida_cm,

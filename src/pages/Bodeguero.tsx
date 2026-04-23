@@ -1126,7 +1126,7 @@ function FirmaView({
           fecha: new Date().toISOString(),
           mes: MESES_A[new Date().getMonth()],
           tipo: 'SALIDA PRODUCCION',
-          codigo: ins.cod,
+          codigo: ins.cod!,
           producto: ins.nemotecnico || ins.descriptor_proveedor || '',
           almacen: 'MP',
           cantidad: cnt.pickeado,

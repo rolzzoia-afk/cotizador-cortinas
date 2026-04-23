@@ -38,7 +38,7 @@ export function useOTs(): UseOTs {
         .select('*')
         .eq('empresa_id', empresaId);
       if (error) throw error;
-      const lista = ((data as OTRow[] | null) || [])
+      const lista = ((data as unknown as OTRow[] | null) || [])
         .map(rowToOT)
         .filter((o) => {
           const dg = o.datosGenerales || {};
@@ -112,7 +112,7 @@ export function useOTs(): UseOTs {
       ultimoWriteRef.current = Date.now();
       const { error } = await supabase
         .from('ots')
-        .upsert(otToRow(ot, empresaId), { onConflict: 'id' });
+        .upsert(otToRow(ot, empresaId) as unknown as never, { onConflict: 'id' });
       if (error) throw error;
     },
     [empresaId],
@@ -277,7 +277,7 @@ export function useOT(id: string | undefined): {
       if (!empresaId) throw new Error('Empresa no resuelta');
       const { error } = await supabase
         .from('ots')
-        .upsert(otToRow(nueva, empresaId), { onConflict: 'id' });
+        .upsert(otToRow(nueva, empresaId) as unknown as never, { onConflict: 'id' });
       if (error) throw error;
       setOt(nueva);
     },

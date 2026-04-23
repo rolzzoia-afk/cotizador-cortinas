@@ -605,7 +605,11 @@ export function Inventario() {
         const clamped = Math.max(0, nuevoStock);
         const { error: errUp } = await supabase
           .from('insumos')
-          .update({ [campoStock]: clamped })
+          .update(
+            campoStock === 'stock_mp'
+              ? { stock_mp: clamped }
+              : { stock_liberado: clamped },
+          )
           .eq('id', insumo.id);
         if (errUp) throw errUp;
         setInsumos((arr) =>

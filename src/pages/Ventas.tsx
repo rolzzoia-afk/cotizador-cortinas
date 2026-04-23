@@ -475,9 +475,9 @@ export function Ventas() {
         setConfig({
           meta_visitas: data.meta_visitas ?? DEFAULT_CONFIG.meta_visitas,
           meta_cierre_pct: data.meta_cierre_pct ?? DEFAULT_CONFIG.meta_cierre_pct,
-          canales: data.canales ?? DEFAULT_CONFIG.canales,
-          vendedoras: data.vendedoras ?? DEFAULT_CONFIG.vendedoras,
-          terreno: data.terreno ?? DEFAULT_CONFIG.terreno,
+          canales: (Array.isArray(data.canales) ? data.canales : DEFAULT_CONFIG.canales) as string[],
+          vendedoras: (Array.isArray(data.vendedoras) ? data.vendedoras : DEFAULT_CONFIG.vendedoras) as string[],
+          terreno: (Array.isArray(data.terreno) ? data.terreno : DEFAULT_CONFIG.terreno) as string[],
         });
       }
     })();
