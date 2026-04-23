@@ -179,6 +179,10 @@ export type ColmenaPano = {
   disponible: boolean;
   ot_asignada: string | null;
   fecha_uso: string | null;
+  // Usados por Plan de Corte (prioridad Regla 3 + FIFO Regla 4 + ubicación al guardar)
+  tipo?: string | null;
+  ubicacion?: string | null;
+  datos_extra?: { creadoEn?: string; ot_origen?: string; fuente?: string } | null;
 };
 
 export type PanoUpdate = {

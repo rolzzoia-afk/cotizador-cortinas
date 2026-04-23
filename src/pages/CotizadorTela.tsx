@@ -3,7 +3,6 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowDownCircle,
-  ExternalLink,
   Factory,
   Loader2,
   Save,
@@ -13,6 +12,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PlanCorteSection } from '@/components/cotizador/PlanCorteSection';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import {
@@ -101,13 +101,6 @@ export function CotizadorTela() {
 
   const calculo = useMemo(() => (rows ? calcularPanos(rows) : null), [rows]);
 
-  const abrirPlanCorteLegacy = () => {
-    if (!ot) return;
-    localStorage.setItem('activeOTId', ot.id);
-    localStorage.setItem('rolzzo_goto_tab', 'tela-tab');
-    navigate('/cotizador');
-  };
-
   if (loading || loadingCat) {
     return (
       <div className="flex h-full items-center justify-center text-zinc-400">
@@ -154,16 +147,6 @@ export function CotizadorTela() {
           <Button variant="outline" size="sm" onClick={cargar} className="gap-1">
             <ArrowDownCircle className="h-3.5 w-3.5" />
             Recargar
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={abrirPlanCorteLegacy}
-            className="gap-1"
-            title="Plan de Corte desde Colmena (legacy)"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Plan de Corte (legacy)
           </Button>
         </div>
       </div>
@@ -365,6 +348,9 @@ export function CotizadorTela() {
                 </div>
               </div>
             )}
+
+            {/* Plan de Corte desde Colmena */}
+            <PlanCorteSection ot={ot} />
           </>
         )}
       </div>
