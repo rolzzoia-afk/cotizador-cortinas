@@ -23,7 +23,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Node 22 trae npm 10.9+ que entiende el lock generado por npm 11.
+          # Con node 20 (npm 10.5) falla con "Missing esbuild@... from lock file"
+          # por cambios en cómo se resuelven peer deps opcionales.
+          node-version: '22'
           cache: 'npm'
 
       - name: Install dependencies
