@@ -1311,6 +1311,10 @@ function AdHocView({
   const [motivo, setMotivo] = useState<MotivoDevolucion>('Error de picking');
   const [saving, setSaving] = useState(false);
   const [resumen, setResumen] = useState<{ msg: string; sub: string } | null>(null);
+  // Anti-reentrada: el scanner dispara onScan cada ~100ms mientras el QR
+  // está en cámara. Sin este guard, cada frame resetea qty a 1 y pisa lo
+  // que el usuario haya tocado.
+  const procesandoRef = useRef(false);
 
   const titulo =
     modo === 'salida'
@@ -1327,8 +1331,12 @@ function AdHocView({
     const norm = cod.trim().toUpperCase();
     if (!norm) {
       toast.warning('Ingresa un código');
+      procesandoRef.current = false;
       return;
     }
+    // La búsqueda manual (click en "Buscar") también debería bloquear
+    // el auto-scan concurrente.
+    procesandoRef.current = true;
     await scanner.stop();
     const { data } = await supabase
       .from('insumos')
@@ -1340,6 +1348,7 @@ function AdHocView({
       .maybeSingle();
     if (!data) {
       toast.error(`Insumo "${norm}" no encontrado`);
+      procesandoRef.current = false;
       scanner.start('adhoc-reader');
       return;
     }
@@ -1352,6 +1361,8 @@ function AdHocView({
 
   const scanner = useQRScanner({
     onScan: async (decoded) => {
+      if (procesandoRef.current) return;
+      procesandoRef.current = true;
       const cod = decoded.startsWith('INS:')
         ? decoded.slice(4)
         : decoded.trim().toUpperCase();
@@ -1545,6 +1556,7 @@ function AdHocView({
     setMotivo('Error de picking');
     setResumen(null);
     setFase('scan');
+    procesandoRef.current = false;
   };
 
   return (
