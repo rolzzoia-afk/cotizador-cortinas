@@ -830,7 +830,14 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
         }>) || []
       )
         .map((row) => {
-          const dg = (row.datos_generales || {}) as OT['datosGenerales'];
+          const dgOriginal = (row.datos_generales || {}) as OT['datosGenerales'];
+          // Excluir OTs huérfanas: sin cliente y sin ot en datos_generales
+          // (mismo filtro que useOTs/Panel — evita incluir fantasmas de producción)
+          const tieneDatos =
+            (dgOriginal.cliente || '').trim() !== '' || (dgOriginal.ot || '').trim() !== '';
+          if (!tieneDatos) return null;
+
+          const dg = { ...dgOriginal };
           // Fallback al numero_ot de la columna si datosGenerales.ot no está
           if (!dg.ot && row.numero_ot) dg.ot = row.numero_ot;
           return {
@@ -839,7 +846,7 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
             datosGenerales: dg,
           } as OT;
         })
-        .filter((o) => (o.storeVentanas || []).length > 0);
+        .filter((o): o is OT => o !== null && (o.storeVentanas || []).length > 0);
 
       // Si la OT actual no está en producción (fallback), incluirla igual
       const yaIncluida = otsProd.some((o) => String(o.id) === String(ot.id));
