@@ -36,13 +36,40 @@ async function loadProfile(userId: string) {
 }
 
 async function loadOnboardingFlag(empresaId: string) {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('configuracion')
     .select('valor')
     .eq('empresa_id', empresaId)
     .eq('clave', 'onboarding_completado')
     .maybeSingle<{ valor: string }>();
-  return data?.valor === 'true';
+
+  // Si la query falla por red u otra causa, NO mandar a Setup —
+  // asumimos onboarding completo para usuarios existentes.
+  if (error) {
+    console.warn('[auth] loadOnboardingFlag falló, asumiendo true:', error.message);
+    return true;
+  }
+
+  if (data?.valor === 'true') return true;
+
+  // Auto-heal: si el flag no existe pero la empresa ya tiene OTs,
+  // claramente no es una empresa nueva. Marcamos el flag y devolvemos true.
+  const { count } = await supabase
+    .from('ots')
+    .select('id', { head: true, count: 'exact' })
+    .eq('empresa_id', empresaId)
+    .limit(1);
+  if ((count ?? 0) > 0) {
+    await supabase
+      .from('configuracion')
+      .upsert(
+        { empresa_id: empresaId, clave: 'onboarding_completado', valor: 'true' },
+        { onConflict: 'empresa_id,clave' },
+      );
+    return true;
+  }
+
+  return false;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
