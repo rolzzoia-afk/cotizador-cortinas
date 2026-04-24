@@ -82,6 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [onboardingCompletado, setOnboarding] = useState(false);
 
   const hydrate = async (s: Session | null) => {
+    // Marcar loading en true para que ProtectedRoute/Login esperen el
+    // hydrate completo antes de decidir redirects. Sin esto, cambios de
+    // sesión disparan navigate con onboardingCompletado=false (default de
+    // useState) aunque la DB tenga la flag en true — mandando al usuario
+    // a /setup por error.
+    setLoading(true);
     setSession(s);
     if (!s) {
       setPerfil(null);
