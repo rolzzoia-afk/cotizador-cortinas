@@ -20,7 +20,23 @@ window.EMPRESA_ID = localStorage.getItem('rolzzo_tenant_id') || null;
 var _authResolve;
 window._authReady = new Promise(function (resolve) { _authResolve = resolve; });
 
-(async function () {
+// ── Short-circuit cuando el HTML corre dentro del shell React (iframe) ──
+// El shell ya validó sesión + empresa + onboarding antes de montar el iframe,
+// así que acá evitamos: (1) crear un tercer cliente Supabase que compite por
+// el Web Lock con el cliente de React y con `sbOpt` del propio optimizador
+// —contención que hace que `getSession()` se trabe y la página quede en
+// blanco—, y (2) el flash de `visibility:hidden` → `''`. Tomamos el tenant
+// que ya dejó el padre en localStorage y resolvemos inmediatamente.
+if (window.top !== window.self) {
+    if (window.EMPRESA_ID) {
+        _authResolve({ user: null, perfil: null, empresa_id: window.EMPRESA_ID });
+    } else {
+        // Sin tenant en localStorage: el padre no alcanzó a setearlo. Pedirle
+        // que nos mande a /login en vez de intentar resolver acá.
+        try { window.parent.postMessage({ navigate: '/login' }, '*'); } catch (e) {}
+    }
+} else {
+  (async function () {
     // Ocultar página hasta confirmar sesión (evita flash de contenido)
     document.documentElement.style.visibility = 'hidden';
 
@@ -92,4 +108,5 @@ window._authReady = new Promise(function (resolve) { _authResolve = resolve; });
         // Acceso directo a /legacy/*.html — ir al shell React
         window.location.replace('/login');
     }
-})();
+  })();
+}
