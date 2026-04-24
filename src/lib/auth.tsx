@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { setSentryUser } from './sentry';
@@ -81,7 +81,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [onboardingCompletado, setOnboarding] = useState(false);
 
+  // Guarda el último user.id que hidratamos completo (perfil + onboarding).
+  // Evita que eventos repetidos de onAuthStateChange para el mismo usuario
+  // disparen setLoading(true), lo que desmonta el árbol protegido (y con
+  // él el iframe del Optimizador). Cuando el iframe se re-monta crea un
+  // nuevo cliente Supabase, que a su vez dispara otro INITIAL_SESSION por
+  // cross-tab sync → loop infinito de remounts del iframe.
+  const hydratedUserIdRef = useRef<string | null>(null);
+
   const hydrate = async (s: Session | null) => {
+    const newUserId = s?.user?.id ?? null;
+
+    // Fast path: mismo usuario ya hidratado → solo actualizar la Session
+    // (los tokens pueden haber rotado) sin volver a cargar perfil/onboarding.
+    if (newUserId && hydratedUserIdRef.current === newUserId) {
+      setSession(s);
+      return;
+    }
+
     // Marcar loading en true para que ProtectedRoute/Login esperen el
     // hydrate completo antes de decidir redirects. Sin esto, cambios de
     // sesión disparan navigate con onboardingCompletado=false (default de
@@ -90,6 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setSession(s);
     if (!s) {
+      hydratedUserIdRef.current = null;
       setPerfil(null);
       setEmpresaId(null);
       setOnboarding(false);
@@ -116,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       nombre: p?.nombre ?? null,
       empresaId: p?.empresa_id ?? null,
     });
+    hydratedUserIdRef.current = s.user.id;
     setLoading(false);
   };
 
@@ -139,6 +158,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const refresh = async () => {
+    // Invalidar el cache de "último user hidratado" para forzar recarga
+    // completa de perfil + onboarding. refresh() lo llama Registro/Setup
+    // justo después de crear la empresa: si dejáramos el fast-path activo
+    // nos quedaríamos con el perfil viejo y onboarding=false.
+    hydratedUserIdRef.current = null;
     const { data } = await supabase.auth.getSession();
     await hydrate(data.session);
   };
