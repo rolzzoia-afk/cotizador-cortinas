@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   Camera,
@@ -15,6 +15,7 @@ import {
   RotateCcw,
   Save,
   Scissors,
+  Search,
   Settings,
   X,
 } from 'lucide-react';
@@ -35,6 +36,23 @@ import {
   usePlanActivo,
   usePlanesHistorial,
 } from '@/modules/admin/correcciones';
+
+// Extrae el conjunto único de OTs asociadas a un plan. Mira tanto
+// plan.ordenes (autoritativo) como cada línea de plan.resultados
+// (fallback por si ordenes viene vacío).
+function extraerOTsPlan(plan: PlanResumen): string[] {
+  const set = new Set<string>();
+  for (const o of plan.ordenes || []) {
+    const ot = (o?.ot || '').toString().trim();
+    if (ot && ot !== '-') set.add(ot);
+  }
+  for (const linea of plan.resultados || []) {
+    const ordRef = (linea as { orden?: { ot?: string } }).orden;
+    const ot = (ordRef?.ot || '').toString().trim();
+    if (ot && ot !== '-') set.add(ot);
+  }
+  return [...set].sort();
+}
 
 export function Correcciones() {
   const cfg = useOptimizerConfig();
@@ -483,6 +501,15 @@ function HistorialPlanes({
   const { planes, loading, cargar, restaurar } = ctx;
   const [preview, setPreview] = useState<PlanResumen | null>(null);
   const [restaurando, setRestaurando] = useState(false);
+  const [filtro, setFiltro] = useState('');
+
+  const planesVisibles = useMemo(() => {
+    const q = filtro.trim().toLowerCase();
+    if (!q) return planes;
+    return planes.filter((p) =>
+      extraerOTsPlan(p).some((ot) => ot.toLowerCase().includes(q)),
+    );
+  }, [planes, filtro]);
 
   const onRestaurar = async (plan: PlanResumen) => {
     if (!email) {
@@ -560,13 +587,31 @@ function HistorialPlanes({
         </div>
       </div>
 
+      {planes.length > 0 && (
+        <div className="relative mb-2">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" />
+          <Input
+            value={filtro}
+            onChange={(e) => setFiltro(e.target.value)}
+            placeholder="Filtrar por OT…"
+            className="h-8 border-white/10 bg-zinc-900 pl-8 text-xs"
+          />
+        </div>
+      )}
+
       <div className="max-h-[340px] overflow-y-auto text-xs">
         {!loading && planes.length === 0 && (
           <div className="py-3 text-center text-zinc-500">
             Hacé clic en "Cargar" para ver todos los planes guardados.
           </div>
         )}
-        {planes.map((plan, i) => {
+        {!loading && planes.length > 0 && planesVisibles.length === 0 && (
+          <div className="py-3 text-center text-zinc-500">
+            No hay planes que coincidan con "{filtro}".
+          </div>
+        )}
+        {planesVisibles.map((plan) => {
+          const i = planes.findIndex((p) => p.id === plan.id);
           const fecha = plan.fecha
             ? new Date(plan.fecha).toLocaleString('es-CL')
             : '—';
@@ -622,6 +667,30 @@ function HistorialPlanes({
                     <span className="text-amber-300"> · {plan.optimizer_email}</span>
                   )}
                 </div>
+                {(() => {
+                  const ots = extraerOTsPlan(plan);
+                  if (ots.length === 0) return null;
+                  return (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {ots.slice(0, 6).map((ot) => (
+                        <span
+                          key={ot}
+                          className="rounded border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[0.65rem] font-mono text-indigo-300"
+                        >
+                          OT {ot}
+                        </span>
+                      ))}
+                      {ots.length > 6 && (
+                        <span
+                          className="text-[0.65rem] text-zinc-500"
+                          title={ots.slice(6).map((o) => `OT ${o}`).join(', ')}
+                        >
+                          +{ots.length - 6}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex gap-1">
                 <Button
