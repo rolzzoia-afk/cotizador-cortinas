@@ -344,21 +344,38 @@ function RegisterErrorDialog({
 
   const { r, ord, planId, idx } = ctx;
 
-  // ── Colmenas ya ocupadas en el plan (para excluirlas)
-  const colmenasOcupadas = useMemo(() => {
-    const usadas = new Set<string>();
-    if (!plan) return usadas;
+  // ── Tubos específicos ya ocupados por otros cortes del mismo plan ─
+  // Identidad de un tubo = (colmena · código · medida_origen). Así,
+  // si el corte 1 usó A30·E66·138cm, solo ese tubo se excluye — los
+  // demás A30·E66 (171.8, 166.2, etc.) quedan disponibles para el
+  // reemplazo. La lógica anterior excluía la colmena completa, lo
+  // cual era demasiado agresivo cuando una colmena tiene varios tubos.
+  const tuboKey = (colmena: unknown, cod: unknown, medida: unknown) =>
+    [
+      String(colmena ?? '').toUpperCase().trim(),
+      String(cod ?? '').toUpperCase().trim(),
+      medida != null && Number.isFinite(Number(medida))
+        ? Number(medida).toFixed(1)
+        : '?',
+    ].join('|');
+
+  const tubosOcupados = useMemo(() => {
+    const keys = new Set<string>();
+    if (!plan) return keys;
     plan.resultados.forEach((item, i) => {
       if (i === idx) return;
       const rr = getR(item);
       if (rr.colmena && rr.colmena !== 'TUBO NUEVO' && rr.colmena !== 'LIBERADO') {
-        usadas.add(String(rr.colmena).toUpperCase().trim());
-      }
-      if (rr.colmena_sobrante) {
-        usadas.add(String(rr.colmena_sobrante).toUpperCase().trim());
+        keys.add(
+          tuboKey(
+            rr.colmena,
+            rr.codigo || rr.codigo_original,
+            rr.medida_origen,
+          ),
+        );
       }
     });
-    return usadas;
+    return keys;
   }, [plan, idx]);
 
   // ── Sugerencia automática
@@ -368,8 +385,7 @@ function RegisterErrorDialog({
     const codNecesario = (r.codigo || r.codigo_original || '').toUpperCase().trim();
     const candidatos = tubosDisponibles.filter((t) => {
       if (Number(t.medida_cm || 0) < medidaNecesaria) return false;
-      const col = String(t.n_colmena || '').toUpperCase().trim();
-      return !colmenasOcupadas.has(col);
+      return !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm));
     });
     if (!candidatos.length) return null;
     const conPuntaje = candidatos.map((t) => ({
@@ -390,7 +406,8 @@ function RegisterErrorDialog({
       );
     razones.push(`sobrante estimado: ${m.sobrante.toFixed(1)} cm`);
     return { tubo: m.tubo, razon: razones.join(' · ') };
-  }, [r, tubosDisponibles, colmenasOcupadas]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [r, tubosDisponibles, tubosOcupados]);
 
   // ── Lista filtrada
   const tubosFiltrados = useMemo(() => {
@@ -398,8 +415,7 @@ function RegisterErrorDialog({
     const codCorte = (r.codigo || r.codigo_original || '').toUpperCase().trim();
     const base = tubosDisponibles.filter((t) => {
       if (sugerencia && t.id === sugerencia.tubo.id) return false;
-      const col = String(t.n_colmena || '').toUpperCase().trim();
-      return !colmenasOcupadas.has(col);
+      return !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm));
     });
     if (buscarTubo) {
       const q = buscarTubo.toLowerCase();
@@ -417,7 +433,8 @@ function RegisterErrorDialog({
       );
     }
     return base;
-  }, [tubosDisponibles, colmenasOcupadas, sugerencia, buscarTubo, r]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tubosDisponibles, tubosOcupados, sugerencia, buscarTubo, r]);
 
   const seleccionarTubo = (t: Tubo) => {
     setReemplazo(t);
