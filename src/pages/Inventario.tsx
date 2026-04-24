@@ -173,6 +173,7 @@ export function Inventario() {
   const [ubicaciones, setUbicaciones] = useState<UbicacionRack[]>([]);
   const [validadores, setValidadores] = useState<ValidadoresMap>({});
   const [qrInsumo, setQrInsumo] = useState<Insumo | null>(null);
+  const [detalleMov, setDetalleMov] = useState<Movimiento | null>(null);
 
   const [busqueda, setBusqueda] = useState('');
   const [filtroCategoria, setFiltroCategoria] = useState('');
@@ -1090,9 +1091,11 @@ export function Inventario() {
                       ? ClipboardPlus
                       : ArrowUpCircle;
                 return (
-                  <div
+                  <button
                     key={m.id}
-                    className="flex items-center gap-3 rounded-lg border border-white/10 bg-zinc-900/50 p-3"
+                    type="button"
+                    onClick={() => setDetalleMov(m)}
+                    className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-zinc-900/50 p-3 text-left transition-colors hover:border-white/20 hover:bg-zinc-900/80"
                   >
                     <div
                       className={cn(
@@ -1123,7 +1126,7 @@ export function Inventario() {
                         {formatFecha(m.fecha)}
                       </div>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -1737,6 +1740,96 @@ export function Inventario() {
                 </div>
               );
             })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Detalle de movimiento */}
+      <Dialog open={!!detalleMov} onOpenChange={(o) => !o && setDetalleMov(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalle del movimiento</DialogTitle>
+          </DialogHeader>
+          {detalleMov && (
+            <div className="space-y-3 text-sm">
+              <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                  Tipo
+                </div>
+                <div className="font-semibold text-zinc-100">{detalleMov.tipo}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                    Código
+                  </div>
+                  <div className="text-zinc-100">{detalleMov.codigo || '—'}</div>
+                </div>
+                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                    Cantidad
+                  </div>
+                  <div className="text-zinc-100">
+                    {detalleMov.cantidad ?? 0} {detalleMov.almacen ? `→ ${detalleMov.almacen}` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                  Producto
+                </div>
+                <div className="text-zinc-100">{detalleMov.producto || '—'}</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                    OT
+                  </div>
+                  <div className="text-zinc-100">{detalleMov.ot || '—'}</div>
+                </div>
+                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                    Responsable
+                  </div>
+                  <div className="text-zinc-100">
+                    {detalleMov.responsable_entrega || '—'}
+                  </div>
+                </div>
+              </div>
+
+              {detalleMov.recepcion && (
+                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                    Recepción
+                  </div>
+                  <div className="text-zinc-100">{detalleMov.recepcion}</div>
+                </div>
+              )}
+
+              <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-amber-300/80">
+                  Motivo / Observaciones
+                </div>
+                <div className="text-zinc-100 whitespace-pre-wrap break-words">
+                  {detalleMov.bitacora || 'Sin observaciones registradas'}
+                </div>
+              </div>
+
+              <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                  Fecha
+                </div>
+                <div className="text-zinc-100">{formatFecha(detalleMov.fecha)}</div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetalleMov(null)}>
+              Cerrar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
