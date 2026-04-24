@@ -320,6 +320,11 @@ function RegisterErrorDialog({
   const [reemplazo, setReemplazo] = useState<Tubo | null>(null);
   const [buscarTubo, setBuscarTubo] = useState('');
   const [saving, setSaving] = useState(false);
+  // ── Modo de reemplazo: desde colmena existente o tubo nuevo ─
+  const [modoReemplazo, setModoReemplazo] = useState<'colmena' | 'nuevo'>('colmena');
+  const [nuevoColmena, setNuevoColmena] = useState('');
+  const [nuevoCod, setNuevoCod] = useState('');
+  const [nuevoMedida, setNuevoMedida] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -331,6 +336,10 @@ function RegisterErrorDialog({
     setDestino(null);
     setReemplazo(null);
     setBuscarTubo('');
+    setModoReemplazo('colmena');
+    setNuevoColmena('');
+    setNuevoCod('');
+    setNuevoMedida('');
   }, [open]);
 
   const { r, ord, planId, idx } = ctx;
@@ -418,6 +427,34 @@ function RegisterErrorDialog({
     }
   };
 
+  // ── Sobrante calculado para modo "tubo nuevo" ─────────────
+  const sobranteNuevo = useMemo(() => {
+    if (modoReemplazo !== 'nuevo') return null;
+    const total = Number(nuevoMedida || 0);
+    const nec = Number(r.medida_cm || 0);
+    if (!total || !nec || total < nec) return null;
+    return total - nec;
+  }, [modoReemplazo, nuevoMedida, r.medida_cm]);
+
+  // ── Cambiar modo: limpiar estado del modo anterior ────────
+  const cambiarModo = (nuevoMode: 'colmena' | 'nuevo') => {
+    setModoReemplazo(nuevoMode);
+    if (nuevoMode === 'colmena') {
+      setNuevoColmena('');
+      setNuevoCod('');
+      setNuevoMedida('');
+    } else {
+      setReemplazo(null);
+      setSobrante('');
+      setBuscarTubo('');
+      // Pre-llenar código con el del corte
+      if (!nuevoCod) {
+        const codigoCorte = (r.codigo || r.codigo_original || '').trim();
+        if (codigoCorte) setNuevoCod(codigoCorte);
+      }
+    }
+  };
+
   const setDestinoYMed = (d: Destino) => {
     setDestino(d);
     if (d === 'recuperar' && r.medida_origen != null && !medRecuperar) {
@@ -434,6 +471,29 @@ function RegisterErrorDialog({
     if (!responsable.trim()) {
       toast.warning('Ingresa tu nombre');
       return;
+    }
+    // Validación específica del modo "tubo nuevo"
+    if (modoReemplazo === 'nuevo') {
+      if (!nuevoColmena.trim()) {
+        toast.warning('Ingresa la colmena donde irá el sobrante');
+        return;
+      }
+      if (!nuevoCod.trim()) {
+        toast.warning('Ingresa el código del tubo nuevo');
+        return;
+      }
+      const medTotal = Number(nuevoMedida);
+      if (!Number.isFinite(medTotal) || medTotal <= 0) {
+        toast.warning('Ingresa una medida total válida para el tubo nuevo');
+        return;
+      }
+      const necesaria = Number(r.medida_cm || 0);
+      if (medTotal < necesaria) {
+        toast.warning(
+          `El tubo nuevo (${medTotal}cm) es menor que la medida necesaria (${necesaria}cm)`,
+        );
+        return;
+      }
     }
     if (destino === 'recuperar') {
       const n = Number(medRecuperar);
@@ -456,7 +516,12 @@ function RegisterErrorDialog({
     }
 
     setSaving(true);
-    const sobranteVal = reemplazo ? Number(sobrante) || 0 : 0;
+    const esNuevo = modoReemplazo === 'nuevo';
+    const sobranteVal = esNuevo
+      ? sobranteNuevo || 0
+      : reemplazo
+        ? Number(sobrante) || 0
+        : 0;
     const medRecupVal = destino === 'recuperar' ? Number(medRecuperar) || 0 : 0;
     const s =
       r.serial && typeof r.serial === 'object'
@@ -479,11 +544,15 @@ function RegisterErrorDialog({
       p_serial: (s.serial || null) as string,
       p_motivo: motivo,
       p_comentario: (comentario.trim() || null) as string,
-      p_reemplazo_id: (reemplazo?.id || null) as string,
+      p_reemplazo_id: (esNuevo ? null : reemplazo?.id || null) as string,
       p_sobrante_cm: sobranteVal,
       p_destino_original: destino as string,
       p_med_recuperar: medRecupVal,
       p_responsable: responsable.trim(),
+      // Modo "tubo nuevo": se mandan solo si el usuario lo eligió
+      p_tubo_nuevo_colmena: esNuevo ? nuevoColmena.trim().toUpperCase() : null,
+      p_tubo_nuevo_cod: esNuevo ? nuevoCod.trim().toUpperCase() : null,
+      p_tubo_nuevo_medida_cm: esNuevo ? Number(nuevoMedida) : null,
     });
 
     setSaving(false);
@@ -502,6 +571,7 @@ function RegisterErrorDialog({
 
     const result = data as {
       reemplazo_consumido?: boolean;
+      reemplazo_tipo?: 'colmena' | 'tubo_nuevo' | null;
       sobrante_reingresado?: boolean;
       destino_original?: string | null;
     } | null;
@@ -509,10 +579,12 @@ function RegisterErrorDialog({
     // Mensaje resumen de lo que pasó
     const partes: string[] = ['Error registrado'];
     if (result?.reemplazo_consumido) {
+      const etiqueta =
+        result.reemplazo_tipo === 'tubo_nuevo' ? 'Tubo nuevo usado' : 'Reemplazo consumido';
       partes.push(
         result.sobrante_reingresado
-          ? `Reemplazo consumido · ${sobranteVal} cm reingresados`
-          : 'Reemplazo consumido',
+          ? `${etiqueta} · ${sobranteVal} cm reingresados`
+          : etiqueta,
       );
     }
     if (result?.destino_original === 'merma') partes.push('tubo original a merma');
@@ -594,97 +666,194 @@ function RegisterErrorDialog({
 
         <div>
           <Label className="mb-1 text-xs">Tubo de reemplazo utilizado</Label>
-          {sugerencia && (
-            <div className="mb-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3">
-              <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-                <Sparkles className="h-3 w-3" /> Sugerencia
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="text-sm font-bold text-zinc-100">
-                    Colmena {sugerencia.tubo.n_colmena} · {sugerencia.tubo.cod}
-                  </span>
-                  <span className="ml-2 text-xs text-emerald-400">
-                    {Number(sugerencia.tubo.medida_cm).toFixed(1)} cm
-                  </span>
+
+          {/* Toggle de modo: desde colmena existente / tubo nuevo */}
+          <div className="mb-2 flex gap-2">
+            <button
+              type="button"
+              onClick={() => cambiarModo('colmena')}
+              className={cn(
+                'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition',
+                modoReemplazo === 'colmena'
+                  ? 'border-purple-500/50 bg-purple-500/15 text-purple-300'
+                  : 'border-white/10 text-zinc-400 hover:border-white/20',
+              )}
+            >
+              Desde colmena existente
+            </button>
+            <button
+              type="button"
+              onClick={() => cambiarModo('nuevo')}
+              className={cn(
+                'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition',
+                modoReemplazo === 'nuevo'
+                  ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300'
+                  : 'border-white/10 text-zinc-400 hover:border-white/20',
+              )}
+            >
+              Tubo nuevo
+            </button>
+          </div>
+
+          {/* ── Modo: desde colmena existente ── */}
+          {modoReemplazo === 'colmena' && (
+            <>
+              {sugerencia && (
+                <div className="mb-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3">
+                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                    <Sparkles className="h-3 w-3" /> Sugerencia
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <span className="text-sm font-bold text-zinc-100">
+                        Colmena {sugerencia.tubo.n_colmena} · {sugerencia.tubo.cod}
+                      </span>
+                      <span className="ml-2 text-xs text-emerald-400">
+                        {Number(sugerencia.tubo.medida_cm).toFixed(1)} cm
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-400">
+                    {sugerencia.razon}
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => seleccionarTubo(sugerencia.tubo)}
+                    className="mt-2 border border-emerald-500/35 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                  >
+                    Usar este tubo
+                  </Button>
                 </div>
+              )}
+
+              <div className="relative mb-2">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+                <Input
+                  value={buscarTubo}
+                  onChange={(e) => setBuscarTubo(e.target.value)}
+                  placeholder="Buscar otro código o colmena…"
+                  className="border-white/10 bg-zinc-800 pl-8 text-sm"
+                />
               </div>
-              <div className="mt-1 text-[11px] text-zinc-400">
-                {sugerencia.razon}
+
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-white/[0.05]">
+                {tubosFiltrados.length === 0 ? (
+                  <div className="p-3 text-center text-xs text-zinc-500">
+                    Sin tubos disponibles
+                  </div>
+                ) : (
+                  tubosFiltrados.slice(0, 80).map((t) => {
+                    const sel = reemplazo?.id === t.id;
+                    const necesaria = Number(r.medida_cm || 0);
+                    const sobrVal =
+                      necesaria > 0 ? Number(t.medida_cm || 0) - necesaria : null;
+                    const insuficiente = sobrVal !== null && sobrVal < 0;
+                    return (
+                      <button
+                        key={t.id}
+                        disabled={insuficiente}
+                        onClick={() => seleccionarTubo(t)}
+                        className={cn(
+                          'flex w-full items-center justify-between gap-2 border-b border-white/[0.05] px-3 py-2 text-left text-xs transition last:border-0',
+                          sel
+                            ? 'bg-purple-500/15 text-purple-300'
+                            : 'hover:bg-white/[0.03]',
+                          insuficiente && 'cursor-not-allowed opacity-45',
+                        )}
+                      >
+                        <span>
+                          <strong>Colmena {t.n_colmena}</strong> · {t.cod}
+                          {sobrVal !== null && sobrVal >= 0 && (
+                            <span className="ml-1 text-[11px] text-zinc-500">
+                              · sobrante: {sobrVal.toFixed(1)} cm
+                            </span>
+                          )}
+                          {insuficiente && (
+                            <span className="ml-1 text-[11px] text-red-400">
+                              · insuficiente
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-zinc-500">
+                          {t.medida_cm != null
+                            ? `${Number(t.medida_cm).toFixed(1)} cm`
+                            : '-'}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
               </div>
-              <Button
-                size="sm"
-                onClick={() => seleccionarTubo(sugerencia.tubo)}
-                className="mt-2 border border-emerald-500/35 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
-              >
-                Usar este tubo
-              </Button>
-            </div>
+
+              {reemplazo && (
+                <div className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">
+                  ✅ <strong>Colmena {reemplazo.n_colmena}</strong> · {reemplazo.cod} ·{' '}
+                  {Number(reemplazo.medida_cm || 0).toFixed(1)} cm
+                </div>
+              )}
+            </>
           )}
 
-          <div className="relative mb-2">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
-            <Input
-              value={buscarTubo}
-              onChange={(e) => setBuscarTubo(e.target.value)}
-              placeholder="Buscar otro código o colmena…"
-              className="border-white/10 bg-zinc-800 pl-8 text-sm"
-            />
-          </div>
-
-          <div className="max-h-48 overflow-y-auto rounded-lg border border-white/[0.05]">
-            {tubosFiltrados.length === 0 ? (
-              <div className="p-3 text-center text-xs text-zinc-500">
-                Sin tubos disponibles
+          {/* ── Modo: tubo nuevo ── */}
+          {modoReemplazo === 'nuevo' && (
+            <div className="space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-3">
+              <p className="text-[11px] text-zinc-400">
+                Tubo que llegó de fuera del inventario. Se corta, el sobrante se guarda
+                en la colmena que elijas y queda registrado en el historial.
+              </p>
+              <div>
+                <Label className="text-xs">Colmena destino del sobrante *</Label>
+                <Input
+                  value={nuevoColmena}
+                  onChange={(e) => setNuevoColmena(e.target.value.toUpperCase())}
+                  placeholder="Ej: E71"
+                  className="border-white/10 bg-zinc-800"
+                />
               </div>
-            ) : (
-              tubosFiltrados.slice(0, 80).map((t) => {
-                const sel = reemplazo?.id === t.id;
-                const necesaria = Number(r.medida_cm || 0);
-                const sobrVal =
-                  necesaria > 0 ? Number(t.medida_cm || 0) - necesaria : null;
-                const insuficiente = sobrVal !== null && sobrVal < 0;
-                return (
-                  <button
-                    key={t.id}
-                    disabled={insuficiente}
-                    onClick={() => seleccionarTubo(t)}
-                    className={cn(
-                      'flex w-full items-center justify-between gap-2 border-b border-white/[0.05] px-3 py-2 text-left text-xs transition last:border-0',
-                      sel
-                        ? 'bg-purple-500/15 text-purple-300'
-                        : 'hover:bg-white/[0.03]',
-                      insuficiente && 'cursor-not-allowed opacity-45',
+              <div>
+                <Label className="text-xs">Código del tubo nuevo *</Label>
+                <Input
+                  value={nuevoCod}
+                  onChange={(e) => setNuevoCod(e.target.value.toUpperCase())}
+                  placeholder={(r.codigo || r.codigo_original || 'código').toString()}
+                  className="border-white/10 bg-zinc-800"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">
+                  Medida total del tubo nuevo (cm) *
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.1"
+                  value={nuevoMedida}
+                  onChange={(e) => setNuevoMedida(e.target.value)}
+                  placeholder={
+                    r.medida_cm != null
+                      ? `≥ ${Number(r.medida_cm).toFixed(1)}`
+                      : 'Medida total'
+                  }
+                  className="border-white/10 bg-zinc-800"
+                />
+                {sobranteNuevo !== null && (
+                  <p className="mt-1 text-[11px] text-emerald-400">
+                    Sobrante calculado: <strong>{sobranteNuevo.toFixed(1)} cm</strong>
+                    {nuevoColmena.trim() && (
+                      <> → volverá a colmena <strong>{nuevoColmena.trim()}</strong></>
                     )}
-                  >
-                    <span>
-                      <strong>Colmena {t.n_colmena}</strong> · {t.cod}
-                      {sobrVal !== null && sobrVal >= 0 && (
-                        <span className="ml-1 text-[11px] text-zinc-500">
-                          · sobrante: {sobrVal.toFixed(1)} cm
-                        </span>
-                      )}
-                      {insuficiente && (
-                        <span className="ml-1 text-[11px] text-red-400">
-                          · insuficiente
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-zinc-500">
-                      {t.medida_cm != null
-                        ? `${Number(t.medida_cm).toFixed(1)} cm`
-                        : '-'}
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-
-          {reemplazo && (
-            <div className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">
-              ✅ <strong>Colmena {reemplazo.n_colmena}</strong> · {reemplazo.cod} ·{' '}
-              {Number(reemplazo.medida_cm || 0).toFixed(1)} cm
+                  </p>
+                )}
+                {nuevoMedida &&
+                  r.medida_cm != null &&
+                  Number(nuevoMedida) > 0 &&
+                  Number(nuevoMedida) < Number(r.medida_cm) && (
+                    <p className="mt-1 text-[11px] text-red-400">
+                      ⚠ El tubo nuevo es menor que la medida necesaria
+                      ({Number(r.medida_cm).toFixed(1)} cm).
+                    </p>
+                  )}
+              </div>
             </div>
           )}
         </div>

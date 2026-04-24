@@ -1781,6 +1781,9 @@ export type Database = {
           p_responsable: string
           p_serial: string
           p_sobrante_cm: number
+          p_tubo_nuevo_cod?: string | null
+          p_tubo_nuevo_colmena?: string | null
+          p_tubo_nuevo_medida_cm?: number | null
           p_ubicacion: string
         }
         Returns: Json
