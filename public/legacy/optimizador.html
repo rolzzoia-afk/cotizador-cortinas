@@ -1094,6 +1094,12 @@ async function verificarVersionMinima() {
 }
 
 // Verificar sesión activa — usando Supabase Auth
+// Bandera: la carga desde la nube solo corre una vez por vida del iframe.
+// Supabase dispara SIGNED_IN al volver de una pestaña inactiva, lo cual
+// re-entraría a cargarDesdeSupabase y dejaría el overlay "Sincronizando..."
+// pegado mientras resuelve (o pisaría el plan en memoria).
+let _datosInicialesCargados = false;
+
 document.addEventListener("DOMContentLoaded", () => {
 
   // Listener de cambios de sesión Supabase
@@ -1107,6 +1113,7 @@ document.addEventListener("DOMContentLoaded", () => {
       unsubSeriales = null;
       inventarioCargado = false;
       serialesCargados = false;
+      _datosInicialesCargados = false;
       mostrarLogin();
     } else {
       console.log("✅ Usuario logueado en Supabase:", user.email, 'evento:', event);
@@ -1119,6 +1126,11 @@ document.addEventListener("DOMContentLoaded", () => {
       if (event !== 'INITIAL_SESSION' && event !== 'SIGNED_IN') {
           return;
       }
+
+      // Ignorar SIGNED_IN repetidos que Supabase dispara al volver de una
+      // pestaña inactiva — ya tenemos los datos en memoria.
+      if (_datosInicialesCargados) return;
+      _datosInicialesCargados = true;
 
       // Verificar versión mínima
       verificarVersionMinima();
