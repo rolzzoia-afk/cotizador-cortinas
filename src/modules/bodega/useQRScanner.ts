@@ -57,7 +57,7 @@ export function useQRScanner({
     onScanRef.current(decoded);
   };
 
-  const start = async (elementId: string) => {
+  const start = async (elementId: string, initialCooldownMs?: number) => {
     // Stop previous scanner cleanly
     if (scannerRef.current) {
       try {
@@ -82,6 +82,16 @@ export function useQRScanner({
     const scanner = new Html5Qrcode(elementId);
     scannerRef.current = scanner;
 
+    // Aplicar cooldown inicial DESPUÉS de que el scanner arranque, para que
+    // no sea pisado por el reset de cooldownRef de arriba. Evita que un QR
+    // que todavía está en cámara (ej: trabajador que acaba de tocar "Otra
+    // salida" y no movió el teléfono) sea re-detectado instantáneamente.
+    const applyInitialCooldown = () => {
+      if (initialCooldownMs && initialCooldownMs > 0) {
+        startCooldown(initialCooldownMs);
+      }
+    };
+
     try {
       await scanner.start(
         { facingMode: 'environment' },
@@ -92,6 +102,7 @@ export function useQRScanner({
         },
       );
       setIsRunning(true);
+      applyInitialCooldown();
     } catch (e) {
       try {
         await scanner.start(
@@ -103,6 +114,7 @@ export function useQRScanner({
           },
         );
         setIsRunning(true);
+        applyInitialCooldown();
       } catch (e2) {
         const err = e2 as Error;
         setError(`${err.name || 'Error'}: ${err.message || 'sin acceso a cámara'}`);

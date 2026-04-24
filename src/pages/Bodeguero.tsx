@@ -1387,10 +1387,14 @@ function AdHocView({
   }, [nombre]);
 
   // Relanzar cámara al volver a fase scan
+  // Cooldown de 1200ms previene que el QR del producto anterior (que
+  // sigue en cámara porque el trabajador acaba de tocar "Otra salida"
+  // sin mover el teléfono) sea re-detectado instantáneamente. Ese era
+  // el bug por el que "lo mandaba al mismo producto".
   useEffect(() => {
     if (fase !== 'scan' || !nombre) return;
     setScanMsg('Esperando escaneo…');
-    const t = setTimeout(() => scanner.start('adhoc-reader'), 200);
+    const t = setTimeout(() => scanner.start('adhoc-reader', 1200), 200);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fase]);
