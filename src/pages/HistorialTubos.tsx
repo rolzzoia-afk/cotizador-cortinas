@@ -203,6 +203,34 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
     return [...mapa.entries()];
   }, [data]);
 
+  // ── Separa eventos de un tubo en "vidas" por cada 'eliminado' ───
+  // Cada vida empieza tras un eliminado (o al principio) y termina con
+  // el próximo eliminado o con el último evento del tubo.
+  // eventos ya vienen ordenados ascendente por created_at.
+  type Vida = {
+    eventos: Evento[];
+    terminada: boolean;  // último evento = 'eliminado'
+    zombie: boolean;     // no es la primera vida Y no empezó con 'ingreso'
+  };
+  const splitVidas = (eventos: Evento[]): Vida[] => {
+    if (eventos.length === 0) return [];
+    const vidas: Evento[][] = [];
+    let actual: Evento[] = [];
+    for (const e of eventos) {
+      actual.push(e);
+      if (e.evento === 'eliminado') {
+        vidas.push(actual);
+        actual = [];
+      }
+    }
+    if (actual.length > 0) vidas.push(actual);
+    return vidas.map((evs, idx) => ({
+      eventos: evs,
+      terminada: evs[evs.length - 1]?.evento === 'eliminado',
+      zombie: idx > 0 && evs[0]?.evento !== 'ingreso',
+    }));
+  };
+
   return (
     <>
       <div className="mb-4 flex flex-wrap gap-2">
@@ -261,6 +289,8 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
             const primero = eventos[0];
             const tieneMerma = eventos.some((e) => e.evento === 'merma');
             const esLinaje = raizId !== 'sin_raiz';
+            const vidas = splitVidas(eventos);
+            const unaSolaVida = vidas.length <= 1;
             return (
               <div key={raizId} className="mb-3 overflow-hidden rounded-lg border bg-card">
                 <div className="flex items-center justify-between border-b px-4 py-3">
@@ -273,6 +303,14 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
                   </h6>
                   <span className="text-right text-xs text-muted-foreground">
                     {eventos.length} evento{eventos.length !== 1 ? 's' : ''}
+                    {vidas.length > 1 && (
+                      <>
+                        {' · '}
+                        <strong className="text-foreground">
+                          {vidas.length} vidas
+                        </strong>
+                      </>
+                    )}
                     {esLinaje && (
                       <>
                         <br />
@@ -283,11 +321,62 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
                     )}
                   </span>
                 </div>
-                <ul className="py-2">
-                  {eventos.map((e) => (
-                    <EventoItem key={e.id} e={e} />
-                  ))}
-                </ul>
+                {unaSolaVida ? (
+                  <ul className="py-2">
+                    {eventos.map((e) => (
+                      <EventoItem key={e.id} e={e} />
+                    ))}
+                  </ul>
+                ) : (
+                  vidas.map((v, i) => {
+                    const esUltima = i === vidas.length - 1;
+                    const estado = v.zombie
+                      ? 'zombie'
+                      : v.terminada
+                        ? 'terminada'
+                        : esUltima
+                          ? 'actual'
+                          : 'terminada';
+                    const headerTone =
+                      estado === 'zombie'
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                        : estado === 'actual'
+                          ? 'border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300'
+                          : 'border-white/10 bg-zinc-500/[0.05] text-zinc-400';
+                    const label =
+                      estado === 'zombie'
+                        ? `Vida ${i + 1} · sin ingreso previo (fantasma)`
+                        : estado === 'actual'
+                          ? `Vida ${i + 1} · actual`
+                          : `Vida ${i + 1} · terminada`;
+                    const desde = v.eventos[0]?.created_at;
+                    const hasta = v.eventos[v.eventos.length - 1]?.created_at;
+                    return (
+                      <div key={i}>
+                        <div
+                          className={cn(
+                            'flex items-center justify-between border-y px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider',
+                            headerTone,
+                          )}
+                        >
+                          <span>
+                            {estado === 'zombie' && '⚠ '}
+                            {label}
+                          </span>
+                          <span className="font-normal normal-case tracking-normal opacity-70">
+                            {formatFechaHora(desde)}
+                            {desde !== hasta && <> → {formatFechaHora(hasta)}</>}
+                          </span>
+                        </div>
+                        <ul className="py-2">
+                          {v.eventos.map((e) => (
+                            <EventoItem key={e.id} e={e} />
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             );
           })}
