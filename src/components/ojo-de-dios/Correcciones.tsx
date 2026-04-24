@@ -707,8 +707,16 @@ function HistorialPlanes({
                     variant="outline"
                     size="sm"
                     onClick={() => onRestaurar(plan)}
-                    disabled={restaurando}
-                    className="h-6 gap-1 border-red-500/30 px-2 text-[0.65rem] text-red-300"
+                    disabled={restaurando || !tieneSnap}
+                    title={
+                      !tieneSnap
+                        ? 'No se puede restaurar: este plan no tiene snapshot de colmena guardado'
+                        : undefined
+                    }
+                    className={cn(
+                      'h-6 gap-1 border-red-500/30 px-2 text-[0.65rem] text-red-300',
+                      !tieneSnap && 'opacity-40',
+                    )}
                   >
                     <RotateCcw className="h-3 w-3" />
                     Restaurar
