@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowUpRight,
@@ -13,6 +13,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
 
 type Role = {
   title: string;
@@ -22,6 +23,9 @@ type Role = {
   color: string;
   tags: string[];
   wide?: boolean;
+  // Lista de roles que pueden ver esta tile. `admin` siempre ve todo
+  // (se maneja aparte). Si la lista está vacía → solo admin.
+  rolesVisibles: string[];
 };
 
 const ROLES: Role[] = [
@@ -32,6 +36,7 @@ const ROLES: Role[] = [
     icon: Package,
     color: 'text-cyan-400 border-cyan-400/40 hover:shadow-cyan-400/30',
     tags: ['Despacho', 'QR', 'Stock', 'Camionetas'],
+    rolesVisibles: ['bodeguero'],
   },
   {
     title: 'Ventas',
@@ -40,6 +45,7 @@ const ROLES: Role[] = [
     icon: LineChart,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'],
+    rolesVisibles: ['ventas'],
   },
   {
     title: 'Cotizaciones',
@@ -48,6 +54,7 @@ const ROLES: Role[] = [
     icon: BriefcaseBusiness,
     color: 'text-indigo-400 border-indigo-400/40 hover:shadow-indigo-400/30',
     tags: ['Panel OTs', 'Cotizador'],
+    rolesVisibles: ['ventas'],
   },
   {
     title: 'Producción',
@@ -56,6 +63,7 @@ const ROLES: Role[] = [
     icon: Wrench,
     color: 'text-amber-400 border-amber-400/40 hover:shadow-amber-400/30',
     tags: ['Optimizador', 'Historial corte', 'Tubos'],
+    rolesVisibles: ['produccion'],
   },
   {
     title: 'Telas',
@@ -64,6 +72,7 @@ const ROLES: Role[] = [
     icon: Layers,
     color: 'text-pink-400 border-pink-400/40 hover:shadow-pink-400/30',
     tags: ['Stock telas', 'Colmena'],
+    rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado'],
   },
   {
     title: 'Dimensionado',
@@ -72,6 +81,7 @@ const ROLES: Role[] = [
     icon: Ruler,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['Corte tela', 'Planes de corte'],
+    rolesVisibles: ['produccion', 'dimensionado'],
   },
   {
     title: 'Pruebas',
@@ -80,6 +90,7 @@ const ROLES: Role[] = [
     icon: ClipboardCheck,
     color: 'text-sky-400 border-sky-400/40 hover:shadow-sky-400/30',
     tags: ['Panel OTs', 'Control calidad'],
+    rolesVisibles: ['pruebas'],
   },
   {
     title: 'Administrador',
@@ -99,6 +110,7 @@ const ROLES: Role[] = [
       'Todo',
     ],
     wide: true,
+    rolesVisibles: [], // solo admin (que pasa el filtro aparte)
   },
 ];
 
@@ -123,6 +135,20 @@ function useClock() {
 
 export function Landing() {
   const { time, fecha } = useClock();
+  const { perfil } = useAuth();
+
+  // Admin ve todas las tiles. Otros roles solo las que los listan en
+  // rolesVisibles. Si el usuario no tiene rol (undefined) → admin view
+  // por compatibilidad (no romper cuentas sin rol asignado).
+  const rolActual = (perfil?.rol || '').toLowerCase().trim();
+  const esAdmin = rolActual === 'admin' || !rolActual;
+  const rolesVisibles = useMemo(
+    () =>
+      esAdmin
+        ? ROLES
+        : ROLES.filter((r) => r.rolesVisibles.includes(rolActual)),
+    [esAdmin, rolActual],
+  );
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#07070d] text-slate-100">
@@ -154,8 +180,16 @@ export function Landing() {
           </p>
         </div>
 
+        {rolesVisibles.length === 0 && (
+          <div className="max-w-md rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-center text-sm text-amber-200">
+            <p className="font-semibold">Tu cuenta no tiene módulos asignados.</p>
+            <p className="mt-2 text-xs text-amber-200/70">
+              Contactá al administrador para que configure tu rol.
+            </p>
+          </div>
+        )}
         <div className="grid w-full max-w-4xl grid-cols-2 gap-4 md:grid-cols-3">
-          {ROLES.map((r) => (
+          {rolesVisibles.map((r) => (
             <Link
               key={r.title}
               to={r.to}

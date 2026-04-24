@@ -4,19 +4,21 @@ import { LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
-const links = [
-  { to: '/', label: 'Panel' },
-  { to: '/ventas', label: 'Ventas' },
-  { to: '/inteligencia', label: 'Inteligencia' },
-  { to: '/telas', label: 'Telas' },
-  { to: '/inventario', label: 'Inventario' },
-  { to: '/optimizador', label: 'Optimizador' },
-  { to: '/bodeguero', label: 'Bodega' },
-  { to: '/camionetas', label: 'Camionetas' },
-  { to: '/historial-corte', label: 'Historial Corte' },
-  { to: '/historial-tubos', label: 'Historial Tubos' },
-  { to: '/ojo-de-dios', label: 'Ojo de Dios' },
-  { to: '/admin', label: 'Admin' },
+// Cada link tiene una lista de roles que pueden verlo. `admin` ve todo
+// (se maneja aparte en el componente). Si la lista está vacía → solo admin.
+const links: Array<{ to: string; label: string; rolesVisibles: string[] }> = [
+  { to: '/', label: 'Panel', rolesVisibles: ['ventas', 'pruebas'] },
+  { to: '/ventas', label: 'Ventas', rolesVisibles: ['ventas'] },
+  { to: '/inteligencia', label: 'Inteligencia', rolesVisibles: ['ventas'] },
+  { to: '/telas', label: 'Telas', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado'] },
+  { to: '/inventario', label: 'Inventario', rolesVisibles: ['bodeguero'] },
+  { to: '/optimizador', label: 'Optimizador', rolesVisibles: ['produccion'] },
+  { to: '/bodeguero', label: 'Bodega', rolesVisibles: ['bodeguero'] },
+  { to: '/camionetas', label: 'Camionetas', rolesVisibles: ['bodeguero'] },
+  { to: '/historial-corte', label: 'Historial Corte', rolesVisibles: ['produccion', 'dimensionado'] },
+  { to: '/historial-tubos', label: 'Historial Tubos', rolesVisibles: ['produccion'] },
+  { to: '/ojo-de-dios', label: 'Ojo de Dios', rolesVisibles: [] }, // solo admin
+  { to: '/admin', label: 'Admin', rolesVisibles: [] }, // solo admin
 ];
 
 export function TopBar() {
@@ -24,6 +26,13 @@ export function TopBar() {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Filtrar links por rol. Admin (o sin rol por compatibilidad) ve todo.
+  const rolActual = (perfil?.rol || '').toLowerCase().trim();
+  const esAdmin = rolActual === 'admin' || !rolActual;
+  const linksVisibles = esAdmin
+    ? links
+    : links.filter((l) => l.rolesVisibles.includes(rolActual));
 
   // Cerrar el menú al navegar
   useEffect(() => {
@@ -62,7 +71,7 @@ export function TopBar() {
         <nav className="hidden items-center gap-4 lg:flex">
           <span className="font-semibold">Rolzzo</span>
           <ul className="flex gap-1">
-            {links.map((l) => (
+            {linksVisibles.map((l) => (
               <li key={l.to}>
                 <NavLink
                   to={l.to}
@@ -120,7 +129,7 @@ export function TopBar() {
               )}
             </div>
             <ul className="py-2">
-              {links.map((l) => (
+              {linksVisibles.map((l) => (
                 <li key={l.to}>
                   <NavLink
                     to={l.to}
