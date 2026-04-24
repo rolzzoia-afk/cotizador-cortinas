@@ -505,14 +505,28 @@ function HistorialPlanes({
     setRestaurando(true);
     try {
       const res = await restaurar(plan.id, email);
+      const omitidos = res.count_omitidos_tombstone ?? 0;
+      const sufijoOmitidos =
+        omitidos > 0
+          ? ` — ${omitidos} tubo${omitidos === 1 ? '' : 's'} omitido${omitidos === 1 ? '' : 's'} por estar eliminado${omitidos === 1 ? '' : 's'} definitivamente`
+          : '';
       toast.success(
-        `Restauración completada. ${res.count_despues} tubos restaurados (antes había ${res.count_antes}).`,
+        `Restauración completada. ${res.count_despues} tubos restaurados (antes había ${res.count_antes})${sufijoOmitidos}.`,
       );
       setPreview(null);
       await cargar();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error('Error al restaurar: ' + msg);
+      // PostgrestError no es Error nativo — tiene .message y opcionalmente
+      // .details/.hint. Sin este cast, el error venía como "[object Object]".
+      const err = e as { message?: string; details?: string; hint?: string } | Error;
+      const msg =
+        (err as Error).message ||
+        (err as { message?: string }).message ||
+        String(e);
+      const extra = (err as { details?: string }).details
+        ? ` (${(err as { details?: string }).details})`
+        : '';
+      toast.error('Error al restaurar: ' + msg + extra);
     } finally {
       setRestaurando(false);
     }

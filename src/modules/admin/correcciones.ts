@@ -365,11 +365,21 @@ export type PlanResumen = {
   nCortes: number;
 };
 
+export type RestauracionResult = {
+  count_antes: number;
+  count_despues: number;
+  // Campos que devuelve la RPC actualizada con el fix de tombstone.
+  // Opcionales por compatibilidad con la versión vieja por si no se
+  // deployó todavía.
+  count_en_snapshot?: number;
+  count_omitidos_tombstone?: number;
+};
+
 export function usePlanesHistorial(): {
   planes: PlanResumen[];
   loading: boolean;
   cargar: () => Promise<void>;
-  restaurar: (planId: string, email: string) => Promise<{ count_antes: number; count_despues: number }>;
+  restaurar: (planId: string, email: string) => Promise<RestauracionResult>;
 } {
   const { empresaId } = useAuth();
   const [planes, setPlanes] = useState<PlanResumen[]>([]);
@@ -425,8 +435,7 @@ export function usePlanesHistorial(): {
         p_email: email,
       });
       if (error) throw error;
-      // RPC devuelve { count_antes, count_despues }
-      return (data as { count_antes: number; count_despues: number }) || {
+      return (data as RestauracionResult) || {
         count_antes: 0,
         count_despues: 0,
       };
