@@ -1323,12 +1323,24 @@ async function guardarResultadoOptimizacion(resultados) {
         }
 
         const timestamp = new Date().toISOString();
+
+        // Capturar snapshot del inventario PRE-optimización para habilitar el botón
+        // "Restaurar" en Ojo de Dios → Correcciones. Sin esto, la RPC
+        // restaurar_plan_de_corte falla con "El plan no tiene snapshot de inventario".
+        // La captura lee la colmena desde Supabase (que todavía no fue modificada
+        // en este punto del flujo) + los seriales crudos en memoria.
+        let snapSafe = null;
+        try { snapSafe = await capturarSnapshotPreOptimizacion(); }
+        catch (eSnap) { console.warn("No se pudo capturar snapshot en guardarResultadoOptimizacion:", eSnap?.message); }
+
         const payload = {
             empresa_id: EMPRESA_ID_OPT,
             optimizer_email: _currentUser.email,
             resultados: resultados,
             ordenes: SistemaInventario.ordenes || [],
-            fecha: timestamp
+            fecha: timestamp,
+            snapshot_inventario: (snapSafe && snapSafe.colmenas) || [],
+            snapshot_seriales:   (snapSafe && snapSafe.seriales) || []
         };
 
         // Intentar hasta 3 veces con _sbRest (sin lock de auth)
@@ -5526,7 +5538,12 @@ async function confirmarYGuardarStaging() {
                     id: o.id, ot: o.ot, ubic: o.ubic, cod: o.cod,
                     medida_cm: o.medida_cm, componente: o.componente
                 })),
-                fecha: fecha
+                fecha: fecha,
+                // Snapshot del inventario PRE-optimización, requerido por el botón "Restaurar"
+                // en Ojo de Dios / Correcciones. Sin esto, la RPC restaurar_plan_de_corte
+                // falla con "El plan no tiene snapshot de inventario".
+                snapshot_inventario: (snapshotSeguro && snapshotSeguro.colmenas) || [],
+                snapshot_seriales:   (snapshotSeguro && snapshotSeguro.seriales) || []
             };
             // Usa _sbRest (fetch directo) para evitar el lock de auth
             let epPlan = null;
