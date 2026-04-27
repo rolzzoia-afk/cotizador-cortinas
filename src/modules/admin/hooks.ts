@@ -113,6 +113,88 @@ export function useTelas(): {
   return { telas, loading, guardar, eliminar };
 }
 
+// ── Hook: Reconciliación de inventario ──────────────────────────────────────
+// Llama a la RPC obtener_reconciliacion_inventario que devuelve counters,
+// tendencia diaria y top anomalías en un solo round-trip.
+export type ReconciliacionCounters = {
+  huerfanos: number;
+  huerfanos_7d: number;
+  fantasmas: number;
+  fantasmas_7d: number;
+  perdidos: number;
+  perdidos_7d: number;
+};
+
+export type ReconciliacionTendenciaDia = {
+  dia: string;
+  huerfanos: number;
+  fantasmas: number;
+};
+
+export type ReconciliacionAnomaliaHuerfano = {
+  tubo_raiz_id: string;
+  n_colmena: string;
+  cod: string;
+  medida_cm: number;
+  created_at: string;
+  ot: string | null;
+  detalle: string | null;
+};
+
+export type ReconciliacionAnomaliaFantasma = {
+  tubo_raiz_id: string;
+  n_colmena: string;
+  cod: string;
+  medida_cm: number;
+  created_at: string;
+};
+
+export type ReconciliacionData = {
+  counters: ReconciliacionCounters;
+  tendencia: ReconciliacionTendenciaDia[];
+  top_huerfanos: ReconciliacionAnomaliaHuerfano[];
+  top_fantasmas: ReconciliacionAnomaliaFantasma[];
+  generado_en: string;
+};
+
+export function useReconciliacion(opts?: { dias?: number; limite?: number }): {
+  data: ReconciliacionData | null;
+  loading: boolean;
+  error: string | null;
+  refrescar: () => Promise<void>;
+} {
+  const dias = opts?.dias ?? 30;
+  const limite = opts?.limite ?? 50;
+  const [data, setData] = useState<ReconciliacionData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refrescar = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data: rpcData, error: rpcError } = await supabase.rpc(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'obtener_reconciliacion_inventario' as any,
+        { p_dias_tendencia: dias, p_limite_anomalias: limite },
+      );
+      if (rpcError) throw rpcError;
+      setData(rpcData as ReconciliacionData);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }, [dias, limite]);
+
+  useEffect(() => {
+    refrescar();
+  }, [refrescar]);
+
+  return { data, loading, error, refrescar };
+}
+
 // ── Hook: Versión mínima (control del panel Ojo de Dios) ─────────────────────
 // Lee `configuracion.clave='version_minima_version'` con realtime.
 export function useVersionMinima(): {
