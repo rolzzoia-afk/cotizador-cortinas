@@ -5165,11 +5165,23 @@ async function logEventosTubos() {
 
         const conHistorial = new Set((previos || []).map(r => r.tubo_raiz_id));
         let nuevos = 0;
+        const fantasmas = [];
 
         raizIds.forEach(raizId => {
             if (conHistorial.has(raizId)) return; // ya tiene historial → no agregar ingreso
             const d = raizADatos[raizId];
             const esNuevo = d.fuente === 'optimizador_nuevo';
+
+            // Tubo SIN historial previo y NO marcado como propuesto-nuevo:
+            // antes se materializaba un INGRESO "retroactivo" silencioso, lo
+            // que enmascaraba bugs río arriba (entradaHistorico undefined,
+            // colmena desincronizada, sobre-asignación entre planes concurrentes).
+            // Ahora: se omite la creación y se loggea para diagnóstico.
+            if (!esNuevo) {
+                fantasmas.push({ raizId, ...d });
+                return;
+            }
+
             eventosIngreso.push({
                 empresa_id:          EMPRESA_ID_OPT,
                 tubo_raiz_id:        raizId,
@@ -5178,11 +5190,9 @@ async function logEventosTubos() {
                 medida_cm:           d.medida_cm,
                 medida_resultado_cm: d.medida_cm,
                 evento:              'ingreso',
-                fuente:              d.fuente || 'retroactivo',
-                ot:                  esNuevo ? (d.ot || null) : null,
-                notas:               esNuevo
-                    ? `Tubo nuevo propuesto por el optimizador para OT ${d.ot} — ingresó directamente al corte.`
-                    : `Registro retroactivo — el tubo ya estaba en colmena antes de implementarse el historial. Fecha de ingreso original desconocida.`,
+                fuente:              d.fuente,
+                ot:                  d.ot || null,
+                notas: `Tubo nuevo propuesto por el optimizador para OT ${d.ot} — ingresó directamente al corte.`,
                 registrado_por:      usuario,
                 created_at:          tsIngreso  // 3s antes del corte → aparece primero en timeline
             });
@@ -5190,7 +5200,17 @@ async function logEventosTubos() {
         });
 
         if (nuevos > 0) {
-            log(`📥 Historial tubos: ${nuevos} tubo(s) sin historial previo → se registrará ingreso automático.`, 'info');
+            log(`📥 Historial tubos: ${nuevos} tubo(s) nuevo(s) propuesto(s) por optimizador → se registrará ingreso automático.`, 'info');
+        }
+
+        if (fantasmas.length > 0) {
+            console.group('%c[OPT] tubos sin historial previo — NO se creará INGRESO retroactivo', 'color:#f87171;font-weight:bold');
+            fantasmas.forEach(p => {
+                console.log(`  • raiz_id=${p.raizId} colmena=${p.n_colmena} cod=${p.cod} medida=${p.medida_cm}cm OT=${p.ot}`);
+            });
+            console.groupEnd();
+            const lista = fantasmas.map(p => `colmena ${p.n_colmena} (${p.cod}, ${p.medida_cm}cm, OT ${p.ot})`).join('; ');
+            log(`⚠️ ${fantasmas.length} tubo(s) sin historial previo detectado(s) — NO se registró INGRESO automático para evitar fantasmas. Detalle: ${lista}. Ver consola para raiz_id.`, 'warn');
         }
     }
 
