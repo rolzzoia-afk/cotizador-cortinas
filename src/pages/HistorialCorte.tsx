@@ -417,31 +417,59 @@ function RegisterErrorDialog({
   }, [r, tubosDisponibles, tubosOcupados]);
 
   // ── Lista filtrada
+  // Si el usuario escribió en el buscador, mostramos TODO lo que matchee
+  // (incluyendo el tubo sugerido — antes lo escondíamos asumiendo que ya
+  // estaba arriba, pero eso confunde: si el único tubo de E62 ≥ medida
+  // necesaria es el sugerido, el usuario veía "Sin tubos disponibles" y
+  // no entendía por qué). Solo cuando NO hay búsqueda explícita ocultamos
+  // el sugerido para no mostrarlo dos veces.
   const tubosFiltrados = useMemo(() => {
     const medidaNecesaria = Number(r.medida_cm || 0);
     const codCorte = (r.codigo || r.codigo_original || '').toUpperCase().trim();
-    const base = tubosDisponibles.filter((t) => {
-      if (sugerencia && t.id === sugerencia.tubo.id) return false;
-      return !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm));
-    });
+    const baseSinOcupados = tubosDisponibles.filter(
+      (t) => !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm)),
+    );
     if (buscarTubo) {
       const q = buscarTubo.toLowerCase();
-      return base.filter(
+      return baseSinOcupados.filter(
         (t) =>
           (t.cod || '').toLowerCase().includes(q) ||
           String(t.n_colmena || '').toLowerCase().includes(q),
       );
     }
+    const baseSinSugerido = baseSinOcupados.filter(
+      (t) => !sugerencia || t.id !== sugerencia.tubo.id,
+    );
     if (codCorte) {
-      return base.filter(
+      return baseSinSugerido.filter(
         (t) =>
           (t.cod || '').toUpperCase().trim() === codCorte &&
           Number(t.medida_cm || 0) >= medidaNecesaria,
       );
     }
-    return base;
+    return baseSinSugerido;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tubosDisponibles, tubosOcupados, sugerencia, buscarTubo, r]);
+
+  // Para mejorar el mensaje "sin tubos disponibles": detectar la causa
+  // probable (todos están reservados, o la búsqueda no matchea ninguno).
+  const motivoListaVacia = useMemo(() => {
+    if (tubosDisponibles.length === 0) return 'No hay tubos en colmena_tubos.';
+    const codCorte = (r.codigo || r.codigo_original || '').toUpperCase().trim();
+    const ocupadosDelCod = tubosDisponibles.filter(
+      (t) =>
+        (!codCorte || (t.cod || '').toUpperCase().trim() === codCorte) &&
+        tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm)),
+    ).length;
+    if (buscarTubo) {
+      return `Ningún tubo matchea "${buscarTubo}".${ocupadosDelCod ? ` (${ocupadosDelCod} reservados por otros cortes del plan)` : ''}`;
+    }
+    if (ocupadosDelCod > 0) {
+      return `Los ${ocupadosDelCod} tubos de ${codCorte} disponibles están reservados por otros cortes del plan. Usá la sugerencia o cambiá a "Tubo nuevo".`;
+    }
+    return `No hay tubos de ${codCorte || 'este código'} en stock con medida suficiente.`;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tubosDisponibles, tubosOcupados, buscarTubo, r]);
 
   const seleccionarTubo = (t: Tubo) => {
     setReemplazo(t);
@@ -769,12 +797,13 @@ function RegisterErrorDialog({
 
               <div className="max-h-48 overflow-y-auto rounded-lg border border-white/[0.05]">
                 {tubosFiltrados.length === 0 ? (
-                  <div className="p-3 text-center text-xs text-zinc-500">
-                    Sin tubos disponibles
+                  <div className="p-3 text-center text-[11px] leading-snug text-zinc-500">
+                    {motivoListaVacia}
                   </div>
                 ) : (
                   tubosFiltrados.slice(0, 80).map((t) => {
                     const sel = reemplazo?.id === t.id;
+                    const esSugerido = sugerencia?.tubo.id === t.id;
                     const necesaria = Number(r.medida_cm || 0);
                     const sobrVal =
                       necesaria > 0 ? Number(t.medida_cm || 0) - necesaria : null;
@@ -794,6 +823,11 @@ function RegisterErrorDialog({
                       >
                         <span>
                           <strong>Colmena {t.n_colmena}</strong> · {t.cod}
+                          {esSugerido && (
+                            <span className="ml-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-emerald-300">
+                              Sugerido
+                            </span>
+                          )}
                           {sobrVal !== null && sobrVal >= 0 && (
                             <span className="ml-1 text-[11px] text-zinc-500">
                               · sobrante: {sobrVal.toFixed(1)} cm
