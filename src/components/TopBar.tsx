@@ -35,11 +35,17 @@ export function TopBar() {
   const viewAs = (params.get('rol') || '').toLowerCase().trim();
   const rolEfectivo = viewAs || rolReal;
   const linksParaRol = links.filter((l) => l.rolesVisibles.includes(rolEfectivo));
-  // esAdmin: cuando no hay viewAs, fallback "fail-open" si el rol real es
-  // admin/vacío, o si no matchea ningún tab (rol mal mapeado tipo 'operario'
-  // → ve todo en vez de quedar sin nav). Cuando hay viewAs, NO aplicamos
-  // fallback: el admin puede inspeccionar un rol vacío para validar mappings.
-  const esAdmin = !viewAs && (rolReal === 'admin' || !rolReal || linksParaRol.length === 0);
+  // esAdmin se evalúa en dos contextos:
+  // 1) Sin viewAs: fallback "fail-open" si el rol real es admin/vacío o si
+  //    no matchea ningún tab (rol mal mapeado tipo 'operario' → ve todo
+  //    en vez de quedar sin nav).
+  // 2) Con viewAs='admin': admin no aparece en rolesVisibles de ningún tab
+  //    (se maneja siempre como "ver todo"), así que sin esta línea el filtro
+  //    quedaría vacío y la TopBar sin links. Tratamos ?rol=admin como sinónimo
+  //    de "perspectiva admin = ver todo".
+  const esAdmin =
+    viewAs === 'admin' ||
+    (!viewAs && (rolReal === 'admin' || !rolReal || linksParaRol.length === 0));
   const linksVisibles = esAdmin ? links : linksParaRol;
 
   // Preservar ?rol=X en cada NavLink para que la navegación entre tabs
