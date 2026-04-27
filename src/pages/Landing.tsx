@@ -32,7 +32,7 @@ const ROLES: Role[] = [
   {
     title: 'Bodeguero',
     desc: 'Despacho y recepción de materiales con escaneo QR.',
-    to: '/?rol=bodeguero',
+    to: '/panel?rol=bodeguero',
     icon: Package,
     color: 'text-cyan-400 border-cyan-400/40 hover:shadow-cyan-400/30',
     tags: ['Despacho', 'QR', 'Stock', 'Camionetas'],
@@ -50,7 +50,7 @@ const ROLES: Role[] = [
   {
     title: 'Cotizaciones',
     desc: 'Gestión de OTs, cotizaciones y seguimiento de despachos.',
-    to: '/?rol=ventas',
+    to: '/panel?rol=ventas',
     icon: BriefcaseBusiness,
     color: 'text-indigo-400 border-indigo-400/40 hover:shadow-indigo-400/30',
     tags: ['Panel OTs', 'Cotizador'],
@@ -59,7 +59,7 @@ const ROLES: Role[] = [
   {
     title: 'Producción',
     desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.',
-    to: '/?rol=produccion',
+    to: '/panel?rol=produccion',
     icon: Wrench,
     color: 'text-amber-400 border-amber-400/40 hover:shadow-amber-400/30',
     tags: ['Optimizador', 'Historial corte', 'Tubos'],
@@ -68,7 +68,7 @@ const ROLES: Role[] = [
   {
     title: 'Telas',
     desc: 'Gestión y control de stock de telas por rollo.',
-    to: '/?rol=telas',
+    to: '/panel?rol=telas',
     icon: Layers,
     color: 'text-pink-400 border-pink-400/40 hover:shadow-pink-400/30',
     tags: ['Stock telas', 'Colmena'],
@@ -77,7 +77,7 @@ const ROLES: Role[] = [
   {
     title: 'Dimensionado',
     desc: 'Corte de tela por cortina según planes de producción.',
-    to: '/?rol=dimensionado',
+    to: '/panel?rol=dimensionado',
     icon: Ruler,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['Corte tela', 'Planes de corte'],
@@ -86,7 +86,7 @@ const ROLES: Role[] = [
   {
     title: 'Pruebas',
     desc: 'Control de calidad final antes de enviar a instalación.',
-    to: '/?rol=pruebas',
+    to: '/panel?rol=pruebas',
     icon: ClipboardCheck,
     color: 'text-sky-400 border-sky-400/40 hover:shadow-sky-400/30',
     tags: ['Panel OTs', 'Control calidad'],
@@ -95,7 +95,7 @@ const ROLES: Role[] = [
   {
     title: 'Administrador',
     desc: 'Acceso completo al sistema — inventario, inteligencia de negocio, panel admin y todos los módulos.',
-    to: '/?rol=admin',
+    to: '/panel?rol=admin',
     icon: ShieldCheck,
     color: 'text-purple-400 border-purple-400/40 hover:shadow-purple-400/30',
     tags: [

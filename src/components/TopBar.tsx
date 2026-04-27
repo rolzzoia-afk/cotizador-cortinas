@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 // Cada link tiene una lista de roles que pueden verlo. `admin` ve todo
 // (se maneja aparte en el componente). Si la lista está vacía → solo admin.
 const links: Array<{ to: string; label: string; rolesVisibles: string[] }> = [
-  { to: '/', label: 'Panel', rolesVisibles: ['ventas', 'pruebas'] },
+  { to: '/panel', label: 'Panel', rolesVisibles: ['ventas', 'pruebas'] },
   { to: '/ventas', label: 'Ventas', rolesVisibles: ['ventas'] },
   { to: '/inteligencia', label: 'Inteligencia', rolesVisibles: ['ventas'] },
   { to: '/telas', label: 'Telas', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado'] },
@@ -64,12 +64,12 @@ export function TopBar() {
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
-          <span className="font-semibold">Rolzzo</span>
+          <Link to="/" className="font-semibold hover:text-primary">Rolzzo</Link>
         </div>
 
         {/* Desktop: logo + nav completo */}
         <nav className="hidden items-center gap-4 lg:flex">
-          <span className="font-semibold">Rolzzo</span>
+          <Link to="/" className="font-semibold hover:text-primary">Rolzzo</Link>
           <ul className="flex gap-1">
             {linksVisibles.map((l) => (
               <li key={l.to}>

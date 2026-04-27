@@ -55,7 +55,6 @@ export function App() {
         {/* Públicas */}
         <Route path="/login" element={<Login />} />
         <Route path="/registro" element={<Registro />} />
-        <Route path="/landing" element={<Landing />} />
 
         {/* Setup (requiere sesión pero no onboarding — sin Shell/TopBar) */}
         <Route
@@ -75,7 +74,10 @@ export function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Panel />} />
+          <Route index element={<Landing />} />
+          <Route path="panel" element={<Panel />} />
+          {/* Alias retrocompat: varias páginas llaman navigate('/landing'). */}
+          <Route path="landing" element={<Landing />} />
           <Route path="ots/:id/fase1" element={<CotizadorFase1 />} />
           <Route path="ots/:id/fase2" element={<CotizadorFase2 />} />
           <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
