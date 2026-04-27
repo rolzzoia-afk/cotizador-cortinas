@@ -145,17 +145,19 @@ export function Landing() {
   };
 
   // Admin ve todas las tiles. Otros roles solo las que los listan en
-  // rolesVisibles. Si el usuario no tiene rol (undefined) → admin view
-  // por compatibilidad (no romper cuentas sin rol asignado).
+  // rolesVisibles. Fallback "fail-open": si el rol no matchea ninguna
+  // tile (cuenta sin rol, rol no mapeado como 'operario', etc.) damos
+  // acceso completo en vez de bloquear con "sin módulos asignados". Es
+  // mejor UX y evita lockout silencioso de cuentas mal configuradas;
+  // cuando se quiera restringir a alguien, basta con asignarle un rol
+  // mapeado (bodeguero/ventas/produccion/telas/dimensionado/pruebas).
   const rolActual = (perfil?.rol || '').toLowerCase().trim();
-  const esAdmin = rolActual === 'admin' || !rolActual;
-  const rolesVisibles = useMemo(
-    () =>
-      esAdmin
-        ? ROLES
-        : ROLES.filter((r) => r.rolesVisibles.includes(rolActual)),
-    [esAdmin, rolActual],
+  const tilesParaRol = useMemo(
+    () => ROLES.filter((r) => r.rolesVisibles.includes(rolActual)),
+    [rolActual],
   );
+  const esAdmin = rolActual === 'admin' || !rolActual || tilesParaRol.length === 0;
+  const rolesVisibles = esAdmin ? ROLES : tilesParaRol;
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#07070d] text-slate-100">
