@@ -10,6 +10,7 @@ import { Reportes } from '@/components/ojo-de-dios/Reportes';
 import { Control } from '@/components/ojo-de-dios/Control';
 import { Colmena } from '@/components/ojo-de-dios/Colmena';
 import { Correcciones } from '@/components/ojo-de-dios/Correcciones';
+import { Reconciliacion } from '@/components/ojo-de-dios/Reconciliacion';
 
 type Tab =
   | 'dashboard'
@@ -17,6 +18,7 @@ type Tab =
   | 'stock'
   | 'reportes'
   | 'colmena'
+  | 'reconciliacion'
   | 'correcciones'
   | 'control';
 
@@ -26,6 +28,7 @@ const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'stock', label: 'Stock Telas' },
   { id: 'reportes', label: 'Reportes' },
   { id: 'colmena', label: 'Colmena' },
+  { id: 'reconciliacion', label: 'Reconciliación' },
   { id: 'correcciones', label: 'Correcciones' },
   { id: 'control', label: 'Control' },
 ];
@@ -86,6 +89,7 @@ export function OjoDeDios() {
         {tab === 'stock' && <Stock />}
         {tab === 'reportes' && <Reportes ots={ots} telas={telas} />}
         {tab === 'colmena' && <Colmena />}
+        {tab === 'reconciliacion' && <Reconciliacion />}
         {tab === 'correcciones' && <Correcciones />}
         {tab === 'control' && <Control ots={ots} telas={telas} online={online} />}
       </div>
