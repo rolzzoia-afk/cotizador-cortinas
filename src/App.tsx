@@ -66,7 +66,21 @@ export function App() {
           }
         />
 
-        {/* Protegidas */}
+        {/* Landing va sin TopBar — es la pantalla de elección de área,
+             mostrar todos los tabs ahí va contra el propósito */}
+        <Route
+          element={
+            <ProtectedRoute>
+              <Outlet />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<Landing />} />
+          {/* Alias retrocompat: varias páginas llaman navigate('/landing'). */}
+          <Route path="landing" element={<Landing />} />
+        </Route>
+
+        {/* Resto de los módulos (con TopBar) */}
         <Route
           element={
             <ProtectedRoute>
@@ -74,10 +88,7 @@ export function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Landing />} />
           <Route path="panel" element={<Panel />} />
-          {/* Alias retrocompat: varias páginas llaman navigate('/landing'). */}
-          <Route path="landing" element={<Landing />} />
           <Route path="ots/:id/fase1" element={<CotizadorFase1 />} />
           <Route path="ots/:id/fase2" element={<CotizadorFase2 />} />
           <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />

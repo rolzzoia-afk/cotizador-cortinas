@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   ArrowUpRight,
   BriefcaseBusiness,
   ClipboardCheck,
   Layers,
   LineChart,
+  LogOut,
   Package,
   Ruler,
   ShieldCheck,
@@ -135,7 +136,13 @@ function useClock() {
 
 export function Landing() {
   const { time, fecha } = useClock();
-  const { perfil } = useAuth();
+  const { perfil, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/login', { replace: true });
+  };
 
   // Admin ve todas las tiles. Otros roles solo las que los listan en
   // rolesVisibles. Si el usuario no tiene rol (undefined) → admin view
@@ -159,10 +166,25 @@ export function Landing() {
         <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-amber-500 opacity-10 blur-[120px]" />
       </div>
 
-      {/* Reloj */}
-      <div className="fixed right-6 top-5 z-10 hidden text-right text-xs text-slate-500 sm:block">
-        <div className="font-semibold tabular-nums text-white/70">{time}</div>
-        <div>{fecha}</div>
+      {/* Header esquina sup. derecha: usuario + Salir + reloj */}
+      <div className="fixed right-6 top-5 z-10 flex items-center gap-4 text-xs text-slate-500">
+        <div className="hidden text-right sm:block">
+          <div className="truncate font-medium text-white/80">{perfil?.nombre ?? '—'}</div>
+          {perfil?.rol && <div className="text-[0.65rem] text-slate-500">{perfil.rol}</div>}
+        </div>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-300 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+          title="Cerrar sesión"
+          aria-label="Cerrar sesión"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Salir</span>
+        </button>
+        <div className="hidden text-right sm:block">
+          <div className="font-semibold tabular-nums text-white/70">{time}</div>
+          <div>{fecha}</div>
+        </div>
       </div>
 
       {/* Contenido */}
