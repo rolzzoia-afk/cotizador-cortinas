@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LogOut, Menu, X } from 'lucide-react';
+import { Link, NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Eye, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
 
@@ -25,14 +25,25 @@ export function TopBar() {
   const { perfil, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const [params] = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Filtrar links por rol. Admin (o sin rol por compatibilidad) ve todo.
-  const rolActual = (perfil?.rol || '').toLowerCase().trim();
-  const esAdmin = rolActual === 'admin' || !rolActual;
+  // "Ver como" via ?rol=X en la URL: permite que un admin entre en
+  // perspectiva de otro rol desde Landing y vea solo los tabs de ese
+  // rol. Si no hay query, se usa el perfil real (comportamiento original).
+  const rolReal = (perfil?.rol || '').toLowerCase().trim();
+  const viewAs = (params.get('rol') || '').toLowerCase().trim();
+  const rolEfectivo = viewAs || rolReal;
+  // esAdmin solo cuando NO está actuando como otro rol — el viewAs siempre
+  // dispara el filtro, incluso si el usuario real es admin.
+  const esAdmin = !viewAs && (rolReal === 'admin' || !rolReal);
   const linksVisibles = esAdmin
     ? links
-    : links.filter((l) => l.rolesVisibles.includes(rolActual));
+    : links.filter((l) => l.rolesVisibles.includes(rolEfectivo));
+
+  // Preservar ?rol=X en cada NavLink para que la navegación entre tabs
+  // mantenga el modo "ver como". Click en el logo Rolzzo limpia la query.
+  const queryStr = viewAs ? `?rol=${viewAs}` : '';
 
   // Cerrar el menú al navegar
   useEffect(() => {
@@ -74,7 +85,7 @@ export function TopBar() {
             {linksVisibles.map((l) => (
               <li key={l.to}>
                 <NavLink
-                  to={l.to}
+                  to={`${l.to}${queryStr}`}
                   end={l.to === '/'}
                   className={({ isActive }) =>
                     cn(
@@ -92,8 +103,19 @@ export function TopBar() {
           </ul>
         </nav>
 
-        {/* Derecha: usuario + salir (compacto en mobile) */}
+        {/* Derecha: viendo como + usuario + salir (compacto en mobile) */}
         <div className="flex items-center gap-2 text-sm lg:gap-3">
+          {viewAs && (
+            <button
+              onClick={() => navigate(location.pathname, { replace: true })}
+              className="hidden items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[0.72rem] text-amber-200 hover:border-amber-500/50 hover:bg-amber-500/15 sm:flex"
+              title="Salir del modo 'ver como'"
+            >
+              <Eye className="h-3 w-3" />
+              <span className="capitalize">Viendo como {viewAs}</span>
+              <X className="h-3 w-3 opacity-70" />
+            </button>
+          )}
           <span className="hidden max-w-[120px] truncate text-muted-foreground sm:inline">
             {perfil?.nombre ?? '—'}
           </span>
@@ -132,7 +154,7 @@ export function TopBar() {
               {linksVisibles.map((l) => (
                 <li key={l.to}>
                   <NavLink
-                    to={l.to}
+                    to={`${l.to}${queryStr}`}
                     end={l.to === '/'}
                     className={({ isActive }) =>
                       cn(

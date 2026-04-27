@@ -33,7 +33,7 @@ const ROLES: Role[] = [
   {
     title: 'Bodeguero',
     desc: 'Despacho y recepción de materiales con escaneo QR.',
-    to: '/panel?rol=bodeguero',
+    to: '/bodeguero?rol=bodeguero',
     icon: Package,
     color: 'text-cyan-400 border-cyan-400/40 hover:shadow-cyan-400/30',
     tags: ['Despacho', 'QR', 'Stock', 'Camionetas'],
@@ -42,7 +42,7 @@ const ROLES: Role[] = [
   {
     title: 'Ventas',
     desc: 'KPIs diarios del equipo comercial: llamadas, visitas, cierres y fuentes.',
-    to: '/ventas',
+    to: '/ventas?rol=ventas',
     icon: LineChart,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'],
@@ -60,7 +60,7 @@ const ROLES: Role[] = [
   {
     title: 'Producción',
     desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.',
-    to: '/panel?rol=produccion',
+    to: '/optimizador?rol=produccion',
     icon: Wrench,
     color: 'text-amber-400 border-amber-400/40 hover:shadow-amber-400/30',
     tags: ['Optimizador', 'Historial corte', 'Tubos'],
@@ -69,7 +69,7 @@ const ROLES: Role[] = [
   {
     title: 'Telas',
     desc: 'Gestión y control de stock de telas por rollo.',
-    to: '/panel?rol=telas',
+    to: '/telas?rol=telas',
     icon: Layers,
     color: 'text-pink-400 border-pink-400/40 hover:shadow-pink-400/30',
     tags: ['Stock telas', 'Colmena'],
@@ -78,7 +78,7 @@ const ROLES: Role[] = [
   {
     title: 'Dimensionado',
     desc: 'Corte de tela por cortina según planes de producción.',
-    to: '/panel?rol=dimensionado',
+    to: '/historial-corte?rol=dimensionado',
     icon: Ruler,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['Corte tela', 'Planes de corte'],
@@ -166,8 +166,10 @@ export function Landing() {
         <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-amber-500 opacity-10 blur-[120px]" />
       </div>
 
-      {/* Header esquina sup. derecha: usuario + Salir + reloj */}
-      <div className="fixed right-6 top-5 z-10 flex items-center gap-4 text-xs text-slate-500">
+      {/* Header esquina sup. derecha: usuario + Salir + reloj.
+          z-20 para quedar por encima del contenido (relative z-10), si no
+          la tile grande "Pruebas" tapa el botón Salir y no recibe clicks. */}
+      <div className="fixed right-6 top-5 z-20 flex items-center gap-4 text-xs text-slate-500">
         <div className="hidden text-right sm:block">
           <div className="truncate font-medium text-white/80">{perfil?.nombre ?? '—'}</div>
           {perfil?.rol && <div className="text-[0.65rem] text-slate-500">{perfil.rol}</div>}
