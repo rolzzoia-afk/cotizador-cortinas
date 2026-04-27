@@ -178,10 +178,26 @@ export function useReconciliacion(opts?: { dias?: number; limite?: number }): {
         'obtener_reconciliacion_inventario' as any,
         { p_dias_tendencia: dias, p_limite_anomalias: limite },
       );
-      if (rpcError) throw rpcError;
+      if (rpcError) {
+        // PostgrestError no es Error clásico — extraer mensaje + code/hint
+        // si existen, sino fallback a JSON. Sin esto la UI mostraba "[object Object]".
+        const parts = [rpcError.message, rpcError.code, rpcError.hint, rpcError.details]
+          .filter(Boolean)
+          .join(' · ');
+        throw new Error(parts || JSON.stringify(rpcError));
+      }
       setData(rpcData as ReconciliacionData);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
+      let msg: string;
+      if (e instanceof Error) {
+        msg = e.message;
+      } else if (e && typeof e === 'object' && 'message' in e) {
+        msg = String((e as { message: unknown }).message);
+      } else {
+        msg = JSON.stringify(e);
+      }
+      // Loggear también a consola con el objeto completo para debug en DevTools.
+      console.error('[useReconciliacion] error:', e);
       setError(msg);
     } finally {
       setLoading(false);
