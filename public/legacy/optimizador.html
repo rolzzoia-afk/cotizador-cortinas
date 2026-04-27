@@ -1419,6 +1419,19 @@ async function cargarColmenaFinalDesdeSupabase() {
                 tubo_raiz_id: t.tubo_raiz_id || null
             })).filter(c => c.medida_mm > 0 && c.cod);
 
+            // Capturar last_sync_at para el lock optimista del próximo sync_colmena_tubos.
+            try {
+                const { data: syncRow } = await sbOpt
+                    .from('colmena_sync_state')
+                    .select('last_sync_at')
+                    .eq('empresa_id', EMPRESA_ID_OPT)
+                    .maybeSingle();
+                _colmenaSyncStateAtLoad = syncRow?.last_sync_at || null;
+            } catch (eSync) {
+                console.warn('[sync] No se pudo leer colmena_sync_state — sync sin lock optimista:', eSync?.message);
+                _colmenaSyncStateAtLoad = null;
+            }
+
             colmenaActual = colmenas;
             SistemaInventario.colmenas = colmenaActual;
             SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(colmenas));
@@ -1950,6 +1963,21 @@ async function cargarColmenasDesdeTabla() {
             if (c.tubo_raiz_id) _colmenaSnapshotMedidas[c.tubo_raiz_id] = c.medida_cm;
         });
 
+        // Capturar last_sync_at para el lock optimista del próximo sync_colmena_tubos.
+        // Importante: NO convertir a Date — se preserva el string ISO para que la RPC
+        // lo compare con precisión de microsegundos contra su propia columna timestamptz.
+        try {
+            const { data: syncRow } = await sbOpt
+                .from('colmena_sync_state')
+                .select('last_sync_at')
+                .eq('empresa_id', EMPRESA_ID_OPT)
+                .maybeSingle();
+            _colmenaSyncStateAtLoad = syncRow?.last_sync_at || null;
+        } catch (eSync) {
+            console.warn('[sync] No se pudo leer colmena_sync_state — sync sin lock optimista:', eSync?.message);
+            _colmenaSyncStateAtLoad = null;
+        }
+
         colmenaActual = SistemaInventario.colmenas;
         usandoColmenaManual = false;
         SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
@@ -2032,13 +2060,30 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
 
     // Usa RPC sync_colmena_tubos: hace DELETE+INSERT en una transacción
     // con app.sync_active=true para que el trigger NO registre "eliminado".
+    // p_expected_sync_at activa el lock optimista en BD: si otra sesión
+    // sincronizó la colmena entre nuestra carga y ahora, la RPC aborta con
+    // 'colmena_sync_conflict' y cortamos sin reintentar.
     for (let intento = 1; intento <= 3; intento++) {
         try {
             const { error } = await sbOpt.rpc('sync_colmena_tubos', {
-                p_empresa_id: EMPRESA_ID_OPT,
-                p_tubos:      filas
+                p_empresa_id:       EMPRESA_ID_OPT,
+                p_tubos:            filas,
+                p_expected_sync_at: _colmenaSyncStateAtLoad  // null = legacy (sin lock)
             });
             if (error) throw new Error(error.message || JSON.stringify(error));
+
+            // Refrescar el timestamp local: la RPC actualizó last_sync_at en BD,
+            // así que cualquier guardado siguiente en esta misma sesión usa el nuevo.
+            try {
+                const { data: syncRow } = await sbOpt
+                    .from('colmena_sync_state')
+                    .select('last_sync_at')
+                    .eq('empresa_id', EMPRESA_ID_OPT)
+                    .maybeSingle();
+                if (syncRow?.last_sync_at) _colmenaSyncStateAtLoad = syncRow.last_sync_at;
+            } catch (eRefresh) {
+                console.warn('[sync] No se pudo refrescar last_sync_at post-sync:', eRefresh?.message);
+            }
 
             // Verificación simétrica: conteo real debe coincidir EXACTO con filas.length.
             // Antes solo detectaba filas faltantes (<) — ahora también detecta excesos,
@@ -2050,6 +2095,13 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
             console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros${conteoReal !== null ? ` — BD confirma: ${conteoReal}` : ''}`);
             return; // éxito
         } catch (e) {
+            const esConflictoLockOptimista = (e.message || '').includes('colmena_sync_conflict');
+            if (esConflictoLockOptimista) {
+                // Snapshot obsoleto: reintentar no sirve, hay que recargar la colmena
+                // y rehacer la optimización con el estado fresco de la BD.
+                console.error('[colmena_tubos] Conflicto de lock optimista — abortando sin reintentar:', e.message);
+                throw new Error('Otra sesión modificó la colmena entre tu carga y este guardado. Tu plan NO se guardó. Recarga el inventario ("Cargar desde Supabase") y vuelve a optimizar.');
+            }
             console.warn(`[colmena_tubos] Intento ${intento} falló: ${e.message}`);
             if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
             else {
@@ -3032,6 +3084,9 @@ async function cargarColmenas(event) {
         // Registrar timestamp de carga (Excel no tiene tubo_raiz_id así que snapshot de medidas queda vacío)
         _colmenaLoadedAt = new Date();
         _colmenaSnapshotMedidas = {};
+        // Excel manual: el usuario eligió sobrescribir lo que haya en BD,
+        // así que se omite el lock optimista (legacy behavior).
+        _colmenaSyncStateAtLoad = null;
         _actualizarFreshnessColmena();
         guardarSistema();
         // (botón ☁️ Guardar en Supabase siempre visible)
@@ -5254,6 +5309,11 @@ let _colmenaLoadedAt = null;
 let _colmenaSnapshotMedidas = {};
 // Intervalo para actualizar el indicador de frescura
 let _freshnessInterval = null;
+// Timestamp `last_sync_at` de colmena_sync_state al momento de la carga.
+// Se envía a la RPC sync_colmena_tubos como `p_expected_sync_at` para
+// detectar si otra sesión modificó la colmena entre la carga y el guardado.
+// Si es null (carga manual desde Excel), la RPC omite el chequeo.
+let _colmenaSyncStateAtLoad = null;
 
 // Actualiza el indicador visual de antigüedad de la colmena
 function _actualizarFreshnessColmena() {
