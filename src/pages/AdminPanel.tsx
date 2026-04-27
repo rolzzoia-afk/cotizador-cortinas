@@ -84,7 +84,7 @@ function parsearResultados(raw: unknown): PlanResultado[] {
 const MODULOS_QUICK = [
   { to: '/ventas', label: 'KPI Ventas', icon: LineChart, color: 'from-green-600 to-green-500' },
   {
-    to: '/?rol=admin',
+    to: '/panel?rol=admin',
     label: 'Cotizaciones / OTs',
     icon: BriefcaseBusiness,
     color: 'from-indigo-600 to-indigo-500',

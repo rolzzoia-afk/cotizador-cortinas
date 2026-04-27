@@ -112,7 +112,7 @@ export function CotizadorTela() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
         <p>OT no encontrada.</p>
-        <Link to="/" className="text-sm text-indigo-300 hover:underline">
+        <Link to="/panel" className="text-sm text-indigo-300 hover:underline">
           Volver al Panel
         </Link>
       </div>

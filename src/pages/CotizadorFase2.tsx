@@ -224,7 +224,7 @@ export function CotizadorFase2() {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
         <p>OT no encontrada.</p>
-        <Link to="/" className="text-sm text-indigo-300 hover:underline">
+        <Link to="/panel" className="text-sm text-indigo-300 hover:underline">
           Volver al Panel
         </Link>
       </div>
@@ -237,7 +237,7 @@ export function CotizadorFase2() {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/panel')}
             className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
             title="Volver al Panel"
           >
@@ -515,7 +515,7 @@ export function CotizadorFase2() {
           <div className="mx-auto max-w-3xl">
             <PostInstalacion data={postData} onChange={(p) => setPostData((s) => ({ ...s, ...p }))} />
             <div className="mt-4 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => navigate('/')}>
+              <Button variant="outline" onClick={() => navigate('/panel')}>
                 Volver al Panel
               </Button>
               <Button
@@ -539,7 +539,7 @@ export function CotizadorFase2() {
       {tab === 'ventanas' && !ventanaForm && ventanas.length > 0 && (
         <div className="border-t border-white/10 bg-zinc-900/60 px-4 py-2.5">
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => navigate('/')}>
+            <Button variant="outline" onClick={() => navigate('/panel')}>
               Volver al Panel
             </Button>
             <Button onClick={avanzarAFase3} disabled={avanzando} className="gap-1">
