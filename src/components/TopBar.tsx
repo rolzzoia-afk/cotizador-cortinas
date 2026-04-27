@@ -34,12 +34,13 @@ export function TopBar() {
   const rolReal = (perfil?.rol || '').toLowerCase().trim();
   const viewAs = (params.get('rol') || '').toLowerCase().trim();
   const rolEfectivo = viewAs || rolReal;
-  // esAdmin solo cuando NO está actuando como otro rol — el viewAs siempre
-  // dispara el filtro, incluso si el usuario real es admin.
-  const esAdmin = !viewAs && (rolReal === 'admin' || !rolReal);
-  const linksVisibles = esAdmin
-    ? links
-    : links.filter((l) => l.rolesVisibles.includes(rolEfectivo));
+  const linksParaRol = links.filter((l) => l.rolesVisibles.includes(rolEfectivo));
+  // esAdmin: cuando no hay viewAs, fallback "fail-open" si el rol real es
+  // admin/vacío, o si no matchea ningún tab (rol mal mapeado tipo 'operario'
+  // → ve todo en vez de quedar sin nav). Cuando hay viewAs, NO aplicamos
+  // fallback: el admin puede inspeccionar un rol vacío para validar mappings.
+  const esAdmin = !viewAs && (rolReal === 'admin' || !rolReal || linksParaRol.length === 0);
+  const linksVisibles = esAdmin ? links : linksParaRol;
 
   // Preservar ?rol=X en cada NavLink para que la navegación entre tabs
   // mantenga el modo "ver como". Click en el logo Rolzzo limpia la query.
