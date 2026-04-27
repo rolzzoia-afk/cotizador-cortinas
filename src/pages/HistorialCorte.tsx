@@ -325,6 +325,12 @@ function RegisterErrorDialog({
   const [nuevoColmena, setNuevoColmena] = useState('');
   const [nuevoCod, setNuevoCod] = useState('');
   const [nuevoMedida, setNuevoMedida] = useState('');
+  // Confirmación física obligatoria antes de registrar un tubo nuevo: el
+  // operario tuvo que sacar físicamente un tubo virgen del stock. Sin este
+  // check histórico se metieron al sistema tubos fantasma que generaron
+  // sobrantes que el optimizador después asignó a OTs, generando cortes
+  // que nunca existieron físicamente. Ver investigación 2026-04-27.
+  const [confirmoTuboFisico, setConfirmoTuboFisico] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -340,6 +346,7 @@ function RegisterErrorDialog({
     setNuevoColmena('');
     setNuevoCod('');
     setNuevoMedida('');
+    setConfirmoTuboFisico(false);
   }, [open]);
 
   const { r, ord, planId, idx } = ctx;
@@ -456,6 +463,7 @@ function RegisterErrorDialog({
   // ── Cambiar modo: limpiar estado del modo anterior ────────
   const cambiarModo = (nuevoMode: 'colmena' | 'nuevo') => {
     setModoReemplazo(nuevoMode);
+    setConfirmoTuboFisico(false);  // resetear confirmación al cambiar de modo
     if (nuevoMode === 'colmena') {
       setNuevoColmena('');
       setNuevoCod('');
@@ -508,6 +516,12 @@ function RegisterErrorDialog({
       if (medTotal < necesaria) {
         toast.warning(
           `El tubo nuevo (${medTotal}cm) es menor que la medida necesaria (${necesaria}cm)`,
+        );
+        return;
+      }
+      if (!confirmoTuboFisico) {
+        toast.warning(
+          'Confirmá que sacaste físicamente un tubo virgen del stock antes de continuar',
         );
         return;
       }
@@ -871,6 +885,30 @@ function RegisterErrorDialog({
                     </p>
                   )}
               </div>
+
+              {/* Confirmación física obligatoria — sin esto se pueden meter
+                  tubos fantasma al sistema (ver investigación 24-04-2026). */}
+              <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 hover:bg-amber-500/10">
+                <input
+                  type="checkbox"
+                  checked={confirmoTuboFisico}
+                  onChange={(e) => setConfirmoTuboFisico(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 cursor-pointer accent-amber-500"
+                />
+                <span className="text-[11px] leading-snug text-amber-200">
+                  <strong>Confirmo que saqué físicamente un tubo virgen del stock</strong>
+                  {nuevoCod && nuevoMedida && Number(nuevoMedida) > 0 && (
+                    <>
+                      {' '}— código <strong className="font-mono">{nuevoCod}</strong> de{' '}
+                      <strong>{Number(nuevoMedida).toFixed(1)} cm</strong>
+                      {nuevoColmena && (
+                        <> y lo dejé en colmena <strong>{nuevoColmena}</strong></>
+                      )}
+                    </>
+                  )}
+                  . Si no marcás esto el sistema no registra el error.
+                </span>
+              </label>
             </div>
           )}
         </div>

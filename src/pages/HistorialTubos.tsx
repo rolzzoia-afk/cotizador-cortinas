@@ -159,16 +159,27 @@ function TabButton({
 function VistaHistorial({ empresaId }: { empresaId: string | null }) {
   const [cod, setCod] = useState('');
   const [colmena, setColmena] = useState('');
+  const [medida, setMedida] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<Evento[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const buscar = async () => {
     if (!empresaId) return;
-    if (!cod.trim() && !colmena.trim()) {
-      setError('Ingresa un código o número de colmena para buscar.');
+    if (!cod.trim() && !colmena.trim() && !medida.trim()) {
+      setError('Ingresa un código, colmena o medida para buscar.');
       setData(null);
       return;
+    }
+    // Si se ingresó medida, validar que sea numérica
+    let medidaNum: number | null = null;
+    if (medida.trim()) {
+      medidaNum = parseFloat(medida.trim().replace(',', '.'));
+      if (!Number.isFinite(medidaNum) || medidaNum <= 0) {
+        setError('La medida debe ser un número positivo (ej: 382 o 382.5).');
+        setData(null);
+        return;
+      }
     }
     setLoading(true);
     setError(null);
@@ -181,6 +192,11 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
       .limit(500);
     if (cod.trim()) q = q.ilike('cod', `%${cod.trim().toUpperCase()}%`);
     if (colmena.trim()) q = q.ilike('n_colmena', `%${colmena.trim().toUpperCase()}%`);
+    if (medidaNum !== null) {
+      // Tolerancia ±0.5 cm: cubre decimales (382 matchea 382.5) y errores
+      // de redondeo en sobrantes calculados (382.50000000000003).
+      q = q.gte('medida_cm', medidaNum - 0.5).lte('medida_cm', medidaNum + 0.5);
+    }
 
     const { data: rows, error: err } = await q;
     setLoading(false);
@@ -247,6 +263,15 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
           onChange={(e) => setColmena(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && buscar()}
           className="max-w-[160px]"
+        />
+        <Input
+          placeholder="Medida cm (±0.5)"
+          value={medida}
+          onChange={(e) => setMedida(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && buscar()}
+          className="max-w-[160px]"
+          inputMode="decimal"
+          title="Medida del tubo en cm. Tolerancia ±0.5 cm. Útil para encontrar sobrantes (corte, sobrante_error) que no aparecen al buscar por código."
         />
         <Button onClick={buscar} disabled={loading}>
           <Search className="h-4 w-4" />
