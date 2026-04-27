@@ -166,8 +166,10 @@ export function Landing() {
         <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-amber-500 opacity-10 blur-[120px]" />
       </div>
 
-      {/* Header esquina sup. derecha: usuario + Salir + reloj */}
-      <div className="fixed right-6 top-5 z-10 flex items-center gap-4 text-xs text-slate-500">
+      {/* Header esquina sup. derecha: usuario + Salir + reloj.
+          z-20 para quedar por encima del contenido (relative z-10), si no
+          la tile grande "Pruebas" tapa el botón Salir y no recibe clicks. */}
+      <div className="fixed right-6 top-5 z-20 flex items-center gap-4 text-xs text-slate-500">
         <div className="hidden text-right sm:block">
           <div className="truncate font-medium text-white/80">{perfil?.nombre ?? '—'}</div>
           {perfil?.rol && <div className="text-[0.65rem] text-slate-500">{perfil.rol}</div>}
