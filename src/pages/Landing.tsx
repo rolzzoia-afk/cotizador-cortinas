@@ -33,7 +33,7 @@ const ROLES: Role[] = [
   {
     title: 'Bodeguero',
     desc: 'Despacho y recepción de materiales con escaneo QR.',
-    to: '/panel?rol=bodeguero',
+    to: '/bodeguero?rol=bodeguero',
     icon: Package,
     color: 'text-cyan-400 border-cyan-400/40 hover:shadow-cyan-400/30',
     tags: ['Despacho', 'QR', 'Stock', 'Camionetas'],
@@ -42,7 +42,7 @@ const ROLES: Role[] = [
   {
     title: 'Ventas',
     desc: 'KPIs diarios del equipo comercial: llamadas, visitas, cierres y fuentes.',
-    to: '/ventas',
+    to: '/ventas?rol=ventas',
     icon: LineChart,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'],
@@ -60,7 +60,7 @@ const ROLES: Role[] = [
   {
     title: 'Producción',
     desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.',
-    to: '/panel?rol=produccion',
+    to: '/optimizador?rol=produccion',
     icon: Wrench,
     color: 'text-amber-400 border-amber-400/40 hover:shadow-amber-400/30',
     tags: ['Optimizador', 'Historial corte', 'Tubos'],
@@ -69,7 +69,7 @@ const ROLES: Role[] = [
   {
     title: 'Telas',
     desc: 'Gestión y control de stock de telas por rollo.',
-    to: '/panel?rol=telas',
+    to: '/telas?rol=telas',
     icon: Layers,
     color: 'text-pink-400 border-pink-400/40 hover:shadow-pink-400/30',
     tags: ['Stock telas', 'Colmena'],
@@ -78,7 +78,7 @@ const ROLES: Role[] = [
   {
     title: 'Dimensionado',
     desc: 'Corte de tela por cortina según planes de producción.',
-    to: '/panel?rol=dimensionado',
+    to: '/historial-corte?rol=dimensionado',
     icon: Ruler,
     color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
     tags: ['Corte tela', 'Planes de corte'],
