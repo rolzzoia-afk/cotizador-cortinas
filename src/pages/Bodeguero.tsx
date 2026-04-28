@@ -1315,6 +1315,13 @@ function AdHocView({
   // está en cámara. Sin este guard, cada frame resetea qty a 1 y pisa lo
   // que el usuario haya tocado.
   const procesandoRef = useRef(false);
+  // Anti-loop: si el scanner detecta un código que acabamos de marcar como
+  // "no encontrado", lo ignoramos por unos segundos. Sin esto, el QR queda
+  // en cámara, se redetecta inmediatamente y entra en bucle infinito de
+  // toasts "Insumo X no encontrado". La búsqueda manual (Buscar/Enter) NO
+  // se bloquea — solo el auto-scan del onScan callback.
+  const lastFailedCodRef = useRef<{ cod: string; at: number } | null>(null);
+  const FAILED_COD_TTL_MS = 5000;
 
   const titulo =
     modo === 'salida'
@@ -1348,8 +1355,13 @@ function AdHocView({
       .maybeSingle();
     if (!data) {
       toast.error(`Insumo "${norm}" no encontrado`);
+      // Marcar el código como recientemente fallido para que el scanner lo
+      // ignore si sigue en cámara. Esto rompe el bucle infinito de toasts.
+      lastFailedCodRef.current = { cod: norm, at: Date.now() };
       procesandoRef.current = false;
-      scanner.start('adhoc-reader');
+      // Cooldown de 1500ms da gracia adicional al usuario para mover la cámara
+      // hacia otro QR antes del próximo intento de decodificación.
+      scanner.start('adhoc-reader', 1500);
       return;
     }
     setInsumo(data as InsumoAdHoc);
@@ -1362,10 +1374,21 @@ function AdHocView({
   const scanner = useQRScanner({
     onScan: async (decoded) => {
       if (procesandoRef.current) return;
-      procesandoRef.current = true;
       const cod = decoded.startsWith('INS:')
         ? decoded.slice(4)
         : decoded.trim().toUpperCase();
+      // Anti-loop: si este código falló hace menos de FAILED_COD_TTL_MS,
+      // ignorar silenciosamente. Permite al operario mover la cámara a otro
+      // QR sin spam de toasts.
+      const lastFailed = lastFailedCodRef.current;
+      if (
+        lastFailed &&
+        lastFailed.cod === cod &&
+        Date.now() - lastFailed.at < FAILED_COD_TTL_MS
+      ) {
+        return;
+      }
+      procesandoRef.current = true;
       setScanMsg(`Código detectado: ${cod}`);
       await cargarInsumo(cod);
     },
