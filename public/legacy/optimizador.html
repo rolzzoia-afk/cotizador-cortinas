@@ -1462,8 +1462,11 @@ async function cargarColmenaFinalDesdeSupabase() {
     }
 }
 
-// Guarda las colmenas disponibles post-optimización en Supabase como colmena_final
-async function guardarColmenaFinalEnSupabase() {
+// Guarda las colmenas disponibles post-optimización en Supabase como colmena_final.
+// `eventos` (opcional): array de eventos para tubos_historial. Cuando se pasa,
+// se envían atómicamente con el sync via 4to arg del RPC. Cuando se omite,
+// solo sincroniza colmena (compatibilidad con call sites de reserva/rollback).
+async function guardarColmenaFinalEnSupabase(eventos = []) {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
         // Recuperar usuario sin llamar getSession() (evita lock)
@@ -1538,8 +1541,9 @@ async function guardarColmenaFinalEnSupabase() {
         }
 
         // ── PASO 1: Sincronizar colmena_tubos (fuente única de verdad) ──────────
-        // Se hace SIEMPRE, independiente del guardado en configuracion
-        await sincronizarColmenaFinalConTabla(colmenasFinal);
+        // Se hace SIEMPRE, independiente del guardado en configuracion.
+        // Si se pasaron eventos, viajan atómicamente con el sync (cierra bug huérfanos).
+        await sincronizarColmenaFinalConTabla(colmenasFinal, eventos);
 
         // ── PASO 2: Guardar copia en configuracion (para restaurar sesión) ──────
         const claveColmena = `opt_colmena_final_${_currentUser.email}`;
@@ -2021,8 +2025,14 @@ async function cargarSerialesDesdeTablaDirecta() {
 
 // También sincronizar colmena_final → colmena_tubos al guardar
 // Esto asegura que cuando el optimizador guarda sus resultados,
-// la tabla colmena_tubos se actualice también (fuente única de verdad)
-async function sincronizarColmenaFinalConTabla(colmenasFinal) {
+// la tabla colmena_tubos se actualice también (fuente única de verdad).
+//
+// 2do parámetro `eventos`: array opcional de eventos para tubos_historial
+// (corte/merma/sobrante/ingreso). Se pasa como 4to argumento al RPC
+// sync_colmena_tubos, que los inserta atómicamente junto con el sync de
+// colmena_tubos. Si el sync falla (lock conflict, etc.), los eventos se
+// rollbackean automáticamente — cierra el bug de huérfanos pre-2026-04-28.
+async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = []) {
     // Dedup defensivo: aunque el dedup al inicio de optimizar ya debería
     // haber limpiado duplicados físicos, protegemos acá por si colmenasFinal
     // llega con duplicados por otra ruta (rollback, descarte de vista previa,
@@ -2068,7 +2078,8 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal) {
             const { error } = await sbOpt.rpc('sync_colmena_tubos', {
                 p_empresa_id:       EMPRESA_ID_OPT,
                 p_tubos:            filas,
-                p_expected_sync_at: _colmenaSyncStateAtLoad  // null = legacy (sin lock)
+                p_expected_sync_at: _colmenaSyncStateAtLoad,  // null = legacy (sin lock)
+                p_eventos:          eventos                    // [] = no escribe historial; populated = atómico
             });
             if (error) throw new Error(error.message || JSON.stringify(error));
 
@@ -5097,12 +5108,19 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
 // ══════════════════════════════════════════════════════════════════
 // LOG DE HISTORIAL DE TUBOS
 // ══════════════════════════════════════════════════════════════════
-async function logEventosTubos() {
-    // ⚠️ Sin try-catch interno: los errores suben al bloque independiente en
-    // confirmarYGuardarStaging(), donde se muestran en la UI con log().
+// Construye el array de eventos del corte (corte/merma/sobrante/ingreso)
+// SIN escribir a la BD. Los eventos se pasan luego como 4to argumento al
+// RPC sync_colmena_tubos para que se inserten atómicamente junto con el
+// sync de colmena_tubos. Si la RPC falla por lock conflict, todo el batch
+// se rollbackea — adiós a los huérfanos por inconsistencia entre sync e
+// historial.
+//
+// Retorna [] si no hay nada que registrar (resultadosOptimizacion vacío
+// o todos saltados).
+async function construirEventosTubos() {
     if (!SistemaInventario.resultadosOptimizacion || !SistemaInventario.resultadosOptimizacion.length) {
         log('ℹ️ Historial tubos: sin resultados de optimización para registrar.', 'info');
-        return;
+        return [];
     }
 
     // Timestamps: ingreso 3 segundos antes que corte/merma/sobrante
@@ -5282,21 +5300,26 @@ async function logEventosTubos() {
 
     if (!eventos.length) {
         log('ℹ️ Historial tubos: sin eventos para registrar (todos los items fueron saltados).', 'info');
-        return;
+        return [];
     }
 
-    log(`📋 Historial tubos: registrando ${eventos.length} evento(s) (${eventosIngreso.length} ingresos + ${eventosCorte.length} cortes/mermas)...`, 'info');
+    log(`📋 Historial tubos: ${eventos.length} evento(s) construido(s) (${eventosIngreso.length} ingresos + ${eventosCorte.length} cortes/mermas) — se enviarán atómicamente con el sync de colmena.`, 'info');
+    return eventos;
+}
 
-    // Usar sbOpt (cliente JS con sesión en memoria) en vez de _sbRest,
-    // para evitar el problema de Tracking Prevention que bloquea localStorage
-    // y deja _getAccessToken() sin token → 403 de RLS.
+// Inserción directa al historial (fallback NO transaccional usado solo cuando
+// el sync de colmena ya se hizo antes — path de reservas / autoReservarPlan).
+// En el path principal, los eventos van como 4to arg del RPC sync_colmena_tubos
+// para garantizar atomicidad real.
+async function insertarEventosHistorialDirecto(eventos) {
+    if (!eventos || !eventos.length) return;
     const BATCH = 100;
     for (let i = 0; i < eventos.length; i += BATCH) {
         const lote = eventos.slice(i, i + BATCH);
         const { error: errInsert } = await sbOpt.from('tubos_historial').insert(lote);
         if (errInsert) throw new Error(errInsert.message || JSON.stringify(errInsert));
     }
-    log(`✅ Historial de tubos: ${eventos.length} evento(s) guardados correctamente.`, 'info');
+    log(`✅ Historial tubos: ${eventos.length} evento(s) guardados (modo directo, sync ya hecho previamente).`, 'info');
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -5530,15 +5553,38 @@ async function confirmarYGuardarStaging() {
 
     // ── PASO 3: AHORA sí persistir los cambios (descontar tubos) ──
     guardarSistema();
+
+    // Construir el array de eventos del historial ANTES del sync.
+    // Los eventos viajan atómicamente con el sync via 4to arg del RPC
+    // sync_colmena_tubos. Si el sync falla (lock conflict, etc.), los
+    // eventos se rollbackean automáticamente — cierra el bug de huérfanos.
+    let eventosCorte = [];
+    try {
+        eventosCorte = await construirEventosTubos();
+    } catch (errBuildEv) {
+        log(`⚠️ No se pudo construir eventos del historial: ${errBuildEv.message}. Los cortes no quedarán registrados, pero el sync de colmena seguirá.`, 'warn');
+        eventosCorte = [];
+    }
+
     let colmenaSincronizadaOK = false;
     if (_colmenaPreSyncOK) {
         // La colmena ya fue sincronizada en staging (autoReservarPlan).
-        // No hay que volver a hacerlo — solo verificar que esté OK.
+        // No hay que volver a hacerlo. Como el sync ya fue exitoso antes,
+        // los eventos van por inserción directa al historial — no hay
+        // riesgo de huérfanos porque no hay sync que pueda fallar acá.
         log('ℹ️ Colmena ya pre-sincronizada al generar el plan. Saltando re-sincronización.', 'info');
         colmenaSincronizadaOK = true;
+        if (eventosCorte.length) {
+            try {
+                await insertarEventosHistorialDirecto(eventosCorte);
+            } catch (errHist) {
+                log(`⚠️ No se pudo registrar el historial de tubos (modo directo): ${errHist.message}`, 'warn');
+            }
+        }
     } else {
         try {
-            await guardarColmenaFinalEnSupabase();
+            // Sync atómico: colmena_tubos + eventos del historial en una sola RPC.
+            await guardarColmenaFinalEnSupabase(eventosCorte);
             colmenaSincronizadaOK = true;
         } catch (errColmena) {
             log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
@@ -5578,14 +5624,9 @@ async function confirmarYGuardarStaging() {
         }
     }
 
-    // ── PASO 3b: Registrar historial de tubos — independiente del sync de colmena ──
-    // Se ejecuta SIEMPRE, aunque guardarColmenaFinalEnSupabase falle,
-    // para que el historial quede registrado sin importar el estado de la colmena.
-    try {
-        await logEventosTubos();
-    } catch (errHistorial) {
-        log(`⚠️ No se pudo registrar el historial de tubos: ${errHistorial.message}`, 'warn');
-    }
+    // PASO 3b removido en 2026-04-28: el historial de tubos ahora viaja atómicamente
+    // junto con el sync de colmena via 4to arg del RPC sync_colmena_tubos. Cuando el
+    // sync falla, los eventos se rollbackean automáticamente — adiós huérfanos.
 
     // ── PASO 3c: Persistir seriales con estado actualizado (disponible → ocupado) ──
     // CRÍTICO: sin este paso, los seriales marcados como 'ocupado' durante la
