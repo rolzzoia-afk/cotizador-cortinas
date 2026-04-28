@@ -28,8 +28,39 @@ type ResultadoBaseline = {
   generado_en: string;
 };
 
-// Parser que recorre toda la hoja buscando bloques con header CODIGO/MEDIDA/COLMENA.
-// Soporta múltiples bloques en distintas columnas o filas.
+// Parser que recorre toda la hoja Excel buscando tripletas (CODIGO, MEDIDA, COLMENA).
+// Tolerante al formato real del operario: múltiples bloques repartidos por la hoja,
+// algunos con header CODIGO/MEDIDA/COLMENA y otros sin header. Funciona con coma
+// o punto como separador decimal. Deduplica filas idénticas. Saltea filas-encabezado.
+const PALABRAS_HEADER = new Set([
+  'CODIGO', 'CÓDIGO', 'COD', 'MEDIDA', 'COLMENA', 'CM', 'MM', 'POSICION', 'POSICIÓN',
+]);
+
+const pareceCodigo = (s: string): boolean => {
+  const t = s.trim().toUpperCase();
+  if (!t || t.length > 20) return false;
+  if (PALABRAS_HEADER.has(t)) return false;
+  if (/\s/.test(t)) return false;
+  return /[A-Z]/.test(t) && /[0-9]/.test(t);
+};
+
+const pareceMedida = (s: string): number | null => {
+  const t = s.trim().replace(',', '.');
+  if (!t) return null;
+  const n = parseFloat(t);
+  if (!Number.isFinite(n)) return null;
+  if (n <= 0 || n > 2000) return null;
+  return n;
+};
+
+const pareceColmena = (s: string): boolean => {
+  const t = s.trim().toUpperCase();
+  if (!t || t.length > 10) return false;
+  if (PALABRAS_HEADER.has(t)) return false;
+  if (/\s/.test(t)) return false;
+  return /[A-Z]/.test(t) && /[0-9]/.test(t);
+};
+
 function parsearExcel(file: File): Promise<Tubo[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -47,40 +78,31 @@ function parsearExcel(file: File): Promise<Tubo[]> {
         });
 
         const tubos: Tubo[] = [];
-        const visto = new Set<string>(); // detección de duplicados (mismo cod+colmena+medida)
+        const visto = new Set<string>();
 
         for (let r = 0; r < grid.length; r++) {
           const row = grid[r] || [];
           for (let c = 0; c < row.length - 2; c++) {
-            const a = String(row[c] ?? '').trim().toUpperCase();
-            const b = String(row[c + 1] ?? '').trim().toUpperCase();
-            const cc = String(row[c + 2] ?? '').trim().toUpperCase();
-            if (a === 'CODIGO' && b === 'MEDIDA' && cc === 'COLMENA') {
-              // Encontramos un bloque. Leer filas debajo hasta encontrar fila inválida.
-              let rr = r + 1;
-              while (rr < grid.length) {
-                const dataRow = grid[rr] || [];
-                const cod = String(dataRow[c] ?? '').trim().toUpperCase();
-                const medidaRaw = String(dataRow[c + 1] ?? '').trim().replace(',', '.');
-                const colmena = String(dataRow[c + 2] ?? '').trim().toUpperCase();
-                const medida = parseFloat(medidaRaw);
+            const a = String(row[c] ?? '').trim();
+            const b = String(row[c + 1] ?? '').trim();
+            const d = String(row[c + 2] ?? '').trim();
 
-                if (!cod || !colmena || !Number.isFinite(medida) || medida <= 0) {
-                  break; // fin de bloque
-                }
-                const key = `${cod}|${colmena}|${medida}`;
-                if (!visto.has(key)) {
-                  visto.add(key);
-                  tubos.push({
-                    cod,
-                    medida_cm: medida,
-                    n_colmena: colmena,
-                    medida_mm: Math.round(medida * 10),
-                  });
-                }
-                rr++;
-              }
-            }
+            const medida = pareceMedida(b);
+            if (medida === null) continue;
+            if (!pareceCodigo(a)) continue;
+            if (!pareceColmena(d)) continue;
+
+            const cod = a.toUpperCase();
+            const colmena = d.toUpperCase();
+            const key = `${cod}|${colmena}|${medida}`;
+            if (visto.has(key)) continue;
+            visto.add(key);
+            tubos.push({
+              cod,
+              medida_cm: medida,
+              n_colmena: colmena,
+              medida_mm: Math.round(medida * 10),
+            });
           }
         }
         resolve(tubos);
@@ -111,7 +133,7 @@ export function InventoryBaselineSection() {
       const parsed = await parsearExcel(file);
       if (parsed.length === 0) {
         setErrorParse(
-          'No se encontró ningún tubo. Verifica que la hoja tenga columnas CODIGO, MEDIDA, COLMENA.',
+          'No se encontró ningún tubo. El parser busca tripletas (código, medida, colmena) donde el código y la colmena tengan letras+números (ej: E62, A28) y la medida sea un número entre 0 y 2000. Revisa que las columnas estén contiguas.',
         );
       }
       setTubos(parsed);
