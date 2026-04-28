@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/dialog';
 import { AuditLogSection } from '@/components/admin/AuditLogSection';
 import { AgenteIASection } from '@/components/admin/AgenteIASection';
+import { InventoryBaselineSection } from '@/components/admin/InventoryBaselineSection';
 
 type Tubo = {
   id: string;
@@ -506,6 +507,9 @@ export function AdminPanel() {
           </Table>
         </div>
       </section>
+
+      {/* Cargar inventario base desde Excel */}
+      <InventoryBaselineSection />
 
       {/* Agente IA */}
       <AgenteIASection />
