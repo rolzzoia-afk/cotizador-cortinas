@@ -69,40 +69,48 @@ function parsearExcel(file: File): Promise<Tubo[]> {
         const data = e.target?.result;
         if (!data) throw new Error('Archivo vacío');
         const wb = XLSX.read(data, { type: 'array' });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        if (!sheet) throw new Error('No se encontró hoja en el Excel');
-        const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-          header: 1,
-          raw: false,
-          defval: '',
-        });
+        if (wb.SheetNames.length === 0) {
+          throw new Error('No se encontró hoja en el Excel');
+        }
 
         const tubos: Tubo[] = [];
         const visto = new Set<string>();
 
-        for (let r = 0; r < grid.length; r++) {
-          const row = grid[r] || [];
-          for (let c = 0; c < row.length - 2; c++) {
-            const a = String(row[c] ?? '').trim();
-            const b = String(row[c + 1] ?? '').trim();
-            const d = String(row[c + 2] ?? '').trim();
+        // Recorrer TODAS las hojas del workbook (el Excel del operario suele tener
+        // los códigos repartidos en varias pestañas, no en una sola).
+        for (const sheetName of wb.SheetNames) {
+          const sheet = wb.Sheets[sheetName];
+          if (!sheet) continue;
+          const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+            header: 1,
+            raw: false,
+            defval: '',
+          });
 
-            const medida = pareceMedida(b);
-            if (medida === null) continue;
-            if (!pareceCodigo(a)) continue;
-            if (!pareceColmena(d)) continue;
+          for (let r = 0; r < grid.length; r++) {
+            const row = grid[r] || [];
+            for (let c = 0; c < row.length - 2; c++) {
+              const a = String(row[c] ?? '').trim();
+              const b = String(row[c + 1] ?? '').trim();
+              const d = String(row[c + 2] ?? '').trim();
 
-            const cod = a.toUpperCase();
-            const colmena = d.toUpperCase();
-            const key = `${cod}|${colmena}|${medida}`;
-            if (visto.has(key)) continue;
-            visto.add(key);
-            tubos.push({
-              cod,
-              medida_cm: medida,
-              n_colmena: colmena,
-              medida_mm: Math.round(medida * 10),
-            });
+              const medida = pareceMedida(b);
+              if (medida === null) continue;
+              if (!pareceCodigo(a)) continue;
+              if (!pareceColmena(d)) continue;
+
+              const cod = a.toUpperCase();
+              const colmena = d.toUpperCase();
+              const key = `${cod}|${colmena}|${medida}`;
+              if (visto.has(key)) continue;
+              visto.add(key);
+              tubos.push({
+                cod,
+                medida_cm: medida,
+                n_colmena: colmena,
+                medida_mm: Math.round(medida * 10),
+              });
+            }
           }
         }
         resolve(tubos);
