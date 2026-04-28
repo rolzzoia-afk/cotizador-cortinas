@@ -34,6 +34,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AuditLogSection } from '@/components/admin/AuditLogSection';
+import { AgenteIASection } from '@/components/admin/AgenteIASection';
 
 type Tubo = {
   id: string;
@@ -505,6 +506,9 @@ export function AdminPanel() {
           </Table>
         </div>
       </section>
+
+      {/* Agente IA */}
+      <AgenteIASection />
 
       {/* Audit log */}
       <AuditLogSection />

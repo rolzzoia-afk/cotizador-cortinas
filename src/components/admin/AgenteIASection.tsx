@@ -1,0 +1,451 @@
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Bot,
+  CheckCircle2,
+  FileText,
+  Power,
+  Save,
+  Users,
+  XCircle,
+} from 'lucide-react';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+import {
+  AGENTE_CATEGORIAS,
+  useAgenteDocs,
+  useEmpresaAgenteConfig,
+  useVendedoras,
+  type AgenteCategoria,
+} from '@/modules/admin/agente-hooks';
+
+export function AgenteIASection() {
+  return (
+    <section className="rounded-lg border bg-card p-5">
+      <header className="mb-4 flex items-center gap-2">
+        <Bot className="h-5 w-5 text-indigo-500" />
+        <h2 className="text-sm font-semibold text-muted-foreground">Agente IA</h2>
+      </header>
+      <div className="space-y-6">
+        <Configuracion />
+        <EditorDocs />
+        <VendedorasPanel />
+      </div>
+    </section>
+  );
+}
+
+// ── Configuración general del agente ─────────────────────────────────
+function Configuracion() {
+  const { config, loading, error, guardar } = useEmpresaAgenteConfig();
+  const [nombre, setNombre] = useState('');
+  const [mensajeFuera, setMensajeFuera] = useState('');
+  const [mensajeFallback, setMensajeFallback] = useState('');
+  const [maxTurnos, setMaxTurnos] = useState<number>(8);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    if (!config) return;
+    setNombre(config.nombre_agente ?? '');
+    setMensajeFuera(config.mensaje_fuera_horario ?? '');
+    setMensajeFallback(config.mensaje_fallback ?? '');
+    setMaxTurnos(config.max_turnos_sin_derivar ?? 8);
+  }, [config]);
+
+  const dirty = useMemo(() => {
+    if (!config) return false;
+    return (
+      nombre !== (config.nombre_agente ?? '') ||
+      mensajeFuera !== (config.mensaje_fuera_horario ?? '') ||
+      mensajeFallback !== (config.mensaje_fallback ?? '') ||
+      maxTurnos !== (config.max_turnos_sin_derivar ?? 8)
+    );
+  }, [config, nombre, mensajeFuera, mensajeFallback, maxTurnos]);
+
+  const handleGuardar = async () => {
+    setGuardando(true);
+    try {
+      await guardar({
+        nombre_agente: nombre.trim() || 'Diego',
+        mensaje_fuera_horario: mensajeFuera,
+        mensaje_fallback: mensajeFallback,
+        max_turnos_sin_derivar: maxTurnos,
+      });
+      toast.success('Configuración guardada');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error('No se pudo guardar: ' + msg);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const toggleActivo = async () => {
+    if (!config) return;
+    try {
+      await guardar({ activo: !config.activo });
+      toast.success(config.activo ? 'Agente desactivado' : 'Agente activado');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error('No se pudo cambiar estado: ' + msg);
+    }
+  };
+
+  if (loading && !config) {
+    return <div className="text-xs text-muted-foreground">Cargando configuración…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="rounded border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+        Error: {error}
+      </div>
+    );
+  }
+
+  if (!config) {
+    return (
+      <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+        No hay configuración de agente para esta empresa. Ejecuta el seed inicial.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3 rounded-md border bg-background p-3">
+        <div>
+          <div className="mb-0.5 flex items-center gap-2 text-sm font-semibold">
+            <Power className={cn('h-4 w-4', config.activo ? 'text-emerald-500' : 'text-zinc-400')} />
+            Estado del agente
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {config.activo
+              ? 'Recibiendo y respondiendo mensajes de WhatsApp.'
+              : 'Detenido. Los mensajes entrantes no se procesan.'}
+          </div>
+        </div>
+        <Button
+          variant={config.activo ? 'destructive' : 'default'}
+          size="sm"
+          onClick={toggleActivo}
+        >
+          {config.activo ? 'Desactivar' : 'Activar'}
+        </Button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <Label htmlFor="nombre-agente" className="text-xs">
+            Nombre del agente
+          </Label>
+          <Input
+            id="nombre-agente"
+            value={nombre}
+            onChange={(e) => setNombre(e.target.value)}
+            placeholder="Diego"
+            className="mt-1"
+          />
+          <p className="mt-1 text-[0.65rem] text-muted-foreground">
+            Aparece en cada respuesta como "Soy {nombre || 'Diego'}, asistente virtual…"
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="max-turnos" className="text-xs">
+            Máx. turnos sin derivar
+          </Label>
+          <Input
+            id="max-turnos"
+            type="number"
+            min={3}
+            max={20}
+            value={maxTurnos}
+            onChange={(e) => setMaxTurnos(parseInt(e.target.value) || 8)}
+            className="mt-1"
+          />
+          <p className="mt-1 text-[0.65rem] text-muted-foreground">
+            Si una conversación supera este número de turnos sin avanzar, deriva igual.
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="msg-fallback" className="text-xs">
+          Mensaje fallback (cuando el agente no sabe algo)
+        </Label>
+        <textarea
+          id="msg-fallback"
+          value={mensajeFallback}
+          onChange={(e) => setMensajeFallback(e.target.value)}
+          rows={2}
+          className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div>
+        <Label htmlFor="msg-fuera" className="text-xs">
+          Mensaje fuera de horario
+        </Label>
+        <textarea
+          id="msg-fuera"
+          value={mensajeFuera}
+          onChange={(e) => setMensajeFuera(e.target.value)}
+          rows={2}
+          className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
+        />
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-[0.65rem] text-muted-foreground">
+          Última actualización: {new Date(config.updated_at).toLocaleString('es-CL')}
+        </p>
+        <Button onClick={handleGuardar} disabled={!dirty || guardando} size="sm">
+          <Save className="mr-1.5 h-3.5 w-3.5" />
+          {guardando ? 'Guardando…' : 'Guardar configuración'}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Editor de los 8 documentos ───────────────────────────────────────
+function EditorDocs() {
+  const { docs, loading, error, guardarDoc } = useAgenteDocs();
+  const [categoria, setCategoria] = useState<AgenteCategoria>('catalogo');
+  const [draft, setDraft] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  const docActual = useMemo(
+    () => docs.find((d) => d.categoria === categoria) ?? null,
+    [docs, categoria],
+  );
+  const meta = AGENTE_CATEGORIAS.find((c) => c.id === categoria);
+
+  useEffect(() => {
+    setDraft(docActual?.contenido_md ?? '');
+  }, [docActual]);
+
+  const dirty = draft !== (docActual?.contenido_md ?? '');
+
+  const handleGuardar = async () => {
+    setGuardando(true);
+    try {
+      await guardarDoc(categoria, draft);
+      toast.success(`Doc "${meta?.label}" guardado (versión incrementada)`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error('No se pudo guardar: ' + msg);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  const handleDescartar = () => {
+    setDraft(docActual?.contenido_md ?? '');
+  };
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex items-center gap-2">
+        <FileText className="h-4 w-4 text-indigo-500" />
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Base de conocimiento
+        </h3>
+      </div>
+
+      {error && (
+        <div className="rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-1">
+        {AGENTE_CATEGORIAS.map((c) => {
+          const doc = docs.find((d) => d.categoria === c.id);
+          const tieneContenido = (doc?.contenido_md.length ?? 0) > 100;
+          return (
+            <button
+              key={c.id}
+              onClick={() => setCategoria(c.id)}
+              className={cn(
+                'rounded-md border px-3 py-1.5 text-xs transition',
+                categoria === c.id
+                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                  : 'border-border hover:bg-muted',
+              )}
+            >
+              {c.label}
+              {!tieneContenido && (
+                <span
+                  className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500"
+                  title="Doc poco desarrollado"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {meta && (
+        <div className="flex items-baseline justify-between gap-3 text-xs">
+          <p className="text-muted-foreground">{meta.descripcion}</p>
+          {docActual && (
+            <div className="flex items-center gap-2 whitespace-nowrap text-[0.65rem] text-muted-foreground">
+              <Badge variant="outline" className="text-[0.65rem]">
+                v{docActual.version}
+              </Badge>
+              <span>{new Date(docActual.updated_at).toLocaleString('es-CL')}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading && !docActual ? (
+        <div className="rounded-md border bg-muted/30 p-6 text-center text-xs text-muted-foreground">
+          Cargando documentos…
+        </div>
+      ) : (
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          rows={20}
+          className="w-full rounded-md border bg-background px-3 py-2 font-mono text-xs leading-relaxed"
+          placeholder="Markdown del documento…"
+        />
+      )}
+
+      <div className="flex items-center justify-between">
+        <p className="text-[0.65rem] text-muted-foreground">
+          {draft.length} caracteres · {draft.split('\n').length} líneas
+        </p>
+        <div className="flex gap-2">
+          <Button
+            onClick={handleDescartar}
+            disabled={!dirty || guardando}
+            variant="outline"
+            size="sm"
+          >
+            Descartar cambios
+          </Button>
+          <Button onClick={handleGuardar} disabled={!dirty || guardando} size="sm">
+            <Save className="mr-1.5 h-3.5 w-3.5" />
+            {guardando ? 'Guardando…' : 'Guardar versión'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Panel de vendedoras activas ─────────────────────────────────────
+function VendedorasPanel() {
+  const { vendedoras, loading, error, setActiva } = useVendedoras();
+  const [actualizando, setActualizando] = useState<string | null>(null);
+
+  const handleToggle = async (perfil_id: string, activa: boolean) => {
+    setActualizando(perfil_id);
+    try {
+      await setActiva(perfil_id, !activa);
+      toast.success(activa ? 'Vendedora desactivada' : 'Vendedora activada');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error('No se pudo actualizar: ' + msg);
+    } finally {
+      setActualizando(null);
+    }
+  };
+
+  return (
+    <div className="space-y-3 border-t pt-4">
+      <div className="flex items-center gap-2">
+        <Users className="h-4 w-4 text-indigo-500" />
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          Vendedoras activas
+        </h3>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Solo las marcadas como activas reciben leads automáticos del agente. Marcar como inactiva
+        cuando una vendedora esté de vacaciones o licencia.
+      </p>
+
+      {error && (
+        <div className="rounded border border-destructive/30 bg-destructive/10 p-2 text-xs text-destructive">
+          {error}
+        </div>
+      )}
+
+      {loading && vendedoras.length === 0 ? (
+        <div className="text-xs text-muted-foreground">Cargando…</div>
+      ) : vendedoras.length === 0 ? (
+        <div className="rounded border border-dashed p-4 text-center text-xs text-muted-foreground">
+          No hay perfiles con rol "ventas" en esta empresa.
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Vendedora</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead className="text-right">Leads asignados</TableHead>
+              <TableHead>Última asignación</TableHead>
+              <TableHead className="text-right">Acción</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {vendedoras.map((v) => (
+              <TableRow key={v.perfil_id}>
+                <TableCell>
+                  <div className="font-medium">{v.nombre || '—'}</div>
+                </TableCell>
+                <TableCell>
+                  {v.activa ? (
+                    <Badge className="gap-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300">
+                      <CheckCircle2 className="h-3 w-3" /> Activa
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="gap-1 text-muted-foreground">
+                      <XCircle className="h-3 w-3" /> Inactiva
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {v.leads_asignados_acumulado}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {v.ultima_asignacion
+                    ? new Date(v.ultima_asignacion).toLocaleString('es-CL')
+                    : '—'}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleToggle(v.perfil_id, v.activa)}
+                    disabled={actualizando === v.perfil_id}
+                  >
+                    {actualizando === v.perfil_id
+                      ? '…'
+                      : v.activa
+                        ? 'Desactivar'
+                        : 'Activar'}
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </div>
+  );
+}
