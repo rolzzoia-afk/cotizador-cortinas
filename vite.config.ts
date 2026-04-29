@@ -3,8 +3,21 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
+// BUILD_ID expuesto al cliente como import.meta.env.VITE_BUILD_ID para hacer
+// cache-busting de los HTML legacy (optimizador, postventa, etc.) que viven
+// fuera del bundle de Vite y no llevan hash en su nombre. Incidente 2026-04-29:
+// un operario sincronizó con HTML cacheado de antes del baseline → DELETE
+// silencioso de 81 tubos. Cambiar el src del iframe a `?v=<BUILD_ID>` fuerza
+// al navegador a revalidar en cada deploy.
+const BUILD_ID = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8)
+  || process.env.GITHUB_SHA?.slice(0, 8)
+  || String(Date.now());
+
 export default defineConfig({
   plugins: [react()],
+  define: {
+    'import.meta.env.VITE_BUILD_ID': JSON.stringify(BUILD_ID),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
