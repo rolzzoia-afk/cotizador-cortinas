@@ -23,8 +23,13 @@ export function LegacyFrame({ src, title }: Props) {
     return () => window.removeEventListener('message', handler);
   }, [navigate]);
 
-  // Propagar query string de la ruta al iframe: /ventas?mes=01 → src/ventas.html?mes=01
-  const finalSrc = search ? `${src}${src.includes('?') ? '&' : '?'}${search.slice(1)}` : src;
+  // Cache-busting del HTML legacy: append `?v=<BUILD_ID>` para invalidar el
+  // cache del navegador en cada deploy. Sin esto, un operario con la pestaña
+  // abierta días puede correr código pre-deploy y aplastar datos nuevos
+  // (incidente 2026-04-29: sync stale borró 81 tubos del baseline).
+  const buildId = import.meta.env.VITE_BUILD_ID ?? 'dev';
+  const versioned = `${src}${src.includes('?') ? '&' : '?'}v=${buildId}`;
+  const finalSrc = search ? `${versioned}&${search.slice(1)}` : versioned;
 
   return (
     <iframe
