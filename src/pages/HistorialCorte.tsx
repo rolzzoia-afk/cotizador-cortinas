@@ -60,6 +60,7 @@ type ResultadoCorte = {
   lote?: string | null;
   paquete?: string | null;
   serial_str?: string | null;
+  tubo_raiz_id?: string | null;
 };
 
 type Orden = {
@@ -385,6 +386,21 @@ function RegisterErrorDialog({
     return keys;
   }, [plan, idx]);
 
+  // ── Identificación del tubo del corte fallido (para no sugerirlo
+  //    como reemplazo de sí mismo).
+  const tuboRaizCorteActual = r.tubo_raiz_id || null;
+  const keyCorteActual =
+    r.colmena && r.colmena !== 'TUBO NUEVO' && r.colmena !== 'LIBERADO'
+      ? tuboKey(r.colmena, r.codigo || r.codigo_original, r.medida_origen)
+      : null;
+  const esTuboDelCorteActual = (t: Tubo): boolean => {
+    if (tuboRaizCorteActual && t.tubo_raiz_id === tuboRaizCorteActual) return true;
+    if (!tuboRaizCorteActual && keyCorteActual) {
+      return tuboKey(t.n_colmena, t.cod, t.medida_cm) === keyCorteActual;
+    }
+    return false;
+  };
+
   // ── Sugerencia automática
   const sugerencia = useMemo(() => {
     const medidaNecesaria = Number(r.medida_cm || 0);
@@ -392,7 +408,11 @@ function RegisterErrorDialog({
     const codNecesario = (r.codigo || r.codigo_original || '').toUpperCase().trim();
     const candidatos = tubosDisponibles.filter((t) => {
       if (Number(t.medida_cm || 0) < medidaNecesaria) return false;
-      return !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm));
+      if (tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm))) return false;
+      // No sugerir el mismo tubo del corte fallido — el cortador ya sabe
+      // que ese registro no le sirvió (no estaba físicamente o estaba mal).
+      if (esTuboDelCorteActual(t)) return false;
+      return true;
     });
     if (!candidatos.length) return null;
     const conPuntaje = candidatos.map((t) => ({
@@ -427,7 +447,9 @@ function RegisterErrorDialog({
     const medidaNecesaria = Number(r.medida_cm || 0);
     const codCorte = (r.codigo || r.codigo_original || '').toUpperCase().trim();
     const baseSinOcupados = tubosDisponibles.filter(
-      (t) => !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm)),
+      (t) =>
+        !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm)) &&
+        !esTuboDelCorteActual(t),
     );
     if (buscarTubo) {
       const q = buscarTubo.toLowerCase();
