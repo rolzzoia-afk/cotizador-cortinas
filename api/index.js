@@ -91,20 +91,72 @@ app.post('/tenants/registro', async (c) => {
 //  RUTAS PROTEGIDAS (requieren JWT válido)
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Helper: timeout wrapper para promesas ────────────────────────────
+// Evita que un call colgado del SDK consuma los 300s de la función Vercel.
+// Si la promesa no resuelve en `ms`, lanza un error explícito que sí va a
+// los Vercel Logs y permite diagnosticar dónde se está colgando.
+const withTimeout = (promesa, ms, label) => Promise.race([
+    promesa,
+    new Promise((_, reject) =>
+        setTimeout(
+            () => reject(new Error(`Timeout (${ms}ms) en ${label} — posible problema de SDK/red Vercel↔Supabase`)),
+            ms,
+        ),
+    ),
+]);
+
+
+// ── Diagnóstico admin client (admin-only, GET) ───────────────────────
+// Endpoint mínimo para verificar si el cliente admin de Supabase responde
+// desde el runtime serverless. Si esto se cuelga también, el problema es
+// del cliente entero; si responde, el problema es específico de createUser.
+app.get('/usuarios/debug-admin', auth, async (c) => {
+    const perfil = c.get('perfil');
+    if ((perfil?.rol || '').toLowerCase() !== 'admin') {
+        return c.json({ error: 'Solo admin' }, 403);
+    }
+    const start = Date.now();
+    try {
+        const result = await withTimeout(
+            supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1 }),
+            5000,
+            'auth.admin.listUsers',
+        );
+        return c.json({
+            ok: true,
+            ms: Date.now() - start,
+            user_count: result?.data?.users?.length ?? null,
+            error: result?.error?.message ?? null,
+        });
+    } catch (e) {
+        return c.json({
+            ok: false,
+            ms: Date.now() - start,
+            error: e.message || 'Error desconocido',
+        }, 500);
+    }
+});
+
+
 // ── Invitar vendedora (admin-only) ───────────────────────────────────
 // Crea un nuevo usuario en auth + perfil con rol='ventas' atado a la
 // empresa del admin que llama. Devuelve la contraseña temporal una sola
 // vez para que el admin la comparta con la vendedora.
 app.post('/usuarios/invitar', auth, async (c) => {
+    const t0 = Date.now();
+    const log = (...args) => console.log('[invitar]', `${Date.now() - t0}ms`, ...args);
     try {
+        log('inicio');
         const perfil = c.get('perfil');
         const empresaId = c.get('empresaId');
 
         if ((perfil?.rol || '').toLowerCase() !== 'admin') {
             return c.json({ error: 'Solo los administradores pueden invitar vendedoras' }, 403);
         }
+        log('rol verificado:', perfil.rol);
 
         const { email, nombre } = await c.req.json();
+        log('body parseado:', { email, nombre: !!nombre });
 
         const emailLimpio = (email || '').trim().toLowerCase();
         const nombreLimpio = (nombre || '').trim();
@@ -128,34 +180,56 @@ app.post('/usuarios/invitar', auth, async (c) => {
         const passwordTemporal = generarPassword();
 
         // 1. Crear usuario en auth (auto-confirmado: el admin invita)
-        const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-            email: emailLimpio,
-            password: passwordTemporal,
-            email_confirm: true,
-        });
+        log('llamando supabaseAdmin.auth.admin.createUser...');
+        const createResult = await withTimeout(
+            supabaseAdmin.auth.admin.createUser({
+                email: emailLimpio,
+                password: passwordTemporal,
+                email_confirm: true,
+            }),
+            10000,
+            'auth.admin.createUser',
+        );
+        log('createUser respondió');
+        const { data: authData, error: authErr } = createResult;
+
         if (authErr) {
+            log('createUser falló:', authErr.message);
             const status = (authErr.message || '').toLowerCase().includes('already') ? 409 : 500;
             return c.json({ error: authErr.message || 'No se pudo crear el usuario' }, status);
         }
 
         const userId = authData.user.id;
+        log('userId creado:', userId);
 
         // 2. Crear perfil con rol='ventas'
-        const { error: perfilErr } = await supabaseAdmin
-            .from('perfiles')
-            .insert({
-                id: userId,
-                empresa_id: empresaId,
-                nombre: nombreLimpio,
-                rol: 'ventas',
-            });
+        log('insertando en perfiles...');
+        const insertResult = await withTimeout(
+            supabaseAdmin
+                .from('perfiles')
+                .insert({
+                    id: userId,
+                    empresa_id: empresaId,
+                    nombre: nombreLimpio,
+                    rol: 'ventas',
+                }),
+            10000,
+            'perfiles.insert',
+        );
+        log('perfiles.insert respondió');
+        const { error: perfilErr } = insertResult;
 
         if (perfilErr) {
-            // Rollback: borrar el auth user si falla la creación del perfil
-            await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {});
+            log('perfil falló, rollback:', perfilErr.message);
+            await withTimeout(
+                supabaseAdmin.auth.admin.deleteUser(userId),
+                10000,
+                'auth.admin.deleteUser (rollback)',
+            ).catch((eDel) => log('rollback falló también:', eDel.message));
             return c.json({ error: perfilErr.message || 'No se pudo crear el perfil' }, 500);
         }
 
+        log('OK, devolviendo response');
         return c.json({
             ok: true,
             perfil_id: userId,
@@ -165,6 +239,7 @@ app.post('/usuarios/invitar', auth, async (c) => {
         }, 201);
 
     } catch (e) {
+        log('catch global:', e.message);
         return c.json({ error: e.message || 'Error interno' }, 500);
     }
 });
