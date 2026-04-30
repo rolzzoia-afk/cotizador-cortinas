@@ -106,33 +106,61 @@ const withTimeout = (promesa, ms, label) => Promise.race([
 ]);
 
 
-// ── Diagnóstico admin client (admin-only, GET) ───────────────────────
-// Endpoint mínimo para verificar si el cliente admin de Supabase responde
-// desde el runtime serverless. Si esto se cuelga también, el problema es
-// del cliente entero; si responde, el problema es específico de createUser.
-app.get('/usuarios/debug-admin', auth, async (c) => {
+// ── Helper: llamada directa a la Supabase Admin API via fetch ───────
+// Bypassea el SDK de @supabase/supabase-js que se cuelga en Vercel
+// (incidente 2026-04-30: SDK bloquea event loop, Promise.race no
+// dispara, función agota los 300s sin devolver). fetch + AbortController
+// devuelve siempre dentro del timeout solicitado.
+const supabaseAdminFetch = async (path, { method = 'GET', body, timeoutMs = 8000 } = {}) => {
+    const url = `${process.env.SUPABASE_URL}${path}`;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+        const r = await fetch(url, {
+            method,
+            headers: {
+                Authorization: `Bearer ${key}`,
+                apikey: key,
+                'Content-Type': 'application/json',
+            },
+            body: body ? JSON.stringify(body) : undefined,
+            signal: ctrl.signal,
+        });
+        const data = await r.json().catch(() => null);
+        return { ok: r.ok, status: r.status, data };
+    } finally {
+        clearTimeout(timer);
+    }
+};
+
+
+// ── Diagnóstico (admin-only, GET) — fetch directo, sin SDK ──────────
+// Si esto responde rápido, la red Vercel↔Supabase está bien y el
+// problema es del SDK. Si esto también se cuelga, el problema es de red
+// o de la auth (key inválida, IP bloqueada, etc.).
+app.get('/usuarios/debug-direct-fetch', auth, async (c) => {
     const perfil = c.get('perfil');
     if ((perfil?.rol || '').toLowerCase() !== 'admin') {
         return c.json({ error: 'Solo admin' }, 403);
     }
     const start = Date.now();
     try {
-        const result = await withTimeout(
-            supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1 }),
-            5000,
-            'auth.admin.listUsers',
-        );
+        const r = await supabaseAdminFetch('/auth/v1/admin/users?per_page=1', {
+            timeoutMs: 5000,
+        });
         return c.json({
-            ok: true,
+            ok: r.ok,
             ms: Date.now() - start,
-            user_count: result?.data?.users?.length ?? null,
-            error: result?.error?.message ?? null,
+            status: r.status,
+            user_count: Array.isArray(r.data?.users) ? r.data.users.length : null,
+            error: r.ok ? null : (r.data?.msg || r.data?.error || 'sin msg'),
         });
     } catch (e) {
         return c.json({
             ok: false,
             ms: Date.now() - start,
-            error: e.message || 'Error desconocido',
+            error: e.name === 'AbortError' ? `Aborted por timeout (${5000}ms)` : (e.message || String(e)),
         }, 500);
     }
 });
@@ -179,53 +207,52 @@ app.post('/usuarios/invitar', auth, async (c) => {
         };
         const passwordTemporal = generarPassword();
 
-        // 1. Crear usuario en auth (auto-confirmado: el admin invita)
-        log('llamando supabaseAdmin.auth.admin.createUser...');
-        const createResult = await withTimeout(
-            supabaseAdmin.auth.admin.createUser({
+        // 1. Crear usuario en auth via fetch directo (bypassea SDK colgado)
+        log('llamando POST /auth/v1/admin/users via fetch...');
+        const createResp = await supabaseAdminFetch('/auth/v1/admin/users', {
+            method: 'POST',
+            body: {
                 email: emailLimpio,
                 password: passwordTemporal,
                 email_confirm: true,
-            }),
-            10000,
-            'auth.admin.createUser',
-        );
-        log('createUser respondió');
-        const { data: authData, error: authErr } = createResult;
+            },
+            timeoutMs: 10000,
+        });
+        log('createUser respondió status=', createResp.status);
 
-        if (authErr) {
-            log('createUser falló:', authErr.message);
-            const status = (authErr.message || '').toLowerCase().includes('already') ? 409 : 500;
-            return c.json({ error: authErr.message || 'No se pudo crear el usuario' }, status);
+        if (!createResp.ok) {
+            const msg = createResp.data?.msg || createResp.data?.error_description || createResp.data?.error || 'No se pudo crear el usuario';
+            log('createUser falló:', msg);
+            const status = (msg || '').toLowerCase().includes('already') || createResp.status === 422 ? 409 : 500;
+            return c.json({ error: msg }, status);
         }
 
-        const userId = authData.user.id;
+        const userId = createResp.data?.id;
+        if (!userId) {
+            log('respuesta sin id:', createResp.data);
+            return c.json({ error: 'Respuesta de Supabase sin id de usuario' }, 500);
+        }
         log('userId creado:', userId);
 
-        // 2. Crear perfil con rol='ventas'
+        // 2. Crear perfil con rol='ventas' (via SDK, este path no era el problema)
         log('insertando en perfiles...');
-        const insertResult = await withTimeout(
-            supabaseAdmin
-                .from('perfiles')
-                .insert({
-                    id: userId,
-                    empresa_id: empresaId,
-                    nombre: nombreLimpio,
-                    rol: 'ventas',
-                }),
-            10000,
-            'perfiles.insert',
-        );
+        const { error: perfilErr } = await supabaseAdmin
+            .from('perfiles')
+            .insert({
+                id: userId,
+                empresa_id: empresaId,
+                nombre: nombreLimpio,
+                rol: 'ventas',
+            });
         log('perfiles.insert respondió');
-        const { error: perfilErr } = insertResult;
 
         if (perfilErr) {
             log('perfil falló, rollback:', perfilErr.message);
-            await withTimeout(
-                supabaseAdmin.auth.admin.deleteUser(userId),
-                10000,
-                'auth.admin.deleteUser (rollback)',
-            ).catch((eDel) => log('rollback falló también:', eDel.message));
+            // Rollback via fetch directo también
+            await supabaseAdminFetch(`/auth/v1/admin/users/${userId}`, {
+                method: 'DELETE',
+                timeoutMs: 10000,
+            }).catch((eDel) => log('rollback falló también:', eDel.message));
             return c.json({ error: perfilErr.message || 'No se pudo crear el perfil' }, 500);
         }
 
