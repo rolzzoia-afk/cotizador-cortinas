@@ -5311,15 +5311,31 @@ async function construirEventosTubos() {
 // el sync de colmena ya se hizo antes — path de reservas / autoReservarPlan).
 // En el path principal, los eventos van como 4to arg del RPC sync_colmena_tubos
 // para garantizar atomicidad real.
+//
+// Orden CRÍTICO: ingresos primero, después corte/merma/sobrante.
+// El trigger Defensa D (`bloquear_corte_sin_origen`) verifica que el
+// `tubo_raiz_id` del corte tenga un evento-origen previo en tubos_historial.
+// Si los ingresos viajan en el MISMO batch que los cortes, los rows pendientes
+// del statement no son visibles al trigger BEFORE INSERT — Defensa D rechaza
+// los cortes y todo el batch falla. Incidentes 2026-04-29/30 (OT 2927, 2914-G1,
+// 2932, 2933): autoReservarPlan dejaba `_colmenaPreSyncOK=true`, los eventos
+// caían acá, batch único, Defensa D rechazaba, el catch en el caller solo
+// loggeaba un warning → pérdida silenciosa de eventos.
 async function insertarEventosHistorialDirecto(eventos) {
     if (!eventos || !eventos.length) return;
+    const ingresos = eventos.filter(e => e.evento === 'ingreso');
+    const resto    = eventos.filter(e => e.evento !== 'ingreso');
     const BATCH = 100;
-    for (let i = 0; i < eventos.length; i += BATCH) {
-        const lote = eventos.slice(i, i + BATCH);
-        const { error: errInsert } = await sbOpt.from('tubos_historial').insert(lote);
-        if (errInsert) throw new Error(errInsert.message || JSON.stringify(errInsert));
-    }
-    log(`✅ Historial tubos: ${eventos.length} evento(s) guardados (modo directo, sync ya hecho previamente).`, 'info');
+    const insertarLotes = async (lista) => {
+        for (let i = 0; i < lista.length; i += BATCH) {
+            const lote = lista.slice(i, i + BATCH);
+            const { error: errInsert } = await sbOpt.from('tubos_historial').insert(lote);
+            if (errInsert) throw new Error(errInsert.message || JSON.stringify(errInsert));
+        }
+    };
+    if (ingresos.length) await insertarLotes(ingresos);
+    if (resto.length)    await insertarLotes(resto);
+    log(`✅ Historial tubos: ${eventos.length} evento(s) guardados (modo directo, sync ya hecho previamente — ${ingresos.length} ingreso/s primero, ${resto.length} corte/merma/sobrante después).`, 'info');
 }
 
 // ══════════════════════════════════════════════════════════════════

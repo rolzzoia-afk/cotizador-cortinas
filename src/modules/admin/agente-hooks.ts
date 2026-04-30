@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { api } from '@/lib/api';
 
 // ── Tipos ────────────────────────────────────────────────────────────
 export type AgenteCategoria =
@@ -171,12 +172,22 @@ export function useAgenteDocs(): {
   return { docs, loading, error, guardarDoc, refrescar: cargar };
 }
 
+// ── Tipo: respuesta de invitación ───────────────────────────────────
+export type InvitacionVendedora = {
+  ok: true;
+  perfil_id: string;
+  email: string;
+  nombre: string;
+  password_temporal: string;
+};
+
 // ── Hook: vendedoras activas + listado de candidatas ────────────────
 export function useVendedoras(): {
   vendedoras: VendedoraActiva[];
   loading: boolean;
   error: string | null;
   setActiva: (perfil_id: string, activa: boolean) => Promise<void>;
+  invitar: (email: string, nombre: string) => Promise<InvitacionVendedora>;
   refrescar: () => Promise<void>;
 } {
   const { empresaId } = useAuth();
@@ -252,5 +263,17 @@ export function useVendedoras(): {
     [empresaId, cargar],
   );
 
-  return { vendedoras, loading, error, setActiva, refrescar: cargar };
+  const invitar = useCallback(
+    async (email: string, nombre: string): Promise<InvitacionVendedora> => {
+      const resp = await api.post<InvitacionVendedora>('/usuarios/invitar', {
+        email,
+        nombre,
+      });
+      await cargar();
+      return resp;
+    },
+    [cargar],
+  );
+
+  return { vendedoras, loading, error, setActiva, invitar, refrescar: cargar };
 }

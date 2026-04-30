@@ -2,15 +2,25 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
+  Copy,
   FileText,
   Power,
   Save,
+  UserPlus,
   Users,
   XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -28,6 +38,7 @@ import {
   useEmpresaAgenteConfig,
   useVendedoras,
   type AgenteCategoria,
+  type InvitacionVendedora,
 } from '@/modules/admin/agente-hooks';
 
 export function AgenteIASection() {
@@ -350,8 +361,10 @@ function EditorDocs() {
 
 // ── Panel de vendedoras activas ─────────────────────────────────────
 function VendedorasPanel() {
-  const { vendedoras, loading, error, setActiva } = useVendedoras();
+  const { vendedoras, loading, error, setActiva, invitar } = useVendedoras();
   const [actualizando, setActualizando] = useState<string | null>(null);
+  const [invitarOpen, setInvitarOpen] = useState(false);
+  const [credenciales, setCredenciales] = useState<InvitacionVendedora | null>(null);
 
   const handleToggle = async (perfil_id: string, activa: boolean) => {
     setActualizando(perfil_id);
@@ -368,11 +381,17 @@ function VendedorasPanel() {
 
   return (
     <div className="space-y-3 border-t pt-4">
-      <div className="flex items-center gap-2">
-        <Users className="h-4 w-4 text-indigo-500" />
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Vendedoras activas
-        </h3>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Users className="h-4 w-4 text-indigo-500" />
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Vendedoras activas
+          </h3>
+        </div>
+        <Button size="sm" onClick={() => setInvitarOpen(true)}>
+          <UserPlus className="mr-1.5 h-3.5 w-3.5" />
+          Invitar vendedora
+        </Button>
       </div>
       <p className="text-xs text-muted-foreground">
         Solo las marcadas como activas reciben leads automáticos del agente. Marcar como inactiva
@@ -446,6 +465,200 @@ function VendedorasPanel() {
           </TableBody>
         </Table>
       )}
+
+      <InvitarVendedoraDialog
+        open={invitarOpen}
+        onOpenChange={setInvitarOpen}
+        invitar={invitar}
+        onSuccess={(c) => {
+          setInvitarOpen(false);
+          setCredenciales(c);
+        }}
+      />
+
+      <CredencialesDialog
+        credenciales={credenciales}
+        onClose={() => setCredenciales(null)}
+      />
+    </div>
+  );
+}
+
+// ── Dialog: invitar nueva vendedora ─────────────────────────────────
+function InvitarVendedoraDialog({
+  open,
+  onOpenChange,
+  invitar,
+  onSuccess,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  invitar: (email: string, nombre: string) => Promise<InvitacionVendedora>;
+  onSuccess: (c: InvitacionVendedora) => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [enviando, setEnviando] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setEmail('');
+      setNombre('');
+      setEnviando(false);
+    }
+  }, [open]);
+
+  const handleEnviar = async () => {
+    const emailLimpio = email.trim().toLowerCase();
+    const nombreLimpio = nombre.trim();
+    if (!emailLimpio || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpio)) {
+      toast.error('Email inválido');
+      return;
+    }
+    if (!nombreLimpio) {
+      toast.error('El nombre es obligatorio');
+      return;
+    }
+    setEnviando(true);
+    try {
+      const credenciales = await invitar(emailLimpio, nombreLimpio);
+      toast.success('Vendedora invitada');
+      onSuccess(credenciales);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error('No se pudo invitar: ' + msg);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Invitar vendedora</DialogTitle>
+          <DialogDescription>
+            Se creará una cuenta con rol de ventas. Después se mostrará una contraseña temporal
+            para que la compartas con ella.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="vend-nombre">Nombre</Label>
+            <Input
+              id="vend-nombre"
+              autoFocus
+              autoComplete="name"
+              placeholder="Nombre completo"
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              disabled={enviando}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="vend-email">Email</Label>
+            <Input
+              id="vend-email"
+              type="email"
+              autoComplete="email"
+              placeholder="vendedora@empresa.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={enviando}
+            />
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={enviando}>
+            Cancelar
+          </Button>
+          <Button onClick={handleEnviar} disabled={enviando}>
+            {enviando ? 'Invitando…' : 'Crear cuenta'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Dialog: muestra credenciales una sola vez ────────────────────────
+function CredencialesDialog({
+  credenciales,
+  onClose,
+}: {
+  credenciales: InvitacionVendedora | null;
+  onClose: () => void;
+}) {
+  const copiar = (texto: string, etiqueta: string) => {
+    navigator.clipboard
+      .writeText(texto)
+      .then(() => toast.success(`${etiqueta} copiado`))
+      .catch(() => toast.error('No se pudo copiar'));
+  };
+
+  return (
+    <Dialog open={!!credenciales} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        {credenciales && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Vendedora creada</DialogTitle>
+              <DialogDescription>
+                Comparte estas credenciales con {credenciales.nombre}. La contraseña no se vuelve
+                a mostrar — guárdala antes de cerrar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <CredencialField
+                label="Email"
+                value={credenciales.email}
+                onCopy={() => copiar(credenciales.email, 'Email')}
+              />
+              <CredencialField
+                label="Contraseña temporal"
+                value={credenciales.password_temporal}
+                onCopy={() => copiar(credenciales.password_temporal, 'Contraseña')}
+                mono
+              />
+              <p className="rounded bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
+                Pídele que cambie la contraseña al ingresar la primera vez.
+              </p>
+            </div>
+            <DialogFooter>
+              <Button onClick={onClose}>Cerrar</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CredencialField({
+  label,
+  value,
+  onCopy,
+  mono,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+  mono?: boolean;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="flex items-center gap-2">
+        <Input
+          readOnly
+          value={value}
+          className={cn('flex-1', mono && 'font-mono')}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <Button variant="ghost" size="icon" onClick={onCopy} title={`Copiar ${label.toLowerCase()}`}>
+          <Copy className="h-4 w-4" />
+        </Button>
+      </div>
     </div>
   );
 }

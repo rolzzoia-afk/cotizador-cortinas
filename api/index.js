@@ -91,6 +91,85 @@ app.post('/tenants/registro', async (c) => {
 //  RUTAS PROTEGIDAS (requieren JWT válido)
 // ═══════════════════════════════════════════════════════════════════
 
+// ── Invitar vendedora (admin-only) ───────────────────────────────────
+// Crea un nuevo usuario en auth + perfil con rol='ventas' atado a la
+// empresa del admin que llama. Devuelve la contraseña temporal una sola
+// vez para que el admin la comparta con la vendedora.
+app.post('/usuarios/invitar', auth, async (c) => {
+    try {
+        const perfil = c.get('perfil');
+        const empresaId = c.get('empresaId');
+
+        if ((perfil?.rol || '').toLowerCase() !== 'admin') {
+            return c.json({ error: 'Solo los administradores pueden invitar vendedoras' }, 403);
+        }
+
+        const { email, nombre } = await c.req.json();
+
+        const emailLimpio = (email || '').trim().toLowerCase();
+        const nombreLimpio = (nombre || '').trim();
+
+        if (!emailLimpio || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpio)) {
+            return c.json({ error: 'Email inválido' }, 400);
+        }
+        if (!nombreLimpio) {
+            return c.json({ error: 'El nombre es obligatorio' }, 400);
+        }
+
+        // Generar contraseña temporal (12 chars alfanuméricos)
+        const generarPassword = () => {
+            const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789';
+            let pass = '';
+            for (let i = 0; i < 12; i++) {
+                pass += alfabeto[Math.floor(Math.random() * alfabeto.length)];
+            }
+            return pass;
+        };
+        const passwordTemporal = generarPassword();
+
+        // 1. Crear usuario en auth (auto-confirmado: el admin invita)
+        const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+            email: emailLimpio,
+            password: passwordTemporal,
+            email_confirm: true,
+        });
+        if (authErr) {
+            const status = (authErr.message || '').toLowerCase().includes('already') ? 409 : 500;
+            return c.json({ error: authErr.message || 'No se pudo crear el usuario' }, status);
+        }
+
+        const userId = authData.user.id;
+
+        // 2. Crear perfil con rol='ventas'
+        const { error: perfilErr } = await supabaseAdmin
+            .from('perfiles')
+            .insert({
+                id: userId,
+                empresa_id: empresaId,
+                nombre: nombreLimpio,
+                rol: 'ventas',
+            });
+
+        if (perfilErr) {
+            // Rollback: borrar el auth user si falla la creación del perfil
+            await supabaseAdmin.auth.admin.deleteUser(userId).catch(() => {});
+            return c.json({ error: perfilErr.message || 'No se pudo crear el perfil' }, 500);
+        }
+
+        return c.json({
+            ok: true,
+            perfil_id: userId,
+            email: emailLimpio,
+            nombre: nombreLimpio,
+            password_temporal: passwordTemporal,
+        }, 201);
+
+    } catch (e) {
+        return c.json({ error: e.message || 'Error interno' }, 500);
+    }
+});
+
+
 // ── Datos del tenant actual ──────────────────────────────────────────
 app.get('/tenants/me', auth, async (c) => {
     const empresaId = c.get('empresaId');
