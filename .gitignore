@@ -6,4 +6,7 @@ dist/
 *.log
 *.tsbuildinfo
 .DS_Store
-supabase/
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/.env.local
