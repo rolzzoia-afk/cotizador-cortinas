@@ -3956,7 +3956,38 @@ function aplicarResolucionesYEjecutar() {
 // ══════════════════════════════════════════════════════════════════
 
 async function ejecutarOptimizacion() {
-    // ── Advertencia de colmena desactualizada ──────────────────────────────
+    // ── Capa 2 anti-huérfanos (2026-05-05): bloqueo por colmena stale ──────
+    // Verifica que el last_sync_at cacheado al cargar la página siga siendo
+    // el mismo en BD. Si difiere, otra sesión modificó la colmena después
+    // de que la cargamos — si seguimos optimizando, el guardado al final
+    // va a fallar (Capa 1) y se pierde el trabajo. Mejor bloquear acá y
+    // recargar antes de hacer nada.
+    try {
+        const { data: syncRow, error: syncErr } = await sbOpt
+            .from('colmena_sync_state')
+            .select('last_sync_at')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .maybeSingle();
+        if (syncErr) throw syncErr;
+        const currentSync = syncRow?.last_sync_at || null;
+        if (_colmenaSyncStateAtLoad && currentSync && currentSync !== _colmenaSyncStateAtLoad) {
+            alert(
+                '🚫 INVENTARIO DESACTUALIZADO\n\n' +
+                'Otra sesión modificó la colmena después de que la cargaste en esta pestaña.\n' +
+                'Si optimizas ahora, el plan no se va a poder guardar al final.\n\n' +
+                '→ Voy a recargar la colmena automáticamente. Vuelve a apretar "Calcular" cuando termine.'
+            );
+            log('🚫 Optimización bloqueada (Capa 2): colmena modificada por otra sesión. Recargando inventario...', 'warn');
+            await cargarColmenasDesdeTabla();
+            return;
+        }
+    } catch (e) {
+        // Si la query falla por algún motivo (red, RLS, etc.) no bloqueamos
+        // la optimización — Capa 1 sigue siendo la red de seguridad final.
+        console.warn('[Capa 2 staleness check] No se pudo verificar:', e?.message);
+    }
+
+    // ── Advertencia de colmena desactualizada por tiempo ────────────────────
     if (_colmenaLoadedAt) {
         const mins = Math.floor((Date.now() - _colmenaLoadedAt.getTime()) / 60000);
         if (mins >= 30) {
