@@ -5603,7 +5603,20 @@ async function confirmarYGuardarStaging() {
             await guardarColmenaFinalEnSupabase(eventosCorte);
             colmenaSincronizadaOK = true;
         } catch (errColmena) {
-            log('⚠️ ATENCIÓN: El inventario NO se actualizó en Supabase. El plan de corte se exportará igual, pero la colmena en la nube quedó desactualizada. Vuelve a abrirla y usa el botón ☁️ Guardar para corregirlo.', 'error');
+            // Si el sync falla, abortamos toda la confirmación. Antes el flujo
+            // seguía e insertaba planes_corte igual → quedaba un plan huérfano
+            // (sin eventos ni descuento de inventario). Incidente 2026-05-05.
+            const msg = errColmena?.message || String(errColmena);
+            log('🚫 GUARDADO BLOQUEADO — el inventario NO se sincronizó (' + msg + ').', 'error');
+            log('👉 Tu plan NO se guardó. Recarga la página (Ctrl+Shift+R) y vuelve a confirmar. Si el error persiste, otra sesión modificó la colmena entre tu carga y este guardado.', 'error');
+            alert(
+                '🚫 Plan NO guardado\n\n' +
+                'No se pudo sincronizar el inventario en Supabase:\n' + msg + '\n\n' +
+                '→ Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.\n' +
+                '→ Si el error persiste, alguien más modificó la colmena entre tu carga y este guardado.'
+            );
+            if (btnEjecutar) btnEjecutar.disabled = false;
+            return; // ← ABORTA: no llega a la inserción de planes_corte (línea 5709) ni al resto del flujo
         }
     }
     // Limpiar registro de reserva (plan confirmado, ya no se puede descartar)
