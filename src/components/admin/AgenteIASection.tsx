@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Bot,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
   FileText,
   MessageCircle,
   Power,
@@ -456,7 +458,105 @@ function VendedorasPanel() {
 }
 
 // ── Playground: chatear con el agente usando los docs como contexto ──
-type PlaygroundMsg = { role: 'user' | 'assistant'; content: string };
+type DocUsado = {
+  categoria: string;
+  version: number;
+  updated_at: string;
+  caracteres: number;
+};
+
+type PlaygroundMeta = {
+  docs_usados: DocUsado[];
+  usage: { input_tokens: number; output_tokens: number } | null;
+  model: string;
+  system_prompt_chars: number;
+};
+
+type PlaygroundMsg = {
+  role: 'user' | 'assistant';
+  content: string;
+  meta?: PlaygroundMeta;
+};
+
+// Precios aproximados de Claude Sonnet 4.6 (USD por millón de tokens).
+// Pueden cambiar; si el costo no cuadra con la factura real, ajustar acá.
+const PRECIO_INPUT_USD_POR_M = 3;
+const PRECIO_OUTPUT_USD_POR_M = 15;
+
+function calcularCostoUSD(usage: { input_tokens: number; output_tokens: number } | null) {
+  if (!usage) return 0;
+  return (
+    (usage.input_tokens * PRECIO_INPUT_USD_POR_M) / 1_000_000 +
+    (usage.output_tokens * PRECIO_OUTPUT_USD_POR_M) / 1_000_000
+  );
+}
+
+function formatUSD(usd: number) {
+  if (usd === 0) return '$0';
+  if (usd < 0.001) return '<$0.001';
+  return '$' + usd.toFixed(4);
+}
+
+function MessageDetails({ meta }: { meta: PlaygroundMeta }) {
+  const [abierto, setAbierto] = useState(false);
+  const costo = calcularCostoUSD(meta.usage);
+  const tokensIn = meta.usage?.input_tokens ?? 0;
+  const tokensOut = meta.usage?.output_tokens ?? 0;
+
+  return (
+    <div className="mt-1 max-w-[85%]">
+      <button
+        onClick={() => setAbierto(!abierto)}
+        className="flex items-center gap-1 text-[0.6rem] text-muted-foreground hover:text-foreground"
+      >
+        {abierto ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+        {tokensIn + tokensOut} tokens · {formatUSD(costo)} · {meta.docs_usados.length} docs
+      </button>
+      {abierto && (
+        <div className="mt-1 rounded-md border bg-muted/30 p-2 text-[0.65rem] space-y-1.5">
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <div className="text-muted-foreground">Input</div>
+              <div className="font-mono">{tokensIn.toLocaleString('es-CL')} tok</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Output</div>
+              <div className="font-mono">{tokensOut.toLocaleString('es-CL')} tok</div>
+            </div>
+            <div>
+              <div className="text-muted-foreground">Costo</div>
+              <div className="font-mono">{formatUSD(costo)}</div>
+            </div>
+          </div>
+          <div className="border-t pt-1.5">
+            <div className="mb-1 text-muted-foreground">
+              Docs leídos ({meta.system_prompt_chars.toLocaleString('es-CL')} caracteres en system prompt)
+            </div>
+            <div className="space-y-0.5">
+              {meta.docs_usados.map((d) => (
+                <div key={d.categoria} className="flex items-center justify-between gap-2">
+                  <span className="font-mono">{d.categoria}</span>
+                  <span className="text-muted-foreground">
+                    v{d.version} · {d.caracteres.toLocaleString('es-CL')} car · actualizado{' '}
+                    {new Date(d.updated_at).toLocaleString('es-CL', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="border-t pt-1 text-muted-foreground">
+            Modelo: <span className="font-mono">{meta.model}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function PlaygroundPanel() {
   const [history, setHistory] = useState<PlaygroundMsg[]>([]);
@@ -469,6 +569,20 @@ function PlaygroundPanel() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [history, enviando]);
+
+  const totales = useMemo(() => {
+    let tokensIn = 0;
+    let tokensOut = 0;
+    let costo = 0;
+    for (const m of history) {
+      if (m.meta?.usage) {
+        tokensIn += m.meta.usage.input_tokens;
+        tokensOut += m.meta.usage.output_tokens;
+        costo += calcularCostoUSD(m.meta.usage);
+      }
+    }
+    return { tokensIn, tokensOut, costo };
+  }, [history]);
 
   const handleEnviar = async () => {
     const message = input.trim();
@@ -483,21 +597,42 @@ function PlaygroundPanel() {
     setEnviando(true);
 
     try {
+      const historyForRequest = history.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
       const { data, error } = await supabase.functions.invoke(
         'agente-playground',
         {
           body: {
             message,
-            history,
+            history: historyForRequest,
           },
         },
       );
       if (error) throw error;
-      const reply = (data as { reply?: string; error?: string })?.reply;
-      const errMsg = (data as { error?: string })?.error;
+      const respuesta = data as {
+        reply?: string;
+        error?: string;
+        usage?: { input_tokens: number; output_tokens: number } | null;
+        model?: string;
+        docs_usados?: DocUsado[];
+        system_prompt_chars?: number;
+      };
+      const reply = respuesta?.reply;
+      const errMsg = respuesta?.error;
       if (errMsg) throw new Error(errMsg);
       if (!reply) throw new Error('Respuesta vacía del agente');
-      setHistory([...nuevoHistorial, { role: 'assistant', content: reply }]);
+      const meta: PlaygroundMeta = {
+        docs_usados: respuesta.docs_usados ?? [],
+        usage: respuesta.usage ?? null,
+        model: respuesta.model ?? 'desconocido',
+        system_prompt_chars: respuesta.system_prompt_chars ?? 0,
+      };
+      setHistory([
+        ...nuevoHistorial,
+        { role: 'assistant', content: reply, meta },
+      ]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Error desconocido';
       toast.error('Error: ' + msg);
@@ -529,28 +664,37 @@ function PlaygroundPanel() {
             Playground
           </h3>
         </div>
-        {history.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleReset}
-            disabled={enviando}
-            className="h-7 px-2 text-[0.65rem]"
-          >
-            <RotateCcw className="mr-1 h-3 w-3" />
-            Reiniciar
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {history.length > 0 && totales.tokensIn + totales.tokensOut > 0 && (
+            <span className="text-[0.65rem] text-muted-foreground">
+              Total: {(totales.tokensIn + totales.tokensOut).toLocaleString('es-CL')} tok ·{' '}
+              {formatUSD(totales.costo)}
+            </span>
+          )}
+          {history.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleReset}
+              disabled={enviando}
+              className="h-7 px-2 text-[0.65rem]"
+            >
+              <RotateCcw className="mr-1 h-3 w-3" />
+              Reiniciar
+            </Button>
+          )}
+        </div>
       </div>
       <p className="text-xs text-muted-foreground">
         Prueba preguntas como las que haría un cliente en WhatsApp. El agente responde usando los
         documentos guardados arriba como única fuente. Si responde mal, ajusta los documentos y
-        prueba de nuevo.
+        prueba de nuevo. Debajo de cada respuesta puedes desplegar los detalles para ver qué
+        documentos leyó el agente y cuánto costó esa respuesta.
       </p>
 
       <div
         ref={scrollRef}
-        className="h-72 overflow-y-auto rounded-md border bg-muted/20 p-3 space-y-2"
+        className="h-80 overflow-y-auto rounded-md border bg-muted/20 p-3 space-y-2"
       >
         {history.length === 0 && !enviando && (
           <div className="flex h-full items-center justify-center text-center text-xs text-muted-foreground">
@@ -561,8 +705,8 @@ function PlaygroundPanel() {
           <div
             key={i}
             className={cn(
-              'flex',
-              m.role === 'user' ? 'justify-end' : 'justify-start',
+              'flex flex-col',
+              m.role === 'user' ? 'items-end' : 'items-start',
             )}
           >
             <div
@@ -575,6 +719,7 @@ function PlaygroundPanel() {
             >
               {m.content}
             </div>
+            {m.role === 'assistant' && m.meta && <MessageDetails meta={m.meta} />}
           </div>
         ))}
         {enviando && (

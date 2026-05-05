@@ -26,6 +26,15 @@ type AgenteDocRow = {
   categoria: string;
   contenido_md: string;
   activo: boolean;
+  version: number;
+  updated_at: string;
+};
+
+type DocUsado = {
+  categoria: string;
+  version: number;
+  updated_at: string;
+  caracteres: number;
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -38,10 +47,10 @@ function jsonResponse(body: unknown, status = 200) {
 async function buildSystemPrompt(
   supabaseAdmin: ReturnType<typeof createClient>,
   empresaId: string,
-): Promise<string> {
+): Promise<{ prompt: string; docsUsados: DocUsado[] }> {
   const { data, error } = await supabaseAdmin
     .from("agente_docs")
-    .select("categoria, contenido_md, activo")
+    .select("categoria, contenido_md, activo, version, updated_at")
     .eq("empresa_id", empresaId)
     .eq("activo", true)
     .order("categoria");
@@ -59,18 +68,25 @@ async function buildSystemPrompt(
     "objeciones",
     "derivacion",
   ];
-  const docsMap = new Map(docs.map((d) => [d.categoria, d.contenido_md]));
+  const docsMap = new Map(docs.map((d) => [d.categoria, d]));
 
+  const docsUsados: DocUsado[] = [];
   const secciones = seccionesOrdenadas
     .map((cat) => {
-      const md = docsMap.get(cat);
-      if (!md || !md.trim()) return null;
-      return `## ${cat.toUpperCase()}\n\n${md.trim()}`;
+      const doc = docsMap.get(cat);
+      if (!doc || !doc.contenido_md.trim()) return null;
+      docsUsados.push({
+        categoria: cat,
+        version: doc.version,
+        updated_at: doc.updated_at,
+        caracteres: doc.contenido_md.trim().length,
+      });
+      return `## ${cat.toUpperCase()}\n\n${doc.contenido_md.trim()}`;
     })
     .filter(Boolean)
     .join("\n\n---\n\n");
 
-  return `Eres un agente de ventas de Cortinas Rolzzo, una empresa chilena que vende cortinas roller, verticales y BeeBlack. Conversas con clientes potenciales por WhatsApp.
+  const prompt = `Eres un agente de ventas de Cortinas Rolzzo, una empresa chilena que vende cortinas roller, verticales y BeeBlack. Conversas con clientes potenciales por WhatsApp.
 
 PERSONALIDAD Y TONO
 
@@ -101,6 +117,8 @@ ESTILO DE ESCRITURA
 MATERIAL DE REFERENCIA DE LA EMPRESA (úsalo como única fuente de verdad)
 
 ${secciones || "(sin documentos cargados todavía)"}`;
+
+  return { prompt, docsUsados };
 }
 
 Deno.serve(async (req) => {
@@ -160,7 +178,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "message vacío" }, 400);
     }
 
-    const systemPrompt = await buildSystemPrompt(
+    const { prompt: systemPrompt, docsUsados } = await buildSystemPrompt(
       supabaseAdmin,
       perfil.empresa_id as string,
     );
@@ -206,6 +224,8 @@ Deno.serve(async (req) => {
       reply,
       usage: data?.usage ?? null,
       model: ANTHROPIC_MODEL,
+      docs_usados: docsUsados,
+      system_prompt_chars: systemPrompt.length,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : JSON.stringify(e);
