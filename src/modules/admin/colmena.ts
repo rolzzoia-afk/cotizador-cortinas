@@ -239,3 +239,128 @@ export function useColmenaPanos(): {
 
   return { panos, loading, refrescar: cargar, guardar };
 }
+
+// ── Inventario (snapshot/diff/lock) ──────────────────────────────────
+export type Inventario = {
+  id: string;
+  empresa_id: string;
+  n_colmena: string | null;
+  iniciado_por: string | null;
+  iniciado_por_email: string | null;
+  iniciado_at: string;
+  cerrado_at: string | null;
+  cerrado_por: string | null;
+  cerrado_por_email: string | null;
+  estado: 'activo' | 'cerrado' | 'cancelado';
+  tubos_count_pre: number;
+  tubos_count_post: number | null;
+  notas: string | null;
+};
+
+export type InventarioDiffRow = {
+  tipo: 'mantenido' | 'eliminado' | 'nuevo' | 'modificado';
+  tubo_raiz_id: string;
+  n_colmena_pre: string | null;
+  n_colmena_post: string | null;
+  cod_pre: string | null;
+  cod_post: string | null;
+  medida_cm_pre: number | null;
+  medida_cm_post: number | null;
+  serial_pre: string | null;
+  serial_post: string | null;
+};
+
+export function useInventario(): {
+  activo: Inventario | null;
+  historicos: Inventario[];
+  loading: boolean;
+  refrescar: () => Promise<void>;
+  iniciar: (notas?: string | null) => Promise<string>;
+  cerrar: (id: string, notas?: string | null) => Promise<void>;
+  revertir: (id: string, motivo: string) => Promise<void>;
+  diff: (id: string) => Promise<InventarioDiffRow[]>;
+} {
+  const { empresaId } = useAuth();
+  const [activo, setActivo] = useState<Inventario | null>(null);
+  const [historicos, setHistoricos] = useState<Inventario[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async () => {
+    if (!empresaId) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('inventarios' as any)
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .order('iniciado_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      const filas = ((data || []) as unknown) as Inventario[];
+      setActivo(filas.find((f) => f.estado === 'activo') ?? null);
+      setHistoricos(filas.filter((f) => f.estado !== 'activo'));
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaId]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  const iniciar = useCallback(
+    async (notas?: string | null) => {
+      const { data, error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .rpc('iniciar_inventario' as any, {
+          p_n_colmena: null,
+          p_notas: notas ?? null,
+        });
+      if (error) throw new Error(error.message || JSON.stringify(error));
+      await cargar();
+      return data as string;
+    },
+    [cargar],
+  );
+
+  const cerrar = useCallback(
+    async (id: string, notas?: string | null) => {
+      const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .rpc('cerrar_inventario' as any, {
+          p_inventario_id: id,
+          p_notas: notas ?? null,
+        });
+      if (error) throw new Error(error.message || JSON.stringify(error));
+      await cargar();
+    },
+    [cargar],
+  );
+
+  const revertir = useCallback(
+    async (id: string, motivo: string) => {
+      const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .rpc('revertir_inventario' as any, {
+          p_inventario_id: id,
+          p_motivo: motivo,
+        });
+      if (error) throw new Error(error.message || JSON.stringify(error));
+      await cargar();
+    },
+    [cargar],
+  );
+
+  const diff = useCallback(async (id: string) => {
+    const { data, error } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .rpc('inventario_diff' as any, {
+        p_inventario_id: id,
+      });
+    if (error) throw new Error(error.message || JSON.stringify(error));
+    return ((data || []) as unknown) as InventarioDiffRow[];
+  }, []);
+
+  return { activo, historicos, loading, refrescar: cargar, iniciar, cerrar, revertir, diff };
+}
