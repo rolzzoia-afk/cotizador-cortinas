@@ -5616,18 +5616,30 @@ async function confirmarYGuardarStaging() {
     let colmenaSincronizadaOK = false;
     if (_colmenaPreSyncOK) {
         // La colmena ya fue sincronizada en staging (autoReservarPlan).
-        // No hay que volver a hacerlo. Como el sync ya fue exitoso antes,
-        // los eventos van por inserción directa al historial — no hay
-        // riesgo de huérfanos porque no hay sync que pueda fallar acá.
+        // No hay que volver a hacerlo. Los eventos van por inserción directa
+        // al historial. Capa 1.5 (PR #44, incidente OT 2935 doble del
+        // 2026-05-06): si la inserción al historial falla, ABORTAR todo el
+        // flujo igual que en la rama del else. Antes solo se loggeaba un
+        // warn → quedaba plan huérfano sin eventos.
         log('ℹ️ Colmena ya pre-sincronizada al generar el plan. Saltando re-sincronización.', 'info');
-        colmenaSincronizadaOK = true;
         if (eventosCorte.length) {
             try {
                 await insertarEventosHistorialDirecto(eventosCorte);
             } catch (errHist) {
-                log(`⚠️ No se pudo registrar el historial de tubos (modo directo): ${errHist.message}`, 'warn');
+                const msg = errHist?.message || String(errHist);
+                log('🚫 GUARDADO BLOQUEADO — el historial de cortes NO se registró (' + msg + ').', 'error');
+                log('👉 Tu plan NO se guardó. Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.', 'error');
+                alert(
+                    '🚫 Plan NO guardado\n\n' +
+                    'No se pudo registrar el historial de cortes en Supabase:\n' + msg + '\n\n' +
+                    '→ Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.\n' +
+                    '→ Si el error persiste, avisar al admin.'
+                );
+                if (btnEjecutar) btnEjecutar.disabled = false;
+                return; // ← ABORTA: no llega a la inserción de planes_corte
             }
         }
+        colmenaSincronizadaOK = true;
     } else {
         try {
             // Sync atómico: colmena_tubos + eventos del historial en una sola RPC.
