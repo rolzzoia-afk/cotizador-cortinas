@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "4.7";
+const VERSION_ACTUAL = "4.8";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5199,9 +5199,20 @@ async function construirEventosTubos() {
         const esMerma       = !!res.es_desecho;
         const tieneSobrante = !esMerma && res.sobrante_cm > 0;
 
-        // ID de linaje del tubo en colmenasHistorico (heredado del tubo original)
+        // ID de linaje del tubo en colmenasHistorico (heredado del tubo original).
+        //
+        // Capa 5d (2026-05-06, incidente OT 2942): el find() original solo
+        // matcheaba (n_colmena, cod, estado='usada'), retornando la PRIMERA
+        // entrada — incorrecto cuando hay múltiples tubos del mismo
+        // (colmena, cod) consumidos por el plan (e.g., A35 E02 135.9 y
+        // A35 E02 197.5 compartían el primer UUID, que era de A35 E02 102.6).
+        // Ahora también matchea por medida_cm normalizada con Number().
+        const medidaOrigen = Number(res.medida_origen || res.medida_cm);
         const entradaHistorico = SistemaInventario.colmenasHistorico.find(c =>
-            c.n_colmena === res.colmena && c.cod === res.codigo && c.estado === 'usada'
+            c.n_colmena === res.colmena &&
+            c.cod === res.codigo &&
+            c.estado === 'usada' &&
+            Math.abs(Number(c.medida_cm || 0) - medidaOrigen) < 0.01
         );
         let tubo_raiz_id = entradaHistorico?.tubo_raiz_id || null;
         let fuenteFinal = null;  // 'historico' | 'bd_lookup' | 'mesa_intermediate' | 'random'
@@ -5210,9 +5221,7 @@ async function construirEventosTubos() {
             fuenteFinal = 'historico';
         } else if (!esMerma) {
             // Capa 5b: lookup en colmena_tubos de BD por (n_colmena, cod, medida_origen).
-            // Number() del lado del plan también, para coincidir con la
-            // normalización aplicada al lado de BD (ver pre-fetch arriba).
-            const medidaOrigen = Number(res.medida_origen || res.medida_cm);
+            // Number() en ambos lados para coincidir con la normalización del pre-fetch.
             const key = `${res.colmena}|${res.codigo.toUpperCase().trim()}|${medidaOrigen}`;
             if (_bdTuboMap.has(key)) {
                 tubo_raiz_id = _bdTuboMap.get(key);
