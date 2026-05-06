@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "4.5";
+const VERSION_ACTUAL = "4.6";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5166,6 +5166,25 @@ async function construirEventosTubos() {
     const eventosCorte = [];
     const raizADatos   = {}; // raiz_id → { n_colmena, cod, medida_cm }
 
+    // Capa 5b (2026-05-06, incidente OT 2942): pre-fetch de colmena_tubos
+    // desde BD para lookup de UUID real cuando colmenasHistorico falla.
+    // Antes el fix usaba SistemaInventario.colmenas, pero ese estado se muta
+    // durante la optimización y no contiene los tubos consumidos. La fuente
+    // autoritativa es BD.
+    const _bdTuboMap = new Map();  // "n_colmena|cod|medida_cm" → tubo_raiz_id
+    try {
+        const { data: bdTubos } = await sbOpt
+            .from('colmena_tubos')
+            .select('n_colmena, cod, medida_cm, tubo_raiz_id')
+            .eq('empresa_id', EMPRESA_ID_OPT);
+        for (const t of (bdTubos || [])) {
+            const key = `${t.n_colmena}|${(t.cod || '').toUpperCase().trim()}|${t.medida_cm}`;
+            if (!_bdTuboMap.has(key)) _bdTuboMap.set(key, t.tubo_raiz_id);
+        }
+    } catch (e) {
+        console.warn('[OPT] No se pudo pre-fetchear colmena_tubos:', e?.message);
+    }
+
     SistemaInventario.resultadosOptimizacion.forEach(item => {
         const res = item.resultado;
         const ord = item.orden;
@@ -5180,36 +5199,43 @@ async function construirEventosTubos() {
             c.n_colmena === res.colmena && c.cod === res.codigo && c.estado === 'usada'
         );
         let tubo_raiz_id = entradaHistorico?.tubo_raiz_id || null;
+        let fuenteFinal = null;  // 'historico' | 'bd_lookup' | 'mesa_intermediate' | 'random'
 
-        // Capa 5 (2026-05-06, incidente OT 2942): si colmenasHistorico no
-        // matchea pero el tubo SÍ existe en la colmena cargada desde BD,
-        // usar su UUID real. Sin esto, el optimizador asignaba un UUID
-        // random a tubos legítimamente existentes, los marcaba como
-        // "fantasmas" sin ingreso, y el trigger Defensa D rechazaba el
-        // corte con `corte_sin_origen`. Causa raíz subyacente: estado
-        // 'usada' de colmenasHistorico no se marca consistentemente.
-        if (!tubo_raiz_id && !esMerma) {
+        if (tubo_raiz_id) {
+            fuenteFinal = 'historico';
+        } else if (!esMerma) {
+            // Capa 5b: lookup en colmena_tubos de BD por (n_colmena, cod, medida_origen)
             const medidaOrigen = res.medida_origen || res.medida_cm;
-            const tuboReal = (SistemaInventario.colmenas || []).find(c =>
-                c.n_colmena === res.colmena &&
-                c.cod === res.codigo &&
-                Math.abs((c.medida_cm || 0) - medidaOrigen) < 0.01
-            );
-            if (tuboReal?.tubo_raiz_id) {
-                tubo_raiz_id = tuboReal.tubo_raiz_id;
+            const key = `${res.colmena}|${res.codigo.toUpperCase().trim()}|${medidaOrigen}`;
+            if (_bdTuboMap.has(key)) {
+                tubo_raiz_id = _bdTuboMap.get(key);
+                fuenteFinal = 'bd_lookup';
             }
+        }
+
+        // Capa 5c: si todavía no hay UUID y la colmena es MESA (corte
+        // intermedio virtual), generar UUID random + agregar ingreso de
+        // tipo 'mesa_intermediate'. MESA es workspace virtual, sus tubos
+        // no existen en colmena_tubos pero el corte físico ya se hizo y
+        // necesita registro.
+        if (!tubo_raiz_id && (res.colmena === 'MESA' || res.colmena?.startsWith('MESA'))) {
+            tubo_raiz_id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+            fuenteFinal = 'mesa_intermediate';
         }
 
         // Última fallback: UUID random (caso TUBO NUEVO sin tracking BD)
         if (!tubo_raiz_id) {
             tubo_raiz_id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+            fuenteFinal = fuenteFinal || 'random';
         }
 
         // Guardar datos para detección de primer uso
-        // fuente: 'optimizador_nuevo' si fue propuesto como tubo nuevo/reemplazo,
+        // fuente: 'optimizador_nuevo' si fue propuesto como tubo nuevo/reemplazo
+        //                              o si es MESA intermediate (necesita ingreso),
         //         'retroactivo' si ya existía en colmena antes del historial.
         if (tubo_raiz_id && !raizADatos[tubo_raiz_id]) {
-            const esNuevo = (res.fuente === 'tubo_nuevo' || res.fuente === 'reemplazo');
+            const esNuevo = (res.fuente === 'tubo_nuevo' || res.fuente === 'reemplazo')
+                            || fuenteFinal === 'mesa_intermediate';
             raizADatos[tubo_raiz_id] = {
                 n_colmena: res.colmena,
                 cod:       res.codigo,
