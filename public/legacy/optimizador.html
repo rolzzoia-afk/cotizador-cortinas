@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.0";
+const VERSION_ACTUAL = "5.1";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5190,6 +5190,17 @@ async function construirEventosTubos() {
     } catch (e) {
         console.warn('[OPT] No se pudo pre-fetchear colmena_tubos:', e?.message);
     }
+
+    // DEBUG: dump colmenasHistorico contenido para tubos sospechosos
+    const _sospechosos = ['A29', 'A35', 'A28'];
+    const _entriesSospechosas = (SistemaInventario.colmenasHistorico || []).filter(c =>
+        _sospechosos.includes(c.n_colmena)
+    );
+    console.group('[DEBUG colmenasHistorico] Entradas A29/A35/A28');
+    _entriesSospechosas.forEach(c => {
+        console.log(`  n=${c.n_colmena} cod=${c.cod} medida=${c.medida_cm}cm raiz=${c.tubo_raiz_id} estado=${c.estado} origen=${c.origen} _raizFresh=${c._raizFresh} _esOriginal=${c._esOriginal}`);
+    });
+    console.groupEnd();
 
     SistemaInventario.resultadosOptimizacion.forEach(item => {
         const res = item.resultado;
