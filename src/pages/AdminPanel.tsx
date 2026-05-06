@@ -36,6 +36,7 @@ import {
 import { AuditLogSection } from '@/components/admin/AuditLogSection';
 import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { InventoryBaselineSection } from '@/components/admin/InventoryBaselineSection';
+import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 
 type Tubo = {
   id: string;
@@ -320,6 +321,8 @@ export function AdminPanel() {
           Control de sistema, inventario en vivo e historial de planes de corte.
         </p>
       </header>
+
+      <OrphanPlansBanner />
 
       {/* Accesos rápidos */}
       <section className="rounded-lg border bg-card p-5">
