@@ -92,7 +92,7 @@ export function OrphanPlansBanner() {
             <DialogTitle>Planes huérfanos detectados</DialogTitle>
             <DialogDescription>
               Estos planes existen en <span className="font-mono">planes_corte</span> pero sus OTs no tienen
-              eventos de corte/sobrante/merma en <span className="font-mono">tubos_historial</span>. Ventana de 30 días.
+              eventos de corte/sobrante/merma en <span className="font-mono">tubos_historial</span>. Ventana de 7 días.
             </DialogDescription>
           </DialogHeader>
 

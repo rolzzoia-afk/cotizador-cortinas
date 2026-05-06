@@ -16,19 +16,28 @@
 --     - Tiene `resultados` no vacío (jsonb_array_length > 0)
 --     - `tipo IS NULL` (no es plan especial como restauración)
 --     - NINGUNA de las OTs en `pc.ordenes` tiene eventos
---       corte/sobrante/merma en tubos_historial posteriores a `pc.fecha`
+--       corte/sobrante/merma en tubos_historial (sin restricción temporal)
+--
+--   Nota: NO se restringe a eventos posteriores a la fecha del plan. Si se
+--   hiciera, planes re-optimizados (mismo OT, plan nuevo) saldrían como
+--   falsos positivos porque los eventos del corte original son anteriores.
+--   Trade-off: si una OT se corta dos veces (Plan A exitoso + Plan B con
+--   sync fallido), el Plan B huérfano no se detecta. Aceptable porque el
+--   inventario sí se descontó del Plan A.
 --
 --   Si después se hace recovery (eventos rellenados o plan borrado), el plan
 --   automáticamente sale del filtro — no necesita estado "resuelto" persistido.
 --
 -- Ventana de tiempo:
---   Por defecto 30 días. Planes muy viejos rara vez justifican monitoreo
---   activo (probablemente ya se resolvieron o son irrelevantes).
+--   Por defecto 7 días. Planes muy viejos generan ruido (re-optimizaciones,
+--   cambios de proceso, wipes de inventario). El monitoreo activo importa
+--   sobre la ventana corta donde Capa 1 (#38) y Capa 2 (#39) deben prevenir
+--   nuevos huérfanos.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION public.detectar_planes_huerfanos(
   p_empresa_id uuid,
-  p_dias integer DEFAULT 30
+  p_dias integer DEFAULT 7
 ) RETURNS TABLE (
   plan_id uuid,
   fecha timestamptz,
@@ -73,7 +82,6 @@ AS $$
       WHERE th.empresa_id = p_empresa_id::text
         AND th.ot = ANY(pr.ots_arr)
         AND th.evento IN ('corte', 'sobrante', 'merma')
-        AND th.created_at >= pr.fecha
     )
   ORDER BY pr.fecha DESC;
 $$;
@@ -82,15 +90,16 @@ GRANT EXECUTE ON FUNCTION public.detectar_planes_huerfanos(uuid, integer) TO aut
 
 COMMENT ON FUNCTION public.detectar_planes_huerfanos(uuid, integer) IS
 'Capa 3 monitoreo: devuelve planes_corte sin eventos en tubos_historial (huérfanos).
-Detección por OT — NINGUNA OT del plan tiene eventos corte/sobrante/merma posteriores a la fecha del plan.
-Solo lee, no modifica. Ventana default 30 días.';
+Detección por OT — NINGUNA OT del plan tiene eventos corte/sobrante/merma jamás.
+Solo lee, no modifica. Ventana default 7 días.';
 
 -- ============================================================================
 -- Smoke test (post-deploy):
 -- ============================================================================
 -- SELECT * FROM detectar_planes_huerfanos(
 --   '67c635a5-152c-4780-a066-23f5081175a9'::uuid,
---   30
+--   7
 -- );
--- Esperado: 0 filas (recovery 2026-05-05 ya borró los huérfanos de OT 2939/2941)
+-- Esperado tras recovery 2026-05-05: solo planes recientes con OT que
+-- nunca tuvieron eventos (p.ej. OT 2935, 2941, 2947 si nunca se cortaron).
 -- ============================================================================

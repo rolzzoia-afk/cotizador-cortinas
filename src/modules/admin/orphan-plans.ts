@@ -16,7 +16,7 @@ export type PlanHuerfano = {
 };
 
 const POLL_INTERVAL_MS = 60_000;
-const VENTANA_DIAS = 30;
+const VENTANA_DIAS = 7;
 
 export function usePlanesHuerfanos(): {
   planes: PlanHuerfano[];
