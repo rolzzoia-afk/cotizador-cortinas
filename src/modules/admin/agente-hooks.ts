@@ -14,14 +14,14 @@ export type AgenteCategoria =
   | 'objeciones';
 
 export const AGENTE_CATEGORIAS: Array<{ id: AgenteCategoria; label: string; descripcion: string }> = [
-  { id: 'catalogo', label: 'Catálogo', descripcion: 'Productos, modelos, telas, usos' },
-  { id: 'politicas', label: 'Políticas', descripcion: 'Garantía, instalación, postventa, pagos' },
-  { id: 'faq', label: 'FAQ', descripcion: 'Preguntas frecuentes (limpieza, motores, medición)' },
-  { id: 'zonas', label: 'Zonas', descripcion: 'Cobertura geográfica, showroom, envíos' },
-  { id: 'precios', label: 'Precios', descripcion: 'Rangos orientativos, cuándo NO cotizar' },
-  { id: 'tono', label: 'Tono', descripcion: 'Cómo habla el agente, personalidad' },
-  { id: 'derivacion', label: 'Derivación', descripcion: 'Cuándo pasa a humano' },
-  { id: 'objeciones', label: 'Objeciones', descripcion: 'Respuestas a "está caro", "vi otra", etc.' },
+  { id: 'faq', label: 'Preguntas Frecuentes (Q&A)', descripcion: 'Lista de preguntas y respuestas exactas. La IA solo responde lo que esté aquí; cualquier otra cosa, o cualquier mensaje posterior a una respuesta, se deriva a una vendedora.' },
+  { id: 'catalogo', label: 'Catálogo', descripcion: 'Productos, modelos, telas, usos (contexto, NO fuente de respuestas).' },
+  { id: 'politicas', label: 'Políticas', descripcion: 'Garantía, instalación, postventa, pagos (contexto).' },
+  { id: 'zonas', label: 'Zonas', descripcion: 'Cobertura geográfica, showroom, envíos (contexto).' },
+  { id: 'precios', label: 'Precios', descripcion: 'Rangos orientativos, cuándo NO cotizar (contexto).' },
+  { id: 'tono', label: 'Tono', descripcion: 'Cómo habla el agente, personalidad.' },
+  { id: 'derivacion', label: 'Derivación', descripcion: 'Cuándo pasa a humano (contexto).' },
+  { id: 'objeciones', label: 'Objeciones', descripcion: 'Respuestas a "está caro", "vi otra", etc. (contexto).' },
 ];
 
 export type EmpresaAgenteConfig = {
