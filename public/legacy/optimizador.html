@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "4.4";
+const VERSION_ACTUAL = "4.5";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5179,8 +5179,31 @@ async function construirEventosTubos() {
         const entradaHistorico = SistemaInventario.colmenasHistorico.find(c =>
             c.n_colmena === res.colmena && c.cod === res.codigo && c.estado === 'usada'
         );
-        const tubo_raiz_id = entradaHistorico?.tubo_raiz_id ||
-            ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+        let tubo_raiz_id = entradaHistorico?.tubo_raiz_id || null;
+
+        // Capa 5 (2026-05-06, incidente OT 2942): si colmenasHistorico no
+        // matchea pero el tubo SÍ existe en la colmena cargada desde BD,
+        // usar su UUID real. Sin esto, el optimizador asignaba un UUID
+        // random a tubos legítimamente existentes, los marcaba como
+        // "fantasmas" sin ingreso, y el trigger Defensa D rechazaba el
+        // corte con `corte_sin_origen`. Causa raíz subyacente: estado
+        // 'usada' de colmenasHistorico no se marca consistentemente.
+        if (!tubo_raiz_id && !esMerma) {
+            const medidaOrigen = res.medida_origen || res.medida_cm;
+            const tuboReal = (SistemaInventario.colmenas || []).find(c =>
+                c.n_colmena === res.colmena &&
+                c.cod === res.codigo &&
+                Math.abs((c.medida_cm || 0) - medidaOrigen) < 0.01
+            );
+            if (tuboReal?.tubo_raiz_id) {
+                tubo_raiz_id = tuboReal.tubo_raiz_id;
+            }
+        }
+
+        // Última fallback: UUID random (caso TUBO NUEVO sin tracking BD)
+        if (!tubo_raiz_id) {
+            tubo_raiz_id = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+        }
 
         // Guardar datos para detección de primer uso
         // fuente: 'optimizador_nuevo' si fue propuesto como tubo nuevo/reemplazo,
