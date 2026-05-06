@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "4.8";
+const VERSION_ACTUAL = "4.9";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5178,14 +5178,17 @@ async function construirEventosTubos() {
     // (string de BD).
     const _bdTuboMap = new Map();  // "n_colmena|cod|medida_num" → tubo_raiz_id
     try {
-        const { data: bdTubos } = await sbOpt
+        const { data: bdTubos, error: bdErr } = await sbOpt
             .from('colmena_tubos')
             .select('n_colmena, cod, medida_cm, tubo_raiz_id')
             .eq('empresa_id', EMPRESA_ID_OPT);
+        if (bdErr) console.warn('[Capa 5b] Error pre-fetch:', bdErr);
         for (const t of (bdTubos || [])) {
             const key = `${t.n_colmena}|${(t.cod || '').toUpperCase().trim()}|${Number(t.medida_cm)}`;
             if (!_bdTuboMap.has(key)) _bdTuboMap.set(key, t.tubo_raiz_id);
         }
+        console.log(`[Capa 5b DEBUG] Pre-fetch: ${_bdTuboMap.size} tubos en Map. Ejemplos:`,
+            [..._bdTuboMap.entries()].slice(0, 5));
     } catch (e) {
         console.warn('[OPT] No se pudo pre-fetchear colmena_tubos:', e?.message);
     }
@@ -5226,6 +5229,13 @@ async function construirEventosTubos() {
             if (_bdTuboMap.has(key)) {
                 tubo_raiz_id = _bdTuboMap.get(key);
                 fuenteFinal = 'bd_lookup';
+            } else {
+                // DEBUG: log de fallo para diagnóstico
+                console.warn(`[Capa 5b DEBUG] Lookup FALLÓ para key="${key}". res:`, {
+                    colmena: res.colmena, codigo: res.codigo,
+                    medida_origen: res.medida_origen, medida_cm: res.medida_cm,
+                    fuente: res.fuente
+                });
             }
         }
 
