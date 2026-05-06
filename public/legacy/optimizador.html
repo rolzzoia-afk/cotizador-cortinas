@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "4.3";
+const VERSION_ACTUAL = "4.4";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5771,6 +5771,74 @@ async function confirmarYGuardarStaging() {
             }
             if (epPlan) throw epPlan;
             log('☁️ Último plan guardado en Supabase (accesible desde cualquier dispositivo)', 'info');
+
+            // ── CAPA 4: Verificación post-INSERT (PR #52, 2026-05-06) ──────
+            // Después de insertar el plan, verifica que existan events en
+            // tubos_historial para sus OTs. Si NO existen (por cualquier
+            // motivo: return silencioso, _currentUser null, RPC quirk, etc.),
+            // BORRA el plan recién insertado para no dejar huérfanos.
+            // Esta capa es defensa por DETECCIÓN, no prevención — cubre
+            // cualquier camino que escape a las capas 1, 1.5 y 2.
+            try {
+                const fechaInicioVerif = new Date(new Date(fecha).getTime() - 30000).toISOString();
+                const otsDelPlan = (SistemaInventario.ordenes || [])
+                    .map(o => String(o.ot || '').trim())
+                    .filter(ot => ot && ot !== '-');
+                const otsUnicas = [...new Set(otsDelPlan)];
+
+                if (otsUnicas.length > 0 && eventosCorte && eventosCorte.length > 0) {
+                    // Esperar 1 segundo para que el sync se asiente.
+                    await new Promise(r => setTimeout(r, 1000));
+
+                    const { count: eventCount } = await sbOpt
+                        .from('tubos_historial')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('empresa_id', EMPRESA_ID_OPT)
+                        .in('ot', otsUnicas)
+                        .in('evento', ['corte', 'sobrante', 'merma'])
+                        .gte('created_at', fechaInicioVerif);
+
+                    if ((eventCount ?? 0) === 0) {
+                        log('🚨 CAPA 4 ACTIVADA: plan insertado SIN events en tubos_historial. Deshaciendo...', 'error');
+
+                        // Buscar planes recientes del usuario con estas OTs (snapshot + activo)
+                        const { data: planesAEliminar } = await sbOpt
+                            .from('planes_corte')
+                            .select('id, ordenes')
+                            .eq('empresa_id', EMPRESA_ID_OPT)
+                            .eq('optimizer_email', _currentUser.email)
+                            .gte('fecha', fechaInicioVerif);
+
+                        const idsAEliminar = (planesAEliminar || [])
+                            .filter(pc => {
+                                const ots = ((pc.ordenes || [])).map(o => String(o.ot || '').trim());
+                                return ots.some(ot => otsUnicas.includes(ot));
+                            })
+                            .map(pc => pc.id);
+
+                        if (idsAEliminar.length > 0) {
+                            await sbOpt.from('planes_corte').delete().in('id', idsAEliminar);
+                            log(`🧹 ${idsAEliminar.length} plan(es) huérfano(s) eliminado(s) (snapshot + activo)`, 'warn');
+                        }
+
+                        alert(
+                            '🚫 PLAN NO GUARDADO\n\n' +
+                            'El plan se intentó guardar pero la sincronización con el inventario falló silenciosamente.\n' +
+                            'NO se descontaron tubos. NO quedó registrado en el historial.\n\n' +
+                            '→ Recargá la página (Ctrl+Shift+R) y volvé a confirmar.\n' +
+                            '→ Si el error persiste, avisá al admin.'
+                        );
+                        throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT');
+                    }
+                    log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
+                }
+            } catch (errCapa4) {
+                if (errCapa4.message && errCapa4.message.includes('Capa 4')) {
+                    throw errCapa4;
+                }
+                console.warn('[Capa 4] Verificación falló:', errCapa4);
+                log(`⚠️ Capa 4: no se pudo verificar (${errCapa4.message || errCapa4}). El plan queda en BD; revisar banner del admin.`, 'warn');
+            }
         } else {
             log('⚠️ Sin sesión activa — el plan NO quedó registrado en el historial.', 'warn');
         }
