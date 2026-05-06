@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.1";
+const VERSION_ACTUAL = "5.2";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5191,16 +5191,6 @@ async function construirEventosTubos() {
         console.warn('[OPT] No se pudo pre-fetchear colmena_tubos:', e?.message);
     }
 
-    // DEBUG: dump colmenasHistorico contenido para tubos sospechosos
-    const _sospechosos = ['A29', 'A35', 'A28'];
-    const _entriesSospechosas = (SistemaInventario.colmenasHistorico || []).filter(c =>
-        _sospechosos.includes(c.n_colmena)
-    );
-    console.group('[DEBUG colmenasHistorico] Entradas A29/A35/A28');
-    _entriesSospechosas.forEach(c => {
-        console.log(`  n=${c.n_colmena} cod=${c.cod} medida=${c.medida_cm}cm raiz=${c.tubo_raiz_id} estado=${c.estado} origen=${c.origen} _raizFresh=${c._raizFresh} _esOriginal=${c._esOriginal}`);
-    });
-    console.groupEnd();
 
     SistemaInventario.resultadosOptimizacion.forEach(item => {
         const res = item.resultado;
@@ -5231,9 +5221,16 @@ async function construirEventosTubos() {
 
         if (tubo_raiz_id) {
             fuenteFinal = 'historico';
-        } else if (!esMerma) {
+        } else {
             // Capa 5b: lookup en colmena_tubos de BD por (n_colmena, cod, medida_origen).
             // Number() en ambos lados para coincidir con la normalización del pre-fetch.
+            //
+            // IMPORTANTE: corremos también para mermas (esMerma=true). El bug
+            // raíz del incidente OT 2942 fue que esta lookup tenía un guard
+            // `!esMerma`. Cuando un corte deja merma, el optimizador limpia
+            // cod='' y medida_cm=0 en colmenasHistorico (línea 4248-4253),
+            // por lo que entradaHistorico find no matchea por (cod, medida).
+            // BD lookup debe correr para encontrar el UUID real.
             const key = `${res.colmena}|${res.codigo.toUpperCase().trim()}|${medidaOrigen}`;
             if (_bdTuboMap.has(key)) {
                 tubo_raiz_id = _bdTuboMap.get(key);
