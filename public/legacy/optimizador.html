@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.2";
+const VERSION_ACTUAL = "5.3";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1507,17 +1507,32 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
             const _SLOTS_PESO_G   = ['A27', 'A28', 'A29'];
             const _SLOTS_PESO_SET = new Set(_SLOTS_PESO_G);
 
-            // 1. Quitar de colmenasFinal cualquier entrada que ya esté en A27/A28/A29
-            //    (evitar duplicados si por alguna razón quedaron como 'disponible')
-            for (let i = colmenasFinal.length - 1; i >= 0; i--) {
-                if (_SLOTS_PESO_SET.has(colmenasFinal[i].n_colmena)) colmenasFinal.splice(i, 1);
-            }
-
-            // 2. Recoger todos los resultados de pesos de esta sesión
+            // Recoger resultados de pesos de esta sesión (necesario para el strip selectivo)
             const resultadosPeso = (SistemaInventario.resultadosOptimizacion || [])
                 .filter(item => item.orden && _TIPOS_PESO_G.has(item.orden.componente) && item.resultado);
 
-            // 3. Mapear cada peso a A27/A28/A29 en round-robin y agregar a colmenasFinal.
+            // 1. Strip SELECTIVO de duplicados.
+            //    Bug histórico (incidente OT 2942, 2026-05-06, 197 tubos perdidos):
+            //    el código original strippeaba TODOS los tubos de A27/A28/A29 antes de
+            //    re-agregar los pesos consolidados. Sobrantes legítimos de sesiones
+            //    previas y otros tubos en peso slots se perdían silenciosamente al sync
+            //    (DELETE+INSERT con app.sync_active=true no logea 'eliminado').
+            //
+            //    Ahora: solo strippeamos las entradas de A27/A28/A29 cuyo tubo_raiz_id
+            //    matchea con un resultadosPeso de esta sesión (caso edge donde el mismo
+            //    tubo ya estaba en peso slot y se va a re-agregar). El resto de tubos
+            //    en peso slots — sobrantes preservados, originales — se mantienen.
+            const _pesoUuidsActuales = new Set(
+                resultadosPeso.map(item => item.resultado?.tubo_raiz_id).filter(Boolean)
+            );
+            for (let i = colmenasFinal.length - 1; i >= 0; i--) {
+                const c = colmenasFinal[i];
+                if (_SLOTS_PESO_SET.has(c.n_colmena) && c.tubo_raiz_id && _pesoUuidsActuales.has(c.tubo_raiz_id)) {
+                    colmenasFinal.splice(i, 1);
+                }
+            }
+
+            // 2. Mapear cada peso a A27/A28/A29 en round-robin y agregar a colmenasFinal.
             //    tubo_raiz_id: preferir el del resultado (preserva linaje entre sesiones);
             //    si no hay, generar UUID fresco ACÁ (no en sincronizarColmenaFinalConTabla)
             //    para que la identidad sea estable entre retries y guardados sucesivos.
