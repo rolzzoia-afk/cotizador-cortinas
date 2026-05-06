@@ -189,15 +189,19 @@ function Configuracion() {
 
       <div>
         <Label htmlFor="msg-fallback" className="text-xs">
-          Mensaje fallback (cuando el agente no sabe algo)
+          Mensaje de derivación a vendedora
         </Label>
         <textarea
           id="msg-fallback"
           value={mensajeFallback}
           onChange={(e) => setMensajeFallback(e.target.value)}
           rows={2}
+          placeholder="Te derivo con una de nuestras vendedoras para que te ayude mejor con eso 🙌"
           className="mt-1 w-full rounded-md border bg-background px-3 py-2 text-sm"
         />
+        <p className="mt-1 text-[0.65rem] text-muted-foreground">
+          La IA usa esta frase cuando la pregunta no está en el FAQ y cuando deriva tras la primera respuesta. Si dejas vacío usa el default.
+        </p>
       </div>
 
       <div>

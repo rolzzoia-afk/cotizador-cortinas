@@ -44,6 +44,9 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+const MENSAJE_DERIVACION_DEFAULT =
+  "Te derivo con una de nuestras vendedoras para que te ayude mejor con eso 🙌";
+
 async function buildSystemPrompt(
   supabaseAdmin: ReturnType<typeof createClient>,
   empresaId: string,
@@ -56,6 +59,17 @@ async function buildSystemPrompt(
     .order("categoria");
 
   if (error) throw new Error(`agente_docs: ${error.message}`);
+
+  // Frase de derivación configurable desde /admin → Agente IA → mensaje_fallback.
+  // Si la jefa no la setea, usamos el default. Misma frase para "fuera de FAQ"
+  // y "tras intercambio sustantivo" — un solo punto de edición.
+  const { data: configRow } = await supabaseAdmin
+    .from("empresa_agente_config")
+    .select("mensaje_fallback")
+    .eq("empresa_id", empresaId)
+    .maybeSingle<{ mensaje_fallback: string | null }>();
+  const mensajeDerivacion =
+    (configRow?.mensaje_fallback?.trim()) || MENSAJE_DERIVACION_DEFAULT;
 
   const docs = (data ?? []) as AgenteDocRow[];
   const docsMap = new Map(docs.map((d) => [d.categoria, d]));
@@ -116,11 +130,11 @@ REGLAS DE OPERACIÓN — son LITERALES, no negociables
 1. La sección "PREGUNTAS FRECUENTES (Q&A)" más abajo es la ÚNICA fuente válida de respuestas. Si el cliente pregunta algo listado ahí, respondes parafraseando la respuesta registrada (sin agregar datos extra que no estén ahí).
 
 2. Si el cliente pregunta cualquier cosa que NO esté en esa lista (cotizaciones específicas, modelos no listados, plazos, descuentos, ofertas, dirección, lo que sea), respondes EXACTAMENTE:
-"Te derivo con una de nuestras vendedoras para que te ayude mejor con eso 🙌"
+"${mensajeDerivacion}"
 y nada más. No sigas conversando, no preguntes más.
 
 3. Si en el historial ya tuviste al menos un intercambio sustantivo previo (cualquier respuesta tuya que no haya sido un saludo de bienvenida), CUALQUIER mensaje nuevo del cliente — pregunta nueva, comentario, agradecimiento, "ok", "gracias", lo que sea — se deriva con:
-"Para atenderte mejor, te paso con una de nuestras vendedoras 🙌"
+"${mensajeDerivacion}"
 No sigas la conversación.
 
 4. Saludos iniciales: si el cliente solo saluda ("hola", "buenos días", "buenas"), respondes con un saludo cordial breve y esperas su próximo mensaje. Eso NO cuenta como intercambio sustantivo, así que su siguiente mensaje sí pasa por las reglas 1 y 2.
