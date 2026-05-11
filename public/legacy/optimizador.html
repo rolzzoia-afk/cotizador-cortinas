@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.4";
+const VERSION_ACTUAL = "5.5";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -3357,12 +3357,37 @@ function evaluarSobrante(sobrante) {
 
 function normalizarCodigo(codigo) { return String(codigo).trim().toUpperCase(); }
 
+// Pesos color-específicos: NUNCA aceptar reemplazo cross-color aunque el
+// catálogo lo permita. Operario subió catálogo con E19→E20 (peso blanco
+// reemplazado por peso gris) y una cortina blanca quedó con peso gris.
+const PESO_COLOR_FIJO = { 'E18': 'NEGRO', 'E19': 'BLANCO', 'E20': 'GRIS' };
+
 function buscarReemplazos(codigo) {
     const codNormalizado = normalizarCodigo(codigo);
+    let reemplazos = null;
     for (const [key, value] of Object.entries(SistemaInventario.catalogoReemplazos)) {
-        if (normalizarCodigo(key) === codNormalizado) return String(value).split(';').map(r => r.trim()).filter(r => r);
+        if (normalizarCodigo(key) === codNormalizado) {
+            reemplazos = String(value).split(';').map(r => r.trim()).filter(r => r);
+            break;
+        }
     }
-    return null;
+    if (!reemplazos) return null;
+
+    const colorOriginal = PESO_COLOR_FIJO[codNormalizado];
+    if (colorOriginal) {
+        const filtrados = reemplazos.filter(r => {
+            const colorR = PESO_COLOR_FIJO[normalizarCodigo(r)];
+            return !colorR || colorR === colorOriginal;
+        });
+        if (filtrados.length < reemplazos.length) {
+            const bloqueados = reemplazos.filter(r => !filtrados.includes(r)).join(', ');
+            log(`⚠️ Pesos color-fijo: bloqueando reemplazo ${codNormalizado}(${colorOriginal}) → ${bloqueados} (color distinto). Arreglá el catálogo o pedí stock del color correcto.`, 'warn');
+        }
+        if (filtrados.length === 0) return null;
+        return filtrados;
+    }
+
+    return reemplazos;
 }
 
 function buscarTubosParaOrden(codigoBuscado, medidaRequerida, codigoOriginal = null) {
