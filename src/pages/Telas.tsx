@@ -161,13 +161,13 @@ function fmtFechaHora(f: string | null): string {
 function tipoBadgeCls(tipo: string | null): string {
   switch (tipo) {
     case 'BK':
-      return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30';
+      return 'bg-accent/20 text-accent border-accent/30';
     case 'DU':
-      return 'bg-purple-500/20 text-purple-300 border-purple-500/30';
+      return 'bg-accent/20 text-accent border-purple-500/30';
     case 'SC':
-      return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+      return 'bg-accent/20 text-blue-300 border-blue-500/30';
     default:
-      return 'bg-zinc-500/10 text-zinc-400 border-white/10';
+      return 'bg-muted text-muted-foreground border-border';
   }
 }
 
@@ -282,25 +282,25 @@ export function Telas() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-950 text-zinc-500">
+      <div className="flex h-full items-center justify-center bg-background text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+    <div className="min-h-full bg-background text-foreground">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <button
           onClick={() => navigate('/landing')}
-          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Inicio
         </button>
         <h1 className="flex-1 text-base font-bold">Inventario de Telas</h1>
       </div>
 
-      <div className="border-b border-white/[0.07] bg-zinc-950 px-5">
+      <div className="border-b border-border bg-background px-5">
         <div className="flex gap-1 overflow-x-auto">
           {(
             [
@@ -316,14 +316,14 @@ export function Telas() {
               className={cn(
                 'relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition',
                 tab === t.k
-                  ? 'border-indigo-500 text-indigo-400'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-muted-foreground hover:text-foreground',
               )}
             >
               {t.i}
               {t.l}
               {t.k === 'fallas' && fallasPendientes > 0 && (
-                <span className="ml-1 rounded-full bg-red-500/30 px-1.5 py-0.5 text-[10px] font-bold text-red-300">
+                <span className="ml-1 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
                   {fallasPendientes}
                 </span>
               )}
@@ -455,18 +455,18 @@ function CatalogoTab({
       {/* Filters */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar código, nemotécnico, proveedor…"
-            className="border-white/10 bg-zinc-900 pl-8"
+            className="border-border bg-card pl-8"
           />
         </div>
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
-          className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+          className="rounded-md border border-border bg-card px-2 py-2 text-sm"
         >
           <option value="">Todos los tipos</option>
           <option value="BK">Blackout</option>
@@ -476,7 +476,7 @@ function CatalogoTab({
         <select
           value={filtroGrupo}
           onChange={(e) => setFiltroGrupo(e.target.value)}
-          className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+          className="rounded-md border border-border bg-card px-2 py-2 text-sm"
         >
           <option value="">Todos los grupos</option>
           {(validadores.GRUPO || []).map((g) => (
@@ -488,7 +488,7 @@ function CatalogoTab({
         <select
           value={filtroEstado}
           onChange={(e) => setFiltroEstado(e.target.value)}
-          className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+          className="rounded-md border border-border bg-card px-2 py-2 text-sm"
         >
           <option value="">Todos los estados</option>
           <option value="ACTIVO">Activo</option>
@@ -502,10 +502,10 @@ function CatalogoTab({
       </div>
 
       {/* Tabla */}
-      <div className="overflow-auto rounded-2xl border border-white/[0.07] bg-zinc-900">
+      <div className="overflow-auto rounded-2xl border border-border bg-card">
         <table className="w-full border-collapse text-[12px]" style={{ minWidth: 1400 }}>
           <thead>
-            <tr className="border-b border-white/10 bg-white/[0.03] text-[10px] uppercase tracking-wider text-zinc-500">
+            <tr className="border-b border-border bg-white/[0.03] text-[10px] uppercase tracking-wider text-muted-foreground">
               {[
                 ['codigo', 'Código'],
                 ['tipo', 'Tipo'],
@@ -525,7 +525,7 @@ function CatalogoTab({
                 <th
                   key={k}
                   onClick={() => sort(k as keyof Tela)}
-                  className="cursor-pointer whitespace-nowrap px-2.5 py-2 text-left font-bold hover:text-zinc-300"
+                  className="cursor-pointer whitespace-nowrap px-2.5 py-2 text-left font-bold hover:text-foreground"
                 >
                   {l}
                 </th>
@@ -538,7 +538,7 @@ function CatalogoTab({
               <tr>
                 <td
                   colSpan={15}
-                  className="px-4 py-8 text-center text-sm text-zinc-500"
+                  className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Sin resultados
                 </td>
@@ -547,7 +547,7 @@ function CatalogoTab({
               lista.map((t) => (
                 <tr
                   key={t.id}
-                  className="border-b border-white/[0.04] hover:bg-white/[0.02]"
+                  className="border-b border-border hover:bg-white/[0.02]"
                 >
                   <td className="whitespace-nowrap px-2.5 py-2 font-bold">
                     {t.codigo || '—'}
@@ -566,14 +566,14 @@ function CatalogoTab({
                       '—'
                     )}
                   </td>
-                  <td className="px-2.5 py-2 text-zinc-400">{t.grupo || '—'}</td>
+                  <td className="px-2.5 py-2 text-muted-foreground">{t.grupo || '—'}</td>
                   <td className="px-2.5 py-2">{t.nemotecnico || '—'}</td>
-                  <td className="px-2.5 py-2 text-zinc-400">{t.proveedor || '—'}</td>
-                  <td className="px-2.5 py-2 text-[11px] text-zinc-500">
+                  <td className="px-2.5 py-2 text-muted-foreground">{t.proveedor || '—'}</td>
+                  <td className="px-2.5 py-2 text-[11px] text-muted-foreground">
                     {t.cod_ext || '—'}
                   </td>
                   <td
-                    className="max-w-[140px] truncate px-2.5 py-2 text-zinc-400"
+                    className="max-w-[140px] truncate px-2.5 py-2 text-muted-foreground"
                     title={t.descriptor || ''}
                   >
                     {t.descriptor || '—'}
@@ -582,36 +582,36 @@ function CatalogoTab({
                   <td className="px-2.5 py-2 text-center font-semibold">
                     {t.stock_total ?? '—'}
                   </td>
-                  <td className="px-2.5 py-2 text-center text-zinc-400">
+                  <td className="px-2.5 py-2 text-center text-muted-foreground">
                     {t.stock_mp ?? '—'}
                   </td>
-                  <td className="px-2.5 py-2 text-center text-zinc-400">
+                  <td className="px-2.5 py-2 text-center text-muted-foreground">
                     {t.stock_liberado ?? '—'}
                   </td>
                   <td className="px-2.5 py-2">
-                    <code className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[11px] text-indigo-300">
+                    <code className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] text-accent">
                       {t.posicion || '—'}
                     </code>
                   </td>
                   <td className="px-2.5 py-2">
-                    <span className="rounded-full border border-white/10 bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-300">
+                    <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] text-foreground">
                       {t.almacen === 'LIBERADO' ? 'Liberado' : t.almacen === 'MATERIAS PRIMAS' ? 'MP' : '—'}
                     </span>
                   </td>
-                  <td className="px-2.5 py-2 text-center text-[11px] text-zinc-400">
+                  <td className="px-2.5 py-2 text-center text-[11px] text-muted-foreground">
                     {t.estado || '—'}
                   </td>
                   <td className="whitespace-nowrap px-2.5 py-2 text-center">
                     <button
                       onClick={() => setModalTela(t)}
-                      className="mr-1 rounded-md border border-white/10 bg-zinc-800 p-1.5 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+                      className="mr-1 rounded-md border border-border bg-secondary p-1.5 hover:border-accent/40 hover:bg-accent/10"
                       title="Editar"
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => setModalQR(t)}
-                      className="rounded-md border border-purple-500/30 bg-purple-500/10 p-1.5 text-purple-400 hover:bg-purple-500/20"
+                      className="rounded-md border border-purple-500/30 bg-accent/10 p-1.5 text-accent hover:bg-accent/20"
                       title="QR"
                     >
                       <QrCode className="h-3.5 w-3.5" />
@@ -623,7 +623,7 @@ function CatalogoTab({
           </tbody>
         </table>
       </div>
-      <div className="mt-2 text-xs text-zinc-500">
+      <div className="mt-2 text-xs text-muted-foreground">
         Mostrando {lista.length} de {telas.length} telas
       </div>
 
@@ -660,13 +660,13 @@ function StatCard({
 }) {
   return (
     <div
-      className="rounded-xl border border-white/[0.07] bg-zinc-900 p-3"
+      className="rounded-xl border border-border bg-card p-3"
       style={{ borderColor: color ? `${color}40` : undefined }}
     >
       <div className="text-2xl font-bold" style={{ color }}>
         {value}
       </div>
-      <div className="text-[11px] text-zinc-500">{label}</div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
     </div>
   );
 }
@@ -785,7 +785,7 @@ function TelaDialog({
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-h-[92vh] max-w-3xl overflow-y-auto border-border bg-card text-foreground">
         <DialogHeader>
           <DialogTitle>{tela ? `Editar — ${tela.codigo}` : 'Nueva Tela'}</DialogTitle>
         </DialogHeader>
@@ -926,7 +926,7 @@ function TelaDialog({
             onChange={(e) => set('observaciones', e.target.value || null)}
             rows={2}
             placeholder="Notas sobre esta tela…"
-            className="w-full resize-none rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+            className="w-full resize-none rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
           />
         </div>
 
@@ -976,21 +976,21 @@ function TelaDialog({
             >
               <ImageIcon className="h-3.5 w-3.5" /> Desde Galería
             </Button>
-            {uploadMsg && <span className="text-[11px] text-zinc-400">{uploadMsg}</span>}
+            {uploadMsg && <span className="text-[11px] text-muted-foreground">{uploadMsg}</span>}
           </div>
           {form.foto_url && (
             <div className="relative mt-2">
               <img
                 src={form.foto_url}
                 alt="preview"
-                className="max-h-48 rounded-lg border border-white/10 object-contain"
+                className="max-h-48 rounded-lg border border-border object-contain"
               />
               <button
                 onClick={() => {
                   set('foto_url', null);
                   setUploadMsg(null);
                 }}
-                className="absolute right-2 top-2 rounded-full bg-black/70 p-1 text-red-400 hover:bg-black"
+                className="absolute right-2 top-2 rounded-full bg-background/80 p-1 text-destructive hover:bg-black"
                 title="Quitar foto"
               >
                 <X className="h-4 w-4" />
@@ -1005,14 +1005,14 @@ function TelaDialog({
               <Button
                 variant="outline"
                 onClick={() => setConfirmDel(true)}
-                className="gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10"
+                className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/15"
               >
                 <Trash2 className="h-4 w-4" /> Eliminar
               </Button>
             )}
             {tela && confirmDel && (
               <div className="flex items-center gap-2 text-xs">
-                <span className="text-red-400">¿Confirmar borrado?</span>
+                <span className="text-destructive">¿Confirmar borrado?</span>
                 <Button
                   size="sm"
                   variant="outline"
@@ -1024,7 +1024,7 @@ function TelaDialog({
                   size="sm"
                   onClick={eliminar}
                   disabled={saving}
-                  className="bg-red-600 hover:bg-red-700"
+                  className="bg-destructive hover:bg-destructive/90"
                 >
                   Sí, eliminar
                 </Button>
@@ -1067,7 +1067,7 @@ function FieldText({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="border-white/10 bg-zinc-800"
+        className="border-border bg-secondary"
       />
     </div>
   );
@@ -1095,7 +1095,7 @@ function FieldNumber({
           const v = e.target.value;
           onChange(v === '' ? null : Number(v));
         }}
-        className="border-white/10 bg-zinc-800"
+        className="border-border bg-secondary"
       />
     </div>
   );
@@ -1117,7 +1117,7 @@ function FieldSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
       >
         {options.map((o) => (
           <option key={o.v} value={o.v}>
@@ -1146,7 +1146,7 @@ function FieldSelectValidador({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
       >
         <option value="">— Seleccionar —</option>
         {todas.map((o) => (
@@ -1182,27 +1182,27 @@ function QRTelaDialog({
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-md border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-w-md border-border bg-card text-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <QrCode className="h-5 w-5 text-purple-400" />
+            <QrCode className="h-5 w-5 text-accent" />
             {tela.nemotecnico || tela.codigo}
           </DialogTitle>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-muted-foreground">
             Código: {tela.codigo}
             {tela.tipo ? ` · Tipo: ${tela.tipo}` : ''}
           </p>
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white p-4 text-black">
+          <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-4 text-black">
             <QRCodeSVG value={`TEL:${codSafe}`} size={160} level="M" />
             <div className="text-center text-[11px] font-semibold">
               TEL:{codSafe}
             </div>
           </div>
           {posicion && (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white p-4 text-black">
+            <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-white p-4 text-black">
               <QRCodeSVG value={telaToQRContent(posicion, almacen)} size={160} level="M" />
               <div className="text-center text-[11px] font-semibold">
                 Pos. {posicion}
@@ -1213,7 +1213,7 @@ function QRTelaDialog({
         </div>
 
         {!posicion && (
-          <p className="text-center text-xs text-zinc-500">
+          <p className="text-center text-xs text-muted-foreground">
             Sin posición física asignada aún. El QR de ubicación aparece cuando la tela
             está cargada en un slot del rack.
           </p>
@@ -1271,7 +1271,7 @@ function RackTab({
         <select
           value={filtroAlm}
           onChange={(e) => setFiltroAlm(e.target.value)}
-          className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+          className="rounded-md border border-border bg-card px-2 py-2 text-sm"
         >
           <option value="">Todos los almacenes</option>
           <option value="LIBERADO">Liberado</option>
@@ -1280,7 +1280,7 @@ function RackTab({
         <select
           value={filtroTipo}
           onChange={(e) => setFiltroTipo(e.target.value)}
-          className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+          className="rounded-md border border-border bg-card px-2 py-2 text-sm"
         >
           <option value="">Todos los tipos</option>
           <option value="BK">Blackout</option>
@@ -1288,15 +1288,15 @@ function RackTab({
           <option value="SC">Screen</option>
         </select>
         <div className="relative max-w-xs flex-1">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar código en rack…"
-            className="border-white/10 bg-zinc-900 pl-8"
+            className="border-border bg-card pl-8"
           />
         </div>
-        <div className="ml-auto flex flex-wrap gap-3 text-[11px] text-zinc-400">
+        <div className="ml-auto flex flex-wrap gap-3 text-[11px] text-muted-foreground">
           <LegendDot color="#6366f1" label="Blackout" />
           <LegendDot color="#a855f7" label="Duo" />
           <LegendDot color="#3b82f6" label="Screen" />
@@ -1309,7 +1309,7 @@ function RackTab({
         {bodegas.map(({ label, map }) => (
           <div key={label ?? 'main'}>
             {label && (
-              <div className="mb-2 text-sm font-bold uppercase tracking-wider text-zinc-400">
+              <div className="mb-2 text-sm font-bold uppercase tracking-wider text-muted-foreground">
                 {label}
               </div>
             )}
@@ -1379,16 +1379,16 @@ function RackSection({
   onClickSlot: (slot: string, entrada: ColmenaEntry | null) => void;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.07] bg-zinc-900 p-3">
-      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-400">
+    <div className="rounded-xl border border-border bg-card p-3">
+      <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
         {nombre}
       </div>
       <table className="w-full border-separate border-spacing-[3px] text-[10px]">
         <thead>
           <tr>
-            <th className="w-6 text-center text-zinc-600">#</th>
+            <th className="w-6 text-center text-muted-foreground">#</th>
             {config.cols.map((col) => (
-              <th key={col} className="text-center text-zinc-600">
+              <th key={col} className="text-center text-muted-foreground">
                 {col}
               </th>
             ))}
@@ -1397,12 +1397,12 @@ function RackSection({
         <tbody>
           {config.rows.map((row) => (
             <tr key={row.num}>
-              <td className="text-center text-[10px] text-zinc-600">{row.num}</td>
+              <td className="text-center text-[10px] text-muted-foreground">{row.num}</td>
               {row.slots.map((slot, i) => {
                 if (!slot) {
                   return (
                     <td key={i} className="p-0">
-                      <div className="h-10 rounded-sm bg-zinc-900/50" />
+                      <div className="h-10 rounded-sm bg-card/50" />
                     </td>
                   );
                 }
@@ -1493,7 +1493,7 @@ function DetalleSlotDialog({
 }) {
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-sm border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-w-sm border-border bg-card text-foreground">
         <DialogHeader>
           <DialogTitle>Posición {slot}</DialogTitle>
         </DialogHeader>
@@ -1511,22 +1511,22 @@ function DetalleSlotDialog({
             )}
             <strong>{entrada.codigo}</strong>
           </div>
-          {tela?.nemotecnico && <div className="text-sm text-zinc-400">{tela.nemotecnico}</div>}
+          {tela?.nemotecnico && <div className="text-sm text-muted-foreground">{tela.nemotecnico}</div>}
           {tela?.ancho != null && (
             <div className="text-xs">
-              <span className="text-zinc-500">Ancho:</span> {tela.ancho} m
+              <span className="text-muted-foreground">Ancho:</span> {tela.ancho} m
             </div>
           )}
           {tela?.descriptor && (
-            <div className="text-xs text-zinc-500">{tela.descriptor}</div>
+            <div className="text-xs text-muted-foreground">{tela.descriptor}</div>
           )}
           {entrada.almacen && (
             <div className="text-xs">
-              <span className="text-zinc-500">Almacén:</span> {entrada.almacen}
+              <span className="text-muted-foreground">Almacén:</span> {entrada.almacen}
             </div>
           )}
           {fallas.length > 0 && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
+            <div className="rounded-lg border border-destructive/30 bg-destructive/15 p-3 text-xs text-destructive">
               <AlertTriangle className="mr-1 inline h-3.5 w-3.5" />
               {fallas.length} falla(s) pendiente(s)
             </div>
@@ -1578,19 +1578,19 @@ function MovimientosTab({
       <div className="mb-3 flex flex-wrap gap-2">
         <Button
           onClick={() => setModalMov('INGRESO')}
-          className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+          className="gap-1.5 bg-success hover:bg-success/90"
         >
           <ArrowDownCircle className="h-4 w-4" /> Nueva Entrada
         </Button>
         <Button
           onClick={() => setModalMov('SALIDA')}
-          className="gap-1.5 bg-red-600 hover:bg-red-700"
+          className="gap-1.5 bg-destructive hover:bg-destructive/90"
         >
           <ArrowUpCircle className="h-4 w-4" /> Nueva Salida
         </Button>
         <Button
           onClick={() => setModalMov('TRASLADO')}
-          className="gap-1.5 bg-amber-600 hover:bg-amber-700"
+          className="gap-1.5 bg-warning hover:bg-warning/90"
         >
           <ArrowLeftRight className="h-4 w-4" /> Traslado
         </Button>
@@ -1605,7 +1605,7 @@ function MovimientosTab({
           <select
             value={filtroTipo}
             onChange={(e) => setFiltroTipo(e.target.value)}
-            className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+            className="rounded-md border border-border bg-card px-2 py-2 text-sm"
           >
             <option value="">Todos</option>
             <option value="INGRESO">Entradas</option>
@@ -1614,19 +1614,19 @@ function MovimientosTab({
             <option value="AJUSTE">Ajustes</option>
           </select>
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar…"
-              className="w-56 border-white/10 bg-zinc-900 pl-8"
+              className="w-56 border-border bg-card pl-8"
             />
           </div>
         </div>
       </div>
 
       {lista.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/[0.07] bg-zinc-900 py-10 text-center text-sm text-zinc-400">
+        <div className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card py-10 text-center text-sm text-muted-foreground">
           <ArrowLeftRight className="h-8 w-8 opacity-60" />
           No hay movimientos registrados aún
         </div>
@@ -1636,12 +1636,12 @@ function MovimientosTab({
             const tela = telas.find((t) => t.codigo === m.codigo);
             const tipoCls =
               m.tipo === 'INGRESO'
-                ? 'bg-emerald-500/15 text-emerald-400'
+                ? 'bg-success/15 text-success'
                 : m.tipo === 'SALIDA'
-                  ? 'bg-red-500/15 text-red-400'
+                  ? 'bg-destructive/15 text-destructive'
                   : m.tipo === 'TRASLADO'
-                    ? 'bg-amber-500/15 text-amber-400'
-                    : 'bg-zinc-700/30 text-zinc-400';
+                    ? 'bg-warning/15 text-warning'
+                    : 'bg-muted/30 text-muted-foreground';
             const tipoIcon =
               m.tipo === 'INGRESO'
                 ? '↓'
@@ -1653,7 +1653,7 @@ function MovimientosTab({
             return (
               <div
                 key={m.id}
-                className="grid grid-cols-[40px_1fr_auto] items-start gap-3 rounded-xl border border-white/[0.07] bg-zinc-900 p-3"
+                className="grid grid-cols-[40px_1fr_auto] items-start gap-3 rounded-xl border border-border bg-card p-3"
               >
                 <div
                   className={cn(
@@ -1667,19 +1667,19 @@ function MovimientosTab({
                   <div className="text-[13px] font-semibold">
                     {m.tipo} — <strong>{m.codigo}</strong>
                     {tela && (
-                      <span className="ml-1 text-zinc-500">({tela.nemotecnico || ''})</span>
+                      <span className="ml-1 text-muted-foreground">({tela.nemotecnico || ''})</span>
                     )}
                   </div>
-                  <div className="mt-0.5 text-[11px] text-zinc-500">
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
                     {m.metros}m · {m.almacen || '—'}
                     {m.ot && ` · OT: ${m.ot}`}
                     {m.responsable && ` · ${m.responsable}`}
                   </div>
                   {m.notas && (
-                    <div className="mt-1 text-[11px] text-zinc-500">{m.notas}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">{m.notas}</div>
                   )}
                 </div>
-                <div className="whitespace-nowrap text-[11px] text-zinc-500">
+                <div className="whitespace-nowrap text-[11px] text-muted-foreground">
                   {fmtFechaHora(m.fecha)}
                 </div>
               </div>
@@ -1770,7 +1770,7 @@ function MovimientoDialog({
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-w-lg border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-w-lg border-border bg-card text-foreground">
         <DialogHeader>
           <DialogTitle>{titulos[tipo]}</DialogTitle>
         </DialogHeader>
@@ -1780,7 +1780,7 @@ function MovimientoDialog({
             <select
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
             >
               <option value="">— Seleccionar tela —</option>
               {telas.map((t) => (
@@ -1821,7 +1821,7 @@ function MovimientoDialog({
             onChange={(e) => setNotas(e.target.value)}
             rows={2}
             placeholder="Detalle del movimiento…"
-            className="w-full resize-none rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+            className="w-full resize-none rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
           />
         </div>
         <DialogFooter>
@@ -1877,7 +1877,7 @@ function FallasTab({
       <div className="mb-3 flex flex-wrap gap-2">
         <Button
           onClick={() => setModalFalla(null)}
-          className="gap-1.5 bg-red-600 hover:bg-red-700"
+          className="gap-1.5 bg-destructive hover:bg-destructive/90"
         >
           <Plus className="h-4 w-4" /> Reportar Falla
         </Button>
@@ -1885,7 +1885,7 @@ function FallasTab({
           <select
             value={filtroRes}
             onChange={(e) => setFiltroRes(e.target.value)}
-            className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+            className="rounded-md border border-border bg-card px-2 py-2 text-sm"
           >
             <option value="">Todos</option>
             <option value="NO">Pendientes</option>
@@ -1895,7 +1895,7 @@ function FallasTab({
           <select
             value={filtroTF}
             onChange={(e) => setFiltroTF(e.target.value)}
-            className="rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+            className="rounded-md border border-border bg-card px-2 py-2 text-sm"
           >
             <option value="">Todos los tipos</option>
             {(validadores.TIPO_FALLA || []).map((t) => (
@@ -1905,21 +1905,21 @@ function FallasTab({
             ))}
           </select>
           <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               placeholder="Buscar…"
-              className="w-56 border-white/10 bg-zinc-900 pl-8"
+              className="w-56 border-border bg-card pl-8"
             />
           </div>
         </div>
       </div>
 
-      <div className="overflow-auto rounded-2xl border border-white/[0.07] bg-zinc-900">
+      <div className="overflow-auto rounded-2xl border border-border bg-card">
         <table className="w-full border-collapse text-[12px]" style={{ minWidth: 1400 }}>
           <thead>
-            <tr className="border-b border-white/10 bg-white/[0.03] text-[10px] uppercase tracking-wider text-zinc-500">
+            <tr className="border-b border-border bg-white/[0.03] text-[10px] uppercase tracking-wider text-muted-foreground">
               {[
                 'Código',
                 'Tipo',
@@ -1948,7 +1948,7 @@ function FallasTab({
               <tr>
                 <td
                   colSpan={15}
-                  className="px-4 py-8 text-center text-sm text-zinc-500"
+                  className="px-4 py-8 text-center text-sm text-muted-foreground"
                 >
                   Sin fallas — todo en orden ✓
                 </td>
@@ -1957,10 +1957,10 @@ function FallasTab({
               lista.map((f) => {
                 const badgeCls =
                   f.resuelto === 'SI'
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    ? 'bg-success/15 text-success border-success/30'
                     : f.resuelto === 'EN PROCESO'
-                      ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                      : 'bg-red-500/15 text-red-400 border-red-500/30';
+                      ? 'bg-warning/15 text-warning border-warning/30'
+                      : 'bg-destructive/15 text-destructive border-destructive/30';
                 const badgeTxt =
                   f.resuelto === 'SI'
                     ? 'Resuelto'
@@ -1970,7 +1970,7 @@ function FallasTab({
                 return (
                   <tr
                     key={f.id}
-                    className="border-b border-white/[0.04] hover:bg-white/[0.02]"
+                    className="border-b border-border hover:bg-white/[0.02]"
                   >
                     <td className="whitespace-nowrap px-2.5 py-2 font-bold">
                       {f.codigo || '—'}
@@ -1989,20 +1989,20 @@ function FallasTab({
                         '—'
                       )}
                     </td>
-                    <td className="px-2.5 py-2 text-zinc-400">{f.grupo || '—'}</td>
-                    <td className="px-2.5 py-2 text-zinc-400">{f.proveedor || '—'}</td>
+                    <td className="px-2.5 py-2 text-muted-foreground">{f.grupo || '—'}</td>
+                    <td className="px-2.5 py-2 text-muted-foreground">{f.proveedor || '—'}</td>
                     <td className="px-2.5 py-2">{f.nemotecnico || '—'}</td>
                     <td className="px-2.5 py-2 text-center">{f.ancho ?? '—'}</td>
                     <td className="px-2.5 py-2 text-center">{f.alto ?? '—'}</td>
                     <td
-                      className="max-w-[140px] truncate px-2.5 py-2 text-[11px] text-zinc-500"
+                      className="max-w-[140px] truncate px-2.5 py-2 text-[11px] text-muted-foreground"
                       title={f.observaciones || ''}
                     >
                       {f.observaciones || '—'}
                     </td>
                     <td className="px-2.5 py-2">
                       {f.tipo_falla && (
-                        <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">
+                        <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[10px] text-warning">
                           {f.tipo_falla}
                         </span>
                       )}
@@ -2017,7 +2017,7 @@ function FallasTab({
                       {f.responsable || '—'}
                     </td>
                     <td
-                      className="max-w-[140px] truncate px-2.5 py-2 text-[11px] text-zinc-500"
+                      className="max-w-[140px] truncate px-2.5 py-2 text-[11px] text-muted-foreground"
                       title={f.solucion || ''}
                     >
                       {f.solucion || '—'}
@@ -2035,7 +2035,7 @@ function FallasTab({
                     <td className="px-2.5 py-2 text-center">
                       <button
                         onClick={() => setModalFalla(f)}
-                        className="rounded-md border border-white/10 bg-zinc-800 p-1.5 hover:border-indigo-500/40 hover:bg-indigo-500/10"
+                        className="rounded-md border border-border bg-secondary p-1.5 hover:border-accent/40 hover:bg-accent/10"
                         title="Editar"
                       >
                         <Pencil className="h-3.5 w-3.5" />
@@ -2137,7 +2137,7 @@ function FallaDialog({
 
   return (
     <Dialog open onOpenChange={() => onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto border-border bg-card text-foreground">
         <DialogHeader>
           <DialogTitle>{falla ? 'Editar Falla' : 'Reportar Falla'}</DialogTitle>
         </DialogHeader>
@@ -2147,7 +2147,7 @@ function FallaDialog({
             <select
               value={codigo}
               onChange={(e) => setCodigo(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
             >
               <option value="">— Seleccionar tela —</option>
               {telas.map((t) => (
@@ -2177,7 +2177,7 @@ function FallaDialog({
               type="date"
               value={fechaReporte}
               onChange={(e) => setFechaReporte(e.target.value)}
-              className="border-white/10 bg-zinc-800"
+              className="border-border bg-secondary"
             />
           </div>
           <FieldSelectValidador
@@ -2200,7 +2200,7 @@ function FallaDialog({
             onChange={(e) => setObservaciones(e.target.value)}
             rows={2}
             placeholder="Detalle de la falla…"
-            className="w-full resize-none rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+            className="w-full resize-none rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
           />
         </div>
         <div>
@@ -2210,7 +2210,7 @@ function FallaDialog({
             onChange={(e) => setSolucion(e.target.value)}
             rows={2}
             placeholder="Qué se hizo para resolver…"
-            className="w-full resize-none rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm"
+            className="w-full resize-none rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
           />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -2220,7 +2220,7 @@ function FallaDialog({
               type="date"
               value={fechaRes}
               onChange={(e) => setFechaRes(e.target.value)}
-              className="border-white/10 bg-zinc-800"
+              className="border-border bg-secondary"
             />
           </div>
           <FieldSelect

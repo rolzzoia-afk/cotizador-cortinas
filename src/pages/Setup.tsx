@@ -108,7 +108,7 @@ export function Setup() {
                 className={cn(
                   'h-2.5 w-2.5 rounded-full transition-all',
                   n === paso && 'scale-125 bg-primary',
-                  n < paso && 'bg-green-500',
+                  n < paso && 'bg-success',
                   n > paso && 'bg-muted',
                 )}
               />

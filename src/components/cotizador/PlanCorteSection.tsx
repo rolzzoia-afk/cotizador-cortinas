@@ -111,9 +111,9 @@ function dibujarCanvas(
 }
 
 function eficClass(efic: number): string {
-  if (efic >= 70) return 'text-emerald-400';
-  if (efic >= 40) return 'text-amber-400';
-  return 'text-red-400';
+  if (efic >= 70) return 'text-success';
+  if (efic >= 40) return 'text-warning';
+  return 'text-destructive';
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -270,26 +270,26 @@ function CardSobrante({
 
   return (
     <div
-      className={`mb-3 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 ${faded}`}
+      className={`mb-3 rounded-lg border border-success/30 bg-success/15 p-3 ${faded}`}
     >
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
             <span className="font-mono">{grupo.sobrante.cod}</span>
             {grupo.regla === 1 ? (
-              <span className="rounded-full border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] text-emerald-400">
+              <span className="rounded-full border border-success/30 bg-success/15 px-2 py-0.5 text-[0.65rem] text-success">
                 ✓ Regla 1 — exacto
               </span>
             ) : (
-              <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-0.5 text-[0.65rem] text-amber-400">
+              <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[0.65rem] text-warning">
                 ≈ Regla 2 — ajuste (±10cm)
               </span>
             )}
           </div>
-          <div className="mt-1 text-xs text-zinc-400">
+          <div className="mt-1 text-xs text-muted-foreground">
             {grupo.sobrante.ancho} × {grupo.sobrante.alto} cm
             {grupo.sobranteAncho && (
-              <div className="mt-1 text-[0.7rem] text-emerald-300">
+              <div className="mt-1 text-[0.7rem] text-success">
                 <Scissors className="mr-1 inline h-3 w-3" />
                 Franja sobrante: <strong>{grupo.sobranteAncho.ancho}×
                 {grupo.sobranteAncho.alto}cm</strong> — se registra al confirmar
@@ -298,7 +298,7 @@ function CardSobrante({
           </div>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="text-[0.68rem] text-zinc-500">
+          <span className="text-[0.68rem] text-muted-foreground">
             📍 {grupo.sobrante.ubicacion || '—'}
           </span>
           <span className={`text-[0.7rem] font-semibold ${eficClass(efic)}`}>
@@ -323,7 +323,7 @@ function CardSobrante({
       </div>
 
       <div className="my-2 flex justify-center">
-        <canvas ref={canvasRef} className="rounded border border-white/10" />
+        <canvas ref={canvasRef} className="rounded border border-border" />
       </div>
 
       {step === 'inicial' && (
@@ -331,7 +331,7 @@ function CardSobrante({
           size="sm"
           onClick={iniciar}
           disabled={saving}
-          className="gap-1 bg-emerald-600 hover:bg-emerald-500"
+          className="gap-1 bg-success hover:bg-success/90"
         >
           {saving ? (
             <Loader2 className="h-3 w-3 animate-spin" />
@@ -343,10 +343,10 @@ function CardSobrante({
       )}
 
       {step === 'inputs' && (
-        <div className="space-y-2 border-t border-emerald-500/20 pt-2">
+        <div className="space-y-2 border-t border-success/30 pt-2">
           {hayAlto && (
             <div>
-              <Label className="text-[0.7rem] text-emerald-300">
+              <Label className="text-[0.7rem] text-success">
                 ⬇ Sobrante alto: {grupo.sobrante.cod} {grupo.sobrante.ancho}×{altoResto}cm
               </Label>
               <Input
@@ -359,7 +359,7 @@ function CardSobrante({
           )}
           {sobAncho && (
             <div>
-              <Label className="text-[0.7rem] text-emerald-300">
+              <Label className="text-[0.7rem] text-success">
                 ✂ Franja ancho: {sobAncho.cod} {sobAncho.ancho}×{sobAncho.alto}cm
               </Label>
               <Input
@@ -374,7 +374,7 @@ function CardSobrante({
             size="sm"
             onClick={confirmar}
             disabled={saving}
-            className="gap-1 bg-emerald-600 hover:bg-emerald-500"
+            className="gap-1 bg-success hover:bg-success/90"
           >
             {saving ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -541,18 +541,18 @@ function CardRollo({
   const faded = step === 'confirmado' ? 'pointer-events-none opacity-40' : '';
 
   return (
-    <div className={`mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 p-3 ${faded}`}>
+    <div className={`mb-3 rounded-lg border border-blue-500/20 bg-accent/5 p-3 ${faded}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold font-mono">{grupo.codInt}</div>
-          <div className="mt-1 text-xs text-zinc-300">
+          <div className="mt-1 text-xs text-foreground">
             Paño a cortar:{' '}
             <strong>
               {grupo.anchoCorte} × {grupo.altoCorte} cm
             </strong>{' '}
             del rollo
             {si && (
-              <span className="ml-2 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] text-emerald-300">
+              <span className="ml-2 rounded-full border border-success/30 bg-success/15 px-2 py-0.5 text-[0.65rem] text-success">
                 <Scissors className="mr-1 inline h-3 w-3" />
                 Franja interna: {si.ancho}×{si.alto}cm → Colmena
               </span>
@@ -581,16 +581,16 @@ function CardRollo({
       </div>
 
       <div className="my-2 flex justify-center">
-        <canvas ref={canvasRef} className="rounded border border-white/10" />
+        <canvas ref={canvasRef} className="rounded border border-border" />
       </div>
 
       {step === 'rotacion-pendiente' && (
-        <div className="mb-2 rounded-lg border border-orange-500/30 bg-orange-500/10 p-2">
-          <div className="mb-1 text-xs font-semibold text-orange-400">
+        <div className="mb-2 rounded-lg border border-orange-500/30 bg-warning/15 p-2">
+          <div className="mb-1 text-xs font-semibold text-warning">
             <TriangleAlert className="mr-1 inline h-3 w-3" />
             Inversión obligatoria — las piezas superan el ancho del rollo
           </div>
-          <div className="mb-2 text-[0.7rem] text-orange-200/80">
+          <div className="mb-2 text-[0.7rem] text-warning/80">
             No es posible cortar sin invertir la tela. Consultá al cliente antes de confirmar.
             Si rechaza, se recalcula el layout sin inversión (más tela pero sin girar).
           </div>
@@ -598,12 +598,12 @@ function CardRollo({
             const decision = decisiones[r.id];
             return (
               <div key={r.id} className="mb-1 flex flex-wrap items-center gap-2">
-                <span className="min-w-[150px] text-[0.7rem] text-orange-200">
+                <span className="min-w-[150px] text-[0.7rem] text-warning">
                   ↺ {r.nombre} — {r.pw}×{r.ph}cm
                 </span>
                 <button
                   onClick={() => decidirRotacion(r.id, true)}
-                  className={`rounded border border-emerald-500/40 bg-emerald-500/15 px-2 py-0.5 text-[0.68rem] text-emerald-400 ${
+                  className={`rounded border border-success/30 bg-success/15 px-2 py-0.5 text-[0.68rem] text-success ${
                     decision === true ? '' : 'opacity-40'
                   }`}
                 >
@@ -611,7 +611,7 @@ function CardRollo({
                 </button>
                 <button
                   onClick={() => decidirRotacion(r.id, false)}
-                  className={`rounded border border-red-500/40 bg-red-500/15 px-2 py-0.5 text-[0.68rem] text-red-400 ${
+                  className={`rounded border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[0.68rem] text-destructive ${
                     decision === false ? '' : 'opacity-40'
                   }`}
                 >
@@ -620,7 +620,7 @@ function CardRollo({
               </div>
             );
           })}
-          <div className="text-[0.68rem] text-zinc-400">
+          <div className="text-[0.68rem] text-muted-foreground">
             ⏳ Esperando decisión sobre la inversión…
           </div>
         </div>
@@ -631,7 +631,7 @@ function CardRollo({
           size="sm"
           onClick={iniciarConfirmar}
           disabled={saving}
-          className="gap-1 bg-blue-600 hover:bg-blue-500"
+          className="gap-1 bg-accent hover:bg-accent"
         >
           <CheckCircle2 className="h-3 w-3" />
           Confirmar corte realizado
@@ -642,7 +642,7 @@ function CardRollo({
         <div className="space-y-2 border-t border-blue-500/20 pt-2">
           {hayResto && (
             <div>
-              <Label className="text-[0.7rem] text-emerald-300">
+              <Label className="text-[0.7rem] text-success">
                 ⬇ Rollo restante: {grupo.codInt} {grupo.anchoCorte}×{altoResto}cm
               </Label>
               <Input
@@ -655,7 +655,7 @@ function CardRollo({
           )}
           {si && (
             <div>
-              <Label className="text-[0.7rem] text-emerald-300">
+              <Label className="text-[0.7rem] text-success">
                 ✂ Franja interna: {grupo.codInt} {si.ancho}×{si.alto}cm
               </Label>
               <Input
@@ -670,7 +670,7 @@ function CardRollo({
             size="sm"
             onClick={guardarSobrantes}
             disabled={saving}
-            className="gap-1 bg-emerald-600 hover:bg-emerald-500"
+            className="gap-1 bg-success hover:bg-success/90"
           >
             {saving ? (
               <Loader2 className="h-3 w-3 animate-spin" />
@@ -736,14 +736,14 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-white/10 bg-zinc-900/40 p-3">
-      <div className="mb-2 text-xs font-semibold text-zinc-300">
+    <div className="mt-3 rounded-lg border border-border bg-card/40 p-3">
+      <div className="mb-2 text-xs font-semibold text-foreground">
         <Plus className="mr-1 inline h-3 w-3" />
         Registrar sobrante manualmente (opcional)
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <div>
-          <Label className="text-[0.65rem] text-zinc-400">COD_INT</Label>
+          <Label className="text-[0.65rem] text-muted-foreground">COD_INT</Label>
           <Input
             value={cod}
             onChange={(e) => setCod(e.target.value.toUpperCase())}
@@ -752,7 +752,7 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
           />
         </div>
         <div>
-          <Label className="text-[0.65rem] text-zinc-400">Ancho (cm)</Label>
+          <Label className="text-[0.65rem] text-muted-foreground">Ancho (cm)</Label>
           <Input
             type="number"
             value={ancho}
@@ -762,7 +762,7 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
           />
         </div>
         <div>
-          <Label className="text-[0.65rem] text-zinc-400">Alto (cm)</Label>
+          <Label className="text-[0.65rem] text-muted-foreground">Alto (cm)</Label>
           <Input
             type="number"
             value={alto}
@@ -772,7 +772,7 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
           />
         </div>
         <div>
-          <Label className="text-[0.65rem] text-zinc-400">Ubicación</Label>
+          <Label className="text-[0.65rem] text-muted-foreground">Ubicación</Label>
           <Input
             value={ubic}
             onChange={(e) => setUbic(e.target.value.toUpperCase())}
@@ -785,7 +785,7 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
             size="sm"
             onClick={guardar}
             disabled={saving}
-            className="h-7 w-full gap-1 bg-emerald-600 hover:bg-emerald-500"
+            className="h-7 w-full gap-1 bg-success hover:bg-success/90"
           >
             {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
             Guardar
@@ -876,16 +876,16 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
   const otNum = ot.datosGenerales.ot || String(ot.id);
 
   return (
-    <div className="mt-4 rounded-lg border border-white/10 bg-zinc-900/40">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-3 py-2">
+    <div className="mt-4 rounded-lg border border-border bg-card/40">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <Ruler className="h-4 w-4 text-blue-300" />
           <strong className="text-sm">Plan de Corte desde Colmena</strong>
           {resumen && (
-            <span className="text-[0.68rem] text-zinc-400">
+            <span className="text-[0.68rem] text-muted-foreground">
               · {resumen.desdeSobrante} desde sobrante · {resumen.desdeRollo} desde rollo
               {resumen.sinStock > 0 && (
-                <span className="text-red-400"> · {resumen.sinStock} sin stock</span>
+                <span className="text-destructive"> · {resumen.sinStock} sin stock</span>
               )}
             </span>
           )}
@@ -894,7 +894,7 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
           size="sm"
           onClick={cargar}
           disabled={loading}
-          className="h-7 gap-1 bg-blue-600 text-[0.7rem] hover:bg-blue-500"
+          className="h-7 gap-1 bg-accent text-[0.7rem] hover:bg-accent"
         >
           {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Ruler className="h-3 w-3" />}
           {generado ? 'Regenerar' : 'Generar plan'}
@@ -902,25 +902,25 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
       </div>
 
       {!generado && !loading && (
-        <div className="p-6 text-center text-xs text-zinc-500">
+        <div className="p-6 text-center text-xs text-muted-foreground">
           Matchea los paños de esta OT (y otras en producción) contra los sobrantes disponibles en
           colmena y arma el plan de corte optimizado.
         </div>
       )}
 
       {loading && (
-        <div className="p-6 text-center text-xs text-zinc-500">Cargando colmena y OTs…</div>
+        <div className="p-6 text-center text-xs text-muted-foreground">Cargando colmena y OTs…</div>
       )}
 
       {plan && (
         <div className="p-3">
           {plan.otsIncluidas.length > 1 && (
-            <div className="mb-2 rounded-lg border border-blue-400/25 bg-blue-400/8 px-3 py-2 text-[0.72rem] text-blue-300">
+            <div className="mb-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-[0.72rem] text-accent">
               <strong>Plan combinado · {plan.otsIncluidas.length} OTs en producción:</strong>
               {plan.otsIncluidas.map((o) => (
                 <span
                   key={o.id}
-                  className="ml-2 rounded-full bg-blue-400/15 px-2 py-0.5 text-[0.68rem]"
+                  className="ml-2 rounded-full bg-accent/15 px-2 py-0.5 text-[0.68rem]"
                 >
                   OT{o.num} — {o.cliente}
                 </span>
@@ -930,7 +930,7 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
           {plan.sobrantes.length > 0 && (
             <>
-              <div className="mb-2 flex items-center gap-1 text-xs font-semibold text-emerald-400">
+              <div className="mb-2 flex items-center gap-1 text-xs font-semibold text-success">
                 <Archive className="h-3 w-3" />
                 Usar sobrantes de la Colmena
               </div>
@@ -942,7 +942,7 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
           {plan.rollo.length > 0 && (
             <>
-              <div className="mb-2 mt-3 flex items-center gap-1 text-xs font-semibold text-blue-400">
+              <div className="mb-2 mt-3 flex items-center gap-1 text-xs font-semibold text-accent">
                 <Ruler className="h-3 w-3" />
                 Cortar desde rollo nuevo
               </div>
@@ -954,26 +954,26 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
           {plan.sinStock.length > 0 && (
             <>
-              <div className="mb-2 mt-3 flex items-center gap-1 text-xs font-semibold text-red-400">
+              <div className="mb-2 mt-3 flex items-center gap-1 text-xs font-semibold text-destructive">
                 <TriangleAlert className="h-3 w-3" />
                 Sin sobrantes disponibles (verificar stock de rollo)
               </div>
               {plan.sinStock.map((g, gi) => (
                 <div
                   key={gi}
-                  className="mb-2 rounded-lg border border-red-500/20 bg-red-500/5 p-3"
+                  className="mb-2 rounded-lg border border-destructive/30 bg-destructive/15 p-3"
                 >
-                  <div className="text-sm font-semibold text-red-400 font-mono">
+                  <div className="text-sm font-semibold text-destructive font-mono">
                     {g.codInt}
                   </div>
-                  <div className="mt-1 text-xs text-zinc-400">
+                  <div className="mt-1 text-xs text-muted-foreground">
                     No hay sobrantes disponibles. Verificar stock de rollos.
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {g.piezas.map((p, i) => (
                       <span
                         key={i}
-                        className="rounded border border-white/10 px-1.5 py-0.5 text-[0.65rem] font-mono"
+                        className="rounded border border-border px-1.5 py-0.5 text-[0.65rem] font-mono"
                       >
                         {p.nombre} — {p.w}×{p.h}cm
                       </span>

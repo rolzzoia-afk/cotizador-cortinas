@@ -106,9 +106,9 @@ function ConfigOptimizador({ cfg }: { cfg: ReturnType<typeof useOptimizerConfig>
   };
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-zinc-900/40 p-3">
+    <div className="rounded-lg border border-warning/30 bg-card/40 p-3">
       <div className="mb-2 flex items-center gap-2">
-        <Settings className="h-4 w-4 text-amber-400" />
+        <Settings className="h-4 w-4 text-warning" />
         <strong className="text-sm">Configuración del optimizador</strong>
       </div>
       <div className="flex gap-2">
@@ -123,15 +123,15 @@ function ConfigOptimizador({ cfg }: { cfg: ReturnType<typeof useOptimizerConfig>
           size="sm"
           onClick={guardar}
           disabled={saving || cfg.loading}
-          className="h-8 gap-1 bg-amber-600 hover:bg-amber-500"
+          className="h-8 gap-1 bg-warning hover:bg-warning"
         >
           <Save className="h-3.5 w-3.5" />
           Guardar
         </Button>
       </div>
       {cfg.email && (
-        <div className="mt-1 text-[0.68rem] text-zinc-500">
-          ✅ Optimizador: <span className="text-amber-300">{cfg.email}</span>
+        <div className="mt-1 text-[0.68rem] text-muted-foreground">
+          ✅ Optimizador: <span className="text-warning">{cfg.email}</span>
         </div>
       )}
     </div>
@@ -163,10 +163,10 @@ function PlanActivoSection({ ctx }: { ctx: ReturnType<typeof usePlanActivo> }) {
   const tienePendientes = Object.keys(pendientes).length > 0;
 
   return (
-    <div className="rounded-lg border border-blue-500/30 bg-zinc-900/40 p-3">
+    <div className="rounded-lg border border-blue-500/30 bg-card/40 p-3">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Scissors className="h-4 w-4 text-blue-400" />
+          <Scissors className="h-4 w-4 text-accent" />
           <strong className="text-sm">Plan de corte activo</strong>
         </div>
         <Button
@@ -184,12 +184,12 @@ function PlanActivoSection({ ctx }: { ctx: ReturnType<typeof usePlanActivo> }) {
           Cargar
         </Button>
       </div>
-      {status && <div className="mb-2 text-xs text-zinc-400">{status}</div>}
+      {status && <div className="mb-2 text-xs text-muted-foreground">{status}</div>}
 
       {plan && plan.resultados.length > 0 && (
-        <div className="max-h-[320px] overflow-y-auto rounded border border-white/5">
+        <div className="max-h-[320px] overflow-y-auto rounded border border-border">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-zinc-900 text-[0.65rem] uppercase tracking-wide text-zinc-400">
+            <thead className="sticky top-0 bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="p-2 text-left">#</th>
                 <th className="p-2 text-left">OT / Ubic.</th>
@@ -212,16 +212,16 @@ function PlanActivoSection({ ctx }: { ctx: ReturnType<typeof usePlanActivo> }) {
                 return (
                   <tr
                     key={i}
-                    className="border-t border-white/5 hover:bg-white/5"
+                    className="border-t border-border hover:bg-card"
                     style={tieneCorr ? { backgroundColor: 'rgba(251,191,36,0.12)' } : undefined}
                   >
-                    <td className="p-2 text-zinc-500">{i + 1}</td>
+                    <td className="p-2 text-muted-foreground">{i + 1}</td>
                     <td className="max-w-[100px] truncate p-2">{otUbic}</td>
                     <td className="max-w-[130px] truncate p-2 font-mono" title={String(codigo)}>
                       {codigo}
                       {tieneCorr && (
                         <span
-                          className="ml-1 rounded-full bg-amber-400 px-1.5 py-0.5 text-[0.6rem] font-bold text-zinc-900"
+                          className="ml-1 rounded-full bg-warning px-1.5 py-0.5 text-[0.6rem] font-bold text-foreground"
                           title="Corrección pendiente"
                         >
                           ✏
@@ -234,7 +234,7 @@ function PlanActivoSection({ ctx }: { ctx: ReturnType<typeof usePlanActivo> }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="h-6 w-6 border-amber-500/30 p-0 text-amber-400 hover:bg-amber-500/10"
+                        className="h-6 w-6 border-warning/30 p-0 text-warning hover:bg-warning/15"
                         onClick={() => setEditorIdx(i)}
                         title="Editar línea"
                       >
@@ -273,7 +273,7 @@ function PlanActivoSection({ ctx }: { ctx: ReturnType<typeof usePlanActivo> }) {
           <Button
             onClick={onAplicarTodo}
             disabled={aplicando}
-            className="w-full gap-1 bg-emerald-600 hover:bg-emerald-500"
+            className="w-full gap-1 bg-success hover:bg-success/90"
           >
             {aplicando ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -336,15 +336,15 @@ function EditorLinea({
   };
 
   return (
-    <div className="mt-3 rounded-lg border border-amber-500/40 bg-zinc-950/50 p-3">
+    <div className="mt-3 rounded-lg border border-warning/30 bg-background/50 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <strong className="text-amber-300">
+        <strong className="text-warning">
           <Pencil className="mr-1 inline h-3.5 w-3.5" />
           Editar línea {idx + 1} — OT {ord.ot || '?'} · {ord.ubic || '?'}
         </strong>
         <button
           onClick={onCancel}
-          className="rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+          className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -355,7 +355,7 @@ function EditorLinea({
           <select
             value={tipo}
             onChange={(e) => setTipo(e.target.value as TipoError | '')}
-            className="h-8 w-full rounded border border-white/10 bg-zinc-900 px-2 text-xs text-zinc-100"
+            className="h-8 w-full rounded border border-border bg-card px-2 text-xs text-foreground"
           >
             <option value="">— Seleccionar —</option>
             {(Object.entries(TIPO_ERROR_LABELS) as Array<[TipoError, string]>).map(([k, v]) => (
@@ -405,7 +405,7 @@ function EditorLinea({
           <Button
             size="sm"
             onClick={submit}
-            className="h-8 gap-1 bg-amber-600 hover:bg-amber-500"
+            className="h-8 gap-1 bg-warning hover:bg-warning"
           >
             <CheckCircle2 className="h-3.5 w-3.5" />
             Guardar corrección
@@ -418,7 +418,7 @@ function EditorLinea({
               variant="outline"
               size="sm"
               onClick={onRemove}
-              className="border-red-500/30 text-red-300 hover:bg-red-500/10"
+              className="border-destructive/30 text-destructive hover:bg-destructive/15"
             >
               Descartar corrección
             </Button>
@@ -440,10 +440,10 @@ function HistorialCorrecciones({
   const { registros, loading, cargar } = ctx;
 
   return (
-    <div className="rounded-lg border border-purple-500/30 bg-zinc-900/40 p-3">
+    <div className="rounded-lg border border-purple-500/30 bg-card/40 p-3">
       <div className="mb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Clock className="h-4 w-4 text-purple-400" />
+          <Clock className="h-4 w-4 text-accent" />
           <strong className="text-sm">Historial de correcciones</strong>
         </div>
         <Button
@@ -451,7 +451,7 @@ function HistorialCorrecciones({
           size="sm"
           onClick={cargar}
           disabled={loading}
-          className="h-8 gap-1 border-purple-500/30 text-purple-300"
+          className="h-8 gap-1 border-purple-500/30 text-accent"
         >
           {loading ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -463,7 +463,7 @@ function HistorialCorrecciones({
       </div>
       <div className="max-h-[200px] overflow-y-auto text-xs">
         {!loading && registros.length === 0 && (
-          <div className="py-3 text-center text-zinc-500">Sin correcciones registradas.</div>
+          <div className="py-3 text-center text-muted-foreground">Sin correcciones registradas.</div>
         )}
         {registros.map((r) => {
           const ts = (r.timestamp || '').slice(0, 16).replace('T', ' ');
@@ -472,13 +472,13 @@ function HistorialCorrecciones({
           return (
             <div
               key={r.id}
-              className="border-b border-white/5 py-1.5 last:border-b-0"
+              className="border-b border-border py-1.5 last:border-b-0"
             >
-              <span className="text-amber-300">{tipoLabel}</span>
-              <span className="text-zinc-500"> · Línea {(r.linea_idx ?? -1) + 1}</span>
-              <span className="text-zinc-500"> · {ts}</span>
+              <span className="text-warning">{tipoLabel}</span>
+              <span className="text-muted-foreground"> · Línea {(r.linea_idx ?? -1) + 1}</span>
+              <span className="text-muted-foreground"> · {ts}</span>
               {r.nota && (
-                <div className="italic text-zinc-400">{r.nota}</div>
+                <div className="italic text-muted-foreground">{r.nota}</div>
               )}
             </div>
           );
@@ -560,14 +560,14 @@ function HistorialPlanes({
   };
 
   return (
-    <div className="rounded-lg border border-red-500/30 bg-zinc-900/40 p-3">
+    <div className="rounded-lg border border-destructive/30 bg-card/40 p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <History className="h-4 w-4 text-red-400" />
+          <History className="h-4 w-4 text-destructive" />
           <strong className="text-sm">Historial de planes de corte</strong>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-[0.68rem] text-zinc-500">
+          <span className="text-[0.68rem] text-muted-foreground">
             Podés restaurar cualquier plan anterior
           </span>
           <Button
@@ -575,7 +575,7 @@ function HistorialPlanes({
             size="sm"
             onClick={cargar}
             disabled={loading}
-            className="h-8 gap-1 border-red-500/30 text-red-300"
+            className="h-8 gap-1 border-destructive/30 text-destructive"
           >
             {loading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -589,24 +589,24 @@ function HistorialPlanes({
 
       {planes.length > 0 && (
         <div className="relative mb-2">
-          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-zinc-500" />
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
           <Input
             value={filtro}
             onChange={(e) => setFiltro(e.target.value)}
             placeholder="Filtrar por OT…"
-            className="h-8 border-white/10 bg-zinc-900 pl-8 text-xs"
+            className="h-8 border-border bg-card pl-8 text-xs"
           />
         </div>
       )}
 
       <div className="max-h-[340px] overflow-y-auto text-xs">
         {!loading && planes.length === 0 && (
-          <div className="py-3 text-center text-zinc-500">
+          <div className="py-3 text-center text-muted-foreground">
             Hacé clic en "Cargar" para ver todos los planes guardados.
           </div>
         )}
         {!loading && planes.length > 0 && planesVisibles.length === 0 && (
-          <div className="py-3 text-center text-zinc-500">
+          <div className="py-3 text-center text-muted-foreground">
             No hay planes que coincidan con "{filtro}".
           </div>
         )}
@@ -624,30 +624,30 @@ function HistorialPlanes({
               className={cn(
                 'flex flex-wrap items-center gap-2 py-2',
                 esRestauracion
-                  ? 'mb-1 rounded border border-purple-500/20 bg-purple-500/5 px-2'
-                  : 'border-b border-white/5 last:border-b-0',
+                  ? 'mb-1 rounded border border-purple-500/20 bg-accent/5 px-2'
+                  : 'border-b border-border last:border-b-0',
               )}
             >
               <div className="min-w-[180px] flex-1">
-                <span className="text-zinc-200">{fecha}</span>
+                <span className="text-foreground">{fecha}</span>
                 {plan.fecha_correccion && (
-                  <span className="ml-2 text-[0.65rem] text-emerald-300">
+                  <span className="ml-2 text-[0.65rem] text-success">
                     (corregido por admin)
                   </span>
                 )}
                 {esActivo && (
-                  <span className="ml-2 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.65rem] text-emerald-300">
+                  <span className="ml-2 rounded-full bg-success/15 px-2 py-0.5 text-[0.65rem] text-success">
                     ● Activo
                   </span>
                 )}
                 {esRestauracion && (
-                  <span className="ml-2 rounded-full border border-purple-500/30 bg-purple-500/15 px-2 py-0.5 text-[0.65rem] text-purple-300">
+                  <span className="ml-2 rounded-full border border-purple-500/30 bg-accent/15 px-2 py-0.5 text-[0.65rem] text-accent">
                     ⏱ Restaurado
                   </span>
                 )}
                 {!esRestauracion && tieneSnap && (
                   <span
-                    className="ml-2 text-[0.65rem] text-blue-400"
+                    className="ml-2 text-[0.65rem] text-accent"
                     title="Tiene snapshot — puede restaurar colmena completa"
                   >
                     <Camera className="inline h-3 w-3" />
@@ -655,16 +655,16 @@ function HistorialPlanes({
                 )}
                 {!esRestauracion && !tieneSnap && i > 0 && (
                   <span
-                    className="ml-2 text-[0.65rem] text-zinc-500"
+                    className="ml-2 text-[0.65rem] text-muted-foreground"
                     title="Sin snapshot"
                   >
                     <AlertTriangle className="inline h-3 w-3" />
                   </span>
                 )}
-                <div className="text-[0.68rem] text-zinc-500">
+                <div className="text-[0.68rem] text-muted-foreground">
                   {plan.nCortes} corte(s)
                   {plan.optimizer_email && (
-                    <span className="text-amber-300"> · {plan.optimizer_email}</span>
+                    <span className="text-warning"> · {plan.optimizer_email}</span>
                   )}
                 </div>
                 {(() => {
@@ -675,14 +675,14 @@ function HistorialPlanes({
                       {ots.slice(0, 6).map((ot) => (
                         <span
                           key={ot}
-                          className="rounded border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[0.65rem] font-mono text-indigo-300"
+                          className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[0.65rem] font-mono text-accent"
                         >
                           OT {ot}
                         </span>
                       ))}
                       {ots.length > 6 && (
                         <span
-                          className="text-[0.65rem] text-zinc-500"
+                          className="text-[0.65rem] text-muted-foreground"
                           title={ots.slice(6).map((o) => `OT ${o}`).join(', ')}
                         >
                           +{ots.length - 6}
@@ -714,7 +714,7 @@ function HistorialPlanes({
                         : undefined
                     }
                     className={cn(
-                      'h-6 gap-1 border-red-500/30 px-2 text-[0.65rem] text-red-300',
+                      'h-6 gap-1 border-destructive/30 px-2 text-[0.65rem] text-destructive',
                       !tieneSnap && 'opacity-40',
                     )}
                   >
@@ -722,7 +722,7 @@ function HistorialPlanes({
                     Restaurar
                   </Button>
                 ) : (
-                  <span className="self-center text-[0.65rem] text-emerald-300">
+                  <span className="self-center text-[0.65rem] text-success">
                     Plan vigente
                   </span>
                 )}
@@ -733,29 +733,29 @@ function HistorialPlanes({
       </div>
 
       {preview && (
-        <div className="mt-3 rounded-lg border border-red-500/30 bg-zinc-950/50 p-3">
+        <div className="mt-3 rounded-lg border border-destructive/30 bg-background/50 p-3">
           <div className="mb-2 flex items-center justify-between">
-            <strong className="text-red-300">
+            <strong className="text-destructive">
               <Eye className="mr-1 inline h-3.5 w-3.5" />
               Vista previa del plan
             </strong>
             <button
               onClick={() => setPreview(null)}
-              className="rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+              className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
             >
               <X className="h-3.5 w-3.5" />
             </button>
           </div>
-          <div className="mb-2 text-[0.68rem] text-zinc-500">
+          <div className="mb-2 text-[0.68rem] text-muted-foreground">
             Plan del{' '}
             {preview.fecha ? new Date(preview.fecha).toLocaleString('es-CL') : '—'}
           </div>
           {preview.resultados.length === 0 ? (
-            <div className="text-zinc-500">Sin cortes en este plan.</div>
+            <div className="text-muted-foreground">Sin cortes en este plan.</div>
           ) : (
             <div className="max-h-[220px] overflow-y-auto text-[0.7rem]">
               <table className="w-full">
-                <thead className="sticky top-0 bg-zinc-900 text-[0.62rem] uppercase tracking-wide text-zinc-400">
+                <thead className="sticky top-0 bg-card text-[0.62rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="p-1.5 text-left">#</th>
                     <th className="p-1.5 text-left">OT / Ubic.</th>
@@ -778,8 +778,8 @@ function HistorialPlanes({
                     const otUbic =
                       [ord.ot, ord.ubic].filter(Boolean).join(' · ') || '—';
                     return (
-                      <tr key={i} className="border-t border-white/5">
-                        <td className="p-1.5 text-zinc-500">{i + 1}</td>
+                      <tr key={i} className="border-t border-border">
+                        <td className="p-1.5 text-muted-foreground">{i + 1}</td>
                         <td className="p-1.5">{otUbic}</td>
                         <td className="p-1.5 font-mono">{codigo}</td>
                         <td className="p-1.5 font-semibold">{medida}</td>
@@ -796,7 +796,7 @@ function HistorialPlanes({
               size="sm"
               onClick={() => onRestaurar(preview)}
               disabled={restaurando}
-              className="gap-1 bg-red-600 hover:bg-red-500"
+              className="gap-1 bg-destructive hover:bg-destructive"
             >
               {restaurando ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -818,14 +818,14 @@ function HistorialPlanes({
 // ──────────────────────────────────────────────────────────────────
 function HintColmenaDuplicada() {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-teal-500/20 bg-teal-500/5 p-2.5 text-[0.72rem] text-zinc-400">
+    <div className="flex items-center gap-2 rounded-lg border border-teal-500/20 bg-teal-500/5 p-2.5 text-[0.72rem] text-muted-foreground">
       <ClipboardList className="h-3.5 w-3.5 text-teal-400" />
       <span>
         El inventario de tubos vive en el tab{' '}
         <strong className="text-teal-300">Colmena</strong> del panel — no se
         duplica acá.
       </span>
-      <FileText className="ml-auto h-3.5 w-3.5 text-zinc-600" />
+      <FileText className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
     </div>
   );
 }

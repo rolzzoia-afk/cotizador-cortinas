@@ -190,7 +190,7 @@ export function InventoryBaselineSection() {
   return (
     <section className="rounded-lg border bg-card p-5">
       <header className="mb-3 flex items-center gap-2">
-        <FileSpreadsheet className="h-5 w-5 text-emerald-600" />
+        <FileSpreadsheet className="h-5 w-5 text-success" />
         <h2 className="text-sm font-semibold text-muted-foreground">
           Cargar inventario base desde Excel
         </h2>
@@ -253,17 +253,17 @@ export function InventoryBaselineSection() {
       )}
 
       {resultado && (
-        <div className="mt-4 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs">
-          <div className="mb-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+        <div className="mt-4 rounded-md border border-success/30 bg-success/15 p-3 text-xs">
+          <div className="mb-1.5 font-semibold text-emerald-700 dark:text-success">
             Baseline aplicado
           </div>
-          <div className="space-y-0.5 text-emerald-700 dark:text-emerald-300/90">
+          <div className="space-y-0.5 text-emerald-700 dark:text-success/90">
             <div>Baseline ID: <span className="font-mono">{resultado.baseline_id}</span></div>
             <div>Tubos actuales cerrados: {resultado.tubos_actuales_cerrados}</div>
             <div>Tubos perdidos cerrados: {resultado.tubos_perdidos_cerrados}</div>
             <div>Tubos insertados: {resultado.tubos_insertados}</div>
           </div>
-          <div className="mt-2 text-emerald-700/80 dark:text-emerald-300/70">
+          <div className="mt-2 text-emerald-700/80 dark:text-success/70">
             Refresca el dashboard de Reconciliación: fantasmas y perdidos deben volver a 0.
           </div>
         </div>
@@ -273,7 +273,7 @@ export function InventoryBaselineSection() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
+              <AlertTriangle className="h-5 w-5 text-warning" />
               Confirmar reseteo de inventario
             </DialogTitle>
             <DialogDescription className="space-y-2 pt-2 text-left">

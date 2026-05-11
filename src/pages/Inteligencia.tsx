@@ -194,12 +194,12 @@ function GlassCard({
   return (
     <div
       className={cn(
-        'rounded-2xl border border-white/[0.07] bg-zinc-900/85 backdrop-blur',
+        'rounded-2xl border border-border bg-card/85 backdrop-blur',
         className,
       )}
     >
-      <div className="flex items-center justify-between border-b border-white/[0.07] px-4 py-3">
-        <h6 className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h6 className="flex items-center gap-2 text-sm font-semibold text-foreground">
           <span style={{ color: iconColor }}>{icon}</span>
           {title}
         </h6>
@@ -230,7 +230,7 @@ function GlassCard({
 
 function EmptyState({ icon, text }: { icon: string; text: string }) {
   return (
-    <div className="flex flex-col items-center gap-2 py-6 text-center text-zinc-500">
+    <div className="flex flex-col items-center gap-2 py-6 text-center text-muted-foreground">
       <div className="text-2xl">{icon}</div>
       <div className="text-xs">{text}</div>
     </div>
@@ -239,8 +239,8 @@ function EmptyState({ icon, text }: { icon: string; text: string }) {
 
 function Spinner({ label }: { label: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 py-5 text-xs text-zinc-500">
-      <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-700 border-t-indigo-400" />
+    <div className="flex items-center justify-center gap-2 py-5 text-xs text-muted-foreground">
+      <div className="h-4 w-4 animate-spin rounded-full border-2 border-border border-t-indigo-400" />
       <span>{label}</span>
     </div>
   );
@@ -466,11 +466,11 @@ function DiagDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-border bg-card text-foreground">
         <DialogHeader>
           <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="flex items-center gap-2 text-white">
-              <Bot className="h-5 w-5 text-purple-400" /> Diagnóstico para Claude
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <Bot className="h-5 w-5 text-accent" /> Diagnóstico para Claude
             </DialogTitle>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" onClick={copiar} className="gap-1.5">
@@ -491,7 +491,7 @@ function DiagDialog({
           </div>
         </DialogHeader>
 
-        <div className="mb-4 rounded-lg border border-indigo-500/30 bg-indigo-500/10 p-3 text-xs text-zinc-300">
+        <div className="mb-4 rounded-lg border border-accent/30 bg-accent/10 p-3 text-xs text-foreground">
           <strong>¿Cómo se usa?</strong> Copia el texto, abre una nueva conversación con Claude y
           pégalo. Luego escribe tu pregunta o problema. Claude va a tener todo el contexto de tu
           empresa para ayudarte.
@@ -502,7 +502,7 @@ function DiagDialog({
             <button
               key={c.label}
               onClick={() => agregar(c.q)}
-              className="rounded-full border border-white/10 bg-zinc-800 px-3 py-1.5 text-xs text-zinc-200 transition hover:border-indigo-500/40 hover:bg-indigo-500/10"
+              className="rounded-full border border-border bg-secondary px-3 py-1.5 text-xs text-foreground transition hover:border-accent/40 hover:bg-accent/10"
             >
               {c.emoji} {c.label}
             </button>
@@ -512,7 +512,7 @@ function DiagDialog({
         <textarea
           value={texto}
           readOnly
-          className="h-[55vh] w-full resize-none rounded-lg border border-white/10 bg-zinc-950 p-3 font-mono text-[11px] text-zinc-300"
+          className="h-[55vh] w-full resize-none rounded-lg border border-border bg-background p-3 font-mono text-[11px] text-foreground"
         />
       </DialogContent>
     </Dialog>
@@ -654,7 +654,7 @@ export function Inteligencia() {
   // ── Render: helpers ─────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex min-h-full items-center justify-center bg-zinc-950 text-zinc-500">
+      <div className="flex min-h-full items-center justify-center bg-background text-muted-foreground">
         <Spinner label="Cargando inteligencia…" />
       </div>
     );
@@ -692,19 +692,19 @@ export function Inteligencia() {
   }
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100">
+    <div className="min-h-full bg-background text-foreground">
       {/* HEADER */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-zinc-900/95 px-5 py-3 backdrop-blur">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-accent/30 bg-gradient-to-br from-indigo-500/10 to-zinc-900/95 px-5 py-3 backdrop-blur">
         <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-indigo-400" />
-          <span className="text-base font-bold text-white">Panel de Inteligencia</span>
-          <span className="rounded-full border border-indigo-500/35 bg-indigo-500/15 px-2.5 py-0.5 text-[11px] font-semibold tracking-wider text-indigo-300">
+          <Brain className="h-5 w-5 text-accent" />
+          <span className="text-base font-bold text-foreground">Panel de Inteligencia</span>
+          <span className="rounded-full border border-accent/35 bg-accent/15 px-2.5 py-0.5 text-[11px] font-semibold tracking-wider text-accent">
             ROLZZO
           </span>
         </div>
         <div className="flex items-center gap-2">
           {lastUpdate && (
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-muted-foreground">
               Actualizado{' '}
               {lastUpdate.toLocaleTimeString('es-CL', {
                 hour: '2-digit',
@@ -716,7 +716,7 @@ export function Inteligencia() {
             size="sm"
             variant="outline"
             onClick={() => setDiagOpen(true)}
-            className="gap-1.5 border-purple-500/30 bg-purple-500/10 text-purple-300 hover:bg-purple-500/20"
+            className="gap-1.5 border-purple-500/30 bg-accent/10 text-accent hover:bg-accent/20"
           >
             <Bot className="h-4 w-4" /> Diagnóstico IA
           </Button>
@@ -724,7 +724,7 @@ export function Inteligencia() {
             size="sm"
             onClick={cargarTodo}
             disabled={refreshing}
-            className="gap-1.5 border border-indigo-500/35 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25"
+            className="gap-1.5 border border-accent/35 bg-accent/15 text-accent hover:bg-accent/25"
           >
             <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
             Actualizar
@@ -734,10 +734,10 @@ export function Inteligencia() {
 
       <div className="mx-auto flex max-w-7xl flex-col gap-3.5 p-4">
         {/* SUMMARY BANNER */}
-        <div className="flex items-start gap-3 rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-500/10 to-zinc-900 p-4">
+        <div className="flex items-start gap-3 rounded-2xl border border-accent/30 bg-gradient-to-br from-indigo-500/10 to-zinc-900 p-4">
           <div className="text-2xl">📊</div>
           <p
-            className="m-0 text-sm leading-relaxed text-zinc-200"
+            className="m-0 text-sm leading-relaxed text-foreground"
             dangerouslySetInnerHTML={{ __html: summaryParts.join(' ') }}
           />
         </div>
@@ -839,7 +839,7 @@ function KPICard({
 }) {
   return (
     <div
-      className="relative overflow-hidden rounded-2xl border border-white/[0.07] bg-zinc-900/85 p-4"
+      className="relative overflow-hidden rounded-2xl border border-border bg-card/85 p-4"
       style={{ borderColor: `${color}30` }}
     >
       <div
@@ -848,9 +848,9 @@ function KPICard({
       >
         {icon}
       </div>
-      <div className="text-3xl font-bold text-white">{value}</div>
-      <div className="mt-1 text-xs text-zinc-400">{label}</div>
-      <div className="mt-1 text-[11px] text-zinc-500">{sub}</div>
+      <div className="text-3xl font-bold text-foreground">{value}</div>
+      <div className="mt-1 text-xs text-muted-foreground">{label}</div>
+      <div className="mt-1 text-[11px] text-muted-foreground">{sub}</div>
     </div>
   );
 }
@@ -918,29 +918,29 @@ function CrossAlertsCard({
           cruces.map((c, i) => (
             <div
               key={`${c.ins.cod}-${i}`}
-              className="flex items-start gap-2.5 border-b border-white/[0.05] py-2.5 last:border-0"
+              className="flex items-start gap-2.5 border-b border-border py-2.5 last:border-0"
             >
               <div
                 className={cn(
                   'mt-1.5 h-2 w-2 flex-shrink-0 rounded-full',
-                  c.nivel === 'red' ? 'bg-red-500' : 'bg-amber-500',
+                  c.nivel === 'red' ? 'bg-destructive' : 'bg-warning',
                 )}
               />
               <div className="flex-1 min-w-0">
-                <div className="truncate text-sm font-semibold text-zinc-100">
+                <div className="truncate text-sm font-semibold text-foreground">
                   {c.ins.nemotecnico || c.ins.cod}
                 </div>
-                <div className="mt-0.5 text-[11px] text-zinc-500">
+                <div className="mt-0.5 text-[11px] text-muted-foreground">
                   📦 Stock: <strong>{fmt(c.stock)}</strong> / mín {fmt(c.minimo)}
                   {c.posicion !== '—' && <> · 📍 {c.posicion}</>}
                 </div>
                 {c.otsAfectadas.length > 0 && (
-                  <div className="mt-0.5 text-[11px] text-zinc-500">
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
                     🔗 OTs recientes:{' '}
                     {c.otsAfectadas
                       .slice(0, 2)
                       .map((o) => (
-                        <em key={o.otId} className="text-zinc-400">
+                        <em key={o.otId} className="text-muted-foreground">
                           {o.otId}
                         </em>
                       ))
@@ -965,8 +965,8 @@ function CrossAlertsCard({
                 className={cn(
                   'rounded-full border px-2 py-0.5 text-[10px] font-bold',
                   c.nivel === 'red'
-                    ? 'border-red-500/30 bg-red-500/15 text-red-400'
-                    : 'border-amber-500/30 bg-amber-500/15 text-amber-400',
+                    ? 'border-destructive/30 bg-destructive/15 text-destructive'
+                    : 'border-warning/30 bg-warning/15 text-warning',
                 )}
               >
                 {c.nivelTxt}
@@ -1027,14 +1027,14 @@ function OTRiskCard({ ots }: { ots: OT[] }) {
   }, [ots]);
 
   const estadoBadges: Record<string, { txt: string; cls: string }> = {
-    cotizacion: { txt: 'Cotización', cls: 'border-blue-500/30 bg-blue-500/15 text-blue-400' },
-    medicion: { txt: 'Medición', cls: 'border-blue-500/30 bg-blue-500/15 text-blue-400' },
-    aprobado: { txt: 'Aprobado', cls: 'border-purple-500/30 bg-purple-500/15 text-purple-400' },
-    produccion: { txt: 'Producción', cls: 'border-amber-500/30 bg-amber-500/15 text-amber-400' },
-    listo: { txt: 'Listo', cls: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400' },
+    cotizacion: { txt: 'Cotización', cls: 'border-blue-500/30 bg-accent/15 text-accent' },
+    medicion: { txt: 'Medición', cls: 'border-blue-500/30 bg-accent/15 text-accent' },
+    aprobado: { txt: 'Aprobado', cls: 'border-purple-500/30 bg-accent/15 text-accent' },
+    produccion: { txt: 'Producción', cls: 'border-warning/30 bg-warning/15 text-warning' },
+    listo: { txt: 'Listo', cls: 'border-success/30 bg-success/15 text-success' },
     instalacion: {
       txt: 'Instalación',
-      cls: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400',
+      cls: 'border-success/30 bg-success/15 text-success',
     },
   };
 
@@ -1059,18 +1059,18 @@ function OTRiskCard({ ots }: { ots: OT[] }) {
                   : 'border-l-blue-500';
             const badge = estadoBadges[r.estado] || {
               txt: r.estado,
-              cls: 'border-blue-500/30 bg-blue-500/15 text-blue-400',
+              cls: 'border-blue-500/30 bg-accent/15 text-accent',
             };
             return (
               <div
                 key={String(r.ot.id)}
                 className={cn(
-                  'mb-2 rounded-lg border border-white/[0.05] border-l-4 bg-white/[0.02] p-3',
+                  'mb-2 rounded-lg border border-border border-l-4 bg-white/[0.02] p-3',
                   borderCls,
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-[13px] font-semibold text-zinc-100">
+                  <span className="text-[13px] font-semibold text-foreground">
                     📋 {r.otId} — {r.cli}
                   </span>
                   <span
@@ -1082,7 +1082,7 @@ function OTRiskCard({ ots }: { ots: OT[] }) {
                     {badge.txt}
                   </span>
                 </div>
-                <div className="mt-1 text-[11px] text-zinc-500">
+                <div className="mt-1 text-[11px] text-muted-foreground">
                   {r.motivos.map((m, i) => (
                     <span key={i}>
                       {i > 0 && '  ·  '}⚠ {m}
@@ -1092,7 +1092,7 @@ function OTRiskCard({ ots }: { ots: OT[] }) {
                     <div className="mt-1">
                       📅 Entrega:{' '}
                       {r.diasParaEntr <= 0 ? (
-                        <strong className="text-red-400">VENCIDA</strong>
+                        <strong className="text-destructive">VENCIDA</strong>
                       ) : (
                         fmtFecha(dgStr(r.ot, ['fecha_entrega', 'fechaEntrega']))
                       )}
@@ -1182,23 +1182,23 @@ function ConsumoCard({ salidas, insumos }: { salidas: Mov[]; insumos: Insumo[] }
               return (
                 <div
                   key={key}
-                  className="flex items-center gap-2.5 border-b border-white/[0.05] py-2 last:border-0"
+                  className="flex items-center gap-2.5 border-b border-border py-2 last:border-0"
                 >
-                  <span className="w-8 flex-shrink-0 text-xs font-bold text-zinc-500">
+                  <span className="w-8 flex-shrink-0 text-xs font-bold text-muted-foreground">
                     #{i + 1}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[13px] font-medium text-zinc-100">
+                    <div className="truncate text-[13px] font-medium text-foreground">
                       {val.desc}
                     </div>
-                    <div className="text-[10px] text-zinc-500">
+                    <div className="text-[10px] text-muted-foreground">
                       {cat}
                       {diasStock !== null && ` · ${diasStock}d de stock`}
                     </div>
                   </div>
-                  <span className="flex-shrink-0 text-right text-[13px] font-bold text-zinc-100">
+                  <span className="flex-shrink-0 text-right text-[13px] font-bold text-foreground">
                     {fmt(val.cantidad)}
-                    <div className="text-[10px] font-normal text-zinc-500">
+                    <div className="text-[10px] font-normal text-muted-foreground">
                       {val.movs} mov.
                     </div>
                   </span>
@@ -1281,7 +1281,7 @@ function ErroresCorteCard({ errores }: { errores: ErrorCorte[] }) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
             Últimos registros
           </div>
           {ultimos5.map((e, i) => {
@@ -1296,23 +1296,23 @@ function ErroresCorteCard({ errores }: { errores: ErrorCorte[] }) {
             return (
               <div
                 key={i}
-                className="flex items-center gap-2 border-b border-white/[0.05] py-1.5 last:border-0"
+                className="flex items-center gap-2 border-b border-border py-1.5 last:border-0"
               >
                 <div
                   className="h-2 w-2 flex-shrink-0 rounded-full"
                   style={{ background: color }}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-[12px] font-semibold text-zinc-200">
+                  <div className="truncate text-[12px] font-semibold text-foreground">
                     {e.motivo}
                   </div>
-                  <div className="text-[10px] text-zinc-500">
+                  <div className="text-[10px] text-muted-foreground">
                     {e.ot || '—'} · {e.cod_original || '—'}
                     {e.medida_cm != null && ` · ${Number(e.medida_cm).toFixed(1)} cm`}
                     {reemplazo && ` · ${reemplazo}`}
                   </div>
                 </div>
-                <span className="flex-shrink-0 text-[10px] text-zinc-500">{fecha}</span>
+                <span className="flex-shrink-0 text-[10px] text-muted-foreground">{fecha}</span>
               </div>
             );
           })}
@@ -1382,18 +1382,18 @@ function RestockCard({
             return (
               <div
                 key={`${s.ins.cod}-${i}`}
-                className="flex items-center gap-2.5 border-b border-white/[0.05] py-2.5 last:border-0"
+                className="flex items-center gap-2.5 border-b border-border py-2.5 last:border-0"
               >
                 <span className="flex-shrink-0 text-base">{icon}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-[13px] font-semibold text-zinc-100">
+                  <div className="truncate text-[13px] font-semibold text-foreground">
                     {s.ins.nemotecnico || s.ins.cod}
                   </div>
-                  <div className="text-[10px] text-zinc-500">{s.motivo}</div>
+                  <div className="text-[10px] text-muted-foreground">{s.motivo}</div>
                 </div>
                 <div className="flex-shrink-0 text-right">
-                  <div className="text-sm font-bold text-zinc-100">{fmt(s.cantSugerida)}</div>
-                  <div className="text-[10px] text-zinc-500">{s.ins.unidad || 'u.'}</div>
+                  <div className="text-sm font-bold text-foreground">{fmt(s.cantSugerida)}</div>
+                  <div className="text-[10px] text-muted-foreground">{s.ins.unidad || 'u.'}</div>
                 </div>
               </div>
             );
@@ -1434,12 +1434,12 @@ function ActivityCard({ movs, insumos }: { movs: Mov[]; insumos: Insumo[] }) {
             const esAjuste = tipo === 'ajuste';
 
             const iconBg = esEntrada
-              ? 'bg-emerald-500/15 text-emerald-400'
+              ? 'bg-success/15 text-success'
               : esSalida
-                ? 'bg-red-500/15 text-red-400'
+                ? 'bg-destructive/15 text-destructive'
                 : esAjuste
-                  ? 'bg-amber-500/15 text-amber-400'
-                  : 'bg-zinc-700/30 text-zinc-400';
+                  ? 'bg-warning/15 text-warning'
+                  : 'bg-muted/30 text-muted-foreground';
             const signo = esEntrada ? '+' : esSalida ? '−' : '';
 
             const codInsumo = (m.codigo || '').trim();
@@ -1468,9 +1468,9 @@ function ActivityCard({ movs, insumos }: { movs: Mov[]; insumos: Insumo[] }) {
             return (
               <div
                 key={i}
-                className="flex items-start gap-2.5 border-b border-white/[0.05] py-2 last:border-0"
+                className="flex items-start gap-2.5 border-b border-border py-2 last:border-0"
               >
-                <span className="flex-shrink-0 text-[10px] text-zinc-500">
+                <span className="flex-shrink-0 text-[10px] text-muted-foreground">
                   {fmtFechaHora(m.fecha)}
                 </span>
                 <div
@@ -1482,11 +1482,11 @@ function ActivityCard({ movs, insumos }: { movs: Mov[]; insumos: Insumo[] }) {
                   {esEntrada ? '↓' : esSalida ? '↑' : esAjuste ? '✎' : '·'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-[12px] font-semibold text-zinc-100">
+                  <div className="truncate text-[12px] font-semibold text-foreground">
                     {titulo}
                   </div>
                   {detalle && (
-                    <div className="truncate text-[10px] text-zinc-500">{detalle}</div>
+                    <div className="truncate text-[10px] text-muted-foreground">{detalle}</div>
                   )}
                 </div>
               </div>
@@ -1593,13 +1593,13 @@ function InsightsCard({
   const tipoCls = (t: string) => {
     switch (t) {
       case 'danger':
-        return 'border-red-500/30 bg-red-500/10 text-red-300';
+        return 'border-destructive/30 bg-destructive/15 text-destructive';
       case 'warning':
-        return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
+        return 'border-warning/30 bg-warning/15 text-warning';
       case 'success':
-        return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300';
+        return 'border-success/30 bg-success/15 text-success';
       default:
-        return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
+        return 'border-blue-500/30 bg-accent/10 text-blue-300';
     }
   };
 
@@ -1667,8 +1667,8 @@ function StockGeneralCard({
           <button
             onClick={() => onFiltro(null)}
             className={cn(
-              'rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px]',
-              !filtro ? 'font-bold text-blue-300' : 'text-blue-400/70',
+              'rounded-full border border-blue-500/30 bg-accent/10 px-2 py-0.5 text-[10px]',
+              !filtro ? 'font-bold text-blue-300' : 'text-accent/70',
             )}
           >
             Todos
@@ -1678,8 +1678,8 @@ function StockGeneralCard({
               key={c}
               onClick={() => onFiltro(c)}
               className={cn(
-                'rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-[10px]',
-                filtro === c ? 'font-bold text-blue-300' : 'text-blue-400/70',
+                'rounded-full border border-blue-500/30 bg-accent/10 px-2 py-0.5 text-[10px]',
+                filtro === c ? 'font-bold text-blue-300' : 'text-accent/70',
               )}
             >
               {c}
@@ -1694,7 +1694,7 @@ function StockGeneralCard({
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[12px]">
             <thead>
-              <tr className="border-b border-white/[0.07] text-zinc-500">
+              <tr className="border-b border-border text-muted-foreground">
                 <th className="px-2 py-2 text-left font-semibold">Insumo</th>
                 <th className="px-2 py-2 text-right font-semibold">Stock</th>
                 <th className="px-2 py-2 text-right font-semibold">Mínimo</th>
@@ -1710,17 +1710,17 @@ function StockGeneralCard({
                 const cod = (ins.cod || '').toUpperCase();
                 const cons30 = consumoMap[cod] || 0;
 
-                let badgeCls = 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400';
+                let badgeCls = 'border-success/30 bg-success/15 text-success';
                 let badgeTxt = 'OK';
                 let rowStyle = '';
                 if (stock <= 0) {
-                  badgeCls = 'border-red-500/30 bg-red-500/15 text-red-400';
+                  badgeCls = 'border-destructive/30 bg-destructive/15 text-destructive';
                   badgeTxt = 'Sin stock';
-                  rowStyle = 'bg-red-500/[0.04]';
+                  rowStyle = 'bg-destructive/[0.04]';
                 } else if (min !== null && stock <= min) {
-                  badgeCls = 'border-amber-500/30 bg-amber-500/15 text-amber-400';
+                  badgeCls = 'border-warning/30 bg-warning/15 text-warning';
                   badgeTxt = 'Bajo min';
-                  rowStyle = 'bg-amber-500/[0.04]';
+                  rowStyle = 'bg-warning/[0.04]';
                 }
 
                 const rack = racks.find(
@@ -1747,13 +1747,13 @@ function StockGeneralCard({
                 return (
                   <tr
                     key={`${cod}-${i}`}
-                    className={cn('border-b border-white/[0.05]', rowStyle)}
+                    className={cn('border-b border-border', rowStyle)}
                   >
                     <td className="max-w-[160px] truncate px-2 py-1.5">
-                      <strong className="text-zinc-100">
+                      <strong className="text-foreground">
                         {ins.nemotecnico || ins.cod || '—'}
                       </strong>
-                      <div className="text-[10px] text-zinc-500">
+                      <div className="text-[10px] text-muted-foreground">
                         {ins.cod || ''} · {ins.categoria || ins.sub_categoria || ''}
                       </div>
                     </td>
@@ -1769,11 +1769,11 @@ function StockGeneralCard({
                       }}
                     >
                       {fmt(stock)}
-                      <span className="ml-1 text-[10px] font-normal text-zinc-500">
+                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
                         {ins.unidad || ''}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 text-right text-zinc-500">{fmt(min)}</td>
+                    <td className="px-2 py-1.5 text-right text-muted-foreground">{fmt(min)}</td>
                     <td className="px-2 py-1.5 text-center">
                       <span
                         className={cn(
@@ -1784,7 +1784,7 @@ function StockGeneralCard({
                         {badgeTxt}
                       </span>
                     </td>
-                    <td className="hidden px-2 py-1.5 text-right text-[10px] text-zinc-500 md:table-cell">
+                    <td className="hidden px-2 py-1.5 text-right text-[10px] text-muted-foreground md:table-cell">
                       {pos}
                     </td>
                     <td

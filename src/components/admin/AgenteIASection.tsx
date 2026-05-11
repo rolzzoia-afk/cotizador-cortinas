@@ -40,7 +40,7 @@ export function AgenteIASection() {
   return (
     <section className="rounded-lg border bg-card p-5">
       <header className="mb-4 flex items-center gap-2">
-        <Bot className="h-5 w-5 text-indigo-500" />
+        <Bot className="h-5 w-5 text-accent" />
         <h2 className="text-sm font-semibold text-muted-foreground">Agente IA</h2>
       </header>
       <div className="space-y-6">
@@ -123,7 +123,7 @@ function Configuracion() {
 
   if (!config) {
     return (
-      <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+      <div className="rounded border border-warning/30 bg-warning/15 p-3 text-xs text-amber-700 dark:text-warning">
         No hay configuración de agente para esta empresa. Ejecuta el seed inicial.
       </div>
     );
@@ -134,7 +134,7 @@ function Configuracion() {
       <div className="flex items-start justify-between gap-3 rounded-md border bg-background p-3">
         <div>
           <div className="mb-0.5 flex items-center gap-2 text-sm font-semibold">
-            <Power className={cn('h-4 w-4', config.activo ? 'text-emerald-500' : 'text-zinc-400')} />
+            <Power className={cn('h-4 w-4', config.activo ? 'text-success' : 'text-muted-foreground')} />
             Estado del agente
           </div>
           <div className="text-xs text-muted-foreground">
@@ -269,7 +269,7 @@ function EditorDocs() {
   return (
     <div className="space-y-3 border-t pt-4">
       <div className="flex items-center gap-2">
-        <FileText className="h-4 w-4 text-indigo-500" />
+        <FileText className="h-4 w-4 text-accent" />
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Base de conocimiento
         </h3>
@@ -292,14 +292,14 @@ function EditorDocs() {
               className={cn(
                 'rounded-md border px-3 py-1.5 text-xs transition',
                 categoria === c.id
-                  ? 'border-indigo-500 bg-indigo-500/10 text-indigo-600 dark:text-indigo-300'
+                  ? 'border-accent bg-accent/10 text-accent dark:text-accent'
                   : 'border-border hover:bg-muted',
               )}
             >
               {c.label}
               {!tieneContenido && (
                 <span
-                  className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-amber-500"
+                  className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-warning"
                   title="Doc poco desarrollado"
                 />
               )}
@@ -380,7 +380,7 @@ function VendedorasPanel() {
   return (
     <div className="space-y-3 border-t pt-4">
       <div className="flex items-center gap-2">
-        <Users className="h-4 w-4 text-indigo-500" />
+        <Users className="h-4 w-4 text-accent" />
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Vendedoras activas
         </h3>
@@ -421,7 +421,7 @@ function VendedorasPanel() {
                 </TableCell>
                 <TableCell>
                   {v.activa ? (
-                    <Badge className="gap-1 bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 dark:text-emerald-300">
+                    <Badge className="gap-1 bg-success/15 text-emerald-700 hover:bg-success/15 dark:text-success">
                       <CheckCircle2 className="h-3 w-3" /> Activa
                     </Badge>
                   ) : (
@@ -663,7 +663,7 @@ function PlaygroundPanel() {
     <div className="space-y-3 border-t pt-4">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <MessageCircle className="h-4 w-4 text-indigo-500" />
+          <MessageCircle className="h-4 w-4 text-accent" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Playground
           </h3>
@@ -717,7 +717,7 @@ function PlaygroundPanel() {
               className={cn(
                 'max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-xs leading-relaxed',
                 m.role === 'user'
-                  ? 'bg-indigo-500 text-white'
+                  ? 'bg-accent text-foreground'
                   : 'bg-background border',
               )}
             >

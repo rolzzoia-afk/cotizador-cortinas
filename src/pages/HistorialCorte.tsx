@@ -259,30 +259,30 @@ function ExistingErrorDialog({
   ];
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-w-md border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <AlertTriangle className="h-5 w-5 text-red-500" /> Error ya registrado
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <AlertTriangle className="h-5 w-5 text-destructive" /> Error ya registrado
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-wrap gap-1.5">
           {chips.map((c) => (
             <div
               key={c.label}
-              className="rounded-md border border-white/10 bg-zinc-800 px-2 py-1 text-[11px]"
+              className="rounded-md border border-border bg-secondary px-2 py-1 text-[11px]"
             >
-              <strong className="mr-1 text-zinc-400">{c.label}</strong>
+              <strong className="mr-1 text-muted-foreground">{c.label}</strong>
               {c.val}
             </div>
           ))}
         </div>
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4">
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-red-400">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/15 p-4">
+          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-destructive">
             Motivo registrado
           </div>
           <div className="text-sm font-semibold text-red-200">{existingError.motivo}</div>
         </div>
-        <p className="text-[11px] text-zinc-500">
+        <p className="text-[11px] text-muted-foreground">
           No se puede registrar otro error sobre la misma línea. Si el registro original es
           incorrecto, revísalo desde la pestaña "Errores registrados".
         </p>
@@ -696,12 +696,12 @@ function RegisterErrorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto border-white/10 bg-zinc-900 text-zinc-200">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
-            <AlertTriangle className="h-5 w-5 text-red-500" /> Registrar error de corte
+          <DialogTitle className="flex items-center gap-2 text-foreground">
+            <AlertTriangle className="h-5 w-5 text-destructive" /> Registrar error de corte
           </DialogTitle>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-muted-foreground">
             El registro quedará en el historial para análisis de errores.
           </p>
         </DialogHeader>
@@ -710,9 +710,9 @@ function RegisterErrorDialog({
           {chips.map((c) => (
             <div
               key={c.label}
-              className="rounded-md border border-white/10 bg-zinc-800 px-2 py-1 text-[11px]"
+              className="rounded-md border border-border bg-secondary px-2 py-1 text-[11px]"
             >
-              <strong className="mr-1 text-zinc-400">{c.label}</strong>
+              <strong className="mr-1 text-muted-foreground">{c.label}</strong>
               {c.val}
             </div>
           ))}
@@ -723,7 +723,7 @@ function RegisterErrorDialog({
           <select
             value={motivo}
             onChange={(e) => setMotivo(e.target.value)}
-            className="w-full rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
+            className="w-full rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:border-purple-500 focus:outline-none"
           >
             <option value="">— Selecciona un motivo —</option>
             {MOTIVOS.map((m) => (
@@ -741,7 +741,7 @@ function RegisterErrorDialog({
             onChange={(e) => setComentario(e.target.value)}
             rows={2}
             placeholder="Ej: el operario cortó 125cm en lugar de 120cm…"
-            className="w-full resize-none rounded-lg border border-white/10 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 focus:border-purple-500 focus:outline-none"
+            className="w-full resize-none rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-foreground focus:border-purple-500 focus:outline-none"
           />
         </div>
 
@@ -756,8 +756,8 @@ function RegisterErrorDialog({
               className={cn(
                 'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition',
                 modoReemplazo === 'colmena'
-                  ? 'border-purple-500/50 bg-purple-500/15 text-purple-300'
-                  : 'border-white/10 text-zinc-400 hover:border-white/20',
+                  ? 'border-purple-500/50 bg-accent/15 text-accent'
+                  : 'border-border text-muted-foreground hover:border-border',
               )}
             >
               Desde colmena existente
@@ -769,7 +769,7 @@ function RegisterErrorDialog({
                 'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition',
                 modoReemplazo === 'nuevo'
                   ? 'border-cyan-500/50 bg-cyan-500/15 text-cyan-300'
-                  : 'border-white/10 text-zinc-400 hover:border-white/20',
+                  : 'border-border text-muted-foreground hover:border-border',
               )}
             >
               Tubo nuevo
@@ -780,27 +780,27 @@ function RegisterErrorDialog({
           {modoReemplazo === 'colmena' && (
             <>
               {sugerencia && (
-                <div className="mb-2 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.07] p-3">
-                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+                <div className="mb-2 rounded-xl border border-success/30 bg-success/[0.07] p-3">
+                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-success">
                     <Sparkles className="h-3 w-3" /> Sugerencia
                   </div>
                   <div className="flex items-center justify-between gap-2">
                     <div>
-                      <span className="text-sm font-bold text-zinc-100">
+                      <span className="text-sm font-bold text-foreground">
                         Colmena {sugerencia.tubo.n_colmena} · {sugerencia.tubo.cod}
                       </span>
-                      <span className="ml-2 text-xs text-emerald-400">
+                      <span className="ml-2 text-xs text-success">
                         {Number(sugerencia.tubo.medida_cm).toFixed(1)} cm
                       </span>
                     </div>
                   </div>
-                  <div className="mt-1 text-[11px] text-zinc-400">
+                  <div className="mt-1 text-[11px] text-muted-foreground">
                     {sugerencia.razon}
                   </div>
                   <Button
                     size="sm"
                     onClick={() => seleccionarTubo(sugerencia.tubo)}
-                    className="mt-2 border border-emerald-500/35 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30"
+                    className="mt-2 border border-success/30 bg-success/15 text-success hover:bg-success/15"
                   >
                     Usar este tubo
                   </Button>
@@ -808,18 +808,18 @@ function RegisterErrorDialog({
               )}
 
               <div className="relative mb-2">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   value={buscarTubo}
                   onChange={(e) => setBuscarTubo(e.target.value)}
                   placeholder="Buscar otro código o colmena…"
-                  className="border-white/10 bg-zinc-800 pl-8 text-sm"
+                  className="border-border bg-secondary pl-8 text-sm"
                 />
               </div>
 
-              <div className="max-h-48 overflow-y-auto rounded-lg border border-white/[0.05]">
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
                 {tubosFiltrados.length === 0 ? (
-                  <div className="p-3 text-center text-[11px] leading-snug text-zinc-500">
+                  <div className="p-3 text-center text-[11px] leading-snug text-muted-foreground">
                     {motivoListaVacia}
                   </div>
                 ) : (
@@ -836,9 +836,9 @@ function RegisterErrorDialog({
                         disabled={insuficiente}
                         onClick={() => seleccionarTubo(t)}
                         className={cn(
-                          'flex w-full items-center justify-between gap-2 border-b border-white/[0.05] px-3 py-2 text-left text-xs transition last:border-0',
+                          'flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left text-xs transition last:border-0',
                           sel
-                            ? 'bg-purple-500/15 text-purple-300'
+                            ? 'bg-accent/15 text-accent'
                             : 'hover:bg-white/[0.03]',
                           insuficiente && 'cursor-not-allowed opacity-45',
                         )}
@@ -846,22 +846,22 @@ function RegisterErrorDialog({
                         <span>
                           <strong>Colmena {t.n_colmena}</strong> · {t.cod}
                           {esSugerido && (
-                            <span className="ml-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-emerald-300">
+                            <span className="ml-1.5 rounded-full border border-success/30 bg-success/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-success">
                               Sugerido
                             </span>
                           )}
                           {sobrVal !== null && sobrVal >= 0 && (
-                            <span className="ml-1 text-[11px] text-zinc-500">
+                            <span className="ml-1 text-[11px] text-muted-foreground">
                               · sobrante: {sobrVal.toFixed(1)} cm
                             </span>
                           )}
                           {insuficiente && (
-                            <span className="ml-1 text-[11px] text-red-400">
+                            <span className="ml-1 text-[11px] text-destructive">
                               · insuficiente
                             </span>
                           )}
                         </span>
-                        <span className="text-zinc-500">
+                        <span className="text-muted-foreground">
                           {t.medida_cm != null
                             ? `${Number(t.medida_cm).toFixed(1)} cm`
                             : '-'}
@@ -873,7 +873,7 @@ function RegisterErrorDialog({
               </div>
 
               {reemplazo && (
-                <div className="mt-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-sm text-emerald-400">
+                <div className="mt-2 rounded-lg bg-success/15 px-3 py-2 text-sm text-success">
                   ✅ <strong>Colmena {reemplazo.n_colmena}</strong> · {reemplazo.cod} ·{' '}
                   {Number(reemplazo.medida_cm || 0).toFixed(1)} cm
                 </div>
@@ -884,7 +884,7 @@ function RegisterErrorDialog({
           {/* ── Modo: tubo nuevo ── */}
           {modoReemplazo === 'nuevo' && (
             <div className="space-y-2 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] p-3">
-              <p className="text-[11px] text-zinc-400">
+              <p className="text-[11px] text-muted-foreground">
                 Tubo que llegó de fuera del inventario. Se corta, el sobrante se guarda
                 en la colmena que elijas y queda registrado en el historial.
               </p>
@@ -894,7 +894,7 @@ function RegisterErrorDialog({
                   value={nuevoColmena}
                   onChange={(e) => setNuevoColmena(e.target.value.toUpperCase())}
                   placeholder="Ej: E71"
-                  className="border-white/10 bg-zinc-800"
+                  className="border-border bg-secondary"
                 />
               </div>
               <div>
@@ -903,7 +903,7 @@ function RegisterErrorDialog({
                   value={nuevoCod}
                   onChange={(e) => setNuevoCod(e.target.value.toUpperCase())}
                   placeholder={(r.codigo || r.codigo_original || 'código').toString()}
-                  className="border-white/10 bg-zinc-800"
+                  className="border-border bg-secondary"
                 />
               </div>
               <div>
@@ -921,10 +921,10 @@ function RegisterErrorDialog({
                       ? `≥ ${Number(r.medida_cm).toFixed(1)}`
                       : 'Medida total'
                   }
-                  className="border-white/10 bg-zinc-800"
+                  className="border-border bg-secondary"
                 />
                 {sobranteNuevo !== null && (
-                  <p className="mt-1 text-[11px] text-emerald-400">
+                  <p className="mt-1 text-[11px] text-success">
                     Sobrante calculado: <strong>{sobranteNuevo.toFixed(1)} cm</strong>
                     {nuevoColmena.trim() && (
                       <> → volverá a colmena <strong>{nuevoColmena.trim()}</strong></>
@@ -935,7 +935,7 @@ function RegisterErrorDialog({
                   r.medida_cm != null &&
                   Number(nuevoMedida) > 0 &&
                   Number(nuevoMedida) < Number(r.medida_cm) && (
-                    <p className="mt-1 text-[11px] text-red-400">
+                    <p className="mt-1 text-[11px] text-destructive">
                       ⚠ El tubo nuevo es menor que la medida necesaria
                       ({Number(r.medida_cm).toFixed(1)} cm).
                     </p>
@@ -944,14 +944,14 @@ function RegisterErrorDialog({
 
               {/* Confirmación física obligatoria — sin esto se pueden meter
                   tubos fantasma al sistema (ver investigación 24-04-2026). */}
-              <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 hover:bg-amber-500/10">
+              <label className="mt-2 flex cursor-pointer items-start gap-2 rounded-lg border border-warning/30 bg-warning/15 p-3 hover:bg-warning/15">
                 <input
                   type="checkbox"
                   checked={confirmoTuboFisico}
                   onChange={(e) => setConfirmoTuboFisico(e.target.checked)}
                   className="mt-0.5 h-4 w-4 cursor-pointer accent-amber-500"
                 />
-                <span className="text-[11px] leading-snug text-amber-200">
+                <span className="text-[11px] leading-snug text-warning">
                   <strong>Confirmo que saqué físicamente un tubo virgen del stock</strong>
                   {nuevoCod && nuevoMedida && Number(nuevoMedida) > 0 && (
                     <>
@@ -970,11 +970,11 @@ function RegisterErrorDialog({
         </div>
 
         {reemplazo && (
-          <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.08] p-3">
-            <Label className="text-xs text-amber-400">
+          <div className="rounded-xl border border-warning/30 bg-warning/[0.08] p-3">
+            <Label className="text-xs text-warning">
               ¿Cuánto sobró del tubo de reemplazo? (cm)
             </Label>
-            <p className="mt-1 mb-2 text-[11px] text-zinc-400">
+            <p className="mt-1 mb-2 text-[11px] text-muted-foreground">
               Si sobró material, se guardará de vuelta en la colmena con la nueva medida.
               Si no quedó nada, dejar en 0.
             </p>
@@ -985,16 +985,16 @@ function RegisterErrorDialog({
               value={sobrante}
               onChange={(e) => setSobrante(e.target.value)}
               placeholder="Ej: 45.5"
-              className="border-white/10 bg-zinc-800"
+              className="border-border bg-secondary"
             />
           </div>
         )}
 
-        <div className="rounded-xl border border-indigo-500/25 bg-indigo-500/[0.07] p-3">
-          <Label className="text-xs text-indigo-300">
+        <div className="rounded-xl border border-accent/25 bg-accent/[0.07] p-3">
+          <Label className="text-xs text-accent">
             ¿Qué pasó con el tubo original?
           </Label>
-          <p className="mt-1 mb-2 text-[11px] text-zinc-400">
+          <p className="mt-1 mb-2 text-[11px] text-muted-foreground">
             Colmena {String(colOrig)} · Código {codOrig} · Medida original {medOrigen}
           </p>
           <div className="mb-2 flex gap-2">
@@ -1003,8 +1003,8 @@ function RegisterErrorDialog({
               className={cn(
                 'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition',
                 destino === 'merma'
-                  ? 'border-red-500/50 bg-red-500/15 text-red-400'
-                  : 'border-red-500/30 text-zinc-400 hover:border-red-500/50',
+                  ? 'border-destructive/30 bg-destructive/15 text-destructive'
+                  : 'border-destructive/30 text-muted-foreground hover:border-destructive/30',
               )}
             >
               <Trash2 className="mr-1 inline h-3.5 w-3.5" /> Merma — se descarta
@@ -1014,8 +1014,8 @@ function RegisterErrorDialog({
               className={cn(
                 'flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition',
                 destino === 'recuperar'
-                  ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-300'
-                  : 'border-indigo-500/30 text-zinc-400 hover:border-indigo-500/50',
+                  ? 'border-accent/50 bg-accent/15 text-accent'
+                  : 'border-accent/30 text-muted-foreground hover:border-accent/50',
               )}
             >
               <Recycle className="mr-1 inline h-3.5 w-3.5" /> Volver a colmena
@@ -1024,7 +1024,7 @@ function RegisterErrorDialog({
           {destino === 'recuperar' && (
             <div>
               <Label className="text-xs">Medida real del tubo (cm)</Label>
-              <p className="mt-1 mb-1.5 text-[11px] text-zinc-500">
+              <p className="mt-1 mb-1.5 text-[11px] text-muted-foreground">
                 Ingresa la medida real del tubo tal como quedó después del corte erróneo.
                 Se va a reingresar a la misma colmena con esa medida.
               </p>
@@ -1035,7 +1035,7 @@ function RegisterErrorDialog({
                 value={medRecuperar}
                 onChange={(e) => setMedRecuperar(e.target.value)}
                 placeholder="Ej: 125"
-                className="border-white/10 bg-zinc-800"
+                className="border-border bg-secondary"
               />
             </div>
           )}
@@ -1047,7 +1047,7 @@ function RegisterErrorDialog({
             value={responsable}
             onChange={(e) => setResponsable(e.target.value)}
             placeholder="Tu nombre"
-            className="border-white/10 bg-zinc-800"
+            className="border-border bg-secondary"
           />
         </div>
 
@@ -1058,7 +1058,7 @@ function RegisterErrorDialog({
           <Button
             onClick={confirmar}
             disabled={saving}
-            className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            className="gap-1.5 bg-success hover:bg-success/90"
           >
             <CheckCircle2 className="h-4 w-4" /> Guardar error
           </Button>
@@ -1111,11 +1111,11 @@ function PlanTabla({
     else if (r.codigo?.includes('TIRA')) accion = 'CORTAR CON TIRA';
 
     rows.push(
-      <tr key={`c-${idx}`} className="border-b border-white/[0.04] hover:bg-white/[0.03]">
+      <tr key={`c-${idx}`} className="border-b border-border hover:bg-white/[0.03]">
         <td className="whitespace-nowrap px-2.5 py-1.5">{ot}</td>
         <td className="whitespace-nowrap px-2.5 py-1.5">{ubicacion}</td>
         <td className="whitespace-nowrap px-2.5 py-1.5">
-          <span className="rounded bg-purple-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-purple-400">
+          <span className="rounded bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase text-accent">
             {accion}
           </span>
         </td>
@@ -1138,8 +1138,8 @@ function PlanTabla({
             className={cn(
               'rounded-md border px-2 py-1 text-[10px] font-bold uppercase transition',
               errorExistente
-                ? 'cursor-default border-red-500/50 bg-red-500/20 text-red-300'
-                : 'border-amber-500/40 text-amber-400 hover:bg-amber-500/15',
+                ? 'cursor-default border-destructive/30 bg-destructive/15 text-destructive'
+                : 'border-warning/30 text-warning hover:bg-warning/15',
             )}
             title={
               errorExistente
@@ -1156,15 +1156,15 @@ function PlanTabla({
     if (r.sobrante_cm && Number(r.sobrante_cm) > 0) {
       const sobranteCm = Number(r.sobrante_cm).toFixed(1);
       const colSob = r.colmena_sobrante || colmena;
-      let rowCls = 'border-b border-white/[0.04] bg-blue-500/[0.08] text-blue-200';
+      let rowCls = 'border-b border-border bg-accent/[0.08] text-blue-200';
       let accion2 = 'GUARDAR SOBRANTE';
       let colDisp: string | number = colSob;
       if (r.es_intermedio) {
-        rowCls = 'border-b border-white/[0.04] bg-orange-500/[0.08] text-orange-200';
+        rowCls = 'border-b border-border bg-warning/10 text-warning';
         accion2 = 'RESERVAR EN MESA';
         colDisp = '—';
       } else if (r.es_desecho) {
-        rowCls = 'border-b border-white/[0.04] bg-red-500/[0.08] text-red-200';
+        rowCls = 'border-b border-border bg-destructive/[0.08] text-red-200';
         accion2 = 'DESECHAR MERMA';
         colDisp = 'BASURERO';
       }
@@ -1173,7 +1173,7 @@ function PlanTabla({
           <td className="whitespace-nowrap px-2.5 py-1.5">{ot}</td>
           <td className="whitespace-nowrap px-2.5 py-1.5">{ubicacion}</td>
           <td className="whitespace-nowrap px-2.5 py-1.5">
-            <span className="rounded bg-white/10 px-2 py-0.5 text-[10px] font-bold uppercase">
+            <span className="rounded bg-card px-2 py-0.5 text-[10px] font-bold uppercase">
               {accion2}
             </span>
           </td>
@@ -1193,7 +1193,7 @@ function PlanTabla({
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-[12px]" style={{ minWidth: 900 }}>
         <thead>
-          <tr className="border-b border-white/10 bg-white/[0.03]">
+          <tr className="border-b border-border bg-white/[0.03]">
             {[
               'OT',
               'Ubicación',
@@ -1211,7 +1211,7 @@ function PlanTabla({
             ].map((h) => (
               <th
                 key={h}
-                className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500"
+                className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
               >
                 {h}
               </th>
@@ -1387,8 +1387,8 @@ export function HistorialCorte() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-950">
-        <div className="flex flex-col items-center gap-2 text-xs text-zinc-500">
+      <div className="flex h-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-purple-500/30 border-t-purple-500" />
           Cargando historial…
         </div>
@@ -1397,12 +1397,12 @@ export function HistorialCorte() {
   }
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100">
+    <div className="min-h-full bg-background text-foreground">
       {/* HEADER */}
-      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+      <div className="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <button
           onClick={() => navigate('/landing')}
-          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Inicio
         </button>
@@ -1410,7 +1410,7 @@ export function HistorialCorte() {
       </div>
 
       {/* TABS */}
-      <div className="flex gap-1.5 border-b border-white/[0.07] bg-zinc-950 px-5 pt-3.5">
+      <div className="flex gap-1.5 border-b border-border bg-background px-5 pt-3.5">
         {(
           [
             { k: 'planes', l: 'Planes de corte' },
@@ -1423,8 +1423,8 @@ export function HistorialCorte() {
             className={cn(
               'rounded-t-lg border-b-2 px-4 py-2 text-[13px] font-semibold transition',
               tab === t.k
-                ? 'border-purple-500 bg-purple-500/[0.08] text-purple-400'
-                : 'border-transparent text-zinc-500 hover:text-zinc-300',
+                ? 'border-purple-500 bg-accent/[0.08] text-accent'
+                : 'border-transparent text-muted-foreground hover:text-foreground',
             )}
           >
             {t.l}
@@ -1436,17 +1436,17 @@ export function HistorialCorte() {
       {tab === 'planes' && (
         <div className="p-5">
           <div className="relative mb-4 max-w-md">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
               placeholder="Filtrar por OT…"
-              className="border-white/10 bg-zinc-900 pl-8"
+              className="border-border bg-card pl-8"
             />
           </div>
 
           {planesVisibles.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 py-10 text-center text-zinc-500">
+            <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
               <Scissors className="h-8 w-8" />
               <div className="text-sm">
                 {planes.length === 0
@@ -1468,8 +1468,8 @@ export function HistorialCorte() {
                   <div
                     key={plan.id}
                     className={cn(
-                      'overflow-hidden rounded-2xl border bg-zinc-900 transition-colors',
-                      hasErrors ? 'border-red-500/30' : 'border-white/[0.07]',
+                      'overflow-hidden rounded-2xl border bg-card transition-colors',
+                      hasErrors ? 'border-destructive/30' : 'border-border',
                     )}
                   >
                     <button
@@ -1478,22 +1478,22 @@ export function HistorialCorte() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 text-[15px] font-bold">
-                          <Scissors className="h-4 w-4 flex-shrink-0 text-purple-500" />
+                          <Scissors className="h-4 w-4 flex-shrink-0 text-accent" />
                           {fechaStr}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1 text-[12px] text-zinc-400">
+                        <div className="mt-1 flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
                           <span>
                             {nCortes} corte{nCortes !== 1 ? 's' : ''}
                           </span>
                           {hasErrors && (
-                            <span className="text-red-400">
+                            <span className="text-destructive">
                               · ⚠ {errs.length} error{errs.length > 1 ? 'es' : ''}
                             </span>
                           )}
                           {ots.map((ot) => (
                             <span
                               key={ot}
-                              className="rounded bg-indigo-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-indigo-300"
+                              className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent"
                             >
                               OT {ot}
                             </span>
@@ -1502,13 +1502,13 @@ export function HistorialCorte() {
                       </div>
                       <ChevronDown
                         className={cn(
-                          'h-4 w-4 text-zinc-400 transition-transform',
+                          'h-4 w-4 text-muted-foreground transition-transform',
                           isExp && 'rotate-180',
                         )}
                       />
                     </button>
                     {isExp && (
-                      <div className="border-t border-white/[0.05]">
+                      <div className="border-t border-border">
                         <PlanTabla
                           plan={plan}
                           errores={errs}
@@ -1528,8 +1528,8 @@ export function HistorialCorte() {
       {tab === 'errores' && (
         <div className="p-5">
           {motivosData.length > 0 && (
-            <div className="mb-5 rounded-2xl border border-white/[0.07] bg-zinc-900 p-4">
-              <h6 className="mb-3 text-sm font-semibold text-zinc-200">
+            <div className="mb-5 rounded-2xl border border-border bg-card p-4">
+              <h6 className="mb-3 text-sm font-semibold text-foreground">
                 Cantidad de errores por motivo
               </h6>
               <div className="h-60">
@@ -1567,15 +1567,15 @@ export function HistorialCorte() {
             </div>
           )}
 
-          <div className="overflow-hidden rounded-2xl border border-white/[0.07] bg-zinc-900">
+          <div className="overflow-hidden rounded-2xl border border-border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[13px]">
                 <thead>
-                  <tr className="border-b border-white/10 bg-white/[0.03]">
+                  <tr className="border-b border-border bg-white/[0.03]">
                     {['Fecha', 'OT', 'Código', 'Medida', 'Motivo', 'Reemplazo', 'Por'].map((h) => (
                       <th
                         key={h}
-                        className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-zinc-500"
+                        className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
                       >
                         {h}
                       </th>
@@ -1587,7 +1587,7 @@ export function HistorialCorte() {
                     <tr>
                       <td
                         colSpan={7}
-                        className="py-8 text-center text-sm text-zinc-500"
+                        className="py-8 text-center text-sm text-muted-foreground"
                       >
                         Sin errores registrados aún.
                       </td>
@@ -1607,9 +1607,9 @@ export function HistorialCorte() {
                       return (
                         <tr
                           key={e.id ?? i}
-                          className="border-b border-white/[0.04] hover:bg-white/[0.02]"
+                          className="border-b border-border hover:bg-white/[0.02]"
                         >
-                          <td className="whitespace-nowrap px-3 py-2 text-zinc-400">
+                          <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                             {fecha}
                           </td>
                           <td className="whitespace-nowrap px-3 py-2">{e.ot || '—'}</td>
@@ -1633,10 +1633,10 @@ export function HistorialCorte() {
                               {e.motivo}
                             </span>
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2 text-zinc-400">
+                          <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                             {reemplazo}
                           </td>
-                          <td className="whitespace-nowrap px-3 py-2 text-zinc-400">
+                          <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                             {e.registrado_por || '—'}
                           </td>
                         </tr>

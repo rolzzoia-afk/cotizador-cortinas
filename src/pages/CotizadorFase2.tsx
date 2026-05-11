@@ -215,16 +215,16 @@ export function CotizadorFase2() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-zinc-400">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando…
       </div>
     );
   }
   if (!ot) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <p>OT no encontrada.</p>
-        <Link to="/panel" className="text-sm text-indigo-300 hover:underline">
+        <Link to="/panel" className="text-sm text-accent hover:underline">
           Volver al Panel
         </Link>
       </div>
@@ -232,26 +232,26 @@ export function CotizadorFase2() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/panel')}
-            className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-card hover:text-foreground"
             title="Volver al Panel"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
             <h2 className="text-base font-semibold">Fase 2 — Terreno</h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               OT {ot.datosGenerales.ot || '—'} · {ot.datosGenerales.cliente || '(sin cliente)'} ·{' '}
               {ventanas.length} ventana{ventanas.length === 1 ? '' : 's'}
             </p>
           </div>
         </div>
-        <nav className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
+        <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
           <TabBtn active={tab === 'ventanas'} onClick={() => setTab('ventanas')}>
             Ventanas
           </TabBtn>
@@ -264,24 +264,24 @@ export function CotizadorFase2() {
       {tab === 'ventanas' && (
         <div className="flex flex-1 overflow-hidden">
           {/* Lista de ventanas */}
-          <aside className="w-80 shrink-0 overflow-y-auto border-r border-white/10 bg-zinc-900/40">
-            <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
+          <aside className="w-80 shrink-0 overflow-y-auto border-r border-border bg-card/40">
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Ventanas de la OT
               </h3>
               <button
                 onClick={iniciarNueva}
-                className="flex items-center gap-1 rounded border border-indigo-500/30 bg-indigo-500/10 px-2 py-1 text-[0.7rem] text-indigo-300 hover:bg-indigo-500/20"
+                className="flex items-center gap-1 rounded border border-accent/30 bg-accent/10 px-2 py-1 text-[0.7rem] text-accent hover:bg-accent/20"
               >
                 <Plus className="h-3 w-3" /> Nueva
               </button>
             </div>
             {ventanas.length === 0 ? (
-              <p className="p-6 text-center text-xs text-zinc-500">
+              <p className="p-6 text-center text-xs text-muted-foreground">
                 No hay ventanas todavía. Agregá una desde "Nueva" o desde Fase 1.
               </p>
             ) : (
-              <ul className="divide-y divide-white/5">
+              <ul className="divide-y divide-border">
                 {ventanas.map((v) => {
                   const badge = catBadgeColor(v.categoria || '');
                   const activa = editandoId === v.id;
@@ -289,8 +289,8 @@ export function CotizadorFase2() {
                     <li
                       key={String(v.id)}
                       className={cn(
-                        'cursor-pointer p-3 hover:bg-white/5',
-                        activa && 'bg-indigo-500/10',
+                        'cursor-pointer p-3 hover:bg-card',
+                        activa && 'bg-accent/10',
                       )}
                       onClick={() => iniciarEdicion(v)}
                     >
@@ -309,7 +309,7 @@ export function CotizadorFase2() {
                           {v.categoria || '—'}
                         </span>
                       </div>
-                      <div className="mt-0.5 text-[0.7rem] text-zinc-500">
+                      <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
                         {tipoVentanaLabel(v.panos.length)} · {resumenPanos(v.panos)}
                       </div>
                       <div className="mt-1 flex justify-end gap-1">
@@ -318,7 +318,7 @@ export function CotizadorFase2() {
                             e.stopPropagation();
                             iniciarEdicion(v);
                           }}
-                          className="rounded border border-white/10 bg-white/5 p-1 text-zinc-400 hover:bg-white/10 hover:text-zinc-100"
+                          className="rounded border border-border bg-card p-1 text-muted-foreground hover:bg-card hover:text-foreground"
                           title="Editar"
                         >
                           <Pencil className="h-3 w-3" />
@@ -328,7 +328,7 @@ export function CotizadorFase2() {
                             e.stopPropagation();
                             eliminarVentana(v.id);
                           }}
-                          className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-300 hover:bg-red-500/20"
+                          className="rounded border border-destructive/30 bg-destructive/15 p-1 text-destructive hover:bg-destructive/15"
                           title="Eliminar"
                         >
                           <Trash2 className="h-3 w-3" />
@@ -344,7 +344,7 @@ export function CotizadorFase2() {
           {/* Editor */}
           <section className="flex-1 overflow-y-auto p-4">
             {!ventanaForm ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 text-zinc-500">
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Pencil className="h-10 w-10 opacity-40" />
                 <p className="text-sm">
                   Seleccioná una ventana de la lista o creá una nueva para editar.
@@ -368,7 +368,7 @@ export function CotizadorFase2() {
             ) : (
               <>
                 {/* Datos de la ventana */}
-                <div className="mb-3 rounded-md border border-white/10 bg-zinc-900/40 p-3">
+                <div className="mb-3 rounded-md border border-border bg-card/40 p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <h3 className="text-sm font-semibold">
                       {ventanas.find((v) => v.id === ventanaForm.id)
@@ -377,7 +377,7 @@ export function CotizadorFase2() {
                     </h3>
                     <button
                       onClick={cancelarEdicion}
-                      className="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                      className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
                       title="Cancelar"
                     >
                       <X className="h-4 w-4" />
@@ -397,7 +397,7 @@ export function CotizadorFase2() {
                       <select
                         value={ventanaForm.categoria}
                         onChange={(e) => actualizarVentana({ categoria: e.target.value })}
-                        className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                        className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
                       >
                         <option value="">— Seleccioná —</option>
                         {CATEGORIAS_FASE1.map((g) => (
@@ -435,8 +435,8 @@ export function CotizadorFase2() {
                             className={cn(
                               'flex items-center gap-1.5 rounded border px-2.5 py-1.5 text-xs transition-colors',
                               active
-                                ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-200'
-                                : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10',
+                                ? 'border-accent/50 bg-accent/20 text-accent'
+                                : 'border-border bg-card text-foreground hover:bg-card',
                             )}
                           >
                             <span className="font-mono">{t.icono}</span>
@@ -450,7 +450,7 @@ export function CotizadorFase2() {
 
                 {/* Tabs por paño */}
                 {ventanaForm.panos.length > 1 && (
-                  <div className="mb-3 flex flex-wrap gap-1 border-b border-white/10 pb-2">
+                  <div className="mb-3 flex flex-wrap gap-1 border-b border-border pb-2">
                     {ventanaForm.panos.map((_, i) => {
                       const color = PANO_COLORS[i] || PANO_COLORS[0];
                       const active = panoActivo === i;
@@ -461,8 +461,8 @@ export function CotizadorFase2() {
                           className={cn(
                             'flex items-center gap-1.5 rounded-t border-b-2 px-3 py-1.5 text-xs transition-colors',
                             active
-                              ? 'border-b-indigo-500 bg-white/5 text-zinc-100'
-                              : 'border-b-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                              ? 'border-b-indigo-500 bg-card text-foreground'
+                              : 'border-b-transparent text-muted-foreground hover:bg-card hover:text-foreground',
                           )}
                         >
                           <span
@@ -537,7 +537,7 @@ export function CotizadorFase2() {
 
       {/* Barra fija inferior para avanzar a Fase 3 (solo visible en tab ventanas con editor cerrado) */}
       {tab === 'ventanas' && !ventanaForm && ventanas.length > 0 && (
-        <div className="border-t border-white/10 bg-zinc-900/60 px-4 py-2.5">
+        <div className="border-t border-border bg-card/60 px-4 py-2.5">
           <div className="flex items-center justify-end gap-2">
             <Button variant="outline" onClick={() => navigate('/panel')}>
               Volver al Panel
@@ -568,8 +568,8 @@ function TabBtn({
       className={cn(
         'flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.78rem] font-medium transition-colors',
         active
-          ? 'bg-indigo-500 text-white shadow'
-          : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100',
+          ? 'bg-accent text-foreground shadow'
+          : 'text-muted-foreground hover:bg-card hover:text-foreground',
       )}
     >
       {children}

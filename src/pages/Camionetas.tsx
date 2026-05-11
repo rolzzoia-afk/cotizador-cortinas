@@ -401,8 +401,8 @@ function VistaDetalle({
               s.cantidad === 0
                 ? 'text-destructive'
                 : s.cantidad <= 2
-                ? 'text-yellow-500'
-                : 'text-green-500';
+                ? 'text-warning'
+                : 'text-success';
             return (
               <div
                 key={s.id}
@@ -726,7 +726,7 @@ function VistaSwap({
       </p>
       <Label>¿Qué insumo se sacó?</Label>
       <Select value={salida} onChange={setSalida} options={opcionesSalida} className="mb-3" />
-      <div className="my-2 text-center text-2xl text-yellow-500">↓</div>
+      <div className="my-2 text-center text-2xl text-warning">↓</div>
       <Label>¿Qué insumo se puso en su lugar?</Label>
       <Select
         value={entrada}
@@ -879,11 +879,11 @@ function VistaDevolucion({
                           ? 'scale-[1.03] opacity-100'
                           : 'opacity-50',
                         e === 'ok' &&
-                          'border-green-500/30 bg-green-500/15 text-green-500',
+                          'border-success/30 bg-success/15 text-success',
                         e === 'defectuoso' &&
-                          'border-red-500/30 bg-red-500/15 text-red-500',
+                          'border-destructive/30 bg-destructive/15 text-destructive',
                         e === 'queda' &&
-                          'border-yellow-500/30 bg-yellow-500/15 text-yellow-500',
+                          'border-warning/30 bg-warning/15 text-warning',
                       )}
                     >
                       {e === 'ok' && '✅ Vuelve OK'}

@@ -165,7 +165,7 @@ export function CotizadorFase1() {
 
   if (loadingOT || loadingCat) {
     return (
-      <div className="flex h-full items-center justify-center text-zinc-400">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando cotizador…
       </div>
     );
@@ -173,9 +173,9 @@ export function CotizadorFase1() {
 
   if (!ot) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <p>OT no encontrada.</p>
-        <Link to="/panel" className="text-sm text-indigo-300 hover:underline">
+        <Link to="/panel" className="text-sm text-accent hover:underline">
           Volver al Panel
         </Link>
       </div>
@@ -186,27 +186,27 @@ export function CotizadorFase1() {
   const sinCatalogo = productosLista.length === 0;
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/panel')}
-            className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-card hover:text-foreground"
             title="Volver al Panel"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
             <h2 className="text-base font-semibold">Fase 1 — Cotización inicial</h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               OT {ot.datosGenerales.ot || '—'} · {ot.datosGenerales.cliente || '(sin cliente)'}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {ot.storeVentanas.length > 0 && (
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-muted-foreground">
               {ot.storeVentanas.length} ventana(s) ya en la OT
             </span>
           )}
@@ -215,7 +215,7 @@ export function CotizadorFase1() {
 
       <div className="flex-1 overflow-auto px-4 py-4">
         {sinCatalogo && (
-          <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+          <div className="mb-4 rounded-lg border border-warning/30 bg-warning/15 p-3 text-xs text-warning">
             El catálogo de productos está vacío. Importalo desde el cotizador legacy antes de
             cotizar nuevos ítems.
           </div>
@@ -223,13 +223,13 @@ export function CotizadorFase1() {
 
         <div className="grid gap-4 xl:grid-cols-[400px_1fr]">
           {/* Formulario */}
-          <div className="space-y-3 rounded-lg border border-white/10 bg-zinc-900/40 p-4">
+          <div className="space-y-3 rounded-lg border border-border bg-card/40 p-4">
             <h3 className="text-sm font-semibold">Agregar producto</h3>
 
             <div>
               <Label>Código (COD_INT)</Label>
               <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={form.codInt}
                   onChange={(e) => actualizarForm({ codInt: e.target.value.trim() })}
@@ -253,29 +253,29 @@ export function CotizadorFase1() {
               className={cn(
                 'rounded-md border p-2.5 text-xs',
                 producto
-                  ? 'border-emerald-500/30 bg-emerald-500/5'
-                  : 'border-white/10 bg-zinc-900/60 text-zinc-500',
+                  ? 'border-success/30 bg-success/15'
+                  : 'border-border bg-card/60 text-muted-foreground',
               )}
             >
               {producto ? (
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[0.7rem] text-zinc-400">{producto.cod}</span>
-                    <span className="rounded bg-white/5 px-1.5 py-0.5 text-[0.62rem] font-semibold text-zinc-300">
+                    <span className="font-mono text-[0.7rem] text-muted-foreground">{producto.cod}</span>
+                    <span className="rounded bg-card px-1.5 py-0.5 text-[0.62rem] font-semibold text-foreground">
                       {producto.tipo}
                     </span>
                   </div>
-                  <div className="font-medium text-zinc-100">{producto.producto}</div>
+                  <div className="font-medium text-foreground">{producto.producto}</div>
                   {producto.descripcion && (
-                    <div className="text-zinc-400">{producto.descripcion}</div>
+                    <div className="text-muted-foreground">{producto.descripcion}</div>
                   )}
-                  <div className="text-emerald-300">
+                  <div className="text-success">
                     {formatCLP(producto.precio)}{' '}
                     {esPorUnidad(producto.tipo) ? '/unidad' : '/m²'}
                   </div>
                 </div>
               ) : form.codInt ? (
-                <span className="text-red-300">Código no encontrado</span>
+                <span className="text-destructive">Código no encontrado</span>
               ) : (
                 <span>Ingresá un código para ver el producto</span>
               )}
@@ -295,7 +295,7 @@ export function CotizadorFase1() {
               <select
                 value={form.categoria}
                 onChange={(e) => actualizarForm({ categoria: e.target.value })}
-                className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="">— Seleccioná categoría —</option>
                 {CATEGORIAS_FASE1.map((grupo) => (
@@ -354,15 +354,15 @@ export function CotizadorFase1() {
 
             {/* Estimado en vivo */}
             {estimado && (
-              <div className="rounded-md border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs">
-                <div className="flex items-center justify-between text-zinc-300">
+              <div className="rounded-md border border-success/30 bg-success/15 p-2.5 text-xs">
+                <div className="flex items-center justify-between text-foreground">
                   <span>
-                    <span className="text-zinc-500">M²:</span>{' '}
+                    <span className="text-muted-foreground">M²:</span>{' '}
                     <strong>{estimado.totalM2.toFixed(2)}</strong>
-                    <span className="text-zinc-500"> × </span>
+                    <span className="text-muted-foreground"> × </span>
                     {formatCLP(producto?.precio || 0)}
                   </span>
-                  <strong className="text-base text-emerald-300">
+                  <strong className="text-base text-success">
                     {formatCLP(estimado.total)}
                   </strong>
                 </div>
@@ -384,17 +384,17 @@ export function CotizadorFase1() {
               <h3 className="text-sm font-semibold">
                 Productos cotizados ({items.length})
               </h3>
-              <span className="text-sm text-zinc-400">
+              <span className="text-sm text-muted-foreground">
                 Total estimado:{' '}
-                <strong className="text-base text-emerald-300">
+                <strong className="text-base text-success">
                   {formatCLP(totalAcumulado)}
                 </strong>
               </span>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-white/10 bg-zinc-900/40">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card/40">
               <table className="w-full text-xs">
-                <thead className="bg-zinc-900 text-[0.68rem] uppercase tracking-wide text-zinc-400">
+                <thead className="bg-card text-[0.68rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="p-2 text-left">Cant</th>
                     <th className="p-2 text-left">Ubicación</th>
@@ -409,7 +409,7 @@ export function CotizadorFase1() {
                 <tbody>
                   {items.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="p-6 text-center text-zinc-500">
+                      <td colSpan={8} className="p-6 text-center text-muted-foreground">
                         Sin productos cotizados todavía. Agregá desde el formulario.
                       </td>
                     </tr>
@@ -426,7 +426,7 @@ export function CotizadorFase1() {
                     const anchoCm = (it.ancho * 100).toFixed(0);
                     const altoCm = (it.alto * 100).toFixed(0);
                     return (
-                      <tr key={it.id} className="border-t border-white/5 hover:bg-white/5">
+                      <tr key={it.id} className="border-t border-border hover:bg-card">
                         <td className="p-2 text-center font-semibold">{it.cantidad}</td>
                         <td className="p-2">{it.ubicacion}</td>
                         <td className="p-2">
@@ -443,23 +443,23 @@ export function CotizadorFase1() {
                         </td>
                         <td className="p-2">
                           <div>{it.producto}</div>
-                          <div className="text-[0.68rem] text-zinc-500">
+                          <div className="text-[0.68rem] text-muted-foreground">
                             {it.color} · {it.codInt}
                           </div>
                         </td>
-                        <td className="p-2 text-zinc-400">
+                        <td className="p-2 text-muted-foreground">
                           {esPorUnidad(it.tipo) ? '—' : `${anchoCm}×${altoCm} cm`}
                         </td>
-                        <td className="p-2 text-right text-zinc-300">
+                        <td className="p-2 text-right text-foreground">
                           {est.totalM2.toFixed(2)}
                         </td>
-                        <td className="p-2 text-right font-semibold text-emerald-300">
+                        <td className="p-2 text-right font-semibold text-success">
                           {formatCLP(est.total)}
                         </td>
                         <td className="p-2 text-right">
                           <button
                             onClick={() => eliminar(it.id)}
-                            className="rounded border border-red-500/30 bg-red-500/10 p-1 text-red-300 hover:bg-red-500/20"
+                            className="rounded border border-destructive/30 bg-destructive/15 p-1 text-destructive hover:bg-destructive/15"
                             title="Eliminar"
                           >
                             <Trash2 className="h-3 w-3" />

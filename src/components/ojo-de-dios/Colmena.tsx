@@ -48,15 +48,15 @@ export function Colmena() {
     <div className="space-y-3">
       <InventarioPanel ctx={inventario} tubosActuales={tubos.tubos.length} onCambio={tubos.refrescar} />
 
-      <div className="rounded-lg border border-emerald-500/30 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-success/30 bg-card/40 p-3">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <button
             onClick={() => setSub('tubos')}
             className={cn(
               'flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition',
               sub === 'tubos'
-                ? 'border-emerald-500/40 bg-emerald-500/20 text-emerald-300'
-                : 'border-emerald-500/20 bg-emerald-500/5 text-emerald-400/60 hover:bg-emerald-500/10',
+                ? 'border-success/30 bg-success/15 text-success'
+                : 'border-success/30 bg-success/15 text-success/60 hover:bg-success/15',
             )}
           >
             <Ruler className="h-3.5 w-3.5" />
@@ -67,8 +67,8 @@ export function Colmena() {
             className={cn(
               'flex items-center gap-1.5 rounded border px-3 py-1.5 text-xs font-medium transition',
               sub === 'panos'
-                ? 'border-indigo-500/40 bg-indigo-500/20 text-indigo-300'
-                : 'border-indigo-500/20 bg-indigo-500/5 text-indigo-400/60 hover:bg-indigo-500/10',
+                ? 'border-accent/40 bg-accent/20 text-accent'
+                : 'border-accent/20 bg-accent/5 text-accent/60 hover:bg-accent/10',
             )}
           >
             <Grid3x3 className="h-3.5 w-3.5" />
@@ -78,7 +78,7 @@ export function Colmena() {
             variant="outline"
             size="sm"
             onClick={refrescar}
-            className="ml-auto h-8 gap-1 border-emerald-500/30 text-emerald-300"
+            className="ml-auto h-8 gap-1 border-success/30 text-success"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Refrescar
@@ -143,7 +143,7 @@ function TubosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaTubos> }) {
         <strong className="text-sm">Inventario de Tubos (colmena_tubos)</strong>
         <div className="flex gap-2">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
@@ -154,14 +154,14 @@ function TubosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaTubos> }) {
           <Button
             size="sm"
             onClick={abrirNuevo}
-            className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-500"
+            className="h-8 gap-1 bg-success hover:bg-success/90"
           >
             <Plus className="h-3.5 w-3.5" />
             Agregar
           </Button>
         </div>
       </div>
-      <div className="mb-2 text-xs text-zinc-500">{tubos.length} tubo(s) en inventario</div>
+      <div className="mb-2 text-xs text-muted-foreground">{tubos.length} tubo(s) en inventario</div>
 
       {creando && (
         <TuboForm
@@ -180,9 +180,9 @@ function TubosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaTubos> }) {
         />
       )}
 
-      <div className="max-h-[420px] overflow-y-auto rounded border border-white/5">
+      <div className="max-h-[420px] overflow-y-auto rounded border border-border">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-zinc-900 text-[0.65rem] uppercase tracking-wide text-zinc-400">
+          <thead className="sticky top-0 bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="p-2 text-left">Colmena</th>
               <th className="p-2 text-left">Código</th>
@@ -195,31 +195,31 @@ function TubosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaTubos> }) {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-zinc-500">
+                <td colSpan={6} className="p-4 text-center text-muted-foreground">
                   Cargando tubos...
                 </td>
               </tr>
             )}
             {!loading && filtrados.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-4 text-center text-zinc-500">
+                <td colSpan={6} className="p-4 text-center text-muted-foreground">
                   Sin tubos para mostrar.
                 </td>
               </tr>
             )}
             {filtrados.map((t) => (
-              <tr key={t.id} className="border-t border-white/5 hover:bg-white/5">
-                <td className="p-2 font-semibold text-emerald-300">{t.n_colmena || '—'}</td>
-                <td className="p-2 font-mono text-zinc-200">{t.cod || '—'}</td>
-                <td className="p-2 text-zinc-200">
+              <tr key={t.id} className="border-t border-border hover:bg-card">
+                <td className="p-2 font-semibold text-success">{t.n_colmena || '—'}</td>
+                <td className="p-2 font-mono text-foreground">{t.cod || '—'}</td>
+                <td className="p-2 text-foreground">
                   {t.medida_cm ? Number(t.medida_cm).toFixed(1) + ' cm' : '—'}
                 </td>
-                <td className="p-2 font-mono text-zinc-400">{t.serial || '—'}</td>
+                <td className="p-2 font-mono text-muted-foreground">{t.serial || '—'}</td>
                 <td className="p-2 text-[0.68rem]">
                   {t.agregado_por_admin ? (
-                    <span className="text-amber-300">✔ Admin</span>
+                    <span className="text-warning">✔ Admin</span>
                   ) : (
-                    <span className="text-zinc-500">Auto</span>
+                    <span className="text-muted-foreground">Auto</span>
                   )}
                 </td>
                 <td className="p-2 text-right">
@@ -236,7 +236,7 @@ function TubosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaTubos> }) {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-6 w-6 border-red-500/30 p-0 text-red-400 hover:bg-red-500/10"
+                      className="h-6 w-6 border-destructive/30 p-0 text-destructive hover:bg-destructive/15"
                       onClick={() => onEliminar(t)}
                       title="Eliminar"
                     >
@@ -294,15 +294,15 @@ function TuboForm({
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-emerald-500/35 bg-zinc-950/50 p-3">
+    <div className="mb-3 rounded-lg border border-success/30 bg-background/50 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <strong className="text-emerald-300">
+        <strong className="text-success">
           <Pencil className="mr-1 inline h-3.5 w-3.5" />
           {tubo ? 'Editar tubo' : 'Nuevo tubo'}
         </strong>
         <button
           onClick={onCancel}
-          className="rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+          className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -348,7 +348,7 @@ function TuboForm({
         </div>
         <div className="md:col-span-12">
           <Label className="text-[0.65rem]">
-            Procedencia <span className="text-zinc-500">(de dónde viene)</span>
+            Procedencia <span className="text-muted-foreground">(de dónde viene)</span>
           </Label>
           <Input
             value={procedencia}
@@ -363,7 +363,7 @@ function TuboForm({
           size="sm"
           onClick={submit}
           disabled={saving}
-          className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-500"
+          className="h-8 gap-1 bg-success hover:bg-success/90"
         >
           <Save className="h-3.5 w-3.5" />
           Guardar tubo
@@ -408,7 +408,7 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
         <strong className="text-sm">Paños de Tela (colmena_panos)</strong>
         <div className="flex gap-2">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
@@ -419,7 +419,7 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
           <select
             value={filtroDisp}
             onChange={(e) => setFiltroDisp(e.target.value as '' | 'true' | 'false')}
-            className="h-8 rounded border border-white/10 bg-zinc-900 px-2 text-xs text-zinc-100"
+            className="h-8 rounded border border-border bg-card px-2 text-xs text-foreground"
           >
             <option value="">Todos</option>
             <option value="true">Disponibles</option>
@@ -427,7 +427,7 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
           </select>
         </div>
       </div>
-      <div className="mb-2 text-xs text-zinc-500">
+      <div className="mb-2 text-xs text-muted-foreground">
         {panos.length} paños — {disponibles} disponibles, {usados} usados
       </div>
 
@@ -448,9 +448,9 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
         />
       )}
 
-      <div className="max-h-[420px] overflow-y-auto rounded border border-white/5">
+      <div className="max-h-[420px] overflow-y-auto rounded border border-border">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-zinc-900 text-[0.65rem] uppercase tracking-wide text-zinc-400">
+          <thead className="sticky top-0 bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="p-2 text-left">Código</th>
               <th className="p-2 text-left">Ancho</th>
@@ -464,43 +464,43 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="p-4 text-center text-zinc-500">
+                <td colSpan={7} className="p-4 text-center text-muted-foreground">
                   Cargando paños...
                 </td>
               </tr>
             )}
             {!loading && filtrados.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-4 text-center text-zinc-500">
+                <td colSpan={7} className="p-4 text-center text-muted-foreground">
                   Sin paños para mostrar.
                 </td>
               </tr>
             )}
             {filtrados.map((p) => (
-              <tr key={p.id} className="border-t border-white/5 hover:bg-white/5">
-                <td className="p-2 font-mono text-zinc-200">{p.codigo || '—'}</td>
-                <td className="p-2 text-zinc-200">
+              <tr key={p.id} className="border-t border-border hover:bg-card">
+                <td className="p-2 font-mono text-foreground">{p.codigo || '—'}</td>
+                <td className="p-2 text-foreground">
                   {p.medida_ancho != null ? Number(p.medida_ancho).toFixed(2) + ' m' : '—'}
                 </td>
-                <td className="p-2 text-zinc-200">
+                <td className="p-2 text-foreground">
                   {p.medida_alto != null ? Number(p.medida_alto).toFixed(2) + ' m' : '—'}
                 </td>
                 <td className="p-2">
                   {p.disponible ? (
-                    <span className="text-emerald-400">● Disponible</span>
+                    <span className="text-success">● Disponible</span>
                   ) : (
-                    <span className="text-amber-400">● Usado</span>
+                    <span className="text-warning">● Usado</span>
                   )}
                 </td>
-                <td className="p-2 text-zinc-400">{p.ot_asignada || '—'}</td>
-                <td className="p-2 text-[0.68rem] text-zinc-500">
+                <td className="p-2 text-muted-foreground">{p.ot_asignada || '—'}</td>
+                <td className="p-2 text-[0.68rem] text-muted-foreground">
                   {p.fecha_uso ? p.fecha_uso.slice(0, 10) : '—'}
                 </td>
                 <td className="p-2 text-right">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-6 w-6 border-indigo-500/30 p-0 text-indigo-400 hover:bg-indigo-500/10"
+                    className="h-6 w-6 border-accent/30 p-0 text-accent hover:bg-accent/10"
                     onClick={() => setEditando(p)}
                     title="Editar"
                   >
@@ -551,15 +551,15 @@ function PanoForm({
   };
 
   return (
-    <div className="mb-3 rounded-lg border border-indigo-500/35 bg-zinc-950/50 p-3">
+    <div className="mb-3 rounded-lg border border-accent/35 bg-background/50 p-3">
       <div className="mb-2 flex items-center justify-between">
-        <strong className="text-indigo-300">
+        <strong className="text-accent">
           <Pencil className="mr-1 inline h-3.5 w-3.5" />
           Editar paño
         </strong>
         <button
           onClick={onCancel}
-          className="rounded p-1 text-zinc-400 hover:bg-white/5 hover:text-zinc-200"
+          className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -598,7 +598,7 @@ function PanoForm({
           <select
             value={disponible ? 'true' : 'false'}
             onChange={(e) => setDisponible(e.target.value === 'true')}
-            className="h-8 w-full rounded border border-white/10 bg-zinc-900 px-2 text-xs text-zinc-100"
+            className="h-8 w-full rounded border border-border bg-card px-2 text-xs text-foreground"
           >
             <option value="true">Disponible</option>
             <option value="false">Usado</option>
@@ -619,7 +619,7 @@ function PanoForm({
           size="sm"
           onClick={submit}
           disabled={saving}
-          className="h-8 gap-1 bg-indigo-600 hover:bg-indigo-500"
+          className="h-8 gap-1 bg-accent hover:bg-accent"
         >
           <Save className="h-3.5 w-3.5" />
           Guardar paño
@@ -716,7 +716,7 @@ function InventarioPanel({
 
   if (loading) {
     return (
-      <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/30 p-3 text-xs text-zinc-500">
+      <div className="rounded-lg border border-border/40 bg-card/30 p-3 text-xs text-muted-foreground">
         Cargando estado de inventario…
       </div>
     );
@@ -725,14 +725,14 @@ function InventarioPanel({
   // ── Sin inventario activo: panel mínimo con botón iniciar
   if (!activo) {
     return (
-      <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/30 p-3">
+      <div className="rounded-lg border border-border/40 bg-card/30 p-3">
         {!iniciando ? (
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-xs text-zinc-400">
-              <ClipboardCheck className="h-4 w-4 text-zinc-500" />
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ClipboardCheck className="h-4 w-4 text-muted-foreground" />
               <span>
                 Sin inventario activo. {historicos.length > 0 && (
-                  <span className="text-zinc-500">
+                  <span className="text-muted-foreground">
                     Último: {new Date(historicos[0].iniciado_at).toLocaleDateString('es-CL')} (
                     {historicos[0].estado})
                   </span>
@@ -743,7 +743,7 @@ function InventarioPanel({
               size="sm"
               variant="outline"
               onClick={() => setIniciando(true)}
-              className="h-8 gap-1 border-amber-500/40 text-amber-300 hover:bg-amber-500/10"
+              className="h-8 gap-1 border-warning/30 text-warning hover:bg-warning/15"
             >
               <ClipboardCheck className="h-3.5 w-3.5" />
               Iniciar inventario
@@ -751,11 +751,11 @@ function InventarioPanel({
           </div>
         ) : (
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <div className="flex items-center gap-2 text-sm font-semibold text-warning">
               <ClipboardCheck className="h-4 w-4" />
               Iniciar nuevo inventario
             </div>
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-muted-foreground">
               Se hará un snapshot de los <strong>{tubosActuales}</strong> tubos actuales y se
               bloqueará el optimizador (operarios no podrán cortar) hasta que cierres o reviertas.
             </p>
@@ -764,7 +764,7 @@ function InventarioPanel({
               onChange={(e) => setNotasInicio(e.target.value)}
               rows={2}
               placeholder="Notas opcionales (responsable, motivo, alcance…)"
-              className="w-full rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-xs"
+              className="w-full rounded border border-border bg-card px-2 py-1.5 text-xs"
             />
             <div className="flex items-center justify-end gap-2">
               <Button
@@ -783,7 +783,7 @@ function InventarioPanel({
                 size="sm"
                 onClick={handleIniciar}
                 disabled={enviando}
-                className="h-8 gap-1 bg-amber-600 hover:bg-amber-500"
+                className="h-8 gap-1 bg-warning hover:bg-warning"
               >
                 <ClipboardCheck className="h-3.5 w-3.5" />
                 {enviando ? 'Iniciando…' : 'Confirmar e iniciar'}
@@ -799,18 +799,18 @@ function InventarioPanel({
   const tieneAnomaliasAlPasar = stats && (stats.eliminados > 0 || stats.nuevos > 0 || stats.modificados > 0);
 
   return (
-    <div className="rounded-lg border-2 border-amber-500/60 bg-amber-500/5 p-3">
+    <div className="rounded-lg border-2 border-warning/30 bg-warning/15 p-3">
       <div className="mb-2 flex items-start justify-between gap-3">
         <div className="flex items-start gap-2">
-          <Lock className="mt-0.5 h-5 w-5 text-amber-400" />
+          <Lock className="mt-0.5 h-5 w-5 text-warning" />
           <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <div className="flex items-center gap-2 text-sm font-semibold text-warning">
               Inventario activo
-              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide text-amber-200">
+              <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide text-warning">
                 Optimizador bloqueado
               </span>
             </div>
-            <div className="mt-0.5 text-[0.7rem] text-amber-200/70">
+            <div className="mt-0.5 text-[0.7rem] text-warning/70">
               Iniciado por{' '}
               <strong>{activo.iniciado_por_email || '—'}</strong> el{' '}
               {new Date(activo.iniciado_at).toLocaleString('es-CL')}
@@ -835,7 +835,7 @@ function InventarioPanel({
       )}
 
       {tieneAnomaliasAlPasar && (
-        <div className="mt-2 flex items-start gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 p-2 text-[0.7rem] text-amber-200">
+        <div className="mt-2 flex items-start gap-1.5 rounded border border-warning/30 bg-warning/15 p-2 text-[0.7rem] text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
           <span>
             Hay cambios pendientes contra el snapshot. Revisa el diff completo antes de cerrar para
@@ -850,7 +850,7 @@ function InventarioPanel({
           variant="outline"
           onClick={() => setAccion('diff')}
           disabled={!stats}
-          className="h-8 gap-1 border-zinc-600 text-zinc-200"
+          className="h-8 gap-1 border-border text-foreground"
         >
           <Search className="h-3.5 w-3.5" />
           Ver diff completo
@@ -858,7 +858,7 @@ function InventarioPanel({
         <Button
           size="sm"
           onClick={() => setAccion('cerrar')}
-          className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-500"
+          className="h-8 gap-1 bg-success hover:bg-success/90"
         >
           <Archive className="h-3.5 w-3.5" />
           Cerrar inventario
@@ -867,7 +867,7 @@ function InventarioPanel({
           size="sm"
           variant="outline"
           onClick={() => setAccion('revertir')}
-          className="h-8 gap-1 border-red-500/40 text-red-300 hover:bg-red-500/10"
+          className="h-8 gap-1 border-destructive/30 text-destructive hover:bg-destructive/15"
         >
           <Undo2 className="h-3.5 w-3.5" />
           Revertir al snapshot
@@ -930,10 +930,10 @@ function StatBox({
   color: 'zinc' | 'indigo' | 'emerald' | 'red';
 }) {
   const palette = {
-    zinc: 'border-zinc-700 bg-zinc-800/40 text-zinc-300',
-    indigo: 'border-indigo-600/40 bg-indigo-500/10 text-indigo-300',
-    emerald: 'border-emerald-600/40 bg-emerald-500/10 text-emerald-300',
-    red: 'border-red-600/40 bg-red-500/10 text-red-300',
+    zinc: 'border-border bg-secondary/40 text-foreground',
+    indigo: 'border-accent/40 bg-accent/10 text-accent',
+    emerald: 'border-success/30 bg-success/15 text-success',
+    red: 'border-destructive/30 bg-destructive/15 text-destructive',
   }[color];
   return (
     <div className={cn('rounded border px-2 py-1.5 text-center', palette)}>
@@ -969,17 +969,17 @@ function ModalAccion({
   confirmarDisabled?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onCancelar}>
-      <div className="w-full max-w-md rounded-lg border border-zinc-700 bg-zinc-900 p-4" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4" onClick={onCancelar}>
+      <div className="w-full max-w-md rounded-lg border border-border bg-card p-4" onClick={(e) => e.stopPropagation()}>
         <div className="mb-2 text-sm font-semibold">{titulo}</div>
-        <p className="mb-3 text-xs text-zinc-400">{descripcion}</p>
-        <Label className="text-xs text-zinc-300">{textareaLabel}</Label>
+        <p className="mb-3 text-xs text-muted-foreground">{descripcion}</p>
+        <Label className="text-xs text-foreground">{textareaLabel}</Label>
         <textarea
           value={textareaValor}
           onChange={(e) => setTextareaValor(e.target.value)}
           rows={3}
           autoFocus
-          className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1.5 text-xs"
+          className="mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
         />
         <div className="mt-3 flex items-center justify-end gap-2">
           <Button size="sm" variant="ghost" onClick={onCancelar} disabled={confirmando} className="h-8 text-xs">
@@ -991,8 +991,8 @@ function ModalAccion({
             disabled={confirmando || !!confirmarDisabled}
             className={cn(
               'h-8 gap-1',
-              confirmarColor === 'emerald' && 'bg-emerald-600 hover:bg-emerald-500',
-              confirmarColor === 'red' && 'bg-red-600 hover:bg-red-500',
+              confirmarColor === 'emerald' && 'bg-success hover:bg-success/90',
+              confirmarColor === 'red' && 'bg-destructive hover:bg-destructive',
             )}
           >
             {confirmando ? 'Procesando…' : confirmarTexto}
@@ -1020,9 +1020,9 @@ function DiffModal({ rows, onClose }: { rows: InventarioDiffRow[]; onClose: () =
   }), [rows]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-4xl rounded-lg border border-zinc-700 bg-zinc-900 p-4"
+        className="w-full max-w-4xl rounded-lg border border-border bg-card p-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-center justify-between">
@@ -1039,17 +1039,17 @@ function DiffModal({ rows, onClose }: { rows: InventarioDiffRow[]; onClose: () =
               className={cn(
                 'rounded border px-2 py-1 capitalize',
                 filtro === t
-                  ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                  : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800',
+                  ? 'border-accent bg-accent/20 text-accent'
+                  : 'border-border text-muted-foreground hover:bg-secondary',
               )}
             >
               {t} ({conteo[t]})
             </button>
           ))}
         </div>
-        <div className="max-h-[60vh] overflow-y-auto rounded border border-zinc-700">
+        <div className="max-h-[60vh] overflow-y-auto rounded border border-border">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-zinc-800 text-[0.65rem] uppercase tracking-wide">
+            <thead className="sticky top-0 bg-secondary text-[0.65rem] uppercase tracking-wide">
               <tr>
                 <th className="p-2 text-left">Tipo</th>
                 <th className="p-2 text-left">Colmena</th>
@@ -1061,7 +1061,7 @@ function DiffModal({ rows, onClose }: { rows: InventarioDiffRow[]; onClose: () =
             <tbody>
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-4 text-center text-zinc-500">
+                  <td colSpan={5} className="p-4 text-center text-muted-foreground">
                     No hay filas en este filtro.
                   </td>
                 </tr>
@@ -1079,26 +1079,26 @@ function DiffModal({ rows, onClose }: { rows: InventarioDiffRow[]; onClose: () =
 
 function DiffRow({ row }: { row: InventarioDiffRow }) {
   const tipoColor = {
-    mantenido: 'text-zinc-400',
-    modificado: 'text-indigo-300',
-    nuevo: 'text-emerald-300',
-    eliminado: 'text-red-300',
+    mantenido: 'text-muted-foreground',
+    modificado: 'text-accent',
+    nuevo: 'text-success',
+    eliminado: 'text-destructive',
   }[row.tipo];
 
   if (row.tipo === 'eliminado') {
     return (
-      <tr className="border-t border-zinc-800">
+      <tr className="border-t border-border">
         <td className={cn('p-2 font-semibold capitalize', tipoColor)}>{row.tipo}</td>
-        <td className="p-2 line-through text-zinc-500">{row.n_colmena_pre}</td>
-        <td className="p-2 line-through text-zinc-500">{row.cod_pre}</td>
-        <td className="p-2 text-right line-through text-zinc-500 tabular-nums">{row.medida_cm_pre}</td>
-        <td className="p-2 line-through text-zinc-500">{row.serial_pre || '—'}</td>
+        <td className="p-2 line-through text-muted-foreground">{row.n_colmena_pre}</td>
+        <td className="p-2 line-through text-muted-foreground">{row.cod_pre}</td>
+        <td className="p-2 text-right line-through text-muted-foreground tabular-nums">{row.medida_cm_pre}</td>
+        <td className="p-2 line-through text-muted-foreground">{row.serial_pre || '—'}</td>
       </tr>
     );
   }
   if (row.tipo === 'nuevo') {
     return (
-      <tr className="border-t border-zinc-800">
+      <tr className="border-t border-border">
         <td className={cn('p-2 font-semibold capitalize', tipoColor)}>{row.tipo}</td>
         <td className="p-2">{row.n_colmena_post}</td>
         <td className="p-2">{row.cod_post}</td>
@@ -1114,34 +1114,34 @@ function DiffRow({ row }: { row: InventarioDiffRow }) {
     if (row.medida_cm_pre !== row.medida_cm_post) camposCambiados.push('medida');
     if (row.serial_pre !== row.serial_post) camposCambiados.push('serial');
     return (
-      <tr className="border-t border-zinc-800">
+      <tr className="border-t border-border">
         <td className={cn('p-2 font-semibold capitalize', tipoColor)} title={camposCambiados.join(', ')}>
           {row.tipo}
         </td>
         <td className="p-2">
           {row.n_colmena_pre !== row.n_colmena_post ? (
-            <span><span className="text-zinc-500 line-through">{row.n_colmena_pre}</span> → <span className="text-indigo-300">{row.n_colmena_post}</span></span>
+            <span><span className="text-muted-foreground line-through">{row.n_colmena_pre}</span> → <span className="text-accent">{row.n_colmena_post}</span></span>
           ) : (
             row.n_colmena_post
           )}
         </td>
         <td className="p-2">
           {row.cod_pre !== row.cod_post ? (
-            <span><span className="text-zinc-500 line-through">{row.cod_pre}</span> → <span className="text-indigo-300">{row.cod_post}</span></span>
+            <span><span className="text-muted-foreground line-through">{row.cod_pre}</span> → <span className="text-accent">{row.cod_post}</span></span>
           ) : (
             row.cod_post
           )}
         </td>
         <td className="p-2 text-right tabular-nums">
           {row.medida_cm_pre !== row.medida_cm_post ? (
-            <span><span className="text-zinc-500 line-through">{row.medida_cm_pre}</span> → <span className="text-indigo-300">{row.medida_cm_post}</span></span>
+            <span><span className="text-muted-foreground line-through">{row.medida_cm_pre}</span> → <span className="text-accent">{row.medida_cm_post}</span></span>
           ) : (
             row.medida_cm_post
           )}
         </td>
         <td className="p-2">
           {row.serial_pre !== row.serial_post ? (
-            <span><span className="text-zinc-500 line-through">{row.serial_pre || '—'}</span> → <span className="text-indigo-300">{row.serial_post || '—'}</span></span>
+            <span><span className="text-muted-foreground line-through">{row.serial_pre || '—'}</span> → <span className="text-accent">{row.serial_post || '—'}</span></span>
           ) : (
             row.serial_post || '—'
           )}
@@ -1151,12 +1151,12 @@ function DiffRow({ row }: { row: InventarioDiffRow }) {
   }
   // mantenido
   return (
-    <tr className="border-t border-zinc-800">
+    <tr className="border-t border-border">
       <td className={cn('p-2 capitalize', tipoColor)}>{row.tipo}</td>
-      <td className="p-2 text-zinc-400">{row.n_colmena_post}</td>
-      <td className="p-2 text-zinc-400">{row.cod_post}</td>
-      <td className="p-2 text-right text-zinc-400 tabular-nums">{row.medida_cm_post}</td>
-      <td className="p-2 text-zinc-400">{row.serial_post || '—'}</td>
+      <td className="p-2 text-muted-foreground">{row.n_colmena_post}</td>
+      <td className="p-2 text-muted-foreground">{row.cod_post}</td>
+      <td className="p-2 text-right text-muted-foreground tabular-nums">{row.medida_cm_post}</td>
+      <td className="p-2 text-muted-foreground">{row.serial_post || '—'}</td>
     </tr>
   );
 }

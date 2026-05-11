@@ -103,16 +103,16 @@ export function CotizadorTela() {
 
   if (loading || loadingCat) {
     return (
-      <div className="flex h-full items-center justify-center text-zinc-400">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando…
       </div>
     );
   }
   if (!ot) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <p>OT no encontrada.</p>
-        <Link to="/panel" className="text-sm text-indigo-300 hover:underline">
+        <Link to="/panel" className="text-sm text-accent hover:underline">
           Volver al Panel
         </Link>
       </div>
@@ -122,23 +122,23 @@ export function CotizadorTela() {
   const sinVentanas = ventanas.length === 0;
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate(`/ots/${ot.id}/fase4`)}
-            className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-card hover:text-foreground"
             title="Volver a Fase 4"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
             <h2 className="flex items-center gap-2 text-base font-semibold">
-              <Scissors className="h-4 w-4 text-indigo-300" />
+              <Scissors className="h-4 w-4 text-accent" />
               Tela — Optimización de paños
             </h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               OT {ot.datosGenerales.ot || '—'} · {ot.datosGenerales.cliente || '(sin cliente)'}
             </p>
           </div>
@@ -153,16 +153,16 @@ export function CotizadorTela() {
 
       <div className="flex-1 overflow-auto px-4 py-4">
         {sinVentanas ? (
-          <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 text-sm text-amber-300">
+          <div className="rounded-lg border border-warning/30 bg-warning/15 p-4 text-sm text-warning">
             La OT no tiene ventanas todavía. Completá Fase 2 primero.
           </div>
         ) : (
           <>
             {/* Optimizador */}
-            <div className="mb-4 rounded-lg border border-amber-500/20 bg-zinc-900/40">
-              <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+            <div className="mb-4 rounded-lg border border-warning/30 bg-card/40">
+              <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                  <Sparkles className="h-3.5 w-3.5 text-warning" />
                   <strong className="text-sm">Optimizador de Corte</strong>
                 </div>
                 <div className="flex gap-2">
@@ -170,7 +170,7 @@ export function CotizadorTela() {
                     size="sm"
                     onClick={onAutoOptimizar}
                     disabled={!rows}
-                    className="h-8 gap-1 bg-amber-600 hover:bg-amber-500"
+                    className="h-8 gap-1 bg-warning hover:bg-warning"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
                     Auto-Optimizar
@@ -179,7 +179,7 @@ export function CotizadorTela() {
                     size="sm"
                     onClick={onGuardar}
                     disabled={!rows || saving}
-                    className="h-8 gap-1 bg-emerald-600 hover:bg-emerald-500"
+                    className="h-8 gap-1 bg-success hover:bg-success/90"
                   >
                     {saving ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -192,7 +192,7 @@ export function CotizadorTela() {
               </div>
               <div className="max-h-[460px] overflow-auto">
                 <table className="w-full text-[0.7rem]">
-                  <thead className="sticky top-0 bg-zinc-900 text-[0.62rem] uppercase tracking-wide text-zinc-400">
+                  <thead className="sticky top-0 bg-card text-[0.62rem] uppercase tracking-wide text-muted-foreground">
                     <tr>
                       <th className="p-1.5 text-left">Cod</th>
                       <th className="p-1.5 text-center">Cant</th>
@@ -214,27 +214,27 @@ export function CotizadorTela() {
                   <tbody>
                     {!rows && (
                       <tr>
-                        <td colSpan={15} className="p-4 text-center text-zinc-500">
+                        <td colSpan={15} className="p-4 text-center text-muted-foreground">
                           Cargando filas...
                         </td>
                       </tr>
                     )}
                     {rows?.map((r, idx) => (
-                      <tr key={idx} className="border-t border-white/5 hover:bg-white/5">
+                      <tr key={idx} className="border-t border-border hover:bg-card">
                         <td className="p-1.5 font-mono">{r.cod}</td>
                         <td className="p-1.5 text-center">{r.cant}</td>
                         <td className="max-w-[120px] truncate p-1.5" title={r.producto}>
                           {r.producto}
                         </td>
-                        <td className="p-1.5 font-mono text-zinc-400">{r.codInt}</td>
-                        <td className="p-1.5 text-zinc-400">{r.tipo}</td>
+                        <td className="p-1.5 font-mono text-muted-foreground">{r.codInt}</td>
+                        <td className="p-1.5 text-muted-foreground">{r.tipo}</td>
                         <td className="p-1.5 text-right">{r.ancho.toFixed(4)}</td>
                         <td className="p-1.5 text-right">{r.alto.toFixed(4)}</td>
                         <td className="p-1.5 text-right">{r.extra.toFixed(2)}</td>
                         <td className="p-1.5 text-right">{r.altoExtra.toFixed(4)}</td>
                         <td className="p-1.5 text-right">{r.altoReal.toFixed(4)}</td>
                         <td className="p-1.5 text-right">{r.m2.toFixed(4)}</td>
-                        <td className="p-1.5 text-right text-zinc-400">
+                        <td className="p-1.5 text-right text-muted-foreground">
                           {r.anchoRollo.toFixed(2)}
                         </td>
                         <td className="p-1.5">
@@ -273,19 +273,19 @@ export function CotizadorTela() {
 
             {/* Cálculo de paños — derivado */}
             {calculo && calculo.panos.length > 0 && (
-              <div className="rounded-lg border border-purple-500/20 bg-zinc-900/40">
-                <div className="flex items-center justify-between border-b border-white/10 px-3 py-2">
+              <div className="rounded-lg border border-purple-500/20 bg-card/40">
+                <div className="flex items-center justify-between border-b border-border px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <Factory className="h-3.5 w-3.5 text-purple-300" />
+                    <Factory className="h-3.5 w-3.5 text-accent" />
                     <strong className="text-sm">Cálculo de Paños (cortes de tela)</strong>
                   </div>
-                  <span className="text-[0.68rem] text-zinc-400">
+                  <span className="text-[0.68rem] text-muted-foreground">
                     {calculo.totalPanos} paños · {calculo.totalM2.toFixed(2)} m² total
                   </span>
                 </div>
                 <div className="max-h-[400px] overflow-auto">
                   <table className="w-full text-[0.7rem]">
-                    <thead className="sticky top-0 bg-zinc-900 text-[0.62rem] uppercase tracking-wide text-zinc-400">
+                    <thead className="sticky top-0 bg-card text-[0.62rem] uppercase tracking-wide text-muted-foreground">
                       <tr>
                         <th className="p-1.5 text-left">#</th>
                         <th className="p-1.5 text-left">Cod</th>
@@ -305,26 +305,26 @@ export function CotizadorTela() {
                     </thead>
                     <tbody>
                       {calculo.panos.map((p) => (
-                        <tr key={p.idx} className="border-t border-white/5 hover:bg-white/5">
-                          <td className="p-1.5 text-zinc-500">{p.idx}</td>
+                        <tr key={p.idx} className="border-t border-border hover:bg-card">
+                          <td className="p-1.5 text-muted-foreground">{p.idx}</td>
                           <td className="p-1.5 font-mono">{p.cod}</td>
                           <td className="p-1.5 text-center">{p.cant}</td>
                           <td className="max-w-[120px] truncate p-1.5" title={p.producto}>
                             {p.producto}
                           </td>
-                          <td className="p-1.5 font-mono text-zinc-400">{p.codInt}</td>
+                          <td className="p-1.5 font-mono text-muted-foreground">{p.codInt}</td>
                           <td className="p-1.5 text-right">
                             {(p.anchoCorteCm + 3.5).toFixed(1)} cm
                           </td>
-                          <td className="p-1.5 text-right text-amber-300">
+                          <td className="p-1.5 text-right text-warning">
                             {p.anchoCorteCm} cm
                           </td>
                           <td className="p-1.5 text-right">{p.altoCm.toFixed(1)} cm</td>
-                          <td className="p-1.5 text-right text-amber-300">
+                          <td className="p-1.5 text-right text-warning">
                             {p.altoCorteCm} cm
                           </td>
                           <td className="p-1.5 text-right">{p.altoReal.toFixed(4)} m</td>
-                          <td className="p-1.5 text-right font-semibold text-emerald-300">
+                          <td className="p-1.5 text-right font-semibold text-success">
                             {p.m2.toFixed(4)}
                           </td>
                           <td className="p-1.5 text-right">{p.anchoPano.toFixed(4)} m</td>
@@ -338,7 +338,7 @@ export function CotizadorTela() {
                         <td colSpan={10} className="p-1.5 text-right">
                           Total
                         </td>
-                        <td className="p-1.5 text-right text-emerald-300">
+                        <td className="p-1.5 text-right text-success">
                           {calculo.totalM2.toFixed(2)} m²
                         </td>
                         <td colSpan={3} />

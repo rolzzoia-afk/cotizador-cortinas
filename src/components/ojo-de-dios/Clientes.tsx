@@ -62,11 +62,11 @@ export function Clientes({ ots }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-white/10 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-border bg-card/40 p-3">
         <div className="mb-3 flex items-center justify-between">
           <strong className="text-sm">Historial por Cliente</strong>
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+            <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={filtro}
               onChange={(e) => setFiltro(e.target.value)}
@@ -77,7 +77,7 @@ export function Clientes({ ots }: Props) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-zinc-900 text-[0.65rem] uppercase tracking-wide text-zinc-400">
+            <thead className="bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="p-2 text-left">Cliente</th>
                 <th className="p-2 text-center">Total OTs</th>
@@ -90,7 +90,7 @@ export function Clientes({ ots }: Props) {
             <tbody>
               {grupos.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="p-4 text-center text-zinc-500">
+                  <td colSpan={6} className="p-4 text-center text-muted-foreground">
                     Sin clientes
                   </td>
                 </tr>
@@ -113,14 +113,14 @@ export function Clientes({ ots }: Props) {
                 );
                 const fechaU = (ultimo.fechaModificacion || '').slice(0, 10) || '—';
                 return (
-                  <tr key={nombre} className="border-t border-white/5 hover:bg-white/5">
+                  <tr key={nombre} className="border-t border-border hover:bg-card">
                     <td className="p-2">
                       <strong>{nombre}</strong>
                     </td>
                     <td className="p-2 text-center">{otsCliente.length}</td>
-                    <td className="p-2 text-zinc-300">
+                    <td className="p-2 text-foreground">
                       {dg.ot || '—'}{' '}
-                      <span className="text-zinc-500">({fechaU})</span>
+                      <span className="text-muted-foreground">({fechaU})</span>
                     </td>
                     <td className="p-2">
                       <span
@@ -150,19 +150,19 @@ export function Clientes({ ots }: Props) {
 
         {/* Panel de detalle */}
         {detalle && (
-          <div className="mt-3 rounded border border-blue-500/20 bg-zinc-950/50 p-3">
+          <div className="mt-3 rounded border border-blue-500/20 bg-background/50 p-3">
             <div className="mb-2 flex items-center justify-between">
               <strong className="text-blue-300">{detalle}</strong>
               <button
                 onClick={() => setDetalle(null)}
-                className="rounded p-1 text-zinc-500 hover:bg-white/5 hover:text-zinc-200"
+                className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-[0.72rem]">
-                <thead className="bg-zinc-900 text-[0.62rem] uppercase tracking-wide text-zinc-400">
+                <thead className="bg-card text-[0.62rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="p-1.5 text-left">OT #</th>
                     <th className="p-1.5 text-left">Estado</th>
@@ -180,9 +180,9 @@ export function Clientes({ ots }: Props) {
                       bg: 'rgba(148,163,184,0.1)',
                     };
                     return (
-                      <tr key={o.id} className="border-t border-white/5">
+                      <tr key={o.id} className="border-t border-border">
                         <td className="p-1.5">
-                          <strong className="text-blue-400">{dg.ot || '—'}</strong>
+                          <strong className="text-accent">{dg.ot || '—'}</strong>
                         </td>
                         <td className="p-1.5">
                           <span
@@ -195,7 +195,7 @@ export function Clientes({ ots }: Props) {
                         <td className="p-1.5 text-center">
                           {(o.storeVentanas || []).length}
                         </td>
-                        <td className="p-1.5 text-zinc-400">
+                        <td className="p-1.5 text-muted-foreground">
                           {(o.fechaModificacion || '').slice(0, 10) || '—'}
                         </td>
                         <td className="p-1.5 text-right">
