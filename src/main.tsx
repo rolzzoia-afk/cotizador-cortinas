@@ -7,6 +7,7 @@ import { App } from './App';
 import { AuthProvider } from '@/lib/auth';
 import { queryClient } from '@/lib/queryClient';
 import { SentryErrorBoundary, initSentry } from '@/lib/sentry';
+import { ThemeProvider } from '@/components/theme-provider';
 import './index.css';
 
 // Sentry debe inicializarse lo antes posible para capturar errores de arranque
@@ -42,14 +43,16 @@ createRoot(document.getElementById('root')!).render(
       )}
       showDialog={false}
     >
-      <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AuthProvider>
-            <App />
-            <Toaster richColors position="top-right" />
-          </AuthProvider>
-        </BrowserRouter>
-      </QueryClientProvider>
+      <ThemeProvider defaultTheme="system" storageKey="rolzzo-theme">
+        <QueryClientProvider client={queryClient}>
+          <BrowserRouter>
+            <AuthProvider>
+              <App />
+              <Toaster richColors position="top-right" />
+            </AuthProvider>
+          </BrowserRouter>
+        </QueryClientProvider>
+      </ThemeProvider>
     </SentryErrorBoundary>
   </StrictMode>,
 );
