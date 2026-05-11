@@ -404,10 +404,13 @@ function RegisterErrorDialog({
   };
 
   // ── Sugerencia automática
+  // Priorizamos codigo_original cuando existe: significa que el optimizador
+  // hizo un reemplazo (ej. cross-color E19→E20) y postventa quiere volver
+  // al código que la orden pedía, no propagar el reemplazo erróneo.
   const sugerencia = useMemo(() => {
     const medidaNecesaria = Number(r.medida_cm || 0);
     if (!medidaNecesaria) return null;
-    const codNecesario = (r.codigo || r.codigo_original || '').toUpperCase().trim();
+    const codNecesario = (r.codigo_original || r.codigo || '').toUpperCase().trim();
     const candidatos = tubosDisponibles.filter((t) => {
       if (Number(t.medida_cm || 0) < medidaNecesaria) return false;
       if (tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm))) return false;
@@ -447,7 +450,7 @@ function RegisterErrorDialog({
   // el sugerido para no mostrarlo dos veces.
   const tubosFiltrados = useMemo(() => {
     const medidaNecesaria = Number(r.medida_cm || 0);
-    const codCorte = (r.codigo || r.codigo_original || '').toUpperCase().trim();
+    const codCorte = (r.codigo_original || r.codigo || '').toUpperCase().trim();
     const baseSinOcupados = tubosDisponibles.filter(
       (t) =>
         !tubosOcupados.has(tuboKey(t.n_colmena, t.cod, t.medida_cm)) &&
@@ -479,7 +482,7 @@ function RegisterErrorDialog({
   // probable (todos están reservados, o la búsqueda no matchea ninguno).
   const motivoListaVacia = useMemo(() => {
     if (tubosDisponibles.length === 0) return 'No hay tubos en colmena_tubos.';
-    const codCorte = (r.codigo || r.codigo_original || '').toUpperCase().trim();
+    const codCorte = (r.codigo_original || r.codigo || '').toUpperCase().trim();
     const ocupadosDelCod = tubosDisponibles.filter(
       (t) =>
         (!codCorte || (t.cod || '').toUpperCase().trim() === codCorte) &&
@@ -679,7 +682,13 @@ function RegisterErrorDialog({
     onOpenChange(false);
   };
 
-  const codOrig = r.codigo || r.codigo_original || '—';
+  const codUsado = r.codigo || r.codigo_original || '—';
+  const codOriginalOrden = r.codigo_original;
+  const huboReemplazo =
+    !!codOriginalOrden && codOriginalOrden !== r.codigo && r.codigo != null;
+  const codOrig = huboReemplazo
+    ? `${codOriginalOrden} (cortado con ${r.codigo})`
+    : codUsado;
   const colOrig = r.colmena ?? '—';
   const medOrigen =
     r.medida_origen != null ? `${Number(r.medida_origen).toFixed(1)} cm` : '—';
