@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
+  GhostIcon,
   Recycle,
   Scissors,
   Search,
@@ -1075,10 +1076,12 @@ function PlanTabla({
   plan,
   errores,
   onRegistrarError,
+  onMarcarSobranteInexistente,
 }: {
   plan: Plan;
   errores: { linea_idx: number; motivo: string }[];
   onRegistrarError: (idx: number) => void;
+  onMarcarSobranteInexistente: (idx: number, descripcion: string) => void;
 }) {
   const rows: React.ReactNode[] = [];
   plan.resultados.forEach((item, idx) => {
@@ -1171,6 +1174,8 @@ function PlanTabla({
         accion2 = 'DESECHAR MERMA';
         colDisp = 'BASURERO';
       }
+      const esSobrantePuro = !r.es_intermedio && !r.es_desecho;
+      const descripcionSobrante = `${colSob} · ${codigo} · ${sobranteCm} cm`;
       rows.push(
         <tr key={`s-${idx}`} className={rowCls}>
           <td className="whitespace-nowrap px-2.5 py-1.5">{ot}</td>
@@ -1186,7 +1191,19 @@ function PlanTabla({
           <td className="whitespace-nowrap px-2.5 py-1.5 text-right font-bold">
             {sobranteCm}
           </td>
-          <td colSpan={6}></td>
+          <td colSpan={5}></td>
+          <td className="whitespace-nowrap px-2.5 py-1.5">
+            {esSobrantePuro && (
+              <button
+                onClick={() => onMarcarSobranteInexistente(idx, descripcionSobrante)}
+                className="rounded-md border border-muted-foreground/30 px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground transition hover:border-warning/50 hover:bg-warning/10 hover:text-warning"
+                title="Marcar este sobrante como inexistente físicamente (no se guardó en la colmena)"
+              >
+                <GhostIcon className="mr-1 inline h-3 w-3" />
+                No existe
+              </button>
+            )}
+          </td>
         </tr>,
       );
     }
@@ -1231,7 +1248,7 @@ function PlanTabla({
 // Página principal
 // ─────────────────────────────────────────────────────────────
 export function HistorialCorte() {
-  const { empresaId } = useAuth();
+  const { empresaId, perfil, user } = useAuth();
   const navigate = useNavigate();
   const [tab, setTab] = useState<'planes' | 'errores'>('planes');
   const [planes, setPlanes] = useState<Plan[]>([]);
@@ -1369,6 +1386,54 @@ export function HistorialCorte() {
     }));
     setExpanded((prev) => new Set([...prev, planId]));
     // refrescar tubos si estamos reemplazando
+    cargarTubos();
+  };
+
+  const marcarSobranteInexistente = async (
+    planId: string,
+    lineaIdx: number,
+    descripcion: string,
+  ) => {
+    const responsable = (perfil?.nombre || user?.email || '').trim();
+    if (!responsable) {
+      toast.error('No se pudo identificar al responsable. Reiniciá sesión.');
+      return;
+    }
+    const ok = window.confirm(
+      `¿Marcar este sobrante como inexistente físicamente?\n\n${descripcion}\n\n` +
+        `Esto lo elimina de la colmena y queda registrado en el historial. Reversible solo por SQL.`,
+    );
+    if (!ok) return;
+
+    const { data, error } = await supabase.rpc(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      'marcar_sobrante_inexistente' as any,
+      {
+        p_plan_id: planId,
+        p_linea_idx: lineaIdx,
+        p_responsable: responsable,
+        p_comentario: null,
+        p_fuente: 'manual_postventa_sobrante_inexistente',
+      },
+    );
+
+    if (error) {
+      toast.error('Error al eliminar el sobrante: ' + error.message);
+      return;
+    }
+
+    const result = data as
+      | { success: boolean; razon?: string; mensaje?: string; n_colmena?: string; medida_cm?: number }
+      | null;
+
+    if (!result?.success) {
+      toast.info(result?.mensaje || 'No se encontró sobrante para esa línea');
+      return;
+    }
+
+    toast.success(
+      `Sobrante eliminado de colmena ${result.n_colmena} (${result.medida_cm} cm)`,
+    );
     cargarTubos();
   };
 
@@ -1516,6 +1581,9 @@ export function HistorialCorte() {
                           plan={plan}
                           errores={errs}
                           onRegistrarError={(idx) => abrirModal(plan, idx)}
+                          onMarcarSobranteInexistente={(idx, desc) =>
+                            marcarSobranteInexistente(plan.id, idx, desc)
+                          }
                         />
                       </div>
                     )}
