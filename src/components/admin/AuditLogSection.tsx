@@ -154,7 +154,7 @@ export function AuditLogSection() {
                   <TableCell>
                     <button
                       onClick={() => setDetalle(r)}
-                      className="rounded border border-white/10 bg-white/5 p-1 text-zinc-300 hover:bg-white/10"
+                      className="rounded border border-border bg-card p-1 text-foreground hover:bg-card"
                       title="Ver detalle"
                     >
                       <Eye className="h-3 w-3" />
@@ -221,10 +221,10 @@ export function AuditLogSection() {
                           return (
                             <TableRow key={k}>
                               <TableCell className="font-mono text-xs">{k}</TableCell>
-                              <TableCell className="font-mono text-xs text-red-400">
+                              <TableCell className="font-mono text-xs text-destructive">
                                 {JSON.stringify(before)}
                               </TableCell>
-                              <TableCell className="font-mono text-xs text-emerald-400">
+                              <TableCell className="font-mono text-xs text-success">
                                 {JSON.stringify(after)}
                               </TableCell>
                             </TableRow>

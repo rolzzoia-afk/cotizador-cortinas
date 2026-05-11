@@ -108,20 +108,20 @@ function StockBadge({ insumo }: { insumo: Insumo }) {
   const bajo = (insumo.minimo || 0) > 0 && st < (insumo.minimo || 0);
   if (sin) {
     return (
-      <span className="rounded-full border border-red-500/30 bg-red-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-red-300">
+      <span className="rounded-full border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[0.62rem] font-semibold text-destructive">
         SIN STOCK
       </span>
     );
   }
   if (bajo) {
     return (
-      <span className="rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-amber-300">
+      <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[0.62rem] font-semibold text-warning">
         BAJO MIN
       </span>
     );
   }
   return (
-    <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[0.62rem] font-semibold text-emerald-300">
+    <span className="rounded-full border border-success/30 bg-success/15 px-2 py-0.5 text-[0.62rem] font-semibold text-success">
       OK
     </span>
   );
@@ -140,17 +140,17 @@ function StatCard({
 }) {
   const color =
     tone === 'success'
-      ? 'text-emerald-300'
+      ? 'text-success'
       : tone === 'danger'
-        ? 'text-red-300'
+        ? 'text-destructive'
         : tone === 'warning'
-          ? 'text-amber-300'
+          ? 'text-warning'
           : tone === 'info'
             ? 'text-sky-300'
-            : 'text-zinc-200';
+            : 'text-foreground';
   return (
-    <div className="rounded-lg border border-white/10 bg-zinc-900/60 p-3">
-      <div className="flex items-center gap-1.5 text-[0.7rem] uppercase tracking-wide text-zinc-500">
+    <div className="rounded-lg border border-border bg-card/60 p-3">
+      <div className="flex items-center gap-1.5 text-[0.7rem] uppercase tracking-wide text-muted-foreground">
         {icon}
         {label}
       </div>
@@ -201,6 +201,7 @@ export function Inventario() {
     tone: '',
   });
   const [savingInsumo, setSavingInsumo] = useState(false);
+  const [lightboxFoto, setLightboxFoto] = useState<{ url: string; cod: string } | null>(null);
 
   const [movDialog, setMovDialog] = useState<{ open: boolean; form: MovForm }>({
     open: false,
@@ -406,7 +407,7 @@ export function Inventario() {
       },
     });
     setFotoEstado(
-      ins.foto_url ? { msg: 'Foto guardada', tone: 'text-emerald-400' } : { msg: '', tone: '' },
+      ins.foto_url ? { msg: 'Foto guardada', tone: 'text-success' } : { msg: '', tone: '' },
     );
   };
 
@@ -421,7 +422,7 @@ export function Inventario() {
   // ─── Foto upload ──────────────────────────────────────────────
   const onFotoArchivo = async (file: File | null) => {
     if (!file || !empresaId) return;
-    setFotoEstado({ msg: 'Subiendo foto…', tone: 'text-amber-300' });
+    setFotoEstado({ msg: 'Subiendo foto…', tone: 'text-warning' });
     try {
       const ext = file.name.split('.').pop() || 'jpg';
       const codVal = (insumoDialog.form.cod || 'insumo').trim().toUpperCase() || 'insumo';
@@ -434,10 +435,10 @@ export function Inventario() {
       const publicUrl = data?.publicUrl;
       if (!publicUrl) throw new Error('No se pudo obtener la URL pública');
       actualizarFormInsumo({ foto_url: publicUrl });
-      setFotoEstado({ msg: 'Foto guardada', tone: 'text-emerald-400' });
+      setFotoEstado({ msg: 'Foto guardada', tone: 'text-success' });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      setFotoEstado({ msg: 'No se pudo subir: ' + msg, tone: 'text-red-400' });
+      setFotoEstado({ msg: 'No se pudo subir: ' + msg, tone: 'text-destructive' });
     } finally {
       if (camRef.current) camRef.current.value = '';
       if (galRef.current) galRef.current.value = '';
@@ -700,33 +701,33 @@ export function Inventario() {
   // ─── Render ───────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-zinc-400">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando inventario…
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
+    <div className="flex h-full flex-col bg-background text-foreground">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/')}
-            className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-card hover:text-foreground"
             title="Volver"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
             <h2 className="text-base font-semibold">Inventario</h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               {statsCatalogo.total} insumos · {alertas.length} alerta
               {alertas.length === 1 ? '' : 's'}
             </p>
           </div>
         </div>
 
-        <nav className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
+        <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
           <TabBtn active={tab === 'catalogo'} onClick={() => setTab('catalogo')}>
             <Package className="h-3.5 w-3.5" /> Catálogo
           </TabBtn>
@@ -739,7 +740,7 @@ export function Inventario() {
           <TabBtn active={tab === 'alertas'} onClick={() => setTab('alertas')}>
             <AlertTriangle className="h-3.5 w-3.5" /> Alertas
             {alertas.length > 0 && (
-              <span className="ml-1 rounded-full bg-red-500 px-1.5 text-[0.6rem] font-semibold text-white">
+              <span className="ml-1 rounded-full bg-destructive px-1.5 text-[0.6rem] font-semibold text-foreground">
                 {alertas.length}
               </span>
             )}
@@ -784,7 +785,7 @@ export function Inventario() {
 
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[220px]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
@@ -795,7 +796,7 @@ export function Inventario() {
               <select
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
-                className="rounded-md border border-white/10 bg-zinc-900 px-2 py-1.5 text-sm"
+                className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="">Todas las categorías</option>
                 {categorias.map((c) => (
@@ -807,7 +808,7 @@ export function Inventario() {
               <select
                 value={filtroSubCategoria}
                 onChange={(e) => setFiltroSubCategoria(e.target.value)}
-                className="rounded-md border border-white/10 bg-zinc-900 px-2 py-1.5 text-sm"
+                className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="">Todas las sub-categorías</option>
                 {subCategorias.map((c) => (
@@ -819,7 +820,7 @@ export function Inventario() {
               <select
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value as EstadoFiltro)}
-                className="rounded-md border border-white/10 bg-zinc-900 px-2 py-1.5 text-sm"
+                className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="">Todos los estados</option>
                 <option value="con_stock">Con stock</option>
@@ -849,9 +850,9 @@ export function Inventario() {
               </Button>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-white/10 bg-zinc-900/40">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card/40">
               <table className="w-full text-xs">
-                <thead className="bg-zinc-900 text-[0.68rem] uppercase tracking-wide text-zinc-400">
+                <thead className="bg-card text-[0.68rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="p-2"></th>
                     <SortTh col="cod" current={sortCol} dir={sortDir} onSort={ordenar}>
@@ -911,7 +912,7 @@ export function Inventario() {
                 <tbody>
                   {insumosFiltrados.length === 0 && (
                     <tr>
-                      <td colSpan={14} className="p-6 text-center text-zinc-500">
+                      <td colSpan={14} className="p-6 text-center text-muted-foreground">
                         No hay insumos que coincidan con el filtro.
                       </td>
                     </tr>
@@ -921,54 +922,61 @@ export function Inventario() {
                     return (
                       <tr
                         key={i.id}
-                        className="border-t border-white/5 hover:bg-white/5"
+                        className="border-t border-border hover:bg-card"
                       >
                         <td className="p-1 text-center">
                           {i.foto_url ? (
-                            <img
-                              src={i.foto_url}
-                              alt=""
-                              className="mx-auto h-8 w-8 rounded object-cover"
-                              loading="lazy"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => setLightboxFoto({ url: i.foto_url!, cod: i.cod || '' })}
+                              className="mx-auto block rounded transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              title="Ver imagen ampliada"
+                            >
+                              <img
+                                src={i.foto_url}
+                                alt=""
+                                className="h-8 w-8 cursor-zoom-in rounded object-cover"
+                                loading="lazy"
+                              />
+                            </button>
                           ) : (
-                            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded bg-zinc-800 text-zinc-600">
+                            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded bg-secondary text-muted-foreground">
                               <ImageIcon className="h-3.5 w-3.5" />
                             </div>
                           )}
                         </td>
-                        <td className="p-2 font-mono font-semibold text-zinc-100">
+                        <td className="p-2 font-mono font-semibold text-foreground">
                           {i.cod}
                         </td>
                         <td className="p-2 max-w-[220px] truncate">
                           {i.nemotecnico || i.descriptor_proveedor || '—'}
                         </td>
-                        <td className="p-2 text-zinc-300">{i.categoria || '—'}</td>
-                        <td className="p-2 text-zinc-400">{i.sub_categoria || '—'}</td>
-                        <td className="p-2 text-zinc-400">{i.proveedor || '—'}</td>
-                        <td className="p-2 text-zinc-400">{i.ubicacion || '—'}</td>
+                        <td className="p-2 text-foreground">{i.categoria || '—'}</td>
+                        <td className="p-2 text-muted-foreground">{i.sub_categoria || '—'}</td>
+                        <td className="p-2 text-muted-foreground">{i.proveedor || '—'}</td>
+                        <td className="p-2 text-muted-foreground">{i.ubicacion || '—'}</td>
                         <td
                           className={cn(
                             'p-2 text-center font-semibold',
                             st <= 0
-                              ? 'text-red-300'
+                              ? 'text-destructive'
                               : (i.minimo || 0) > 0 && st < (i.minimo || 0)
-                                ? 'text-amber-300'
-                                : 'text-zinc-100',
+                                ? 'text-warning'
+                                : 'text-foreground',
                           )}
                         >
                           {st}
                         </td>
-                        <td className="p-2 text-center text-zinc-400">
+                        <td className="p-2 text-center text-muted-foreground">
                           {i.stock_mp || 0}
                         </td>
-                        <td className="p-2 text-center text-zinc-400">
+                        <td className="p-2 text-center text-muted-foreground">
                           {i.stock_liberado || 0}
                         </td>
-                        <td className="p-2 text-center text-zinc-400">
+                        <td className="p-2 text-center text-muted-foreground">
                           {i.minimo || 0}
                         </td>
-                        <td className="p-2 text-right text-zinc-400">
+                        <td className="p-2 text-right text-muted-foreground">
                           ${formatCLP(i.costo)}
                         </td>
                         <td className="p-2 text-center">
@@ -978,14 +986,14 @@ export function Inventario() {
                           <div className="flex justify-center gap-1">
                             <button
                               onClick={() => abrirEditarInsumo(i)}
-                              className="rounded border border-white/10 bg-white/5 p-1 text-zinc-300 hover:bg-white/10"
+                              className="rounded border border-border bg-card p-1 text-foreground hover:bg-card"
                               title="Editar"
                             >
                               <Pencil className="h-3 w-3" />
                             </button>
                             <button
                               onClick={() => setQrInsumo(i)}
-                              className="rounded border border-indigo-500/30 bg-indigo-500/10 p-1 text-indigo-300 hover:bg-indigo-500/20"
+                              className="rounded border border-accent/30 bg-accent/10 p-1 text-accent hover:bg-accent/20"
                               title="Ver / imprimir QR"
                             >
                               <QrCode className="h-3 w-3" />
@@ -994,7 +1002,7 @@ export function Inventario() {
                               onClick={() =>
                                 abrirNuevoMov('NUEVO INGRESO', i.cod || '')
                               }
-                              className="rounded border border-emerald-500/30 bg-emerald-500/10 p-1 text-emerald-300 hover:bg-emerald-500/20"
+                              className="rounded border border-success/30 bg-success/15 p-1 text-success hover:bg-success/15"
                               title="Registrar entrada"
                             >
                               <Plus className="h-3 w-3" />
@@ -1014,7 +1022,7 @@ export function Inventario() {
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <div className="relative flex-1 min-w-[220px]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={busquedaMov}
                   onChange={(e) => setBusquedaMov(e.target.value)}
@@ -1025,7 +1033,7 @@ export function Inventario() {
               <select
                 value={filtroTipoMov}
                 onChange={(e) => setFiltroTipoMov(e.target.value)}
-                className="rounded-md border border-white/10 bg-zinc-900 px-2 py-1.5 text-sm"
+                className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="">Todos los tipos</option>
                 <option value="NUEVO INGRESO">Entrada</option>
@@ -1061,7 +1069,7 @@ export function Inventario() {
             </div>
             <div className="space-y-2">
               {movimientosFiltrados.length === 0 && (
-                <p className="py-8 text-center text-sm text-zinc-500">
+                <p className="py-8 text-center text-sm text-muted-foreground">
                   No hay movimientos que coincidan.
                 </p>
               )}
@@ -1072,17 +1080,17 @@ export function Inventario() {
                 const color = ajuste
                   ? 'text-sky-300'
                   : entrada
-                    ? 'text-emerald-300'
+                    ? 'text-success'
                     : m.tipo === 'PEDIDO REPOSICION'
-                      ? 'text-violet-300'
-                      : 'text-red-300';
+                      ? 'text-accent'
+                      : 'text-destructive';
                 const bg = ajuste
                   ? 'bg-sky-500/10 border-sky-500/30'
                   : entrada
-                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                    ? 'bg-success/15 border-success/30'
                     : m.tipo === 'PEDIDO REPOSICION'
-                      ? 'bg-violet-500/10 border-violet-500/30'
-                      : 'bg-red-500/10 border-red-500/30';
+                      ? 'bg-accent/10 border-violet-500/30'
+                      : 'bg-destructive/15 border-destructive/30';
                 const Icon = ajuste
                   ? Pencil
                   : entrada
@@ -1095,7 +1103,7 @@ export function Inventario() {
                     key={m.id}
                     type="button"
                     onClick={() => setDetalleMov(m)}
-                    className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-zinc-900/50 p-3 text-left transition-colors hover:border-white/20 hover:bg-zinc-900/80"
+                    className="flex w-full items-center gap-3 rounded-lg border border-border bg-card/50 p-3 text-left transition-colors hover:border-border hover:bg-card/80"
                   >
                     <div
                       className={cn(
@@ -1107,12 +1115,12 @@ export function Inventario() {
                       <Icon className="h-4 w-4" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-zinc-100">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                         <span className="truncate">
                           {m.tipo}: {m.codigo} — {m.producto || ''}
                         </span>
                       </div>
-                      <div className="text-xs text-zinc-400">
+                      <div className="text-xs text-muted-foreground">
                         <strong className={color}>
                           {signo}
                           {m.cantidad}
@@ -1122,7 +1130,7 @@ export function Inventario() {
                         {m.ot ? ` · OT: ${m.ot}` : ''}
                         {m.responsable_entrega ? ` · ${m.responsable_entrega}` : ''}
                       </div>
-                      <div className="mt-0.5 text-[0.7rem] text-zinc-500">
+                      <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
                         {formatFecha(m.fecha)}
                       </div>
                     </div>
@@ -1136,8 +1144,8 @@ export function Inventario() {
         {tab === 'alertas' && (
           <>
             {alertasOrdenadas.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-zinc-500">
-                <AlertTriangle className="mb-3 h-10 w-10 text-emerald-500/50" />
+              <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+                <AlertTriangle className="mb-3 h-10 w-10 text-success/50" />
                 <p>No hay alertas de stock.</p>
               </div>
             ) : (
@@ -1155,16 +1163,16 @@ export function Inventario() {
                       className={cn(
                         'flex items-start gap-3 rounded-lg border p-3',
                         color === 'red'
-                          ? 'border-red-500/30 bg-red-500/5'
-                          : 'border-amber-500/30 bg-amber-500/5',
+                          ? 'border-destructive/30 bg-destructive/15'
+                          : 'border-warning/30 bg-warning/15',
                       )}
                     >
                       <div
                         className={cn(
                           'flex h-9 w-9 shrink-0 items-center justify-center rounded',
                           color === 'red'
-                            ? 'bg-red-500/15 text-red-300'
-                            : 'bg-amber-500/15 text-amber-300',
+                            ? 'bg-destructive/15 text-destructive'
+                            : 'bg-warning/15 text-warning',
                         )}
                       >
                         {color === 'red' ? (
@@ -1178,23 +1186,23 @@ export function Inventario() {
                           <span
                             className={cn(
                               'text-sm font-semibold',
-                              color === 'red' ? 'text-red-300' : 'text-amber-300',
+                              color === 'red' ? 'text-destructive' : 'text-warning',
                             )}
                           >
                             {a.tipo === 'SIN_STOCK' ? 'Sin stock' : 'Stock bajo'}
                           </span>
-                          <span className="font-mono text-[0.7rem] text-zinc-500">
+                          <span className="font-mono text-[0.7rem] text-muted-foreground">
                             {a.codigo}
                           </span>
                         </div>
-                        <div className="text-sm text-zinc-300">{a.nombre || '—'}</div>
-                        <div className="mt-1 flex flex-wrap gap-3 text-[0.7rem] text-zinc-500">
+                        <div className="text-sm text-foreground">{a.nombre || '—'}</div>
+                        <div className="mt-1 flex flex-wrap gap-3 text-[0.7rem] text-muted-foreground">
                           <span>📍 {ubic}</span>
                           <span>
                             Stock:{' '}
                             <strong
                               className={
-                                color === 'red' ? 'text-red-300' : 'text-amber-300'
+                                color === 'red' ? 'text-destructive' : 'text-warning'
                               }
                             >
                               {st}
@@ -1205,7 +1213,7 @@ export function Inventario() {
                             <span
                               className={cn(
                                 'font-semibold',
-                                color === 'red' ? 'text-red-300' : 'text-amber-300',
+                                color === 'red' ? 'text-destructive' : 'text-warning',
                               )}
                             >
                               Reponer: {falta}
@@ -1215,7 +1223,7 @@ export function Inventario() {
                         <div className="mt-2 flex gap-2">
                           <button
                             onClick={() => verEnCatalogo(a.codigo)}
-                            className="rounded border border-white/10 bg-white/5 px-2.5 py-1 text-[0.72rem] text-zinc-300 hover:bg-white/10"
+                            className="rounded border border-border bg-card px-2.5 py-1 text-[0.72rem] text-foreground hover:bg-card"
                           >
                             Ver ítem
                           </button>
@@ -1226,8 +1234,8 @@ export function Inventario() {
                             className={cn(
                               'rounded border px-2.5 py-1 text-[0.72rem]',
                               color === 'red'
-                                ? 'border-red-500/40 bg-red-500/15 text-red-200 hover:bg-red-500/25'
-                                : 'border-amber-500/40 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25',
+                                ? 'border-destructive/30 bg-destructive/15 text-red-200 hover:bg-destructive/15'
+                                : 'border-warning/30 bg-warning/15 text-warning hover:bg-warning/15',
                             )}
                           >
                             Registrar pedido
@@ -1248,13 +1256,13 @@ export function Inventario() {
               <select
                 value={filtroAlmacenRack}
                 onChange={(e) => setFiltroAlmacenRack(e.target.value as AlmacenRack)}
-                className="rounded-md border border-white/10 bg-zinc-900 px-2 py-1.5 text-sm"
+                className="rounded-md border border-border bg-card px-2 py-1.5 text-sm"
               >
                 <option value="LIBERADO">Bodega LIBERADO</option>
                 <option value="MATERIAS_PRIMAS">MATERIAS PRIMAS</option>
               </select>
               <div className="relative flex-1 min-w-[220px]">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={busquedaRack}
                   onChange={(e) => setBusquedaRack(e.target.value)}
@@ -1262,7 +1270,7 @@ export function Inventario() {
                   className="pl-8"
                 />
               </div>
-              <span className="text-xs text-zinc-500">
+              <span className="text-xs text-muted-foreground">
                 {mapaUbicaciones.size} posiciones registradas
               </span>
             </div>
@@ -1270,9 +1278,9 @@ export function Inventario() {
               {getRacks(filtroAlmacenRack).map((rack) => (
                 <div
                   key={rack.nombre}
-                  className="rounded-lg border border-white/10 bg-zinc-900/40 p-3"
+                  className="rounded-lg border border-border bg-card/40 p-3"
                 >
-                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-300">
+                  <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-foreground">
                     {rack.nombre}
                   </div>
                   <div
@@ -1281,13 +1289,13 @@ export function Inventario() {
                       gridTemplateColumns: `28px repeat(${rack.columnas.length}, minmax(0,1fr))`,
                     }}
                   >
-                    <div className="rounded bg-zinc-800/60 p-1 text-center text-[0.6rem] text-zinc-500">
+                    <div className="rounded bg-secondary/60 p-1 text-center text-[0.6rem] text-muted-foreground">
                       #
                     </div>
                     {rack.columnas.map((col) => (
                       <div
                         key={col}
-                        className="rounded bg-zinc-800/60 p-1 text-center text-[0.6rem] text-zinc-500"
+                        className="rounded bg-secondary/60 p-1 text-center text-[0.6rem] text-muted-foreground"
                       >
                         {col}
                       </div>
@@ -1439,7 +1447,7 @@ export function Inventario() {
                 onChange={(e) =>
                   actualizarFormInsumo({ estado_inventario: e.target.value })
                 }
-                className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="ACTIVO">Activo</option>
                 <option value="DISCONTINUADO">Discontinuado</option>
@@ -1470,14 +1478,14 @@ export function Inventario() {
                   value={insumoDialog.form.stock_inicial}
                   onChange={(e) => actualizarFormInsumo({ stock_inicial: e.target.value })}
                 />
-                <p className="mt-0.5 text-[0.7rem] text-zinc-500">
+                <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
                   Si ingresás una cantidad, se crea un movimiento de NUEVO INGRESO en MP.
                 </p>
               </div>
             )}
 
             {/* Foto */}
-            <div className="sm:col-span-2 rounded-lg border border-white/10 bg-zinc-900/60 p-3">
+            <div className="sm:col-span-2 rounded-lg border border-border bg-card/60 p-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <Label className="mb-0">Foto</Label>
                 {fotoEstado.msg && (
@@ -1526,7 +1534,7 @@ export function Inventario() {
                     variant="ghost"
                     onClick={quitarFoto}
                     type="button"
-                    className="gap-1 text-red-300 hover:bg-red-500/10"
+                    className="gap-1 text-destructive hover:bg-destructive/15"
                   >
                     <X className="h-4 w-4" /> Quitar
                   </Button>
@@ -1537,7 +1545,7 @@ export function Inventario() {
                   <img
                     src={insumoDialog.form.foto_url}
                     alt="Preview"
-                    className="max-h-44 rounded border border-white/10 object-contain"
+                    className="max-h-44 rounded border border-border object-contain"
                   />
                 </div>
               )}
@@ -1580,7 +1588,7 @@ export function Inventario() {
                 onChange={(e) =>
                   actualizarFormMov({ tipo: e.target.value as MovTipo })
                 }
-                className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="NUEVO INGRESO">Entrada</option>
                 <option value="SALIDA PRODUCCION">Salida</option>
@@ -1593,7 +1601,7 @@ export function Inventario() {
               <select
                 value={movDialog.form.codigo}
                 onChange={(e) => actualizarFormMov({ codigo: e.target.value })}
-                className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="">Seleccionar insumo…</option>
                 {insumos.map((i) => (
@@ -1618,7 +1626,7 @@ export function Inventario() {
                 onChange={(e) =>
                   actualizarFormMov({ almacen: e.target.value as 'MP' | 'LIBERADO' })
                 }
-                className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="MP">Materias primas (MP)</option>
                 <option value="LIBERADO">Liberado</option>
@@ -1683,7 +1691,7 @@ export function Inventario() {
               const ins = codigo ? insumoByCod.get(codigo) : undefined;
               if (!codigo) {
                 return (
-                  <div className="py-6 text-center text-zinc-500">
+                  <div className="py-6 text-center text-muted-foreground">
                     <Package className="mx-auto mb-2 h-8 w-8 opacity-60" />
                     Posición vacía
                   </div>
@@ -1695,14 +1703,14 @@ export function Inventario() {
                     <img
                       src={ins.foto_url}
                       alt=""
-                      className="mx-auto mb-3 max-h-48 rounded border border-white/10 object-contain"
+                      className="mx-auto mb-3 max-h-48 rounded border border-border object-contain"
                     />
                   )}
-                  <div className="rounded-lg bg-zinc-900 p-3">
-                    <div className="font-mono text-lg font-semibold text-indigo-300">
+                  <div className="rounded-lg bg-card p-3">
+                    <div className="font-mono text-lg font-semibold text-accent">
                       {codigo}
                     </div>
-                    <div className="text-sm text-zinc-300">
+                    <div className="text-sm text-foreground">
                       {ins ? ins.nemotecnico || ins.descriptor_proveedor || '—' : 'Sin datos'}
                     </div>
                   </div>
@@ -1751,77 +1759,77 @@ export function Inventario() {
           </DialogHeader>
           {detalleMov && (
             <div className="space-y-3 text-sm">
-              <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+              <div className="rounded-md border border-border bg-card/60 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                   Tipo
                 </div>
-                <div className="font-semibold text-zinc-100">{detalleMov.tipo}</div>
+                <div className="font-semibold text-foreground">{detalleMov.tipo}</div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                <div className="rounded-md border border-border bg-card/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                     Código
                   </div>
-                  <div className="text-zinc-100">{detalleMov.codigo || '—'}</div>
+                  <div className="text-foreground">{detalleMov.codigo || '—'}</div>
                 </div>
-                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                <div className="rounded-md border border-border bg-card/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                     Cantidad
                   </div>
-                  <div className="text-zinc-100">
+                  <div className="text-foreground">
                     {detalleMov.cantidad ?? 0} {detalleMov.almacen ? `→ ${detalleMov.almacen}` : ''}
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+              <div className="rounded-md border border-border bg-card/60 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                   Producto
                 </div>
-                <div className="text-zinc-100">{detalleMov.producto || '—'}</div>
+                <div className="text-foreground">{detalleMov.producto || '—'}</div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                <div className="rounded-md border border-border bg-card/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                     OT
                   </div>
-                  <div className="text-zinc-100">{detalleMov.ot || '—'}</div>
+                  <div className="text-foreground">{detalleMov.ot || '—'}</div>
                 </div>
-                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                <div className="rounded-md border border-border bg-card/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                     Responsable
                   </div>
-                  <div className="text-zinc-100">
+                  <div className="text-foreground">
                     {detalleMov.responsable_entrega || '—'}
                   </div>
                 </div>
               </div>
 
               {detalleMov.recepcion && (
-                <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                  <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+                <div className="rounded-md border border-border bg-card/60 p-3">
+                  <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                     Recepción
                   </div>
-                  <div className="text-zinc-100">{detalleMov.recepcion}</div>
+                  <div className="text-foreground">{detalleMov.recepcion}</div>
                 </div>
               )}
 
-              <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
-                <div className="text-[0.65rem] uppercase tracking-wide text-amber-300/80">
+              <div className="rounded-md border border-warning/30 bg-warning/15 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-warning/80">
                   Motivo / Observaciones
                 </div>
-                <div className="text-zinc-100 whitespace-pre-wrap break-words">
+                <div className="text-foreground whitespace-pre-wrap break-words">
                   {detalleMov.bitacora || 'Sin observaciones registradas'}
                 </div>
               </div>
 
-              <div className="rounded-md border border-white/10 bg-zinc-900/60 p-3">
-                <div className="text-[0.65rem] uppercase tracking-wide text-zinc-500">
+              <div className="rounded-md border border-border bg-card/60 p-3">
+                <div className="text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                   Fecha
                 </div>
-                <div className="text-zinc-100">{formatFecha(detalleMov.fecha)}</div>
+                <div className="text-foreground">{formatFecha(detalleMov.fecha)}</div>
               </div>
             </div>
           )}
@@ -1830,6 +1838,24 @@ export function Inventario() {
               Cerrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox de foto */}
+      <Dialog open={!!lightboxFoto} onOpenChange={(v) => (v ? null : setLightboxFoto(null))}>
+        <DialogContent className="max-w-3xl bg-card p-4">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-medium text-muted-foreground">
+              {lightboxFoto?.cod}
+            </DialogTitle>
+          </DialogHeader>
+          {lightboxFoto && (
+            <img
+              src={lightboxFoto.url}
+              alt={lightboxFoto.cod}
+              className="mx-auto max-h-[75vh] w-auto rounded-md object-contain"
+            />
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1861,8 +1887,8 @@ function TabBtn({
       className={cn(
         'flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.78rem] font-medium transition-colors',
         active
-          ? 'bg-indigo-500 text-white shadow'
-          : 'text-zinc-400 hover:bg-white/5 hover:text-zinc-100',
+          ? 'bg-accent text-foreground shadow'
+          : 'text-muted-foreground hover:bg-card hover:text-foreground',
       )}
     >
       {children}
@@ -1891,9 +1917,9 @@ function SortTh({
     <th
       onClick={() => onSort(col)}
       className={cn(
-        'cursor-pointer select-none p-2 hover:text-zinc-100',
+        'cursor-pointer select-none p-2 hover:text-foreground',
         textAlign,
-        isActive && 'text-indigo-300',
+        isActive && 'text-accent',
       )}
     >
       {children}
@@ -1915,7 +1941,7 @@ function SelectValidador({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+      className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
     >
       <option value="">—</option>
       {opciones.map((o) => (
@@ -1948,7 +1974,7 @@ function RackRow({
   const q = busqueda.trim().toUpperCase();
   return (
     <>
-      <div className="rounded bg-zinc-800/60 p-1 text-center text-[0.6rem] text-zinc-500">
+      <div className="rounded bg-secondary/60 p-1 text-center text-[0.6rem] text-muted-foreground">
         {fila}
       </div>
       {columnas.map((col) => {
@@ -1967,10 +1993,10 @@ function RackRow({
             className={cn(
               'aspect-square rounded border text-center text-[0.56rem] font-semibold transition-all',
               vacio
-                ? 'border-white/5 bg-zinc-800/30 text-zinc-600'
+                ? 'border-border bg-secondary/30 text-muted-foreground'
                 : bajo
-                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-200'
-                  : 'border-indigo-500/30 bg-indigo-500/15 text-indigo-200',
+                  ? 'border-warning/30 bg-warning/15 text-warning'
+                  : 'border-accent/30 bg-accent/15 text-accent',
               match && 'scale-110 ring-2 ring-yellow-400 z-10',
               dim && 'opacity-20',
             )}
@@ -1985,8 +2011,8 @@ function RackRow({
 
 function InfoCell({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="rounded border border-white/10 bg-zinc-900/40 p-2">
-      <div className="text-[0.65rem] uppercase text-zinc-500">{label}</div>
+    <div className="rounded border border-border bg-card/40 p-2">
+      <div className="text-[0.65rem] uppercase text-muted-foreground">{label}</div>
       <div className="text-sm font-medium">{children}</div>
     </div>
   );
@@ -2086,11 +2112,11 @@ ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{nombre}</DialogTitle>
-          <p className="text-xs text-zinc-400">Código: {insumo.cod}</p>
+          <p className="text-xs text-muted-foreground">Código: {insumo.cod}</p>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div className="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-zinc-900/40 p-3">
-            <div className="text-[0.68rem] font-semibold uppercase text-indigo-300">
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card/40 p-3">
+            <div className="text-[0.68rem] font-semibold uppercase text-accent">
               QR del contenedor
             </div>
             <div className="rounded bg-white p-2">
@@ -2101,11 +2127,11 @@ ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
                 level="M"
               />
             </div>
-            <div className="font-mono text-[0.68rem] text-zinc-400">INS:{codQR}</div>
+            <div className="font-mono text-[0.68rem] text-muted-foreground">INS:{codQR}</div>
           </div>
           {ubicacionQR && (
-            <div className="flex flex-col items-center gap-2 rounded-lg border border-white/10 bg-zinc-900/40 p-3">
-              <div className="text-[0.68rem] font-semibold uppercase text-amber-300">
+            <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card/40 p-3">
+              <div className="text-[0.68rem] font-semibold uppercase text-warning">
                 QR de ubicación
               </div>
               <div className="rounded bg-white p-2">
@@ -2116,7 +2142,7 @@ ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
                   level="M"
                 />
               </div>
-              <div className="text-center text-[0.68rem] text-zinc-400">
+              <div className="text-center text-[0.68rem] text-muted-foreground">
                 {ubicacionDisplay}
                 {rackEntry?.almacen && (
                   <div className="opacity-70">({rackEntry.almacen})</div>
@@ -2125,7 +2151,7 @@ ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
             </div>
           )}
           {!ubicacionQR && (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-white/10 bg-zinc-900/40 p-3 text-center text-[0.7rem] text-zinc-500">
+            <div className="flex flex-col items-center justify-center rounded-lg border border-border bg-card/40 p-3 text-center text-[0.7rem] text-muted-foreground">
               Sin ubicación asignada — solo se imprime el QR de contenedor.
             </div>
           )}
@@ -2134,7 +2160,7 @@ ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
           <Button variant="outline" onClick={onClose}>
             Cerrar
           </Button>
-          <Button onClick={imprimir} className="gap-1.5 bg-indigo-600 hover:bg-indigo-500">
+          <Button onClick={imprimir} className="gap-1.5 bg-accent hover:bg-accent">
             <Printer className="h-3.5 w-3.5" />
             Imprimir
           </Button>

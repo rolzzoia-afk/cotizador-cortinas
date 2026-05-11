@@ -145,17 +145,17 @@ export function Reportes({ ots, telas }: Props) {
   };
 
   return (
-    <div className="rounded-lg border border-indigo-500/30 bg-zinc-900/40 p-3">
+    <div className="rounded-lg border border-accent/30 bg-card/40 p-3">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-indigo-400" />
+          <BarChart3 className="h-4 w-4 text-accent" />
           <strong className="text-sm">Estadísticas de Producción</strong>
         </div>
         <div className="flex gap-2">
           <select
             value={periodo}
             onChange={(e) => setPeriodo(e.target.value)}
-            className="h-8 rounded border border-white/10 bg-zinc-900 px-2 text-xs text-zinc-100"
+            className="h-8 rounded border border-border bg-card px-2 text-xs text-foreground"
           >
             {PERIODOS.map((p) => (
               <option key={p.value} value={p.value}>
@@ -167,7 +167,7 @@ export function Reportes({ ots, telas }: Props) {
             variant="outline"
             size="sm"
             onClick={exportarExcel}
-            className="h-8 gap-1 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10"
+            className="h-8 gap-1 border-success/30 text-success hover:bg-success/15"
           >
             <Download className="h-3.5 w-3.5" />
             Exportar Excel
@@ -185,11 +185,11 @@ export function Reportes({ ots, telas }: Props) {
 
       {/* OTs por mes */}
       <div className="mb-4">
-        <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-zinc-400">
+        <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-muted-foreground">
           OTs por mes
         </div>
         {porMes.length === 0 ? (
-          <span className="text-xs text-zinc-500">Sin datos en el período</span>
+          <span className="text-xs text-muted-foreground">Sin datos en el período</span>
         ) : (
           <div className="space-y-1">
             {porMes.map(([m, n]) => {
@@ -201,14 +201,14 @@ export function Reportes({ ots, telas }: Props) {
               });
               return (
                 <div key={m} className="flex items-center gap-2 text-xs">
-                  <span className="min-w-[60px] text-[0.68rem] text-zinc-400">{label}</span>
-                  <div className="h-4 flex-1 overflow-hidden rounded bg-white/5">
+                  <span className="min-w-[60px] text-[0.68rem] text-muted-foreground">{label}</span>
+                  <div className="h-4 flex-1 overflow-hidden rounded bg-card">
                     <div
                       className="h-full rounded transition-all"
                       style={{ width: `${pct}%`, backgroundColor: '#6366f1', opacity: 0.75 }}
                     />
                   </div>
-                  <span className="min-w-[24px] text-xs font-bold text-indigo-400">{n}</span>
+                  <span className="min-w-[24px] text-xs font-bold text-accent">{n}</span>
                 </div>
               );
             })}
@@ -219,11 +219,11 @@ export function Reportes({ ots, telas }: Props) {
       {/* Distribución + Top clientes */}
       <div className="grid gap-4 md:grid-cols-2">
         <div>
-          <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-muted-foreground">
             Distribución por estado
           </div>
           {porEstado.length === 0 ? (
-            <span className="text-xs text-zinc-500">Sin datos</span>
+            <span className="text-xs text-muted-foreground">Sin datos</span>
           ) : (
             <div className="space-y-1">
               {porEstado.map(([k, n]) => {
@@ -237,7 +237,7 @@ export function Reportes({ ots, telas }: Props) {
                     >
                       {cfg.label}
                     </span>
-                    <div className="h-3.5 flex-1 overflow-hidden rounded bg-white/5">
+                    <div className="h-3.5 flex-1 overflow-hidden rounded bg-card">
                       <div
                         className="h-full rounded"
                         style={{
@@ -261,11 +261,11 @@ export function Reportes({ ots, telas }: Props) {
         </div>
 
         <div>
-          <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-zinc-400">
+          <div className="mb-2 text-[0.68rem] font-semibold uppercase tracking-wider text-muted-foreground">
             Top clientes (por OTs)
           </div>
           {topClientes.length === 0 ? (
-            <span className="text-xs text-zinc-500">Sin datos</span>
+            <span className="text-xs text-muted-foreground">Sin datos</span>
           ) : (
             <div className="space-y-1">
               {topClientes.map(([nom, n]) => {
@@ -278,7 +278,7 @@ export function Reportes({ ots, telas }: Props) {
                     >
                       {nom}
                     </span>
-                    <div className="h-3.5 flex-1 overflow-hidden rounded bg-white/5">
+                    <div className="h-3.5 flex-1 overflow-hidden rounded bg-card">
                       <div
                         className="h-full rounded"
                         style={{ width: `${pct}%`, backgroundColor: '#14b8a6', opacity: 0.7 }}
@@ -299,13 +299,13 @@ export function Reportes({ ots, telas }: Props) {
 function KpiMini({ label, val, color }: { label: string; val: number | string; color: string }) {
   return (
     <div
-      className="rounded-lg border bg-zinc-900/40 p-2 text-center"
+      className="rounded-lg border bg-card/40 p-2 text-center"
       style={{ borderColor: color + '33' }}
     >
       <div className="text-lg font-extrabold" style={{ color }}>
         {val}
       </div>
-      <div className="mt-0.5 text-[0.65rem] text-zinc-500">{label}</div>
+      <div className="mt-0.5 text-[0.65rem] text-muted-foreground">{label}</div>
     </div>
   );
 }

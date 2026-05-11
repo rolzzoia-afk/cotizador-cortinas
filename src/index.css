@@ -4,53 +4,129 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --primary: 243 82% 70%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 243 82% 70%;
-    --radius: 0.5rem;
+    /* Editorial Wellness — Light mode (cream + warm brown + terracota accent) */
+    --background: 36 47% 93%;
+    --foreground: 28 17% 15%;
+    --card: 36 45% 96%;
+    --card-foreground: 28 17% 15%;
+    --popover: 36 45% 96%;
+    --popover-foreground: 28 17% 15%;
+    --primary: 28 17% 15%;
+    --primary-foreground: 36 47% 93%;
+    --secondary: 36 32% 87%;
+    --secondary-foreground: 28 17% 15%;
+    --muted: 36 32% 87%;
+    --muted-foreground: 28 14% 37%;
+    --accent: 28 41% 51%;
+    --accent-foreground: 36 45% 96%;
+    --destructive: 353 51% 46%;
+    --destructive-foreground: 36 45% 96%;
+    --success: 152 27% 38%;
+    --success-foreground: 36 45% 96%;
+    --warning: 32 62% 48%;
+    --warning-foreground: 36 45% 96%;
+    --border: 34 20% 80%;
+    --input: 34 20% 80%;
+    --ring: 28 41% 51%;
+    --radius: 0.625rem;
   }
 
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --primary: 243 82% 70%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 243 82% 70%;
+    /* Editorial Wellness — Dark mode (warm black + cream + terracota glow) */
+    --background: 28 17% 9%;
+    --foreground: 36 47% 93%;
+    --card: 28 17% 12%;
+    --card-foreground: 36 47% 93%;
+    --popover: 28 17% 12%;
+    --popover-foreground: 36 47% 93%;
+    --primary: 36 40% 88%;
+    --primary-foreground: 28 17% 9%;
+    --secondary: 28 16% 18%;
+    --secondary-foreground: 36 47% 93%;
+    --muted: 28 16% 15%;
+    --muted-foreground: 30 14% 60%;
+    --accent: 28 49% 59%;
+    --accent-foreground: 28 17% 9%;
+    --destructive: 353 56% 56%;
+    --destructive-foreground: 36 47% 93%;
+    --success: 152 30% 55%;
+    --success-foreground: 28 17% 9%;
+    --warning: 32 68% 60%;
+    --warning-foreground: 28 17% 9%;
+    --border: 28 19% 20%;
+    --input: 28 19% 20%;
+    --ring: 28 49% 59%;
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
-    font-family:
-      'Inter',
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      sans-serif;
+    @apply bg-background text-foreground;
+    font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    font-optical-sizing: auto;
+  }
+
+  /* Headings use Fraunces — editorial serif with optical sizing */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Fraunces', ui-serif, Georgia, serif;
+    font-feature-settings: 'ss01', 'ss02';
+    font-optical-sizing: auto;
+    letter-spacing: -0.02em;
+  }
+
+  /* Numeric data lucks better with mono — opt-in via .font-mono / .tabular */
+  .tabular,
+  table td,
+  table th {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Focus-visible refined */
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Scrollbars subtle (webkit) */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.4);
+    background-clip: padding-box;
+  }
+}
+
+@layer components {
+  /* Editorial section divider */
+  .editorial-divider {
+    @apply h-px w-full bg-border;
+  }
+
+  /* Subtle elevated surface for premium cards */
+  .surface-elevated {
+    @apply bg-card border border-border;
+    box-shadow:
+      0 1px 0 hsl(var(--foreground) / 0.04),
+      0 1px 3px hsl(var(--foreground) / 0.04);
   }
 }

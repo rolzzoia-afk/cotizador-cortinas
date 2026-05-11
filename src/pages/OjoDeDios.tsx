@@ -39,14 +39,14 @@ export function OjoDeDios() {
   const { telas } = useTelas();
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
         <div className="flex items-center gap-3">
-          <Eye className="h-5 w-5 text-purple-400" />
+          <Eye className="h-5 w-5 text-accent" />
           <div>
             <h2 className="text-base font-semibold">Ojo de Dios</h2>
-            <p className="text-xs text-zinc-500">Panel de administración</p>
+            <p className="text-xs text-muted-foreground">Panel de administración</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -54,8 +54,8 @@ export function OjoDeDios() {
             className={cn(
               'flex items-center gap-1 rounded-full border px-2 py-1 text-[0.65rem]',
               online
-                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
-                : 'border-red-500/30 bg-red-500/10 text-red-300',
+                ? 'border-success/30 bg-success/15 text-success'
+                : 'border-destructive/30 bg-destructive/15 text-destructive',
             )}
           >
             {online ? <Wifi className="h-3 w-3" /> : <WifiOff className="h-3 w-3" />}
@@ -65,7 +65,7 @@ export function OjoDeDios() {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-white/10 bg-zinc-900/40 px-4 pt-2">
+      <div className="flex flex-wrap gap-1 border-b border-border bg-card/40 px-4 pt-2">
         {TABS.map((t) => (
           <button
             key={t.id}
@@ -73,8 +73,8 @@ export function OjoDeDios() {
             className={cn(
               'rounded-t-md border border-b-0 px-4 py-2 text-xs font-medium transition',
               tab === t.id
-                ? 'border-white/10 bg-zinc-950 text-zinc-100'
-                : 'border-transparent text-zinc-400 hover:bg-white/5 hover:text-zinc-200',
+                ? 'border-border bg-background text-foreground'
+                : 'border-transparent text-muted-foreground hover:bg-card hover:text-foreground',
             )}
           >
             {t.label}

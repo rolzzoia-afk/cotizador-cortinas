@@ -94,16 +94,16 @@ export function Dashboard({ ots }: Props) {
 
       {/* Alertas */}
       {estancadas.length > 0 && (
-        <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+        <div className="rounded-lg border border-warning/30 bg-warning/15 p-3">
           <div className="mb-2 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber-400" />
-            <strong className="text-sm text-amber-300">OTs Estancadas</strong>
-            <span className="text-xs text-zinc-500">
+            <AlertTriangle className="h-4 w-4 text-warning" />
+            <strong className="text-sm text-warning">OTs Estancadas</strong>
+            <span className="text-xs text-muted-foreground">
               ({estancadas.length} sin movimiento hace más de {diasAlerta} días)
             </span>
             <div className="ml-auto flex items-center gap-1">
-              <SlidersHorizontal className="h-3 w-3 text-zinc-500" />
-              <label className="text-[0.68rem] text-zinc-400">Alerta después de</label>
+              <SlidersHorizontal className="h-3 w-3 text-muted-foreground" />
+              <label className="text-[0.68rem] text-muted-foreground">Alerta después de</label>
               <Input
                 type="number"
                 value={diasAlerta}
@@ -112,7 +112,7 @@ export function Dashboard({ ots }: Props) {
                 max={60}
                 className="h-7 w-14 text-xs"
               />
-              <span className="text-[0.68rem] text-zinc-400">días</span>
+              <span className="text-[0.68rem] text-muted-foreground">días</span>
             </div>
           </div>
           <div className="space-y-1">
@@ -130,18 +130,18 @@ export function Dashboard({ ots }: Props) {
               return (
                 <div
                   key={o.id}
-                  className="flex items-center gap-2 rounded bg-amber-500/5 p-2 text-xs"
+                  className="flex items-center gap-2 rounded bg-warning/15 p-2 text-xs"
                 >
-                  <strong className="text-amber-400">{dg.ot || '—'}</strong>
-                  <span className="text-zinc-500">—</span>
-                  <span className="text-zinc-200">{dg.cliente || '—'}</span>
+                  <strong className="text-warning">{dg.ot || '—'}</strong>
+                  <span className="text-muted-foreground">—</span>
+                  <span className="text-foreground">{dg.cliente || '—'}</span>
                   <span
                     className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
                     style={{ backgroundColor: ecfg.bg, color: ecfg.color }}
                   >
                     {ecfg.label}
                   </span>
-                  <span className="ml-auto text-[0.68rem] text-zinc-500">
+                  <span className="ml-auto text-[0.68rem] text-muted-foreground">
                     hace {dSin} días
                   </span>
                   <Button
@@ -160,12 +160,12 @@ export function Dashboard({ ots }: Props) {
       )}
 
       {/* Barras + Tabla OTs */}
-      <div className="rounded-lg border border-white/10 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-border bg-card/40 p-3">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <strong className="text-sm">Todas las OTs</strong>
           <div className="flex gap-2">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-500" />
+              <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={filtroTexto}
                 onChange={(e) => setFiltroTexto(e.target.value)}
@@ -176,7 +176,7 @@ export function Dashboard({ ots }: Props) {
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
-              className="h-8 rounded border border-white/10 bg-zinc-900 px-2 text-xs text-zinc-100"
+              className="h-8 rounded border border-border bg-card px-2 text-xs text-foreground"
             >
               <option value="">Todos los estados</option>
               {Object.entries(ODIOS_ESTADOS).map(([k, cfg]) => (
@@ -202,7 +202,7 @@ export function Dashboard({ ots }: Props) {
                 >
                   {cfg.label}
                 </span>
-                <div className="h-3.5 flex-1 overflow-hidden rounded bg-white/5">
+                <div className="h-3.5 flex-1 overflow-hidden rounded bg-card">
                   <div
                     className="h-full rounded transition-all"
                     style={{ width: `${pct}%`, backgroundColor: cfg.color, opacity: 0.7 }}
@@ -222,7 +222,7 @@ export function Dashboard({ ots }: Props) {
         {/* Tabla */}
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-zinc-900 text-[0.65rem] uppercase tracking-wide text-zinc-400">
+            <thead className="bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="p-2 text-left">OT #</th>
                 <th className="p-2 text-left">Cliente</th>
@@ -236,7 +236,7 @@ export function Dashboard({ ots }: Props) {
             <tbody>
               {filtradas.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-4 text-center text-zinc-500">
+                  <td colSpan={7} className="p-4 text-center text-muted-foreground">
                     Sin resultados
                   </td>
                 </tr>
@@ -259,16 +259,16 @@ export function Dashboard({ ots }: Props) {
                 return (
                   <tr
                     key={o.id}
-                    className="border-t border-white/5 hover:bg-white/5"
+                    className="border-t border-border hover:bg-card"
                     style={estancada ? { backgroundColor: 'rgba(245,158,11,0.06)' } : undefined}
                   >
                     <td className="p-2">
-                      <strong className="text-blue-400">
+                      <strong className="text-accent">
                         {estancada && '⚠️ '}
                         {dg.ot || '—'}
                       </strong>
                     </td>
-                    <td className="p-2 text-zinc-200">{dg.cliente || '—'}</td>
+                    <td className="p-2 text-foreground">{dg.cliente || '—'}</td>
                     <td className="p-2">
                       <span
                         className="rounded-full px-2 py-0.5 text-[0.63rem] font-bold"
@@ -285,7 +285,7 @@ export function Dashboard({ ots }: Props) {
                       {dias}
                     </td>
                     <td
-                      className="max-w-[130px] truncate p-2 text-[0.68rem] text-zinc-400"
+                      className="max-w-[130px] truncate p-2 text-[0.68rem] text-muted-foreground"
                       title={o.notas || ''}
                     >
                       {nota || '—'}
@@ -315,13 +315,13 @@ export function Dashboard({ ots }: Props) {
 function KpiCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div
-      className="rounded-lg border bg-zinc-900/40 p-3 text-center"
+      className="rounded-lg border bg-card/40 p-3 text-center"
       style={{ borderColor: color + '40' }}
     >
       <div className="text-2xl font-extrabold" style={{ color }}>
         {value}
       </div>
-      <div className="mt-1 text-[0.68rem] uppercase tracking-wide text-zinc-500">
+      <div className="mt-1 text-[0.68rem] uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
     </div>

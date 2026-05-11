@@ -32,8 +32,8 @@ export function OrphanPlansBanner() {
 
   if (error) {
     return (
-      <section className="rounded-lg border border-red-500/40 bg-red-500/5 p-4">
-        <div className="flex items-center gap-2 text-sm text-red-400">
+      <section className="rounded-lg border border-destructive/30 bg-destructive/15 p-4">
+        <div className="flex items-center gap-2 text-sm text-destructive">
           <AlertTriangle className="h-4 w-4" />
           <span>
             No se pudo verificar planes huérfanos:{' '}
@@ -54,14 +54,14 @@ export function OrphanPlansBanner() {
 
   return (
     <>
-      <section className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-4">
+      <section className="rounded-lg border-2 border-warning/30 bg-warning/15 p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-400" />
+          <AlertTriangle className="h-5 w-5 shrink-0 text-warning" />
           <div className="flex-1 min-w-[200px]">
-            <div className="text-sm font-semibold text-amber-300">
+            <div className="text-sm font-semibold text-warning">
               {total} {total === 1 ? 'plan huérfano detectado' : 'planes huérfanos detectados'}
             </div>
-            <div className="text-xs text-amber-200/80">
+            <div className="text-xs text-warning/80">
               Planes guardados sin eventos correspondientes en historial. Posible sync silencioso fallido.
             </div>
           </div>
@@ -131,7 +131,7 @@ export function OrphanPlansBanner() {
             </Table>
           </div>
 
-          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-200/90">
+          <div className="rounded-md border border-warning/30 bg-warning/15 p-3 text-xs text-warning/90">
             <div className="mb-1 font-semibold">Pasos sugeridos:</div>
             <ol className="ml-4 list-decimal space-y-1">
               <li>Confirmar con el taller si la OT fue cortada físicamente.</li>

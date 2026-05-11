@@ -251,16 +251,16 @@ export function CotizadorFase4() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-zinc-400">
+      <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando…
       </div>
     );
   }
   if (!ot) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 text-zinc-400">
+      <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
         <p>OT no encontrada.</p>
-        <Link to="/panel" className="text-sm text-indigo-300 hover:underline">
+        <Link to="/panel" className="text-sm text-accent hover:underline">
           Volver al Panel
         </Link>
       </div>
@@ -277,13 +277,13 @@ export function CotizadorFase4() {
   );
 
   return (
-    <div className="flex h-full flex-col bg-zinc-950 text-zinc-100">
+    <div className="flex h-full flex-col bg-background text-foreground">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-zinc-900/60 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/panel')}
-            className="rounded p-1.5 text-zinc-400 hover:bg-white/5 hover:text-zinc-100"
+            className="rounded p-1.5 text-muted-foreground hover:bg-card hover:text-foreground"
             title="Volver al Panel"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -293,14 +293,14 @@ export function CotizadorFase4() {
               <Factory className="h-4 w-4 text-blue-300" />
               Fase 4 — Producción
             </h2>
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-muted-foreground">
               OT {ot.datosGenerales.ot || '—'} · {ot.datosGenerales.cliente || '(sin cliente)'} ·
-              estado: <span className="text-zinc-300">{ot.estado}</span>
+              estado: <span className="text-foreground">{ot.estado}</span>
             </p>
           </div>
         </div>
         {readOnly && (
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[0.7rem] text-zinc-400">
+          <span className="rounded-full border border-border bg-card px-2 py-1 text-[0.7rem] text-muted-foreground">
             Solo lectura (la OT está en {ot.estado})
           </span>
         )}
@@ -308,14 +308,14 @@ export function CotizadorFase4() {
 
       <div className="flex-1 overflow-auto px-4 py-4">
         {/* Sub-etapas tracker */}
-        <div className="mb-4 rounded-lg border border-white/10 bg-zinc-900/40 p-4">
+        <div className="mb-4 rounded-lg border border-border bg-card/40 p-4">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-sm font-medium text-zinc-200">Sub-etapas de producción</span>
-            <span className="text-xs text-zinc-400">
+            <span className="text-sm font-medium text-foreground">Sub-etapas de producción</span>
+            <span className="text-xs text-muted-foreground">
               Avance: <span style={{ color: barColor }}>{pct}%</span>
             </span>
           </div>
-          <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-white/5">
+          <div className="mb-4 h-1.5 overflow-hidden rounded-full bg-card">
             <div
               className="h-full transition-all"
               style={{ width: `${pct}%`, backgroundColor: barColor }}
@@ -364,13 +364,13 @@ export function CotizadorFase4() {
         </div>
 
         {/* BOM editable */}
-        <div className="mb-4 rounded-lg border border-white/10 bg-zinc-900/40">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
+        <div className="mb-4 rounded-lg border border-border bg-card/40">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
             <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-amber-300" />
-              <span className="text-sm font-medium text-zinc-200">Lista de materiales (BOM)</span>
+              <Package className="h-4 w-4 text-warning" />
+              <span className="text-sm font-medium text-foreground">Lista de materiales (BOM)</span>
               {ot.datosGenerales.bomFecha && (
-                <span className="text-[0.68rem] text-zinc-500">
+                <span className="text-[0.68rem] text-muted-foreground">
                   · Guardado {new Date(ot.datosGenerales.bomFecha).toLocaleString('es-CL')}
                 </span>
               )}
@@ -402,7 +402,7 @@ export function CotizadorFase4() {
                 size="sm"
                 onClick={guardarBom}
                 disabled={!bomItems || bomSaving || bomEstado === 'guardado' || readOnly}
-                className="h-7 gap-1 bg-emerald-600 text-[0.7rem] hover:bg-emerald-500"
+                className="h-7 gap-1 bg-success text-[0.7rem] hover:bg-success/90"
               >
                 {bomSaving ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -414,17 +414,17 @@ export function CotizadorFase4() {
             </div>
           </div>
           {!bomItems ? (
-            <div className="px-4 py-8 text-center text-sm text-zinc-500">
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               Cargando BOM…
             </div>
           ) : bomItems.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-zinc-500">
+            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               No hay materiales. Completá los paños en Fase 2 o presioná <em>Recalcular</em>.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
-                <thead className="bg-zinc-900 text-[0.68rem] uppercase tracking-wide text-zinc-400">
+                <thead className="bg-card text-[0.68rem] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <th className="w-8 p-2 text-left">#</th>
                     <th className="p-2 text-left">Categoría</th>
@@ -438,8 +438,8 @@ export function CotizadorFase4() {
                 </thead>
                 <tbody>
                   {bomItems.map((it, idx) => (
-                    <tr key={idx} className="border-t border-white/5 hover:bg-white/5">
-                      <td className="p-2 text-zinc-500">{idx + 1}</td>
+                    <tr key={idx} className="border-t border-border hover:bg-card">
+                      <td className="p-2 text-muted-foreground">{idx + 1}</td>
                       <td className="p-2">
                         <span
                           className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
@@ -488,12 +488,12 @@ export function CotizadorFase4() {
                           className="h-6 w-16 text-right text-xs"
                         />
                       </td>
-                      <td className="p-2 text-zinc-500">{it.unidad}</td>
+                      <td className="p-2 text-muted-foreground">{it.unidad}</td>
                       <td className="p-2">
                         <button
                           onClick={() => removeBomRow(idx)}
                           disabled={readOnly}
-                          className="text-red-400 opacity-50 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20"
+                          className="text-destructive opacity-50 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20"
                           title="Eliminar fila"
                         >
                           <X className="h-3 w-3" />
@@ -508,21 +508,21 @@ export function CotizadorFase4() {
         </div>
 
         {/* Integraciones */}
-        <div className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
+        <div className="mb-4 rounded-lg border border-blue-500/20 bg-accent/5 p-4">
           <div className="mb-2 flex items-center gap-2">
             <Scissors className="h-4 w-4 text-blue-300" />
             <span className="text-sm font-medium text-blue-200">
               Optimización, PDF de producción y etiquetas
             </span>
           </div>
-          <p className="mb-3 text-xs text-zinc-400">
+          <p className="mb-3 text-xs text-muted-foreground">
             Todo corre en React. El plan de corte desde colmena queda en legacy (Fase 6 pendiente).
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               onClick={abrirTelaReact}
-              className="gap-1.5 bg-indigo-600 hover:bg-indigo-500"
+              className="gap-1.5 bg-accent hover:bg-accent"
             >
               <Scissors className="h-3.5 w-3.5" />
               Abrir Tela (optimizador)
@@ -531,7 +531,7 @@ export function CotizadorFase4() {
               size="sm"
               onClick={onGenerarPDF}
               disabled={!pdfRows || pdfRows.length === 0}
-              className="gap-1.5 bg-purple-600 hover:bg-purple-500"
+              className="gap-1.5 bg-accent hover:bg-accent"
             >
               <FileDown className="h-3.5 w-3.5" />
               Generar PDF Producción
@@ -540,7 +540,7 @@ export function CotizadorFase4() {
               size="sm"
               onClick={onImprimirEtiquetas}
               disabled={!pdfRows || pdfRows.length === 0}
-              className="gap-1.5 bg-emerald-600 hover:bg-emerald-500"
+              className="gap-1.5 bg-success hover:bg-success/90"
             >
               <Printer className="h-3.5 w-3.5" />
               Imprimir etiquetas
@@ -566,7 +566,7 @@ export function CotizadorFase4() {
             <Button
               onClick={marcarComoLista}
               disabled={avanzando}
-              className="gap-1 bg-purple-600 hover:bg-purple-500"
+              className="gap-1 bg-accent hover:bg-accent"
             >
               {avanzando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Marcar como lista para entrega
@@ -581,10 +581,10 @@ export function CotizadorFase4() {
 
 function Card({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-zinc-900/40 p-3">
-      <div className="text-[0.68rem] uppercase tracking-wide text-zinc-500">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-zinc-100">{value}</div>
-      {hint && <div className="mt-1 text-[0.68rem] text-zinc-500">{hint}</div>}
+    <div className="rounded-lg border border-border bg-card/40 p-3">
+      <div className="text-[0.68rem] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
+      {hint && <div className="mt-1 text-[0.68rem] text-muted-foreground">{hint}</div>}
     </div>
   );
 }

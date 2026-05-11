@@ -44,7 +44,7 @@ const ROLES: Role[] = [
     desc: 'KPIs diarios del equipo comercial: llamadas, visitas, cierres y fuentes.',
     to: '/ventas?rol=ventas',
     icon: LineChart,
-    color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
+    color: 'text-success border-success/30 hover:shadow-green-400/30',
     tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'],
     rolesVisibles: ['ventas'],
   },
@@ -53,7 +53,7 @@ const ROLES: Role[] = [
     desc: 'Gestión de OTs, cotizaciones y seguimiento de despachos.',
     to: '/panel?rol=ventas',
     icon: BriefcaseBusiness,
-    color: 'text-indigo-400 border-indigo-400/40 hover:shadow-indigo-400/30',
+    color: 'text-accent border-accent/40 hover:shadow-indigo-400/30',
     tags: ['Panel OTs', 'Cotizador'],
     rolesVisibles: ['ventas'],
   },
@@ -62,7 +62,7 @@ const ROLES: Role[] = [
     desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.',
     to: '/optimizador?rol=produccion',
     icon: Wrench,
-    color: 'text-amber-400 border-amber-400/40 hover:shadow-amber-400/30',
+    color: 'text-warning border-warning/30 hover:shadow-amber-400/30',
     tags: ['Optimizador', 'Historial corte', 'Tubos'],
     rolesVisibles: ['produccion'],
   },
@@ -80,7 +80,7 @@ const ROLES: Role[] = [
     desc: 'Corte de tela por cortina según planes de producción.',
     to: '/historial-corte?rol=dimensionado',
     icon: Ruler,
-    color: 'text-green-400 border-green-400/40 hover:shadow-green-400/30',
+    color: 'text-success border-success/30 hover:shadow-green-400/30',
     tags: ['Corte tela', 'Planes de corte'],
     rolesVisibles: ['produccion', 'dimensionado'],
   },
@@ -98,7 +98,7 @@ const ROLES: Role[] = [
     desc: 'Acceso completo al sistema — inventario, inteligencia de negocio, panel admin y todos los módulos.',
     to: '/panel?rol=admin',
     icon: ShieldCheck,
-    color: 'text-purple-400 border-purple-400/40 hover:shadow-purple-400/30',
+    color: 'text-accent border-purple-400/40 hover:shadow-purple-400/30',
     tags: [
       'Panel OTs',
       'Cotizador',
@@ -160,25 +160,25 @@ export function Landing() {
   const rolesVisibles = esAdmin ? ROLES : tilesParaRol;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#07070d] text-slate-100">
-      {/* Fondo con orbs */}
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      {/* Fondo con orbs — sutiles, respetan el tema */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-36 -top-24 h-[600px] w-[600px] animate-pulse rounded-full bg-indigo-500 opacity-15 blur-[120px]" />
-        <div className="absolute -bottom-24 -right-24 h-[500px] w-[500px] animate-pulse rounded-full bg-cyan-500 opacity-15 blur-[120px]" />
-        <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-amber-500 opacity-10 blur-[120px]" />
+        <div className="absolute -left-36 -top-24 h-[600px] w-[600px] animate-pulse rounded-full bg-accent opacity-[0.08] blur-[120px]" />
+        <div className="absolute -bottom-24 -right-24 h-[500px] w-[500px] animate-pulse rounded-full bg-success opacity-[0.08] blur-[120px]" />
+        <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-warning opacity-[0.06] blur-[120px]" />
       </div>
 
       {/* Header esquina sup. derecha: usuario + Salir + reloj.
           z-20 para quedar por encima del contenido (relative z-10), si no
           la tile grande "Pruebas" tapa el botón Salir y no recibe clicks. */}
-      <div className="fixed right-6 top-5 z-20 flex items-center gap-4 text-xs text-slate-500">
+      <div className="fixed right-6 top-5 z-20 flex items-center gap-4 text-xs text-muted-foreground">
         <div className="hidden text-right sm:block">
-          <div className="truncate font-medium text-white/80">{perfil?.nombre ?? '—'}</div>
-          {perfil?.rol && <div className="text-[0.65rem] text-slate-500">{perfil.rol}</div>}
+          <div className="truncate font-medium text-muted-foreground">{perfil?.nombre ?? '—'}</div>
+          {perfil?.rol && <div className="text-[0.65rem] text-muted-foreground">{perfil.rol}</div>}
         </div>
         <button
           onClick={handleLogout}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-300 transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-foreground transition-all hover:border-border hover:bg-card hover:text-foreground"
           title="Cerrar sesión"
           aria-label="Cerrar sesión"
         >
@@ -186,7 +186,7 @@ export function Landing() {
           <span className="hidden sm:inline">Salir</span>
         </button>
         <div className="hidden text-right sm:block">
-          <div className="font-semibold tabular-nums text-white/70">{time}</div>
+          <div className="font-semibold tabular-nums text-muted-foreground">{time}</div>
           <div>{fecha}</div>
         </div>
       </div>
@@ -194,22 +194,22 @@ export function Landing() {
       {/* Contenido */}
       <div className="relative z-10 flex min-h-screen flex-col items-center px-6 py-12">
         <div className="mb-12 text-center">
-          <div className="mb-4 font-[cursive] text-5xl leading-none tracking-wide text-white drop-shadow-[0_2px_30px_rgba(99,102,241,0.4)]">
+          <div className="mb-4 font-serif text-6xl font-medium leading-none tracking-tight text-foreground drop-shadow-[0_2px_30px_hsl(var(--accent)/0.4)]">
             Rolzzo
           </div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-400">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
             Cortinas Rolzzo · Sistema de Gestión Interna
           </div>
-          <h1 className="mb-1 text-2xl font-bold text-white">¿A qué área vas hoy?</h1>
-          <p className="text-sm text-slate-500">
+          <h1 className="mb-1 text-2xl font-bold text-foreground">¿A qué área vas hoy?</h1>
+          <p className="text-sm text-muted-foreground">
             Selecciona tu rol para acceder a tu módulo de trabajo
           </p>
         </div>
 
         {rolesVisibles.length === 0 && (
-          <div className="max-w-md rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 text-center text-sm text-amber-200">
+          <div className="max-w-md rounded-2xl border border-warning/30 bg-warning/15 p-6 text-center text-sm text-warning">
             <p className="font-semibold">Tu cuenta no tiene módulos asignados.</p>
-            <p className="mt-2 text-xs text-amber-200/70">
+            <p className="mt-2 text-xs text-warning/70">
               Contactá al administrador para que configure tu rol.
             </p>
           </div>
@@ -220,14 +220,13 @@ export function Landing() {
               key={r.title}
               to={r.to}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:bg-white/[0.07] hover:shadow-2xl',
-                r.color,
+                'group relative overflow-hidden rounded-2xl border border-border bg-card p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10',
                 r.wide && 'col-span-2 flex items-center gap-5 md:col-span-3',
               )}
             >
               <div
                 className={cn(
-                  'flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-white/5 transition-all group-hover:bg-white/10',
+                  'flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/50 text-accent transition-all group-hover:border-accent/40 group-hover:bg-accent/10',
                   r.wide && 'h-14 w-14 flex-shrink-0',
                 )}
               >
@@ -235,13 +234,13 @@ export function Landing() {
               </div>
 
               <div className="flex-1">
-                <div className="mb-1 text-base font-bold text-white">{r.title}</div>
-                <div className="mb-2 text-xs leading-snug text-slate-500">{r.desc}</div>
+                <div className="mb-1 text-base font-bold text-foreground">{r.title}</div>
+                <div className="mb-2 text-xs leading-snug text-muted-foreground">{r.desc}</div>
                 <div className="flex flex-wrap gap-1.5">
                   {r.tags.map((t) => (
                     <span
                       key={t}
-                      className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-white/60"
+                      className="rounded-full border border-border bg-card px-2 py-0.5 text-[10px] font-semibold tracking-wider text-muted-foreground"
                     >
                       {t}
                     </span>
@@ -249,13 +248,13 @@ export function Landing() {
                 </div>
               </div>
 
-              <ArrowUpRight className="absolute right-5 top-5 h-4 w-4 text-white/20 transition-all group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-current" />
+              <ArrowUpRight className="absolute right-5 top-5 h-4 w-4 text-muted-foreground transition-all group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-current" />
             </Link>
           ))}
         </div>
 
-        <div className="mt-12 text-center text-xs text-white/20">
-          <span className="text-white/30">Cortinas Rolzzo</span> · Sistema de gestión interna · v1.0
+        <div className="mt-12 text-center text-xs text-muted-foreground">
+          <span className="text-muted-foreground">Cortinas Rolzzo</span> · Sistema de gestión interna · v1.0
         </div>
       </div>
     </div>

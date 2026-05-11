@@ -378,7 +378,7 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
             rows={2}
             value={pano.comentarioFinal || ''}
             onChange={(e) => onChange({ comentarioFinal: e.target.value })}
-            className="w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+            className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
           />
         </div>
       </Section>
@@ -391,8 +391,8 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
 // ─────────────────────────────────────────────────────────────
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-md border border-white/10 bg-zinc-900/40 p-3">
-      <div className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-zinc-400">
+    <div className="rounded-md border border-border bg-card/40 p-3">
+      <div className="mb-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </div>
       <div className="space-y-2">{children}</div>
@@ -415,7 +415,7 @@ function RadioRow({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {label && <span className="min-w-[80px] text-[0.72rem] text-zinc-400">{label}</span>}
+      {label && <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">{label}</span>}
       <div className="flex flex-wrap gap-1">
         {options.map((o) => {
           const val = typeof o === 'string' ? o : o.value;
@@ -429,8 +429,8 @@ function RadioRow({
               className={cn(
                 'rounded border px-2 py-1 text-[0.7rem] transition-colors',
                 active
-                  ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-200'
-                  : 'border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10',
+                  ? 'border-accent/50 bg-accent/20 text-accent'
+                  : 'border-border bg-card text-foreground hover:bg-card',
               )}
             >
               {lbl}
@@ -452,12 +452,12 @@ function Checkbox({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-[0.78rem] text-zinc-300">
+    <label className="flex cursor-pointer items-center gap-2 text-[0.78rem] text-foreground">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-white/20 bg-zinc-900 accent-indigo-500"
+        className="h-4 w-4 rounded border-border bg-card accent-indigo-500"
       />
       {label}
     </label>

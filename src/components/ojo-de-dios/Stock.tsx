@@ -73,7 +73,7 @@ export function Stock() {
   return (
     <div className="space-y-4">
       {/* Formulario */}
-      <div className="rounded-lg border border-teal-500/30 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-teal-500/30 bg-card/40 p-3">
         <div className="mb-2 flex items-center gap-2">
           <Plus className="h-4 w-4 text-teal-400" />
           <strong className="text-sm">Agregar / Actualizar Tela</strong>
@@ -146,24 +146,24 @@ export function Stock() {
       </div>
 
       {/* Inventario */}
-      <div className="rounded-lg border border-white/10 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-border bg-card/40 p-3">
         <div className="mb-2 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Layers className="h-4 w-4 text-teal-400" />
             <strong className="text-sm">Inventario de Telas</strong>
           </div>
-          <span className="text-xs text-zinc-400">
+          <span className="text-xs text-muted-foreground">
             {telas.length} telas ·{' '}
             {bajoStock > 0 ? (
-              <span className="text-red-400">⚠️ {bajoStock} con stock bajo</span>
+              <span className="text-destructive">⚠️ {bajoStock} con stock bajo</span>
             ) : (
-              <span className="text-emerald-400">Stock OK</span>
+              <span className="text-success">Stock OK</span>
             )}
           </span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-zinc-900 text-[0.65rem] uppercase tracking-wide text-zinc-400">
+            <thead className="bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="p-2 text-left">Código</th>
                 <th className="p-2 text-left">Nombre</th>
@@ -177,14 +177,14 @@ export function Stock() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={7} className="p-4 text-center text-zinc-500">
+                  <td colSpan={7} className="p-4 text-center text-muted-foreground">
                     Cargando inventario...
                   </td>
                 </tr>
               )}
               {!loading && telas.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="p-4 text-center text-zinc-500">
+                  <td colSpan={7} className="p-4 text-center text-muted-foreground">
                     No hay telas en el inventario. Agregá la primera arriba.
                   </td>
                 </tr>
@@ -195,12 +195,12 @@ export function Stock() {
                 const bajo = m <= alerta;
                 const fecha = t.fechaActualizacion ? t.fechaActualizacion.slice(0, 10) : '—';
                 return (
-                  <tr key={t.id} className="border-t border-white/5 hover:bg-white/5">
+                  <tr key={t.id} className="border-t border-border hover:bg-card">
                     <td className="p-2">
                       <strong className="text-teal-400">{t.codigo}</strong>
                     </td>
                     <td className="p-2">{t.nombre}</td>
-                    <td className="p-2 text-zinc-400">
+                    <td className="p-2 text-muted-foreground">
                       {t.ancho_m ? `${t.ancho_m} m` : '—'}
                     </td>
                     <td className="p-2">
@@ -208,18 +208,18 @@ export function Stock() {
                     </td>
                     <td className="p-2">
                       {bajo ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-0.5 text-[0.63rem] font-bold text-red-300">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-[0.63rem] font-bold text-destructive">
                           <AlertTriangle className="h-2.5 w-2.5" />
                           Bajo stock
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[0.63rem] font-bold text-emerald-300">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[0.63rem] font-bold text-success">
                           <CheckCircle2 className="h-2.5 w-2.5" />
                           OK
                         </span>
                       )}
                     </td>
-                    <td className="p-2 text-zinc-400">{fecha}</td>
+                    <td className="p-2 text-muted-foreground">{fecha}</td>
                     <td className="p-2 text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -234,7 +234,7 @@ export function Stock() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-6 w-6 border-red-500/30 p-0 text-red-400 hover:bg-red-500/10"
+                          className="h-6 w-6 border-destructive/30 p-0 text-destructive hover:bg-destructive/15"
                           onClick={() => onEliminar(t.id, t.nombre || t.codigo)}
                           title="Eliminar"
                         >

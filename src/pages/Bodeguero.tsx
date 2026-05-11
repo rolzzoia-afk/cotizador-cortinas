@@ -275,7 +275,7 @@ export function Bodeguero() {
   // ── Render
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-zinc-950 text-zinc-500">
+      <div className="flex h-full items-center justify-center bg-background text-muted-foreground">
         <Loader2 className="h-6 w-6 animate-spin" />
       </div>
     );
@@ -284,7 +284,7 @@ export function Bodeguero() {
   if (error) {
     return (
       <div className="mx-auto max-w-xl p-6">
-        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-5 text-red-200">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/15 p-5 text-red-200">
           <div className="mb-2 flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-5 w-5" /> No se pudo cargar
           </div>
@@ -298,7 +298,7 @@ export function Bodeguero() {
   }
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100">
+    <div className="min-h-full bg-background text-foreground">
       {vista === 'lista' && (
         <ListaOTs
           ots={ots}
@@ -390,10 +390,10 @@ function ListaOTs({
 }) {
   return (
     <>
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Inicio
         </button>
@@ -404,7 +404,7 @@ function ListaOTs({
         <div className="mb-4 grid grid-cols-3 gap-2">
           <Button
             onClick={onSalida}
-            className="h-auto flex-col gap-1 border border-red-500/30 bg-red-500/10 py-3 text-red-300 hover:bg-red-500/20"
+            className="h-auto flex-col gap-1 border border-destructive/30 bg-destructive/15 py-3 text-destructive hover:bg-destructive/15"
             variant="outline"
           >
             <ArrowUpCircle className="h-5 w-5" />
@@ -413,7 +413,7 @@ function ListaOTs({
           </Button>
           <Button
             onClick={onEntrada}
-            className="h-auto flex-col gap-1 border border-emerald-500/30 bg-emerald-500/10 py-3 text-emerald-300 hover:bg-emerald-500/20"
+            className="h-auto flex-col gap-1 border border-success/30 bg-success/15 py-3 text-success hover:bg-success/15"
             variant="outline"
           >
             <ArrowDownCircle className="h-5 w-5" />
@@ -422,7 +422,7 @@ function ListaOTs({
           </Button>
           <Button
             onClick={onDevolucion}
-            className="h-auto flex-col gap-1 border border-amber-500/30 bg-amber-500/10 py-3 text-amber-300 hover:bg-amber-500/20"
+            className="h-auto flex-col gap-1 border border-warning/30 bg-warning/15 py-3 text-warning hover:bg-warning/15"
             variant="outline"
           >
             <ArrowLeft className="h-5 w-5" />
@@ -431,12 +431,12 @@ function ListaOTs({
           </Button>
         </div>
 
-        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           Despacho por OT
         </div>
 
         {ots.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-8 text-center text-sm text-zinc-400">
+          <div className="rounded-2xl border border-border bg-card p-8 text-center text-sm text-muted-foreground">
             No hay órdenes en producción
           </div>
         ) : (
@@ -454,16 +454,16 @@ function ListaOTs({
               );
               const badge =
                 ot.estado === 'pendiente_firma'
-                  ? { cls: 'bg-amber-500/15 text-amber-400 border-amber-500/30', txt: 'Pendiente firma' }
+                  ? { cls: 'bg-warning/15 text-warning border-warning/30', txt: 'Pendiente firma' }
                   : ot.estado === 'lista'
-                    ? { cls: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30', txt: 'Lista p/ entrega' }
-                    : { cls: 'bg-blue-500/15 text-blue-400 border-blue-500/30', txt: 'En producción' };
+                    ? { cls: 'bg-success/15 text-success border-success/30', txt: 'Lista p/ entrega' }
+                    : { cls: 'bg-accent/15 text-accent border-blue-500/30', txt: 'En producción' };
 
               return (
                 <button
                   key={ot.id}
                   onClick={() => onSelect(ot)}
-                  className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-4 text-left transition hover:border-indigo-500/40 hover:bg-zinc-900/80"
+                  className="rounded-2xl border border-border bg-card p-4 text-left transition hover:border-accent/40 hover:bg-card/80"
                 >
                   <div className="mb-1 flex items-center justify-between">
                     <span className="text-base font-bold">
@@ -478,13 +478,13 @@ function ListaOTs({
                       {badge.txt}
                     </span>
                   </div>
-                  <div className="text-sm text-zinc-400">{cliente}</div>
-                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-zinc-500">
+                  <div className="text-sm text-muted-foreground">{cliente}</div>
+                  <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <Package className="h-3 w-3" /> {bomCount} insumos
                     </span>
                     {telaCount > 0 && (
-                      <span className="flex items-center gap-1 text-amber-500">
+                      <span className="flex items-center gap-1 text-warning">
                         <Scissors className="h-3 w-3" /> {telaCount} paño(s)
                       </span>
                     )}
@@ -542,39 +542,39 @@ function DespachoView({
 
   return (
     <>
-      <div className="sticky top-0 z-10 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+      <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}
-            className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" /> OTs
           </button>
           <h1 className="flex-1 text-base font-bold">
             OT {ot.numero_ot || ot.id.slice(-6)}
           </h1>
-          <span className="rounded-full border border-indigo-500/30 bg-indigo-500/15 px-2 py-0.5 text-[11px] font-semibold text-indigo-300">
+          <span className="rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[11px] font-semibold text-accent">
             {badge}
           </span>
         </div>
       </div>
 
       <div className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
-        <div className="rounded-xl border border-white/[0.07] bg-zinc-900 p-4">
+        <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-wrap gap-4 text-sm">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Cliente
               </div>
               <div className="font-semibold">{cliente}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">OT</div>
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">OT</div>
               <div className="font-semibold">{ot.numero_ot || '—'}</div>
             </div>
             {fechaEntrega && (
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   Entrega
                 </div>
                 <div className="font-semibold">{fechaEntrega}</div>
@@ -583,15 +583,15 @@ function DespachoView({
           </div>
         </div>
 
-        <div className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+        <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           BOM — Tocá un ítem para escanear
         </div>
 
         {bomItems.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.07] bg-zinc-900 p-6 text-center text-sm text-zinc-400">
+          <div className="rounded-2xl border border-border bg-card p-6 text-center text-sm text-muted-foreground">
             No hay BOM para esta OT.
             <br />
-            <span className="text-[11px] text-zinc-500">
+            <span className="text-[11px] text-muted-foreground">
               Generá Fase 4 en el cotizador primero.
             </span>
           </div>
@@ -627,13 +627,13 @@ function DespachoView({
                 disabled={completo}
                 onClick={() => !completo && onIniciarScan(idx)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl border bg-zinc-900 p-3.5 text-left transition',
+                  'flex items-center gap-3 rounded-xl border bg-card p-3.5 text-left transition',
                   completo
-                    ? 'border-emerald-500/30 bg-emerald-500/5 opacity-70'
+                    ? 'border-success/30 bg-success/15 opacity-70'
                     : enProceso
-                      ? 'border-amber-500/30 bg-amber-500/5 hover:border-amber-500/50'
-                      : 'border-white/[0.07] hover:border-indigo-500/40',
-                  esTela && !completo && 'border-amber-500/20',
+                      ? 'border-warning/30 bg-warning/15 hover:border-warning/30'
+                      : 'border-border hover:border-accent/40',
+                  esTela && !completo && 'border-warning/30',
                 )}
               >
                 <div className="flex-shrink-0 text-2xl">
@@ -643,18 +643,18 @@ function DespachoView({
                   <div
                     className={cn(
                       'text-[10px] font-bold uppercase tracking-wider',
-                      esTela ? 'text-amber-500' : 'text-zinc-500',
+                      esTela ? 'text-warning' : 'text-muted-foreground',
                     )}
                   >
                     {item.categoria}
                   </div>
                   <div className="truncate text-sm font-semibold">{item.descripcion}</div>
-                  <div className="truncate text-[11px] text-zinc-500">
+                  <div className="truncate text-[11px] text-muted-foreground">
                     {[item.especificacion, item.color].filter(Boolean).join(' · ')}
                     {stockInfo}
                   </div>
                   {locText && (
-                    <div className="mt-0.5 text-[11px] text-zinc-400">{locText}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">{locText}</div>
                   )}
                 </div>
                 <div className="flex-shrink-0 text-right">
@@ -662,15 +662,15 @@ function DespachoView({
                     className={cn(
                       'text-xl font-bold',
                       completo
-                        ? 'text-emerald-500'
+                        ? 'text-success'
                         : esTela
-                          ? 'text-amber-500'
-                          : 'text-zinc-100',
+                          ? 'text-warning'
+                          : 'text-foreground',
                     )}
                   >
                     {cnt?.pickeado || 0}
                   </div>
-                  <div className="text-[10px] text-zinc-500">
+                  <div className="text-[10px] text-muted-foreground">
                     /{cnt?.requerido} {item.unidad}
                   </div>
                 </div>
@@ -682,7 +682,7 @@ function DespachoView({
         {todosCompletos && (
           <Button
             onClick={onIrAFirma}
-            className="mt-2 h-12 gap-2 bg-emerald-600 text-base hover:bg-emerald-700"
+            className="mt-2 h-12 gap-2 bg-success text-base hover:bg-success/90"
           >
             <FileSignature className="h-5 w-5" /> Firmar y confirmar entrega
           </Button>
@@ -887,14 +887,14 @@ function ScannerView({
   const paso = showConfirm ? 3 : fase === 'item' ? 2 : 1;
 
   return (
-    <div className="min-h-full bg-zinc-950">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+    <div className="min-h-full bg-background">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <button
           onClick={async () => {
             await scanner.stop();
             onCerrar();
           }}
-          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Cerrar
         </button>
@@ -914,10 +914,10 @@ function ScannerView({
                   className={cn(
                     'mx-auto mb-1 flex h-7 w-7 items-center justify-center rounded-full border text-xs font-bold',
                     completo
-                      ? 'border-emerald-500 bg-emerald-500/20 text-emerald-400'
+                      ? 'border-emerald-500 bg-success/15 text-success'
                       : activo
-                        ? 'border-indigo-500 bg-indigo-500/20 text-indigo-300'
-                        : 'border-white/10 bg-zinc-900 text-zinc-600',
+                        ? 'border-accent bg-accent/20 text-accent'
+                        : 'border-border bg-card text-muted-foreground',
                   )}
                 >
                   {completo ? '✓' : n}
@@ -925,7 +925,7 @@ function ScannerView({
                 <div
                   className={cn(
                     'text-[10px] uppercase',
-                    activo ? 'text-indigo-300' : 'text-zinc-500',
+                    activo ? 'text-accent' : 'text-muted-foreground',
                   )}
                 >
                   {label}
@@ -937,16 +937,16 @@ function ScannerView({
 
         {/* Info del ítem */}
         {!showConfirm && (
-          <div className="mb-3 rounded-xl border border-white/[0.07] bg-zinc-900 p-3 text-sm">
-            <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+          <div className="mb-3 rounded-xl border border-border bg-card p-3 text-sm">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
               {item.categoria}
             </div>
             <div className="font-semibold">{item.descripcion}</div>
-            <div className="text-[11px] text-zinc-500">
+            <div className="text-[11px] text-muted-foreground">
               {[item.especificacion, item.color].filter(Boolean).join(' · ')}
             </div>
-            <div className="mt-2 text-[12px] text-zinc-300">{locDisplay}</div>
-            <div className="mt-1 text-[11px] text-zinc-500">
+            <div className="mt-2 text-[12px] text-foreground">{locDisplay}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">
               Progreso: {contador.pickeado} / {contador.requerido} {item.unidad}
             </div>
           </div>
@@ -958,10 +958,10 @@ function ScannerView({
             className={cn(
               'mb-3 rounded-xl border p-3 text-center text-sm',
               estado === 'error'
-                ? 'border-red-500/40 bg-red-500/10 text-red-300'
+                ? 'border-destructive/30 bg-destructive/15 text-destructive'
                 : estado === 'ok'
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
-                  : 'border-indigo-500/30 bg-indigo-500/10 text-indigo-300',
+                  ? 'border-success/30 bg-success/15 text-success'
+                  : 'border-accent/30 bg-accent/10 text-accent',
             )}
           >
             <div className="text-base font-semibold">{mensaje}</div>
@@ -973,15 +973,15 @@ function ScannerView({
         {!showConfirm && !needItemScanTap && (
           <div
             id="reader-bodega"
-            className="mx-auto mb-3 aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border border-white/[0.07] bg-black"
+            className="mx-auto mb-3 aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border border-border bg-black"
           />
         )}
 
         {scanner.error && !showConfirm && (
-          <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-300">
+          <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/15 p-3 text-center text-sm text-destructive">
             <Camera className="mx-auto mb-1 h-6 w-6" />
             <div className="font-semibold">Sin acceso a cámara</div>
-            <div className="mt-1 text-[11px] text-zinc-400">{scanner.error}</div>
+            <div className="mt-1 text-[11px] text-muted-foreground">{scanner.error}</div>
             <Button
               onClick={() => scanner.start('reader-bodega')}
               size="sm"
@@ -1006,12 +1006,12 @@ function ScannerView({
 
         {/* Panel confirmar */}
         {showConfirm && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5">
-            <div className="mb-1 text-xs uppercase tracking-wider text-emerald-400">
+          <div className="rounded-2xl border border-success/30 bg-success/15 p-5">
+            <div className="mb-1 text-xs uppercase tracking-wider text-success">
               Confirmar cantidad
             </div>
             <div className="mb-0.5 text-base font-semibold">{item.descripcion}</div>
-            <div className="mb-4 text-xs text-zinc-400">
+            <div className="mb-4 text-xs text-muted-foreground">
               El sistema requiere {maxQty} {item.unidad} para esta OT
             </div>
             <div className="mb-4 flex items-center justify-center gap-3">
@@ -1047,7 +1047,7 @@ function ScannerView({
             </div>
             <Button
               onClick={() => onConfirm(qty)}
-              className="mb-2 h-12 w-full gap-2 bg-emerald-600 text-base hover:bg-emerald-700"
+              className="mb-2 h-12 w-full gap-2 bg-success text-base hover:bg-success/90"
             >
               <Check className="h-5 w-5" /> Confirmar {qty} {item.unidad}
             </Button>
@@ -1195,11 +1195,11 @@ function FirmaView({
   };
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+    <div className="min-h-full bg-background text-foreground">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <button
           onClick={onBack}
-          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Volver
         </button>
@@ -1207,18 +1207,18 @@ function FirmaView({
       </div>
 
       <div className="mx-auto max-w-md p-4">
-        <div className="mb-4 rounded-xl border border-white/[0.07] bg-zinc-900 p-4">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+        <div className="mb-4 rounded-xl border border-border bg-card p-4">
+          <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
             <ClipboardList className="h-3.5 w-3.5" /> Resumen del despacho
           </div>
           <div className="flex flex-col gap-1 text-sm">
             {bomItems.map((item, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between border-b border-white/[0.05] py-1 last:border-0"
+                className="flex items-center justify-between border-b border-border py-1 last:border-0"
               >
                 <span>{item.descripcion}</span>
-                <span className="font-semibold text-emerald-400">
+                <span className="font-semibold text-success">
                   {contadores[i]?.pickeado || 0} {item.unidad}
                 </span>
               </div>
@@ -1231,7 +1231,7 @@ function FirmaView({
           value={nombre}
           onChange={(e) => setNombre(e.target.value)}
           placeholder="Ej: Juan Pérez"
-          className="mb-4 border-white/10 bg-zinc-900"
+          className="mb-4 border-border bg-card"
         />
 
         <Label className="text-xs">Firma</Label>
@@ -1253,7 +1253,7 @@ function FirmaView({
         <Button
           onClick={confirmar}
           disabled={saving}
-          className="h-12 w-full gap-2 bg-emerald-600 text-base hover:bg-emerald-700"
+          className="h-12 w-full gap-2 bg-success text-base hover:bg-success/90"
         >
           {saving ? (
             <>
@@ -1587,14 +1587,14 @@ function AdHocView({
   };
 
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-100">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-white/[0.07] bg-zinc-950/95 px-5 py-3 backdrop-blur">
+    <div className="min-h-full bg-background text-foreground">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
         <button
           onClick={async () => {
             await scanner.stop();
             onCerrar();
           }}
-          className="flex items-center gap-1 text-sm text-zinc-400 hover:text-zinc-100"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" /> Volver
         </button>
@@ -1606,7 +1606,7 @@ function AdHocView({
             setNombreInput(nombre);
             setModalNombre(true);
           }}
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-zinc-300 hover:bg-white/10"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs text-foreground hover:bg-card"
         >
           <User className="h-3.5 w-3.5" />
           {nombre || labelNombre}
@@ -1619,17 +1619,17 @@ function AdHocView({
           <>
             <div
               id="adhoc-reader"
-              className="mx-auto mb-3 aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border border-white/[0.07] bg-black"
+              className="mx-auto mb-3 aspect-square w-full max-w-[320px] overflow-hidden rounded-2xl border border-border bg-black"
             />
-            <div className="mb-3 rounded-xl border border-indigo-500/30 bg-indigo-500/10 p-3 text-center text-sm text-indigo-300">
+            <div className="mb-3 rounded-xl border border-accent/30 bg-accent/10 p-3 text-center text-sm text-accent">
               <QrCode className="mx-auto mb-1 h-5 w-5" />
               {scanMsg}
             </div>
             {scanner.error && (
-              <div className="mb-3 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-center text-sm text-red-300">
+              <div className="mb-3 rounded-xl border border-destructive/30 bg-destructive/15 p-3 text-center text-sm text-destructive">
                 <Camera className="mx-auto mb-1 h-5 w-5" />
                 <div className="font-semibold">Cámara no disponible</div>
-                <div className="mt-1 text-[11px] text-zinc-400">{scanner.error}</div>
+                <div className="mt-1 text-[11px] text-muted-foreground">{scanner.error}</div>
                 <Button
                   onClick={() => scanner.start('adhoc-reader')}
                   size="sm"
@@ -1639,7 +1639,7 @@ function AdHocView({
                 </Button>
               </div>
             )}
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               O escribí el código manualmente
             </div>
             <div className="flex gap-2">
@@ -1648,7 +1648,7 @@ function AdHocView({
                 onChange={(e) => setCodManual(e.target.value.toUpperCase())}
                 onKeyDown={(e) => e.key === 'Enter' && cargarInsumo(codManual)}
                 placeholder="Ej: MEC14"
-                className="border-white/10 bg-zinc-900"
+                className="border-border bg-card"
               />
               <Button onClick={() => cargarInsumo(codManual)} className="gap-1.5">
                 <KeyRound className="h-4 w-4" /> Buscar
@@ -1659,8 +1659,8 @@ function AdHocView({
 
         {fase === 'confirm' && insumo && (
           <>
-            <div className="mb-4 rounded-2xl border border-white/[0.07] bg-zinc-900 p-4">
-              <div className="text-[10px] uppercase tracking-wider text-zinc-500">
+            <div className="mb-4 rounded-2xl border border-border bg-card p-4">
+              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                 Código: {insumo.cod}
               </div>
               <div className="text-base font-semibold">
@@ -1669,22 +1669,22 @@ function AdHocView({
               <div className="mt-2 text-xs">
                 {modo === 'salida' ? (
                   stockActual <= 0 ? (
-                    <span className="text-red-400">
+                    <span className="text-destructive">
                       <AlertTriangle className="mr-1 inline h-3 w-3" /> Sin stock disponible
                     </span>
                   ) : stockActual <= 5 ? (
-                    <span className="text-amber-400">
+                    <span className="text-warning">
                       <AlertTriangle className="mr-1 inline h-3 w-3" /> Stock bajo:{' '}
                       {stockActual} unidades
                     </span>
                   ) : (
-                    <span className="text-emerald-400">
+                    <span className="text-success">
                       <CheckCircle2 className="mr-1 inline h-3 w-3" /> Stock disponible:{' '}
                       {stockActual} unidades
                     </span>
                   )
                 ) : (
-                  <span className="text-zinc-400">
+                  <span className="text-muted-foreground">
                     Stock actual: {stockActual} unidades
                   </span>
                 )}
@@ -1692,7 +1692,7 @@ function AdHocView({
             </div>
 
             <Label className="mb-1 text-xs">Cantidad</Label>
-            <div className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-white/[0.07] bg-zinc-900 p-3">
+            <div className="mb-4 flex items-center justify-center gap-3 rounded-xl border border-border bg-card p-3">
               <Button
                 onClick={() => setQty((q) => Math.max(1, q - 1))}
                 variant="outline"
@@ -1730,7 +1730,7 @@ function AdHocView({
                   value={otRef}
                   onChange={(e) => setOtRef(e.target.value)}
                   placeholder="Ej: 12345"
-                  className="mb-4 border-white/10 bg-zinc-900"
+                  className="mb-4 border-border bg-card"
                 />
               </>
             )}
@@ -1742,14 +1742,14 @@ function AdHocView({
                   value={proveedor}
                   onChange={(e) => setProveedor(e.target.value)}
                   placeholder="Ej: Meriggi"
-                  className="mb-3 border-white/10 bg-zinc-900"
+                  className="mb-3 border-border bg-card"
                 />
                 <Label className="mb-1 text-xs">N° de documento (opcional)</Label>
                 <Input
                   value={docRef}
                   onChange={(e) => setDocRef(e.target.value)}
                   placeholder="Ej: Factura 1234"
-                  className="mb-4 border-white/10 bg-zinc-900"
+                  className="mb-4 border-border bg-card"
                 />
               </>
             )}
@@ -1761,13 +1761,13 @@ function AdHocView({
                   value={otRef}
                   onChange={(e) => setOtRef(e.target.value)}
                   placeholder="Ej: 12345"
-                  className="mb-3 border-white/10 bg-zinc-900"
+                  className="mb-3 border-border bg-card"
                 />
                 <Label className="mb-1 text-xs">Motivo</Label>
                 <select
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value as MotivoDevolucion)}
-                  className="mb-4 w-full rounded-md border border-white/10 bg-zinc-900 px-2 py-2 text-sm"
+                  className="mb-4 w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
                 >
                   {MOTIVOS_DEVOLUCION.map((m) => (
                     <option key={m} value={m}>
@@ -1788,10 +1788,10 @@ function AdHocView({
               className={cn(
                 'mb-2 h-12 w-full gap-2 text-base',
                 modo === 'salida'
-                  ? 'bg-red-600 hover:bg-red-700'
+                  ? 'bg-destructive hover:bg-destructive/90'
                   : modo === 'entrada'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : 'bg-amber-600 hover:bg-amber-700',
+                    ? 'bg-success hover:bg-success/90'
+                    : 'bg-warning hover:bg-warning/90',
               )}
             >
               {saving ? (
@@ -1816,10 +1816,10 @@ function AdHocView({
         )}
 
         {fase === 'ok' && resumen && (
-          <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-6 text-center">
-            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-400" />
-            <div className="mb-1 text-lg font-bold text-white">{resumen.msg}</div>
-            <div className="mb-4 text-xs text-zinc-400">{resumen.sub}</div>
+          <div className="rounded-2xl border border-success/30 bg-success/15 p-6 text-center">
+            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-success" />
+            <div className="mb-1 text-lg font-bold text-foreground">{resumen.msg}</div>
+            <div className="mb-4 text-xs text-muted-foreground">{resumen.sub}</div>
             <Button onClick={nuevoItem} className="w-full gap-1.5">
               <QrCode className="h-4 w-4" />{' '}
               {modo === 'salida'
@@ -1834,10 +1834,10 @@ function AdHocView({
 
       {/* Modal nombre */}
       {modalNombre && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-zinc-900 p-5">
-            <div className="mb-3 flex items-center gap-2 text-base font-semibold text-white">
-              <User className="h-5 w-5 text-indigo-400" /> ¿Quién{' '}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-5">
+            <div className="mb-3 flex items-center gap-2 text-base font-semibold text-foreground">
+              <User className="h-5 w-5 text-accent" /> ¿Quién{' '}
               {modo === 'salida'
                 ? 'retira'
                 : modo === 'entrada'
@@ -1845,7 +1845,7 @@ function AdHocView({
                   : 'devuelve'}
               ?
             </div>
-            <p className="mb-3 text-xs text-zinc-400">
+            <p className="mb-3 text-xs text-muted-foreground">
               Este nombre se usa para todos los movimientos que registres desde este
               dispositivo. Queda guardado en el celular.
             </p>
@@ -1855,7 +1855,7 @@ function AdHocView({
               onKeyDown={(e) => e.key === 'Enter' && guardarNombre()}
               placeholder="Tu nombre"
               autoFocus
-              className="mb-3 border-white/10 bg-zinc-800"
+              className="mb-3 border-border bg-secondary"
             />
             <div className="flex justify-end gap-2">
               {nombre && (

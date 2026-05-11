@@ -63,14 +63,14 @@ type EvCfg = {
 };
 
 const EV: Record<string, EvCfg> = {
-  ingreso: { color: 'text-green-400', icon: Box, label: 'Ingreso' },
-  corte: { color: 'text-blue-400', icon: Scissors, label: 'Corte' },
-  sobrante: { color: 'text-violet-400', icon: ArrowLeftRight, label: 'Sobrante' },
-  merma: { color: 'text-red-400', icon: Trash2, label: 'Merma' },
-  error_reemplazo: { color: 'text-orange-400', icon: RotateCw, label: 'Reemplazo error' },
+  ingreso: { color: 'text-success', icon: Box, label: 'Ingreso' },
+  corte: { color: 'text-accent', icon: Scissors, label: 'Corte' },
+  sobrante: { color: 'text-accent', icon: ArrowLeftRight, label: 'Sobrante' },
+  merma: { color: 'text-destructive', icon: Trash2, label: 'Merma' },
+  error_reemplazo: { color: 'text-warning', icon: RotateCw, label: 'Reemplazo error' },
   sobrante_error: { color: 'text-fuchsia-400', icon: ArrowLeftRight, label: 'Sobrante error' },
-  ajuste: { color: 'text-yellow-400', icon: Pencil, label: 'Ajuste admin' },
-  eliminado: { color: 'text-zinc-400', icon: XCircle, label: 'Eliminado' },
+  ajuste: { color: 'text-warning', icon: Pencil, label: 'Ajuste admin' },
+  eliminado: { color: 'text-muted-foreground', icon: XCircle, label: 'Eliminado' },
   restauracion: { color: 'text-pink-400', icon: History, label: 'Restauración', esRestauracion: true },
 };
 
@@ -323,7 +323,7 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
                     <Link2 className="h-4 w-4 text-primary" />
                     {primero.cod} · Colmena {primero.n_colmena ?? '—'}
                     {tieneMerma && (
-                      <span className="ml-1 text-xs text-red-400">→ MERMA</span>
+                      <span className="ml-1 text-xs text-destructive">→ MERMA</span>
                     )}
                   </h6>
                   <span className="text-right text-xs text-muted-foreground">
@@ -364,10 +364,10 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
                           : 'terminada';
                     const headerTone =
                       estado === 'zombie'
-                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300'
+                        ? 'border-warning/30 bg-warning/15 text-warning'
                         : estado === 'actual'
-                          ? 'border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-300'
-                          : 'border-white/10 bg-zinc-500/[0.05] text-zinc-400';
+                          ? 'border-success/30 bg-success/[0.06] text-success'
+                          : 'border-border bg-muted/40 text-muted-foreground';
                     const label =
                       estado === 'zombie'
                         ? `Vida ${i + 1} · sin ingreso previo (fantasma)`
@@ -412,7 +412,7 @@ function VistaHistorial({ empresaId }: { empresaId: string | null }) {
 }
 
 function EventoItem({ e }: { e: Evento }) {
-  const cfg = EV[e.evento] ?? { color: 'text-zinc-400', icon: Box, label: e.evento };
+  const cfg = EV[e.evento] ?? { color: 'text-muted-foreground', icon: Box, label: e.evento };
   const Icon = cfg.icon;
   const medida = e.medida_cm != null ? `${Number(e.medida_cm).toFixed(1)} cm` : '—';
   const resultado =
@@ -586,19 +586,27 @@ function VistaMerma({ empresaId }: { empresaId: string | null }) {
       <div className="mb-4 rounded-lg border bg-card">
         <div className="border-b px-4 py-3">
           <h6 className="flex items-center gap-1.5 text-sm font-bold">
-            <Eraser className="h-4 w-4 text-red-400" />
+            <Eraser className="h-4 w-4 text-destructive" />
             Merma por mes y código
           </h6>
         </div>
         <div className="h-[260px] p-4">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-              <XAxis dataKey="mes" tick={{ fontSize: 10 }} />
-              <YAxis tick={{ fontSize: 10 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="mes" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
               <Tooltip
                 formatter={(v: number) => [`${v} cm`]}
-                contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))' }}
+                cursor={{ fill: 'hsl(var(--accent) / 0.08)' }}
+                contentStyle={{
+                  background: 'hsl(var(--popover))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: 8,
+                  color: 'hsl(var(--popover-foreground))',
+                }}
+                labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
               />
               <Legend wrapperStyle={{ fontSize: 10 }} />
               {cods.map((c, i) => (
@@ -642,7 +650,7 @@ function VistaMerma({ empresaId }: { empresaId: string | null }) {
                   <div className="min-w-[80px] text-sm font-bold">{codigo}</div>
                   <div className="h-2 flex-1 overflow-hidden rounded bg-muted">
                     <div
-                      className="h-full bg-red-500"
+                      className="h-full bg-destructive"
                       style={{ width: `${(info.total_cm / maxCm) * 100}%` }}
                     />
                   </div>
@@ -681,7 +689,7 @@ function VistaMerma({ empresaId }: { empresaId: string | null }) {
                             <TableCell className="text-muted-foreground">
                               {e.n_colmena ?? '—'}
                             </TableCell>
-                            <TableCell className="text-right font-semibold text-red-400">
+                            <TableCell className="text-right font-semibold text-destructive">
                               {(e.medida_cm ?? 0).toFixed(1)}
                             </TableCell>
                             <TableCell className="text-muted-foreground">

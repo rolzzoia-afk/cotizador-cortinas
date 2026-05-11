@@ -144,8 +144,8 @@ function SectionHeader({
         {icon}
       </div>
       <div className="flex-1">
-        <div className="text-[15px] font-bold text-white">{title}</div>
-        <div className="mt-0.5 text-xs text-slate-400">{sub}</div>
+        <div className="text-[15px] font-bold text-foreground">{title}</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>
       </div>
       {right}
     </div>
@@ -179,7 +179,7 @@ function Gauge({ pct, hasData }: { pct: number; hasData: boolean }) {
         {!hasData && (
           <path
             d={`M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`}
-            stroke="rgba(255,255,255,0.1)"
+            stroke="hsl(var(--border))"
             strokeWidth="16"
             strokeDasharray="6 6"
             fill="none"
@@ -189,7 +189,7 @@ function Gauge({ pct, hasData }: { pct: number; hasData: boolean }) {
           <>
             <path
               d={`M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`}
-              stroke="rgba(255,255,255,0.07)"
+              stroke="hsl(var(--border))"
               strokeWidth="16"
               fill="none"
             />
@@ -264,13 +264,13 @@ function ChipList({
       {items.map((item, i) => (
         <div
           key={`${item}-${i}`}
-          className="flex items-center gap-1.5 rounded-full border border-white/10 bg-slate-800 px-3 py-1 text-xs text-slate-200"
+          className="flex items-center gap-1.5 rounded-full border border-border bg-secondary px-3 py-1 text-xs text-foreground"
         >
           {item}
           <button
             type="button"
             onClick={() => onRemove(i)}
-            className="text-red-500 hover:text-red-400"
+            className="text-destructive hover:text-destructive"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -324,22 +324,22 @@ function ConfigDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto border-white/10 bg-slate-900 text-slate-200">
+      <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-white">
+          <DialogTitle className="flex items-center gap-2 text-foreground">
             <Settings className="h-4 w-4" /> Configuración KPI Ventas
           </DialogTitle>
         </DialogHeader>
 
         <section className="mb-5">
-          <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">Metas</div>
-          <div className="flex items-center justify-between border-b border-white/10 py-2.5">
+          <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Metas</div>
+          <div className="flex items-center justify-between border-b border-border py-2.5">
             <span className="text-sm">Meta de visitas por asesora (diario)</span>
             <NumInput
               value={draft.meta_visitas}
               min={1}
               onChange={(v) => setDraft((d) => ({ ...d, meta_visitas: v }))}
-              className="w-20 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-center font-bold text-white"
+              className="w-20 rounded-lg border border-border bg-secondary px-2 py-1.5 text-center font-bold text-foreground"
             />
           </div>
           <div className="flex items-center justify-between py-2.5">
@@ -349,13 +349,13 @@ function ConfigDialog({
               min={1}
               max={100}
               onChange={(v) => setDraft((d) => ({ ...d, meta_cierre_pct: v }))}
-              className="w-20 rounded-lg border border-white/10 bg-slate-800 px-2 py-1.5 text-center font-bold text-white"
+              className="w-20 rounded-lg border border-border bg-secondary px-2 py-1.5 text-center font-bold text-foreground"
             />
           </div>
         </section>
 
         <section className="mb-5">
-          <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">Canales de contacto</div>
+          <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Canales de contacto</div>
           <ChipList
             items={draft.canales}
             onRemove={(i) =>
@@ -368,7 +368,7 @@ function ConfigDialog({
               onChange={(e) => setNuevoCanal(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addCanal()}
               placeholder="Nuevo canal (ej: TikTok)"
-              className="flex-1 border-white/10 bg-slate-800 text-slate-200"
+              className="flex-1 border-border bg-secondary text-foreground"
             />
             <Button onClick={addCanal} size="sm" className="gap-1">
               <Plus className="h-4 w-4" />
@@ -377,7 +377,7 @@ function ConfigDialog({
         </section>
 
         <section className="mb-5">
-          <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">
+          <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">
             Equipo — Llamadas / cotizaciones
           </div>
           <ChipList
@@ -395,7 +395,7 @@ function ConfigDialog({
               onChange={(e) => setNuevaVendedora(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addVendedora()}
               placeholder="Nombre vendedora"
-              className="flex-1 border-white/10 bg-slate-800 text-slate-200"
+              className="flex-1 border-border bg-secondary text-foreground"
             />
             <Button onClick={addVendedora} size="sm" className="gap-1">
               <Plus className="h-4 w-4" />
@@ -404,7 +404,7 @@ function ConfigDialog({
         </section>
 
         <section className="mb-5">
-          <div className="mb-2 text-xs uppercase tracking-wide text-slate-400">Equipo — Terreno</div>
+          <div className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Equipo — Terreno</div>
           <ChipList
             items={draft.terreno}
             onRemove={(i) =>
@@ -417,7 +417,7 @@ function ConfigDialog({
               onChange={(e) => setNuevoTerreno(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && addTerreno()}
               placeholder="Nombre vendedor/a terreno"
-              className="flex-1 border-white/10 bg-slate-800 text-slate-200"
+              className="flex-1 border-border bg-secondary text-foreground"
             />
             <Button onClick={addTerreno} size="sm" className="gap-1">
               <Plus className="h-4 w-4" />
@@ -650,9 +650,9 @@ export function Ventas() {
   // ─────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-950 p-8 text-slate-400">
+      <div className="flex h-full items-center justify-center bg-background p-8 text-muted-foreground">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-indigo-500/30 border-t-indigo-500" />
+          <div className="h-9 w-9 animate-spin rounded-full border-[3px] border-accent/30 border-t-indigo-500" />
           <div className="text-sm">Cargando datos…</div>
         </div>
       </div>
@@ -660,27 +660,27 @@ export function Ventas() {
   }
 
   return (
-    <div className="min-h-full bg-slate-950 text-slate-200">
+    <div className="min-h-full bg-background text-foreground">
       {/* TOPBAR */}
-      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-slate-900 px-5 py-3">
+      <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-5 py-3">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/landing')}
-            className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-sm text-slate-200 hover:bg-white/10"
+            className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground hover:bg-card"
           >
             <ArrowLeft className="h-4 w-4" /> Inicio
           </button>
           <div className="flex items-center gap-2">
-            <span className="text-base font-bold text-white">KPI Ventas</span>
-            <span className="rounded-full border border-indigo-500/30 bg-indigo-500/20 px-2 py-0.5 text-[10px] font-semibold text-indigo-300">
+            <span className="text-base font-bold text-foreground">KPI Ventas</span>
+            <span className="rounded-full border border-accent/30 bg-accent/20 px-2 py-0.5 text-[10px] font-semibold text-accent">
               DIARIO
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2">
           {ultimoGuardado && (
-            <div className="flex items-center gap-1 text-[11px] text-slate-400">
-              <Check className="h-3.5 w-3.5 text-emerald-500" />
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <Check className="h-3.5 w-3.5 text-success" />
               Guardado{' '}
               {ultimoGuardado.toLocaleTimeString('es-CL', {
                 hour: '2-digit',
@@ -703,15 +703,15 @@ export function Ventas() {
       </div>
 
       {/* DATE BAR */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-white/10 bg-slate-900/60 px-5 py-2.5">
-        <span className="flex items-center gap-1.5 text-xs text-slate-400">
+      <div className="flex flex-wrap items-center gap-3 border-b border-border bg-card/60 px-5 py-2.5">
+        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Calendar className="h-3.5 w-3.5" /> Fecha:
         </span>
         <input
           type="date"
           value={fechaActiva}
           onChange={(e) => setFechaActiva(e.target.value)}
-          className="rounded-md border border-white/10 bg-slate-900 px-2.5 py-1 text-sm text-slate-200 focus:border-indigo-500 focus:outline-none"
+          className="rounded-md border border-border bg-card px-2.5 py-1 text-sm text-foreground focus:border-accent focus:outline-none"
         />
         <div className="ml-auto flex gap-1.5">
           {(['dia', 'semana', 'mes'] as Periodo[]).map((p) => (
@@ -721,8 +721,8 @@ export function Ventas() {
               className={cn(
                 'rounded-md border px-3 py-1 text-xs transition-colors',
                 periodo === p
-                  ? 'border-indigo-500 bg-indigo-500/15 text-indigo-300'
-                  : 'border-white/10 bg-transparent text-slate-400 hover:border-indigo-500/50',
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-border bg-transparent text-muted-foreground hover:border-accent/50',
               )}
             >
               {p === 'dia' ? 'Hoy' : p === 'semana' ? 'Semana' : 'Mes'}
@@ -734,7 +734,7 @@ export function Ventas() {
       {/* MAIN */}
       <div className="mx-auto flex max-w-6xl flex-col gap-5 px-5 py-6">
         {/* BLOQUE 1: CANALES */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <div className="rounded-2xl border border-border bg-card p-5">
           <SectionHeader
             icon={<MessageCircle className="h-4 w-4" />}
             iconBg="rgba(99,102,241,0.15)"
@@ -742,9 +742,9 @@ export function Ventas() {
             title="Fuente de cotizaciones"
             sub="Cantidad de mensajes recibidos por canal hoy"
             right={
-              <div className="text-right text-[22px] font-extrabold text-white">
+              <div className="text-right text-[22px] font-extrabold text-foreground">
                 {totalCanales}
-                <span className="block text-[11px] font-normal text-slate-400">total</span>
+                <span className="block text-[11px] font-normal text-muted-foreground">total</span>
               </div>
             }
           />
@@ -763,7 +763,7 @@ export function Ventas() {
                 return (
                   <div
                     key={canal}
-                    className="rounded-xl border border-white/10 bg-slate-800 p-3.5 text-center"
+                    className="rounded-xl border border-border bg-secondary p-3.5 text-center"
                   >
                     <div
                       className="mb-2.5 flex items-center justify-center gap-1.5 text-[11px]"
@@ -774,9 +774,9 @@ export function Ventas() {
                     <NumInput
                       value={v}
                       onChange={(nv) => setVal('canal_' + slugify(canal), nv)}
-                      className="w-full border-0 border-b-2 border-white/10 bg-transparent text-center text-[28px] font-extrabold text-white focus:border-indigo-500 focus:outline-none"
+                      className="w-full border-0 border-b-2 border-border bg-transparent text-center text-[28px] font-extrabold text-foreground focus:border-accent focus:outline-none"
                     />
-                    <div className="mt-1.5 text-[11px] text-slate-400">{pct}% del total</div>
+                    <div className="mt-1.5 text-[11px] text-muted-foreground">{pct}% del total</div>
                   </div>
                 );
               })}
@@ -799,11 +799,14 @@ export function Ventas() {
                     </Pie>
                     <ReTooltip
                       contentStyle={{
-                        background: '#141726',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
                         borderRadius: 8,
                         fontSize: 12,
+                        color: 'hsl(var(--popover-foreground))',
                       }}
+                      labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                      itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -813,7 +816,7 @@ export function Ventas() {
         </div>
 
         {/* BLOQUE 2: LLAMADAS */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <div className="rounded-2xl border border-border bg-card p-5">
           <SectionHeader
             icon={<Phone className="h-4 w-4" />}
             iconBg="rgba(245,158,11,0.15)"
@@ -821,9 +824,9 @@ export function Ventas() {
             title="Llamadas diarias"
             sub="Cotizaciones atendidas por vendedora"
             right={
-              <div className="text-right text-[22px] font-extrabold text-white">
+              <div className="text-right text-[22px] font-extrabold text-foreground">
                 {totalLlamadas}
-                <span className="block text-[11px] font-normal text-slate-400">llamadas</span>
+                <span className="block text-[11px] font-normal text-muted-foreground">llamadas</span>
               </div>
             }
           />
@@ -844,62 +847,62 @@ export function Ventas() {
                 cot > 0
                   ? pctCot >= 70
                     ? {
-                        cls: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-500',
+                        cls: 'border-success/30 bg-success/15 text-success',
                         icon: <CircleCheckBig className="h-3 w-3" />,
                         text: `${pctCot}% de cotizaciones (${cot}/${totalCanales || cot})`,
                       }
                     : pctCot >= 40
                       ? {
-                          cls: 'border-amber-500/30 bg-amber-500/15 text-amber-500',
+                          cls: 'border-warning/30 bg-warning/15 text-warning',
                           icon: <ChevronUp className="h-3 w-3" />,
                           text: `${pctCot}% de cotizaciones (${cot}/${totalCanales || cot})`,
                         }
                       : {
-                          cls: 'border-red-500/30 bg-red-500/15 text-red-500',
+                          cls: 'border-destructive/30 bg-destructive/15 text-destructive',
                           icon: <CircleAlert className="h-3 w-3" />,
                           text: `${pctCot}% de cotizaciones (${cot}/${totalCanales || cot})`,
                         }
                   : ll > 0
                     ? {
-                        cls: 'border-white/10 bg-slate-800 text-slate-400',
+                        cls: 'border-border bg-secondary text-muted-foreground',
                         icon: <CircleDot className="h-3 w-3" />,
                         text: '0 cotizaciones asignadas',
                       }
                     : {
-                        cls: 'border-white/10 bg-slate-800 text-slate-400',
+                        cls: 'border-border bg-secondary text-muted-foreground',
                         icon: <Hourglass className="h-3 w-3" />,
                         text: 'Sin datos aún',
                       };
               return (
                 <div
                   key={v}
-                  className="flex flex-col gap-2.5 rounded-xl border border-white/10 bg-slate-800 p-3.5"
+                  className="flex flex-col gap-2.5 rounded-xl border border-border bg-secondary p-3.5"
                 >
                   <div className="flex items-center gap-2">
-                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-indigo-400 text-[13px] font-bold text-white">
+                    <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-accent text-[13px] font-bold text-foreground">
                       {iniciales(v)}
                     </div>
-                    <div className="text-[13px] font-semibold text-white">{v}</div>
+                    <div className="text-[13px] font-semibold text-foreground">{v}</div>
                   </div>
                   <div className="flex flex-col gap-2">
                     <div className="flex flex-col gap-1">
-                      <Label className="text-[10px] uppercase tracking-wide text-slate-400">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         Llamadas del día
                       </Label>
                       <NumInput
                         value={ll}
                         onChange={(nv) => setVal('ll_llamadas_' + slugify(v), nv)}
-                        className="w-full rounded-md border border-white/10 bg-slate-900 px-1.5 py-1.5 text-center text-xl font-bold text-white focus:border-indigo-500 focus:outline-none"
+                        className="w-full rounded-md border border-border bg-card px-1.5 py-1.5 text-center text-xl font-bold text-foreground focus:border-accent focus:outline-none"
                       />
                     </div>
                     <div className="flex flex-col gap-1">
-                      <Label className="text-[10px] uppercase tracking-wide text-slate-400">
+                      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         Cotizaciones atendidas
                       </Label>
                       <NumInput
                         value={cot}
                         onChange={(nv) => setVal('ll_cotz_' + slugify(v), nv)}
-                        className="w-full rounded-md border border-white/10 bg-slate-900 px-1.5 py-1.5 text-center text-xl font-bold text-white focus:border-indigo-500 focus:outline-none"
+                        className="w-full rounded-md border border-border bg-card px-1.5 py-1.5 text-center text-xl font-bold text-foreground focus:border-accent focus:outline-none"
                       />
                     </div>
                   </div>
@@ -918,7 +921,7 @@ export function Ventas() {
         </div>
 
         {/* BLOQUE 3: META VISITAS */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <div className="rounded-2xl border border-border bg-card p-5">
           <SectionHeader
             icon={<Target className="h-4 w-4" />}
             iconBg="rgba(34,197,94,0.15)"
@@ -927,7 +930,7 @@ export function Ventas() {
             sub={
               <>
                 Progreso de cada asesora vs meta de{' '}
-                <strong className="text-slate-200">{config.meta_visitas}</strong> visitas
+                <strong className="text-foreground">{config.meta_visitas}</strong> visitas
               </>
             }
           />
@@ -948,21 +951,21 @@ export function Ventas() {
               return (
                 <div
                   key={v}
-                  className="rounded-xl border border-white/10 bg-slate-800 p-3.5"
+                  className="rounded-xl border border-border bg-secondary p-3.5"
                 >
                   <div className="mb-2.5 flex items-center justify-between">
-                    <div className="text-[13px] font-semibold text-white">{v}</div>
+                    <div className="text-[13px] font-semibold text-foreground">{v}</div>
                     <div className="flex items-center gap-1.5">
                       <NumInput
                         value={visitas}
                         onChange={(nv) => setVal('meta_' + slugify(v), nv)}
-                        className="w-16 rounded-md border border-white/10 bg-slate-900 px-1 py-1 text-center text-[22px] font-extrabold text-white focus:border-indigo-500 focus:outline-none"
+                        className="w-16 rounded-md border border-border bg-card px-1 py-1 text-center text-[22px] font-extrabold text-foreground focus:border-accent focus:outline-none"
                       />
-                      <span className="text-lg text-slate-400">/</span>
-                      <span className="text-base font-bold text-slate-400">{meta}</span>
+                      <span className="text-lg text-muted-foreground">/</span>
+                      <span className="text-base font-bold text-muted-foreground">{meta}</span>
                     </div>
                   </div>
-                  <div className="h-2 overflow-hidden rounded bg-white/5">
+                  <div className="h-2 overflow-hidden rounded bg-card">
                     <div
                       className="h-full transition-all"
                       style={{ width: pct + '%', background: color }}
@@ -975,7 +978,7 @@ export function Ventas() {
         </div>
 
         {/* BLOQUE 4: CIERRE */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <div className="rounded-2xl border border-border bg-card p-5">
           <SectionHeader
             icon={<ClipboardCheck className="h-4 w-4" />}
             iconBg="rgba(239,68,68,0.15)"
@@ -984,59 +987,59 @@ export function Ventas() {
             sub="Cotizaciones enviadas vs cerradas definitivamente"
           />
           <div className="grid gap-4 md:grid-cols-2">
-            <div className="rounded-xl border border-white/10 bg-slate-800 p-4 text-center">
-              <div className="text-xs text-slate-400">Cotizaciones enviadas</div>
+            <div className="rounded-xl border border-border bg-secondary p-4 text-center">
+              <div className="text-xs text-muted-foreground">Cotizaciones enviadas</div>
               <NumInput
                 value={envVal}
                 onChange={(v) => setVal('cierre_enviadas', v)}
-                className="w-full border-0 border-b-2 border-white/10 bg-transparent text-center text-5xl font-extrabold leading-none text-white focus:border-indigo-500 focus:outline-none"
+                className="w-full border-0 border-b-2 border-border bg-transparent text-center text-5xl font-extrabold leading-none text-foreground focus:border-accent focus:outline-none"
               />
             </div>
-            <div className="rounded-xl border border-white/10 bg-slate-800 p-4 text-center">
-              <div className="text-xs text-slate-400">Cotizaciones cerradas</div>
+            <div className="rounded-xl border border-border bg-secondary p-4 text-center">
+              <div className="text-xs text-muted-foreground">Cotizaciones cerradas</div>
               <NumInput
                 value={cerVal}
                 onChange={(v) => setVal('cierre_cerradas', v)}
                 className={cn(
-                  'w-full border-0 border-b-2 bg-transparent text-center text-5xl font-extrabold leading-none text-white focus:outline-none',
+                  'w-full border-0 border-b-2 bg-transparent text-center text-5xl font-extrabold leading-none text-foreground focus:outline-none',
                   errorCierre
                     ? 'border-red-500 focus:border-red-500'
-                    : 'border-white/10 focus:border-indigo-500',
+                    : 'border-border focus:border-accent',
                 )}
               />
               {errorCierre && (
-                <div className="mt-1 flex items-center justify-center gap-1 text-[11px] text-red-500">
+                <div className="mt-1 flex items-center justify-center gap-1 text-[11px] text-destructive">
                   <CircleAlert className="h-3 w-3" /> No puede superar las enviadas
                 </div>
               )}
             </div>
-            <div className="flex flex-wrap items-center justify-around gap-5 rounded-xl border border-white/10 bg-slate-800 p-4 md:col-span-2">
+            <div className="flex flex-wrap items-center justify-around gap-5 rounded-xl border border-border bg-secondary p-4 md:col-span-2">
               <div className="text-center">
                 <Gauge pct={pctCierre} hasData={envVal > 0} />
-                <div className="mt-1.5 text-[11px] text-slate-400">% de cierre real</div>
+                <div className="mt-1.5 text-[11px] text-muted-foreground">% de cierre real</div>
               </div>
               <div className="p-3 text-center">
-                <div className="mb-1.5 text-[13px] text-slate-400">Tasa de cierre</div>
-                <div className="text-3xl font-extrabold text-white">
+                <div className="mb-1.5 text-[13px] text-muted-foreground">Tasa de cierre</div>
+                <div className="text-3xl font-extrabold text-foreground">
                   {envVal > 0 ? `${pctCierre}%` : '—'}
                 </div>
-                <div className="mt-1.5 text-[11px] text-slate-400">
+                <div className="mt-1.5 text-[11px] text-muted-foreground">
                   de las cotizaciones se cerraron
                 </div>
               </div>
               <div className="p-3 text-center">
-                <div className="mb-1 text-[13px] text-slate-400">Cotizaciones pendientes</div>
-                <div className="text-4xl font-extrabold text-indigo-400">
+                <div className="mb-1 text-[13px] text-muted-foreground">Cotizaciones pendientes</div>
+                <div className="text-4xl font-extrabold text-accent">
                   {envVal > 0 ? pendientes : '—'}
                 </div>
-                <div className="text-[11px] text-slate-400">sin cerrar aún</div>
+                <div className="text-[11px] text-muted-foreground">sin cerrar aún</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* BLOQUE 5: TERRENO */}
-        <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+        <div className="rounded-2xl border border-border bg-card p-5">
           <SectionHeader
             icon={<MapPin className="h-4 w-4" />}
             iconBg="rgba(14,165,233,0.15)"
@@ -1053,7 +1056,7 @@ export function Ventas() {
                       <th
                         key={h}
                         className={cn(
-                          'border-b border-white/10 px-3 py-2 text-[11px] uppercase tracking-wide text-slate-400',
+                          'border-b border-border px-3 py-2 text-[11px] uppercase tracking-wide text-muted-foreground',
                           i === 0 ? 'w-9 text-left' : i === 1 ? 'text-left' : 'text-center',
                         )}
                       >
@@ -1068,40 +1071,40 @@ export function Ventas() {
                   const rank = i + 1;
                   const rankCls =
                     rank === 1
-                      ? 'bg-amber-500/20 text-amber-500'
+                      ? 'bg-warning/15 text-warning'
                       : rank === 2
-                        ? 'bg-slate-400/15 text-slate-400'
+                        ? 'bg-muted text-muted-foreground'
                         : rank === 3
-                          ? 'bg-amber-800/20 text-amber-800'
+                          ? 'bg-warning/15 text-warning'
                           : '';
                   const pctCls =
                     d.pct >= 60
-                      ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-500'
+                      ? 'border-success/30 bg-success/15 text-success'
                       : d.pct >= 30
-                        ? 'border-amber-500/30 bg-amber-500/15 text-amber-500'
-                        : 'border-red-500/30 bg-red-500/15 text-red-500';
+                        ? 'border-warning/30 bg-warning/15 text-warning'
+                        : 'border-destructive/30 bg-destructive/15 text-destructive';
                   const estado =
                     d.total === 0 ? (
-                      <span className="text-xs text-slate-400">
+                      <span className="text-xs text-muted-foreground">
                         <CircleDot className="inline h-3 w-3" /> Sin datos
                       </span>
                     ) : d.pct >= 60 ? (
-                      <span className="text-xs font-semibold text-emerald-500">
+                      <span className="text-xs font-semibold text-success">
                         <CircleCheckBig className="inline h-3 w-3" /> Excelente
                       </span>
                     ) : d.pct >= 30 ? (
-                      <span className="text-xs font-semibold text-amber-500">
+                      <span className="text-xs font-semibold text-warning">
                         <ChevronUp className="inline h-3 w-3" /> En progreso
                       </span>
                     ) : (
-                      <span className="text-xs font-semibold text-red-500">
+                      <span className="text-xs font-semibold text-destructive">
                         <CircleAlert className="inline h-3 w-3" /> Bajo
                       </span>
                     );
                   return (
                     <tr
                       key={d.nombre}
-                      className="border-b border-white/10 transition-colors hover:bg-white/[0.03]"
+                      className="border-b border-border transition-colors hover:bg-secondary/40"
                     >
                       <td className="px-3 py-2.5">
                         <span
@@ -1114,20 +1117,20 @@ export function Ventas() {
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-[13px]">
-                        <strong className="text-white">{d.nombre}</strong>
+                        <strong className="text-foreground">{d.nombre}</strong>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <NumInput
                           value={d.total}
                           onChange={(v) => setVal('ter_total_' + slugify(d.nombre), v)}
-                          className="w-16 rounded-md border border-white/10 bg-slate-900 px-1.5 py-1 text-center text-base font-bold text-white focus:border-indigo-500 focus:outline-none"
+                          className="w-16 rounded-md border border-border bg-card px-1.5 py-1 text-center text-base font-bold text-foreground focus:border-accent focus:outline-none"
                         />
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <NumInput
                           value={d.cerradas}
                           onChange={(v) => setVal('ter_cerradas_' + slugify(d.nombre), v)}
-                          className="w-16 rounded-md border border-white/10 bg-slate-900 px-1.5 py-1 text-center text-base font-bold text-white focus:border-indigo-500 focus:outline-none"
+                          className="w-16 rounded-md border border-border bg-card px-1.5 py-1 text-center text-base font-bold text-foreground focus:border-accent focus:outline-none"
                         />
                       </td>
                       <td className="px-3 py-2.5 text-center">
@@ -1151,7 +1154,7 @@ export function Ventas() {
 
         {/* BLOQUE HISTORIAL */}
         {periodo !== 'dia' && historial.length > 0 && (
-          <div className="rounded-2xl border border-white/10 bg-slate-900 p-5">
+          <div className="rounded-2xl border border-border bg-card p-5">
             <SectionHeader
               icon={<TrendingUp className="h-4 w-4" />}
               iconBg="rgba(99,102,241,0.15)"
@@ -1162,25 +1165,28 @@ export function Ventas() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={historial}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="label"
-                    stroke="#64748b"
-                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                   />
-                  <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                   <ReTooltip
                     contentStyle={{
-                      background: '#141726',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
                       borderRadius: 8,
                       fontSize: 12,
+                      color: 'hsl(var(--popover-foreground))',
                     }}
+                    labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                    itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                   />
                   <Legend
                     wrapperStyle={{ fontSize: 11 }}
                     iconType="line"
-                    formatter={(v) => <span style={{ color: '#94a3b8' }}>{v}</span>}
+                    formatter={(v) => <span style={{ color: 'hsl(var(--muted-foreground))' }}>{v}</span>}
                   />
                   <Line
                     type="monotone"

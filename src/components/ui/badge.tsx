@@ -3,17 +3,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold transition-colors',
+  'inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[0.6875rem] font-medium tracking-[0.02em] transition-colors',
   {
     variants: {
       variant: {
-        default: 'border-transparent bg-primary text-primary-foreground',
+        default: 'border-transparent bg-foreground text-background',
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
-        destructive: 'border-transparent bg-destructive text-destructive-foreground',
-        outline: 'text-foreground',
-        success: 'border-transparent bg-green-500/20 text-green-600 dark:text-green-400',
-        warning: 'border-transparent bg-yellow-500/20 text-yellow-600 dark:text-yellow-400',
-        info: 'border-transparent bg-blue-500/20 text-blue-600 dark:text-blue-400',
+        outline: 'border-border text-foreground bg-transparent',
+        accent: 'border-transparent bg-accent/15 text-accent',
+        destructive: 'border-transparent bg-destructive/15 text-destructive',
+        success: 'border-transparent bg-success/15 text-success',
+        warning: 'border-transparent bg-warning/15 text-warning',
+        info: 'border-transparent bg-accent/15 text-accent',
+        muted: 'border-transparent bg-muted text-muted-foreground',
       },
     },
     defaultVariants: { variant: 'default' },
@@ -27,3 +29,5 @@ export interface BadgeProps
 export function Badge({ className, variant, ...props }: BadgeProps) {
   return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
 }
+
+export { badgeVariants };

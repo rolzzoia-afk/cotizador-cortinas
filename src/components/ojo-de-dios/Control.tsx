@@ -48,12 +48,12 @@ export function Control({ ots, telas, online }: Props) {
   return (
     <div className="space-y-4">
       {/* Versión */}
-      <div className="rounded-lg border border-red-500/30 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-destructive/30 bg-card/40 p-3">
         <div className="mb-2 flex items-center gap-2">
-          <Radio className="h-4 w-4 text-red-400" />
+          <Radio className="h-4 w-4 text-destructive" />
           <strong className="text-sm">Control de Versión</strong>
         </div>
-        <p className="mb-3 text-xs text-zinc-400">
+        <p className="mb-3 text-xs text-muted-foreground">
           Incrementar la versión mínima fuerza una recarga en todos los dispositivos del
           taller conectados.
         </p>
@@ -69,11 +69,11 @@ export function Control({ ots, telas, online }: Props) {
             {loading ? '…' : `v${version || '—'}`}
           </div>
           <div>
-            <div className="mb-1 text-xs text-zinc-400">Versión activa en Supabase</div>
+            <div className="mb-1 text-xs text-muted-foreground">Versión activa en Supabase</div>
             <Button
               onClick={forzar}
               disabled={forzando || loading}
-              className="gap-1.5 bg-red-600 hover:bg-red-500"
+              className="gap-1.5 bg-destructive hover:bg-destructive"
             >
               {forzando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               <Radio className="h-3.5 w-3.5" />
@@ -84,9 +84,9 @@ export function Control({ ots, telas, online }: Props) {
       </div>
 
       {/* Estado del sistema */}
-      <div className="rounded-lg border border-blue-500/30 bg-zinc-900/40 p-3">
+      <div className="rounded-lg border border-blue-500/30 bg-card/40 p-3">
         <div className="mb-3 flex items-center gap-2">
-          <Activity className="h-4 w-4 text-blue-400" />
+          <Activity className="h-4 w-4 text-accent" />
           <strong className="text-sm">Estado del Sistema</strong>
         </div>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -114,11 +114,11 @@ function StatCard({
   color: string;
 }) {
   return (
-    <div className="rounded-lg bg-zinc-950/50 p-3 text-center">
+    <div className="rounded-lg bg-background/50 p-3 text-center">
       <div className="text-lg font-bold" style={{ color }}>
         {val}
       </div>
-      <div className="mt-0.5 text-[0.65rem] text-zinc-500">{label}</div>
+      <div className="mt-0.5 text-[0.65rem] text-muted-foreground">{label}</div>
     </div>
   );
 }
