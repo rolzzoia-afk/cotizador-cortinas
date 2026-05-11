@@ -212,7 +212,7 @@ export function useReconciliacion(opts?: { dias?: number; limite?: number }): {
 }
 
 // ── Hook: Versión mínima (control del panel Ojo de Dios) ─────────────────────
-// Lee `configuracion.clave='version_minima_version'` con realtime.
+// Lee `configuracion.clave='opt_version_minima'` con realtime.
 export function useVersionMinima(): {
   version: string | null;
   loading: boolean;
@@ -230,7 +230,7 @@ export function useVersionMinima(): {
         .from('configuracion')
         .select('valor')
         .eq('empresa_id', empresaId)
-        .eq('clave', 'version_minima_version')
+        .eq('clave', 'opt_version_minima')
         .maybeSingle<{ valor: string }>();
       setVersion(data?.valor ?? null);
     } finally {
@@ -273,7 +273,7 @@ export function useVersionMinima(): {
     const { error } = await supabase.from('configuracion').upsert(
       {
         empresa_id: empresaId,
-        clave: 'version_minima_version',
+        clave: 'opt_version_minima',
         valor: nueva,
       },
       { onConflict: 'empresa_id,clave' },

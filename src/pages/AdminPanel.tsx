@@ -129,7 +129,7 @@ export function AdminPanel() {
         .from('configuracion')
         .select('valor')
         .eq('empresa_id', empresaId)
-        .eq('clave', 'version_minima_version')
+        .eq('clave', 'opt_version_minima')
         .maybeSingle<{ valor: string }>();
       setVersion(data?.valor ?? null);
     };
@@ -258,7 +258,7 @@ export function AdminPanel() {
     const { error } = await supabase
       .from('configuracion')
       .upsert(
-        { empresa_id: empresaId, clave: 'version_minima_version', valor: nueva },
+        { empresa_id: empresaId, clave: 'opt_version_minima', valor: nueva },
         { onConflict: 'empresa_id,clave' },
       );
     setActualizandoVersion(false);
