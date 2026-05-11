@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.5";
+const VERSION_ACTUAL = "5.6";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -5416,7 +5416,9 @@ async function construirEventosTubos() {
 
         const conHistorial = new Set((previos || []).map(r => r.tubo_raiz_id));
         let nuevos = 0;
+        let retroactivos = 0;
         const fantasmas = [];
+        const auditRetroactivos = [];
 
         raizIds.forEach(raizId => {
             if (conHistorial.has(raizId)) return; // ya tiene historial → no agregar ingreso
@@ -5424,11 +5426,42 @@ async function construirEventosTubos() {
             const esNuevo = d.fuente === 'optimizador_nuevo';
 
             // Tubo SIN historial previo y NO marcado como propuesto-nuevo:
-            // antes se materializaba un INGRESO "retroactivo" silencioso, lo
-            // que enmascaraba bugs río arriba (entradaHistorico undefined,
-            // colmena desincronizada, sobre-asignación entre planes concurrentes).
-            // Ahora: se omite la creación y se loggea para diagnóstico.
+            // Capa 6 (2026-05-11): antes abortábamos el plan entero por miedo
+            // a fantasmas. Pero si el tubo está confirmado físicamente en
+            // colmena_tubos (vía pre-fetch _bdTuboMap) Y el operario lo va
+            // a cortar = existe. Generamos ingreso retroactivo con fuente
+            // 'ingreso_retroactivo_auto' (audit trail identificable). Si
+            // empezamos a ver muchos de estos, hay bug río arriba que
+            // mantenemos cazable por la fuente.
+            //
+            // Solo si el raiz_id NO matchea con BD seguimos abortando — ahí
+            // realmente sería un UUID inventado por el optimizador.
             if (!esNuevo) {
+                const bdKey = `${d.n_colmena}|${(d.cod || '').toUpperCase().trim()}|${Number(d.medida_cm)}`;
+                const bdRaizConfirmado = _bdTuboMap.get(bdKey);
+                const tuboEnBD = bdRaizConfirmado === raizId;
+
+                if (tuboEnBD) {
+                    eventosIngreso.push({
+                        empresa_id:          EMPRESA_ID_OPT,
+                        tubo_raiz_id:        raizId,
+                        n_colmena:           d.n_colmena,
+                        cod:                 d.cod,
+                        medida_cm:           d.medida_cm,
+                        medida_resultado_cm: d.medida_cm,
+                        evento:              'ingreso',
+                        fuente:              'ingreso_retroactivo_auto',
+                        ot:                  d.ot || null,
+                        notas: `Tubo confirmado físicamente en colmena_tubos pero sin evento previo en historial. Ingreso retroactivo auto-generado para permitir el corte. Auditar fuente upstream (probable consolidación o sync que no creó evento).`,
+                        registrado_por:      usuario,
+                        created_at:          tsIngreso
+                    });
+                    retroactivos++;
+                    auditRetroactivos.push({ raizId, ...d });
+                    return;
+                }
+
+                // Realmente fantasma: raiz_id no matchea con ningún tubo en BD
                 fantasmas.push({ raizId, ...d });
                 return;
             }
@@ -5454,14 +5487,23 @@ async function construirEventosTubos() {
             log(`📥 Historial tubos: ${nuevos} tubo(s) nuevo(s) propuesto(s) por optimizador → se registrará ingreso automático.`, 'info');
         }
 
+        if (retroactivos > 0) {
+            console.group('%c[OPT] ingreso retroactivo auto — tubos en BD sin historial previo', 'color:#fbbf24;font-weight:bold');
+            auditRetroactivos.forEach(p => {
+                console.log(`  • raiz_id=${p.raizId} colmena=${p.n_colmena} cod=${p.cod} medida=${p.medida_cm}cm OT=${p.ot}`);
+            });
+            console.groupEnd();
+            log(`🩹 ${retroactivos} tubo(s) en colmena sin historial detectados — generado INGRESO retroactivo auto. Auditable con fuente=ingreso_retroactivo_auto.`, 'info');
+        }
+
         if (fantasmas.length > 0) {
-            console.group('%c[OPT] tubos sin historial previo — NO se creará INGRESO retroactivo', 'color:#f87171;font-weight:bold');
+            console.group('%c[OPT] tubos sin historial Y sin match en BD — NO se creará INGRESO', 'color:#f87171;font-weight:bold');
             fantasmas.forEach(p => {
                 console.log(`  • raiz_id=${p.raizId} colmena=${p.n_colmena} cod=${p.cod} medida=${p.medida_cm}cm OT=${p.ot}`);
             });
             console.groupEnd();
             const lista = fantasmas.map(p => `colmena ${p.n_colmena} (${p.cod}, ${p.medida_cm}cm, OT ${p.ot})`).join('; ');
-            log(`⚠️ ${fantasmas.length} tubo(s) sin historial previo detectado(s) — NO se registró INGRESO automático para evitar fantasmas. Detalle: ${lista}. Ver consola para raiz_id.`, 'warn');
+            log(`⚠️ ${fantasmas.length} tubo(s) sin historial Y sin match en BD — UUID probablemente inventado por el optimizador. El plan va a ser rechazado por trigger. Detalle: ${lista}.`, 'warn');
         }
     }
 
