@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.3";
+const VERSION_ACTUAL = "5.4";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1536,17 +1536,42 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
             //    tubo_raiz_id: preferir el del resultado (preserva linaje entre sesiones);
             //    si no hay, generar UUID fresco ACÁ (no en sincronizarColmenaFinalConTabla)
             //    para que la identidad sea estable entre retries y guardados sucesivos.
+            //
+            //    Si el UUID es fresco (no había uno preservado), generar evento 'ingreso'
+            //    con fuente='consolidacion_peso' para que el tubo tenga origen en
+            //    tubos_historial. Sin esto, la heurística de fantasmas marca estos
+            //    UUIDs como falsos positivos (sin origen post-cutoff).
             resultadosPeso.forEach((item, i) => {
-                const slot = _SLOTS_PESO_G[i % _SLOTS_PESO_G.length];
-                const r    = item.resultado;
+                const slot           = _SLOTS_PESO_G[i % _SLOTS_PESO_G.length];
+                const r              = item.resultado;
+                const teniaUuid      = !!r.tubo_raiz_id;
+                const uuid           = r.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+                const medida         = r.medida_origen || r.medida_cm || 0;
+                const cod            = (r.codigo || r.codigo_original || '').toUpperCase().trim();
+
                 colmenasFinal.push({
                     n_colmena:    slot,
-                    medida_cm:    r.medida_origen || r.medida_cm || 0,
-                    medida_mm:    (r.medida_origen || r.medida_cm || 0) * 10,
-                    cod:          (r.codigo || r.codigo_original || '').toUpperCase().trim(),
+                    medida_cm:    medida,
+                    medida_mm:    medida * 10,
+                    cod:          cod,
                     serial:       (r.serial && typeof r.serial === 'object' ? r.serial.serial : r.serial) || null,
-                    tubo_raiz_id: r.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null)
+                    tubo_raiz_id: uuid
                 });
+
+                if (!teniaUuid && uuid) {
+                    eventos.push({
+                        empresa_id:   EMPRESA_ID_OPT,
+                        tubo_raiz_id: uuid,
+                        n_colmena:    slot,
+                        cod:          cod,
+                        medida_cm:    medida,
+                        evento:       'ingreso',
+                        fuente:       'consolidacion_peso',
+                        ot:           item.orden?.ot || null,
+                        notas:        `Peso consolidado en slot ${slot} — ingreso automático para preservar trazabilidad.`,
+                        registrado_por: (_currentUser && _currentUser.email) || 'sistema'
+                    });
+                }
             });
 
             if (resultadosPeso.length > 0) {
