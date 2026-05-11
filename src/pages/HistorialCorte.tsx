@@ -80,6 +80,7 @@ type ResultadoItem = {
 type Plan = {
   id: string;
   fecha: string | null;
+  fecha_correccion: string | null;
   resultados: ResultadoItem[];
   ordenes: Orden[];
 };
@@ -1077,11 +1078,13 @@ function PlanTabla({
   errores,
   onRegistrarError,
   onMarcarSobranteInexistente,
+  readonly = false,
 }: {
   plan: Plan;
   errores: { linea_idx: number; motivo: string }[];
   onRegistrarError: (idx: number) => void;
   onMarcarSobranteInexistente: (idx: number, descripcion: string) => void;
+  readonly?: boolean;
 }) {
   const rows: React.ReactNode[] = [];
   plan.resultados.forEach((item, idx) => {
@@ -1138,16 +1141,21 @@ function PlanTabla({
         <td className="whitespace-nowrap px-2.5 py-1.5">
           <button
             onClick={() => onRegistrarError(idx)}
+            disabled={readonly && !errorExistente}
             className={cn(
               'rounded-md border px-2 py-1 text-[10px] font-bold uppercase transition',
               errorExistente
                 ? 'cursor-default border-destructive/30 bg-destructive/15 text-destructive'
-                : 'border-warning/30 text-warning hover:bg-warning/15',
+                : readonly
+                  ? 'cursor-not-allowed border-border text-muted-foreground opacity-50'
+                  : 'border-warning/30 text-warning hover:bg-warning/15',
             )}
             title={
               errorExistente
                 ? `Ya registrado: ${errorExistente.motivo}`
-                : 'Registrar error en este corte'
+                : readonly
+                  ? 'Versión anterior: marcar errores en el plan actual'
+                  : 'Registrar error en este corte'
             }
           >
             ⚠ {errorExistente ? errorExistente.motivo : 'Error'}
@@ -1196,8 +1204,18 @@ function PlanTabla({
             {esSobrantePuro && (
               <button
                 onClick={() => onMarcarSobranteInexistente(idx, descripcionSobrante)}
-                className="rounded-md border border-muted-foreground/30 px-2 py-1 text-[10px] font-bold uppercase text-muted-foreground transition hover:border-warning/50 hover:bg-warning/10 hover:text-warning"
-                title="Marcar este sobrante como inexistente físicamente (no se guardó en la colmena)"
+                disabled={readonly}
+                className={cn(
+                  'rounded-md border px-2 py-1 text-[10px] font-bold uppercase transition',
+                  readonly
+                    ? 'cursor-not-allowed border-border text-muted-foreground opacity-50'
+                    : 'border-muted-foreground/30 text-muted-foreground hover:border-warning/50 hover:bg-warning/10 hover:text-warning',
+                )}
+                title={
+                  readonly
+                    ? 'Versión anterior: marcar sobrantes inexistentes en el plan actual'
+                    : 'Marcar este sobrante como inexistente físicamente (no se guardó en la colmena)'
+                }
               >
                 <GhostIcon className="mr-1 inline h-3 w-3" />
                 No existe
@@ -1245,6 +1263,115 @@ function PlanTabla({
 }
 
 // ─────────────────────────────────────────────────────────────
+// Card del plan (extraído para reusar entre actual y versiones anteriores)
+// ─────────────────────────────────────────────────────────────
+function PlanCard({
+  plan,
+  errores,
+  esActual,
+  esVersionAnterior,
+  expandido,
+  onToggle,
+  onRegistrarError,
+  onMarcarSobranteInexistente,
+}: {
+  plan: Plan;
+  errores: { linea_idx: number; motivo: string }[];
+  esActual: boolean;
+  esVersionAnterior: boolean;
+  expandido: boolean;
+  onToggle: () => void;
+  onRegistrarError: (idx: number) => void;
+  onMarcarSobranteInexistente: (idx: number, descripcion: string) => void;
+}) {
+  const fechaStr = fmtFechaHora(plan.fecha);
+  const nCortes = plan.resultados.length;
+  const hasErrors = errores.length > 0;
+  const ots = extraerOTs(plan);
+  const esCorregido = !!plan.fecha_correccion;
+
+  return (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl border transition-colors',
+        esVersionAnterior
+          ? 'ml-4 border-dashed border-border bg-card/50 opacity-80'
+          : hasErrors
+            ? 'border-destructive/30 bg-card'
+            : esActual
+              ? 'border-success/40 bg-card'
+              : 'border-border bg-card',
+      )}
+    >
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-secondary/40"
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 text-[15px] font-bold">
+            <Scissors className="h-4 w-4 flex-shrink-0 text-accent" />
+            {fechaStr}
+            {esActual && (
+              <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
+                Actual
+              </span>
+            )}
+            {esVersionAnterior && (
+              <span className="rounded-full border border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Versión anterior
+              </span>
+            )}
+            {esCorregido && (
+              <span
+                className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning"
+                title="Plan generado al aplicar correcciones sobre una versión anterior"
+              >
+                Corregido
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
+            <span>
+              {nCortes} corte{nCortes !== 1 ? 's' : ''}
+            </span>
+            {hasErrors && (
+              <span className="text-destructive">
+                · ⚠ {errores.length} error{errores.length > 1 ? 'es' : ''}
+              </span>
+            )}
+            {ots.map((ot) => (
+              <span
+                key={ot}
+                className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent"
+              >
+                OT {ot}
+              </span>
+            ))}
+          </div>
+        </div>
+        <ChevronDown
+          className={cn(
+            'h-4 w-4 text-muted-foreground transition-transform',
+            expandido && 'rotate-180',
+          )}
+        />
+      </button>
+      {expandido && (
+        <div className="border-t border-border">
+          <PlanTabla
+            plan={plan}
+            errores={errores}
+            onRegistrarError={onRegistrarError}
+            onMarcarSobranteInexistente={onMarcarSobranteInexistente}
+            readonly={esVersionAnterior}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
 // Página principal
 // ─────────────────────────────────────────────────────────────
 export function HistorialCorte() {
@@ -1266,14 +1393,15 @@ export function HistorialCorte() {
     if (!empresaId) return;
     const { data } = await supabase
       .from('planes_corte')
-      .select('id, fecha, resultados, ordenes')
+      .select('id, fecha, fecha_correccion, resultados, ordenes')
       .eq('empresa_id', empresaId)
       .order('fecha', { ascending: false })
       .limit(50);
 
-    const raw = (data || []).map((p: { id: string; fecha: string | null; resultados: unknown; ordenes: unknown }) => ({
+    const raw = (data || []).map((p: { id: string; fecha: string | null; fecha_correccion: string | null; resultados: unknown; ordenes: unknown }) => ({
       id: p.id,
       fecha: p.fecha,
+      fecha_correccion: p.fecha_correccion,
       resultados: (Array.isArray(p.resultados)
         ? p.resultados
         : tryParse(p.resultados, [])) as ResultadoItem[],
@@ -1282,7 +1410,7 @@ export function HistorialCorte() {
         : tryParse(p.ordenes, [])) as Orden[],
     }));
 
-    // Dedupe
+    // Dedupe (planes idénticos del mismo minuto: keep el id mayor)
     const map = new Map<string, Plan>();
     raw.forEach((p) => {
       const ots = [
@@ -1362,6 +1490,35 @@ export function HistorialCorte() {
     if (!q) return planes;
     return planes.filter((p) => extraerOTs(p).some((ot) => ot.toLowerCase().includes(q)));
   }, [planes, filtro]);
+
+  // Agrupar por OTs: cada grupo ordenado por fecha desc, el [0] es el ACTUAL.
+  // Grupos ordenados por fecha del ACTUAL desc.
+  const gruposPlan = useMemo(() => {
+    const map = new Map<string, Plan[]>();
+    planesVisibles.forEach((p) => {
+      const otsKey = extraerOTs(p).sort().join(',') || `__sin_ots__${p.id}`;
+      if (!map.has(otsKey)) map.set(otsKey, []);
+      map.get(otsKey)!.push(p);
+    });
+    for (const arr of map.values()) {
+      arr.sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    }
+    return [...map.entries()]
+      .map(([otsKey, arr]) => ({ otsKey, actual: arr[0], anteriores: arr.slice(1) }))
+      .sort((a, b) =>
+        (b.actual.fecha || '').localeCompare(a.actual.fecha || ''),
+      );
+  }, [planesVisibles]);
+
+  const [showAnteriores, setShowAnteriores] = useState<Set<string>>(new Set());
+  const toggleAnteriores = (otsKey: string) => {
+    setShowAnteriores((prev) => {
+      const next = new Set(prev);
+      if (next.has(otsKey)) next.delete(otsKey);
+      else next.add(otsKey);
+      return next;
+    });
+  };
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
@@ -1513,7 +1670,7 @@ export function HistorialCorte() {
             />
           </div>
 
-          {planesVisibles.length === 0 ? (
+          {gruposPlan.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-10 text-center text-muted-foreground">
               <Scissors className="h-8 w-8" />
               <div className="text-sm">
@@ -1524,68 +1681,55 @@ export function HistorialCorte() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {planesVisibles.map((plan) => {
-                const fechaStr = fmtFechaHora(plan.fecha);
-                const nCortes = plan.resultados.length;
-                const errs = erroresPorPlan[plan.id] || [];
-                const hasErrors = errs.length > 0;
-                const ots = extraerOTs(plan);
-                const isExp = expanded.has(plan.id);
-
+              {gruposPlan.map(({ otsKey, actual, anteriores }) => {
+                const verAnteriores = showAnteriores.has(otsKey);
                 return (
-                  <div
-                    key={plan.id}
-                    className={cn(
-                      'overflow-hidden rounded-2xl border bg-card transition-colors',
-                      hasErrors ? 'border-destructive/30' : 'border-border',
-                    )}
-                  >
-                    <button
-                      onClick={() => toggle(plan.id)}
-                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-secondary/40"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 text-[15px] font-bold">
-                          <Scissors className="h-4 w-4 flex-shrink-0 text-accent" />
-                          {fechaStr}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
-                          <span>
-                            {nCortes} corte{nCortes !== 1 ? 's' : ''}
-                          </span>
-                          {hasErrors && (
-                            <span className="text-destructive">
-                              · ⚠ {errs.length} error{errs.length > 1 ? 'es' : ''}
-                            </span>
-                          )}
-                          {ots.map((ot) => (
-                            <span
-                              key={ot}
-                              className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent"
-                            >
-                              OT {ot}
-                            </span>
+                  <div key={otsKey} className="flex flex-col gap-1.5">
+                    <PlanCard
+                      plan={actual}
+                      errores={erroresPorPlan[actual.id] || []}
+                      esActual={anteriores.length > 0}
+                      esVersionAnterior={false}
+                      expandido={expanded.has(actual.id)}
+                      onToggle={() => toggle(actual.id)}
+                      onRegistrarError={(idx) => abrirModal(actual, idx)}
+                      onMarcarSobranteInexistente={(idx, desc) =>
+                        marcarSobranteInexistente(actual.id, idx, desc)
+                      }
+                    />
+                    {anteriores.length > 0 && (
+                      <>
+                        <button
+                          onClick={() => toggleAnteriores(otsKey)}
+                          className="ml-2 flex items-center gap-1.5 self-start rounded px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-secondary/40 hover:text-foreground"
+                        >
+                          <ChevronDown
+                            className={cn(
+                              'h-3 w-3 transition-transform',
+                              verAnteriores && 'rotate-180',
+                            )}
+                          />
+                          {verAnteriores ? 'Ocultar' : 'Ver'} {anteriores.length}{' '}
+                          versión{anteriores.length > 1 ? 'es' : ''} anterior
+                          {anteriores.length > 1 ? 'es' : ''}
+                        </button>
+                        {verAnteriores &&
+                          anteriores.map((prev) => (
+                            <PlanCard
+                              key={prev.id}
+                              plan={prev}
+                              errores={erroresPorPlan[prev.id] || []}
+                              esActual={false}
+                              esVersionAnterior={true}
+                              expandido={expanded.has(prev.id)}
+                              onToggle={() => toggle(prev.id)}
+                              onRegistrarError={(idx) => abrirModal(prev, idx)}
+                              onMarcarSobranteInexistente={(idx, desc) =>
+                                marcarSobranteInexistente(prev.id, idx, desc)
+                              }
+                            />
                           ))}
-                        </div>
-                      </div>
-                      <ChevronDown
-                        className={cn(
-                          'h-4 w-4 text-muted-foreground transition-transform',
-                          isExp && 'rotate-180',
-                        )}
-                      />
-                    </button>
-                    {isExp && (
-                      <div className="border-t border-border">
-                        <PlanTabla
-                          plan={plan}
-                          errores={errs}
-                          onRegistrarError={(idx) => abrirModal(plan, idx)}
-                          onMarcarSobranteInexistente={(idx, desc) =>
-                            marcarSobranteInexistente(plan.id, idx, desc)
-                          }
-                        />
-                      </div>
+                      </>
                     )}
                   </div>
                 );
