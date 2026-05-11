@@ -142,24 +142,27 @@ export function Reconciliacion() {
           <div className="h-56 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={tendencia} margin={{ top: 8, right: 16, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="dia"
-                  tick={{ fill: '#71717a', fontSize: 10 }}
+                  stroke="hsl(var(--muted-foreground))"
+                  tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
                   tickFormatter={(v) => {
                     const d = new Date(v);
                     return d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
                   }}
                 />
-                <YAxis allowDecimals={false} tick={{ fill: '#71717a', fontSize: 10 }} />
+                <YAxis allowDecimals={false} stroke="hsl(var(--muted-foreground))" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }} />
                 <ReTooltip
                   contentStyle={{
-                    background: '#18181b',
-                    border: '1px solid #3f3f46',
+                    background: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
                     borderRadius: 6,
                     fontSize: 12,
+                    color: 'hsl(var(--popover-foreground))',
                   }}
-                  labelStyle={{ color: '#a1a1aa' }}
+                  labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
                 <Line

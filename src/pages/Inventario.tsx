@@ -201,6 +201,7 @@ export function Inventario() {
     tone: '',
   });
   const [savingInsumo, setSavingInsumo] = useState(false);
+  const [lightboxFoto, setLightboxFoto] = useState<{ url: string; cod: string } | null>(null);
 
   const [movDialog, setMovDialog] = useState<{ open: boolean; form: MovForm }>({
     open: false,
@@ -925,12 +926,19 @@ export function Inventario() {
                       >
                         <td className="p-1 text-center">
                           {i.foto_url ? (
-                            <img
-                              src={i.foto_url}
-                              alt=""
-                              className="mx-auto h-8 w-8 rounded object-cover"
-                              loading="lazy"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => setLightboxFoto({ url: i.foto_url!, cod: i.cod || '' })}
+                              className="mx-auto block rounded transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              title="Ver imagen ampliada"
+                            >
+                              <img
+                                src={i.foto_url}
+                                alt=""
+                                className="h-8 w-8 cursor-zoom-in rounded object-cover"
+                                loading="lazy"
+                              />
+                            </button>
                           ) : (
                             <div className="mx-auto flex h-8 w-8 items-center justify-center rounded bg-secondary text-muted-foreground">
                               <ImageIcon className="h-3.5 w-3.5" />
@@ -1830,6 +1838,24 @@ export function Inventario() {
               Cerrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Lightbox de foto */}
+      <Dialog open={!!lightboxFoto} onOpenChange={(v) => (v ? null : setLightboxFoto(null))}>
+        <DialogContent className="max-w-3xl bg-card p-4">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-medium text-muted-foreground">
+              {lightboxFoto?.cod}
+            </DialogTitle>
+          </DialogHeader>
+          {lightboxFoto && (
+            <img
+              src={lightboxFoto.url}
+              alt={lightboxFoto.cod}
+              className="mx-auto max-h-[75vh] w-auto rounded-md object-contain"
+            />
+          )}
         </DialogContent>
       </Dialog>
 

@@ -179,7 +179,7 @@ function Gauge({ pct, hasData }: { pct: number; hasData: boolean }) {
         {!hasData && (
           <path
             d={`M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`}
-            stroke="rgba(255,255,255,0.1)"
+            stroke="hsl(var(--border))"
             strokeWidth="16"
             strokeDasharray="6 6"
             fill="none"
@@ -189,7 +189,7 @@ function Gauge({ pct, hasData }: { pct: number; hasData: boolean }) {
           <>
             <path
               d={`M ${bgStart.x} ${bgStart.y} A ${r} ${r} 0 0 1 ${bgEnd.x} ${bgEnd.y}`}
-              stroke="rgba(255,255,255,0.07)"
+              stroke="hsl(var(--border))"
               strokeWidth="16"
               fill="none"
             />
@@ -799,11 +799,14 @@ export function Ventas() {
                     </Pie>
                     <ReTooltip
                       contentStyle={{
-                        background: '#141726',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
                         borderRadius: 8,
                         fontSize: 12,
+                        color: 'hsl(var(--popover-foreground))',
                       }}
+                      labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                      itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                     />
                   </PieChart>
                 </ResponsiveContainer>
@@ -1101,7 +1104,7 @@ export function Ventas() {
                   return (
                     <tr
                       key={d.nombre}
-                      className="border-b border-border transition-colors hover:bg-white/[0.03]"
+                      className="border-b border-border transition-colors hover:bg-secondary/40"
                     >
                       <td className="px-3 py-2.5">
                         <span
@@ -1162,25 +1165,28 @@ export function Ventas() {
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={historial}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                   <XAxis
                     dataKey="label"
-                    stroke="#64748b"
-                    tick={{ fontSize: 10, fill: '#64748b' }}
+                    stroke="hsl(var(--muted-foreground))"
+                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                   />
-                  <YAxis stroke="#64748b" tick={{ fontSize: 10, fill: '#64748b' }} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                   <ReTooltip
                     contentStyle={{
-                      background: '#141726',
-                      border: '1px solid rgba(255,255,255,0.1)',
+                      background: 'hsl(var(--popover))',
+                      border: '1px solid hsl(var(--border))',
                       borderRadius: 8,
                       fontSize: 12,
+                      color: 'hsl(var(--popover-foreground))',
                     }}
+                    labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                    itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                   />
                   <Legend
                     wrapperStyle={{ fontSize: 11 }}
                     iconType="line"
-                    formatter={(v) => <span style={{ color: '#94a3b8' }}>{v}</span>}
+                    formatter={(v) => <span style={{ color: 'hsl(var(--muted-foreground))' }}>{v}</span>}
                   />
                   <Line
                     type="monotone"

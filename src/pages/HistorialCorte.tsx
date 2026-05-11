@@ -839,7 +839,7 @@ function RegisterErrorDialog({
                           'flex w-full items-center justify-between gap-2 border-b border-border px-3 py-2 text-left text-xs transition last:border-0',
                           sel
                             ? 'bg-accent/15 text-accent'
-                            : 'hover:bg-white/[0.03]',
+                            : 'hover:bg-secondary/40',
                           insuficiente && 'cursor-not-allowed opacity-45',
                         )}
                       >
@@ -1111,7 +1111,7 @@ function PlanTabla({
     else if (r.codigo?.includes('TIRA')) accion = 'CORTAR CON TIRA';
 
     rows.push(
-      <tr key={`c-${idx}`} className="border-b border-border hover:bg-white/[0.03]">
+      <tr key={`c-${idx}`} className="border-b border-border hover:bg-secondary/40">
         <td className="whitespace-nowrap px-2.5 py-1.5">{ot}</td>
         <td className="whitespace-nowrap px-2.5 py-1.5">{ubicacion}</td>
         <td className="whitespace-nowrap px-2.5 py-1.5">
@@ -1156,15 +1156,18 @@ function PlanTabla({
     if (r.sobrante_cm && Number(r.sobrante_cm) > 0) {
       const sobranteCm = Number(r.sobrante_cm).toFixed(1);
       const colSob = r.colmena_sobrante || colmena;
-      let rowCls = 'border-b border-border bg-accent/[0.08] text-blue-200';
+      let rowCls = 'border-b border-border bg-accent/[0.08] text-accent';
+      let badgeCls = 'rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold uppercase text-accent';
       let accion2 = 'GUARDAR SOBRANTE';
       let colDisp: string | number = colSob;
       if (r.es_intermedio) {
         rowCls = 'border-b border-border bg-warning/10 text-warning';
+        badgeCls = 'rounded bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning';
         accion2 = 'RESERVAR EN MESA';
         colDisp = '—';
       } else if (r.es_desecho) {
-        rowCls = 'border-b border-border bg-destructive/[0.08] text-red-200';
+        rowCls = 'border-b border-border bg-destructive/[0.08] text-destructive';
+        badgeCls = 'rounded bg-destructive/20 px-2 py-0.5 text-[10px] font-bold uppercase text-destructive';
         accion2 = 'DESECHAR MERMA';
         colDisp = 'BASURERO';
       }
@@ -1173,7 +1176,7 @@ function PlanTabla({
           <td className="whitespace-nowrap px-2.5 py-1.5">{ot}</td>
           <td className="whitespace-nowrap px-2.5 py-1.5">{ubicacion}</td>
           <td className="whitespace-nowrap px-2.5 py-1.5">
-            <span className="rounded bg-card px-2 py-0.5 text-[10px] font-bold uppercase">
+            <span className={badgeCls}>
               {accion2}
             </span>
           </td>
@@ -1193,7 +1196,7 @@ function PlanTabla({
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-[12px]" style={{ minWidth: 900 }}>
         <thead>
-          <tr className="border-b border-border bg-white/[0.03]">
+          <tr className="border-b border-border bg-secondary/40">
             {[
               'OT',
               'Ubicación',
@@ -1474,7 +1477,7 @@ export function HistorialCorte() {
                   >
                     <button
                       onClick={() => toggle(plan.id)}
-                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-white/[0.03]"
+                      className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-secondary/40"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 text-[15px] font-bold">
@@ -1535,25 +1538,29 @@ export function HistorialCorte() {
               <div className="h-60">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={motivosData}>
-                    <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.05)" />
+                    <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
                     <XAxis
                       dataKey="name"
-                      stroke="#a1a1aa"
-                      tick={{ fontSize: 11 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                       interval={0}
                     />
                     <YAxis
-                      stroke="#a1a1aa"
-                      tick={{ fontSize: 11 }}
+                      stroke="hsl(var(--muted-foreground))"
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
                       allowDecimals={false}
                     />
                     <ReTooltip
+                      cursor={{ fill: 'hsl(var(--accent) / 0.08)' }}
                       contentStyle={{
-                        background: '#18181b',
-                        border: '1px solid rgba(255,255,255,0.1)',
+                        background: 'hsl(var(--popover))',
+                        border: '1px solid hsl(var(--border))',
                         borderRadius: 8,
                         fontSize: 12,
+                        color: 'hsl(var(--popover-foreground))',
                       }}
+                      labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                      itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                       formatter={(v: number) => [`${v} error${v > 1 ? 'es' : ''}`, '']}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]}>
@@ -1571,7 +1578,7 @@ export function HistorialCorte() {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-[13px]">
                 <thead>
-                  <tr className="border-b border-border bg-white/[0.03]">
+                  <tr className="border-b border-border bg-secondary/40">
                     {['Fecha', 'OT', 'Código', 'Medida', 'Motivo', 'Reemplazo', 'Por'].map((h) => (
                       <th
                         key={h}
@@ -1607,7 +1614,7 @@ export function HistorialCorte() {
                       return (
                         <tr
                           key={e.id ?? i}
-                          className="border-b border-border hover:bg-white/[0.02]"
+                          className="border-b border-border hover:bg-secondary/40"
                         >
                           <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                             {fecha}

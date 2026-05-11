@@ -547,7 +547,7 @@ function CatalogoTab({
               lista.map((t) => (
                 <tr
                   key={t.id}
-                  className="border-b border-border hover:bg-white/[0.02]"
+                  className="border-b border-border hover:bg-secondary/40"
                 >
                   <td className="whitespace-nowrap px-2.5 py-2 font-bold">
                     {t.codigo || '—'}
@@ -990,7 +990,7 @@ function TelaDialog({
                   set('foto_url', null);
                   setUploadMsg(null);
                 }}
-                className="absolute right-2 top-2 rounded-full bg-background/80 p-1 text-destructive hover:bg-black"
+                className="absolute right-2 top-2 rounded-full bg-background/80 p-1 text-destructive hover:bg-destructive/15"
                 title="Quitar foto"
               >
                 <X className="h-4 w-4" />
@@ -1970,7 +1970,7 @@ function FallasTab({
                 return (
                   <tr
                     key={f.id}
-                    className="border-b border-border hover:bg-white/[0.02]"
+                    className="border-b border-border hover:bg-secondary/40"
                   >
                     <td className="whitespace-nowrap px-2.5 py-2 font-bold">
                       {f.codigo || '—'}

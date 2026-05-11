@@ -160,12 +160,12 @@ export function Landing() {
   const rolesVisibles = esAdmin ? ROLES : tilesParaRol;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#07070d] text-foreground">
-      {/* Fondo con orbs */}
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      {/* Fondo con orbs — sutiles, respetan el tema */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -left-36 -top-24 h-[600px] w-[600px] animate-pulse rounded-full bg-accent opacity-15 blur-[120px]" />
-        <div className="absolute -bottom-24 -right-24 h-[500px] w-[500px] animate-pulse rounded-full bg-cyan-500 opacity-15 blur-[120px]" />
-        <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-warning opacity-10 blur-[120px]" />
+        <div className="absolute -left-36 -top-24 h-[600px] w-[600px] animate-pulse rounded-full bg-accent opacity-[0.08] blur-[120px]" />
+        <div className="absolute -bottom-24 -right-24 h-[500px] w-[500px] animate-pulse rounded-full bg-success opacity-[0.08] blur-[120px]" />
+        <div className="absolute left-[40%] top-[40%] h-[400px] w-[400px] animate-pulse rounded-full bg-warning opacity-[0.06] blur-[120px]" />
       </div>
 
       {/* Header esquina sup. derecha: usuario + Salir + reloj.
@@ -194,7 +194,7 @@ export function Landing() {
       {/* Contenido */}
       <div className="relative z-10 flex min-h-screen flex-col items-center px-6 py-12">
         <div className="mb-12 text-center">
-          <div className="mb-4 font-[cursive] text-5xl leading-none tracking-wide text-foreground drop-shadow-[0_2px_30px_hsl(var(--accent)/0.4)]">
+          <div className="mb-4 font-serif text-6xl font-medium leading-none tracking-tight text-foreground drop-shadow-[0_2px_30px_hsl(var(--accent)/0.4)]">
             Rolzzo
           </div>
           <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-accent">
@@ -220,14 +220,13 @@ export function Landing() {
               key={r.title}
               to={r.to}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border border-border bg-card p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:bg-white/[0.07] hover:shadow-2xl',
-                r.color,
+                'group relative overflow-hidden rounded-2xl border border-border bg-card p-6 backdrop-blur-md transition-all hover:-translate-y-1 hover:border-accent/50 hover:shadow-xl hover:shadow-accent/10',
                 r.wide && 'col-span-2 flex items-center gap-5 md:col-span-3',
               )}
             >
               <div
                 className={cn(
-                  'flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-card transition-all group-hover:bg-card',
+                  'flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-secondary/50 text-accent transition-all group-hover:border-accent/40 group-hover:bg-accent/10',
                   r.wide && 'h-14 w-14 flex-shrink-0',
                 )}
               >

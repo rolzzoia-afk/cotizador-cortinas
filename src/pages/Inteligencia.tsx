@@ -1148,16 +1148,20 @@ function ConsumoCard({ salidas, insumos }: { salidas: Mov[]; insumos: Insumo[] }
           <div className="mb-2.5 h-36">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={top5}>
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="name" stroke="#71717a" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#71717a" tick={{ fontSize: 10 }} />
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
                 <ReTooltip
+                  cursor={{ fill: 'hsl(var(--accent) / 0.08)' }}
                   contentStyle={{
-                    background: '#141726',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
                     borderRadius: 8,
                     fontSize: 12,
+                    color: 'hsl(var(--popover-foreground))',
                   }}
+                  labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                   formatter={(v: number) => [`${fmt(v)} unid.`, '']}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]}>
@@ -1253,16 +1257,20 @@ function ErroresCorteCard({ errores }: { errores: ErrorCorte[] }) {
           <div className="mb-3 h-52">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData}>
-                <CartesianGrid vertical={false} stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="dia" stroke="#71717a" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#71717a" tick={{ fontSize: 10 }} allowDecimals={false} />
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="dia" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} allowDecimals={false} />
                 <ReTooltip
+                  cursor={{ fill: 'hsl(var(--accent) / 0.08)' }}
                   contentStyle={{
-                    background: '#141726',
-                    border: '1px solid rgba(255,255,255,0.1)',
+                    background: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
                     borderRadius: 8,
                     fontSize: 11,
+                    color: 'hsl(var(--popover-foreground))',
                   }}
+                  labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                  itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
                 />
                 <Legend
                   wrapperStyle={{ fontSize: 9, paddingTop: 8 }}
