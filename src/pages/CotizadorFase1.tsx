@@ -90,11 +90,11 @@ export function CotizadorFase1() {
         .insert({
           empresa_id: empresaId,
           nombre: dg.cliente,
-          telefono: dg.telefono || null,
+          whatsapp_phone: dg.telefono || null,
           email: dg.mail || null,
           rut: dg.rut || null,
-          canal: dg.canal || null,
-          ubicacion: dg.comuna || null,
+          fuente: dg.canal || 'manual',
+          comuna: dg.comuna || null,
           estado: 'cotizando',
           ot_id: ot.id,
         })

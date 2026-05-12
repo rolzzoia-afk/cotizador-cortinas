@@ -10,6 +10,8 @@ import {
   MessageSquare,
   ArrowRightCircle,
   ExternalLink,
+  Bot,
+  Star,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -66,14 +68,22 @@ function ActividadItem({ act }: { act: LeadActividad }) {
   let texto: React.ReactNode;
   switch (act.tipo) {
     case 'creado':
-      texto = <span>Lead creado</span>;
+      texto = <span>Lead creado{det.fuente ? <em className="ml-1 text-muted-foreground">· {String(det.fuente)}</em> : null}</span>;
+      break;
+    case 'agente_ingreso':
+      texto = <span>Ingresado por agente IA</span>;
       break;
     case 'cambio_estado':
       texto = (
         <span>
-          Estado: <strong className="text-muted-foreground">{ESTADOS_LABEL[det.de as LeadEstado] || String(det.de)}</strong>
+          Estado:{' '}
+          <strong className="text-muted-foreground">
+            {ESTADOS_LABEL[det.de as LeadEstado] || String(det.de)}
+          </strong>
           {' → '}
-          <strong className="text-foreground">{ESTADOS_LABEL[det.a as LeadEstado] || String(det.a)}</strong>
+          <strong className="text-foreground">
+            {ESTADOS_LABEL[det.a as LeadEstado] || String(det.a)}
+          </strong>
           {det.motivo ? <em className="ml-1 text-muted-foreground">· {String(det.motivo)}</em> : null}
           {det.comentario ? <div className="mt-1 text-muted-foreground">{String(det.comentario)}</div> : null}
         </span>
@@ -127,14 +137,26 @@ export function LeadDetalleDialog({
   useEffect(() => {
     if (lead) {
       setEstadoDraft(lead.estado);
-      setVendedoraDraft(lead.vendedora_id || '');
+      setVendedoraDraft(lead.asignado_a || '');
     }
   }, [lead]);
 
   const vendedoraNombre = useMemo(() => {
-    if (!lead?.vendedora_id) return null;
-    return vendedoras.find((v) => v.id === lead.vendedora_id)?.nombre ?? '—';
-  }, [vendedoras, lead?.vendedora_id]);
+    if (!lead?.asignado_a) return null;
+    return vendedoras.find((v) => v.id === lead.asignado_a)?.nombre ?? '—';
+  }, [vendedoras, lead?.asignado_a]);
+
+  // Detecta si vino del agente: tiene whatsapp_phone o scoring o resumen
+  const tieneDatosAgente = useMemo(() => {
+    if (!lead) return false;
+    return (
+      !!lead.whatsapp_phone ||
+      !!lead.whatsapp_wa_id ||
+      lead.scoring != null ||
+      !!lead.resumen_para_vendedor ||
+      !!lead.producto_interes
+    );
+  }, [lead]);
 
   if (!lead) {
     return (
@@ -173,12 +195,13 @@ export function LeadDetalleDialog({
   };
 
   const handleGuardarVendedora = async () => {
-    if (vendedoraDraft === (lead.vendedora_id || '')) return;
+    if (vendedoraDraft === (lead.asignado_a || '')) return;
     try {
       const { error: err } = await supabase
         .from('leads' as any)
         .update({
-          vendedora_id: vendedoraDraft || null,
+          asignado_a: vendedoraDraft || null,
+          asignado_at: vendedoraDraft ? new Date().toISOString() : null,
           ultima_actividad_at: new Date().toISOString(),
         })
         .eq('id', lead.id);
@@ -187,7 +210,7 @@ export function LeadDetalleDialog({
         lead_id: lead.id,
         empresa_id: empresaId,
         tipo: 'asignacion',
-        detalle: { vendedora_id: vendedoraDraft || null },
+        detalle: { asignado_a: vendedoraDraft || null },
       });
       await refresh();
       onChanged?.();
@@ -217,7 +240,6 @@ export function LeadDetalleDialog({
     if (!empresaId) return;
     setCreandoOT(true);
     try {
-      // Crear OT minimal con datos del lead
       const otId = crypto.randomUUID();
       const now = new Date().toISOString();
       const numeroOT = String(Math.floor(Date.now() / 1000)).slice(-4);
@@ -227,12 +249,12 @@ export function LeadDetalleDialog({
         numero_ot: numeroOT,
         estado: 'cotizacion',
         datos_generales: {
-          cliente: lead.nombre,
+          cliente: lead.nombre || '',
           rut: lead.rut || '',
           mail: lead.email || '',
-          telefono: lead.telefono || '',
-          comuna: lead.ubicacion || '',
-          canal: lead.canal || '',
+          telefono: lead.whatsapp_phone || '',
+          comuna: lead.comuna || '',
+          canal: lead.fuente || '',
           fecha: now.split('T')[0],
           ot: numeroOT,
         },
@@ -243,7 +265,6 @@ export function LeadDetalleDialog({
       });
       if (errOT) throw new Error(errOT.message);
 
-      // Vincular lead → OT
       const { error: errLink } = await supabase.rpc('lead_vincular_ot' as any, {
         p_lead_id: lead.id,
         p_ot_id: otId,
@@ -262,7 +283,8 @@ export function LeadDetalleDialog({
   };
 
   const handleEliminar = async () => {
-    if (!confirm(`¿Eliminar el lead "${lead.nombre}"? Esto NO se puede deshacer.`)) return;
+    if (!confirm(`¿Eliminar el lead "${lead.nombre || '(sin nombre)'}"? Esto NO se puede deshacer.`))
+      return;
     try {
       await onDelete(lead.id);
       onOpenChange(false);
@@ -278,7 +300,7 @@ export function LeadDetalleDialog({
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto border-border bg-card text-foreground">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-3">
-            <span>{lead.nombre}</span>
+            <span>{lead.nombre || '(sin nombre)'}</span>
             <span className="rounded-full border border-accent/30 bg-accent/15 px-2.5 py-0.5 text-[11px] font-semibold text-accent">
               {ESTADOS_LABEL[lead.estado]}
             </span>
@@ -286,22 +308,21 @@ export function LeadDetalleDialog({
         </DialogHeader>
 
         <div className="grid gap-5 md:grid-cols-[1.2fr_1fr]">
-          {/* Columna izquierda: info + acciones */}
+          {/* Columna izquierda */}
           <div className="space-y-4">
-            {/* Datos contacto */}
             <section className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Contacto</div>
               <div className="grid gap-1.5 text-sm">
-                {lead.telefono && (
+                {lead.whatsapp_phone && (
                   <div className="flex items-center gap-2">
                     <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                     <a
-                      href={`https://wa.me/${lead.telefono.replace(/\D/g, '')}`}
+                      href={`https://wa.me/${lead.whatsapp_phone.replace(/\D/g, '')}`}
                       target="_blank"
                       rel="noreferrer"
                       className="text-foreground hover:text-accent"
                     >
-                      {lead.telefono}
+                      {lead.whatsapp_phone}
                     </a>
                   </div>
                 )}
@@ -319,27 +340,20 @@ export function LeadDetalleDialog({
                     <span className="text-foreground">{lead.rut}</span>
                   </div>
                 )}
-                {lead.ubicacion && (
+                {lead.comuna && (
                   <div className="flex items-center gap-2">
                     <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-foreground">{lead.ubicacion}</span>
+                    <span className="text-foreground">{lead.comuna}</span>
                   </div>
                 )}
-                {lead.canal && (
+                {lead.fuente && (
                   <div className="text-xs text-muted-foreground">
-                    Canal: <span className="text-foreground">{lead.canal}</span>
+                    Fuente: <span className="text-foreground">{lead.fuente}</span>
                   </div>
                 )}
-                {lead.valor_estimado != null && (
+                {lead.presupuesto_rango && (
                   <div className="text-xs text-muted-foreground">
-                    Valor estimado:{' '}
-                    <span className="font-semibold text-foreground">
-                      {new Intl.NumberFormat('es-CL', {
-                        style: 'currency',
-                        currency: 'CLP',
-                        maximumFractionDigits: 0,
-                      }).format(lead.valor_estimado)}
-                    </span>
+                    Presupuesto: <span className="font-semibold text-foreground">{lead.presupuesto_rango}</span>
                   </div>
                 )}
                 <div className="text-xs text-muted-foreground">
@@ -353,6 +367,67 @@ export function LeadDetalleDialog({
                 </div>
               )}
             </section>
+
+            {/* Datos del agente IA (si vino por WhatsApp) */}
+            {tieneDatosAgente && (
+              <section className="space-y-2 rounded-lg border border-accent/30 bg-accent/5 p-3">
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-accent">
+                  <Bot className="h-3 w-3" /> Datos capturados por agente IA
+                </div>
+                <div className="space-y-1 text-xs">
+                  {lead.scoring != null && (
+                    <div className="flex items-center gap-1.5">
+                      <Star className="h-3 w-3 text-warning" />
+                      <span className="text-muted-foreground">Scoring:</span>
+                      <span className="font-bold text-foreground">{lead.scoring}/100</span>
+                    </div>
+                  )}
+                  {lead.producto_interes && (
+                    <div>
+                      <span className="text-muted-foreground">Producto: </span>
+                      <span className="text-foreground">{lead.producto_interes}</span>
+                    </div>
+                  )}
+                  {lead.cantidad_ventanas != null && (
+                    <div>
+                      <span className="text-muted-foreground">Cantidad ventanas: </span>
+                      <span className="text-foreground">{lead.cantidad_ventanas}</span>
+                    </div>
+                  )}
+                  {lead.tiene_medidas != null && (
+                    <div>
+                      <span className="text-muted-foreground">Medidas tomadas: </span>
+                      <span className="text-foreground">{lead.tiene_medidas ? 'Sí' : 'No'}</span>
+                    </div>
+                  )}
+                  {lead.necesita_instalacion != null && (
+                    <div>
+                      <span className="text-muted-foreground">Requiere instalación: </span>
+                      <span className="text-foreground">
+                        {lead.necesita_instalacion ? 'Sí' : 'No'}
+                      </span>
+                    </div>
+                  )}
+                  {lead.urgencia && (
+                    <div>
+                      <span className="text-muted-foreground">Urgencia: </span>
+                      <span className="text-foreground">{lead.urgencia}</span>
+                    </div>
+                  )}
+                  {lead.motivo_derivacion && (
+                    <div>
+                      <span className="text-muted-foreground">Motivo derivación: </span>
+                      <span className="text-foreground">{lead.motivo_derivacion}</span>
+                    </div>
+                  )}
+                </div>
+                {lead.resumen_para_vendedor && (
+                  <div className="mt-2 rounded border border-accent/20 bg-card/40 p-2 text-xs italic text-foreground">
+                    "{lead.resumen_para_vendedor}"
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* Cambiar estado */}
             <section className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3">
@@ -424,14 +499,13 @@ export function LeadDetalleDialog({
                 <Button
                   onClick={handleGuardarVendedora}
                   size="sm"
-                  disabled={vendedoraDraft === (lead.vendedora_id || '')}
+                  disabled={vendedoraDraft === (lead.asignado_a || '')}
                 >
                   Asignar
                 </Button>
               </div>
             </section>
 
-            {/* Conversión OT */}
             {!lead.ot_id ? (
               <Button
                 onClick={handleCrearCotizacion}
@@ -456,7 +530,6 @@ export function LeadDetalleDialog({
               </Button>
             )}
 
-            {/* Editar / Eliminar */}
             <div className="flex gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(lead)} className="flex-1">
                 Editar datos
@@ -472,7 +545,7 @@ export function LeadDetalleDialog({
             </div>
           </div>
 
-          {/* Columna derecha: actividad */}
+          {/* Columna derecha */}
           <div className="space-y-3 rounded-lg border border-border bg-secondary/40 p-3">
             <div className="flex items-center justify-between">
               <div className="text-[11px] uppercase tracking-wide text-muted-foreground">

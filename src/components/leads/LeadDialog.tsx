@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { Lead, LeadInput } from '@/modules/leads/types';
+import { PRESUPUESTO_RANGOS } from '@/modules/leads/types';
 import { useVendedoras } from '@/modules/leads/hooks';
 
 type Props = {
@@ -24,13 +25,13 @@ type Props = {
 
 const EMPTY: LeadInput = {
   nombre: '',
-  telefono: '',
+  whatsapp_phone: '',
   email: '',
   rut: '',
-  canal: '',
-  ubicacion: '',
-  vendedora_id: null,
-  valor_estimado: null,
+  comuna: '',
+  fuente: '',
+  asignado_a: null,
+  presupuesto_rango: '',
   comentarios: '',
 };
 
@@ -43,14 +44,14 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
     if (!open) return;
     if (lead) {
       setDraft({
-        nombre: lead.nombre,
-        telefono: lead.telefono ?? '',
+        nombre: lead.nombre ?? '',
+        whatsapp_phone: lead.whatsapp_phone ?? '',
         email: lead.email ?? '',
         rut: lead.rut ?? '',
-        canal: lead.canal ?? '',
-        ubicacion: lead.ubicacion ?? '',
-        vendedora_id: lead.vendedora_id ?? null,
-        valor_estimado: lead.valor_estimado,
+        comuna: lead.comuna ?? '',
+        fuente: lead.fuente ?? '',
+        asignado_a: lead.asignado_a ?? null,
+        presupuesto_rango: lead.presupuesto_rango ?? '',
         comentarios: lead.comentarios ?? '',
       });
     } else {
@@ -96,10 +97,10 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>Teléfono</Label>
+              <Label>WhatsApp / Teléfono</Label>
               <Input
-                value={draft.telefono || ''}
-                onChange={(e) => setDraft((d) => ({ ...d, telefono: e.target.value }))}
+                value={draft.whatsapp_phone || ''}
+                onChange={(e) => setDraft((d) => ({ ...d, whatsapp_phone: e.target.value }))}
                 placeholder="+56 9 1234 5678"
               />
             </div>
@@ -124,10 +125,10 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
               />
             </div>
             <div>
-              <Label>Ubicación</Label>
+              <Label>Comuna</Label>
               <Input
-                value={draft.ubicacion || ''}
-                onChange={(e) => setDraft((d) => ({ ...d, ubicacion: e.target.value }))}
+                value={draft.comuna || ''}
+                onChange={(e) => setDraft((d) => ({ ...d, comuna: e.target.value }))}
                 placeholder="Las Condes, Vitacura, etc."
               />
             </div>
@@ -135,13 +136,13 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label>Canal</Label>
+              <Label>Fuente</Label>
               <select
-                value={draft.canal || ''}
-                onChange={(e) => setDraft((d) => ({ ...d, canal: e.target.value }))}
+                value={draft.fuente || ''}
+                onChange={(e) => setDraft((d) => ({ ...d, fuente: e.target.value }))}
                 className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
               >
-                <option value="">— Sin canal —</option>
+                <option value="">— Sin fuente —</option>
                 {canales.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -149,15 +150,15 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
                 ))}
                 <option value="Web">Web</option>
                 <option value="Referido">Referido</option>
-                <option value="Otro">Otro</option>
+                <option value="manual">Manual</option>
               </select>
             </div>
             <div>
               <Label>Asignar vendedora</Label>
               <select
-                value={draft.vendedora_id || ''}
+                value={draft.asignado_a || ''}
                 onChange={(e) =>
-                  setDraft((d) => ({ ...d, vendedora_id: e.target.value || null }))
+                  setDraft((d) => ({ ...d, asignado_a: e.target.value || null }))
                 }
                 className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
               >
@@ -172,18 +173,19 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
           </div>
 
           <div>
-            <Label>Valor estimado (CLP)</Label>
-            <Input
-              type="number"
-              value={draft.valor_estimado ?? ''}
-              onChange={(e) =>
-                setDraft((d) => ({
-                  ...d,
-                  valor_estimado: e.target.value === '' ? null : Number(e.target.value),
-                }))
-              }
-              placeholder="Opcional"
-            />
+            <Label>Presupuesto estimado</Label>
+            <select
+              value={draft.presupuesto_rango || ''}
+              onChange={(e) => setDraft((d) => ({ ...d, presupuesto_rango: e.target.value }))}
+              className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm text-foreground focus:border-accent focus:outline-none"
+            >
+              <option value="">— Sin definir —</option>
+              {PRESUPUESTO_RANGOS.map((r) => (
+                <option key={r} value={r}>
+                  {r}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

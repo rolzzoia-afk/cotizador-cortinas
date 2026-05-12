@@ -35,7 +35,6 @@ export function useLeads() {
     cargar();
   }, [cargar]);
 
-  // Realtime: cambios sobre leads de esta empresa.
   useEffect(() => {
     if (!empresaId) return;
     const channelName = `leads-realtime-${crypto.randomUUID()}`;
@@ -81,14 +80,14 @@ export function useLeads() {
       const row = {
         empresa_id: empresaId,
         nombre: input.nombre.trim(),
-        telefono: input.telefono?.trim() || null,
+        whatsapp_phone: input.whatsapp_phone?.trim() || null,
         email: input.email?.trim() || null,
         rut: input.rut?.trim() || null,
-        canal: input.canal?.trim() || null,
-        ubicacion: input.ubicacion?.trim() || null,
-        vendedora_id: input.vendedora_id || null,
+        comuna: input.comuna?.trim() || null,
+        fuente: input.fuente?.trim() || 'manual',
+        asignado_a: input.asignado_a || null,
         estado: input.estado || 'nuevo',
-        valor_estimado: input.valor_estimado ?? null,
+        presupuesto_rango: input.presupuesto_rango?.trim() || null,
         comentarios: input.comentarios?.trim() || null,
       };
       const { data, error: err } = await supabase
@@ -99,15 +98,12 @@ export function useLeads() {
       if (err) throw new Error(err.message);
       const nuevo = (data as unknown) as Lead;
 
-      // Activity log: creación (best-effort, no bloqueante)
-      await supabase
-        .from('leads_actividad' as any)
-        .insert({
-          lead_id: nuevo.id,
-          empresa_id: empresaId,
-          tipo: 'creado',
-          detalle: { nombre: nuevo.nombre, canal: nuevo.canal },
-        });
+      await supabase.from('leads_actividad' as any).insert({
+        lead_id: nuevo.id,
+        empresa_id: empresaId,
+        tipo: 'creado',
+        detalle: { nombre: nuevo.nombre, fuente: nuevo.fuente },
+      });
 
       setLeads((prev) => [nuevo, ...prev]);
       return nuevo;
@@ -119,14 +115,17 @@ export function useLeads() {
     async (id: string, patch: Partial<LeadInput>): Promise<Lead | null> => {
       const row: Record<string, unknown> = {};
       if (patch.nombre !== undefined) row.nombre = patch.nombre.trim();
-      if (patch.telefono !== undefined) row.telefono = patch.telefono?.trim() || null;
+      if (patch.whatsapp_phone !== undefined)
+        row.whatsapp_phone = patch.whatsapp_phone?.trim() || null;
       if (patch.email !== undefined) row.email = patch.email?.trim() || null;
       if (patch.rut !== undefined) row.rut = patch.rut?.trim() || null;
-      if (patch.canal !== undefined) row.canal = patch.canal?.trim() || null;
-      if (patch.ubicacion !== undefined) row.ubicacion = patch.ubicacion?.trim() || null;
-      if (patch.vendedora_id !== undefined) row.vendedora_id = patch.vendedora_id || null;
-      if (patch.valor_estimado !== undefined) row.valor_estimado = patch.valor_estimado ?? null;
-      if (patch.comentarios !== undefined) row.comentarios = patch.comentarios?.trim() || null;
+      if (patch.comuna !== undefined) row.comuna = patch.comuna?.trim() || null;
+      if (patch.fuente !== undefined) row.fuente = patch.fuente?.trim() || null;
+      if (patch.asignado_a !== undefined) row.asignado_a = patch.asignado_a || null;
+      if (patch.presupuesto_rango !== undefined)
+        row.presupuesto_rango = patch.presupuesto_rango?.trim() || null;
+      if (patch.comentarios !== undefined)
+        row.comentarios = patch.comentarios?.trim() || null;
       row.ultima_actividad_at = new Date().toISOString();
 
       const { data, error: err } = await supabase
@@ -197,7 +196,6 @@ export function useLeads() {
   };
 }
 
-// Hook un solo lead + su historial de actividad
 export function useLeadDetalle(leadId: string | null) {
   const { empresaId } = useAuth();
   const [lead, setLead] = useState<Lead | null>(null);
@@ -244,7 +242,6 @@ export function useLeadDetalle(leadId: string | null) {
   return { lead, actividad, loading, refresh: cargar, agregarComentario };
 }
 
-// Vendedoras (perfiles con rol='ventas' activos) para el selector de asignación
 export type VendedoraOpt = { id: string; nombre: string };
 
 export function useVendedoras(): { vendedoras: VendedoraOpt[]; loading: boolean } {

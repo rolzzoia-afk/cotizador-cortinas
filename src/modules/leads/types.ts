@@ -12,21 +12,39 @@ export type LeadEstado =
   | 'perdido_competencia'
   | 'perdido_otro';
 
+// Shape de la tabla `leads` (compartida con Agente IA Playground).
+// Las columnas del agente (whatsapp_*, scoring, producto_interes, etc.) las
+// puebla la Edge Function; las columnas manuales (email, rut, comentarios)
+// las puebla la UI de Fase 1. Ambos flujos coexisten en la misma tabla.
 export type Lead = {
   id: string;
   empresa_id: string;
-  nombre: string;
-  telefono: string | null;
+  // Identidad / contacto
+  nombre: string | null;
+  whatsapp_phone: string | null;
+  whatsapp_wa_id: string | null;
   email: string | null;
   rut: string | null;
-  canal: string | null;
-  ubicacion: string | null;
-  vendedora_id: string | null;
+  comuna: string | null;
+  // Captura agente IA
+  producto_interes: string | null;
+  cantidad_ventanas: number | null;
+  tiene_medidas: boolean | null;
+  necesita_instalacion: boolean | null;
+  urgencia: string | null;
+  presupuesto_rango: string | null;
+  resumen_para_vendedor: string | null;
+  scoring: number | null;
+  // Pipeline / asignación
+  fuente: string | null;
   estado: LeadEstado;
-  motivo_perdida: string | null;
-  valor_estimado: number | null;
-  comentarios: string | null;
+  motivo_derivacion: string | null;
+  asignado_a: string | null;
+  asignado_at: string | null;
+  tomado_at: string | null;
+  // Conversión + tracking
   ot_id: string | null;
+  comentarios: string | null;
   ultima_actividad_at: string;
   created_at: string;
   updated_at: string;
@@ -38,7 +56,8 @@ export type LeadActividadTipo =
   | 'comentario'
   | 'asignacion'
   | 'conversion_ot'
-  | 'edicion';
+  | 'edicion'
+  | 'agente_ingreso';
 
 export type LeadActividad = {
   id: string;
@@ -50,16 +69,17 @@ export type LeadActividad = {
   created_at: string;
 };
 
+// Input para crear/editar manualmente desde UI
 export type LeadInput = {
   nombre: string;
-  telefono?: string;
+  whatsapp_phone?: string;
   email?: string;
   rut?: string;
-  canal?: string;
-  ubicacion?: string;
-  vendedora_id?: string | null;
+  comuna?: string;
+  fuente?: string;
+  asignado_a?: string | null;
   estado?: LeadEstado;
-  valor_estimado?: number | null;
+  presupuesto_rango?: string;
   comentarios?: string;
 };
 
@@ -93,8 +113,6 @@ export const ESTADOS_LABEL: Record<LeadEstado, string> = {
   perdido_otro: 'Perdido (otro)',
 };
 
-// Mapa visual de estado → semántica (color HSL via Tailwind tokens del theme)
-// neutral: nuevo flows | progress: en curso | success: ganado | danger: perdido
 export const ESTADOS_TONO: Record<LeadEstado, 'neutral' | 'progress' | 'warn' | 'success' | 'danger'> = {
   nuevo: 'neutral',
   contactado: 'progress',
@@ -115,3 +133,14 @@ export const ESTADO_ES_PERDIDO = (e: LeadEstado): boolean =>
 
 export const ESTADO_ES_TERMINAL = (e: LeadEstado): boolean =>
   e === 'ganado' || ESTADO_ES_PERDIDO(e);
+
+// Opciones de presupuesto_rango (texto libre, pero ofrecemos un set sugerido
+// alineado con cómo lo captura el agente IA en WhatsApp)
+export const PRESUPUESTO_RANGOS: string[] = [
+  'Menos de $300.000',
+  '$300.000 - $700.000',
+  '$700.000 - $1.500.000',
+  '$1.500.000 - $3.000.000',
+  'Más de $3.000.000',
+  'No definido',
+];

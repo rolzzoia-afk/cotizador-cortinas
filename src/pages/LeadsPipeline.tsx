@@ -109,11 +109,14 @@ export function LeadsPipeline() {
     const q = busqueda.trim().toLowerCase();
     return leads.filter((l) => {
       if (filtroEstados.size > 0 && !filtroEstados.has(l.estado)) return false;
-      if (filtroVendedora && l.vendedora_id !== filtroVendedora) return false;
-      if (filtroVendedora === '__sin_asignar' && l.vendedora_id) return false;
-      if (filtroCanal && l.canal !== filtroCanal) return false;
+      if (filtroVendedora === '__sin_asignar') {
+        if (l.asignado_a) return false;
+      } else if (filtroVendedora && l.asignado_a !== filtroVendedora) {
+        return false;
+      }
+      if (filtroCanal && l.fuente !== filtroCanal) return false;
       if (!q) return true;
-      const hay = [l.nombre, l.telefono, l.email, l.rut, l.ubicacion]
+      const hay = [l.nombre, l.whatsapp_phone, l.email, l.rut, l.comuna]
         .filter(Boolean)
         .some((s) => String(s).toLowerCase().includes(q));
       return hay;
@@ -443,16 +446,18 @@ function TablaVista({
               className="cursor-pointer border-t border-border transition-colors hover:bg-secondary/30"
             >
               <td className="px-3 py-2.5">
-                <div className="font-semibold text-foreground">{l.nombre}</div>
-                {l.ubicacion && (
-                  <div className="text-[11px] text-muted-foreground">{l.ubicacion}</div>
+                <div className="font-semibold text-foreground">
+                  {l.nombre || <span className="text-muted-foreground italic">(sin nombre)</span>}
+                </div>
+                {l.comuna && (
+                  <div className="text-[11px] text-muted-foreground">{l.comuna}</div>
                 )}
               </td>
               <td className="px-3 py-2.5 text-xs">
-                {l.telefono && <div>{l.telefono}</div>}
+                {l.whatsapp_phone && <div>{l.whatsapp_phone}</div>}
                 {l.email && <div className="text-muted-foreground">{l.email}</div>}
               </td>
-              <td className="px-3 py-2.5 text-xs text-muted-foreground">{l.canal || '—'}</td>
+              <td className="px-3 py-2.5 text-xs text-muted-foreground">{l.fuente || '—'}</td>
               <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                 <select
                   value={l.estado}
@@ -470,7 +475,7 @@ function TablaVista({
                 </select>
               </td>
               <td className="px-3 py-2.5 text-xs text-foreground">
-                {vendedoraNombre(l.vendedora_id)}
+                {vendedoraNombre(l.asignado_a)}
               </td>
               <td className="px-3 py-2.5 text-xs text-muted-foreground">
                 {fechaRelativa(l.ultima_actividad_at)}
@@ -576,21 +581,23 @@ function KanbanVista({
                       dragId === l.id && 'opacity-40',
                     )}
                   >
-                    <div className="font-semibold text-foreground">{l.nombre}</div>
-                    {l.telefono && (
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">{l.telefono}</div>
+                    <div className="font-semibold text-foreground">
+                      {l.nombre || <span className="text-muted-foreground italic">(sin nombre)</span>}
+                    </div>
+                    {l.whatsapp_phone && (
+                      <div className="mt-0.5 text-[10px] text-muted-foreground">{l.whatsapp_phone}</div>
                     )}
                     <div className="mt-1.5 flex items-center justify-between">
                       <span className="text-[10px] text-muted-foreground">
-                        {l.canal || '—'}
+                        {l.fuente || '—'}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
                         {fechaRelativa(l.ultima_actividad_at)}
                       </span>
                     </div>
-                    {vendedoraNombre(l.vendedora_id) && (
+                    {vendedoraNombre(l.asignado_a) && (
                       <div className="mt-1 truncate text-[10px] text-accent">
-                        {vendedoraNombre(l.vendedora_id)}
+                        {vendedoraNombre(l.asignado_a)}
                       </div>
                     )}
                   </div>
