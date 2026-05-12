@@ -31,35 +31,81 @@ CREATE TABLE IF NOT EXISTS leads (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   empresa_id      uuid NOT NULL,
   nombre          text NOT NULL,
-  telefono        text,
-  email           text,
-  rut             text,
-  canal           text,
-  ubicacion       text,
-  vendedora_id    uuid REFERENCES perfiles(id) ON DELETE SET NULL,
-  estado          text NOT NULL DEFAULT 'nuevo',
-  motivo_perdida  text,
-  valor_estimado  numeric,
-  comentarios     text,
-  ot_id           uuid REFERENCES ots(id) ON DELETE SET NULL,
-  ultima_actividad_at timestamptz NOT NULL DEFAULT now(),
   created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT leads_estado_check CHECK (estado IN (
-    'nuevo',
-    'contactado',
-    'visita_agendada',
-    'visita_realizada',
-    'cotizando',
-    'cotizado',
-    'negociacion',
-    'en_espera',
-    'ganado',
-    'perdido_precio',
-    'perdido_competencia',
-    'perdido_otro'
-  ))
+  updated_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Defensivo: si la tabla `leads` pre-existía con otro shape (e.g. de un
+-- experimento previo), agregamos las columnas faltantes sin destruir datos.
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS empresa_id          uuid;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS nombre              text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS telefono            text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS email               text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS rut                 text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS canal               text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS ubicacion           text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS vendedora_id        uuid;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS estado              text NOT NULL DEFAULT 'nuevo';
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS motivo_perdida      text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS valor_estimado      numeric;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS comentarios         text;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS ot_id               uuid;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS ultima_actividad_at timestamptz NOT NULL DEFAULT now();
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS created_at          timestamptz NOT NULL DEFAULT now();
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS updated_at          timestamptz NOT NULL DEFAULT now();
+
+-- FKs: agregar solo si no existen ya
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'leads_vendedora_id_fkey' AND conrelid = 'leads'::regclass
+  ) THEN
+    ALTER TABLE leads
+      ADD CONSTRAINT leads_vendedora_id_fkey
+      FOREIGN KEY (vendedora_id) REFERENCES perfiles(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'leads_ot_id_fkey' AND conrelid = 'leads'::regclass
+  ) THEN
+    ALTER TABLE leads
+      ADD CONSTRAINT leads_ot_id_fkey
+      FOREIGN KEY (ot_id) REFERENCES ots(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- CHECK constraint del estado: solo si no existe (evita reescribir si pre-existe)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'leads_estado_check' AND conrelid = 'leads'::regclass
+  ) THEN
+    ALTER TABLE leads ADD CONSTRAINT leads_estado_check CHECK (estado IN (
+      'nuevo','contactado','visita_agendada','visita_realizada',
+      'cotizando','cotizado','negociacion','en_espera',
+      'ganado','perdido_precio','perdido_competencia','perdido_otro'
+    ));
+  END IF;
+END $$;
+
+-- empresa_id debe ser NOT NULL (si la tabla pre-existía sin la columna,
+-- el ALTER de arriba la agregó nullable; ahora la forzamos a NOT NULL
+-- asumiendo que está vacía o todos los rows tienen empresa_id)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leads'
+      AND column_name = 'empresa_id' AND is_nullable = 'YES'
+  ) AND NOT EXISTS (
+    SELECT 1 FROM leads WHERE empresa_id IS NULL
+  ) THEN
+    ALTER TABLE leads ALTER COLUMN empresa_id SET NOT NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_leads_empresa          ON leads(empresa_id);
 CREATE INDEX IF NOT EXISTS idx_leads_empresa_estado   ON leads(empresa_id, estado);
@@ -88,21 +134,62 @@ FOR EACH ROW EXECUTE FUNCTION leads_set_updated_at();
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS leads_actividad (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  lead_id         uuid NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  empresa_id      uuid NOT NULL,
-  tipo            text NOT NULL,
-  detalle         jsonb NOT NULL DEFAULT '{}'::jsonb,
-  registrado_por  uuid REFERENCES perfiles(id) ON DELETE SET NULL,
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT leads_actividad_tipo_check CHECK (tipo IN (
-    'creado',
-    'cambio_estado',
-    'comentario',
-    'asignacion',
-    'conversion_ot',
-    'edicion'
-  ))
+  lead_id         uuid NOT NULL,
+  created_at      timestamptz NOT NULL DEFAULT now()
 );
+
+-- Defensivo: agregar columnas si la tabla pre-existía
+ALTER TABLE leads_actividad ADD COLUMN IF NOT EXISTS empresa_id      uuid;
+ALTER TABLE leads_actividad ADD COLUMN IF NOT EXISTS tipo            text;
+ALTER TABLE leads_actividad ADD COLUMN IF NOT EXISTS detalle         jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE leads_actividad ADD COLUMN IF NOT EXISTS registrado_por  uuid;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'leads_actividad_lead_id_fkey' AND conrelid = 'leads_actividad'::regclass
+  ) THEN
+    ALTER TABLE leads_actividad
+      ADD CONSTRAINT leads_actividad_lead_id_fkey
+      FOREIGN KEY (lead_id) REFERENCES leads(id) ON DELETE CASCADE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'leads_actividad_registrado_por_fkey' AND conrelid = 'leads_actividad'::regclass
+  ) THEN
+    ALTER TABLE leads_actividad
+      ADD CONSTRAINT leads_actividad_registrado_por_fkey
+      FOREIGN KEY (registrado_por) REFERENCES perfiles(id) ON DELETE SET NULL;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'leads_actividad_tipo_check' AND conrelid = 'leads_actividad'::regclass
+  ) THEN
+    ALTER TABLE leads_actividad ADD CONSTRAINT leads_actividad_tipo_check CHECK (tipo IN (
+      'creado','cambio_estado','comentario','asignacion','conversion_ot','edicion'
+    ));
+  END IF;
+
+  -- empresa_id y tipo deben ser NOT NULL si están vacíos / nuevos
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leads_actividad'
+      AND column_name = 'empresa_id' AND is_nullable = 'YES'
+  ) AND NOT EXISTS (SELECT 1 FROM leads_actividad WHERE empresa_id IS NULL) THEN
+    ALTER TABLE leads_actividad ALTER COLUMN empresa_id SET NOT NULL;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'leads_actividad'
+      AND column_name = 'tipo' AND is_nullable = 'YES'
+  ) AND NOT EXISTS (SELECT 1 FROM leads_actividad WHERE tipo IS NULL) THEN
+    ALTER TABLE leads_actividad ALTER COLUMN tipo SET NOT NULL;
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_leads_actividad_lead     ON leads_actividad(lead_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_leads_actividad_empresa  ON leads_actividad(empresa_id, created_at DESC);
