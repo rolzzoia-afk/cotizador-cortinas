@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  Bot,
   KanbanSquare,
   LayoutList,
   Loader2,
   Plus,
   Search,
+  Star,
   Users,
   X,
 } from 'lucide-react';
@@ -21,6 +23,7 @@ import {
   ESTADOS_LABEL,
   ESTADOS_ORDEN,
   ESTADOS_TONO,
+  esLeadDeBot,
   type Lead,
   type LeadEstado,
   type LeadInput,
@@ -29,6 +32,7 @@ import { LeadDialog } from '@/components/leads/LeadDialog';
 import { LeadDetalleDialog } from '@/components/leads/LeadDetalleDialog';
 
 type Vista = 'tabla' | 'kanban';
+type FiltroOrigen = 'todos' | 'bot' | 'manual';
 
 const TONO_CLS: Record<string, string> = {
   neutral: 'border-border bg-secondary text-foreground',
@@ -72,7 +76,9 @@ export function LeadsPipeline() {
   const [busqueda, setBusqueda] = useState('');
   const [filtroVendedora, setFiltroVendedora] = useState<string>('');
   const [filtroCanal, setFiltroCanal] = useState<string>('');
+  const [filtroOrigen, setFiltroOrigen] = useState<FiltroOrigen>('todos');
   const [filtroEstados, setFiltroEstados] = useState<Set<LeadEstado>>(new Set());
+  const [ordenarPorScoring, setOrdenarPorScoring] = useState(false);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [leadEnEdicion, setLeadEnEdicion] = useState<Lead | null>(null);
@@ -104,10 +110,10 @@ export function LeadsPipeline() {
     })();
   }, [empresaId]);
 
-  // Aplicar filtros
+  // Aplicar filtros + orden
   const leadsFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    return leads.filter((l) => {
+    const filtrados = leads.filter((l) => {
       if (filtroEstados.size > 0 && !filtroEstados.has(l.estado)) return false;
       if (filtroVendedora === '__sin_asignar') {
         if (l.asignado_a) return false;
@@ -115,13 +121,29 @@ export function LeadsPipeline() {
         return false;
       }
       if (filtroCanal && l.fuente !== filtroCanal) return false;
+      if (filtroOrigen === 'bot' && !esLeadDeBot(l)) return false;
+      if (filtroOrigen === 'manual' && esLeadDeBot(l)) return false;
       if (!q) return true;
       const hay = [l.nombre, l.whatsapp_phone, l.email, l.rut, l.comuna]
         .filter(Boolean)
         .some((s) => String(s).toLowerCase().includes(q));
       return hay;
     });
-  }, [leads, busqueda, filtroVendedora, filtroCanal, filtroEstados]);
+
+    if (ordenarPorScoring) {
+      // Scoring desc, nulls al final; empate por ultima_actividad_at desc
+      return [...filtrados].sort((a, b) => {
+        const sa = a.scoring ?? -1;
+        const sb = b.scoring ?? -1;
+        if (sb !== sa) return sb - sa;
+        return b.ultima_actividad_at.localeCompare(a.ultima_actividad_at);
+      });
+    }
+    return filtrados;
+  }, [leads, busqueda, filtroVendedora, filtroCanal, filtroOrigen, filtroEstados, ordenarPorScoring]);
+
+  // ¿Hay al menos un lead del bot? (define si mostrar UI relacionada al bot)
+  const hayLeadsDeBot = useMemo(() => leads.some(esLeadDeBot), [leads]);
 
   // Métricas top
   const metricas = useMemo(() => {
@@ -278,6 +300,50 @@ export function LeadsPipeline() {
           <option value="Web">Web</option>
           <option value="Referido">Referido</option>
         </select>
+
+        {hayLeadsDeBot && (
+          <>
+            <div className="flex overflow-hidden rounded-md border border-border">
+              {(['todos', 'bot', 'manual'] as FiltroOrigen[]).map((o, idx) => (
+                <button
+                  key={o}
+                  onClick={() => setFiltroOrigen(o)}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors',
+                    idx > 0 && 'border-l border-border',
+                    filtroOrigen === o
+                      ? 'bg-accent/15 text-accent'
+                      : 'bg-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                  title={
+                    o === 'bot'
+                      ? 'Solo leads derivados por el bot de WhatsApp'
+                      : o === 'manual'
+                        ? 'Solo leads cargados manualmente'
+                        : 'Todos los leads'
+                  }
+                >
+                  {o === 'bot' && <Bot className="h-3 w-3" />}
+                  {o === 'todos' ? 'Todos' : o === 'bot' ? 'Bot' : 'Manual'}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setOrdenarPorScoring((v) => !v)}
+              className={cn(
+                'inline-flex items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs transition-colors',
+                ordenarPorScoring
+                  ? 'border-warning/30 bg-warning/15 text-warning'
+                  : 'border-border bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+              title="Priorizar leads con mayor scoring del bot"
+            >
+              <Star className={cn('h-3 w-3', ordenarPorScoring && 'fill-current')} />
+              Por scoring
+            </button>
+          </>
+        )}
 
         {/* Chips de estado */}
         <div className="ml-1 flex flex-wrap items-center gap-1">
@@ -446,8 +512,25 @@ function TablaVista({
               className="cursor-pointer border-t border-border transition-colors hover:bg-secondary/30"
             >
               <td className="px-3 py-2.5">
-                <div className="font-semibold text-foreground">
-                  {l.nombre || <span className="text-muted-foreground italic">(sin nombre)</span>}
+                <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                  {esLeadDeBot(l) && (
+                    <Bot
+                      className="h-3.5 w-3.5 flex-shrink-0 text-accent"
+                      aria-label="Lead derivado por el bot de WhatsApp"
+                    />
+                  )}
+                  <span>
+                    {l.nombre || <span className="text-muted-foreground italic">(sin nombre)</span>}
+                  </span>
+                  {l.scoring != null && (
+                    <span
+                      className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0 text-[10px] font-bold text-warning"
+                      title="Scoring del bot (0-100)"
+                    >
+                      <Star className="h-2.5 w-2.5 fill-current" />
+                      {l.scoring}
+                    </span>
+                  )}
                 </div>
                 {l.comuna && (
                   <div className="text-[11px] text-muted-foreground">{l.comuna}</div>
@@ -581,8 +664,22 @@ function KanbanVista({
                       dragId === l.id && 'opacity-40',
                     )}
                   >
-                    <div className="font-semibold text-foreground">
-                      {l.nombre || <span className="text-muted-foreground italic">(sin nombre)</span>}
+                    <div className="flex items-center gap-1 font-semibold text-foreground">
+                      {esLeadDeBot(l) && (
+                        <Bot className="h-3 w-3 flex-shrink-0 text-accent" />
+                      )}
+                      <span className="truncate">
+                        {l.nombre || <span className="text-muted-foreground italic">(sin nombre)</span>}
+                      </span>
+                      {l.scoring != null && (
+                        <span
+                          className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-warning/15 px-1 text-[9px] font-bold text-warning"
+                          title="Scoring del bot"
+                        >
+                          <Star className="h-2 w-2 fill-current" />
+                          {l.scoring}
+                        </span>
+                      )}
                     </div>
                     {l.whatsapp_phone && (
                       <div className="mt-0.5 text-[10px] text-muted-foreground">{l.whatsapp_phone}</div>

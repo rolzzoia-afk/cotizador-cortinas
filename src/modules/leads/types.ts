@@ -134,6 +134,11 @@ export const ESTADO_ES_PERDIDO = (e: LeadEstado): boolean =>
 export const ESTADO_ES_TERMINAL = (e: LeadEstado): boolean =>
   e === 'ganado' || ESTADO_ES_PERDIDO(e);
 
+// Un lead viene del bot de WhatsApp si tiene whatsapp_wa_id o scoring.
+// Esos campos solo los puebla la Edge Function del agente, nunca el form manual.
+export const esLeadDeBot = (l: Pick<Lead, 'whatsapp_wa_id' | 'scoring'>): boolean =>
+  !!l.whatsapp_wa_id || l.scoring != null;
+
 // Opciones de presupuesto_rango (texto libre, pero ofrecemos un set sugerido
 // alineado con cómo lo captura el agente IA en WhatsApp)
 export const PRESUPUESTO_RANGOS: string[] = [
