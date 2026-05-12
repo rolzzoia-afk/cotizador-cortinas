@@ -16,6 +16,7 @@ const AdminPanel = lazy(() => import('@/pages/AdminPanel').then((m) => ({ defaul
 const HistorialTubos = lazy(() => import('@/pages/HistorialTubos').then((m) => ({ default: m.HistorialTubos })));
 const Camionetas = lazy(() => import('@/pages/Camionetas').then((m) => ({ default: m.Camionetas })));
 const Ventas = lazy(() => import('@/pages/Ventas').then((m) => ({ default: m.Ventas })));
+const LeadsPipeline = lazy(() => import('@/pages/LeadsPipeline').then((m) => ({ default: m.LeadsPipeline })));
 const Inteligencia = lazy(() => import('@/pages/Inteligencia').then((m) => ({ default: m.Inteligencia })));
 const HistorialCorte = lazy(() => import('@/pages/HistorialCorte').then((m) => ({ default: m.HistorialCorte })));
 const Bodeguero = lazy(() => import('@/pages/Bodeguero').then((m) => ({ default: m.Bodeguero })));
@@ -95,6 +96,7 @@ export function App() {
           <Route path="ots/:id/fase4" element={<CotizadorFase4 />} />
           <Route path="ots/:id/tela" element={<CotizadorTela />} />
           <Route path="ventas" element={<Ventas />} />
+          <Route path="leads" element={<LeadsPipeline />} />
           <Route path="inteligencia" element={<Inteligencia />} />
           <Route path="telas" element={<Telas />} />
           <Route path="inventario" element={<Inventario />} />

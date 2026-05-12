@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 const links: Array<{ to: string; label: string; rolesVisibles: string[] }> = [
   { to: '/panel', label: 'Panel', rolesVisibles: ['ventas', 'pruebas'] },
   { to: '/ventas', label: 'Ventas', rolesVisibles: ['ventas'] },
+  { to: '/leads', label: 'Leads', rolesVisibles: ['ventas'] },
   { to: '/inteligencia', label: 'Inteligencia', rolesVisibles: ['ventas'] },
   { to: '/telas', label: 'Telas', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado'] },
   { to: '/inventario', label: 'Inventario', rolesVisibles: ['bodeguero'] },

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -7,6 +7,8 @@ import {
   Plus,
   Search,
   Trash2,
+  UserPlus,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -15,6 +17,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import type { Lead } from '@/modules/leads/types';
 import {
   CATEGORIAS_FASE1,
   catBadgeColor,
@@ -42,12 +47,79 @@ type Form = typeof EMPTY_FORM;
 export function CotizadorFase1() {
   const { id: otId } = useParams();
   const navigate = useNavigate();
+  const { empresaId } = useAuth();
   const { ot, loading: loadingOT, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
 
   const [form, setForm] = useState<Form>({ ...EMPTY_FORM });
   const [items, setItems] = useState<ItemFase1[]>([]);
   const [enviando, setEnviando] = useState(false);
+  const [leadVinculado, setLeadVinculado] = useState<Lead | null>(null);
+  const [creandoLead, setCreandoLead] = useState(false);
+
+  // Busca si la OT actual ya está vinculada a un lead
+  useEffect(() => {
+    if (!otId || !empresaId) {
+      setLeadVinculado(null);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('leads' as any)
+        .select('*')
+        .eq('ot_id', otId)
+        .eq('empresa_id', empresaId)
+        .maybeSingle();
+      setLeadVinculado((data as unknown as Lead) ?? null);
+    })();
+  }, [otId, empresaId]);
+
+  const handleGuardarComoLead = async () => {
+    if (!ot || !empresaId) return;
+    const dg = ot.datosGenerales || {};
+    if (!(dg.cliente || '').trim()) {
+      toast.error('La OT no tiene cliente cargado — agregalo primero en Datos Generales');
+      return;
+    }
+    setCreandoLead(true);
+    try {
+      const { data, error: err } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('leads' as any)
+        .insert({
+          empresa_id: empresaId,
+          nombre: dg.cliente,
+          telefono: dg.telefono || null,
+          email: dg.mail || null,
+          rut: dg.rut || null,
+          canal: dg.canal || null,
+          ubicacion: dg.comuna || null,
+          estado: 'cotizando',
+          ot_id: ot.id,
+        })
+        .select('*')
+        .single();
+      if (err) throw new Error(err.message);
+      const nuevo = data as unknown as Lead;
+      await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('leads_actividad' as any)
+        .insert({
+          lead_id: nuevo.id,
+          empresa_id: empresaId,
+          tipo: 'creado',
+          detalle: { desde: 'cotizador_fase1', ot_id: ot.id },
+        });
+      setLeadVinculado(nuevo);
+      toast.success('Cliente guardado como lead');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error al guardar como lead: ' + msg);
+    } finally {
+      setCreandoLead(false);
+    }
+  };
 
   const producto: Producto | undefined = useMemo(
     () => buscarProducto(catalogo, form.codInt),
@@ -205,6 +277,30 @@ export function CotizadorFase1() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {leadVinculado ? (
+            <button
+              onClick={() => navigate(`/leads?abrir=${leadVinculado.id}`)}
+              className="inline-flex items-center gap-1 rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent transition-colors hover:bg-accent/20"
+              title="Ver lead vinculado"
+            >
+              <ExternalLink className="h-3 w-3" /> Lead: {leadVinculado.nombre}
+            </button>
+          ) : ot.datosGenerales.cliente ? (
+            <Button
+              onClick={handleGuardarComoLead}
+              variant="outline"
+              size="sm"
+              disabled={creandoLead}
+              className="gap-1.5"
+            >
+              {creandoLead ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <UserPlus className="h-3.5 w-3.5" />
+              )}
+              Guardar como lead
+            </Button>
+          ) : null}
           {ot.storeVentanas.length > 0 && (
             <span className="text-xs text-muted-foreground">
               {ot.storeVentanas.length} ventana(s) ya en la OT
