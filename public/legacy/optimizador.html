@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.6";
+const VERSION_ACTUAL = "5.7";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -2693,12 +2693,30 @@ function parsearNumero(valor) {
       return datosLimpios;
   }
 
+  // Normalización de códigos legacy: el operario subía órdenes con E53 que
+  // físicamente eran el mismo tubo que E66. Hasta v5.6 el optimizador
+  // procesaba ambos como códigos distintos, llevando a stock fantasma de
+  // E53 y errores de cálculo. v5.7 normaliza al parseo.
+  // Si aparece otro código legacy en el futuro, agregarlo acá.
+  const COD_NORMALIZACION = { 'E53': 'E66' };
+
+  function normalizarCodLegacy(cod) {
+      if (!cod) return cod;
+      const upper = String(cod).toUpperCase().trim();
+      if (COD_NORMALIZACION[upper]) {
+          const mapeado = COD_NORMALIZACION[upper];
+          console.log(`🔁 Cod legacy normalizado: ${upper} → ${mapeado}`);
+          return mapeado;
+      }
+      return upper;
+  }
+
   function extraerCodigoDesdeTuberia(tuberia) {
     if (!tuberia) return null;
     const str = String(tuberia).trim();
     const match = str.match(/_([A-Za-z0-9]+)$/);
-    if (match) return match[1].toUpperCase();
-    return str.toUpperCase();
+    const extraido = match ? match[1].toUpperCase() : str.toUpperCase();
+    return normalizarCodLegacy(extraido);
 }
 
 // Términos cortos o ambiguos que requieren match exacto para no colisionar
