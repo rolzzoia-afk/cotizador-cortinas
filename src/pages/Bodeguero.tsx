@@ -73,7 +73,8 @@ const AREAS_BODEGA = [
   'estructura',
   'dimensionado',
   'oficina',
-  'telas',
+  'panos',
+  'pruebas',
   'general',
 ] as const;
 type AreaBodega = (typeof AREAS_BODEGA)[number];
@@ -81,7 +82,8 @@ const AREA_LABEL: Record<AreaBodega, string> = {
   estructura: 'Estructura',
   dimensionado: 'Dimensionado',
   oficina: 'Oficina',
-  telas: 'Telas',
+  panos: 'Paños',
+  pruebas: 'Pruebas',
   general: 'General',
 };
 type ScanFase = 'loc' | 'item';
