@@ -658,6 +658,8 @@ function InventarioPanel({
   const [diffData, setDiffData] = useState<InventarioDiffRow[] | null>(null);
   const [enviando, setEnviando] = useState(false);
 
+  const [verPorColmena, setVerPorColmena] = useState(false);
+
   const stats = useMemo(() => {
     if (!diffData) return null;
     return {
@@ -666,6 +668,49 @@ function InventarioPanel({
       nuevos: diffData.filter((r) => r.tipo === 'nuevo').length,
       modificados: diffData.filter((r) => r.tipo === 'modificado').length,
     };
+  }, [diffData]);
+
+  // Agrega el diff por n_colmena para la vista live por colmena.
+  // Mismo tubo movido de C1 → C2: salida en C1, entrada en C2.
+  const perColmena = useMemo(() => {
+    if (!diffData) return [];
+    const map = new Map<
+      string,
+      { snapshot: number; actual: number; modificados: number; nuevos: number; eliminados: number }
+    >();
+    const bump = (k: string, key: 'snapshot' | 'actual' | 'modificados' | 'nuevos' | 'eliminados') => {
+      const row = map.get(k) || { snapshot: 0, actual: 0, modificados: 0, nuevos: 0, eliminados: 0 };
+      row[key]++;
+      map.set(k, row);
+    };
+    diffData.forEach((r) => {
+      const pre = r.n_colmena_pre;
+      const post = r.n_colmena_post;
+      if (pre) bump(pre, 'snapshot');
+      if (post) bump(post, 'actual');
+      if (r.tipo === 'nuevo' && post) bump(post, 'nuevos');
+      if (r.tipo === 'eliminado' && pre) bump(pre, 'eliminados');
+      if (r.tipo === 'modificado') {
+        if (post && post === pre) bump(post, 'modificados');
+        else {
+          if (pre) bump(pre, 'eliminados');
+          if (post) bump(post, 'nuevos');
+        }
+      }
+    });
+    return Array.from(map.entries())
+      .map(([n_colmena, v]) => ({
+        n_colmena,
+        ...v,
+        delta: v.actual - v.snapshot,
+      }))
+      .sort((a, b) => {
+        // Colmenas con anomalías primero, luego por nombre
+        const anomA = a.delta !== 0 || a.modificados > 0 ? 0 : 1;
+        const anomB = b.delta !== 0 || b.modificados > 0 ? 0 : 1;
+        if (anomA !== anomB) return anomA - anomB;
+        return a.n_colmena.localeCompare(b.n_colmena, 'es', { numeric: true });
+      });
   }, [diffData]);
 
   // Auto-cargar diff cuando hay inventario activo
@@ -848,6 +893,23 @@ function InventarioPanel({
         </div>
       )}
 
+      {perColmena.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => setVerPorColmena((v) => !v)}
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[0.7rem] text-warning hover:bg-warning/15"
+          >
+            <Grid3x3 className="h-3 w-3" />
+            {verPorColmena ? 'Ocultar vista por colmena' : 'Ver por colmena'}
+            <span className="text-warning/60">
+              ({perColmena.length} colmena{perColmena.length === 1 ? '' : 's'})
+            </span>
+          </button>
+          {verPorColmena && <PorColmenaTabla rows={perColmena} />}
+        </div>
+      )}
+
       {tieneAnomaliasAlPasar && (
         <div className="mt-2 flex items-start gap-1.5 rounded border border-warning/30 bg-warning/15 p-2 text-[0.7rem] text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
@@ -920,6 +982,90 @@ function InventarioPanel({
           onClose={() => setAccion(null)}
         />
       )}
+    </div>
+  );
+}
+
+type PorColmenaRow = {
+  n_colmena: string;
+  snapshot: number;
+  actual: number;
+  modificados: number;
+  nuevos: number;
+  eliminados: number;
+  delta: number;
+};
+
+function PorColmenaTabla({ rows }: { rows: PorColmenaRow[] }) {
+  return (
+    <div className="mt-2 max-h-80 overflow-auto rounded border border-warning/30 bg-card/40">
+      <table className="w-full text-[0.7rem]">
+        <thead className="sticky top-0 bg-card/95 backdrop-blur">
+          <tr className="border-b border-warning/30 text-warning">
+            <th className="px-2 py-1.5 text-left font-semibold">Colmena</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Snapshot</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Actual</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Δ</th>
+            <th className="px-2 py-1.5 text-center font-semibold">Detalle</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => {
+            const tieneAnomalia = r.delta !== 0 || r.modificados > 0;
+            return (
+              <tr
+                key={r.n_colmena}
+                className={cn(
+                  'border-b border-border/30',
+                  tieneAnomalia ? 'bg-warning/10' : '',
+                )}
+              >
+                <td className="px-2 py-1 font-mono font-semibold text-foreground">
+                  {r.n_colmena}
+                </td>
+                <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                  {r.snapshot}
+                </td>
+                <td className="px-2 py-1 text-right tabular-nums text-foreground">
+                  {r.actual}
+                </td>
+                <td
+                  className={cn(
+                    'px-2 py-1 text-right tabular-nums font-semibold',
+                    r.delta > 0 && 'text-success',
+                    r.delta < 0 && 'text-destructive',
+                    r.delta === 0 && 'text-muted-foreground',
+                  )}
+                >
+                  {r.delta > 0 ? `+${r.delta}` : r.delta}
+                </td>
+                <td className="px-2 py-1 text-center">
+                  <div className="flex justify-center gap-1">
+                    {r.nuevos > 0 && (
+                      <span className="rounded bg-success/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-success">
+                        +{r.nuevos}
+                      </span>
+                    )}
+                    {r.eliminados > 0 && (
+                      <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-destructive">
+                        −{r.eliminados}
+                      </span>
+                    )}
+                    {r.modificados > 0 && (
+                      <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-accent">
+                        ✎{r.modificados}
+                      </span>
+                    )}
+                    {!tieneAnomalia && (
+                      <span className="text-[0.6rem] text-muted-foreground">OK</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
