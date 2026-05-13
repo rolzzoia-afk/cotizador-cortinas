@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.9";
+const VERSION_ACTUAL = "5.10";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -2042,6 +2042,23 @@ async function cargarColmenasDesdeTabla() {
             return;
         }
 
+        // Guard anti-fantasma legacy (v5.10 / incidente OT 2954, 2026-05-13):
+        // Si algún tubo viene con tubo_raiz_id=null, abortar fuerte. Indica que el
+        // constraint NOT NULL en BD no se aplicó o algún path está insertando
+        // sin uuid. El optimizer no puede confiar en un tubo sin trazabilidad —
+        // antes la consolidación de pesos los "blanqueaba" generando UUIDs frescos
+        // y eventos de ingreso, escondiendo el origen real.
+        const _fantasmasSinUUID = (data || []).filter(t => !t.tubo_raiz_id);
+        if (_fantasmasSinUUID.length > 0) {
+            const muestra = _fantasmasSinUUID.slice(0, 5).map(t =>
+                `  ${t.n_colmena}/${t.cod}/${t.medida_cm}cm (id=${t.id})`
+            ).join('\n');
+            const msg = `❌ Hay ${_fantasmasSinUUID.length} tubo(s) en colmena_tubos sin tubo_raiz_id.\nMuestra:\n${muestra}\n\nNo se puede optimizar hasta limpiar. Reportar al admin.`;
+            log(msg, 'error');
+            alert(msg);
+            return;
+        }
+
         // Convertir al formato que el optimizador espera
         // ⚠️ IMPORTANTE: incluir tubo_raiz_id para la verificación de integridad pre-guardado
         SistemaInventario.colmenas = data.map(t => ({
@@ -2050,7 +2067,7 @@ async function cargarColmenasDesdeTabla() {
             medida_cm:    t.medida_cm || (t.medida_mm ? (t.medida_mm / 10) : 0),
             cod:          (t.cod || '').toUpperCase().trim(),
             serial:       t.serial || null,
-            tubo_raiz_id: t.tubo_raiz_id || null   // ← esencial para verificación de integridad
+            tubo_raiz_id: t.tubo_raiz_id   // guard arriba garantiza no-null
         })).filter(c => c.medida_mm > 0 && c.cod);
 
         // Registrar momento de carga para detectar colmenas desactualizadas
