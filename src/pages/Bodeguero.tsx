@@ -68,6 +68,22 @@ const MOTIVOS_DEVOLUCION = [
   'Otro',
 ] as const;
 type MotivoDevolucion = (typeof MOTIVOS_DEVOLUCION)[number];
+
+const AREAS_BODEGA = [
+  'estructura',
+  'dimensionado',
+  'oficina',
+  'telas',
+  'general',
+] as const;
+type AreaBodega = (typeof AREAS_BODEGA)[number];
+const AREA_LABEL: Record<AreaBodega, string> = {
+  estructura: 'Estructura',
+  dimensionado: 'Dimensionado',
+  oficina: 'Oficina',
+  telas: 'Telas',
+  general: 'General',
+};
 type ScanFase = 'loc' | 'item';
 type ScanEstado = 'esperando' | 'ok' | 'error';
 
@@ -1309,6 +1325,8 @@ function AdHocView({
   const [proveedor, setProveedor] = useState('');
   const [docRef, setDocRef] = useState('');
   const [motivo, setMotivo] = useState<MotivoDevolucion>('Error de picking');
+  const [area, setArea] = useState<AreaBodega>('general');
+  const [recibe, setRecibe] = useState('');
   const [saving, setSaving] = useState(false);
   const [resumen, setResumen] = useState<{ msg: string; sub: string } | null>(null);
   // Anti-reentrada: el scanner dispara onScan cada ~100ms mientras el QR
@@ -1472,6 +1490,7 @@ function AdHocView({
           if (error) throw error;
         }
 
+        const recibeTrim = recibe.trim();
         const { error: errMov } = await supabase
           .from('movimientos_insumos')
           .insert({
@@ -1484,15 +1503,17 @@ function AdHocView({
             almacen: 'MP',
             cantidad: qty,
             ot: otRef.trim(),
+            area,
             responsable_entrega: nombre,
-            bitacora: `Salida rápida — ${nombre}${otRef.trim() ? ' · OT ' + otRef.trim() : ''}`,
+            recepcion: recibeTrim || null,
+            bitacora: `Salida rápida — ${nombre} · Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''}${otRef.trim() ? ' · OT ' + otRef.trim() : ''}`,
           });
         if (errMov) throw errMov;
 
         const stockRestante = Math.max(0, stockActual - qty);
         setResumen({
           msg: `${qty}× ${insumo.nemotecnico || insumo.cod}`,
-          sub: `Registrado a nombre de ${nombre}${otRef.trim() ? ' · OT ' + otRef.trim() : ''} · Stock restante: ${stockRestante}`,
+          sub: `Registrado a nombre de ${nombre} · Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''}${otRef.trim() ? ' · OT ' + otRef.trim() : ''} · Stock restante: ${stockRestante}`,
         });
       } else if (modo === 'entrada') {
         const mpActual = insActual ? Number(insActual.stock_mp) || 0 : 0;
@@ -1504,6 +1525,7 @@ function AdHocView({
           .eq('cod', insumo.cod);
         if (error) throw error;
 
+        const recibeTrim = recibe.trim();
         const { error: errMov } = await supabase
           .from('movimientos_insumos')
           .insert({
@@ -1515,16 +1537,17 @@ function AdHocView({
             producto: insumo.nemotecnico || insumo.descriptor_proveedor || '',
             almacen: 'MP',
             cantidad: qty,
+            area,
             responsable_entrega: nombre,
-            recepcion: nombre,
-            bitacora: `Ingreso rápido — ${nombre}${proveedor.trim() ? ' · Proveedor: ' + proveedor.trim() : ''}${docRef.trim() ? ' · Doc: ' + docRef.trim() : ''}`,
+            recepcion: recibeTrim || nombre,
+            bitacora: `Ingreso rápido — ${nombre} · Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''}${proveedor.trim() ? ' · Proveedor: ' + proveedor.trim() : ''}${docRef.trim() ? ' · Doc: ' + docRef.trim() : ''}`,
           });
         if (errMov) throw errMov;
 
         const stockNuevo = mpActual + libActual + qty;
         setResumen({
           msg: `+${qty}× ${insumo.nemotecnico || insumo.cod}`,
-          sub: `Registrado por ${nombre}${proveedor.trim() ? ' · ' + proveedor.trim() : ''}${docRef.trim() ? ' · ' + docRef.trim() : ''} · Stock nuevo: ${stockNuevo}`,
+          sub: `Registrado por ${nombre} · Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''}${proveedor.trim() ? ' · ' + proveedor.trim() : ''}${docRef.trim() ? ' · ' + docRef.trim() : ''} · Stock nuevo: ${stockNuevo}`,
         });
       } else {
         // devolucion: vuelve el stock a MP y registra trazabilidad con OT + motivo
@@ -1542,6 +1565,7 @@ function AdHocView({
           .eq('cod', insumo.cod);
         if (error) throw error;
 
+        const recibeTrim = recibe.trim();
         const { error: errMov } = await supabase
           .from('movimientos_insumos')
           .insert({
@@ -1554,15 +1578,17 @@ function AdHocView({
             almacen: 'MP',
             cantidad: qty,
             ot: otRef.trim(),
+            area,
             responsable_entrega: nombre,
-            bitacora: `Devolución — Motivo: ${motivo} · Devolvió: ${nombre}`,
+            recepcion: recibeTrim || null,
+            bitacora: `Devolución — Motivo: ${motivo} · Devolvió: ${nombre} · Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''}`,
           });
         if (errMov) throw errMov;
 
         const stockNuevo = mpActual + libActual + qty;
         setResumen({
           msg: `+${qty}× ${insumo.nemotecnico || insumo.cod}`,
-          sub: `Devuelto a stock por ${nombre} · OT ${otRef.trim()} · ${motivo} · Stock nuevo: ${stockNuevo}`,
+          sub: `Devuelto a stock por ${nombre} · OT ${otRef.trim()} · ${motivo} · Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''} · Stock nuevo: ${stockNuevo}`,
         });
       }
       setFase('ok');
@@ -1581,6 +1607,8 @@ function AdHocView({
     setProveedor('');
     setDocRef('');
     setMotivo('Error de picking');
+    setArea('general');
+    setRecibe('');
     setResumen(null);
     setFase('scan');
     procesandoRef.current = false;
@@ -1722,6 +1750,29 @@ function AdHocView({
                 <Plus className="h-5 w-5" />
               </Button>
             </div>
+
+            <Label className="mb-1 text-xs">
+              Área que {modo === 'salida' ? 'pide' : modo === 'entrada' ? 'recibe' : 'devuelve'} el material
+            </Label>
+            <select
+              value={area}
+              onChange={(e) => setArea(e.target.value as AreaBodega)}
+              className="mb-3 w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
+            >
+              {AREAS_BODEGA.map((a) => (
+                <option key={a} value={a}>
+                  {AREA_LABEL[a]}
+                </option>
+              ))}
+            </select>
+
+            <Label className="mb-1 text-xs">Persona que recibe</Label>
+            <Input
+              value={recibe}
+              onChange={(e) => setRecibe(e.target.value)}
+              placeholder="Nombre del que recibe (opcional)"
+              className="mb-4 border-border bg-card"
+            />
 
             {modo === 'salida' && (
               <>

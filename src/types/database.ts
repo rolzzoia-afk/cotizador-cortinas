@@ -864,6 +864,7 @@ export type Database = {
       movimientos_insumos: {
         Row: {
           almacen: string | null
+          area: string | null
           bitacora: string | null
           cantidad: number
           codigo: string
@@ -890,6 +891,7 @@ export type Database = {
         }
         Insert: {
           almacen?: string | null
+          area?: string | null
           bitacora?: string | null
           cantidad?: number
           codigo: string
@@ -916,6 +918,7 @@ export type Database = {
         }
         Update: {
           almacen?: string | null
+          area?: string | null
           bitacora?: string | null
           cantidad?: number
           codigo?: string
