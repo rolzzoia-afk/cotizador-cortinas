@@ -27,10 +27,12 @@ import {
   useColmenaTubos,
   useColmenaPanos,
   useInventario,
+  useTalliesReconciliacion,
   validarMedidaCm,
   type ColmenaTubo,
   type ColmenaPano,
   type InventarioDiffRow,
+  type TallyRow,
 } from '@/modules/admin/colmena';
 
 type SubTab = 'tubos' | 'panos';
@@ -657,6 +659,8 @@ function InventarioPanel({
   const [textoAccion, setTextoAccion] = useState('');
   const [diffData, setDiffData] = useState<InventarioDiffRow[] | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const { tallies, refrescar: refrescarTallies } = useTalliesReconciliacion(activo?.id ?? null);
+  const [verTallies, setVerTallies] = useState(false);
 
   const [verPorColmena, setVerPorColmena] = useState(false);
 
@@ -910,6 +914,34 @@ function InventarioPanel({
         </div>
       )}
 
+      {tallies.length > 0 && perColmena.length > 0 && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (!verTallies) refrescarTallies();
+              setVerTallies((v) => !v);
+            }}
+            className="flex items-center gap-1.5 rounded px-1.5 py-0.5 text-[0.7rem] text-warning hover:bg-warning/15"
+          >
+            <ClipboardCheck className="h-3 w-3" />
+            {verTallies ? 'Ocultar conteos doble ciego' : 'Ver conteos doble ciego'}
+            <span className="text-warning/60">
+              ({new Set(tallies.map((t) => t.operario_email)).size} operario
+              {new Set(tallies.map((t) => t.operario_email)).size === 1 ? '' : 's'})
+            </span>
+          </button>
+          {verTallies && (
+            <TalliesReconciliacionTabla
+              tallies={tallies}
+              snapshotPorColmena={
+                new Map(perColmena.map((r) => [r.n_colmena, r.snapshot]))
+              }
+            />
+          )}
+        </div>
+      )}
+
       {tieneAnomaliasAlPasar && (
         <div className="mt-2 flex items-start gap-1.5 rounded border border-warning/30 bg-warning/15 p-2 text-[0.7rem] text-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
@@ -1060,6 +1092,139 @@ function PorColmenaTabla({ rows }: { rows: PorColmenaRow[] }) {
                       <span className="text-[0.6rem] text-muted-foreground">OK</span>
                     )}
                   </div>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function TalliesReconciliacionTabla({
+  tallies,
+  snapshotPorColmena,
+}: {
+  tallies: TallyRow[];
+  snapshotPorColmena: Map<string, number>;
+}) {
+  // Determinar operarios y colmenas únicas
+  const operarios = useMemo(() => {
+    const set = new Set<string>();
+    tallies.forEach((t) => set.add(t.operario_email));
+    return Array.from(set).sort();
+  }, [tallies]);
+
+  const colmenas = useMemo(() => {
+    const set = new Set<string>();
+    tallies.forEach((t) => set.add(t.n_colmena));
+    snapshotPorColmena.forEach((_, k) => set.add(k));
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'es', { numeric: true }));
+  }, [tallies, snapshotPorColmena]);
+
+  // Matrix [colmena][operario] = conteo
+  const matriz = useMemo(() => {
+    const m = new Map<string, Map<string, number>>();
+    tallies.forEach((t) => {
+      if (!m.has(t.n_colmena)) m.set(t.n_colmena, new Map());
+      m.get(t.n_colmena)!.set(t.operario_email, t.conteo);
+    });
+    return m;
+  }, [tallies]);
+
+  // Filas con discrepancia (entre operarios entre sí, o vs snapshot)
+  const filasConDiscrepancia = useMemo(() => {
+    const set = new Set<string>();
+    colmenas.forEach((c) => {
+      const valores: number[] = [];
+      const snap = snapshotPorColmena.get(c);
+      if (snap != null) valores.push(snap);
+      operarios.forEach((op) => {
+        const v = matriz.get(c)?.get(op);
+        if (v != null) valores.push(v);
+      });
+      const allEqual = valores.every((v) => v === valores[0]);
+      if (!allEqual || valores.length < operarios.length + 1) {
+        set.add(c);
+      }
+    });
+    return set;
+  }, [colmenas, operarios, matriz, snapshotPorColmena]);
+
+  // Ordenar: discrepancias primero
+  const colmenasOrdenadas = useMemo(() => {
+    return [...colmenas].sort((a, b) => {
+      const dA = filasConDiscrepancia.has(a) ? 0 : 1;
+      const dB = filasConDiscrepancia.has(b) ? 0 : 1;
+      if (dA !== dB) return dA - dB;
+      return a.localeCompare(b, 'es', { numeric: true });
+    });
+  }, [colmenas, filasConDiscrepancia]);
+
+  return (
+    <div className="mt-2 max-h-96 overflow-auto rounded border border-warning/30 bg-card/40">
+      <table className="w-full text-[0.7rem]">
+        <thead className="sticky top-0 bg-card/95 backdrop-blur">
+          <tr className="border-b border-warning/30 text-warning">
+            <th className="px-2 py-1.5 text-left font-semibold">Colmena</th>
+            <th className="px-2 py-1.5 text-right font-semibold">Snapshot</th>
+            {operarios.map((op) => (
+              <th key={op} className="px-2 py-1.5 text-right font-semibold" title={op}>
+                {op.split('@')[0]}
+              </th>
+            ))}
+            <th className="px-2 py-1.5 text-center font-semibold">Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {colmenasOrdenadas.map((c) => {
+            const snap = snapshotPorColmena.get(c);
+            const discrep = filasConDiscrepancia.has(c);
+            const conteosOp = operarios.map((op) => matriz.get(c)?.get(op));
+            const falta = conteosOp.some((v) => v == null);
+            const todosIguales =
+              !falta && conteosOp.every((v) => v === conteosOp[0]) && snap === conteosOp[0];
+            return (
+              <tr
+                key={c}
+                className={cn('border-b border-border/30', discrep ? 'bg-warning/10' : '')}
+              >
+                <td className="px-2 py-1 font-mono font-semibold text-foreground">{c}</td>
+                <td className="px-2 py-1 text-right tabular-nums text-muted-foreground">
+                  {snap ?? '—'}
+                </td>
+                {operarios.map((op) => {
+                  const v = matriz.get(c)?.get(op);
+                  const diffVsSnap = v != null && snap != null && v !== snap;
+                  return (
+                    <td
+                      key={op}
+                      className={cn(
+                        'px-2 py-1 text-right tabular-nums',
+                        v == null && 'text-muted-foreground/50 italic',
+                        v != null && diffVsSnap && 'font-semibold text-destructive',
+                        v != null && !diffVsSnap && 'text-foreground',
+                      )}
+                    >
+                      {v ?? '—'}
+                    </td>
+                  );
+                })}
+                <td className="px-2 py-1 text-center">
+                  {todosIguales ? (
+                    <span className="rounded bg-success/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-success">
+                      OK
+                    </span>
+                  ) : falta ? (
+                    <span className="rounded bg-muted/40 px-1.5 py-0.5 text-[0.6rem] font-semibold text-muted-foreground">
+                      Falta
+                    </span>
+                  ) : (
+                    <span className="rounded bg-destructive/15 px-1.5 py-0.5 text-[0.6rem] font-semibold text-destructive">
+                      Discrepancia
+                    </span>
+                  )}
                 </td>
               </tr>
             );

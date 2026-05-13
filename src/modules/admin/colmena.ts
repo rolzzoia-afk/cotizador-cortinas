@@ -383,3 +383,106 @@ export function useInventario(): {
 
   return { activo, historicos, loading, refrescar: cargar, iniciar, cerrar, revertir, diff };
 }
+
+// ── Tally doble ciego ────────────────────────────────────────────────
+export type TallyRow = {
+  id: string;
+  inventario_id: string;
+  empresa_id: string;
+  operario_id: string;
+  operario_email: string;
+  n_colmena: string;
+  conteo: number;
+  contado_at: string;
+};
+
+// Hook para operario: SOLO ve su propio tally (RLS lo enforce).
+export function useMisTallies(inventarioId: string | null): {
+  tallies: TallyRow[];
+  loading: boolean;
+  refrescar: () => Promise<void>;
+  setConteo: (nColmena: string, conteo: number) => Promise<void>;
+} {
+  const [tallies, setTallies] = useState<TallyRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async () => {
+    if (!inventarioId) {
+      setTallies([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('inventario_tally' as any)
+        .select('*')
+        .eq('inventario_id', inventarioId);
+      if (error) throw error;
+      setTallies(((data || []) as unknown) as TallyRow[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [inventarioId]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  const setConteo = useCallback(
+    async (nColmena: string, conteo: number) => {
+      if (!inventarioId) throw new Error('No hay inventario activo');
+      const { error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .rpc('tally_set' as any, {
+          p_inventario_id: inventarioId,
+          p_n_colmena: nColmena,
+          p_conteo: conteo,
+        });
+      if (error) throw new Error(error.message || JSON.stringify(error));
+      await cargar();
+    },
+    [inventarioId, cargar],
+  );
+
+  return { tallies, loading, refrescar: cargar, setConteo };
+}
+
+// Hook para admin: ve TODOS los tallies del inventario (RLS allow admin policy).
+export function useTalliesReconciliacion(inventarioId: string | null): {
+  tallies: TallyRow[];
+  loading: boolean;
+  refrescar: () => Promise<void>;
+} {
+  const [tallies, setTallies] = useState<TallyRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async () => {
+    if (!inventarioId) {
+      setTallies([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .from('inventario_tally' as any)
+        .select('*')
+        .eq('inventario_id', inventarioId)
+        .order('n_colmena')
+        .order('operario_email');
+      if (error) throw error;
+      setTallies(((data || []) as unknown) as TallyRow[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [inventarioId]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  return { tallies, loading, refrescar: cargar };
+}

@@ -29,6 +29,7 @@ const CotizadorFase3 = lazy(() => import('@/pages/CotizadorFase3').then((m) => (
 const CotizadorFase4 = lazy(() => import('@/pages/CotizadorFase4').then((m) => ({ default: m.CotizadorFase4 })));
 const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ default: m.CotizadorTela })));
 const OjoDeDios = lazy(() => import('@/pages/OjoDeDios').then((m) => ({ default: m.OjoDeDios })));
+const InventarioConteo = lazy(() => import('@/pages/InventarioConteo').then((m) => ({ default: m.InventarioConteo })));
 
 function Shell() {
   return (
@@ -110,6 +111,7 @@ export function App() {
           <Route path="historial-tubos" element={<HistorialTubos />} />
           <Route path="admin" element={<AdminPanel />} />
           <Route path="ojo-de-dios" element={<OjoDeDios />} />
+          <Route path="inventario-conteo" element={<InventarioConteo />} />
         </Route>
 
         <Route path="*" element={<div className="p-8">404 · Ruta no encontrada</div>} />
