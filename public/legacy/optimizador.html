@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.8";
+const VERSION_ACTUAL = "5.9";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1466,8 +1466,16 @@ async function cargarColmenaFinalDesdeSupabase() {
 // `eventos` (opcional): array de eventos para tubos_historial. Cuando se pasa,
 // se envían atómicamente con el sync via 4to arg del RPC. Cuando se omite,
 // solo sincroniza colmena (compatibilidad con call sites de reserva/rollback).
-async function guardarColmenaFinalEnSupabase(eventos = []) {
+// `planPayload` (opcional, Phase 2 anti-huérfanos 2026-05-13): si viene, se pasa
+// a `sincronizarColmenaFinalConTabla` que llama la RPC `guardar_plan_atomico`,
+// integrando el INSERT a `planes_corte` en la misma transacción del sync. La
+// función devuelve el plan_id de la RPC (o null). Errores se RE-LANZAN cuando
+// hay planPayload (caller responsable de abortar el plan); sin planPayload el
+// comportamiento legacy es tragar el error (loggear solo) para no romper
+// reservas/rollbacks.
+async function guardarColmenaFinalEnSupabase(eventos = [], planPayload = null) {
     document.getElementById('loading-overlay').style.display = 'flex';
+    let _planRpcResultado = null;
     try {
         // Recuperar usuario sin llamar getSession() (evita lock)
         if (!_currentUser) {
@@ -1617,7 +1625,9 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
         // ── PASO 1: Sincronizar colmena_tubos (fuente única de verdad) ──────────
         // Se hace SIEMPRE, independiente del guardado en configuracion.
         // Si se pasaron eventos, viajan atómicamente con el sync (cierra bug huérfanos).
-        await sincronizarColmenaFinalConTabla(colmenasFinal, eventos);
+        // Si se pasó planPayload, la RPC atómica `guardar_plan_atomico` también inserta
+        // el plan_corte en la misma transacción (Phase 2, 2026-05-13).
+        _planRpcResultado = await sincronizarColmenaFinalConTabla(colmenasFinal, eventos, planPayload);
 
         // ── PASO 2: Guardar copia en configuracion (para restaurar sesión) ──────
         const claveColmena = `opt_colmena_final_${_currentUser.email}`;
@@ -1643,9 +1653,18 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
     } catch (error) {
         console.error("Error guardando colmena_final en Supabase:", error);
         log("❌ Error guardando colmena final: " + error.message, "error");
+        // Phase 2 (2026-05-13): cuando hay planPayload, RE-LANZAR para que el
+        // caller (confirmarYGuardarStaging) pueda abortar el plan y NO inserte
+        // un planes_corte huérfano. Sin planPayload (reservas/rollbacks),
+        // mantener comportamiento legacy de tragar el error.
+        if (planPayload) {
+            document.getElementById('loading-overlay').style.display = 'none';
+            throw error;
+        }
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }
+    return _planRpcResultado;
 }
 
 // ─── GUARDAR COLMENA EN SUPABASE DIRECTO (sin necesidad de plan de corte) ────
@@ -2106,7 +2125,16 @@ async function cargarSerialesDesdeTablaDirecta() {
 // sync_colmena_tubos, que los inserta atómicamente junto con el sync de
 // colmena_tubos. Si el sync falla (lock conflict, etc.), los eventos se
 // rollbackean automáticamente — cierra el bug de huérfanos pre-2026-04-28.
-async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = []) {
+//
+// 3er parámetro `planPayload`: opcional. Si viene, llamamos a la RPC
+// `guardar_plan_atomico` (PR Phase 2, 2026-05-13) que hace ADEMÁS el
+// INSERT en `planes_corte` en la MISMA transacción. Esto cierra la
+// ventana de ~100ms entre sync y INSERT plan donde un browser-crash
+// podía dejar inventario modificado sin plan registrado. Devuelve
+// { plan_id, last_sync_at }. Si planPayload=null, comportamiento legacy
+// (solo sync de colmena, sin INSERT plan — los call sites de reserva
+// y rollback funcionan igual).
+async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], planPayload = null) {
     // Dedup defensivo: aunque el dedup al inicio de optimizar ya debería
     // haber limpiado duplicados físicos, protegemos acá por si colmenasFinal
     // llega con duplicados por otra ruta (rollback, descarte de vista previa,
@@ -2142,32 +2170,41 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = []) {
         agregado_por_admin: false
     }));
 
-    // Usa RPC sync_colmena_tubos: hace DELETE+INSERT en una transacción
-    // con app.sync_active=true para que el trigger NO registre "eliminado".
-    // p_expected_sync_at activa el lock optimista en BD: si otra sesión
-    // sincronizó la colmena entre nuestra carga y ahora, la RPC aborta con
-    // 'colmena_sync_conflict' y cortamos sin reintentar.
+    // Si viene planPayload → usar RPC `guardar_plan_atomico` (Phase 2 anti-huérfanos).
+    // Si NO → usar `sync_colmena_tubos` (legacy, para reservas/rollback).
+    // Ambas tienen la misma signature de los primeros 4 args + el lock optimista.
+    const _rpcNombre = planPayload ? 'guardar_plan_atomico' : 'sync_colmena_tubos';
+    const _rpcArgs = {
+        p_empresa_id:       EMPRESA_ID_OPT,
+        p_tubos:            filas,
+        p_expected_sync_at: _colmenaSyncStateAtLoad,  // null = legacy (sin lock)
+        p_eventos:          eventos                    // [] = no escribe historial; populated = atómico
+    };
+    if (planPayload) _rpcArgs.p_plan_payload = planPayload;
+
     for (let intento = 1; intento <= 3; intento++) {
         try {
-            const { error } = await sbOpt.rpc('sync_colmena_tubos', {
-                p_empresa_id:       EMPRESA_ID_OPT,
-                p_tubos:            filas,
-                p_expected_sync_at: _colmenaSyncStateAtLoad,  // null = legacy (sin lock)
-                p_eventos:          eventos                    // [] = no escribe historial; populated = atómico
-            });
+            const { data: rpcData, error } = await sbOpt.rpc(_rpcNombre, _rpcArgs);
             if (error) throw new Error(error.message || JSON.stringify(error));
 
             // Refrescar el timestamp local: la RPC actualizó last_sync_at en BD,
             // así que cualquier guardado siguiente en esta misma sesión usa el nuevo.
-            try {
-                const { data: syncRow } = await sbOpt
-                    .from('colmena_sync_state')
-                    .select('last_sync_at')
-                    .eq('empresa_id', EMPRESA_ID_OPT)
-                    .maybeSingle();
-                if (syncRow?.last_sync_at) _colmenaSyncStateAtLoad = syncRow.last_sync_at;
-            } catch (eRefresh) {
-                console.warn('[sync] No se pudo refrescar last_sync_at post-sync:', eRefresh?.message);
+            // Si la RPC atómica nos devolvió last_sync_at, lo usamos directamente
+            // (ahorra un round-trip).
+            const _newSyncAt = (rpcData && typeof rpcData === 'object' && rpcData.last_sync_at) || null;
+            if (_newSyncAt) {
+                _colmenaSyncStateAtLoad = _newSyncAt;
+            } else {
+                try {
+                    const { data: syncRow } = await sbOpt
+                        .from('colmena_sync_state')
+                        .select('last_sync_at')
+                        .eq('empresa_id', EMPRESA_ID_OPT)
+                        .maybeSingle();
+                    if (syncRow?.last_sync_at) _colmenaSyncStateAtLoad = syncRow.last_sync_at;
+                } catch (eRefresh) {
+                    console.warn('[sync] No se pudo refrescar last_sync_at post-sync:', eRefresh?.message);
+                }
             }
 
             // Verificación simétrica: conteo real debe coincidir EXACTO con filas.length.
@@ -2177,8 +2214,8 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = []) {
             if (conteoReal !== null && conteoReal !== filas.length) {
                 throw new Error(`Verificación falló: ${conteoReal} en BD vs ${filas.length} enviados (${conteoReal > filas.length ? 'exceso' : 'faltan'})`);
             }
-            console.log(`✅ colmena_tubos sincronizada (intento ${intento}): ${filas.length} registros${conteoReal !== null ? ` — BD confirma: ${conteoReal}` : ''}`);
-            return; // éxito
+            console.log(`✅ ${_rpcNombre} OK (intento ${intento}): ${filas.length} registros${conteoReal !== null ? ` — BD confirma: ${conteoReal}` : ''}${rpcData?.plan_id ? ` — plan_id=${rpcData.plan_id}` : ''}`);
+            return rpcData || null; // éxito (devuelve plan_id si viene de guardar_plan_atomico)
         } catch (e) {
             const esConflictoLockOptimista = (e.message || '').includes('colmena_sync_conflict');
             if (esConflictoLockOptimista) {
@@ -5846,7 +5883,44 @@ async function confirmarYGuardarStaging() {
         eventosCorte = [];
     }
 
+    // Phase 2 (2026-05-13): armar el payload del plan ANTES del sync, así
+    // la RPC `guardar_plan_atomico` puede insertarlo en la misma transacción.
+    // Esto cierra la ventana de ~100ms entre sync e INSERT plan donde un
+    // browser-crash podía dejar inventario modificado sin plan registrado.
+    const fechaPlan = new Date().toISOString();
+    let planPayload = null;
+    // Recuperar usuario sin llamar getSession() (evita lock)
+    if (!_currentUser) {
+        try {
+            const lsKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+            if (lsKey) { const raw = JSON.parse(localStorage.getItem(lsKey)); if (raw?.user) _currentUser = raw.user; }
+        } catch(e) { /* ignorar */ }
+    }
+    if (_currentUser) {
+        planPayload = {
+            optimizer_email: _currentUser.email,
+            resultados: SistemaInventario.resultadosOptimizacion.map(item => ({
+                resultado: item.resultado,
+                orden: {
+                    id: item.orden.id, ot: item.orden.ot, ubic: item.orden.ubic,
+                    cod: item.orden.cod, medida_cm: item.orden.medida_cm,
+                    componente: item.orden.componente, color: item.orden.color
+                }
+            })),
+            ordenes: SistemaInventario.ordenes.map(o => ({
+                id: o.id, ot: o.ot, ubic: o.ubic, cod: o.cod,
+                medida_cm: o.medida_cm, componente: o.componente
+            })),
+            fecha: fechaPlan,
+            // Snapshot del inventario PRE-optimización, requerido por la RPC
+            // restaurar_plan_de_corte (Ojo de Dios / Correcciones).
+            snapshot_inventario: (snapshotSeguro && snapshotSeguro.colmenas) || [],
+            snapshot_seriales:   (snapshotSeguro && snapshotSeguro.seriales) || []
+        };
+    }
+
     let colmenaSincronizadaOK = false;
+    let _planAtomicoId = null;
     if (_colmenaPreSyncOK) {
         // La colmena ya fue sincronizada en staging (autoReservarPlan).
         // No hay que volver a hacerlo. Los eventos van por inserción directa
@@ -5875,9 +5949,15 @@ async function confirmarYGuardarStaging() {
         colmenaSincronizadaOK = true;
     } else {
         try {
-            // Sync atómico: colmena_tubos + eventos del historial en una sola RPC.
-            await guardarColmenaFinalEnSupabase(eventosCorte);
+            // Phase 2 (2026-05-13): sync atómico TOTAL — colmena_tubos + eventos +
+            // INSERT planes_corte en una sola RPC `guardar_plan_atomico`. Si CUALQUIER
+            // paso falla, rollback completo. Si el browser cae → o todo o nada.
+            const _rpcRes = await guardarColmenaFinalEnSupabase(eventosCorte, planPayload);
+            _planAtomicoId = (_rpcRes && _rpcRes.plan_id) || null;
             colmenaSincronizadaOK = true;
+            if (_planAtomicoId) {
+                log(`☁️ Plan guardado atómicamente (plan_id=${_planAtomicoId})`, 'info');
+            }
         } catch (errColmena) {
             // Si el sync falla, abortamos toda la confirmación. Antes el flujo
             // seguía e insertaba planes_corte igual → quedaba un plan huérfano
@@ -5958,126 +6038,60 @@ async function confirmarYGuardarStaging() {
     // ── Capturar resumen ANTES de limpiar el estado temporal ──
     const resultados = SistemaInventario.resultadosOptimizacion.map(item => item.resultado);
 
-    // ── Guardar último plan en Supabase para acceso multi-dispositivo ──
-    try {
-        // Recuperar usuario sin llamar getSession() (evita lock)
-        if (!_currentUser) {
-            try {
-                const lsKey = Object.keys(localStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
-                if (lsKey) { const raw = JSON.parse(localStorage.getItem(lsKey)); if (raw?.user) _currentUser = raw.user; }
-            } catch(e) { /* ignorar */ }
-        }
-        if (_currentUser) {
-            const fecha = new Date().toISOString();
-            const payload = {
-                empresa_id: EMPRESA_ID_OPT,
-                optimizer_email: _currentUser.email,
-                resultados: SistemaInventario.resultadosOptimizacion.map(item => ({
-                    resultado: item.resultado,
-                    orden: {
-                        id: item.orden.id, ot: item.orden.ot, ubic: item.orden.ubic,
-                        cod: item.orden.cod, medida_cm: item.orden.medida_cm,
-                        componente: item.orden.componente, color: item.orden.color
-                    }
-                })),
-                ordenes: SistemaInventario.ordenes.map(o => ({
-                    id: o.id, ot: o.ot, ubic: o.ubic, cod: o.cod,
-                    medida_cm: o.medida_cm, componente: o.componente
-                })),
-                fecha: fecha,
-                // Snapshot del inventario PRE-optimización, requerido por el botón "Restaurar"
-                // en Ojo de Dios / Correcciones. Sin esto, la RPC restaurar_plan_de_corte
-                // falla con "El plan no tiene snapshot de inventario".
-                snapshot_inventario: (snapshotSeguro && snapshotSeguro.colmenas) || [],
-                snapshot_seriales:   (snapshotSeguro && snapshotSeguro.seriales) || []
-            };
-            // Usa _sbRest (fetch directo) para evitar el lock de auth
-            let epPlan = null;
-            for (let intento = 1; intento <= 3; intento++) {
-                try {
-                    await _sbRest('POST', 'planes_corte', payload);
-                    epPlan = null; break;
-                } catch(e) {
-                    epPlan = e;
-                    if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
+    // ── Plan ya guardado en la RPC atómica (Phase 2) ────────────────────────
+    // El INSERT a planes_corte se hizo dentro de `guardar_plan_atomico`
+    // junto con el sync de colmena_tubos y los eventos. Si llegamos acá, el
+    // plan_id está en `_planAtomicoId`. No hay INSERT redundante.
+
+    // ── CAPA 4: Verificación defensiva (PR #52 + Phase 2) ─────────────────
+    // Con la RPC atómica, esta capa es estructuralmente redundante (los
+    // events y el plan se insertan en la misma transacción). La mantenemos
+    // como defensa por DETECCIÓN — si algo extraño pasara (e.g. trigger
+    // raro, ENVE adelantar timestamps), igual cazamos huérfanos.
+    if (_planAtomicoId && eventosCorte && eventosCorte.length > 0) {
+        try {
+            const fechaInicioVerif = new Date(new Date(fechaPlan).getTime() - 30000).toISOString();
+            const otsDelPlan = (SistemaInventario.ordenes || [])
+                .map(o => String(o.ot || '').trim())
+                .filter(ot => ot && ot !== '-');
+            const otsUnicas = [...new Set(otsDelPlan)];
+
+            if (otsUnicas.length > 0) {
+                // Esperar 1 segundo para que el sync se asiente (timestamp clock).
+                await new Promise(r => setTimeout(r, 1000));
+
+                const { count: eventCount } = await sbOpt
+                    .from('tubos_historial')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('empresa_id', EMPRESA_ID_OPT)
+                    .in('ot', otsUnicas)
+                    .in('evento', ['corte', 'sobrante', 'merma'])
+                    .gte('created_at', fechaInicioVerif);
+
+                if ((eventCount ?? 0) === 0) {
+                    log('🚨 CAPA 4 ACTIVADA: plan atómico sin events visibles. Deshaciendo...', 'error');
+                    await sbOpt.from('planes_corte').delete().eq('id', _planAtomicoId);
+                    log(`🧹 Plan ${_planAtomicoId} eliminado por Capa 4.`, 'warn');
+                    alert(
+                        '🚫 PLAN NO GUARDADO\n\n' +
+                        'El plan se intentó guardar pero la verificación post-INSERT no encontró events.\n' +
+                        'Caso extraordinario — revisar logs.\n\n' +
+                        '→ Recargá la página (Ctrl+Shift+R) y volvé a confirmar.\n' +
+                        '→ Si el error persiste, avisá al admin.'
+                    );
+                    throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT atómico');
                 }
+                log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
             }
-            if (epPlan) throw epPlan;
-            log('☁️ Último plan guardado en Supabase (accesible desde cualquier dispositivo)', 'info');
-
-            // ── CAPA 4: Verificación post-INSERT (PR #52, 2026-05-06) ──────
-            // Después de insertar el plan, verifica que existan events en
-            // tubos_historial para sus OTs. Si NO existen (por cualquier
-            // motivo: return silencioso, _currentUser null, RPC quirk, etc.),
-            // BORRA el plan recién insertado para no dejar huérfanos.
-            // Esta capa es defensa por DETECCIÓN, no prevención — cubre
-            // cualquier camino que escape a las capas 1, 1.5 y 2.
-            try {
-                const fechaInicioVerif = new Date(new Date(fecha).getTime() - 30000).toISOString();
-                const otsDelPlan = (SistemaInventario.ordenes || [])
-                    .map(o => String(o.ot || '').trim())
-                    .filter(ot => ot && ot !== '-');
-                const otsUnicas = [...new Set(otsDelPlan)];
-
-                if (otsUnicas.length > 0 && eventosCorte && eventosCorte.length > 0) {
-                    // Esperar 1 segundo para que el sync se asiente.
-                    await new Promise(r => setTimeout(r, 1000));
-
-                    const { count: eventCount } = await sbOpt
-                        .from('tubos_historial')
-                        .select('id', { count: 'exact', head: true })
-                        .eq('empresa_id', EMPRESA_ID_OPT)
-                        .in('ot', otsUnicas)
-                        .in('evento', ['corte', 'sobrante', 'merma'])
-                        .gte('created_at', fechaInicioVerif);
-
-                    if ((eventCount ?? 0) === 0) {
-                        log('🚨 CAPA 4 ACTIVADA: plan insertado SIN events en tubos_historial. Deshaciendo...', 'error');
-
-                        // Buscar planes recientes del usuario con estas OTs (snapshot + activo)
-                        const { data: planesAEliminar } = await sbOpt
-                            .from('planes_corte')
-                            .select('id, ordenes')
-                            .eq('empresa_id', EMPRESA_ID_OPT)
-                            .eq('optimizer_email', _currentUser.email)
-                            .gte('fecha', fechaInicioVerif);
-
-                        const idsAEliminar = (planesAEliminar || [])
-                            .filter(pc => {
-                                const ots = ((pc.ordenes || [])).map(o => String(o.ot || '').trim());
-                                return ots.some(ot => otsUnicas.includes(ot));
-                            })
-                            .map(pc => pc.id);
-
-                        if (idsAEliminar.length > 0) {
-                            await sbOpt.from('planes_corte').delete().in('id', idsAEliminar);
-                            log(`🧹 ${idsAEliminar.length} plan(es) huérfano(s) eliminado(s) (snapshot + activo)`, 'warn');
-                        }
-
-                        alert(
-                            '🚫 PLAN NO GUARDADO\n\n' +
-                            'El plan se intentó guardar pero la sincronización con el inventario falló silenciosamente.\n' +
-                            'NO se descontaron tubos. NO quedó registrado en el historial.\n\n' +
-                            '→ Recargá la página (Ctrl+Shift+R) y volvé a confirmar.\n' +
-                            '→ Si el error persiste, avisá al admin.'
-                        );
-                        throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT');
-                    }
-                    log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
-                }
-            } catch (errCapa4) {
-                if (errCapa4.message && errCapa4.message.includes('Capa 4')) {
-                    throw errCapa4;
-                }
-                console.warn('[Capa 4] Verificación falló:', errCapa4);
-                log(`⚠️ Capa 4: no se pudo verificar (${errCapa4.message || errCapa4}). El plan queda en BD; revisar banner del admin.`, 'warn');
+        } catch (errCapa4) {
+            if (errCapa4.message && errCapa4.message.includes('Capa 4')) {
+                throw errCapa4;
             }
-        } else {
-            log('⚠️ Sin sesión activa — el plan NO quedó registrado en el historial.', 'warn');
+            console.warn('[Capa 4] Verificación falló:', errCapa4);
+            log(`⚠️ Capa 4: no se pudo verificar (${errCapa4.message || errCapa4}). El plan queda en BD; revisar banner del admin.`, 'warn');
         }
-    } catch (e) {
-        console.warn("No se pudo guardar último plan en Supabase:", e.message);
-        log('❌ No se pudo guardar el plan en la nube: ' + e.message, 'error');
+    } else if (!_planAtomicoId) {
+        log('⚠️ Sin plan_id del RPC atómico — el plan probablemente no se guardó. Revisar logs.', 'warn');
     }
 
     // ── Exportar Excel ANTES de limpiar (usa resultadosOptimizacion que aún tiene datos) ──
