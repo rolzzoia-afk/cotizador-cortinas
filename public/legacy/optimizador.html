@@ -1011,7 +1011,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.7";
+const VERSION_ACTUAL = "5.8";
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1511,6 +1511,33 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
             const resultadosPeso = (SistemaInventario.resultadosOptimizacion || [])
                 .filter(item => item.orden && _TIPOS_PESO_G.has(item.orden.componente) && item.resultado);
 
+            // Pre-fetch: ¿cuáles UUIDs preservados YA tienen evento en tubos_historial?
+            // Sin esto, un UUID preservado que vino huérfano queda huérfano para
+            // siempre (bug raíz que disparaba `ingreso_retroactivo_auto` desde
+            // construirEventosTubos al guardar el plan, PR #82). Ahora la consolidación
+            // misma cubre el agujero: si el UUID preservado no tiene historial, le
+            // genera evento `ingreso` con fuente='consolidacion_peso' en este mismo
+            // sync atómico — el tubo queda con origen antes de que el plan se guarde.
+            const _uuidsPesoPreservados = resultadosPeso
+                .map(item => item.resultado?.tubo_raiz_id)
+                .filter(Boolean);
+            const _uuidsPesoConHistorial = new Set();
+            if (_uuidsPesoPreservados.length > 0) {
+                try {
+                    const { data: _prevPeso } = await sbOpt
+                        .from('tubos_historial')
+                        .select('tubo_raiz_id')
+                        .eq('empresa_id', EMPRESA_ID_OPT)
+                        .in('tubo_raiz_id', _uuidsPesoPreservados);
+                    (_prevPeso || []).forEach(r => _uuidsPesoConHistorial.add(r.tubo_raiz_id));
+                } catch (e) {
+                    console.warn('[OPT] pre-fetch historial pesos falló — se generarán ingresos posiblemente duplicados:', e?.message || e);
+                    // Failsafe: si el fetch falla, dejamos vacío el set → cualquier UUID
+                    // preservado se trata como sin historial y se le genera ingreso.
+                    // Es ruido en BD pero NO destructivo. Mejor sobrar que faltar.
+                }
+            }
+
             // 1. Strip SELECTIVO de duplicados.
             //    Bug histórico (incidente OT 2942, 2026-05-06, 197 tubos perdidos):
             //    el código original strippeaba TODOS los tubos de A27/A28/A29 antes de
@@ -1558,7 +1585,12 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
                     tubo_raiz_id: uuid
                 });
 
-                if (!teniaUuid && uuid) {
+                // Generar evento `ingreso` si:
+                // 1) UUID fresco (no había uno preservado) — caso original.
+                // 2) UUID preservado pero SIN historial en BD — el bug raíz que
+                //    creaba huérfanos invisibles hasta el próximo plan.
+                const sinHistorial = teniaUuid && !_uuidsPesoConHistorial.has(uuid);
+                if (uuid && (!teniaUuid || sinHistorial)) {
                     eventos.push({
                         empresa_id:   EMPRESA_ID_OPT,
                         tubo_raiz_id: uuid,
@@ -1566,9 +1598,11 @@ async function guardarColmenaFinalEnSupabase(eventos = []) {
                         cod:          cod,
                         medida_cm:    medida,
                         evento:       'ingreso',
-                        fuente:       'consolidacion_peso',
+                        fuente:       sinHistorial ? 'consolidacion_peso_retroactivo' : 'consolidacion_peso',
                         ot:           item.orden?.ot || null,
-                        notas:        `Peso consolidado en slot ${slot} — ingreso automático para preservar trazabilidad.`,
+                        notas:        sinHistorial
+                          ? `Peso consolidado en slot ${slot} — UUID preservado pero sin historial previo. Ingreso retroactivo para cerrar el bug raíz (antes generaba ingreso_retroactivo_auto al guardar el plan).`
+                          : `Peso consolidado en slot ${slot} — ingreso automático para preservar trazabilidad.`,
                         registrado_por: (_currentUser && _currentUser.email) || 'sistema'
                     });
                 }
