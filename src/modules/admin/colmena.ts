@@ -7,6 +7,21 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 
+// Rango sano de medidas de tubos (Phase 2 inventario, 2026-05-13).
+// Coincide con el CHECK constraint en BD `colmena_tubos_medida_rango_check`.
+// Mínimo 10cm: por debajo no hay corte funcional (un peso pesa ~30-50cm).
+// Máximo 2000cm (20m): los tubos vírgenes más largos son ~578cm; 2000 da
+// margen amplio sin permitir typos absurdos (3201 en vez de 320.1).
+export const MEDIDA_CM_MIN = 10;
+export const MEDIDA_CM_MAX = 2000;
+
+export function validarMedidaCm(medida: number | null | undefined): string | null {
+  if (medida == null || Number.isNaN(medida)) return 'La medida es obligatoria';
+  if (medida < MEDIDA_CM_MIN) return `Medida muy baja: ${medida}cm. Mínimo ${MEDIDA_CM_MIN}cm. ¿Tipeaste mal? (ej: 5 en vez de 50)`;
+  if (medida > MEDIDA_CM_MAX) return `Medida muy alta: ${medida}cm. Máximo ${MEDIDA_CM_MAX}cm. ¿Tipeaste mal? (ej: 3201 en vez de 320.1)`;
+  return null;
+}
+
 // ── Tubos ────────────────────────────────────────────────────────────
 export type ColmenaTubo = {
   id: string;
@@ -96,6 +111,8 @@ export function useColmenaTubos(): {
   const guardar = useCallback(
     async (input: TuboInput, id?: string | null) => {
       if (!empresaId) throw new Error('Empresa no resuelta');
+      const errMedida = validarMedidaCm(input.medida_cm);
+      if (errMedida) throw new Error(errMedida);
       const payload = {
         empresa_id: empresaId,
         n_colmena: input.n_colmena,
