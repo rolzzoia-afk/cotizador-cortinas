@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Archive,
   Boxes,
   ClipboardCheck,
+  Eraser,
   Grid3x3,
   Lock,
   Pencil,
@@ -16,6 +17,7 @@ import {
   Undo2,
   X,
 } from 'lucide-react';
+import SignatureCanvas from 'react-signature-canvas';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -696,20 +698,29 @@ function InventarioPanel({
     }
   };
 
-  const handleAccion = async () => {
+  const handleRevertir = async () => {
     if (!activo) return;
     setEnviando(true);
     try {
-      if (accion === 'cerrar') {
-        await cerrar(activo.id, textoAccion.trim() || null);
-        toast.success('Inventario cerrado');
-      } else if (accion === 'revertir') {
-        await revertir(activo.id, textoAccion.trim());
-        toast.success('Inventario revertido. Tubos restaurados al snapshot.');
-        onCambio();
-      }
+      await revertir(activo.id, textoAccion.trim());
+      toast.success('Inventario revertido. Tubos restaurados al snapshot.');
+      onCambio();
       setAccion(null);
       setTextoAccion('');
+    } catch (e) {
+      toast.error('Error: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  const handleCerrar = async (firmaPng: string, notas: string) => {
+    if (!activo) return;
+    setEnviando(true);
+    try {
+      await cerrar(activo.id, firmaPng, notas.trim() || null);
+      toast.success('Inventario cerrado y firmado.');
+      setAccion(null);
     } catch (e) {
       toast.error('Error: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -879,20 +890,10 @@ function InventarioPanel({
 
       {/* Modal de acción */}
       {accion === 'cerrar' && (
-        <ModalAccion
-          titulo="Cerrar inventario"
-          descripcion="El inventario quedará archivado con el conteo final actual. Después podrás revisarlo en el historial pero no editarlo."
-          textareaLabel="Notas de cierre (opcional)"
-          textareaValor={textoAccion}
-          setTextareaValor={setTextoAccion}
-          onConfirmar={handleAccion}
-          onCancelar={() => {
-            setAccion(null);
-            setTextoAccion('');
-          }}
+        <ModalCerrarInventario
           confirmando={enviando}
-          confirmarTexto="Confirmar cierre"
-          confirmarColor="emerald"
+          onConfirmar={handleCerrar}
+          onCancelar={() => setAccion(null)}
         />
       )}
       {accion === 'revertir' && (
@@ -902,7 +903,7 @@ function InventarioPanel({
           textareaLabel="Motivo del rollback (mínimo 5 caracteres) *"
           textareaValor={textoAccion}
           setTextareaValor={setTextoAccion}
-          onConfirmar={handleAccion}
+          onConfirmar={handleRevertir}
           onCancelar={() => {
             setAccion(null);
             setTextoAccion('');
@@ -999,6 +1000,106 @@ function ModalAccion({
             )}
           >
             {confirmando ? 'Procesando…' : confirmarTexto}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ModalCerrarInventario({
+  confirmando,
+  onConfirmar,
+  onCancelar,
+}: {
+  confirmando: boolean;
+  onConfirmar: (firmaPng: string, notas: string) => void;
+  onCancelar: () => void;
+}) {
+  const [notas, setNotas] = useState('');
+  const [firmaPresente, setFirmaPresente] = useState(false);
+  const sigRef = useRef<SignatureCanvas>(null);
+
+  const limpiar = () => {
+    sigRef.current?.clear();
+    setFirmaPresente(false);
+  };
+
+  const confirmar = () => {
+    if (!sigRef.current || sigRef.current.isEmpty()) {
+      toast.warning('Firma del admin requerida.');
+      return;
+    }
+    const firmaPng = sigRef.current.toDataURL('image/png');
+    onConfirmar(firmaPng, notas);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
+      onClick={onCancelar}
+    >
+      <div
+        className="w-full max-w-md rounded-lg border border-border bg-card p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-2 text-sm font-semibold">Cerrar inventario</div>
+        <p className="mb-3 text-xs text-muted-foreground">
+          El inventario quedará archivado con el conteo final actual. Después podrás revisarlo
+          en el historial pero no editarlo.
+        </p>
+
+        <Label className="text-xs text-foreground">Notas de cierre (opcional)</Label>
+        <textarea
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          rows={2}
+          className="mb-3 mt-1 w-full rounded border border-border bg-background px-2 py-1.5 text-xs"
+        />
+
+        <Label className="text-xs text-foreground">
+          Firma del admin <span className="text-destructive">*</span>
+        </Label>
+        <div className="mt-1 overflow-hidden rounded border border-border bg-white">
+          <SignatureCanvas
+            ref={sigRef}
+            onEnd={() => setFirmaPresente(!sigRef.current?.isEmpty())}
+            canvasProps={{
+              className: 'w-full',
+              width: 400,
+              height: 160,
+              style: { width: '100%', height: 160, display: 'block' },
+            }}
+          />
+        </div>
+        <div className="mt-1.5 flex items-center justify-between text-[0.65rem] text-muted-foreground">
+          <span>Firma con el dedo o el mouse en el área blanca.</span>
+          <button
+            type="button"
+            onClick={limpiar}
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-muted-foreground hover:bg-secondary/40 hover:text-foreground"
+          >
+            <Eraser className="h-3 w-3" /> Limpiar
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onCancelar}
+            disabled={confirmando}
+            className="h-8 text-xs"
+          >
+            Cancelar
+          </Button>
+          <Button
+            size="sm"
+            onClick={confirmar}
+            disabled={confirmando || !firmaPresente}
+            className="h-8 gap-1 bg-success hover:bg-success/90"
+          >
+            {confirmando ? 'Procesando…' : 'Confirmar cierre'}
           </Button>
         </div>
       </div>

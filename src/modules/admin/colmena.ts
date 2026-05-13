@@ -272,6 +272,7 @@ export type Inventario = {
   tubos_count_pre: number;
   tubos_count_post: number | null;
   notas: string | null;
+  firma_png: string | null;
 };
 
 export type InventarioDiffRow = {
@@ -293,7 +294,7 @@ export function useInventario(): {
   loading: boolean;
   refrescar: () => Promise<void>;
   iniciar: (notas?: string | null) => Promise<string>;
-  cerrar: (id: string, notas?: string | null) => Promise<void>;
+  cerrar: (id: string, firmaPng: string, notas?: string | null) => Promise<void>;
   revertir: (id: string, motivo: string) => Promise<void>;
   diff: (id: string) => Promise<InventarioDiffRow[]>;
 } {
@@ -342,12 +343,13 @@ export function useInventario(): {
   );
 
   const cerrar = useCallback(
-    async (id: string, notas?: string | null) => {
+    async (id: string, firmaPng: string, notas?: string | null) => {
       const { error } = await supabase
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .rpc('cerrar_inventario' as any, {
           p_inventario_id: id,
           p_notas: notas ?? null,
+          p_firma_png: firmaPng,
         });
       if (error) throw new Error(error.message || JSON.stringify(error));
       await cargar();
