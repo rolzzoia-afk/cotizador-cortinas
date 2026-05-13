@@ -2,8 +2,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" },
-    { "source": "/((?!api/|legacy/|assets/|favicon).*)", "destination": "/index.html" }
+    { "source": "/((?!legacy/|assets/|favicon).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
