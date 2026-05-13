@@ -25,6 +25,7 @@ import {
   useColmenaTubos,
   useColmenaPanos,
   useInventario,
+  validarMedidaCm,
   type ColmenaTubo,
   type ColmenaPano,
   type InventarioDiffRow,
@@ -282,6 +283,8 @@ function TuboForm({
     if (!colT) return toast.error('El número de colmena es obligatorio');
     if (!codT) return toast.error('El código del tubo es obligatorio');
     if (!medN) return toast.error('La medida es obligatoria');
+    const errMedida = validarMedidaCm(medN);
+    if (errMedida) return toast.error(errMedida);
     setSaving(true);
     await onSave({
       n_colmena: colT,
