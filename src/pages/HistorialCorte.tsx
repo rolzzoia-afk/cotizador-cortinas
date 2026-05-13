@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   ChevronDown,
+  FileSpreadsheet,
   GhostIcon,
   Recycle,
   Scissors,
@@ -26,6 +27,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
+import { exportarPlanComoExcel } from '@/modules/planes-corte/exportar-excel';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -1283,6 +1285,7 @@ function PlanCard({
   onToggle,
   onRegistrarError,
   onMarcarSobranteInexistente,
+  onDescargarExcel,
 }: {
   plan: Plan;
   errores: { linea_idx: number; motivo: string }[];
@@ -1292,6 +1295,7 @@ function PlanCard({
   onToggle: () => void;
   onRegistrarError: (idx: number) => void;
   onMarcarSobranteInexistente: (idx: number, descripcion: string) => void;
+  onDescargarExcel: () => void;
 }) {
   const fechaStr = fmtFechaHora(plan.fecha);
   const nCortes = plan.resultados.length;
@@ -1312,59 +1316,69 @@ function PlanCard({
               : 'border-border bg-card',
       )}
     >
-      <button
-        onClick={onToggle}
-        className="flex w-full items-center gap-3 px-4 py-3.5 text-left hover:bg-secondary/40"
-      >
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2 text-[15px] font-bold">
-            <Scissors className="h-4 w-4 flex-shrink-0 text-accent" />
-            {fechaStr}
-            {esActual && (
-              <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
-                Actual
+      <div className="flex w-full items-stretch">
+        <button
+          onClick={onToggle}
+          className="flex flex-1 items-center gap-3 px-4 py-3.5 text-left hover:bg-secondary/40"
+        >
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 text-[15px] font-bold">
+              <Scissors className="h-4 w-4 flex-shrink-0 text-accent" />
+              {fechaStr}
+              {esActual && (
+                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
+                  Actual
+                </span>
+              )}
+              {esVersionAnterior && (
+                <span className="rounded-full border border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  Versión anterior
+                </span>
+              )}
+              {esCorregido && (
+                <span
+                  className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning"
+                  title="Plan generado al aplicar correcciones sobre una versión anterior"
+                >
+                  Corregido
+                </span>
+              )}
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
+              <span>
+                {nCortes} corte{nCortes !== 1 ? 's' : ''}
               </span>
-            )}
-            {esVersionAnterior && (
-              <span className="rounded-full border border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                Versión anterior
-              </span>
-            )}
-            {esCorregido && (
-              <span
-                className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning"
-                title="Plan generado al aplicar correcciones sobre una versión anterior"
-              >
-                Corregido
-              </span>
-            )}
+              {hasErrors && (
+                <span className="text-destructive">
+                  · ⚠ {errores.length} error{errores.length > 1 ? 'es' : ''}
+                </span>
+              )}
+              {ots.map((ot) => (
+                <span
+                  key={ot}
+                  className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent"
+                >
+                  OT {ot}
+                </span>
+              ))}
+            </div>
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-1 text-[12px] text-muted-foreground">
-            <span>
-              {nCortes} corte{nCortes !== 1 ? 's' : ''}
-            </span>
-            {hasErrors && (
-              <span className="text-destructive">
-                · ⚠ {errores.length} error{errores.length > 1 ? 'es' : ''}
-              </span>
+          <ChevronDown
+            className={cn(
+              'h-4 w-4 text-muted-foreground transition-transform',
+              expandido && 'rotate-180',
             )}
-            {ots.map((ot) => (
-              <span
-                key={ot}
-                className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent"
-              >
-                OT {ot}
-              </span>
-            ))}
-          </div>
-        </div>
-        <ChevronDown
-          className={cn(
-            'h-4 w-4 text-muted-foreground transition-transform',
-            expandido && 'rotate-180',
-          )}
-        />
-      </button>
+          />
+        </button>
+        <button
+          onClick={onDescargarExcel}
+          title="Descargar Excel"
+          aria-label="Descargar Excel"
+          className="flex shrink-0 items-center justify-center border-l border-border px-3 text-success transition-colors hover:bg-success/10"
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+        </button>
+      </div>
       {expandido && (
         <div className="border-t border-border">
           <PlanTabla
@@ -1705,6 +1719,7 @@ export function HistorialCorte() {
                       onMarcarSobranteInexistente={(idx, desc) =>
                         marcarSobranteInexistente(actual.id, idx, desc)
                       }
+                      onDescargarExcel={() => exportarPlanComoExcel(actual)}
                     />
                     {anteriores.length > 0 && (
                       <>
@@ -1736,6 +1751,7 @@ export function HistorialCorte() {
                               onMarcarSobranteInexistente={(idx, desc) =>
                                 marcarSobranteInexistente(prev.id, idx, desc)
                               }
+                              onDescargarExcel={() => exportarPlanComoExcel(prev)}
                             />
                           ))}
                       </>
