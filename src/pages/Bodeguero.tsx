@@ -72,6 +72,7 @@ type MotivoDevolucion = (typeof MOTIVOS_DEVOLUCION)[number];
 const AREAS_BODEGA = [
   'estructura',
   'dimensionado',
+  'armado',
   'oficina',
   'panos',
   'pruebas',
@@ -81,6 +82,7 @@ type AreaBodega = (typeof AREAS_BODEGA)[number];
 const AREA_LABEL: Record<AreaBodega, string> = {
   estructura: 'Estructura',
   dimensionado: 'Dimensionado',
+  armado: 'Armado',
   oficina: 'Oficina',
   panos: 'Paños',
   pruebas: 'Pruebas',
