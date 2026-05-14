@@ -1414,10 +1414,14 @@ export function HistorialCorte() {
 
   const cargarPlanes = async () => {
     if (!empresaId) return;
+    // Filtrar `tipo IS NULL`: solo planes reales, sin los "respaldo" que el
+    // optimizador inserta como punto de restauración antes del sync. Si el
+    // sync falla, ese respaldo queda huérfano — el filtro lo oculta de la UI.
     const { data } = await supabase
       .from('planes_corte')
       .select('id, fecha, fecha_correccion, resultados, ordenes')
       .eq('empresa_id', empresaId)
+      .is('tipo', null)
       .order('fecha', { ascending: false })
       .limit(50);
 
