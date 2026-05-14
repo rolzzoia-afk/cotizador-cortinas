@@ -2135,6 +2135,13 @@ async function guardarColmenaFinalEnSupabase(eventos = [], planPayload = null) {
             const _uuidsPesoPreservados = resultadosPeso
                 .map(item => item.resultado?.tubo_raiz_id)
                 .filter(Boolean);
+            // Solo contar UUIDs con evento `ingreso` (no `eliminado`, no `corte`, etc).
+            // Antes el filtro era "cualquier evento" — pero si el único evento es
+            // `eliminado` (sin ingreso posterior), el UUID está tombstoned y la RPC
+            // lo va a rechazar. Si dejamos sin generar el ingreso retroactivo, el
+            // sync falla con "verificación falló". El filtro estricto matchea la
+            // semántica del tombstone V2: solo es "tiene historia legítima" si tiene
+            // ingreso. Si solo tiene eliminado, hay que generar un ingreso nuevo.
             const _uuidsPesoConHistorial = new Set();
             if (_uuidsPesoPreservados.length > 0) {
                 try {
@@ -2142,6 +2149,7 @@ async function guardarColmenaFinalEnSupabase(eventos = [], planPayload = null) {
                         .from('tubos_historial')
                         .select('tubo_raiz_id')
                         .eq('empresa_id', EMPRESA_ID_OPT)
+                        .eq('evento', 'ingreso')
                         .in('tubo_raiz_id', _uuidsPesoPreservados);
                     (_prevPeso || []).forEach(r => _uuidsPesoConHistorial.add(r.tubo_raiz_id));
                 } catch (e) {

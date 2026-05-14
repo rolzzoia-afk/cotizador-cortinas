@@ -36,6 +36,15 @@ BEGIN;
 DO $$ BEGIN RAISE NOTICE '=== Carga inicial colmena 2026-05-14 — INICIADO ==='; END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- 0) Marcar sesión como sync-administrativo para que el trigger de eliminado
+--    no loguee eventos `eliminado` en tubos_historial. El trigger BD chequea
+--    `app.sync_active` y skipea si es 'true' (mismo mecanismo que usa la RPC
+--    sync_colmena_tubos). Sin esto, cada wipe administrativo polluciona el
+--    tombstone check con eliminados falsos.
+-- ─────────────────────────────────────────────────────────────────────────────
+SET LOCAL app.sync_active = 'true';
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- 1) Pre-flight: reportar el estado actual
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
@@ -47,7 +56,7 @@ BEGIN
 END $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 2) Borrar inventario actual
+-- 2) Borrar inventario actual (sin disparar eliminado en historial)
 -- ─────────────────────────────────────────────────────────────────────────────
 DELETE FROM colmena_tubos
 WHERE empresa_id = '67c635a5-152c-4780-a066-23f5081175a9'::uuid;
