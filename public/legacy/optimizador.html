@@ -325,6 +325,13 @@
             font-size: 12px;
         }
         .estado-pill-label { color: var(--text-muted); font-weight: 500; }
+        /* ── Pill de salud del inventario (chequeo post-plan) ── */
+        .estado-pill.salud-sano       { border-color: rgba(34,197,94,0.4);  background: rgba(34,197,94,0.08); }
+        .estado-pill.salud-alerta     { border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.10); }
+        .estado-pill.salud-pendiente  { opacity: 0.7; }
+        .salud-icon { font-size: 14px; line-height: 1; }
+        .salud-detalle { color: var(--text-secondary); font-weight: 500; }
+        .salud-meta    { color: var(--text-muted); font-size: 10px; }
         .badge-info {
             font-size: 10px;
             padding: 2px 8px;
@@ -1089,6 +1096,11 @@
                 <div class="estado-pill">
                     <span class="estado-pill-label">Estructura de inventario</span>
                     <span id="estadoEstructura" class="estado-archivo estado-pendiente">Sin cargar</span>
+                </div>
+                <div class="estado-pill salud-pendiente" id="pill-salud" title="Salud del inventario: contraprueba post-plan que verifica que los conteos cuadren">
+                    <span class="estado-pill-label">Salud</span>
+                    <span class="salud-icon" id="salud-icon">·</span>
+                    <span class="salud-detalle" id="salud-detalle">Sin chequeos aún</span>
                 </div>
             </div>
             <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
@@ -6242,6 +6254,119 @@ function recuperarStagingPendiente(snap) {
     }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// SALUD DEL INVENTARIO — contraprueba post-plan
+// ══════════════════════════════════════════════════════════════════
+// Después de guardar un plan, verifica que el conteo de tubos en BD
+// cuadre con lo que el optimizador pensaba que iba a pasar:
+//
+//   esperado = pre_count - tubos_consumidos_enteros + sobrantes_nuevos_guardados
+//   actual   = SELECT COUNT(*) FROM colmena_tubos WHERE empresa_id = X
+//
+// Si esperado != actual → algo se escapó (bug en optimizer, sync parcial,
+// modificación concurrente, etc.). El pill se pone amarillo con la diferencia.
+//
+// Por cada resultado del plan:
+//   - origen tubo_nuevo  →  delta 0 (no toca colmena; si hay sobrante guardado, +1)
+//   - origen colmena/merma →  delta -1 (tubo consumido). Si sobrante usable saved, +1
+//   - sobrante intermedio →  +0 (queda en mesa, no entra a colmena)
+//   - sobrante en zona desecho (es_desecho) → no se guarda (+0)
+const SALUD_KEY = 'opt_salud_ultima_v1';
+
+function calcularDeltaEsperado(resultados) {
+    let consumidos = 0;
+    let sobrantesGuardados = 0;
+    for (const r of (resultados || [])) {
+        if (!r) continue;
+        const esNuevo = r.fuente === 'tubo_nuevo';
+        if (!esNuevo) consumidos++;
+        const guardaSobrante = r.sobrante_cm > 0 && !r.es_desecho && !r.es_intermedio;
+        if (guardaSobrante) sobrantesGuardados++;
+    }
+    return { consumidos, sobrantesGuardados, delta: sobrantesGuardados - consumidos };
+}
+
+async function verificarSaludInventario(preCount, resultadosPlan) {
+    try {
+        const desglose = calcularDeltaEsperado(resultadosPlan);
+        const esperado = preCount + desglose.delta;
+        const actual = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+        if (actual === null || actual === undefined) {
+            // No se pudo contar — no marcamos sano ni alerta, dejamos pendiente
+            log('⚠️ Salud: no se pudo contar el inventario post-plan (probable RLS o red).', 'warn');
+            return;
+        }
+        const diff = actual - esperado;
+        const sano = diff === 0;
+        const reporte = {
+            timestamp: Date.now(),
+            sano,
+            preCount,
+            esperado,
+            actual,
+            diff,
+            consumidos: desglose.consumidos,
+            sobrantesGuardados: desglose.sobrantesGuardados,
+            cortes: (resultadosPlan || []).length
+        };
+        try { localStorage.setItem(SALUD_KEY, JSON.stringify(reporte)); } catch(e) { /* ignorar */ }
+        renderSaludInventario();
+
+        if (sano) {
+            log(`💚 Salud: inventario coincide con el plan (${actual} tubos, delta esperado ${desglose.delta >= 0 ? '+' : ''}${desglose.delta}).`, 'success');
+        } else {
+            log(`🟡 Salud: discrepancia de ${diff > 0 ? '+' : ''}${diff} tubos vs esperado (esperado=${esperado}, actual=${actual}).`, 'warn');
+            toast({
+                titulo: `Inventario con discrepancia: ${diff > 0 ? '+' : ''}${diff} tubos`,
+                mensaje: `Esperado tras el plan: ${esperado}. Real en BD: ${actual}. Revisa el último plan antes de optimizar el siguiente.`
+            }, 'warning', { duracion: 0 });
+        }
+    } catch (e) {
+        console.warn('Salud inventario: error verificando', e);
+        log(`⚠️ Salud: error verificando inventario post-plan: ${e?.message || e}`, 'warn');
+    }
+}
+
+function renderSaludInventario() {
+    const pill = document.getElementById('pill-salud');
+    const icon = document.getElementById('salud-icon');
+    const detalle = document.getElementById('salud-detalle');
+    if (!pill || !icon || !detalle) return;
+    let reporte = null;
+    try {
+        const raw = localStorage.getItem(SALUD_KEY);
+        if (raw) reporte = JSON.parse(raw);
+    } catch(e) { /* ignorar */ }
+
+    pill.classList.remove('salud-sano', 'salud-alerta', 'salud-pendiente');
+
+    if (!reporte) {
+        pill.classList.add('salud-pendiente');
+        icon.textContent = '·';
+        detalle.textContent = 'Sin chequeos aún';
+        pill.title = 'Aún no se verificó la salud del inventario. Se chequea automáticamente después de guardar cada plan.';
+        return;
+    }
+
+    const minutos = Math.max(1, Math.round((Date.now() - reporte.timestamp) / 60000));
+    const tiempoTxt = minutos < 60
+        ? `hace ${minutos} min`
+        : (minutos < 1440 ? `hace ${Math.round(minutos / 60)} h` : `hace ${Math.round(minutos / 1440)} d`);
+
+    if (reporte.sano) {
+        pill.classList.add('salud-sano');
+        icon.textContent = '✓';
+        detalle.innerHTML = `Sano <span class="salud-meta">· ${tiempoTxt}</span>`;
+        pill.title = `Último plan: ${reporte.cortes} cortes. Pre: ${reporte.preCount}, esperado: ${reporte.esperado}, real: ${reporte.actual}. Sin diferencias.`;
+    } else {
+        pill.classList.add('salud-alerta');
+        icon.textContent = '⚠';
+        const signo = reporte.diff > 0 ? '+' : '';
+        detalle.innerHTML = `${signo}${reporte.diff} tubos vs esperado <span class="salud-meta">· ${tiempoTxt}</span>`;
+        pill.title = `Discrepancia detectada en el último plan (${reporte.cortes} cortes). Esperado: ${reporte.esperado}, real: ${reporte.actual}. Diferencia: ${signo}${reporte.diff} tubos. Revisa el último plan antes de seguir.`;
+    }
+}
+
 // ── PASO 1: Capturar snapshot intacto ANTES de cualquier escritura ──
 // Devuelve un objeto con las colmenas y seriales tal como están en Supabase en este instante.
 async function capturarSnapshotPreOptimizacion() {
@@ -7156,6 +7281,17 @@ async function confirmarYGuardarStaging() {
     // ── Limpiar staging persistido: el plan ya quedó guardado en BD ──
     limpiarStagingPendiente();
 
+    // ── Salud del inventario: contraprueba post-plan ─────────────────────
+    // Verifica que pre_count + delta_esperado == count_real_en_BD.
+    // Si no cuadra, el pill de salud se pone amarillo con la diferencia.
+    if (colmenaSincronizadaOK) {
+        const preCount = (snapshotSeguro && snapshotSeguro.colmenas) ? snapshotSeguro.colmenas.length : null;
+        if (preCount !== null) {
+            // Esperar 500ms para que cualquier replica async se asiente
+            setTimeout(() => { verificarSaludInventario(preCount, resultados); }, 500);
+        }
+    }
+
     // ── Aviso visual si la colmena no se sincronizó ──
     if (!colmenaSincronizadaOK) {
         setTimeout(() => {
@@ -7840,6 +7976,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ── Verificar si hay staging pendiente para recuperar ──
     try { verificarStagingPendiente(); } catch(e) { console.warn('Recuperación staging:', e); }
+
+    // ── Pintar pill de salud del inventario desde el último chequeo ──
+    try { renderSaludInventario(); } catch(e) { console.warn('Render salud:', e); }
 });
 
 // ====== CORRECCIÓN DE CORTE ERRÓNEO (sin rollback) ======
