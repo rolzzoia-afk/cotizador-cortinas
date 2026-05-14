@@ -5084,39 +5084,34 @@ async function ejecutarOptimizacion() {
     // de colmenasAUsar, por lo que dedupar acá cura el problema en los dos
     // lados de una sola vez.
     //
-    // Criterio de identidad: primero UUID (si existe). Si el mismo UUID
-    // aparece 2 veces es inequívocamente duplicado. PERO TAMBIÉN la misma
-    // identidad física — (n_colmena, cod, medida_mm, serial) — con UUIDs
-    // distintos es duplicado: dos filas distintas en BD pero 1 solo tubo
-    // real. Esto pasa cuando Excel upload o la RPC insertó filas sin
-    // preservar raiz_id y BD generó UUIDs frescos.
+    // Criterio de identidad: UUID. Si el mismo UUID aparece 2 veces es
+    // inequívocamente duplicado (un solo tubo físico aparece dos veces en
+    // la lista). Lo descartamos.
+    //
+    // ANTES también descartábamos por identidad física (n_colmena, cod,
+    // medida_mm, serial) cuando los UUIDs eran distintos — defensa contra
+    // uploads que generaban phantom duplicates sin preservar raiz_id.
+    // Con NOT NULL en colmena_tubos.tubo_raiz_id (PR #97 + v5.10) y la
+    // carga_inicial que SÍ tiene duplicados físicos LEGÍTIMOS (dos tubos
+    // distintos del mismo cod/medida en la misma colmena, cada uno con su
+    // UUID), esa dedupe física rompía el invariante: descartaba tubos
+    // reales y el sync fallaba con "verificación falló: N en BD vs M
+    // enviados (faltan)". Removida 2026-05-14.
     {
         const _vistosFuente = new Set();
-        const _vistosFisico = new Set();
         const _deduped = [];
-        let _skippedUuid = 0, _skippedFisico = 0;
+        let _skippedUuid = 0;
         for (const c of colmenasAUsar) {
             if (c.tubo_raiz_id && _vistosFuente.has(c.tubo_raiz_id)) {
                 _skippedUuid++;
                 console.warn(`[OPT] ⚠️ Duplicado UUID en fuente: raiz_id=${c.tubo_raiz_id} (${c.n_colmena}/${c.cod}/${c.medida_cm}cm) — descartado`);
                 continue;
             }
-            const serialKey = (c.serial && typeof c.serial === 'object')
-                ? `${c.serial.lote || ''}|${c.serial.paquete || ''}|${c.serial.serial || ''}`
-                : String(c.serial || '');
-            const fisicoKey = `${c.n_colmena}|${(c.cod || '').toUpperCase().trim()}|${c.medida_mm || 0}|${serialKey}`;
-            if (_vistosFisico.has(fisicoKey)) {
-                _skippedFisico++;
-                console.warn(`[OPT] ⚠️ Duplicado físico en fuente: ${c.n_colmena}/${c.cod}/${c.medida_cm}cm (raiz_id=${c.tubo_raiz_id || 'null'}) — descartado (ya hay otra fila con misma identidad física)`);
-                continue;
-            }
             if (c.tubo_raiz_id) _vistosFuente.add(c.tubo_raiz_id);
-            _vistosFisico.add(fisicoKey);
             _deduped.push(c);
         }
-        const _totalSkipped = _skippedUuid + _skippedFisico;
-        if (_totalSkipped > 0) {
-            log(`⚠️ ${_totalSkipped} tubo(s) duplicados descartados antes de optimizar (${_skippedUuid} por UUID, ${_skippedFisico} por identidad física). Revisá consola.`, 'warn');
+        if (_skippedUuid > 0) {
+            log(`⚠️ ${_skippedUuid} tubo(s) con UUID duplicado descartados antes de optimizar. Revisá consola.`, 'warn');
             colmenasAUsar = _deduped;
         }
     }
