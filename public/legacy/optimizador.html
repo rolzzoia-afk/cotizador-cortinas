@@ -2781,29 +2781,22 @@ async function cargarSerialesDesdeTablaDirecta() {
 // (solo sync de colmena, sin INSERT plan — los call sites de reserva
 // y rollback funcionan igual).
 async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], planPayload = null) {
-    // Dedup defensivo: aunque el dedup al inicio de optimizar ya debería
-    // haber limpiado duplicados físicos, protegemos acá por si colmenasFinal
-    // llega con duplicados por otra ruta (rollback, descarte de vista previa,
-    // etc.). Si un mismo (n_colmena, cod, medida_mm, serial) aparece 2 veces
-    // con UUIDs distintos, es inequívocamente un duplicado físico — nos
-    // quedamos con uno solo.
-    const _vistosFisico = new Set();
+    // Dedup defensivo: protege contra duplicados de UUID en la lista a sincronizar.
+    // Antes también deduplicaba por identidad física (n_colmena+cod+medida+serial)
+    // como cinturón contra phantom uploads sin raiz_id. Con NOT NULL en
+    // colmena_tubos.tubo_raiz_id (PR #97) y carga_inicial con duplicados físicos
+    // LEGÍTIMOS (dos tubos distintos con UUIDs propios), esa rama rompía el sync
+    // ("verificación falló: N en BD vs M enviados (faltan)"). Removida 2026-05-14.
     const _vistosUuid = new Set();
     const colmenasDedupeadas = [];
-    let _dupFisico = 0, _dupUuid = 0;
+    let _dupUuid = 0;
     for (const c of colmenasFinal) {
         if (c.tubo_raiz_id && _vistosUuid.has(c.tubo_raiz_id)) { _dupUuid++; continue; }
-        const serialKey = (c.serial && typeof c.serial === 'object')
-            ? `${c.serial.lote || ''}|${c.serial.paquete || ''}|${c.serial.serial || ''}`
-            : String(c.serial || '');
-        const fisicoKey = `${c.n_colmena || '-'}|${(c.cod || '').toUpperCase().trim()}|${c.medida_mm || 0}|${serialKey}`;
-        if (_vistosFisico.has(fisicoKey)) { _dupFisico++; continue; }
         if (c.tubo_raiz_id) _vistosUuid.add(c.tubo_raiz_id);
-        _vistosFisico.add(fisicoKey);
         colmenasDedupeadas.push(c);
     }
-    if (_dupFisico + _dupUuid > 0) {
-        console.warn(`[sync] ⚠️ Dedup defensivo descartó ${_dupFisico + _dupUuid} filas (${_dupUuid} UUID, ${_dupFisico} físico) antes de sync_colmena_tubos.`);
+    if (_dupUuid > 0) {
+        console.warn(`[sync] ⚠️ Dedup defensivo descartó ${_dupUuid} fila(s) con UUID duplicado antes de sync_colmena_tubos.`);
     }
 
     const filas = colmenasDedupeadas.map(c => ({
