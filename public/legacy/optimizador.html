@@ -258,6 +258,214 @@
         .archivo-item { margin: 10px 0; padding: 12px 16px; background: var(--bg-secondary); border-radius: 8px; border: 1px solid var(--border); }
         .archivo-item label { color: var(--text-secondary); font-size: 13px; font-weight: 500; }
 
+        /* ── PASO PRINCIPAL (Subir OT) ── */
+        .paso-principal {
+            display: flex;
+            gap: 14px;
+            background: linear-gradient(135deg, rgba(99,102,241,0.10), rgba(99,102,241,0.04));
+            border: 1px solid rgba(99,102,241,0.35);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
+        }
+        .paso-numero {
+            flex: 0 0 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: white;
+            font-weight: 700;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .paso-contenido { flex: 1; }
+        .paso-titulo { margin: 0 0 4px; font-size: 1rem; color: var(--text-primary); }
+        .paso-ayuda { margin: 0 0 10px; font-size: 12px; color: var(--text-muted); }
+        .archivo-item-principal {
+            margin-top: 8px;
+            background: transparent;
+            border: none;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .file-input-lg { font-size: 14px !important; padding: 10px 14px !important; }
+
+        /* ── ESTADO INVENTARIO (cards de auto-cargado) ── */
+        .estado-inventario {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 10px 0;
+        }
+        .estado-inventario-titulo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .estado-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+        .estado-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            font-size: 12px;
+        }
+        .estado-pill-label { color: var(--text-muted); font-weight: 500; }
+        .badge-info {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(99,102,241,0.15);
+            color: var(--primary);
+            border: 1px solid rgba(99,102,241,0.3);
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+            font-weight: 600;
+        }
+        .btn-mini {
+            margin-left: auto;
+            padding: 3px 10px;
+            font-size: 11px;
+            border-radius: 6px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-mini:hover { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* ── ACCIONES PRINCIPALES ── */
+        .acciones-principales {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 14px 0 12px;
+        }
+        .btn-grande {
+            padding: 12px 24px !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
+            letter-spacing: 0.2px;
+            min-width: 220px;
+        }
+
+        /* ── OPCIONES AVANZADAS (collapse) ── */
+        .opciones-avanzadas {
+            margin-top: 14px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0;
+            overflow: hidden;
+        }
+        .opciones-avanzadas summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 12px 16px;
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .opciones-avanzadas summary::-webkit-details-marker { display: none; }
+        .opciones-avanzadas summary:hover { background: var(--bg-card); color: var(--text-secondary); }
+        .opciones-avanzadas summary::after {
+            content: '▼';
+            margin-left: auto;
+            font-size: 10px;
+            transition: transform 0.2s;
+        }
+        .opciones-avanzadas[open] summary::after { transform: rotate(180deg); }
+        .opciones-avanzadas-contenido {
+            padding: 6px 16px 16px;
+            border-top: 1px dashed var(--border);
+        }
+        .opciones-avanzadas-contenido h4 {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 12px 0 6px;
+            font-weight: 600;
+        }
+        .ayuda-secundaria { font-size: 11px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.4; }
+        .botones-avanzados { display: flex; gap: 8px; flex-wrap: wrap; }
+
+        /* ── BANNER EJECUTIVO (resumen 1-línea del plan) ── */
+        .banner-ejecutivo {
+            background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(34,197,94,0.04));
+            border: 1px solid rgba(34,197,94,0.35);
+            border-radius: 12px;
+            padding: 18px 22px;
+            margin-bottom: 14px;
+            display: none; /* lo muestra renderizarStaging cuando hay data */
+        }
+        .banner-ejecutivo.alerta {
+            background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04));
+            border-color: rgba(245,158,11,0.4);
+        }
+        .banner-ejecutivo-titulo {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0 0 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .banner-ejecutivo.alerta .banner-ejecutivo-titulo { color: var(--warning); }
+        .banner-ejecutivo:not(.alerta) .banner-ejecutivo-titulo { color: var(--success); }
+        .banner-ejecutivo-subtitulo {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin: 0;
+            line-height: 1.5;
+        }
+        .detalle-stats {
+            margin: 8px 0 14px;
+            background: transparent;
+        }
+        .detalle-stats summary {
+            list-style: none;
+            cursor: pointer;
+            padding: 6px 0;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .detalle-stats summary::-webkit-details-marker { display: none; }
+        .detalle-stats summary:hover { color: var(--text-secondary); }
+        .detalle-stats summary::before {
+            content: '▶';
+            font-size: 9px;
+            transition: transform 0.2s;
+            display: inline-block;
+        }
+        .detalle-stats[open] summary::before { transform: rotate(90deg); }
+
         /* ── STAT CARDS (resumen ahorro) ── */
         .resumen-ahorro { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0; }
         .stat-card {
@@ -583,9 +791,57 @@
 
     <div class="opt-content">
     <div class="carga-archivos">
-        <h2><i class="bi bi-folder2-open" style="color:var(--primary);"></i> Cargar Archivos Excel</h2>
+        <!-- PASO 1: Subir la OT (lo único variable de OT a OT) -->
+        <div class="paso-principal">
+            <div class="paso-numero">1</div>
+            <div class="paso-contenido">
+                <h2 class="paso-titulo">Subí el archivo de la OT</h2>
+                <p class="paso-ayuda">Es el Excel con las órdenes de corte. Lo descargás del sistema de ventas.</p>
+                <div class="archivo-item archivo-item-principal">
+                    <input type="file" id="fileOrdenes" accept=".xlsx,.xlsm" class="file-input file-input-lg" onchange="cargarOrdenes(event)">
+                    <span id="estadoOrdenes" class="estado-archivo estado-pendiente">Sin cargar</span>
+                </div>
+            </div>
+        </div>
 
-        <!-- Barra de progreso -->
+        <!-- Estado del inventario (auto-cargado de Supabase) -->
+        <div class="estado-inventario">
+            <div class="estado-inventario-titulo">
+                <i class="bi bi-cloud-check" style="color:var(--success);"></i> Estado del inventario
+                <span class="badge-info">Auto-cargado de la base de datos</span>
+                <button class="btn-mini" onclick="refrescarInventarioCompleto()" title="Volver a leer Catálogo, Estructura y Colmenas desde la base de datos">
+                    <i class="bi bi-arrow-clockwise"></i> Refrescar
+                </button>
+            </div>
+            <div class="estado-pills">
+                <div class="estado-pill">
+                    <span class="estado-pill-label">Colmenas</span>
+                    <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
+                    <span id="colmena-freshness" style="display:none; font-size:0.7rem; opacity:0.7;"></span>
+                </div>
+                <div class="estado-pill">
+                    <span class="estado-pill-label">Catálogo de reemplazos</span>
+                    <span id="estadoCatalogo" class="estado-archivo estado-pendiente">Sin cargar</span>
+                </div>
+                <div class="estado-pill">
+                    <span class="estado-pill-label">Estructura de inventario</span>
+                    <span id="estadoEstructura" class="estado-archivo estado-pendiente">Sin cargar</span>
+                </div>
+            </div>
+            <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
+        </div>
+
+        <!-- Acciones principales: ver plan + descargar -->
+        <div class="acciones-principales">
+            <button class="btn btn-success btn-grande" onclick="ejecutarOptimizacion()" id="btnEjecutar" disabled title="Calcula el plan de corte y muestra una vista previa para revisar antes de guardar">
+                <i class="bi bi-play-fill"></i> Ver plan de corte
+            </button>
+            <button class="btn btn-exportar btn-grande" onclick="exportarResultados()" id="btnExportar" disabled title="Descarga un Excel con el plan de corte para que el bodeguero lo siga">
+                <i class="bi bi-file-earmark-excel"></i> Descargar Excel del plan
+            </button>
+        </div>
+
+        <!-- Barra de progreso de archivos requeridos -->
         <div class="progress-bar-container">
             <div class="progress-label">
                 <span id="progressText">0 de 4 archivos cargados</span>
@@ -595,50 +851,61 @@
                 <div class="progress-bar-fill" id="progressFill" style="width: 0%"></div>
             </div>
         </div>
-        <div class="archivo-item">
-            <label><strong>Archivo de Órdenes:</strong></label>
-            <input type="file" id="fileOrdenes" accept=".xlsx,.xlsm" class="file-input" onchange="cargarOrdenes(event)">
-            <span id="estadoOrdenes" class="estado-archivo estado-pendiente">Sin cargar</span>
-        </div>
-        <div class="archivo-item">
-            <label><strong>Archivo de Colmenas:</strong></label>
-            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                <input type="file" id="fileColmenas" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarColmenas(event)">
-                <button class="btn btn-exportar btn-sm" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="white-space:nowrap;">
-                    <i class="bi bi-cloud-download"></i> Cargar desde Supabase
-                </button>
-                <button class="btn btn-success btn-sm" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" style="white-space:nowrap;">
-                    <i class="bi bi-cloud-upload"></i> Guardar en Supabase
-                </button>
-            </div>
-            <span id="estadoColmenas" class="estado-archivo estado-pendiente">Sin cargar</span>
-            <span id="indicadorFuenteColmena" style="display:none; padding:3px 8px; border-radius:4px; font-size:11px; color:white; margin-left:8px;"></span>
-            <span id="colmena-freshness" style="display:none; font-size:0.72rem; margin-left:8px;"></span>
-        </div>
-        <div class="archivo-item">
-            <label><strong>Archivo de Catálogo de Reemplazos:</strong></label>
-            <input type="file" id="fileCatalogo" accept=".xlsx,.xlsm" class="file-input" onchange="cargarCatalogo(event)">
-            <span id="estadoCatalogo" class="estado-archivo estado-pendiente">Sin cargar</span>
-        </div>
-        <div class="archivo-item">
-            <label><strong>Archivo de Estructura de Inventario:</strong></label>
-            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                <input type="file" id="fileEstructura" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarEstructuraInventario(event)">
-                <button class="btn btn-exportar btn-sm" id="btnCargarSerialesDB" onclick="cargarSerialesDesdeTablaDirecta()" style="white-space:nowrap;">
-                    <i class="bi bi-cloud-download"></i> Cargar desde Supabase
-                </button>
-            </div>
-            <span id="estadoEstructura" class="estado-archivo estado-pendiente">Sin cargar</span>
-        </div>
 
-        <div style="margin-top:16px; display:flex; flex-wrap:wrap; gap:4px;">
-            <button class="btn btn-success" onclick="ejecutarOptimizacion()" id="btnEjecutar" disabled><i class="bi bi-play-fill"></i> Calcular Vista Previa</button>
-            <button class="btn btn-exportar" onclick="exportarResultados()" id="btnExportar" disabled><i class="bi bi-file-earmark-excel"></i> Exportar Plan</button>
-            <button class="btn btn-exportar" onclick="exportarColmenasDisponibles()" id="btnExportarDisponibles" disabled><i class="bi bi-grid-3x3"></i> Exportar Colmenas</button>
-            <button class="btn btn-success" onclick="exportarInventarioActualizado()"><i class="bi bi-download"></i> Inventario Actual</button>
-            <button id="btnRectificar" class="btn btn-warning"><i class="bi bi-wrench"></i> Rectificar Tubos Nuevos</button>
-            <button id="btnCorregirCorte" class="btn btn-purple"><i class="bi bi-pencil-square"></i> Corregir Corte Erróneo</button>
-        </div>
+        <!-- Opciones avanzadas (lo que se usa rara vez) -->
+        <details class="opciones-avanzadas">
+            <summary><i class="bi bi-gear"></i> Más opciones (uso avanzado)</summary>
+            <div class="opciones-avanzadas-contenido">
+
+                <h4>Cambiar inventario por Excel (en vez de la base de datos)</h4>
+                <p class="ayuda-secundaria">Solo si necesitás trabajar con un Excel local en lugar de los datos de Supabase. El comportamiento normal es usar la base de datos auto-cargada arriba.</p>
+
+                <div class="archivo-item">
+                    <label><strong>Excel de Colmenas:</strong></label>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <input type="file" id="fileColmenas" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarColmenas(event)">
+                        <button class="btn btn-exportar btn-sm" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="white-space:nowrap;" title="Vuelve a leer las colmenas desde la base de datos (descarta lo cargado desde Excel)">
+                            <i class="bi bi-cloud-download"></i> Cargar de BD
+                        </button>
+                        <button class="btn btn-success btn-sm" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" style="white-space:nowrap;" title="Pisa la base de datos con las colmenas actualmente cargadas. Cuidado: si recién cargaste un Excel viejo, podés borrar inventario real.">
+                            <i class="bi bi-cloud-upload"></i> Guardar en BD
+                        </button>
+                    </div>
+                </div>
+
+                <div class="archivo-item">
+                    <label><strong>Excel de Catálogo de reemplazos:</strong></label>
+                    <input type="file" id="fileCatalogo" accept=".xlsx,.xlsm" class="file-input" onchange="cargarCatalogo(event)">
+                </div>
+
+                <div class="archivo-item">
+                    <label><strong>Excel de Estructura de inventario:</strong></label>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <input type="file" id="fileEstructura" accept=".xlsx,.xlsm" class="file-input" style="flex:1; min-width:200px;" onchange="cargarEstructuraInventario(event)">
+                        <button class="btn btn-exportar btn-sm" id="btnCargarSerialesDB" onclick="cargarSerialesDesdeTablaDirecta()" style="white-space:nowrap;" title="Vuelve a leer la estructura desde la base de datos">
+                            <i class="bi bi-cloud-download"></i> Cargar de BD
+                        </button>
+                    </div>
+                </div>
+
+                <h4 style="margin-top:18px;">Acciones avanzadas</h4>
+
+                <div class="botones-avanzados">
+                    <button class="btn btn-exportar btn-sm" onclick="exportarColmenasDisponibles()" id="btnExportarDisponibles" disabled title="Descarga un Excel con todas las colmenas disponibles del inventario actual">
+                        <i class="bi bi-grid-3x3"></i> Exportar colmenas disponibles
+                    </button>
+                    <button class="btn btn-success btn-sm" onclick="exportarInventarioActualizado()" title="Descarga el inventario completo de seriales y tubos enteros en formato Excel">
+                        <i class="bi bi-download"></i> Descargar inventario completo
+                    </button>
+                    <button id="btnRectificar" class="btn btn-warning btn-sm" title="Ajusta el largo registrado de tubos nuevos (E02, E53...) cuando viene distinto al estándar">
+                        <i class="bi bi-wrench"></i> Rectificar largo de tubos nuevos
+                    </button>
+                    <button id="btnCorregirCorte" class="btn btn-purple btn-sm" title="Corrige manualmente un corte que ya fue guardado. Si el bodeguero reporta error desde su pantalla, no hace falta usar este botón.">
+                        <i class="bi bi-pencil-square"></i> Corregir un corte ya guardado
+                    </button>
+                </div>
+            </div>
+        </details>
 
         <div id="panelAlertasStock" style="display:none; margin-top:12px;"></div>
     </div>
@@ -654,8 +921,14 @@
         </div>
         <div class="preview-body">
 
-            <!-- Resumen de ahorro -->
-            <div class="resumen-ahorro" id="resumenAhorro"></div>
+            <!-- Banner ejecutivo: 1 línea con todo lo importante -->
+            <div class="banner-ejecutivo" id="bannerEjecutivo"></div>
+
+            <!-- Resumen detallado (stat cards) -->
+            <details class="detalle-stats" open>
+                <summary>Ver detalle por categoría</summary>
+                <div class="resumen-ahorro" id="resumenAhorro"></div>
+            </details>
 
             <!-- Sección A: Órdenes de Entrada -->
             <details open>
@@ -1084,7 +1357,7 @@ async function verificarVersionMinima() {
                 Object.keys(localStorage)
                     .filter(k => !clavesProtegidas.includes(k))
                     .forEach(k => localStorage.removeItem(k));
-                alert("Hay una nueva versión del sistema. Se recargará el optimizador.");
+                alert("Hay una versión nueva del optimizador. Se va a recargar la página para que la uses.");
                 window.location.reload();
             }
         }
@@ -1399,6 +1672,23 @@ function actualizarIndicadorFuente(esManual) {
 // Carga la colmena desde Supabase al iniciar sesión.
 // FUENTE DE VERDAD: tabla colmena_tubos (NO el snapshot opt_colmena_final_*,
 // que puede contener tubos fantasma de sesiones anteriores).
+// Refresca de Supabase los 3 datasets auto-cargados (Catálogo, Estructura, Colmenas).
+// Se invoca desde el botón "Refrescar" de la sección "Estado del inventario".
+async function refrescarInventarioCompleto() {
+    document.getElementById('loading-overlay').style.display = 'flex';
+    try {
+        await cargarCatalogoDesdeSupabase();
+        await cargarSerialesDesdeSupabase();
+        await cargarColmenaFinalDesdeSupabase();
+        log('🔄 Inventario refrescado desde la base de datos.', 'success');
+    } catch (e) {
+        console.error('Refrescar inventario falló:', e);
+        alert('No se pudo refrescar el inventario. Recargá la página si el problema persiste.');
+    } finally {
+        document.getElementById('loading-overlay').style.display = 'none';
+    }
+}
+
 async function cargarColmenaFinalDesdeSupabase() {
     if (!_currentUser || !_currentUser.email) return;
     try {
@@ -3420,6 +3710,113 @@ function verificarListo() {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Catálogo de mensajes humanos: mapea errores técnicos a algo que postventa
+// puede leer y accionar. Si el error no matchea ningún patrón, se devuelve
+// el mensaje original (degradación segura).
+// ─────────────────────────────────────────────────────────────────────────────
+function mensajeHumano(error) {
+    const msgRaw = (typeof error === 'string' ? error : (error && error.message) || String(error)) || '';
+    const msg = msgRaw.toLowerCase();
+
+    // Sesión expirada
+    if (msg.includes('sesión expirada') || msg.includes('sesion expirada') || msg.includes('jwt expired') || msg.includes('refresh token')) {
+        return {
+            titulo: '🔒 Tu sesión expiró',
+            mensaje: 'Tenés que volver a entrar. Al recargar la página vas a perder lo que tengas a medias.',
+            accion: { texto: 'Volver a entrar', onClick: () => location.reload() }
+        };
+    }
+
+    // Conflicto de sincronización (otro usuario tocó el inventario)
+    if (msg.includes('otra sesión modificó') || msg.includes('otra sesion modifico') || msg.includes('sync stale')) {
+        return {
+            titulo: '⚠ Otro usuario actualizó el inventario',
+            mensaje: 'Mientras trabajabas, alguien guardó cambios en las colmenas. Tu plan NO se guardó. Refrescá el inventario y volvé a calcular el plan.',
+            accion: { texto: 'Refrescar inventario', onClick: () => refrescarInventarioCompleto() }
+        };
+    }
+
+    // Plan abortado por la pila atómica
+    if (msg.includes('plan abortado por capa') || msg.includes('events no encontrados') || msg.includes('insert atómico') || msg.includes('insert atomico')) {
+        return {
+            titulo: '❌ No se pudo guardar el plan',
+            mensaje: 'Hubo un problema al sincronizar con la base de datos. Probá guardar de nuevo. Si vuelve a pasar, contactá al admin.',
+        };
+    }
+
+    // Inventario exportado pero no actualizado en BD (recovery manual)
+    if (msg.includes('inventario no se actualizó') || msg.includes('inventario no se actualizo')) {
+        return {
+            titulo: '⚠ El plan se descargó pero NO se actualizó en la base de datos',
+            mensaje: 'Para recuperarlo: 1) Recargá esta página. 2) En "Estado del inventario" tocá Refrescar. 3) Volvé a calcular el plan y guardalo.',
+        };
+    }
+
+    // Falta cargar OT
+    if (msg.includes('cargue órdenes') || msg.includes('cargue ordenes')) {
+        return {
+            titulo: 'Falta cargar la OT',
+            mensaje: 'Antes de calcular el plan, subí el Excel de Órdenes (Paso 1, arriba en azul).',
+        };
+    }
+
+    // No hay resultados para exportar
+    if (msg.includes('no hay resultados para exportar')) {
+        return {
+            titulo: 'Todavía no calculaste un plan',
+            mensaje: 'Tocá "Ver plan de corte" primero. Cuando aparezca la vista previa, ahí podés descargar el Excel.',
+        };
+    }
+
+    // No hay inventario
+    if (msg.includes('no hay inventario') || msg.includes('no hay colmenas')) {
+        return {
+            titulo: 'El inventario todavía no se sincronizó',
+            mensaje: 'Esperá unos segundos y tocá Refrescar en la sección "Estado del inventario". Si tarda mucho, recargá la página.',
+        };
+    }
+
+    // Columnas faltantes en el Excel
+    if (msg.includes('no se encontraron columnas') || msg.includes('no se encontraron todas las columnas')) {
+        return {
+            titulo: 'El archivo Excel no tiene las columnas esperadas',
+            mensaje: 'Verificá que estés cargando el archivo correcto. ' + msgRaw,
+        };
+    }
+
+    // Versión nueva disponible
+    if (msg.includes('nueva versión') || msg.includes('nueva version')) {
+        return {
+            titulo: 'Hay una versión nueva del optimizador',
+            mensaje: 'Guardá tu trabajo y recargá la página para usar la nueva versión.',
+            accion: { texto: 'Recargar ahora', onClick: () => location.reload() }
+        };
+    }
+
+    // Genérico — devolver el mensaje raw con prefijo amistoso
+    return {
+        titulo: 'Hubo un problema',
+        mensaje: msgRaw || 'Error inesperado.',
+    };
+}
+
+// Muestra un mensaje de error usando confirm() si tiene acción asociada,
+// alert() si no. Fase 1 deliberadamente usa los diálogos nativos para
+// no introducir un sistema de modales nuevo. Fase 2 puede reemplazar
+// esto por una UI más rica sin tocar los call sites.
+function mostrarError(error) {
+    const h = mensajeHumano(error);
+    const txt = `${h.titulo}\n\n${h.mensaje}`;
+    if (h.accion && typeof h.accion.onClick === 'function') {
+        if (confirm(`${txt}\n\n¿${h.accion.texto}?`)) {
+            try { h.accion.onClick(); } catch(e) { console.error('Acción del error falló:', e); }
+        }
+    } else {
+        alert(txt);
+    }
+}
+
 function log(mensaje, tipo) {
     SistemaInventario.logs.push({ mensaje, tipo });
     const logDiv = document.getElementById('logs');
@@ -4202,7 +4599,7 @@ async function ejecutarOptimizacion() {
         colmenasAUsar = JSON.parse(JSON.stringify(SistemaInventario.colmenas));
     }
 
-    if (SistemaInventario.ordenes.length === 0 || colmenasAUsar.length === 0) { alert('Cargue órdenes y colmenas'); return; }
+    if (SistemaInventario.ordenes.length === 0 || colmenasAUsar.length === 0) { mostrarError('Cargue órdenes y colmenas'); return; }
 
     // ── Dedup en la fuente: si colmenasAUsar trae el mismo tubo físico dos
     // veces (bug de carga, duplicados en BD de sesiones anteriores, race
@@ -5133,6 +5530,31 @@ function renderizarStaging(resultados) {
         });
         const total = resultados.length;
         const pct = total > 0 ? Math.round((stats.reutilizados / total) * 100) : 0;
+
+        // Banner ejecutivo: una línea para entender el plan sin scrollear stats
+        const bannerEl = document.getElementById('bannerEjecutivo');
+        if (bannerEl) {
+            const colmenasUsadas = new Set(resultados.map(r => r && r.colmena).filter(c => c && c !== '-')).size;
+            const sobrantesGuardados = resultados.filter(r => r && r.sobrante_cm > 0 && !r.es_desecho && !r.es_intermedio).length;
+            const tieneAlertas = stats.nuevos > 5 || stats.merma > 100 || pct < 30;
+            const icono = tieneAlertas ? '⚠' : '✓';
+            const titulo = tieneAlertas ? 'Plan calculado · revisá los puntos amarillos antes de guardar' : 'Plan listo para guardar';
+            const partes = [
+                `${total} corte${total !== 1 ? 's' : ''}`,
+                `${colmenasUsadas} colmena${colmenasUsadas !== 1 ? 's' : ''}`,
+                stats.nuevos > 0 ? `${stats.nuevos} tubo${stats.nuevos !== 1 ? 's' : ''} nuevo${stats.nuevos !== 1 ? 's' : ''}` : null,
+                sobrantesGuardados > 0 ? `${sobrantesGuardados} sobrante${sobrantesGuardados !== 1 ? 's' : ''} guardado${sobrantesGuardados !== 1 ? 's' : ''}` : null,
+                stats.merma > 0 ? `${stats.merma.toFixed(1)} cm de merma` : null,
+                `${pct}% reutilización`,
+            ].filter(Boolean).join(' · ');
+            bannerEl.className = tieneAlertas ? 'banner-ejecutivo alerta' : 'banner-ejecutivo';
+            bannerEl.innerHTML = `
+                <h3 class="banner-ejecutivo-titulo">${icono} ${titulo}</h3>
+                <p class="banner-ejecutivo-subtitulo">${partes}</p>
+            `;
+            bannerEl.style.display = 'block';
+        }
+
         resumenDiv.innerHTML = `
             <div class="stat-card"><div class="num">${total}</div><div class="lbl">Cortes totales</div></div>
             <div class="stat-card"><div class="num" style="color:var(--warning)">${stats.nuevos}</div><div class="lbl">Tubos nuevos</div></div>
@@ -6117,7 +6539,7 @@ async function confirmarYGuardarStaging() {
     // ── Aviso visual si la colmena no se sincronizó ──
     if (!colmenaSincronizadaOK) {
         setTimeout(() => {
-            alert('⚠️ ATENCIÓN: El plan de corte fue exportado, pero el inventario NO se actualizó en Supabase.\n\nPara corregirlo:\n1. Recarga esta página\n2. Carga la colmena desde Supabase\n3. Usa el botón ☁️ Guardar en Supabase');
+            mostrarError('El plan de corte fue exportado, pero el inventario no se actualizó en la base de datos.');
         }, 500);
     }
 
@@ -6312,7 +6734,7 @@ async function exportarResultados() {
     if (SistemaInventario.resultadosOptimizacion.length === 0) {
         const cargado = await cargarUltimoPlanDesdeSupabase();
         if (!cargado) {
-            alert('No hay resultados para exportar. Ejecute una optimización primero, o el último plan no está disponible.');
+            mostrarError('No hay resultados para exportar. Ejecute una optimización primero, o el último plan no está disponible.');
             return;
         }
     }
@@ -6511,7 +6933,7 @@ function exportarInventarioActualizado() {
     const disponibles = SistemaInventario.seriales.filter(s => s.estado === 'disponible');
 
     if (disponibles.length === 0) {
-        alert("No hay inventario disponible para exportar.");
+        mostrarError("No hay inventario disponible para exportar.");
         return;
     }
 
@@ -6796,7 +7218,7 @@ async function corregirCorteErroneo() {
     // Verificar que hay colmenas cargadas
     const colmenas = colmenaActual || SistemaInventario.colmenas;
     if (!colmenas || colmenas.length === 0) {
-        alert('No hay inventario cargado. Espere a que se sincronice desde Supabase.');
+        mostrarError('No hay inventario cargado. Espere a que se sincronice desde Supabase.');
         return;
     }
 
