@@ -515,6 +515,32 @@
         }
         .log-entry { margin: 3px 0; }
 
+        /* ── Panel de logs colapsable ── */
+        #panel-logs h2 {
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #panel-logs h2 .log-chevron {
+            margin-left: auto;
+            font-size: 0.7rem;
+            transition: transform 0.2s ease;
+        }
+        #panel-logs.colapsado h2 .log-chevron { transform: rotate(-90deg); }
+        #panel-logs.colapsado #logs { display: none; }
+        #panel-logs h2 .log-count {
+            font-size: 0.7rem;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 500;
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
         /* ── 3-COLUMN LAYOUT ── */
         .container { display: flex; gap: 16px; margin-top: 20px; flex-wrap: wrap; }
         .panel { flex: 1; min-width: 280px; background: var(--bg-card); padding: 20px; border-radius: 12px; border: 1px solid var(--border); overflow-x: auto; }
@@ -817,12 +843,15 @@
             font-weight: 600;
             cursor: pointer;
             margin-top: 8px;
+            margin-right: 6px;
             transition: background 0.15s, border-color 0.15s;
         }
-        .toast-success .toast-action:hover { background: var(--success); border-color: var(--success); color: white; }
-        .toast-error   .toast-action:hover { background: var(--danger);  border-color: var(--danger);  color: white; }
-        .toast-warning .toast-action:hover { background: var(--warning); border-color: var(--warning); color: white; }
-        .toast-info    .toast-action:hover { background: var(--primary); border-color: var(--primary); color: white; }
+        .toast-action.secundario { color: var(--text-muted); }
+        .toast-action.secundario:hover { background: var(--bg-secondary); color: var(--text-primary); }
+        .toast-success .toast-action:not(.secundario):hover { background: var(--success); border-color: var(--success); color: white; }
+        .toast-error   .toast-action:not(.secundario):hover { background: var(--danger);  border-color: var(--danger);  color: white; }
+        .toast-warning .toast-action:not(.secundario):hover { background: var(--warning); border-color: var(--warning); color: white; }
+        .toast-info    .toast-action:not(.secundario):hover { background: var(--primary); border-color: var(--primary); color: white; }
         .toast-close {
             background: transparent;
             border: none;
@@ -1260,8 +1289,13 @@
         <div id="resultados"></div>
     </div>
 
-    <div class="panel" style="margin-top:16px;">
-        <h2><i class="bi bi-terminal" style="color:var(--text-muted);"></i> Logs</h2>
+    <div class="panel colapsado" style="margin-top:16px;" id="panel-logs">
+        <h2 onclick="alternarPanelLogs()" title="Ocultar o mostrar el log técnico">
+            <i class="bi bi-terminal" style="color:var(--text-muted);"></i>
+            Log técnico
+            <span class="log-count" id="log-count">0</span>
+            <i class="bi bi-chevron-down log-chevron"></i>
+        </h2>
         <div class="log-container" id="logs"></div>
     </div>
 
@@ -2248,6 +2282,29 @@ async function guardarColmenaEnSupabaseDirecto() {
     }
     if (!_currentUser) {
         log('❌ Sin sesión activa. Inicia sesión antes de guardar.', 'error');
+        return;
+    }
+
+    // ── Confirmación amistosa: contar cuántos tubos hay en BD vs locales ─
+    // Esta operación es destructiva (DELETE + INSERT). Mostrar números reales
+    // antes de pisar, para que el usuario sepa qué va a perder.
+    let conteoBD = null;
+    try {
+        conteoBD = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+    } catch(eCount) { /* si falla el conteo, seguimos con confirmación genérica */ }
+
+    const conteoLocal = SistemaInventario.colmenas.length;
+    const mensajeConf = (conteoBD !== null && conteoBD > 0)
+        ? `Vas a reemplazar el inventario en la base de datos.\n\n`
+          + `   BD actual:   ${conteoBD} tubos\n`
+          + `   Reemplazar por:  ${conteoLocal} tubos cargados ahora\n\n`
+          + `Esta acción borra TODO el inventario actual y lo sustituye por lo cargado.\n`
+          + `Si recién cargaste un Excel viejo, se puede perder inventario real.\n\n`
+          + `¿Continuar?`
+        : `Vas a guardar ${conteoLocal} tubos en la base de datos. ¿Continuar?`;
+
+    if (!confirm(mensajeConf)) {
+        log('ℹ️ Guardado en BD cancelado por el usuario.', 'info');
         return;
     }
 
@@ -4123,14 +4180,17 @@ function toast(contenido, tipo, opts) {
     const icono = TOAST_ICONOS[tipo] || 'ℹ';
     const tituloHtml = data.titulo ? `<p class="toast-titulo">${escapeHtml(data.titulo)}</p>` : '';
     const mensajeHtml = data.mensaje ? `<p class="toast-mensaje">${escapeHtml(data.mensaje)}</p>` : '';
-    const accionHtml = (data.accion && data.accion.texto) ? `<button class="toast-action">${escapeHtml(data.accion.texto)}</button>` : '';
+    const accionHtml = (data.accion && data.accion.texto)
+        ? `<button class="toast-action" data-toast-btn="primaria">${escapeHtml(data.accion.texto)}</button>` : '';
+    const accionSecHtml = (data.accionSecundaria && data.accionSecundaria.texto)
+        ? `<button class="toast-action secundario" data-toast-btn="secundaria">${escapeHtml(data.accionSecundaria.texto)}</button>` : '';
 
     el.innerHTML = `
         <span class="toast-icon">${icono}</span>
         <div class="toast-body">
             ${tituloHtml}
             ${mensajeHtml}
-            ${accionHtml}
+            ${accionHtml}${accionSecHtml}
         </div>
         <button class="toast-close" title="Cerrar">×</button>
     `;
@@ -4142,8 +4202,16 @@ function toast(contenido, tipo, opts) {
 
     el.querySelector('.toast-close').addEventListener('click', cerrar);
     if (data.accion && typeof data.accion.onClick === 'function') {
-        el.querySelector('.toast-action').addEventListener('click', () => {
+        const btn = el.querySelector('[data-toast-btn="primaria"]');
+        if (btn) btn.addEventListener('click', () => {
             try { data.accion.onClick(); } catch(e) { console.error('Acción del toast falló:', e); }
+            cerrar();
+        });
+    }
+    if (data.accionSecundaria && typeof data.accionSecundaria.onClick === 'function') {
+        const btn = el.querySelector('[data-toast-btn="secundaria"]');
+        if (btn) btn.addEventListener('click', () => {
+            try { data.accionSecundaria.onClick(); } catch(e) { console.error('Acción secundaria del toast falló:', e); }
             cerrar();
         });
     }
@@ -4209,6 +4277,18 @@ function log(mensaje, tipo) {
     entry.textContent = mensaje;
     logDiv.appendChild(entry);
     logDiv.scrollTop = logDiv.scrollHeight;
+    // Actualizar contador del panel colapsable
+    const cntEl = document.getElementById('log-count');
+    if (cntEl) cntEl.textContent = SistemaInventario.logs.length;
+}
+
+function alternarPanelLogs() {
+    const panel = document.getElementById('panel-logs');
+    if (!panel) return;
+    panel.classList.toggle('colapsado');
+    try {
+        localStorage.setItem('opt_logs_colapsado', panel.classList.contains('colapsado') ? '1' : '0');
+    } catch(e) { /* ignorar */ }
 }
 
 function agregarPaso(numero, titulo, descripcion) {
@@ -5925,7 +6005,7 @@ function renderizarStaging(resultados) {
             const sobrantesGuardados = resultados.filter(r => r && r.sobrante_cm > 0 && !r.es_desecho && !r.es_intermedio).length;
             const tieneAlertas = stats.nuevos > 5 || stats.merma > 100 || pct < 30;
             const icono = tieneAlertas ? '⚠' : '✓';
-            const titulo = tieneAlertas ? 'Plan calculado · revisá los puntos amarillos antes de guardar' : 'Plan listo para guardar';
+            const titulo = tieneAlertas ? 'Plan calculado · revisa los puntos amarillos antes de guardar' : 'Plan listo para guardar';
             const partes = [
                 `${total} corte${total !== 1 ? 's' : ''}`,
                 `${colmenasUsadas} colmena${colmenasUsadas !== 1 ? 's' : ''}`,
@@ -6036,6 +6116,130 @@ function renderizarStaging(resultados) {
     html += `<p>Se calcularon <strong>${resultados.length}</strong> cortes. Revise el panel de vista previa arriba y confirme para guardar.</p>`;
     html += '</div>';
     document.getElementById('resultados').innerHTML = html;
+
+    // ── Persistir staging en localStorage para recuperación ante crash ──
+    try { guardarStagingPendiente(resultados); } catch(e) { console.warn('Persistir staging:', e); }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PERSISTENCIA DE STAGING EN LOCALSTORAGE
+// ══════════════════════════════════════════════════════════════════
+// Después de renderizar el plan (paso 2), guardamos un snapshot en
+// localStorage. Si el browser crashea o el usuario cierra la pestaña
+// antes de confirmar, en la próxima carga se le ofrece recuperar.
+//
+// Se limpia al confirmar (plan guardado en BD) o al descartar.
+const STAGING_KEY = 'opt_staging_pendiente_v1';
+const STAGING_MAX_EDAD_MS = 24 * 60 * 60 * 1000; // 24h
+
+function guardarStagingPendiente(resultados) {
+    if (!_currentUser?.email) return;
+    const snapshot = {
+        v: 1,
+        timestamp: Date.now(),
+        usuario: _currentUser.email,
+        empresa_id: EMPRESA_ID_OPT,
+        resultados: resultados,
+        ordenes: SistemaInventario.ordenes,
+        ordenesCrudas: SistemaInventario.ordenesCrudas,
+        seriales: SistemaInventario.seriales,
+        serialesCrudos: SistemaInventario.serialesCrudos,
+        colmenas: SistemaInventario.colmenas,
+        colmenaCruda: SistemaInventario.colmenaCruda,
+        colmenasHistorico: SistemaInventario.colmenasHistorico,
+        colmenasDisponibles: SistemaInventario.colmenasDisponibles,
+        mermas: SistemaInventario.mermas,
+        resultadosOptimizacion: SistemaInventario.resultadosOptimizacion,
+        overridesNuevos: SistemaInventario.overridesNuevos,
+        _reservaActualId: typeof _reservaActualId !== 'undefined' ? _reservaActualId : null,
+        _colmenaPreSyncOK: typeof _colmenaPreSyncOK !== 'undefined' ? _colmenaPreSyncOK : false
+    };
+    try {
+        localStorage.setItem(STAGING_KEY, JSON.stringify(snapshot));
+    } catch(e) {
+        // Posible QuotaExceededError si el plan es enorme. No bloquear el flujo.
+        console.warn('No se pudo persistir staging en localStorage:', e?.message);
+    }
+}
+
+function limpiarStagingPendiente() {
+    try { localStorage.removeItem(STAGING_KEY); } catch(e) { /* ignorar */ }
+}
+
+function verificarStagingPendiente() {
+    if (!_currentUser?.email) {
+        // Reintentar cuando haya sesión (cargarDesdeSupabase la inicializa)
+        setTimeout(() => { try { verificarStagingPendiente(); } catch(e) {} }, 1500);
+        return;
+    }
+    let snap = null;
+    try {
+        const raw = localStorage.getItem(STAGING_KEY);
+        if (!raw) return;
+        snap = JSON.parse(raw);
+    } catch(e) {
+        limpiarStagingPendiente();
+        return;
+    }
+    if (!snap || snap.v !== 1) { limpiarStagingPendiente(); return; }
+    // Filtros de seguridad: mismo usuario, misma empresa, < 24h
+    if (snap.usuario !== _currentUser.email) return;
+    if (snap.empresa_id !== EMPRESA_ID_OPT) { limpiarStagingPendiente(); return; }
+    const edadMs = Date.now() - (snap.timestamp || 0);
+    if (edadMs > STAGING_MAX_EDAD_MS) { limpiarStagingPendiente(); return; }
+    if (!snap.resultados || !snap.resultados.length) { limpiarStagingPendiente(); return; }
+
+    // Ofrecer recuperación con toast persistente
+    const minutos = Math.max(1, Math.round(edadMs / 60000));
+    const tiempoTexto = minutos < 60
+        ? `hace ${minutos} minuto${minutos !== 1 ? 's' : ''}`
+        : `hace ${Math.round(minutos / 60)} hora${Math.round(minutos / 60) !== 1 ? 's' : ''}`;
+
+    toast({
+        titulo: 'Hay un plan calculado sin guardar',
+        mensaje: `Se calculó un plan ${tiempoTexto} (${snap.resultados.length} cortes) y no se confirmó. ¿Recuperar para revisarlo y guardarlo, o descartar?`,
+        accion: {
+            texto: 'Recuperar plan',
+            onClick: () => recuperarStagingPendiente(snap)
+        },
+        accionSecundaria: {
+            texto: 'Descartar',
+            onClick: () => { limpiarStagingPendiente(); }
+        }
+    }, 'info', { duracion: 0 });
+}
+
+function recuperarStagingPendiente(snap) {
+    try {
+        SistemaInventario.ordenes              = snap.ordenes              || [];
+        SistemaInventario.ordenesCrudas        = snap.ordenesCrudas        || [];
+        SistemaInventario.seriales             = snap.seriales             || [];
+        SistemaInventario.serialesCrudos       = snap.serialesCrudos       || [];
+        SistemaInventario.colmenas             = snap.colmenas             || [];
+        SistemaInventario.colmenaCruda         = snap.colmenaCruda         || [];
+        SistemaInventario.colmenasHistorico    = snap.colmenasHistorico    || [];
+        SistemaInventario.colmenasDisponibles  = snap.colmenasDisponibles  || [];
+        SistemaInventario.mermas               = snap.mermas               || [];
+        SistemaInventario.resultadosOptimizacion = snap.resultadosOptimizacion || [];
+        SistemaInventario.overridesNuevos      = snap.overridesNuevos      || {};
+        if (typeof _reservaActualId !== 'undefined') _reservaActualId = snap._reservaActualId || null;
+        if (typeof _colmenaPreSyncOK !== 'undefined') _colmenaPreSyncOK = !!snap._colmenaPreSyncOK;
+
+        actualizarTablaOrdenes();
+        actualizarTablaColmenas();
+        actualizarTablaSeriales();
+        renderizarStaging(snap.resultados);
+
+        log(`♻️ Plan recuperado de la sesión anterior (${snap.resultados.length} cortes). Verifica el inventario antes de confirmar.`, 'info');
+        toast({
+            titulo: 'Plan recuperado',
+            mensaje: 'Revisa el inventario y los cortes en la vista previa antes de confirmar el guardado.'
+        }, 'success', { duracion: 5000 });
+    } catch (e) {
+        console.error('Recuperación staging falló:', e);
+        mostrarToastError('No se pudo recuperar el plan anterior. Genera uno nuevo desde la OT.');
+        limpiarStagingPendiente();
+    }
 }
 
 // ── PASO 1: Capturar snapshot intacto ANTES de cualquier escritura ──
@@ -6949,6 +7153,9 @@ async function confirmarYGuardarStaging() {
         mensaje: 'El Excel se descargó y el inventario quedó actualizado en la base de datos.'
     }, 'success', { duracion: 5000 });
 
+    // ── Limpiar staging persistido: el plan ya quedó guardado en BD ──
+    limpiarStagingPendiente();
+
     // ── Aviso visual si la colmena no se sincronizó ──
     if (!colmenaSincronizadaOK) {
         setTimeout(() => {
@@ -7043,6 +7250,9 @@ async function confirmarYGuardarStaging() {
 // ── Descartar: volver al estado previo sin guardar ──
 async function descartarStaging() {
     if (!confirm('¿Descartar la vista previa? Los cambios calculados se perderán.')) return;
+
+    // Limpiar staging persistido: el usuario descartó voluntariamente
+    limpiarStagingPendiente();
 
     document.getElementById('panel-vista-previa').style.display = 'none';
     document.getElementById('resultados').innerHTML = '';
@@ -7619,6 +7829,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // ── Botón: Corregir Corte Erróneo ──
     const btnCorregir = document.getElementById('btnCorregirCorte');
     if (btnCorregir) btnCorregir.addEventListener('click', corregirCorteErroneo);
+
+    // ── Restaurar preferencia de panel de logs (default: colapsado) ──
+    try {
+        if (localStorage.getItem('opt_logs_colapsado') === '0') {
+            const panelLogs = document.getElementById('panel-logs');
+            if (panelLogs) panelLogs.classList.remove('colapsado');
+        }
+    } catch(e) { /* ignorar */ }
+
+    // ── Verificar si hay staging pendiente para recuperar ──
+    try { verificarStagingPendiente(); } catch(e) { console.warn('Recuperación staging:', e); }
 });
 
 // ====== CORRECCIÓN DE CORTE ERRÓNEO (sin rollback) ======
