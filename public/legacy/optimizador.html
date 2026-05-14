@@ -795,8 +795,8 @@
         <div class="paso-principal">
             <div class="paso-numero">1</div>
             <div class="paso-contenido">
-                <h2 class="paso-titulo">Subí el archivo de la OT</h2>
-                <p class="paso-ayuda">Es el Excel con las órdenes de corte. Lo descargás del sistema de ventas.</p>
+                <h2 class="paso-titulo">Sube el archivo de la OT</h2>
+                <p class="paso-ayuda">Es el Excel con las órdenes de corte. Se descarga del sistema de ventas.</p>
                 <div class="archivo-item archivo-item-principal">
                     <input type="file" id="fileOrdenes" accept=".xlsx,.xlsm" class="file-input file-input-lg" onchange="cargarOrdenes(event)">
                     <span id="estadoOrdenes" class="estado-archivo estado-pendiente">Sin cargar</span>
@@ -867,7 +867,7 @@
                         <button class="btn btn-exportar btn-sm" id="btnCargarColmenaDB" onclick="cargarColmenasDesdeTabla()" style="white-space:nowrap;" title="Vuelve a leer las colmenas desde la base de datos (descarta lo cargado desde Excel)">
                             <i class="bi bi-cloud-download"></i> Cargar de BD
                         </button>
-                        <button class="btn btn-success btn-sm" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" style="white-space:nowrap;" title="Pisa la base de datos con las colmenas actualmente cargadas. Cuidado: si recién cargaste un Excel viejo, podés borrar inventario real.">
+                        <button class="btn btn-success btn-sm" id="btnGuardarColmenaDB" onclick="guardarColmenaEnSupabaseDirecto()" style="white-space:nowrap;" title="Pisa la base de datos con las colmenas actualmente cargadas. Cuidado: si recién se cargó un Excel viejo, se puede borrar inventario real.">
                             <i class="bi bi-cloud-upload"></i> Guardar en BD
                         </button>
                     </div>
@@ -1683,7 +1683,7 @@ async function refrescarInventarioCompleto() {
         log('🔄 Inventario refrescado desde la base de datos.', 'success');
     } catch (e) {
         console.error('Refrescar inventario falló:', e);
-        alert('No se pudo refrescar el inventario. Recargá la página si el problema persiste.');
+        alert('No se pudo refrescar el inventario. Recarga la página si el problema persiste.');
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }
@@ -2413,7 +2413,7 @@ async function cargarSerialesDesdeTablaDirecta() {
         if (cargado) {
             log('Seriales cargados desde Supabase exitosamente.', 'success');
         } else {
-            log('No hay seriales guardados en Supabase. Subí el archivo de Estructura manualmente.', 'warn');
+            log('No hay seriales guardados en Supabase. Sube el archivo de Estructura manualmente.', 'warn');
         }
     } catch (e) {
         console.error('Error cargando seriales:', e);
@@ -3723,7 +3723,7 @@ function mensajeHumano(error) {
     if (msg.includes('sesión expirada') || msg.includes('sesion expirada') || msg.includes('jwt expired') || msg.includes('refresh token')) {
         return {
             titulo: '🔒 Tu sesión expiró',
-            mensaje: 'Tenés que volver a entrar. Al recargar la página vas a perder lo que tengas a medias.',
+            mensaje: 'Tienes que volver a entrar. Al recargar la página vas a perder lo que tengas a medias.',
             accion: { texto: 'Volver a entrar', onClick: () => location.reload() }
         };
     }
@@ -3732,7 +3732,7 @@ function mensajeHumano(error) {
     if (msg.includes('otra sesión modificó') || msg.includes('otra sesion modifico') || msg.includes('sync stale')) {
         return {
             titulo: '⚠ Otro usuario actualizó el inventario',
-            mensaje: 'Mientras trabajabas, alguien guardó cambios en las colmenas. Tu plan NO se guardó. Refrescá el inventario y volvé a calcular el plan.',
+            mensaje: 'Mientras trabajabas, alguien guardó cambios en las colmenas. Tu plan NO se guardó. Refresca el inventario y vuelve a calcular el plan.',
             accion: { texto: 'Refrescar inventario', onClick: () => refrescarInventarioCompleto() }
         };
     }
@@ -3741,7 +3741,7 @@ function mensajeHumano(error) {
     if (msg.includes('plan abortado por capa') || msg.includes('events no encontrados') || msg.includes('insert atómico') || msg.includes('insert atomico')) {
         return {
             titulo: '❌ No se pudo guardar el plan',
-            mensaje: 'Hubo un problema al sincronizar con la base de datos. Probá guardar de nuevo. Si vuelve a pasar, contactá al admin.',
+            mensaje: 'Hubo un problema al sincronizar con la base de datos. Intenta guardar de nuevo. Si vuelve a pasar, contacta al admin.',
         };
     }
 
@@ -3749,7 +3749,7 @@ function mensajeHumano(error) {
     if (msg.includes('inventario no se actualizó') || msg.includes('inventario no se actualizo')) {
         return {
             titulo: '⚠ El plan se descargó pero NO se actualizó en la base de datos',
-            mensaje: 'Para recuperarlo: 1) Recargá esta página. 2) En "Estado del inventario" tocá Refrescar. 3) Volvé a calcular el plan y guardalo.',
+            mensaje: 'Para recuperarlo: 1) Recarga esta página. 2) En "Estado del inventario" haz clic en Refrescar. 3) Vuelve a calcular el plan y guárdalo.',
         };
     }
 
@@ -3757,7 +3757,7 @@ function mensajeHumano(error) {
     if (msg.includes('cargue órdenes') || msg.includes('cargue ordenes')) {
         return {
             titulo: 'Falta cargar la OT',
-            mensaje: 'Antes de calcular el plan, subí el Excel de Órdenes (Paso 1, arriba en azul).',
+            mensaje: 'Antes de calcular el plan, sube el Excel de Órdenes (Paso 1, arriba en azul).',
         };
     }
 
@@ -3765,7 +3765,7 @@ function mensajeHumano(error) {
     if (msg.includes('no hay resultados para exportar')) {
         return {
             titulo: 'Todavía no calculaste un plan',
-            mensaje: 'Tocá "Ver plan de corte" primero. Cuando aparezca la vista previa, ahí podés descargar el Excel.',
+            mensaje: 'Haz clic en "Ver plan de corte" primero. Cuando aparezca la vista previa, ahí puedes descargar el Excel.',
         };
     }
 
@@ -3773,7 +3773,7 @@ function mensajeHumano(error) {
     if (msg.includes('no hay inventario') || msg.includes('no hay colmenas')) {
         return {
             titulo: 'El inventario todavía no se sincronizó',
-            mensaje: 'Esperá unos segundos y tocá Refrescar en la sección "Estado del inventario". Si tarda mucho, recargá la página.',
+            mensaje: 'Espera unos segundos y haz clic en Refrescar en la sección "Estado del inventario". Si tarda mucho, recarga la página.',
         };
     }
 
@@ -3781,7 +3781,7 @@ function mensajeHumano(error) {
     if (msg.includes('no se encontraron columnas') || msg.includes('no se encontraron todas las columnas')) {
         return {
             titulo: 'El archivo Excel no tiene las columnas esperadas',
-            mensaje: 'Verificá que estés cargando el archivo correcto. ' + msgRaw,
+            mensaje: 'Verifica que estés cargando el archivo correcto. ' + msgRaw,
         };
     }
 
@@ -3789,7 +3789,7 @@ function mensajeHumano(error) {
     if (msg.includes('nueva versión') || msg.includes('nueva version')) {
         return {
             titulo: 'Hay una versión nueva del optimizador',
-            mensaje: 'Guardá tu trabajo y recargá la página para usar la nueva versión.',
+            mensaje: 'Guarda tu trabajo y recarga la página para usar la nueva versión.',
             accion: { texto: 'Recargar ahora', onClick: () => location.reload() }
         };
     }
@@ -6435,7 +6435,7 @@ async function confirmarYGuardarStaging() {
             ).length;
             const conteoReal = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
             if (conteoReal !== null && Math.abs(conteoReal - tubosEsperados) > 2) {
-                log(`⚠️ POST-GUARDADO: Se esperaban ~${tubosEsperados} tubos en Supabase pero hay ${conteoReal}. Puede haber una inconsistencia. Verificá la colmena.`, 'warn');
+                log(`⚠️ POST-GUARDADO: Se esperaban ~${tubosEsperados} tubos en Supabase pero hay ${conteoReal}. Puede haber una inconsistencia. Verifica la colmena.`, 'warn');
             } else {
                 log(`✅ Post-verificación OK: ${conteoReal} tubos en Supabase.`, 'info');
             }
@@ -6515,7 +6515,7 @@ async function confirmarYGuardarStaging() {
                         '🚫 PLAN NO GUARDADO\n\n' +
                         'El plan se intentó guardar pero la verificación post-INSERT no encontró events.\n' +
                         'Caso extraordinario — revisar logs.\n\n' +
-                        '→ Recargá la página (Ctrl+Shift+R) y volvé a confirmar.\n' +
+                        '→ Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.\n' +
                         '→ Si el error persiste, avisá al admin.'
                     );
                     throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT atómico');
