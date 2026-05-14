@@ -6467,7 +6467,10 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
         // Guardar en planes_corte con snapshot completo para viaje en el tiempo
         // snapshot_inventario = estado de colmena_tubos ANTES de este plan
         // snapshot_seriales   = estado de seriales ANTES de este plan
-        await _sbRest('POST', 'planes_corte', {
+        //
+        // Devolvemos el ID del respaldo para que confirmarYGuardarStaging
+        // pueda eliminarlo si el sync atómico falla (huérfano).
+        const res = await _sbRest('POST', 'planes_corte', {
             empresa_id:          EMPRESA_ID_OPT,
             optimizer_email:     _currentUser.email,
             resultados:          resultadosGuardar,
@@ -6477,12 +6480,22 @@ async function guardarPuntoRestauracion(snapshotIntacto) {
             tipo:                'respaldo',
             snapshot_inventario: snapshotIntacto.colmenas  || [],
             snapshot_seriales:   snapshotIntacto.seriales  || []
-        });
+        }, { 'Prefer': 'return=representation' });
+
+        let respaldoId = null;
+        try {
+            const rows = await res.json();
+            respaldoId = Array.isArray(rows) ? (rows[0]?.id || null) : (rows?.id || null);
+        } catch(eParse) {
+            console.warn('No se pudo parsear el ID del respaldo:', eParse?.message);
+        }
 
         log('📸 Punto de restauración guardado en historial Supabase.', 'info');
+        return respaldoId;
     } catch (error) {
         console.error("Error guardando punto de restauración:", error);
         log('⚠️ No se pudo guardar el punto de restauración: ' + error.message, 'warn');
+        return null;
     }
 }
 
@@ -7087,11 +7100,27 @@ async function confirmarYGuardarStaging() {
     }
 
     // ── PASO 2: Persistir el punto de restauración con el snapshot puro ──
+    // Guardamos el ID para poder eliminarlo si el sync atómico falla más adelante
+    // (sin el cleanup, queda un "respaldo huérfano" en planes_corte que aparecía
+    // en el Historial Corte como si el plan se hubiera guardado).
+    let respaldoIdActual = null;
     if (snapshotSeguro) {
-        await guardarPuntoRestauracion(snapshotSeguro);
+        respaldoIdActual = await guardarPuntoRestauracion(snapshotSeguro);
     } else {
         log('⚠️ No se pudo capturar snapshot pre-optimización. El historial puede estar incompleto.', 'warn');
     }
+
+    // Helper local para eliminar el respaldo huérfano en cualquier rama de error
+    const _eliminarRespaldoHuerfano = async () => {
+        if (!respaldoIdActual) return;
+        try {
+            await sbOpt.from('planes_corte').delete().eq('id', respaldoIdActual);
+            log(`🧹 Respaldo huérfano eliminado (id=${respaldoIdActual.slice(0,8)}…)`, 'info');
+        } catch(e) {
+            console.warn('No se pudo eliminar respaldo huérfano:', e?.message);
+        }
+        respaldoIdActual = null;
+    };
 
     // ── PASO 3: AHORA sí persistir los cambios (descontar tubos) ──
     guardarSistema();
@@ -7167,6 +7196,7 @@ async function confirmarYGuardarStaging() {
                     '→ Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.\n' +
                     '→ Si el error persiste, avisar al admin.'
                 );
+                await _eliminarRespaldoHuerfano();
                 if (btnEjecutar) btnEjecutar.disabled = false;
                 return; // ← ABORTA: no llega a la inserción de planes_corte
             }
@@ -7204,6 +7234,7 @@ async function confirmarYGuardarStaging() {
                     accion: { texto: 'Reintentar guardado', onClick: () => confirmarYGuardarStaging() }
                 }, 'error', { duracion: 0 });
             }
+            await _eliminarRespaldoHuerfano();
             if (btnEjecutar) btnEjecutar.disabled = false;
             return; // ← ABORTA: no llega a la inserción de planes_corte (línea 5709) ni al resto del flujo
         }
@@ -7305,6 +7336,8 @@ async function confirmarYGuardarStaging() {
                     log('🚨 CAPA 4 ACTIVADA: plan atómico sin events visibles. Deshaciendo...', 'error');
                     await sbOpt.from('planes_corte').delete().eq('id', _planAtomicoId);
                     log(`🧹 Plan ${_planAtomicoId} eliminado por Capa 4.`, 'warn');
+                    // El respaldo del paso 2 también queda huérfano (no hay plan real al cual servir de snapshot)
+                    await _eliminarRespaldoHuerfano();
                     toast({
                         titulo: 'Plan no guardado · caso extraordinario',
                         mensaje: 'La base de datos no registró los eventos esperados. El plan fue revertido para evitar inconsistencias. Si vuelve a pasar, contacta al admin.',
