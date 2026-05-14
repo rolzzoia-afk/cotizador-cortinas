@@ -867,6 +867,91 @@
         .banner-sticky-action:hover { background: rgba(255,255,255,0.3); }
         body.tiene-banner-sticky { padding-top: 42px; }
 
+        /* ══ WIZARD STEPPER (3 pasos) ══ */
+        .wizard-stepper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+        .wizard-paso {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            transition: all 0.25s ease;
+            min-width: 0;
+        }
+        .wizard-paso-num {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--bg-card);
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            font-weight: 700;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.25s ease;
+        }
+        .wizard-paso-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+        .wizard-paso.activo {
+            background: linear-gradient(135deg, rgba(99,102,241,0.18), rgba(99,102,241,0.06));
+            border-color: rgba(99,102,241,0.5);
+        }
+        .wizard-paso.activo .wizard-paso-num {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.18);
+        }
+        .wizard-paso.activo .wizard-paso-label {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        .wizard-paso.completo {
+            background: rgba(34,197,94,0.08);
+            border-color: rgba(34,197,94,0.35);
+        }
+        .wizard-paso.completo .wizard-paso-num {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+        .wizard-paso.completo .wizard-paso-num::after {
+            content: '✓';
+            font-size: 14px;
+        }
+        .wizard-paso.completo .wizard-paso-num span { display: none; }
+        .wizard-paso.completo .wizard-paso-label {
+            color: var(--success);
+        }
+        .wizard-conector {
+            flex: 0 1 40px;
+            height: 1px;
+            background: var(--border);
+            min-width: 16px;
+        }
+        @media (max-width: 600px) {
+            .wizard-paso { padding: 6px 10px; gap: 6px; }
+            .wizard-paso-num { width: 22px; height: 22px; font-size: 11px; }
+            .wizard-paso-label { font-size: 10px; }
+            .wizard-conector { flex-basis: 14px; }
+        }
+
         /* ══ FRESHNESS DEL INVENTARIO ══ */
         .freshness-indicator {
             display: inline-flex;
@@ -920,6 +1005,25 @@
     </div>
 
     <div class="opt-content">
+
+    <!-- Wizard stepper: muestra dónde está el usuario en el flujo -->
+    <div class="wizard-stepper" id="wizardStepper">
+        <div class="wizard-paso activo" data-paso="1">
+            <div class="wizard-paso-num">1</div>
+            <div class="wizard-paso-label">Sube la OT</div>
+        </div>
+        <div class="wizard-conector"></div>
+        <div class="wizard-paso" data-paso="2">
+            <div class="wizard-paso-num">2</div>
+            <div class="wizard-paso-label">Revisa el plan</div>
+        </div>
+        <div class="wizard-conector"></div>
+        <div class="wizard-paso" data-paso="3">
+            <div class="wizard-paso-num">3</div>
+            <div class="wizard-paso-label">Confirma y guarda</div>
+        </div>
+    </div>
+
     <div class="carga-archivos">
         <!-- PASO 1: Subir la OT (lo único variable de OT a OT) -->
         <div class="paso-principal">
@@ -4066,6 +4170,26 @@ function escapeHtml(s) {
         .replace(/'/g, '&#39;');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Wizard de 3 pasos — solo indicador visual del progreso del flujo.
+// No oculta secciones agresivamente; postventa puede ir y volver libremente.
+// Pasos:
+//   1 = Subir OT (estado inicial)
+//   2 = Revisar plan (después de "Ver plan de corte", aparece vista previa)
+//   3 = Confirmado (después de guardar exitosamente)
+// ─────────────────────────────────────────────────────────────────────────────
+function setearPasoWizard(n) {
+    const stepper = document.getElementById('wizardStepper');
+    if (!stepper) return;
+    const pasos = stepper.querySelectorAll('.wizard-paso');
+    pasos.forEach(p => {
+        const paso = parseInt(p.dataset.paso, 10);
+        p.classList.remove('activo', 'completo');
+        if (paso < n) p.classList.add('completo');
+        else if (paso === n) p.classList.add('activo');
+    });
+}
+
 // Variante de mostrarError que usa toast en lugar de alert/confirm.
 // Para errores no críticos donde no necesitamos respuesta forzada del usuario.
 function mostrarToastError(error) {
@@ -5777,6 +5901,9 @@ function renderizarStaging(resultados) {
     panel.style.display = 'block';
     panel.scrollIntoView({ behavior: 'smooth' });
 
+    // Wizard: paso 2 (Revisa el plan)
+    setearPasoWizard(2);
+
     // ── Resumen de Ahorro visual (tarjetas) ──
     const resumenDiv = document.getElementById('resumenAhorro');
     if (resumenDiv) {
@@ -6676,13 +6803,21 @@ async function confirmarYGuardarStaging() {
             // (sin eventos ni descuento de inventario). Incidente 2026-05-05.
             const msg = errColmena?.message || String(errColmena);
             log('🚫 GUARDADO BLOQUEADO — el inventario NO se sincronizó (' + msg + ').', 'error');
-            log('👉 Tu plan NO se guardó. Recarga la página (Ctrl+Shift+R) y vuelve a confirmar. Si el error persiste, otra sesión modificó la colmena entre tu carga y este guardado.', 'error');
-            alert(
-                '🚫 Plan NO guardado\n\n' +
-                'No se pudo sincronizar el inventario en Supabase:\n' + msg + '\n\n' +
-                '→ Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.\n' +
-                '→ Si el error persiste, alguien más modificó la colmena entre tu carga y este guardado.'
-            );
+
+            const esConflictoSync = msg.toLowerCase().includes('modificó') || msg.toLowerCase().includes('modifico') || msg.toLowerCase().includes('sync stale');
+            if (esConflictoSync) {
+                toast({
+                    titulo: 'Plan no guardado · otro usuario actualizó el inventario',
+                    mensaje: 'Refresca el inventario y vuelve a calcular el plan para tener los datos al día.',
+                    accion: { texto: 'Refrescar inventario', onClick: () => refrescarInventarioCompleto() }
+                }, 'error', { duracion: 0 });
+            } else {
+                toast({
+                    titulo: 'Plan no guardado',
+                    mensaje: 'No se pudo sincronizar el inventario en la base de datos. Detalle: ' + msg,
+                    accion: { texto: 'Reintentar guardado', onClick: () => confirmarYGuardarStaging() }
+                }, 'error', { duracion: 0 });
+            }
             if (btnEjecutar) btnEjecutar.disabled = false;
             return; // ← ABORTA: no llega a la inserción de planes_corte (línea 5709) ni al resto del flujo
         }
@@ -6784,13 +6919,11 @@ async function confirmarYGuardarStaging() {
                     log('🚨 CAPA 4 ACTIVADA: plan atómico sin events visibles. Deshaciendo...', 'error');
                     await sbOpt.from('planes_corte').delete().eq('id', _planAtomicoId);
                     log(`🧹 Plan ${_planAtomicoId} eliminado por Capa 4.`, 'warn');
-                    alert(
-                        '🚫 PLAN NO GUARDADO\n\n' +
-                        'El plan se intentó guardar pero la verificación post-INSERT no encontró events.\n' +
-                        'Caso extraordinario — revisar logs.\n\n' +
-                        '→ Recarga la página (Ctrl+Shift+R) y vuelve a confirmar.\n' +
-                        '→ Si el error persiste, avisá al admin.'
-                    );
+                    toast({
+                        titulo: 'Plan no guardado · caso extraordinario',
+                        mensaje: 'La base de datos no registró los eventos esperados. El plan fue revertido para evitar inconsistencias. Si vuelve a pasar, contacta al admin.',
+                        accion: { texto: 'Reintentar', onClick: () => confirmarYGuardarStaging() }
+                    }, 'error', { duracion: 0 });
                     throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT atómico');
                 }
                 log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
@@ -6808,6 +6941,13 @@ async function confirmarYGuardarStaging() {
 
     // ── Exportar Excel ANTES de limpiar (usa resultadosOptimizacion que aún tiene datos) ──
     exportarResultados();
+
+    // Wizard: paso 3 (Confirmado y guardado)
+    setearPasoWizard(3);
+    toast({
+        titulo: 'Plan guardado',
+        mensaje: 'El Excel se descargó y el inventario quedó actualizado en la base de datos.'
+    }, 'success', { duracion: 5000 });
 
     // ── Aviso visual si la colmena no se sincronizó ──
     if (!colmenaSincronizadaOK) {
@@ -6908,6 +7048,9 @@ async function descartarStaging() {
     document.getElementById('resultados').innerHTML = '';
     document.getElementById('btnExportar').disabled = true;
     document.getElementById('btnExportarDisponibles').disabled = true;
+
+    // Wizard: vuelve al paso 1 (Subir OT)
+    setearPasoWizard(1);
 
     // ── Si la colmena fue pre-sincronizada, restaurar en Supabase ────────
     if (_colmenaPreSyncOK && _reservaActualId) {
