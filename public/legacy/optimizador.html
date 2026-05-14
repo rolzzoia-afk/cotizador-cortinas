@@ -6287,15 +6287,36 @@ function calcularDeltaEsperado(resultados) {
 }
 
 async function verificarSaludInventario(preCount, resultadosPlan) {
+    console.log('[Salud] verificarSaludInventario INICIO', { preCount, cortes: resultadosPlan?.length });
     try {
         const desglose = calcularDeltaEsperado(resultadosPlan);
         const esperado = preCount + desglose.delta;
-        const actual = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+        console.log('[Salud] Desglose:', desglose, 'esperado:', esperado);
+
+        let actual = null;
+        try {
+            actual = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+        } catch(eCount) {
+            console.warn('[Salud] _sbCount threw:', eCount);
+        }
+        console.log('[Salud] actual desde BD:', actual);
+
         if (actual === null || actual === undefined) {
-            // No se pudo contar — no marcamos sano ni alerta, dejamos pendiente
-            log('⚠️ Salud: no se pudo contar el inventario post-plan (probable RLS o red).', 'warn');
+            log('⚠️ Salud: no se pudo contar el inventario post-plan. Pill marcado como "no verificado".', 'warn');
+            try {
+                localStorage.setItem(SALUD_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    sano: false,
+                    error: 'no_post_count',
+                    mensaje: 'No se pudo contar el inventario post-plan',
+                    preCount,
+                    cortes: (resultadosPlan || []).length
+                }));
+                renderSaludInventario();
+            } catch(eSet) { /* ignorar */ }
             return;
         }
+
         const diff = actual - esperado;
         const sano = diff === 0;
         const reporte = {
@@ -6309,7 +6330,12 @@ async function verificarSaludInventario(preCount, resultadosPlan) {
             sobrantesGuardados: desglose.sobrantesGuardados,
             cortes: (resultadosPlan || []).length
         };
-        try { localStorage.setItem(SALUD_KEY, JSON.stringify(reporte)); } catch(e) { /* ignorar */ }
+        try {
+            localStorage.setItem(SALUD_KEY, JSON.stringify(reporte));
+            console.log('[Salud] Reporte persistido:', reporte);
+        } catch(e) {
+            console.warn('[Salud] localStorage.setItem falló:', e);
+        }
         renderSaludInventario();
 
         if (sano) {
@@ -6322,8 +6348,18 @@ async function verificarSaludInventario(preCount, resultadosPlan) {
             }, 'warning', { duracion: 0 });
         }
     } catch (e) {
-        console.warn('Salud inventario: error verificando', e);
+        console.error('[Salud] error inesperado:', e);
         log(`⚠️ Salud: error verificando inventario post-plan: ${e?.message || e}`, 'warn');
+        try {
+            localStorage.setItem(SALUD_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                sano: false,
+                error: 'exception',
+                mensaje: e?.message || String(e),
+                cortes: (resultadosPlan || []).length
+            }));
+            renderSaludInventario();
+        } catch(eSet) { /* ignorar */ }
     }
 }
 
@@ -6353,7 +6389,12 @@ function renderSaludInventario() {
         ? `hace ${minutos} min`
         : (minutos < 1440 ? `hace ${Math.round(minutos / 60)} h` : `hace ${Math.round(minutos / 1440)} d`);
 
-    if (reporte.sano) {
+    if (reporte.error) {
+        pill.classList.add('salud-alerta');
+        icon.textContent = '?';
+        detalle.innerHTML = `No se pudo verificar <span class="salud-meta">· ${tiempoTxt}</span>`;
+        pill.title = `El último chequeo falló: ${reporte.mensaje || reporte.error}. El próximo plan reintentará. Si persiste, hay un problema de conexión o RLS.`;
+    } else if (reporte.sano) {
         pill.classList.add('salud-sano');
         icon.textContent = '✓';
         detalle.innerHTML = `Sano <span class="salud-meta">· ${tiempoTxt}</span>`;
@@ -7029,6 +7070,22 @@ async function confirmarYGuardarStaging() {
     // ── PASO 1: Capturar snapshot INTACTO desde Supabase (antes de cualquier escritura) ──
     const snapshotSeguro = await capturarSnapshotPreOptimizacion();
 
+    // ── PASO 1b: Conteo en vivo de colmena_tubos ANTES del sync ──────────
+    // Sirve como preCount autoritativo para el chequeo de salud post-plan.
+    // Más confiable que snapshotSeguro.colmenas.length (que viene del cache
+    // de `configuracion` y puede estar stale después de un wipe directo).
+    let preCountLive = null;
+    try {
+        preCountLive = await _sbCount('colmena_tubos', `empresa_id=eq.${EMPRESA_ID_OPT}`);
+        if (preCountLive !== null) {
+            console.log('[Salud] preCount en vivo:', preCountLive);
+        } else {
+            log('⚠️ Salud: no se pudo capturar conteo pre-plan (RLS o red). El pill quedará sin chequeo.', 'warn');
+        }
+    } catch(eCount) {
+        log(`⚠️ Salud: error capturando conteo pre-plan: ${eCount?.message || eCount}`, 'warn');
+    }
+
     // ── PASO 2: Persistir el punto de restauración con el snapshot puro ──
     if (snapshotSeguro) {
         await guardarPuntoRestauracion(snapshotSeguro);
@@ -7284,11 +7341,25 @@ async function confirmarYGuardarStaging() {
     // ── Salud del inventario: contraprueba post-plan ─────────────────────
     // Verifica que pre_count + delta_esperado == count_real_en_BD.
     // Si no cuadra, el pill de salud se pone amarillo con la diferencia.
+    // preCount viene del conteo en vivo (PASO 1b), no del snapshot cacheado.
     if (colmenaSincronizadaOK) {
-        const preCount = (snapshotSeguro && snapshotSeguro.colmenas) ? snapshotSeguro.colmenas.length : null;
-        if (preCount !== null) {
+        if (preCountLive !== null) {
             // Esperar 500ms para que cualquier replica async se asiente
-            setTimeout(() => { verificarSaludInventario(preCount, resultados); }, 500);
+            console.log('[Salud] Agendando verificación con preCount=', preCountLive, 'resultados=', resultados.length);
+            setTimeout(() => { verificarSaludInventario(preCountLive, resultados); }, 500);
+        } else {
+            log('⚠️ Salud: omitida (sin preCount confiable).', 'warn');
+            // Marcar el pill como "no verificado" para que postventa vea que el chequeo falló
+            try {
+                localStorage.setItem(SALUD_KEY, JSON.stringify({
+                    timestamp: Date.now(),
+                    sano: false,
+                    error: 'no_precount',
+                    mensaje: 'No se pudo capturar el conteo pre-plan',
+                    cortes: resultados.length
+                }));
+                renderSaludInventario();
+            } catch(e) { /* ignorar */ }
         }
     }
 
