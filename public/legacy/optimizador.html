@@ -765,6 +765,127 @@
             .panel { padding: 12px 10px; }
             table { min-width: 380px; }
         }
+
+        /* ══ TOAST SYSTEM (no-bloqueante) ══ */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            max-width: 400px;
+            pointer-events: none;
+        }
+        .toast {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-left-width: 4px;
+            border-radius: 10px;
+            padding: 12px 16px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.4);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            opacity: 0;
+            transform: translateX(20px);
+            transition: opacity 0.25s ease, transform 0.25s ease;
+            pointer-events: auto;
+            min-width: 280px;
+        }
+        .toast.show { opacity: 1; transform: translateX(0); }
+        .toast.toast-success { border-left-color: var(--success); }
+        .toast.toast-error   { border-left-color: var(--danger); }
+        .toast.toast-warning { border-left-color: var(--warning); }
+        .toast.toast-info    { border-left-color: var(--primary); }
+        .toast-icon { font-size: 18px; line-height: 1; margin-top: 1px; flex-shrink: 0; }
+        .toast-success .toast-icon { color: var(--success); }
+        .toast-error   .toast-icon { color: var(--danger); }
+        .toast-warning .toast-icon { color: var(--warning); }
+        .toast-info    .toast-icon { color: var(--primary); }
+        .toast-body { flex: 1; min-width: 0; }
+        .toast-titulo { font-size: 13px; font-weight: 600; color: var(--text-primary); margin: 0 0 2px; }
+        .toast-mensaje { font-size: 12px; color: var(--text-secondary); margin: 0; line-height: 1.45; word-wrap: break-word; }
+        .toast-action {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 8px;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .toast-success .toast-action:hover { background: var(--success); border-color: var(--success); color: white; }
+        .toast-error   .toast-action:hover { background: var(--danger);  border-color: var(--danger);  color: white; }
+        .toast-warning .toast-action:hover { background: var(--warning); border-color: var(--warning); color: white; }
+        .toast-info    .toast-action:hover { background: var(--primary); border-color: var(--primary); color: white; }
+        .toast-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 0 4px;
+            flex-shrink: 0;
+        }
+        .toast-close:hover { color: var(--text-primary); }
+
+        /* ══ BANNER STICKY (versión nueva) ══ */
+        .banner-sticky {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9998;
+            background: linear-gradient(90deg, rgba(245,158,11,0.95), rgba(245,158,11,0.85));
+            color: #fff;
+            padding: 10px 18px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        .banner-sticky.show { display: flex; }
+        .banner-sticky-action {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .banner-sticky-action:hover { background: rgba(255,255,255,0.3); }
+        body.tiene-banner-sticky { padding-top: 42px; }
+
+        /* ══ FRESHNESS DEL INVENTARIO ══ */
+        .freshness-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            margin-left: 6px;
+        }
+        .freshness-fresca { background: rgba(34,197,94,0.15);  color: var(--success); border: 1px solid rgba(34,197,94,0.3); }
+        .freshness-media  { background: rgba(245,158,11,0.15); color: var(--warning); border: 1px solid rgba(245,158,11,0.3); }
+        .freshness-stale  { background: rgba(239,68,68,0.15);  color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
+        .freshness-indicator::before {
+            content: '●';
+            font-size: 10px;
+            line-height: 1;
+        }
     </style>
 </head>
 <body>
@@ -776,6 +897,15 @@
       <div class="spinner" style="width:44px; height:44px; border:3px solid rgba(99,102,241,0.2); border-top:3px solid #6366f1; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
       <p style="color:#a1a1aa; margin-top:16px; font-family:'Inter',sans-serif; font-size:14px; font-weight:500;">Sincronizando con la nube de Rolzzo...</p>
     </div>
+
+    <!-- Banner sticky (versión nueva u otros avisos persistentes) -->
+    <div id="banner-version-nueva" class="banner-sticky">
+      <span><i class="bi bi-arrow-up-circle"></i> Hay una versión nueva del optimizador disponible.</span>
+      <button class="banner-sticky-action" onclick="aplicarVersionNueva()">Actualizar ahora</button>
+    </div>
+
+    <!-- Container del toast system (poblado dinámicamente por toast()) -->
+    <div id="toast-container"></div>
 
     <!-- TOP BAR -->
     <div class="opt-topbar">
@@ -1344,7 +1474,10 @@ function formatearFecha(fecha) {
     if (isNaN(d.getTime())) return String(fecha).includes('/') ? fecha : '-';
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
-// Verificar versión mínima contra Supabase
+// Verificar versión mínima contra Supabase.
+// Si hay versión nueva, en lugar de recargar automáticamente, mostramos
+// un banner sticky en la parte superior. El usuario decide cuándo aplicar
+// la actualización (así no pierde un plan a medias).
 async function verificarVersionMinima() {
     try {
         const valor = await _supabaseLeer('opt_version_minima');
@@ -1352,18 +1485,34 @@ async function verificarVersionMinima() {
             const versionMinima = String(valor).trim();
             if (versionMinima && VERSION_ACTUAL < versionMinima) {
                 console.warn(`Versión ${VERSION_ACTUAL} obsoleta. Mínima requerida: ${versionMinima}`);
-                // Limpiar solo las claves del optimizador — NO tocar claves del cotizador
-                const clavesProtegidas = ['productosRollerDB','storeVentanas','activeOTId','rolzzo_device_id','rolzzo_operario'];
-                Object.keys(localStorage)
-                    .filter(k => !clavesProtegidas.includes(k))
-                    .forEach(k => localStorage.removeItem(k));
-                alert("Hay una versión nueva del optimizador. Se va a recargar la página para que la uses.");
-                window.location.reload();
+                mostrarBannerVersionNueva();
             }
         }
     } catch (error) {
         console.error("Error verificando versión mínima:", error);
     }
+}
+
+function mostrarBannerVersionNueva() {
+    const banner = document.getElementById('banner-version-nueva');
+    if (banner) {
+        banner.classList.add('show');
+        document.body.classList.add('tiene-banner-sticky');
+    }
+}
+
+// Invocado desde el botón "Actualizar ahora" del banner sticky.
+// Limpia caches del optimizador y recarga.
+function aplicarVersionNueva() {
+    try {
+        const clavesProtegidas = ['productosRollerDB','storeVentanas','activeOTId','rolzzo_device_id','rolzzo_operario'];
+        Object.keys(localStorage)
+            .filter(k => !clavesProtegidas.includes(k))
+            .forEach(k => localStorage.removeItem(k));
+    } catch (e) {
+        console.warn('Limpiando localStorage falló:', e);
+    }
+    window.location.reload();
 }
 
 // Verificar sesión activa — usando Supabase Auth
@@ -1681,9 +1830,16 @@ async function refrescarInventarioCompleto() {
         await cargarSerialesDesdeSupabase();
         await cargarColmenaFinalDesdeSupabase();
         log('🔄 Inventario refrescado desde la base de datos.', 'success');
+        toast({
+            titulo: 'Inventario actualizado',
+            mensaje: 'Catálogo, estructura y colmenas leídos desde la base de datos.'
+        }, 'success', { duracion: 3500 });
     } catch (e) {
         console.error('Refrescar inventario falló:', e);
-        alert('No se pudo refrescar el inventario. Recarga la página si el problema persiste.');
+        toast({
+            titulo: 'No se pudo refrescar',
+            mensaje: 'Recarga la página si el problema persiste.'
+        }, 'error');
     } finally {
         document.getElementById('loading-overlay').style.display = 'none';
     }
@@ -1725,8 +1881,18 @@ async function cargarColmenaFinalDesdeSupabase() {
             colmenaActual = colmenas;
             SistemaInventario.colmenas = colmenaActual;
             SistemaInventario.colmenaCruda = JSON.parse(JSON.stringify(colmenas));
+
+            // Registrar momento de la carga + snapshot de medidas para freshness
+            // y verificación de integridad pre-guardado.
+            _colmenaLoadedAt = new Date();
+            _colmenaSnapshotMedidas = {};
+            colmenas.forEach(c => {
+                if (c.tubo_raiz_id) _colmenaSnapshotMedidas[c.tubo_raiz_id] = c.medida_cm;
+            });
+
             actualizarTablaColmenas();
             actualizarIndicadorFuente(false);
+            _actualizarFreshnessColmena();
             verificarListo();
             const estadoEl = document.getElementById('estadoColmenas');
             if (estadoEl) {
@@ -3815,6 +3981,100 @@ function mostrarError(error) {
     } else {
         alert(txt);
     }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Toast system (no bloqueante) — Fase 2
+// Uso:
+//   toast('Plan guardado', 'success')
+//   toast({titulo:'Error', mensaje:'Algo falló'}, 'error', {duracion: 8000})
+//   toast({titulo:'Conflicto', mensaje:'Otro usuario...', accion:{texto:'Refrescar', onClick: fn}}, 'warning', {duracion: 0})
+// ─────────────────────────────────────────────────────────────────────────────
+const TOAST_ICONOS = {
+    success: '✓',
+    error:   '✕',
+    warning: '⚠',
+    info:    'ℹ',
+};
+
+function toast(contenido, tipo, opts) {
+    tipo = tipo || 'info';
+    opts = opts || {};
+
+    // Normalizar: si viene como string, asumimos solo mensaje
+    const data = (typeof contenido === 'string')
+        ? { titulo: null, mensaje: contenido }
+        : contenido || {};
+
+    const container = document.getElementById('toast-container');
+    if (!container) {
+        // Fallback si el container no existe (ej. carga muy temprana)
+        console.log(`[toast/${tipo}]`, data.titulo || '', data.mensaje || '');
+        return null;
+    }
+
+    const el = document.createElement('div');
+    el.className = `toast toast-${tipo}`;
+
+    const icono = TOAST_ICONOS[tipo] || 'ℹ';
+    const tituloHtml = data.titulo ? `<p class="toast-titulo">${escapeHtml(data.titulo)}</p>` : '';
+    const mensajeHtml = data.mensaje ? `<p class="toast-mensaje">${escapeHtml(data.mensaje)}</p>` : '';
+    const accionHtml = (data.accion && data.accion.texto) ? `<button class="toast-action">${escapeHtml(data.accion.texto)}</button>` : '';
+
+    el.innerHTML = `
+        <span class="toast-icon">${icono}</span>
+        <div class="toast-body">
+            ${tituloHtml}
+            ${mensajeHtml}
+            ${accionHtml}
+        </div>
+        <button class="toast-close" title="Cerrar">×</button>
+    `;
+
+    const cerrar = () => {
+        el.classList.remove('show');
+        setTimeout(() => el.remove(), 250);
+    };
+
+    el.querySelector('.toast-close').addEventListener('click', cerrar);
+    if (data.accion && typeof data.accion.onClick === 'function') {
+        el.querySelector('.toast-action').addEventListener('click', () => {
+            try { data.accion.onClick(); } catch(e) { console.error('Acción del toast falló:', e); }
+            cerrar();
+        });
+    }
+
+    container.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+
+    // Auto-dismiss (excepto si duracion = 0)
+    const duracion = (opts.duracion != null) ? opts.duracion
+        : (tipo === 'error' ? 8000 : 5000);
+    if (duracion > 0) {
+        setTimeout(cerrar, duracion);
+    }
+    return el;
+}
+
+function escapeHtml(s) {
+    if (s == null) return '';
+    return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Variante de mostrarError que usa toast en lugar de alert/confirm.
+// Para errores no críticos donde no necesitamos respuesta forzada del usuario.
+function mostrarToastError(error) {
+    const h = mensajeHumano(error);
+    toast({
+        titulo: h.titulo,
+        mensaje: h.mensaje,
+        accion: h.accion,
+    }, 'error', { duracion: h.accion ? 0 : 8000 });
 }
 
 function log(mensaje, tipo) {
@@ -6094,29 +6354,42 @@ let _freshnessInterval = null;
 // Si es null (carga manual desde Excel), la RPC omite el chequeo.
 let _colmenaSyncStateAtLoad = null;
 
-// Actualiza el indicador visual de antigüedad de la colmena
+// Actualiza el indicador visual de antigüedad de la colmena.
+// Verde: < 5 min. Amarillo: 5-30 min. Rojo: > 30 min.
+// Aparece como pill al lado del estado "Colmenas" en la sección
+// "Estado del inventario".
 function _actualizarFreshnessColmena() {
     if (_freshnessInterval) clearInterval(_freshnessInterval);
     const el = document.getElementById('colmena-freshness');
     if (!el) return;
 
     function _render() {
-        if (!_colmenaLoadedAt) { el.style.display = 'none'; return; }
+        if (!_colmenaLoadedAt) {
+            el.style.display = 'none';
+            el.className = '';
+            return;
+        }
         const mins = Math.floor((Date.now() - _colmenaLoadedAt.getTime()) / 60000);
         el.style.display = '';
+        let texto, clase;
         if (mins < 5) {
-            el.style.color = '#4ade80';
-            el.textContent = `⬤ Colmena actualizada hace ${mins < 1 ? 'unos segundos' : mins + ' min'}`;
+            clase = 'freshness-indicator freshness-fresca';
+            texto = mins < 1 ? 'Hace unos segundos' : `Hace ${mins} min`;
         } else if (mins < 30) {
-            el.style.color = '#fbbf24';
-            el.textContent = `⬤ Colmena cargada hace ${mins} min — considerá recargar`;
+            clase = 'freshness-indicator freshness-media';
+            texto = `Hace ${mins} min · considera refrescar`;
         } else {
-            el.style.color = '#f87171';
-            el.textContent = `⚠ Colmena cargada hace ${mins} min — puede estar desactualizada`;
+            const hrs = Math.floor(mins / 60);
+            clase = 'freshness-indicator freshness-stale';
+            texto = hrs >= 1
+                ? `Hace ${hrs} h · puede estar desactualizada`
+                : `Hace ${mins} min · puede estar desactualizada`;
         }
+        el.className = clase;
+        el.textContent = texto;
     }
     _render();
-    _freshnessInterval = setInterval(_render, 60000);
+    _freshnessInterval = setInterval(_render, 30000);
 }
 
 // ── VERIFICACIÓN PRE-GUARDADO ────────────────────────────────────
