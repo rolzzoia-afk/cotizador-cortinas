@@ -310,7 +310,7 @@ SELECT
   'Conteo físico completo del 14/05/2026 — baseline post-recuento del taller. Lote total: 217 tubos en 16 colmenas (A14-A35, B1-B3, L02, L03).',
   'cortinasrolzzo@hotmail.com',
   now() - interval '1 second'
-FROM nuevos_tubos;
+FROM nuevos_tubos nt;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4) Verificación post-INSERT
