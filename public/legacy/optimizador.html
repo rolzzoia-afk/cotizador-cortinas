@@ -1415,6 +1415,28 @@ async function _sbCount(tabla, filtro) {
     return null;
 }
 
+// Trae de tubos_historial los tubo_raiz_id que tienen un evento dado, EN LOTES.
+// Evita el bug de "URL demasiado larga": con 200+ UUIDs, un solo .in() arma una
+// dirección de >8 KB que el gateway de Supabase rechaza con HTTP 414, y supabase-js
+// NO lanza excepción — devuelve { data: null } — así que el resultado quedaba
+// silenciosamente vacío. Lotes de 80 UUIDs mantienen la URL muy por debajo del límite.
+async function _historialUuidsConEvento(evento, uuids) {
+    const LOTE = 80;
+    const encontrados = new Set();
+    for (let i = 0; i < uuids.length; i += LOTE) {
+        const lote = uuids.slice(i, i + LOTE);
+        const { data, error } = await sbOpt
+            .from('tubos_historial')
+            .select('tubo_raiz_id')
+            .eq('empresa_id', EMPRESA_ID_OPT)
+            .eq('evento', evento)
+            .in('tubo_raiz_id', lote);
+        if (error) throw new Error(error.message || JSON.stringify(error));
+        (data || []).forEach(r => encontrados.add(r.tubo_raiz_id));
+    }
+    return encontrados;
+}
+
 // ── Funciones helper para comunicarse con el cotizador padre (iframe) ──────
 // El cotizador expone window.guardarConfigEnSupabase y window.leerConfigDeSupabase
 // que corren con sesión autenticada. Esto evita problemas de RLS.
@@ -2133,13 +2155,10 @@ async function guardarColmenaFinalEnSupabase(eventos = [], planPayload = null) {
             const _uuidsPesoConHistorial = new Set();
             if (_uuidsPesoPreservados.length > 0) {
                 try {
-                    const { data: _prevPeso } = await sbOpt
-                        .from('tubos_historial')
-                        .select('tubo_raiz_id')
-                        .eq('empresa_id', EMPRESA_ID_OPT)
-                        .eq('evento', 'ingreso')
-                        .in('tubo_raiz_id', _uuidsPesoPreservados);
-                    (_prevPeso || []).forEach(r => _uuidsPesoConHistorial.add(r.tubo_raiz_id));
+                    // EN LOTES (ver _historialUuidsConEvento): evita el HTTP 414 silencioso
+                    // cuando hay muchos tubos en slots de peso.
+                    const _conIngreso = await _historialUuidsConEvento('ingreso', _uuidsPesoPreservados);
+                    _conIngreso.forEach(id => _uuidsPesoConHistorial.add(id));
                 } catch (e) {
                     console.warn('[OPT] pre-fetch historial pesos falló — se generarán ingresos posiblemente duplicados:', e?.message || e);
                     // Failsafe: si el fetch falla, dejamos vacío el set → cualquier UUID
@@ -2825,32 +2844,51 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
     try {
         const _uuidsFilas = filas.map(f => f.tubo_raiz_id).filter(Boolean);
         if (_uuidsFilas.length > 0) {
-            const { data: _eliminados } = await sbOpt
-                .from('tubos_historial')
-                .select('tubo_raiz_id, created_at')
-                .eq('empresa_id', EMPRESA_ID_OPT)
-                .eq('evento', 'eliminado')
-                .in('tubo_raiz_id', _uuidsFilas);
+            // Helper: trae eventos de tubos_historial filtrando por UUID EN LOTES.
+            // BUG corregido 2026-05-15: con ~200+ tubos, un solo .in() genera una
+            // URL de >8 KB que el gateway de Supabase rechaza (HTTP 414). supabase-js
+            // NO lanza excepción en ese caso — devuelve { data: null } — así que el
+            // prechequeo de tombstones quedaba silenciosamente vacío, el RPC descartaba
+            // el tubo tombstoneado y la verificación reventaba con
+            // "Verificación falló: N en BD vs M enviados (faltan)".
+            // Lotes de 80 UUIDs mantienen la URL muy por debajo del límite.
+            const _fetchHistorialEnLotes = async (evento, uuids) => {
+                const LOTE = 80;
+                const acumulado = [];
+                for (let i = 0; i < uuids.length; i += LOTE) {
+                    const lote = uuids.slice(i, i + LOTE);
+                    const { data, error } = await sbOpt
+                        .from('tubos_historial')
+                        .select('tubo_raiz_id, created_at')
+                        .eq('empresa_id', EMPRESA_ID_OPT)
+                        .eq('evento', evento)
+                        .in('tubo_raiz_id', lote);
+                    if (error) throw new Error(error.message || JSON.stringify(error));
+                    if (data) acumulado.push(...data);
+                }
+                return acumulado;
+            };
 
+            const _eliminados = await _fetchHistorialEnLotes('eliminado', _uuidsFilas);
+
+            // Comparación por timestamp REAL (Date.getTime), no por string: evita
+            // falsos negativos si created_at llega con formatos/precisión distintos.
             const _maxEliminadoPorUuid = new Map();
             (_eliminados || []).forEach(r => {
+                const ts = new Date(r.created_at).getTime();
                 const prev = _maxEliminadoPorUuid.get(r.tubo_raiz_id);
-                if (!prev || r.created_at > prev) _maxEliminadoPorUuid.set(r.tubo_raiz_id, r.created_at);
+                if (prev === undefined || ts > prev) _maxEliminadoPorUuid.set(r.tubo_raiz_id, ts);
             });
 
             if (_maxEliminadoPorUuid.size > 0) {
                 const _uuidsConEliminado = [..._maxEliminadoPorUuid.keys()];
-                const { data: _ingresos } = await sbOpt
-                    .from('tubos_historial')
-                    .select('tubo_raiz_id, created_at')
-                    .eq('empresa_id', EMPRESA_ID_OPT)
-                    .eq('evento', 'ingreso')
-                    .in('tubo_raiz_id', _uuidsConEliminado);
+                const _ingresos = await _fetchHistorialEnLotes('ingreso', _uuidsConEliminado);
 
                 const _maxIngresoPorUuid = new Map();
                 (_ingresos || []).forEach(r => {
+                    const ts = new Date(r.created_at).getTime();
                     const prev = _maxIngresoPorUuid.get(r.tubo_raiz_id);
-                    if (!prev || r.created_at > prev) _maxIngresoPorUuid.set(r.tubo_raiz_id, r.created_at);
+                    if (prev === undefined || ts > prev) _maxIngresoPorUuid.set(r.tubo_raiz_id, ts);
                 });
 
                 const _uuidsConIngresoEnEventos = new Set(
@@ -2865,7 +2903,7 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
                 let _autoCurados = 0;
                 _maxEliminadoPorUuid.forEach((eliminadoTs, uuid) => {
                     const ingresoTs = _maxIngresoPorUuid.get(uuid);
-                    if (ingresoTs && ingresoTs > eliminadoTs) return; // ingreso posterior → no tombstoneado
+                    if (ingresoTs !== undefined && ingresoTs > eliminadoTs) return; // ingreso posterior → no tombstoneado
                     if (_uuidsConIngresoEnEventos.has(uuid)) return;  // ya hay ingreso programado
                     const f = _filaPorUuid.get(uuid);
                     if (!f) return;
@@ -2904,10 +2942,23 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
     };
     if (planPayload) _rpcArgs.p_plan_payload = planPayload;
 
+    // ¿El RPC ya se ejecutó (y por tanto YA escribió en BD) en el intento actual?
+    let _rpcEjecutado = false;
+
     for (let intento = 1; intento <= 3; intento++) {
+        _rpcEjecutado = false;
         try {
+            // BUG corregido 2026-05-15: cada reintento debe usar el last_sync_at
+            // MÁS RECIENTE. Si el intento anterior llegó a escribir en BD (la RPC
+            // sí corre aunque la verificación posterior falle), colmena_sync_state
+            // ya cambió. Reusar el `_rpcArgs` con el timestamp viejo disparaba un
+            // falso `colmena_sync_conflict` en el intento 2 → el usuario veía
+            // "otra sesión modificó la colmena" cuando nadie la tocó, y el
+            // guardado se abortaba sin reintentar de verdad.
+            _rpcArgs.p_expected_sync_at = _colmenaSyncStateAtLoad;
             const { data: rpcData, error } = await sbOpt.rpc(_rpcNombre, _rpcArgs);
             if (error) throw new Error(error.message || JSON.stringify(error));
+            _rpcEjecutado = true;   // a partir de aquí, el RPC YA escribió en BD
 
             // Refrescar el timestamp local: la RPC actualizó last_sync_at en BD,
             // así que cualquier guardado siguiente en esta misma sesión usa el nuevo.
@@ -2945,6 +2996,15 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
                 // y rehacer la optimización con el estado fresco de la BD.
                 console.error('[colmena_tubos] Conflicto de lock optimista — abortando sin reintentar:', e.message);
                 throw new Error('Otra sesión modificó la colmena entre tu carga y este guardado. Tu plan NO se guardó. Recarga el inventario ("Cargar desde Supabase") y vuelve a optimizar.');
+            }
+            // BUG corregido 2026-05-15: si el RPC YA se ejecutó (escribió en BD) y lo
+            // que falló fue la verificación POSTERIOR, no se debe reintentar cuando se
+            // usó `guardar_plan_atomico`: ese RPC NO es idempotente y un reintento
+            // insertaría un plan_corte DUPLICADO. Además, el desajuste de conteo es
+            // determinista (filtro tombstone), así que reintentar daría lo mismo.
+            if (_rpcEjecutado && planPayload) {
+                console.error('[colmena_tubos] guardar_plan_atomico ejecutado pero verificación falló — abortando sin reintentar para no duplicar el plan:', e.message);
+                throw new Error(`El inventario se sincronizó pero la verificación posterior no cuadró (${e.message}). No se reintenta automáticamente para no duplicar el plan. Recarga el inventario ("Cargar desde Supabase"), revisa la colmena y vuelve a guardar.`);
             }
             console.warn(`[colmena_tubos] Intento ${intento} falló: ${e.message}`);
             if (intento < 3) await new Promise(r => setTimeout(r, 800 * intento));
@@ -6349,6 +6409,20 @@ async function capturarSnapshotPreOptimizacion() {
             : (colmenaActual ? JSON.parse(JSON.stringify(colmenaActual)) : []);
     }
 
+    // Failsafe: si el caché de Supabase (`opt_colmena_final`) vino vacío o no existe,
+    // un snapshot de 0 registros NUNCA es correcto cuando hay una colmena cargada.
+    // Caería en un punto de restauración inservible. Usar la copia inmutable que se
+    // tomó al cargar la colmena (colmenaCruda / colmenaActual) como fuente real.
+    if (snapshotColmenas.length === 0) {
+        const _fallback = (SistemaInventario.colmenaCruda && SistemaInventario.colmenaCruda.length > 0)
+            ? SistemaInventario.colmenaCruda
+            : (colmenaActual && colmenaActual.length > 0 ? colmenaActual : null);
+        if (_fallback) {
+            snapshotColmenas = JSON.parse(JSON.stringify(_fallback));
+            console.warn(`📸 Snapshot vino vacío desde Supabase — usando copia inmutable en memoria (${snapshotColmenas.length} registros).`);
+        }
+    }
+
     // ── Seriales: usar la copia inmutable pre-optimización ──
     snapshotSeriales = SistemaInventario.serialesCrudos.length > 0
         ? JSON.parse(JSON.stringify(SistemaInventario.serialesCrudos))
@@ -6628,14 +6702,15 @@ async function construirEventosTubos() {
         // lo rechazará. Tratarlo como "sin historial" deja que el flujo decida:
         // si raiz matchea BD → genera `ingreso_retroactivo_auto`; si no → fantasma.
         // Matchea la semántica del tombstone V2 (sql/20260513b_rpc_guardar_plan_atomico.sql:95-109).
-        const { data: previos } = await sbOpt
-            .from('tubos_historial')
-            .select('tubo_raiz_id')
-            .eq('empresa_id', EMPRESA_ID_OPT)
-            .eq('evento', 'ingreso')
-            .in('tubo_raiz_id', raizIds);
-
-        const conHistorial = new Set((previos || []).map(r => r.tubo_raiz_id));
+        // EN LOTES (ver _historialUuidsConEvento): con planes grandes, un solo .in()
+        // generaba una URL >8 KB que Supabase rechazaba sin avisar → conHistorial
+        // quedaba vacío y se generaban ingresos retroactivos de más (ruido, no destructivo).
+        let conHistorial = new Set();
+        try {
+            conHistorial = await _historialUuidsConEvento('ingreso', raizIds);
+        } catch (ePrev) {
+            console.warn('[historial] pre-fetch de ingresos previos falló — los tubos se tratarán como sin historial:', ePrev?.message || ePrev);
+        }
         let nuevos = 0;
         let retroactivos = 0;
         const fantasmas = [];
@@ -6902,14 +6977,22 @@ async function verificarIntegridadPreGuardado() {
     // que cuelga la query indefinidamente cuando el optimizador corre en iframe.
     let actuales = [];
     try {
-        const idsStr = raizIds.map(id => `"${id}"`).join(',');
-        const res = await _sbRest(
-            'GET',
-            `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}&tubo_raiz_id=in.(${idsStr})&select=tubo_raiz_id,n_colmena,cod,medida_cm`,
-            undefined,
-            { 'Prefer': 'return=representation' }
-        );
-        actuales = await res.json();
+        // EN LOTES de 80: con planes grandes, meter todos los UUIDs en un solo
+        // tubo_raiz_id=in.(...) generaba una URL >8 KB → Supabase respondía 414 →
+        // la verificación de integridad se saltaba sin avisar. Trocear la consulta
+        // mantiene la URL corta y conserva esta red de seguridad para planes grandes.
+        const LOTE = 80;
+        for (let i = 0; i < raizIds.length; i += LOTE) {
+            const idsStr = raizIds.slice(i, i + LOTE).map(id => `"${id}"`).join(',');
+            const res = await _sbRest(
+                'GET',
+                `colmena_tubos?empresa_id=eq.${EMPRESA_ID_OPT}&tubo_raiz_id=in.(${idsStr})&select=tubo_raiz_id,n_colmena,cod,medida_cm`,
+                undefined,
+                { 'Prefer': 'return=representation' }
+            );
+            const lote = await res.json();
+            if (Array.isArray(lote)) actuales.push(...lote);
+        }
     } catch (err) {
         log(`⚠️ No se pudo verificar integridad: ${err.message}. Procediendo con precaución.`, 'warn');
         return { ok: true };
@@ -8096,6 +8179,7 @@ async function corregirCorteErroneo() {
         document.getElementById('loading-overlay').style.display = 'none';
     }
 }
+// ── Fin del script principal del optimizador ──
 </script>
 
 <!-- ══════════════════════════════════════════════════════════════════
