@@ -1916,4 +1916,3 @@ export function HistorialCorte() {
     </div>
   );
 }
-  

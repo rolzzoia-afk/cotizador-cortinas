@@ -604,4 +604,3 @@ function BomEstadoBadge({ estado }: { estado: BomEstado }) {
     </span>
   );
 }
- 
