@@ -2806,63 +2806,86 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
     }));
 
     // ── Auto-curar tombstones false positives ───────────────────────────────
-    // El filtro tombstone V2 del RPC (sql/20260513b_rpc_guardar_plan_atomico.sql:95-109)
-    // descarta cualquier UUID cuyo último evento sea `eliminado` sin `ingreso` posterior.
-    // Si un tubo lateral de `colmenasFinal` está tombstoneado y el caller no programó
-    // un `ingreso` para él en `eventos`, el RPC inserta menos filas que las enviadas y
-    // la verificación post-sync revienta con "verificación falló: N en BD vs M enviados (faltan)".
+    // El filtro tombstone V2 del RPC (sql/20260513b... y sql/20260515...) descarta
+    // cualquier UUID con un `eliminado` en historial que no tenga un `ingreso`
+    // posterior (en historial o en p_eventos). NO mira "el último evento" — basta
+    // con que EXISTA un eliminado sin ingreso posterior, aunque haya cortes/sobrantes
+    // en medio. Ej: secuencia eliminado(T1) → corte(T2) sigue siendo tombstone activo
+    // porque entre el eliminado y el `now` no hay un ingreso.
     //
-    // Esto cubre tubos que no pasan por `construirEventosTubos` (sobrantes preservados,
-    // tubos en peso slots fuera de la consolidación actual, reservas/rollbacks, etc).
-    // Generamos `ingreso` con fuente='sync_tombstone_autocurado' para los que hagan falta.
-    // Mismo patrón que PR #109, pero defensivo a nivel sync — confía en `colmenasFinal`
-    // como source-of-truth del estado físico.
+    // Esta función replica esa semántica para tubos en `colmenasFinal` que no pasan
+    // por construirEventosTubos (sobrantes preservados, peso slots fuera de la
+    // consolidación actual, reservas/rollbacks). Genera `ingreso` con
+    // fuente='sync_tombstone_autocurado' para los que correspondan.
+    //
+    // Implementación en 2 queries focalizadas (vs single query con LIMIT 1000):
+    //   1) eliminados de los UUIDs en filas → max(created_at) por UUID
+    //   2) ingresos de los mismos UUIDs → max(created_at) por UUID
+    //   tombstone activo si maxEliminado existe y maxIngreso <= maxEliminado.
     try {
         const _uuidsFilas = filas.map(f => f.tubo_raiz_id).filter(Boolean);
         if (_uuidsFilas.length > 0) {
-            const { data: _eventosPrev } = await sbOpt
+            const { data: _eliminados } = await sbOpt
                 .from('tubos_historial')
-                .select('tubo_raiz_id, evento, created_at')
+                .select('tubo_raiz_id, created_at')
                 .eq('empresa_id', EMPRESA_ID_OPT)
-                .in('tubo_raiz_id', _uuidsFilas)
-                .order('created_at', { ascending: false });
+                .eq('evento', 'eliminado')
+                .in('tubo_raiz_id', _uuidsFilas);
 
-            const _ultimoPorUuid = new Map();
-            (_eventosPrev || []).forEach(r => {
-                if (!_ultimoPorUuid.has(r.tubo_raiz_id)) _ultimoPorUuid.set(r.tubo_raiz_id, r);
+            const _maxEliminadoPorUuid = new Map();
+            (_eliminados || []).forEach(r => {
+                const prev = _maxEliminadoPorUuid.get(r.tubo_raiz_id);
+                if (!prev || r.created_at > prev) _maxEliminadoPorUuid.set(r.tubo_raiz_id, r.created_at);
             });
 
-            const _uuidsConIngresoEnEventos = new Set(
-                (eventos || [])
-                    .filter(e => e && e.evento === 'ingreso' && e.tubo_raiz_id)
-                    .map(e => e.tubo_raiz_id)
-            );
+            if (_maxEliminadoPorUuid.size > 0) {
+                const _uuidsConEliminado = [..._maxEliminadoPorUuid.keys()];
+                const { data: _ingresos } = await sbOpt
+                    .from('tubos_historial')
+                    .select('tubo_raiz_id, created_at')
+                    .eq('empresa_id', EMPRESA_ID_OPT)
+                    .eq('evento', 'ingreso')
+                    .in('tubo_raiz_id', _uuidsConEliminado);
 
-            const _filaPorUuid = new Map();
-            filas.forEach(f => { if (f.tubo_raiz_id) _filaPorUuid.set(f.tubo_raiz_id, f); });
-
-            let _autoCurados = 0;
-            _ultimoPorUuid.forEach((ultimo, uuid) => {
-                if (ultimo.evento !== 'eliminado') return;
-                if (_uuidsConIngresoEnEventos.has(uuid)) return;
-                const f = _filaPorUuid.get(uuid);
-                if (!f) return;
-                eventos.push({
-                    empresa_id:     EMPRESA_ID_OPT,
-                    tubo_raiz_id:   uuid,
-                    n_colmena:      f.n_colmena,
-                    cod:            f.cod,
-                    medida_cm:      f.medida_cm,
-                    evento:         'ingreso',
-                    fuente:         'sync_tombstone_autocurado',
-                    notas:          'Tubo presente en colmena local con tombstone activo (eliminado sin ingreso posterior). Ingreso retroactivo auto-generado por sincronizarColmenaFinalConTabla para evitar rechazo del RPC tombstone V2. Auditar fuente upstream.',
-                    registrado_por: (typeof _currentUser !== 'undefined' && _currentUser && _currentUser.email) || 'sistema'
+                const _maxIngresoPorUuid = new Map();
+                (_ingresos || []).forEach(r => {
+                    const prev = _maxIngresoPorUuid.get(r.tubo_raiz_id);
+                    if (!prev || r.created_at > prev) _maxIngresoPorUuid.set(r.tubo_raiz_id, r.created_at);
                 });
-                _autoCurados++;
-            });
 
-            if (_autoCurados > 0) {
-                console.warn(`[sync] ⚠️ Auto-curados ${_autoCurados} tubo(s) con tombstone activo. Fuente='sync_tombstone_autocurado' — auditar.`);
+                const _uuidsConIngresoEnEventos = new Set(
+                    (eventos || [])
+                        .filter(e => e && e.evento === 'ingreso' && e.tubo_raiz_id)
+                        .map(e => e.tubo_raiz_id)
+                );
+
+                const _filaPorUuid = new Map();
+                filas.forEach(f => { if (f.tubo_raiz_id) _filaPorUuid.set(f.tubo_raiz_id, f); });
+
+                let _autoCurados = 0;
+                _maxEliminadoPorUuid.forEach((eliminadoTs, uuid) => {
+                    const ingresoTs = _maxIngresoPorUuid.get(uuid);
+                    if (ingresoTs && ingresoTs > eliminadoTs) return; // ingreso posterior → no tombstoneado
+                    if (_uuidsConIngresoEnEventos.has(uuid)) return;  // ya hay ingreso programado
+                    const f = _filaPorUuid.get(uuid);
+                    if (!f) return;
+                    eventos.push({
+                        empresa_id:     EMPRESA_ID_OPT,
+                        tubo_raiz_id:   uuid,
+                        n_colmena:      f.n_colmena,
+                        cod:            f.cod,
+                        medida_cm:      f.medida_cm,
+                        evento:         'ingreso',
+                        fuente:         'sync_tombstone_autocurado',
+                        notas:          'Tubo presente en colmena local con tombstone activo (eliminado sin ingreso posterior). Ingreso retroactivo auto-generado por sincronizarColmenaFinalConTabla para evitar rechazo del RPC tombstone V2. Auditar fuente upstream.',
+                        registrado_por: (typeof _currentUser !== 'undefined' && _currentUser && _currentUser.email) || 'sistema'
+                    });
+                    _autoCurados++;
+                });
+
+                if (_autoCurados > 0) {
+                    console.warn(`[sync] ⚠️ Auto-curados ${_autoCurados} tubo(s) con tombstone activo. Fuente='sync_tombstone_autocurado' — auditar.`);
+                }
             }
         }
     } catch (_e) {
