@@ -445,3 +445,60 @@ export function usePlanesHistorial(): {
 
   return { planes, loading, cargar, restaurar };
 }
+
+// ── Hook: corrección retroactiva sobre un plan antiguo ──────────────
+// B2 v1: llama al RPC `aplicar_correccion_retroactiva` para marcar como
+// defectuosa una línea de un plan que NO es el último, sin rebobinar
+// inventario ni crear un plan nuevo. Solo deja el registro (audit +
+// evento error_reemplazo). El encargado luego corta el reemplazo via
+// el optimizador normal.
+export type CorreccionRetroactivaResult = {
+  correccion_id: string;
+  evento_id: string;
+  tubo_raiz_id: string | null;
+  n_colmena: string | null;
+  cod: string | null;
+  medida_cm: number | null;
+  ot: string | null;
+};
+
+export function useCorreccionRetroactiva(): {
+  aplicar: (
+    planId: string,
+    lineaIdx: number,
+    tipo: TipoError,
+    nota?: string,
+  ) => Promise<CorreccionRetroactivaResult>;
+} {
+  const aplicar = useCallback(
+    async (
+      planId: string,
+      lineaIdx: number,
+      tipo: TipoError,
+      nota?: string,
+    ): Promise<CorreccionRetroactivaResult> => {
+      // (supabase.rpc as any): la función es nueva y todavía no está en los
+      // tipos generados de database.ts. Mismo patrón que orphan-plans.ts usa
+      // para detectar_planes_huerfanos. Se limpia cuando se regeneren los tipos.
+      const { data, error } = await (supabase.rpc as any)('aplicar_correccion_retroactiva', {
+        p_plan_id: planId,
+        p_linea_idx: lineaIdx,
+        p_tipo: tipo,
+        p_nota: nota ?? null,
+      });
+      if (error) throw error;
+      return (data as CorreccionRetroactivaResult) || {
+        correccion_id: '',
+        evento_id: '',
+        tubo_raiz_id: null,
+        n_colmena: null,
+        cod: null,
+        medida_cm: null,
+        ot: null,
+      };
+    },
+    [],
+  );
+
+  return { aplicar };
+}
