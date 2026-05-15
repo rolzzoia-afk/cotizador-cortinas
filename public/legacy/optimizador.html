@@ -2805,6 +2805,70 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
         agregado_por_admin: false
     }));
 
+    // ── Auto-curar tombstones false positives ───────────────────────────────
+    // El filtro tombstone V2 del RPC (sql/20260513b_rpc_guardar_plan_atomico.sql:95-109)
+    // descarta cualquier UUID cuyo último evento sea `eliminado` sin `ingreso` posterior.
+    // Si un tubo lateral de `colmenasFinal` está tombstoneado y el caller no programó
+    // un `ingreso` para él en `eventos`, el RPC inserta menos filas que las enviadas y
+    // la verificación post-sync revienta con "verificación falló: N en BD vs M enviados (faltan)".
+    //
+    // Esto cubre tubos que no pasan por `construirEventosTubos` (sobrantes preservados,
+    // tubos en peso slots fuera de la consolidación actual, reservas/rollbacks, etc).
+    // Generamos `ingreso` con fuente='sync_tombstone_autocurado' para los que hagan falta.
+    // Mismo patrón que PR #109, pero defensivo a nivel sync — confía en `colmenasFinal`
+    // como source-of-truth del estado físico.
+    try {
+        const _uuidsFilas = filas.map(f => f.tubo_raiz_id).filter(Boolean);
+        if (_uuidsFilas.length > 0) {
+            const { data: _eventosPrev } = await sbOpt
+                .from('tubos_historial')
+                .select('tubo_raiz_id, evento, created_at')
+                .eq('empresa_id', EMPRESA_ID_OPT)
+                .in('tubo_raiz_id', _uuidsFilas)
+                .order('created_at', { ascending: false });
+
+            const _ultimoPorUuid = new Map();
+            (_eventosPrev || []).forEach(r => {
+                if (!_ultimoPorUuid.has(r.tubo_raiz_id)) _ultimoPorUuid.set(r.tubo_raiz_id, r);
+            });
+
+            const _uuidsConIngresoEnEventos = new Set(
+                (eventos || [])
+                    .filter(e => e && e.evento === 'ingreso' && e.tubo_raiz_id)
+                    .map(e => e.tubo_raiz_id)
+            );
+
+            const _filaPorUuid = new Map();
+            filas.forEach(f => { if (f.tubo_raiz_id) _filaPorUuid.set(f.tubo_raiz_id, f); });
+
+            let _autoCurados = 0;
+            _ultimoPorUuid.forEach((ultimo, uuid) => {
+                if (ultimo.evento !== 'eliminado') return;
+                if (_uuidsConIngresoEnEventos.has(uuid)) return;
+                const f = _filaPorUuid.get(uuid);
+                if (!f) return;
+                eventos.push({
+                    empresa_id:     EMPRESA_ID_OPT,
+                    tubo_raiz_id:   uuid,
+                    n_colmena:      f.n_colmena,
+                    cod:            f.cod,
+                    medida_cm:      f.medida_cm,
+                    evento:         'ingreso',
+                    fuente:         'sync_tombstone_autocurado',
+                    notas:          'Tubo presente en colmena local con tombstone activo (eliminado sin ingreso posterior). Ingreso retroactivo auto-generado por sincronizarColmenaFinalConTabla para evitar rechazo del RPC tombstone V2. Auditar fuente upstream.',
+                    registrado_por: (typeof _currentUser !== 'undefined' && _currentUser && _currentUser.email) || 'sistema'
+                });
+                _autoCurados++;
+            });
+
+            if (_autoCurados > 0) {
+                console.warn(`[sync] ⚠️ Auto-curados ${_autoCurados} tubo(s) con tombstone activo. Fuente='sync_tombstone_autocurado' — auditar.`);
+            }
+        }
+    } catch (_e) {
+        console.warn('[sync] No se pudo prechequear tombstones; el sync puede fallar si hay alguno activo:', _e?.message || _e);
+    }
+
     // Si viene planPayload → usar RPC `guardar_plan_atomico` (Phase 2 anti-huérfanos).
     // Si NO → usar `sync_colmena_tubos` (legacy, para reservas/rollback).
     // Ambas tienen la misma signature de los primeros 4 args + el lock optimista.
