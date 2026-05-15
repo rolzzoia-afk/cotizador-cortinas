@@ -6536,10 +6536,16 @@ async function construirEventosTubos() {
 
     if (raizIds.length > 0) {
         log(`🔍 Historial tubos: verificando primer uso de ${raizIds.length} tubo(s)...`, 'info');
+        // Solo contar UUIDs con evento `ingreso`. Si el único evento es `eliminado`
+        // (sin ingreso posterior), el UUID está tombstoned y la RPC `guardar_plan_atomico`
+        // lo rechazará. Tratarlo como "sin historial" deja que el flujo decida:
+        // si raiz matchea BD → genera `ingreso_retroactivo_auto`; si no → fantasma.
+        // Matchea la semántica del tombstone V2 (sql/20260513b_rpc_guardar_plan_atomico.sql:95-109).
         const { data: previos } = await sbOpt
             .from('tubos_historial')
             .select('tubo_raiz_id')
             .eq('empresa_id', EMPRESA_ID_OPT)
+            .eq('evento', 'ingreso')
             .in('tubo_raiz_id', raizIds);
 
         const conHistorial = new Set((previos || []).map(r => r.tubo_raiz_id));
