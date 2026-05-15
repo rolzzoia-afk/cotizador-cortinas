@@ -477,7 +477,10 @@ export function useCorreccionRetroactiva(): {
       tipo: TipoError,
       nota?: string,
     ): Promise<CorreccionRetroactivaResult> => {
-      const { data, error } = await supabase.rpc('aplicar_correccion_retroactiva', {
+      // (supabase.rpc as any): la función es nueva y todavía no está en los
+      // tipos generados de database.ts. Mismo patrón que orphan-plans.ts usa
+      // para detectar_planes_huerfanos. Se limpia cuando se regeneren los tipos.
+      const { data, error } = await (supabase.rpc as any)('aplicar_correccion_retroactiva', {
         p_plan_id: planId,
         p_linea_idx: lineaIdx,
         p_tipo: tipo,
