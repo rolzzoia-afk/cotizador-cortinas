@@ -502,3 +502,47 @@ export function useCorreccionRetroactiva(): {
 
   return { aplicar };
 }
+
+// ── Hook: verificación de salud de la colmena ───────────────────────
+// Llama al RPC verificar_salud_colmena que corre 5 chequeos de invariantes.
+// Pensado para correr automáticamente después de cada acción que mueve la BD
+// y manualmente desde un botón "Verificar ahora".
+export type SaludCheck = {
+  nombre: string;
+  count: number;
+  severity: 'error' | 'warning';
+  descripcion: string;
+};
+
+export type SaludResult = {
+  estado: 'ok' | 'warning' | 'error';
+  total_tubos: number;
+  ts: string;
+  checks: SaludCheck[];
+};
+
+export function useSaludColmena(): {
+  salud: SaludResult | null;
+  loading: boolean;
+  verificar: () => Promise<SaludResult>;
+} {
+  const [salud, setSalud] = useState<SaludResult | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const verificar = useCallback(async (): Promise<SaludResult> => {
+    setLoading(true);
+    try {
+      // (supabase.rpc as any): la función es nueva, no está en database.ts
+      // todavía. Mismo patrón que orphan-plans.ts.
+      const { data, error } = await (supabase.rpc as any)('verificar_salud_colmena');
+      if (error) throw error;
+      const result = data as SaludResult;
+      setSalud(result);
+      return result;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  return { salud, loading, verificar };
+}

@@ -7404,6 +7404,36 @@ async function confirmarYGuardarStaging() {
         mensaje: 'El Excel se descargó y el inventario quedó actualizado en la base de datos.'
     }, 'success', { duracion: 5000 });
 
+    // ── Verificación de salud post-guardado (anti-descuadre) ─────────
+    // Corre 5 chequeos de invariantes sobre la base. Si algo se rompió,
+    // avisa de inmediato — antes de que el operario haga el siguiente plan.
+    try {
+        const { data: saludData, error: saludError } = await sbOpt.rpc('verificar_salud_colmena');
+        if (saludError) throw saludError;
+        const salud = saludData || {};
+        const estado = salud.estado || 'desconocido';
+        const checksFallando = Array.isArray(salud.checks)
+            ? salud.checks.filter(c => c && c.count > 0)
+            : [];
+        if (estado === 'ok') {
+            log(`✅ Salud de la colmena OK — ${salud.total_tubos} tubos, todos los invariantes pasaron.`, 'success');
+        } else if (estado === 'warning') {
+            const detalles = checksFallando.map(c => `${c.count} ${c.descripcion}`).join(' | ');
+            log(`⚠️ Salud de la colmena: aviso — ${detalles}`, 'warn');
+        } else if (estado === 'error') {
+            const detalles = checksFallando.map(c => `${c.count} ${c.descripcion}`).join(' | ');
+            log(`🚨 Salud de la colmena: DESCUADRE detectado — ${detalles}`, 'error');
+            toast({
+                titulo: '🚨 Descuadre detectado en la colmena',
+                mensaje: `${checksFallando.length} chequeo(s) de invariante fallaron. Revisa la pestaña Reconciliación o avisa al administrador antes de seguir guardando planes.`
+            }, 'error', { duracion: 0 });
+        }
+    } catch (eSalud) {
+        // No bloquear el flujo si el chequeo falla — solo loguear
+        console.warn('[salud] No se pudo verificar salud de la colmena:', eSalud?.message || eSalud);
+        log('⚠️ No se pudo verificar la salud post-guardado (el plan sí se guardó).', 'warn');
+    }
+
     // ── Limpiar staging persistido: el plan ya quedó guardado en BD ──
     limpiarStagingPendiente();
 
