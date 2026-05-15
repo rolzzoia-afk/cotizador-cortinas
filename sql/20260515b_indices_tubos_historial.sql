@@ -27,33 +27,41 @@
 --   5) Capa 4 verificación post-sync (optimizador.html línea 7212):
 --        WHERE empresa_id = X AND ot IN (...) AND evento IN (...) AND created_at >= ...
 --
--- IMPORTANTE — cómo ejecutar:
---   `CREATE INDEX CONCURRENTLY` NO se puede correr dentro de una transacción.
---   En el SQL Editor de Supabase, ejecutar UN STATEMENT A LA VEZ
---   (seleccionar la línea del CREATE INDEX y "Run selected"). Si el editor
---   intenta envolverlo en una transacción y falla con "CREATE INDEX
---   CONCURRENTLY cannot run inside a transaction block", usar `psql` o
---   eliminar el `CONCURRENTLY` (esto bloquea writes durante el build,
---   ~segundos para una tabla mediana).
+-- Cómo ejecutar:
+--   Pegar todo el bloque en el SQL Editor de Supabase y "Run". El editor lo
+--   envuelve en una transacción, así que NO se puede usar CONCURRENTLY (eso
+--   tira "CREATE INDEX CONCURRENTLY cannot run inside a transaction block").
+--   Sin CONCURRENTLY el index toma un ACCESS EXCLUSIVE lock sobre la tabla
+--   durante el build — bloquea writes (INSERT/UPDATE/DELETE) los pocos segundos
+--   que tarda. Para una tabla en el rango de decenas de miles de filas, el
+--   bloqueo es del orden de 1-3s, aceptable para una ventana operativa baja.
+--
+--   Si en algún momento la tabla crece a millones de filas y querés evitar
+--   el lock, usar psql o el CLI de Supabase para correr cada CREATE INDEX
+--   CONCURRENTLY por separado:
+--     CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tubos_historial_tombstone
+--         ON public.tubos_historial (empresa_id, tubo_raiz_id, evento, created_at);
+--     CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tubos_historial_ot_evento
+--         ON public.tubos_historial (empresa_id, ot, evento, created_at);
 --
 -- Tipos relevantes:
 --   - tubos_historial.empresa_id es `text` (no uuid) por inconsistencia
 --     histórica de schema. Los índices van sobre el tipo real.
 --
 -- Reversibilidad:
---   DROP INDEX CONCURRENTLY IF EXISTS public.idx_tubos_historial_tombstone;
---   DROP INDEX CONCURRENTLY IF EXISTS public.idx_tubos_historial_ot_evento;
+--   DROP INDEX IF EXISTS public.idx_tubos_historial_tombstone;
+--   DROP INDEX IF EXISTS public.idx_tubos_historial_ot_evento;
 -- ============================================================================
 
 -- 1) Index principal: cubre tombstone V2 + todos los prefetches por tubo_raiz_id.
 --    Leading prefix (empresa_id, tubo_raiz_id) cubre lookups por UUID;
 --    incluir evento permite filtrar 'eliminado'/'ingreso' sin scan;
 --    incluir created_at permite el ORDER BY DESC y el rango created_at > ...
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tubos_historial_tombstone
+CREATE INDEX IF NOT EXISTS idx_tubos_historial_tombstone
     ON public.tubos_historial (empresa_id, tubo_raiz_id, evento, created_at);
 
 -- 2) Index para verificación Capa 4 (lookup por OT):
 --    Optimizador chequea post-sync que los eventos de las OTs del plan
 --    aparezcan en tubos_historial. Sin index, cada Capa 4 hace seq scan.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_tubos_historial_ot_evento
+CREATE INDEX IF NOT EXISTS idx_tubos_historial_ot_evento
     ON public.tubos_historial (empresa_id, ot, evento, created_at);
