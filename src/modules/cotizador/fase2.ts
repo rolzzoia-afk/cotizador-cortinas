@@ -142,16 +142,16 @@ export function resumenPanos(panos: Pano[]): string {
 
 // Valida que una ventana esté lista para guardar (ancho+alto > 0 en cada paño).
 export function validarVentana(ventana: Partial<Ventana>): string | null {
-  if (!ventana.ubicacion || !ventana.ubicacion.trim()) return 'Ingresá una ubicación';
-  if (!ventana.categoria) return 'Seleccioná una categoría';
+  if (!ventana.ubicacion || !ventana.ubicacion.trim()) return 'Ingresa una ubicación';
+  if (!ventana.categoria) return 'Selecciona una categoría';
   const panos = ventana.panos || [];
   if (panos.length === 0) return 'Debe haber al menos 1 paño';
   for (let i = 0; i < panos.length; i++) {
     const p = panos[i];
     const ancho = parseFloat(String(p.ancho));
     const alto = parseFloat(String(p.alto));
-    if (!ancho || ancho <= 0) return `Paño ${i + 1}: ingresá el ancho`;
-    if (!alto || alto <= 0) return `Paño ${i + 1}: ingresá el alto`;
+    if (!ancho || ancho <= 0) return `Paño ${i + 1}: ingresa el ancho`;
+    if (!alto || alto <= 0) return `Paño ${i + 1}: ingresa el alto`;
   }
   return null;
 }

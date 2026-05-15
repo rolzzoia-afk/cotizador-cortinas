@@ -1,6 +1,6 @@
 // Inicialización de Sentry (error tracking).
 // Si VITE_SENTRY_DSN no está seteada, la inicialización es un no-op
-// → podés desarrollar en local sin necesidad de tener un DSN.
+// → puedes desarrollar en local sin necesidad de tener un DSN.
 
 import * as Sentry from '@sentry/react';
 

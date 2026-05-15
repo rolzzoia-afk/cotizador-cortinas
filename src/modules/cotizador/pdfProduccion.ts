@@ -95,7 +95,7 @@ export function generarPDFProduccion(
   catalogo: CatalogoProductos,
 ): void {
   if (!rows || rows.length === 0) {
-    throw new Error('No hay filas para generar el PDF. Guardá el plan en Tela primero.');
+    throw new Error('No hay filas para generar el PDF. Guarda el plan en Tela primero.');
   }
 
   const doc = new jsPDF('l', 'mm', 'letter');
@@ -371,7 +371,7 @@ export function generarEtiquetasPDF(
   catalogo: CatalogoProductos,
 ): void {
   if (!rows || rows.length === 0) {
-    throw new Error('No hay filas para imprimir. Guardá el plan en Tela primero.');
+    throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
 
   // Etiqueta 62mm × 100mm Brother QL-810W

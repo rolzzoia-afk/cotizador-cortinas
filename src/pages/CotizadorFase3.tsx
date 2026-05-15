@@ -168,7 +168,7 @@ export function CotizadorFase3() {
               {ventanas.length === 0 && (
                 <tr>
                   <td colSpan={8} className="p-6 text-center text-muted-foreground">
-                    La OT no tiene ventanas todavía. Ingresá productos en Fase 1 → Fase 2.
+                    La OT no tiene ventanas todavía. Ingresa productos en Fase 1 → Fase 2.
                   </td>
                 </tr>
               )}

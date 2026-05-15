@@ -1121,7 +1121,7 @@
             <div class="opciones-avanzadas-contenido">
 
                 <h4>Cambiar inventario por Excel (en vez de la base de datos)</h4>
-                <p class="ayuda-secundaria">Solo si necesitás trabajar con un Excel local en lugar de los datos de Supabase. El comportamiento normal es usar la base de datos auto-cargada arriba.</p>
+                <p class="ayuda-secundaria">Solo si necesitas trabajar con un Excel local en lugar de los datos de Supabase. El comportamiento normal es usar la base de datos auto-cargada arriba.</p>
 
                 <div class="archivo-item">
                     <label><strong>Excel de Colmenas:</strong></label>
@@ -4542,7 +4542,7 @@ function buscarReemplazos(codigo) {
         });
         if (filtrados.length < reemplazos.length) {
             const bloqueados = reemplazos.filter(r => !filtrados.includes(r)).join(', ');
-            log(`⚠️ Pesos color-fijo: bloqueando reemplazo ${codNormalizado}(${colorOriginal}) → ${bloqueados} (color distinto). Arreglá el catálogo o pedí stock del color correcto.`, 'warn');
+            log(`⚠️ Pesos color-fijo: bloqueando reemplazo ${codNormalizado}(${colorOriginal}) → ${bloqueados} (color distinto). Arregla el catálogo o pide stock del color correcto.`, 'warn');
         }
         if (filtrados.length === 0) return null;
         return filtrados;
@@ -8248,7 +8248,7 @@ async function corregirCorteErroneo() {
             Conflicto de colores en grupos de ambiente
           </div>
           <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:2px;">
-            Hay órdenes con colores distintos dentro del mismo espacio físico. Elegí cómo resolver cada una antes de calcular.
+            Hay órdenes con colores distintos dentro del mismo espacio físico. Elige cómo resolver cada una antes de calcular.
           </div>
         </div>
       </div>

@@ -604,7 +604,7 @@ function DespachoView({
         </div>
 
         <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          BOM — Tocá un ítem para escanear
+          BOM — Toca un ítem para escanear
         </div>
 
         {bomItems.length === 0 ? (
@@ -612,7 +612,7 @@ function DespachoView({
             No hay BOM para esta OT.
             <br />
             <span className="text-[11px] text-muted-foreground">
-              Generá Fase 4 en el cotizador primero.
+              Genera Fase 4 en el cotizador primero.
             </span>
           </div>
         ) : (
@@ -850,7 +850,7 @@ function ScannerView({
     if (insumoEsperado && normCod(insumoEsperado.cod || '') !== normCod(codEscaneado)) {
       setEstado('error');
       setMensaje('❌ Insumo incorrecto');
-      setSubmensaje(`Escaneaste: ${codEscaneado}  |  Necesitás: ${insumoEsperado.cod}`);
+      setSubmensaje(`Escaneaste: ${codEscaneado}  |  Necesitas: ${insumoEsperado.cod}`);
       scanner.startCooldown(SCAN_COOLDOWN_ERR);
       setTimeout(() => {
         setEstado('esperando');
@@ -1556,7 +1556,7 @@ function AdHocView({
       } else {
         // devolucion: vuelve el stock a MP y registra trazabilidad con OT + motivo
         if (!otRef.trim()) {
-          toast.warning('Ingresá la OT de origen');
+          toast.warning('Ingresa la OT de origen');
           setSaving(false);
           return;
         }
@@ -1672,7 +1672,7 @@ function AdHocView({
               </div>
             )}
             <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              O escribí el código manualmente
+              O escribe el código manualmente
             </div>
             <div className="flex gap-2">
               <Input
@@ -1934,3 +1934,4 @@ export type __Unused =
   | typeof X
   | typeof ArrowDownCircle
   | typeof ArrowUpCircle;
+ 

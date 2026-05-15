@@ -168,7 +168,7 @@ export function AuditLogSection() {
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
-        Mostrando hasta 200 eventos. Ajustá los filtros si necesitás otros más viejos.
+        Mostrando hasta 200 eventos. Ajustá los filtros si necesitas otros más viejos.
       </p>
 
       {/* Detalle */}

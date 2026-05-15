@@ -494,7 +494,7 @@ function RegisterErrorDialog({
       return `Ningún tubo matchea "${buscarTubo}".${ocupadosDelCod ? ` (${ocupadosDelCod} reservados por otros cortes del plan)` : ''}`;
     }
     if (ocupadosDelCod > 0) {
-      return `Los ${ocupadosDelCod} tubos de ${codCorte} disponibles están reservados por otros cortes del plan. Usá la sugerencia o cambiá a "Tubo nuevo".`;
+      return `Los ${ocupadosDelCod} tubos de ${codCorte} disponibles están reservados por otros cortes del plan. Usa la sugerencia o cambia a "Tubo nuevo".`;
     }
     return `No hay tubos de ${codCorte || 'este código'} en stock con medida suficiente.`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -578,7 +578,7 @@ function RegisterErrorDialog({
       }
       if (!confirmoTuboFisico) {
         toast.warning(
-          'Confirmá que sacaste físicamente un tubo virgen del stock antes de continuar',
+          'Confirma que sacaste físicamente un tubo virgen del stock antes de continuar',
         );
         return;
       }
@@ -1916,3 +1916,4 @@ export function HistorialCorte() {
     </div>
   );
 }
+  

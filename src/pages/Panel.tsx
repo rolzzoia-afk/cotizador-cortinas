@@ -141,7 +141,7 @@ export function Panel() {
     const cliente = (nuevoForm.cliente || '').trim();
     const numeroOT = (nuevoForm.ot || '').trim();
     if (!cliente && !numeroOT) {
-      toast.error('Ingresá al menos cliente o número de OT');
+      toast.error('Ingresa al menos cliente o número de OT');
       return;
     }
     setCreando(true);

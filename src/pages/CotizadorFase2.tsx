@@ -190,7 +190,7 @@ export function CotizadorFase2() {
   const avanzarAFase3 = async () => {
     if (!ot) return;
     if (ventanas.length === 0) {
-      toast.error('Agregá al menos 1 ventana antes de avanzar');
+      toast.error('Agrega al menos 1 ventana antes de avanzar');
       return;
     }
     setAvanzando(true);
@@ -278,7 +278,7 @@ export function CotizadorFase2() {
             </div>
             {ventanas.length === 0 ? (
               <p className="p-6 text-center text-xs text-muted-foreground">
-                No hay ventanas todavía. Agregá una desde "Nueva" o desde Fase 1.
+                No hay ventanas todavía. Agrega una desde "Nueva" o desde Fase 1.
               </p>
             ) : (
               <ul className="divide-y divide-border">
@@ -347,7 +347,7 @@ export function CotizadorFase2() {
               <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Pencil className="h-10 w-10 opacity-40" />
                 <p className="text-sm">
-                  Seleccioná una ventana de la lista o creá una nueva para editar.
+                  Selecciona una ventana de la lista o crea una nueva para editar.
                 </p>
                 <Button onClick={iniciarNueva} className="gap-1" size="sm">
                   <Plus className="h-4 w-4" /> Nueva ventana
@@ -399,7 +399,7 @@ export function CotizadorFase2() {
                         onChange={(e) => actualizarVentana({ categoria: e.target.value })}
                         className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
                       >
-                        <option value="">— Seleccioná —</option>
+                        <option value="">— Selecciona —</option>
                         {CATEGORIAS_FASE1.map((g) => (
                           <optgroup key={g.label} label={g.label}>
                             {g.options.map((o) => (

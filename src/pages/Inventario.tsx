@@ -566,7 +566,7 @@ export function Inventario() {
     if (!empresaId) return;
     const f = movDialog.form;
     if (!f.codigo) {
-      toast.error('Seleccioná un insumo');
+      toast.error('Selecciona un insumo');
       return;
     }
     const cantidad = parseInt(f.cantidad, 10) || 0;

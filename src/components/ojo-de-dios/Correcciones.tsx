@@ -343,7 +343,7 @@ function CorreccionRetroactivaSection({
         nota || undefined,
       );
       toast.success(
-        `Corrección registrada${r.ot ? ` (OT ${r.ot})` : ''}. Ahora cortá la línea con otro tubo desde el optimizador.`,
+        `Corrección registrada${r.ot ? ` (OT ${r.ot})` : ''}. Ahora corta la línea con otro tubo desde el optimizador.`,
         { duration: 7000 },
       );
       resetForm();
@@ -364,9 +364,9 @@ function CorreccionRetroactivaSection({
         <strong className="text-sm">Corregir un plan antiguo</strong>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Usá esto cuando descubrís un problema en un plan que <strong>YA no es el más reciente</strong>{' '}
-        (ej. tubo dañado descubierto después de varios planes). Solo registra el error — no
-        rebobina el inventario ni afecta planes posteriores. Después tenés que cortar el reemplazo
+        Usa esto cuando descubras un problema en un plan que <strong>ya no es el más reciente</strong>{' '}
+        (ejemplo: un tubo dañado detectado después de varios planes). Solo registra el error — no
+        revierte el inventario ni afecta los planes posteriores. Después hay que cortar el reemplazo
         desde el optimizador normal con otro tubo del mismo código.
       </p>
 
@@ -393,7 +393,7 @@ function CorreccionRetroactivaSection({
               }}
               className="mt-1 w-full rounded border border-border bg-card px-2 py-1.5 text-xs"
             >
-              <option value="">Elegí un plan...</option>
+              <option value="">Elige un plan...</option>
               {planesParaCorregir.map((p) => {
                 const fecha = p.fecha ? new Date(p.fecha).toLocaleString('es-CL') : '?';
                 const ots = extraerOTsPlan(p).slice(0, 3).join(', ');
@@ -491,7 +491,7 @@ function CorreccionRetroactivaSection({
                   onChange={(e) => setTipo(e.target.value as TipoError)}
                   className="mt-1 w-full rounded border border-border bg-card px-2 py-1.5 text-xs"
                 >
-                  <option value="">Elegí el tipo...</option>
+                  <option value="">Elige el tipo...</option>
                   {(Object.entries(TIPO_ERROR_LABELS) as Array<[TipoError, string]>).map(
                     ([k, v]) => (
                       <option key={k} value={k}>
@@ -572,7 +572,7 @@ function EditorLinea({
 
   const submit = () => {
     if (!tipo) {
-      toast.error('Seleccioná el tipo de error');
+      toast.error('Selecciona el tipo de error');
       return;
     }
     onSave({
@@ -773,7 +773,7 @@ function HistorialPlanes({
       : `\n⚠️ Este plan no tiene snapshot de colmena guardado. Solo se restaurará el listado de cortes.`;
     if (
       !confirm(
-        `⏱ VIAJE EN EL TIEMPO\n\nVas a volver al estado del: ${fecha}${msgInv}\n\n¿Confirmás la restauración? Esta acción actualiza el inventario físico de tubos.`,
+        `⏱ VIAJE EN EL TIEMPO\n\nVas a volver al estado del: ${fecha}${msgInv}\n\n¿Confirmas la restauración? Esta acción actualiza el inventario físico de tubos.`,
       )
     )
       return;
@@ -816,7 +816,7 @@ function HistorialPlanes({
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[0.68rem] text-muted-foreground">
-            Podés restaurar cualquier plan anterior
+            Puedes restaurar cualquier plan anterior
           </span>
           <Button
             variant="outline"
@@ -850,7 +850,7 @@ function HistorialPlanes({
       <div className="max-h-[340px] overflow-y-auto text-xs">
         {!loading && planes.length === 0 && (
           <div className="py-3 text-center text-muted-foreground">
-            Hacé clic en "Cargar" para ver todos los planes guardados.
+            Haz clic en "Cargar" para ver todos los planes guardados.
           </div>
         )}
         {!loading && planes.length > 0 && planesVisibles.length === 0 && (
