@@ -2904,7 +2904,13 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
                 _maxEliminadoPorUuid.forEach((eliminadoTs, uuid) => {
                     const ingresoTs = _maxIngresoPorUuid.get(uuid);
                     if (ingresoTs !== undefined && ingresoTs > eliminadoTs) return; // ingreso posterior → no tombstoneado
-                    if (_uuidsConIngresoEnEventos.has(uuid)) return;  // ya hay ingreso programado
+                    // BUG corregido 2026-05-15: el auto-curado ahora es INCONDICIONAL.
+                    // Antes saltaba si `eventos` ya tenía un ingreso para este UUID
+                    // (_uuidsConIngresoEnEventos), asumiendo que el RPC lo vería — pero algún
+                    // caso se escapaba y el tubo se descartaba igual ("N en BD vs M — faltan").
+                    // Empujar SIEMPRE un ingreso para cada tubo tombstoneado presente en
+                    // `filas` garantiza que el RPC lo conserve. Si ya había otro ingreso,
+                    // queda un evento duplicado en el historial: ruido inofensivo.
                     const f = _filaPorUuid.get(uuid);
                     if (!f) return;
                     eventos.push({
