@@ -2197,11 +2197,30 @@ async function guardarColmenaFinalEnSupabase(eventos = [], planPayload = null) {
             //    con fuente='consolidacion_peso' para que el tubo tenga origen en
             //    tubos_historial. Sin esto, la heurística de fantasmas marca estos
             //    UUIDs como falsos positivos (sin origen post-cutoff).
+            // UUIDs que este plan CONSUME (corte/merma/eliminado ya están en `eventos`,
+            // los armó construirEventosTubos antes de llegar acá).
+            // BUG corregido 2026-05-15: un slot de peso NO puede reusar el UUID del
+            // tubo de origen si ese tubo se está cortando — la BD tiene un trigger
+            // (trg_auto_remove_consumed_tube) que borra de colmena_tubos cualquier
+            // tubo al que le entre un `corte`. Si el peso reusa ese UUID, el tubo
+            // entra al sync y el mismo plan lo borra → "N en BD vs M (faltan)".
+            // El slot de peso es una pieza NUEVA: cuando el origen se consume,
+            // se le da un UUID fresco (y su evento `ingreso` de trazabilidad).
+            const _uuidsConsumidosEnPlan = new Set(
+                (eventos || [])
+                    .filter(e => e && e.tubo_raiz_id && ['corte', 'merma', 'eliminado'].includes(e.evento))
+                    .map(e => e.tubo_raiz_id)
+            );
             resultadosPeso.forEach((item, i) => {
                 const slot           = _SLOTS_PESO_G[i % _SLOTS_PESO_G.length];
                 const r              = item.resultado;
-                const teniaUuid      = !!r.tubo_raiz_id;
-                const uuid           = r.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+                const _freshUuid     = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+                // Solo se "preserva" el UUID del resultado si NO se está consumiendo
+                // en este plan. Si se consume, el peso es pieza nueva → UUID fresco.
+                const _uuidPreservado = (r.tubo_raiz_id && !_uuidsConsumidosEnPlan.has(r.tubo_raiz_id))
+                    ? r.tubo_raiz_id : null;
+                const teniaUuid      = !!_uuidPreservado;
+                const uuid           = _uuidPreservado || _freshUuid();
                 const medida         = r.medida_origen || r.medida_cm || 0;
                 const cod            = (r.codigo || r.codigo_original || '').toUpperCase().trim();
 
@@ -2814,7 +2833,7 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
         console.warn(`[sync] ⚠️ Dedup defensivo descartó ${_dupUuid} fila(s) con UUID duplicado antes de sync_colmena_tubos.`);
     }
 
-    const filas = colmenasDedupeadas.map(c => ({
+    const _filasPre = colmenasDedupeadas.map(c => ({
         n_colmena:     c.n_colmena || '-',
         cod:           (c.cod || '').toUpperCase().trim(),
         medida_cm:     typeof c.medida_cm === 'number' ? c.medida_cm : parseFloat(c.medida_cm) || 0,
@@ -2823,6 +2842,27 @@ async function sincronizarColmenaFinalConTabla(colmenasFinal, eventos = [], plan
         tubo_raiz_id:  c.tubo_raiz_id || ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null),
         agregado_por_admin: false
     }));
+
+    // ── Guardia de consistencia: un tubo NO puede estar en `filas` Y tener un
+    //    evento corte/merma/eliminado en `eventos` ────────────────────────────
+    // BUG corregido 2026-05-15: la BD tiene un trigger (trg_auto_remove_consumed_tube)
+    // que borra de colmena_tubos cualquier tubo al que le entre un evento
+    // corte/merma/eliminado. Si el optimizador manda un tubo en `filas` (para
+    // conservarlo) y a la vez manda un `corte` para ese mismo UUID, el RPC inserta
+    // el tubo y acto seguido el trigger lo borra → "N en BD vs M enviados (faltan)".
+    // Pasaba con la consolidación de pesos, que reusaba el UUID del tubo de origen
+    // cortado. Acá filtramos cualquier fila cuyo UUID se consume en este mismo plan:
+    // el estado final correcto es "tubo consumido = NO está en la colmena".
+    const _uuidsConsumidos = new Set(
+        (eventos || [])
+            .filter(e => e && e.tubo_raiz_id && ['corte', 'merma', 'eliminado'].includes(e.evento))
+            .map(e => e.tubo_raiz_id)
+    );
+    const filas = _filasPre.filter(f => !(f.tubo_raiz_id && _uuidsConsumidos.has(f.tubo_raiz_id)));
+    const _filasConsumidasStrip = _filasPre.length - filas.length;
+    if (_filasConsumidasStrip > 0) {
+        console.warn(`[sync] ⚠️ Guardia de consistencia: ${_filasConsumidasStrip} fila(s) descartada(s) porque su UUID también tiene un evento corte/merma/eliminado en este plan (la BD las borraría igual).`);
+    }
 
     // ── Auto-curar tombstones false positives ───────────────────────────────
     // El filtro tombstone V2 del RPC (sql/20260513b... y sql/20260515...) descarta
