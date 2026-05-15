@@ -121,7 +121,7 @@ export function InventarioConteo() {
         <ClipboardCheck className="mx-auto mb-3 h-10 w-10 text-muted-foreground" />
         <h1 className="mb-2 text-base font-bold">Sin inventario activo</h1>
         <p className="mb-4 text-sm text-muted-foreground">
-          Esperá a que el admin inicie un inventario para registrar tu conteo.
+          Espera a que el admin inicie un inventario para registrar tu conteo.
         </p>
         <Button variant="outline" onClick={() => navigate(-1)}>
           <ArrowLeft className="mr-1 h-4 w-4" /> Volver

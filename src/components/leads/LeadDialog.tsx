@@ -61,7 +61,7 @@ export function LeadDialog({ open, onOpenChange, lead, canales, onSubmit }: Prop
 
   const handleGuardar = async () => {
     if (!draft.nombre.trim()) {
-      toast.error('Ingresá el nombre del lead');
+      toast.error('Ingresa el nombre del lead');
       return;
     }
     setSaving(true);

@@ -127,7 +127,7 @@ export function useOptimizerConfig(): {
     async (nuevo: string) => {
       if (!empresaId) throw new Error('Empresa no resuelta');
       const e = nuevo.trim().toLowerCase();
-      if (!e || !e.includes('@')) throw new Error('Ingresá un email válido');
+      if (!e || !e.includes('@')) throw new Error('Ingresa un email válido');
       const { error } = await supabase
         .from('configuracion')
         .upsert(

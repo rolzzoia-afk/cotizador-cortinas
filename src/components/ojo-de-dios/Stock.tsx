@@ -185,7 +185,7 @@ export function Stock() {
               {!loading && telas.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-4 text-center text-muted-foreground">
-                    No hay telas en el inventario. Agregá la primera arriba.
+                    No hay telas en el inventario. Agrega la primera arriba.
                   </td>
                 </tr>
               )}

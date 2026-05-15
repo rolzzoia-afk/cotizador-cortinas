@@ -131,7 +131,7 @@ export function CotizadorFase4() {
 
   const onGenerarPDF = () => {
     if (!pdfRows || pdfRows.length === 0) {
-      toast.error('No hay paños. Agregá ventanas en Fase 2 primero.');
+      toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
       return;
     }
     try {
@@ -145,7 +145,7 @@ export function CotizadorFase4() {
 
   const onImprimirEtiquetas = () => {
     if (!pdfRows || pdfRows.length === 0) {
-      toast.error('No hay paños. Agregá ventanas en Fase 2 primero.');
+      toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
       return;
     }
     const faltantes = validarDatosParaEtiquetas(pdfRows);
@@ -153,7 +153,7 @@ export function CotizadorFase4() {
       const continuar = confirm(
         'Faltan campos importantes para etiquetas detalladas:\n\n' +
           faltantes.join('\n') +
-          '\n\n¿Querés imprimir de todos modos con los datos disponibles?',
+          '\n\n¿Deseas imprimir de todos modos con los datos disponibles?',
       );
       if (!continuar) return;
     }

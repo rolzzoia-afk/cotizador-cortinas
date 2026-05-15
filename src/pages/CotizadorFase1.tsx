@@ -162,18 +162,18 @@ export function CotizadorFase1() {
       return;
     }
     if (!form.ubicacion.trim()) {
-      toast.error('Ingresá la ubicación');
+      toast.error('Ingresa la ubicación');
       return;
     }
     if (!form.categoria) {
-      toast.error('Seleccioná una categoría');
+      toast.error('Selecciona una categoría');
       return;
     }
     const ancho = parseFloat(form.ancho) || 0;
     const alto = parseFloat(form.alto) || 0;
     const cantidad = parseInt(form.cantidad, 10) || 1;
     if (!esPorUnidad(producto.tipo) && (ancho <= 0 || alto <= 0)) {
-      toast.error('Ingresá medidas válidas');
+      toast.error('Ingresa medidas válidas');
       return;
     }
     const nuevo: ItemFase1 = {
@@ -204,7 +204,7 @@ export function CotizadorFase1() {
   const enviarATerreno = async () => {
     if (!ot) return;
     if (items.length === 0) {
-      toast.error('Agregá al menos 1 producto antes de enviar');
+      toast.error('Agrega al menos 1 producto antes de enviar');
       return;
     }
     setEnviando(true);
@@ -373,7 +373,7 @@ export function CotizadorFase1() {
               ) : form.codInt ? (
                 <span className="text-destructive">Código no encontrado</span>
               ) : (
-                <span>Ingresá un código para ver el producto</span>
+                <span>Ingresa un código para ver el producto</span>
               )}
             </div>
 
@@ -393,7 +393,7 @@ export function CotizadorFase1() {
                 onChange={(e) => actualizarForm({ categoria: e.target.value })}
                 className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
-                <option value="">— Seleccioná categoría —</option>
+                <option value="">— Selecciona categoría —</option>
                 {CATEGORIAS_FASE1.map((grupo) => (
                   <optgroup key={grupo.label} label={grupo.label}>
                     {grupo.options.map((o) => (
@@ -506,7 +506,7 @@ export function CotizadorFase1() {
                   {items.length === 0 && (
                     <tr>
                       <td colSpan={8} className="p-6 text-center text-muted-foreground">
-                        Sin productos cotizados todavía. Agregá desde el formulario.
+                        Sin productos cotizados todavía. Agrega desde el formulario.
                       </td>
                     </tr>
                   )}

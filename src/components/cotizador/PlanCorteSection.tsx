@@ -194,11 +194,11 @@ function CardSobrante({
 
   const confirmar = async () => {
     if (hayAlto && !ubicAlto.trim()) {
-      toast.error('Ingresá la ubicación del sobrante de alto');
+      toast.error('Ingresa la ubicación del sobrante de alto');
       return;
     }
     if (sobAncho && !ubicAncho.trim()) {
-      toast.error('Ingresá la ubicación de la franja de ancho');
+      toast.error('Ingresa la ubicación de la franja de ancho');
       return;
     }
     setSaving(true);
@@ -480,11 +480,11 @@ function CardRollo({
 
   const guardarSobrantes = async () => {
     if (hayResto && !ubicRollo.trim()) {
-      toast.error('Ingresá la ubicación del rollo restante');
+      toast.error('Ingresa la ubicación del rollo restante');
       return;
     }
     if (si && !ubicSI.trim()) {
-      toast.error('Ingresá la ubicación de la franja interna');
+      toast.error('Ingresa la ubicación de la franja interna');
       return;
     }
     setSaving(true);
@@ -701,9 +701,9 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
     const a = parseFloat(ancho);
     const al = parseFloat(alto);
     const u = ubic.trim().toUpperCase();
-    if (!c) return toast.error('Ingresá el COD_INT');
-    if (!a || !al) return toast.error('Ingresá las medidas');
-    if (!u) return toast.error('Ingresá la ubicación (ej: A-54)');
+    if (!c) return toast.error('Ingresa el COD_INT');
+    if (!a || !al) return toast.error('Ingresa las medidas');
+    if (!u) return toast.error('Ingresa la ubicación (ej: A-54)');
     if (!empresaId) return toast.error('Empresa no resuelta');
     setSaving(true);
     try {

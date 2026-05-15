@@ -23,7 +23,7 @@ createRoot(document.getElementById('root')!).render(
             {error instanceof Error ? error.message : 'Error desconocido'}
           </p>
           <p className="text-xs text-muted-foreground">
-            El error fue reportado automáticamente. Podés recargar o reintentar.
+            El error fue reportado automáticamente. Puedes recargar o reintentar.
           </p>
           <div className="flex gap-2">
             <button

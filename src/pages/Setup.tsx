@@ -52,7 +52,7 @@ export function Setup() {
 
   const finalizar = async () => {
     if (!empresaId) {
-      toast.error('No se pudo resolver tu empresa. Recargá la página.');
+      toast.error('No se pudo resolver tu empresa. Recarga la página.');
       return;
     }
     setSaving(true);
