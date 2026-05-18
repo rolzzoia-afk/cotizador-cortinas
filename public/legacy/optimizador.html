@@ -2211,50 +2211,28 @@ async function guardarColmenaFinalEnSupabase(eventos = [], planPayload = null) {
                     .filter(e => e && e.tubo_raiz_id && ['corte', 'merma', 'eliminado'].includes(e.evento))
                     .map(e => e.tubo_raiz_id)
             );
-            resultadosPeso.forEach((item, i) => {
-                const slot           = _SLOTS_PESO_G[i % _SLOTS_PESO_G.length];
-                const r              = item.resultado;
-                const _freshUuid     = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
-                // Solo se "preserva" el UUID del resultado si NO se está consumiendo
-                // en este plan. Si se consume, el peso es pieza nueva → UUID fresco.
-                const _uuidPreservado = (r.tubo_raiz_id && !_uuidsConsumidosEnPlan.has(r.tubo_raiz_id))
-                    ? r.tubo_raiz_id : null;
-                const teniaUuid      = !!_uuidPreservado;
-                const uuid           = _uuidPreservado || _freshUuid();
-                const medida         = r.medida_origen || r.medida_cm || 0;
-                const cod            = (r.codigo || r.codigo_original || '').toUpperCase().trim();
-
-                colmenasFinal.push({
-                    n_colmena:    slot,
-                    medida_cm:    medida,
-                    medida_mm:    medida * 10,
-                    cod:          cod,
-                    serial:       (r.serial && typeof r.serial === 'object' ? r.serial.serial : r.serial) || null,
-                    tubo_raiz_id: uuid
+            // ❌ DESACTIVADO 2026-05-18: la consolidación de peso creaba "tubos fantasma"
+            // en A27/A28/A29 con la medida del tubo padre (medida_origen). Pero el padre
+            // ya estaba siendo cortado/consumido — el slot de peso nunca recibía el tubo
+            // físicamente. La BD terminaba creyendo que A27/A28/A29 tenían un tubo grande
+            // que en realidad ya se había cortado en otra colmena. El siguiente plan
+            // veía ese fantasma como disponible y planificaba cortes que el operario no
+            // podía ejecutar (caso real OT 2953: A27/E18 307.1cm fantasma porque el
+            // padre L04/E18 307.1cm se cortó en OT 2960).
+            //
+            // Los eventos normales (corte para el padre, sobrante para el remanente real,
+            // optimizador_nuevo para piezas nuevas) ya cubren toda la trazabilidad sin
+            // necesidad de re-etiquetar los tubos en slots de peso.
+            //
+            // Si se necesita en el futuro tracking físico de pesos en A27/A28/A29, hay
+            // que cambiarlo a opt-in con confirmación del operario de que sí movió el
+            // tubo a ese slot.
+            if (false) {
+                resultadosPeso.forEach((item, i) => {
+                    // bloque desactivado — ver comentario arriba
+                    void item; void i;
                 });
-
-                // Generar evento `ingreso` si:
-                // 1) UUID fresco (no había uno preservado) — caso original.
-                // 2) UUID preservado pero SIN historial en BD — el bug raíz que
-                //    creaba huérfanos invisibles hasta el próximo plan.
-                const sinHistorial = teniaUuid && !_uuidsPesoConHistorial.has(uuid);
-                if (uuid && (!teniaUuid || sinHistorial)) {
-                    eventos.push({
-                        empresa_id:   EMPRESA_ID_OPT,
-                        tubo_raiz_id: uuid,
-                        n_colmena:    slot,
-                        cod:          cod,
-                        medida_cm:    medida,
-                        evento:       'ingreso',
-                        fuente:       sinHistorial ? 'consolidacion_peso_retroactivo' : 'consolidacion_peso',
-                        ot:           item.orden?.ot || null,
-                        notas:        sinHistorial
-                          ? `Peso consolidado en slot ${slot} — UUID preservado pero sin historial previo. Ingreso retroactivo para cerrar el bug raíz (antes generaba ingreso_retroactivo_auto al guardar el plan).`
-                          : `Peso consolidado en slot ${slot} — ingreso automático para preservar trazabilidad.`,
-                        registrado_por: (_currentUser && _currentUser.email) || 'sistema'
-                    });
-                }
-            });
+            }
 
             if (resultadosPeso.length > 0) {
                 console.log(`⚖️ Pesos consolidados en colmena: ${resultadosPeso.map((it, i) =>
