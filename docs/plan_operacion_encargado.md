@@ -54,7 +54,7 @@ No hace falta tocar nada de esto. Se enumera para que se sepa que NO está pendi
 
 ---
 
-#### ☐ B2 · Cerrar el gap de corrección retroactiva (escenario E2)
+#### ✅ B2 · Cerrar el gap de corrección retroactiva (escenario E2) — IMPLEMENTADO 18/05/2026
 
 **El problema:** hoy solo se puede corregir el plan **más reciente**. Si un tubo aparece dañado y ya hay 3 planes posteriores, el encargado no tiene flujo limpio y tiene que escalar a admin.
 
@@ -153,8 +153,25 @@ Esta es la sección para imprimir, compartir, o pegar en la wiki del equipo. Val
 ### Antes de empezar
 
 - Tener acceso a Ojo de Dios.
-- Saber tu rol: vos resolvés los casos comunes; los raros se anotan y se escalan.
-- **Regla de oro:** si dudás, parás y consultás. Mejor 10 minutos parado que 10 horas reparando.
+- Saber tu rol: tú resuelves los casos comunes; los raros se anotan y se escalan.
+- **Regla de oro:** si dudas, paras y consultas. Mejor 10 minutos parado que 10 horas reparando.
+
+### Rutina de 30 segundos al cierre de cada plan (importante)
+
+Cada vez que termines de cortar un plan, antes de irte de la pestaña:
+
+1. **Mira el widget "Salud de la colmena"** en Correcciones.
+   - Verde → todo cuadra, sigues.
+   - Amarillo → revisa qué dice (puede ser solo "duplicado físico", que es normal: dos tubos reales con la misma medida). Si solo es eso, sigues.
+   - Rojo → para, anota lo que dice y escala.
+
+2. **Repasa los sobrantes nuevos contra el papel del plan.** El plan que descargas trae al final una lista de sobrantes que se generaron. Mientras los pones físicamente en su colmena, marca con un check al lado de cada uno en el papel. Si llegas al final del plan y queda alguno sin check → escala antes de cerrar la pestaña.
+
+3. **Listo, cierra la pestaña.**
+
+Esto toma 30 segundos por plan, no para producción, y atrapa cualquier descuadre en el momento en que pasa (que es 10 veces más fácil de arreglar que descubrirlo una semana después).
+
+
 
 ### Caso 1 — "Voy a cortar un tubo del plan y vino con falla / estaba mal medido"
 
@@ -171,8 +188,12 @@ Esta es la sección para imprimir, compartir, o pegar en la wiki del equipo. Val
 
 **Si el plan NO es el más reciente** (ya hay planes después):
 
-- Por ahora no podés hacerlo solo. **Esto se habilita cuando esté el bloqueador B2.**
-- Mientras tanto: anotá la OT, el tubo, la fecha del plan original, **sacá el tubo defectuoso de la colmena** (físicamente) y **escalá a Antonio**.
+1. Anda a **Ojo de Dios → Correcciones**, sección **"Corrección retroactiva"**.
+2. Elige el plan antiguo en el selector "Plan a corregir".
+3. Busca la línea problemática y haz clic en **"Marcar"**.
+4. Elige el tipo (`medida_erronea`, `tubo_equivocado`, `tubo_inexistente`, `tubo_danado`) y agrega una nota corta describiendo qué pasó.
+5. Confirma. La corrección queda registrada en el historial sin tocar el inventario actual (el plan viejo queda como está, pero queda marcado).
+6. Si necesitas rehacer la pieza, genera un plan nuevo solo con esa línea.
 
 ### Caso 2 — "El operario cortó mal"
 
@@ -185,8 +206,10 @@ Mismo flujo que el Caso 1 — la pestaña Correcciones cubre `tubo_equivocado` y
 
 ### Caso 4 — "El sistema dice que hay un sobrante, pero no aparece"
 
-- Buscalo bien primero (slots A27/A28/A29 si era peso, colmenas cercanas).
-- Si confirmás que no está, anotalo y escalá. El admin registra un `eliminado` con motivo.
+1. Anda a **Historial de tubos → Trazabilidad**.
+2. Busca el tubo por colmena + código + medida (o por OT).
+3. La Ficha te muestra de qué tubo padre vino y en qué OT se generó. Eso te da pistas de dónde puede estar (revisa primero las colmenas cercanas a la del padre).
+4. Si confirmas que no está, anótalo y escala. El admin registra un `eliminado` con motivo.
 
 ### Caso 5 — "El guardado se quedó cargando y no descargó el Excel"
 
@@ -247,3 +270,4 @@ En este orden:
 
 - **2026-05-15 v1** — Plan inicial framing "operación activa".
 - **2026-05-15 v2** — Reframeado a checklist de pre-lanzamiento. La V1 asumía sistema en producción, no aplica.
+- **2026-05-18 v3** — B2 implementado (corrección retroactiva con widget de salud + sección Correcciones extendida). Colmena definitiva cargada (227 tubos en 19 colmenas). Trazabilidad (Ficha del tubo) en pestaña Historial. Agregada rutina de 30 segundos al cierre de cada plan.
