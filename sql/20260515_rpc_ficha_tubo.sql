@@ -110,13 +110,26 @@ BEGIN
         -- Si el origen es un sobrante/merma con OT, hay un corte padre del mismo timestamp
         IF v_origen_row.evento IN ('sobrante','sobrante_error','merma')
            AND v_origen_row.ot IS NOT NULL THEN
+            -- Heurística mejorada (fix 2026-05-18):
+            --  * mismo created_at + misma OT (transacción del corte)
+            --  * MISMO CÓDIGO (el sobrante hereda el código del padre)
+            --  * la matemática cierra: padre.medida_cm - padre.medida_resultado_cm
+            --    ≈ sobrante.medida_cm (el "leftover" del corte = el sobrante)
+            -- Sin el filtro de código, en una transacción con varios cortes
+            -- (cada plan de optimizador tiene N cortes) el padre se elegía
+            -- arbitrario y se mezclaban códigos distintos.
             SELECT * INTO v_padre_row
-            FROM tubos_historial
-            WHERE empresa_id = v_caller_empresa::text
-              AND evento = 'corte'
-              AND ot = v_origen_row.ot
-              AND created_at = v_origen_row.created_at
-              AND tubo_raiz_id <> p_tubo_raiz_id
+            FROM tubos_historial th_c
+            WHERE th_c.empresa_id   = v_caller_empresa::text
+              AND th_c.evento       = 'corte'
+              AND th_c.ot           = v_origen_row.ot
+              AND th_c.created_at   = v_origen_row.created_at
+              AND th_c.tubo_raiz_id <> p_tubo_raiz_id
+              AND COALESCE(th_c.cod, '') = COALESCE(v_origen_row.cod, '')
+            ORDER BY
+              ABS(COALESCE(th_c.medida_cm, 0)
+                  - COALESCE(th_c.medida_resultado_cm, 0)
+                  - COALESCE(v_origen_row.medida_cm, 0)) ASC
             LIMIT 1;
             IF v_padre_row.tubo_raiz_id IS NOT NULL THEN
                 v_padre := jsonb_build_object(
@@ -140,6 +153,10 @@ BEGIN
           AND evento = 'corte'
     ) THEN
         -- Hijos: sobrantes/mermas del mismo timestamp + misma OT
+        -- Hijos: mismos filtros que padre (mismo cod del tubo padre,
+        -- mismo created_at + OT). Fix 2026-05-18: sin filtro de código,
+        -- una OT con varios cortes mostraba sobrantes de OTROS códigos
+        -- como hijos.
         SELECT jsonb_agg(jsonb_build_object(
             'tubo_raiz_id',  th.tubo_raiz_id,
             'evento',        th.evento,
@@ -158,6 +175,7 @@ BEGIN
         WHERE th.empresa_id = v_caller_empresa::text
           AND th.evento IN ('sobrante','sobrante_error','merma')
           AND th.tubo_raiz_id <> p_tubo_raiz_id
+          AND COALESCE(th.cod, '') = COALESCE(v_cod, '')
           AND EXISTS (
               SELECT 1 FROM tubos_historial th_c
               WHERE th_c.empresa_id = v_caller_empresa::text

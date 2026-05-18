@@ -5501,6 +5501,10 @@ async function ejecutarOptimizacion() {
                     log(`📦 Sobrante reubicado en colmena ${nColmenaDestino} (código ${tuboEncontrado.colmena.cod}). Medida sobrante: ${sobrante / 10}cm`, 'info');
                 }
 
+                // FIX huérfano-sobrante: capturar el UUID UNA VEZ y propagarlo al resultado
+                // para que el constructor de eventos use el MISMO UUID que la fila de colmena.
+                const _sobranteUuid = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+                resultado.sobrante_raiz_id = _sobranteUuid;
                 const _sobranteEntry = {
                     n_colmena: nColmenaDestino,
                     medida_cm: sobrante / 10,
@@ -5512,7 +5516,7 @@ async function ejecutarOptimizacion() {
                     posicionOriginal: nColmenaDestino,
                     serial: tuboEncontrado.colmena.serial || orden.serial || null,
                     fecha: tuboEncontrado.colmena.serial ? tuboEncontrado.colmena.serial.fecha : null,
-                    tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null,
+                    tubo_raiz_id: _sobranteUuid,
                     tubo_parent_raiz_id: tuboEncontrado.colmena.tubo_raiz_id || null
                 };
                 // Insertar junto al tubo consumido si es posible, o al final si el sobrante va a otro slot
@@ -5602,7 +5606,10 @@ async function ejecutarOptimizacion() {
                                 log(`📦 Sobrante agregado como nueva fila para colmena ${colmenaExistente.n_colmena} (código ${codReemplazo}). Medida sobrante: ${sobrante / 10}cm`, 'info');
                                 const idxHistoricoExistente = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === colmenaExistente.n_colmena);
                                 if (idxHistoricoExistente !== -1) {
-                                    SistemaInventario.colmenasHistorico.splice(idxHistoricoExistente + 1, 0, { n_colmena: colmenaExistente.n_colmena, medida_cm: sobrante / 10, medida_mm: sobrante, cod: codReemplazo, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: colmenaExistente.n_colmena, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null, tubo_parent_raiz_id: tuboReemplazo.colmena.tubo_raiz_id || null });
+                                    // FIX huérfano-sobrante: propagar UUID al resultado para coincidir con el evento
+                                    const _sobReempUuidA = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+                                    resultado.sobrante_raiz_id = _sobReempUuidA;
+                                    SistemaInventario.colmenasHistorico.splice(idxHistoricoExistente + 1, 0, { n_colmena: colmenaExistente.n_colmena, medida_cm: sobrante / 10, medida_mm: sobrante, cod: codReemplazo, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: colmenaExistente.n_colmena, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: _sobReempUuidA, tubo_parent_raiz_id: tuboReemplazo.colmena.tubo_raiz_id || null });
                                 }
                                 SistemaInventario.colmenasDisponibles.splice(tuboReemplazo.indice, 1);
                                 SistemaInventario.colmenasDisponibles.push({
@@ -5613,7 +5620,10 @@ async function ejecutarOptimizacion() {
                                     serial: tuboReemplazo.colmena.serial || null
                                 });
                             } else {
-                                const _sobReempEntry = { n_colmena: _nColmFallbackR, medida_cm: sobrante / 10, medida_mm: sobrante, cod: tuboReemplazo.colmena.cod, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: _nColmFallbackR, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null };
+                                // FIX huérfano-sobrante: propagar UUID al resultado para coincidir con el evento
+                                const _sobReempUuidB = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+                                resultado.sobrante_raiz_id = _sobReempUuidB;
+                                const _sobReempEntry = { n_colmena: _nColmFallbackR, medida_cm: sobrante / 10, medida_mm: sobrante, cod: tuboReemplazo.colmena.cod, codigo_original: tuboReemplazo.colmena.cod, estado: 'disponible', origen: 'Sobrante reemplazo orden ' + orden.id, posicionOriginal: _nColmFallbackR, serial: tuboReemplazo.colmena.serial || null, fecha: tuboReemplazo.colmena.serial ? tuboReemplazo.colmena.serial.fecha : null, tubo_raiz_id: _sobReempUuidB };
                                 const idxInsertar = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === tuboReemplazo.colmena.n_colmena && c.cod === tuboReemplazo.colmena.cod && c.medida_mm === tuboReemplazo.colmena.medida_mm);
                                 if (idxInsertar !== -1) {
                                     SistemaInventario.colmenasHistorico.splice(idxInsertar + 1, 0, _sobReempEntry);
@@ -5771,6 +5781,9 @@ async function ejecutarOptimizacion() {
                         log(`📦 Sobrante agregado como nueva fila para colmena ${colmenaExistente.n_colmena} (código ${codigoTuboNuevo}). Medida sobrante: ${sobranteNuevo / 10}cm`, 'info');
                         const idxHistoricoExistente = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === colmenaExistente.n_colmena);
                         if (idxHistoricoExistente !== -1) {
+                            // FIX huérfano-sobrante: propagar UUID al resultado
+                            const _sobTNuevoUuidA = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+                            resultado.sobrante_raiz_id = _sobTNuevoUuidA;
                             SistemaInventario.colmenasHistorico.splice(idxHistoricoExistente + 1, 0, {
                                 n_colmena: colmenaExistente.n_colmena,
                                 medida_cm: sobranteNuevo / 10,
@@ -5782,7 +5795,7 @@ async function ejecutarOptimizacion() {
                                 posicionOriginal: colmenaExistente.n_colmena,
                                 serial: serialDisponible || null,
                                 fecha: serialDisponible ? serialDisponible.fecha : null,
-                                tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null
+                                tubo_raiz_id: _sobTNuevoUuidA
                             });
                         }
                         SistemaInventario.colmenasDisponibles.push({
@@ -5793,6 +5806,9 @@ async function ejecutarOptimizacion() {
                             serial: serialDisponible || null
                         });
                     } else {
+                        // FIX huérfano-sobrante: propagar UUID al resultado
+                        const _sobTNuevoUuidB = (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null;
+                        resultado.sobrante_raiz_id = _sobTNuevoUuidB;
                         SistemaInventario.colmenasHistorico.push({
                             n_colmena: _posicionSobrante,
                             medida_cm: sobranteNuevo / 10,
@@ -5804,7 +5820,7 @@ async function ejecutarOptimizacion() {
                             posicionOriginal: _posicionSobrante,
                             serial: serialDisponible || null,
                             fecha: serialDisponible ? serialDisponible.fecha : null,
-                            tubo_raiz_id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null
+                            tubo_raiz_id: _sobTNuevoUuidB
                         });
                         SistemaInventario.colmenasDisponibles.push({
                             n_colmena: _posicionSobrante,
@@ -6707,12 +6723,21 @@ async function construirEventosTubos() {
         // ── Evento: SOBRANTE (vuelve a colmena) ──
         if (tieneSobrante) {
             const colmenaDestino = res.colmena_sobrante || res.colmena;
+            // FIX huérfano-sobrante: priorizar el UUID propagado desde la creación del
+            // sobrante (res.sobrante_raiz_id). Esto garantiza que el evento y la fila
+            // física en colmena_tubos compartan el mismo tubo_raiz_id. Si por algún
+            // motivo no está propagado, fallback al lookup viejo (más frágil) y
+            // como último recurso a un UUID nuevo (queda registrado en notas).
             const entradaSobrante = SistemaInventario.colmenasHistorico.find(c =>
                 c.n_colmena === colmenaDestino && c.cod === res.codigo &&
                 c.estado === 'disponible' && c.origen && c.origen.includes(String(ord?.id || ot))
             );
-            const sobrante_raiz_id = entradaSobrante?.tubo_raiz_id ||
+            const sobrante_raiz_id = res.sobrante_raiz_id ||
+                entradaSobrante?.tubo_raiz_id ||
                 ((typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : null);
+            if (!res.sobrante_raiz_id && sobrante_raiz_id) {
+                console.warn(`[OPT] ⚠️ sobrante sin raiz_id propagado para OT ${ot} ${res.colmena}/${res.codigo} ${res.sobrante_cm}cm — usando fallback`);
+            }
 
             eventosCorte.push({
                 empresa_id:          EMPRESA_ID_OPT,
