@@ -43,6 +43,18 @@ import type { VendedoraOpt } from '@/modules/leads/hooks';
 const COLORES_ORIGEN = ['#7F77DD', '#1D9E75', '#378ADD', '#EF9F27', '#888780', '#D85A30', '#D4537E'];
 const COLORES_PERDIDA = ['#E24B4A', '#D85A30', '#888780'];
 
+// Estilo de tooltip consistente y legible en modo oscuro
+const TOOLTIP_STYLE = {
+  backgroundColor: '#1f1f1f',
+  border: '1px solid #3a3a3a',
+  borderRadius: 6,
+  fontSize: 12,
+  color: '#f5f5f5',
+  padding: '6px 10px',
+} as const;
+const TOOLTIP_ITEM_STYLE = { color: '#f5f5f5' };
+const TOOLTIP_LABEL_STYLE = { color: '#f5f5f5', fontWeight: 500, marginBottom: 2 };
+
 // ── Formateadores ─────────────────────────────────────────────────────
 const fmtCLP = (n: number): string => {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M`;
@@ -266,12 +278,9 @@ export function MetricasLeadsView({
               <XAxis type="number" tick={{ fontSize: 11 }} label={{ value: 'días', position: 'insideBottom', offset: -5, fontSize: 11 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={140} />
               <ReTooltip
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--popover))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(value: number, _name: string, ctx: any) => [
                   `${value} días (${ctx.payload.muestras} muestras)`,
                   'Promedio',
@@ -382,12 +391,9 @@ export function MetricasLeadsView({
               <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <ReTooltip
-                contentStyle={{
-                  backgroundColor: 'hsl(var(--popover))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
               />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Line type="monotone" dataKey="nuevos" stroke="#7F77DD" strokeWidth={2} dot={{ r: 3 }} name="Nuevos" />
@@ -509,13 +515,10 @@ function DonutGrafico({
               ))}
             </Pie>
             <ReTooltip
-              contentStyle={{
-                backgroundColor: 'hsl(var(--popover))',
-                border: '1px solid hsl(var(--border))',
-                borderRadius: 6,
-                fontSize: 12,
-              }}
-              formatter={(value: number) => [value + ' leads', '']}
+              contentStyle={TOOLTIP_STYLE}
+              itemStyle={TOOLTIP_ITEM_STYLE}
+              labelStyle={TOOLTIP_LABEL_STYLE}
+              formatter={(value: number, name: string) => [`${value} leads`, name]}
             />
           </PieChart>
         </ResponsiveContainer>
