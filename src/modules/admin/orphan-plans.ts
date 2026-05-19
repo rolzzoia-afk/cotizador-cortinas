@@ -1,6 +1,11 @@
 // Capa 3 anti-huérfanos: hook de monitoreo de planes_corte sin eventos.
 // La RPC detectar_planes_huerfanos solo lee. Si la lista cambia (nuevo plan
-// huérfano detectado o uno resuelto), el polling de 60s lo refresca.
+// huérfano detectado o uno resuelto), el polling lo refresca.
+//
+// Polling subido de 60s a 300s (5 min) el 2026-05-19 para reducir carga de
+// CPU sobre Supabase. Las políticas RLS evaluadas por fila amplifican el
+// costo de cada llamada; bajar la frecuencia es el workaround más rápido
+// hasta refactorizar las RLS.
 
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
@@ -15,7 +20,7 @@ export type PlanHuerfano = {
   optimizer_email: string | null;
 };
 
-const POLL_INTERVAL_MS = 60_000;
+const POLL_INTERVAL_MS = 300_000; // 5 min (era 60s — bajado por carga de RLS, ver comentario arriba)
 const VENTANA_DIAS = 7;
 
 export function usePlanesHuerfanos(): {
