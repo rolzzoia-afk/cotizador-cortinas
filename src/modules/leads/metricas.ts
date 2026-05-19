@@ -232,7 +232,6 @@ export type TransicionTiempo = {
 };
 
 export function calcularTiemposPorEtapa(
-  leads: Lead[],
   actividad: LeadActividad[],
 ): TransicionTiempo[] {
   // Agrupar actividad por lead, ordenada por created_at asc
@@ -407,7 +406,7 @@ export function todasLasMetricas(
     embudo: calcularEmbudo(filtrados),
     origen: calcularOrigen(filtrados),
     motivos: calcularMotivosPerdida(filtrados),
-    tiempos: calcularTiemposPorEtapa(filtrados, actividad),
+    tiempos: calcularTiemposPorEtapa(actividad),
     porVendedora: calcularPorVendedora(filtrados, actividad, vendedoras),
     tendencia: calcularTendenciaSemanal(filtrados, actividad),
   };
