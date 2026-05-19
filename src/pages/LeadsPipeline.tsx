@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
+  BarChart3,
   Bot,
   KanbanSquare,
   LayoutList,
@@ -30,8 +31,9 @@ import {
 } from '@/modules/leads/types';
 import { LeadDialog } from '@/components/leads/LeadDialog';
 import { LeadDetalleDialog } from '@/components/leads/LeadDetalleDialog';
+import { MetricasLeadsView } from '@/components/leads/MetricasLeadsView';
 
-type Vista = 'tabla' | 'kanban';
+type Vista = 'tabla' | 'kanban' | 'metricas';
 type FiltroOrigen = 'todos' | 'bot' | 'manual';
 
 const TONO_CLS: Record<string, string> = {
@@ -70,9 +72,11 @@ export function LeadsPipeline() {
   } = useLeads();
   const { vendedoras } = useVendedoras();
 
-  const [vista, setVista] = useState<Vista>(
-    (params.get('vista') as Vista) === 'kanban' ? 'kanban' : 'tabla',
-  );
+  const [vista, setVista] = useState<Vista>(() => {
+    const v = params.get('vista') as Vista;
+    if (v === 'kanban' || v === 'metricas') return v;
+    return 'tabla';
+  });
   const [busqueda, setBusqueda] = useState('');
   const [filtroVendedora, setFiltroVendedora] = useState<string>('');
   const [filtroCanal, setFiltroCanal] = useState<string>('');
@@ -239,6 +243,17 @@ export function LeadsPipeline() {
             >
               <KanbanSquare className="h-3.5 w-3.5" /> Kanban
             </button>
+            <button
+              onClick={() => setVista('metricas')}
+              className={cn(
+                'inline-flex items-center gap-1 border-l border-border px-3 py-1.5 text-xs transition-colors',
+                vista === 'metricas'
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <BarChart3 className="h-3.5 w-3.5" /> Métricas
+            </button>
           </div>
           <Button
             onClick={() => {
@@ -387,7 +402,9 @@ export function LeadsPipeline() {
 
       {/* CONTENIDO */}
       <div className="px-5 py-5">
-        {vista === 'tabla' ? (
+        {vista === 'metricas' ? (
+          <MetricasLeadsView vendedoras={vendedoras} />
+        ) : vista === 'tabla' ? (
           <TablaVista
             leads={leadsFiltrados}
             vendedoras={vendedoras}
