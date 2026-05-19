@@ -68,7 +68,9 @@ export function MetricasLeadsView({
   const { user, perfil } = useAuth();
   const esAdmin = perfil?.rol === 'admin';
 
-  const [rango, setRango] = useState<RangoMetricas>('mes');
+  // Default = 'todo' para no esconder leads viejos que se ganaron/perdieron recientemente.
+  // El filtro de rango se aplica al created_at del lead (no a la última actividad).
+  const [rango, setRango] = useState<RangoMetricas>('todo');
   const [filtroVendedora, setFiltroVendedora] = useState<string>('');
   const [filtroCanal, setFiltroCanal] = useState<string>('');
 
@@ -125,11 +127,12 @@ export function MetricasLeadsView({
           value={rango}
           onChange={(e) => setRango(e.target.value as RangoMetricas)}
           className="rounded-md border border-border bg-background px-2 py-1 text-foreground"
+          title="Filtra por fecha de creación del lead"
         >
-          <option value="mes">Últimos 30 días</option>
-          <option value="trimestre">Últimos 90 días</option>
-          <option value="anio">Último año</option>
           <option value="todo">Todo el histórico</option>
+          <option value="anio">Leads creados en último año</option>
+          <option value="trimestre">Leads creados en últimos 90 días</option>
+          <option value="mes">Leads creados en últimos 30 días</option>
         </select>
         {esAdmin && (
           <select
