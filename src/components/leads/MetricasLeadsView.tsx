@@ -190,27 +190,38 @@ export function MetricasLeadsView({
       {/* Embudo */}
       <Section title="Embudo de conversión" subtitle="Cuántos leads pasaron por cada etapa y el % de avance entre ellas.">
         <div className="space-y-1.5">
-          {m.embudo.map((nivel) => (
-            <div key={nivel.key} className="flex items-center gap-3 text-xs">
-              <div
-                className={cn(
-                  'flex flex-1 items-center justify-between rounded-md px-3 py-1.5 transition-all',
-                  nivel.acento === 'ganado' && 'bg-success/20 text-success',
-                  nivel.acento === 'negociacion' && 'bg-warning/20 text-warning',
-                  nivel.acento === 'progreso' && 'bg-accent/15 text-accent',
-                )}
-                style={{
-                  width: `${Math.max(10, (nivel.count / (m.embudo[0]?.count || 1)) * 100)}%`,
-                }}
-              >
-                <span>{nivel.label}</span>
-                <span className="font-medium">{nivel.count}</span>
+          {m.embudo.map((nivel, idx) => {
+            // Paleta gradiente como el mockup: púrpura → ámbar → verde
+            // Los 6 primeros niveles en púrpura (3 tonos), negociación en ámbar, ganado en verde.
+            const colorBg =
+              nivel.acento === 'ganado'
+                ? '#97C459' // verde fuerte
+                : nivel.acento === 'negociacion'
+                  ? '#FAC775' // ámbar
+                  : idx < 4
+                    ? '#CECBF6' // púrpura claro
+                    : '#AFA9EC'; // púrpura medio
+            const colorText = nivel.acento === 'ganado' ? '#173404' : nivel.acento === 'negociacion' ? '#412402' : '#26215C';
+            const ancho = Math.max(15, (nivel.count / (m.embudo[0]?.count || 1)) * 100);
+            return (
+              <div key={nivel.key} className="flex items-center gap-3 text-xs">
+                <div
+                  className="flex items-center justify-between rounded-md px-3 py-1.5 transition-all"
+                  style={{
+                    width: `${ancho}%`,
+                    background: colorBg,
+                    color: colorText,
+                  }}
+                >
+                  <span className="font-medium">{nivel.label}</span>
+                  <span className="font-medium">{nivel.count}</span>
+                </div>
+                <span className="min-w-[70px] text-muted-foreground">
+                  {nivel.pctAvance == null ? '—' : `${fmtPct(nivel.pctAvance, 0)} →`}
+                </span>
               </div>
-              <span className="min-w-[60px] text-muted-foreground">
-                {nivel.pctAvance == null ? '—' : `${fmtPct(nivel.pctAvance, 0)} →`}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Section>
 
@@ -298,33 +309,56 @@ export function MetricasLeadsView({
                   </tr>
                 </thead>
                 <tbody>
-                  {m.porVendedora.map((v, i) => (
-                    <tr
-                      key={v.vendedoraId}
-                      className={cn(
-                        'border-b border-border/50',
-                        i === 0 && 'bg-success/5',
-                      )}
-                    >
-                      <td className="px-2 py-1.5 font-medium">{v.nombre}</td>
-                      <td className="px-2 py-1.5 text-right">{v.asignados}</td>
-                      <td className="px-2 py-1.5 text-right font-medium">{v.ganados}</td>
-                      <td className={cn(
-                        'px-2 py-1.5 text-right',
-                        v.tasaCierre >= 15 && 'text-success',
-                        v.tasaCierre < 10 && v.asignados > 0 && 'text-warning',
-                      )}>
-                        {fmtPct(v.tasaCierre)}
-                      </td>
-                      <td className={cn(
-                        'px-2 py-1.5 text-right',
-                        v.diasPromedio > 0 && v.diasPromedio < 14 && 'text-success',
-                        v.diasPromedio >= 21 && 'text-warning',
-                      )}>
-                        {fmtDias(v.diasPromedio)}
-                      </td>
-                    </tr>
-                  ))}
+                  {m.porVendedora.map((v, i) => {
+                    const cierreColor =
+                      v.tasaCierre >= 20
+                        ? { bg: '#0F6E56', fg: '#E1F5EE' } // teal fuerte
+                        : v.tasaCierre >= 10
+                          ? { bg: '#085041', fg: '#9FE1CB' } // teal medio
+                          : v.asignados > 0
+                            ? { bg: '#791F1F', fg: '#F7C1C1' } // rojo
+                            : { bg: 'transparent', fg: 'var(--muted-foreground)' };
+                    const diasColor =
+                      v.diasPromedio > 0 && v.diasPromedio < 14
+                        ? { bg: '#0F6E56', fg: '#E1F5EE' }
+                        : v.diasPromedio >= 21
+                          ? { bg: '#854F0B', fg: '#FAEEDA' } // ámbar
+                          : { bg: 'transparent', fg: 'var(--muted-foreground)' };
+                    return (
+                      <tr
+                        key={v.vendedoraId}
+                        className={cn(
+                          'border-b border-border/50',
+                          i === 0 && 'bg-success/10',
+                        )}
+                      >
+                        <td className="px-2 py-2 font-medium">
+                          {i === 0 && (
+                            <span className="mr-1.5" style={{ color: '#FAC775' }}>★</span>
+                          )}
+                          {v.nombre}
+                        </td>
+                        <td className="px-2 py-2 text-right">{v.asignados}</td>
+                        <td className="px-2 py-2 text-right font-medium">{v.ganados}</td>
+                        <td className="px-2 py-2 text-right">
+                          <span
+                            className="inline-block rounded-md px-2 py-0.5 text-[11px] font-medium"
+                            style={{ background: cierreColor.bg, color: cierreColor.fg }}
+                          >
+                            {fmtPct(v.tasaCierre)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <span
+                            className="inline-block rounded-md px-2 py-0.5 text-[11px] font-medium"
+                            style={{ background: diasColor.bg, color: diasColor.fg }}
+                          >
+                            {fmtDias(v.diasPromedio)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -377,21 +411,30 @@ function KpiCard({
   accent?: 'success' | 'warn';
   icon?: React.ReactNode;
 }) {
+  // Colores explícitos para que se lean bien tanto en oscuro como claro
+  const valueColor =
+    accent === 'warn'
+      ? '#F0997B' // coral suave, muy legible en oscuro
+      : accent === 'success'
+        ? '#5DCAA5'
+        : undefined;
+  const subColor =
+    accent === 'warn'
+      ? '#F0997B'
+      : accent === 'success'
+        ? '#5DCAA5'
+        : 'var(--muted-foreground)';
   return (
     <div className="rounded-md bg-secondary/40 p-3">
       <div className="text-[11px] text-muted-foreground">{label}</div>
-      <div className={cn(
-        'mt-0.5 text-xl font-medium',
-        accent === 'warn' && 'text-warning',
-      )}>
+      <div className="mt-0.5 text-xl font-medium" style={valueColor ? { color: valueColor } : undefined}>
         {value}
       </div>
       {sub && (
-        <div className={cn(
-          'mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground',
-          accent === 'success' && 'text-success',
-          accent === 'warn' && 'text-warning',
-        )}>
+        <div
+          className="mt-0.5 flex items-center gap-1 text-[11px]"
+          style={{ color: subColor }}
+        >
           {icon}
           {sub}
         </div>
