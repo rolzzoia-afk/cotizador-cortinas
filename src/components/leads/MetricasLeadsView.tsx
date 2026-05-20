@@ -16,6 +16,8 @@ import {
   Trophy,
 } from 'lucide-react';
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -33,10 +35,13 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import {
+  TEMPERATURA_COLOR,
+  TEMPERATURA_LABEL,
   useMetricasDerivadas,
   useMetricasLeads,
   type FiltrosMetricas,
   type RangoMetricas,
+  type Temperatura,
 } from '@/modules/leads/metricas';
 import type { VendedoraOpt } from '@/modules/leads/hooks';
 
@@ -237,6 +242,103 @@ export function MetricasLeadsView({
               </div>
             );
           })}
+        </div>
+      </Section>
+
+      {/* Clientes por temperatura */}
+      <Section
+        title="Clientes por temperatura"
+        subtitle="Cuántos hay en cada nivel de calor y el monto estimado en pesos."
+      >
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+          {(['frio','tibio','caliente','ganado','perdido'] as Temperatura[]).map((t) => {
+            const stat = m.temperatura.find((x) => x.temperatura === t);
+            const c = TEMPERATURA_COLOR[t];
+            return (
+              <div
+                key={t}
+                className="rounded-md p-3"
+                style={{ background: c.bg }}
+              >
+                <div className="flex items-center gap-1 text-[11px]" style={{ color: c.fg, opacity: 0.85 }}>
+                  <span>{c.icon}</span>
+                  <span>{TEMPERATURA_LABEL[t]}</span>
+                </div>
+                <div className="mt-0.5 text-2xl font-medium" style={{ color: c.fg }}>
+                  {stat?.count ?? 0}
+                </div>
+                <div className="mt-0.5 text-[11px]" style={{ color: c.fg, opacity: 0.85 }}>
+                  {fmtCLP(stat?.montoCLP ?? 0)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Section>
+
+      {/* Flujo temporal de temperatura */}
+      <Section
+        title="Flujo de clientes a lo largo del tiempo"
+        subtitle="Cómo se han movido los leads entre frío, tibio, caliente y ganado semana a semana."
+      >
+        <div className="mb-2 flex flex-wrap gap-3 text-[11px]">
+          {(['frio','tibio','caliente','ganado','perdido'] as Temperatura[]).map((t) => (
+            <span key={t} className="flex items-center gap-1">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm"
+                style={{ background: TEMPERATURA_COLOR[t].fg }}
+              />
+              {TEMPERATURA_LABEL[t]}
+            </span>
+          ))}
+        </div>
+        <div className="h-56 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={m.flujoTemperatura} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+              <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <ReTooltip
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
+              />
+              <Area type="monotone" dataKey="frio"     stackId="1" stroke={TEMPERATURA_COLOR.frio.fg}     fill={TEMPERATURA_COLOR.frio.fg}     fillOpacity={0.7} name="Frío" />
+              <Area type="monotone" dataKey="tibio"    stackId="1" stroke={TEMPERATURA_COLOR.tibio.fg}    fill={TEMPERATURA_COLOR.tibio.fg}    fillOpacity={0.7} name="Tibio" />
+              <Area type="monotone" dataKey="caliente" stackId="1" stroke={TEMPERATURA_COLOR.caliente.fg} fill={TEMPERATURA_COLOR.caliente.fg} fillOpacity={0.7} name="Caliente" />
+              <Area type="monotone" dataKey="ganado"   stackId="1" stroke={TEMPERATURA_COLOR.ganado.fg}   fill={TEMPERATURA_COLOR.ganado.fg}   fillOpacity={0.7} name="Ganado" />
+              <Area type="monotone" dataKey="perdido"  stackId="1" stroke={TEMPERATURA_COLOR.perdido.fg}  fill={TEMPERATURA_COLOR.perdido.fg}  fillOpacity={0.7} name="Perdido" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Lectura: cada banda muestra cuántos leads había en ese estado al cierre de la semana. Si la banda caliente o ganado crece, el pipeline está madurando.
+        </p>
+      </Section>
+
+      {/* Flujo monetario del pipeline activo */}
+      <Section
+        title="Monto en pipeline activo por semana"
+        subtitle="Suma estimada del presupuesto de leads frío + tibio + caliente. Refleja la 'plata posible' por cerrar."
+      >
+        <div className="h-44 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={m.flujoTemperatura} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+              <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" />
+              <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                tickFormatter={(v: number) => (v >= 1_000_000 ? `$${(v/1_000_000).toFixed(0)}M` : v >= 1_000 ? `$${(v/1_000).toFixed(0)}K` : `$${v}`)}
+              />
+              <ReTooltip
+                contentStyle={TOOLTIP_STYLE}
+                itemStyle={TOOLTIP_ITEM_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
+                formatter={(value: number) => [fmtCLP(value), 'Pipeline activo']}
+              />
+              <Area type="monotone" dataKey="montoActivoCLP" stroke="#7F77DD" fill="#7F77DD" fillOpacity={0.3} name="Pipeline activo" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
       </Section>
 
