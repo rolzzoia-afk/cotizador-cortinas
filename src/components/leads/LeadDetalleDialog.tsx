@@ -242,7 +242,18 @@ export function LeadDetalleDialog({
     try {
       const otId = crypto.randomUUID();
       const now = new Date().toISOString();
-      const numeroOT = String(Math.floor(Date.now() / 1000)).slice(-4);
+
+      // Número de OT con formato año-mes-secuencial (ej. 26-5-1, 26-12-1).
+      // La RPC `generar_numero_ot` mantiene un contador por (empresa, periodo)
+      // con UPSERT atómico — garantiza unicidad incluso con clicks simultáneos.
+      const { data: numeroData, error: errNum } = await supabase.rpc(
+        'generar_numero_ot' as any,
+        { p_empresa_id: empresaId },
+      );
+      if (errNum) throw new Error(errNum.message);
+      const numeroOT = String(numeroData ?? '');
+      if (!numeroOT) throw new Error('No se pudo generar el número de OT');
+
       const { error: errOT } = await supabase.from('ots').insert({
         id: otId,
         empresa_id: empresaId,
