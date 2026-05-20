@@ -204,6 +204,139 @@ export function calcularOrigen(leads: Lead[]): Array<{ label: string; count: num
     .sort((a, b) => b.count - a.count);
 }
 
+// ── Clasificación por temperatura ─────────────────────────────────────
+// Frío:     todavía no se concretó nada — solo pidió info / fue contactado / agendó visita
+// Tibio:    ya hay cotización con precio — el cliente conoce el monto
+// Caliente: ya tuvo visita real (showroom o terreno) — máximo compromiso recíproco
+// Ganado:   cerró
+// Perdido:  se cayó en algún punto
+export type Temperatura = 'frio' | 'tibio' | 'caliente' | 'ganado' | 'perdido';
+
+export function temperaturaDeLead(l: Pick<Lead, 'estado'>): Temperatura {
+  if (l.estado === 'ganado') return 'ganado';
+  if (ESTADO_ES_PERDIDO(l.estado)) return 'perdido';
+  if (l.estado === 'visita_realizada' || l.estado === 'negociacion' || l.estado === 'en_espera') return 'caliente';
+  if (l.estado === 'cotizando' || l.estado === 'cotizado') return 'tibio';
+  return 'frio';
+}
+
+export const TEMPERATURA_LABEL: Record<Temperatura, string> = {
+  frio: 'Frío',
+  tibio: 'Tibio',
+  caliente: 'Caliente',
+  ganado: 'Ganado',
+  perdido: 'Perdido',
+};
+
+export const TEMPERATURA_COLOR: Record<Temperatura, { bg: string; fg: string; icon: string }> = {
+  frio:     { bg: '#1F3A5F', fg: '#85B7EB', icon: '❄' },
+  tibio:    { bg: '#3D2F12', fg: '#EF9F27', icon: '◐' },
+  caliente: { bg: '#4A1B0C', fg: '#F0997B', icon: '🔥' },
+  ganado:   { bg: '#173404', fg: '#97C459', icon: '✓' },
+  perdido:  { bg: '#3B0E0E', fg: '#F09595', icon: '✕' },
+};
+
+export type StatTemperatura = {
+  temperatura: Temperatura;
+  count: number;
+  montoCLP: number;
+  pct: number;
+};
+
+export function calcularPorTemperatura(leads: Lead[]): StatTemperatura[] {
+  const total = leads.length;
+  const ordenes: Temperatura[] = ['frio', 'tibio', 'caliente', 'ganado', 'perdido'];
+  return ordenes.map((t) => {
+    const subset = leads.filter((l) => temperaturaDeLead(l) === t);
+    const monto = subset.reduce((s, l) => s + presupuestoPromedio(l.presupuesto_rango), 0);
+    return {
+      temperatura: t,
+      count: subset.length,
+      montoCLP: monto,
+      pct: total > 0 ? (subset.length / total) * 100 : 0,
+    };
+  });
+}
+
+// Flujo temporal: cuántos leads en cada temperatura semana a semana.
+// Para cada lead vivo en una semana, lo clasificamos según el estado en que estaba
+// en ese momento (reconstruido a partir del histórico de actividades).
+export type PuntoFlujoTemperatura = {
+  semana: string;
+  frio: number;
+  tibio: number;
+  caliente: number;
+  ganado: number;
+  perdido: number;
+  montoActivoCLP: number; // monto total de leads frio+tibio+caliente
+};
+
+export function calcularFlujoTemperaturaSemanal(
+  leads: Lead[],
+  actividad: LeadActividad[],
+  semanas: number = 8,
+): PuntoFlujoTemperatura[] {
+  const hoy = new Date();
+  const buckets: PuntoFlujoTemperatura[] = [];
+
+  // Pre-construir: por cada lead, lista ordenada de [timestamp → estado]
+  const transicionesPorLead = new Map<string, Array<{ ts: number; estado: LeadEstado }>>();
+  leads.forEach((l) => {
+    transicionesPorLead.set(l.id, [
+      { ts: new Date(l.created_at).getTime(), estado: 'nuevo' as LeadEstado },
+    ]);
+  });
+  actividad.forEach((a) => {
+    const lista = transicionesPorLead.get(a.lead_id);
+    if (!lista) return;
+    const to = a.detalle?.to_estado as LeadEstado | undefined;
+    if (!to) return;
+    lista.push({ ts: new Date(a.created_at).getTime(), estado: to });
+  });
+
+  for (let i = semanas - 1; i >= 0; i--) {
+    const finSemana = new Date(hoy);
+    finSemana.setDate(finSemana.getDate() - i * 7);
+    finSemana.setHours(23, 59, 59, 999);
+    const inicioSemana = new Date(finSemana);
+    inicioSemana.setDate(inicioSemana.getDate() - 6);
+    inicioSemana.setHours(0, 0, 0, 0);
+    const cutoffTs = finSemana.getTime();
+
+    const conteo: Record<Temperatura, number> = {
+      frio: 0, tibio: 0, caliente: 0, ganado: 0, perdido: 0,
+    };
+    let montoActivo = 0;
+
+    leads.forEach((l) => {
+      // ¿Este lead existía a fin de semana?
+      const createdTs = new Date(l.created_at).getTime();
+      if (createdTs > cutoffTs) return;
+
+      // ¿Cuál era su estado al cierre de esa semana?
+      const transiciones = transicionesPorLead.get(l.id) || [];
+      let estadoEnSemana: LeadEstado = 'nuevo';
+      for (const t of transiciones) {
+        if (t.ts <= cutoffTs) estadoEnSemana = t.estado;
+        else break;
+      }
+      const temp = temperaturaDeLead({ estado: estadoEnSemana });
+      conteo[temp]++;
+      if (temp === 'frio' || temp === 'tibio' || temp === 'caliente') {
+        montoActivo += presupuestoPromedio(l.presupuesto_rango);
+      }
+    });
+
+    buckets.push({
+      semana: inicioSemana.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' }),
+      ...conteo,
+      montoActivoCLP: montoActivo,
+    });
+  }
+
+  return buckets;
+}
+
 // ── Motivos de pérdida ────────────────────────────────────────────────
 export function calcularMotivosPerdida(leads: Lead[]): Array<{ label: string; count: number; pct: number }> {
   const perdidos = leads.filter((l) => ESTADO_ES_PERDIDO(l.estado));
@@ -409,6 +542,8 @@ export function todasLasMetricas(
     tiempos: calcularTiemposPorEtapa(actividad),
     porVendedora: calcularPorVendedora(filtrados, actividad, vendedoras),
     tendencia: calcularTendenciaSemanal(filtrados, actividad),
+    temperatura: calcularPorTemperatura(filtrados),
+    flujoTemperatura: calcularFlujoTemperaturaSemanal(filtrados, actividad),
   };
 }
 
