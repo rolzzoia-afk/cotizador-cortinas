@@ -171,7 +171,7 @@ export function SeguimientosView({ leads, vendedoras, onRefresh, onAbrir }: Prop
       {resumen.atrasados > 0 && (
         <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-          Tenés {resumen.atrasados} seguimiento{resumen.atrasados === 1 ? '' : 's'} atrasado{resumen.atrasados === 1 ? '' : 's'}. Empezá por la prioridad alta.
+          Tienes {resumen.atrasados} seguimiento{resumen.atrasados === 1 ? '' : 's'} atrasado{resumen.atrasados === 1 ? '' : 's'}. Empieza por la prioridad alta.
         </div>
       )}
 
@@ -276,9 +276,9 @@ function TarjetaSeguimiento({
     setGuardando(true);
     try {
       await registrarSeguimiento(lead.id, resultado, nota.trim() || null);
-      if (resultado === 'cerro') toast.success('¡Cierre registrado! Recordá marcar el lead como Ganado.');
-      else if (resultado === 'agendo_visita') toast.success('Visita agendada. Actualizá el estado del lead.');
-      else if (resultado === 'no_interesado') toast.info('Registrado. Podés marcarlo como Perdido.');
+      if (resultado === 'cerro') toast.success('¡Cierre registrado! Recuerda marcar el lead como Ganado.');
+      else if (resultado === 'agendo_visita') toast.success('Visita agendada. Actualiza el estado del lead.');
+      else if (resultado === 'no_interesado') toast.info('Registrado. Puedes marcarlo como Perdido.');
       else toast.success('Seguimiento registrado');
       setNota('');
       await onRegistrado();
@@ -355,7 +355,7 @@ function TarjetaSeguimiento({
           <span className="font-semibold text-accent">Conector: </span>
           {lead.detalle_personal || (
             <span className="italic text-muted-foreground">
-              Sin detalle personal cargado — agregalo en la ficha del lead para personalizar este seguimiento.
+              Sin detalle personal cargado — agrégalo en la ficha del lead para personalizar este seguimiento.
             </span>
           )}
         </div>
