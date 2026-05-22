@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BarChart3,
   Bot,
+  CalendarClock,
   KanbanSquare,
   LayoutList,
   Loader2,
@@ -32,8 +33,10 @@ import {
 import { LeadDialog } from '@/components/leads/LeadDialog';
 import { LeadDetalleDialog } from '@/components/leads/LeadDetalleDialog';
 import { MetricasLeadsView } from '@/components/leads/MetricasLeadsView';
+import { SeguimientosView } from '@/components/leads/SeguimientosView';
+import { resumenBandeja } from '@/modules/leads/seguimientos';
 
-type Vista = 'tabla' | 'kanban' | 'metricas';
+type Vista = 'tabla' | 'kanban' | 'metricas' | 'seguimientos';
 type FiltroOrigen = 'todos' | 'bot' | 'manual';
 
 const TONO_CLS: Record<string, string> = {
@@ -60,11 +63,12 @@ function fechaRelativa(iso: string): string {
 export function LeadsPipeline() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const { empresaId } = useAuth();
+  const { empresaId, perfil } = useAuth();
   const {
     leads,
     loading,
     error,
+    refresh,
     crear,
     actualizar,
     cambiarEstado,
@@ -74,7 +78,7 @@ export function LeadsPipeline() {
 
   const [vista, setVista] = useState<Vista>(() => {
     const v = params.get('vista') as Vista;
-    if (v === 'kanban' || v === 'metricas') return v;
+    if (v === 'kanban' || v === 'metricas' || v === 'seguimientos') return v;
     return 'tabla';
   });
   const [busqueda, setBusqueda] = useState('');
@@ -163,6 +167,14 @@ export function LeadsPipeline() {
     return { total, ganados, enCurso, cerrados, tasaCierre };
   }, [leads]);
 
+  // Seguimientos pendientes (atrasados + hoy) para el badge de la pestaña.
+  // Admin ve todos; vendedora solo los suyos.
+  const segPendientes = useMemo(() => {
+    const esAdmin = perfil?.rol === 'admin';
+    const r = resumenBandeja(leads, { vendedoraId: esAdmin ? null : perfil?.id ?? null });
+    return r.atrasados + r.hoy;
+  }, [leads, perfil]);
+
   const handleCrearOEditar = async (input: LeadInput) => {
     if (leadEnEdicion) {
       await actualizar(leadEnEdicion.id, input);
@@ -242,6 +254,22 @@ export function LeadsPipeline() {
               )}
             >
               <KanbanSquare className="h-3.5 w-3.5" /> Kanban
+            </button>
+            <button
+              onClick={() => setVista('seguimientos')}
+              className={cn(
+                'relative inline-flex items-center gap-1 border-l border-border px-3 py-1.5 text-xs transition-colors',
+                vista === 'seguimientos'
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <CalendarClock className="h-3.5 w-3.5" /> Seguimientos
+              {segPendientes > 0 && (
+                <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+                  {segPendientes}
+                </span>
+              )}
             </button>
             <button
               onClick={() => setVista('metricas')}
@@ -404,6 +432,16 @@ export function LeadsPipeline() {
       <div className="px-5 py-5">
         {vista === 'metricas' ? (
           <MetricasLeadsView vendedoras={vendedoras} />
+        ) : vista === 'seguimientos' ? (
+          <SeguimientosView
+            leads={leads}
+            vendedoras={vendedoras}
+            onRefresh={refresh}
+            onAbrir={(id) => {
+              setDetalleId(id);
+              setDetalleOpen(true);
+            }}
+          />
         ) : vista === 'tabla' ? (
           <TablaVista
             leads={leadsFiltrados}

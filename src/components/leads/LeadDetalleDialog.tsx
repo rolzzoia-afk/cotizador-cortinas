@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   Calendar,
+  CalendarClock,
   Loader2,
   MapPin,
   Mail,
   Phone,
   User,
   FileText,
+  Flame,
   MessageSquare,
   ArrowRightCircle,
   ExternalLink,
@@ -31,10 +33,19 @@ import {
   ESTADOS_LABEL,
   ESTADOS_ORDEN,
   ESTADO_ES_PERDIDO,
+  PRIORIDAD_LABEL,
+  PRIORIDAD_ORDEN,
+  SEG_RESULTADO_LABEL,
   type Lead,
   type LeadActividad,
   type LeadEstado,
+  type Prioridad,
 } from '@/modules/leads/types';
+import {
+  actualizarPrioridadDetalle,
+  fechaProximoSeguimiento,
+  prioridadSugerida,
+} from '@/modules/leads/seguimientos';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -98,6 +109,22 @@ function ActividadItem({ act }: { act: LeadActividad }) {
     case 'conversion_ot':
       texto = <span>Convertido en cotización (OT)</span>;
       break;
+    case 'seguimiento':
+      if (det.accion === 'archivado_auto') {
+        texto = <span>Archivado automáticamente por falta de respuesta (día +8)</span>;
+      } else {
+        texto = (
+          <span>
+            Seguimiento {det.etapa ? String(det.etapa) : ''}:{' '}
+            <strong className="text-foreground">
+              {SEG_RESULTADO_LABEL[det.resultado as keyof typeof SEG_RESULTADO_LABEL] ||
+                String(det.resultado ?? '')}
+            </strong>
+            {det.nota ? <div className="mt-1 text-muted-foreground">{String(det.nota)}</div> : null}
+          </span>
+        );
+      }
+      break;
     default:
       texto = <span>{act.tipo}</span>;
   }
@@ -110,6 +137,81 @@ function ActividadItem({ act }: { act: LeadActividad }) {
         </div>
       </div>
     </li>
+  );
+}
+
+function SeguimientosTimeline({ lead }: { lead: Lead }) {
+  const proxima = fechaProximoSeguimiento(lead);
+  const activo = lead.estado === 'cotizado' && !lead.archivado;
+  const etapas = [
+    { n: 1, fecha: lead.seg1_fecha, resultado: lead.seg1_resultado },
+    { n: 2, fecha: lead.seg2_fecha, resultado: lead.seg2_resultado },
+    { n: 3, fecha: lead.seg3_fecha, resultado: lead.seg3_resultado },
+  ];
+
+  return (
+    <section className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3">
+      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <CalendarClock className="h-3 w-3" /> Seguimientos
+      </div>
+      {!lead.fecha_cotizacion ? (
+        <p className="text-xs text-muted-foreground">
+          El ciclo de 3 seguimientos arranca cuando el lead pasa a estado{' '}
+          <strong className="text-foreground">Cotizado</strong> (cotización enviada).
+        </p>
+      ) : (
+        <div className="space-y-1.5 text-xs">
+          <div className="text-muted-foreground">
+            Cotización enviada:{' '}
+            <span className="text-foreground">{formatFecha(lead.fecha_cotizacion)}</span>
+          </div>
+          {etapas.map((e) => {
+            const hecho = !!e.fecha;
+            const pendiente = activo && lead.etapa_seguimiento === e.n;
+            return (
+              <div key={e.n} className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    'inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-bold',
+                    hecho
+                      ? 'border-success/40 bg-success/15 text-success'
+                      : pendiente
+                        ? 'border-warning/40 bg-warning/15 text-warning'
+                        : 'border-border bg-card text-muted-foreground',
+                  )}
+                >
+                  {e.n}
+                </span>
+                <div className="flex-1">
+                  {hecho ? (
+                    <span className="text-foreground">
+                      {SEG_RESULTADO_LABEL[e.resultado as keyof typeof SEG_RESULTADO_LABEL] ||
+                        e.resultado}{' '}
+                      · <span className="text-muted-foreground">{formatFecha(e.fecha!)}</span>
+                    </span>
+                  ) : pendiente ? (
+                    <span className="text-warning">
+                      Pendiente{proxima ? ` · ${formatFecha(proxima.toISOString())}` : ''}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {lead.archivado && (
+            <div className="mt-1 rounded border border-destructive/30 bg-destructive/10 px-2 py-1 text-destructive">
+              Archivado por falta de respuesta
+              {lead.fecha_archivado ? ` · ${formatFecha(lead.fecha_archivado)}` : ''}
+            </div>
+          )}
+          {lead.etapa_seguimiento === 4 && !lead.archivado && (
+            <div className="mt-1 text-success">Ciclo cerrado — el cliente respondió.</div>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -133,11 +235,16 @@ export function LeadDetalleDialog({
   const [cambiando, setCambiando] = useState(false);
   const [creandoOT, setCreandoOT] = useState(false);
   const [vendedoraDraft, setVendedoraDraft] = useState<string>('');
+  const [prioridadDraft, setPrioridadDraft] = useState<Prioridad>('media');
+  const [detalleDraft, setDetalleDraft] = useState('');
+  const [guardandoPD, setGuardandoPD] = useState(false);
 
   useEffect(() => {
     if (lead) {
       setEstadoDraft(lead.estado);
       setVendedoraDraft(lead.asignado_a || '');
+      setPrioridadDraft(lead.prioridad ?? 'media');
+      setDetalleDraft(lead.detalle_personal ?? '');
     }
   }, [lead]);
 
@@ -218,6 +325,24 @@ export function LeadDetalleDialog({
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error: ' + msg);
+    }
+  };
+
+  const handleGuardarPrioridadDetalle = async () => {
+    setGuardandoPD(true);
+    try {
+      await actualizarPrioridadDetalle(lead.id, {
+        prioridad: prioridadDraft,
+        detalle_personal: detalleDraft,
+      });
+      await refresh();
+      onChanged?.();
+      toast.success('Prioridad y detalle guardados');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error: ' + msg);
+    } finally {
+      setGuardandoPD(false);
     }
   };
 
@@ -439,6 +564,67 @@ export function LeadDetalleDialog({
                 )}
               </section>
             )}
+
+            {/* Prioridad y detalle personal (CONECTOR) */}
+            <section className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                  <Flame className="h-3 w-3" /> Prioridad y detalle personal
+                </div>
+                {prioridadSugerida(lead) !== prioridadDraft && (
+                  <button
+                    onClick={() => setPrioridadDraft(prioridadSugerida(lead))}
+                    className="text-[10px] text-accent hover:underline"
+                    title="Aplicar la prioridad sugerida según scoring, presupuesto y urgencia"
+                  >
+                    Sugerida: {PRIORIDAD_LABEL[prioridadSugerida(lead)]}
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-1.5">
+                {PRIORIDAD_ORDEN.map((p) => (
+                  <button
+                    key={p}
+                    onClick={() => setPrioridadDraft(p)}
+                    className={cn(
+                      'flex-1 rounded-md border px-2 py-1.5 text-xs font-semibold transition-colors',
+                      prioridadDraft === p
+                        ? p === 'alta'
+                          ? 'border-destructive/50 bg-destructive/15 text-destructive'
+                          : p === 'media'
+                            ? 'border-warning/50 bg-warning/15 text-warning'
+                            : 'border-accent/40 bg-accent/15 text-accent'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground',
+                    )}
+                  >
+                    {PRIORIDAD_LABEL[p]}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={detalleDraft}
+                onChange={(e) => setDetalleDraft(e.target.value)}
+                placeholder="Conector / detalle personal: lo importante que surgió en la conversación (ej. 'se muda en marzo', 'le preocupa la luz de la mañana')…"
+                rows={2}
+                className="w-full rounded-md border border-border bg-card px-2 py-2 text-xs focus:border-accent focus:outline-none"
+              />
+              <Button
+                onClick={handleGuardarPrioridadDetalle}
+                disabled={
+                  guardandoPD ||
+                  (prioridadDraft === (lead.prioridad ?? 'media') &&
+                    detalleDraft.trim() === (lead.detalle_personal ?? '').trim())
+                }
+                size="sm"
+                className="w-full"
+              >
+                {guardandoPD && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+                Guardar prioridad y detalle
+              </Button>
+            </section>
+
+            {/* Línea de tiempo de seguimientos */}
+            <SeguimientosTimeline lead={lead} />
 
             {/* Cambiar estado */}
             <section className="space-y-2 rounded-lg border border-border bg-secondary/40 p-3">
