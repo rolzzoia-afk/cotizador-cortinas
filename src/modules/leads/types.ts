@@ -48,7 +48,57 @@ export type Lead = {
   ultima_actividad_at: string;
   created_at: string;
   updated_at: string;
+  // Motor de seguimientos (Sistema "Menos Ruido, Más Control")
+  prioridad: Prioridad;
+  detalle_personal: string | null;
+  fecha_cotizacion: string | null;
+  etapa_seguimiento: number; // 0 = sin cotización; 1/2/3 = etapa pendiente; 4 = ciclo cerrado
+  seg1_fecha: string | null;
+  seg1_resultado: string | null;
+  seg2_fecha: string | null;
+  seg2_resultado: string | null;
+  seg3_fecha: string | null;
+  seg3_resultado: string | null;
+  archivado: boolean;
+  fecha_archivado: string | null;
 };
+
+export type Prioridad = 'alta' | 'media' | 'baja';
+
+export const PRIORIDAD_ORDEN: Prioridad[] = ['alta', 'media', 'baja'];
+
+export const PRIORIDAD_LABEL: Record<Prioridad, string> = {
+  alta: 'Alta',
+  media: 'Media',
+  baja: 'Baja',
+};
+
+// Peso para ordenar (alta primero)
+export const PRIORIDAD_PESO: Record<Prioridad, number> = {
+  alta: 0,
+  media: 1,
+  baja: 2,
+};
+
+// Resultados posibles de un seguimiento
+export type SeguimientoResultado =
+  | 'no_respondio'
+  | 'respondio'
+  | 'agendo_visita'
+  | 'cerro'
+  | 'no_interesado';
+
+export const SEG_RESULTADO_LABEL: Record<SeguimientoResultado, string> = {
+  no_respondio: 'No respondió',
+  respondio: 'Respondió (sigue interesado)',
+  agendo_visita: 'Agendó visita',
+  cerro: 'Cerró la venta',
+  no_interesado: 'No le interesa',
+};
+
+// Un resultado "positivo" detiene el ciclo de seguimientos
+export const SEG_RESULTADO_POSITIVO = (r: string): boolean =>
+  r === 'respondio' || r === 'agendo_visita' || r === 'cerro';
 
 export type LeadActividadTipo =
   | 'creado'
@@ -57,7 +107,8 @@ export type LeadActividadTipo =
   | 'asignacion'
   | 'conversion_ot'
   | 'edicion'
-  | 'agente_ingreso';
+  | 'agente_ingreso'
+  | 'seguimiento';
 
 export type LeadActividad = {
   id: string;
