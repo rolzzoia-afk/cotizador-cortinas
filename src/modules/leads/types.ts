@@ -61,6 +61,9 @@ export type Lead = {
   seg3_resultado: string | null;
   archivado: boolean;
   fecha_archivado: string | null;
+  // Metas / dinero
+  monto: number | null;        // monto de la venta/cotización en CLP
+  fecha_cierre: string | null; // cuándo pasó a 'ganado'
 };
 
 export type Prioridad = 'alta' | 'media' | 'baja';

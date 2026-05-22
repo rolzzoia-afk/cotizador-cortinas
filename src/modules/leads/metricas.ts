@@ -12,7 +12,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Lead, LeadActividad, LeadEstado } from './types';
-import { ESTADO_ES_PERDIDO, ESTADO_ES_TERMINAL, esLeadDeBot } from './types';
+import { ESTADO_ES_PERDIDO, ESTADO_ES_TERMINAL, esLeadDeBot, SEG_RESULTADO_POSITIVO } from './types';
+
+// El estado destino de un cambio_estado: la RPC guarda la clave como `a`, pero
+// algunos datos antiguos usaban `to_estado`. Leemos ambas por robustez.
+function estadoDestino(a: LeadActividad): LeadEstado | undefined {
+  const d = a.detalle as Record<string, unknown> | null;
+  return (d?.to_estado ?? d?.a) as LeadEstado | undefined;
+}
 
 // ── Rango temporal ────────────────────────────────────────────────────
 export type RangoMetricas = 'mes' | 'trimestre' | 'anio' | 'todo';
@@ -38,6 +45,48 @@ export function presupuestoPromedio(rango: string | null): number {
   if (r.includes('1.500') && r.includes('3.000')) return 2_250_000;
   if (r.includes('más de') && r.includes('3.000')) return 4_000_000;
   return 0;
+}
+
+// Monto efectivo del lead: usa el monto real si está cargado; si no, lo estima
+// desde el rango de presupuesto (proxy) para que el dashboard nunca quede vacío.
+export function montoLead(l: Pick<Lead, 'monto' | 'presupuesto_rango'>): number {
+  if (l.monto != null && l.monto > 0) return l.monto;
+  return presupuestoPromedio(l.presupuesto_rango);
+}
+
+// Periodo 'YYYY-MM'
+export function periodoActual(d: Date = new Date()): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function mismoPeriodo(iso: string | null, periodo: string): boolean {
+  if (!iso) return false;
+  return periodoActual(new Date(iso)) === periodo;
+}
+
+function esAyer(iso: string | null): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  return (
+    d.getFullYear() === ayer.getFullYear() &&
+    d.getMonth() === ayer.getMonth() &&
+    d.getDate() === ayer.getDate()
+  );
+}
+
+// Días hábiles (lun-vie) que quedan en el mes, contando hoy.
+export function diasHabilesRestantes(d: Date = new Date()): number {
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const finMes = new Date(year, month + 1, 0).getDate();
+  let count = 0;
+  for (let dia = d.getDate(); dia <= finMes; dia++) {
+    const wd = new Date(year, month, dia).getDay();
+    if (wd !== 0 && wd !== 6) count++;
+  }
+  return count;
 }
 
 // ── Hook principal ────────────────────────────────────────────────────
@@ -289,7 +338,7 @@ export function calcularFlujoTemperaturaSemanal(
   actividad.forEach((a) => {
     const lista = transicionesPorLead.get(a.lead_id);
     if (!lista) return;
-    const to = a.detalle?.to_estado as LeadEstado | undefined;
+    const to = estadoDestino(a);
     if (!to) return;
     lista.push({ ts: new Date(a.created_at).getTime(), estado: to });
   });
@@ -389,12 +438,8 @@ export function calcularTiemposPorEtapa(
     const tiempos: number[] = [];
     porLead.forEach((acts) => {
       // Buscar pares from→to consecutivos o no, lo importante es timestamp
-      const idxFrom = acts.findIndex(
-        (a) => (a.detalle?.to_estado as string) === t.from,
-      );
-      const idxTo = acts.findIndex(
-        (a) => (a.detalle?.to_estado as string) === t.to,
-      );
+      const idxFrom = acts.findIndex((a) => estadoDestino(a) === t.from);
+      const idxTo = acts.findIndex((a) => estadoDestino(a) === t.to);
       if (idxFrom >= 0 && idxTo > idxFrom) {
         const ms =
           new Date(acts[idxTo].created_at).getTime() -
@@ -439,7 +484,7 @@ export function calcularPorVendedora(
     const tiempos: number[] = [];
     ganados.forEach((l) => {
       const evGanado = actividad
-        .filter((a) => a.lead_id === l.id && a.detalle?.to_estado === 'ganado')
+        .filter((a) => a.lead_id === l.id && estadoDestino(a) === 'ganado')
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
       if (evGanado) {
         const ms =
@@ -492,7 +537,7 @@ export function calcularTendenciaSemanal(
       return t >= inicio.getTime() && t < fin.getTime();
     }).length;
     const ganados = actividad.filter((a) => {
-      if (a.detalle?.to_estado !== 'ganado') return false;
+      if (estadoDestino(a) !== 'ganado') return false;
       const t = new Date(a.created_at).getTime();
       return t >= inicio.getTime() && t < fin.getTime();
     }).length;
@@ -503,6 +548,216 @@ export function calcularTendenciaSemanal(
     });
   }
   return buckets;
+}
+
+// ── Embudo de efectividad por asesora ─────────────────────────────────
+// KPIs alineados con la propuesta de medición de efectividad en ventas.
+function haCotizado(l: Lead): boolean {
+  return (
+    l.fecha_cotizacion != null ||
+    l.ot_id != null ||
+    l.estado === 'cotizado' ||
+    l.estado === 'negociacion' ||
+    l.estado === 'en_espera' ||
+    l.estado === 'ganado'
+  );
+}
+
+function contactoEfectivo(l: Lead): boolean {
+  if (SEG_RESULTADO_POSITIVO(l.seg1_resultado ?? '')) return true;
+  if (SEG_RESULTADO_POSITIVO(l.seg2_resultado ?? '')) return true;
+  if (SEG_RESULTADO_POSITIVO(l.seg3_resultado ?? '')) return true;
+  return ['negociacion', 'en_espera', 'visita_realizada', 'ganado'].includes(l.estado);
+}
+
+function tuvoVisita(l: Lead): boolean {
+  if (l.estado === 'visita_agendada' || l.estado === 'visita_realizada') return true;
+  return (
+    l.seg1_resultado === 'agendo_visita' ||
+    l.seg2_resultado === 'agendo_visita' ||
+    l.seg3_resultado === 'agendo_visita'
+  );
+}
+
+export type EmbudoAsesora = {
+  vendedoraId: string;
+  nombre: string;
+  asignados: number;
+  cotizaciones: number;
+  contactosEfectivos: number;
+  seg2: number;
+  seg3: number;
+  visitas: number;
+  cierres: number;
+  tasaCierre: number; // cierres / cotizaciones * 100
+};
+
+export function calcularEmbudoPorAsesora(
+  leads: Lead[],
+  vendedoras: Array<{ id: string; nombre: string }>,
+): EmbudoAsesora[] {
+  return vendedoras
+    .map((v) => {
+      const propios = leads.filter((l) => l.asignado_a === v.id);
+      const cotizaciones = propios.filter(haCotizado).length;
+      const cierres = propios.filter((l) => l.estado === 'ganado').length;
+      return {
+        vendedoraId: v.id,
+        nombre: v.nombre,
+        asignados: propios.length,
+        cotizaciones,
+        contactosEfectivos: propios.filter(contactoEfectivo).length,
+        seg2: propios.filter((l) => l.seg2_fecha != null).length,
+        seg3: propios.filter((l) => l.seg3_fecha != null).length,
+        visitas: propios.filter(tuvoVisita).length,
+        cierres,
+        tasaCierre: cotizaciones > 0 ? (cierres / cotizaciones) * 100 : 0,
+      };
+    })
+    .filter((e) => e.asignados > 0)
+    .sort((a, b) => b.cierres - a.cierres);
+}
+
+// ── Reunión diaria y metas ────────────────────────────────────────────
+export type ReunionDiaria = {
+  periodo: string;
+  metaMes: number;
+  acumulado: number;
+  brecha: number;
+  avancePct: number;
+  ritmoDiario: number;
+  diasHabilesRestantes: number;
+  clientesCalientes: number;
+  cierresAyer: number;
+  cierresMes: number;
+};
+
+export function calcularReunionDiaria(
+  leads: Lead[],
+  metaMes: number,
+  periodo: string = periodoActual(),
+): ReunionDiaria {
+  const ganadosMes = leads.filter(
+    (l) => l.estado === 'ganado' && mismoPeriodo(l.fecha_cierre, periodo),
+  );
+  const acumulado = ganadosMes.reduce((s, l) => s + montoLead(l), 0);
+  const brecha = Math.max(0, metaMes - acumulado);
+  const dias = diasHabilesRestantes();
+  const calientes = leads.filter(
+    (l) => !l.archivado && temperaturaDeLead(l) === 'caliente',
+  ).length;
+  const cierresAyer = leads.filter(
+    (l) => l.estado === 'ganado' && esAyer(l.fecha_cierre),
+  ).length;
+  return {
+    periodo,
+    metaMes,
+    acumulado,
+    brecha,
+    avancePct: metaMes > 0 ? (acumulado / metaMes) * 100 : 0,
+    ritmoDiario: dias > 0 ? brecha / dias : brecha,
+    diasHabilesRestantes: dias,
+    clientesCalientes: calientes,
+    cierresAyer,
+    cierresMes: ganadosMes.length,
+  };
+}
+
+export type ProgresoVendedora = {
+  vendedoraId: string;
+  nombre: string;
+  meta: number;
+  vendido: number;
+  avancePct: number;
+  aportePct: number; // vendido / meta global del mes * 100
+  cierres: number;
+  calientes: number;
+};
+
+export function calcularProgresoVendedoras(
+  leads: Lead[],
+  vendedoras: Array<{ id: string; nombre: string }>,
+  metasPorVendedora: Record<string, number>,
+  periodo: string = periodoActual(),
+): ProgresoVendedora[] {
+  const metaGlobal = Object.values(metasPorVendedora).reduce((s, n) => s + n, 0);
+  return vendedoras
+    .map((v) => {
+      const propios = leads.filter((l) => l.asignado_a === v.id);
+      const ganadosMes = propios.filter(
+        (l) => l.estado === 'ganado' && mismoPeriodo(l.fecha_cierre, periodo),
+      );
+      const vendido = ganadosMes.reduce((s, l) => s + montoLead(l), 0);
+      const meta = metasPorVendedora[v.id] ?? 0;
+      const calientes = propios.filter(
+        (l) => !l.archivado && temperaturaDeLead(l) === 'caliente',
+      ).length;
+      return {
+        vendedoraId: v.id,
+        nombre: v.nombre,
+        meta,
+        vendido,
+        avancePct: meta > 0 ? (vendido / meta) * 100 : 0,
+        aportePct: metaGlobal > 0 ? (vendido / metaGlobal) * 100 : 0,
+        cierres: ganadosMes.length,
+        calientes,
+      };
+    })
+    .filter((p) => p.meta > 0 || p.vendido > 0)
+    .sort((a, b) => b.vendido - a.vendido);
+}
+
+// ── Hook: metas + leads para reunión diaria (mes actual, sin filtro de rango) ──
+export function useMetasReunion(periodo: string = periodoActual()) {
+  const { empresaId } = useAuth();
+  const [metas, setMetas] = useState<Record<string, number>>({});
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const cargar = useCallback(async () => {
+    if (!empresaId) return;
+    setLoading(true);
+    const [{ data: metasData }, { data: leadsData }] = await Promise.all([
+      supabase
+        .from('metas_vendedora' as any)
+        .select('vendedora_id, monto_meta')
+        .eq('empresa_id', empresaId)
+        .eq('periodo', periodo),
+      supabase.from('leads' as any).select('*').eq('empresa_id', empresaId),
+    ]);
+    const map: Record<string, number> = {};
+    ((metasData || []) as unknown as Array<{ vendedora_id: string; monto_meta: number }>).forEach((m) => {
+      map[String(m.vendedora_id)] = Number(m.monto_meta) || 0;
+    });
+    setMetas(map);
+    setLeads(((leadsData || []) as unknown) as Lead[]);
+    setLoading(false);
+  }, [empresaId, periodo]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  const guardarMeta = useCallback(
+    async (vendedoraId: string, monto: number) => {
+      if (!empresaId) return;
+      const { error } = await supabase.from('metas_vendedora' as any).upsert(
+        {
+          empresa_id: empresaId,
+          vendedora_id: vendedoraId,
+          periodo,
+          monto_meta: monto,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'empresa_id,vendedora_id,periodo' },
+      );
+      if (error) throw new Error(error.message);
+      setMetas((prev) => ({ ...prev, [vendedoraId]: monto }));
+    },
+    [empresaId, periodo],
+  );
+
+  return { metas, leads, loading, periodo, refrescar: cargar, guardarMeta };
 }
 
 // ── Filtros ───────────────────────────────────────────────────────────
@@ -541,6 +796,7 @@ export function todasLasMetricas(
     motivos: calcularMotivosPerdida(filtrados),
     tiempos: calcularTiemposPorEtapa(actividad),
     porVendedora: calcularPorVendedora(filtrados, actividad, vendedoras),
+    embudoAsesora: calcularEmbudoPorAsesora(filtrados, vendedoras),
     tendencia: calcularTendenciaSemanal(filtrados, actividad),
     temperatura: calcularPorTemperatura(filtrados),
     flujoTemperatura: calcularFlujoTemperaturaSemanal(filtrados, actividad),
