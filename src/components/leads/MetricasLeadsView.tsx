@@ -9,9 +9,13 @@
 // useMetricasDerivadas. El componente solo renderiza.
 
 import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
 import {
   AlertTriangle,
+  CalendarDays,
+  Flame,
   Loader2,
+  Pencil,
   TrendingUp,
   Trophy,
 } from 'lucide-react';
@@ -37,10 +41,16 @@ import { useAuth } from '@/lib/auth';
 import {
   TEMPERATURA_COLOR,
   TEMPERATURA_LABEL,
+  calcularProgresoVendedoras,
+  calcularReunionDiaria,
+  useMetasReunion,
   useMetricasDerivadas,
   useMetricasLeads,
+  type EmbudoAsesora,
   type FiltrosMetricas,
+  type ProgresoVendedora,
   type RangoMetricas,
+  type ReunionDiaria,
   type Temperatura,
 } from '@/modules/leads/metricas';
 import type { VendedoraOpt } from '@/modules/leads/hooks';
@@ -70,12 +80,6 @@ const fmtCLP = (n: number): string => {
 const fmtPct = (n: number, decimales = 1): string =>
   `${n.toFixed(decimales).replace('.', ',')}%`;
 
-const fmtDias = (n: number): string => {
-  if (n === 0) return '—';
-  if (n < 1) return `${(n * 24).toFixed(1)}h`;
-  return `${n.toFixed(1)} d`;
-};
-
 // ── Componente principal ──────────────────────────────────────────────
 export function MetricasLeadsView({
   vendedoras,
@@ -103,6 +107,22 @@ export function MetricasLeadsView({
   );
 
   const m = useMetricasDerivadas(leads, actividad, vendedoras, filtros);
+
+  // Metas + datos del mes actual (independiente del filtro de rango)
+  const { metas, leads: leadsMes, periodo, guardarMeta } = useMetasReunion();
+
+  const reunion = useMemo(() => {
+    const propios = esAdmin ? leadsMes : leadsMes.filter((l) => l.asignado_a === user?.id);
+    const metaMes = esAdmin
+      ? Object.values(metas).reduce((s, n) => s + n, 0)
+      : metas[user?.id ?? ''] ?? 0;
+    return calcularReunionDiaria(propios, metaMes, periodo);
+  }, [leadsMes, metas, esAdmin, user?.id, periodo]);
+
+  const progreso = useMemo(
+    () => calcularProgresoVendedoras(leadsMes, vendedoras, metas, periodo),
+    [leadsMes, vendedoras, metas, periodo],
+  );
 
   // Canales únicos para el filtro
   const canalesDisponibles = useMemo(() => {
@@ -138,6 +158,17 @@ export function MetricasLeadsView({
 
   return (
     <div className="space-y-4">
+      {/* Reunión diaria */}
+      <ReunionDiariaPanel
+        reunion={reunion}
+        progreso={progreso}
+        esAdmin={esAdmin}
+        periodo={periodo}
+        metas={metas}
+        vendedoras={vendedoras}
+        onGuardarMeta={guardarMeta}
+      />
+
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <select
@@ -401,81 +432,17 @@ export function MetricasLeadsView({
         </div>
       </Section>
 
-      {/* Performance por vendedora — solo admin */}
+      {/* Efectividad por asesora — solo admin */}
       {esAdmin && (
         <Section
-          title="Performance por vendedora"
-          subtitle="Ranking ordenado por leads ganados."
+          title="Efectividad por asesora"
+          subtitle="El embudo de cada vendedora: de cuántas cotizaciones envió, cuántas avanzaron por cada etapa de seguimiento hasta cerrar."
           icon={<Trophy className="h-3.5 w-3.5" />}
         >
-          {m.porVendedora.length === 0 ? (
+          {m.embudoAsesora.length === 0 ? (
             <EmptyMini text="Sin leads asignados en este período" />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border text-muted-foreground">
-                    <th className="px-2 py-1.5 text-left font-normal">Vendedora</th>
-                    <th className="px-2 py-1.5 text-right font-normal">Asignados</th>
-                    <th className="px-2 py-1.5 text-right font-normal">Ganados</th>
-                    <th className="px-2 py-1.5 text-right font-normal">% cierre</th>
-                    <th className="px-2 py-1.5 text-right font-normal">Días prom.</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {m.porVendedora.map((v, i) => {
-                    const cierreColor =
-                      v.tasaCierre >= 20
-                        ? { bg: '#0F6E56', fg: '#E1F5EE' } // teal fuerte
-                        : v.tasaCierre >= 10
-                          ? { bg: '#085041', fg: '#9FE1CB' } // teal medio
-                          : v.asignados > 0
-                            ? { bg: '#791F1F', fg: '#F7C1C1' } // rojo
-                            : { bg: 'transparent', fg: 'var(--muted-foreground)' };
-                    const diasColor =
-                      v.diasPromedio > 0 && v.diasPromedio < 14
-                        ? { bg: '#0F6E56', fg: '#E1F5EE' }
-                        : v.diasPromedio >= 21
-                          ? { bg: '#854F0B', fg: '#FAEEDA' } // ámbar
-                          : { bg: 'transparent', fg: 'var(--muted-foreground)' };
-                    return (
-                      <tr
-                        key={v.vendedoraId}
-                        className={cn(
-                          'border-b border-border/50',
-                          i === 0 && 'bg-success/10',
-                        )}
-                      >
-                        <td className="px-2 py-2 font-medium">
-                          {i === 0 && (
-                            <span className="mr-1.5" style={{ color: '#FAC775' }}>★</span>
-                          )}
-                          {v.nombre}
-                        </td>
-                        <td className="px-2 py-2 text-right">{v.asignados}</td>
-                        <td className="px-2 py-2 text-right font-medium">{v.ganados}</td>
-                        <td className="px-2 py-2 text-right">
-                          <span
-                            className="inline-block rounded-md px-2 py-0.5 text-[11px] font-medium"
-                            style={{ background: cierreColor.bg, color: cierreColor.fg }}
-                          >
-                            {fmtPct(v.tasaCierre)}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          <span
-                            className="inline-block rounded-md px-2 py-0.5 text-[11px] font-medium"
-                            style={{ background: diasColor.bg, color: diasColor.fg }}
-                          >
-                            {fmtDias(v.diasPromedio)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <EmbudoAsesoraTabla filas={m.embudoAsesora} />
           )}
         </Section>
       )}
@@ -633,6 +600,244 @@ function EmptyMini({ text }: { text: string }) {
   return (
     <div className="flex h-24 items-center justify-center text-xs text-muted-foreground">
       {text}
+    </div>
+  );
+}
+
+// ── Reunión diaria ────────────────────────────────────────────────────
+function BarraAvance({ pct }: { pct: number }) {
+  const w = Math.min(100, Math.max(0, pct));
+  const color =
+    pct >= 100 ? '#1D9E75' : pct >= 60 ? '#7F77DD' : pct >= 30 ? '#EF9F27' : '#E24B4A';
+  return (
+    <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+      <div className="h-full rounded-full transition-all" style={{ width: `${w}%`, background: color }} />
+    </div>
+  );
+}
+
+function ReunionDiariaPanel({
+  reunion,
+  progreso,
+  esAdmin,
+  periodo,
+  metas,
+  vendedoras,
+  onGuardarMeta,
+}: {
+  reunion: ReunionDiaria;
+  progreso: ProgresoVendedora[];
+  esAdmin: boolean;
+  periodo: string;
+  metas: Record<string, number>;
+  vendedoras: VendedoraOpt[];
+  onGuardarMeta: (vendedoraId: string, monto: number) => Promise<void>;
+}) {
+  const [editando, setEditando] = useState(false);
+  const nombrePeriodo = new Date(periodo + '-01T00:00:00').toLocaleDateString('es-CL', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+  return (
+    <div className="rounded-lg border border-accent/30 bg-accent/5 p-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <CalendarDays className="h-5 w-5 text-accent" />
+          <div>
+            <div className="text-base font-bold text-foreground">Reunión diaria</div>
+            <div className="text-[11px] capitalize text-muted-foreground">{nombrePeriodo}</div>
+          </div>
+        </div>
+        {esAdmin && (
+          <button
+            onClick={() => setEditando((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <Pencil className="h-3 w-3" /> {editando ? 'Cerrar' : 'Editar metas'}
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+        <KpiCard label="Meta del mes" value={fmtCLP(reunion.metaMes)} />
+        <KpiCard
+          label="Vendido"
+          value={fmtCLP(reunion.acumulado)}
+          sub={fmtPct(reunion.avancePct, 0) + ' de la meta'}
+          accent="success"
+        />
+        <KpiCard
+          label="Brecha"
+          value={fmtCLP(reunion.brecha)}
+          sub={reunion.brecha > 0 ? 'falta' : 'meta lograda'}
+          accent={reunion.brecha > 0 ? 'warn' : 'success'}
+        />
+        <KpiCard
+          label="Ritmo diario"
+          value={fmtCLP(reunion.ritmoDiario)}
+          sub={`${reunion.diasHabilesRestantes} días hábiles`}
+        />
+        <KpiCard
+          label="Clientes calientes"
+          value={String(reunion.clientesCalientes)}
+          sub="activos"
+          icon={<Flame className="h-3 w-3" />}
+        />
+        <KpiCard
+          label="Cierres ayer"
+          value={String(reunion.cierresAyer)}
+          sub={`${reunion.cierresMes} en el mes`}
+        />
+      </div>
+
+      <div className="mt-3">
+        <BarraAvance pct={reunion.avancePct} />
+      </div>
+
+      {esAdmin &&
+        (editando ? (
+          <MetasEditor vendedoras={vendedoras} metas={metas} onGuardarMeta={onGuardarMeta} />
+        ) : progreso.length > 0 ? (
+          <div className="mt-4 space-y-2">
+            {progreso.map((p) => (
+              <div key={p.vendedoraId} className="text-xs">
+                <div className="mb-0.5 flex items-center justify-between">
+                  <span className="font-medium text-foreground">{p.nombre}</span>
+                  <span className="text-muted-foreground">
+                    {fmtCLP(p.vendido)} / {fmtCLP(p.meta)} · aporte {fmtPct(p.aportePct, 0)}
+                  </span>
+                </div>
+                <BarraAvance pct={p.avancePct} />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Todavía no hay metas cargadas. Usa "Editar metas" para definir la meta mensual de cada vendedora.
+          </p>
+        ))}
+    </div>
+  );
+}
+
+function MetasEditor({
+  vendedoras,
+  metas,
+  onGuardarMeta,
+}: {
+  vendedoras: VendedoraOpt[];
+  metas: Record<string, number>;
+  onGuardarMeta: (vendedoraId: string, monto: number) => Promise<void>;
+}) {
+  const [valores, setValores] = useState<Record<string, string>>(() => {
+    const o: Record<string, string> = {};
+    vendedoras.forEach((v) => {
+      o[v.id] = metas[v.id] ? String(metas[v.id]) : '';
+    });
+    return o;
+  });
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      for (const v of vendedoras) {
+        const nuevo = Number(valores[v.id] || 0);
+        if (nuevo !== (metas[v.id] ?? 0)) await onGuardarMeta(v.id, nuevo);
+      }
+      toast.success('Metas guardadas');
+    } catch (e) {
+      toast.error('Error: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 space-y-2">
+      {vendedoras.map((v) => (
+        <div key={v.id} className="flex items-center gap-2 text-xs">
+          <span className="w-40 truncate text-foreground">{v.nombre}</span>
+          <span className="text-muted-foreground">$</span>
+          <input
+            type="number"
+            min={0}
+            step={100000}
+            value={valores[v.id] ?? ''}
+            onChange={(e) => setValores((p) => ({ ...p, [v.id]: e.target.value }))}
+            placeholder="0"
+            className="w-40 rounded-md border border-border bg-card px-2 py-1 text-foreground focus:border-accent focus:outline-none"
+          />
+          {valores[v.id] && Number(valores[v.id]) > 0 && (
+            <span className="text-muted-foreground">{fmtCLP(Number(valores[v.id]))}</span>
+          )}
+        </div>
+      ))}
+      <button
+        onClick={guardar}
+        disabled={guardando}
+        className="mt-1 inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-accent-foreground disabled:opacity-60"
+      >
+        {guardando && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Guardar metas
+      </button>
+    </div>
+  );
+}
+
+function EmbudoAsesoraTabla({ filas }: { filas: EmbudoAsesora[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-border text-muted-foreground">
+            <th className="px-2 py-1.5 text-left font-normal">Asesora</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Leads asignados">Asignados</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Cotizaciones enviadas">Cotiz.</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Clientes que respondieron">Contactos</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Seguimiento 2 realizado">Seg 2</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Seguimiento 3 realizado">Seg 3</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Visitas">Visitas</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Cierres ganados">Cierres</th>
+            <th className="px-2 py-1.5 text-right font-normal" title="Cierres / Cotizaciones">% cierre</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filas.map((v, i) => {
+            const cierreColor =
+              v.tasaCierre >= 20
+                ? { bg: '#0F6E56', fg: '#E1F5EE' }
+                : v.tasaCierre >= 10
+                  ? { bg: '#085041', fg: '#9FE1CB' }
+                  : v.cotizaciones > 0
+                    ? { bg: '#791F1F', fg: '#F7C1C1' }
+                    : { bg: 'transparent', fg: 'var(--muted-foreground)' };
+            return (
+              <tr key={v.vendedoraId} className={cn('border-b border-border/50', i === 0 && 'bg-success/10')}>
+                <td className="px-2 py-2 font-medium">
+                  {i === 0 && <span className="mr-1.5" style={{ color: '#FAC775' }}>★</span>}
+                  {v.nombre}
+                </td>
+                <td className="px-2 py-2 text-right">{v.asignados}</td>
+                <td className="px-2 py-2 text-right">{v.cotizaciones}</td>
+                <td className="px-2 py-2 text-right">{v.contactosEfectivos}</td>
+                <td className="px-2 py-2 text-right">{v.seg2}</td>
+                <td className="px-2 py-2 text-right">{v.seg3}</td>
+                <td className="px-2 py-2 text-right">{v.visitas}</td>
+                <td className="px-2 py-2 text-right font-medium">{v.cierres}</td>
+                <td className="px-2 py-2 text-right">
+                  <span
+                    className="inline-block rounded-md px-2 py-0.5 text-[11px] font-medium"
+                    style={{ background: cierreColor.bg, color: cierreColor.fg }}
+                  >
+                    {fmtPct(v.tasaCierre)}
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
