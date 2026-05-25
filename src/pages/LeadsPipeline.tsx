@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   BarChart3,
+  BookOpen,
   Bot,
   CalendarClock,
   KanbanSquare,
@@ -34,9 +35,10 @@ import { LeadDialog } from '@/components/leads/LeadDialog';
 import { LeadDetalleDialog } from '@/components/leads/LeadDetalleDialog';
 import { MetricasLeadsView } from '@/components/leads/MetricasLeadsView';
 import { SeguimientosView } from '@/components/leads/SeguimientosView';
+import { CoachingView } from '@/components/coaching/CoachingView';
 import { resumenBandeja } from '@/modules/leads/seguimientos';
 
-type Vista = 'tabla' | 'kanban' | 'metricas' | 'seguimientos';
+type Vista = 'tabla' | 'kanban' | 'metricas' | 'seguimientos' | 'coaching';
 type FiltroOrigen = 'todos' | 'bot' | 'manual';
 
 const TONO_CLS: Record<string, string> = {
@@ -78,7 +80,7 @@ export function LeadsPipeline() {
 
   const [vista, setVista] = useState<Vista>(() => {
     const v = params.get('vista') as Vista;
-    if (v === 'kanban' || v === 'metricas' || v === 'seguimientos') return v;
+    if (v === 'kanban' || v === 'metricas' || v === 'seguimientos' || v === 'coaching') return v;
     return 'tabla';
   });
   const [busqueda, setBusqueda] = useState('');
@@ -282,6 +284,17 @@ export function LeadsPipeline() {
             >
               <BarChart3 className="h-3.5 w-3.5" /> Métricas
             </button>
+            <button
+              onClick={() => setVista('coaching')}
+              className={cn(
+                'inline-flex items-center gap-1 border-l border-border px-3 py-1.5 text-xs transition-colors',
+                vista === 'coaching'
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <BookOpen className="h-3.5 w-3.5" /> Coaching
+            </button>
           </div>
           <Button
             onClick={() => {
@@ -432,6 +445,8 @@ export function LeadsPipeline() {
       <div className="px-5 py-5">
         {vista === 'metricas' ? (
           <MetricasLeadsView vendedoras={vendedoras} />
+        ) : vista === 'coaching' ? (
+          <CoachingView />
         ) : vista === 'seguimientos' ? (
           <SeguimientosView
             leads={leads}
