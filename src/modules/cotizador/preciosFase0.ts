@@ -27,8 +27,10 @@ export const RECARGO_TARJETA = 0.138;
 // Instalación por cortina.
 export const INSTALACION_ROLLER = 17500;
 export const INSTALACION_VERTICAL = 40000; // 39.999,99 en el Excel
-// Mano de obra por cortina roller.
+// Mano de obra por cortina: roller (MAN 01), dúo (MAN 02), vertical (MAN 03).
 export const MANO_OBRA_ROLLER = 19500;
+export const MANO_OBRA_DUO = 25000;
+export const MANO_OBRA_VERTICAL = 62000;
 // Traslado: se cobra 1 por cada TIPO de cortina cotizado (roller, dúo, screen, vertical…).
 export const TRASLADO = 55000; // 55.000,61 en el Excel
 // Publicidad / etiqueta por cortina (incluido en la lista de materiales).
@@ -39,20 +41,54 @@ export const PUBLICIDAD = 1400;
 // (Mapa completo de 87 insumos extraído del Excel; aquí los de la familia
 //  Roller Blackout / Screen / Dúo, que es la primera capa a construir.)
 export const INSUMO_VALOR_MAXIMO: Record<string, number> = {
-  'E 02': 3729.16, // Tubo 1.2 / Ø38 mm  (cortinas de ancho ≤ 2,19 m)
-  'E 05': 8958.22, // Tubo .45 esp 1.2   (cortinas de ancho ≥ 2,191 m)
-  'E 15': 4583.24, // Peso inferior roller/dúo (por metro)
-  'TAP 01 -19': 235.62, // Tapa peso (2 por cortina)
-  'TOP 03': 59.5, // Tope cadena
-  MER0006: 59.5, // Tope metálico cadena
+  // Tubos / perfiles
+  'E 02': 3729.1625, // Tubo Ø38 (roller, ancho ≤ 2,19 m)
+  'E 02-1': 3729.1625, // Tubo (variante standard)
+  'E 05': 8958.220833, // Tubo .45 (roller, ancho ≥ 2,191 m)
+  'E 15': 4583.235417, // Peso inferior roller (por metro)
+  'E 26': 9252.99375, // Perfil superior cenefa dúo (por metro)
+  'E 18': 4638.76875, // Peso lágrima dúo (por metro)
+  'E 13': 2900.625, // Peso dúo (por metro)
+  // Mecanismos
+  'MEC 18': 5950, // Mecanismo 0.45 Decorelli (roller)
+  'MEC 09': 4069.8, // Mecanismo cenefa ovalada (dúo)
+  // Cadenas / topes
+  'CAD 03': 1190, // Cadena infinita plástica (roller manual)
+  'CAD 02': 1190, // Cadena infinita plástica (dúo manual)
+  'CAD 13': 725.9, // Cadena metálica por metro (motor)
+  'TOP 03': 59.5, // Tope cadena (roller)
+  MER0006: 59.5, // Tope metálico cadena (motor)
+  // Pesos / tapas / zunchos
   'PCA 04': 1190, // Peso porta cadena
+  'TAP 01 -19': 235.62, // Tapa peso roller (2 por cortina)
+  'TAP 09': 314.16, // Tapa peso dúo (2 por cortina)
   'ZUN 06': 238, // Zuncho (por metro, ×2)
+  // Dúo varios
+  'MIC 01': 416.5, // Mica transparente cenefa (dúo premium/poli, por metro)
+  'CIN 02': 71.4, // Cinta doble contacto (dúo premium/poli, por metro)
+  'BRA 02': 589.05, // Bracket largo (dúo, ×3 por cortina)
+  // Genéricos
   'INS 95': 450, // Etiqueta Rolzzo (por cortina)
-  MAT00001: 1300, // Materiales varios (por cortina)
-  'MEC 18': 5950, // Mecanismo 0.45 Decorelli
-  'CAD 03': 1190, // Cadena infinita plástica (cortina manual)
-  'CAD 13': 725.9, // Cadena metálica por metro
-  'PUB 01': 1400, // Publicidad
+  MAT00001: 1300, // Materiales varios
+  'PUB 01': 1400, // Publicidad (por cortina)
+  // Verticales (lamas / riel) — receta decodificada, pendiente de validar
+  'VER 35': 16495.78, // Perfil (riel) cortina vertical, por metro de ancho
+  'VER 02': 773.5, // Carro conector 3 vías (por lama)
+  'VER 19': 833, // Peso lama vertical (por lama)
+  'VER 03': 238, // Lama de sujeción (por lama)
+  'VER 04': 95.2, // Espaciador (por lama)
+  'VER 05': 238, // Clip sujeción riel
+  'VER 06': 714, // Escuadra cortina vertical
+  'VER 07': 476, // Sujetador eje 3 vías
+  'VER 08': 142.8, // Conductor de cordón
+  'VER 09': 785.4, // Unidad de control
+  'VER 10': 95.2, // Freno eje 3 vías
+  'VER 11': 3570, // Peso cordón vertical
+  'VER 15': 202.3, // Cadena inferior vertical (por metro de alto)
+  'VER 22': 202.3, // Cordón cortina vertical (por metro de alto)
+  'VER 24': 89.25, // Tope cordón
+  'VER 29': 142.8, // Guía tope de soga
+  'VER 30': 737.8, // Soporte riel
 };
 
 // ── Tipo de resultado del motor de precio ─────────────────────────────

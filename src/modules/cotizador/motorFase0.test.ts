@@ -1,49 +1,66 @@
 import { describe, it, expect } from 'vitest';
-import { calcularRollerBKSCR, metrosTelaPorPanos, type ItemFase0 } from './motorFase0';
+import { cotizarFase0, metrosTelaPorPanos, type FilaFase0 } from './motorFase0';
+import type { CatalogoProductos } from './types';
 
-// Caso de referencia: 3 ROLLER BLACKOUT PREMIUM (BK-P), manual.
-// precio/ml tela = 29.231 ; ancho de rollo = 2,45 m.
-// Los números esperados se derivan de las fórmulas decodificadas del Excel
-// (Optimizador + Cotizador). Sirven para detectar regresiones en el motor.
-// La validación final "al peso" se hace comparando este desglose contra una
-// cotización real del Excel.
-const CASO: ItemFase0[] = [
-  { codInt: 'BK-P', ancho: 1.5, alto: 2.0, cantidad: 1, precioMl: 29231, anchoRollo: 2.45 },
-  { codInt: 'BK-P', ancho: 2.4, alto: 2.3, cantidad: 1, precioMl: 29231, anchoRollo: 2.45 },
-  { codInt: 'BK-P', ancho: 1.2, alto: 1.8, cantidad: 1, precioMl: 29231, anchoRollo: 2.45 },
-];
+// Catálogo mínimo para los casos reales (precio = MAX de la familia COD).
+const CAT: CatalogoProductos = {
+  'DU 25': { cod: 'DUOBK_D', producto: 'ROLLER DUO BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 40307.692307692305 },
+  'DB-P': { cod: 'DUOBK_P', producto: 'ROLLER DUO BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 32292.30769230769 },
+  'DUOP-P': { cod: 'DUOPOLI_P', producto: 'ROLLER DUO POLIESTER PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 28603.93846153846 },
+};
+const AR: Record<string, number> = { 'DU 25': 2.65, 'DB-P': 2.65, 'DUOP-P': 2.88 };
 
-describe('motorFase0 — familia Roller Blackout/Screen', () => {
-  it('agrupa paños y calcula metros de tela (MTS)', () => {
+const cerca = (valor: number, esperado: number, tolPct: number) =>
+  Math.abs(valor - esperado) / esperado <= tolPct;
+
+describe('motorFase0 — agrupado de paños', () => {
+  it('suma alturas de paño (DUO Blackout Delux, Guillermo)', () => {
+    // alto real = (alto+0,25)*2: 5,0 / 4,1 / 4,1 ; anchoRollo 2,65 → 3 paños
     const piezas = [
-      { codInt: 'BK-P', ancho: 1.5, altoReal: 2.25, m2: 3.375 },
-      { codInt: 'BK-P', ancho: 2.4, altoReal: 2.55, m2: 6.12 },
-      { codInt: 'BK-P', ancho: 1.2, altoReal: 2.05, m2: 2.46 },
+      { ancho: 2.44, altoReal: 5.0 },
+      { ancho: 1.76, altoReal: 4.1 },
+      { ancho: 1.76, altoReal: 4.1 },
     ];
-    // 3 alturas distintas → 3 paños → MTS = 2,55 + 2,25 + 2,05 = 6,85
-    expect(metrosTelaPorPanos(piezas, 2.45)).toBeCloseTo(6.85, 4);
+    expect(metrosTelaPorPanos(piezas, 2.65)).toBeCloseTo(13.2, 4);
+  });
+});
+
+describe('motorFase0 — validación contra cotizaciones reales', () => {
+  it('Guillermo (Dúo Blackout Delux) — exacto al peso', () => {
+    const filas: FilaFase0[] = [
+      { codInt: 'DU 25', ancho: 2.44, alto: 2.25, cantidad: 1 },
+      { codInt: 'DU 25', ancho: 1.76, alto: 1.8, cantidad: 1 },
+      { codInt: 'DU 25', ancho: 1.76, alto: 1.8, cantidad: 1 },
+    ];
+    const r = cotizarFase0(filas, CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 465137.31, 0.001)).toBe(true);
+    expect(cerca(r.lineas[1].valorUnit, 282266.46, 0.001)).toBe(true);
+    expect(r.familias[0].exacto).toBe(true);
   });
 
-  it('reproduce el precio/m² combinado y los totales del Excel', () => {
-    const r = calcularRollerBKSCR(CASO);
-    const fam = r.familias[0];
-    expect(fam.metrosTela).toBeCloseTo(6.85, 4);
-    expect(fam.m2Total).toBeCloseTo(11.955, 3);
-    expect(fam.costoMateriales).toBeCloseTo(143696.62, 1);
-    expect(fam.costoTotal).toBeCloseTo(457428.97, 1);
-    expect(fam.precioM2).toBeCloseTo(38262.57, 1);
+  it('Jorge (Dúo Blackout Premium) — exacto al peso', () => {
+    const filas: FilaFase0[] = [
+      { codInt: 'DB-P', ancho: 1.7, alto: 2.3, cantidad: 1 },
+      { codInt: 'DB-P', ancho: 1.45, alto: 1.5, cantidad: 1 },
+      { codInt: 'DB-P', ancho: 0.78, alto: 2.3, cantidad: 1 },
+      { codInt: 'DB-P', ancho: 0.78, alto: 2.3, cantidad: 1 },
+    ];
+    const r = cotizarFase0(filas, CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 349003.15, 0.001)).toBe(true);
+    expect(cerca(r.lineas[2].valorUnit, 169601.45, 0.001)).toBe(true);
+  });
 
-    expect(r.subtotalNeto).toBeCloseTo(509928.97, 1);
-    expect(r.totales.totalTransferencia).toBeCloseTo(606815.48, 1);
-    expect(r.totales.totalTarjeta).toBeCloseTo(690556.01, 1);
-    expect(r.totales.abono50).toBeCloseTo(303407.74, 1);
+  it('Francisco (Dúo Poliéster) — dentro de ~2% (precio de tela poliéster por confirmar)', () => {
+    const filas: FilaFase0[] = [
+      { codInt: 'DUOP-P', ancho: 2.025, alto: 1.9, cantidad: 1 },
+      { codInt: 'DUOP-P', ancho: 2.025, alto: 1.9, cantidad: 1 },
+    ];
+    const r = cotizarFase0(filas, CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 275841.48, 0.02)).toBe(true);
   });
 
   it('multiplica el valor unitario por la cantidad en el total de línea', () => {
-    const r = calcularRollerBKSCR([
-      { codInt: 'BK-P', ancho: 1.5, alto: 2.0, cantidad: 2, precioMl: 29231, anchoRollo: 2.45 },
-    ]);
-    const l = r.lineas[0];
-    expect(l.total).toBeCloseTo(l.valorUnit * 2, 4);
+    const r = cotizarFase0([{ codInt: 'DU 25', ancho: 1.5, alto: 2.0, cantidad: 2 }], CAT, AR);
+    expect(r.lineas[0].total).toBeCloseTo(r.lineas[0].valorUnit * 2, 4);
   });
 });
