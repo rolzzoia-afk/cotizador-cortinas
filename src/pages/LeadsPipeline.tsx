@@ -6,6 +6,7 @@ import {
   BookOpen,
   Bot,
   CalendarClock,
+  Calculator,
   KanbanSquare,
   LayoutList,
   Loader2,
@@ -296,6 +297,14 @@ export function LeadsPipeline() {
               <BookOpen className="h-3.5 w-3.5" /> Coaching
             </button>
           </div>
+          <Button
+            onClick={() => navigate('/cotizar')}
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+          >
+            <Calculator className="h-4 w-4" /> Cotizar
+          </Button>
           <Button
             onClick={() => {
               setLeadEnEdicion(null);

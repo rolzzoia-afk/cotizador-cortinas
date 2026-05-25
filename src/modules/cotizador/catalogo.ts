@@ -55,3 +55,49 @@ export function useCatalogoProductos(): {
 
   return { catalogo, loading, refresh: cargar };
 }
+
+// Hook: carga el mapa de ancho de rollo por producto (COD_INT → metros).
+// Fuente: tabla `configuracion`, clave 'ancho_rollo_data' (JSON string).
+// Lo usa el motor de precio de Fase 0 para la optimización de telas.
+export function useAnchoRollo(): {
+  anchoRollo: Record<string, number>;
+  loading: boolean;
+} {
+  const { empresaId } = useAuth();
+  const [anchoRollo, setAnchoRollo] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!empresaId) {
+      setAnchoRollo({});
+      setLoading(false);
+      return;
+    }
+    (async () => {
+      setLoading(true);
+      try {
+        const { data } = await supabase
+          .from('configuracion')
+          .select('valor')
+          .eq('empresa_id', empresaId)
+          .eq('clave', 'ancho_rollo_data')
+          .maybeSingle<{ valor: string }>();
+        if (data?.valor) {
+          try {
+            setAnchoRollo(JSON.parse(data.valor) || {});
+          } catch {
+            setAnchoRollo({});
+          }
+        } else {
+          setAnchoRollo({});
+        }
+      } catch {
+        setAnchoRollo({});
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [empresaId]);
+
+  return { anchoRollo, loading };
+}
