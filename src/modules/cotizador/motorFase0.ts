@@ -21,6 +21,7 @@ import {
   INSTALACION_VERTICAL,
   MANO_OBRA_ROLLER,
   MANO_OBRA_DUO,
+  MANO_OBRA_VERTICAL,
   TRASLADO,
   INSUMO_VALOR_MAXIMO,
   calcularTotales,
@@ -73,22 +74,26 @@ function altoRealM(alto: number, esDuo: boolean): number {
   return esDuo ? conExtra * 2 : conExtra;
 }
 
-// Metros de tela: ordenar por alto real desc, acumular ancho hasta llenar el
-// rollo; cada paño aporta su alto máximo. MTS = suma de altos de paño.
+// Metros de tela (paños roller): se ordena por ancho ascendente y se
+// acumulan los anchos en un mismo paño hasta llenar el rollo; al exceder
+// se abre un paño nuevo. El alto del paño = MAX alto real de sus cortinas.
+// MTS = suma de los altos de paño.
+//
+// Validado al peso contra cotizaciones reales (Guillermo, Jorge, Francisco,
+// Felipe-SCREEN_P, Felipe-BLACKOUT_D). El bug previo (exigir mismo alto para
+// agrupar) hacía que MTS quedara sobreestimado en cortinas con alturas casi
+// iguales y anchos chicos, inflando el precio.
 export function metrosTelaPorPanos(
   piezas: { ancho: number; altoReal: number }[],
   anchoRollo: number,
 ): number {
-  const ordenadas = [...piezas].sort((a, b) => b.altoReal - a.altoReal);
+  const ordenadas = [...piezas].sort((a, b) => a.ancho - b.ancho);
   const panos: { alto: number; ancho: number }[] = [];
   let acc = 0;
-  let curAlto: number | null = null;
   for (const p of ordenadas) {
     const excede = acc + p.ancho > anchoRollo;
-    const nuevo = curAlto === null || Math.abs(p.altoReal - curAlto) > 1e-6 || excede;
-    if (nuevo) {
+    if (panos.length === 0 || excede) {
       panos.push({ alto: p.altoReal, ancho: p.ancho });
-      curAlto = p.altoReal;
       acc = p.ancho;
     } else {
       const last = panos[panos.length - 1];
@@ -176,10 +181,46 @@ function costoMateriales(cod: string, ctx: Ctx): number {
   return m;
 }
 
-// NOTA: la receta de materiales para VERTICALES está decodificada en el Excel
-// (insumos VER xx, mano de obra MAN 03, instalación INSTVER), pero un cálculo
-// de prueba dio valores implausibles, así que NO se activa hasta validar con
-// una cotización vertical real. Por ahora las verticales no se cotizan acá.
+// ── VERTICALES ────────────────────────────────────────────────────────
+// Metros de tela vertical: cada cortina usa altoReal × nº de paños, donde
+// nº de paños = redondear hacia arriba (ancho / ancho de rollo).
+export function metrosTelaVertical(
+  piezas: { ancho: number; altoReal: number }[],
+  anchoRollo: number,
+): number {
+  return piezas.reduce(
+    (s, p) => s + p.altoReal * Math.max(1, Math.ceil(p.ancho / anchoRollo)),
+    0,
+  );
+}
+
+// Lista de materiales (costo) para verticales. Decodificada del Cotizador
+// Verticales del Excel. Validada contra 1 caso real (Felipe SC 34-V): da
+// ~+5% (precio/m² 75.921 vs Excel 71.985). Conviene afinar con más ejemplos.
+function costoMaterialesVertical(n: number, sw: number, sumAlto: number): number {
+  const lamas = (sw / 0.8) * 10;
+  let m = 0;
+  m += pv('VER 35') * sw; // riel
+  m += pv('VER 02') * lamas; // carro conector
+  m += pv('VER 19') * lamas; // peso lama
+  m += pv('VER 03') * lamas; // lama de sujeción
+  m += pv('VER 04') * lamas; // espaciador
+  m += pv('VER 05') * 4; // clip sujeción riel (fijo)
+  m += pv('VER 06') * n * 3; // escuadra
+  m += pv('VER 07') * n;
+  m += pv('VER 08') * n;
+  m += pv('VER 09') * n;
+  m += pv('VER 10') * n;
+  m += pv('VER 11') * n * 2;
+  m += pv('VER 15') * sumAlto * 2;
+  m += pv('VER 22') * sumAlto * 5;
+  m += pv('VER 24') * n;
+  m += pv('VER 30') * n;
+  m += pv('CAD 02') * n;
+  m += pv('VER 29') * n;
+  m += pv('MAT00001') * n;
+  return m;
+}
 
 // Precio de tela por familia = MAX precio de venta entre los productos del
 // catálogo que comparten ese COD (igual que MAXIFS del Excel).
@@ -203,7 +244,7 @@ export function cotizarFase0(
 ): ResultadoCotizacion {
   const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
 
-  type Pieza = { ancho: number; altoReal: number; m2: number };
+  type Pieza = { ancho: number; alto: number; altoReal: number; m2: number };
   type Grupo = {
     cod: string;
     esDuo: boolean;
@@ -223,7 +264,7 @@ export function cotizarFase0(
     const esDuo = cod.startsWith('DUO') || nombre.includes('DUO');
     const esVertical = /(_V_|-V$|-V-)/.test(cod) || nombre.includes('VERTICAL');
     const altoReal = altoRealM(f.alto, esDuo);
-    const pieza: Pieza = { ancho: f.ancho, altoReal, m2: altoReal * f.ancho };
+    const pieza: Pieza = { ancho: f.ancho, alto: f.alto, altoReal, m2: altoReal * f.ancho };
     let g = grupos.get(cod);
     if (!g) {
       g = {
@@ -255,10 +296,15 @@ export function cotizarFase0(
       wle250: g.piezas.filter((p) => p.ancho <= 2.5).reduce((s, p) => s + p.ancho, 0),
       cge220: g.piezas.filter((p) => p.ancho >= 2.2).length,
     };
-    const metrosTela = metrosTelaPorPanos(g.piezas, g.anchoRollo);
+    const metrosTela = g.esVertical
+      ? metrosTelaVertical(g.piezas, g.anchoRollo)
+      : metrosTelaPorPanos(g.piezas, g.anchoRollo);
     const costoTela = g.precioMl * metrosTela;
-    const costoMat = costoMateriales(cod, ctx);
-    const manoObra = (g.esDuo ? MANO_OBRA_DUO : MANO_OBRA_ROLLER) * n;
+    const costoMat = g.esVertical
+      ? costoMaterialesVertical(n, sw, g.piezas.reduce((s, p) => s + p.alto, 0))
+      : costoMateriales(cod, ctx);
+    const manoObra =
+      (g.esVertical ? MANO_OBRA_VERTICAL : g.esDuo ? MANO_OBRA_DUO : MANO_OBRA_ROLLER) * n;
     const traslado = TRASLADO;
     const costoTotal = costoTela + costoMat + manoObra + traslado;
     const precioM2 = m2Total > 0 ? costoTotal / m2Total : 0;
