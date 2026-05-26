@@ -58,12 +58,16 @@ type AdicionalUI = {
   codInt: string;
   cantidad: number;
   descuento: number;
+  ubicacion: string;
+  colorAcc: string;
 };
 const nuevoAdicional = (): AdicionalUI => ({
   id: crypto.randomUUID(),
   codInt: '',
   cantidad: 1,
   descuento: 0,
+  ubicacion: '',
+  colorAcc: '',
 });
 
 const DIRECCIONES = [
@@ -82,14 +86,30 @@ const CATEGORIAS_MECANISMO = [
   'OSCURANTI_63mm',
 ];
 
-// ── Filtros del catálogo (chips de colores, estilo Excel) ─────────────
 const N = (s?: string) => (s || '').toUpperCase();
+
+const CHIP_DE_CODINT: Record<string, string> = {
+  // MOT
+  'DOM 01': 'MOT', 'DOM 02': 'MOT', 'DOM 03': 'MOT', 'DOM 05': 'MOT', INSTMOT: 'MOT',
+  // MOTOR MG
+  'DOM 33': 'MOTOR_MG', 'DOM 34': 'MOTOR_MG', 'DOM 38': 'MOTOR_MG', 'DOM 39': 'MOTOR_MG', INSTMOTMG: 'MOTOR_MG',
+  // SOFT
+  SOFTLDER: 'SOFT', SOFTLIZQ: 'SOFT', 'CENF O': 'SOFT', INSTSOFT: 'SOFT',
+  // OSCURA
+  'CEN-PRO': 'OSCURA', 'P-DER': 'OSCURA', 'P-IZQ': 'OSCURA', 'P-INST': 'OSCURA',
+  // MOT VERT
+  'MOT 01': 'MOT_VERT', 'MOT 03': 'MOT_VERT', 'INSTMOT-VERT': 'MOT_VERT',
+  // MOTOR GRANDE
+  'DOM 35': 'MOTOR_GRANDE', 'DOM 36': 'MOTOR_GRANDE', 'DOM 37': 'MOTOR_GRANDE', INSTMOTCA: 'MOTOR_GRANDE',
+};
+
 type Filtro = {
   id: string;
   label: string;
-  cls: string; // tailwind para el chip
+  cls: string;
   match: (p: Producto, codInt: string) => boolean;
 };
+const enChip = (ci: string, chip: string) => CHIP_DE_CODINT[ci.trim()] === chip;
 const FILTROS_CATALOGO: Filtro[] = [
   { id: 'BK', label: 'BK', cls: 'bg-amber-100 text-amber-900 border-amber-400',
     match: (p) => ['BLACKOUT_P', 'BLACKOUT_D', 'BLACKOUT_S'].includes(N(p.cod)) },
@@ -104,25 +124,24 @@ const FILTROS_CATALOGO: Filtro[] = [
   { id: 'DUO_POLI', label: 'DUO POLI', cls: 'bg-blue-200 text-blue-900 border-blue-500',
     match: (p) => N(p.cod).startsWith('DUOPOLI') },
   { id: 'SOFT', label: 'SOFT', cls: 'bg-lime-400 text-lime-950 border-lime-600',
-    match: (p, ci) => N(p.producto).includes('SOFT') || N(ci).startsWith('SOFT') },
+    match: (_p, ci) => enChip(ci, 'SOFT') },
   { id: 'OSCURA', label: 'OSCURA', cls: 'bg-teal-400 text-teal-950 border-teal-600',
-    match: (p) => N(p.producto).includes('OSCURANTI') || N(p.producto).includes('DARK') },
+    match: (_p, ci) => enChip(ci, 'OSCURA') },
   { id: 'MOT_VERT', label: 'MOT VERT', cls: 'bg-purple-300 text-purple-950 border-purple-600',
-    match: (p) => N(p.producto).includes('MOTOR') && N(p.producto).includes('VERTICAL') },
+    match: (_p, ci) => enChip(ci, 'MOT_VERT') },
   { id: 'MOT', label: 'MOT', cls: 'bg-amber-700 text-white border-amber-800',
-    match: (p, ci) => {
-      const t = N(p.producto), c = N(ci);
-      return (t.includes('MOTOR') && !t.includes('VERTICAL') && !t.includes('GRANDE') && !c.includes('MG'))
-        || c.startsWith('MOT ');
-    } },
+    match: (_p, ci) => enChip(ci, 'MOT') },
   { id: 'MOTOR_GRANDE', label: 'MOTOR GRANDE', cls: 'bg-fuchsia-500 text-white border-fuchsia-700',
-    match: (p) => N(p.producto).includes('MOTOR') && N(p.producto).includes('GRANDE') },
+    match: (_p, ci) => enChip(ci, 'MOTOR_GRANDE') },
   { id: 'MOTOR_MG', label: 'MOTOR MG', cls: 'bg-gray-400 text-gray-950 border-gray-600',
-    match: (p, ci) => N(p.producto).includes('MOTOR') && (N(ci).includes('MG') || N(p.producto).includes(' MG')) },
+    match: (_p, ci) => enChip(ci, 'MOTOR_MG') },
 ];
 
 const esCortinaTipo = (tipo: string): boolean =>
   ['PREMIUM', 'DELUX', 'STANDARD', 'BASIC'].includes((tipo || '').toUpperCase().trim());
+
+// Total de columnas de la grilla (para los colSpan de filas separadoras / botones)
+const COL_SPAN = 18;
 
 export function CotizadorFase0() {
   const navigate = useNavigate();
@@ -134,8 +153,6 @@ export function CotizadorFase0() {
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
-
-  // Filtros del panel de catálogo
   const [filtroActivo, setFiltroActivo] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
 
@@ -197,7 +214,6 @@ export function CotizadorFase0() {
     return m;
   }, [adicionales, resultado]);
 
-  // Lista de productos filtrados según chip activo + búsqueda libre.
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toUpperCase();
     const filtro = filtroActivo ? FILTROS_CATALOGO.find((f) => f.id === filtroActivo) : null;
@@ -267,12 +283,10 @@ export function CotizadorFase0() {
           <Campo label="Dirección" value={cliente.direccion} onChange={(v) => setCliente({ ...cliente, direccion: v })} />
         </section>
 
-        {/* CATÁLOGO con chips de colores (estilo Excel) */}
+        {/* CATÁLOGO con chips */}
         <section className="mb-4 rounded-lg border border-border bg-card/40 p-3 print:hidden">
-          <div className="mb-2 flex items-baseline gap-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Catálogo · elige una categoría y agrega con un clic
-            </div>
+          <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            Catálogo · elige una categoría y agrega con un clic
           </div>
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <button
@@ -317,6 +331,7 @@ export function CotizadorFase0() {
                   <tr>
                     <Th>COD_INT</Th>
                     <Th>PRODUCTO</Th>
+                    <Th>DESCRIPCIÓN</Th>
                     <Th>TIPO</Th>
                     <Th className="text-right">PRECIO</Th>
                     <th className="w-24" />
@@ -325,7 +340,7 @@ export function CotizadorFase0() {
                 <tbody>
                   {productosFiltrados.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="px-3 py-4 text-center text-muted-foreground">
+                      <td colSpan={6} className="px-3 py-4 text-center text-muted-foreground">
                         Sin productos para esta categoría/búsqueda.
                       </td>
                     </tr>
@@ -334,6 +349,7 @@ export function CotizadorFase0() {
                     <tr key={ci} className="border-t border-border hover:bg-secondary/40">
                       <Td className="font-semibold">{ci}</Td>
                       <Td className="text-muted-foreground">{p.producto}</Td>
+                      <Td className="text-[10px] text-muted-foreground">{p.descripcion}</Td>
                       <Td className="text-[10px] text-muted-foreground">{p.tipo}</Td>
                       <Td className="text-right tabular-nums">
                         {p.precio ? formatCLP(Number(p.precio)) : '—'}
@@ -342,11 +358,7 @@ export function CotizadorFase0() {
                         <button
                           onClick={() => agregarProducto(ci)}
                           className="rounded bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground hover:bg-accent/90"
-                          title={
-                            esCortinaTipo(p.tipo)
-                              ? 'Agregar como cortina'
-                              : 'Agregar como adicional'
-                          }
+                          title={esCortinaTipo(p.tipo) ? 'Agregar como cortina' : 'Agregar como adicional'}
                         >
                           + Agregar
                         </button>
@@ -369,7 +381,7 @@ export function CotizadorFase0() {
           )}
         </section>
 
-        {/* CORTINAS */}
+        {/* GRILLA UNIFICADA (cortinas + adicionales con mismas columnas) */}
         <section className="overflow-x-auto rounded-lg border border-border bg-card/40">
           <datalist id="codint-options">
             {Object.entries(catalogo).map(([k, p]) => (
@@ -379,7 +391,7 @@ export function CotizadorFase0() {
             ))}
           </datalist>
 
-          <table className="w-full min-w-[1600px] border-collapse text-xs">
+          <table className="w-full min-w-[1700px] border-collapse text-xs">
             <thead className="bg-card text-[10px] uppercase tracking-wide text-muted-foreground">
               <tr className="border-b border-border">
                 <th colSpan={11} className="px-2 py-1.5 text-center font-semibold">Información del producto</th>
@@ -388,27 +400,28 @@ export function CotizadorFase0() {
                 <th></th>
               </tr>
               <tr className="border-b border-border">
-                <Th>COD</Th>
-                <Th>COD SEC</Th>
-                <Th>DIRECC. CAD/CIERRE</Th>
-                <Th>SENT. CORT</Th>
-                <Th>CANT</Th>
-                <Th>PRODUCTO</Th>
-                <Th>COD_INT</Th>
-                <Th>TIPO</Th>
-                <Th>DESCRIPCIÓN</Th>
-                <Th>UBIC.</Th>
-                <Th>COLOR ACCESORIOS</Th>
-                <Th className="border-l border-border">ANCHO</Th>
-                <Th>ALTO</Th>
-                <Th className="border-l border-border">M²</Th>
-                <Th>VAL.UNIT.</Th>
-                <Th>DCT %</Th>
-                <Th>TOTAL</Th>
+                <Th className="min-w-[6rem]">COD</Th>
+                <Th className="min-w-[8rem]">COD SEC</Th>
+                <Th className="min-w-[8rem]">DIRECC. CAD/CIERRE</Th>
+                <Th className="min-w-[6rem]">SENT. CORT</Th>
+                <Th className="min-w-[3.5rem]">CANT</Th>
+                <Th className="min-w-[12rem]">PRODUCTO</Th>
+                <Th className="min-w-[6rem]">COD_INT</Th>
+                <Th className="min-w-[5rem]">TIPO</Th>
+                <Th className="min-w-[10rem]">DESCRIPCIÓN</Th>
+                <Th className="min-w-[5rem]">UBIC.</Th>
+                <Th className="min-w-[7rem]">COLOR ACCESORIOS</Th>
+                <Th className="min-w-[5rem] border-l border-border">ANCHO</Th>
+                <Th className="min-w-[5rem]">ALTO</Th>
+                <Th className="min-w-[4rem] border-l border-border">M²</Th>
+                <Th className="min-w-[7rem]">VAL.UNIT.</Th>
+                <Th className="min-w-[3.5rem]">DCT %</Th>
+                <Th className="min-w-[7rem]">TOTAL</Th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody>
+              {/* CORTINAS */}
               {filas.map((f) => {
                 const prod = f.codInt ? catalogo[f.codInt.trim()] : undefined;
                 const ln = lineaDeFila.get(f.id);
@@ -471,84 +484,96 @@ export function CotizadorFase0() {
                   </tr>
                 );
               })}
+              {/* Botón agregar cortina */}
+              <tr className="print:hidden">
+                <td colSpan={COL_SPAN} className="border-t border-border bg-card/40 px-2 py-2">
+                  <Button size="sm" variant="outline" className="gap-1"
+                    onClick={() => setFilas((p) => [...p, nuevaFila()])}>
+                    <Plus className="h-3.5 w-3.5" /> Agregar cortina
+                  </Button>
+                </td>
+              </tr>
+              {/* Divisor ADICIONALES */}
+              <tr>
+                <td colSpan={COL_SPAN}
+                  className="border-y-2 border-border bg-card/80 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider text-foreground">
+                  Adicionales (instalaciones extras, cenefas, motores, controles, traslados…)
+                </td>
+              </tr>
+              {/* ADICIONALES */}
+              {adicionales.length === 0 && (
+                <tr className="print:hidden">
+                  <td colSpan={COL_SPAN} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                    Sin adicionales. Filtra el catálogo arriba para agregar con un clic, o usa el botón de abajo.
+                  </td>
+                </tr>
+              )}
+              {adicionales.map((a) => {
+                const prod = a.codInt ? catalogo[a.codInt.trim()] : undefined;
+                const r = adicResDeFila.get(a.id);
+                return (
+                  <tr key={a.id} className="border-t border-border align-middle">
+                    <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td>
+                      <CellInput type="number" step="0.01" value={a.cantidad || ''}
+                        onChange={(e) => setAdic(a.id, { cantidad: parseFloat(e.target.value) || 0 })}
+                        className="w-14 text-right" />
+                    </Td>
+                    <Td className="text-muted-foreground">{prod?.producto ?? '—'}</Td>
+                    <Td>
+                      <CellInput list="codint-options" value={a.codInt}
+                        onChange={(e) => setAdic(a.id, { codInt: e.target.value })}
+                        placeholder="ej. DOM 38" className="w-24" />
+                    </Td>
+                    <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
+                    <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
+                    <Td>
+                      <CellInput value={a.ubicacion}
+                        onChange={(e) => setAdic(a.id, { ubicacion: e.target.value })}
+                        placeholder="" className="w-20" />
+                    </Td>
+                    <Td>
+                      <CellInput value={a.colorAcc}
+                        onChange={(e) => setAdic(a.id, { colorAcc: e.target.value })}
+                        placeholder="" className="w-24" />
+                    </Td>
+                    <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                    <Td className="text-right">{r ? formatCLP(r.precioUnit) : '—'}</Td>
+                    <Td>
+                      <CellInput type="number" min={0} max={100} step="1" value={a.descuento || ''}
+                        onChange={(e) => setAdic(a.id, { descuento: parseFloat(e.target.value) || 0 })}
+                        className="w-14 text-right" placeholder="0" />
+                    </Td>
+                    <Td className="text-right font-semibold">{r ? formatCLP(r.total) : '—'}</Td>
+                    <Td className="text-right print:hidden">
+                      <button onClick={() => quitarAdic(a.id)}
+                        className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                        title="Quitar">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </Td>
+                  </tr>
+                );
+              })}
+              {/* Botón agregar adicional */}
+              <tr className="print:hidden">
+                <td colSpan={COL_SPAN} className="border-t border-border bg-card/40 px-2 py-2">
+                  <Button size="sm" variant="outline" className="gap-1"
+                    onClick={() => setAdicionales((p) => [...p, nuevoAdicional()])}>
+                    <Plus className="h-3.5 w-3.5" /> Agregar adicional
+                  </Button>
+                </td>
+              </tr>
             </tbody>
           </table>
-          <div className="border-t border-border p-2 print:hidden">
-            <Button size="sm" variant="outline" className="gap-1" onClick={() => setFilas((p) => [...p, nuevaFila()])}>
-              <Plus className="h-3.5 w-3.5" /> Agregar cortina
-            </Button>
-          </div>
         </section>
 
-        {/* ADICIONALES */}
-        <section className="mt-4 overflow-x-auto rounded-lg border border-border bg-card/40">
-          <div className="border-b border-border bg-card px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Adicionales (instalaciones extras, cenefas, motores, controles, traslados…)
-          </div>
-          {adicionales.length === 0 ? (
-            <div className="p-4 text-xs text-muted-foreground print:hidden">
-              Sin adicionales. Filtra el catálogo arriba y agrega, o usa el botón de abajo.
-            </div>
-          ) : (
-            <table className="w-full min-w-[800px] border-collapse text-xs">
-              <thead className="bg-card text-[10px] uppercase tracking-wide text-muted-foreground">
-                <tr className="border-b border-border">
-                  <Th>COD_INT</Th>
-                  <Th>PRODUCTO</Th>
-                  <Th>DESCRIPCIÓN</Th>
-                  <Th>CANT</Th>
-                  <Th>VAL.UNIT.</Th>
-                  <Th>DCT %</Th>
-                  <Th>TOTAL</Th>
-                  <th className="w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {adicionales.map((a) => {
-                  const prod = a.codInt ? catalogo[a.codInt.trim()] : undefined;
-                  const r = adicResDeFila.get(a.id);
-                  return (
-                    <tr key={a.id} className="border-t border-border align-middle">
-                      <Td>
-                        <CellInput list="codint-options" value={a.codInt}
-                          onChange={(e) => setAdic(a.id, { codInt: e.target.value })}
-                          placeholder="ej. DOM 38" className="w-28" />
-                      </Td>
-                      <Td className="text-muted-foreground">{prod?.producto ?? '—'}</Td>
-                      <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
-                      <Td>
-                        <CellInput type="number" step="0.01" value={a.cantidad || ''}
-                          onChange={(e) => setAdic(a.id, { cantidad: parseFloat(e.target.value) || 0 })}
-                          className="w-16 text-right" />
-                      </Td>
-                      <Td className="text-right">{r ? formatCLP(r.precioUnit) : '—'}</Td>
-                      <Td>
-                        <CellInput type="number" min={0} max={100} step="1" value={a.descuento || ''}
-                          onChange={(e) => setAdic(a.id, { descuento: parseFloat(e.target.value) || 0 })}
-                          className="w-14 text-right" placeholder="0" />
-                      </Td>
-                      <Td className="text-right font-semibold">{r ? formatCLP(r.total) : '—'}</Td>
-                      <Td className="text-right print:hidden">
-                        <button onClick={() => quitarAdic(a.id)}
-                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                          title="Quitar">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-          <div className="border-t border-border p-2 print:hidden">
-            <Button size="sm" variant="outline" className="gap-1"
-              onClick={() => setAdicionales((p) => [...p, nuevoAdicional()])}>
-              <Plus className="h-3.5 w-3.5" /> Agregar adicional
-            </Button>
-          </div>
-        </section>
-
+        {/* TOTALES */}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
           <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
