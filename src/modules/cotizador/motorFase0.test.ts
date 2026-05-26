@@ -6,28 +6,44 @@ import {
 } from './motorFase0';
 import type { CatalogoProductos } from './types';
 
-// Catálogo mínimo para los casos reales. Para cada COD se incluye un producto
-// cuyo precio coincide con el precio/ml que usa el motor (MAX de la familia
-// para roller/dúo; precio del COD_INT base para verticales).
+// Catálogo mínimo para los casos reales. Cada COD tiene un producto cuyo precio
+// equivale al MAX de la familia (lo que usa el motor para roller/dúo) o al
+// COD_INT base (lo que usan las verticales).
 const CAT: CatalogoProductos = {
-  // Familias dúo
+  // Dúo
   'DU 25': { cod: 'DUOBK_D', producto: 'ROLLER DUO BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 40307.692307692305 },
-  'DB-P': { cod: 'DUOBK_P', producto: 'ROLLER DUO BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 32292.30769230769 },
-  'DUOP-P': { cod: 'DUOPOLI_P', producto: 'ROLLER DUO POLIESTER PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 28603.93846153846 },
-  // Familias roller (catálogo con un solo producto por COD → MAX = ese precio)
+  'DB-P':  { cod: 'DUOBK_P', producto: 'ROLLER DUO BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 32292.30769230769 },
+  'DU 28': { cod: 'DUOBK_P', producto: 'ROLLER DUO BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 32292.30769230769 },
+  'DU 07': { cod: 'DUOPOLI_P', producto: 'ROLLER DUO POLIESTER PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 22346.153846153844 },
+  // Roller
   'SC 34': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
-  'SC 68': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
+  'SC 17': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
   'BK 18': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 41868 },
+  'BK 50': { cod: 'BLACKOUT_S', producto: 'ROLLER BLACKOUT STANDARD', tipo: 'STANDARD', descripcion: '', precio: 29231 },
   // COD_INT base de cada familia roller (precio que usa la vertical equivalente)
-  'SC-P': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM (base)', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
-  // Verticales (el cod_int se usa solo para detectar familia; el precio/ml viene del base)
-  'SC 34-V': { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
-  'SC 93-V': { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  'SC-P':  { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM (base)', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
+  'BK-P':  { cod: 'BLACKOUT_P', producto: 'ROLLER BLACKOUT PREMIUM (base)', tipo: 'PREMIUM', descripcion: '', precio: 29231 },
+  // Verticales (el precio del catálogo no se usa; el motor lo toma del base)
+  'SC 34-V':  { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  'SC 03-V':  { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  'SC 17-V':  { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  'BK 49-V':  { cod: 'BLACKOUT_V_P', producto: 'CORTINA VERTICAL BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  // Adicionales (precio fijo del catálogo × cantidad − descuento)
+  'INST':       { cod: 'INSTALACION', producto: 'INSTALACION ROLLER', tipo: 'INSTALACION', descripcion: '', precio: 17500 },
+  'CENF C':     { cod: 'ACCESORIO', producto: 'CENEFA CUADRADA', tipo: 'ACCESORIO', descripcion: '', precio: 40000 },
+  'CENF O':     { cod: 'ACCESORIO', producto: 'CENEFA OVALADA', tipo: 'ACCESORIO', descripcion: '', precio: 20000 },
+  'INSTCENF':   { cod: 'INSTALACION', producto: 'INSTALACION CENEFA', tipo: 'INSTALACION', descripcion: '', precio: 25000 },
+  'DOM 38':     { cod: 'ACCESORIO', producto: 'MOTOR MG', tipo: 'ACCESORIO', descripcion: '', precio: 170000 },
+  'DOM 04':     { cod: 'ACCESORIO', producto: 'MOTOR MOR-MERI', tipo: 'ACCESORIO', descripcion: '', precio: 170000 },
+  'DOM 39':     { cod: 'ACCESORIO', producto: 'CONTROL 15 CANALES', tipo: 'ACCESORIO', descripcion: '', precio: 35000 },
+  'DOM 33':     { cod: 'ACCESORIO', producto: 'PUERTO USB MG', tipo: 'ACCESORIO', descripcion: '', precio: 195000 },
+  'DOM 34':     { cod: 'ACCESORIO', producto: 'ROUTER', tipo: 'ACCESORIO', descripcion: '', precio: 28500 },
+  'INSTMOTMG':  { cod: 'INSTALACION', producto: 'INSTALACION MOTOR', tipo: 'INSTALACION', descripcion: '', precio: 18000 },
 };
 const AR: Record<string, number> = {
-  'DU 25': 2.65, 'DB-P': 2.65, 'DUOP-P': 2.88,
-  'SC 34': 2.98, 'SC 68': 2.98, 'BK 18': 2.98,
-  'SC 34-V': 2.98, 'SC 93-V': 2.98,
+  'DU 25': 2.65, 'DB-P': 2.65, 'DU 28': 2.95, 'DU 07': 2.95,
+  'SC 34': 2.98, 'SC 17': 2.98, 'BK 18': 2.98, 'BK 50': 2.98,
+  'SC 34-V': 2.98, 'SC 03-V': 2.48, 'SC 17-V': 2.98, 'BK 49-V': 2.98,
 };
 
 const cerca = (valor: number, esperado: number, tolPct: number) =>
@@ -49,7 +65,8 @@ describe('motorFase0 — armado de paños', () => {
 });
 
 describe('motorFase0 — validación al peso contra cotizaciones reales', () => {
-  it('Guillermo (Dúo Blackout Delux) — exacto', () => {
+  // ───── Dúo ─────
+  it('Guillermo — Dúo Blackout Delux (3 cortinas) — exacto', () => {
     const r = cotizarFase0([
       { codInt: 'DU 25', ancho: 2.44, alto: 2.25, cantidad: 1 },
       { codInt: 'DU 25', ancho: 1.76, alto: 1.8, cantidad: 1 },
@@ -59,7 +76,7 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     expect(cerca(r.lineas[1].valorUnit, 282266.46, 0.001)).toBe(true);
   });
 
-  it('Jorge (Dúo Blackout Premium) — exacto', () => {
+  it('Jorge — Dúo Blackout Premium (4 cortinas) — exacto', () => {
     const r = cotizarFase0([
       { codInt: 'DB-P', ancho: 1.7, alto: 2.3, cantidad: 1 },
       { codInt: 'DB-P', ancho: 1.45, alto: 1.5, cantidad: 1 },
@@ -70,15 +87,15 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     expect(cerca(r.lineas[2].valorUnit, 169601.45, 0.001)).toBe(true);
   });
 
-  it('Francisco (Dúo Poliéster) — ~1,6% (ajuste fino pendiente)', () => {
+  it('Jeanine — Dúo Poliéster Premium — exacto', () => {
     const r = cotizarFase0([
-      { codInt: 'DUOP-P', ancho: 2.025, alto: 1.9, cantidad: 1 },
-      { codInt: 'DUOP-P', ancho: 2.025, alto: 1.9, cantidad: 1 },
+      { codInt: 'DU 07', ancho: 1.757, alto: 1.3, cantidad: 1 },
     ], CAT, AR);
-    expect(cerca(r.lineas[0].valorUnit, 275841.48, 0.02)).toBe(true);
+    expect(cerca(r.lineas[0].valorUnit, 245061.99, 0.001)).toBe(true);
   });
 
-  it('Felipe Screen Premium (3 cortinas) — exacto', () => {
+  // ───── Roller Premium / Delux ─────
+  it('Felipe — Screen Premium (3 cortinas) — exacto', () => {
     const r = cotizarFase0([
       { codInt: 'SC 34', ancho: 1.124, alto: 1.3, cantidad: 1 },
       { codInt: 'SC 34', ancho: 1.168, alto: 1.307, cantidad: 1 },
@@ -89,7 +106,23 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     expect(cerca(r.lineas[2].valorUnit, 111950.68, 0.001)).toBe(true);
   });
 
-  it('Felipe Blackout Delux (2 cortinas) — exacto', () => {
+  it('Alejandro — Screen Premium (9 cortinas, mezcla anchos/altos) — exacto', () => {
+    const r = cotizarFase0([
+      { codInt: 'SC 17', ancho: 1.352, alto: 2.36, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 1.254, alto: 2.36, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 1.349, alto: 2.36, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 0.745, alto: 1.4, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 1.874, alto: 1.4, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 1.886, alto: 1.4, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 0.745, alto: 1.4, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 1.973, alto: 2.3, cantidad: 1 },
+      { codInt: 'SC 17', ancho: 0.898, alto: 2.3, cantidad: 1 },
+    ], CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 150329.51, 0.001)).toBe(true);
+    expect(cerca(r.lineas[7].valorUnit, 206884.59, 0.001)).toBe(true);
+  });
+
+  it('Felipe — Blackout Delux (2 cortinas) — exacto', () => {
     const r = cotizarFase0([
       { codInt: 'BK 18', ancho: 1.23, alto: 1.4, cantidad: 1 },
       { codInt: 'BK 18', ancho: 1.1, alto: 1.41, cantidad: 1 },
@@ -98,7 +131,18 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     expect(cerca(r.lineas[1].valorUnit, 127358.68, 0.001)).toBe(true);
   });
 
-  it('Felipe Vertical Screen Premium — exacto', () => {
+  // ───── Roller Standard ─────
+  it('Alejandro — Blackout Standard (2 cortinas) — dentro de ~0,5% (residual menor)', () => {
+    const r = cotizarFase0([
+      { codInt: 'BK 50', ancho: 1.5, alto: 1.0, cantidad: 1 },
+      { codInt: 'BK 50', ancho: 2.0, alto: 1.9, cantidad: 1 },
+    ], CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 101556.21, 0.01)).toBe(true);
+    expect(cerca(r.lineas[1].valorUnit, 210268.91, 0.01)).toBe(true);
+  });
+
+  // ───── Verticales ─────
+  it('Felipe — Vertical Screen Premium — exacto', () => {
     const r = cotizarFase0(
       [{ codInt: 'SC 34-V', ancho: 1.869, alto: 2.3, cantidad: 1 }],
       CAT, AR,
@@ -106,23 +150,68 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     expect(cerca(r.lineas[0].valorUnit, 383068.76, 0.001)).toBe(true);
   });
 
-  it('GEMA Vertical Screen Premium — exacto', () => {
-    const r = cotizarFase0(
-      [{ codInt: 'SC 93-V', ancho: 2.22, alto: 2.05, cantidad: 1 }],
-      CAT, AR,
-    );
-    expect(cerca(r.lineas[0].valorUnit, 396629.3, 0.001)).toBe(true);
+  it('Jeanine — Vertical Screen Premium (2 cortinas) — exacto', () => {
+    const r = cotizarFase0([
+      { codInt: 'SC 03-V', ancho: 0.878, alto: 2.38, cantidad: 1 },
+      { codInt: 'SC 17-V', ancho: 2.255, alto: 2.38, cantidad: 1 },
+    ], CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 207347.57, 0.001)).toBe(true);
+    expect(cerca(r.lineas[1].valorUnit, 469804.99, 0.001)).toBe(true);
   });
 
-  it('ALEJANDRA Screen Premium (4 cortinas) — exacto', () => {
-    const r = cotizarFase0([
-      { codInt: 'SC 68', ancho: 1.939, alto: 1.99, cantidad: 1 },
-      { codInt: 'SC 68', ancho: 2.604, alto: 1.99, cantidad: 1 },
-      { codInt: 'SC 68', ancho: 2.09, alto: 1.99, cantidad: 1 },
-      { codInt: 'SC 68', ancho: 2.455, alto: 1.99, cantidad: 1 },
-    ], CAT, AR);
-    expect(cerca(r.lineas[0].valorUnit, 156921.32, 0.001)).toBe(true);
-    expect(cerca(r.lineas[1].valorUnit, 204737.3, 0.001)).toBe(true);
-    expect(cerca(r.lineas[3].valorUnit, 194023.65, 0.001)).toBe(true);
+  it('Giovanni — Vertical Blackout Premium — exacto', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'BK 49-V', ancho: 2.791, alto: 2.337, cantidad: 1 }],
+      CAT, AR,
+    );
+    expect(cerca(r.lineas[0].valorUnit, 436026.86, 0.001)).toBe(true);
+  });
+
+  // ───── Cotización completa con descuentos por línea y adicionales ─────
+  it('Alejandro — cotización completa (16 cortinas con 20% dcto + 12 adicionales) — total exacto', () => {
+    const cortinas = [
+      // 9 Screen Premium (SC 17)
+      { codInt: 'SC 17', ancho: 1.352, alto: 2.36, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 1.254, alto: 2.36, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 1.349, alto: 2.36, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 0.745, alto: 1.4, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 1.874, alto: 1.4, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 1.886, alto: 1.4, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 0.745, alto: 1.4, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 1.973, alto: 2.3, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 17', ancho: 0.898, alto: 2.3, cantidad: 1, descuento: 0.2 },
+      // 5 Blackout Delux (BK 61)
+      { codInt: 'BK 18', ancho: 1.352, alto: 2.364, cantidad: 1, descuento: 0.2 },
+      { codInt: 'BK 18', ancho: 2.7, alto: 2.364, cantidad: 1, descuento: 0.2 },
+      { codInt: 'BK 18', ancho: 2.642, alto: 1.45, cantidad: 1, descuento: 0.2 },
+      { codInt: 'BK 18', ancho: 2.638, alto: 1.45, cantidad: 1, descuento: 0.2 },
+      { codInt: 'BK 18', ancho: 3, alto: 2.4, cantidad: 1, descuento: 0.2 },
+      // 2 Blackout Standard (BK 50)
+      { codInt: 'BK 50', ancho: 1.5, alto: 1.0, cantidad: 1, descuento: 0.2 },
+      { codInt: 'BK 50', ancho: 2.0, alto: 1.9, cantidad: 1, descuento: 0.2 },
+    ];
+    const adicionales = [
+      { codInt: 'INST', cantidad: 16, descuento: 1 }, // gratis
+      { codInt: 'CENF C', cantidad: 4.07, descuento: 0.1 },
+      { codInt: 'INSTCENF', cantidad: 1, descuento: 0.1 },
+      { codInt: 'CENF C', cantidad: 3.02, descuento: 0.1 },
+      { codInt: 'INSTCENF', cantidad: 1, descuento: 0.1 },
+      { codInt: 'DOM 38', cantidad: 2, descuento: 0.3 },
+      { codInt: 'DOM 04', cantidad: 1, descuento: 0.3 },
+      { codInt: 'DOM 39', cantidad: 1, descuento: 0.1 },
+      { codInt: 'DOM 33', cantidad: 1, descuento: 0.1 },
+      { codInt: 'DOM 34', cantidad: 1, descuento: 0 },
+      { codInt: 'INSTMOTMG', cantidad: 3, descuento: 0.1 },
+      { codInt: 'CENF O', cantidad: 1.5, descuento: 0.1 },
+    ];
+    const r = cotizarFase0(cortinas, CAT, AR, adicionales);
+    // Adicionales exactos al peso (12 items)
+    expect(r.adicionales.length).toBe(12);
+    const sumaAdic = r.adicionales.reduce((s, a) => s + a.total, 0);
+    expect(cerca(sumaAdic, 968340, 0.0001)).toBe(true);
+    // Subtotal completo (cortinas + adicionales) — la única holgura viene del
+    // residual de Blackout Standard (~0,4%), que diluye a ~0,01% en el total.
+    expect(cerca(r.subtotalNeto, 2983696.24, 0.001)).toBe(true);
+    expect(cerca(r.totales.totalTransferencia, 3550598.53, 0.001)).toBe(true);
   });
 });
