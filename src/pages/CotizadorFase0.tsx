@@ -21,14 +21,60 @@ type Cliente = {
 };
 const EMPTY_CLIENTE: Cliente = { nombre: '', rut: '', mail: '', telefono: '', direccion: '' };
 
-type FilaUI = { id: string; codInt: string; ancho: number; alto: number; cantidad: number };
+type FilaUI = {
+  id: string;
+  codInt: string;
+  categoria: string; // COD SEC
+  direccion: string; // DIRECC. CAD/CIERRE
+  sentido: string; // SENT. CORT
+  cantidad: number;
+  ubicacion: string;
+  colorAcc: string;
+  ancho: number;
+  alto: number;
+};
 const nuevaFila = (): FilaUI => ({
   id: crypto.randomUUID(),
   codInt: '',
+  categoria: '',
+  direccion: '',
+  sentido: '',
+  cantidad: 1,
+  ubicacion: '',
+  colorAcc: '',
   ancho: 0,
   alto: 0,
-  cantidad: 1,
 });
+
+// Listas de validación del Excel
+const DIRECCIONES = [
+  'CAD [IZQUIERDA]',
+  'CAD [DERECHA]',
+  'CIERRE [DERECHO]',
+  'CIERRE [IZQUIERDO]',
+  'CIERRE [MEDIO]',
+];
+const SENTIDOS = ['INTERNO', 'EXTERNO'];
+const CATEGORIAS = [
+  'ROL',
+  'ROL_DUAL',
+  'ROL_MANUAL_CENEFA_OVALADA_38mm',
+  'ROL_MANUAL_CENEFA_OVALADA_45mm',
+  'ROL_CENEFA_OVALADA_MOTOR_PEQUEÑO',
+  'ROL_CENEFA_OVALADA_MOTOR_GRANDE',
+  'PLETINA_ROLLER_V',
+  'DUO_MANUAL_38mm',
+  'DUO_MANUAL_45mm',
+  'DUO_MOTOR_PEQUEÑO_38mm',
+  'DUO_MOTOR_GRANDE_45mm',
+  'PLETINA_DUO_V',
+  'VERTICAL',
+  'SOFT_LIGHT_38mm',
+  'SOFT_LIGHT_45mm',
+  'DARK_38mm',
+  'DARK_45mm',
+  'OSCURANTI_63mm',
+];
 
 export function CotizadorFase0() {
   const navigate = useNavigate();
@@ -62,14 +108,6 @@ export function CotizadorFase0() {
       }
     })();
   }, [params, empresaId]);
-
-  const opciones = useMemo(
-    () =>
-      Object.entries(catalogo)
-        .map(([codInt, p]) => ({ codInt, nombre: p.producto }))
-        .sort((a, b) => a.nombre.localeCompare(b.nombre)),
-    [catalogo],
-  );
 
   const resultado = useMemo(
     () => cotizarFase0(filas, catalogo, anchoRollo),
@@ -114,9 +152,8 @@ export function CotizadorFase0() {
       <div className="mx-5 mt-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning print:hidden">
         <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
         <span>
-          Precios en validación. El motor está calibrado para cortinas roller (Blackout/Screen/Dúo);
-          las demás familias se afinan luego. Conviene comparar un caso contra el Excel antes de usar
-          en clientes.
+          Motor validado al peso para roller (Blackout, Screen), dúo (Blackout) y vertical (Screen).
+          Dúo Poliéster queda al ~1,6% pendiente de ajuste fino.
         </span>
       </div>
 
@@ -130,75 +167,152 @@ export function CotizadorFase0() {
           <Campo label="Dirección" value={cliente.direccion} onChange={(v) => setCliente({ ...cliente, direccion: v })} />
         </section>
 
-        {/* GRILLA DE PRODUCTOS */}
+        {/* GRILLA (replica el Formato del Excel) */}
         <section className="overflow-x-auto rounded-lg border border-border bg-card/40">
-          <table className="w-full text-sm">
-            <thead className="bg-card text-[11px] uppercase tracking-wide text-muted-foreground">
-              <tr>
-                <th className="px-2 py-2 text-left">Producto</th>
-                <th className="px-2 py-2 text-right">Ancho (m)</th>
-                <th className="px-2 py-2 text-right">Alto (m)</th>
-                <th className="px-2 py-2 text-right">Cant</th>
-                <th className="px-2 py-2 text-right">m²</th>
-                <th className="px-2 py-2 text-right">Valor unit.</th>
-                <th className="px-2 py-2 text-right">Total</th>
-                <th className="px-2 py-2"></th>
+          {/* Datalist de COD_INT (autocompletar como en el Excel) */}
+          <datalist id="codint-options">
+            {Object.entries(catalogo).map(([k, p]) => (
+              <option key={k} value={k}>
+                {p.producto}
+              </option>
+            ))}
+          </datalist>
+
+          <table className="w-full min-w-[1500px] border-collapse text-xs">
+            <thead className="bg-card text-[10px] uppercase tracking-wide text-muted-foreground">
+              <tr className="border-b border-border">
+                <th colSpan={11} className="px-2 py-1.5 text-center font-semibold">Información del producto</th>
+                <th colSpan={2} className="border-l border-border px-2 py-1.5 text-center font-semibold">Medidas</th>
+                <th colSpan={3} className="border-l border-border px-2 py-1.5 text-center font-semibold">Precio</th>
+                <th></th>
+              </tr>
+              <tr className="border-b border-border">
+                <Th>COD</Th>
+                <Th>COD SEC</Th>
+                <Th>DIRECC. CAD/CIERRE</Th>
+                <Th>SENT. CORT</Th>
+                <Th>CANT</Th>
+                <Th>PRODUCTO</Th>
+                <Th>COD_INT</Th>
+                <Th>TIPO</Th>
+                <Th>DESCRIPCIÓN</Th>
+                <Th>UBIC.</Th>
+                <Th>COLOR ACCESORIOS</Th>
+                <Th className="border-l border-border">ANCHO</Th>
+                <Th>ALTO</Th>
+                <Th className="border-l border-border">M²</Th>
+                <Th>VAL.UNIT.</Th>
+                <Th>TOTAL</Th>
+                <th className="w-8" />
               </tr>
             </thead>
             <tbody>
               {filas.map((f) => {
+                const codInt = f.codInt.trim();
+                const prod = codInt ? catalogo[codInt] : undefined;
                 const ln = lineaDeFila.get(f.id);
                 return (
-                  <tr key={f.id} className="border-t border-border">
-                    <td className="px-2 py-1.5">
-                      <select
+                  <tr key={f.id} className="border-t border-border align-middle">
+                    {/* COD (derivado) */}
+                    <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
+                    {/* COD SEC = categoría */}
+                    <Td>
+                      <SelectCell
+                        value={f.categoria}
+                        onChange={(v) => setFila(f.id, { categoria: v })}
+                        opciones={CATEGORIAS}
+                      />
+                    </Td>
+                    {/* DIRECC */}
+                    <Td>
+                      <SelectCell
+                        value={f.direccion}
+                        onChange={(v) => setFila(f.id, { direccion: v })}
+                        opciones={DIRECCIONES}
+                      />
+                    </Td>
+                    {/* SENT */}
+                    <Td>
+                      <SelectCell
+                        value={f.sentido}
+                        onChange={(v) => setFila(f.id, { sentido: v })}
+                        opciones={SENTIDOS}
+                      />
+                    </Td>
+                    {/* CANT */}
+                    <Td>
+                      <CellInput
+                        type="number"
+                        min={1}
+                        value={f.cantidad || 1}
+                        onChange={(e) => setFila(f.id, { cantidad: parseInt(e.target.value) || 1 })}
+                        className="w-14 text-right"
+                      />
+                    </Td>
+                    {/* PRODUCTO (derivado) */}
+                    <Td className="text-muted-foreground">{prod?.producto ?? '—'}</Td>
+                    {/* COD_INT (input con autocompletar) */}
+                    <Td>
+                      <CellInput
+                        list="codint-options"
                         value={f.codInt}
                         onChange={(e) => setFila(f.id, { codInt: e.target.value })}
-                        className="w-56 rounded-md border border-border bg-card px-2 py-1.5 text-sm focus:border-accent focus:outline-none"
-                      >
-                        <option value="">— Elegir producto —</option>
-                        {opciones.map((o) => (
-                          <option key={o.codInt} value={o.codInt}>
-                            {o.nombre} ({o.codInt})
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="px-2 py-1.5 text-right">
-                      <Input
+                        placeholder="ej. SC 68"
+                        className="w-24"
+                      />
+                    </Td>
+                    {/* TIPO (derivado) */}
+                    <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
+                    {/* DESCRIPCIÓN (derivada) */}
+                    <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
+                    {/* UBIC */}
+                    <Td>
+                      <CellInput
+                        value={f.ubicacion}
+                        onChange={(e) => setFila(f.id, { ubicacion: e.target.value })}
+                        placeholder="V1-G1"
+                        className="w-20"
+                      />
+                    </Td>
+                    {/* COLOR ACC */}
+                    <Td>
+                      <CellInput
+                        value={f.colorAcc}
+                        onChange={(e) => setFila(f.id, { colorAcc: e.target.value })}
+                        placeholder="GRIS"
+                        className="w-24"
+                      />
+                    </Td>
+                    {/* ANCHO */}
+                    <Td className="border-l border-border">
+                      <CellInput
                         type="number"
-                        step="0.01"
+                        step="0.001"
                         value={f.ancho || ''}
                         onChange={(e) => setFila(f.id, { ancho: parseFloat(e.target.value) || 0 })}
                         className="w-20 text-right"
                       />
-                    </td>
-                    <td className="px-2 py-1.5 text-right">
-                      <Input
+                    </Td>
+                    {/* ALTO */}
+                    <Td>
+                      <CellInput
                         type="number"
-                        step="0.01"
+                        step="0.001"
                         value={f.alto || ''}
                         onChange={(e) => setFila(f.id, { alto: parseFloat(e.target.value) || 0 })}
                         className="w-20 text-right"
                       />
-                    </td>
-                    <td className="px-2 py-1.5 text-right">
-                      <Input
-                        type="number"
-                        min="1"
-                        value={f.cantidad || 1}
-                        onChange={(e) => setFila(f.id, { cantidad: parseInt(e.target.value) || 1 })}
-                        className="w-16 text-right"
-                      />
-                    </td>
-                    <td className="px-2 py-1.5 text-right text-muted-foreground">
+                    </Td>
+                    {/* M² */}
+                    <Td className="border-l border-border text-right text-muted-foreground">
                       {ln ? ln.m2.toFixed(2) : '—'}
-                    </td>
-                    <td className="px-2 py-1.5 text-right">{ln ? formatCLP(ln.valorUnit) : '—'}</td>
-                    <td className="px-2 py-1.5 text-right font-semibold">
-                      {ln ? formatCLP(ln.total) : '—'}
-                    </td>
-                    <td className="px-2 py-1.5 text-right print:hidden">
+                    </Td>
+                    {/* VAL UNIT */}
+                    <Td className="text-right">{ln ? formatCLP(ln.valorUnit) : '—'}</Td>
+                    {/* TOTAL */}
+                    <Td className="text-right font-semibold">{ln ? formatCLP(ln.total) : '—'}</Td>
+                    {/* eliminar */}
+                    <Td className="text-right print:hidden">
                       <button
                         onClick={() => quitarFila(f.id)}
                         className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
@@ -206,7 +320,7 @@ export function CotizadorFase0() {
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
-                    </td>
+                    </Td>
                   </tr>
                 );
               })}
@@ -221,15 +335,15 @@ export function CotizadorFase0() {
 
         {/* TOTALES */}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
-          <Fila label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
-          <Fila label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
-          <Fila label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
+          <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
+          <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
+          <FilaTotal label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
           <div className="my-1 border-t border-border" />
-          <Fila label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />
-          <Fila label="Abono 50% (inicio)" valor={formatCLP(t.abono50)} />
+          <FilaTotal label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />
+          <FilaTotal label="Abono 50% (inicio)" valor={formatCLP(t.abono50)} />
         </section>
 
-        {/* CONDICIONES (resumen del Formato) */}
+        {/* CONDICIONES */}
         <section className="mt-4 rounded-lg border border-border bg-card/40 p-4 text-[11px] leading-relaxed text-muted-foreground">
           <div className="mb-1 font-semibold text-foreground">Condiciones</div>
           Cotización válida por 5 días. Pago: 50% para iniciar la fabricación y 50% al finalizar la
@@ -239,6 +353,63 @@ export function CotizadorFase0() {
         </section>
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Subcomponentes para mantener la grilla pareja
+// ─────────────────────────────────────────────────────────────────────
+function Th({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <th
+      className={cn(
+        'whitespace-nowrap px-2 py-1.5 text-left font-medium text-muted-foreground',
+        className,
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <td className={cn('whitespace-nowrap px-2 py-1.5 align-middle', className)}>{children}</td>;
+}
+
+function CellInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+  return (
+    <Input
+      {...props}
+      className={cn(
+        'h-7 rounded-md border-border bg-card px-2 py-0 text-xs focus:border-accent',
+        props.className,
+      )}
+    />
+  );
+}
+
+function SelectCell({
+  value,
+  onChange,
+  opciones,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  opciones: string[];
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-7 w-full max-w-[14rem] rounded-md border border-border bg-card px-1 text-xs focus:border-accent focus:outline-none"
+    >
+      <option value="">—</option>
+      {opciones.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -259,7 +430,7 @@ function Campo({
   );
 }
 
-function Fila({ label, valor, fuerte }: { label: string; valor: string; fuerte?: boolean }) {
+function FilaTotal({ label, valor, fuerte }: { label: string; valor: string; fuerte?: boolean }) {
   return (
     <div className="flex items-center justify-between">
       <span className={cn('text-muted-foreground', fuerte && 'font-semibold text-foreground')}>{label}</span>
