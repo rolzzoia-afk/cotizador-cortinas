@@ -29,7 +29,13 @@ import {
 } from './preciosFase0';
 import type { CatalogoProductos } from './types';
 
-export type FilaFase0 = { codInt: string; ancho: number; alto: number; cantidad: number };
+export type FilaFase0 = {
+  codInt: string;
+  ancho: number;
+  alto: number;
+  cantidad: number;
+  descuento?: number; // 0-1 (ej. 0.20 = 20% off)
+};
 
 export type LineaResultado = {
   codInt: string;
@@ -39,6 +45,26 @@ export type LineaResultado = {
   cantidad: number;
   m2: number;
   valorUnit: number;
+  descuento: number;
+  total: number; // valorUnit × cantidad × (1 − descuento)
+};
+
+// Adicionales (cenefas, motores, instalaciones extra, controles, routers...).
+// Se cobran a precio fijo del catálogo × cantidad, no entran en el blended
+// de las familias de cortinas.
+export type AdicionalFase0 = {
+  codInt: string;
+  cantidad: number;
+  descuento?: number;
+};
+
+export type AdicionalResultado = {
+  codInt: string;
+  producto: string;
+  descripcion: string;
+  cantidad: number;
+  precioUnit: number;
+  descuento: number;
   total: number;
 };
 
@@ -60,6 +86,7 @@ export type ResultadoFamilia = {
 export type ResultadoCotizacion = {
   familias: ResultadoFamilia[];
   lineas: LineaResultado[];
+  adicionales: AdicionalResultado[];
   subtotalNeto: number;
   totales: TotalesCotizacion;
 };
@@ -260,6 +287,7 @@ export function cotizarFase0(
   filas: FilaFase0[],
   catalogo: CatalogoProductos,
   anchoRolloMap: Record<string, number>,
+  adicionales: AdicionalFase0[] = [],
 ): ResultadoCotizacion {
   const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
 
@@ -344,7 +372,7 @@ export function cotizarFase0(
     });
   }
 
-  // Preciar cada línea de entrada.
+  // Preciar cada línea de entrada (aplicando descuento por línea si lo hay).
   const lineas: LineaResultado[] = validas.map((f, i) => {
     const cod = codDeFila[i];
     const g = cod ? grupos.get(cod) : undefined;
@@ -354,6 +382,8 @@ export function cotizarFase0(
     const precioM2 = cod ? pm2PorCod.get(cod) ?? 0 : 0;
     const instalacion = g?.esVertical ? INSTALACION_VERTICAL : INSTALACION_ROLLER;
     const valorUnit = m2 * precioM2 + instalacion;
+    const cant = Math.max(1, f.cantidad);
+    const descuento = Math.max(0, Math.min(1, f.descuento ?? 0));
     return {
       codInt: f.codInt,
       cod: cod ?? '',
@@ -362,10 +392,37 @@ export function cotizarFase0(
       cantidad: f.cantidad,
       m2,
       valorUnit,
-      total: valorUnit * Math.max(1, f.cantidad),
+      descuento,
+      total: valorUnit * cant * (1 - descuento),
     };
   });
 
-  const subtotalNeto = lineas.reduce((s, l) => s + l.total, 0);
-  return { familias, lineas, subtotalNeto, totales: calcularTotales(subtotalNeto) };
+  // Adicionales: precio fijo del catálogo × cantidad − descuento.
+  const adicionalesRes: AdicionalResultado[] = adicionales
+    .filter((a) => a.codInt && a.cantidad > 0)
+    .map((a) => {
+      const prod = catalogo[a.codInt];
+      const precioUnit = Number(prod?.precio) || 0;
+      const descuento = Math.max(0, Math.min(1, a.descuento ?? 0));
+      return {
+        codInt: a.codInt,
+        producto: prod?.producto ?? '',
+        descripcion: prod?.descripcion ?? '',
+        cantidad: a.cantidad,
+        precioUnit,
+        descuento,
+        total: precioUnit * a.cantidad * (1 - descuento),
+      };
+    });
+
+  const subtotalCortinas = lineas.reduce((s, l) => s + l.total, 0);
+  const subtotalAdicionales = adicionalesRes.reduce((s, a) => s + a.total, 0);
+  const subtotalNeto = subtotalCortinas + subtotalAdicionales;
+  return {
+    familias,
+    lineas,
+    adicionales: adicionalesRes,
+    subtotalNeto,
+    totales: calcularTotales(subtotalNeto),
+  };
 }
