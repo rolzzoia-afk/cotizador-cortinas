@@ -222,9 +222,28 @@ function costoMaterialesVertical(n: number, sw: number, sumAlto: number): number
   return m;
 }
 
-// Precio de tela por familia = MAX precio de venta entre los productos del
-// catálogo que comparten ese COD (igual que MAXIFS del Excel).
+// Para cortinas VERTICALES, el Excel hardcodea el precio de tela al de un
+// producto base (el roller equivalente), no usa MAXIFS de la familia vertical.
+// Mapa: COD vertical → COD_INT base del catálogo.
+const BASE_CODINT_VERTICAL: Record<string, string> = {
+  BLACKOUT_V_P: 'BK-P',
+  BLACKOUT_V_D: 'BK-D',
+  BLACKOUT_V_S: 'BK-S',
+  SCREEN_V_P: 'SC-P',
+  SCREEN_V_D: 'SC-D',
+  SCREEN_V_S: 'SC-S',
+};
+
+// Precio de tela por familia:
+// - Vertical: precio del COD_INT base del roller equivalente (regla del Excel).
+// - Roller / dúo: MAX precio entre los productos del catálogo con ese COD
+//   (igual que MAXIFS del Excel).
 function precioMlPorCod(cod: string, catalogo: CatalogoProductos): number {
+  const baseV = BASE_CODINT_VERTICAL[cod];
+  if (baseV) {
+    const p = catalogo[baseV];
+    return Number(p?.precio) || 0;
+  }
   let max = 0;
   for (const k of Object.keys(catalogo)) {
     const p = catalogo[k];
