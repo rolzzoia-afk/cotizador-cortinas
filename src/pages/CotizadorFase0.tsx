@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Printer, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -188,14 +188,6 @@ export function CotizadorFase0() {
         <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-1.5">
           <Printer className="h-4 w-4" /> Imprimir
         </Button>
-      </div>
-
-      <div className="mx-5 mt-4 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs text-warning print:hidden">
-        <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-        <span>
-          Motor validado al peso para roller (Blackout, Screen), dúo (Blackout, Poliéster) y vertical
-          (Screen, Blackout). Blackout Standard queda al ~0,4% (residual menor).
-        </span>
       </div>
 
       <div className="px-5 py-4">
