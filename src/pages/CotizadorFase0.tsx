@@ -23,8 +23,11 @@ type Cliente = {
   mail: string;
   telefono: string;
   direccion: string;
+  comuna: string;
 };
-const EMPTY_CLIENTE: Cliente = { nombre: '', rut: '', mail: '', telefono: '', direccion: '' };
+const EMPTY_CLIENTE: Cliente = {
+  nombre: '', rut: '', mail: '', telefono: '', direccion: '', comuna: '',
+};
 
 type FilaUI = {
   id: string;
@@ -173,6 +176,7 @@ export function CotizadorFase0() {
           mail: l.email || '',
           telefono: l.whatsapp_phone || '',
           direccion: '',
+          comuna: l.comuna || '',
         });
       }
     })();
@@ -281,6 +285,7 @@ export function CotizadorFase0() {
           <Campo label="Teléfono" value={cliente.telefono} onChange={(v) => setCliente({ ...cliente, telefono: v })} />
           <Campo label="Mail" value={cliente.mail} onChange={(v) => setCliente({ ...cliente, mail: v })} />
           <Campo label="Dirección" value={cliente.direccion} onChange={(v) => setCliente({ ...cliente, direccion: v })} />
+          <Campo label="Comuna" value={cliente.comuna} onChange={(v) => setCliente({ ...cliente, comuna: v })} />
         </section>
 
         {/* CATÁLOGO con chips */}
