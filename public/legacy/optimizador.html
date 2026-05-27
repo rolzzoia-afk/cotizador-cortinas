@@ -3985,7 +3985,12 @@ async function cargarColmenas(event) {
             const enc = String(encabezados[i] || '').toLowerCase();
             if (enc.includes('medida') && columnaMedida === -1) columnaMedida = i;
             if (enc.includes('cod') && columnaCod === -1) columnaCod = i;
-            if ((enc.includes('n_colmena') || enc.includes('n° colmena') || enc === 'n colmena' || enc.includes('n°') || enc.includes('numero')) && columnaNColmena === -1) columnaNColmena = i;
+            // Detecta la columna del nombre de la colmena. Acepta variantes
+            // antiguas (n_colmena, n° colmena, n°, numero) y también el header
+            // real del Excel del operario: "UBICACIÓN" / "ubicacion" / "ubic".
+            // Sin esta detección el parser cae al fallback `length+1` y guarda
+            // un número secuencial (1..N) en vez del nombre real (A28, B2…).
+            if ((enc.includes('n_colmena') || enc.includes('n° colmena') || enc === 'n colmena' || enc.includes('n°') || enc.includes('numero') || enc.includes('ubicaci') || enc.includes('ubic')) && columnaNColmena === -1) columnaNColmena = i;
         }
         SistemaInventario.colmenas = [];
         for (let i = filaEncabezado + 1; i < datos.length; i++) {
