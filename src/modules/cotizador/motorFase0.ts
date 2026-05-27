@@ -265,11 +265,14 @@ const BASE_CODINT_VERTICAL: Record<string, string> = {
 // - Vertical: precio del COD_INT base del roller equivalente (regla del Excel).
 // - Roller / dúo: MAX precio entre los productos del catálogo con ese COD
 //   (igual que MAXIFS del Excel).
+// El Excel usa el precio redondeado al peso (ej. 41.868 en lugar de
+// 41.867,69), por eso aplicamos Math.round para que los totales calcen al
+// peso sin arrastre de decimales.
 function precioMlPorCod(cod: string, catalogo: CatalogoProductos): number {
   const baseV = BASE_CODINT_VERTICAL[cod];
   if (baseV) {
     const p = catalogo[baseV];
-    return Number(p?.precio) || 0;
+    return Math.round(Number(p?.precio) || 0);
   }
   let max = 0;
   for (const k of Object.keys(catalogo)) {
@@ -279,7 +282,7 @@ function precioMlPorCod(cod: string, catalogo: CatalogoProductos): number {
       if (precio > max) max = precio;
     }
   }
-  return max;
+  return Math.round(max);
 }
 
 // ── Cálculo principal ─────────────────────────────────────────────────
