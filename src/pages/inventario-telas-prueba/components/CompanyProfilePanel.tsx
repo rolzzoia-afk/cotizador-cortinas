@@ -9,11 +9,40 @@ import { Building2, FileText, Instagram, Globe, MapPin, Edit3, Save, X, RotateCc
 
 interface CompanyProfilePanelProps {
   profile: CompanyProfile;
-  onUpdateProfile: (newProfile: CompanyProfile) => void;
+  onSave?: (newProfile: CompanyProfile) => void | Promise<void>;
+  onUploadImage?: (file: File, tipo: 'logo' | 'banner') => Promise<string>;
+  isExpanded?: boolean;
+  setIsExpanded?: (b: boolean) => void;
+  onUpdateProfile?: (newProfile: CompanyProfile) => void;
   onReset: () => void;
 }
 
-export default function CompanyProfilePanel({ profile, onUpdateProfile, onReset }: CompanyProfilePanelProps) {
+export default function CompanyProfilePanel({
+  profile,
+  onSave,
+  onUpdateProfile,
+  onReset,
+  onUploadImage,
+}: CompanyProfilePanelProps) {
+  const persistir = async (p: CompanyProfile) => {
+    if (onSave) await onSave(p);
+    else if (onUpdateProfile) onUpdateProfile(p);
+  };
+  const procesarArchivo = async (file: File, field: 'logoUrl' | 'bannerUrl') => {
+    if (onUploadImage) {
+      try {
+        const tipo: 'logo' | 'banner' = field === 'logoUrl' ? 'logo' : 'banner';
+        const url = await onUploadImage(file, tipo);
+        setFormData((prev) => ({ ...prev, [field]: url }));
+      } catch (err) {
+        alert('Error subiendo imagen: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    } else {
+      const reader = new FileReader();
+      reader.onloadend = () => setFormData((prev) => ({ ...prev, [field]: reader.result as string }));
+      reader.readAsDataURL(file);
+    }
+  };
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<CompanyProfile>({ ...profile });
   const [dragActiveLogo, setDragActiveLogo] = useState(false);
@@ -35,24 +64,15 @@ export default function CompanyProfilePanel({ profile, onUpdateProfile, onReset 
     }));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateProfile(formData);
+    await persistir(formData);
     setIsEditing(false);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'bannerUrl') => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          [field]: reader.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) procesarArchivo(file, field);
   };
 
   // Drag and drop handlers
@@ -70,16 +90,7 @@ export default function CompanyProfilePanel({ profile, onUpdateProfile, onReset 
     else setDragActiveBanner(false);
 
     const file = e.dataTransfer.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData(prev => ({
-          ...prev,
-          [field]: reader.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (file) procesarArchivo(file, field);
   };
 
   return (

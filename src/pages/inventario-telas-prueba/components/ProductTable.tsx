@@ -5,14 +5,18 @@
 
 import { useState, useMemo } from 'react';
 import { InventoryItem } from '../types';
-import { Search, ArrowUpDown, AlertCircle, Download, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Search, ArrowUpDown, AlertCircle, Download, Plus, RefreshCw, Trash2, Pencil } from 'lucide-react';
 
 interface ProductTableProps {
   items: InventoryItem[];
   onSelectAdjustItem: (item: InventoryItem) => void;
-  onAddNewProductClick: () => void;
+  onAddNew?: () => void;
+  onReset?: () => void;
+  onSelectEditItem?: (item: InventoryItem) => void;
+  puedeEditarStock?: boolean;
+  onAddNewProductClick?: () => void;
+  onResetToDefault?: () => void;
   onDeleteItem: (itemId: string) => void;
-  onResetToDefault: () => void;
   onExportCSV: () => void;
 }
 
@@ -22,11 +26,17 @@ type SortOrder = 'asc' | 'desc';
 export default function ProductTable({
   items,
   onSelectAdjustItem,
+  onAddNew,
+  onReset,
+  onSelectEditItem,
+  puedeEditarStock = false,
   onAddNewProductClick,
-  onDeleteItem,
   onResetToDefault,
-  onExportCSV
+  onDeleteItem,
+  onExportCSV,
 }: ProductTableProps) {
+  const handleAddNew = onAddNew || onAddNewProductClick || (() => {});
+  const handleReset = onReset || onResetToDefault || (() => {});
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [verticalFilter, setVerticalFilter] = useState<string>('ALL');
@@ -132,7 +142,7 @@ export default function ProductTable({
 
             {/* Restar inventory default sheet */}
             <button
-              onClick={onResetToDefault}
+              onClick={handleReset}
               className="px-3.5 py-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-300 font-semibold text-xs rounded-xl border border-neutral-800/80 transition-all flex items-center gap-1.5 cursor-pointer"
               title="Restablecer base de datos a los valores originales del PDF"
             >
@@ -143,7 +153,7 @@ export default function ProductTable({
             {/* Add new stock item */}
             <button
               id="btn-add-item-trigger"
-              onClick={onAddNewProductClick}
+              onClick={handleAddNew}
               className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer border border-indigo-500/20"
             >
               <Plus size={14} />
@@ -465,6 +475,17 @@ export default function ProductTable({
                       <td className="py-3 px-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
                           
+                          {/* Botón EDITAR stock asignado — solo admins */}
+                          {puedeEditarStock && onSelectEditItem && (
+                            <button
+                              onClick={() => onSelectEditItem(item)}
+                              className="bg-amber-600 hover:bg-amber-500 text-white px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1 active:scale-95 border border-amber-500/20"
+                              title="Editar stock asignado (rollos y metros) — solo admin"
+                            >
+                              <Pencil size={11} />
+                              Editar
+                            </button>
+                          )}
                           {/* Main discount/adjustment action */}
                           <button
                             onClick={() => onSelectAdjustItem(item)}
