@@ -4,6 +4,7 @@ import {
   ArrowUpRight,
   BriefcaseBusiness,
   ClipboardCheck,
+  FlaskConical,
   Layers,
   LineChart,
   LogOut,
@@ -92,6 +93,16 @@ const ROLES: Role[] = [
     color: 'text-sky-400 border-sky-400/40 hover:shadow-sky-400/30',
     tags: ['Panel OTs', 'Control calidad'],
     rolesVisibles: ['pruebas'],
+  },
+  {
+    title: 'Inventario de Telas (PRUEBA)',
+    desc: 'App de la jefa para vendedores en terreno: descuentos de metraje de rollos por venta (CyberDay).',
+    to: '/inventario-telas-prueba',
+    icon: FlaskConical,
+    color: 'text-orange-400 border-orange-400/40 hover:shadow-orange-400/30',
+    tags: ['Rollos', 'Vendedores', 'Terreno', 'CyberDay'],
+    // Visible para ventas y admin; ajustable después
+    rolesVisibles: ['ventas'],
   },
   {
     title: 'Administrador',
@@ -256,6 +267,7 @@ export function Landing() {
         <div className="mt-12 text-center text-xs text-muted-foreground">
           <span className="text-muted-foreground">Cortinas Rolzzo</span> · Sistema de gestión interna · v1.0
         </div>
+
       </div>
     </div>
   );
