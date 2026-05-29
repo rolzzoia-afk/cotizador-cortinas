@@ -26,7 +26,6 @@ import CompanyProfilePanel from './components/CompanyProfilePanel';
 import InventoryStats from './components/InventoryStats';
 import AdjustStockModal from './components/AdjustStockModal';
 import AddProductModal from './components/AddProductModal';
-import EditStockModal from './components/EditStockModal';
 import HistoryLog from './components/HistoryLog';
 import ProductTable from './components/ProductTable';
 import { useInventarioSupabase, usePermisoInventario } from './useInventarioSupabase';
@@ -39,7 +38,6 @@ export default function InventarioTelasPruebaPagina() {
   const [activeTab, setActiveTab] = useState<'inventario' | 'historial' | 'empresa'>('inventario');
   const [isProfileExpanded, setIsProfileExpanded] = useState<boolean>(true);
   const [selectedAdjustItem, setSelectedAdjustItem] = useState<InventoryItem | null>(null);
-  const [selectedEditItem, setSelectedEditItem] = useState<InventoryItem | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -105,24 +103,6 @@ export default function InventarioTelasPruebaPagina() {
       const item = items.find((i) => i.id === itemId);
       const verbo = actionType === 'DESCUENTO' ? 'descontaron' : 'añadieron';
       triggerNotification(`¡Stock modificado! Se ${verbo} ${meters} metros de "${item?.descripcion || ''}".`);
-    } catch (e) {
-      triggerNotification('Error: ' + (e instanceof Error ? e.message : String(e)), 'error');
-    }
-  };
-
-  const handleEditStock = async (
-    itemId: string,
-    nuevosRollos: number,
-    nuevoMetrosPorRollo: number,
-    nuevoTotal: number,
-    comment: string,
-  ) => {
-    try {
-      await data.editarStockAsignado(
-        itemId, nuevosRollos, nuevoMetrosPorRollo, nuevoTotal,
-        comment, permiso.email || 'desconocido',
-      );
-      triggerNotification('Stock asignado actualizado correctamente.');
     } catch (e) {
       triggerNotification('Error: ' + (e instanceof Error ? e.message : String(e)), 'error');
     }
@@ -271,7 +251,7 @@ export default function InventarioTelasPruebaPagina() {
             <ProductTable
               items={items}
               onSelectAdjustItem={(item) => setSelectedAdjustItem(item)}
-              onSelectEditItem={puedeEditarStock ? (item) => setSelectedEditItem(item) : undefined}
+              
               onDeleteItem={handleDeleteItem}
               onAddNew={() => setIsAddModalOpen(true)}
               onReset={() => { /* sin reset */ }}
@@ -299,17 +279,6 @@ export default function InventarioTelasPruebaPagina() {
           setSelectedAdjustItem(null);
         }}
       />
-
-      {selectedEditItem && (
-        <EditStockModal
-          item={selectedEditItem}
-          onClose={() => setSelectedEditItem(null)}
-          onConfirm={(nuevosRollos, nuevoMetros, nuevoTotal, comentario) => {
-            handleEditStock(selectedEditItem.id, nuevosRollos, nuevoMetros, nuevoTotal, comentario);
-            setSelectedEditItem(null);
-          }}
-        />
-      )}
 
       <AddProductModal
         isOpen={isAddModalOpen}

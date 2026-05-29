@@ -33,7 +33,7 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
 
   const submit = () => {
     if (!comentario.trim()) {
-      alert('Tenés que escribir un motivo para la edición (queda registrado en historial).');
+      alert('Tienes que escribir un motivo para la edición (queda registrado en historial).');
       return;
     }
     onConfirm(r, mr, totalCalc, comentario);
@@ -169,7 +169,7 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
             disabled={!cambio || !comentario.trim()}
             className="px-4 py-2 rounded-md bg-amber-600 text-white text-xs font-bold hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Guardar cambios
+            Guardar cambio
           </button>
         </div>
       </div>

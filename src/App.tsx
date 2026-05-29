@@ -5,9 +5,6 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { TopBar } from '@/components/TopBar';
 import { LegacyFrame } from '@/components/LegacyFrame';
 
-// Todas las páginas son lazy: cada ruta se descarga solo al navegar a ella.
-// La sintaxis `.then(m => ({ default: m.X }))` adapta nuestros exports
-// nombrados al formato default que espera React.lazy.
 const Login = lazy(() => import('@/pages/Login').then((m) => ({ default: m.Login })));
 const Registro = lazy(() => import('@/pages/Registro').then((m) => ({ default: m.Registro })));
 const Setup = lazy(() => import('@/pages/Setup').then((m) => ({ default: m.Setup })));
@@ -31,9 +28,6 @@ const CotizadorFase4 = lazy(() => import('@/pages/CotizadorFase4').then((m) => (
 const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ default: m.CotizadorTela })));
 const OjoDeDios = lazy(() => import('@/pages/OjoDeDios').then((m) => ({ default: m.OjoDeDios })));
 const InventarioConteo = lazy(() => import('@/pages/InventarioConteo').then((m) => ({ default: m.InventarioConteo })));
-// Módulo standalone "Inventario de Telas PRUEBA" — la app que mandó la jefa
-// para vendedores en terreno (CyberDay). Se renderiza sin Shell/TopBar para
-// que el vendedor vea solo el inventario, no las otras pestañas.
 const InventarioTelasPrueba = lazy(() => import('@/pages/inventario-telas-prueba/Pagina'));
 
 function Shell() {
@@ -59,11 +53,9 @@ export function App() {
   return (
     <Suspense fallback={<PageLoading />}>
       <Routes>
-        {/* Públicas */}
         <Route path="/login" element={<Login />} />
         <Route path="/registro" element={<Registro />} />
 
-        {/* Setup (requiere sesión pero no onboarding — sin Shell/TopBar) */}
         <Route
           path="/setup"
           element={
@@ -73,8 +65,6 @@ export function App() {
           }
         />
 
-        {/* Inventario de Telas PRUEBA — módulo standalone para vendedores
-            en terreno. Sin Shell para que el vendedor vea solo la app. */}
         <Route
           path="/inventario-telas-prueba"
           element={
@@ -84,8 +74,6 @@ export function App() {
           }
         />
 
-        {/* Landing va sin TopBar — es la pantalla de elección de área,
-             mostrar todos los tabs ahí va contra el propósito */}
         <Route
           element={
             <ProtectedRoute>
@@ -94,11 +82,9 @@ export function App() {
           }
         >
           <Route index element={<Landing />} />
-          {/* Alias retrocompat: varias páginas llaman navigate('/landing'). */}
           <Route path="landing" element={<Landing />} />
         </Route>
 
-        {/* Resto de los módulos (con TopBar) */}
         <Route
           element={
             <ProtectedRoute>
