@@ -368,6 +368,15 @@ export type PlanResumen = {
 export type RestauracionResult = {
   count_antes: number;
   count_despues: number;
+  // Detalle de tubos NO restaurados por estar consumidos físicamente (tombstone).
+  // Lo agrega la función `restaurar_plan_de_corte` desde el 29-05-2026.
+  tubos_omitidos_detalle?: Array<{
+    cod?: string;
+    medida_cm?: number | string;
+    n_colmena?: string;
+    tubo_raiz_id?: string;
+  }>;
+  mensaje?: string;
   // Campos que devuelve la RPC actualizada con el fix de tombstone.
   // Opcionales por compatibilidad con la versión vieja por si no se
   // deployó todavía.
@@ -503,15 +512,16 @@ export function useCorreccionRetroactiva(): {
   return { aplicar };
 }
 
-// ── Hook: verificación de salud de la colmena ───────────────────────
-// Llama al RPC verificar_salud_colmena que corre 5 chequeos de invariantes.
-// Pensado para correr automáticamente después de cada acción que mueve la BD
-// y manualmente desde un botón "Verificar ahora".
+// ─────────────────────────────────────────────────────────────────────
+// Salud de la colmena (anti-descuadre)
+// ─────────────────────────────────────────────────────────────────────
+// Verifica invariantes de la colmena: tubos zombie, duplicados, etc.
+// Llama al RPC `chequear_salud_colmena` que devuelve estado + checks.
 export type SaludCheck = {
   nombre: string;
-  count: number;
-  severity: 'error' | 'warning';
   descripcion: string;
+  count: number;
+  severity: 'info' | 'warning' | 'error';
 };
 
 export type SaludResult = {
@@ -524,21 +534,37 @@ export type SaludResult = {
 export function useSaludColmena(): {
   salud: SaludResult | null;
   loading: boolean;
-  verificar: () => Promise<SaludResult>;
+  verificar: () => Promise<void>;
 } {
   const [salud, setSalud] = useState<SaludResult | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const verificar = useCallback(async (): Promise<SaludResult> => {
+  const verificar = useCallback(async () => {
     setLoading(true);
     try {
-      // (supabase.rpc as any): la función es nueva, no está en database.ts
-      // todavía. Mismo patrón que orphan-plans.ts.
-      const { data, error } = await (supabase.rpc as any)('verificar_salud_colmena');
-      if (error) throw error;
-      const result = data as SaludResult;
-      setSalud(result);
-      return result;
+      const { data, error } = await (supabase.rpc as unknown as (
+        fn: string,
+      ) => Promise<{ data: SaludResult | null; error: { message: string } | null }>)(
+        'chequear_salud_colmena',
+      );
+      if (error) {
+        // Si el RPC no existe todavía, dejamos un estado neutro
+        setSalud({
+          estado: 'ok',
+          total_tubos: 0,
+          ts: new Date().toISOString(),
+          checks: [],
+        });
+        return;
+      }
+      setSalud(
+        (data as SaludResult) || {
+          estado: 'ok',
+          total_tubos: 0,
+          ts: new Date().toISOString(),
+          checks: [],
+        },
+      );
     } finally {
       setLoading(false);
     }

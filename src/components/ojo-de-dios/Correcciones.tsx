@@ -4,10 +4,8 @@ import {
   Camera,
   CheckCheck,
   CheckCircle2,
-  ClipboardList,
   Clock,
   Eye,
-  FileText,
   History,
   Loader2,
   Pencil,
@@ -878,13 +876,31 @@ function HistorialPlanes({
     try {
       const res = await restaurar(plan.id, email);
       const omitidos = res.count_omitidos_tombstone ?? 0;
-      const sufijoOmitidos =
-        omitidos > 0
-          ? ` — ${omitidos} tubo${omitidos === 1 ? '' : 's'} omitido${omitidos === 1 ? '' : 's'} por estar eliminado${omitidos === 1 ? '' : 's'} definitivamente`
-          : '';
-      toast.success(
-        `Restauración completada. ${res.count_despues} tubos restaurados (antes había ${res.count_antes})${sufijoOmitidos}.`,
-      );
+
+      if (omitidos > 0) {
+        // PARCIAL: mostrar dialog persistente con detalle de tubos no restaurados.
+        // Esto reemplaza el toast.success que pasaba desapercibido (incidente 29-05).
+        const detalleArr = ((res as { tubos_omitidos_detalle?: unknown[] }).tubos_omitidos_detalle || []) as Array<{
+          cod?: string; medida_cm?: string | number; n_colmena?: string;
+        }>;
+        const listaDetalle = detalleArr.slice(0, 30).map((t) =>
+          `  · ${t.cod || '?'}  ${t.medida_cm ?? '?'} cm  (${t.n_colmena || '?'})`,
+        ).join('\n');
+        const masTubos = detalleArr.length > 30 ? `\n  … y ${detalleArr.length - 30} más` : '';
+        alert(
+          '⚠️ RESTAURACIÓN PARCIAL\n\n' +
+          `Se restauraron ${res.count_despues} de ${res.count_despues + omitidos} tubos.\n` +
+          `Antes había ${res.count_antes} tubos en colmena.\n\n` +
+          `❌ ${omitidos} tubo${omitidos === 1 ? '' : 's'} NO se restauraron porque ya fueron cortados o eliminados físicamente:\n` +
+          listaDetalle + masTubos +
+          '\n\nSi esos tubos NO fueron cortados en la realidad (la app se confundió), contactá a soporte para corrección manual. ' +
+          'NO le vuelvas a dar "Restaurar" — no van a aparecer apretando el botón otra vez.',
+        );
+      } else {
+        toast.success(
+          `Restauración completa. ${res.count_despues} tubos restaurados (antes había ${res.count_antes}).`,
+        );
+      }
       setPreview(null);
       await cargar();
     } catch (e) {
@@ -1158,19 +1174,25 @@ function HistorialPlanes({
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Hint: el legacy duplicaba el inventario de tubos acá; ahora vive
-// en su propio sub-tab Colmena. No re-implementamos el duplicado.
+// Hint visible permanente: explica el caso "tubo duplicado"
 // ──────────────────────────────────────────────────────────────────
 function HintColmenaDuplicada() {
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-teal-500/20 bg-teal-500/5 p-2.5 text-[0.72rem] text-muted-foreground">
-      <ClipboardList className="h-3.5 w-3.5 text-teal-400" />
-      <span>
-        El inventario de tubos vive en el tab{' '}
-        <strong className="text-teal-300">Colmena</strong> del panel — no se
-        duplica acá.
-      </span>
-      <FileText className="ml-auto h-3.5 w-3.5 text-muted-foreground" />
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-[0.72rem] text-amber-200">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+        <div className="space-y-1">
+          <strong className="block text-amber-100">
+            ¿Te aparece un tubo con dos códigos en la colmena?
+          </strong>
+          <p className="opacity-90">
+            Si el bodeguero ingresó un tubo duplicado, no lo elimines manualmente.
+            Usa <em>Restaurar plan</em> con el plan correcto, o crea una corrección
+            retroactiva indicando el tubo válido. Eliminar a mano deja la colmena
+            descuadrada.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

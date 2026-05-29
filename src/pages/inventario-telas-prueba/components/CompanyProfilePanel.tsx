@@ -412,11 +412,11 @@ export default function CompanyProfilePanel({
                 <RotateCcw size={11} />
                 Restablecer a valores iniciales
               </button>
-
               <button
                 type="submit"
-                className="px-4 py-2 bg-indigo-650 hover:bg-indigo-600 border border-indigo-500/20 text-white rounded-xl text-xs font-semibold shadow-md transition-all cursor-pointer"
+                className="flex items-center gap-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-500/20 transition-all"
               >
+                <Save size={12} />
                 Confirmar y Guardar Cambios
               </button>
             </div>

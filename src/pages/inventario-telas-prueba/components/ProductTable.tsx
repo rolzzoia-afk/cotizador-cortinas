@@ -502,14 +502,12 @@ export default function ProductTable({
                               }
                             }}
                             className="text-neutral-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-neutral-900 transition-colors cursor-pointer"
-                            title="Eliminar este ítem definitivamente de la lista"
+                            title="Eliminar del catálogo"
                           >
                             <Trash2 size={13} />
                           </button>
-
                         </div>
                       </td>
-
                     </tr>
                   );
                 })}
@@ -518,7 +516,6 @@ export default function ProductTable({
           )}
         </div>
       </div>
-
     </div>
   );
 }
