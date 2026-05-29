@@ -31,6 +31,10 @@ const CotizadorFase4 = lazy(() => import('@/pages/CotizadorFase4').then((m) => (
 const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ default: m.CotizadorTela })));
 const OjoDeDios = lazy(() => import('@/pages/OjoDeDios').then((m) => ({ default: m.OjoDeDios })));
 const InventarioConteo = lazy(() => import('@/pages/InventarioConteo').then((m) => ({ default: m.InventarioConteo })));
+// Módulo standalone "Inventario de Telas PRUEBA" — la app que mandó la jefa
+// para vendedores en terreno (CyberDay). Se renderiza sin Shell/TopBar para
+// que el vendedor vea solo el inventario, no las otras pestañas.
+const InventarioTelasPrueba = lazy(() => import('@/pages/inventario-telas-prueba/Pagina'));
 
 function Shell() {
   return (
@@ -65,6 +69,17 @@ export function App() {
           element={
             <ProtectedRoute>
               <Setup />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Inventario de Telas PRUEBA — módulo standalone para vendedores
+            en terreno. Sin Shell para que el vendedor vea solo la app. */}
+        <Route
+          path="/inventario-telas-prueba"
+          element={
+            <ProtectedRoute>
+              <InventarioTelasPrueba />
             </ProtectedRoute>
           }
         />
