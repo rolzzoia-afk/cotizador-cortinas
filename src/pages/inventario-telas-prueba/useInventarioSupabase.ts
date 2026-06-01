@@ -32,6 +32,7 @@ type RolloDB = {
   rollos: number;
   metros_x_rollo: number;
   total_metros: number;
+  metros_originales: number;
   comentario: string | null;
   activo: boolean;
 };
@@ -75,6 +76,7 @@ function rolloDBToItem(r: RolloDB): InventoryItem {
     rollos: r.rollos,
     metros: r.metros_x_rollo,
     totalMetros: r.total_metros,
+    metrosOriginales: r.metros_originales ?? r.total_metros,
     comentario: r.comentario || '',
   };
 }
@@ -262,6 +264,8 @@ export function useInventarioSupabase(empresaId: string | null) {
           rollos: nuevoRollos,
           metros_x_rollo: nuevoMetrosPorRollo,
           total_metros: nuevoTotalMetros,
+          // Al editar el stock asignado, también se "resetea" el 100% de la barra
+          metros_originales: nuevoTotalMetros,
         })
         .eq('id', itemId);
       if (upErr) throw upErr;
@@ -299,6 +303,7 @@ export function useInventarioSupabase(empresaId: string | null) {
         rollos: item.rollos,
         metros_x_rollo: item.metros,
         total_metros: item.totalMetros,
+        metros_originales: item.totalMetros, // al crear, el 100% de la barra = stock inicial
         comentario: item.comentario,
       });
       if (error) throw error;

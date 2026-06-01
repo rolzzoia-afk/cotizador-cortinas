@@ -369,8 +369,13 @@ export default function ProductTable({
                   const isAgotado = item.totalMetros === 0;
                   const isLimited = item.comentario.toUpperCase().includes('LIMIT');
                   
-                  // Calculate raw percentage bar based on original roll metrics
-                  const maxMeters = Math.max(item.rollos * item.metros, 30);
+                  // Calculate raw percentage bar using metrosOriginales (snapshot del ingreso),
+                  // no rollos*metros que se actualizan con cada descuento y "rellenan" la barra.
+                  const maxMeters = Math.max(
+                    item.metrosOriginales || item.totalMetros || 0,
+                    item.rollos * item.metros,
+                    30,
+                  );
                   const stockPercent = maxMeters > 0 ? Math.min(100, Math.round((item.totalMetros / maxMeters) * 100)) : 0;
 
                   return (

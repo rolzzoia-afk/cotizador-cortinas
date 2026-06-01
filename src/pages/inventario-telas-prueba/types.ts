@@ -15,6 +15,7 @@ export interface InventoryItem {
   rollos: number;          // number of rolls
   metros: number;          // meters per roll (or length per unit)
   totalMetros: number;     // actual available stock in meters
+  metrosOriginales?: number; // stock al ingreso (referencia del 100% para la barra). Si falta, fallback a totalMetros
   comentario: string;      // e.g. "S/C", "STOCK LIMITAD"
 }
 
@@ -39,5 +40,5 @@ export interface DiscountHistoryEntry {
   nuevoMetros: number;
   tipoAccion: 'DESCUENTO' | 'INCREMENTO';
   fecha: string;
-  comentario: string; // e.g., "Pedido #4321", "Merma de corte"
+  comentario: string;
 }
