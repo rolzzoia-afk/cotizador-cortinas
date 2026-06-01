@@ -5,11 +5,12 @@
 
 import { useState, useMemo } from 'react';
 import { InventoryItem } from '../types';
-import { Search, ArrowUpDown, AlertCircle, Download, Plus, RefreshCw, Trash2, Pencil } from 'lucide-react';
+import { Search, ArrowUpDown, AlertCircle, Download, Plus, RefreshCw, Trash2, Pencil, Minus } from 'lucide-react';
 
 interface ProductTableProps {
   items: InventoryItem[];
   onSelectAdjustItem: (item: InventoryItem) => void;
+  onSelectIncrementItem?: (item: InventoryItem) => void;
   onAddNew?: () => void;
   onReset?: () => void;
   onSelectEditItem?: (item: InventoryItem) => void;
@@ -26,6 +27,7 @@ type SortOrder = 'asc' | 'desc';
 export default function ProductTable({
   items,
   onSelectAdjustItem,
+  onSelectIncrementItem,
   onAddNew,
   onReset,
   onSelectEditItem,
@@ -491,11 +493,23 @@ export default function ProductTable({
                               Editar
                             </button>
                           )}
-                          {/* Main discount/adjustment action */}
+                          {/* Sumar metros (deshacer descuento por error) */}
+                          <button
+                            onClick={() => (onSelectIncrementItem || onSelectAdjustItem)(item)}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1 active:scale-95 border border-emerald-500/20"
+                            title="Sumar metros (devolver un descuento, recepción de mercadería, etc.)"
+                          >
+                            <Plus size={11} />
+                            Sumar
+                          </button>
+
+                          {/* Main discount action */}
                           <button
                             onClick={() => onSelectAdjustItem(item)}
-                            className="bg-indigo-600 hover:bg-indigo-505 hover:bg-indigo-500 text-white px-3 py-1 text-[11px] font-bold rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1 active:scale-95 border border-indigo-500/20"
+                            className="bg-rose-600 hover:bg-rose-500 text-white px-2.5 py-1 text-[11px] font-bold rounded-lg transition-all shadow-xs cursor-pointer flex items-center gap-1 active:scale-95 border border-rose-500/20"
+                            title="Descontar metros del stock"
                           >
+                            <Minus size={11} />
                             Descontar
                           </button>
 

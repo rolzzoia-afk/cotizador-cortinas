@@ -368,6 +368,43 @@ export function useInventarioSupabase(empresaId: string | null) {
     },
     [refresh],
   );
+  // ── Reiniciar inventario: vuelve cada rollo a su metros_originales ──
+  // Útil cuando se hicieron pruebas o descuentos por error y querés
+  // limpiar todo de un saque. Solo debería estar disponible para admin.
+  const reiniciarInventario = useCallback(
+    async (vendedorEmail: string) => {
+      if (!empresaId) throw new Error('Sin empresa');
+      for (const rollo of rollosRaw) {
+        const original = (rollo as any).metros_originales ?? rollo.total_metros;
+        if (Number(original) === Number(rollo.total_metros)) continue;
+        const nuevosRollos =
+          rollo.metros_x_rollo > 0 ? Math.ceil(original / rollo.metros_x_rollo) : rollo.rollos;
+        const { error: upErr } = await (supabase as any).from('inv_rollos')
+          .update({
+            total_metros: original,
+            rollos: nuevosRollos,
+            comentario: original === 0 ? 'STOCK LIMITADO' : null,
+          })
+          .eq('id', rollo.id);
+        if (upErr) throw upErr;
+        const { error: movErr } = await (supabase as any).from('inv_movimientos').insert({
+          empresa_id: empresaId,
+          rollo_id: rollo.id,
+          tipo: 'INCREMENTO',
+          cantidad_metros: Number(original) - Number(rollo.total_metros),
+          anterior_metros: rollo.total_metros,
+          nuevo_metros: original,
+          anterior_rollos: rollo.rollos,
+          nuevo_rollos: nuevosRollos,
+          comentario: '[RESET] Reinicio de inventario — volvió al stock original',
+          vendedor_email: vendedorEmail,
+        });
+        if (movErr) throw movErr;
+      }
+      await refresh();
+    },
+    [empresaId, rollosRaw, refresh],
+  );
 
   return {
     items,
@@ -379,6 +416,7 @@ export function useInventarioSupabase(empresaId: string | null) {
     editarStockAsignado,
     agregarRollo,
     eliminarRollo,
+    reiniciarInventario,
     guardarPerfil,
     subirImagen,
     borrarMovimiento,
