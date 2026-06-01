@@ -10,6 +10,7 @@ import { MinusCircle, PlusCircle, AlertCircle, Sparkles, X, Check } from 'lucide
 interface AdjustStockModalProps {
   item: InventoryItem | null;
   isOpen: boolean;
+  defaultActionType?: 'DESCUENTO' | 'INCREMENTO';
   onClose: () => void;
   onSubmitAdjustment: (
     itemId: string,
@@ -19,7 +20,7 @@ interface AdjustStockModalProps {
   ) => void;
 }
 
-export default function AdjustStockModal({ item, isOpen, onClose, onSubmitAdjustment }: AdjustStockModalProps) {
+export default function AdjustStockModal({ item, isOpen, defaultActionType, onClose, onSubmitAdjustment }: AdjustStockModalProps) {
   const [actionType, setActionType] = useState<'DESCUENTO' | 'INCREMENTO'>('DESCUENTO');
   const [metersString, setMetersString] = useState<string>('');
   const [comment, setComment] = useState<string>('');
@@ -31,10 +32,14 @@ export default function AdjustStockModal({ item, isOpen, onClose, onSubmitAdjust
       setMetersString('');
       setComment('');
       setErrorMsg(null);
-      // Default to discount if stock is available, else let them replenish
-      setActionType(item.totalMetros > 0 ? 'DESCUENTO' : 'INCREMENTO');
+      // Use explicit default if provided; otherwise auto: descuento si hay stock, increment si está agotado
+      if (defaultActionType) {
+        setActionType(defaultActionType);
+      } else {
+        setActionType(item.totalMetros > 0 ? 'DESCUENTO' : 'INCREMENTO');
+      }
     }
-  }, [item, isOpen]);
+  }, [item, isOpen, defaultActionType]);
 
   if (!isOpen || !item) return null;
 
@@ -243,20 +248,18 @@ export default function AdjustStockModal({ item, isOpen, onClose, onSubmitAdjust
             </button>
             <button
               type="submit"
-              disabled={!!errorMsg || !metersString}
-              className={`px-4 py-2 text-white font-semibold rounded-xl text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed border ${
-                actionType === 'DESCUENTO' 
-                  ? 'bg-rose-600 hover:bg-rose-500 border-rose-500/20' 
-                  : 'bg-emerald-600 hover:bg-emerald-500 border-emerald-500/20'
+              disabled={!!errorMsg || !metersString || !comment.trim()}
+              className={`flex-1 px-4 py-2 rounded-md text-white text-xs font-bold transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                actionType === 'DESCUENTO'
+                  ? 'bg-rose-600 hover:bg-rose-500'
+                  : 'bg-emerald-600 hover:bg-emerald-500'
               }`}
             >
-              <Check size={14} />
-              Confirmar Movimiento
+              <Check size={14} className="inline mr-1" />
+              {actionType === 'DESCUENTO' ? 'Confirmar Descuento' : 'Confirmar Ingreso'}
             </button>
           </div>
-
         </form>
-
       </div>
     </div>
   );

@@ -38,6 +38,7 @@ export default function InventarioTelasPruebaPagina() {
   const [activeTab, setActiveTab] = useState<'inventario' | 'historial' | 'empresa'>('inventario');
   const [isProfileExpanded, setIsProfileExpanded] = useState<boolean>(true);
   const [selectedAdjustItem, setSelectedAdjustItem] = useState<InventoryItem | null>(null);
+  const [adjustDefaultMode, setAdjustDefaultMode] = useState<'DESCUENTO' | 'INCREMENTO' | undefined>(undefined);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'info' | 'error' } | null>(null);
 
@@ -152,6 +153,20 @@ export default function InventarioTelasPruebaPagina() {
     }
   };
 
+  const handleResetInventario = async () => {
+    if (!puedeEditarStock) {
+      triggerNotification('Solo administradores pueden reiniciar el inventario.', 'error');
+      return;
+    }
+    if (!confirm('¿Reiniciar TODO el inventario? Cada rollo vuelve a su stock original (descarta todos los descuentos). Queda registro de cada cambio en el historial.')) return;
+    try {
+      await data.reiniciarInventario(permiso.email || 'desconocido');
+      triggerNotification('Inventario reiniciado al stock original.', 'info');
+    } catch (e) {
+      triggerNotification('Error: ' + (e instanceof Error ? e.message : String(e)), 'error');
+    }
+  };
+
   const handleClearLogs = async () => {
     if (!confirm('¿Vaciar TODO el historial? No se puede deshacer.')) return;
     try {
@@ -250,11 +265,11 @@ export default function InventarioTelasPruebaPagina() {
             <InventoryStats items={items} />
             <ProductTable
               items={items}
-              onSelectAdjustItem={(item) => setSelectedAdjustItem(item)}
-              
+              onSelectAdjustItem={(item) => { setAdjustDefaultMode('DESCUENTO'); setSelectedAdjustItem(item); }}
+              onSelectIncrementItem={(item) => { setAdjustDefaultMode('INCREMENTO'); setSelectedAdjustItem(item); }}
               onDeleteItem={handleDeleteItem}
               onAddNew={() => setIsAddModalOpen(true)}
-              onReset={() => { /* sin reset */ }}
+              onReset={handleResetInventario}
               onExportCSV={() => exportCSV(items)}
               puedeEditarStock={puedeEditarStock}
             />
@@ -269,14 +284,15 @@ export default function InventarioTelasPruebaPagina() {
           />
         )}
       </main>
-
       <AdjustStockModal
         item={selectedAdjustItem}
         isOpen={!!selectedAdjustItem}
-        onClose={() => setSelectedAdjustItem(null)}
+        defaultActionType={adjustDefaultMode}
+        onClose={() => { setSelectedAdjustItem(null); setAdjustDefaultMode(undefined); }}
         onSubmitAdjustment={(itemId, meters, type, comment) => {
           handleStockAdjustment(itemId, meters, type, comment);
           setSelectedAdjustItem(null);
+          setAdjustDefaultMode(undefined);
         }}
       />
 
@@ -290,7 +306,7 @@ export default function InventarioTelasPruebaPagina() {
 }
 
 function exportCSV(items: InventoryItem[]) {
-  let csv = '﻿COD;Producto;COD_INT;Tipo;Descripcion;Tela Verticales;Descuento;Rollos;Metros Ind;Total Metros;Comentario\r\n';
+  let csv = '\ufeffCOD;Producto;COD_INT;Tipo;Descripcion;Tela Verticales;Descuento;Rollos;Metros Ind;Total Metros;Comentario\r\n';
   items.forEach((it) => {
     csv += [it.cod, it.producto, it.cod_int, it.tipo, it.descripcion, it.telaVerticales, it.descuento, it.rollos, it.metros, it.totalMetros, it.comentario]
       .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(';') + '\r\n';
