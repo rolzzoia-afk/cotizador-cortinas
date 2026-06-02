@@ -4592,7 +4592,20 @@ function buscarTubosParaOrden(codigoBuscado, medidaRequerida, codigoOriginal = n
 }
 
 function buscarColmenaDisponibleConCodigo(codigo) {
+    // ANTES: devolvía la PRIMERA colmena con tubos del mismo código.
+    // PROBLEMA: si solo había una colmena (ej. A1 para E02), TODOS los
+    //   sobrantes terminaban apilándose ahí — saturando físicamente la colmena.
+    // AHORA: agrupa por colmena, cuenta cuántos tubos del mismo código tiene
+    //   cada una, y devuelve la que tenga MENOS carga. En empate prefiere
+    //   la de menores metros acumulados.
+    // Resultado: los sobrantes se distribuyen entre A1, A2, A3, ... sin
+    //   sobrecargar ninguna.
+
     const codNormalizado = normalizarCodigo(codigo);
+
+    // Recolectar todas las colmenas válidas y representativas del código
+    // (una entrada por n_colmena distinto, contando carga total).
+    const cargaPorColmena = new Map(); // n_colmena -> { rep, count, metros }
 
     for (let i = 0; i < SistemaInventario.colmenasHistorico.length; i++) {
         const c = SistemaInventario.colmenasHistorico[i];
@@ -4601,10 +4614,30 @@ function buscarColmenaDisponibleConCodigo(codigo) {
         if (normalizarCodigo(c.cod) !== codNormalizado) continue;
         if (normalizarCodigo(c.codigo_original) !== codNormalizado) continue;
 
-        return c;
+        const key = c.n_colmena;
+        const medida = Number(c.medida_cm) || 0;
+        const prev = cargaPorColmena.get(key);
+        if (prev) {
+            prev.count += 1;
+            prev.metros += medida;
+        } else {
+            cargaPorColmena.set(key, { rep: c, count: 1, metros: medida });
+        }
     }
 
-    return null;
+    if (cargaPorColmena.size === 0) return null;
+
+    // Elegir la colmena con menor count; desempata por menor metros.
+    let mejor = null;
+    for (const entry of cargaPorColmena.values()) {
+        if (!mejor) { mejor = entry; continue; }
+        if (entry.count < mejor.count) { mejor = entry; continue; }
+        if (entry.count === mejor.count && entry.metros < mejor.metros) {
+            mejor = entry;
+        }
+    }
+
+    return mejor ? mejor.rep : null;
 }
 
 function formatearResultado(orden, resultado) {
