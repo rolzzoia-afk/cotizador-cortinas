@@ -29,6 +29,7 @@ const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ 
 const OjoDeDios = lazy(() => import('@/pages/OjoDeDios').then((m) => ({ default: m.OjoDeDios })));
 const InventarioConteo = lazy(() => import('@/pages/InventarioConteo').then((m) => ({ default: m.InventarioConteo })));
 const InventarioTelasPrueba = lazy(() => import('@/pages/inventario-telas-prueba/Pagina'));
+const CotizadorJefe = lazy(() => import('@/pages/CotizadorJefe').then((m) => ({ default: m.CotizadorJefe })));
 
 function Shell() {
   return (
@@ -111,6 +112,7 @@ export function App() {
           <Route path="bodeguero" element={<Bodeguero />} />
           <Route path="camionetas" element={<Camionetas />} />
           <Route path="historial-corte" element={<HistorialCorte />} />
+          <Route path="cotizador-jefe" element={<CotizadorJefe />} />
           <Route path="historial-tubos" element={<HistorialTubos />} />
           <Route path="admin" element={<AdminPanel />} />
           <Route path="ojo-de-dios" element={<OjoDeDios />} />

@@ -1,0 +1,1215 @@
+{
+  "config": {
+    "ivaRate": 0.19,
+    "margenBase": 0.65,
+    "margenDescuento": 0.6,
+    "descuentoWebMax": 0.4,
+    "estrategiaTela": "mas_cara",
+    "precioVentaUsaDescuentoProveedorTela": true
+  },
+  "coloresAccesorio": [
+    "Negro",
+    "Blanco",
+    "Gris",
+    "Aluminio",
+    "Café",
+    "Transparente"
+  ],
+  "coloresCadena": [
+    "Negro",
+    "Blanco",
+    "Gris",
+    "Metalico"
+  ],
+  "tiposCenefa": [
+    "Cuadrada",
+    "Ovalada"
+  ],
+  "insumos": [
+    {
+      "id": "E01",
+      "categoria": "ESTRUCTURA",
+      "subcategoria": "Tubo Superior",
+      "color": "",
+      "descripcion": "Tubo 0.8 Ø 38 mm",
+      "proveedor": "MERIGGI",
+      "costoSinIVA": 8170,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "anchoBobina": 4.8,
+      "activo": true
+    },
+    {
+      "id": "E35",
+      "categoria": "ESTRUCTURA",
+      "subcategoria": "Peso Inferior",
+      "color": "Negro",
+      "descripcion": "RO Roller Riel Inferior #33",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 7128,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "120200076003",
+      "anchoBobina": 4.8,
+      "activo": true
+    },
+    {
+      "id": "E40",
+      "categoria": "ESTRUCTURA",
+      "subcategoria": "Peso Inferior",
+      "color": "Blanco",
+      "descripcion": "Peso Inferior Rectangular Blanco (GAMA B)",
+      "proveedor": "MERYGATES",
+      "costoSinIVA": 12900,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "anchoBobina": 4.8,
+      "activo": true
+    },
+    {
+      "id": "TAP29-B",
+      "categoria": "INSUMO",
+      "subcategoria": "Tapa de Peso Inferior",
+      "color": "Negro",
+      "descripcion": "RA Roller Terminal Riel Inferior 33",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 47,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "193502250503",
+      "activo": true
+    },
+    {
+      "id": "TAP18",
+      "categoria": "INSUMO",
+      "subcategoria": "Tapa de Peso Inferior",
+      "color": "Blanco",
+      "descripcion": "Tapa Blanca para Peso Nuevo E39 (Merygate)",
+      "proveedor": "MERYGATES",
+      "costoSinIVA": 20,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "MEC44-B",
+      "categoria": "MECANISMO",
+      "subcategoria": "Mecanismo Roller",
+      "color": "Blanco",
+      "descripcion": "RA Set Unidad de Control Cadena 4M #14",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 2368,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "180951919001",
+      "activo": true
+    },
+    {
+      "id": "MEC26",
+      "categoria": "MECANISMO",
+      "subcategoria": "Mecanismo Roller",
+      "color": "Negro",
+      "descripcion": "KIT Simple 38 Negro Soporte 62mm",
+      "proveedor": "FABRICS",
+      "costoSinIVA": 2500,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "MEC22",
+      "categoria": "MECANISMO",
+      "subcategoria": "Mecanismo Dual",
+      "color": "Blanco",
+      "descripcion": "DUAL MERI GATE Blanco",
+      "proveedor": "MERYGATES",
+      "costoSinIVA": 9800,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "MEC22-N",
+      "categoria": "MECANISMO",
+      "subcategoria": "Mecanismo Dual",
+      "color": "Negro",
+      "descripcion": "DUAL MERI GATE Negro",
+      "proveedor": "MERYGATES",
+      "costoSinIVA": 9800,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "MEC42-B",
+      "categoria": "MECANISMO",
+      "subcategoria": "Mecanismo Cenefa",
+      "color": "Negro",
+      "descripcion": "RA Roller Unidad de Control Duo Premium Tipo B Cad. #33",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 3201,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "109086340114",
+      "activo": true
+    },
+    {
+      "id": "MEC43-B",
+      "categoria": "MECANISMO",
+      "subcategoria": "Mecanismo Cenefa",
+      "color": "Blanco",
+      "descripcion": "RA Roller Unidad de Control Duo Premium Tipo B Cad. #14",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 3201,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "109086340113",
+      "activo": true
+    },
+    {
+      "id": "E67-B",
+      "categoria": "ESTRUCTURA",
+      "subcategoria": "Cenefa Cuadrada",
+      "color": "Negro",
+      "descripcion": "RA Roller Riel con Cenefa Duo Premium Tipo B #33",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 34198,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "109085340110",
+      "anchoBobina": 4.8,
+      "activo": true
+    },
+    {
+      "id": "E68-B",
+      "categoria": "ESTRUCTURA",
+      "subcategoria": "Cenefa Cuadrada",
+      "color": "Blanco",
+      "descripcion": "RA Roller Riel con Cenefa Duo Premium Tipo B #14",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 34198,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "109085340109",
+      "anchoBobina": 4.8,
+      "activo": true
+    },
+    {
+      "id": "BRA03-B",
+      "categoria": "INSUMO",
+      "subcategoria": "Bracket",
+      "color": "",
+      "descripcion": "RA Roller Bracket Premium Duo",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 380,
+      "descuento1": 0.95,
+      "descuento2": 0.97,
+      "sku": "110033345221",
+      "activo": true
+    },
+    {
+      "id": "ZUN02",
+      "categoria": "INSUMO",
+      "subcategoria": "Zuncho",
+      "color": "",
+      "descripcion": "Zuncho 12mm c/pegamento (rollo 50m)",
+      "proveedor": "MERIGGI",
+      "costoSinIVA": 9000,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "RAZVCP001",
+      "anchoBobina": 50,
+      "activo": true
+    },
+    {
+      "id": "TOP05",
+      "categoria": "INSUMO",
+      "subcategoria": "Topes",
+      "color": "Negro",
+      "descripcion": "Topes Negros Rolzzo",
+      "proveedor": "FORRAIL",
+      "costoSinIVA": 20,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "TOP01",
+      "categoria": "INSUMO",
+      "subcategoria": "Topes",
+      "color": "Blanco",
+      "descripcion": "Topes F-22 Blancos",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 20,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "TOP04",
+      "categoria": "INSUMO",
+      "subcategoria": "Topes",
+      "color": "Gris",
+      "descripcion": "Topes Grises",
+      "proveedor": "CHANTILLY",
+      "costoSinIVA": 25,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "TOP03",
+      "categoria": "INSUMO",
+      "subcategoria": "Topes",
+      "color": "Transparente",
+      "descripcion": "Topes Transparentes",
+      "proveedor": "DECORELLI",
+      "costoSinIVA": 50,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "TOP06",
+      "categoria": "INSUMO",
+      "subcategoria": "Topes",
+      "color": "Metalico",
+      "descripcion": "Topes Metálicos Rolzzo",
+      "proveedor": "FORRAIL",
+      "costoSinIVA": 50,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "INS95",
+      "categoria": "INSUMO",
+      "subcategoria": "Etiqueta",
+      "color": "",
+      "descripcion": "Etiqueta Sianne",
+      "proveedor": "",
+      "costoSinIVA": 350,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "PCA01",
+      "categoria": "INSUMO",
+      "subcategoria": "Peso Cadena",
+      "color": "Blanco",
+      "descripcion": "Peso Huevo Porta Cadena Blanco",
+      "proveedor": "",
+      "costoSinIVA": 450,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "PCA02",
+      "categoria": "INSUMO",
+      "subcategoria": "Peso Cadena",
+      "color": "Negro",
+      "descripcion": "Peso Huevo Porta Cadena Negro",
+      "proveedor": "",
+      "costoSinIVA": 450,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "TAR03",
+      "categoria": "INSUMO",
+      "subcategoria": "Tarugos",
+      "color": "",
+      "descripcion": "Tarugo SA 6 - Fisher",
+      "proveedor": "SERVIPER",
+      "costoSinIVA": 94,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "TOR18",
+      "categoria": "INSUMO",
+      "subcategoria": "Tornillos",
+      "color": "",
+      "descripcion": "Cabeza de Lenteja 8x1 1/4",
+      "proveedor": "DYGGMETAL",
+      "costoSinIVA": 25,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "MO-ARM",
+      "categoria": "MANO DE OBRA",
+      "subcategoria": "Armado",
+      "color": "",
+      "descripcion": "Mano de Obra Armado por cortina",
+      "proveedor": "",
+      "costoSinIVA": 10000,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    },
+    {
+      "id": "COM-REV",
+      "categoria": "COMISION",
+      "subcategoria": "Review",
+      "color": "",
+      "descripcion": "Comisión Review",
+      "proveedor": "",
+      "costoSinIVA": 1681,
+      "descuento1": 0,
+      "descuento2": 0,
+      "sku": "",
+      "activo": true
+    }
+  ],
+  "telas": [
+    {
+      "id": "TELA-BK-1",
+      "categoria": "Tela Blackout",
+      "descripcion": "RO Roller Blackout 3.0 DIS-4M #35",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 17538,
+      "descuento1": 0.8,
+      "descuento2": 0.95,
+      "sku": "104228310902",
+      "activo": false
+    },
+    {
+      "id": "TELA-BK-2",
+      "categoria": "Tela Blackout",
+      "descripcion": "RO Roller Blackout Extra Largo 3.0 CM #103",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 15900,
+      "descuento1": 0.8,
+      "descuento2": 0.9,
+      "sku": "102993306003",
+      "activo": true
+    },
+    {
+      "id": "TELA-BK-3",
+      "categoria": "Tela Blackout",
+      "descripcion": "RO Roller Blackout Plus 3.0 CM #103",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 12778,
+      "descuento1": 0.8,
+      "descuento2": 0.9,
+      "sku": "11119354402",
+      "activo": false
+    },
+    {
+      "id": "TELA-SCR-1",
+      "categoria": "Tela Screen",
+      "descripcion": "RO Roller Screen DIS. 5 3.0 CM #103",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 11112,
+      "descuento1": 0.76,
+      "descuento2": 1,
+      "sku": "102140306206",
+      "activo": true
+    },
+    {
+      "id": "TELA-DUOBK-1",
+      "categoria": "Tela Duo Blackout",
+      "descripcion": "RO Roller Duo Blackout DIS.A96 3.0 CM #37",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 9803,
+      "descuento1": 0.8,
+      "descuento2": 0.95,
+      "sku": "109060339838",
+      "activo": true
+    },
+    {
+      "id": "TELA-DUOBK-2",
+      "categoria": "Tela Duo Blackout",
+      "descripcion": "RO Roller Duo 20237 DIS.697-13.0 CM",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 12480,
+      "descuento1": 0.8,
+      "descuento2": 0.95,
+      "sku": "107210327711",
+      "activo": false
+    },
+    {
+      "id": "TELA-DUOPOL-1",
+      "categoria": "Tela Duo Polyester",
+      "descripcion": "RO Roller Duo 20237 DIS.697-3.0 CM #37",
+      "proveedor": "CHANTILLY",
+      "anchoMetros": 3.0,
+      "costoSinIVA": 11735,
+      "descuento1": 0.8,
+      "descuento2": 0.95,
+      "sku": "106577323418",
+      "activo": true
+    }
+  ],
+  "reglas": {
+    "brackets": [
+      {
+        "anchoMaximo": 1.2,
+        "cantidad": 2
+      },
+      {
+        "anchoMaximo": 1.8,
+        "cantidad": 3
+      },
+      {
+        "anchoMaximo": 2.5,
+        "cantidad": 4
+      },
+      {
+        "anchoMaximo": 99,
+        "cantidad": 5
+      }
+    ]
+  },
+  "modelosComposicion": [
+    {
+      "id": "BLACKOUT",
+      "nombre": "Blackout",
+      "insumos": [
+        {
+          "insumoId": "E01",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "E35",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "E40",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TAP29-B",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAP18",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "MEC26",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "MEC44-B",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "ZUN02",
+          "tipo": "lineal",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOP05",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TOP01",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TOP04",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Gris"
+        },
+        {
+          "insumoId": "TOP06",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Metalico"
+        },
+        {
+          "insumoId": "INS95",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "PCA01",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "PCA02",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAR03",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOR18",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "MO-ARM",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "COM-REV",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        }
+      ]
+    },
+    {
+      "id": "SCREEN",
+      "nombre": "Screen",
+      "insumos": [
+        {
+          "insumoId": "E01",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "E35",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "E40",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TAP29-B",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAP18",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "MEC26",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "MEC44-B",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "ZUN02",
+          "tipo": "lineal",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOP05",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TOP01",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TOP04",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Gris"
+        },
+        {
+          "insumoId": "TOP06",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Metalico"
+        },
+        {
+          "insumoId": "INS95",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "PCA01",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "PCA02",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAR03",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOR18",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "MO-ARM",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "COM-REV",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        }
+      ]
+    },
+    {
+      "id": "DUAL",
+      "nombre": "Dual",
+      "insumos": [
+        {
+          "insumoId": "E01",
+          "tipo": "lineal",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "E35",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "E40",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TAP29-B",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAP18",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "MEC22-N",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "MEC22",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "ZUN02",
+          "tipo": "lineal",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOP05",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TOP01",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TOP04",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Gris"
+        },
+        {
+          "insumoId": "TOP06",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Metalico"
+        },
+        {
+          "insumoId": "INS95",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "PCA01",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "PCA02",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAR03",
+          "tipo": "unidad",
+          "cantidad": 8,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOR18",
+          "tipo": "unidad",
+          "cantidad": 8,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "MO-ARM",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "COM-REV",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        }
+      ]
+    },
+    {
+      "id": "DUO POLY",
+      "nombre": "Duo Polyester",
+      "insumos": [
+        {
+          "insumoId": "E01",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "E35",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "E40",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TAP29-B",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAP18",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "MEC26",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "MEC44-B",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "ZUN02",
+          "tipo": "lineal",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOP05",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TOP01",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TOP04",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Gris"
+        },
+        {
+          "insumoId": "TOP06",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Metalico"
+        },
+        {
+          "insumoId": "INS95",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "PCA01",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "PCA02",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAR03",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOR18",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "MO-ARM",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "COM-REV",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        }
+      ]
+    },
+    {
+      "id": "DUO BLACKOUT",
+      "nombre": "Duo Blackout",
+      "insumos": [
+        {
+          "insumoId": "E01",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "E35",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "E40",
+          "tipo": "lineal",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TAP29-B",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAP18",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "MEC26",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "MEC44-B",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "ZUN02",
+          "tipo": "lineal",
+          "cantidad": 2,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOP05",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TOP01",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "TOP04",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Gris"
+        },
+        {
+          "insumoId": "TOP06",
+          "tipo": "unidad",
+          "cantidad": 2,
+          "seleccionPorColor": true,
+          "colorRef": "cadena",
+          "colorValor": "Metalico"
+        },
+        {
+          "insumoId": "INS95",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "PCA01",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Blanco"
+        },
+        {
+          "insumoId": "PCA02",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": true,
+          "colorRef": "accesorio",
+          "colorValor": "Negro"
+        },
+        {
+          "insumoId": "TAR03",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "TOR18",
+          "tipo": "unidad",
+          "cantidad": 4,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "MO-ARM",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        },
+        {
+          "insumoId": "COM-REV",
+          "tipo": "unidad",
+          "cantidad": 1,
+          "seleccionPorColor": false
+        }
+      ]
+    }
+  ]
+}
