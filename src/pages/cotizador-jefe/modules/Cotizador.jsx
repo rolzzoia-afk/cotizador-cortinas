@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useData, calcularLinea, fmt } from '../store/useData'
 import { supabase } from '@/lib/supabase'
 
@@ -21,7 +21,7 @@ function newLinea(id, modeloDefault = 'BLACKOUT') {
   }
 }
 
-export default function Cotizador({ restringido = false } = {}) {
+export default function Cotizador({ restringido = false, cotizacionACargar = null, onCotizacionCargada = null } = {}) {
   const { data } = useData()
   const MODELOS_DISPONIBLES = data.modelosComposicion.map((m) => m.id)
   const modeloDefault = MODELOS_DISPONIBLES[0] || 'BLACKOUT'
@@ -42,6 +42,34 @@ export default function Cotizador({ restringido = false } = {}) {
   const [correlativoGuardado, setCorrelativoGuardado] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [feedbackGuardar, setFeedbackGuardar] = useState(null) // {tipo, msg}
+
+  // Cargar cotización desde el historial cuando llega via prop
+  useEffect(() => {
+    if (!cotizacionACargar) return
+    const c = cotizacionACargar
+    setCotizacionId(c.id)
+    setCorrelativoGuardado(c.correlativo)
+    setCliente({
+      nombre: c.cliente?.nombre || '',
+      proyecto: c.cliente?.proyecto || '',
+      fecha: c.cliente?.fecha || new Date().toISOString().slice(0, 10),
+      ot: c.cliente?.ot || '',
+      contacto: c.cliente?.contacto || '',
+      telefono: c.cliente?.telefono || '',
+    })
+    if (Array.isArray(c.lineas) && c.lineas.length > 0) {
+      setLineas(c.lineas)
+    }
+    setDescuento(c.descuento ? String(c.descuento) : '')
+    setFeedbackGuardar({
+      tipo: 'ok',
+      msg: `Cotización #${c.correlativo} cargada. Modificá lo que necesites y dale Actualizar.`,
+    })
+    setTimeout(() => setFeedbackGuardar(null), 5000)
+    // Avisar al padre que ya consumimos la prop
+    if (onCotizacionCargada) onCotizacionCargada()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cotizacionACargar])
 
   const pctDcto = parseFloat(descuento) || 0
   const resultados = lineas.map((l) => ({ linea: l, calc: calcularLinea(l, data) }))

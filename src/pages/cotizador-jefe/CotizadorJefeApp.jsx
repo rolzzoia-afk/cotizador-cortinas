@@ -3,14 +3,20 @@ import ListaPrecios from './modules/ListaPrecios'
 import ComposicionModelos from './modules/ComposicionModelos'
 import Cotizador from './modules/Cotizador'
 import CostoProduccion from './modules/CostoProduccion'
+import HistorialCotizaciones from './modules/HistorialCotizaciones'
 import { resetToDefaults, exportData, importData } from './store/useData'
 import './CotizadorJefe.css'
 
-const TABS = [
+const TABS_ADMIN = [
   { id: 'lista', label: 'Lista de Precios' },
   { id: 'composicion', label: 'Composicion Modelos' },
   { id: 'cotizador', label: 'Cotizador' },
+  { id: 'historial', label: 'Cotizaciones guardadas' },
   { id: 'costo', label: 'Costo Produccion' },
+]
+const TABS_VENTAS = [
+  { id: 'cotizador', label: 'Cotizador' },
+  { id: 'historial', label: 'Cotizaciones guardadas' },
 ]
 
 // Modo restringido (rol "ventas"):
@@ -23,6 +29,12 @@ export default function App({ restringido = false } = {}) {
   const [confirmReset, setConfirmReset] = useState(false)
   const [importInfo, setImportInfo] = useState(null)
   const fileInputRef = useRef(null)
+  // Cotización a cargar en el Cotizador (cuando se abre desde el Historial).
+  // Cambia a null después de que el Cotizador la consume.
+  const [cotizacionACargar, setCotizacionACargar] = useState(null)
+
+  // Lista de tabs según el rol
+  const TABS = restringido ? TABS_VENTAS : TABS_ADMIN
 
   function handleReset() {
     resetToDefaults()
@@ -75,8 +87,14 @@ export default function App({ restringido = false } = {}) {
     reader.readAsText(file)
   }
 
-  // En modo restringido forzamos el tab a Cotizador siempre.
-  const tabActivo = restringido ? 'cotizador' : tab
+  // En modo restringido solo permitimos cotizador / historial.
+  const tabActivo = restringido && tab !== 'historial' && tab !== 'cotizador' ? 'cotizador' : tab
+
+  // Handler: cargar una cotización guardada al Cotizador
+  function handleAbrirCotizacion(cotizacion) {
+    setCotizacionACargar(cotizacion)
+    setTab('cotizador')
+  }
 
   return (
     <div className="app">
@@ -100,19 +118,17 @@ export default function App({ restringido = false } = {}) {
           <span className="app-subtitle">Sistema de Cotizacion v1.1</span>
         </div>
 
-        {!restringido && (
-          <nav className="app-nav">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                className={`nav-btn ${tab === t.id ? 'active' : ''}`}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </nav>
-        )}
+        <nav className="app-nav">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`nav-btn ${tab === t.id ? 'active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
 
         {!restringido && (
           <div style={{ display: 'flex', gap: 4, marginLeft: 16, alignItems: 'center' }}>
@@ -209,7 +225,16 @@ export default function App({ restringido = false } = {}) {
       <main className="app-main">
         {tabActivo === 'lista' && <ListaPrecios />}
         {tabActivo === 'composicion' && <ComposicionModelos />}
-        {tabActivo === 'cotizador' && <Cotizador restringido={restringido} />}
+        {tabActivo === 'cotizador' && (
+          <Cotizador
+            restringido={restringido}
+            cotizacionACargar={cotizacionACargar}
+            onCotizacionCargada={() => setCotizacionACargar(null)}
+          />
+        )}
+        {tabActivo === 'historial' && (
+          <HistorialCotizaciones onEditar={handleAbrirCotizacion} restringido={restringido} />
+        )}
         {tabActivo === 'costo' && <CostoProduccion />}
       </main>
     </div>
