@@ -3,7 +3,7 @@
    Variables CSS + clases utilitarias usadas por todos los módulos.
    ───────────────────────────────────────────────────────────────── */
 
-:root {
+.cotizador-jefe-scope {
   --bg:           #f7f8fa;
   --bg-card:      #ffffff;
   --text:         #1f2937;
@@ -18,13 +18,14 @@
   --red:          #dc2626;
   --red-light:    #fee2e2;
   --radius:       6px;
+  --ease-out:     cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-* { box-sizing: border-box; }
+.cotizador-jefe-scope * { box-sizing: border-box; }
 
-html, body, #root { height: 100%; }
+.cotizador-jefe-scope, .cotizador-jefe-scope, .cotizador-jefe-scope { height: 100%; }
 
-body {
+.cotizador-jefe-scope {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   font-size: 14px;
@@ -34,13 +35,13 @@ body {
 }
 
 /* Layout ─────────────────────────────────────────────────────── */
-.app {
+.cotizador-jefe-scope .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
-.app-header {
+.cotizador-jefe-scope .app-header {
   background: var(--bg-card);
   border-bottom: 1px solid var(--border);
   padding: 10px 24px;
@@ -53,7 +54,7 @@ body {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-.app-brand {
+.cotizador-jefe-scope .app-brand {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -62,7 +63,7 @@ body {
   letter-spacing: 1px;
 }
 
-.logo-r {
+.cotizador-jefe-scope .logo-r {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -75,7 +76,7 @@ body {
   margin-right: 2px;
 }
 
-.app-subtitle {
+.cotizador-jefe-scope .app-subtitle {
   margin-left: 12px;
   font-size: 11px;
   color: var(--text-muted);
@@ -83,13 +84,13 @@ body {
   letter-spacing: 0;
 }
 
-.app-nav {
+.cotizador-jefe-scope .app-nav {
   display: flex;
   gap: 4px;
   margin-left: auto;
 }
 
-.nav-btn {
+.cotizador-jefe-scope .nav-btn {
   appearance: none;
   background: transparent;
   border: 1px solid transparent;
@@ -102,18 +103,18 @@ body {
   transition: background 0.15s, color 0.15s;
 }
 
-.nav-btn:hover {
+.cotizador-jefe-scope .nav-btn:hover {
   background: var(--bg);
   color: var(--text);
 }
 
-.nav-btn.active {
+.cotizador-jefe-scope .nav-btn.active {
   background: var(--accent-light);
   color: var(--accent);
   border-color: #c5d8ed;
 }
 
-.app-main {
+.cotizador-jefe-scope .app-main {
   padding: 24px;
   max-width: 1400px;
   width: 100%;
@@ -121,14 +122,14 @@ body {
 }
 
 /* Cards ───────────────────────────────────────────────────────── */
-.card {
+.cotizador-jefe-scope .card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
 }
 
-.card-header {
+.cotizador-jefe-scope .card-header {
   display: flex;
   align-items: center;
   padding: 10px 16px;
@@ -140,19 +141,19 @@ body {
 }
 
 /* Module headers ─────────────────────────────────────────────── */
-.module-title {
+.cotizador-jefe-scope .module-title {
   font-size: 20px;
   font-weight: 600;
   margin-bottom: 4px;
 }
 
-.module-subtitle {
+.cotizador-jefe-scope .module-subtitle {
   font-size: 13px;
   color: var(--text-muted);
   margin-bottom: 18px;
 }
 
-.field-label {
+.cotizador-jefe-scope .field-label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -162,24 +163,24 @@ body {
 }
 
 /* Tables ─────────────────────────────────────────────────────── */
-.table-wrap {
+.cotizador-jefe-scope .table-wrap {
   overflow-x: auto;
 }
 
-table {
+.cotizador-jefe-scope table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
 }
 
-th, td {
+.cotizador-jefe-scope th, .cotizador-jefe-scope td {
   padding: 8px 10px;
   text-align: left;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }
 
-th {
+.cotizador-jefe-scope th {
   background: var(--bg);
   font-weight: 600;
   font-size: 11px;
@@ -190,16 +191,16 @@ th {
   top: 0;
 }
 
-td.num-right, th.num-right { text-align: right; }
-td.check-cell, th.check-cell { text-align: center; }
+.cotizador-jefe-scope td.num-right, .cotizador-jefe-scope th.num-right { text-align: right; }
+.cotizador-jefe-scope td.check-cell, .cotizador-jefe-scope th.check-cell { text-align: center; }
 
-tr.total-row td {
+.cotizador-jefe-scope tr.total-row td {
   background: var(--bg);
   font-weight: 600;
   border-top: 2px solid var(--border);
 }
 
-.section-label {
+.cotizador-jefe-scope .section-label {
   background: var(--accent-light);
   color: var(--accent);
   font-weight: 600;
@@ -210,11 +211,7 @@ tr.total-row td {
 }
 
 /* Inputs ─────────────────────────────────────────────────────── */
-input[type="text"],
-input[type="number"],
-input[type="date"],
-select,
-.inline-edit {
+.cotizador-jefe-scope input[type="text"], .cotizador-jefe-scope input[type="number"], .cotizador-jefe-scope input[type="date"], .cotizador-jefe-scope select, .cotizador-jefe-scope .inline-edit {
   width: 100%;
   padding: 5px 8px;
   border: 1px solid var(--border);
@@ -226,13 +223,13 @@ select,
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-input:focus, select:focus, .inline-edit:focus {
+.cotizador-jefe-scope input:focus, .cotizador-jefe-scope select:focus, .cotizador-jefe-scope .inline-edit:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
-input[type="checkbox"] {
+.cotizador-jefe-scope input[type="checkbox"] {
   width: 16px;
   height: 16px;
   accent-color: var(--accent);
@@ -240,7 +237,7 @@ input[type="checkbox"] {
 }
 
 /* Buttons ────────────────────────────────────────────────────── */
-.btn {
+.cotizador-jefe-scope .btn {
   appearance: none;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -256,61 +253,61 @@ input[type="checkbox"] {
   gap: 4px;
 }
 
-.btn:hover:not(:disabled) {
+.cotizador-jefe-scope .btn:hover:not(:disabled) {
   background: var(--bg);
 }
 
-.btn:disabled {
+.cotizador-jefe-scope .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-.btn-sm {
+.cotizador-jefe-scope .btn-sm {
   padding: 3px 8px;
   font-size: 12px;
 }
 
-.btn-primary {
+.cotizador-jefe-scope .btn-primary {
   background: var(--accent);
   color: #fff;
   border-color: var(--accent);
 }
 
-.btn-primary:hover:not(:disabled) {
+.cotizador-jefe-scope .btn-primary:hover:not(:disabled) {
   background: #1d4ed8;
 }
 
-.btn-success {
+.cotizador-jefe-scope .btn-success {
   background: var(--green);
   color: #fff;
   border-color: var(--green);
 }
 
-.btn-success:hover:not(:disabled) {
+.cotizador-jefe-scope .btn-success:hover:not(:disabled) {
   background: #15803d;
 }
 
-.btn-danger {
+.cotizador-jefe-scope .btn-danger {
   background: var(--red);
   color: #fff;
   border-color: var(--red);
 }
 
-.btn-danger:hover:not(:disabled) {
+.cotizador-jefe-scope .btn-danger:hover:not(:disabled) {
   background: #b91c1c;
 }
 
-.btn-ghost {
+.cotizador-jefe-scope .btn-ghost {
   background: transparent;
   border-color: transparent;
 }
 
-.btn-ghost:hover:not(:disabled) {
+.cotizador-jefe-scope .btn-ghost:hover:not(:disabled) {
   background: var(--bg);
 }
 
 /* Badges ─────────────────────────────────────────────────────── */
-.badge {
+.cotizador-jefe-scope .badge {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 10px;
@@ -322,13 +319,13 @@ input[type="checkbox"] {
   color: var(--text-muted);
 }
 
-.badge-blue   { background: var(--accent-light); color: var(--accent); }
-.badge-green  { background: var(--green-light);  color: var(--green); }
-.badge-amber  { background: var(--amber-light);  color: var(--amber); }
-.badge-red    { background: var(--red-light);    color: var(--red); }
+.cotizador-jefe-scope .badge-blue { background: var(--accent-light); color: var(--accent); }
+.cotizador-jefe-scope .badge-green { background: var(--green-light);  color: var(--green); }
+.cotizador-jefe-scope .badge-amber { background: var(--amber-light);  color: var(--amber); }
+.cotizador-jefe-scope .badge-red { background: var(--red-light);    color: var(--red); }
 
 /* Tags ───────────────────────────────────────────────────────── */
-.tag {
+.cotizador-jefe-scope .tag {
   display: inline-block;
   font-family: 'SF Mono', 'Menlo', monospace;
   font-size: 11px;
@@ -337,4 +334,98 @@ input[type="checkbox"] {
   padding: 2px 6px;
   border-radius: 3px;
   border: 1px solid var(--border);
+}
+
+
+.cotizador-jefe-scope .nav-btn,
+.cotizador-jefe-scope .btn {
+  transition: background-color 150ms var(--ease-out), color 150ms var(--ease-out),
+              border-color 150ms var(--ease-out), opacity 150ms var(--ease-out),
+              transform 160ms var(--ease-out);
+}
+.cotizador-jefe-scope .nav-btn:active:not(:disabled),
+.cotizador-jefe-scope .btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cotizador-jefe-scope .nav-btn,
+  .cotizador-jefe-scope .btn,
+  .cotizador-jefe-scope .nav-btn:active,
+  .cotizador-jefe-scope .btn:active {
+    transition: none;
+    transform: none;
+  }
+}
+
+/* ─── ui-ux-pro-max audit fixes ──────────────────────────────────── */
+
+/* Sin sticky interno: el shell de Rolzzo ya provee el header sticky con
+   el botón "Inicio". El header del cotizador se queda en flow normal. */
+.cotizador-jefe-scope .app-header {
+  position: static;
+  top: auto;
+  z-index: auto;
+}
+
+/* Touch target mínimo 36px en inputs (compromiso desktop denso).
+   El padding existente más este min-height asegura tap area cómodo. */
+.cotizador-jefe-scope input[type='text'],
+.cotizador-jefe-scope input[type='number'],
+.cotizador-jefe-scope input[type='date'],
+.cotizador-jefe-scope select,
+.cotizador-jefe-scope textarea {
+  min-height: 36px;
+}
+
+/* Focus state visible y consistente (accent ring) para keyboard nav.
+   Outline en lugar de border-color para no causar layout shift. */
+.cotizador-jefe-scope input:focus-visible,
+.cotizador-jefe-scope select:focus-visible,
+.cotizador-jefe-scope textarea:focus-visible,
+.cotizador-jefe-scope .nav-btn:focus-visible,
+.cotizador-jefe-scope .btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Tabular nums en datos numéricos para evitar saltos de columna cuando
+   los precios/medidas cambian de dígitos (ej. 1.250 vs 12.500). */
+.cotizador-jefe-scope .num-right,
+.cotizador-jefe-scope input[type='number'],
+.cotizador-jefe-scope input[type='text'][placeholder='0'],
+.cotizador-jefe-scope td.num-right,
+.cotizador-jefe-scope .dp-num,
+.cotizador-jefe-scope .price-cell {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+/* Disabled más claro: opacity + cursor not-allowed.
+   El usuario debe ver de inmediato qué está inactivo. */
+.cotizador-jefe-scope input:disabled,
+.cotizador-jefe-scope select:disabled,
+.cotizador-jefe-scope textarea:disabled,
+.cotizador-jefe-scope .btn:disabled,
+.cotizador-jefe-scope .nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Logo Siane (reemplaza al "R OLZZO" anterior). 
+   Altura fija + ancho auto para mantener proporciones. 
+   object-fit contain por si el aspect ratio del PNG no coincide.
+   El fallback textual se activa solo si la imagen no carga. */
+.cotizador-jefe-scope .app-logo {
+  height: 28px;
+  width: auto;
+  object-fit: contain;
+  display: inline-block;
+  vertical-align: middle;
+}
+.cotizador-jefe-scope .app-brand-fallback {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: var(--text);
 }

@@ -285,13 +285,19 @@ export default function Cotizador({ restringido = false } = {}) {
                     </td>
                     <td className="num-right">
                       {r ? (
-                        <button
-                          className="btn btn-ghost btn-sm"
-                          style={{ fontWeight: 600, color: 'var(--accent)' }}
-                          onClick={() => setVerDetalle(verDetalle === l.id ? null : l.id)}
-                        >
-                          {fmt(r.precioListaCIVA)} {verDetalle === l.id ? '▲' : '▼'}
-                        </button>
+                        restringido ? (
+                          <span style={{ fontWeight: 600, color: 'var(--accent)' }}>
+                            {fmt(r.precioListaCIVA)}
+                          </span>
+                        ) : (
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            style={{ fontWeight: 600, color: 'var(--accent)' }}
+                            onClick={() => setVerDetalle(verDetalle === l.id ? null : l.id)}
+                          >
+                            {fmt(r.precioListaCIVA)} {verDetalle === l.id ? '▲' : '▼'}
+                          </button>
+                        )
                       ) : (
                         '—'
                       )}
@@ -320,7 +326,7 @@ export default function Cotizador({ restringido = false } = {}) {
                       </button>
                     </td>
                   </tr>,
-                  verDetalle === l.id && r && (
+                  !restringido && verDetalle === l.id && r && (
                     <tr key={`det-${l.id}`}>
                       <td colSpan={13} style={{ padding: 0 }}>
                         <div
