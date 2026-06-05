@@ -1,6 +1,15 @@
-// Wrapper del Cotizador del Jefe (OLZZO v1.1).
-// Modo restringido para rol distinto de 'admin': solo tab Cotizador,
-// sin export/import/reset, sin margen bruto, descuento clampeado a 40%.
+// Wrapper del Cotizador del Jefe (OLZZO v1.1) integrado al shell Rolzzo.
+//
+// Modo restringido (rol distinto de 'admin'):
+// - Solo tab Cotizador
+// - Sin Exportar/Importar/Reset
+// - Sin Margen Bruto Estimado
+// - Sin detalle expandido del precio
+// - Descuento clampeado a 40% (para todos, no solo restringido)
+//
+// El CSS del cotizador del jefe (CotizadorJefe.css) está scopeado bajo
+// .cotizador-jefe-scope para no contaminar las CSS variables del shell.
+// El wrapper agrega ese className al contenedor que monta el JSX app.
 
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -30,7 +39,11 @@ export function CotizadorJefe() {
           )}
         </h1>
       </div>
-      <div>
+      {/* cotizador-jefe-scope aísla las CSS variables y los selectores del
+          cotizador del jefe para que no contaminen el theme global del shell.
+          El contenedor además le da un fondo claro definido para que el
+          cotizador (light theme) se vea como una "ventana" dentro del shell. */}
+      <div className="cotizador-jefe-scope bg-[#f7f8fa] text-[#1f2937]">
         <CotizadorJefeApp restringido={restringido} />
       </div>
     </div>

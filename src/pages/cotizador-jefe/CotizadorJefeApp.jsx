@@ -82,8 +82,21 @@ export default function App({ restringido = false } = {}) {
     <div className="app">
       <header className="app-header">
         <div className="app-brand">
-          <span className="logo-r">R</span>
-          <span>OLZZO</span>
+          <img
+            src="/Siane%20otro.png"
+            alt="Siane"
+            className="app-logo"
+            onError={(e) => {
+              // Si por alguna razón no carga la imagen, mostramos un fallback textual
+              // para no romper el layout (ej. mientras se sube el asset por primera vez).
+              e.currentTarget.style.display = 'none'
+              const fallback = e.currentTarget.nextSibling
+              if (fallback) fallback.style.display = 'inline'
+            }}
+          />
+          <span className="app-brand-fallback" style={{ display: 'none' }}>
+            Siane
+          </span>
           <span className="app-subtitle">Sistema de Cotizacion v1.1</span>
         </div>
 
