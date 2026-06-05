@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useData, calcularLinea, fmt } from '../store/useData'
+import { supabase } from '@/lib/supabase'
 
 // Modelos disponibles = los que existen en data.modelosComposicion.
 // Cuando se agrega un modelo nuevo en data.json, aparece automáticamente
@@ -36,6 +37,11 @@ export default function Cotizador({ restringido = false } = {}) {
   const [lineas, setLineas] = useState([newLinea(1, modeloDefault)])
   const [descuento, setDescuento] = useState('')
   const [verDetalle, setVerDetalle] = useState(null)
+  // Estado de guardado de cotización (persistencia Supabase)
+  const [cotizacionId, setCotizacionId] = useState(null) // id de la cotización si fue cargada
+  const [correlativoGuardado, setCorrelativoGuardado] = useState(null)
+  const [guardando, setGuardando] = useState(false)
+  const [feedbackGuardar, setFeedbackGuardar] = useState(null) // {tipo, msg}
 
   const pctDcto = parseFloat(descuento) || 0
   const resultados = lineas.map((l) => ({ linea: l, calc: calcularLinea(l, data) }))
@@ -47,6 +53,103 @@ export default function Cotizador({ restringido = false } = {}) {
   const margenReal =
     totalListaSIVA > 0 ? ((totalListaSIVA - totalCosto) / totalListaSIVA) * 100 : 0
   const maxDcto = ((1 - data.config.margenDescuento) * 100).toFixed(0)
+
+  // ── Guardar / actualizar la cotización en Supabase ────────────────
+  async function handleGuardar() {
+    // Validación mínima: requiere nombre de cliente para identificarla luego.
+    if (!cliente.nombre.trim()) {
+      setFeedbackGuardar({ tipo: 'error', msg: 'Falta el nombre del cliente para guardar.' })
+      setTimeout(() => setFeedbackGuardar(null), 4000)
+      return
+    }
+    if (lineas.length === 0 || lineas.every((l) => !l.ancho && !l.alto)) {
+      setFeedbackGuardar({ tipo: 'error', msg: 'Agrega al menos una línea con medidas para guardar.' })
+      setTimeout(() => setFeedbackGuardar(null), 4000)
+      return
+    }
+    setGuardando(true)
+    try {
+      // Obtener empresa_id + user del usuario actual
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Sesión no encontrada. Reiniciá sesión.')
+      const { data: perfil } = await supabase
+        .from('perfiles')
+        .select('empresa_id')
+        .eq('id', user.id)
+        .single()
+      if (!perfil?.empresa_id) throw new Error('Tu perfil no tiene empresa asignada.')
+
+      const payload = {
+        empresa_id: perfil.empresa_id,
+        cliente,
+        lineas,
+        descuento: parseFloat(descuento) || 0,
+        total_lista_sin_iva: totalListaSIVA,
+        total_lista_con_iva: totalListaCIVA,
+        total_con_descuento: totalConDcto,
+        margen_real: margenReal,
+        creado_por: user.id,
+      }
+
+      if (cotizacionId) {
+        // UPDATE existente
+        const { data: row, error } = await supabase
+          .from('cotizaciones_jefe')
+          .update(payload)
+          .eq('id', cotizacionId)
+          .select('id, correlativo')
+          .single()
+        if (error) throw error
+        setCorrelativoGuardado(row.correlativo)
+        setFeedbackGuardar({
+          tipo: 'ok',
+          msg: `Cotización #${row.correlativo} actualizada.`,
+        })
+      } else {
+        // INSERT nuevo (el trigger asigna correlativo)
+        const { data: row, error } = await supabase
+          .from('cotizaciones_jefe')
+          .insert(payload)
+          .select('id, correlativo')
+          .single()
+        if (error) throw error
+        setCotizacionId(row.id)
+        setCorrelativoGuardado(row.correlativo)
+        setFeedbackGuardar({
+          tipo: 'ok',
+          msg: `Cotización #${row.correlativo} guardada. Cliente: ${cliente.nombre}.`,
+        })
+      }
+      setTimeout(() => setFeedbackGuardar(null), 4000)
+    } catch (e) {
+      console.error('[Cotizador] Error al guardar:', e)
+      setFeedbackGuardar({
+        tipo: 'error',
+        msg: `Error: ${e?.message || 'No se pudo guardar la cotización.'}`,
+      })
+      setTimeout(() => setFeedbackGuardar(null), 5000)
+    } finally {
+      setGuardando(false)
+    }
+  }
+
+  // Limpiar y empezar cotización nueva
+  function handleNueva() {
+    setCotizacionId(null)
+    setCorrelativoGuardado(null)
+    setCliente({
+      nombre: '',
+      proyecto: '',
+      fecha: new Date().toISOString().slice(0, 10),
+      ot: '',
+      contacto: '',
+      telefono: '',
+    })
+    setLineas([newLinea(1, modeloDefault)])
+    setDescuento('')
+    setVerDetalle(null)
+    setFeedbackGuardar(null)
+  }
 
   return (
     <div>
@@ -507,6 +610,52 @@ export default function Cotizador({ restringido = false } = {}) {
                 >
                   {margenReal.toFixed(1)}%
                 </span>
+              </div>
+            )}
+
+            {/* Botón guardar cotización (Supabase). Si ya hay cotizacionId,
+                el texto cambia a "Actualizar". El correlativo se muestra
+                una vez asignado por el trigger del backend. */}
+            <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleGuardar}
+                disabled={guardando}
+                style={{ flex: 1 }}
+              >
+                {guardando
+                  ? 'Guardando…'
+                  : cotizacionId
+                    ? `Actualizar cotización${correlativoGuardado ? ` #${correlativoGuardado}` : ''}`
+                    : 'Guardar cotización'}
+              </button>
+              {cotizacionId && (
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={handleNueva}
+                  disabled={guardando}
+                  title="Empezar una cotización nueva en blanco"
+                >
+                  Nueva
+                </button>
+              )}
+            </div>
+            {feedbackGuardar && (
+              <div
+                style={{
+                  marginTop: 10,
+                  padding: '8px 12px',
+                  borderRadius: 6,
+                  fontSize: 12.5,
+                  background:
+                    feedbackGuardar.tipo === 'ok' ? 'var(--green-light)' : 'var(--red-light)',
+                  color: feedbackGuardar.tipo === 'ok' ? 'var(--green)' : 'var(--red)',
+                  border: `1px solid ${feedbackGuardar.tipo === 'ok' ? 'var(--green)' : 'var(--red)'}`,
+                }}
+              >
+                {feedbackGuardar.msg}
               </div>
             )}
           </div>
