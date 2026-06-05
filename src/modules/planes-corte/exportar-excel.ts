@@ -55,6 +55,12 @@ export type PlanParaExportar = {
   fecha: string | null;
   resultados: ResultadoItem[];
   ordenes: OrdenLike[];
+  /**
+   * Número correlativo del plan dentro del orden de ejecución del taller.
+   * Determinado por la fecha de entrega más próxima entre las OTs del plan.
+   * 1 = primera prioridad (entrega más urgente). null = sin correlativo.
+   */
+  correlativo?: number | null;
 };
 
 // Formatea fecha tipo serial Excel (46083) o ISO string a "dd/mm/yyyy".
@@ -281,6 +287,47 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
     }
   }
 
+  // Footer del documento: CORRELATIVO N en una celda destacada al final.
+  // Sigue el patrón del template del jefe (ver screenshot del usuario): celda
+  // grande con fondo y borde para que el taller la vea de un vistazo.
+  if (plan.correlativo != null) {
+    const lastRow = XLSX.utils.decode_range(ws['!ref'] || 'A1').e.r;
+    const corrRow = lastRow + 3; // 2 filas vacías + 1 fila para el correlativo
+    const corrCellAddr = XLSX.utils.encode_cell({ r: corrRow, c: 1 });
+    ws[corrCellAddr] = {
+      t: 's',
+      v: `CORRELATIVO ${plan.correlativo}`,
+      s: {
+        fill: { fgColor: { rgb: 'FF1F1F2E' } },
+        font: { color: { rgb: 'FFFFFFFF' }, bold: true, sz: 14 },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        border: {
+          top: { style: 'medium', color: { rgb: 'FF000000' } },
+          bottom: { style: 'medium', color: { rgb: 'FF000000' } },
+          left: { style: 'medium', color: { rgb: 'FF000000' } },
+          right: { style: 'medium', color: { rgb: 'FF000000' } },
+        },
+      },
+    } as XLSX.CellObject & {
+      s: {
+        fill: { fgColor: { rgb: string } };
+        font: { color: { rgb: string }; bold: boolean; sz: number };
+        alignment: { horizontal: string; vertical: string };
+        border: Record<string, { style: string; color: { rgb: string } }>;
+      };
+    };
+    // Merge celdas B-G del correlativo para que sea ancho/visible
+    const merges = (ws['!merges'] as XLSX.Range[] | undefined) || [];
+    merges.push({ s: { r: corrRow, c: 1 }, e: { r: corrRow, c: 6 } });
+    ws['!merges'] = merges;
+    // Set alto de la fila para que se vea destacado
+    const rows = (ws['!rows'] as XLSX.RowInfo[] | undefined) || [];
+    rows[corrRow] = { hpt: 30 };
+    ws['!rows'] = rows;
+    // Extender el rango del worksheet
+    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: corrRow, c: range.e.c } });
+  }
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Plan de Corte');
 
@@ -288,5 +335,6 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
   const yyyy = fechaPlan.getFullYear();
   const mm = String(fechaPlan.getMonth() + 1).padStart(2, '0');
   const dd = String(fechaPlan.getDate()).padStart(2, '0');
-  XLSX.writeFile(wb, `plan_corte_${yyyy}-${mm}-${dd}.xlsx`);
+  const corrSuffix = plan.correlativo != null ? `_corr-${plan.correlativo}` : '';
+  XLSX.writeFile(wb, `plan_corte${corrSuffix}_${yyyy}-${mm}-${dd}.xlsx`);
 }

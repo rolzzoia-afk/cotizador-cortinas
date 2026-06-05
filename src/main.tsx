@@ -9,6 +9,7 @@ import { queryClient } from '@/lib/queryClient';
 import { SentryErrorBoundary, initSentry } from '@/lib/sentry';
 import { ThemeProvider } from '@/components/theme-provider';
 import './index.css';
+import './styles/dashboard-pro.css';
 
 // Sentry debe inicializarse lo antes posible para capturar errores de arranque
 initSentry();
