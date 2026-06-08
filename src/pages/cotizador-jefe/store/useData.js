@@ -421,10 +421,19 @@ export function calcularLinea(linea, data) {
     }
   }
 
+  // Fix junio 2026: el Excel del jefe interpreta el resultado de
+  //   (costo_c_iva / margenBase / margenDescuento)
+  // como "precio S/IVA al cliente" (porque al cliente se le factura IVA
+  // encima). El código original asumía ese resultado como C/IVA, dando
+  // precios 19% más bajos que los del Excel real. Alineamos sumando
+  // un factor (1 + ivaRate) al precio base para que el c/IVA al cliente
+  // coincida con el Excel: ej. BLACKOUT premium 3.33m² = $148.308 c/IVA
+  // (antes daba $124.628 c/IVA, ahora da $148.308 c/IVA).
+  const precioBaseSIVA = totalVenta * (1 + config.ivaRate)
   return {
     m2,
-    precioListaSIVA: totalVenta,
-    precioListaCIVA: totalVenta * (1 + config.ivaRate),
+    precioListaSIVA: precioBaseSIVA,
+    precioListaCIVA: precioBaseSIVA * (1 + config.ivaRate),
     totalCostoAcum,
     detalle,
   }
