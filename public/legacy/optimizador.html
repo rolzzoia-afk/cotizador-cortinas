@@ -7389,31 +7389,45 @@ async function confirmarYGuardarStaging() {
     // events y el plan se insertan en la misma transacción). La mantenemos
     // como defensa por DETECCIÓN — si algo extraño pasara (e.g. trigger
     // raro, ENVE adelantar timestamps), igual cazamos huérfanos.
+    //
+    // FIX 2026-06-09 v3 (clock skew DEFINITIVO):
+    // Histórico del bug:
+    //   v1: ventana de 30s comparando created_at >= (fechaPlan - 30s).
+    //       Falló cuando reloj del cliente > 30s adelantado (caso OT 3028).
+    //   v2: ventana ampliada a 10 minutos. También falló (caso OT 3024,
+    //       el cliente estaba adelantado >10 min, plan borrado igual).
+    //   v3 (este): NO usamos más el reloj del cliente para el filtro.
+    //       Llamamos a un RPC del servidor `verificar_eventos_recientes_ot`
+    //       que cuenta eventos usando NOW() del SERVIDOR. Así el clock skew
+    //       del cliente deja de importar — siempre comparamos contra la
+    //       hora real de la base de datos.
     if (_planAtomicoId && eventosCorte && eventosCorte.length > 0) {
         try {
-            const fechaInicioVerif = new Date(new Date(fechaPlan).getTime() - 30000).toISOString();
             const otsDelPlan = (SistemaInventario.ordenes || [])
                 .map(o => String(o.ot || '').trim())
                 .filter(ot => ot && ot !== '-');
             const otsUnicas = [...new Set(otsDelPlan)];
 
             if (otsUnicas.length > 0) {
-                // Esperar 1 segundo para que el sync se asiente (timestamp clock).
+                // Esperar 1 segundo para que el sync se asiente (commit propagation).
                 await new Promise(r => setTimeout(r, 1000));
 
-                const { count: eventCount } = await sbOpt
-                    .from('tubos_historial')
-                    .select('id', { count: 'exact', head: true })
-                    .eq('empresa_id', EMPRESA_ID_OPT)
-                    .in('ot', otsUnicas)
-                    .in('evento', ['corte', 'sobrante', 'merma'])
-                    .gte('created_at', fechaInicioVerif);
+                // Ventana de 30 minutos contra el reloj del SERVIDOR (NOW() en el RPC).
+                // 30 min es más que suficiente para que cualquier corte recién hecho
+                // aparezca, y suficientemente corto para no matchear planes viejos.
+                const { data: eventCount, error: rpcError } = await sbOpt.rpc(
+                    'verificar_eventos_recientes_ot',
+                    { p_empresa_id: EMPRESA_ID_OPT, p_ots: otsUnicas, p_minutos_atras: 30 }
+                );
 
-                if ((eventCount ?? 0) === 0) {
-                    log('🚨 CAPA 4 ACTIVADA: plan atómico sin events visibles. Deshaciendo...', 'error');
+                if (rpcError) {
+                    // Si el RPC falla, NO borramos el plan — mejor pecar de conservador.
+                    console.warn('[Capa 4] RPC falló:', rpcError);
+                    log(`⚠️ Capa 4: RPC falló (${rpcError.message}). Plan se mantiene; revisar admin.`, 'warn');
+                } else if ((eventCount ?? 0) === 0) {
+                    log('🚨 CAPA 4 ACTIVADA: plan atómico sin events visibles según servidor. Deshaciendo...', 'error');
                     await sbOpt.from('planes_corte').delete().eq('id', _planAtomicoId);
                     log(`🧹 Plan ${_planAtomicoId} eliminado por Capa 4.`, 'warn');
-                    // El respaldo del paso 2 también queda huérfano (no hay plan real al cual servir de snapshot)
                     await _eliminarRespaldoHuerfano();
                     toast({
                         titulo: 'Plan no guardado · caso extraordinario',
@@ -7421,8 +7435,9 @@ async function confirmarYGuardarStaging() {
                         accion: { texto: 'Reintentar', onClick: () => confirmarYGuardarStaging() }
                     }, 'error', { duracion: 0 });
                     throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT atómico');
+                } else {
+                    log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
                 }
-                log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
             }
         } catch (errCapa4) {
             if (errCapa4.message && errCapa4.message.includes('Capa 4')) {
