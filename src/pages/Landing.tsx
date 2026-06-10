@@ -29,6 +29,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/lib/marca';
+import { esRolAdmin } from '@/lib/roles';
 import { supabase } from '@/lib/supabase';
 import Sparkline from './inteligencia/components/Sparkline';
 import FlowFieldBackground from '@/components/FlowFieldBackground';
@@ -83,10 +84,10 @@ type Role = {
 };
 
 const ROLES: Role[] = [
-  { title: 'Bodeguero', desc: 'Despacho y recepción de materiales con escaneo QR.', to: '/bodeguero?rol=bodeguero', icon: Package, tags: ['Despacho', 'QR', 'Stock', 'Camionetas'], categoria: 'operaciones', rolesVisibles: ['bodeguero'] },
-  { title: 'Producción', desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.', to: '/optimizador?rol=produccion', icon: Wrench, tags: ['Optimizador', 'Historial corte', 'Tubos'], categoria: 'operaciones', rolesVisibles: ['produccion'] },
-  { title: 'Telas', desc: 'Gestión y control de stock de telas por rollo.', to: '/telas?rol=telas', icon: Layers, tags: ['Stock telas', 'Colmena'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado'] },
-  { title: 'Dimensionado', desc: 'Corte de tela por cortina según planes de producción.', to: '/historial-corte?rol=dimensionado', icon: Ruler, tags: ['Corte tela', 'Planes de corte'], categoria: 'operaciones', rolesVisibles: ['produccion', 'dimensionado'] },
+  { title: 'Bodeguero', desc: 'Despacho y recepción de materiales con escaneo QR.', to: '/bodeguero?rol=bodeguero', icon: Package, tags: ['Despacho', 'QR', 'Stock', 'Camionetas'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'operario'] },
+  { title: 'Producción', desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.', to: '/optimizador?rol=produccion', icon: Wrench, tags: ['Optimizador', 'Historial corte', 'Tubos'], categoria: 'operaciones', rolesVisibles: ['produccion', 'operario'] },
+  { title: 'Telas', desc: 'Gestión y control de stock de telas por rollo.', to: '/telas?rol=telas', icon: Layers, tags: ['Stock telas', 'Colmena'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario'] },
+  { title: 'Dimensionado', desc: 'Corte de tela por cortina según planes de producción.', to: '/historial-corte?rol=dimensionado', icon: Ruler, tags: ['Corte tela', 'Planes de corte'], categoria: 'operaciones', rolesVisibles: ['produccion', 'dimensionado', 'operario'] },
   { title: 'Pruebas', desc: 'Control de calidad final antes de enviar a instalación.', to: '/panel?rol=pruebas', icon: ClipboardCheck, tags: ['Panel OTs', 'Control calidad'], categoria: 'operaciones', rolesVisibles: ['pruebas'] },
   { title: 'Ventas', desc: 'KPIs diarios del equipo comercial: llamadas, visitas, cierres y fuentes.', to: '/ventas?rol=ventas', icon: LineChart, tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'], categoria: 'comercial', rolesVisibles: ['ventas'] },
   { title: 'Cotizaciones', desc: 'Gestión de OTs, cotizaciones y seguimiento de despachos.', to: '/panel?rol=ventas', icon: BriefcaseBusiness, tags: ['Panel OTs', 'Cotizador'], categoria: 'comercial', rolesVisibles: ['ventas'] },
@@ -241,7 +242,9 @@ export function Landing() {
     () => ROLES.filter((r) => r.rolesVisibles.includes(rolActual)),
     [rolActual],
   );
-  const esAdmin = rolActual === 'admin' || !rolActual || tilesParaRol.length === 0;
+  // Solo el rol admin ve todo. Antes un rol vacío o desconocido también veía
+  // todo (hueco de seguridad); ahora esos casos ven el aviso de "sin rol".
+  const esAdmin = esRolAdmin(rolActual);
   const rolesVisibles = esAdmin ? ROLES : tilesParaRol;
 
   const operaciones = rolesVisibles.filter((r) => r.categoria === 'operaciones');

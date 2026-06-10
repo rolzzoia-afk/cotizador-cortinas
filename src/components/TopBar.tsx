@@ -3,25 +3,26 @@ import { Link, NavLink, useNavigate, useLocation, useSearchParams } from 'react-
 import { Eye, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/lib/marca';
+import { esRolAdmin, puedeAccederRuta } from '@/lib/roles';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
 
-// Cada link tiene una lista de roles que pueden verlo. `admin` ve todo
-// (se maneja aparte en el componente). Si la lista está vacía → solo admin.
-const links: Array<{ to: string; label: string; rolesVisibles: string[] }> = [
-  { to: '/panel', label: 'Panel', rolesVisibles: ['ventas', 'pruebas'] },
-  { to: '/ventas', label: 'Ventas', rolesVisibles: ['ventas'] },
-  { to: '/leads', label: 'Leads', rolesVisibles: ['ventas'] },
-  { to: '/inteligencia', label: 'Inteligencia', rolesVisibles: ['ventas'] },
-  { to: '/telas', label: 'Telas', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado'] },
-  { to: '/inventario', label: 'Inventario', rolesVisibles: ['bodeguero'] },
-  { to: '/optimizador', label: 'Optimizador', rolesVisibles: ['produccion'] },
-  { to: '/bodeguero', label: 'Bodega', rolesVisibles: ['bodeguero'] },
-  { to: '/camionetas', label: 'Camionetas', rolesVisibles: ['bodeguero'] },
-  { to: '/historial-corte', label: 'Historial Corte', rolesVisibles: ['produccion', 'dimensionado'] },
-  { to: '/historial-tubos', label: 'Historial Tubos', rolesVisibles: ['produccion'] },
-  { to: '/ojo-de-dios', label: 'Ojo de Dios', rolesVisibles: [] },
-  { to: '/admin', label: 'Admin', rolesVisibles: [] },
+// La visibilidad de cada link la decide src/lib/roles.ts (misma matriz que
+// usa ProtectedRoute para bloquear las rutas de verdad).
+const links: Array<{ to: string; label: string }> = [
+  { to: '/panel', label: 'Panel' },
+  { to: '/ventas', label: 'Ventas' },
+  { to: '/leads', label: 'Leads' },
+  { to: '/inteligencia', label: 'Inteligencia' },
+  { to: '/telas', label: 'Telas' },
+  { to: '/inventario', label: 'Inventario' },
+  { to: '/optimizador', label: 'Optimizador' },
+  { to: '/bodeguero', label: 'Bodega' },
+  { to: '/camionetas', label: 'Camionetas' },
+  { to: '/historial-corte', label: 'Historial Corte' },
+  { to: '/historial-tubos', label: 'Historial Tubos' },
+  { to: '/ojo-de-dios', label: 'Ojo de Dios' },
+  { to: '/admin', label: 'Admin' },
 ];
 
 export function TopBar() {
@@ -33,13 +34,14 @@ export function TopBar() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const rolReal = (perfil?.rol || '').toLowerCase().trim();
-  const viewAs = (params.get('rol') || '').toLowerCase().trim();
+  const esAdminReal = esRolAdmin(rolReal);
+  // "Ver como" (?rol=) es solo una vista previa para ADMINS. Antes cualquier
+  // usuario podía ponerse ?rol=admin en la URL y ver el menú completo.
+  const viewAs = esAdminReal ? (params.get('rol') || '').toLowerCase().trim() : '';
   const rolEfectivo = viewAs || rolReal;
-  const linksParaRol = links.filter((l) => l.rolesVisibles.includes(rolEfectivo));
-  const esAdmin =
-    viewAs === 'admin' ||
-    (!viewAs && (rolReal === 'admin' || !rolReal || linksParaRol.length === 0));
-  const linksVisibles = esAdmin ? links : linksParaRol;
+  const linksVisibles = esRolAdmin(rolEfectivo)
+    ? links
+    : links.filter((l) => puedeAccederRuta(rolEfectivo, l.to));
   const queryStr = viewAs ? `?rol=${viewAs}` : '';
 
   useEffect(() => {
