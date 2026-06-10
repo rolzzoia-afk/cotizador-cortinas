@@ -1,0 +1,46 @@
+-- ════════════════════════════════════════════════════════════════════
+-- RENDIMIENTO BD · 2026-06-10 (YA APLICADO EN PRODUCCIÓN)
+-- Migraciones: rls_limpieza_politicas_redundantes,
+--   rls_initplan_envolver_funciones, indices_fk_y_archivo_backups,
+--   rls_limpieza_final_write_y_tally, politicas_camioneta_y_alertas_huerfanos
+--
+-- Resultado: de ~190 políticas RLS a 73 (solo `perfiles` mantiene pares
+-- intencionales propio+admin). 0 políticas con funciones sin envolver.
+--
+-- 1) LIMPIEZA RLS — eliminadas ~115 políticas acumuladas en 2-4
+--    generaciones por tabla. La canónica es `empresa_isolation`
+--    (ALL, empresa_id = (SELECT get_my_empresa_id())). Se eliminaron:
+--    · CROSS_TENANT (¡seguridad!): políticas `auth.role()='authenticated'`
+--      sin filtro de empresa en alertas_stock, insumos, movimientos_insumos,
+--      ubicaciones_rack, validadores_insumos — permitían leer/escribir
+--      datos de OTRAS empresas.
+--    · rolzzo_* (UUID de empresa hardcodeado), *_own, solo_mi_empresa,
+--      *_all/*_select GUEI: redundantes con empresa_isolation.
+--    · *_write con has_role/is_admin: sin efecto (permisivas = OR).
+--    · leads: 6 políticas → 1 empresa_isolation.
+--    · perfiles: eliminados duplicados viejos; quedan _own + _admin_empresa.
+--    · inventario_tally: 2 SELECT → 1 con OR.
+--    Excepción intencional: modulos.ver_modulos (catálogo global).
+--
+-- 2) INITPLAN — todas las políticas reescritas con (SELECT fn()) para
+--    que auth.uid()/get_my_empresa_id()/etc se evalúen 1 vez por consulta
+--    y no por fila. (Ver migración rls_initplan_envolver_funciones para
+--    el DO block reutilizable.)
+--
+-- 3) ÍNDICES — 27 índices nuevos para claves foráneas sin índice
+--    (idx_<tabla>_<columna>, ver migración indices_fk_y_archivo_backups).
+--
+-- 4) ARCHIVO — esquema `archivo` nuevo; movidas (NO borradas) las 8
+--    tablas de respaldo/histórico sin PK: *_backup_20260518_* (6),
+--    audit_log_historico, movimientos_insumos_historico_2026_04 (23 MB).
+--    Siguen consultables por SQL: SELECT * FROM archivo.<tabla>.
+--
+-- 5) FIX — inventario_camioneta y alertas_planes_huerfanos tenían RLS
+--    activo SIN políticas (los clientes leían 0 filas; bug latente en
+--    la página Camionetas). Se crearon sus políticas empresa_isolation
+--    (inventario_camioneta aislada vía camionetas.empresa_id).
+--
+-- Pendiente conocido y aceptado: avisos "unused_index" (los índices FK
+-- nuevos figuran como no usados hasta que acumulen estadísticas; no
+-- conviene borrar índices por stats jóvenes).
+-- ════════════════════════════════════════════════════════════════════
