@@ -174,12 +174,15 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
     ]);
 
     if ((res.sobrante_cm ?? 0) > 0) {
+      // Defensa: sobrante ≤ 10 cm SIEMPRE es merma (espejo de MERMA_MAX_MM=100
+      // del optimizador), aunque el plan guardado no traiga es_desecho.
+      const esDesecho = !!res.es_desecho || (res.sobrante_cm ?? 0) <= 10;
       let accionSobrante: string;
       let colmenaDestino: string | number;
       if (res.es_intermedio) {
         accionSobrante = 'RESERVAR EN MESA';
         colmenaDestino = '-';
-      } else if (res.es_desecho) {
+      } else if (esDesecho) {
         accionSobrante = 'DESECHAR MERMA';
         colmenaDestino = 'BASURERO';
       } else {

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/marca';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -70,7 +71,7 @@ export function Login() {
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Lock className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl">Cortinas Rolzzo</CardTitle>
+          <CardTitle className="text-xl">{APP_NAME}</CardTitle>
           <CardDescription>Ingresa con tu cuenta para continuar</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

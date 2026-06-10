@@ -4,6 +4,7 @@ import { Settings2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/marca';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -97,7 +98,7 @@ export function Setup() {
             <Settings2 className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="text-xl">Configuración inicial</CardTitle>
-          <CardDescription>Configura lo básico para empezar a usar Rolzzo</CardDescription>
+          <CardDescription>Configura lo básico para empezar a usar {APP_NAME}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Indicador de pasos */}
@@ -206,7 +207,7 @@ export function Setup() {
                   Atrás
                 </Button>
                 <Button onClick={finalizar} disabled={saving}>
-                  {saving ? 'Guardando…' : 'Empezar a usar Rolzzo'}
+                  {saving ? 'Guardando…' : `Empezar a usar ${APP_NAME}`}
                 </Button>
               </div>
             </div>

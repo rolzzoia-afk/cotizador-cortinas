@@ -16,6 +16,8 @@ type AuthState = {
   user: User | null;
   perfil: Perfil | null;
   empresaId: string | null;
+  /** Nombre de la empresa (tenant) del usuario, cargado desde `tenants.nombre`. */
+  empresaNombre: string | null;
   onboardingCompletado: boolean;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -33,6 +35,20 @@ async function loadProfile(userId: string) {
     .maybeSingle();
   if (error) throw error;
   return data as Perfil | null;
+}
+
+async function loadEmpresaNombre(empresaId: string): Promise<string | null> {
+  // RLS (tenant_isolation) garantiza que solo se puede leer el propio tenant.
+  const { data, error } = await supabase
+    .from('tenants')
+    .select('nombre')
+    .eq('id', empresaId)
+    .maybeSingle<{ nombre: string | null }>();
+  if (error) {
+    console.warn('[auth] loadEmpresaNombre falló:', error.message);
+    return null;
+  }
+  return data?.nombre ?? null;
 }
 
 async function loadOnboardingFlag(empresaId: string) {
@@ -79,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [empresaId, setEmpresaId] = useState<string | null>(
     () => localStorage.getItem(TENANT_KEY),
   );
+  const [empresaNombre, setEmpresaNombre] = useState<string | null>(null);
   const [onboardingCompletado, setOnboarding] = useState(false);
 
   // Guarda el último user.id que hidratamos completo (perfil + onboarding).
@@ -110,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       hydratedUserIdRef.current = null;
       setPerfil(null);
       setEmpresaId(null);
+      setEmpresaNombre(null);
       setOnboarding(false);
       localStorage.removeItem(TENANT_KEY);
       setSentryUser(null);
@@ -121,10 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (p?.empresa_id) {
       setEmpresaId(p.empresa_id);
       localStorage.setItem(TENANT_KEY, p.empresa_id);
-      const ok = await loadOnboardingFlag(p.empresa_id);
+      const [ok, nombre] = await Promise.all([
+        loadOnboardingFlag(p.empresa_id),
+        loadEmpresaNombre(p.empresa_id),
+      ]);
       setOnboarding(ok);
+      setEmpresaNombre(nombre);
     } else {
       setEmpresaId(null);
+      setEmpresaNombre(null);
       localStorage.removeItem(TENANT_KEY);
       setOnboarding(false);
     }
@@ -173,6 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     perfil,
     empresaId,
+    empresaNombre,
     onboardingCompletado,
     signOut,
     refresh,

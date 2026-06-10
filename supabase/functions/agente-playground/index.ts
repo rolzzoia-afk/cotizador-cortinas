@@ -13,12 +13,26 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const ANTHROPIC_MODEL = "claude-sonnet-4-6";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-};
+// Orígenes permitidos. Se puede sobreescribir con la variable de entorno
+// ALLOWED_ORIGINS (lista separada por comas) sin tocar código.
+const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ??
+  "https://rolzzo.com,https://www.rolzzo.com,http://localhost:5173,http://localhost:4173")
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+function corsFor(origin: string | null) {
+  const allowed = origin && ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0];
+  return {
+    "Access-Control-Allow-Origin": allowed,
+    "Vary": "Origin",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+  };
+}
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 
@@ -37,11 +51,12 @@ type DocUsado = {
   caracteres: number;
 };
 
-function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
+function jsonResponseWith(cors: Record<string, string>) {
+  return (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
 }
 
 const MENSAJE_DERIVACION_DEFAULT =
@@ -70,6 +85,14 @@ async function buildSystemPrompt(
     .maybeSingle<{ mensaje_fallback: string | null }>();
   const mensajeDerivacion =
     (configRow?.mensaje_fallback?.trim()) || MENSAJE_DERIVACION_DEFAULT;
+
+  // Nombre de la empresa (tenant) — el prompt no debe asumir una marca fija.
+  const { data: tenantRow } = await supabaseAdmin
+    .from("tenants")
+    .select("nombre")
+    .eq("id", empresaId)
+    .maybeSingle<{ nombre: string | null }>();
+  const nombreEmpresa = tenantRow?.nombre?.trim() || "la empresa";
 
   const docs = (data ?? []) as AgenteDocRow[];
   const docsMap = new Map(docs.map((d) => [d.categoria, d]));
@@ -116,7 +139,7 @@ async function buildSystemPrompt(
     .filter(Boolean)
     .join("\n\n---\n\n");
 
-  const prompt = `Eres un asistente virtual de Cortinas Rolzzo, empresa chilena de cortinas. Conversas con clientes potenciales por WhatsApp.
+  const prompt = `Eres un asistente virtual de ${nombreEmpresa}, empresa chilena de cortinas. Conversas con clientes potenciales por WhatsApp.
 
 ESTILO Y PERSONALIDAD
 - Cálido, cercano, breve, como mensaje de WhatsApp real.
@@ -183,8 +206,11 @@ ${contexto || "(sin contenido adicional)"}`;
 }
 
 Deno.serve(async (req) => {
+  const cors = corsFor(req.headers.get("Origin"));
+  const jsonResponse = jsonResponseWith(cors);
+
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response(null, { headers: cors });
   }
 
   if (req.method !== "POST") {

@@ -6630,7 +6630,11 @@ async function construirEventosTubos() {
         if (!res || !res.colmena || !res.codigo) { saltados++; return; }
 
         const ot            = String(ord?.ot || ord?.id || '');
-        const esMerma       = !!res.es_desecho;
+        // Defensa 2026-06-10: un sobrante ≤ MERMA_MAX (10 cm) SIEMPRE es merma,
+        // aunque el resultado no traiga es_desecho (planes reconstruidos a mano
+        // o de versiones viejas). Evita guardar pedacitos inservibles en colmena.
+        const esMerma       = !!res.es_desecho ||
+            (Number(res.sobrante_cm || 0) > 0 && Number(res.sobrante_cm) * 10 <= MERMA_MAX_MM);
         const tieneSobrante = !esMerma && res.sobrante_cm > 0;
 
         // ID de linaje del tubo en colmenasHistorico (heredado del tubo original).
@@ -7692,6 +7696,82 @@ async function cargarUltimoPlanDesdeSupabase() {
     }
 }
 
+// ── Correlativo del plan (réplica de la lógica del Historial de Corte React) ──
+// Agrupa los últimos planes por su set de OTs, calcula la fecha de prioridad de
+// cada grupo (fecha_entrega más próxima de sus OTs; fallback: fecha del plan) y
+// devuelve la posición 1-based del plan actual en ese orden. Así el Excel que
+// se descarga al confirmar trae el MISMO correlativo que muestra el Historial.
+async function calcularCorrelativoActual() {
+    try {
+        const otsActuales = [...new Set(
+            (SistemaInventario.ordenes || [])
+                .map(o => String(o?.ot || '').trim())
+                .filter(ot => ot && ot !== '-')
+        )].sort();
+
+        const [planesRes, otsRes] = await Promise.all([
+            sbOpt.from('planes_corte')
+                .select('id, fecha, ordenes')
+                .eq('empresa_id', EMPRESA_ID_OPT)
+                .is('tipo', null)
+                .order('fecha', { ascending: false })
+                .limit(50),
+            sbOpt.from('ots')
+                .select('numero_ot, datos_generales')
+                .eq('empresa_id', EMPRESA_ID_OPT),
+        ]);
+
+        const feMap = {};
+        (otsRes.data || []).forEach(r => {
+            const num = String(r.numero_ot || '').trim();
+            if (!num) return;
+            const dg = r.datos_generales || {};
+            feMap[num] = dg.fecha_entrega || dg.fechaEntrega || null;
+        });
+
+        const FAR = '9999-12-31';
+        const otsDePlan = (p) => {
+            let ords = p.ordenes;
+            if (typeof ords === 'string') { try { ords = JSON.parse(ords); } catch (e) { ords = []; } }
+            const set = new Set();
+            (ords || []).forEach(o => {
+                const ot = String(o?.ot || o?.numero_ot || '').trim();
+                if (ot && ot !== '-') set.add(ot);
+            });
+            return [...set].sort();
+        };
+
+        // Grupo por set de OTs → fecha del plan más reciente (vienen desc)
+        const grupos = new Map();
+        (planesRes.data || []).forEach(p => {
+            const key = otsDePlan(p).join(',') || ('__sin_ots__' + p.id);
+            if (!grupos.has(key)) grupos.set(key, { fechaPlan: p.fecha });
+        });
+        // Incluir el plan actual (puede que aún no esté guardado/visible)
+        const keyActual = otsActuales.join(',') || '__plan_actual__';
+        if (!grupos.has(keyActual)) grupos.set(keyActual, { fechaPlan: new Date().toISOString() });
+
+        const fechaPrioridad = (key, g) => {
+            const ots = key.startsWith('__') ? [] : key.split(',');
+            let min = FAR, found = false;
+            ots.forEach(ot => {
+                const fe = feMap[ot.replace(/^#/, '')] ?? feMap[ot];
+                if (fe && fe < min) { min = fe; found = true; }
+            });
+            return found ? min : (g.fechaPlan || FAR);
+        };
+
+        const orden = [...grupos.entries()]
+            .map(([k, g]) => ({ k, fp: fechaPrioridad(k, g) }))
+            .sort((a, b) => String(a.fp).localeCompare(String(b.fp)));
+        const idx = orden.findIndex(e => e.k === keyActual);
+        return idx >= 0 ? idx + 1 : null;
+    } catch (e) {
+        console.warn('[Excel] No se pudo calcular correlativo:', e?.message);
+        return null;
+    }
+}
+
 async function exportarResultados() {
     // ── Si no hay datos locales, intentar cargar último plan desde Supabase ──
     if (SistemaInventario.resultadosOptimizacion.length === 0) {
@@ -7887,9 +7967,40 @@ async function exportarResultados() {
         }
     }
     
+    // ── Footer: CORRELATIVO N (mismo formato que el Excel del Historial) ──
+    const _correlativo = await calcularCorrelativoActual();
+    if (_correlativo != null) {
+        const _lastRow = XLSX.utils.decode_range(ws['!ref'] || 'A1').e.r;
+        const _corrRow = _lastRow + 3; // 2 filas vacías + 1 fila para el correlativo
+        const _corrAddr = XLSX.utils.encode_cell({ r: _corrRow, c: 1 });
+        ws[_corrAddr] = {
+            t: 's',
+            v: `CORRELATIVO ${_correlativo}`,
+            s: {
+                fill: { fgColor: { rgb: 'FF1F1F2E' } },
+                font: { color: { rgb: 'FFFFFFFF' }, bold: true, sz: 14 },
+                alignment: { horizontal: 'center', vertical: 'center' },
+                border: {
+                    top:    { style: 'medium', color: { rgb: 'FF000000' } },
+                    bottom: { style: 'medium', color: { rgb: 'FF000000' } },
+                    left:   { style: 'medium', color: { rgb: 'FF000000' } },
+                    right:  { style: 'medium', color: { rgb: 'FF000000' } },
+                },
+            },
+        };
+        const _merges = ws['!merges'] || [];
+        _merges.push({ s: { r: _corrRow, c: 1 }, e: { r: _corrRow, c: 6 } });
+        ws['!merges'] = _merges;
+        const _rows = ws['!rows'] || [];
+        _rows[_corrRow] = { hpt: 30 };
+        ws['!rows'] = _rows;
+        ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: _corrRow, c: range.e.c } });
+    }
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Plan de Corte');
-    XLSX.writeFile(wb, `plan_corte_${new Date().toISOString().slice(0,10)}.xlsx`);
+    const _corrSuffix = _correlativo != null ? `_corr-${_correlativo}` : '';
+    XLSX.writeFile(wb, `plan_corte${_corrSuffix}_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 function exportarInventarioActualizado() {

@@ -29,6 +29,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { useAuth } from '@/lib/auth';
 import { useOTs } from '@/modules/ots/hooks';
 import {
   calcularPorcentaje,
@@ -65,6 +66,7 @@ const CANALES = [
 
 export function Panel() {
   const navigate = useNavigate();
+  const { empresaNombre } = useAuth();
   const {
     ots,
     loading,
@@ -211,7 +213,7 @@ export function Panel() {
     if (ot.estado === 'archivada') return;
     const nombre = dg.cliente || 'cliente';
     const numOT = dg.ot || '—';
-    const mensaje = WHATSAPP_MESSAGES[ot.estado](nombre, numOT);
+    const mensaje = WHATSAPP_MESSAGES[ot.estado](nombre, numOT, empresaNombre ?? undefined);
     const telefono = formatTelefonoWhatsApp(dg.telefono || '');
     const url =
       telefono.length >= 11

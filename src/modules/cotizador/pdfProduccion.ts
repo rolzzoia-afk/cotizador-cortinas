@@ -16,6 +16,8 @@ type MetaPDF = {
   ot: string;
   cliente: string;
   fecha: string;
+  /** Nombre de la empresa (tenant) para encabezados; default 'Rolzzo'. */
+  empresa?: string;
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -587,7 +589,7 @@ export function generarEtiquetasPDF(
       doc.setTextColor(20, 20, 20);
       doc.setFont('times', 'bolditalic');
       doc.setFontSize(15);
-      doc.text('Rolzzo', cL, 11);
+      doc.text(meta.empresa || 'Rolzzo', cL, 11);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(20);
       doc.text(String(meta.ot), cR, 12, { align: 'right' });

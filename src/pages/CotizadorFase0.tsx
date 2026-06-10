@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   cotizarFase0,
   type LineaResultado,
@@ -152,6 +153,7 @@ export function CotizadorFase0() {
   const { empresaId } = useAuth();
   const { catalogo } = useCatalogoProductos();
   const { anchoRollo } = useAnchoRollo();
+  const { parametros } = useParametrosCotizador();
 
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
@@ -195,8 +197,8 @@ export function CotizadorFase0() {
       cantidad: a.cantidad,
       descuento: a.descuento / 100,
     }));
-    return cotizarFase0(filasMotor, catalogo, anchoRollo, adicMotor);
-  }, [filas, adicionales, catalogo, anchoRollo]);
+    return cotizarFase0(filasMotor, catalogo, anchoRollo, adicMotor, parametros);
+  }, [filas, adicionales, catalogo, anchoRollo, parametros]);
 
   const lineaDeFila = useMemo(() => {
     const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);

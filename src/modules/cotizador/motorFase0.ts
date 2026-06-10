@@ -17,14 +17,11 @@
 
 import {
   EXTRA_ALTO_M,
-  INSTALACION_ROLLER,
-  INSTALACION_VERTICAL,
-  MANO_OBRA_ROLLER,
-  MANO_OBRA_DUO,
-  MANO_OBRA_VERTICAL,
-  TRASLADO,
+  MARGEN_INSUMO,
   INSUMO_VALOR_MAXIMO,
+  PARAMETROS_DEFAULT,
   calcularTotales,
+  type ParametrosCotizador,
   type TotalesCotizacion,
 } from './preciosFase0';
 import type { CatalogoProductos } from './types';
@@ -92,7 +89,9 @@ export type ResultadoCotizacion = {
 };
 
 // ── Helpers de precio de insumo ───────────────────────────────────────
-const pv = (c: string): number => (INSUMO_VALOR_MAXIMO[c] ?? 0) / 0.65; // precio venta = valor / 0,65
+// precio venta = valor / margen (default 0,65 = margen 35%, configurable
+// por empresa vía ParametrosCotizador.margenInsumo).
+const mkPv = (margen: number) => (c: string): number => (INSUMO_VALOR_MAXIMO[c] ?? 0) / margen;
 const raw = (c: string): number => INSUMO_VALOR_MAXIMO[c] ?? 0;
 
 // Alto real: alto + 0,25 m; si es dúo, se duplica (Optimizador del Excel).
@@ -156,7 +155,8 @@ function clasificar(cod: string) {
 }
 
 // Lista de materiales (costo) por familia. Decodificado del Cotizador del Excel.
-function costoMateriales(cod: string, ctx: Ctx): number {
+function costoMateriales(cod: string, ctx: Ctx, margenInsumo: number = MARGEN_INSUMO): number {
+  const pv = mkPv(margenInsumo);
   const { isDuo, isDuoPoli, isScreen, gama } = clasificar(cod);
   const { n, sw, wle219, wge2191, wle250, cge220 } = ctx;
   let m = 0;
@@ -224,7 +224,13 @@ export function metrosTelaVertical(
 // Lista de materiales (costo) para verticales. Decodificada del Cotizador
 // Verticales del Excel. Validada contra 1 caso real (Felipe SC 34-V): da
 // ~+5% (precio/m² 75.921 vs Excel 71.985). Conviene afinar con más ejemplos.
-function costoMaterialesVertical(n: number, sw: number, sumAlto: number): number {
+function costoMaterialesVertical(
+  n: number,
+  sw: number,
+  sumAlto: number,
+  margenInsumo: number = MARGEN_INSUMO,
+): number {
+  const pv = mkPv(margenInsumo);
   const lamas = (sw / 0.8) * 10;
   let m = 0;
   m += pv('VER 35') * sw; // riel
@@ -291,6 +297,7 @@ export function cotizarFase0(
   catalogo: CatalogoProductos,
   anchoRolloMap: Record<string, number>,
   adicionales: AdicionalFase0[] = [],
+  params: ParametrosCotizador = PARAMETROS_DEFAULT,
 ): ResultadoCotizacion {
   const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
 
@@ -351,11 +358,15 @@ export function cotizarFase0(
       : metrosTelaPorPanos(g.piezas, g.anchoRollo);
     const costoTela = g.precioMl * metrosTela;
     const costoMat = g.esVertical
-      ? costoMaterialesVertical(n, sw, g.piezas.reduce((s, p) => s + p.alto, 0))
-      : costoMateriales(cod, ctx);
+      ? costoMaterialesVertical(n, sw, g.piezas.reduce((s, p) => s + p.alto, 0), params.margenInsumo)
+      : costoMateriales(cod, ctx, params.margenInsumo);
     const manoObra =
-      (g.esVertical ? MANO_OBRA_VERTICAL : g.esDuo ? MANO_OBRA_DUO : MANO_OBRA_ROLLER) * n;
-    const traslado = TRASLADO;
+      (g.esVertical
+        ? params.manoObraVertical
+        : g.esDuo
+          ? params.manoObraDuo
+          : params.manoObraRoller) * n;
+    const traslado = params.traslado;
     const costoTotal = costoTela + costoMat + manoObra + traslado;
     const precioM2 = m2Total > 0 ? costoTotal / m2Total : 0;
     pm2PorCod.set(cod, precioM2);
@@ -383,7 +394,7 @@ export function cotizarFase0(
     const altoReal = altoRealM(f.alto, esDuo);
     const m2 = altoReal * f.ancho;
     const precioM2 = cod ? pm2PorCod.get(cod) ?? 0 : 0;
-    const instalacion = g?.esVertical ? INSTALACION_VERTICAL : INSTALACION_ROLLER;
+    const instalacion = g?.esVertical ? params.instalacionVertical : params.instalacionRoller;
     const valorUnit = m2 * precioM2 + instalacion;
     const cant = Math.max(1, f.cantidad);
     const descuento = Math.max(0, Math.min(1, f.descuento ?? 0));
@@ -426,6 +437,9 @@ export function cotizarFase0(
     lineas,
     adicionales: adicionalesRes,
     subtotalNeto,
-    totales: calcularTotales(subtotalNeto),
+    totales: calcularTotales(subtotalNeto, {
+      iva: params.iva,
+      recargoTarjeta: params.recargoTarjeta,
+    }),
   };
 }
