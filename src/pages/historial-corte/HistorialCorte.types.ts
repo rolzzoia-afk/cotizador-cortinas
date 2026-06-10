@@ -14,6 +14,11 @@ export type ResultadoCorte = {
   es_peso?: boolean;
   es_intermedio?: boolean;
   es_desecho?: boolean;
+  /** Origen del material: 'colmena' | 'exacta' | 'tubo_nuevo' | 'reemplazo' | 'merma' | otros. */
+  fuente?: string | null;
+  /** Etiqueta del material nuevo (p.ej. 'TUBO NUEVO', 'PESO NUEVO'). */
+  nombreMaterialNuevo?: string | null;
+  codigo_reemplazo?: string | null;
   serial?:
     | { lote?: string; paquete?: string; serial?: string; fecha?: string }
     | string

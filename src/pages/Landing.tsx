@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/marca';
 import { supabase } from '@/lib/supabase';
 import Sparkline from './inteligencia/components/Sparkline';
 import FlowFieldBackground from '@/components/FlowFieldBackground';
@@ -225,7 +226,8 @@ function useBriefing(empresaId: string | null | undefined): Briefing {
 
 export function Landing() {
   const { time, fecha, saludo } = useClock();
-  const { perfil, signOut, empresaId } = useAuth();
+  const { perfil, signOut, empresaId, empresaNombre } = useAuth();
+  const marca = empresaNombre || APP_NAME;
   const navigate = useNavigate();
   const briefing = useBriefing(empresaId);
 
@@ -269,7 +271,7 @@ export function Landing() {
                   letterSpacing: '-0.02em',
                 }}
               >
-                Rolzzo
+                {marca}
               </span>
               <span aria-hidden className="inline-block h-1.5 w-1.5 translate-y-[-2px] bg-accent" />
             </div>
@@ -323,7 +325,7 @@ export function Landing() {
               )}
             </h1>
             <p className="mt-3 max-w-md text-[14px] leading-relaxed text-muted-foreground">
-              Esto es lo que está pasando hoy en Rolzzo.
+              Esto es lo que está pasando hoy en {marca}.
             </p>
           </div>
           {rolActual && (
@@ -398,7 +400,7 @@ export function Landing() {
         )}
 
         <footer className="mt-20 flex items-baseline justify-between border-t border-border pt-5 text-[11px] text-muted-foreground">
-          <span>Cortinas Rolzzo · Sistema de gestión interna</span>
+          <span>{marca} · Sistema de gestión interna</span>
           <span className="dp-num tabular-nums">
             {briefing.lastUpdate ? `Sincronizado ${briefing.lastUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}` : 'v1.0'}
           </span>

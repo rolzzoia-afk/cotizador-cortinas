@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Eye, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/marca';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +25,8 @@ const links: Array<{ to: string; label: string; rolesVisibles: string[] }> = [
 ];
 
 export function TopBar() {
-  const { perfil, signOut } = useAuth();
+  const { perfil, empresaNombre, signOut } = useAuth();
+  const marca = empresaNombre || APP_NAME;
   const navigate = useNavigate();
   const location = useLocation();
   const [params] = useSearchParams();
@@ -72,7 +74,7 @@ export function TopBar() {
             to="/"
             className="font-serif text-xl font-medium tracking-tight text-foreground hover:text-accent"
           >
-            Rolzzo
+            {marca}
           </Link>
         </div>
 
@@ -82,7 +84,7 @@ export function TopBar() {
             to="/"
             className="font-serif text-2xl font-medium tracking-tight text-foreground transition-colors hover:text-accent"
           >
-            Rolzzo
+            {marca}
           </Link>
           <ul className="flex items-center gap-0.5">
             {linksVisibles.map((l) => (

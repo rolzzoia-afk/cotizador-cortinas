@@ -9,6 +9,11 @@ import { getOrd, getR } from '../utils/parsers';
 import { fmtFecha } from '../utils/formato';
 import type { Plan } from '../HistorialCorte.types';
 
+// Regla de negocio: un sobrante de ≤ 10 cm es MERMA (se desecha), aunque el
+// plan guardado no traiga `es_desecho` (planes viejos o reconstruidos a mano).
+// Espejo de MERMA_MAX_MM = 100 en el optimizador legacy.
+const MERMA_MAX_CM = 10;
+
 interface PlanTablaProps {
   plan: Plan;
   errores: { linea_idx: number; motivo: string }[];
@@ -30,7 +35,12 @@ export default function PlanTabla({
     const ord = getOrd(item, plan.ordenes);
     const ot = ord.ot || ord.numero_ot || r.orden || '-';
     const ubicacion = ord.ubic || ord.ubicacion || '-';
-    const colmena = r.colmena ?? 'TUBO NUEVO';
+    // Material nuevo: el corte NO sale de una colmena. `r.colmena` en ese caso
+    // es la posición DESTINO del sobrante, no el origen del corte.
+    const esMaterialNuevo = r.fuente === 'tubo_nuevo' || !!r.nombreMaterialNuevo;
+    const colmena = esMaterialNuevo
+      ? r.nombreMaterialNuevo || 'TUBO NUEVO'
+      : (r.colmena ?? 'TUBO NUEVO');
     const codigo = r.codigo || r.codigo_original || '-';
     const color = r.color || '-';
     const medidaCm = r.medida_cm != null ? Number(r.medida_cm).toFixed(1) : '-';
@@ -99,8 +109,12 @@ export default function PlanTabla({
     );
 
     if (r.sobrante_cm && Number(r.sobrante_cm) > 0) {
-      const sobranteCm = Number(r.sobrante_cm).toFixed(1);
-      const colSob = r.colmena_sobrante || colmena;
+      const sobranteNum = Number(r.sobrante_cm);
+      const sobranteCm = sobranteNum.toFixed(1);
+      // Defensa: ≤ 10 cm SIEMPRE es merma, aunque es_desecho venga falso/ausente.
+      const esDesecho = !!r.es_desecho || sobranteNum <= MERMA_MAX_CM;
+      // Destino del sobrante: posición física (no la etiqueta 'TUBO NUEVO').
+      const colSob = r.colmena_sobrante || r.colmena || colmena;
       let rowCls = 'border-b border-border bg-accent/[0.08] text-accent';
       let badgeCls = 'rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold uppercase text-accent';
       let accion2 = 'GUARDAR SOBRANTE';
@@ -110,13 +124,13 @@ export default function PlanTabla({
         badgeCls = 'rounded bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning';
         accion2 = 'RESERVAR EN MESA';
         colDisp = '—';
-      } else if (r.es_desecho) {
+      } else if (esDesecho) {
         rowCls = 'border-b border-border bg-destructive/[0.08] text-destructive';
         badgeCls = 'rounded bg-destructive/20 px-2 py-0.5 text-[10px] font-bold uppercase text-destructive';
         accion2 = 'DESECHAR MERMA';
         colDisp = 'BASURERO';
       }
-      const esSobrantePuro = !r.es_intermedio && !r.es_desecho;
+      const esSobrantePuro = !r.es_intermedio && !esDesecho;
       const descripcionSobrante = `${colSob} · ${codigo} · ${sobranteCm} cm`;
       rows.push(
         <tr key={`s-${idx}`} className={rowCls}>

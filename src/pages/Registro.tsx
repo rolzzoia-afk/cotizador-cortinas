@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Rocket, Mail } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { APP_NAME } from '@/lib/marca';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -111,7 +112,7 @@ export function Registro() {
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Rocket className="h-6 w-6 text-primary" />
           </div>
-          <CardTitle className="text-xl">Crear cuenta en Rolzzo</CardTitle>
+          <CardTitle className="text-xl">Crear cuenta en {APP_NAME}</CardTitle>
           <CardDescription>Registra tu empresa y empieza a usar el sistema</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

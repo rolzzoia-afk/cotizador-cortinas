@@ -84,21 +84,26 @@ export const SUB_ETAPAS_PROD: SubEtapaProd[] = [
 ];
 
 // Mensajes por defecto de WhatsApp según estado (portados del legacy 6401-6409).
-export const WHATSAPP_MESSAGES: Record<Exclude<OTEstado, 'archivada'>, (cliente: string, numOT: string) => string> = {
-  cotizacion: (n, o) =>
-    `Hola ${n}, hemos registrado tu cotización N°${o} en Cortinas Rolzzo. En breve te contactamos con los detalles. Gracias por elegirnos — Cortinas Rolzzo`,
-  esperando: (n, o) =>
-    `Hola ${n}, tu cotización N°${o} está lista y esperamos tu confirmación para continuar. Cualquier consulta estamos a tu disposición. — Cortinas Rolzzo`,
-  terreno: (n, o) =>
-    `Hola ${n}, hemos coordinado la visita de terreno para tu pedido N°${o}. Nuestro equipo se pondrá en contacto para confirmar la fecha y hora. — Cortinas Rolzzo`,
-  aprobada: (n, o) =>
-    `Hola ${n}, tu pedido N°${o} ha sido aprobado y ya está ingresado a nuestro sistema de producción. Te avisamos cuando esté listo. — Cortinas Rolzzo`,
-  produccion: (n, o) =>
-    `Hola ${n}, tu pedido N°${o} está en fabricación. Estamos trabajando en él y te notificaremos cuando esté terminado. — Cortinas Rolzzo`,
-  lista: (n, o) =>
-    `Hola ${n}, ¡buenas noticias! Tu pedido N°${o} está listo. Nos pondremos en contacto para coordinar la instalación. — Cortinas Rolzzo`,
-  instalada: (n, o) =>
-    `Hola ${n}, tu pedido N°${o} ha sido instalado correctamente. Esperamos que estés muy contento/a con el resultado. Gracias por confiar en Cortinas Rolzzo.`,
+// `empresa` es el nombre del tenant (useAuth().empresaNombre); el default
+// mantiene el comportamiento histórico si no se pasa.
+export const WHATSAPP_MESSAGES: Record<
+  Exclude<OTEstado, 'archivada'>,
+  (cliente: string, numOT: string, empresa?: string) => string
+> = {
+  cotizacion: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, hemos registrado tu cotización N°${o} en ${e}. En breve te contactamos con los detalles. Gracias por elegirnos — ${e}`,
+  esperando: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, tu cotización N°${o} está lista y esperamos tu confirmación para continuar. Cualquier consulta estamos a tu disposición. — ${e}`,
+  terreno: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, hemos coordinado la visita de terreno para tu pedido N°${o}. Nuestro equipo se pondrá en contacto para confirmar la fecha y hora. — ${e}`,
+  aprobada: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, tu pedido N°${o} ha sido aprobado y ya está ingresado a nuestro sistema de producción. Te avisamos cuando esté listo. — ${e}`,
+  produccion: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, tu pedido N°${o} está en fabricación. Estamos trabajando en él y te notificaremos cuando esté terminado. — ${e}`,
+  lista: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, ¡buenas noticias! Tu pedido N°${o} está listo. Nos pondremos en contacto para coordinar la instalación. — ${e}`,
+  instalada: (n, o, e = 'Cortinas Rolzzo') =>
+    `Hola ${n}, tu pedido N°${o} ha sido instalado correctamente. Esperamos que estés muy contento/a con el resultado. Gracias por confiar en ${e}.`,
 };
 
 // Formatea teléfono chileno para wa.me (portado del legacy 6414-6423).

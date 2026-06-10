@@ -46,7 +46,7 @@ export function CotizadorFase4() {
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
-  const { empresaId } = useAuth();
+  const { empresaId, empresaNombre } = useAuth();
   const [avanzando, setAvanzando] = useState(false);
   const [cambiandoSub, setCambiandoSub] = useState(false);
   const [bomItems, setBomItems] = useState<BomItem[] | null>(null);
@@ -127,6 +127,7 @@ export function CotizadorFase4() {
     ot: ot?.datosGenerales.ot || '—',
     cliente: ot?.datosGenerales.cliente || '—',
     fecha: new Date().toISOString().split('T')[0],
+    empresa: empresaNombre ?? undefined,
   });
 
   const onGenerarPDF = () => {

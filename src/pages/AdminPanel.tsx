@@ -36,6 +36,7 @@ import {
 import { AuditLogSection } from '@/components/admin/AuditLogSection';
 import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { InventoryBaselineSection } from '@/components/admin/InventoryBaselineSection';
+import { ParametrosCotizadorSection } from '@/components/admin/ParametrosCotizadorSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 
 type Tubo = {
@@ -510,6 +511,9 @@ export function AdminPanel() {
           </Table>
         </div>
       </section>
+
+      {/* Parámetros comerciales del cotizador */}
+      <ParametrosCotizadorSection />
 
       {/* Cargar inventario base desde Excel */}
       <InventoryBaselineSection />

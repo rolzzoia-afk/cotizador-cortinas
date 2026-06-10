@@ -91,6 +91,34 @@ export const INSUMO_VALOR_MAXIMO: Record<string, number> = {
   'VER 30': 737.8, // Soporte riel
 };
 
+// ── Parámetros comerciales configurables por empresa ──────────────────
+// Los valores de arriba son los DEFAULTS históricos (Excel Rolzzo).
+// Cada empresa puede sobreescribirlos vía tabla `configuracion`
+// (clave 'parametros_cotizador'; ver parametros.ts y el panel Admin).
+export type ParametrosCotizador = {
+  iva: number;
+  margenInsumo: number;
+  recargoTarjeta: number;
+  instalacionRoller: number;
+  instalacionVertical: number;
+  manoObraRoller: number;
+  manoObraDuo: number;
+  manoObraVertical: number;
+  traslado: number;
+};
+
+export const PARAMETROS_DEFAULT: ParametrosCotizador = {
+  iva: IVA,
+  margenInsumo: MARGEN_INSUMO,
+  recargoTarjeta: RECARGO_TARJETA,
+  instalacionRoller: INSTALACION_ROLLER,
+  instalacionVertical: INSTALACION_VERTICAL,
+  manoObraRoller: MANO_OBRA_ROLLER,
+  manoObraDuo: MANO_OBRA_DUO,
+  manoObraVertical: MANO_OBRA_VERTICAL,
+  traslado: TRASLADO,
+};
+
 // ── Tipo de resultado del motor de precio ─────────────────────────────
 export type LineaPrecio = {
   codInt: string;
@@ -113,11 +141,18 @@ export type TotalesCotizacion = {
 };
 
 // Totales finales a partir del subtotal neto (suma de líneas).
-export function calcularTotales(subtotalNeto: number): TotalesCotizacion {
-  const ivaTransferencia = subtotalNeto * IVA;
+// `opts` permite usar el IVA/recargo configurados por empresa
+// (módulo parametros.ts); sin opts se usan los defaults históricos.
+export function calcularTotales(
+  subtotalNeto: number,
+  opts?: { iva?: number; recargoTarjeta?: number },
+): TotalesCotizacion {
+  const iva = opts?.iva ?? IVA;
+  const recargo = opts?.recargoTarjeta ?? RECARGO_TARJETA;
+  const ivaTransferencia = subtotalNeto * iva;
   const totalTransferencia = subtotalNeto + ivaTransferencia;
-  const subtotalTarjeta = subtotalNeto * (1 + RECARGO_TARJETA);
-  const ivaTarjeta = subtotalTarjeta * IVA;
+  const subtotalTarjeta = subtotalNeto * (1 + recargo);
+  const ivaTarjeta = subtotalTarjeta * iva;
   const totalTarjeta = subtotalTarjeta + ivaTarjeta;
   return {
     subtotalNeto,
@@ -131,7 +166,7 @@ export function calcularTotales(subtotalNeto: number): TotalesCotizacion {
 }
 
 // Precio de venta de un insumo a partir de su VALOR MAXIMO.
-export function precioVentaInsumo(codInt: string): number {
+export function precioVentaInsumo(codInt: string, margenInsumo: number = MARGEN_INSUMO): number {
   const v = INSUMO_VALOR_MAXIMO[codInt];
-  return v ? v / MARGEN_INSUMO : 0;
+  return v ? v / margenInsumo : 0;
 }
