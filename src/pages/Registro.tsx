@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Rocket, Mail } from 'lucide-react';
+import { Rocket, Mail, UserPlus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/lib/marca';
@@ -14,13 +14,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const schema = z.object({
-  empresa: z.string().trim().min(1, 'Ingresa el nombre de la empresa'),
+  empresa: z.string().trim(),
   nombre: z.string().trim().min(1, 'Ingresa tu nombre'),
   email: z.string().trim().email('Email inválido'),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
 });
 
 type FormValues = z.infer<typeof schema>;
+
+type InfoInvitacion = {
+  valida: boolean;
+  motivo?: string;
+  empresa_nombre?: string;
+  rol?: string;
+  email?: string | null;
+};
 
 function mapError(message: string): string {
   if (message.includes('already registered')) {
@@ -32,20 +40,47 @@ function mapError(message: string): string {
 export function Registro() {
   const navigate = useNavigate();
   const { refresh } = useAuth();
+  const [params] = useSearchParams();
+  const codigoInvitacion = (params.get('invitacion') || '').trim();
   const [emailEnviado, setEmailEnviado] = useState<string | null>(null);
+  const [invitacion, setInvitacion] = useState<InfoInvitacion | null>(null);
+  const conInvitacion = !!codigoInvitacion && invitacion?.valida === true;
 
   const {
     register,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { empresa: '', nombre: '', email: '', password: '' },
   });
 
+  // Cargar info de la invitación (nombre de la empresa, rol, email fijado)
+  useEffect(() => {
+    if (!codigoInvitacion) return;
+    (async () => {
+      const { data, error } = await supabase.rpc('info_invitacion' as never, {
+        p_codigo: codigoInvitacion,
+      } as never);
+      if (error) {
+        setInvitacion({ valida: false, motivo: 'No se pudo verificar la invitación.' });
+        return;
+      }
+      const info = data as unknown as InfoInvitacion;
+      setInvitacion(info);
+      if (info?.valida && info.email) setValue('email', info.email);
+    })();
+  }, [codigoInvitacion, setValue]);
+
   const onSubmit = async (v: FormValues) => {
     try {
+      if (!conInvitacion && v.empresa.length < 1) {
+        setError('empresa', { message: 'Ingresa el nombre de la empresa' });
+        return;
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email: v.email,
         password: v.password,
@@ -55,23 +90,39 @@ export function Registro() {
       const userId = data.user?.id;
       if (!userId) throw new Error('No se pudo obtener el ID del usuario.');
 
-      const { data: tenantId, error: rpcErr } = await supabase.rpc('registrar_tenant', {
-        p_nombre_empresa: v.empresa,
-        p_user_id: userId,
-        p_user_nombre: v.nombre,
-        p_user_email: v.email,
-      });
-      if (rpcErr) throw new Error(rpcErr.message || 'Error creando la empresa.');
+      let tenantId: string | null = null;
+      if (conInvitacion) {
+        // Unirse a la empresa que invitó
+        const { data: empresaId, error: rpcErr } = await supabase.rpc(
+          'aceptar_invitacion' as never,
+          {
+            p_codigo: codigoInvitacion,
+            p_user_id: userId,
+            p_user_nombre: v.nombre,
+            p_user_email: v.email,
+          } as never,
+        );
+        if (rpcErr) throw new Error(rpcErr.message || 'Error aceptando la invitación.');
+        tenantId = empresaId as unknown as string;
+      } else {
+        // Crear empresa nueva
+        const { data: nuevoTenant, error: rpcErr } = await supabase.rpc('registrar_tenant', {
+          p_nombre_empresa: v.empresa,
+          p_user_id: userId,
+          p_user_nombre: v.nombre,
+          p_user_email: v.email,
+        });
+        if (rpcErr) throw new Error(rpcErr.message || 'Error creando la empresa.');
+        tenantId = nuevoTenant as unknown as string;
+      }
 
-      if (tenantId) localStorage.setItem('rolzzo_tenant_id', tenantId as string);
+      if (tenantId) localStorage.setItem('rolzzo_tenant_id', tenantId);
 
       // Si "Confirm email" está OFF en Supabase, signUp devuelve sesión activa:
-      // el AuthProvider ya cargó el perfil (vacío) antes de que corriera el RPC,
-      // así que hay que re-hidratar antes de navegar — sino ProtectedRoute dispara
-      // "Tu cuenta no tiene una empresa asignada".
+      // re-hidratar antes de navegar para que ProtectedRoute tenga el perfil.
       if (data.session) {
         await refresh();
-        navigate('/setup', { replace: true });
+        navigate(conInvitacion ? '/' : '/setup', { replace: true });
         return;
       }
       setEmailEnviado(v.email);
@@ -110,32 +161,54 @@ export function Registro() {
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Rocket className="h-6 w-6 text-primary" />
+            {conInvitacion ? (
+              <UserPlus className="h-6 w-6 text-primary" />
+            ) : (
+              <Rocket className="h-6 w-6 text-primary" />
+            )}
           </div>
-          <CardTitle className="text-xl">Crear cuenta en {APP_NAME}</CardTitle>
-          <CardDescription>Registra tu empresa y empieza a usar el sistema</CardDescription>
+          <CardTitle className="text-xl">
+            {conInvitacion ? `Únete a ${invitacion?.empresa_nombre}` : `Crear cuenta en ${APP_NAME}`}
+          </CardTitle>
+          <CardDescription>
+            {conInvitacion
+              ? `Fuiste invitado/a como ${invitacion?.rol}. Crea tu cuenta para entrar.`
+              : 'Registra tu empresa y empieza a usar el sistema'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {codigoInvitacion && invitacion && !invitacion.valida && (
+            <Alert variant="destructive">
+              <AlertDescription>
+                {invitacion.motivo || 'Invitación inválida.'} Puedes registrar una empresa nueva
+                con el formulario de abajo.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="empresa">Nombre de la empresa</Label>
-              <Input
-                id="empresa"
-                autoComplete="organization"
-                autoFocus
-                aria-invalid={!!errors.empresa}
-                {...register('empresa')}
-              />
-              {errors.empresa && (
-                <p className="text-xs text-destructive">{errors.empresa.message}</p>
-              )}
-            </div>
+            {!conInvitacion && (
+              <div className="space-y-1.5">
+                <Label htmlFor="empresa">Nombre de la empresa</Label>
+                <Input
+                  id="empresa"
+                  autoComplete="organization"
+                  autoFocus
+                  aria-invalid={!!errors.empresa}
+                  {...register('empresa')}
+                />
+                {errors.empresa && (
+                  <p className="text-xs text-destructive">{errors.empresa.message}</p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label htmlFor="nombre">Tu nombre</Label>
               <Input
                 id="nombre"
                 autoComplete="name"
+                autoFocus={conInvitacion}
                 aria-invalid={!!errors.nombre}
                 {...register('nombre')}
               />
@@ -150,6 +223,7 @@ export function Registro() {
                 id="email"
                 type="email"
                 autoComplete="email"
+                readOnly={conInvitacion && !!invitacion?.email}
                 aria-invalid={!!errors.email}
                 {...register('email')}
               />
@@ -178,7 +252,11 @@ export function Registro() {
             )}
 
             <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting ? 'Creando cuenta…' : 'Crear cuenta'}
+              {isSubmitting
+                ? 'Creando cuenta…'
+                : conInvitacion
+                  ? `Unirme a ${invitacion?.empresa_nombre}`
+                  : 'Crear cuenta'}
             </Button>
           </form>
 

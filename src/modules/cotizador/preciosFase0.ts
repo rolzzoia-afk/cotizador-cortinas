@@ -119,6 +119,20 @@ export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   traslado: TRASLADO,
 };
 
+/** Mezcla lo guardado con los defaults, ignorando valores no numéricos. */
+export function normalizarParametros(raw: unknown): ParametrosCotizador {
+  const out: ParametrosCotizador = { ...PARAMETROS_DEFAULT };
+  if (raw && typeof raw === 'object') {
+    for (const k of Object.keys(PARAMETROS_DEFAULT) as (keyof ParametrosCotizador)[]) {
+      const v = (raw as Record<string, unknown>)[k];
+      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
+    }
+  }
+  // margenInsumo = 0 dividiría por cero.
+  if (out.margenInsumo <= 0) out.margenInsumo = PARAMETROS_DEFAULT.margenInsumo;
+  return out;
+}
+
 // ── Tipo de resultado del motor de precio ─────────────────────────────
 export type LineaPrecio = {
   codInt: string;

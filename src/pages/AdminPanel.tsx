@@ -246,13 +246,38 @@ export function AdminPanel() {
   // Acciones
   const forzarActualizacion = async () => {
     if (!empresaId) return;
-    const actual = version ?? '0.9';
-    const num = parseFloat(actual);
-    const nueva = (Math.round((num + 0.1) * 10) / 10).toFixed(1);
+
+    // Leer la versión REAL del optimizador desplegado (VERSION_ACTUAL en el
+    // HTML, servido con no-store). Así la mínima nunca queda por encima de
+    // lo desplegado — antes se sumaba 0.1 a ciegas y, con comparación de
+    // strings, podía dejar el banner de actualización pegado para siempre.
+    let nueva: string;
+    try {
+      const res = await fetch(`/legacy/optimizador.html?v=${Date.now()}`, { cache: 'no-store' });
+      const html = await res.text();
+      const m = html.match(/VERSION_ACTUAL\s*=\s*"([^"]+)"/);
+      if (!m) throw new Error('No se encontró VERSION_ACTUAL en el optimizador desplegado.');
+      nueva = m[1].trim();
+    } catch (e) {
+      toast.error(
+        'No se pudo leer la versión desplegada del optimizador: ' +
+          (e instanceof Error ? e.message : String(e)),
+      );
+      return;
+    }
+
+    if (nueva === (version ?? '').trim()) {
+      toast.info(
+        `La versión mínima ya es la desplegada (v${nueva}). ` +
+          'Si acabas de hacer deploy, espera a que Vercel termine y reintenta.',
+      );
+      return;
+    }
 
     const ok = window.confirm(
-      `¿Subir la versión de "${version ?? 'N/A'}" a "${nueva}"?\n\n` +
-        `Esto forzará una recarga inmediata en TODOS los navegadores del taller.`,
+      `Versión desplegada del optimizador: v${nueva} (mínima actual: v${version ?? 'N/A'}).\n\n` +
+        `¿Fijarla como mínima? Los navegadores del taller con versiones anteriores ` +
+        `verán el banner "Actualizar ahora".`,
     );
     if (!ok) return;
 
