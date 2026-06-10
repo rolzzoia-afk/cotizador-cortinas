@@ -37,6 +37,7 @@ import { AuditLogSection } from '@/components/admin/AuditLogSection';
 import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { InventoryBaselineSection } from '@/components/admin/InventoryBaselineSection';
 import { ParametrosCotizadorSection } from '@/components/admin/ParametrosCotizadorSection';
+import { UsuariosRolesSection } from '@/components/admin/UsuariosRolesSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 
 type Tubo = {
@@ -511,6 +512,9 @@ export function AdminPanel() {
           </Table>
         </div>
       </section>
+
+      {/* Usuarios y roles */}
+      <UsuariosRolesSection />
 
       {/* Parámetros comerciales del cotizador */}
       <ParametrosCotizadorSection />
