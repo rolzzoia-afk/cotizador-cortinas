@@ -13,25 +13,15 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { PARAMETROS_DEFAULT, type ParametrosCotizador } from './preciosFase0';
+import {
+  PARAMETROS_DEFAULT,
+  normalizarParametros,
+  type ParametrosCotizador,
+} from './preciosFase0';
 
-export { PARAMETROS_DEFAULT, type ParametrosCotizador };
+export { PARAMETROS_DEFAULT, normalizarParametros, type ParametrosCotizador };
 
 export const CLAVE_PARAMETROS = 'parametros_cotizador';
-
-/** Mezcla lo guardado con los defaults, ignorando valores no numéricos. */
-export function normalizarParametros(raw: unknown): ParametrosCotizador {
-  const out: ParametrosCotizador = { ...PARAMETROS_DEFAULT };
-  if (raw && typeof raw === 'object') {
-    for (const k of Object.keys(PARAMETROS_DEFAULT) as (keyof ParametrosCotizador)[]) {
-      const v = (raw as Record<string, unknown>)[k];
-      if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
-    }
-  }
-  // margenInsumo = 0 dividiría por cero.
-  if (out.margenInsumo <= 0) out.margenInsumo = PARAMETROS_DEFAULT.margenInsumo;
-  return out;
-}
 
 export async function cargarParametros(empresaId: string): Promise<ParametrosCotizador> {
   const { data, error } = await supabase

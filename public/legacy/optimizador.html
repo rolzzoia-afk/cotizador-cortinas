@@ -1634,6 +1634,21 @@ function formatearFecha(fecha) {
     if (isNaN(d.getTime())) return String(fecha).includes('/') ? fecha : '-';
     return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
+// Comparación SEMÁNTICA de versiones (por segmentos numéricos).
+// La comparación de strings rompe casos como "5.9" vs "5.10" (string dice
+// que 5.9 > 5.10) o "5.11" vs "5.2" (string dice que 5.11 < 5.2).
+function _versionMenor(a, b) {
+    const pa = String(a).trim().split('.').map(n => parseInt(n, 10) || 0);
+    const pb = String(b).trim().split('.').map(n => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+        const x = pa[i] || 0, y = pb[i] || 0;
+        if (x < y) return true;
+        if (x > y) return false;
+    }
+    return false;
+}
+
 // Verificar versión mínima contra Supabase.
 // Si hay versión nueva, en lugar de recargar automáticamente, mostramos
 // un banner sticky en la parte superior. El usuario decide cuándo aplicar
@@ -1643,7 +1658,7 @@ async function verificarVersionMinima() {
         const valor = await _supabaseLeer('opt_version_minima');
         if (valor) {
             const versionMinima = String(valor).trim();
-            if (versionMinima && VERSION_ACTUAL < versionMinima) {
+            if (versionMinima && _versionMenor(VERSION_ACTUAL, versionMinima)) {
                 console.warn(`Versión ${VERSION_ACTUAL} obsoleta. Mínima requerida: ${versionMinima}`);
                 mostrarBannerVersionNueva();
             }

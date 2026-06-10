@@ -1,0 +1,23 @@
+-- ════════════════════════════════════════════════════════════════════
+-- INVITACIONES DE EQUIPO · 2026-06-10 (YA APLICADO EN PRODUCCIÓN)
+-- Migración: invitaciones_de_equipo
+--
+-- Cierra el hueco: antes el registro SIEMPRE creaba una empresa nueva;
+-- no había forma de sumar gente a una empresa existente sin tocar la BD.
+--
+-- · Tabla `invitaciones` (codigo único, rol, email opcional, vence en
+--   7 días) con RLS solo-admin de la empresa.
+-- · RPC `info_invitacion(codigo)` — abierta a anon: devuelve nombre de
+--   empresa/rol para la pantalla de registro, o el motivo de invalidez.
+-- · RPC `aceptar_invitacion(codigo, user_id, nombre, email)` — abierta a
+--   anon con los mismos guards que registrar_tenant (usuario real en
+--   auth.users, email coincidente, cuenta <1h sin sesión, sin perfil
+--   previo) + valida código no usado/no vencido/email si está fijado.
+--   Crea el perfil en la empresa del admin y marca la invitación usada.
+--
+-- Frontend: Admin → Usuarios y roles genera el link
+-- /registro?invitacion=CODIGO (copiable, revocable); Registro.tsx
+-- detecta el código, muestra "Únete a <empresa> como <rol>" y llama
+-- aceptar_invitacion en vez de registrar_tenant.
+-- ════════════════════════════════════════════════════════════════════
+-- (El SQL completo está en la migración invitaciones_de_equipo en Supabase)
