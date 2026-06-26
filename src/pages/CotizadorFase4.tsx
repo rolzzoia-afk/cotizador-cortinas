@@ -35,7 +35,8 @@ import {
 import { generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
 import { generarPdfCalculoGeneral } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
-import { rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
+import { generarPlanCorte, rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
+import { deduccionesColmena } from '@/modules/cotizador/colmenaCorte';
 import type { SubEtapaProd } from '@/modules/ots/types';
 import type { Ventana as VentanaCotizador } from '@/modules/cotizador/types';
 import { descargarExcelOrdenes } from '@/modules/descuentos/excel-ordenes';
@@ -237,6 +238,89 @@ export function CotizadorFase4() {
       toast.error('Error generando hoja de corte: ' + msg);
     } finally {
       setCorteLoading(false);
+    }
+  };
+
+  // ── Confirmar corte general: descuenta de la colmena los paños usados ──
+  // Se hace UNA sola vez (antes de pasar a dimensionado). Aplica el mismo plan
+  // que la Hoja de corte: cada sobrante usado se achica al retazo o se marca
+  // como Usado. Guard de idempotencia en datosGenerales.corteGeneralColmena.
+  const [corteGenLoading, setCorteGenLoading] = useState(false);
+  const corteGenConfirmado = ot?.datosGenerales?.corteGeneralColmena;
+
+  const onConfirmarCorteGeneral = async () => {
+    if (!ot || !empresaId) return;
+    if (corteGenConfirmado) {
+      toast.info(
+        `El corte general ya se confirmó el ${corteGenConfirmado.confirmadoEn.split('T')[0]}.`,
+      );
+      return;
+    }
+    setCorteGenLoading(true);
+    try {
+      const { data: panosData } = await supabase
+        .from('colmena_panos')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('disponible', true);
+      const panos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
+      const plan = generarPlanCorte([ot], panos);
+      const deducciones = deduccionesColmena(plan);
+      if (deducciones.length === 0) {
+        toast.info('Este corte no usa paños de la colmena (todo sale de rollo).');
+        return;
+      }
+      const retazos = deducciones.filter((d) => d.accion === 'retazo').length;
+      const usados = deducciones.filter((d) => d.accion === 'usado').length;
+      const ok = await confirmar({
+        titulo: 'Confirmar corte general',
+        mensaje:
+          `Se descontarán ${deducciones.length} paño(s) de la colmena:\n` +
+          `· ${retazos} quedan como retazo (medida nueva, misma ubicación)\n` +
+          `· ${usados} se marcan como usados\n\n` +
+          'Esto actualiza el inventario y no debería repetirse.',
+        confirmLabel: 'Confirmar y descontar',
+        destructivo: true,
+      });
+      if (!ok) return;
+      const otNum = ot.datosGenerales.ot || String(ot.id);
+      const now = new Date().toISOString();
+      const aplicadas = await Promise.all(
+        deducciones.map(async (d) => {
+          const res =
+            d.accion === 'retazo'
+              ? await supabase
+                  .from('colmena_panos')
+                  .update({ medida_ancho: d.nuevoAncho, medida_alto: d.nuevoAlto, disponible: true })
+                  .eq('id', d.docId)
+              : await supabase
+                  .from('colmena_panos')
+                  .update({ disponible: false, ot_asignada: otNum, fecha_uso: now })
+                  .eq('id', d.docId);
+          return { ...d, error: res.error ? res.error.message : undefined };
+        }),
+      );
+      const fallidas = aplicadas.filter((d) => d.error);
+      // Persistir el snapshot SIEMPRE (aunque haya fallos parciales) para no
+      // re-descontar en un reintento.
+      await guardar({
+        datosGenerales: {
+          ...(ot.datosGenerales || {}),
+          corteGeneralColmena: { confirmadoEn: now, panos: aplicadas },
+        },
+      });
+      if (fallidas.length) {
+        toast.error(
+          `Corte confirmado, pero ${fallidas.length} paño(s) no se actualizaron ` +
+            `(${fallidas.map((d) => d.cod).join(', ')}). Revisalos en Ojo de Dios → Colmena.`,
+        );
+      } else {
+        toast.success(`Colmena descontada: ${retazos} retazo(s), ${usados} usado(s).`);
+      }
+    } catch (e) {
+      toast.error('Error al confirmar corte general: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setCorteGenLoading(false);
     }
   };
 
@@ -467,6 +551,22 @@ export function CotizadorFase4() {
                 <Scissors className="h-3.5 w-3.5" />
               )}
               Imprimir corte
+            </Button>
+            <Button
+              size="sm"
+              onClick={onConfirmarCorteGeneral}
+              disabled={
+                !pdfRows || pdfRows.length === 0 || corteGenLoading || !!corteGenConfirmado
+              }
+              className="gap-1.5 bg-warning text-warning-foreground hover:bg-warning/90 disabled:opacity-60"
+              title="Descuenta de la colmena los paños usados en este corte (retazo o usado). Hacerlo UNA vez, antes de pasar a dimensionado."
+            >
+              {corteGenLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {corteGenConfirmado ? 'Colmena descontada ✓' : 'Confirmar corte general'}
             </Button>
             <Button
               size="sm"
