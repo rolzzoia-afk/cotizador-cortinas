@@ -43,11 +43,11 @@ export default function ModuleHeader({
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-white text-base tracking-tight">{profile.razonSocial}</span>
-                <span className="text-[9px] font-mono font-bold bg-indigo-950/60 text-indigo-300 border border-indigo-900/40 px-1.5 py-0.5 rounded-sm">
+                <span className="text-[11px] font-mono font-bold bg-indigo-950/60 text-indigo-300 border border-indigo-900/40 px-1.5 py-0.5 rounded-sm">
                   Inventario de Rollos
                 </span>
               </div>
-              <p className="text-[10px] text-neutral-400 tracking-wide font-medium">
+              <p className="text-[12px] text-neutral-400 tracking-wide font-medium">
                 {profile.rut || 'RUT S/I'} · {email} ({rol})
               </p>
             </div>

@@ -603,16 +603,24 @@ function CardRollo({
                 </span>
                 <button
                   onClick={() => decidirRotacion(r.id, true)}
-                  className={`rounded border border-success/30 bg-success/15 px-2 py-0.5 text-[0.68rem] text-success ${
-                    decision === true ? '' : 'opacity-40'
+                  className={`rounded-md px-3 py-1 text-[0.72rem] font-bold transition-all ${
+                    decision === true
+                      ? 'bg-success text-success-foreground ring-2 ring-success/60 shadow'
+                      : decision === false
+                        ? 'border border-success/40 bg-success/10 text-success opacity-50 hover:opacity-100'
+                        : 'bg-success text-success-foreground shadow hover:brightness-110'
                   }`}
                 >
                   ✓ Autoriza
                 </button>
                 <button
                   onClick={() => decidirRotacion(r.id, false)}
-                  className={`rounded border border-destructive/30 bg-destructive/15 px-2 py-0.5 text-[0.68rem] text-destructive ${
-                    decision === false ? '' : 'opacity-40'
+                  className={`rounded-md px-3 py-1 text-[0.72rem] font-bold transition-all ${
+                    decision === false
+                      ? 'bg-destructive text-destructive-foreground ring-2 ring-destructive/60 shadow'
+                      : decision === true
+                        ? 'border border-destructive/40 bg-destructive/10 text-destructive opacity-50 hover:opacity-100'
+                        : 'bg-destructive text-destructive-foreground shadow hover:brightness-110'
                   }`}
                 >
                   ✗ Rechaza
@@ -854,9 +862,11 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
         })
         .filter((o): o is OT => o !== null && (o.storeVentanas || []).length > 0);
 
-      // Si la OT actual no está en producción (fallback), incluirla igual
+      // La OT desde la que se abrió el optimizador SIEMPRE entra al plan,
+      // aunque no esté en producción (antes se omitía y el usuario veía
+      // solo los paños de OTRAS OTs creyendo que eran de la suya).
       const yaIncluida = otsProd.some((o) => String(o.id) === String(ot.id));
-      const listaOTs = otsProd.length > 0 ? otsProd : yaIncluida ? otsProd : [ot];
+      const listaOTs = yaIncluida ? otsProd : [ot, ...otsProd];
       setOts(listaOTs);
       setGenerado(true);
     } catch (e) {

@@ -254,7 +254,7 @@ export default function ScannerView({
                 </div>
                 <div
                   className={cn(
-                    'text-[10px] uppercase',
+                    'text-[12px] uppercase',
                     activo ? 'text-accent' : 'text-muted-foreground',
                   )}
                 >
@@ -267,7 +267,7 @@ export default function ScannerView({
 
         {!showConfirm && (
           <div className="mb-3 rounded-xl border border-border bg-card p-3 text-sm">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+            <div className="text-[12px] uppercase tracking-wider text-muted-foreground">
               {item.categoria}
             </div>
             <div className="font-semibold">{item.descripcion}</div>

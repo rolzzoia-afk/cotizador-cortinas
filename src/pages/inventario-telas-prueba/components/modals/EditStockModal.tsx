@@ -79,7 +79,7 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
+              <label className="block text-[12px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
                 Rollos
               </label>
               <input
@@ -89,12 +89,12 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
                 onChange={(e) => setRollos(e.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60"
               />
-              <p className="text-[10px] text-neutral-500 mt-1">
+              <p className="text-[12px] text-neutral-500 mt-1">
                 Actual: {item.rollos}
               </p>
             </div>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
+              <label className="block text-[12px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
                 Metros por rollo
               </label>
               <input
@@ -105,7 +105,7 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
                 onChange={(e) => setMetrosPorRollo(e.target.value)}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60"
               />
-              <p className="text-[10px] text-neutral-500 mt-1">
+              <p className="text-[12px] text-neutral-500 mt-1">
                 Actual: {item.metros}
               </p>
             </div>
@@ -122,7 +122,7 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
               Calcular total automáticamente (rollos × metros por rollo)
             </label>
             <div>
-              <label className="block text-[10px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
+              <label className="block text-[12px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
                 Total metros
               </label>
               <input
@@ -134,14 +134,14 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
                 disabled={autoCalcular}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 disabled:opacity-60"
               />
-              <p className="text-[10px] text-neutral-500 mt-1">
+              <p className="text-[12px] text-neutral-500 mt-1">
                 Actual: {item.totalMetros}
               </p>
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
+            <label className="block text-[12px] uppercase tracking-wider text-neutral-400 font-semibold mb-1">
               Motivo de la edición *
             </label>
             <textarea
@@ -151,7 +151,7 @@ export default function EditStockModal({ item, onClose, onConfirm }: EditStockMo
               rows={2}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500/60 resize-none"
             />
-            <p className="text-[10px] text-neutral-500 mt-1">
+            <p className="text-[12px] text-neutral-500 mt-1">
               Queda registrado en el historial junto con tu email.
             </p>
           </div>

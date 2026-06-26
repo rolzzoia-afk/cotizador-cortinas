@@ -78,7 +78,7 @@ export default function KanbanVista({
               <div className="flex items-center justify-between border-b border-border px-3 py-2">
                 <span
                   className={cn(
-                    'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+                    'inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-semibold',
                     TONO_CLS[tono],
                   )}
                 >
@@ -88,7 +88,7 @@ export default function KanbanVista({
               </div>
               <div className="flex flex-col gap-2 p-2">
                 {items.length === 0 && (
-                  <div className="rounded border border-dashed border-border/50 p-3 text-center text-[10px] text-muted-foreground">
+                  <div className="rounded border border-dashed border-border/50 p-3 text-center text-[12px] text-muted-foreground">
                     Vacío
                   </div>
                 )}
@@ -116,7 +116,7 @@ export default function KanbanVista({
                       </span>
                       {l.scoring != null && (
                         <span
-                          className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-warning/15 px-1 text-[9px] font-bold text-warning"
+                          className="ml-auto inline-flex items-center gap-0.5 rounded-full bg-warning/15 px-1 text-[11px] font-bold text-warning"
                           title="Scoring del bot"
                         >
                           <Star className="h-2 w-2 fill-current" />
@@ -125,18 +125,18 @@ export default function KanbanVista({
                       )}
                     </div>
                     {l.whatsapp_phone && (
-                      <div className="mt-0.5 text-[10px] text-muted-foreground">{l.whatsapp_phone}</div>
+                      <div className="mt-0.5 text-[12px] text-muted-foreground">{l.whatsapp_phone}</div>
                     )}
                     <div className="mt-1.5 flex items-center justify-between">
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[12px] text-muted-foreground">
                         {l.fuente || '—'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-[12px] text-muted-foreground">
                         {fechaRelativa(l.ultima_actividad_at)}
                       </span>
                     </div>
                     {vendedoraNombre(l.asignado_a) && (
-                      <div className="mt-1 truncate text-[10px] text-accent">
+                      <div className="mt-1 truncate text-[12px] text-accent">
                         {vendedoraNombre(l.asignado_a)}
                       </div>
                     )}

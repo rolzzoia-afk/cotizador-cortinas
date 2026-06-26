@@ -180,7 +180,7 @@ export function Telas() {
               {t.i}
               {t.l}
               {t.k === 'fallas' && fallasPendientes > 0 && (
-                <span className="ml-1 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[10px] font-bold text-destructive">
+                <span className="ml-1 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[12px] font-bold text-destructive">
                   {fallasPendientes}
                 </span>
               )}

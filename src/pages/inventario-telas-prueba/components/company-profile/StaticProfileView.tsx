@@ -70,7 +70,7 @@ function DetailCard({
         {icon}
       </div>
       <div className="min-w-0">
-        <span className="block text-[10px] text-neutral-400 font-semibold uppercase tracking-wider">{label}</span>
+        <span className="block text-[12px] text-neutral-400 font-semibold uppercase tracking-wider">{label}</span>
         {children}
       </div>
     </div>

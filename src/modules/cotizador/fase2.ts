@@ -30,7 +30,11 @@ export const OPCIONES_CIERRE_VERT = ['Izquierda', 'Derecha', 'Vertical', 'Medio'
 export const OPCIONES_MANILLA_COLOR = ['NEG', 'BCO', 'CAFÉ'] as const;
 export const OPCIONES_ACCESORIO_COLOR = ['MET', 'NEG', 'BCO', 'GRS'] as const;
 export const OPCIONES_CENEFA = ['No', 'Ovalada', 'Cuadrada'] as const;
-export const OPCIONES_CENEFA_TAPA = ['SIN_TAPA', 'CON_1_TAPA', 'CON_2_TAPAS'] as const;
+export const OPCIONES_CENEFA_TIRA = ['CON TIRA', 'SIN TIRA'] as const;
+// El TIP. INST de la cenefa cuadrada sale de acá (alimenta el cuadro de la
+// hoja de órdenes): MURO_MURO −0,5 · CON_1_TAPA +1 · CON_2_TAPAS +2.
+// MURO_MURO es la opción base (reemplaza a "sin tapa": son lo mismo).
+export const OPCIONES_CENEFA_TAPA = ['MURO_MURO', 'CON_1_TAPA', 'CON_2_TAPAS'] as const;
 export const OPCIONES_COLOR_TAPA_OVALADA = ['NEG', 'BCO', 'GRS'] as const;
 export const OPCIONES_COLOR_TAPA_CUADRADA = ['NEG', 'BCO', 'GRS', 'CAFÉ'] as const;
 export const OPCIONES_SUPERFICIE = ['TECHO', 'PARED'] as const;
@@ -40,6 +44,15 @@ export const OPCIONES_ORDEN_DOBLE = [
   { value: 'SCR_VID_BK', label: 'SCR al vidrio · BK por delante' },
 ] as const;
 export const OPCIONES_MECANISMO = [
+  // Inventario bodega (default por color de accesorios — ver reglas-mecanismo.ts)
+  'KIT SIMPLE NEGRO 38MM [MEC 32]',
+  'KIT SIMPLE BLANCO 38MM [MEC 33]',
+  'KIT SIMPLE GRIS 38MM [MEC 34]',
+  // Legacy Excel / opciones manuales
+  'LZ 38 MERG BCO [MEC 05]',
+  'OVALADA NEG [MEC 09]',
+  'OVALADA BCO [MEC 10]',
+  'OVALADA BLANCO SOFT [MEC 39]',
   'LZ50 MERG BCO [MEC 06]',
   'LZ50 SFLX NGR [MEC 11]',
   'LZ50 SFLX GRIS [MEC 13]',
@@ -60,7 +73,9 @@ export const OPCIONES_SOFT_DARK = ['N/A', 'SOFT', 'DARK'] as const;
 export const OPCIONES_INSTALACION = ['INT', 'SEMI', 'EXT', 'M-M', 'T-M', 'P-T'] as const;
 export const OPCIONES_SEPARADOR = ['2.5cm', '3.0cm', '[U]'] as const;
 export const OPCIONES_TUBERIA = [
+  // Chips deben coincidir con REGLAS_TUBERIA (reglas-tuberia.ts)
   '0,38mm [E02] 1,2mm',
+  '0,38mm [E66] 2mm',
   '0,40mm - 2mm [E53]',
   '0,45mm [E05]',
   '0,63mm [E47]',
@@ -77,6 +92,8 @@ export function crearPanoVacio(): Pano {
     armado: 'Interno',
     tipoTela: 'SCR',
     largoCadena: '',
+    codCadena: '',
+    codPeso: '',
     cierreVert: 'Derecha',
     manillaCant: 0,
     manillaColor: '',
@@ -84,8 +101,9 @@ export function crearPanoVacio(): Pano {
     colorCadena: 'BCO',
     colorMecanismo: 'BCO',
     cenefa: 'No',
+    cenefaTira: 'SIN TIRA',
     colorTapa: '',
-    cenefaTapa: 'SIN_TAPA',
+    cenefaTapa: 'MURO_MURO',
     retiro: 0,
     superficie: '',
     materialTipo: '',
@@ -141,7 +159,10 @@ export function resumenPanos(panos: Pano[]): string {
 }
 
 // Valida que una ventana esté lista para guardar (ancho+alto > 0 en cada paño).
-export function validarVentana(ventana: Partial<Ventana>): string | null {
+export function validarVentana(
+  ventana: Partial<Ventana>,
+  opts?: { requiereMecanismo?: boolean },
+): string | null {
   if (!ventana.ubicacion || !ventana.ubicacion.trim()) return 'Ingresa una ubicación';
   if (!ventana.categoria) return 'Selecciona una categoría';
   const panos = ventana.panos || [];
@@ -152,6 +173,9 @@ export function validarVentana(ventana: Partial<Ventana>): string | null {
     const alto = parseFloat(String(p.alto));
     if (!ancho || ancho <= 0) return `Paño ${i + 1}: ingresa el ancho`;
     if (!alto || alto <= 0) return `Paño ${i + 1}: ingresa el alto`;
+    if (opts?.requiereMecanismo && !(p.mecanismo as string)?.trim()) {
+      return `Paño ${i + 1}: selecciona el mecanismo`;
+    }
   }
   return null;
 }

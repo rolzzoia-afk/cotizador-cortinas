@@ -17,6 +17,7 @@ const links: Array<{ to: string; label: string }> = [
   { to: '/telas', label: 'Telas' },
   { to: '/inventario', label: 'Inventario' },
   { to: '/optimizador', label: 'Optimizador' },
+  { to: '/optimizador-tela', label: 'Optim. Tela' },
   { to: '/bodeguero', label: 'Bodega' },
   { to: '/camionetas', label: 'Camionetas' },
   { to: '/historial-corte', label: 'Historial Corte' },

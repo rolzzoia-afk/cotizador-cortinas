@@ -197,7 +197,7 @@ export default function VistaHistorial({ empresaId }: VistaHistorialProps) {
                     {esLinaje && (
                       <>
                         <br />
-                        <span className="font-mono text-[10px]">
+                        <span className="font-mono text-[12px]">
                           ID:{raizId.slice(0, 8)}…
                         </span>
                       </>
@@ -238,7 +238,7 @@ export default function VistaHistorial({ empresaId }: VistaHistorialProps) {
                       <div key={i}>
                         <div
                           className={cn(
-                            'flex items-center justify-between border-y px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider',
+                            'flex items-center justify-between border-y px-4 py-1.5 text-[12px] font-bold uppercase tracking-wider',
                             headerTone,
                           )}
                         >

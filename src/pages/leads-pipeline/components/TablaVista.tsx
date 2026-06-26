@@ -73,7 +73,7 @@ export default function TablaVista({
                   </span>
                   {l.scoring != null && (
                     <span
-                      className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0 text-[10px] font-bold text-warning"
+                      className="ml-1 inline-flex items-center gap-0.5 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0 text-[12px] font-bold text-warning"
                       title="Scoring del bot (0-100)"
                     >
                       <Star className="h-2.5 w-2.5 fill-current" />
@@ -95,7 +95,7 @@ export default function TablaVista({
                   value={l.estado}
                   onChange={(e) => onCambioRapido(l, e.target.value as LeadEstado)}
                   className={cn(
-                    'rounded-full border px-2 py-0.5 text-[10px] font-semibold focus:outline-none',
+                    'rounded-full border px-2 py-0.5 text-[12px] font-semibold focus:outline-none',
                     TONO_CLS[ESTADOS_TONO[l.estado]],
                   )}
                 >

@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
+import { confirmar } from '@/components/ui/confirm';
 import SectionTitle from '../components/SectionTitle';
 import EmptyState from '../components/EmptyState';
 import type { Camioneta, StockItem, Vista } from '../Camionetas.types';
@@ -45,7 +46,7 @@ export default function VistaDetalle({
       toast.warning('La camioneta tiene stock. Devuelve todo a bodega antes de eliminarla.');
       return;
     }
-    const ok = window.confirm(
+    const ok = await confirmar(
       `¿Eliminar la camioneta "${camioneta.nombre}"?\n\nEsta acción no se puede deshacer.`,
     );
     if (!ok) return;

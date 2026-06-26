@@ -40,7 +40,7 @@ export default function DetalleSlotDialog({
             {entrada.tipo && (
               <span
                 className={cn(
-                  'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                  'rounded-full border px-2 py-0.5 text-[12px] font-bold',
                   tipoBadgeCls(entrada.tipo),
                 )}
               >

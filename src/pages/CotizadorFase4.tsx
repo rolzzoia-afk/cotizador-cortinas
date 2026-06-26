@@ -7,24 +7,18 @@ import {
   Factory,
   FileDown,
   Loader2,
-  Package,
-  Plus,
   Printer,
-  RefreshCw,
-  Save,
   Scissors,
-  X,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
-import { SUB_ETAPA_META, colorCategoria } from '@/modules/cotizador/fase4';
+import { SUB_ETAPA_META } from '@/modules/cotizador/fase4';
 import { formatCLP } from '@/modules/cotizador/calculos';
 import {
   asignarJuntoEnOrden,
@@ -32,14 +26,20 @@ import {
   restorePlanGuardado,
 } from '@/modules/cotizador/tela';
 import { bomToOrdenMaterialesRows, calcularBOM } from '@/modules/cotizador/bom';
+import { INVENTARIO_VACIO, type InventarioEstado } from '@/modules/cotizador/inventario';
+import { InventarioSheet } from '@/components/cotizador/InventarioSheet';
 import {
   generarEtiquetasPDF,
-  generarPDFProduccion,
   validarDatosParaEtiquetas,
 } from '@/modules/cotizador/pdfProduccion';
-import type { BomItem, SubEtapaProd } from '@/modules/ots/types';
-
-type BomEstado = 'guardado' | 'pendiente' | 'guardando';
+import { generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
+import { generarPdfCalculoGeneral } from '@/modules/cotizador/pdfCalculoGeneral';
+import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
+import { rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
+import type { SubEtapaProd } from '@/modules/ots/types';
+import type { Ventana as VentanaCotizador } from '@/modules/cotizador/types';
+import { descargarExcelOrdenes } from '@/modules/descuentos/excel-ordenes';
+import { confirmar } from '@/components/ui/confirm';
 
 export function CotizadorFase4() {
   const { id: otId } = useParams();
@@ -49,9 +49,9 @@ export function CotizadorFase4() {
   const { empresaId, empresaNombre } = useAuth();
   const [avanzando, setAvanzando] = useState(false);
   const [cambiandoSub, setCambiandoSub] = useState(false);
-  const [bomItems, setBomItems] = useState<BomItem[] | null>(null);
-  const [bomEstado, setBomEstado] = useState<BomEstado>('guardado');
-  const [bomSaving, setBomSaving] = useState(false);
+  const [inventario, setInventario] = useState<InventarioEstado | null>(null);
+  const [invDirty, setInvDirty] = useState(false);
+  const [invSaving, setInvSaving] = useState(false);
 
   const pdfRows = useMemo(() => {
     if (!ot || loadingCat) return null;
@@ -63,18 +63,18 @@ export function CotizadorFase4() {
     return tieneJunto ? restored : asignarJuntoEnOrden(restored);
   }, [ot, loadingCat, catalogo]);
 
-  // Inicializar BOM: usa lo guardado en la OT si existe, si no calcula desde pdfRows
+  // Componentes consolidados (siempre frescos desde el optimizador).
+  // El ajuste manual se hace con la columna "Adicional" de la hoja.
+  const invItems = useMemo(
+    () => (pdfRows ? calcularBOM(pdfRows, ot.storeVentanas) : []),
+    [pdfRows, ot?.storeVentanas],
+  );
+
+  // Inicializar estado de entrega del inventario desde lo guardado en la OT.
   useEffect(() => {
-    if (!ot || bomItems !== null) return;
-    const saved = ot.datosGenerales?.bom;
-    if (saved && saved.length > 0) {
-      setBomItems(saved);
-      setBomEstado('guardado');
-    } else if (pdfRows && pdfRows.length > 0) {
-      setBomItems(calcularBOM(pdfRows));
-      setBomEstado('pendiente');
-    }
-  }, [ot, pdfRows, bomItems]);
+    if (!ot || inventario !== null) return;
+    setInventario(ot.datosGenerales?.inventario || INVENTARIO_VACIO);
+  }, [ot, inventario]);
 
   const cambiarSubEtapa = async (sub: SubEtapaProd) => {
     if (!ot || cambiandoSub) return;
@@ -93,7 +93,7 @@ export function CotizadorFase4() {
 
   const marcarComoLista = async () => {
     if (!ot) return;
-    if (!confirm('¿Marcar esta OT como lista para entrega?')) return;
+    if (!(await confirmar({ titulo: 'Marcar como lista', mensaje: '¿Marcar esta OT como lista para entrega?', confirmLabel: 'Marcar lista' }))) return;
     setAvanzando(true);
     try {
       const dg = {
@@ -131,27 +131,69 @@ export function CotizadorFase4() {
   });
 
   const onGenerarPDF = () => {
-    if (!pdfRows || pdfRows.length === 0) {
-      toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
+    if (!ot || (ot.storeVentanas || []).length === 0) {
+      toast.error('No hay ventanas en la OT.');
       return;
     }
     try {
-      generarPDFProduccion(pdfRows, metaPDF(), catalogo);
-      toast.success('PDF de Producción generado');
+      const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      generarPdfInventario(ventanas, catalogo, {
+        ot: ot.datosGenerales.ot || String(ot.id),
+        cliente: ot.datosGenerales.cliente || undefined,
+        empresa: empresaNombre ?? undefined,
+      });
+      toast.success('Hoja de inventario generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error('Error generando PDF: ' + msg);
+      toast.error('Error generando inventario: ' + msg);
     }
   };
 
-  const onImprimirEtiquetas = () => {
+  const onExcelOrdenes = () => {
+    if (!ot) return;
+    try {
+      const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      const res = descargarExcelOrdenes(ot.datosGenerales.ot || '—', ventanas, {
+        adicionalesFase0: ot.datosGenerales.adicionalesFase0,
+      });
+      if (res.advertencias.length > 0) {
+        toast.warning(
+          `Excel generado (${res.filas} cortes) con ${res.advertencias.length} advertencia(s): ` +
+            res.advertencias[0],
+        );
+      } else {
+        toast.success(`Excel de órdenes generado: ${res.filas} cortes con despiece calculado.`);
+      }
+    } catch (e) {
+      toast.error('Error generando Excel: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const onCalculoGeneral = () => {
+    if (!ot || (ot.storeVentanas || []).length === 0) {
+      toast.error('No hay ventanas en la OT.');
+      return;
+    }
+    try {
+      const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      generarPdfCalculoGeneral(ventanas, catalogo, {
+        ot: ot.datosGenerales.ot || String(ot.id),
+        cliente: ot.datosGenerales.cliente || undefined,
+      });
+      toast.success('Cálculo general generado');
+    } catch (e) {
+      toast.error('Error generando cálculo general: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const onImprimirEtiquetas = async () => {
     if (!pdfRows || pdfRows.length === 0) {
       toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
       return;
     }
     const faltantes = validarDatosParaEtiquetas(pdfRows);
     if (faltantes.length > 0) {
-      const continuar = confirm(
+      const continuar = await confirmar(
         'Faltan campos importantes para etiquetas detalladas:\n\n' +
           faltantes.join('\n') +
           '\n\n¿Deseas imprimir de todos modos con los datos disponibles?',
@@ -167,86 +209,80 @@ export function CotizadorFase4() {
     }
   };
 
-  // ── BOM: handlers ──────────────────────────────────────────
-  const setBomField = (idx: number, field: keyof BomItem, value: string | number) => {
-    setBomItems((prev) => {
-      if (!prev) return prev;
-      const next = [...prev];
-      next[idx] = { ...next[idx], [field]: value };
-      return next;
-    });
-    setBomEstado('pendiente');
-  };
-
-  const addBomRow = () => {
-    setBomItems((prev) => [
-      ...(prev || []),
-      {
-        categoria: 'OTRO',
-        descripcion: 'Nuevo ítem',
-        especificacion: '',
-        color: '',
-        cantidad: 1,
-        unidad: 'unid.',
-      },
-    ]);
-    setBomEstado('pendiente');
-  };
-
-  const removeBomRow = (idx: number) => {
-    setBomItems((prev) => (prev ? prev.filter((_, i) => i !== idx) : prev));
-    setBomEstado('pendiente');
-  };
-
-  const recomputarBom = () => {
+  const [corteLoading, setCorteLoading] = useState(false);
+  const onImprimirCorte = async () => {
     if (!pdfRows || pdfRows.length === 0) {
-      toast.error('No hay paños en el optimizador para recalcular.');
+      toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
       return;
     }
-    if (bomItems && bomItems.length > 0) {
-      if (!confirm('Esto sobrescribe el BOM actual con uno fresco desde el optimizador. ¿Continuar?'))
-        return;
+    if (!ot || !empresaId) return;
+    setCorteLoading(true);
+    try {
+      // Sobrantes de colmena disponibles (igual que el Plan de Corte) para
+      // saber qué pieza sale de qué sobrante.
+      const { data: panosData } = await supabase
+        .from('colmena_panos')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('disponible', true);
+      const colmenaPanos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
+      generarPdfHojaCorte(pdfRows, colmenaPanos, ot, {
+        ot: ot.datosGenerales.ot || String(ot.id),
+        cliente: ot.datosGenerales.cliente || '',
+        empresa: empresaNombre ?? undefined,
+      });
+      toast.success('Hoja de corte generada');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error generando hoja de corte: ' + msg);
+    } finally {
+      setCorteLoading(false);
     }
-    setBomItems(calcularBOM(pdfRows));
-    setBomEstado('pendiente');
-    toast.success('BOM recalculado desde el optimizador');
   };
 
-  const guardarBom = async () => {
-    if (!ot || !bomItems || !empresaId) return;
-    setBomSaving(true);
-    setBomEstado('guardando');
+  // ── Inventario: handlers ──────────────────────────────────────────
+  const onInventarioChange = (estado: InventarioEstado) => {
+    setInventario(estado);
+    setInvDirty(true);
+  };
+
+  const guardarInventario = async () => {
+    if (!ot || !inventario || !empresaId) return;
+    setInvSaving(true);
     try {
+      const ahora = new Date().toISOString();
       const dg = {
         ...(ot.datosGenerales || {}),
-        bom: bomItems,
-        bomFecha: new Date().toISOString(),
+        inventario,
+        inventarioFecha: ahora,
+        // El BOM guardado sigue alimentando Bodeguero
+        bom: invItems,
+        bomFecha: ahora,
       };
       await guardar({ datosGenerales: dg });
 
       // Sincronizar orden_materiales (lo consume Bodeguero)
-      const rows = bomToOrdenMaterialesRows(bomItems, empresaId, ot.id);
+      const rows = bomToOrdenMaterialesRows(invItems, empresaId, ot.id);
       const { error: delErr } = await supabase
         .from('orden_materiales')
         .delete()
         .eq('empresa_id', empresaId)
         .eq('ot_id', ot.id);
       if (delErr && delErr.code !== '42P01') {
-        console.warn('[BOM] Error borrando orden_materiales:', delErr.message);
+        console.warn('[Inventario] Error borrando orden_materiales:', delErr.message);
       }
       if (!delErr || delErr.code !== '42P01') {
         const { error: insErr } = await supabase.from('orden_materiales').insert(rows);
-        if (insErr) console.warn('[BOM] Error insertando orden_materiales:', insErr.message);
+        if (insErr) console.warn('[Inventario] Error insertando orden_materiales:', insErr.message);
       }
 
-      setBomEstado('guardado');
-      toast.success('BOM guardado');
+      setInvDirty(false);
+      toast.success('Hoja de inventario guardada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error('Error guardando BOM: ' + msg);
-      setBomEstado('pendiente');
+      toast.error('Error guardando inventario: ' + msg);
     } finally {
-      setBomSaving(false);
+      setInvSaving(false);
     }
   };
 
@@ -364,149 +400,20 @@ export function CotizadorFase4() {
           />
         </div>
 
-        {/* BOM editable */}
-        <div className="mb-4 rounded-lg border border-border bg-card/40">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <Package className="h-4 w-4 text-warning" />
-              <span className="text-sm font-medium text-foreground">Lista de materiales (BOM)</span>
-              {ot.datosGenerales.bomFecha && (
-                <span className="text-[0.68rem] text-muted-foreground">
-                  · Guardado {new Date(ot.datosGenerales.bomFecha).toLocaleString('es-CL')}
-                </span>
-              )}
-              <BomEstadoBadge estado={bomEstado} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={recomputarBom}
-                disabled={!pdfRows || pdfRows.length === 0 || readOnly}
-                className="h-7 gap-1 text-[0.7rem]"
-                title="Recalcula desde optimizador (sobrescribe)"
-              >
-                <RefreshCw className="h-3 w-3" />
-                Recalcular
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={addBomRow}
-                disabled={readOnly}
-                className="h-7 gap-1 text-[0.7rem]"
-              >
-                <Plus className="h-3 w-3" />
-                Agregar fila
-              </Button>
-              <Button
-                size="sm"
-                onClick={guardarBom}
-                disabled={!bomItems || bomSaving || bomEstado === 'guardado' || readOnly}
-                className="h-7 gap-1 bg-success text-[0.7rem] hover:bg-success/90"
-              >
-                {bomSaving ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Save className="h-3 w-3" />
-                )}
-                Guardar BOM
-              </Button>
-            </div>
-          </div>
-          {!bomItems ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              Cargando BOM…
-            </div>
-          ) : bomItems.length === 0 ? (
-            <div className="px-4 py-8 text-center text-sm text-muted-foreground">
-              No hay materiales. Completá los paños en Fase 2 o presioná <em>Recalcular</em>.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead className="bg-card text-[0.68rem] uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="w-8 p-2 text-left">#</th>
-                    <th className="p-2 text-left">Categoría</th>
-                    <th className="p-2 text-left">Descripción</th>
-                    <th className="p-2 text-left">Especificación</th>
-                    <th className="p-2 text-left">Color</th>
-                    <th className="p-2 text-right">Cantidad</th>
-                    <th className="p-2 text-left">Unidad</th>
-                    <th className="w-8" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {bomItems.map((it, idx) => (
-                    <tr key={idx} className="border-t border-border hover:bg-card">
-                      <td className="p-2 text-muted-foreground">{idx + 1}</td>
-                      <td className="p-2">
-                        <span
-                          className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
-                          style={{
-                            backgroundColor: colorCategoria(it.categoria) + '22',
-                            color: colorCategoria(it.categoria),
-                          }}
-                        >
-                          {it.categoria}
-                        </span>
-                      </td>
-                      <td className="p-2">
-                        <Input
-                          value={it.descripcion}
-                          onChange={(e) => setBomField(idx, 'descripcion', e.target.value)}
-                          disabled={readOnly}
-                          className="h-6 text-xs"
-                        />
-                      </td>
-                      <td className="p-2">
-                        <Input
-                          value={it.especificacion || ''}
-                          onChange={(e) => setBomField(idx, 'especificacion', e.target.value)}
-                          disabled={readOnly}
-                          className="h-6 text-xs"
-                        />
-                      </td>
-                      <td className="p-2">
-                        <Input
-                          value={it.color || ''}
-                          onChange={(e) => setBomField(idx, 'color', e.target.value)}
-                          disabled={readOnly}
-                          className="h-6 text-xs"
-                        />
-                      </td>
-                      <td className="p-2">
-                        <Input
-                          type="number"
-                          value={it.cantidad}
-                          onChange={(e) =>
-                            setBomField(idx, 'cantidad', parseFloat(e.target.value) || 0)
-                          }
-                          disabled={readOnly}
-                          min={0}
-                          step={1}
-                          className="h-6 w-16 text-right text-xs"
-                        />
-                      </td>
-                      <td className="p-2 text-muted-foreground">{it.unidad}</td>
-                      <td className="p-2">
-                        <button
-                          onClick={() => removeBomRow(idx)}
-                          disabled={readOnly}
-                          className="text-destructive opacity-50 hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-20"
-                          title="Eliminar fila"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        {/* Hoja de inventario (entrega y recepción de material) */}
+        {inventario && (
+          <InventarioSheet
+            ot={ot}
+            items={invItems}
+            estado={inventario}
+            onChange={onInventarioChange}
+            readOnly={readOnly}
+            empresaNombre={empresaNombre}
+            dirty={invDirty}
+            guardando={invSaving}
+            onGuardar={guardarInventario}
+          />
+        )}
 
         {/* Integraciones */}
         <div className="mb-4 rounded-lg border border-blue-500/20 bg-accent/5 p-4">
@@ -545,6 +452,43 @@ export function CotizadorFase4() {
             >
               <Printer className="h-3.5 w-3.5" />
               Imprimir etiquetas
+            </Button>
+            <Button
+              size="sm"
+              onClick={onImprimirCorte}
+              disabled={!pdfRows || pdfRows.length === 0 || corteLoading}
+              variant="outline"
+              className="gap-1.5"
+              title="Hoja de corte / optimización de telas (PDF para imprimir)"
+            >
+              {corteLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Scissors className="h-3.5 w-3.5" />
+              )}
+              Imprimir corte
+            </Button>
+            <Button
+              size="sm"
+              onClick={onExcelOrdenes}
+              disabled={!ot || (ot.storeVentanas || []).length === 0}
+              variant="outline"
+              className="gap-1.5"
+              title="Excel con medidas de corte calculadas (tubo/peso/cenefas) para cargar en el Optimizador"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              Excel órdenes (optimizador)
+            </Button>
+            <Button
+              size="sm"
+              onClick={onCalculoGeneral}
+              disabled={!ot || (ot.storeVentanas || []).length === 0}
+              variant="outline"
+              className="gap-1.5"
+              title="Hoja maestra con todo el despiece por cortina, agrupado por sistema (PDF)"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              Cálculo general
             </Button>
           </div>
         </div>
@@ -590,18 +534,3 @@ function Card({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
-function BomEstadoBadge({ estado }: { estado: BomEstado }) {
-  const cfg = {
-    guardado: { label: '✓ Guardado', bg: 'rgba(34,197,94,0.15)', color: '#22c55e' },
-    pendiente: { label: 'Sin guardar', bg: 'rgba(245,158,11,0.2)', color: '#f59e0b' },
-    guardando: { label: 'Guardando…', bg: 'rgba(124,117,240,0.15)', color: '#a78bfa' },
-  }[estado];
-  return (
-    <span
-      className="rounded-full px-2 py-0.5 text-[0.65rem] font-semibold"
-      style={{ backgroundColor: cfg.bg, color: cfg.color }}
-    >
-      {cfg.label}
-    </span>
-  );
-}

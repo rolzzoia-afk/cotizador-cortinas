@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowDownCircle,
+  Download,
   Factory,
   Loader2,
   Save,
@@ -13,6 +14,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PlanCorteSection } from '@/components/cotizador/PlanCorteSection';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import {
@@ -23,6 +26,14 @@ import {
   restorePlanGuardado,
   type OptimizerRow,
 } from '@/modules/cotizador/tela';
+import { rowToPano, type PanoColmena } from '@/modules/cotizador/planCorte';
+import {
+  construirFilasCorte,
+  descargarCorteXlsx,
+  type OTParaCorte,
+} from '@/modules/cotizador/exportCorteExcel';
+import type { ColmenaPano } from '@/modules/admin/colmena';
+import type { OT } from '@/modules/ots/types';
 import type { Ventana } from '@/modules/cotizador/types';
 
 export function CotizadorTela() {
@@ -30,8 +41,16 @@ export function CotizadorTela() {
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
+  const { empresaId } = useAuth();
   const [rows, setRows] = useState<OptimizerRow[] | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ── Exportar hoja del cortador (.xlsx) ──────────────────────────────
+  const [exportOpen, setExportOpen] = useState(false);
+  const [loadingExport, setLoadingExport] = useState(false);
+  const [otsProd, setOtsProd] = useState<OT[] | null>(null);
+  const [colmenaPanos, setColmenaPanos] = useState<PanoColmena[]>([]);
+  const [selOts, setSelOts] = useState<Set<string>>(new Set());
 
   const ventanas: Ventana[] = useMemo(
     () => ((ot?.storeVentanas || []) as unknown as Ventana[]),
@@ -79,6 +98,95 @@ export function CotizadorTela() {
     } finally {
       setSaving(false);
     }
+  };
+
+  // Abre el panel de exportación: carga las OTs en producción y los
+  // sobrantes de colmena (igual que el Plan de Corte) para poder elegir
+  // qué OTs incluir y calcular el origen (rollo vs. sobrante) de cada pieza.
+  const abrirExport = async () => {
+    setExportOpen((v) => !v);
+    if (otsProd !== null || !ot || !empresaId) return; // ya cargado / sin sesión
+    setLoadingExport(true);
+    try {
+      const { data: panosData } = await supabase
+        .from('colmena_panos')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('disponible', true);
+      setColmenaPanos(((panosData || []) as ColmenaPano[]).map(rowToPano));
+
+      const { data: otsData } = await supabase
+        .from('ots')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('estado', 'produccion');
+      const prod = ((otsData as Array<Record<string, unknown>>) || [])
+        .map((row) => {
+          const dg = (row.datos_generales || {}) as OT['datosGenerales'];
+          const tieneDatos =
+            (dg.cliente || '').trim() !== '' || (dg.ot || '').trim() !== '';
+          if (!tieneDatos) return null;
+          if (!dg.ot && row.numero_ot) dg.ot = String(row.numero_ot);
+          return {
+            id: String(row.id),
+            datosGenerales: dg,
+            storeVentanas: (row.items || []) as OT['storeVentanas'],
+          } as OT;
+        })
+        .filter((o): o is OT => o !== null && (o.storeVentanas || []).length > 0);
+      // La OT actual siempre disponible para exportar, aunque no esté en producción.
+      const yaEsta = prod.some((o) => String(o.id) === String(ot.id));
+      const lista = yaEsta ? prod : [ot, ...prod];
+      setOtsProd(lista);
+      setSelOts(new Set([String(ot.id)])); // por defecto: solo la OT actual
+    } catch (e) {
+      toast.error('Error cargando OTs: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setLoadingExport(false);
+    }
+  };
+
+  const toggleOt = (id: string) =>
+    setSelOts((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // Optimiza las filas de una OT: usa el plan en vivo para la OT actual, y
+  // el guardado (o auto) para las demás.
+  const filasOptimizadasDe = (o: OT): OptimizerRow[] => {
+    if (String(o.id) === String(ot?.id) && rows) return rows;
+    const fresh = buildOptimizerRows(o.storeVentanas, catalogo);
+    const guardado = o.datosGenerales?.optimizerRows as unknown[] | undefined;
+    const restored = restorePlanGuardado(fresh, guardado);
+    const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
+    return tieneJunto ? restored : autoOptimizar(restored);
+  };
+
+  const onDescargar = () => {
+    if (!otsProd) return;
+    const elegidas = otsProd.filter((o) => selOts.has(String(o.id)));
+    if (elegidas.length === 0) {
+      toast.error('Elige al menos una OT.');
+      return;
+    }
+    const otsParaCorte: OTParaCorte[] = elegidas.map((o) => ({
+      ot: o,
+      rows: filasOptimizadasDe(o),
+    }));
+    const filas = construirFilasCorte(otsParaCorte, colmenaPanos);
+    if (filas.length === 0) {
+      toast.error('No hay paños para exportar en las OTs elegidas.');
+      return;
+    }
+    const nombre =
+      elegidas.length === 1
+        ? `Corte_OT${elegidas[0].datosGenerales?.ot || elegidas[0].id}.xlsx`
+        : `Corte_${elegidas.length}_OTs.xlsx`;
+    descargarCorteXlsx(filas, nombre);
+    toast.success(`Hoja de corte descargada (${filas.length} filas).`);
   };
 
   const setRowField = (
@@ -188,8 +296,71 @@ export function CotizadorTela() {
                     )}
                     Guardar plan
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={abrirExport}
+                    className="h-8 gap-1"
+                    title="Descargar la hoja de corte (.xlsx) para los cortadores"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Descargar Excel
+                  </Button>
                 </div>
               </div>
+
+              {/* Panel de exportación: elegir qué OTs incluir */}
+              {exportOpen && (
+                <div className="border-b border-border bg-card/60 px-3 py-2.5 text-[0.72rem]">
+                  {loadingExport ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Cargando OTs en producción…
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          Incluir OTs en la hoja de corte
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            (se separan por OT/cliente)
+                          </span>
+                        </span>
+                        <Button size="sm" onClick={onDescargar} className="h-7 gap-1 bg-accent hover:bg-accent">
+                          <Download className="h-3 w-3" />
+                          Descargar {selOts.size > 0 ? `(${selOts.size})` : ''}
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {(otsProd || []).map((o) => {
+                          const id = String(o.id);
+                          const sel = selOts.has(id);
+                          return (
+                            <button
+                              key={id}
+                              onClick={() => toggleOt(id)}
+                              className={
+                                'rounded-md border px-2 py-1 font-mono text-[0.7rem] transition-colors ' +
+                                (sel
+                                  ? 'border-accent bg-accent/15 text-foreground'
+                                  : 'border-border bg-card text-muted-foreground hover:bg-secondary')
+                              }
+                            >
+                              {sel ? '✓ ' : ''}OT{o.datosGenerales?.ot || id}
+                              <span className="ml-1 font-sans text-muted-foreground">
+                                {o.datosGenerales?.cliente || '(sin cliente)'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        {(otsProd || []).length === 0 && (
+                          <span className="text-muted-foreground">No hay OTs disponibles.</span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <div className="max-h-[460px] overflow-auto">
                 <table className="w-full text-[0.7rem]">
                   <thead className="sticky top-0 bg-card text-[0.62rem] uppercase tracking-wide text-muted-foreground">

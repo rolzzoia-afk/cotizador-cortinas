@@ -67,7 +67,7 @@ export default function PlanTabla({
         <td className="whitespace-nowrap px-2.5 py-1.5">{ot}</td>
         <td className="whitespace-nowrap px-2.5 py-1.5">{ubicacion}</td>
         <td className="whitespace-nowrap px-2.5 py-1.5">
-          <span className="rounded bg-accent/15 px-2 py-0.5 text-[10px] font-bold uppercase text-accent">
+          <span className="rounded bg-accent/15 px-2 py-0.5 text-[12px] font-bold uppercase text-accent">
             {accion}
           </span>
         </td>
@@ -87,7 +87,7 @@ export default function PlanTabla({
             onClick={() => onRegistrarError(idx)}
             disabled={readonly && !errorExistente}
             className={cn(
-              'rounded-md border px-2 py-1 text-[10px] font-bold uppercase transition',
+              'rounded-md border px-2 py-1 text-[12px] font-bold uppercase transition',
               errorExistente
                 ? 'cursor-default border-destructive/30 bg-destructive/15 text-destructive'
                 : readonly
@@ -116,17 +116,17 @@ export default function PlanTabla({
       // Destino del sobrante: posición física (no la etiqueta 'TUBO NUEVO').
       const colSob = r.colmena_sobrante || r.colmena || colmena;
       let rowCls = 'border-b border-border bg-accent/[0.08] text-accent';
-      let badgeCls = 'rounded bg-accent/20 px-2 py-0.5 text-[10px] font-bold uppercase text-accent';
+      let badgeCls = 'rounded bg-accent/20 px-2 py-0.5 text-[12px] font-bold uppercase text-accent';
       let accion2 = 'GUARDAR SOBRANTE';
       let colDisp: string | number = colSob;
       if (r.es_intermedio) {
         rowCls = 'border-b border-border bg-warning/10 text-warning';
-        badgeCls = 'rounded bg-warning/20 px-2 py-0.5 text-[10px] font-bold uppercase text-warning';
+        badgeCls = 'rounded bg-warning/20 px-2 py-0.5 text-[12px] font-bold uppercase text-warning';
         accion2 = 'RESERVAR EN MESA';
         colDisp = '—';
       } else if (esDesecho) {
         rowCls = 'border-b border-border bg-destructive/[0.08] text-destructive';
-        badgeCls = 'rounded bg-destructive/20 px-2 py-0.5 text-[10px] font-bold uppercase text-destructive';
+        badgeCls = 'rounded bg-destructive/20 px-2 py-0.5 text-[12px] font-bold uppercase text-destructive';
         accion2 = 'DESECHAR MERMA';
         colDisp = 'BASURERO';
       }
@@ -150,7 +150,7 @@ export default function PlanTabla({
                 onClick={() => onMarcarSobranteInexistente(idx, descripcionSobrante)}
                 disabled={readonly}
                 className={cn(
-                  'rounded-md border px-2 py-1 text-[10px] font-bold uppercase transition',
+                  'rounded-md border px-2 py-1 text-[12px] font-bold uppercase transition',
                   readonly
                     ? 'cursor-not-allowed border-border text-muted-foreground opacity-50'
                     : 'border-muted-foreground/30 text-muted-foreground hover:border-warning/50 hover:bg-warning/10 hover:text-warning',
@@ -193,7 +193,7 @@ export default function PlanTabla({
             ].map((h) => (
               <th
                 key={h}
-                className="whitespace-nowrap px-2.5 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                className="whitespace-nowrap px-2.5 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-muted-foreground"
               >
                 {h}
               </th>

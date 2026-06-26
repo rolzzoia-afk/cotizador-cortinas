@@ -32,7 +32,7 @@ export default function RackSection({
       <div className="mb-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
         {nombre}
       </div>
-      <table className="w-full border-separate border-spacing-[3px] text-[10px]">
+      <table className="w-full border-separate border-spacing-[3px] text-[12px]">
         <thead>
           <tr>
             <th className="w-6 text-center text-muted-foreground">#</th>
@@ -46,7 +46,7 @@ export default function RackSection({
         <tbody>
           {config.rows.map((row) => (
             <tr key={row.num}>
-              <td className="text-center text-[10px] text-muted-foreground">{row.num}</td>
+              <td className="text-center text-[12px] text-muted-foreground">{row.num}</td>
               {row.slots.map((slot, i) => {
                 if (!slot) {
                   return (
@@ -101,7 +101,7 @@ export default function RackSection({
                       disabled={!info && !(filtroAlm || filtroTipo)}
                       onClick={() => onClickSlot(slot, info || null)}
                       className={cn(
-                        'flex h-10 w-full flex-col items-center justify-center overflow-hidden rounded-sm border px-0.5 text-[9px] leading-tight transition',
+                        'flex h-10 w-full flex-col items-center justify-center overflow-hidden rounded-sm border px-0.5 text-[11px] leading-tight transition',
                         info && 'cursor-pointer hover:scale-105',
                       )}
                       style={{ background: bg, color, borderColor }}
@@ -110,10 +110,10 @@ export default function RackSection({
                       {info ? (
                         <>
                           <span className="truncate font-bold">{info.codigo}</span>
-                          <span className="truncate text-[8px] opacity-60">{slot}</span>
+                          <span className="truncate text-[11px] opacity-60">{slot}</span>
                         </>
                       ) : (
-                        <span className="text-[9px] opacity-50">{slot}</span>
+                        <span className="text-[11px] opacity-50">{slot}</span>
                       )}
                     </button>
                   </td>

@@ -287,7 +287,7 @@ export function Landing() {
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-success" aria-hidden />
                 <div className="text-right">
                   <div className="text-[12.5px] font-medium text-foreground">{perfil.nombre}</div>
-                  {perfil?.rol && <div className="text-[10.5px] text-muted-foreground">{perfil.rol}</div>}
+                  {perfil?.rol && <div className="text-[12px] text-muted-foreground">{perfil.rol}</div>}
                 </div>
               </div>
             )}
@@ -296,7 +296,7 @@ export function Landing() {
                 {time}
                 <span className="dp-tick text-accent" aria-hidden>·</span>
               </div>
-              <div className="text-[10.5px] text-muted-foreground first-letter:capitalize">{fecha}</div>
+              <div className="text-[12px] text-muted-foreground first-letter:capitalize">{fecha}</div>
             </div>
             <button
               onClick={handleLogout}

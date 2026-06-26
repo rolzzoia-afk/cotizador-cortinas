@@ -146,7 +146,7 @@ export default function CatalogoTab({
       <div className="overflow-auto rounded-2xl border border-border bg-card">
         <table className="w-full border-collapse text-[12px]" style={{ minWidth: 1400 }}>
           <thead>
-            <tr className="border-b border-border bg-white/[0.03] text-[10px] uppercase tracking-wider text-muted-foreground">
+            <tr className="border-b border-border bg-white/[0.03] text-[12px] uppercase tracking-wider text-muted-foreground">
               {[
                 ['codigo', 'Código'],
                 ['tipo', 'Tipo'],
@@ -189,7 +189,7 @@ export default function CatalogoTab({
                     {t.tipo ? (
                       <span
                         className={cn(
-                          'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                          'rounded-full border px-2 py-0.5 text-[12px] font-bold',
                           tipoBadgeCls(t.tipo),
                         )}
                       >
@@ -223,7 +223,7 @@ export default function CatalogoTab({
                     </code>
                   </td>
                   <td className="px-2.5 py-2">
-                    <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] text-foreground">
+                    <span className="rounded-full border border-border bg-secondary px-2 py-0.5 text-[12px] text-foreground">
                       {t.almacen === 'LIBERADO'
                         ? 'Liberado'
                         : t.almacen === 'MATERIAS PRIMAS'

@@ -10,3 +10,16 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env
 supabase/.env.local
+
+# Basura de filesystem / temporales de herramientas
+.fuse_hidden*
+vite.config.ts.timestamp-*
+.openspec-test-*
+*.bak
+
+# Tooling local del agente / openspec (no es código de la app)
+.claude/
+.design-sync/
+
+# Archivos de referencia muy pesados (no versionar binarios grandes)
+docs/referencias/*.xlsm

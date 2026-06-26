@@ -36,7 +36,7 @@ export default function FichaCard({ ficha, onVerTubo }: FichaCardProps) {
               {tubo.n_colmena ?? '—'} · {tubo.cod ?? '—'} ·{' '}
               {tubo.medida_cm != null ? `${Number(tubo.medida_cm).toFixed(1)} cm` : '—'}
             </div>
-            <div className="font-mono text-[10px] text-muted-foreground">
+            <div className="font-mono text-[12px] text-muted-foreground">
               ID: {tubo.tubo_raiz_id.slice(0, 8)}…
             </div>
           </div>
@@ -155,7 +155,7 @@ export default function FichaCard({ ficha, onVerTubo }: FichaCardProps) {
                       </span>
                     </Button>
                     {h.en_inventario && (
-                      <Badge className="bg-success/20 text-[10px] text-success">
+                      <Badge className="bg-success/20 text-[12px] text-success">
                         En stock
                       </Badge>
                     )}

@@ -40,6 +40,19 @@ export type BomItem = {
   unidad: string;
 };
 
+/** Línea adicional de Fase 0 (motores, cenefas, instalaciones, etc.). */
+export type AdicionalFase0Persistido = {
+  id?: string;
+  codInt: string;
+  cantidad: number;
+  /** Descuento en porcentaje (0–100), igual que la grilla de Fase 0. */
+  descuento: number;
+  ubicacion?: string;
+  colorAcc?: string;
+  /** Cenefa ovalada con tira de aluminio (true → CON TIRA en Excel). */
+  conTira?: boolean;
+};
+
 export type DatosGenerales = {
   cliente?: string;
   rut?: string;
@@ -59,6 +72,11 @@ export type DatosGenerales = {
   bom?: BomItem[];
   bomFecha?: string | null;
   optimizerRows?: unknown[];
+  /** Hoja de inventario Fase 4: estado de entrega por ítem (ver cotizador/inventario). */
+  inventario?: import('@/modules/cotizador/inventario').InventarioEstado;
+  inventarioFecha?: string | null;
+  /** Adicionales de la cotización Fase 0 (no son ventanas/cortinas). */
+  adicionalesFase0?: AdicionalFase0Persistido[];
 };
 
 // Estructura mínima de una ventana/ítem dentro de OT.items. El cotizador

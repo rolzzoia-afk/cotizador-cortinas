@@ -1,6 +1,8 @@
 // Pure helpers para el módulo bodega: extracción del BOM, rack lookup,
 // matching fuzzy de insumos.
 
+import { resolverCodCadenaBom } from '@/modules/cotizador/cadenas';
+
 export type OT = {
   id: string;
   numero_ot: string | null;
@@ -395,12 +397,17 @@ export function extraerInsumosBOM(
   };
 
   const processPano = (p: Pano) => {
+    const cadCod = String(p.codCadena || '').trim();
     const cadLargo = String(p.largoCadena || '');
     const cadColor = String(p.colorCadena || 'BCO');
-    if (cadLargo) {
-      add(`CAD|${cadLargo}|${cadColor}`, 'CADENA', `Cadena ${cadLargo}`, cadLargo, cadColor, 1, 'unid.', '');
+    if (cadCod || cadLargo) {
+      // Si hay código del inventario (CAD01…) va en la especificación para
+      // enlazar al stock; si no, cae al largo antiguo.
+      const spec = cadCod || cadLargo;
+      add(`CAD|${spec}|${cadColor}`, 'CADENA', `Cadena ${cadLargo || cadCod}`, spec, cadColor, 1, 'unid.', '');
+      const pesoCod = String(p.codPeso || '').trim();
       const pesoColor = String(p.colorPeso || cadColor);
-      add(`PESO|${pesoColor}`, 'CADENA', 'Peso de cadena', '', pesoColor, 1, 'unid.', '');
+      add(`PESO|${pesoCod || pesoColor}`, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.', '');
     }
 
     const mec = String(p.mecanismo || '');
@@ -530,6 +537,16 @@ export function construirBOM(
     );
     if (filtrados.length) bom = [...bom, ...filtrados];
   }
+
+  // Pase final: enlazar cada línea de CADENA a su código de inventario
+  // (CAD01…). Para cotizaciones nuevas la especificación ya trae el código;
+  // para OTs antiguas (texto suelto como "3mts") lo resolvemos desde el
+  // inventario por largo + color. Si no se puede resolver, se deja igual.
+  bom = bom.map((b) => {
+    if ((b.categoria || '').toUpperCase() !== 'CADENA') return b;
+    const cod = resolverCodCadenaBom(b, insumos);
+    return cod && cod !== b.especificacion ? { ...b, especificacion: cod } : b;
+  });
 
   return bom;
 }

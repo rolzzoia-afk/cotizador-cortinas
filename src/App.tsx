@@ -26,6 +26,7 @@ const CotizadorFase2 = lazy(() => import('@/pages/CotizadorFase2').then((m) => (
 const CotizadorFase3 = lazy(() => import('@/pages/CotizadorFase3').then((m) => ({ default: m.CotizadorFase3 })));
 const CotizadorFase4 = lazy(() => import('@/pages/CotizadorFase4').then((m) => ({ default: m.CotizadorFase4 })));
 const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ default: m.CotizadorTela })));
+const OptimizadorTela = lazy(() => import('@/pages/OptimizadorTela').then((m) => ({ default: m.OptimizadorTela })));
 const OjoDeDios = lazy(() => import('@/pages/OjoDeDios').then((m) => ({ default: m.OjoDeDios })));
 const InventarioConteo = lazy(() => import('@/pages/InventarioConteo').then((m) => ({ default: m.InventarioConteo })));
 const InventarioTelasPrueba = lazy(() => import('@/pages/inventario-telas-prueba/Pagina'));
@@ -95,11 +96,13 @@ export function App() {
         >
           <Route path="panel" element={<Panel />} />
           <Route path="cotizar" element={<CotizadorFase0 />} />
+          <Route path="ots/:id/fase0" element={<CotizadorFase0 />} />
           <Route path="ots/:id/fase1" element={<CotizadorFase1 />} />
           <Route path="ots/:id/fase2" element={<CotizadorFase2 />} />
           <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
           <Route path="ots/:id/fase4" element={<CotizadorFase4 />} />
           <Route path="ots/:id/tela" element={<CotizadorTela />} />
+          <Route path="optimizador-tela" element={<OptimizadorTela />} />
           <Route path="ventas" element={<Ventas />} />
           <Route path="leads" element={<LeadsPipeline />} />
           <Route path="inteligencia" element={<Inteligencia />} />

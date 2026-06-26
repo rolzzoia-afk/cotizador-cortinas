@@ -44,7 +44,7 @@ export default function StockGeneralCard({
           <button
             onClick={() => onFiltro(null)}
             className={cn(
-              'rounded-full border border-blue-500/30 bg-accent/10 px-2 py-0.5 text-[10px]',
+              'rounded-full border border-blue-500/30 bg-accent/10 px-2 py-0.5 text-[12px]',
               !filtro ? 'font-bold text-blue-300' : 'text-accent/70',
             )}
           >
@@ -55,7 +55,7 @@ export default function StockGeneralCard({
               key={c}
               onClick={() => onFiltro(c)}
               className={cn(
-                'rounded-full border border-blue-500/30 bg-accent/10 px-2 py-0.5 text-[10px]',
+                'rounded-full border border-blue-500/30 bg-accent/10 px-2 py-0.5 text-[12px]',
                 filtro === c ? 'font-bold text-blue-300' : 'text-accent/70',
               )}
             >
@@ -130,7 +130,7 @@ export default function StockGeneralCard({
                       <strong className="text-foreground">
                         {ins.nemotecnico || ins.cod || '—'}
                       </strong>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-[12px] text-muted-foreground">
                         {ins.cod || ''} · {ins.categoria || ins.sub_categoria || ''}
                       </div>
                     </td>
@@ -146,7 +146,7 @@ export default function StockGeneralCard({
                       }}
                     >
                       {fmt(stock)}
-                      <span className="ml-1 text-[10px] font-normal text-muted-foreground">
+                      <span className="ml-1 text-[12px] font-normal text-muted-foreground">
                         {ins.unidad || ''}
                       </span>
                     </td>
@@ -154,14 +154,14 @@ export default function StockGeneralCard({
                     <td className="px-2 py-1.5 text-center">
                       <span
                         className={cn(
-                          'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                          'rounded-full border px-2 py-0.5 text-[12px] font-bold',
                           badgeCls,
                         )}
                       >
                         {badgeTxt}
                       </span>
                     </td>
-                    <td className="hidden px-2 py-1.5 text-right text-[10px] text-muted-foreground md:table-cell">
+                    <td className="hidden px-2 py-1.5 text-right text-[12px] text-muted-foreground md:table-cell">
                       {pos}
                     </td>
                     <td

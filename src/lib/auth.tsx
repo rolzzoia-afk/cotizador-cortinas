@@ -10,6 +10,16 @@ type Perfil = {
   rol: string | null;
 };
 
+export type Suscripcion = {
+  activa: boolean;
+  plan?: string;
+  exenta?: boolean;
+  vence?: string;
+  en_trial?: boolean;
+  dias_restantes?: number;
+  motivo?: string | null;
+};
+
 type AuthState = {
   loading: boolean;
   session: Session | null;
@@ -18,6 +28,8 @@ type AuthState = {
   empresaId: string | null;
   /** Nombre de la empresa (tenant) del usuario, cargado desde `tenants.nombre`. */
   empresaNombre: string | null;
+  /** Estado de la suscripción de la empresa (null si no se pudo cargar). */
+  suscripcion: Suscripcion | null;
   onboardingCompletado: boolean;
   signOut: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -49,6 +61,16 @@ async function loadEmpresaNombre(empresaId: string): Promise<string | null> {
     return null;
   }
   return data?.nombre ?? null;
+}
+
+async function loadSuscripcion(): Promise<Suscripcion | null> {
+  // Si falla (red, etc.) devolvemos null y NO bloqueamos la app.
+  const { data, error } = await supabase.rpc('estado_suscripcion' as never);
+  if (error) {
+    console.warn('[auth] estado_suscripcion falló:', error.message);
+    return null;
+  }
+  return (data as unknown as Suscripcion) ?? null;
 }
 
 async function loadOnboardingFlag(empresaId: string) {
@@ -96,6 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(TENANT_KEY),
   );
   const [empresaNombre, setEmpresaNombre] = useState<string | null>(null);
+  const [suscripcion, setSuscripcion] = useState<Suscripcion | null>(null);
   const [onboardingCompletado, setOnboarding] = useState(false);
 
   // Guarda el último user.id que hidratamos completo (perfil + onboarding).
@@ -128,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setPerfil(null);
       setEmpresaId(null);
       setEmpresaNombre(null);
+      setSuscripcion(null);
       setOnboarding(false);
       localStorage.removeItem(TENANT_KEY);
       setSentryUser(null);
@@ -139,15 +163,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (p?.empresa_id) {
       setEmpresaId(p.empresa_id);
       localStorage.setItem(TENANT_KEY, p.empresa_id);
-      const [ok, nombre] = await Promise.all([
+      const [ok, nombre, susc] = await Promise.all([
         loadOnboardingFlag(p.empresa_id),
         loadEmpresaNombre(p.empresa_id),
+        loadSuscripcion(),
       ]);
       setOnboarding(ok);
       setEmpresaNombre(nombre);
+      setSuscripcion(susc);
     } else {
       setEmpresaId(null);
       setEmpresaNombre(null);
+      setSuscripcion(null);
       localStorage.removeItem(TENANT_KEY);
       setOnboarding(false);
     }
@@ -197,6 +224,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     perfil,
     empresaId,
     empresaNombre,
+    suscripcion,
     onboardingCompletado,
     signOut,
     refresh,

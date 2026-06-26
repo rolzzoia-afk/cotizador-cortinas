@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { confirmar } from '@/components/ui/confirm';
 import {
   type PlanResumen,
   type usePlanesHistorial,
@@ -60,7 +61,7 @@ export default function HistorialPlanes({ ctx, email }: HistorialPlanesProps) {
       ? `\n🗄 Colmena: se restaurarán ${plan.snapshot_inventario.length} tubos al estado anterior a este plan.`
       : `\n⚠️ Este plan no tiene snapshot de colmena guardado. Solo se restaurará el listado de cortes.`;
     if (
-      !confirm(
+      !await confirmar(
         `⏱ VIAJE EN EL TIEMPO\n\nVas a volver al estado del: ${fecha}${msgInv}\n\n¿Confirmas la restauración? Esta acción actualiza el inventario físico de tubos.`,
       )
     )
@@ -80,7 +81,7 @@ export default function HistorialPlanes({ ctx, email }: HistorialPlanesProps) {
           `  · ${t.cod || '?'}  ${t.medida_cm ?? '?'} cm  (${t.n_colmena || '?'})`,
         ).join('\n');
         const masTubos = detalleArr.length > 30 ? `\n  … y ${detalleArr.length - 30} más` : '';
-        alert(
+        toast.error(
           '⚠️ RESTAURACIÓN PARCIAL\n\n' +
           `Se restauraron ${res.count_despues} de ${res.count_despues + omitidos} tubos.\n` +
           `Antes había ${res.count_antes} tubos en colmena.\n\n` +

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTelas } from '@/modules/admin/hooks';
+import { confirmar } from '@/components/ui/confirm';
 
 export function Stock() {
   const { telas, loading, guardar, eliminar } = useTelas();
@@ -56,7 +57,7 @@ export function Stock() {
   };
 
   const onEliminar = async (id: string, nombre: string) => {
-    if (!confirm(`¿Eliminar la tela "${nombre}" del inventario?`)) return;
+    if (!await confirmar(`¿Eliminar la tela "${nombre}" del inventario?`)) return;
     try {
       await eliminar(id);
       toast.success(`Tela "${nombre}" eliminada`);

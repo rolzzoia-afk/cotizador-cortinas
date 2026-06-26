@@ -102,7 +102,7 @@ export default function LlamadasSection({
               </div>
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <Label className="text-[12px] uppercase tracking-wide text-muted-foreground">
                     Llamadas del día
                   </Label>
                   <NumInput
@@ -112,7 +112,7 @@ export default function LlamadasSection({
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <Label className="text-[12px] uppercase tracking-wide text-muted-foreground">
                     Cotizaciones atendidas
                   </Label>
                   <NumInput
@@ -124,7 +124,7 @@ export default function LlamadasSection({
               </div>
               <div
                 className={cn(
-                  'flex items-center justify-center gap-1 rounded-full border px-2 py-1 text-center text-[10px] font-semibold',
+                  'flex items-center justify-center gap-1 rounded-full border px-2 py-1 text-center text-[12px] font-semibold',
                   badge.cls,
                 )}
               >

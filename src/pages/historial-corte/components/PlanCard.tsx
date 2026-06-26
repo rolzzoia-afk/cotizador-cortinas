@@ -64,7 +64,7 @@ export default function PlanCard({
               className="flex h-12 min-w-12 flex-shrink-0 flex-col items-center justify-center rounded-md border border-accent/40 bg-accent/10 px-2 font-mono tabular-nums leading-none"
               title="Correlativo: orden de prioridad por fecha de entrega más próxima"
             >
-              <span className="text-[8.5px] font-semibold uppercase tracking-wider text-accent/80">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-accent/80">
                 Corr
               </span>
               <span className="mt-0.5 text-[18px] font-bold text-accent">{correlativo}</span>
@@ -75,18 +75,18 @@ export default function PlanCard({
               <Scissors className="h-4 w-4 flex-shrink-0 text-accent" />
               {fechaStr}
               {esActual && (
-                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success">
+                <span className="rounded-full border border-success/30 bg-success/10 px-2 py-0.5 text-[12px] font-bold uppercase tracking-wider text-success">
                   Actual
                 </span>
               )}
               {esVersionAnterior && (
-                <span className="rounded-full border border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                <span className="rounded-full border border-muted-foreground/30 bg-muted/30 px-2 py-0.5 text-[12px] font-bold uppercase tracking-wider text-muted-foreground">
                   Versión anterior
                 </span>
               )}
               {esCorregido && (
                 <span
-                  className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-warning"
+                  className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[12px] font-bold uppercase tracking-wider text-warning"
                   title="Plan generado al aplicar correcciones sobre una versión anterior"
                 >
                   Corregido

@@ -223,6 +223,18 @@ export function generarPlanCorte(
   const MIN_SOB = 30;
   const multiOT = ots.length > 1;
 
+  // ── Umbrales de reuso de SOBRANTES (ajustados 2026-06 para igualar el
+  //    corte manual; ver comparación OT ANGELICA) ─────────────────────
+  // Ventana de alto: un sobrante sirve si su alto está dentro de +VENTANA_ALTO
+  // de la pieza. Subido de 10 → 20 cm para aprovechar leftovers algo más altos
+  // (ej. usar un sobrante de 200 cm para una pieza de 185).
+  const VENTANA_ALTO = 20;
+  // Ancho real que una pieza necesita de un SOBRANTE: al reusar tela ya cortada
+  // NO se aplica el margen de corte limpio del rollo (BORDE), basta el ancho
+  // nominal de la cortina. Así una cortina de 144 cm entra en un sobrante de
+  // 146 (antes 144+4=148 lo rechazaba). El corte del rollo conserva su BORDE.
+  const anchoSob = (w: number) => w - BORDE;
+
   // ── 1. Armar la lista de piezas desde todas las ventanas ──────────
   const piezas: Pieza[] = [];
 
@@ -285,75 +297,108 @@ export function generarPlanCorte(
   Object.entries(porCod).forEach(([codInt, grupo]) => {
     const sinCubrir: (Pieza | null)[] = [...grupo];
 
-    // Reglas 3+4: ordenar sobrantes por prioridad de tipo → FIFO por creadoEn
+    // Regla 3: prioridad por tipo de sobrante (FALLA/ERROR antes que SOBRANTE
+    // intacto). YA NO se aplica FIFO por antigüedad: la asignación la decide la
+    // optimización (ver Fase 2), no la fecha. El tipo queda solo como desempate.
     const disponiblesOrdenados = colmenaPanos
       .filter((s) => s.cod.toUpperCase().trim() === codInt)
-      .sort((a, b) => {
-        const dp = tipoPrio(a.tipo) - tipoPrio(b.tipo);
-        if (dp !== 0) return dp;
-        const da = a.creadoEn ? new Date(a.creadoEn).getTime() : 0;
-        const db = b.creadoEn ? new Date(b.creadoEn).getTime() : 0;
-        return da - db;
-      });
+      .sort((a, b) => tipoPrio(a.tipo) - tipoPrio(b.tipo));
 
     const usadosEnPlan = new Set<string>();
 
+    // ── Regla 1: match EXACTO (ancho+alto), una pieza por sobrante ──
     sinCubrir.forEach((pieza, idx) => {
       if (!pieza) return;
-
-      // Regla 1: cod + ancho exacto + alto exacto
-      let match: PanoColmena | undefined = disponiblesOrdenados.find(
+      const match = disponiblesOrdenados.find(
         (s) => !usadosEnPlan.has(s._docId) && s.ancho === pieza.w && s.alto === pieza.h,
       );
-      let regla: 1 | 2 = 1;
-
-      // Regla 2: cod + ancho >= req + alto en [req, req+10]
-      if (!match) {
-        match = disponiblesOrdenados.find(
-          (s) =>
-            !usadosEnPlan.has(s._docId) &&
-            s.ancho >= pieza.w &&
-            s.alto >= pieza.h &&
-            s.alto <= pieza.h + 10,
-        );
-        regla = 2;
-      }
-
-      if (match) {
-        usadosEnPlan.add(match._docId);
-        const anchoExceso = match.ancho - pieza.w;
-        const sobranteAncho =
-          regla === 2 && anchoExceso >= MIN_SOB
-            ? {
-                cod: codInt,
-                ancho: Math.round(anchoExceso),
-                alto: Math.round(match.alto),
-              }
-            : null;
-
-        const placed: Placed[] = [
-          {
-            ...pieza,
-            px: 0,
-            py: 0,
-            pw: pieza.w,
-            ph: pieza.h,
-            rot: false,
-            failed: false,
-          },
-        ];
-
-        plan.sobrantes.push({
-          sobrante: match,
-          placed,
-          regla,
-          sobranteAncho,
-          uw: match.ancho,
-          uh: match.alto,
-        });
-        sinCubrir[idx] = null;
-      }
+      if (!match) return;
+      usadosEnPlan.add(match._docId);
+      plan.sobrantes.push({
+        sobrante: match,
+        placed: [{ ...pieza, px: 0, py: 0, pw: pieza.w, ph: pieza.h, rot: false, failed: false }],
+        regla: 1,
+        sobranteAncho: null,
+        uw: match.ancho,
+        uh: match.alto,
+      });
+      sinCubrir[idx] = null;
     });
+
+    // ── Regla 2 (optimización): empaquetar VARIAS cortinas por sobrante,
+    //    minimizando la cantidad de sobrantes que quedan en la colmena ──
+    //
+    // Regla #1 del negocio: optimizar al máximo para que la colmena se achique
+    // cada vez más. En cada ronda se evalúan TODOS los sobrantes disponibles y
+    // se elige el que queda MÁS LLENO (menor sobra), acomodando lado a lado las
+    // cortinas que quepan. Esto da, a la vez:
+    //   · best-fit para piezas sueltas (una cortina chica usa el sobrante más
+    //     justo, no el más grande → no malgasta sobrantes grandes), y
+    //   · consolidación de grupos (dos cortinas chicas caen en un mismo
+    //     sobrante en vez de gastar dos), dejando intactos los que no hacen
+    //     falta. Sin FIFO: la antigüedad ya no influye.
+    const ajusteSobrante = (sob: PanoColmena) => {
+      const idxs: number[] = [];
+      let usado = 0;
+      const cand = sinCubrir
+        .map((p, i) => ({ p, i }))
+        .filter(
+          (c): c is { p: Pieza; i: number } =>
+            c.p !== null && c.p.h <= sob.alto && sob.alto <= c.p.h + VENTANA_ALTO,
+        )
+        .sort((a, b) => b.p.w - a.p.w); // mayor a menor ancho
+      for (const { p, i } of cand) {
+        const w = anchoSob(p.w); // ancho real de tela al reusar el sobrante
+        if (w <= sob.ancho - usado) {
+          idxs.push(i);
+          usado += w;
+        }
+      }
+      return { idxs, usado, sobra: sob.ancho - usado };
+    };
+
+    for (;;) {
+      // El sobrante que queda más lleno; desempate por tipo (Regla 3).
+      let mejor: { sob: PanoColmena; idxs: number[]; usado: number; sobra: number } | null = null;
+      for (const sob of disponiblesOrdenados) {
+        if (usadosEnPlan.has(sob._docId)) continue;
+        const fit = ajusteSobrante(sob);
+        if (fit.idxs.length === 0) continue;
+        if (
+          !mejor ||
+          fit.sobra < mejor.sobra ||
+          (fit.sobra === mejor.sobra && tipoPrio(sob.tipo) < tipoPrio(mejor.sob.tipo))
+        ) {
+          mejor = { sob, ...fit };
+        }
+      }
+      if (!mejor) break;
+
+      usadosEnPlan.add(mejor.sob._docId);
+      let px = 0;
+      const placed: Placed[] = [];
+      for (const i of mejor.idxs) {
+        const p = sinCubrir[i] as Pieza;
+        const w = anchoSob(p.w);
+        placed.push({ ...p, px, py: 0, pw: w, ph: p.h, rot: false, failed: false });
+        px += w;
+        sinCubrir[i] = null;
+      }
+      const anchoExceso = mejor.sobra;
+      const sobranteAncho =
+        anchoExceso >= MIN_SOB
+          ? { cod: codInt, ancho: Math.round(anchoExceso), alto: Math.round(mejor.sob.alto) }
+          : null;
+
+      plan.sobrantes.push({
+        sobrante: mejor.sob,
+        placed,
+        regla: 2,
+        sobranteAncho,
+        uw: mejor.sob.ancho,
+        uh: mejor.sob.alto,
+      });
+    }
 
     const restantes = sinCubrir.filter((p): p is Pieza => p !== null);
 
@@ -413,9 +458,16 @@ export function generarPlanCorte(
         }
       }
 
-      // Preferir siempre Pasada A (sin rotación)
-      const bestPl = plA || plB;
-      const bestH = plA ? hA : hB;
+      // Elegir layout: antes se prefería SIEMPRE la Pasada A (sin rotación)
+      // y la B solo era fallback. Ahora, si rotar ahorra tela de forma
+      // relevante (las telas lisas se pueden rotar), se PROPONE el layout
+      // rotado — el operario lo autoriza pieza por pieza en la UI (flujo
+      // 'rotacion-pendiente' ya existente) y puede volver al layout
+      // vertical si la tela tiene diseño/dirección.
+      const AHORRO_MIN_CM = 20; // proponer rotación solo si ahorra ≥ 20 cm de rollo
+      const rotarConviene = plA !== null && plB !== null && hB + AHORRO_MIN_CM <= hA;
+      const bestPl = rotarConviene ? plB : plA || plB;
+      const bestH = rotarConviene ? hB : plA ? hA : hB;
 
       if (bestPl) {
         const altoCorte = bestH + MARGEN * 2;
@@ -430,7 +482,7 @@ export function generarPlanCorte(
             : null;
 
         const piezasRotadas = bestPl.filter((r) => r.rot && !r.failed);
-        const tieneRotaciones = !plA && piezasRotadas.length > 0;
+        const tieneRotaciones = (rotarConviene || !plA) && piezasRotadas.length > 0;
 
         const altoVertical = plA ? hA + MARGEN * 2 : null;
         const eficVertical = plA

@@ -38,7 +38,10 @@ import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { InventoryBaselineSection } from '@/components/admin/InventoryBaselineSection';
 import { ParametrosCotizadorSection } from '@/components/admin/ParametrosCotizadorSection';
 import { UsuariosRolesSection } from '@/components/admin/UsuariosRolesSection';
+import { SuscripcionSection } from '@/components/admin/SuscripcionSection';
+import { DescuentosCatalogoSection } from '@/components/admin/DescuentosCatalogoSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
+import { confirmar } from '@/components/ui/confirm';
 
 type Tubo = {
   id: string;
@@ -274,7 +277,7 @@ export function AdminPanel() {
       return;
     }
 
-    const ok = window.confirm(
+    const ok = await confirmar(
       `Versión desplegada del optimizador: v${nueva} (mínima actual: v${version ?? 'N/A'}).\n\n` +
         `¿Fijarla como mínima? Los navegadores del taller con versiones anteriores ` +
         `verán el banner "Actualizar ahora".`,
@@ -300,7 +303,7 @@ export function AdminPanel() {
     if (!planDetalle || !empresaId) return;
     const fecha = formatDateTime(planDetalle.fecha);
 
-    const ok = window.confirm(
+    const ok = await confirmar(
       `¿Restaurar el plan del ${fecha} como plan activo?\n\n` +
         `Se creará una copia como el más reciente del optimizador "${planDetalle.optimizer_email}".`,
     );
@@ -538,11 +541,17 @@ export function AdminPanel() {
         </div>
       </section>
 
+      {/* Suscripción */}
+      <SuscripcionSection />
+
       {/* Usuarios y roles */}
       <UsuariosRolesSection />
 
       {/* Parámetros comerciales del cotizador */}
       <ParametrosCotizadorSection />
+
+      {/* Catálogo de descuentos de fabricación (despiece) */}
+      <DescuentosCatalogoSection />
 
       {/* Cargar inventario base desde Excel */}
       <InventoryBaselineSection />

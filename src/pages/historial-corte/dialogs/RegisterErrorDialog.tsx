@@ -457,7 +457,7 @@ export default function RegisterErrorDialog({
             <>
               {sugerencia && (
                 <div className="mb-2 rounded-xl border border-success/30 bg-success/[0.07] p-3">
-                  <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-success">
+                  <div className="mb-1 flex items-center gap-1.5 text-[12px] font-bold uppercase tracking-wider text-success">
                     <Sparkles className="h-3 w-3" /> Sugerencia
                   </div>
                   <div className="flex items-center justify-between gap-2">
@@ -517,7 +517,7 @@ export default function RegisterErrorDialog({
                         <span>
                           <strong>Colmena {t.n_colmena}</strong> · {t.cod}
                           {esSugerido && (
-                            <span className="ml-1.5 rounded-full border border-success/30 bg-success/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-success">
+                            <span className="ml-1.5 rounded-full border border-success/30 bg-success/15 px-1.5 py-0.5 text-[11px] uppercase tracking-wide text-success">
                               Sugerido
                             </span>
                           )}

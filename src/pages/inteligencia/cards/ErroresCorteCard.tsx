@@ -92,7 +92,7 @@ export default function ErroresCorteCard({ errores }: ErroresCorteCardProps) {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+          <div className="mb-1 text-[12px] font-bold uppercase tracking-wider text-muted-foreground">
             Últimos registros
           </div>
           {ultimos5.map((e, i) => {
@@ -117,13 +117,13 @@ export default function ErroresCorteCard({ errores }: ErroresCorteCardProps) {
                   <div className="truncate text-[12px] font-semibold text-foreground">
                     {e.motivo}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-[12px] text-muted-foreground">
                     {e.ot || '—'} · {e.cod_original || '—'}
                     {e.medida_cm != null && ` · ${Number(e.medida_cm).toFixed(1)} cm`}
                     {reemplazo && ` · ${reemplazo}`}
                   </div>
                 </div>
-                <span className="flex-shrink-0 text-[10px] text-muted-foreground">{fecha}</span>
+                <span className="flex-shrink-0 text-[12px] text-muted-foreground">{fecha}</span>
               </div>
             );
           })}

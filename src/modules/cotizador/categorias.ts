@@ -49,6 +49,7 @@ export const CATEGORIAS_FASE1: CategoriaGroup[] = [
       { value: 'DARK_38mm', label: 'DARK_38mm' },
       { value: 'DARK_45mm', label: 'DARK_45mm' },
       { value: 'OSCURANTI_63mm', label: 'OSCURANTI_63mm' },
+      { value: 'BEEBLACK', label: 'BEEBLACK — Cierre horizontal' },
     ],
   },
 ];
@@ -80,6 +81,12 @@ export function catBadgeColor(categoria: string): { bg: string; color: string; b
       bg: 'rgba(148,163,184,0.15)',
       color: '#94a3b8',
       border: 'rgba(148,163,184,0.4)',
+    };
+  if (cat.includes('BEEBLACK'))
+    return {
+      bg: 'rgba(30,30,30,0.25)',
+      color: '#a3a3a3',
+      border: 'rgba(100,100,100,0.5)',
     };
   if (cat.includes('SOFT_LIGHT') || cat.includes('DARK') || cat.includes('OSCURANTI'))
     return {

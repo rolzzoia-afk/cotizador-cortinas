@@ -11,6 +11,7 @@ import {
   Loader2,
   MessageCircle,
   Plus,
+  Scissors,
   Search,
   Trash2,
   Wifi,
@@ -41,6 +42,7 @@ import {
   WHATSAPP_MESSAGES,
 } from '@/modules/ots/constants';
 import type { DatosGenerales, OT, OTEstado, SubEtapaProd } from '@/modules/ots/types';
+import { confirmar } from '@/components/ui/confirm';
 
 const EMPTY_FORM: DatosGenerales = {
   cliente: '',
@@ -173,8 +175,7 @@ export function Panel() {
 
   const handleArchivar = async (ot: OT) => {
     const nombre = ot.datosGenerales.cliente || 'esta OT';
-    if (!confirm(`¿Archivar la OT de "${nombre}"?\nPodés restaurarla desde el Historial.`))
-      return;
+    if (!(await confirmar({ titulo: 'Archivar OT', mensaje: `¿Archivar la OT de "${nombre}"?\nPodés restaurarla desde el Historial.`, confirmLabel: 'Archivar' }))) return;
     try {
       await archivar(ot.id);
       toast.success('OT archivada');
@@ -194,12 +195,7 @@ export function Panel() {
 
   const handleEliminar = async (ot: OT) => {
     const nombre = ot.datosGenerales.cliente || 'esta OT';
-    if (
-      !confirm(
-        `Eliminar definitivamente la cotización de "${nombre}"?\nEsta acción NO se puede deshacer.`,
-      )
-    )
-      return;
+    if (!(await confirmar({ titulo: 'Eliminar definitivamente', mensaje: `Eliminar definitivamente la cotización de "${nombre}"?\nEsta acción NO se puede deshacer.`, destructivo: true, confirmLabel: 'Eliminar' }))) return;
     try {
       await eliminarDefinitivo(ot.id);
       toast.success('OT eliminada');
@@ -324,6 +320,10 @@ export function Panel() {
                         key={ot.id}
                         ot={ot}
                         onAbrir={() => abrirOT(ot)}
+                        onIrAFase={(ruta) => {
+                          localStorage.setItem('activeOTId', ot.id);
+                          navigate(`/ots/${ot.id}/${ruta}`);
+                        }}
                         onMoverEstado={(est) => handleMoverEstado(ot.id, est)}
                         onMoverSub={(sub) => moverSubEtapa(ot.id, sub)}
                         onArchivar={() => handleArchivar(ot)}
@@ -514,9 +514,19 @@ export function Panel() {
 // ─────────────────────────────────────────────────────────────
 // Card individual de OT
 // ─────────────────────────────────────────────────────────────
+const FASES_OT: Array<{ ruta: string; label: string }> = [
+  { ruta: 'fase0', label: 'Fase 0 · Cotizar (agregar cortinas)' },
+  { ruta: 'fase1', label: 'Fase 1 · Datos' },
+  { ruta: 'fase2', label: 'Fase 2 · Terreno / Ventanas' },
+  { ruta: 'fase3', label: 'Fase 3 · Aprobación' },
+  { ruta: 'fase4', label: 'Fase 4 · Producción' },
+  { ruta: 'tela', label: 'Optimizador de Tela' },
+];
+
 function OTCard({
   ot,
   onAbrir,
+  onIrAFase,
   onMoverEstado,
   onMoverSub,
   onArchivar,
@@ -525,12 +535,14 @@ function OTCard({
 }: {
   ot: OT;
   onAbrir: () => void;
+  onIrAFase: (ruta: string) => void;
   onMoverEstado: (e: OTEstado) => void;
   onMoverSub: (s: SubEtapaProd) => void;
   onArchivar: () => void;
   onWhatsApp: () => void;
   onEliminar: () => void;
 }) {
+  const [menuFases, setMenuFases] = useState(false);
   const dg = ot.datosGenerales || {};
   const idxEstado = (OT_ESTADOS as readonly OTEstado[]).indexOf(ot.estado);
   const prev = idxEstado > 0 ? OT_ESTADOS[idxEstado - 1] : null;
@@ -618,10 +630,39 @@ function OTCard({
         <button
           onClick={onAbrir}
           className="flex items-center gap-1 rounded border border-accent/30 bg-accent/10 px-2 py-1 text-[0.7rem] font-medium text-accent hover:bg-accent/20"
-          title="Abrir en cotizador"
+          title="Abrir en la fase según el estado"
         >
           <FolderOpen className="h-3 w-3" /> Abrir
         </button>
+        <div className="relative">
+          <button
+            onClick={() => setMenuFases((v) => !v)}
+            className="flex items-center gap-1 rounded border border-border bg-card px-2 py-1 text-[0.7rem] font-medium text-muted-foreground hover:text-foreground"
+            title="Ir a una fase específica"
+          >
+            Ir a fase <ChevronDown className="h-3 w-3" />
+          </button>
+          {menuFases && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setMenuFases(false)} />
+              <div className="absolute left-0 top-full z-20 mt-1 w-52 rounded-md border border-border bg-popover py-1 shadow-lg">
+                {FASES_OT.map((f) => (
+                  <button
+                    key={f.ruta}
+                    onClick={() => {
+                      setMenuFases(false);
+                      onIrAFase(f.ruta);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-[0.72rem] text-foreground hover:bg-secondary"
+                  >
+                    {f.ruta === 'tela' && <Scissors className="h-3 w-3 text-accent" />}
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
         {prev && (
           <button
             onClick={() => onMoverEstado(prev)}

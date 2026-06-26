@@ -66,7 +66,7 @@ export default function BannerUploader({
         >
           <Upload size={24} className="mb-1 text-indigo-400" />
           <span className="text-xs font-semibold">Haz clic o arrastra para cambiar el Banner</span>
-          <span className="text-[10px] opacity-75">Sugerido: 1200 x 300px</span>
+          <span className="text-[12px] opacity-75">Sugerido: 1200 x 300px</span>
           <input
             type="file"
             ref={inputRef}

@@ -37,7 +37,7 @@ export default function ProductRow({
     >
       {/* COD */}
       <td className="py-3 px-4">
-        <span className="font-mono text-[10px] font-bold text-neutral-300 bg-neutral-950 px-2 py-1 rounded-sm border border-neutral-800/60 block w-fit">
+        <span className="font-mono text-[12px] font-bold text-neutral-300 bg-neutral-950 px-2 py-1 rounded-sm border border-neutral-800/60 block w-fit">
           {item.cod}
         </span>
       </td>
@@ -47,7 +47,7 @@ export default function ProductRow({
         <div>
           <span>{item.producto}</span>
           {item.tipo && item.tipo !== '-' && (
-            <span className="text-[9px] text-indigo-300 font-bold ml-1 bg-indigo-950/60 px-1 border border-indigo-900/30 rounded-xs uppercase">
+            <span className="text-[11px] text-indigo-300 font-bold ml-1 bg-indigo-950/60 px-1 border border-indigo-900/30 rounded-xs uppercase">
               {item.tipo}
             </span>
           )}
@@ -68,7 +68,7 @@ export default function ProductRow({
         <div>
           <span className="font-bold text-white tracking-tight uppercase">{item.descripcion}</span>
           {isLimited && (
-            <span className="ml-1 text-[8px] font-extrabold px-1.5 py-0.5 rounded-sm bg-rose-950/70 text-rose-400 border border-rose-900/40 animate-pulse">
+            <span className="ml-1 text-[11px] font-extrabold px-1.5 py-0.5 rounded-sm bg-rose-950/70 text-rose-400 border border-rose-900/40 animate-pulse">
               STOCK LIMITADO
             </span>
           )}
@@ -77,7 +77,7 @@ export default function ProductRow({
 
       {/* Verticales SI / NO */}
       <td className="py-3 px-4 text-center">
-        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-[10px] font-extrabold ${
+        <span className={`inline-flex items-center justify-center px-2 py-0.5 rounded-lg text-[12px] font-extrabold ${
           item.telaVerticales === 'SI'
             ? 'bg-teal-950/70 text-teal-300 border border-teal-900/30 font-bold'
             : 'bg-neutral-900 text-neutral-500 font-normal border border-neutral-850'
@@ -88,7 +88,7 @@ export default function ProductRow({
 
       {/* Descuento */}
       <td className="py-3 px-4 text-center">
-        <span className="font-mono font-bold text-indigo-300 bg-indigo-950/60 border border-indigo-900/35 px-1.5 py-0.5 rounded text-[10px]">
+        <span className="font-mono font-bold text-indigo-300 bg-indigo-950/60 border border-indigo-900/35 px-1.5 py-0.5 rounded text-[12px]">
           {item.descuento}
         </span>
       </td>

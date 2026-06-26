@@ -62,7 +62,7 @@ export default function ActivityCard({ movs, insumos }: ActivityCardProps) {
                   key={i}
                   className="dp-row grid grid-cols-[auto_1fr_auto] items-baseline gap-x-3 py-1.5"
                 >
-                  <span className="dp-num w-14 flex-shrink-0 text-[10.5px] tabular-nums text-muted-foreground">
+                  <span className="dp-num w-14 flex-shrink-0 text-[12px] tabular-nums text-muted-foreground">
                     {fmtFechaHora(m.fecha)}
                   </span>
                   <span className="min-w-0 truncate text-[12px] text-foreground/85">

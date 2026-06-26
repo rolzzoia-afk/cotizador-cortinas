@@ -27,6 +27,7 @@ import {
   type Prioridad,
 } from '@/modules/leads/types';
 import { actualizarPrioridadDetalle } from '@/modules/leads/seguimientos';
+import { confirmar } from '@/components/ui/confirm';
 
 import ActividadColumn from './lead-detalle/components/ActividadColumn';
 import AgenteDataSection from './lead-detalle/components/AgenteDataSection';
@@ -252,7 +253,7 @@ export function LeadDetalleDialog({
   };
 
   const handleEliminar = async () => {
-    if (!confirm(`¿Eliminar el lead "${lead.nombre || '(sin nombre)'}"? Esto NO se puede deshacer.`))
+    if (!await confirmar(`¿Eliminar el lead "${lead.nombre || '(sin nombre)'}"? Esto NO se puede deshacer.`))
       return;
     try {
       await onDelete(lead.id);

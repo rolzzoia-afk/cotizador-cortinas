@@ -301,26 +301,26 @@ function TarjetaSeguimiento({
         </button>
         <span
           className={cn(
-            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-semibold',
             PRIORIDAD_CHIP[lead.prioridad],
           )}
         >
           {lead.prioridad === 'alta' && <Flame className="h-2.5 w-2.5" />}
           Prioridad {PRIORIDAD_LABEL[lead.prioridad]}
         </span>
-        <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[10px] font-semibold text-accent">
+        <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[12px] font-semibold text-accent">
           Seguimiento {etapa} de 3
         </span>
         <span
           className={cn(
-            'inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold',
+            'inline-flex items-center rounded-full border px-2 py-0.5 text-[12px] font-semibold',
             URGENCIA_CHIP[urgencia],
           )}
         >
           {textoDias(diasDiff)}
         </span>
         {lead.scoring != null && (
-          <span className="inline-flex items-center gap-0.5 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0 text-[10px] font-bold text-warning">
+          <span className="inline-flex items-center gap-0.5 rounded-full border border-warning/30 bg-warning/15 px-1.5 py-0 text-[12px] font-bold text-warning">
             <Star className="h-2.5 w-2.5 fill-current" />
             {lead.scoring}
           </span>

@@ -70,7 +70,7 @@ export default function GroupedBars({
       </div>
 
       {/* Max label en esquina superior derecha */}
-      <div className="dp-num absolute right-0 top-0 -translate-y-full pb-0.5 text-[10px] tabular-nums text-muted-foreground">
+      <div className="dp-num absolute right-0 top-0 -translate-y-full pb-0.5 text-[12px] tabular-nums text-muted-foreground">
         max {maxVal}
       </div>
 
@@ -116,7 +116,7 @@ export default function GroupedBars({
           <div
             key={i}
             className={cn(
-              'dp-num flex-1 text-center text-[9.5px] tabular-nums transition-colors',
+              'dp-num flex-1 text-center text-[11px] tabular-nums transition-colors',
               hoverIdx === i ? 'text-foreground' : 'text-muted-foreground/70',
             )}
             style={{ width: `${colWidthPct}%` }}
@@ -129,7 +129,7 @@ export default function GroupedBars({
       {/* Tooltip por columna */}
       {hoverIdx !== null && (
         <div
-          className="dp-num pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-sm border border-border bg-popover px-2 py-1.5 text-[10.5px] shadow-sm"
+          className="dp-num pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-sm border border-border bg-popover px-2 py-1.5 text-[12px] shadow-sm"
           style={{
             left: `${(hoverIdx + 0.5) * (100 / cols)}%`,
             top: -8,

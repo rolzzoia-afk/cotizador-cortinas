@@ -87,7 +87,7 @@ export default function ErroresTab({ errores }: ErroresTabProps) {
                 {['Fecha', 'OT', 'Código', 'Medida', 'Motivo', 'Reemplazo', 'Por'].map((h) => (
                   <th
                     key={h}
-                    className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground"
+                    className="px-3 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-muted-foreground"
                   >
                     {h}
                   </th>

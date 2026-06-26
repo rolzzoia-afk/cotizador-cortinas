@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { useVersionMinima } from '@/modules/admin/hooks';
 import type { OT } from '@/modules/ots/types';
 import type { Tela } from '@/modules/admin/types';
+import { confirmar } from '@/components/ui/confirm';
 
 type Props = {
   ots: OT[];
@@ -28,7 +29,7 @@ export function Control({ ots, telas, online }: Props) {
       ? (Math.round((parseFloat(version) + 0.1) * 10) / 10).toFixed(1)
       : '1.0';
     if (
-      !confirm(
+      !await confirmar(
         `¿Subir versión de "${version || 'N/A'}" a "${nueva}"?\n\nEsto forzará una recarga en TODOS los dispositivos del taller.`,
       )
     )

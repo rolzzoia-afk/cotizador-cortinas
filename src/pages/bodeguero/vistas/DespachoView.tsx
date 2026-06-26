@@ -76,18 +76,18 @@ export default function DespachoView({
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex flex-wrap gap-4 text-sm">
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="text-[12px] uppercase tracking-wider text-muted-foreground">
                 Cliente
               </div>
               <div className="font-semibold">{cliente}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">OT</div>
+              <div className="text-[12px] uppercase tracking-wider text-muted-foreground">OT</div>
               <div className="font-semibold">{ot.numero_ot || '—'}</div>
             </div>
             {fechaEntrega && (
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                <div className="text-[12px] uppercase tracking-wider text-muted-foreground">
                   Entrega
                 </div>
                 <div className="font-semibold">{fechaEntrega}</div>
@@ -155,7 +155,7 @@ export default function DespachoView({
                 <div className="min-w-0 flex-1">
                   <div
                     className={cn(
-                      'text-[10px] font-bold uppercase tracking-wider',
+                      'text-[12px] font-bold uppercase tracking-wider',
                       esTela ? 'text-warning' : 'text-muted-foreground',
                     )}
                   >
@@ -179,7 +179,7 @@ export default function DespachoView({
                   >
                     {cnt?.pickeado || 0}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-[12px] text-muted-foreground">
                     /{cnt?.requerido} {item.unidad}
                   </div>
                 </div>
