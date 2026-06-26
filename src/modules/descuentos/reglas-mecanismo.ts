@@ -79,7 +79,7 @@ export const REGLAS_MECANISMO = {
       codigoInventario: 'MEC_39_OVALADA_BLANCO',
       colores: ['BCO', 'BLANCO'],
     },
-  ] as const satisfies readonly ReglaMecCategoria[],
+  ] as readonly ReglaMecCategoria[],
 } as const;
 
 // ── Helpers de normalización ─────────────────────────────────────────

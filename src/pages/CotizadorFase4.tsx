@@ -66,7 +66,7 @@ export function CotizadorFase4() {
   // Componentes consolidados (siempre frescos desde el optimizador).
   // El ajuste manual se hace con la columna "Adicional" de la hoja.
   const invItems = useMemo(
-    () => (pdfRows ? calcularBOM(pdfRows, ot.storeVentanas) : []),
+    () => (pdfRows && ot ? calcularBOM(pdfRows, ot.storeVentanas) : []),
     [pdfRows, ot?.storeVentanas],
   );
 

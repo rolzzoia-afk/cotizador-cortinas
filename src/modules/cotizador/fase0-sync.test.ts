@@ -42,7 +42,7 @@ describe('fase0-sync', () => {
       codInt: 'BK 18',
       color: 'BLANCO',
       panos: [],
-    } as Ventana;
+    } as unknown as Ventana;
     const pano = { ancho: 2, alto: 2, color: 'BLANCO', armado: 'Interno' } as Pano;
     const out = enriquecerPanoDesdeFase0(pano, ventana, {
       'BK 18': { cod: 'BLACKOUT_D', producto: '', tipo: '', descripcion: '', precio: 0 },
