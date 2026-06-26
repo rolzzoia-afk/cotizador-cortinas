@@ -68,7 +68,7 @@ export default function LogoUploader({
           }`}
         >
           <Upload size={16} className="mb-0.5 text-indigo-400" />
-          <span className="text-[8px] text-center font-bold px-1">Cambiar Logo</span>
+          <span className="text-[11px] text-center font-bold px-1">Cambiar Logo</span>
           <input
             type="file"
             ref={inputRef}

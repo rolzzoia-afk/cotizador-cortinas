@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Printer, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Copy, Plus, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -8,6 +10,14 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useDescuentosModelo } from '@/modules/descuentos/hooks';
+import {
+  elegirModeloPorColor,
+  modelosParaCategoria,
+} from '@/modules/descuentos/tipos';
+import { otToRow } from '@/modules/ots/mappers';
+import { useOT } from '@/modules/ots/hooks';
+import type { AdicionalFase0Persistido, OT } from '@/modules/ots/types';
 import {
   cotizarFase0,
   type LineaResultado,
@@ -15,6 +25,14 @@ import {
 } from '@/modules/cotizador/motorFase0';
 import { formatCLP } from '@/modules/cotizador/calculos';
 import type { Producto } from '@/modules/cotizador/types';
+import { enriquecerPanoDesdeFase0 } from '@/modules/cotizador/fase0-sync';
+import { COMUNAS_SANTIAGO } from '@/modules/cotizador/comunas';
+import {
+  parsearExcelFase0,
+  validarFilaFase0,
+  canonizar,
+  type CampoFase0,
+} from '@/modules/cotizador/importarExcelFase0';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -42,6 +60,8 @@ type FilaUI = {
   ancho: number;
   alto: number;
   descuento: number;
+  /** id de la ventana original (si la fila viene de una OT existente). */
+  vid?: string;
 };
 const nuevaFila = (): FilaUI => ({
   id: crypto.randomUUID(),
@@ -74,6 +94,32 @@ const nuevoAdicional = (): AdicionalUI => ({
   colorAcc: '',
 });
 
+function adicionalesToPersist(list: AdicionalUI[]): AdicionalFase0Persistido[] {
+  return list.map(({ id, codInt, cantidad, descuento, ubicacion, colorAcc }) => ({
+    id,
+    codInt: codInt.trim(),
+    cantidad,
+    descuento,
+    ubicacion,
+    colorAcc,
+  }));
+}
+
+function adicionalesFromPersist(raw: unknown): AdicionalUI[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((a) => {
+    const row = a as Partial<AdicionalFase0Persistido>;
+    return {
+      id: row.id || crypto.randomUUID(),
+      codInt: row.codInt || '',
+      cantidad: row.cantidad ?? 1,
+      descuento: row.descuento ?? 0,
+      ubicacion: row.ubicacion || '',
+      colorAcc: row.colorAcc || '',
+    };
+  });
+}
+
 const DIRECCIONES = [
   'CAD [IZQUIERDA]',
   'CAD [DERECHA]',
@@ -87,7 +133,7 @@ const CATEGORIAS_MECANISMO = [
   'ROL_CENEFA_OVALADA_MOTOR_PEQUEÑO', 'ROL_CENEFA_OVALADA_MOTOR_GRANDE', 'PLETINA_ROLLER_V',
   'DUO_MANUAL_38mm', 'DUO_MANUAL_45mm', 'DUO_MOTOR_PEQUEÑO_38mm', 'DUO_MOTOR_GRANDE_45mm',
   'PLETINA_DUO_V', 'VERTICAL', 'SOFT_LIGHT_38mm', 'SOFT_LIGHT_45mm', 'DARK_38mm', 'DARK_45mm',
-  'OSCURANTI_63mm',
+  'OSCURANTI_63mm', 'BEEBLACK',
 ];
 
 const N = (s?: string) => (s || '').toUpperCase();
@@ -150,10 +196,13 @@ const COL_SPAN = 18;
 export function CotizadorFase0() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const { id: editOtId } = useParams();
+  const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId } = useAuth();
   const { catalogo } = useCatalogoProductos();
   const { anchoRollo } = useAnchoRollo();
   const { parametros } = useParametrosCotizador();
+  const { modelos: modelosDespiece } = useDescuentosModelo();
 
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
@@ -161,6 +210,214 @@ export function CotizadorFase0() {
   const [filtroActivo, setFiltroActivo] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
 
+  const [guardandoOT, setGuardandoOT] = useState(false);
+  // Celdas a corregir a mano tras importar un Excel: id de fila → campos inválidos.
+  const [erroresImport, setErroresImport] = useState<Map<string, Set<CampoFase0>>>(new Map());
+  // Adicionales importados con COD_INT inválido: id de adicional → { 'codInt' }.
+  const [erroresImportAdic, setErroresImportAdic] = useState<Map<string, Set<'codInt'>>>(new Map());
+  const inputExcelRef = useRef<HTMLInputElement>(null);
+  // Al editar una OT existente: ventanas originales (para preservar los
+  // datos ricos de Fase 2 al volver a guardar) y bandera de carga única.
+  const [origVentanas, setOrigVentanas] = useState<Record<string, Record<string, unknown>>>({});
+  const [cargadoEdit, setCargadoEdit] = useState(false);
+
+  useEffect(() => {
+    if (!editOtId || !otCargada || cargadoEdit) return;
+    const dg = (otCargada.datosGenerales || {}) as Record<string, string> & {
+      adicionalesFase0?: AdicionalFase0Persistido[];
+    };
+    setCliente({
+      nombre: dg.cliente || '',
+      rut: dg.rut || '',
+      mail: dg.mail || '',
+      telefono: dg.telefono || '',
+      direccion: dg.direccion || '',
+      comuna: dg.comuna || '',
+    });
+    const vts = (otCargada.storeVentanas || []) as Record<string, any>[];
+    const orig: Record<string, Record<string, unknown>> = {};
+    const nuevasFilas: FilaUI[] = vts.map((v) => {
+      orig[v.id as string] = v;
+      const pano = (Array.isArray(v.panos) && v.panos[0]) || {};
+      return {
+        id: crypto.randomUUID(),
+        codInt: (v.codInt as string) || '',
+        categoria: (v.categoria as string) || '',
+        direccion: (v.direccion as string) || '',
+        sentido: (v.sentido as string) || '',
+        cantidad: (v.cantidad as number) || 1,
+        ubicacion: (v.ubicacion as string) || '',
+        colorAcc: (v.color as string) || '',
+        ancho: parseFloat(String(pano.ancho ?? 0)) || 0,
+        alto: parseFloat(String(v.alto ?? pano.alto ?? 0)) || 0,
+        descuento: 0,
+        vid: v.id as string,
+      };
+    });
+    setFilas(nuevasFilas.length ? nuevasFilas : [nuevaFila()]);
+    setAdicionales(adicionalesFromPersist(dg.adicionalesFase0));
+    setOrigVentanas(orig);
+    setCargadoEdit(true);
+  }, [editOtId, otCargada, cargadoEdit]);
+
+  // Guarda la cotización como OT: cliente + ventanas (con el modelo de
+  // fabricación elegido por categoría y color) y sigue el flujo en Fase 2.
+  const guardarComoOT = async () => {
+    if (!empresaId) return;
+    if (!cliente.nombre.trim()) {
+      toast.error('Ingresa el nombre del cliente antes de guardar la OT.');
+      return;
+    }
+    const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
+    if (validas.length === 0) {
+      toast.error('Agrega al menos una cortina con producto y medidas.');
+      return;
+    }
+    if (erroresImport.size > 0 || erroresImportAdic.size > 0) {
+      toast.error('Hay datos importados a corregir (en rojo). Complétalos antes de guardar.');
+      return;
+    }
+    setGuardandoOT(true);
+    try {
+      // Construye la ventana de una fila. Si la fila viene de una OT
+      // existente (f.vid), se preserva el objeto original (paños de Fase 2,
+      // modelo, etc.) y solo se actualiza lo editable en Fase 0; así no se
+      // pierde el trabajo de terreno al volver a guardar.
+      const construirVentana = (f: FilaUI) => {
+        const prod = catalogo[f.codInt.trim()];
+        const ln = lineaDeFila.get(f.id);
+        const candidatos = modelosParaCategoria(modelosDespiece, f.categoria);
+        const modeloCalc = elegirModeloPorColor(candidatos, f.colorAcc);
+        const orig = f.vid ? (origVentanas[f.vid] as Record<string, any> | undefined) : undefined;
+        if (orig) {
+          const pano0 = (Array.isArray(orig.panos) && orig.panos[0]) || {};
+          const ventana: Record<string, unknown> = {
+            ...orig,
+            ubicacion: f.ubicacion || '',
+            codInt: f.codInt.trim(),
+            producto: prod?.producto ?? orig.producto ?? '',
+            tipo: prod?.tipo ?? orig.tipo ?? '',
+            descripcion: prod?.descripcion ?? orig.descripcion ?? '',
+            color: f.colorAcc || orig.color || 'Blanco',
+            alto: f.alto,
+            precio: ln?.valorUnit ?? orig.precio ?? 0,
+            cantidad: f.cantidad || 1,
+            categoria: f.categoria || orig.categoria || '',
+            direccion: f.direccion || '',
+            sentido: f.sentido || '',
+            panos: [
+              { ...pano0, ancho: f.ancho, alto: f.alto, color: f.colorAcc || pano0.color || '' },
+              ...((Array.isArray(orig.panos) ? orig.panos : []).slice(1)),
+            ],
+            modelo: orig.modelo ?? modeloCalc,
+          };
+          ventana.panos = (ventana.panos as Record<string, unknown>[]).map((p) =>
+            enriquecerPanoDesdeFase0(p as never, ventana as never, catalogo),
+          );
+          return ventana;
+        }
+        const ventanaNueva: Record<string, unknown> = {
+          id: crypto.randomUUID(),
+          ubicacion: f.ubicacion || '',
+          codInt: f.codInt.trim(),
+          producto: prod?.producto ?? '',
+          tipo: prod?.tipo ?? '',
+          descripcion: prod?.descripcion ?? '',
+          color: f.colorAcc || 'Blanco',
+          alto: f.alto,
+          precio: ln?.valorUnit ?? 0,
+          cantidad: f.cantidad || 1,
+          categoria: f.categoria,
+          grupoId: null,
+          direccion: f.direccion || '',
+          sentido: f.sentido || '',
+          panos: [{ ancho: f.ancho, alto: f.alto, color: f.colorAcc || '' }],
+          modelo: modeloCalc,
+        };
+        ventanaNueva.panos = (ventanaNueva.panos as Record<string, unknown>[]).map((p) =>
+          enriquecerPanoDesdeFase0(p as never, ventanaNueva as never, catalogo),
+        );
+        return ventanaNueva;
+      };
+
+      const ventanas = validas.map(construirVentana);
+      const adicionalesGuardados = adicionalesToPersist(adicionales);
+      const now = new Date().toISOString();
+
+      // ── Editando una OT existente: actualizar la MISMA OT ──
+      if (editOtId && otCargada) {
+        const actualizada: OT = {
+          ...otCargada,
+          datosGenerales: {
+            ...(otCargada.datosGenerales || {}),
+            cliente: cliente.nombre,
+            rut: cliente.rut,
+            mail: cliente.mail,
+            telefono: cliente.telefono,
+            direccion: cliente.direccion,
+            comuna: cliente.comuna,
+            adicionalesFase0: adicionalesGuardados,
+          },
+          storeVentanas: ventanas as unknown as OT['storeVentanas'],
+          fechaModificacion: now,
+          totalConIva: t.totalTransferencia,
+        };
+        await guardarCompleto(actualizada);
+        const numActual = (otCargada.datosGenerales as Record<string, string>)?.ot ?? '';
+        toast.success(`OT ${numActual} actualizada · ${ventanas.length} cortina(s).`);
+        navigate(`/ots/${otCargada.id}/fase2`);
+        return;
+      }
+
+      // ── Cotización nueva: crear OT con número correlativo ──
+      const { data: numOT, error: errNum } = await supabase.rpc('generar_numero_ot' as never, {
+        p_empresa_id: empresaId,
+      } as never);
+      if (errNum) throw errNum;
+
+      const ot: OT = {
+        id: crypto.randomUUID(),
+        estado: 'cotizacion',
+        subEtapa: null,
+        datosGenerales: {
+          cliente: cliente.nombre,
+          rut: cliente.rut,
+          mail: cliente.mail,
+          telefono: cliente.telefono,
+          direccion: cliente.direccion,
+          comuna: cliente.comuna,
+          ot: String(numOT ?? ''),
+          canal: 'Cotizador',
+          fecha: now.split('T')[0],
+          adicionalesFase0: adicionalesGuardados,
+        },
+        storeVentanas: ventanas as unknown as OT['storeVentanas'],
+        cotizacionCount: 1,
+        fechaCreacion: now,
+        fechaModificacion: now,
+        notas: '',
+        totalConIva: t.totalTransferencia,
+      };
+      const { error } = await supabase
+        .from('ots')
+        .upsert(otToRow(ot, empresaId) as unknown as never, { onConflict: 'id' });
+      if (error) throw error;
+
+      const sinModelo = ventanas.filter((v) => !v.modelo).length;
+      toast.success(
+        `OT ${numOT} creada con ${ventanas.length} cortina(s).` +
+          (sinModelo > 0 ? ` ${sinModelo} sin modelo de fabricación (completar en Fase 2).` : ''),
+      );
+      navigate(`/ots/${ot.id}/fase2`);
+    } catch (e) {
+      toast.error('Error al guardar la OT: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setGuardandoOT(false);
+    }
+  };
+
+  // Validación de fabricabilidad por fila: categoría + ancho vs catálogo
+  // de descuentos (ancho máximo entre los modelos de esa categoría).
   useEffect(() => {
     const leadId = params.get('lead');
     if (!leadId || !empresaId) return;
@@ -251,13 +508,126 @@ export function CotizadorFase0() {
     }
   };
 
-  const setFila = (id: string, patch: Partial<FilaUI>) =>
+  const setFila = (id: string, patch: Partial<FilaUI>) => {
     setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+    // Al corregir una celda importada, le quitamos su marca roja.
+    setErroresImport((prev) => {
+      if (!prev.has(id)) return prev;
+      const campos = new Set(prev.get(id));
+      for (const k of Object.keys(patch)) campos.delete(k as CampoFase0);
+      const next = new Map(prev);
+      if (campos.size === 0) next.delete(id);
+      else next.set(id, campos);
+      return next;
+    });
+  };
   const quitarFila = (id: string) =>
     setFilas((prev) => (prev.length > 1 ? prev.filter((f) => f.id !== id) : prev));
+  // Duplica una fila completa (con sus datos) justo debajo, con nuevo id,
+  // para cargar varias cortinas parecidas sin reescribir todo.
+  const duplicarFila = (id: string) =>
+    setFilas((prev) => {
+      const idx = prev.findIndex((f) => f.id === id);
+      if (idx < 0) return prev;
+      const copia: FilaUI = { ...prev[idx], id: crypto.randomUUID() };
+      const next = [...prev];
+      next.splice(idx + 1, 0, copia);
+      return next;
+    });
 
-  const setAdic = (id: string, patch: Partial<AdicionalUI>) =>
+  // Importa una cotización desde Excel: REEMPLAZA las cortinas de la grilla
+  // con las filas de la planilla. Las celdas con datos llave inválidos
+  // (COD_INT inexistente, mecanismo/dirección/sentido fuera de lista, o
+  // medida ≤ 0) quedan marcadas en rojo para corregir a mano antes de seguir.
+  const importarExcel = async (file: File) => {
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const { cortinas, adicionales: adicCrudos } = parsearExcelFase0(wb);
+      if (cortinas.length === 0 && adicCrudos.length === 0) {
+        toast.error('No se encontraron filas con COD_INT y ANCHO en la planilla.');
+        return;
+      }
+      const opts = {
+        codIntValidos: new Set(Object.keys(catalogo)),
+        categorias: new Set(CATEGORIAS_MECANISMO),
+        direcciones: new Set(DIRECCIONES),
+        sentidos: new Set(SENTIDOS),
+      };
+
+      // ── Cortinas ──
+      const nuevas: FilaUI[] = [];
+      const errores = new Map<string, Set<CampoFase0>>();
+      for (const c of cortinas) {
+        const categoria = canonizar(c.categoria, CATEGORIAS_MECANISMO);
+        const direccion = canonizar(c.direccion, DIRECCIONES);
+        const sentido = canonizar(c.sentido, SENTIDOS);
+        const fila: FilaUI = {
+          id: crypto.randomUUID(),
+          codInt: c.codInt,
+          categoria,
+          direccion,
+          sentido,
+          cantidad: c.cantidad || 1,
+          ubicacion: c.ubicacion,
+          colorAcc: c.colorAcc,
+          ancho: c.ancho,
+          alto: c.alto,
+          descuento: 0,
+        };
+        const malos = validarFilaFase0({ ...c, categoria, direccion, sentido }, opts);
+        if (malos.length) errores.set(fila.id, new Set(malos));
+        nuevas.push(fila);
+      }
+
+      // ── Adicionales (debajo del rótulo "ADICIONALES"): solo se valida que el
+      //    COD_INT exista en el catálogo; el ancho del Excel se ignora. ──
+      const nuevosAdic: AdicionalUI[] = [];
+      const erroresAdic = new Map<string, Set<'codInt'>>();
+      for (const a of adicCrudos) {
+        const id = crypto.randomUUID();
+        nuevosAdic.push({
+          id,
+          codInt: a.codInt,
+          cantidad: a.cantidad || 1,
+          descuento: 0,
+          ubicacion: a.ubicacion,
+          colorAcc: a.colorAcc,
+        });
+        if (!a.codInt || !catalogo[a.codInt.trim()]) erroresAdic.set(id, new Set(['codInt']));
+      }
+
+      // Reemplazo COMPLETO de cortinas y adicionales con lo de la planilla.
+      setFilas(nuevas.length ? nuevas : [nuevaFila()]);
+      setAdicionales(nuevosAdic);
+      setErroresImport(errores);
+      setErroresImportAdic(erroresAdic);
+
+      const conError = errores.size + erroresAdic.size;
+      const resumen = `${nuevas.length} cortina(s) · ${nuevosAdic.length} adicional(es)`;
+      if (conError > 0) {
+        toast.warning(`Importadas ${resumen} · ${conError} con datos a corregir (en rojo).`);
+      } else {
+        toast.success(`Importadas ${resumen}.`);
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error('No se pudo leer el Excel. Revisa que sea un archivo .xlsx válido.');
+    }
+  };
+
+  const setAdic = (id: string, patch: Partial<AdicionalUI>) => {
     setAdicionales((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    // Al editar el COD_INT de un adicional importado, le quitamos su marca roja.
+    if ('codInt' in patch) {
+      setErroresImportAdic((prev) => {
+        if (!prev.has(id)) return prev;
+        const next = new Map(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  };
   const quitarAdic = (id: string) =>
     setAdicionales((prev) => prev.filter((a) => a.id !== id));
 
@@ -273,10 +643,36 @@ export function CotizadorFase0() {
         >
           <ArrowLeft className="h-4 w-4" /> Volver
         </button>
-        <span className="text-base font-bold">Cotización · Fase 0</span>
-        <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-1.5">
-          <Printer className="h-4 w-4" /> Imprimir
-        </Button>
+        <span className="text-base font-bold">
+          {editOtId && otCargada
+            ? `OT ${(otCargada.datosGenerales as Record<string, string>)?.ot ?? ''} · Fase 0 (agregar cortinas)`
+            : 'Cotización · Fase 0'}
+        </span>
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputExcelRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importarExcel(file);
+              e.target.value = ''; // permite re-importar el mismo archivo
+            }}
+          />
+          <Button
+            onClick={() => inputExcelRef.current?.click()}
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            title="Cargar una cotización desde una planilla Excel"
+          >
+            <FileUp className="h-4 w-4" /> Importar Excel
+          </Button>
+          <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-1.5">
+            <Printer className="h-4 w-4" /> Imprimir
+          </Button>
+        </div>
       </div>
 
       <div className="px-5 py-4">
@@ -287,7 +683,7 @@ export function CotizadorFase0() {
           <Campo label="Teléfono" value={cliente.telefono} onChange={(v) => setCliente({ ...cliente, telefono: v })} />
           <Campo label="Mail" value={cliente.mail} onChange={(v) => setCliente({ ...cliente, mail: v })} />
           <Campo label="Dirección" value={cliente.direccion} onChange={(v) => setCliente({ ...cliente, direccion: v })} />
-          <Campo label="Comuna" value={cliente.comuna} onChange={(v) => setCliente({ ...cliente, comuna: v })} />
+          <CampoComuna value={cliente.comuna} onChange={(v) => setCliente({ ...cliente, comuna: v })} />
         </section>
 
         {/* CATÁLOGO con chips */}
@@ -334,7 +730,7 @@ export function CotizadorFase0() {
           {hayFiltro ? (
             <div className="max-h-64 overflow-y-auto rounded-md border border-border">
               <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-card text-[10px] uppercase tracking-wide text-muted-foreground">
+                <thead className="sticky top-0 bg-card text-[12px] uppercase tracking-wide text-muted-foreground">
                   <tr>
                     <Th>COD_INT</Th>
                     <Th>PRODUCTO</Th>
@@ -356,15 +752,15 @@ export function CotizadorFase0() {
                     <tr key={ci} className="border-t border-border hover:bg-secondary/40">
                       <Td className="font-semibold">{ci}</Td>
                       <Td className="text-muted-foreground">{p.producto}</Td>
-                      <Td className="text-[10px] text-muted-foreground">{p.descripcion}</Td>
-                      <Td className="text-[10px] text-muted-foreground">{p.tipo}</Td>
+                      <Td className="text-[12px] text-muted-foreground">{p.descripcion}</Td>
+                      <Td className="text-[12px] text-muted-foreground">{p.tipo}</Td>
                       <Td className="text-right tabular-nums">
                         {p.precio ? formatCLP(Number(p.precio)) : '—'}
                       </Td>
                       <Td className="text-right">
                         <button
                           onClick={() => agregarProducto(ci)}
-                          className="rounded bg-accent px-2 py-0.5 text-[10px] font-semibold text-accent-foreground hover:bg-accent/90"
+                          className="rounded bg-accent px-2 py-0.5 text-[12px] font-semibold text-accent-foreground hover:bg-accent/90"
                           title={esCortinaTipo(p.tipo) ? 'Agregar como cortina' : 'Agregar como adicional'}
                         >
                           + Agregar
@@ -375,7 +771,7 @@ export function CotizadorFase0() {
                 </tbody>
               </table>
               {productosFiltrados.length > 200 && (
-                <div className="border-t border-border bg-card/60 px-3 py-1 text-[10px] text-muted-foreground">
+                <div className="border-t border-border bg-card/60 px-3 py-1 text-[12px] text-muted-foreground">
                   Mostrando 200 de {productosFiltrados.length} — refina la búsqueda para ver el resto.
                 </div>
               )}
@@ -399,7 +795,7 @@ export function CotizadorFase0() {
           </datalist>
 
           <table className="w-full min-w-[1700px] border-collapse text-xs">
-            <thead className="bg-card text-[10px] uppercase tracking-wide text-muted-foreground">
+            <thead className="bg-card text-[12px] uppercase tracking-wide text-muted-foreground">
               <tr className="border-b border-border">
                 <th colSpan={11} className="px-2 py-1.5 text-center font-semibold">Información del producto</th>
                 <th colSpan={2} className="border-l border-border px-2 py-1.5 text-center font-semibold">Medidas</th>
@@ -432,12 +828,13 @@ export function CotizadorFase0() {
               {filas.map((f) => {
                 const prod = f.codInt ? catalogo[f.codInt.trim()] : undefined;
                 const ln = lineaDeFila.get(f.id);
+                const errs = erroresImport.get(f.id);
                 return (
                   <tr key={f.id} className="border-t border-border align-middle">
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
-                    <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, { categoria: v })} opciones={CATEGORIAS_MECANISMO} /></Td>
-                    <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} /></Td>
-                    <Td><SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} /></Td>
+                    <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
+                    <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
+                    <Td><SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} /></Td>
                     <Td>
                       <CellInput type="number" min={1} value={f.cantidad || 1}
                         onChange={(e) => setFila(f.id, { cantidad: parseInt(e.target.value) || 1 })}
@@ -447,7 +844,12 @@ export function CotizadorFase0() {
                     <Td>
                       <CellInput list="codint-options" value={f.codInt}
                         onChange={(e) => setFila(f.id, { codInt: e.target.value })}
-                        placeholder="ej. SC 68" className="w-24" />
+                        placeholder="ej. SC 68"
+                        title={errs?.has('codInt') ? 'COD_INT no encontrado en el catálogo' : undefined}
+                        className={cn(
+                          'w-24',
+                          errs?.has('codInt') && 'border-destructive bg-destructive/10 text-destructive',
+                        )} />
                     </Td>
                     <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
                     <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
@@ -464,12 +866,23 @@ export function CotizadorFase0() {
                     <Td className="border-l border-border">
                       <CellInput type="number" step="0.001" value={f.ancho || ''}
                         onChange={(e) => setFila(f.id, { ancho: parseFloat(e.target.value) || 0 })}
-                        className="w-20 text-right" />
+                        title={
+                          errs?.has('ancho') ? 'Ancho inválido (debe ser mayor a 0, en metros)' : undefined
+                        }
+                        className={cn(
+                          'w-20 text-right',
+                          errs?.has('ancho') &&
+                            'border-destructive bg-destructive/10 text-destructive',
+                        )} />
                     </Td>
                     <Td>
                       <CellInput type="number" step="0.001" value={f.alto || ''}
                         onChange={(e) => setFila(f.id, { alto: parseFloat(e.target.value) || 0 })}
-                        className="w-20 text-right" />
+                        title={errs?.has('alto') ? 'Alto inválido (debe ser mayor a 0, en metros)' : undefined}
+                        className={cn(
+                          'w-20 text-right',
+                          errs?.has('alto') && 'border-destructive bg-destructive/10 text-destructive',
+                        )} />
                     </Td>
                     <Td className="border-l border-border text-right text-muted-foreground">
                       {ln ? ln.m2.toFixed(2) : '—'}
@@ -482,11 +895,18 @@ export function CotizadorFase0() {
                     </Td>
                     <Td className="text-right font-semibold">{ln ? formatCLP(ln.total) : '—'}</Td>
                     <Td className="text-right print:hidden">
-                      <button onClick={() => quitarFila(f.id)}
-                        className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                        title="Quitar">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button onClick={() => duplicarFila(f.id)}
+                          className="rounded p-1 text-muted-foreground hover:bg-accent/10 hover:text-accent"
+                          title="Duplicar fila">
+                          <Copy className="h-3.5 w-3.5" />
+                        </button>
+                        <button onClick={() => quitarFila(f.id)}
+                          className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                          title="Quitar">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </Td>
                   </tr>
                 );
@@ -533,7 +953,12 @@ export function CotizadorFase0() {
                     <Td>
                       <CellInput list="codint-options" value={a.codInt}
                         onChange={(e) => setAdic(a.id, { codInt: e.target.value })}
-                        placeholder="ej. DOM 38" className="w-24" />
+                        placeholder="ej. DOM 38"
+                        title={erroresImportAdic.has(a.id) ? 'COD_INT no encontrado en el catálogo' : undefined}
+                        className={cn(
+                          'w-24',
+                          erroresImportAdic.has(a.id) && 'border-destructive bg-destructive/10 text-destructive',
+                        )} />
                     </Td>
                     <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
                     <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
@@ -580,6 +1005,18 @@ export function CotizadorFase0() {
           </table>
         </section>
 
+        {/* Avisos de importación de Excel (datos llave a corregir a mano) */}
+        {(erroresImport.size > 0 || erroresImportAdic.size > 0) && (
+          <section className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive print:hidden">
+            <p className="font-semibold">
+              ⚠ Hay {erroresImport.size + erroresImportAdic.size} fila(s) importada(s)
+              {erroresImport.size > 0 && ` · ${erroresImport.size} cortina(s)`}
+              {erroresImportAdic.size > 0 && ` · ${erroresImportAdic.size} adicional(es)`}{' '}
+              con datos a corregir (marcados en rojo en la grilla). Completa esas celdas para continuar.
+            </p>
+          </section>
+        )}
+
         {/* TOTALES */}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
@@ -588,6 +1025,16 @@ export function CotizadorFase0() {
           <div className="my-1 border-t border-border" />
           <FilaTotal label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />
           <FilaTotal label="Abono 50% (inicio)" valor={formatCLP(t.abono50)} />
+          <div className="my-1 border-t border-border" />
+          <Button
+            onClick={guardarComoOT}
+            disabled={guardandoOT}
+            className="w-full gap-1.5"
+            title="Crea la OT con las cortinas, el cliente y el modelo de fabricación, y continúa el flujo en Fase 2"
+          >
+            <Save className="h-4 w-4" />
+            {guardandoOT ? 'Guardando…' : editOtId ? 'Guardar cambios en la OT' : 'Guardar como OT'}
+          </Button>
         </section>
 
         <section className="mt-4 rounded-lg border border-border bg-card/40 p-4 text-[11px] leading-relaxed text-muted-foreground">
@@ -630,16 +1077,21 @@ function SelectCell({
   value,
   onChange,
   opciones,
+  invalido,
 }: {
   value: string;
   onChange: (v: string) => void;
   opciones: string[];
+  invalido?: boolean;
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-7 w-full max-w-[14rem] rounded-md border border-border bg-card px-1 text-xs focus:border-accent focus:outline-none"
+      className={cn(
+        'h-7 w-full max-w-[14rem] rounded-md border border-border bg-card px-1 text-xs focus:border-accent focus:outline-none',
+        invalido && 'border-destructive bg-destructive/10 text-destructive',
+      )}
     >
       <option value="">—</option>
       {opciones.map((o) => (
@@ -662,6 +1114,27 @@ function Campo({
     <label className="block">
       <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
       <Input value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+// Comuna: desplegable con las comunas de Santiago (RM). Combobox — si la
+// comuna no está en la lista, igual se puede escribir a mano.
+function CampoComuna({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Comuna</span>
+      <Input
+        list="comunas-santiago-rm"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Elegí o escribí…"
+      />
+      <datalist id="comunas-santiago-rm">
+        {COMUNAS_SANTIAGO.map((c) => (
+          <option key={c} value={c} />
+        ))}
+      </datalist>
     </label>
   );
 }

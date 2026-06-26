@@ -91,7 +91,7 @@ export default function OTRiskCard({ ots }: OTRiskCardProps) {
                 <span className="min-w-0 truncate text-[13px] text-foreground/85">
                   {r.cli}
                 </span>
-                <span className="text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                <span className="text-[12px] uppercase tracking-wider text-muted-foreground">
                   {estadoLabel[r.estado] || r.estado}
                 </span>
                 <span aria-hidden />

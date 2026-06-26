@@ -83,6 +83,26 @@ describe('calcularBOM', () => {
     expect(mec?.cantidad).toBe(1);
   });
 
+  it('6 paños sin mecanismo guardado pero ROL+BCO → 6× MEC 33', () => {
+    const ventana = {
+      id: 'v1',
+      categoria: 'ROL',
+      color: 'Blanco',
+      panos: [{ ancho: 1.5, colorPeso: 'BCO' }],
+    };
+    const rows = Array.from({ length: 6 }, (_, i) =>
+      row(
+        { mecanismo: '', colorPeso: 'BCO' },
+        { ventanaId: 'v1', rowIdx: i + 1, anchoCm: 150 },
+      ),
+    );
+    const bom = calcularBOM(rows, [ventana as never]);
+    const mec33 = bom.find(
+      (i) => i.categoria === 'MECANISMO' && i.especificacion === 'MEC 33',
+    );
+    expect(mec33?.cantidad).toBe(6);
+  });
+
   it('sin motor: agrega cadena + peso', () => {
     const bom = calcularBOM([
       row({ largoCadena: '1.5', colorCadena: 'Blanco', colorPeso: 'Blanco' }),
@@ -92,6 +112,14 @@ describe('calcularBOM', () => {
     expect(cadena?.cantidad).toBe(1);
     expect(cadena?.especificacion).toBe('1.5');
     expect(peso?.cantidad).toBe(1);
+  });
+
+  it('con codCadena: la especificación lleva el código del inventario (CAD01)', () => {
+    const bom = calcularBOM([
+      row({ codCadena: 'CAD01', largoCadena: '3mts', colorCadena: 'GRS' }),
+    ]);
+    const cadena = bom.find((i) => i.descripcion === 'Cadena');
+    expect(cadena?.especificacion).toBe('CAD01');
   });
 
   it('con motor: NO agrega cadena ni peso, pero sí motor', () => {
@@ -172,7 +200,6 @@ describe('calcularBOM', () => {
       }),
     ]);
     const cats = bom.map((i) => i.categoria);
-    // TUBERÍA < MECANISMO < MANILLA < CENEFA
     expect(cats.indexOf('TUBERÍA')).toBeLessThan(cats.indexOf('MECANISMO'));
     expect(cats.indexOf('MECANISMO')).toBeLessThan(cats.indexOf('MANILLA'));
     expect(cats.indexOf('MANILLA')).toBeLessThan(cats.indexOf('CENEFA'));

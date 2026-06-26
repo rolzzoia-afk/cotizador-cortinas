@@ -92,7 +92,7 @@ export default function FallasTab({
       <div className="overflow-auto rounded-2xl border border-border bg-card">
         <table className="w-full border-collapse text-[12px]" style={{ minWidth: 1400 }}>
           <thead>
-            <tr className="border-b border-border bg-white/[0.03] text-[10px] uppercase tracking-wider text-muted-foreground">
+            <tr className="border-b border-border bg-white/[0.03] text-[12px] uppercase tracking-wider text-muted-foreground">
               {[
                 'Código',
                 'Tipo',
@@ -144,7 +144,7 @@ export default function FallasTab({
                       {f.tipo ? (
                         <span
                           className={cn(
-                            'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                            'rounded-full border px-2 py-0.5 text-[12px] font-bold',
                             tipoBadgeCls(f.tipo),
                           )}
                         >
@@ -167,7 +167,7 @@ export default function FallasTab({
                     </td>
                     <td className="px-2.5 py-2">
                       {f.tipo_falla && (
-                        <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[10px] text-warning">
+                        <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[12px] text-warning">
                           {f.tipo_falla}
                         </span>
                       )}
@@ -188,7 +188,7 @@ export default function FallasTab({
                     <td className="px-2.5 py-2 text-center">
                       <span
                         className={cn(
-                          'rounded-full border px-2 py-0.5 text-[10px] font-bold',
+                          'rounded-full border px-2 py-0.5 text-[12px] font-bold',
                           badgeCls,
                         )}
                       >

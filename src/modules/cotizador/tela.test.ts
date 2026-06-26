@@ -140,6 +140,63 @@ describe('buildOptimizerRows', () => {
     );
     expect(rows.map((r) => r.rowIdx)).toEqual([1, 2, 3]);
   });
+
+  it('propaga sentido y direccion de la ventana a la fila (etiqueta)', () => {
+    const rows = buildOptimizerRows(
+      [v({ sentido: 'INTERNO', direccion: 'CAD [DERECHA]' } as Partial<VentanaItem>)],
+      cat,
+    );
+    expect(rows[0].sentido).toBe('INTERNO');
+    expect(rows[0].direccion).toBe('CAD [DERECHA]');
+  });
+
+  it('deriva tuberiaCod del modelo aunque el chip del paño venga vacío', () => {
+    const modelo = { diametro_tubo_mm: 38, sistema: 'ROLLER', codigos_tubo: 'E02;E66' };
+    const rows = buildOptimizerRows(
+      [v({ categoria: 'ROL', modelo, panos: [{ ancho: 1.5, alto: 2.0 }] } as Partial<VentanaItem>)],
+      cat,
+    );
+    // ancho 1,5 m ≤ 2,2 m → E02 (regla por ancho), sin chip elegido a mano.
+    expect(rows[0].tuberiaCod).toBe('38mm_E02');
+  });
+
+  it('respeta el tubo elegido a mano en el chip del paño', () => {
+    const modelo = { diametro_tubo_mm: 38, sistema: 'ROLLER', codigos_tubo: 'E02;E66' };
+    const rows = buildOptimizerRows(
+      [v({ categoria: 'ROL', modelo, panos: [{ ancho: 1.5, alto: 2.0, tuberia: '0,38mm [E66] 1,2mm' }] } as Partial<VentanaItem>)],
+      cat,
+    );
+    expect(rows[0].tuberiaCod).toBe('38mm_E66');
+  });
+
+  it('piezas: cenefa ovalada usa el despiece real (medida) + código por estructura', () => {
+    const modelo = {
+      sistema: 'CENEFA_OVALADA',
+      tipo_rol: 'ROL_CENEFA_OV_MANUAL_38mm',
+      diametro_tubo_mm: 38,
+      codigos_tubo: 'E02;E66',
+      dcto_tubo_cm: 1.8,
+      dcto_cenefa_cm: 1.5,
+      suma_peso_cm: 0.1,
+    };
+    const rows = buildOptimizerRows(
+      [v({ modelo, color: 'NEGRO', panos: [{ ancho: 1.565, alto: 2.726 }] } as Partial<VentanaItem>)],
+      cat,
+    );
+    const piezas = rows[0].piezas || [];
+    const tubo = piezas.find((p) => p.columnaExcel === 'TUBO');
+    const peso = piezas.find((p) => p.columnaExcel === 'PESO');
+    const cenefa = piezas.find((p) => p.columnaExcel === 'CENEFA OVALADA');
+    // Medidas reales (no la resta hardcodeada ancho−3.8/−4.2).
+    expect(tubo?.medidaCm).toBe(153.2); // 156.5 − 1.8 − 1.5
+    expect(peso?.medidaCm).toBe(152.8); // tubo − 0.4
+    expect(cenefa?.medidaCm).toBe(155); // 156.5 − 1.5
+    // Códigos: tubo del catálogo de tubería; cenefa/peso color-fijo (NEGRO).
+    expect(tubo?.cod).toBe('38mm_E02');
+    expect(peso?.cod).toBe('E14'); // peso roller negro
+    expect(cenefa?.cod).toBe('E26'); // cenefa ovalada negro
+    expect(cenefa?.color).toBe('NEGRO');
+  });
 });
 
 // ── restorePlanGuardado ──────────────────────────────────────────

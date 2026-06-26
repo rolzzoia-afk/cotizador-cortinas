@@ -4,8 +4,13 @@
 // desde las filas del optimizador (OptimizerRow con pano).
 
 import type { BomItem } from '@/modules/ots/types';
+import type { VentanaItem } from '@/modules/ots/types';
+import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
+import { tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
+import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
+import { OPCIONES_MECANISMO, OPCIONES_TUBERIA } from './fase2';
 
 const EMPTY_PANO: Partial<Pano> = {};
 
@@ -13,11 +18,18 @@ const CAT_ORDER = ['TUBERÍA', 'MECANISMO', 'CADENA', 'MOTOR', 'MANILLA', 'CENEF
 
 function extraerSpec(s: string | undefined): string {
   if (!s) return '';
+  const mec = s.match(/\[MEC (\d+)\]/i);
+  if (mec) return `MEC ${mec[1]}`;
   const m = s.match(/\[(.+)\]/);
   return m ? m[1] : s;
 }
 
-export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
+function ventanaDeFila(row: OptimizerRow, ventanas?: VentanaItem[]): VentanaItem | undefined {
+  if (!ventanas?.length) return undefined;
+  return ventanas.find((v) => String(v.id) === String(row.ventanaId));
+}
+
+export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): BomItem[] {
   const acc = new Map<string, BomItem>();
   const add = (
     key: string,
@@ -38,16 +50,30 @@ export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
 
   rows.forEach((row) => {
     const p = row.pano || EMPTY_PANO;
-    const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
+    const v = ventanaDeFila(row, ventanas);
+    const modelo = (v?.modelo as ModeloDespiece | null | undefined) ?? null;
+    const categoria = (v?.categoria as string) || '';
+    const ventanaColor = (v?.color as string) || (p.color as string) || '';
+    const anchoM = row.ancho || parseFloat(String(p.ancho ?? 0)) || 0;
 
-    // Mecanismo (con o sin motor) — calculado antes para que el tubo use el mismo color
-    const mecSpec = extraerSpec(p.mecanismo);
-    const mecColor = p.colorMecanismo || '';
+    const mecChip = mecanismoParaPano(
+      p,
+      ventanaColor,
+      modelo,
+      OPCIONES_MECANISMO,
+      categoria,
+    );
+    const mecSpec = extraerSpec(mecChip || (p.mecanismo as string));
+    const mecColor = colorAccesoriosDePano(p, ventanaColor) || p.colorMecanismo || '';
 
-    // Tubo — clave incluye el largo para separar tubos con largos distintos.
-    // El color del tubo = colorMecanismo || color (van pintados juntos),
-    // el largo va en especificación como "E02 · 1.42m".
-    const tubSpec = extraerSpec(p.tuberia);
+    const tubChip = tuberiaParaPano(
+      anchoM,
+      modelo,
+      p.tuberia as string,
+      OPCIONES_TUBERIA,
+      categoria,
+    );
+    const tubSpec = extraerSpec(tubChip || (p.tuberia as string));
     const anchoCm = row.anchoCm || row.ancho * 100;
     const tubLargoM = ((anchoCm - 3.8) / 100).toFixed(2);
     const tubColor = mecColor || p.color || '';
@@ -59,22 +85,28 @@ export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
       add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
     }
 
+    const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
+
     if (!tieneMotor) {
-      // Cadena
+      // Cadena. Si el cotizador eligió la cadena real del inventario,
+      // `codCadena` (CAD01…) va en la especificación para enlazar al stock
+      // (mismo patrón que el mecanismo). Si no, cae al largo de texto antiguo.
+      const cadCod = (p.codCadena || '').trim();
       const cadLargo = p.largoCadena ? String(p.largoCadena) : '';
       const cadColor = p.colorCadena || '';
-      if (cadLargo) {
-        const cadKey = `CAD|${cadLargo}|${cadColor}`;
-        add(cadKey, 'CADENA', 'Cadena', cadLargo, cadColor, 1, 'unid.');
+      if (cadCod || cadLargo) {
+        const cadKey = `CAD|${cadCod || cadLargo}|${cadColor}`;
+        add(cadKey, 'CADENA', 'Cadena', cadCod || cadLargo, cadColor, 1, 'unid.');
       }
-      // Peso
+      // Peso de cadena. Si se eligió el peso real del inventario, su código
+      // (PCA01/PCA04) va en la especificación para enlazar al stock.
+      const pesoCod = (p.codPeso || '').trim();
       const pesoColor = p.colorPeso || '';
-      if (pesoColor) {
-        const pesoKey = `PESO|${pesoColor}`;
-        add(pesoKey, 'CADENA', 'Peso de cadena', '', pesoColor, 1, 'unid.');
+      if (pesoCod || pesoColor) {
+        const pesoKey = `PESO|${pesoCod || pesoColor}`;
+        add(pesoKey, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.');
       }
     } else {
-      // Motor (tipo + lado + color mecanismo)
       const ladoMot = p.ladoMotor || '';
       const motEspec = [p.motorTipo, ladoMot ? `Lado ${ladoMot}` : '']
         .filter(Boolean)
@@ -85,13 +117,11 @@ export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
       if (p.motorHubUsb) add('MOT-HUB', 'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
     }
 
-    // Mecanismo Dual
     if (p.dual) {
       const dualKey = `DUAL|${mecColor}`;
       add(dualKey, 'MECANISMO', 'Mecanismo Dual', mecSpec || '', mecColor, 1, 'unid.');
     }
 
-    // Manillas
     const manCant = parseInt(String(p.manillaCant ?? '0')) || 0;
     if (manCant > 0) {
       const manColor = p.manillaColor || '';
@@ -99,7 +129,6 @@ export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
       add(manKey, 'MANILLA', 'Manilla', '', manColor, manCant, 'unid.');
     }
 
-    // Cenefa
     const cenefaTipo = p.cenefa || 'No';
     if (cenefaTipo && cenefaTipo !== 'No') {
       const cenColor = p.colorTapa || '';
@@ -121,8 +150,6 @@ export function calcularBOM(rows: OptimizerRow[]): BomItem[] {
   });
 }
 
-// Persiste el BOM: actualiza datos_generales.bom y sincroniza
-// la tabla orden_materiales (delete + insert) que consume Bodeguero.
 export type GuardarBomResult = {
   ordenMaterialesOk: boolean;
   errorOrdenMateriales?: string;

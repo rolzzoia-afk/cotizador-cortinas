@@ -23,7 +23,7 @@ export default function StockBar({ item }: StockBarProps) {
         }`}>
           {item.totalMetros.toLocaleString('es-CL')}
         </span>
-        <span className="text-[10px] text-neutral-500 font-medium"> / {maxMeters}m</span>
+        <span className="text-[12px] text-neutral-500 font-medium"> / {maxMeters}m</span>
       </div>
 
       {/* Level Bar */}

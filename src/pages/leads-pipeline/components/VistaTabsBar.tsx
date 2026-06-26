@@ -54,7 +54,7 @@ export default function VistaTabsBar({ vista, onCambio, segPendientes }: VistaTa
       >
         <CalendarClock className="h-3.5 w-3.5" /> Seguimientos
         {segPendientes > 0 && (
-          <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+          <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[12px] font-bold text-destructive-foreground">
             {segPendientes}
           </span>
         )}

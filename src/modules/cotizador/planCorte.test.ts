@@ -153,14 +153,15 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.46, alto: 2.05 }],
       },
     ]);
-    // Pieza: 150x230. Sobrante: 200x235 → excede 50cm de ancho y 5cm de alto
+    // Pieza: 150x230 (bordered). En sobrante se usa el ancho nominal 146
+    // (150 - BORDE 4). Sobrante 200x235 → franja restante 200 - 146 = 54.
     const sobrante = pano('SC001', 200, 235);
     const plan = generarPlanCorte([ot], [sobrante]);
     expect(plan.sobrantes).toHaveLength(1);
     expect(plan.sobrantes[0].regla).toBe(2);
     expect(plan.sobrantes[0].sobranteAncho).toEqual({
       cod: 'SC001',
-      ancho: 50, // 200 - 150
+      ancho: 54, // 200 - 146 (ancho nominal, sin BORDE)
       alto: 235,
     });
   });
@@ -218,6 +219,62 @@ describe('generarPlanCorte', () => {
     expect(plan.rollo.length).toBeGreaterThan(0);
   });
 
+  it('Regla 2 mejorada: dos cortinas chicas comparten un mismo sobrante', () => {
+    const ot = hacerOT([
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L1', alto: 1.6, panos: [{ ancho: 0.52, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L2', alto: 1.6, panos: [{ ancho: 0.75, alto: 1.6 }] },
+    ]);
+    // Piezas: nominal 52 y 75 cm (bordered 56/79 menos BORDE 4). El sobrante
+    // 140×190 las toma juntas (52 + 75 = 127 ≤ 140).
+    const sobrante = pano('BK 69', 140, 190);
+    const plan = generarPlanCorte([ot], [sobrante]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].placed).toHaveLength(2); // ambas en el mismo sobrante
+    expect(plan.rollo).toHaveLength(0); // no quedó nada para el rollo
+    // Quedan lado a lado: la más ancha (75) en px=0, la otra (52) a continuación.
+    const xs = plan.sobrantes[0].placed.map((p) => p.px).sort((a, b) => a - b);
+    expect(xs).toEqual([0, 75]);
+    // Franja restante 140-127=13 cm < 30 → no se registra.
+    expect(plan.sobrantes[0].sobranteAncho).toBeNull();
+  });
+
+  it('Regla 2 mejorada: la cortina que no entra al sobrante cae al rollo', () => {
+    const ot = hacerOT([
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L1', alto: 1.6, panos: [{ ancho: 0.52, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L2', alto: 1.6, panos: [{ ancho: 0.75, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L3', alto: 1.6, panos: [{ ancho: 2.5, alto: 1.6 }] },
+    ]);
+    const sobrante = pano('BK 69', 140, 190);
+    const plan = generarPlanCorte([ot], [sobrante]);
+    expect(plan.sobrantes[0].placed).toHaveLength(2);
+    expect(plan.rollo.length).toBeGreaterThan(0); // la de 2,5 m va al rollo
+  });
+
+  it('umbrales nuevos: caso ANGELICA baja a 2 paños de rollo (3 cortinas a colmena)', () => {
+    const ot = hacerOT([
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L1', alto: 1.6, panos: [{ ancho: 2.72, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L2', alto: 1.6, panos: [{ ancho: 2.63, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L3', alto: 1.6, panos: [{ ancho: 1.44, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L4', alto: 1.6, panos: [{ ancho: 0.75, alto: 1.6 }] },
+      { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L5', alto: 1.6, panos: [{ ancho: 0.52, alto: 1.6 }] },
+    ]);
+    // Tres sobrantes disponibles. El óptimo (igual que el corte manual) usa
+    // solo DOS: 133×200 toma 0,52+0,75 (alto 200 entra por VENTANA_ALTO=20) y
+    // 146×195 toma 1,44 (144 ≤ 146 sin BORDE). El 122×195 queda INTACTO.
+    const sobrantes = [
+      pano('BK 69', 133, 200, { _docId: 's-133' }),
+      pano('BK 69', 146, 195, { _docId: 's-146' }),
+      pano('BK 69', 122, 195, { _docId: 's-122' }), // no debería usarse
+    ];
+    const plan = generarPlanCorte([ot], sobrantes);
+    const r = resumenPlan(plan);
+    expect(r.desdeSobrante).toBe(3); // las 3 chicas salen de sobrantes
+    expect(r.desdeRollo).toBe(2); // solo 2,72 y 2,63 van al rollo → 2 paños
+    // Consolida en 2 sobrantes y preserva el 122×195 → la colmena se achica más.
+    expect(plan.sobrantes).toHaveLength(2);
+    expect(plan.sobrantes.map((g) => g.sobrante._docId)).not.toContain('s-122');
+  });
+
   it('Regla 3: prioridad por tipo (FALLA antes que SOBRANTE)', () => {
     const ot = hacerOT([
       { codInt: 'SC001', producto: 'Roller SC', ubicacion: 'L1', panos: [{ ancho: 1.46, alto: 2.05 }] },
@@ -229,14 +286,16 @@ describe('generarPlanCorte', () => {
     expect(plan.sobrantes[0].sobrante._docId).toBe('falla');
   });
 
-  it('Regla 4: FIFO por creadoEn dentro del mismo tipo', () => {
+  it('sin FIFO + best-fit: una pieza chica usa el sobrante más justo, no el más grande', () => {
     const ot = hacerOT([
-      { codInt: 'SC001', producto: 'Roller SC', ubicacion: 'L1', panos: [{ ancho: 1.46, alto: 2.05 }] },
+      { codInt: 'SC001', producto: 'Roller SC', ubicacion: 'L1', alto: 2.0, panos: [{ ancho: 0.7, alto: 2.0 }] },
     ]);
-    const nuevo = pano('SC001', 150, 230, { _docId: 'nuevo', creadoEn: '2026-02-01T00:00:00Z' });
-    const viejo = pano('SC001', 150, 230, { _docId: 'viejo', creadoEn: '2026-01-01T00:00:00Z' });
-    const plan = generarPlanCorte([ot], [nuevo, viejo]);
-    expect(plan.sobrantes[0].sobrante._docId).toBe('viejo');
+    // Pieza nominal 70 cm (74 - BORDE), alto 225. Hay un sobrante grande y uno justo.
+    const grande = pano('SC001', 200, 230, { _docId: 'grande' });
+    const justo = pano('SC001', 80, 230, { _docId: 'justo' });
+    const plan = generarPlanCorte([ot], [grande, justo]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].sobrante._docId).toBe('justo'); // usa el justo, preserva el grande
   });
 
   it('pieza sin codInt: no debería matchear sobrantes (queda en rollo o sinStock)', () => {
@@ -344,5 +403,34 @@ describe('resumenPlan', () => {
   it('plan vacío: todo en 0', () => {
     const r = resumenPlan({ sobrantes: [], rollo: [], sinStock: [], otsIncluidas: [] });
     expect(r).toEqual({ totalPiezas: 0, desdeSobrante: 0, desdeRollo: 0, sinStock: 0 });
+  });
+});
+
+// ── Rotación proactiva (caso real OT 266-1 de Eduardo) ──────────────
+describe('generarPlanCorte — propone rotación cuando ahorra tela', () => {
+  it('dos screen ~150×185 → rotados consumen ~306cm de rollo en vez de ~422', () => {
+    const ot = hacerOT([
+      { producto: 'ROLLER SCREEN - TRASLUCIDA PREMIUM', codInt: 'TR 02', ubicacion: 'TERRAZA IZQ', alto: 1.85, panos: [{ ancho: 1.501, alto: 1.85 }] },
+      { producto: 'ROLLER SCREEN - TRASLUCIDA PREMIUM', codInt: 'TR 02', ubicacion: 'TERRAZA DER', alto: 1.85, panos: [{ ancho: 1.475, alto: 1.85 }] },
+    ]);
+    const plan = generarPlanCorte([ot], []);
+    expect(plan.rollo).toHaveLength(1);
+    const g = plan.rollo[0];
+    // El layout propuesto rota las piezas (210 de ancho cabe en el rollo)
+    expect(g.tieneRotaciones).toBe(true);
+    expect(g.piezasRotadas.length).toBe(2);
+    expect(g.altoCorte).toBeLessThan(330); // ~306-310 vs ~422 sin rotar
+    // La alternativa vertical (sin rotación) sigue disponible para rechazar
+    expect(g.layoutVertical).not.toBeNull();
+    expect(g.altoVertical).toBeGreaterThan(400);
+  });
+
+  it('si rotar no ahorra (≥20cm), se mantiene el layout sin rotación', () => {
+    const ot = hacerOT([
+      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'V1', alto: 2.0, panos: [{ ancho: 2.8, alto: 2.0 }] },
+    ]);
+    const plan = generarPlanCorte([ot], []);
+    expect(plan.rollo).toHaveLength(1);
+    expect(plan.rollo[0].tieneRotaciones).toBe(false);
   });
 });

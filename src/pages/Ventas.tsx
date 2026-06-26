@@ -247,7 +247,7 @@ export function Ventas() {
           </button>
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-foreground">KPI Ventas</span>
-            <span className="rounded-full border border-accent/30 bg-accent/20 px-2 py-0.5 text-[10px] font-semibold text-accent">
+            <span className="rounded-full border border-accent/30 bg-accent/20 px-2 py-0.5 text-[12px] font-semibold text-accent">
               DIARIO
             </span>
           </div>

@@ -20,6 +20,8 @@ import { useOT } from '@/modules/ots/hooks';
 import {
   ajustarPanos,
   crearPanoVacio,
+  OPCIONES_MECANISMO,
+  OPCIONES_TUBERIA,
   PANO_COLORS,
   postInstalacionVacia,
   resumenPanos,
@@ -28,10 +30,35 @@ import {
   validarVentana,
   type PostInstalacionData,
 } from '@/modules/cotizador/fase2';
+import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { obtenerAnchoRollo } from '@/modules/cotizador/tela';
 import { CATEGORIAS_FASE1, catBadgeColor } from '@/modules/cotizador/categorias';
+import { enriquecerPanoDesdeFase0, enriquecerVentanaDesdeFase0 } from '@/modules/cotizador/fase0-sync';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { esCadenaRoller, esPesoSeleccionable, type CadenaInsumo } from '@/modules/cotizador/cadenas';
 import { PanoEditor } from '@/components/cotizador/PanoEditor';
 import { PostInstalacion } from '@/components/cotizador/PostInstalacion';
 import type { Pano, Ventana } from '@/modules/cotizador/types';
+import { confirmar } from '@/components/ui/confirm';
+import { useDescuentosModelo } from '@/modules/descuentos/hooks';
+import {
+  claveModelo,
+  elegirModeloPorColor,
+  etiquetaModelo,
+  modelosParaCategoria,
+} from '@/modules/descuentos/tipos';
+import { calcularDespiece, contextoDespieceDesdePano, MODELO_DESPIECE_STUB } from '@/modules/descuentos/despiece';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import {
+  categoriaRequiereMecanismo,
+  colorAccesoriosDePano,
+  mecanismoParaPano,
+  modeloDesdeChipMecanismo,
+  opcionesMecanismoFiltradas,
+  tuberiaParaPano,
+} from '@/modules/descuentos/chips';
+import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 
 type Tab = 'ventanas' | 'post';
 
@@ -39,8 +66,13 @@ export function CotizadorFase2() {
   const { id: otId } = useParams();
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
+  const { catalogo } = useCatalogoProductos();
 
+  const { empresaId } = useAuth();
+  const { modelos } = useDescuentosModelo();
   const [tab, setTab] = useState<Tab>('ventanas');
+  const [cadenas, setCadenas] = useState<CadenaInsumo[]>([]);
+  const [pesos, setPesos] = useState<CadenaInsumo[]>([]);
   const [editandoId, setEditandoId] = useState<string | number | null>(null);
   const [ventanaForm, setVentanaForm] = useState<Ventana | null>(null);
   const [panoActivo, setPanoActivo] = useState(0);
@@ -53,6 +85,25 @@ export function CotizadorFase2() {
     () => ((ot?.storeVentanas || []) as unknown as Ventana[]),
     [ot],
   );
+
+  // Cargar las cadenas del inventario (CAD01…) para el selector del paño.
+  useEffect(() => {
+    if (!empresaId) return;
+    let activo = true;
+    supabase
+      .from('insumos')
+      .select('cod,nemotecnico,color,status')
+      .eq('empresa_id', empresaId)
+      .then(({ data }) => {
+        if (!activo || !data) return;
+        const insumos = data as CadenaInsumo[];
+        setCadenas(insumos.filter((i) => esCadenaRoller(i.cod)));
+        setPesos(insumos.filter((i) => esPesoSeleccionable(i.cod)));
+      });
+    return () => {
+      activo = false;
+    };
+  }, [empresaId]);
 
   // Cargar post-instalación existente al abrir la OT
   useEffect(() => {
@@ -73,9 +124,116 @@ export function CotizadorFase2() {
     }
   }, [ot]);
 
+  // Marca en los paños los chips de MECANISMO y TUBERÍA (reglas-mecanismo / reglas-tuberia).
+  const sincronizarChips = (
+    v: Ventana,
+    modelo: ModeloDespiece | null,
+    forzarTuberia = false,
+  ): Ventana => {
+    return {
+      ...v,
+      panos: v.panos.map((p) => {
+        const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
+        const mecanismo = mecanismoParaPano(p, v.color, modelo, OPCIONES_MECANISMO, v.categoria);
+        const tuberia =
+          modelo && anchoM > 0
+            ? tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria)
+            : forzarTuberia && modelo
+              ? tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria) ||
+                (p.tuberia as string)
+              : (p.tuberia as string) || '';
+        return {
+          ...p,
+          mecanismo: mecanismo || p.mecanismo,
+          tuberia,
+        };
+      }),
+    };
+  };
+
+  const modelosDeVentana = useMemo(
+    () => modelosParaCategoria(modelos, ventanaForm?.categoria || ''),
+    [modelos, ventanaForm?.categoria],
+  );
+
+  const sistemasDeVentana = useMemo(
+    () => [...new Set(modelosDeVentana.map((m) => m.sistema))],
+    [modelosDeVentana],
+  );
+
+  const panoEnEdicion = ventanaForm?.panos[panoActivo];
+
+  const opcionesMecVentana = useMemo(() => {
+    if (!ventanaForm) return OPCIONES_MECANISMO;
+    return opcionesMecanismoFiltradas(
+      modelos,
+      ventanaForm.categoria,
+      colorAccesoriosDePano(panoEnEdicion || {}, ventanaForm.color),
+      OPCIONES_MECANISMO,
+      (panoEnEdicion?.mecanismo as string) || '',
+    );
+  }, [
+    ventanaForm,
+    panoEnEdicion?.colorMecanismo,
+    panoEnEdicion?.colorPeso,
+    panoEnEdicion?.colorCadena,
+    panoEnEdicion?.color,
+    panoEnEdicion?.mecanismo,
+    modelos,
+  ]);
+
+  // Pre-seleccionar mecanismo inventario al editar o cambiar paño/color accesorios
+  useEffect(() => {
+    if (!ventanaForm || editandoId == null) return;
+    setVentanaForm((v) => {
+      if (!v) return v;
+      const synced = sincronizarChips(v, v.modelo ?? null);
+      const igual = v.panos.every(
+        (p, i) =>
+          p.mecanismo === synced.panos[i]?.mecanismo &&
+          p.tuberia === synced.panos[i]?.tuberia,
+      );
+      return igual ? v : synced;
+    });
+  }, [
+    editandoId,
+    panoActivo,
+    ventanaForm?.categoria,
+    ventanaForm?.modelo,
+    panoEnEdicion?.ancho,
+    panoEnEdicion?.colorMecanismo,
+    panoEnEdicion?.colorPeso,
+    panoEnEdicion?.colorCadena,
+  ]);
+
   const iniciarEdicion = (v: Ventana) => {
     setEditandoId(v.id);
-    setVentanaForm({ ...v, panos: v.panos.length > 0 ? v.panos : [crearPanoVacio()] });
+    // Autocompletar el modelo de fabricación si la ventana tiene categoría
+    // pero aún no tiene modelo (OTs creadas antes o desde el Panel). El
+    // mecanismo se elige según el color de accesorios (GRIS→MEC_13, etc.).
+    let modelo = v.modelo ?? null;
+    if (!modelo && v.categoria) {
+      modelo = elegirModeloPorColor(
+        modelosParaCategoria(modelos, v.categoria),
+        (v.panos?.[0]?.colorMecanismo as string) ||
+          (v.panos?.[0]?.color as string) ||
+          v.color,
+      );
+    }
+    const adicionalesFase0 = ot?.datosGenerales.adicionalesFase0;
+    const enriquecida = enriquecerVentanaDesdeFase0(v, catalogo, adicionalesFase0);
+    const panos =
+      enriquecida.panos.length > 0
+        ? enriquecida.panos
+        : [
+            enriquecerPanoDesdeFase0(crearPanoVacio(), enriquecida, catalogo, {
+              adicionalesFase0,
+              panoIndex: 0,
+              totalPanos: 1,
+            }),
+          ];
+    const base: Ventana = { ...enriquecida, modelo, panos };
+    setVentanaForm(sincronizarChips(base, modelo));
     setPanoActivo(0);
   };
 
@@ -114,7 +272,43 @@ export function CotizadorFase2() {
       if (!v) return v;
       const panos = [...v.panos];
       panos[idx] = { ...panos[idx], ...patch };
-      return { ...v, panos };
+      let nuevo: Ventana = { ...v, panos };
+
+      if (patch.colorMecanismo !== undefined || patch.colorPeso !== undefined || patch.colorCadena !== undefined || patch.color !== undefined) {
+        const mec = mecanismoParaPano(panos[idx], v.color, v.modelo ?? null, OPCIONES_MECANISMO, v.categoria);
+        if (mec) {
+          panos[idx] = { ...panos[idx], mecanismo: mec };
+          nuevo = { ...nuevo, panos: [...panos] };
+        }
+      }
+
+      if (patch.ancho !== undefined && v.modelo) {
+        const anchoM = parseFloat(String(panos[idx].ancho ?? 0)) || 0;
+        const tub = tuberiaParaPano(anchoM, v.modelo, panos[idx].tuberia as string, OPCIONES_TUBERIA, v.categoria);
+        if (tub) {
+          panos[idx] = { ...panos[idx], tuberia: tub };
+          nuevo = { ...nuevo, panos: [...panos] };
+        }
+      }
+
+      // Sincronización inversa: si el operario cambia el chip de MECANISMO,
+      // actualizar el modelo de fabricación al candidato correspondiente
+      // (y con él, los descuentos del despiece).
+      if (typeof patch.mecanismo === 'string' && patch.mecanismo) {
+        const candidatos = modelosParaCategoria(modelos, v.categoria);
+        const nuevoModelo = modeloDesdeChipMecanismo(candidatos, patch.mecanismo);
+        if (nuevoModelo) {
+          nuevo = { ...nuevo, modelo: nuevoModelo };
+          const anchoMidx = parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
+          const tub = tuberiaParaPano(anchoMidx, nuevoModelo, nuevo.panos[idx]?.tuberia as string, OPCIONES_TUBERIA, v.categoria);
+          if (tub) {
+            nuevo.panos = nuevo.panos.map((p, i) =>
+              i === idx ? { ...p, tuberia: tub } : p,
+            );
+          }
+        }
+      }
+      return nuevo;
     });
 
   const cambiarTipoVentana = (n: number) => {
@@ -127,14 +321,16 @@ export function CotizadorFase2() {
 
   const guardarVentana = async () => {
     if (!ot || !ventanaForm) return;
-    // Propagar ancho/alto/color del primer paño al nivel ventana si están vacíos
     const primer = ventanaForm.panos[0];
-    const vent: Ventana = {
+    const ventBase: Ventana = {
       ...ventanaForm,
       alto: parseFloat(String(primer?.alto)) || ventanaForm.alto || 0,
       color: primer?.color || ventanaForm.color || 'Blanco',
     };
-    const err = validarVentana(vent);
+    const vent = sincronizarChips(ventBase, ventBase.modelo ?? null, true);
+    const err = validarVentana(vent, {
+      requiereMecanismo: categoriaRequiereMecanismo(vent.categoria),
+    });
     if (err) {
       toast.error(err);
       return;
@@ -158,7 +354,7 @@ export function CotizadorFase2() {
 
   const eliminarVentana = async (id: string | number) => {
     if (!ot) return;
-    if (!confirm('¿Eliminar esta ventana?')) return;
+    if (!await confirmar('¿Eliminar esta ventana?')) return;
     try {
       const nuevas = ventanas.filter((v) => v.id !== id);
       await guardar({ storeVentanas: nuevas });
@@ -396,7 +592,34 @@ export function CotizadorFase2() {
                       <Label>Categoría</Label>
                       <select
                         value={ventanaForm.categoria}
-                        onChange={(e) => actualizarVentana({ categoria: e.target.value })}
+                        onChange={(e) => {
+                          const categoria = e.target.value;
+                          // Pre-seleccionar el modelo de fabricación cuando la
+                          // categoría mapea a candidatos del catálogo.
+                          const candidatos = modelosParaCategoria(modelos, categoria);
+                          const actualSirve =
+                            ventanaForm.modelo &&
+                            candidatos.some(
+                              (m) => claveModelo(m) === claveModelo(ventanaForm.modelo!),
+                            );
+                          const nuevoModelo = actualSirve
+                            ? ventanaForm.modelo!
+                            : elegirModeloPorColor(
+                                candidatos,
+                                (ventanaForm.panos?.[0]?.colorMecanismo as string) ||
+                                  (ventanaForm.panos?.[0]?.color as string) ||
+                                  ventanaForm.color,
+                              ) ?? ventanaForm.modelo ?? null;
+                          setVentanaForm((v) =>
+                            v
+                              ? sincronizarChips(
+                                  { ...v, categoria, modelo: nuevoModelo },
+                                  nuevoModelo,
+                                  !actualSirve,
+                                )
+                              : v,
+                          );
+                        }}
                         className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
                       >
                         <option value="">— Selecciona —</option>
@@ -420,6 +643,91 @@ export function CotizadorFase2() {
                       />
                     </div>
                   </div>
+
+                  {/* Modelo de fabricación (catálogo de descuentos → despiece) */}
+                  {modelos.length > 0 && !esCategoriaBeeblack(ventanaForm.categoria) && (
+                    <div className="mt-3">
+                      <Label>Modelo de fabricación</Label>
+                      <select
+                        value={ventanaForm.modelo ? claveModelo(ventanaForm.modelo) : ''}
+                        onChange={(e) => {
+                          const m = modelos.find((x) => claveModelo(x) === e.target.value) ?? null;
+                          setVentanaForm((v) =>
+                            v ? sincronizarChips({ ...v, modelo: m }, m, true) : v,
+                          );
+                        }}
+                        className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
+                      >
+                        <option value="">— Sin modelo (despiece manual) —</option>
+                        {sistemasDeVentana.map((s) => (
+                          <optgroup key={s} label={s.replaceAll('_', ' ')}>
+                            {modelosDeVentana
+                              .filter((m) => m.sistema === s)
+                              .map((m) => (
+                                <option key={claveModelo(m)} value={claveModelo(m)}>
+                                  {etiquetaModelo(m)}
+                                </option>
+                              ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      {ventanaForm.modelo && (
+                        <p className="mt-1 text-[12px] text-muted-foreground">
+                          Ancho máx {ventanaForm.modelo.ancho_max_m} m · dcto tubo{' '}
+                          {ventanaForm.modelo.dcto_tubo_cm} cm · tela{' '}
+                          {ventanaForm.modelo.dcto_tela_cm} cm
+                          {ventanaForm.modelo.notas && ` · ${ventanaForm.modelo.notas}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Despiece en vivo (roller/oscuridad con modelo, BEEBLACK sin modelo) */}
+                  {(ventanaForm.modelo || esCategoriaBeeblack(ventanaForm.categoria)) &&
+                    (() => {
+                      const esBb = esCategoriaBeeblack(ventanaForm.categoria);
+                      const modeloDesp = ventanaForm.modelo ?? MODELO_DESPIECE_STUB;
+                      const conMedidas = ventanaForm.panos
+                        .map((p, i) => ({
+                          i,
+                          p,
+                          anchoM: parseFloat(String(p.ancho ?? 0)) || 0,
+                          altoM: parseFloat(String(p.alto ?? 0)) || 0,
+                        }))
+                        .filter((x) => x.anchoM > 0 && (!esBb || x.altoM > 0));
+                      if (conMedidas.length === 0) return null;
+                      const despieces = conMedidas.map((x) => ({
+                        ...x,
+                        d: calcularDespiece(
+                          modeloDesp,
+                          x.anchoM * 100,
+                          contextoDespieceDesdePano(ventanaForm, x.p),
+                        ),
+                      }));
+                      return (
+                        <div className="mt-2 rounded-md border border-border bg-card/60 p-2.5">
+                          <p className="mb-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                            Despiece (medidas de corte)
+                          </p>
+                          {despieces.map(({ i, anchoM, altoM, d }) => (
+                            <p key={i} className="text-[12.5px] tabular-nums">
+                              <span className="font-semibold">
+                                {ventanaForm.panos.length > 1 ? `Paño ${i + 1}` : 'Cortina'}
+                              </span>{' '}
+                              ({anchoM.toFixed(2)} × {altoM.toFixed(2)} m):{' '}
+                              {d.cortes
+                                .map((c) => `${c.componente} ${c.medidaCm.toFixed(1)}`)
+                                .join(' · ')}
+                            </p>
+                          ))}
+                          {despieces.some(({ d }) => d.aproximado) && (
+                            <p className="mt-1 text-[11.5px] font-medium text-warning">
+                              ⚠ {despieces[0].d.notas[0]}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
 
                   {/* Selector tipo ventana */}
                   <div className="mt-3">
@@ -481,6 +789,14 @@ export function CotizadorFase2() {
                   pano={ventanaForm.panos[panoActivo] || crearPanoVacio()}
                   panoNum={panoActivo + 1}
                   onChange={(patch) => actualizarPano(panoActivo, patch)}
+                  cadenas={cadenas}
+                  pesos={pesos}
+                  opcionesMecanismo={opcionesMecVentana}
+                  ocultarMecanismo={!categoriaRequiereMecanismo(ventanaForm.categoria)}
+                  categoria={ventanaForm.categoria}
+                  sentidoVentana={ventanaForm.sentido}
+                  adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
+                  anchoRollo={obtenerAnchoRollo(ventanaForm.codInt, catalogo)}
                 />
 
                 {/* Acciones */}

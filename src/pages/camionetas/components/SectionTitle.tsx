@@ -8,7 +8,7 @@ interface SectionTitleProps {
 
 export default function SectionTitle({ children }: SectionTitleProps) {
   return (
-    <div className="mb-2 pt-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+    <div className="mb-2 pt-1 text-[12px] font-bold uppercase tracking-wider text-muted-foreground">
       {children}
     </div>
   );

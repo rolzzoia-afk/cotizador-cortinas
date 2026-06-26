@@ -1,0 +1,28 @@
+-- ════════════════════════════════════════════════════════════════════
+-- SUSCRIPCIONES (BASE SIN PASARELA) · 2026-06-10 (YA APLICADO)
+-- Migración: suscripciones_planes_y_vencimiento
+--
+-- Decisiones del negocio: planes por nivel (trial/basico/pro),
+-- trial de 30 días, pasarela de pago aún por definir → activación
+-- manual mientras tanto.
+--
+-- · tenants += trial_termina_en, activo_hasta, exenta (+ CHECK de plan).
+-- · Rolzzo: plan='pro', exenta=true. Empresas trial existentes: 30 días
+--   desde hoy. registrar_tenant: las nuevas nacen con 30 días.
+-- · RPC estado_suscripcion() → {activa, plan, vence, dias_restantes,
+--   en_trial, motivo}. Vigente = exenta OR max(activo_hasta,
+--   trial_termina_en) >= now().
+--
+-- Frontend: useAuth().suscripcion; ProtectedRoute bloquea TODA la app si
+-- activa=false (pantalla "trial vencido / suscripción vencida", datos no
+-- se pierden, cerrar sesión); Admin → "Suscripción" muestra plan, fecha
+-- de vencimiento y días restantes (avisa si quedan ≤7).
+--
+-- ACTIVACIÓN MANUAL (hasta integrar pasarela): cuando una empresa pague,
+--   UPDATE tenants SET plan='basico'|'pro', activo_hasta = <fecha>
+--   WHERE id = '<empresa>';
+-- La integración futura de pagos solo debe actualizar activo_hasta.
+--
+-- PENDIENTE para diferenciar planes: gating de módulos por plan (p.ej.
+-- agente IA solo en 'pro') usando las tablas modulos/empresa_modulos.
+-- ════════════════════════════════════════════════════════════════════

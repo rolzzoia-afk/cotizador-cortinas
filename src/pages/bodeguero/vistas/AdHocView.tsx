@@ -395,7 +395,7 @@ export default function AdHocView({ modo, empresaId, onCerrar }: AdHocViewProps)
         {fase === 'confirm' && insumo && (
           <>
             <div className="mb-4 rounded-2xl border border-border bg-card p-4">
-              <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              <div className="text-[12px] uppercase tracking-wider text-muted-foreground">
                 Código: {insumo.cod}
               </div>
               <div className="text-base font-semibold">

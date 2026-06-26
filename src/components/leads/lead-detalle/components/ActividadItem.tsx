@@ -78,7 +78,7 @@ export default function ActividadItem({ act }: ActividadItemProps) {
     <li className="flex gap-3 border-l-2 border-border pl-3 text-xs">
       <div className="flex-1">
         <div className="text-foreground">{texto}</div>
-        <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+        <div className="mt-0.5 text-[12px] uppercase tracking-wide text-muted-foreground">
           {formatFecha(act.created_at)}
         </div>
       </div>

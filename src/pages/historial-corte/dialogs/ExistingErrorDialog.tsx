@@ -55,7 +55,7 @@ export default function ExistingErrorDialog({
           ))}
         </div>
         <div className="rounded-xl border border-destructive/30 bg-destructive/15 p-4">
-          <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-destructive">
+          <div className="mb-1 text-[12px] font-bold uppercase tracking-wider text-destructive">
             Motivo registrado
           </div>
           <div className="text-sm font-semibold text-red-200">{existingError.motivo}</div>

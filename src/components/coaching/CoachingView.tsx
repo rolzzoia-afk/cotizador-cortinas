@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
+import { confirmar } from '@/components/ui/confirm';
 import {
   useCoaching,
   crearObjecion,
@@ -94,7 +95,7 @@ export function CoachingView() {
   };
 
   const handleArchivarObj = async (o: CoachingObjecion) => {
-    if (!confirm('¿Archivar esta objeción? Quedará oculta, pero no se borra de la base de datos.')) return;
+    if (!await confirmar('¿Archivar esta objeción? Quedará oculta, pero no se borra de la base de datos.')) return;
     try {
       await archivarObjecion(o.id);
       toast.success('Objeción archivada');
@@ -105,7 +106,7 @@ export function CoachingView() {
   };
 
   const handleArchivarTip = async (t: CoachingTip) => {
-    if (!confirm('¿Archivar este tip? Quedará oculto, pero no se borra de la base de datos.')) return;
+    if (!await confirmar('¿Archivar este tip? Quedará oculto, pero no se borra de la base de datos.')) return;
     try {
       await archivarTip(t.id);
       toast.success('Tip archivado');
@@ -403,7 +404,7 @@ function TipCard({
       </div>
       <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{tip.contenido}</p>
       {tip.fuente && (
-        <div className="mt-1.5 text-[10px] uppercase tracking-wide text-accent">{tip.fuente}</div>
+        <div className="mt-1.5 text-[12px] uppercase tracking-wide text-accent">{tip.fuente}</div>
       )}
     </div>
   );

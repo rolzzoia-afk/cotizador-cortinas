@@ -42,7 +42,7 @@ export default function PrioridadDetalleSection({
         {sugerida !== prioridadDraft && (
           <button
             onClick={() => setPrioridadDraft(sugerida)}
-            className="text-[10px] text-accent hover:underline"
+            className="text-[12px] text-accent hover:underline"
             title="Aplicar la prioridad sugerida según scoring, presupuesto y urgencia"
           >
             Sugerida: {PRIORIDAD_LABEL[sugerida]}

@@ -52,7 +52,7 @@ export default function ListaOTs({
           >
             <ArrowUpCircle className="h-5 w-5" />
             <span className="text-sm font-semibold">Salida rápida</span>
-            <span className="text-[10px] opacity-80">Sin OT</span>
+            <span className="text-[12px] opacity-80">Sin OT</span>
           </Button>
           <Button
             onClick={onEntrada}
@@ -61,7 +61,7 @@ export default function ListaOTs({
           >
             <ArrowDownCircle className="h-5 w-5" />
             <span className="text-sm font-semibold">Entrada rápida</span>
-            <span className="text-[10px] opacity-80">Stock nuevo</span>
+            <span className="text-[12px] opacity-80">Stock nuevo</span>
           </Button>
           <Button
             onClick={onDevolucion}
@@ -70,7 +70,7 @@ export default function ListaOTs({
           >
             <ArrowLeft className="h-5 w-5" />
             <span className="text-sm font-semibold">Devolución</span>
-            <span className="text-[10px] opacity-80">Devolver de OT</span>
+            <span className="text-[12px] opacity-80">Devolver de OT</span>
           </Button>
         </div>
 

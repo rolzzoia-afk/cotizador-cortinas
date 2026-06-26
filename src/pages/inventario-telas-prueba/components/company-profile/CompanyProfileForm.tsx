@@ -83,7 +83,7 @@ export default function CompanyProfileForm({
         <span className="font-semibold text-neutral-300 block">Enlaces Directos de Imágenes (Opcional)</span>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-[10px] text-neutral-500">URL del Logotipo</label>
+            <label className="block text-[12px] text-neutral-500">URL del Logotipo</label>
             <input
               type="text"
               value={formData.logoUrl || ''}
@@ -93,7 +93,7 @@ export default function CompanyProfileForm({
             />
           </div>
           <div>
-            <label className="block text-[10px] text-neutral-500">URL de Imagen de Banner</label>
+            <label className="block text-[12px] text-neutral-500">URL de Imagen de Banner</label>
             <input
               type="text"
               value={formData.bannerUrl || ''}
@@ -103,7 +103,7 @@ export default function CompanyProfileForm({
             />
           </div>
         </div>
-        <p className="text-[10px] text-neutral-500">
+        <p className="text-[12px] text-neutral-500">
           Puedes arrastrar archivos directamente a las zonas de arriba, o pegar links directos aquí.
         </p>
       </div>

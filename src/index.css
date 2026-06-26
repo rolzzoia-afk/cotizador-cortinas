@@ -44,7 +44,9 @@
     --secondary: 28 16% 18%;
     --secondary-foreground: 36 47% 93%;
     --muted: 28 16% 15%;
-    --muted-foreground: 30 14% 60%;
+    /* 60% → 68%: el gris secundario rozaba el mínimo de contraste (4.5:1)
+       sobre el fondo oscuro; con 68% es legible sin perder jerarquía. */
+    --muted-foreground: 30 16% 68%;
     --accent: 28 49% 59%;
     --accent-foreground: 28 17% 9%;
     --destructive: 353 56% 56%;

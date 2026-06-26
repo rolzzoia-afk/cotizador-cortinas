@@ -19,6 +19,7 @@ import {
   IVA_RATE,
 } from '@/modules/cotizador/calculos';
 import type { Ventana } from '@/modules/cotizador/types';
+import { confirmar } from '@/components/ui/confirm';
 
 export function CotizadorFase3() {
   const { id: otId } = useParams();
@@ -38,7 +39,7 @@ export function CotizadorFase3() {
 
   const eliminarVentana = async (id: string | number) => {
     if (!ot) return;
-    if (!confirm('¿Eliminar esta ventana de la cotización?')) return;
+    if (!await confirmar('¿Eliminar esta ventana de la cotización?')) return;
     try {
       const nuevas = ot.storeVentanas.filter((v) => v.id !== id);
       const totalConIva = calcularTotalesFase3(nuevas as unknown as Ventana[]).total;

@@ -33,7 +33,7 @@ export default function HistoryLog({ logs, onClearLogs, onDeleteLogItem }: Histo
             <Clock size={16} className="text-indigo-400" />
             Registro de Movimientos e Historial
           </h3>
-          <p className="text-[10px] text-neutral-400 mt-0.5">Auditoría en tiempo real de descuentos y reposiciones de metraje</p>
+          <p className="text-[12px] text-neutral-400 mt-0.5">Auditoría en tiempo real de descuentos y reposiciones de metraje</p>
         </div>
 
         {/* Tools */}
@@ -70,12 +70,12 @@ export default function HistoryLog({ logs, onClearLogs, onDeleteLogItem }: Histo
           <div className="p-12 text-center text-neutral-500 space-y-2 bg-neutral-950/10">
             <Clock size={36} className="mx-auto text-neutral-600 stroke-1" />
             <p className="text-xs font-medium text-neutral-300">No se han registrado movimientos aún</p>
-            <p className="text-[10px] text-neutral-500 max-w-sm mx-auto">Cuando descuentes o aumentes metrajes en la tabla de arriba, aparecerán aquí.</p>
+            <p className="text-[12px] text-neutral-500 max-w-sm mx-auto">Cuando descuentes o aumentes metrajes en la tabla de arriba, aparecerán aquí.</p>
           </div>
         ) : (
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-[#181818] border-b border-neutral-800 text-[10px] text-neutral-450 font-bold uppercase tracking-wider select-none">
+              <tr className="bg-[#181818] border-b border-neutral-800 text-[12px] text-neutral-450 font-bold uppercase tracking-wider select-none">
                 <th className="py-3 px-4">Acción</th>
                 <th className="py-3 px-4">Producto</th>
                 <th className="py-3 px-4">Meteaje de Cambio</th>
@@ -93,7 +93,7 @@ export default function HistoryLog({ logs, onClearLogs, onDeleteLogItem }: Histo
                     
                     {/* Action pill */}
                     <td className="py-3.5 px-4 font-semibold">
-                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-bold border ${
                         isDiscount 
                           ? 'bg-rose-950/40 text-rose-400 border-rose-900/30' 
                           : 'bg-emerald-950/40 text-emerald-400 border-emerald-900/30'
@@ -116,7 +116,7 @@ export default function HistoryLog({ logs, onClearLogs, onDeleteLogItem }: Histo
                     <td className="py-3.5 px-4">
                       <div>
                         <span className="font-bold text-neutral-100 block">{log.producto}</span>
-                        <span className="text-[10px] text-neutral-450 font-medium font-mono">
+                        <span className="text-[12px] text-neutral-450 font-medium font-mono">
                           {log.cod_int} · {log.descripcion}
                         </span>
                       </div>
@@ -130,7 +130,7 @@ export default function HistoryLog({ logs, onClearLogs, onDeleteLogItem }: Histo
                     </td>
 
                     {/* Ledger audit */}
-                    <td className="py-3.5 px-4 font-mono text-[10px] text-neutral-500">
+                    <td className="py-3.5 px-4 font-mono text-[12px] text-neutral-500">
                       <span>{log.anteriorMetros}m → <strong className="text-neutral-350">{log.nuevoMetros}m</strong></span>
                     </td>
 
@@ -140,7 +140,7 @@ export default function HistoryLog({ logs, onClearLogs, onDeleteLogItem }: Histo
                     </td>
 
                     {/* Timestamps */}
-                    <td className="py-3.5 px-4 text-right text-neutral-450 font-mono text-[10px]">
+                    <td className="py-3.5 px-4 text-right text-neutral-450 font-mono text-[12px]">
                       {new Date(log.fecha).toLocaleString('es-CL', {
                         day: '2-digit',
                         month: '2-digit',

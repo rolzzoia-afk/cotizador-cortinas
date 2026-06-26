@@ -146,7 +146,7 @@ export default function FiltrosBar({
               key={e}
               onClick={() => toggleEstadoFiltro(e)}
               className={cn(
-                'rounded-full border px-2 py-0.5 text-[10px] font-medium transition-colors',
+                'rounded-full border px-2 py-0.5 text-[12px] font-medium transition-colors',
                 activo
                   ? TONO_CLS[ESTADOS_TONO[e]]
                   : 'border-border bg-transparent text-muted-foreground hover:text-foreground',
@@ -159,7 +159,7 @@ export default function FiltrosBar({
         {filtroEstados.size > 0 && (
           <button
             onClick={() => setFiltroEstados(new Set())}
-            className="ml-1 inline-flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-destructive"
+            className="ml-1 inline-flex items-center gap-0.5 text-[12px] text-muted-foreground hover:text-destructive"
           >
             <X className="h-3 w-3" /> limpiar
           </button>

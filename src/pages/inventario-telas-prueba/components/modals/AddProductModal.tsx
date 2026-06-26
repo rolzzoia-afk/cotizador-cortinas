@@ -99,7 +99,7 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
               <Plus size={16} className="text-indigo-400" />
               Añadir Nuevo Producto al Inventario
             </h3>
-            <p className="text-[10px] text-neutral-400 mt-0.5">Agrega telas de cortinas roller o accesorios personalizados</p>
+            <p className="text-[12px] text-neutral-400 mt-0.5">Agrega telas de cortinas roller o accesorios personalizados</p>
           </div>
           <button 
             type="button" 
@@ -251,11 +251,11 @@ export default function AddProductModal({ isOpen, onClose, onAddProduct }: AddPr
           {/* Quick summary check */}
           <div className="p-3.5 bg-neutral-950 border border-neutral-850 rounded-xl grid grid-cols-2 gap-2 text-xs">
             <div>
-              <span className="text-neutral-450 block text-[10px]">Metraje Total Calculado:</span>
+              <span className="text-neutral-450 block text-[12px]">Metraje Total Calculado:</span>
               <span className="font-bold text-indigo-400 font-mono text-base">{(rollos * metros).toLocaleString('es-CL')} mts</span>
             </div>
             <div>
-              <span className="text-neutral-450 block text-[10px]">Gama de Producto:</span>
+              <span className="text-neutral-450 block text-[12px]">Gama de Producto:</span>
               <span className="font-semibold text-neutral-200 text-xs block truncate mt-1">{producto} {codInt ? `(${codInt})` : ''}</span>
             </div>
           </div>

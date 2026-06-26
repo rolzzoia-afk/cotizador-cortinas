@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/auth';
 import { ROLES_DISPONIBLES } from '@/lib/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { confirmar } from '@/components/ui/confirm';
 
 type PerfilRow = {
   id: string;
@@ -118,7 +119,7 @@ export function UsuariosRolesSection() {
 
   const cambiarRol = async (p: PerfilRow, nuevoRol: string) => {
     if (p.id === user?.id && nuevoRol !== 'admin') {
-      const ok = window.confirm(
+      const ok = await confirmar(
         'Estás a punto de quitarte el rol de administrador A TI MISMO. ' +
           'Perderás acceso al panel Admin. ¿Continuar?',
       );
@@ -156,7 +157,7 @@ export function UsuariosRolesSection() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-[12.5px]">
             <thead>
-              <tr className="border-b border-border text-left text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <tr className="border-b border-border text-left text-[12px] font-bold uppercase tracking-wider text-muted-foreground">
                 <th className="px-2 py-2">Nombre</th>
                 <th className="px-2 py-2">Rol</th>
               </tr>
@@ -167,7 +168,7 @@ export function UsuariosRolesSection() {
                   <td className="px-2 py-1.5">
                     {p.nombre || '—'}
                     {p.id === user?.id && (
-                      <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent">
+                      <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[12px] font-bold uppercase text-accent">
                         tú
                       </span>
                     )}
@@ -236,7 +237,7 @@ export function UsuariosRolesSection() {
                 className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-background px-2.5 py-1.5 text-xs"
               >
                 <code className="font-mono font-bold">{inv.codigo}</code>
-                <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-accent">
+                <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[12px] font-bold uppercase text-accent">
                   {inv.rol}
                 </span>
                 {inv.email && <span className="text-muted-foreground">{inv.email}</span>}

@@ -110,7 +110,7 @@ export default function AdjustStockModal({ item, isOpen, defaultActionType, onCl
         <div className="px-6 py-4 bg-[#181818] border-b border-neutral-800 flex items-center justify-between">
           <div>
             <h3 className="font-bold text-white text-sm tracking-tight">Transacción de Metraje</h3>
-            <p className="text-[10px] text-neutral-450 font-mono mt-0.5">{item.cod} · {item.cod_int}</p>
+            <p className="text-[12px] text-neutral-450 font-mono mt-0.5">{item.cod} · {item.cod_int}</p>
           </div>
           <button 
             type="button" 
@@ -126,7 +126,7 @@ export default function AdjustStockModal({ item, isOpen, defaultActionType, onCl
           
           {/* Target Product Summary card */}
           <div className="bg-neutral-950 p-3.5 rounded-xl border border-neutral-850/80 flex flex-col gap-1.5">
-            <span className="text-[9px] text-neutral-450 font-bold uppercase tracking-wider">Producto Seleccionado</span>
+            <span className="text-[11px] text-neutral-450 font-bold uppercase tracking-wider">Producto Seleccionado</span>
             <div>
               <span className="font-bold text-neutral-100 text-xs block">{item.producto}</span>
               <span className="text-neutral-400 text-xs">{item.descripcion}</span>
@@ -134,11 +134,11 @@ export default function AdjustStockModal({ item, isOpen, defaultActionType, onCl
             
             <div className="grid grid-cols-2 gap-2 mt-1 pt-2 border-t border-neutral-900">
               <div className="text-left">
-                <span className="block text-[9px] text-neutral-500">Stock Actual</span>
-                <span className="font-mono text-sm font-bold text-white">{item.totalMetros} <span className="text-[10px] font-normal text-neutral-500">mts</span></span>
+                <span className="block text-[11px] text-neutral-500">Stock Actual</span>
+                <span className="font-mono text-sm font-bold text-white">{item.totalMetros} <span className="text-[12px] font-normal text-neutral-500">mts</span></span>
               </div>
               <div className="text-left">
-                <span className="block text-[9px] text-neutral-500">Rollos / Descuento</span>
+                <span className="block text-[11px] text-neutral-500">Rollos / Descuento</span>
                 <span className="text-xs font-semibold text-neutral-350">{item.rollos} rollos ({item.descuento})</span>
               </div>
             </div>

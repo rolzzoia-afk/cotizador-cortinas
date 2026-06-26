@@ -52,7 +52,7 @@ export default function InventoryStats({ items }: InventoryStatsProps) {
             <span className="text-2xl font-bold text-white tracking-tight">{totalMeters.toLocaleString('es-CL')}</span>
             <span className="text-xs font-semibold text-neutral-450">mts</span>
           </div>
-          <p className="text-[10px] text-neutral-500 mt-1">Total de rollos y unidades</p>
+          <p className="text-[12px] text-neutral-500 mt-1">Total de rollos y unidades</p>
         </div>
         <div className="p-3 bg-indigo-950/40 text-indigo-405 rounded-xl border border-indigo-900/40">
           <Scissors size={20} className="text-indigo-400" />
@@ -67,7 +67,7 @@ export default function InventoryStats({ items }: InventoryStatsProps) {
             <span className="text-2xl font-bold text-white tracking-tight">{totalRolls}</span>
             <span className="text-xs font-semibold text-neutral-450">unds</span>
           </div>
-          <p className="text-[10px] text-neutral-500 mt-1">Suministro activo en local</p>
+          <p className="text-[12px] text-neutral-500 mt-1">Suministro activo en local</p>
         </div>
         <div className="p-3 bg-teal-950/40 text-teal-400 rounded-xl border border-teal-900/40">
           <Layers size={21} />
@@ -80,13 +80,13 @@ export default function InventoryStats({ items }: InventoryStatsProps) {
           <span className="text-xs text-neutral-400 font-semibold uppercase tracking-wider">Stock Crítico / Agotado</span>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl font-bold text-rose-500 tracking-tight">{lowStockItems.length}</span>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+            <span className={`text-[12px] font-bold px-2 py-0.5 rounded-full ${
               lowStockItems.length > 0 ? 'bg-amber-955/50 text-amber-300 border border-amber-900/40' : 'bg-emerald-950/60 text-emerald-400 border border-emerald-900/30'
             }`}>
               {lowStockItems.length > 0 ? 'Reabastecer' : 'Al día'}
             </span>
           </div>
-          <p className="text-[10px] text-neutral-500 mt-1">Métricas con stock limitado</p>
+          <p className="text-[12px] text-neutral-500 mt-1">Métricas con stock limitado</p>
         </div>
         <div className={`p-3 rounded-xl border ${lowStockItems.length > 0 ? 'bg-rose-950/40 border-rose-900/40 text-rose-455' : 'bg-neutral-900 border-neutral-800 text-neutral-600'}`}>
           <AlertTriangle size={20} className={lowStockItems.length > 0 ? 'text-rose-400' : 'text-neutral-500'} />
@@ -101,7 +101,7 @@ export default function InventoryStats({ items }: InventoryStatsProps) {
             const percent = totalMeters > 0 ? Math.round((data.meters / totalMeters) * 100) : 0;
             return (
               <div key={name} className="flex flex-col gap-0.5">
-                <div className="flex justify-between items-center text-[10px] font-medium">
+                <div className="flex justify-between items-center text-[12px] font-medium">
                   <span className="text-neutral-350 font-semibold">{name}</span>
                   <span className="text-neutral-450 font-mono">{data.meters.toFixed(1)}m ({percent}%)</span>
                 </div>

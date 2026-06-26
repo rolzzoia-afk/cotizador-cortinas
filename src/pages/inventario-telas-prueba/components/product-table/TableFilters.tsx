@@ -91,7 +91,7 @@ export default function TableFilters({
       {/* Category chips */}
       <div className="flex flex-col md:flex-row md:items-center gap-4 pt-1 border-t border-neutral-800/60 text-xs">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-neutral-450 font-bold uppercase tracking-wider text-[10px]">Categoría:</span>
+          <span className="text-neutral-450 font-bold uppercase tracking-wider text-[12px]">Categoría:</span>
           <button
             onClick={() => setCategoryFilter('ALL')}
             className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer transition-all border ${
@@ -125,7 +125,7 @@ export default function TableFilters({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 text-xs">
         {/* Verticales filter */}
         <div className="flex items-center gap-3">
-          <span className="text-neutral-450 font-bold uppercase tracking-wider text-[10px] shrink-0">Tela Cortinas Verticales:</span>
+          <span className="text-neutral-450 font-bold uppercase tracking-wider text-[12px] shrink-0">Tela Cortinas Verticales:</span>
           <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-lg w-full max-w-xs border border-neutral-800">
             {(['ALL', 'SI', 'NO'] as VerticalFilter[]).map((v) => (
               <button
@@ -143,7 +143,7 @@ export default function TableFilters({
 
         {/* Stock filter */}
         <div className="flex items-center gap-3 md:justify-end">
-          <span className="text-neutral-450 font-bold uppercase tracking-wider text-[10px] shrink-0">Filtro de Existencias:</span>
+          <span className="text-neutral-450 font-bold uppercase tracking-wider text-[12px] shrink-0">Filtro de Existencias:</span>
           <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-lg w-full max-w-xs border border-neutral-800">
             <button
               onClick={() => setStockFilter('ALL')}

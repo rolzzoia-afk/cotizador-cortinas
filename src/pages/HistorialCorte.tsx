@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { exportarPlanComoExcel } from '@/modules/planes-corte/exportar-excel';
 import { Input } from '@/components/ui/input';
+import { confirmar } from '@/components/ui/confirm';
 
 import type {
   CorteCtx,
@@ -297,7 +298,7 @@ export function HistorialCorte() {
       toast.error('No se pudo identificar al responsable. Reiniciá sesión.');
       return;
     }
-    const ok = window.confirm(
+    const ok = await confirmar(
       `¿Marcar este sobrante como inexistente físicamente?\n\n${descripcion}\n\n` +
         `Esto lo elimina de la colmena y queda registrado en el historial. Reversible solo por SQL.`,
     );

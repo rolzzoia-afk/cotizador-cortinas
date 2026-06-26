@@ -151,7 +151,7 @@ export default function ProductTable({
           ) : (
             <table className="w-full text-left border-collapse table-auto">
               <thead>
-                <tr className="bg-[#181818] border-b border-neutral-800 text-[10px] text-neutral-450 font-bold uppercase tracking-wider select-none">
+                <tr className="bg-[#181818] border-b border-neutral-800 text-[12px] text-neutral-450 font-bold uppercase tracking-wider select-none">
                   <SortableTh field="cod" current={sortField} onSort={handleSort} className="w-28">COD</SortableTh>
                   <SortableTh field="producto" current={sortField} onSort={handleSort}>Producto</SortableTh>
                   <SortableTh field="cod_int" current={sortField} onSort={handleSort} className="w-24">COD_INT</SortableTh>

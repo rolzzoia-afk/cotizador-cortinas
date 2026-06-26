@@ -32,7 +32,7 @@ export default function EventoItem({ e }: EventoItemProps) {
     <>
       {esRest && (
         <li className="relative mx-4 my-1 border-t border-dashed border-pink-400/35 text-center">
-          <span className="bg-background px-2 text-[10px] text-pink-400">
+          <span className="bg-background px-2 text-[12px] text-pink-400">
             — PUNTO DE RESTAURACIÓN —
           </span>
         </li>
@@ -62,7 +62,7 @@ export default function EventoItem({ e }: EventoItemProps) {
               </span>
             )}
             {fuenteLabel && (
-              <Badge variant="outline" className="text-[10px]">
+              <Badge variant="outline" className="text-[12px]">
                 {fuenteLabel}
               </Badge>
             )}
@@ -85,7 +85,7 @@ export default function EventoItem({ e }: EventoItemProps) {
               {e.notas}
             </div>
           )}
-          <div className="mt-0.5 text-[10px] text-muted-foreground">
+          <div className="mt-0.5 text-[12px] text-muted-foreground">
             {formatFechaHora(e.created_at)}
             {e.registrado_por ? ` · ${e.registrado_por}` : ''}
           </div>

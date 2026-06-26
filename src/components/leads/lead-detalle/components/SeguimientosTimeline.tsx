@@ -44,7 +44,7 @@ export default function SeguimientosTimeline({ lead }: SeguimientosTimelineProps
               <div key={e.n} className="flex items-center gap-2">
                 <span
                   className={cn(
-                    'inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-[10px] font-bold',
+                    'inline-flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border text-[12px] font-bold',
                     hecho
                       ? 'border-success/40 bg-success/15 text-success'
                       : pendiente

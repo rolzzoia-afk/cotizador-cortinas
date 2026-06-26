@@ -32,7 +32,7 @@ export default function ActividadColumn({
           <MessageSquare className="mr-1 inline h-3 w-3" />
           Actividad
         </div>
-        <span className="text-[10px] text-muted-foreground">{actividad.length} entradas</span>
+        <span className="text-[12px] text-muted-foreground">{actividad.length} entradas</span>
       </div>
 
       <div className="space-y-2">

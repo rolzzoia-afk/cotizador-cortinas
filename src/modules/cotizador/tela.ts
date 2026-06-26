@@ -5,6 +5,11 @@
 
 import type { CatalogoProductos, Pano } from './types';
 import type { VentanaItem } from '@/modules/ots/types';
+import type { ModeloDespiece } from '@/modules/descuentos/tipos';
+import { tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
+import { calcularDespiece, contextoDespieceDesdePano } from '@/modules/descuentos/despiece';
+import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
+import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -54,7 +59,50 @@ export type OptimizerRow = {
   ventanaId: string | number;
   panoIndex: number;
   pano?: Pano;
+  /** Código corto del tubo ("38mm_E02") — mismo origen que Excel/PDF. */
+  tuberiaCod?: string;
+  /** Sentido/caída de la cortina (INTERNO/EXTERNO) — Fase 0 ventana. */
+  sentido?: string;
+  /** Dirección de cadena/cierre ("CAD [DERECHA]") — Fase 0 ventana. */
+  direccion?: string;
+  /** Piezas del despiece (medida de corte + código de estructura) para etiquetas. */
+  piezas?: PiezaEtiqueta[];
 };
+
+/** Una pieza del despiece para la etiqueta: medida de corte real + su código. */
+export type PiezaEtiqueta = {
+  componente: string;
+  /** Columna del Excel de órdenes ('TUBO', 'PESO', 'CENEFA OVALADA', …). */
+  columnaExcel: string;
+  medidaCm: number;
+  /** Código de inventario (38mm_E02, E13, E18…) o '' si vive en catálogo accesorios. */
+  cod: string;
+  /** Color de accesorios (identificador cuando no hay código). */
+  color: string;
+};
+
+/** Calcula las piezas del despiece (medida + código) de una ventana/paño. */
+function piezasDespiece(
+  v: VentanaItem,
+  p: Pano,
+  anchoCm: number,
+  tuberiaCod: string,
+): PiezaEtiqueta[] {
+  const modelo = (v.modelo as ModeloDespiece | null | undefined) ?? null;
+  if (!modelo || !(anchoCm > 0)) return [];
+  const ctx = contextoDespieceDesdePano(
+    { categoria: v.categoria as string | undefined, sentido: v.sentido as string | null | undefined },
+    p as Parameters<typeof contextoDespieceDesdePano>[1],
+  );
+  const color = colorAccesoriosDePano(p, v.color as string | undefined);
+  return calcularDespiece(modelo, anchoCm, ctx).cortes.map((c) => ({
+    componente: c.componente,
+    columnaExcel: c.columnaExcel,
+    medidaCm: c.medidaCm,
+    cod: codigoEstructura(c.columnaExcel, color, tuberiaCod),
+    color,
+  }));
+}
 
 // Construye las filas del optimizador desde las ventanas de la OT.
 export function buildOptimizerRows(
@@ -80,6 +128,12 @@ export function buildOptimizerRows(
       const anchoRollo = obtenerAnchoRollo(v.codInt, catalogo);
       const cod = derivarCod(v.producto || '');
       const panoLabel = panos.length > 1 ? ` P${pi + 1}` : '';
+      const tuberiaCod = tuberiaCodigoCorto(
+        (v.modelo as ModeloDespiece | null | undefined) ?? null,
+        String(p.tuberia || ''),
+        anchoM,
+        v.categoria,
+      );
       rows.push({
         rowIdx,
         cod,
@@ -103,6 +157,10 @@ export function buildOptimizerRows(
         ventanaId: v.id,
         panoIndex: pi,
         pano: p as unknown as Pano,
+        tuberiaCod,
+        sentido: String(v.sentido ?? ''),
+        direccion: String(v.direccion ?? ''),
+        piezas: piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod),
       });
     });
   }

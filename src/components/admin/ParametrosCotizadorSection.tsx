@@ -141,7 +141,7 @@ export function ParametrosCotizadorSection() {
                     setValores((v) => ({ ...v, [c.key]: e.target.value }))
                   }
                 />
-                <p className="text-[10.5px] leading-tight text-muted-foreground">{c.hint}</p>
+                <p className="text-[12px] leading-tight text-muted-foreground">{c.hint}</p>
               </div>
             ))}
           </div>

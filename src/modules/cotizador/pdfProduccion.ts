@@ -7,6 +7,8 @@
 import { jsPDF } from 'jspdf';
 import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow } from './tela';
+import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
+import { etiquetaConTira } from '@/modules/descuentos/adicionales-cenefa';
 
 const EMPTY_PANO: Partial<Pano> = {};
 
@@ -392,21 +394,68 @@ export function generarEtiquetasPDF(
     const p = row.pano || EMPTY_PANO;
     const anchoCm = row.anchoCm || 0;
     const altoCm = row.altoCm || 0;
-    const tubo = (anchoCm - 3.8).toFixed(1);
-    const peso = (anchoCm - 4.2).toFixed(1);
-    const pletina =
-      p.cenefa === 'Cuadrada' ? (anchoCm + 1).toFixed(1) + ' cm' : 'NO';
-    const cenefaOv = p.cenefa === 'Ovalada' ? 'SI' : 'NO';
+    // Medidas sin sufijo "cm" y con coma decimal es-CL (172,0 → "172").
+    const fmt = (n: number) => {
+      const s = n.toFixed(1);
+      return (s.endsWith('.0') ? s.slice(0, -2) : s).replace('.', ',');
+    };
+    // Piezas del despiece (medida de corte real + código de estructura), mismo
+    // origen que el optimizador. Reemplaza las restas hardcodeadas ancho−3.8/−4.2.
+    const piezas = row.piezas || [];
+    const piezaPorCol = (col: string) => piezas.find((x) => x.columnaExcel === col);
+    // Código corto para la celda: tubo "38mm_E02" → "E02"; si no hay código,
+    // cae al color como identificador. Devuelve "" si no existe la pieza.
+    const celdaPieza = (col: string): string => {
+      const pz = piezaPorCol(col);
+      if (!pz) return '';
+      const med = fmt(pz.medidaCm);
+      const codCorto = pz.cod.includes('_') ? pz.cod.split('_').pop() || pz.cod : pz.cod;
+      const etq = codCorto || (pz.color ? String(pz.color).toUpperCase().substring(0, 6) : '');
+      // Primero la medida, después el código (ej. "153,2 / E02").
+      return etq ? `${med} / ${etq}` : med;
+    };
+    // Fallback al cálculo viejo solo si no hay modelo (sin piezas).
+    const tuboCm = celdaPieza('TUBO') || fmt(anchoCm - 3.8);
+    const pesoCm = celdaPieza('PESO') || fmt(anchoCm - 4.2);
+    const cefOvCm = celdaPieza('CENEFA OVALADA');
+    const pesoUCm = celdaPieza('PESO U');
+    const pesoIntCm = celdaPieza('PESO INTERNO');
+    const pletina = piezaPorCol('PLETINA')
+      ? celdaPieza('PLETINA')
+      : p.cenefa === 'Cuadrada'
+        ? fmt(anchoCm + 1)
+        : 'NO';
     const tipoTela = p.tipoTela || '—';
     const telaDesc = catalogo[row.codInt]?.descripcion || '';
     const telaFullName = telaDesc
       ? `${row.codInt} / ${telaDesc}`.toUpperCase()
       : (row.producto || tipoTela).toUpperCase();
-    const cadena = p.largoCadena ?? '—';
-    const tuberia = p.tuberia || '—';
-    const colorAcc = p.colorMecanismo || p.color || '—';
+    // Código de tubo: mismo origen que Excel/PDF (deriva del modelo aunque el
+    // chip del paño venga vacío) → ya no sale "—".
+    const tuberia = row.tuberiaCod || '—';
+    // Color de accesorios con nombre completo (NEG → NEGRO, BCO → BLANCO…).
+    const colorAcc = colorPesoNormalizado(p.colorMecanismo || p.color) || '—';
     const ubicacion = row.ubicacion || '—';
-    const caida = (altoCm + 25).toFixed(1);
+    // CAIDA = tipo interno/externo (Fase 2 armado · Fase 0 sentido).
+    const caidaTipo = String(p.armado || row.sentido || '—').toUpperCase();
+    // CAD. = lado de cadena de Fase 0. Quita el prefijo "CAD" redundante (la
+    // etiqueta ya dice "CAD.:") → "CAD [IZQUIERDA]" se muestra como "IZQUIERDA".
+    const cadDireccion = (() => {
+      const raw = String(row.direccion || '—').trim();
+      const m = raw.match(/\[([^\]]+)\]/); // contenido entre corchetes
+      const limpio = (m ? m[1] : raw.replace(/^CAD\s*/i, '')).trim();
+      return limpio || '—';
+    })();
+    // Largo de la cadena para mostrar junto al lado: "IZQUIERDA 4 mts".
+    // El valor guardado puede traer su propia unidad ("4mts", "1,5"): extraemos
+    // solo el número y normalizamos a una sola "mts" (no "4mts mts").
+    const largoCad = (() => {
+      const raw = String(p.largoCadena ?? '').trim();
+      if (!raw) return '';
+      const num = parseFloat(raw.replace(',', '.'));
+      return Number.isFinite(num) && num > 0 ? `${String(num).replace('.', ',')} mts` : raw;
+    })();
+    const cadTexto = largoCad ? `${cadDireccion} ${largoCad}` : cadDireccion;
 
     // SECCIÓN 1: HEADER ───────────────────────────────────────────────
     doc.setTextColor(20, 20, 30);
@@ -421,7 +470,7 @@ export function generarEtiquetasPDF(
     doc.text(String(ubicacion).substring(0, 20), L, 11);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.5);
-    doc.text(String(meta.cliente).substring(0, 22), PW - L, 15, { align: 'right' });
+    doc.text(String(meta.cliente).toUpperCase().substring(0, 22), PW - L, 15, { align: 'right' });
     doc.setDrawColor(160, 160, 170);
     doc.setLineWidth(0.2);
     doc.line(L, 17, PW - L, 17);
@@ -429,12 +478,10 @@ export function generarEtiquetasPDF(
     doc.setFontSize(6.5);
     doc.setFont('helvetica', 'bold');
     doc.text('TUBO:', L, 22);
-    doc.setFont('helvetica', 'normal');
-    doc.text(tubo + ' cm', L + 11, 22);
-    doc.setFont('helvetica', 'bold');
     doc.text('TELA:', PW / 2 + 1, 22);
 
-    doc.setFontSize(5.8);
+    // Código del tubo (ej. "38mm_E02"), no la medida en cm (esa va en ROLLER).
+    doc.setFontSize(6.5);
     doc.setFont('helvetica', 'normal');
     doc.text(String(tuberia).substring(0, 18), L, 26.5);
     doc.setFont('helvetica', 'italic');
@@ -476,35 +523,36 @@ export function generarEtiquetasPDF(
     doc.line(L, tY + hdrH + rowH * 2, PW - L, tY + hdrH + rowH * 2);
 
     doc.setFontSize(6.5);
+    // Valores alineados a la derecha de cada media-celda (más espacio para "[cod] medida").
+    const lxL = L + 1;
+    const rxL = L + halfW - 1;
+    const lxR = L + halfW + 1;
+    const rxR = PW - L - 1;
+    const celda = (label: string, value: string, lx: number, rx: number, y: number) => {
+      doc.setFont('helvetica', 'bold');
+      doc.text(label, lx, y);
+      if (value) {
+        doc.setFont('helvetica', 'normal');
+        doc.text(value, rx, y, { align: 'right' });
+      }
+    };
+
     let ry = tY + hdrH + 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text('TUBO:', L + 1, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(tubo + ' cm', L + 13, ry);
-    doc.setFont('helvetica', 'bold');
-    doc.text('CEF.OV.:', L + halfW + 1, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(cenefaOv, L + halfW + 18, ry);
+    celda('TUBO:', tuboCm, lxL, rxL, ry);
+    celda('CEF.OV.:', cefOvCm, lxR, rxR, ry);
 
     ry += rowH;
-    doc.setFont('helvetica', 'bold');
-    doc.text('PESO:', L + 1, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(peso + ' cm', L + 13, ry);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PESO U.:', L + halfW + 1, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text('—', L + halfW + 18, ry);
+    celda('PESO:', pesoCm, lxL, rxL, ry);
+    celda('PESO U.:', pesoUCm, lxR, rxR, ry);
 
     ry += rowH;
-    doc.setFont('helvetica', 'bold');
-    doc.text('PLATINA:', L + 1, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text(pletina, L + 15, ry);
-    doc.setFont('helvetica', 'bold');
-    doc.text('PESO INT:', L + halfW + 1, ry);
-    doc.setFont('helvetica', 'normal');
-    doc.text('—', L + halfW + 19, ry);
+    celda('PLATINA:', pletina, lxL, rxL, ry);
+    // Cenefa ovalada sin peso interno (no-dúo): la fila muestra CON/SIN TIRA.
+    if (cefOvCm && !pesoIntCm) {
+      celda('TIRA:', etiquetaConTira(p.cenefaTira), lxR, rxR, ry);
+    } else {
+      celda('PESO INT:', pesoIntCm, lxR, rxR, ry);
+    }
 
     // SECCIÓN 3: BARRA "INFORMACION TERRENO" ──────────────────────────
     const infoY = tY + tH + 2;
@@ -535,21 +583,21 @@ export function generarEtiquetasPDF(
     doc.setFont('helvetica', 'bold');
     doc.text('ANCHO:', L + 1, dy);
     doc.setFont('helvetica', 'normal');
-    doc.text(anchoCm.toFixed(1) + ' cm', L + 15, dy);
+    doc.text(fmt(anchoCm), L + 15, dy);
     doc.setFont('helvetica', 'bold');
     doc.text('CAIDA:', L + halfW + 1, dy);
     doc.setFont('helvetica', 'normal');
-    doc.text(caida + ' cm', L + halfW + 13, dy);
+    doc.text(caidaTipo, L + halfW + 13, dy);
 
     dy += dtRH;
     doc.setFont('helvetica', 'bold');
     doc.text('ALTO:', L + 1, dy);
     doc.setFont('helvetica', 'normal');
-    doc.text(altoCm.toFixed(1) + ' cm', L + 12, dy);
+    doc.text(fmt(altoCm), L + 12, dy);
     doc.setFont('helvetica', 'bold');
     doc.text('CAD.:', L + halfW + 1, dy);
     doc.setFont('helvetica', 'normal');
-    doc.text(String(cadena), L + halfW + 12, dy);
+    doc.text(String(cadTexto).substring(0, 18), L + halfW + 9, dy);
 
     // FOOTER ───────────────────────────────────────────────────────────
     const footY = dtY + dtH + 3;
@@ -574,11 +622,12 @@ export function generarEtiquetasPDF(
       const tipoInstal = p.instalacion || '—';
       const colorCenefa = p.color || colorAcc || '—';
       const tapaLabels: Record<string, string> = {
-        SIN_TAPA: 'SIN TAPA',
+        SIN_TAPA: 'MURO A MURO', // legacy → muro a muro
         CON_1_TAPA: 'CON 1 TAPA',
         CON_2_TAPAS: 'CON 2 TAPAS',
+        MURO_MURO: 'MURO A MURO',
       };
-      const tapaTexto = (p.cenefaTapa && tapaLabels[p.cenefaTapa]) || 'SIN TAPA';
+      const tapaTexto = (p.cenefaTapa && tapaLabels[p.cenefaTapa]) || 'MURO A MURO';
 
       doc.setDrawColor(150, 150, 150);
       doc.setLineWidth(0.4);
@@ -601,7 +650,7 @@ export function generarEtiquetasPDF(
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(6.5);
       doc.setTextColor(40, 40, 40);
-      doc.text(String(meta.cliente).substring(0, 20), cR, 17, { align: 'right' });
+      doc.text(String(meta.cliente).toUpperCase().substring(0, 20), cR, 17, { align: 'right' });
 
       doc.setDrawColor(150, 150, 150);
       doc.setLineWidth(0.25);

@@ -45,6 +45,7 @@ const REGLAS: Array<{ patron: RegExp; roles: string[] }> = [
   { patron: /^\/telas/, roles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario'] },
   { patron: /^\/inventario-conteo/, roles: ['bodeguero', 'operario'] },
   { patron: /^\/inventario/, roles: ['bodeguero', 'operario'] },
+  { patron: /^\/optimizador-tela/, roles: ['produccion', 'dimensionado', 'telas', 'operario'] },
   { patron: /^\/optimizador/, roles: ['produccion', 'operario'] },
   { patron: /^\/bodeguero/, roles: ['bodeguero', 'operario'] },
   { patron: /^\/camionetas/, roles: ['bodeguero', 'operario'] },

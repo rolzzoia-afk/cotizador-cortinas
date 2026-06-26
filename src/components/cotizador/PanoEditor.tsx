@@ -6,6 +6,7 @@ import {
   OPCIONES_ACCESORIO_COLOR,
   OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
+  OPCIONES_CENEFA_TIRA,
   OPCIONES_CIERRE_VERT,
   OPCIONES_COLOR_TAPA_CUADRADA,
   OPCIONES_COLOR_TAPA_OVALADA,
@@ -28,14 +29,209 @@ import {
   OPCIONES_TUBERIA,
 } from '@/modules/cotizador/fase2';
 import type { Pano } from '@/modules/cotizador/types';
+import {
+  cadenasRoller,
+  etiquetaCadena,
+  derivarLargoColor,
+  pesosSeleccionables,
+  type CadenaInsumo,
+} from '@/modules/cotizador/cadenas';
+import {
+  cortesOscuridad,
+  familiaOscuridad,
+  medidaPerfilOscuridad,
+  normalizarVarianteOscuridad,
+  PERFILES_OSCURIDAD,
+  type PerfilesOscuridad,
+  type VarianteOscuridad,
+} from '@/modules/descuentos/reglas-oscuridad';
+import { colorPerfilDesdeAdicional, type TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
+import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
+import {
+  cortesBeeblack,
+  esCategoriaBeeblack,
+  medidaComponenteBeeblack,
+  normalizarVarianteBeeblack,
+  TOGGLES_BEEBLACK_EXTERNO,
+  TOGGLES_BEEBLACK_INTERNO,
+  type TogglesBeeblack,
+  type VarianteBeeblack,
+} from '@/modules/descuentos/reglas-beeblack';
+import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 
 type Props = {
   pano: Pano;
   onChange: (patch: Partial<Pano>) => void;
   panoNum: number;
+  /** Cadenas reales del inventario (CAD01…) para el selector. */
+  cadenas?: CadenaInsumo[];
+  /** Pesos de cadena del inventario (PCA01/PCA04) para el selector. */
+  pesos?: CadenaInsumo[];
+  /** Opciones filtradas de mecanismo (default: todas). */
+  opcionesMecanismo?: readonly string[];
+  /** Opciones filtradas de tubería (default: todas). */
+  opcionesTuberia?: readonly string[];
+  /** Ocultar sección mecanismo (VERTICAL, BEEBLACK). */
+  ocultarMecanismo?: boolean;
+  /** Categoría de la ventana (para detectar sistemas de oscuridad). */
+  categoria?: string;
+  /** Sentido de instalación heredado de Fase 0 (default de la variante). */
+  sentidoVentana?: string | null;
+  /** Adicionales Fase 0 (colores de perfiles). */
+  adicionalesFase0?: AdicionalFase0Persistido[];
+  /** Ancho del rollo (m) para auto-sugerir corte invertido. Default 2,98. */
+  anchoRollo?: number;
 };
 
-export function PanoEditor({ pano, onChange, panoNum }: Props) {
+// Mapea cada interruptor de perfil a su campo ON/OFF en el Pano.
+const PERFIL_FIELD: Record<keyof PerfilesOscuridad, keyof Pano> = {
+  izqMuro: 'perfilIzqMuro',
+  izqPiso: 'perfilIzqPiso',
+  derMuro: 'perfilDerMuro',
+  derPiso: 'perfilDerPiso',
+  infMuro: 'perfilInfMuro',
+  infPiso: 'perfilInfPiso',
+};
+
+// Mapea cada perfil a su campo de medida manual (override de terreno) en el Pano.
+const PERFIL_MEDIDA_FIELD: Record<keyof PerfilesOscuridad, keyof Pano> = {
+  izqMuro: 'perfilIzqMuroCm',
+  izqPiso: 'perfilIzqPisoCm',
+  derMuro: 'perfilDerMuroCm',
+  derPiso: 'perfilDerPisoCm',
+  infMuro: 'perfilInfMuroCm',
+  infPiso: 'perfilInfPisoCm',
+};
+
+const PERFIL_TIPO_ADICIONAL: Record<keyof PerfilesOscuridad, TipoPerfilAdicional> = {
+  izqMuro: 'izq',
+  izqPiso: 'izq',
+  derMuro: 'der',
+  derPiso: 'der',
+  infMuro: 'inf',
+  infPiso: 'inf',
+};
+
+const OPCIONES_VARIANTE_OSCURIDAD = [
+  { value: 'INTERNO', label: 'Interno' },
+  { value: 'SEMI', label: 'Semi' },
+  { value: 'EXTERNO', label: 'Externo' },
+] as const;
+
+const OPCIONES_VARIANTE_BEEBLACK = [
+  { value: 'INTERNO', label: 'Interno' },
+  { value: 'EXTERNO_SEMI', label: 'Externo o Semi' },
+] as const;
+
+const BEEBLACK_TOGGLE_FIELD: Record<keyof TogglesBeeblack, keyof Pano> = {
+  manillaIzq: 'beeblackManillaIzq',
+  manillaDer: 'beeblackManillaDer',
+  extraAnchoIzq: 'beeblackExtraSupInfIzq',
+  extraAnchoDer: 'beeblackExtraSupInfDer',
+  extraAltoSup: 'beeblackExtraLatSup',
+  extraAltoInf: 'beeblackExtraLatInf',
+};
+
+const BEEBLACK_MANILLA_MEDIDA_FIELD: Record<'manillaIzq' | 'manillaDer', keyof Pano> = {
+  manillaIzq: 'beeblackManillaIzqCm',
+  manillaDer: 'beeblackManillaDerCm',
+};
+
+const BEEBLACK_FIJO_ROWS: Array<{
+  key: keyof import('@/modules/descuentos/reglas-beeblack').MedidasBeeblack;
+  label: string;
+  field: keyof Pano;
+  calcKey: Parameters<typeof medidaComponenteBeeblack>[1];
+}> = [
+  { key: 'perfilSupAncho', label: 'Perfil superior (ancho)', field: 'beeblackPerfilSupAnchoCm', calcKey: 'perfilSupAncho' },
+  { key: 'perfilInfAncho', label: 'Perfil inferior (ancho)', field: 'beeblackPerfilInfAnchoCm', calcKey: 'perfilInfAncho' },
+  { key: 'perfilLatIzq', label: 'Perfil lateral izq (alto)', field: 'beeblackPerfilLatIzqCm', calcKey: 'perfilLatIzq' },
+  { key: 'perfilLatDer', label: 'Perfil lateral der (alto)', field: 'beeblackPerfilLatDerCm', calcKey: 'perfilLatDer' },
+  { key: 'anchoTela', label: 'Ancho tela', field: 'beeblackAnchoTelaCm', calcKey: 'anchoTela' },
+  { key: 'altoTela', label: 'Alto tela', field: 'beeblackAltoTelaCm', calcKey: 'altoTela' },
+  { key: 'totalLamas', label: 'Total lamas corte', field: 'beeblackTotalLamasCm', calcKey: 'totalLamas' },
+];
+
+export function PanoEditor({
+  pano,
+  onChange,
+  panoNum,
+  cadenas = [],
+  pesos = [],
+  opcionesMecanismo = OPCIONES_MECANISMO,
+  opcionesTuberia = OPCIONES_TUBERIA,
+  ocultarMecanismo = false,
+  categoria,
+  sentidoVentana,
+  adicionalesFase0,
+  anchoRollo = 2.98,
+}: Props) {
+  const cadenasDisponibles = cadenasRoller(cadenas);
+  const pesosDisponibles = pesosSeleccionables(pesos);
+
+  // Corte invertido (rotado): se auto-sugiere cuando la cortina + borde (4 cm)
+  // no entra en el ancho del rollo. El flag explícito del usuario manda.
+  const anchoPanoM = parseFloat(String(pano.ancho)) || 0;
+  const debeInvertir = anchoPanoM > 0 && anchoPanoM + 0.04 > anchoRollo;
+  const invertida = pano.invertida ?? debeInvertir;
+
+  // ── Sistema de oscuridad (Soft Light / Oscuranti / Dark) ──
+  const familia = familiaOscuridad(categoria, pano.cenefa);
+  const varianteOscuridad: VarianteOscuridad = normalizarVarianteOscuridad(
+    pano.oscuridadVariante ?? sentidoVentana,
+    'INTERNO',
+  );
+  const anchoCmOsc = (parseFloat(String(pano.ancho ?? 0)) || 0) * 100;
+  const altoCmOsc = (parseFloat(String(pano.alto ?? 0)) || 0) * 100;
+  const perfilesOsc: PerfilesOscuridad = {
+    izqMuro: !!pano.perfilIzqMuro,
+    izqPiso: !!pano.perfilIzqPiso,
+    derMuro: !!pano.perfilDerMuro,
+    derPiso: !!pano.perfilDerPiso,
+    infMuro: !!pano.perfilInfMuro,
+    infPiso: !!pano.perfilInfPiso,
+  };
+  const cortesOsc = familia
+    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOsc)
+    : [];
+  const componentesOsc = cortesOsc.filter((c) => !c.perfil);
+  const colorPesoInfOscuridad = familia
+    ? colorPesoInfOscuridadExcel(pano.colorPeso || pano.color)
+    : '';
+
+  // ── BEEBLACK ──
+  const esBeeblack = esCategoriaBeeblack(categoria);
+  const varianteBeeblack: VarianteBeeblack = normalizarVarianteBeeblack(
+    pano.beeblackVariante ?? sentidoVentana,
+    'INTERNO',
+  );
+  const anchoCmBb = (parseFloat(String(pano.ancho ?? 0)) || 0) * 100;
+  const altoCmBb = (parseFloat(String(pano.alto ?? 0)) || 0) * 100;
+  const togglesBeeblack: TogglesBeeblack = {
+    manillaIzq: pano.beeblackManillaIzq,
+    manillaDer: pano.beeblackManillaDer,
+    extraAnchoIzq: pano.beeblackExtraSupInfIzq,
+    extraAnchoDer: pano.beeblackExtraSupInfDer,
+    extraAltoSup: pano.beeblackExtraLatSup,
+    extraAltoInf: pano.beeblackExtraLatInf,
+  };
+  const overridesBeeblack = {
+    perfilSupAncho: pano.beeblackPerfilSupAnchoCm,
+    perfilInfAncho: pano.beeblackPerfilInfAnchoCm,
+    perfilLatIzq: pano.beeblackPerfilLatIzqCm,
+    perfilLatDer: pano.beeblackPerfilLatDerCm,
+    manillaIzq: pano.beeblackManillaIzqCm,
+    manillaDer: pano.beeblackManillaDerCm,
+    anchoTela: pano.beeblackAnchoTelaCm,
+    altoTela: pano.beeblackAltoTelaCm,
+    totalLamas: pano.beeblackTotalLamasCm,
+  };
+  const componentesBb =
+    esBeeblack && anchoCmBb > 0 && altoCmBb > 0
+      ? cortesBeeblack(varianteBeeblack, anchoCmBb, altoCmBb, togglesBeeblack, overridesBeeblack)
+      : [];
+  const togglesBeeblackUi =
+    varianteBeeblack === 'INTERNO' ? TOGGLES_BEEBLACK_INTERNO : TOGGLES_BEEBLACK_EXTERNO;
   return (
     <div className="space-y-3">
       {/* 0. MEDIDAS */}
@@ -70,6 +266,23 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
             />
           </div>
         </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Checkbox
+            label="Corte invertido (rotado)"
+            checked={invertida}
+            onChange={(v) => onChange({ invertida: v })}
+          />
+          {debeInvertir && pano.invertida === undefined && (
+            <span className="text-[0.7rem] text-amber-500">
+              auto: no entra normal en el rollo ({anchoRollo.toFixed(2)} m)
+            </span>
+          )}
+          {pano.invertida === false && debeInvertir && (
+            <span className="text-[0.7rem] text-destructive">
+              ¡no entra normal! confirmá que esta tela no se puede rotar
+            </span>
+          )}
+        </div>
       </Section>
 
       {/* 1. ARMADO */}
@@ -90,12 +303,38 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
 
       {/* 2. CADENA */}
       <Section title="Cadena">
-        <RadioRow
-          label="Largo"
-          value={String(pano.largoCadena || '')}
-          options={OPCIONES_LARGO_CADENA}
-          onChange={(v) => onChange({ largoCadena: v })}
-        />
+        {cadenasDisponibles.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
+            <select
+              className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+              value={pano.codCadena || ''}
+              onChange={(e) => {
+                const cod = e.target.value;
+                if (!cod) {
+                  onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
+                  return;
+                }
+                const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+                onChange({ codCadena: cod, largoCadena, colorCadena });
+              }}
+            >
+              <option value="">— Sin cadena —</option>
+              {cadenasDisponibles.map((c) => (
+                <option key={c.cod} value={c.cod as string}>
+                  {etiquetaCadena(c)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <RadioRow
+            label="Largo"
+            value={String(pano.largoCadena || '')}
+            options={OPCIONES_LARGO_CADENA}
+            onChange={(v) => onChange({ largoCadena: v })}
+          />
+        )}
         <RadioRow
           label="Cierre"
           value={pano.cierreVert || ''}
@@ -103,6 +342,27 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
           onChange={(v) => onChange({ cierreVert: v })}
         />
       </Section>
+
+      {/* 2b. PESO DE CADENA */}
+      {pesosDisponibles.length > 0 && (
+        <Section title="Peso de cadena">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Peso</span>
+            <select
+              className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+              value={pano.codPeso || ''}
+              onChange={(e) => onChange({ codPeso: e.target.value })}
+            >
+              <option value="">— Sin peso —</option>
+              {pesosDisponibles.map((c) => (
+                <option key={c.cod} value={c.cod as string}>
+                  {etiquetaCadena(c)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </Section>
+      )}
 
       {/* 3. MANILLA */}
       <Section title="Manilla">
@@ -153,21 +413,34 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
           label="Tipo"
           value={pano.cenefa || 'No'}
           options={OPCIONES_CENEFA}
-          onChange={(v) => onChange({ cenefa: v })}
+          onChange={(v) =>
+            onChange({
+              cenefa: v,
+              ...(v !== 'Ovalada' ? { cenefaTira: 'SIN TIRA' } : {}),
+            })
+          }
         />
         {pano.cenefa === 'Ovalada' && (
-          <RadioRow
-            label="Color tapa"
-            value={pano.colorTapa || ''}
-            options={OPCIONES_COLOR_TAPA_OVALADA}
-            onChange={(v) => onChange({ colorTapa: v })}
-          />
+          <>
+            <RadioRow
+              label="Tira"
+              value={pano.cenefaTira || 'SIN TIRA'}
+              options={OPCIONES_CENEFA_TIRA}
+              onChange={(v) => onChange({ cenefaTira: v })}
+            />
+            <RadioRow
+              label="Color tapa"
+              value={pano.colorTapa || ''}
+              options={OPCIONES_COLOR_TAPA_OVALADA}
+              onChange={(v) => onChange({ colorTapa: v })}
+            />
+          </>
         )}
         {pano.cenefa === 'Cuadrada' && (
           <>
             <RadioRow
               label="Tapas"
-              value={pano.cenefaTapa || 'SIN_TAPA'}
+              value={!pano.cenefaTapa || pano.cenefaTapa === 'SIN_TAPA' ? 'MURO_MURO' : pano.cenefaTapa}
               options={OPCIONES_CENEFA_TAPA}
               onChange={(v) => onChange({ cenefaTapa: v })}
             />
@@ -180,6 +453,172 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
           </>
         )}
       </Section>
+
+      {/* 5b. SISTEMA DE OSCURIDAD (Soft Light / Oscuranti / Dark) */}
+      {familia && (
+        <Section title="Sistema de oscuridad — perfiles">
+          <RadioRow
+            label="Instalación"
+            value={varianteOscuridad}
+            options={OPCIONES_VARIANTE_OSCURIDAD as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onChange({ oscuridadVariante: v || 'INTERNO' })}
+          />
+          {componentesOsc.length > 0 && (
+            <div className="rounded border border-border/60 bg-background/40 p-2 text-[0.7rem]">
+              <div className="mb-1 font-semibold uppercase tracking-wide text-muted-foreground">
+                Medidas de corte (cm)
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                {componentesOsc.map((c) => (
+                  <div key={c.componente} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">{c.componente}</span>
+                    <span className="font-mono text-foreground">{c.medidaCm}</span>
+                  </div>
+                ))}
+                {colorPesoInfOscuridad && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">Color peso inf.</span>
+                    <span className="font-mono text-foreground">{colorPesoInfOscuridad}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <div className="space-y-1">
+            {PERFILES_OSCURIDAD.map((p) => {
+              const field = PERFIL_FIELD[p.key];
+              const medidaField = PERFIL_MEDIDA_FIELD[p.key];
+              const checked = !!pano[field];
+              const medida = medidaPerfilOscuridad(
+                familia,
+                varianteOscuridad,
+                p.key,
+                anchoCmOsc,
+                altoCmOsc,
+              );
+              const override = pano[medidaField] as number | undefined;
+              const colorPerfil = colorPerfilDesdeAdicional(
+                PERFIL_TIPO_ADICIONAL[p.key],
+                adicionalesFase0,
+                categoria,
+              );
+              return (
+                <PerfilToggle
+                  key={p.key}
+                  label={p.label}
+                  medida={medida}
+                  override={typeof override === 'number' ? override : undefined}
+                  colorPerfil={colorPerfil}
+                  checked={checked}
+                  onToggle={(v) => onChange({ [field]: v } as Partial<Pano>)}
+                  onMedidaChange={(v) => onChange({ [medidaField]: v } as Partial<Pano>)}
+                />
+              );
+            })}
+          </div>
+        </Section>
+      )}
+
+      {/* 5c. BEEBLACK — cierre horizontal */}
+      {esBeeblack && (
+        <Section title="BEEBLACK — cierre horizontal">
+          <RadioRow
+            label="Instalación"
+            value={varianteBeeblack}
+            options={OPCIONES_VARIANTE_BEEBLACK as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onChange({ beeblackVariante: v || 'INTERNO' })}
+          />
+          {componentesBb.length > 0 && (
+            <div className="rounded border border-border/60 bg-background/40 p-2 text-[0.7rem]">
+              <div className="mb-1 font-semibold uppercase tracking-wide text-muted-foreground">
+                Medidas de corte (cm)
+              </div>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                {componentesBb.map((c) => (
+                  <div key={c.componente} className="flex items-center justify-between gap-2">
+                    <span className="text-muted-foreground">{c.componente}</span>
+                    <span className="font-mono text-foreground">{c.medidaCm}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="space-y-1">
+            {BEEBLACK_FIJO_ROWS.map((row) => {
+              const medida =
+                anchoCmBb > 0 && altoCmBb > 0
+                  ? medidaComponenteBeeblack(
+                      varianteBeeblack,
+                      row.calcKey,
+                      anchoCmBb,
+                      altoCmBb,
+                      togglesBeeblack,
+                    )
+                  : 0;
+              const override = pano[row.field] as number | undefined;
+              return (
+                <MedidaEditableRow
+                  key={row.key}
+                  label={row.label}
+                  medida={medida}
+                  override={typeof override === 'number' ? override : undefined}
+                  onMedidaChange={(v) => onChange({ [row.field]: v } as Partial<Pano>)}
+                />
+              );
+            })}
+            {togglesBeeblackUi.map((t) => {
+              const field = BEEBLACK_TOGGLE_FIELD[t.key];
+              const checked = !!pano[field];
+              if (t.key === 'manillaIzq' || t.key === 'manillaDer') {
+                const medidaField = BEEBLACK_MANILLA_MEDIDA_FIELD[t.key];
+                const medida =
+                  anchoCmBb > 0 && altoCmBb > 0
+                    ? medidaComponenteBeeblack(
+                        varianteBeeblack,
+                        t.key,
+                        anchoCmBb,
+                        altoCmBb,
+                        togglesBeeblack,
+                      )
+                    : 0;
+                const override = pano[medidaField] as number | undefined;
+                return (
+                  <PerfilToggle
+                    key={t.key}
+                    label={t.label}
+                    medida={medida}
+                    override={typeof override === 'number' ? override : undefined}
+                    checked={checked}
+                    onToggle={(v) => onChange({ [field]: v } as Partial<Pano>)}
+                    onMedidaChange={(v) => onChange({ [medidaField]: v } as Partial<Pano>)}
+                  />
+                );
+              }
+              return (
+                <div
+                  key={t.key}
+                  className="flex items-center justify-between gap-2 rounded border border-border/60 bg-card/40 px-2 py-1"
+                >
+                  <span className="text-[0.72rem] text-foreground">{t.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => onChange({ [field]: !checked } as Partial<Pano>)}
+                    aria-pressed={checked}
+                    className={cn(
+                      'w-12 rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide transition-colors',
+                      checked
+                        ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
+                        : 'border-border bg-card text-muted-foreground hover:bg-card',
+                    )}
+                  >
+                    {checked ? 'ON' : 'OFF'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </Section>
+      )}
 
       {/* 6. RETIRO */}
       <Section title="Retiro de cortinas">
@@ -228,14 +667,16 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
       </Section>
 
       {/* 9. MECANISMO */}
-      <Section title="Mecanismo">
-        <RadioRow
-          label=""
-          value={pano.mecanismo || ''}
-          options={OPCIONES_MECANISMO}
-          onChange={(v) => onChange({ mecanismo: v })}
-        />
-      </Section>
+      {!ocultarMecanismo && (
+        <Section title="Mecanismo">
+          <RadioRow
+            label=""
+            value={pano.mecanismo || ''}
+            options={opcionesMecanismo}
+            onChange={(v) => onChange({ mecanismo: v })}
+          />
+        </Section>
+      )}
 
       {/* 10. DUAL */}
       <Section title="Mecanismo dual">
@@ -321,7 +762,7 @@ export function PanoEditor({ pano, onChange, panoNum }: Props) {
         <RadioRow
           label=""
           value={pano.tuberia || ''}
-          options={OPCIONES_TUBERIA}
+          options={opcionesTuberia}
           onChange={(v) => onChange({ tuberia: v })}
         />
       </Section>
@@ -437,6 +878,140 @@ function RadioRow({
             </button>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function MedidaEditableRow({
+  label,
+  medida,
+  override,
+  onMedidaChange,
+}: {
+  label: string;
+  medida: number;
+  override?: number;
+  onMedidaChange: (v: number | undefined) => void;
+}) {
+  const editado = typeof override === 'number';
+  const valorInput = editado ? override : medida > 0 ? medida : '';
+  return (
+    <div className="flex items-center justify-between gap-2 rounded border border-border/60 bg-card/40 px-2 py-1">
+      <span className="text-[0.72rem] text-foreground">{label}</span>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          step="0.1"
+          value={valorInput}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') return onMedidaChange(undefined);
+            const n = parseFloat(raw);
+            onMedidaChange(Number.isFinite(n) ? n : undefined);
+          }}
+          className={cn(
+            'h-6 w-[64px] rounded border bg-card px-1 text-right font-mono text-[0.72rem] text-foreground',
+            editado ? 'border-amber-500/60' : 'border-border',
+          )}
+          title={editado ? `Calculada: ${medida}` : 'Medida calculada (editable)'}
+        />
+        {editado && (
+          <button
+            type="button"
+            onClick={() => onMedidaChange(undefined)}
+            title={`Restablecer a ${medida}`}
+            className="text-[0.7rem] text-muted-foreground hover:text-foreground"
+          >
+            ↺
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PerfilToggle({
+  label,
+  medida,
+  override,
+  colorPerfil,
+  checked,
+  onToggle,
+  onMedidaChange,
+}: {
+  label: string;
+  medida: number;
+  override?: number;
+  colorPerfil?: string;
+  checked: boolean;
+  onToggle: (v: boolean) => void;
+  onMedidaChange: (v: number | undefined) => void;
+}) {
+  const editado = typeof override === 'number';
+  const valorInput = editado ? override : medida > 0 ? medida : '';
+  return (
+    <div className="flex items-center justify-between gap-2 rounded border border-border/60 bg-card/40 px-2 py-1">
+      <span className="text-[0.72rem] text-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        {colorPerfil && (
+          <span
+            className={cn(
+              'min-w-[52px] text-center text-[0.65rem] uppercase tracking-wide',
+              checked ? 'text-muted-foreground' : 'text-muted-foreground/40',
+            )}
+            title="Color desde adicionales Fase 0"
+          >
+            {colorPerfil}
+          </span>
+        )}
+        {checked ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              step="0.1"
+              value={valorInput}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === '') return onMedidaChange(undefined);
+                const n = parseFloat(raw);
+                onMedidaChange(Number.isFinite(n) ? n : undefined);
+              }}
+              className={cn(
+                'h-6 w-[64px] rounded border bg-card px-1 text-right font-mono text-[0.72rem] text-foreground',
+                editado ? 'border-amber-500/60' : 'border-border',
+              )}
+              title={editado ? `Calculada: ${medida}` : 'Medida calculada (editable)'}
+            />
+            {editado && (
+              <button
+                type="button"
+                onClick={() => onMedidaChange(undefined)}
+                title={`Restablecer a ${medida}`}
+                className="text-[0.7rem] text-muted-foreground hover:text-foreground"
+              >
+                ↺
+              </button>
+            )}
+          </div>
+        ) : (
+          <span className="min-w-[48px] text-right font-mono text-[0.72rem] text-muted-foreground/40">
+            {medida > 0 ? medida : '—'}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => onToggle(!checked)}
+          aria-pressed={checked}
+          className={cn(
+            'w-12 rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide transition-colors',
+            checked
+              ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
+              : 'border-border bg-card text-muted-foreground hover:bg-card',
+          )}
+        >
+          {checked ? 'ON' : 'OFF'}
+        </button>
       </div>
     </div>
   );

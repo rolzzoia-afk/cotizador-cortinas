@@ -98,4 +98,10 @@ describe('puedeAccederRuta — prefijos no se confunden', () => {
   it('/inventario-telas-prueba es solo admin aunque empiece con /inventario', () => {
     expect(puedeAccederRuta('bodeguero', '/inventario-telas-prueba')).toBe(false);
   });
+  it('/optimizador-tela no hereda la regla de /optimizador (telas/dimensionado sí entran)', () => {
+    expect(puedeAccederRuta('telas', '/optimizador-tela')).toBe(true);
+    expect(puedeAccederRuta('dimensionado', '/optimizador-tela')).toBe(true);
+    // telas NO entra al optimizador de tubos
+    expect(puedeAccederRuta('telas', '/optimizador')).toBe(false);
+  });
 });

@@ -107,14 +107,14 @@ export default function ConsumoCard({ salidas, insumos }: ConsumoCardProps) {
                     <div className="truncate text-[13px] font-medium text-foreground">
                       {val.desc}
                     </div>
-                    <div className="text-[10px] text-muted-foreground">
+                    <div className="text-[12px] text-muted-foreground">
                       {cat}
                       {diasStock !== null && ` · ${diasStock}d de stock`}
                     </div>
                   </div>
                   <span className="flex-shrink-0 text-right text-[13px] font-bold text-foreground">
                     {fmt(val.cantidad)}
-                    <div className="text-[10px] font-normal text-muted-foreground">
+                    <div className="text-[12px] font-normal text-muted-foreground">
                       {val.movs} mov.
                     </div>
                   </span>

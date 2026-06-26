@@ -88,7 +88,7 @@ export default function RestockCard({ insumos, consumoMap }: RestockCardProps) {
                     <div className={`dp-num text-[15px] font-medium leading-none ${tone}`}>
                       {fmt(s.cantSugerida)}
                     </div>
-                    <div className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    <div className="mt-1 text-[12px] uppercase tracking-wide text-muted-foreground">
                       sugerido
                     </div>
                   </div>

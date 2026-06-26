@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { confirmar } from '@/components/ui/confirm';
 import {
   useColmenaTubos,
   useColmenaPanos,
@@ -36,6 +37,11 @@ import {
 } from '@/modules/admin/colmena';
 
 type SubTab = 'tubos' | 'panos';
+
+/** Formatea una medida en cm sin ceros sobrantes (178.0 → "178 cm", 119.6 → "119,6 cm"). */
+function fmtCm(v: number): string {
+  return Number(v).toFixed(1).replace(/\.0$/, '').replace('.', ',') + ' cm';
+}
 
 export function Colmena() {
   const [sub, setSub] = useState<SubTab>('tubos');
@@ -131,7 +137,7 @@ function TubosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaTubos> }) {
   };
 
   const onEliminar = async (t: ColmenaTubo) => {
-    if (!confirm(`¿Eliminar tubo "${t.cod}" de colmena ${t.n_colmena}?\n\nNo se puede deshacer.`))
+    if (!await confirmar(`¿Eliminar tubo "${t.cod}" de colmena ${t.n_colmena}?\n\nNo se puede deshacer.`))
       return;
     try {
       await eliminar(t.id);
@@ -460,8 +466,8 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
           <thead className="sticky top-0 bg-card text-[0.65rem] uppercase tracking-wide text-muted-foreground">
             <tr>
               <th className="p-2 text-left">Código</th>
-              <th className="p-2 text-left">Ancho</th>
-              <th className="p-2 text-left">Alto</th>
+              <th className="p-2 text-left">Ancho (cm)</th>
+              <th className="p-2 text-left">Alto (cm)</th>
               <th className="p-2 text-left">Estado</th>
               <th className="p-2 text-left">OT</th>
               <th className="p-2 text-left">Fecha uso</th>
@@ -487,10 +493,10 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
               <tr key={p.id} className="border-t border-border hover:bg-card">
                 <td className="p-2 font-mono text-foreground">{p.codigo || '—'}</td>
                 <td className="p-2 text-foreground">
-                  {p.medida_ancho != null ? Number(p.medida_ancho).toFixed(2) + ' m' : '—'}
+                  {p.medida_ancho != null ? fmtCm(p.medida_ancho) : '—'}
                 </td>
                 <td className="p-2 text-foreground">
-                  {p.medida_alto != null ? Number(p.medida_alto).toFixed(2) + ' m' : '—'}
+                  {p.medida_alto != null ? fmtCm(p.medida_alto) : '—'}
                 </td>
                 <td className="p-2">
                   {p.disponible ? (
@@ -581,22 +587,24 @@ function PanoForm({
           />
         </div>
         <div className="md:col-span-3">
-          <Label className="text-[0.65rem]">Ancho (m)</Label>
+          <Label className="text-[0.65rem]">Ancho (cm)</Label>
           <Input
             type="number"
             value={ancho}
             onChange={(e) => setAncho(e.target.value)}
-            step="0.001"
+            step="0.1"
+            placeholder="178"
             className="h-8 text-xs"
           />
         </div>
         <div className="md:col-span-3">
-          <Label className="text-[0.65rem]">Alto (m)</Label>
+          <Label className="text-[0.65rem]">Alto (cm)</Label>
           <Input
             type="number"
             value={alto}
             onChange={(e) => setAlto(e.target.value)}
-            step="0.001"
+            step="0.1"
+            placeholder="200"
             className="h-8 text-xs"
           />
         </div>
