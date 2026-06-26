@@ -77,6 +77,8 @@ export type DatosGenerales = {
   inventarioFecha?: string | null;
   /** Adicionales de la cotización Fase 0 (no son ventanas/cortinas). */
   adicionalesFase0?: AdicionalFase0Persistido[];
+  /** Descuento de colmena al confirmar el corte general (Fase 4) — guard de idempotencia. */
+  corteGeneralColmena?: import('@/modules/cotizador/colmenaCorte').CorteGeneralColmena;
 };
 
 // Estructura mínima de una ventana/ítem dentro de OT.items. El cotizador

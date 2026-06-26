@@ -19,6 +19,7 @@ import {
   type Placed,
   type Plan,
 } from '@/modules/cotizador/planCorte';
+import { retazoSugerido } from '@/modules/cotizador/colmenaCorte';
 import type { ColmenaPano } from '@/modules/admin/colmena';
 import type { OT } from '@/modules/ots/types';
 import type { Database } from '@/types/database';
@@ -119,28 +120,12 @@ function eficClass(efic: number): string {
 // ═════════════════════════════════════════════════════════════════════
 // Card: usar sobrante de colmena
 // ═════════════════════════════════════════════════════════════════════
-function CardSobrante({
-  grupo,
-  otNum,
-  onConfirmado,
-}: {
-  grupo: GrupoSobrante;
-  otNum: string;
-  onConfirmado: () => void;
-}) {
+function CardSobrante({ grupo }: { grupo: GrupoSobrante }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [step, setStep] = useState<'inicial' | 'inputs' | 'confirmado'>('inicial');
-  const [ubicAlto, setUbicAlto] = useState('');
-  const [ubicAncho, setUbicAncho] = useState('');
-  const [saving, setSaving] = useState(false);
 
   const placed = grupo.placed.filter((r) => !r.failed);
-  const MARGEN = 1;
-  const MIN_CM = 30;
-  const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-  const altoResto = Math.round(grupo.sobrante.alto - (maxY + MARGEN * 2));
-  const hayAlto = altoResto >= MIN_CM;
-  const sobAncho = grupo.sobranteAncho;
+  // Retazo único estimado tras el corte (mismo cálculo que el corte general).
+  const retazo = retazoSugerido(grupo);
 
   const efic = Math.round(
     (placed.reduce((s, r) => s + r.pw * r.ph, 0) / (grupo.uw * grupo.uh)) * 100,
@@ -159,119 +144,8 @@ function CardSobrante({
     }
   }, [grupo, placed]);
 
-  const iniciar = async () => {
-    if (!hayAlto && !sobAncho) {
-      // Sin sobrantes útiles → marcar usado directo
-      await marcarUsado();
-      return;
-    }
-    setStep('inputs');
-  };
-
-  const marcarUsado = async () => {
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('colmena_panos')
-        .update({
-          disponible: false,
-          ot_asignada: otNum,
-          fecha_uso: new Date().toISOString(),
-        })
-        .eq('id', grupo.sobrante._docId);
-      if (error) throw error;
-      toast.success(
-        `Sobrante marcado como usado${altoResto > 0 ? ` (${altoResto}cm restantes, no útil)` : ''}`,
-      );
-      setStep('confirmado');
-      onConfirmado();
-    } catch (e) {
-      toast.error('Error al actualizar la Colmena: ' + (e instanceof Error ? e.message : e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const confirmar = async () => {
-    if (hayAlto && !ubicAlto.trim()) {
-      toast.error('Ingresa la ubicación del sobrante de alto');
-      return;
-    }
-    if (sobAncho && !ubicAncho.trim()) {
-      toast.error('Ingresa la ubicación de la franja de ancho');
-      return;
-    }
-    setSaving(true);
-    try {
-      const now = new Date().toISOString();
-      const { error: updErr } = await supabase
-        .from('colmena_panos')
-        .update({ disponible: false, ot_asignada: otNum, fecha_uso: now })
-        .eq('id', grupo.sobrante._docId);
-      if (updErr) throw updErr;
-
-      const { empresaId } = authRef;
-      if (!empresaId) throw new Error('Empresa no resuelta');
-      const inserts: ColmenaPanoInsert[] = [];
-      const msgs: string[] = [];
-
-      if (hayAlto) {
-        inserts.push({
-          empresa_id: empresaId,
-          codigo: grupo.sobrante.cod,
-          medida_ancho: grupo.sobrante.ancho,
-          medida_alto: altoResto,
-          ubicacion: ubicAlto.trim().toUpperCase(),
-          tipo: 'SOBRANTE',
-          disponible: true,
-          ot_asignada: null,
-          datos_extra: { fuente: 'GALPON_ROLZZO', ot_origen: otNum, creadoEn: now },
-        });
-        msgs.push(`alto ${grupo.sobrante.ancho}×${altoResto}cm → ${ubicAlto.trim().toUpperCase()}`);
-      }
-
-      if (sobAncho) {
-        inserts.push({
-          empresa_id: empresaId,
-          codigo: sobAncho.cod,
-          medida_ancho: sobAncho.ancho,
-          medida_alto: sobAncho.alto,
-          ubicacion: ubicAncho.trim().toUpperCase(),
-          tipo: 'SOBRANTE',
-          disponible: true,
-          ot_asignada: null,
-          datos_extra: { fuente: 'GALPON_ROLZZO', ot_origen: otNum, creadoEn: now },
-        });
-        msgs.push(
-          `ancho ${sobAncho.ancho}×${sobAncho.alto}cm → ${ubicAncho.trim().toUpperCase()}`,
-        );
-      }
-
-      if (inserts.length > 0) {
-        const { error: insErr } = await supabase.from('colmena_panos').insert(inserts);
-        if (insErr) throw insErr;
-      }
-
-      toast.success(`Confirmado. Sobrantes guardados: ${msgs.join(' | ') || 'ninguno'}`);
-      setStep('confirmado');
-      onConfirmado();
-    } catch (e) {
-      toast.error('Error al actualizar la Colmena: ' + (e instanceof Error ? e.message : e));
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // HACK: needs empresaId but can't use hook in child scope cleanly. Use ref trick.
-  const { empresaId } = useAuth();
-  const authRef = { empresaId };
-
-  const faded = step === 'confirmado' ? 'pointer-events-none opacity-40' : '';
-
   return (
-    <div
-      className={`mb-3 rounded-lg border border-success/30 bg-success/15 p-3 ${faded}`}
-    >
+    <div className="mb-3 rounded-lg border border-success/30 bg-success/15 p-3">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold">
@@ -288,11 +162,11 @@ function CardSobrante({
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {grupo.sobrante.ancho} × {grupo.sobrante.alto} cm
-            {grupo.sobranteAncho && (
+            {retazo && (
               <div className="mt-1 text-[0.7rem] text-success">
                 <Scissors className="mr-1 inline h-3 w-3" />
-                Franja sobrante: <strong>{grupo.sobranteAncho.ancho}×
-                {grupo.sobranteAncho.alto}cm</strong> — se registra al confirmar
+                Retazo estimado: <strong>{retazo.ancho}×{retazo.alto}cm</strong> — se descuenta en
+                el corte general (Fase 4)
               </div>
             )}
           </div>
@@ -326,65 +200,10 @@ function CardSobrante({
         <canvas ref={canvasRef} className="rounded border border-border" />
       </div>
 
-      {step === 'inicial' && (
-        <Button
-          size="sm"
-          onClick={iniciar}
-          disabled={saving}
-          className="gap-1 bg-success hover:bg-success/90"
-        >
-          {saving ? (
-            <Loader2 className="h-3 w-3 animate-spin" />
-          ) : (
-            <CheckCircle2 className="h-3 w-3" />
-          )}
-          Confirmar uso de este sobrante
-        </Button>
-      )}
-
-      {step === 'inputs' && (
-        <div className="space-y-2 border-t border-success/30 pt-2">
-          {hayAlto && (
-            <div>
-              <Label className="text-[0.7rem] text-success">
-                ⬇ Sobrante alto: {grupo.sobrante.cod} {grupo.sobrante.ancho}×{altoResto}cm
-              </Label>
-              <Input
-                value={ubicAlto}
-                onChange={(e) => setUbicAlto(e.target.value.toUpperCase())}
-                placeholder="A-54"
-                className="mt-1 h-7 max-w-[160px] text-xs"
-              />
-            </div>
-          )}
-          {sobAncho && (
-            <div>
-              <Label className="text-[0.7rem] text-success">
-                ✂ Franja ancho: {sobAncho.cod} {sobAncho.ancho}×{sobAncho.alto}cm
-              </Label>
-              <Input
-                value={ubicAncho}
-                onChange={(e) => setUbicAncho(e.target.value.toUpperCase())}
-                placeholder="B-12"
-                className="mt-1 h-7 max-w-[160px] text-xs"
-              />
-            </div>
-          )}
-          <Button
-            size="sm"
-            onClick={confirmar}
-            disabled={saving}
-            className="gap-1 bg-success hover:bg-success/90"
-          >
-            {saving ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <CheckCircle2 className="h-3 w-3" />
-            )}
-            Confirmar y guardar sobrantes
-          </Button>
-        </div>
-      )}
+      <div className="mt-1 border-t border-success/30 pt-2 text-[0.68rem] text-muted-foreground">
+        El descuento de la colmena se hace en <strong>Fase 4 → Confirmar corte general</strong>.
+        Acá es solo referencia de qué paño usar.
+      </div>
     </div>
   );
 }
@@ -945,7 +764,7 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
                 Usar sobrantes de la Colmena
               </div>
               {plan.sobrantes.map((g, gi) => (
-                <CardSobrante key={gi} grupo={g} otNum={otNum} onConfirmado={cargar} />
+                <CardSobrante key={gi} grupo={g} />
               ))}
             </>
           )}
