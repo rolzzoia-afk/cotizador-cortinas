@@ -86,6 +86,16 @@ describe('rowToPano', () => {
       creadoEn: '',
     });
   });
+
+  it('creadoEn cae a datos_extra.fecha_origen y luego a created_at (FIFO)', () => {
+    const base = { id: 'a', codigo: 'X', medida_ancho: 1, medida_alto: 1, disponible: true, ot_asignada: null };
+    expect(rowToPano({ ...base, datos_extra: { fecha_origen: '2026-02-02' } }).creadoEn).toBe('2026-02-02');
+    expect(rowToPano({ ...base, created_at: '2026-03-03T00:00:00Z' }).creadoEn).toBe('2026-03-03T00:00:00Z');
+    // creadoEn explícito gana sobre los demás
+    expect(
+      rowToPano({ ...base, created_at: '2026-03-03T00:00:00Z', datos_extra: { creadoEn: '2026-01-01' } }).creadoEn,
+    ).toBe('2026-01-01');
+  });
 });
 
 // ── generarPlanCorte ────────────────────────────────────────────────
@@ -144,7 +154,7 @@ describe('generarPlanCorte', () => {
     expect(plan.sinStock).toHaveLength(0);
   });
 
-  it('Regla 2: ancho mayor genera sobranteAncho si excede MIN_SOB (30)', () => {
+  it('Regla 2: remanente de ancho ≥120×180 se registra como colmena', () => {
     const ot = hacerOT([
       {
         codInt: 'SC001',
@@ -153,17 +163,30 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.46, alto: 2.05 }],
       },
     ]);
-    // Pieza: 150x230 (bordered). En sobrante se usa el ancho nominal 146
-    // (150 - BORDE 4). Sobrante 200x235 → franja restante 200 - 146 = 54.
+    // Pieza nominal 146 (150 - BORDE 4). Sobrante 280×235 → franja 280-146=134
+    // (≥120) y alto 235 (≥180) → califica como colmena reutilizable.
+    const sobrante = pano('SC001', 280, 235);
+    const plan = generarPlanCorte([ot], [sobrante]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].regla).toBe(2);
+    expect(plan.sobrantes[0].sobranteAncho).toEqual({ cod: 'SC001', ancho: 134, alto: 235 });
+  });
+
+  it('Regla 2: remanente de ancho <120 NO se registra como colmena (sería merma)', () => {
+    const ot = hacerOT([
+      {
+        codInt: 'SC001',
+        producto: 'Roller SC',
+        ubicacion: 'Living',
+        panos: [{ ancho: 1.46, alto: 2.05 }],
+      },
+    ]);
+    // Sobrante 200×235 → franja 200-146=54 (<120) → no es colmena, no se registra.
     const sobrante = pano('SC001', 200, 235);
     const plan = generarPlanCorte([ot], [sobrante]);
     expect(plan.sobrantes).toHaveLength(1);
     expect(plan.sobrantes[0].regla).toBe(2);
-    expect(plan.sobrantes[0].sobranteAncho).toEqual({
-      cod: 'SC001',
-      ancho: 54, // 200 - 146 (ancho nominal, sin BORDE)
-      alto: 235,
-    });
+    expect(plan.sobrantes[0].sobranteAncho).toBeNull();
   });
 
   it('no matchea si el sobrante es más chico que la pieza', () => {
@@ -234,7 +257,7 @@ describe('generarPlanCorte', () => {
     // Quedan lado a lado: la más ancha (75) en px=0, la otra (52) a continuación.
     const xs = plan.sobrantes[0].placed.map((p) => p.px).sort((a, b) => a - b);
     expect(xs).toEqual([0, 75]);
-    // Franja restante 140-127=13 cm < 30 → no se registra.
+    // Franja restante 140-127=13 cm < 120 → no califica como colmena.
     expect(plan.sobrantes[0].sobranteAncho).toBeNull();
   });
 
@@ -259,7 +282,7 @@ describe('generarPlanCorte', () => {
       { codInt: 'BK 69', producto: 'Roller BK', ubicacion: 'L5', alto: 1.6, panos: [{ ancho: 0.52, alto: 1.6 }] },
     ]);
     // Tres sobrantes disponibles. El óptimo (igual que el corte manual) usa
-    // solo DOS: 133×200 toma 0,52+0,75 (alto 200 entra por VENTANA_ALTO=20) y
+    // solo DOS: 133×200 toma 0,52+0,75 (alto 200 entra por VENTANA_ALTO=30) y
     // 146×195 toma 1,44 (144 ≤ 146 sin BORDE). El 122×195 queda INTACTO.
     const sobrantes = [
       pano('BK 69', 133, 200, { _docId: 's-133' }),
@@ -275,10 +298,23 @@ describe('generarPlanCorte', () => {
     expect(plan.sobrantes.map((g) => g.sobrante._docId)).not.toContain('s-122');
   });
 
-  it('Regla 3: prioridad por tipo (FALLA antes que SOBRANTE)', () => {
+  it('FIFO en Regla 1: entre dos colmenas EXACTAS usa la más antigua', () => {
     const ot = hacerOT([
       { codInt: 'SC001', producto: 'Roller SC', ubicacion: 'L1', panos: [{ ancho: 1.46, alto: 2.05 }] },
     ]);
+    // Dos sobrantes idénticos (150×230). Reglas Rolzzo: se usa el más antiguo.
+    const nueva = pano('SC001', 150, 230, { _docId: 'nueva', creadoEn: '2026-06-01T00:00:00Z' });
+    const vieja = pano('SC001', 150, 230, { _docId: 'vieja', creadoEn: '2026-01-01T00:00:00Z' });
+    const plan = generarPlanCorte([ot], [nueva, vieja]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].sobrante._docId).toBe('vieja');
+  });
+
+  it('Regla 3: con misma antigüedad, desempata por tipo (FALLA antes que SOBRANTE)', () => {
+    const ot = hacerOT([
+      { codInt: 'SC001', producto: 'Roller SC', ubicacion: 'L1', panos: [{ ancho: 1.46, alto: 2.05 }] },
+    ]);
+    // Sin fecha (creadoEn ''): empata FIFO → decide el tipo de sobrante.
     const sobrante = pano('SC001', 150, 230, { _docId: 'normal', tipo: 'SOBRANTE' });
     const falla = pano('SC001', 150, 230, { _docId: 'falla', tipo: 'FALLA' });
     const plan = generarPlanCorte([ot], [sobrante, falla]);

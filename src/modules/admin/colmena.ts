@@ -201,10 +201,33 @@ export type ColmenaPano = {
   disponible: boolean;
   ot_asignada: string | null;
   fecha_uso: string | null;
+  // Timestamp de fila en BD; fallback de fecha de ingreso para alerta 90 días.
+  created_at?: string | null;
   // Usados por Plan de Corte (prioridad Regla 3 + FIFO Regla 4 + ubicación al guardar)
   tipo?: string | null;
   ubicacion?: string | null;
-  datos_extra?: { creadoEn?: string; ot_origen?: string; fuente?: string } | null;
+  // `rack/m/col/cell` los escribe la importación del MAPA (grilla RACK 1-7);
+  // se usan para reconstruir la grilla en la vista Colmena (colmenaViva.ts).
+  datos_extra?: {
+    creadoEn?: string;
+    // Fecha de origen del sobrante (ROLZZO); fuente primaria de antigüedad.
+    fecha_origen?: string;
+    ot_origen?: string;
+    fuente?: string;
+    // Zona física de la colmena ('GALPON' | 'LIBERADO'). Cada zona es una
+    // grilla independiente en la vista. Si falta, se asume 'GALPON'.
+    zona?: string;
+    // Coordenadas de la grilla MAPA. Pueden venir null en jsonb (ej. celda
+    // suelta fuera de la grilla) → se tratan como sin coordenada.
+    rack?: string | number | null;
+    m?: string | number | null;
+    col?: string | number | null;
+    cell?: string | null;
+    // Colmena dada de baja (Reglas Rolzzo): no se usa, queda como merma.
+    baja?: boolean;
+    fecha_baja?: string;
+    motivo_baja?: string;
+  } | null;
 };
 
 export type PanoUpdate = {

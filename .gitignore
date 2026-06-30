@@ -23,3 +23,5 @@ vite.config.ts.timestamp-*
 
 # Archivos de referencia muy pesados (no versionar binarios grandes)
 docs/referencias/*.xlsm
+# Export crudo de ROLZZO (datos ya volcados a colmena_panos; no versionar)
+docs/referencias/Libro1.xlsx

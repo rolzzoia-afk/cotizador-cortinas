@@ -10,26 +10,48 @@
 // Lógica pura y testeable: acá solo se CALCULAN las deducciones a partir del
 // Plan de Corte (planCorte.ts). La escritura a Supabase la hace Fase 4.
 // ─────────────────────────────────────────────────────────────────────
+import { esColmena } from './planCorte';
 import type { GrupoSobrante, Plan } from './planCorte';
 
-// Mismos umbrales que el Plan de Corte / la tarjeta de colmena.
 const MARGEN = 1;
-const MIN_CM = 30;
 
 /**
  * Retazo único sugerido tras cortar las piezas en un sobrante: el rectángulo
  * de MAYOR ÁREA entre la banda de alto (ancho del paño × alto sobrante) y la
- * tira de ancho (`grupo.sobranteAncho`). `null` si no queda nada usable.
+ * tira de ancho (`grupo.sobranteAncho`). Reglas Rolzzo v1.0: un retazo solo
+ * "sobrevive" como colmena si cumple el mínimo 120×180; si no, devuelve `null`
+ * (el paño se marca Usado y el remanente queda como merma — ver `mermaSobrante`).
  */
 export function retazoSugerido(grupo: GrupoSobrante): { ancho: number; alto: number } | null {
   const placed = grupo.placed.filter((r) => !r.failed);
   const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
   const altoResto = Math.round(grupo.sobrante.alto - (maxY + MARGEN * 2));
   const cands: { ancho: number; alto: number }[] = [];
-  if (altoResto >= MIN_CM) cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
+  // Banda de alto (ancho del paño × alto restante): colmena solo si 120×180.
+  if (esColmena(grupo.sobrante.ancho, altoResto))
+    cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
+  // Tira de ancho: planCorte ya la dejó presente solo si cumple 120×180.
   if (grupo.sobranteAncho) {
     cands.push({ ancho: grupo.sobranteAncho.ancho, alto: grupo.sobranteAncho.alto });
   }
+  if (cands.length === 0) return null;
+  return cands.reduce((a, b) => (b.ancho * b.alto > a.ancho * a.alto ? b : a));
+}
+
+/**
+ * Remanente que NO califica como colmena → MERMA. Es el rectángulo de mayor
+ * área (banda de alto o tira de ancho) cuando ninguno llega a 120×180. `null`
+ * si el corte no deja remanente con medida útil o si ya sobrevivió como retazo.
+ */
+export function mermaSobrante(grupo: GrupoSobrante): { ancho: number; alto: number } | null {
+  if (retazoSugerido(grupo)) return null; // sobrevivió como colmena, no es merma
+  const placed = grupo.placed.filter((r) => !r.failed);
+  const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+  const altoResto = Math.round(grupo.sobrante.alto - (maxY + MARGEN * 2));
+  const cands: { ancho: number; alto: number }[] = [];
+  if (altoResto > 0) cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
+  const anchoResto = Math.round(grupo.uw - grupo.placed.reduce((s, r) => s + (r.failed ? 0 : r.pw), 0));
+  if (anchoResto > 0) cands.push({ ancho: anchoResto, alto: Math.round(grupo.sobrante.alto) });
   if (cands.length === 0) return null;
   return cands.reduce((a, b) => (b.ancho * b.alto > a.ancho * a.alto ? b : a));
 }
@@ -46,6 +68,8 @@ export type DeduccionColmena = {
   accion: 'retazo' | 'usado';
   nuevoAncho?: number;
   nuevoAlto?: number;
+  /** Remanente que NO califica como colmena (120×180) → merma a registrar. */
+  merma?: { ancho: number; alto: number } | null;
   /** Se completa en la capa UI si la escritura falló. */
   error?: string;
 };
@@ -71,7 +95,7 @@ export function deduccionesColmena(plan: Plan): DeduccionColmena[] {
     };
     const retazo = retazoSugerido(g);
     return retazo
-      ? { ...base, accion: 'retazo' as const, nuevoAncho: retazo.ancho, nuevoAlto: retazo.alto }
-      : { ...base, accion: 'usado' as const };
+      ? { ...base, accion: 'retazo' as const, nuevoAncho: retazo.ancho, nuevoAlto: retazo.alto, merma: null }
+      : { ...base, accion: 'usado' as const, merma: mermaSobrante(g) };
   });
 }
