@@ -17,7 +17,13 @@ export type ColmenaPanoRow = {
   ubicacion?: string | null;
   disponible: boolean;
   ot_asignada: string | null;
-  datos_extra?: { creadoEn?: string; ot_origen?: string; fuente?: string } | null;
+  created_at?: string | null;
+  datos_extra?: {
+    creadoEn?: string;
+    ot_origen?: string;
+    fuente?: string;
+    fecha_origen?: string;
+  } | null;
 };
 
 export type PanoColmena = {
@@ -99,6 +105,32 @@ function tipoPrio(t: string): number {
   return COLMENA_TIPO_PRIO[(t || '').toUpperCase().trim()] ?? 99;
 }
 
+// ── Reglas Rolzzo v1.0 (2026-06-26) ──────────────────────────────────
+// Medida mínima para que un sobrante se registre como COLMENA reutilizable.
+// Por debajo de esto el remanente es MERMA (no entra al inventario activo).
+export const COLMENA_MIN_ANCHO = 120; // cm
+export const COLMENA_MIN_ALTO = 180; // cm
+
+/** ¿Un remanente (ancho × alto, cm) califica como colmena reutilizable? */
+export function esColmena(ancho: number, alto: number): boolean {
+  return ancho >= COLMENA_MIN_ANCHO && alto >= COLMENA_MIN_ALTO;
+}
+
+/**
+ * Comparador FIFO: más antiguo primero. `creadoEn` es ISO ('' si no se sabe).
+ * Los sin fecha van al final (no se pueden ordenar por antigüedad). Desempata
+ * por tipo de sobrante (FALLA/ERROR antes que SOBRANTE intacto).
+ */
+function ordenFifo(a: PanoColmena, b: PanoColmena): number {
+  const fa = a.creadoEn || '';
+  const fb = b.creadoEn || '';
+  if (fa && fb) {
+    if (fa !== fb) return fa < fb ? -1 : 1;
+  } else if (fa) return -1;
+  else if (fb) return 1;
+  return tipoPrio(a.tipo) - tipoPrio(b.tipo);
+}
+
 // Regla 7: extra cm al alto según tipo de producto
 export function extraCmPorTipo(v: VentanaItem): number {
   const prod = (v.producto || '').toUpperCase();
@@ -117,7 +149,13 @@ export function rowToPano(row: ColmenaPanoRow): PanoColmena {
     alto: Number(row.medida_alto) || 0,
     ubicacion: (row.ubicacion || '').toString(),
     tipo: (row.tipo || '').toString(),
-    creadoEn: row.datos_extra?.creadoEn || '',
+    // Fecha de ingreso para FIFO: explícita (creadoEn) → fecha de origen del
+    // sobrante (ROLZZO) → timestamp de fila en BD. '' si no hay ninguna.
+    creadoEn:
+      row.datos_extra?.creadoEn ||
+      row.datos_extra?.fecha_origen ||
+      row.created_at ||
+      '',
   };
 }
 
@@ -220,15 +258,14 @@ export function generarPlanCorte(
   const MARGEN = 1; // 1 cm de margen por lado
   const BORDE = 4; // 4 cm de limpieza de bordes al ancho (Regla 5)
   const ROLL_W_UTIL = 300 - MARGEN * 2;
-  const MIN_SOB = 30;
   const multiOT = ots.length > 1;
 
   // ── Umbrales de reuso de SOBRANTES (ajustados 2026-06 para igualar el
   //    corte manual; ver comparación OT ANGELICA) ─────────────────────
   // Ventana de alto: un sobrante sirve si su alto está dentro de +VENTANA_ALTO
-  // de la pieza. Subido de 10 → 20 cm para aprovechar leftovers algo más altos
-  // (ej. usar un sobrante de 200 cm para una pieza de 185).
-  const VENTANA_ALTO = 20;
+  // de la pieza. Reglas Rolzzo v1.0: tolerancia máxima +30 cm (alto). En ancho
+  // NO hay tope: se empaquetan varias cortinas en un sobrante ancho (Regla 5).
+  const VENTANA_ALTO = 30;
   // Ancho real que una pieza necesita de un SOBRANTE: al reusar tela ya cortada
   // NO se aplica el margen de corte limpio del rollo (BORDE), basta el ancho
   // nominal de la cortina. Así una cortina de 144 cm entra en un sobrante de
@@ -297,12 +334,15 @@ export function generarPlanCorte(
   Object.entries(porCod).forEach(([codInt, grupo]) => {
     const sinCubrir: (Pieza | null)[] = [...grupo];
 
-    // Regla 3: prioridad por tipo de sobrante (FALLA/ERROR antes que SOBRANTE
-    // intacto). YA NO se aplica FIFO por antigüedad: la asignación la decide la
-    // optimización (ver Fase 2), no la fecha. El tipo queda solo como desempate.
+    // Orden FIFO (más antigua primero), desempatando por tipo de sobrante
+    // (FALLA/ERROR antes que SOBRANTE). Reglas Rolzzo v1.0: cuando hay 2+
+    // colmenas que coinciden EXACTO (código + medida), se usa la más antigua
+    // (Regla 1 abajo toma la primera del orden). En el best-fit (Regla 2) la
+    // antigüedad solo desempata cuando sobra y tipo son idénticos: la decide
+    // la optimización (minimizar colmena), no la fecha.
     const disponiblesOrdenados = colmenaPanos
       .filter((s) => s.cod.toUpperCase().trim() === codInt)
-      .sort((a, b) => tipoPrio(a.tipo) - tipoPrio(b.tipo));
+      .sort(ordenFifo);
 
     const usadosEnPlan = new Set<string>();
 
@@ -384,11 +424,13 @@ export function generarPlanCorte(
         px += w;
         sinCubrir[i] = null;
       }
-      const anchoExceso = mejor.sobra;
-      const sobranteAncho =
-        anchoExceso >= MIN_SOB
-          ? { cod: codInt, ancho: Math.round(anchoExceso), alto: Math.round(mejor.sob.alto) }
-          : null;
+      // El remanente de ancho solo se registra como colmena si cumple el
+      // mínimo 120×180 (Reglas Rolzzo). Por debajo es merma (Fase 4 la registra).
+      const anchoExceso = Math.round(mejor.sobra);
+      const altoRemanente = Math.round(mejor.sob.alto);
+      const sobranteAncho = esColmena(anchoExceso, altoRemanente)
+        ? { cod: codInt, ancho: anchoExceso, alto: altoRemanente }
+        : null;
 
       plan.sobrantes.push({
         sobrante: mejor.sob,
@@ -475,11 +517,11 @@ export function generarPlanCorte(
           (bestPl.reduce((s, r) => s + r.pw * r.ph, 0) / (ROLL_W_UTIL * bestH)) * 100,
         );
         const maxX = bestPl.reduce((m, r) => Math.max(m, r.px + r.pw), 0);
-        const anchoFranja = ROLL_W_UTIL - maxX;
-        const sobInterno =
-          anchoFranja >= MIN_SOB
-            ? { ancho: Math.round(anchoFranja), alto: Math.round(altoCorte) }
-            : null;
+        const anchoFranja = Math.round(ROLL_W_UTIL - maxX);
+        const altoFranja = Math.round(altoCorte);
+        const sobInterno = esColmena(anchoFranja, altoFranja)
+          ? { ancho: anchoFranja, alto: altoFranja }
+          : null;
 
         const piezasRotadas = bestPl.filter((r) => r.rot && !r.failed);
         const tieneRotaciones = (rotarConviene || !plA) && piezasRotadas.length > 0;
@@ -491,9 +533,11 @@ export function generarPlanCorte(
             )
           : 0;
         const maxXv = plA ? plA.reduce((m, r) => Math.max(m, r.px + r.pw), 0) : 0;
+        const anchoFranjaV = Math.round(ROLL_W_UTIL - maxXv);
+        const altoFranjaV = altoVertical ? Math.round(altoVertical) : 0;
         const sobInternoV =
-          plA && ROLL_W_UTIL - maxXv >= MIN_SOB && altoVertical
-            ? { ancho: Math.round(ROLL_W_UTIL - maxXv), alto: Math.round(altoVertical) }
+          plA && altoVertical && esColmena(anchoFranjaV, altoFranjaV)
+            ? { ancho: anchoFranjaV, alto: altoFranjaV }
             : null;
 
         plan.rollo.push({

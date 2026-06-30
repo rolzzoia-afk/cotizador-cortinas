@@ -266,20 +266,33 @@ export function CotizadorFase4() {
       const panos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
       const plan = generarPlanCorte([ot], panos);
       const deducciones = deduccionesColmena(plan);
-      if (deducciones.length === 0) {
-        toast.info('Este corte no usa paños de la colmena (todo sale de rollo).');
+      // Sobrantes de rollo reutilizables (≥120×180, ya gateados por planCorte):
+      // se ofrecen para sumar a la colmena con confirmación física del operario.
+      const sobrantesRollo = plan.rollo
+        .filter((g) => g.sobInterno)
+        .map((g) => ({ codInt: g.codInt, sob: g.sobInterno! }));
+      if (deducciones.length === 0 && sobrantesRollo.length === 0) {
+        toast.info('Este corte no usa colmena ni deja sobrantes reutilizables.');
         return;
       }
       const retazos = deducciones.filter((d) => d.accion === 'retazo').length;
       const usados = deducciones.filter((d) => d.accion === 'usado').length;
+      const conMerma = deducciones.filter((d) => d.merma).length;
       const ok = await confirmar({
         titulo: 'Confirmar corte general',
         mensaje:
-          `Se descontarán ${deducciones.length} paño(s) de la colmena:\n` +
-          `· ${retazos} quedan como retazo (medida nueva, misma ubicación)\n` +
-          `· ${usados} se marcan como usados\n\n` +
-          'Esto actualiza el inventario y no debería repetirse.',
-        confirmLabel: 'Confirmar y descontar',
+          (deducciones.length
+            ? `Se descontarán ${deducciones.length} paño(s) de la colmena:\n` +
+              `· ${retazos} quedan como retazo (medida nueva, misma ubicación)\n` +
+              `· ${usados} se marcan como usados\n` +
+              (conMerma ? `· ${conMerma} dejan merma (registrada con trazabilidad)\n` : '')
+            : 'Este corte no descuenta paños de la colmena.\n') +
+          (sobrantesRollo.length
+            ? `\nDeja ${sobrantesRollo.length} sobrante(s) de rollo reutilizable(s); ` +
+              'te preguntaré si los guardaste.\n'
+            : '') +
+          '\nEsto actualiza el inventario y no debería repetirse.',
+        confirmLabel: 'Confirmar',
         destructivo: true,
       });
       if (!ok) return;
@@ -301,6 +314,54 @@ export function CotizadorFase4() {
         }),
       );
       const fallidas = aplicadas.filter((d) => d.error);
+
+      // Reglas Rolzzo v1.0: registrar como MERMA los remanentes que no llegan a
+      // 120×180 (con trazabilidad: código, medida, OT y colmena de origen).
+      const mermas = deducciones
+        .filter((d) => d.merma)
+        .map((d) => ({
+          empresa_id: empresaId,
+          codigo: d.cod,
+          medida_ancho: d.merma!.ancho,
+          medida_alto: d.merma!.alto,
+          motivo: 'sobrante_colmena',
+          ot_origen: otNum,
+          colmena_origen_id: d.docId,
+          fecha: now,
+        }));
+      if (mermas.length) {
+        const { error: mErr } = await supabase.from('telas_mermas').insert(mermas);
+        if (mErr) console.warn('[CorteGeneral] merma no registrada:', mErr.message);
+      }
+
+      // Reglas Rolzzo (Fase 3): los sobrantes de rollo ≥120×180 se suman a la
+      // colmena SOLO con confirmación física del operario (anti-fantasma).
+      let rolloGuardados = 0;
+      if (sobrantesRollo.length) {
+        const guardarRollo = await confirmar({
+          titulo: 'Sobrantes de rollo',
+          mensaje:
+            `Este corte deja ${sobrantesRollo.length} sobrante(s) de rollo reutilizable(s):\n` +
+            sobrantesRollo.map((x) => `· ${x.codInt}: ${x.sob.ancho}×${x.sob.alto} cm`).join('\n') +
+            '\n\n¿Los guardaste físicamente para sumarlos a la colmena?',
+          confirmLabel: 'Sí, sumar a la colmena',
+        });
+        if (guardarRollo) {
+          const nuevas = sobrantesRollo.map((x) => ({
+            empresa_id: empresaId,
+            codigo: x.codInt,
+            medida_ancho: x.sob.ancho,
+            medida_alto: x.sob.alto,
+            disponible: true,
+            ubicacion: `CORTE OT ${otNum}`,
+            datos_extra: { fuente: 'corte_rollo', zona: 'CORTE', ot_origen: otNum, creadoEn: now },
+          }));
+          const { error: cErr } = await supabase.from('colmena_panos').insert(nuevas);
+          if (cErr) console.warn('[CorteGeneral] sobrante de rollo no guardado:', cErr.message);
+          else rolloGuardados = nuevas.length;
+        }
+      }
+
       // Persistir el snapshot SIEMPRE (aunque haya fallos parciales) para no
       // re-descontar en un reintento.
       await guardar({
@@ -315,7 +376,12 @@ export function CotizadorFase4() {
             `(${fallidas.map((d) => d.cod).join(', ')}). Revisalos en Ojo de Dios → Colmena.`,
         );
       } else {
-        toast.success(`Colmena descontada: ${retazos} retazo(s), ${usados} usado(s).`);
+        toast.success(
+          `Colmena descontada: ${retazos} retazo(s), ${usados} usado(s)` +
+            (mermas.length ? `, ${mermas.length} merma(s)` : '') +
+            (rolloGuardados ? `, +${rolloGuardados} sobrante(s) de rollo a la colmena` : '') +
+            '.',
+        );
       }
     } catch (e) {
       toast.error('Error al confirmar corte general: ' + (e instanceof Error ? e.message : String(e)));

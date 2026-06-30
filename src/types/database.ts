@@ -1496,6 +1496,45 @@ export type Database = {
         }
         Relationships: []
       }
+      telas_mermas: {
+        Row: {
+          codigo: string | null
+          colmena_origen_id: string | null
+          created_at: string | null
+          empresa_id: string
+          fecha: string | null
+          id: string
+          medida_alto: number | null
+          medida_ancho: number | null
+          motivo: string | null
+          ot_origen: string | null
+        }
+        Insert: {
+          codigo?: string | null
+          colmena_origen_id?: string | null
+          created_at?: string | null
+          empresa_id: string
+          fecha?: string | null
+          id?: string
+          medida_alto?: number | null
+          medida_ancho?: number | null
+          motivo?: string | null
+          ot_origen?: string | null
+        }
+        Update: {
+          codigo?: string | null
+          colmena_origen_id?: string | null
+          created_at?: string | null
+          empresa_id?: string
+          fecha?: string | null
+          id?: string
+          medida_alto?: number | null
+          medida_ancho?: number | null
+          motivo?: string | null
+          ot_origen?: string | null
+        }
+        Relationships: []
+      }
       telas_slots: {
         Row: {
           almacen: string | null

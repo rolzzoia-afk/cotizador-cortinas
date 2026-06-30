@@ -29,8 +29,9 @@ import type {
   Validador,
   ValidadoresMap,
 } from './telas/Telas.types';
+import type { ColmenaPano } from '@/modules/admin/colmena';
 import CatalogoTab from './telas/tabs/CatalogoTab';
-import RackTab from './telas/tabs/RackTab';
+import ColmenaVivaTab from './telas/tabs/ColmenaVivaTab';
 import MovimientosTab from './telas/tabs/MovimientosTab';
 import FallasTab from './telas/tabs/FallasTab';
 
@@ -45,12 +46,13 @@ export function Telas() {
   const [fallas, setFallas] = useState<Falla[]>([]);
   const [validadores, setValidadores] = useState<ValidadoresMap>({});
   const [colmena, setColmena] = useState<Colmena>({});
+  const [panos, setPanos] = useState<ColmenaPano[]>([]);
 
   const cargarTodo = async () => {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const [rTelas, rSlots, rMov, rFallas, rVal] = await Promise.all([
+      const [rTelas, rSlots, rMov, rFallas, rVal, rPanos] = await Promise.all([
         supabase.from('telas_catalogo').select('*').eq('empresa_id', empresaId).order('codigo'),
         supabase
           .from('telas_slots')
@@ -72,12 +74,20 @@ export function Telas() {
           .select('*')
           .eq('empresa_id', empresaId)
           .order('orden'),
+        // Colmena viva (optimizador): retazos reales con medidas. Alimenta el
+        // tab "Colmena" — reemplaza al snapshot congelado de telas_slots.
+        supabase
+          .from('colmena_panos')
+          .select('*')
+          .eq('empresa_id', empresaId)
+          .order('codigo'),
       ]);
 
       const telasData = (rTelas.data as Tela[]) || [];
       setTelas(telasData);
       setMovimientos((rMov.data as Movimiento[]) || []);
       setFallas((rFallas.data as Falla[]) || []);
+      setPanos((rPanos.data as ColmenaPano[]) || []);
 
       const vmap: ValidadoresMap = {};
       ((rVal.data as Validador[]) || []).forEach((v) => {
@@ -198,7 +208,7 @@ export function Telas() {
           colmena={colmena}
         />
       )}
-      {tab === 'rack' && <RackTab telas={telas} fallas={fallas} colmena={colmena} />}
+      {tab === 'rack' && <ColmenaVivaTab panos={panos} fallas={fallas} onReload={cargarTodo} />}
       {tab === 'movimientos' && (
         <MovimientosTab
           movimientos={movimientos}
