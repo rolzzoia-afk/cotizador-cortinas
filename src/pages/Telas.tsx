@@ -1,7 +1,7 @@
 // Orquestador de la pantalla Inventario de Telas.
 //
-// 4 tabs: Catálogo / Colmena (rack visual) / Movimientos / Fallas.
-// Carga 5 datasets en paralelo y construye el mapa de colmena combinando
+// 5 tabs: Catálogo / Colmena (rack visual) / Movimientos / Fallas / Mermas.
+// Carga los datasets en paralelo y construye el mapa de colmena combinando
 // telas.posicion con telas_slots. Cada tab vive en su archivo bajo
 // ./telas/tabs/, y los modales bajo ./telas/dialogs/.
 
@@ -14,6 +14,7 @@ import {
   Boxes,
   Loader2,
   PencilRuler,
+  Recycle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
@@ -22,6 +23,7 @@ import { useAuth } from '@/lib/auth';
 import type {
   Colmena,
   Falla,
+  Merma,
   Movimiento,
   Slot,
   Tab,
@@ -34,6 +36,7 @@ import CatalogoTab from './telas/tabs/CatalogoTab';
 import ColmenaVivaTab from './telas/tabs/ColmenaVivaTab';
 import MovimientosTab from './telas/tabs/MovimientosTab';
 import FallasTab from './telas/tabs/FallasTab';
+import MermasTab from './telas/tabs/MermasTab';
 
 export function Telas() {
   const { empresaId } = useAuth();
@@ -47,12 +50,13 @@ export function Telas() {
   const [validadores, setValidadores] = useState<ValidadoresMap>({});
   const [colmena, setColmena] = useState<Colmena>({});
   const [panos, setPanos] = useState<ColmenaPano[]>([]);
+  const [mermas, setMermas] = useState<Merma[]>([]);
 
   const cargarTodo = async () => {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const [rTelas, rSlots, rMov, rFallas, rVal, rPanos] = await Promise.all([
+      const [rTelas, rSlots, rMov, rFallas, rVal, rPanos, rMermas] = await Promise.all([
         supabase.from('telas_catalogo').select('*').eq('empresa_id', empresaId).order('codigo'),
         supabase
           .from('telas_slots')
@@ -81,6 +85,12 @@ export function Telas() {
           .select('*')
           .eq('empresa_id', empresaId)
           .order('codigo'),
+        // Mermas registradas (Reglas Rolzzo): sobrantes < 120×180 y bajas.
+        supabase
+          .from('telas_mermas')
+          .select('*')
+          .eq('empresa_id', empresaId)
+          .order('fecha', { ascending: false }),
       ]);
 
       const telasData = (rTelas.data as Tela[]) || [];
@@ -88,6 +98,7 @@ export function Telas() {
       setMovimientos((rMov.data as Movimiento[]) || []);
       setFallas((rFallas.data as Falla[]) || []);
       setPanos((rPanos.data as ColmenaPano[]) || []);
+      setMermas((rMermas.data as Merma[]) || []);
 
       const vmap: ValidadoresMap = {};
       ((rVal.data as Validador[]) || []).forEach((v) => {
@@ -175,6 +186,7 @@ export function Telas() {
               { k: 'rack', l: 'Colmena', i: <PencilRuler className="h-4 w-4" /> },
               { k: 'movimientos', l: 'Movimientos', i: <ArrowLeftRight className="h-4 w-4" /> },
               { k: 'fallas', l: 'Fallas', i: <AlertTriangle className="h-4 w-4" /> },
+              { k: 'mermas', l: 'Mermas', i: <Recycle className="h-4 w-4" /> },
             ] as const
           ).map((t) => (
             <button
@@ -227,6 +239,7 @@ export function Telas() {
           onReload={cargarTodo}
         />
       )}
+      {tab === 'mermas' && <MermasTab mermas={mermas} />}
     </div>
   );
 }

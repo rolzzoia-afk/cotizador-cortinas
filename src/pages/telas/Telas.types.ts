@@ -72,6 +72,20 @@ export type ColmenaEntry = {
 };
 export type Colmena = Record<string, ColmenaEntry>;
 
-export type Tab = 'catalogo' | 'rack' | 'movimientos' | 'fallas';
+export type Tab = 'catalogo' | 'rack' | 'movimientos' | 'fallas' | 'mermas';
 export type SortDir = 'asc' | 'desc';
+
+// Merma de tela (Reglas Rolzzo): sobrante que no llega a colmena (120×180) o
+// colmena dada de baja. La escribe Fase 4 (corte general) y "dar de baja".
+export type Merma = {
+  id: string;
+  codigo: string | null;
+  medida_ancho: number | null;
+  medida_alto: number | null;
+  motivo: string | null;
+  ot_origen: string | null;
+  colmena_origen_id: string | null;
+  fecha: string | null;
+  created_at: string | null;
+};
 export type MovTipo = 'INGRESO' | 'SALIDA' | 'TRASLADO' | 'AJUSTE';
