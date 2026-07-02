@@ -40,9 +40,10 @@ export type OTParaCorte = { ot: OT; rows: OptimizerRow[] };
 const pieceId = (otId: string | number, ventanaId: string | number, panoIndex: number) =>
   `${otId}_${ventanaId}_p${panoIndex}`;
 
-// Alto de corte del paño en metros, igual a la columna "Alto corte" del
-// optimizador (altoCm + 25 cm). Tomamos el mayor del grupo por seguridad.
-const altoCorteM = (altoCm: number) => parseFloat(((altoCm + 25) / 100).toFixed(2));
+// Alto de corte del paño en metros (columna "Alto corte" del optimizador).
+// Ya viene calculado en la fila (dúo: 2×alto+0,30; resto: alto+0,25); acá solo
+// redondeamos a 2 decimales para la planilla.
+const red2 = (m: number) => parseFloat(m.toFixed(2));
 
 /**
  * Construye las filas de la hoja del cortador para las OTs dadas.
@@ -92,14 +93,14 @@ export function construirFilasCorte(
     for (const [junto, grupo] of rolloPorJunto) {
       nPano++;
       const ref = grupo[0];
-      const altoMax = Math.max(...grupo.map((g) => g.altoCm));
+      const corteReal = Math.max(...grupo.map((g) => g.altoCorte));
       filas.push({
         ot: otNum,
         cliente,
         panos: nPano,
         tipo: ref.producto,
         cod: ref.codInt,
-        altoCortePano: altoCorteM(altoMax),
+        altoCortePano: red2(corteReal),
         seCortaJunto: junto === '·' ? '' : junto,
         origen: 'ROLLO',
       });
@@ -113,7 +114,7 @@ export function construirFilasCorte(
         panos: '',
         tipo: row.producto,
         cod: row.codInt,
-        altoCortePano: altoCorteM(row.altoCm),
+        altoCortePano: red2(row.altoCorte),
         seCortaJunto: '',
         origen,
       });

@@ -299,7 +299,7 @@ export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaT
         >
           <span className="font-bold">⚠ {alertas.length} colmena(s) en alerta</span>
           <span className="text-amber-200/70">
-            más de 90 días sin usar — revisá su estado o dales de baja
+            más de 90 días sin usar — revisa su estado o da de baja
           </span>
         </button>
       )}

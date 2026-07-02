@@ -2,13 +2,20 @@
 // abre TelaDialog; click en el QR abre QRTelaDialog.
 
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, QrCode, Search } from 'lucide-react';
+import { Copy, FileUp, Pencil, Plus, QrCode, Search, Tags } from 'lucide-react';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import StatCard from '../components/StatCard';
 import TelaDialog from '../dialogs/TelaDialog';
 import QRTelaDialog from '../dialogs/QRTelaDialog';
+import ClonarCodigoDialog from '../dialogs/ClonarCodigoDialog';
+import ImportarCatalogoDialog from '../dialogs/ImportarCatalogoDialog';
+import {
+  construirFilasEtiquetas,
+  descargarEtiquetasPtouchXlsx,
+} from '@/modules/telas/exportEtiquetasPtouch';
 import { tipoBadgeCls } from '../utils/tipo-badge';
 import type { Colmena, SortDir, Tela, ValidadoresMap } from '../Telas.types';
 
@@ -35,6 +42,8 @@ export default function CatalogoTab({
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [modalTela, setModalTela] = useState<Tela | null | undefined>(undefined);
   const [modalQR, setModalQR] = useState<Tela | null>(null);
+  const [clonar, setClonar] = useState(false);
+  const [importar, setImportar] = useState(false);
 
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -75,6 +84,19 @@ export default function CatalogoTab({
     }),
     [telas],
   );
+
+  const exportarEtiquetas = () => {
+    if (lista.length === 0) {
+      toast.error('No hay telas para exportar con los filtros actuales.');
+      return;
+    }
+    // Nombre FIJO: P-touch Editor vincula la base de datos por ruta de archivo;
+    // un nombre con fecha rompería el vínculo de la plantilla en cada export.
+    descargarEtiquetasPtouchXlsx(construirFilasEtiquetas(lista, colmena), 'etiquetas-ptouch.xlsx');
+    toast.success(
+      `${lista.length} etiqueta${lista.length === 1 ? '' : 's'} exportada${lista.length === 1 ? '' : 's'}. Vincula el archivo como base de datos en P-touch Editor.`,
+    );
+  };
 
   const sort = (col: keyof Tela) => {
     if (sortCol === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
@@ -140,6 +162,30 @@ export default function CatalogoTab({
         </select>
         <Button onClick={() => setModalTela(null)} className="gap-1.5">
           <Plus className="h-4 w-4" /> Nueva Tela
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setClonar(true)}
+          className="gap-1.5"
+          title="Crear un código de cortina nuevo heredando la familia de uno existente (para cotizar)"
+        >
+          <Copy className="h-4 w-4" /> Clonar código de cortina
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => setImportar(true)}
+          className="gap-1.5"
+          title="Importar códigos, precios y descuentos desde el Excel maestro (hoja Productos)"
+        >
+          <FileUp className="h-4 w-4" /> Importar catálogo (Excel)
+        </Button>
+        <Button
+          variant="outline"
+          onClick={exportarEtiquetas}
+          className="gap-1.5"
+          title="Exportar las telas filtradas como base de datos para imprimir etiquetas en la Brother QL-810W (P-touch Editor)"
+        >
+          <Tags className="h-4 w-4" /> Etiquetas P-touch
         </Button>
       </div>
 
@@ -274,6 +320,12 @@ export default function CatalogoTab({
       )}
 
       {modalQR && <QRTelaDialog tela={modalQR} colmena={colmena} onClose={() => setModalQR(null)} />}
+
+      {clonar && <ClonarCodigoDialog onClose={() => setClonar(false)} onSaved={onReload} />}
+
+      {importar && (
+        <ImportarCatalogoDialog onClose={() => setImportar(false)} onSaved={onReload} />
+      )}
     </div>
   );
 }

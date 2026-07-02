@@ -22,7 +22,7 @@ export function Stock() {
     const codigo = form.codigo.trim().toUpperCase();
     const nombre = form.nombre.trim();
     if (!codigo || !nombre) {
-      toast.error('Completá el código y nombre de la tela');
+      toast.error('Completa el código y nombre de la tela');
       return;
     }
     setGuardando(true);

@@ -31,7 +31,7 @@ export type FilaCorteCortina = {
   anchoCorteTela: number; // m
   corteAncho35: number; // m (ancho − 3,5 cm)
   alto: number; // m
-  altoCorteTela: number; // m (alto + 25 cm)
+  altoCorteTela: number; // m — corte real (dúo: 2×alto+0,30; resto: alto+0,25)
   pano: number; // n.º de paño (= letra "cortar junto")
   cortarJunto: string; // letra A, B, C… (o "RR" si no cabe ni invertida)
   comentario: string; // "INVERTIDA" / "NO CABE" / ""
@@ -66,6 +66,9 @@ const BORDE_CM = 4;
 
 /** Metros (m) desde cm, redondeado a 3 decimales sin ceros sobrantes. */
 const aMetros = (cm: number) => parseFloat((cm / 100).toFixed(3));
+
+/** Redondea metros a 3 decimales sin ceros sobrantes. */
+const redM = (m: number) => parseFloat(m.toFixed(3));
 
 /** Tipo corto = última palabra del producto ("ROLLER SCREEN PREMIUM" → "PREMIUM"). */
 const tipoCorto = (producto: string) => {
@@ -129,7 +132,7 @@ export function construirHojaCorte(
       anchoCorteTela: aMetros(r.anchoCm),
       corteAncho35: aMetros(r.anchoCm - 3.5),
       alto: aMetros(r.altoCm),
-      altoCorteTela: aMetros(r.altoCm + 25),
+      altoCorteTela: redM(r.altoCorte), // dúo: 2×alto+0,30; resto: alto+0,25
       pano,
       cortarJunto: noCabe ? 'RR' : letra(pano),
       comentario: inv ? 'INVERTIDA' : noCabe ? 'NO CABE' : '',
@@ -156,17 +159,21 @@ export function construirHojaCorte(
     if (!esRollo) continue;
     const ref = grupo[0];
     const inv = esInvertida(ref);
-    const altoCorte = Math.max(...grupo.map((g) => aMetros(g.altoCm + 25)));
+    // Corte real del paño (dúo = 2×alto+0,30) vs. reserva "alto máximo a utilizar"
+    // (dúo = 2×(alto+0,25)). En roller simple ambas coinciden.
+    const corteReal = Math.max(...grupo.map((g) => redM(g.altoCorte)));
+    const altoMax = Math.max(...grupo.map((g) => redM(g.altoReal)));
     const anchoMax = Math.max(...grupo.map((g) => aMetros(g.anchoCm)));
     panos.push({
       pano,
       tipo: ref.producto,
       cod: ref.codInt,
-      altoCortePano: inv ? anchoMax : altoCorte, // invertida → ancho consumido
-      altoMaxUtilizar: inv ? '' : altoCorte,
+      altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
+      altoMaxUtilizar: inv ? '' : altoMax,
       invertida: inv,
     });
-    metrosRollo.set(ref.codInt, (metrosRollo.get(ref.codInt) || 0) + altoCorte);
+    // Metros a reservar = alto máximo a utilizar (invertida: el corte consumido).
+    metrosRollo.set(ref.codInt, (metrosRollo.get(ref.codInt) || 0) + (inv ? corteReal : altoMax));
   }
   panos.sort((a, b) => a.pano - b.pano);
 

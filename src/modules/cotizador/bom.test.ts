@@ -19,6 +19,8 @@ function row(pano: Partial<Pano> = {}, opts: Partial<OptimizerRow> = {}): Optimi
     extra: 0.25,
     altoExtra: 2.25,
     altoReal: 2.25,
+    altoCorte: 2.25,
+    isDuo: false,
     m2: 3.375,
     anchoRollo: 2.98,
     anchoPano: 1.5,

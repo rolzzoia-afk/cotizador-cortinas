@@ -192,7 +192,7 @@ function AccesoRestringido({ email }: { email: string | null }) {
         <h2 className="text-white text-lg font-bold mb-2">Acceso restringido</h2>
         <p className="text-neutral-400 text-sm mb-4">
           Este módulo solo está disponible para vendedores y administradores autorizados.
-          Si necesitas acceso, contactá a gerencia para que te agregue a la lista de permisos.
+          Si necesitas acceso, contacta a gerencia para que te agregue a la lista de permisos.
         </p>
         {email && (
           <p className="text-neutral-500 text-xs mb-6">

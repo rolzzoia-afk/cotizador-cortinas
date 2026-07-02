@@ -196,7 +196,7 @@ export default function InsumoDialog({
                 onChange={(e) => onChange({ stock_inicial: e.target.value })}
               />
               <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
-                Si ingresás una cantidad, se crea un movimiento de NUEVO INGRESO en MP.
+                Si ingresas una cantidad, se crea un movimiento de NUEVO INGRESO en MP.
               </p>
             </div>
           )}

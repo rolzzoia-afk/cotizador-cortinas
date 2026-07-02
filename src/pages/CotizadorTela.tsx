@@ -262,7 +262,7 @@ export function CotizadorTela() {
       <div className="flex-1 overflow-auto px-4 py-4">
         {sinVentanas ? (
           <div className="rounded-lg border border-warning/30 bg-warning/15 p-4 text-sm text-warning">
-            La OT no tiene ventanas todavía. Completá Fase 2 primero.
+            La OT no tiene ventanas todavía. Completa Fase 2 primero.
           </div>
         ) : (
           <>

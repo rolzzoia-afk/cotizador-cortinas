@@ -295,7 +295,7 @@ export function HistorialCorte() {
   ) => {
     const responsable = (perfil?.nombre || user?.email || '').trim();
     if (!responsable) {
-      toast.error('No se pudo identificar al responsable. Reiniciá sesión.');
+      toast.error('No se pudo identificar al responsable. Reinicia sesión.');
       return;
     }
     const ok = await confirmar(

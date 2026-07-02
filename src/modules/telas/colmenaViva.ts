@@ -144,8 +144,11 @@ export const ZONAS: Record<string, ZonaConfig> = {
   GALPON: { label: 'Galpón', filaPrefix: 'M', filaDesc: true, modo: 'grid' },
   LIBERADO: { label: 'Liberado', filaPrefix: '', filaDesc: false, modo: 'grid' },
   ROLZZO: { label: 'Galpón (ROLZZO)', filaPrefix: '', filaDesc: false, modo: 'slots' },
+  // Sobrantes de rollo nuevos guardados desde Fase 4 (fuente 'corte_rollo'). La
+  // ubicación la escribe el operario al confirmar; se agrupan como estantes.
+  CORTE: { label: 'Cortes nuevos', filaPrefix: '', filaDesc: false, modo: 'slots' },
 };
-const ORDEN_ZONA = ['GALPON', 'LIBERADO', 'ROLZZO'];
+const ORDEN_ZONA = ['GALPON', 'LIBERADO', 'ROLZZO', 'CORTE'];
 
 export function zonaDe(p: ColmenaPano): string {
   const z = p.datos_extra?.zona;

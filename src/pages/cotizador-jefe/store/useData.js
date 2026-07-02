@@ -253,7 +253,7 @@ export function importData(newData) {
     !Array.isArray(newData.modelosComposicion) ||
     !newData.config
   ) {
-    throw new Error('El archivo no tiene la estructura esperada. Verificá que sea un JSON exportado desde esta app.')
+    throw new Error('El archivo no tiene la estructura esperada. Verifica que sea un JSON exportado desde esta app.')
   }
   globalData = JSON.parse(JSON.stringify(newData))
   saveData(globalData)
@@ -421,19 +421,16 @@ export function calcularLinea(linea, data) {
     }
   }
 
-  // Fix junio 2026: el Excel del jefe interpreta el resultado de
-  //   (costo_c_iva / margenBase / margenDescuento)
-  // como "precio S/IVA al cliente" (porque al cliente se le factura IVA
-  // encima). El código original asumía ese resultado como C/IVA, dando
-  // precios 19% más bajos que los del Excel real. Alineamos sumando
-  // un factor (1 + ivaRate) al precio base para que el c/IVA al cliente
-  // coincida con el Excel: ej. BLACKOUT premium 3.33m² = $148.308 c/IVA
-  // (antes daba $124.628 c/IVA, ahora da $148.308 c/IVA).
-  const precioBaseSIVA = totalVenta * (1 + config.ivaRate)
+  // Decisión del jefe 2026-07-02: la suma bruta de componentes × (1+IVA)
+  // ES el precio final c/IVA. (El fix de junio 2026 trataba ese valor como
+  // "s/IVA" y le aplicaba IVA encima otra vez — factor cobrado dos veces.)
+  // totalVenta queda expuesto para el TOTAL CORTINA del detalle (bruto,
+  // sin IVA ni nada) y como base del margen.
   return {
     m2,
-    precioListaSIVA: precioBaseSIVA,
-    precioListaCIVA: precioBaseSIVA * (1 + config.ivaRate),
+    totalVenta,
+    precioListaSIVA: totalVenta,
+    precioListaCIVA: totalVenta * (1 + config.ivaRate),
     totalCostoAcum,
     detalle,
   }

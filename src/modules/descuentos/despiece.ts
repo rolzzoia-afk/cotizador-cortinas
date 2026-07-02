@@ -11,11 +11,12 @@
 //   · peso               = tubo − 0.4  (constante de taller, confirmada en
 //     todas las OTs reales; NO usa la columna suma_peso)
 //   · cenefa ovalada     = ancho − dcto_tubo − dcto_cenefa
-//   · pesos DÚO          = ancho − dcto_tubo − peso_interno / peso_u
-//     (⚠ pendiente de validar con el taller — se marca en notas)
+//   · DÚO peso interno   = baseTubo − dcto_tela_cm  (= MISMO ancho que la tela;
+//     el peso interno se cose dentro de la tela. Validado con OT 3048.)
+//   · DÚO peso U         = baseTubo − peso_u_duo_cm  (validado con OT 3048)
 //   · cenefa del./tras.  = ancho − dcto_cenefa_del / dcto_cenefa_tra
-// Nota: dcto_tela_cm del Excel (0.5) NO se usa para el ancho de tela;
-// su significado real está por confirmar (¿alto?).
+// Nota: en DÚO, dcto_tela_cm (0.5) ES el descuento de la tela → fija también el
+// ancho del peso interno. En roller la tela usa peso − suma_peso (ver abajo).
 //
 // `columnaExcel` corresponde a las COLUMNAS_CORTE que el optimizador
 // legacy procesa al cargar el Excel de órdenes (multi-corte). La TELA no
@@ -182,13 +183,19 @@ export function calcularDespiece(
       });
     }
 
-    // Pesos
+    // Pesos DÚO (validados con OT real 3048, ovalada 38 mm):
+    //   · Peso interno (E13) → se corta al MISMO ancho que la tela = baseTubo −
+    //     dcto_tela_cm. El peso interno se cose dentro de la bolsa de la tela,
+    //     por eso va exactamente del ancho de la tela (regla "peso interno = tela"
+    //     confirmada por el dueño). `peso_interno_duo_cm` solo marca que el modelo
+    //     LLEVA peso interno; la medida la da dcto_tela_cm.
+    //   · Peso U (lágrima)   = baseTubo − peso_u_duo_cm.
     if (esDuo) {
       if (modelo.peso_interno_duo_cm > 0) {
         cortes.push({
           componente: 'Peso interno (E13)',
           columnaExcel: 'PESO INTERNO',
-          medidaCm: r1(baseTubo - modelo.peso_interno_duo_cm),
+          medidaCm: r1(baseTubo - modelo.dcto_tela_cm),
         });
       }
       if (modelo.peso_u_duo_cm > 0) {
@@ -198,7 +205,6 @@ export function calcularDespiece(
           medidaCm: r1(baseTubo - modelo.peso_u_duo_cm),
         });
       }
-      notas.push('Pesos DÚO pendientes de validar con el taller.');
     } else if (conTubo || modelo.dcto_tubo_cm > 0) {
       // Regla de taller validada con OTs reales: peso = tubo − 0.4 SIEMPRE.
       cortes.push({

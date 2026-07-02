@@ -107,7 +107,7 @@ export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps)
       <div className="mb-3 rounded-lg border bg-card p-3">
         <p className="mb-2 text-xs text-muted-foreground">
           Busca un tubo por sus datos físicos (código + colmena + medida) o por la OT en
-          la que participó. Clickeá un resultado para ver su ficha completa: de dónde
+          la que participó. Haz clic en un resultado para ver su ficha completa: de dónde
           vino, qué se hizo con él, y qué piezas o sobrantes generó.
         </p>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -168,9 +168,9 @@ export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps)
           <Search className="mx-auto mb-3 h-10 w-10" />
           No se encontraron tubos con esos criterios.
           <p className="mt-2 text-xs">
-            Probá relajar algún criterio. Ten en cuenta que un tubo ya cortado no
+            Prueba relajar algún criterio. Ten en cuenta que un tubo ya cortado no
             aparece por colmena/medida (cambia de identidad al cortarse) — para esos
-            casos, buscá por OT.
+            casos, busca por OT.
           </p>
         </EmptyState>
       )}
