@@ -65,7 +65,10 @@ describe('construirCalculoGeneral', () => {
     expect(f.armado).toBe('EXTERNO');
     // Columnas nuevas (lo que faltaba vs el manual cg.xlsx).
     expect(f.codSec).toBe('ROL');
-    expect(f.codMecanismo).toBe('MEC_14_LZ50_SINFLEX_BLANCO');
+    // Mecanismo como CHIP de bodega (mismo resolutor que Fase 4), no el id
+    // crudo del modelo Excel. Aquí el color no mapea a kit 32/33/34
+    // (colorPeso TRANSPARENTE) → chip derivado del modelo MEC_14.
+    expect(f.codMecanismo).toBe('LZ50 SFLX BCO [MEC 14]');
     expect(f.accionamiento).toBe('[CAD 05] 4MT');
     expect(f.pesoCadena).toBe('[PCA 04] TRANSPARENTE');
     // Despiece del mismo motor: tubo = ancho − 2, peso = tubo − 0,4, tela = peso − 0,1.

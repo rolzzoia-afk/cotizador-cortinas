@@ -18,7 +18,12 @@ import type { BomItem, VentanaItem } from '@/modules/ots/types';
 import type { Pano } from './types';
 import { textoPesoCadenaInventario } from './cadenas';
 import { OPCIONES_MECANISMO, OPCIONES_TUBERIA } from './fase2';
-import { mecanismoParaPano, tuberiaParaPano } from '@/modules/descuentos/chips';
+import {
+  colorAccesoriosDePano,
+  mecanismoParaPano,
+  normalizarColorAccesorio,
+  tuberiaParaPano,
+} from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 
 // ── Tipos ────────────────────────────────────────────────────────────
@@ -61,8 +66,47 @@ export function claveItem(it: BomItem): string {
   return [it.categoria, it.descripcion, it.especificacion || '', it.color || ''].join('|');
 }
 
-/** Clave reservada para la fila de etiquetas. */
+// ── Etiquetas Rolzzo ─────────────────────────────────────────────────
+// La etiqueta acompaña el color de los accesorios de cada cortina:
+//   • accesorios BLANCOS → INS 95-1 (etiqueta blanca)
+//   • resto (negros, grises…) → INS 95 (etiqueta negra, la estándar)
+
+export type EtiquetaLinea = { cod: string; color: 'BLANCA' | 'NEGRA'; cantidad: number };
+
+/** Código de etiqueta según el color de accesorios del paño. */
+export function codigoEtiqueta(
+  colorAccesorios: string | null | undefined,
+): { cod: string; color: 'BLANCA' | 'NEGRA' } {
+  const c = normalizarColorAccesorio(colorAccesorios);
+  if (c === 'BCO' || c === 'BLANCO') return { cod: 'INS 95-1', color: 'BLANCA' };
+  return { cod: 'INS 95', color: 'NEGRA' };
+}
+
+/** Clave de estado de entrega para una fila de etiquetas. */
+export function claveEtiquetas(cod: string): string {
+  return `ETIQUETAS|${cod}`;
+}
+
+/** @deprecated Clave histórica (etiqueta blanca). Usar claveEtiquetas(cod). */
 export const CLAVE_ETIQUETAS = 'ETIQUETAS|INS 95-1';
+
+/**
+ * Líneas de etiquetas de la OT: 1 etiqueta por paño, agrupadas por código
+ * según el color de accesorios (una OT mixta genera una línea por color).
+ */
+export function construirEtiquetas(ventanas: VentanaItem[]): EtiquetaLinea[] {
+  const acc = new Map<string, EtiquetaLinea>();
+  for (const v of ventanas) {
+    for (const p of (v.panos || []) as Partial<Pano>[]) {
+      const { cod, color } = codigoEtiqueta(colorAccesoriosDePano(p, v.color as string));
+      const prev = acc.get(cod);
+      if (prev) prev.cantidad++;
+      else acc.set(cod, { cod, color, cantidad: 1 });
+    }
+  }
+  // Orden estable: INS 95 (negra, estándar) primero.
+  return [...acc.values()].sort((a, b) => a.cod.localeCompare(b.cod));
+}
 
 // ── Tabla de cortinas ────────────────────────────────────────────────
 
@@ -178,7 +222,7 @@ function xsDesde(mg: number, ws: number[]): number[] {
 export function generarPDFInventario(
   filasCortinas: FilaCortina[],
   items: BomItem[],
-  etiquetasCant: number,
+  etiquetas: EtiquetaLinea[],
   meta: MetaInventario,
   estado: InventarioEstado,
 ): void {
@@ -289,15 +333,17 @@ export function generarPDFInventario(
     textColor: [255, 255, 255],
     fontSize: 6.5,
   });
-  const entEtq = estado.entregas[CLAVE_ETIQUETAS];
-  y = fila(doc, y, xs3, ws3, [
-    'INS 95-1',
-    `ETIQUETAS DE CORTINAS (${empresa})`,
-    String(etiquetasCant),
-    entEtq?.entregado ? '✓ SÍ' : '',
-    entEtq?.fecha || '',
-    entEtq?.recibe || '',
-  ]);
+  for (const e of etiquetas) {
+    const entEtq = estado.entregas[claveEtiquetas(e.cod)];
+    y = fila(doc, y, xs3, ws3, [
+      e.cod,
+      `ETIQUETAS DE CORTINAS ${e.color === 'BLANCA' ? 'BLANCAS' : 'NEGRAS'} (${empresa})`,
+      String(e.cantidad),
+      entEtq?.entregado ? '✓ SÍ' : '',
+      entEtq?.fecha || '',
+      entEtq?.recibe || '',
+    ]);
+  }
   y += 10;
 
   // ── Fecha de instalación ──

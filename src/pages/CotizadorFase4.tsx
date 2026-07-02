@@ -28,15 +28,19 @@ import {
 import { bomToOrdenMaterialesRows, calcularBOM } from '@/modules/cotizador/bom';
 import { INVENTARIO_VACIO, type InventarioEstado } from '@/modules/cotizador/inventario';
 import { InventarioSheet } from '@/components/cotizador/InventarioSheet';
+import { validarDatosParaEtiquetas } from '@/modules/cotizador/pdfProduccion';
 import {
   generarEtiquetasPDF,
-  validarDatosParaEtiquetas,
-} from '@/modules/cotizador/pdfProduccion';
+  generarEtiquetasPanosPDF,
+} from '@/modules/cotizador/pdfEtiquetasBrother';
 import { generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
 import { generarPdfCalculoGeneral } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
 import { generarPlanCorte, rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
 import { deduccionesColmena } from '@/modules/cotizador/colmenaCorte';
+import GuardarSobranteRolloDialog, {
+  type SobranteRollo,
+} from './telas/dialogs/GuardarSobranteRolloDialog';
 import type { SubEtapaProd } from '@/modules/ots/types';
 import type { Ventana as VentanaCotizador } from '@/modules/cotizador/types';
 import { descargarExcelOrdenes } from '@/modules/descuentos/excel-ordenes';
@@ -210,6 +214,20 @@ export function CotizadorFase4() {
     }
   };
 
+  const onEtiquetasPanos = () => {
+    if (!pdfRows || pdfRows.length === 0) {
+      toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
+      return;
+    }
+    try {
+      generarEtiquetasPanosPDF(pdfRows, metaPDF(), catalogo);
+      toast.success('Etiquetas de paños generadas');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      toast.error('Error generando etiquetas de paños: ' + msg);
+    }
+  };
+
   const [corteLoading, setCorteLoading] = useState(false);
   const onImprimirCorte = async () => {
     if (!pdfRows || pdfRows.length === 0) {
@@ -246,6 +264,8 @@ export function CotizadorFase4() {
   // que la Hoja de corte: cada sobrante usado se achica al retazo o se marca
   // como Usado. Guard de idempotencia en datosGenerales.corteGeneralColmena.
   const [corteGenLoading, setCorteGenLoading] = useState(false);
+  // Sobrantes de rollo pendientes de ubicar (abre el diálogo tras confirmar).
+  const [sobrantesRollo, setSobrantesRollo] = useState<SobranteRollo[]>([]);
   const corteGenConfirmado = ot?.datosGenerales?.corteGeneralColmena;
 
   const onConfirmarCorteGeneral = async () => {
@@ -268,10 +288,10 @@ export function CotizadorFase4() {
       const deducciones = deduccionesColmena(plan);
       // Sobrantes de rollo reutilizables (≥120×180, ya gateados por planCorte):
       // se ofrecen para sumar a la colmena con confirmación física del operario.
-      const sobrantesRollo = plan.rollo
+      const sobrantesRolloPlan: SobranteRollo[] = plan.rollo
         .filter((g) => g.sobInterno)
         .map((g) => ({ codInt: g.codInt, sob: g.sobInterno! }));
-      if (deducciones.length === 0 && sobrantesRollo.length === 0) {
+      if (deducciones.length === 0 && sobrantesRolloPlan.length === 0) {
         toast.info('Este corte no usa colmena ni deja sobrantes reutilizables.');
         return;
       }
@@ -287,9 +307,9 @@ export function CotizadorFase4() {
               `· ${usados} se marcan como usados\n` +
               (conMerma ? `· ${conMerma} dejan merma (registrada con trazabilidad)\n` : '')
             : 'Este corte no descuenta paños de la colmena.\n') +
-          (sobrantesRollo.length
-            ? `\nDeja ${sobrantesRollo.length} sobrante(s) de rollo reutilizable(s); ` +
-              'te preguntaré si los guardaste.\n'
+          (sobrantesRolloPlan.length
+            ? `\nDeja ${sobrantesRolloPlan.length} sobrante(s) de rollo reutilizable(s); ` +
+              'después te pido dónde guardaste cada uno.\n'
             : '') +
           '\nEsto actualiza el inventario y no debería repetirse.',
         confirmLabel: 'Confirmar',
@@ -334,34 +354,6 @@ export function CotizadorFase4() {
         if (mErr) console.warn('[CorteGeneral] merma no registrada:', mErr.message);
       }
 
-      // Reglas Rolzzo (Fase 3): los sobrantes de rollo ≥120×180 se suman a la
-      // colmena SOLO con confirmación física del operario (anti-fantasma).
-      let rolloGuardados = 0;
-      if (sobrantesRollo.length) {
-        const guardarRollo = await confirmar({
-          titulo: 'Sobrantes de rollo',
-          mensaje:
-            `Este corte deja ${sobrantesRollo.length} sobrante(s) de rollo reutilizable(s):\n` +
-            sobrantesRollo.map((x) => `· ${x.codInt}: ${x.sob.ancho}×${x.sob.alto} cm`).join('\n') +
-            '\n\n¿Los guardaste físicamente para sumarlos a la colmena?',
-          confirmLabel: 'Sí, sumar a la colmena',
-        });
-        if (guardarRollo) {
-          const nuevas = sobrantesRollo.map((x) => ({
-            empresa_id: empresaId,
-            codigo: x.codInt,
-            medida_ancho: x.sob.ancho,
-            medida_alto: x.sob.alto,
-            disponible: true,
-            ubicacion: `CORTE OT ${otNum}`,
-            datos_extra: { fuente: 'corte_rollo', zona: 'CORTE', ot_origen: otNum, creadoEn: now },
-          }));
-          const { error: cErr } = await supabase.from('colmena_panos').insert(nuevas);
-          if (cErr) console.warn('[CorteGeneral] sobrante de rollo no guardado:', cErr.message);
-          else rolloGuardados = nuevas.length;
-        }
-      }
-
       // Persistir el snapshot SIEMPRE (aunque haya fallos parciales) para no
       // re-descontar en un reintento.
       await guardar({
@@ -379,10 +371,13 @@ export function CotizadorFase4() {
         toast.success(
           `Colmena descontada: ${retazos} retazo(s), ${usados} usado(s)` +
             (mermas.length ? `, ${mermas.length} merma(s)` : '') +
-            (rolloGuardados ? `, +${rolloGuardados} sobrante(s) de rollo a la colmena` : '') +
             '.',
         );
       }
+
+      // Reglas Rolzzo (Fase 3): los sobrantes de rollo ≥120×180 se ofrecen para
+      // sumar a la colmena, pidiendo la ubicación física (anti-fantasma).
+      if (sobrantesRolloPlan.length) setSobrantesRollo(sobrantesRolloPlan);
     } catch (e) {
       toast.error('Error al confirmar corte general: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
@@ -601,7 +596,17 @@ export function CotizadorFase4() {
               className="gap-1.5 bg-success hover:bg-success/90"
             >
               <Printer className="h-3.5 w-3.5" />
-              Imprimir etiquetas
+              Etiquetas estructura
+            </Button>
+            <Button
+              size="sm"
+              onClick={onEtiquetasPanos}
+              disabled={!pdfRows || pdfRows.length === 0}
+              className="gap-1.5 bg-success hover:bg-success/90"
+              title="Una etiqueta por paño de tela cortado (Brother QL-810W, 62 mm)"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Etiquetas paños
             </Button>
             <Button
               size="sm"
@@ -686,6 +691,15 @@ export function CotizadorFase4() {
           )}
         </div>
       </div>
+
+      {sobrantesRollo.length > 0 && ot && (
+        <GuardarSobranteRolloDialog
+          sobrantes={sobrantesRollo}
+          otNum={ot.datosGenerales.ot || String(ot.id)}
+          empresaId={empresaId || ''}
+          onClose={() => setSobrantesRollo([])}
+        />
+      )}
     </div>
   );
 }
