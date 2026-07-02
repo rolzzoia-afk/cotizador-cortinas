@@ -24,8 +24,8 @@ type CampoDef = {
   key: keyof ParametrosCotizador;
   label: string;
   hint: string;
-  /** 'pct' se muestra como porcentaje (0.19 → 19); 'clp' como monto. */
-  modo: 'pct' | 'clp';
+  /** 'pct' se muestra como porcentaje (0.19 → 19); 'clp' monto; 'num' entero. */
+  modo: 'pct' | 'clp' | 'num';
 };
 
 const CAMPOS: CampoDef[] = [
@@ -48,6 +48,24 @@ const CAMPOS: CampoDef[] = [
   { key: 'manoObraDuo', label: 'Mano de obra dúo ($)', hint: 'Por cortina', modo: 'clp' },
   { key: 'manoObraVertical', label: 'Mano de obra vertical ($)', hint: 'Por cortina', modo: 'clp' },
   { key: 'traslado', label: 'Traslado ($)', hint: '1 por cada tipo de cortina cotizado', modo: 'clp' },
+  {
+    key: 'instalacionGratisMinCortinas',
+    label: 'Instalación gratis desde (cortinas)',
+    hint: 'Nº mínimo de cortinas roller/dúo para instalación gratis en RM',
+    modo: 'num',
+  },
+  {
+    key: 'instalacionDescuentoRM',
+    label: 'Descuento instalación RM (%)',
+    hint: '100 = gratis al llegar al mínimo de cortinas',
+    modo: 'pct',
+  },
+  {
+    key: 'instalacionDescuentoRegion',
+    label: 'Descuento instalación región (%)',
+    hint: '0 = se cobra completa; editable para cotizaciones a región',
+    modo: 'pct',
+  },
 ];
 
 // margenInsumo se guarda como divisor (0.65) pero se edita como margen (35%).
@@ -64,7 +82,18 @@ function aInterno(def: CampoDef, s: string): number | null {
     if (n >= 100) return null;
     return (100 - n) / 100;
   }
-  if (def.modo === 'pct') return n / 100;
+  if (def.modo === 'pct') {
+    // Los descuentos de instalación viven en [0,1]; rechazar > 100% para no
+    // guardar datos fuera de rango en la BD (aunque el motor luego los acote).
+    if (
+      (def.key === 'instalacionDescuentoRM' || def.key === 'instalacionDescuentoRegion') &&
+      n > 100
+    ) {
+      return null;
+    }
+    return n / 100;
+  }
+  if (def.modo === 'num') return Math.round(n);
   return n;
 }
 

@@ -4,6 +4,7 @@ import {
   metrosTelaPorPanos,
   metrosTelaVertical,
 } from './motorFase0';
+import { PARAMETROS_DEFAULT } from './preciosFase0';
 import type { CatalogoProductos } from './types';
 
 // Catálogo mínimo para los casos reales. Cada COD tiene un producto cuyo precio
@@ -20,9 +21,13 @@ const CAT: CatalogoProductos = {
   'SC 17': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
   'BK 18': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 41868 },
   'BK 50': { cod: 'BLACKOUT_S', producto: 'ROLLER BLACKOUT STANDARD', tipo: 'STANDARD', descripcion: '', precio: 29231 },
-  // COD_INT base de cada familia roller (precio que usa la vertical equivalente)
+  // OT Jeferson: SC 93 (precio propio 0 → hereda arquetipo SC-P) y BK 68.
+  'SC 93': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 23782 },
+  // COD_INT arquetipo de cada familia (precio de tela por gama, regla del Excel)
   'SC-P':  { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM (base)', tipo: 'PREMIUM', descripcion: '', precio: 31582 },
   'BK-P':  { cod: 'BLACKOUT_P', producto: 'ROLLER BLACKOUT PREMIUM (base)', tipo: 'PREMIUM', descripcion: '', precio: 29231 },
+  'BK-D':  { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX (base)', tipo: 'DELUX', descripcion: '', precio: 41868 },
   // Verticales (el precio del catálogo no se usa; el motor lo toma del base)
   'SC 34-V':  { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
   'SC 03-V':  { cod: 'SCREEN_V_P', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
@@ -44,6 +49,7 @@ const AR: Record<string, number> = {
   'DU 25': 2.65, 'DB-P': 2.65, 'DU 28': 2.95, 'DU 07': 2.95,
   'SC 34': 2.98, 'SC 17': 2.98, 'BK 18': 2.98, 'BK 50': 2.98,
   'SC 34-V': 2.98, 'SC 03-V': 2.48, 'SC 17-V': 2.98, 'BK 49-V': 2.98,
+  'SC 93': 2.98, 'BK 68': 2.98,
 };
 
 const cerca = (valor: number, esperado: number, tolPct: number) =>
@@ -213,5 +219,108 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     // residual de Blackout Standard (~0,4%), que diluye a ~0,01% en el total.
     expect(cerca(r.subtotalNeto, 2983696.24, 0.001)).toBe(true);
     expect(cerca(r.totales.totalTransferencia, 3550598.53, 0.001)).toBe(true);
+  });
+
+  // ───── OT Jeferson (JEFERSON- LA FLORIDA.xlsm): 6 SC 93 + 1 BK 68 ─────
+  // Valida el fix #1: SC usa el arquetipo SC-P (31.582), no el MAX de familia;
+  // SC 93 (precio propio 0) cotiza igual heredando el arquetipo; DCT% por código
+  // (SC 20% / BK 25%) y cenefa ovalada con 30%. VAL. UNIT/TOTAL de la hoja
+  // "Formato de Cotización"; subtotal = SUBTOTAL PAGO TRANSF. del Excel.
+  it('Jeferson — Screen Premium (SC 93) + Blackout Delux (BK 68) con descuentos — cuadra al peso', () => {
+    const cortinas = [
+      { codInt: 'SC 93', ancho: 1.618, alto: 2.301, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 93', ancho: 1.075, alto: 2.301, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 93', ancho: 1.57, alto: 2.305, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 93', ancho: 1.6, alto: 2.305, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 93', ancho: 1.067, alto: 2.305, cantidad: 1, descuento: 0.2 },
+      { codInt: 'SC 93', ancho: 1.631, alto: 2.305, cantidad: 1, descuento: 0.2 },
+      { codInt: 'BK 68', ancho: 2.7, alto: 2.305, cantidad: 1, descuento: 0.25 },
+    ];
+    const adic = [{ codInt: 'CENF O', cantidad: 2.7, descuento: 0.3 }];
+    const r = cotizarFase0(cortinas, CAT, AR, adic);
+    // VAL. UNIT (incluye instalación 17.500) — primera SC y la BK
+    expect(cerca(r.lineas[0].valorUnit, 168903.61, 0.001)).toBe(true);
+    expect(cerca(r.lineas[6].valorUnit, 275677.77, 0.001)).toBe(true);
+    // TOTAL por línea (con descuento por código)
+    expect(cerca(r.lineas[0].total, 135122.89, 0.001)).toBe(true);
+    expect(cerca(r.lineas[6].total, 206758.33, 0.001)).toBe(true);
+    // Cenefa ovalada 2,7 × 20.000 − 30% = 37.800
+    expect(cerca(r.adicionales[0].total, 37800, 0.001)).toBe(true);
+    // Instalación: 6 SC + 1 BK = 7 cortinas (≥4) en RM → GRATIS ($0), no suma al total.
+    expect(r.instalacion.cantidad).toBe(7);
+    expect(r.instalacion.total).toBe(0);
+    expect(r.instalacion.gratis).toBe(true);
+    // Subtotal neto = SUBTOTAL PAGO TRANSF. del Excel
+    expect(cerca(r.subtotalNeto, 970120.46, 0.001)).toBe(true);
+  });
+});
+
+describe('motorFase0 — instalación gratis 4+ / región (Fase 2)', () => {
+  const cortina = (n: number) =>
+    Array.from({ length: n }, () => ({ codInt: 'SC 34', ancho: 1.3, alto: 2.3, cantidad: 1 }));
+
+  it('4+ cortinas roller en RM → instalación GRATIS ($0) y no altera el subtotal', () => {
+    const r = cotizarFase0(cortina(4), CAT, AR);
+    expect(r.instalacion.cantidad).toBe(4);
+    expect(r.instalacion.descuento).toBe(1);
+    expect(r.instalacion.total).toBe(0);
+    expect(r.instalacion.gratis).toBe(true);
+    // subtotal = sólo las líneas (instalación 0)
+    const sumaLineas = r.lineas.reduce((s, l) => s + l.total, 0);
+    expect(r.subtotalNeto).toBeCloseTo(sumaLineas, 6);
+  });
+
+  it('menos del mínimo en RM → instalación incluida (línea $0, sin doble cobro)', () => {
+    const r = cotizarFase0(cortina(3), CAT, AR);
+    expect(r.instalacion.cantidad).toBe(3);
+    expect(r.instalacion.descuento).toBe(1); // descRM default = 100% (incluida)
+    expect(r.instalacion.total).toBe(0);
+    expect(r.instalacion.gratis).toBe(false); // 3 < mínimo 4 → "incluida", no "GRATIS"
+    // La instalación va embebida en cada VAL. UNIT; no se suma aparte.
+    const sumaLineas = r.lineas.reduce((s, l) => s + l.total, 0);
+    expect(r.subtotalNeto).toBeCloseTo(sumaLineas, 6);
+  });
+
+  it('región con % editable → aplica el descuento de región, no el de RM', () => {
+    const params = { ...PARAMETROS_DEFAULT, instalacionDescuentoRegion: 0.5 };
+    const r = cotizarFase0(cortina(4), CAT, AR, [], params, true);
+    expect(r.instalacion.region).toBe(true);
+    expect(r.instalacion.descuento).toBe(0.5);
+    expect(r.instalacion.total).toBe(4 * 17500 * 0.5);
+    expect(r.instalacion.gratis).toBe(false);
+  });
+
+  it('región por defecto (0%) → instalación completa aunque sean 4+', () => {
+    const r = cotizarFase0(cortina(5), CAT, AR, [], PARAMETROS_DEFAULT, true);
+    expect(r.instalacion.total).toBe(5 * 17500);
+  });
+
+  it('verticales no cuentan para la instalación roller (cantidad 0, total 0)', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'SC 34-V', ancho: 1.869, alto: 2.3, cantidad: 1 }],
+      CAT,
+      AR,
+    );
+    expect(r.instalacion.cantidad).toBe(0);
+    expect(r.instalacion.total).toBe(0);
+  });
+
+  it('el mínimo de cortinas es configurable (min 2 → 2 cortinas ya es gratis)', () => {
+    const params = { ...PARAMETROS_DEFAULT, instalacionGratisMinCortinas: 2 };
+    const r = cotizarFase0(cortina(2), CAT, AR, [], params);
+    expect(r.instalacion.gratis).toBe(true);
+    expect(r.instalacion.total).toBe(0);
+  });
+
+  it('sin instalación (cliente retira) → quita $17.500 del VAL. UNIT de cada cortina', () => {
+    const filas = [{ codInt: 'SC 34', ancho: 1.3, alto: 2.3, cantidad: 1 }];
+    const conInst = cotizarFase0(filas, CAT, AR);
+    // 7º arg region=false, 8º sinInstalacion=true
+    const sinInst = cotizarFase0(filas, CAT, AR, [], PARAMETROS_DEFAULT, false, true);
+    expect(conInst.lineas[0].valorUnit - sinInst.lineas[0].valorUnit).toBeCloseTo(17500, 6);
+    expect(sinInst.instalacion.total).toBe(0);
+    expect(sinInst.instalacion.sinInstalacion).toBe(true);
+    // el subtotal baja exactamente la instalación embebida (con descuento de línea 0)
+    expect(conInst.subtotalNeto - sinInst.subtotalNeto).toBeCloseTo(17500, 6);
   });
 });
