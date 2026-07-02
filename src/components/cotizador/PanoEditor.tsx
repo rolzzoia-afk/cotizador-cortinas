@@ -279,7 +279,7 @@ export function PanoEditor({
           )}
           {pano.invertida === false && debeInvertir && (
             <span className="text-[0.7rem] text-destructive">
-              ¡no entra normal! confirmá que esta tela no se puede rotar
+              ¡no entra normal! confirma que esta tela no se puede rotar
             </span>
           )}
         </div>

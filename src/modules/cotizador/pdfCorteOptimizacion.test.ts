@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { construirHojaCorte } from './pdfCorteOptimizacion';
-import { buildOptimizerRows, asignarJuntoEnOrden } from './tela';
+import { buildOptimizerRows, asignarJuntoEnOrden, autoOptimizar } from './tela';
 import type { CatalogoProductos } from './types';
 import type { OT, VentanaItem } from '@/modules/ots/types';
 
 const cat: CatalogoProductos = {
   'BK 18': { cod: 'BK 18', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 0, anchoRollo: 2.98 },
   'SC 64': { cod: 'SC 64', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0, anchoRollo: 2.98 },
+  'DU 28': { cod: 'DU 28', producto: 'ROLLER DUO BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0, anchoRollo: 2.98 },
 };
 
 function ot(ventanas: VentanaItem[]): OT {
@@ -141,5 +142,51 @@ describe('construirHojaCorte — telas invertidas', () => {
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(true);
     expect(hoja.cortinas[0].comentario).toBe('INVERTIDA');
+  });
+});
+
+// Caso REAL de taller (OT 266-16, new.xlsx): 4 cortinas DÚO "DU 28". La tela
+// dúo se corta al DOBLE. Antes la app cortaba a una capa (2,55) → tela corta.
+describe('construirHojaCorte — DÚO OT 266-16 (new.xlsx)', () => {
+  function ventDuo(id: string, ancho: number, alto: number): VentanaItem {
+    return {
+      id,
+      ubicacion: id,
+      codInt: 'DU 28',
+      producto: 'ROLLER DUO BLACKOUT PREMIUM',
+      tipo: 'PREMIUM',
+      categoria: 'ROL',
+      grupoId: null,
+      alto,
+      precio: 0,
+      cantidad: 1,
+      panos: [{ ancho, alto }],
+    };
+  }
+  // anchos nominales (corte −3,5 = 1,625 / 1,575 / 0,56 / 2,145) y altos reales.
+  const ventanas = [
+    ventDuo('IZQ', 1.66, 2.3),
+    ventDuo('DER', 1.61, 2.3),
+    ventDuo('OFI', 0.595, 1.015),
+    ventDuo('PPAL', 2.18, 2.3),
+  ];
+  const rows = autoOptimizar(buildOptimizerRows(ventanas, cat));
+  const hoja = construirHojaCorte(rows, [], ot(ventanas));
+
+  it('ALTO CORTE TELA se duplica (2×alto+0,30): tres de 4,9 y una de 2,33', () => {
+    const cortes = hoja.cortinas.map((c) => c.altoCorteTela).sort((a, b) => a - b);
+    expect(cortes).toEqual([2.33, 4.9, 4.9, 4.9]);
+  });
+
+  it('anida cortinas de distinto alto → 3 paños (como el taller)', () => {
+    expect(hoja.totalPanos).toBe(3);
+    // Cada paño: corte real 4,9 y "alto máximo a utilizar" 5,1 (=2×(alto+0,25)).
+    expect(hoja.panos.map((p) => p.altoCortePano)).toEqual([4.9, 4.9, 4.9]);
+    expect(hoja.panos.map((p) => p.altoMaxUtilizar)).toEqual([5.1, 5.1, 5.1]);
+  });
+
+  it('OPTIMIZADOR DU 28 = 15,3 m (3 paños × 5,1)', () => {
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['DU 28']).toBe(15.3);
   });
 });

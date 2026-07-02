@@ -50,7 +50,7 @@ export default function HistorialPlanes({ ctx, email }: HistorialPlanesProps) {
 
   const onRestaurar = async (plan: PlanResumen) => {
     if (!email) {
-      toast.error('Configurá primero el email del optimizador');
+      toast.error('Configura primero el email del optimizador');
       return;
     }
     const fecha = plan.fecha
@@ -87,7 +87,7 @@ export default function HistorialPlanes({ ctx, email }: HistorialPlanesProps) {
           `Antes había ${res.count_antes} tubos en colmena.\n\n` +
           `❌ ${omitidos} tubo${omitidos === 1 ? '' : 's'} NO se restauraron porque ya fueron cortados o eliminados físicamente:\n` +
           listaDetalle + masTubos +
-          '\n\nSi esos tubos NO fueron cortados en la realidad (la app se confundió), contactá a soporte para corrección manual. ' +
+          '\n\nSi esos tubos NO fueron cortados en la realidad (la app se confundió), contacta a soporte para corrección manual. ' +
           'NO le vuelvas a dar "Restaurar" — no van a aparecer apretando el botón otra vez.',
         );
       } else {

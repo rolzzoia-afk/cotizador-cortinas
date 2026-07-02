@@ -49,7 +49,12 @@ export type OptimizerRow = {
   altoCm: number;
   extra: number; // siempre 0.25 (m)
   altoExtra: number;
+  /** Reserva "alto máximo a utilizar" (m). Dúo = 2×(alto+0,25); resto = alto+0,25. */
   altoReal: number;
+  /** Alto de corte REAL de la tela (m). Dúo = 2×alto+0,30; resto = alto+0,25. */
+  altoCorte: number;
+  /** ¿Cortina dúo (día/noche)? La tela se duplica. */
+  isDuo: boolean;
   m2: number;
   anchoRollo: number;
   anchoPano: number;
@@ -122,8 +127,13 @@ export function buildOptimizerRows(
       const altoCm = altoM * 100;
       const extra = 0.25;
       const altoExtra = altoM + extra;
-      const isDuo = v.producto && v.producto.toUpperCase().includes('DUO');
+      const isDuo = !!(v.producto && v.producto.toUpperCase().includes('DUO'));
+      // Dúo (día/noche): la tela baja y vuelve a subir → se corta al doble.
+      //  · altoReal  = reserva "alto máximo a utilizar" = 2×(alto+0,25)
+      //  · altoCorte = corte real de la tela            = 2×alto + 0,30
+      // En roller simple ambas valen alto+0,25. (Validado con OT 266-16 dúo.)
       const altoReal = isDuo ? altoExtra * 2 : altoExtra;
+      const altoCorte = isDuo ? altoM * 2 + 0.3 : altoExtra;
       const m2 = parseFloat((altoReal * anchoM).toFixed(4));
       const anchoRollo = obtenerAnchoRollo(v.codInt, catalogo);
       const cod = derivarCod(v.producto || '');
@@ -148,6 +158,8 @@ export function buildOptimizerRows(
         extra,
         altoExtra,
         altoReal,
+        altoCorte,
+        isDuo,
         m2,
         anchoRollo,
         anchoPano: anchoM,
@@ -186,70 +198,76 @@ export function restorePlanGuardado(
   });
 }
 
-// Auto-asigna anchoPano + numeroPano + junto SIN reordenar las filas.
-// Útil cuando se carga la primera vez y no hay plan guardado.
-export function asignarJuntoEnOrden(rows: OptimizerRow[]): OptimizerRow[] {
-  let jCode = 64;
-  let curCodInt: string | null = null;
-  let curAlto = -1;
-  let accW = 0;
-  return rows.map((r) => {
-    const exceeds = accW + r.ancho > r.anchoRollo;
-    const newGroup =
-      r.codInt !== curCodInt || Math.abs(r.altoReal - curAlto) > 0.0001 || exceeds;
-    if (newGroup) {
-      jCode++;
-      if (jCode > 90) jCode = 65;
-      curCodInt = r.codInt;
-      curAlto = r.altoReal;
-      accW = r.ancho;
-    } else {
-      accW += r.ancho;
+// ── Empaquetado best-fit por ancho ───────────────────────────────────
+// Cada paño es un contenedor de ancho = ancho del rollo. Para CADA cortina
+// buscamos el paño del mismo COD_INT MÁS LLENO donde todavía entre a lo ancho;
+// si no entra en ninguno, abrimos uno nuevo. Best-fit minimiza la cantidad de
+// paños (= metros de tela) mejor que el next-fit anterior, que solo miraba el
+// último paño abierto (p.ej. anchos 1,5/1,5/1,0/1,0 en rollo 2,98: next-fit da
+// 3 paños; best-fit da 2). El alto no restringe el agrupado: el paño se corta
+// al alto mayor y las cortinas más bajas viajan en el ancho sobrante del mismo
+// tiro (0 metros extra). Las cortinas más anchas que el rollo van solas ("RR").
+type PanoBin = {
+  codInt: string;
+  usado: number; // ancho acumulado (m)
+  anchoRollo: number;
+  junto: string;
+  numeroPano: number;
+};
+
+const EPS = 1e-9;
+
+function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
+  const bins: PanoBin[] = [];
+  let juntoCode = 64;
+  let panoNum = 0;
+  return orden.map((r) => {
+    if (r.ancho > r.anchoRollo) {
+      // Más ancha que el rollo → su propio paño, marca "RR".
+      panoNum++;
+      return { ...r, junto: 'RR', numeroPano: panoNum, anchoPano: r.ancho };
     }
-    return {
-      ...r,
-      junto: r.ancho > r.anchoRollo ? 'RR' : String.fromCharCode(jCode),
-      anchoPano: accW,
-    };
+    // Best-fit: paño del mismo COD_INT con MENOR espacio libre donde todavía entre.
+    let mejor: PanoBin | null = null;
+    for (const b of bins) {
+      if (b.codInt !== r.codInt) continue;
+      if (b.anchoRollo - b.usado + EPS < r.ancho) continue; // no entra
+      if (!mejor || b.usado > mejor.usado) mejor = b;
+    }
+    if (!mejor) {
+      panoNum++;
+      juntoCode = juntoCode >= 90 ? 65 : juntoCode + 1;
+      mejor = {
+        codInt: r.codInt,
+        usado: 0,
+        anchoRollo: r.anchoRollo,
+        junto: String.fromCharCode(juntoCode),
+        numeroPano: panoNum,
+      };
+      bins.push(mejor);
+    }
+    mejor.usado += r.ancho;
+    return { ...r, junto: mejor.junto, numeroPano: mejor.numeroPano, anchoPano: mejor.usado };
   });
 }
 
-// Auto-Optimize: reordena por (codInt asc, altoReal desc) y reasigna grupos.
-// Idéntico al algoritmo legacy de autoOptimizarCorte().
+// Auto-asigna anchoPano + numeroPano + junto SIN reordenar las filas (best-fit
+// sobre el orden de entrada). Útil al cargar por primera vez sin plan guardado.
+export function asignarJuntoEnOrden(rows: OptimizerRow[]): OptimizerRow[] {
+  return empacarBestFit(rows);
+}
+
+// Auto-Optimize: ordena por (codInt asc, altoReal desc) y empaca best-fit. El
+// orden alto-desc hace que las cortinas altas abran los paños y las más bajas
+// rellenen el ancho sobrante → minimiza los metros de tela. Al final reagrupa
+// las filas por paño para que queden contiguas en la tabla / hoja de corte.
 export function autoOptimizar(rows: OptimizerRow[]): OptimizerRow[] {
   const ordenadas = [...rows].sort((a, b) => {
     if (a.codInt !== b.codInt) return a.codInt.localeCompare(b.codInt);
     return b.altoReal - a.altoReal;
   });
-
-  let panoNum = 0;
-  let juntoCode = 64;
-  let curCodInt: string | null = null;
-  let curAlto = -1;
-  let accW = 0;
-
-  return ordenadas.map((r) => {
-    const exceeds = accW + r.ancho > r.anchoRollo;
-    const newGroup =
-      r.codInt !== curCodInt || Math.abs(r.altoReal - curAlto) > 0.0001 || exceeds;
-    if (newGroup) {
-      panoNum++;
-      juntoCode++;
-      if (juntoCode > 90) juntoCode = 65;
-      curCodInt = r.codInt;
-      curAlto = r.altoReal;
-      accW = r.ancho;
-    } else {
-      accW += r.ancho;
-    }
-    const oversize = r.ancho > r.anchoRollo;
-    return {
-      ...r,
-      numeroPano: panoNum,
-      junto: oversize ? 'RR' : String.fromCharCode(juntoCode),
-      anchoPano: accW,
-    };
-  });
+  const empacadas = empacarBestFit(ordenadas);
+  return empacadas.sort((a, b) => Number(a.numeroPano) - Number(b.numeroPano));
 }
 
 // ── Cálculo de paños (display derivado del optimizador) ──────────────
@@ -261,7 +279,7 @@ export type PanoCalculado = {
   codInt: string;
   tipo: string;
   anchoCorteCm: number; // ancho - 3.5cm
-  altoCorteCm: number; // alto + 25cm
+  altoCorteCm: number; // corte real: dúo = 2×alto+30cm; resto = alto+25cm
   altoCm: number;
   altoExtra: number;
   altoReal: number;
@@ -282,7 +300,7 @@ export function calcularPanos(rows: OptimizerRow[]): {
   for (const r of rows) {
     idx++;
     const anchoCorteCm = parseFloat((r.anchoCm - 3.5).toFixed(1));
-    const altoCorteCm = parseFloat((r.altoCm + 25).toFixed(1));
+    const altoCorteCm = parseFloat((r.altoCorte * 100).toFixed(1)); // dúo: 2×alto+30
     const m2Val = (r.anchoCm / 100) * (altoCorteCm / 100);
     totalM2 += m2Val;
     panos.push({

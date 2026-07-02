@@ -97,17 +97,27 @@ describe('calcularDespiece — DÚO manual 38 (ancho 200)', () => {
     tipo_rol: 'DUO_CENEFA_OV_MANUAL_38mm',
     mecanismo: 'MEC_09_OVALADA_NEGRO',
     dcto_tubo_cm: 1.8,
+    dcto_tela_cm: 0.5,
     dcto_cenefa_cm: 1.5,
     peso_interno_duo_cm: 0.2,
     peso_u_duo_cm: 0.3,
   };
   const d = calcularDespiece(m, 200);
-  it('pesos dúo detrás de la tapa (interno 196.5, U 196.4), sin columna PESO, y nota de validación', () => {
+  it('pesos dúo detrás de la tapa (peso interno = tela 196.2, U 196.4), sin columna PESO', () => {
     // baseTubo = 200 − 1.8 − 1.5 = 196.7 (los pesos van detrás de la cenefa).
-    expect(corte(d, 'PESO INTERNO')).toBe(196.5); // 196.7 − 0.2
+    // El PESO INTERNO va del MISMO ancho que la tela = baseTubo − dcto_tela (OT 3048).
+    expect(corte(d, 'PESO INTERNO')).toBe(196.2); // 196.7 − 0.5 (= tela)
     expect(corte(d, 'PESO U')).toBe(196.4); // 196.7 − 0.3
     expect(corte(d, 'PESO')).toBeUndefined();
-    expect(d.notas.some((n) => n.includes('validar con el taller'))).toBe(true);
+  });
+
+  // Caso REAL de planilla del taller (OT 3048, duoej.xlsx): ancho 166 →
+  // tubo 162.7, peso U 162.4, peso interno 162.2 (= tela). Antes daba 162.5.
+  it('OT 3048 LIVING IZQ ancho 166 → tubo 162.7, peso U 162.4, peso interno 162.2', () => {
+    const d3048 = calcularDespiece(m, 166);
+    expect(corte(d3048, 'TUBO')).toBe(162.7); // 166 − 1.8 − 1.5
+    expect(corte(d3048, 'PESO U')).toBe(162.4); // 162.7 − 0.3
+    expect(corte(d3048, 'PESO INTERNO')).toBe(162.2); // 162.7 − 0.5 (= tela)
   });
 });
 

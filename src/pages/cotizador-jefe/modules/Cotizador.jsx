@@ -63,7 +63,7 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
     setDescuento(c.descuento ? String(c.descuento) : '')
     setFeedbackGuardar({
       tipo: 'ok',
-      msg: `Cotización #${c.correlativo} cargada. Modificá lo que necesites y dale Actualizar.`,
+      msg: `Cotización #${c.correlativo} cargada. Modifica lo que necesites y presiona Actualizar.`,
     })
     setTimeout(() => setFeedbackGuardar(null), 5000)
     // Avisar al padre que ya consumimos la prop
@@ -99,7 +99,7 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
     try {
       // Obtener empresa_id + user del usuario actual
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error('Sesión no encontrada. Reiniciá sesión.')
+      if (!user) throw new Error('Sesión no encontrada. Reinicia sesión.')
       const { data: perfil } = await supabase
         .from('perfiles')
         .select('empresa_id')
@@ -515,7 +515,8 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
                                   <strong>{fmt(r.totalCostoAcum)}</strong>
                                 </td>
                                 <td className="num-right">
-                                  <strong>{fmt(r.precioListaCIVA)}</strong>
+                                  {/* Suma bruta de los componentes (sin IVA ni margen extra) */}
+                                  <strong>{fmt(r.totalVenta)}</strong>
                                 </td>
                               </tr>
                             </tbody>
@@ -578,12 +579,6 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
           <div className="card-header">Resumen Cotización</div>
           <div style={{ padding: 16 }}>
             {[
-              { label: 'Total precio lista s/IVA', val: fmt(totalListaSIVA), muted: true },
-              {
-                label: `IVA (${(data.config.ivaRate * 100).toFixed(0)}%)`,
-                val: fmt(totalListaCIVA - totalListaSIVA),
-                muted: true,
-              },
               { label: 'Total precio lista c/IVA', val: fmt(totalListaCIVA), bold: true },
               pctDcto > 0 && {
                 label: `Descuento ${pctDcto}%`,

@@ -108,12 +108,21 @@ describe('buildOptimizerRows', () => {
     expect(rows[0].m2).toBeCloseTo(3.375, 3);
   });
 
-  it('DUO duplica altoReal', () => {
+  it('DUO: reserva altoReal = 2×(alto+0,25) y corte real = 2×alto+0,30', () => {
     const rows = buildOptimizerRows(
       [v({ producto: 'Roller DUO', panos: [{ ancho: 1, alto: 2 }] })],
       cat,
     );
-    expect(rows[0].altoReal).toBeCloseTo(4.5, 2);
+    expect(rows[0].isDuo).toBe(true);
+    expect(rows[0].altoReal).toBeCloseTo(4.5, 2); // 2×(2+0,25)
+    expect(rows[0].altoCorte).toBeCloseTo(4.3, 2); // 2×2+0,30
+  });
+
+  it('no-DUO: altoCorte = altoReal = alto+0,25', () => {
+    const rows = buildOptimizerRows([v({ panos: [{ ancho: 1, alto: 2 }] })], cat);
+    expect(rows[0].isDuo).toBe(false);
+    expect(rows[0].altoCorte).toBeCloseTo(2.25, 2);
+    expect(rows[0].altoReal).toBeCloseTo(2.25, 2);
   });
 
   it('sufija ubicación con P1/P2 cuando hay múltiples paños', () => {
@@ -215,6 +224,8 @@ describe('restorePlanGuardado', () => {
     extra: 0.25,
     altoExtra: 2.25,
     altoReal: 2.25,
+    altoCorte: 2.25,
+    isDuo: false,
     m2: 2.25,
     anchoRollo: 2.98,
     anchoPano: 1,
@@ -324,7 +335,7 @@ describe('autoOptimizar', () => {
     expect(out[0].altoReal).toBeGreaterThan(out[1].altoReal);
   });
 
-  it('asigna numeroPano correlativo por grupo', () => {
+  it('agrupa distinto alto en un mismo paño mientras entren a lo ancho', () => {
     const cat = mkCat({ A: { anchoRollo: 3 } });
     const rows = buildOptimizerRows(
       [
@@ -335,9 +346,45 @@ describe('autoOptimizar', () => {
       cat,
     );
     const out = autoOptimizar(rows);
-    // Dos de alto 2 juntos (pano 2 después de ordenar), uno de alto 3 (pano 1).
-    const panoAlto3 = out.find((r) => r.altoReal > 3);
-    expect(panoAlto3?.numeroPano).toBe(1);
+    // 3 cortinas de ancho 1 (Σ=3 ≤ rollo 3), distinto alto → un solo paño (nº 1).
+    expect(out.map((r) => r.numeroPano)).toEqual([1, 1, 1]);
+    expect(new Set(out.map((r) => r.junto)).size).toBe(1);
+  });
+
+  it('empieza nuevo paño cuando el ancho acumulado supera el rollo', () => {
+    const cat = mkCat({ A: { anchoRollo: 2.98 } });
+    const rows = buildOptimizerRows(
+      [
+        { id: 1, ubicacion: 'L1', codInt: 'A', producto: 'x', panos: [{ ancho: 1.6, alto: 2 }] },
+        { id: 2, ubicacion: 'L2', codInt: 'A', producto: 'x', panos: [{ ancho: 1.6, alto: 3 }] },
+      ],
+      cat,
+    );
+    const out = autoOptimizar(rows);
+    // 1,6 + 1,6 = 3,2 > 2,98 → cada una su paño (aunque compartan COD_INT).
+    expect(new Set(out.map((r) => r.numeroPano)).size).toBe(2);
+  });
+
+  it('best-fit: anchos 1,5/1,5/1,0/1,0 en rollo 2,98 → 2 paños (next-fit daba 3)', () => {
+    const cat = mkCat({ A: { anchoRollo: 2.98 } });
+    const rows = buildOptimizerRows(
+      [
+        { id: 1, ubicacion: 'L1', codInt: 'A', producto: 'x', panos: [{ ancho: 1.5, alto: 2 }] },
+        { id: 2, ubicacion: 'L2', codInt: 'A', producto: 'x', panos: [{ ancho: 1.5, alto: 2 }] },
+        { id: 3, ubicacion: 'L3', codInt: 'A', producto: 'x', panos: [{ ancho: 1.0, alto: 2 }] },
+        { id: 4, ubicacion: 'L4', codInt: 'A', producto: 'x', panos: [{ ancho: 1.0, alto: 2 }] },
+      ],
+      cat,
+    );
+    const out = autoOptimizar(rows);
+    // Cada 1,5 se empareja con un 1,0 (2,5 ≤ 2,98) → 2 paños, no 3.
+    const panos = new Set(out.map((r) => r.numeroPano));
+    expect(panos.size).toBe(2);
+    // Cada paño usa 1,5 + 1,0 = 2,5 m de ancho (máximo acumulado del grupo).
+    for (const p of panos) {
+      const anchoUsado = Math.max(...out.filter((r) => r.numeroPano === p).map((r) => r.anchoPano));
+      expect(anchoUsado).toBeCloseTo(2.5, 5);
+    }
   });
 });
 

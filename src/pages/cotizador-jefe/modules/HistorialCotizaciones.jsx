@@ -101,7 +101,7 @@ export default function HistorialCotizaciones({ onEditar, restringido = false })
         ) : visibles.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-muted)' }}>
             {cotizaciones.length === 0
-              ? 'No hay cotizaciones guardadas aún. Andá al Cotizador y guarda la primera.'
+              ? 'No hay cotizaciones guardadas aún. Ve al Cotizador y guarda la primera.'
               : `No hay cotizaciones que coincidan con "${filtro}".`}
           </div>
         ) : (
