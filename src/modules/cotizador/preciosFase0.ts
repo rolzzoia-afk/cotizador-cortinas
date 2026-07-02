@@ -105,6 +105,14 @@ export type ParametrosCotizador = {
   manoObraDuo: number;
   manoObraVertical: number;
   traslado: number;
+  // ── Instalación gratis por cantidad (regla del Excel, hoja Formato de
+  //    Cotización fila INSTALACIÓN) ─────────────────────────────────────
+  /** Mínimo de cortinas roller/dúo para que la instalación sea gratis. */
+  instalacionGratisMinCortinas: number;
+  /** Descuento de instalación en RM al alcanzar el mínimo (0–1; 1 = gratis). */
+  instalacionDescuentoRM: number;
+  /** Descuento de instalación para región (0–1; editable, 0 = se cobra full). */
+  instalacionDescuentoRegion: number;
 };
 
 export const PARAMETROS_DEFAULT: ParametrosCotizador = {
@@ -117,6 +125,9 @@ export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   manoObraDuo: MANO_OBRA_DUO,
   manoObraVertical: MANO_OBRA_VERTICAL,
   traslado: TRASLADO,
+  instalacionGratisMinCortinas: 4,
+  instalacionDescuentoRM: 1, // 100% = gratis
+  instalacionDescuentoRegion: 0, // 0% = se cobra (editable por empresa)
 };
 
 /** Mezcla lo guardado con los defaults, ignorando valores no numéricos. */
@@ -130,6 +141,10 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
   }
   // margenInsumo = 0 dividiría por cero.
   if (out.margenInsumo <= 0) out.margenInsumo = PARAMETROS_DEFAULT.margenInsumo;
+  // Descuentos de instalación acotados a [0,1]; mínimo de cortinas entero ≥ 0.
+  out.instalacionDescuentoRM = Math.min(1, Math.max(0, out.instalacionDescuentoRM));
+  out.instalacionDescuentoRegion = Math.min(1, Math.max(0, out.instalacionDescuentoRegion));
+  out.instalacionGratisMinCortinas = Math.max(0, Math.round(out.instalacionGratisMinCortinas));
   return out;
 }
 

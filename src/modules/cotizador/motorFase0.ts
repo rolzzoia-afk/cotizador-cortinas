@@ -80,10 +80,27 @@ export type ResultadoFamilia = {
   exacto: boolean; // true si la receta de la familia está decodificada y validada
 };
 
+// Línea de instalación (regla "4+ cortinas roller = gratis" del Excel, hoja
+// Formato de Cotización fila INSTALACIÓN). La instalación por cortina ya va
+// EMBEBIDA en el VAL. UNIT de cada línea (precio/m² + instalación); esta línea
+// replica la fila del Excel: cantidad = nº de cortinas roller/dúo, precio =
+// instalación por cortina, con descuento 100% (gratis) al llegar al mínimo en
+// RM, o el % de región (editable). Total 0 → no altera el subtotal (RM 4+).
+export type InstalacionResultado = {
+  cantidad: number; // nº de cortinas roller/dúo instalables
+  precioUnit: number; // instalación por cortina
+  descuento: number; // 0-1 aplicado a la línea
+  total: number; // cantidad × precioUnit × (1 − descuento)
+  gratis: boolean; // descuento >= 1
+  region: boolean; // si se cotizó como región
+  sinInstalacion: boolean; // true = cliente retira / solo cortina (sin instalación)
+};
+
 export type ResultadoCotizacion = {
   familias: ResultadoFamilia[];
   lineas: LineaResultado[];
   adicionales: AdicionalResultado[];
+  instalacion: InstalacionResultado;
   subtotalNeto: number;
   totales: TotalesCotizacion;
 };
@@ -256,8 +273,7 @@ function costoMaterialesVertical(
 }
 
 // Para cortinas VERTICALES, el Excel hardcodea el precio de tela al de un
-// producto base (el roller equivalente), no usa MAXIFS de la familia vertical.
-// Mapa: COD vertical → COD_INT base del catálogo.
+// producto base (el roller equivalente). Mapa: COD vertical → COD_INT base.
 const BASE_CODINT_VERTICAL: Record<string, string> = {
   BLACKOUT_V_P: 'BK-P',
   BLACKOUT_V_D: 'BK-D',
@@ -267,18 +283,42 @@ const BASE_CODINT_VERTICAL: Record<string, string> = {
   SCREEN_V_S: 'SC-S',
 };
 
-// Precio de tela por familia:
+// El Excel cotiza la tela al precio del ARQUETIPO de la familia (el COD_INT
+// genérico "<PREFIJO>-<GAMA>", ej. SC-P, BK-D), NO al MAX de los códigos.
+// Mapa: COD roller/dúo → COD_INT arquetipo.
+const ARQUETIPO_ROLLER: Record<string, string> = {
+  BLACKOUT_P: 'BK-P',
+  BLACKOUT_D: 'BK-D',
+  BLACKOUT_S: 'BK-S',
+  SCREEN_P: 'SC-P',
+  SCREEN_D: 'SC-D',
+  SCREEN_S: 'SC-S',
+  DUOBK_P: 'DB-P',
+  DUOBK_D: 'DB-D',
+  DUOBK_S: 'DB-S',
+  DUOPOLI_P: 'DUOP-P',
+  DUOPOLI_D: 'DUOP-D',
+  DUOPOLI_S: 'DUOP-S',
+};
+
+// Precio de tela (CLP/m) por familia:
 // - Vertical: precio del COD_INT base del roller equivalente (regla del Excel).
-// - Roller / dúo: MAX precio entre los productos del catálogo con ese COD
-//   (igual que MAXIFS del Excel).
-// El Excel usa el precio redondeado al peso (ej. 41.868 en lugar de
-// 41.867,69), por eso aplicamos Math.round para que los totales calcen al
-// peso sin arrastre de decimales.
+// - Roller / dúo: precio del ARQUETIPO de la familia (SC-P, BK-D…). El Excel
+//   usa ese valor fijo por gama, no el MAX; el MAX se inflaba con códigos
+//   sueltos o BEEBLACK mal etiquetados (ej. SCREEN_P a 48.415 vs arquetipo
+//   31.582), sobreprecio que se veía sobre todo en SCREEN. Si el arquetipo no
+//   está en el catálogo (p.ej. fixtures de test), cae al MAX de la familia.
+// El Excel redondea al peso (ej. 41.868 en vez de 41.867,69) → Math.round.
 function precioMlPorCod(cod: string, catalogo: CatalogoProductos): number {
   const baseV = BASE_CODINT_VERTICAL[cod];
   if (baseV) {
     const p = catalogo[baseV];
     return Math.round(Number(p?.precio) || 0);
+  }
+  const arq = ARQUETIPO_ROLLER[cod];
+  if (arq) {
+    const pArq = Number(catalogo[arq]?.precio) || 0;
+    if (pArq > 0) return Math.round(pArq);
   }
   let max = 0;
   for (const k of Object.keys(catalogo)) {
@@ -298,6 +338,8 @@ export function cotizarFase0(
   anchoRolloMap: Record<string, number>,
   adicionales: AdicionalFase0[] = [],
   params: ParametrosCotizador = PARAMETROS_DEFAULT,
+  region = false,
+  sinInstalacion = false,
 ): ResultadoCotizacion {
   const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
 
@@ -394,7 +436,13 @@ export function cotizarFase0(
     const altoReal = altoRealM(f.alto, esDuo);
     const m2 = altoReal * f.ancho;
     const precioM2 = cod ? pm2PorCod.get(cod) ?? 0 : 0;
-    const instalacion = g?.esVertical ? params.instalacionVertical : params.instalacionRoller;
+    // Sin instalación: el cliente retira / solo cortina → VAL. UNIT = precio del
+    // producto (m² × precio/m²), sin el cargo de instalación embebido.
+    const instalacion = sinInstalacion
+      ? 0
+      : g?.esVertical
+        ? params.instalacionVertical
+        : params.instalacionRoller;
     const valorUnit = m2 * precioM2 + instalacion;
     const cant = Math.max(1, f.cantidad);
     const descuento = Math.max(0, Math.min(1, f.descuento ?? 0));
@@ -429,13 +477,49 @@ export function cotizarFase0(
       };
     });
 
+  // Instalación (regla 4+ gratis / región editable). Cuenta las cortinas
+  // roller/dúo (no verticales); la instalación de cada una ya está embebida en
+  // su VAL. UNIT, así que esta línea replica la fila INSTALACIÓN del Excel:
+  //   • RM y nº ≥ mínimo → descuento RM (default 100% → total 0, no suma).
+  //   • RM y nº < mínimo → sin descuento (se cobra la instalación aparte).
+  //   • Región           → descuento de región (editable por empresa).
+  let nInstalables = 0;
+  for (const [, g] of grupos) if (!g.esVertical) nInstalables += g.piezas.length;
+  const minGratis = params.instalacionGratisMinCortinas ?? PARAMETROS_DEFAULT.instalacionGratisMinCortinas;
+  const descRM = params.instalacionDescuentoRM ?? PARAMETROS_DEFAULT.instalacionDescuentoRM;
+  const descRegion = params.instalacionDescuentoRegion ?? PARAMETROS_DEFAULT.instalacionDescuentoRegion;
+  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+  // La instalación va EMBEBIDA en el VAL. UNIT de cada cortina (Excel: PRECIO +
+  // INSTALACIÓN). Esta línea separada NO la vuelve a cobrar (evita el doble
+  // cobro):
+  //   • RM               → incluida; descuento RM (default 100% → total 0).
+  //   • Región           → cobra un extra de instalación con % editable.
+  //   • Sin instalación  → 0 (y ya se quitó del VAL. UNIT arriba).
+  const descInstal = sinInstalacion ? 1 : region ? clamp01(descRegion) : clamp01(descRM);
+  const totalInstal =
+    sinInstalacion || nInstalables === 0
+      ? 0
+      : params.instalacionRoller * nInstalables * (1 - descInstal);
+  const instalacion: InstalacionResultado = {
+    cantidad: nInstalables,
+    precioUnit: params.instalacionRoller,
+    descuento: descInstal,
+    total: totalInstal,
+    // "GRATIS" sólo si no se cobra extra y (es región 100% off o llega al mínimo
+    // de cortinas en RM). Bajo el mínimo en RM la instalación va "incluida".
+    gratis: !sinInstalacion && totalInstal === 0 && (region || nInstalables >= minGratis),
+    region,
+    sinInstalacion,
+  };
+
   const subtotalCortinas = lineas.reduce((s, l) => s + l.total, 0);
   const subtotalAdicionales = adicionalesRes.reduce((s, a) => s + a.total, 0);
-  const subtotalNeto = subtotalCortinas + subtotalAdicionales;
+  const subtotalNeto = subtotalCortinas + subtotalAdicionales + instalacion.total;
   return {
     familias,
     lineas,
     adicionales: adicionalesRes,
+    instalacion,
     subtotalNeto,
     totales: calcularTotales(subtotalNeto, {
       iva: params.iva,

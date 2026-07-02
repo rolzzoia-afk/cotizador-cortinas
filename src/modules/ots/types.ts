@@ -60,6 +60,8 @@ export type DatosGenerales = {
   telefono?: string;
   direccion?: string;
   comuna?: string;
+  /** Región de Chile de la dirección del cliente (desplegable de Fase 0). */
+  regionNombre?: string;
   ot?: string;
   canal?: string;
   fecha?: string;
@@ -77,6 +79,14 @@ export type DatosGenerales = {
   inventarioFecha?: string | null;
   /** Adicionales de la cotización Fase 0 (no son ventanas/cortinas). */
   adicionalesFase0?: AdicionalFase0Persistido[];
+  /** Cotización a región: la instalación no es gratis por 4+ (usa el % de región). */
+  region?: boolean;
+  /** Descuento de instalación (0–1) para esta OT a región; si falta usa el global. */
+  instalacionDescuentoRegion?: number;
+  /** Cotización sin instalación (el cliente retira / solo cortina). */
+  sinInstalacion?: boolean;
+  /** Envío de la cotización: gratis o con cobro en destino (lo paga el cliente al courier). */
+  envio?: 'gratis' | 'cobro_destino';
   /** Descuento de colmena al confirmar el corte general (Fase 4) — guard de idempotencia. */
   corteGeneralColmena?: import('@/modules/cotizador/colmenaCorte').CorteGeneralColmena;
 };

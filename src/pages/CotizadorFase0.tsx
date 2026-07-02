@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Plus, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { ArrowLeft, Copy, Palette, Pencil, Plus, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,17 @@ import {
 import { formatCLP } from '@/modules/cotizador/calculos';
 import type { Producto } from '@/modules/cotizador/types';
 import { enriquecerPanoDesdeFase0 } from '@/modules/cotizador/fase0-sync';
+import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
+import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
+import BannerCuotas from '@/components/cotizador/BannerCuotas';
+import { estiloChipHex, useChipsColores } from '@/modules/cotizador/chipsColores';
 import { COMUNAS_SANTIAGO } from '@/modules/cotizador/comunas';
+import {
+  REGIONES_CHILE,
+  REGION_METROPOLITANA,
+  esRegionMetropolitana,
+  esComunaRM,
+} from '@/modules/cotizador/regiones-chile';
 import {
   parsearExcelFase0,
   validarFilaFase0,
@@ -43,9 +53,10 @@ type Cliente = {
   telefono: string;
   direccion: string;
   comuna: string;
+  region: string;
 };
 const EMPTY_CLIENTE: Cliente = {
-  nombre: '', rut: '', mail: '', telefono: '', direccion: '', comuna: '',
+  nombre: '', rut: '', mail: '', telefono: '', direccion: '', comuna: '', region: '',
 };
 
 type FilaUI = {
@@ -157,38 +168,47 @@ type Filtro = {
   id: string;
   label: string;
   cls: string;
+  /** Color por defecto del chip (equivalente hex de sus clases Tailwind). */
+  hexDefault: string;
   match: (p: Producto, codInt: string) => boolean;
 };
 const enChip = (ci: string, chip: string) => CHIP_DE_CODINT[ci.trim()] === chip;
 const FILTROS_CATALOGO: Filtro[] = [
-  { id: 'BK', label: 'BK', cls: 'bg-amber-100 text-amber-900 border-amber-400',
+  { id: 'BK', label: 'BK', cls: 'bg-amber-100 text-amber-900 border-amber-400', hexDefault: '#fef3c7',
     match: (p) => ['BLACKOUT_P', 'BLACKOUT_D', 'BLACKOUT_S'].includes(N(p.cod)) },
-  { id: 'BK_V', label: 'BK VERT', cls: 'bg-orange-200 text-orange-900 border-orange-400',
+  { id: 'BK_V', label: 'BK VERT', cls: 'bg-orange-200 text-orange-900 border-orange-400', hexDefault: '#fed7aa',
     match: (p) => N(p.cod).startsWith('BLACKOUT_V') },
-  { id: 'SCR', label: 'SCR', cls: 'bg-green-200 text-green-900 border-green-500',
+  { id: 'SCR', label: 'SCR', cls: 'bg-green-200 text-green-900 border-green-500', hexDefault: '#bbf7d0',
     match: (p) => ['SCREEN_P', 'SCREEN_D', 'SCREEN_S'].includes(N(p.cod)) },
-  { id: 'SC_V', label: 'SC VERT', cls: 'bg-emerald-300 text-emerald-900 border-emerald-600',
+  { id: 'SC_V', label: 'SC VERT', cls: 'bg-emerald-300 text-emerald-900 border-emerald-600', hexDefault: '#6ee7b7',
     match: (p) => N(p.cod).startsWith('SCREEN_V') },
-  { id: 'DUO_BK', label: 'DUO BK', cls: 'bg-sky-200 text-sky-900 border-sky-400',
+  { id: 'DUO_BK', label: 'DUO BK', cls: 'bg-sky-200 text-sky-900 border-sky-400', hexDefault: '#bae6fd',
     match: (p) => N(p.cod).startsWith('DUOBK') },
-  { id: 'DUO_POLI', label: 'DUO POLI', cls: 'bg-blue-200 text-blue-900 border-blue-500',
+  { id: 'DUO_POLI', label: 'DUO POLI', cls: 'bg-blue-200 text-blue-900 border-blue-500', hexDefault: '#bfdbfe',
     match: (p) => N(p.cod).startsWith('DUOPOLI') },
-  { id: 'SOFT', label: 'SOFT', cls: 'bg-lime-400 text-lime-950 border-lime-600',
+  { id: 'SOFT', label: 'SOFT', cls: 'bg-lime-400 text-lime-950 border-lime-600', hexDefault: '#a3e635',
     match: (_p, ci) => enChip(ci, 'SOFT') },
-  { id: 'OSCURA', label: 'OSCURA', cls: 'bg-teal-400 text-teal-950 border-teal-600',
+  { id: 'OSCURA', label: 'OSCURA', cls: 'bg-teal-400 text-teal-950 border-teal-600', hexDefault: '#2dd4bf',
     match: (_p, ci) => enChip(ci, 'OSCURA') },
-  { id: 'MOT_VERT', label: 'MOT VERT', cls: 'bg-purple-300 text-purple-950 border-purple-600',
+  { id: 'MOT_VERT', label: 'MOT VERT', cls: 'bg-purple-300 text-purple-950 border-purple-600', hexDefault: '#d8b4fe',
     match: (_p, ci) => enChip(ci, 'MOT_VERT') },
-  { id: 'MOT', label: 'MOT', cls: 'bg-amber-700 text-white border-amber-800',
+  { id: 'MOT', label: 'MOT', cls: 'bg-amber-700 text-white border-amber-800', hexDefault: '#b45309',
     match: (_p, ci) => enChip(ci, 'MOT') },
-  { id: 'MOTOR_GRANDE', label: 'MOTOR GRANDE', cls: 'bg-fuchsia-500 text-white border-fuchsia-700',
+  { id: 'MOTOR_GRANDE', label: 'MOTOR GRANDE', cls: 'bg-fuchsia-500 text-white border-fuchsia-700', hexDefault: '#d946ef',
     match: (_p, ci) => enChip(ci, 'MOTOR_GRANDE') },
-  { id: 'MOTOR_MG', label: 'MOTOR MG', cls: 'bg-gray-400 text-gray-950 border-gray-600',
+  { id: 'MOTOR_MG', label: 'MOTOR MG', cls: 'bg-gray-400 text-gray-950 border-gray-600', hexDefault: '#9ca3af',
     match: (_p, ci) => enChip(ci, 'MOTOR_MG') },
 ];
 
 const esCortinaTipo = (tipo: string): boolean =>
   ['PREMIUM', 'DELUX', 'STANDARD', 'BASIC'].includes((tipo || '').toUpperCase().trim());
+
+// COD_INT de la instalación roller base. Desde Fase 2 la instalación se calcula
+// automáticamente (regla 4+ gratis / región), así que se filtra de los
+// adicionales manuales para no cobrarla dos veces (la instalación de motor,
+// soft, cenefa —INSTMOT, INSTSOFT, INSTCENF…— sí siguen siendo manuales).
+const COD_INSTALACION_BASE = 'INST';
+const esInstalacionBase = (ci: string) => (ci || '').trim().toUpperCase() === COD_INSTALACION_BASE;
 
 // Total de columnas de la grilla (para los colSpan de filas separadoras / botones)
 const COL_SPAN = 18;
@@ -199,8 +219,8 @@ export function CotizadorFase0() {
   const { id: editOtId } = useParams();
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId } = useAuth();
-  const { catalogo } = useCatalogoProductos();
-  const { anchoRollo } = useAnchoRollo();
+  const { catalogo, refresh: refreshCatalogo } = useCatalogoProductos();
+  const { anchoRollo, refresh: refreshAnchoRollo } = useAnchoRollo();
   const { parametros } = useParametrosCotizador();
   const { modelos: modelosDespiece } = useDescuentosModelo();
 
@@ -209,6 +229,20 @@ export function CotizadorFase0() {
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
   const [filtroActivo, setFiltroActivo] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
+  // Editor del catálogo: undefined = cerrado, null = producto nuevo, string = editar ese COD_INT.
+  const [editarProducto, setEditarProducto] = useState<string | null | undefined>(undefined);
+  // Editor de colores de los chips de categoría.
+  const [editarColores, setEditarColores] = useState(false);
+  const { colores: chipsColores, guardar: guardarColoresChips } = useChipsColores();
+  // Cotización a región: la instalación no es gratis por 4+ (usa el % de región).
+  const [region, setRegion] = useState(false);
+  // Descuento de instalación región de ESTA cotización, en % (0–100). null =
+  // seguir el valor global de Admin; un número = override para esta OT.
+  const [regionDescPct, setRegionDescPct] = useState<number | null>(null);
+  // Sin instalación: el cliente retira / solo quiere la cortina (sin instalación).
+  const [sinInstalacion, setSinInstalacion] = useState(false);
+  // Envío: gratis o cobro en destino (lo paga el cliente al courier; no suma al total).
+  const [envio, setEnvio] = useState<'gratis' | 'cobro_destino'>('gratis');
 
   const [guardandoOT, setGuardandoOT] = useState(false);
   // Celdas a corregir a mano tras importar un Excel: id de fila → campos inválidos.
@@ -225,6 +259,10 @@ export function CotizadorFase0() {
     if (!editOtId || !otCargada || cargadoEdit) return;
     const dg = (otCargada.datosGenerales || {}) as Record<string, string> & {
       adicionalesFase0?: AdicionalFase0Persistido[];
+      region?: boolean;
+      instalacionDescuentoRegion?: number;
+      sinInstalacion?: boolean;
+      envio?: 'gratis' | 'cobro_destino';
     };
     setCliente({
       nombre: dg.cliente || '',
@@ -233,6 +271,7 @@ export function CotizadorFase0() {
       telefono: dg.telefono || '',
       direccion: dg.direccion || '',
       comuna: dg.comuna || '',
+      region: dg.regionNombre || '',
     });
     const vts = (otCargada.storeVentanas || []) as Record<string, any>[];
     const orig: Record<string, Record<string, unknown>> = {};
@@ -255,7 +294,19 @@ export function CotizadorFase0() {
       };
     });
     setFilas(nuevasFilas.length ? nuevasFilas : [nuevaFila()]);
-    setAdicionales(adicionalesFromPersist(dg.adicionalesFase0));
+    // La instalación base ('INST') ahora es automática (Fase 2): se descarta de
+    // los adicionales guardados para no duplicarla.
+    setAdicionales(
+      adicionalesFromPersist(dg.adicionalesFase0).filter((a) => !esInstalacionBase(a.codInt)),
+    );
+    setRegion(!!dg.region);
+    setRegionDescPct(
+      typeof dg.instalacionDescuentoRegion === 'number'
+        ? Math.round(dg.instalacionDescuentoRegion * 100)
+        : null,
+    );
+    setSinInstalacion(!!dg.sinInstalacion);
+    setEnvio(dg.envio === 'cobro_destino' ? 'cobro_destino' : 'gratis');
     setOrigVentanas(orig);
     setCargadoEdit(true);
   }, [editOtId, otCargada, cargadoEdit]);
@@ -356,7 +407,12 @@ export function CotizadorFase0() {
             telefono: cliente.telefono,
             direccion: cliente.direccion,
             comuna: cliente.comuna,
+            regionNombre: cliente.region,
             adicionalesFase0: adicionalesGuardados,
+            region,
+            instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
+            sinInstalacion,
+            envio,
           },
           storeVentanas: ventanas as unknown as OT['storeVentanas'],
           fechaModificacion: now,
@@ -386,10 +442,15 @@ export function CotizadorFase0() {
           telefono: cliente.telefono,
           direccion: cliente.direccion,
           comuna: cliente.comuna,
+          regionNombre: cliente.region,
           ot: String(numOT ?? ''),
           canal: 'Cotizador',
           fecha: now.split('T')[0],
           adicionalesFase0: adicionalesGuardados,
+          region,
+          instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
+          sinInstalacion,
+          envio,
         },
         storeVentanas: ventanas as unknown as OT['storeVentanas'],
         cotizacionCount: 1,
@@ -436,10 +497,23 @@ export function CotizadorFase0() {
           telefono: l.whatsapp_phone || '',
           direccion: '',
           comuna: l.comuna || '',
+          region: esComunaRM(l.comuna || '') ? REGION_METROPOLITANA : '',
         });
       }
     })();
   }, [params, empresaId]);
+
+  // Descuento de instalación región efectivo: override de esta OT (regionDescPct)
+  // o, si es null, el valor global configurado en Admin.
+  const regionPctEff =
+    regionDescPct ?? Math.round((parametros.instalacionDescuentoRegion || 0) * 100);
+
+  // La región del cliente maneja el cobro de instalación: cualquier región
+  // distinta de la Metropolitana activa el cobro (con el % de región). Si el
+  // campo Región está vacío, se respeta el toggle manual de abajo.
+  useEffect(() => {
+    if (cliente.region) setRegion(!esRegionMetropolitana(cliente.region));
+  }, [cliente.region]);
 
   const resultado = useMemo(() => {
     const filasMotor = filas.map((f) => ({
@@ -449,13 +523,25 @@ export function CotizadorFase0() {
       cantidad: f.cantidad,
       descuento: f.descuento / 100,
     }));
-    const adicMotor = adicionales.map((a) => ({
-      codInt: a.codInt,
-      cantidad: a.cantidad,
-      descuento: a.descuento / 100,
-    }));
-    return cotizarFase0(filasMotor, catalogo, anchoRollo, adicMotor, parametros);
-  }, [filas, adicionales, catalogo, anchoRollo, parametros]);
+    // La instalación base ('INST') se calcula automáticamente; se excluye de los
+    // adicionales que van al motor para no cobrarla dos veces aunque alguien la
+    // haya tipeado a mano en una fila (guard contra doble cobro).
+    const adicMotor = adicionales
+      .filter((a) => !esInstalacionBase(a.codInt))
+      .map((a) => ({
+        codInt: a.codInt,
+        cantidad: a.cantidad,
+        descuento: a.descuento / 100,
+      }));
+    // Para región, el % de descuento de instalación de esta OT sobreescribe el global.
+    const paramsEff = region
+      ? {
+          ...parametros,
+          instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
+        }
+      : parametros;
+    return cotizarFase0(filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion);
+  }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion]);
 
   const lineaDeFila = useMemo(() => {
     const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
@@ -468,7 +554,11 @@ export function CotizadorFase0() {
   }, [filas, resultado]);
 
   const adicResDeFila = useMemo(() => {
-    const validos = adicionales.filter((a) => a.codInt && a.cantidad > 0);
+    // Mismo filtro que adicMotor (incluye excluir 'INST') para que los índices
+    // de resultado.adicionales queden alineados con las filas mostradas.
+    const validos = adicionales.filter(
+      (a) => a.codInt && a.cantidad > 0 && !esInstalacionBase(a.codInt),
+    );
     const m = new Map<string, AdicionalResultado>();
     validos.forEach((a, i) => {
       const r = resultado.adicionales[i];
@@ -492,24 +582,40 @@ export function CotizadorFase0() {
       .sort((a, b) => (a[1].producto || '').localeCompare(b[1].producto || ''));
   }, [catalogo, filtroActivo, busqueda]);
 
+  // DCT% por defecto (0–100) del código, tomado del catálogo. Autollena la
+  // columna al elegir/importar un COD_INT; el usuario lo puede editar después.
+  const dctDeCodigo = (ci: string | undefined): number =>
+    Math.round((Number(catalogo[(ci || '').trim()]?.descuento) || 0) * 100);
+
   const agregarProducto = (codInt: string) => {
     const prod = catalogo[codInt];
     if (!prod) return;
+    if (esInstalacionBase(codInt)) {
+      toast.info('La instalación se calcula sola (gratis desde 4 cortinas; % editable a región).');
+      return;
+    }
+    const descuento = dctDeCodigo(codInt);
     if (esCortinaTipo(prod.tipo)) {
       setFilas((prev) => {
         const last = prev[prev.length - 1];
         if (last && !last.codInt && last.ancho === 0 && last.alto === 0) {
-          return prev.map((f, i) => (i === prev.length - 1 ? { ...f, codInt } : f));
+          return prev.map((f, i) => (i === prev.length - 1 ? { ...f, codInt, descuento } : f));
         }
-        return [...prev, { ...nuevaFila(), codInt }];
+        return [...prev, { ...nuevaFila(), codInt, descuento }];
       });
     } else {
-      setAdicionales((prev) => [...prev, { ...nuevoAdicional(), codInt }]);
+      setAdicionales((prev) => [...prev, { ...nuevoAdicional(), codInt, descuento }]);
     }
   };
 
   const setFila = (id: string, patch: Partial<FilaUI>) => {
-    setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+    // Al cambiar el COD_INT, autollenar el DCT% con el descuento del código
+    // (salvo que el patch ya traiga un descuento explícito).
+    const conDct =
+      'codInt' in patch && !('descuento' in patch)
+        ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
+        : patch;
+    setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, ...conDct } : f)));
     // Al corregir una celda importada, le quitamos su marca roja.
     setErroresImport((prev) => {
       if (!prev.has(id)) return prev;
@@ -573,7 +679,7 @@ export function CotizadorFase0() {
           colorAcc: c.colorAcc,
           ancho: c.ancho,
           alto: c.alto,
-          descuento: 0,
+          descuento: dctDeCodigo(c.codInt),
         };
         const malos = validarFilaFase0({ ...c, categoria, direccion, sentido }, opts);
         if (malos.length) errores.set(fila.id, new Set(malos));
@@ -585,12 +691,14 @@ export function CotizadorFase0() {
       const nuevosAdic: AdicionalUI[] = [];
       const erroresAdic = new Map<string, Set<'codInt'>>();
       for (const a of adicCrudos) {
+        // La instalación base es automática (Fase 2): no se importa como adicional.
+        if (esInstalacionBase(a.codInt)) continue;
         const id = crypto.randomUUID();
         nuevosAdic.push({
           id,
           codInt: a.codInt,
           cantidad: a.cantidad || 1,
-          descuento: 0,
+          descuento: dctDeCodigo(a.codInt),
           ubicacion: a.ubicacion,
           colorAcc: a.colorAcc,
         });
@@ -617,7 +725,11 @@ export function CotizadorFase0() {
   };
 
   const setAdic = (id: string, patch: Partial<AdicionalUI>) => {
-    setAdicionales((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+    const conDct =
+      'codInt' in patch && !('descuento' in patch)
+        ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
+        : patch;
+    setAdicionales((prev) => prev.map((a) => (a.id === id ? { ...a, ...conDct } : a)));
     // Al editar el COD_INT de un adicional importado, le quitamos su marca roja.
     if ('codInt' in patch) {
       setErroresImportAdic((prev) => {
@@ -683,7 +795,58 @@ export function CotizadorFase0() {
           <Campo label="Teléfono" value={cliente.telefono} onChange={(v) => setCliente({ ...cliente, telefono: v })} />
           <Campo label="Mail" value={cliente.mail} onChange={(v) => setCliente({ ...cliente, mail: v })} />
           <Campo label="Dirección" value={cliente.direccion} onChange={(v) => setCliente({ ...cliente, direccion: v })} />
-          <CampoComuna value={cliente.comuna} onChange={(v) => setCliente({ ...cliente, comuna: v })} />
+          <CampoComuna
+            value={cliente.comuna}
+            onChange={(v) =>
+              setCliente((c) => ({
+                ...c,
+                comuna: v,
+                // Si la comuna es de la RM, autocompleta la región.
+                region: esComunaRM(v) ? REGION_METROPOLITANA : c.region,
+              }))
+            }
+          />
+          <CampoRegion
+            value={cliente.region}
+            onChange={(v) => setCliente((c) => ({ ...c, region: v }))}
+          />
+          <CampoEstado
+            label="Instalación"
+            value={sinInstalacion ? 'sin' : 'incluye'}
+            onChange={(v) => setSinInstalacion(v === 'sin')}
+            opciones={[
+              { value: 'incluye', label: 'Incluye instalación', tono: 'ok' },
+              { value: 'sin', label: 'Sin instalación', tono: 'mal' },
+            ]}
+          />
+          <CampoEstado
+            label="Envío"
+            value={envio}
+            onChange={(v) => setEnvio(v === 'cobro_destino' ? 'cobro_destino' : 'gratis')}
+            opciones={[
+              { value: 'gratis', label: 'Gratis', tono: 'ok' },
+              { value: 'cobro_destino', label: 'Cobro en destino', tono: 'mal' },
+            ]}
+          />
+          {region && !sinInstalacion && (
+            <label className="block">
+              <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+                Descuento instalación región (%)
+              </span>
+              <Input
+                type="number"
+                min={0}
+                max={100}
+                step={1}
+                value={regionPctEff}
+                onChange={(e) =>
+                  setRegionDescPct(Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)))
+                }
+                title="0% = se cobra completa · 100% = gratis"
+                className="text-right"
+              />
+            </label>
+          )}
         </section>
 
         {/* CATÁLOGO con chips */}
@@ -707,6 +870,7 @@ export function CotizadorFase0() {
               <button
                 key={f.id}
                 onClick={() => setFiltroActivo(filtroActivo === f.id ? null : f.id)}
+                style={chipsColores[f.id] ? estiloChipHex(chipsColores[f.id]) : undefined}
                 className={cn(
                   'rounded-md border px-2.5 py-1 text-[11px] font-bold transition-all',
                   f.cls,
@@ -716,6 +880,13 @@ export function CotizadorFase0() {
                 {f.label}
               </button>
             ))}
+            <button
+              onClick={() => setEditarColores(true)}
+              className="rounded-md border border-border p-1 text-muted-foreground transition-colors hover:border-accent/40 hover:text-accent"
+              title="Editar los colores de las categorías"
+            >
+              <Palette className="h-3.5 w-3.5" />
+            </button>
             <div className="relative ml-auto w-56">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -725,6 +896,15 @@ export function CotizadorFase0() {
                 className="h-8 pl-7 text-xs"
               />
             </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 gap-1 text-xs"
+              onClick={() => setEditarProducto(null)}
+              title="Crear un código nuevo en el catálogo"
+            >
+              <Plus className="h-3.5 w-3.5" /> Nuevo producto
+            </Button>
           </div>
 
           {hayFiltro ? (
@@ -758,13 +938,22 @@ export function CotizadorFase0() {
                         {p.precio ? formatCLP(Number(p.precio)) : '—'}
                       </Td>
                       <Td className="text-right">
-                        <button
-                          onClick={() => agregarProducto(ci)}
-                          className="rounded bg-accent px-2 py-0.5 text-[12px] font-semibold text-accent-foreground hover:bg-accent/90"
-                          title={esCortinaTipo(p.tipo) ? 'Agregar como cortina' : 'Agregar como adicional'}
-                        >
-                          + Agregar
-                        </button>
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => setEditarProducto(ci)}
+                            className="rounded border border-border p-1 text-muted-foreground hover:border-accent/40 hover:text-accent"
+                            title="Editar este producto del catálogo"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            onClick={() => agregarProducto(ci)}
+                            className="rounded bg-accent px-2 py-0.5 text-[12px] font-semibold text-accent-foreground hover:bg-accent/90"
+                            title={esCortinaTipo(p.tipo) ? 'Agregar como cortina' : 'Agregar como adicional'}
+                          >
+                            + Agregar
+                          </button>
+                        </div>
                       </Td>
                     </tr>
                   ))}
@@ -1019,6 +1208,30 @@ export function CotizadorFase0() {
 
         {/* TOTALES */}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
+          {/* Resumen de instalación y envío (los controles viven junto a los
+              datos del cliente: desplegables Instalación / Envío / % región). */}
+          {resultado.instalacion.cantidad > 0 && (
+            <FilaTotal
+              label={
+                sinInstalacion
+                  ? 'Instalación'
+                  : `Instalación (${resultado.instalacion.cantidad} × ${formatCLP(
+                      resultado.instalacion.precioUnit,
+                    )})`
+              }
+              valor={
+                sinInstalacion
+                  ? 'No incluida'
+                  : resultado.instalacion.gratis
+                    ? 'GRATIS'
+                    : resultado.instalacion.total === 0
+                      ? 'Incluida'
+                      : formatCLP(resultado.instalacion.total)
+              }
+            />
+          )}
+          <FilaTotal label="Envío" valor={envio === 'gratis' ? 'GRATIS' : 'Cobro en destino'} />
+          <div className="my-1 border-t border-border" />
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
           <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
           <FilaTotal label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
@@ -1037,13 +1250,44 @@ export function CotizadorFase0() {
           </Button>
         </section>
 
+        {editarProducto !== undefined && (
+          <ProductoCatalogoDialog
+            codInt={editarProducto}
+            catalogo={catalogo}
+            anchoRollo={anchoRollo}
+            onClose={() => setEditarProducto(undefined)}
+            onSaved={() => {
+              refreshCatalogo();
+              refreshAnchoRollo();
+            }}
+          />
+        )}
+
+        {editarColores && (
+          <ChipsColoresDialog
+            chips={FILTROS_CATALOGO.map((f) => ({
+              id: f.id,
+              label: f.label,
+              hexDefault: f.hexDefault,
+            }))}
+            colores={chipsColores}
+            onGuardar={guardarColoresChips}
+            onClose={() => setEditarColores(false)}
+          />
+        )}
+
         <section className="mt-4 rounded-lg border border-border bg-card/40 p-4 text-[11px] leading-relaxed text-muted-foreground">
           <div className="mb-1 font-semibold text-foreground">Condiciones</div>
           Cotización válida por 5 días. Pago: 50% para iniciar la fabricación y 50% al finalizar la
-          instalación. Tarjeta de crédito hasta 6 cuotas sin interés (recargo MercadoPago 13,8%).
+          instalación. Tarjeta de crédito hasta 12 cuotas sin interés (recargo MercadoPago 13,8%).
           Primera visita sin costo previa cotización (RM en AVN). Las cortinas se fabrican a medida;
           una vez confeccionadas no hay devolución de dinero. Verificar stock de la tela antes de pagar.
         </section>
+
+        {/* Banner de cuotas al pie de la cotización (visible también al imprimir) */}
+        <div className="mt-6 flex justify-center pb-4">
+          <BannerCuotas />
+        </div>
       </div>
     </div>
   );
@@ -1128,11 +1372,70 @@ function CampoComuna({ value, onChange }: { value: string; onChange: (v: string)
         list="comunas-santiago-rm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Elegí o escribí…"
+        placeholder="Elige o escribe…"
       />
       <datalist id="comunas-santiago-rm">
         {COMUNAS_SANTIAGO.map((c) => (
           <option key={c} value={c} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
+// Desplegable de estado con código de color: la opción con tono 'ok' pinta el
+// cuadro en verde (incluye instalación / envío gratis) y la de tono 'mal' en
+// rojo (sin instalación / cobro en destino).
+function CampoEstado({
+  label,
+  value,
+  opciones,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  opciones: { value: string; label: string; tono: 'ok' | 'mal' }[];
+  onChange: (v: string) => void;
+}) {
+  const tono = opciones.find((o) => o.value === value)?.tono;
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          'h-9 w-full rounded-md border px-2 text-sm font-semibold focus:outline-none',
+          tono === 'ok' && 'border-success bg-success/25 text-success',
+          tono === 'mal' && 'border-destructive bg-destructive/25 text-destructive',
+          !tono && 'border-border bg-card',
+        )}
+      >
+        {opciones.map((o) => (
+          <option key={o.value} value={o.value} className="bg-card text-foreground">
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// Región: desplegable con las 16 regiones de Chile. Combobox — se completa
+// solo al elegir una comuna de la RM, y se puede cambiar a mano.
+function CampoRegion({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">Región</span>
+      <Input
+        list="regiones-chile"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="Selecciona una región…"
+      />
+      <datalist id="regiones-chile">
+        {REGIONES_CHILE.map((r) => (
+          <option key={r} value={r} />
         ))}
       </datalist>
     </label>
