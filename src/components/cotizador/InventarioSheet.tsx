@@ -14,8 +14,9 @@ import { Input } from '@/components/ui/input';
 import type { BomItem } from '@/modules/ots/types';
 import type { OT } from '@/modules/ots/types';
 import {
-  CLAVE_ETIQUETAS,
+  claveEtiquetas,
   claveItem,
+  construirEtiquetas,
   construirFilasCortinas,
   generarPDFInventario,
   totalItem,
@@ -40,7 +41,8 @@ const hoy = () => new Date().toISOString().split('T')[0];
 
 export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresaNombre, dirty, guardando, onGuardar }: Props) {
   const filas = useMemo(() => construirFilasCortinas(ot.storeVentanas || []), [ot.storeVentanas]);
-  const etiquetasCant = filas.length;
+  // Etiquetas por color de accesorios (blancos → INS 95-1; resto → INS 95).
+  const etiquetas = useMemo(() => construirEtiquetas(ot.storeVentanas || []), [ot.storeVentanas]);
   const empresa = (empresaNombre || 'Rolzzo').toUpperCase();
 
   const setEntrega = (clave: string, patch: Partial<EntregaItem>) => {
@@ -61,7 +63,7 @@ export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresa
     generarPDFInventario(
       filas,
       items,
-      etiquetasCant,
+      etiquetas,
       {
         ot: ot.datosGenerales.ot || '—',
         cliente: ot.datosGenerales.cliente || '—',
@@ -125,7 +127,7 @@ export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresa
               {filas.length === 0 ? (
                 <tr>
                   <td colSpan={12} className={`${tdCls} py-4 text-center text-muted-foreground`}>
-                    No hay paños. Completá las ventanas en Fase 2.
+                    No hay paños. Completa las ventanas en Fase 2.
                   </td>
                 </tr>
               ) : (
@@ -228,17 +230,28 @@ export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresa
                 </tr>
               </thead>
               <tbody>
-                <FilaEntrega
-                  cod="INS 95-1"
-                  descripcion={`Etiquetas de cortinas (${empresa})`}
-                  cantidad={etiquetasCant}
-                  total={etiquetasCant}
-                  ent={estado.entregas[CLAVE_ETIQUETAS]}
-                  readOnly={readOnly}
-                  onToggle={() => toggleEntregado(CLAVE_ETIQUETAS)}
-                  onPatch={(p) => setEntrega(CLAVE_ETIQUETAS, p)}
-                  tdCls={tdCls}
-                />
+                {etiquetas.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className={`${tdCls} py-3 text-center text-muted-foreground`}>
+                      Sin cortinas todavía.
+                    </td>
+                  </tr>
+                ) : (
+                  etiquetas.map((e) => (
+                    <FilaEntrega
+                      key={e.cod}
+                      cod={e.cod}
+                      descripcion={`Etiquetas de cortinas ${e.color === 'BLANCA' ? 'blancas' : 'negras'} (${empresa})`}
+                      cantidad={e.cantidad}
+                      total={e.cantidad}
+                      ent={estado.entregas[claveEtiquetas(e.cod)]}
+                      readOnly={readOnly}
+                      onToggle={() => toggleEntregado(claveEtiquetas(e.cod))}
+                      onPatch={(p) => setEntrega(claveEtiquetas(e.cod), p)}
+                      tdCls={tdCls}
+                    />
+                  ))
+                )}
               </tbody>
             </table>
           </div>

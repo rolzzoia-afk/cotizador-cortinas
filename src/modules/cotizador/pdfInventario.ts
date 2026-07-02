@@ -8,13 +8,16 @@
 //   2. CORTINAS ROLLER: materiales consolidados (mecanismo, cadena, peso de
 //      cadena) con cantidad/total y casilleros de entrega (instalación/
 //      producción/estructura, fecha, recibe) para llenar a mano.
-//   3. ETIQUETAS ROLZZO: fila fija (INS 95) con cantidad = nº de cortinas.
+//   3. ETIQUETAS ROLZZO: una fila por código según color de accesorios
+//      (blancos → INS 95-1 blanca; resto → INS 95 negra), 1 por paño.
 //
 // Lógica pura salvo `generarPdfInventario`, que dibuja con jsPDF.
 // ─────────────────────────────────────────────────────────────────────
 import jsPDF from 'jspdf';
 import type { Ventana, CatalogoProductos } from '@/modules/cotizador/types';
+import type { VentanaItem } from '@/modules/ots/types';
 import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
+import { construirEtiquetas, type EtiquetaLinea } from './inventario';
 
 type RGB = [number, number, number];
 
@@ -42,7 +45,8 @@ export type MaterialConsolidado = {
 export type Inventario = {
   filas: FilaInventario[];
   materiales: MaterialConsolidado[];
-  etiquetaCant: number;
+  /** Etiquetas por código según color de accesorios (blancos → INS 95-1). */
+  etiquetas: EtiquetaLinea[];
 };
 
 const mts3 = (n: number) => n.toFixed(3).replace('.', ',');
@@ -87,7 +91,7 @@ export function construirInventario(
   return {
     filas: filasInv,
     materiales: consolidarMateriales(filas),
-    etiquetaCant: filas.length,
+    etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
   };
 }
 
@@ -325,9 +329,14 @@ export function generarPdfInventario(
     { label: 'PRODUCCION', align: 'c' },
     { label: 'PERSONA QUE RECIBE' },
   ].map((c, i) => ({ ...c, w: w3[i] * sc3 }) as Col);
-  const rows3 = [
-    ['INS 95', 'ETIQUETAS DE CORTINAS (ROLZZO)', String(data.etiquetaCant), '', '', ''],
-  ];
+  const rows3 = data.etiquetas.map((e) => [
+    e.cod,
+    `ETIQUETAS DE CORTINAS ${e.color === 'BLANCA' ? 'BLANCAS' : 'NEGRAS'} (ROLZZO)`,
+    String(e.cantidad),
+    '',
+    '',
+    '',
+  ]);
   y = tabla(doc, mg, y, cols3, rows3, { rowH: 7, greenCol: 2 });
 
   doc.save(`Inventario_${meta.ot}.pdf`);

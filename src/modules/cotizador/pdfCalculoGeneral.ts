@@ -23,6 +23,8 @@ import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
+import { mecanismoParaPano } from '@/modules/descuentos/chips';
+import { OPCIONES_MECANISMO } from './fase2';
 import { colorPesoCadena } from './cadenas';
 
 type RGB = [number, number, number];
@@ -150,12 +152,28 @@ export function construirCalculoGeneral(
       // Color PROPIO del peso de cadena (PCA04→TRANSPARENTE), no el de accesorios.
       const colorPeso = colorPesoCadena(p);
       const manillaCant = Number(p.manillaCant) || 0;
+      // COD MECANISMO = el kit que entrega bodega, resuelto con el MISMO motor
+      // que la hoja de Fase 4 (regla de categoría → kit inventario por color
+      // 32/33/34, pisando los MEC legacy del modelo Excel como MEC_05/MEC_10).
+      // Si no resuelve a un chip, cae al id del modelo (comportamiento previo).
+      const mecChip = mecanismoParaPano(
+        { ...p, mecanismo: p.mecanismo as string },
+        v.color as string,
+        v.modelo,
+        OPCIONES_MECANISMO,
+        v.categoria,
+      );
+      const codMecanismo =
+        [mecChip, (p.colorMecanismo as string) || ''].filter(Boolean).join(' ') ||
+        (v.modelo?.mecanismo as string) ||
+        (p.mecanismo as string) ||
+        '';
 
       filas.push({
         codSec: v.categoria || '',
         tuberia: esBee ? '' : tuberiaCodigoCorto(v.modelo, String(p.tuberia || ''), anchoM, v.categoria),
         tipoRol: (v.modelo?.tipo_rol as string) || '',
-        codMecanismo: (v.modelo?.mecanismo as string) || (p.mecanismo as string) || '',
+        codMecanismo,
         accionamiento: codCadena
           ? `[${codCadena}] ${largoCadena}`.trim()
           : largoCadena,

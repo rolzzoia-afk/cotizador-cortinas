@@ -2,7 +2,14 @@
 // cortina y totales con adicional manual.
 import { describe, expect, it } from 'vitest';
 import type { BomItem, VentanaItem } from '@/modules/ots/types';
-import { claveItem, construirFilasCortinas, totalItem, type InventarioEstado } from './inventario';
+import {
+  claveItem,
+  codigoEtiqueta,
+  construirEtiquetas,
+  construirFilasCortinas,
+  totalItem,
+  type InventarioEstado,
+} from './inventario';
 
 const ventanaEduardo = (ubic: string, ancho: number): VentanaItem => ({
   id: ubic,
@@ -171,6 +178,41 @@ describe('construirFilasCortinas', () => {
       },
     ]);
     expect(f.tuberia).toContain('[E66]');
+  });
+});
+
+describe('etiquetas por color de accesorios', () => {
+  const v = (color: string, colorMecanismo?: string): VentanaItem => ({
+    id: color,
+    color,
+    panos: [{ ancho: 1.5, alto: 1.8, ...(colorMecanismo ? { colorMecanismo } : {}) }],
+  });
+
+  it('codigoEtiqueta: blancos → INS 95-1 (blanca); negros y resto → INS 95 (negra)', () => {
+    expect(codigoEtiqueta('BLANCO')).toEqual({ cod: 'INS 95-1', color: 'BLANCA' });
+    expect(codigoEtiqueta('BCO')).toEqual({ cod: 'INS 95-1', color: 'BLANCA' });
+    expect(codigoEtiqueta('NEGRO')).toEqual({ cod: 'INS 95', color: 'NEGRA' });
+    expect(codigoEtiqueta('GRIS')).toEqual({ cod: 'INS 95', color: 'NEGRA' });
+    expect(codigoEtiqueta('')).toEqual({ cod: 'INS 95', color: 'NEGRA' });
+  });
+
+  it('OT blanca → 1 línea INS 95-1 con 1 etiqueta por paño', () => {
+    expect(construirEtiquetas([v('Blanco'), v('BLANCO')])).toEqual([
+      { cod: 'INS 95-1', color: 'BLANCA', cantidad: 2 },
+    ]);
+  });
+
+  it('OT mixta → una línea por código (negra primero)', () => {
+    expect(construirEtiquetas([v('Blanco'), v('NEGRO'), v('GRIS')])).toEqual([
+      { cod: 'INS 95', color: 'NEGRA', cantidad: 2 },
+      { cod: 'INS 95-1', color: 'BLANCA', cantidad: 1 },
+    ]);
+  });
+
+  it('el color de accesorios del paño (colorMecanismo) pisa el de la ventana', () => {
+    expect(construirEtiquetas([v('NEGRO', 'BCO')])).toEqual([
+      { cod: 'INS 95-1', color: 'BLANCA', cantidad: 1 },
+    ]);
   });
 });
 
