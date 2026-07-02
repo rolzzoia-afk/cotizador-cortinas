@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// chipsColores.ts importa el cliente supabase (para el hook useChipsColores);
+// en CI no hay VITE_SUPABASE_* y el módulo real lanza al importarse.
+vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+
 import { esHexValido, estiloChipHex } from './chipsColores';
 
 describe('esHexValido', () => {
