@@ -38,6 +38,18 @@ interface ImportarCatalogoDialogProps {
 const clp = (n: number) => Math.round(n).toLocaleString('es-CL');
 const pct = (n: number) => `${Math.round((n || 0) * 100)}%`;
 
+/** Chip pequeño de categoría de tela (A verde / B ámbar). */
+function ChipCategoria({ cat }: { cat: string | null | undefined }) {
+  if (!cat) return null;
+  const tono =
+    cat === 'B'
+      ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
+      : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400';
+  return (
+    <span className={`rounded border px-1 text-[10px] font-bold leading-4 ${tono}`}>{cat}</span>
+  );
+}
+
 export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCatalogoDialogProps) {
   const { empresaId } = useAuth();
   const { catalogo, refresh } = useCatalogoProductos();
@@ -59,7 +71,7 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
       const wb = XLSX.read(buf, { type: 'array' });
       const parsed = parsearCatalogoExcel(wb);
       if (parsed.length === 0) {
-        toast.error('No se encontró la hoja "Productos" con columnas COD_INT / Precio de Venta.');
+        toast.error('No se encontró una hoja ("Productos" o "DEPURADA") con columna COD_INT.');
         setDiff(null);
         return;
       }
@@ -125,7 +137,7 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
 
         <div className="flex flex-col gap-3">
           <div>
-            <Label className="mb-1 text-xs">Archivo Excel (hoja «Productos»)</Label>
+            <Label className="mb-1 text-xs">Archivo Excel (hoja «Productos» o «DEPURADA»)</Label>
             <input
               type="file"
               accept=".xlsx,.xlsm,.xls"
@@ -181,6 +193,7 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
                             onChange={() => toggle(okNuevos, n.codInt, setOkNuevos)}
                           />
                           <span className="w-20 shrink-0 font-bold">{n.codInt}</span>
+                          <ChipCategoria cat={n.producto.categoria} />
                           <span className="min-w-0 flex-1 truncate text-muted-foreground">
                             {n.producto.producto} · {n.producto.tipo}
                           </span>
@@ -227,6 +240,21 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
                             onChange={() => toggle(okCambios, c.codInt, setOkCambios)}
                           />
                           <span className="w-20 shrink-0 font-bold">{c.codInt}</span>
+                          <span className="flex w-16 shrink-0 items-center gap-1">
+                            {c.cambiaCategoria ? (
+                              <>
+                                {c.categoriaVieja ? (
+                                  <ChipCategoria cat={c.categoriaVieja} />
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground">—</span>
+                                )}
+                                <span className="text-[10px] text-muted-foreground">→</span>
+                                <ChipCategoria cat={c.categoriaNueva} />
+                              </>
+                            ) : (
+                              <ChipCategoria cat={c.categoriaVieja} />
+                            )}
+                          </span>
                           <span
                             className={
                               'w-40 text-right ' +

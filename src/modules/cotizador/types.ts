@@ -10,6 +10,8 @@ export type Producto = {
   anchoRollo?: number | string;
   /** Descuento por defecto de este código (0–1). Autollena el DCT% en Fase 0. */
   descuento?: number;
+  /** Categoría comercial de la tela ('A' | 'B'), de la planilla TELAS DEPURADAS. */
+  categoria?: string;
 };
 
 // Mapa de catálogo: COD_INT → Producto. Se guarda en Supabase `configuracion`

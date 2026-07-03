@@ -42,6 +42,8 @@ export type FilaAdicionalImportada = {
 export type ResultadoImportFase0 = {
   cortinas: FilaImportadaFase0[];
   adicionales: FilaAdicionalImportada[];
+  /** N° de OT del Excel manual ("OT CLIENTE: 3085" del encabezado); '' si no viene. */
+  otCliente: string;
 };
 
 /** Campos llave que pueden quedar "en rojo" para corregir a mano. */
@@ -98,28 +100,56 @@ const texto = (v: unknown): string => String(v ?? '').trim();
 const esSeparadorAdicionales = (r: unknown[]): boolean =>
   (r || []).some((c) => norm(c).startsWith('ADICIONALES'));
 
+// N° de OT del encabezado del Excel manual: celda rotulada "OT CLIENTE"
+// (fila 16 del Formato de Cotización) con el número en la celda siguiente
+// no vacía de la misma fila. Solo se busca ARRIBA de la tabla de productos.
+function otClienteDeEncabezado(matriz: unknown[][], headerIdx: number): string {
+  for (let i = 0; i < headerIdx; i++) {
+    const r = matriz[i] || [];
+    for (let c = 0; c < r.length; c++) {
+      if (!norm(r[c]).includes('OTCLIENTE')) continue;
+      for (let k = c + 1; k < r.length; k++) {
+        const v = texto(r[k]);
+        // La primera celda con contenido a la derecha es el número; si no
+        // trae ningún dígito es otro rótulo ("FECHA COTIZACIÓN") → sin OT.
+        if (v) return /\d/.test(v) ? v : '';
+      }
+    }
+  }
+  return '';
+}
+
 /**
- * Parsea la primera hoja del workbook y separa las filas en CORTINAS y
+ * Parsea la hoja de la cotización y separa las filas en CORTINAS y
  * ADICIONALES, usando la fila rótulo "ADICIONALES" como límite (todo lo que
  * está debajo son adicionales). Detecta automáticamente la fila de
  * encabezados (la que contiene COD_INT y ANCHO), tolerando filas de
- * título/logo arriba de la tabla.
+ * título/logo arriba de la tabla; si la primera hoja no tiene la tabla,
+ * busca en las demás (así se puede adjuntar el .xlsm maestro completo).
+ * También rescata el N° de OT manual del encabezado ("OT CLIENTE: 3085").
  */
 export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
-  const vacio: ResultadoImportFase0 = { cortinas: [], adicionales: [] };
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) return vacio;
-  const matriz = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][];
+  const vacio: ResultadoImportFase0 = { cortinas: [], adicionales: [], otCliente: '' };
 
+  let matriz: unknown[][] = [];
   let headerIdx = -1;
-  for (let i = 0; i < matriz.length; i++) {
-    const claves = new Set((matriz[i] || []).map(norm));
-    if (claves.has('CODINT') && claves.has('ANCHO')) {
-      headerIdx = i;
-      break;
+  for (const nombre of wb.SheetNames) {
+    const ws = wb.Sheets[nombre];
+    if (!ws) continue;
+    const m = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null }) as unknown[][];
+    for (let i = 0; i < m.length; i++) {
+      const claves = new Set((m[i] || []).map(norm));
+      if (claves.has('CODINT') && claves.has('ANCHO')) {
+        matriz = m;
+        headerIdx = i;
+        break;
+      }
     }
+    if (headerIdx >= 0) break;
   }
   if (headerIdx < 0) return vacio;
+
+  const otCliente = otClienteDeEncabezado(matriz, headerIdx);
 
   const colDe = new Map<number, keyof FilaImportadaFase0>();
   (matriz[headerIdx] || []).forEach((h, idx) => {
@@ -178,7 +208,7 @@ export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
     cortinas.push(f);
   }
 
-  return { cortinas, adicionales };
+  return { cortinas, adicionales, otCliente };
 }
 
 export type OpcionesValidacion = {

@@ -9,7 +9,10 @@
 //
 // Columnas esperadas en la hoja "Productos" (se mapean por nombre de cabecera,
 // robusto a corrimientos): COD, Producto, COD_INT, Tipo, Descripción,
-// Descuento (0–1), Precio de Venta (CLP/m), Ancho de Paños (m).
+// Descuento (0–1), Precio de Venta (CLP/m), Ancho de Paños (m),
+// CATEGORIA ('A' | 'B', opcional — planilla TELAS DEPURADAS).
+// Si el libro no tiene hoja "Productos" se busca "DEPURADA" y, en último
+// término, la primera hoja que tenga una cabecera COD_INT.
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
 import type { WorkBook } from 'xlsx';
@@ -43,15 +46,31 @@ function mapaColumnas(rows: unknown[][]): { headerIdx: number; col: Record<strin
   return null;
 }
 
-/** Parsea la hoja "Productos" del Excel a filas de catálogo. */
+/** Parsea la hoja "Productos" (o "DEPURADA", o la primera con COD_INT) a filas de catálogo. */
 export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCatalogo[] {
-  const nombre =
-    wb.SheetNames.find((n) => n === hoja) ??
-    wb.SheetNames.find((n) => normHeader(n) === normHeader(hoja));
-  const ws = nombre ? wb.Sheets[nombre] : undefined;
-  if (!ws) return [];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' }) as unknown[][];
-  const m = mapaColumnas(rows);
+  const porNombre = [hoja, 'DEPURADA']
+    .map(
+      (h) =>
+        wb.SheetNames.find((n) => n === h) ??
+        wb.SheetNames.find((n) => normHeader(n) === normHeader(h)),
+    )
+    .filter((n): n is string => !!n);
+  const candidatas = [...porNombre, ...wb.SheetNames.filter((n) => !porNombre.includes(n))];
+  let rows: unknown[][] = [];
+  let m: ReturnType<typeof mapaColumnas> = null;
+  for (const nombre of candidatas) {
+    const r = XLSX.utils.sheet_to_json(wb.Sheets[nombre], {
+      header: 1,
+      raw: true,
+      defval: '',
+    }) as unknown[][];
+    const mapa = mapaColumnas(r);
+    if (mapa) {
+      rows = r;
+      m = mapa;
+      break;
+    }
+  }
   if (!m) return [];
   const { headerIdx, col } = m;
   const cell = (r: unknown[], name: string) => (col[name] != null ? r[col[name]] : undefined);
@@ -68,6 +87,8 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
     const descRaw = Number(cell(r, 'descuento'));
     const descuento = Number.isFinite(descRaw) ? Math.max(0, Math.min(1, descRaw)) : 0;
     const anchoRollo = Number(cell(r, 'ancho de panos')) || null;
+    const catRaw = normCod(cell(r, 'categoria'));
+    const categoria = catRaw === 'A' || catRaw === 'B' ? catRaw : undefined;
     const producto: Producto = {
       cod,
       producto: String(cell(r, 'producto') ?? '').trim(),
@@ -76,6 +97,7 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
       precio,
       descuento,
       ...(anchoRollo ? { anchoRollo } : {}),
+      ...(categoria ? { categoria } : {}),
     };
     out.push({ codInt, producto, anchoRollo });
   }
@@ -93,8 +115,11 @@ export type CambioExistente = {
   precioNuevo: number;
   descuentoViejo: number;
   descuentoNuevo: number;
+  categoriaVieja: string | null;
+  categoriaNueva: string | null;
   cambiaPrecio: boolean;
   cambiaDescuento: boolean;
+  cambiaCategoria: boolean;
 };
 
 export type DiffCatalogo = {
@@ -126,9 +151,13 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
     const precioNuevo = f.producto.precio;
     const descuentoViejo = Number(prev.descuento) || 0;
     const descuentoNuevo = Number(f.producto.descuento) || 0;
+    const categoriaVieja = prev.categoria || null;
+    const categoriaNueva = f.producto.categoria || null;
     const cambiaPrecio = precioNuevo > 0 && Math.abs(precioViejo - precioNuevo) > EPS_PRECIO;
     const cambiaDescuento = Math.abs(descuentoViejo - descuentoNuevo) > EPS_DCTO;
-    if (cambiaPrecio || cambiaDescuento) {
+    // Una categoría ausente en el Excel no borra la existente (merge conservador).
+    const cambiaCategoria = categoriaNueva != null && categoriaNueva !== categoriaVieja;
+    if (cambiaPrecio || cambiaDescuento || cambiaCategoria) {
       cambios.push({
         codInt: realKey,
         producto: f.producto,
@@ -137,8 +166,11 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
         precioNuevo,
         descuentoViejo,
         descuentoNuevo,
+        categoriaVieja,
+        categoriaNueva,
         cambiaPrecio,
         cambiaDescuento,
+        cambiaCategoria,
       });
     } else {
       sinCambio++;
