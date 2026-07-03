@@ -1,32 +1,52 @@
-// Banner "HASTA 12 cuotas sin interés" + logos Visa / MasterCard / American
-// Express, para el pie de la cotización (Fase 0). Recreado como SVG/CSS para
-// que imprima nítido; los colores se fuerzan en impresión (print-color-adjust).
+// Banner de pago con tarjeta + logos Visa / MasterCard / American Express,
+// para el pie de la cotización (Fase 0). Recreado como SVG/CSS para que
+// imprima nítido; los colores se fuerzan en impresión (print-color-adjust).
+// Según el proveedor de tarjeta activo (Admin → Comisiones de tarjeta):
+//   - mercadopago: "HASTA 12 cuotas sin interés" (Mercado Pago).
+//   - flow: cuotas con interés del banco (Flow no da cuotas sin interés).
+import type { ProveedorTarjeta } from '@/modules/cotizador/parametros';
 
 const AZUL = '#1d4f91';
 
-export default function BannerCuotas() {
+export default function BannerCuotas({
+  proveedor = 'mercadopago',
+}: {
+  proveedor?: ProveedorTarjeta;
+}) {
   return (
     <div
       className="flex flex-col items-center gap-3"
       style={{ printColorAdjust: 'exact', WebkitPrintColorAdjust: 'exact' }}
     >
       {/* Píldora azul */}
-      <div
-        className="flex items-center gap-3 rounded-full px-10 py-4 shadow"
-        style={{ backgroundColor: AZUL }}
-      >
-        <span
-          className="text-[10px] font-bold uppercase tracking-widest text-white"
-          style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+      {proveedor === 'flow' ? (
+        <div
+          className="flex flex-col items-center rounded-full px-12 py-4 leading-tight shadow"
+          style={{ backgroundColor: AZUL }}
         >
-          Hasta
-        </span>
-        <span className="text-6xl font-extrabold leading-none text-white">12</span>
-        <span className="flex flex-col leading-tight text-white">
-          <span className="text-4xl font-light lowercase">cuotas</span>
-          <span className="text-2xl font-bold">sin interés</span>
-        </span>
-      </div>
+          <span className="text-3xl font-bold text-white">Cuotas con tarjeta de crédito</span>
+          <span className="text-xl font-light text-white">
+            los intereses dependen de tu banco
+          </span>
+        </div>
+      ) : (
+        <div
+          className="flex items-center gap-3 rounded-full px-10 py-4 shadow"
+          style={{ backgroundColor: AZUL }}
+        >
+          <span
+            className="text-[10px] font-bold uppercase tracking-widest text-white"
+            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+          >
+            Hasta
+          </span>
+          <span className="text-6xl font-extrabold leading-none text-white">12</span>
+          <span className="flex flex-col leading-tight text-white">
+            <span className="text-4xl font-light lowercase">cuotas</span>
+            <span className="text-2xl font-bold">sin interés</span>
+          </span>
+        </div>
+      )}
 
       {/* Logos de tarjetas */}
       <div className="flex items-center gap-2">

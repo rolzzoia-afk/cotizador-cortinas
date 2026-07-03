@@ -16,10 +16,20 @@ import { useAuth } from '@/lib/auth';
 import {
   PARAMETROS_DEFAULT,
   normalizarParametros,
+  recargoTarjetaEfectivo,
+  type ClaveNumericaParametros,
   type ParametrosCotizador,
+  type ProveedorTarjeta,
 } from './preciosFase0';
 
-export { PARAMETROS_DEFAULT, normalizarParametros, type ParametrosCotizador };
+export {
+  PARAMETROS_DEFAULT,
+  normalizarParametros,
+  recargoTarjetaEfectivo,
+  type ClaveNumericaParametros,
+  type ParametrosCotizador,
+  type ProveedorTarjeta,
+};
 
 export const CLAVE_PARAMETROS = 'parametros_cotizador';
 

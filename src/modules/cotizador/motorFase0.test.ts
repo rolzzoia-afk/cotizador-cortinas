@@ -324,3 +324,28 @@ describe('motorFase0 — instalación gratis 4+ / región (Fase 2)', () => {
     expect(conInst.subtotalNeto - sinInst.subtotalNeto).toBeCloseTo(17500, 6);
   });
 });
+
+describe('motorFase0 — proveedor de tarjeta (Mercado Pago / Flow)', () => {
+  const filas = [{ codInt: 'SC 34', ancho: 1.3, alto: 2.3, cantidad: 1 }];
+
+  it('con Flow el total tarjeta usa la comisión Flow; el resto no cambia', () => {
+    const mp = cotizarFase0(filas, CAT, AR);
+    const flow = cotizarFase0(filas, CAT, AR, [], {
+      ...PARAMETROS_DEFAULT,
+      proveedorTarjeta: 'flow',
+    });
+    // Transferencia idéntica: el proveedor solo afecta el pago con tarjeta.
+    expect(flow.subtotalNeto).toBeCloseTo(mp.subtotalNeto, 6);
+    expect(flow.totales.totalTransferencia).toBeCloseTo(mp.totales.totalTransferencia, 6);
+    // Tarjeta: 4,15% de recargo en vez de 13,8%.
+    expect(flow.totales.subtotalTarjeta).toBeCloseTo(
+      flow.subtotalNeto * (1 + PARAMETROS_DEFAULT.recargoTarjetaFlow),
+      6,
+    );
+    expect(mp.totales.subtotalTarjeta).toBeCloseTo(
+      mp.subtotalNeto * (1 + PARAMETROS_DEFAULT.recargoTarjeta),
+      6,
+    );
+    expect(flow.totales.totalTarjeta).toBeLessThan(mp.totales.totalTarjeta);
+  });
+});

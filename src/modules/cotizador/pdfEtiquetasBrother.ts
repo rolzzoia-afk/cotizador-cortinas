@@ -193,8 +193,9 @@ function dibujarEstructura(
   // Mismo estilo que la etiqueta de paños: esquinas cuadradas, contorno
   // exterior común (x 1,325 → 60,075; los rellenos se expanden medio trazo)
   // y borde derecho en 59,9 (el filo derecho del cabezal imprime débil).
-  // Tamaños y escalas horizontales calcados del .lbx oficial (Arial con
-  // lfWidth fijo): títulos estirados ~1,1 y rótulos/medidas condensados.
+  // Tamaños y escalas horizontales calcados del .lbx oficial rev. (3) (Arial
+  // con lfWidth fijo): títulos estirados ~1,1, rótulos/medidas condensados y
+  // subtítulos/leyendas en 4–4,4 pt (la rev. 3 agrandó las letras chicas).
 
   // Encabezado negro: sistema + Cortina n/N + [tipoTela] + QR
   doc.setFillColor(...NEGRO);
@@ -251,18 +252,18 @@ function dibujarEstructura(
   txt(doc, conCod('TUBO', codCorto(pzTubo) || (row.tuberiaCod || '').split('_').pop() || ''), 3.1, 44.2, 8.2, { hScale: 0.73 });
   txt(doc, tuboCm, 29.4, 45.7, 14.6, { align: 'right', hScale: 0.79 });
   const espec = especTuboEtiqueta(row.tuberiaCod, p.tuberia);
-  if (espec) txt(doc, espec, 3.1, 46.9, 2.4, { bold: false, hScale: 1.04 });
+  if (espec) txt(doc, espec, 3.1, 46.9, 4.4, { bold: false, hScale: 1.08 });
 
   const pzPeso = pieza(row, 'PESO');
   const pesoCm = pzPeso ? fmtMedidaCm(pzPeso.medidaCm) : fmtMedidaCm(anchoCm - 4.2);
   txt(doc, conCod('PESO', codCorto(pzPeso)), 3.1, 51.9, 8.4, { hScale: 0.77 });
   txt(doc, pesoCm, 29.4, 53.4, 14.6, { align: 'right', hScale: 0.79 });
-  txt(doc, `PESO ${sistema} ${colorAcc}`.trim(), 3.1, 55.2, 2.4, { bold: false, max: 30, hScale: 1.04 });
+  txt(doc, `PESO ${sistema} ${colorAcc}`.trim(), 3.1, 55.4, 4, { bold: false, max: 30 });
 
   const pzTela = (row.piezas || []).find((x) => x.componente.toUpperCase().startsWith('TELA'));
   txt(doc, 'TELA:', 3.1, 59.8, 7.5, { hScale: 0.8 });
   if (pzTela) txt(doc, fmtMedidaCm(pzTela.medidaCm), 29.4, 61.3, 14.6, { align: 'right', hScale: 0.79 });
-  txt(doc, 'DIMENSIONADO', 3.1, 62.6, 2.4, { bold: false, hScale: 1.13 });
+  txt(doc, 'DIMENSIONADO', 3.1, 62.5, 4, { bold: false, hScale: 0.91 });
 
   // Columna derecha: CEF. OV. (o PESO U dúo) / tira / PLAT
   doc.rect(30.4, 40, 29.5, 23.7, 'S');
@@ -272,7 +273,7 @@ function dibujarEstructura(
   if (pzCef) {
     txt(doc, conCod('CEF. OV.', codCorto(pzCef)), 31.5, 44.6, 8.4, { hScale: 0.66 });
     txt(doc, fmtMedidaCm(pzCef.medidaCm), 59.1, 45.7, 14.6, { align: 'right', hScale: 0.79 });
-    txt(doc, 'CENEFA OVALADA', 32, 47.3, 2.4, { bold: false, hScale: 1.04 });
+    txt(doc, 'CENEFA OVALADA', 32, 47.4, 4, { bold: false });
   } else if (pzPesoU) {
     txt(doc, conCod('PESO U.', codCorto(pzPesoU)), 31.5, 44.6, 8.4, { hScale: 0.66 });
     txt(doc, fmtMedidaCm(pzPesoU.medidaCm), 59.1, 45.7, 14.6, { align: 'right', hScale: 0.79 });
@@ -280,7 +281,7 @@ function dibujarEstructura(
     // Sin cenefa ovalada ni peso U: fila explícita, como el "NO" de platina.
     txt(doc, 'CEF. OV.:', 31.5, 44.6, 8.4, { hScale: 0.66 });
     txt(doc, 'N/A', 59.1, 45.7, 10, { align: 'right', hScale: 0.79 });
-    txt(doc, 'CENEFA OVALADA', 32, 47.3, 2.4, { bold: false, hScale: 1.04 });
+    txt(doc, 'CENEFA OVALADA', 32, 47.4, 4, { bold: false });
   }
   // Franja negra central: CON/SIN TIRA (cenefa ov.) o PESO INTERNO (dúo)
   doc.setFillColor(...NEGRO);
@@ -297,6 +298,9 @@ function dibujarEstructura(
       align: 'center',
       hScale: 0.98,
     });
+  } else {
+    // Sin cenefa ovalada ni dúo: N/A explícito, igual que la fila de arriba.
+    txt(doc, 'N/A', 45.2, 52.7, 9, { color: BLANCO, align: 'center', hScale: 0.98 });
   }
   const pzPlat = pieza(row, 'PLETINA');
   const platCm = pzPlat
@@ -306,7 +310,7 @@ function dibujarEstructura(
       : 'NO';
   txt(doc, conCod('PLAT', codCorto(pzPlat)), 31.5, 59.8, 7.5, { hScale: 0.8 });
   txt(doc, platCm, 59.1, 61.3, platCm === 'NO' ? 10 : 14.6, { align: 'right', hScale: 0.79 });
-  txt(doc, 'PLATINA', 31.9, 62.6, 2.4, { bold: false, hScale: 1.13 });
+  txt(doc, 'PLATINA', 31.9, 62.5, 4, { bold: false });
 
   // Barra INFORMACIÓN TERRENO
   doc.setFillColor(...NEGRO);
@@ -338,11 +342,12 @@ function dibujarEstructura(
   doc.rect(30.225, 82, 29.85, 5.6, 'F');
   const codCad = String(p.codCadena || '').toUpperCase();
   txt(doc, codCad ? `ACCIONAMIENTO: [${codCad}]` : 'ACCIONAMIENTO:', 31.3, 85.3, 7.5, {
+    bold: false,
     color: BLANCO,
     max: 30,
-    hScale: 0.8,
+    hScale: 0.85,
   });
-  txt(doc, textoAccionamiento(p), 31.3, 87.2, 2.5, { bold: false, color: BLANCO, max: 34 });
+  txt(doc, textoAccionamiento(p), 31.3, 87.4, 4, { color: BLANCO, max: 34 });
 
   // Barra DIMENSIONADO: ancho × alto terminados
   doc.setFillColor(...NEGRO);

@@ -37,6 +37,7 @@ import { AuditLogSection } from '@/components/admin/AuditLogSection';
 import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { InventoryBaselineSection } from '@/components/admin/InventoryBaselineSection';
 import { ParametrosCotizadorSection } from '@/components/admin/ParametrosCotizadorSection';
+import { ComisionesTarjetaSection } from '@/components/admin/ComisionesTarjetaSection';
 import { UsuariosRolesSection } from '@/components/admin/UsuariosRolesSection';
 import { SuscripcionSection } from '@/components/admin/SuscripcionSection';
 import { DescuentosCatalogoSection } from '@/components/admin/DescuentosCatalogoSection';
@@ -549,6 +550,9 @@ export function AdminPanel() {
 
       {/* Parámetros comerciales del cotizador */}
       <ParametrosCotizadorSection />
+
+      {/* Comisiones de tarjeta (Mercado Pago / Flow) */}
+      <ComisionesTarjetaSection />
 
       {/* Catálogo de descuentos de fabricación (despiece) */}
       <DescuentosCatalogoSection />
