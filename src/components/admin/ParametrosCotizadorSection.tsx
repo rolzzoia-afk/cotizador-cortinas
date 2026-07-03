@@ -17,29 +17,26 @@ import {
   PARAMETROS_DEFAULT,
   guardarParametros,
   useParametrosCotizador,
+  type ClaveNumericaParametros,
   type ParametrosCotizador,
 } from '@/modules/cotizador/parametros';
 
 type CampoDef = {
-  key: keyof ParametrosCotizador;
+  key: ClaveNumericaParametros;
   label: string;
   hint: string;
   /** 'pct' se muestra como porcentaje (0.19 → 19); 'clp' monto; 'num' entero. */
   modo: 'pct' | 'clp' | 'num';
 };
 
+// El recargo de tarjeta (Mercado Pago / Flow) se edita en su propia sección
+// "Comisiones de tarjeta de crédito", no acá.
 const CAMPOS: CampoDef[] = [
   { key: 'iva', label: 'IVA (%)', hint: 'Impuesto aplicado a los totales', modo: 'pct' },
   {
     key: 'margenInsumo',
     label: 'Margen de insumos (%)',
     hint: 'Precio venta insumo = costo ÷ (1 − margen). 35 = histórico',
-    modo: 'pct',
-  },
-  {
-    key: 'recargoTarjeta',
-    label: 'Recargo tarjeta (%)',
-    hint: 'Comisión por pago con tarjeta de crédito',
     modo: 'pct',
   },
   { key: 'instalacionRoller', label: 'Instalación roller/dúo ($)', hint: 'Por cortina', modo: 'clp' },

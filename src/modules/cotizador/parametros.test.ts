@@ -7,10 +7,12 @@ import {
   IVA,
   MARGEN_INSUMO,
   RECARGO_TARJETA,
+  RECARGO_TARJETA_FLOW,
   PARAMETROS_DEFAULT,
   calcularTotales,
   normalizarParametros,
   precioVentaInsumo,
+  recargoTarjetaEfectivo,
 } from './preciosFase0';
 
 describe('normalizarParametros', () => {
@@ -44,6 +46,29 @@ describe('normalizarParametros', () => {
   it('campos extra desconocidos se ignoran', () => {
     const out = normalizarParametros({ hacker: 999, iva: 0.19 });
     expect((out as Record<string, unknown>).hacker).toBeUndefined();
+  });
+
+  it('proveedorTarjeta: conserva "flow", cualquier otra cosa → mercadopago', () => {
+    expect(normalizarParametros({ proveedorTarjeta: 'flow' }).proveedorTarjeta).toBe('flow');
+    expect(normalizarParametros({}).proveedorTarjeta).toBe('mercadopago');
+    expect(normalizarParametros({ proveedorTarjeta: 'webpay' }).proveedorTarjeta).toBe('mercadopago');
+    expect(normalizarParametros({ proveedorTarjeta: 42 }).proveedorTarjeta).toBe('mercadopago');
+  });
+
+  it('recargoTarjetaFlow: numérico se conserva, inválido cae al default', () => {
+    expect(normalizarParametros({ recargoTarjetaFlow: 0.05 }).recargoTarjetaFlow).toBe(0.05);
+    expect(normalizarParametros({ recargoTarjetaFlow: 'x' }).recargoTarjetaFlow).toBe(
+      RECARGO_TARJETA_FLOW,
+    );
+  });
+});
+
+describe('recargoTarjetaEfectivo', () => {
+  it('mercadopago (default) usa recargoTarjeta; flow usa recargoTarjetaFlow', () => {
+    expect(recargoTarjetaEfectivo(PARAMETROS_DEFAULT)).toBe(RECARGO_TARJETA);
+    expect(
+      recargoTarjetaEfectivo({ ...PARAMETROS_DEFAULT, proveedorTarjeta: 'flow' }),
+    ).toBe(RECARGO_TARJETA_FLOW);
   });
 });
 

@@ -20,8 +20,12 @@ export const EXTRA_ALTO_M = 0.25;
 export const MARGEN_INSUMO = 0.65;
 // IVA Chile.
 export const IVA = 0.19;
-// Recargo por pago con tarjeta de crédito (comisión MercadoPago): +13,8%.
+// Recargo por pago con tarjeta de crédito (comisión Mercado Pago, incluye
+// las 12 cuotas sin interés): +13,8%.
 export const RECARGO_TARJETA = 0.138;
+// Comisión Flow para tarjeta de crédito nacional: 3,49% + IVA ≈ 4,15%.
+// Flow NO ofrece cuotas sin interés (los intereses los pone el banco).
+export const RECARGO_TARJETA_FLOW = 0.0415;
 
 // ── Costos fijos (tabla Insumos del Excel, columna VALOR MAXIMO) ──────
 // Instalación por cortina.
@@ -95,10 +99,18 @@ export const INSUMO_VALOR_MAXIMO: Record<string, number> = {
 // Los valores de arriba son los DEFAULTS históricos (Excel Rolzzo).
 // Cada empresa puede sobreescribirlos vía tabla `configuracion`
 // (clave 'parametros_cotizador'; ver parametros.ts y el panel Admin).
+/** Proveedor de pago con tarjeta activo (Mercado Pago = Mercado Libre). */
+export type ProveedorTarjeta = 'mercadopago' | 'flow';
+
 export type ParametrosCotizador = {
   iva: number;
   margenInsumo: number;
+  /** Comisión Mercado Pago (con 12 cuotas sin interés). */
   recargoTarjeta: number;
+  /** Comisión Flow (cuotas con interés del banco). */
+  recargoTarjetaFlow: number;
+  /** Qué proveedor de tarjeta usa la empresa (afecta recargo y banner). */
+  proveedorTarjeta: ProveedorTarjeta;
   instalacionRoller: number;
   instalacionVertical: number;
   manoObraRoller: number;
@@ -119,6 +131,8 @@ export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   iva: IVA,
   margenInsumo: MARGEN_INSUMO,
   recargoTarjeta: RECARGO_TARJETA,
+  recargoTarjetaFlow: RECARGO_TARJETA_FLOW,
+  proveedorTarjeta: 'mercadopago',
   instalacionRoller: INSTALACION_ROLLER,
   instalacionVertical: INSTALACION_VERTICAL,
   manoObraRoller: MANO_OBRA_ROLLER,
@@ -130,14 +144,26 @@ export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   instalacionDescuentoRegion: 0, // 0% = se cobra (editable por empresa)
 };
 
+/** Claves de parámetros con valor numérico (todas menos proveedorTarjeta). */
+export type ClaveNumericaParametros = {
+  [K in keyof ParametrosCotizador]: ParametrosCotizador[K] extends number ? K : never;
+}[keyof ParametrosCotizador];
+
+const CLAVES_NUMERICAS = (
+  Object.keys(PARAMETROS_DEFAULT) as (keyof ParametrosCotizador)[]
+).filter((k): k is ClaveNumericaParametros => typeof PARAMETROS_DEFAULT[k] === 'number');
+
 /** Mezcla lo guardado con los defaults, ignorando valores no numéricos. */
 export function normalizarParametros(raw: unknown): ParametrosCotizador {
   const out: ParametrosCotizador = { ...PARAMETROS_DEFAULT };
   if (raw && typeof raw === 'object') {
-    for (const k of Object.keys(PARAMETROS_DEFAULT) as (keyof ParametrosCotizador)[]) {
+    for (const k of CLAVES_NUMERICAS) {
       const v = (raw as Record<string, unknown>)[k];
       if (typeof v === 'number' && Number.isFinite(v) && v >= 0) out[k] = v;
     }
+    // Proveedor de tarjeta: string acotado; cualquier otra cosa → default.
+    const prov = (raw as Record<string, unknown>).proveedorTarjeta;
+    out.proveedorTarjeta = prov === 'flow' ? 'flow' : 'mercadopago';
   }
   // margenInsumo = 0 dividiría por cero.
   if (out.margenInsumo <= 0) out.margenInsumo = PARAMETROS_DEFAULT.margenInsumo;
@@ -146,6 +172,11 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
   out.instalacionDescuentoRegion = Math.min(1, Math.max(0, out.instalacionDescuentoRegion));
   out.instalacionGratisMinCortinas = Math.max(0, Math.round(out.instalacionGratisMinCortinas));
   return out;
+}
+
+/** Recargo de tarjeta vigente según el proveedor activo de la empresa. */
+export function recargoTarjetaEfectivo(p: ParametrosCotizador): number {
+  return p.proveedorTarjeta === 'flow' ? p.recargoTarjetaFlow : p.recargoTarjeta;
 }
 
 // ── Tipo de resultado del motor de precio ─────────────────────────────

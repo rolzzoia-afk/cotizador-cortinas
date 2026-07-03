@@ -21,6 +21,7 @@ import {
   INSUMO_VALOR_MAXIMO,
   PARAMETROS_DEFAULT,
   calcularTotales,
+  recargoTarjetaEfectivo,
   type ParametrosCotizador,
   type TotalesCotizacion,
 } from './preciosFase0';
@@ -523,7 +524,7 @@ export function cotizarFase0(
     subtotalNeto,
     totales: calcularTotales(subtotalNeto, {
       iva: params.iva,
-      recargoTarjeta: params.recargoTarjeta,
+      recargoTarjeta: recargoTarjetaEfectivo(params),
     }),
   };
 }

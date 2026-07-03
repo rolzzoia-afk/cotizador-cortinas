@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
-import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { recargoTarjetaEfectivo, useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
 import {
   elegirModeloPorColor,
@@ -203,6 +203,9 @@ const FILTROS_CATALOGO: Filtro[] = [
 
 const esCortinaTipo = (tipo: string): boolean =>
   ['PREMIUM', 'DELUX', 'STANDARD', 'BASIC'].includes((tipo || '').toUpperCase().trim());
+
+// % es-CL con hasta 2 decimales: 0.138 → "13,8" · 0.0415 → "4,15".
+const fmtPct = (v: number) => (Math.round(v * 10000) / 100).toLocaleString('es-CL');
 
 // COD_INT de la instalación roller base. Desde Fase 2 la instalación se calcula
 // automáticamente (regla 4+ gratis / región), así que se filtra de los
@@ -1269,32 +1272,9 @@ export function CotizadorFase0() {
           </section>
         )}
 
-        {/* TOTALES */}
+        {/* TOTALES (los controles de Instalación / Envío / % región viven
+            junto a los datos del cliente; acá solo van los montos). */}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
-          {/* Resumen de instalación y envío (los controles viven junto a los
-              datos del cliente: desplegables Instalación / Envío / % región). */}
-          {resultado.instalacion.cantidad > 0 && (
-            <FilaTotal
-              label={
-                sinInstalacion
-                  ? 'Instalación'
-                  : `Instalación (${resultado.instalacion.cantidad} × ${formatCLP(
-                      resultado.instalacion.precioUnit,
-                    )})`
-              }
-              valor={
-                sinInstalacion
-                  ? 'No incluida'
-                  : resultado.instalacion.gratis
-                    ? 'GRATIS'
-                    : resultado.instalacion.total === 0
-                      ? 'Incluida'
-                      : formatCLP(resultado.instalacion.total)
-              }
-            />
-          )}
-          <FilaTotal label="Envío" valor={envio === 'gratis' ? 'GRATIS' : 'Cobro en destino'} />
-          <div className="my-1 border-t border-border" />
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
           <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
           <FilaTotal label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
@@ -1342,14 +1322,18 @@ export function CotizadorFase0() {
         <section className="mt-4 rounded-lg border border-border bg-card/40 p-4 text-[11px] leading-relaxed text-muted-foreground">
           <div className="mb-1 font-semibold text-foreground">Condiciones</div>
           Cotización válida por 5 días. Pago: 50% para iniciar la fabricación y 50% al finalizar la
-          instalación. Tarjeta de crédito hasta 12 cuotas sin interés (recargo MercadoPago 13,8%).
+          instalación.{' '}
+          {parametros.proveedorTarjeta === 'flow'
+            ? `Tarjeta de crédito vía Flow (recargo ${fmtPct(recargoTarjetaEfectivo(parametros))}%): las cuotas y sus intereses dependen de tu banco.`
+            : `Tarjeta de crédito hasta 12 cuotas sin interés (recargo Mercado Pago ${fmtPct(recargoTarjetaEfectivo(parametros))}%).`}{' '}
           Primera visita sin costo previa cotización (RM en AVN). Las cortinas se fabrican a medida;
           una vez confeccionadas no hay devolución de dinero. Verificar stock de la tela antes de pagar.
         </section>
 
-        {/* Banner de cuotas al pie de la cotización (visible también al imprimir) */}
+        {/* Banner de cuotas al pie de la cotización (visible también al imprimir).
+            Con Flow no hay 12 cuotas sin interés: el banner cambia de mensaje. */}
         <div className="mt-6 flex justify-center pb-4">
-          <BannerCuotas />
+          <BannerCuotas proveedor={parametros.proveedorTarjeta} />
         </div>
       </div>
     </div>
