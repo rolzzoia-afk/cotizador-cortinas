@@ -100,6 +100,49 @@ describe('parsearExcelFase0', () => {
     });
   });
 
+  it('rescata el N° de OT manual del encabezado ("OT CLIENTE: 3085")', () => {
+    const wb = libro(
+      [['', 'ROL', 'CAD [IZQUIERDA]', 'EXTERNO', 1, '', 'BK 69', '', '', 'A', 'GRIS', '2,72', '1,6']],
+      [
+        ['', 'COTIZACIÓN'],
+        // Como el Formato de Cotización real: rótulo, número (numérico) y
+        // "FECHA COTIZACIÓN" más a la derecha en la misma fila.
+        ['', 'NOMBRE:', '', 'JEFERSON', '', 'OT CLIENTE:', 3085, null, 'FECHA COTIZACIÓN'],
+      ],
+    );
+    expect(parsearExcelFase0(wb).otCliente).toBe('3085');
+  });
+
+  it('sin "OT CLIENTE" (o con la celda del número vacía) devuelve otCliente vacío', () => {
+    const fila = ['', 'ROL', 'CAD [IZQUIERDA]', 'EXTERNO', 1, '', 'BK 69', '', '', 'A', 'GRIS', '2,72', '1,6'];
+    expect(parsearExcelFase0(libro([fila])).otCliente).toBe('');
+    // Celda del número vacía: NO debe tragarse el rótulo "FECHA COTIZACIÓN".
+    const wb = libro([fila], [['', 'OT CLIENTE:', null, null, 'FECHA COTIZACIÓN']]);
+    expect(parsearExcelFase0(wb).otCliente).toBe('');
+  });
+
+  it('si la primera hoja no tiene la tabla, la busca en las demás (.xlsm maestro)', () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([['NUMERO', 'ESTILO', 'ANCHO', 'ALTO'], [1, 'SCREEN', 1.2, 2.3]]),
+      'Hoja1',
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet([
+        ['', 'OT CLIENTE:', '3085-B'],
+        HEADER,
+        ['', 'ROL', 'CAD [DERECHA]', 'INTERNO', 1, '', 'BK 69', '', '', 'A', 'GRIS', '2,72', '1,6'],
+      ]),
+      'Formato de Cotizacion',
+    );
+    const { cortinas, otCliente } = parsearExcelFase0(wb);
+    expect(cortinas).toHaveLength(1);
+    expect(cortinas[0].codInt).toBe('BK 69');
+    expect(otCliente).toBe('3085-B');
+  });
+
   it('los adicionales sin COD_INT se descartan (filas vacías de relleno)', () => {
     const wb = libro([
       ['BLACKOUT_D', 'ROL', 'CAD [DERECHA]', 'INTERNO', 1, 'X', 'BK 69', 'DELUX', 'd', 'A', 'GRIS', '2,69', '2,32'],

@@ -25,6 +25,7 @@ import {
 } from '@/modules/cotizador/motorFase0';
 import { formatCLP } from '@/modules/cotizador/calculos';
 import type { Producto } from '@/modules/cotizador/types';
+import { categoriasTela } from '@/modules/cotizador/categoriaTela';
 import { enriquecerPanoDesdeFase0 } from '@/modules/cotizador/fase0-sync';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
@@ -225,6 +226,10 @@ export function CotizadorFase0() {
   const { modelos: modelosDespiece } = useDescuentosModelo();
 
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
+  // N° de OT manual (transición desde el Excel legado): si viene, la OT se
+  // crea con ESTE número en vez del correlativo automático de la app. Se
+  // autocompleta al importar un Excel que traiga "OT CLIENTE" en el encabezado.
+  const [otManual, setOtManual] = useState('');
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
   const [filtroActivo, setFiltroActivo] = useState<string | null>(null);
@@ -425,11 +430,29 @@ export function CotizadorFase0() {
         return;
       }
 
-      // ── Cotización nueva: crear OT con número correlativo ──
-      const { data: numOT, error: errNum } = await supabase.rpc('generar_numero_ot' as never, {
-        p_empresa_id: empresaId,
-      } as never);
-      if (errNum) throw errNum;
+      // ── Cotización nueva: N° manual (Excel legado) o correlativo automático ──
+      let numOT = otManual.trim();
+      if (numOT) {
+        const { data: dups, error: errDup } = await supabase
+          .from('ots')
+          .select('id')
+          .eq('empresa_id', empresaId)
+          .eq('numero_ot', numOT)
+          .limit(1);
+        if (errDup) throw errDup;
+        if ((dups ?? []).length > 0) {
+          toast.error(
+            `Ya existe una OT con el número ${numOT}. Usa otro (ej. ${numOT}-B) o deja el campo vacío para el correlativo automático.`,
+          );
+          return;
+        }
+      } else {
+        const { data: numGen, error: errNum } = await supabase.rpc('generar_numero_ot' as never, {
+          p_empresa_id: empresaId,
+        } as never);
+        if (errNum) throw errNum;
+        numOT = String(numGen ?? '');
+      }
 
       const ot: OT = {
         id: crypto.randomUUID(),
@@ -443,7 +466,7 @@ export function CotizadorFase0() {
           direccion: cliente.direccion,
           comuna: cliente.comuna,
           regionNombre: cliente.region,
-          ot: String(numOT ?? ''),
+          ot: numOT,
           canal: 'Cotizador',
           fecha: now.split('T')[0],
           adicionalesFase0: adicionalesGuardados,
@@ -649,11 +672,14 @@ export function CotizadorFase0() {
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
-      const { cortinas, adicionales: adicCrudos } = parsearExcelFase0(wb);
+      const { cortinas, adicionales: adicCrudos, otCliente } = parsearExcelFase0(wb);
       if (cortinas.length === 0 && adicCrudos.length === 0) {
         toast.error('No se encontraron filas con COD_INT y ANCHO en la planilla.');
         return;
       }
+      // N° de OT del encabezado del Excel manual → campo "N° OT (Excel manual)".
+      // Al editar una OT existente el número no se toca (el campo no aplica).
+      if (otCliente && !editOtId) setOtManual(otCliente);
       const opts = {
         codIntValidos: new Set(Object.keys(catalogo)),
         categorias: new Set(CATEGORIAS_MECANISMO),
@@ -712,7 +738,9 @@ export function CotizadorFase0() {
       setErroresImportAdic(erroresAdic);
 
       const conError = errores.size + erroresAdic.size;
-      const resumen = `${nuevas.length} cortina(s) · ${nuevosAdic.length} adicional(es)`;
+      const resumen =
+        `${nuevas.length} cortina(s) · ${nuevosAdic.length} adicional(es)` +
+        (otCliente && !editOtId ? ` · OT ${otCliente}` : '');
       if (conError > 0) {
         toast.warning(`Importadas ${resumen} · ${conError} con datos a corregir (en rojo).`);
       } else {
@@ -746,6 +774,18 @@ export function CotizadorFase0() {
   const t = resultado.totales;
   const hayFiltro = filtroActivo !== null || busqueda.trim().length > 0;
 
+  // Categorías de tela (A/B) de las CORTINAS de la cotización — distintivo en
+  // la cabecera (también al importar una orden desde Excel). Los adicionales
+  // (accesorios, cenefas) no cuentan: la categoría es un atributo de la tela.
+  const catsTela = useMemo(
+    () =>
+      categoriasTela(
+        filas.map((f) => f.codInt),
+        catalogo,
+      ),
+    [filas, catalogo],
+  );
+
   return (
     <div className="min-h-full bg-background text-foreground">
       <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-5 py-3 print:hidden">
@@ -755,10 +795,24 @@ export function CotizadorFase0() {
         >
           <ArrowLeft className="h-4 w-4" /> Volver
         </button>
-        <span className="text-base font-bold">
+        <span className="flex items-center gap-2 text-base font-bold">
           {editOtId && otCargada
             ? `OT ${(otCargada.datosGenerales as Record<string, string>)?.ot ?? ''} · Fase 0 (agregar cortinas)`
             : 'Cotización · Fase 0'}
+          {catsTela.map((c) => (
+            <span
+              key={c}
+              title="Categoría de las telas de esta cotización (catálogo TELAS DEPURADAS)"
+              className={cn(
+                'rounded-md border px-2 py-0.5 text-xs font-bold',
+                c === 'B'
+                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-400'
+                  : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400',
+              )}
+            >
+              Categoría {c}
+            </span>
+          ))}
         </span>
         <div className="flex items-center gap-2">
           <input
@@ -791,6 +845,15 @@ export function CotizadorFase0() {
         {/* DATOS DEL CLIENTE */}
         <section className="mb-4 grid gap-3 rounded-lg border border-border bg-card/40 p-4 md:grid-cols-2 lg:grid-cols-3">
           <Campo label="Nombre" value={cliente.nombre} onChange={(v) => setCliente({ ...cliente, nombre: v })} />
+          {!editOtId && (
+            <Campo
+              label="N° OT (Excel manual)"
+              value={otManual}
+              onChange={(v) => setOtManual(v)}
+              placeholder="Vacío = automático"
+              title="Número de OT de la planilla manual (OT CLIENTE). Si se deja vacío, la app asigna su correlativo automático. Se autocompleta al importar el Excel."
+            />
+          )}
           <Campo label="RUT" value={cliente.rut} onChange={(v) => setCliente({ ...cliente, rut: v })} />
           <Campo label="Teléfono" value={cliente.telefono} onChange={(v) => setCliente({ ...cliente, telefono: v })} />
           <Campo label="Mail" value={cliente.mail} onChange={(v) => setCliente({ ...cliente, mail: v })} />
@@ -1349,15 +1412,19 @@ function Campo({
   label,
   value,
   onChange,
+  placeholder,
+  title,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
+  title?: string;
 }) {
   return (
-    <label className="block">
+    <label className="block" title={title}>
       <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">{label}</span>
-      <Input value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
     </label>
   );
 }

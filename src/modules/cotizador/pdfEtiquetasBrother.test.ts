@@ -1,12 +1,33 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { jsPDF } from 'jspdf';
+
+// Captura el documento al guardar (save vive en la instancia, no en el
+// prototipo): subclase real de jsPDF, así las medidas de página son las reales.
+const docsGuardados = vi.hoisted(() => [] as unknown[]);
+vi.mock('jspdf', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('jspdf')>();
+  class JsPDFCaptura extends mod.jsPDF {
+    constructor(...args: ConstructorParameters<typeof mod.jsPDF>) {
+      super(...args);
+      (this as { save: unknown }).save = () => {
+        docsGuardados.push(this);
+        return this;
+      };
+    }
+  }
+  return { ...mod, jsPDF: JsPDFCaptura };
+});
+
 import {
   especTuboEtiqueta,
   familiaTelaEtiqueta,
   fmtMedidaCm,
+  generarEtiquetasPanosPDF,
   ladoCadenaEtiqueta,
   textoAccionamiento,
   tipoCortinaEtiqueta,
 } from './pdfEtiquetasBrother';
+import type { OptimizerRow } from './tela';
 
 describe('fmtMedidaCm', () => {
   it('coma decimal es-CL y sin ",0" redundante', () => {
@@ -77,5 +98,32 @@ describe('textoAccionamiento', () => {
 
   it('sin datos devuelve vacío', () => {
     expect(textoAccionamiento({})).toBe('');
+  });
+});
+
+describe('generarEtiquetasPanosPDF', () => {
+  it('páginas exactas de 62×51 mm, sin sobrante (y sin volteo de jsPDF)', () => {
+    docsGuardados.length = 0;
+    const row = {
+      codInt: 'SC 93',
+      producto: 'ROLLER SCREEN PREMIUM',
+      tipo: 'PREMIUM',
+      junto: 'A',
+      altoCorte: 2.551,
+      pano: { tipoTela: 'SCR' },
+    } as unknown as OptimizerRow;
+    generarEtiquetasPanosPDF(
+      [row, row],
+      { ot: '267-3', cliente: 'JEFFI', fecha: '2026-07-03' },
+      { 'SC 93': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: 'TEXTURE PERLA 5%', precio: 23820 } },
+    );
+    expect(docsGuardados).toHaveLength(1);
+    const doc = docsGuardados[0] as jsPDF;
+    expect(doc.getNumberOfPages()).toBe(2);
+    for (let p = 1; p <= 2; p++) {
+      doc.setPage(p);
+      expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
+      expect(doc.internal.pageSize.getHeight()).toBeCloseTo(51, 1);
+    }
   });
 });
