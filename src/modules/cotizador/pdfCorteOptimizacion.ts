@@ -20,6 +20,7 @@
 import jsPDF from 'jspdf';
 import type { OptimizerRow } from './tela';
 import { generarPlanCorte, type PanoColmena } from './planCorte';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { OT } from '@/modules/ots/types';
 
 // ── Modelo de datos (puro, testeable) ────────────────────────────────
@@ -61,9 +62,6 @@ export type HojaCorte = {
 const pieceId = (otId: string | number, ventanaId: string | number, panoIndex: number) =>
   `${otId}_${ventanaId}_p${panoIndex}`;
 
-/** Limpieza de bordes al ancho (cm) — igual que planCorte (Regla 5). */
-const BORDE_CM = 4;
-
 /** Metros (m) desde cm, redondeado a 3 decimales sin ceros sobrantes. */
 const aMetros = (cm: number) => parseFloat((cm / 100).toFixed(3));
 
@@ -84,8 +82,9 @@ export function construirHojaCorte(
   rows: OptimizerRow[],
   colmenaPanos: PanoColmena[],
   ot: OT,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): HojaCorte {
-  const plan = generarPlanCorte([ot], colmenaPanos);
+  const plan = generarPlanCorte([ot], colmenaPanos, params);
 
   // Sobrante (colmena) que recibió cada pieza, y qué piezas van a rollo.
   const sobranteDe = new Map<string, PanoColmena>();
@@ -97,7 +96,7 @@ export function construirHojaCorte(
   // ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no
   // está definido, se auto-marca cuando el ancho + borde supera el rollo.
   const esInvertida = (r: OptimizerRow) =>
-    r.pano?.invertida ?? r.anchoCm + BORDE_CM > r.anchoRollo * 100;
+    r.pano?.invertida ?? r.anchoCm + params.bordeCm > r.anchoRollo * 100;
 
   // Clave de paño por fila:
   //  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
@@ -130,7 +129,7 @@ export function construirHojaCorte(
       codInt: r.codInt,
       tipo: tipoCorto(r.producto),
       anchoCorteTela: aMetros(r.anchoCm),
-      corteAncho35: aMetros(r.anchoCm - 3.5),
+      corteAncho35: aMetros(r.anchoCm - params.descAnchoCorteCm),
       alto: aMetros(r.altoCm),
       altoCorteTela: redM(r.altoCorte), // dúo: 2×alto+0,30; resto: alto+0,25
       pano,
@@ -243,31 +242,48 @@ export function generarPdfHojaCorte(
   colmenaPanos: PanoColmena[],
   ot: OT,
   meta: MetaCorte,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): void {
   if (!rows || rows.length === 0) {
     throw new Error('No hay paños. Guarda el plan en Tela primero.');
   }
-  const hoja = construirHojaCorte(rows, colmenaPanos, ot);
+  const hoja = construirHojaCorte(rows, colmenaPanos, ot, params);
 
   const doc = new jsPDF('l', 'mm', 'a4'); // 297 × 210
   const W = 297;
   const M = 6;
+  const BOTTOM = 210 - M; // límite inferior útil de la página
   let y = M;
+  let pagina = 0;
 
-  // ── Encabezado ──
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(30, 30, 38);
-  doc.text(`HOJA DE CORTE — OT ${meta.ot}`, M, y + 4);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text(meta.cliente || '', M, y + 9);
-  // Marca de agua "Página 1"
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(150, 150, 158);
-  doc.text(meta.empresa || 'Página 1', W - M, y + 5, { align: 'right' });
-  y += 13;
+  // ── Encabezado (se repite en cada página) ──
+  const encabezado = () => {
+    pagina++;
+    y = M;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(30, 30, 38);
+    doc.text(`HOJA DE CORTE — OT ${meta.ot}`, M, y + 4);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text(meta.cliente || '', M, y + 9);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(150, 150, 158);
+    doc.text(meta.empresa || `Página ${pagina}`, W - M, y + 5, { align: 'right' });
+    if (meta.empresa) {
+      doc.setFontSize(7);
+      doc.text(`Página ${pagina}`, W - M, y + 9, { align: 'right' });
+    }
+    y += 13;
+  };
+  // Cotizaciones largas: cuando una tabla no cabe, sigue en una página nueva
+  // repitiendo su cabecera (antes se dibujaba de corrido y se cortaba).
+  const nuevaPagina = () => {
+    doc.addPage();
+    encabezado();
+  };
+  encabezado();
 
   // ── BLOQUE 1: tabla de corte ──
   const cols: { key: keyof FilaCorteCortina | 'serial'; label: string; w: number; head: RGB }[] = [
@@ -291,25 +307,31 @@ export function generarPdfHojaCorte(
 
   const x0 = M;
   const headH = 9;
-  // Cabecera
-  let cx = x0;
-  for (const c of cols) {
-    rect(doc, cx, y, c.w, headH, c.head);
-    const txtColor: RGB = c.head === C_BLUE ? [30, 30, 40] : C_WHITE;
-    celdaTexto(doc, c.label, cx, c.w, y + (c.label.length > 14 ? 3.4 : 5.4), {
-      size: 4.6,
-      bold: true,
-      color: txtColor,
-    });
-    cx += c.w;
-  }
-  y += headH;
+  const cabeceraTabla = () => {
+    let cx = x0;
+    for (const c of cols) {
+      rect(doc, cx, y, c.w, headH, c.head);
+      const txtColor: RGB = c.head === C_BLUE ? [30, 30, 40] : C_WHITE;
+      celdaTexto(doc, c.label, cx, c.w, y + (c.label.length > 14 ? 3.4 : 5.4), {
+        size: 4.6,
+        bold: true,
+        color: txtColor,
+      });
+      cx += c.w;
+    }
+    y += headH;
+  };
+  cabeceraTabla();
 
   // Filas de datos (color por paño)
   const rowH = 6;
   for (const fila of hoja.cortinas) {
+    if (y + rowH > BOTTOM) {
+      nuevaPagina();
+      cabeceraTabla();
+    }
     const fill = PALETA[(fila.pano - 1 + PALETA.length) % PALETA.length] || PALETA[0];
-    cx = x0;
+    let cx = x0;
     for (const c of cols) {
       rect(doc, cx, y, c.w, rowH, fill);
       let val = '';
@@ -329,19 +351,104 @@ export function generarPdfHojaCorte(
     y += rowH;
   }
 
-  y += 5;
-  const yBloques = y;
-
   // ── BLOQUE 2 (izq): TOTAL PAÑOS ── y ── BLOQUE 3 (der): errores ──
-  // Ambas tablas dibujan solo las filas usadas (una por paño), no 10 fijas.
-  const t2x = M;
-  const yTot = drawTotalPanos(doc, t2x, yBloques, hoja);
+  // Comparten filas (una por paño): se dibujan en paralelo, con salto de
+  // página conjunto repitiendo ambas cabeceras.
+  // Layout fijo pedido por el taller: la primera página es SOLO la tabla de
+  // corte; TOTAL PAÑOS/errores parten siempre en página nueva aunque sobre
+  // espacio.
+  const totalW = 16;
+  const cols2 = [
+    { label: 'PAÑOS', w: 12, k: 'pano' as const },
+    { label: 'TIPO', w: 48, k: 'tipo' as const },
+    { label: 'COD', w: 16, k: 'cod' as const },
+    { label: 'ALTO CORTE PAÑO', w: 24, k: 'altoCortePano' as const },
+    { label: 'ALTO MÁXIMO A UTILIZAR', w: 26, k: 'altoMaxUtilizar' as const },
+    { label: 'COLMENA', w: 18, k: 'colmena' as const },
+  ];
+  const cols3 = [
+    { label: 'PAÑO ADICIONAL', w: 26 },
+    { label: 'MTS PAÑO ADIC.', w: 20 },
+    { label: 'COD TELA', w: 18 },
+    { label: 'MOTIVO', w: 38 },
+    { label: 'RESPONSABLE DE ERROR', w: 28 },
+  ];
   const t3x = 150;
-  const yErr = drawErrores(doc, t3x, yBloques, hoja.panos.length);
+  const rowH23 = 5.5;
+  let y23Box = 0; // borde inferior del recuadro TOTAL PAÑOS (por página)
+  const cabecera23 = () => {
+    rect(doc, M, y, totalW, 8, C_DARK);
+    celdaTexto(doc, 'TOTAL PAÑOS', M, totalW, y + 5, { size: 4.4, bold: true, color: C_WHITE });
+    rect(doc, M, y + 8, totalW, 16);
+    celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 18, { size: 16, bold: true });
+    y23Box = y + 24;
+    let tx = M + totalW + 1;
+    for (const c of cols2) {
+      rect(doc, tx, y, c.w, 8, C_DARK);
+      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.4 : 5), {
+        size: 4.4,
+        bold: true,
+        color: C_WHITE,
+      });
+      tx += c.w;
+    }
+    tx = t3x;
+    for (const c of cols3) {
+      rect(doc, tx, y, c.w, 8, C_DARK);
+      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.4 : 5), {
+        size: 4.4,
+        bold: true,
+        color: C_WHITE,
+      });
+      tx += c.w;
+    }
+    y += 8;
+  };
+  nuevaPagina();
+  cabecera23();
+  for (const p of hoja.panos) {
+    if (y + rowH23 > BOTTOM) {
+      nuevaPagina();
+      cabecera23();
+    }
+    const fill = PALETA[(p.pano - 1 + PALETA.length) % PALETA.length] || PALETA[0];
+    // Fila bloque 2 (resumen del paño)
+    let tx = M + totalW + 1;
+    for (const c of cols2) {
+      rect(doc, tx, y, c.w, rowH23, fill);
+      let val = '';
+      if (c.k === 'colmena') val = '';
+      else if (c.k === 'altoCortePano') val = num(p.altoCortePano);
+      else if (c.k === 'altoMaxUtilizar') val = p.altoMaxUtilizar === '' ? '' : num(p.altoMaxUtilizar);
+      else val = String(p[c.k] ?? '');
+      if (val) celdaTexto(doc, val, tx, c.w, y + 3.8, { size: 5, align: c.k === 'tipo' ? 'left' : 'center' });
+      tx += c.w;
+    }
+    // Fila bloque 3 (errores, para llenar a mano)
+    tx = t3x;
+    for (const c of cols3) {
+      rect(doc, tx, y, c.w, rowH23);
+      if (c.label === 'MOTIVO') {
+        // Dos opciones con su círculo (radio) para marcar a mano.
+        doc.setDrawColor(90, 90, 100);
+        doc.setLineWidth(0.2);
+        doc.circle(tx + 2.5, y + rowH23 / 2, 1);
+        celdaTexto(doc, 'FALLA TELA', tx + 4, 17, y + 3.6, { size: 4.2, align: 'left' });
+        doc.circle(tx + 21, y + rowH23 / 2, 1);
+        celdaTexto(doc, 'ERROR CORTE', tx + 22.5, 16, y + 3.6, { size: 4.2, align: 'left' });
+      }
+      tx += c.w;
+    }
+    y += rowH23;
+  }
+  // No pisar el recuadro grande TOTAL PAÑOS cuando hay pocas filas.
+  y = Math.max(y, y23Box);
 
-  // ── BLOQUE 4: OPTIMIZADOR + SELLO, ubicados debajo de lo anterior ──
-  // (antes en y=150 fijo, lo que solapaba cuando había muchas filas).
-  const yAbajo = Math.max(yTot, yErr) + 6;
+  // ── BLOQUE 4: OPTIMIZADOR + SELLO (se mueve entero a otra página si no cabe) ──
+  const hOpt = 9 + Math.max(1, hoja.optimizador.length) * 6;
+  y += 6;
+  if (y + Math.max(hOpt, 40) > BOTTOM) nuevaPagina();
+  const yAbajo = y;
   drawOptimizador(doc, M, yAbajo, hoja);
 
   // ── SELLO PAÑOS (abajo der) ──
@@ -355,93 +462,6 @@ export function generarPdfHojaCorte(
 
   const nombre = `Corte_OT${meta.ot}.pdf`;
   doc.save(nombre);
-}
-
-function drawTotalPanos(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {
-  // Recuadro grande TOTAL PAÑOS + tabla
-  const totalW = 16;
-  rect(doc, x, y, totalW, 8, C_DARK);
-  celdaTexto(doc, 'TOTAL PAÑOS', x, totalW, y + 5, { size: 4.4, bold: true, color: C_WHITE });
-  rect(doc, x, y + 8, totalW, 16);
-  celdaTexto(doc, String(hoja.totalPanos), x, totalW, y + 18, { size: 16, bold: true });
-
-  const cols = [
-    { label: 'PAÑOS', w: 12, k: 'pano' as const },
-    { label: 'TIPO', w: 48, k: 'tipo' as const },
-    { label: 'COD', w: 16, k: 'cod' as const },
-    { label: 'ALTO CORTE PAÑO', w: 24, k: 'altoCortePano' as const },
-    { label: 'ALTO MÁXIMO A UTILIZAR', w: 26, k: 'altoMaxUtilizar' as const },
-    { label: 'COLMENA', w: 18, k: 'colmena' as const },
-  ];
-  let tx = x + totalW + 1;
-  const headY = y;
-  for (const c of cols) {
-    rect(doc, tx, headY, c.w, 8, C_DARK);
-    celdaTexto(doc, c.label, tx, c.w, headY + (c.label.length > 14 ? 3.4 : 5), {
-      size: 4.4,
-      bold: true,
-      color: C_WHITE,
-    });
-    tx += c.w;
-  }
-  let ry = headY + 8;
-  const rowH = 5.5;
-  for (const p of hoja.panos) {
-    tx = x + totalW + 1;
-    const fill = PALETA[(p.pano - 1 + PALETA.length) % PALETA.length] || PALETA[0];
-    for (const c of cols) {
-      rect(doc, tx, ry, c.w, rowH, fill);
-      let val = '';
-      if (c.k === 'colmena') val = '';
-      else if (c.k === 'altoCortePano') val = num(p.altoCortePano);
-      else if (c.k === 'altoMaxUtilizar') val = p.altoMaxUtilizar === '' ? '' : num(p.altoMaxUtilizar);
-      else val = String(p[c.k] ?? '');
-      if (val) celdaTexto(doc, val, tx, c.w, ry + 3.8, { size: 5, align: c.k === 'tipo' ? 'left' : 'center' });
-      tx += c.w;
-    }
-    ry += rowH;
-  }
-  return ry; // y final (para ubicar lo de abajo dinámicamente)
-}
-
-function drawErrores(doc: jsPDF, x: number, y: number, filas: number) {
-  const cols = [
-    { label: 'PAÑO ADICIONAL', w: 26 },
-    { label: 'MTS PAÑO ADIC.', w: 20 },
-    { label: 'COD TELA', w: 18 },
-    { label: 'MOTIVO', w: 38 },
-    { label: 'RESPONSABLE DE ERROR', w: 28 },
-  ];
-  let tx = x;
-  for (const c of cols) {
-    rect(doc, tx, y, c.w, 8, C_DARK);
-    celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.4 : 5), {
-      size: 4.4,
-      bold: true,
-      color: C_WHITE,
-    });
-    tx += c.w;
-  }
-  let ry = y + 8;
-  const rowH = 5.5;
-  for (let i = 0; i < filas; i++) {
-    tx = x;
-    for (const c of cols) {
-      rect(doc, tx, ry, c.w, rowH);
-      if (c.label === 'MOTIVO') {
-        // Dos opciones con su círculo (radio) para marcar a mano.
-        doc.setDrawColor(90, 90, 100);
-        doc.setLineWidth(0.2);
-        doc.circle(tx + 2.5, ry + rowH / 2, 1);
-        celdaTexto(doc, 'FALLA TELA', tx + 4, 17, ry + 3.6, { size: 4.2, align: 'left' });
-        doc.circle(tx + 21, ry + rowH / 2, 1);
-        celdaTexto(doc, 'ERROR CORTE', tx + 22.5, 16, ry + 3.6, { size: 4.2, align: 'left' });
-      }
-      tx += c.w;
-    }
-    ry += rowH;
-  }
-  return ry; // y final
 }
 
 function drawOptimizador(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {

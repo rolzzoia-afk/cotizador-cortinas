@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   asignarJuntoEnOrden,
   autoOptimizar,
@@ -41,6 +42,7 @@ export function CotizadorTela() {
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
+  const { parametros, loading: loadingParams } = useParametrosCotizador();
   const { empresaId } = useAuth();
   const [rows, setRows] = useState<OptimizerRow[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -59,22 +61,24 @@ export function CotizadorTela() {
 
   const cargar = useMemo(
     () => () => {
-      if (!ot || loadingCat) return;
-      const fresh = buildOptimizerRows(ot.storeVentanas, catalogo);
+      // Espera también los parámetros de corte: las filas viven en state
+      // editable y no se reconstruyen cuando el hook llega tarde.
+      if (!ot || loadingCat || loadingParams) return;
+      const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros);
       const guardado = ot.datosGenerales?.optimizerRows;
       const restored = restorePlanGuardado(fresh, guardado);
       const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
       setRows(tieneJunto ? restored : asignarJuntoEnOrden(restored));
     },
-    [ot, loadingCat, catalogo],
+    [ot, loadingCat, catalogo, loadingParams, parametros],
   );
 
-  // Auto-cargar cuando hay OT y catálogo listos
+  // Auto-cargar cuando hay OT, catálogo y parámetros listos
   useEffect(() => {
-    if (ot && !loadingCat && rows === null) {
+    if (ot && !loadingCat && !loadingParams && rows === null) {
       cargar();
     }
-  }, [ot, loadingCat, rows, cargar]);
+  }, [ot, loadingCat, loadingParams, rows, cargar]);
 
   const onAutoOptimizar = () => {
     if (!rows) return;
@@ -158,7 +162,7 @@ export function CotizadorTela() {
   // el guardado (o auto) para las demás.
   const filasOptimizadasDe = (o: OT): OptimizerRow[] => {
     if (String(o.id) === String(ot?.id) && rows) return rows;
-    const fresh = buildOptimizerRows(o.storeVentanas, catalogo);
+    const fresh = buildOptimizerRows(o.storeVentanas, catalogo, parametros);
     const guardado = o.datosGenerales?.optimizerRows as unknown[] | undefined;
     const restored = restorePlanGuardado(fresh, guardado);
     const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
@@ -176,7 +180,7 @@ export function CotizadorTela() {
       ot: o,
       rows: filasOptimizadasDe(o),
     }));
-    const filas = construirFilasCorte(otsParaCorte, colmenaPanos);
+    const filas = construirFilasCorte(otsParaCorte, colmenaPanos, parametros);
     if (filas.length === 0) {
       toast.error('No hay paños para exportar en las OTs elegidas.');
       return;
@@ -207,9 +211,12 @@ export function CotizadorTela() {
     });
   };
 
-  const calculo = useMemo(() => (rows ? calcularPanos(rows) : null), [rows]);
+  const calculo = useMemo(
+    () => (rows ? calcularPanos(rows, parametros) : null),
+    [rows, parametros],
+  );
 
-  if (loading || loadingCat) {
+  if (loading || loadingCat || loadingParams) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando…

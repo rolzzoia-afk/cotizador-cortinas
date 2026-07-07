@@ -25,3 +25,5 @@ vite.config.ts.timestamp-*
 docs/referencias/*.xlsm
 # Export crudo de ROLZZO (datos ya volcados a colmena_panos; no versionar)
 docs/referencias/Libro1.xlsx
+# Conteo físico ROLZZO 2026-07-06 (datos ya volcados a colmena_panos; no versionar)
+docs/referencias/actualizacion.xlsx

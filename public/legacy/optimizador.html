@@ -4521,6 +4521,13 @@ function normalizarCodigo(codigo) { return String(codigo).trim().toUpperCase(); 
 // reemplazado por peso gris) y una cortina blanca quedó con peso gris.
 const PESO_COLOR_FIJO = { 'E18': 'NEGRO', 'E19': 'BLANCO', 'E20': 'GRIS' };
 
+// Códigos con lista blanca de reemplazos: solo se aceptan los equivalentes
+// listados aquí, aunque el catálogo diga otra cosa. E13 (peso interno dúo)
+// es pieza única sin equivalente validado → lista vacía = nunca sustituir
+// (queda SIN STOCK y se pide el material correcto). Guard preventivo tras
+// las 2 reversas de la OT dúo 3088-B (2026-07-02/03).
+const REEMPLAZO_SOLO_LISTA_BLANCA = { 'E13': [] };
+
 function buscarReemplazos(codigo) {
     const codNormalizado = normalizarCodigo(codigo);
     let reemplazos = null;
@@ -4531,6 +4538,17 @@ function buscarReemplazos(codigo) {
         }
     }
     if (!reemplazos) return null;
+
+    const listaBlanca = REEMPLAZO_SOLO_LISTA_BLANCA[codNormalizado];
+    if (listaBlanca) {
+        const filtrados = reemplazos.filter(r => listaBlanca.includes(normalizarCodigo(r)));
+        const bloqueados = reemplazos.filter(r => !filtrados.includes(r));
+        if (bloqueados.length > 0) {
+            log(`⚠️ ${codNormalizado} (peso interno dúo): bloqueando reemplazo → ${bloqueados.join(', ')} — pieza sin equivalente validado; si falta stock, la orden queda SIN STOCK.`, 'warn');
+        }
+        if (filtrados.length === 0) return null;
+        reemplazos = filtrados;
+    }
 
     const colorOriginal = PESO_COLOR_FIJO[codNormalizado];
     if (colorOriginal) {

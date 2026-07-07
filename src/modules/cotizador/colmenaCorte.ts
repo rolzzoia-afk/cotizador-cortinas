@@ -12,8 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import { esColmena } from './planCorte';
 import type { GrupoSobrante, Plan } from './planCorte';
-
-const MARGEN = 1;
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
 /**
  * Retazo único sugerido tras cortar las piezas en un sobrante: el rectángulo
@@ -22,13 +21,16 @@ const MARGEN = 1;
  * "sobrevive" como colmena si cumple el mínimo 120×180; si no, devuelve `null`
  * (el paño se marca Usado y el remanente queda como merma — ver `mermaSobrante`).
  */
-export function retazoSugerido(grupo: GrupoSobrante): { ancho: number; alto: number } | null {
+export function retazoSugerido(
+  grupo: GrupoSobrante,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): { ancho: number; alto: number } | null {
   const placed = grupo.placed.filter((r) => !r.failed);
   const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-  const altoResto = Math.round(grupo.sobrante.alto - (maxY + MARGEN * 2));
+  const altoResto = Math.round(grupo.sobrante.alto - (maxY + params.margenRolloCm * 2));
   const cands: { ancho: number; alto: number }[] = [];
   // Banda de alto (ancho del paño × alto restante): colmena solo si 120×180.
-  if (esColmena(grupo.sobrante.ancho, altoResto))
+  if (esColmena(grupo.sobrante.ancho, altoResto, params))
     cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
   // Tira de ancho: planCorte ya la dejó presente solo si cumple 120×180.
   if (grupo.sobranteAncho) {
@@ -43,11 +45,14 @@ export function retazoSugerido(grupo: GrupoSobrante): { ancho: number; alto: num
  * área (banda de alto o tira de ancho) cuando ninguno llega a 120×180. `null`
  * si el corte no deja remanente con medida útil o si ya sobrevivió como retazo.
  */
-export function mermaSobrante(grupo: GrupoSobrante): { ancho: number; alto: number } | null {
-  if (retazoSugerido(grupo)) return null; // sobrevivió como colmena, no es merma
+export function mermaSobrante(
+  grupo: GrupoSobrante,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): { ancho: number; alto: number } | null {
+  if (retazoSugerido(grupo, params)) return null; // sobrevivió como colmena, no es merma
   const placed = grupo.placed.filter((r) => !r.failed);
   const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-  const altoResto = Math.round(grupo.sobrante.alto - (maxY + MARGEN * 2));
+  const altoResto = Math.round(grupo.sobrante.alto - (maxY + params.margenRolloCm * 2));
   const cands: { ancho: number; alto: number }[] = [];
   if (altoResto > 0) cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
   const anchoResto = Math.round(grupo.uw - grupo.placed.reduce((s, r) => s + (r.failed ? 0 : r.pw), 0));
@@ -84,7 +89,12 @@ export type CorteGeneralColmena = {
  * Calcula la lista de deducciones a la colmena para un Plan de Corte: una por
  * cada sobrante de colmena efectivamente usado (`plan.sobrantes`).
  */
-export function deduccionesColmena(plan: Plan): DeduccionColmena[] {
+export function deduccionesColmena(
+  plan: Plan,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): DeduccionColmena[] {
+  // OJO: usar los MISMOS params con que se generó el plan; con otros, el
+  // retazo calculado no calza con el layout.
   return plan.sobrantes.map((g: GrupoSobrante) => {
     const base = {
       docId: g.sobrante._docId,
@@ -93,9 +103,9 @@ export function deduccionesColmena(plan: Plan): DeduccionColmena[] {
       ancho: g.sobrante.ancho,
       alto: g.sobrante.alto,
     };
-    const retazo = retazoSugerido(g);
+    const retazo = retazoSugerido(g, params);
     return retazo
       ? { ...base, accion: 'retazo' as const, nuevoAncho: retazo.ancho, nuevoAlto: retazo.alto, merma: null }
-      : { ...base, accion: 'usado' as const, merma: mermaSobrante(g) };
+      : { ...base, accion: 'usado' as const, merma: mermaSobrante(g, params) };
   });
 }

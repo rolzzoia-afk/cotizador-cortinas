@@ -31,6 +31,7 @@ import {
   type PostInstalacionData,
 } from '@/modules/cotizador/fase2';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { obtenerAnchoRollo } from '@/modules/cotizador/tela';
 import { CATEGORIAS_FASE1, catBadgeColor } from '@/modules/cotizador/categorias';
 import { enriquecerPanoDesdeFase0, enriquecerVentanaDesdeFase0 } from '@/modules/cotizador/fase0-sync';
@@ -67,6 +68,7 @@ export function CotizadorFase2() {
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo } = useCatalogoProductos();
+  const { parametros } = useParametrosCotizador();
 
   const { empresaId } = useAuth();
   const { modelos } = useDescuentosModelo();
@@ -796,7 +798,7 @@ export function CotizadorFase2() {
                   categoria={ventanaForm.categoria}
                   sentidoVentana={ventanaForm.sentido}
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
-                  anchoRollo={obtenerAnchoRollo(ventanaForm.codInt, catalogo)}
+                  anchoRollo={obtenerAnchoRollo(ventanaForm.codInt, catalogo, parametros.anchoRolloDefaultM)}
                 />
 
                 {/* Acciones */}

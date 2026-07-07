@@ -6,6 +6,7 @@
 //   - generarPlanCorte (motor principal: 4 reglas de match + packing + output)
 
 import type { OT, VentanaItem } from '@/modules/ots/types';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
 // ── Tipos del plan ───────────────────────────────────────────────────
 export type ColmenaPanoRow = {
@@ -108,12 +109,17 @@ function tipoPrio(t: string): number {
 // ── Reglas Rolzzo v1.0 (2026-06-26) ──────────────────────────────────
 // Medida mínima para que un sobrante se registre como COLMENA reutilizable.
 // Por debajo de esto el remanente es MERMA (no entra al inventario activo).
+// Defaults históricos; editables en Parámetros de corte (parametrosCorte.ts).
 export const COLMENA_MIN_ANCHO = 120; // cm
 export const COLMENA_MIN_ALTO = 180; // cm
 
 /** ¿Un remanente (ancho × alto, cm) califica como colmena reutilizable? */
-export function esColmena(ancho: number, alto: number): boolean {
-  return ancho >= COLMENA_MIN_ANCHO && alto >= COLMENA_MIN_ALTO;
+export function esColmena(
+  ancho: number,
+  alto: number,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): boolean {
+  return ancho >= params.colmenaMinAnchoCm && alto >= params.colmenaMinAltoCm;
 }
 
 /**
@@ -131,13 +137,21 @@ function ordenFifo(a: PanoColmena, b: PanoColmena): number {
   return tipoPrio(a.tipo) - tipoPrio(b.tipo);
 }
 
-// Regla 7: extra cm al alto según tipo de producto
-export function extraCmPorTipo(v: VentanaItem): number {
+// Regla 7: extra cm al alto según tipo de producto.
+// DUO = extraDuoCm (default 30): el corte real del paño dúo es 2×alto+30
+// (tela.ts / Excel oficial); con el 10 anterior la reserva quedaba 20 cm más
+// corta que la tela necesaria y un sobrante insuficiente podía darse por
+// válido. Cada tipo usa LA MISMA clave que su corte real (regla "nunca
+// inferior" garantizada por construcción).
+export function extraCmPorTipo(
+  v: VentanaItem,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): number {
   const prod = (v.producto || '').toUpperCase();
   const tipo = (v.tipo || '').toUpperCase();
-  if (prod.includes('DUO')) return 10;
-  if (prod.includes('VERTICAL') || tipo.includes('VERTICAL')) return 5;
-  return 25; // Rollers SC, BK y otros
+  if (prod.includes('DUO')) return params.extraDuoCm;
+  if (prod.includes('VERTICAL') || tipo.includes('VERTICAL')) return params.extraVerticalCm;
+  return params.extraAltoCm; // Rollers SC, BK y otros
 }
 
 // Normaliza fila de colmena_panos (Supabase) al tipo interno usado por el algoritmo
@@ -254,10 +268,11 @@ function mxPack(items: Pieza[], uw: number, uh: number, allowRot = true): Placed
 export function generarPlanCorte(
   ots: OT[],
   colmenaPanos: PanoColmena[],
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): Plan {
-  const MARGEN = 1; // 1 cm de margen por lado
-  const BORDE = 4; // 4 cm de limpieza de bordes al ancho (Regla 5)
-  const ROLL_W_UTIL = 300 - MARGEN * 2;
+  const MARGEN = params.margenRolloCm; // margen por lado (default 1 cm)
+  const BORDE = params.bordeCm; // limpieza de bordes al ancho (Regla 5, default 4 cm)
+  const ROLL_W_UTIL = params.anchoRolloPlanCm - MARGEN * 2;
   const multiOT = ots.length > 1;
 
   // ── Umbrales de reuso de SOBRANTES (ajustados 2026-06 para igualar el
@@ -265,7 +280,7 @@ export function generarPlanCorte(
   // Ventana de alto: un sobrante sirve si su alto está dentro de +VENTANA_ALTO
   // de la pieza. Reglas Rolzzo v1.0: tolerancia máxima +30 cm (alto). En ancho
   // NO hay tope: se empaquetan varias cortinas en un sobrante ancho (Regla 5).
-  const VENTANA_ALTO = 30;
+  const VENTANA_ALTO = params.ventanaAltoCm;
   // Ancho real que una pieza necesita de un SOBRANTE: al reusar tela ya cortada
   // NO se aplica el margen de corte limpio del rollo (BORDE), basta el ancho
   // nominal de la cortina. Así una cortina de 144 cm entra en un sobrante de
@@ -281,7 +296,7 @@ export function generarPlanCorte(
 
     ventanas.forEach((v) => {
       if (!v.panos || v.panos.length === 0) return;
-      const extraCm = extraCmPorTipo(v); // Regla 7
+      const extraCm = extraCmPorTipo(v, params); // Regla 7
       const isDuo = (v.producto || '').toUpperCase().includes('DUO');
 
       v.panos.forEach((p, pi) => {
@@ -428,7 +443,7 @@ export function generarPlanCorte(
       // mínimo 120×180 (Reglas Rolzzo). Por debajo es merma (Fase 4 la registra).
       const anchoExceso = Math.round(mejor.sobra);
       const altoRemanente = Math.round(mejor.sob.alto);
-      const sobranteAncho = esColmena(anchoExceso, altoRemanente)
+      const sobranteAncho = esColmena(anchoExceso, altoRemanente, params)
         ? { cod: codInt, ancho: anchoExceso, alto: altoRemanente }
         : null;
 
@@ -506,7 +521,7 @@ export function generarPlanCorte(
       // rotado — el operario lo autoriza pieza por pieza en la UI (flujo
       // 'rotacion-pendiente' ya existente) y puede volver al layout
       // vertical si la tela tiene diseño/dirección.
-      const AHORRO_MIN_CM = 20; // proponer rotación solo si ahorra ≥ 20 cm de rollo
+      const AHORRO_MIN_CM = params.ahorroMinRotacionCm; // proponer rotación solo si ahorra ≥ esto
       const rotarConviene = plA !== null && plB !== null && hB + AHORRO_MIN_CM <= hA;
       const bestPl = rotarConviene ? plB : plA || plB;
       const bestH = rotarConviene ? hB : plA ? hA : hB;
@@ -519,7 +534,7 @@ export function generarPlanCorte(
         const maxX = bestPl.reduce((m, r) => Math.max(m, r.px + r.pw), 0);
         const anchoFranja = Math.round(ROLL_W_UTIL - maxX);
         const altoFranja = Math.round(altoCorte);
-        const sobInterno = esColmena(anchoFranja, altoFranja)
+        const sobInterno = esColmena(anchoFranja, altoFranja, params)
           ? { ancho: anchoFranja, alto: altoFranja }
           : null;
 
@@ -536,7 +551,7 @@ export function generarPlanCorte(
         const anchoFranjaV = Math.round(ROLL_W_UTIL - maxXv);
         const altoFranjaV = altoVertical ? Math.round(altoVertical) : 0;
         const sobInternoV =
-          plA && altoVertical && esColmena(anchoFranjaV, altoFranjaV)
+          plA && altoVertical && esColmena(anchoFranjaV, altoFranjaV, params)
             ? { ancho: anchoFranjaV, alto: altoFranjaV }
             : null;
 
@@ -545,7 +560,7 @@ export function generarPlanCorte(
           placed: bestPl,
           anchoUtil: ROLL_W_UTIL,
           altoUtil: bestH,
-          anchoCorte: 300,
+          anchoCorte: params.anchoRolloPlanCm,
           altoCorte,
           efic,
           sobInterno,

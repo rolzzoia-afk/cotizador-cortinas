@@ -8,11 +8,12 @@ import {
   type PanoColmena,
 } from './planCorte';
 import type { OT, VentanaItem } from '@/modules/ots/types';
+import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
 
 // ── extraCmPorTipo (Regla 7) ─────────────────────────────────────────
 describe('extraCmPorTipo', () => {
-  it('DUO: 10 cm extra', () => {
-    expect(extraCmPorTipo({ id: 1, producto: 'Roller DUO SC/BK' } as VentanaItem)).toBe(10);
+  it('DUO: 30 cm extra (corte real 2×alto+30, como tela.ts y el Excel)', () => {
+    expect(extraCmPorTipo({ id: 1, producto: 'Roller DUO SC/BK' } as VentanaItem)).toBe(30);
   });
 
   it('Vertical (producto): 5 cm extra', () => {
@@ -34,11 +35,18 @@ describe('extraCmPorTipo', () => {
   it('DUO gana sobre Vertical en conflicto (DUO primero)', () => {
     expect(
       extraCmPorTipo({ id: 1, producto: 'DUO Vertical' } as VentanaItem),
-    ).toBe(10);
+    ).toBe(30);
   });
 
   it('sin producto ni tipo: default 25', () => {
     expect(extraCmPorTipo({ id: 1 } as VentanaItem)).toBe(25);
+  });
+
+  it('params custom: cada tipo usa su clave (extraDuoCm/extraVerticalCm/extraAltoCm)', () => {
+    const params = { ...PARAMETROS_CORTE_DEFAULT, extraDuoCm: 40, extraVerticalCm: 8, extraAltoCm: 30 };
+    expect(extraCmPorTipo({ id: 1, producto: 'Roller DUO' } as VentanaItem, params)).toBe(40);
+    expect(extraCmPorTipo({ id: 1, tipo: 'vertical' } as VentanaItem, params)).toBe(8);
+    expect(extraCmPorTipo({ id: 1, producto: 'Roller SC' } as VentanaItem, params)).toBe(30);
   });
 });
 
@@ -187,6 +195,86 @@ describe('generarPlanCorte', () => {
     expect(plan.sobrantes).toHaveLength(1);
     expect(plan.sobrantes[0].regla).toBe(2);
     expect(plan.sobrantes[0].sobranteAncho).toBeNull();
+  });
+
+  it('DUO: la pieza reserva el corte real (2×alto+30) — un sobrante 20 cm más corto NO sirve', () => {
+    const ventana = {
+      codInt: 'DU 28',
+      producto: 'ROLLER DUO BLACKOUT PREMIUM',
+      ubicacion: 'Living',
+      panos: [{ ancho: 1.66, alto: 2.3 }],
+    };
+    // Pieza dúo: ancho = 166+BORDE(4) = 170; alto = 2×230+30 = 490.
+    // Con el bug anterior (extra 10 → 470) este sobrante de 480 se aceptaba
+    // aunque la tela real a cortar mide 490.
+    const corto = pano('DU 28', 200, 480);
+    const planCorto = generarPlanCorte([hacerOT([ventana])], [corto]);
+    expect(planCorto.sobrantes).toHaveLength(0);
+
+    const justo = pano('DU 28', 200, 490);
+    const planJusto = generarPlanCorte([hacerOT([ventana])], [justo]);
+    expect(planJusto.sobrantes).toHaveLength(1);
+  });
+
+  it('params custom: mínimos de colmena más bajos convierten merma en colmena', () => {
+    const ot = hacerOT([
+      {
+        codInt: 'SC001',
+        producto: 'Roller SC',
+        ubicacion: 'Living',
+        panos: [{ ancho: 1.46, alto: 2.05 }],
+      },
+    ]);
+    // Franja 200−146 = 54: con el mínimo default (120) es merma; bajando
+    // colmenaMinAnchoCm a 50 la franja sobrevive como colmena.
+    const sobrante = pano('SC001', 200, 235);
+    const plan = generarPlanCorte([ot], [sobrante], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      colmenaMinAnchoCm: 50,
+    });
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].sobranteAncho).toEqual({ cod: 'SC001', ancho: 54, alto: 235 });
+  });
+
+  it('params custom: ventanaAltoCm más amplia acepta un sobrante que hoy no matchea', () => {
+    const ventana = {
+      codInt: 'SC001',
+      producto: 'Roller SC',
+      ubicacion: 'Living',
+      panos: [{ ancho: 1.46, alto: 2.05 }],
+    };
+    // Pieza alto 230; sobrante alto 280 excede la ventana default (+30) y se
+    // rechaza; con ventanaAltoCm 60 entra.
+    const sobrante = pano('SC001', 160, 280);
+    const planDefault = generarPlanCorte([hacerOT([ventana])], [sobrante]);
+    expect(planDefault.sobrantes).toHaveLength(0);
+    const planAmplio = generarPlanCorte([hacerOT([ventana])], [sobrante], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      ventanaAltoCm: 60,
+    });
+    expect(planAmplio.sobrantes).toHaveLength(1);
+  });
+
+  it('params custom: extraDuoCm cambia la reserva del dúo', () => {
+    const ventana = {
+      codInt: 'DU 28',
+      producto: 'ROLLER DUO BLACKOUT PREMIUM',
+      ubicacion: 'Living',
+      panos: [{ ancho: 1.66, alto: 2.3 }],
+    };
+    // Con extraDuoCm 40 la pieza reserva 2×230+40 = 500 → un sobrante de 490 ya no sirve.
+    const sobrante = pano('DU 28', 200, 490);
+    const plan = generarPlanCorte([hacerOT([ventana])], [sobrante], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      extraDuoCm: 40,
+    });
+    expect(plan.sobrantes).toHaveLength(0);
+    const justo = pano('DU 28', 200, 500);
+    const planJusto = generarPlanCorte([hacerOT([ventana])], [justo], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      extraDuoCm: 40,
+    });
+    expect(planJusto.sobrantes).toHaveLength(1);
   });
 
   it('no matchea si el sobrante es más chico que la pieza', () => {
@@ -352,11 +440,11 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.0, alto: 2.0 }],
       },
     ]);
-    // DUO: alto pieza = round(2.0*100)*2 + 10 = 410. ancho = 100+4 = 104.
-    const sobrante = pano('DUO001', 104, 410);
+    // DUO: alto pieza = round(2.0*100)*2 + 30 = 430 (corte real). ancho = 100+4 = 104.
+    const sobrante = pano('DUO001', 104, 430);
     const plan = generarPlanCorte([ot], [sobrante]);
     expect(plan.sobrantes).toHaveLength(1);
-    expect(plan.sobrantes[0].sobrante.alto).toBe(410);
+    expect(plan.sobrantes[0].sobrante.alto).toBe(430);
   });
 
   it('múltiples OTs: label incluye OT cuando multiOT', () => {

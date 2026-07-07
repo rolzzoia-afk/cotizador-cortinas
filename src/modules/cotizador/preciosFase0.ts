@@ -10,9 +10,12 @@
 // NO toca el flujo de producción actual (Fase 1–4). Es la base de Fase 0.
 // ─────────────────────────────────────────────────────────────────────
 
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+
 // ── Geometría (Optimizador del Excel) ────────────────────────────────
 // A cada cortina se le suma 0,25 m al alto; si es DÚO, el alto se duplica.
 // m² = alto_real × ancho.  (Idéntico a buildOptimizerRows en tela.ts)
+// Default histórico; el valor vigente por empresa es params.extraAltoCm/100.
 export const EXTRA_ALTO_M = 0.25;
 
 // ── Márgenes y cargos ─────────────────────────────────────────────────
@@ -125,7 +128,7 @@ export type ParametrosCotizador = {
   instalacionDescuentoRM: number;
   /** Descuento de instalación para región (0–1; editable, 0 = se cobra full). */
   instalacionDescuentoRegion: number;
-};
+} & ParametrosCorte; // parámetros de corte/dimensionado (tab del Optimizador de Tela)
 
 export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   iva: IVA,
@@ -142,6 +145,7 @@ export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   instalacionGratisMinCortinas: 4,
   instalacionDescuentoRM: 1, // 100% = gratis
   instalacionDescuentoRegion: 0, // 0% = se cobra (editable por empresa)
+  ...PARAMETROS_CORTE_DEFAULT,
 };
 
 /** Claves de parámetros con valor numérico (todas menos proveedorTarjeta). */
@@ -171,6 +175,13 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
   out.instalacionDescuentoRM = Math.min(1, Math.max(0, out.instalacionDescuentoRM));
   out.instalacionDescuentoRegion = Math.min(1, Math.max(0, out.instalacionDescuentoRegion));
   out.instalacionGratisMinCortinas = Math.max(0, Math.round(out.instalacionGratisMinCortinas));
+  // Corte: un rollo de ancho 0 rompería el empaquetado.
+  if (out.anchoRolloDefaultM <= 0) out.anchoRolloDefaultM = PARAMETROS_DEFAULT.anchoRolloDefaultM;
+  if (out.anchoRolloPlanCm <= 2 * out.margenRolloCm) {
+    out.anchoRolloPlanCm = PARAMETROS_DEFAULT.anchoRolloPlanCm;
+    out.margenRolloCm = PARAMETROS_DEFAULT.margenRolloCm;
+  }
+  out.diasAlertaColmena = Math.round(out.diasAlertaColmena);
   return out;
 }
 

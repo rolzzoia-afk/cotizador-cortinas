@@ -167,6 +167,9 @@ function conCod(label: string, cod: string): string {
   return cod ? `${label}: [${cod}]` : `${label}:`;
 }
 
+// Color fijo por código del PESO U dúo (lágrima), igual que el optimizador.
+const PESO_U_COLOR: Record<string, string> = { E18: 'NEGRO', E19: 'BLANCO', E20: 'GRIS' };
+
 const tapaLabels: Record<string, string> = {
   SIN_TAPA: 'MURO A MURO', // legacy → muro a muro
   CON_1_TAPA: 'CON 1 TAPA',
@@ -188,7 +191,13 @@ function dibujarEstructura(
   const anchoCm = row.anchoCm || 0;
   const altoCm = row.altoCm || 0;
   const colorAcc = colorPesoNormalizado(p.colorMecanismo || p.color) || '—';
-  const sistema = tipoCortinaEtiqueta(row.producto, row.tipo);
+  // Dúo (día/noche): etiqueta propia — título "DUO", PESO U a la izquierda y
+  // columna derecha con CEF. OV / TIRA / PESO.IT / CIERRE (foto oficial DUO).
+  const esDuo = (row.producto || '').toUpperCase().includes('DUO');
+  const sistema = esDuo ? 'DUO' : tipoCortinaEtiqueta(row.producto, row.tipo);
+  const pzCef = pieza(row, 'CENEFA OVALADA');
+  const pzPesoU = pieza(row, 'PESO U');
+  const pzPesoInt = pieza(row, 'PESO INTERNO');
 
   // Mismo estilo que la etiqueta de paños: esquinas cuadradas, contorno
   // exterior común (x 1,325 → 60,075; los rellenos se expanden medio trazo)
@@ -205,8 +214,13 @@ function dibujarEstructura(
   txt(doc, sistema, 3.7, 12.4, tamTitulo, { color: BLANCO, max: 12, hScale: escTitulo });
   txt(doc, `Cortina ${n}/${total}`, 3.7, 16.4, 9.5, { color: BLANCO, hScale: 1.02 });
   // El chip de despiece dice SCR, pero la etiqueta muestra SC (familia). Va
-  // justo después de donde termina el título (con tope antes del QR).
-  const chipTela = String(p.tipoTela || '').toUpperCase().replace(/^SCR$/, 'SC');
+  // justo después de donde termina el título (con tope antes del QR). En el
+  // dúo el chip es la familia completa: [DUO BK] / [DUO POLI].
+  const chipTela = esDuo
+    ? (row.producto || '').toUpperCase().includes('POLI')
+      ? 'DUO POLI'
+      : 'DUO BK'
+    : String(p.tipoTela || '').toUpperCase().replace(/^SCR$/, 'SC');
   if (chipTela) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(tamTitulo);
@@ -245,31 +259,63 @@ function dibujarEstructura(
     hScale: 1.02,
   });
 
-  // Columna izquierda: TUBO / PESO / TELA
+  // Columna izquierda: TUBO / PESO (roller) o PESO U (dúo) / TELA
   doc.rect(1.5, 40, 28.9, 23.7, 'S');
   const pzTubo = pieza(row, 'TUBO');
-  const tuboCm = pzTubo ? fmtMedidaCm(pzTubo.medidaCm) : fmtMedidaCm(anchoCm - 3.8);
+  const tuboCm = pzTubo
+    ? fmtMedidaCm(pzTubo.medidaCm)
+    : fmtMedidaCm(anchoCm - (esDuo ? 3.3 : 3.8));
   txt(doc, conCod('TUBO', codCorto(pzTubo) || (row.tuberiaCod || '').split('_').pop() || ''), 3.1, 44.2, 8.2, { hScale: 0.73 });
   txt(doc, tuboCm, 29.4, 45.7, 14.6, { align: 'right', hScale: 0.79 });
   const espec = especTuboEtiqueta(row.tuberiaCod, p.tuberia);
   if (espec) txt(doc, espec, 3.1, 46.9, 4.4, { bold: false, hScale: 1.08 });
 
-  const pzPeso = pieza(row, 'PESO');
-  const pesoCm = pzPeso ? fmtMedidaCm(pzPeso.medidaCm) : fmtMedidaCm(anchoCm - 4.2);
-  txt(doc, conCod('PESO', codCorto(pzPeso)), 3.1, 51.9, 8.4, { hScale: 0.77 });
-  txt(doc, pesoCm, 29.4, 53.4, 14.6, { align: 'right', hScale: 0.79 });
-  txt(doc, `PESO ${sistema} ${colorAcc}`.trim(), 3.1, 55.4, 4, { bold: false, max: 30 });
+  if (esDuo) {
+    // Dúo: la fila de peso es el PESO U (lágrima E18/E19/E20, color fijo).
+    const colorPesoU = PESO_U_COLOR[codCorto(pzPesoU)] || colorAcc;
+    txt(doc, conCod('PESO U', codCorto(pzPesoU)), 3.1, 51.9, 8.2, { hScale: 0.7 });
+    txt(doc, pzPesoU ? fmtMedidaCm(pzPesoU.medidaCm) : 'N/A', 29.4, 53.4, pzPesoU ? 14.6 : 10, { align: 'right', hScale: 0.79 });
+    txt(doc, `PESO ROLLER ${colorPesoU}`.trim(), 3.1, 55.4, 4, { bold: false, max: 30 });
+  } else {
+    const pzPeso = pieza(row, 'PESO');
+    const pesoCm = pzPeso ? fmtMedidaCm(pzPeso.medidaCm) : fmtMedidaCm(anchoCm - 4.2);
+    txt(doc, conCod('PESO', codCorto(pzPeso)), 3.1, 51.9, 8.4, { hScale: 0.77 });
+    txt(doc, pesoCm, 29.4, 53.4, 14.6, { align: 'right', hScale: 0.79 });
+    txt(doc, `PESO ${sistema} ${colorAcc}`.trim(), 3.1, 55.4, 4, { bold: false, max: 30 });
+  }
 
   const pzTela = (row.piezas || []).find((x) => x.componente.toUpperCase().startsWith('TELA'));
   txt(doc, 'TELA:', 3.1, 59.8, 7.5, { hScale: 0.8 });
   if (pzTela) txt(doc, fmtMedidaCm(pzTela.medidaCm), 29.4, 61.3, 14.6, { align: 'right', hScale: 0.79 });
   txt(doc, 'DIMENSIONADO', 3.1, 62.5, 4, { bold: false, hScale: 0.91 });
 
-  // Columna derecha: CEF. OV. (o PESO U dúo) / tira / PLAT
+  if (esDuo) {
+    // Columna derecha dúo (foto oficial): CEF. OV / franja TIRA / PESO.IT / CIERRE
+    doc.rect(30.4, 40, 29.5, 23.7, 'S');
+    txt(doc, conCod('CEF. OV', codCorto(pzCef)), 31.5, 43.8, 7.2, { hScale: 0.7 });
+    txt(doc, pzCef ? fmtMedidaCm(pzCef.medidaCm) : 'N/A', 59.1, 44.9, pzCef ? 13 : 9, { align: 'right', hScale: 0.79 });
+    txt(doc, 'CENEFA OVALADA', 32, 46.4, 4, { bold: false });
+
+    doc.setFillColor(...NEGRO);
+    doc.rect(30.225, 47.2, 29.85, 4.4, 'F');
+    txt(doc, etiquetaConTira(p.cenefaTira), 45.2, 50.2, 8.5, {
+      color: BLANCO,
+      align: 'center',
+      hScale: 0.98,
+    });
+
+    txt(doc, conCod('PESO.IT', codCorto(pzPesoInt)), 31.5, 54.7, 7.2, { hScale: 0.7 });
+    txt(doc, pzPesoInt ? fmtMedidaCm(pzPesoInt.medidaCm) : 'N/A', 59.1, 55.8, pzPesoInt ? 13 : 9, { align: 'right', hScale: 0.79 });
+    txt(doc, 'PESO.INTERNO', 32, 57.3, 4, { bold: false });
+
+    // Cierre de altura: lo mide el vendedor en terreno (Fase 2, pano.cierreAlturaCm).
+    const cierreCm = parseFloat(String(p.cierreAlturaCm ?? ''));
+    txt(doc, 'CIERRE:', 31.5, 60.7, 7.2, { hScale: 0.8 });
+    txt(doc, cierreCm > 0 ? fmtMedidaCm(cierreCm) : 'N/A', 59.1, 61.8, cierreCm > 0 ? 13 : 9, { align: 'right', hScale: 0.79 });
+    txt(doc, 'CIERRE DE ALTURA', 32, 63.2, 4, { bold: false });
+  } else {
+  // Columna derecha: CEF. OV. / tira / PLAT
   doc.rect(30.4, 40, 29.5, 23.7, 'S');
-  const pzCef = pieza(row, 'CENEFA OVALADA');
-  const pzPesoU = pieza(row, 'PESO U');
-  const pzPesoInt = pieza(row, 'PESO INTERNO');
   if (pzCef) {
     txt(doc, conCod('CEF. OV.', codCorto(pzCef)), 31.5, 44.6, 8.4, { hScale: 0.66 });
     txt(doc, fmtMedidaCm(pzCef.medidaCm), 59.1, 45.7, 14.6, { align: 'right', hScale: 0.79 });
@@ -311,6 +357,7 @@ function dibujarEstructura(
   txt(doc, conCod('PLAT', codCorto(pzPlat)), 31.5, 59.8, 7.5, { hScale: 0.8 });
   txt(doc, platCm, 59.1, 61.3, platCm === 'NO' ? 10 : 14.6, { align: 'right', hScale: 0.79 });
   txt(doc, 'PLATINA', 31.9, 62.5, 4, { bold: false });
+  }
 
   // Barra INFORMACIÓN TERRENO
   doc.setFillColor(...NEGRO);

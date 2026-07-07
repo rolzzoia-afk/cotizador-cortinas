@@ -26,6 +26,7 @@ import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
 import { OPCIONES_MECANISMO } from './fase2';
 import { colorPesoCadena } from './cadenas';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
 type RGB = [number, number, number];
 
@@ -123,6 +124,7 @@ const NUM_IDENTIDAD = new Set<keyof FilaCalculo>(['anchoMts', 'altoMts']);
 export function construirCalculoGeneral(
   ventanas: Ventana[],
   catalogo: CatalogoProductos = {},
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): CalculoGeneral {
   const filas: FilaCalculo[] = [];
 
@@ -145,6 +147,12 @@ export function construirCalculoGeneral(
           if (c.medidaCm > 0) despiece.set(c.componente.toUpperCase(), c.medidaCm);
         }
       }
+      // Dúo: cierre de altura medido en terreno (Fase 2) — columna propia.
+      const esDuoFila =
+        (v.producto || '').toUpperCase().includes('DUO') ||
+        (v.categoria || '').toUpperCase().includes('DUO');
+      const cierreCm = parseFloat(String(p.cierreAlturaCm ?? ''));
+      if (esDuoFila && cierreCm > 0) despiece.set('CIERRE DE ALTURA', r1(cierreCm));
 
       const codCadena = (p.codCadena as string) || '';
       const largoCadena = String(p.largoCadena ?? '');
@@ -191,8 +199,9 @@ export function construirCalculoGeneral(
         anchoMts: r1(anchoM * 1000) / 1000,
         altoMts: r1(altoM * 1000) / 1000,
         anchoCorteCm: r1(anchoCm),
-        altoRollerCm: r1(altoCm + 25),
-        altoDuoCm: r1(altoCm * 2 + 20),
+        altoRollerCm: r1(altoCm + params.extraAltoCm),
+        // Corte real del paño dúo (2×alto+extraDuo), alineado con tela.ts y el Excel.
+        altoDuoCm: r1(altoCm * 2 + params.extraDuoCm),
         bloque: bloque.key,
         despiece,
       });
@@ -314,11 +323,12 @@ export function generarPdfCalculoGeneral(
   ventanas: Ventana[],
   catalogo: CatalogoProductos,
   meta: MetaCalculo,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): void {
   if (!ventanas || ventanas.length === 0) {
     throw new Error('No hay ventanas en la OT.');
   }
-  const data = construirCalculoGeneral(ventanas, catalogo);
+  const data = construirCalculoGeneral(ventanas, catalogo, params);
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
 
   // Columnas planas: identidad + (por bloque) sus columnas.

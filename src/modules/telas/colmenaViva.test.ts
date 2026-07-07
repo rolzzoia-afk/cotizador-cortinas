@@ -177,4 +177,11 @@ describe('diasEnColmena / estadoColmena / enAlerta', () => {
     expect(enAlerta(pano({ disponible: false, datos_extra: { fecha_origen: '2026-01-01' } }), HOY)).toBe(false);
     expect(enAlerta(pano({ datos_extra: { fecha_origen: '2026-06-20' } }), HOY)).toBe(false);
   });
+
+  it('diasAlerta custom cambia el umbral (parámetro de corte)', () => {
+    const p = pano({ datos_extra: { fecha_origen: '2026-06-16' } }); // 10 días
+    expect(enAlerta(p, HOY)).toBe(false); // default 90
+    expect(enAlerta(p, HOY, 7)).toBe(true);
+    expect(estadoColmena(p, HOY, 7).estado).toBe('alerta');
+  });
 });

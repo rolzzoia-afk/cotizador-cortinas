@@ -9,6 +9,7 @@ import {
   calcularPanos,
   type OptimizerRow,
 } from './tela';
+import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
 import type { CatalogoProductos, Producto } from './types';
 import type { VentanaItem } from '@/modules/ots/types';
 
@@ -123,6 +124,22 @@ describe('buildOptimizerRows', () => {
     expect(rows[0].isDuo).toBe(false);
     expect(rows[0].altoCorte).toBeCloseTo(2.25, 2);
     expect(rows[0].altoReal).toBeCloseTo(2.25, 2);
+  });
+
+  it('parámetros custom: extraAltoCm/extraDuoCm/anchoRolloDefaultM gobiernan la geometría', () => {
+    const params = { ...PARAMETROS_CORTE_DEFAULT, extraAltoCm: 30, extraDuoCm: 40, anchoRolloDefaultM: 2.5 };
+    const roller = buildOptimizerRows([v({ panos: [{ ancho: 1, alto: 2 }] })], cat, params);
+    expect(roller[0].extra).toBeCloseTo(0.3, 3);
+    expect(roller[0].altoExtra).toBeCloseTo(2.3, 2);
+    expect(roller[0].altoCorte).toBeCloseTo(2.3, 2);
+    const duo = buildOptimizerRows(
+      [v({ producto: 'Roller DUO', codInt: 'NO-EN-CAT', panos: [{ ancho: 1, alto: 2 }] })],
+      cat,
+      params,
+    );
+    expect(duo[0].altoReal).toBeCloseTo(4.6, 2); // 2×(2+0,30)
+    expect(duo[0].altoCorte).toBeCloseTo(4.4, 2); // 2×2+0,40
+    expect(duo[0].anchoRollo).toBeCloseTo(2.5, 2); // default custom (codInt fuera de catálogo)
   });
 
   it('sufija ubicación con P1/P2 cuando hay múltiples paños', () => {
@@ -319,6 +336,40 @@ describe('asignarJuntoEnOrden', () => {
 
 // ── autoOptimizar ──────────────────────────────────────────────
 describe('autoOptimizar', () => {
+  it('Camila (OT 3048) — paños dúo: igual o mejor que el Excel, nunca inferior', () => {
+    // 4 dúos DU 28 (rollo 2,95). El Excel corta 3 paños / 14,7 m
+    // (0,595+2,18 juntos; 1,61 y 1,66 solos). La app debe igualar o mejorar.
+    const cat = mkCat({ 'DU 28': { anchoRollo: 2.95, producto: 'ROLLER DUO BLACKOUT PREMIUM' } });
+    const rows = buildOptimizerRows(
+      [
+        { id: 1, ubicacion: 'LIVING IZQ-G1', codInt: 'DU 28', producto: 'ROLLER DUO BLACKOUT PREMIUM', panos: [{ ancho: 1.66, alto: 2.3 }] },
+        { id: 2, ubicacion: 'LIVING DER-G1', codInt: 'DU 28', producto: 'ROLLER DUO BLACKOUT PREMIUM', panos: [{ ancho: 1.61, alto: 2.3 }] },
+        { id: 3, ubicacion: 'OFICINA-G2', codInt: 'DU 28', producto: 'ROLLER DUO BLACKOUT PREMIUM', panos: [{ ancho: 0.595, alto: 1.015 }] },
+        { id: 4, ubicacion: 'PPAL-G3', codInt: 'DU 28', producto: 'ROLLER DUO BLACKOUT PREMIUM', panos: [{ ancho: 2.18, alto: 2.3 }] },
+      ],
+      cat,
+    );
+    const out = autoOptimizar(rows);
+    const { panos } = calcularPanos(out);
+
+    // Cortes idénticos al Excel: ancho −3,5 y alto = 2×alto+0,30.
+    const porUbic = Object.fromEntries(panos.map((p) => [out[panos.indexOf(p)].ubicacion, p]));
+    expect(porUbic['LIVING IZQ-G1'].anchoCorteCm).toBeCloseTo(162.5, 1);
+    expect(porUbic['LIVING IZQ-G1'].altoCorteCm).toBeCloseTo(490, 1);
+    expect(porUbic['OFICINA-G2'].anchoCorteCm).toBeCloseTo(56, 1);
+    expect(porUbic['OFICINA-G2'].altoCorteCm).toBeCloseTo(233, 1);
+
+    // Optimización ≥ Excel: a lo más 3 paños y a lo más 14,7 m de tela cortada.
+    const grupos = new Map<string | number, number>();
+    for (const r of out) {
+      const alto = r.altoCorte;
+      grupos.set(r.numeroPano, Math.max(grupos.get(r.numeroPano) ?? 0, alto));
+    }
+    const metros = [...grupos.values()].reduce((s, a) => s + a, 0);
+    expect(grupos.size).toBeLessThanOrEqual(3);
+    expect(metros).toBeLessThanOrEqual(14.7 + 1e-9);
+  });
+
   it('ordena por codInt asc, luego por altoReal desc', () => {
     const cat = mkCat({ A: { anchoRollo: 3 }, B: { anchoRollo: 3 } });
     const rows = buildOptimizerRows(
@@ -418,5 +469,14 @@ describe('calcularPanos', () => {
 
   it('plan vacío: totales en 0', () => {
     expect(calcularPanos([])).toEqual({ panos: [], totalM2: 0, totalPanos: 0 });
+  });
+
+  it('descAnchoCorteCm custom cambia el ancho de corte', () => {
+    const rows = buildOptimizerRows(
+      [{ id: 1, ubicacion: 'L', codInt: 'SC', producto: 'p', panos: [{ ancho: 1.5, alto: 2.0 }] }],
+      cat,
+    );
+    const { panos } = calcularPanos(rows, { ...PARAMETROS_CORTE_DEFAULT, descAnchoCorteCm: 4 });
+    expect(panos[0].anchoCorteCm).toBe(146); // 150 − 4
   });
 });

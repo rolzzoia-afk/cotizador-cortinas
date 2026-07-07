@@ -112,9 +112,12 @@ export type ResultadoCotizacion = {
 const mkPv = (margen: number) => (c: string): number => (INSUMO_VALOR_MAXIMO[c] ?? 0) / margen;
 const raw = (c: string): number => INSUMO_VALOR_MAXIMO[c] ?? 0;
 
-// Alto real: alto + 0,25 m; si es dúo, se duplica (Optimizador del Excel).
-function altoRealM(alto: number, esDuo: boolean): number {
-  const conExtra = alto + EXTRA_ALTO_M;
+// Alto real: alto + extra (default 0,25 m); si es dúo, se duplica
+// (Optimizador del Excel). El extra vigente por empresa viene de
+// params.extraAltoCm — cambiarlo cambia los metros de tela y el precio,
+// igual que la celda del Excel.
+function altoRealM(alto: number, esDuo: boolean, extraAltoM: number = EXTRA_ALTO_M): number {
+  const conExtra = alto + extraAltoM;
   return esDuo ? conExtra * 2 : conExtra;
 }
 
@@ -201,7 +204,9 @@ function costoMateriales(cod: string, ctx: Ctx, margenInsumo: number = MARGEN_IN
 
   // ── Dúo Blackout / Dúo Poliéster ──
   m += pv('E 02') * wle219 + pv('E 05') * wge2191;
-  const e26 = sw + (cod === 'DUOBK_P' ? 0.2 : 0);
+  // Perfil superior cenefa: el Excel suma 5 cm POR CORTINA en DUOBK_P
+  // (verificado en la OT Camila 3048: sw + 0,05×n con n=4 → +0,2).
+  const e26 = sw + (cod === 'DUOBK_P' ? 0.05 * n : 0);
   m += pv('E 26') * e26; // perfil superior cenefa
   if (cod === 'DUOBK_P' || isDuoPoli) {
     m += pv('MIC 01') * sw; // mica
@@ -363,7 +368,7 @@ export function cotizarFase0(
     const nombre = (prod.producto || '').toUpperCase();
     const esDuo = cod.startsWith('DUO') || nombre.includes('DUO');
     const esVertical = /(_V_|-V$|-V-)/.test(cod) || nombre.includes('VERTICAL');
-    const altoReal = altoRealM(f.alto, esDuo);
+    const altoReal = altoRealM(f.alto, esDuo, params.extraAltoCm / 100);
     const pieza: Pieza = { ancho: f.ancho, alto: f.alto, altoReal, m2: altoReal * f.ancho };
     let g = grupos.get(cod);
     if (!g) {
@@ -371,6 +376,9 @@ export function cotizarFase0(
         cod,
         esDuo,
         esVertical,
+        // Fallback 2.45 histórico del Excel de precios (≠ 2.98 de tela.ts /
+        // anchoRolloDefaultM): último recurso, en producción ancho_rollo_data
+        // o el catálogo resuelven antes. Los goldens de precio lo pinnean.
         anchoRollo: anchoRolloMap[f.codInt] ?? (Number(prod.anchoRollo) || 2.45),
         precioMl: precioMlPorCod(cod, catalogo) || Number(prod.precio) || 0,
         piezas: [],
@@ -434,7 +442,7 @@ export function cotizarFase0(
     const cod = codDeFila[i];
     const g = cod ? grupos.get(cod) : undefined;
     const esDuo = g?.esDuo ?? false;
-    const altoReal = altoRealM(f.alto, esDuo);
+    const altoReal = altoRealM(f.alto, esDuo, params.extraAltoCm / 100);
     const m2 = altoReal * f.ancho;
     const precioM2 = cod ? pm2PorCod.get(cod) ?? 0 : 0;
     // Sin instalación: el cliente retira / solo cortina → VAL. UNIT = precio del

@@ -201,6 +201,8 @@ export function PanoEditor({
 
   // ── BEEBLACK ──
   const esBeeblack = esCategoriaBeeblack(categoria);
+  // Dúo (día/noche): pide el cierre de altura medido en terreno.
+  const esDuo = (categoria || '').toUpperCase().includes('DUO');
   const varianteBeeblack: VarianteBeeblack = normalizarVarianteBeeblack(
     pano.beeblackVariante ?? sentidoVentana,
     'INTERNO',
@@ -299,6 +301,31 @@ export function PanoEditor({
           options={OPCIONES_TIPO_TELA}
           onChange={(v) => onChange({ tipoTela: v })}
         />
+        {esDuo && (
+          /* Dúo: cierre de altura medido en terreno por el vendedor — va en
+             la etiqueta de estructura y en la hoja de cálculo general. */
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">
+              Cierre de altura (cm)
+            </span>
+            <Input
+              type="number"
+              min={0}
+              step={0.1}
+              className="h-7 w-28 text-[0.72rem]"
+              value={String(pano.cierreAlturaCm ?? '')}
+              onChange={(e) =>
+                onChange({ cierreAlturaCm: e.target.value === '' ? undefined : e.target.value })
+              }
+              placeholder="cm"
+            />
+            {!(parseFloat(String(pano.cierreAlturaCm ?? '')) > 0) && (
+              <span className="text-[0.7rem] text-amber-500">
+                falta el cierre (lo mide el vendedor en terreno)
+              </span>
+            )}
+          </div>
+        )}
       </Section>
 
       {/* 2. CADENA */}

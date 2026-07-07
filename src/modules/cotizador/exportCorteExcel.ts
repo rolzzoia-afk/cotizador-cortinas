@@ -19,6 +19,7 @@
 import * as XLSX from 'xlsx';
 import type { OptimizerRow } from './tela';
 import { generarPlanCorte, type PanoColmena } from './planCorte';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { OT } from '@/modules/ots/types';
 
 export type OrigenCorte = 'ROLLO' | 'COLMENA' | 'SIN STOCK';
@@ -53,12 +54,14 @@ const red2 = (m: number) => parseFloat(m.toFixed(2));
 export function construirFilasCorte(
   otsParaCorte: OTParaCorte[],
   colmenaPanos: PanoColmena[],
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): FilaCorte[] {
   // Origen por pieza, calculado sobre TODAS las OTs juntas (igual que el
   // plan combinado de la app) para que el reparto de sobrantes sea el real.
   const plan = generarPlanCorte(
     otsParaCorte.map((o) => o.ot),
     colmenaPanos,
+    params,
   );
   const origenDe = new Map<string, string>();
   for (const g of plan.sobrantes) {

@@ -19,6 +19,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { confirmar } from '@/components/ui/confirm';
 import type { ColmenaPano } from '@/modules/admin/colmena';
 import {
@@ -75,6 +76,7 @@ const fmt = (n: number | null | undefined) => (n == null ? '–' : Math.round(n)
 
 export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaTabProps) {
   const { empresaId } = useAuth();
+  const { parametros } = useParametrosCotizador();
   const [filtroTipo, setFiltroTipo] = useState<TipoTela | ''>('');
   const [incluirUsados, setIncluirUsados] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -84,7 +86,11 @@ export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaT
   const q = busqueda.trim().toLowerCase();
   // Fecha de referencia para la alerta de antigüedad (estable por montaje).
   const hoy = useMemo(() => new Date().toISOString(), []);
-  const alertas = useMemo(() => panos.filter((p) => enAlerta(p, hoy)), [panos, hoy]);
+  const diasAlerta = parametros.diasAlertaColmena;
+  const alertas = useMemo(
+    () => panos.filter((p) => enAlerta(p, hoy, diasAlerta)),
+    [panos, hoy, diasAlerta],
+  );
 
   // Dar de baja una colmena vieja (Reglas Rolzzo, sección 6): sale del inventario
   // activo y se registra como merma con trazabilidad.
@@ -381,7 +387,7 @@ export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaT
             <div className="flex max-h-[60vh] flex-col gap-2 overflow-y-auto">
               {detalle.panos.map((p) => {
                 const tipo = tipoDeCodigo(p.codigo);
-                const { estado, dias } = estadoColmena(p, hoy);
+                const { estado, dias } = estadoColmena(p, hoy, diasAlerta);
                 return (
                   <div
                     key={p.id}
