@@ -266,14 +266,14 @@ function celda(
   opts: { size?: number; bold?: boolean; color?: RGB } = {},
 ) {
   const { bold = false, color = [25, 25, 30] } = opts;
-  let size = opts.size ?? 5.2;
+  let size = opts.size ?? 7;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setTextColor(color[0], color[1], color[2]);
   const maxW = w - 1;
   let txt = s;
   doc.setFontSize(size);
   // Una sola línea: achicar la fuente hasta un mínimo para que entre…
-  while (size > 3.4 && doc.getTextWidth(txt) > maxW) {
+  while (size > 4 && doc.getTextWidth(txt) > maxW) {
     size -= 0.3;
     doc.setFontSize(size);
   }
@@ -356,48 +356,77 @@ export function generarPdfCalculoGeneral(
   }
   const idN = data.identidad.length;
 
+  const PH = 297;
+  const BOTTOM = PH - M;
+  const superH = 6;
+  const headH = 10;
+  const rowH = 7.2;
+
   let y = M;
-  // Encabezado
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(30, 30, 38);
-  doc.text('CÁLCULO GENERAL', M, y + 5);
-  // Número de OT grande y destacado.
-  doc.setFontSize(24);
-  doc.text(`OT ${meta.ot}`, M + 62, y + 6.5);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.text('FECHA OT: ___/___/____      RESPONSABLE OT: __________', M + 130, y + 5);
-  if (meta.cliente) doc.text(meta.cliente, PW - M, y + 5, { align: 'right' });
-  y += 10;
+  let pagina = 0;
+  let yBorde = 0;
 
-  // Súper-cabecera de bloques (colores por sistema).
-  const superH = 5;
-  let colIdx = idN; // arranca tras las columnas de identidad
-  for (const b of data.bloques) {
-    const x0 = xs[colIdx];
-    const w = b.columnas.reduce((s, _c, j) => s + widths[colIdx + j], 0);
-    rect(doc, x0, y, w, superH, b.sistema.color);
-    celda(doc, b.sistema.label, x0, w, y + 3.5, { size: 5.6, bold: true, color: C_WHITE });
-    colIdx += b.columnas.length;
-  }
-  y += superH;
+  const encabezado = () => {
+    pagina += 1;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(30, 30, 38);
+    doc.text('CÁLCULO GENERAL', M, y + 5);
+    // Número de OT grande y destacado.
+    doc.setFontSize(24);
+    doc.text(`OT ${meta.ot}`, M + 62, y + 6.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('FECHA OT: ___/___/____      RESPONSABLE OT: __________', M + 130, y + 5);
+    if (meta.cliente) doc.text(meta.cliente, PW - M, y + 5, { align: 'right' });
+    doc.setFontSize(7);
+    doc.text(`Página ${pagina}`, PW - M, y + 9, { align: 'right' });
+    y += 10;
+  };
 
-  // Cabecera de columnas.
-  const headH = 9;
-  cols.forEach((c, i) => {
-    rect(doc, xs[i], y, widths[i], headH, c.sistema ? c.sistema.color : C_DARK);
-    celda(doc, c.label, xs[i], widths[i], y + (c.label.length > 10 ? 3.4 : 5.2), {
-      size: 4.4,
-      bold: true,
-      color: C_WHITE,
+  // Súper-cabecera de bloques (colores por sistema) + cabecera de columnas;
+  // se redibujan en cada página.
+  const cabeceras = () => {
+    let colIdx = idN; // arranca tras las columnas de identidad
+    for (const b of data.bloques) {
+      const x0 = xs[colIdx];
+      const w = b.columnas.reduce((s, _c, j) => s + widths[colIdx + j], 0);
+      rect(doc, x0, y, w, superH, b.sistema.color);
+      celda(doc, b.sistema.label, x0, w, y + 4.2, { size: 7, bold: true, color: C_WHITE });
+      colIdx += b.columnas.length;
+    }
+    y += superH;
+    yBorde = y;
+    cols.forEach((c, i) => {
+      rect(doc, xs[i], y, widths[i], headH, c.sistema ? c.sistema.color : C_DARK);
+      celda(doc, c.label, xs[i], widths[i], y + (c.label.length > 10 ? 4 : 6.2), {
+        size: 5.6,
+        bold: true,
+        color: C_WHITE,
+      });
     });
-  });
-  y += headH;
+    y += headH;
+  };
 
-  // Filas.
-  const rowH = 5.5;
+  // Borde exterior del tramo de tabla dibujado en la página actual.
+  const cerrarBorde = () => {
+    doc.setDrawColor(80, 80, 88);
+    doc.setLineWidth(0.4);
+    doc.rect(M, yBorde, usable, y - yBorde);
+  };
+
+  encabezado();
+  cabeceras();
+
+  // Filas (con salto de página cuando no cabe la siguiente).
   for (const f of data.filas) {
+    if (y + rowH > BOTTOM) {
+      cerrarBorde();
+      doc.addPage();
+      y = M;
+      encabezado();
+      cabeceras();
+    }
     cols.forEach((c, i) => {
       rect(doc, xs[i], y, widths[i], rowH);
       let val = '';
@@ -419,15 +448,11 @@ export function generarPdfCalculoGeneral(
               : num(raw as number);
         } else val = raw === 0 ? '' : String(raw ?? '');
       }
-      if (val) celda(doc, val, xs[i], widths[i], y + 3.7, { size: 5 });
+      if (val) celda(doc, val, xs[i], widths[i], y + 4.9, { size: 7 });
     });
     y += rowH;
   }
-
-  // Borde exterior de la tabla.
-  doc.setDrawColor(80, 80, 88);
-  doc.setLineWidth(0.4);
-  doc.rect(M, M + 10 + superH, usable, headH + rowH * data.filas.length);
+  cerrarBorde();
 
   doc.save(`CalculoGeneral_OT${meta.ot}.pdf`);
 }

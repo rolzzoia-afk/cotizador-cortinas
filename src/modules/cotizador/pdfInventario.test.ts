@@ -99,11 +99,11 @@ describe('construirInventario — mecanismo consistente con Fase 4', () => {
     expect(data.filas[0].codMecanismo).toBe('KIT SIMPLE BLANCO 38MM [MEC 33] BCO');
   });
 
-  it('MEC_10 ovalada legacy también resuelve al kit por color', () => {
+  it('MEC_10 ovalada legacy resuelve al kit ovalada por color (MEC 39), no al id del modelo', () => {
     const data = construirInventario([
       vjeffi('MEC_10_OVALADA_BLANCO', 'ROL_MANUAL_CENEFA_OVALADA_38mm'),
     ]);
-    expect(data.filas[0].codMecanismo).toBe('KIT SIMPLE BLANCO 38MM [MEC 33] BCO');
+    expect(data.filas[0].codMecanismo).toBe('OVALADA BLANCO [MEC 39] BCO');
   });
 
   it('accesorios blancos → etiqueta blanca INS 95-1 (misma regla que Fase 4)', () => {

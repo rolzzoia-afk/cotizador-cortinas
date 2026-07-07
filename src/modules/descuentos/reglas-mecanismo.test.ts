@@ -58,6 +58,20 @@ describe('REGLAS_MECANISMO — reglasCategoria', () => {
     expect(mecPorCategoriaYColor('DUO_MANUAL_38mm', 'GRS')).toBe(12);
   });
 
+  it('ROL_MANUAL_CENEFA_OVALADA_38mm → kits ovalada por color (39/38/12)', () => {
+    const blanco = reglaCategoriaAplicable('ROL_MANUAL_CENEFA_OVALADA_38mm', 'BCO');
+    expect(blanco?.mec).toBe(39);
+    expect(blanco?.codigoInventario).toBe('MEC_39_OVALADA_BLANCO');
+    expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_38mm', 'BLANCO')).toBe(39);
+    expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_38mm', 'NEG')).toBe(38);
+    expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_38mm', 'GRIS')).toBe(12);
+  });
+
+  it('cenefa ovalada motorizada o 45 mm → sin regla (motor / kit simple)', () => {
+    expect(reglaCategoriaAplicable('ROL_CENEFA_OVALADA_MOTOR_PEQUEÑO', 'BCO')).toBeNull();
+    expect(reglaCategoriaAplicable('ROL_MANUAL_CENEFA_OVALADA_45mm', 'BCO')).toBeNull();
+  });
+
   it('ROL estándar → cae en colorAMec, no en reglasCategoria', () => {
     expect(reglaCategoriaAplicable('ROL', 'BCO')).toBeNull();
     expect(mecPorCategoriaYColor('ROL', 'BCO')).toBeNull();

@@ -144,6 +144,23 @@ describe('construirFilasCortinas', () => {
     expect(f.mecanismo).toContain('[MEC 39]');
   });
 
+  it('ROL_MANUAL_CENEFA_OVALADA_38mm + BCO → MEC 39 (kit ovalada) en Fase 4', () => {
+    const [f] = construirFilasCortinas([
+      {
+        id: '1',
+        ubicacion: 'DORM PPA',
+        producto: 'ROLLER BLACKOUT DELUX',
+        tipo: 'DELUX',
+        color: 'Blanco',
+        categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+        // Caso real: roller con cenefa ovalada quedaba con el kit simple
+        // blanco guardado por el mapeo por color.
+        panos: [{ ancho: 2.65, alto: 2.4, colorPeso: 'BCO', mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]' }],
+      },
+    ]);
+    expect(f.mecanismo).toContain('[MEC 39]');
+  });
+
   it('OSCURANTI → MEC 28 en Fase 4', () => {
     const [f] = construirFilasCortinas([
       {

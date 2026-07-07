@@ -105,6 +105,29 @@ describe('calcularBOM', () => {
     expect(mec33?.cantidad).toBe(6);
   });
 
+  it('roller manual cenefa ovalada 38 BCO → MEC 39 en COMPONENTES (no kit simple 33)', () => {
+    const ventana = {
+      id: 'v1',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      color: 'Blanco',
+      panos: [{ ancho: 2.65, colorPeso: 'BCO' }],
+    };
+    const rows = [
+      row(
+        { mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]', colorPeso: 'BCO' },
+        { ventanaId: 'v1', rowIdx: 1, anchoCm: 265 },
+      ),
+    ];
+    const bom = calcularBOM(rows, [ventana as never]);
+    const mec39 = bom.find(
+      (i) => i.categoria === 'MECANISMO' && i.especificacion === 'MEC 39',
+    );
+    expect(mec39?.cantidad).toBe(1);
+    expect(
+      bom.find((i) => i.categoria === 'MECANISMO' && i.especificacion === 'MEC 33'),
+    ).toBeUndefined();
+  });
+
   it('dúo manual 38 BCO → MEC 39 en COMPONENTES (no kit simple 33)', () => {
     const ventana = {
       id: 'v1',

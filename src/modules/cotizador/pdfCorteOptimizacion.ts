@@ -261,11 +261,11 @@ export function generarPdfHojaCorte(
     pagina++;
     y = M;
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(12);
     doc.setTextColor(30, 30, 38);
     doc.text(`HOJA DE CORTE — OT ${meta.ot}`, M, y + 4);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.text(meta.cliente || '', M, y + 9);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
@@ -305,15 +305,21 @@ export function generarPdfHojaCorte(
     { key: 'serial', label: 'AUTORIZACIÓN OPTIM.', w: 21, head: C_BLUE },
   ];
 
+  // La tabla ocupa TODO el ancho útil: los anchos base se escalan
+  // proporcionalmente para darle aire a la letra más grande.
+  const anchoUtil = W - 2 * M;
+  const sumaW = cols.reduce((s, c) => s + c.w, 0);
+  for (const c of cols) c.w = (c.w * anchoUtil) / sumaW;
+
   const x0 = M;
-  const headH = 9;
+  const headH = 10;
   const cabeceraTabla = () => {
     let cx = x0;
     for (const c of cols) {
       rect(doc, cx, y, c.w, headH, c.head);
       const txtColor: RGB = c.head === C_BLUE ? [30, 30, 40] : C_WHITE;
-      celdaTexto(doc, c.label, cx, c.w, y + (c.label.length > 14 ? 3.4 : 5.4), {
-        size: 4.6,
+      celdaTexto(doc, c.label, cx, c.w, y + (c.label.length > 14 ? 3.8 : 6.4), {
+        size: 6,
         bold: true,
         color: txtColor,
       });
@@ -324,7 +330,7 @@ export function generarPdfHojaCorte(
   cabeceraTabla();
 
   // Filas de datos (color por paño)
-  const rowH = 6;
+  const rowH = 7.5;
   for (const fila of hoja.cortinas) {
     if (y + rowH > BOTTOM) {
       nuevaPagina();
@@ -344,7 +350,7 @@ export function generarPdfHojaCorte(
       }
       if (val) {
         const bold = c.key === 'cortarJunto' || c.key === 'pano' || c.key === 'comentario';
-        celdaTexto(doc, val, cx, c.w, y + 4, { size: c.key === 'comentario' ? 4.8 : 5.4, bold });
+        celdaTexto(doc, val, cx, c.w, y + 5, { size: c.key === 'comentario' ? 6 : 7, bold });
       }
       cx += c.w;
     }
@@ -374,19 +380,19 @@ export function generarPdfHojaCorte(
     { label: 'RESPONSABLE DE ERROR', w: 28 },
   ];
   const t3x = 150;
-  const rowH23 = 5.5;
+  const rowH23 = 7;
   let y23Box = 0; // borde inferior del recuadro TOTAL PAÑOS (por página)
   const cabecera23 = () => {
-    rect(doc, M, y, totalW, 8, C_DARK);
-    celdaTexto(doc, 'TOTAL PAÑOS', M, totalW, y + 5, { size: 4.4, bold: true, color: C_WHITE });
-    rect(doc, M, y + 8, totalW, 16);
-    celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 18, { size: 16, bold: true });
-    y23Box = y + 24;
+    rect(doc, M, y, totalW, 9, C_DARK);
+    celdaTexto(doc, 'TOTAL PAÑOS', M, totalW, y + 5.8, { size: 5, bold: true, color: C_WHITE });
+    rect(doc, M, y + 9, totalW, 16);
+    celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 19.5, { size: 18, bold: true });
+    y23Box = y + 25;
     let tx = M + totalW + 1;
     for (const c of cols2) {
-      rect(doc, tx, y, c.w, 8, C_DARK);
-      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.4 : 5), {
-        size: 4.4,
+      rect(doc, tx, y, c.w, 9, C_DARK);
+      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.6 : 5.8), {
+        size: 5.4,
         bold: true,
         color: C_WHITE,
       });
@@ -394,15 +400,15 @@ export function generarPdfHojaCorte(
     }
     tx = t3x;
     for (const c of cols3) {
-      rect(doc, tx, y, c.w, 8, C_DARK);
-      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.4 : 5), {
-        size: 4.4,
+      rect(doc, tx, y, c.w, 9, C_DARK);
+      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.6 : 5.8), {
+        size: 5.4,
         bold: true,
         color: C_WHITE,
       });
       tx += c.w;
     }
-    y += 8;
+    y += 9;
   };
   nuevaPagina();
   cabecera23();
@@ -421,7 +427,7 @@ export function generarPdfHojaCorte(
       else if (c.k === 'altoCortePano') val = num(p.altoCortePano);
       else if (c.k === 'altoMaxUtilizar') val = p.altoMaxUtilizar === '' ? '' : num(p.altoMaxUtilizar);
       else val = String(p[c.k] ?? '');
-      if (val) celdaTexto(doc, val, tx, c.w, y + 3.8, { size: 5, align: c.k === 'tipo' ? 'left' : 'center' });
+      if (val) celdaTexto(doc, val, tx, c.w, y + 4.8, { size: 6.5, align: c.k === 'tipo' ? 'left' : 'center' });
       tx += c.w;
     }
     // Fila bloque 3 (errores, para llenar a mano)
@@ -432,10 +438,10 @@ export function generarPdfHojaCorte(
         // Dos opciones con su círculo (radio) para marcar a mano.
         doc.setDrawColor(90, 90, 100);
         doc.setLineWidth(0.2);
-        doc.circle(tx + 2.5, y + rowH23 / 2, 1);
-        celdaTexto(doc, 'FALLA TELA', tx + 4, 17, y + 3.6, { size: 4.2, align: 'left' });
-        doc.circle(tx + 21, y + rowH23 / 2, 1);
-        celdaTexto(doc, 'ERROR CORTE', tx + 22.5, 16, y + 3.6, { size: 4.2, align: 'left' });
+        doc.circle(tx + 2.5, y + rowH23 / 2, 1.1);
+        celdaTexto(doc, 'FALLA TELA', tx + 4, 17, y + 4.4, { size: 5, align: 'left' });
+        doc.circle(tx + 21, y + rowH23 / 2, 1.1);
+        celdaTexto(doc, 'ERROR CORTE', tx + 22.5, 16, y + 4.4, { size: 5, align: 'left' });
       }
       tx += c.w;
     }
@@ -445,7 +451,7 @@ export function generarPdfHojaCorte(
   y = Math.max(y, y23Box);
 
   // ── BLOQUE 4: OPTIMIZADOR + SELLO (se mueve entero a otra página si no cabe) ──
-  const hOpt = 9 + Math.max(1, hoja.optimizador.length) * 6;
+  const hOpt = 10 + Math.max(1, hoja.optimizador.length) * 7;
   y += 6;
   if (y + Math.max(hOpt, 40) > BOTTOM) nuevaPagina();
   const yAbajo = y;
@@ -475,23 +481,23 @@ function drawOptimizador(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {
   ];
   let tx = x;
   for (const c of cols) {
-    rect(doc, tx, y, c.w, 9, C_DARK);
-    celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 16 ? 3.2 : 5.4), {
-      size: 4.2,
+    rect(doc, tx, y, c.w, 10, C_DARK);
+    celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 16 ? 3.6 : 6.4), {
+      size: 5.2,
       bold: true,
       color: C_WHITE,
     });
     tx += c.w;
   }
-  let ry = y + 9;
-  const rowH = 6;
+  let ry = y + 10;
+  const rowH = 7;
   const filas = hoja.optimizador.length ? hoja.optimizador : [{ codInt: '', metros: 0 }];
   for (const f of filas) {
     tx = x;
     for (const c of cols) {
       rect(doc, tx, ry, c.w, rowH);
-      if (c.label === 'COD_INT' && f.codInt) celdaTexto(doc, f.codInt, tx, c.w, ry + 4, { size: 5.4, bold: true });
-      else if (c.label === 'OPTIMIZADOR' && f.codInt) celdaTexto(doc, num(f.metros), tx, c.w, ry + 4, { size: 5.4 });
+      if (c.label === 'COD_INT' && f.codInt) celdaTexto(doc, f.codInt, tx, c.w, ry + 4.8, { size: 6.5, bold: true });
+      else if (c.label === 'OPTIMIZADOR' && f.codInt) celdaTexto(doc, num(f.metros), tx, c.w, ry + 4.8, { size: 6.5 });
       tx += c.w;
     }
     ry += rowH;

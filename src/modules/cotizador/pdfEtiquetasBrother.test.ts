@@ -19,6 +19,7 @@ vi.mock('jspdf', async (importOriginal) => {
 });
 
 import {
+  agruparEtiquetasPanos,
   especTuboEtiqueta,
   familiaTelaEtiqueta,
   fmtMedidaCm,
@@ -101,7 +102,73 @@ describe('textoAccionamiento', () => {
   });
 });
 
+describe('agruparEtiquetasPanos', () => {
+  const fila = (junto: string, numeroPano: number | string, altoCorte = 2.65): OptimizerRow =>
+    ({ codInt: 'SC 64', junto, numeroPano, altoCorte }) as unknown as OptimizerRow;
+
+  it('corte en conjunto → UNA etiqueta con la letra repetida ("A-A")', () => {
+    const grupos = agruparEtiquetasPanos([
+      fila('A', 1),
+      fila('A', 1),
+      fila('B', 2),
+    ]);
+    expect(grupos).toHaveLength(2);
+    expect(grupos[0].junto).toBe('A-A');
+    expect(grupos[0].cortinas).toBe(2);
+    expect(grupos[1].junto).toBe('B');
+  });
+
+  it('la etiqueta del grupo lleva el alto MAYOR (el tiro se corta a ese alto)', () => {
+    const grupos = agruparEtiquetasPanos([fila('A', 1, 2.05), fila('A', 1, 2.65)]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].row.altoCorte).toBe(2.65);
+  });
+
+  it('tres cortinas juntas → "A-A-A"', () => {
+    const grupos = agruparEtiquetasPanos([fila('A', 1), fila('A', 1), fila('A', 1)]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].junto).toBe('A-A-A');
+  });
+
+  it('misma letra pero distinto N° de paño NO se agrupa (letras se reciclan tras la Z)', () => {
+    const grupos = agruparEtiquetasPanos([fila('A', 1), fila('A', 27)]);
+    expect(grupos).toHaveLength(2);
+    expect(grupos.map((g) => g.junto)).toEqual(['A', 'A']);
+  });
+
+  it('filas sin letra o sin N° de paño (planes legacy) van cada una con su etiqueta', () => {
+    const grupos = agruparEtiquetasPanos([
+      fila('', ''),
+      fila('', ''),
+      fila('·', 3),
+      fila('A', ''),
+      fila('A', ''),
+    ]);
+    expect(grupos).toHaveLength(5);
+  });
+});
+
 describe('generarEtiquetasPanosPDF', () => {
+  it('una página por paño físico: 3 cortinas con corte en conjunto → 2 etiquetas', () => {
+    docsGuardados.length = 0;
+    const fila = (junto: string, numeroPano: number): OptimizerRow =>
+      ({
+        codInt: 'SC 64',
+        producto: 'ROLLER SCREEN PREMIUM',
+        tipo: 'PREMIUM',
+        junto,
+        numeroPano,
+        altoCorte: 2.65,
+        pano: { tipoTela: 'SCR' },
+      }) as unknown as OptimizerRow;
+    generarEtiquetasPanosPDF(
+      [fila('A', 1), fila('A', 1), fila('B', 2)],
+      { ot: '3097', cliente: 'BARBARA / LEONARDO', fecha: '2026-07-07' },
+      {},
+    );
+    const doc = docsGuardados[0] as jsPDF;
+    expect(doc.getNumberOfPages()).toBe(2);
+  });
   it('páginas exactas de 62×51 mm, sin sobrante (y sin volteo de jsPDF)', () => {
     docsGuardados.length = 0;
     const row = {
