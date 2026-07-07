@@ -75,6 +75,15 @@ describe('construirCalculoGeneral', () => {
     expect(f.despiece.get('TUBO')).toBe(172.5);
     expect(f.despiece.get('PESO')).toBe(172.1);
     expect(f.despiece.get('TELA (ANCHO)')).toBe(172); // peso − 0.1
+    // Columna ALTO del Excel manual: alto de corte de la tela (alto + 25).
+    expect(f.despiece.get('ALTO')).toBe(205);
+  });
+
+  it('dúo: la columna ALTO trae el corte real (2×alto + 30)', () => {
+    const v = ventRoller(1.5, 'LIVING');
+    (v as { producto: string }).producto = 'ROLLER DUO BLACKOUT PREMIUM';
+    const [f] = construirCalculoGeneral([v]).filas;
+    expect(f.despiece.get('ALTO')).toBe(390); // 180×2 + 30
   });
 
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {
@@ -85,6 +94,8 @@ describe('construirCalculoGeneral', () => {
     expect(labels).toContain('TUBO');
     expect(labels).toContain('PESO');
     expect(labels).toContain('TELA (ANCHO)');
+    // ALTO siempre cierra el bloque, como en la hoja manual.
+    expect(labels[labels.length - 1]).toBe('ALTO');
   });
 
   it('oculta columnas de identidad sin datos (ej. sin cadena → no aparece)', () => {
