@@ -31,7 +31,6 @@ export type FilaInventario = {
   adicional: string;
   accionamiento: string;
   pesoCadena: string;
-  manillas: string;
   ubic: string;
   anchoMts: string;
   altoMts: string;
@@ -52,7 +51,7 @@ export type Inventario = {
 
 const mts3 = (n: number) => n.toFixed(3).replace('.', ',');
 
-/** Consolida mecanismo + cadena + peso de cadena por valor único (orden por dimensión). */
+/** Consolida mecanismo + cadena + peso de cadena + manillas por valor único. */
 function consolidarMateriales(filas: FilaCalculo[]): MaterialConsolidado[] {
   const acc = new Map<string, number>();
   const bump = (s: string) => {
@@ -62,6 +61,17 @@ function consolidarMateriales(filas: FilaCalculo[]): MaterialConsolidado[] {
   for (const f of filas) bump(f.codMecanismo);
   for (const f of filas) bump(f.accionamiento);
   for (const f of filas) bump(f.pesoCadena);
+  // Manillas: van como material consolidado (no como columna por cortina).
+  // f.manillas viene "9 CAFÉ" → MANILLA CAFÉ ×9, sumando por color.
+  for (const f of filas) {
+    const m = (f.manillas || '').trim();
+    if (!m) continue;
+    const [, cant, color] = m.match(/^(\d+)\s*(.*)$/) || [];
+    const n = parseInt(cant || '', 10);
+    if (!n) continue;
+    const k = `MANILLA ${(color || '').trim()}`.trim();
+    acc.set(k, (acc.get(k) || 0) + n);
+  }
   return [...acc.entries()].map(([descripcion, cantidad], i) => ({
     id: i + 1,
     descripcion,
@@ -85,7 +95,6 @@ export function construirInventario(
     adicional: '0',
     accionamiento: f.accionamiento,
     pesoCadena: f.pesoCadena,
-    manillas: f.manillas || '0',
     ubic: f.ubic,
     anchoMts: mts3(f.anchoMts),
     altoMts: mts3(f.altoMts),
@@ -109,28 +118,63 @@ const C_TEXT: RGB = [25, 25, 30];
 
 type Col = { label: string; w: number; align?: 'l' | 'c' };
 
+/**
+ * Texto dentro de una celda, centrado verticalmente. Achica la fuente hasta
+ * 8 pt para que quepa en UNA línea; si aún no entra, parte en DOS líneas en
+ * vez de seguir encogiendo — así los textos largos (KIT SIMPLE…, UBIC.)
+ * quedan del mismo porte que el resto de la tabla. Con `wrap: false`
+ * (cabeceras) mantiene el comportamiento de una línea con mínimo 4 pt.
+ */
 function celda(
   doc: jsPDF,
   s: string,
   x: number,
   w: number,
-  y: number,
-  opts: { size?: number; bold?: boolean; color?: RGB; align?: 'l' | 'c' } = {},
+  yTop: number,
+  h: number,
+  opts: { size?: number; bold?: boolean; color?: RGB; align?: 'l' | 'c'; wrap?: boolean } = {},
 ) {
-  const { bold = false, color = C_TEXT, align = 'l' } = opts;
-  let size = opts.size ?? 11;
+  const { bold = false, color = C_TEXT, align = 'l', wrap = true } = opts;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setTextColor(color[0], color[1], color[2]);
   const maxW = w - 1.4;
-  let txt = String(s ?? '');
+  const txt = String(s ?? '');
+
+  const dibujar = (t: string, yBase: number) => {
+    if (align === 'c') doc.text(t, x + w / 2, yBase, { align: 'center' });
+    else doc.text(t, x + 0.8, yBase, { align: 'left' });
+  };
+
+  let size = opts.size ?? 11;
   doc.setFontSize(size);
-  while (size > 4 && doc.getTextWidth(txt) > maxW) {
+  const minUnaLinea = wrap ? 8 : 4;
+  while (size > minUnaLinea && doc.getTextWidth(txt) > maxW) {
     size -= 0.3;
     doc.setFontSize(size);
   }
-  while (txt.length > 1 && doc.getTextWidth(txt) > maxW) txt = txt.slice(0, -1);
-  if (align === 'c') doc.text(txt, x + w / 2, y, { align: 'center' });
-  else doc.text(txt, x + 0.8, y, { align: 'left' });
+  if (!wrap || doc.getTextWidth(txt) <= maxW) {
+    let t = txt;
+    while (t.length > 1 && doc.getTextWidth(t) > maxW) t = t.slice(0, -1);
+    dibujar(t, yTop + h / 2 + size * 0.17);
+    return;
+  }
+
+  // Dos líneas (achicando un poco más solo si ni así entra).
+  let lineas = doc.splitTextToSize(txt, maxW) as string[];
+  while (size > 5.5 && lineas.length > 2) {
+    size -= 0.3;
+    doc.setFontSize(size);
+    lineas = doc.splitTextToSize(txt, maxW) as string[];
+  }
+  lineas = lineas.slice(0, 2);
+  const lh = size * 0.42;
+  const y1 = yTop + h / 2 + size * 0.17 - lh / 2;
+  dibujar(lineas[0], y1);
+  if (lineas[1]) {
+    let t2 = lineas[1];
+    while (t2.length > 1 && doc.getTextWidth(t2) > maxW) t2 = t2.slice(0, -1);
+    dibujar(t2, y1 + lh);
+  }
 }
 
 /** Salto de página de una tabla: límite inferior + qué dibujar en la nueva página. */
@@ -162,11 +206,12 @@ function tabla(
       doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
       doc.setLineWidth(0.2);
       doc.rect(cx, yy, c.w, headH);
-      celda(doc, c.label, cx, c.w, yy + headH / 2 + 1.5, {
+      celda(doc, c.label, cx, c.w, yy, headH, {
         bold: true,
         color: C_WHITE,
         align: 'c',
         size: 8.5,
+        wrap: false,
       });
       cx += c.w;
     }
@@ -191,7 +236,7 @@ function tabla(
       doc.setLineWidth(0.2);
       doc.rect(cx, y, c.w, rowH);
       const val = row[j] ?? '';
-      celda(doc, val, cx, c.w, y + rowH / 2 + 1.9, {
+      celda(doc, val, cx, c.w, y, rowH, {
         align: c.align ?? 'l',
         bold: opts.greenCol === j,
         color: opts.greenCol === j ? C_WHITE : C_TEXT,
@@ -262,7 +307,9 @@ export function generarPdfInventario(
   };
 
   // ── BLOQUE 1: detalle por cortina ──────────────────────────────────
-  const w1 = [6, 26, 28, 30, 20, 16, 24, 24, 16, 22, 14, 14, 27];
+  // Sin columna MANILLAS (van consolidadas en CORTINAS ROLLER); los anchos
+  // priorizan las columnas de texto largo para que no se encojan tanto.
+  const w1 = [6, 28, 22, 40, 18, 12, 26, 28, 30, 13, 13, 24];
   const sum1 = w1.reduce((a, b) => a + b, 0);
   const sc1 = usable / sum1;
   const cols1: Col[] = [
@@ -274,7 +321,6 @@ export function generarPdfInventario(
     { label: 'ADICIONAL', align: 'c' },
     { label: 'ACCIONAMIENTO' },
     { label: 'PESO CADENA' },
-    { label: 'MANILLAS', align: 'c' },
     { label: 'UBIC.' },
     { label: 'ANCHO mts', align: 'c' },
     { label: 'ALTO mts', align: 'c' },
@@ -289,7 +335,6 @@ export function generarPdfInventario(
     f.adicional,
     f.accionamiento,
     f.pesoCadena,
-    f.manillas,
     f.ubic,
     f.anchoMts,
     f.altoMts,

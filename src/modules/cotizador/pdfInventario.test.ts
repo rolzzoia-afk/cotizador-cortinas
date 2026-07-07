@@ -68,6 +68,18 @@ describe('construirInventario', () => {
   it('etiquetas: 1 por cortina, código según color de accesorios (NEG → INS 95 negra)', () => {
     expect(data.etiquetas).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 2 }]);
   });
+
+  it('manillas van consolidadas en materiales (cantidad real por color), no como columna', () => {
+    const conManillas = [ventana('BAÑO 1', 0.9, 1.3), ventana('BAÑO 2', 0.9, 1.3)];
+    (conManillas[0].panos![0] as { manillaCant?: number; manillaColor?: string }).manillaCant = 9;
+    (conManillas[0].panos![0] as { manillaCant?: number; manillaColor?: string }).manillaColor = 'CAFÉ';
+    (conManillas[1].panos![0] as { manillaCant?: number; manillaColor?: string }).manillaCant = 2;
+    (conManillas[1].panos![0] as { manillaCant?: number; manillaColor?: string }).manillaColor = 'CAFÉ';
+    const d = construirInventario(conManillas);
+    const manilla = d.materiales.find((m) => m.descripcion === 'MANILLA CAFÉ');
+    expect(manilla?.cantidad).toBe(11);
+    expect(Object.keys(d.filas[0])).not.toContain('manillas');
+  });
 });
 
 // Regresión OT 267-3 (jeffi): el PDF mostraba el id del modelo de despiece
