@@ -118,13 +118,13 @@ function celda(
   opts: { size?: number; bold?: boolean; color?: RGB; align?: 'l' | 'c' } = {},
 ) {
   const { bold = false, color = C_TEXT, align = 'l' } = opts;
-  let size = opts.size ?? 6.5;
+  let size = opts.size ?? 11;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setTextColor(color[0], color[1], color[2]);
   const maxW = w - 1.4;
   let txt = String(s ?? '');
   doc.setFontSize(size);
-  while (size > 3.4 && doc.getTextWidth(txt) > maxW) {
+  while (size > 4 && doc.getTextWidth(txt) > maxW) {
     size -= 0.3;
     doc.setFontSize(size);
   }
@@ -151,7 +151,7 @@ function tabla(
 ): number {
   const headFill = opts.headFill ?? C_DARK;
   const rowH = opts.rowH ?? 6;
-  const headH = opts.headH ?? 8;
+  const headH = opts.headH ?? 11;
   const totalW = cols.reduce((a, c) => a + c.w, 0);
 
   const cabecera = (yy: number): number => {
@@ -162,11 +162,11 @@ function tabla(
       doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
       doc.setLineWidth(0.2);
       doc.rect(cx, yy, c.w, headH);
-      celda(doc, c.label, cx, c.w, yy + headH / 2 + 1.4, {
+      celda(doc, c.label, cx, c.w, yy + headH / 2 + 1.5, {
         bold: true,
         color: C_WHITE,
         align: 'c',
-        size: 6,
+        size: 8.5,
       });
       cx += c.w;
     }
@@ -191,7 +191,7 @@ function tabla(
       doc.setLineWidth(0.2);
       doc.rect(cx, y, c.w, rowH);
       const val = row[j] ?? '';
-      celda(doc, val, cx, c.w, y + rowH / 2 + 1.3, {
+      celda(doc, val, cx, c.w, y + rowH / 2 + 1.9, {
         align: c.align ?? 'l',
         bold: opts.greenCol === j,
         color: opts.greenCol === j ? C_WHITE : C_TEXT,
@@ -295,19 +295,19 @@ export function generarPdfInventario(
     f.altoMts,
     '',
   ]);
-  y = tabla(doc, mg, y, cols1, rows1, { rowH: 7.5, salto });
+  y = tabla(doc, mg, y, cols1, rows1, { rowH: 11, salto });
 
   // ── BLOQUE 2: CORTINAS ROLLER (consolidado + entrega) ──────────────
   y += 7;
-  const titH = 8;
-  if (y + titH + 16 > BOTTOM) y = salto.onBreak();
+  const titH = 9;
+  if (y + titH + 22 > BOTTOM) y = salto.onBreak();
   doc.setFillColor(C_BLUE[0], C_BLUE[1], C_BLUE[2]);
   doc.rect(mg, y, usable, titH, 'F');
   doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(13);
   doc.text('CORTINAS ROLLER', mg + 2, y + titH / 2 + 2);
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.text('ENTREGADO POR:', mg + usable * 0.5, y + titH / 2 + 2);
   y += titH;
 
@@ -338,18 +338,18 @@ export function generarPdfInventario(
     '',
     '',
   ]);
-  y = tabla(doc, mg, y, cols2, rows2, { rowH: 8, greenCol: 4, salto });
+  y = tabla(doc, mg, y, cols2, rows2, { rowH: 11.5, greenCol: 4, salto });
 
   // ── BLOQUE 3: ETIQUETAS ROLZZO ─────────────────────────────────────
   y += 7;
-  if (y + titH + 16 > BOTTOM) y = salto.onBreak();
+  if (y + titH + 22 > BOTTOM) y = salto.onBreak();
   doc.setFillColor(C_GREEN[0], C_GREEN[1], C_GREEN[2]);
   doc.rect(mg, y, usable, titH, 'F');
   doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
+  doc.setFontSize(13);
   doc.text('ETIQUETAS ROLZZO', mg + 2, y + titH / 2 + 2);
-  doc.setFontSize(7.5);
+  doc.setFontSize(8.5);
   doc.text('ENTREGADO', mg + usable * 0.5, y + titH / 2 + 2);
   y += titH;
 
@@ -372,7 +372,7 @@ export function generarPdfInventario(
     '',
     '',
   ]);
-  y = tabla(doc, mg, y, cols3, rows3, { rowH: 8, greenCol: 2, salto });
+  y = tabla(doc, mg, y, cols3, rows3, { rowH: 11.5, greenCol: 2, salto });
 
   doc.save(`Inventario_${meta.ot}.pdf`);
 }
