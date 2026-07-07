@@ -483,11 +483,12 @@ function dibujarPano(
   total: number,
   meta: MetaPDF,
   catalogo: CatalogoProductos,
+  juntoTexto: string,
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const familia = familiaTelaEtiqueta(p.tipoTela, row.producto);
   const tipoCortina = tipoCortinaEtiqueta(row.producto, row.tipo);
-  const junto = row.junto && row.junto !== '·' ? row.junto : '—';
+  const junto = juntoTexto && juntoTexto !== '·' ? juntoTexto : '—';
   const altoCorteCm = (row.altoCorte || 0) * 100;
 
   // Bloques CONTIGUOS con esquinas cuadradas y bordes laterales visibles:
@@ -520,7 +521,8 @@ function dibujarPano(
   });
   txt(doc, String(meta.ot), 2.9, 32.7, 18.4);
   txt(doc, 'SE CORTA JUNTO:', 58.3, 26.2, 5.6, { align: 'right' });
-  txt(doc, junto, 58.3, 32.7, 18.4, { align: 'right', max: 6 });
+  // Grupos grandes ("A-A-A-A…") bajan de cuerpo para no pisar el N° de OT.
+  txt(doc, junto, 58.3, 32.7, junto.length > 7 ? 10.5 : 18.4, { align: 'right', max: 15 });
 
   // Caja tela: codInt grande + descripción (34,1 → 50,8, ancho hasta 30)
   doc.rect(1.5, 34.1, 28.5, 16.7, 'S');
@@ -575,7 +577,53 @@ export function generarEtiquetasPDF(
   doc.save(`Etiquetas_${meta.ot}.pdf`);
 }
 
-/** Etiquetas de PAÑOS (una por paño de tela cortado), formato oficial. */
+/** Grupo de cortinas que comparten paño físico (misma letra + N° de paño). */
+export type GrupoEtiquetaPano = {
+  /** Fila representativa: la de mayor alto de corte (define el tiro de tela). */
+  row: OptimizerRow;
+  /** Texto SE CORTA JUNTO: "A" si va sola, "A-A" si viajan 2 cortinas, etc. */
+  junto: string;
+  cortinas: number;
+};
+
+/**
+ * Agrupa las filas del optimizador en paños físicos: las cortinas que se
+ * cortan juntas (misma letra + mismo N° de paño) comparten UNA etiqueta.
+ * Filas sin letra o sin N° de paño (planes legacy) quedan cada una con la
+ * suya, igual que antes.
+ */
+export function agruparEtiquetasPanos(rows: OptimizerRow[]): GrupoEtiquetaPano[] {
+  const grupos: GrupoEtiquetaPano[] = [];
+  const porClave = new Map<string, GrupoEtiquetaPano>();
+  rows.forEach((row, i) => {
+    const letra = (row.junto || '').trim();
+    const numero = row.numeroPano == null ? '' : String(row.numeroPano).trim();
+    const esAgrupable = letra !== '' && letra !== '·' && numero !== '';
+    const clave = esAgrupable ? `${numero}|${letra}` : `sola-${i}`;
+    const previo = porClave.get(clave);
+    if (!previo) {
+      const g: GrupoEtiquetaPano = { row, junto: row.junto, cortinas: 1 };
+      porClave.set(clave, g);
+      grupos.push(g);
+    } else {
+      previo.cortinas += 1;
+      if ((row.altoCorte || 0) > (previo.row.altoCorte || 0)) previo.row = row;
+    }
+  });
+  for (const g of grupos) {
+    if (g.cortinas > 1) {
+      const letra = (g.row.junto || '').trim();
+      g.junto = Array(g.cortinas).fill(letra).join('-');
+    }
+  }
+  return grupos;
+}
+
+/**
+ * Etiquetas de PAÑOS (una por paño FÍSICO de tela cortado), formato oficial.
+ * Un corte en conjunto (varias cortinas en el mismo tiro) lleva UNA etiqueta
+ * con la letra repetida ("A-A") y el alto mayor del grupo.
+ */
 export function generarEtiquetasPanosPDF(
   rows: OptimizerRow[],
   meta: MetaPDF,
@@ -584,12 +632,13 @@ export function generarEtiquetasPanosPDF(
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
+  const grupos = agruparEtiquetasPanos(rows);
   // Página exacta 62×54: orientación 'l' porque jsPDF voltea las páginas
   // "apaisadas" (ancho > alto) cuando se le pide 'p'.
   const doc = new jsPDF('l', 'mm', [ANCHO, ALTO_PANO]);
-  rows.forEach((row, i) => {
+  grupos.forEach((g, i) => {
     if (i > 0) doc.addPage([ANCHO, ALTO_PANO], 'l');
-    dibujarPano(doc, row, i + 1, rows.length, meta, catalogo);
+    dibujarPano(doc, g.row, i + 1, grupos.length, meta, catalogo, g.junto);
   });
   doc.save(`Etiquetas_Panos_${meta.ot}.pdf`);
 }

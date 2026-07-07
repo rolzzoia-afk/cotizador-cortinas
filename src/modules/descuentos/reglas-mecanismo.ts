@@ -104,6 +104,31 @@ export const REGLAS_MECANISMO = {
       codigoInventario: 'MEC_12_OVALADA_GRIS',
       colores: ['GRS', 'GRIS'],
     },
+    // Roller manual 38 mm con cenefa ovalada: misma familia de kits ovalada
+    // que la dúo (confirmado 2026-07-07). Los motorizados no entran (el motor
+    // reemplaza al mecanismo) y el 45 mm sigue con kit simple hasta confirmar
+    // si bodega tiene kit ovalada de 45 mm.
+    {
+      descripcion: 'Roller manual cenefa ovalada 38 mm blanco → MEC 39 ovalada',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      mec: 39,
+      codigoInventario: 'MEC_39_OVALADA_BLANCO',
+      colores: ['BCO', 'BLANCO'],
+    },
+    {
+      descripcion: 'Roller manual cenefa ovalada 38 mm negro → MEC 38 ovalada',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      mec: 38,
+      codigoInventario: 'MEC_38_OVALADA_NEGRO',
+      colores: ['NEG', 'NEGRO'],
+    },
+    {
+      descripcion: 'Roller manual cenefa ovalada 38 mm gris → MEC 12 ovalada',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      mec: 12,
+      codigoInventario: 'MEC_12_OVALADA_GRIS',
+      colores: ['GRS', 'GRIS'],
+    },
   ] as readonly ReglaMecCategoria[],
 } as const;
 
