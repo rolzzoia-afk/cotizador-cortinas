@@ -48,11 +48,16 @@ export const OPCIONES_MECANISMO = [
   'KIT SIMPLE NEGRO 38MM [MEC 32]',
   'KIT SIMPLE BLANCO 38MM [MEC 33]',
   'KIT SIMPLE GRIS 38MM [MEC 34]',
+  // Kits bodega de cenefa ovalada por color (Dúo manual 38 / Soft Light 38;
+  // ver reglas-mecanismo.ts). Nemotécnicos de inventario: MECANISMO OVALADO
+  // GRIS/NEGRO/BLANCO - ROLZZO.
+  'OVALADA GRIS [MEC 12]',
+  'OVALADA NEGRO [MEC 38]',
+  'OVALADA BLANCO [MEC 39]',
   // Legacy Excel / opciones manuales
   'LZ 38 MERG BCO [MEC 05]',
   'OVALADA NEG [MEC 09]',
   'OVALADA BCO [MEC 10]',
-  'OVALADA BLANCO SOFT [MEC 39]',
   'LZ50 MERG BCO [MEC 06]',
   'LZ50 SFLX NGR [MEC 11]',
   'LZ50 SFLX GRIS [MEC 13]',

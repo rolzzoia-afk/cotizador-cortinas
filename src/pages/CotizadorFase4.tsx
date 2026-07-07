@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
 import { SUB_ETAPA_META } from '@/modules/cotizador/fase4';
 import { formatCLP } from '@/modules/cotizador/calculos';
@@ -51,6 +52,7 @@ export function CotizadorFase4() {
   const navigate = useNavigate();
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
+  const { parametros, loading: loadingParams } = useParametrosCotizador();
   const { empresaId, empresaNombre } = useAuth();
   const [avanzando, setAvanzando] = useState(false);
   const [cambiandoSub, setCambiandoSub] = useState(false);
@@ -59,14 +61,14 @@ export function CotizadorFase4() {
   const [invSaving, setInvSaving] = useState(false);
 
   const pdfRows = useMemo(() => {
-    if (!ot || loadingCat) return null;
-    const fresh = buildOptimizerRows(ot.storeVentanas, catalogo);
+    if (!ot || loadingCat || loadingParams) return null;
+    const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros);
     if (fresh.length === 0) return [];
     const guardado = ot.datosGenerales?.optimizerRows;
     const restored = restorePlanGuardado(fresh, guardado);
     const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
     return tieneJunto ? restored : asignarJuntoEnOrden(restored);
-  }, [ot, loadingCat, catalogo]);
+  }, [ot, loadingCat, catalogo, loadingParams, parametros]);
 
   // Componentes consolidados (siempre frescos desde el optimizador).
   // El ajuste manual se hace con la columna "Adicional" de la hoja.
@@ -146,7 +148,7 @@ export function CotizadorFase4() {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
         empresa: empresaNombre ?? undefined,
-      });
+      }, parametros);
       toast.success('Hoja de inventario generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -184,7 +186,7 @@ export function CotizadorFase4() {
       generarPdfCalculoGeneral(ventanas, catalogo, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
-      });
+      }, parametros);
       toast.success('Cálculo general generado');
     } catch (e) {
       toast.error('Error generando cálculo general: ' + (e instanceof Error ? e.message : String(e)));
@@ -249,7 +251,7 @@ export function CotizadorFase4() {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || '',
         empresa: empresaNombre ?? undefined,
-      });
+      }, parametros);
       toast.success('Hoja de corte generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -284,8 +286,9 @@ export function CotizadorFase4() {
         .eq('empresa_id', empresaId)
         .eq('disponible', true);
       const panos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
-      const plan = generarPlanCorte([ot], panos);
-      const deducciones = deduccionesColmena(plan);
+      // Plan y deducción con los MISMOS params: el retazo debe calzar el layout.
+      const plan = generarPlanCorte([ot], panos, parametros);
+      const deducciones = deduccionesColmena(plan, parametros);
       // Sobrantes de rollo reutilizables (≥120×180, ya gateados por planCorte):
       // se ofrecen para sumar a la colmena con confirmación física del operario.
       const sobrantesRolloPlan: SobranteRollo[] = plan.rollo

@@ -61,6 +61,35 @@ describe('normalizarParametros', () => {
       RECARGO_TARJETA_FLOW,
     );
   });
+
+  it('parámetros de corte: defaults históricos presentes', () => {
+    expect(PARAMETROS_DEFAULT.extraAltoCm).toBe(25);
+    expect(PARAMETROS_DEFAULT.extraDuoCm).toBe(30);
+    expect(PARAMETROS_DEFAULT.extraVerticalCm).toBe(5);
+    expect(PARAMETROS_DEFAULT.descAnchoCorteCm).toBe(3.5);
+    expect(PARAMETROS_DEFAULT.anchoRolloDefaultM).toBe(2.98);
+    expect(PARAMETROS_DEFAULT.anchoRolloPlanCm).toBe(300);
+    expect(PARAMETROS_DEFAULT.colmenaMinAnchoCm).toBe(120);
+    expect(PARAMETROS_DEFAULT.colmenaMinAltoCm).toBe(180);
+    expect(PARAMETROS_DEFAULT.diasAlertaColmena).toBe(90);
+  });
+
+  it('parámetros de corte: custom válidos se conservan, garbage cae al default', () => {
+    const out = normalizarParametros({ extraDuoCm: 35, ventanaAltoCm: 'x', bordeCm: -2 });
+    expect(out.extraDuoCm).toBe(35);
+    expect(out.ventanaAltoCm).toBe(PARAMETROS_DEFAULT.ventanaAltoCm);
+    expect(out.bordeCm).toBe(PARAMETROS_DEFAULT.bordeCm);
+  });
+
+  it('clamps de corte: rollo 0 y plan ≤ 2×margen caen a defaults; días se redondean', () => {
+    expect(normalizarParametros({ anchoRolloDefaultM: 0 }).anchoRolloDefaultM).toBe(
+      PARAMETROS_DEFAULT.anchoRolloDefaultM,
+    );
+    const out = normalizarParametros({ anchoRolloPlanCm: 8, margenRolloCm: 5 });
+    expect(out.anchoRolloPlanCm).toBe(PARAMETROS_DEFAULT.anchoRolloPlanCm);
+    expect(out.margenRolloCm).toBe(PARAMETROS_DEFAULT.margenRolloCm);
+    expect(normalizarParametros({ diasAlertaColmena: 90.7 }).diasAlertaColmena).toBe(91);
+  });
 });
 
 describe('recargoTarjetaEfectivo', () => {

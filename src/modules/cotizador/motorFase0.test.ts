@@ -100,6 +100,31 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     expect(cerca(r.lineas[0].valorUnit, 245061.99, 0.001)).toBe(true);
   });
 
+  it('Camila (OT 3048) — Dúo Blackout Premium DU 28 (4 cortinas) — exacto', () => {
+    // COTIZACIÓN FINAL CAMILA.xlsm: rollo 2,95, tela DB-P 32.292, MTS 15,3.
+    const r = cotizarFase0([
+      { codInt: 'DU 28', ancho: 1.66, alto: 2.3, cantidad: 1 },
+      { codInt: 'DU 28', ancho: 1.61, alto: 2.3, cantidad: 1 },
+      { codInt: 'DU 28', ancho: 0.595, alto: 1.015, cantidad: 1 },
+      { codInt: 'DU 28', ancho: 2.18, alto: 2.3, cantidad: 1 },
+    ], CAT, AR);
+    expect(cerca(r.lineas[0].valorUnit, 284926.19, 0.001)).toBe(true);
+    expect(cerca(r.lineas[1].valorUnit, 276871.19, 0.001)).toBe(true);
+    expect(cerca(r.lineas[2].valorUnit, 65051.38, 0.001)).toBe(true);
+    expect(cerca(r.lineas[3].valorUnit, 368698.25, 0.001)).toBe(true);
+  });
+
+  it('extraAltoCm custom afecta metros de tela y precio (como la celda del Excel)', () => {
+    const filas = [{ codInt: 'SC 34', ancho: 1.5, alto: 2.0, cantidad: 1 }];
+    const base = cotizarFase0(filas, CAT, AR);
+    const conExtra = cotizarFase0(filas, CAT, AR, [], { ...PARAMETROS_DEFAULT, extraAltoCm: 35 });
+    // alto real 2,25 → 2,35: más tela y más precio.
+    expect(conExtra.lineas[0].valorUnit).toBeGreaterThan(base.lineas[0].valorUnit);
+    // Con el default explícito reproduce el histórico exacto.
+    const explicito = cotizarFase0(filas, CAT, AR, [], { ...PARAMETROS_DEFAULT });
+    expect(explicito.lineas[0].valorUnit).toBeCloseTo(base.lineas[0].valorUnit, 6);
+  });
+
   // ───── Roller Premium / Delux ─────
   it('Felipe — Screen Premium (3 cortinas) — exacto', () => {
     const r = cotizarFase0([

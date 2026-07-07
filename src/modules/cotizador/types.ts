@@ -41,6 +41,9 @@ export type Pano = {
   cenefa?: string;
   /** 'CON TIRA' | 'SIN TIRA' — cenefa ovalada (Excel órdenes / optimizador). */
   cenefaTira?: string;
+  /** Dúo: cierre de altura (cm), medido en terreno por el vendedor. Sale en
+   *  la etiqueta de estructura dúo y en la hoja de cálculo general. */
+  cierreAlturaCm?: number | string;
   /** Sistemas de oscuridad: variante de instalación 'INTERNO'|'SEMI'|'EXTERNO'. */
   oscuridadVariante?: string;
   /** Sistemas de oscuridad: interruptores ON/OFF de perfiles. */

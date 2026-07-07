@@ -276,6 +276,8 @@ export function extraerTelasBOM(
       if (!cod) return;
       const anchoM =
         parseFloat(String(row.ancho ?? (row.anchoCm ? row.anchoCm / 100 : 0))) || 0;
+      // 0.25 = fallback histórico solo para filas guardadas SIN altoReal; el
+      // valor real (param-aware) viene en optimizerRows.altoReal.
       const altoM =
         parseFloat(String(row.altoReal ?? (parseFloat(String(row.alto ?? 0)) + 0.25))) ||
         0;
@@ -303,6 +305,7 @@ export function extraerTelasBOM(
       const panos = Array.isArray(v.panos) && v.panos.length ? v.panos : [{}];
       panos.forEach((p: Record<string, unknown>) => {
         const anchoM = parseFloat(String(p.ancho ?? v.ancho ?? 0)) || 0;
+        // 0.25 = fallback histórico (OTs sin optimizerRows guardadas).
         const altoM = parseFloat(String(v.alto ?? 0)) + 0.25;
         if (!acc.has(cod)) {
           acc.set(cod, {

@@ -10,6 +10,7 @@ import { tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { calcularDespiece, contextoDespieceDesdePano } from '@/modules/descuentos/despiece';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -26,13 +27,14 @@ export function derivarCod(producto: string): string {
 export function obtenerAnchoRollo(
   codInt: string | undefined | null,
   catalogo: CatalogoProductos,
+  anchoRolloDefaultM: number = PARAMETROS_CORTE_DEFAULT.anchoRolloDefaultM,
 ): number {
-  if (!codInt) return 2.98;
+  if (!codInt) return anchoRolloDefaultM;
   const info = catalogo[codInt];
   if (info && info.anchoRollo) {
-    return parseFloat(String(info.anchoRollo)) || 2.98;
+    return parseFloat(String(info.anchoRollo)) || anchoRolloDefaultM;
   }
-  return 2.98;
+  return anchoRolloDefaultM;
 }
 
 // ── Tipo de fila del optimizador ─────────────────────────────────────
@@ -47,7 +49,7 @@ export type OptimizerRow = {
   alto: number; // metros
   anchoCm: number;
   altoCm: number;
-  extra: number; // siempre 0.25 (m)
+  extra: number; // extra de alto (m); default 0,25 (parámetro extraAltoCm)
   altoExtra: number;
   /** Reserva "alto máximo a utilizar" (m). Dúo = 2×(alto+0,25); resto = alto+0,25. */
   altoReal: number;
@@ -113,6 +115,7 @@ function piezasDespiece(
 export function buildOptimizerRows(
   ventanas: VentanaItem[],
   catalogo: CatalogoProductos,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): OptimizerRow[] {
   const rows: OptimizerRow[] = [];
   let rowIdx = 0;
@@ -125,17 +128,18 @@ export function buildOptimizerRows(
       const altoM = parseFloat(String(v.alto ?? p.alto ?? 0)) || 0;
       const anchoCm = anchoM * 100;
       const altoCm = altoM * 100;
-      const extra = 0.25;
+      const extra = params.extraAltoCm / 100;
       const altoExtra = altoM + extra;
       const isDuo = !!(v.producto && v.producto.toUpperCase().includes('DUO'));
       // Dúo (día/noche): la tela baja y vuelve a subir → se corta al doble.
-      //  · altoReal  = reserva "alto máximo a utilizar" = 2×(alto+0,25)
-      //  · altoCorte = corte real de la tela            = 2×alto + 0,30
-      // En roller simple ambas valen alto+0,25. (Validado con OT 266-16 dúo.)
+      //  · altoReal  = reserva "alto máximo a utilizar" = 2×(alto+extraAlto)
+      //  · altoCorte = corte real de la tela            = 2×alto + extraDuo
+      // En roller simple ambas valen alto+extraAlto. Defaults 0,25/0,30
+      // (validado con OT 266-16 dúo); editables en Parámetros de corte.
       const altoReal = isDuo ? altoExtra * 2 : altoExtra;
-      const altoCorte = isDuo ? altoM * 2 + 0.3 : altoExtra;
+      const altoCorte = isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra;
       const m2 = parseFloat((altoReal * anchoM).toFixed(4));
-      const anchoRollo = obtenerAnchoRollo(v.codInt, catalogo);
+      const anchoRollo = obtenerAnchoRollo(v.codInt, catalogo, params.anchoRolloDefaultM);
       const cod = derivarCod(v.producto || '');
       const panoLabel = panos.length > 1 ? ` P${pi + 1}` : '';
       const tuberiaCod = tuberiaCodigoCorto(
@@ -289,7 +293,10 @@ export type PanoCalculado = {
   junto: string;
 };
 
-export function calcularPanos(rows: OptimizerRow[]): {
+export function calcularPanos(
+  rows: OptimizerRow[],
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): {
   panos: PanoCalculado[];
   totalM2: number;
   totalPanos: number;
@@ -299,7 +306,7 @@ export function calcularPanos(rows: OptimizerRow[]): {
   let idx = 0;
   for (const r of rows) {
     idx++;
-    const anchoCorteCm = parseFloat((r.anchoCm - 3.5).toFixed(1));
+    const anchoCorteCm = parseFloat((r.anchoCm - params.descAnchoCorteCm).toFixed(1));
     const altoCorteCm = parseFloat((r.altoCorte * 100).toFixed(1)); // dúo: 2×alto+30
     const m2Val = (r.anchoCm / 100) * (altoCorteCm / 100);
     totalM2 += m2Val;

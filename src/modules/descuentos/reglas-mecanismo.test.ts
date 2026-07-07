@@ -40,6 +40,24 @@ describe('REGLAS_MECANISMO — reglasCategoria', () => {
     expect(mecPorCategoriaYColor('SOFT_LIGHT_38mm', 'GRS')).toBeNull();
   });
 
+  it('DUO_MANUAL_38mm + BCO → MEC 39 (cenefa ovalada blanco, no kit simple)', () => {
+    const regla = reglaCategoriaAplicable('DUO_MANUAL_38mm', 'BCO');
+    expect(regla?.mec).toBe(39);
+    expect(regla?.codigoInventario).toBe('MEC_39_OVALADA_BLANCO');
+    expect(mecPorCategoriaYColor('DUO_MANUAL_38mm', 'BLANCO')).toBe(39);
+  });
+
+  it('DUO_MANUAL_38mm + NEG → MEC 38 y + GRS → MEC 12 (kits ovalada de bodega)', () => {
+    const negro = reglaCategoriaAplicable('DUO_MANUAL_38mm', 'NEG');
+    expect(negro?.mec).toBe(38);
+    expect(negro?.codigoInventario).toBe('MEC_38_OVALADA_NEGRO');
+    expect(mecPorCategoriaYColor('DUO_MANUAL_38mm', 'NEGRO')).toBe(38);
+    const gris = reglaCategoriaAplicable('DUO_MANUAL_38mm', 'GRIS');
+    expect(gris?.mec).toBe(12);
+    expect(gris?.codigoInventario).toBe('MEC_12_OVALADA_GRIS');
+    expect(mecPorCategoriaYColor('DUO_MANUAL_38mm', 'GRS')).toBe(12);
+  });
+
   it('ROL estándar → cae en colorAMec, no en reglasCategoria', () => {
     expect(reglaCategoriaAplicable('ROL', 'BCO')).toBeNull();
     expect(mecPorCategoriaYColor('ROL', 'BCO')).toBeNull();

@@ -17,6 +17,7 @@ import jsPDF from 'jspdf';
 import type { Ventana, CatalogoProductos } from '@/modules/cotizador/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
 
 type RGB = [number, number, number];
@@ -72,8 +73,9 @@ function consolidarMateriales(filas: FilaCalculo[]): MaterialConsolidado[] {
 export function construirInventario(
   ventanas: Ventana[],
   catalogo: CatalogoProductos = {},
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): Inventario {
-  const { filas } = construirCalculoGeneral(ventanas, catalogo);
+  const { filas } = construirCalculoGeneral(ventanas, catalogo, params);
   const filasInv: FilaInventario[] = filas.map((f, i) => ({
     id: i + 1,
     producto: f.producto,
@@ -194,8 +196,9 @@ export function generarPdfInventario(
   ventanas: Ventana[],
   catalogo: CatalogoProductos,
   meta: MetaInventario,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): void {
-  const data = construirInventario(ventanas, catalogo);
+  const data = construirInventario(ventanas, catalogo, params);
   if (data.filas.length === 0) {
     throw new Error('No hay cortinas en la OT.');
   }

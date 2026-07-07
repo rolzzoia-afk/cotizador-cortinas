@@ -79,6 +79,31 @@ export const REGLAS_MECANISMO = {
       codigoInventario: 'MEC_39_OVALADA_BLANCO',
       colores: ['BCO', 'BLANCO'],
     },
+    // Dúo manual 38 mm (cenefa ovalada): usa el kit ovalada de bodega según
+    // color de accesorios, NO el kit simple 32/33/34. Verificado contra el
+    // inventario real 2026-07-06: MEC 39 = MECANISMO OVALADO BLANCO - ROLZZO,
+    // MEC 38 = OVALADO NEGRO - ROLZZO, MEC 12 = OVALADO GRIS (producto DÚO).
+    {
+      descripcion: 'Dúo manual 38 mm con accesorios blancos → MEC 39 ovalada',
+      categoria: 'DUO_MANUAL_38mm',
+      mec: 39,
+      codigoInventario: 'MEC_39_OVALADA_BLANCO',
+      colores: ['BCO', 'BLANCO'],
+    },
+    {
+      descripcion: 'Dúo manual 38 mm con accesorios negros → MEC 38 ovalada',
+      categoria: 'DUO_MANUAL_38mm',
+      mec: 38,
+      codigoInventario: 'MEC_38_OVALADA_NEGRO',
+      colores: ['NEG', 'NEGRO'],
+    },
+    {
+      descripcion: 'Dúo manual 38 mm con accesorios grises → MEC 12 ovalada',
+      categoria: 'DUO_MANUAL_38mm',
+      mec: 12,
+      codigoInventario: 'MEC_12_OVALADA_GRIS',
+      colores: ['GRS', 'GRIS'],
+    },
   ] as readonly ReglaMecCategoria[],
 } as const;
 

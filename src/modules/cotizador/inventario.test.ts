@@ -111,6 +111,39 @@ describe('construirFilasCortinas', () => {
     expect(f.mecanismo).toContain('[MEC 39]');
   });
 
+  it('DUO_MANUAL_38mm + NEG → MEC 38 (cenefa ovalada negro) en Fase 4', () => {
+    const [f] = construirFilasCortinas([
+      {
+        id: '1',
+        ubicacion: 'LIVING IZQ-G1',
+        producto: 'ROLLER DUO POLIESTER PREMIUM NEGRO',
+        tipo: 'PREMIUM',
+        color: 'Negro',
+        categoria: 'DUO_MANUAL_38mm',
+        // Caso real OT 267-9: kit simple negro guardado por el mapeo por color.
+        panos: [{ ancho: 1.346, alto: 2.32, colorPeso: 'NEG', mecanismo: 'KIT SIMPLE NEGRO 38MM [MEC 32]' }],
+      },
+    ]);
+    expect(f.mecanismo).toContain('[MEC 38]');
+  });
+
+  it('DUO_MANUAL_38mm + BCO → MEC 39 (cenefa ovalada blanco) en Fase 4', () => {
+    const [f] = construirFilasCortinas([
+      {
+        id: '1',
+        ubicacion: 'LIVING IZQ-G1',
+        producto: 'ROLLER DUO BLACKOUT PREMIUM BLANCO',
+        tipo: 'PREMIUM',
+        color: 'Blanco',
+        categoria: 'DUO_MANUAL_38mm',
+        // Caso real OT 267-5: el kit simple quedó guardado por el mapeo por
+        // color; la regla de categoría debe pisarlo con el kit ovalada.
+        panos: [{ ancho: 1.66, alto: 2.3, colorPeso: 'BCO', mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]' }],
+      },
+    ]);
+    expect(f.mecanismo).toContain('[MEC 39]');
+  });
+
   it('OSCURANTI → MEC 28 en Fase 4', () => {
     const [f] = construirFilasCortinas([
       {

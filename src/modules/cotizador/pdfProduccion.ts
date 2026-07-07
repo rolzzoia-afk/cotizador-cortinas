@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf';
 import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow } from './tela';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
 const EMPTY_PANO: Partial<Pano> = {};
 
@@ -94,6 +95,7 @@ export function generarPDFProduccion(
   rows: OptimizerRow[],
   meta: MetaPDF,
   catalogo: CatalogoProductos,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): void {
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para generar el PDF. Guarda el plan en Tela primero.');
@@ -122,8 +124,9 @@ export function generarPDFProduccion(
 
   // 1. CÁLCULO DE PAÑOS ───────────────────────────────────────────────
   const panoData = rows.map((r, i) => {
-    const altoCorteCm = (r.altoCm + 25).toFixed(1);
-    const m2Val = ((r.anchoCm / 100) * ((r.altoCm + 25) / 100)).toFixed(4);
+    // altoCorte viene de la fila (param-aware; dúo = 2×alto+extraDuo).
+    const altoCorteCm = (r.altoCorte * 100).toFixed(1);
+    const m2Val = ((r.anchoCm / 100) * r.altoCorte).toFixed(4);
     return [
       i + 1,
       r.cod || '',
@@ -132,9 +135,9 @@ export function generarPDFProduccion(
       r.codInt || '',
       r.tipo || '',
       r.anchoCm.toFixed(1) + ' cm',
-      (r.anchoCm - 3.5).toFixed(1) + ' cm',
+      (r.anchoCm - params.descAnchoCorteCm).toFixed(1) + ' cm',
       r.altoCm.toFixed(1) + ' cm',
-      '0.25 m',
+      r.extra.toFixed(2) + ' m',
       altoCorteCm + ' cm',
       r.altoReal.toFixed(4) + ' m',
       m2Val,
@@ -276,7 +279,7 @@ export function generarPDFProduccion(
     if (!resumenTela[codKey]) {
       resumenTela[codKey] = {
         producto: r.producto || '',
-        anchoRollo: r.anchoRollo || 2.98,
+        anchoRollo: r.anchoRollo || params.anchoRolloDefaultM,
         totalM2: 0,
         panos: 0,
       };

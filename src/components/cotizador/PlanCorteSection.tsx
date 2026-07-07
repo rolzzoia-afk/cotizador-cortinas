@@ -20,6 +20,7 @@ import {
   type Plan,
 } from '@/modules/cotizador/planCorte';
 import { retazoSugerido } from '@/modules/cotizador/colmenaCorte';
+import { useParametrosCotizador, type ParametrosCorte } from '@/modules/cotizador/parametros';
 import type { ColmenaPano } from '@/modules/admin/colmena';
 import type { OT } from '@/modules/ots/types';
 import type { Database } from '@/types/database';
@@ -120,12 +121,12 @@ function eficClass(efic: number): string {
 // ═════════════════════════════════════════════════════════════════════
 // Card: usar sobrante de colmena
 // ═════════════════════════════════════════════════════════════════════
-function CardSobrante({ grupo }: { grupo: GrupoSobrante }) {
+function CardSobrante({ grupo, params }: { grupo: GrupoSobrante; params: ParametrosCorte }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const placed = grupo.placed.filter((r) => !r.failed);
   // Retazo único estimado tras el corte (mismo cálculo que el corte general).
-  const retazo = retazoSugerido(grupo);
+  const retazo = retazoSugerido(grupo, params);
 
   const efic = Math.round(
     (placed.reduce((s, r) => s + r.pw * r.ph, 0) / (grupo.uw * grupo.uh)) * 100,
@@ -628,6 +629,7 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
 // ═════════════════════════════════════════════════════════════════════
 export function PlanCorteSection({ ot }: { ot: OT }) {
   const { empresaId } = useAuth();
+  const { parametros, loading: loadingParams } = useParametrosCotizador();
   const [colmenaPanos, setColmenaPanos] = useState<ColmenaPano[] | null>(null);
   const [ots, setOts] = useState<OT[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -696,10 +698,11 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
   };
 
   const plan: Plan | null = useMemo(() => {
-    if (!colmenaPanos || !ots) return null;
+    // Espera los parámetros de corte: un plan con defaults no se recalcularía.
+    if (!colmenaPanos || !ots || loadingParams) return null;
     const panos = colmenaPanos.map(rowToPano);
-    return generarPlanCorte(ots, panos);
-  }, [colmenaPanos, ots]);
+    return generarPlanCorte(ots, panos, parametros);
+  }, [colmenaPanos, ots, loadingParams, parametros]);
 
   const resumen = plan ? resumenPlan(plan) : null;
   const otNum = ot.datosGenerales.ot || String(ot.id);
@@ -764,7 +767,7 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
                 Usar sobrantes de la Colmena
               </div>
               {plan.sobrantes.map((g, gi) => (
-                <CardSobrante key={gi} grupo={g} />
+                <CardSobrante key={gi} grupo={g} params={parametros} />
               ))}
             </>
           )}

@@ -30,7 +30,8 @@ export function claveCelda(fila: number, col: number): string {
 
 // ── Estado / alerta de antigüedad (Reglas Rolzzo v1.0, sección 6) ─────
 export type EstadoColmena = 'activa' | 'alerta' | 'usada' | 'baja';
-/** Una colmena disponible sin usar por más de 90 días pasa a "en alerta". */
+/** Una colmena disponible sin usar por más de 90 días pasa a "en alerta".
+ *  Default histórico; el vigente por empresa es parametros.diasAlertaColmena. */
 export const DIAS_ALERTA = 90;
 
 /**
@@ -50,17 +51,18 @@ export function diasEnColmena(p: ColmenaPano, hoyISO: string): number | null {
 export function estadoColmena(
   p: ColmenaPano,
   hoyISO: string,
+  diasAlerta: number = DIAS_ALERTA,
 ): { estado: EstadoColmena; dias: number | null } {
   const dias = diasEnColmena(p, hoyISO);
   if (p.datos_extra?.baja) return { estado: 'baja', dias };
   if (!p.disponible) return { estado: 'usada', dias };
-  if (dias != null && dias > DIAS_ALERTA) return { estado: 'alerta', dias };
+  if (dias != null && dias > diasAlerta) return { estado: 'alerta', dias };
   return { estado: 'activa', dias };
 }
 
 /** ¿El paño está en alerta por antigüedad (disponible y >90 días)? */
-export function enAlerta(p: ColmenaPano, hoyISO: string): boolean {
-  return estadoColmena(p, hoyISO).estado === 'alerta';
+export function enAlerta(p: ColmenaPano, hoyISO: string, diasAlerta: number = DIAS_ALERTA): boolean {
+  return estadoColmena(p, hoyISO, diasAlerta).estado === 'alerta';
 }
 
 export type MapaRack = {

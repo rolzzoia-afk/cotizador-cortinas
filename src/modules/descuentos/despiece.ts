@@ -191,6 +191,16 @@ export function calcularDespiece(
     //     LLEVA peso interno; la medida la da dcto_tela_cm.
     //   · Peso U (lágrima)   = baseTubo − peso_u_duo_cm.
     if (esDuo) {
+      // Tela dúo: en dúo NO corre la regla peso − suma_peso (suma_peso_cm=0);
+      // el ancho de la tela lo fija dcto_tela_cm sobre el tubo. Referencial
+      // (etiqueta/hoja cálculo): viaja por el flujo de telas, no por el Excel.
+      if (modelo.dcto_tela_cm > 0) {
+        cortes.push({
+          componente: 'Tela (ancho)',
+          columnaExcel: '',
+          medidaCm: r1(baseTubo - modelo.dcto_tela_cm),
+        });
+      }
       if (modelo.peso_interno_duo_cm > 0) {
         cortes.push({
           componente: 'Peso interno (E13)',
