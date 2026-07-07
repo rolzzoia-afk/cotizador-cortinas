@@ -206,21 +206,40 @@ const PALETA: RGB[] = [
   [237, 237, 237],
 ];
 
-/** Dibuja texto centrado dentro de una celda, recortado al ancho. */
+/**
+ * Dibuja texto dentro de una celda. `fit: 'wrap'` (cabeceras) parte en dos
+ * líneas si no cabe; `fit: 'shrink'` (datos) mantiene UNA línea achicando la
+ * fuente hasta que entre — así letras y números salen al tamaño máximo y
+ * solo los textos largos se reducen.
+ */
 function celdaTexto(
   doc: jsPDF,
   s: string,
   x: number,
   w: number,
   y: number,
-  opts: { size?: number; bold?: boolean; color?: RGB; align?: 'center' | 'left' } = {},
+  opts: { size?: number; bold?: boolean; color?: RGB; align?: 'center' | 'left'; fit?: 'wrap' | 'shrink' } = {},
 ) {
-  const { size = 6, bold = false, color = [20, 20, 25], align = 'center' } = opts;
+  const { size = 6, bold = false, color = [20, 20, 25], align = 'center', fit = 'wrap' } = opts;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.setFontSize(size);
   doc.setTextColor(color[0], color[1], color[2]);
+  const maxW = w - 1.5;
   const tx = align === 'left' ? x + 1 : x + w / 2;
-  doc.text(s, tx, y, { align: align === 'left' ? 'left' : 'center', maxWidth: w - 1.5 });
+  const alignOpt = align === 'left' ? ('left' as const) : ('center' as const);
+  if (fit === 'shrink') {
+    let sz = size;
+    doc.setFontSize(sz);
+    let txt = s;
+    while (sz > 4.5 && doc.getTextWidth(txt) > maxW) {
+      sz -= 0.3;
+      doc.setFontSize(sz);
+    }
+    while (txt.length > 1 && doc.getTextWidth(txt) > maxW) txt = txt.slice(0, -1);
+    doc.text(txt, tx, y, { align: alignOpt });
+    return;
+  }
+  doc.setFontSize(size);
+  doc.text(s, tx, y, { align: alignOpt, maxWidth: maxW });
 }
 
 function rect(doc: jsPDF, x: number, y: number, w: number, h: number, fill?: RGB) {
@@ -312,17 +331,30 @@ export function generarPdfHojaCorte(
   for (const c of cols) c.w = (c.w * anchoUtil) / sumaW;
 
   const x0 = M;
-  const headH = 11;
+  const headH = 14;
+  // Rótulo de cabecera: achica la fuente hasta que la palabra más larga
+  // quepa en la columna (el wrap de jsPDF parte palabras a la mitad) y
+  // centra verticalmente cuando queda en una sola línea.
+  const rotuloCabecera = (label: string, cx: number, w: number, color: RGB) => {
+    const maxW = w - 1.5;
+    doc.setFont('helvetica', 'bold');
+    let sz = 8.5;
+    doc.setFontSize(sz);
+    const palabraMax = () =>
+      Math.max(...label.split(/\s+/).map((p) => doc.getTextWidth(p)));
+    while (sz > 5 && palabraMax() > maxW) {
+      sz -= 0.3;
+      doc.setFontSize(sz);
+    }
+    const unaLinea = doc.getTextWidth(label) <= maxW;
+    celdaTexto(doc, label, cx, w, y + (unaLinea ? 8.8 : 5), { size: sz, bold: true, color });
+  };
   const cabeceraTabla = () => {
     let cx = x0;
     for (const c of cols) {
       rect(doc, cx, y, c.w, headH, c.head);
       const txtColor: RGB = c.head === C_BLUE ? [30, 30, 40] : C_WHITE;
-      celdaTexto(doc, c.label, cx, c.w, y + (c.label.length > 14 ? 4 : 7), {
-        size: 6.5,
-        bold: true,
-        color: txtColor,
-      });
+      rotuloCabecera(c.label, cx, c.w, txtColor);
       cx += c.w;
     }
     y += headH;
@@ -330,7 +362,7 @@ export function generarPdfHojaCorte(
   cabeceraTabla();
 
   // Filas de datos (color por paño)
-  const rowH = 8.5;
+  const rowH = 12.5;
   for (const fila of hoja.cortinas) {
     if (y + rowH > BOTTOM) {
       nuevaPagina();
@@ -350,7 +382,7 @@ export function generarPdfHojaCorte(
       }
       if (val) {
         const bold = c.key === 'cortarJunto' || c.key === 'pano' || c.key === 'comentario';
-        celdaTexto(doc, val, cx, c.w, y + 5.6, { size: c.key === 'comentario' ? 6.5 : 8, bold });
+        celdaTexto(doc, val, cx, c.w, y + 8.5, { size: c.key === 'comentario' ? 10 : 13, bold, fit: 'shrink' });
       }
       cx += c.w;
     }
@@ -380,19 +412,19 @@ export function generarPdfHojaCorte(
     { label: 'RESPONSABLE DE ERROR', w: 28 },
   ];
   const t3x = 150;
-  const rowH23 = 8;
+  const rowH23 = 11.5;
   let y23Box = 0; // borde inferior del recuadro TOTAL PAÑOS (por página)
   const cabecera23 = () => {
-    rect(doc, M, y, totalW, 10, C_DARK);
-    celdaTexto(doc, 'TOTAL PAÑOS', M, totalW, y + 6.4, { size: 5.5, bold: true, color: C_WHITE });
-    rect(doc, M, y + 10, totalW, 16);
-    celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 20.8, { size: 20, bold: true });
-    y23Box = y + 26;
+    rect(doc, M, y, totalW, 12, C_DARK);
+    celdaTexto(doc, 'TOTAL PAÑOS', M, totalW, y + 7.6, { size: 6.5, bold: true, color: C_WHITE, fit: 'shrink' });
+    rect(doc, M, y + 12, totalW, 18);
+    celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 24.4, { size: 26, bold: true, fit: 'shrink' });
+    y23Box = y + 30;
     let tx = M + totalW + 1;
     for (const c of cols2) {
-      rect(doc, tx, y, c.w, 10, C_DARK);
-      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.8 : 6.4), {
-        size: 6,
+      rect(doc, tx, y, c.w, 12, C_DARK);
+      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 4.4 : 7.6), {
+        size: 8,
         bold: true,
         color: C_WHITE,
       });
@@ -400,15 +432,15 @@ export function generarPdfHojaCorte(
     }
     tx = t3x;
     for (const c of cols3) {
-      rect(doc, tx, y, c.w, 10, C_DARK);
-      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 3.8 : 6.4), {
-        size: 6,
+      rect(doc, tx, y, c.w, 12, C_DARK);
+      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 4.4 : 7.6), {
+        size: 8,
         bold: true,
         color: C_WHITE,
       });
       tx += c.w;
     }
-    y += 10;
+    y += 12;
   };
   nuevaPagina();
   cabecera23();
@@ -427,7 +459,7 @@ export function generarPdfHojaCorte(
       else if (c.k === 'altoCortePano') val = num(p.altoCortePano);
       else if (c.k === 'altoMaxUtilizar') val = p.altoMaxUtilizar === '' ? '' : num(p.altoMaxUtilizar);
       else val = String(p[c.k] ?? '');
-      if (val) celdaTexto(doc, val, tx, c.w, y + 5.3, { size: 7.5, align: c.k === 'tipo' ? 'left' : 'center' });
+      if (val) celdaTexto(doc, val, tx, c.w, y + 7.8, { size: 12, align: c.k === 'tipo' ? 'left' : 'center', fit: 'shrink' });
       tx += c.w;
     }
     // Fila bloque 3 (errores, para llenar a mano)
@@ -435,13 +467,14 @@ export function generarPdfHojaCorte(
     for (const c of cols3) {
       rect(doc, tx, y, c.w, rowH23);
       if (c.label === 'MOTIVO') {
-        // Dos opciones con su círculo (radio) para marcar a mano.
+        // Dos opciones con su círculo (radio) para marcar a mano, apiladas
+        // para que el rótulo salga grande.
         doc.setDrawColor(90, 90, 100);
-        doc.setLineWidth(0.2);
-        doc.circle(tx + 2.5, y + rowH23 / 2, 1.2);
-        celdaTexto(doc, 'FALLA TELA', tx + 4.2, 17, y + 4.9, { size: 5.5, align: 'left' });
-        doc.circle(tx + 21, y + rowH23 / 2, 1.2);
-        celdaTexto(doc, 'ERROR CORTE', tx + 22.7, 16, y + 4.9, { size: 5.5, align: 'left' });
+        doc.setLineWidth(0.25);
+        doc.circle(tx + 3, y + 3.4, 1.3);
+        celdaTexto(doc, 'FALLA TELA', tx + 5.2, 30, y + 4.6, { size: 8, align: 'left', fit: 'shrink' });
+        doc.circle(tx + 3, y + 8.2, 1.3);
+        celdaTexto(doc, 'ERROR CORTE', tx + 5.2, 30, y + 9.4, { size: 8, align: 'left', fit: 'shrink' });
       }
       tx += c.w;
     }
@@ -451,7 +484,7 @@ export function generarPdfHojaCorte(
   y = Math.max(y, y23Box);
 
   // ── BLOQUE 4: OPTIMIZADOR + SELLO (se mueve entero a otra página si no cabe) ──
-  const hOpt = 11 + Math.max(1, hoja.optimizador.length) * 8;
+  const hOpt = 14 + Math.max(1, hoja.optimizador.length) * 11.5;
   y += 6;
   if (y + Math.max(hOpt, 40) > BOTTOM) nuevaPagina();
   const yAbajo = y;
@@ -481,23 +514,23 @@ function drawOptimizador(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {
   ];
   let tx = x;
   for (const c of cols) {
-    rect(doc, tx, y, c.w, 11, C_DARK);
-    celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 16 ? 3.8 : 7), {
-      size: 5.6,
+    rect(doc, tx, y, c.w, 14, C_DARK);
+    celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 16 ? 5 : 8.8), {
+      size: 8,
       bold: true,
       color: C_WHITE,
     });
     tx += c.w;
   }
-  let ry = y + 11;
-  const rowH = 8;
+  let ry = y + 14;
+  const rowH = 11.5;
   const filas = hoja.optimizador.length ? hoja.optimizador : [{ codInt: '', metros: 0 }];
   for (const f of filas) {
     tx = x;
     for (const c of cols) {
       rect(doc, tx, ry, c.w, rowH);
-      if (c.label === 'COD_INT' && f.codInt) celdaTexto(doc, f.codInt, tx, c.w, ry + 5.3, { size: 7.5, bold: true });
-      else if (c.label === 'OPTIMIZADOR' && f.codInt) celdaTexto(doc, num(f.metros), tx, c.w, ry + 5.3, { size: 7.5 });
+      if (c.label === 'COD_INT' && f.codInt) celdaTexto(doc, f.codInt, tx, c.w, ry + 7.8, { size: 12, bold: true, fit: 'shrink' });
+      else if (c.label === 'OPTIMIZADOR' && f.codInt) celdaTexto(doc, num(f.metros), tx, c.w, ry + 7.8, { size: 12, fit: 'shrink' });
       tx += c.w;
     }
     ry += rowH;
