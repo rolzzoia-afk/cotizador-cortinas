@@ -266,7 +266,7 @@ function celda(
   opts: { size?: number; bold?: boolean; color?: RGB } = {},
 ) {
   const { bold = false, color = [25, 25, 30] } = opts;
-  let size = opts.size ?? 7;
+  let size = opts.size ?? 8;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setTextColor(color[0], color[1], color[2]);
   const maxW = w - 1;
@@ -358,9 +358,9 @@ export function generarPdfCalculoGeneral(
 
   const PH = 297;
   const BOTTOM = PH - M;
-  const superH = 6;
+  const superH = 6.5;
   const headH = 10;
-  const rowH = 7.2;
+  const rowH = 8;
 
   let y = M;
   let pagina = 0;
@@ -392,15 +392,15 @@ export function generarPdfCalculoGeneral(
       const x0 = xs[colIdx];
       const w = b.columnas.reduce((s, _c, j) => s + widths[colIdx + j], 0);
       rect(doc, x0, y, w, superH, b.sistema.color);
-      celda(doc, b.sistema.label, x0, w, y + 4.2, { size: 7, bold: true, color: C_WHITE });
+      celda(doc, b.sistema.label, x0, w, y + 4.6, { size: 7.5, bold: true, color: C_WHITE });
       colIdx += b.columnas.length;
     }
     y += superH;
     yBorde = y;
     cols.forEach((c, i) => {
       rect(doc, xs[i], y, widths[i], headH, c.sistema ? c.sistema.color : C_DARK);
-      celda(doc, c.label, xs[i], widths[i], y + (c.label.length > 10 ? 4 : 6.2), {
-        size: 5.6,
+      celda(doc, c.label, xs[i], widths[i], y + (c.label.length > 10 ? 4.2 : 6.4), {
+        size: 6.2,
         bold: true,
         color: C_WHITE,
       });
@@ -448,7 +448,7 @@ export function generarPdfCalculoGeneral(
               : num(raw as number);
         } else val = raw === 0 ? '' : String(raw ?? '');
       }
-      if (val) celda(doc, val, xs[i], widths[i], y + 4.9, { size: 7 });
+      if (val) celda(doc, val, xs[i], widths[i], y + 5.4, { size: 8 });
     });
     y += rowH;
   }

@@ -118,7 +118,7 @@ function celda(
   opts: { size?: number; bold?: boolean; color?: RGB; align?: 'l' | 'c' } = {},
 ) {
   const { bold = false, color = C_TEXT, align = 'l' } = opts;
-  let size = opts.size ?? 5.4;
+  let size = opts.size ?? 6.5;
   doc.setFont('helvetica', bold ? 'bold' : 'normal');
   doc.setTextColor(color[0], color[1], color[2]);
   const maxW = w - 1.4;
@@ -133,44 +133,56 @@ function celda(
   else doc.text(txt, x + 0.8, y, { align: 'left' });
 }
 
-/** Dibuja una tabla (header oscuro + filas). Devuelve la y final. */
+/** Salto de página de una tabla: límite inferior + qué dibujar en la nueva página. */
+type SaltoTabla = { bottom: number; onBreak: () => number };
+
+/**
+ * Dibuja una tabla (header oscuro + filas). Devuelve la y final. Si recibe
+ * `salto`, corta en el límite inferior y sigue en página nueva repitiendo
+ * la cabecera.
+ */
 function tabla(
   doc: jsPDF,
   x: number,
   yStart: number,
   cols: Col[],
   rows: string[][],
-  opts: { headFill?: RGB; rowH?: number; headH?: number; greenCol?: number } = {},
+  opts: { headFill?: RGB; rowH?: number; headH?: number; greenCol?: number; salto?: SaltoTabla } = {},
 ): number {
   const headFill = opts.headFill ?? C_DARK;
   const rowH = opts.rowH ?? 6;
-  const headH = opts.headH ?? 7;
+  const headH = opts.headH ?? 8;
   const totalW = cols.reduce((a, c) => a + c.w, 0);
-  let y = yStart;
 
-  // Header
-  doc.setFillColor(headFill[0], headFill[1], headFill[2]);
-  doc.rect(x, y, totalW, headH, 'F');
-  let cx = x;
-  for (const c of cols) {
-    doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
-    doc.setLineWidth(0.2);
-    doc.rect(cx, y, c.w, headH);
-    celda(doc, c.label, cx, c.w, y + headH / 2 + 1.4, {
-      bold: true,
-      color: C_WHITE,
-      align: 'c',
-      size: 5.2,
-    });
-    cx += c.w;
-  }
-  y += headH;
+  const cabecera = (yy: number): number => {
+    doc.setFillColor(headFill[0], headFill[1], headFill[2]);
+    doc.rect(x, yy, totalW, headH, 'F');
+    let cx = x;
+    for (const c of cols) {
+      doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
+      doc.setLineWidth(0.2);
+      doc.rect(cx, yy, c.w, headH);
+      celda(doc, c.label, cx, c.w, yy + headH / 2 + 1.4, {
+        bold: true,
+        color: C_WHITE,
+        align: 'c',
+        size: 6,
+      });
+      cx += c.w;
+    }
+    return yy + headH;
+  };
+
+  let y = cabecera(yStart);
 
   // Filas
   for (let i = 0; i < rows.length; i++) {
+    if (opts.salto && y + rowH > opts.salto.bottom) {
+      y = cabecera(opts.salto.onBreak());
+    }
     const row = rows[i];
     const bg: RGB = i % 2 === 0 ? [245, 246, 248] : C_WHITE;
-    cx = x;
+    let cx = x;
     cols.forEach((c, j) => {
       const fill = opts.greenCol === j ? C_GREEN : bg;
       doc.setFillColor(fill[0], fill[1], fill[2]);
@@ -208,28 +220,46 @@ export function generarPdfInventario(
   const mg = 8;
   const usable = W - mg * 2;
 
-  // ── Encabezado ─────────────────────────────────────────────────────
-  doc.setTextColor(C_TEXT[0], C_TEXT[1], C_TEXT[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.text('INVENTARIO', mg, 13);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(110, 110, 118);
-  doc.text('[ ENTREGA Y RECEPCIÓN DE MATERIAL ]', mg, 18);
+  // ── Encabezado (se repite en cada página) ──────────────────────────
+  let pagina = 0;
+  const encabezado = (): number => {
+    pagina++;
+    doc.setTextColor(C_TEXT[0], C_TEXT[1], C_TEXT[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('INVENTARIO', mg, 13);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(110, 110, 118);
+    doc.text('[ ENTREGA Y RECEPCIÓN DE MATERIAL ]', mg, 18);
 
-  doc.setTextColor(C_TEXT[0], C_TEXT[1], C_TEXT[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(16);
-  doc.text(`OT  ${meta.ot}`, W - mg, 13, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7.5);
-  doc.text(`Cliente: ${(meta.cliente || '—').toUpperCase()}`, W - mg, 18, { align: 'right' });
-  doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
-  doc.setLineWidth(0.3);
-  doc.line(mg, 21, W - mg, 21);
+    doc.setTextColor(C_TEXT[0], C_TEXT[1], C_TEXT[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text(`OT  ${meta.ot}`, W - mg, 13, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(`Cliente: ${(meta.cliente || '—').toUpperCase()}`, W - mg, 18, { align: 'right' });
+    doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
+    doc.setLineWidth(0.3);
+    doc.line(mg, 21, W - mg, 21);
+    doc.setFontSize(6.5);
+    doc.setTextColor(150, 150, 158);
+    doc.text(`Página ${pagina}`, W - mg, 24.5, { align: 'right' });
+    return 26;
+  };
+  let y = encabezado();
 
-  let y = 26;
+  // OTs largas: las tablas cortan al llegar al borde y siguen en página
+  // nueva; los títulos de bloque saltan junto con su cabecera y ≥1 fila.
+  const BOTTOM = doc.internal.pageSize.getHeight() - mg;
+  const salto: SaltoTabla = {
+    bottom: BOTTOM,
+    onBreak: () => {
+      doc.addPage();
+      return encabezado();
+    },
+  };
 
   // ── BLOQUE 1: detalle por cortina ──────────────────────────────────
   const w1 = [6, 26, 28, 30, 20, 16, 24, 24, 16, 22, 14, 14, 27];
@@ -265,18 +295,19 @@ export function generarPdfInventario(
     f.altoMts,
     '',
   ]);
-  y = tabla(doc, mg, y, cols1, rows1, { rowH: 6.5 });
+  y = tabla(doc, mg, y, cols1, rows1, { rowH: 7.5, salto });
 
   // ── BLOQUE 2: CORTINAS ROLLER (consolidado + entrega) ──────────────
   y += 7;
   const titH = 8;
+  if (y + titH + 16 > BOTTOM) y = salto.onBreak();
   doc.setFillColor(C_BLUE[0], C_BLUE[1], C_BLUE[2]);
   doc.rect(mg, y, usable, titH, 'F');
   doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.text('CORTINAS ROLLER', mg + 2, y + titH / 2 + 2);
-  doc.setFontSize(6.5);
+  doc.setFontSize(7.5);
   doc.text('ENTREGADO POR:', mg + usable * 0.5, y + titH / 2 + 2);
   y += titH;
 
@@ -307,17 +338,18 @@ export function generarPdfInventario(
     '',
     '',
   ]);
-  y = tabla(doc, mg, y, cols2, rows2, { rowH: 7, greenCol: 4 });
+  y = tabla(doc, mg, y, cols2, rows2, { rowH: 8, greenCol: 4, salto });
 
   // ── BLOQUE 3: ETIQUETAS ROLZZO ─────────────────────────────────────
   y += 7;
+  if (y + titH + 16 > BOTTOM) y = salto.onBreak();
   doc.setFillColor(C_GREEN[0], C_GREEN[1], C_GREEN[2]);
   doc.rect(mg, y, usable, titH, 'F');
   doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.text('ETIQUETAS ROLZZO', mg + 2, y + titH / 2 + 2);
-  doc.setFontSize(6.5);
+  doc.setFontSize(7.5);
   doc.text('ENTREGADO', mg + usable * 0.5, y + titH / 2 + 2);
   y += titH;
 
@@ -340,7 +372,7 @@ export function generarPdfInventario(
     '',
     '',
   ]);
-  y = tabla(doc, mg, y, cols3, rows3, { rowH: 7, greenCol: 2 });
+  y = tabla(doc, mg, y, cols3, rows3, { rowH: 8, greenCol: 2, salto });
 
   doc.save(`Inventario_${meta.ot}.pdf`);
 }
