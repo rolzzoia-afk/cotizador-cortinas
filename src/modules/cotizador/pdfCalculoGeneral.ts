@@ -153,6 +153,12 @@ export function construirCalculoGeneral(
         (v.categoria || '').toUpperCase().includes('DUO');
       const cierreCm = parseFloat(String(p.cierreAlturaCm ?? ''));
       if (esDuoFila && cierreCm > 0) despiece.set('CIERRE DE ALTURA', r1(cierreCm));
+      // Columna ALTO del Excel manual: alto de CORTE de la tela del sistema
+      // (dúo = 2×alto + extraDuo; resto = alto + extraAlto). Va al final del
+      // bloque, igual que en la hoja manual.
+      const altoRollerCm = r1(altoCm + params.extraAltoCm);
+      const altoDuoCm = r1(altoCm * 2 + params.extraDuoCm);
+      if (altoCm > 0) despiece.set('ALTO', esDuoFila ? altoDuoCm : altoRollerCm);
 
       const codCadena = (p.codCadena as string) || '';
       const largoCadena = String(p.largoCadena ?? '');
@@ -199,9 +205,9 @@ export function construirCalculoGeneral(
         anchoMts: r1(anchoM * 1000) / 1000,
         altoMts: r1(altoM * 1000) / 1000,
         anchoCorteCm: r1(anchoCm),
-        altoRollerCm: r1(altoCm + params.extraAltoCm),
+        altoRollerCm,
         // Corte real del paño dúo (2×alto+extraDuo), alineado con tela.ts y el Excel.
-        altoDuoCm: r1(altoCm * 2 + params.extraDuoCm),
+        altoDuoCm,
         bloque: bloque.key,
         despiece,
       });
@@ -231,6 +237,12 @@ export function construirCalculoGeneral(
       }
     }
     if (cols.length === 0) continue;
+    // ALTO siempre al final del bloque (como en la hoja manual).
+    const iAlto = cols.indexOf('ALTO');
+    if (iAlto >= 0) {
+      cols.splice(iAlto, 1);
+      cols.push('ALTO');
+    }
     bloques.push({
       sistema,
       columnas: cols.map((col) => ({ key: col, label: col, bloque: sistema })),
