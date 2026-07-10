@@ -121,6 +121,7 @@ export function itemToVentana(item: ItemFase1): Ventana {
     alturaCierre: '',
     cotizarConSin: '',
     suplementos: '',
+    suplementoTipo: '',
     comentarioFinal: '',
   };
   return {

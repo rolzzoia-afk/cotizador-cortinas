@@ -73,6 +73,8 @@ export type FilaCalculo = {
   codPeso: string;
   suplementos: string;
   manillas: string;
+  /** Letra de "cortar junto" (A/B/RR…) para la columna CONJUNTO PAÑOS del Dimensionado. */
+  conjunto: string;
   cant: number;
   producto: string;
   codInt: string;
@@ -131,6 +133,8 @@ export function construirCalculoGeneral(
   ventanas: Ventana[],
   catalogo: CatalogoProductos = {},
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  /** Letras de "cortar junto" por pieza (`${ventanaId}_${panoIndex}` → letra). */
+  juntoPorPieza?: Map<string, string>,
 ): CalculoGeneral {
   const filas: FilaCalculo[] = [];
 
@@ -209,6 +213,7 @@ export function construirCalculoGeneral(
         codPeso,
         suplementos: (p.suplementos as string) || '',
         manillas: manillaCant > 0 ? `${manillaCant} ${(p.manillaColor as string) || ''}`.trim() : '',
+        conjunto: juntoPorPieza?.get(`${v.id}_${i}`) ?? '',
         cant: 1,
         producto: v.producto || '',
         codInt: v.codInt || '',
@@ -334,6 +339,7 @@ function pesoColumna(key: string, esDespiece: boolean): number {
     case 'colorAcc':
     case 'armado':
     case 'manillas':
+    case 'conjunto':
       return 1.1;
     case 'codSec':
     case 'codInt':
@@ -353,6 +359,8 @@ export type VarianteHojaCalculo = {
   sinIdentidad?: ReadonlySet<string>;
   /** Componentes de despiece que se OMITEN (por label del bloque). */
   sinDespiece?: (label: string) => boolean;
+  /** Agrega al final la columna CONJUNTO PAÑOS (letras de cortar junto). */
+  conjuntoPanos?: boolean;
 };
 
 const VARIANTE_CALCULO_GENERAL: VarianteHojaCalculo = {
@@ -374,6 +382,7 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   sinDespiece: (label) =>
     label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
     label === 'CENEFA OVALADA',
+  conjuntoPanos: true,
 };
 
 /** Aplica la variante a las columnas (puro, para test). */
@@ -407,8 +416,9 @@ export function generarPdfDimensionado(
   catalogo: CatalogoProductos,
   meta: MetaCalculo,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  juntoPorPieza?: Map<string, string>,
 ): void {
-  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO);
+  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO, juntoPorPieza);
 }
 
 function renderHojaCalculo(
@@ -417,20 +427,22 @@ function renderHojaCalculo(
   meta: MetaCalculo,
   params: ParametrosCorte,
   variante: VarianteHojaCalculo,
+  juntoPorPieza?: Map<string, string>,
 ): void {
   if (!ventanas || ventanas.length === 0) {
     throw new Error('No hay ventanas en la OT.');
   }
-  const data = construirCalculoGeneral(ventanas, catalogo, params);
+  const data = construirCalculoGeneral(ventanas, catalogo, params, juntoPorPieza);
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
   const { identidad, bloques } = aplicarVariante(data, variante);
 
-  // Columnas planas: identidad + (por bloque) sus columnas.
+  // Columnas planas: identidad + (por bloque) sus columnas + (Dimensionado) conjunto.
   type ColPlana = ColumnaCalculo & { sistema?: BloqueSistema };
   const cols: ColPlana[] = [
     ...identidad,
     ...bloques.flatMap((b) => b.columnas.map((c) => ({ ...c, sistema: b.sistema }))),
   ];
+  if (variante.conjuntoPanos) cols.push({ key: 'conjunto', label: 'CONJUNTO PAÑOS' });
 
   // A3 apaisado (420 × 297) para que entren muchas columnas.
   const doc = new jsPDF('l', 'mm', 'a3');

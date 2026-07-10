@@ -1,7 +1,8 @@
 // ─────────────────────────────────────────────────────────────────────
 // Cenefas declaradas como adicional en Fase 0 (CENF O / CENFO).
 // Se vinculan SOLO por UBIC. idéntica a la del adicional (ej. PZA 3-G2).
-// El corte usa el ancho real del paño; la cantidad del adicional es referencial.
+// Para una cenefa, `cantidad` ES el ancho (m): la ovalada corta por el ancho
+// real del paño (cantidad de respaldo) y la cuadrada corta por cantidad*100.
 //
 // Fórmulas:
 //   · Soft Light 38 mm → cenefa = ancho + ajuste (INTERNO: −1,2 → ej. 295,7)
@@ -148,7 +149,10 @@ export function derivarAdicionalesCenefaDesdeVentanas(
       if (!codInt) return;
       out.push({
         codInt,
-        cantidad: Number(v.cantidad) || 1,
+        // Para una cenefa, `cantidad` ES el ancho (m) del paño: define el corte
+        // (anchoNominalCenefaCorte = cantidad*100) y el precio. Antes tomaba
+        // v.cantidad (unidades de la ventana) y perdía el ancho al reabrir la OT.
+        cantidad: parseFloat(String(p.ancho)) || Number(v.cantidad) || 1,
         descuento: 0,
         ubicacion: ubicPanoVentana(v.ubicacion || '', i, total),
         colorAcc: String(p.colorTapa || p.color || ''),

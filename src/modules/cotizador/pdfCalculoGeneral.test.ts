@@ -153,3 +153,19 @@ describe('aplicarVariante — DIMENSIONADO', () => {
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA DELANTERA')).toBe(false);
   });
 });
+
+describe('CONJUNTO PAÑOS (Dimensionado, #27)', () => {
+  it('juntoPorPieza puebla fila.conjunto; VARIANTE_DIMENSIONADO trae conjuntoPanos', () => {
+    const vents = [ventRoller(1.4, 'LIVING'), ventRoller(1.5, 'COMEDOR')];
+    const junto = new Map([
+      ['vLIVING_0', 'A'],
+      ['vCOMEDOR_0', 'B'],
+    ]);
+    const data = construirCalculoGeneral(vents, {}, undefined, junto);
+    expect(data.filas.map((f) => f.conjunto)).toEqual(['A', 'B']);
+    expect(VARIANTE_DIMENSIONADO.conjuntoPanos).toBe(true);
+    // Sin el mapa la columna queda vacía.
+    const sinMapa = construirCalculoGeneral(vents, {});
+    expect(sinMapa.filas.every((f) => f.conjunto === '')).toBe(true);
+  });
+});

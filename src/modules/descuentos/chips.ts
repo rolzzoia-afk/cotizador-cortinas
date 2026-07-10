@@ -27,6 +27,7 @@ export {
   categoriaRequiereMecanismo,
   normalizarColorAccesorio,
   numeroMecPorColor,
+  mecPorAncho,
   mecPorCategoriaYColor,
   reglaCategoriaAplicable,
   colorParaBusquedaModelo,

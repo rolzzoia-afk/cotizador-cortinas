@@ -24,6 +24,7 @@ import {
   OPCIONES_RELACION_MARCO,
   OPCIONES_SEPARADOR,
   OPCIONES_SOFT_DARK,
+  OPCIONES_SUPLEMENTO,
   OPCIONES_SUPERFICIE,
   OPCIONES_TIPO_MECANISMO,
   OPCIONES_TIPO_TELA,
@@ -32,6 +33,7 @@ import {
 } from '@/modules/cotizador/fase2';
 import type { Pano } from '@/modules/cotizador/types';
 import { debeInvertirPano } from '@/modules/cotizador/tela';
+import { cantidadSuplementosAuto } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import {
@@ -76,6 +78,8 @@ type Props = {
   opcionesMecanismo?: readonly string[];
   /** Opciones filtradas de tubería (default: todas). */
   opcionesTuberia?: readonly string[];
+  /** Nota cuando el mecanismo quedó fijo (p.ej. roller >3 m → 63 mm). */
+  mecanismoFijoNota?: string;
   /** Ocultar sección mecanismo (VERTICAL, BEEBLACK). */
   ocultarMecanismo?: boolean;
   /** Categoría de la ventana (para detectar sistemas de oscuridad). */
@@ -167,6 +171,7 @@ export function PanoEditor({
   pesos = [],
   opcionesMecanismo = OPCIONES_MECANISMO,
   opcionesTuberia = OPCIONES_TUBERIA,
+  mecanismoFijoNota,
   ocultarMecanismo = false,
   categoria,
   colorVentana,
@@ -182,6 +187,8 @@ export function PanoEditor({
   const anchoPanoM = parseFloat(String(pano.ancho)) || 0;
   const debeInvertir = debeInvertirPano(anchoPanoM, anchoRollo);
   const invertida = pano.invertida ?? debeInvertir;
+  // Cantidad auto de suplementos (roller 2 / cenefa 1 por bracket); editable.
+  const suplementoAuto = cantidadSuplementosAuto(pano, categoria, anchoPanoM);
 
   // ── Sistema de oscuridad (Soft Light / Oscuranti / Dark) ──
   const familia = familiaOscuridad(categoria, pano.cenefa);
@@ -568,6 +575,39 @@ export function PanoEditor({
         />
       </Section>
 
+      {/* 5a-bis. SUPLEMENTOS — opcional; cantidad auto (roller 2 / cenefa 1 por bracket). */}
+      <Section title="Suplementos">
+        <RadioRow
+          label="Tipo"
+          value={pano.suplementoTipo || ''}
+          options={OPCIONES_SUPLEMENTO as unknown as readonly { value: string; label: string }[]}
+          onChange={(v) => onChange({ suplementoTipo: v })}
+        />
+        {pano.suplementoTipo && (
+          <div className="flex items-end gap-2">
+            <div className="max-w-[150px]">
+              <Label>Cantidad</Label>
+              <Input
+                type="number"
+                min={0}
+                value={pano.suplementoCant ?? suplementoAuto}
+                onChange={(e) => onChange({ suplementoCant: parseInt(e.target.value, 10) || 0 })}
+              />
+            </div>
+            {typeof pano.suplementoCant === 'number' && (
+              <button
+                type="button"
+                onClick={() => onChange({ suplementoCant: undefined })}
+                className="mb-2 text-[0.7rem] text-muted-foreground hover:text-foreground"
+                title={`Auto: ${suplementoAuto}`}
+              >
+                ↺ auto
+              </button>
+            )}
+          </div>
+        )}
+      </Section>
+
       {/* 5b. SISTEMA DE OSCURIDAD (Soft Light / Oscuranti / Dark) */}
       {familia && (
         <Section title="Sistema de oscuridad — perfiles">
@@ -791,6 +831,9 @@ export function PanoEditor({
             options={opcionesMecanismo}
             onChange={(v) => onChange({ mecanismo: v })}
           />
+          {mecanismoFijoNota && !pano.dual && (
+            <p className="text-[0.7rem] text-amber-500">{mecanismoFijoNota}</p>
+          )}
         </Section>
       )}
 

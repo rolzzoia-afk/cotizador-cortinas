@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   esCadenaRoller,
   cadenasRoller,
+  codCadenaAutoPorAlto,
   etiquetaCadena,
   resolverCodCadenaLegacy,
   resolverCodCadenaBom,
@@ -13,6 +14,41 @@ import {
   type CadenaInsumo,
 } from './cadenas';
 import { OPCIONES_LARGO_CADENA } from './fase2';
+
+// Inventario para las reglas de auto-selección (#25): 3m/4m + 2,4m + 1,40m.
+const INV_AUTO: CadenaInsumo[] = [
+  { cod: 'CAD03', nemotecnico: 'CADENA INFINITA 4 METROS [NEGRO]', color: 'NEGRO', status: 'OK' },
+  { cod: 'CAD04', nemotecnico: 'CADENA INFINITA 3 METROS [NEGRO]', color: 'NEGRO', status: 'OK' },
+  { cod: 'CAD06', nemotecnico: 'CADENA INFINITA 3 METROS [BLANCO]', color: 'BLANCO', status: 'OK' },
+  { cod: 'CAD14', nemotecnico: 'CADENA 2.4 MTS NEGRA', color: 'NEGRO', status: 'OK' },
+  { cod: 'CAD16', nemotecnico: 'CADENA 2.4 MTS BLANCA', color: 'BLANCO', status: 'OK' },
+  { cod: 'CAD18', nemotecnico: 'CADENA NEGRO - 1,40 MTS (70 CM) SIN FIN', color: 'NEGRO', status: 'OK' },
+  { cod: 'CAD19', nemotecnico: 'CADENA GRIS - 1,40 MTS (70 CM) SIN FIN', color: 'GRIS', status: 'OK' },
+  { cod: 'CAD20', nemotecnico: 'CADENA 2.4 MTS - GRIS', color: 'GRIS', status: 'OK' },
+];
+
+describe('derivarLargoColor (1,40 m)', () => {
+  it('reconoce "1,40 MTS" como 1.4mts', () => {
+    expect(derivarLargoColor('CAD18', INV_AUTO)).toEqual({ largoCadena: '1.4mts', colorCadena: 'NEG' });
+  });
+});
+
+describe('codCadenaAutoPorAlto', () => {
+  it('roller por alto: 2,5→4m · 1,6→3m · 1,0→2,4m · 0,6→1,4m', () => {
+    expect(codCadenaAutoPorAlto(2.5, 'NEG', 'ROL', INV_AUTO)).toBe('CAD03');
+    expect(codCadenaAutoPorAlto(1.6, 'BCO', 'ROL', INV_AUTO)).toBe('CAD06');
+    expect(codCadenaAutoPorAlto(1.0, 'NEG', 'ROL', INV_AUTO)).toBe('CAD14');
+    expect(codCadenaAutoPorAlto(0.6, 'NEG', 'ROL', INV_AUTO)).toBe('CAD18');
+  });
+  it('dúo → siempre 1,40 m (por color); gris corto roller → 2,4 gris (CAD20)', () => {
+    expect(codCadenaAutoPorAlto(2.3, 'GRS', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD19');
+    expect(codCadenaAutoPorAlto(1.0, 'GRS', 'ROL', INV_AUTO)).toBe('CAD20');
+  });
+  it('MET/CAFÉ → null; alto <0,5 → null', () => {
+    expect(codCadenaAutoPorAlto(1.5, 'MET', 'ROL', INV_AUTO)).toBeNull();
+    expect(codCadenaAutoPorAlto(0.4, 'NEG', 'ROL', INV_AUTO)).toBeNull();
+  });
+});
 
 // Muestra representativa del inventario real (CAD01–CAD16).
 const INV: CadenaInsumo[] = [

@@ -148,8 +148,10 @@ export function derivarLargoColor(
   const nemo = normalizar(c.nemotecnico);
 
   let largoCadena = '';
-  // '2.4' va PRIMERO: "2.4 METROS" también contiene "4 METRO" y caería mal.
+  // '2.4' / '1.4' van PRIMERO: "2.4 METROS" también contiene "4 METRO", y
+  // "1,40 MTS" (cadena dúo/corta) no dice "METRO" y caería sin largo.
   if (nemo.includes('2.4') || nemo.includes('2,4')) largoCadena = '2.4mts';
+  else if (nemo.includes('1.4') || nemo.includes('1,4')) largoCadena = '1.4mts';
   else if (nemo.includes('3 METRO')) largoCadena = '3mts';
   else if (nemo.includes('4 METRO')) largoCadena = '4mts';
   else if (nemo.includes('1,2 METRO') || nemo.includes('1 METRO')) largoCadena = '1mts';
@@ -171,6 +173,53 @@ export function derivarLargoColor(
   return { largoCadena, colorCadena };
 }
 
+/** Color de accesorios normalizado a BCO/NEG/GRS, o '' si no aplica (MET/CAFÉ). */
+function colorCadenaCorto(color: string | null | undefined): string {
+  const c = normalizar(color);
+  if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'BCO';
+  if (c === 'NEG' || c === 'NEGRO' || c === 'NEGRA') return 'NEG';
+  if (c === 'GRS' || c === 'GRI' || c === 'GRIS' || c === 'GRISE' || c === 'GRISES') return 'GRS';
+  return '';
+}
+
+/** Cadena del inventario que calza un largo ('4mts'…) y color (BCO/NEG/GRS). */
+function codCadenaPorLargoColor(
+  largo: string,
+  colorCod: string,
+  insumos: CadenaInsumo[],
+): string | null {
+  const match = cadenasRoller(insumos).find((c) => {
+    const d = derivarLargoColor(c.cod as string, insumos);
+    return d.largoCadena === largo && d.colorCadena === colorCod;
+  });
+  return match ? (match.cod as string) : null;
+}
+
+/**
+ * Cadena a auto-seleccionar según el ALTO y el color de accesorios. Dúo → 1,40 m
+ * (CAD17/18/19). Roller por alto: ≥2 m → 4 m · ≥1,4 m → 3 m · ≥0,8 m → 2,4 m ·
+ * ≥0,5 m → 1,4 m · <0,5 m → sin auto. Color MET/CAFÉ → null (lo elige el vendedor).
+ * Devuelve el cod CAD que calza largo+color en el inventario, o null.
+ */
+export function codCadenaAutoPorAlto(
+  altoM: number,
+  colorAcc: string | null | undefined,
+  categoria: string | null | undefined,
+  insumos: CadenaInsumo[],
+): string | null {
+  const colorCod = colorCadenaCorto(colorAcc);
+  if (!colorCod || !(altoM > 0)) return null;
+  const esDuo = normalizar(categoria).startsWith('DUO');
+  let largo: string;
+  if (esDuo) largo = '1.4mts';
+  else if (altoM >= 2.0) largo = '4mts';
+  else if (altoM >= 1.4) largo = '3mts';
+  else if (altoM >= 0.8) largo = '2.4mts';
+  else if (altoM >= 0.5) largo = '1.4mts';
+  else return null;
+  return codCadenaPorLargoColor(largo, colorCod, insumos);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Peso de cadena: por ahora solo se ofrecen dos pesos del inventario.
 // (PCA01 = PESO HUEVO PORTA CADENA BLANCO, PCA04 = PESO PORTA CADENA
@@ -180,6 +229,9 @@ export function derivarLargoColor(
 
 /** Códigos de peso que se ofrecen en el cotizador (en este orden). */
 export const PESOS_SELECCIONABLES = ['PCA01', 'PCA04'] as const;
+
+/** Peso de cadena que se auto-selecciona en Fase 2 (transparente cuadrado). */
+export const COD_PESO_AUTO = 'PCA04';
 
 /** ¿Es un peso ofrecible en el selector? */
 export function esPesoSeleccionable(cod: string | null | undefined): boolean {

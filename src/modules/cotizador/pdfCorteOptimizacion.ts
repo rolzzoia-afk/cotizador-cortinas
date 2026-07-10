@@ -21,6 +21,7 @@ import jsPDF from 'jspdf';
 import { debeInvertirPano, type OptimizerRow } from './tela';
 import { generarPlanCorte, type PanoColmena } from './planCorte';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import type { PiezaColmenaSnap } from './colmenaCorte';
 import type { OT } from '@/modules/ots/types';
 
 // ── Modelo de datos (puro, testeable) ────────────────────────────────
@@ -92,6 +93,9 @@ export function construirHojaCorte(
   colmenaPanos: PanoColmena[],
   ot: OT,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  /** Snapshot pieza→sobrante (post-confirmación): muestra el origen colmena aun
+   *  cuando el sobrante ya se consumió y el plan vivo no lo re-asigna. */
+  piezasSnapshot?: Record<string, PiezaColmenaSnap>,
 ): HojaCorte {
   const plan = generarPlanCorte([ot], colmenaPanos, params);
 
@@ -128,10 +132,16 @@ export function construirHojaCorte(
 
   // ── Bloque 1: una fila por cortina ──
   const cortinas: FilaCorteCortina[] = rows.map((r, idx) => {
-    const sob = sobranteDe.get(pieceId(ot.id, r.ventanaId, r.panoIndex));
+    const pid = pieceId(ot.id, r.ventanaId, r.panoIndex);
+    const sob = sobranteDe.get(pid);
+    // Si el plan vivo no la asigna (sobrante ya consumido), cae al snapshot.
+    const snap = !sob ? piezasSnapshot?.[pid] : undefined;
     const inv = esInvertida(r);
     const noCabe = !inv && r.junto === 'RR'; // más ancha que el rollo y no rota
     const pano = juntoNum.get(claveJunto(r, idx)) ?? 0;
+    const colmena = sob
+      ? { cod: sob.cod, ancho: sob.ancho, alto: sob.alto, ubic: sob.ubicacion || '' }
+      : snap ?? null;
     return {
       cadena: 0,
       cant: 1,
@@ -145,8 +155,8 @@ export function construirHojaCorte(
       cortarJunto: noCabe ? 'RR' : letra(pano),
       comentario: inv ? 'INVERTIDA' : noCabe ? 'NO CABE' : '',
       invertida: inv,
-      medidaColmena: sob ? `${sob.cod} (${Math.round(sob.ancho)}X${Math.round(sob.alto)})` : '',
-      ubicColmena: sob ? sob.ubicacion : '',
+      medidaColmena: colmena ? `${colmena.cod} (${Math.round(colmena.ancho)}X${Math.round(colmena.alto)})` : '',
+      ubicColmena: colmena ? colmena.ubic : '',
     };
   });
 
@@ -271,11 +281,12 @@ export function generarPdfHojaCorte(
   ot: OT,
   meta: MetaCorte,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  piezasSnapshot?: Record<string, PiezaColmenaSnap>,
 ): void {
   if (!rows || rows.length === 0) {
     throw new Error('No hay paños. Guarda el plan en Tela primero.');
   }
-  const hoja = construirHojaCorte(rows, colmenaPanos, ot, params);
+  const hoja = construirHojaCorte(rows, colmenaPanos, ot, params, piezasSnapshot);
 
   const doc = new jsPDF('l', 'mm', 'a4'); // 297 × 210
   const W = 297;

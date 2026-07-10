@@ -3,12 +3,15 @@ import type { Pano } from './types';
 import {
   bracketDeCenefa,
   cantidadBrackets,
+  cantidadSuplementosAuto,
   cantidadTarugos,
+  esCategoriaDuo,
   insumosDePano,
   insumosMotorDePano,
   llevaTapasPeso,
   otLlevaDomotica,
   panoLlevaDomotica,
+  tarugoDeMaterial,
 } from './insumosCortina';
 
 const pano = (p: Partial<Pano>): Partial<Pano> => p;
@@ -61,10 +64,22 @@ describe('bracketDeCenefa', () => {
   });
 });
 
+describe('tarugoDeMaterial', () => {
+  it('vulcanita→TAR01; concreto/cerámica (con y sin tilde)→TAR03; madera/otro→null', () => {
+    expect(tarugoDeMaterial('VULCANITA')?.codigo).toBe('TAR01');
+    expect(tarugoDeMaterial('CONCRETO')?.codigo).toBe('TAR03');
+    expect(tarugoDeMaterial('CERÁMICA')?.codigo).toBe('TAR03');
+    expect(tarugoDeMaterial('CERAMICA')?.codigo).toBe('TAR03');
+    expect(tarugoDeMaterial('MADERA')).toBeNull();
+    expect(tarugoDeMaterial('')).toBeNull();
+  });
+});
+
 describe('cantidadTarugos', () => {
-  it('solo con vulcanita; roller sin cenefa → 4', () => {
+  it('vulcanita/concreto/cerámica → tarugos; madera → 0; roller sin cenefa → 4', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'ROL', 1.5)).toBe(4);
-    expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'ROL', 1.5)).toBe(0);
+    expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'ROL', 1.5)).toBe(4);
+    expect(cantidadTarugos(pano({ materialTipo: 'MADERA' }), 'ROL', 1.5)).toBe(0);
     expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'VERTICAL', 1.5)).toBe(0);
   });
   it('cenefa ovalada: 1/bracket a techo, 2/bracket a muro', () => {
@@ -99,6 +114,38 @@ describe('insumosDePano', () => {
     const out = insumosDePano(pano({ color: 'BCO', materialTipo: 'VULCANITA' }), { categoria: 'ROL', anchoM: 1.5 });
     expect(out.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(4);
   });
+  it('concreto roller sin cenefa → 4 tarugos TAR03; cerámica ovalada muro 1,5 m → 6 TAR03', () => {
+    const conc = insumosDePano(pano({ color: 'BCO', materialTipo: 'CONCRETO' }), { categoria: 'ROL', anchoM: 1.5 });
+    expect(conc.find((i) => i.codigo === 'TAR03')?.cantidad).toBe(4);
+    const cer = insumosDePano(
+      pano({ color: 'NEG', materialTipo: 'CERÁMICA', cenefa: 'Ovalada', superficie: 'PARED' }),
+      { categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm', anchoM: 1.5 },
+    );
+    expect(cer.find((i) => i.codigo === 'TAR03')?.cantidad).toBe(6);
+  });
+  it('DÚO → 2 tapas exteriores por color + 2 TAP13, SIN tornillos (a presión)', () => {
+    const out = insumosDePano(pano({ color: 'NEG' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
+    const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
+    expect(map.TAP11).toBe(2); // exterior negro
+    expect(map.TAP13).toBe(2); // interno
+    expect(out.some((i) => i.codigo === 'TOR02')).toBe(false); // a presión
+    // Color fuera de mapa (MET): solo las 2 internas.
+    const met = insumosDePano(pano({ color: 'MET' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
+    expect(met.map((i) => i.codigo)).toEqual(['TAP13']);
+  });
+  it('suplemento SUB01: roller→2, cenefa ovalada 1,5 m→3 (brackets), override manual manda', () => {
+    const roller = insumosDePano(pano({ color: 'BCO', suplementoTipo: 'SUB01' }), { categoria: 'ROL', anchoM: 1.5 });
+    expect(roller.find((i) => i.codigo === 'SUB01')?.cantidad).toBe(2);
+    const ovalada = insumosDePano(
+      pano({ color: 'BCO', suplementoTipo: 'SUB02', cenefa: 'Ovalada' }),
+      { categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm', anchoM: 1.5 },
+    );
+    expect(ovalada.find((i) => i.codigo === 'SUB02')?.cantidad).toBe(3);
+    const override = insumosDePano(pano({ color: 'BCO', suplementoTipo: 'SUB01', suplementoCant: 5 }), { categoria: 'ROL', anchoM: 1.5 });
+    expect(override.find((i) => i.codigo === 'SUB01')?.cantidad).toBe(5);
+    // Sin tipo → sin suplemento.
+    expect(insumosDePano(pano({ color: 'BCO' }), { categoria: 'ROL', anchoM: 1.5 }).some((i) => i.codigo?.startsWith('SUB'))).toBe(false);
+  });
 });
 
 describe('insumosMotorDePano', () => {
@@ -106,8 +153,11 @@ describe('insumosMotorDePano', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38' }));
     expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04']);
   });
-  it('DOM41 con 2 controles adicionales → DOM42 total 3, y hub adicional DOM43', () => {
+  it('DOM41: motor + DOM42 + DOM04, SIN cable DOM40 (#28); controles/hub adicionales', () => {
+    const base = insumosMotorDePano(pano({ motorModelo: 'DOM41' }));
+    expect(base.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42', 'DOM04']); // sin DOM40
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM41', motorControlAdicCant: 2, motorHubUsbCant: 1 }));
+    expect(out.some((i) => i.codigo === 'DOM40')).toBe(false);
     const ctrl = out.filter((i) => i.codigo === 'DOM42').reduce((a, i) => a + i.cantidad, 0);
     expect(ctrl).toBe(3); // 1 del kit + 2 adicionales
     expect(out.find((i) => i.codigo === 'DOM43')?.cantidad).toBe(1);
@@ -146,5 +196,23 @@ describe('otLlevaDomotica', () => {
     expect(otLlevaDomotica([v({ motorModelo: 'DOM41' })])).toBe(false);
     // 'INALAMB. SIN DOMO' no debe encender la domótica (DOM43 fantasma).
     expect(otLlevaDomotica([v({ motorTipo: 'INALAMB. SIN DOMO' })])).toBe(false);
+  });
+});
+
+describe('esCategoriaDuo', () => {
+  it('DUO_* sí; PLETINA_DUO_V y ROL no', () => {
+    expect(esCategoriaDuo('DUO_MANUAL_38mm')).toBe(true);
+    expect(esCategoriaDuo('DUO_MOTOR_GRANDE_45mm')).toBe(true);
+    expect(esCategoriaDuo('PLETINA_DUO_V')).toBe(false);
+    expect(esCategoriaDuo('ROL')).toBe(false);
+    expect(esCategoriaDuo('')).toBe(false);
+  });
+});
+
+describe('cantidadSuplementosAuto', () => {
+  it('roller → 2; con cenefa (ovalada/cuadrada) → 1 por bracket', () => {
+    expect(cantidadSuplementosAuto(pano({}), 'ROL', 1.5)).toBe(2);
+    expect(cantidadSuplementosAuto(pano({ cenefa: 'Ovalada' }), 'ROL', 1.5)).toBe(3); // brackets(1,5)=3
+    expect(cantidadSuplementosAuto(pano({ cenefa: 'Cuadrada a muro' }), 'ROL', 2.0)).toBe(4);
   });
 });

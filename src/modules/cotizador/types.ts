@@ -121,7 +121,12 @@ export type Pano = {
   relacionMarco?: string;
   alturaCierre?: string;
   cotizarConSin?: string;
+  /** Nota libre de terreno (legacy; distinto del insumo suplemento). */
   suplementos?: string;
+  /** Suplemento seleccionable: 'SUB01' (madera 3mm) | 'SUB02' (acrílico 1,5cm) | '' (ninguno). */
+  suplementoTipo?: string;
+  /** Cantidad de suplementos; undefined = auto (roller 2 / cenefa 1 por bracket). */
+  suplementoCant?: number;
   comentarioFinal?: string;
 };
 

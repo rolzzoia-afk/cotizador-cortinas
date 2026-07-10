@@ -34,6 +34,22 @@ const m = (mecanismo: string, diametro = 38): ModeloDespiece => ({
   ancho_max_m: 2.6, activo: true, notas: '',
 });
 
+describe('mecanismoParaPano — kit reforzado MEC 40/41 (#18)', () => {
+  const chip40 = 'KIT REFORZADO NEGRO 38MM [MEC 40]';
+  it('un MEC 40 guardado en ROL se CONSERVA (es kit de inventario, no legacy)', () => {
+    const out = mecanismoParaPano(
+      { mecanismo: chip40, color: 'NEG' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 1.5,
+    );
+    expect(out).toBe(chip40);
+  });
+  it('sobre 3 m la regla de ancho lo reemplaza por MEC 28', () => {
+    const out = mecanismoParaPano(
+      { mecanismo: chip40, color: 'NEG' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.5,
+    );
+    expect(out).toContain('[MEC 28]');
+  });
+});
+
 describe('chips ↔ modelo', () => {
   it('MEC_13 marca el chip "[MEC 13]" (lista de resolución) y 38mm la tubería E02', () => {
     const modelo = m('MEC_13_LZ50_SINFLEX_GRIS');

@@ -54,7 +54,14 @@ import {
 import { ProductoSelectorFase2 } from '@/components/cotizador/ProductoSelectorFase2';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { esCadenaRoller, esPesoSeleccionable, type CadenaInsumo } from '@/modules/cotizador/cadenas';
+import {
+  codCadenaAutoPorAlto,
+  COD_PESO_AUTO,
+  derivarLargoColor,
+  esCadenaRoller,
+  esPesoSeleccionable,
+  type CadenaInsumo,
+} from '@/modules/cotizador/cadenas';
 import { PanoEditor } from '@/components/cotizador/PanoEditor';
 import { PostInstalacion } from '@/components/cotizador/PostInstalacion';
 import type { Pano, Ventana } from '@/modules/cotizador/types';
@@ -70,10 +77,13 @@ import {
   canonizarChipTuberia,
   categoriaRequiereMecanismo,
   chipDualPorLadoColor,
+  chipMecanismoPorNumero,
+  codigoTuberiaDeChip,
   colorAccesoriosDePano,
   esChipDual,
   ladoColorDesdeChipDual,
   mecanismoParaPano,
+  mecPorAncho,
   modeloDesdeChipMecanismo,
   modeloPorAncho,
   modeloSimple38PorColor,
@@ -223,11 +233,36 @@ export function CotizadorFase2() {
         // Si quedó un chip dual, rellena lado/color derivados (coherencia con el
         // toggle Simple/Dual, que sí los setea).
         const lc = dual && esChipDual(mecanismo) ? ladoColorDesdeChipDual(mecanismo) : null;
+        // Auto cadena + peso (roller/dúo manual): prefill SOLO si están vacíos (no
+        // pisa la elección manual). El recálculo por alto/color vive en actualizarPano.
+        const llevaCadena =
+          categoriaRequiereMecanismo(v.categoria) &&
+          !(p.motorModelo || p.motorTipo) &&
+          !(v.categoria || '').toUpperCase().includes('MOTOR');
+        const cadPatch: Partial<Pano> = {};
+        if (llevaCadena) {
+          if (!p.codCadena) {
+            const cod = codCadenaAutoPorAlto(
+              parseFloat(String(p.alto)) || 0,
+              colorAccesoriosDePano(p, v.color),
+              v.categoria,
+              cadenas,
+            );
+            if (cod) {
+              const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+              cadPatch.codCadena = cod;
+              cadPatch.largoCadena = largoCadena;
+              cadPatch.colorCadena = colorCadena;
+            }
+          }
+          if (!p.codPeso) cadPatch.codPeso = COD_PESO_AUTO;
+        }
         return {
           ...p,
           dual,
           mecanismo,
           ...(lc ? { dualLado: lc.lado, dualColor: lc.dualColor } : {}),
+          ...cadPatch,
           tuberia,
           cenefa,
         };
@@ -237,6 +272,15 @@ export function CotizadorFase2() {
 
   const panoEnEdicion = ventanaForm?.panos[panoActivo];
 
+  // Roller simple >3 m: el mecanismo y el tubo de 63 mm quedan FIJOS (un kit de
+  // 38 mm no aguanta esa luz). Devuelve el N° MEC forzado (28) o null. Se usa
+  // para mostrar un solo chip (no los kits que "rebotan") y una nota al usuario.
+  const mecFijoPorAncho = useMemo(() => {
+    if (!ventanaForm || panoEnEdicion?.dual) return null;
+    const anchoM = parseFloat(String(panoEnEdicion?.ancho ?? 0)) || 0;
+    return mecPorAncho(ventanaForm.categoria, anchoM);
+  }, [ventanaForm?.categoria, panoEnEdicion?.ancho, panoEnEdicion?.dual]);
+
   const opcionesMecVentana = useMemo(() => {
     if (!ventanaForm) return OPCIONES_MECANISMO;
     const stored = (panoEnEdicion?.mecanismo as string) || '';
@@ -245,6 +289,11 @@ export function CotizadorFase2() {
       const base: string[] = [...OPCIONES_MECANISMO_DUAL];
       if (stored && !base.includes(stored)) base.push(stored);
       return base;
+    }
+    // Fijo por ancho >3 m: solo el chip de 63 mm (MEC 28), sin los kits de 38 mm.
+    if (mecFijoPorAncho != null) {
+      const chip = chipMecanismoPorNumero(mecFijoPorAncho, OPCIONES_MECANISMO);
+      if (chip) return [chip];
     }
     const opts = opcionesMecanismoFiltradas(
       modelos,
@@ -265,6 +314,7 @@ export function CotizadorFase2() {
     panoEnEdicion?.color,
     panoEnEdicion?.mecanismo,
     panoEnEdicion?.dual,
+    mecFijoPorAncho,
     modelos,
   ]);
 
@@ -273,13 +323,19 @@ export function CotizadorFase2() {
   // hay mecanismo). La tubería guardada siempre se conserva (OTs viejas).
   const opcionesTubVentana = useMemo(() => {
     if (!ventanaForm) return OPCIONES_TUBERIA;
-    return opcionesTuberiaFiltradas(OPCIONES_TUBERIA, {
+    const base = opcionesTuberiaFiltradas(OPCIONES_TUBERIA, {
       mecanismoChip: (panoEnEdicion?.mecanismo as string) || null,
       modelo: ventanaForm.modelo ?? null,
       categoria: ventanaForm.categoria,
       tuberiaActual: (panoEnEdicion?.tuberia as string) || null,
     });
-  }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia]);
+    // Fijo por ancho >3 m: el tubo queda en E65 (63 mm); no se ofrece el E47.
+    if (mecFijoPorAncho != null) {
+      const soloE65 = base.filter((o) => codigoTuberiaDeChip(o) === 'E65');
+      if (soloE65.length > 0) return soloE65;
+    }
+    return base;
+  }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, mecFijoPorAncho]);
 
   // Pre-seleccionar mecanismo inventario al editar o cambiar paño/color accesorios
   useEffect(() => {
@@ -291,7 +347,9 @@ export function CotizadorFase2() {
         (p, i) =>
           p.mecanismo === synced.panos[i]?.mecanismo &&
           p.tuberia === synced.panos[i]?.tuberia &&
-          p.cenefa === synced.panos[i]?.cenefa,
+          p.cenefa === synced.panos[i]?.cenefa &&
+          p.codCadena === synced.panos[i]?.codCadena &&
+          p.codPeso === synced.panos[i]?.codPeso,
       );
       return igual ? v : synced;
     });
@@ -301,9 +359,11 @@ export function CotizadorFase2() {
     ventanaForm?.categoria,
     ventanaForm?.modelo,
     panoEnEdicion?.ancho,
+    panoEnEdicion?.alto,
     panoEnEdicion?.colorMecanismo,
     panoEnEdicion?.colorPeso,
     panoEnEdicion?.colorCadena,
+    cadenas,
   ]);
 
   const iniciarEdicion = (v: Ventana) => {
@@ -431,6 +491,20 @@ export function CotizadorFase2() {
         nuevo = { ...nuevo, panos: nuevo.panos.map((p, i) => (i === idx ? { ...p, ...mod } : p)) };
       };
       const anchoIdx = () => parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
+      const altoIdx = () => parseFloat(String(nuevo.panos[idx]?.alto ?? 0)) || 0;
+      // Recalcula la cadena auto por ALTO + color (roller/dúo manual); setea si
+      // cambió. El peso se auto-fija (PCA04) si está vacío. No pisa un peso manual.
+      const recomputarCadena = () => {
+        const pn = nuevo.panos[idx];
+        if ((v.categoria || '').toUpperCase().includes('MOTOR') || pn.motorModelo || pn.motorTipo) return;
+        if (!categoriaRequiereMecanismo(v.categoria)) return;
+        const cod = codCadenaAutoPorAlto(altoIdx(), colorAccesoriosDePano(pn, v.color), v.categoria, cadenas);
+        if (cod && cod !== pn.codCadena) {
+          const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+          setPano({ codCadena: cod, largoCadena, colorCadena });
+        }
+        if (!nuevo.panos[idx].codPeso) setPano({ codPeso: COD_PESO_AUTO });
+      };
 
       // Toggle tipo Simple/Dual: represelecciona mecanismo + modelo + tubería.
       if (patch.dual !== undefined) {
@@ -471,7 +545,11 @@ export function CotizadorFase2() {
       if (patch.colorMecanismo !== undefined || patch.colorPeso !== undefined || patch.colorCadena !== undefined || patch.color !== undefined) {
         const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx());
         if (mec && mec !== nuevo.panos[idx].mecanismo) setPano({ mecanismo: mec });
+        recomputarCadena();
       }
+
+      // Cambio de alto → recalcula la cadena auto (el largo depende del alto).
+      if (patch.alto !== undefined) recomputarCadena();
 
       // Cambio de ancho → si cruza 3 m cambia el mecanismo (MEC 28 ↔ kit), y en
       // todo caso ajusta la tubería (E02/E66 y E47/E65).
@@ -1011,6 +1089,11 @@ export function CotizadorFase2() {
                   pesos={pesos}
                   opcionesMecanismo={opcionesMecVentana}
                   opcionesTuberia={opcionesTubVentana}
+                  mecanismoFijoNota={
+                    mecFijoPorAncho != null
+                      ? 'Fijo por ancho >3 m: mecanismo y tubo de 63 mm (MEC 28 · E65). Un kit de 38 mm no aguanta esa luz.'
+                      : undefined
+                  }
                   ocultarMecanismo={!categoriaRequiereMecanismo(ventanaForm.categoria)}
                   categoria={ventanaForm.categoria}
                   colorVentana={ventanaForm.color}

@@ -214,3 +214,26 @@ describe('filasCorteVisibles (tabla de corte solo colmena/invertidas)', () => {
     expect(filasCorteVisibles([fila({}), fila({})])).toEqual([]);
   });
 });
+
+// #26: tras "Confirmar corte general" el sobrante queda disponible=false y el
+// plan vivo no lo re-asigna; el snapshot persistido mantiene el origen colmena.
+describe('construirHojaCorte — snapshot de colmena (#26)', () => {
+  const ventCol: VentanaItem = {
+    id: 'vcol', ubicacion: 'Living', codInt: 'SC 64', producto: 'ROLLER SCREEN PREMIUM',
+    tipo: 'PREMIUM', categoria: 'ROL', grupoId: null, alto: 1.8, precio: 0, cantidad: 1,
+    panos: [{ ancho: 1.45, alto: 1.8 }],
+  };
+  const rows = asignarJuntoEnOrden(buildOptimizerRows([ventCol], cat));
+  const otObj = ot([ventCol]);
+
+  it('sin snapshot y sin colmena viva → la fila no es visible', () => {
+    expect(filasCorteVisibles(construirHojaCorte(rows, [], otObj).cortinas)).toEqual([]);
+  });
+  it('con snapshot persistido → fila visible con medida/ubic de colmena', () => {
+    const snap = { [`${otObj.id}_vcol_p0`]: { cod: 'SC 64', ancho: 178, alto: 200, ubic: 'RACK1' } };
+    const vis = filasCorteVisibles(construirHojaCorte(rows, [], otObj, undefined, snap).cortinas);
+    expect(vis).toHaveLength(1);
+    expect(vis[0].medidaColmena).toBe('SC 64 (178X200)');
+    expect(vis[0].ubicColmena).toBe('RACK1');
+  });
+});

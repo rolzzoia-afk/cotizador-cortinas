@@ -65,12 +65,22 @@ describe('construirInventario', () => {
     expect('materiales' in data).toBe(false);
   });
 
-  it('las cortinas roller emiten tapas de peso por color + tornillos (bloque INSUMOS)', () => {
-    // 2 cortinas roller NEG sin cenefa: TAP04+TAP05 (×2 c/u) y TOR02 (2/paño = 4).
-    const codes = data.insumos.map((i) => i.codigo);
-    expect(codes).toEqual(['TAP04', 'TAP05', 'TOR02']);
-    expect(data.insumos.find((i) => i.codigo === 'TOR02')?.cantidad).toBe(4);
-    expect(data.insumos.find((i) => i.codigo === 'TAP04')?.cantidad).toBe(2);
+  it('roller emite tapas + tornillos + mecanismo + cadena + peso, clasificados por grupo', () => {
+    // 2 cortinas roller NEG: TAP04/05 (×2), TOR02 (2/paño=4), y MEC/CAD/PCA por paño.
+    const map = Object.fromEntries(data.insumos.map((i) => [i.codigo, i.cantidad]));
+    expect(map.TAP04).toBe(2);
+    expect(map.TAP05).toBe(2);
+    expect(map.TOR02).toBe(4);
+    expect(map.MEC32).toBe(2);
+    expect(map['CAD 03']).toBe(2);
+    expect(map.PCA04).toBe(2);
+    // Producción: tapas/tornillos/cadena/peso. Instalación: el kit simple.
+    const grupo = (c: string) => data.insumos.find((i) => i.codigo === c)?.grupo;
+    expect(grupo('TAP04')).toBe('PRODUCCION');
+    expect(grupo('TOR02')).toBe('PRODUCCION');
+    expect(grupo('CAD 03')).toBe('PRODUCCION');
+    expect(grupo('PCA04')).toBe('PRODUCCION');
+    expect(grupo('MEC32')).toBe('INSTALACION');
   });
 
   it('etiquetas: 1 por cortina, código según color de accesorios (NEG → INS 95 negra)', () => {
@@ -111,8 +121,8 @@ describe('construirInventario — bloque INSUMOS', () => {
       vMan('C', 2, 'NEG'),
     ]);
     expect(d.insumos.slice(0, 2)).toEqual([
-      { id: 1, descripcion: 'MANILLA CAFÉ', cantidad: 9 },
-      { id: 2, descripcion: 'MANILLA NEG', cantidad: 2 },
+      { id: 1, descripcion: 'MANILLA CAFÉ', cantidad: 9, grupo: 'INSTALACION' },
+      { id: 2, descripcion: 'MANILLA NEG', cantidad: 2, grupo: 'INSTALACION' },
     ]);
   });
 
@@ -136,7 +146,7 @@ describe('construirInventario — bloque INSUMOS', () => {
     expect(d.insumos.find((i) => i.codigo === 'BRA04')?.cantidad).toBe(3);
   });
 
-  it('motor DOM41 + domótica → kit DOM completo + 1 DOM43 por OT', () => {
+  it('motor DOM41 + domótica → kit DOM (sin DOM40) + 1 DOM43 por OT', () => {
     const v = {
       id: 'm', ubicacion: 'DORM', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloCenefa,
@@ -144,7 +154,8 @@ describe('construirInventario — bloque INSUMOS', () => {
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const codes = d.insumos.map((i) => i.codigo);
-    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM40', 'DOM04', 'DOM43']));
+    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM04', 'DOM43']));
+    expect(codes).not.toContain('DOM40'); // #28: el DOM41 no lleva cable
     // DOM43 aparece una sola vez.
     expect(d.insumos.filter((i) => i.codigo === 'DOM43')).toHaveLength(1);
   });
