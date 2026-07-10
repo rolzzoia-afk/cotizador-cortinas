@@ -34,11 +34,11 @@ import {
   generarEtiquetasPDF,
   generarEtiquetasPanosPDF,
 } from '@/modules/cotizador/pdfEtiquetasBrother';
-import { generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
+import { construirHojaCorte, generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
 import { generarPdfCalculoGeneral, generarPdfDimensionado } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
 import { generarPlanCorte, rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
-import { deduccionesColmena } from '@/modules/cotizador/colmenaCorte';
+import { deduccionesColmena, piezasColmenaSnapshot } from '@/modules/cotizador/colmenaCorte';
 import GuardarSobranteRolloDialog, {
   type SobranteRollo,
 } from './telas/dialogs/GuardarSobranteRolloDialog';
@@ -200,10 +200,20 @@ export function CotizadorFase4() {
     }
     try {
       const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      // Letras de "cortar junto" por pieza (mismas que la hoja de corte/paños).
+      let juntoPorPieza: Map<string, string> | undefined;
+      if (pdfRows && pdfRows.length > 0) {
+        const cortinas = construirHojaCorte(pdfRows, [], ot, parametros).cortinas;
+        juntoPorPieza = new Map();
+        pdfRows.forEach((r, i) => {
+          const letra = cortinas[i]?.cortarJunto;
+          if (letra) juntoPorPieza!.set(`${r.ventanaId}_${r.panoIndex}`, letra);
+        });
+      }
       generarPdfDimensionado(ventanas, catalogo, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
-      }, parametros);
+      }, parametros, juntoPorPieza);
       toast.success('Dimensionado generado');
     } catch (e) {
       toast.error('Error generando dimensionado: ' + (e instanceof Error ? e.message : String(e)));
@@ -268,7 +278,7 @@ export function CotizadorFase4() {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || '',
         empresa: empresaNombre ?? undefined,
-      }, parametros);
+      }, parametros, ot.datosGenerales?.corteGeneralColmena?.piezas);
       toast.success('Hoja de corte generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -379,7 +389,7 @@ export function CotizadorFase4() {
       await guardar({
         datosGenerales: {
           ...(ot.datosGenerales || {}),
-          corteGeneralColmena: { confirmadoEn: now, panos: aplicadas },
+          corteGeneralColmena: { confirmadoEn: now, panos: aplicadas, piezas: piezasColmenaSnapshot(plan) },
         },
       });
       if (fallidas.length) {

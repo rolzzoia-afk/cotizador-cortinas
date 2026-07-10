@@ -34,8 +34,9 @@ export const REGLAS_MECANISMO = {
   /** Categorías que NO llevan mecanismo roller. */
   categoriasSinMecanismo: ['VERTICAL', 'BEEBLACK'] as const,
 
-  /** Kits de inventario bodega — visibles en rollers estándar (Fase 2). */
-  kitsInventario: [32, 33, 34] as const,
+  /** Kits de inventario bodega — visibles en rollers estándar (Fase 2).
+   *  32/33/34 simples · 40/41 reforzados (mismo tubo 38 mm). */
+  kitsInventario: [32, 33, 34, 40, 41] as const,
 
   /**
    * MEC del Excel legacy que se reemplazan automáticamente por kits inventario

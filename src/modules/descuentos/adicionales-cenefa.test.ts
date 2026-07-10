@@ -135,16 +135,16 @@ describe('cenefa cuadrada (verticales/roller)', () => {
 });
 
 describe('derivarAdicionalesCenefaDesdeVentanas (paño → adicional)', () => {
-  it('1 paño Ovalada CON TIRA → un CENF O (ubic sin -G, conTira, color de la tapa, origen pano)', () => {
+  it('1 paño Ovalada CON TIRA → un CENF O con cantidad = ANCHO del paño (#22), no v.cantidad', () => {
     const v: VentanaItem = {
       id: 'v1',
       ubicacion: 'LIVING',
-      cantidad: 2,
+      cantidad: 2, // unidades de la ventana: NO debe usarse como cantidad de la cenefa
       color: 'NEGRO',
       panos: [{ ancho: 2.5, alto: 2, cenefa: 'Ovalada', cenefaTira: 'CON TIRA', colorTapa: 'GRS' }],
     };
     expect(derivarAdicionalesCenefaDesdeVentanas([v])).toEqual([
-      { codInt: 'CENF O', cantidad: 2, descuento: 0, ubicacion: 'LIVING', colorAcc: 'GRS', conTira: true, origen: 'pano' },
+      { codInt: 'CENF O', cantidad: 2.5, descuento: 0, ubicacion: 'LIVING', colorAcc: 'GRS', conTira: true, origen: 'pano' },
     ]);
   });
 

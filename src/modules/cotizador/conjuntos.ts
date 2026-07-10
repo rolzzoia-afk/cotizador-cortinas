@@ -83,6 +83,8 @@ export const CAMPOS_PANO_CONJUNTO = [
   'alturaCierre',
   'cotizarConSin',
   'suplementos',
+  'suplementoTipo',
+  'suplementoCant',
   'oscuridadVariante',
   'perfilIzqMuro',
   'perfilIzqPiso',

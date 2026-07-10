@@ -79,11 +79,37 @@ export type DeduccionColmena = {
   error?: string;
 };
 
+/** Origen de colmena de una pieza (para reconstruir la hoja de corte). */
+export type PiezaColmenaSnap = { cod: string; ancho: number; alto: number; ubic: string };
+
 /** Snapshot persistido en la OT como guard de idempotencia del corte general. */
 export type CorteGeneralColmena = {
   confirmadoEn: string;
   panos: DeduccionColmena[];
+  /**
+   * Pieza (pieceId) → sobrante usado. Permite que la hoja de corte siga
+   * mostrando el origen de colmena DESPUÉS de confirmar (cuando el sobrante ya
+   * quedó disponible=false y el plan vivo no lo re-asigna).
+   */
+  piezas?: Record<string, PiezaColmenaSnap>;
 };
+
+/** Construye el mapa pieza→sobrante desde un plan (para persistir al confirmar). */
+export function piezasColmenaSnapshot(plan: Plan): Record<string, PiezaColmenaSnap> {
+  const out: Record<string, PiezaColmenaSnap> = {};
+  for (const g of plan.sobrantes) {
+    for (const pz of g.placed) {
+      if (pz.failed) continue;
+      out[pz.id] = {
+        cod: g.sobrante.cod,
+        ancho: g.sobrante.ancho,
+        alto: g.sobrante.alto,
+        ubic: g.sobrante.ubicacion || '',
+      };
+    }
+  }
+  return out;
+}
 
 /**
  * Calcula la lista de deducciones a la colmena para un Plan de Corte: una por

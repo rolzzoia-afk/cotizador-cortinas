@@ -220,6 +220,8 @@ describe('diametroDesdeChipMecanismo', () => {
       'KIT SIMPLE NEGRO 38MM [MEC 32]': 38,
       'KIT SIMPLE BLANCO 38MM [MEC 33]': 38,
       'KIT SIMPLE GRIS 38MM [MEC 34]': 38,
+      'KIT REFORZADO NEGRO 38MM [MEC 40]': 38,
+      'KIT REFORZADO BLANCO 38MM [MEC 41]': 38,
       'OVALADA GRIS [MEC 12]': 38,
       'OVALADA NEGRO [MEC 38]': 38,
       'OVALADA BLANCO [MEC 39]': 38,

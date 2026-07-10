@@ -41,13 +41,40 @@ const NOMBRE_TAPA: Record<string, string> = {
   TAP20: 'TAPA PESO GRIS ROLLER [IZQUIERDO]',
 };
 
+// ── Tapas de peso DÚO (a presión, SIN tornillos) ─────────────────────
+// Cada dúo lleva 2 tapas exteriores del color de accesorios + 2 tapas internas
+// (TAP13) por cortina. Van a presión, así que no llevan tornillos TOR02.
+export const TAPAS_DUO_POR_COLOR: Record<'BCO' | 'NEG' | 'GRS', string> = {
+  BCO: 'TAP12',
+  NEG: 'TAP11',
+  GRS: 'TAP09',
+};
+const NOMBRE_TAPA_DUO: Record<string, string> = {
+  TAP12: '[TAPA DE PESO DUO] DUO 4 EXTERIOR BLANCO',
+  TAP11: '[TAPA DE PESO DUO] DUO 4 EXTERIOR NEGRO',
+  TAP09: '[TAPA DE PESO DUO] DUO 4 EXTERIOR GRIS',
+};
+export const COD_TAPA_DUO_INTERNA = 'TAP13';
+export const NOMBRE_TAPA_DUO_INTERNA = '[TAPA DE PESO DUO] DUO INTERNO';
+export const TAPAS_DUO_EXTERIOR_POR_PANO = 2;
+export const TAPAS_DUO_INTERNA_POR_PANO = 2;
+
 export const COD_TORNILLO_TAPA = 'TOR02';
 export const NOMBRE_TORNILLO_TAPA = 'TORNILLO TAPA PESO ROLLER 4X1/4"';
 export const TORNILLOS_TAPA_PESO_POR_PANO = 2;
 export const TORNILLOS_CENEFA_OVALADA = 6; // por cenefa ovalada (decisión 2026-07-09: TOR02)
 
+// Tarugos de fijación según el material del muro.
 export const COD_TARUGO = 'TAR01';
 export const NOMBRE_TARUGO = 'TARUGO VOLCANITA (COLA DE CHANCHO)';
+export const COD_TARUGO_CONCRETO = 'TAR03';
+export const NOMBRE_TARUGO_CONCRETO = 'TARUGO SA 6 - FISHER (CONCRETO)';
+
+// Suplementos (opcionales, uno por paño).
+export const NOMBRE_SUPLEMENTO: Record<string, string> = {
+  SUB01: 'SUPLEMENTO DE MADERA 3MM',
+  SUB02: 'SUPLEMENTO ACRILICO 1.5CM',
+};
 
 /** Color de accesorios normalizado a BCO/NEG/GRS, o null si no aplica (MET, CAFÉ, vacío). */
 function colorTapaCorto(color: string | null | undefined): 'BCO' | 'NEG' | 'GRS' | null {
@@ -64,6 +91,27 @@ export function llevaTapasPeso(categoria: string | null | undefined): boolean {
   const c = (categoria || '').trim().toUpperCase();
   if (!c) return false;
   return c === 'ROL' || (c.startsWith('ROL_') && !c.includes('DUAL') && !c.includes('PLETINA'));
+}
+
+/** ¿La categoría es dúo (día/noche, doble tela)? Excluye PLETINA_DUO_V. */
+export function esCategoriaDuo(categoria: string | null | undefined): boolean {
+  return (categoria || '').trim().toUpperCase().startsWith('DUO');
+}
+
+/**
+ * Tarugo de fijación según el material de instalación: VULCANITA → TAR01;
+ * CONCRETO / CERÁMICA (con o sin tilde) → TAR03; MADERA (se atornilla directo),
+ * vacío u otro → null (sin tarugo).
+ */
+export function tarugoDeMaterial(
+  materialTipo: string | null | undefined,
+): { codigo: string; descripcion: string } | null {
+  const m = (materialTipo || '').trim().toUpperCase();
+  if (m === 'VULCANITA') return { codigo: COD_TARUGO, descripcion: NOMBRE_TARUGO };
+  if (m === 'CONCRETO' || m === 'CERÁMICA' || m === 'CERAMICA') {
+    return { codigo: COD_TARUGO_CONCRETO, descripcion: NOMBRE_TARUGO_CONCRETO };
+  }
+  return null;
 }
 
 /** ¿La cenefa del paño es ovalada? (chip 'Ovalada' o categoría que la implica). */
@@ -111,16 +159,17 @@ export function bracketDeCenefa(
 }
 
 /**
- * Tarugos de vulcanita (TAR01) del paño. Solo si el material de instalación es
- * VULCANITA: roller sin cenefa → 4; cenefa ovalada → 1/bracket a techo, 2/bracket
- * a muro; cenefa cuadrada → 1/bracket.
+ * Cantidad de tarugos del paño (código según `tarugoDeMaterial`). Solo si el
+ * material lleva tarugo (vulcanita/concreto/cerámica; madera no): roller sin
+ * cenefa → 4; cenefa ovalada → 1/bracket a techo, 2/bracket a muro; cenefa
+ * cuadrada → 1/bracket.
  */
 export function cantidadTarugos(
   p: Partial<Pano>,
   categoria: string | null | undefined,
   anchoM: number,
 ): number {
-  if ((p.materialTipo || '').trim().toUpperCase() !== 'VULCANITA') return 0;
+  if (!tarugoDeMaterial(p.materialTipo)) return 0;
   const brackets = cantidadBrackets(anchoM);
   if (esCenefaOvalada(p.cenefa, categoria || undefined)) {
     const aTecho = (p.superficie || '').toUpperCase() === 'TECHO';
@@ -129,6 +178,21 @@ export function cantidadTarugos(
   if (esCenefaCuadrada(p.cenefa)) return brackets * 1;
   // Roller sin cenefa: 4 tarugos.
   return llevaTapasPeso(categoria) ? 4 : 0;
+}
+
+/**
+ * Cantidad auto de suplementos: con cenefa (ovalada o cuadrada) → 1 por bracket;
+ * roller sin cenefa → 2. El usuario puede sobrescribir con `suplementoCant`.
+ */
+export function cantidadSuplementosAuto(
+  p: Partial<Pano>,
+  categoria: string | null | undefined,
+  anchoM: number,
+): number {
+  if (esCenefaOvalada(p.cenefa, categoria || undefined) || esCenefaCuadrada(p.cenefa)) {
+    return cantidadBrackets(anchoM);
+  }
+  return 2;
 }
 
 /**
@@ -141,10 +205,10 @@ export function insumosDePano(
 ): InsumoCortina[] {
   const out: InsumoCortina[] = [];
   const { categoria, ventanaColor, anchoM } = ctx;
+  const cc = colorTapaCorto(colorAccesoriosDePano(p, ventanaColor));
 
   // Tapas de peso + sus tornillos (solo roller, por color de accesorios).
   if (llevaTapasPeso(categoria)) {
-    const cc = colorTapaCorto(colorAccesoriosDePano(p, ventanaColor));
     if (cc) {
       const { izq, der } = TAPAS_PESO_POR_COLOR[cc];
       out.push({ codigo: izq, descripcion: NOMBRE_TAPA[izq], color: cc, cantidad: 1 });
@@ -156,6 +220,18 @@ export function insumosDePano(
         cantidad: TORNILLOS_TAPA_PESO_POR_PANO,
       });
     }
+  } else if (esCategoriaDuo(categoria)) {
+    // Dúo: tapas a presión, SIN tornillos. 2 exteriores por color + 2 internas (TAP13).
+    if (cc) {
+      const ext = TAPAS_DUO_POR_COLOR[cc];
+      out.push({ codigo: ext, descripcion: NOMBRE_TAPA_DUO[ext], color: cc, cantidad: TAPAS_DUO_EXTERIOR_POR_PANO });
+    }
+    out.push({
+      codigo: COD_TAPA_DUO_INTERNA,
+      descripcion: NOMBRE_TAPA_DUO_INTERNA,
+      color: '',
+      cantidad: TAPAS_DUO_INTERNA_POR_PANO,
+    });
   }
 
   // Tornillos de la cenefa ovalada (6 por cenefa).
@@ -174,10 +250,23 @@ export function insumosDePano(
     out.push({ ...bracket, color: '', cantidad: cantidadBrackets(anchoM) });
   }
 
-  // Tarugos de vulcanita.
+  // Tarugos según material (vulcanita/concreto/cerámica; madera no lleva).
+  const tarugo = tarugoDeMaterial(p.materialTipo);
   const tarugos = cantidadTarugos(p, categoria, anchoM);
-  if (tarugos > 0) {
-    out.push({ codigo: COD_TARUGO, descripcion: NOMBRE_TARUGO, color: '', cantidad: tarugos });
+  if (tarugo && tarugos > 0) {
+    out.push({ codigo: tarugo.codigo, descripcion: tarugo.descripcion, color: '', cantidad: tarugos });
+  }
+
+  // Suplementos (opcional; cantidad auto por roller/cenefa, override manual).
+  if (p.suplementoTipo) {
+    const override = Number(p.suplementoCant);
+    const cant = override > 0 ? override : cantidadSuplementosAuto(p, categoria, anchoM);
+    out.push({
+      codigo: p.suplementoTipo,
+      descripcion: NOMBRE_SUPLEMENTO[p.suplementoTipo] || p.suplementoTipo,
+      color: '',
+      cantidad: cant,
+    });
   }
 
   return out;
@@ -205,8 +294,9 @@ export function panoTieneMotorDom(p: Partial<Pano>): boolean {
 }
 
 /**
- * Kit de motor del paño: motor + control + cable DOM40 + enchufe DOM04, más los
- * controles y hubs adicionales. Vacío si el modelo es 'CABLE' (futuro) o no hay motor.
+ * Kit de motor del paño: motor + control + enchufe DOM04, más los controles y
+ * hubs adicionales. El cable DOM40 se agrega SOLO al DOM38 (Tronic Plus a batería;
+ * el DOM41 no lo lleva). Vacío si el modelo es 'CABLE' (futuro) o no hay motor.
  * F15: la cenefa ovalada NO admite DOM41 → cae a DOM38. La regla vive acá (en la
  * derivación del BOM), no solo en la UI, para que una OT importada o cargada sin
  * re-editar la cenefa tampoco emita el kit DOM41 prohibido.
@@ -219,9 +309,12 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
   const out: InsumoCortina[] = [
     { codigo: m.motor, descripcion: m.nombre, color: '', cantidad: 1 },
     { codigo: m.control, descripcion: NOMBRE_CONTROL[m.control], color: '', cantidad: 1 },
-    { codigo: COD_CABLE_MOTOR, descripcion: NOMBRE_CABLE_MOTOR, color: '', cantidad: 1 },
-    { codigo: COD_ENCHUFE_MOTOR, descripcion: NOMBRE_ENCHUFE_MOTOR, color: '', cantidad: 1 },
   ];
+  // Cable tipo C (DOM40): solo el Tronic Plus a batería (DOM38).
+  if (modelo === 'DOM38') {
+    out.push({ codigo: COD_CABLE_MOTOR, descripcion: NOMBRE_CABLE_MOTOR, color: '', cantidad: 1 });
+  }
+  out.push({ codigo: COD_ENCHUFE_MOTOR, descripcion: NOMBRE_ENCHUFE_MOTOR, color: '', cantidad: 1 });
   // Controles adicionales (mismo código que el control del kit).
   const ctrlAdic = Number(p.motorControlAdicCant) || (p.motorControlAdic ? 1 : 0);
   if (ctrlAdic > 0) {

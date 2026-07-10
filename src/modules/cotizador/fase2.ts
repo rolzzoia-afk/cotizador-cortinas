@@ -59,6 +59,9 @@ export const OPCIONES_MECANISMO = [
   'KIT SIMPLE NEGRO 38MM [MEC 32]',
   'KIT SIMPLE BLANCO 38MM [MEC 33]',
   'KIT SIMPLE GRIS 38MM [MEC 34]',
+  // Kits reforzados (mismo tubo 38 mm; inventario MEC 40/41 - ROLZZO).
+  'KIT REFORZADO NEGRO 38MM [MEC 40]',
+  'KIT REFORZADO BLANCO 38MM [MEC 41]',
   // Kits bodega de cenefa ovalada por color (Dúo manual 38 / Soft Light 38 /
   // Roller cenefa ovalada 38; ver reglas-mecanismo.ts). Nemotécnicos de
   // inventario: MECANISMO OVALADO GRIS/NEGRO/BLANCO - ROLZZO.
@@ -141,6 +144,11 @@ export const OPCIONES_TUBERIA = [
 ] as const;
 export const OPCIONES_CORTES = ['Nada', 'Plumavit', 'Rodapié', 'Ambos'] as const;
 export const OPCIONES_RELACION_MARCO = ['N/A', 'Dentro', 'Fuera'] as const;
+// Suplemento seleccionable (opcional). '' = sin suplemento.
+export const OPCIONES_SUPLEMENTO = [
+  { value: 'SUB01', label: 'Madera 3 mm [SUB01]' },
+  { value: 'SUB02', label: 'Acrílico 1,5 cm [SUB02]' },
+] as const;
 
 // Factory: paño vacío. Tela y colores de accesorios parten VACÍOS para que
 // fase0-sync los rellene con el producto/color REAL de la ventana (los
@@ -192,6 +200,7 @@ export function crearPanoVacio(): Pano {
     alturaCierre: '',
     cotizarConSin: '',
     suplementos: '',
+    suplementoTipo: '',
     comentarioFinal: '',
     color: '',
   };
