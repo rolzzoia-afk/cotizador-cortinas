@@ -82,6 +82,8 @@ export type Pano = {
   beeblackTotalLamasCm?: number;
   colorTapa?: string;
   cenefaTapa?: string;
+  /** Cenefa ovalada: tipo de bracket 'CORTO' (BRA01) | 'LARGO' (BRA02). Default CORTO. */
+  bracketTipo?: string;
   /**
    * Corte invertido (rotado 90°): el alto va a lo ancho del rollo y el ancho
    * corre a lo largo. Necesario cuando la cortina es más ancha que el rollo.
@@ -102,6 +104,14 @@ export type Pano = {
   motorTipo?: string;
   motorControlAdic?: boolean;
   motorHubUsb?: boolean;
+  /** Modelo de motor: 'DOM38' (tronic) | 'DOM41' (inalámbrico) | 'CABLE' (futuro, sin códigos). */
+  motorModelo?: string;
+  /** Motor con domótica (agrega 1× DOM43 bridge hub por OT). */
+  motorDomotica?: boolean;
+  /** Controles remotos adicionales (además del que viene en el kit base). */
+  motorControlAdicCant?: number;
+  /** Hubs USB (DOM43) adicionales. */
+  motorHubUsbCant?: number;
   ladoMotor?: string;
   softDark?: string;
   instalacion?: string;

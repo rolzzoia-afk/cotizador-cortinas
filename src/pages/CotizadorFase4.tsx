@@ -35,7 +35,7 @@ import {
   generarEtiquetasPanosPDF,
 } from '@/modules/cotizador/pdfEtiquetasBrother';
 import { generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
-import { generarPdfCalculoGeneral } from '@/modules/cotizador/pdfCalculoGeneral';
+import { generarPdfCalculoGeneral, generarPdfDimensionado } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
 import { generarPlanCorte, rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
 import { deduccionesColmena } from '@/modules/cotizador/colmenaCorte';
@@ -190,6 +190,23 @@ export function CotizadorFase4() {
       toast.success('Cálculo general generado');
     } catch (e) {
       toast.error('Error generando cálculo general: ' + (e instanceof Error ? e.message : String(e)));
+    }
+  };
+
+  const onDimensionado = () => {
+    if (!ot || (ot.storeVentanas || []).length === 0) {
+      toast.error('No hay ventanas en la OT.');
+      return;
+    }
+    try {
+      const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      generarPdfDimensionado(ventanas, catalogo, {
+        ot: ot.datosGenerales.ot || String(ot.id),
+        cliente: ot.datosGenerales.cliente || undefined,
+      }, parametros);
+      toast.success('Dimensionado generado');
+    } catch (e) {
+      toast.error('Error generando dimensionado: ' + (e instanceof Error ? e.message : String(e)));
     }
   };
 
@@ -663,6 +680,17 @@ export function CotizadorFase4() {
             >
               <FileDown className="h-3.5 w-3.5" />
               Cálculo general
+            </Button>
+            <Button
+              size="sm"
+              onClick={onDimensionado}
+              disabled={!ot || (ot.storeVentanas || []).length === 0}
+              variant="outline"
+              className="gap-1.5"
+              title="La hoja de cálculo general solo con medidas de tela: sin tubería, accesorios, cadena, armado ni cortes de tubo/peso (PDF)"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              Dimensionado
             </Button>
           </div>
         </div>

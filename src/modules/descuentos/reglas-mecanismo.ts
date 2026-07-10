@@ -43,6 +43,15 @@ export const REGLAS_MECANISMO = {
    */
   legacyReemplazar: [5, 6, 9, 10, 11, 13, 14, 18, 23, 28] as const,
 
+  /**
+   * Reglas por ANCHO: fuerzan un MEC según el ancho de la cortina, por encima
+   * de la regla de color. Roller simple sobre 3 m usa el kit 63 mm (MEC 28,
+   * tubo E65). Se evalúan tras la regla de categoría.
+   */
+  reglasAncho: [
+    { descripcion: 'Roller simple sobre 3,0 m → MEC 28 (fila 63 mm, tubo E65)', categoria: 'ROL', anchoMinM: 3.0, mec: 28 },
+  ] as const,
+
   /** Mapeo color accesorios → MEC inventario (rollers estándar). */
   colorAMec: {
     BCO: 33,
@@ -200,6 +209,25 @@ export function mecPorCategoriaYColor(
   color: string | null | undefined,
 ): number | null {
   return reglaCategoriaAplicable(categoria, color)?.mec ?? null;
+}
+
+/** Número MEC forzado por ANCHO (roller simple >3 m → MEC 28), o null. */
+export function mecPorAncho(categoria: string, anchoM: number): number | null {
+  const c = normalizarCategoria(categoria);
+  for (const r of REGLAS_MECANISMO.reglasAncho) {
+    if (c === r.categoria.toUpperCase() && anchoM > r.anchoMinM) return r.mec;
+  }
+  return null;
+}
+
+/**
+ * true si la categoría tiene una regla por ANCHO (p.ej. ROL sube a 63 mm sobre
+ * 3 m). Sirve para saber cuándo hay que VOLVER a 38 mm al bajar de ese ancho —
+ * OSCURANTI y las ovaladas, que también son 63 mm, no tienen regla → no se tocan.
+ */
+export function categoriaTieneReglaAncho(categoria: string): boolean {
+  const c = normalizarCategoria(categoria);
+  return REGLAS_MECANISMO.reglasAncho.some((r) => c === r.categoria.toUpperCase());
 }
 
 /** true si la categoría tiene una regla fija (ignora color al forzar MEC). */

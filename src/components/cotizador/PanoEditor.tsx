@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   OPCIONES_ARMADO,
   OPCIONES_ACCESORIO_COLOR,
+  OPCIONES_BRACKET_TIPO,
   OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
   OPCIONES_CENEFA_TIRA,
@@ -11,24 +13,27 @@ import {
   OPCIONES_COLOR_TAPA_CUADRADA,
   OPCIONES_COLOR_TAPA_OVALADA,
   OPCIONES_CORTES,
-  OPCIONES_DUAL_COLOR,
-  OPCIONES_DUAL_LADO,
   OPCIONES_INSTALACION,
   OPCIONES_LADO_MOTOR,
   OPCIONES_LARGO_CADENA,
   OPCIONES_MANILLA_COLOR,
   OPCIONES_MATERIAL_TIPO,
   OPCIONES_MECANISMO,
-  OPCIONES_MOTOR_TIPO,
+  OPCIONES_MOTOR_MODELO,
   OPCIONES_ORDEN_DOBLE,
   OPCIONES_RELACION_MARCO,
   OPCIONES_SEPARADOR,
   OPCIONES_SOFT_DARK,
   OPCIONES_SUPERFICIE,
+  OPCIONES_TIPO_MECANISMO,
   OPCIONES_TIPO_TELA,
   OPCIONES_TUBERIA,
+  esCenefaCuadrada,
 } from '@/modules/cotizador/fase2';
 import type { Pano } from '@/modules/cotizador/types';
+import { debeInvertirPano } from '@/modules/cotizador/tela';
+import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
+import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import {
   cadenasRoller,
   etiquetaCadena,
@@ -75,6 +80,8 @@ type Props = {
   ocultarMecanismo?: boolean;
   /** Categoría de la ventana (para detectar sistemas de oscuridad). */
   categoria?: string;
+  /** Color de la ventana (fallback del color de accesorios). */
+  colorVentana?: string | null;
   /** Sentido de instalación heredado de Fase 0 (default de la variante). */
   sentidoVentana?: string | null;
   /** Adicionales Fase 0 (colores de perfiles). */
@@ -162,6 +169,7 @@ export function PanoEditor({
   opcionesTuberia = OPCIONES_TUBERIA,
   ocultarMecanismo = false,
   categoria,
+  colorVentana,
   sentidoVentana,
   adicionalesFase0,
   anchoRollo = 2.98,
@@ -172,7 +180,7 @@ export function PanoEditor({
   // Corte invertido (rotado): se auto-sugiere cuando la cortina + borde (4 cm)
   // no entra en el ancho del rollo. El flag explícito del usuario manda.
   const anchoPanoM = parseFloat(String(pano.ancho)) || 0;
-  const debeInvertir = anchoPanoM > 0 && anchoPanoM + 0.04 > anchoRollo;
+  const debeInvertir = debeInvertirPano(anchoPanoM, anchoRollo);
   const invertida = pano.invertida ?? debeInvertir;
 
   // ── Sistema de oscuridad (Soft Light / Oscuranti / Dark) ──
@@ -203,6 +211,39 @@ export function PanoEditor({
   const esBeeblack = esCategoriaBeeblack(categoria);
   // Dúo (día/noche): pide el cierre de altura medido en terreno.
   const esDuo = (categoria || '').toUpperCase().includes('DUO');
+
+  // ── Gates por categoría (con escape: si hay dato guardado, se muestra) ──
+  const catUpper = (categoria || '').toUpperCase();
+  const esMotorCat = catUpper.includes('MOTOR');
+  const esVerticalCat = catUpper.includes('VERTICAL');
+  const categoriaImplicaOvalada = catUpper.includes('CENEFA_OVALADA');
+  // Color de accesorios único (Medidas): el mismo resolutor que producción.
+  const colorAccesorios = colorAccesorioCorto(colorAccesoriosDePano(pano, colorVentana));
+  // Cierre Vertical/Medio solo aplica a VERTICAL; el resto ve Izq/Der
+  // (más el valor guardado de OTs viejas, para no esconderlo).
+  const opcionesCierre = esVerticalCat
+    ? OPCIONES_CIERRE_VERT
+    : OPCIONES_CIERRE_VERT.filter(
+        (o) => o === 'Izquierda' || o === 'Derecha' || o === pano.cierreVert,
+      );
+  // Cenefa fija Ovalada cuando la categoría la implica (salvo dato legacy distinto).
+  const cenefaFijaOvalada =
+    categoriaImplicaOvalada && !esCenefaCuadrada(pano.cenefa);
+  // F15: el motor DOM41 no se usa con cenefa ovalada (se cae a DOM38).
+  const cenefaEsOvalada = pano.cenefa === 'Ovalada' || cenefaFijaOvalada;
+  const opcionesMotorModelo = cenefaEsOvalada
+    ? OPCIONES_MOTOR_MODELO.filter((o) => o.value !== 'DOM41')
+    : OPCIONES_MOTOR_MODELO;
+  // OTs viejas guardan 'Cuadrada' a secas: se muestra como chip extra para
+  // no esconder el dato (al elegir muro/techo queda con el valor nuevo).
+  const opcionesCenefa =
+    pano.cenefa && esCenefaCuadrada(pano.cenefa) && !OPCIONES_CENEFA.includes(pano.cenefa as never)
+      ? [...OPCIONES_CENEFA, pano.cenefa]
+      : OPCIONES_CENEFA;
+  // Soft/Dark legacy fuera de familia de oscuridad: solo si hay dato guardado.
+  const softDarkLegacy =
+    !familia &&
+    !!((pano.softDark && pano.softDark !== 'N/A') || pano.instalacion || pano.separador);
   const varianteBeeblack: VarianteBeeblack = normalizarVarianteBeeblack(
     pano.beeblackVariante ?? sentidoVentana,
     'INTERNO',
@@ -261,11 +302,18 @@ export function PanoEditor({
           </div>
           <div>
             <Label>Color accesorios</Label>
-            <Input
-              value={pano.color || ''}
-              onChange={(e) => onChange({ color: e.target.value })}
-              placeholder="Blanco"
-            />
+            {/* Control ÚNICO de color: escribe de una vez los 4 campos que
+                leen los consumidores (mecanismo/cadena/peso/tela). */}
+            <div className="pt-1.5">
+              <RadioRow
+                label=""
+                value={colorAccesorios}
+                options={OPCIONES_ACCESORIO_COLOR}
+                onChange={(v) =>
+                  onChange({ color: v, colorMecanismo: v, colorCadena: v, colorPeso: v })
+                }
+              />
+            </div>
           </div>
         </div>
         <div className="mt-2 flex items-center gap-2">
@@ -319,11 +367,16 @@ export function PanoEditor({
               }
               placeholder="cm"
             />
-            {!(parseFloat(String(pano.cierreAlturaCm ?? '')) > 0) && (
-              <span className="text-[0.7rem] text-amber-500">
-                falta el cierre (lo mide el vendedor en terreno)
-              </span>
-            )}
+            {!(parseFloat(String(pano.cierreAlturaCm ?? '')) > 0) &&
+              (pano.alturaCierre ? (
+                <span className="text-[0.7rem] text-muted-foreground">
+                  terreno (texto viejo): {pano.alturaCierre}
+                </span>
+              ) : (
+                <span className="text-[0.7rem] text-amber-500">
+                  falta el cierre (lo mide el vendedor en terreno)
+                </span>
+              ))}
           </div>
         )}
       </Section>
@@ -365,7 +418,7 @@ export function PanoEditor({
         <RadioRow
           label="Cierre"
           value={pano.cierreVert || ''}
-          options={OPCIONES_CIERRE_VERT}
+          options={opcionesCierre}
           onChange={(v) => onChange({ cierreVert: v })}
         />
       </Section>
@@ -412,7 +465,8 @@ export function PanoEditor({
         </div>
       </Section>
 
-      {/* 4. ACCESORIOS */}
+      {/* 4. COLORES ACCESORIOS (detalle por pieza; el control único de
+          "Color accesorios" de arriba pinta los tres de una vez). */}
       <Section title="Colores accesorios">
         <RadioRow
           label="Peso inf."
@@ -436,18 +490,28 @@ export function PanoEditor({
 
       {/* 5. CENEFA */}
       <Section title="Cenefa">
-        <RadioRow
-          label="Tipo"
-          value={pano.cenefa || 'No'}
-          options={OPCIONES_CENEFA}
-          onChange={(v) =>
-            onChange({
-              cenefa: v,
-              ...(v !== 'Ovalada' ? { cenefaTira: 'SIN TIRA' } : {}),
-            })
-          }
-        />
-        {pano.cenefa === 'Ovalada' && (
+        {cenefaFijaOvalada ? (
+          /* La categoría ya trae la cenefa ovalada: no se elige el tipo. */
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Tipo</span>
+            <span className="rounded border border-accent/50 bg-accent/20 px-2 py-1 text-[0.7rem] text-accent">
+              Ovalada — fija por categoría
+            </span>
+          </div>
+        ) : (
+          <RadioRow
+            label="Tipo"
+            value={pano.cenefa || 'No'}
+            options={opcionesCenefa}
+            onChange={(v) =>
+              onChange({
+                cenefa: v,
+                ...(v !== 'Ovalada' ? { cenefaTira: 'SIN TIRA' } : {}),
+              })
+            }
+          />
+        )}
+        {(pano.cenefa === 'Ovalada' || cenefaFijaOvalada) && (
           <>
             <RadioRow
               label="Tira"
@@ -461,9 +525,15 @@ export function PanoEditor({
               options={OPCIONES_COLOR_TAPA_OVALADA}
               onChange={(v) => onChange({ colorTapa: v })}
             />
+            <RadioRow
+              label="Bracket"
+              value={pano.bracketTipo || 'CORTO'}
+              options={OPCIONES_BRACKET_TIPO}
+              onChange={(v) => onChange({ bracketTipo: v })}
+            />
           </>
         )}
-        {pano.cenefa === 'Cuadrada' && (
+        {esCenefaCuadrada(pano.cenefa) && (
           <>
             <RadioRow
               label="Tapas"
@@ -479,6 +549,23 @@ export function PanoEditor({
             />
           </>
         )}
+      </Section>
+
+      {/* 5a. MATERIAL DE INSTALACIÓN — tipo de muro (define tarugos de vulcanita)
+          y posición (techo/pared, cambia los tarugos de la cenefa ovalada). */}
+      <Section title="Material de instalación">
+        <RadioRow
+          label="Tipo"
+          value={pano.materialTipo || ''}
+          options={OPCIONES_MATERIAL_TIPO}
+          onChange={(v) => onChange({ materialTipo: v })}
+        />
+        <RadioRow
+          label="Posición"
+          value={pano.superficie || ''}
+          options={OPCIONES_SUPERFICIE}
+          onChange={(v) => onChange({ superficie: v })}
+        />
       </Section>
 
       {/* 5b. SISTEMA DE OSCURIDAD (Soft Light / Oscuranti / Dark) */}
@@ -543,6 +630,29 @@ export function PanoEditor({
               );
             })}
           </div>
+          {/* Soft / Dark (legacy) vive dentro de la sección de oscuridad. */}
+          <RadioRow
+            label="Soft / Dark"
+            value={pano.softDark || 'N/A'}
+            options={OPCIONES_SOFT_DARK}
+            onChange={(v) => onChange({ softDark: v })}
+          />
+          {pano.softDark && pano.softDark !== 'N/A' && (
+            <>
+              <RadioRow
+                label="Instalación"
+                value={pano.instalacion || ''}
+                options={OPCIONES_INSTALACION}
+                onChange={(v) => onChange({ instalacion: v })}
+              />
+              <RadioRow
+                label="Separador"
+                value={pano.separador || ''}
+                options={OPCIONES_SEPARADOR}
+                onChange={(v) => onChange({ separador: v })}
+              />
+            </>
+          )}
         </Section>
       )}
 
@@ -647,55 +757,34 @@ export function PanoEditor({
         </Section>
       )}
 
-      {/* 6. RETIRO */}
-      <Section title="Retiro de cortinas">
-        <div className="max-w-[120px]">
-          <Label>Cantidad</Label>
-          <Input
-            type="number"
-            min={0}
-            value={pano.retiro ?? 0}
-            onChange={(e) => onChange({ retiro: parseInt(e.target.value, 10) || 0 })}
+      {/* 8. ORDEN DOBLE — solo dúo (o dato guardado de OT vieja) */}
+      {(esDuo || pano.ordenDoble) && (
+        <Section title="Orden doble (cortina duo)">
+          <Checkbox
+            label="Es doble"
+            checked={!!pano.ordenDoble}
+            onChange={(v) => onChange({ ordenDoble: v })}
           />
-        </div>
-      </Section>
+          {pano.ordenDoble && (
+            <RadioRow
+              label="Orden"
+              value={pano.ordenDobleOpcion || ''}
+              options={OPCIONES_ORDEN_DOBLE as unknown as readonly { value: string; label: string }[]}
+              onChange={(v) => onChange({ ordenDobleOpcion: v })}
+            />
+          )}
+        </Section>
+      )}
 
-      {/* 7. MATERIAL */}
-      <Section title="Material de instalación">
-        <RadioRow
-          label="Posición"
-          value={pano.superficie || ''}
-          options={OPCIONES_SUPERFICIE}
-          onChange={(v) => onChange({ superficie: v })}
-        />
-        <RadioRow
-          label="Tipo"
-          value={pano.materialTipo || ''}
-          options={OPCIONES_MATERIAL_TIPO}
-          onChange={(v) => onChange({ materialTipo: v })}
-        />
-      </Section>
-
-      {/* 8. ORDEN DOBLE */}
-      <Section title="Orden doble (solo cortina duo)">
-        <Checkbox
-          label="Es doble"
-          checked={!!pano.ordenDoble}
-          onChange={(v) => onChange({ ordenDoble: v })}
-        />
-        {pano.ordenDoble && (
-          <RadioRow
-            label="Orden"
-            value={pano.ordenDobleOpcion || ''}
-            options={OPCIONES_ORDEN_DOBLE as unknown as readonly { value: string; label: string }[]}
-            onChange={(v) => onChange({ ordenDobleOpcion: v })}
-          />
-        )}
-      </Section>
-
-      {/* 9. MECANISMO */}
+      {/* 9. MECANISMO — con selector de tipo Simple/Dual */}
       {!ocultarMecanismo && (
         <Section title="Mecanismo">
+          <RadioRow
+            label="Tipo"
+            value={pano.dual ? 'DUAL' : 'SIMPLE'}
+            options={OPCIONES_TIPO_MECANISMO as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onChange({ dual: v === 'DUAL' })}
+          />
           <RadioRow
             label=""
             value={pano.mecanismo || ''}
@@ -705,84 +794,78 @@ export function PanoEditor({
         </Section>
       )}
 
-      {/* 10. DUAL */}
-      <Section title="Mecanismo dual">
-        <Checkbox
-          label="Con mecanismo dual"
-          checked={!!pano.dual}
-          onChange={(v) => onChange({ dual: v })}
-        />
-        {pano.dual && (
-          <>
-            <RadioRow
-              label="Lado"
-              value={pano.dualLado || ''}
-              options={OPCIONES_DUAL_LADO}
-              onChange={(v) => onChange({ dualLado: v })}
-            />
-            <RadioRow
-              label="Color"
-              value={pano.dualColor || ''}
-              options={OPCIONES_DUAL_COLOR}
-              onChange={(v) => onChange({ dualColor: v })}
-            />
-          </>
-        )}
-      </Section>
-
-      {/* 11. MOTOR */}
-      <Section title="Motor">
-        <RadioRow
-          label="Tipo"
-          value={pano.motorTipo || ''}
-          options={OPCIONES_MOTOR_TIPO}
-          onChange={(v) => onChange({ motorTipo: v })}
-        />
-        <div className="flex flex-wrap gap-4 pt-1">
-          <Checkbox
-            label="Control adicional"
-            checked={!!pano.motorControlAdic}
-            onChange={(v) => onChange({ motorControlAdic: v })}
+      {/* 11. MOTOR — modelo (todos inalámbricos hoy), domótica y adicionales.
+          DOM41 no se ofrece con cenefa ovalada (regla F15). */}
+      {(esMotorCat || !!pano.motorModelo || !!pano.motorTipo || !!pano.ladoMotor) && (
+        <Section title="Motor">
+          <RadioRow
+            label="Modelo"
+            value={pano.motorModelo || ''}
+            options={opcionesMotorModelo as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onChange({ motorModelo: v })}
           />
-          <Checkbox
-            label="Hub USB adicional"
-            checked={!!pano.motorHubUsb}
-            onChange={(v) => onChange({ motorHubUsb: v })}
+          <RadioRow
+            label="Domótica"
+            value={pano.motorDomotica ? 'SI' : 'NO'}
+            options={[{ value: 'NO', label: 'Sin domótica' }, { value: 'SI', label: 'Con domótica' }]}
+            onChange={(v) => onChange({ motorDomotica: v === 'SI' })}
           />
-        </div>
-        <RadioRow
-          label="Lado motor"
-          value={pano.ladoMotor || ''}
-          options={OPCIONES_LADO_MOTOR}
-          onChange={(v) => onChange({ ladoMotor: v })}
-        />
-      </Section>
+          <div className="flex flex-wrap items-end gap-4 pt-1">
+            <div className="max-w-[150px]">
+              <Label>Controles adicionales</Label>
+              <Input
+                type="number"
+                min={0}
+                value={pano.motorControlAdicCant ?? 0}
+                onChange={(e) => onChange({ motorControlAdicCant: parseInt(e.target.value, 10) || 0 })}
+              />
+            </div>
+            <div className="max-w-[150px]">
+              <Label>Hub USB adicionales</Label>
+              <Input
+                type="number"
+                min={0}
+                value={pano.motorHubUsbCant ?? 0}
+                onChange={(e) => onChange({ motorHubUsbCant: parseInt(e.target.value, 10) || 0 })}
+              />
+            </div>
+          </div>
+          <RadioRow
+            label="Lado motor"
+            value={pano.ladoMotor || ''}
+            options={OPCIONES_LADO_MOTOR}
+            onChange={(v) => onChange({ ladoMotor: v })}
+          />
+        </Section>
+      )}
 
-      {/* 12. SOFT / DARK */}
-      <Section title="Soft / Dark">
-        <RadioRow
-          label=""
-          value={pano.softDark || 'N/A'}
-          options={OPCIONES_SOFT_DARK}
-          onChange={(v) => onChange({ softDark: v })}
-        />
-        {pano.softDark && pano.softDark !== 'N/A' && (
-          <>
-            <RadioRow
-              label="Instalación"
-              value={pano.instalacion || ''}
-              options={OPCIONES_INSTALACION}
-              onChange={(v) => onChange({ instalacion: v })}
-            />
-            <RadioRow
-              label="Separador"
-              value={pano.separador || ''}
-              options={OPCIONES_SEPARADOR}
-              onChange={(v) => onChange({ separador: v })}
-            />
-          </>
-        )}
-      </Section>
+      {/* 12. SOFT / DARK — escape legacy: fuera de oscuridad solo si hay dato */}
+      {softDarkLegacy && (
+        <Section title="Soft / Dark">
+          <RadioRow
+            label=""
+            value={pano.softDark || 'N/A'}
+            options={OPCIONES_SOFT_DARK}
+            onChange={(v) => onChange({ softDark: v })}
+          />
+          {pano.softDark && pano.softDark !== 'N/A' && (
+            <>
+              <RadioRow
+                label="Instalación"
+                value={pano.instalacion || ''}
+                options={OPCIONES_INSTALACION}
+                onChange={(v) => onChange({ instalacion: v })}
+              />
+              <RadioRow
+                label="Separador"
+                value={pano.separador || ''}
+                options={OPCIONES_SEPARADOR}
+                onChange={(v) => onChange({ separador: v })}
+              />
+            </>
+          )}
+        </Section>
+      )}
 
       {/* 13. TUBERÍA */}
       <Section title="Tubería">
@@ -794,10 +877,23 @@ export function PanoEditor({
         />
       </Section>
 
-      {/* 14. CORTES */}
-      <Section title="Cortes en terreno">
+      {/* 14. NOTAS DE TERRENO — agrupa retiro/material/cortes/comentarios.
+          Colapsada por defecto; lo anotado sale en la hoja de INVENTARIO. */}
+      <SeccionColapsable
+        title="Notas de terreno"
+        badge={tieneNotasTerreno(pano) ? 'con notas' : undefined}
+      >
+        <div className="max-w-[160px]">
+          <Label>Retiro de cortinas</Label>
+          <Input
+            type="number"
+            min={0}
+            value={pano.retiro ?? 0}
+            onChange={(e) => onChange({ retiro: parseInt(e.target.value, 10) || 0 })}
+          />
+        </div>
         <RadioRow
-          label=""
+          label="Cortes"
           value={pano.cortes || ''}
           options={OPCIONES_CORTES}
           onChange={(v) => onChange({ cortes: v })}
@@ -807,24 +903,24 @@ export function PanoEditor({
           checked={!!pano.verVideo}
           onChange={(v) => onChange({ verVideo: v })}
         />
-      </Section>
-
-      {/* 15. COMENTARIOS */}
-      <Section title="Comentario adicional">
         <RadioRow
           label="Relación marco"
           value={pano.relacionMarco || ''}
           options={OPCIONES_RELACION_MARCO}
           onChange={(v) => onChange({ relacionMarco: v })}
         />
-        <div>
-          <Label>Cerrada a altura de</Label>
-          <Input
-            value={pano.alturaCierre || ''}
-            onChange={(e) => onChange({ alturaCierre: e.target.value })}
-            placeholder="Ej: 1.20m, ras de piso…"
-          />
-        </div>
+        {/* Campo legado: solo se muestra si la OT ya lo traía escrito
+            (el dato nuevo del dúo va en "Cierre de altura (cm)"). */}
+        {!!pano.alturaCierre && (
+          <div>
+            <Label>Cerrada a altura de (texto viejo)</Label>
+            <Input
+              value={pano.alturaCierre || ''}
+              onChange={(e) => onChange({ alturaCierre: e.target.value })}
+              placeholder="Ej: 1.20m, ras de piso…"
+            />
+          </div>
+        )}
         <div>
           <Label>Cotizar con y sin</Label>
           <Input
@@ -849,8 +945,23 @@ export function PanoEditor({
             className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
           />
         </div>
-      </Section>
+      </SeccionColapsable>
     </div>
+  );
+}
+
+/** ¿El paño tiene alguna nota de terreno anotada? (para el badge).
+ *  superficie/materialTipo tienen su propia sección "Material de instalación". */
+function tieneNotasTerreno(p: Pano): boolean {
+  return !!(
+    (p.retiro ?? 0) > 0 ||
+    (p.cortes && p.cortes !== 'Nada') ||
+    p.verVideo ||
+    (p.relacionMarco && p.relacionMarco !== 'N/A') ||
+    p.alturaCierre ||
+    p.cotizarConSin ||
+    p.suplementos ||
+    p.comentarioFinal
   );
 }
 
@@ -864,6 +975,38 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {title}
       </div>
       <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+function SeccionColapsable({
+  title,
+  badge,
+  children,
+}: {
+  title: string;
+  badge?: string;
+  children: React.ReactNode;
+}) {
+  const [abierta, setAbierta] = useState(false);
+  return (
+    <div className="rounded-md border border-border bg-card/40 p-3">
+      <button
+        type="button"
+        onClick={() => setAbierta((v) => !v)}
+        className="flex w-full items-center justify-between gap-2 text-[0.72rem] font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
+      >
+        <span className="flex items-center gap-2">
+          {title}
+          {badge && (
+            <span className="rounded-full border border-amber-500/50 bg-amber-500/15 px-1.5 py-0.5 text-[0.6rem] normal-case tracking-normal text-amber-400">
+              {badge}
+            </span>
+          )}
+        </span>
+        <span aria-hidden>{abierta ? '▾' : '▸'}</span>
+      </button>
+      {abierta && <div className="mt-2 space-y-2">{children}</div>}
     </div>
   );
 }

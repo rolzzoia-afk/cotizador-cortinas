@@ -11,6 +11,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
 import type { Ventana } from '@/modules/cotizador/types';
+import { esCenefaCuadrada } from '@/modules/cotizador/fase2';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import {
   buscarAdicionalCenefaOvalada,
@@ -115,7 +116,7 @@ function tapaCenefaDeUbic(ventanas: Ventana[], ubicAdicional: string): string {
     const panos = v.panos || [];
     for (let i = 0; i < panos.length; i++) {
       const p = panos[i];
-      if ((p.cenefa as string) !== 'Cuadrada') continue;
+      if (!esCenefaCuadrada(p.cenefa as string)) continue;
       const ubic = normalizarUbicacion(ubicPanoVentana(v.ubicacion || '', i, panos.length));
       if (ubic === key || ubic.startsWith(key)) return (p.cenefaTapa as string) || '';
     }

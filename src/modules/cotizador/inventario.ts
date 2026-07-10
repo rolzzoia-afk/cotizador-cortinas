@@ -17,7 +17,7 @@ import { jsPDF } from 'jspdf';
 import type { BomItem, VentanaItem } from '@/modules/ots/types';
 import type { Pano } from './types';
 import { textoPesoCadenaInventario } from './cadenas';
-import { OPCIONES_MECANISMO, OPCIONES_TUBERIA } from './fase2';
+import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
   colorAccesoriosDePano,
   mecanismoParaPano,
@@ -68,8 +68,8 @@ export function claveItem(it: BomItem): string {
 
 // ── Etiquetas Rolzzo ─────────────────────────────────────────────────
 // La etiqueta acompaña el color de los accesorios de cada cortina:
-//   • accesorios BLANCOS → INS 95-1 (etiqueta blanca)
-//   • resto (negros, grises…) → INS 95 (etiqueta negra, la estándar)
+//   • accesorios BLANCOS o GRISES → INS 95-1 (etiqueta blanca)
+//   • resto (negros…) → INS 95 (etiqueta negra, la estándar)
 
 export type EtiquetaLinea = { cod: string; color: 'BLANCA' | 'NEGRA'; cantidad: number };
 
@@ -78,7 +78,9 @@ export function codigoEtiqueta(
   colorAccesorios: string | null | undefined,
 ): { cod: string; color: 'BLANCA' | 'NEGRA' } {
   const c = normalizarColorAccesorio(colorAccesorios);
-  if (c === 'BCO' || c === 'BLANCO') return { cod: 'INS 95-1', color: 'BLANCA' };
+  if (c === 'BCO' || c === 'BLANCO' || c === 'GRS' || c === 'GRIS') {
+    return { cod: 'INS 95-1', color: 'BLANCA' };
+  }
   return { cod: 'INS 95', color: 'NEGRA' };
 }
 
@@ -129,14 +131,15 @@ export function construirFilasCortinas(ventanas: VentanaItem[]): FilaCortina[] {
     for (const p of panos) {
       id++;
       const manCant = parseInt(String(p.manillaCant ?? '0')) || 0;
+      const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const mecChip = mecanismoParaPano(
         { ...p, mecanismo: p.mecanismo as string },
         v.color as string,
         modelo,
-        OPCIONES_MECANISMO,
+        OPCIONES_MECANISMO_RESOLUCION,
         v.categoria as string,
+        anchoM,
       );
-      const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const tubChip = tuberiaParaPano(
         anchoM,
         modelo,

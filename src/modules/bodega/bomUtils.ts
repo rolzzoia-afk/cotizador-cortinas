@@ -448,7 +448,7 @@ export function extraerInsumosBOM(
     }
 
     const motTipo = String(p.motorTipo || '');
-    const motColor = String(p.motorColor || p.color || '');
+    const motColor = String(p.color || '');
     if (motTipo) {
       add(`MOT|${motTipo}`, 'MOTOR', 'Motor', motTipo, motColor, 1, 'unid.', '');
       if (p.motorControlAdic)

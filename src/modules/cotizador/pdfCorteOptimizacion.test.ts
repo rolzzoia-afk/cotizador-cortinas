@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { construirHojaCorte } from './pdfCorteOptimizacion';
+import { construirHojaCorte, filasCorteVisibles, type FilaCorteCortina } from './pdfCorteOptimizacion';
 import { buildOptimizerRows, asignarJuntoEnOrden, autoOptimizar } from './tela';
 import type { CatalogoProductos } from './types';
 import type { OT, VentanaItem } from '@/modules/ots/types';
@@ -188,5 +188,29 @@ describe('construirHojaCorte — DÚO OT 266-16 (new.xlsx)', () => {
   it('OPTIMIZADOR DU 28 = 15,3 m (3 paños × 5,1)', () => {
     const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
     expect(m['DU 28']).toBe(15.3);
+  });
+});
+
+describe('filasCorteVisibles (tabla de corte solo colmena/invertidas)', () => {
+  const fila = (over: Partial<FilaCorteCortina>): FilaCorteCortina =>
+    ({
+      cadena: 0, cant: 1, codInt: 'SC 64', tipo: 'PREMIUM',
+      anchoCorteTela: 1.5, corteAncho35: 1.465, alto: 2, altoCorteTela: 2.25,
+      pano: 1, cortarJunto: 'A', comentario: '', invertida: false,
+      medidaColmena: '', ubicColmena: '', ...over,
+    });
+
+  it('muestra solo las filas de colmena o invertidas', () => {
+    const cortinas = [
+      fila({ codInt: 'A' }), // rollo normal → oculta
+      fila({ codInt: 'B', invertida: true }), // invertida → visible
+      fila({ codInt: 'C', medidaColmena: 'SC 64 (178X200)' }), // colmena → visible
+      fila({ codInt: 'D' }), // rollo normal → oculta
+    ];
+    expect(filasCorteVisibles(cortinas).map((f) => f.codInt)).toEqual(['B', 'C']);
+  });
+
+  it('todas normales → lista vacía (el PDF omite la tabla de corte)', () => {
+    expect(filasCorteVisibles([fila({}), fila({})])).toEqual([]);
   });
 });

@@ -260,6 +260,65 @@ describe('calcularBOM', () => {
   });
 });
 
+// ── Insumos de instalación (categoría INSUMO) ──────────────────────
+const vent = (categoria: string, color = 'Blanco') =>
+  [{ id: 1, categoria, color }] as unknown as Parameters<typeof calcularBOM>[1];
+
+describe('calcularBOM — insumos de instalación', () => {
+  it('roller emite tapas de peso por color + 2 tornillos TOR02, categoría INSUMO tras CENEFA', () => {
+    const bom = calcularBOM([row({ color: 'BCO' })], vent('ROL', 'BCO'));
+    const ins = bom.filter((i) => i.categoria === 'INSUMO');
+    const specs = ins.map((i) => i.especificacion);
+    expect(specs).toEqual(['TAP19', 'TAP01', 'TOR02']);
+    expect(ins.find((i) => i.especificacion === 'TOR02')?.cantidad).toBe(2);
+    // INSUMO va después de todo lo demás salvo OTRO.
+    const cats = bom.map((i) => i.categoria);
+    expect(cats.lastIndexOf('CENEFA')).toBeLessThan(cats.indexOf('INSUMO'));
+  });
+
+  it('cenefa ovalada 1,5 m: 3 brackets BRA01 + tornillos (2 tapas + 6 ovalada = 8)', () => {
+    const bom = calcularBOM(
+      [row({ color: 'NEG', cenefa: 'Ovalada', bracketTipo: 'CORTO' })],
+      vent('ROL_MANUAL_CENEFA_OVALADA_38mm', 'NEG'),
+    );
+    const ins = bom.filter((i) => i.categoria === 'INSUMO');
+    expect(ins.find((i) => i.especificacion === 'BRA01')?.cantidad).toBe(3);
+    expect(ins.find((i) => i.especificacion === 'TOR02')?.cantidad).toBe(8);
+  });
+
+  it('vulcanita roller sin cenefa → 4 tarugos TAR01', () => {
+    const bom = calcularBOM([row({ color: 'BCO', materialTipo: 'VULCANITA' })], vent('ROL', 'BCO'));
+    expect(bom.find((i) => i.especificacion === 'TAR01')?.cantidad).toBe(4);
+  });
+
+  it('motor DOM41 + domótica: kit DOM por cortina + 1 solo DOM43 por OT', () => {
+    const bom = calcularBOM(
+      [
+        row({ motorModelo: 'DOM41', motorDomotica: true }),
+        row({ motorModelo: 'DOM41', motorDomotica: true }),
+      ],
+      vent('ROL', 'BCO'),
+    );
+    expect(bom.find((i) => i.especificacion === 'DOM41')?.cantidad).toBe(2);
+    const dom43 = bom.filter((i) => i.especificacion === 'DOM43');
+    expect(dom43).toHaveLength(1);
+    expect(dom43[0].cantidad).toBe(1);
+    // Motor reemplaza la cadena.
+    expect(bom.find((i) => i.categoria === 'CADENA')).toBeUndefined();
+  });
+
+  it('mecanismo dual: una sola línea "Mecanismo Dual" con la spec del chip [MEC 01]', () => {
+    const bom = calcularBOM(
+      [row({ dual: true, mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', colorMecanismo: 'BCO' })],
+      vent('ROL_DUAL', 'BCO'),
+    );
+    const mecs = bom.filter((i) => i.categoria === 'MECANISMO');
+    expect(mecs).toHaveLength(1);
+    expect(mecs[0].descripcion).toBe('Mecanismo Dual');
+    expect(mecs[0].especificacion).toBe('MEC 01');
+  });
+});
+
 // ── bomToOrdenMaterialesRows ──────────────────────────────────────
 describe('bomToOrdenMaterialesRows', () => {
   it('mapea a shape de orden_materiales con orden + estado pendiente', () => {

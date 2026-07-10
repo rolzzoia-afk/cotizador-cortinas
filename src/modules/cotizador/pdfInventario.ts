@@ -1,24 +1,37 @@
 // ─────────────────────────────────────────────────────────────────────
 // PDF "INVENTARIO — ENTREGA Y RECEPCIÓN DE MATERIAL"
 //
-// Hoja de bodega que se entrega con la OT. Tres bloques:
+// Hoja de bodega que se entrega con la OT. Cuatro bloques:
 //   1. Detalle por cortina (identidad: producto/tipo/mecanismo/tubería/
-//      accionamiento/peso cadena/manillas/ubic/medidas) — reusa la identidad
-//      del Cálculo general (mismo motor de datos).
-//   2. CORTINAS ROLLER: materiales consolidados (mecanismo, cadena, peso de
-//      cadena) con cantidad/total y casilleros de entrega (instalación/
-//      producción/estructura, fecha, recibe) para llenar a mano.
+//      accionamiento/peso cadena/ubic/medidas, con descripciones completas)
+//      — reusa la identidad del Cálculo general (mismo motor de datos).
+//   2. INSUMOS: consolidados con cantidad/adicional/total — manillas, tapas de
+//      peso, tornillos, brackets, tarugos de vulcanita y kit de motor (códigos
+//      DOM). Solo se imprime si la OT lleva algún insumo.
 //   3. ETIQUETAS ROLZZO: una fila por código según color de accesorios
-//      (blancos → INS 95-1 blanca; resto → INS 95 negra), 1 por paño.
+//      (blancos/grises → INS 95-1 blanca; resto → INS 95 negra), 1 por paño.
+//   4. NOTAS DE TERRENO: lo que el vendedor anotó en Fase 2 (retiro,
+//      material de instalación, cortes, suplementos, comentarios) por
+//      ubicación — solo se imprime si alguna cortina tiene notas.
 //
 // Lógica pura salvo `generarPdfInventario`, que dibuja con jsPDF.
 // ─────────────────────────────────────────────────────────────────────
 import jsPDF from 'jspdf';
 import type { Ventana, CatalogoProductos } from '@/modules/cotizador/types';
 import type { VentanaItem } from '@/modules/ots/types';
+import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
+import { descripcionCadenaInventario, textoPesoCadenaInventario } from './cadenas';
+import { esCenefaCuadrada } from './fase2';
+import {
+  COD_HUB_DOMOTICA,
+  NOMBRE_HUB_DOMOTICA,
+  insumosDePano,
+  insumosMotorDePano,
+  panoLlevaDomotica,
+} from './insumosCortina';
 
 type RGB = [number, number, number];
 
@@ -36,33 +49,31 @@ export type FilaInventario = {
   altoMts: string;
 };
 
-export type MaterialConsolidado = {
-  id: number;
-  descripcion: string;
-  cantidad: number;
-};
+export type NotaTerreno = { ubic: string; notas: string };
+
+/** Insumo consolidado para la tabla de entrega de material (manillas, tapas de
+ *  peso, tornillos, brackets, tarugos, motor…). `codigo` opcional (manillas y
+ *  tapas de cenefa no tienen insumo con código). */
+export type InsumoConsolidado = { id: number; codigo?: string; descripcion: string; cantidad: number };
 
 export type Inventario = {
   filas: FilaInventario[];
-  materiales: MaterialConsolidado[];
+  /** Insumos consolidados de la OT (manillas + tapas/tornillos/brackets/tarugos/motor). */
+  insumos: InsumoConsolidado[];
   /** Etiquetas por código según color de accesorios (blancos → INS 95-1). */
   etiquetas: EtiquetaLinea[];
+  /** Notas de terreno de Fase 2, una fila por paño con algo anotado. */
+  notas: NotaTerreno[];
 };
 
 const mts3 = (n: number) => n.toFixed(3).replace('.', ',');
 
-/** Consolida mecanismo + cadena + peso de cadena + manillas por valor único. */
-function consolidarMateriales(filas: FilaCalculo[]): MaterialConsolidado[] {
+/**
+ * Manillas consolidadas por color desde las filas del Cálculo General.
+ * `f.manillas` viene como "9 CAFÉ" → { descripcion: "MANILLA CAFÉ", cantidad: 9 }.
+ */
+export function consolidarManillas(filas: FilaCalculo[]): { descripcion: string; cantidad: number }[] {
   const acc = new Map<string, number>();
-  const bump = (s: string) => {
-    const k = (s || '').trim();
-    if (k) acc.set(k, (acc.get(k) || 0) + 1);
-  };
-  for (const f of filas) bump(f.codMecanismo);
-  for (const f of filas) bump(f.accionamiento);
-  for (const f of filas) bump(f.pesoCadena);
-  // Manillas: van como material consolidado (no como columna por cortina).
-  // f.manillas viene "9 CAFÉ" → MANILLA CAFÉ ×9, sumando por color.
   for (const f of filas) {
     const m = (f.manillas || '').trim();
     if (!m) continue;
@@ -72,11 +83,89 @@ function consolidarMateriales(filas: FilaCalculo[]): MaterialConsolidado[] {
     const k = `MANILLA ${(color || '').trim()}`.trim();
     acc.set(k, (acc.get(k) || 0) + n);
   }
-  return [...acc.entries()].map(([descripcion, cantidad], i) => ({
-    id: i + 1,
-    descripcion,
-    cantidad,
-  }));
+  return [...acc.entries()].map(([descripcion, cantidad]) => ({ descripcion, cantidad }));
+}
+
+/**
+ * Todos los insumos de la OT consolidados para la hoja de inventario: manillas
+ * (por color), tapas de peso / tornillos / brackets / tarugos (por paño) y el
+ * kit de motor (códigos DOM). La domótica agrega 1× DOM43 por OT.
+ */
+export function consolidarInsumos(ventanas: Ventana[], filas: FilaCalculo[]): InsumoConsolidado[] {
+  const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number }>();
+  const bump = (codigo: string | undefined, descripcion: string, cantidad: number) => {
+    const key = codigo || descripcion;
+    const prev = acc.get(key);
+    if (prev) prev.cantidad += cantidad;
+    else acc.set(key, { codigo, descripcion, cantidad });
+  };
+  let llevaDomotica = false;
+  for (const v of ventanas) {
+    for (const p of v.panos || []) {
+      const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
+      for (const ins of insumosDePano(p, { categoria: v.categoria, ventanaColor: v.color, anchoM })) {
+        bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
+      }
+      const motorInsumos = insumosMotorDePano(p, v.categoria);
+      if (motorInsumos.length > 0) {
+        for (const ins of motorInsumos) {
+          bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
+        }
+      } else if (p.motorModelo || p.motorTipo) {
+        // Motor legacy o 'CABLE' futuro (sin código DOM): línea genérica, para que
+        // el motor no se pierda de la hoja de entrega (el BOM también lo lista así).
+        const etiqueta = (p.motorTipo || (p.motorModelo === 'CABLE' ? 'CON CABLE' : '')).trim();
+        bump(undefined, etiqueta ? `MOTOR ${etiqueta}` : 'MOTOR', 1);
+      }
+      if (panoLlevaDomotica(p)) llevaDomotica = true;
+      // Tapa de cenefa cuadrada (sin código de insumo): 1 o 2 según cenefaTapa.
+      if (esCenefaCuadrada(p.cenefa)) {
+        const n = p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
+        if (n > 0) bump(undefined, `TAPA CENEFA CUADRADA ${p.colorTapa || ''}`.trim(), n);
+      }
+    }
+  }
+  if (llevaDomotica) bump(COD_HUB_DOMOTICA, `[${COD_HUB_DOMOTICA}] ${NOMBRE_HUB_DOMOTICA}`, 1);
+
+  const out: InsumoConsolidado[] = [];
+  let id = 0;
+  // Manillas primero (mantiene el orden previo), luego el resto de insumos.
+  for (const m of consolidarManillas(filas)) out.push({ id: ++id, descripcion: m.descripcion, cantidad: m.cantidad });
+  for (const it of acc.values()) out.push({ id: ++id, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad });
+  return out;
+}
+
+/**
+ * Notas de terreno anotadas en Fase 2, por paño. Concatena con rótulos solo
+ * los campos con contenido real ('Nada' y 'N/A' cuentan como vacío). Si nadie
+ * anotó nada, devuelve [] y el bloque no se imprime.
+ */
+export function notasTerreno(ventanas: Ventana[]): NotaTerreno[] {
+  const out: NotaTerreno[] = [];
+  for (const v of ventanas) {
+    const panos = v.panos || [];
+    panos.forEach((p, i) => {
+      const partes: string[] = [];
+      const retiro = Number(p.retiro) || 0;
+      if (retiro > 0) partes.push(`Retiro: ${retiro}`);
+      const material = [p.superficie, p.materialTipo].filter(Boolean).join(' / ');
+      if (material) partes.push(`Material: ${material}`);
+      if (p.cortes && p.cortes !== 'Nada') partes.push(`Cortes: ${p.cortes}`);
+      if (p.verVideo) partes.push('Ver video de terreno');
+      if (p.relacionMarco && p.relacionMarco !== 'N/A') partes.push(`Marco: ${p.relacionMarco}`);
+      if (p.cotizarConSin) partes.push(`Cotizar con y sin: ${p.cotizarConSin}`);
+      if (p.suplementos) partes.push(`Suplementos: ${p.suplementos}`);
+      // Campo legado (hoy el dúo usa cierreAlturaCm): se imprime si venía escrito.
+      if (p.alturaCierre) partes.push(`Cerrada a altura de: ${p.alturaCierre}`);
+      if (p.comentarioFinal) partes.push(`Nota: ${p.comentarioFinal}`);
+      if (partes.length === 0) return;
+      out.push({
+        ubic: ubicPanoVentana(v.ubicacion || '', i, panos.length),
+        notas: partes.join(' · '),
+      });
+    });
+  }
+  return out;
 }
 
 /** Construye los datos de la hoja INVENTARIO para las ventanas de una OT. */
@@ -91,18 +180,25 @@ export function construirInventario(
     producto: f.producto,
     tipo: f.tipoRol,
     codMecanismo: f.codMecanismo,
+    // f.tuberia ya llega con la descripción larga desde el Cálculo General.
     tuberia: f.tuberia,
     adicional: '0',
-    accionamiento: f.accionamiento,
-    pesoCadena: f.pesoCadena,
+    // Descripción larga de la cadena ("[CAD05] CADENA INFINITA 4 METROS GRIS").
+    accionamiento: f.codCadena ? descripcionCadenaInventario(f) : f.accionamiento,
+    // Peso de cadena SOLO si se eligió un insumo en Fase 2 (codPeso). Sin peso
+    // la celda queda vacía (antes mostraba el color de accesorios, ej. "GRIS").
+    pesoCadena: f.codPeso
+      ? `[${f.codPeso.replace(/\s+/g, '').toUpperCase()}] ${textoPesoCadenaInventario({ codPeso: f.codPeso })}`.trim()
+      : '',
     ubic: f.ubic,
     anchoMts: mts3(f.anchoMts),
     altoMts: mts3(f.altoMts),
   }));
   return {
     filas: filasInv,
-    materiales: consolidarMateriales(filas),
+    insumos: consolidarInsumos(ventanas, filas),
     etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
+    notas: notasTerreno(ventanas),
   };
 }
 
@@ -307,9 +403,10 @@ export function generarPdfInventario(
   };
 
   // ── BLOQUE 1: detalle por cortina ──────────────────────────────────
-  // Sin columna MANILLAS (van consolidadas en CORTINAS ROLLER); los anchos
-  // priorizan las columnas de texto largo para que no se encojan tanto.
-  const w1 = [6, 28, 22, 40, 18, 12, 26, 28, 30, 13, 13, 24];
+  // Descripciones completas: TUBERIA / ACCIONAMIENTO / PESO CADENA traen
+  // texto largo, por eso van más anchas (recortando PRODUCTO/TIPO/MECANISMO/
+  // UBIC/RECIBE). `celda()` parte el texto en 2 líneas si no cabe.
+  const w1 = [5, 22, 16, 34, 34, 8, 40, 42, 22, 12, 12, 20];
   const sum1 = w1.reduce((a, b) => a + b, 0);
   const sc1 = usable / sum1;
   const cols1: Col[] = [
@@ -322,8 +419,8 @@ export function generarPdfInventario(
     { label: 'ACCIONAMIENTO' },
     { label: 'PESO CADENA' },
     { label: 'UBIC.' },
-    { label: 'ANCHO mts', align: 'c' },
-    { label: 'ALTO mts', align: 'c' },
+    { label: 'ANCHO REAL', align: 'c' },
+    { label: 'ALTO REAL', align: 'c' },
     { label: 'PERSONA QUE RECIBE' },
   ].map((c, i) => ({ ...c, w: w1[i] * sc1 }) as Col);
   const rows1 = data.filas.map((f) => [
@@ -342,48 +439,49 @@ export function generarPdfInventario(
   ]);
   y = tabla(doc, mg, y, cols1, rows1, { rowH: 11, salto });
 
-  // ── BLOQUE 2: CORTINAS ROLLER (consolidado + entrega) ──────────────
-  y += 7;
+  // ── BLOQUE 2: INSUMOS (manillas, tapas, tornillos, brackets, tarugos,
+  // motor) consolidados + entrega. Sin insumos el bloque no se imprime.
   const titH = 9;
-  if (y + titH + 22 > BOTTOM) y = salto.onBreak();
-  doc.setFillColor(C_BLUE[0], C_BLUE[1], C_BLUE[2]);
-  doc.rect(mg, y, usable, titH, 'F');
-  doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.text('CORTINAS ROLLER', mg + 2, y + titH / 2 + 2);
-  doc.setFontSize(8.5);
-  doc.text('ENTREGADO POR:', mg + usable * 0.5, y + titH / 2 + 2);
-  y += titH;
+  if (data.insumos.length > 0) {
+    y += 7;
+    if (y + titH + 22 > BOTTOM) y = salto.onBreak();
+    doc.setFillColor(C_BLUE[0], C_BLUE[1], C_BLUE[2]);
+    doc.rect(mg, y, usable, titH, 'F');
+    doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('INSUMOS', mg + 2, y + titH / 2 + 2);
+    doc.setFontSize(8.5);
+    doc.text('ENTREGADO POR:', mg + usable * 0.5, y + titH / 2 + 2);
+    y += titH;
 
-  const w2 = [6, 50, 16, 16, 14, 22, 22, 22, 20, 22];
-  const sum2 = w2.reduce((a, b) => a + b, 0);
-  const sc2 = usable / sum2;
-  const cols2: Col[] = [
-    { label: 'ID', align: 'c' },
-    { label: 'DESCRIPCIÓN' },
-    { label: 'CANTIDAD', align: 'c' },
-    { label: 'ADICIONAL', align: 'c' },
-    { label: 'TOTAL', align: 'c' },
-    { label: 'INSTALACIÓN', align: 'c' },
-    { label: 'PRODUCCIÓN', align: 'c' },
-    { label: 'ESTRUCTURA', align: 'c' },
-    { label: 'FECHA', align: 'c' },
-    { label: 'RECIBE', align: 'c' },
-  ].map((c, i) => ({ ...c, w: w2[i] * sc2 }) as Col);
-  const rows2 = data.materiales.map((m) => [
-    String(m.id),
-    m.descripcion,
-    String(m.cantidad),
-    '',
-    String(m.cantidad),
-    '',
-    '',
-    '',
-    '',
-    '',
-  ]);
-  y = tabla(doc, mg, y, cols2, rows2, { rowH: 11.5, greenCol: 4, salto });
+    const w2 = [8, 70, 20, 20, 18, 28, 28, 28, 30];
+    const sum2 = w2.reduce((a, b) => a + b, 0);
+    const sc2 = usable / sum2;
+    const cols2: Col[] = [
+      { label: 'ID', align: 'c' },
+      { label: 'DESCRIPCIÓN' },
+      { label: 'CANTIDAD', align: 'c' },
+      { label: 'ADICIONAL', align: 'c' },
+      { label: 'TOTAL', align: 'c' },
+      { label: 'INSTALACIÓN', align: 'c' },
+      { label: 'PRODUCCIÓN', align: 'c' },
+      { label: 'FECHA', align: 'c' },
+      { label: 'PERSONA QUE RECIBE' },
+    ].map((c, i) => ({ ...c, w: w2[i] * sc2 }) as Col);
+    const rows2 = data.insumos.map((m) => [
+      String(m.id),
+      m.descripcion,
+      String(m.cantidad),
+      '',
+      String(m.cantidad),
+      '',
+      '',
+      '',
+      '',
+    ]);
+    y = tabla(doc, mg, y, cols2, rows2, { rowH: 11.5, greenCol: 4, salto });
+  }
 
   // ── BLOQUE 3: ETIQUETAS ROLZZO ─────────────────────────────────────
   y += 7;
@@ -418,6 +516,31 @@ export function generarPdfInventario(
     '',
   ]);
   y = tabla(doc, mg, y, cols3, rows3, { rowH: 11.5, greenCol: 2, salto });
+
+  // ── BLOQUE 3: NOTAS DE TERRENO (solo si alguien anotó algo en Fase 2) ─
+  if (data.notas.length > 0) {
+    y += 7;
+    if (y + titH + 22 > BOTTOM) y = salto.onBreak();
+    doc.setFillColor(C_DARK[0], C_DARK[1], C_DARK[2]);
+    doc.rect(mg, y, usable, titH, 'F');
+    doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('NOTAS DE TERRENO', mg + 2, y + titH / 2 + 2);
+    doc.setFontSize(8.5);
+    doc.text('ANOTADO EN FASE 2', mg + usable * 0.5, y + titH / 2 + 2);
+    y += titH;
+
+    const w4 = [55, 226];
+    const sum4 = w4.reduce((a, b) => a + b, 0);
+    const sc4 = usable / sum4;
+    const cols4: Col[] = [
+      { label: 'UBICACIÓN' },
+      { label: 'NOTAS' },
+    ].map((c, i) => ({ ...c, w: w4[i] * sc4 }) as Col);
+    const rows4 = data.notas.map((n) => [n.ubic, n.notas]);
+    y = tabla(doc, mg, y, cols4, rows4, { rowH: 11.5, salto });
+  }
 
   doc.save(`Inventario_${meta.ot}.pdf`);
 }

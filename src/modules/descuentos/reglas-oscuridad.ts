@@ -137,7 +137,8 @@ export function familiaOscuridad(
   cenefaTipo?: string | null,
 ): FamiliaOscuridad | null {
   const cat = (categoria || '').trim().toUpperCase();
-  const esCuadrada = (cenefaTipo || '').trim().toUpperCase() === 'CUADRADA';
+  // Prefijo: cubre 'Cuadrada a muro' / 'a techo' y el 'Cuadrada' legacy.
+  const esCuadrada = (cenefaTipo || '').trim().toUpperCase().startsWith('CUADRADA');
   if (cat === 'SOFT_LIGHT_38MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_38';
   if (cat === 'SOFT_LIGHT_45MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_45';
   if (cat === 'DARK_38MM' || cat === 'DARK_45MM') return 'DARK';

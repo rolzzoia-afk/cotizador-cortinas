@@ -72,25 +72,28 @@ export function calcularTotalesFase3(ventanas: Ventana[]): {
 }
 
 // Convierte un ítem de Fase 1 a una Ventana completa (con pano por defecto).
-// Portado de enviarFase1AFase2() líneas 4184-4208.
+// Portado de enviarFase1AFase2() líneas 4184-4208. Tela y colores de
+// accesorios parten VACÍOS: fase0-sync los rellena con el dato real del ítem
+// (los defaults duros 'SCR'/'BCO' enmascaraban el color/producto de Fase 0).
 export function itemToVentana(item: ItemFase1): Ventana {
   const panoDefault: Pano = {
     ancho: item.ancho,
     alto: item.alto,
     color: item.color || 'Blanco',
     armado: 'Interno',
-    tipoTela: 'SCR',
+    tipoTela: '',
     largoCadena: '',
     cierreVert: 'Derecha',
     manillaCant: 0,
     manillaColor: '',
-    colorPeso: 'BCO',
-    colorCadena: 'BCO',
-    colorMecanismo: 'BCO',
+    colorPeso: '',
+    colorCadena: '',
+    colorMecanismo: '',
     cenefa: 'No',
     cenefaTira: 'SIN TIRA',
     colorTapa: '',
     cenefaTapa: 'MURO_MURO',
+    bracketTipo: '',
     retiro: 0,
     superficie: '',
     materialTipo: '',
@@ -102,8 +105,12 @@ export function itemToVentana(item: ItemFase1): Ventana {
     dualLado: '',
     dualColor: '',
     motorTipo: '',
+    motorModelo: '',
+    motorDomotica: false,
     motorControlAdic: false,
     motorHubUsb: false,
+    motorControlAdicCant: 0,
+    motorHubUsbCant: 0,
     ladoMotor: '',
     softDark: 'N/A',
     instalacion: '',

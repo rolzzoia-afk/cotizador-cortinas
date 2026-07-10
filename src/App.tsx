@@ -20,10 +20,10 @@ const Bodeguero = lazy(() => import('@/pages/Bodeguero').then((m) => ({ default:
 const Telas = lazy(() => import('@/pages/Telas').then((m) => ({ default: m.Telas })));
 const Inventario = lazy(() => import('@/pages/Inventario').then((m) => ({ default: m.Inventario })));
 const Panel = lazy(() => import('@/pages/Panel').then((m) => ({ default: m.Panel })));
+// Cotizador compartido: Fase 1 (entrada, columnas reducidas) y Fase 3
+// (cotización final tras Terreno) son el MISMO componente con distinto `modo`.
 const CotizadorFase0 = lazy(() => import('@/pages/CotizadorFase0').then((m) => ({ default: m.CotizadorFase0 })));
-const CotizadorFase1 = lazy(() => import('@/pages/CotizadorFase1').then((m) => ({ default: m.CotizadorFase1 })));
 const CotizadorFase2 = lazy(() => import('@/pages/CotizadorFase2').then((m) => ({ default: m.CotizadorFase2 })));
-const CotizadorFase3 = lazy(() => import('@/pages/CotizadorFase3').then((m) => ({ default: m.CotizadorFase3 })));
 const CotizadorFase4 = lazy(() => import('@/pages/CotizadorFase4').then((m) => ({ default: m.CotizadorFase4 })));
 const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ default: m.CotizadorTela })));
 const OptimizadorTela = lazy(() => import('@/pages/OptimizadorTela').then((m) => ({ default: m.OptimizadorTela })));
@@ -95,11 +95,15 @@ export function App() {
           }
         >
           <Route path="panel" element={<Panel />} />
-          <Route path="cotizar" element={<CotizadorFase0 />} />
-          <Route path="ots/:id/fase0" element={<CotizadorFase0 />} />
-          <Route path="ots/:id/fase1" element={<CotizadorFase1 />} />
+          {/* Fase 1 = cotización de entrada (columnas reducidas). /cotizar y
+              /fase0 (compat) renderizan lo mismo. */}
+          <Route path="cotizar" element={<CotizadorFase0 modo="fase1" />} />
+          <Route path="ots/:id/fase0" element={<CotizadorFase0 modo="fase1" />} />
+          <Route path="ots/:id/fase1" element={<CotizadorFase0 modo="fase1" />} />
           <Route path="ots/:id/fase2" element={<CotizadorFase2 />} />
-          <Route path="ots/:id/fase3" element={<CotizadorFase3 />} />
+          {/* Fase 3 = cotización final tras Terreno (mismo cotizador, todas las
+              columnas + aprobar a Producción). */}
+          <Route path="ots/:id/fase3" element={<CotizadorFase0 modo="fase3" />} />
           <Route path="ots/:id/fase4" element={<CotizadorFase4 />} />
           <Route path="ots/:id/tela" element={<CotizadorTela />} />
           <Route path="optimizador-tela" element={<OptimizadorTela />} />

@@ -37,6 +37,37 @@ export function obtenerAnchoRollo(
   return anchoRolloDefaultM;
 }
 
+/**
+ * Regla única del corte invertido (rotado 90°): la cortina + borde no entra
+ * a lo ancho del rollo → se corta rotada. La comparten la grilla de
+ * cotización, el editor de paños de Fase 2 y la hoja de corte; el flag
+ * explícito `pano.invertida` siempre gana sobre esta auto-detección.
+ */
+export function debeInvertirPano(
+  anchoPanoM: number,
+  anchoRolloM: number,
+  bordeCm: number = PARAMETROS_CORTE_DEFAULT.bordeCm,
+): boolean {
+  return anchoPanoM > 0 && anchoPanoM + bordeCm / 100 > anchoRolloM;
+}
+
+/**
+ * Ancho de rollo con la misma prioridad que usa el motor de Fase 0:
+ * 1º map global 'ancho_rollo_data' (useAnchoRollo), 2º `anchoRollo` del
+ * catálogo, 3º default de corte (2.98 m).
+ */
+export function resolverAnchoRollo(
+  codInt: string | undefined | null,
+  anchoRolloMap: Record<string, number>,
+  catalogo: CatalogoProductos,
+  defaultM: number = PARAMETROS_CORTE_DEFAULT.anchoRolloDefaultM,
+): number {
+  const ci = (codInt || '').trim();
+  const m = anchoRolloMap[ci];
+  if (typeof m === 'number' && m > 0) return m;
+  return obtenerAnchoRollo(ci, catalogo, defaultM);
+}
+
 // ── Tipo de fila del optimizador ─────────────────────────────────────
 export type OptimizerRow = {
   rowIdx: number;

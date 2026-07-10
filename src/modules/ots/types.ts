@@ -51,6 +51,12 @@ export type AdicionalFase0Persistido = {
   colorAcc?: string;
   /** Cenefa ovalada con tira de aluminio (true → CON TIRA en Excel). */
   conTira?: boolean;
+  /**
+   * Origen del adicional: 'manual' (agregado a mano/Excel) o 'pano' (derivado
+   * automáticamente de una cenefa de paño al reconciliar la cotización). Los
+   * 'pano' se regeneran en cada apertura, así que no se acumulan.
+   */
+  origen?: 'manual' | 'pano';
 };
 
 export type DatosGenerales = {
@@ -115,6 +121,8 @@ export type VentanaItem = {
     ancho: number | string;
     alto: number | string;
     color?: string;
+    /** DCT% (0–100) de la línea en la cotización; el descuento es por paño. */
+    descuento?: number;
     [k: string]: unknown;
   }>;
   [k: string]: unknown;

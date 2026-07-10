@@ -2,6 +2,7 @@
 // Portados desde public/legacy/index.html líneas 3096-4120.
 
 import type { Pano, Ventana } from './types';
+import { DESCRIPCION_TUBERIA } from '@/modules/descuentos/reglas-tuberia';
 
 export const TIPOS_VENTANA = [
   { value: 1, label: 'Simple', icono: '▯' },
@@ -25,11 +26,19 @@ export const PANO_COLORS = [
 // Opciones de selects/radios por campo.
 export const OPCIONES_ARMADO = ['Interno', 'Externo'] as const;
 export const OPCIONES_TIPO_TELA = ['SCR', 'BK', 'DU'] as const;
-export const OPCIONES_LARGO_CADENA = ['0.75', '1mts', '3mts', '4mts', 'ROLLO'] as const;
+export const OPCIONES_LARGO_CADENA = ['0.75', '1mts', '2.4mts', '3mts', '4mts', 'ROLLO'] as const;
 export const OPCIONES_CIERRE_VERT = ['Izquierda', 'Derecha', 'Vertical', 'Medio'] as const;
 export const OPCIONES_MANILLA_COLOR = ['NEG', 'BCO', 'CAFÉ'] as const;
 export const OPCIONES_ACCESORIO_COLOR = ['MET', 'NEG', 'BCO', 'GRS'] as const;
-export const OPCIONES_CENEFA = ['No', 'Ovalada', 'Cuadrada'] as const;
+// La cuadrada se separa por tipo de instalación (muro / techo). Las OTs
+// viejas guardan 'Cuadrada' a secas: usar esCenefaCuadrada() para detectar
+// cualquiera de las tres variantes.
+export const OPCIONES_CENEFA = ['No', 'Ovalada', 'Cuadrada a muro', 'Cuadrada a techo'] as const;
+
+/** ¿La cenefa del paño es cuadrada? ('Cuadrada a muro'/'a techo' o el 'Cuadrada' legacy). */
+export function esCenefaCuadrada(cenefa: string | null | undefined): boolean {
+  return (cenefa || '').trim().toUpperCase().startsWith('CUADRADA');
+}
 export const OPCIONES_CENEFA_TIRA = ['CON TIRA', 'SIN TIRA'] as const;
 // El TIP. INST de la cenefa cuadrada sale de acá (alimenta el cuadro de la
 // hoja de órdenes): MURO_MURO −0,5 · CON_1_TAPA +1 · CON_2_TAPAS +2.
@@ -38,7 +47,9 @@ export const OPCIONES_CENEFA_TAPA = ['MURO_MURO', 'CON_1_TAPA', 'CON_2_TAPAS'] a
 export const OPCIONES_COLOR_TAPA_OVALADA = ['NEG', 'BCO', 'GRS'] as const;
 export const OPCIONES_COLOR_TAPA_CUADRADA = ['NEG', 'BCO', 'GRS', 'CAFÉ'] as const;
 export const OPCIONES_SUPERFICIE = ['TECHO', 'PARED'] as const;
-export const OPCIONES_MATERIAL_TIPO = ['VULCANITA', 'CONCRETO', 'MADERA'] as const;
+export const OPCIONES_MATERIAL_TIPO = ['VULCANITA', 'CONCRETO', 'MADERA', 'CERÁMICA'] as const;
+/** Tipo de bracket de la cenefa ovalada: corto (BRA01) o largo (BRA02). */
+export const OPCIONES_BRACKET_TIPO = ['CORTO', 'LARGO'] as const;
 export const OPCIONES_ORDEN_DOBLE = [
   { value: 'BK_VID_SCR', label: 'BK al vidrio · SCR por delante' },
   { value: 'SCR_VID_BK', label: 'SCR al vidrio · BK por delante' },
@@ -48,13 +59,22 @@ export const OPCIONES_MECANISMO = [
   'KIT SIMPLE NEGRO 38MM [MEC 32]',
   'KIT SIMPLE BLANCO 38MM [MEC 33]',
   'KIT SIMPLE GRIS 38MM [MEC 34]',
-  // Kits bodega de cenefa ovalada por color (Dúo manual 38 / Soft Light 38;
-  // ver reglas-mecanismo.ts). Nemotécnicos de inventario: MECANISMO OVALADO
-  // GRIS/NEGRO/BLANCO - ROLZZO.
+  // Kits bodega de cenefa ovalada por color (Dúo manual 38 / Soft Light 38 /
+  // Roller cenefa ovalada 38; ver reglas-mecanismo.ts). Nemotécnicos de
+  // inventario: MECANISMO OVALADO GRIS/NEGRO/BLANCO - ROLZZO.
   'OVALADA GRIS [MEC 12]',
   'OVALADA NEGRO [MEC 38]',
   'OVALADA BLANCO [MEC 39]',
-  // Legacy Excel / opciones manuales
+  // Fijo de Oscuranti 63 mm (regla de categoría).
+  '0,63mm BCO [MEC 28]',
+] as const;
+
+// Chips MEC legacy del Excel: ya NO se ofrecen en el editor (al guardar,
+// reglas-mecanismo.legacyReemplazar los cambia por kits de inventario), pero
+// siguen en la lista de RESOLUCIÓN para que OTs viejas con estos chips
+// guardados —o modelos MEC_XX cuyo color no mapea a kit (p.ej. TRANSPARENTE)—
+// sigan mostrando su mecanismo en PDFs e inventario.
+export const CHIPS_MECANISMO_LEGACY = [
   'LZ 38 MERG BCO [MEC 05]',
   'OVALADA NEG [MEC 09]',
   'OVALADA BCO [MEC 10]',
@@ -64,51 +84,87 @@ export const OPCIONES_MECANISMO = [
   'LZ50 SFLX BCO [MEC 14]',
   '0,45mm BCO [MEC 18]',
   '0,45mm NGR [MEC 23]',
-  '0,63mm BCO [MEC 28]',
+] as const;
+
+// Mecanismos dual (producto duo día/noche con dos rollers en un bracket).
+// Formato cero-padded [MEC 01] para que modeloDesdeChipMecanismo encuentre el
+// modelo ROLLER_DUAL 'MEC_01_DUAL_…' en el catálogo (descuentos_modelo).
+export const OPCIONES_MECANISMO_DUAL = [
+  'DUAL DERECHO BLANCO [MEC 01]',
+  'DUAL IZQUIERDO BLANCO [MEC 02]',
+  'DUAL DERECHO NEGRO [MEC 03]',
+  'DUAL IZQUIERDO NEGRO [MEC 04]',
+  'DUAL MIXTO BLANCO [MEC 19]',
+  'DUAL MIXTO NEGRO [MEC 20]',
+  'DUAL DERECHO GRIS [MEC 24]',
+  'DUAL IZQUIERDO GRIS [MEC 25]',
+] as const;
+
+/** Lista completa para RESOLVER mecanismos (UI limpia + dual + legacy guardados). */
+export const OPCIONES_MECANISMO_RESOLUCION = [
+  ...OPCIONES_MECANISMO,
+  ...OPCIONES_MECANISMO_DUAL,
+  ...CHIPS_MECANISMO_LEGACY,
 ] as const;
 export const OPCIONES_DUAL_LADO = ['DERECHO', 'IZQUIERDO', 'MIXTO'] as const;
 export const OPCIONES_DUAL_COLOR = ['NEG', 'BCO', 'GRS'] as const;
+// Tipo de mecanismo: simple (kits 32/33/34 por color) o dual (los 8 de arriba).
+export const OPCIONES_TIPO_MECANISMO = [
+  { value: 'SIMPLE', label: 'Simple' },
+  { value: 'DUAL', label: 'Dual' },
+] as const;
+// Legacy: OTs viejas guardan motorTipo con estos textos (se leen, ya no se ofrecen).
 export const OPCIONES_MOTOR_TIPO = [
   'CON CABLE',
   'INALAMB. SIN DOMO',
   'CON DOMÓTICA',
+] as const;
+// Modelo de motor (todos inalámbricos hoy; 'CABLE' queda para el futuro sin códigos).
+export const OPCIONES_MOTOR_MODELO = [
+  { value: 'DOM41', label: 'Inalámbrico [DOM41]' },
+  { value: 'DOM38', label: 'Tronic Plus [DOM38]' },
+  { value: 'CABLE', label: 'Con cable' },
 ] as const;
 export const OPCIONES_LADO_MOTOR = ['IZQUIERDA', 'DERECHA'] as const;
 export const OPCIONES_SOFT_DARK = ['N/A', 'SOFT', 'DARK'] as const;
 export const OPCIONES_INSTALACION = ['INT', 'SEMI', 'EXT', 'M-M', 'T-M', 'P-T'] as const;
 export const OPCIONES_SEPARADOR = ['2.5cm', '3.0cm', '[U]'] as const;
 export const OPCIONES_TUBERIA = [
-  // Chips deben coincidir con REGLAS_TUBERIA (reglas-tuberia.ts)
-  '0,38mm [E02] 1,2mm',
-  '0,38mm [E66] 2mm',
-  '0,40mm - 2mm [E53]',
-  '0,45mm [E05]',
-  '0,63mm [E47]',
+  // Descripciones largas por código (fuente única: DESCRIPCION_TUBERIA en
+  // reglas-tuberia.ts). E53 (0,40mm - 2mm) se quitó 2026-07-08.
+  DESCRIPCION_TUBERIA.E02, // 'E02-TUBO 1.2 / Ø 38 mm'
+  DESCRIPCION_TUBERIA.E66, // 'E66 - TUBO (.40mm) - 2.5mm'
+  DESCRIPCION_TUBERIA.E05, // 'E05 - TUBO Ø 45 mm'
+  DESCRIPCION_TUBERIA.E47, // 'E47 - TUBO Ø 63 mm'
+  DESCRIPCION_TUBERIA.E65, // 'E65 - TUBO (.63mm)' — default para roller >3 m
   'VELCRO',
 ] as const;
 export const OPCIONES_CORTES = ['Nada', 'Plumavit', 'Rodapié', 'Ambos'] as const;
 export const OPCIONES_RELACION_MARCO = ['N/A', 'Dentro', 'Fuera'] as const;
 
-// Factory: paño vacío con defaults del legacy (línea 3109-3124).
+// Factory: paño vacío. Tela y colores de accesorios parten VACÍOS para que
+// fase0-sync los rellene con el producto/color REAL de la ventana (los
+// defaults duros 'SCR'/'BCO' del legacy enmascaraban el dato de Fase 0).
 export function crearPanoVacio(): Pano {
   return {
     ancho: '',
     alto: '',
     armado: 'Interno',
-    tipoTela: 'SCR',
+    tipoTela: '',
     largoCadena: '',
     codCadena: '',
     codPeso: '',
     cierreVert: 'Derecha',
     manillaCant: 0,
     manillaColor: '',
-    colorPeso: 'BCO',
-    colorCadena: 'BCO',
-    colorMecanismo: 'BCO',
+    colorPeso: '',
+    colorCadena: '',
+    colorMecanismo: '',
     cenefa: 'No',
     cenefaTira: 'SIN TIRA',
     colorTapa: '',
     cenefaTapa: 'MURO_MURO',
+    bracketTipo: '',
     retiro: 0,
     superficie: '',
     materialTipo: '',
@@ -120,8 +176,12 @@ export function crearPanoVacio(): Pano {
     dualLado: '',
     dualColor: '',
     motorTipo: '',
+    motorModelo: '',
+    motorDomotica: false,
     motorControlAdic: false,
     motorHubUsb: false,
+    motorControlAdicCant: 0,
+    motorHubUsbCant: 0,
     ladoMotor: '',
     softDark: 'N/A',
     instalacion: '',

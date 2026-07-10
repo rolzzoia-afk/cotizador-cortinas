@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { construirCalculoGeneral } from './pdfCalculoGeneral';
+import {
+  aplicarVariante,
+  construirCalculoGeneral,
+  VARIANTE_DIMENSIONADO,
+} from './pdfCalculoGeneral';
 import type { Ventana } from './types';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 
@@ -111,5 +115,41 @@ describe('construirCalculoGeneral', () => {
     const data = construirCalculoGeneral([ventRoller(1.745, 'A')]);
     expect(data.bloques.some((b) => b.sistema.key === 'SOFT')).toBe(false);
     expect(data.bloques.some((b) => b.sistema.key === 'OSCU')).toBe(false);
+  });
+});
+
+// DIMENSIONADO: la misma hoja pero solo con lo que usa la mesa de tela.
+describe('aplicarVariante — DIMENSIONADO', () => {
+  const data = construirCalculoGeneral([ventRoller(1.745, 'PPAL IZQ')]);
+  const { identidad, bloques } = aplicarVariante(data, VARIANTE_DIMENSIONADO);
+
+  it('quita tubería, color accesorios, cadena/cierre, armado y ancho/alto mts', () => {
+    const keys = identidad.map((c) => c.key);
+    for (const fuera of ['tuberia', 'colorAcc', 'cadena', 'armado', 'anchoMts', 'altoMts']) {
+      expect(keys).not.toContain(fuera);
+    }
+    // La identidad útil queda intacta.
+    expect(keys).toContain('cant');
+    expect(keys).toContain('producto');
+    expect(keys).toContain('codInt');
+    expect(keys).toContain('ubic');
+  });
+
+  it('quita TUBO, PESO y CENEFA OVALADA del bloque, conserva TELA (ANCHO) y ALTO al final', () => {
+    const labels = bloques[0].columnas.map((c) => c.label);
+    expect(labels).not.toContain('TUBO');
+    expect(labels).not.toContain('PESO');
+    expect(labels).not.toContain('CENEFA OVALADA');
+    expect(labels).toContain('TELA (ANCHO)');
+    expect(labels[labels.length - 1]).toBe('ALTO');
+  });
+
+  it('también excluye los pesos del dúo (PESO INTERNO / PESO U) y la cenefa ovalada', () => {
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('PESO INTERNO (E13)')).toBe(true);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('PESO U (LÁGRIMA)')).toBe(true);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA')).toBe(true);
+    // Pero no toca otros componentes.
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CIERRE DE ALTURA')).toBe(false);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA DELANTERA')).toBe(false);
   });
 });
