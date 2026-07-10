@@ -8,7 +8,7 @@
 //   · Roller cenefa ovalada → tapa = ancho − dcto_cenefa (ej. −1,5); el tubo
 //     va detrás (ancho − dcto_tubo − dcto_cenefa). La tapa es la más ancha.
 // ─────────────────────────────────────────────────────────────────────
-import type { AdicionalFase0Persistido } from '@/modules/ots/types';
+import type { AdicionalFase0Persistido, VentanaItem } from '@/modules/ots/types';
 import { medidaCenefaSoftLight38, varianteSoftLight38 } from './reglas-soft-light';
 import type { ModeloDespiece } from './tipos';
 
@@ -123,6 +123,61 @@ export function ubicacionCoincideConAdicional(ubicFila: string, ubicAdicional: s
   const fila = normalizarUbicacion(ubicFila);
   const adic = normalizarUbicacion(ubicAdicional);
   return !!fila && fila === adic;
+}
+
+// ── Mapeo FORWARD paño → adicional de cenefa ─────────────────────────────
+// Al reconciliar la cotización, cada paño con cenefa genera un adicional
+// cobrable (Ovalada → CENF O, Cuadrada → CENF C), vinculado por UBIC. a su
+// cortina. Se marcan origen:'pano' para regenerarse en cada apertura sin
+// acumularse; la dedup contra manuales evita cobrar dos veces la misma.
+
+/** Deriva los adicionales de cenefa cobrables desde los paños de las ventanas. */
+export function derivarAdicionalesCenefaDesdeVentanas(
+  ventanas: VentanaItem[],
+): AdicionalFase0Persistido[] {
+  const out: AdicionalFase0Persistido[] = [];
+  for (const v of ventanas) {
+    const panos = v.panos || [];
+    const total = panos.length;
+    panos.forEach((p, i) => {
+      const cenefa = String(p.cenefa ?? '');
+      // Cuadrada matchea por prefijo: 'Cuadrada a muro' / 'a techo' y el
+      // 'Cuadrada' legacy generan el mismo adicional CENF C.
+      const esCuadrada = cenefa.trim().toUpperCase().startsWith('CUADRADA');
+      const codInt = cenefa === 'Ovalada' ? 'CENF O' : esCuadrada ? 'CENF C' : '';
+      if (!codInt) return;
+      out.push({
+        codInt,
+        cantidad: Number(v.cantidad) || 1,
+        descuento: 0,
+        ubicacion: ubicPanoVentana(v.ubicacion || '', i, total),
+        colorAcc: String(p.colorTapa || p.color || ''),
+        // La tira solo aplica a la ovalada.
+        conTira:
+          cenefa === 'Ovalada'
+            ? etiquetaConTira(p.cenefaTira as string | undefined) === 'CON TIRA'
+            : undefined,
+        origen: 'pano',
+      });
+    });
+  }
+  return out;
+}
+
+/** ¿Ya hay un adicional de cenefa MANUAL (mismo tipo) en esa ubicación? */
+export function existeCenefaManualEnUbic(
+  manuales: AdicionalFase0Persistido[],
+  tipo: 'Ovalada' | 'Cuadrada',
+  ubic: string,
+): boolean {
+  const key = normalizarUbicacion(ubic);
+  if (!key) return false;
+  return manuales.some(
+    (a) =>
+      !!a.codInt &&
+      tipoCenefaDesdeAdicional(a.codInt) === tipo &&
+      normalizarUbicacion(a.ubicacion || '') === key,
+  );
 }
 
 export function buscarAdicionalCenefaOvalada(

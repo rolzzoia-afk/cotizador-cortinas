@@ -4,15 +4,18 @@ import {
   anchoNominalCenefaCorte,
   buscarAdicionalCenefaOvalada,
   cenefaOvaladaDesdeAdicional,
+  derivarAdicionalesCenefaDesdeVentanas,
   esAdicionalCenefaOvalada,
   esRollerOVertical,
   etiquetaTipInstCenefa,
+  existeCenefaManualEnUbic,
   indexCenefasOvaladasAdicionales,
   medidaCorteCenefaCuadrada,
   medidaCorteCenefaOvalada,
   ubicacionCoincideConAdicional,
 } from './adicionales-cenefa';
 import type { ModeloDespiece } from './tipos';
+import type { VentanaItem } from '@/modules/ots/types';
 
 const modeloRoller: ModeloDespiece = {
   sistema: 'ROLLER_SIMPLE',
@@ -128,5 +131,67 @@ describe('cenefa cuadrada (verticales/roller)', () => {
     expect(etiquetaTipInstCenefa('CON_1_TAPA')).toBe('CON_1_TAPA');
     expect(etiquetaTipInstCenefa('SIN_TAPA')).toBe('MURO_MURO');
     expect(etiquetaTipInstCenefa(undefined)).toBe('MURO_MURO');
+  });
+});
+
+describe('derivarAdicionalesCenefaDesdeVentanas (paño → adicional)', () => {
+  it('1 paño Ovalada CON TIRA → un CENF O (ubic sin -G, conTira, color de la tapa, origen pano)', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      ubicacion: 'LIVING',
+      cantidad: 2,
+      color: 'NEGRO',
+      panos: [{ ancho: 2.5, alto: 2, cenefa: 'Ovalada', cenefaTira: 'CON TIRA', colorTapa: 'GRS' }],
+    };
+    expect(derivarAdicionalesCenefaDesdeVentanas([v])).toEqual([
+      { codInt: 'CENF O', cantidad: 2, descuento: 0, ubicacion: 'LIVING', colorAcc: 'GRS', conTira: true, origen: 'pano' },
+    ]);
+  });
+
+  it('multi-paño: Cuadrada en paños 1 y 3 → dos CENF C en V1-G1 / V1-G3 (conTira undefined)', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      ubicacion: 'PZA 3',
+      cantidad: 1,
+      panos: [
+        { ancho: 1, alto: 2, cenefa: 'Cuadrada', color: 'BCO' },
+        { ancho: 1, alto: 2, cenefa: 'No' },
+        { ancho: 1, alto: 2, cenefa: 'Cuadrada', color: 'BCO' },
+      ],
+    };
+    const out = derivarAdicionalesCenefaDesdeVentanas([v]);
+    expect(out).toHaveLength(2);
+    expect(out.map((a) => a.ubicacion)).toEqual(['PZA 3-G1', 'PZA 3-G3']);
+    expect(out.every((a) => a.codInt === 'CENF C' && a.conTira === undefined)).toBe(true);
+  });
+
+  it('sin cenefa (No / vacío) no genera nada', () => {
+    const v: VentanaItem = { id: 'v1', ubicacion: 'X', panos: [{ ancho: 1, alto: 1, cenefa: 'No' }, { ancho: 1, alto: 1 }] };
+    expect(derivarAdicionalesCenefaDesdeVentanas([v])).toEqual([]);
+  });
+
+  it('las variantes "Cuadrada a muro" / "a techo" también generan CENF C', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      ubicacion: 'COMEDOR',
+      cantidad: 1,
+      panos: [
+        { ancho: 1, alto: 2, cenefa: 'Cuadrada a muro', color: 'BCO' },
+        { ancho: 1, alto: 2, cenefa: 'Cuadrada a techo', color: 'BCO' },
+      ],
+    };
+    const out = derivarAdicionalesCenefaDesdeVentanas([v]);
+    expect(out).toHaveLength(2);
+    expect(out.every((a) => a.codInt === 'CENF C')).toBe(true);
+  });
+});
+
+describe('existeCenefaManualEnUbic (dedup contra manuales)', () => {
+  const manuales = [{ codInt: 'CENF O', cantidad: 1, descuento: 0, ubicacion: 'LIVING' }];
+  it('mismo tipo + misma ubicación → true; distinto tipo/ubic → false', () => {
+    expect(existeCenefaManualEnUbic(manuales, 'Ovalada', 'living')).toBe(true);
+    expect(existeCenefaManualEnUbic(manuales, 'Cuadrada', 'LIVING')).toBe(false);
+    expect(existeCenefaManualEnUbic(manuales, 'Ovalada', 'COCINA')).toBe(false);
+    expect(existeCenefaManualEnUbic([], 'Ovalada', 'LIVING')).toBe(false);
   });
 });

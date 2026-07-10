@@ -10,6 +10,7 @@ import {
   totalItem,
   type InventarioEstado,
 } from './inventario';
+import { codigoTuberiaDeChip } from '@/modules/descuentos/reglas-tuberia';
 
 const ventanaEduardo = (ubic: string, ancho: number): VentanaItem => ({
   id: ubic,
@@ -193,7 +194,7 @@ describe('construirFilasCortinas', () => {
       },
     ]);
     expect(f.mecanismo).toContain('[MEC 28]');
-    expect(f.tuberia).toContain('[E47]');
+    expect(codigoTuberiaDeChip(f.tuberia)).toBe('E47');
   });
 
   it('SOFT_LIGHT ancho 2,99 m sin tubo guardado → E66 en Fase 4', () => {
@@ -227,7 +228,7 @@ describe('construirFilasCortinas', () => {
         panos: [{ ancho: 2.989, alto: 2, colorPeso: 'BCO', mecanismo: '', tuberia: '' }],
       },
     ]);
-    expect(f.tuberia).toContain('[E66]');
+    expect(codigoTuberiaDeChip(f.tuberia)).toBe('E66');
   });
 });
 
@@ -238,11 +239,13 @@ describe('etiquetas por color de accesorios', () => {
     panos: [{ ancho: 1.5, alto: 1.8, ...(colorMecanismo ? { colorMecanismo } : {}) }],
   });
 
-  it('codigoEtiqueta: blancos → INS 95-1 (blanca); negros y resto → INS 95 (negra)', () => {
+  it('codigoEtiqueta: blancos Y GRISES → INS 95-1 (blanca); negros y resto → INS 95 (negra)', () => {
     expect(codigoEtiqueta('BLANCO')).toEqual({ cod: 'INS 95-1', color: 'BLANCA' });
     expect(codigoEtiqueta('BCO')).toEqual({ cod: 'INS 95-1', color: 'BLANCA' });
+    // Cambio 2026-07-09: accesorios grises llevan etiqueta blanca (antes negra).
+    expect(codigoEtiqueta('GRIS')).toEqual({ cod: 'INS 95-1', color: 'BLANCA' });
+    expect(codigoEtiqueta('GRS')).toEqual({ cod: 'INS 95-1', color: 'BLANCA' });
     expect(codigoEtiqueta('NEGRO')).toEqual({ cod: 'INS 95', color: 'NEGRA' });
-    expect(codigoEtiqueta('GRIS')).toEqual({ cod: 'INS 95', color: 'NEGRA' });
     expect(codigoEtiqueta('')).toEqual({ cod: 'INS 95', color: 'NEGRA' });
   });
 
@@ -252,10 +255,10 @@ describe('etiquetas por color de accesorios', () => {
     ]);
   });
 
-  it('OT mixta → una línea por código (negra primero)', () => {
+  it('OT mixta → una línea por código (negra primero; gris cuenta como blanca)', () => {
     expect(construirEtiquetas([v('Blanco'), v('NEGRO'), v('GRIS')])).toEqual([
-      { cod: 'INS 95', color: 'NEGRA', cantidad: 2 },
-      { cod: 'INS 95-1', color: 'BLANCA', cantidad: 1 },
+      { cod: 'INS 95', color: 'NEGRA', cantidad: 1 },
+      { cod: 'INS 95-1', color: 'BLANCA', cantidad: 2 },
     ]);
   });
 

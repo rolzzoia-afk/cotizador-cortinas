@@ -70,6 +70,12 @@ const MAPEO_CATEGORIA: Record<string, ReglaCategoria> = {
   OSCURANTI_63mm: { sistemas: ['OSCURANTI'] },
 };
 
+/** true si la categoría del cotizador es roller dual (mecanismo dual [MEC 01-25]). */
+export function categoriaEsDual(categoria: string): boolean {
+  const regla = MAPEO_CATEGORIA[(categoria || '').trim()];
+  return !!regla && regla.sistemas.includes('ROLLER_DUAL');
+}
+
 /** Modelos del catálogo compatibles con una categoría del cotizador. */
 export function modelosParaCategoria(
   modelos: ModeloDespiece[],

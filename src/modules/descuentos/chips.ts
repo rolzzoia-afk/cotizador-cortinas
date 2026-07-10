@@ -8,13 +8,16 @@
 // Módulo puro.
 // ─────────────────────────────────────────────────────────────────────
 import type { ModeloDespiece } from './tipos';
-import { modelosParaCategoria } from './tipos';
+import { elegirModeloPorColor, modelosParaCategoria } from './tipos';
 import {
   REGLAS_MECANISMO,
   categoriaRequiereMecanismo,
+  categoriaTieneReglaAncho,
   esKitInventarioMec,
   esMecLegacy,
+  mecPorAncho,
   mecPorCategoriaYColor,
+  normalizarColorAccesorio,
   numeroMecPorColor,
   reglaCategoriaAplicable,
 } from './reglas-mecanismo';
@@ -31,9 +34,13 @@ export {
 
 export {
   REGLAS_TUBERIA,
+  canonizarChipTuberia,
   chipTuberiaDeModelo,
   chipTuberiaPorAncho,
   codigoTuberiaDeChip,
+  diametroDesdeChipMecanismo,
+  opcionesTuberiaFiltradas,
+  tuberiaCorregidaPorMecanismo,
   tuberiaParaPano,
 } from './reglas-tuberia';
 
@@ -44,7 +51,58 @@ export function chipMecanismoPorNumero(
   num: number,
   opciones: readonly string[],
 ): string | null {
-  return opciones.find((o) => o.toUpperCase().includes(`[MEC ${num}]`)) ?? null;
+  // Compara por número (robusto a formato cero-padded '[MEC 01]' de los duales).
+  return opciones.find((o) => numeroMecDeChip(o) === num) ?? null;
+}
+
+// ── Mecanismos duales (producto duo día/noche) ───────────────────────
+const NUMS_MEC_DUAL = new Set([1, 2, 3, 4, 19, 20, 24, 25]);
+const DUAL_LADO_COLOR_A_MEC: Record<string, number> = {
+  'DERECHO|BCO': 1, 'IZQUIERDO|BCO': 2, 'DERECHO|NEG': 3, 'IZQUIERDO|NEG': 4,
+  'MIXTO|BCO': 19, 'MIXTO|NEG': 20, 'DERECHO|GRS': 24, 'IZQUIERDO|GRS': 25,
+};
+const MEC_DUAL_A_LADO_COLOR: Record<number, { lado: string; dualColor: string }> = {
+  1: { lado: 'DERECHO', dualColor: 'BCO' }, 2: { lado: 'IZQUIERDO', dualColor: 'BCO' },
+  3: { lado: 'DERECHO', dualColor: 'NEG' }, 4: { lado: 'IZQUIERDO', dualColor: 'NEG' },
+  19: { lado: 'MIXTO', dualColor: 'BCO' }, 20: { lado: 'MIXTO', dualColor: 'NEG' },
+  24: { lado: 'DERECHO', dualColor: 'GRS' }, 25: { lado: 'IZQUIERDO', dualColor: 'GRS' },
+};
+
+/** true si el chip es un mecanismo dual ([MEC 01..04, 19, 20, 24, 25]). */
+export function esChipDual(chip: string | null | undefined): boolean {
+  const n = numeroMecDeChip(chip);
+  return n != null && NUMS_MEC_DUAL.has(n);
+}
+
+/** Color de accesorios normalizado a BCO/NEG/GRS (o '' si no calza). */
+function colorAccCorto(color: string | null | undefined): string {
+  const c = normalizarColorAccesorio(color);
+  if (c === 'BCO' || c === 'BLANCO') return 'BCO';
+  if (c === 'NEG' || c === 'NEGRO') return 'NEG';
+  if (c === 'GRS' || c === 'GRIS') return 'GRS';
+  return '';
+}
+
+/** Chip dual por lado + color. MIXTO no tiene gris → degrada a DERECHO. */
+export function chipDualPorLadoColor(
+  lado: string | null | undefined,
+  color: string | null | undefined,
+  opciones: readonly string[],
+): string | null {
+  const cc = colorAccCorto(color);
+  if (!cc) return null;
+  let l = (lado || 'DERECHO').toUpperCase();
+  if (l === 'MIXTO' && cc === 'GRS') l = 'DERECHO';
+  const mec = DUAL_LADO_COLOR_A_MEC[`${l}|${cc}`];
+  return mec != null ? chipMecanismoPorNumero(mec, opciones) : null;
+}
+
+/** Lado + color implícitos en un chip dual (para rellenar dualLado/dualColor). */
+export function ladoColorDesdeChipDual(
+  chip: string | null | undefined,
+): { lado: string; dualColor: string } | null {
+  const n = numeroMecDeChip(chip);
+  return n != null ? MEC_DUAL_A_LADO_COLOR[n] ?? null : null;
 }
 
 /** Chip de mecanismo que corresponde al modelo: 'MEC_13_…' → '… [MEC 13]'. */
@@ -104,13 +162,23 @@ export function colorAccesoriosDePano(
  * luego inventario por color, reemplazando legacy/vacío.
  */
 export function mecanismoParaPano(
-  p: Partial<{ mecanismo?: string; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string }>,
+  p: Partial<{ mecanismo?: string; dual?: boolean; dualLado?: string; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string }>,
   ventanaColor: string | undefined,
   modelo: ModeloDespiece | null | undefined,
   opciones: readonly string[],
   categoria?: string,
+  anchoM?: number,
 ): string {
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+
+  // Rama dual: usa los chips [MEC 01..25], no los kits por color ni la categoría.
+  if (p.dual) {
+    const storedDual = ((p.mecanismo as string) || '').trim();
+    if (esChipDual(storedDual)) return storedDual;
+    const chipDual = chipDualPorLadoColor(p.dualLado, colorAcc, opciones);
+    return chipDual || storedDual;
+  }
+
   const mecCat = mecPorCategoriaYColor(categoria || '', colorAcc);
   if (mecCat != null) {
     const chipCat = chipMecanismoPorNumero(mecCat, opciones);
@@ -123,6 +191,24 @@ export function mecanismoParaPano(
       if (nStored != null && esKitInventarioMec(nStored)) return chipCat;
       if (opciones.includes(trimmed)) return trimmed;
       return chipCat;
+    }
+  }
+
+  // Regla por ancho (roller simple >3 m → MEC 28). Va tras la categoría y antes
+  // que el color. MEC 28 es "legacy" en el catálogo, así que forzarlo acá evita
+  // que la sincronización lo revierta al kit por color.
+  const mecAncho = anchoM != null ? mecPorAncho(categoria || '', anchoM) : null;
+  if (mecAncho != null) {
+    const chipAncho = chipMecanismoPorNumero(mecAncho, opciones);
+    if (chipAncho) {
+      const trimmed = ((p.mecanismo as string) || '').trim();
+      if (!trimmed) return chipAncho;
+      const nStored = numeroMecDeChip(trimmed);
+      if (nStored === mecAncho) return trimmed;
+      if (nStored != null && esKitInventarioMec(nStored)) return chipAncho;
+      if (nStored != null && esMecLegacy(nStored)) return chipAncho;
+      if (opciones.includes(trimmed)) return trimmed;
+      return chipAncho;
     }
   }
 
@@ -258,6 +344,20 @@ export function opcionesMecanismoFiltradas(
   return opcionesBase;
 }
 
+/** Modelo del catálogo cuyo mecanismo es 'MEC_<num>_…' (o cero-padded 'MEC_0N_…'). */
+export function modeloDesdeNumeroMec(
+  candidatos: ModeloDespiece[],
+  num: number,
+): ModeloDespiece | null {
+  return (
+    candidatos.find((c) => {
+      const mc = c.mecanismo.toUpperCase();
+      return mc.startsWith(`MEC_${num}_`) || mc === `MEC_${num}` ||
+        mc.startsWith(`MEC_0${num}_`) || mc === `MEC_0${num}`;
+    }) ?? null
+  );
+}
+
 /** Modelo del catálogo que corresponde a un chip: '… [MEC 13]' → 'MEC_13_…'. */
 export function modeloDesdeChipMecanismo(
   candidatos: ModeloDespiece[],
@@ -265,10 +365,52 @@ export function modeloDesdeChipMecanismo(
 ): ModeloDespiece | null {
   const m = chip.toUpperCase().match(/\[MEC (\d+)\]/);
   if (!m) return null;
-  return (
-    candidatos.find((c) => {
-      const mc = c.mecanismo.toUpperCase();
-      return mc.startsWith(`MEC_${m[1]}_`) || mc === `MEC_${m[1]}`;
-    }) ?? null
+  return modeloDesdeNumeroMec(candidatos, parseInt(m[1], 10)); // '[MEC 01]' → 1
+}
+
+/**
+ * Modelo efectivo de la VENTANA según el ANCHO. Roller simple sobre 3 m sube a
+ * la fila 63 mm (MEC 28, tubo E65); al bajar de 3 m vuelve al 38 mm por color.
+ * El resto de categorías —incluidas OSCURANTI y las ovaladas, legítimamente de
+ * 63 mm— se devuelven sin tocar. Es la contraparte "al abrir/sincronizar" de la
+ * cascada mecanismo→modelo que corre al editar (aplicarCascadaMecanismo): sin
+ * esto, una OT de >3 m abierta queda con el modelo de 38 mm y la tubería E66.
+ * El modelo es por ventana, así que se decide con el ancho de referencia (el
+ * paño más ancho). Para paños dual NO se aplica (mantienen su modelo dual 38 mm).
+ */
+export function modeloPorAncho(
+  modelos: ModeloDespiece[],
+  categoria: string,
+  anchoM: number,
+  modeloActual: ModeloDespiece | null,
+  color: string | null | undefined,
+): ModeloDespiece | null {
+  const mecA = mecPorAncho(categoria || '', anchoM);
+  if (mecA != null) {
+    const up = modeloDesdeNumeroMec(modelosParaCategoria(modelos, categoria), mecA);
+    return up ?? modeloActual;
+  }
+  // Sin regla de ancho vigente: si el modelo quedó en la fila 63 mm forzada por
+  // ancho y la categoría sí tiene esa regla (ROL), volver al 38 mm por color.
+  if (categoriaTieneReglaAncho(categoria) && modeloActual && modeloActual.diametro_tubo_mm === 63) {
+    return modeloSimple38PorColor(modelos, categoria, color) ?? modeloActual;
+  }
+  return modeloActual;
+}
+
+/**
+ * Modelo roller simple 38 mm por color de accesorios. Se usa al bajar de 3 m
+ * (volver del kit 63 mm) o al desactivar el dual: hay que filtrar por diámetro
+ * 38, porque elegirModeloPorColor sin filtro podría matchear el 63 mm (su
+ * mecanismo también contiene el color "BLANCO").
+ */
+export function modeloSimple38PorColor(
+  modelos: ModeloDespiece[],
+  categoria: string,
+  color: string | null | undefined,
+): ModeloDespiece | null {
+  const cands = modelosParaCategoria(modelos, categoria).filter(
+    (m) => m.diametro_tubo_mm === 38 && m.sistema === 'ROLLER_SIMPLE',
   );
+  return elegirModeloPorColor(cands, color);
 }

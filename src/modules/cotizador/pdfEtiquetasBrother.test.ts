@@ -66,6 +66,11 @@ describe('especTuboEtiqueta', () => {
     expect(especTuboEtiqueta('38mm_E02', '0,38mm [E02] 1,2mm')).toBe('38 mm de 1,2 mm');
   });
 
+  it('con el chip largo nuevo saca el espesor del código (E02→1,2; E66→2,5)', () => {
+    expect(especTuboEtiqueta('38mm_E02', 'E02-TUBO 1.2 / Ø 38 mm')).toBe('38 mm de 1,2 mm');
+    expect(especTuboEtiqueta('38mm_E66', 'E66 - TUBO (.40mm) - 2.5mm')).toBe('38 mm de 2,5 mm');
+  });
+
   it('sin espesor en el chip deja solo el diámetro', () => {
     expect(especTuboEtiqueta('38mm_E02', '')).toBe('38 mm');
     expect(especTuboEtiqueta('38mm_E02')).toBe('38 mm');

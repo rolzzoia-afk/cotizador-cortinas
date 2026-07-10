@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Copy, Palette, Pencil, Plus, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
 } from '@/modules/descuentos/tipos';
 import { otToRow } from '@/modules/ots/mappers';
 import { useOT } from '@/modules/ots/hooks';
-import type { AdicionalFase0Persistido, OT } from '@/modules/ots/types';
+import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
 import {
   cotizarFase0,
   type LineaResultado,
@@ -26,7 +26,18 @@ import {
 import { formatCLP } from '@/modules/cotizador/calculos';
 import type { Producto } from '@/modules/cotizador/types';
 import { categoriasTela } from '@/modules/cotizador/categoriaTela';
-import { enriquecerPanoDesdeFase0 } from '@/modules/cotizador/fase0-sync';
+import { enriquecerVentanaDesdeFase0 } from '@/modules/cotizador/fase0-sync';
+import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
+import {
+  agruparFilasPorVentana,
+  construirPanosDeGrupo,
+  explotarVentanasAFilas,
+} from '@/modules/cotizador/fase0-reconcile';
+import {
+  derivarAdicionalesCenefaDesdeVentanas,
+  existeCenefaManualEnUbic,
+  tipoCenefaDesdeAdicional,
+} from '@/modules/descuentos/adicionales-cenefa';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
 import BannerCuotas from '@/components/cotizador/BannerCuotas';
@@ -72,9 +83,23 @@ type FilaUI = {
   ancho: number;
   alto: number;
   descuento: number;
+  /**
+   * Corte invertido (rotado) EXPLÍCITO — por paño, tri-estado como en
+   * PanoEditor: undefined = auto según ancho de rollo; el click lo fija.
+   */
+  invertida?: boolean;
   /** id de la ventana original (si la fila viene de una OT existente). */
   vid?: string;
+  /** índice del paño dentro de su ventana (una fila por paño en la cotización). */
+  panoIndex?: number;
 };
+
+// Campos de nivel VENTANA: al editarlos en una fila-paño se replican a los
+// demás paños de la misma ventana (`vid`) para que no diverjan (el re-agrupado
+// toma el primer paño). ancho/alto/color/descuento quedan por paño.
+const CAMPOS_NIVEL_VENTANA: (keyof FilaUI)[] = [
+  'codInt', 'categoria', 'direccion', 'sentido', 'cantidad', 'ubicacion',
+];
 const nuevaFila = (): FilaUI => ({
   id: crypto.randomUUID(),
   codInt: '',
@@ -96,6 +121,10 @@ type AdicionalUI = {
   descuento: number;
   ubicacion: string;
   colorAcc: string;
+  /** Cenefa ovalada con tira (solo derivados de paño). */
+  conTira?: boolean;
+  /** 'pano' = derivado de una cenefa de paño (no editable, se regenera). */
+  origen?: 'manual' | 'pano';
 };
 const nuevoAdicional = (): AdicionalUI => ({
   id: crypto.randomUUID(),
@@ -107,13 +136,15 @@ const nuevoAdicional = (): AdicionalUI => ({
 });
 
 function adicionalesToPersist(list: AdicionalUI[]): AdicionalFase0Persistido[] {
-  return list.map(({ id, codInt, cantidad, descuento, ubicacion, colorAcc }) => ({
+  return list.map(({ id, codInt, cantidad, descuento, ubicacion, colorAcc, conTira, origen }) => ({
     id,
     codInt: codInt.trim(),
     cantidad,
     descuento,
     ubicacion,
     colorAcc,
+    conTira,
+    origen,
   }));
 }
 
@@ -128,6 +159,8 @@ function adicionalesFromPersist(raw: unknown): AdicionalUI[] {
       descuento: row.descuento ?? 0,
       ubicacion: row.ubicacion || '',
       colorAcc: row.colorAcc || '',
+      conTira: row.conTira,
+      origen: row.origen,
     };
   });
 }
@@ -214,13 +247,24 @@ const fmtPct = (v: number) => (Math.round(v * 10000) / 100).toLocaleString('es-C
 const COD_INSTALACION_BASE = 'INST';
 const esInstalacionBase = (ci: string) => (ci || '').trim().toUpperCase() === COD_INSTALACION_BASE;
 
-// Total de columnas de la grilla (para los colSpan de filas separadoras / botones)
-const COL_SPAN = 18;
-
-export function CotizadorFase0() {
+/**
+ * Cotizador compartido. `modo` define el papel en el flujo:
+ *   · 'fase1' = entrada (cliente + cortinas + precio inicial). Oculta las
+ *     columnas COD SEC / DIRECC. CAD-CIERRE / SENT. CORT (se capturan en
+ *     Terreno). Al guardar avanza a Terreno.
+ *   · 'fase3' = cotización final tras Terreno. Muestra todas las columnas,
+ *     reconcilia una línea por paño, deriva cenefas cobrables, y aprueba a
+ *     Producción.
+ */
+export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } = {}) {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const { id: editOtId } = useParams();
+  // Columnas COD SEC / DIRECC. / SENT. solo en la cotización final (Fase 3).
+  // La columna INVERTIDA va en ambos modos (+1 a los colspans).
+  const showCols = modo === 'fase3';
+  const colSpanTotal = showCols ? 19 : 16;
+  const colSpanInfo = showCols ? 12 : 9;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId } = useAuth();
   const { catalogo, refresh: refreshCatalogo } = useCatalogoProductos();
@@ -281,32 +325,41 @@ export function CotizadorFase0() {
       comuna: dg.comuna || '',
       region: dg.regionNombre || '',
     });
-    const vts = (otCargada.storeVentanas || []) as Record<string, any>[];
-    const orig: Record<string, Record<string, unknown>> = {};
-    const nuevasFilas: FilaUI[] = vts.map((v) => {
-      orig[v.id as string] = v;
-      const pano = (Array.isArray(v.panos) && v.panos[0]) || {};
-      return {
-        id: crypto.randomUUID(),
-        codInt: (v.codInt as string) || '',
-        categoria: (v.categoria as string) || '',
-        direccion: (v.direccion as string) || '',
-        sentido: (v.sentido as string) || '',
-        cantidad: (v.cantidad as number) || 1,
-        ubicacion: (v.ubicacion as string) || '',
-        colorAcc: (v.color as string) || '',
-        ancho: parseFloat(String(pano.ancho ?? 0)) || 0,
-        alto: parseFloat(String(v.alto ?? pano.alto ?? 0)) || 0,
-        descuento: 0,
-        vid: v.id as string,
-      };
-    });
-    setFilas(nuevasFilas.length ? nuevasFilas : [nuevaFila()]);
-    // La instalación base ('INST') ahora es automática (Fase 2): se descarta de
-    // los adicionales guardados para no duplicarla.
-    setAdicionales(
-      adicionalesFromPersist(dg.adicionalesFase0).filter((a) => !esInstalacionBase(a.codInt)),
+    // Reconcilia la grilla desde las cortinas: UNA fila por paño (multi-paño =
+    // varias líneas), conservando `vid`/`panoIndex` para re-agrupar al guardar.
+    // El DCT% guardado en el paño se restaura; si no existe (cortina creada en
+    // Terreno u OT vieja), se autollena con el % del catálogo, igual que al
+    // elegir el COD_INT a mano.
+    const vts = (otCargada.storeVentanas || []) as unknown as VentanaItem[];
+    const { filas: nuevasFilas, orig } = explotarVentanasAFilas(
+      vts,
+      () => crypto.randomUUID(),
+      dctDeCodigo,
     );
+    setFilas(nuevasFilas.length ? nuevasFilas : [nuevaFila()]);
+    // Adicionales = manuales persistidos + cenefas DERIVADAS de los paños.
+    // 'INST' (instalación base) es automático → se descarta. Los derivados de
+    // una apertura anterior (origen 'pano') se descartan y se regeneran acá,
+    // así no se acumulan; y no se duplica lo que el usuario puso a mano.
+    const persistidos = adicionalesFromPersist(dg.adicionalesFase0).filter(
+      (a) => !esInstalacionBase(a.codInt),
+    );
+    const manuales = persistidos.filter((a) => a.origen !== 'pano');
+    const derivados = derivarAdicionalesCenefaDesdeVentanas(vts).filter((d) => {
+      const tipo = tipoCenefaDesdeAdicional(d.codInt);
+      return tipo ? !existeCenefaManualEnUbic(manuales, tipo, d.ubicacion || '') : true;
+    });
+    const derivadosUI: AdicionalUI[] = derivados.map((d) => ({
+      id: crypto.randomUUID(),
+      codInt: d.codInt,
+      cantidad: d.cantidad,
+      descuento: dctDeCodigo(d.codInt),
+      ubicacion: d.ubicacion || '',
+      colorAcc: d.colorAcc || '',
+      conTira: d.conTira,
+      origen: 'pano',
+    }));
+    setAdicionales([...manuales, ...derivadosUI]);
     setRegion(!!dg.region);
     setRegionDescPct(
       typeof dg.instalacionDescuentoRegion === 'number'
@@ -315,13 +368,13 @@ export function CotizadorFase0() {
     );
     setSinInstalacion(!!dg.sinInstalacion);
     setEnvio(dg.envio === 'cobro_destino' ? 'cobro_destino' : 'gratis');
-    setOrigVentanas(orig);
+    setOrigVentanas(orig as Record<string, Record<string, unknown>>);
     setCargadoEdit(true);
   }, [editOtId, otCargada, cargadoEdit]);
 
   // Guarda la cotización como OT: cliente + ventanas (con el modelo de
   // fabricación elegido por categoría y color) y sigue el flujo en Fase 2.
-  const guardarComoOT = async () => {
+  const guardarComoOT = async (opts?: { aProduccion?: boolean }) => {
     if (!empresaId) return;
     if (!cliente.nombre.trim()) {
       toast.error('Ingresa el nombre del cliente antes de guardar la OT.');
@@ -338,98 +391,99 @@ export function CotizadorFase0() {
     }
     setGuardandoOT(true);
     try {
-      // Construye la ventana de una fila. Si la fila viene de una OT
-      // existente (f.vid), se preserva el objeto original (paños de Fase 2,
-      // modelo, etc.) y solo se actualiza lo editable en Fase 0; así no se
-      // pierde el trabajo de terreno al volver a guardar.
-      const construirVentana = (f: FilaUI) => {
-        const prod = catalogo[f.codInt.trim()];
-        const ln = lineaDeFila.get(f.id);
-        const candidatos = modelosParaCategoria(modelosDespiece, f.categoria);
-        const modeloCalc = elegirModeloPorColor(candidatos, f.colorAcc);
-        const orig = f.vid ? (origVentanas[f.vid] as Record<string, any> | undefined) : undefined;
-        if (orig) {
-          const pano0 = (Array.isArray(orig.panos) && orig.panos[0]) || {};
-          const ventana: Record<string, unknown> = {
-            ...orig,
-            ubicacion: f.ubicacion || '',
-            codInt: f.codInt.trim(),
-            producto: prod?.producto ?? orig.producto ?? '',
-            tipo: prod?.tipo ?? orig.tipo ?? '',
-            descripcion: prod?.descripcion ?? orig.descripcion ?? '',
-            color: f.colorAcc || orig.color || 'Blanco',
-            alto: f.alto,
-            precio: ln?.valorUnit ?? orig.precio ?? 0,
-            cantidad: f.cantidad || 1,
-            categoria: f.categoria || orig.categoria || '',
-            direccion: f.direccion || '',
-            sentido: f.sentido || '',
-            panos: [
-              { ...pano0, ancho: f.ancho, alto: f.alto, color: f.colorAcc || pano0.color || '' },
-              ...((Array.isArray(orig.panos) ? orig.panos : []).slice(1)),
-            ],
-            modelo: orig.modelo ?? modeloCalc,
-          };
-          ventana.panos = (ventana.panos as Record<string, unknown>[]).map((p) =>
-            enriquecerPanoDesdeFase0(p as never, ventana as never, catalogo),
-          );
-          return ventana;
-        }
-        const ventanaNueva: Record<string, unknown> = {
-          id: crypto.randomUUID(),
-          ubicacion: f.ubicacion || '',
-          codInt: f.codInt.trim(),
-          producto: prod?.producto ?? '',
-          tipo: prod?.tipo ?? '',
-          descripcion: prod?.descripcion ?? '',
-          color: f.colorAcc || 'Blanco',
-          alto: f.alto,
-          precio: ln?.valorUnit ?? 0,
-          cantidad: f.cantidad || 1,
-          categoria: f.categoria,
-          grupoId: null,
-          direccion: f.direccion || '',
-          sentido: f.sentido || '',
-          panos: [{ ancho: f.ancho, alto: f.alto, color: f.colorAcc || '' }],
-          modelo: modeloCalc,
-        };
-        ventanaNueva.panos = (ventanaNueva.panos as Record<string, unknown>[]).map((p) =>
-          enriquecerPanoDesdeFase0(p as never, ventanaNueva as never, catalogo),
-        );
-        return ventanaNueva;
-      };
-
-      const ventanas = validas.map(construirVentana);
       const adicionalesGuardados = adicionalesToPersist(adicionales);
+      // Re-agrupa las filas-paño por ventana (`vid`): reconstruye UNA ventana
+      // con sus N paños, preservando la ficha rica de Terreno (mecanismo,
+      // tubería, cenefa…) y solo actualizando ancho/alto/color desde la fila.
+      // Las filas sin `vid` (alta manual/Excel) → ventana nueva de 1 paño.
+      const construirVentanaGrupo = (
+        g: ReturnType<typeof agruparFilasPorVentana>[number],
+      ) => {
+        const head = g.filas[0];
+        const prod = catalogo[head.codInt.trim()];
+        const candidatos = modelosParaCategoria(modelosDespiece, head.categoria);
+        const modeloCalc = elegirModeloPorColor(candidatos, head.colorAcc);
+        const orig = head.vid
+          ? (origVentanas[head.vid] as Record<string, any> | undefined)
+          : undefined;
+        const precio = g.filas.reduce((s, f) => s + (lineaDeFila.get(f.id)?.valorUnit ?? 0), 0);
+        const panos = construirPanosDeGrupo(
+          g.filas,
+          orig?.panos as Record<string, unknown>[] | undefined,
+        );
+        const ventana: Record<string, unknown> = {
+          ...(orig ?? { id: crypto.randomUUID(), grupoId: null }),
+          ubicacion: head.ubicacion || '',
+          codInt: head.codInt.trim(),
+          producto: prod?.producto ?? orig?.producto ?? '',
+          tipo: prod?.tipo ?? orig?.tipo ?? '',
+          descripcion: prod?.descripcion ?? orig?.descripcion ?? '',
+          color: head.colorAcc || (orig?.color as string) || 'Blanco',
+          alto: head.alto,
+          precio: precio || (orig?.precio as number) || 0,
+          cantidad: head.cantidad || 1,
+          categoria: head.categoria || (orig?.categoria as string) || '',
+          direccion: head.direccion || '',
+          sentido: head.sentido || '',
+          panos,
+          modelo: (orig?.modelo as unknown) ?? modeloCalc,
+        };
+        return enriquecerVentanaDesdeFase0(
+          ventana as never,
+          catalogo,
+          adicionalesGuardados,
+        ) as unknown as Record<string, unknown>;
+      };
+      const ventanas = agruparFilasPorVentana(validas).map(construirVentanaGrupo);
       const now = new Date().toISOString();
 
       // ── Editando una OT existente: actualizar la MISMA OT ──
       if (editOtId && otCargada) {
+        const aProduccion = !!opts?.aProduccion;
+        const dgBase = {
+          ...(otCargada.datosGenerales || {}),
+          cliente: cliente.nombre,
+          rut: cliente.rut,
+          mail: cliente.mail,
+          telefono: cliente.telefono,
+          direccion: cliente.direccion,
+          comuna: cliente.comuna,
+          regionNombre: cliente.region,
+          adicionalesFase0: adicionalesGuardados,
+          region,
+          instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
+          sinInstalacion,
+          envio,
+        };
         const actualizada: OT = {
           ...otCargada,
-          datosGenerales: {
-            ...(otCargada.datosGenerales || {}),
-            cliente: cliente.nombre,
-            rut: cliente.rut,
-            mail: cliente.mail,
-            telefono: cliente.telefono,
-            direccion: cliente.direccion,
-            comuna: cliente.comuna,
-            regionNombre: cliente.region,
-            adicionalesFase0: adicionalesGuardados,
-            region,
-            instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
-            sinInstalacion,
-            envio,
-          },
+          estado: aProduccion ? 'produccion' : otCargada.estado,
+          subEtapa: aProduccion ? 'Estructura' : otCargada.subEtapa,
+          datosGenerales: aProduccion
+            ? {
+                ...dgBase,
+                historialEstados: [
+                  ...(otCargada.datosGenerales?.historialEstados || []),
+                  { de: otCargada.estado, a: 'produccion' as const, fecha: now },
+                ],
+              }
+            : dgBase,
           storeVentanas: ventanas as unknown as OT['storeVentanas'],
           fechaModificacion: now,
           totalConIva: t.totalTransferencia,
         };
         await guardarCompleto(actualizada);
         const numActual = (otCargada.datosGenerales as Record<string, string>)?.ot ?? '';
-        toast.success(`OT ${numActual} actualizada · ${ventanas.length} cortina(s).`);
-        navigate(`/ots/${otCargada.id}/fase2`);
+        if (aProduccion) {
+          toast.success(`OT ${numActual} enviada a Producción.`);
+          localStorage.setItem('activeOTId', otCargada.id);
+          navigate(`/ots/${otCargada.id}/fase4`);
+        } else if (modo === 'fase1') {
+          toast.success(`OT ${numActual} actualizada · ${ventanas.length} cortina(s).`);
+          navigate(`/ots/${otCargada.id}/fase2`);
+        } else {
+          toast.success(`Cotización guardada · ${ventanas.length} cortina(s).`);
+        }
         return;
       }
 
@@ -641,7 +695,25 @@ export function CotizadorFase0() {
       'codInt' in patch && !('descuento' in patch)
         ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
         : patch;
-    setFilas((prev) => prev.map((f) => (f.id === id ? { ...f, ...conDct } : f)));
+    setFilas((prev) => {
+      const fila = prev.find((f) => f.id === id);
+      const vid = fila?.vid;
+      // Los campos de nivel ventana se replican a los demás paños del mismo vid.
+      const espejo =
+        !!vid && Object.keys(conDct).some((k) => CAMPOS_NIVEL_VENTANA.includes(k as keyof FilaUI));
+      const soloVentana = (): Partial<FilaUI> => {
+        const sub: Partial<FilaUI> = {};
+        for (const k of CAMPOS_NIVEL_VENTANA) {
+          if (k in conDct) (sub as Record<string, unknown>)[k] = (conDct as Record<string, unknown>)[k];
+        }
+        return sub;
+      };
+      return prev.map((f) => {
+        if (f.id === id) return { ...f, ...conDct };
+        if (espejo && f.vid === vid) return { ...f, ...soloVentana() };
+        return f;
+      });
+    });
     // Al corregir una celda importada, le quitamos su marca roja.
     setErroresImport((prev) => {
       if (!prev.has(id)) return prev;
@@ -661,7 +733,9 @@ export function CotizadorFase0() {
     setFilas((prev) => {
       const idx = prev.findIndex((f) => f.id === id);
       if (idx < 0) return prev;
-      const copia: FilaUI = { ...prev[idx], id: crypto.randomUUID() };
+      // La copia es una cortina NUEVA independiente: sin vid/panoIndex para no
+      // engancharse al grupo multi-paño de la ventana original.
+      const copia: FilaUI = { ...prev[idx], id: crypto.randomUUID(), vid: undefined, panoIndex: undefined };
       const next = [...prev];
       next.splice(idx + 1, 0, copia);
       return next;
@@ -789,6 +863,19 @@ export function CotizadorFase0() {
     [filas, catalogo],
   );
 
+  // Cuántos paños tiene cada ventana (para el badge "Paño n/m" en la grilla).
+  const panosPorVid = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const f of filas) if (f.vid) m.set(f.vid, (m.get(f.vid) || 0) + 1);
+    return m;
+  }, [filas]);
+
+  // Fase 3: solo lectura cuando la OT ya avanzó a Producción o más.
+  const readOnlyFase3 =
+    modo === 'fase3' &&
+    !!otCargada &&
+    ['produccion', 'lista', 'instalada', 'archivada'].includes(otCargada.estado);
+
   return (
     <div className="min-h-full bg-background text-foreground">
       <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-5 py-3 print:hidden">
@@ -799,9 +886,20 @@ export function CotizadorFase0() {
           <ArrowLeft className="h-4 w-4" /> Volver
         </button>
         <span className="flex items-center gap-2 text-base font-bold">
-          {editOtId && otCargada
-            ? `OT ${(otCargada.datosGenerales as Record<string, string>)?.ot ?? ''} · Fase 0 (agregar cortinas)`
-            : 'Cotización · Fase 0'}
+          {(() => {
+            const num =
+              editOtId && otCargada
+                ? `OT ${(otCargada.datosGenerales as Record<string, string>)?.ot ?? ''} · `
+                : '';
+            return modo === 'fase3'
+              ? `${num}Cotización final (Fase 3)`
+              : `${num}Cotización (Fase 1)`;
+          })()}
+          {readOnlyFase3 && (
+            <span className="rounded-full border border-border bg-card px-2 py-0.5 text-[0.65rem] font-normal text-muted-foreground">
+              Solo lectura ({otCargada?.estado})
+            </span>
+          )}
           {catsTela.map((c) => (
             <span
               key={c}
@@ -1049,24 +1147,29 @@ export function CotizadorFase0() {
             ))}
           </datalist>
 
-          <table className="w-full min-w-[1700px] border-collapse text-xs">
+          <table className="w-full min-w-[1760px] border-collapse text-xs">
             <thead className="bg-card text-[12px] uppercase tracking-wide text-muted-foreground">
               <tr className="border-b border-border">
-                <th colSpan={11} className="px-2 py-1.5 text-center font-semibold">Información del producto</th>
+                <th colSpan={colSpanInfo} className="px-2 py-1.5 text-center font-semibold">Información del producto</th>
                 <th colSpan={2} className="border-l border-border px-2 py-1.5 text-center font-semibold">Medidas</th>
                 <th colSpan={4} className="border-l border-border px-2 py-1.5 text-center font-semibold">Precio</th>
                 <th></th>
               </tr>
               <tr className="border-b border-border">
                 <Th className="min-w-[6rem]">COD</Th>
-                <Th className="min-w-[8rem]">COD SEC</Th>
-                <Th className="min-w-[8rem]">DIRECC. CAD/CIERRE</Th>
-                <Th className="min-w-[6rem]">SENT. CORT</Th>
+                {showCols && (
+                  <>
+                    <Th className="min-w-[8rem]">COD SEC</Th>
+                    <Th className="min-w-[8rem]">DIRECC. CAD/CIERRE</Th>
+                    <Th className="min-w-[6rem]">SENT. CORT</Th>
+                  </>
+                )}
                 <Th className="min-w-[3.5rem]">CANT</Th>
                 <Th className="min-w-[12rem]">PRODUCTO</Th>
                 <Th className="min-w-[6rem]">COD_INT</Th>
                 <Th className="min-w-[5rem]">TIPO</Th>
                 <Th className="min-w-[10rem]">DESCRIPCIÓN</Th>
+                <Th className="min-w-[4.5rem] text-center">INVERTIDA</Th>
                 <Th className="min-w-[5rem]">UBIC.</Th>
                 <Th className="min-w-[7rem]">COLOR ACCESORIOS</Th>
                 <Th className="min-w-[5rem] border-l border-border">ANCHO</Th>
@@ -1087,9 +1190,13 @@ export function CotizadorFase0() {
                 return (
                   <tr key={f.id} className="border-t border-border align-middle">
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
-                    <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
-                    <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
-                    <Td><SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} /></Td>
+                    {showCols && (
+                      <>
+                        <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
+                        <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
+                        <Td><SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} /></Td>
+                      </>
+                    )}
                     <Td>
                       <CellInput type="number" min={1} value={f.cantidad || 1}
                         onChange={(e) => setFila(f.id, { cantidad: parseInt(e.target.value) || 1 })}
@@ -1108,7 +1215,36 @@ export function CotizadorFase0() {
                     </Td>
                     <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
                     <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
+                    <Td className="text-center">
+                      {(() => {
+                        // Efectivo = flag explícito, o auto cuando el paño no
+                        // entra normal en el rollo (misma regla que Fase 2).
+                        const rollo = resolverAnchoRollo(
+                          f.codInt, anchoRollo, catalogo, parametros.anchoRolloDefaultM,
+                        );
+                        const invEfectiva = f.invertida ?? debeInvertirPano(f.ancho, rollo);
+                        return (
+                          <button
+                            onClick={() => setFila(f.id, { invertida: !invEfectiva })}
+                            title={`Corte invertido (rotado): no entra normal en el rollo (${rollo.toFixed(2)} m)`}
+                            className={cn(
+                              'rounded-md border p-1.5 transition-colors',
+                              invEfectiva
+                                ? 'border-amber-400 bg-amber-500 text-amber-950 shadow-[0_0_8px_rgba(245,158,11,0.55)]'
+                                : 'border-border text-muted-foreground opacity-60 hover:border-amber-500/60 hover:text-amber-500 hover:opacity-100',
+                            )}
+                          >
+                            <RotateCw className={cn('h-4 w-4', invEfectiva && 'stroke-[2.5]')} />
+                          </button>
+                        );
+                      })()}
+                    </Td>
                     <Td>
+                      {f.vid && (panosPorVid.get(f.vid) || 0) > 1 && (
+                        <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-accent">
+                          Paño {(f.panoIndex ?? 0) + 1}/{panosPorVid.get(f.vid)}
+                        </span>
+                      )}
                       <CellInput value={f.ubicacion}
                         onChange={(e) => setFila(f.id, { ubicacion: e.target.value })}
                         placeholder="V1-G1" className="w-20" />
@@ -1168,7 +1304,7 @@ export function CotizadorFase0() {
               })}
               {/* Botón agregar cortina */}
               <tr className="print:hidden">
-                <td colSpan={COL_SPAN} className="border-t border-border bg-card/40 px-2 py-2">
+                <td colSpan={colSpanTotal} className="border-t border-border bg-card/40 px-2 py-2">
                   <Button size="sm" variant="outline" className="gap-1"
                     onClick={() => setFilas((p) => [...p, nuevaFila()])}>
                     <Plus className="h-3.5 w-3.5" /> Agregar cortina
@@ -1177,7 +1313,7 @@ export function CotizadorFase0() {
               </tr>
               {/* Divisor ADICIONALES */}
               <tr>
-                <td colSpan={COL_SPAN}
+                <td colSpan={colSpanTotal}
                   className="border-y-2 border-border bg-card/80 px-3 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider text-foreground">
                   Adicionales (instalaciones extras, cenefas, motores, controles, traslados…)
                 </td>
@@ -1185,7 +1321,7 @@ export function CotizadorFase0() {
               {/* ADICIONALES */}
               {adicionales.length === 0 && (
                 <tr className="print:hidden">
-                  <td colSpan={COL_SPAN} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                  <td colSpan={colSpanTotal} className="px-3 py-3 text-center text-xs text-muted-foreground">
                     Sin adicionales. Filtra el catálogo arriba para agregar con un clic, o usa el botón de abajo.
                   </td>
                 </tr>
@@ -1195,10 +1331,24 @@ export function CotizadorFase0() {
                 const r = adicResDeFila.get(a.id);
                 return (
                   <tr key={a.id} className="border-t border-border align-middle">
-                    <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
-                    <Td className="text-center text-muted-foreground">—</Td>
-                    <Td className="text-center text-muted-foreground">—</Td>
-                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="text-muted-foreground">
+                      {prod?.cod ?? '—'}
+                      {a.origen === 'pano' && (
+                        <span
+                          className="ml-1 rounded border border-accent/40 bg-accent/10 px-1 text-[9px] font-semibold text-accent"
+                          title="Cenefa derivada del paño en Terreno. Para quitarla, cambia la cenefa en Fase 2."
+                        >
+                          auto
+                        </span>
+                      )}
+                    </Td>
+                    {showCols && (
+                      <>
+                        <Td className="text-center text-muted-foreground">—</Td>
+                        <Td className="text-center text-muted-foreground">—</Td>
+                        <Td className="text-center text-muted-foreground">—</Td>
+                      </>
+                    )}
                     <Td>
                       <CellInput type="number" step="0.01" value={a.cantidad || ''}
                         onChange={(e) => setAdic(a.id, { cantidad: parseFloat(e.target.value) || 0 })}
@@ -1217,6 +1367,7 @@ export function CotizadorFase0() {
                     </Td>
                     <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
                     <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
                     <Td>
                       <CellInput value={a.ubicacion}
                         onChange={(e) => setAdic(a.id, { ubicacion: e.target.value })}
@@ -1249,7 +1400,7 @@ export function CotizadorFase0() {
               })}
               {/* Botón agregar adicional */}
               <tr className="print:hidden">
-                <td colSpan={COL_SPAN} className="border-t border-border bg-card/40 px-2 py-2">
+                <td colSpan={colSpanTotal} className="border-t border-border bg-card/40 px-2 py-2">
                   <Button size="sm" variant="outline" className="gap-1"
                     onClick={() => setAdicionales((p) => [...p, nuevoAdicional()])}>
                     <Plus className="h-3.5 w-3.5" /> Agregar adicional
@@ -1282,15 +1433,45 @@ export function CotizadorFase0() {
           <FilaTotal label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />
           <FilaTotal label="Abono 50% (inicio)" valor={formatCLP(t.abono50)} />
           <div className="my-1 border-t border-border" />
-          <Button
-            onClick={guardarComoOT}
-            disabled={guardandoOT}
-            className="w-full gap-1.5"
-            title="Crea la OT con las cortinas, el cliente y el modelo de fabricación, y continúa el flujo en Fase 2"
-          >
-            <Save className="h-4 w-4" />
-            {guardandoOT ? 'Guardando…' : editOtId ? 'Guardar cambios en la OT' : 'Guardar como OT'}
-          </Button>
+          {modo === 'fase3' ? (
+            readOnlyFase3 ? (
+              <p className="text-center text-xs text-muted-foreground">
+                La OT ya avanzó a {otCargada?.estado}: cotización en solo lectura.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <Button
+                  onClick={() => guardarComoOT()}
+                  disabled={guardandoOT}
+                  variant="outline"
+                  className="w-full gap-1.5"
+                  title="Guarda los cambios de la cotización sin avanzar de fase"
+                >
+                  <Save className="h-4 w-4" />
+                  {guardandoOT ? 'Guardando…' : 'Guardar cotización'}
+                </Button>
+                <Button
+                  onClick={() => guardarComoOT({ aProduccion: true })}
+                  disabled={guardandoOT}
+                  className="w-full gap-1.5"
+                  title="Aprueba la cotización y envía la OT a Producción (Fase 4)"
+                >
+                  <ArrowRight className="h-4 w-4" />
+                  Aprobar y enviar a Producción
+                </Button>
+              </div>
+            )
+          ) : (
+            <Button
+              onClick={() => guardarComoOT()}
+              disabled={guardandoOT}
+              className="w-full gap-1.5"
+              title="Crea la OT con las cortinas y el cliente, y continúa en Terreno (Fase 2)"
+            >
+              <Save className="h-4 w-4" />
+              {guardandoOT ? 'Guardando…' : editOtId ? 'Guardar cambios en la OT' : 'Guardar como OT'}
+            </Button>
+          )}
         </section>
 
         {editarProducto !== undefined && (

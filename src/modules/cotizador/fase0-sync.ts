@@ -95,6 +95,28 @@ export function cierreDesdeDireccion(direccion: string | undefined | null): stri
 
 }
 
+/** Recíproco de armadoDesdeSentido: 'Interno'/'Externo' → 'INTERNO'/'EXTERNO'. */
+export function sentidoDesdeArmado(armado: string | undefined | null): string {
+  const a = (armado || '').toUpperCase();
+  if (a.includes('EXTERNO')) return 'EXTERNO';
+  if (a.includes('INTERNO')) return 'INTERNO';
+  return '';
+}
+
+/**
+ * Recíproco (aproximado) de cierreDesdeDireccion: 'Izquierda'/'Derecha'/'Medio'
+ * → una de las opciones de DIRECCIONES. Es lossy (no distingue CAD de CIERRE;
+ * 'Vertical' no tiene destino) — es metadato editable en la cotización, no
+ * afecta el precio.
+ */
+export function direccionDesdeCierre(cierreVert: string | undefined | null): string {
+  const c = (cierreVert || '').toUpperCase();
+  if (c.includes('IZQUIERDA') || c.includes('IZQUIERDO')) return 'CAD [IZQUIERDA]';
+  if (c.includes('DERECHA') || c.includes('DERECHO')) return 'CAD [DERECHA]';
+  if (c.includes('MEDIO')) return 'CIERRE [MEDIO]';
+  return '';
+}
+
 
 
 /** Normaliza color de accesorios de Fase 0 al código corto de Fase 2. */

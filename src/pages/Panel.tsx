@@ -515,10 +515,9 @@ export function Panel() {
 // Card individual de OT
 // ─────────────────────────────────────────────────────────────
 const FASES_OT: Array<{ ruta: string; label: string }> = [
-  { ruta: 'fase0', label: 'Fase 0 · Cotizar (agregar cortinas)' },
-  { ruta: 'fase1', label: 'Fase 1 · Datos' },
+  { ruta: 'fase1', label: 'Fase 1 · Cotización (inicial)' },
   { ruta: 'fase2', label: 'Fase 2 · Terreno / Ventanas' },
-  { ruta: 'fase3', label: 'Fase 3 · Aprobación' },
+  { ruta: 'fase3', label: 'Fase 3 · Cotización final' },
   { ruta: 'fase4', label: 'Fase 4 · Producción' },
   { ruta: 'tela', label: 'Optimizador de Tela' },
 ];

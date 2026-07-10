@@ -16,6 +16,8 @@ import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow, PiezaEtiqueta } from './tela';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
 import { etiquetaConTira, medidaCorteCenefaCuadrada } from '@/modules/descuentos/adicionales-cenefa';
+import { codigoTuberiaDeChip } from '@/modules/descuentos/reglas-tuberia';
+import { esCenefaCuadrada } from './fase2';
 
 const EMPTY_PANO: Partial<Pano> = {};
 
@@ -68,15 +70,22 @@ export function tipoCortinaEtiqueta(producto?: string, tipo?: string): string {
   return (p || tipo || '—').toUpperCase();
 }
 
+/** Espesor de pared por código de tubo (fallback cuando el chip no lo trae). */
+const ESPESOR_TUBO_POR_CODIGO: Record<string, string> = { E02: '1,2', E66: '2,5' };
+
 /**
  * Espec del tubo "38 mm de 1,2 mm": diámetro del código corto ("38mm_E02")
- * + espesor del texto del chip de tubería ("0,38mm [E02] 1,2mm").
+ * + espesor del texto del chip de tubería. El chip largo actual
+ * ("E02-TUBO 1.2 / Ø 38 mm") no siempre expone el espesor con "mm" pegado,
+ * así que se cae al mapa por código.
  */
 export function especTuboEtiqueta(tuberiaCod?: string, tuberiaChip?: string): string {
   const dia = (tuberiaCod || '').match(/(\d{2,3})\s*mm/i);
   if (!dia) return '';
   const espesores = [...(tuberiaChip || '').matchAll(/(\d+[.,]\d+)\s*mm/gi)];
-  const esp = espesores.length ? espesores[espesores.length - 1][1] : '';
+  const esp = espesores.length
+    ? espesores[espesores.length - 1][1]
+    : ESPESOR_TUBO_POR_CODIGO[codigoTuberiaDeChip(tuberiaChip)] || '';
   return esp ? `${dia[1]} mm de ${esp.replace('.', ',')} mm` : `${dia[1]} mm`;
 }
 
@@ -351,7 +360,7 @@ function dibujarEstructura(
   const pzPlat = pieza(row, 'PLETINA');
   const platCm = pzPlat
     ? fmtMedidaCm(pzPlat.medidaCm)
-    : p.cenefa === 'Cuadrada'
+    : esCenefaCuadrada(p.cenefa as string)
       ? fmtMedidaCm(anchoCm + 1)
       : 'NO';
   txt(doc, conCod('PLAT', codCorto(pzPlat)), 31.5, 59.8, 7.5, { hScale: 0.8 });
@@ -556,7 +565,7 @@ export function generarEtiquetasPDF(
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
-  const cenefas = rows.filter((r) => (r.pano || EMPTY_PANO).cenefa === 'Cuadrada');
+  const cenefas = rows.filter((r) => esCenefaCuadrada((r.pano || EMPTY_PANO).cenefa as string));
   const doc = new jsPDF('p', 'mm', [ANCHO, ALTO_PAGINA]);
   let first = true;
   let nCenefa = 0;
@@ -566,7 +575,7 @@ export function generarEtiquetasPDF(
     first = false;
     dibujarEstructura(doc, row, i + 1, rows.length, meta, catalogo);
 
-    if ((row.pano || EMPTY_PANO).cenefa === 'Cuadrada') {
+    if (esCenefaCuadrada((row.pano || EMPTY_PANO).cenefa as string)) {
       nCenefa += 1;
       doc.addPage([ANCHO, ALTO_PAGINA], 'p');
       dibujarCenefaCuadrada(doc, row, nCenefa, cenefas.length, meta);

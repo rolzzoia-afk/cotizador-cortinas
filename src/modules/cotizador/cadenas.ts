@@ -148,12 +148,13 @@ export function derivarLargoColor(
   const nemo = normalizar(c.nemotecnico);
 
   let largoCadena = '';
-  if (nemo.includes('3 METRO')) largoCadena = '3mts';
+  // '2.4' va PRIMERO: "2.4 METROS" también contiene "4 METRO" y caería mal.
+  if (nemo.includes('2.4') || nemo.includes('2,4')) largoCadena = '2.4mts';
+  else if (nemo.includes('3 METRO')) largoCadena = '3mts';
   else if (nemo.includes('4 METRO')) largoCadena = '4mts';
   else if (nemo.includes('1,2 METRO') || nemo.includes('1 METRO')) largoCadena = '1mts';
   else if (nemo.includes('80 CM')) largoCadena = '0.75';
   else if (nemo.includes('ROLLO')) largoCadena = 'ROLLO';
-  else if (nemo.includes('2.4')) largoCadena = '2.4mts';
 
   const colorNombre = normalizar(c.color) || '';
   const colorCadena =
@@ -235,9 +236,10 @@ export function textoPesoCadenaInventario(
   p: Partial<{ codPeso?: string; colorPeso?: string }>,
   insumos?: CadenaInsumo[],
 ): string {
-  const cod = (p.codPeso || '').trim().toUpperCase();
+  // Sin espacios: "PCA 04" y "PCA04" son el mismo insumo del stock.
+  const cod = (p.codPeso || '').trim().toUpperCase().replace(/\s+/g, '');
   if (cod) {
-    const ins = insumos?.find((i) => normalizar(i.cod) === cod);
+    const ins = insumos?.find((i) => normalizar(i.cod).replace(/\s+/g, '') === cod);
     if (ins?.nemotecnico?.trim()) return ins.nemotecnico.trim();
     if (ins?.color?.trim()) return ins.color.trim();
     return PESO_COD_ETIQUETAS[cod] || cod;
@@ -252,4 +254,32 @@ export function textoPesoCadenaInventario(
   if (norm === 'GRS' || norm === 'GRI') return 'GRIS';
   if (norm === 'MET') return 'METAL';
   return cp;
+}
+
+/** Largo del cotizador → texto largo para la hoja de inventario (Fase 4). */
+const LARGO_DESCRIPCION: Record<string, string> = {
+  '0.75': '80 CM',
+  '1mts': '1,2 METROS',
+  '2.4mts': '2,4 METROS',
+  '3mts': '3 METROS',
+  '4mts': '4 METROS',
+  ROLLO: 'ROLLO',
+};
+
+/**
+ * Descripción larga de la cadena para la columna ACCIONAMIENTO del inventario:
+ * "[CAD05] CADENA INFINITA 4 METROS GRIS". Sin `codCadena` (OT vieja o motor)
+ * cae al texto de `largoCadena` tal cual, para no inventar un código.
+ */
+export function descripcionCadenaInventario(
+  p: Partial<{ codCadena?: string; largoCadena?: string | number; colorCadena?: string }>,
+): string {
+  const cod = (p.codCadena || '').trim().toUpperCase().replace(/\s+/g, '');
+  const largo = String(p.largoCadena ?? '').trim();
+  if (!cod) return largo;
+  const palabra = LARGO_DESCRIPCION[largo] || largo;
+  const colorCod = normalizar(p.colorCadena);
+  const color = COLOR_COD_A_NOMBRE[colorCod] || colorCod;
+  const cuerpo = palabra.toUpperCase() === 'ROLLO' ? 'CADENA ROLLO' : `CADENA INFINITA ${palabra}`;
+  return `[${cod}] ${[cuerpo, color].filter(Boolean).join(' ')}`.trim();
 }

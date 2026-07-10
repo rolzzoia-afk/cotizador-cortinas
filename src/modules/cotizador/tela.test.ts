@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   derivarCod,
   obtenerAnchoRollo,
+  debeInvertirPano,
+  resolverAnchoRollo,
   buildOptimizerRows,
   restorePlanGuardado,
   asignarJuntoEnOrden,
@@ -79,6 +81,56 @@ describe('obtenerAnchoRollo', () => {
 
   it('default 2.98 si producto no tiene anchoRollo', () => {
     expect(obtenerAnchoRollo('NoRollo', cat)).toBe(2.98);
+  });
+});
+
+// ── debeInvertirPano ─────────────────────────────────────────────
+describe('debeInvertirPano', () => {
+  it('invierte cuando ancho + borde (4 cm) supera el rollo', () => {
+    expect(debeInvertirPano(2.95, 2.98)).toBe(true); // 2.99 > 2.98
+    expect(debeInvertirPano(3.2, 2.98)).toBe(true);
+  });
+
+  it('no invierte cuando entra normal', () => {
+    expect(debeInvertirPano(2.9, 2.98)).toBe(false); // 2.94 < 2.98
+    expect(debeInvertirPano(1.5, 2.98)).toBe(false);
+  });
+
+  it('ancho 0 o negativo nunca invierte', () => {
+    expect(debeInvertirPano(0, 2.98)).toBe(false);
+    expect(debeInvertirPano(-1, 2.98)).toBe(false);
+  });
+
+  it('respeta un bordeCm custom', () => {
+    expect(debeInvertirPano(2.9, 2.98, 10)).toBe(true); // 3.00 > 2.98
+    expect(debeInvertirPano(2.9, 2.98, 0)).toBe(false);
+  });
+});
+
+// ── resolverAnchoRollo ───────────────────────────────────────────
+describe('resolverAnchoRollo', () => {
+  const cat = mkCat({ 'SC 64': { anchoRollo: 2.5 } });
+
+  it('el map global gana sobre el catálogo', () => {
+    expect(resolverAnchoRollo('SC 64', { 'SC 64': 3.2 }, cat)).toBe(3.2);
+  });
+
+  it('sin map usa el anchoRollo del catálogo', () => {
+    expect(resolverAnchoRollo('SC 64', {}, cat)).toBe(2.5);
+  });
+
+  it('sin map ni catálogo cae al default de corte (2.98)', () => {
+    expect(resolverAnchoRollo('OTRO', {}, cat)).toBe(2.98);
+    expect(resolverAnchoRollo('', {}, cat)).toBe(2.98);
+  });
+
+  it('trimea el codInt y acepta default custom', () => {
+    expect(resolverAnchoRollo('  SC 64  ', { 'SC 64': 3.0 }, cat)).toBe(3.0);
+    expect(resolverAnchoRollo('OTRO', {}, cat, 2.45)).toBe(2.45);
+  });
+
+  it('un valor 0 o inválido en el map no cuenta', () => {
+    expect(resolverAnchoRollo('SC 64', { 'SC 64': 0 }, cat)).toBe(2.5);
   });
 });
 

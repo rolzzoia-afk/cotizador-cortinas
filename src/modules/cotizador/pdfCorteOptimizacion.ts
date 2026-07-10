@@ -18,7 +18,7 @@
 // `generarPdfHojaCorte`, que toca el DOM (jsPDF).
 // ─────────────────────────────────────────────────────────────────────
 import jsPDF from 'jspdf';
-import type { OptimizerRow } from './tela';
+import { debeInvertirPano, type OptimizerRow } from './tela';
 import { generarPlanCorte, type PanoColmena } from './planCorte';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { OT } from '@/modules/ots/types';
@@ -49,6 +49,15 @@ export type FilaPanoResumen = {
   altoMaxUtilizar: number | ''; // m (vacío en invertidas)
   invertida: boolean;
 };
+
+/**
+ * Filas de la tabla de corte que se imprimen: solo las que salen de colmena
+ * (medidaColmena) o van invertidas. Las cortinas de rollo normal no se muestran
+ * (el taller solo necesita esta tabla para esos dos casos especiales).
+ */
+export function filasCorteVisibles(cortinas: FilaCorteCortina[]): FilaCorteCortina[] {
+  return cortinas.filter((f) => f.invertida || f.medidaColmena !== '');
+}
 
 export type MetrosOptimizador = { codInt: string; metros: number };
 
@@ -96,7 +105,7 @@ export function construirHojaCorte(
   // ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no
   // está definido, se auto-marca cuando el ancho + borde supera el rollo.
   const esInvertida = (r: OptimizerRow) =>
-    r.pano?.invertida ?? r.anchoCm + params.bordeCm > r.anchoRollo * 100;
+    r.pano?.invertida ?? debeInvertirPano(r.anchoCm / 100, r.anchoRollo, params.bordeCm);
 
   // Clave de paño por fila:
   //  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
@@ -359,34 +368,39 @@ export function generarPdfHojaCorte(
     }
     y += headH;
   };
-  cabeceraTabla();
+  // BLOQUE 1 solo con las cortinas que salen de colmena o van invertidas. Si
+  // ninguna califica, se omite toda la tabla (el resto de bloques sigue igual).
+  const visibles = filasCorteVisibles(hoja.cortinas);
+  if (visibles.length > 0) {
+    cabeceraTabla();
 
-  // Filas de datos (color por paño)
-  const rowH = 12.5;
-  for (const fila of hoja.cortinas) {
-    if (y + rowH > BOTTOM) {
-      nuevaPagina();
-      cabeceraTabla();
-    }
-    const fill = PALETA[(fila.pano - 1 + PALETA.length) % PALETA.length] || PALETA[0];
-    let cx = x0;
-    for (const c of cols) {
-      rect(doc, cx, y, c.w, rowH, fill);
-      let val = '';
-      if (c.key === 'serial') val = '';
-      else {
-        const raw = fila[c.key as keyof FilaCorteCortina];
-        if (c.key === 'anchoCorteTela' || c.key === 'corteAncho35' || c.key === 'alto' || c.key === 'altoCorteTela')
-          val = num(raw as number);
-        else val = raw === 0 ? '0' : String(raw ?? '');
+    // Filas de datos (color por paño)
+    const rowH = 12.5;
+    for (const fila of visibles) {
+      if (y + rowH > BOTTOM) {
+        nuevaPagina();
+        cabeceraTabla();
       }
-      if (val) {
-        const bold = c.key === 'cortarJunto' || c.key === 'pano' || c.key === 'comentario';
-        celdaTexto(doc, val, cx, c.w, y + 8.5, { size: c.key === 'comentario' ? 10 : 13, bold, fit: 'shrink' });
+      const fill = PALETA[(fila.pano - 1 + PALETA.length) % PALETA.length] || PALETA[0];
+      let cx = x0;
+      for (const c of cols) {
+        rect(doc, cx, y, c.w, rowH, fill);
+        let val = '';
+        if (c.key === 'serial') val = '';
+        else {
+          const raw = fila[c.key as keyof FilaCorteCortina];
+          if (c.key === 'anchoCorteTela' || c.key === 'corteAncho35' || c.key === 'alto' || c.key === 'altoCorteTela')
+            val = num(raw as number);
+          else val = raw === 0 ? '0' : String(raw ?? '');
+        }
+        if (val) {
+          const bold = c.key === 'cortarJunto' || c.key === 'pano' || c.key === 'comentario';
+          celdaTexto(doc, val, cx, c.w, y + 8.5, { size: c.key === 'comentario' ? 10 : 13, bold, fit: 'shrink' });
+        }
+        cx += c.w;
       }
-      cx += c.w;
+      y += rowH;
     }
-    y += rowH;
   }
 
   // ── BLOQUE 2 (izq): TOTAL PAÑOS ── y ── BLOQUE 3 (der): errores ──
@@ -442,7 +456,9 @@ export function generarPdfHojaCorte(
     }
     y += 12;
   };
-  nuevaPagina();
+  // TOTAL PAÑOS parte en página nueva salvo que la tabla de corte se haya
+  // omitido (sin colmena ni invertidas): entonces empieza en la página 1.
+  if (visibles.length > 0) nuevaPagina();
   cabecera23();
   for (const p of hoja.panos) {
     if (y + rowH23 > BOTTOM) {

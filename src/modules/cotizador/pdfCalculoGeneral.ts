@@ -21,10 +21,10 @@ import {
 } from '@/modules/descuentos/despiece';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
-import { tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
+import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
-import { OPCIONES_MECANISMO } from './fase2';
+import { OPCIONES_MECANISMO_RESOLUCION } from './fase2';
 import { colorPesoCadena } from './cadenas';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
@@ -65,6 +65,12 @@ export type FilaCalculo = {
   codMecanismo: string;
   accionamiento: string;
   pesoCadena: string;
+  // Campos crudos de cadena/peso: el inventario (Fase 4) compone con ellos su
+  // descripción larga; el Cálculo General usa las versiones compactas de arriba.
+  codCadena: string;
+  largoCadena: string;
+  colorCadena: string;
+  codPeso: string;
   suplementos: string;
   manillas: string;
   cant: number;
@@ -114,8 +120,8 @@ const IDENTIDAD: { key: keyof FilaCalculo; label: string }[] = [
   { key: 'colorAcc', label: 'COLOR ACCESORIOS' },
   { key: 'cadena', label: 'CADENA/CIERRE' },
   { key: 'armado', label: 'ARMADO' },
-  { key: 'anchoMts', label: 'ANCHO mts' },
-  { key: 'altoMts', label: 'ALTO mts' },
+  { key: 'anchoMts', label: 'ANCHO REAL' },
+  { key: 'altoMts', label: 'ALTO REAL' },
 ];
 
 const NUM_IDENTIDAD = new Set<keyof FilaCalculo>(['anchoMts', 'altoMts']);
@@ -174,8 +180,9 @@ export function construirCalculoGeneral(
         { ...p, mecanismo: p.mecanismo as string },
         v.color as string,
         v.modelo,
-        OPCIONES_MECANISMO,
+        OPCIONES_MECANISMO_RESOLUCION,
         v.categoria,
+        anchoM,
       );
       const codMecanismo =
         [mecChip, (p.colorMecanismo as string) || ''].filter(Boolean).join(' ') ||
@@ -185,13 +192,21 @@ export function construirCalculoGeneral(
 
       filas.push({
         codSec: v.categoria || '',
-        tuberia: esBee ? '' : tuberiaCodigoCorto(v.modelo, String(p.tuberia || ''), anchoM, v.categoria),
+        // Descripción larga del tubo ("E02-TUBO 1.2 / Ø 38 mm"). El código
+        // compacto sigue en tuberiaCodigoCorto para Excel/etiqueta/tela.
+        tuberia: esBee
+          ? ''
+          : descripcionTuberia(tuberiaCodigoCorto(v.modelo, String(p.tuberia || ''), anchoM, v.categoria)),
         tipoRol: (v.modelo?.tipo_rol as string) || '',
         codMecanismo,
         accionamiento: codCadena
           ? `[${codCadena}] ${largoCadena}`.trim()
           : largoCadena,
         pesoCadena: codPeso ? `[${codPeso}] ${colorPeso}`.trim() : colorPeso,
+        codCadena,
+        largoCadena,
+        colorCadena: String(p.colorCadena ?? ''),
+        codPeso,
         suplementos: (p.suplementos as string) || '',
         manillas: manillaCant > 0 ? `${manillaCant} ${(p.manillaColor as string) || ''}`.trim() : '',
         cant: 1,
@@ -315,7 +330,7 @@ function pesoColumna(key: string, esDespiece: boolean): number {
     case 'cadena':
       return 1.7;
     case 'tuberia':
-      return 1.3;
+      return 2.4; // descripción larga del tubo ("E02-TUBO 1.2 / Ø 38 mm")
     case 'colorAcc':
     case 'armado':
     case 'manillas':
@@ -330,6 +345,52 @@ function pesoColumna(key: string, esDespiece: boolean): number {
   }
 }
 
+/** Variante de la hoja: mismo motor, distinto título y columnas visibles. */
+export type VarianteHojaCalculo = {
+  titulo: string;
+  archivo: string;
+  /** Columnas de identidad que se OMITEN (keys de FilaCalculo). */
+  sinIdentidad?: ReadonlySet<string>;
+  /** Componentes de despiece que se OMITEN (por label del bloque). */
+  sinDespiece?: (label: string) => boolean;
+};
+
+const VARIANTE_CALCULO_GENERAL: VarianteHojaCalculo = {
+  titulo: 'CÁLCULO GENERAL',
+  archivo: 'CalculoGeneral',
+};
+
+/**
+ * DIMENSIONADO: la hoja del cálculo general reducida a lo que usa la mesa de
+ * dimensionado de tela — identidad de la cortina + medidas de corte de tela.
+ * Fuera: tubería, color accesorios, cadena/cierre, armado, medidas de
+ * levantamiento (ANCHO/ALTO mts), los cortes de metal (TUBO y PESO*) y la
+ * CENEFA OVALADA (no se dimensiona en esta mesa).
+ */
+export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
+  titulo: 'DIMENSIONADO',
+  archivo: 'Dimensionado',
+  sinIdentidad: new Set(['tuberia', 'colorAcc', 'cadena', 'armado', 'anchoMts', 'altoMts']),
+  sinDespiece: (label) =>
+    label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
+    label === 'CENEFA OVALADA',
+};
+
+/** Aplica la variante a las columnas (puro, para test). */
+export function aplicarVariante(
+  data: CalculoGeneral,
+  variante: VarianteHojaCalculo,
+): Pick<CalculoGeneral, 'identidad' | 'bloques'> {
+  const identidad = data.identidad.filter((c) => !variante.sinIdentidad?.has(c.key));
+  const bloques = data.bloques
+    .map((b) => ({
+      ...b,
+      columnas: b.columnas.filter((c) => !variante.sinDespiece?.(c.label)),
+    }))
+    .filter((b) => b.columnas.length > 0);
+  return { identidad, bloques };
+}
+
 /** Genera y descarga el PDF CALCULO GENERAL de la OT. */
 export function generarPdfCalculoGeneral(
   ventanas: Ventana[],
@@ -337,17 +398,38 @@ export function generarPdfCalculoGeneral(
   meta: MetaCalculo,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): void {
+  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_CALCULO_GENERAL);
+}
+
+/** Genera y descarga el PDF DIMENSIONADO (cálculo general solo-tela). */
+export function generarPdfDimensionado(
+  ventanas: Ventana[],
+  catalogo: CatalogoProductos,
+  meta: MetaCalculo,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): void {
+  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO);
+}
+
+function renderHojaCalculo(
+  ventanas: Ventana[],
+  catalogo: CatalogoProductos,
+  meta: MetaCalculo,
+  params: ParametrosCorte,
+  variante: VarianteHojaCalculo,
+): void {
   if (!ventanas || ventanas.length === 0) {
     throw new Error('No hay ventanas en la OT.');
   }
   const data = construirCalculoGeneral(ventanas, catalogo, params);
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
+  const { identidad, bloques } = aplicarVariante(data, variante);
 
   // Columnas planas: identidad + (por bloque) sus columnas.
   type ColPlana = ColumnaCalculo & { sistema?: BloqueSistema };
   const cols: ColPlana[] = [
-    ...data.identidad,
-    ...data.bloques.flatMap((b) => b.columnas.map((c) => ({ ...c, sistema: b.sistema }))),
+    ...identidad,
+    ...bloques.flatMap((b) => b.columnas.map((c) => ({ ...c, sistema: b.sistema }))),
   ];
 
   // A3 apaisado (420 × 297) para que entren muchas columnas.
@@ -366,7 +448,7 @@ export function generarPdfCalculoGeneral(
     xs.push(acc);
     acc += w;
   }
-  const idN = data.identidad.length;
+  const idN = identidad.length;
 
   const PH = 297;
   const BOTTOM = PH - M;
@@ -383,7 +465,7 @@ export function generarPdfCalculoGeneral(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.setTextColor(30, 30, 38);
-    doc.text('CÁLCULO GENERAL', M, y + 5);
+    doc.text(variante.titulo, M, y + 5);
     // Número de OT grande y destacado.
     doc.setFontSize(24);
     doc.text(`OT ${meta.ot}`, M + 62, y + 6.5);
@@ -400,7 +482,7 @@ export function generarPdfCalculoGeneral(
   // se redibujan en cada página.
   const cabeceras = () => {
     let colIdx = idN; // arranca tras las columnas de identidad
-    for (const b of data.bloques) {
+    for (const b of bloques) {
       const x0 = xs[colIdx];
       const w = b.columnas.reduce((s, _c, j) => s + widths[colIdx + j], 0);
       rect(doc, x0, y, w, superH, b.sistema.color);
@@ -466,5 +548,5 @@ export function generarPdfCalculoGeneral(
   }
   cerrarBorde();
 
-  doc.save(`CalculoGeneral_OT${meta.ot}.pdf`);
+  doc.save(`${variante.archivo}_OT${meta.ot}.pdf`);
 }

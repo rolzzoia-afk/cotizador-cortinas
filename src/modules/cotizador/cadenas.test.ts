@@ -6,11 +6,13 @@ import {
   resolverCodCadenaLegacy,
   resolverCodCadenaBom,
   derivarLargoColor,
+  descripcionCadenaInventario,
   pesosSeleccionables,
   esPesoSeleccionable,
   textoPesoCadenaInventario,
   type CadenaInsumo,
 } from './cadenas';
+import { OPCIONES_LARGO_CADENA } from './fase2';
 
 // Muestra representativa del inventario real (CAD01–CAD16).
 const INV: CadenaInsumo[] = [
@@ -104,6 +106,17 @@ describe('derivarLargoColor', () => {
   it('CAD05 → 4mts / BCO', () => {
     expect(derivarLargoColor('CAD05', INV)).toEqual({ largoCadena: '4mts', colorCadena: 'BCO' });
   });
+  it('CAD16 (2.4 metros) → 2.4mts, y el radio de Fase 2 lo ofrece', () => {
+    const inv = [
+      ...INV,
+      { cod: 'CAD16', nemotecnico: 'CADENA INFINITA 2.4 METROS [NEGRO]', color: 'NEGRO', status: 'OK' },
+    ];
+    const { largoCadena } = derivarLargoColor('CAD16', inv);
+    expect(largoCadena).toBe('2.4mts');
+    // Regresión: derivarLargoColor producía '2.4mts' pero OPCIONES_LARGO_CADENA
+    // no lo tenía, así que el valor no se podía mostrar/elegir en el editor.
+    expect(OPCIONES_LARGO_CADENA).toContain(largoCadena);
+  });
 });
 
 describe('pesos de cadena', () => {
@@ -140,5 +153,36 @@ describe('textoPesoCadenaInventario', () => {
   it('sin codPeso cae a colorPeso (OTs viejas)', () => {
     expect(textoPesoCadenaInventario({ colorPeso: 'TRANSPARENTE' })).toBe('TRANSPARENTE');
     expect(textoPesoCadenaInventario({ colorPeso: 'BCO' })).toBe('BLANCO');
+  });
+
+  it('normaliza el código con espacios ("PCA 04" == "PCA04")', () => {
+    expect(textoPesoCadenaInventario({ codPeso: 'PCA 04' })).toBe(
+      'PESO PORTA CADENA TRANSPARENTE / CUADRADA 7.5 CM',
+    );
+  });
+});
+
+describe('descripcionCadenaInventario', () => {
+  it('compone código + nombre + color: "[CAD05] CADENA INFINITA 4 METROS GRIS"', () => {
+    expect(
+      descripcionCadenaInventario({ codCadena: 'CAD05', largoCadena: '4mts', colorCadena: 'GRS' }),
+    ).toBe('[CAD05] CADENA INFINITA 4 METROS GRIS');
+  });
+
+  it('normaliza el código con espacios y sin color no lo agrega', () => {
+    expect(descripcionCadenaInventario({ codCadena: 'CAD 03', largoCadena: '4mts' })).toBe(
+      '[CAD03] CADENA INFINITA 4 METROS',
+    );
+  });
+
+  it('ROLLO usa "CADENA ROLLO"', () => {
+    expect(descripcionCadenaInventario({ codCadena: 'CAD10', largoCadena: 'ROLLO', colorCadena: 'NEG' })).toBe(
+      '[CAD10] CADENA ROLLO NEGRO',
+    );
+  });
+
+  it('sin codCadena (motor / OT vieja) devuelve el largo tal cual', () => {
+    expect(descripcionCadenaInventario({ largoCadena: '4mts' })).toBe('4mts');
+    expect(descripcionCadenaInventario({})).toBe('');
   });
 });

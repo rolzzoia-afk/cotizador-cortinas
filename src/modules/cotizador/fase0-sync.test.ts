@@ -3,11 +3,14 @@ import {
   armadoDesdeSentido,
   cierreDesdeDireccion,
   colorAccesorioCorto,
+  direccionDesdeCierre,
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
+  sentidoDesdeArmado,
   tipoTelaDesdeProducto,
   tipoTelaDesdeVentana,
 } from './fase0-sync';
+import { crearPanoVacio } from './fase2';
 import type { Pano, Ventana } from './types';
 
 describe('fase0-sync', () => {
@@ -27,6 +30,16 @@ describe('fase0-sync', () => {
     expect(cierreDesdeDireccion('CAD [IZQUIERDA]')).toBe('Izquierda');
     expect(cierreDesdeDireccion('CAD [DERECHA]')).toBe('Derecha');
     expect(cierreDesdeDireccion('CIERRE [MEDIO]')).toBe('Medio');
+  });
+
+  it('recíprocos armado→sentido y cierre→direccion (para Fase 2 → cotización)', () => {
+    expect(sentidoDesdeArmado('Interno')).toBe('INTERNO');
+    expect(sentidoDesdeArmado('Externo')).toBe('EXTERNO');
+    expect(sentidoDesdeArmado('')).toBe('');
+    expect(direccionDesdeCierre('Izquierda')).toBe('CAD [IZQUIERDA]');
+    expect(direccionDesdeCierre('Derecha')).toBe('CAD [DERECHA]');
+    expect(direccionDesdeCierre('Medio')).toBe('CIERRE [MEDIO]');
+    expect(direccionDesdeCierre('Vertical')).toBe('');
   });
 
   it('color accesorios → código corto', () => {
@@ -55,6 +68,23 @@ describe('fase0-sync', () => {
 
   it('tipoTelaDesdeVentana sin catálogo usa COD_INT', () => {
     expect(tipoTelaDesdeVentana({ codInt: 'SC 64' })).toBe('SCR');
+  });
+
+  it('paño NUEVO (vacío) toma el color y la tela REALES de la ventana, no BCO/SCR', () => {
+    const ventana = {
+      id: '1',
+      codInt: 'BK 18',
+      color: 'NEGRO',
+      panos: [],
+    } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0(crearPanoVacio(), ventana, {
+      'BK 18': { cod: 'BLACKOUT_D', producto: '', tipo: '', descripcion: '', precio: 0 },
+    });
+    // Antes crearPanoVacio nacía con BCO/SCR duros y este relleno nunca corría.
+    expect(out.colorPeso).toBe('NEG');
+    expect(out.colorCadena).toBe('NEG');
+    expect(out.colorMecanismo).toBe('NEG');
+    expect(out.tipoTela).toBe('BK');
   });
 
   it('adicional CENFO en misma ubicación → pre-selecciona cenefa Ovalada y tira', () => {

@@ -6,15 +6,22 @@
 import type { BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
-import { tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
+import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
-import { OPCIONES_MECANISMO, OPCIONES_TUBERIA } from './fase2';
+import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
+import {
+  COD_HUB_DOMOTICA,
+  NOMBRE_HUB_DOMOTICA,
+  insumosDePano,
+  insumosMotorDePano,
+  panoLlevaDomotica,
+} from './insumosCortina';
 
 const EMPTY_PANO: Partial<Pano> = {};
 
-const CAT_ORDER = ['TUBERÍA', 'MECANISMO', 'CADENA', 'MOTOR', 'MANILLA', 'CENEFA', 'OTRO'];
+const CAT_ORDER = ['TUBERÍA', 'MECANISMO', 'CADENA', 'MOTOR', 'MANILLA', 'CENEFA', 'INSUMO', 'OTRO'];
 
 function extraerSpec(s: string | undefined): string {
   if (!s) return '';
@@ -48,6 +55,8 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
     }
   };
 
+  let llevaDomotica = false;
+
   rows.forEach((row) => {
     const p = row.pano || EMPTY_PANO;
     const v = ventanaDeFila(row, ventanas);
@@ -60,8 +69,9 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
       p,
       ventanaColor,
       modelo,
-      OPCIONES_MECANISMO,
+      OPCIONES_MECANISMO_RESOLUCION,
       categoria,
+      anchoM,
     );
     const mecSpec = extraerSpec(mecChip || (p.mecanismo as string));
     const mecColor = colorAccesoriosDePano(p, ventanaColor) || p.colorMecanismo || '';
@@ -73,19 +83,32 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
       OPCIONES_TUBERIA,
       categoria,
     );
-    const tubSpec = extraerSpec(tubChip || (p.tuberia as string));
+    // El chip de tubería ahora es una descripción larga sin corchetes; el
+    // código (E02…) es la especificación del stock. Fallback a extraerSpec
+    // para VELCRO / chips no estándar.
+    const tubSpec =
+      codigoTuberiaDeChip(tubChip || (p.tuberia as string)) ||
+      extraerSpec(tubChip || (p.tuberia as string));
     const anchoCm = row.anchoCm || row.ancho * 100;
     const tubLargoM = ((anchoCm - 3.8) / 100).toFixed(2);
     const tubColor = mecColor || p.color || '';
     const tubEspec = tubSpec ? `${tubSpec} · ${tubLargoM}m` : `${tubLargoM}m`;
     const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
     add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
-    if (mecSpec) {
+    // Mecanismo: una sola línea, dual o simple (el chip dual ya trae [MEC 0N]).
+    if (p.dual) {
+      const dualKey = `DUAL|${mecSpec}|${mecColor}`;
+      add(dualKey, 'MECANISMO', 'Mecanismo Dual', mecSpec || '', mecColor, 1, 'unid.');
+    } else if (mecSpec) {
       const mecKey = `MEC|${mecSpec}|${mecColor}`;
       add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
     }
 
-    const tieneMotor = !!(p.motorTipo && p.motorTipo !== '');
+    if (panoLlevaDomotica(p)) {
+      llevaDomotica = true;
+    }
+
+    const tieneMotor = !!(p.motorModelo || p.motorTipo);
 
     if (!tieneMotor) {
       // Cadena. Si el cotizador eligió la cadena real del inventario,
@@ -107,19 +130,24 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
         add(pesoKey, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.');
       }
     } else {
-      const ladoMot = p.ladoMotor || '';
-      const motEspec = [p.motorTipo, ladoMot ? `Lado ${ladoMot}` : '']
-        .filter(Boolean)
-        .join(' — ');
-      const motKey = `MOT|${p.motorTipo}|${mecColor}|${ladoMot}`;
-      add(motKey, 'MOTOR', 'Motor', motEspec, mecColor, 1, 'unid.');
-      if (p.motorControlAdic) add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
-      if (p.motorHubUsb) add('MOT-HUB', 'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
-    }
-
-    if (p.dual) {
-      const dualKey = `DUAL|${mecColor}`;
-      add(dualKey, 'MECANISMO', 'Mecanismo Dual', mecSpec || '', mecColor, 1, 'unid.');
+      // Motor nuevo (DOM38/DOM41): kit con códigos DOM. Motor legacy o 'CABLE'
+      // futuro: línea genérica como antes.
+      const motorInsumos = insumosMotorDePano(p, categoria);
+      if (motorInsumos.length > 0) {
+        for (const ins of motorInsumos) {
+          add(`MOT|${ins.codigo}|${ins.color}`, 'MOTOR', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
+        }
+      } else {
+        const ladoMot = p.ladoMotor || '';
+        const etiqueta = p.motorTipo || (p.motorModelo === 'CABLE' ? 'CON CABLE' : '');
+        const motEspec = [etiqueta, ladoMot ? `Lado ${ladoMot}` : '']
+          .filter(Boolean)
+          .join(' — ');
+        const motKey = `MOT|${etiqueta}|${mecColor}|${ladoMot}`;
+        add(motKey, 'MOTOR', 'Motor', motEspec, mecColor, 1, 'unid.');
+        if (p.motorControlAdic) add('MOT-CTRL', 'MOTOR', 'Control adicional motor', '', '', 1, 'unid.');
+        if (p.motorHubUsb) add('MOT-HUB', 'MOTOR', 'Hub USB motor', '', '', 1, 'unid.');
+      }
     }
 
     const manCant = parseInt(String(p.manillaCant ?? '0')) || 0;
@@ -141,7 +169,17 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
         add(tapKey, 'CENEFA', 'Tapa de cenefa', '', cenColor, tapasCount, 'unid.');
       }
     }
+
+    // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos.
+    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM })) {
+      add(`INS|${ins.codigo}|${ins.color}`, 'INSUMO', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
+    }
   });
+
+  // Domótica: 1 bridge hub (DOM43) por OT (consolida con "hub USB adicional").
+  if (llevaDomotica) {
+    add(`MOT|${COD_HUB_DOMOTICA}|`, 'MOTOR', NOMBRE_HUB_DOMOTICA, COD_HUB_DOMOTICA, '', 1, 'unid.');
+  }
 
   return [...acc.values()].sort((a, b) => {
     const ia = CAT_ORDER.indexOf(a.categoria);
