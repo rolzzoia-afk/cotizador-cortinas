@@ -6,8 +6,8 @@
 //   1. Tabla de corte — una fila por cortina (ancho/alto de corte, n.º de
 //      paño, letra "cortar junto") + columnas de colmena (verde) que se
 //      llenan cuando la pieza sale de un sobrante.
-//   2. "TOTAL PAÑOS" — una fila por paño de rollo (cortinas que se cortan
-//      juntas).
+//   2. "TOTAL PAÑOS" — una fila por paño (cortinas que se cortan juntas);
+//      los paños que salen de colmena se marcan en su columna COLMENA.
 //   3. Bloque de errores (PAÑO ADICIONAL / MOTIVO: FALLA TELA · ERROR
 //      CORTE) — en blanco para llenar a mano.
 //   4. "OPTIMIZADOR" — metros de tela por COD_INT (auto) + PASO 1-4 a mano.
@@ -49,6 +49,7 @@ export type FilaPanoResumen = {
   altoCortePano: number; // m (invertida → ancho de la cortina)
   altoMaxUtilizar: number | ''; // m (vacío en invertidas)
   invertida: boolean;
+  colmena: string; // "A-27 · 178X210" si el paño sale de colmena; '' si es rollo
 };
 
 /**
@@ -99,12 +100,19 @@ export function construirHojaCorte(
 ): HojaCorte {
   const plan = generarPlanCorte([ot], colmenaPanos, params);
 
-  // Sobrante (colmena) que recibió cada pieza, y qué piezas van a rollo.
+  // Sobrante (colmena) que recibió cada pieza (las demás salen de rollo).
   const sobranteDe = new Map<string, PanoColmena>();
   for (const g of plan.sobrantes)
     for (const pz of g.placed) if (!pz.failed) sobranteDe.set(pz.id, g.sobrante);
-  const enRollo = new Set<string>();
-  for (const g of plan.rollo) for (const pz of g.placed) if (!pz.failed) enRollo.add(pz.id);
+
+  // Origen colmena de una pieza: del plan vivo (sobranteDe) o, si el sobrante ya
+  // se consumió tras "confirmar corte general", del snapshot persistido.
+  type OrigenColmena = { cod: string; ancho: number; alto: number; ubic: string };
+  const colmenaDePieza = (pid: string): OrigenColmena | null => {
+    const sob = sobranteDe.get(pid);
+    if (sob) return { cod: sob.cod, ancho: sob.ancho, alto: sob.alto, ubic: sob.ubicacion || '' };
+    return piezasSnapshot?.[pid] ?? null;
+  };
 
   // ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no
   // está definido, se auto-marca cuando el ancho + borde supera el rollo.
@@ -133,15 +141,10 @@ export function construirHojaCorte(
   // ── Bloque 1: una fila por cortina ──
   const cortinas: FilaCorteCortina[] = rows.map((r, idx) => {
     const pid = pieceId(ot.id, r.ventanaId, r.panoIndex);
-    const sob = sobranteDe.get(pid);
-    // Si el plan vivo no la asigna (sobrante ya consumido), cae al snapshot.
-    const snap = !sob ? piezasSnapshot?.[pid] : undefined;
     const inv = esInvertida(r);
     const noCabe = !inv && r.junto === 'RR'; // más ancha que el rollo y no rota
     const pano = juntoNum.get(claveJunto(r, idx)) ?? 0;
-    const colmena = sob
-      ? { cod: sob.cod, ancho: sob.ancho, alto: sob.alto, ubic: sob.ubicacion || '' }
-      : snap ?? null;
+    const colmena = colmenaDePieza(pid);
     return {
       cadena: 0,
       cant: 1,
@@ -160,8 +163,10 @@ export function construirHojaCorte(
     };
   });
 
-  // ── Bloque 2: una fila por paño de ROLLO (grupo "cortar junto" con ≥1
-  //    pieza que se corta del rollo; los grupos 100% colmena no son paño). ──
+  // ── Bloque 2: una fila por paño (grupo "cortar junto"). Incluye los paños
+  //    que salen de colmena — se marcan en la columna COLMENA. Antes se
+  //    filtraban los grupos 100% colmena y el resumen quedaba vacío (TOTAL
+  //    PAÑOS = 0) cuando toda la OT se cortaba de sobrantes. ──
   const grupos = new Map<string, { rows: OptimizerRow[]; pano: number }>();
   rows.forEach((r, idx) => {
     const k = claveJunto(r, idx);
@@ -169,12 +174,11 @@ export function construirHojaCorte(
     grupos.get(k)!.rows.push(r);
   });
   const panos: FilaPanoResumen[] = [];
-  // Metros de rollo por COD_INT: alto de corte (≈2,05) por cada paño de rollo,
-  // igual que el manual (las invertidas también cuentan como un paño).
-  const metrosRollo = new Map<string, number>();
+  // Metros de tela por COD_INT para el OPTIMIZADOR: alto de corte (≈2,05) por
+  // cada paño, sea de rollo o de colmena (la cortadora igual corta y verifica
+  // esa cortina). La columna COLMENA del resumen marca cuáles salen de sobrante.
+  const metrosPorCod = new Map<string, number>();
   for (const { rows: grupo, pano } of grupos.values()) {
-    const esRollo = grupo.some((r) => enRollo.has(pieceId(ot.id, r.ventanaId, r.panoIndex)));
-    if (!esRollo) continue;
     const ref = grupo[0];
     const inv = esInvertida(ref);
     // Corte real del paño (dúo = 2×alto+0,30) vs. reserva "alto máximo a utilizar"
@@ -182,6 +186,17 @@ export function construirHojaCorte(
     const corteReal = Math.max(...grupo.map((g) => redM(g.altoCorte)));
     const altoMax = Math.max(...grupo.map((g) => redM(g.altoReal)));
     const anchoMax = Math.max(...grupo.map((g) => aMetros(g.anchoCm)));
+    // Origen colmena del paño (si alguna de sus piezas sale de un sobrante):
+    // ubicación · medida, para que la cortadora sepa de dónde tomar la tela.
+    let colmena = '';
+    for (const g of grupo) {
+      const c = colmenaDePieza(pieceId(ot.id, g.ventanaId, g.panoIndex));
+      if (c) {
+        const med = `${Math.round(c.ancho)}X${Math.round(c.alto)}`;
+        colmena = c.ubic ? `${c.ubic} · ${med}` : med;
+        break;
+      }
+    }
     panos.push({
       pano,
       tipo: ref.producto,
@@ -189,14 +204,16 @@ export function construirHojaCorte(
       altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
       altoMaxUtilizar: inv ? '' : altoMax,
       invertida: inv,
+      colmena,
     });
-    // Metros a reservar = alto máximo a utilizar (invertida: el corte consumido).
-    metrosRollo.set(ref.codInt, (metrosRollo.get(ref.codInt) || 0) + (inv ? corteReal : altoMax));
+    // Todos los paños (rollo y colmena) suman al OPTIMIZADOR: nunca queda vacío
+    // habiendo cortinas. La reserva por paño = "alto máximo a utilizar".
+    metrosPorCod.set(ref.codInt, (metrosPorCod.get(ref.codInt) || 0) + (inv ? corteReal : altoMax));
   }
   panos.sort((a, b) => a.pano - b.pano);
 
-  // ── Bloque 4: metros por COD_INT (las piezas de colmena no consumen rollo). ──
-  const optimizador: MetrosOptimizador[] = [...metrosRollo.entries()].map(([codInt, metros]) => ({
+  // ── Bloque 4: metros de tela por COD_INT (rollo + colmena). ──
+  const optimizador: MetrosOptimizador[] = [...metrosPorCod.entries()].map(([codInt, metros]) => ({
     codInt,
     metros: parseFloat(metros.toFixed(3)),
   }));
@@ -421,13 +438,15 @@ export function generarPdfHojaCorte(
   // corte; TOTAL PAÑOS/errores parten siempre en página nueva aunque sobre
   // espacio.
   const totalW = 16;
+  // cols2 debe caber en el tramo [M+totalW+1 .. t3x) = 23..150 = 127 mm, si no
+  // la última columna (COLMENA) queda tapada por la tabla de errores (cols3).
   const cols2 = [
-    { label: 'PAÑOS', w: 12, k: 'pano' as const },
-    { label: 'TIPO', w: 48, k: 'tipo' as const },
-    { label: 'COD', w: 16, k: 'cod' as const },
-    { label: 'ALTO CORTE PAÑO', w: 24, k: 'altoCortePano' as const },
-    { label: 'ALTO MÁXIMO A UTILIZAR', w: 26, k: 'altoMaxUtilizar' as const },
-    { label: 'COLMENA', w: 18, k: 'colmena' as const },
+    { label: 'PAÑOS', w: 11, k: 'pano' as const },
+    { label: 'TIPO', w: 34, k: 'tipo' as const },
+    { label: 'COD', w: 15, k: 'cod' as const },
+    { label: 'ALTO CORTE PAÑO', w: 22, k: 'altoCortePano' as const },
+    { label: 'ALTO MÁXIMO A UTILIZAR', w: 23, k: 'altoMaxUtilizar' as const },
+    { label: 'COLMENA', w: 22, k: 'colmena' as const },
   ];
   const cols3 = [
     { label: 'PAÑO ADICIONAL', w: 26 },
@@ -482,11 +501,16 @@ export function generarPdfHojaCorte(
     for (const c of cols2) {
       rect(doc, tx, y, c.w, rowH23, fill);
       let val = '';
-      if (c.k === 'colmena') val = '';
+      if (c.k === 'colmena') val = p.colmena;
       else if (c.k === 'altoCortePano') val = num(p.altoCortePano);
       else if (c.k === 'altoMaxUtilizar') val = p.altoMaxUtilizar === '' ? '' : num(p.altoMaxUtilizar);
       else val = String(p[c.k] ?? '');
-      if (val) celdaTexto(doc, val, tx, c.w, y + 7.8, { size: 12, align: c.k === 'tipo' ? 'left' : 'center', fit: 'shrink' });
+      if (val)
+        celdaTexto(doc, val, tx, c.w, y + 7.8, {
+          size: c.k === 'colmena' ? 9 : 12,
+          align: c.k === 'tipo' ? 'left' : 'center',
+          fit: 'shrink',
+        });
       tx += c.w;
     }
     // Fila bloque 3 (errores, para llenar a mano)

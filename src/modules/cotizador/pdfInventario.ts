@@ -23,7 +23,7 @@ import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
-import { descripcionCadenaInventario, textoPesoCadenaInventario } from './cadenas';
+import { COD_PESO_AUTO, descripcionCadenaInventario, textoPesoCadenaInventario } from './cadenas';
 import { esCenefaCuadrada, OPCIONES_MECANISMO_RESOLUCION } from './fase2';
 import {
   categoriaRequiereMecanismo,
@@ -148,10 +148,12 @@ export function consolidarInsumos(ventanas: Ventana[], filas: FilaCalculo[]): In
           bump(cod, `[${cod}] ${chip}`, 1);
         }
         if (p.codCadena) bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1);
-        if (p.codPeso) {
-          const cp = p.codPeso.replace(/\s+/g, '').toUpperCase();
-          bump(cp, `[${cp}] ${textoPesoCadenaInventario({ codPeso: p.codPeso })}`.trim(), 1);
-        }
+        // El peso de cadena es fijo (PCA04, transparente) para toda cortina de
+        // cadena: se emite SIEMPRE, aunque el paño no lo tenga guardado — igual
+        // que el mecanismo, que se resuelve en vivo. Si en Fase 2 se eligió otro
+        // peso, se respeta.
+        const cp = (p.codPeso || COD_PESO_AUTO).replace(/\s+/g, '').toUpperCase();
+        bump(cp, `[${cp}] ${textoPesoCadenaInventario({ codPeso: cp })}`.trim(), 1);
       }
 
       for (const ins of insumosDePano(p, { categoria: v.categoria, ventanaColor: v.color, anchoM })) {

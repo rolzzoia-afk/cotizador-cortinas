@@ -99,6 +99,16 @@ describe('construirInventario', () => {
     const d = construirInventario([v]);
     expect(d.filas[0].pesoCadena).toBe('');
   });
+
+  it('sin codPeso guardado → la tabla INSUMOS igual emite el peso PCA04 (fijo)', () => {
+    const v = ventana('LIVING', 1.5, 2.0);
+    delete (v.panos![0] as { codPeso?: string }).codPeso; // OT no sincronizada en Fase 2
+    const d = construirInventario([v]);
+    const pca = d.insumos.find((i) => i.codigo === 'PCA04');
+    expect(pca?.cantidad).toBe(1);
+    expect(pca?.grupo).toBe('PRODUCCION');
+    expect(pca?.descripcion).toBe('[PCA04] PESO PORTA CADENA TRANSPARENTE / CUADRADA 7.5 CM');
+  });
 });
 
 // Las manillas se consolidan por color al inicio del bloque INSUMOS, seguidas

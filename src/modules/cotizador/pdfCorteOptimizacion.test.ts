@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { construirHojaCorte, filasCorteVisibles, type FilaCorteCortina } from './pdfCorteOptimizacion';
 import { buildOptimizerRows, asignarJuntoEnOrden, autoOptimizar } from './tela';
+import type { PanoColmena } from './planCorte';
 import type { CatalogoProductos } from './types';
 import type { OT, VentanaItem } from '@/modules/ots/types';
 
@@ -75,11 +76,12 @@ describe('construirHojaCorte', () => {
     expect(hoja.cortinas.map((c) => c.cortarJunto)).toEqual(['A', 'B', 'B']);
   });
 
-  it('TOTAL PAÑOS = paños de rollo (un grupo por letra)', () => {
+  it('TOTAL PAÑOS = un grupo por letra (aquí todos de rollo, sin colmena)', () => {
     expect(hoja.totalPanos).toBe(2);
     expect(hoja.panos.map((p) => p.pano)).toEqual([1, 2]);
     expect(hoja.panos[0].tipo).toBe('ROLLER BLACKOUT DELUX'); // producto completo
     expect(hoja.panos[1].cod).toBe('SC 64');
+    expect(hoja.panos.every((p) => p.colmena === '')).toBe(true); // ninguno de colmena
   });
 
   it('OPTIMIZADOR = metros de tela por COD_INT (suma de alto de corte de sus paños)', () => {
@@ -235,5 +237,38 @@ describe('construirHojaCorte — snapshot de colmena (#26)', () => {
     expect(vis).toHaveLength(1);
     expect(vis[0].medidaColmena).toBe('SC 64 (178X200)');
     expect(vis[0].ubicColmena).toBe('RACK1');
+  });
+});
+
+// La cortina sale ENTERA de colmena (sobrante). Antes el bloque TOTAL PAÑOS la
+// filtraba y quedaba en 0 (OT 267-14). Ahora aparece como paño, marcada en la
+// columna COLMENA, y su COD también se lista en el OPTIMIZADOR (no queda vacío).
+describe('construirHojaCorte — paño de colmena en TOTAL PAÑOS (OT 267-14)', () => {
+  const ventCol: VentanaItem = {
+    id: 'vcol', ubicacion: 'Living', codInt: 'SC 64', producto: 'ROLLER SCREEN PREMIUM',
+    tipo: 'PREMIUM', categoria: 'ROL', grupoId: null, alto: 1.8, precio: 0, cantidad: 1,
+    panos: [{ ancho: 1.45, alto: 1.8 }],
+  };
+  const rows = asignarJuntoEnOrden(buildOptimizerRows([ventCol], cat));
+  const otObj = ot([ventCol]);
+  // Sobrante que calza por Regla 2 (alto 210 ∈ [205, 235]; ancho 178 ≥ 145).
+  const colmena: PanoColmena[] = [
+    { _docId: 's1', cod: 'SC 64', ancho: 178, alto: 210, ubicacion: 'A-27', tipo: 'SOBRANTE', creadoEn: '' },
+  ];
+  const hoja = construirHojaCorte(rows, colmena, otObj);
+
+  it('la cortina de colmena cuenta como paño y trae la columna COLMENA (ubic · medida)', () => {
+    expect(hoja.totalPanos).toBe(1);
+    expect(hoja.panos[0].colmena).toBe('A-27 · 178X210');
+  });
+
+  it('en la tabla de corte también sale con su medida y ubicación de colmena', () => {
+    expect(hoja.cortinas[0].medidaColmena).toBe('SC 64 (178X210)');
+    expect(hoja.cortinas[0].ubicColmena).toBe('A-27');
+  });
+
+  it('OPTIMIZADOR lista el COD de colmena con sus metros (la tabla no queda vacía)', () => {
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['SC 64']).toBe(2.05); // 1,8 + 0,25 de reserva
   });
 });
