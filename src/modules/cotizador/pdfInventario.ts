@@ -23,10 +23,18 @@ import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
-import { COD_PESO_AUTO, descripcionCadenaInventario, textoPesoCadenaInventario } from './cadenas';
+import {
+  COD_PESO_AUTO,
+  codCadenaAutoPorAlto,
+  derivarLargoColor,
+  descripcionCadenaInventario,
+  textoPesoCadenaInventario,
+  type CadenaInsumo,
+} from './cadenas';
 import { esCenefaCuadrada, OPCIONES_MECANISMO_RESOLUCION } from './fase2';
 import {
   categoriaRequiereMecanismo,
+  colorAccesoriosDePano,
   mecanismoParaPano,
   numeroMecDeChip,
 } from '@/modules/descuentos/chips';
@@ -124,7 +132,11 @@ function grupoInsumo(codigo: string | undefined, descripcion: string): GrupoInsu
  * tornillos, brackets, tarugos, suplementos, mecanismos, cadenas, peso de cadena
  * y el kit de motor (códigos DOM). La domótica agrega 1× DOM43 por OT.
  */
-export function consolidarInsumos(ventanas: Ventana[], filas: FilaCalculo[]): InsumoConsolidado[] {
+export function consolidarInsumos(
+  ventanas: Ventana[],
+  filas: FilaCalculo[],
+  cadenas: CadenaInsumo[] = [],
+): InsumoConsolidado[] {
   const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo }>();
   const bump = (codigo: string | undefined, descripcion: string, cantidad: number) => {
     const key = codigo || descripcion;
@@ -147,7 +159,19 @@ export function consolidarInsumos(ventanas: Ventana[], filas: FilaCalculo[]): In
           const cod = `MEC${String(num).padStart(2, '0')}`;
           bump(cod, `[${cod}] ${chip}`, 1);
         }
-        if (p.codCadena) bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1);
+        // Cadena: usa la elegida en Fase 2 (codCadena); si el paño no la guardó
+        // (OT no sincronizada en Fase 2), la resuelve por alto + color con el
+        // catálogo de cadenas — igual que Fase 2 — para que no falte en la hoja.
+        if (p.codCadena) {
+          bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1);
+        } else {
+          const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
+          const codCad = codCadenaAutoPorAlto(altoM, colorAccesoriosDePano(p, v.color), v.categoria, cadenas);
+          if (codCad) {
+            const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas);
+            bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1);
+          }
+        }
         // El peso de cadena es fijo (PCA04, transparente) para toda cortina de
         // cadena: se emite SIEMPRE, aunque el paño no lo tenga guardado — igual
         // que el mecanismo, que se resuelve en vivo. Si en Fase 2 se eligió otro
@@ -230,6 +254,9 @@ export function construirInventario(
   ventanas: Ventana[],
   catalogo: CatalogoProductos = {},
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  /** Catálogo de cadenas del inventario para resolver la cadena de paños sin
+   *  codCadena guardado (OT no sincronizada en Fase 2). Vacío = sin resolución. */
+  cadenas: CadenaInsumo[] = [],
 ): Inventario {
   const { filas } = construirCalculoGeneral(ventanas, catalogo, params);
   const filasInv: FilaInventario[] = filas.map((f, i) => ({
@@ -253,7 +280,7 @@ export function construirInventario(
   }));
   return {
     filas: filasInv,
-    insumos: consolidarInsumos(ventanas, filas),
+    insumos: consolidarInsumos(ventanas, filas, cadenas),
     etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
     notas: notasTerreno(ventanas),
   };
@@ -407,8 +434,9 @@ export function generarPdfInventario(
   catalogo: CatalogoProductos,
   meta: MetaInventario,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  cadenas: CadenaInsumo[] = [],
 ): void {
-  const data = construirInventario(ventanas, catalogo, params);
+  const data = construirInventario(ventanas, catalogo, params, cadenas);
   if (data.filas.length === 0) {
     throw new Error('No hay cortinas en la OT.');
   }

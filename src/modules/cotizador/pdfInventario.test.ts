@@ -109,6 +109,26 @@ describe('construirInventario', () => {
     expect(pca?.grupo).toBe('PRODUCCION');
     expect(pca?.descripcion).toBe('[PCA04] PESO PORTA CADENA TRANSPARENTE / CUADRADA 7.5 CM');
   });
+
+  it('sin codCadena guardado → resuelve la cadena por alto + color con el catálogo', () => {
+    const v = ventana('LIVING', 1.5, 2.0); // paño NEGRO, alto 2,0 → cadena 4 m
+    delete (v.panos![0] as { codCadena?: string }).codCadena; // OT no sincronizada en Fase 2
+    const cadenas = [
+      { cod: 'CAD05', nemotecnico: 'CADENA INFINITA 4 METROS NEGRA', color: 'NEGRO', status: 'OK' },
+    ];
+    const d = construirInventario([v], {}, undefined, cadenas);
+    const cad = d.insumos.find((i) => i.codigo === 'CAD05');
+    expect(cad?.cantidad).toBe(1);
+    expect(cad?.grupo).toBe('PRODUCCION');
+    expect(cad?.descripcion).toBe('[CAD05] CADENA INFINITA 4 METROS NEGRO');
+  });
+
+  it('sin codCadena y sin catálogo de cadenas → no inventa cadena (queda sin línea)', () => {
+    const v = ventana('LIVING', 1.5, 2.0);
+    delete (v.panos![0] as { codCadena?: string }).codCadena;
+    const d = construirInventario([v]); // sin catálogo de cadenas
+    expect(d.insumos.some((i) => (i.codigo || '').startsWith('CAD'))).toBe(false);
+  });
 });
 
 // Las manillas se consolidan por color al inicio del bloque INSUMOS, seguidas
