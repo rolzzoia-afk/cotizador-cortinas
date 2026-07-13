@@ -448,12 +448,14 @@ export function generarPdfHojaCorte(
     { label: 'ALTO MÁXIMO A UTILIZAR', w: 23, k: 'altoMaxUtilizar' as const },
     { label: 'COLMENA', w: 22, k: 'colmena' as const },
   ];
+  // COD. SERIAL va al mismo ancho que MOTIVO (38). cols3 debe caber en
+  // [t3x .. W−M] = 150..291 = 141 mm, así que se achican las vecinas.
   const cols3 = [
-    { label: 'PAÑO ADICIONAL', w: 26 },
-    { label: 'MTS PAÑO ADIC.', w: 20 },
-    { label: 'COD TELA', w: 18 },
+    { label: 'PAÑO ADICIONAL', w: 22 },
+    { label: 'MTS PAÑO ADIC.', w: 17 },
+    { label: 'COD. SERIAL', w: 38 },
     { label: 'MOTIVO', w: 38 },
-    { label: 'RESPONSABLE DE ERROR', w: 28 },
+    { label: 'RESPONSABLE DE ERROR', w: 25 },
   ];
   const t3x = 150;
   const rowH23 = 11.5;
@@ -464,24 +466,32 @@ export function generarPdfHojaCorte(
     rect(doc, M, y + 12, totalW, 18);
     celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 24.4, { size: 26, bold: true, fit: 'shrink' });
     y23Box = y + 30;
+    // Rótulo centrado en la celda de 12 mm: achica la fuente hasta que la
+    // palabra más larga entre (evita cortarla, p. ej. "PAÑOS") y decide 1 o 2
+    // líneas por el ANCHO real del texto, no por su cantidad de caracteres.
+    const rotulo = (label: string, tx: number, w: number) => {
+      const maxW = w - 1.5;
+      doc.setFont('helvetica', 'bold');
+      let sz = 8;
+      doc.setFontSize(sz);
+      const palabraMax = () => Math.max(...label.split(/\s+/).map((p) => doc.getTextWidth(p)));
+      while (sz > 5 && palabraMax() > maxW) {
+        sz -= 0.3;
+        doc.setFontSize(sz);
+      }
+      const unaLinea = doc.getTextWidth(label) <= maxW;
+      celdaTexto(doc, label, tx, w, y + (unaLinea ? 7.6 : 4.4), { size: sz, bold: true, color: C_WHITE });
+    };
     let tx = M + totalW + 1;
     for (const c of cols2) {
       rect(doc, tx, y, c.w, 12, C_DARK);
-      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 4.4 : 7.6), {
-        size: 8,
-        bold: true,
-        color: C_WHITE,
-      });
+      rotulo(c.label, tx, c.w);
       tx += c.w;
     }
     tx = t3x;
     for (const c of cols3) {
       rect(doc, tx, y, c.w, 12, C_DARK);
-      celdaTexto(doc, c.label, tx, c.w, y + (c.label.length > 14 ? 4.4 : 7.6), {
-        size: 8,
-        bold: true,
-        color: C_WHITE,
-      });
+      rotulo(c.label, tx, c.w);
       tx += c.w;
     }
     y += 12;
