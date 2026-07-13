@@ -31,7 +31,7 @@ import type {
   Validador,
   ValidadoresMap,
 } from './telas/Telas.types';
-import type { ColmenaPano } from '@/modules/admin/colmena';
+import { cargarTodosLosPanos, type ColmenaPano } from '@/modules/admin/colmena';
 import CatalogoTab from './telas/tabs/CatalogoTab';
 import ColmenaVivaTab from './telas/tabs/ColmenaVivaTab';
 import MovimientosTab from './telas/tabs/MovimientosTab';
@@ -79,12 +79,8 @@ export function Telas() {
           .eq('empresa_id', empresaId)
           .order('orden'),
         // Colmena viva (optimizador): retazos reales con medidas. Alimenta el
-        // tab "Colmena" — reemplaza al snapshot congelado de telas_slots.
-        supabase
-          .from('colmena_panos')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .order('codigo'),
+        // tab "Colmena". Paginado: la tabla supera las 1000 filas de PostgREST.
+        cargarTodosLosPanos(empresaId),
         // Mermas registradas (Reglas Rolzzo): sobrantes < 120×180 y bajas.
         supabase
           .from('telas_mermas')
@@ -97,7 +93,7 @@ export function Telas() {
       setTelas(telasData);
       setMovimientos((rMov.data as Movimiento[]) || []);
       setFallas((rFallas.data as Falla[]) || []);
-      setPanos((rPanos.data as ColmenaPano[]) || []);
+      setPanos(rPanos);
       setMermas((rMermas.data as Merma[]) || []);
 
       const vmap: ValidadoresMap = {};

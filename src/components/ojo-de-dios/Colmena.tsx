@@ -15,6 +15,7 @@ import {
   Search,
   Trash2,
   Undo2,
+  Upload,
   X,
 } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
@@ -35,6 +36,7 @@ import {
   type InventarioDiffRow,
   type TallyRow,
 } from '@/modules/admin/colmena';
+import ImportarColmenaDialog from '@/components/ojo-de-dios/ImportarColmenaDialog';
 
 type SubTab = 'tubos' | 'panos';
 
@@ -395,6 +397,7 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
   const [filtro, setFiltro] = useState('');
   const [filtroDisp, setFiltroDisp] = useState<'' | 'true' | 'false'>('');
   const [editando, setEditando] = useState<ColmenaPano | null>(null);
+  const [importando, setImportando] = useState(false);
 
   const filtrados = useMemo(() => {
     const q = filtro.toLowerCase();
@@ -438,8 +441,22 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
             <option value="true">Disponibles</option>
             <option value="false">Usados</option>
           </select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setImportando(true)}
+            className="h-8 gap-1 border-accent/40 text-accent hover:bg-accent/10"
+            title="Importar la colmena ROLZZO desde el Excel del galpón"
+          >
+            <Upload className="h-3.5 w-3.5" />
+            Importar colmena
+          </Button>
         </div>
       </div>
+
+      {importando && (
+        <ImportarColmenaDialog onClose={() => setImportando(false)} onSaved={ctx.refrescar} />
+      )}
       <div className="mb-2 text-xs text-muted-foreground">
         {panos.length} paños — {disponibles} disponibles, {usados} usados
       </div>
