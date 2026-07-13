@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import type { ColmenaPano } from '@/modules/admin/colmena';
 import {
   parsearContenidoCelda,
+  parsearNota,
   parsearMapaExcel,
   diffMapa,
   planAplicacion,
@@ -64,7 +65,10 @@ function celda(
   ancho: number | null = null,
   alto: number | null = null,
 ): CeldaMapa {
-  return { zona: 'GALPON', rack, m, col, cell: `X${rack}${m}${col}`, codigo, ancho, alto, raw: codigo };
+  return {
+    zona: 'GALPON', rack, m, col, cell: `X${rack}${m}${col}`,
+    codigo, ancho, alto, comentario: null, raw: codigo,
+  };
 }
 function parseoDe(celdas: CeldaMapa[]): ParseoMapa {
   return { celdas, zonas: ['GALPON'], hoja: 'Hoja1', advertencias: [] };
@@ -117,6 +121,27 @@ describe('normCodPano', () => {
   });
 });
 
+describe('parsearNota', () => {
+  it('extrae ANCHO/ALTO limpios de la nota (sin comentario)', () => {
+    const n = parsearNota('====== | ID#X | Autor | COD: BK 61 | ANCHO: 188 | ALTO: 250 | ¿ESTATUS?');
+    expect(n).toMatchObject({ ancho: 188, alto: 250, complejo: false, comentario: null });
+  });
+  it('funciona con saltos de línea', () => {
+    expect(parsearNota('COD: DU 12\nANCHO: 300\nALTO: 352')).toMatchObject({ ancho: 300, alto: 352 });
+  });
+  it('caso "2 paños": toma el primer alto y conserva el comentario completo', () => {
+    const txt = 'COD: SC 85\nANCHO: 300\nALTO: (2 PAÑOS)\n214\n129\n¿ESTATUS?';
+    const n = parsearNota(txt);
+    expect(n.ancho).toBe(300);
+    expect(n.alto).toBe(214); // el "2" de "(2 PAÑOS)" no se cuela
+    expect(n.complejo).toBe(true);
+    expect(n.comentario).toContain('2 PAÑOS');
+  });
+  it('nota vacía → todo nulo', () => {
+    expect(parsearNota('')).toMatchObject({ ancho: null, alto: null, complejo: false, comentario: null });
+  });
+});
+
 // ── parsearMapaExcel ─────────────────────────────────────────────────
 describe('parsearMapaExcel', () => {
   it('usa rótulos M como ancla de fila y deriva rack/col por posición', () => {
@@ -141,6 +166,24 @@ describe('parsearMapaExcel', () => {
     const p = parsearMapaExcel(wb);
     expect(p.celdas).toHaveLength(1);
     expect([p.celdas[0].rack, p.celdas[0].m, p.celdas[0].col]).toEqual([1, 1, 2]);
+  });
+
+  it('lee las medidas de la NOTA de la celda (el texto solo trae el código)', () => {
+    const wb = wbMapa([{ r: 17, c: 2, v: 'BK 61' }]); // sin medidas en el texto
+    const ws = wb.Sheets['Hoja1'] as Record<string, { c?: { t: string }[] } | undefined>;
+    ws['C18'] = { ...ws['C18'], c: [{ t: 'COD: BK 61\nANCHO: 188\nALTO: 250\n¿ESTATUS?' }] };
+    const p = parsearMapaExcel(wb);
+    expect(p.celdas[0]).toMatchObject({ codigo: 'BK 61', ancho: 188, alto: 250, comentario: null });
+  });
+
+  it('nota "2 paños": alto best-effort y conserva el comentario', () => {
+    const wb = wbMapa([{ r: 17, c: 2, v: 'SC 85' }]);
+    const ws = wb.Sheets['Hoja1'] as Record<string, { c?: { t: string }[] } | undefined>;
+    ws['C18'] = { ...ws['C18'], c: [{ t: 'COD: SC 85\nANCHO: 300\nALTO: (2 PAÑOS)\n214\n129' }] };
+    const p = parsearMapaExcel(wb);
+    expect(p.celdas[0].ancho).toBe(300);
+    expect(p.celdas[0].alto).toBe(214);
+    expect(p.celdas[0].comentario).toContain('2 PAÑOS');
   });
 
   it('con rótulos, ignora códigos en filas sin M', () => {
