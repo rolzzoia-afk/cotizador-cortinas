@@ -312,6 +312,7 @@ export function textoPesoCadenaInventario(
 const LARGO_DESCRIPCION: Record<string, string> = {
   '0.75': '80 CM',
   '1mts': '1,2 METROS',
+  '1.4mts': '1,4 METROS',
   '2.4mts': '2,4 METROS',
   '3mts': '3 METROS',
   '4mts': '4 METROS',

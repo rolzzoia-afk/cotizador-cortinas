@@ -37,6 +37,7 @@ import {
 import { construirHojaCorte, generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
 import { generarPdfCalculoGeneral, generarPdfDimensionado } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
+import { esCadenaRoller, type CadenaInsumo } from '@/modules/cotizador/cadenas';
 import { generarPlanCorte, rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
 import { deduccionesColmena, piezasColmenaSnapshot } from '@/modules/cotizador/colmenaCorte';
 import GuardarSobranteRolloDialog, {
@@ -137,18 +138,28 @@ export function CotizadorFase4() {
     empresa: empresaNombre ?? undefined,
   });
 
-  const onGenerarPDF = () => {
+  const onGenerarPDF = async () => {
     if (!ot || (ot.storeVentanas || []).length === 0) {
       toast.error('No hay ventanas en la OT.');
       return;
     }
     try {
       const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      // Catálogo de cadenas: si un paño no guardó su codCadena (OT que no pasó
+      // por Fase 2), el inventario la resuelve por alto + color con este catálogo.
+      let cadenas: CadenaInsumo[] = [];
+      if (empresaId) {
+        const { data } = await supabase
+          .from('insumos')
+          .select('cod,nemotecnico,color,status')
+          .eq('empresa_id', empresaId);
+        cadenas = ((data || []) as CadenaInsumo[]).filter((i) => esCadenaRoller(i.cod));
+      }
       generarPdfInventario(ventanas, catalogo, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
         empresa: empresaNombre ?? undefined,
-      }, parametros);
+      }, parametros, cadenas);
       toast.success('Hoja de inventario generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
