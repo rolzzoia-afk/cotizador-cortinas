@@ -85,6 +85,33 @@ export function parsearContenidoCelda(
 }
 
 // ── Parseo del libro ─────────────────────────────────────────────────
+/**
+ * Parsea la NOTA (comentario) de una celda del MAPA → medidas + comentario.
+ * Formato típico: "… | COD: BK 61 | ANCHO: 188 | ALTO: 250 | ¿ESTATUS? …".
+ * Las medidas del MAPA viven en la nota, no en el texto de la celda.
+ * Caso "2 paños" ("ALTO: (2 PAÑOS) 214 129"): `alto` = primer número (best-effort),
+ * `complejo=true` y se conserva la nota completa como comentario (pedido del usuario).
+ */
+export function parsearNota(texto: unknown): {
+  ancho: number | null;
+  alto: number | null;
+  comentario: string | null;
+  complejo: boolean;
+} {
+  const s = String(texto ?? '').replace(/\r/g, '');
+  if (!s.trim()) return { ancho: null, alto: null, comentario: null, complejo: false };
+  const plano = s.replace(/\n/g, ' ');
+  const mA = plano.match(/ANCHO:\s*(\d+(?:[.,]\d+)?)/i);
+  const ancho = mA ? aCm(mA[1]) : null;
+  const altoTxt = (plano.match(/ALTO:\s*(.*?)(?:¿|QUIEN\s+CARGA|$)/i)?.[1] ?? '').trim();
+  // Quita paréntesis ("(2 PAÑOS)") para que su número no se cuele como alto.
+  const sinParen = altoTxt.replace(/\([^)]*\)/g, ' ');
+  const nums = [...sinParen.matchAll(/\d+(?:[.,]\d+)?/g)].map((m) => m[0]);
+  const complejo = /\(|PAÑO/i.test(altoTxt) || nums.length > 1;
+  const alto = nums.length ? aCm(nums[0]) : null;
+  return { ancho, alto, comentario: complejo ? s.trim() : null, complejo };
+}
+
 export type CeldaMapa = {
   zona: string;
   rack: number;
@@ -95,6 +122,8 @@ export type CeldaMapa = {
   codigo: string;
   ancho: number | null;
   alto: number | null;
+  /** Nota de la celda a preservar (solo casos "2 paños"); null si medida limpia. */
+  comentario: string | null;
   /** Texto original de la celda (preview/diagnóstico). */
   raw: string;
 };
@@ -127,17 +156,13 @@ function refA1(filaIdx0: number, colIdx0: number): string {
 }
 
 /**
- * Parsea el libro del MAPA → celdas con coordenadas rack/m/col. Elige la hoja
- * con más contenido tipo código. Detecta rótulos M para anclar las filas; si no
- * hay, usa el offset calibrado. Zona = GALPON (histórico); ajustable si el Sheet
- * incorpora un bloque LIBERADO rotulado.
+ * Elige la hoja del MAPA y devuelve sus filas. Preferencia por nombre ("…(MAPA)"):
+ * el libro real trae hojas ROLZZO de 100k+ filas que no se deben recorrer. Si no
+ * hay ninguna con "MAPA" en el nombre, cae a puntuar por códigos pero solo las
+ * primeras filas de cada hoja (tope de seguridad). Compartida por el parser de
+ * GALPON y el de LIBERADO para garantizar que lean la MISMA hoja.
  */
-export function parsearMapaExcel(wb: WorkBook): ParseoMapa {
-  const advertencias: string[] = [];
-  // Elige la hoja del MAPA. Preferencia por nombre ("…(MAPA)"): el libro real
-  // trae hojas ROLZZO de 100k+ filas que no se deben recorrer. Si no hay ninguna
-  // con "MAPA" en el nombre, cae a puntuar por códigos pero solo las primeras
-  // filas de cada hoja (tope de seguridad).
+export function elegirHojaMapa(wb: WorkBook): { hoja: string; rows: unknown[][] } {
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
   const filasDe = (nombre: string): unknown[][] =>
     XLSX.utils.sheet_to_json(wb.Sheets[nombre], { header: 1, raw: false, defval: '' }) as unknown[][];
@@ -162,6 +187,18 @@ export function parsearMapaExcel(wb: WorkBook): ParseoMapa {
       }
     }
   }
+  return { hoja: mejorHoja, rows: mejorRows };
+}
+
+/**
+ * Parsea el libro del MAPA → celdas con coordenadas rack/m/col. Elige la hoja
+ * con más contenido tipo código. Detecta rótulos M para anclar las filas; si no
+ * hay, usa el offset calibrado. Zona = GALPON (histórico); ajustable si el Sheet
+ * incorpora un bloque LIBERADO rotulado.
+ */
+export function parsearMapaExcel(wb: WorkBook): ParseoMapa {
+  const advertencias: string[] = [];
+  const { hoja: mejorHoja, rows: mejorRows } = elegirHojaMapa(wb);
 
   const filasM = mapaFilasM(mejorRows);
   const usarLabels = filasM.size >= 2;
@@ -169,6 +206,10 @@ export function parsearMapaExcel(wb: WorkBook): ParseoMapa {
     if (usarLabels) return filasM.get(filaIdx0) ?? null; // fuera de la grilla → null
     return FILA_M1_DEFECTO - (filaIdx0 + 1) + 1; // 19 − filaXlsx
   };
+
+  // Worksheet real: las medidas del MAPA están en la NOTA de cada celda (.c),
+  // no en el texto; se leen del objeto de hoja, no de sheet_to_json.
+  const ws = wb.Sheets[mejorHoja] as Record<string, { c?: { t?: string }[] } | undefined>;
 
   const celdas: CeldaMapa[] = [];
   const vistos = new Set<string>();
@@ -191,6 +232,8 @@ export function parsearMapaExcel(wb: WorkBook): ParseoMapa {
         continue;
       }
       vistos.add(clave);
+      const notaTxt = (ws[refA1(i, j)]?.c ?? []).map((x) => x.t ?? '').join('\n');
+      const nota = parsearNota(notaTxt);
       celdas.push({
         zona: ZONA_MAPA_DEFECTO,
         rack,
@@ -198,8 +241,9 @@ export function parsearMapaExcel(wb: WorkBook): ParseoMapa {
         col,
         cell: refA1(i, j),
         codigo: parsed.codigo,
-        ancho: parsed.ancho,
-        alto: parsed.alto,
+        ancho: nota.ancho ?? parsed.ancho,
+        alto: nota.alto ?? parsed.alto,
+        comentario: nota.comentario,
         raw: String(fila[j] ?? '').replace(/\s+/g, ' ').trim(),
       });
     }
@@ -435,6 +479,7 @@ export function planAplicacion(
         cell: c.cell,
         fuente,
         creadoEn: ctx.ahoraISO,
+        ...(c.comentario ? { comentario: c.comentario } : {}),
       },
     }));
 
@@ -450,6 +495,7 @@ export function planAplicacion(
         cell: celda.cell,
         actualizadoEn: ctx.ahoraISO,
         fuente_actualizacion: fuente,
+        ...(celda.comentario ? { comentario: celda.comentario } : {}),
       },
     }));
 

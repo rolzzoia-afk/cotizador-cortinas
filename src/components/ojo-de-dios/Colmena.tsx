@@ -446,7 +446,7 @@ function PanosPanel({ ctx }: { ctx: ReturnType<typeof useColmenaPanos> }) {
             size="sm"
             onClick={() => setImportando(true)}
             className="h-8 gap-1 border-accent/40 text-accent hover:bg-accent/10"
-            title="Importar la colmena ROLZZO desde el Excel del galpón"
+            title="Importar la colmena (GALPÓN + LIBERADO + ROLZZO) desde el Excel del galpón"
           >
             <Upload className="h-3.5 w-3.5" />
             Importar colmena
