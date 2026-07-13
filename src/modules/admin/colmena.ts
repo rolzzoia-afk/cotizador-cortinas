@@ -238,6 +238,32 @@ export type PanoUpdate = {
   ot_asignada: string | null;
 };
 
+/**
+ * Trae TODOS los paños de la empresa PAGINANDO. PostgREST corta cada request en
+ * 1000 filas y colmena_panos supera ese tope (~1.750+), así que un `.select`
+ * simple truncaría la colmena (síntoma: "COLMENA 999 PAÑOS" en la vista). Lo usan
+ * la vista Colmena (Telas), el editor admin (useColmenaPanos) y el importador.
+ * Orden por codigo+id: estable para paginar y conserva el orden de la tabla admin.
+ */
+export async function cargarTodosLosPanos(empresaId: string): Promise<ColmenaPano[]> {
+  const PAGINA = 1000;
+  const todos: ColmenaPano[] = [];
+  for (let desde = 0; ; desde += PAGINA) {
+    const { data, error } = await supabase
+      .from('colmena_panos')
+      .select('*')
+      .eq('empresa_id', empresaId)
+      .order('codigo')
+      .order('id')
+      .range(desde, desde + PAGINA - 1);
+    if (error) throw error;
+    const lote = (data || []) as ColmenaPano[];
+    todos.push(...lote);
+    if (lote.length < PAGINA) break;
+  }
+  return todos;
+}
+
 export function useColmenaPanos(): {
   panos: ColmenaPano[];
   loading: boolean;
@@ -252,13 +278,7 @@ export function useColmenaPanos(): {
     if (!empresaId) return;
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('colmena_panos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .order('codigo');
-      if (error) throw error;
-      setPanos((data || []) as ColmenaPano[]);
+      setPanos(await cargarTodosLosPanos(empresaId));
     } finally {
       setLoading(false);
     }
