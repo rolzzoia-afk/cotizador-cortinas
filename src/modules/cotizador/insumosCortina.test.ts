@@ -90,6 +90,11 @@ describe('cantidadTarugos', () => {
   it('cenefa cuadrada: 1/bracket', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA', cenefa: 'Cuadrada a muro' }), 'ROL', 1.5)).toBe(3);
   });
+  it('dúo sin cenefa se fija con brackets → 4 tarugos como el roller (no 0)', () => {
+    expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(4);
+    expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'DUO_MOTOR_PEQUEÑO_38mm', 1.5)).toBe(4);
+    expect(cantidadTarugos(pano({ materialTipo: 'MADERA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(0);
+  });
 });
 
 describe('insumosDePano', () => {
@@ -132,6 +137,10 @@ describe('insumosDePano', () => {
     // Color fuera de mapa (MET): solo las 2 internas.
     const met = insumosDePano(pano({ color: 'MET' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
     expect(met.map((i) => i.codigo)).toEqual(['TAP13']);
+  });
+  it('dúo vulcanita sin cenefa → 4 tarugos TAR01 (además de las tapas dúo)', () => {
+    const out = insumosDePano(pano({ color: 'GRS', materialTipo: 'VULCANITA' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
+    expect(out.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(4);
   });
   it('suplemento SUB01: roller→2, cenefa ovalada 1,5 m→3 (brackets), override manual manda', () => {
     const roller = insumosDePano(pano({ color: 'BCO', suplementoTipo: 'SUB01' }), { categoria: 'ROL', anchoM: 1.5 });

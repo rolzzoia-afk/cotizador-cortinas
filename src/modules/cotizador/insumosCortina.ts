@@ -176,8 +176,9 @@ export function cantidadTarugos(
     return brackets * (aTecho ? 1 : 2);
   }
   if (esCenefaCuadrada(p.cenefa)) return brackets * 1;
-  // Roller sin cenefa: 4 tarugos.
-  return llevaTapasPeso(categoria) ? 4 : 0;
+  // Roller o dúo sin cenefa: 4 tarugos (se instalan con brackets al muro). El
+  // dúo no lleva tapas peso roller, pero igual se fija con tarugos.
+  return llevaTapasPeso(categoria) || esCategoriaDuo(categoria) ? 4 : 0;
 }
 
 /**
