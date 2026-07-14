@@ -53,6 +53,12 @@ const CAMPOS: CampoDef[] = [
     grupo: 'corte',
   },
   {
+    key: 'extraMesaDuoCm',
+    label: 'Extra mesa dúo (cm)',
+    hint: 'Dúo: ALTO MESA DE CORTE = alto + este valor (tela doblada en la mesa). Solo afecta el PDF Dimensionado.',
+    grupo: 'corte',
+  },
+  {
     key: 'extraVerticalCm',
     label: 'Extra vertical (cm)',
     hint: 'Reserva extra de alto para verticales en el plan de corte.',
