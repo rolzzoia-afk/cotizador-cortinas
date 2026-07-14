@@ -11,7 +11,39 @@ import {
   ubicPanoVentana,
 } from '@/modules/descuentos/adicionales-cenefa';
 import { esCategoriaBeeblack, normalizarVarianteBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import { codigoMotorDesdeAdicional, esAdicionalHubDomotica } from './insumosCortina';
 import type { CatalogoProductos, Pano, Ventana } from './types';
+
+// Clave de ubicación para el match de motor: sin espacios ni separadores, así
+// "LIVING IZQ.G1" del adicional calza con "LIVING IZQ-G1" de la ventana (el
+// vendedor a veces escribe punto donde va guion). Más laxa que
+// `normalizarUbicacion` (cenefas), a propósito.
+const claveUbicMotor = (u: string | undefined): string =>
+  (u || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/**
+ * Modelo de motor (DOM38/DOM41) de un adicional de Fase 0 cuya ubicación calza
+ * con la del paño; null si ninguno. Match ESTRICTO por ubicación (solo la
+ * cortina que coincide se motoriza), robusto a separadores.
+ */
+export function motorAdicionalParaUbic(
+  ubic: string,
+  adicionales: AdicionalFase0Persistido[] | undefined,
+): string | null {
+  const key = claveUbicMotor(ubic);
+  if (!key || !adicionales?.length) return null;
+  for (const a of adicionales) {
+    if (!(a.cantidad > 0)) continue;
+    const modelo = codigoMotorDesdeAdicional(a.codInt);
+    if (modelo && claveUbicMotor(a.ubicacion) === key) return modelo;
+  }
+  return null;
+}
+
+/** ¿La OT trae el hub de domótica (DOM43) entre sus adicionales de Fase 0? */
+export function otTraeHubDomotica(adicionales: AdicionalFase0Persistido[] | undefined): boolean {
+  return !!adicionales?.some((a) => a.cantidad > 0 && esAdicionalHubDomotica(a.codInt));
+}
 
 
 
@@ -253,6 +285,21 @@ export function enriquecerPanoDesdeFase0(
 
     }
 
+  }
+
+  // Motor: si la cotización trae un adicional-motor (DOM38/DOM41) en la MISMA
+  // ubicación del paño, precargar el modelo. Con motorModelo, la sección Motor
+  // de Fase 2 aparece y Fase 4/inventario emiten el kit (y dejan de emitir la
+  // cadena manual). Domótica si la OT trae el hub DOM43. Solo si el paño no
+  // tiene ya un motor elegido en terreno (no pisa ediciones manuales).
+  if (!pano.motorModelo && !pano.motorTipo) {
+    const modeloMotor = motorAdicionalParaUbic(ubic, opts?.adicionalesFase0);
+    if (modeloMotor) {
+      patch.motorModelo = modeloMotor;
+      if (!pano.motorDomotica && otTraeHubDomotica(opts?.adicionalesFase0)) {
+        patch.motorDomotica = true;
+      }
+    }
   }
 
   if (esCategoriaBeeblack(ventana.categoria)) {
