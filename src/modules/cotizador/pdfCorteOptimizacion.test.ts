@@ -95,6 +95,64 @@ describe('construirHojaCorte', () => {
   });
 });
 
+// El OPTIMIZADOR mide los metros a sacar del ROLLO: los paños que salen de
+// colmena ya están cortados, así que se descuentan (caso OT 3119: 3 rollers,
+// 1 de colmena → 5,85 baja a 3,90).
+describe('construirHojaCorte — OPTIMIZADOR descuenta los paños de colmena', () => {
+  const mkVent = (id: string, ancho: number): VentanaItem => ({
+    id,
+    ubicacion: id,
+    codInt: 'SC 64',
+    producto: 'ROLLER SCREEN PREMIUM',
+    tipo: 'PREMIUM',
+    categoria: 'ROL',
+    grupoId: null,
+    alto: 1.8,
+    precio: 0,
+    cantidad: 1,
+    panos: [{ ancho, alto: 1.8 }],
+  });
+  // 3 rollers del mismo COD_INT, anchos que NO caben lado a lado (1,6 + 1,6 >
+  // 2,98) → cada uno su propio paño, como en la OT 3119.
+  const ventanas = [mkVent('LIVING-IZQ', 1.6), mkVent('LIVING-CENT', 1.6), mkVent('LIVING-DER', 1.6)];
+  const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+
+  it('sin colmena: suma los 3 paños (3 × 2,05 = 6,15)', () => {
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['SC 64']).toBe(6.15);
+  });
+
+  it('con 1 paño de colmena: descuenta ese paño (6,15 − 2,05 = 4,10)', () => {
+    // Snapshot pieza→sobrante. La clave es `${otId}_${ventanaId}_p${panoIndex}`;
+    // acá la pieza de LIVING-IZQ (paño 0) sale de un sobrante de colmena.
+    const snap = {
+      'ot1_LIVING-IZQ_p0': { cod: 'MAPA M1-13', ancho: 255, alto: 202, ubic: 'RACK 1' },
+    };
+    const hoja = construirHojaCorte(rows, [], ot(ventanas), undefined, snap);
+    // El paño de colmena (LIVING-IZQ) NO aparece en TOTAL PAÑOS: quedan 2 de rollo.
+    expect(hoja.panos).toHaveLength(2);
+    expect(hoja.totalPanos).toBe(2);
+    expect(hoja.panos.every((p) => p.colmena === '')).toBe(true);
+    // Y su metraje se descuenta del OPTIMIZADOR.
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['SC 64']).toBe(4.1);
+  });
+
+  it('si TODOS los paños salen de colmena: TOTAL PAÑOS vacío (0) y OPTIMIZADOR en 0', () => {
+    const snap = {
+      'ot1_LIVING-IZQ_p0': { cod: 'M1', ancho: 255, alto: 202, ubic: '' },
+      'ot1_LIVING-CENT_p0': { cod: 'M2', ancho: 255, alto: 202, ubic: '' },
+      'ot1_LIVING-DER_p0': { cod: 'M3', ancho: 255, alto: 202, ubic: '' },
+    };
+    const hoja = construirHojaCorte(rows, [], ot(ventanas), undefined, snap);
+    expect(hoja.panos).toHaveLength(0);
+    expect(hoja.totalPanos).toBe(0);
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['SC 64']).toBe(0);
+  });
+});
+
 describe('construirHojaCorte — telas invertidas', () => {
   function ventBK(ancho: number, invertida?: boolean): VentanaItem {
     return {
@@ -240,10 +298,10 @@ describe('construirHojaCorte — snapshot de colmena (#26)', () => {
   });
 });
 
-// La cortina sale ENTERA de colmena (sobrante). Antes el bloque TOTAL PAÑOS la
-// filtraba y quedaba en 0 (OT 267-14). Ahora aparece como paño, marcada en la
-// columna COLMENA, y su COD también se lista en el OPTIMIZADOR (no queda vacío).
-describe('construirHojaCorte — paño de colmena en TOTAL PAÑOS (OT 267-14)', () => {
+// La cortina sale ENTERA de colmena (sobrante). Ya está cortada, así que NO va a
+// la tabla TOTAL PAÑOS (no se corta del rollo); sí aparece en la tabla de corte
+// de arriba con su columna COLMENA. Su COD se lista en el OPTIMIZADOR con 0.
+describe('construirHojaCorte — paño de colmena NO va a TOTAL PAÑOS (OT 267-14)', () => {
   const ventCol: VentanaItem = {
     id: 'vcol', ubicacion: 'Living', codInt: 'SC 64', producto: 'ROLLER SCREEN PREMIUM',
     tipo: 'PREMIUM', categoria: 'ROL', grupoId: null, alto: 1.8, precio: 0, cantidad: 1,
@@ -257,18 +315,19 @@ describe('construirHojaCorte — paño de colmena en TOTAL PAÑOS (OT 267-14)', 
   ];
   const hoja = construirHojaCorte(rows, colmena, otObj);
 
-  it('la cortina de colmena cuenta como paño y trae la columna COLMENA (ubic · medida)', () => {
-    expect(hoja.totalPanos).toBe(1);
-    expect(hoja.panos[0].colmena).toBe('A-27 · 178X210');
+  it('la cortina de colmena NO aparece en TOTAL PAÑOS (se corta de sobrante, no del rollo)', () => {
+    expect(hoja.totalPanos).toBe(0);
+    expect(hoja.panos).toHaveLength(0);
   });
 
-  it('en la tabla de corte también sale con su medida y ubicación de colmena', () => {
+  it('pero sí sale en la tabla de corte, con su medida y ubicación de colmena', () => {
     expect(hoja.cortinas[0].medidaColmena).toBe('SC 64 (178X210)');
     expect(hoja.cortinas[0].ubicColmena).toBe('A-27');
   });
 
-  it('OPTIMIZADOR lista el COD de colmena con sus metros (la tabla no queda vacía)', () => {
+  it('OPTIMIZADOR lista el COD aunque su paño sea de colmena, pero con 0 metros (descontado del rollo)', () => {
     const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
-    expect(m['SC 64']).toBe(2.05); // 1,8 + 0,25 de reserva
+    // Único paño y sale de colmena → 0 metros de rollo, pero la fila igual aparece.
+    expect(m['SC 64']).toBe(0);
   });
 });
