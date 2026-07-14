@@ -51,7 +51,8 @@ export type CampoFase0 = 'codInt' | 'categoria' | 'direccion' | 'sentido' | 'anc
 
 // Normaliza un encabezado: mayúsculas, sin acentos, solo alfanumérico.
 // Así "DIRECC. CAD/CIERRE" → "DIRECCCADCIERRE" y "UBIC." → "UBIC".
-const norm = (s: unknown): string =>
+// Exportado para reusar en otros importadores (ej. importarExcelJefe.ts).
+export const norm = (s: unknown): string =>
   String(s ?? '')
     .toUpperCase()
     .normalize('NFD')
@@ -73,7 +74,8 @@ const COLUMNAS: Record<string, keyof FilaImportadaFase0> = {
 
 // Convierte un valor de medida es-CL a número en metros.
 // La coma es SIEMPRE separador decimal; el punto (si coexiste) es de miles.
-function metros(v: unknown): number {
+// Exportado para reusar en otros importadores (ej. importarExcelJefe.ts).
+export function metros(v: unknown): number {
   if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
   let s = String(v ?? '').trim();
   if (!s) return 0;
