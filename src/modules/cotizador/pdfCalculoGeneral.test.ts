@@ -118,6 +118,37 @@ describe('construirCalculoGeneral', () => {
     expect(data.bloques.some((b) => b.sistema.key === 'SOFT')).toBe(false);
     expect(data.bloques.some((b) => b.sistema.key === 'OSCU')).toBe(false);
   });
+
+  it('CENEFA OVALADA se divide por tira: "(CON TIRA)" / "(SIN TIRA)" según el paño', () => {
+    const modeloCenefa: ModeloDespiece = { ...modeloRoller, dcto_cenefa_cm: 1.5 };
+    const conTira = ventRoller(1.45, 'PIEZA 1');
+    conTira.modelo = modeloCenefa;
+    conTira.panos![0].cenefa = 'Ovalada';
+    conTira.panos![0].cenefaTira = 'CON TIRA';
+    const sinTira = ventRoller(1.2, 'PIEZA 2');
+    sinTira.modelo = modeloCenefa;
+    sinTira.panos![0].cenefa = 'Ovalada';
+    sinTira.panos![0].cenefaTira = 'SIN TIRA';
+    const data = construirCalculoGeneral([conTira, sinTira]);
+    // La medida es la misma fórmula (ancho − 1,5); solo cambia la etiqueta.
+    expect(data.filas[0].despiece.get('CENEFA OVALADA (CON TIRA)')).toBe(143.5); // 145 − 1,5
+    expect(data.filas[0].despiece.has('CENEFA OVALADA (SIN TIRA)')).toBe(false);
+    expect(data.filas[1].despiece.get('CENEFA OVALADA (SIN TIRA)')).toBe(118.5); // 120 − 1,5
+    // El bloque ROLLER trae ambas columnas y ya no la etiqueta genérica.
+    const labels = data.bloques[0].columnas.map((c) => c.label);
+    expect(labels).toContain('CENEFA OVALADA (CON TIRA)');
+    expect(labels).toContain('CENEFA OVALADA (SIN TIRA)');
+    expect(labels).not.toContain('CENEFA OVALADA');
+  });
+
+  it('paño ovalado sin tira definida → cae en "(SIN TIRA)" por defecto', () => {
+    const modeloCenefa: ModeloDespiece = { ...modeloRoller, dcto_cenefa_cm: 1.5 };
+    const v = ventRoller(1.45, 'PIEZA 1');
+    v.modelo = modeloCenefa;
+    v.panos![0].cenefa = 'Ovalada';
+    const [f] = construirCalculoGeneral([v]).filas;
+    expect(f.despiece.get('CENEFA OVALADA (SIN TIRA)')).toBe(143.5);
+  });
 });
 
 // DIMENSIONADO: la misma hoja pero solo con lo que usa la mesa de tela.
@@ -150,6 +181,8 @@ describe('aplicarVariante — DIMENSIONADO', () => {
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('PESO INTERNO (E13)')).toBe(true);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('PESO U (LÁGRIMA)')).toBe(true);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA')).toBe(true);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA (CON TIRA)')).toBe(true);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA (SIN TIRA)')).toBe(true);
     // Pero no toca otros componentes.
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CIERRE DE ALTURA')).toBe(false);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA DELANTERA')).toBe(false);
