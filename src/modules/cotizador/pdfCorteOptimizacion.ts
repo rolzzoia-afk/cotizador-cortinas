@@ -174,9 +174,10 @@ export function construirHojaCorte(
     grupos.get(k)!.rows.push(r);
   });
   const panos: FilaPanoResumen[] = [];
-  // Metros de tela por COD_INT para el OPTIMIZADOR: alto de corte (≈2,05) por
-  // cada paño, sea de rollo o de colmena (la cortadora igual corta y verifica
-  // esa cortina). La columna COLMENA del resumen marca cuáles salen de sobrante.
+  // Metros de tela por COD_INT para el OPTIMIZADOR = lo que hay que sacar del
+  // ROLLO: los paños que salen de COLMENA ya están cortados y NO suman. Igual se
+  // registra el COD_INT (en 0 si todos sus paños son de colmena) para que su fila
+  // no desaparezca del resumen. La columna COLMENA marca cuáles salen de sobrante.
   const metrosPorCod = new Map<string, number>();
   for (const { rows: grupo, pano } of grupos.values()) {
     const ref = grupo[0];
@@ -197,22 +198,30 @@ export function construirHojaCorte(
         break;
       }
     }
-    panos.push({
-      pano,
-      tipo: ref.producto,
-      cod: ref.codInt,
-      altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
-      altoMaxUtilizar: inv ? '' : altoMax,
-      invertida: inv,
-      colmena,
-    });
-    // Todos los paños (rollo y colmena) suman al OPTIMIZADOR: nunca queda vacío
-    // habiendo cortinas. La reserva por paño = "alto máximo a utilizar".
-    metrosPorCod.set(ref.codInt, (metrosPorCod.get(ref.codInt) || 0) + (inv ? corteReal : altoMax));
+    // Los paños que salen de COLMENA no van a la tabla TOTAL PAÑOS: ya están
+    // cortados, la cortadora no los corta del rollo. (Igual aparecen en la tabla
+    // de corte de arriba, con su columna COLMENA.) Así TOTAL PAÑOS cuenta solo
+    // los paños a cortar del rollo.
+    if (!colmena) {
+      panos.push({
+        pano,
+        tipo: ref.producto,
+        cod: ref.codInt,
+        altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
+        altoMaxUtilizar: inv ? '' : altoMax,
+        invertida: inv,
+        colmena,
+      });
+    }
+    // Solo los paños de ROLLO suman al OPTIMIZADOR (los de colmena ya están
+    // cortados). El COD_INT se registra igual —aunque sume 0— para que su fila no
+    // desaparezca. La reserva por paño de rollo = "alto máximo a utilizar".
+    const acumulado = metrosPorCod.get(ref.codInt) || 0;
+    metrosPorCod.set(ref.codInt, acumulado + (colmena ? 0 : inv ? corteReal : altoMax));
   }
   panos.sort((a, b) => a.pano - b.pano);
 
-  // ── Bloque 4: metros de tela por COD_INT (rollo + colmena). ──
+  // ── Bloque 4: metros de tela por COD_INT (solo rollo; colmena descontada). ──
   const optimizador: MetrosOptimizador[] = [...metrosPorCod.entries()].map(([codInt, metros]) => ({
     codInt,
     metros: parseFloat(metros.toFixed(3)),
@@ -319,7 +328,7 @@ export function generarPdfHojaCorte(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
     doc.setTextColor(30, 30, 38);
-    doc.text(`HOJA DE CORTE — OT ${meta.ot}`, M, y + 4);
+    doc.text(`HOJA DE CORTE PAÑO — OT ${meta.ot}`, M, y + 4);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text(meta.cliente || '', M, y + 9);
