@@ -5,9 +5,12 @@
 //   1. Detalle por cortina (identidad: producto/tipo/mecanismo/tubería/
 //      accionamiento/peso cadena/ubic/medidas, con descripciones completas)
 //      — reusa la identidad del Cálculo general (mismo motor de datos).
-//   2. INSUMOS: consolidados con cantidad/adicional/total — manillas, tapas de
-//      peso, tornillos, brackets, tarugos de vulcanita y kit de motor (códigos
-//      DOM). Solo se imprime si la OT lleva algún insumo.
+//   2. INSUMOS consolidados en TRES tablas por destino: «INSUMOS» (tapas de
+//      peso, tornillos, tarugos, suplementos), «INSUMOS DE PRODUCCIÓN» (taller:
+//      mecanismo de cenefa ovalada + el motor de cortinas ovaladas) e «INSUMOS
+//      DE INSTALACIÓN» (terreno: manillas, brackets, cadena, peso de cadena,
+//      resto del kit de motor, tapa de cenefa cuadrada, etc.). Cada tabla se
+//      imprime solo si tiene filas.
 //   3. ETIQUETAS ROLZZO: una fila por código según color de accesorios
 //      (blancos/grises → INS 95-1 blanca; resto → INS 95 negra), 1 por paño.
 //   4. NOTAS DE TERRENO: lo que el vendedor anotó en Fase 2 (retiro,
@@ -42,9 +45,12 @@ import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
   COD_HUB_DOMOTICA,
   NOMBRE_HUB_DOMOTICA,
+  esCenefaOvalada,
+  esCodigoMotor,
   insumosDePano,
   insumosMotorDePano,
   panoLlevaDomotica,
+  tapaCenefaCuadrada,
 } from './insumosCortina';
 
 type RGB = [number, number, number];
@@ -65,8 +71,9 @@ export type FilaInventario = {
 
 export type NotaTerreno = { ubic: string; notas: string };
 
-/** Grupo de la tabla de insumos: producción (taller) o instalación (terreno). */
-export type GrupoInsumo = 'PRODUCCION' | 'INSTALACION';
+/** Tabla de destino del insumo: bodega (INSUMOS), taller (PRODUCCION) o
+ *  terreno (INSTALACION). */
+export type GrupoInsumo = 'INSUMOS' | 'PRODUCCION' | 'INSTALACION';
 
 /** Insumo consolidado para la tabla de entrega de material (manillas, tapas de
  *  peso, tornillos, brackets, tarugos, motor…). `codigo` opcional (manillas y
@@ -110,27 +117,35 @@ export function consolidarManillas(filas: FilaCalculo[]): { descripcion: string;
 }
 
 /**
- * Grupo de un insumo: PRODUCCIÓN (se arma en el taller) = tapas, tornillos de
- * tapas (TOR02), cadenas (CAD), peso de cadena (PCA) y mecanismos de cenefa
- * ovalada. INSTALACIÓN (terreno) = todo lo demás: brackets, tarugos, suplementos,
- * motor (DOM), manillas y los mecanismos simples/reforzados/dual/63 mm.
+ * Tabla de destino de un insumo por su código:
+ *  • INSUMOS (bodega): tapas de peso (TAP), tornillos (TOR), tarugos (TAR),
+ *    suplementos (SUB). Excepción: la tapa de cenefa cuadrada (TAP32/33/34) se
+ *    coloca en terreno y su emisión la fuerza a INSTALACIÓN (ver override abajo).
+ *  • PRODUCCIÓN (taller): mecanismo de cenefa ovalada (MEC + "OVALADA"). El
+ *    motor de una cortina ovalada también, pero eso se decide en
+ *    `consolidarInsumos` con el contexto del paño (ver override).
+ *  • INSTALACIÓN (terreno): todo lo demás — manillas, brackets, cadena (CAD),
+ *    peso de cadena (PCA), resto del kit de motor (DOM), mecanismos simples,
+ *    tapa de cenefa cuadrada, etc.
  */
 function grupoInsumo(codigo: string | undefined, descripcion: string): GrupoInsumo {
   const c = (codigo || '').toUpperCase();
   const d = descripcion.toUpperCase();
-  if (c.startsWith('TAP')) return 'PRODUCCION';
-  if (c === 'TOR02') return 'PRODUCCION';
-  if (c.startsWith('CAD') || c.startsWith('PCA')) return 'PRODUCCION';
-  if (c.startsWith('MEC')) return d.includes('OVALADA') ? 'PRODUCCION' : 'INSTALACION';
-  if (!c && d.includes('TAPA CENEFA CUADRADA')) return 'PRODUCCION';
+  if (c.startsWith('TAP') || c.startsWith('TOR') || c.startsWith('TAR') || c.startsWith('SUB')) {
+    return 'INSUMOS';
+  }
+  if (c.startsWith('MEC') && d.includes('OVALADA')) return 'PRODUCCION';
   return 'INSTALACION';
 }
 
 /**
  * Todos los insumos de la OT consolidados para la hoja de inventario, ya
- * clasificados en PRODUCCIÓN / INSTALACIÓN: manillas (por color), tapas de peso,
- * tornillos, brackets, tarugos, suplementos, mecanismos, cadenas, peso de cadena
- * y el kit de motor (códigos DOM). La domótica agrega 1× DOM43 por OT.
+ * clasificados en INSUMOS / PRODUCCIÓN / INSTALACIÓN: manillas (por color), tapas
+ * de peso, tornillos, brackets, tarugos, suplementos, mecanismos, cadenas, peso
+ * de cadena y el kit de motor (códigos DOM). La domótica agrega 1× DOM43 por OT.
+ * Además del grupo por código (`grupoInsumo`), hay overrides contextuales por
+ * cortina: en una cenefa ovalada, su MECANISMO, su CADENA y su MOTOR van a
+ * PRODUCCIÓN (aunque su código caería en otra tabla).
  */
 export function consolidarInsumos(
   ventanas: Ventana[],
@@ -138,11 +153,21 @@ export function consolidarInsumos(
   cadenas: CadenaInsumo[] = [],
 ): InsumoConsolidado[] {
   const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo }>();
-  const bump = (codigo: string | undefined, descripcion: string, cantidad: number) => {
-    const key = codigo || descripcion;
+  // `grupoOverride` fuerza la tabla (el motor de una cortina ovalada va a
+  // PRODUCCIÓN aunque su código DOM caiga por defecto en INSTALACIÓN). La clave
+  // del acumulador incluye el grupo para que un mismo código pueda quedar en dos
+  // tablas (ej. DOM38 en un paño ovalado y en uno normal) sin consolidarse.
+  const bump = (
+    codigo: string | undefined,
+    descripcion: string,
+    cantidad: number,
+    grupoOverride?: GrupoInsumo,
+  ) => {
+    const grupo = grupoOverride ?? grupoInsumo(codigo, descripcion);
+    const key = `${grupo}|${codigo || descripcion}`;
     const prev = acc.get(key);
     if (prev) prev.cantidad += cantidad;
-    else acc.set(key, { codigo, descripcion, cantidad, grupo: grupoInsumo(codigo, descripcion) });
+    else acc.set(key, { codigo, descripcion, cantidad, grupo });
   };
   let llevaDomotica = false;
   for (const v of ventanas) {
@@ -151,10 +176,15 @@ export function consolidarInsumos(
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const tieneMotor = !!(p.motorModelo || p.motorTipo) || (v.categoria || '').toUpperCase().includes('MOTOR');
 
-      // Mecanismo + cadena + peso (producción): solo roller manual con mecanismo.
+      // Mecanismo + cadena + peso: solo roller manual con mecanismo.
       if (!tieneMotor && categoriaRequiereMecanismo(v.categoria)) {
         const chip = mecanismoParaPano(p, v.color, modelo, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM);
         const num = numeroMecDeChip(chip);
+        // Una cortina con mecanismo de cenefa ovalada se arma en el taller: su
+        // mecanismo Y su cadena van a PRODUCCIÓN. El resto de cadenas, a
+        // INSTALACIÓN (grupo por defecto).
+        const grupoOvalada: GrupoInsumo | undefined =
+          chip && chip.toUpperCase().includes('OVALADA') ? 'PRODUCCION' : undefined;
         if (chip && num != null) {
           const cod = `MEC${String(num).padStart(2, '0')}`;
           bump(cod, `[${cod}] ${chip}`, 1);
@@ -163,13 +193,13 @@ export function consolidarInsumos(
         // (OT no sincronizada en Fase 2), la resuelve por alto + color con el
         // catálogo de cadenas — igual que Fase 2 — para que no falte en la hoja.
         if (p.codCadena) {
-          bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1);
+          bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
         } else {
           const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
           const codCad = codCadenaAutoPorAlto(altoM, colorAccesoriosDePano(p, v.color), v.categoria, cadenas);
           if (codCad) {
             const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas);
-            bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1);
+            bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1, grupoOvalada);
           }
         }
         // El peso de cadena es fijo (PCA04, transparente) para toda cortina de
@@ -183,22 +213,34 @@ export function consolidarInsumos(
       for (const ins of insumosDePano(p, { categoria: v.categoria, ventanaColor: v.color, anchoM })) {
         bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
       }
+      // El MOTOR de una cortina con cenefa ovalada va a PRODUCCIÓN; el resto del
+      // kit (control, cable, enchufe) y los motores de cortinas normales, a
+      // INSTALACIÓN (grupo por defecto).
+      const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
       const motorInsumos = insumosMotorDePano(p, v.categoria);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
-          bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
+          const grupo = ovalada && esCodigoMotor(ins.codigo) ? 'PRODUCCION' : undefined;
+          bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad, grupo);
         }
       } else if (p.motorModelo || p.motorTipo) {
         // Motor legacy o 'CABLE' futuro (sin código DOM): línea genérica, para que
         // el motor no se pierda de la hoja de entrega (el BOM también lo lista así).
         const etiqueta = (p.motorTipo || (p.motorModelo === 'CABLE' ? 'CON CABLE' : '')).trim();
-        bump(undefined, etiqueta ? `MOTOR ${etiqueta}` : 'MOTOR', 1);
+        bump(undefined, etiqueta ? `MOTOR ${etiqueta}` : 'MOTOR', 1, ovalada ? 'PRODUCCION' : undefined);
       }
       if (panoLlevaDomotica(p)) llevaDomotica = true;
-      // Tapa de cenefa cuadrada (sin código de insumo): 1 o 2 según cenefaTapa.
+      // Tapa de cenefa cuadrada: 1 o 2 según cenefaTapa. Lleva código por color
+      // (TAP32 negro / TAP33 blanco / TAP34 café) para que bodega enlace stock,
+      // pero se FUERZA a INSTALACIÓN (se coloca en terreno): su código TAP caería
+      // en INSUMOS por defecto. Gris u otro color sale sin código.
       if (esCenefaCuadrada(p.cenefa)) {
         const n = p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
-        if (n > 0) bump(undefined, `TAPA CENEFA CUADRADA ${p.colorTapa || ''}`.trim(), n);
+        if (n > 0) {
+          const tapa = tapaCenefaCuadrada(p.colorTapa);
+          const desc = tapa.codigo ? `[${tapa.codigo}] ${tapa.descripcion}` : tapa.descripcion;
+          bump(tapa.codigo, desc, n, 'INSTALACION');
+        }
       }
     }
   }
@@ -487,7 +529,7 @@ export function generarPdfInventario(
     },
   };
 
-  // ── INSUMOS: dos tablas (PRODUCCIÓN / INSTALACIÓN) consolidadas + entrega.
+  // ── INSUMOS: tres tablas (INSUMOS / PRODUCCIÓN / INSTALACIÓN) consolidadas.
   // La antigua tabla "detalle por cortina" se eliminó (pedido #20). Cada tabla
   // se imprime solo si tiene filas; el título salta con su cabecera y ≥1 fila.
   const titH = 9;
@@ -532,6 +574,7 @@ export function generarPdfInventario(
     ]);
     y = tabla(doc, mg, y, cols2, rows2, { rowH: 11.5, greenCol: 4, salto });
   };
+  bloqueInsumos('INSUMOS', data.insumos.filter((m) => m.grupo === 'INSUMOS'));
   bloqueInsumos('INSUMOS DE PRODUCCIÓN', data.insumos.filter((m) => m.grupo === 'PRODUCCION'));
   bloqueInsumos('INSUMOS DE INSTALACIÓN', data.insumos.filter((m) => m.grupo === 'INSTALACION'));
 

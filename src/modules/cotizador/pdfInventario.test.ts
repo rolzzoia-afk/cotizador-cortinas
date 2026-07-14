@@ -74,12 +74,12 @@ describe('construirInventario', () => {
     expect(map.MEC32).toBe(2);
     expect(map['CAD 03']).toBe(2);
     expect(map.PCA04).toBe(2);
-    // Producción: tapas/tornillos/cadena/peso. Instalación: el kit simple.
+    // INSUMOS (bodega): tapas + tornillos. INSTALACIÓN: cadena, peso y kit simple.
     const grupo = (c: string) => data.insumos.find((i) => i.codigo === c)?.grupo;
-    expect(grupo('TAP04')).toBe('PRODUCCION');
-    expect(grupo('TOR02')).toBe('PRODUCCION');
-    expect(grupo('CAD 03')).toBe('PRODUCCION');
-    expect(grupo('PCA04')).toBe('PRODUCCION');
+    expect(grupo('TAP04')).toBe('INSUMOS');
+    expect(grupo('TOR02')).toBe('INSUMOS');
+    expect(grupo('CAD 03')).toBe('INSTALACION');
+    expect(grupo('PCA04')).toBe('INSTALACION');
     expect(grupo('MEC32')).toBe('INSTALACION');
   });
 
@@ -100,13 +100,13 @@ describe('construirInventario', () => {
     expect(d.filas[0].pesoCadena).toBe('');
   });
 
-  it('sin codPeso guardado → la tabla INSUMOS igual emite el peso PCA04 (fijo)', () => {
+  it('sin codPeso guardado → igual emite el peso PCA04 (fijo, va a instalación)', () => {
     const v = ventana('LIVING', 1.5, 2.0);
     delete (v.panos![0] as { codPeso?: string }).codPeso; // OT no sincronizada en Fase 2
     const d = construirInventario([v]);
     const pca = d.insumos.find((i) => i.codigo === 'PCA04');
     expect(pca?.cantidad).toBe(1);
-    expect(pca?.grupo).toBe('PRODUCCION');
+    expect(pca?.grupo).toBe('INSTALACION');
     expect(pca?.descripcion).toBe('[PCA04] PESO PORTA CADENA TRANSPARENTE / CUADRADA 7.5 CM');
   });
 
@@ -119,7 +119,7 @@ describe('construirInventario', () => {
     const d = construirInventario([v], {}, undefined, cadenas);
     const cad = d.insumos.find((i) => i.codigo === 'CAD05');
     expect(cad?.cantidad).toBe(1);
-    expect(cad?.grupo).toBe('PRODUCCION');
+    expect(cad?.grupo).toBe('INSTALACION');
     expect(cad?.descripcion).toBe('[CAD05] CADENA INFINITA 4 METROS NEGRO');
   });
 
@@ -156,7 +156,7 @@ describe('construirInventario — bloque INSUMOS', () => {
     ]);
   });
 
-  it('cenefa cuadrada CON_2_TAPAS → línea "TAPA CENEFA CUADRADA {color}" ×2 + brackets', () => {
+  it('cenefa cuadrada CON_2_TAPAS → "[TAP32] TAPA CENEFA CUADRADA NEGRO" ×2 + brackets', () => {
     const v = {
       id: 'x',
       ubicacion: 'LIVING',
@@ -170,13 +170,39 @@ describe('construirInventario — bloque INSUMOS', () => {
       }],
     } as unknown as Ventana;
     const d = construirInventario([v]);
-    const tapa = d.insumos.find((i) => i.descripcion === 'TAPA CENEFA CUADRADA NEG');
+    const tapa = d.insumos.find((i) => i.codigo === 'TAP32');
+    expect(tapa?.descripcion).toBe('[TAP32] TAPA CENEFA CUADRADA NEGRO');
     expect(tapa?.cantidad).toBe(2);
-    // Cenefa cuadrada a techo → BRA04 × cantidadBrackets(1,5) = 3.
-    expect(d.insumos.find((i) => i.codigo === 'BRA04')?.cantidad).toBe(3);
+    expect(tapa?.grupo).toBe('INSTALACION'); // tapa cenefa cuadrada → instalación pese a código TAP
+    // Cenefa cuadrada a techo → BRA04 × cantidadBrackets(1,5) = 3, instalación.
+    const bra = d.insumos.find((i) => i.codigo === 'BRA04');
+    expect(bra?.cantidad).toBe(3);
+    expect(bra?.grupo).toBe('INSTALACION');
   });
 
-  it('motor DOM41 + domótica → kit DOM (sin DOM40) + 1 DOM43 por OT', () => {
+  it('tapa cenefa cuadrada: código por color (BCO→TAP33, CAFÉ→TAP34); color desconocido sin código', () => {
+    const mk = (colorTapa: string) =>
+      ({
+        id: 'c' + colorTapa, ubicacion: 'LIVING', producto: 'ROLLER BLACKOUT', categoria: 'ROL', color: 'BLANCO',
+        modelo: modeloCenefa,
+        panos: [{ ancho: 1.2, alto: 2.0, cenefa: 'Cuadrada a muro', cenefaTapa: 'CON_1_TAPA', colorTapa }],
+      }) as unknown as Ventana;
+    const bco = construirInventario([mk('BCO')]).insumos.find((i) => i.codigo === 'TAP33');
+    expect(bco?.descripcion).toBe('[TAP33] TAPA CENEFA CUADRADA BLANCO');
+    expect(bco?.grupo).toBe('INSTALACION');
+    const cafe = construirInventario([mk('CAFÉ')]).insumos.find((i) => i.codigo === 'TAP34');
+    expect(cafe?.descripcion).toBe('[TAP34] TAPA CENEFA CUADRADA CAFÉ');
+    expect(cafe?.grupo).toBe('INSTALACION');
+    // Defensivo: un color fuera de catálogo (dato legacy) sale sin código, igual
+    // en instalación. La tapa cuadrada solo existe en negro/blanco/café.
+    const otro = construirInventario([mk('VERDE')]).insumos.find((i) =>
+      i.descripcion.includes('TAPA CENEFA CUADRADA'),
+    );
+    expect(otro?.codigo).toBeUndefined();
+    expect(otro?.grupo).toBe('INSTALACION');
+  });
+
+  it('motor DOM41 + domótica (sin ovalada) → kit DOM (sin DOM40) en INSTALACIÓN + 1 DOM43 por OT', () => {
     const v = {
       id: 'm', ubicacion: 'DORM', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloCenefa,
@@ -186,8 +212,81 @@ describe('construirInventario — bloque INSUMOS', () => {
     const codes = d.insumos.map((i) => i.codigo);
     expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM04', 'DOM43']));
     expect(codes).not.toContain('DOM40'); // #28: el DOM41 no lleva cable
+    // Sin cenefa ovalada, todo el kit va a INSTALACIÓN (incluido el motor).
+    const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
+    expect(grupo('DOM41')).toBe('INSTALACION');
+    expect(grupo('DOM42')).toBe('INSTALACION');
     // DOM43 aparece una sola vez.
     expect(d.insumos.filter((i) => i.codigo === 'DOM43')).toHaveLength(1);
+  });
+});
+
+// Cenefa ovalada: el motor y el mecanismo van a PRODUCCIÓN; el resto del kit de
+// motor (control/cable/enchufe) sigue en INSTALACIÓN.
+describe('construirInventario — clasificación por cenefa ovalada', () => {
+  it('motor de cortina ovalada → PRODUCCIÓN; control/cable/enchufe → INSTALACIÓN', () => {
+    const v = {
+      id: 'ov', ubicacion: 'LIVING', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
+      modelo: modeloCenefa,
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'OVALADA', motorModelo: 'DOM41' }],
+    } as unknown as Ventana;
+    const d = construirInventario([v]);
+    const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
+    // DOM41 en cenefa ovalada degrada a DOM38 (Tronic Plus con cable).
+    expect(grupo('DOM38')).toBe('PRODUCCION'); // el motor
+    expect(grupo('DOM39')).toBe('INSTALACION'); // control
+    expect(grupo('DOM40')).toBe('INSTALACION'); // cable
+    expect(grupo('DOM04')).toBe('INSTALACION'); // enchufe
+  });
+
+  it('mecanismo de cenefa ovalada → PRODUCCIÓN', () => {
+    const v = {
+      id: 'x', ubicacion: 'OFICINA', producto: 'ROLLER SCREEN PREMIUM', color: 'BLANCO',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      modelo: {
+        sistema: 'ROLLER', tipo_rol: 'ROL_SIMPLE', mecanismo: 'MEC_10_OVALADA_BLANCO',
+        diametro_tubo_mm: 38, codigos_tubo: 'E02', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+      },
+      panos: [{ ancho: 1.618, alto: 2.301, colorMecanismo: 'BCO' }],
+    } as unknown as Ventana;
+    const d = construirInventario([v]);
+    const mec = d.insumos.find((i) => (i.codigo || '').startsWith('MEC'));
+    expect(mec?.descripcion).toContain('OVALADA');
+    expect(mec?.grupo).toBe('PRODUCCION');
+  });
+
+  it('cadena de una cortina ovalada → PRODUCCIÓN; su peso sigue en INSTALACIÓN', () => {
+    const v = {
+      id: 'x', ubicacion: 'PZA 1', producto: 'ROLLER SCREEN PREMIUM', color: 'BLANCO',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      modelo: {
+        sistema: 'ROLLER', tipo_rol: 'ROL_SIMPLE', mecanismo: 'MEC_10_OVALADA_BLANCO',
+        diametro_tubo_mm: 38, codigos_tubo: 'E02', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+      },
+      panos: [{
+        ancho: 1.618, alto: 2.301, colorMecanismo: 'BCO',
+        codCadena: 'CAD07', largoCadena: '4mts', colorCadena: 'BLANCO', codPeso: 'PCA04',
+      }],
+    } as unknown as Ventana;
+    const d = construirInventario([v]);
+    expect(d.insumos.find((i) => i.codigo === 'CAD07')?.grupo).toBe('PRODUCCION');
+    expect(d.insumos.find((i) => i.codigo === 'PCA04')?.grupo).toBe('INSTALACION');
+  });
+
+  it('mismo motor DOM38 en paño ovalado y en paño normal → dos filas, una por tabla', () => {
+    const vOv = {
+      id: 'a', ubicacion: 'A', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO', modelo: modeloCenefa,
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'OVALADA', motorModelo: 'DOM38' }],
+    } as unknown as Ventana;
+    const vNorm = {
+      id: 'b', ubicacion: 'B', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO', modelo: modeloCenefa,
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', motorModelo: 'DOM38' }],
+    } as unknown as Ventana;
+    const d = construirInventario([vOv, vNorm]);
+    const dom38 = d.insumos.filter((i) => i.codigo === 'DOM38');
+    expect(dom38).toHaveLength(2); // NO se consolidan entre tablas
+    expect(dom38.map((i) => i.grupo).sort()).toEqual(['INSTALACION', 'PRODUCCION']);
+    expect(dom38.every((i) => i.cantidad === 1)).toBe(true);
   });
 });
 

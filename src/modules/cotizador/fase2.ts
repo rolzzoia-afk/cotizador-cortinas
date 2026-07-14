@@ -45,7 +45,9 @@ export const OPCIONES_CENEFA_TIRA = ['CON TIRA', 'SIN TIRA'] as const;
 // MURO_MURO es la opción base (reemplaza a "sin tapa": son lo mismo).
 export const OPCIONES_CENEFA_TAPA = ['MURO_MURO', 'CON_1_TAPA', 'CON_2_TAPAS'] as const;
 export const OPCIONES_COLOR_TAPA_OVALADA = ['NEG', 'BCO', 'GRS'] as const;
-export const OPCIONES_COLOR_TAPA_CUADRADA = ['NEG', 'BCO', 'GRS', 'CAFÉ'] as const;
+// Sin gris: la tapa de cenefa cuadrada no existe en ese color (solo negro,
+// blanco y café → TAP32/TAP33/TAP34).
+export const OPCIONES_COLOR_TAPA_CUADRADA = ['NEG', 'BCO', 'CAFÉ'] as const;
 export const OPCIONES_SUPERFICIE = ['TECHO', 'PARED'] as const;
 export const OPCIONES_MATERIAL_TIPO = ['VULCANITA', 'CONCRETO', 'MADERA', 'CERÁMICA'] as const;
 /** Tipo de bracket de la cenefa ovalada: corto (BRA01) o largo (BRA02). */
