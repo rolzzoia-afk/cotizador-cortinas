@@ -22,7 +22,7 @@ import {
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
-import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
+import { etiquetaConTira, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
 import { OPCIONES_MECANISMO_RESOLUCION } from './fase2';
 import { colorPesoCadena } from './cadenas';
@@ -156,7 +156,15 @@ export function construirCalculoGeneral(
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
         for (const c of d.cortes) {
-          if (c.medidaCm > 0) despiece.set(c.componente.toUpperCase(), c.medidaCm);
+          if (c.medidaCm <= 0) continue;
+          let comp = c.componente.toUpperCase();
+          // La CENEFA OVALADA se separa en dos columnas según la tira de aluminio
+          // del paño: "CENEFA OVALADA (CON TIRA)" / "(SIN TIRA)". La medida de
+          // corte es la misma; solo cambia la etiqueta. Cada paño llena una.
+          if (comp === 'CENEFA OVALADA') {
+            comp = `CENEFA OVALADA (${etiquetaConTira(p.cenefaTira as string | undefined)})`;
+          }
+          despiece.set(comp, c.medidaCm);
         }
       }
       // Dúo: se detecta SOLO por producto, igual que el corte real (tela.ts
@@ -387,6 +395,7 @@ function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: nu
 /** Peso (ancho relativo) de cada columna: texto largo más ancho. */
 function pesoColumna(key: string, esDespiece: boolean): number {
   if (key === 'ALTO MESA DE CORTE') return 1.6; // etiqueta larga
+  if (key.startsWith('CENEFA OVALADA')) return 1.55; // etiqueta larga (con/sin tira)
   if (esDespiece) return 1.15;
   switch (key) {
     case 'codMecanismo':
@@ -453,7 +462,7 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   sinIdentidad: new Set(['tuberia', 'colorAcc', 'cadena', 'armado', 'anchoMts', 'altoMts']),
   sinDespiece: (label) =>
     label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
-    label === 'CENEFA OVALADA',
+    label.startsWith('CENEFA OVALADA'), // incluye "(CON/SIN TIRA)"
   conjuntoPanos: true,
   altoMesaCorteDuo: true,
 };
