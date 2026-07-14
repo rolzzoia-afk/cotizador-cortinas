@@ -1,6 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { useData, calcularLinea, fmt } from '../store/useData'
 import { supabase } from '@/lib/supabase'
+import { parsearExcelJefe } from '@/modules/cotizador/importarExcelJefe'
+import { canonizar } from '@/modules/cotizador/importarExcelFase0'
 
 // Modelos disponibles = los que existen en data.modelosComposicion.
 // Cuando se agrega un modelo nuevo en data.json, aparece automáticamente
@@ -42,6 +45,7 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
   const [correlativoGuardado, setCorrelativoGuardado] = useState(null)
   const [guardando, setGuardando] = useState(false)
   const [feedbackGuardar, setFeedbackGuardar] = useState(null) // {tipo, msg}
+  const inputExcelRef = useRef(null)
 
   // Cargar cotización desde el historial cuando llega via prop
   useEffect(() => {
@@ -179,6 +183,77 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
     setFeedbackGuardar(null)
   }
 
+  // ── Importar cortinas desde un Excel de proyecto ──────────────────
+  // Planilla con columnas LUGAR | MODELO | COLOR ACCESORIO | COLOR CADENA |
+  // ANCHO | ALTO (ej. RAUL LABBE.xlsx). Reemplaza las líneas actuales por
+  // las del Excel; modelo/colores se canonizan contra los selects (los que
+  // no calzan quedan en el default y se anotan en Notas).
+  async function importarExcel(file) {
+    try {
+      const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
+      const filas = parsearExcelJefe(wb)
+      if (filas.length === 0) {
+        setFeedbackGuardar({
+          tipo: 'error',
+          msg: 'No se encontraron cortinas en el Excel. Revisa que tenga las columnas LUGAR, MODELO, COLOR ACCESORIO, COLOR CADENA, ANCHO y ALTO.',
+        })
+        setTimeout(() => setFeedbackGuardar(null), 6000)
+        return
+      }
+      let avisos = 0
+      const nuevas = filas.map((f, i) => {
+        const linea = newLinea(Date.now() + i, modeloDefault)
+        linea.lugar = f.lugar
+        const notas = []
+
+        const modelo = canonizar(f.modelo, MODELOS_DISPONIBLES)
+        if (f.modelo && MODELOS_DISPONIBLES.includes(modelo)) {
+          linea.modelo = modelo
+        } else if (f.modelo) {
+          notas.push(`Modelo Excel: ${f.modelo}`)
+          avisos++
+        }
+
+        const colorAcc = canonizar(f.colorAccesorio, data.coloresAccesorio)
+        if (f.colorAccesorio && data.coloresAccesorio.includes(colorAcc)) {
+          linea.colorAccesorio = colorAcc
+        } else if (f.colorAccesorio) {
+          notas.push(`Color accesorio Excel: ${f.colorAccesorio}`)
+          avisos++
+        }
+
+        const colorCad = canonizar(f.colorCadena, data.coloresCadena)
+        if (f.colorCadena && data.coloresCadena.includes(colorCad)) {
+          linea.colorCadena = colorCad
+        } else if (f.colorCadena) {
+          notas.push(`Color cadena Excel: ${f.colorCadena}`)
+          avisos++
+        }
+
+        linea.ancho = f.ancho > 0 ? String(f.ancho) : ''
+        linea.alto = f.alto > 0 ? String(f.alto) : ''
+        linea.notas = notas.join(' · ')
+        return linea
+      })
+
+      setLineas(nuevas)
+      setVerDetalle(null)
+      const avisoMsg = avisos > 0 ? ` (${avisos} valor(es) no reconocido(s), ver Notas)` : ''
+      setFeedbackGuardar({
+        tipo: 'ok',
+        msg: `Importadas ${nuevas.length} cortina(s) desde «${file.name}».${avisoMsg}`,
+      })
+      setTimeout(() => setFeedbackGuardar(null), 6000)
+    } catch (e) {
+      console.error('[Cotizador] Error al importar Excel:', e)
+      setFeedbackGuardar({
+        tipo: 'error',
+        msg: 'No se pudo leer el Excel. Revisa que sea un archivo .xlsx válido.',
+      })
+      setTimeout(() => setFeedbackGuardar(null), 6000)
+    }
+  }
+
   return (
     <div>
       <div className="module-title">Cotizador</div>
@@ -219,12 +294,35 @@ export default function Cotizador({ restringido = false, cotizacionACargar = nul
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ justifyContent: 'space-between' }}>
           <span>Cortinas a Cotizar</span>
-          <button
-            className="btn btn-success btn-sm"
-            onClick={() => setLineas((l) => [...l, newLinea(Date.now(), modeloDefault)])}
-          >
-            + Agregar cortina
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              ref={inputExcelRef}
+              type="file"
+              // Incluye los MIME types además de las extensiones: en algunos
+              // Windows el filtro "Archivos personalizados" oculta los .xlsx si
+              // solo se declara la extensión.
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const file = e.target.files?.[0]
+                if (file) importarExcel(file)
+                e.target.value = '' // permite re-importar el mismo archivo
+              }}
+            />
+            <button
+              className="btn btn-sm"
+              onClick={() => inputExcelRef.current?.click()}
+              title="Reemplaza la tabla con las cortinas de una planilla Excel (LUGAR, MODELO, COLOR ACCESORIO, COLOR CADENA, ANCHO, ALTO)"
+            >
+              Importar Excel
+            </button>
+            <button
+              className="btn btn-success btn-sm"
+              onClick={() => setLineas((l) => [...l, newLinea(Date.now(), modeloDefault)])}
+            >
+              + Agregar cortina
+            </button>
+          </div>
         </div>
         <div className="table-wrap">
           <table>
