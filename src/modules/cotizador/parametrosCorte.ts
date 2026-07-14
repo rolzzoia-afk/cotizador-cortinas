@@ -20,6 +20,10 @@ export type ParametrosCorte = {
   /** Dúo: corte real de tela = 2×alto + este valor (cm). Fija también la
    *  reserva de colmena del plan de corte (regla "nunca inferior"). */
   extraDuoCm: number;
+  /** Dúo: ALTO MESA DE CORTE = alto + este valor (cm). La tela dúo se corta
+   *  DOBLADA en la mesa, así que el Dimensionado muestra esta medida (mitad del
+   *  alto de tela) en vez del ALTO. Solo afecta el PDF Dimensionado. */
+  extraMesaDuoCm: number;
   /** Vertical: extra (cm) de reserva en el plan de corte (Regla 7). */
   extraVerticalCm: number;
   /** Ancho de corte = ancho nominal − este valor (cm). */
@@ -48,6 +52,7 @@ export type ParametrosCorte = {
 export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   extraAltoCm: 25,
   extraDuoCm: 30,
+  extraMesaDuoCm: 10,
   extraVerticalCm: 5,
   descAnchoCorteCm: 3.5,
   anchoRolloDefaultM: 2.98,

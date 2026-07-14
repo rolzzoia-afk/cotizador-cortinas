@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   aplicarVariante,
   construirCalculoGeneral,
+  envolverEtiqueta,
   VARIANTE_DIMENSIONADO,
 } from './pdfCalculoGeneral';
+import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
 import type { Ventana } from './types';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 
@@ -151,6 +153,110 @@ describe('aplicarVariante — DIMENSIONADO', () => {
     // Pero no toca otros componentes.
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CIERRE DE ALTURA')).toBe(false);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA DELANTERA')).toBe(false);
+  });
+});
+
+// El Dimensionado muestra en las filas dúo ALTO MESA DE CORTE (alto + 10) en
+// vez de ALTO, porque la tela dúo se corta doblada en la mesa.
+describe('ALTO MESA DE CORTE (Dimensionado dúo)', () => {
+  const duo = (ancho: number, alto: number, ubic: string): Ventana => {
+    const v = ventRoller(ancho, ubic);
+    (v as { producto: string }).producto = 'ROLLER DUO BLACKOUT PREMIUM';
+    (v as { alto: number }).alto = alto;
+    (v.panos![0] as { alto: number }).alto = alto;
+    return v;
+  };
+
+  it('dúo con opts → ALTO MESA DE CORTE = alto + 10 y NO setea ALTO', () => {
+    const [f] = construirCalculoGeneral([duo(1.5, 2.3, 'PZA 1')], {}, undefined, undefined, {
+      altoMesaCorteDuo: true,
+    }).filas;
+    expect(f.despiece.get('ALTO MESA DE CORTE')).toBe(240); // 230 + 10
+    expect(f.despiece.has('ALTO')).toBe(false);
+  });
+
+  it('dúo alto 101,5 → mesa 111,5 (media tela con decimal)', () => {
+    const [f] = construirCalculoGeneral([duo(0.5, 1.015, 'OFICINA')], {}, undefined, undefined, {
+      altoMesaCorteDuo: true,
+    }).filas;
+    expect(f.despiece.get('ALTO MESA DE CORTE')).toBe(111.5); // 101,5 + 10
+  });
+
+  it('roller con opts → ALTO normal (alto+25), sin columna mesa', () => {
+    const [f] = construirCalculoGeneral([ventRoller(1.5, 'LIVING')], {}, undefined, undefined, {
+      altoMesaCorteDuo: true,
+    }).filas;
+    expect(f.despiece.get('ALTO')).toBe(205); // 180 + 25
+    expect(f.despiece.has('ALTO MESA DE CORTE')).toBe(false);
+  });
+
+  it('sin opts → dúo mantiene ALTO = 2×alto+30 (Cálculo General / Inventario intactos)', () => {
+    const [f] = construirCalculoGeneral([duo(1.5, 1.8, 'LIVING')]).filas;
+    expect(f.despiece.get('ALTO')).toBe(390); // 180×2 + 30
+    expect(f.despiece.has('ALTO MESA DE CORTE')).toBe(false);
+  });
+
+  it('OT mixta con opts: el bloque trae MESA penúltima y ALTO última', () => {
+    const data = construirCalculoGeneral(
+      [ventRoller(1.5, 'LIVING'), duo(1.5, 2.3, 'PZA 1')],
+      {}, undefined, undefined, { altoMesaCorteDuo: true },
+    );
+    const labels = data.bloques[0].columnas.map((c) => c.label);
+    expect(labels).toContain('ALTO MESA DE CORTE');
+    expect(labels[labels.length - 1]).toBe('ALTO');
+    expect(labels[labels.length - 2]).toBe('ALTO MESA DE CORTE');
+  });
+
+  it('params custom: extraMesaDuoCm gobierna el valor', () => {
+    const params = { ...PARAMETROS_CORTE_DEFAULT, extraMesaDuoCm: 15 };
+    const [f] = construirCalculoGeneral([duo(1.5, 2.3, 'PZA 1')], {}, params, undefined, {
+      altoMesaCorteDuo: true,
+    }).filas;
+    expect(f.despiece.get('ALTO MESA DE CORTE')).toBe(245); // 230 + 15
+  });
+
+  it('VARIANTE_DIMENSIONADO activa el flag y no filtra la columna nueva', () => {
+    expect(VARIANTE_DIMENSIONADO.altoMesaCorteDuo).toBe(true);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('ALTO MESA DE CORTE')).toBe(false);
+  });
+
+  it('categoría con "DUO" pero producto roller (screen con motor) NO es dúo', () => {
+    // OT 999 real: LIVING = ROLLER SCREEN PREMIUM con categoria DUO_MOTOR_PEQUEÑO.
+    // El corte (tela.ts) lo trata como roller simple; el dimensionado también.
+    const v = ventRoller(1, 'LIVING');
+    (v as { categoria: string }).categoria = 'DUO_MOTOR_PEQUEÑO_38mm';
+    (v as { alto: number }).alto = 0.6;
+    (v.panos![0] as { alto: number }).alto = 0.6;
+    const [f] = construirCalculoGeneral([v], {}, undefined, undefined, {
+      altoMesaCorteDuo: true,
+    }).filas;
+    expect(f.despiece.get('ALTO')).toBe(85); // 60 + 25 (roller), no 2×60+30
+    expect(f.despiece.has('ALTO MESA DE CORTE')).toBe(false);
+  });
+});
+
+// Cabeceras: tamaño de letra fijo (como TUBERIA), envolviendo a varias líneas.
+describe('envolverEtiqueta', () => {
+  const medir = (s: string) => s.length * 2; // 2 mm por carácter
+
+  it('etiqueta corta que cabe → una sola línea', () => {
+    expect(envolverEtiqueta(medir, 'TUBERIA', 20)).toEqual(['TUBERIA']);
+  });
+
+  it('quiebra por espacio cuando no cabe', () => {
+    expect(envolverEtiqueta(medir, 'PESO INTERNO (E13)', 16)).toEqual(['PESO', 'INTERNO', '(E13)']);
+  });
+
+  it('quiebra por "/" conservando la barra en la línea de arriba', () => {
+    expect(envolverEtiqueta(medir, 'CADENA/CIERRE', 16)).toEqual(['CADENA/', 'CIERRE']);
+  });
+
+  it('si todo cabe, no mete espacios extra alrededor de "/"', () => {
+    expect(envolverEtiqueta(medir, 'CADENA/CIERRE', 100)).toEqual(['CADENA/CIERRE']);
+  });
+
+  it('etiqueta vacía → no rompe', () => {
+    expect(envolverEtiqueta(medir, '', 20)).toEqual(['']);
   });
 });
 

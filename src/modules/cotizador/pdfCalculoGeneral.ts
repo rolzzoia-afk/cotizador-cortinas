@@ -116,7 +116,7 @@ const IDENTIDAD: { key: keyof FilaCalculo; label: string }[] = [
   { key: 'tuberia', label: 'TUBERIA' },
   { key: 'cant', label: 'CANT' },
   { key: 'producto', label: 'PRODUCTO' },
-  { key: 'codInt', label: 'OD_IN' },
+  { key: 'codInt', label: 'COD_IN' },
   { key: 'descripcion', label: 'DESCRIPCIÓN' },
   { key: 'ubic', label: 'UBIC.' },
   { key: 'colorAcc', label: 'COLOR ACCESORIOS' },
@@ -135,6 +135,8 @@ export function construirCalculoGeneral(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   /** Letras de "cortar junto" por pieza (`${ventanaId}_${panoIndex}` → letra). */
   juntoPorPieza?: Map<string, string>,
+  /** Dimensionado: en filas dúo reemplaza la columna ALTO por ALTO MESA DE CORTE. */
+  opts?: { altoMesaCorteDuo?: boolean },
 ): CalculoGeneral {
   const filas: FilaCalculo[] = [];
 
@@ -157,10 +159,12 @@ export function construirCalculoGeneral(
           if (c.medidaCm > 0) despiece.set(c.componente.toUpperCase(), c.medidaCm);
         }
       }
-      // Dúo: cierre de altura medido en terreno (Fase 2) — columna propia.
-      const esDuoFila =
-        (v.producto || '').toUpperCase().includes('DUO') ||
-        (v.categoria || '').toUpperCase().includes('DUO');
+      // Dúo: se detecta SOLO por producto, igual que el corte real (tela.ts
+      // `isDuo`). NO por categoría: hay familias "DUO_MOTOR_*"/"DUO_MANUAL_*" que
+      // quedan aplicadas a un roller simple (screen con motor), y ahí la tela se
+      // corta simple — el dimensionado debe coincidir con el corte, no con la
+      // etiqueta de la categoría.
+      const esDuoFila = (v.producto || '').toUpperCase().includes('DUO');
       const cierreCm = parseFloat(String(p.cierreAlturaCm ?? ''));
       if (esDuoFila && cierreCm > 0) despiece.set('CIERRE DE ALTURA', r1(cierreCm));
       // Columna ALTO del Excel manual: alto de CORTE de la tela del sistema
@@ -168,7 +172,16 @@ export function construirCalculoGeneral(
       // bloque, igual que en la hoja manual.
       const altoRollerCm = r1(altoCm + params.extraAltoCm);
       const altoDuoCm = r1(altoCm * 2 + params.extraDuoCm);
-      if (altoCm > 0) despiece.set('ALTO', esDuoFila ? altoDuoCm : altoRollerCm);
+      if (altoCm > 0) {
+        if (opts?.altoMesaCorteDuo && esDuoFila) {
+          // Dimensionado: la tela dúo se corta DOBLADA en la mesa, así que en vez
+          // del ALTO se muestra ALTO MESA DE CORTE = alto + extraMesaDuo (la mitad
+          // del alto de tela), igual que la hoja dúo del Excel manual.
+          despiece.set('ALTO MESA DE CORTE', r1(altoCm + params.extraMesaDuoCm));
+        } else {
+          despiece.set('ALTO', esDuoFila ? altoDuoCm : altoRollerCm);
+        }
+      }
 
       const codCadena = (p.codCadena as string) || '';
       const largoCadena = String(p.largoCadena ?? '');
@@ -257,11 +270,14 @@ export function construirCalculoGeneral(
       }
     }
     if (cols.length === 0) continue;
-    // ALTO siempre al final del bloque (como en la hoja manual).
-    const iAlto = cols.indexOf('ALTO');
-    if (iAlto >= 0) {
-      cols.splice(iAlto, 1);
-      cols.push('ALTO');
+    // Al final del bloque (como en la hoja manual): primero ALTO MESA DE CORTE
+    // (dúo del Dimensionado) y luego ALTO.
+    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO']) {
+      const idx = cols.indexOf(colFin);
+      if (idx >= 0) {
+        cols.splice(idx, 1);
+        cols.push(colFin);
+      }
     }
     bloques.push({
       sistema,
@@ -317,8 +333,60 @@ function celda(
   doc.text(txt, x + w / 2, y, { align: 'center' });
 }
 
+/**
+ * Envuelve una etiqueta en varias líneas que caben en `maxW`, quebrando por
+ * espacios y por "/". `medir(s)` da el ancho del texto (mm). Se usa para las
+ * cabeceras: mantienen el tamaño fijo (como "TUBERIA") y bajan de línea en vez
+ * de encogerse. Puro y testeable (medidor inyectable).
+ */
+export function envolverEtiqueta(
+  medir: (s: string) => number,
+  label: string,
+  maxW: number,
+): string[] {
+  const tokens = label
+    .split(/\s+/)
+    .flatMap((w) => {
+      const partes = w.split('/');
+      return partes.map((p, i) => (i < partes.length - 1 ? `${p}/` : p));
+    })
+    .filter(Boolean);
+  const lines: string[] = [];
+  let cur = '';
+  for (const t of tokens) {
+    const sep = !cur || cur.endsWith('/') ? '' : ' ';
+    const probe = `${cur}${sep}${t}`;
+    if (!cur || medir(probe) <= maxW) cur = probe;
+    else {
+      lines.push(cur);
+      cur = t;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.length ? lines : [label];
+}
+
+/**
+ * Cabecera de columna a tamaño FIJO (9, el de "TUBERIA"), envuelta en varias
+ * líneas si no cabe — para que todas las cabeceras luzcan igual, en vez de que
+ * `celda` encoja las etiquetas largas.
+ */
+function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: number, h: number) {
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
+  const lines = envolverEtiqueta((s) => doc.getTextWidth(s), label, w - 1.5);
+  const lineH = 3.5;
+  let y = yTop + (h - lines.length * lineH) / 2 + 2.5;
+  for (const ln of lines) {
+    doc.text(ln, x + w / 2, y, { align: 'center' });
+    y += lineH;
+  }
+}
+
 /** Peso (ancho relativo) de cada columna: texto largo más ancho. */
 function pesoColumna(key: string, esDespiece: boolean): number {
+  if (key === 'ALTO MESA DE CORTE') return 1.6; // etiqueta larga
   if (esDespiece) return 1.15;
   switch (key) {
     case 'codMecanismo':
@@ -337,12 +405,14 @@ function pesoColumna(key: string, esDespiece: boolean): number {
     case 'tuberia':
       return 2.4; // descripción larga del tubo ("E02-TUBO 1.2 / Ø 38 mm")
     case 'colorAcc':
+      return 1.6; // cabecera "COLOR ACCESORIOS": "ACCESORIOS" debe entrar entera
     case 'armado':
     case 'manillas':
     case 'conjunto':
       return 1.1;
-    case 'codSec':
     case 'codInt':
+      return 1.05; // "COD_IN" es una sola palabra (no envuelve): necesita su ancho
+    case 'codSec':
       return 0.9;
     case 'cant':
       return 0.6;
@@ -361,6 +431,8 @@ export type VarianteHojaCalculo = {
   sinDespiece?: (label: string) => boolean;
   /** Agrega al final la columna CONJUNTO PAÑOS (letras de cortar junto). */
   conjuntoPanos?: boolean;
+  /** En filas dúo, reemplaza la columna ALTO por ALTO MESA DE CORTE (tela doblada). */
+  altoMesaCorteDuo?: boolean;
 };
 
 const VARIANTE_CALCULO_GENERAL: VarianteHojaCalculo = {
@@ -383,6 +455,7 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
     label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
     label === 'CENEFA OVALADA',
   conjuntoPanos: true,
+  altoMesaCorteDuo: true,
 };
 
 /** Aplica la variante a las columnas (puro, para test). */
@@ -432,7 +505,9 @@ function renderHojaCalculo(
   if (!ventanas || ventanas.length === 0) {
     throw new Error('No hay ventanas en la OT.');
   }
-  const data = construirCalculoGeneral(ventanas, catalogo, params, juntoPorPieza);
+  const data = construirCalculoGeneral(ventanas, catalogo, params, juntoPorPieza, {
+    altoMesaCorteDuo: variante.altoMesaCorteDuo,
+  });
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
   const { identidad, bloques } = aplicarVariante(data, variante);
 
@@ -465,7 +540,7 @@ function renderHojaCalculo(
   const PH = 297;
   const BOTTOM = PH - M;
   const superH = 9;
-  const headH = 13;
+  const headH = 15; // más alto: las cabeceras largas se envuelven a 2-3 líneas
   const rowH = 12;
 
   let y = M;
@@ -505,11 +580,7 @@ function renderHojaCalculo(
     yBorde = y;
     cols.forEach((c, i) => {
       rect(doc, xs[i], y, widths[i], headH, c.sistema ? c.sistema.color : C_DARK);
-      celda(doc, c.label, xs[i], widths[i], y + 8.2, {
-        size: 9,
-        bold: true,
-        color: C_WHITE,
-      });
+      celdaCabecera(doc, c.label, xs[i], widths[i], y, headH);
     });
     y += headH;
   };

@@ -65,6 +65,7 @@ describe('normalizarParametros', () => {
   it('parámetros de corte: defaults históricos presentes', () => {
     expect(PARAMETROS_DEFAULT.extraAltoCm).toBe(25);
     expect(PARAMETROS_DEFAULT.extraDuoCm).toBe(30);
+    expect(PARAMETROS_DEFAULT.extraMesaDuoCm).toBe(10);
     expect(PARAMETROS_DEFAULT.extraVerticalCm).toBe(5);
     expect(PARAMETROS_DEFAULT.descAnchoCorteCm).toBe(3.5);
     expect(PARAMETROS_DEFAULT.anchoRolloDefaultM).toBe(2.98);
