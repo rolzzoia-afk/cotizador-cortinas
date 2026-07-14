@@ -59,6 +59,34 @@ export const NOMBRE_TAPA_DUO_INTERNA = '[TAPA DE PESO DUO] DUO INTERNO';
 export const TAPAS_DUO_EXTERIOR_POR_PANO = 2;
 export const TAPAS_DUO_INTERNA_POR_PANO = 2;
 
+// ── Tapa de cenefa cuadrada (por color de tapa) ──────────────────────
+// A diferencia de las tapas de PESO (que van a bodega), estas se colocan en
+// terreno, así que el inventario las lista en la tabla de INSTALACIÓN aunque su
+// código sea TAP. Solo NEG/BCO/CAFÉ tienen código propio; gris u otro color sale
+// sin código (aún no catalogado).
+export const TAPAS_CENEFA_CUADRADA_POR_COLOR: Record<string, { codigo: string; color: string }> = {
+  NEG: { codigo: 'TAP32', color: 'NEGRO' },
+  NEGRO: { codigo: 'TAP32', color: 'NEGRO' },
+  BCO: { codigo: 'TAP33', color: 'BLANCO' },
+  BLANCO: { codigo: 'TAP33', color: 'BLANCO' },
+  CAFÉ: { codigo: 'TAP34', color: 'CAFÉ' },
+  CAFE: { codigo: 'TAP34', color: 'CAFÉ' },
+};
+
+/**
+ * Insumo de tapa de cenefa cuadrada según el color de tapa (NEG→TAP32,
+ * BCO→TAP33, CAFÉ→TAP34). Para colores sin código propio (gris u otro) devuelve
+ * solo la descripción, sin código, para no inventar un insumo inexistente.
+ */
+export function tapaCenefaCuadrada(
+  colorTapa: string | null | undefined,
+): { codigo?: string; descripcion: string } {
+  const c = (colorTapa || '').trim().toUpperCase();
+  const m = TAPAS_CENEFA_CUADRADA_POR_COLOR[c];
+  if (m) return { codigo: m.codigo, descripcion: `TAPA CENEFA CUADRADA ${m.color}` };
+  return { descripcion: `TAPA CENEFA CUADRADA ${(colorTapa || '').trim()}`.trim() };
+}
+
 export const COD_TORNILLO_TAPA = 'TOR02';
 export const NOMBRE_TORNILLO_TAPA = 'TORNILLO TAPA PESO ROLLER 4X1/4"';
 export const TORNILLOS_TAPA_PESO_POR_PANO = 2;
@@ -115,7 +143,7 @@ export function tarugoDeMaterial(
 }
 
 /** ¿La cenefa del paño es ovalada? (chip 'Ovalada' o categoría que la implica). */
-function esCenefaOvalada(cenefa: string | null | undefined, categoria?: string): boolean {
+export function esCenefaOvalada(cenefa: string | null | undefined, categoria?: string): boolean {
   if ((cenefa || '').trim().toUpperCase() === 'OVALADA') return true;
   return (categoria || '').toUpperCase().includes('CENEFA_OVALADA');
 }
@@ -292,6 +320,15 @@ export const NOMBRE_HUB_DOMOTICA = 'BRIGDE HUB DOMOTICA';
 /** ¿El paño lleva un motor con código DOM (no 'CABLE' futuro ni vacío)? */
 export function panoTieneMotorDom(p: Partial<Pano>): boolean {
   return !!MOTORES[(p.motorModelo || '').toUpperCase()];
+}
+
+/**
+ * ¿El código es el de la UNIDAD de motor (DOM38/DOM41), no el control/cable/
+ * enchufe/hub del kit? Se usa para clasificar el inventario: el motor de una
+ * cortina con cenefa ovalada va a PRODUCCIÓN; el resto del kit, a INSTALACIÓN.
+ */
+export function esCodigoMotor(codigo: string | undefined): boolean {
+  return !!codigo && Object.prototype.hasOwnProperty.call(MOTORES, codigo.toUpperCase());
 }
 
 /**
