@@ -332,6 +332,23 @@ export function esCodigoMotor(codigo: string | undefined): boolean {
 }
 
 /**
+ * Modelo de motor (DOM38/DOM41) a partir del código de un adicional de Fase 0.
+ * El catálogo de Fase 0 usa el código con espacio ("DOM 38"); acá se normaliza
+ * sin espacios y se valida contra los motores conocidos. Devuelve el modelo
+ * canónico (llave de MOTORES) o null si el adicional no es una unidad de motor
+ * (control DOM39, hub DOM43, router DOM05, etc. → null).
+ */
+export function codigoMotorDesdeAdicional(codInt: string | undefined): string | null {
+  const c = (codInt || '').replace(/\s+/g, '').toUpperCase();
+  return Object.prototype.hasOwnProperty.call(MOTORES, c) ? c : null;
+}
+
+/** ¿El adicional es el hub de domótica (DOM43), con o sin espacio en el código? */
+export function esAdicionalHubDomotica(codInt: string | undefined): boolean {
+  return (codInt || '').replace(/\s+/g, '').toUpperCase() === COD_HUB_DOMOTICA;
+}
+
+/**
  * Kit de motor del paño: motor + control + enchufe DOM04, más los controles y
  * hubs adicionales. El cable DOM40 se agrega SOLO al DOM38 (Tronic Plus a batería;
  * el DOM41 no lo lleva). Vacío si el modelo es 'CABLE' (futuro) o no hay motor.

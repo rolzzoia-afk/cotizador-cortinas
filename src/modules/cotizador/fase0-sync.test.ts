@@ -6,6 +6,8 @@ import {
   direccionDesdeCierre,
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
+  motorAdicionalParaUbic,
+  otTraeHubDomotica,
   sentidoDesdeArmado,
   tipoTelaDesdeProducto,
   tipoTelaDesdeVentana,
@@ -142,5 +144,83 @@ describe('fase0-sync', () => {
     } as Ventana;
     const out = enriquecerPanoDesdeFase0(ventana.panos[0], ventana);
     expect(out.beeblackVariante).toBe('EXTERNO_SEMI');
+  });
+});
+
+// Motor desde los adicionales de Fase 0: el motor cotizado como adicional
+// (DOM 38/41) se precarga en el paño cuya UBIC. calza, para que aparezca en
+// Fase 2 y en Fase 4/inventario. Match estricto por ubicación (solo la que
+// calza), robusto a separadores; domótica si la OT trae el hub DOM 43.
+describe('fase0-sync — motor desde adicionales de Fase 0', () => {
+  const ventanaLiving = (ubic: string): Ventana =>
+    ({
+      id: ubic,
+      ubicacion: ubic,
+      codInt: 'SC 11',
+      categoria: 'ROL',
+      panos: [{ ancho: 1.6, alto: 1.7, color: 'NEGRO' } as Pano],
+    }) as Ventana;
+
+  it('motorAdicionalParaUbic: calza pese al separador (punto vs guion)', () => {
+    const adic = [{ codInt: 'DOM 38', cantidad: 3, descuento: 30, ubicacion: 'LIVING IZQ.G1' }];
+    expect(motorAdicionalParaUbic('LIVING IZQ-G1', adic)).toBe('DOM38');
+    expect(motorAdicionalParaUbic('LIVING CENT-G1', adic)).toBeNull();
+    expect(motorAdicionalParaUbic('', adic)).toBeNull();
+  });
+
+  it('otTraeHubDomotica detecta el DOM 43', () => {
+    expect(otTraeHubDomotica([{ codInt: 'DOM 43', cantidad: 1, descuento: 0 }])).toBe(true);
+    expect(otTraeHubDomotica([{ codInt: 'DOM 39', cantidad: 1, descuento: 0 }])).toBe(false);
+    expect(otTraeHubDomotica([])).toBe(false);
+  });
+
+  it('motor DOM 38 en la misma ubicación (separador distinto) + hub → motorModelo + domótica', () => {
+    const adicionales = [
+      { codInt: 'DOM 38', cantidad: 3, descuento: 30, ubicacion: 'LIVING IZQ.G1' },
+      { codInt: 'DOM 43', cantidad: 1, descuento: 10, ubicacion: '' },
+    ];
+    const out = enriquecerVentanaDesdeFase0(ventanaLiving('LIVING IZQ-G1'), undefined, adicionales);
+    expect(out.panos[0].motorModelo).toBe('DOM38');
+    expect(out.panos[0].motorDomotica).toBe(true);
+  });
+
+  it('ubicación que NO calza → cortina sin motor (match estricto)', () => {
+    const adicionales = [
+      { codInt: 'DOM 38', cantidad: 3, descuento: 30, ubicacion: 'LIVING IZQ.G1' },
+    ];
+    const out = enriquecerVentanaDesdeFase0(ventanaLiving('LIVING CENT-G1'), undefined, adicionales);
+    expect(out.panos[0].motorModelo).toBeFalsy();
+  });
+
+  it('sin hub DOM 43 → motor sin domótica', () => {
+    const adicionales = [
+      { codInt: 'DOM 38', cantidad: 1, descuento: 0, ubicacion: 'LIVING IZQ-G1' },
+    ];
+    const out = enriquecerVentanaDesdeFase0(ventanaLiving('LIVING IZQ-G1'), undefined, adicionales);
+    expect(out.panos[0].motorModelo).toBe('DOM38');
+    expect(out.panos[0].motorDomotica).toBeFalsy();
+  });
+
+  it('un control (DOM 39) NO motoriza aunque calce la ubicación', () => {
+    const adicionales = [
+      { codInt: 'DOM 39', cantidad: 1, descuento: 10, ubicacion: 'LIVING IZQ-G1' },
+    ];
+    const out = enriquecerVentanaDesdeFase0(ventanaLiving('LIVING IZQ-G1'), undefined, adicionales);
+    expect(out.panos[0].motorModelo).toBeFalsy();
+  });
+
+  it('no pisa un motor ya elegido en terreno', () => {
+    const adicionales = [
+      { codInt: 'DOM 38', cantidad: 1, descuento: 0, ubicacion: 'LIVING IZQ-G1' },
+    ];
+    const ventana = {
+      id: 'x',
+      ubicacion: 'LIVING IZQ-G1',
+      codInt: 'SC 11',
+      categoria: 'ROL',
+      panos: [{ ancho: 1.6, alto: 1.7, color: 'NEGRO', motorModelo: 'DOM41' } as Pano],
+    } as Ventana;
+    const out = enriquecerVentanaDesdeFase0(ventana, undefined, adicionales);
+    expect(out.panos[0].motorModelo).toBe('DOM41'); // respeta lo elegido
   });
 });

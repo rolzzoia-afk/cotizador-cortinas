@@ -5,6 +5,8 @@ import {
   cantidadBrackets,
   cantidadSuplementosAuto,
   cantidadTarugos,
+  codigoMotorDesdeAdicional,
+  esAdicionalHubDomotica,
   esCategoriaDuo,
   insumosDePano,
   insumosMotorDePano,
@@ -15,6 +17,29 @@ import {
 } from './insumosCortina';
 
 const pano = (p: Partial<Pano>): Partial<Pano> => p;
+
+describe('codigoMotorDesdeAdicional / esAdicionalHubDomotica', () => {
+  it('normaliza el código del adicional a modelo de motor (con o sin espacio)', () => {
+    expect(codigoMotorDesdeAdicional('DOM 38')).toBe('DOM38');
+    expect(codigoMotorDesdeAdicional('DOM38')).toBe('DOM38');
+    expect(codigoMotorDesdeAdicional('dom 41')).toBe('DOM41');
+  });
+  it('adicionales que no son unidad de motor → null', () => {
+    expect(codigoMotorDesdeAdicional('DOM 39')).toBeNull(); // control
+    expect(codigoMotorDesdeAdicional('DOM 43')).toBeNull(); // hub domótica
+    expect(codigoMotorDesdeAdicional('DOM 05')).toBeNull(); // router
+    expect(codigoMotorDesdeAdicional('INSTMOTMG')).toBeNull(); // instalación
+    expect(codigoMotorDesdeAdicional('CENF O')).toBeNull();
+    expect(codigoMotorDesdeAdicional('')).toBeNull();
+    expect(codigoMotorDesdeAdicional(undefined)).toBeNull();
+  });
+  it('hub de domótica reconoce DOM43 con o sin espacio', () => {
+    expect(esAdicionalHubDomotica('DOM 43')).toBe(true);
+    expect(esAdicionalHubDomotica('DOM43')).toBe(true);
+    expect(esAdicionalHubDomotica('DOM 38')).toBe(false);
+    expect(esAdicionalHubDomotica('')).toBe(false);
+  });
+});
 
 describe('cantidadBrackets', () => {
   it('hasta 1 m → 2; sobre 1 m suma 1 cada 60 cm iniciados', () => {
