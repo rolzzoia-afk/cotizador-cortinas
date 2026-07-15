@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.11"; // 2026-06-10: merma ≤10cm en eventos + correlativo en Excel
+const VERSION_ACTUAL = "5.12"; // 2026-07-15: merma máx. por código (E78 ≤ 50 cm)
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -4499,6 +4499,15 @@ const MERMA_MAX_MM = 100;              // ≤ 10 cm → merma (desechar)
 const ZONA_PROHIBIDA_MIN_MM = 101;     // 10.1 cm
 const ZONA_PROHIBIDA_MAX_MM = 1299;    // 129.9 cm
 
+// Regla especial de merma POR CÓDIGO: E78 (tubo 45 mm, barra virgen 579 cm)
+// desecha sobrantes de hasta 50 cm para no acumular pedacitos en la colmena.
+// Solo aplica al código exacto; el resto de códigos usa MERMA_MAX_MM (10 cm).
+const MERMA_MAX_POR_COD_MM = { 'E78': 500 };
+function mermaMaxMm(cod) {
+    const m = MERMA_MAX_POR_COD_MM[normalizarCodigo(cod || '')];
+    return m != null ? m : MERMA_MAX_MM;
+}
+
 // ── Colmenas para tubos/accesorios LARGOS (> 300 cm) ──────────────────────
 const UMBRAL_LARGO_CM  = 300;               // > 300 cm → L01/L02/L03
 const UMBRAL_LARGO_MM  = UMBRAL_LARGO_CM * 10;
@@ -4507,9 +4516,9 @@ const _SLOTS_LARGO_SET = new Set(_SLOTS_LARGO);
 const _SLOTS_PESO      = ['A27', 'A28', 'A29'];
 const _SLOTS_PESO_SET  = new Set(_SLOTS_PESO);
 
-function evaluarSobrante(sobrante) {
+function evaluarSobrante(sobrante, cod) {
     if (sobrante < 0) return { estado: 'prohibido' };
-    if (sobrante <= MERMA_MAX_MM) return { estado: 'merma' };
+    if (sobrante <= mermaMaxMm(cod)) return { estado: 'merma' };
     if (sobrante >= ZONA_PROHIBIDA_MIN_MM && sobrante <= ZONA_PROHIBIDA_MAX_MM) return { estado: 'prohibido' };
     return { estado: 'colmena' };
 }
@@ -4583,7 +4592,7 @@ function buscarTubosParaOrden(codigoBuscado, medidaRequerida, codigoOriginal = n
         if (col.medida_mm < medidaRequerida) return;
 
         const sobrante = col.medida_mm - medidaRequerida - MM_KERF;
-        const clasificacion = evaluarSobrante(sobrante);
+        const clasificacion = evaluarSobrante(sobrante, col.cod);
         if (clasificacion.estado === 'prohibido') return;
 
         // Priorizar: menor sobrante = mejor ajuste (menos desperdicio)
@@ -5459,7 +5468,7 @@ async function ejecutarOptimizacion() {
                     colmena:       tuboPre,
                     sobrante_mm:   Math.max(0, sobrantePre),
                     indice:        idxPre,
-                    clasificacion: evaluarSobrante(Math.max(0, sobrantePre)),
+                    clasificacion: evaluarSobrante(Math.max(0, sobrantePre), tuboPre.cod),
                     medidaOriginal: tuboPre.medida_mm,
                     esReemplazo:   false
                 };
@@ -5499,7 +5508,7 @@ async function ejecutarOptimizacion() {
             resultado = { orden: orden.id, medida_cm: orden.medida_cm, fuente: fuente, colmena: tuboEncontrado.colmena.n_colmena, codigo: tuboEncontrado.colmena.cod, codigo_original: codOrden, sobrante_cm: tuboEncontrado.sobrante_mm / 10, medida_origen: tuboEncontrado.medidaOriginal / 10, serial: tuboEncontrado.colmena.serial || null, es_desecho: esMerma, tubo_raiz_id: tuboEncontrado.colmena.tubo_raiz_id || null };
             const idxHistorico = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === tuboEncontrado.colmena.n_colmena && c.cod === tuboEncontrado.colmena.cod && c.medida_mm === tuboEncontrado.colmena.medida_mm);
             const sobrante = tuboEncontrado.medidaOriginal - orden.medida_mm - MM_KERF;
-            const clasificacion = evaluarSobrante(sobrante);
+            const clasificacion = evaluarSobrante(sobrante, tuboEncontrado.colmena.cod);
 
             if (clasificacion.estado === 'merma') {
                 SistemaInventario.mermas.push({
@@ -5611,7 +5620,7 @@ async function ejecutarOptimizacion() {
                         };
                         const idxHistorico = SistemaInventario.colmenasHistorico.findIndex(c => c.n_colmena === tuboReemplazo.colmena.n_colmena && c.cod === tuboReemplazo.colmena.cod && c.medida_mm === tuboReemplazo.colmena.medida_mm);
                         const sobrante = tuboReemplazo.medidaOriginal - orden.medida_mm - MM_KERF;
-                        const clasificacion = evaluarSobrante(sobrante);
+                        const clasificacion = evaluarSobrante(sobrante, tuboReemplazo.colmena.cod);
 
                         if (clasificacion.estado === 'merma') {
                             SistemaInventario.mermas.push({
@@ -5811,7 +5820,22 @@ async function ejecutarOptimizacion() {
                     tubo_raiz_id: tuboNuevoRaizId
                 });
                 
-                const clasificacion = evaluarSobrante(sobranteNuevo);
+                const clasificacion = evaluarSobrante(sobranteNuevo, codigoTuboNuevo);
+                // Sobrante-merma de un tubo NUEVO (común en E78 con cola ≤ 50 cm): marcar
+                // es_desecho para que la hoja de corte / vista previa muestren DESECHAR MERMA
+                // (no GUARDAR SOBRANTE) y para que la tabla de mermas lo liste.
+                if (clasificacion.estado === 'merma' && sobranteNuevo > 0) {
+                    resultado.es_desecho = true;
+                    SistemaInventario.mermas.push({
+                        orden: orden.id,
+                        espacioOriginal: posicionNueva,
+                        codigoOriginal: codOrden,
+                        medidaRequerida: orden.medida_cm,
+                        tipo: 'MERMA',
+                        valor: sobranteNuevo / 10,
+                        codigoUsado: codigoTuboNuevo
+                    });
+                }
                 if (clasificacion.estado !== 'prohibido' && clasificacion.estado !== 'merma') {
                     const colmenaExistente = buscarColmenaDisponibleConCodigo(codigoTuboNuevo);
                     // CORRECCIÓN TRAZABILIDAD + L-SLOT: si tubo nuevo es largo pero sobrante < 300cm,
@@ -6667,7 +6691,7 @@ async function construirEventosTubos() {
         // aunque el resultado no traiga es_desecho (planes reconstruidos a mano
         // o de versiones viejas). Evita guardar pedacitos inservibles en colmena.
         const esMerma       = !!res.es_desecho ||
-            (Number(res.sobrante_cm || 0) > 0 && Number(res.sobrante_cm) * 10 <= MERMA_MAX_MM);
+            (Number(res.sobrante_cm || 0) > 0 && Number(res.sobrante_cm) * 10 <= mermaMaxMm(res.codigo));
         const tieneSobrante = !esMerma && res.sobrante_cm > 0;
 
         // ID de linaje del tubo en colmenasHistorico (heredado del tubo original).
@@ -6767,7 +6791,7 @@ async function construirEventosTubos() {
                 medida_resultado_cm: 0,
                 evento:              'merma',
                 ot,
-                notas: `Merma de ${res.sobrante_cm}cm — descartada (< ${MERMA_MAX_MM/10}cm)`,
+                notas: `Merma de ${res.sobrante_cm}cm — descartada (≤ ${mermaMaxMm(res.codigo)/10}cm)`,
                 registrado_por: usuario,
                 created_at:     tsCorte
             });
