@@ -37,6 +37,7 @@ import {
 import { esCenefaCuadrada, OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
   categoriaRequiereMecanismo,
+  chipMecanismoPorNumero,
   codigoTuberiaDeChip,
   colorAccesoriosDePano,
   mecanismoParaPano,
@@ -148,6 +149,17 @@ function grupoInsumo(codigo: string | undefined, descripcion: string): GrupoInsu
 }
 
 /**
+ * Descripción completa del kit de un número MEC para las líneas de tapas/pivotes
+ * de la armadura E78 ovalada: "[MEC39] OVALADA BLANCO [MEC 39]" en vez de solo
+ * "MEC 39" (así el bodeguero ve de qué kit salen). Cae a "MEC N" si no hay chip.
+ */
+function descKitMec(num: number): string {
+  const cod = `MEC${String(num).padStart(2, '0')}`;
+  const chip = chipMecanismoPorNumero(num, OPCIONES_MECANISMO_RESOLUCION);
+  return chip ? `[${cod}] ${chip}` : `MEC ${num}`;
+}
+
+/**
  * Todos los insumos de la OT consolidados para la hoja de inventario, ya
  * clasificados en INSUMOS / PRODUCCIÓN / INSTALACIÓN: manillas (por color), tapas
  * de peso, tornillos, brackets, tarugos, suplementos, mecanismos, cadenas, peso
@@ -249,7 +261,7 @@ export function consolidarInsumos(
         const nMix = esCategoriaDuo(v.categoria) ? 4 : 2;
         const colorAcc = normalizarColorAccesorio(colorAccesoriosDePano(p, v.color));
         const mecTapas = MEC_KIT_OVALADA_POR_COLOR[colorAcc];
-        if (mecTapas != null) bump(undefined, `MEC ${mecTapas}`, nMix, 'PRODUCCION', 'TAPAS');
+        if (mecTapas != null) bump(undefined, descKitMec(mecTapas), nMix, 'PRODUCCION', 'TAPAS');
         // Pivotes: solo blanco→18 / negro→23. Gris (y colores sin kit 45) queda
         // manual — decisión del usuario 2026-07-15: sin línea automática.
         const mecPivotes =
@@ -258,7 +270,7 @@ export function consolidarInsumos(
             : colorAcc === 'BCO' || colorAcc === 'BLANCO'
               ? 18
               : null;
-        if (mecPivotes != null) bump(undefined, `MEC ${mecPivotes}`, nMix, 'PRODUCCION', 'PIVOTES');
+        if (mecPivotes != null) bump(undefined, descKitMec(mecPivotes), nMix, 'PRODUCCION', 'PIVOTES');
       }
       // El MOTOR de una cortina con cenefa ovalada va a PRODUCCIÓN; el resto del
       // kit (control, cable, enchufe) y los motores de cortinas normales, a
