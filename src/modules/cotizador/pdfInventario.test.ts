@@ -308,38 +308,48 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
     }) as unknown as Ventana;
   const tieneUnidad = (d: ReturnType<typeof construirInventario>, unidad: string) =>
     d.insumos.some((i) => i.unidad === unidad);
+  // Las líneas de tapas/pivotes traen la descripción COMPLETA del kit del que
+  // salen, no solo "MEC 39" (pedido del usuario 2026-07-15).
+  const TAPAS_39 = '[MEC39] OVALADA BLANCO [MEC 39]';
+  const TAPAS_38 = '[MEC38] OVALADA NEGRO [MEC 38]';
+  const TAPAS_12 = '[MEC12] OVALADA GRIS [MEC 12]';
+  const PIV_18 = '[MEC18] 0,45mm BCO [MEC 18]';
+  const PIV_23 = '[MEC23] 0,45mm NGR [MEC 23]';
 
   it('ROL cenefa ovalada BLANCA + E78 → MEC 39 (2 TAPAS) y MEC 18 (2 PIVOTES) en PRODUCCIÓN', () => {
     const d = construirInventario([ventRolOv('LIVING')]);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_39)).toMatchObject({
       cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
     });
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === PIV_18)).toMatchObject({
       cantidad: 2, unidad: 'PIVOTES', grupo: 'PRODUCCION',
     });
   });
 
   it('E78 + ovalada NO lista el kit de mecanismo completo (se reemplaza por tapas + pivotes)', () => {
     const d = construirInventario([ventRolOv('LIVING')]);
-    // El kit se emite con código MECxx y descripción "[MECxx] OVALADA…"; con E78
-    // no debe aparecer. La cadena/peso sí siguen (se listan aparte).
+    // El kit completo se emitiría con código MECxx y sin unidad (cantidad 1); con
+    // E78 no debe aparecer. La línea de TAPAS sí trae la descripción del kit
+    // ("[MEC39] OVALADA…") pero lleva unidad 'TAPAS' — por eso el filtro !unidad.
     expect(d.insumos.find((i) => i.codigo === 'MEC39')).toBeUndefined();
-    expect(d.insumos.some((i) => (i.descripcion || '').includes('OVALADA'))).toBe(false);
+    expect(d.insumos.some((i) => (i.descripcion || '').includes('OVALADA') && !i.unidad)).toBe(false);
+    // La línea de tapas SÍ existe, con la descripción completa del kit.
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_39)?.unidad).toBe('TAPAS');
   });
 
   it('ROL cenefa ovalada NEGRA + E78 → MEC 38 (TAPAS) y MEC 23 (PIVOTES)', () => {
     const d = construirInventario([ventRolOv('LIVING', 'NEGRO', 'MEC_23_OVALADA_NEGRO')]);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 38')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_38)).toMatchObject({
       cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
     });
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 23')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === PIV_23)).toMatchObject({
       cantidad: 2, unidad: 'PIVOTES', grupo: 'PRODUCCION',
     });
   });
 
   it('ROL cenefa ovalada GRIS + E78 → MEC 12 (TAPAS) y SIN línea de pivotes (manual)', () => {
     const d = construirInventario([ventRolOv('LIVING', 'GRIS', 'MEC_12_OVALADA_GRIS')]);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 12')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_12)).toMatchObject({
       cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
     });
     expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
@@ -360,18 +370,18 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
       panos: [{ ancho: 2.5, alto: 2.2, color: 'BLANCO' }], // sin cenefa guardada
     } as unknown as Ventana;
     const d = construirInventario([vDuo]);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_39)).toMatchObject({
       cantidad: 4, unidad: 'TAPAS', grupo: 'PRODUCCION',
     });
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')).toMatchObject({
+    expect(d.insumos.find((i) => i.descripcion === PIV_18)).toMatchObject({
       cantidad: 4, unidad: 'PIVOTES', grupo: 'PRODUCCION',
     });
   });
 
   it('2 cortinas ROL ovalada BLANCA E78 → consolida a 4 TAPAS (MEC 39) y 4 PIVOTES (MEC 18)', () => {
     const d = construirInventario([ventRolOv('LIVING'), ventRolOv('COMEDOR')]);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')?.cantidad).toBe(4);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')?.cantidad).toBe(4);
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_39)?.cantidad).toBe(4);
+    expect(d.insumos.find((i) => i.descripcion === PIV_18)?.cantidad).toBe(4);
   });
 
   it('mezcla de colores NO se consolida: blanca (MEC 39/18) y negra (MEC 38/23) separadas', () => {
@@ -379,10 +389,10 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
       ventRolOv('LIVING'),
       ventRolOv('COMEDOR', 'NEGRO', 'MEC_23_OVALADA_NEGRO'),
     ]);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')?.cantidad).toBe(2);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')?.cantidad).toBe(2);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 38')?.cantidad).toBe(2);
-    expect(d.insumos.find((i) => i.descripcion === 'MEC 23')?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_39)?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === PIV_18)?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_38)?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === PIV_23)?.cantidad).toBe(2);
   });
 
   it('cenefa ovalada 38 mm (tubo E02, no E78) → NO agrega tapas/pivotes y SÍ lista el mecanismo completo', () => {
