@@ -354,17 +354,52 @@ describe('banda 2,2–3,0 m → kit 45 mm + tubo E78 (2026-07-14)', () => {
       mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.01),
     ).toContain('[MEC 28]');
   });
-  it('DUO_MANUAL_38mm en banda: la regla de ancho pisa el kit ovalada 38 de la categoría', () => {
+  it('DUO_MANUAL_38mm en banda: kit ovalada de bodega por color (mismo que en 38 mm)', () => {
+    // 2026-07-15: la banda dúo ya NO muestra MEC 18/23; usa el kit ovalada de
+    // bodega (negro 38 · gris 12) igual que las ovaladas de 38 mm. El tubo/modelo
+    // sí cruza a 45 mm/E78 (ver modeloPorAncho más abajo).
     expect(
       mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
-    ).toContain('[MEC 23]');
+    ).toContain('[MEC 38]');
     expect(
       mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
-    ).toContain('[MEC 18]');
+    ).toContain('[MEC 12]');
+    // Una OT guardada con el chip viejo de banda (MEC 23) migra al kit ovalada.
+    expect(
+      mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
+    ).toContain('[MEC 38]');
     // Bajo la banda sigue la regla de categoría (kit ovalada 38 por color).
     expect(
       mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 1.5),
     ).toContain('[MEC 38]');
+  });
+});
+
+describe('cenefa ovalada 45 mm (E78): mismo kit ovalada de bodega que el 38 mm', () => {
+  // 2026-07-15: las categorías 45 mm dejaron de caer al kit simple 32/33/34.
+  it('ROL_MANUAL_CENEFA_OVALADA_45mm → 39 blanco / 38 negro / 12 gris', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_45mm', 2.0),
+    ).toContain('[MEC 39]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_45mm', 2.0),
+    ).toContain('[MEC 38]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_45mm', 2.0),
+    ).toContain('[MEC 12]');
+  });
+  it('DUO_MANUAL_45mm → 39 blanco / 38 negro / 12 gris', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_45mm', 2.0),
+    ).toContain('[MEC 39]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_45mm', 2.0),
+    ).toContain('[MEC 38]');
+  });
+  it('un kit simple guardado (MEC 33) en una ovalada 45 migra al kit ovalada', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_45mm', 2.0),
+    ).toContain('[MEC 39]');
   });
 });
 

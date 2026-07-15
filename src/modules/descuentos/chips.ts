@@ -405,9 +405,13 @@ export function modeloPorAncho(
   if (aplicada) {
     // La fila destino puede vivir en otra categoría (dúo 38 → filas MANUAL_45)
     // y el número MEC puede repetirse por color (MEC 18 ovalada blanco Y gris):
-    // filtra por número y desambigua por color.
+    // filtra por número y desambigua por color. El kit MOSTRADO (aplicada.mec)
+    // puede diferir del MEC de la fila del catálogo (dúo banda: kit ovalada
+    // 39/38/12 pero filas MEC_18/23_OVALADA) → usa modeloMecPorColor si existe.
+    const mecFila =
+      aplicada.regla.modeloMecPorColor?.[normalizarColorAccesorio(color)] ?? aplicada.mec;
     const cands = modelosParaCategoria(modelos, aplicada.regla.categoriaModelo ?? categoria);
-    const delMec = cands.filter((c) => mecanismoCoincideNumero(c.mecanismo, aplicada.mec));
+    const delMec = cands.filter((c) => mecanismoCoincideNumero(c.mecanismo, mecFila));
     const up = delMec.length > 0 ? elegirModeloPorColor(delMec, color) : null;
     if (up) return up;
     // Catálogo sin la fila forzada: no dejar colgado un modelo de otra banda.

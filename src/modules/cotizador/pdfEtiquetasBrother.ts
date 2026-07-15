@@ -590,6 +590,8 @@ export function generarEtiquetasPDF(
 export type GrupoEtiquetaPano = {
   /** Fila representativa: la de mayor alto de corte (define el tiro de tela). */
   row: OptimizerRow;
+  /** Todas las filas del paño (para decidir si alguna sale de colmena). */
+  rows: OptimizerRow[];
   /** Texto SE CORTA JUNTO: "A" si va sola, "A-A" si viajan 2 cortinas, etc. */
   junto: string;
   cortinas: number;
@@ -611,11 +613,12 @@ export function agruparEtiquetasPanos(rows: OptimizerRow[]): GrupoEtiquetaPano[]
     const clave = esAgrupable ? `${numero}|${letra}` : `sola-${i}`;
     const previo = porClave.get(clave);
     if (!previo) {
-      const g: GrupoEtiquetaPano = { row, junto: row.junto, cortinas: 1 };
+      const g: GrupoEtiquetaPano = { row, rows: [row], junto: row.junto, cortinas: 1 };
       porClave.set(clave, g);
       grupos.push(g);
     } else {
       previo.cortinas += 1;
+      previo.rows.push(row);
       if ((row.altoCorte || 0) > (previo.row.altoCorte || 0)) previo.row = row;
     }
   });
@@ -637,11 +640,18 @@ export function generarEtiquetasPanosPDF(
   rows: OptimizerRow[],
   meta: MetaPDF,
   catalogo: CatalogoProductos,
-): void {
+  /** Si se pasa, los paños con ALGUNA pieza de colmena NO llevan etiqueta (ya
+   *  están cortados y etiquetados). Sin este argumento se imprimen todos. */
+  esDeColmena?: (r: OptimizerRow) => boolean,
+): number {
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
-  const grupos = agruparEtiquetasPanos(rows);
+  const todos = agruparEtiquetasPanos(rows);
+  const grupos = esDeColmena
+    ? todos.filter((g) => !g.rows.some(esDeColmena))
+    : todos;
+  if (grupos.length === 0) return 0;
   // Página exacta 62×54: orientación 'l' porque jsPDF voltea las páginas
   // "apaisadas" (ancho > alto) cuando se le pide 'p'.
   const doc = new jsPDF('l', 'mm', [ANCHO, ALTO_PANO]);
@@ -650,4 +660,5 @@ export function generarEtiquetasPanosPDF(
     dibujarPano(doc, g.row, i + 1, grupos.length, meta, catalogo, g.junto);
   });
   doc.save(`Etiquetas_Panos_${meta.ot}.pdf`);
+  return grupos.length;
 }

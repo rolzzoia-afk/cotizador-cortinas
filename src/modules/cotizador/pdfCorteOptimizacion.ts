@@ -70,8 +70,28 @@ export type HojaCorte = {
   optimizador: MetrosOptimizador[];
 };
 
-const pieceId = (otId: string | number, ventanaId: string | number, panoIndex: number) =>
+export const pieceId = (otId: string | number, ventanaId: string | number, panoIndex: number) =>
   `${otId}_${ventanaId}_p${panoIndex}`;
+
+/**
+ * IDs de pieza (pieceId) que salen de la COLMENA de paños (ya cortados de un
+ * sobrante), no del rollo. Mismo criterio que `construirHojaCorte`: plan vivo
+ * (sobrantes asignados) + snapshot persistido tras "confirmar corte general".
+ * Se usa para NO imprimir etiqueta de esos paños (ya están cortados/etiquetados).
+ */
+export function piezasConOrigenColmena(
+  colmenaPanos: PanoColmena[],
+  ot: OT,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  piezasSnapshot?: Record<string, PiezaColmenaSnap>,
+): Set<string> {
+  const plan = generarPlanCorte([ot], colmenaPanos, params);
+  const set = new Set<string>();
+  for (const g of plan.sobrantes)
+    for (const pz of g.placed) if (!pz.failed) set.add(pz.id);
+  for (const pid of Object.keys(piezasSnapshot ?? {})) set.add(pid);
+  return set;
+}
 
 /** Metros (m) desde cm, redondeado a 3 decimales sin ceros sobrantes. */
 const aMetros = (cm: number) => parseFloat((cm / 100).toFixed(3));

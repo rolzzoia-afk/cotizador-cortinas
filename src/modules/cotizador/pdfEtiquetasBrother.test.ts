@@ -199,3 +199,62 @@ describe('generarEtiquetasPanosPDF', () => {
     }
   });
 });
+
+describe('generarEtiquetasPanosPDF — omite paños de colmena', () => {
+  const fila = (junto: string, numeroPano: number, ventanaId: string, panoIndex = 0): OptimizerRow =>
+    ({
+      codInt: 'SC 64',
+      producto: 'ROLLER SCREEN PREMIUM',
+      tipo: 'PREMIUM',
+      junto,
+      numeroPano,
+      ventanaId,
+      panoIndex,
+      altoCorte: 2.65,
+      pano: { tipoTela: 'SCR' },
+    }) as unknown as OptimizerRow;
+  const meta = { ot: '3115', cliente: 'LUIS-VIVIANA', fecha: '2026-07-15' };
+
+  it('paño de colmena no lleva etiqueta: 3 paños, 1 de colmena → 2 etiquetas', () => {
+    docsGuardados.length = 0;
+    const n = generarEtiquetasPanosPDF(
+      [fila('A', 1, 'V1'), fila('B', 2, 'V2'), fila('C', 3, 'V3')],
+      meta,
+      {},
+      (r) => r.ventanaId === 'V3',
+    );
+    expect(n).toBe(2);
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
+  });
+
+  it('si ALGUNA pieza del paño en conjunto sale de colmena, se omite todo el paño', () => {
+    docsGuardados.length = 0;
+    const n = generarEtiquetasPanosPDF(
+      [fila('A', 1, 'V1'), fila('A', 1, 'V2'), fila('B', 2, 'V3')],
+      meta,
+      {},
+      (r) => r.ventanaId === 'V2', // una de las dos cortinas del paño A
+    );
+    expect(n).toBe(1); // solo queda el paño B
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(1);
+  });
+
+  it('todos los paños de colmena → 0 etiquetas y NO genera PDF', () => {
+    docsGuardados.length = 0;
+    const n = generarEtiquetasPanosPDF(
+      [fila('A', 1, 'V1'), fila('B', 2, 'V2')],
+      meta,
+      {},
+      () => true,
+    );
+    expect(n).toBe(0);
+    expect(docsGuardados).toHaveLength(0);
+  });
+
+  it('sin callback → imprime todos (regresión del comportamiento previo)', () => {
+    docsGuardados.length = 0;
+    const n = generarEtiquetasPanosPDF([fila('A', 1, 'V1'), fila('B', 2, 'V2')], meta, {});
+    expect(n).toBe(2);
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
+  });
+});
