@@ -54,11 +54,20 @@ export const REGLAS_TUBERIA = {
     codigoDesde: 'E65',
   } as const,
 
-  /** Código de tubo por diámetro cuando no aplica regla de categoría ni E02/E66. */
+  /** Código de tubo por diámetro cuando no aplica regla de categoría ni E02/E66.
+   *  45 mm: E78 es el default nuevo (2026-07-14); E05 quedó en desuso pero sigue
+   *  seleccionable a mano (ver tubos45mm). */
   codigoPorDiametro: {
-    45: 'E05',
+    45: 'E78',
     63: 'E47',
   } as Record<number, string>,
+
+  /**
+   * Tubos 45 mm seleccionables (sin regla por ancho): E78 (default nuevo,
+   * 2026-07-14) y E05 (histórico, en desuso pero conservado para OTs viejas y
+   * elección manual). El primero es el que se auto-selecciona.
+   */
+  tubos45mm: ['E78', 'E05'] as const,
 
   /** Reglas por categoría — tienen prioridad sobre E02/E66 y el diámetro del modelo Excel. */
   reglasCategoria: [
@@ -97,6 +106,12 @@ export function aplicaRegla63(modelo: ModeloTubo, categoria?: string): boolean {
 
 /**
  * Código de tubo (E02, E66, E47…) según categoría, modelo y ancho.
+ *
+ * El diámetro efectivo lo fija el MODELO cuando existe (es el dato real del
+ * catálogo, incluida la fila 45 mm que fuerza la banda 2,2–3,0 m aunque la
+ * categoría diga "…_38mm"); si no hay modelo con diámetro, la categoría con mm
+ * en el nombre (…_45mm) decide — cubre la ventana nueva sin producto, donde el
+ * mecanismo placeholder es un "kit simple 38MM" que no debe fijar el tubo.
  */
 export function codigoTuboPorAncho(
   m: ModeloTubo,
@@ -107,18 +122,19 @@ export function codigoTuboPorAncho(
   if (porCat) return porCat;
 
   const { reglaE02E66, regla63, codigoPorDiametro } = REGLAS_TUBERIA;
+  const diam = m.diametro_tubo_mm > 0 ? m.diametro_tubo_mm : diametroDesdeCategoria(categoria) ?? 0;
 
-  if (m.diametro_tubo_mm === reglaE02E66.diametroMm && anchoM > 0) {
+  if (diam === reglaE02E66.diametroMm && anchoM > 0) {
     return anchoM > reglaE02E66.anchoMaxE02M
       ? reglaE02E66.codigoDesde
       : reglaE02E66.codigoHasta;
   }
 
-  if (m.diametro_tubo_mm === regla63.diametroMm && anchoM > 0) {
+  if (diam === regla63.diametroMm && anchoM > 0) {
     return anchoM > regla63.anchoMaxE47M ? regla63.codigoDesde : regla63.codigoHasta;
   }
 
-  const porDiam = codigoPorDiametro[m.diametro_tubo_mm];
+  const porDiam = codigoPorDiametro[diam];
   if (porDiam) return porDiam;
 
   const codes = codigosTuboModelo(m);
@@ -133,6 +149,7 @@ export function codigoTuboPorAncho(
 export const DESCRIPCION_TUBERIA: Record<string, string> = {
   E02: 'E02-TUBO 1.2 / Ø 38 mm',
   E66: 'E66 - TUBO (.40mm) - 2.5mm',
+  E78: 'E78 - TUBO 43MM(ESP1.2)(5.8)',
   E05: 'E05 - TUBO Ø 45 mm',
   E47: 'E47 - TUBO Ø 63 mm',
   E65: 'E65 - TUBO (.63mm)',
@@ -253,7 +270,7 @@ export function chipTuberiaPorAncho(
  * roller >3 m (E65) y pasa a OSCURANTI —siempre E47— tiene que perder el E65.
  * Sin E65 en el set, ese tubo guardado sobrevivía y OSCURANTI quedaba en E65.
  */
-const TUBOS_AUTO_POR_ANCHO = new Set(['E02', 'E66', 'E65']);
+const TUBOS_AUTO_POR_ANCHO = new Set(['E02', 'E66', 'E65', 'E78']);
 
 /**
  * Tubería que debe quedar en el paño: pre-selecciona según reglas;
@@ -266,7 +283,20 @@ export function tuberiaParaPano(
   opciones: readonly string[],
   categoria?: string,
 ): string {
-  if (!modelo || anchoM <= 0) return (stored || '').trim();
+  if (!modelo || anchoM <= 0) {
+    // Sin modelo o sin ancho no corre la regla por ancho; pero si la categoría
+    // fija el diámetro (…_45mm/…_63mm, un único código sin regla de ancho) y no
+    // hay tubería guardada, igual se pre-selecciona ese tubo (cenefa ovalada
+    // 45 mm → E78, aunque el modelo sea null o el mecanismo sea "kit simple 38MM").
+    const trimmed = (stored || '').trim();
+    if (!trimmed) {
+      const dCat = diametroDesdeCategoria(categoria);
+      const codCatDiam = dCat != null ? REGLAS_TUBERIA.codigoPorDiametro[dCat] : undefined;
+      const chip = codCatDiam ? chipTuberiaPorCodigo(codCatDiam, opciones) : null;
+      if (chip) return chip;
+    }
+    return trimmed;
+  }
 
   const esperado = chipTuberiaPorAncho(modelo, anchoM, opciones, categoria);
   if (!esperado) return (stored || '').trim();
@@ -278,6 +308,17 @@ export function tuberiaParaPano(
 
   const codCat = codigoTuboPorCategoria(categoria || '');
   if (codCat) {
+    const cs = codigoTuberiaDeChip(trimmed);
+    if (!cs || TUBOS_AUTO_POR_ANCHO.has(cs)) return esperado;
+    return trimmed;
+  }
+
+  // Diámetro efectivo 45 mm (banda 2,2–3,0 m o cenefa ovalada 45): corrige los
+  // tubos auto de otras franjas (E02/E66/E65 → E78); respeta E05 y cualquier
+  // elección manual guardada.
+  const diamMod =
+    modelo.diametro_tubo_mm > 0 ? modelo.diametro_tubo_mm : diametroDesdeCategoria(categoria);
+  if (diamMod === 45) {
     const cs = codigoTuberiaDeChip(trimmed);
     if (!cs || TUBOS_AUTO_POR_ANCHO.has(cs)) return esperado;
     return trimmed;
@@ -298,11 +339,14 @@ export function tuberiaParaPano(
 // etiqueta ("…38MM", "0,63mm…", OVALADA = 38 mm) y el modelo de despiece en
 // diametro_tubo_mm. No existe (ni hace falta) una tabla mecanismo→tubo.
 
-/** Códigos de tubo compatibles con un diámetro: 38→[E02,E66], 45→[E05], 63→[E47]. */
+/** Códigos de tubo compatibles con un diámetro: 38→[E02,E66], 45→[E78,E05], 63→[E47,E65]. */
 export function codigosTuberiaCompatibles(diametroMm: number): string[] {
-  const { reglaE02E66, regla63, codigoPorDiametro } = REGLAS_TUBERIA;
+  const { reglaE02E66, regla63, tubos45mm, codigoPorDiametro } = REGLAS_TUBERIA;
   if (diametroMm === reglaE02E66.diametroMm) {
     return [reglaE02E66.codigoHasta, reglaE02E66.codigoDesde];
+  }
+  if (diametroMm === 45) {
+    return [...tubos45mm];
   }
   if (diametroMm === regla63.diametroMm) {
     return [regla63.codigoHasta, regla63.codigoDesde];
@@ -312,12 +356,11 @@ export function codigosTuberiaCompatibles(diametroMm: number): string[] {
 }
 
 /**
- * Diámetro de tubo (mm) implícito en la etiqueta de un chip de MECANISMO:
- * "…38MM [MEC 32]"→38 · "0,63mm BCO [MEC 28]"→63 · "0,45mm [MEC 18]"→45 ·
- * OVALADA→38 · LZ90/LZ50→38 (el 50 de "LZ50" es el modelo, NO un diámetro).
- * Si no se reconoce o el número no tiene regla de tubo → null.
+ * Diámetro (mm) EXPLÍCITO en la etiqueta de un chip de mecanismo: "…38MM"→38 ·
+ * "0,63mm…"→63 · "0,45mm…"→45. NO incluye las heurísticas OVALADA/LZ/DUAL
+ * (ambiguas: esos sistemas existen hoy en 38 Y 45 mm). null si no hay mm explícito.
  */
-export function diametroDesdeChipMecanismo(chip: string | null | undefined): number | null {
+function diametroExplicitoDesdeChip(chip: string | null | undefined): number | null {
   const s = (chip || '').trim().toUpperCase();
   if (!s) return null;
   const valido = (d: number) => (codigosTuberiaCompatibles(d).length > 0 ? d : null);
@@ -327,7 +370,25 @@ export function diametroDesdeChipMecanismo(chip: string | null | undefined): num
   // "38MM" pegado o con espacio (kits simples).
   const directo = s.match(/(\d{2})\s*MM/);
   if (directo) return valido(parseInt(directo[1], 10));
-  // Ovaladas (nuevas y legacy), kits LZ y duales: siempre tubo de 38 mm.
+  return null;
+}
+
+/**
+ * Diámetro de tubo (mm) implícito en la etiqueta de un chip de MECANISMO:
+ * "…38MM [MEC 32]"→38 · "0,63mm BCO [MEC 28]"→63 · "0,45mm [MEC 18]"→45 ·
+ * OVALADA→38 · LZ90/LZ50→38 (el 50 de "LZ50" es el modelo, NO un diámetro).
+ * Si no se reconoce o el número no tiene regla de tubo → null.
+ *
+ * OJO: OVALADA/LZ/DUAL→38 es una HEURÍSTICA histórica (antes solo existían en
+ * 38 mm). Hoy hay cenefa ovalada y LZ de 45 mm, así que esto es solo el último
+ * recurso; cuando hay modelo con diámetro real, `diametroEfectivo` lo prefiere.
+ */
+export function diametroDesdeChipMecanismo(chip: string | null | undefined): number | null {
+  const explicito = diametroExplicitoDesdeChip(chip);
+  if (explicito != null) return explicito;
+  const s = (chip || '').trim().toUpperCase();
+  const valido = (d: number) => (codigosTuberiaCompatibles(d).length > 0 ? d : null);
+  // Ovaladas (nuevas y legacy), kits LZ y duales: heurística a 38 mm.
   if (s.includes('OVALADA')) return valido(38);
   if (s.includes('LZ')) return valido(38);
   if (s.includes('DUAL')) return valido(38);
@@ -335,11 +396,50 @@ export function diametroDesdeChipMecanismo(chip: string | null | undefined): num
 }
 
 /**
+ * Diámetro (mm) implícito en el NOMBRE de la categoría del cotizador:
+ * "ROL_MANUAL_CENEFA_OVALADA_45mm"→45 · "…_38mm"→38 · "OSCURANTI_63mm"→63.
+ * Fuente secundaria para la ventana nueva (aún sin producto/modelo pero con la
+ * categoría ya elegida). null si la categoría no codifica mm o no tiene regla.
+ */
+export function diametroDesdeCategoria(categoria: string | null | undefined): number | null {
+  const m = (categoria || '').toUpperCase().match(/(\d{2})\s*MM/);
+  if (!m) return null;
+  const d = parseInt(m[1], 10);
+  return codigosTuberiaCompatibles(d).length > 0 ? d : null;
+}
+
+/**
+ * Diámetro de tubo efectivo, con la precedencia correcta:
+ *   1. modelo (diametro_tubo_mm > 0) — dato real del catálogo. Manda incluso
+ *      sobre la categoría: la banda 2,2–3,0 m fuerza la fila 45 mm aunque la
+ *      categoría diga "…_38mm" (dúo manual).
+ *   2. categoría (…_45mm/…_38mm/…_63mm) — sin modelo (ventana nueva), la spec
+ *      del producto decide. Gana al chip porque una cenefa ovalada 45 mm sin
+ *      regla de mecanismo cae al "kit simple 38MM" (placeholder); ese 38 es
+ *      del kit, no del tubo.
+ *   3. explícito en el chip (38MM / 0,45mm / 0,63mm) — cuando ni modelo ni
+ *      categoría aportan (p.ej. roller "ROL": el tubo lo fija el mecanismo).
+ *   4. heurística del chip (OVALADA/LZ/DUAL→38) — último recurso.
+ */
+function diametroEfectivo(
+  mecanismoChip: string | null | undefined,
+  modelo: ModeloTubo | null | undefined,
+  categoria: string | null | undefined,
+): number | null {
+  if (modelo && modelo.diametro_tubo_mm > 0) return modelo.diametro_tubo_mm;
+  const porCat = diametroDesdeCategoria(categoria);
+  if (porCat != null) return porCat;
+  const explicito = diametroExplicitoDesdeChip(mecanismoChip);
+  if (explicito != null) return explicito;
+  return diametroDesdeChipMecanismo(mecanismoChip); // heurística (explícito ya fue null)
+}
+
+/**
  * Opciones de tubería visibles según mecanismo/modelo/categoría (cascada
  * mecanismo→tubería del editor de paños). Prioridad: regla de categoría
- * (OSCURANTI→E47) → diámetro del chip de mecanismo → diámetro del modelo
- * (pletina→VELCRO) → sin datos: todas. La tubería guardada SIEMPRE se
- * conserva (escape para OTs viejas, incluso chips retirados de la lista).
+ * (OSCURANTI→E47) → pletina→VELCRO → diámetro efectivo (categoría con mm →
+ * chip explícito → modelo → heurística) → sin datos: todas. La tubería guardada
+ * SIEMPRE se conserva (escape para OTs viejas, incluso chips retirados).
  * Fail-open: ante cualquier hueco de datos devuelve todas las opciones,
  * nunca deja al operario sin alternativas.
  */
@@ -372,16 +472,22 @@ export function opcionesTuberiaFiltradas(
     return chip ? conStored([chip]) : [...opciones];
   }
 
-  // 2. Diámetro: chip de mecanismo primero, si no el modelo.
-  let d = diametroDesdeChipMecanismo(ctx.mecanismoChip);
-  if (d == null && ctx.modelo) {
-    if (ctx.modelo.diametro_tubo_mm <= 0) {
-      // Pletina/velcro (verticales): sin tubo redondo.
-      const chip = chipTuberiaDeModelo(ctx.modelo, opciones, ctx.categoria);
-      return chip ? conStored([chip]) : [...opciones];
-    }
-    d = ctx.modelo.diametro_tubo_mm;
+  // 2. Pletina/velcro (verticales): el modelo lo marca con diámetro 0 y no hay
+  //    categoría ni chip con mm que aporten un diámetro → sin tubo redondo.
+  if (
+    ctx.modelo &&
+    ctx.modelo.diametro_tubo_mm <= 0 &&
+    diametroDesdeCategoria(ctx.categoria) == null &&
+    diametroExplicitoDesdeChip(ctx.mecanismoChip) == null
+  ) {
+    const chip = chipTuberiaDeModelo(ctx.modelo, opciones, ctx.categoria);
+    return chip ? conStored([chip]) : [...opciones];
   }
+
+  // 3. Diámetro efectivo: categoría (spec) → chip explícito → modelo → heurística.
+  //    La categoría manda: una cenefa ovalada 45 mm cae al "kit simple 38MM"
+  //    (placeholder) y ese 38 del kit NO debe fijar el tubo en 38 mm.
+  const d = diametroEfectivo(ctx.mecanismoChip, ctx.modelo, ctx.categoria);
   if (d == null) return [...opciones];
 
   // 3. Diámetro → chips compatibles.
@@ -404,9 +510,11 @@ export function tuberiaCorregidaPorMecanismo(
   anchoM: number,
   opciones: readonly string[],
   categoria?: string,
+  modelo?: ModeloTubo | null,
 ): string | null {
   const codCat = codigoTuboPorCategoria(categoria || '');
-  const d = diametroDesdeChipMecanismo(mecanismoChip);
+  // Diámetro con el modelo como fuente real (gana a la heurística OVALADA/LZ→38).
+  const d = codCat ? null : diametroEfectivo(mecanismoChip, modelo, categoria);
   if (!codCat && d == null) return null;
 
   const compatibles = codCat ? [codCat] : codigosTuberiaCompatibles(d!);

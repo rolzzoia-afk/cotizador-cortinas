@@ -30,28 +30,84 @@ export type ReglaMecCategoria = {
   colores?: readonly string[];
 };
 
+/** Regla por ANCHO: fuerza mecanismo (y de paso el tubo) según el ancho. */
+export type ReglaMecAncho = {
+  /** Nota para quien edita las reglas; no afecta la lógica. */
+  descripcion: string;
+  categoria: string;
+  /** Ancho mínimo (m) ESTRICTO: la regla aplica si ancho > anchoMinM. */
+  anchoMinM: number;
+  /** Ancho máximo (m) INCLUSIVE; sin tope si se omite. */
+  anchoMaxM?: number;
+  /** MEC fijo (ignora el color de accesorios). */
+  mec?: number;
+  /** MEC por color de accesorios (claves cortas y largas, como colorAMec).
+   *  Un color SIN entrada (p.ej. gris en ROL) deja la elección manual. */
+  mecPorColor?: Record<string, number>;
+  /** Categoría cuyas filas del catálogo traen el modelo destino (cruce de
+   *  catálogo, p.ej. DUO_MANUAL_38mm → filas de DUO_MANUAL_45mm). */
+  categoriaModelo?: string;
+  /** Código de tubo que la regla fija (filtro y nota de la UI). */
+  tubo: string;
+  /** Nota que ve el operario en Fase 2 cuando la regla está activa. */
+  nota: string;
+};
+
 export const REGLAS_MECANISMO = {
   /** Categorías que NO llevan mecanismo roller. */
   categoriasSinMecanismo: ['VERTICAL', 'BEEBLACK'] as const,
 
   /** Kits de inventario bodega — visibles en rollers estándar (Fase 2).
-   *  32/33/34 simples · 40/41 reforzados (mismo tubo 38 mm). */
-  kitsInventario: [32, 33, 34, 40, 41] as const,
+   *  32/33/34 simples · 40/41 reforzados (mismo tubo 38 mm) ·
+   *  18/23 kits 45 mm (DECORELLI/ROLZZO, tubo E78 — banda 2,2–3,0 m). */
+  kitsInventario: [32, 33, 34, 40, 41, 18, 23] as const,
 
   /**
    * MEC del Excel legacy que se reemplazan automáticamente por kits inventario
-   * o por la regla de categoría correspondiente.
+   * o por la regla de categoría correspondiente. (18/23 salieron de la lista
+   * 2026-07-14: los kits 45 mm volvieron a ser de primera línea con el tubo E78.)
    */
-  legacyReemplazar: [5, 6, 9, 10, 11, 13, 14, 18, 23, 28] as const,
+  legacyReemplazar: [5, 6, 9, 10, 11, 13, 14, 28] as const,
 
   /**
    * Reglas por ANCHO: fuerzan un MEC según el ancho de la cortina, por encima
-   * de la regla de color. Roller simple sobre 3 m usa el kit 63 mm (MEC 28,
-   * tubo E65). Se evalúan tras la regla de categoría.
+   * de la regla de color Y de la de categoría. Se evalúan EN ORDEN; gana la
+   * primera cuyo rango y color calcen.
+   *  · Roller simple sobre 3 m → kit 63 mm (MEC 28, tubo E65).
+   *  · Banda 2,2–3,0 m (2026-07-14, tubo E78): ROL usa los kits 45 mm por color
+   *    (blanco MEC 18 DECORELLI · negro MEC 23 ROLZZO; GRIS queda manual porque
+   *    no hay kit 45 gris). El dúo manual pasa a los kits ovalada 45 del
+   *    catálogo dúo (blanco/gris MEC 18 · negro MEC 23).
    */
   reglasAncho: [
-    { descripcion: 'Roller simple sobre 3,0 m → MEC 28 (fila 63 mm, tubo E65)', categoria: 'ROL', anchoMinM: 3.0, mec: 28 },
-  ] as const,
+    {
+      descripcion: 'Roller simple sobre 3,0 m → MEC 28 (fila 63 mm, tubo E65)',
+      categoria: 'ROL',
+      anchoMinM: 3.0,
+      mec: 28,
+      tubo: 'E65',
+      nota: 'Fijo por ancho >3 m: mecanismo y tubo de 63 mm (MEC 28 · E65). Un kit de 38 mm no aguanta esa luz.',
+    },
+    {
+      descripcion: 'Roller simple 2,2–3,0 m → kit 45 mm por color (tubo E78); gris queda manual',
+      categoria: 'ROL',
+      anchoMinM: 2.2,
+      anchoMaxM: 3.0,
+      mecPorColor: { BCO: 18, BLANCO: 18, NEG: 23, NEGRO: 23 },
+      tubo: 'E78',
+      nota: 'Fijo por ancho 2,2–3,0 m: kit 45 mm por color y tubo E78. Con accesorios grises la elección queda manual.',
+    },
+    {
+      descripcion: 'Dúo manual 38 mm de 2,2–3,0 m → kit ovalada 45 por color (tubo E78)',
+      categoria: 'DUO_MANUAL_38mm',
+      anchoMinM: 2.2,
+      anchoMaxM: 3.0,
+      mecPorColor: { BCO: 18, BLANCO: 18, GRS: 18, GRIS: 18, NEG: 23, NEGRO: 23 },
+      categoriaModelo: 'DUO_MANUAL_45mm',
+      tubo: 'E78',
+      nota: 'Fijo por ancho 2,2–3,0 m: kit ovalada 45 mm por color y tubo E78.',
+    },
+  ] as readonly ReglaMecAncho[],
 
   /** Mapeo color accesorios → MEC inventario (rollers estándar). */
   colorAMec: {
@@ -212,13 +268,49 @@ export function mecPorCategoriaYColor(
   return reglaCategoriaAplicable(categoria, color)?.mec ?? null;
 }
 
-/** Número MEC forzado por ANCHO (roller simple >3 m → MEC 28), o null. */
-export function mecPorAncho(categoria: string, anchoM: number): number | null {
+/**
+ * Regla de ANCHO que aplica para la categoría/ancho/color, con su MEC ya
+ * resuelto, o null. Un color sin entrada en mecPorColor (gris en ROL) NO
+ * activa la regla: la elección queda manual.
+ */
+export function reglaAnchoAplicable(
+  categoria: string,
+  anchoM: number,
+  color?: string | null,
+): { regla: ReglaMecAncho; mec: number } | null {
   const c = normalizarCategoria(categoria);
   for (const r of REGLAS_MECANISMO.reglasAncho) {
-    if (c === r.categoria.toUpperCase() && anchoM > r.anchoMinM) return r.mec;
+    if (c !== r.categoria.toUpperCase()) continue;
+    if (!(anchoM > r.anchoMinM)) continue;
+    if (r.anchoMaxM != null && anchoM > r.anchoMaxM) continue;
+    if (r.mec != null) return { regla: r, mec: r.mec };
+    const mc = r.mecPorColor?.[normalizarColorAccesorio(color)];
+    if (mc != null) return { regla: r, mec: mc };
   }
   return null;
+}
+
+/** Número MEC forzado por ANCHO (>3 m → MEC 28 · banda 2,2–3,0 → kit 45), o null. */
+export function mecPorAncho(
+  categoria: string,
+  anchoM: number,
+  color?: string | null,
+): number | null {
+  return reglaAnchoAplicable(categoria, anchoM, color)?.mec ?? null;
+}
+
+/**
+ * true si el color tiene regla de banda por color en la categoría (blanco/negro
+ * en ROL; todos en dúo manual). Decide si un modelo 45 mm se REVIERTE a 38 al
+ * salir de la banda: con regla = fue automático y vuelve; sin regla (gris ROL)
+ * = fue elección manual y se respeta.
+ */
+export function colorConBandaAncho(categoria: string, color?: string | null): boolean {
+  const c = normalizarCategoria(categoria);
+  const col = normalizarColorAccesorio(color);
+  return REGLAS_MECANISMO.reglasAncho.some(
+    (r) => c === r.categoria.toUpperCase() && r.mecPorColor?.[col] != null,
+  );
 }
 
 /**

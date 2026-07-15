@@ -39,6 +39,7 @@ describe('opciones de Fase 2', () => {
     expect([...OPCIONES_TUBERIA]).toEqual([
       'E02-TUBO 1.2 / Ø 38 mm',
       'E66 - TUBO (.40mm) - 2.5mm',
+      'E78 - TUBO 43MM(ESP1.2)(5.8)',
       'E05 - TUBO Ø 45 mm',
       'E47 - TUBO Ø 63 mm',
       'E65 - TUBO (.63mm)',

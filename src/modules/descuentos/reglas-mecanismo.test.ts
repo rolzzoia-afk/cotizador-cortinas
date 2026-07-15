@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   REGLAS_MECANISMO,
   categoriaRequiereMecanismo,
+  colorConBandaAncho,
   mecEsFijoPorCategoria,
+  mecPorAncho,
   mecPorCategoriaYColor,
   numeroMecPorColor,
+  reglaAnchoAplicable,
   reglaCategoriaAplicable,
 } from './reglas-mecanismo';
 
@@ -85,5 +88,41 @@ describe('REGLAS_MECANISMO — categoriasSinMecanismo', () => {
       expect(categoriaRequiereMecanismo(cat)).toBe(false);
     }
     expect(categoriaRequiereMecanismo('ROL')).toBe(true);
+  });
+});
+
+describe('REGLAS_MECANISMO — reglasAncho (banda 2,2–3,0 → kit 45 · >3 → MEC 28)', () => {
+  it('ROL en banda: blanco → 18, negro → 23, gris → sin regla (manual)', () => {
+    expect(mecPorAncho('ROL', 2.5, 'BCO')).toBe(18);
+    expect(mecPorAncho('ROL', 2.5, 'BLANCO')).toBe(18);
+    expect(mecPorAncho('ROL', 2.5, 'NEG')).toBe(23);
+    expect(mecPorAncho('ROL', 2.5, 'GRS')).toBeNull();
+    expect(mecPorAncho('ROL', 2.5, 'GRIS')).toBeNull();
+    expect(mecPorAncho('ROL', 2.5)).toBeNull(); // sin color no hay banda
+  });
+  it('fronteras: 2,2 exacto fuera; 3,0 exacto dentro; >3,0 → MEC 28 (cualquier color)', () => {
+    expect(mecPorAncho('ROL', 2.2, 'BCO')).toBeNull();
+    expect(mecPorAncho('ROL', 3.0, 'BCO')).toBe(18);
+    expect(mecPorAncho('ROL', 3.01, 'BCO')).toBe(28);
+    expect(mecPorAncho('ROL', 3.5, 'GRS')).toBe(28); // la fila >3 m es fija, sin color
+  });
+  it('DUO_MANUAL_38mm en banda: blanco/gris → 18, negro → 23, y cruza al catálogo 45', () => {
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'BCO')).toBe(18);
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'GRS')).toBe(18);
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'NEG')).toBe(23);
+    expect(reglaAnchoAplicable('DUO_MANUAL_38mm', 2.5, 'NEG')?.regla.categoriaModelo).toBe('DUO_MANUAL_45mm');
+    expect(mecPorAncho('DUO_MANUAL_38mm', 3.5, 'NEG')).toBeNull(); // el dúo no tiene regla >3 m
+  });
+  it('la regla trae el tubo y la nota para la UI', () => {
+    expect(reglaAnchoAplicable('ROL', 2.5, 'BCO')?.regla.tubo).toBe('E78');
+    expect(reglaAnchoAplicable('ROL', 3.5, 'GRS')?.regla.tubo).toBe('E65');
+    expect(reglaAnchoAplicable('ROL', 2.5, 'NEG')?.regla.nota).toContain('E78');
+  });
+  it('colorConBandaAncho: decide la vuelta automática 45→38', () => {
+    expect(colorConBandaAncho('ROL', 'BCO')).toBe(true);
+    expect(colorConBandaAncho('ROL', 'NEGRO')).toBe(true);
+    expect(colorConBandaAncho('ROL', 'GRS')).toBe(false); // gris = manual, no se revierte
+    expect(colorConBandaAncho('DUO_MANUAL_38mm', 'GRIS')).toBe(true);
+    expect(colorConBandaAncho('OSCURANTI_63mm', 'BCO')).toBe(false);
   });
 });

@@ -11,10 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
 import { recargoTarjetaEfectivo, useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
-import {
-  elegirModeloPorColor,
-  modelosParaCategoria,
-} from '@/modules/descuentos/tipos';
+import { modeloVentanaPorAncho } from '@/modules/descuentos/chips';
 import { otToRow } from '@/modules/ots/mappers';
 import { useOT } from '@/modules/ots/hooks';
 import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
@@ -401,8 +398,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       ) => {
         const head = g.filas[0];
         const prod = catalogo[head.codInt.trim()];
-        const candidatos = modelosParaCategoria(modelosDespiece, head.categoria);
-        const modeloCalc = elegirModeloPorColor(candidatos, head.colorAcc);
+        // Modelo por color + regla por ANCHO (banda 2,2–3,0 m → kit 45/E78; >3 m →
+        // 63 mm/E65), igual que sincronizarChips en Fase 2. Sin esto una cortina
+        // importada nace en 38 mm y el Excel de órdenes/optimizador salía en E66
+        // hasta abrirla a mano en Fase 2.
+        const anchoGrupo = g.filas.reduce((mx, f) => Math.max(mx, f.ancho || 0), 0);
+        const modeloCalc = modeloVentanaPorAncho(
+          modelosDespiece,
+          head.categoria,
+          head.colorAcc,
+          anchoGrupo,
+        );
         const orig = head.vid
           ? (origVentanas[head.vid] as Record<string, any> | undefined)
           : undefined;

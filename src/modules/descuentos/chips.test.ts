@@ -12,6 +12,7 @@ import {
   mecanismoParaPano,
   modeloDesdeChipMecanismo,
   modeloPorAncho,
+  modeloVentanaPorAncho,
   numeroMecPorColor,
   opcionesMecanismoFiltradas,
 } from './chips';
@@ -301,10 +302,130 @@ describe('regla de mecanismo por ancho (roller >3 m → MEC 28)', () => {
       mecanismoParaPano({ mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.5),
     ).toContain('[MEC 28]');
   });
-  it('al bajar de 3 m vuelve al kit por color', () => {
+  it('al bajar de 3 m cae en la banda 2,2–3,0 → kit 45 (MEC 18)', () => {
     expect(
       mecanismoParaPano({ mecanismo: CHIP28 }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toContain('[MEC 18]');
+  });
+  it('al bajar de 2,2 m vuelve al kit por color', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: CHIP28 }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.0),
     ).toContain('[MEC 33]');
+  });
+});
+
+describe('banda 2,2–3,0 m → kit 45 mm + tubo E78 (2026-07-14)', () => {
+  it('ROL: blanco → MEC 18; negro → MEC 23; en la banda', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toContain('[MEC 18]');
+    expect(
+      mecanismoParaPano({ mecanismo: 'KIT SIMPLE NEGRO 38MM [MEC 32]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toContain('[MEC 23]');
+  });
+  it('ROL gris: la banda NO fuerza nada (elección manual); sigue el kit 38 gris', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toContain('[MEC 34]');
+  });
+  it('ROL gris: un kit 45 elegido a mano se CONSERVA en la sincronización', () => {
+    const manual45 = '0,45mm BCO [MEC 18]';
+    expect(
+      mecanismoParaPano({ mecanismo: manual45 }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toBe(manual45);
+    // Incluso fuera de la banda (fue elección manual, no automática).
+    expect(
+      mecanismoParaPano({ mecanismo: manual45 }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 1.5),
+    ).toBe(manual45);
+  });
+  it('ROL blanco: el kit 45 puesto por la banda VUELVE al kit color bajo 2,2 m', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '0,45mm BCO [MEC 18]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.0),
+    ).toContain('[MEC 33]');
+  });
+  it('fronteras: 2,2 exacto NO entra; 3,0 exacto SÍ; >3,0 pasa a MEC 28', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.2),
+    ).toContain('[MEC 33]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.0),
+    ).toContain('[MEC 18]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.01),
+    ).toContain('[MEC 28]');
+  });
+  it('DUO_MANUAL_38mm en banda: la regla de ancho pisa el kit ovalada 38 de la categoría', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
+    ).toContain('[MEC 23]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
+    ).toContain('[MEC 18]');
+    // Bajo la banda sigue la regla de categoría (kit ovalada 38 por color).
+    expect(
+      mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 1.5),
+    ).toContain('[MEC 38]');
+  });
+});
+
+describe('modeloPorAncho — banda 2,2–3,0 m (kit 45 / E78)', () => {
+  const rol38 = m('MEC_07_ROLLER_BLANCO', 38);
+  const rol45b = m('MEC_18_045_DECORELLI_BLANCO', 45);
+  const rol45n = m('MEC_23_045_ROLZZO_NEGRO', 45);
+  const rol63 = m('MEC_28_63mm_BLANCO_DER_IZQ', 63);
+  const modelosRol = [rol38, rol45b, rol45n, rol63];
+
+  const duo38 = (mec: string): ModeloDespiece => ({
+    ...m(mec, 38), sistema: 'CENEFA_OVALADA_DUO', tipo_rol: 'DUO_CENEFA_OV_MANUAL_38mm',
+  });
+  const duo45 = (mec: string): ModeloDespiece => ({
+    ...m(mec, 45), sistema: 'CENEFA_OVALADA_DUO', tipo_rol: 'DUO_CENEFA_OV_MANUAL_45mm',
+  });
+  const modelosDuo = [
+    duo38('MEC_09_OVALADA_NEGRO'), duo38('MEC_10_OVALADA_BLANCO'),
+    duo45('MEC_18_OVALADA_BLANCO'), duo45('MEC_18_OVALADA_GRIS'), duo45('MEC_23_OVALADA_NEGRO'),
+  ];
+
+  it('ROL 2,5 m blanco → DECORELLI 45; negro → ROLZZO 45', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'BCO')?.mecanismo).toBe('MEC_18_045_DECORELLI_BLANCO');
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'NEG')?.mecanismo).toBe('MEC_23_045_ROLZZO_NEGRO');
+  });
+  it('ROL 2,5 m gris → sin regla: conserva el modelo actual', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'GRS')).toBe(rol38);
+  });
+  it('ROL que baja de 2,2 m revierte el 45 de banda al 38 por color', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.0, rol45b, 'BCO')?.mecanismo).toBe('MEC_07_ROLLER_BLANCO');
+  });
+  it('ROL gris con 45 manual NO se revierte al bajar el ancho', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.0, rol45b, 'GRS')).toBe(rol45b);
+  });
+  it('DUO_MANUAL_38mm 2,5 m: cruza al catálogo 45 y desambigua MEC 18 por color', () => {
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'GRS')?.mecanismo).toBe('MEC_18_OVALADA_GRIS');
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'BCO')?.mecanismo).toBe('MEC_18_OVALADA_BLANCO');
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'NEG')?.mecanismo).toBe('MEC_23_OVALADA_NEGRO');
+  });
+  it('DUO que baja de 2,2 m vuelve a su fila MANUAL_38 por color', () => {
+    const en45 = duo45('MEC_23_OVALADA_NEGRO');
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 1.5, en45, 'NEG')?.mecanismo).toBe('MEC_09_OVALADA_NEGRO');
+  });
+
+  // Modelo de ventana NUEVA (Fase 0 al importar/guardar): color + regla por ancho
+  // en un solo paso. Regresión del bug "el Excel de órdenes salía en E66": sin
+  // esto la cortina importada nacía en 38 mm y solo se corregía al abrirla en Fase 2.
+  describe('modeloVentanaPorAncho — banda aplicada al crear la ventana', () => {
+    it('ROL en banda: blanco → DECORELLI 45; negro → ROLZZO 45', () => {
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.5)).toBe(rol45b);
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'NEG', 2.8)).toBe(rol45n);
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 3.0)?.diametro_tubo_mm).toBe(45);
+    });
+    it('ROL fuera de banda: 2,2 m exacto → 38 mm; >3 m → 63 mm', () => {
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.2)?.diametro_tubo_mm).toBe(38);
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 3.5)).toBe(rol63);
+    });
+    it('DUO_MANUAL_38mm en banda: cruza al catálogo 45 por color', () => {
+      expect(modeloVentanaPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 'BCO', 2.5)?.mecanismo).toBe('MEC_18_OVALADA_BLANCO');
+      expect(modeloVentanaPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 'NEG', 2.6)?.mecanismo).toBe('MEC_23_OVALADA_NEGRO');
+    });
   });
 });
 
