@@ -70,9 +70,18 @@ describe('REGLAS_MECANISMO — reglasCategoria', () => {
     expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_38mm', 'GRIS')).toBe(12);
   });
 
-  it('cenefa ovalada motorizada o 45 mm → sin regla (motor / kit simple)', () => {
+  it('cenefa ovalada motorizada → sin regla (el motor reemplaza al mecanismo)', () => {
     expect(reglaCategoriaAplicable('ROL_CENEFA_OVALADA_MOTOR_PEQUEÑO', 'BCO')).toBeNull();
-    expect(reglaCategoriaAplicable('ROL_MANUAL_CENEFA_OVALADA_45mm', 'BCO')).toBeNull();
+  });
+
+  it('cenefa ovalada 45 mm (E78) → mismo kit ovalada de bodega que el 38 mm (39/38/12)', () => {
+    // 2026-07-15: la ovalada 45 mm dejó de caer al kit simple; usa el kit ovalada.
+    expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_45mm', 'BCO')).toBe(39);
+    expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_45mm', 'NEG')).toBe(38);
+    expect(mecPorCategoriaYColor('ROL_MANUAL_CENEFA_OVALADA_45mm', 'GRIS')).toBe(12);
+    expect(mecPorCategoriaYColor('DUO_MANUAL_45mm', 'BLANCO')).toBe(39);
+    expect(mecPorCategoriaYColor('DUO_MANUAL_45mm', 'NEG')).toBe(38);
+    expect(mecPorCategoriaYColor('DUO_MANUAL_45mm', 'GRS')).toBe(12);
   });
 
   it('ROL estándar → cae en colorAMec, no en reglasCategoria', () => {
@@ -106,11 +115,16 @@ describe('REGLAS_MECANISMO — reglasAncho (banda 2,2–3,0 → kit 45 · >3 →
     expect(mecPorAncho('ROL', 3.01, 'BCO')).toBe(28);
     expect(mecPorAncho('ROL', 3.5, 'GRS')).toBe(28); // la fila >3 m es fija, sin color
   });
-  it('DUO_MANUAL_38mm en banda: blanco/gris → 18, negro → 23, y cruza al catálogo 45', () => {
-    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'BCO')).toBe(18);
-    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'GRS')).toBe(18);
-    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'NEG')).toBe(23);
-    expect(reglaAnchoAplicable('DUO_MANUAL_38mm', 2.5, 'NEG')?.regla.categoriaModelo).toBe('DUO_MANUAL_45mm');
+  it('DUO_MANUAL_38mm en banda: kit ovalada de bodega por color (39/38/12), fila 45 vía modeloMecPorColor', () => {
+    // 2026-07-15: el kit MOSTRADO es el ovalada de bodega; la FILA 45 mm del
+    // catálogo sigue siendo MEC_18/23 (modeloMecPorColor), que consume modeloPorAncho.
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'BCO')).toBe(39);
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'GRS')).toBe(12);
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'NEG')).toBe(38);
+    const reglaNeg = reglaAnchoAplicable('DUO_MANUAL_38mm', 2.5, 'NEG')?.regla;
+    expect(reglaNeg?.categoriaModelo).toBe('DUO_MANUAL_45mm');
+    expect(reglaNeg?.modeloMecPorColor?.NEG).toBe(23);
+    expect(reglaNeg?.modeloMecPorColor?.BCO).toBe(18);
     expect(mecPorAncho('DUO_MANUAL_38mm', 3.5, 'NEG')).toBeNull(); // el dúo no tiene regla >3 m
   });
   it('la regla trae el tubo y la nota para la UI', () => {

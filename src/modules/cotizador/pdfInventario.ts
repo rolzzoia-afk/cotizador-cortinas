@@ -34,17 +34,24 @@ import {
   textoPesoCadenaInventario,
   type CadenaInsumo,
 } from './cadenas';
-import { esCenefaCuadrada, OPCIONES_MECANISMO_RESOLUCION } from './fase2';
+import { esCenefaCuadrada, OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
   categoriaRequiereMecanismo,
+  codigoTuberiaDeChip,
   colorAccesoriosDePano,
   mecanismoParaPano,
   numeroMecDeChip,
+  tuberiaParaPano,
 } from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
+  MEC_KIT_OVALADA_POR_COLOR,
+  normalizarColorAccesorio,
+} from '@/modules/descuentos/reglas-mecanismo';
+import {
   COD_HUB_DOMOTICA,
   NOMBRE_HUB_DOMOTICA,
+  esCategoriaDuo,
   esCenefaOvalada,
   esCodigoMotor,
   insumosDePano,
@@ -84,6 +91,8 @@ export type InsumoConsolidado = {
   descripcion: string;
   cantidad: number;
   grupo: GrupoInsumo;
+  /** Texto que acompaña a la cantidad ("TAPAS", "PIVOTES"); vacío = cantidad sola. */
+  unidad?: string;
 };
 
 export type Inventario = {
@@ -152,7 +161,7 @@ export function consolidarInsumos(
   filas: FilaCalculo[],
   cadenas: CadenaInsumo[] = [],
 ): InsumoConsolidado[] {
-  const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo }>();
+  const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo; unidad?: string }>();
   // `grupoOverride` fuerza la tabla (el motor de una cortina ovalada va a
   // PRODUCCIÓN aunque su código DOM caiga por defecto en INSTALACIÓN). La clave
   // del acumulador incluye el grupo para que un mismo código pueda quedar en dos
@@ -162,12 +171,13 @@ export function consolidarInsumos(
     descripcion: string,
     cantidad: number,
     grupoOverride?: GrupoInsumo,
+    unidad?: string,
   ) => {
     const grupo = grupoOverride ?? grupoInsumo(codigo, descripcion);
     const key = `${grupo}|${codigo || descripcion}`;
     const prev = acc.get(key);
     if (prev) prev.cantidad += cantidad;
-    else acc.set(key, { codigo, descripcion, cantidad, grupo });
+    else acc.set(key, { codigo, descripcion, cantidad, grupo, unidad });
   };
   let llevaDomotica = false;
   for (const v of ventanas) {
@@ -217,6 +227,37 @@ export function consolidarInsumos(
       // kit (control, cable, enchufe) y los motores de cortinas normales, a
       // INSTALACIÓN (grupo por defecto).
       const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
+      // TUBO E78 + cenefa ovalada: armadura mixta — tapas del kit ovalada de
+      // bodega (39 blanco / 38 negro / 12 gris, según color de accesorios) +
+      // pivotes del kit 45 mm por color (18 blanco / 23 negro; GRIS queda manual
+      // porque no hay kit 45 gris). Solo el código E78; van al taller =
+      // PRODUCCIÓN. Se detecta la ovalada por el SISTEMA del modelo, que cubre
+      // tanto el roller (CENEFA_OVALADA) como el DÚO manual (CENEFA_OVALADA_DUO,
+      // cuya categoría "DUO_MANUAL_*" no dice "ovalada"). El dúo lleva 2 tubos →
+      // 4+4; resto 2+2. Se resuelve por COLOR (no por el chip de mecanismo) para
+      // que también aplique a las ovaladas motorizadas (sin chip de mecanismo).
+      const ovaladaSistema =
+        ovalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
+      if (ovaladaSistema) {
+        const codTubo = codigoTuberiaDeChip(
+          tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria),
+        );
+        if (codTubo === 'E78') {
+          const nMix = esCategoriaDuo(v.categoria) ? 4 : 2;
+          const colorAcc = normalizarColorAccesorio(colorAccesoriosDePano(p, v.color));
+          const mecTapas = MEC_KIT_OVALADA_POR_COLOR[colorAcc];
+          if (mecTapas != null) bump(undefined, `MEC ${mecTapas}`, nMix, 'PRODUCCION', 'TAPAS');
+          // Pivotes: solo blanco→18 / negro→23. Gris (y colores sin kit 45) queda
+          // manual — decisión del usuario 2026-07-15: sin línea automática.
+          const mecPivotes =
+            colorAcc === 'NEG' || colorAcc === 'NEGRO'
+              ? 23
+              : colorAcc === 'BCO' || colorAcc === 'BLANCO'
+                ? 18
+                : null;
+          if (mecPivotes != null) bump(undefined, `MEC ${mecPivotes}`, nMix, 'PRODUCCION', 'PIVOTES');
+        }
+      }
       const motorInsumos = insumosMotorDePano(p, v.categoria);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
@@ -253,7 +294,7 @@ export function consolidarInsumos(
     out.push({ id: ++id, descripcion: m.descripcion, cantidad: m.cantidad, grupo: 'INSTALACION' });
   }
   for (const it of acc.values()) {
-    out.push({ id: ++id, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, grupo: it.grupo });
+    out.push({ id: ++id, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, grupo: it.grupo, unidad: it.unidad });
   }
   return out;
 }
@@ -561,12 +602,14 @@ export function generarPdfInventario(
       { label: 'FECHA', align: 'c' },
       { label: 'PERSONA QUE RECIBE' },
     ].map((c, i) => ({ ...c, w: w2[i] * sc2 }) as Col);
+    const cantTxt = (m: InsumoConsolidado) =>
+      m.unidad ? `${m.cantidad} ${m.unidad}` : String(m.cantidad);
     const rows2 = items.map((m, i) => [
       String(i + 1),
       m.descripcion,
-      String(m.cantidad),
+      cantTxt(m),
       '',
-      String(m.cantidad),
+      cantTxt(m),
       '',
       '',
       '',

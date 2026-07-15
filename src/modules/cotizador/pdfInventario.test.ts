@@ -290,6 +290,121 @@ describe('construirInventario — clasificación por cenefa ovalada', () => {
   });
 });
 
+describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) + pivotes (kit 45) por color', () => {
+  // El kit de TAPAS es el ovalada de bodega según color (39 blanco / 38 negro /
+  // 12 gris); los PIVOTES salen del kit 45 mm por color (18 blanco / 23 negro);
+  // el gris deja los pivotes manuales (sin línea). ROL ovalada = 1 tubo → 2+2;
+  // dúo = 2 tubos → 4+4. Solo el tubo E78 gatilla las líneas.
+  const modeloRolOv45 = (mec: string) => ({
+    sistema: 'CENEFA_OVALADA', tipo_rol: 'ROL_CENEFA_OV_MANUAL_45mm',
+    mecanismo: mec, diametro_tubo_mm: 45,
+    codigos_tubo: 'E04; E05; E39; E46; E78', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+  });
+  const ventRolOv = (ubic: string, color = 'BLANCO', mec = 'MEC_18_OVALADA_BLANCO') =>
+    ({
+      id: ubic, ubicacion: ubic, producto: 'ROLLER SCREEN PREMIUM', color,
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_45mm', modelo: modeloRolOv45(mec),
+      panos: [{ ancho: 2.0, alto: 2.2, color, cenefa: 'Ovalada' }],
+    }) as unknown as Ventana;
+  const tieneUnidad = (d: ReturnType<typeof construirInventario>, unidad: string) =>
+    d.insumos.some((i) => i.unidad === unidad);
+
+  it('ROL cenefa ovalada BLANCA + E78 → MEC 39 (2 TAPAS) y MEC 18 (2 PIVOTES) en PRODUCCIÓN', () => {
+    const d = construirInventario([ventRolOv('LIVING')]);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')).toMatchObject({
+      cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
+    });
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')).toMatchObject({
+      cantidad: 2, unidad: 'PIVOTES', grupo: 'PRODUCCION',
+    });
+  });
+
+  it('ROL cenefa ovalada NEGRA + E78 → MEC 38 (TAPAS) y MEC 23 (PIVOTES)', () => {
+    const d = construirInventario([ventRolOv('LIVING', 'NEGRO', 'MEC_23_OVALADA_NEGRO')]);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 38')).toMatchObject({
+      cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
+    });
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 23')).toMatchObject({
+      cantidad: 2, unidad: 'PIVOTES', grupo: 'PRODUCCION',
+    });
+  });
+
+  it('ROL cenefa ovalada GRIS + E78 → MEC 12 (TAPAS) y SIN línea de pivotes (manual)', () => {
+    const d = construirInventario([ventRolOv('LIVING', 'GRIS', 'MEC_12_OVALADA_GRIS')]);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 12')).toMatchObject({
+      cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
+    });
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+  });
+
+  it('DÚO manual BLANCO + E78 (sistema CENEFA_OVALADA_DUO, categoría sin "ovalada", cenefa null) → MEC 39 (4 TAPAS) y MEC 18 (4 PIVOTES)', () => {
+    // Caso real OT 99990 cortina 7/8: la categoría es DUO_MANUAL_38mm (no dice
+    // "ovalada") y el paño no tiene cenefa guardada; la ovalada se detecta por
+    // el sistema del modelo. El dúo lleva 2 tubos → 4+4.
+    const vDuo = {
+      id: 'duo', ubicacion: 'DORMITORIO', producto: 'ROLLER DUO', color: 'BLANCO',
+      categoria: 'DUO_MANUAL_38mm',
+      modelo: {
+        sistema: 'CENEFA_OVALADA_DUO', tipo_rol: 'DUO_CENEFA_OV_MANUAL_45mm',
+        mecanismo: 'MEC_18_OVALADA_BLANCO', diametro_tubo_mm: 45,
+        codigos_tubo: 'E04; E05; E39; E46; E78', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+      },
+      panos: [{ ancho: 2.5, alto: 2.2, color: 'BLANCO' }], // sin cenefa guardada
+    } as unknown as Ventana;
+    const d = construirInventario([vDuo]);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')).toMatchObject({
+      cantidad: 4, unidad: 'TAPAS', grupo: 'PRODUCCION',
+    });
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')).toMatchObject({
+      cantidad: 4, unidad: 'PIVOTES', grupo: 'PRODUCCION',
+    });
+  });
+
+  it('2 cortinas ROL ovalada BLANCA E78 → consolida a 4 TAPAS (MEC 39) y 4 PIVOTES (MEC 18)', () => {
+    const d = construirInventario([ventRolOv('LIVING'), ventRolOv('COMEDOR')]);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')?.cantidad).toBe(4);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')?.cantidad).toBe(4);
+  });
+
+  it('mezcla de colores NO se consolida: blanca (MEC 39/18) y negra (MEC 38/23) separadas', () => {
+    const d = construirInventario([
+      ventRolOv('LIVING'),
+      ventRolOv('COMEDOR', 'NEGRO', 'MEC_23_OVALADA_NEGRO'),
+    ]);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 39')?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 18')?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 38')?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.descripcion === 'MEC 23')?.cantidad).toBe(2);
+  });
+
+  it('cenefa ovalada 38 mm (tubo E02, no E78) → NO agrega las líneas', () => {
+    const v = {
+      id: 'x', ubicacion: 'PZA', producto: 'ROLLER', color: 'BLANCO',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm', modelo: modeloCenefa,
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'Ovalada' }],
+    } as unknown as Ventana;
+    const d = construirInventario([v]);
+    expect(tieneUnidad(d, 'TAPAS')).toBe(false);
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+  });
+
+  it('ROL banda E78 sin cenefa (roller simple 45 mm) → NO agrega las líneas', () => {
+    const v = {
+      id: 'y', ubicacion: 'PZA', producto: 'ROLLER', color: 'BLANCO',
+      categoria: 'ROL',
+      modelo: {
+        sistema: 'ROLLER_SIMPLE', tipo_rol: 'ROL_SIMPLE',
+        mecanismo: 'MEC_18_045_DECORELLI_BLANCO', diametro_tubo_mm: 45,
+        codigos_tubo: 'E04; E05; E39; E46; E78', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+      },
+      panos: [{ ancho: 2.5, alto: 2.2, color: 'BLANCO' }],
+    } as unknown as Ventana;
+    const d = construirInventario([v]);
+    expect(tieneUnidad(d, 'TAPAS')).toBe(false);
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+  });
+});
+
 // Regresión OT 267-3 (jeffi): el PDF mostraba el id del modelo de despiece
 // (MEC_05_LZ90_BLANCO / MEC_10_OVALADA_BLANCO) mientras Fase 4 mostraba el kit
 // real de bodega (KIT SIMPLE BLANCO 38MM [MEC 33]). Ambos deben coincidir.

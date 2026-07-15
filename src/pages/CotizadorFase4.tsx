@@ -34,7 +34,12 @@ import {
   generarEtiquetasPDF,
   generarEtiquetasPanosPDF,
 } from '@/modules/cotizador/pdfEtiquetasBrother';
-import { construirHojaCorte, generarPdfHojaCorte } from '@/modules/cotizador/pdfCorteOptimizacion';
+import {
+  construirHojaCorte,
+  generarPdfHojaCorte,
+  pieceId,
+  piezasConOrigenColmena,
+} from '@/modules/cotizador/pdfCorteOptimizacion';
 import { generarPdfCalculoGeneral, generarPdfDimensionado } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
 import { esCadenaRoller, type CadenaInsumo } from '@/modules/cotizador/cadenas';
@@ -254,17 +259,43 @@ export function CotizadorFase4() {
     }
   };
 
-  const onEtiquetasPanos = () => {
+  const [etiquetasLoading, setEtiquetasLoading] = useState(false);
+  const onEtiquetasPanos = async () => {
     if (!pdfRows || pdfRows.length === 0) {
       toast.error('No hay paños. Agrega ventanas en Fase 2 primero.');
       return;
     }
+    if (!ot || !empresaId) return;
+    setEtiquetasLoading(true);
     try {
-      generarEtiquetasPanosPDF(pdfRows, metaPDF(), catalogo);
-      toast.success('Etiquetas de paños generadas');
+      // Paños que salen de COLMENA (ya cortados y etiquetados): no llevan
+      // etiqueta nueva. Mismo origen que la hoja de corte (colmena viva +
+      // snapshot post-confirmación).
+      const { data: panosData } = await supabase
+        .from('colmena_panos')
+        .select('*')
+        .eq('empresa_id', empresaId)
+        .eq('disponible', true);
+      const colmenaPanos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
+      const piezasColmena = piezasConOrigenColmena(
+        colmenaPanos,
+        ot,
+        parametros,
+        ot.datosGenerales?.corteGeneralColmena?.piezas,
+      );
+      const n = generarEtiquetasPanosPDF(pdfRows, metaPDF(), catalogo, (r) =>
+        piezasColmena.has(pieceId(ot.id, r.ventanaId, r.panoIndex)),
+      );
+      if (n === 0) {
+        toast.info('Todos los paños salen de la colmena — no hay etiquetas que imprimir.');
+      } else {
+        toast.success(`${n} etiqueta(s) de paño generada(s)`);
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error generando etiquetas de paños: ' + msg);
+    } finally {
+      setEtiquetasLoading(false);
     }
   };
 
@@ -642,9 +673,9 @@ export function CotizadorFase4() {
             <Button
               size="sm"
               onClick={onEtiquetasPanos}
-              disabled={!pdfRows || pdfRows.length === 0}
+              disabled={!pdfRows || pdfRows.length === 0 || etiquetasLoading}
               className="gap-1.5 bg-success hover:bg-success/90"
-              title="Una etiqueta por paño de tela cortado (Brother QL-810W, 62 mm)"
+              title="Una etiqueta por paño de tela cortado, sin los de colmena (Brother QL-810W, 62 mm)"
             >
               <Printer className="h-3.5 w-3.5" />
               Etiquetas paños

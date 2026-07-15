@@ -44,6 +44,11 @@ export type ReglaMecAncho = {
   /** MEC por color de accesorios (claves cortas y largas, como colorAMec).
    *  Un color SIN entrada (p.ej. gris en ROL) deja la elección manual. */
   mecPorColor?: Record<string, number>;
+  /** MEC con que se busca la FILA del catálogo destino cuando difiere del kit
+   *  mostrado. Dúo banda: el kit de bodega es el ovalada 39/38/12 (mecPorColor)
+   *  pero la fila 45 mm del catálogo es MEC_18/23_OVALADA. Si se omite, la fila
+   *  se busca con mecPorColor. */
+  modeloMecPorColor?: Record<string, number>;
   /** Categoría cuyas filas del catálogo traen el modelo destino (cruce de
    *  catálogo, p.ej. DUO_MANUAL_38mm → filas de DUO_MANUAL_45mm). */
   categoriaModelo?: string;
@@ -51,6 +56,23 @@ export type ReglaMecAncho = {
   tubo: string;
   /** Nota que ve el operario en Fase 2 cuando la regla está activa. */
   nota: string;
+};
+
+/**
+ * Kits de bodega de cenefa ovalada por color de accesorios (39 blanco · 38
+ * negro · 12 gris). Se usan en TODAS las cenefa ovalada, de 38 y de 45 mm
+ * (tubo E78): desde 2026-07-15 la ovalada 45 mm ya NO usa los MEC 09/10 legacy
+ * del Excel, sino este mismo kit que las roller y dúo 38 mm. Compartido por las
+ * reglas de categoría (45 mm) y la banda dúo, y por el inventario (líneas de
+ * tapas). Un color sin entrada (transparente, café…) deja el mecanismo manual.
+ */
+export const MEC_KIT_OVALADA_POR_COLOR: Record<string, number> = {
+  BCO: 39,
+  BLANCO: 39,
+  NEG: 38,
+  NEGRO: 38,
+  GRS: 12,
+  GRIS: 12,
 };
 
 export const REGLAS_MECANISMO = {
@@ -98,14 +120,18 @@ export const REGLAS_MECANISMO = {
       nota: 'Fijo por ancho 2,2–3,0 m: kit 45 mm por color y tubo E78. Con accesorios grises la elección queda manual.',
     },
     {
-      descripcion: 'Dúo manual 38 mm de 2,2–3,0 m → kit ovalada 45 por color (tubo E78)',
+      descripcion: 'Dúo manual 38 mm de 2,2–3,0 m → kit ovalada de bodega por color (tubo E78)',
       categoria: 'DUO_MANUAL_38mm',
       anchoMinM: 2.2,
       anchoMaxM: 3.0,
-      mecPorColor: { BCO: 18, BLANCO: 18, GRS: 18, GRIS: 18, NEG: 23, NEGRO: 23 },
+      // El KIT que se muestra/entrega es el ovalada de bodega (39/38/12), igual
+      // que en 38 mm; la FILA 45 mm del catálogo sigue siendo MEC_18/23_OVALADA
+      // (por eso modeloMecPorColor). Antes se mostraba MEC 18/23 (2026-07-15).
+      mecPorColor: MEC_KIT_OVALADA_POR_COLOR,
+      modeloMecPorColor: { BCO: 18, BLANCO: 18, GRS: 18, GRIS: 18, NEG: 23, NEGRO: 23 },
       categoriaModelo: 'DUO_MANUAL_45mm',
       tubo: 'E78',
-      nota: 'Fijo por ancho 2,2–3,0 m: kit ovalada 45 mm por color y tubo E78.',
+      nota: 'Fijo por ancho 2,2–3,0 m: kit ovalada de bodega por color y tubo E78.',
     },
   ] as readonly ReglaMecAncho[],
 
@@ -170,10 +196,34 @@ export const REGLAS_MECANISMO = {
       codigoInventario: 'MEC_12_OVALADA_GRIS',
       colores: ['GRS', 'GRIS'],
     },
-    // Roller manual 38 mm con cenefa ovalada: misma familia de kits ovalada
-    // que la dúo (confirmado 2026-07-07). Los motorizados no entran (el motor
-    // reemplaza al mecanismo) y el 45 mm sigue con kit simple hasta confirmar
-    // si bodega tiene kit ovalada de 45 mm.
+    // Dúo manual 45 mm (tubo E78, banda 2,2–3,0 m elegida directamente o cortina
+    // 45 mm nativa): mismo kit ovalada de bodega que la de 38 mm — 2026-07-15 ya
+    // NO usa MEC 09/10 legacy ni el kit simple 32/33/34.
+    {
+      descripcion: 'Dúo manual 45 mm con accesorios blancos → MEC 39 ovalada',
+      categoria: 'DUO_MANUAL_45mm',
+      mec: 39,
+      codigoInventario: 'MEC_39_OVALADA_BLANCO',
+      colores: ['BCO', 'BLANCO'],
+    },
+    {
+      descripcion: 'Dúo manual 45 mm con accesorios negros → MEC 38 ovalada',
+      categoria: 'DUO_MANUAL_45mm',
+      mec: 38,
+      codigoInventario: 'MEC_38_OVALADA_NEGRO',
+      colores: ['NEG', 'NEGRO'],
+    },
+    {
+      descripcion: 'Dúo manual 45 mm con accesorios grises → MEC 12 ovalada',
+      categoria: 'DUO_MANUAL_45mm',
+      mec: 12,
+      codigoInventario: 'MEC_12_OVALADA_GRIS',
+      colores: ['GRS', 'GRIS'],
+    },
+    // Roller manual con cenefa ovalada: misma familia de kits ovalada que la dúo
+    // (confirmado 2026-07-07). Los motorizados no entran (el motor reemplaza al
+    // mecanismo). Desde 2026-07-15 el 45 mm (tubo E78) usa el MISMO kit ovalada
+    // de bodega que el 38 mm — antes caía al kit simple 32/33/34.
     {
       descripcion: 'Roller manual cenefa ovalada 38 mm blanco → MEC 39 ovalada',
       categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
@@ -191,6 +241,27 @@ export const REGLAS_MECANISMO = {
     {
       descripcion: 'Roller manual cenefa ovalada 38 mm gris → MEC 12 ovalada',
       categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      mec: 12,
+      codigoInventario: 'MEC_12_OVALADA_GRIS',
+      colores: ['GRS', 'GRIS'],
+    },
+    {
+      descripcion: 'Roller manual cenefa ovalada 45 mm blanco → MEC 39 ovalada',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_45mm',
+      mec: 39,
+      codigoInventario: 'MEC_39_OVALADA_BLANCO',
+      colores: ['BCO', 'BLANCO'],
+    },
+    {
+      descripcion: 'Roller manual cenefa ovalada 45 mm negro → MEC 38 ovalada',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_45mm',
+      mec: 38,
+      codigoInventario: 'MEC_38_OVALADA_NEGRO',
+      colores: ['NEG', 'NEGRO'],
+    },
+    {
+      descripcion: 'Roller manual cenefa ovalada 45 mm gris → MEC 12 ovalada',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_45mm',
       mec: 12,
       codigoInventario: 'MEC_12_OVALADA_GRIS',
       colores: ['GRS', 'GRIS'],
