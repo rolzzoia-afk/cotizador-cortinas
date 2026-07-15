@@ -319,6 +319,14 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
     });
   });
 
+  it('E78 + ovalada NO lista el kit de mecanismo completo (se reemplaza por tapas + pivotes)', () => {
+    const d = construirInventario([ventRolOv('LIVING')]);
+    // El kit se emite con código MECxx y descripción "[MECxx] OVALADA…"; con E78
+    // no debe aparecer. La cadena/peso sí siguen (se listan aparte).
+    expect(d.insumos.find((i) => i.codigo === 'MEC39')).toBeUndefined();
+    expect(d.insumos.some((i) => (i.descripcion || '').includes('OVALADA'))).toBe(false);
+  });
+
   it('ROL cenefa ovalada NEGRA + E78 → MEC 38 (TAPAS) y MEC 23 (PIVOTES)', () => {
     const d = construirInventario([ventRolOv('LIVING', 'NEGRO', 'MEC_23_OVALADA_NEGRO')]);
     expect(d.insumos.find((i) => i.descripcion === 'MEC 38')).toMatchObject({
@@ -377,7 +385,7 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
     expect(d.insumos.find((i) => i.descripcion === 'MEC 23')?.cantidad).toBe(2);
   });
 
-  it('cenefa ovalada 38 mm (tubo E02, no E78) → NO agrega las líneas', () => {
+  it('cenefa ovalada 38 mm (tubo E02, no E78) → NO agrega tapas/pivotes y SÍ lista el mecanismo completo', () => {
     const v = {
       id: 'x', ubicacion: 'PZA', producto: 'ROLLER', color: 'BLANCO',
       categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm', modelo: modeloCenefa,
@@ -386,6 +394,8 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
     const d = construirInventario([v]);
     expect(tieneUnidad(d, 'TAPAS')).toBe(false);
     expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+    // Sin E78 el mecanismo ovalada completo se sigue entregando (solo el E78 lo suprime).
+    expect(d.insumos.find((i) => i.codigo === 'MEC39')).toBeDefined();
   });
 
   it('ROL banda E78 sin cenefa (roller simple 45 mm) → NO agrega las líneas', () => {

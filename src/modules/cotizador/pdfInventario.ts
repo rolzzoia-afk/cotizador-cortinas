@@ -185,6 +185,19 @@ export function consolidarInsumos(
     for (const p of v.panos || []) {
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const tieneMotor = !!(p.motorModelo || p.motorTipo) || (v.categoria || '').toUpperCase().includes('MOTOR');
+      // Cenefa ovalada: por la cenefa guardada o por el SISTEMA del modelo (cubre
+      // el dúo, cuya categoría "DUO_MANUAL_*" no dice "ovalada"). Con tubo E78 la
+      // armadura es MIXTA (tapas del kit ovalada + pivotes del kit 45) y NO se
+      // arma el mecanismo ovalada completo: por eso ese kit no se lista, solo las
+      // tapas y los pivotes (más abajo).
+      const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
+      const ovaladaSistema =
+        ovalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
+      const esE78Ovalada =
+        ovaladaSistema &&
+        codigoTuberiaDeChip(
+          tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria),
+        ) === 'E78';
 
       // Mecanismo + cadena + peso: solo roller manual con mecanismo.
       if (!tieneMotor && categoriaRequiereMecanismo(v.categoria)) {
@@ -195,7 +208,9 @@ export function consolidarInsumos(
         // INSTALACIÓN (grupo por defecto).
         const grupoOvalada: GrupoInsumo | undefined =
           chip && chip.toUpperCase().includes('OVALADA') ? 'PRODUCCION' : undefined;
-        if (chip && num != null) {
+        // E78 + ovalada NO usa el mecanismo completo (se desglosa en tapas +
+        // pivotes), así que su kit NO se lista; el resto sí lleva su mecanismo.
+        if (chip && num != null && !esE78Ovalada) {
           const cod = `MEC${String(num).padStart(2, '0')}`;
           bump(cod, `[${cod}] ${chip}`, 1);
         }
@@ -223,41 +238,31 @@ export function consolidarInsumos(
       for (const ins of insumosDePano(p, { categoria: v.categoria, ventanaColor: v.color, anchoM })) {
         bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
       }
+      // TUBO E78 + cenefa ovalada: armadura mixta que reemplaza al mecanismo
+      // completo (por eso arriba no se lista el kit) — tapas del kit ovalada de
+      // bodega (39 blanco / 38 negro / 12 gris, según color de accesorios) +
+      // pivotes del kit 45 mm por color (18 blanco / 23 negro; GRIS queda manual
+      // porque no hay kit 45 gris). Van al taller = PRODUCCIÓN. El dúo lleva 2
+      // tubos → 4+4; resto 2+2. Se resuelve por COLOR (no por el chip de
+      // mecanismo) para que también aplique a las ovaladas motorizadas.
+      if (esE78Ovalada) {
+        const nMix = esCategoriaDuo(v.categoria) ? 4 : 2;
+        const colorAcc = normalizarColorAccesorio(colorAccesoriosDePano(p, v.color));
+        const mecTapas = MEC_KIT_OVALADA_POR_COLOR[colorAcc];
+        if (mecTapas != null) bump(undefined, `MEC ${mecTapas}`, nMix, 'PRODUCCION', 'TAPAS');
+        // Pivotes: solo blanco→18 / negro→23. Gris (y colores sin kit 45) queda
+        // manual — decisión del usuario 2026-07-15: sin línea automática.
+        const mecPivotes =
+          colorAcc === 'NEG' || colorAcc === 'NEGRO'
+            ? 23
+            : colorAcc === 'BCO' || colorAcc === 'BLANCO'
+              ? 18
+              : null;
+        if (mecPivotes != null) bump(undefined, `MEC ${mecPivotes}`, nMix, 'PRODUCCION', 'PIVOTES');
+      }
       // El MOTOR de una cortina con cenefa ovalada va a PRODUCCIÓN; el resto del
       // kit (control, cable, enchufe) y los motores de cortinas normales, a
       // INSTALACIÓN (grupo por defecto).
-      const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
-      // TUBO E78 + cenefa ovalada: armadura mixta — tapas del kit ovalada de
-      // bodega (39 blanco / 38 negro / 12 gris, según color de accesorios) +
-      // pivotes del kit 45 mm por color (18 blanco / 23 negro; GRIS queda manual
-      // porque no hay kit 45 gris). Solo el código E78; van al taller =
-      // PRODUCCIÓN. Se detecta la ovalada por el SISTEMA del modelo, que cubre
-      // tanto el roller (CENEFA_OVALADA) como el DÚO manual (CENEFA_OVALADA_DUO,
-      // cuya categoría "DUO_MANUAL_*" no dice "ovalada"). El dúo lleva 2 tubos →
-      // 4+4; resto 2+2. Se resuelve por COLOR (no por el chip de mecanismo) para
-      // que también aplique a las ovaladas motorizadas (sin chip de mecanismo).
-      const ovaladaSistema =
-        ovalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
-      if (ovaladaSistema) {
-        const codTubo = codigoTuberiaDeChip(
-          tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria),
-        );
-        if (codTubo === 'E78') {
-          const nMix = esCategoriaDuo(v.categoria) ? 4 : 2;
-          const colorAcc = normalizarColorAccesorio(colorAccesoriosDePano(p, v.color));
-          const mecTapas = MEC_KIT_OVALADA_POR_COLOR[colorAcc];
-          if (mecTapas != null) bump(undefined, `MEC ${mecTapas}`, nMix, 'PRODUCCION', 'TAPAS');
-          // Pivotes: solo blanco→18 / negro→23. Gris (y colores sin kit 45) queda
-          // manual — decisión del usuario 2026-07-15: sin línea automática.
-          const mecPivotes =
-            colorAcc === 'NEG' || colorAcc === 'NEGRO'
-              ? 23
-              : colorAcc === 'BCO' || colorAcc === 'BLANCO'
-                ? 18
-                : null;
-          if (mecPivotes != null) bump(undefined, `MEC ${mecPivotes}`, nMix, 'PRODUCCION', 'PIVOTES');
-        }
-      }
       const motorInsumos = insumosMotorDePano(p, v.categoria);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
