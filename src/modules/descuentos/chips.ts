@@ -8,17 +8,19 @@
 // Módulo puro.
 // ─────────────────────────────────────────────────────────────────────
 import type { ModeloDespiece } from './tipos';
-import { elegirModeloPorColor, modelosParaCategoria } from './tipos';
+import { categoriaEsDual, elegirModeloPorColor, modelosParaCategoria } from './tipos';
 import {
   REGLAS_MECANISMO,
   categoriaRequiereMecanismo,
   categoriaTieneReglaAncho,
+  colorConBandaAncho,
   esKitInventarioMec,
   esMecLegacy,
   mecPorAncho,
   mecPorCategoriaYColor,
   normalizarColorAccesorio,
   numeroMecPorColor,
+  reglaAnchoAplicable,
   reglaCategoriaAplicable,
 } from './reglas-mecanismo';
 
@@ -29,6 +31,7 @@ export {
   numeroMecPorColor,
   mecPorAncho,
   mecPorCategoriaYColor,
+  reglaAnchoAplicable,
   reglaCategoriaAplicable,
   colorParaBusquedaModelo,
 } from './reglas-mecanismo';
@@ -180,6 +183,25 @@ export function mecanismoParaPano(
     return chipDual || storedDual;
   }
 
+  // Regla por ancho (>3 m → MEC 28 · banda 2,2–3,0 → kit 45 por color). Va
+  // ANTES que la de categoría: el dúo manual 38 tiene regla de categoría
+  // (kit ovalada 38) que la banda debe poder pisar. MEC 28 es "legacy" en el
+  // catálogo, así que forzarlo acá evita que la sync lo revierta al kit color.
+  const mecAncho = anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc) : null;
+  if (mecAncho != null) {
+    const chipAncho = chipMecanismoPorNumero(mecAncho, opciones);
+    if (chipAncho) {
+      const trimmed = ((p.mecanismo as string) || '').trim();
+      if (!trimmed) return chipAncho;
+      const nStored = numeroMecDeChip(trimmed);
+      if (nStored === mecAncho) return trimmed;
+      if (nStored != null && esKitInventarioMec(nStored)) return chipAncho;
+      if (nStored != null && esMecLegacy(nStored)) return chipAncho;
+      if (opciones.includes(trimmed)) return trimmed;
+      return chipAncho;
+    }
+  }
+
   const mecCat = mecPorCategoriaYColor(categoria || '', colorAcc);
   if (mecCat != null) {
     const chipCat = chipMecanismoPorNumero(mecCat, opciones);
@@ -192,24 +214,6 @@ export function mecanismoParaPano(
       if (nStored != null && esKitInventarioMec(nStored)) return chipCat;
       if (opciones.includes(trimmed)) return trimmed;
       return chipCat;
-    }
-  }
-
-  // Regla por ancho (roller simple >3 m → MEC 28). Va tras la categoría y antes
-  // que el color. MEC 28 es "legacy" en el catálogo, así que forzarlo acá evita
-  // que la sincronización lo revierta al kit por color.
-  const mecAncho = anchoM != null ? mecPorAncho(categoria || '', anchoM) : null;
-  if (mecAncho != null) {
-    const chipAncho = chipMecanismoPorNumero(mecAncho, opciones);
-    if (chipAncho) {
-      const trimmed = ((p.mecanismo as string) || '').trim();
-      if (!trimmed) return chipAncho;
-      const nStored = numeroMecDeChip(trimmed);
-      if (nStored === mecAncho) return trimmed;
-      if (nStored != null && esKitInventarioMec(nStored)) return chipAncho;
-      if (nStored != null && esMecLegacy(nStored)) return chipAncho;
-      if (opciones.includes(trimmed)) return trimmed;
-      return chipAncho;
     }
   }
 
@@ -227,10 +231,23 @@ export function mecanismoParaPano(
     ) {
       return porColor;
     }
+    // Kit 45 mm puesto por la banda 2,2–3,0 m: al salir de la banda vuelve al
+    // kit por color — solo para colores CON regla de banda; sin regla (gris en
+    // ROL) el kit 45 fue elección manual y se respeta.
+    if (nStored != null && esMecDeBanda(nStored) && colorConBandaAncho(categoria || '', colorAcc)) {
+      return porColor;
+    }
     return stored;
   }
 
   return chipMecanismoEfectivo(stored, colorAcc, modelo, opciones);
+}
+
+/** true si el número MEC es de los que fuerza alguna banda por ancho+color. */
+function esMecDeBanda(num: number): boolean {
+  return REGLAS_MECANISMO.reglasAncho.some(
+    (r) => r.mecPorColor && Object.values(r.mecPorColor).includes(num),
+  );
 }
 
 /**
@@ -350,13 +367,7 @@ export function modeloDesdeNumeroMec(
   candidatos: ModeloDespiece[],
   num: number,
 ): ModeloDespiece | null {
-  return (
-    candidatos.find((c) => {
-      const mc = c.mecanismo.toUpperCase();
-      return mc.startsWith(`MEC_${num}_`) || mc === `MEC_${num}` ||
-        mc.startsWith(`MEC_0${num}_`) || mc === `MEC_0${num}`;
-    }) ?? null
-  );
+  return candidatos.find((c) => mecanismoCoincideNumero(c.mecanismo, num)) ?? null;
 }
 
 /** Modelo del catálogo que corresponde a un chip: '… [MEC 13]' → 'MEC_13_…'. */
@@ -370,12 +381,16 @@ export function modeloDesdeChipMecanismo(
 }
 
 /**
- * Modelo efectivo de la VENTANA según el ANCHO. Roller simple sobre 3 m sube a
- * la fila 63 mm (MEC 28, tubo E65); al bajar de 3 m vuelve al 38 mm por color.
+ * Modelo efectivo de la VENTANA según el ANCHO.
+ *  · Roller simple sobre 3 m sube a la fila 63 mm (MEC 28, tubo E65).
+ *  · Banda 2,2–3,0 m: ROL sube al kit 45 mm por color (DECORELLI/ROLZZO) y el
+ *    dúo manual 38 a la fila ovalada 45 de su color (tubo E78). Gris en ROL no
+ *    tiene regla → no se toca (elección manual).
+ *  · Al salir del rango vuelve al 38 mm por color. Un 45 mm elegido a mano en
+ *    un color SIN regla de banda (gris ROL) NO se revierte.
  * El resto de categorías —incluidas OSCURANTI y las ovaladas, legítimamente de
  * 63 mm— se devuelven sin tocar. Es la contraparte "al abrir/sincronizar" de la
- * cascada mecanismo→modelo que corre al editar (aplicarCascadaMecanismo): sin
- * esto, una OT de >3 m abierta queda con el modelo de 38 mm y la tubería E66.
+ * cascada mecanismo→modelo que corre al editar (aplicarCascadaMecanismo).
  * El modelo es por ventana, así que se decide con el ancho de referencia (el
  * paño más ancho). Para paños dual NO se aplica (mantienen su modelo dual 38 mm).
  */
@@ -386,17 +401,73 @@ export function modeloPorAncho(
   modeloActual: ModeloDespiece | null,
   color: string | null | undefined,
 ): ModeloDespiece | null {
-  const mecA = mecPorAncho(categoria || '', anchoM);
-  if (mecA != null) {
-    const up = modeloDesdeNumeroMec(modelosParaCategoria(modelos, categoria), mecA);
-    return up ?? modeloActual;
+  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color);
+  if (aplicada) {
+    // La fila destino puede vivir en otra categoría (dúo 38 → filas MANUAL_45)
+    // y el número MEC puede repetirse por color (MEC 18 ovalada blanco Y gris):
+    // filtra por número y desambigua por color.
+    const cands = modelosParaCategoria(modelos, aplicada.regla.categoriaModelo ?? categoria);
+    const delMec = cands.filter((c) => mecanismoCoincideNumero(c.mecanismo, aplicada.mec));
+    const up = delMec.length > 0 ? elegirModeloPorColor(delMec, color) : null;
+    if (up) return up;
+    // Catálogo sin la fila forzada: no dejar colgado un modelo de otra banda.
+    if (modeloActual && modeloActual.diametro_tubo_mm !== 38) {
+      return modeloBase38PorColor(modelos, categoria, color) ?? modeloActual;
+    }
+    return modeloActual;
   }
-  // Sin regla de ancho vigente: si el modelo quedó en la fila 63 mm forzada por
-  // ancho y la categoría sí tiene esa regla (ROL), volver al 38 mm por color.
-  if (categoriaTieneReglaAncho(categoria) && modeloActual && modeloActual.diametro_tubo_mm === 63) {
-    return modeloSimple38PorColor(modelos, categoria, color) ?? modeloActual;
+  // Sin regla de ancho vigente: si el modelo quedó forzado por ancho (63 mm, o
+  // 45 mm en un color CON regla de banda), volver al 38 mm por color.
+  if (categoriaTieneReglaAncho(categoria) && modeloActual) {
+    const forzado =
+      modeloActual.diametro_tubo_mm === 63 ||
+      (modeloActual.diametro_tubo_mm === 45 && colorConBandaAncho(categoria, color));
+    if (forzado) return modeloBase38PorColor(modelos, categoria, color) ?? modeloActual;
   }
   return modeloActual;
+}
+
+/**
+ * Modelo de fabricación para una ventana NUEVA (Fase 0 al guardar/importar y
+ * Fase 2 al abrir sin modelo): default por color + regla por ANCHO (banda
+ * 2,2–3,0 m → kit 45/E78 por color; >3 m → 63 mm/E65). El dual mantiene su
+ * modelo ROLLER_DUAL (no lleva regla por ancho). Sin esto, una cortina importada
+ * nace en 38 mm y solo se corrige al abrirla a mano en Fase 2.
+ */
+export function modeloVentanaPorAncho(
+  modelos: ModeloDespiece[],
+  categoria: string,
+  color: string | null | undefined,
+  anchoM: number,
+): ModeloDespiece | null {
+  const base = elegirModeloPorColor(modelosParaCategoria(modelos, categoria), color);
+  if (categoriaEsDual(categoria)) return base;
+  return modeloPorAncho(modelos, categoria, anchoM, base, color);
+}
+
+/** true si el mecanismo del catálogo es 'MEC_<num>_…' (o cero-padded). */
+function mecanismoCoincideNumero(mecanismo: string, num: number): boolean {
+  const mc = mecanismo.toUpperCase();
+  return (
+    mc.startsWith(`MEC_${num}_`) || mc === `MEC_${num}` ||
+    mc.startsWith(`MEC_0${num}_`) || mc === `MEC_0${num}`
+  );
+}
+
+/**
+ * Modelo 38 mm de la propia categoría, por color. Es la vuelta genérica al
+ * salir de una regla de ancho: ROL → roller simple 38; dúo manual → fila
+ * MANUAL_38 ovalada de su color.
+ */
+export function modeloBase38PorColor(
+  modelos: ModeloDespiece[],
+  categoria: string,
+  color: string | null | undefined,
+): ModeloDespiece | null {
+  const cands = modelosParaCategoria(modelos, categoria).filter(
+    (m) => m.diametro_tubo_mm === 38,
+  );
+  return elegirModeloPorColor(cands, color);
 }
 
 /**

@@ -70,6 +70,10 @@ export const OPCIONES_MECANISMO = [
   'OVALADA GRIS [MEC 12]',
   'OVALADA NEGRO [MEC 38]',
   'OVALADA BLANCO [MEC 39]',
+  // Kits 45 mm (tubo E78) — banda 2,2–3,0 m por color y elección manual
+  // (2026-07-14; antes eran legacy). MEC 18 DECORELLI · MEC 23 ROLZZO.
+  '0,45mm BCO [MEC 18]',
+  '0,45mm NGR [MEC 23]',
   // Fijo de Oscuranti 63 mm (regla de categoría).
   '0,63mm BCO [MEC 28]',
 ] as const;
@@ -79,6 +83,7 @@ export const OPCIONES_MECANISMO = [
 // siguen en la lista de RESOLUCIÓN para que OTs viejas con estos chips
 // guardados —o modelos MEC_XX cuyo color no mapea a kit (p.ej. TRANSPARENTE)—
 // sigan mostrando su mecanismo en PDFs e inventario.
+// (MEC 18/23 pasaron a la lista de UI 2026-07-14, junto con el tubo E78.)
 export const CHIPS_MECANISMO_LEGACY = [
   'LZ 38 MERG BCO [MEC 05]',
   'OVALADA NEG [MEC 09]',
@@ -87,8 +92,6 @@ export const CHIPS_MECANISMO_LEGACY = [
   'LZ50 SFLX NGR [MEC 11]',
   'LZ50 SFLX GRIS [MEC 13]',
   'LZ50 SFLX BCO [MEC 14]',
-  '0,45mm BCO [MEC 18]',
-  '0,45mm NGR [MEC 23]',
 ] as const;
 
 // Mecanismos dual (producto duo día/noche con dos rollers en un bracket).
@@ -139,7 +142,8 @@ export const OPCIONES_TUBERIA = [
   // reglas-tuberia.ts). E53 (0,40mm - 2mm) se quitó 2026-07-08.
   DESCRIPCION_TUBERIA.E02, // 'E02-TUBO 1.2 / Ø 38 mm'
   DESCRIPCION_TUBERIA.E66, // 'E66 - TUBO (.40mm) - 2.5mm'
-  DESCRIPCION_TUBERIA.E05, // 'E05 - TUBO Ø 45 mm'
+  DESCRIPCION_TUBERIA.E78, // 'E78 - TUBO 43MM(ESP1.2)(5.8)' — default 45 mm desde 2026-07-14
+  DESCRIPCION_TUBERIA.E05, // 'E05 - TUBO Ø 45 mm' — histórico (en desuso), sigue seleccionable
   DESCRIPCION_TUBERIA.E47, // 'E47 - TUBO Ø 63 mm'
   DESCRIPCION_TUBERIA.E65, // 'E65 - TUBO (.63mm)' — default para roller >3 m
   'VELCRO',
