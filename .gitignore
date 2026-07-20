@@ -27,3 +27,5 @@ docs/referencias/*.xlsm
 docs/referencias/Libro1.xlsx
 # Conteo físico ROLZZO 2026-07-06 (datos ya volcados a colmena_panos; no versionar)
 docs/referencias/actualizacion.xlsx
+# Excel de prueba del flujo ROL_DUAL (data de prueba; no versionar)
+docs/referencias/ot-prueba-rol-dual*.xlsx

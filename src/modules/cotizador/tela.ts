@@ -11,6 +11,7 @@ import { calcularDespiece, contextoDespieceDesdePano } from '@/modules/descuento
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import { telaDePano } from './telaPano';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -161,7 +162,9 @@ export function buildOptimizerRows(
       const altoCm = altoM * 100;
       const extra = params.extraAltoCm / 100;
       const altoExtra = altoM + extra;
-      const isDuo = !!(v.producto && v.producto.toUpperCase().includes('DUO'));
+      // Tela por paño: en dual cada paño trae SU tela; si no, la de la ventana.
+      const tela = telaDePano(v, p as unknown as { codInt?: string; producto?: string });
+      const isDuo = !!(tela.producto && tela.producto.toUpperCase().includes('DUO'));
       // Dúo (día/noche): la tela baja y vuelve a subir → se corta al doble.
       //  · altoReal  = reserva "alto máximo a utilizar" = 2×(alto+extraAlto)
       //  · altoCorte = corte real de la tela            = 2×alto + extraDuo
@@ -170,8 +173,8 @@ export function buildOptimizerRows(
       const altoReal = isDuo ? altoExtra * 2 : altoExtra;
       const altoCorte = isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra;
       const m2 = parseFloat((altoReal * anchoM).toFixed(4));
-      const anchoRollo = obtenerAnchoRollo(v.codInt, catalogo, params.anchoRolloDefaultM);
-      const cod = derivarCod(v.producto || '');
+      const anchoRollo = obtenerAnchoRollo(tela.codInt, catalogo, params.anchoRolloDefaultM);
+      const cod = derivarCod(tela.producto || '');
       const panoLabel = panos.length > 1 ? ` P${pi + 1}` : '';
       const tuberiaCod = tuberiaCodigoCorto(
         (v.modelo as ModeloDespiece | null | undefined) ?? null,
@@ -183,8 +186,8 @@ export function buildOptimizerRows(
         rowIdx,
         cod,
         cant: 1,
-        producto: v.producto || '',
-        codInt: v.codInt || '',
+        producto: tela.producto || '',
+        codInt: tela.codInt || '',
         tipo: v.tipo || '',
         ancho: anchoM,
         alto: altoM,
@@ -241,7 +244,8 @@ export function restorePlanGuardado(
 // último paño abierto (p.ej. anchos 1,5/1,5/1,0/1,0 en rollo 2,98: next-fit da
 // 3 paños; best-fit da 2). El alto no restringe el agrupado: el paño se corta
 // al alto mayor y las cortinas más bajas viajan en el ancho sobrante del mismo
-// tiro (0 metros extra). Las cortinas más anchas que el rollo van solas ("RR").
+// tiro (0 metros extra). Las cortinas más anchas que el rollo abren su propio
+// paño (con su letra) y nadie las comparte; en el taller se cortan rotadas.
 type PanoBin = {
   codInt: string;
   usado: number; // ancho acumulado (m)
@@ -257,12 +261,9 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
   let juntoCode = 64;
   let panoNum = 0;
   return orden.map((r) => {
-    if (r.ancho > r.anchoRollo) {
-      // Más ancha que el rollo → su propio paño, marca "RR".
-      panoNum++;
-      return { ...r, junto: 'RR', numeroPano: panoNum, anchoPano: r.ancho };
-    }
-    // Best-fit: paño del mismo COD_INT con MENOR espacio libre donde todavía entre.
+    // Best-fit: paño del mismo COD_INT con MENOR espacio libre donde todavía
+    // entre. Una cortina más ancha que el rollo no cabe en ningún paño → abre
+    // el suyo (con su propia letra) y nadie más lo comparte (se corta rotada).
     let mejor: PanoBin | null = null;
     for (const b of bins) {
       if (b.codInt !== r.codInt) continue;

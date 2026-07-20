@@ -11,7 +11,12 @@ import { useAuth } from '@/lib/auth';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
 import { recargoTarjetaEfectivo, useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
-import { modeloVentanaPorAncho } from '@/modules/descuentos/chips';
+import {
+  chipDualPorLadoColor,
+  modeloDesdeChipMecanismo,
+  modeloVentanaPorAncho,
+} from '@/modules/descuentos/chips';
+import { categoriaEsDual, modelosParaCategoria } from '@/modules/descuentos/tipos';
 import { otToRow } from '@/modules/ots/mappers';
 import { useOT } from '@/modules/ots/hooks';
 import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
@@ -23,7 +28,13 @@ import {
 import { formatCLP } from '@/modules/cotizador/calculos';
 import type { Producto } from '@/modules/cotizador/types';
 import { categoriasTela } from '@/modules/cotizador/categoriaTela';
-import { enriquecerVentanaDesdeFase0 } from '@/modules/cotizador/fase0-sync';
+import {
+  dualLadoDesdeDireccion,
+  enriquecerVentanaDesdeFase0,
+  tipoTelaDesdeProducto,
+} from '@/modules/cotizador/fase0-sync';
+import { emparejarDualesFase0 } from '@/modules/cotizador/fase0-dual';
+import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
 import {
   agruparFilasPorVentana,
@@ -402,13 +413,30 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // 63 mm/E65), igual que sincronizarChips en Fase 2. Sin esto una cortina
         // importada nace en 38 mm y el Excel de órdenes/optimizador salía en E66
         // hasta abrirla a mano en Fase 2.
+        const esDual = categoriaEsDual(head.categoria);
         const anchoGrupo = g.filas.reduce((mx, f) => Math.max(mx, f.ancho || 0), 0);
-        const modeloCalc = modeloVentanaPorAncho(
+        let modeloCalc = modeloVentanaPorAncho(
           modelosDespiece,
           head.categoria,
           head.colorAcc,
           anchoGrupo,
         );
+        // Dual: refinar el modelo al mecanismo dual exacto por lado+color (los 8
+        // modelos comparten descuentos, así que es coherencia del snapshot).
+        if (esDual) {
+          const chip = chipDualPorLadoColor(
+            dualLadoDesdeDireccion(head.direccion),
+            head.colorAcc,
+            OPCIONES_MECANISMO_DUAL,
+          );
+          const modeloDual = chip
+            ? modeloDesdeChipMecanismo(
+                modelosParaCategoria(modelosDespiece, head.categoria),
+                chip,
+              )
+            : null;
+          if (modeloDual) modeloCalc = modeloDual;
+        }
         const orig = head.vid
           ? (origVentanas[head.vid] as Record<string, any> | undefined)
           : undefined;
@@ -416,7 +444,20 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         const panos = construirPanosDeGrupo(
           g.filas,
           orig?.panos as Record<string, unknown>[] | undefined,
+          { persistirCodInt: esDual },
         );
+        // Dual: cada paño lleva SU tela (producto/descripción/tipoTela del catálogo);
+        // la ventana conserva la del paño 0 (head) para consumidores nivel-ventana.
+        if (esDual) {
+          panos.forEach((p, i) => {
+            const f = g.filas[i];
+            const prodP = f ? catalogo[(f.codInt || '').trim()] : undefined;
+            p.codInt = f?.codInt || '';
+            p.producto = prodP?.producto ?? '';
+            p.descripcion = prodP?.descripcion ?? '';
+            p.tipoTela = tipoTelaDesdeProducto(prodP?.cod, f?.codInt);
+          });
+        }
         const ventana: Record<string, unknown> = {
           ...(orig ?? { id: crypto.randomUUID(), grupoId: null }),
           ubicacion: head.ubicacion || '',
@@ -707,9 +748,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // Los campos de nivel ventana se replican a los demás paños del mismo vid.
       const espejo =
         !!vid && Object.keys(conDct).some((k) => CAMPOS_NIVEL_VENTANA.includes(k as keyof FilaUI));
+      // Dual: cada paño (fila) mantiene SU tela → el codInt NO se replica a los
+      // demás paños de la ventana (el resto de campos nivel-ventana sí).
+      const catEfectiva = (conDct.categoria as string) ?? fila?.categoria ?? '';
+      const esDualFila = categoriaEsDual(catEfectiva);
       const soloVentana = (): Partial<FilaUI> => {
         const sub: Partial<FilaUI> = {};
         for (const k of CAMPOS_NIVEL_VENTANA) {
+          if (k === 'codInt' && esDualFila) continue;
           if (k in conDct) (sub as Record<string, unknown>)[k] = (conDct as Record<string, unknown>)[k];
         }
         return sub;
@@ -814,8 +860,24 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         if (!a.codInt || !catalogo[a.codInt.trim()]) erroresAdic.set(id, new Set(['codInt']));
       }
 
+      // Dual (roller doble tela): las 2 filas ROL_DUAL de la misma UBIC se
+      // fusionan en UNA cortina de 2 paños (SCR primero = tela al vidrio) con un
+      // `vid` compartido + `panoIndex` 0/1. Las no-dual quedan como filas sueltas.
+      const { grupos, avisos } = emparejarDualesFase0(nuevas, (f) =>
+        tipoTelaDesdeProducto(catalogo[f.codInt.trim()]?.cod, f.codInt),
+      );
+      const nuevasEmparejadas: FilaUI[] = [];
+      for (const g of grupos) {
+        if (g.length >= 2 && categoriaEsDual(g[0].categoria)) {
+          const vid = crypto.randomUUID();
+          g.forEach((f, i) => nuevasEmparejadas.push({ ...f, vid, panoIndex: i }));
+        } else {
+          nuevasEmparejadas.push(...g);
+        }
+      }
+
       // Reemplazo COMPLETO de cortinas y adicionales con lo de la planilla.
-      setFilas(nuevas.length ? nuevas : [nuevaFila()]);
+      setFilas(nuevasEmparejadas.length ? nuevasEmparejadas : [nuevaFila()]);
       setAdicionales(nuevosAdic);
       setErroresImport(errores);
       setErroresImportAdic(erroresAdic);
@@ -829,6 +891,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       } else {
         toast.success(`Importadas ${resumen}.`);
       }
+      if (avisos.length) toast.warning(avisos.slice(0, 3).join(' '));
     } catch (e) {
       console.error(e);
       toast.error('No se pudo leer el Excel. Revisa que sea un archivo .xlsx válido.');

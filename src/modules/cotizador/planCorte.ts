@@ -312,7 +312,8 @@ export function generarPlanCorte(
         piezas.push({
           id: `${otItem.id}_${v.id}_p${pi}`,
           nombre: label,
-          codInt: (v.codInt || '').toUpperCase().trim(),
+          // Dual: cada paño matchea la colmena con SU tela; si no, la de la ventana.
+          codInt: ((p.codInt as string) || v.codInt || '').toUpperCase().trim(),
           otId: String(otItem.id),
           otNum,
           w: anchoCm,

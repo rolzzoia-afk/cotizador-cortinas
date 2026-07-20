@@ -369,3 +369,48 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     expect(fila[idxManillaIzq]).toBe(131.7);
   });
 });
+
+describe('generarOrdenesOptimizador — dual (2 telas por ventana)', () => {
+  const idxCOD_INT = 2;
+  const dualModel: ModeloDespiece = {
+    sistema: 'ROLLER_DUAL',
+    tipo_rol: 'ROL_DUAL',
+    mecanismo: 'MEC_01_DUAL_DERECHO_BLANCO',
+    codigos_tubo: 'E01; E02; E66',
+    diametro_tubo_mm: 38,
+    dcto_tubo_cm: 3.9,
+    dcto_tela_cm: 0.5,
+    suma_peso_cm: 0.1,
+    dcto_cenefa_cm: 0,
+    dcto_cenefa_del_cm: 0,
+    dcto_cenefa_tra_cm: 0,
+    dcto_perfiles_cm: 0,
+    peso_interno_duo_cm: 0,
+    peso_u_duo_cm: 0,
+    ancho_max_m: 2.1,
+    activo: true,
+    notas: '',
+  };
+
+  it('exporta 2 filas TUBO/PESO, COD_INT por paño y tubería 38mm_E02', () => {
+    const v = {
+      id: 'vd', ubicacion: 'LIVING', codInt: 'SC 68', producto: 'ROLLER SCREEN',
+      tipo: '', color: 'BLANCO', alto: 1.8, precio: 0, cantidad: 1,
+      categoria: 'ROL_DUAL', grupoId: null, grupoOrden: 0, modelo: dualModel,
+      panos: [
+        { ancho: 1.6, alto: 1.8, color: 'BLANCO', dual: true, codInt: 'SC 68' },
+        { ancho: 1.6, alto: 1.8, color: 'BLANCO', dual: true, codInt: 'BK 69' },
+      ] as Pano[],
+    } as Ventana;
+    const { aoa } = generarOrdenesOptimizador('DUAL-1', [v]);
+    // 2 filas de datos (una por paño).
+    expect(aoa).toHaveLength(3); // header + 2
+    expect(aoa[1][idxCOD_INT]).toBe('SC 68');
+    expect(aoa[2][idxCOD_INT]).toBe('BK 69');
+    // Tubo por paño = ancho − 3,9 (160 − 3,9 = 156,1).
+    expect(aoa[1][idxTUBO]).toBe(156.1);
+    expect(aoa[2][idxTUBO]).toBe(156.1);
+    // Tubería 38 mm → E02 (ancho ≤ 2,2 m).
+    expect(String(aoa[1][idxTUBERIA])).toContain('E02');
+  });
+});

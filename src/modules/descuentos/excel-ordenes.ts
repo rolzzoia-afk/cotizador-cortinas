@@ -18,10 +18,10 @@ import {
   cenefaOvaladaDesdeAdicional,
   esAdicionalCenefaCuadrada,
   esRollerOVertical,
-  etiquetaConTira,
   etiquetaTipInstCenefa,
   medidaCorteCenefaCuadrada,
   normalizarUbicacion,
+  tiraCenefaOvalada,
   ubicPanoVentana,
 } from './adicionales-cenefa';
 import { colorPerfilFilaExcel } from './adicionales-perfil';
@@ -189,7 +189,8 @@ export function generarOrdenesOptimizador(
       const fila: Record<string, string | number> = {
         OT: numeroOT,
         'COD SEC': v.categoria || '',
-        COD_INT: v.codInt || '',
+        // Dual: cada paño lleva SU tela; si no, la de la ventana.
+        COD_INT: ((p as { codInt?: string }).codInt as string) || v.codInt || '',
         TUBERIA: esBeeblack ? '' : tuberiaDe(v, String(p.tuberia || ''), anchoM),
         'UBIC.': ubic,
         'COLOR ACCESORIOS': (p.color as string) || v.color || '',
@@ -219,7 +220,7 @@ export function generarOrdenesOptimizador(
           });
           if (medida != null) {
             fila['CENEFA OVALADA'] = medida;
-            fila['CON TIRA'] = etiquetaConTira(p.cenefaTira ?? adicCenefa.conTira);
+            fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined, adicCenefa.conTira);
             if (adicCenefa.colorAcc) {
               fila['COLOR ACCESORIOS'] = adicCenefa.colorAcc;
             }
@@ -232,7 +233,7 @@ export function generarOrdenesOptimizador(
           const cenefaDespiece = d.cortes.find((c) => c.columnaExcel === 'CENEFA OVALADA');
           if (cenefaDespiece) {
             fila['CENEFA OVALADA'] = cenefaDespiece.medidaCm;
-            fila['CON TIRA'] = etiquetaConTira(p.cenefaTira);
+            fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined);
           }
         }
         if (d.aproximado) {

@@ -4,6 +4,7 @@ import {
   cierreDesdeDireccion,
   colorAccesorioCorto,
   direccionDesdeCierre,
+  dualLadoDesdeDireccion,
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
   motorAdicionalParaUbic,
@@ -13,7 +14,7 @@ import {
   tipoTelaDesdeVentana,
 } from './fase0-sync';
 import { crearPanoVacio } from './fase2';
-import type { Pano, Ventana } from './types';
+import type { CatalogoProductos, Pano, Ventana } from './types';
 
 describe('fase0-sync', () => {
   it('sentido INTERNO/EXTERNO → armado', () => {
@@ -222,5 +223,67 @@ describe('fase0-sync — motor desde adicionales de Fase 0', () => {
     } as Ventana;
     const out = enriquecerVentanaDesdeFase0(ventana, undefined, adicionales);
     expect(out.panos[0].motorModelo).toBe('DOM41'); // respeta lo elegido
+  });
+});
+
+describe('fase0-sync — dual (ROL_DUAL)', () => {
+  const catalogo: CatalogoProductos = {
+    'SC 68': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN', tipo: '', descripcion: '', precio: 0 },
+    'BK 69': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT', tipo: '', descripcion: '', precio: 0 },
+  };
+
+  it('dualLadoDesdeDireccion: izquierda→IZQUIERDO, resto→DERECHO', () => {
+    expect(dualLadoDesdeDireccion('CAD [IZQUIERDA]')).toBe('IZQUIERDO');
+    expect(dualLadoDesdeDireccion('CAD [DERECHA]')).toBe('DERECHO');
+    expect(dualLadoDesdeDireccion('')).toBe('DERECHO');
+  });
+
+  it('enriquecerPano ROL_DUAL → dual + lado por dirección + chip + orden + tela del paño', () => {
+    const ventana = {
+      id: '1',
+      categoria: 'ROL_DUAL',
+      direccion: 'CAD [DERECHA]',
+      codInt: 'SC 68',
+      color: 'GRIS',
+      panos: [],
+    } as unknown as Ventana;
+    // Paño BK (2ª tela) con su propio codInt.
+    const pano = { ancho: 1.6, alto: 1.8, color: 'GRIS', codInt: 'BK 69' } as Pano;
+    const out = enriquecerPanoDesdeFase0(pano, ventana, catalogo);
+    expect(out.dual).toBe(true);
+    expect(out.dualLado).toBe('DERECHO');
+    expect(out.dualColor).toBe('GRS');
+    // GRIS + DERECHO → MEC 24 (kit dual derecho gris).
+    expect(out.mecanismo).toContain('[MEC 24]');
+    expect(out.ordenDoble).toBe(true);
+    expect(out.ordenDobleOpcion).toBe('SCR_VID_BK');
+    // tipoTela desde la tela del paño (BK), no la de la ventana (SC).
+    expect(out.tipoTela).toBe('BK');
+  });
+
+  it('lado IZQUIERDO + blanco → MEC 02', () => {
+    const ventana = {
+      id: '2', categoria: 'ROL_DUAL', direccion: 'CAD [IZQUIERDA]',
+      codInt: 'SC 68', color: 'BLANCO', panos: [],
+    } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0({ ancho: 1.5, alto: 1.7, color: 'BLANCO' } as Pano, ventana, catalogo);
+    expect(out.dualLado).toBe('IZQUIERDO');
+    expect(out.mecanismo).toContain('[MEC 02]');
+  });
+
+  it('no pisa valores ya elegidos a mano (lado/orden/mecanismo)', () => {
+    const ventana = {
+      id: '3', categoria: 'ROL_DUAL', direccion: 'CAD [DERECHA]',
+      codInt: 'SC 68', color: 'BLANCO', panos: [],
+    } as unknown as Ventana;
+    const pano = {
+      ancho: 1.6, alto: 1.8, color: 'BLANCO', dual: true,
+      dualLado: 'MIXTO', mecanismo: 'DUAL MIXTO BLANCO [MEC 19]',
+      ordenDobleOpcion: 'BK_VID_SCR',
+    } as Pano;
+    const out = enriquecerPanoDesdeFase0(pano, ventana, catalogo);
+    expect(out.dualLado).toBe('MIXTO');
+    expect(out.mecanismo).toBe('DUAL MIXTO BLANCO [MEC 19]');
+    expect(out.ordenDobleOpcion).toBe('BK_VID_SCR');
   });
 });

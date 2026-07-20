@@ -54,11 +54,12 @@ describe('cantidadBrackets', () => {
 });
 
 describe('llevaTapasPeso', () => {
-  it('solo roller (incluye ovalada y motorizados); excluye dual/pletina/dúo/oscuridad', () => {
+  it('roller (incluye ovalada, motorizados y DUAL); excluye pletina/dúo/oscuridad', () => {
     expect(llevaTapasPeso('ROL')).toBe(true);
     expect(llevaTapasPeso('ROL_MANUAL_CENEFA_OVALADA_38mm')).toBe(true);
     expect(llevaTapasPeso('ROL_CENEFA_OVALADA_MOTOR_GRANDE')).toBe(true);
-    expect(llevaTapasPeso('ROL_DUAL')).toBe(false);
+    // Dual: cada roller/tela lleva su barra de peso con 2 tapas (2026-07-15).
+    expect(llevaTapasPeso('ROL_DUAL')).toBe(true);
     expect(llevaTapasPeso('PLETINA_ROLLER_V')).toBe(false);
     expect(llevaTapasPeso('DUO_MANUAL_38mm')).toBe(false);
     expect(llevaTapasPeso('SOFT_LIGHT_38mm')).toBe(false);

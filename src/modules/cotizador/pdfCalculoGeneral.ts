@@ -22,10 +22,11 @@ import {
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
-import { etiquetaConTira, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
+import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
 import { OPCIONES_MECANISMO_RESOLUCION } from './fase2';
 import { colorPesoCadena } from './cadenas';
+import { telaDePano } from './telaPano';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 
 type RGB = [number, number, number];
@@ -162,7 +163,7 @@ export function construirCalculoGeneral(
           // del paño: "CENEFA OVALADA (CON TIRA)" / "(SIN TIRA)". La medida de
           // corte es la misma; solo cambia la etiqueta. Cada paño llena una.
           if (comp === 'CENEFA OVALADA') {
-            comp = `CENEFA OVALADA (${etiquetaConTira(p.cenefaTira as string | undefined)})`;
+            comp = `CENEFA OVALADA (${tiraCenefaOvalada(p.cenefaTira as string | undefined)})`;
           }
           despiece.set(comp, c.medidaCm);
         }
@@ -172,7 +173,9 @@ export function construirCalculoGeneral(
       // quedan aplicadas a un roller simple (screen con motor), y ahí la tela se
       // corta simple — el dimensionado debe coincidir con el corte, no con la
       // etiqueta de la categoría.
-      const esDuoFila = (v.producto || '').toUpperCase().includes('DUO');
+      // Tela por paño: en dual cada paño trae SU tela; si no, la de la ventana.
+      const tela = telaDePano(v, p as { codInt?: string; producto?: string; descripcion?: string });
+      const esDuoFila = (tela.producto || '').toUpperCase().includes('DUO');
       const cierreCm = parseFloat(String(p.cierreAlturaCm ?? ''));
       if (esDuoFila && cierreCm > 0) despiece.set('CIERRE DE ALTURA', r1(cierreCm));
       // Columna ALTO del Excel manual: alto de CORTE de la tela del sistema
@@ -236,9 +239,9 @@ export function construirCalculoGeneral(
         manillas: manillaCant > 0 ? `${manillaCant} ${(p.manillaColor as string) || ''}`.trim() : '',
         conjunto: juntoPorPieza?.get(`${v.id}_${i}`) ?? '',
         cant: 1,
-        producto: v.producto || '',
-        codInt: v.codInt || '',
-        descripcion: catalogo[v.codInt]?.descripcion || v.descripcion || '',
+        producto: tela.producto || '',
+        codInt: tela.codInt || '',
+        descripcion: catalogo[tela.codInt]?.descripcion || tela.descripcion || '',
         ubic: ubicPanoVentana(v.ubicacion || '', i, panos.length),
         colorAcc: (p.color as string) || v.color || '',
         cadena: (v.direccion as string) || '',

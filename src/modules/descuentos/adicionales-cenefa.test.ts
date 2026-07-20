@@ -148,6 +148,29 @@ describe('derivarAdicionalesCenefaDesdeVentanas (paño → adicional)', () => {
     ]);
   });
 
+  it('1 paño Ovalada SIN dato de tira → CENF O con conTira true (default 2026-07-20)', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      ubicacion: 'LIVING',
+      cantidad: 1,
+      color: 'NEGRO',
+      panos: [{ ancho: 2.5, alto: 2, cenefa: 'Ovalada', colorTapa: 'GRS' }],
+    };
+    const [adic] = derivarAdicionalesCenefaDesdeVentanas([v]);
+    expect(adic.codInt).toBe('CENF O');
+    expect(adic.conTira).toBe(true);
+  });
+
+  it('1 paño Ovalada con "SIN TIRA" explícito → CENF O con conTira false', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      ubicacion: 'LIVING',
+      cantidad: 1,
+      panos: [{ ancho: 2.5, alto: 2, cenefa: 'Ovalada', cenefaTira: 'SIN TIRA', colorTapa: 'GRS' }],
+    };
+    expect(derivarAdicionalesCenefaDesdeVentanas([v])[0].conTira).toBe(false);
+  });
+
   it('multi-paño: Cuadrada en paños 1 y 3 → dos CENF C en V1-G1 / V1-G3 (conTira undefined)', () => {
     const v: VentanaItem = {
       id: 'v1',

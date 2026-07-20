@@ -18,6 +18,7 @@ import {
   OPCIONES_LARGO_CADENA,
   OPCIONES_MANILLA_COLOR,
   OPCIONES_MATERIAL_TIPO,
+  OPCIONES_DUAL_LADO,
   OPCIONES_MECANISMO,
   OPCIONES_MOTOR_MODELO,
   OPCIONES_ORDEN_DOBLE,
@@ -513,7 +514,8 @@ export function PanoEditor({
             onChange={(v) =>
               onChange({
                 cenefa: v,
-                ...(v !== 'Ovalada' ? { cenefaTira: 'SIN TIRA' } : {}),
+                // Ovalada arranca CON TIRA por default; el resto sin tira.
+                cenefaTira: v === 'Ovalada' ? 'CON TIRA' : 'SIN TIRA',
               })
             }
           />
@@ -522,7 +524,7 @@ export function PanoEditor({
           <>
             <RadioRow
               label="Tira"
-              value={pano.cenefaTira || 'SIN TIRA'}
+              value={pano.cenefaTira || (cenefaEsOvalada ? 'CON TIRA' : 'SIN TIRA')}
               options={OPCIONES_CENEFA_TIRA}
               onChange={(v) => onChange({ cenefaTira: v })}
             />
@@ -797,18 +799,22 @@ export function PanoEditor({
         </Section>
       )}
 
-      {/* 8. ORDEN DOBLE — solo dúo (o dato guardado de OT vieja) */}
-      {(esDuo || pano.ordenDoble) && (
-        <Section title="Orden doble (cortina duo)">
-          <Checkbox
-            label="Es doble"
-            checked={!!pano.ordenDoble}
-            onChange={(v) => onChange({ ordenDoble: v })}
-          />
-          {pano.ordenDoble && (
+      {/* 8. ORDEN DOBLE — dúo, dual, o dato guardado de OT vieja. En dual el
+          orden es inherente (2 telas): se oculta el checkbox "Es doble" y se
+          muestra directo el selector (default SCR al vidrio). */}
+      {(esDuo || pano.dual || pano.ordenDoble) && (
+        <Section title="Orden doble (dual / duo)">
+          {!pano.dual && (
+            <Checkbox
+              label="Es doble"
+              checked={!!pano.ordenDoble}
+              onChange={(v) => onChange({ ordenDoble: v })}
+            />
+          )}
+          {(pano.dual || pano.ordenDoble) && (
             <RadioRow
               label="Orden"
-              value={pano.ordenDobleOpcion || ''}
+              value={pano.ordenDobleOpcion || 'SCR_VID_BK'}
               options={OPCIONES_ORDEN_DOBLE as unknown as readonly { value: string; label: string }[]}
               onChange={(v) => onChange({ ordenDobleOpcion: v })}
             />
@@ -825,6 +831,14 @@ export function PanoEditor({
             options={OPCIONES_TIPO_MECANISMO as unknown as readonly { value: string; label: string }[]}
             onChange={(v) => onChange({ dual: v === 'DUAL' })}
           />
+          {pano.dual && (
+            <RadioRow
+              label="Lado"
+              value={pano.dualLado || ''}
+              options={OPCIONES_DUAL_LADO}
+              onChange={(v) => onChange({ dualLado: v })}
+            />
+          )}
           <RadioRow
             label=""
             value={pano.mecanismo || ''}
