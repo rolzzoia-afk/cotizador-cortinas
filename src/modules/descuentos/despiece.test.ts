@@ -181,19 +181,41 @@ describe('calcularDespiece — SOFT LIGHT interno 38 mm (SISTEMAS OSCURIDAD.xlsx
 });
 
 describe('calcularDespiece — pletina y oscuridad', () => {
-  it('pletina: dcto_tubo sobre la pletina, peso = pletina − 0.4', () => {
+  it('pletina roller (velcro): cada corte se descuenta DIRECTO del ancho (Excel manual)', () => {
     const m: ModeloDespiece = {
       ...base,
       sistema: 'PLETINA_ROLLER',
       tipo_rol: 'PLETINA_ROLLER_V',
       mecanismo: 'VELCRO',
       diametro_tubo_mm: 0,
-      dcto_tubo_cm: 0.84,
-      suma_peso_cm: 0.1,
+      dcto_tubo_cm: 0.8,
+      dcto_tela_cm: 0.8,
+      suma_peso_cm: 0.7,
     };
-    const d = calcularDespiece(m, 60);
-    expect(corte(d, 'PLETINA')).toBe(59.2);
-    expect(corte(d, 'PESO')).toBe(58.8);
+    const d = calcularDespiece(m, 80); // ancho 80 → 79,2 / 79,2 / 79,3
+    expect(corte(d, 'PLETINA')).toBe(79.2);
+    expect(tela(d)).toBe(79.2);
+    expect(corte(d, 'PESO')).toBe(79.3);
+    expect(corte(d, 'TUBO')).toBeUndefined();
+  });
+
+  it('pletina dúo (velcro): tela y pletina / peso U / peso interno directos del ancho', () => {
+    const m: ModeloDespiece = {
+      ...base,
+      sistema: 'PLETINA_DUO',
+      tipo_rol: 'PLETINA_DUO_V',
+      mecanismo: 'VELCRO',
+      diametro_tubo_mm: 0,
+      dcto_tubo_cm: 0.8,
+      dcto_tela_cm: 0.8,
+      peso_u_duo_cm: 0.6,
+      peso_interno_duo_cm: 0.8,
+    };
+    const d = calcularDespiece(m, 80); // ancho 80 → 79,2 / 79,4 / 79,2
+    expect(corte(d, 'TELA Y PLETINA')).toBe(79.2);
+    expect(corte(d, 'PESO U')).toBe(79.4);
+    expect(corte(d, 'PESO INTERNO')).toBe(79.2);
+    expect(corte(d, 'PLETINA')).toBeUndefined();
     expect(corte(d, 'TUBO')).toBeUndefined();
   });
 

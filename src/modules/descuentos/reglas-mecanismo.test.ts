@@ -101,42 +101,65 @@ describe('REGLAS_MECANISMO — categoriasSinMecanismo', () => {
 });
 
 describe('REGLAS_MECANISMO — reglasAncho (banda 2,2–3,0 → kit 45 · >3 → MEC 28)', () => {
-  it('ROL en banda: blanco → 18, negro → 23, gris → sin regla (manual)', () => {
-    expect(mecPorAncho('ROL', 2.5, 'BCO')).toBe(18);
-    expect(mecPorAncho('ROL', 2.5, 'BLANCO')).toBe(18);
-    expect(mecPorAncho('ROL', 2.5, 'NEG')).toBe(23);
-    expect(mecPorAncho('ROL', 2.5, 'GRS')).toBeNull();
-    expect(mecPorAncho('ROL', 2.5, 'GRIS')).toBeNull();
-    expect(mecPorAncho('ROL', 2.5)).toBeNull(); // sin color no hay banda
+  // La banda 2,2–3,0 m (tubo E78) requiere el flag usarTuboE78 = true (4º arg).
+  // Con el flag apagado (default) el rango se queda en 38 mm → tubo E66.
+  it('ROL en banda CON flag E78: blanco → 18, negro → 23, gris → sin regla (manual)', () => {
+    expect(mecPorAncho('ROL', 2.5, 'BCO', true)).toBe(18);
+    expect(mecPorAncho('ROL', 2.5, 'BLANCO', true)).toBe(18);
+    expect(mecPorAncho('ROL', 2.5, 'NEG', true)).toBe(23);
+    expect(mecPorAncho('ROL', 2.5, 'GRS', true)).toBeNull();
+    expect(mecPorAncho('ROL', 2.5, 'GRIS', true)).toBeNull();
+    expect(mecPorAncho('ROL', 2.5, undefined, true)).toBeNull(); // sin color no hay banda
   });
-  it('fronteras: 2,2 exacto fuera; 3,0 exacto dentro; >3,0 → MEC 28 (cualquier color)', () => {
-    expect(mecPorAncho('ROL', 2.2, 'BCO')).toBeNull();
-    expect(mecPorAncho('ROL', 3.0, 'BCO')).toBe(18);
+  it('ROL en banda SIN flag E78 (default): no sube: se queda en 38 mm (null)', () => {
+    expect(mecPorAncho('ROL', 2.5, 'BCO')).toBeNull();
+    expect(mecPorAncho('ROL', 2.5, 'NEG')).toBeNull();
+    expect(mecPorAncho('ROL', 2.5, 'BCO', false)).toBeNull();
+  });
+  it('fronteras (flag E78 ON): 2,2 exacto fuera; 3,0 exacto dentro; >3,0 → MEC 28 sin flag', () => {
+    expect(mecPorAncho('ROL', 2.2, 'BCO', true)).toBeNull();
+    expect(mecPorAncho('ROL', 3.0, 'BCO', true)).toBe(18);
+    // La fila >3 m (MEC 28/E65) es estructural: NO depende del flag E78.
     expect(mecPorAncho('ROL', 3.01, 'BCO')).toBe(28);
+    expect(mecPorAncho('ROL', 3.01, 'BCO', true)).toBe(28);
     expect(mecPorAncho('ROL', 3.5, 'GRS')).toBe(28); // la fila >3 m es fija, sin color
   });
-  it('DUO_MANUAL_38mm en banda: kit ovalada de bodega por color (39/38/12), fila 45 vía modeloMecPorColor', () => {
-    // 2026-07-15: el kit MOSTRADO es el ovalada de bodega; la FILA 45 mm del
-    // catálogo sigue siendo MEC_18/23 (modeloMecPorColor), que consume modeloPorAncho.
-    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'BCO')).toBe(39);
-    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'GRS')).toBe(12);
-    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'NEG')).toBe(38);
-    const reglaNeg = reglaAnchoAplicable('DUO_MANUAL_38mm', 2.5, 'NEG')?.regla;
+  it('DUO_MANUAL_38mm en banda (flag E78 ON): kit ovalada 39/38/12, fila 45 vía modeloMecPorColor', () => {
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'BCO', true)).toBe(39);
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'GRS', true)).toBe(12);
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'NEG', true)).toBe(38);
+    const reglaNeg = reglaAnchoAplicable('DUO_MANUAL_38mm', 2.5, 'NEG', true)?.regla;
     expect(reglaNeg?.categoriaModelo).toBe('DUO_MANUAL_45mm');
     expect(reglaNeg?.modeloMecPorColor?.NEG).toBe(23);
     expect(reglaNeg?.modeloMecPorColor?.BCO).toBe(18);
-    expect(mecPorAncho('DUO_MANUAL_38mm', 3.5, 'NEG')).toBeNull(); // el dúo no tiene regla >3 m
+    expect(mecPorAncho('DUO_MANUAL_38mm', 3.5, 'NEG', true)).toBeNull(); // el dúo no tiene regla >3 m
+    // Sin flag no sube.
+    expect(mecPorAncho('DUO_MANUAL_38mm', 2.5, 'BCO')).toBeNull();
   });
-  it('la regla trae el tubo y la nota para la UI', () => {
-    expect(reglaAnchoAplicable('ROL', 2.5, 'BCO')?.regla.tubo).toBe('E78');
-    expect(reglaAnchoAplicable('ROL', 3.5, 'GRS')?.regla.tubo).toBe('E65');
-    expect(reglaAnchoAplicable('ROL', 2.5, 'NEG')?.regla.nota).toContain('E78');
+  it('cenefa ovalada roller 38 mm en banda (flag E78 ON): kit 39/38, fila 45 vía 10/9; gris no sube', () => {
+    expect(mecPorAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, 'BCO', true)).toBe(39);
+    expect(mecPorAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, 'NEG', true)).toBe(38);
+    expect(mecPorAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, 'GRS', true)).toBeNull(); // gris → 38/E66
+    const regla = reglaAnchoAplicable('ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, 'BCO', true)?.regla;
+    expect(regla?.categoriaModelo).toBe('ROL_MANUAL_CENEFA_OVALADA_45mm');
+    expect(regla?.modeloMecPorColor?.BCO).toBe(10); // fila 45 = MEC_10 blanco
+    expect(regla?.modeloMecPorColor?.NEG).toBe(9); //  fila 45 = MEC_09 negro
+    expect(regla?.tubo).toBe('E78');
+    // Sin flag (default) no sube: se queda en 38 mm.
+    expect(mecPorAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, 'BCO')).toBeNull();
   });
-  it('colorConBandaAncho: decide la vuelta automática 45→38', () => {
+  it('la regla trae el tubo y la nota para la UI (flag E78 ON)', () => {
+    expect(reglaAnchoAplicable('ROL', 2.5, 'BCO', true)?.regla.tubo).toBe('E78');
+    expect(reglaAnchoAplicable('ROL', 3.5, 'GRS')?.regla.tubo).toBe('E65'); // >3 m sin flag
+    expect(reglaAnchoAplicable('ROL', 2.5, 'NEG', true)?.regla.nota).toContain('E78');
+  });
+  it('colorConBandaAncho: decide la vuelta automática 45→38 (NO gateado por el flag)', () => {
     expect(colorConBandaAncho('ROL', 'BCO')).toBe(true);
     expect(colorConBandaAncho('ROL', 'NEGRO')).toBe(true);
     expect(colorConBandaAncho('ROL', 'GRS')).toBe(false); // gris = manual, no se revierte
     expect(colorConBandaAncho('DUO_MANUAL_38mm', 'GRIS')).toBe(true);
+    expect(colorConBandaAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 'BCO')).toBe(true);
+    expect(colorConBandaAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 'GRS')).toBe(false);
     expect(colorConBandaAncho('OSCURANTI_63mm', 'BCO')).toBe(false);
   });
 });

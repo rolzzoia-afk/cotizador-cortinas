@@ -5,12 +5,14 @@ import {
   cantidadBrackets,
   cantidadSuplementosAuto,
   cantidadTarugos,
+  codigoManillaPorColor,
   codigoMotorDesdeAdicional,
   esAdicionalHubDomotica,
   esCategoriaDuo,
   insumosDePano,
   insumosMotorDePano,
   llevaTapasPeso,
+  manillaDesdeAdicional,
   otLlevaDomotica,
   panoLlevaDomotica,
   tarugoDeMaterial,
@@ -41,6 +43,29 @@ describe('codigoMotorDesdeAdicional / esAdicionalHubDomotica', () => {
   });
 });
 
+describe('manillaDesdeAdicional / codigoManillaPorColor', () => {
+  it('normaliza el código del adicional a manilla + color (con o sin espacio)', () => {
+    expect(manillaDesdeAdicional('HER 47')).toEqual({ codigo: 'HER47', color: 'NEG' });
+    expect(manillaDesdeAdicional('HER48')).toEqual({ codigo: 'HER48', color: 'BCO' });
+    expect(manillaDesdeAdicional('her 49')).toEqual({ codigo: 'HER49', color: 'CAFÉ' });
+  });
+  it('adicionales que no son manilla → null', () => {
+    expect(manillaDesdeAdicional('HER 48X')).toBeNull();
+    expect(manillaDesdeAdicional('DOM 38')).toBeNull();
+    expect(manillaDesdeAdicional('')).toBeNull();
+    expect(manillaDesdeAdicional(undefined)).toBeNull();
+  });
+  it('código de bodega por color del paño (corto o largo)', () => {
+    expect(codigoManillaPorColor('NEG')).toBe('HER47');
+    expect(codigoManillaPorColor('NEGRO')).toBe('HER47');
+    expect(codigoManillaPorColor('BCO')).toBe('HER48');
+    expect(codigoManillaPorColor('CAFÉ')).toBe('HER49');
+    expect(codigoManillaPorColor('CAFE')).toBe('HER49');
+    expect(codigoManillaPorColor('MET')).toBe('');
+    expect(codigoManillaPorColor('')).toBe('');
+  });
+});
+
 describe('cantidadBrackets', () => {
   it('hasta 1 m → 2; sobre 1 m suma 1 cada 60 cm iniciados', () => {
     expect(cantidadBrackets(0.8)).toBe(2);
@@ -54,13 +79,16 @@ describe('cantidadBrackets', () => {
 });
 
 describe('llevaTapasPeso', () => {
-  it('roller (incluye ovalada, motorizados y DUAL); excluye pletina/dúo/oscuridad', () => {
+  it('roller (incluye ovalada, motorizados, DUAL y pletina roller); excluye dúo/pletina dúo/oscuridad', () => {
     expect(llevaTapasPeso('ROL')).toBe(true);
     expect(llevaTapasPeso('ROL_MANUAL_CENEFA_OVALADA_38mm')).toBe(true);
     expect(llevaTapasPeso('ROL_CENEFA_OVALADA_MOTOR_GRANDE')).toBe(true);
     // Dual: cada roller/tela lleva su barra de peso con 2 tapas (2026-07-15).
     expect(llevaTapasPeso('ROL_DUAL')).toBe(true);
-    expect(llevaTapasPeso('PLETINA_ROLLER_V')).toBe(false);
+    // Pletina roller: barra de peso roller con 2 tapas (2026-07-20).
+    expect(llevaTapasPeso('PLETINA_ROLLER_V')).toBe(true);
+    // Pletina dúo: NO usa tapas roller (usa el juego dúo, ver llevaTapasDuo).
+    expect(llevaTapasPeso('PLETINA_DUO_V')).toBe(false);
     expect(llevaTapasPeso('DUO_MANUAL_38mm')).toBe(false);
     expect(llevaTapasPeso('SOFT_LIGHT_38mm')).toBe(false);
     expect(llevaTapasPeso('OSCURANTI_63mm')).toBe(false);
@@ -121,6 +149,10 @@ describe('cantidadTarugos', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'DUO_MOTOR_PEQUEÑO_38mm', 1.5)).toBe(4);
     expect(cantidadTarugos(pano({ materialTipo: 'MADERA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(0);
   });
+  it('pletina (velcro): 0 tarugos aunque tenga material', () => {
+    expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'PLETINA_ROLLER_V', 1.5)).toBe(0);
+    expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'PLETINA_DUO_V', 1.5)).toBe(0);
+  });
 });
 
 describe('insumosDePano', () => {
@@ -167,6 +199,22 @@ describe('insumosDePano', () => {
   it('dúo vulcanita sin cenefa → 4 tarugos TAR01 (además de las tapas dúo)', () => {
     const out = insumosDePano(pano({ color: 'GRS', materialTipo: 'VULCANITA' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
     expect(out.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(4);
+  });
+  it('pletina roller → tapas roller (2 + TOR02), SIN tarugos aunque haya material', () => {
+    const out = insumosDePano(pano({ color: 'BCO', materialTipo: 'VULCANITA' }), { categoria: 'PLETINA_ROLLER_V', anchoM: 0.8 });
+    const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
+    expect(map.TAP19).toBe(1);
+    expect(map.TAP01).toBe(1);
+    expect(map.TOR02).toBe(2);
+    expect(out.some((i) => i.codigo === 'TAR01')).toBe(false); // velcro: 0 tarugos
+  });
+  it('pletina dúo → juego de tapas dúo (a presión), SIN tarugos', () => {
+    const out = insumosDePano(pano({ color: 'NEG', materialTipo: 'VULCANITA' }), { categoria: 'PLETINA_DUO_V', anchoM: 0.8 });
+    const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
+    expect(map.TAP11).toBe(2); // exterior negro dúo
+    expect(map.TAP13).toBe(2); // interno
+    expect(out.some((i) => i.codigo === 'TOR02')).toBe(false); // a presión
+    expect(out.some((i) => i.codigo === 'TAR01')).toBe(false); // velcro: 0 tarugos
   });
   it('suplemento SUB01: roller→2, cenefa ovalada 1,5 m→3 (brackets), override manual manda', () => {
     const roller = insumosDePano(pano({ color: 'BCO', suplementoTipo: 'SUB01' }), { categoria: 'ROL', anchoM: 1.5 });

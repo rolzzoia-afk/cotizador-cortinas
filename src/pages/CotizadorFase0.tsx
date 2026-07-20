@@ -14,8 +14,11 @@ import { useDescuentosModelo } from '@/modules/descuentos/hooks';
 import {
   chipDualPorLadoColor,
   modeloDesdeChipMecanismo,
+  modeloPorAncho,
   modeloVentanaPorAncho,
+  resincronizarChipsPanos,
 } from '@/modules/descuentos/chips';
+import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { categoriaEsDual, modelosParaCategoria } from '@/modules/descuentos/tipos';
 import { otToRow } from '@/modules/ots/mappers';
 import { useOT } from '@/modules/ots/hooks';
@@ -34,7 +37,11 @@ import {
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0 } from '@/modules/cotizador/fase0-dual';
-import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
+import {
+  OPCIONES_MECANISMO_DUAL,
+  OPCIONES_MECANISMO_RESOLUCION,
+  OPCIONES_TUBERIA,
+} from '@/modules/cotizador/fase2';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
 import {
   agruparFilasPorVentana,
@@ -303,6 +310,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [sinInstalacion, setSinInstalacion] = useState(false);
   // Envío: gratis o cobro en destino (lo paga el cliente al courier; no suma al total).
   const [envio, setEnvio] = useState<'gratis' | 'cobro_destino'>('gratis');
+  // Tubo E78: habilita la banda 2,2–3,0 m (kit 45 mm + tubo E78) para esta OT.
+  // Default false = el rango usa tubo E66 (38 mm) con kit normal.
+  const [usarTuboE78, setUsarTuboE78] = useState(false);
 
   const [guardandoOT, setGuardandoOT] = useState(false);
   // Celdas a corregir a mano tras importar un Excel: id de fila → campos inválidos.
@@ -323,6 +333,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       instalacionDescuentoRegion?: number;
       sinInstalacion?: boolean;
       envio?: 'gratis' | 'cobro_destino';
+      usarTuboE78?: boolean;
     };
     setCliente({
       nombre: dg.cliente || '',
@@ -376,6 +387,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     );
     setSinInstalacion(!!dg.sinInstalacion);
     setEnvio(dg.envio === 'cobro_destino' ? 'cobro_destino' : 'gratis');
+    setUsarTuboE78(!!dg.usarTuboE78);
     setOrigVentanas(orig as Record<string, Record<string, unknown>>);
     setCargadoEdit(true);
   }, [editOtId, otCargada, cargadoEdit]);
@@ -420,6 +432,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           head.categoria,
           head.colorAcc,
           anchoGrupo,
+          usarTuboE78,
         );
         // Dual: refinar el modelo al mecanismo dual exacto por lado+color (los 8
         // modelos comparten descuentos, así que es coherencia del snapshot).
@@ -458,6 +471,38 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             p.tipoTela = tipoTelaDesdeProducto(prodP?.cod, f?.codInt);
           });
         }
+        // Modelo final: al re-guardar una OT existente, recalcula el modelo por
+        // ancho con el flag E78 actual (banda ON → 45 mm/E78; OFF → revierte a 38
+        // mm/E66 los colores con regla, respeta el 45 manual gris y las categorías
+        // …_45mm por spec). El dual conserva su modelo (no lleva regla por ancho).
+        const origModelo = orig?.modelo as ModeloDespiece | undefined;
+        const modeloFinal = esDual
+          ? (origModelo ?? modeloCalc)
+          : origModelo
+            ? modeloPorAncho(
+                modelosDespiece,
+                head.categoria,
+                anchoGrupo,
+                origModelo,
+                head.colorAcc,
+                usarTuboE78,
+              )
+            : modeloCalc;
+        // Re-sincroniza los chips de mecanismo/tubería de los paños con el modelo
+        // recalculado: baja MEC 18/23 → kit por color y E78 → E66 si eran auto (el
+        // Excel de órdenes/etiquetas priorizan el CHIP guardado; un chip E78
+        // huérfano con modelo 38 daría "38mm_E78"). Dual conserva sus chips.
+        if (!esDual) {
+          resincronizarChipsPanos(
+            panos,
+            head.colorAcc,
+            modeloFinal,
+            head.categoria,
+            OPCIONES_MECANISMO_RESOLUCION,
+            OPCIONES_TUBERIA,
+            usarTuboE78,
+          );
+        }
         const ventana: Record<string, unknown> = {
           ...(orig ?? { id: crypto.randomUUID(), grupoId: null }),
           ubicacion: head.ubicacion || '',
@@ -473,7 +518,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           direccion: head.direccion || '',
           sentido: head.sentido || '',
           panos,
-          modelo: (orig?.modelo as unknown) ?? modeloCalc,
+          modelo: modeloFinal,
         };
         return enriquecerVentanaDesdeFase0(
           ventana as never,
@@ -501,6 +546,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
           sinInstalacion,
           envio,
+          usarTuboE78,
         };
         const actualizada: OT = {
           ...otCargada,
@@ -578,6 +624,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
           sinInstalacion,
           envio,
+          usarTuboE78,
         },
         storeVentanas: ventanas as unknown as OT['storeVentanas'],
         cotizacionCount: 1,
@@ -1059,6 +1106,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             opciones={[
               { value: 'gratis', label: 'Gratis', tono: 'ok' },
               { value: 'cobro_destino', label: 'Cobro en destino', tono: 'mal' },
+            ]}
+          />
+          <CampoEstado
+            label="Tubo E78 (2,2–3,0 m)"
+            value={usarTuboE78 ? 'si' : 'no'}
+            onChange={(v) => setUsarTuboE78(v === 'si')}
+            opciones={[
+              { value: 'no', label: 'Desactivado (tubo E66)' },
+              { value: 'si', label: 'Activado (kit 45 + tubo E78)', tono: 'ok' },
             ]}
           />
           {region && !sinInstalacion && (
@@ -1695,7 +1751,7 @@ function CampoEstado({
 }: {
   label: string;
   value: string;
-  opciones: { value: string; label: string; tono: 'ok' | 'mal' }[];
+  opciones: { value: string; label: string; tono?: 'ok' | 'mal' }[];
   onChange: (v: string) => void;
 }) {
   const tono = opciones.find((o) => o.value === value)?.tono;

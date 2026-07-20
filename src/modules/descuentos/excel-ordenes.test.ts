@@ -1,14 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { generarOrdenesOptimizador } from './excel-ordenes';
+import { COLUMNAS, generarOrdenesOptimizador } from './excel-ordenes';
 import type { ModeloDespiece } from './tipos';
 import type { Ventana, Pano } from '@/modules/cotizador/types';
 
-const idxTUBO = 6;
-const idxPESO = 7;
-const idxCENEFA = 8;
-const idxCON_TIRA = 12;
-const idxPESO_SOFT_LIGHT = 15;
-const idxTUBERIA = 3;
+// Índice de columna por NOMBRE (robusto a que se agreguen/reordenen columnas).
+const col = (n: string) => (COLUMNAS as readonly string[]).indexOf(n);
+const idxTUBO = col('TUBO');
+const idxPESO = col('PESO');
+const idxCENEFA = col('CENEFA OVALADA');
+const idxCON_TIRA = col('CON TIRA');
+const idxPESO_SOFT_LIGHT = col('PESO SOFT LIGHT');
+const idxTUBERIA = col('TUBERIA');
 
 const modelo: ModeloDespiece = {
   sistema: 'ROLLER_SIMPLE',
@@ -167,8 +169,8 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
       { codInt: 'SOFTLDER', cantidad: 1, descuento: 0, ubicacion: 'PERFIL DEF', colorAcc: 'BLANCO' },
     ];
     const { aoa } = generarOrdenesOptimizador('266-2', [v], { adicionalesFase0: adicionales });
-    const idxPerfilIzq = 18;
-    const idxColorPerfil = 19;
+    const idxPerfilIzq = col('PERFIL (IZQ) INT');
+    const idxColorPerfil = col('COLOR PERFIL');
     expect(aoa[1][idxPerfilIzq]).toBe(210); // alto 200 cm + 10
     expect(aoa[1][idxColorPerfil]).toBe('BLANCO');
   });
@@ -301,10 +303,10 @@ describe('generarOrdenesOptimizador — tubo por ancho (E02/E66)', () => {
 });
 
 describe('generarOrdenesOptimizador — BEEBLACK', () => {
-  const idxPerfilSupAncho = 22;
-  const idxAnchoTela = 28;
-  const idxTotalLamas = 30;
-  const idxManillaIzq = 26;
+  const idxPerfilSupAncho = col('PERFIL SUPERIOR (ANCHO)');
+  const idxAnchoTela = col('ANCHO TELA');
+  const idxTotalLamas = col('TOTAL LAMAS CORTE');
+  const idxManillaIzq = col('MANILLA IZQ (ALTO)');
   const idxTubo = 6;
 
   function ventanaBeeblack(
@@ -412,5 +414,82 @@ describe('generarOrdenesOptimizador — dual (2 telas por ventana)', () => {
     expect(aoa[2][idxTUBO]).toBe(156.1);
     // Tubería 38 mm → E02 (ancho ≤ 2,2 m).
     expect(String(aoa[1][idxTUBERIA])).toContain('E02');
+  });
+});
+
+describe('generarOrdenesOptimizador — PLETINA (velcro)', () => {
+  const pletinaRoller: ModeloDespiece = {
+    sistema: 'PLETINA_ROLLER',
+    tipo_rol: 'PLETINA_ROLLER_V',
+    mecanismo: 'VELCRO',
+    codigos_tubo: '',
+    diametro_tubo_mm: 0,
+    dcto_tubo_cm: 0.8,
+    dcto_tela_cm: 0.8,
+    suma_peso_cm: 0.7,
+    dcto_cenefa_cm: 0,
+    dcto_cenefa_del_cm: 0,
+    dcto_cenefa_tra_cm: 0,
+    dcto_perfiles_cm: 0,
+    peso_interno_duo_cm: 0,
+    peso_u_duo_cm: 0,
+    ancho_max_m: 3,
+    activo: true,
+    notas: '',
+  };
+  const pletinaDuo: ModeloDespiece = {
+    ...pletinaRoller,
+    sistema: 'PLETINA_DUO',
+    tipo_rol: 'PLETINA_DUO_V',
+    peso_u_duo_cm: 0.6,
+    peso_interno_duo_cm: 0.8,
+  };
+  const ventPletina = (modelo: ModeloDespiece, categoria: string, producto: string): Ventana =>
+    ({
+      id: 'vp',
+      ubicacion: 'TERRAZA',
+      codInt: 'SC 02',
+      producto,
+      tipo: '',
+      color: 'GRIS',
+      alto: 1.85,
+      precio: 0,
+      cantidad: 1,
+      categoria,
+      grupoId: null,
+      grupoOrden: 0,
+      modelo,
+      panos: [{ ancho: 0.8, alto: 1.85, color: 'GRIS' } as Pano],
+    }) as Ventana;
+
+  const idxPletina = col('PLETINA');
+  const idxTelaYPletina = col('TELA Y PLETINA');
+  const idxPesoU = col('PESO U');
+  const idxPesoInterno = col('PESO INTERNO');
+  const idxAltoMesa = col('ALTO MESA DE CORTE');
+  const idxAltoTela = col('ALTO TELA');
+
+  it('roller 0,80×1,85 → PLETINA 79,2 · PESO 79,3 · TUBO vacío · TUBERIA VELCRO · ALTO TELA 185', () => {
+    const { aoa } = generarOrdenesOptimizador('X', [
+      ventPletina(pletinaRoller, 'PLETINA_ROLLER_V', 'ROLLER SCREEN PREMIUM'),
+    ]);
+    expect(aoa[1][idxPletina]).toBe(79.2);
+    expect(aoa[1][idxPESO]).toBe(79.3);
+    expect(aoa[1][idxTUBO]).toBe('');
+    expect(aoa[1][idxTUBERIA]).toBe('VELCRO');
+    expect(aoa[1][idxAltoTela]).toBe(185);
+  });
+
+  it('dúo 0,80×1,85 → TELA Y PLETINA 79,2 · PESO U 79,4 · PESO INTERNO 79,2 · ALTO MESA 195 · ALTO TELA 370', () => {
+    const { aoa } = generarOrdenesOptimizador('X', [
+      ventPletina(pletinaDuo, 'PLETINA_DUO_V', 'ROLLER DUO BLACKOUT PREMIUM'),
+    ]);
+    expect(aoa[1][idxTelaYPletina]).toBe(79.2);
+    expect(aoa[1][idxPesoU]).toBe(79.4);
+    expect(aoa[1][idxPesoInterno]).toBe(79.2);
+    expect(aoa[1][idxAltoMesa]).toBe(195);
+    expect(aoa[1][idxAltoTela]).toBe(370);
+    expect(aoa[1][idxTUBERIA]).toBe('VELCRO');
+    expect(aoa[1][idxPletina]).toBe(''); // el dúo NO llena la columna PLETINA
   });
 });

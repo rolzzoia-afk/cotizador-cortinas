@@ -52,7 +52,9 @@ import {
 } from '@/modules/descuentos/reglas-mecanismo';
 import {
   COD_HUB_DOMOTICA,
+  MANILLAS,
   NOMBRE_HUB_DOMOTICA,
+  codigoManillaPorColor,
   esCategoriaDuo,
   esCenefaOvalada,
   esCodigoMotor,
@@ -111,20 +113,31 @@ const mts3 = (n: number) => n.toFixed(3).replace('.', ',');
 
 /**
  * Manillas consolidadas por color desde las filas del Cálculo General.
- * `f.manillas` viene como "9 CAFÉ" → { descripcion: "MANILLA CAFÉ", cantidad: 9 }.
+ * `f.manillas` viene como "9 CAFÉ" → { codigo: "HER49",
+ * descripcion: "[HER49] MANILLA PLANA CAFE", cantidad: 9 }. Si el color no
+ * calza con una manilla conocida, queda sin código (descripción genérica).
  */
-export function consolidarManillas(filas: FilaCalculo[]): { descripcion: string; cantidad: number }[] {
-  const acc = new Map<string, number>();
+export function consolidarManillas(
+  filas: FilaCalculo[],
+): { codigo?: string; descripcion: string; cantidad: number }[] {
+  const acc = new Map<string, { codigo?: string; cantidad: number }>();
   for (const f of filas) {
     const m = (f.manillas || '').trim();
     if (!m) continue;
     const [, cant, color] = m.match(/^(\d+)\s*(.*)$/) || [];
     const n = parseInt(cant || '', 10);
     if (!n) continue;
-    const k = `MANILLA ${(color || '').trim()}`.trim();
-    acc.set(k, (acc.get(k) || 0) + n);
+    const col = (color || '').trim();
+    const cod = codigoManillaPorColor(col);
+    const descripcion = cod ? `[${cod}] ${MANILLAS[cod].nombre}` : `MANILLA ${col}`.trim();
+    const prev = acc.get(descripcion) || { codigo: cod || undefined, cantidad: 0 };
+    acc.set(descripcion, { codigo: cod || undefined, cantidad: prev.cantidad + n });
   }
-  return [...acc.entries()].map(([descripcion, cantidad]) => ({ descripcion, cantidad }));
+  return [...acc.entries()].map(([descripcion, v]) => ({
+    codigo: v.codigo,
+    descripcion,
+    cantidad: v.cantidad,
+  }));
 }
 
 /**
@@ -173,6 +186,7 @@ export function consolidarInsumos(
   ventanas: Ventana[],
   filas: FilaCalculo[],
   cadenas: CadenaInsumo[] = [],
+  usarTuboE78 = false,
 ): InsumoConsolidado[] {
   const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo; unidad?: string }>();
   // `grupoOverride` fuerza la tabla (el motor de una cortina ovalada va a
@@ -216,7 +230,7 @@ export function consolidarInsumos(
 
       // Mecanismo + cadena + peso: solo roller manual con mecanismo.
       if (!tieneMotor && categoriaRequiereMecanismo(v.categoria)) {
-        const chip = mecanismoParaPano(p, v.color, modelo, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM);
+        const chip = mecanismoParaPano(p, v.color, modelo, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM, usarTuboE78);
         const num = numeroMecDeChip(chip);
         // Una cortina con mecanismo de cenefa ovalada se arma en el taller: su
         // mecanismo Y su cadena van a PRODUCCIÓN. El resto de cadenas, a
@@ -322,7 +336,7 @@ export function consolidarInsumos(
   let id = 0;
   // Manillas primero (instalación), luego el resto de insumos ya clasificados.
   for (const m of consolidarManillas(filas)) {
-    out.push({ id: ++id, descripcion: m.descripcion, cantidad: m.cantidad, grupo: 'INSTALACION' });
+    out.push({ id: ++id, codigo: m.codigo, descripcion: m.descripcion, cantidad: m.cantidad, grupo: 'INSTALACION' });
   }
   for (const it of acc.values()) {
     out.push({ id: ++id, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, grupo: it.grupo, unidad: it.unidad });
@@ -371,8 +385,11 @@ export function construirInventario(
   /** Catálogo de cadenas del inventario para resolver la cadena de paños sin
    *  codCadena guardado (OT no sincronizada en Fase 2). Vacío = sin resolución. */
   cadenas: CadenaInsumo[] = [],
+  usarTuboE78 = false,
 ): Inventario {
-  const { filas } = construirCalculoGeneral(ventanas, catalogo, params);
+  const { filas } = construirCalculoGeneral(ventanas, catalogo, params, undefined, {
+    usarTuboE78,
+  });
   const filasInv: FilaInventario[] = filas.map((f, i) => ({
     id: i + 1,
     producto: f.producto,
@@ -394,7 +411,7 @@ export function construirInventario(
   }));
   return {
     filas: filasInv,
-    insumos: consolidarInsumos(ventanas, filas, cadenas),
+    insumos: consolidarInsumos(ventanas, filas, cadenas, usarTuboE78),
     etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
     notas: notasTerreno(ventanas),
   };
@@ -549,8 +566,9 @@ export function generarPdfInventario(
   meta: MetaInventario,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   cadenas: CadenaInsumo[] = [],
+  usarTuboE78 = false,
 ): void {
-  const data = construirInventario(ventanas, catalogo, params, cadenas);
+  const data = construirInventario(ventanas, catalogo, params, cadenas, usarTuboE78);
   if (data.filas.length === 0) {
     throw new Error('No hay cortinas en la OT.');
   }

@@ -198,6 +198,15 @@ export function tuberiaCodigoCorto(
     return cod ? `${modelo.diametro_tubo_mm}mm_${cod}` : `${modelo.diametro_tubo_mm}mm`;
   }
   if (codChip) return codChip;
+  // Pletina/velcro (sin diámetro ni código E): la "tubería" es VELCRO, no el
+  // nombre del sistema ('PLETINA_ROLLER'/'PLETINA_DUO').
+  if (
+    (tuberiaChip || '').toUpperCase().trim() === 'VELCRO' ||
+    modelo?.sistema === 'PLETINA_ROLLER' ||
+    modelo?.sistema === 'PLETINA_DUO'
+  ) {
+    return 'VELCRO';
+  }
   return modelo ? modelo.sistema : '';
 }
 

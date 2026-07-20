@@ -123,7 +123,10 @@ function fmtAccionamiento(p: Partial<Pano>): string {
   return [largo, color].filter(Boolean).join(' ');
 }
 
-export function construirFilasCortinas(ventanas: VentanaItem[]): FilaCortina[] {
+export function construirFilasCortinas(
+  ventanas: VentanaItem[],
+  usarTuboE78 = false,
+): FilaCortina[] {
   const filas: FilaCortina[] = [];
   let id = 0;
   for (const v of ventanas) {
@@ -140,6 +143,7 @@ export function construirFilasCortinas(ventanas: VentanaItem[]): FilaCortina[] {
         OPCIONES_MECANISMO_RESOLUCION,
         v.categoria as string,
         anchoM,
+        usarTuboE78,
       );
       const tubChip = tuberiaParaPano(
         anchoM,

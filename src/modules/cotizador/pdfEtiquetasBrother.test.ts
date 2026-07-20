@@ -69,6 +69,10 @@ describe('sistemaEtiquetaEstructura', () => {
     expect(sistemaEtiquetaEstructura('ROLLER SCREEN', '', true)).toBe('DUAL');
     expect(sistemaEtiquetaEstructura('ROLLER BLACKOUT', '', false)).toBe('ROLLER');
   });
+  it('pletina (velcro) gana al resto: PLETINA V (roller) / PLETINA DUO', () => {
+    expect(sistemaEtiquetaEstructura('ROLLER SCREEN', '', false, true)).toBe('PLETINA V');
+    expect(sistemaEtiquetaEstructura('ROLLER DUO BLACKOUT', '', false, true)).toBe('PLETINA DUO');
+  });
 });
 
 describe('ordenDobleEtiqueta', () => {

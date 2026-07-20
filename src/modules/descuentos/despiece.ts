@@ -153,6 +153,59 @@ export function calcularDespiece(
 
   const esDuo = modelo.sistema === 'CENEFA_OVALADA_DUO' || modelo.sistema === 'PLETINA_DUO';
   const conTubo = modelo.diametro_tubo_mm > 0;
+
+  // ── PLETINA (velcro, sin tubo): cada corte se descuenta DIRECTO del ancho
+  //    (NO encadena tubo − 0.4 − suma como el roller/dúo con tubo; en la pletina
+  //    el peso es MÁS ancho que la pletina). Fórmulas validadas con el Excel
+  //    manual (ancho 80 → roller 79,2/79,2/79,3 · dúo 79,2/79,4/79,2). ──
+  if (modelo.sistema === 'PLETINA_ROLLER' || modelo.sistema === 'PLETINA_DUO') {
+    if (esDuo) {
+      // La "tela y pletina" es la pieza combinada más ancha (col propia del Excel).
+      cortes.push({
+        componente: 'Tela y pletina',
+        columnaExcel: 'TELA Y PLETINA',
+        medidaCm: r1(anchoCm - modelo.dcto_tubo_cm),
+      });
+      if (modelo.peso_u_duo_cm > 0) {
+        cortes.push({
+          componente: 'Peso U (lágrima)',
+          columnaExcel: 'PESO U',
+          medidaCm: r1(anchoCm - modelo.peso_u_duo_cm),
+        });
+      }
+      if (modelo.peso_interno_duo_cm > 0) {
+        cortes.push({
+          componente: 'Peso interno (E13)',
+          columnaExcel: 'PESO INTERNO',
+          medidaCm: r1(anchoCm - modelo.peso_interno_duo_cm),
+        });
+      }
+    } else {
+      cortes.push({
+        componente: 'Pletina',
+        columnaExcel: 'PLETINA',
+        medidaCm: r1(anchoCm - modelo.dcto_tubo_cm),
+      });
+      // Tela referencial (viaja por el flujo de telas / cálculo, no al Excel).
+      if (modelo.dcto_tela_cm > 0) {
+        cortes.push({
+          componente: 'Tela (ancho)',
+          columnaExcel: '',
+          medidaCm: r1(anchoCm - modelo.dcto_tela_cm),
+        });
+      }
+      if (modelo.suma_peso_cm > 0) {
+        cortes.push({
+          componente: 'Peso',
+          columnaExcel: 'PESO',
+          medidaCm: r1(anchoCm - modelo.suma_peso_cm),
+        });
+      }
+    }
+    if (modelo.notas) notas.push(modelo.notas);
+    return { cortes, aproximado: false, notas };
+  }
+
   // En cenefa ovalada la TAPA (cenefa) es la pieza más ancha = ancho − dcto_cenefa,
   // y el TUBO va detrás, deducido por tubo + cenefa. (Antes el tubo restaba solo
   // dcto_tubo y la cenefa restaba ambos → quedaban invertidos vs. el manual.)

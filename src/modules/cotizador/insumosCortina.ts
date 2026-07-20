@@ -10,7 +10,7 @@
 import type { Pano, Ventana } from './types';
 import { esCenefaCuadrada } from './fase2';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
-import { normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 
 export type InsumoCortina = {
   /** Código del insumo (TAP01, TOR02, BRA01, TAR01, DOM38…), sin corchetes. */
@@ -113,18 +113,26 @@ function colorTapaCorto(color: string | null | undefined): 'BCO' | 'NEG' | 'GRS'
   return null;
 }
 
-/** ¿La categoría lleva peso inferior con tapas de peso? Roller, incluidos los
- *  motorizados, la cenefa ovalada y el DUAL (cada roller/tela lleva su barra de
- *  peso con 2 tapas). Excluye PLETINA, DÚO, oscuridad, vertical… */
+/** ¿La categoría lleva peso inferior con tapas de peso ROLLER (izq+der + tornillos)?
+ *  Roller (incl. motorizados), cenefa ovalada, DUAL y la pletina roller
+ *  (PLETINA_ROLLER_V, que también tiene barra de peso roller). Excluye DÚO,
+ *  pletina dúo, oscuridad, vertical… */
 export function llevaTapasPeso(categoria: string | null | undefined): boolean {
   const c = (categoria || '').trim().toUpperCase();
   if (!c) return false;
+  if (c === 'PLETINA_ROLLER_V') return true;
   return c === 'ROL' || (c.startsWith('ROL_') && !c.includes('PLETINA'));
 }
 
 /** ¿La categoría es dúo (día/noche, doble tela)? Excluye PLETINA_DUO_V. */
 export function esCategoriaDuo(categoria: string | null | undefined): boolean {
   return (categoria || '').trim().toUpperCase().startsWith('DUO');
+}
+
+/** ¿Lleva el juego de tapas de peso DÚO (a presión, con tapa interna)? Los dúos
+ *  normales y la pletina dúo (PLETINA_DUO_V), que también tiene barra de peso dúo. */
+export function llevaTapasDuo(categoria: string | null | undefined): boolean {
+  return esCategoriaDuo(categoria) || (categoria || '').trim().toUpperCase() === 'PLETINA_DUO_V';
 }
 
 /**
@@ -205,6 +213,8 @@ export function cantidadTarugos(
     return brackets * (aTecho ? 1 : 2);
   }
   if (esCenefaCuadrada(p.cenefa)) return brackets * 1;
+  // Pletina (velcro): se pega, sin tarugos/fijaciones (aunque lleve tapas de peso).
+  if (esCategoriaPletina(categoria)) return 0;
   // Roller o dúo sin cenefa: 4 tarugos (se instalan con brackets al muro). El
   // dúo no lleva tapas peso roller, pero igual se fija con tarugos.
   return llevaTapasPeso(categoria) || esCategoriaDuo(categoria) ? 4 : 0;
@@ -260,8 +270,8 @@ export function insumosDePano(
         cantidad: TORNILLOS_TAPA_PESO_POR_PANO,
       });
     }
-  } else if (esCategoriaDuo(categoria)) {
-    // Dúo: tapas a presión, SIN tornillos. 2 exteriores por color + 2 internas (TAP13).
+  } else if (llevaTapasDuo(categoria)) {
+    // Dúo (y pletina dúo): tapas a presión, SIN tornillos. 2 exteriores por color + 2 internas (TAP13).
     if (cc) {
       const ext = TAPAS_DUO_POR_COLOR[cc];
       out.push({ codigo: ext, descripcion: NOMBRE_TAPA_DUO[ext], color: cc, cantidad: TAPAS_DUO_EXTERIOR_POR_PANO });
@@ -360,6 +370,38 @@ export function codigoMotorDesdeAdicional(codInt: string | undefined): string | 
 /** ¿El adicional es el hub de domótica (DOM43), con o sin espacio en el código? */
 export function esAdicionalHubDomotica(codInt: string | undefined): boolean {
   return (codInt || '').replace(/\s+/g, '').toUpperCase() === COD_HUB_DOMOTICA;
+}
+
+// ── Manillas planas (herraje de bodega G-U.CL) ───────────────────────
+// El código manda sobre el colorAcc del adicional (que suele venir vacío).
+export const MANILLAS: Record<string, { color: string; nombre: string }> = {
+  HER47: { color: 'NEG', nombre: 'MANILLA PLANA NEGRO' },
+  HER48: { color: 'BCO', nombre: 'MANILLA PLANA BLANCA' },
+  HER49: { color: 'CAFÉ', nombre: 'MANILLA PLANA CAFE' },
+};
+
+/**
+ * Manilla (código canónico + color) desde el código de un adicional de Fase 0.
+ * Normaliza 'HER 48'→'HER48' (mismo estilo que codigoMotorDesdeAdicional).
+ * null si el adicional no es una manilla plana conocida.
+ */
+export function manillaDesdeAdicional(codInt: string | undefined): { codigo: string; color: string } | null {
+  const c = (codInt || '').replace(/\s+/g, '').toUpperCase();
+  const m = MANILLAS[c];
+  return m ? { codigo: c, color: m.color } : null;
+}
+
+/**
+ * Código de bodega (HER47/48/49) para un color de manilla del paño. Tolera el
+ * código corto ('NEG'/'BCO'/'CAFÉ') y el nombre largo (NEGRO/BLANCO/CAFE).
+ * '' si el color no calza con ninguna manilla.
+ */
+export function codigoManillaPorColor(color: string | undefined): string {
+  const c = (color || '').toUpperCase().trim();
+  if (c === 'NEG' || c === 'NEGRO') return 'HER47';
+  if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'HER48';
+  if (c === 'CAFÉ' || c === 'CAFE') return 'HER49';
+  return '';
 }
 
 /**
