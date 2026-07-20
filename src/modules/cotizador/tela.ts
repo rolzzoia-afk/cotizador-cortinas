@@ -12,6 +12,7 @@ import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { telaDePano } from './telaPano';
+import { esCategoriaPletina } from '@/modules/descuentos/reglas-mecanismo';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -170,8 +171,15 @@ export function buildOptimizerRows(
       //  · altoCorte = corte real de la tela            = 2×alto + extraDuo
       // En roller simple ambas valen alto+extraAlto. Defaults 0,25/0,30
       // (validado con OT 266-16 dúo); editables en Parámetros de corte.
-      const altoReal = isDuo ? altoExtra * 2 : altoExtra;
-      const altoCorte = isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra;
+      // PLETINA (velcro): la tela se corta al ALTO EXACTO (roller = alto;
+      // dúo = 2×alto), SIN los extras de roller/dúo normales (Excel manual).
+      const esPletina = esCategoriaPletina(v.categoria);
+      const altoReal = esPletina
+        ? (isDuo ? altoM * 2 : altoM)
+        : (isDuo ? altoExtra * 2 : altoExtra);
+      const altoCorte = esPletina
+        ? (isDuo ? altoM * 2 : altoM)
+        : (isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra);
       const m2 = parseFloat((altoReal * anchoM).toFixed(4));
       const anchoRollo = obtenerAnchoRollo(tela.codInt, catalogo, params.anchoRolloDefaultM);
       const cod = derivarCod(tela.producto || '');

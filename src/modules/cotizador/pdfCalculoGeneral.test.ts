@@ -92,6 +92,64 @@ describe('construirCalculoGeneral', () => {
     expect(f.despiece.get('ALTO')).toBe(390); // 180×2 + 30
   });
 
+  it('pletina roller: ALTO exacto (sin +25), la tela no lleva vuelta de tubo', () => {
+    const modeloPletR: ModeloDespiece = {
+      ...modeloRoller,
+      sistema: 'PLETINA_ROLLER',
+      diametro_tubo_mm: 0,
+      dcto_tubo_cm: 0.8,
+      dcto_tela_cm: 0.8,
+      suma_peso_cm: 0.7,
+      ancho_max_m: 3,
+    };
+    const v = ventRoller(0.8, 'TERRAZA IZQ');
+    (v as { categoria: string }).categoria = 'PLETINA_ROLLER_V';
+    (v as { alto: number }).alto = 1.85;
+    v.panos![0].alto = 1.85;
+    v.modelo = modeloPletR;
+    const [f] = construirCalculoGeneral([v]).filas;
+    expect(f.altoRollerCm).toBe(185); // exacto, sin +25
+    expect(f.despiece.get('ALTO')).toBe(185);
+    // Despiece directo del ancho: pletina/tela = 80 − 0,8 ; peso = 80 − 0,7.
+    expect(f.despiece.get('PLETINA')).toBe(79.2);
+    expect(f.despiece.get('PESO')).toBe(79.3);
+  });
+
+  it('pletina dúo: ALTO = 2×alto (sin +30); Dimensionado → ALTO MESA = alto+10', () => {
+    const modeloPletD: ModeloDespiece = {
+      ...modeloRoller,
+      sistema: 'PLETINA_DUO',
+      diametro_tubo_mm: 0,
+      dcto_tubo_cm: 0.8,
+      dcto_tela_cm: 0.8,
+      peso_u_duo_cm: 0.6,
+      peso_interno_duo_cm: 0.8,
+      ancho_max_m: 3,
+    };
+    const v = ventRoller(0.8, 'TERRAZA DER');
+    (v as { producto: string }).producto = 'ROLLER DUO BLACKOUT DELUX';
+    (v as { categoria: string }).categoria = 'PLETINA_DUO_V';
+    (v as { alto: number }).alto = 1.85;
+    v.panos![0].alto = 1.85;
+    v.modelo = modeloPletD;
+    const [f] = construirCalculoGeneral([v]).filas;
+    expect(f.altoDuoCm).toBe(370); // 185×2, sin +30
+    expect(f.despiece.get('ALTO')).toBe(370);
+    expect(f.despiece.get('TELA Y PLETINA')).toBe(79.2);
+    expect(f.despiece.get('PESO U (LÁGRIMA)')).toBe(79.4);
+    expect(f.despiece.get('PESO INTERNO (E13)')).toBe(79.2);
+    // Dimensionado: la tela dúo se corta doblada → ALTO MESA DE CORTE = alto + 10.
+    const [fd] = construirCalculoGeneral(
+      [v],
+      {},
+      PARAMETROS_CORTE_DEFAULT,
+      undefined,
+      { altoMesaCorteDuo: true },
+    ).filas;
+    expect(fd.despiece.get('ALTO MESA DE CORTE')).toBe(195);
+    expect(fd.despiece.has('ALTO')).toBe(false);
+  });
+
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {
     const data = construirCalculoGeneral([ventRoller(1.745, 'A'), ventRoller(1.49, 'B')]);
     expect(data.bloques).toHaveLength(1);

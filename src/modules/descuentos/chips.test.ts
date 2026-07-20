@@ -15,6 +15,7 @@ import {
   modeloVentanaPorAncho,
   numeroMecPorColor,
   opcionesMecanismoFiltradas,
+  resincronizarChipsPanos,
 } from './chips';
 import { categoriaEsDual } from './tipos';
 import {
@@ -302,10 +303,15 @@ describe('regla de mecanismo por ancho (roller >3 m → MEC 28)', () => {
       mecanismoParaPano({ mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.5),
     ).toContain('[MEC 28]');
   });
-  it('al bajar de 3 m cae en la banda 2,2–3,0 → kit 45 (MEC 18)', () => {
+  it('al bajar de 3 m con flag E78 cae en la banda 2,2–3,0 → kit 45 (MEC 18)', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: CHIP28 }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true),
+    ).toContain('[MEC 18]');
+  });
+  it('al bajar de 3 m SIN flag E78 (default): la banda no aplica → kit por color (MEC 33)', () => {
     expect(
       mecanismoParaPano({ mecanismo: CHIP28 }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
-    ).toContain('[MEC 18]');
+    ).toContain('[MEC 33]');
   });
   it('al bajar de 2,2 m vuelve al kit por color', () => {
     expect(
@@ -314,64 +320,98 @@ describe('regla de mecanismo por ancho (roller >3 m → MEC 28)', () => {
   });
 });
 
-describe('banda 2,2–3,0 m → kit 45 mm + tubo E78 (2026-07-14)', () => {
-  it('ROL: blanco → MEC 18; negro → MEC 23; en la banda', () => {
+describe('banda 2,2–3,0 m → kit 45 mm + tubo E78 (flag usarTuboE78, 7º arg)', () => {
+  it('ROL CON flag: blanco → MEC 18; negro → MEC 23; en la banda', () => {
     expect(
-      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true),
     ).toContain('[MEC 18]');
     expect(
-      mecanismoParaPano({ mecanismo: 'KIT SIMPLE NEGRO 38MM [MEC 32]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+      mecanismoParaPano({ mecanismo: 'KIT SIMPLE NEGRO 38MM [MEC 32]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true),
     ).toContain('[MEC 23]');
+  });
+  it('ROL SIN flag (default): la banda no aplica → kit por color 38 (MEC 33/32)', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toContain('[MEC 33]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+    ).toContain('[MEC 32]');
   });
   it('ROL gris: la banda NO fuerza nada (elección manual); sigue el kit 38 gris', () => {
     expect(
-      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true),
     ).toContain('[MEC 34]');
   });
   it('ROL gris: un kit 45 elegido a mano se CONSERVA en la sincronización', () => {
     const manual45 = '0,45mm BCO [MEC 18]';
     expect(
-      mecanismoParaPano({ mecanismo: manual45 }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5),
+      mecanismoParaPano({ mecanismo: manual45 }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true),
     ).toBe(manual45);
     // Incluso fuera de la banda (fue elección manual, no automática).
     expect(
-      mecanismoParaPano({ mecanismo: manual45 }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 1.5),
+      mecanismoParaPano({ mecanismo: manual45 }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 1.5, true),
     ).toBe(manual45);
   });
   it('ROL blanco: el kit 45 puesto por la banda VUELVE al kit color bajo 2,2 m', () => {
     expect(
-      mecanismoParaPano({ mecanismo: '0,45mm BCO [MEC 18]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.0),
+      mecanismoParaPano({ mecanismo: '0,45mm BCO [MEC 18]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.0, true),
     ).toContain('[MEC 33]');
   });
-  it('fronteras: 2,2 exacto NO entra; 3,0 exacto SÍ; >3,0 pasa a MEC 28', () => {
+  it('guarda de coherencia: MEC 18 + modelo 45 mm + flag OFF → conserva MEC 18 (BOM coherente)', () => {
+    // Una OT con E78 planificado (modelo 45) que aún NO se re-guardó con el flag
+    // apagado: el kit NO debe bajar mientras el modelo siga en 45 (trío coherente).
+    const rol45 = m('MEC_18_045_DECORELLI_BLANCO', 45);
     expect(
-      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.2),
+      mecanismoParaPano({ mecanismo: '0,45mm BCO [MEC 18]' }, 'BCO', rol45, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, false),
+    ).toContain('[MEC 18]');
+    // Con el modelo ya revertido a 38, sí baja al kit por color.
+    const rol38 = m('MEC_07_ROLLER_BLANCO', 38);
+    expect(
+      mecanismoParaPano({ mecanismo: '0,45mm BCO [MEC 18]' }, 'BCO', rol38, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, false),
+    ).toContain('[MEC 33]');
+  });
+  it('fronteras (flag ON): 2,2 exacto NO entra; 3,0 exacto SÍ; >3,0 pasa a MEC 28', () => {
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.2, true),
     ).toContain('[MEC 33]');
     expect(
-      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.0),
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.0, true),
     ).toContain('[MEC 18]');
+    // >3 m (MEC 28) es estructural: no depende del flag.
     expect(
       mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 3.01),
     ).toContain('[MEC 28]');
   });
-  it('DUO_MANUAL_38mm en banda: kit ovalada de bodega por color (mismo que en 38 mm)', () => {
-    // 2026-07-15: la banda dúo ya NO muestra MEC 18/23; usa el kit ovalada de
-    // bodega (negro 38 · gris 12) igual que las ovaladas de 38 mm. El tubo/modelo
-    // sí cruza a 45 mm/E78 (ver modeloPorAncho más abajo).
+  it('DUO_MANUAL_38mm en banda CON flag: kit ovalada de bodega por color (mismo que en 38 mm)', () => {
     expect(
-      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
+      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5, true),
     ).toContain('[MEC 38]');
     expect(
-      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
+      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5, true),
     ).toContain('[MEC 12]');
     // Una OT guardada con el chip viejo de banda (MEC 23) migra al kit ovalada.
     expect(
-      mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5),
+      mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 2.5, true),
     ).toContain('[MEC 38]');
     // Bajo la banda sigue la regla de categoría (kit ovalada 38 por color).
     expect(
-      mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 1.5),
+      mecanismoParaPano({ mecanismo: '0,45mm NGR [MEC 23]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'DUO_MANUAL_38mm', 1.5, true),
     ).toContain('[MEC 38]');
+  });
+  it('cenefa ovalada roller 38 mm en banda CON flag: kit ovalada por color (39/38); gris no sube', () => {
+    // El kit ovalada 38 mostrado es igual que en 38 mm (reglaCategoria da lo mismo);
+    // lo que cambia con el flag es que el MODELO/tubo cruza a 45 mm/E78 (ver
+    // modeloPorAncho). Aquí validamos que la banda no rompe el kit por color.
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, true),
+    ).toContain('[MEC 39]');
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, true),
+    ).toContain('[MEC 38]');
+    // Gris: la banda no aplica → kit ovalada gris 12 (queda en 38 mm/E66).
+    expect(
+      mecanismoParaPano({ mecanismo: '' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, true),
+    ).toContain('[MEC 12]');
   });
 });
 
@@ -421,46 +461,111 @@ describe('modeloPorAncho — banda 2,2–3,0 m (kit 45 / E78)', () => {
     duo45('MEC_18_OVALADA_BLANCO'), duo45('MEC_18_OVALADA_GRIS'), duo45('MEC_23_OVALADA_NEGRO'),
   ];
 
-  it('ROL 2,5 m blanco → DECORELLI 45; negro → ROLZZO 45', () => {
-    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'BCO')?.mecanismo).toBe('MEC_18_045_DECORELLI_BLANCO');
-    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'NEG')?.mecanismo).toBe('MEC_23_045_ROLZZO_NEGRO');
+  // Cenefa ovalada roller: filas reales del catálogo (MEC_10 blanco / MEC_09
+  // negro / MEC_12 gris, tanto 38 como 45). La banda cruza _38mm → _45mm.
+  const ovRol = (mec: string, diam: number): ModeloDespiece => ({
+    ...m(mec, diam), sistema: 'CENEFA_OVALADA',
+    tipo_rol: diam === 45 ? 'ROL_CENEFA_OV_MANUAL_45mm' : 'ROL_CENEFA_OV_MANUAL_38mm',
   });
-  it('ROL 2,5 m gris → sin regla: conserva el modelo actual', () => {
-    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'GRS')).toBe(rol38);
+  const modelosOvRol = [
+    ovRol('MEC_10_OVALADA_BLANCO', 38), ovRol('MEC_09_OVALADA_NEGRO', 38), ovRol('MEC_12_OVALADA_GRIS', 38),
+    ovRol('MEC_10_OVALADA_BLANCO', 45), ovRol('MEC_09_OVALADA_NEGRO', 45), ovRol('MEC_12_OVALADA_GRIS', 45),
+  ];
+
+  it('ROL 2,5 m CON flag: blanco → DECORELLI 45; negro → ROLZZO 45', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'BCO', true)?.mecanismo).toBe('MEC_18_045_DECORELLI_BLANCO');
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'NEG', true)?.mecanismo).toBe('MEC_23_045_ROLZZO_NEGRO');
+  });
+  it('ROL 2,5 m SIN flag (default): no cruza, conserva el modelo 38', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'BCO')).toBe(rol38);
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'NEG')).toBe(rol38);
+  });
+  it('ROL 2,5 m gris CON flag → sin regla: conserva el modelo actual', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol38, 'GRS', true)).toBe(rol38);
   });
   it('ROL que baja de 2,2 m revierte el 45 de banda al 38 por color', () => {
     expect(modeloPorAncho(modelosRol, 'ROL', 2.0, rol45b, 'BCO')?.mecanismo).toBe('MEC_07_ROLLER_BLANCO');
   });
+  it('ROL blanco: apagar el flag revierte el 45 de banda al 38 (dentro del rango)', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.5, rol45b, 'BCO', false)?.mecanismo).toBe('MEC_07_ROLLER_BLANCO');
+  });
   it('ROL gris con 45 manual NO se revierte al bajar el ancho', () => {
     expect(modeloPorAncho(modelosRol, 'ROL', 2.0, rol45b, 'GRS')).toBe(rol45b);
   });
-  it('DUO_MANUAL_38mm 2,5 m: cruza al catálogo 45 y desambigua MEC 18 por color', () => {
-    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'GRS')?.mecanismo).toBe('MEC_18_OVALADA_GRIS');
-    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'BCO')?.mecanismo).toBe('MEC_18_OVALADA_BLANCO');
-    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'NEG')?.mecanismo).toBe('MEC_23_OVALADA_NEGRO');
+  it('DUO_MANUAL_38mm 2,5 m CON flag: cruza al catálogo 45 y desambigua MEC 18 por color', () => {
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'GRS', true)?.mecanismo).toBe('MEC_18_OVALADA_GRIS');
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'BCO', true)?.mecanismo).toBe('MEC_18_OVALADA_BLANCO');
+    expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 2.5, modelosDuo[0], 'NEG', true)?.mecanismo).toBe('MEC_23_OVALADA_NEGRO');
   });
   it('DUO que baja de 2,2 m vuelve a su fila MANUAL_38 por color', () => {
     const en45 = duo45('MEC_23_OVALADA_NEGRO');
     expect(modeloPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 1.5, en45, 'NEG')?.mecanismo).toBe('MEC_09_OVALADA_NEGRO');
+  });
+  it('cenefa ovalada roller 38 mm 2,5 m CON flag: cruza a la fila 45 (MEC_10/09); gris no cruza', () => {
+    const ov38b = modelosOvRol[0];
+    expect(modeloPorAncho(modelosOvRol, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, ov38b, 'BCO', true))
+      .toMatchObject({ mecanismo: 'MEC_10_OVALADA_BLANCO', diametro_tubo_mm: 45 });
+    expect(modeloPorAncho(modelosOvRol, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, ov38b, 'NEG', true))
+      .toMatchObject({ mecanismo: 'MEC_09_OVALADA_NEGRO', diametro_tubo_mm: 45 });
+    // Gris no tiene regla de banda → conserva el modelo 38.
+    const ov38g = modelosOvRol[2];
+    expect(modeloPorAncho(modelosOvRol, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, ov38g, 'GRS', true)?.diametro_tubo_mm).toBe(38);
+    // Sin flag (default): blanco tampoco cruza.
+    expect(modeloPorAncho(modelosOvRol, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, ov38b, 'BCO')?.diametro_tubo_mm).toBe(38);
   });
 
   // Modelo de ventana NUEVA (Fase 0 al importar/guardar): color + regla por ancho
   // en un solo paso. Regresión del bug "el Excel de órdenes salía en E66": sin
   // esto la cortina importada nacía en 38 mm y solo se corregía al abrirla en Fase 2.
   describe('modeloVentanaPorAncho — banda aplicada al crear la ventana', () => {
-    it('ROL en banda: blanco → DECORELLI 45; negro → ROLZZO 45', () => {
-      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.5)).toBe(rol45b);
-      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'NEG', 2.8)).toBe(rol45n);
-      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 3.0)?.diametro_tubo_mm).toBe(45);
+    it('ROL en banda CON flag: blanco → DECORELLI 45; negro → ROLZZO 45', () => {
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.5, true)).toBe(rol45b);
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'NEG', 2.8, true)).toBe(rol45n);
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 3.0, true)?.diametro_tubo_mm).toBe(45);
     });
-    it('ROL fuera de banda: 2,2 m exacto → 38 mm; >3 m → 63 mm', () => {
+    it('ROL en banda SIN flag (default): se queda en 38 mm', () => {
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.5)?.diametro_tubo_mm).toBe(38);
+      expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'NEG', 2.8)?.diametro_tubo_mm).toBe(38);
+    });
+    it('ROL fuera de banda: 2,2 m exacto → 38 mm; >3 m → 63 mm (sin flag)', () => {
       expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.2)?.diametro_tubo_mm).toBe(38);
       expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 3.5)).toBe(rol63);
     });
-    it('DUO_MANUAL_38mm en banda: cruza al catálogo 45 por color', () => {
-      expect(modeloVentanaPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 'BCO', 2.5)?.mecanismo).toBe('MEC_18_OVALADA_BLANCO');
-      expect(modeloVentanaPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 'NEG', 2.6)?.mecanismo).toBe('MEC_23_OVALADA_NEGRO');
+    it('DUO_MANUAL_38mm en banda CON flag: cruza al catálogo 45 por color', () => {
+      expect(modeloVentanaPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 'BCO', 2.5, true)?.mecanismo).toBe('MEC_18_OVALADA_BLANCO');
+      expect(modeloVentanaPorAncho(modelosDuo, 'DUO_MANUAL_38mm', 'NEG', 2.6, true)?.mecanismo).toBe('MEC_23_OVALADA_NEGRO');
     });
+  });
+});
+
+describe('resincronizarChipsPanos — recálculo de chips al re-guardar (Fase 0)', () => {
+  it('modelo 38 + flag OFF: baja MEC 18 → kit color 33 y fija tubo E66 (>2,2 m)', () => {
+    const rol38 = m('MEC_07_ROLLER_BLANCO', 38);
+    const panos: Record<string, unknown>[] = [
+      { ancho: 2.5, color: 'BCO', mecanismo: '0,45mm BCO [MEC 18]', tuberia: '' },
+    ];
+    resincronizarChipsPanos(panos, 'BCO', rol38, 'ROL', OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, false);
+    expect(String(panos[0].mecanismo)).toContain('[MEC 33]');
+    expect(codigoTuberiaDeChip(String(panos[0].tuberia))).toBe('E66');
+  });
+  it('modelo 45 + flag ON: fija kit 45 (MEC 18) y tubo E78', () => {
+    const rol45 = m('MEC_18_045_DECORELLI_BLANCO', 45);
+    const panos: Record<string, unknown>[] = [{ ancho: 2.5, color: 'BCO', mecanismo: '', tuberia: '' }];
+    resincronizarChipsPanos(panos, 'BCO', rol45, 'ROL', OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, true);
+    expect(String(panos[0].mecanismo)).toContain('[MEC 18]');
+    expect(codigoTuberiaDeChip(String(panos[0].tuberia))).toBe('E78');
+  });
+  it('paño dual: no toca sus chips', () => {
+    const dualPano: Record<string, unknown> = {
+      ancho: 2.5, color: 'BCO', dual: true,
+      mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', tuberia: 'x',
+    };
+    resincronizarChipsPanos(
+      [dualPano], 'BCO', m('MEC_18_045_DECORELLI_BLANCO', 45), 'ROL_DUAL',
+      OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, true,
+    );
+    expect(dualPano.mecanismo).toBe('DUAL DERECHO BLANCO [MEC 01]');
+    expect(dualPano.tuberia).toBe('x');
   });
 });
 

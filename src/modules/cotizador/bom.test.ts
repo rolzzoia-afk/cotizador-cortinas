@@ -205,13 +205,15 @@ describe('calcularBOM', () => {
     expect(dual?.cantidad).toBe(1);
   });
 
-  it('manillas: acumula cantidad, no cantidad de rows', () => {
+  it('manillas: acumula cantidad, no cantidad de rows; código HER + descripción por color', () => {
     const bom = calcularBOM([
       row({ manillaCant: 3, manillaColor: 'Blanco' }),
       row({ manillaCant: 2, manillaColor: 'Blanco' }),
     ]);
     const manilla = bom.find((i) => i.categoria === 'MANILLA');
     expect(manilla?.cantidad).toBe(5);
+    expect(manilla?.especificacion).toBe('HER48');
+    expect(manilla?.descripcion).toBe('MANILLA PLANA BLANCA');
   });
 
   it('manillas: cant 0 no se agrega', () => {

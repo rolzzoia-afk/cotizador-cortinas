@@ -106,6 +106,9 @@ export function CotizadorFase2() {
 
   const { empresaId } = useAuth();
   const { modelos } = useDescuentosModelo();
+  // Tubo E78 activado en esta OT: habilita la banda 2,2–3,0 m (kit 45 mm/E78).
+  // Default false → el rango usa tubo E66 (38 mm) con kit normal.
+  const usarE78 = !!ot?.datosGenerales?.usarTuboE78;
   const [tab, setTab] = useState<Tab>('ventanas');
   const [cadenas, setCadenas] = useState<CadenaInsumo[]>([]);
   const [pesos, setPesos] = useState<CadenaInsumo[]>([]);
@@ -204,7 +207,7 @@ export function CotizadorFase2() {
     const colorRef = colorAccesoriosDePano(v.panos?.[0] || {}, v.color);
     const modeloEf = esDualV
       ? modelo
-      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef);
+      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78);
     return {
       ...v,
       modelo: modeloEf,
@@ -213,7 +216,7 @@ export function CotizadorFase2() {
         const pDual = dual === !!p.dual ? p : { ...p, dual };
         const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
         const mecanismo =
-          mecanismoParaPano(pDual, v.color, modeloEf, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM) ||
+          mecanismoParaPano(pDual, v.color, modeloEf, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM, usarE78) ||
           p.mecanismo;
         // Canoniza siempre el chip guardado (solo formato): una OT vieja con
         // "0,38mm [E02] 1,2mm" migra a "E02-TUBO…" aunque no haya modelo/ancho
@@ -281,7 +284,7 @@ export function CotizadorFase2() {
     if (!ventanaForm || panoEnEdicion?.dual) return null;
     const anchoM = parseFloat(String(panoEnEdicion?.ancho ?? 0)) || 0;
     const color = colorAccesoriosDePano(panoEnEdicion || {}, ventanaForm.color);
-    return reglaAnchoAplicable(ventanaForm.categoria, anchoM, color);
+    return reglaAnchoAplicable(ventanaForm.categoria, anchoM, color, usarE78);
   }, [
     ventanaForm?.categoria,
     ventanaForm?.color,
@@ -291,6 +294,7 @@ export function CotizadorFase2() {
     panoEnEdicion?.colorPeso,
     panoEnEdicion?.colorCadena,
     panoEnEdicion?.color,
+    usarE78,
   ]);
   const mecFijoPorAncho = reglaFijaPorAncho?.mec ?? null;
 
@@ -554,7 +558,7 @@ export function CotizadorFase2() {
         } else {
           const chip = mecanismoParaPano(
             { ...nuevo.panos[idx], dual: false, mecanismo: '' },
-            v.color, null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(),
+            v.color, null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(), usarE78,
           );
           setPano({ mecanismo: chip, dualLado: '', dualColor: '' });
           if (chip) nuevo = aplicarCascadaMecanismo(nuevo, idx, chip);
@@ -587,7 +591,7 @@ export function CotizadorFase2() {
       // Cambio de color de accesorios → represelecciona el mecanismo (con ancho,
       // para respetar la regla >3 m = MEC 28). Dual: represelecciona chip por color.
       if (patch.colorMecanismo !== undefined || patch.colorPeso !== undefined || patch.colorCadena !== undefined || patch.color !== undefined) {
-        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx());
+        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(), usarE78);
         if (mec && mec !== nuevo.panos[idx].mecanismo) setPano({ mecanismo: mec });
         recomputarCadena();
       }
@@ -598,7 +602,7 @@ export function CotizadorFase2() {
       // Cambio de ancho → si cruza 3 m cambia el mecanismo (MEC 28 ↔ kit), y en
       // todo caso ajusta la tubería (E02/E66 y E47/E65).
       if (patch.ancho !== undefined) {
-        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx());
+        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(), usarE78);
         if (mec && mec !== nuevo.panos[idx].mecanismo) {
           setPano({ mecanismo: mec });
           nuevo = aplicarCascadaMecanismo(nuevo, idx, mec);
@@ -807,7 +811,17 @@ export function CotizadorFase2() {
             <ArrowLeft className="h-4 w-4" />
           </button>
           <div>
-            <h2 className="text-base font-semibold">Fase 2 — Terreno</h2>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-semibold">Fase 2 — Terreno</h2>
+              {usarE78 && (
+                <span
+                  className="rounded-full border border-success/40 bg-success/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success"
+                  title="Esta OT usa el tubo E78 (kit 45 mm) en la banda 2,2–3,0 m"
+                >
+                  Tubo E78
+                </span>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               OT {ot.datosGenerales.ot || '—'} · {ot.datosGenerales.cliente || '(sin cliente)'} ·{' '}
               {ventanas.length} ventana{ventanas.length === 1 ? '' : 's'}

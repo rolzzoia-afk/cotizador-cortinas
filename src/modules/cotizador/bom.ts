@@ -7,13 +7,16 @@ import type { BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
+import { esCategoriaPletina } from '@/modules/descuentos/reglas-mecanismo';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
 import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
   COD_HUB_DOMOTICA,
+  MANILLAS,
   NOMBRE_HUB_DOMOTICA,
+  codigoManillaPorColor,
   insumosDePano,
   insumosMotorDePano,
   panoLlevaDomotica,
@@ -36,7 +39,11 @@ function ventanaDeFila(row: OptimizerRow, ventanas?: VentanaItem[]): VentanaItem
   return ventanas.find((v) => String(v.id) === String(row.ventanaId));
 }
 
-export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): BomItem[] {
+export function calcularBOM(
+  rows: OptimizerRow[],
+  ventanas?: VentanaItem[],
+  usarTuboE78 = false,
+): BomItem[] {
   const acc = new Map<string, BomItem>();
   const add = (
     key: string,
@@ -75,6 +82,7 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
       OPCIONES_MECANISMO_RESOLUCION,
       categoria,
       anchoM,
+      usarTuboE78,
     );
     const mecSpec = extraerSpec(mecChip || (p.mecanismo as string));
     const mecColor = colorAccesoriosDePano(p, ventanaColor) || p.colorMecanismo || '';
@@ -96,12 +104,18 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
     const tubLargoM = ((anchoCm - 3.8) / 100).toFixed(2);
     const tubColor = mecColor || p.color || '';
     const tubEspec = tubSpec ? `${tubSpec} · ${tubLargoM}m` : `${tubLargoM}m`;
-    const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
-    add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
+    // Pletina (velcro): NO va al inventario ni como tubería ni como mecanismo.
+    const esPletinaCat = esCategoriaPletina(categoria);
+    if (!esPletinaCat) {
+      const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
+      add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
+    }
     // Mecanismo: una sola línea, dual o simple (el chip dual ya trae [MEC 0N]).
     // El dual es 1 kit por VENTANA: se emite solo la primera vez (no ×2 paños);
     // la clave sin ventanaId deja que dos ventanas iguales sí consoliden.
-    if (p.dual) {
+    if (esPletinaCat) {
+      // velcro: sin kit de mecanismo
+    } else if (p.dual) {
       const vkey = String(row.ventanaId);
       if (!dualMecEmitido.has(vkey)) {
         dualMecEmitido.add(vkey);
@@ -162,8 +176,10 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
     const manCant = parseInt(String(p.manillaCant ?? '0')) || 0;
     if (manCant > 0) {
       const manColor = p.manillaColor || '';
+      const manCod = codigoManillaPorColor(manColor);
+      const manDesc = manCod ? MANILLAS[manCod].nombre : 'Manilla';
       const manKey = `MAN|${manColor}`;
-      add(manKey, 'MANILLA', 'Manilla', '', manColor, manCant, 'unid.');
+      add(manKey, 'MANILLA', manDesc, manCod, manColor, manCant, 'unid.');
     }
 
     const cenefaTipo = p.cenefa || 'No';

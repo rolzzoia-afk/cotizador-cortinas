@@ -7,6 +7,7 @@ import {
   dualLadoDesdeDireccion,
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
+  manillasAdicionalesParaUbic,
   motorAdicionalParaUbic,
   otTraeHubDomotica,
   sentidoDesdeArmado,
@@ -223,6 +224,59 @@ describe('fase0-sync — motor desde adicionales de Fase 0', () => {
     } as Ventana;
     const out = enriquecerVentanaDesdeFase0(ventana, undefined, adicionales);
     expect(out.panos[0].motorModelo).toBe('DOM41'); // respeta lo elegido
+  });
+});
+
+describe('fase0-sync — manilla desde adicionales de Fase 0', () => {
+  const ventanaPieza = (ubic: string): Ventana =>
+    ({
+      id: ubic,
+      ubicacion: ubic,
+      codInt: 'SC 11',
+      categoria: 'ROL',
+      panos: [{ ancho: 1.6, alto: 1.7, color: 'NEGRO' } as Pano],
+    }) as Ventana;
+
+  it('manillasAdicionalesParaUbic: cantidad completa a la ubicación que calza', () => {
+    const adic = [{ codInt: 'HER 48', cantidad: 3, descuento: 0, ubicacion: 'PIEZA 1' }];
+    expect(manillasAdicionalesParaUbic('PIEZA 1', adic)).toEqual({ cantidad: 3, color: 'BCO' });
+    expect(manillasAdicionalesParaUbic('PIEZA 2', adic)).toBeNull();
+    expect(manillasAdicionalesParaUbic('', adic)).toBeNull();
+  });
+
+  it('multi-ubicación por coma → reparte parejo (3 en 3 ubic = 1 c/u)', () => {
+    const adic = [{ codInt: 'HER 47', cantidad: 3, descuento: 0, ubicacion: 'DORM 2, LIVING, PPAL' }];
+    expect(manillasAdicionalesParaUbic('LIVING', adic)).toEqual({ cantidad: 1, color: 'NEG' });
+    expect(manillasAdicionalesParaUbic('PPAL', adic)).toEqual({ cantidad: 1, color: 'NEG' });
+  });
+
+  it('dos filas de manilla a la misma ubicación se suman', () => {
+    const adic = [
+      { codInt: 'HER 49', cantidad: 2, descuento: 0, ubicacion: 'PIEZA 1' },
+      { codInt: 'HER 49', cantidad: 1, descuento: 0, ubicacion: 'PIEZA 1' },
+    ];
+    expect(manillasAdicionalesParaUbic('PIEZA 1', adic)).toEqual({ cantidad: 3, color: 'CAFÉ' });
+  });
+
+  it('enriquecer: precarga manillaCant + color por ubicación', () => {
+    const adic = [{ codInt: 'HER 48', cantidad: 3, descuento: 0, ubicacion: 'PIEZA 1' }];
+    const out = enriquecerVentanaDesdeFase0(ventanaPieza('PIEZA 1'), undefined, adic);
+    expect(out.panos[0].manillaCant).toBe(3);
+    expect(out.panos[0].manillaColor).toBe('BCO');
+  });
+
+  it('no pisa una manilla ya puesta en terreno', () => {
+    const adic = [{ codInt: 'HER 48', cantidad: 3, descuento: 0, ubicacion: 'PIEZA 1' }];
+    const ventana = {
+      id: 'x',
+      ubicacion: 'PIEZA 1',
+      codInt: 'SC 11',
+      categoria: 'ROL',
+      panos: [{ ancho: 1.6, alto: 1.7, color: 'NEGRO', manillaCant: 1, manillaColor: 'NEG' } as Pano],
+    } as Ventana;
+    const out = enriquecerVentanaDesdeFase0(ventana, undefined, adic);
+    expect(out.panos[0].manillaCant).toBe(1); // respeta lo elegido
+    expect(out.panos[0].manillaColor).toBe('NEG');
   });
 });
 

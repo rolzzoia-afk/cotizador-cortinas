@@ -54,6 +54,11 @@ export type ReglaMecAncho = {
   categoriaModelo?: string;
   /** Código de tubo que la regla fija (filtro y nota de la UI). */
   tubo: string;
+  /** Si true, la regla SOLO aplica cuando la OT tiene el tubo E78 activado
+   *  (flag `usarTuboE78`). Con el flag apagado (default) la banda 2,2–3,0 m no
+   *  sube a 45 mm y la cortina queda en 38 mm → tubo E66. La regla >3 m (MEC 28/
+   *  E65) NO lo lleva: es estructural, no depende del E78. */
+  requiereTuboE78?: boolean;
   /** Nota que ve el operario en Fase 2 cuando la regla está activa. */
   nota: string;
 };
@@ -117,6 +122,7 @@ export const REGLAS_MECANISMO = {
       anchoMaxM: 3.0,
       mecPorColor: { BCO: 18, BLANCO: 18, NEG: 23, NEGRO: 23 },
       tubo: 'E78',
+      requiereTuboE78: true,
       nota: 'Fijo por ancho 2,2–3,0 m: kit 45 mm por color y tubo E78. Con accesorios grises la elección queda manual.',
     },
     {
@@ -131,7 +137,24 @@ export const REGLAS_MECANISMO = {
       modeloMecPorColor: { BCO: 18, BLANCO: 18, GRS: 18, GRIS: 18, NEG: 23, NEGRO: 23 },
       categoriaModelo: 'DUO_MANUAL_45mm',
       tubo: 'E78',
+      requiereTuboE78: true,
       nota: 'Fijo por ancho 2,2–3,0 m: kit ovalada de bodega por color y tubo E78.',
+    },
+    {
+      descripcion: 'Cenefa ovalada roller 38 mm de 2,2–3,0 m → fila 45 mm por color (tubo E78); gris queda en 38 mm',
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      anchoMinM: 2.2,
+      anchoMaxM: 3.0,
+      // Igual que el dúo banda: el KIT mostrado/entregado es el ovalada de bodega
+      // (39 blanco / 38 negro), pero la FILA 45 mm del catálogo ovalada roller es
+      // MEC_10_OVALADA_BLANCO / MEC_09_OVALADA_NEGRO (verificado en descuentos_modelo).
+      // Gris NO tiene entrada → no sube: queda en 38 mm/E66 con su kit ovalada gris.
+      mecPorColor: { BCO: 39, BLANCO: 39, NEG: 38, NEGRO: 38 },
+      modeloMecPorColor: { BCO: 10, BLANCO: 10, NEG: 9, NEGRO: 9 },
+      categoriaModelo: 'ROL_MANUAL_CENEFA_OVALADA_45mm',
+      tubo: 'E78',
+      requiereTuboE78: true,
+      nota: 'Fijo por ancho 2,2–3,0 m (Tubo E78 activado): fila cenefa ovalada 45 mm y tubo E78. Con accesorios grises queda en 38 mm.',
     },
   ] as readonly ReglaMecAncho[],
 
@@ -298,6 +321,13 @@ export function colorCoincide(
 
 // ── Evaluación de reglas ───────────────────────────────────────────────
 
+/** ¿La categoría es pletina (velcro, sin tubo)? PLETINA_ROLLER_V / PLETINA_DUO_V.
+ *  Vive acá (leaf puro) para poder usarse tanto en chips.ts como en el cotizador
+ *  (insumosCortina, tela, excel-ordenes…) sin ciclos de import. */
+export function esCategoriaPletina(categoria: string | null | undefined): boolean {
+  return (categoria || '').toUpperCase().includes('PLETINA');
+}
+
 export function categoriaRequiereMecanismo(categoria: string): boolean {
   const c = normalizarCategoria(categoria);
   if (!c) return false;
@@ -348,10 +378,13 @@ export function reglaAnchoAplicable(
   categoria: string,
   anchoM: number,
   color?: string | null,
+  usarTuboE78 = false,
 ): { regla: ReglaMecAncho; mec: number } | null {
   const c = normalizarCategoria(categoria);
   for (const r of REGLAS_MECANISMO.reglasAncho) {
     if (c !== r.categoria.toUpperCase()) continue;
+    // Las reglas de banda 2,2–3,0 m (tubo E78) solo aplican si la OT lo activó.
+    if (r.requiereTuboE78 && !usarTuboE78) continue;
     if (!(anchoM > r.anchoMinM)) continue;
     if (r.anchoMaxM != null && anchoM > r.anchoMaxM) continue;
     if (r.mec != null) return { regla: r, mec: r.mec };
@@ -366,8 +399,9 @@ export function mecPorAncho(
   categoria: string,
   anchoM: number,
   color?: string | null,
+  usarTuboE78 = false,
 ): number | null {
-  return reglaAnchoAplicable(categoria, anchoM, color)?.mec ?? null;
+  return reglaAnchoAplicable(categoria, anchoM, color, usarTuboE78)?.mec ?? null;
 }
 
 /**

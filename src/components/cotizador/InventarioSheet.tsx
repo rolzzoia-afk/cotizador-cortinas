@@ -40,7 +40,11 @@ type Props = {
 const hoy = () => new Date().toISOString().split('T')[0];
 
 export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresaNombre, dirty, guardando, onGuardar }: Props) {
-  const filas = useMemo(() => construirFilasCortinas(ot.storeVentanas || []), [ot.storeVentanas]);
+  const usarE78 = !!ot.datosGenerales?.usarTuboE78;
+  const filas = useMemo(
+    () => construirFilasCortinas(ot.storeVentanas || [], usarE78),
+    [ot.storeVentanas, usarE78],
+  );
   // Etiquetas por color de accesorios (blancos → INS 95-1; resto → INS 95).
   const etiquetas = useMemo(() => construirEtiquetas(ot.storeVentanas || []), [ot.storeVentanas]);
   const empresa = (empresaNombre || 'Rolzzo').toUpperCase();

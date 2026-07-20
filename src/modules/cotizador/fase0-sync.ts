@@ -13,7 +13,7 @@ import {
 import { esCategoriaBeeblack, normalizarVarianteBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { categoriaEsDual } from '@/modules/descuentos/tipos';
 import { chipDualPorLadoColor } from '@/modules/descuentos/chips';
-import { codigoMotorDesdeAdicional, esAdicionalHubDomotica } from './insumosCortina';
+import { codigoMotorDesdeAdicional, esAdicionalHubDomotica, manillaDesdeAdicional } from './insumosCortina';
 import { OPCIONES_MECANISMO_DUAL } from './fase2';
 import type { CatalogoProductos, Pano, Ventana } from './types';
 
@@ -46,6 +46,37 @@ export function motorAdicionalParaUbic(
 /** ¿La OT trae el hub de domótica (DOM43) entre sus adicionales de Fase 0? */
 export function otTraeHubDomotica(adicionales: AdicionalFase0Persistido[] | undefined): boolean {
   return !!adicionales?.some((a) => a.cantidad > 0 && esAdicionalHubDomotica(a.codInt));
+}
+
+/**
+ * Manilla (cantidad + color) de los adicionales de Fase 0 cuya ubicación calza
+ * con la del paño. La cantidad del adicional va COMPLETA a su cortina; si la
+ * fila lista varias ubicaciones separadas por coma, se reparte parejo entre
+ * ellas (redondeo, mínimo 1). Filas de manilla a la misma ubicación se suman;
+ * el color es el del primer código que calce (el paño lleva UN solo color).
+ * Match por ubicación robusto a separadores (claveUbicMotor). null si ninguno.
+ */
+export function manillasAdicionalesParaUbic(
+  ubic: string,
+  adicionales: AdicionalFase0Persistido[] | undefined,
+): { cantidad: number; color: string } | null {
+  const key = claveUbicMotor(ubic);
+  if (!key || !adicionales?.length) return null;
+  let cantidad = 0;
+  let color = '';
+  for (const a of adicionales) {
+    if (!(a.cantidad > 0)) continue;
+    const man = manillaDesdeAdicional(a.codInt);
+    if (!man) continue;
+    const tokens = String(a.ubicacion || '')
+      .split(',')
+      .map((t) => claveUbicMotor(t))
+      .filter(Boolean);
+    if (!tokens.includes(key)) continue;
+    cantidad += tokens.length > 1 ? Math.max(1, Math.round(a.cantidad / tokens.length)) : a.cantidad;
+    if (!color) color = man.color;
+  }
+  return cantidad > 0 ? { cantidad, color } : null;
 }
 
 
@@ -356,6 +387,17 @@ export function enriquecerPanoDesdeFase0(
       if (!pano.motorDomotica && otTraeHubDomotica(opts?.adicionalesFase0)) {
         patch.motorDomotica = true;
       }
+    }
+  }
+
+  // Manilla: si la OT trae adicionales de manilla (HER47/48/49) en la ubicación
+  // del paño, precargar cantidad + color (el código manda sobre colorAcc). Solo
+  // si el paño no tiene ya una manilla puesta en terreno (no pisa lo manual).
+  if (!pano.manillaCant) {
+    const man = manillasAdicionalesParaUbic(ubic, opts?.adicionalesFase0);
+    if (man) {
+      patch.manillaCant = man.cantidad;
+      if (!pano.manillaColor) patch.manillaColor = man.color;
     }
   }
 

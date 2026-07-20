@@ -151,8 +151,8 @@ describe('construirInventario — bloque INSUMOS', () => {
       vMan('C', 2, 'NEG'),
     ]);
     expect(d.insumos.slice(0, 2)).toEqual([
-      { id: 1, descripcion: 'MANILLA CAFÉ', cantidad: 9, grupo: 'INSTALACION' },
-      { id: 2, descripcion: 'MANILLA NEG', cantidad: 2, grupo: 'INSTALACION' },
+      { id: 1, codigo: 'HER49', descripcion: '[HER49] MANILLA PLANA CAFE', cantidad: 9, grupo: 'INSTALACION' },
+      { id: 2, codigo: 'HER47', descripcion: '[HER47] MANILLA PLANA NEGRO', cantidad: 2, grupo: 'INSTALACION' },
     ]);
   });
 

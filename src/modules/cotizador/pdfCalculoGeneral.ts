@@ -21,6 +21,7 @@ import {
 } from '@/modules/descuentos/despiece';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import { esCategoriaPletina } from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
@@ -136,8 +137,9 @@ export function construirCalculoGeneral(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   /** Letras de "cortar junto" por pieza (`${ventanaId}_${panoIndex}` → letra). */
   juntoPorPieza?: Map<string, string>,
-  /** Dimensionado: en filas dúo reemplaza la columna ALTO por ALTO MESA DE CORTE. */
-  opts?: { altoMesaCorteDuo?: boolean },
+  /** Dimensionado: en filas dúo reemplaza la columna ALTO por ALTO MESA DE CORTE.
+   *  usarTuboE78: habilita la banda 2,2–3,0 m (kit 45 mm/E78) para esta OT. */
+  opts?: { altoMesaCorteDuo?: boolean; usarTuboE78?: boolean },
 ): CalculoGeneral {
   const filas: FilaCalculo[] = [];
 
@@ -181,8 +183,12 @@ export function construirCalculoGeneral(
       // Columna ALTO del Excel manual: alto de CORTE de la tela del sistema
       // (dúo = 2×alto + extraDuo; resto = alto + extraAlto). Va al final del
       // bloque, igual que en la hoja manual.
-      const altoRollerCm = r1(altoCm + params.extraAltoCm);
-      const altoDuoCm = r1(altoCm * 2 + params.extraDuoCm);
+      // Pletina/velcro: la tela se corta a la medida EXACTA (no lleva la vuelta
+      // del tubo del roller ni el doblez extra del dúo). El ALTO MESA DE CORTE
+      // del dúo sí conserva el +extraMesaDuo (=10, la mitad del alto doblado).
+      const esPletinaFila = esCategoriaPletina(v.categoria);
+      const altoRollerCm = r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
+      const altoDuoCm = r1(altoCm * 2 + (esPletinaFila ? 0 : params.extraDuoCm));
       if (altoCm > 0) {
         if (opts?.altoMesaCorteDuo && esDuoFila) {
           // Dimensionado: la tela dúo se corta DOBLADA en la mesa, así que en vez
@@ -211,6 +217,7 @@ export function construirCalculoGeneral(
         OPCIONES_MECANISMO_RESOLUCION,
         v.categoria,
         anchoM,
+        opts?.usarTuboE78 ?? false,
       );
       const codMecanismo =
         [mecChip, (p.colorMecanismo as string) || ''].filter(Boolean).join(' ') ||
@@ -491,8 +498,9 @@ export function generarPdfCalculoGeneral(
   catalogo: CatalogoProductos,
   meta: MetaCalculo,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  usarTuboE78 = false,
 ): void {
-  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_CALCULO_GENERAL);
+  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_CALCULO_GENERAL, undefined, usarTuboE78);
 }
 
 /** Genera y descarga el PDF DIMENSIONADO (cálculo general solo-tela). */
@@ -502,8 +510,9 @@ export function generarPdfDimensionado(
   meta: MetaCalculo,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   juntoPorPieza?: Map<string, string>,
+  usarTuboE78 = false,
 ): void {
-  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO, juntoPorPieza);
+  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO, juntoPorPieza, usarTuboE78);
 }
 
 function renderHojaCalculo(
@@ -513,12 +522,14 @@ function renderHojaCalculo(
   params: ParametrosCorte,
   variante: VarianteHojaCalculo,
   juntoPorPieza?: Map<string, string>,
+  usarTuboE78 = false,
 ): void {
   if (!ventanas || ventanas.length === 0) {
     throw new Error('No hay ventanas en la OT.');
   }
   const data = construirCalculoGeneral(ventanas, catalogo, params, juntoPorPieza, {
     altoMesaCorteDuo: variante.altoMesaCorteDuo,
+    usarTuboE78,
   });
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
   const { identidad, bloques } = aplicarVariante(data, variante);

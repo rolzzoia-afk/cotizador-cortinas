@@ -26,6 +26,7 @@ import {
 } from './adicionales-cenefa';
 import { colorPerfilFilaExcel } from './adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from './peso-oscuridad';
+import { esCategoriaPletina } from './reglas-mecanismo';
 import {
   calcularDespiece,
   contextoDespieceDesdePano,
@@ -44,7 +45,7 @@ export type OpcionesOrdenesOptimizador = {
   adicionalesFase0?: AdicionalFase0Persistido[];
 };
 
-const COLUMNAS = [
+export const COLUMNAS = [
   'OT',
   'COD SEC',
   'COD_INT',
@@ -63,6 +64,7 @@ const COLUMNAS = [
   COLUMNA_PESO_OSCURIDAD,
   COLUMNA_COLOR_PESO_OSCURIDAD,
   'PLETINA',
+  'TELA Y PLETINA',
   'PERFIL (IZQ) INT',
   'COLOR PERFIL',
   'PERFIL (DER) INT',
@@ -74,9 +76,13 @@ const COLUMNAS = [
   'MANILLA IZQ (ALTO)',
   'MANILLA DER (ALTO)',
   'ANCHO TELA',
+  'ALTO MESA DE CORTE',
   'ALTO TELA',
   'TOTAL LAMAS CORTE',
 ] as const;
+
+/** Extra de la pletina DÚO sobre el alto para la mesa de corte (cm). */
+const EXTRA_MESA_PLETINA_DUO_CM = 10;
 
 function celdaConMedida(val: string | number | undefined): boolean {
   return val !== undefined && val !== '' && val !== 0;
@@ -203,6 +209,17 @@ export function generarOrdenesOptimizador(
         for (const c of d.cortes) {
           if (c.columnaExcel && c.columnaExcel !== 'CENEFA OVALADA') {
             fila[c.columnaExcel] = c.medidaCm;
+          }
+        }
+        // Pletina (velcro): altos exactos como el Excel manual. Roller → ALTO
+        // TELA = alto; dúo → ALTO TELA = 2×alto y ALTO MESA DE CORTE = alto + 10.
+        if (esCategoriaPletina(v.categoria)) {
+          const altoP = Math.round((parseFloat(String(v.alto ?? p.alto ?? 0)) || 0) * 100);
+          if (modelo.sistema === 'PLETINA_DUO') {
+            fila['ALTO TELA'] = altoP * 2;
+            fila['ALTO MESA DE CORTE'] = altoP + EXTRA_MESA_PLETINA_DUO_CM;
+          } else {
+            fila['ALTO TELA'] = altoP;
           }
         }
         if (!esBeeblack) {

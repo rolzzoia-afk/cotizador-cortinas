@@ -13,6 +13,7 @@ import {
   diametroDesdeCategoria,
   diametroDesdeChipMecanismo,
   opcionesTuberiaFiltradas,
+  tuberiaCodigoCorto,
   tuberiaCorregidaPorMecanismo,
   tuberiaParaPano,
 } from './reglas-tuberia';
@@ -364,6 +365,23 @@ describe('regla 63 mm (E47 / E65 por ancho)', () => {
   });
 });
 
+describe('tuberiaCodigoCorto — pletina (velcro)', () => {
+  const pletinaRoller: ModeloDespiece = {
+    ...soft38,
+    sistema: 'PLETINA_ROLLER',
+    tipo_rol: 'PLETINA_ROLLER_V',
+    diametro_tubo_mm: 0,
+  };
+  const pletinaDuo: ModeloDespiece = { ...pletinaRoller, sistema: 'PLETINA_DUO', tipo_rol: 'PLETINA_DUO_V' };
+  it('modelo pletina → "VELCRO" (no el nombre del sistema)', () => {
+    expect(tuberiaCodigoCorto(pletinaRoller, '', 0.8)).toBe('VELCRO');
+    expect(tuberiaCodigoCorto(pletinaDuo, '', 0.8)).toBe('VELCRO');
+  });
+  it('chip VELCRO explícito → "VELCRO" aunque el modelo falte', () => {
+    expect(tuberiaCodigoCorto(null, 'VELCRO', 0.8)).toBe('VELCRO');
+  });
+});
+
 describe('diametroDesdeChipMecanismo', () => {
   it('mapa exhaustivo de TODOS los chips de UI y legacy (uno nuevo sin regla rompe acá)', () => {
     const esperado: Record<string, number | null> = {
@@ -377,6 +395,8 @@ describe('diametroDesdeChipMecanismo', () => {
       'OVALADA NEGRO [MEC 38]': 38,
       'OVALADA BLANCO [MEC 39]': 38,
       '0,63mm BCO [MEC 28]': 63,
+      // Pletina (velcro): no es un kit MEC, no tiene diámetro de tubo.
+      VELCRO: null,
       // CHIPS_MECANISMO_LEGACY
       'LZ 38 MERG BCO [MEC 05]': 38,
       'OVALADA NEG [MEC 09]': 38,

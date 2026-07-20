@@ -70,12 +70,14 @@ export function tipoCortinaEtiqueta(producto?: string, tipo?: string): string {
   return (p || tipo || '—').toUpperCase();
 }
 
-/** Sistema del encabezado de la etiqueta de estructura: DUO / DUAL / familia. */
+/** Sistema del encabezado de la etiqueta de estructura: PLETINA / DUO / DUAL / familia. */
 export function sistemaEtiquetaEstructura(
   producto?: string,
   tipo?: string,
   dual?: boolean,
+  esPletina?: boolean,
 ): string {
+  if (esPletina) return (producto || '').toUpperCase().includes('DUO') ? 'PLETINA DUO' : 'PLETINA V';
   if ((producto || '').toUpperCase().includes('DUO')) return 'DUO';
   if (dual) return 'DUAL';
   return tipoCortinaEtiqueta(producto, tipo);
@@ -222,7 +224,9 @@ function dibujarEstructura(
   // columna derecha con CEF. OV / TIRA / PESO.IT / CIERRE (foto oficial DUO).
   const esDuo = (row.producto || '').toUpperCase().includes('DUO');
   const esDual = !!p.dual;
-  const sistema = sistemaEtiquetaEstructura(row.producto, row.tipo, esDual);
+  // Pletina (velcro): el código de tubería de la fila es 'VELCRO' (tuberiaCodigoCorto).
+  const esPletina = (row.tuberiaCod || '').toUpperCase() === 'VELCRO';
+  const sistema = sistemaEtiquetaEstructura(row.producto, row.tipo, esDual, esPletina);
   const pzCef = pieza(row, 'CENEFA OVALADA');
   const pzPesoU = pieza(row, 'PESO U');
   const pzPesoInt = pieza(row, 'PESO INTERNO');
@@ -384,7 +388,8 @@ function dibujarEstructura(
     // Sin cenefa ovalada ni dúo: N/A explícito, igual que la fila de arriba.
     txt(doc, 'N/A', 45.2, 52.7, 9, { color: BLANCO, align: 'center', hScale: 0.98 });
   }
-  const pzPlat = pieza(row, 'PLETINA');
+  // Pletina roller → corte 'PLETINA'; pletina dúo → 'TELA Y PLETINA'.
+  const pzPlat = pieza(row, 'PLETINA') || pieza(row, 'TELA Y PLETINA');
   const platCm = pzPlat
     ? fmtMedidaCm(pzPlat.medidaCm)
     : esCenefaCuadrada(p.cenefa as string)

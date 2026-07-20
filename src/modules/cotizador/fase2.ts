@@ -76,6 +76,9 @@ export const OPCIONES_MECANISMO = [
   '0,45mm NGR [MEC 23]',
   // Fijo de Oscuranti 63 mm (regla de categoría).
   '0,63mm BCO [MEC 28]',
+  // Pletina (velcro): sin kit de mecanismo. Solo se ofrece en categorías pletina
+  // (opcionesMecanismoFiltradas) y NO emite insumo en el inventario.
+  'VELCRO',
 ] as const;
 
 // Chips MEC legacy del Excel: ya NO se ofrecen en el editor (al guardar,

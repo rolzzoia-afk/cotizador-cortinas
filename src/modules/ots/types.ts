@@ -93,6 +93,10 @@ export type DatosGenerales = {
   sinInstalacion?: boolean;
   /** Envío de la cotización: gratis o con cobro en destino (lo paga el cliente al courier). */
   envio?: 'gratis' | 'cobro_destino';
+  /** Habilita el tubo E78 (kit 45 mm) para la banda 2,2–3,0 m de esta OT.
+   *  Default (ausente/false): el rango usa tubo E66 (38 mm) con kit normal;
+   *  true: ROL/dúo/cenefa ovalada 38 mm del rango suben a fila 45 mm + E78. */
+  usarTuboE78?: boolean;
   /** Descuento de colmena al confirmar el corte general (Fase 4) — guard de idempotencia. */
   corteGeneralColmena?: import('@/modules/cotizador/colmenaCorte').CorteGeneralColmena;
 };

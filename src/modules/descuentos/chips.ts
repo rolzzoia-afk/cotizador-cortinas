@@ -14,6 +14,7 @@ import {
   categoriaRequiereMecanismo,
   categoriaTieneReglaAncho,
   colorConBandaAncho,
+  esCategoriaPletina,
   esKitInventarioMec,
   esMecLegacy,
   mecPorAncho,
@@ -23,6 +24,9 @@ import {
   reglaAnchoAplicable,
   reglaCategoriaAplicable,
 } from './reglas-mecanismo';
+// Binding local (los del bloque `export { … } from` no quedan disponibles en el
+// cuerpo del módulo): resincronizarChipsPanos los usa.
+import { canonizarChipTuberia, tuberiaParaPano } from './reglas-tuberia';
 
 export {
   REGLAS_MECANISMO,
@@ -172,8 +176,13 @@ export function mecanismoParaPano(
   opciones: readonly string[],
   categoria?: string,
   anchoM?: number,
+  usarTuboE78 = false,
 ): string {
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+
+  // Pletina (velcro): mecanismo fijo VELCRO. No lleva kit de mecanismo por color
+  // ni por categoría (y en el inventario NO se emite insumo — ver bom/pdfInventario).
+  if (esCategoriaPletina(categoria)) return 'VELCRO';
 
   // Rama dual: usa los chips [MEC 01..25], no los kits por color ni la categoría.
   if (p.dual) {
@@ -187,7 +196,7 @@ export function mecanismoParaPano(
   // ANTES que la de categoría: el dúo manual 38 tiene regla de categoría
   // (kit ovalada 38) que la banda debe poder pisar. MEC 28 es "legacy" en el
   // catálogo, así que forzarlo acá evita que la sync lo revierta al kit color.
-  const mecAncho = anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc) : null;
+  const mecAncho = anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc, usarTuboE78) : null;
   if (mecAncho != null) {
     const chipAncho = chipMecanismoPorNumero(mecAncho, opciones);
     if (chipAncho) {
@@ -234,7 +243,17 @@ export function mecanismoParaPano(
     // Kit 45 mm puesto por la banda 2,2–3,0 m: al salir de la banda vuelve al
     // kit por color — solo para colores CON regla de banda; sin regla (gris en
     // ROL) el kit 45 fue elección manual y se respeta.
-    if (nStored != null && esMecDeBanda(nStored) && colorConBandaAncho(categoria || '', colorAcc)) {
+    // Guarda de coherencia: si el MODELO guardado sigue en 45 mm (una OT con E78
+    // planificado que aún NO se re-guardó con el flag apagado), NO bajar el kit
+    // — el trío modelo+kit+tubo debe revertir JUNTO. Fase 2/Fase 0 revierten el
+    // modelo primero (a 38 mm) y ahí sí baja el kit; mientras el modelo siga en
+    // 45 mm, el BOM/inventario muestra kit 45 + E78 coherentes.
+    if (
+      nStored != null &&
+      esMecDeBanda(nStored) &&
+      colorConBandaAncho(categoria || '', colorAcc) &&
+      !(modelo && modelo.diametro_tubo_mm === 45)
+    ) {
       return porColor;
     }
     return stored;
@@ -311,6 +330,9 @@ export function opcionesMecanismoFiltradas(
   mecanismoActual?: string,
 ): readonly string[] {
   if (!categoriaRequiereMecanismo(categoria)) return [];
+
+  // Pletina (velcro): la única opción de mecanismo es VELCRO.
+  if (esCategoriaPletina(categoria)) return ['VELCRO'];
 
   const regla = reglaCategoriaAplicable(categoria, colorAccesorios);
   if (regla) {
@@ -400,8 +422,9 @@ export function modeloPorAncho(
   anchoM: number,
   modeloActual: ModeloDespiece | null,
   color: string | null | undefined,
+  usarTuboE78 = false,
 ): ModeloDespiece | null {
-  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color);
+  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, usarTuboE78);
   if (aplicada) {
     // La fila destino puede vivir en otra categoría (dúo 38 → filas MANUAL_45)
     // y el número MEC puede repetirse por color (MEC 18 ovalada blanco Y gris):
@@ -443,10 +466,51 @@ export function modeloVentanaPorAncho(
   categoria: string,
   color: string | null | undefined,
   anchoM: number,
+  usarTuboE78 = false,
 ): ModeloDespiece | null {
   const base = elegirModeloPorColor(modelosParaCategoria(modelos, categoria), color);
   if (categoriaEsDual(categoria)) return base;
-  return modeloPorAncho(modelos, categoria, anchoM, base, color);
+  return modeloPorAncho(modelos, categoria, anchoM, base, color, usarTuboE78);
+}
+
+/**
+ * Re-sincroniza los chips de MECANISMO y TUBERÍA de los paños NO dual de una
+ * ventana con su modelo/categoría/ancho actuales — la contraparte pura de
+ * `sincronizarChips` (Fase 2) para usar al re-guardar en Fase 1. Al cambiar el
+ * flag `usarTuboE78` de la OT baja los kits/tubos de banda automáticos (MEC 18/23
+ * → kit por color, E78 → E66) y respeta las elecciones manuales (E05, gris). El
+ * `modelo` debe venir YA recalculado por ancho (modeloPorAncho con el flag), así
+ * la tubería derivada del diámetro coincide con el kit. Muta los paños in situ.
+ */
+export function resincronizarChipsPanos(
+  panos: Array<Record<string, unknown>>,
+  ventanaColor: string | undefined,
+  modelo: ModeloDespiece | null | undefined,
+  categoria: string | undefined,
+  opcionesMec: readonly string[],
+  opcionesTub: readonly string[],
+  usarTuboE78 = false,
+): void {
+  for (const p of panos) {
+    if (p.dual) continue;
+    const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
+    const mec = mecanismoParaPano(
+      p as Parameters<typeof mecanismoParaPano>[0],
+      ventanaColor,
+      modelo,
+      opcionesMec,
+      categoria,
+      anchoM,
+      usarTuboE78,
+    );
+    if (mec) p.mecanismo = mec;
+    if (modelo && anchoM > 0) {
+      p.tuberia = canonizarChipTuberia(
+        tuberiaParaPano(anchoM, modelo, (p.tuberia as string) || '', opcionesTub, categoria),
+        opcionesTub,
+      );
+    }
+  }
 }
 
 /** true si el mecanismo del catálogo es 'MEC_<num>_…' (o cero-padded). */
