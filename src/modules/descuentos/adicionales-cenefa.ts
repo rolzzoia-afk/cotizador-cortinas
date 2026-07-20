@@ -105,6 +105,22 @@ export function etiquetaConTira(val?: boolean | string | null): EtiquetaConTira 
   return 'SIN TIRA';
 }
 
+/**
+ * Tira efectiva de una cenefa OVALADA. Regla (2026-07-20): el default —cuando
+ * el paño no trae dato— es CON TIRA (antes era SIN TIRA). Solo un 'SIN TIRA'
+ * explícito la deja sin tira. `adicionalConTira` (flag del adicional del Excel)
+ * es el respaldo cuando el paño no define nada. Usar en TODA lectura de la tira
+ * ovalada (UI, Excel de órdenes, cálculo general, etiquetas, precio).
+ */
+export function tiraCenefaOvalada(
+  cenefaTira?: boolean | string | null,
+  adicionalConTira?: boolean | null,
+): EtiquetaConTira {
+  if (String(cenefaTira ?? '').trim() !== '') return etiquetaConTira(cenefaTira);
+  if (adicionalConTira != null) return etiquetaConTira(adicionalConTira);
+  return 'CON TIRA';
+}
+
 export function buscarAdicionalCenefaEnUbic(
   ubicFila: string,
   adicionales: AdicionalFase0Persistido[] | undefined,
@@ -156,10 +172,10 @@ export function derivarAdicionalesCenefaDesdeVentanas(
         descuento: 0,
         ubicacion: ubicPanoVentana(v.ubicacion || '', i, total),
         colorAcc: String(p.colorTapa || p.color || ''),
-        // La tira solo aplica a la ovalada.
+        // La tira solo aplica a la ovalada. Default CON TIRA (ver tiraCenefaOvalada).
         conTira:
           cenefa === 'Ovalada'
-            ? etiquetaConTira(p.cenefaTira as string | undefined) === 'CON TIRA'
+            ? tiraCenefaOvalada(p.cenefaTira as string | undefined) === 'CON TIRA'
             : undefined,
         origen: 'pano',
       });

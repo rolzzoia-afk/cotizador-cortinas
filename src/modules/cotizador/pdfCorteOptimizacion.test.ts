@@ -187,13 +187,14 @@ describe('construirHojaCorte — telas invertidas', () => {
     expect(m['BK 18']).toBe(4.1);
   });
 
-  it('override manual: invertida=false en una ancha la marca "NO CABE"', () => {
+  it('override manual: invertida=false en una ancha → "NO CABE" en comentario, letra en CORTAR JUNTO', () => {
     const ventanas = [ventBK(3.507, false)];
     const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(false);
     expect(hoja.cortinas[0].comentario).toBe('NO CABE');
-    expect(hoja.cortinas[0].cortarJunto).toBe('RR');
+    // El aviso vive en COMENTARIO; CORTAR JUNTO siempre muestra letra, nunca "RR".
+    expect(hoja.cortinas[0].cortarJunto).toBe('A');
   });
 
   it('override manual: invertida=true en una que sí cabe la fuerza invertida', () => {

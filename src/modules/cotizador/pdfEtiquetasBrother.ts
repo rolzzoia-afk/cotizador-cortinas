@@ -15,7 +15,7 @@ import { jsPDF } from 'jspdf';
 import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow, PiezaEtiqueta } from './tela';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
-import { etiquetaConTira, medidaCorteCenefaCuadrada } from '@/modules/descuentos/adicionales-cenefa';
+import { medidaCorteCenefaCuadrada, tiraCenefaOvalada } from '@/modules/descuentos/adicionales-cenefa';
 import { codigoTuberiaDeChip } from '@/modules/descuentos/reglas-tuberia';
 import { esCenefaCuadrada } from './fase2';
 
@@ -68,6 +68,24 @@ export function familiaTelaEtiqueta(tipoTela?: string, producto?: string): strin
 export function tipoCortinaEtiqueta(producto?: string, tipo?: string): string {
   const p = (producto || '').trim().split(/\s+/)[0];
   return (p || tipo || '—').toUpperCase();
+}
+
+/** Sistema del encabezado de la etiqueta de estructura: DUO / DUAL / familia. */
+export function sistemaEtiquetaEstructura(
+  producto?: string,
+  tipo?: string,
+  dual?: boolean,
+): string {
+  if ((producto || '').toUpperCase().includes('DUO')) return 'DUO';
+  if (dual) return 'DUAL';
+  return tipoCortinaEtiqueta(producto, tipo);
+}
+
+/** Texto del orden de telas de una dual/dúo desde ordenDobleOpcion. */
+export function ordenDobleEtiqueta(ordenDobleOpcion?: string): string {
+  if (ordenDobleOpcion === 'BK_VID_SCR') return 'BK AL VIDRIO';
+  if (ordenDobleOpcion === 'SCR_VID_BK') return 'SCR AL VIDRIO';
+  return '';
 }
 
 /** Espesor de pared por código de tubo (fallback cuando el chip no lo trae). */
@@ -203,7 +221,8 @@ function dibujarEstructura(
   // Dúo (día/noche): etiqueta propia — título "DUO", PESO U a la izquierda y
   // columna derecha con CEF. OV / TIRA / PESO.IT / CIERRE (foto oficial DUO).
   const esDuo = (row.producto || '').toUpperCase().includes('DUO');
-  const sistema = esDuo ? 'DUO' : tipoCortinaEtiqueta(row.producto, row.tipo);
+  const esDual = !!p.dual;
+  const sistema = sistemaEtiquetaEstructura(row.producto, row.tipo, esDual);
   const pzCef = pieza(row, 'CENEFA OVALADA');
   const pzPesoU = pieza(row, 'PESO U');
   const pzPesoInt = pieza(row, 'PESO INTERNO');
@@ -221,7 +240,8 @@ function dibujarEstructura(
   const tamTitulo = sistema.length > 8 ? 13 : 19.2;
   const escTitulo = sistema.length > 8 ? 1 : 1.04;
   txt(doc, sistema, 3.7, 12.4, tamTitulo, { color: BLANCO, max: 12, hScale: escTitulo });
-  txt(doc, `Cortina ${n}/${total}`, 3.7, 16.4, 9.5, { color: BLANCO, hScale: 1.02 });
+  const ladoDual = esDual && p.dualLado ? ` · ${String(p.dualLado).toUpperCase()}` : '';
+  txt(doc, `Cortina ${n}/${total}${ladoDual}`, 3.7, 16.4, 9.5, { color: BLANCO, hScale: 1.02 });
   // El chip de despiece dice SCR, pero la etiqueta muestra SC (familia). Va
   // justo después de donde termina el título (con tope antes del QR). En el
   // dúo el chip es la familia completa: [DUO BK] / [DUO POLI].
@@ -307,7 +327,7 @@ function dibujarEstructura(
 
     doc.setFillColor(...NEGRO);
     doc.rect(30.225, 47.2, 29.85, 4.4, 'F');
-    txt(doc, etiquetaConTira(p.cenefaTira), 45.2, 50.2, 8.5, {
+    txt(doc, tiraCenefaOvalada(p.cenefaTira), 45.2, 50.2, 8.5, {
       color: BLANCO,
       align: 'center',
       hScale: 0.98,
@@ -342,13 +362,20 @@ function dibujarEstructura(
   doc.setFillColor(...NEGRO);
   doc.rect(30.225, 48.8, 29.85, 5.9, 'F');
   if (pzCef) {
-    txt(doc, etiquetaConTira(p.cenefaTira), 45.2, 52.7, 9, {
+    txt(doc, tiraCenefaOvalada(p.cenefaTira), 45.2, 52.7, 9, {
       color: BLANCO,
       align: 'center',
       hScale: 0.98,
     });
   } else if (pzPesoInt) {
     txt(doc, `PESO INT: ${fmtMedidaCm(pzPesoInt.medidaCm)}`, 45.2, 52.7, 8, {
+      color: BLANCO,
+      align: 'center',
+      hScale: 0.98,
+    });
+  } else if (esDual) {
+    // Dual: el orden de telas (SCR/BK al vidrio) en la franja central.
+    txt(doc, ordenDobleEtiqueta(p.ordenDobleOpcion) || 'DUAL', 45.2, 52.7, 7, {
       color: BLANCO,
       align: 'center',
       hScale: 0.98,

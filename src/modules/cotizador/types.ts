@@ -101,6 +101,14 @@ export type Pano = {
   dual?: boolean;
   dualLado?: string;
   dualColor?: string;
+  /**
+   * Tela PROPIA de este paño. Solo se puebla en cortinas DUAL (roller doble
+   * tela: cada paño = un roller con su tela); en rollers/dúos normales quedan
+   * undefined y todo consumidor cae a la tela de la ventana (ver telaDePano).
+   */
+  codInt?: string;
+  producto?: string;
+  descripcion?: string;
   motorTipo?: string;
   motorControlAdic?: boolean;
   motorHubUsb?: boolean;

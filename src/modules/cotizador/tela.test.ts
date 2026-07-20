@@ -275,6 +275,46 @@ describe('buildOptimizerRows', () => {
     expect(cenefa?.cod).toBe('E26'); // cenefa ovalada negro
     expect(cenefa?.color).toBe('NEGRO');
   });
+
+  it('DUAL: 2 paños con SU tela → 2 filas, cada una con su codInt/anchoRollo', () => {
+    const catDual = mkCat({
+      'SC 68': { producto: 'ROLLER SCREEN', anchoRollo: 2.5 },
+      'BK 69': { producto: 'ROLLER BLACKOUT', anchoRollo: 3.0 },
+    });
+    const modelo = {
+      sistema: 'ROLLER_DUAL',
+      tipo_rol: 'ROL_DUAL',
+      mecanismo: 'MEC_01_DUAL_DERECHO_BLANCO',
+      diametro_tubo_mm: 38,
+      codigos_tubo: 'E01;E02;E66',
+      dcto_tubo_cm: 3.9,
+      dcto_tela_cm: 0.5,
+      suma_peso_cm: 0.1,
+    };
+    const vDual = {
+      id: 'vd',
+      ubicacion: 'LIVING',
+      codInt: 'SC 68',
+      producto: 'ROLLER SCREEN',
+      categoria: 'ROL_DUAL',
+      modelo,
+      color: 'BLANCO',
+      panos: [
+        { ancho: 1.6, alto: 1.8, dual: true, codInt: 'SC 68', producto: 'ROLLER SCREEN' },
+        { ancho: 1.6, alto: 1.8, dual: true, codInt: 'BK 69', producto: 'ROLLER BLACKOUT' },
+      ],
+    } as unknown as VentanaItem;
+    const rows = buildOptimizerRows([vDual], catDual);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].codInt).toBe('SC 68');
+    expect(rows[0].anchoRollo).toBe(2.5);
+    expect(rows[1].codInt).toBe('BK 69');
+    expect(rows[1].anchoRollo).toBe(3.0);
+    // Despiece por paño: tubo = ancho − 3,9 · peso = tubo − 0,4 · tela = peso − 0,1.
+    const piezas = rows[0].piezas || [];
+    expect(piezas.find((p) => p.columnaExcel === 'TUBO')?.medidaCm).toBe(156.1); // 160 − 3.9
+    expect(piezas.find((p) => p.columnaExcel === 'PESO')?.medidaCm).toBe(155.7); // tubo − 0.4
+  });
 });
 
 // ── restorePlanGuardado ──────────────────────────────────────────
@@ -362,14 +402,19 @@ describe('asignarJuntoEnOrden', () => {
     expect(out[0].junto).not.toBe(out[1].junto);
   });
 
-  it('asigna RR a fila que excede ancho del rollo sola', () => {
+  it('fila más ancha que el rollo → su propia letra (no "RR"), sin compartir', () => {
     const cat = mkCat({ SC: { anchoRollo: 2.98 } });
     const rows = buildOptimizerRows(
-      [{ id: 1, ubicacion: 'L', codInt: 'SC', producto: 'p', panos: [{ ancho: 3.5, alto: 2 }] }],
+      [
+        { id: 1, ubicacion: 'L', codInt: 'SC', producto: 'p', panos: [{ ancho: 3.5, alto: 2 }] },
+        { id: 2, ubicacion: 'M', codInt: 'SC', producto: 'p', panos: [{ ancho: 1, alto: 2 }] },
+      ],
       cat,
     );
     const out = asignarJuntoEnOrden(rows);
-    expect(out[0].junto).toBe('RR');
+    // La ancha abre su propio paño con letra (nunca "RR") y no la comparte.
+    expect(out[0].junto).toBe('A');
+    expect(out[1].junto).not.toBe(out[0].junto);
   });
 
   it('empieza nuevo junto si cambia codInt', () => {

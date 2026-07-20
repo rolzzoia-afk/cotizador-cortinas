@@ -90,7 +90,8 @@ export function itemToVentana(item: ItemFase1): Ventana {
     colorCadena: '',
     colorMecanismo: '',
     cenefa: 'No',
-    cenefaTira: 'SIN TIRA',
+    // Sin dato: la tira ovalada se resuelve con default CON TIRA (tiraCenefaOvalada).
+    cenefaTira: '',
     colorTapa: '',
     cenefaTapa: 'MURO_MURO',
     bracketTipo: '',

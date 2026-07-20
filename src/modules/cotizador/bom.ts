@@ -56,6 +56,9 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
   };
 
   let llevaDomotica = false;
+  // Dual: el kit de mecanismo es UNO por ventana (un solo bracket dual) → se
+  // emite una sola vez aunque la ventana tenga 2 paños.
+  const dualMecEmitido = new Set<string>();
 
   rows.forEach((row) => {
     const p = row.pano || EMPTY_PANO;
@@ -96,9 +99,15 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
     const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
     add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
     // Mecanismo: una sola línea, dual o simple (el chip dual ya trae [MEC 0N]).
+    // El dual es 1 kit por VENTANA: se emite solo la primera vez (no ×2 paños);
+    // la clave sin ventanaId deja que dos ventanas iguales sí consoliden.
     if (p.dual) {
-      const dualKey = `DUAL|${mecSpec}|${mecColor}`;
-      add(dualKey, 'MECANISMO', 'Mecanismo Dual', mecSpec || '', mecColor, 1, 'unid.');
+      const vkey = String(row.ventanaId);
+      if (!dualMecEmitido.has(vkey)) {
+        dualMecEmitido.add(vkey);
+        const dualKey = `DUAL|${mecSpec}|${mecColor}`;
+        add(dualKey, 'MECANISMO', 'Mecanismo Dual', mecSpec || '', mecColor, 1, 'unid.');
+      }
     } else if (mecSpec) {
       const mecKey = `MEC|${mecSpec}|${mecColor}`;
       add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
@@ -170,8 +179,10 @@ export function calcularBOM(rows: OptimizerRow[], ventanas?: VentanaItem[]): Bom
       }
     }
 
-    // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos.
-    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM })) {
+    // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos. Dual:
+    // el 2º+ paño omite las fijaciones (1 juego por cortina); las tapas van ×paño.
+    const omitirFijaciones = !!p.dual && (row.panoIndex ?? 0) > 0;
+    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM, omitirFijaciones })) {
       add(`INS|${ins.codigo}|${ins.color}`, 'INSUMO', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
     }
   });

@@ -40,6 +40,7 @@ import {
   chipMecanismoPorNumero,
   codigoTuberiaDeChip,
   colorAccesoriosDePano,
+  esChipDual,
   mecanismoParaPano,
   numeroMecDeChip,
   tuberiaParaPano,
@@ -194,7 +195,9 @@ export function consolidarInsumos(
   let llevaDomotica = false;
   for (const v of ventanas) {
     const modelo = (v.modelo as ModeloDespiece | null | undefined) ?? null;
-    for (const p of v.panos || []) {
+    // Dual: el kit de mecanismo es 1 por ventana (un solo bracket dual).
+    let dualKitEmitido = false;
+    for (const [pi, p] of (v.panos || []).entries()) {
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const tieneMotor = !!(p.motorModelo || p.motorTipo) || (v.categoria || '').toUpperCase().includes('MOTOR');
       // Cenefa ovalada: por la cenefa guardada o por el SISTEMA del modelo (cubre
@@ -222,9 +225,14 @@ export function consolidarInsumos(
           chip && chip.toUpperCase().includes('OVALADA') ? 'PRODUCCION' : undefined;
         // E78 + ovalada NO usa el mecanismo completo (se desglosa en tapas +
         // pivotes), así que su kit NO se lista; el resto sí lleva su mecanismo.
+        // Dual: 1 kit por ventana (no ×2 paños) → se emite solo una vez.
         if (chip && num != null && !esE78Ovalada) {
-          const cod = `MEC${String(num).padStart(2, '0')}`;
-          bump(cod, `[${cod}] ${chip}`, 1);
+          const esDualChip = esChipDual(chip);
+          if (!esDualChip || !dualKitEmitido) {
+            const cod = `MEC${String(num).padStart(2, '0')}`;
+            bump(cod, `[${cod}] ${chip}`, 1);
+            if (esDualChip) dualKitEmitido = true;
+          }
         }
         // Cadena: usa la elegida en Fase 2 (codCadena); si el paño no la guardó
         // (OT no sincronizada en Fase 2), la resuelve por alto + color con el
@@ -247,7 +255,13 @@ export function consolidarInsumos(
         bump(cp, `[${cp}] ${textoPesoCadenaInventario({ codPeso: cp })}`.trim(), 1);
       }
 
-      for (const ins of insumosDePano(p, { categoria: v.categoria, ventanaColor: v.color, anchoM })) {
+      // Dual: el 2º+ paño omite las fijaciones (1 juego por cortina); tapas ×paño.
+      for (const ins of insumosDePano(p, {
+        categoria: v.categoria,
+        ventanaColor: v.color,
+        anchoM,
+        omitirFijaciones: !!p.dual && pi > 0,
+      })) {
         bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
       }
       // TUBO E78 + cenefa ovalada: armadura mixta que reemplaza al mecanismo

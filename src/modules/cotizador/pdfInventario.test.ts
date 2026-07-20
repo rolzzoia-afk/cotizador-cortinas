@@ -523,3 +523,37 @@ describe('notasTerreno', () => {
     ]);
   });
 });
+
+describe('construirInventario — dual (ROL_DUAL)', () => {
+  const modeloDual = {
+    sistema: 'ROLLER_DUAL', tipo_rol: 'ROL_DUAL', mecanismo: 'MEC_01_DUAL_DERECHO_BLANCO',
+    diametro_tubo_mm: 38, codigos_tubo: 'E01; E02; E66',
+    dcto_tubo_cm: 3.9, dcto_tela_cm: 0.5, suma_peso_cm: 0.1,
+  };
+  const pano = (codInt: string, tipoTela: string): Partial<Pano> => ({
+    ancho: 1.6, alto: 1.8, color: 'BLANCO', dual: true, dualLado: 'DERECHO',
+    mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', colorMecanismo: 'BCO',
+    codCadena: 'CAD03', codPeso: 'PCA04', materialTipo: 'VULCANITA', codInt, tipoTela,
+  });
+  const vDual = {
+    id: 'vd', ubicacion: 'LIVING', producto: 'ROLLER SCREEN', color: 'BLANCO',
+    categoria: 'ROL_DUAL', modelo: modeloDual,
+    panos: [pano('SC 68', 'SCR'), pano('BK 69', 'BK')],
+  } as unknown as Ventana;
+
+  it('UN kit de mecanismo dual (MEC01), 2 cadenas, 2 pesos, tapas ×2/paño, tarugos 1 juego', () => {
+    const d = construirInventario([vDual]);
+    // 1 kit MEC01 (no ×2 paños).
+    const mecs = d.insumos.filter((i) => i.codigo === 'MEC01');
+    expect(mecs).toHaveLength(1);
+    expect(mecs[0].cantidad).toBe(1);
+    // 2 cadenas + 2 pesos.
+    expect(d.insumos.find((i) => i.codigo === 'CAD03')?.cantidad).toBe(2);
+    expect(d.insumos.find((i) => i.codigo === 'PCA04')?.cantidad).toBe(2);
+    // Tapas de peso: 4 (2 por paño). Tarugos: 1 juego (paño 0 → 4).
+    const tapas = d.insumos.filter((i) => (i.codigo || '').startsWith('TAP'));
+    expect(tapas.reduce((s, t) => s + t.cantidad, 0)).toBe(4);
+    const tarugos = d.insumos.filter((i) => (i.codigo || '').startsWith('TAR'));
+    expect(tarugos.reduce((s, t) => s + t.cantidad, 0)).toBe(4);
+  });
+});

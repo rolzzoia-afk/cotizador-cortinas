@@ -50,6 +50,7 @@ import {
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
   sentidoDesdeArmado,
+  tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
 import { ProductoSelectorFase2 } from '@/components/cotizador/ProductoSelectorFase2';
 import { supabase } from '@/lib/supabase';
@@ -509,6 +510,13 @@ export function CotizadorFase2() {
       };
       const anchoIdx = () => parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
       const altoIdx = () => parseFloat(String(nuevo.panos[idx]?.alto ?? 0)) || 0;
+      const esDualVentana = categoriaEsDual(v.categoria || '');
+      // Dual: el mecanismo (lado+color) es UNO por ventana (un solo bracket dual)
+      // → se espeja lado/color/mecanismo a TODOS los paños. Cada paño mantiene su
+      // tela (codInt); solo se comparte la parte del kit.
+      const espejarADual = (mod: Partial<Pano>) => {
+        nuevo = { ...nuevo, panos: nuevo.panos.map((p) => ({ ...p, ...mod })) };
+      };
       // Recalcula la cadena auto por ALTO + color (roller/dúo manual); setea si
       // cambió. El peso se auto-fija (PCA04) si está vacío. No pisa un peso manual.
       const recomputarCadena = () => {
@@ -530,7 +538,9 @@ export function CotizadorFase2() {
           const chip = chipDualPorLadoColor(nuevo.panos[idx].dualLado || 'DERECHO', colorAcc, OPCIONES_MECANISMO_DUAL);
           if (chip) {
             const lc = ladoColorDesdeChipDual(chip);
-            setPano({ mecanismo: chip, ...(lc ? { dualLado: lc.lado, dualColor: lc.dualColor } : {}) });
+            const mod: Partial<Pano> = { mecanismo: chip, ...(lc ? { dualLado: lc.lado, dualColor: lc.dualColor } : {}) };
+            if (esDualVentana) espejarADual(mod);
+            else setPano(mod);
             nuevo = aplicarCascadaMecanismo(nuevo, idx, chip);
           } else {
             // Color de accesorios sin mecanismo dual (MET/CAFÉ: los 8 duales solo
@@ -548,6 +558,23 @@ export function CotizadorFase2() {
           );
           setPano({ mecanismo: chip, dualLado: '', dualColor: '' });
           if (chip) nuevo = aplicarCascadaMecanismo(nuevo, idx, chip);
+        }
+        return nuevo;
+      }
+
+      // Cambio del LADO dual (radio del editor): re-resuelve el chip por
+      // lado+color y lo espeja a todos los paños (un solo mecanismo por ventana).
+      if (patch.dualLado !== undefined && nuevo.panos[idx].dual) {
+        const colorAcc = colorAccesoriosDePano(nuevo.panos[idx] || {}, v.color);
+        const chip = chipDualPorLadoColor(patch.dualLado || 'DERECHO', colorAcc, OPCIONES_MECANISMO_DUAL);
+        if (chip) {
+          const lc = ladoColorDesdeChipDual(chip);
+          espejarADual({
+            mecanismo: chip,
+            dualLado: lc?.lado ?? patch.dualLado,
+            dualColor: lc?.dualColor ?? nuevo.panos[idx].dualColor,
+          });
+          nuevo = aplicarCascadaMecanismo(nuevo, idx, chip);
         }
         return nuevo;
       }
@@ -585,7 +612,12 @@ export function CotizadorFase2() {
       if (typeof patch.mecanismo === 'string' && patch.mecanismo) {
         if (esChipDual(patch.mecanismo)) {
           const lc = ladoColorDesdeChipDual(patch.mecanismo);
-          if (lc) setPano({ dualLado: lc.lado, dualColor: lc.dualColor });
+          // En una ventana dual el kit es único → espeja el chip a todos los paños.
+          if (esDualVentana) {
+            espejarADual({ mecanismo: patch.mecanismo, ...(lc ? { dualLado: lc.lado, dualColor: lc.dualColor } : {}) });
+          } else if (lc) {
+            setPano({ dualLado: lc.lado, dualColor: lc.dualColor });
+          }
         }
         nuevo = aplicarCascadaMecanismo(nuevo, idx, patch.mecanismo);
       }
@@ -604,6 +636,13 @@ export function CotizadorFase2() {
       sentido: ventanaForm.sentido || sentidoDesdeArmado(primer?.armado) || undefined,
       direccion: ventanaForm.direccion || direccionDesdeCierre(primer?.cierreVert) || undefined,
     };
+    // Dual: la ventana refleja la tela del paño 0 (para consumidores nivel-ventana);
+    // cada paño conserva la suya en codInt/producto/descripcion.
+    if (categoriaEsDual(ventBase.categoria || '') && primer) {
+      if (primer.codInt) ventBase.codInt = primer.codInt;
+      if (primer.producto) ventBase.producto = primer.producto;
+      if (primer.descripcion) ventBase.descripcion = primer.descripcion;
+    }
     const vent = sincronizarChips(ventBase, ventBase.modelo ?? null, true);
     const err = validarVentana(vent, {
       requiereMecanismo: categoriaRequiereMecanismo(vent.categoria),
@@ -1034,18 +1073,36 @@ export function CotizadorFase2() {
                       </select>
                     </div>
                     <div>
-                      <Label>Producto</Label>
+                      <Label>
+                        {categoriaEsDual(ventanaForm.categoria || '')
+                          ? `Producto (paño ${panoActivo + 1})`
+                          : 'Producto'}
+                      </Label>
                       <ProductoSelectorFase2
-                        value={ventanaForm.codInt}
-                        catalogo={catalogo}
-                        onSelect={(sel) =>
-                          actualizarVentana({
-                            codInt: sel.codInt,
-                            producto: sel.producto,
-                            tipo: sel.tipo,
-                            descripcion: sel.descripcion,
-                          })
+                        value={
+                          categoriaEsDual(ventanaForm.categoria || '')
+                            ? ventanaForm.panos[panoActivo]?.codInt || ''
+                            : ventanaForm.codInt
                         }
+                        catalogo={catalogo}
+                        onSelect={(sel) => {
+                          if (categoriaEsDual(ventanaForm.categoria || '')) {
+                            // Dual: cada paño tiene SU tela.
+                            actualizarPano(panoActivo, {
+                              codInt: sel.codInt,
+                              producto: sel.producto,
+                              descripcion: sel.descripcion,
+                              tipoTela: tipoTelaDesdeProducto(catalogo[sel.codInt]?.cod, sel.codInt),
+                            });
+                          } else {
+                            actualizarVentana({
+                              codInt: sel.codInt,
+                              producto: sel.producto,
+                              tipo: sel.tipo,
+                              descripcion: sel.descripcion,
+                            });
+                          }
+                        }}
                       />
                     </div>
                     <div>
@@ -1112,7 +1169,13 @@ export function CotizadorFase2() {
                   colorVentana={ventanaForm.color}
                   sentidoVentana={ventanaForm.sentido}
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
-                  anchoRollo={obtenerAnchoRollo(ventanaForm.codInt, catalogo, parametros.anchoRolloDefaultM)}
+                  anchoRollo={obtenerAnchoRollo(
+                    (categoriaEsDual(ventanaForm.categoria || '')
+                      ? ventanaForm.panos[panoActivo]?.codInt
+                      : '') || ventanaForm.codInt,
+                    catalogo,
+                    parametros.anchoRolloDefaultM,
+                  )}
                 />
 
                 {/* Acciones */}

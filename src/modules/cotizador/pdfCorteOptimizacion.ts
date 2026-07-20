@@ -35,7 +35,7 @@ export type FilaCorteCortina = {
   alto: number; // m
   altoCorteTela: number; // m — corte real (dúo: 2×alto+0,30; resto: alto+0,25)
   pano: number; // n.º de paño (= letra "cortar junto")
-  cortarJunto: string; // letra A, B, C… (o "RR" si no cabe ni invertida)
+  cortarJunto: string; // letra A, B, C… (el aviso "NO CABE" va en comentario)
   comentario: string; // "INVERTIDA" / "NO CABE" / ""
   invertida: boolean;
   medidaColmena: string; // "SC 64 (178X200)" si sale de sobrante
@@ -141,8 +141,9 @@ export function construirHojaCorte(
 
   // Clave de paño por fila:
   //  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
-  //  · "RR" sin invertir (más ancha que el rollo y no rota) → su propio paño
   //  · resto → letra "cortar junto" del optimizador (cortinas lado a lado)
+  // (Planes antiguos podían traer junto = "RR" en varias filas: se separan por
+  //  índice para que cada una quede en su propio paño y no colapsen en uno.)
   const claveJunto = (r: OptimizerRow, idx: number) => {
     if (esInvertida(r)) return `INV#${idx}`;
     if (r.junto === 'RR') return `RR#${idx}`;
@@ -162,7 +163,9 @@ export function construirHojaCorte(
   const cortinas: FilaCorteCortina[] = rows.map((r, idx) => {
     const pid = pieceId(ot.id, r.ventanaId, r.panoIndex);
     const inv = esInvertida(r);
-    const noCabe = !inv && r.junto === 'RR'; // más ancha que el rollo y no rota
+    // Más ancha que el rollo y no rota → no cabe. El aviso va en COMENTARIO;
+    // CORTAR JUNTO siempre muestra la letra del paño (nunca "RR").
+    const noCabe = !inv && r.anchoCm / 100 > r.anchoRollo;
     const pano = juntoNum.get(claveJunto(r, idx)) ?? 0;
     const colmena = colmenaDePieza(pid);
     return {
@@ -175,7 +178,7 @@ export function construirHojaCorte(
       alto: aMetros(r.altoCm),
       altoCorteTela: redM(r.altoCorte), // dúo: 2×alto+0,30; resto: alto+0,25
       pano,
-      cortarJunto: noCabe ? 'RR' : letra(pano),
+      cortarJunto: letra(pano),
       comentario: inv ? 'INVERTIDA' : noCabe ? 'NO CABE' : '',
       invertida: inv,
       medidaColmena: colmena ? `${colmena.cod} (${Math.round(colmena.ancho)}X${Math.round(colmena.alto)})` : '',

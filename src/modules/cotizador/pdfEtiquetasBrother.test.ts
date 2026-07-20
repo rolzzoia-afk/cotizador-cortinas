@@ -25,6 +25,8 @@ import {
   fmtMedidaCm,
   generarEtiquetasPanosPDF,
   ladoCadenaEtiqueta,
+  ordenDobleEtiqueta,
+  sistemaEtiquetaEstructura,
   textoAccionamiento,
   tipoCortinaEtiqueta,
 } from './pdfEtiquetasBrother';
@@ -58,6 +60,22 @@ describe('tipoCortinaEtiqueta', () => {
     expect(tipoCortinaEtiqueta('ROLLER BLACKOUT DELUX')).toBe('ROLLER');
     expect(tipoCortinaEtiqueta('', 'DELUX')).toBe('DELUX');
     expect(tipoCortinaEtiqueta()).toBe('—');
+  });
+});
+
+describe('sistemaEtiquetaEstructura', () => {
+  it('DUO por producto, DUAL por flag, si no la familia del producto', () => {
+    expect(sistemaEtiquetaEstructura('ROLLER DUO BK', '', false)).toBe('DUO');
+    expect(sistemaEtiquetaEstructura('ROLLER SCREEN', '', true)).toBe('DUAL');
+    expect(sistemaEtiquetaEstructura('ROLLER BLACKOUT', '', false)).toBe('ROLLER');
+  });
+});
+
+describe('ordenDobleEtiqueta', () => {
+  it('mapea el orden de telas a texto', () => {
+    expect(ordenDobleEtiqueta('BK_VID_SCR')).toBe('BK AL VIDRIO');
+    expect(ordenDobleEtiqueta('SCR_VID_BK')).toBe('SCR AL VIDRIO');
+    expect(ordenDobleEtiqueta('')).toBe('');
   });
 });
 

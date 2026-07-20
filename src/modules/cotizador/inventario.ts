@@ -17,6 +17,7 @@ import { jsPDF } from 'jspdf';
 import type { BomItem, VentanaItem } from '@/modules/ots/types';
 import type { Pano } from './types';
 import { textoPesoCadenaInventario } from './cadenas';
+import { telaDePano } from './telaPano';
 import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
   colorAccesoriosDePano,
@@ -149,7 +150,8 @@ export function construirFilasCortinas(ventanas: VentanaItem[]): FilaCortina[] {
       );
       filas.push({
         id,
-        producto: `${v.producto || ''} ${v.color || ''}`.trim(),
+        // Dual: cada paño muestra SU tela; si no, la de la ventana.
+        producto: `${telaDePano(v, p).producto || ''} ${v.color || ''}`.trim(),
         tipo: v.tipo || '',
         mecanismo: [mecChip, p.colorMecanismo].filter(Boolean).join(' '),
         tuberia: tubChip,

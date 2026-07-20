@@ -11,7 +11,10 @@ import {
   ubicPanoVentana,
 } from '@/modules/descuentos/adicionales-cenefa';
 import { esCategoriaBeeblack, normalizarVarianteBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import { categoriaEsDual } from '@/modules/descuentos/tipos';
+import { chipDualPorLadoColor } from '@/modules/descuentos/chips';
 import { codigoMotorDesdeAdicional, esAdicionalHubDomotica } from './insumosCortina';
+import { OPCIONES_MECANISMO_DUAL } from './fase2';
 import type { CatalogoProductos, Pano, Ventana } from './types';
 
 // Clave de ubicación para el match de motor: sin espacios ni separadores, así
@@ -127,6 +130,16 @@ export function cierreDesdeDireccion(direccion: string | undefined | null): stri
 
 }
 
+/**
+ * Lado del mecanismo dual (DERECHO/IZQUIERDO) desde la dirección de cadena de
+ * Fase 0. Default DERECHO (el MIXTO solo se marca a mano en Fase 2).
+ */
+export function dualLadoDesdeDireccion(direccion: string | undefined | null): string {
+  const d = (direccion || '').toUpperCase();
+  if (d.includes('IZQUIERDA') || d.includes('IZQUIERDO')) return 'IZQUIERDO';
+  return 'DERECHO';
+}
+
 /** Recíproco de armadoDesdeSentido: 'Interno'/'Externo' → 'INTERNO'/'EXTERNO'. */
 export function sentidoDesdeArmado(armado: string | undefined | null): string {
   const a = (armado || '').toUpperCase();
@@ -221,7 +234,13 @@ export function enriquecerPanoDesdeFase0(
 
   if (!pano.tipoTela) {
 
-    const tipoTela = tipoTelaDesdeVentana(ventana, catalogo);
+    // Dual: cada paño tiene su propia tela (pano.codInt); si no, la de la ventana.
+
+    const tipoTela = pano.codInt
+
+      ? tipoTelaDesdeProducto(catalogo?.[pano.codInt.trim()]?.cod, pano.codInt)
+
+      : tipoTelaDesdeVentana(ventana, catalogo);
 
     if (tipoTela) patch.tipoTela = tipoTela;
 
@@ -248,6 +267,44 @@ export function enriquecerPanoDesdeFase0(
     if (!pano.colorCadena) patch.colorCadena = colorAcc;
 
     if (!pano.colorMecanismo) patch.colorMecanismo = colorAcc;
+
+  }
+
+
+
+  // Dual (roller doble tela): flag + lado desde la dirección de Fase 0 + color +
+
+  // chip de mecanismo dual por lado+color + orden de telas por defecto (SCR al
+
+  // vidrio). Solo rellena vacíos (no pisa lo elegido a mano en Fase 2). Con color
+
+  // MET/CAFÉ no hay chip dual → el mecanismo queda vacío (se completa en Fase 2).
+
+  if (categoriaEsDual(ventana.categoria)) {
+
+    if (!pano.dual) patch.dual = true;
+
+    const lado = pano.dualLado || dualLadoDesdeDireccion(ventana.direccion);
+
+    if (!pano.dualLado) patch.dualLado = lado;
+
+    if (!pano.dualColor && colorAcc) patch.dualColor = colorAcc;
+
+    if (!pano.mecanismo) {
+
+      const chip = chipDualPorLadoColor(lado, colorAcc, OPCIONES_MECANISMO_DUAL);
+
+      if (chip) patch.mecanismo = chip;
+
+    }
+
+    if (!pano.ordenDobleOpcion) {
+
+      patch.ordenDoble = true;
+
+      patch.ordenDobleOpcion = 'SCR_VID_BK';
+
+    }
 
   }
 

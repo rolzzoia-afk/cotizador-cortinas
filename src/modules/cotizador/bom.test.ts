@@ -317,6 +317,40 @@ describe('calcularBOM — insumos de instalación', () => {
     expect(mecs[0].descripcion).toBe('Mecanismo Dual');
     expect(mecs[0].especificacion).toBe('MEC 01');
   });
+
+  it('dual 2 paños misma ventana: UN Mecanismo Dual, 2 cadenas/pesos, 4 tapas, tarugos 1 juego', () => {
+    const p = (codInt: string): Partial<Pano> => ({
+      dual: true,
+      mecanismo: 'DUAL DERECHO BLANCO [MEC 01]',
+      colorMecanismo: 'BCO',
+      color: 'BCO',
+      codCadena: 'CAD03',
+      codPeso: 'PCA04',
+      colorPeso: 'BCO',
+      materialTipo: 'VULCANITA',
+      codInt,
+    });
+    const bom = calcularBOM(
+      [
+        row(p('SC 68'), { ventanaId: 1, panoIndex: 0, anchoCm: 160 }),
+        row(p('BK 69'), { ventanaId: 1, panoIndex: 1, anchoCm: 160 }),
+      ],
+      vent('ROL_DUAL', 'BCO'),
+    );
+    // 1 kit de mecanismo dual (no ×2 paños).
+    const mecs = bom.filter((i) => i.categoria === 'MECANISMO');
+    expect(mecs).toHaveLength(1);
+    expect(mecs[0].cantidad).toBe(1);
+    // 2 tubos, 2 cadenas, 2 pesos (un juego por paño).
+    expect(bom.filter((i) => i.categoria === 'TUBERÍA').reduce((s, t) => s + t.cantidad, 0)).toBe(2);
+    expect(bom.find((i) => i.descripcion === 'Cadena')?.cantidad).toBe(2);
+    expect(bom.find((i) => i.descripcion === 'Peso de cadena')?.cantidad).toBe(2);
+    // Tapas de peso: 4 (2 por paño). Tarugos: 1 juego (solo el paño 0 → 4, no 8).
+    const tapas = bom.filter((i) => i.categoria === 'INSUMO' && (i.especificacion || '').startsWith('TAP'));
+    expect(tapas.reduce((s, t) => s + t.cantidad, 0)).toBe(4);
+    const tarugos = bom.filter((i) => i.categoria === 'INSUMO' && (i.especificacion || '').startsWith('TAR'));
+    expect(tarugos.reduce((s, t) => s + t.cantidad, 0)).toBe(4);
+  });
 });
 
 // ── bomToOrdenMaterialesRows ──────────────────────────────────────

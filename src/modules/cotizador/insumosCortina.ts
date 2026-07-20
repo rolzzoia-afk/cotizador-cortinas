@@ -113,12 +113,13 @@ function colorTapaCorto(color: string | null | undefined): 'BCO' | 'NEG' | 'GRS'
   return null;
 }
 
-/** ¿La categoría lleva peso inferior con tapas de peso? Solo roller (incluye
- *  motorizados y cenefa ovalada; excluye DUAL, PLETINA, DÚO, oscuridad, vertical…). */
+/** ¿La categoría lleva peso inferior con tapas de peso? Roller, incluidos los
+ *  motorizados, la cenefa ovalada y el DUAL (cada roller/tela lleva su barra de
+ *  peso con 2 tapas). Excluye PLETINA, DÚO, oscuridad, vertical… */
 export function llevaTapasPeso(categoria: string | null | undefined): boolean {
   const c = (categoria || '').trim().toUpperCase();
   if (!c) return false;
-  return c === 'ROL' || (c.startsWith('ROL_') && !c.includes('DUAL') && !c.includes('PLETINA'));
+  return c === 'ROL' || (c.startsWith('ROL_') && !c.includes('PLETINA'));
 }
 
 /** ¿La categoría es dúo (día/noche, doble tela)? Excluye PLETINA_DUO_V. */
@@ -230,10 +231,20 @@ export function cantidadSuplementosAuto(
  */
 export function insumosDePano(
   p: Partial<Pano>,
-  ctx: { categoria?: string; ventanaColor?: string | null; anchoM: number },
+  ctx: {
+    categoria?: string;
+    ventanaColor?: string | null;
+    anchoM: number;
+    /**
+     * Dual: en el 2º+ paño se omiten las fijaciones que son 1 juego por cortina
+     * (brackets, tarugos, suplementos) — el dual cuelga de UN solo bracket. Las
+     * tapas de peso y sus tornillos SÍ van por paño (una barra de peso por tela).
+     */
+    omitirFijaciones?: boolean;
+  },
 ): InsumoCortina[] {
   const out: InsumoCortina[] = [];
-  const { categoria, ventanaColor, anchoM } = ctx;
+  const { categoria, ventanaColor, anchoM, omitirFijaciones } = ctx;
   const cc = colorTapaCorto(colorAccesoriosDePano(p, ventanaColor));
 
   // Tapas de peso + sus tornillos (solo roller, por color de accesorios).
@@ -273,21 +284,24 @@ export function insumosDePano(
     });
   }
 
-  // Brackets (por cenefa; cantidad por ancho).
-  const bracket = bracketDeCenefa(p.cenefa, p.bracketTipo, p.superficie, categoria);
+  // Brackets (por cenefa; cantidad por ancho). Fijación por cortina: en dual
+  // el 2º paño no las emite (un solo bracket dual sostiene ambos rollers).
+  const bracket = omitirFijaciones ? null : bracketDeCenefa(p.cenefa, p.bracketTipo, p.superficie, categoria);
   if (bracket) {
     out.push({ ...bracket, color: '', cantidad: cantidadBrackets(anchoM) });
   }
 
-  // Tarugos según material (vulcanita/concreto/cerámica; madera no lleva).
-  const tarugo = tarugoDeMaterial(p.materialTipo);
-  const tarugos = cantidadTarugos(p, categoria, anchoM);
+  // Tarugos según material (vulcanita/concreto/cerámica; madera no lleva). Igual
+  // que los brackets: 1 juego por cortina (el 2º paño dual no los emite).
+  const tarugo = omitirFijaciones ? null : tarugoDeMaterial(p.materialTipo);
+  const tarugos = omitirFijaciones ? 0 : cantidadTarugos(p, categoria, anchoM);
   if (tarugo && tarugos > 0) {
     out.push({ codigo: tarugo.codigo, descripcion: tarugo.descripcion, color: '', cantidad: tarugos });
   }
 
   // Suplementos (opcional; cantidad auto por roller/cenefa, override manual).
-  if (p.suplementoTipo) {
+  // También 1 juego por cortina (el 2º paño dual no los emite).
+  if (p.suplementoTipo && !omitirFijaciones) {
     const override = Number(p.suplementoCant);
     const cant = override > 0 ? override : cantidadSuplementosAuto(p, categoria, anchoM);
     out.push({

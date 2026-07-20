@@ -141,13 +141,15 @@ describe('construirCalculoGeneral', () => {
     expect(labels).not.toContain('CENEFA OVALADA');
   });
 
-  it('paño ovalado sin tira definida → cae en "(SIN TIRA)" por defecto', () => {
+  it('paño ovalado sin tira definida → cae en "(CON TIRA)" por defecto', () => {
     const modeloCenefa: ModeloDespiece = { ...modeloRoller, dcto_cenefa_cm: 1.5 };
     const v = ventRoller(1.45, 'PIEZA 1');
     v.modelo = modeloCenefa;
     v.panos![0].cenefa = 'Ovalada';
     const [f] = construirCalculoGeneral([v]).filas;
-    expect(f.despiece.get('CENEFA OVALADA (SIN TIRA)')).toBe(143.5);
+    // Default 2026-07-20: la cenefa ovalada sin dato de tira arranca CON TIRA.
+    expect(f.despiece.get('CENEFA OVALADA (CON TIRA)')).toBe(143.5);
+    expect(f.despiece.has('CENEFA OVALADA (SIN TIRA)')).toBe(false);
   });
 });
 
