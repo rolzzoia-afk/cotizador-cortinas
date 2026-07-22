@@ -177,6 +177,15 @@ describe('validarFilaFase0', () => {
     );
     expect(malos.sort()).toEqual(['alto', 'ancho', 'categoria', 'direccion', 'sentido'].sort());
   });
+
+  it('VERTICAL no exige sentido de caída (no se enrolla: corre de lado)', () => {
+    const opts = { ...OPTS, categorias: new Set([...OPTS.categorias, 'VERTICAL']) };
+    expect(validarFilaFase0({ ...base, categoria: 'VERTICAL', sentido: '' }, opts)).toEqual([]);
+    // Y si el Excel igual trae un sentido, tampoco se marca (se ignora al importar).
+    expect(validarFilaFase0({ ...base, categoria: 'VERTICAL', sentido: 'ZZZ' }, opts)).toEqual([]);
+    // El resto de categorías lo sigue exigiendo.
+    expect(validarFilaFase0({ ...base, sentido: '' }, opts)).toEqual(['sentido']);
+  });
 });
 
 describe('canonizar', () => {

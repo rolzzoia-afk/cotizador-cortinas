@@ -35,7 +35,7 @@ describe('opciones de Fase 2', () => {
     expect(OPCIONES_TUBERIA.some((o) => o.includes('E53'))).toBe(false);
   });
 
-  it('la tubería usa las descripciones largas por código + E65 + VELCRO', () => {
+  it('la tubería usa las descripciones largas por código + E65 + VELCRO + VERTICAL', () => {
     expect([...OPCIONES_TUBERIA]).toEqual([
       'E02-TUBO 1.2 / Ø 38 mm',
       'E66 - TUBO (.40mm) - 2.5mm',
@@ -44,6 +44,7 @@ describe('opciones de Fase 2', () => {
       'E47 - TUBO Ø 63 mm',
       'E65 - TUBO (.63mm)',
       'VELCRO',
+      'VERTICAL',
     ]);
   });
 

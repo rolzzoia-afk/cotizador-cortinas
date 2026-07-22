@@ -9,6 +9,8 @@ const cat: CatalogoProductos = {
   'BK 18': { cod: 'BK 18', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 0, anchoRollo: 2.98 },
   'SC 64': { cod: 'SC 64', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0, anchoRollo: 2.98 },
   'DU 28': { cod: 'DU 28', producto: 'ROLLER DUO BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0, anchoRollo: 2.98 },
+  // Tela de rollo angosto (2,50) para ejercitar la vertical más ancha que el rollo.
+  'SC 02': { cod: 'SC 02', producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0, anchoRollo: 2.5 },
 };
 
 function ot(ventanas: VentanaItem[]): OT {
@@ -252,23 +254,91 @@ describe('construirHojaCorte — DÚO OT 266-16 (new.xlsx)', () => {
   });
 });
 
-describe('filasCorteVisibles (tabla de corte solo colmena/invertidas)', () => {
+// Caso dorado: planilla manual "PAÑOS VERTICAL" de la OT 2923 (ROSSANA), tela
+// SC 34-V de 2,12 × 2,34 → ANCHO 2,12 (sin −3,5) · ALTO CORTE TELA REAL 2,39
+// (alto+5) · ALTO REAL / OPTIMIZADOR 2,59 (alto+25, la reserva del roller).
+describe('construirHojaCorte — VERTICAL (OT 2923 ROSSANA)', () => {
+  const ventanas: VentanaItem[] = [
+    {
+      id: 'vv', ubicacion: 'LIVING -G1', codInt: 'SC 64',
+      producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'VERTICAL',
+      grupoId: null, alto: 2.34, precio: 0, cantidad: 1,
+      panos: [{ ancho: 2.12, alto: 2.34 }],
+    },
+  ];
+  const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+  const hoja = construirHojaCorte(rows, [], ot(ventanas));
+
+  it('la tela se corta al ancho REAL y la celda del −3,5 queda vacía', () => {
+    const [c] = hoja.cortinas;
+    expect(c.anchoCorteTela).toBe(2.12); // ancho real, sin limpieza de borde
+    expect(c.corteAncho35).toBe(''); // no aplica a la vertical
+    expect(c.alto).toBe(2.34);
+    expect(c.altoCorteTela).toBe(2.39); // alto + extraVertical (5 cm)
+  });
+
+  it('no se marca INVERTIDA, pero sí se identifica como vertical', () => {
+    const [c] = hoja.cortinas;
+    expect(c.invertida).toBe(false);
+    expect(c.esVertical).toBe(true);
+    expect(c.comentario).toBe('VERTICAL');
+  });
+
+  it('el paño corta 2,39 y reserva 2,59 (alto+25, igual que el roller)', () => {
+    expect(hoja.panos[0].altoCortePano).toBe(2.39);
+    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.59);
+    expect(hoja.optimizador.find((o) => o.codInt === 'SC 64')?.metros).toBe(2.59);
+  });
+});
+
+// Vertical MÁS ANCHA que el rollo (SALON 2,80 en un rollo de 2,50): nunca se
+// invierte (la tela va en lamas), el aviso dice cuántas pasadas del rollo lleva
+// y el paño conserva su alto/reserva de vertical (alto+5 / alto+25).
+describe('construirHojaCorte — VERTICAL más ancha que el rollo', () => {
+  const ventanas: VentanaItem[] = [
+    {
+      id: 'salon', ubicacion: 'SALON ANCHO', codInt: 'SC 02',
+      producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'VERTICAL',
+      grupoId: null, alto: 2.4, precio: 0, cantidad: 1,
+      panos: [{ ancho: 2.8, alto: 2.4 }],
+    },
+  ];
+  const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+  const hoja = construirHojaCorte(rows, [], ot(ventanas));
+
+  it('NO se marca INVERTIDA ni NO CABE: avisa las pasadas (2,80 / 2,50 → 2 PASADAS)', () => {
+    const [c] = hoja.cortinas;
+    expect(c.invertida).toBe(false);
+    expect(c.esVertical).toBe(true);
+    expect(c.comentario).toBe('VERTICAL · 2 PASADAS');
+    expect(c.anchoCorteTela).toBe(2.8); // ancho real
+    expect(c.corteAncho35).toBe(''); // sin −3,5 en vertical
+  });
+
+  it('el paño conserva su alto/reserva de vertical (2,45 / 2,65), no el ancho invertido', () => {
+    expect(hoja.panos[0].altoCortePano).toBe(2.45); // alto + 5
+    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.65); // alto + 25
+  });
+});
+
+describe('filasCorteVisibles (tabla de corte solo colmena/invertidas/verticales)', () => {
   const fila = (over: Partial<FilaCorteCortina>): FilaCorteCortina =>
     ({
       cadena: 0, cant: 1, codInt: 'SC 64', tipo: 'PREMIUM',
       anchoCorteTela: 1.5, corteAncho35: 1.465, alto: 2, altoCorteTela: 2.25,
-      pano: 1, cortarJunto: 'A', comentario: '', invertida: false,
+      pano: 1, cortarJunto: 'A', comentario: '', invertida: false, esVertical: false,
       medidaColmena: '', ubicColmena: '', ...over,
     });
 
-  it('muestra solo las filas de colmena o invertidas', () => {
+  it('muestra solo las filas de colmena, invertidas o verticales', () => {
     const cortinas = [
       fila({ codInt: 'A' }), // rollo normal → oculta
       fila({ codInt: 'B', invertida: true }), // invertida → visible
       fila({ codInt: 'C', medidaColmena: 'SC 64 (178X200)' }), // colmena → visible
       fila({ codInt: 'D' }), // rollo normal → oculta
+      fila({ codInt: 'E', esVertical: true }), // vertical (rollo girado) → visible
     ];
-    expect(filasCorteVisibles(cortinas).map((f) => f.codInt)).toEqual(['B', 'C']);
+    expect(filasCorteVisibles(cortinas).map((f) => f.codInt)).toEqual(['B', 'C', 'E']);
   });
 
   it('todas normales → lista vacía (el PDF omite la tabla de corte)', () => {

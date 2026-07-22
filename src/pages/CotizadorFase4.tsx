@@ -178,6 +178,7 @@ export function CotizadorFase4() {
       const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
       const res = descargarExcelOrdenes(ot.datosGenerales.ot || '—', ventanas, {
         adicionalesFase0: ot.datosGenerales.adicionalesFase0,
+        params: parametros,
       });
       if (res.advertencias.length > 0) {
         toast.warning(

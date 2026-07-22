@@ -1574,10 +1574,14 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.12"; // 2026-07-15: merma máx. por código (E78 ≤ 50 cm)
+const VERSION_ACTUAL = "5.13"; // 2026-07-21: cortes VERTICAL (perfil cabezal VER62/61 + varilla VER63, barra 580 cm)
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
+// Largo de barra virgen (cm) por código cuando el catálogo del operario no lo
+// trae. Los perfiles/varillas verticales vienen en barras de 5,80 m (el fallback
+// genérico MM_TUBO_ORIGINAL es 5,78 m, de los tubos roller).
+const MEDIDAS_BARRA_DEFAULT = { 'VER61': 580, 'VER62': 580, 'VER63': 580 };
 const STOCK_MINIMO = 10; // Umbral de alerta: códigos con ≤ este número de tubos enteros disponibles
 
 const SistemaInventario = {
@@ -3695,7 +3699,8 @@ function expandirOrdenesDesdeExcel() {
     // ─── MULTI-CORTE: Columnas de componentes a procesar ───
     const COLUMNAS_CORTE = [
         'TUBO', 'PESO', 'CENEFA OVALADA', 'PESO U', 'PESO INTERNO',
-        'PLETINA', 'PERFIL [CORTINA VERTICAL]', 'VARILLA [CORTINA VERTICAL]',
+        'PLETINA', 'PERFIL CABEZAL', 'VARILLA',
+        'PERFIL [CORTINA VERTICAL]', 'VARILLA [CORTINA VERTICAL]',
         'PERFIL (IZQ) INT', 'PERFIL (DER) INT', 'PERFIL BASE',
         'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT'
     ];
@@ -3716,6 +3721,10 @@ function expandirOrdenesDesdeExcel() {
         'PESO U': 'COLOR ACCESORIOS',
         'PESO INTERNO': 'COLOR ACCESORIOS',
         'PLETINA': 'COLOR ACCESORIOS',
+        // Vertical: el cabezal (VER62/61) va por color de accesorios; la varilla
+        // (VER63) es única, pero igual se le asigna la columna para trazabilidad.
+        'PERFIL CABEZAL': 'COLOR ACCESORIOS',
+        'VARILLA': 'COLOR ACCESORIOS',
         'PERFIL [CORTINA VERTICAL]': 'COLOR PERFIL',
         'VARILLA [CORTINA VERTICAL]': 'COLOR PERFIL',
         'PERFIL (IZQ) INT': 'COLOR PERFIL',
@@ -3910,6 +3919,34 @@ function expandirOrdenesDesdeExcel() {
                     SistemaInventario.ordenes.push(orden);
                     ordenesDeEstaFila++;
                     log(`✓ PESO U detectado: ${codPesoU} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: PERFIL CABEZAL (vertical) = cabezal Vertilux, código
+                // por color de accesorios. Negro → VER61 | Blanco (o cualquier otro,
+                // no hay vertical gris) → VER62. Barra virgen 5,80 m (MEDIDAS_BARRA_DEFAULT).
+                if (nombreCol === 'PERFIL CABEZAL') {
+                    const codPerfil = colorDeseado === 'NEGRO' ? 'VER61' : 'VER62';
+                    orden.cod = codPerfil;
+                    orden.codigoExtraido = codPerfil;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codPerfil] || null;
+                    orden.tuberia = `PERFIL CABEZAL - ${colorDeseado || 'BLANCO'}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ PERFIL CABEZAL detectado: ${codPerfil} (${colorDeseado || 'BLANCO'}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: VARILLA (vertical) = varilla Vertilux, código único
+                // VER63 sin importar color. Barra virgen 5,80 m (MEDIDAS_BARRA_DEFAULT).
+                if (nombreCol === 'VARILLA') {
+                    orden.cod = 'VER63';
+                    orden.codigoExtraido = 'VER63';
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos['VER63'] || null;
+                    orden.tuberia = 'VARILLA VERTICAL';
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ VARILLA detectada: VER63 para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
                     continue;
                 }
 
@@ -5722,7 +5759,7 @@ async function ejecutarOptimizacion() {
                     if (!serialDisponible) log(`⚠️ No hay serial para ${codOrden} ni sus reemplazos`, 'warn');
                 }
                 const codBuscarMedida = String(codParaTuboNuevo || '').trim().toUpperCase();
-                let medidaNuevoCm = SistemaInventario.catalogoMedidas[codBuscarMedida] || (MM_TUBO_ORIGINAL / 10);
+                let medidaNuevoCm = SistemaInventario.catalogoMedidas[codBuscarMedida] || MEDIDAS_BARRA_DEFAULT[codBuscarMedida] || (MM_TUBO_ORIGINAL / 10);
 
                 // Rectificación al vuelo: si hay un override de medida real, usarlo
                 if (SistemaInventario.overridesNuevos[codBuscarMedida] && SistemaInventario.overridesNuevos[codBuscarMedida].length > 0) {
@@ -5986,8 +6023,9 @@ async function ejecutarOptimizacion() {
     // Así el operario corta TUBO + PESO + accesorios de la misma ubicación seguidos
     const ORDEN_COMPONENTE = {
         'TUBO': 0, 'PESO': 1, 'PESO U': 2, 'PESO INTERNO': 3,
-        'CENEFA OVALADA': 4, 'PLETINA': 5, 'PERFIL [CORTINA VERTICAL]': 6,
-        'VARILLA [CORTINA VERTICAL]': 7, 'PERFIL (IZQ) INT': 8, 'PERFIL (DER) INT': 9,
+        'CENEFA OVALADA': 4, 'PLETINA': 5, 'PERFIL CABEZAL': 6, 'VARILLA': 7,
+        'PERFIL [CORTINA VERTICAL]': 6, 'VARILLA [CORTINA VERTICAL]': 7,
+        'PERFIL (IZQ) INT': 8, 'PERFIL (DER) INT': 9,
         'PERFIL BASE': 10, 'CENEFA DELANTERA': 11, 'CENEFA TRASERA': 12, 'PESO SOFT LIGHT': 13
     };
     SistemaInventario.resultadosOptimizacion.sort((a, b) => {

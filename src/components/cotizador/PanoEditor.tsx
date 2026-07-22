@@ -389,40 +389,43 @@ export function PanoEditor({
         )}
       </Section>
 
-      {/* 2. CADENA */}
+      {/* 2. CADENA — la vertical no lleva cadena roller (usa su propio peso de
+          cadena VER, que se lista en la hoja de inventario); conserva solo el
+          Cierre (que sí aplica: es el lado de accionamiento de las lamas). */}
       <Section title="Cadena">
-        {cadenasDisponibles.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
-            <select
-              className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
-              value={pano.codCadena || ''}
-              onChange={(e) => {
-                const cod = e.target.value;
-                if (!cod) {
-                  onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
-                  return;
-                }
-                const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
-                onChange({ codCadena: cod, largoCadena, colorCadena });
-              }}
-            >
-              <option value="">— Sin cadena —</option>
-              {cadenasDisponibles.map((c) => (
-                <option key={c.cod} value={c.cod as string}>
-                  {etiquetaCadena(c)}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <RadioRow
-            label="Largo"
-            value={String(pano.largoCadena || '')}
-            options={OPCIONES_LARGO_CADENA}
-            onChange={(v) => onChange({ largoCadena: v })}
-          />
-        )}
+        {!esVerticalCat &&
+          (cadenasDisponibles.length > 0 ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
+              <select
+                className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+                value={pano.codCadena || ''}
+                onChange={(e) => {
+                  const cod = e.target.value;
+                  if (!cod) {
+                    onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
+                    return;
+                  }
+                  const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+                  onChange({ codCadena: cod, largoCadena, colorCadena });
+                }}
+              >
+                <option value="">— Sin cadena —</option>
+                {cadenasDisponibles.map((c) => (
+                  <option key={c.cod} value={c.cod as string}>
+                    {etiquetaCadena(c)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <RadioRow
+              label="Largo"
+              value={String(pano.largoCadena || '')}
+              options={OPCIONES_LARGO_CADENA}
+              onChange={(v) => onChange({ largoCadena: v })}
+            />
+          ))}
         <RadioRow
           label="Cierre"
           value={pano.cierreVert || ''}
@@ -431,8 +434,8 @@ export function PanoEditor({
         />
       </Section>
 
-      {/* 2b. PESO DE CADENA */}
-      {pesosDisponibles.length > 0 && (
+      {/* 2b. PESO DE CADENA — no aplica a la vertical (lleva su peso VER propio). */}
+      {!esVerticalCat && pesosDisponibles.length > 0 && (
         <Section title="Peso de cadena">
           <div className="flex flex-wrap items-center gap-2">
             <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Peso</span>

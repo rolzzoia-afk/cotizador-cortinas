@@ -15,13 +15,15 @@ import jsPDF from 'jspdf';
 import type { Ventana } from '@/modules/cotizador/types';
 import type { CatalogoProductos } from '@/modules/cotizador/types';
 import {
+  ANCHO_LAMA_VERTICAL_CM,
   calcularDespiece,
+  calculoVertical,
   contextoDespieceDesdePano,
   MODELO_DESPIECE_STUB,
 } from '@/modules/descuentos/despiece';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
-import { esCategoriaPletina } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
@@ -40,9 +42,11 @@ const BLOQUES: Record<string, BloqueSistema> = {
   OSCU: { key: 'OSCU', label: 'OSCURANTI', color: [192, 80, 77] },
   DARK: { key: 'DARK', label: 'DARK', color: [55, 55, 60] },
   BEEBLACK: { key: 'BEEBLACK', label: 'BEEBLACK', color: [51, 63, 80] },
+  VERTICAL: { key: 'VERTICAL', label: 'VERTICAL', color: [56, 118, 29] },
 };
 
 function bloqueDe(categoria: string | undefined, cenefaTipo: string | undefined): BloqueSistema {
+  if (esCategoriaVertical(categoria)) return BLOQUES.VERTICAL;
   if (esCategoriaBeeblack(categoria)) return BLOQUES.BEEBLACK;
   const fam = familiaOscuridad(categoria, cenefaTipo);
   if (fam === 'OSCURANTI') return BLOQUES.OSCU;
@@ -155,7 +159,10 @@ export function construirCalculoGeneral(
 
       const despiece = new Map<string, number | string>();
       if (anchoCm > 0 && (v.modelo || esBee)) {
-        const ctx = contextoDespieceDesdePano(v, p);
+        const ctx = contextoDespieceDesdePano(v, p, {
+          verticalExtraAltoCm: params.extraVerticalCm,
+          verticalDctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
+        });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
         for (const c of d.cortes) {
@@ -186,10 +193,28 @@ export function construirCalculoGeneral(
       // Pletina/velcro: la tela se corta a la medida EXACTA (no lleva la vuelta
       // del tubo del roller ni el doblez extra del dúo). El ALTO MESA DE CORTE
       // del dúo sí conserva el +extraMesaDuo (=10, la mitad del alto doblado).
+      // VERTICAL: el alto de corte NO es alto+25 sino alto+extraVertical, y ya
+      // viene del despiece como ALTO TELA (junto con ALTO FINAL LAMA), así que
+      // la columna ALTO genérica se omite para no mostrar una medida falsa.
+      const esVerticalFila = esCategoriaVertical(v.categoria);
       const esPletinaFila = esCategoriaPletina(v.categoria);
-      const altoRollerCm = r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
+      const altoRollerCm = esVerticalFila
+        ? r1(altoCm + params.extraVerticalCm)
+        : r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
       const altoDuoCm = r1(altoCm * 2 + (esPletinaFila ? 0 : params.extraDuoCm));
-      if (altoCm > 0) {
+      if (esVerticalFila && v.modelo && anchoCm > 0 && altoCm > 0) {
+        // Guía de dimensionado: de la pieza única salen N lamas de 8,9 × alto final.
+        const cv = calculoVertical(v.modelo, anchoCm, altoCm, {
+          extraAltoCm: params.extraVerticalCm,
+          dctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
+        });
+        // Total a CORTAR = las que se instalan + las de repuesto.
+        despiece.set(
+          'LAMAS (8,9 × ALTO FINAL)',
+          `${cv.lamas + cv.repuesto} × ${num(ANCHO_LAMA_VERTICAL_CM)} × ${num(cv.altoFinalCm)}`,
+        );
+      }
+      if (altoCm > 0 && !esVerticalFila) {
         if (opts?.altoMesaCorteDuo && esDuoFila) {
           // Dimensionado: la tela dúo se corta DOBLADA en la mesa, así que en vez
           // del ALTO se muestra ALTO MESA DE CORTE = alto + extraMesaDuo (la mitad
@@ -272,7 +297,7 @@ export function construirCalculoGeneral(
 
   // Bloques de sistema presentes, en orden fijo, con sus columnas de despiece
   // (solo las que tienen datos en alguna cortina de ese sistema).
-  const ordenBloques = ['ROLLER', 'SOFT', 'OSCU', 'DARK', 'BEEBLACK'];
+  const ordenBloques = ['ROLLER', 'SOFT', 'OSCU', 'DARK', 'BEEBLACK', 'VERTICAL'];
   const bloques: { sistema: BloqueSistema; columnas: ColumnaCalculo[] }[] = [];
   for (const bk of ordenBloques) {
     const sistema = BLOQUES[bk];
@@ -405,6 +430,7 @@ function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: nu
 /** Peso (ancho relativo) de cada columna: texto largo más ancho. */
 function pesoColumna(key: string, esDespiece: boolean): number {
   if (key === 'ALTO MESA DE CORTE') return 1.6; // etiqueta larga
+  if (key.startsWith('LAMAS (')) return 1.7; // etiqueta larga + valor compuesto
   if (key.startsWith('CENEFA OVALADA')) return 1.55; // etiqueta larga (con/sin tira)
   if (esDespiece) return 1.15;
   switch (key) {
@@ -463,16 +489,26 @@ const VARIANTE_CALCULO_GENERAL: VarianteHojaCalculo = {
  * DIMENSIONADO: la hoja del cálculo general reducida a lo que usa la mesa de
  * dimensionado de tela — identidad de la cortina + medidas de corte de tela.
  * Fuera: tubería, color accesorios, cadena/cierre, armado, medidas de
- * levantamiento (ANCHO/ALTO mts), los cortes de metal (TUBO y PESO*) y la
- * CENEFA OVALADA (no se dimensiona en esta mesa).
+ * levantamiento (ANCHO/ALTO mts), los cortes de metal (TUBO y PESO*, más el
+ * PERFIL CABEZAL / VARILLA / CARRITOS de la vertical) y la CENEFA OVALADA
+ * (no se dimensiona en esta mesa).
  */
+// Metal y ferretería de la vertical: no se dimensionan en la mesa de tela.
+// LAMAS y REPUESTO sí quedan (son piezas de tela a cortar).
+const SIN_DIMENSIONADO_VERTICAL = new Set([
+  'PERFIL CABEZAL',
+  'VARILLA',
+  'CARRITOS',
+]);
+
 export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   titulo: 'DIMENSIONADO',
   archivo: 'Dimensionado',
   sinIdentidad: new Set(['tuberia', 'colorAcc', 'cadena', 'armado', 'anchoMts', 'altoMts']),
   sinDespiece: (label) =>
     label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
-    label.startsWith('CENEFA OVALADA'), // incluye "(CON/SIN TIRA)"
+    label.startsWith('CENEFA OVALADA') || // incluye "(CON/SIN TIRA)"
+    SIN_DIMENSIONADO_VERTICAL.has(label),
   conjuntoPanos: true,
   altoMesaCorteDuo: true,
 };

@@ -58,6 +58,10 @@ export type ContextoDespiece = {
   perfiles?: PerfilesOscuridad;
   /** Medidas manuales (cm) que sobreescriben la calculada de cada perfil. */
   perfilesMedidas?: MedidasPerfilesOscuridad;
+  /** VERTICAL: cm que se SUMAN al alto para el corte de tela (params.extraVerticalCm). */
+  verticalExtraAltoCm?: number;
+  /** VERTICAL: cm que se RESTAN al alto de corte para el alto final de la lama. */
+  verticalDctoAltoFinalCm?: number;
   /** BEEBLACK: variante INTERNO | EXTERNO_SEMI. */
   beeblackVariante?: string | null;
   beeblackToggles?: TogglesBeeblack;
@@ -86,7 +90,65 @@ export const COLUMNA_PESO_OSCURIDAD = 'PESO SOFT LIGHT';
 /** Regla de taller: el peso roller se corta SIEMPRE 0.4 cm menos que el tubo. */
 export const PESO_VS_TUBO_CM = 0.4;
 
+// ── VERTICAL (cortinas de lamas) ──
+/** Ancho de cada lama vertical (cm): se sacan en dimensionado del corte único. */
+export const ANCHO_LAMA_VERTICAL_CM = 8.9;
+/** Un carrito cada 8 cm de varilla (la varilla se divide en este paso). */
+export const PASO_CARRITO_VERTICAL_CM = 8;
+/** Lamas de TELA extra que se cortan de más, siempre, como repuesto (no se
+ *  instalan: la ferretería —peso de lama, sujetador— es 1 por carrito). */
+export const LAMAS_REPUESTO_VERTICAL = 2;
+/** Default del +cm al alto para el corte de tela (= parametrosCorte.extraVerticalCm). */
+export const EXTRA_ALTO_VERTICAL_DEFAULT_CM = 5;
+/** Default de los cm que se restan al corte para el alto final de la lama. */
+export const DCTO_ALTO_FINAL_VERTICAL_DEFAULT_CM = 13;
+
 const r1 = (n: number) => Math.round(n * 10) / 10;
+
+export type CalculoVertical = {
+  /** Corte del perfil cabezal (aluminio) = ancho − dcto_tubo_cm. */
+  perfilCabezalCm: number;
+  /** Corte de la varilla = perfil cabezal − dcto_perfiles_cm. */
+  varillaCm: number;
+  /** Carritos que entran en la varilla (uno cada 8 cm, redondeando HACIA ABAJO). */
+  carritos: number;
+  /** Lamas que se instalan = una por carrito. */
+  lamas: number;
+  /** Lamas EXTRA de tela que se cortan de repuesto (0 si no hay lamas). */
+  repuesto: number;
+  /** Alto del corte de tela = alto + extra. 0 si no hay alto. */
+  altoCorteCm: number;
+  /** Alto de la lama ya terminada = alto de corte − descuento. 0 si no hay alto. */
+  altoFinalCm: number;
+};
+
+/**
+ * Fórmulas de taller de la cortina VERTICAL (validadas con el dueño 2026-07-21).
+ * Los dos descuentos de aluminio salen del catálogo (`descuentos_modelo`, fila
+ * sistema='VERTICAL'): `dcto_tubo_cm` es el del perfil cabezal y
+ * `dcto_perfiles_cm` el de la varilla, que se encadena al perfil (NO al ancho).
+ * Los cm de la tela son parámetros de corte editables, no del catálogo.
+ */
+export function calculoVertical(
+  modelo: Pick<ModeloDespiece, 'dcto_tubo_cm' | 'dcto_perfiles_cm'>,
+  anchoCm: number,
+  altoCm: number,
+  opts?: { extraAltoCm?: number; dctoAltoFinalCm?: number },
+): CalculoVertical {
+  const extra = opts?.extraAltoCm ?? EXTRA_ALTO_VERTICAL_DEFAULT_CM;
+  const dctoFinal = opts?.dctoAltoFinalCm ?? DCTO_ALTO_FINAL_VERTICAL_DEFAULT_CM;
+  const perfilCabezalCm = r1(anchoCm - modelo.dcto_tubo_cm);
+  const varillaCm = r1(perfilCabezalCm - modelo.dcto_perfiles_cm);
+  // Hacia abajo: un carrito de más no entra en la varilla.
+  const carritos = varillaCm > 0 ? Math.floor(varillaCm / PASO_CARRITO_VERTICAL_CM) : 0;
+  // Una lama por carrito (igual que el peso de lama y el sujetador de bodega);
+  // el repuesto es tela EXTRA que se corta aparte, no va montada.
+  const lamas = carritos;
+  const repuesto = lamas > 0 ? LAMAS_REPUESTO_VERTICAL : 0;
+  const altoCorteCm = altoCm > 0 ? r1(altoCm + extra) : 0;
+  const altoFinalCm = altoCorteCm > 0 ? r1(altoCorteCm - dctoFinal) : 0;
+  return { perfilCabezalCm, varillaCm, carritos, lamas, repuesto, altoCorteCm, altoFinalCm };
+}
 
 function columnaPesoExcel(modelo: ModeloDespiece): string {
   return SISTEMAS_OSCURIDAD.includes(modelo.sistema) ? COLUMNA_PESO_OSCURIDAD : 'PESO';
@@ -201,6 +263,44 @@ export function calcularDespiece(
           medidaCm: r1(anchoCm - modelo.suma_peso_cm),
         });
       }
+    }
+    if (modelo.notas) notas.push(modelo.notas);
+    return { cortes, aproximado: false, notas };
+  }
+
+  // ── VERTICAL (lamas): el aluminio se encadena (ancho → perfil cabezal →
+  //    varilla) y la varilla define cuántos carritos/lamas salen. La TELA se
+  //    corta como la de un roller: una sola pieza de ancho real × (alto + extra),
+  //    y de ahí se dimensionan después las lamas de 8,9 cm — por eso no hay un
+  //    corte por lama. Validado con la planilla manual OT 2923. ──
+  if (modelo.sistema === 'VERTICAL') {
+    const cv = calculoVertical(modelo, anchoCm, ctx?.altoCm ?? 0, {
+      extraAltoCm: ctx?.verticalExtraAltoCm,
+      dctoAltoFinalCm: ctx?.verticalDctoAltoFinalCm,
+    });
+    cortes.push({
+      componente: 'Perfil cabezal',
+      columnaExcel: 'PERFIL CABEZAL',
+      medidaCm: cv.perfilCabezalCm,
+    });
+    cortes.push({ componente: 'Varilla', columnaExcel: 'VARILLA', medidaCm: cv.varillaCm });
+    // Carritos y lamas son CANTIDADES, no medidas (mismo patrón que el
+    // 'TOTAL LAMAS CORTE' de beeblack: viajan por `medidaCm` a su columna).
+    // El nombre del componente debe coincidir con la columna: el Cálculo
+    // General arma sus columnas con `componente`, el Excel con `columnaExcel`.
+    cortes.push({ componente: 'Carritos', columnaExcel: 'CARRITOS', medidaCm: cv.carritos });
+    cortes.push({ componente: 'Lamas', columnaExcel: 'LAMAS', medidaCm: cv.lamas });
+    cortes.push({ componente: 'Repuesto', columnaExcel: 'REPUESTO', medidaCm: cv.repuesto });
+    if (cv.altoCorteCm > 0) {
+      // Ancho de la tela = ancho real de la ventana (sin descuento: la lama sale
+      // del paño completo). Referencial, no viaja al Excel de órdenes.
+      cortes.push({ componente: 'Ancho tela', columnaExcel: '', medidaCm: r1(anchoCm) });
+      cortes.push({ componente: 'Alto tela', columnaExcel: 'ALTO TELA', medidaCm: cv.altoCorteCm });
+      cortes.push({
+        componente: 'Alto final lama',
+        columnaExcel: 'ALTO FINAL LAMA',
+        medidaCm: cv.altoFinalCm,
+      });
     }
     if (modelo.notas) notas.push(modelo.notas);
     return { cortes, aproximado: false, notas };
@@ -338,7 +438,7 @@ export const MODELO_DESPIECE_STUB: import('./tipos').ModeloDespiece = {
 
 /** Construye el contexto de despiece desde ventana + paño (Fase 2 / Excel). */
 export function contextoDespieceDesdePano(
-  v: { categoria?: string; sentido?: string | null },
+  v: { categoria?: string; sentido?: string | null; alto?: number | string },
   p: {
     alto?: number | string;
     cenefa?: string | null;
@@ -372,12 +472,18 @@ export function contextoDespieceDesdePano(
     beeblackAltoTelaCm?: number;
     beeblackTotalLamasCm?: number;
   },
+  /** Parámetros de corte que el despiece necesita (hoy solo los de VERTICAL). */
+  extras?: { verticalExtraAltoCm?: number; verticalDctoAltoFinalCm?: number },
 ): ContextoDespiece {
-  const altoCm = (parseFloat(String(p.alto ?? 0)) || 0) * 100;
+  // El alto suele vivir en la VENTANA, no en el paño (igual que en tela.ts):
+  // sin este fallback, vertical y oscuridad quedaban con altoCm = 0.
+  const altoCm = (parseFloat(String(p.alto ?? v.alto ?? 0)) || 0) * 100;
   return {
     categoria: v.categoria,
     sentido: v.sentido,
     altoCm,
+    verticalExtraAltoCm: extras?.verticalExtraAltoCm,
+    verticalDctoAltoFinalCm: extras?.verticalDctoAltoFinalCm,
     cenefa: p.cenefa,
     oscuridadVariante: p.oscuridadVariante,
     perfiles: {

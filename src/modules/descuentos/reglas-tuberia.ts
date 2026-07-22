@@ -12,7 +12,10 @@ import { categoriaCoincide, type MatchCategoria } from './reglas-mecanismo';
  * "modelos sintéticos" (p.ej. diámetro derivado del chip de mecanismo)
  * reutilizando las mismas reglas; un ModeloDespiece completo también sirve.
  */
-export type ModeloTubo = Pick<ModeloDespiece, 'diametro_tubo_mm' | 'codigos_tubo'>;
+export type ModeloTubo = Pick<ModeloDespiece, 'diametro_tubo_mm' | 'codigos_tubo'> & {
+  /** Distingue los sistemas SIN tubo entre sí (VERTICAL vs. pletina/velcro). */
+  sistema?: string;
+};
 
 export type ReglaE02E66 = {
   descripcion: string;
@@ -198,6 +201,14 @@ export function tuberiaCodigoCorto(
     return cod ? `${modelo.diametro_tubo_mm}mm_${cod}` : `${modelo.diametro_tubo_mm}mm`;
   }
   if (codChip) return codChip;
+  // VERTICAL (sin tubo): la "tubería" es la estructura vertical, no el nombre
+  // del sistema. Va antes que velcro porque ambos tienen diámetro 0.
+  if (
+    modelo?.sistema === 'VERTICAL' ||
+    (tuberiaChip || '').toUpperCase().trim() === 'VERTICAL'
+  ) {
+    return 'VERTICAL';
+  }
   // Pletina/velcro (sin diámetro ni código E): la "tubería" es VELCRO, no el
   // nombre del sistema ('PLETINA_ROLLER'/'PLETINA_DUO').
   if (
@@ -243,7 +254,9 @@ export function chipTuberiaDeModelo(
   categoria?: string,
 ): string | null {
   if (modelo.diametro_tubo_mm <= 0) {
-    return opciones.find((o) => o.toUpperCase() === 'VELCRO') ?? null;
+    // Sin tubo: VERTICAL usa su propio chip; el resto (pletina) es velcro.
+    const objetivo = modelo.sistema === 'VERTICAL' ? 'VERTICAL' : 'VELCRO';
+    return opciones.find((o) => o.toUpperCase() === objetivo) ?? null;
   }
   const codigo = codigoTuboPorAncho(modelo, 0, categoria) ||
     REGLAS_TUBERIA.codigoPorDiametro[modelo.diametro_tubo_mm];

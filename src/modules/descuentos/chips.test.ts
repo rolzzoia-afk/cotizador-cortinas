@@ -162,6 +162,12 @@ describe('opcionesMecanismoFiltradas', () => {
     expect(opcionesMecanismoFiltradas(modelos, 'VERTICAL', 'BCO', OPCIONES_MECANISMO)).toEqual([]);
   });
 
+  it('VERTICAL no resuelve mecanismo aunque ahora tenga modelo (sin kit de bodega)', () => {
+    expect(
+      mecanismoParaPano({}, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'VERTICAL', 1.5),
+    ).toBe('');
+  });
+
   it('conserva selección manual no-legacy fuera del filtro', () => {
     const manual = 'KIT SIMPLE NEGRO 38MM [MEC 32]';
     const opts = opcionesMecanismoFiltradas(modelos, 'ROL', 'BCO', OPCIONES_MECANISMO, manual);

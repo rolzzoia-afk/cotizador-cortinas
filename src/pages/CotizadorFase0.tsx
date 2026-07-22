@@ -37,6 +37,7 @@ import {
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0 } from '@/modules/cotizador/fase0-dual';
+import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import {
   OPCIONES_MECANISMO_DUAL,
   OPCIONES_MECANISMO_RESOLUCION,
@@ -785,10 +786,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const setFila = (id: string, patch: Partial<FilaUI>) => {
     // Al cambiar el COD_INT, autollenar el DCT% con el descuento del código
     // (salvo que el patch ya traiga un descuento explícito).
-    const conDct =
+    let conDct =
       'codInt' in patch && !('descuento' in patch)
         ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
         : patch;
+    // Al pasar una fila a VERTICAL se limpia el sentido de caída: no aplica
+    // (la vertical corre de lado, no se enrolla) y la celda pasa a mostrar "—".
+    if ('categoria' in patch && esCategoriaVertical(patch.categoria)) {
+      conDct = { ...conDct, sentido: '' };
+    }
     setFilas((prev) => {
       const fila = prev.find((f) => f.id === id);
       const vid = fila?.vid;
@@ -817,7 +823,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     setErroresImport((prev) => {
       if (!prev.has(id)) return prev;
       const campos = new Set(prev.get(id));
-      for (const k of Object.keys(patch)) campos.delete(k as CampoFase0);
+      // `conDct`, no `patch`: incluye los campos derivados (p. ej. el sentido
+      // que se limpia al pasar a VERTICAL), que también dejan de estar en rojo.
+      for (const k of Object.keys(conDct)) campos.delete(k as CampoFase0);
       const next = new Map(prev);
       if (campos.size === 0) next.delete(id);
       else next.set(id, campos);
@@ -869,7 +877,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       for (const c of cortinas) {
         const categoria = canonizar(c.categoria, CATEGORIAS_MECANISMO);
         const direccion = canonizar(c.direccion, DIRECCIONES);
-        const sentido = canonizar(c.sentido, SENTIDOS);
+        // La vertical no tiene sentido de caída: si el Excel trae algo, se ignora.
+        const sentido = esCategoriaVertical(categoria) ? '' : canonizar(c.sentido, SENTIDOS);
         const fila: FilaUI = {
           id: crypto.randomUUID(),
           codInt: c.codInt,
@@ -1319,7 +1328,20 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       <>
                         <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
                         <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
-                        <Td><SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} /></Td>
+                        <Td>
+                          {/* La vertical no lleva sentido de caída (corre de
+                              lado con carritos, no se enrolla). */}
+                          {esCategoriaVertical(f.categoria) ? (
+                            <span
+                              className="text-muted-foreground"
+                              title="La cortina vertical no tiene sentido de caída"
+                            >
+                              —
+                            </span>
+                          ) : (
+                            <SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} />
+                          )}
+                        </Td>
                       </>
                     )}
                     <Td>

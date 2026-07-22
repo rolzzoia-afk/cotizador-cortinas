@@ -4,6 +4,7 @@ import {
   DESCRIPCION_TUBERIA,
   REGLAS_TUBERIA,
   canonizarChipTuberia,
+  chipTuberiaDeModelo,
   chipTuberiaPorAncho,
   chipTuberiaPorCodigo,
   codigoTuberiaDeChip,
@@ -379,6 +380,35 @@ describe('tuberiaCodigoCorto — pletina (velcro)', () => {
   });
   it('chip VELCRO explícito → "VELCRO" aunque el modelo falte', () => {
     expect(tuberiaCodigoCorto(null, 'VELCRO', 0.8)).toBe('VELCRO');
+  });
+});
+
+describe('tuberiaCodigoCorto / chipTuberiaDeModelo — vertical (lamas)', () => {
+  const vertical: ModeloDespiece = {
+    ...soft38,
+    sistema: 'VERTICAL',
+    tipo_rol: 'VERTICAL_LAMAS_89',
+    diametro_tubo_mm: 0,
+    codigos_tubo: '',
+  };
+  const pletina: ModeloDespiece = { ...vertical, sistema: 'PLETINA_ROLLER' };
+
+  it('modelo vertical → "VERTICAL" (no el nombre del sistema ni VELCRO)', () => {
+    expect(tuberiaCodigoCorto(vertical, '', 1.5, 'VERTICAL')).toBe('VERTICAL');
+  });
+  it('chip VERTICAL explícito → "VERTICAL" aunque el modelo falte', () => {
+    expect(tuberiaCodigoCorto(null, 'VERTICAL', 1.5)).toBe('VERTICAL');
+  });
+  it('regresión: una OT vertical vieja (sin modelo ni chip) sigue devolviendo ""', () => {
+    expect(tuberiaCodigoCorto(null, '', 1.5, 'VERTICAL')).toBe('');
+  });
+  it('chipTuberiaDeModelo distingue vertical de pletina (ambos sin diámetro)', () => {
+    expect(chipTuberiaDeModelo(vertical, OPCIONES_TUBERIA, 'VERTICAL')).toBe('VERTICAL');
+    expect(chipTuberiaDeModelo(pletina, OPCIONES_TUBERIA, 'PLETINA_ROLLER_V')).toBe('VELCRO');
+  });
+  it('opcionesTuberiaFiltradas deja solo el chip VERTICAL', () => {
+    expect(opcionesTuberiaFiltradas(OPCIONES_TUBERIA, { modelo: vertical, categoria: 'VERTICAL' }))
+      .toEqual(['VERTICAL']);
   });
 });
 

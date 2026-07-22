@@ -47,7 +47,7 @@ export function validarAnchoModelo(m: ModeloDespiece, anchoM: number): string | 
 
 // ── Mapeo categoría (cotizador Fase 0 / Fase 2) → modelos del catálogo ──
 // Las categorías del cotizador (CATEGORIAS_MECANISMO) corresponden a
-// sistemas/tipos del catálogo de descuentos. VERTICAL no tiene catálogo aún.
+// sistemas/tipos del catálogo de descuentos.
 type ReglaCategoria = { sistemas: string[]; tipoIncluye?: string };
 
 const MAPEO_CATEGORIA: Record<string, ReglaCategoria> = {
@@ -68,6 +68,7 @@ const MAPEO_CATEGORIA: Record<string, ReglaCategoria> = {
   DARK_38mm: { sistemas: ['DARK_ROLLER'], tipoIncluye: '38mm' },
   DARK_45mm: { sistemas: ['DARK_ROLLER'], tipoIncluye: '45mm' },
   OSCURANTI_63mm: { sistemas: ['OSCURANTI'] },
+  VERTICAL: { sistemas: ['VERTICAL'] },
 };
 
 /** true si la categoría del cotizador es roller dual (mecanismo dual [MEC 01-25]). */

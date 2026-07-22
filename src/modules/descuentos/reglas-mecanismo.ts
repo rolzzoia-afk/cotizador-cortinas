@@ -328,6 +328,13 @@ export function esCategoriaPletina(categoria: string | null | undefined): boolea
   return (categoria || '').toUpperCase().includes('PLETINA');
 }
 
+/** ¿La categoría es VERTICAL (cortina de lamas)? Sin tubo ni mecanismo roller:
+ *  su estructura es perfil cabezal + varilla + carritos. Leaf puro, igual que
+ *  `esCategoriaPletina`, para usarse desde el cotizador sin ciclos de import. */
+export function esCategoriaVertical(categoria: string | null | undefined): boolean {
+  return (categoria || '').trim().toUpperCase() === 'VERTICAL';
+}
+
 export function categoriaRequiereMecanismo(categoria: string): boolean {
   const c = normalizarCategoria(categoria);
   if (!c) return false;
