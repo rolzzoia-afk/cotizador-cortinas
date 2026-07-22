@@ -53,6 +53,41 @@ describe('calcularBOM', () => {
     expect(tubos[1].cantidad).toBe(1);
   });
 
+  it('VERTICAL no emite tubería ni mecanismo (su estructura no es de bodega roller)', () => {
+    const ventanas = [{ id: 1, categoria: 'VERTICAL', panos: [{ ancho: 1.5, alto: 1.8 }] }];
+    const bom = calcularBOM([row()], ventanas as Parameters<typeof calcularBOM>[1]);
+    expect(bom.filter((i) => i.categoria === 'TUBERÍA')).toHaveLength(0);
+    expect(bom.filter((i) => i.categoria === 'MECANISMO')).toHaveLength(0);
+  });
+
+  it('VERTICAL con modelo emite los VER bajo INSUMO (carritos, cordón CALCULAR, bracket)', () => {
+    const ventanas = [{
+      id: 1,
+      categoria: 'VERTICAL',
+      color: 'Blanco',
+      modelo: { sistema: 'VERTICAL', dcto_tubo_cm: 1.8, dcto_perfiles_cm: 1.7 },
+      panos: [{ ancho: 1.5, alto: 1.8, color: 'Blanco' }],
+    }];
+    const bom = calcularBOM([row({ color: 'Blanco' })], ventanas as Parameters<typeof calcularBOM>[1]);
+    const ins = bom.filter((i) => i.categoria === 'INSUMO');
+    const spec = Object.fromEntries(ins.map((i) => [i.especificacion, i]));
+    // carritos ancho 1,5 → perfil 148,2 · varilla 146,5 · floor(/8) = 18.
+    expect(spec.VER40?.cantidad).toBe(18); // carrito
+    expect(spec.VER41?.cantidad).toBe(18); // peso lama
+    expect(spec.VER45?.cantidad).toBe(18); // sujetador blanco
+    expect(spec.VER37?.cantidad).toBe(1); // peso cordón
+    expect(spec.VER50?.cantidad).toBe(1); // kit
+    expect(spec.VER52?.cantidad).toBe(1); // peso cadena blanco
+    expect(spec.VER38?.cantidad).toBe(3); // bracket = cantidadBrackets(1,5)
+    // Cordón y cadena inferior → "CALCULAR" (cantidad 0).
+    expect(spec.VER43?.unidad).toBe('CALCULAR');
+    expect(spec.VER43?.cantidad).toBe(0);
+    expect(spec.VER39?.unidad).toBe('CALCULAR');
+    // Regresión: sigue sin tubería/mecanismo.
+    expect(bom.filter((i) => i.categoria === 'TUBERÍA')).toHaveLength(0);
+    expect(bom.filter((i) => i.categoria === 'MECANISMO')).toHaveLength(0);
+  });
+
   it('agrupa tubos con mismo largo + spec + color', () => {
     const bom = calcularBOM([row({ color: 'Blanco' }), row({ color: 'Blanco' })]);
     const tubos = bom.filter((i) => i.categoria === 'TUBERÍA');

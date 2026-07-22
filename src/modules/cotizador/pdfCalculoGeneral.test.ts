@@ -59,6 +59,29 @@ function ventRoller(ancho: number, ubic: string): Ventana {
   } as Ventana;
 }
 
+const modeloVertical: ModeloDespiece = {
+  ...modeloRoller,
+  sistema: 'VERTICAL',
+  tipo_rol: 'VERTICAL_LAMAS_89',
+  mecanismo: '',
+  codigos_tubo: '',
+  diametro_tubo_mm: 0,
+  dcto_tubo_cm: 1.8,
+  dcto_tela_cm: 0,
+  suma_peso_cm: 0,
+  dcto_perfiles_cm: 1.7,
+  ancho_max_m: 6,
+};
+
+/** Vertical 1,50 × 1,80 → cabezal 148,2 · varilla 146,5 · 18 carritos · 20 lamas. */
+function ventVertical(): Ventana {
+  const v = ventRoller(1.5, 'LIVING');
+  (v as { categoria: string }).categoria = 'VERTICAL';
+  (v as { producto: string }).producto = 'VERTICAL PVC';
+  v.modelo = modeloVertical;
+  return v;
+}
+
 describe('construirCalculoGeneral', () => {
   it('una fila por cortina con identidad y despiece del mismo motor', () => {
     const data = construirCalculoGeneral([ventRoller(1.745, 'PPAL IZQ')]);
@@ -148,6 +171,41 @@ describe('construirCalculoGeneral', () => {
     ).filas;
     expect(fd.despiece.get('ALTO MESA DE CORTE')).toBe(195);
     expect(fd.despiece.has('ALTO')).toBe(false);
+  });
+
+  it('vertical: bloque propio, sin columna ALTO y con la guía de lamas', () => {
+    const [f] = construirCalculoGeneral([ventVertical()]).filas;
+    expect(f.bloque).toBe('VERTICAL');
+    expect(f.despiece.get('PERFIL CABEZAL')).toBe(148.2);
+    expect(f.despiece.get('VARILLA')).toBe(146.5);
+    expect(f.despiece.get('CARRITOS')).toBe(18);
+    expect(f.despiece.get('LAMAS')).toBe(18); // una por carrito
+    expect(f.despiece.get('REPUESTO')).toBe(2); // tela extra, aparte
+    expect(f.despiece.get('ALTO TELA')).toBe(185);
+    expect(f.despiece.get('ALTO FINAL LAMA')).toBe(172);
+    // La guía de dimensionado muestra el TOTAL a cortar (18 montadas + 2 rep.).
+    expect(f.despiece.get('LAMAS (8,9 × ALTO FINAL)')).toBe('20 × 8,9 × 172');
+    // El ALTO genérico (+25) no aplica: la vertical trae su propio alto de corte.
+    expect(f.despiece.has('ALTO')).toBe(false);
+    expect(f.altoRollerCm).toBe(185); // alto + extraVertical, no + 25
+    // Sin kit de mecanismo (su estructura es cabezal + varilla + carritos).
+    expect(f.codMecanismo).toBe('');
+  });
+
+  it('vertical: el Dimensionado oculta el metal y deja las piezas de tela', () => {
+    const data = construirCalculoGeneral([ventVertical()]);
+    const { bloques } = aplicarVariante(data, VARIANTE_DIMENSIONADO);
+    const labels = bloques[0].columnas.map((c) => c.label);
+    // Aluminio y ferretería: no se dimensionan en la mesa de tela.
+    expect(labels).not.toContain('PERFIL CABEZAL');
+    expect(labels).not.toContain('VARILLA');
+    expect(labels).not.toContain('CARRITOS');
+    // Piezas de tela: sí quedan (lamas montadas + repuesto).
+    expect(labels).toContain('LAMAS');
+    expect(labels).toContain('REPUESTO');
+    expect(labels).toContain('ALTO TELA');
+    expect(labels).toContain('ALTO FINAL LAMA');
+    expect(labels).toContain('LAMAS (8,9 × ALTO FINAL)');
   });
 
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {

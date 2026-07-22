@@ -16,6 +16,7 @@
 // Lógica pura (sin React/Supabase) para poder testearla.
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
+import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 
 export type FilaImportadaFase0 = {
   codInt: string;
@@ -223,13 +224,19 @@ export type OpcionesValidacion = {
 /**
  * Devuelve la lista de campos llave inválidos de una fila (vacía = fila OK).
  * Se usa para pintar en rojo las celdas a corregir a mano tras importar.
+ *
+ * SENT. CORT no aplica a la cortina VERTICAL: el interno/externo describe la
+ * caída del enrollado del roller, y la vertical corre de lado con carritos.
+ * En esas filas el campo no se exige (y la grilla lo muestra como "—").
  */
 export function validarFilaFase0(f: FilaImportadaFase0, opts: OpcionesValidacion): CampoFase0[] {
   const malos: CampoFase0[] = [];
   if (!f.codInt || !opts.codIntValidos.has(f.codInt)) malos.push('codInt');
   if (!f.categoria || !opts.categorias.has(f.categoria)) malos.push('categoria');
   if (!f.direccion || !opts.direcciones.has(f.direccion)) malos.push('direccion');
-  if (!f.sentido || !opts.sentidos.has(f.sentido)) malos.push('sentido');
+  if (!esCategoriaVertical(f.categoria) && (!f.sentido || !opts.sentidos.has(f.sentido))) {
+    malos.push('sentido');
+  }
   if (!(f.ancho > 0)) malos.push('ancho');
   if (!(f.alto > 0)) malos.push('alto');
   return malos;

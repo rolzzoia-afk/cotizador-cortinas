@@ -67,6 +67,7 @@ describe('normalizarParametros', () => {
     expect(PARAMETROS_DEFAULT.extraDuoCm).toBe(30);
     expect(PARAMETROS_DEFAULT.extraMesaDuoCm).toBe(10);
     expect(PARAMETROS_DEFAULT.extraVerticalCm).toBe(5);
+    expect(PARAMETROS_DEFAULT.dctoAltoFinalVerticalCm).toBe(13);
     expect(PARAMETROS_DEFAULT.descAnchoCorteCm).toBe(3.5);
     expect(PARAMETROS_DEFAULT.anchoRolloDefaultM).toBe(2.98);
     expect(PARAMETROS_DEFAULT.anchoRolloPlanCm).toBe(300);

@@ -221,6 +221,53 @@ describe('construirInventario — bloque INSUMOS', () => {
   });
 });
 
+describe('construirInventario — VERTICAL (insumos VER)', () => {
+  const modeloVertical = {
+    sistema: 'VERTICAL',
+    tipo_rol: 'VERTICAL_LAMAS_89',
+    diametro_tubo_mm: 0,
+    dcto_tubo_cm: 1.8,
+    dcto_perfiles_cm: 1.7,
+  };
+  const vVert = (color: string, materialTipo?: string): Ventana =>
+    ({
+      id: 'V', ubicacion: 'ROSSANA G1', producto: 'VERTICAL', categoria: 'VERTICAL', color,
+      modelo: modeloVertical,
+      panos: [{ ancho: 2.12, alto: 2.34, color, materialTipo }],
+    }) as unknown as Ventana;
+
+  it('blanco: PRODUCCIÓN (peso cordón/carrito/peso lama/sujetador/kit/peso cadena) + INSTALACIÓN (bracket) + CALCULAR', () => {
+    const by = Object.fromEntries(construirInventario([vVert('BLANCO')]).insumos.map((i) => [i.codigo, i]));
+    // ancho 2,12 → perfil 210,2 · varilla 208,5 · floor(/8) = 26 carritos; brackets = 4.
+    expect(by.VER37).toMatchObject({ cantidad: 1, grupo: 'PRODUCCION' });
+    expect(by.VER40).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' });
+    expect(by.VER41).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' });
+    expect(by.VER45).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' });
+    expect(by.VER50).toMatchObject({ cantidad: 1, grupo: 'PRODUCCION' });
+    expect(by.VER52).toMatchObject({ cantidad: 1, grupo: 'PRODUCCION' });
+    expect(by.VER38).toMatchObject({ cantidad: 4, grupo: 'INSTALACION' });
+    // Cordón y cadena inferior → "CALCULAR" (cantidad 0 + unidad, se miden en terreno).
+    expect(by.VER43).toMatchObject({ cantidad: 0, unidad: 'CALCULAR', grupo: 'PRODUCCION' });
+    expect(by.VER39).toMatchObject({ cantidad: 0, unidad: 'CALCULAR', grupo: 'INSTALACION' });
+  });
+
+  it('negro: cordón VER59, sujetador VER56, peso cadena VER64, cadena inferior VER58', () => {
+    const by = Object.fromEntries(construirInventario([vVert('NEGRO')]).insumos.map((i) => [i.codigo, i]));
+    expect(by.VER59?.unidad).toBe('CALCULAR');
+    expect(by.VER56?.cantidad).toBe(26);
+    expect(by.VER64?.cantidad).toBe(1);
+    expect(by.VER58?.unidad).toBe('CALCULAR');
+    // No aparecen las contrapartes blancas.
+    expect(by.VER43).toBeUndefined();
+    expect(by.VER45).toBeUndefined();
+  });
+
+  it('tarugos por bracket según material (vulcanita → TAR01 × 4) en INSUMOS', () => {
+    const by = Object.fromEntries(construirInventario([vVert('BLANCO', 'VULCANITA')]).insumos.map((i) => [i.codigo, i]));
+    expect(by.TAR01).toMatchObject({ cantidad: 4, grupo: 'INSUMOS' });
+  });
+});
+
 // Cenefa ovalada: el motor y el mecanismo van a PRODUCCIÓN; el resto del kit de
 // motor (control/cable/enchufe) sigue en INSTALACIÓN.
 describe('construirInventario — clasificación por cenefa ovalada', () => {

@@ -48,8 +48,10 @@ import {
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
   MEC_KIT_OVALADA_POR_COLOR,
+  esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { calculoVertical } from '@/modules/descuentos/despiece';
 import {
   COD_HUB_DOMOTICA,
   MANILLAS,
@@ -60,6 +62,7 @@ import {
   esCodigoMotor,
   insumosDePano,
   insumosMotorDePano,
+  insumosVerticalDePano,
   panoLlevaDomotica,
   tapaCenefaCuadrada,
 } from './insumosCortina';
@@ -278,6 +281,26 @@ export function consolidarInsumos(
       })) {
         bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
       }
+      // VERTICAL (lamas): insumos VER propios (carritos, cordón, sujetador, kit,
+      // peso de cadena, bracket, cadena inferior). Los tarugos ya salieron por
+      // `insumosDePano` (código TAR → INSUMOS). Los "CALCULAR" (cordón, cadena
+      // inferior) se emiten con cantidad 0 + unidad "CALCULAR": no llevan número.
+      if (esCategoriaVertical(v.categoria) && modelo) {
+        const carritos = calculoVertical(modelo, anchoM * 100, 0).carritos;
+        for (const it of insumosVerticalDePano({
+          colorAcc: colorAccesoriosDePano(p, v.color),
+          anchoM,
+          carritos,
+        })) {
+          bump(
+            it.codigo,
+            `[${it.codigo}] ${it.descripcion}`,
+            it.calcular ? 0 : it.cantidad,
+            it.grupo,
+            it.calcular ? 'CALCULAR' : undefined,
+          );
+        }
+      }
       // TUBO E78 + cenefa ovalada: armadura mixta que reemplaza al mecanismo
       // completo (por eso arriba no se lista el kit) — tapas del kit ovalada de
       // bodega (39 blanco / 38 negro / 12 gris, según color de accesorios) +
@@ -458,7 +481,11 @@ function celda(
 
   let size = opts.size ?? 11;
   doc.setFontSize(size);
-  const minUnaLinea = wrap ? 8 : 4;
+  // 7 pt como piso de UNA línea (antes 8): las columnas ya están dimensionadas
+  // para que todo entre a 8 pt, así que este medio punto extra es solo la red
+  // para una descripción excepcionalmente larga — cortar en dos líneas ahora
+  // desbordaría la fila, que es más baja.
+  const minUnaLinea = wrap ? 7 : 4;
   while (size > minUnaLinea && doc.getTextWidth(txt) > maxW) {
     size -= 0.3;
     doc.setFontSize(size);
@@ -506,7 +533,9 @@ function tabla(
 ): number {
   const headFill = opts.headFill ?? C_DARK;
   const rowH = opts.rowH ?? 6;
-  const headH = opts.headH ?? 11;
+  // Cabecera compacta: el rótulo va en 8,5 pt (≈2,1 mm de altura de mayúscula),
+  // así que 7 mm dejan ~2,4 mm de aire arriba y abajo.
+  const headH = opts.headH ?? 7;
   const totalW = cols.reduce((a, c) => a + c.w, 0);
 
   const cabecera = (yy: number): number => {
@@ -577,6 +606,12 @@ export function generarPdfInventario(
   const W = doc.internal.pageSize.getWidth();
   const mg = 8;
   const usable = W - mg * 2;
+  // Ancho de las TABLAS (los títulos de bloque usan el mismo para no desalinearse).
+  // Dimensionado para que NINGUNA celda parta en dos líneas: la descripción más
+  // larga del catálogo ([PCA04] PESO PORTA CADENA TRANSPARENTE / CUADRADA 7.5 CM)
+  // mide 92,8 mm a 8 pt, así que DESCRIPCIÓN necesita ≥ 95 mm. Con una sola línea
+  // por fila el alto baja a 6 mm, que es lo que realmente comprime la hoja.
+  const tablaW = Math.min(usable, 261);
 
   // ── Encabezado (se repite en cada página) ──────────────────────────
   let pagina = 0;
@@ -622,24 +657,28 @@ export function generarPdfInventario(
   // ── INSUMOS: tres tablas (INSUMOS / PRODUCCIÓN / INSTALACIÓN) consolidadas.
   // La antigua tabla "detalle por cortina" se eliminó (pedido #20). Cada tabla
   // se imprime solo si tiene filas; el título salta con su cabecera y ≥1 fila.
-  const titH = 9;
+  const titH = 7;
   const bloqueInsumos = (titulo: string, items: InsumoConsolidado[]) => {
     if (items.length === 0) return;
-    y += 7;
-    if (y + titH + 22 > BOTTOM) y = salto.onBreak();
+    y += 3;
+    if (y + titH + 13 > BOTTOM) y = salto.onBreak();
     doc.setFillColor(C_BLUE[0], C_BLUE[1], C_BLUE[2]);
-    doc.rect(mg, y, usable, titH, 'F');
+    doc.rect(mg, y, tablaW, titH, 'F');
     doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text(titulo, mg + 2, y + titH / 2 + 2);
     doc.setFontSize(8.5);
-    doc.text('ENTREGADO POR:', mg + usable * 0.5, y + titH / 2 + 2);
+    doc.text('ENTREGADO POR:', mg + tablaW * 0.5, y + titH / 2 + 2);
     y += titH;
 
-    const w2 = [8, 70, 20, 20, 18, 28, 28, 28, 30];
+    // Anchos en mm reales (suman tablaW, así que sc2 = 1). Cada uno está tomado
+    // del texto más largo que puede recibir a 8 pt: DESCRIPCIÓN 92,8 + margen;
+    // CANTIDAD/TOTAL 14,5 ("4 PIVOTES") + margen; ADICIONAL por su cabecera
+    // (16,1 a 8,5 pt). El resto son casillas de firma.
+    const w2 = [8, 96, 17, 18, 17, 24, 24, 21, 36];
     const sum2 = w2.reduce((a, b) => a + b, 0);
-    const sc2 = usable / sum2;
+    const sc2 = tablaW / sum2;
     const cols2: Col[] = [
       { label: 'ID', align: 'c' },
       { label: 'DESCRIPCIÓN' },
@@ -651,8 +690,10 @@ export function generarPdfInventario(
       { label: 'FECHA', align: 'c' },
       { label: 'PERSONA QUE RECIBE' },
     ].map((c, i) => ({ ...c, w: w2[i] * sc2 }) as Col);
+    // Con cantidad 0 + unidad se muestra SOLO la unidad ("CALCULAR": el cordón y
+    // la cadena inferior de la vertical se miden en terreno, sin número fijo).
     const cantTxt = (m: InsumoConsolidado) =>
-      m.unidad ? `${m.cantidad} ${m.unidad}` : String(m.cantidad);
+      m.unidad ? (m.cantidad === 0 ? m.unidad : `${m.cantidad} ${m.unidad}`) : String(m.cantidad);
     const rows2 = items.map((m, i) => [
       String(i + 1),
       m.descripcion,
@@ -664,28 +705,30 @@ export function generarPdfInventario(
       '',
       '',
     ]);
-    y = tabla(doc, mg, y, cols2, rows2, { rowH: 11.5, greenCol: 4, salto });
+    y = tabla(doc, mg, y, cols2, rows2, { rowH: 6, greenCol: 4, salto });
   };
   bloqueInsumos('INSUMOS', data.insumos.filter((m) => m.grupo === 'INSUMOS'));
   bloqueInsumos('INSUMOS DE PRODUCCIÓN', data.insumos.filter((m) => m.grupo === 'PRODUCCION'));
   bloqueInsumos('INSUMOS DE INSTALACIÓN', data.insumos.filter((m) => m.grupo === 'INSTALACION'));
 
   // ── BLOQUE 3: ETIQUETAS ROLZZO ─────────────────────────────────────
-  y += 7;
-  if (y + titH + 22 > BOTTOM) y = salto.onBreak();
+  y += 3;
+  if (y + titH + 13 > BOTTOM) y = salto.onBreak();
   doc.setFillColor(C_GREEN[0], C_GREEN[1], C_GREEN[2]);
-  doc.rect(mg, y, usable, titH, 'F');
+  doc.rect(mg, y, tablaW, titH, 'F');
   doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
   doc.text('ETIQUETAS ROLZZO', mg + 2, y + titH / 2 + 2);
   doc.setFontSize(8.5);
-  doc.text('ENTREGADO', mg + usable * 0.5, y + titH / 2 + 2);
+  doc.text('ENTREGADO', mg + tablaW * 0.5, y + titH / 2 + 2);
   y += titH;
 
-  const w3 = [16, 40, 16, 24, 24, 60];
+  // DESCRIPCIÓN alineada con la de las tablas de insumos (96 mm): la etiqueta
+  // ("ETIQUETAS DE CORTINAS BLANCAS (ROLZZO)", 63,5 mm) entra holgada en UNA línea.
+  const w3 = [18, 96, 17, 34, 34, 62];
   const sum3 = w3.reduce((a, b) => a + b, 0);
-  const sc3 = usable / sum3;
+  const sc3 = tablaW / sum3;
   const cols3: Col[] = [
     { label: 'COD', align: 'c' },
     { label: 'DESCRIPCIÓN' },
@@ -702,31 +745,33 @@ export function generarPdfInventario(
     '',
     '',
   ]);
-  y = tabla(doc, mg, y, cols3, rows3, { rowH: 11.5, greenCol: 2, salto });
+  y = tabla(doc, mg, y, cols3, rows3, { rowH: 6, greenCol: 2, salto });
 
   // ── BLOQUE 3: NOTAS DE TERRENO (solo si alguien anotó algo en Fase 2) ─
   if (data.notas.length > 0) {
-    y += 7;
-    if (y + titH + 22 > BOTTOM) y = salto.onBreak();
+    y += 3;
+    if (y + titH + 16 > BOTTOM) y = salto.onBreak();
     doc.setFillColor(C_DARK[0], C_DARK[1], C_DARK[2]);
-    doc.rect(mg, y, usable, titH, 'F');
+    doc.rect(mg, y, tablaW, titH, 'F');
     doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
     doc.text('NOTAS DE TERRENO', mg + 2, y + titH / 2 + 2);
     doc.setFontSize(8.5);
-    doc.text('ANOTADO EN FASE 2', mg + usable * 0.5, y + titH / 2 + 2);
+    doc.text('ANOTADO EN FASE 2', mg + tablaW * 0.5, y + titH / 2 + 2);
     y += titH;
 
-    const w4 = [55, 226];
+    const w4 = [55, 206];
     const sum4 = w4.reduce((a, b) => a + b, 0);
-    const sc4 = usable / sum4;
+    const sc4 = tablaW / sum4;
     const cols4: Col[] = [
       { label: 'UBICACIÓN' },
       { label: 'NOTAS' },
     ].map((c, i) => ({ ...c, w: w4[i] * sc4 }) as Col);
     const rows4 = data.notas.map((n) => [n.ubic, n.notas]);
-    y = tabla(doc, mg, y, cols4, rows4, { rowH: 11.5, salto });
+    // NOTAS conserva la fila alta: es texto libre del vendedor, sin largo acotado,
+    // así que es la única tabla donde el corte en dos líneas es esperable.
+    y = tabla(doc, mg, y, cols4, rows4, { rowH: 8.5, salto });
   }
 
   doc.save(`Inventario_${meta.ot}.pdf`);

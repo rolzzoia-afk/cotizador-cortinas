@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { COLUMNAS, generarOrdenesOptimizador } from './excel-ordenes';
 import type { ModeloDespiece } from './tipos';
 import type { Ventana, Pano } from '@/modules/cotizador/types';
+import { PARAMETROS_CORTE_DEFAULT } from '@/modules/cotizador/parametrosCorte';
 
 // Índice de columna por NOMBRE (robusto a que se agreguen/reordenen columnas).
 const col = (n: string) => (COLUMNAS as readonly string[]).indexOf(n);
@@ -491,5 +492,78 @@ describe('generarOrdenesOptimizador — PLETINA (velcro)', () => {
     expect(aoa[1][idxAltoTela]).toBe(370);
     expect(aoa[1][idxTUBERIA]).toBe('VELCRO');
     expect(aoa[1][idxPletina]).toBe(''); // el dúo NO llena la columna PLETINA
+  });
+});
+
+describe('generarOrdenesOptimizador — VERTICAL (lamas)', () => {
+  const vertical: ModeloDespiece = {
+    sistema: 'VERTICAL',
+    tipo_rol: 'VERTICAL_LAMAS_89',
+    mecanismo: '',
+    codigos_tubo: '',
+    diametro_tubo_mm: 0,
+    dcto_tubo_cm: 1.8,
+    dcto_tela_cm: 0,
+    suma_peso_cm: 0,
+    dcto_cenefa_cm: 0,
+    dcto_cenefa_del_cm: 0,
+    dcto_cenefa_tra_cm: 0,
+    dcto_perfiles_cm: 1.7,
+    peso_interno_duo_cm: 0,
+    peso_u_duo_cm: 0,
+    ancho_max_m: 6,
+    activo: true,
+    notas: '',
+  };
+  const ventVertical = (): Ventana =>
+    ({
+      id: 'vv',
+      ubicacion: 'LIVING',
+      codInt: 'SC 02',
+      producto: 'VERTICAL PVC',
+      tipo: '',
+      color: 'BLANCO',
+      alto: 1.8,
+      precio: 0,
+      cantidad: 1,
+      categoria: 'VERTICAL',
+      grupoId: null,
+      grupoOrden: 0,
+      modelo: vertical,
+      panos: [{ ancho: 1.5, color: 'BLANCO' } as Pano],
+    }) as Ventana;
+
+  const idxPerfilCabezal = col('PERFIL CABEZAL');
+  const idxVarilla = col('VARILLA');
+  const idxAltoTelaV = col('ALTO TELA');
+
+  it('1,50×1,80 → SOLO cabezal 148,2 + varilla 146,5 (el resto no va al Excel de estructura)', () => {
+    const { aoa, advertencias } = generarOrdenesOptimizador('X', [ventVertical()]);
+    expect(aoa[1][idxPerfilCabezal]).toBe(148.2);
+    expect(aoa[1][idxVarilla]).toBe(146.5);
+    // El optimizador de ESTRUCTURA solo corta perfil + varilla: carritos, lamas,
+    // repuesto y alto final NO son columnas de este Excel (viven en el Cálculo
+    // General). La tela tampoco: ALTO TELA existe (pletina/beeblack) pero va vacío.
+    expect(col('CARRITOS')).toBe(-1);
+    expect(col('LAMAS')).toBe(-1);
+    expect(col('REPUESTO')).toBe(-1);
+    expect(col('ALTO FINAL LAMA')).toBe(-1);
+    expect(aoa[1][idxAltoTelaV]).toBe('');
+    expect(aoa[1][idxTUBERIA]).toBe('VERTICAL');
+    expect(aoa[1][idxTUBO]).toBe('');
+    expect(aoa[1][idxPESO]).toBe('');
+    // Ya tiene modelo de fabricación: no debe advertir.
+    expect(advertencias).toHaveLength(0);
+  });
+
+  it('los parámetros de corte de la tela NO afectan el Excel de estructura', () => {
+    const base = generarOrdenesOptimizador('X', [ventVertical()]);
+    const conParams = generarOrdenesOptimizador('X', [ventVertical()], {
+      params: { ...PARAMETROS_CORTE_DEFAULT, extraVerticalCm: 6, dctoAltoFinalVerticalCm: 12 },
+    });
+    // Perfil/varilla no dependen de los cm de tela; ALTO TELA sigue vacío.
+    expect(conParams.aoa[1][idxPerfilCabezal]).toBe(base.aoa[1][idxPerfilCabezal]);
+    expect(conParams.aoa[1][idxVarilla]).toBe(base.aoa[1][idxVarilla]);
+    expect(conParams.aoa[1][idxAltoTelaV]).toBe('');
   });
 });

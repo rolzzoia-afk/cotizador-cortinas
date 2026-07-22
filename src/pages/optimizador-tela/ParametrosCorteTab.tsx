@@ -61,7 +61,13 @@ const CAMPOS: CampoDef[] = [
   {
     key: 'extraVerticalCm',
     label: 'Extra vertical (cm)',
-    hint: 'Reserva extra de alto para verticales en el plan de corte.',
+    hint: 'Vertical: alto de corte de la tela = alto real + este valor. También es la reserva de alto en el plan de corte.',
+    grupo: 'corte',
+  },
+  {
+    key: 'dctoAltoFinalVerticalCm',
+    label: 'Descuento alto final vertical (cm)',
+    hint: 'Vertical: alto final de la lama terminada = alto de corte − este valor.',
     grupo: 'corte',
   },
   {

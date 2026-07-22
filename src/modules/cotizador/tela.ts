@@ -12,7 +12,7 @@ import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { telaDePano } from './telaPano';
-import { esCategoriaPletina } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -90,6 +90,9 @@ export type OptimizerRow = {
   altoCorte: number;
   /** ¿Cortina dúo (día/noche)? La tela se duplica. */
   isDuo: boolean;
+  /** ¿Cortina VERTICAL? Se corta como un roller (ancho real × alto+extraVertical),
+   *  pero su corte NO lleva el descuento de limpieza de borde (−3,5). */
+  esVertical?: boolean;
   m2: number;
   anchoRollo: number;
   anchoPano: number;
@@ -127,12 +130,21 @@ function piezasDespiece(
   p: Pano,
   anchoCm: number,
   tuberiaCod: string,
+  params: ParametrosCorte,
 ): PiezaEtiqueta[] {
   const modelo = (v.modelo as ModeloDespiece | null | undefined) ?? null;
   if (!modelo || !(anchoCm > 0)) return [];
   const ctx = contextoDespieceDesdePano(
-    { categoria: v.categoria as string | undefined, sentido: v.sentido as string | null | undefined },
+    {
+      categoria: v.categoria as string | undefined,
+      sentido: v.sentido as string | null | undefined,
+      alto: v.alto as number | string | undefined,
+    },
     p as Parameters<typeof contextoDespieceDesdePano>[1],
+    {
+      verticalExtraAltoCm: params.extraVerticalCm,
+      verticalDctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
+    },
   );
   const color = colorAccesoriosDePano(p, v.color as string | undefined);
   return calcularDespiece(modelo, anchoCm, ctx).cortes.map((c) => ({
@@ -173,13 +185,20 @@ export function buildOptimizerRows(
       // (validado con OT 266-16 dúo); editables en Parámetros de corte.
       // PLETINA (velcro): la tela se corta al ALTO EXACTO (roller = alto;
       // dúo = 2×alto), SIN los extras de roller/dúo normales (Excel manual).
+      // VERTICAL: se corta COMO UN ROLLER (la tela NO se invierte). La pieza es
+      // el ancho real × (alto + extraVertical), y de ahí se dimensionan después
+      // las lamas de 8,9 cm. La RESERVA sigue siendo la del roller (alto + 25),
+      // igual que la planilla manual (OT 2923: alto 2,34 → corte 2,39, real 2,59).
       const esPletina = esCategoriaPletina(v.categoria);
+      const esVertical = esCategoriaVertical(v.categoria);
       const altoReal = esPletina
         ? (isDuo ? altoM * 2 : altoM)
         : (isDuo ? altoExtra * 2 : altoExtra);
-      const altoCorte = esPletina
-        ? (isDuo ? altoM * 2 : altoM)
-        : (isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra);
+      const altoCorte = esVertical
+        ? altoM + params.extraVerticalCm / 100
+        : esPletina
+          ? (isDuo ? altoM * 2 : altoM)
+          : (isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra);
       const m2 = parseFloat((altoReal * anchoM).toFixed(4));
       const anchoRollo = obtenerAnchoRollo(tela.codInt, catalogo, params.anchoRolloDefaultM);
       const cod = derivarCod(tela.producto || '');
@@ -206,6 +225,7 @@ export function buildOptimizerRows(
         altoReal,
         altoCorte,
         isDuo,
+        esVertical,
         m2,
         anchoRollo,
         anchoPano: anchoM,
@@ -218,7 +238,7 @@ export function buildOptimizerRows(
         tuberiaCod,
         sentido: String(v.sentido ?? ''),
         direccion: String(v.direccion ?? ''),
-        piezas: piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod),
+        piezas: piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params),
       });
     });
   }
@@ -346,7 +366,11 @@ export function calcularPanos(
   let idx = 0;
   for (const r of rows) {
     idx++;
-    const anchoCorteCm = parseFloat((r.anchoCm - params.descAnchoCorteCm).toFixed(1));
+    // VERTICAL: la tela se corta al ancho REAL, sin el descuento de limpieza de
+    // borde (la lama sale del paño completo; planilla manual OT 2923).
+    const anchoCorteCm = r.esVertical
+      ? parseFloat(r.anchoCm.toFixed(1))
+      : parseFloat((r.anchoCm - params.descAnchoCorteCm).toFixed(1));
     const altoCorteCm = parseFloat((r.altoCorte * 100).toFixed(1)); // dúo: 2×alto+30
     const m2Val = (r.anchoCm / 100) * (altoCorteCm / 100);
     totalM2 += m2Val;

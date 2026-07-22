@@ -26,7 +26,7 @@ import {
 } from './adicionales-cenefa';
 import { colorPerfilFilaExcel } from './adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from './peso-oscuridad';
-import { esCategoriaPletina } from './reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical } from './reglas-mecanismo';
 import {
   calcularDespiece,
   contextoDespieceDesdePano,
@@ -34,6 +34,7 @@ import {
   MODELO_DESPIECE_STUB,
 } from './despiece';
 import { esCategoriaBeeblack } from './reglas-beeblack';
+import type { ParametrosCorte } from '@/modules/cotizador/parametrosCorte';
 
 /** Columna del Excel con el color/código del peso inferior de oscuridad. */
 const COLUMNA_COLOR_PESO_OSCURIDAD = 'COLOR PESO INF. SOFT LIGHT';
@@ -43,6 +44,8 @@ import { tuberiaCodigoCorto } from './reglas-tuberia';
 
 export type OpcionesOrdenesOptimizador = {
   adicionalesFase0?: AdicionalFase0Persistido[];
+  /** Parámetros de corte de la empresa (hoy los usa el despiece vertical). */
+  params?: ParametrosCorte;
 };
 
 export const COLUMNAS = [
@@ -79,6 +82,12 @@ export const COLUMNAS = [
   'ALTO MESA DE CORTE',
   'ALTO TELA',
   'TOTAL LAMAS CORTE',
+  // ── VERTICAL (lamas): al optimizador de ESTRUCTURA solo van los dos cortes de
+  //    aluminio (perfil cabezal + varilla). Carritos/lamas/repuesto/alto de la
+  //    tela son cantidades/medidas de referencia — viven en el Cálculo General,
+  //    NO en este Excel (el optimizador de estructura las ignora).
+  'PERFIL CABEZAL',
+  'VARILLA',
 ] as const;
 
 /** Extra de la pletina DÚO sobre el alto para la mesa de corte (cm). */
@@ -203,13 +212,20 @@ export function generarOrdenesOptimizador(
       };
       const puedeDespiece = anchoCm > 0 && (v.modelo || esBeeblack);
       if (puedeDespiece) {
-        const ctx = contextoDespieceDesdePano(v, p);
+        const ctx = contextoDespieceDesdePano(v, p, {
+          verticalExtraAltoCm: opts?.params?.extraVerticalCm,
+          verticalDctoAltoFinalCm: opts?.params?.dctoAltoFinalVerticalCm,
+        });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
+        // Vertical: al Excel de órdenes (optimizador de estructura) solo van los
+        // cortes de aluminio; el resto del despiece (carritos/lamas/alto de tela)
+        // es referencia y no debe ensuciar el archivo.
+        const esVert = esCategoriaVertical(v.categoria);
         for (const c of d.cortes) {
-          if (c.columnaExcel && c.columnaExcel !== 'CENEFA OVALADA') {
-            fila[c.columnaExcel] = c.medidaCm;
-          }
+          if (!c.columnaExcel || c.columnaExcel === 'CENEFA OVALADA') continue;
+          if (esVert && c.columnaExcel !== 'PERFIL CABEZAL' && c.columnaExcel !== 'VARILLA') continue;
+          fila[c.columnaExcel] = c.medidaCm;
         }
         // Pletina (velcro): altos exactos como el Excel manual. Roller → ALTO
         // TELA = alto; dúo → ALTO TELA = 2×alto y ALTO MESA DE CORTE = alto + 10.
@@ -298,11 +314,17 @@ export function descargarExcelOrdenes(
 ): ResultadoOrdenes {
   const res = generarOrdenesOptimizador(numeroOT, ventanas, opts);
   const ws = XLSX.utils.aoa_to_sheet(res.aoa);
+  // Un ancho por columna, en el MISMO orden que COLUMNAS (posicional).
   ws['!cols'] = [
     { wch: 7 }, { wch: 26 }, { wch: 10 }, { wch: 16 }, { wch: 18 },
     { wch: 12 }, { wch: 9 }, { wch: 9 }, { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 14 },
     { wch: 10 }, { wch: 9 }, { wch: 11 }, { wch: 14 }, { wch: 20 }, { wch: 9 },
     { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 12 },
+    // Beeblack (perfiles / manillas / tela / lamas)
+    { wch: 12 }, { wch: 22 }, { wch: 22 }, { wch: 24 }, { wch: 24 }, { wch: 17 },
+    { wch: 17 }, { wch: 11 }, { wch: 18 }, { wch: 10 }, { wch: 17 },
+    // Vertical (solo perfil cabezal + varilla)
+    { wch: 15 }, { wch: 9 },
   ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'ORDENES');

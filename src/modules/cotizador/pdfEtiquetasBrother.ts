@@ -38,6 +38,10 @@ const QR_ROLZZO =
 // sobrante blanco: en el driver se imprime con papel "62mm" y Longitud 51.
 const ANCHO = 62;
 const ALTO_PAGINA = 100;
+// La estructura VERTICAL tiene 3 secciones de datos (PRODUCCIÓN / ARMADO /
+// ESTRUCTURA) en vez del bloque único del roller → su etiqueta es más larga
+// (medida del .lbx oficial: 105,9 mm).
+const ALTO_PAGINA_VERTICAL = 106;
 const ALTO_PANO = 51; // bloques contiguos, 3 mm arriba y 0 abajo (offset del corte)
 // Alto real del diseño de cenefa (medido del .lbx): bajo esta línea se recorta.
 const FIN_CENEFA = 54.9;
@@ -70,17 +74,29 @@ export function tipoCortinaEtiqueta(producto?: string, tipo?: string): string {
   return (p || tipo || '—').toUpperCase();
 }
 
-/** Sistema del encabezado de la etiqueta de estructura: PLETINA / DUO / DUAL / familia. */
+/** Sistema del encabezado de la etiqueta de estructura: VERTICAL / PLETINA / DUO / DUAL / familia. */
 export function sistemaEtiquetaEstructura(
   producto?: string,
   tipo?: string,
   dual?: boolean,
   esPletina?: boolean,
+  esVertical?: boolean,
 ): string {
+  if (esVertical) return 'VERTICAL';
   if (esPletina) return (producto || '').toUpperCase().includes('DUO') ? 'PLETINA DUO' : 'PLETINA V';
   if ((producto || '').toUpperCase().includes('DUO')) return 'DUO';
   if (dual) return 'DUAL';
   return tipoCortinaEtiqueta(producto, tipo);
+}
+
+/**
+ * Código del perfil cabezal vertical por color de accesorios: negro → VER61,
+ * cualquier otro color (blanco, gris) → VER62. No hay vertical gris catalogada;
+ * misma regla que `insumosVerticalDePano` y el optimizador de estructura.
+ */
+export function codigoPerfilVertical(colorAcc?: string): string {
+  const c = (colorAcc || '').toUpperCase().trim();
+  return c === 'NEG' || c === 'NEGRO' ? 'VER61' : 'VER62';
 }
 
 /** Texto del orden de telas de una dual/dúo desde ordenDobleOpcion. */
@@ -206,6 +222,153 @@ const tapaLabels: Record<string, string> = {
   MURO_MURO: 'MURO A MURO',
 };
 
+// ── ETIQUETA ESTRUCTURA/ARMADO VERTICAL (62×106) ─────────────────────
+// Réplica de docs/referencias/ETIQ.ESTRUCTURA-ARMADO (SOFTWARE) - VERTICALES.lbx.
+// La vertical no lleva tubo ni peso roller: su estructura es perfil cabezal +
+// varilla + carritos, dividida en 4 secciones (PRODUCCIÓN / ARMADO / ESTRUCTURA
+// / TERRENO). Todo el texto va centrado o en pares rótulo-izq / valor-der.
+function dibujarEstructuraVertical(
+  doc: jsPDF,
+  row: OptimizerRow,
+  n: number,
+  total: number,
+  meta: MetaPDF,
+  catalogo: CatalogoProductos,
+) {
+  const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
+  const anchoCm = row.anchoCm || 0;
+  const altoCm = row.altoCm || 0;
+  const colorAcc = colorPesoNormalizado(p.colorMecanismo || p.color) || '—';
+
+  const pzCabezal = pieza(row, 'PERFIL CABEZAL');
+  const pzVarilla = pieza(row, 'VARILLA');
+  const pzCarritos = pieza(row, 'CARRITOS');
+  const pzLamas = pieza(row, 'LAMAS');
+  const pzAltoFinal = pieza(row, 'ALTO FINAL LAMA');
+  // Carritos = peso de lama = sujetador (1 por carrito). Las LAMAS montadas son
+  // esas mismas (el repuesto de tela NO se cuenta acá, decisión 2026-07-22).
+  const carritos = pzCarritos ? String(pzCarritos.medidaCm) : 'N/A';
+
+  // Barra de sección negra con título centrado en blanco.
+  const barra = (y: number, h: number, titulo: string, size: number) => {
+    doc.setFillColor(...NEGRO);
+    doc.rect(1.325, y, 58.75, h, 'F');
+    txt(doc, titulo, 30.7, y + h * 0.7, size, { color: BLANCO, align: 'center', hScale: 1 });
+  };
+  // Fila de 2 celdas con borde: rótulo a la izquierda, valor a la derecha. Las
+  // celdas quedan DENTRO de las barras (izq 1,5→30,4 · der 30,4→59,9), igual que
+  // el roller — antes la derecha se pasaba a 60,4 y se salía de la barra.
+  const fila = (y: number, izqL: string, izqV: string, derL: string, derV: string) => {
+    const h = 5.2;
+    const by = y + 3.3;
+    doc.setDrawColor(...NEGRO);
+    doc.setLineWidth(0.3);
+    doc.rect(1.5, y, 28.9, h, 'S');
+    doc.rect(30.4, y, 29.5, h, 'S');
+    txt(doc, izqL, 2.9, by, 7.5, { hScale: 0.82 });
+    txt(doc, izqV, 29.3, by, 8.5, { align: 'right', hScale: 0.85 });
+    txt(doc, derL, 31.4, by, 7.5, { hScale: 0.82 });
+    txt(doc, derV, 58.9, by, 8.5, { align: 'right', hScale: 0.85 });
+  };
+
+  // ── Encabezado negro: VERTICAL + Cortina n/N + [tipoTela] + QR ──
+  // "VERTICAL" (8 letras) mide 33,7 mm a 19,2 pt y se comía el chip: se condensa
+  // a ~26 mm (17 pt · 0,88) para que el [tipoTela] entre en el hueco antes del QR.
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 3, 58.75, 22.3, 'F');
+  txt(doc, 'VERTICAL', 3.7, 12.4, 17, { color: BLANCO, max: 12, hScale: 0.88 });
+  txt(doc, `Cortina ${n}/${total}`, 3.7, 17.9, 9.5, { color: BLANCO, hScale: 1.02 });
+  const chipTela = String(p.tipoTela || '').toUpperCase().replace(/^SCR$/, 'SC');
+  if (chipTela) txt(doc, `[${chipTela}]`, 31.3, 11.4, 9.5, { color: BLANCO, hScale: 1 });
+  qr(doc, 41.7, 4.4, 17, true);
+
+  // ── Ubicación + OT + cliente ──
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 25.3, 58.4, 13.2, 'S');
+  txt(doc, 'UBICACIÓN:', 2.9, 28.7, 6, { bold: false, hScale: 0.83 });
+  const ubic = (row.ubicacion || '—').toUpperCase();
+  txt(doc, ubic, 2.4, 35, ubic.length > 9 ? 11 : 19.3, { max: 18, hScale: ubic.length > 9 ? 1 : 1.03 });
+  txt(doc, String(meta.cliente || '').toUpperCase(), 58.3, 28.7, 6, {
+    bold: false,
+    align: 'right',
+    max: 26,
+    hScale: 0.83,
+  });
+  txt(doc, String(meta.ot), 58.3, 35, 19.3, { align: 'right', hScale: 1.03 });
+
+  // ── INFORMACIÓN DE PRODUCCIÓN ──
+  barra(38.3, 3.7, 'INFORMACIÓN DE PRODUCCIÓN', 8);
+  fila(
+    41.9,
+    'CANT.LAMAS:', pzLamas ? String(pzLamas.medidaCm) : carritos,
+    'ALTO DE LAMA:', pzAltoFinal ? fmtMedidaCm(pzAltoFinal.medidaCm) : 'N/A',
+  );
+  fila(47.1, 'CANT.PESO LAMA:', carritos, 'CANT.SUJETADOR:', carritos);
+
+  // ── INFORMACIÓN DE ARMADO-VERTICALES ──
+  barra(52.2, 3.6, 'INFORMACIÓN DE ARMADO-VERTICALES', 7);
+  fila(55.9, 'CANT.CARRITOS:', carritos, 'PESO.CORDON:', '1');
+  fila(61, 'KIT.VERTICAL:', '1', 'PESO.CADENA:', '1');
+
+  // ── INFORMACIÓN DE ESTRUCTURA ──
+  barra(66.1, 3.6, 'INFORMACIÓN DE ESTRUCTURA', 7);
+  fila(
+    69.7,
+    `PERFIL [${codigoPerfilVertical(colorAcc)}]:`, pzCabezal ? fmtMedidaCm(pzCabezal.medidaCm) : 'N/A',
+    'VARILLA [VER63]:', pzVarilla ? fmtMedidaCm(pzVarilla.medidaCm) : 'N/A',
+  );
+
+  // ── INFORMACIÓN TERRENO ──
+  barra(74.9, 5.2, 'INFORMACIÓN TERRENO', 9.5);
+
+  // Caja tela (identidad): codInt grande + descripción. Las dos cajas comparten
+  // el divisor en x=30,4 (igual que las filas de arriba) y quedan dentro de las
+  // barras (izq 1,5→30,4 · der 30,4→59,9).
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 80.1, 28.9, 18.7, 'S');
+  const codInt = row.codInt || '—';
+  txt(doc, codInt, 15.95, 90.5, codInt.length > 6 ? 15 : 23.7, {
+    align: 'center',
+    max: 10,
+    hScale: codInt.length > 6 ? 1 : 0.8,
+  });
+  const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
+  if (telaDesc) txt(doc, telaDesc, 15.95, 94.5, 4.8, { bold: false, align: 'center', max: 26 });
+
+  // Caja terreno: caída / cadena / accesorios + franja accionamiento
+  doc.rect(30.4, 80.1, 29.5, 13.3, 'S');
+  const caida = String(p.armado || row.sentido || '—').toUpperCase();
+  // Lado de accionamiento: en la vertical lo define el radio "Cierre" (cierreVert)
+  // de Fase 2; sin él, el lado de cadena de la fila (como el roller).
+  const ladoCad = String(p.cierreVert || '').trim()
+    ? String(p.cierreVert).toUpperCase()
+    : ladoCadenaEtiqueta(row.direccion);
+  txt(doc, `CAIDA: ${caida}`, 31.9, 83.4, 7.5, { max: 22, hScale: 0.8 });
+  txt(doc, `CADENA: ${ladoCad}`, 31.9, 87.6, 7.5, { max: 22, hScale: 0.8 });
+  txt(doc, `ACCESORIOS: ${colorAcc}`, 31.9, 91.8, 7.5, { max: 22, hScale: 0.8 });
+  doc.setFillColor(...NEGRO);
+  doc.rect(30.4, 93.4, 29.5, 5.4, 'F');
+  const codCad = String(p.codCadena || '').toUpperCase();
+  txt(doc, codCad ? `ACCIONAMIENTO: [${codCad}]` : 'ACCIONAMIENTO:', 31.5, 96.7, 7, {
+    bold: false,
+    color: BLANCO,
+    max: 30,
+    hScale: 0.82,
+  });
+  const detalle = textoAccionamiento(p);
+  if (detalle) txt(doc, detalle, 31.5, 98.4, 4, { color: BLANCO, max: 34 });
+
+  // ── Barra DIMENSIONADO final: ANCHO × ALTO terminados ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 98.8, 58.75, 5.2, 'F');
+  txt(doc, 'ANCHO:', 3.8, 102.3, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(anchoCm), 14.2, 102.5, 9.2, { color: BLANCO, hScale: 1.03 });
+  txt(doc, 'ALTO:', 32.6, 102.3, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(altoCm), 40.4, 102.5, 9.2, { color: BLANCO, hScale: 1.03 });
+}
+
 // ── ETIQUETA ESTRUCTURA/ARMADO (62×95,5) ─────────────────────────────
 
 function dibujarEstructura(
@@ -226,7 +389,14 @@ function dibujarEstructura(
   const esDual = !!p.dual;
   // Pletina (velcro): el código de tubería de la fila es 'VELCRO' (tuberiaCodigoCorto).
   const esPletina = (row.tuberiaCod || '').toUpperCase() === 'VELCRO';
-  const sistema = sistemaEtiquetaEstructura(row.producto, row.tipo, esDual, esPletina);
+  // Vertical (lamas): etiqueta propia (réplica del .lbx de verticales), sin tubo
+  // ni peso roller. Su código de tubería es 'VERTICAL'.
+  const esVertical = (row.tuberiaCod || '').toUpperCase() === 'VERTICAL';
+  if (esVertical) {
+    dibujarEstructuraVertical(doc, row, n, total, meta, catalogo);
+    return;
+  }
+  const sistema = sistemaEtiquetaEstructura(row.producto, row.tipo, esDual, esPletina, esVertical);
   const pzCef = pieza(row, 'CENEFA OVALADA');
   const pzPesoU = pieza(row, 'PESO U');
   const pzPesoInt = pieza(row, 'PESO INTERNO');
@@ -598,12 +768,15 @@ export function generarEtiquetasPDF(
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
   const cenefas = rows.filter((r) => esCenefaCuadrada((r.pano || EMPTY_PANO).cenefa as string));
-  const doc = new jsPDF('p', 'mm', [ANCHO, ALTO_PAGINA]);
+  // La vertical usa una página más larga (106 mm); el resto 100 mm.
+  const altoPagina = (r: OptimizerRow) =>
+    (r.tuberiaCod || '').toUpperCase() === 'VERTICAL' ? ALTO_PAGINA_VERTICAL : ALTO_PAGINA;
+  const doc = new jsPDF('p', 'mm', [ANCHO, altoPagina(rows[0])]);
   let first = true;
   let nCenefa = 0;
 
   rows.forEach((row, i) => {
-    if (!first) doc.addPage([ANCHO, ALTO_PAGINA], 'p');
+    if (!first) doc.addPage([ANCHO, altoPagina(row)], 'p');
     first = false;
     dibujarEstructura(doc, row, i + 1, rows.length, meta, catalogo);
 

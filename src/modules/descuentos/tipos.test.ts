@@ -52,6 +52,7 @@ describe('modelosParaCategoria / validarAnchoCategoria', () => {
     { ...base, sistema: 'CENEFA_OVALADA', tipo_rol: 'ROL_CENEFA_OV_MANUAL_45mm', mecanismo: 'MEC_09', ancho_max_m: 3 },
     { ...base, sistema: 'DARK_ROLLER', tipo_rol: 'DARK_INTERNO_38mm', mecanismo: '', ancho_max_m: 2.5 },
     { ...base, sistema: 'DARK_ROLLER', tipo_rol: 'DARK_INTERNO_45mm', mecanismo: '', ancho_max_m: 3 },
+    { ...base, sistema: 'VERTICAL', tipo_rol: 'VERTICAL_LAMAS_89', mecanismo: '', diametro_tubo_mm: 0, ancho_max_m: 6 },
   ];
 
   it('ROL trae todos los roller simple', () => {
@@ -63,9 +64,16 @@ describe('modelosParaCategoria / validarAnchoCategoria', () => {
     expect(grd[0].tipo_rol).toContain('MOTOR_GRD');
     expect(modelosParaCategoria(catalogo, 'DARK_38mm')[0].tipo_rol).toBe('DARK_INTERNO_38mm');
   });
-  it('categoría sin catálogo (VERTICAL) no valida', () => {
-    expect(modelosParaCategoria(catalogo, 'VERTICAL')).toHaveLength(0);
-    expect(validarAnchoCategoria(catalogo, 'VERTICAL', 9)).toBeNull();
+  it('VERTICAL trae su modelo de lamas y valida por su ancho máximo', () => {
+    const vert = modelosParaCategoria(catalogo, 'VERTICAL');
+    expect(vert).toHaveLength(1);
+    expect(vert[0].tipo_rol).toBe('VERTICAL_LAMAS_89');
+    expect(validarAnchoCategoria(catalogo, 'VERTICAL', 5.9)).toBeNull();
+    expect(validarAnchoCategoria(catalogo, 'VERTICAL', 6.5)).toContain('no fabricable');
+  });
+  it('categoría sin catálogo no valida', () => {
+    expect(modelosParaCategoria(catalogo, 'INEXISTENTE')).toHaveLength(0);
+    expect(validarAnchoCategoria(catalogo, 'INEXISTENTE', 9)).toBeNull();
   });
   it('valida contra el MÁXIMO de la categoría (fabricable en al menos un modelo)', () => {
     expect(validarAnchoCategoria(catalogo, 'ROL', 3.0)).toBeNull(); // cabe en el de 3.5

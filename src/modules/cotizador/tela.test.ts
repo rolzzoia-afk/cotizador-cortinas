@@ -178,6 +178,28 @@ describe('buildOptimizerRows', () => {
     expect(rows[0].altoReal).toBeCloseTo(2.25, 2);
   });
 
+  it('VERTICAL: se corta como roller — corte alto+0,05, reserva alto+0,25', () => {
+    const rows = buildOptimizerRows(
+      [v({ categoria: 'VERTICAL', alto: 1.8, panos: [{ ancho: 1.5, alto: 1.8 }] })],
+      cat,
+    );
+    expect(rows[0].esVertical).toBe(true);
+    expect(rows[0].ancho).toBeCloseTo(1.5, 2); // la tela NO se invierte
+    expect(rows[0].altoCorte).toBeCloseTo(1.85, 2); // corte real = alto + extraVertical
+    expect(rows[0].altoReal).toBeCloseTo(2.05, 2); // reserva = alto + extraAlto (roller)
+    expect(rows[0].m2).toBeCloseTo(3.075, 3); // 2,05 × 1,50
+  });
+
+  it('VERTICAL: caso dorado OT 2923 (2,12×2,34) → corte 2,39 · reserva 2,59 · m² 5,4908', () => {
+    const rows = buildOptimizerRows(
+      [v({ categoria: 'VERTICAL', alto: 2.34, panos: [{ ancho: 2.12, alto: 2.34 }] })],
+      cat,
+    );
+    expect(rows[0].altoCorte).toBeCloseTo(2.39, 3);
+    expect(rows[0].altoReal).toBeCloseTo(2.59, 3);
+    expect(rows[0].m2).toBeCloseTo(5.4908, 4); // idéntico al M2 de la planilla manual
+  });
+
   it('parámetros custom: extraAltoCm/extraDuoCm/anchoRolloDefaultM gobiernan la geometría', () => {
     const params = { ...PARAMETROS_CORTE_DEFAULT, extraAltoCm: 30, extraDuoCm: 40, anchoRolloDefaultM: 2.5 };
     const roller = buildOptimizerRows([v({ panos: [{ ancho: 1, alto: 2 }] })], cat, params);
@@ -566,6 +588,20 @@ describe('calcularPanos', () => {
 
   it('plan vacío: totales en 0', () => {
     expect(calcularPanos([])).toEqual({ panos: [], totalM2: 0, totalPanos: 0 });
+  });
+
+  it('VERTICAL: corta al ancho REAL (sin −3,5) y al alto+5', () => {
+    const rows = buildOptimizerRows(
+      [{
+        id: 1, ubicacion: 'L', codInt: 'SC', producto: 'p', categoria: 'VERTICAL',
+        alto: 1.8, panos: [{ ancho: 1.5, alto: 1.8 }],
+      }],
+      cat,
+    );
+    const { panos, totalM2 } = calcularPanos(rows);
+    expect(panos[0].anchoCorteCm).toBe(150); // ancho real, sin limpieza de borde
+    expect(panos[0].altoCorteCm).toBe(185); // 180 + 5
+    expect(totalM2).toBeCloseTo(2.775, 3); // 1,50 × 1,85
   });
 
   it('descAnchoCorteCm custom cambia el ancho de corte', () => {

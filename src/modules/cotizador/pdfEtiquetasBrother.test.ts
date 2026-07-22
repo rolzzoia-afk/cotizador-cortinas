@@ -20,6 +20,7 @@ vi.mock('jspdf', async (importOriginal) => {
 
 import {
   agruparEtiquetasPanos,
+  codigoPerfilVertical,
   especTuboEtiqueta,
   familiaTelaEtiqueta,
   fmtMedidaCm,
@@ -72,6 +73,22 @@ describe('sistemaEtiquetaEstructura', () => {
   it('pletina (velcro) gana al resto: PLETINA V (roller) / PLETINA DUO', () => {
     expect(sistemaEtiquetaEstructura('ROLLER SCREEN', '', false, true)).toBe('PLETINA V');
     expect(sistemaEtiquetaEstructura('ROLLER DUO BLACKOUT', '', false, true)).toBe('PLETINA DUO');
+  });
+  it('vertical gana a todo lo demás', () => {
+    expect(sistemaEtiquetaEstructura('VERTICAL PVC', '', false, false, true)).toBe('VERTICAL');
+    expect(sistemaEtiquetaEstructura('ROLLER DUO BK', '', true, true, true)).toBe('VERTICAL');
+  });
+});
+
+describe('codigoPerfilVertical', () => {
+  it('negro → VER61; blanco/gris/otro → VER62 (no hay vertical gris)', () => {
+    expect(codigoPerfilVertical('NEGRO')).toBe('VER61');
+    expect(codigoPerfilVertical('NEG')).toBe('VER61');
+    expect(codigoPerfilVertical('BLANCO')).toBe('VER62');
+    expect(codigoPerfilVertical('BCO')).toBe('VER62');
+    expect(codigoPerfilVertical('GRIS')).toBe('VER62');
+    expect(codigoPerfilVertical('')).toBe('VER62');
+    expect(codigoPerfilVertical(undefined)).toBe('VER62');
   });
 });
 

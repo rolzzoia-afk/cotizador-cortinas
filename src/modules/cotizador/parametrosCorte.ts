@@ -24,8 +24,12 @@ export type ParametrosCorte = {
    *  DOBLADA en la mesa, así que el Dimensionado muestra esta medida (mitad del
    *  alto de tela) en vez del ALTO. Solo afecta el PDF Dimensionado. */
   extraMesaDuoCm: number;
-  /** Vertical: extra (cm) de reserva en el plan de corte (Regla 7). */
+  /** Vertical: extra (cm) al alto. Es el ALTO DE CORTE de la tela vertical
+   *  (alto real + este valor) y la reserva del plan de corte (Regla 7). */
   extraVerticalCm: number;
+  /** Vertical: alto FINAL de la lama = alto de corte − este valor (cm). Es el
+   *  descuento de la terminación (dobladillo + enganche del carrito). */
+  dctoAltoFinalVerticalCm: number;
   /** Ancho de corte = ancho nominal − este valor (cm). */
   descAnchoCorteCm: number;
   /** Ancho de rollo (m) cuando el producto no define el suyo en catálogo. */
@@ -54,6 +58,7 @@ export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   extraDuoCm: 30,
   extraMesaDuoCm: 10,
   extraVerticalCm: 5,
+  dctoAltoFinalVerticalCm: 13,
   descAnchoCorteCm: 3.5,
   anchoRolloDefaultM: 2.98,
   anchoRolloPlanCm: 300,

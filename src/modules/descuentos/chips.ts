@@ -15,6 +15,7 @@ import {
   categoriaTieneReglaAncho,
   colorConBandaAncho,
   esCategoriaPletina,
+  esCategoriaVertical,
   esKitInventarioMec,
   esMecLegacy,
   mecPorAncho,
@@ -183,6 +184,11 @@ export function mecanismoParaPano(
   // Pletina (velcro): mecanismo fijo VELCRO. No lleva kit de mecanismo por color
   // ni por categoría (y en el inventario NO se emite insumo — ver bom/pdfInventario).
   if (esCategoriaPletina(categoria)) return 'VELCRO';
+
+  // VERTICAL: su estructura es perfil cabezal + varilla + carritos, no un kit
+  // de mecanismo roller. Sin esta guarda, ahora que la categoría tiene modelo,
+  // caería en el kit por color y aparecería en el BOM/inventario.
+  if (esCategoriaVertical(categoria)) return '';
 
   // Rama dual: usa los chips [MEC 01..25], no los kits por color ni la categoría.
   if (p.dual) {

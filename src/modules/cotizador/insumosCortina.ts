@@ -10,7 +10,11 @@
 import type { Pano, Ventana } from './types';
 import { esCenefaCuadrada } from './fase2';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
-import { esCategoriaPletina, normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  esCategoriaPletina,
+  esCategoriaVertical,
+  normalizarColorAccesorio,
+} from '@/modules/descuentos/reglas-mecanismo';
 
 export type InsumoCortina = {
   /** Código del insumo (TAP01, TOR02, BRA01, TAR01, DOM38…), sin corchetes. */
@@ -213,6 +217,9 @@ export function cantidadTarugos(
     return brackets * (aTecho ? 1 : 2);
   }
   if (esCenefaCuadrada(p.cenefa)) return brackets * 1;
+  // Vertical (lamas): se fija con brackets al muro, 1 tarugo por bracket según
+  // la superficie (igual criterio que el roller, pero por cantidad de brackets).
+  if (esCategoriaVertical(categoria)) return brackets;
   // Pletina (velcro): se pega, sin tarugos/fijaciones (aunque lleve tapas de peso).
   if (esCategoriaPletina(categoria)) return 0;
   // Roller o dúo sin cenefa: 4 tarugos (se instalan con brackets al muro). El
@@ -323,6 +330,72 @@ export function insumosDePano(
   }
 
   return out;
+}
+
+// ── VERTICAL (lamas) — insumos VER de la cortina ─────────────────────
+/** Insumo VER de una cortina vertical. `calcular` = la cantidad se define en
+ *  terreno (cordón, cadena inferior): la hoja imprime "CALCULAR" en vez del número. */
+export type InsumoVertical = {
+  codigo: string;
+  descripcion: string;
+  cantidad: number;
+  /** Taller (PRODUCCIÓN) o terreno (INSTALACIÓN). */
+  grupo: 'PRODUCCION' | 'INSTALACION';
+  /** true → cantidad a calcular en terreno; se imprime "CALCULAR". */
+  calcular?: boolean;
+};
+
+/** ¿El color de accesorios de la vertical es negro? Cualquier otro color
+ *  (incl. gris) usa el set blanco: no hay vertical gris catalogada. */
+function verticalEsNegro(colorAcc: string | null | undefined): boolean {
+  const c = normalizarColorAccesorio(colorAcc);
+  return c === 'NEG' || c === 'NEGRO';
+}
+
+/**
+ * Insumos VER de una cortina VERTICAL (códigos de la lámina "ACCESORIOS
+ * BLANCOS / NEGROS", validados contra la tabla `insumos`). El set es por color
+ * de accesorios: blanco (o cualquier color que no sea negro, incl. gris) vs.
+ * negro. Cantidades: 1 (peso cordón, kit, peso cadena), = `carritos` (carrito,
+ * peso lama, sujetador), `cantidadBrackets` (bracket) y "CALCULAR" (cordón y
+ * cadena inferior, que se miden en terreno — igual que el Excel de taller).
+ * PRODUCCIÓN = lo que se arma en el taller; INSTALACIÓN = lo que va a terreno
+ * (los tarugos salen aparte por `insumosDePano`, código TAR).
+ */
+export function insumosVerticalDePano(ctx: {
+  colorAcc?: string | null;
+  anchoM: number;
+  carritos: number;
+}): InsumoVertical[] {
+  const negro = verticalEsNegro(ctx.colorAcc);
+  const carritos = Math.max(0, Math.round(ctx.carritos) || 0);
+  const brackets = cantidadBrackets(ctx.anchoM);
+  const cordon = negro
+    ? { codigo: 'VER59', descripcion: 'CORDÓN DE 2.2mm COLOR: NEGRO' }
+    : { codigo: 'VER43', descripcion: 'CORDON BLANCO VERTICAL VERTILUX' };
+  const sujetador = negro
+    ? { codigo: 'VER56', descripcion: 'SUJETADOR DE LAMAS TRANSPARENTE' }
+    : { codigo: 'VER45', descripcion: 'SUJETADOR DE LAMAS VERTILUX' };
+  const pesoCadena = negro
+    ? { codigo: 'VER64', descripcion: 'PESO CADENA VERTICAL NEGRO' }
+    : { codigo: 'VER52', descripcion: 'PESO CADENA VERTICAL VERTILUX' };
+  const cadenaInferior = negro
+    ? { codigo: 'VER58', descripcion: 'CADENA INFERIOR PARA VERTICAL NEGRO' }
+    : { codigo: 'VER39', descripcion: 'CADENA DE PESO VERTICAL VERTILUX' };
+
+  return [
+    // ENTREGA PRODUCCIÓN (taller): se arma la cortina.
+    { codigo: 'VER37', descripcion: 'PESO CORDON VERTICAL VERTILUX', cantidad: 1, grupo: 'PRODUCCION' },
+    { codigo: 'VER40', descripcion: 'CARRITO VERTICAL VERTILUX', cantidad: carritos, grupo: 'PRODUCCION' },
+    { codigo: 'VER41', descripcion: 'PESO LAMA VERTICAL VERTILUX', cantidad: carritos, grupo: 'PRODUCCION' },
+    { ...cordon, cantidad: 0, grupo: 'PRODUCCION', calcular: true },
+    { ...sujetador, cantidad: carritos, grupo: 'PRODUCCION' },
+    { codigo: 'VER50', descripcion: 'KIT DE VERTICAL NUEVO VERTILUX', cantidad: 1, grupo: 'PRODUCCION' },
+    { ...pesoCadena, cantidad: 1, grupo: 'PRODUCCION' },
+    // ENTREGA INSTALACIÓN (terreno): se cuelga y se cierra.
+    { codigo: 'VER38', descripcion: 'BRACKET VERTICAL VERTILUX', cantidad: brackets, grupo: 'INSTALACION' },
+    { ...cadenaInferior, cantidad: 0, grupo: 'INSTALACION', calcular: true },
+  ];
 }
 
 // ── Motor (kits DOM) ─────────────────────────────────────────────────

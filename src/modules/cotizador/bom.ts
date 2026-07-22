@@ -7,7 +7,8 @@ import type { BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
-import { esCategoriaPletina } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { calculoVertical } from '@/modules/descuentos/despiece';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
@@ -19,6 +20,7 @@ import {
   codigoManillaPorColor,
   insumosDePano,
   insumosMotorDePano,
+  insumosVerticalDePano,
   panoLlevaDomotica,
 } from './insumosCortina';
 
@@ -104,8 +106,9 @@ export function calcularBOM(
     const tubLargoM = ((anchoCm - 3.8) / 100).toFixed(2);
     const tubColor = mecColor || p.color || '';
     const tubEspec = tubSpec ? `${tubSpec} · ${tubLargoM}m` : `${tubLargoM}m`;
-    // Pletina (velcro): NO va al inventario ni como tubería ni como mecanismo.
-    const esPletinaCat = esCategoriaPletina(categoria);
+    // Sistemas sin tubo ni kit de mecanismo: pletina (velcro) y vertical (perfil
+    // cabezal + varilla). NO van al inventario ni como tubería ni como mecanismo.
+    const esPletinaCat = esCategoriaPletina(categoria) || esCategoriaVertical(categoria);
     if (!esPletinaCat) {
       const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
       add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
@@ -200,6 +203,29 @@ export function calcularBOM(
     const omitirFijaciones = !!p.dual && (row.panoIndex ?? 0) > 0;
     for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM, omitirFijaciones })) {
       add(`INS|${ins.codigo}|${ins.color}`, 'INSUMO', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
+    }
+
+    // VERTICAL (lamas): insumos VER propios (carritos, cordón, sujetador, kit,
+    // peso de cadena, bracket, cadena inferior). Los tarugos ya salieron por
+    // insumosDePano (código TAR). Cordón y cadena inferior van "CALCULAR"
+    // (cantidad 0 + unidad, se miden en terreno).
+    if (esCategoriaVertical(categoria) && modelo) {
+      const carritos = calculoVertical(modelo, anchoM * 100, 0).carritos;
+      for (const it of insumosVerticalDePano({
+        colorAcc: colorAccesoriosDePano(p, ventanaColor),
+        anchoM,
+        carritos,
+      })) {
+        add(
+          `INS|${it.codigo}|`,
+          'INSUMO',
+          it.descripcion,
+          it.codigo,
+          '',
+          it.calcular ? 0 : it.cantidad,
+          it.calcular ? 'CALCULAR' : 'unid.',
+        );
+      }
     }
   });
 

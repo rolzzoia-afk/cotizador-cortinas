@@ -180,6 +180,19 @@ describe('calcularDespiece — SOFT LIGHT interno 38 mm (SISTEMAS OSCURIDAD.xlsx
   });
 });
 
+/** Fila del catálogo de la cortina vertical (sql/20260721_alta_vertical_descuentos.sql). */
+const mVertical: ModeloDespiece = {
+  ...base,
+  sistema: 'VERTICAL',
+  tipo_rol: 'VERTICAL_LAMAS_89',
+  mecanismo: '',
+  codigos_tubo: '',
+  diametro_tubo_mm: 0,
+  dcto_tubo_cm: 1.8, // perfil cabezal
+  dcto_perfiles_cm: 1.7, // varilla (encadenada al perfil)
+  ancho_max_m: 6,
+};
+
 describe('calcularDespiece — pletina y oscuridad', () => {
   it('pletina roller (velcro): cada corte se descuenta DIRECTO del ancho (Excel manual)', () => {
     const m: ModeloDespiece = {
@@ -217,6 +230,49 @@ describe('calcularDespiece — pletina y oscuridad', () => {
     expect(corte(d, 'PESO INTERNO')).toBe(79.2);
     expect(corte(d, 'PLETINA')).toBeUndefined();
     expect(corte(d, 'TUBO')).toBeUndefined();
+  });
+
+  it('vertical: perfil/varilla encadenados y carritos con floor (fórmulas del taller)', () => {
+    const d = calcularDespiece(mVertical, 150, { altoCm: 180 });
+    expect(corte(d, 'PERFIL CABEZAL')).toBe(148.2); // 150 − 1,8
+    expect(corte(d, 'VARILLA')).toBe(146.5); // 148,2 − 1,7
+    expect(corte(d, 'CARRITOS')).toBe(18); // floor(146,5 / 8) = floor(18,31)
+    expect(corte(d, 'LAMAS')).toBe(18); // una por carrito (como la ferretería)
+    expect(corte(d, 'REPUESTO')).toBe(2); // tela extra, no se instala
+    expect(corte(d, 'ALTO TELA')).toBe(185); // 180 + 5
+    expect(corte(d, 'ALTO FINAL LAMA')).toBe(172); // 185 − 13
+    // El ancho del corte de tela es el ancho real (sin descuento) y va sin
+    // columna: la tela no viaja en el Excel de órdenes.
+    expect(d.cortes.find((c) => c.componente === 'Ancho tela')?.medidaCm).toBe(150);
+    expect(corte(d, 'TUBO')).toBeUndefined();
+    expect(corte(d, 'PESO')).toBeUndefined();
+  });
+
+  it('vertical: la división exacta NO suma un carrito de más', () => {
+    // 131,5 → perfil 129,7 → varilla 128,0 → 128/8 = 16 justo.
+    const d = calcularDespiece(mVertical, 131.5, { altoCm: 200 });
+    expect(corte(d, 'VARILLA')).toBe(128);
+    expect(corte(d, 'CARRITOS')).toBe(16);
+    expect(corte(d, 'LAMAS')).toBe(16);
+  });
+
+  it('vertical: los cm de tela salen del contexto (parámetros de corte)', () => {
+    const d = calcularDespiece(mVertical, 150, {
+      altoCm: 180,
+      verticalExtraAltoCm: 6,
+      verticalDctoAltoFinalCm: 12,
+    });
+    expect(corte(d, 'ALTO TELA')).toBe(186);
+    expect(corte(d, 'ALTO FINAL LAMA')).toBe(174);
+  });
+
+  it('vertical sin alto: solo el aluminio, sin columnas de tela', () => {
+    const d = calcularDespiece(mVertical, 150);
+    expect(corte(d, 'PERFIL CABEZAL')).toBe(148.2);
+    expect(corte(d, 'ALTO TELA')).toBeUndefined();
+    expect(corte(d, 'ALTO FINAL LAMA')).toBeUndefined();
+    expect(corte(d, 'LAMAS')).toBe(18);
+    expect(corte(d, 'REPUESTO')).toBe(2);
   });
 
   it('dark roller marcado aproximado, con cenefas del/tras', () => {

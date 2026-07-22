@@ -31,13 +31,15 @@ export type FilaCorteCortina = {
   codInt: string;
   tipo: string; // corto: DELUX / PREMIUM
   anchoCorteTela: number; // m
-  corteAncho35: number; // m (ancho − 3,5 cm)
+  corteAncho35: number | ''; // m (ancho − 3,5 cm); '' en vertical (no aplica)
   alto: number; // m
   altoCorteTela: number; // m — corte real (dúo: 2×alto+0,30; resto: alto+0,25)
   pano: number; // n.º de paño (= letra "cortar junto")
   cortarJunto: string; // letra A, B, C… (el aviso "NO CABE" va en comentario)
-  comentario: string; // "INVERTIDA" / "NO CABE" / ""
+  comentario: string; // "INVERTIDA" / "NO CABE" / "VERTICAL" / ""
   invertida: boolean;
+  /** Cortina vertical: la tela se corta con el rollo girado (alto a lo ancho). */
+  esVertical: boolean;
   medidaColmena: string; // "SC 64 (178X200)" si sale de sobrante
   ubicColmena: string; // ubicación del sobrante (ej. "B-42")
 };
@@ -54,11 +56,12 @@ export type FilaPanoResumen = {
 
 /**
  * Filas de la tabla de corte que se imprimen: solo las que salen de colmena
- * (medidaColmena) o van invertidas. Las cortinas de rollo normal no se muestran
- * (el taller solo necesita esta tabla para esos dos casos especiales).
+ * (medidaColmena), van invertidas o son verticales (se cortan con el rollo
+ * girado). Las cortinas de rollo normal no se muestran: el taller solo necesita
+ * esta tabla para los cortes especiales.
  */
 export function filasCorteVisibles(cortinas: FilaCorteCortina[]): FilaCorteCortina[] {
-  return cortinas.filter((f) => f.invertida || f.medidaColmena !== '');
+  return cortinas.filter((f) => f.invertida || f.esVertical || f.medidaColmena !== '');
 }
 
 export type MetrosOptimizador = { codInt: string; metros: number };
@@ -136,8 +139,19 @@ export function construirHojaCorte(
 
   // ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no
   // está definido, se auto-marca cuando el ancho + borde supera el rollo.
+  // Se compara contra `r.ancho` = ancho REAL de la pieza a lo ancho del rollo.
+  // La VERTICAL NUNCA se invierte: su tela se corta en lamas de 8,9 cm que
+  // siempre entran a lo ancho del rollo (una ventana ancha = más lamas, en
+  // varias pasadas). Si se invirtiera, las lamas quedarían acostadas.
   const esInvertida = (r: OptimizerRow) =>
-    r.pano?.invertida ?? debeInvertirPano(r.anchoCm / 100, r.anchoRollo, params.bordeCm);
+    r.esVertical ? false : (r.pano?.invertida ?? debeInvertirPano(r.ancho, r.anchoRollo, params.bordeCm));
+
+  // Pasadas del rollo para una vertical más ancha que el rollo: se cortan las
+  // lamas en varias franjas a lo largo del rollo (ceil(ancho / ancho rollo)).
+  const pasadasVertical = (r: OptimizerRow) =>
+    r.esVertical && r.anchoRollo > 0 && r.ancho > r.anchoRollo
+      ? Math.ceil(r.ancho / r.anchoRollo)
+      : 0;
 
   // Clave de paño por fila:
   //  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
@@ -164,8 +178,10 @@ export function construirHojaCorte(
     const pid = pieceId(ot.id, r.ventanaId, r.panoIndex);
     const inv = esInvertida(r);
     // Más ancha que el rollo y no rota → no cabe. El aviso va en COMENTARIO;
-    // CORTAR JUNTO siempre muestra la letra del paño (nunca "RR").
-    const noCabe = !inv && r.anchoCm / 100 > r.anchoRollo;
+    // CORTAR JUNTO siempre muestra la letra del paño (nunca "RR"). La vertical
+    // se excluye: nunca "no cabe" (se corta en lamas), lleva su propio aviso.
+    const noCabe = !inv && !r.esVertical && r.ancho > r.anchoRollo;
+    const pasadas = pasadasVertical(r);
     const pano = juntoNum.get(claveJunto(r, idx)) ?? 0;
     const colmena = colmenaDePieza(pid);
     return {
@@ -173,14 +189,25 @@ export function construirHojaCorte(
       cant: 1,
       codInt: r.codInt,
       tipo: tipoCorto(r.producto),
-      anchoCorteTela: aMetros(r.anchoCm),
-      corteAncho35: aMetros(r.anchoCm - params.descAnchoCorteCm),
+      anchoCorteTela: redM(r.ancho),
+      // La vertical se corta al ancho REAL: no lleva limpieza de borde, así que
+      // la celda queda vacía en vez de repetir la medida de al lado.
+      corteAncho35: r.esVertical ? '' : redM(r.ancho - params.descAnchoCorteCm / 100),
       alto: aMetros(r.altoCm),
       altoCorteTela: redM(r.altoCorte), // dúo: 2×alto+0,30; resto: alto+0,25
       pano,
       cortarJunto: letra(pano),
-      comentario: inv ? 'INVERTIDA' : noCabe ? 'NO CABE' : '',
+      comentario: inv
+        ? 'INVERTIDA'
+        : noCabe
+          ? 'NO CABE'
+          : r.esVertical
+            ? pasadas > 1
+              ? `VERTICAL · ${pasadas} PASADAS`
+              : 'VERTICAL'
+            : '',
       invertida: inv,
+      esVertical: !!r.esVertical,
       medidaColmena: colmena ? `${colmena.cod} (${Math.round(colmena.ancho)}X${Math.round(colmena.alto)})` : '',
       ubicColmena: colmena ? colmena.ubic : '',
     };
@@ -209,7 +236,8 @@ export function construirHojaCorte(
     // (dúo = 2×(alto+0,25)). En roller simple ambas coinciden.
     const corteReal = Math.max(...grupo.map((g) => redM(g.altoCorte)));
     const altoMax = Math.max(...grupo.map((g) => redM(g.altoReal)));
-    const anchoMax = Math.max(...grupo.map((g) => aMetros(g.anchoCm)));
+    // Ancho de la pieza a lo ancho del rollo (en la vertical ya viene invertido).
+    const anchoMax = Math.max(...grupo.map((g) => redM(g.ancho)));
     // Origen colmena del paño (si alguna de sus piezas sale de un sobrante):
     // ubicación · medida, para que la cortadora sepa de dónde tomar la tela.
     let colmena = '';
@@ -449,8 +477,10 @@ export function generarPdfHojaCorte(
         if (c.key === 'serial') val = '';
         else {
           const raw = fila[c.key as keyof FilaCorteCortina];
+          // Las columnas de medida van formateadas; '' (vertical sin −3,5) se
+          // deja en blanco en vez de pasarlo por `num`.
           if (c.key === 'anchoCorteTela' || c.key === 'corteAncho35' || c.key === 'alto' || c.key === 'altoCorteTela')
-            val = num(raw as number);
+            val = raw === '' ? '' : num(raw as number);
           else val = raw === 0 ? '0' : String(raw ?? '');
         }
         if (val) {

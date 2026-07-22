@@ -150,6 +150,7 @@ export const OPCIONES_TUBERIA = [
   DESCRIPCION_TUBERIA.E47, // 'E47 - TUBO Ø 63 mm'
   DESCRIPCION_TUBERIA.E65, // 'E65 - TUBO (.63mm)' — default para roller >3 m
   'VELCRO',
+  'VERTICAL', // cortina de lamas: perfil cabezal + varilla (sin tubo)
 ] as const;
 export const OPCIONES_CORTES = ['Nada', 'Plumavit', 'Rodapié', 'Ambos'] as const;
 export const OPCIONES_RELACION_MARCO = ['N/A', 'Dentro', 'Fuera'] as const;
