@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { construirHojaCorte, filasCorteVisibles, type FilaCorteCortina } from './pdfCorteOptimizacion';
+import { construirHojaCorte, filasCorteVisibles, partirHojaCorte, type FilaCorteCortina } from './pdfCorteOptimizacion';
 import { buildOptimizerRows, asignarJuntoEnOrden, autoOptimizar } from './tela';
 import type { PanoColmena } from './planCorte';
 import type { CatalogoProductos } from './types';
@@ -318,6 +318,92 @@ describe('construirHojaCorte — VERTICAL más ancha que el rollo', () => {
   it('el paño conserva su alto/reserva de vertical (2,45 / 2,65), no el ancho invertido', () => {
     expect(hoja.panos[0].altoCortePano).toBe(2.45); // alto + 5
     expect(hoja.panos[0].altoMaxUtilizar).toBe(2.65); // alto + 25
+  });
+});
+
+// La hoja de corte se PARTE en dos cuando la OT tiene verticales: una hoja
+// clásica (roller/etc.) y otra solo-vertical. Una tela usada por AMBOS lados
+// (SC 64 acá) aparece en cada hoja con SUS propios paños y metros, y ningún
+// paño queda a caballo entre las dos hojas.
+describe('partirHojaCorte — OT mixta (roller + vertical, tela compartida)', () => {
+  const ventanas: VentanaItem[] = [
+    {
+      id: 'roller', ubicacion: 'LIVING', codInt: 'SC 64',
+      producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'ROL',
+      grupoId: null, alto: 1.8, precio: 0, cantidad: 1,
+      panos: [{ ancho: 1.5, alto: 1.8 }],
+    },
+    {
+      id: 'vert64', ubicacion: 'COMEDOR', codInt: 'SC 64',
+      producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'VERTICAL',
+      grupoId: null, alto: 2.34, precio: 0, cantidad: 1,
+      panos: [{ ancho: 2.12, alto: 2.34 }],
+    },
+    {
+      id: 'vert02', ubicacion: 'SALA', codInt: 'SC 02',
+      producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'VERTICAL',
+      grupoId: null, alto: 2.0, precio: 0, cantidad: 1,
+      panos: [{ ancho: 1.8, alto: 2.0 }],
+    },
+  ];
+  const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+  const hoja = construirHojaCorte(rows, [], ot(ventanas));
+  const { principal, vertical } = partirHojaCorte(hoja);
+
+  it('las cortinas se separan por esVertical (1 roller | 2 verticales)', () => {
+    expect(principal.cortinas.map((c) => c.esVertical)).toEqual([false]);
+    expect(vertical.cortinas.map((c) => c.esVertical)).toEqual([true, true]);
+  });
+
+  it('roller y vertical de la MISMA tela NO comparten paño', () => {
+    // 3 paños distintos: roller SC 64, vertical SC 64, vertical SC 02.
+    expect(principal.panos).toHaveLength(1);
+    expect(vertical.panos).toHaveLength(2);
+    const nums = [...principal.panos, ...vertical.panos].map((p) => p.pano);
+    expect(new Set(nums).size).toBe(nums.length); // números de paño globales, sin choques
+  });
+
+  it('totalPanos se recalcula por lado', () => {
+    expect(principal.totalPanos).toBe(1);
+    expect(vertical.totalPanos).toBe(2);
+  });
+
+  it('la tela compartida (SC 64) aparece en cada hoja con SUS metros', () => {
+    const sc64Roller = principal.optimizador.find((o) => o.codInt === 'SC 64');
+    const sc64Vert = vertical.optimizador.find((o) => o.codInt === 'SC 64');
+    expect(sc64Roller?.esVertical).toBe(false);
+    expect(sc64Vert?.esVertical).toBe(true);
+    expect(sc64Vert?.metros).toBe(2.59); // alto 2,34 + 25
+    // SC 02 solo existe del lado vertical.
+    expect(principal.optimizador.find((o) => o.codInt === 'SC 02')).toBeUndefined();
+    expect(vertical.optimizador.find((o) => o.codInt === 'SC 02')?.esVertical).toBe(true);
+  });
+});
+
+describe('partirHojaCorte — casos borde solo-vertical / solo-roller', () => {
+  const vVert: VentanaItem = {
+    id: 'v', ubicacion: 'LIVING', codInt: 'SC 64',
+    producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'VERTICAL',
+    grupoId: null, alto: 2.0, precio: 0, cantidad: 1, panos: [{ ancho: 1.5, alto: 2.0 }],
+  };
+  const vRoller: VentanaItem = {
+    id: 'r', ubicacion: 'LIVING', codInt: 'SC 64',
+    producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'ROL',
+    grupoId: null, alto: 1.8, precio: 0, cantidad: 1, panos: [{ ancho: 1.5, alto: 1.8 }],
+  };
+
+  it('solo vertical → principal vacío', () => {
+    const hoja = construirHojaCorte(asignarJuntoEnOrden(buildOptimizerRows([vVert], cat)), [], ot([vVert]));
+    const { principal, vertical } = partirHojaCorte(hoja);
+    expect(principal.cortinas).toHaveLength(0);
+    expect(vertical.cortinas).toHaveLength(1);
+  });
+
+  it('solo roller → vertical vacío', () => {
+    const hoja = construirHojaCorte(asignarJuntoEnOrden(buildOptimizerRows([vRoller], cat)), [], ot([vRoller]));
+    const { principal, vertical } = partirHojaCorte(hoja);
+    expect(vertical.cortinas).toHaveLength(0);
+    expect(principal.cortinas).toHaveLength(1);
   });
 });
 

@@ -173,7 +173,7 @@ describe('construirCalculoGeneral', () => {
     expect(fd.despiece.has('ALTO')).toBe(false);
   });
 
-  it('vertical: bloque propio, sin columna ALTO y con la guía de lamas', () => {
+  it('vertical: bloque propio, sin columna ALTO, sin ANCHO TELA ni guía de lamas', () => {
     const [f] = construirCalculoGeneral([ventVertical()]).filas;
     expect(f.bloque).toBe('VERTICAL');
     expect(f.despiece.get('PERFIL CABEZAL')).toBe(148.2);
@@ -181,10 +181,11 @@ describe('construirCalculoGeneral', () => {
     expect(f.despiece.get('CARRITOS')).toBe(18);
     expect(f.despiece.get('LAMAS')).toBe(18); // una por carrito
     expect(f.despiece.get('REPUESTO')).toBe(2); // tela extra, aparte
-    expect(f.despiece.get('ALTO TELA')).toBe(185);
-    expect(f.despiece.get('ALTO FINAL LAMA')).toBe(172);
-    // La guía de dimensionado muestra el TOTAL a cortar (18 montadas + 2 rep.).
-    expect(f.despiece.get('LAMAS (8,9 × ALTO FINAL)')).toBe('20 × 8,9 × 172');
+    expect(f.despiece.get('ALTO DE CORTE')).toBe(185); // ex "ALTO TELA"
+    expect(f.despiece.get('ALTO FINAL')).toBe(172); // ex "ALTO FINAL LAMA"
+    // El ancho de tela referencial y la guía compuesta se eliminaron.
+    expect(f.despiece.has('ANCHO TELA')).toBe(false);
+    expect(f.despiece.has('LAMAS (8,9 × ALTO FINAL)')).toBe(false);
     // El ALTO genérico (+25) no aplica: la vertical trae su propio alto de corte.
     expect(f.despiece.has('ALTO')).toBe(false);
     expect(f.altoRollerCm).toBe(185); // alto + extraVertical, no + 25
@@ -203,9 +204,11 @@ describe('construirCalculoGeneral', () => {
     // Piezas de tela: sí quedan (lamas montadas + repuesto).
     expect(labels).toContain('LAMAS');
     expect(labels).toContain('REPUESTO');
-    expect(labels).toContain('ALTO TELA');
-    expect(labels).toContain('ALTO FINAL LAMA');
-    expect(labels).toContain('LAMAS (8,9 × ALTO FINAL)');
+    expect(labels).toContain('ALTO DE CORTE');
+    expect(labels).toContain('ALTO FINAL');
+    // La guía compuesta se eliminó también del Dimensionado.
+    expect(labels).not.toContain('LAMAS (8,9 × ALTO FINAL)');
+    expect(labels).not.toContain('ANCHO TELA');
   });
 
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {

@@ -15,9 +15,7 @@ import jsPDF from 'jspdf';
 import type { Ventana } from '@/modules/cotizador/types';
 import type { CatalogoProductos } from '@/modules/cotizador/types';
 import {
-  ANCHO_LAMA_VERTICAL_CM,
   calcularDespiece,
-  calculoVertical,
   contextoDespieceDesdePano,
   MODELO_DESPIECE_STUB,
 } from '@/modules/descuentos/despiece';
@@ -194,7 +192,7 @@ export function construirCalculoGeneral(
       // del tubo del roller ni el doblez extra del dúo). El ALTO MESA DE CORTE
       // del dúo sí conserva el +extraMesaDuo (=10, la mitad del alto doblado).
       // VERTICAL: el alto de corte NO es alto+25 sino alto+extraVertical, y ya
-      // viene del despiece como ALTO TELA (junto con ALTO FINAL LAMA), así que
+      // viene del despiece como ALTO DE CORTE (junto con ALTO FINAL), así que
       // la columna ALTO genérica se omite para no mostrar una medida falsa.
       const esVerticalFila = esCategoriaVertical(v.categoria);
       const esPletinaFila = esCategoriaPletina(v.categoria);
@@ -202,18 +200,6 @@ export function construirCalculoGeneral(
         ? r1(altoCm + params.extraVerticalCm)
         : r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
       const altoDuoCm = r1(altoCm * 2 + (esPletinaFila ? 0 : params.extraDuoCm));
-      if (esVerticalFila && v.modelo && anchoCm > 0 && altoCm > 0) {
-        // Guía de dimensionado: de la pieza única salen N lamas de 8,9 × alto final.
-        const cv = calculoVertical(v.modelo, anchoCm, altoCm, {
-          extraAltoCm: params.extraVerticalCm,
-          dctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
-        });
-        // Total a CORTAR = las que se instalan + las de repuesto.
-        despiece.set(
-          'LAMAS (8,9 × ALTO FINAL)',
-          `${cv.lamas + cv.repuesto} × ${num(ANCHO_LAMA_VERTICAL_CM)} × ${num(cv.altoFinalCm)}`,
-        );
-      }
       if (altoCm > 0 && !esVerticalFila) {
         if (opts?.altoMesaCorteDuo && esDuoFila) {
           // Dimensionado: la tela dúo se corta DOBLADA en la mesa, así que en vez
@@ -430,7 +416,6 @@ function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: nu
 /** Peso (ancho relativo) de cada columna: texto largo más ancho. */
 function pesoColumna(key: string, esDespiece: boolean): number {
   if (key === 'ALTO MESA DE CORTE') return 1.6; // etiqueta larga
-  if (key.startsWith('LAMAS (')) return 1.7; // etiqueta larga + valor compuesto
   if (key.startsWith('CENEFA OVALADA')) return 1.55; // etiqueta larga (con/sin tira)
   if (esDespiece) return 1.15;
   switch (key) {

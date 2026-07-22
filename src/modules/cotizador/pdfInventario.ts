@@ -5,9 +5,11 @@
 //   1. Detalle por cortina (identidad: producto/tipo/mecanismo/tubería/
 //      accionamiento/peso cadena/ubic/medidas, con descripciones completas)
 //      — reusa la identidad del Cálculo general (mismo motor de datos).
-//   2. INSUMOS consolidados en TRES tablas por destino: «INSUMOS» (tapas de
-//      peso, tornillos, tarugos, suplementos), «INSUMOS DE PRODUCCIÓN» (taller:
-//      mecanismo de cenefa ovalada + el motor de cortinas ovaladas) e «INSUMOS
+//   2. INSUMOS consolidados en tablas por destino: «INSUMOS» (tapas de peso,
+//      tornillos, tarugos, suplementos), «INSUMOS DE PRODUCCIÓN» (taller:
+//      mecanismo de cenefa ovalada + motor de ovaladas; en vertical, peso de
+//      lama + sujetador), «INSUMOS ESTRUCTURA» (vertical: ferretería del sistema
+//      de lamas — peso cordón, carritos, cordón, kit, peso cadena) e «INSUMOS
 //      DE INSTALACIÓN» (terreno: manillas, brackets, cadena, peso de cadena,
 //      resto del kit de motor, tapa de cenefa cuadrada, etc.). Cada tabla se
 //      imprime solo si tiene filas.
@@ -85,9 +87,9 @@ export type FilaInventario = {
 
 export type NotaTerreno = { ubic: string; notas: string };
 
-/** Tabla de destino del insumo: bodega (INSUMOS), taller (PRODUCCION) o
- *  terreno (INSTALACION). */
-export type GrupoInsumo = 'INSUMOS' | 'PRODUCCION' | 'INSTALACION';
+/** Tabla de destino del insumo: bodega (INSUMOS), taller — montaje sobre la tela
+ *  (PRODUCCION) o ferretería del sistema (ESTRUCTURA) — o terreno (INSTALACION). */
+export type GrupoInsumo = 'INSUMOS' | 'PRODUCCION' | 'ESTRUCTURA' | 'INSTALACION';
 
 /** Insumo consolidado para la tabla de entrega de material (manillas, tapas de
  *  peso, tornillos, brackets, tarugos, motor…). `codigo` opcional (manillas y
@@ -709,6 +711,7 @@ export function generarPdfInventario(
   };
   bloqueInsumos('INSUMOS', data.insumos.filter((m) => m.grupo === 'INSUMOS'));
   bloqueInsumos('INSUMOS DE PRODUCCIÓN', data.insumos.filter((m) => m.grupo === 'PRODUCCION'));
+  bloqueInsumos('INSUMOS ESTRUCTURA', data.insumos.filter((m) => m.grupo === 'ESTRUCTURA'));
   bloqueInsumos('INSUMOS DE INSTALACIÓN', data.insumos.filter((m) => m.grupo === 'INSTALACION'));
 
   // ── BLOQUE 3: ETIQUETAS ROLZZO ─────────────────────────────────────

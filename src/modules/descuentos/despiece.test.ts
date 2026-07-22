@@ -239,11 +239,11 @@ describe('calcularDespiece — pletina y oscuridad', () => {
     expect(corte(d, 'CARRITOS')).toBe(18); // floor(146,5 / 8) = floor(18,31)
     expect(corte(d, 'LAMAS')).toBe(18); // una por carrito (como la ferretería)
     expect(corte(d, 'REPUESTO')).toBe(2); // tela extra, no se instala
-    expect(corte(d, 'ALTO TELA')).toBe(185); // 180 + 5
-    expect(corte(d, 'ALTO FINAL LAMA')).toBe(172); // 185 − 13
-    // El ancho del corte de tela es el ancho real (sin descuento) y va sin
-    // columna: la tela no viaja en el Excel de órdenes.
-    expect(d.cortes.find((c) => c.componente === 'Ancho tela')?.medidaCm).toBe(150);
+    expect(corte(d, 'ALTO TELA')).toBe(185); // 180 + 5 (componente "Alto de corte")
+    expect(corte(d, 'ALTO FINAL LAMA')).toBe(172); // 185 − 13 (componente "Alto final")
+    // El "Ancho tela" referencial se eliminó del despiece (no se usaba en ningún
+    // documento): el ancho de la tela = ancho real de la ventana.
+    expect(d.cortes.find((c) => c.componente === 'Ancho tela')).toBeUndefined();
     expect(corte(d, 'TUBO')).toBeUndefined();
     expect(corte(d, 'PESO')).toBeUndefined();
   });

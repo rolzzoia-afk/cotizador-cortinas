@@ -276,6 +276,7 @@ export function restorePlanGuardado(
 // paño (con su letra) y nadie las comparte; en el taller se cortan rotadas.
 type PanoBin = {
   codInt: string;
+  esVertical: boolean; // vertical y roller de la misma tela NO comparten paño
   usado: number; // ancho acumulado (m)
   anchoRollo: number;
   junto: string;
@@ -289,12 +290,15 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
   let juntoCode = 64;
   let panoNum = 0;
   return orden.map((r) => {
-    // Best-fit: paño del mismo COD_INT con MENOR espacio libre donde todavía
-    // entre. Una cortina más ancha que el rollo no cabe en ningún paño → abre
-    // el suyo (con su propia letra) y nadie más lo comparte (se corta rotada).
+    // Best-fit: paño del mismo COD_INT (y mismo tipo vertical/roller) con MENOR
+    // espacio libre donde todavía entre. Una cortina más ancha que el rollo no
+    // cabe en ningún paño → abre el suyo (con su propia letra) y nadie más lo
+    // comparte (se corta rotada). Vertical y roller de la MISMA tela nunca
+    // comparten paño: van en hojas de corte separadas (se cortan en mesas
+    // distintas), así que ningún paño queda a caballo entre las dos hojas.
     let mejor: PanoBin | null = null;
     for (const b of bins) {
-      if (b.codInt !== r.codInt) continue;
+      if (b.codInt !== r.codInt || b.esVertical !== !!r.esVertical) continue;
       if (b.anchoRollo - b.usado + EPS < r.ancho) continue; // no entra
       if (!mejor || b.usado > mejor.usado) mejor = b;
     }
@@ -303,6 +307,7 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
       juntoCode = juntoCode >= 90 ? 65 : juntoCode + 1;
       mejor = {
         codInt: r.codInt,
+        esVertical: !!r.esVertical,
         usado: 0,
         anchoRollo: r.anchoRollo,
         junto: String.fromCharCode(juntoCode),

@@ -242,18 +242,19 @@ describe('insumosVerticalDePano', () => {
   const cod = (out: ReturnType<typeof insumosVerticalDePano>) =>
     Object.fromEntries(out.map((i) => [i.codigo, i]));
 
-  it('set BLANCO: códigos, cantidades y "CALCULAR" del cordón y la cadena inferior', () => {
+  it('set BLANCO: códigos, cantidades, grupos y "CALCULAR" del cordón y la cadena inferior', () => {
     const out = insumosVerticalDePano({ colorAcc: 'BCO', anchoM: 2.12, carritos: 26 });
     const m = cod(out);
-    // PRODUCCIÓN
-    expect(m.VER37).toMatchObject({ cantidad: 1, grupo: 'PRODUCCION' }); // peso cordón
-    expect(m.VER40).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' }); // carrito = carritos
+    // PRODUCCIÓN (montaje sobre la tela)
     expect(m.VER41).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' }); // peso lama = carritos
-    expect(m.VER43).toMatchObject({ grupo: 'PRODUCCION', calcular: true }); // cordón blanco → CALCULAR
     expect(m.VER45).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' }); // sujetador blanco = carritos
-    expect(m.VER50).toMatchObject({ cantidad: 1, grupo: 'PRODUCCION' }); // kit
-    expect(m.VER52).toMatchObject({ cantidad: 1, grupo: 'PRODUCCION' }); // peso cadena blanco
-    // INSTALACIÓN
+    // ESTRUCTURA (ferretería del sistema)
+    expect(m.VER37).toMatchObject({ cantidad: 1, grupo: 'ESTRUCTURA' }); // peso cordón blanco
+    expect(m.VER40).toMatchObject({ cantidad: 26, grupo: 'ESTRUCTURA' }); // carrito = carritos
+    expect(m.VER43).toMatchObject({ grupo: 'ESTRUCTURA', calcular: true }); // cordón blanco → CALCULAR
+    expect(m.VER50).toMatchObject({ cantidad: 1, grupo: 'ESTRUCTURA' }); // kit
+    expect(m.VER52).toMatchObject({ cantidad: 1, grupo: 'ESTRUCTURA' }); // peso cadena blanco
+    // INSTALACIÓN (terreno)
     expect(m.VER38).toMatchObject({ cantidad: 4, grupo: 'INSTALACION' }); // bracket = cantidadBrackets(2,12)
     expect(m.VER39).toMatchObject({ grupo: 'INSTALACION', calcular: true }); // cadena inferior → CALCULAR
     // No aparecen los códigos del set negro.
@@ -263,20 +264,26 @@ describe('insumosVerticalDePano', () => {
     expect(m.VER58).toBeUndefined();
   });
 
-  it('set NEGRO: cordón VER59, sujetador VER56, peso cadena VER64, cadena inferior VER58', () => {
-    const m = cod(insumosVerticalDePano({ colorAcc: 'NEGRO', anchoM: 1.5, carritos: 18 }));
-    expect(m.VER59).toMatchObject({ calcular: true }); // cordón negro
-    expect(m.VER56).toMatchObject({ cantidad: 18 }); // sujetador transparente
-    expect(m.VER64).toMatchObject({ cantidad: 1 }); // peso cadena negro
-    expect(m.VER58).toMatchObject({ calcular: true }); // cadena inferior negro
+  it('set NEGRO: peso cordón y peso cadena son ambos VER64; cordón VER59, sujetador VER56, cadena inferior VER58', () => {
+    const out = insumosVerticalDePano({ colorAcc: 'NEGRO', anchoM: 1.5, carritos: 18 });
+    const m = cod(out);
+    expect(m.VER59).toMatchObject({ calcular: true, grupo: 'ESTRUCTURA' }); // cordón negro
+    expect(m.VER56).toMatchObject({ cantidad: 18, grupo: 'PRODUCCION' }); // sujetador transparente
+    expect(m.VER58).toMatchObject({ calcular: true, grupo: 'INSTALACION' }); // cadena inferior negro
+    // El peso del cordón pasa a VER64 (mismo código que el peso de cadena): dos
+    // líneas VER64 en ESTRUCTURA, cantidad 1 c/u → se consolidan a ×2 aguas abajo.
+    const ver64 = out.filter((i) => i.codigo === 'VER64');
+    expect(ver64).toHaveLength(2);
+    expect(ver64.every((i) => i.grupo === 'ESTRUCTURA' && i.cantidad === 1)).toBe(true);
+    // En negro el peso del cordón ya NO es VER37.
+    expect(m.VER37).toBeUndefined();
     // Sus contrapartes blancas no aparecen.
     expect(m.VER43).toBeUndefined();
     expect(m.VER45).toBeUndefined();
     expect(m.VER52).toBeUndefined();
     expect(m.VER39).toBeUndefined();
-    // Los comunes siguen.
-    expect(m.VER37).toBeDefined();
-    expect(m.VER40).toMatchObject({ cantidad: 18 });
+    // Carrito común (ahora ESTRUCTURA).
+    expect(m.VER40).toMatchObject({ cantidad: 18, grupo: 'ESTRUCTURA' });
   });
 
   it('gris (y cualquier color no-negro) usa el set BLANCO: no hay vertical gris', () => {

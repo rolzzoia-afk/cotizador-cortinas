@@ -424,6 +424,25 @@ describe('asignarJuntoEnOrden', () => {
     expect(out[0].junto).not.toBe(out[1].junto);
   });
 
+  it('vertical y roller de la MISMA tela NO comparten paño; vertical+vertical sí', () => {
+    const cat = mkCat({ SC: { anchoRollo: 3 } });
+    const rows = buildOptimizerRows(
+      [
+        { id: 1, ubicacion: 'L', codInt: 'SC', producto: 'p', categoria: 'ROL', panos: [{ ancho: 1, alto: 2 }] },
+        { id: 2, ubicacion: 'L', codInt: 'SC', producto: 'p', categoria: 'VERTICAL', panos: [{ ancho: 1, alto: 2 }] },
+        { id: 3, ubicacion: 'L', codInt: 'SC', producto: 'p', categoria: 'VERTICAL', panos: [{ ancho: 1, alto: 2 }] },
+      ],
+      cat,
+    );
+    const out = asignarJuntoEnOrden(rows);
+    expect(out[0].esVertical).toBe(false);
+    expect(out[1].esVertical).toBe(true);
+    // Roller (0) y vertical (1) de la misma tela → paños distintos (hojas separadas).
+    expect(out[0].junto).not.toBe(out[1].junto);
+    // Vertical (1) y vertical (2) de la misma tela → mismo paño (1+1 < 3, entran).
+    expect(out[1].junto).toBe(out[2].junto);
+  });
+
   it('fila más ancha que el rollo → su propia letra (no "RR"), sin compartir', () => {
     const cat = mkCat({ SC: { anchoRollo: 2.98 } });
     const rows = buildOptimizerRows(
