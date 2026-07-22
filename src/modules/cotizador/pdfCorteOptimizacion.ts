@@ -51,6 +51,7 @@ export type FilaPanoResumen = {
   altoCortePano: number; // m (invertida → ancho de la cortina)
   altoMaxUtilizar: number | ''; // m (vacío en invertidas)
   invertida: boolean;
+  esVertical: boolean; // el paño es de una cortina vertical (hoja separada)
   colmena: string; // "A-27 · 178X210" si el paño sale de colmena; '' si es rollo
 };
 
@@ -64,7 +65,7 @@ export function filasCorteVisibles(cortinas: FilaCorteCortina[]): FilaCorteCorti
   return cortinas.filter((f) => f.invertida || f.esVertical || f.medidaColmena !== '');
 }
 
-export type MetrosOptimizador = { codInt: string; metros: number };
+export type MetrosOptimizador = { codInt: string; metros: number; esVertical: boolean };
 
 export type HojaCorte = {
   cortinas: FilaCorteCortina[];
@@ -158,10 +159,14 @@ export function construirHojaCorte(
   //  · resto → letra "cortar junto" del optimizador (cortinas lado a lado)
   // (Planes antiguos podían traer junto = "RR" en varias filas: se separan por
   //  índice para que cada una quede en su propio paño y no colapsen en uno.)
+  // Sufijo ·V: vertical y roller NUNCA comparten paño (van en hojas separadas).
+  // Aunque el empaque ya los separa, un plan GUARDADO viejo podría traer un grupo
+  // mixto; el sufijo garantiza que ningún paño quede a caballo entre las dos hojas.
   const claveJunto = (r: OptimizerRow, idx: number) => {
-    if (esInvertida(r)) return `INV#${idx}`;
-    if (r.junto === 'RR') return `RR#${idx}`;
-    return r.junto || `·${idx}`;
+    const suf = r.esVertical ? '·V' : '';
+    if (esInvertida(r)) return `INV#${idx}${suf}`;
+    if (r.junto === 'RR') return `RR#${idx}${suf}`;
+    return `${r.junto || `·${idx}`}${suf}`;
   };
 
   // N.º de paño por clave (orden de aparición): primera clave → 1, etc.
@@ -228,10 +233,13 @@ export function construirHojaCorte(
   // ROLLO: los paños que salen de COLMENA ya están cortados y NO suman. Igual se
   // registra el COD_INT (en 0 si todos sus paños son de colmena) para que su fila
   // no desaparezca del resumen. La columna COLMENA marca cuáles salen de sobrante.
-  const metrosPorCod = new Map<string, number>();
+  // Clave por COD_INT + tipo (vertical/roller): una tela usada por AMBOS lados
+  // suma en cada hoja con SUS propios metros (las hojas salen separadas).
+  const metrosPorCod = new Map<string, { codInt: string; metros: number; esVertical: boolean }>();
   for (const { rows: grupo, pano } of grupos.values()) {
     const ref = grupo[0];
     const inv = esInvertida(ref);
+    const vert = !!ref.esVertical;
     // Corte real del paño (dúo = 2×alto+0,30) vs. reserva "alto máximo a utilizar"
     // (dúo = 2×(alto+0,25)). En roller simple ambas coinciden.
     const corteReal = Math.max(...grupo.map((g) => redM(g.altoCorte)));
@@ -261,21 +269,26 @@ export function construirHojaCorte(
         altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
         altoMaxUtilizar: inv ? '' : altoMax,
         invertida: inv,
+        esVertical: vert,
         colmena,
       });
     }
     // Solo los paños de ROLLO suman al OPTIMIZADOR (los de colmena ya están
     // cortados). El COD_INT se registra igual —aunque sume 0— para que su fila no
     // desaparezca. La reserva por paño de rollo = "alto máximo a utilizar".
-    const acumulado = metrosPorCod.get(ref.codInt) || 0;
-    metrosPorCod.set(ref.codInt, acumulado + (colmena ? 0 : inv ? corteReal : altoMax));
+    const claveOpt = `${ref.codInt}|${vert}`;
+    const prev = metrosPorCod.get(claveOpt);
+    const suma = colmena ? 0 : inv ? corteReal : altoMax;
+    if (prev) prev.metros += suma;
+    else metrosPorCod.set(claveOpt, { codInt: ref.codInt, metros: suma, esVertical: vert });
   }
   panos.sort((a, b) => a.pano - b.pano);
 
   // ── Bloque 4: metros de tela por COD_INT (solo rollo; colmena descontada). ──
-  const optimizador: MetrosOptimizador[] = [...metrosPorCod.entries()].map(([codInt, metros]) => ({
-    codInt,
-    metros: parseFloat(metros.toFixed(3)),
+  const optimizador: MetrosOptimizador[] = [...metrosPorCod.values()].map((m) => ({
+    codInt: m.codInt,
+    metros: parseFloat(m.metros.toFixed(3)),
+    esVertical: m.esVertical,
   }));
 
   return { cortinas, panos, totalPanos: panos.length, optimizador };
@@ -348,9 +361,42 @@ function rect(doc: jsPDF, x: number, y: number, w: number, h: number, fill?: RGB
   doc.rect(x, y, w, h);
 }
 
+/** Tema visual de una hoja de corte: distingue la clásica de la VERTICAL. */
+type TemaCorte = {
+  titulo: string; // título del encabezado
+  archivo: string; // nombre del .pdf
+  banner?: string; // franja de aviso bajo el encabezado (solo vertical)
+  colorTitulo: RGB;
+  tituloTotalPanos: string;
+  tituloSello: string;
+};
+
+const C_GREEN_VERT: RGB = [56, 118, 29]; // verde de las verticales (bloque/etiqueta)
+
 /**
- * Genera y descarga (abre el diálogo de impresión) el PDF de la hoja de
- * corte para la OT dada.
+ * Parte una hoja de corte en `principal` (roller/todo lo no-vertical) y
+ * `vertical`. Conserva los números de paño GLOBALES (con huecos por lado, para
+ * que las etiquetas de paño sigan coincidiendo) y recalcula `totalPanos` por lado.
+ */
+export function partirHojaCorte(hoja: HojaCorte): { principal: HojaCorte; vertical: HojaCorte } {
+  const lado = (esV: boolean): HojaCorte => {
+    const panos = hoja.panos.filter((p) => p.esVertical === esV);
+    return {
+      cortinas: hoja.cortinas.filter((c) => c.esVertical === esV),
+      panos,
+      totalPanos: panos.length,
+      optimizador: hoja.optimizador.filter((o) => o.esVertical === esV),
+    };
+  };
+  return { principal: lado(false), vertical: lado(true) };
+}
+
+/**
+ * Genera y descarga el/los PDF de la hoja de corte para la OT dada. Si la OT
+ * tiene cortinas verticales, salen DOS hojas SEPARADAS: la clásica (roller/etc.)
+ * y una "HOJA DE CORTE DE PAÑO VERTICAL". Solo-vertical o solo-roller → una sola.
+ * El taller corta las verticales en mesa aparte, así que ningún paño queda a
+ * caballo entre las dos hojas (ver empaque por `esVertical` en tela.ts).
  */
 export function generarPdfHojaCorte(
   rows: OptimizerRow[],
@@ -364,7 +410,33 @@ export function generarPdfHojaCorte(
     throw new Error('No hay paños. Guarda el plan en Tela primero.');
   }
   const hoja = construirHojaCorte(rows, colmenaPanos, ot, params, piezasSnapshot);
+  const { principal, vertical } = partirHojaCorte(hoja);
 
+  if (principal.cortinas.length > 0) {
+    renderHojaCorte(principal, meta, {
+      titulo: 'HOJA DE CORTE PAÑO',
+      archivo: `Corte_OT${meta.ot}.pdf`,
+      colorTitulo: [30, 30, 38],
+      tituloTotalPanos: 'TOTAL PAÑOS',
+      tituloSello: 'SELLO PAÑOS',
+    });
+  }
+  if (vertical.cortinas.length > 0) {
+    renderHojaCorte(vertical, meta, {
+      titulo: 'HOJA DE CORTE DE PAÑO VERTICAL',
+      archivo: `Corte_Vertical_OT${meta.ot}.pdf`,
+      banner: 'PAÑOS / COLMENA SOLO PARA CORTINAS VERTICALES',
+      colorTitulo: C_GREEN_VERT,
+      // El recuadro es de 16 mm: "TOTAL PAÑOS VERTICALES" se trunca. La franja
+      // verde de arriba ya deja claro que son verticales, así que va corto.
+      tituloTotalPanos: 'TOTAL PAÑOS',
+      tituloSello: 'SELLO PAÑOS VERTICALES',
+    });
+  }
+}
+
+/** Render de UNA hoja de corte (clásica o vertical, según `tema`). */
+function renderHojaCorte(hoja: HojaCorte, meta: MetaCorte, tema: TemaCorte): void {
   const doc = new jsPDF('l', 'mm', 'a4'); // 297 × 210
   const W = 297;
   const M = 6;
@@ -378,10 +450,11 @@ export function generarPdfHojaCorte(
     y = M;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
-    doc.setTextColor(30, 30, 38);
-    doc.text(`HOJA DE CORTE PAÑO — OT ${meta.ot}`, M, y + 4);
+    doc.setTextColor(tema.colorTitulo[0], tema.colorTitulo[1], tema.colorTitulo[2]);
+    doc.text(`${tema.titulo} — OT ${meta.ot}`, M, y + 4);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
+    doc.setTextColor(20, 20, 25);
     doc.text(meta.cliente || '', M, y + 9);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
@@ -392,6 +465,13 @@ export function generarPdfHojaCorte(
       doc.text(`Página ${pagina}`, W - M, y + 9, { align: 'right' });
     }
     y += 13;
+    // Franja de aviso (solo hoja vertical): repite en cada página que estos
+    // paños/colmenas son EXCLUSIVAMENTE para cortinas verticales.
+    if (tema.banner) {
+      rect(doc, M, y, W - 2 * M, 6.5, C_GREEN_VERT);
+      celdaTexto(doc, tema.banner, M, W - 2 * M, y + 4.6, { size: 9.5, bold: true, color: C_WHITE });
+      y += 9;
+    }
   };
   // Cotizaciones largas: cuando una tabla no cabe, sigue en una página nueva
   // repitiendo su cabecera (antes se dibujaba de corrido y se cortaba).
@@ -524,7 +604,7 @@ export function generarPdfHojaCorte(
   let y23Box = 0; // borde inferior del recuadro TOTAL PAÑOS (por página)
   const cabecera23 = () => {
     rect(doc, M, y, totalW, 12, C_DARK);
-    celdaTexto(doc, 'TOTAL PAÑOS', M, totalW, y + 7.6, { size: 6.5, bold: true, color: C_WHITE, fit: 'shrink' });
+    celdaTexto(doc, tema.tituloTotalPanos, M, totalW, y + 7.6, { size: 6.5, bold: true, color: C_WHITE, fit: 'shrink' });
     rect(doc, M, y + 12, totalW, 18);
     celdaTexto(doc, String(hoja.totalPanos), M, totalW, y + 24.4, { size: 26, bold: true, fit: 'shrink' });
     y23Box = y + 30;
@@ -620,10 +700,9 @@ export function generarPdfHojaCorte(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
   doc.setTextColor(150, 150, 158);
-  doc.text('SELLO PAÑOS', 230, yAbajo + 23, { align: 'center' });
+  doc.text(tema.tituloSello, 230, yAbajo + 23, { align: 'center' });
 
-  const nombre = `Corte_OT${meta.ot}.pdf`;
-  doc.save(nombre);
+  doc.save(tema.archivo);
 }
 
 function drawOptimizador(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {
@@ -647,7 +726,7 @@ function drawOptimizador(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {
   }
   let ry = y + 14;
   const rowH = 11.5;
-  const filas = hoja.optimizador.length ? hoja.optimizador : [{ codInt: '', metros: 0 }];
+  const filas = hoja.optimizador.length ? hoja.optimizador : [{ codInt: '', metros: 0, esVertical: false }];
   for (const f of filas) {
     tx = x;
     for (const c of cols) {

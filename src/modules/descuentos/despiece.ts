@@ -292,12 +292,13 @@ export function calcularDespiece(
     cortes.push({ componente: 'Lamas', columnaExcel: 'LAMAS', medidaCm: cv.lamas });
     cortes.push({ componente: 'Repuesto', columnaExcel: 'REPUESTO', medidaCm: cv.repuesto });
     if (cv.altoCorteCm > 0) {
-      // Ancho de la tela = ancho real de la ventana (sin descuento: la lama sale
-      // del paño completo). Referencial, no viaja al Excel de órdenes.
-      cortes.push({ componente: 'Ancho tela', columnaExcel: '', medidaCm: r1(anchoCm) });
-      cortes.push({ componente: 'Alto tela', columnaExcel: 'ALTO TELA', medidaCm: cv.altoCorteCm });
+      // Alto de corte de la tela (alto real + extra). `columnaExcel` se mantiene
+      // como id interno; el guard vertical del Excel de órdenes igual lo bloquea.
+      cortes.push({ componente: 'Alto de corte', columnaExcel: 'ALTO TELA', medidaCm: cv.altoCorteCm });
+      // Alto final de la lama (corte − dcto). La etiqueta Brother la busca por
+      // `columnaExcel: 'ALTO FINAL LAMA'`, así que ese id NO cambia.
       cortes.push({
-        componente: 'Alto final lama',
+        componente: 'Alto final',
         columnaExcel: 'ALTO FINAL LAMA',
         medidaCm: cv.altoFinalCm,
       });

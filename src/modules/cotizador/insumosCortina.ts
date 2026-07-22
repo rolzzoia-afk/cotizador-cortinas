@@ -339,8 +339,10 @@ export type InsumoVertical = {
   codigo: string;
   descripcion: string;
   cantidad: number;
-  /** Taller (PRODUCCIÓN) o terreno (INSTALACIÓN). */
-  grupo: 'PRODUCCION' | 'INSTALACION';
+  /** Cuadro de la hoja de inventario: PRODUCCIÓN (peso lama + sujetador, lo que
+   *  se monta sobre la tela), ESTRUCTURA (cordón, carritos, kit, pesos) o
+   *  INSTALACIÓN (terreno: brackets, cadena inferior). */
+  grupo: 'PRODUCCION' | 'ESTRUCTURA' | 'INSTALACION';
   /** true → cantidad a calcular en terreno; se imprime "CALCULAR". */
   calcular?: boolean;
 };
@@ -359,8 +361,11 @@ function verticalEsNegro(colorAcc: string | null | undefined): boolean {
  * negro. Cantidades: 1 (peso cordón, kit, peso cadena), = `carritos` (carrito,
  * peso lama, sujetador), `cantidadBrackets` (bracket) y "CALCULAR" (cordón y
  * cadena inferior, que se miden en terreno — igual que el Excel de taller).
- * PRODUCCIÓN = lo que se arma en el taller; INSTALACIÓN = lo que va a terreno
- * (los tarugos salen aparte por `insumosDePano`, código TAR).
+ * Cuadros de inventario: PRODUCCIÓN = lo que se monta sobre la tela (peso lama +
+ * sujetador); ESTRUCTURA = la ferretería del sistema (peso cordón, carritos,
+ * cordón, kit, peso cadena); INSTALACIÓN = terreno (bracket + cadena inferior).
+ * En negro el peso del cordón es VER64 (mismo producto que el peso de cadena →
+ * consolida a [VER64] ×2). Los tarugos salen aparte por `insumosDePano` (TAR).
  */
 export function insumosVerticalDePano(ctx: {
   colorAcc?: string | null;
@@ -370,6 +375,11 @@ export function insumosVerticalDePano(ctx: {
   const negro = verticalEsNegro(ctx.colorAcc);
   const carritos = Math.max(0, Math.round(ctx.carritos) || 0);
   const brackets = cantidadBrackets(ctx.anchoM);
+  // Peso del cordón: en negro es el MISMO producto que el peso de cadena (VER64),
+  // así que en inventario/BOM consolida a una sola línea [VER64] ×2.
+  const pesoCordon = negro
+    ? { codigo: 'VER64', descripcion: 'PESO CORDON VERTICAL NEGRO' }
+    : { codigo: 'VER37', descripcion: 'PESO CORDON VERTICAL VERTILUX' };
   const cordon = negro
     ? { codigo: 'VER59', descripcion: 'CORDÓN DE 2.2mm COLOR: NEGRO' }
     : { codigo: 'VER43', descripcion: 'CORDON BLANCO VERTICAL VERTILUX' };
@@ -384,15 +394,16 @@ export function insumosVerticalDePano(ctx: {
     : { codigo: 'VER39', descripcion: 'CADENA DE PESO VERTICAL VERTILUX' };
 
   return [
-    // ENTREGA PRODUCCIÓN (taller): se arma la cortina.
-    { codigo: 'VER37', descripcion: 'PESO CORDON VERTICAL VERTILUX', cantidad: 1, grupo: 'PRODUCCION' },
-    { codigo: 'VER40', descripcion: 'CARRITO VERTICAL VERTILUX', cantidad: carritos, grupo: 'PRODUCCION' },
+    // PRODUCCIÓN (taller): lo que se monta sobre la tela.
     { codigo: 'VER41', descripcion: 'PESO LAMA VERTICAL VERTILUX', cantidad: carritos, grupo: 'PRODUCCION' },
-    { ...cordon, cantidad: 0, grupo: 'PRODUCCION', calcular: true },
     { ...sujetador, cantidad: carritos, grupo: 'PRODUCCION' },
-    { codigo: 'VER50', descripcion: 'KIT DE VERTICAL NUEVO VERTILUX', cantidad: 1, grupo: 'PRODUCCION' },
-    { ...pesoCadena, cantidad: 1, grupo: 'PRODUCCION' },
-    // ENTREGA INSTALACIÓN (terreno): se cuelga y se cierra.
+    // ESTRUCTURA (taller): la ferretería del sistema de lamas.
+    { ...pesoCordon, cantidad: 1, grupo: 'ESTRUCTURA' },
+    { codigo: 'VER40', descripcion: 'CARRITO VERTICAL VERTILUX', cantidad: carritos, grupo: 'ESTRUCTURA' },
+    { ...cordon, cantidad: 0, grupo: 'ESTRUCTURA', calcular: true },
+    { codigo: 'VER50', descripcion: 'KIT DE VERTICAL NUEVO VERTILUX', cantidad: 1, grupo: 'ESTRUCTURA' },
+    { ...pesoCadena, cantidad: 1, grupo: 'ESTRUCTURA' },
+    // INSTALACIÓN (terreno): se cuelga y se cierra.
     { codigo: 'VER38', descripcion: 'BRACKET VERTICAL VERTILUX', cantidad: brackets, grupo: 'INSTALACION' },
     { ...cadenaInferior, cantidad: 0, grupo: 'INSTALACION', calcular: true },
   ];

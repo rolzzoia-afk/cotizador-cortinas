@@ -88,6 +88,23 @@ describe('calcularBOM', () => {
     expect(bom.filter((i) => i.categoria === 'MECANISMO')).toHaveLength(0);
   });
 
+  it('VERTICAL negro: peso cordón + peso cadena son VER64 → una línea consolidada ×2', () => {
+    const ventanas = [{
+      id: 1,
+      categoria: 'VERTICAL',
+      color: 'NEGRO',
+      modelo: { sistema: 'VERTICAL', dcto_tubo_cm: 1.8, dcto_perfiles_cm: 1.7 },
+      panos: [{ ancho: 1.5, alto: 1.8, color: 'NEGRO' }],
+    }];
+    const bom = calcularBOM([row({ color: 'NEGRO' })], ventanas as Parameters<typeof calcularBOM>[1]);
+    const ins = bom.filter((i) => i.categoria === 'INSUMO');
+    const ver64 = ins.filter((i) => i.especificacion === 'VER64');
+    expect(ver64).toHaveLength(1); // consolidado, no dos líneas
+    expect(ver64[0].cantidad).toBe(2); // peso cordón (1) + peso cadena (1)
+    // En negro ya no hay VER37 (el peso del cordón pasó a VER64).
+    expect(ins.some((i) => i.especificacion === 'VER37')).toBe(false);
+  });
+
   it('agrupa tubos con mismo largo + spec + color', () => {
     const bom = calcularBOM([row({ color: 'Blanco' }), row({ color: 'Blanco' })]);
     const tubos = bom.filter((i) => i.categoria === 'TUBERÍA');
