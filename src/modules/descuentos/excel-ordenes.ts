@@ -69,9 +69,12 @@ export const COLUMNAS = [
   'PLETINA',
   'TELA Y PLETINA',
   'PERFIL (IZQ) INT',
+  'PERF. (IZQ)',
   'COLOR PERFIL',
   'PERFIL (DER) INT',
+  'PERF. (DER)',
   'PERFIL BASE',
+  'PERF. BASE',
   'PERFIL SUPERIOR (ANCHO)',
   'PERFIL INFERIOR (ANCHO)',
   'PERFIL LATERAL IZQ (ALTO)',
@@ -92,6 +95,13 @@ export const COLUMNAS = [
 
 /** Extra de la pletina DÚO sobre el alto para la mesa de corte (cm). */
 const EXTRA_MESA_PLETINA_DUO_CM = 10;
+
+/** Columna de PERFORACIÓN (INTERNO/EXTERNO) que acompaña a cada columna de perfil. */
+const PERF_POR_PERFIL: Record<string, string> = {
+  'PERFIL (IZQ) INT': 'PERF. (IZQ)',
+  'PERFIL (DER) INT': 'PERF. (DER)',
+  'PERFIL BASE': 'PERF. BASE',
+};
 
 function celdaConMedida(val: string | number | undefined): boolean {
   return val !== undefined && val !== '' && val !== 0;
@@ -225,7 +235,27 @@ export function generarOrdenesOptimizador(
         for (const c of d.cortes) {
           if (!c.columnaExcel || c.columnaExcel === 'CENEFA OVALADA') continue;
           if (esVert && c.columnaExcel !== 'PERFIL CABEZAL' && c.columnaExcel !== 'VARILLA') continue;
+          // Perfil de oscuridad sin superficie (muro/piso) elegida: medida pendiente
+          // → celda vacía + advertencia (se llena en Fase 2). Los demás cortes van.
+          if (c.medidaCm <= 0) continue;
           fila[c.columnaExcel] = c.medidaCm;
+        }
+        // Perforación (INTERNO/EXTERNO) de los perfiles de oscuridad → columnas
+        // PERF. El taller las lee junto a la medida. Advertencia si un perfil está
+        // activo pero le falta la medida (superficie) o la perforación (SEMI).
+        for (const c of d.cortes) {
+          const perfCol = PERF_POR_PERFIL[c.columnaExcel];
+          if (!perfCol) continue;
+          if (c.perforacion) fila[perfCol] = c.perforacion;
+          if (c.pendienteMedida || !c.perforacion) {
+            const falta = [
+              c.pendienteMedida ? 'medida (muro/piso)' : null,
+              !c.perforacion ? 'perforación (int/ext)' : null,
+            ]
+              .filter(Boolean)
+              .join(' y ');
+            advertencias.push(`"${ubic}": perfil ${c.componente} — definir ${falta} en Fase 2.`);
+          }
         }
         // Pletina (velcro): altos exactos como el Excel manual. Roller → ALTO
         // TELA = alto; dúo → ALTO TELA = 2×alto y ALTO MESA DE CORTE = alto + 10.
@@ -263,6 +293,9 @@ export function generarOrdenesOptimizador(
             );
           }
         } else {
+          // Soft Light "normal": el motor de oscuridad ya emite la cenefa con
+          // columna CENEFA OVALADA, así que SIEMPRE viaja al Excel aunque no haya
+          // un adicional CENF O (la corta el taller). CC/Dark van por otra columna.
           const cenefaDespiece = d.cortes.find((c) => c.columnaExcel === 'CENEFA OVALADA');
           if (cenefaDespiece) {
             fila['CENEFA OVALADA'] = cenefaDespiece.medidaCm;

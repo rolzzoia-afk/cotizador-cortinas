@@ -194,6 +194,30 @@ export const REGLAS_MECANISMO = {
       codigoInventario: 'MEC_39_OVALADA_BLANCO',
       colores: ['BCO', 'BLANCO'],
     },
+    // Soft light lleva cenefa ovalada → mismos kits ovalada de bodega que la dúo
+    // (MEC 39 blanco / MEC 38 negro). Soft light no se vende en gris. Antes el
+    // negro caía al kit simple 32/34; ahora usa el ovalada como el resto.
+    {
+      descripcion: 'Soft light 38 mm con accesorios negros → MEC 38 ovalada',
+      categoria: 'SOFT_LIGHT_38mm',
+      mec: 38,
+      codigoInventario: 'MEC_38_OVALADA_NEGRO',
+      colores: ['NEG', 'NEGRO'],
+    },
+    {
+      descripcion: 'Soft light 45 mm con accesorios blancos → MEC 39 ovalada',
+      categoria: 'SOFT_LIGHT_45mm',
+      mec: 39,
+      codigoInventario: 'MEC_39_OVALADA_BLANCO',
+      colores: ['BCO', 'BLANCO'],
+    },
+    {
+      descripcion: 'Soft light 45 mm con accesorios negros → MEC 38 ovalada',
+      categoria: 'SOFT_LIGHT_45mm',
+      mec: 38,
+      codigoInventario: 'MEC_38_OVALADA_NEGRO',
+      colores: ['NEG', 'NEGRO'],
+    },
     // Dúo manual 38 mm (cenefa ovalada): usa el kit ovalada de bodega según
     // color de accesorios, NO el kit simple 32/33/34. Verificado contra el
     // inventario real 2026-07-06: MEC 39 = MECANISMO OVALADO BLANCO - ROLZZO,

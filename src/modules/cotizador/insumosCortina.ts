@@ -15,6 +15,7 @@ import {
   esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 
 export type InsumoCortina = {
   /** Código del insumo (TAP01, TOR02, BRA01, TAR01, DOM38…), sin corchetes. */
@@ -89,6 +90,32 @@ export function tapaCenefaCuadrada(
   const m = TAPAS_CENEFA_CUADRADA_POR_COLOR[c];
   if (m) return { codigo: m.codigo, descripcion: `TAPA CENEFA CUADRADA ${m.color}` };
   return { descripcion: `TAPA CENEFA CUADRADA ${(colorTapa || '').trim()}`.trim() };
+}
+
+// ── Tapa de peso SOFT LIGHT / DARK (por color de accesorios) ─────────
+// Van a PRESIÓN, SIN tornillos (como las tapas dúo). Solo blanco/negro tienen
+// código; soft light no se vende en gris → sin código, con descripción genérica.
+// El mismo código de tapa sirve para DARK (mismo peso inferior E24/E44).
+export const TAPAS_PESO_OSCURIDAD_POR_COLOR: Record<string, { codigo: string; color: string }> = {
+  BCO: { codigo: 'TAP26', color: 'BLANCO' },
+  BLANCO: { codigo: 'TAP26', color: 'BLANCO' },
+  NEG: { codigo: 'TAP31', color: 'NEGRO' },
+  NEGRO: { codigo: 'TAP31', color: 'NEGRO' },
+};
+export const TAPAS_PESO_OSCURIDAD_POR_PANO = 2;
+
+/**
+ * Insumo de tapa de peso de sistemas de oscuridad (Soft Light / Dark) por color
+ * de accesorios (BCO→TAP26, NEG→TAP31). Gris u otro color → sin código (no se
+ * vende), solo descripción, para no inventar un insumo inexistente.
+ */
+export function tapaPesoOscuridad(
+  colorAcc: string | null | undefined,
+): { codigo?: string; descripcion: string; color: string } {
+  const c = (colorAcc || '').trim().toUpperCase();
+  const m = TAPAS_PESO_OSCURIDAD_POR_COLOR[c];
+  if (m) return { codigo: m.codigo, descripcion: `TAPA PESO SOFT.LIGHT/DARK - ${m.color}`, color: m.color };
+  return { descripcion: `TAPA PESO SOFT.LIGHT/DARK - ${(colorAcc || '').trim()}`.trim(), color: (colorAcc || '').trim() };
 }
 
 export const COD_TORNILLO_TAPA = 'TOR02';
@@ -262,7 +289,8 @@ export function insumosDePano(
 ): InsumoCortina[] {
   const out: InsumoCortina[] = [];
   const { categoria, ventanaColor, anchoM, omitirFijaciones } = ctx;
-  const cc = colorTapaCorto(colorAccesoriosDePano(p, ventanaColor));
+  const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+  const cc = colorTapaCorto(colorAcc);
 
   // Tapas de peso + sus tornillos (solo roller, por color de accesorios).
   if (llevaTapasPeso(categoria)) {
@@ -277,6 +305,16 @@ export function insumosDePano(
         cantidad: TORNILLOS_TAPA_PESO_POR_PANO,
       });
     }
+  } else if (familiaOscuridad(categoria, p.cenefa)) {
+    // Soft Light / Dark: 2 tapas de peso a PRESIÓN, SIN tornillos (TAP26 blanco /
+    // TAP31 negro). Gris no se vende → item sin código, solo descripción.
+    const tapa = tapaPesoOscuridad(colorAcc);
+    out.push({
+      codigo: tapa.codigo ?? '',
+      descripcion: tapa.descripcion,
+      color: tapa.color,
+      cantidad: TAPAS_PESO_OSCURIDAD_POR_PANO,
+    });
   } else if (llevaTapasDuo(categoria)) {
     // Dúo (y pletina dúo): tapas a presión, SIN tornillos. 2 exteriores por color + 2 internas (TAP13).
     if (cc) {
@@ -393,6 +431,20 @@ export function insumosVerticalDePano(ctx: {
     ? { codigo: 'VER58', descripcion: 'CADENA INFERIOR PARA VERTICAL NEGRO' }
     : { codigo: 'VER39', descripcion: 'CADENA DE PESO VERTICAL VERTILUX' };
 
+  // Imanes (VER55): las verticales de más de 3 m de ancho llevan 2 carritos con
+  // imán extra para que las lamas no se abran. Se SUMAN a los carritos normales.
+  const imanes: InsumoVertical[] =
+    ctx.anchoM > 3
+      ? [
+          {
+            codigo: 'VER55',
+            descripcion: 'CARRITO PARA CORTINAS GRANDES (IMANES)',
+            cantidad: 2,
+            grupo: 'ESTRUCTURA',
+          },
+        ]
+      : [];
+
   return [
     // PRODUCCIÓN (taller): lo que se monta sobre la tela.
     { codigo: 'VER41', descripcion: 'PESO LAMA VERTICAL VERTILUX', cantidad: carritos, grupo: 'PRODUCCION' },
@@ -400,6 +452,7 @@ export function insumosVerticalDePano(ctx: {
     // ESTRUCTURA (taller): la ferretería del sistema de lamas.
     { ...pesoCordon, cantidad: 1, grupo: 'ESTRUCTURA' },
     { codigo: 'VER40', descripcion: 'CARRITO VERTICAL VERTILUX', cantidad: carritos, grupo: 'ESTRUCTURA' },
+    ...imanes,
     { ...cordon, cantidad: 0, grupo: 'ESTRUCTURA', calcular: true },
     { codigo: 'VER50', descripcion: 'KIT DE VERTICAL NUEVO VERTILUX', cantidad: 1, grupo: 'ESTRUCTURA' },
     { ...pesoCadena, cantidad: 1, grupo: 'ESTRUCTURA' },
@@ -424,6 +477,21 @@ export const COD_ENCHUFE_MOTOR = 'DOM04';
 export const NOMBRE_ENCHUFE_MOTOR = 'ENCHUFE PARA HUB USB';
 export const COD_HUB_DOMOTICA = 'DOM43';
 export const NOMBRE_HUB_DOMOTICA = 'BRIGDE HUB DOMOTICA';
+
+// ── Cargador del motor (1 por motor, tabla INSTALACIÓN) ──────────────
+// DOM03 (HUB USB 1 QR) por defecto; el vendedor puede cambiarlo por DOM33
+// (enchufe adaptador motor grande) en Fase 2 cuando el motor lo requiera.
+export const COD_CARGADOR_MOTOR = 'DOM03';
+export const NOMBRE_CARGADOR_MOTOR = 'HUB USB [1 QR]';
+export const COD_CARGADOR_MOTOR_ALT = 'DOM33';
+export const NOMBRE_CARGADOR_MOTOR_ALT = 'ENCHUFE ADAPTADOR MOTOR GRANDE';
+
+/** Cargador del motor del paño: DOM03 por defecto, DOM33 si se cambió en Fase 2. */
+export function cargadorMotorDePano(p: Partial<Pano>): { codigo: string; descripcion: string } {
+  return (p.motorCargador || '').toUpperCase() === COD_CARGADOR_MOTOR_ALT
+    ? { codigo: COD_CARGADOR_MOTOR_ALT, descripcion: NOMBRE_CARGADOR_MOTOR_ALT }
+    : { codigo: COD_CARGADOR_MOTOR, descripcion: NOMBRE_CARGADOR_MOTOR };
+}
 
 /** ¿El paño lleva un motor con código DOM (no 'CABLE' futuro ni vacío)? */
 export function panoTieneMotorDom(p: Partial<Pano>): boolean {
@@ -510,6 +578,10 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
     out.push({ codigo: COD_CABLE_MOTOR, descripcion: NOMBRE_CABLE_MOTOR, color: '', cantidad: 1 });
   }
   out.push({ codigo: COD_ENCHUFE_MOTOR, descripcion: NOMBRE_ENCHUFE_MOTOR, color: '', cantidad: 1 });
+  // Cargador del motor (1 por motor): DOM03 por defecto o DOM33 si se cambió en
+  // Fase 2. Su código DOM cae por defecto en INSTALACIÓN del inventario.
+  const cargador = cargadorMotorDePano(p);
+  out.push({ codigo: cargador.codigo, descripcion: cargador.descripcion, color: '', cantidad: 1 });
   // Controles adicionales (mismo código que el control del kit).
   const ctrlAdic = Number(p.motorControlAdicCant) || (p.motorControlAdic ? 1 : 0);
   if (ctrlAdic > 0) {

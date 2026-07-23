@@ -30,8 +30,11 @@
 // ─────────────────────────────────────────────────────────────────────
 import type { ModeloDespiece } from './tipos';
 import {
+  aplicarDefaultsPerfiles,
   cortesOscuridad,
   familiaOscuridad,
+  familiaOscuridadConDiametro,
+  normalizarPerforacion,
   normalizarVarianteOscuridad,
   type MedidasPerfilesOscuridad,
   type PerfilesOscuridad,
@@ -73,6 +76,10 @@ export type CorteDespiece = {
   /** Columna del Excel de órdenes del optimizador ('' = no viaja en él). */
   columnaExcel: string;
   medidaCm: number;
+  /** Oscuridad: perforación del perfil (INTERNO/EXTERNO) — anotación de taller. */
+  perforacion?: 'INTERNO' | 'EXTERNO';
+  /** Oscuridad: perfil activo sin superficie elegida → medida pendiente (Fase 2). */
+  pendienteMedida?: boolean;
 };
 
 export type Despiece = {
@@ -191,7 +198,9 @@ export function calcularDespiece(
 
   // ── Sistemas de oscuridad: motor dedicado con fórmulas del Excel ──
   // (Soft Light 38/45, Soft Light con cenefa cuadrada, Oscuranti, Dark).
-  const familia = familiaOscuridad(ctx?.categoria, ctx?.cenefa);
+  // El diámetro del modelo manda: un soft light 38 mm sobre tubo 45 mm (banda
+  // E78) usa el corte de tubo de 45 mm (cenefa/tela/peso no cambian).
+  const familia = familiaOscuridadConDiametro(ctx?.categoria, ctx?.cenefa, modelo.diametro_tubo_mm);
   if (familia) {
     const variante = normalizarVarianteOscuridad(
       ctx?.oscuridadVariante ?? ctx?.sentido,
@@ -207,7 +216,18 @@ export function calcularDespiece(
       ctx?.perfilesMedidas ?? {},
     );
     for (const c of cortesOsc) {
-      cortes.push({ componente: c.componente, columnaExcel: c.columnaExcel, medidaCm: c.medidaCm });
+      cortes.push({
+        componente: c.componente,
+        columnaExcel: c.columnaExcel,
+        medidaCm: c.medidaCm,
+        perforacion: c.perforacion,
+        pendienteMedida: c.pendienteMedida,
+      });
+    }
+    // ALTO de corte de la tela (reserva roller = alto + 25): la mesa corta la
+    // pieza a este alto y el Excel de órdenes llena su columna ALTO TELA.
+    if (altoCm > 0) {
+      cortes.push({ componente: 'Alto tela', columnaExcel: 'ALTO TELA', medidaCm: r1(altoCm + 25) });
     }
     if (modelo.notas) notas.push(modelo.notas);
     return { cortes, aproximado: false, notas };
@@ -439,7 +459,7 @@ export const MODELO_DESPIECE_STUB: import('./tipos').ModeloDespiece = {
 
 /** Construye el contexto de despiece desde ventana + paño (Fase 2 / Excel). */
 export function contextoDespieceDesdePano(
-  v: { categoria?: string; sentido?: string | null; alto?: number | string },
+  v: { categoria?: string; sentido?: string | null; alto?: number | string; oscuridadVariante?: string | null },
   p: {
     alto?: number | string;
     cenefa?: string | null;
@@ -450,6 +470,12 @@ export function contextoDespieceDesdePano(
     perfilDerPiso?: boolean;
     perfilInfMuro?: boolean;
     perfilInfPiso?: boolean;
+    perfilIzqActivo?: boolean;
+    perfilDerActivo?: boolean;
+    perfilInfActivo?: boolean;
+    perfilIzqPerf?: string;
+    perfilDerPerf?: string;
+    perfilInfPerf?: string;
     perfilIzqMuroCm?: number;
     perfilIzqPisoCm?: number;
     perfilDerMuroCm?: number;
@@ -479,6 +505,24 @@ export function contextoDespieceDesdePano(
   // El alto suele vivir en la VENTANA, no en el paño (igual que en tela.ts):
   // sin este fallback, vertical y oscuridad quedaban con altoCm = 0.
   const altoCm = (parseFloat(String(p.alto ?? v.alto ?? 0)) || 0) * 100;
+  // Variante (Fase 1) y familia: para auto-activar los laterales con su
+  // perforación (soft light / dark). Prioridad paño → ventana → sentido.
+  const oscuridadVariante = p.oscuridadVariante ?? v.oscuridadVariante ?? v.sentido;
+  const familiaOsc = familiaOscuridad(v.categoria, p.cenefa);
+  const perfilesBase: PerfilesOscuridad = {
+    izqMuro: p.perfilIzqMuro,
+    izqPiso: p.perfilIzqPiso,
+    derMuro: p.perfilDerMuro,
+    derPiso: p.perfilDerPiso,
+    infMuro: p.perfilInfMuro,
+    infPiso: p.perfilInfPiso,
+    izqActivo: p.perfilIzqActivo,
+    derActivo: p.perfilDerActivo,
+    infActivo: p.perfilInfActivo,
+    izqPerf: normalizarPerforacion(p.perfilIzqPerf),
+    derPerf: normalizarPerforacion(p.perfilDerPerf),
+    infPerf: normalizarPerforacion(p.perfilInfPerf),
+  };
   return {
     categoria: v.categoria,
     sentido: v.sentido,
@@ -486,15 +530,12 @@ export function contextoDespieceDesdePano(
     verticalExtraAltoCm: extras?.verticalExtraAltoCm,
     verticalDctoAltoFinalCm: extras?.verticalDctoAltoFinalCm,
     cenefa: p.cenefa,
-    oscuridadVariante: p.oscuridadVariante,
-    perfiles: {
-      izqMuro: p.perfilIzqMuro,
-      izqPiso: p.perfilIzqPiso,
-      derMuro: p.perfilDerMuro,
-      derPiso: p.perfilDerPiso,
-      infMuro: p.perfilInfMuro,
-      infPiso: p.perfilInfPiso,
-    },
+    oscuridadVariante,
+    perfiles: aplicarDefaultsPerfiles(
+      perfilesBase,
+      familiaOsc,
+      normalizarVarianteOscuridad(oscuridadVariante),
+    ),
     perfilesMedidas: {
       izqMuro: p.perfilIzqMuroCm,
       izqPiso: p.perfilIzqPisoCm,

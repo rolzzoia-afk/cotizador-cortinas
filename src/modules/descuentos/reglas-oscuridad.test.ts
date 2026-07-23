@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cortesOscuridad,
   familiaOscuridad,
+  familiaOscuridadConDiametro,
   normalizarVarianteOscuridad,
   type FamiliaOscuridad,
   type VarianteOscuridad,
@@ -110,6 +111,18 @@ describe('familiaOscuridad / normalizarVarianteOscuridad', () => {
     expect(familiaOscuridad('OSCURANTI_63mm', '')).toBe('OSCURANTI');
     expect(familiaOscuridad('DARK_38mm', '')).toBe('DARK');
     expect(familiaOscuridad('ROL', '')).toBeNull();
+  });
+
+  it('familiaOscuridadConDiametro: soft light 38 mm sobre tubo 45 mm (banda E78) → SOFT_LIGHT_45', () => {
+    // Solo el soft light 38 mm NO cuadrado se sube a 45; el resto no se toca.
+    expect(familiaOscuridadConDiametro('SOFT_LIGHT_38mm', 'Ovalada', 45)).toBe('SOFT_LIGHT_45');
+    expect(familiaOscuridadConDiametro('SOFT_LIGHT_38mm', 'Ovalada', 38)).toBe('SOFT_LIGHT_38');
+    expect(familiaOscuridadConDiametro('SOFT_LIGHT_38mm', 'Ovalada', undefined)).toBe('SOFT_LIGHT_38');
+    // Cuadrada (CC) no se toca: 38 y 45 son idénticas en corte.
+    expect(familiaOscuridadConDiametro('SOFT_LIGHT_38mm', 'Cuadrada', 45)).toBe('SOFT_LIGHT_CC');
+    // 45 nativo y DARK quedan igual.
+    expect(familiaOscuridadConDiametro('SOFT_LIGHT_45mm', 'Ovalada', 38)).toBe('SOFT_LIGHT_45');
+    expect(familiaOscuridadConDiametro('DARK_38mm', '', 45)).toBe('DARK');
   });
 
   it('normaliza variante desde sentido / selección', () => {

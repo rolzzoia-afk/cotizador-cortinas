@@ -361,6 +361,16 @@ export function tuberiaParaPano(
 // etiqueta ("…38MM", "0,63mm…", OVALADA = 38 mm) y el modelo de despiece en
 // diametro_tubo_mm. No existe (ni hace falta) una tabla mecanismo→tubo.
 
+/** Diámetro (mm) al que pertenece un CÓDIGO de tubo (E66→38 · E78/E05→45 · E47/E65→63); null si no se reconoce. */
+export function diametroDeCodigoTubo(codigo: string | null | undefined): number | null {
+  const up = (codigo || '').trim().toUpperCase();
+  if (!up) return null;
+  for (const d of [38, 45, 63]) {
+    if (codigosTuberiaCompatibles(d).includes(up)) return d;
+  }
+  return null;
+}
+
 /** Códigos de tubo compatibles con un diámetro: 38→[E02,E66], 45→[E78,E05], 63→[E47,E65]. */
 export function codigosTuberiaCompatibles(diametroMm: number): string[] {
   const { reglaE02E66, regla63, tubos45mm, codigoPorDiametro } = REGLAS_TUBERIA;

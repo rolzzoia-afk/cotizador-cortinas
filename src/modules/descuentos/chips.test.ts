@@ -52,6 +52,42 @@ describe('mecanismoParaPano — kit reforzado MEC 40/41 (#18)', () => {
   });
 });
 
+describe('modeloPorAncho — soft light 38 mm banda E78', () => {
+  const soft = (variante: string, diam: 38 | 45): ModeloDespiece => ({
+    ...m('', diam),
+    sistema: 'SOFT_LIGHT',
+    tipo_rol: `SOFT_LIGHT_${variante}_${diam}mm`,
+    codigos_tubo: diam === 45 ? 'E04; E05; E78' : 'E01; E02; E66',
+  });
+  const catalogo = [soft('INTERNO', 38), soft('INTERNO', 45), soft('EXTERNO', 38), soft('EXTERNO', 45)];
+  const base38 = soft('EXTERNO', 38);
+
+  it('en banda 2,2–3,0 m con toggle E78 sube al 45 mm del mismo variante', () => {
+    const out = modeloPorAncho(catalogo, 'SOFT_LIGHT_38mm', 2.5, base38, 'BLANCO', true);
+    expect(out?.diametro_tubo_mm).toBe(45);
+    expect(out?.tipo_rol).toBe('SOFT_LIGHT_EXTERNO_45mm');
+  });
+
+  it('el borde superior 3,0 m entra; 2,2 m NO (banda estricta como roller)', () => {
+    expect(modeloPorAncho(catalogo, 'SOFT_LIGHT_38mm', 3.0, base38, 'BLANCO', true)?.diametro_tubo_mm).toBe(45);
+    expect(modeloPorAncho(catalogo, 'SOFT_LIGHT_38mm', 2.2, base38, 'BLANCO', true)?.diametro_tubo_mm).toBe(38);
+  });
+
+  it('sin toggle E78 se queda en 38 mm', () => {
+    expect(modeloPorAncho(catalogo, 'SOFT_LIGHT_38mm', 2.5, base38, 'BLANCO', false)?.diametro_tubo_mm).toBe(38);
+  });
+
+  it('fuera de banda (>3 m) se queda en 38 mm aunque el toggle esté activo', () => {
+    expect(modeloPorAncho(catalogo, 'SOFT_LIGHT_38mm', 3.2, base38, 'BLANCO', true)?.diametro_tubo_mm).toBe(38);
+  });
+
+  it('al bajar de banda revierte un modelo 45 mm a 38 mm', () => {
+    const out = modeloPorAncho(catalogo, 'SOFT_LIGHT_38mm', 1.8, soft('EXTERNO', 45), 'BLANCO', true);
+    expect(out?.diametro_tubo_mm).toBe(38);
+    expect(out?.tipo_rol).toBe('SOFT_LIGHT_EXTERNO_38mm');
+  });
+});
+
 describe('chips ↔ modelo', () => {
   it('MEC_13 marca el chip "[MEC 13]" (lista de resolución) y 38mm la tubería E02', () => {
     const modelo = m('MEC_13_LZ50_SINFLEX_GRIS');

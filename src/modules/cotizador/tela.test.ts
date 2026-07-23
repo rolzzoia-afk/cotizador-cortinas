@@ -14,6 +14,7 @@ import {
 import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
 import type { CatalogoProductos, Producto } from './types';
 import type { VentanaItem } from '@/modules/ots/types';
+import { MODELO_DESPIECE_STUB } from '@/modules/descuentos/despiece';
 
 // Helper: construye un Producto con defaults razonables
 // (los tests solo leen anchoRollo, el resto es ruido).
@@ -296,6 +297,25 @@ describe('buildOptimizerRows', () => {
     expect(peso?.cod).toBe('E14'); // peso roller negro
     expect(cenefa?.cod).toBe('E26'); // cenefa ovalada negro
     expect(cenefa?.color).toBe('NEGRO');
+  });
+
+  it('OSCURIDAD (soft light): la tela se corta al ancho REAL del despiece, no ancho−3,5', () => {
+    // Interno, ancho 2,969 m (296,9 cm) → TELA_ADJ −7,2 → corte 289,7 (golden).
+    const rows = buildOptimizerRows(
+      [
+        v({
+          categoria: 'SOFT_LIGHT_38mm',
+          sentido: 'INTERNO',
+          alto: 1.8,
+          modelo: MODELO_DESPIECE_STUB,
+          panos: [{ ancho: 2.969, alto: 1.8, cenefa: 'Ovalada', oscuridadVariante: 'INTERNO' }],
+        } as unknown as Partial<VentanaItem>),
+      ],
+      cat,
+    );
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(289.7, 1);
+    const { panos } = calcularPanos(rows);
+    expect(panos[0].anchoCorteCm).toBe(289.7); // no 296,9 − 3,5 = 293,4
   });
 
   it('DUAL: 2 paños con SU tela → 2 filas, cada una con su codInt/anchoRollo', () => {

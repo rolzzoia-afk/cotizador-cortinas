@@ -197,7 +197,13 @@ export function construirHojaCorte(
       anchoCorteTela: redM(r.ancho),
       // La vertical se corta al ancho REAL: no lleva limpieza de borde, así que
       // la celda queda vacía en vez de repetir la medida de al lado.
-      corteAncho35: r.esVertical ? '' : redM(r.ancho - params.descAnchoCorteCm / 100),
+      // OSCURIDAD: el corte real viene del despiece (ancho + TELA_ADJ), no del
+      // ancho−3,5 roller (golden Soft Light interno 296,9 → 289,7).
+      corteAncho35: r.esVertical
+        ? ''
+        : typeof r.anchoCorteTelaCm === 'number'
+          ? redM(r.anchoCorteTelaCm / 100)
+          : redM(r.ancho - params.descAnchoCorteCm / 100),
       alto: aMetros(r.altoCm),
       altoCorteTela: redM(r.altoCorte), // dúo: 2×alto+0,30; resto: alto+0,25
       pano,
@@ -361,10 +367,9 @@ function rect(doc: jsPDF, x: number, y: number, w: number, h: number, fill?: RGB
   doc.rect(x, y, w, h);
 }
 
-/** Tema visual de una hoja de corte: distingue la clásica de la VERTICAL. */
+/** Tema visual de una sección de la hoja de corte: clásica o VERTICAL. */
 type TemaCorte = {
   titulo: string; // título del encabezado
-  archivo: string; // nombre del .pdf
   banner?: string; // franja de aviso bajo el encabezado (solo vertical)
   colorTitulo: RGB;
   tituloTotalPanos: string;
@@ -392,11 +397,12 @@ export function partirHojaCorte(hoja: HojaCorte): { principal: HojaCorte; vertic
 }
 
 /**
- * Genera y descarga el/los PDF de la hoja de corte para la OT dada. Si la OT
- * tiene cortinas verticales, salen DOS hojas SEPARADAS: la clásica (roller/etc.)
- * y una "HOJA DE CORTE DE PAÑO VERTICAL". Solo-vertical o solo-roller → una sola.
- * El taller corta las verticales en mesa aparte, así que ningún paño queda a
- * caballo entre las dos hojas (ver empaque por `esVertical` en tela.ts).
+ * Genera y descarga UN solo PDF de la hoja de corte para la OT dada. Si la OT
+ * tiene cortinas verticales, el mismo PDF trae DOS secciones continuas: la hoja
+ * clásica (roller/etc.) y a continuación la "HOJA DE CORTE DE PAÑO VERTICAL",
+ * cada una con su encabezado en sus páginas. Solo-vertical o solo-roller → una
+ * sección. El taller corta las verticales en mesa aparte, así que ningún paño
+ * queda a caballo entre las dos secciones (ver empaque por `esVertical` en tela.ts).
  */
 export function generarPdfHojaCorte(
   rows: OptimizerRow[],
@@ -412,19 +418,23 @@ export function generarPdfHojaCorte(
   const hoja = construirHojaCorte(rows, colmenaPanos, ot, params, piezasSnapshot);
   const { principal, vertical } = partirHojaCorte(hoja);
 
-  if (principal.cortinas.length > 0) {
-    renderHojaCorte(principal, meta, {
+  const doc = new jsPDF('l', 'mm', 'a4'); // 297 × 210
+  const hayPrincipal = principal.cortinas.length > 0;
+  const hayVertical = vertical.cortinas.length > 0;
+
+  if (hayPrincipal) {
+    renderHojaCorte(doc, principal, meta, {
       titulo: 'HOJA DE CORTE PAÑO',
-      archivo: `Corte_OT${meta.ot}.pdf`,
       colorTitulo: [30, 30, 38],
       tituloTotalPanos: 'TOTAL PAÑOS',
       tituloSello: 'SELLO PAÑOS',
     });
   }
-  if (vertical.cortinas.length > 0) {
-    renderHojaCorte(vertical, meta, {
+  if (hayVertical) {
+    // La sección vertical parte en página propia, a continuación de la clásica.
+    if (hayPrincipal) doc.addPage();
+    renderHojaCorte(doc, vertical, meta, {
       titulo: 'HOJA DE CORTE DE PAÑO VERTICAL',
-      archivo: `Corte_Vertical_OT${meta.ot}.pdf`,
       banner: 'PAÑOS / COLMENA SOLO PARA CORTINAS VERTICALES',
       colorTitulo: C_GREEN_VERT,
       // El recuadro es de 16 mm: "TOTAL PAÑOS VERTICALES" se trunca. La franja
@@ -433,20 +443,21 @@ export function generarPdfHojaCorte(
       tituloSello: 'SELLO PAÑOS VERTICALES',
     });
   }
+  // Un solo archivo; si la OT es SOLO vertical, el nombre lo dice.
+  doc.save(hayPrincipal ? `Corte_OT${meta.ot}.pdf` : `Corte_Vertical_OT${meta.ot}.pdf`);
 }
 
-/** Render de UNA hoja de corte (clásica o vertical, según `tema`). */
-function renderHojaCorte(hoja: HojaCorte, meta: MetaCorte, tema: TemaCorte): void {
-  const doc = new jsPDF('l', 'mm', 'a4'); // 297 × 210
+/** Render de UNA sección de la hoja de corte (clásica o vertical, según `tema`)
+ *  sobre el doc compartido, empezando en la página actual. No guarda. */
+function renderHojaCorte(doc: jsPDF, hoja: HojaCorte, meta: MetaCorte, tema: TemaCorte): void {
   const W = 297;
   const M = 6;
   const BOTTOM = 210 - M; // límite inferior útil de la página
   let y = M;
-  let pagina = 0;
 
-  // ── Encabezado (se repite en cada página) ──
+  // ── Encabezado (se repite en cada página; numeración continua del doc) ──
   const encabezado = () => {
-    pagina++;
+    const pagina = doc.getNumberOfPages();
     y = M;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(12);
@@ -701,8 +712,6 @@ function renderHojaCorte(hoja: HojaCorte, meta: MetaCorte, tema: TemaCorte): voi
   doc.setFontSize(16);
   doc.setTextColor(150, 150, 158);
   doc.text(tema.tituloSello, 230, yAbajo + 23, { align: 'center' });
-
-  doc.save(tema.archivo);
 }
 
 function drawOptimizador(doc: jsPDF, x: number, y: number, hoja: HojaCorte) {

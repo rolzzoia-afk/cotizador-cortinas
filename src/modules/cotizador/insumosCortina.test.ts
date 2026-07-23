@@ -202,6 +202,21 @@ describe('insumosDePano', () => {
     const met = insumosDePano(pano({ color: 'MET' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
     expect(met.map((i) => i.codigo)).toEqual(['TAP13']);
   });
+  it('SOFT LIGHT → 2 tapas de peso TAP26/TAP31 por color, a presión (SIN tornillos)', () => {
+    const blanco = insumosDePano(pano({ color: 'BCO', cenefa: 'Ovalada' }), { categoria: 'SOFT_LIGHT_38mm', anchoM: 2.5 });
+    const bm = Object.fromEntries(blanco.map((i) => [i.codigo, i.cantidad]));
+    expect(bm.TAP26).toBe(2); // tapa blanca ×2
+    // Las tapas van a presión: sus tornillos NO se emiten. Los TOR02 presentes
+    // (6) son solo los de la cenefa ovalada, no de las tapas.
+    expect(bm.TOR02).toBe(6);
+    const negro = insumosDePano(pano({ color: 'NEG', cenefa: 'Ovalada' }), { categoria: 'SOFT_LIGHT_38mm', anchoM: 2.5 });
+    expect(negro.find((i) => i.codigo === 'TAP31')?.cantidad).toBe(2); // tapa negra ×2
+    // Gris no se vende: item sin código (solo descripción), igual ×2.
+    const gris = insumosDePano(pano({ color: 'GRS', cenefa: 'Ovalada' }), { categoria: 'SOFT_LIGHT_38mm', anchoM: 2.5 });
+    const tapaGris = gris.find((i) => i.descripcion.includes('TAPA PESO SOFT.LIGHT/DARK'));
+    expect(tapaGris?.codigo).toBe('');
+    expect(tapaGris?.cantidad).toBe(2);
+  });
   it('dúo vulcanita sin cenefa → 4 tarugos TAR01 (además de las tapas dúo)', () => {
     const out = insumosDePano(pano({ color: 'GRS', materialTipo: 'VULCANITA' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
     expect(out.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(4);
@@ -300,16 +315,31 @@ describe('insumosVerticalDePano', () => {
     expect(calc.map((i) => i.codigo).sort()).toEqual(['VER39', 'VER43']);
     expect(calc.every((i) => i.cantidad === 0)).toBe(true);
   });
+
+  it('imanes VER55 ×2 (ESTRUCTURA) solo cuando el ancho pasa de 3 m', () => {
+    // Exactamente 3,00 m NO lleva imanes.
+    expect(cod(insumosVerticalDePano({ colorAcc: 'BCO', anchoM: 3, carritos: 36 })).VER55).toBeUndefined();
+    // 3,01 m sí: 2 imanes, en ESTRUCTURA, sumados a los carritos (VER40 intacto).
+    const anchos = insumosVerticalDePano({ colorAcc: 'BCO', anchoM: 3.01, carritos: 36 });
+    const m = cod(anchos);
+    expect(m.VER55).toMatchObject({ cantidad: 2, grupo: 'ESTRUCTURA' });
+    expect(m.VER40).toMatchObject({ cantidad: 36, grupo: 'ESTRUCTURA' }); // carritos NO cambian
+  });
 });
 
 describe('insumosMotorDePano', () => {
-  it('DOM38 → motor + control DOM39 + cable DOM40 + enchufe DOM04', () => {
+  it('DOM38 → motor + control DOM39 + cable DOM40 + enchufe DOM04 + cargador DOM03', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM03']);
   });
-  it('DOM41: motor + DOM42 + DOM04, SIN cable DOM40 (#28); controles/hub adicionales', () => {
+  it('cargador cambia a DOM33 cuando el paño lo pide', () => {
+    const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM33' }));
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM33']);
+    expect(out.some((i) => i.codigo === 'DOM03')).toBe(false);
+  });
+  it('DOM41: motor + DOM42 + DOM04 + cargador DOM03, SIN cable DOM40 (#28); controles/hub adicionales', () => {
     const base = insumosMotorDePano(pano({ motorModelo: 'DOM41' }));
-    expect(base.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42', 'DOM04']); // sin DOM40
+    expect(base.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42', 'DOM04', 'DOM03']); // sin DOM40
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM41', motorControlAdicCant: 2, motorHubUsbCant: 1 }));
     expect(out.some((i) => i.codigo === 'DOM40')).toBe(false);
     const ctrl = out.filter((i) => i.codigo === 'DOM42').reduce((a, i) => a + i.cantidad, 0);
@@ -322,7 +352,7 @@ describe('insumosMotorDePano', () => {
   });
   it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38+DOM39', () => {
     const porChip = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada' }));
-    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04']);
+    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM03']);
     const porCategoria = insumosMotorDePano(pano({ motorModelo: 'DOM41' }), 'ROL_CENEFA_OVALADA_MOTOR_GRANDE');
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.

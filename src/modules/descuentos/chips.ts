@@ -409,6 +409,30 @@ export function modeloDesdeChipMecanismo(
 }
 
 /**
+ * Soft light 38 mm: la banda 2,2–3,0 m con el toggle E78 de la OT sube al MISMO
+ * sistema en 45 mm (tubo E78 + corte de tubo 45 mm); fuera de banda / toggle off
+ * vuelve a 38 mm. Los modelos soft light no traen mecanismo, así que se
+ * desambiguan por sistema + tipo_rol (mismo variante INTERNO/SEMI/EXTERNO, solo
+ * cambia el "38mm"↔"45mm"). Devuelve el modelo actual si no hay fila destino.
+ */
+function modeloSoftLight38PorBandaE78(
+  modelos: ModeloDespiece[],
+  anchoM: number,
+  modeloActual: ModeloDespiece | null,
+  usarTuboE78: boolean,
+): ModeloDespiece | null {
+  if (!modeloActual) return modeloActual;
+  const enBanda = usarTuboE78 && anchoM > 2.2 && anchoM <= 3.0;
+  const objetivoDiam = enBanda ? 45 : 38;
+  if (modeloActual.diametro_tubo_mm === objetivoDiam) return modeloActual;
+  const tipoObjetivo = modeloActual.tipo_rol.replace(enBanda ? '38mm' : '45mm', enBanda ? '45mm' : '38mm');
+  const encontrado = modelos.find(
+    (m) => m.sistema === modeloActual.sistema && m.tipo_rol === tipoObjetivo,
+  );
+  return encontrado ?? modeloActual;
+}
+
+/**
  * Modelo efectivo de la VENTANA según el ANCHO.
  *  · Roller simple sobre 3 m sube a la fila 63 mm (MEC 28, tubo E65).
  *  · Banda 2,2–3,0 m: ROL sube al kit 45 mm por color (DECORELLI/ROLZZO) y el
@@ -430,6 +454,11 @@ export function modeloPorAncho(
   color: string | null | undefined,
   usarTuboE78 = false,
 ): ModeloDespiece | null {
+  // Soft light 38 mm tiene su propia banda E78 (swap 38↔45 mm por sistema/tipo_rol,
+  // no por mecanismo): va antes de la maquinaria roller basada en número MEC.
+  if ((categoria || '').trim() === 'SOFT_LIGHT_38mm') {
+    return modeloSoftLight38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78);
+  }
   const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, usarTuboE78);
   if (aplicada) {
     // La fila destino puede vivir en otra categoría (dúo 38 → filas MANUAL_45)

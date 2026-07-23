@@ -155,6 +155,7 @@ export function construirCalculoGeneral(
       const esBee = esCategoriaBeeblack(v.categoria);
       const bloque = bloqueDe(v.categoria, p.cenefa as string);
 
+      const famOscFila = familiaOscuridad(v.categoria, p.cenefa as string | undefined);
       const despiece = new Map<string, number | string>();
       if (anchoCm > 0 && (v.modelo || esBee)) {
         const ctx = contextoDespieceDesdePano(v, p, {
@@ -163,7 +164,24 @@ export function construirCalculoGeneral(
         });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
+        // Oscuridad: los dos perfiles laterales van juntos en UNA columna PERFIL
+        // LATERAL (medida + perforación, "210 INT / 200 EXT"); el inferior en
+        // PERFIL BASE. Se acumulan aquí porque son cortes separados.
+        const perfLateral: string[] = [];
         for (const c of d.cortes) {
+          // Token de perfil: medida (o "definir F2" si falta) + perforación INT/EXT.
+          const perfTag =
+            c.perforacion === 'INTERNO' ? ' INT' : c.perforacion === 'EXTERNO' ? ' EXT' : '';
+          if (/^Perfil (izquierdo|derecho)/.test(c.componente)) {
+            const med = c.pendienteMedida ? 'definir F2' : String(c.medidaCm);
+            perfLateral.push(`${med}${perfTag}`.trim());
+            continue;
+          }
+          if (/^Perfil inferior/.test(c.componente)) {
+            const med = c.pendienteMedida ? 'definir F2' : String(c.medidaCm);
+            despiece.set('PERFIL BASE', `${med}${perfTag}`.trim());
+            continue;
+          }
           if (c.medidaCm <= 0) continue;
           let comp = c.componente.toUpperCase();
           // La CENEFA OVALADA se separa en dos columnas según la tira de aluminio
@@ -172,7 +190,14 @@ export function construirCalculoGeneral(
           if (comp === 'CENEFA OVALADA') {
             comp = `CENEFA OVALADA (${tiraCenefaOvalada(p.cenefaTira as string | undefined)})`;
           }
+          // Oscuridad: "TELA (ANCHO)" se muestra como TELA (como la planilla manual).
+          if (comp === 'TELA (ANCHO)' && famOscFila) comp = 'TELA';
           despiece.set(comp, c.medidaCm);
+        }
+        if (perfLateral.length > 0) {
+          // Si izq y der miden/perforan igual, no repetir el token.
+          const uniq = perfLateral.every((t) => t === perfLateral[0]) ? [perfLateral[0]] : perfLateral;
+          despiece.set('PERFIL LATERAL', uniq.join(' / '));
         }
       }
       // Dúo: se detecta SOLO por producto, igual que el corte real (tela.ts
@@ -200,7 +225,9 @@ export function construirCalculoGeneral(
         ? r1(altoCm + params.extraVerticalCm)
         : r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
       const altoDuoCm = r1(altoCm * 2 + (esPletinaFila ? 0 : params.extraDuoCm));
-      if (altoCm > 0 && !esVerticalFila) {
+      // Oscuridad: el alto de la tela ya viaja como columna ALTO TELA (alto+25)
+      // desde el despiece; la columna ALTO genérica se omite para no duplicarla.
+      if (altoCm > 0 && !esVerticalFila && !famOscFila) {
         if (opts?.altoMesaCorteDuo && esDuoFila) {
           // Dimensionado: la tela dúo se corta DOBLADA en la mesa, así que en vez
           // del ALTO se muestra ALTO MESA DE CORTE = alto + extraMesaDuo (la mitad
@@ -300,8 +327,8 @@ export function construirCalculoGeneral(
     }
     if (cols.length === 0) continue;
     // Al final del bloque (como en la hoja manual): primero ALTO MESA DE CORTE
-    // (dúo del Dimensionado) y luego ALTO.
-    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO']) {
+    // (dúo del Dimensionado), luego ALTO TELA (oscuridad) y ALTO.
+    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO TELA', 'ALTO']) {
       const idx = cols.indexOf(colFin);
       if (idx >= 0) {
         cols.splice(idx, 1);
@@ -479,12 +506,20 @@ const VARIANTE_CALCULO_GENERAL: VarianteHojaCalculo = {
  * (no se dimensiona en esta mesa).
  */
 // Metal y ferretería de la vertical: no se dimensionan en la mesa de tela.
-// LAMAS y REPUESTO sí quedan (son piezas de tela a cortar).
+// LAMAS, REPUESTO y ALTO DE CORTE sí quedan (la mesa corta la pieza con el
+// alto de corte); el ALTO FINAL de la lama es dato del Cálculo General.
 const SIN_DIMENSIONADO_VERTICAL = new Set([
   'PERFIL CABEZAL',
   'VARILLA',
   'CARRITOS',
+  'ALTO FINAL',
 ]);
+
+// Piezas de TALLER de los sistemas de oscuridad (Soft Light / Oscuranti / Dark):
+// la cenefa (soft light "normal") y los perfiles los corta el taller, no la mesa
+// de tela. La mesa solo ve TELA + ALTO TELA. (CENEFA DELANTERA/TRASERA de las
+// familias con cenefa cuadrada mantienen su comportamiento previo.)
+const SIN_DIMENSIONADO_OSCURIDAD = new Set(['CENEFA', 'PERFIL LATERAL', 'PERFIL BASE']);
 
 export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   titulo: 'DIMENSIONADO',
@@ -493,7 +528,8 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   sinDespiece: (label) =>
     label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
     label.startsWith('CENEFA OVALADA') || // incluye "(CON/SIN TIRA)"
-    SIN_DIMENSIONADO_VERTICAL.has(label),
+    SIN_DIMENSIONADO_VERTICAL.has(label) ||
+    SIN_DIMENSIONADO_OSCURIDAD.has(label),
   conjuntoPanos: true,
   altoMesaCorteDuo: true,
 };

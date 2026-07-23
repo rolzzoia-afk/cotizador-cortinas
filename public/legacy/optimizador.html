@@ -1574,14 +1574,18 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.13"; // 2026-07-21: cortes VERTICAL (perfil cabezal VER62/61 + varilla VER63, barra 580 cm)
+const VERSION_ACTUAL = "5.14"; // 2026-07-23: SOFT LIGHT — peso E24/E44 + perfiles zócalo E32/E33/E34 (barra 580) con perforación
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
 // Largo de barra virgen (cm) por código cuando el catálogo del operario no lo
 // trae. Los perfiles/varillas verticales vienen en barras de 5,80 m (el fallback
-// genérico MM_TUBO_ORIGINAL es 5,78 m, de los tubos roller).
-const MEDIDAS_BARRA_DEFAULT = { 'VER61': 580, 'VER62': 580, 'VER63': 580 };
+// genérico MM_TUBO_ORIGINAL es 5,78 m, de los tubos roller). El zócalo de los
+// perfiles SOFT LIGHT/DARK (E32/E33/E34) también es barra de 5,80 m.
+const MEDIDAS_BARRA_DEFAULT = {
+    'VER61': 580, 'VER62': 580, 'VER63': 580,
+    'E32': 580, 'E33': 580, 'E34': 580,
+};
 const STOCK_MINIMO = 10; // Umbral de alerta: códigos con ≤ este número de tubos enteros disponibles
 
 const SistemaInventario = {
@@ -3359,7 +3363,11 @@ const COLUMNAS_ESPECIFICAS = [
     { key: 'cenefa_delantera', titulo: 'CENEFA DELANTERA', buscar: ['cenefa_delantera', 'cenefa delantea'] },
     { key: 'cenefa_trasera', titulo: 'CENEFA TRASERA', buscar: ['cenefa_trasera', 'cenefa trasera'] },
     { key: 'cenefa_ovalada', titulo: 'CENEFA OVALADA', buscar: ['cenefa ovalada', 'cenefa_ovalada'] },
-    { key: 'perfil_base', titulo: 'PERFIL BASE', buscar: ['perfil base'] }
+    { key: 'perfil_base', titulo: 'PERFIL BASE', buscar: ['perfil base'] },
+    // Perforación (INTERNO/EXTERNO) de los perfiles SOFT LIGHT/DARK — solo rótulo.
+    { key: 'perf_izq', titulo: 'PERF. (IZQ)', buscar: ['perf. (izq)', 'perf (izq)'] },
+    { key: 'perf_der', titulo: 'PERF. (DER)', buscar: ['perf. (der)', 'perf (der)'] },
+    { key: 'perf_base', titulo: 'PERF. BASE', buscar: ['perf. base', 'perf base'] }
 ];
 
 const COLUMNAS_ESPECIALES = {
@@ -3947,6 +3955,58 @@ function expandirOrdenesDesdeExcel() {
                     SistemaInventario.ordenes.push(orden);
                     ordenesDeEstaFila++;
                     log(`✓ VARILLA detectada: VER63 para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: PESO SOFT LIGHT (peso inferior de oscuridad) =
+                // E24 blanco / E44 negro. El código viaja embebido en la columna
+                // COLOR PESO INF. SOFT LIGHT ("E24 [BLANCO]"); se extrae el Exx y,
+                // si no, se mapea por color. Gris no aplica (soft light no va gris).
+                if (nombreCol === 'PESO SOFT LIGHT') {
+                    let codPesoSL = null;
+                    const mCod = colorDeseado.match(/\bE\d+\b/);
+                    if (mCod) codPesoSL = mCod[0];
+                    if (!codPesoSL) {
+                        const MAPA_PESO_SL = { 'BLANCO': 'E24', 'NEGRO': 'E44' };
+                        codPesoSL = MAPA_PESO_SL[colorDeseado] || null;
+                    }
+                    if (!codPesoSL) {
+                        log(`⚠️ PESO SOFT LIGHT: color "${colorDeseado}" sin código (E24 blanco / E44 negro). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codPesoSL;
+                    orden.codigoExtraido = codPesoSL;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codPesoSL] || null;
+                    orden.tuberia = `PESO SOFT LIGHT - ${codPesoSL}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ PESO SOFT LIGHT: ${codPesoSL} para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: PERFIL (IZQ)/(DER) INT y PERFIL BASE de los
+                // sistemas SOFT LIGHT/DARK = zócalo por COLOR PERFIL (BLANCO→E32,
+                // NEGRO→E33, CAFÉ→E34). Los tres cortes salen de la misma barra de
+                // zócalo (5,80 m, MEDIDAS_BARRA_DEFAULT). La perforación (INT/EXT)
+                // viaja en las columnas PERF. (IZQ)/(DER)/BASE — solo rótulo.
+                if (nombreCol === 'PERFIL (IZQ) INT' || nombreCol === 'PERFIL (DER) INT' || nombreCol === 'PERFIL BASE') {
+                    const MAPA_ZOCALO = { 'BLANCO': 'E32', 'NEGRO': 'E33', 'CAFÉ': 'E34', 'CAFE': 'E34' };
+                    const codZocalo = MAPA_ZOCALO[colorDeseado] || null;
+                    if (!codZocalo) {
+                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin zócalo (E32 blanco / E33 negro / E34 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    const perf = nombreCol === 'PERFIL (IZQ) INT' ? datosCompartidos.perf_izq
+                        : nombreCol === 'PERFIL (DER) INT' ? datosCompartidos.perf_der
+                        : datosCompartidos.perf_base;
+                    const perfTxt = perf ? ` [${String(perf).toUpperCase().trim()}]` : '';
+                    orden.cod = codZocalo;
+                    orden.codigoExtraido = codZocalo;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codZocalo] || null;
+                    orden.tuberia = `${nombreCol}${perfTxt} - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ ${nombreCol}${perfTxt}: ${codZocalo} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
                     continue;
                 }
 
