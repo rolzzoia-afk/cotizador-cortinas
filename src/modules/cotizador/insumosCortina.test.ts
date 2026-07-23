@@ -328,14 +328,18 @@ describe('insumosVerticalDePano', () => {
 });
 
 describe('insumosMotorDePano', () => {
-  it('DOM38 → motor + control DOM39 + cable DOM40 + enchufe DOM04 + cargador DOM03', () => {
+  it('DOM38 → motor + control DOM39 + cable DOM40 + enchufe DOM04 + cargador DOM43 (hub domótica)', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM03']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM43']);
   });
-  it('cargador cambia a DOM33 cuando el paño lo pide', () => {
+  it('DOM38: cargador cambia a DOM33 cuando el paño lo pide (sin DOM43 ni DOM03)', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM33' }));
     expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM33']);
-    expect(out.some((i) => i.codigo === 'DOM03')).toBe(false);
+    expect(out.some((i) => i.codigo === 'DOM43' || i.codigo === 'DOM03')).toBe(false);
+  });
+  it('DOM38: se puede forzar DOM03 a mano en Fase 2', () => {
+    const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM03' }));
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM03']);
   });
   it('DOM41: motor + DOM42 + DOM04 + cargador DOM03, SIN cable DOM40 (#28); controles/hub adicionales', () => {
     const base = insumosMotorDePano(pano({ motorModelo: 'DOM41' }));
@@ -350,9 +354,9 @@ describe('insumosMotorDePano', () => {
     expect(insumosMotorDePano(pano({ motorModelo: 'CABLE' }))).toEqual([]);
     expect(insumosMotorDePano(pano({}))).toEqual([]);
   });
-  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38+DOM39', () => {
+  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38+DOM39 (y su cargador DOM43)', () => {
     const porChip = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada' }));
-    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM03']);
+    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM43']);
     const porCategoria = insumosMotorDePano(pano({ motorModelo: 'DOM41' }), 'ROL_CENEFA_OVALADA_MOTOR_GRANDE');
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.

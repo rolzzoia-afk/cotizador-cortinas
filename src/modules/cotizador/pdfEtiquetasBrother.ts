@@ -74,6 +74,22 @@ export function tipoCortinaEtiqueta(producto?: string, tipo?: string): string {
   return (p || tipo || '—').toUpperCase();
 }
 
+/**
+ * Tipo de cortina de un GRUPO de paños que se cortan juntos, para la casilla
+ * "TIPO DE CORTINA" (separa los tipos de corte): VERTICAL si todos son
+ * verticales, el tipo roller del producto si ninguno lo es, y "VERT/ROLLER" si
+ * el paño mezcla ambos. La señal de vertical es `tuberiaCod === 'VERTICAL'`
+ * (la misma que usa el alto de página de la etiqueta).
+ */
+export function tipoCortinaEtiquetaGrupo(rows: OptimizerRow[]): string {
+  if (rows.length === 0) return '—';
+  const esVertical = (r: OptimizerRow) => (r.tuberiaCod || '').toUpperCase() === 'VERTICAL';
+  const nVert = rows.filter(esVertical).length;
+  if (nVert === rows.length) return 'VERTICAL';
+  if (nVert === 0) return tipoCortinaEtiqueta(rows[0].producto, rows[0].tipo);
+  return 'VERT/ROLLER';
+}
+
 /** Sistema del encabezado de la etiqueta de estructura: VERTICAL / PLETINA / DUO / DUAL / familia. */
 export function sistemaEtiquetaEstructura(
   producto?: string,
@@ -703,10 +719,12 @@ function dibujarPano(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   juntoTexto: string,
+  /** Todas las filas del paño físico (para el TIPO DE CORTINA de grupos mixtos). */
+  rowsGrupo: OptimizerRow[] = [row],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const familia = familiaTelaEtiqueta(p.tipoTela, row.producto);
-  const tipoCortina = tipoCortinaEtiqueta(row.producto, row.tipo);
+  const tipoCortina = tipoCortinaEtiquetaGrupo(rowsGrupo);
   const junto = juntoTexto && juntoTexto !== '·' ? juntoTexto : '—';
   const altoCorteCm = (row.altoCorte || 0) * 100;
 
@@ -870,7 +888,7 @@ export function generarEtiquetasPanosPDF(
   const doc = new jsPDF('l', 'mm', [ANCHO, ALTO_PANO]);
   grupos.forEach((g, i) => {
     if (i > 0) doc.addPage([ANCHO, ALTO_PANO], 'l');
-    dibujarPano(doc, g.row, i + 1, grupos.length, meta, catalogo, g.junto);
+    dibujarPano(doc, g.row, i + 1, grupos.length, meta, catalogo, g.junto, g.rows);
   });
   doc.save(`Etiquetas_Panos_${meta.ot}.pdf`);
   return grupos.length;

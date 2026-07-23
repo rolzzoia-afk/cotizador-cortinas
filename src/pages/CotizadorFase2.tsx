@@ -237,11 +237,11 @@ export function CotizadorFase2() {
         // Si quedó un chip dual, rellena lado/color derivados (coherencia con el
         // toggle Simple/Dual, que sí los setea).
         const lc = dual && esChipDual(mecanismo) ? ladoColorDesdeChipDual(mecanismo) : null;
-        // Auto cadena + peso (roller/dúo manual): prefill SOLO si están vacíos (no
-        // pisa la elección manual). El recálculo por alto/color vive en actualizarPano.
+        // Auto cadena + peso: prefill SOLO si están vacíos (no pisa la elección
+        // manual). Se auto-asignan aunque el paño lleve motor (van dentro del
+        // precio); solo se excluyen las categorías vendidas como motor.
         const llevaCadena =
           categoriaRequiereMecanismo(v.categoria) &&
-          !(p.motorModelo || p.motorTipo) &&
           !(v.categoria || '').toUpperCase().includes('MOTOR');
         const cadPatch: Partial<Pano> = {};
         if (llevaCadena) {
@@ -1182,6 +1182,7 @@ export function CotizadorFase2() {
                   categoria={ventanaForm.categoria}
                   colorVentana={ventanaForm.color}
                   sentidoVentana={ventanaForm.sentido}
+                  varianteVentana={ventanaForm.oscuridadVariante}
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
                   anchoRollo={obtenerAnchoRollo(
                     (categoriaEsDual(ventanaForm.categoria || '')

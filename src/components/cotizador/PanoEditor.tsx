@@ -47,8 +47,11 @@ import {
 import {
   aplicarDefaultsPerfiles,
   cortesOscuridad,
+  esFamiliaSoftLight,
   familiaOscuridadConDiametro,
   medidaPerfilOscuridad,
+  montajeBaseDisponible,
+  normalizarMontajeBase,
   normalizarPerforacion,
   normalizarVarianteOscuridad,
   type PerfilesOscuridad,
@@ -91,8 +94,10 @@ type Props = {
   categoria?: string;
   /** Color de la ventana (fallback del color de accesorios). */
   colorVentana?: string | null;
-  /** Sentido de instalación heredado de Fase 0 (default de la variante). */
+  /** Caída de la ventana heredada de Fase 0 (INTERNO/EXTERNO). */
   sentidoVentana?: string | null;
+  /** Variante de oscuridad de la ventana (INTERNO/SEMI/EXTERNO), asignada en Fase 1. */
+  varianteVentana?: string | null;
   /** Adicionales Fase 0 (colores de perfiles). */
   adicionalesFase0?: AdicionalFase0Persistido[];
   /** Ancho del rollo (m) para auto-sugerir corte invertido. Default 2,98. */
@@ -133,7 +138,20 @@ const OPCIONES_SUPERFICIE_PERFIL = [
   { value: 'piso', label: 'Piso' },
 ] as const;
 
-const OPCIONES_CARGADOR_MOTOR = [
+// Montaje del perfil base (solo soft light INTERNO): entre los laterales (más
+// corto, ancho − 13,3) o de pared a pared (ancho completo).
+const OPCIONES_MONTAJE_BASE = [
+  { value: 'DENTRO', label: 'Dentro laterales' },
+  { value: 'PARED', label: 'Pared a pared' },
+] as const;
+
+// Cargador del motor: el default depende del motor (DOM38 → hub domótica DOM43;
+// DOM41 → HUB USB DOM03). DOM33 (adaptador) es la alternativa manual en ambos.
+const OPCIONES_CARGADOR_DOM38 = [
+  { value: 'DOM43', label: 'Hub domótica (DOM43)' },
+  { value: 'DOM33', label: 'Adaptador (DOM33)' },
+] as const;
+const OPCIONES_CARGADOR_DOM41 = [
   { value: 'DOM03', label: 'HUB USB (DOM03)' },
   { value: 'DOM33', label: 'Adaptador (DOM33)' },
 ] as const;
@@ -191,6 +209,7 @@ export function PanoEditor({
   categoria,
   colorVentana,
   sentidoVentana,
+  varianteVentana,
   adicionalesFase0,
   anchoRollo = 2.98,
 }: Props) {
@@ -214,8 +233,10 @@ export function PanoEditor({
     pano.cenefa,
     diametroDeCodigoTubo(codigoTuberiaDeChip(pano.tuberia as string)),
   );
+  // La variante sale del paño → de la ventana (Fase 1). El `sentidoVentana` queda
+  // como último recurso solo para OTs viejas donde la variante viajaba en la caída.
   const varianteOscuridad: VarianteOscuridad = normalizarVarianteOscuridad(
-    pano.oscuridadVariante ?? sentidoVentana,
+    pano.oscuridadVariante ?? varianteVentana ?? sentidoVentana,
     'INTERNO',
   );
   const anchoCmOsc = (parseFloat(String(pano.ancho ?? 0)) || 0) * 100;
@@ -233,10 +254,18 @@ export function PanoEditor({
     izqPerf: normalizarPerforacion(pano.perfilIzqPerf),
     derPerf: normalizarPerforacion(pano.perfilDerPerf),
     infPerf: normalizarPerforacion(pano.perfilInfPerf),
+    infMontaje: normalizarMontajeBase(pano.perfilInfMontaje),
   };
   // Efectivo con defaults de la variante (laterales activos + perforación) — el
   // mismo criterio que el despiece, para que la UI muestre lo que sale en el Excel.
   const perfilesOscEff = aplicarDefaultsPerfiles(perfilesOsc, familia, varianteOscuridad);
+  // Montaje del perfil base (soft light INTERNO/EXTERNO): dentro de laterales
+  // (default) o pared a pared. SEMI no tiene selector (es siempre pared a pared).
+  const montajeBase = normalizarMontajeBase(pano.perfilInfMontaje) ?? 'DENTRO';
+  const mostrarMontajeBase = montajeBaseDisponible(familia, varianteOscuridad);
+  // Soft light SEMI: el perfil base va SIEMPRE con perforación EXTERNA (fija).
+  const perfBaseSemiForzada =
+    !!familia && esFamiliaSoftLight(familia) && varianteOscuridad === 'SEMI';
   const cortesOsc = familia
     ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff)
     : [];
@@ -272,6 +301,21 @@ export function PanoEditor({
   const opcionesMotorModelo = cenefaEsOvalada
     ? OPCIONES_MOTOR_MODELO.filter((o) => o.value !== 'DOM41')
     : OPCIONES_MOTOR_MODELO;
+  // Cargador del motor: default y opciones según el motor EFECTIVO (DOM41 con
+  // cenefa ovalada cae a DOM38). DOM38 → DOM43 (hub domótica); resto → DOM03.
+  const motorModeloEfectivo =
+    (pano.motorModelo || '').toUpperCase() === 'DOM41' && cenefaEsOvalada
+      ? 'DOM38'
+      : (pano.motorModelo || '').toUpperCase();
+  const cargadorDefault = motorModeloEfectivo === 'DOM38' ? 'DOM43' : 'DOM03';
+  const opcionesCargador =
+    motorModeloEfectivo === 'DOM38' ? OPCIONES_CARGADOR_DOM38 : OPCIONES_CARGADOR_DOM41;
+  const cargadorGuardado = (pano.motorCargador || '').toUpperCase();
+  const cargadorValue = opcionesCargador.some((o) => o.value === cargadorGuardado)
+    ? cargadorGuardado
+    : cargadorGuardado === 'DOM33'
+      ? 'DOM33'
+      : cargadorDefault;
   // OTs viejas guardan 'Cuadrada' a secas: se muestra como chip extra para
   // no esconder el dato (al elegir muro/techo queda con el valor nuevo).
   const opcionesCenefa =
@@ -679,10 +723,21 @@ export function PanoEditor({
               const superficie = pano[L.muro] ? 'muro' : pano[L.piso] ? 'piso' : '';
               const perf =
                 (perfilesOscEff[`${L.side}Perf` as keyof PerfilesOscuridad] as PerforacionPerfil | undefined) ?? '';
+              // Soft light SEMI: la perforación del perfil base es fija EXTERNA.
+              const perfBaseForzada = L.side === 'inf' && perfBaseSemiForzada;
+              const perfEfectiva: PerforacionPerfil | '' = perfBaseForzada ? 'EXTERNO' : perf;
               // Medida según la superficie elegida (muro = alto+10, piso = alto).
+              // El perfil base soft light INTERNO además depende del montaje.
               const surfaceKey: SuperficiePerfilKey = superficie === 'piso' ? L.pisoKey : L.muroKey;
               const medida = superficie
-                ? medidaPerfilOscuridad(familia, varianteOscuridad, surfaceKey, anchoCmOsc, altoCmOsc)
+                ? medidaPerfilOscuridad(
+                    familia,
+                    varianteOscuridad,
+                    surfaceKey,
+                    anchoCmOsc,
+                    altoCmOsc,
+                    L.side === 'inf' ? montajeBase : undefined,
+                  )
                 : 0;
               const overrideField = superficie === 'piso' ? L.pisoCm : L.muroCm;
               const override = superficie ? (pano[overrideField] as number | undefined) : undefined;
@@ -728,24 +783,34 @@ export function PanoEditor({
                   </div>
                   {activo && (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5 text-[0.68rem]">
-                      {/* Perforación INT/EXT (anotación de taller) */}
+                      {/* Perforación INT/EXT (anotación de taller). Soft light SEMI:
+                          el perfil base es EXT fija (chip estático, no editable). */}
                       <div className="flex items-center gap-1">
                         <span className="text-muted-foreground">Perf.</span>
-                        {OPCIONES_PERFORACION.map((o) => (
-                          <button
-                            key={o.value}
-                            type="button"
-                            onClick={() => onChange({ [L.perf]: o.value } as Partial<Pano>)}
-                            className={cn(
-                              'rounded px-1.5 py-0.5 text-[0.66rem] uppercase',
-                              perf === o.value
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted text-muted-foreground hover:text-foreground',
-                            )}
+                        {perfBaseForzada ? (
+                          <span
+                            className="rounded bg-primary/80 px-1.5 py-0.5 text-[0.66rem] uppercase text-primary-foreground"
+                            title="Soft light SEMI: perforación del perfil base fija en Externa"
                           >
-                            {o.label}
-                          </button>
-                        ))}
+                            Ext (fija)
+                          </span>
+                        ) : (
+                          OPCIONES_PERFORACION.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => onChange({ [L.perf]: o.value } as Partial<Pano>)}
+                              className={cn(
+                                'rounded px-1.5 py-0.5 text-[0.66rem] uppercase',
+                                perf === o.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground hover:text-foreground',
+                              )}
+                            >
+                              {o.label}
+                            </button>
+                          ))
+                        )}
                       </div>
                       {/* Superficie muro/piso → medida */}
                       <div className="flex items-center gap-1">
@@ -766,6 +831,28 @@ export function PanoEditor({
                           </button>
                         ))}
                       </div>
+                      {/* Montaje del perfil base (soft light INTERNO/EXTERNO):
+                          dentro de laterales o pared a pared. SEMI no lo muestra. */}
+                      {L.side === 'inf' && mostrarMontajeBase && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Base</span>
+                          {OPCIONES_MONTAJE_BASE.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => onChange({ perfilInfMontaje: o.value } as Partial<Pano>)}
+                              className={cn(
+                                'rounded px-1.5 py-0.5 text-[0.66rem]',
+                                montajeBase === o.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground hover:text-foreground',
+                              )}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       {/* Medida (calculada + override cm) */}
                       {superficie ? (
                         <div className="flex items-center gap-1">
@@ -789,7 +876,7 @@ export function PanoEditor({
                       ) : (
                         <span className="text-amber-500">definir muro/piso</span>
                       )}
-                      {!perf && <span className="text-amber-500">definir perforación</span>}
+                      {!perfEfectiva && <span className="text-amber-500">definir perforación</span>}
                     </div>
                   )}
                 </div>
@@ -993,9 +1080,9 @@ export function PanoEditor({
           />
           <RadioRow
             label="Cargador"
-            value={(pano.motorCargador || 'DOM03').toUpperCase() === 'DOM33' ? 'DOM33' : 'DOM03'}
-            options={OPCIONES_CARGADOR_MOTOR as unknown as readonly { value: string; label: string }[]}
-            onChange={(v) => onChange({ motorCargador: v || 'DOM03' })}
+            value={cargadorValue}
+            options={opcionesCargador as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onChange({ motorCargador: v || cargadorDefault })}
           />
           <div className="flex flex-wrap items-end gap-4 pt-1">
             <div className="max-w-[150px]">

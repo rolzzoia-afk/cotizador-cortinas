@@ -218,7 +218,11 @@ export function consolidarInsumos(
     let dualKitEmitido = false;
     for (const [pi, p] of (v.panos || []).entries()) {
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
-      const tieneMotor = !!(p.motorModelo || p.motorTipo) || (v.categoria || '').toUpperCase().includes('MOTOR');
+      // Categoría vendida COMO motor (ROL/DUO ..._MOTOR_...): su precio incluye el
+      // motor, no un kit manual → sin mecanismo/cadena. En cambio, un motor
+      // asignado a una cortina de categoría MANUAL (roller normal) NO le quita el
+      // kit+cadena+peso: van dentro del precio y se entregan igual al cliente.
+      const catEsMotor = (v.categoria || '').toUpperCase().includes('MOTOR');
       // Cenefa ovalada: por la cenefa guardada o por el SISTEMA del modelo (cubre
       // el dúo, cuya categoría "DUO_MANUAL_*" no dice "ovalada"). Con tubo E78 la
       // armadura es MIXTA (tapas del kit ovalada + pivotes del kit 45) y NO se
@@ -233,8 +237,9 @@ export function consolidarInsumos(
           tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria),
         ) === 'E78';
 
-      // Mecanismo + cadena + peso: solo roller manual con mecanismo.
-      if (!tieneMotor && categoriaRequiereMecanismo(v.categoria)) {
+      // Mecanismo + cadena + peso: toda categoría con mecanismo que NO se venda
+      // como motor (aunque el paño lleve un motor, va dentro del precio).
+      if (!catEsMotor && categoriaRequiereMecanismo(v.categoria)) {
         const chip = mecanismoParaPano(p, v.color, modelo, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM, usarTuboE78);
         const num = numeroMecDeChip(chip);
         // Una cortina con mecanismo de cenefa ovalada se arma en el taller: su

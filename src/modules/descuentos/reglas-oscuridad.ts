@@ -37,6 +37,14 @@ export type FamiliaOscuridad =
 /** Perforación (anotación de taller) de un perfil: no cambia la medida. */
 export type PerforacionPerfil = 'INTERNO' | 'EXTERNO';
 
+/**
+ * Montaje del perfil base (inferior) — SOLO soft light INTERNO:
+ *   'DENTRO' (default) = entre los perfiles laterales → ancho − 13,3.
+ *   'PARED'            = de pared a pared → ancho real completo.
+ * No afecta SEMI/EXTERNO ni a Oscuranti/Dark (siguen = cenefa frontal − descuento).
+ */
+export type MontajeBaseOscuridad = 'DENTRO' | 'PARED';
+
 export type PerfilesOscuridad = {
   /** Superficie (define la MEDIDA): muro = alto+10, piso = alto. Se elige en Fase 2. */
   izqMuro?: boolean;
@@ -58,6 +66,9 @@ export type PerfilesOscuridad = {
   izqPerf?: PerforacionPerfil;
   derPerf?: PerforacionPerfil;
   infPerf?: PerforacionPerfil;
+  /** Montaje del perfil base (soft light INTERNO): 'DENTRO' (default) = ancho − 13,3;
+   *  'PARED' = ancho completo. Se elige en Fase 2; sin efecto en otras familias/variantes. */
+  infMontaje?: MontajeBaseOscuridad;
 };
 
 /** Claves de SUPERFICIE de perfil (definen la medida: muro=alto+10, piso=alto). */
@@ -146,6 +157,21 @@ const INF_DESC: Record<FamiliaOscuridad, [number, number, number]> = {
   OSCURANTI: [13, 6.3, 12.6],
   DARK: [12.6, 6.3, 12.6],
 };
+// Soft light: el perfil base NO se mide sobre la cenefa sino sobre el ANCHO REAL
+// directo, con un ajuste neto por variante y montaje (dentro de los laterales /
+// pared a pared). SEMI no tiene montaje "dentro" (DENTRO: null) → siempre pared
+// a pared. (INTERNO: −13,3 dentro / +0 pared · EXTERNO: +0,08 dentro (0,8 mm) /
+// +14 pared · SEMI: +7,5 siempre.)
+const INF_SOFTLIGHT_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }> = {
+  INTERNO: { DENTRO: -13.3, PARED: 0 },
+  SEMI: { DENTRO: null, PARED: 7.5 },
+  EXTERNO: { DENTRO: 0.08, PARED: 14 },
+};
+const FAMILIAS_SOFT_LIGHT: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC'];
+/** ¿Es un sistema soft light (38/45/cenefa cuadrada)? (No Oscuranti/Dark.) */
+export function esFamiliaSoftLight(familia: FamiliaOscuridad): boolean {
+  return FAMILIAS_SOFT_LIGHT.includes(familia);
+}
 // Perfiles laterales (sobre el ALTO): a muro suma 10, a piso sin ajuste.
 const PERFIL_LATERAL_MURO_SUMA = 10;
 // Alto de la tira de velcro (DARK): fijo.
@@ -203,6 +229,16 @@ export function normalizarPerforacion(
   return undefined;
 }
 
+/** Normaliza el montaje del perfil base ('PARED'|'DENTRO'|undefined = default DENTRO). */
+export function normalizarMontajeBase(
+  valor: string | undefined | null,
+): MontajeBaseOscuridad | undefined {
+  const v = (valor || '').trim().toUpperCase();
+  if (v.startsWith('PARED')) return 'PARED';
+  if (v.startsWith('DENTRO')) return 'DENTRO';
+  return undefined;
+}
+
 /** Familias cuyos LATERALES son parte física del sistema (siempre presentes). */
 const CON_LATERALES_SIEMPRE: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC', 'DARK'];
 
@@ -251,6 +287,37 @@ export function cenefaFrontOscuridad(
   return r1(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
 }
 
+/**
+ * Medida (cm) del perfil BASE (inferior). En soft light se mide sobre el ANCHO
+ * REAL directo con un ajuste por variante y montaje (ver INF_SOFTLIGHT_ADJ):
+ *   INTERNO: dentro = ancho − 13,3 · pared = ancho.
+ *   EXTERNO: dentro = ancho + 0,08 · pared = ancho + 14.
+ *   SEMI:    siempre pared a pared = ancho + 7,5 (no tiene "dentro").
+ * Oscuranti/Dark = cenefa frontal − descuento de variante.
+ */
+export function medidaPerfilBaseOscuridad(
+  familia: FamiliaOscuridad,
+  variante: VarianteOscuridad,
+  anchoCm: number,
+  montaje?: MontajeBaseOscuridad,
+): number {
+  if (esFamiliaSoftLight(familia)) {
+    const adj = INF_SOFTLIGHT_ADJ[variante];
+    // SEMI (DENTRO null) → siempre pared a pared; INTERNO/EXTERNO default DENTRO.
+    const delta = adj.DENTRO === null || montaje === 'PARED' ? adj.PARED : adj.DENTRO;
+    return r1(anchoCm + delta);
+  }
+  return r1(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
+}
+
+/** ¿Se ofrece el selector Dentro/Pared del perfil base? Soft light salvo SEMI (fijo). */
+export function montajeBaseDisponible(
+  familia: FamiliaOscuridad | null,
+  variante: VarianteOscuridad,
+): boolean {
+  return !!familia && esFamiliaSoftLight(familia) && INF_SOFTLIGHT_ADJ[variante].DENTRO !== null;
+}
+
 /** Medida (cm) de UN perfil individual, esté ON u OFF (para mostrar en la UI). */
 export function medidaPerfilOscuridad(
   familia: FamiliaOscuridad,
@@ -258,11 +325,12 @@ export function medidaPerfilOscuridad(
   key: SuperficiePerfilKey,
   anchoCm: number,
   altoCm: number,
+  infMontaje?: MontajeBaseOscuridad,
 ): number {
   if (key === 'izqMuro' || key === 'derMuro') return r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
   if (key === 'izqPiso' || key === 'derPiso') return r1(altoCm);
-  // inferior (muro/piso): cenefa frontal − descuento de variante
-  return r1(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
+  // inferior (muro/piso): soft light INTERNO usa montaje; resto = cenefa − descuento.
+  return medidaPerfilBaseOscuridad(familia, variante, anchoCm, infMontaje);
 }
 
 /**
@@ -317,7 +385,9 @@ export function cortesOscuridad(
   const altoOk = altoCm > 0;
   const lateralMuro = r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
   const lateralPiso = r1(altoCm);
-  const inferior = r1(cenefaFront - descPerfilInferior(familia, variante));
+  // Soft light INTERNO: ancho − 13,3 (dentro de laterales) o ancho (pared a pared);
+  // resto de variantes/familias = cenefa frontal − descuento de variante.
+  const inferior = medidaPerfilBaseOscuridad(familia, variante, anchoCm, perfiles.infMontaje);
 
   // Un lateral: elige superficie (muro gana), aplica override y anota perforación.
   const emitLateral = (
@@ -362,12 +432,15 @@ export function cortesOscuridad(
     const pendienteMedida = superficie === null && !overrideOk;
     const nombre =
       superficie === 'piso' ? 'Perfil inferior al Piso' : superficie === 'muro' ? 'Perfil inferior a Muro' : 'Perfil inferior';
+    // Soft light SEMI: el perfil base SIEMPRE va con perforación EXTERNA (no se elige).
+    const infPerf =
+      esFamiliaSoftLight(familia) && variante === 'SEMI' ? 'EXTERNO' : perfiles.infPerf;
     cortes.push({
       componente: nombre,
       columnaExcel: 'PERFIL BASE',
       medidaCm: pendienteMedida ? 0 : aplicarOverride(inferior, override),
       perfil: true,
-      perforacion: perfiles.infPerf,
+      perforacion: infPerf,
       pendienteMedida,
     });
   }

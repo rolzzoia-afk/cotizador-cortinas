@@ -30,6 +30,7 @@ import {
   sistemaEtiquetaEstructura,
   textoAccionamiento,
   tipoCortinaEtiqueta,
+  tipoCortinaEtiquetaGrupo,
 } from './pdfEtiquetasBrother';
 import type { OptimizerRow } from './tela';
 
@@ -61,6 +62,23 @@ describe('tipoCortinaEtiqueta', () => {
     expect(tipoCortinaEtiqueta('ROLLER BLACKOUT DELUX')).toBe('ROLLER');
     expect(tipoCortinaEtiqueta('', 'DELUX')).toBe('DELUX');
     expect(tipoCortinaEtiqueta()).toBe('—');
+  });
+});
+
+describe('tipoCortinaEtiquetaGrupo', () => {
+  const r = (tuberiaCod: string, producto = 'ROLLER SCREEN PREMIUM'): OptimizerRow =>
+    ({ tuberiaCod, producto, tipo: '' } as unknown as OptimizerRow);
+  it('todas verticales → VERTICAL', () => {
+    expect(tipoCortinaEtiquetaGrupo([r('VERTICAL'), r('VERTICAL')])).toBe('VERTICAL');
+  });
+  it('ninguna vertical → tipo roller del producto', () => {
+    expect(tipoCortinaEtiquetaGrupo([r('38mm_E02')])).toBe('ROLLER');
+  });
+  it('grupo mixto vertical + roller → VERT/ROLLER', () => {
+    expect(tipoCortinaEtiquetaGrupo([r('VERTICAL'), r('38mm_E02')])).toBe('VERT/ROLLER');
+  });
+  it('lista vacía → guion', () => {
+    expect(tipoCortinaEtiquetaGrupo([])).toBe('—');
   });
 });
 

@@ -3,6 +3,7 @@ import {
   cortesOscuridad,
   familiaOscuridad,
   familiaOscuridadConDiametro,
+  montajeBaseDisponible,
   normalizarVarianteOscuridad,
   type FamiliaOscuridad,
   type VarianteOscuridad,
@@ -68,13 +69,61 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     expect(cortes.filter((c) => c.columnaExcel === 'PERFIL (IZQ) INT')).toHaveLength(1);
   });
 
-  it('perfil inferior = cenefa frontal − descuento de variante', () => {
-    const soft38 = cortesOscuridad('SOFT_LIGHT_38', 'INTERNO', 296.9, 180, { infMuro: true });
-    expect(medida(soft38, 'Perfil inferior a Muro')).toBe(283.1); // 295.7 − 12.6
+  it('perfil inferior (no soft-light-INTERNO) = cenefa frontal − descuento de variante', () => {
     const semi = cortesOscuridad('OSCURANTI', 'SEMI', 200, 200, { infPiso: true });
     expect(medida(semi, 'Perfil inferior al Piso')).toBe(201.2); // 207.5 − 6.3
     const oscInterno = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMuro: true });
     expect(medida(oscInterno, 'Perfil inferior a Muro')).toBe(186.7); // 199.7 − 13
+  });
+
+  it('perfil base SOFT LIGHT INTERNO = ancho − 13,3 (dentro laterales, default)', () => {
+    // Antes salía de cenefa frontal − 12,6 (296,9 → 283,1); ahora directo del ancho.
+    for (const fam of ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC'] as const) {
+      const c = cortesOscuridad(fam, 'INTERNO', 296.9, 180, { infMuro: true });
+      expect(medida(c, 'Perfil inferior a Muro'), fam).toBe(283.6); // 296,9 − 13,3
+    }
+  });
+
+  it('perfil base SOFT LIGHT INTERNO pared a pared = ancho real completo', () => {
+    const c = cortesOscuridad('SOFT_LIGHT_38', 'INTERNO', 296.9, 180, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(c, 'Perfil inferior a Muro')).toBe(296.9);
+    // Con 'DENTRO' explícito vuelve a ancho − 13,3.
+    const dentro = cortesOscuridad('SOFT_LIGHT_38', 'INTERNO', 296.9, 180, { infMuro: true, infMontaje: 'DENTRO' });
+    expect(medida(dentro, 'Perfil inferior a Muro')).toBe(283.6);
+  });
+
+  it('perfil base SOFT LIGHT EXTERNO: dentro = ancho + 0,08 (default) · pared = ancho + 14', () => {
+    // "+0,8 mm" literal = 0,08 cm (200 → 200,1 con r1; 296,9 → 297,0).
+    const dentro = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true });
+    expect(medida(dentro, 'Perfil inferior a Muro')).toBe(200.1); // 200 + 0,08
+    const dentroBig = cortesOscuridad('SOFT_LIGHT_45', 'EXTERNO', 296.9, 180, { infMuro: true, infMontaje: 'DENTRO' });
+    expect(medida(dentroBig, 'Perfil inferior a Muro')).toBe(297); // 296,9 + 0,08 → 297,0
+    const pared = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(pared, 'Perfil inferior a Muro')).toBe(214); // 200 + 14
+  });
+
+  it('perfil base SOFT LIGHT SEMI = ancho + 7,5 SIEMPRE (sin montaje "dentro")', () => {
+    const semi = cortesOscuridad('SOFT_LIGHT_38', 'SEMI', 200, 200, { infMuro: true });
+    expect(medida(semi, 'Perfil inferior a Muro')).toBe(207.5); // 200 + 7,5
+    // Aunque le pasen 'DENTRO', SEMI ignora el montaje (siempre pared a pared).
+    const semiDentro = cortesOscuridad('SOFT_LIGHT_45', 'SEMI', 200, 200, { infMuro: true, infMontaje: 'DENTRO' });
+    expect(medida(semiDentro, 'Perfil inferior a Muro')).toBe(207.5);
+  });
+
+  it('perfil base SOFT LIGHT SEMI: perforación SIEMPRE externa (ignora infPerf)', () => {
+    const semi = cortesOscuridad('SOFT_LIGHT_38', 'SEMI', 200, 200, { infMuro: true, infPerf: 'INTERNO' });
+    const base = semi.find((c) => c.columnaExcel === 'PERFIL BASE');
+    expect(base?.perforacion).toBe('EXTERNO');
+    // INTERNO/EXTERNO respetan la perforación elegida (no se fuerza).
+    const ext = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true, infPerf: 'INTERNO' });
+    expect(ext.find((c) => c.columnaExcel === 'PERFIL BASE')?.perforacion).toBe('INTERNO');
+  });
+
+  it('el montaje del base NO afecta Oscuranti/Dark (no son soft light)', () => {
+    const oscPared = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(oscPared, 'Perfil inferior a Muro')).toBe(186.7); // 199,7 − 13, montaje ignorado
+    const darkSemi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(darkSemi, 'Perfil inferior a Muro')).toBe(201.2); // 207,5 − 6,3
   });
 
   it('sin perfiles ON no agrega cortes de perfil', () => {
@@ -99,6 +148,20 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
   it('override inválido (0 o negativo) cae a la medida calculada', () => {
     const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { izqMuro: true }, { izqMuro: 0 });
     expect(medida(cortes, 'Perfil izquierdo a Muro')).toBe(210);
+  });
+});
+
+describe('montajeBaseDisponible', () => {
+  it('soft light INTERNO/EXTERNO ofrecen selector; SEMI no', () => {
+    expect(montajeBaseDisponible('SOFT_LIGHT_38', 'INTERNO')).toBe(true);
+    expect(montajeBaseDisponible('SOFT_LIGHT_45', 'EXTERNO')).toBe(true);
+    expect(montajeBaseDisponible('SOFT_LIGHT_CC', 'SEMI')).toBe(false); // SEMI = pared fija
+  });
+
+  it('Oscuranti/Dark y familia nula nunca ofrecen selector', () => {
+    expect(montajeBaseDisponible('OSCURANTI', 'INTERNO')).toBe(false);
+    expect(montajeBaseDisponible('DARK', 'EXTERNO')).toBe(false);
+    expect(montajeBaseDisponible(null, 'INTERNO')).toBe(false);
   });
 });
 
