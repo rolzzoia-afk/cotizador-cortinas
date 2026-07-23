@@ -38,4 +38,12 @@ describe('codigoEstructura', () => {
     expect(codigoEstructura('PESO U', 'GRS', '')).toBe('E20');
     expect(codigoEstructura('PESO', 'NEGROS', '')).toBe('E14');
   });
+
+  it('PESO SOFT LIGHT (oscuridad): BLANCO→E24, NEGRO→E44, gris sin código', () => {
+    expect(codigoEstructura('PESO SOFT LIGHT', 'BLANCO', '')).toBe('E24');
+    expect(codigoEstructura('PESO SOFT LIGHT', 'BCO', '')).toBe('E24');
+    expect(codigoEstructura('PESO SOFT LIGHT', 'NEGRO', '')).toBe('E44');
+    expect(codigoEstructura('PESO SOFT LIGHT', 'NEG', '')).toBe('E44');
+    expect(codigoEstructura('PESO SOFT LIGHT', 'GRIS', '')).toBe(''); // soft light no va gris
+  });
 });

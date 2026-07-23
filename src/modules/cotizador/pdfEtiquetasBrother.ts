@@ -396,10 +396,16 @@ function dibujarEstructura(
     dibujarEstructuraVertical(doc, row, n, total, meta, catalogo);
     return;
   }
-  const sistema = sistemaEtiquetaEstructura(row.producto, row.tipo, esDual, esPletina, esVertical);
   const pzCef = pieza(row, 'CENEFA OVALADA');
   const pzPesoU = pieza(row, 'PESO U');
   const pzPesoInt = pieza(row, 'PESO INTERNO');
+  // Oscuridad (Soft Light): el peso viaja en la columna PESO SOFT LIGHT y la
+  // cenefa en CENEFA OVALADA (ambas del motor de oscuridad). Se detecta por esas
+  // piezas para rotular el sistema como "SOFT LIGHT" (en vez del tipo de tela).
+  const esSoftLight = !!pieza(row, 'PESO SOFT LIGHT') && !!pzCef;
+  const sistema = esSoftLight
+    ? 'SOFT LIGHT'
+    : sistemaEtiquetaEstructura(row.producto, row.tipo, esDual, esPletina, esVertical);
 
   // Mismo estilo que la etiqueta de paños: esquinas cuadradas, contorno
   // exterior común (x 1,325 → 60,075; los rellenos se expanden medio trazo)
@@ -480,7 +486,9 @@ function dibujarEstructura(
     txt(doc, pzPesoU ? fmtMedidaCm(pzPesoU.medidaCm) : 'N/A', 29.4, 53.4, pzPesoU ? 14.6 : 10, { align: 'right', hScale: 0.79 });
     txt(doc, `PESO ROLLER ${colorPesoU}`.trim(), 3.1, 55.4, 4, { bold: false, max: 30 });
   } else {
-    const pzPeso = pieza(row, 'PESO');
+    // Oscuridad: el peso está en la columna PESO SOFT LIGHT (código E24/E44 por
+    // color), no en PESO (roller). Sin ninguna, cae al ancho−4,2 aproximado.
+    const pzPeso = pieza(row, 'PESO') ?? pieza(row, 'PESO SOFT LIGHT');
     const pesoCm = pzPeso ? fmtMedidaCm(pzPeso.medidaCm) : fmtMedidaCm(anchoCm - 4.2);
     txt(doc, conCod('PESO', codCorto(pzPeso)), 3.1, 51.9, 8.4, { hScale: 0.77 });
     txt(doc, pesoCm, 29.4, 53.4, 14.6, { align: 'right', hScale: 0.79 });

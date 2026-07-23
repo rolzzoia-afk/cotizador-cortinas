@@ -46,13 +46,30 @@ export type Pano = {
   cierreAlturaCm?: number | string;
   /** Sistemas de oscuridad: variante de instalación 'INTERNO'|'SEMI'|'EXTERNO'. */
   oscuridadVariante?: string;
-  /** Sistemas de oscuridad: interruptores ON/OFF de perfiles. */
+  /** Sistemas de oscuridad: interruptores ON/OFF de perfiles (superficie = MEDIDA). */
   perfilIzqMuro?: boolean;
   perfilIzqPiso?: boolean;
   perfilDerMuro?: boolean;
   perfilDerPiso?: boolean;
   perfilInfMuro?: boolean;
   perfilInfPiso?: boolean;
+  /**
+   * Perfil ACTIVO (lleva perfil izq/der/base), independiente de la superficie
+   * (muro/piso). La variante en Fase 1 activa los laterales; la superficie
+   * (medida) se elige en Fase 2. Ausente = inactivo (con retro-compat: un perfil
+   * con muro/piso marcado también cuenta como activo).
+   */
+  perfilIzqActivo?: boolean;
+  perfilDerActivo?: boolean;
+  perfilInfActivo?: boolean;
+  /**
+   * Perforación del perfil: 'INTERNO' | 'EXTERNO'. Se asigna en Fase 1 desde la
+   * variante (INTERNO→INT, EXTERNO→EXT, SEMI→sin definir); editable en Fase 2.
+   * Es una ANOTACIÓN de taller (no cambia la medida). Ausente = sin definir.
+   */
+  perfilIzqPerf?: string;
+  perfilDerPerf?: string;
+  perfilInfPerf?: string;
   /** Medida manual (cm) que sobreescribe la calculada por perfil (ajuste de terreno). */
   perfilIzqMuroCm?: number;
   perfilIzqPisoCm?: number;
@@ -120,6 +137,11 @@ export type Pano = {
   motorControlAdicCant?: number;
   /** Hubs USB (DOM43) adicionales. */
   motorHubUsbCant?: number;
+  /**
+   * Cargador del motor (tabla INSTALACIÓN del inventario): 'DOM03' (HUB USB 1 QR,
+   * por defecto) o 'DOM33' (enchufe adaptador motor grande). Ausente = DOM03.
+   */
+  motorCargador?: string;
   ladoMotor?: string;
   softDark?: string;
   instalacion?: string;
@@ -157,6 +179,12 @@ export type Ventana = {
   panos: Pano[];
   /** Sentido de la cortina (INTERNO / EXTERNO) — define variante Soft Light. */
   sentido?: string;
+  /**
+   * Sistemas de oscuridad: variante de instalación asignada en Fase 1
+   * ('INTERNO'|'SEMI'|'EXTERNO'). Los paños la heredan (pano.oscuridadVariante
+   * la sobreescribe si el vendedor la cambia por paño en Fase 2).
+   */
+  oscuridadVariante?: string;
   /** Dirección cadena/cierre de Fase 0 (CAD [IZQUIERDA], etc.). */
   direccion?: string;
   /**

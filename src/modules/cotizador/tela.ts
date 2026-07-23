@@ -13,6 +13,7 @@ import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { telaDePano } from './telaPano';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -93,6 +94,12 @@ export type OptimizerRow = {
   /** ¿Cortina VERTICAL? Se corta como un roller (ancho real × alto+extraVertical),
    *  pero su corte NO lleva el descuento de limpieza de borde (−3,5). */
   esVertical?: boolean;
+  /**
+   * Sistemas de oscuridad (Soft Light / Oscuranti / Dark): ancho de corte REAL de
+   * la tela (cm), tomado del despiece (ancho + TELA_ADJ). Reemplaza al ancho−3,5
+   * roller en `calcularPanos`. El empaque en paños sigue por ancho nominal.
+   */
+  anchoCorteTelaCm?: number;
   m2: number;
   anchoRollo: number;
   anchoPano: number;
@@ -209,6 +216,12 @@ export function buildOptimizerRows(
         anchoM,
         v.categoria,
       );
+      const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params);
+      // Oscuridad: la tela se corta al ancho REAL del despiece (ancho + TELA_ADJ),
+      // no al ancho−3,5 del roller. El empaque en paños sigue por ancho nominal.
+      const anchoCorteTelaCm = familiaOscuridad(v.categoria, p.cenefa as string | null | undefined)
+        ? piezas.find((pz) => pz.componente === 'Tela (ancho)')?.medidaCm
+        : undefined;
       rows.push({
         rowIdx,
         cod,
@@ -226,6 +239,7 @@ export function buildOptimizerRows(
         altoCorte,
         isDuo,
         esVertical,
+        anchoCorteTelaCm,
         m2,
         anchoRollo,
         anchoPano: anchoM,
@@ -238,7 +252,7 @@ export function buildOptimizerRows(
         tuberiaCod,
         sentido: String(v.sentido ?? ''),
         direccion: String(v.direccion ?? ''),
-        piezas: piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params),
+        piezas,
       });
     });
   }
@@ -373,9 +387,13 @@ export function calcularPanos(
     idx++;
     // VERTICAL: la tela se corta al ancho REAL, sin el descuento de limpieza de
     // borde (la lama sale del paño completo; planilla manual OT 2923).
+    // OSCURIDAD (Soft Light/Oscuranti/Dark): ancho de corte del despiece
+    // (ancho + TELA_ADJ), no el ancho−3,5 del roller.
     const anchoCorteCm = r.esVertical
       ? parseFloat(r.anchoCm.toFixed(1))
-      : parseFloat((r.anchoCm - params.descAnchoCorteCm).toFixed(1));
+      : typeof r.anchoCorteTelaCm === 'number'
+        ? parseFloat(r.anchoCorteTelaCm.toFixed(1))
+        : parseFloat((r.anchoCm - params.descAnchoCorteCm).toFixed(1));
     const altoCorteCm = parseFloat((r.altoCorte * 100).toFixed(1)); // dúo: 2×alto+30
     const m2Val = (r.anchoCm / 100) * (altoCorteCm / 100);
     totalM2 += m2Val;

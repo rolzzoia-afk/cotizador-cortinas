@@ -45,14 +45,18 @@ import {
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
 import {
+  aplicarDefaultsPerfiles,
   cortesOscuridad,
-  familiaOscuridad,
+  familiaOscuridadConDiametro,
   medidaPerfilOscuridad,
+  normalizarPerforacion,
   normalizarVarianteOscuridad,
-  PERFILES_OSCURIDAD,
   type PerfilesOscuridad,
+  type PerforacionPerfil,
+  type SuperficiePerfilKey,
   type VarianteOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
+import { codigoTuberiaDeChip, diametroDeCodigoTubo } from '@/modules/descuentos/reglas-tuberia';
 import { colorPerfilDesdeAdicional, type TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
@@ -95,34 +99,44 @@ type Props = {
   anchoRollo?: number;
 };
 
-// Mapea cada interruptor de perfil a su campo ON/OFF en el Pano.
-const PERFIL_FIELD: Record<keyof PerfilesOscuridad, keyof Pano> = {
-  izqMuro: 'perfilIzqMuro',
-  izqPiso: 'perfilIzqPiso',
-  derMuro: 'perfilDerMuro',
-  derPiso: 'perfilDerPiso',
-  infMuro: 'perfilInfMuro',
-  infPiso: 'perfilInfPiso',
+// Perfiles de oscuridad POR LADO (izq / der / base). Cada lado tiene: activo,
+// perforación (INT/EXT, anotación de taller), superficie (muro/piso = medida) y
+// override cm. La variante en Fase 1 activa los laterales; la superficie y el
+// perfil base se completan en Fase 2.
+type LadoPerfil = {
+  side: 'izq' | 'der' | 'inf';
+  label: string;
+  activo: keyof Pano;
+  perf: keyof Pano;
+  muro: keyof Pano;
+  piso: keyof Pano;
+  muroKey: SuperficiePerfilKey;
+  pisoKey: SuperficiePerfilKey;
+  muroCm: keyof Pano;
+  pisoCm: keyof Pano;
+  tipoAdic: TipoPerfilAdicional;
 };
 
-// Mapea cada perfil a su campo de medida manual (override de terreno) en el Pano.
-const PERFIL_MEDIDA_FIELD: Record<keyof PerfilesOscuridad, keyof Pano> = {
-  izqMuro: 'perfilIzqMuroCm',
-  izqPiso: 'perfilIzqPisoCm',
-  derMuro: 'perfilDerMuroCm',
-  derPiso: 'perfilDerPisoCm',
-  infMuro: 'perfilInfMuroCm',
-  infPiso: 'perfilInfPisoCm',
-};
+const PERFILES_LADO: LadoPerfil[] = [
+  { side: 'izq', label: 'Perfil izquierdo', activo: 'perfilIzqActivo', perf: 'perfilIzqPerf', muro: 'perfilIzqMuro', piso: 'perfilIzqPiso', muroKey: 'izqMuro', pisoKey: 'izqPiso', muroCm: 'perfilIzqMuroCm', pisoCm: 'perfilIzqPisoCm', tipoAdic: 'izq' },
+  { side: 'der', label: 'Perfil derecho', activo: 'perfilDerActivo', perf: 'perfilDerPerf', muro: 'perfilDerMuro', piso: 'perfilDerPiso', muroKey: 'derMuro', pisoKey: 'derPiso', muroCm: 'perfilDerMuroCm', pisoCm: 'perfilDerPisoCm', tipoAdic: 'der' },
+  { side: 'inf', label: 'Perfil base', activo: 'perfilInfActivo', perf: 'perfilInfPerf', muro: 'perfilInfMuro', piso: 'perfilInfPiso', muroKey: 'infMuro', pisoKey: 'infPiso', muroCm: 'perfilInfMuroCm', pisoCm: 'perfilInfPisoCm', tipoAdic: 'inf' },
+];
 
-const PERFIL_TIPO_ADICIONAL: Record<keyof PerfilesOscuridad, TipoPerfilAdicional> = {
-  izqMuro: 'izq',
-  izqPiso: 'izq',
-  derMuro: 'der',
-  derPiso: 'der',
-  infMuro: 'inf',
-  infPiso: 'inf',
-};
+const OPCIONES_PERFORACION = [
+  { value: 'INTERNO', label: 'Int' },
+  { value: 'EXTERNO', label: 'Ext' },
+] as const;
+
+const OPCIONES_SUPERFICIE_PERFIL = [
+  { value: 'muro', label: 'Muro' },
+  { value: 'piso', label: 'Piso' },
+] as const;
+
+const OPCIONES_CARGADOR_MOTOR = [
+  { value: 'DOM03', label: 'HUB USB (DOM03)' },
+  { value: 'DOM33', label: 'Adaptador (DOM33)' },
+] as const;
 
 const OPCIONES_VARIANTE_OSCURIDAD = [
   { value: 'INTERNO', label: 'Interno' },
@@ -192,7 +206,14 @@ export function PanoEditor({
   const suplementoAuto = cantidadSuplementosAuto(pano, categoria, anchoPanoM);
 
   // ── Sistema de oscuridad (Soft Light / Oscuranti / Dark) ──
-  const familia = familiaOscuridad(categoria, pano.cenefa);
+  // El diámetro sale del tubo YA elegido en el paño (chip): un soft light 38 mm
+  // con tubo E78 (banda 2,2–3,0 m) muestra el corte de tubo de 45 mm, igual que
+  // el despiece del Excel/Cálculo General.
+  const familia = familiaOscuridadConDiametro(
+    categoria,
+    pano.cenefa,
+    diametroDeCodigoTubo(codigoTuberiaDeChip(pano.tuberia as string)),
+  );
   const varianteOscuridad: VarianteOscuridad = normalizarVarianteOscuridad(
     pano.oscuridadVariante ?? sentidoVentana,
     'INTERNO',
@@ -206,9 +227,18 @@ export function PanoEditor({
     derPiso: !!pano.perfilDerPiso,
     infMuro: !!pano.perfilInfMuro,
     infPiso: !!pano.perfilInfPiso,
+    izqActivo: !!pano.perfilIzqActivo,
+    derActivo: !!pano.perfilDerActivo,
+    infActivo: !!pano.perfilInfActivo,
+    izqPerf: normalizarPerforacion(pano.perfilIzqPerf),
+    derPerf: normalizarPerforacion(pano.perfilDerPerf),
+    infPerf: normalizarPerforacion(pano.perfilInfPerf),
   };
+  // Efectivo con defaults de la variante (laterales activos + perforación) — el
+  // mismo criterio que el despiece, para que la UI muestre lo que sale en el Excel.
+  const perfilesOscEff = aplicarDefaultsPerfiles(perfilesOsc, familia, varianteOscuridad);
   const cortesOsc = familia
-    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOsc)
+    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff)
     : [];
   const componentesOsc = cortesOsc.filter((c) => !c.perfil);
   const colorPesoInfOscuridad = familia
@@ -644,34 +674,125 @@ export function PanoEditor({
             </div>
           )}
           <div className="space-y-1">
-            {PERFILES_OSCURIDAD.map((p) => {
-              const field = PERFIL_FIELD[p.key];
-              const medidaField = PERFIL_MEDIDA_FIELD[p.key];
-              const checked = !!pano[field];
-              const medida = medidaPerfilOscuridad(
-                familia,
-                varianteOscuridad,
-                p.key,
-                anchoCmOsc,
-                altoCmOsc,
-              );
-              const override = pano[medidaField] as number | undefined;
-              const colorPerfil = colorPerfilDesdeAdicional(
-                PERFIL_TIPO_ADICIONAL[p.key],
-                adicionalesFase0,
-                categoria,
-              );
+            {PERFILES_LADO.map((L) => {
+              const activo = !!perfilesOscEff[`${L.side}Activo` as keyof PerfilesOscuridad];
+              const superficie = pano[L.muro] ? 'muro' : pano[L.piso] ? 'piso' : '';
+              const perf =
+                (perfilesOscEff[`${L.side}Perf` as keyof PerfilesOscuridad] as PerforacionPerfil | undefined) ?? '';
+              // Medida según la superficie elegida (muro = alto+10, piso = alto).
+              const surfaceKey: SuperficiePerfilKey = superficie === 'piso' ? L.pisoKey : L.muroKey;
+              const medida = superficie
+                ? medidaPerfilOscuridad(familia, varianteOscuridad, surfaceKey, anchoCmOsc, altoCmOsc)
+                : 0;
+              const overrideField = superficie === 'piso' ? L.pisoCm : L.muroCm;
+              const override = superficie ? (pano[overrideField] as number | undefined) : undefined;
+              const colorPerfil = colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria);
+              // Elegir superficie: marca muro XOR piso (limpia el otro) y activa el perfil.
+              const setSuperficie = (s: string) =>
+                onChange({
+                  [L.activo]: true,
+                  [L.muro]: s === 'muro',
+                  [L.piso]: s === 'piso',
+                } as Partial<Pano>);
               return (
-                <PerfilToggle
-                  key={p.key}
-                  label={p.label}
-                  medida={medida}
-                  override={typeof override === 'number' ? override : undefined}
-                  colorPerfil={colorPerfil}
-                  checked={checked}
-                  onToggle={(v) => onChange({ [field]: v } as Partial<Pano>)}
-                  onMedidaChange={(v) => onChange({ [medidaField]: v } as Partial<Pano>)}
-                />
+                <div key={L.side} className="rounded border border-border/60 bg-card/40 px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="flex items-center gap-1.5 text-[0.72rem] text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={activo}
+                        onChange={(e) =>
+                          onChange({
+                            [L.activo]: e.target.checked,
+                            // Al desactivar, limpia superficie/override para que no
+                            // reaparezca una medida vieja.
+                            ...(e.target.checked
+                              ? {}
+                              : { [L.muro]: false, [L.piso]: false, [L.muroCm]: undefined, [L.pisoCm]: undefined }),
+                          } as Partial<Pano>)
+                        }
+                      />
+                      {L.label}
+                    </label>
+                    {colorPerfil && (
+                      <span
+                        className={cn(
+                          'text-[0.62rem] uppercase tracking-wide',
+                          activo ? 'text-muted-foreground' : 'text-muted-foreground/40',
+                        )}
+                        title="Color desde adicionales Fase 0"
+                      >
+                        {colorPerfil}
+                      </span>
+                    )}
+                  </div>
+                  {activo && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5 text-[0.68rem]">
+                      {/* Perforación INT/EXT (anotación de taller) */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Perf.</span>
+                        {OPCIONES_PERFORACION.map((o) => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => onChange({ [L.perf]: o.value } as Partial<Pano>)}
+                            className={cn(
+                              'rounded px-1.5 py-0.5 text-[0.66rem] uppercase',
+                              perf === o.value
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:text-foreground',
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Superficie muro/piso → medida */}
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Sup.</span>
+                        {OPCIONES_SUPERFICIE_PERFIL.map((o) => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => setSuperficie(o.value)}
+                            className={cn(
+                              'rounded px-1.5 py-0.5 text-[0.66rem]',
+                              superficie === o.value
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:text-foreground',
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      {/* Medida (calculada + override cm) */}
+                      {superficie ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={typeof override === 'number' ? override : medida > 0 ? medida : ''}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const v = raw === '' ? undefined : parseFloat(raw);
+                              onChange({ [overrideField]: Number.isFinite(v as number) ? v : undefined } as Partial<Pano>);
+                            }}
+                            className={cn(
+                              'h-6 w-[64px] rounded border bg-card px-1 text-right font-mono text-[0.7rem] text-foreground',
+                              typeof override === 'number' ? 'border-amber-500/60' : 'border-border',
+                            )}
+                            title={typeof override === 'number' ? `Calculada: ${medida}` : 'Medida calculada (editable)'}
+                          />
+                          <span className="text-muted-foreground">cm</span>
+                        </div>
+                      ) : (
+                        <span className="text-amber-500">definir muro/piso</span>
+                      )}
+                      {!perf && <span className="text-amber-500">definir perforación</span>}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -869,6 +990,12 @@ export function PanoEditor({
             value={pano.motorDomotica ? 'SI' : 'NO'}
             options={[{ value: 'NO', label: 'Sin domótica' }, { value: 'SI', label: 'Con domótica' }]}
             onChange={(v) => onChange({ motorDomotica: v === 'SI' })}
+          />
+          <RadioRow
+            label="Cargador"
+            value={(pano.motorCargador || 'DOM03').toUpperCase() === 'DOM33' ? 'DOM33' : 'DOM03'}
+            options={OPCIONES_CARGADOR_MOTOR as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onChange({ motorCargador: v || 'DOM03' })}
           />
           <div className="flex flex-wrap items-end gap-4 pt-1">
             <div className="max-w-[150px]">

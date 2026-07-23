@@ -47,6 +47,12 @@ export const CENEFA_OVALADA_POR_COLOR: Record<string, string> = {
 /** Peso interno de dúo: constante de taller (E13), sin importar color. */
 export const COD_PESO_INTERNO = 'E13';
 
+/** Peso inferior de sistemas de oscuridad (Soft Light / Dark): código por color. */
+export const PESO_OSCURIDAD_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E24',
+  NEGRO: 'E44',
+};
+
 /**
  * Código de inventario de una pieza del despiece, según su columna del Excel
  * de órdenes (misma lógica que el optimizador de estructura).
@@ -68,6 +74,10 @@ export function codigoEstructura(
       return PESO_ROLLER_POR_COLOR[color] || '';
     case 'PESO U':
       return PESO_U_POR_COLOR[color] || '';
+    case 'PESO SOFT LIGHT':
+      // Peso inferior de oscuridad (Soft Light / Dark): E24 blanco / E44 negro.
+      // Gris no aplica (soft light no se vende en gris) → cae al color.
+      return PESO_OSCURIDAD_POR_COLOR[color] || '';
     case 'CENEFA OVALADA':
       return CENEFA_OVALADA_POR_COLOR[color] || '';
     default:

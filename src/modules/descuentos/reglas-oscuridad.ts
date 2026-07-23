@@ -34,17 +34,43 @@ export type FamiliaOscuridad =
   | 'OSCURANTI'
   | 'DARK';
 
+/** Perforación (anotación de taller) de un perfil: no cambia la medida. */
+export type PerforacionPerfil = 'INTERNO' | 'EXTERNO';
+
 export type PerfilesOscuridad = {
+  /** Superficie (define la MEDIDA): muro = alto+10, piso = alto. Se elige en Fase 2. */
   izqMuro?: boolean;
   izqPiso?: boolean;
   derMuro?: boolean;
   derPiso?: boolean;
   infMuro?: boolean;
   infPiso?: boolean;
+  /**
+   * Perfil ACTIVO (lleva perfil izq/der/base), independiente de la superficie.
+   * La variante en Fase 1 activa los laterales aunque la superficie (medida)
+   * quede pendiente para Fase 2. Retro-compat: un perfil con muro/piso marcado
+   * cuenta como activo aunque estas banderas vengan ausentes.
+   */
+  izqActivo?: boolean;
+  derActivo?: boolean;
+  infActivo?: boolean;
+  /** Perforación INTERNO/EXTERNO por perfil (SEMI puede dejarla sin definir). */
+  izqPerf?: PerforacionPerfil;
+  derPerf?: PerforacionPerfil;
+  infPerf?: PerforacionPerfil;
 };
 
-/** Medidas manuales (cm) que sobreescriben la calculada de cada perfil. */
-export type MedidasPerfilesOscuridad = Partial<Record<keyof PerfilesOscuridad, number>>;
+/** Claves de SUPERFICIE de perfil (definen la medida: muro=alto+10, piso=alto). */
+export type SuperficiePerfilKey =
+  | 'izqMuro'
+  | 'izqPiso'
+  | 'derMuro'
+  | 'derPiso'
+  | 'infMuro'
+  | 'infPiso';
+
+/** Medidas manuales (cm) que sobreescriben la calculada de cada perfil (solo superficies). */
+export type MedidasPerfilesOscuridad = Partial<Record<SuperficiePerfilKey, number>>;
 
 /** Devuelve el override si es un número válido (> 0); si no, la medida calculada. */
 function aplicarOverride(calculada: number, override: number | undefined): number {
@@ -60,9 +86,13 @@ export type CorteOscuridad = {
   medidaCm: number;
   /** true si proviene de un perfil con interruptor ON/OFF. */
   perfil?: boolean;
+  /** Perforación del perfil (INTERNO/EXTERNO) — anotación de taller. */
+  perforacion?: PerforacionPerfil;
+  /** Perfil activo pero sin superficie (muro/piso) elegida → medida pendiente (Fase 2). */
+  pendienteMedida?: boolean;
 };
 
-export const PERFILES_OSCURIDAD: Array<{ key: keyof PerfilesOscuridad; label: string }> = [
+export const PERFILES_OSCURIDAD: Array<{ key: SuperficiePerfilKey; label: string }> = [
   { key: 'izqMuro', label: 'Perfil izquierdo a Muro' },
   { key: 'izqPiso', label: 'Perfil izquierdo a Piso' },
   { key: 'derMuro', label: 'Perfil derecho a Muro' },
@@ -146,6 +176,60 @@ export function familiaOscuridad(
   return null;
 }
 
+/**
+ * Familia de oscuridad EFECTIVA según el diámetro de tubo ya resuelto: un soft
+ * light 38 mm montado sobre tubo de 45 mm (banda 2,2–3,0 m con el toggle E78 de
+ * la OT) usa el corte de tubo de 45 mm. El único descuento que difiere entre
+ * SOFT_LIGHT_38 y _45 es el TUBO (cenefa/tela/peso/perfiles son idénticos), así
+ * que el diámetro del modelo/tubo es el único lever. El resto de familias (CC,
+ * DARK, OSCURANTI, soft light 45 nativo) se devuelven sin tocar.
+ */
+export function familiaOscuridadConDiametro(
+  categoria: string | undefined | null,
+  cenefaTipo: string | undefined | null,
+  diametroTuboMm?: number | null,
+): FamiliaOscuridad | null {
+  const fam = familiaOscuridad(categoria, cenefaTipo);
+  return fam === 'SOFT_LIGHT_38' && diametroTuboMm === 45 ? 'SOFT_LIGHT_45' : fam;
+}
+
+/** Normaliza el texto de perforación de un perfil ('INTERNO'|'EXTERNO'|undefined). */
+export function normalizarPerforacion(
+  valor: string | undefined | null,
+): PerforacionPerfil | undefined {
+  const v = (valor || '').trim().toUpperCase();
+  if (v.includes('EXTERNO') || v === 'EXT') return 'EXTERNO';
+  if (v.includes('INTERNO') || v === 'INT') return 'INTERNO';
+  return undefined;
+}
+
+/** Familias cuyos LATERALES son parte física del sistema (siempre presentes). */
+const CON_LATERALES_SIEMPRE: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC', 'DARK'];
+
+/**
+ * Aplica los defaults de perfiles que impone la VARIANTE (asignada en Fase 1):
+ * en soft light / dark los dos LATERALES van siempre activos y su perforación
+ * (INTERNO/EXTERNO) sale de la variante (SEMI = sin definir). Los flags que el
+ * paño ya trae (Fase 2) mandan; solo se rellenan los que están sin definir. El
+ * perfil base (inferior) NO se activa por defecto (se elige en Fase 2).
+ */
+export function aplicarDefaultsPerfiles(
+  base: PerfilesOscuridad,
+  familia: FamiliaOscuridad | null,
+  variante: VarianteOscuridad,
+): PerfilesOscuridad {
+  if (!familia || !CON_LATERALES_SIEMPRE.includes(familia)) return base;
+  const perfVariante: PerforacionPerfil | undefined =
+    variante === 'INTERNO' ? 'INTERNO' : variante === 'EXTERNO' ? 'EXTERNO' : undefined;
+  return {
+    ...base,
+    izqActivo: base.izqActivo ?? true,
+    derActivo: base.derActivo ?? true,
+    izqPerf: base.izqPerf ?? perfVariante,
+    derPerf: base.derPerf ?? perfVariante,
+  };
+}
+
 /** Normaliza el texto de variante (acepta sentido Fase 0 / selección Fase 2). */
 export function normalizarVarianteOscuridad(
   valor: string | undefined | null,
@@ -171,7 +255,7 @@ export function cenefaFrontOscuridad(
 export function medidaPerfilOscuridad(
   familia: FamiliaOscuridad,
   variante: VarianteOscuridad,
-  key: keyof PerfilesOscuridad,
+  key: SuperficiePerfilKey,
   anchoCm: number,
   altoCm: number,
 ): number {
@@ -215,37 +299,77 @@ export function cortesOscuridad(
       cortes.push({ componente: 'Alto Tela Velcro', columnaExcel: '', medidaCm: ALTO_TELA_VELCRO_CM });
     }
   } else {
-    // Soft Light "normal": la cenefa frontal viaja por el adicional CENF O
-    // (columna CENEFA OVALADA), por eso aquí va sin columna de Excel.
-    cortes.push({ componente: 'Cenefa', columnaExcel: '', medidaCm: cenefaFront });
+    // Soft Light "normal": la cenefa frontal la corta el taller y SIEMPRE viaja
+    // al Excel de órdenes (columna CENEFA OVALADA, código E26/27/28 por color).
+    // Un adicional CENF O, si existe, sobreescribe esta medida en excel-ordenes.
+    cortes.push({ componente: 'Cenefa', columnaExcel: 'CENEFA OVALADA', medidaCm: cenefaFront });
   }
 
   cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r1(anchoCm + TUBO_ADJ[familia][vi]) });
   cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r1(anchoCm + TELA_ADJ[familia][vi]) });
   cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r1(anchoCm + PESO_ADJ[familia][vi]) });
 
-  // ── Perfiles (ON/OFF) ──
-  // Laterales sobre el ALTO; colapsamos muro/piso por lado (muro tiene
-  // prioridad) porque cada columna del Excel admite una sola medida.
+  // ── Perfiles (activos) ──
+  // La MEDIDA depende de la superficie (muro = alto+10, piso = alto); la
+  // PERFORACIÓN (INT/EXT) es una anotación de taller aparte. Un perfil puede
+  // estar ACTIVO (asignado en Fase 1) con la superficie/medida pendiente para
+  // Fase 2. Retro-compat: muro/piso marcado implica activo.
   const altoOk = altoCm > 0;
   const lateralMuro = r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
   const lateralPiso = r1(altoCm);
   const inferior = r1(cenefaFront - descPerfilInferior(familia, variante));
-  if (perfiles.izqMuro && altoOk) {
-    cortes.push({ componente: 'Perfil izquierdo a Muro', columnaExcel: 'PERFIL (IZQ) INT', medidaCm: aplicarOverride(lateralMuro, medidas.izqMuro), perfil: true });
-  } else if (perfiles.izqPiso && altoOk) {
-    cortes.push({ componente: 'Perfil izquierdo a Piso', columnaExcel: 'PERFIL (IZQ) INT', medidaCm: aplicarOverride(lateralPiso, medidas.izqPiso), perfil: true });
-  }
-  if (perfiles.derMuro && altoOk) {
-    cortes.push({ componente: 'Perfil derecho a Muro', columnaExcel: 'PERFIL (DER) INT', medidaCm: aplicarOverride(lateralMuro, medidas.derMuro), perfil: true });
-  } else if (perfiles.derPiso && altoOk) {
-    cortes.push({ componente: 'Perfil derecho a Piso', columnaExcel: 'PERFIL (DER) INT', medidaCm: aplicarOverride(lateralPiso, medidas.derPiso), perfil: true });
-  }
-  // Inferior sobre la cenefa frontal (muro y piso miden igual).
-  if (perfiles.infMuro || perfiles.infPiso) {
-    const nombre = perfiles.infMuro ? 'Perfil inferior a Muro' : 'Perfil inferior al Piso';
+
+  // Un lateral: elige superficie (muro gana), aplica override y anota perforación.
+  const emitLateral = (
+    activo: boolean | undefined,
+    muro: boolean | undefined,
+    piso: boolean | undefined,
+    columna: string,
+    lado: 'izquierdo' | 'derecho',
+    override: number | undefined,
+    perf: PerforacionPerfil | undefined,
+  ) => {
+    if (!(activo || muro || piso) || !altoOk) return;
+    const superficie = muro ? 'muro' : piso ? 'piso' : null;
+    const overrideOk = typeof override === 'number' && Number.isFinite(override) && override > 0;
+    // Sin superficie ni override → medida pendiente (se llena en Fase 2).
+    const pendienteMedida = superficie === null && !overrideOk;
+    const base = superficie === 'piso' ? lateralPiso : lateralMuro; // default muro al mostrar
+    const nombre =
+      superficie === 'piso'
+        ? `Perfil ${lado} a Piso`
+        : superficie === 'muro'
+          ? `Perfil ${lado} a Muro`
+          : `Perfil ${lado}`;
+    cortes.push({
+      componente: nombre,
+      columnaExcel: columna,
+      medidaCm: pendienteMedida ? 0 : aplicarOverride(base, override),
+      perfil: true,
+      perforacion: perf,
+      pendienteMedida,
+    });
+  };
+  emitLateral(perfiles.izqActivo, perfiles.izqMuro, perfiles.izqPiso, 'PERFIL (IZQ) INT', 'izquierdo', perfiles.izqMuro ? medidas.izqMuro : medidas.izqPiso, perfiles.izqPerf);
+  emitLateral(perfiles.derActivo, perfiles.derMuro, perfiles.derPiso, 'PERFIL (DER) INT', 'derecho', perfiles.derMuro ? medidas.derMuro : medidas.derPiso, perfiles.derPerf);
+
+  // Inferior (perfil base): sobre la cenefa frontal (muro y piso miden igual).
+  const infActivo = perfiles.infActivo || perfiles.infMuro || perfiles.infPiso;
+  if (infActivo) {
+    const superficie = perfiles.infMuro ? 'muro' : perfiles.infPiso ? 'piso' : null;
     const override = perfiles.infMuro ? medidas.infMuro : medidas.infPiso;
-    cortes.push({ componente: nombre, columnaExcel: 'PERFIL BASE', medidaCm: aplicarOverride(inferior, override), perfil: true });
+    const overrideOk = typeof override === 'number' && Number.isFinite(override) && override > 0;
+    const pendienteMedida = superficie === null && !overrideOk;
+    const nombre =
+      superficie === 'piso' ? 'Perfil inferior al Piso' : superficie === 'muro' ? 'Perfil inferior a Muro' : 'Perfil inferior';
+    cortes.push({
+      componente: nombre,
+      columnaExcel: 'PERFIL BASE',
+      medidaCm: pendienteMedida ? 0 : aplicarOverride(inferior, override),
+      perfil: true,
+      perforacion: perfiles.infPerf,
+      pendienteMedida,
+    });
   }
 
   return cortes;

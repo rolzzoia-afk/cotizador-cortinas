@@ -201,14 +201,61 @@ describe('construirCalculoGeneral', () => {
     expect(labels).not.toContain('PERFIL CABEZAL');
     expect(labels).not.toContain('VARILLA');
     expect(labels).not.toContain('CARRITOS');
-    // Piezas de tela: sí quedan (lamas montadas + repuesto).
+    // Piezas de tela: sí quedan (lamas montadas + repuesto + alto de corte).
     expect(labels).toContain('LAMAS');
     expect(labels).toContain('REPUESTO');
     expect(labels).toContain('ALTO DE CORTE');
-    expect(labels).toContain('ALTO FINAL');
+    // ALTO FINAL es dato del Cálculo General, no de la mesa de dimensionado.
+    expect(labels).not.toContain('ALTO FINAL');
     // La guía compuesta se eliminó también del Dimensionado.
     expect(labels).not.toContain('LAMAS (8,9 × ALTO FINAL)');
     expect(labels).not.toContain('ANCHO TELA');
+  });
+
+  it('soft light: bloque SOFT con TELA / PERFIL LATERAL / PERFIL BASE / ALTO TELA', () => {
+    // Externo 2,50 × 2,50 con perfiles a piso (izq a muro, der a piso para probar
+    // "medida / medida" en PERFIL LATERAL) y base a muro.
+    const v = ventRoller(2.5, 'LIVING');
+    (v as { categoria: string }).categoria = 'SOFT_LIGHT_38mm';
+    (v as { alto: number }).alto = 2.5;
+    v.sentido = 'EXTERNO';
+    Object.assign(v.panos[0], {
+      alto: 2.5,
+      cenefa: 'Ovalada',
+      oscuridadVariante: 'EXTERNO',
+      perfilIzqActivo: true,
+      perfilIzqMuro: true,
+      perfilIzqPerf: 'EXTERNO',
+      perfilDerActivo: true,
+      perfilDerPiso: true,
+      perfilDerPerf: 'EXTERNO',
+      perfilInfActivo: true,
+      perfilInfPiso: true,
+      perfilInfPerf: 'EXTERNO',
+    });
+    const data = construirCalculoGeneral([v]);
+    const bloque = data.bloques.find((b) => b.sistema.key === 'SOFT');
+    expect(bloque).toBeTruthy();
+    const labels = bloque!.columnas.map((c) => c.label);
+    expect(labels).toContain('TELA'); // no "TELA (ANCHO)"
+    expect(labels).toContain('PERFIL LATERAL');
+    expect(labels).toContain('PERFIL BASE');
+    expect(labels).toContain('ALTO TELA');
+    expect(labels).not.toContain('ALTO'); // el ALTO genérico se omite en oscuridad
+    const [f] = data.filas;
+    expect(f.despiece.get('TELA')).toBe(257.2);
+    expect(f.despiece.get('ALTO TELA')).toBe(275);
+    // Izq a muro (alto+10 = 260) EXT, der a piso (alto = 250) EXT → "260 EXT / 250 EXT".
+    expect(String(f.despiece.get('PERFIL LATERAL'))).toBe('260 EXT / 250 EXT');
+    expect(String(f.despiece.get('PERFIL BASE'))).toContain('EXT');
+    // Dimensionado: la mesa de tela no ve cenefa ni perfiles.
+    const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'SOFT');
+    const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
+    expect(dimLabels).toContain('TELA');
+    expect(dimLabels).toContain('ALTO TELA');
+    expect(dimLabels).not.toContain('CENEFA');
+    expect(dimLabels).not.toContain('PERFIL LATERAL');
+    expect(dimLabels).not.toContain('PERFIL BASE');
   });
 
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {

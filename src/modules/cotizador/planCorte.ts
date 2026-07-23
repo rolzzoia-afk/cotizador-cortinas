@@ -7,6 +7,11 @@
 
 import type { OT, VentanaItem } from '@/modules/ots/types';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import {
+  cortesOscuridad,
+  familiaOscuridad,
+  normalizarVarianteOscuridad,
+} from '@/modules/descuentos/reglas-oscuridad';
 
 // ── Tipos del plan ───────────────────────────────────────────────────
 export type ColmenaPanoRow = {
@@ -303,7 +308,24 @@ export function generarPlanCorte(
         const altoFuente = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
         const altoBase = Math.round(altoFuente * 100) + extraCm;
         const altoCm = isDuo ? Math.round(altoFuente * 100) * 2 + extraCm : altoBase;
-        const anchoCm = Math.round(parseFloat(String(p.ancho)) * 100) + BORDE;
+        const anchoNominalCm = Math.round(parseFloat(String(p.ancho)) * 100);
+        // OSCURIDAD (Soft Light / Oscuranti / Dark): la tela se corta al ancho REAL
+        // del despiece (ancho + TELA_ADJ), no al nominal. En EXTERNO el corte es
+        // MÁS ancho que el nominal, así que el sobrante debe alcanzar ese ancho.
+        const familiaOsc = familiaOscuridad(v.categoria, p.cenefa as string | null | undefined);
+        const anchoCorteOsc = familiaOsc
+          ? cortesOscuridad(
+              familiaOsc,
+              normalizarVarianteOscuridad(
+                (p.oscuridadVariante as string | undefined) ??
+                  (v.oscuridadVariante as string | undefined) ??
+                  (v.sentido as string | undefined),
+              ),
+              anchoNominalCm,
+              0,
+            ).find((c) => c.componente === 'Tela (ancho)')?.medidaCm
+          : undefined;
+        const anchoCm = Math.round(anchoCorteOsc ?? anchoNominalCm) + BORDE;
         if (!anchoCm || !altoCm) return;
         const panoSuffix = v.panos!.length > 1 ? ` P${pi + 1}` : '';
         const label = multiOT

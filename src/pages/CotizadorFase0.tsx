@@ -38,6 +38,7 @@ import {
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0 } from '@/modules/cotizador/fase0-dual';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import {
   OPCIONES_MECANISMO_DUAL,
   OPCIONES_MECANISMO_RESOLUCION,
@@ -189,6 +190,11 @@ const DIRECCIONES = [
   'CIERRE [MEDIO]',
 ];
 const SENTIDOS = ['INTERNO', 'EXTERNO'];
+// Sistemas de oscuridad (Soft Light / Dark / Oscuranti): la variante de
+// instalación se asigna desde Fase 1 e incluye SEMI (además de INTERNO/EXTERNO).
+const SENTIDOS_OSCURIDAD = ['INTERNO', 'SEMI', 'EXTERNO'];
+const esCategoriaOscuridad = (categoria: string | undefined): boolean =>
+  familiaOscuridad(categoria) != null;
 const CATEGORIAS_MECANISMO = [
   'ROL', 'ROL_DUAL', 'ROL_MANUAL_CENEFA_OVALADA_38mm', 'ROL_MANUAL_CENEFA_OVALADA_45mm',
   'ROL_CENEFA_OVALADA_MOTOR_PEQUEÑO', 'ROL_CENEFA_OVALADA_MOTOR_GRANDE', 'PLETINA_ROLLER_V',
@@ -868,7 +874,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         codIntValidos: new Set(Object.keys(catalogo)),
         categorias: new Set(CATEGORIAS_MECANISMO),
         direcciones: new Set(DIRECCIONES),
-        sentidos: new Set(SENTIDOS),
+        // SEMI es válido para los sistemas de oscuridad (variante de instalación).
+        sentidos: new Set([...SENTIDOS, ...SENTIDOS_OSCURIDAD]),
       };
 
       // ── Cortinas ──
@@ -1339,7 +1346,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                               —
                             </span>
                           ) : (
-                            <SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} />
+                            <SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={esCategoriaOscuridad(f.categoria) ? SENTIDOS_OSCURIDAD : SENTIDOS} invalido={errs?.has('sentido')} />
                           )}
                         </Td>
                       </>
