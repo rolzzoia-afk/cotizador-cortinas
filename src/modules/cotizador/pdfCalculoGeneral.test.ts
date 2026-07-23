@@ -476,3 +476,94 @@ describe('CONJUNTO PAÑOS (Dimensionado, #27)', () => {
     expect(sinMapa.filas.every((f) => f.conjunto === '')).toBe(true);
   });
 });
+
+// La caída (ARMADO) y el tipo de soft light (variante) son campos DISTINTOS: la
+// caída viene de la cotización (v.sentido/p.armado, Interna/Externa); la variante
+// se elige en Fase 1 (p.oscuridadVariante, INTERNO/SEMI/EXTERNO) y viaja en su
+// propia columna verde "TIPO DE SOFT.LIGHT".
+describe('TIPO DE SOFT.LIGHT separado de la caída (ARMADO) — #C4/C5', () => {
+  const softVent = (variante: string, caida: string): Ventana => {
+    const v = ventRoller(2.0, 'PIEZA');
+    (v as { categoria: string }).categoria = 'SOFT_LIGHT_38mm';
+    (v as { alto: number }).alto = 2.0;
+    v.sentido = caida;
+    Object.assign(v.panos![0], {
+      alto: 2.0,
+      cenefa: 'Ovalada',
+      oscuridadVariante: variante,
+      armado: caida,
+    });
+    return v;
+  };
+
+  it('ARMADO = caída; la columna TIPO trae la variante (aunque difieran)', () => {
+    // Caída INTERNA, variante EXTERNA → NO deben mezclarse.
+    const data = construirCalculoGeneral([softVent('EXTERNO', 'INTERNO')]);
+    const [f] = data.filas;
+    expect(f.armado).toBe('INTERNO'); // caída de la cotización
+    expect(f.despiece.get('TIPO SOFT LIGHT')).toBe('EXTERNO'); // variante de Fase 1
+    // La columna cierra el bloque SOFT y se rotula "TIPO DE SOFT.LIGHT".
+    const bloque = data.bloques.find((b) => b.sistema.key === 'SOFT')!;
+    const labels = bloque.columnas.map((c) => c.label);
+    expect(labels[labels.length - 1]).toBe('TIPO DE SOFT.LIGHT');
+    // No pisa el ALTO TELA (la penúltima del bloque de oscuridad).
+    expect(labels).toContain('ALTO TELA');
+  });
+
+  it('cada fila lleva SU variante (INTERNO/SEMI/EXTERNO por paño)', () => {
+    const vents = [softVent('INTERNO', 'EXTERNO'), softVent('SEMI', 'EXTERNO'), softVent('EXTERNO', 'INTERNO')];
+    const data = construirCalculoGeneral(vents);
+    expect(data.filas.map((f) => f.despiece.get('TIPO SOFT LIGHT'))).toEqual([
+      'INTERNO',
+      'SEMI',
+      'EXTERNO',
+    ]);
+  });
+
+  it('OT vieja sin oscuridadVariante: la columna cae a la caída (compat)', () => {
+    // Antes la variante viajaba en `sentido`; sin oscuridadVariante se preserva.
+    const v = ventRoller(2.0, 'PIEZA');
+    (v as { categoria: string }).categoria = 'SOFT_LIGHT_38mm';
+    (v as { alto: number }).alto = 2.0;
+    v.sentido = 'SEMI';
+    Object.assign(v.panos![0], { alto: 2.0, cenefa: 'Ovalada' });
+    const [f] = construirCalculoGeneral([v]).filas;
+    expect(f.despiece.get('TIPO SOFT LIGHT')).toBe('SEMI');
+  });
+
+  it('Dimensionado NO trae la columna TIPO DE SOFT.LIGHT (es dato de taller)', () => {
+    const data = construirCalculoGeneral([softVent('SEMI', 'INTERNO')]);
+    const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'SOFT');
+    const labels = (dim?.columnas ?? []).map((c) => c.label);
+    expect(labels).not.toContain('TIPO DE SOFT.LIGHT');
+  });
+});
+
+// El rediseño del Cálculo General agrupa por SISTEMA en secciones (una banda por
+// tipo de cortina). El builder ya entrega los bloques en el orden fijo del render
+// (ROLLER → SOFT → OSCU → DARK → BEEBLACK → VERTICAL) y cada uno con SOLO sus
+// columnas — el render solo los dibuja.
+describe('Secciones por tipo de cortina (rediseño CG) — #C5', () => {
+  it('OT mixta: bloques en orden fijo, cada sección con SOLO sus columnas', () => {
+    const roller = ventRoller(1.5, 'SALON');
+    const soft = ventRoller(2.0, 'PIEZA');
+    (soft as { categoria: string }).categoria = 'SOFT_LIGHT_38mm';
+    (soft as { alto: number }).alto = 2.0;
+    Object.assign(soft.panos![0], { alto: 2.0, cenefa: 'Ovalada', oscuridadVariante: 'SEMI' });
+    const vert = ventVertical(); // id 'vLIVING'
+    // Entrada desordenada: soft, vertical, roller.
+    const data = construirCalculoGeneral([soft, vert, roller]);
+    expect(data.bloques.map((b) => b.sistema.key)).toEqual(['ROLLER', 'SOFT', 'VERTICAL']);
+    const rollerLabels = data.bloques[0].columnas.map((c) => c.label);
+    const vertLabels = data.bloques[2].columnas.map((c) => c.label);
+    // El roller no arrastra columnas de vertical y viceversa.
+    expect(rollerLabels).toContain('TUBO');
+    expect(rollerLabels).not.toContain('PERFIL CABEZAL');
+    expect(vertLabels).toContain('PERFIL CABEZAL');
+    expect(vertLabels).not.toContain('TUBO');
+    // Números dorados intactos tras el rediseño.
+    const fSoft = data.filas.find((f) => f.bloque === 'SOFT')!;
+    expect(fSoft.despiece.get('TELA')).toBe(200.6); // 2,00 → soft light SEMI
+    expect(fSoft.despiece.get('ALTO TELA')).toBe(225); // alto 2,00 + 25
+  });
+});

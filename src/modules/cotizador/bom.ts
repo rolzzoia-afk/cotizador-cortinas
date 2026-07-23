@@ -135,8 +135,15 @@ export function calcularBOM(
     }
 
     const tieneMotor = !!(p.motorModelo || p.motorTipo);
+    // Categoría vendida COMO motor (ROL/DUO ..._MOTOR_...): su precio incluye el
+    // motor, no un kit manual → sin cadena/peso. Un motor asignado a una cortina
+    // de categoría MANUAL SÍ conserva cadena+peso (van dentro del precio) — por eso
+    // el gate es por categoría, no por `tieneMotor`.
+    const catEsMotor = (categoria || '').toUpperCase().includes('MOTOR');
 
-    if (!tieneMotor) {
+    // Cadena + peso: se emiten aunque el paño lleve motor; solo se omiten en las
+    // categorías vendidas como motor.
+    if (!catEsMotor) {
       // Cadena. Si el cotizador eligió la cadena real del inventario,
       // `codCadena` (CAD01…) va en la especificación para enlazar al stock
       // (mismo patrón que el mecanismo). Si no, cae al largo de texto antiguo.
@@ -155,7 +162,10 @@ export function calcularBOM(
         const pesoKey = `PESO|${pesoCod || pesoColor}`;
         add(pesoKey, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.');
       }
-    } else {
+    }
+
+    // Kit de motor: además del kit manual, cuando el paño tiene un motor asignado.
+    if (tieneMotor) {
       // Motor nuevo (DOM38/DOM41): kit con códigos DOM. Motor legacy o 'CABLE'
       // futuro: línea genérica como antes.
       const motorInsumos = insumosMotorDePano(p, categoria);

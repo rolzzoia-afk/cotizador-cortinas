@@ -70,6 +70,12 @@ export type Pano = {
   perfilIzqPerf?: string;
   perfilDerPerf?: string;
   perfilInfPerf?: string;
+  /**
+   * Montaje del perfil BASE (solo soft light INTERNO): 'DENTRO' (default, entre
+   * los laterales → ancho − 13,3) | 'PARED' (pared a pared → ancho completo).
+   * Se elige en Fase 2; sin efecto en SEMI/EXTERNO ni en Oscuranti/Dark.
+   */
+  perfilInfMontaje?: string;
   /** Medida manual (cm) que sobreescribe la calculada por perfil (ajuste de terreno). */
   perfilIzqMuroCm?: number;
   perfilIzqPisoCm?: number;

@@ -479,18 +479,36 @@ export const COD_HUB_DOMOTICA = 'DOM43';
 export const NOMBRE_HUB_DOMOTICA = 'BRIGDE HUB DOMOTICA';
 
 // ── Cargador del motor (1 por motor, tabla INSTALACIÓN) ──────────────
-// DOM03 (HUB USB 1 QR) por defecto; el vendedor puede cambiarlo por DOM33
-// (enchufe adaptador motor grande) en Fase 2 cuando el motor lo requiera.
+// El cargador POR DEFECTO depende del motor: el DOM38 (Tronic Plus batería)
+// lleva el hub de domótica DOM43; el DOM41 (Merygate) lleva el HUB USB DOM03.
+// En Fase 2 el vendedor puede cambiarlo por DOM33 (enchufe adaptador motor
+// grande) o forzar el otro hub. Su código DOM cae en INSTALACIÓN del inventario.
 export const COD_CARGADOR_MOTOR = 'DOM03';
 export const NOMBRE_CARGADOR_MOTOR = 'HUB USB [1 QR]';
 export const COD_CARGADOR_MOTOR_ALT = 'DOM33';
 export const NOMBRE_CARGADOR_MOTOR_ALT = 'ENCHUFE ADAPTADOR MOTOR GRANDE';
 
-/** Cargador del motor del paño: DOM03 por defecto, DOM33 si se cambió en Fase 2. */
-export function cargadorMotorDePano(p: Partial<Pano>): { codigo: string; descripcion: string } {
-  return (p.motorCargador || '').toUpperCase() === COD_CARGADOR_MOTOR_ALT
-    ? { codigo: COD_CARGADOR_MOTOR_ALT, descripcion: NOMBRE_CARGADOR_MOTOR_ALT }
-    : { codigo: COD_CARGADOR_MOTOR, descripcion: NOMBRE_CARGADOR_MOTOR };
+/** Cargador por DEFECTO según el modelo de motor: DOM38 → DOM43, resto → DOM03. */
+export function cargadorPorDefectoMotor(modeloMotor?: string): { codigo: string; descripcion: string } {
+  return (modeloMotor || '').toUpperCase() === 'DOM38'
+    ? { codigo: COD_HUB_DOMOTICA, descripcion: NOMBRE_HUB_DOMOTICA } // DOM43
+    : { codigo: COD_CARGADOR_MOTOR, descripcion: NOMBRE_CARGADOR_MOTOR }; // DOM03
+}
+
+/**
+ * Cargador del motor del paño. Por defecto depende del motor (DOM38 → DOM43 ·
+ * DOM41 → DOM03); una elección manual en Fase 2 (`motorCargador`) la sobreescribe.
+ * `modeloMotor` es el modelo EFECTIVO (con la coerción ovalada DOM41→DOM38).
+ */
+export function cargadorMotorDePano(
+  p: Partial<Pano>,
+  modeloMotor?: string,
+): { codigo: string; descripcion: string } {
+  const elegido = (p.motorCargador || '').toUpperCase();
+  if (elegido === COD_CARGADOR_MOTOR_ALT) return { codigo: COD_CARGADOR_MOTOR_ALT, descripcion: NOMBRE_CARGADOR_MOTOR_ALT }; // DOM33
+  if (elegido === COD_HUB_DOMOTICA) return { codigo: COD_HUB_DOMOTICA, descripcion: NOMBRE_HUB_DOMOTICA }; // DOM43
+  if (elegido === COD_CARGADOR_MOTOR) return { codigo: COD_CARGADOR_MOTOR, descripcion: NOMBRE_CARGADOR_MOTOR }; // DOM03
+  return cargadorPorDefectoMotor(modeloMotor);
 }
 
 /** ¿El paño lleva un motor con código DOM (no 'CABLE' futuro ni vacío)? */
@@ -578,9 +596,9 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
     out.push({ codigo: COD_CABLE_MOTOR, descripcion: NOMBRE_CABLE_MOTOR, color: '', cantidad: 1 });
   }
   out.push({ codigo: COD_ENCHUFE_MOTOR, descripcion: NOMBRE_ENCHUFE_MOTOR, color: '', cantidad: 1 });
-  // Cargador del motor (1 por motor): DOM03 por defecto o DOM33 si se cambió en
-  // Fase 2. Su código DOM cae por defecto en INSTALACIÓN del inventario.
-  const cargador = cargadorMotorDePano(p);
+  // Cargador del motor (1 por motor): por defecto DOM43 en el DOM38 / DOM03 en el
+  // DOM41, o DOM33 si se cambió en Fase 2. Cae por defecto en INSTALACIÓN.
+  const cargador = cargadorMotorDePano(p, modelo);
   out.push({ codigo: cargador.codigo, descripcion: cargador.descripcion, color: '', cantidad: 1 });
   // Controles adicionales (mismo código que el control del kit).
   const ctrlAdic = Number(p.motorControlAdicCant) || (p.motorControlAdic ? 1 : 0);

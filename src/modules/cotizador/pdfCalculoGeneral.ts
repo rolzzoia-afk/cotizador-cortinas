@@ -19,7 +19,7 @@ import {
   contextoDespieceDesdePano,
   MODELO_DESPIECE_STUB,
 } from '@/modules/descuentos/despiece';
-import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import { familiaOscuridad, normalizarVarianteOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
@@ -200,6 +200,19 @@ export function construirCalculoGeneral(
           despiece.set('PERFIL LATERAL', uniq.join(' / '));
         }
       }
+      // Soft light: cada fila muestra SU tipo (variante INTERNO/SEMI/EXTERNO) en
+      // una columna propia, al final del bloque. Independiente de la caída (ARMADO).
+      if (bloque.key === 'SOFT') {
+        despiece.set(
+          'TIPO SOFT LIGHT',
+          normalizarVarianteOscuridad(
+            (p as { oscuridadVariante?: string }).oscuridadVariante ??
+              (v as { oscuridadVariante?: string }).oscuridadVariante ??
+              (v.sentido as string),
+            'INTERNO',
+          ),
+        );
+      }
       // Dúo: se detecta SOLO por producto, igual que el corte real (tela.ts
       // `isDuo`). NO por categoría: hay familias "DUO_MOTOR_*"/"DUO_MANUAL_*" que
       // quedan aplicadas a un roller simple (screen con motor), y ahí la tela se
@@ -327,8 +340,9 @@ export function construirCalculoGeneral(
     }
     if (cols.length === 0) continue;
     // Al final del bloque (como en la hoja manual): primero ALTO MESA DE CORTE
-    // (dúo del Dimensionado), luego ALTO TELA (oscuridad) y ALTO.
-    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO TELA', 'ALTO']) {
+    // (dúo del Dimensionado), luego ALTO TELA (oscuridad), ALTO y, cerrando el
+    // bloque soft light, el TIPO DE SOFT.LIGHT (variante por fila).
+    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO TELA', 'ALTO', 'TIPO SOFT LIGHT']) {
       const idx = cols.indexOf(colFin);
       if (idx >= 0) {
         cols.splice(idx, 1);
@@ -337,7 +351,11 @@ export function construirCalculoGeneral(
     }
     bloques.push({
       sistema,
-      columnas: cols.map((col) => ({ key: col, label: col, bloque: sistema })),
+      columnas: cols.map((col) => ({
+        key: col,
+        label: col === 'TIPO SOFT LIGHT' ? 'TIPO DE SOFT.LIGHT' : col,
+        bloque: sistema,
+      })),
     });
   }
 
@@ -359,34 +377,6 @@ function rect(doc: jsPDF, x: number, y: number, w: number, h: number, fill?: RGB
   doc.setDrawColor(C_LINE[0], C_LINE[1], C_LINE[2]);
   doc.setLineWidth(0.2);
   doc.rect(x, y, w, h);
-}
-
-function celda(
-  doc: jsPDF,
-  s: string,
-  x: number,
-  w: number,
-  y: number,
-  opts: { size?: number; bold?: boolean; color?: RGB } = {},
-) {
-  const { bold = false, color = [25, 25, 30] } = opts;
-  let size = opts.size ?? 13;
-  doc.setFont('helvetica', bold ? 'bold' : 'normal');
-  doc.setTextColor(color[0], color[1], color[2]);
-  const maxW = w - 1;
-  let txt = s;
-  doc.setFontSize(size);
-  // Una sola línea: achicar la fuente hasta un mínimo para que entre…
-  while (size > 5 && doc.getTextWidth(txt) > maxW) {
-    size -= 0.3;
-    doc.setFontSize(size);
-  }
-  // …y si aún no entra, recortar con elipsis (nunca se monta sobre la fila).
-  if (doc.getTextWidth(txt) > maxW) {
-    while (txt.length > 1 && doc.getTextWidth(txt + '…') > maxW) txt = txt.slice(0, -1);
-    txt += '…';
-  }
-  doc.text(txt, x + w / 2, y, { align: 'center' });
 }
 
 /**
@@ -429,11 +419,20 @@ export function envolverEtiqueta(
  */
 function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: number, h: number) {
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
   doc.setTextColor(C_WHITE[0], C_WHITE[1], C_WHITE[2]);
-  const lines = envolverEtiqueta((s) => doc.getTextWidth(s), label, w - 1.5);
-  const lineH = 3.5;
-  let y = yTop + (h - lines.length * lineH) / 2 + 2.5;
+  const maxW = w - 1.4;
+  let size = 9;
+  doc.setFontSize(size);
+  let lines = envolverEtiqueta((s) => doc.getTextWidth(s), label, maxW);
+  // Palabra sola que no cabe (ej. "ACCESORIOS"/"COD_IN" en columnas angostas):
+  // achica la fuente de la cabecera hasta que entre — nunca recorta.
+  while (size > 6 && lines.some((ln) => doc.getTextWidth(ln) > maxW)) {
+    size -= 0.5;
+    doc.setFontSize(size);
+    lines = envolverEtiqueta((s) => doc.getTextWidth(s), label, maxW);
+  }
+  const lineH = size * 0.39;
+  let y = yTop + (h - lines.length * lineH) / 2 + size * 0.28;
   for (const ln of lines) {
     doc.text(ln, x + w / 2, y, { align: 'center' });
     y += lineH;
@@ -444,6 +443,11 @@ function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: nu
 function pesoColumna(key: string, esDespiece: boolean): number {
   if (key === 'ALTO MESA DE CORTE') return 1.6; // etiqueta larga
   if (key.startsWith('CENEFA OVALADA')) return 1.55; // etiqueta larga (con/sin tira)
+  // Columnas de oscuridad con contenido largo: se ensanchan para que el texto
+  // entre completo ("283,6 INT" / "260 EXT / 250 EXT" / "EXTERNO").
+  if (key === 'PERFIL LATERAL') return 1.95;
+  if (key === 'PERFIL BASE') return 1.75;
+  if (key === 'TIPO SOFT LIGHT') return 1.8;
   if (esDespiece) return 1.15;
   switch (key) {
     case 'codMecanismo':
@@ -462,13 +466,13 @@ function pesoColumna(key: string, esDespiece: boolean): number {
     case 'tuberia':
       return 2.4; // descripción larga del tubo ("E02-TUBO 1.2 / Ø 38 mm")
     case 'colorAcc':
-      return 1.6; // cabecera "COLOR ACCESORIOS": "ACCESORIOS" debe entrar entera
+      return 1.1; // angosta: valores cortos (BLANCO/NEGRO); la cabecera se achica si hace falta
     case 'armado':
     case 'manillas':
     case 'conjunto':
       return 1.1;
     case 'codInt':
-      return 1.05; // "COD_IN" es una sola palabra (no envuelve): necesita su ancho
+      return 0.72; // angosta: "SC 02"; la cabecera "COD_IN" se achica si no cabe
     case 'codSec':
       return 0.9;
     case 'cant':
@@ -519,7 +523,9 @@ const SIN_DIMENSIONADO_VERTICAL = new Set([
 // la cenefa (soft light "normal") y los perfiles los corta el taller, no la mesa
 // de tela. La mesa solo ve TELA + ALTO TELA. (CENEFA DELANTERA/TRASERA de las
 // familias con cenefa cuadrada mantienen su comportamiento previo.)
-const SIN_DIMENSIONADO_OSCURIDAD = new Set(['CENEFA', 'PERFIL LATERAL', 'PERFIL BASE']);
+const SIN_DIMENSIONADO_OSCURIDAD = new Set([
+  'CENEFA', 'PERFIL LATERAL', 'PERFIL BASE', 'TIPO DE SOFT.LIGHT',
+]);
 
 export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   titulo: 'DIMENSIONADO',
@@ -591,41 +597,88 @@ function renderHojaCalculo(
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
   const { identidad, bloques } = aplicarVariante(data, variante);
 
-  // Columnas planas: identidad + (por bloque) sus columnas + (Dimensionado) conjunto.
-  type ColPlana = ColumnaCalculo & { sistema?: BloqueSistema };
-  const cols: ColPlana[] = [
-    ...identidad,
-    ...bloques.flatMap((b) => b.columnas.map((c) => ({ ...c, sistema: b.sistema }))),
-  ];
-  if (variante.conjuntoPanos) cols.push({ key: 'conjunto', label: 'CONJUNTO PAÑOS' });
+  // Identidad + (Dimensionado) CONJUNTO PAÑOS: columnas comunes a TODAS las
+  // secciones, con anchos GLOBALES para que queden alineadas verticalmente.
+  const identCols: ColumnaCalculo[] = variante.conjuntoPanos
+    ? [...identidad, { key: 'conjunto', label: 'CONJUNTO PAÑOS' }]
+    : identidad;
 
-  // A3 apaisado (420 × 297) para que entren muchas columnas.
+  // Una SECCIÓN por sistema presente (orden fijo, verticales al final), con SUS
+  // filas y SOLO sus columnas de despiece. Un bloque sin columnas (despiece
+  // vacío o filtrado por la variante) igual arma su sección: sus filas se
+  // muestran solo con identidad.
+  const colsPorBloque = new Map(bloques.map((b) => [b.sistema.key, b.columnas]));
+  const secciones: { sistema: BloqueSistema; columnas: ColumnaCalculo[]; filas: FilaCalculo[] }[] = [];
+  for (const bk of ['ROLLER', 'SOFT', 'OSCU', 'DARK', 'BEEBLACK', 'VERTICAL']) {
+    const filasBloque = data.filas.filter((f) => f.bloque === bk);
+    if (filasBloque.length === 0) continue;
+    secciones.push({ sistema: BLOQUES[bk], columnas: colsPorBloque.get(bk) ?? [], filas: filasBloque });
+  }
+
+  // A3 apaisado (420 × 297).
   const doc = new jsPDF('l', 'mm', 'a3');
   const PW = 420;
+  const PH = 297;
   const M = 6;
   const usable = PW - M * 2;
-
-  // Anchos por columna (texto largo más ancho) y posiciones X acumuladas.
-  const pesos = cols.map((c) => pesoColumna(c.key, !!c.sistema));
-  const totalPeso = pesos.reduce((a, b) => a + b, 0);
-  const widths = pesos.map((p) => (usable * p) / totalPeso);
-  const xs: number[] = [];
-  let acc = M;
-  for (const w of widths) {
-    xs.push(acc);
-    acc += w;
-  }
-  const idN = identidad.length;
-
-  const PH = 297;
   const BOTTOM = PH - M;
-  const superH = 9;
-  const headH = 15; // más alto: las cabeceras largas se envuelven a 2-3 líneas
-  const rowH = 12;
+
+  // Anchos de IDENTIDAD globales: ocupan la fracción que deja libre la sección
+  // con MÁS despiece; el resto ("área de despiece") lo reparte cada sección
+  // entre SUS columnas, llenándola completa. Así la identidad queda alineada
+  // entre secciones y cada banda ocupa todo el ancho útil.
+  const identPesos = identCols.map((c) => pesoColumna(String(c.key), false));
+  const sumIdent = identPesos.reduce((a, b) => a + b, 0) || 1;
+  const despiecePeso = (columnas: ColumnaCalculo[]) =>
+    columnas.reduce((s, c) => s + pesoColumna(c.key, true), 0);
+  const despieceMax = Math.max(0.001, ...secciones.map((sec) => despiecePeso(sec.columnas)));
+  const identTotal = (usable * sumIdent) / (sumIdent + despieceMax);
+  const identWidths = identPesos.map((p) => (identTotal * p) / sumIdent);
+  const despieceArea = usable - identTotal;
+  const despX0 = M + identTotal;
+  const identXs: number[] = [];
+  {
+    let ax = M;
+    for (const w of identWidths) {
+      identXs.push(ax);
+      ax += w;
+    }
+  }
+
+  const bannerH = 9;
+  const superH = 8;
+  const headH = 15; // cabeceras largas se envuelven a 2-3 líneas
+  const rowH = 11;
+  const SIZE_TEXTO = 8.5; // identidad (texto) — tamaño fijo, uniforme
+  const SIZE_NUM = 12; // despiece (números / variante) — tamaño fijo, uniforme
+  const VERDE: RGB = [112, 173, 71];
+  const VERDE_TXT: RGB = [22, 46, 20];
 
   let y = M;
   let pagina = 0;
-  let yBorde = 0;
+
+  // Celda a tamaño FIJO (nunca encoge): lo que no cabe se recorta con "…".
+  const celdaFija = (
+    txt: string,
+    x: number,
+    w: number,
+    yText: number,
+    size: number,
+    o: { bold?: boolean; color?: RGB } = {},
+  ) => {
+    if (!txt) return;
+    doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
+    doc.setFontSize(size);
+    const c = o.color ?? [25, 25, 30];
+    doc.setTextColor(c[0], c[1], c[2]);
+    let t = txt;
+    const maxW = w - 1.4;
+    if (doc.getTextWidth(t) > maxW) {
+      while (t.length > 1 && doc.getTextWidth(t + '…') > maxW) t = t.slice(0, -1);
+      t += '…';
+    }
+    doc.text(t, x + w / 2, yText, { align: 'center' });
+  };
 
   const encabezado = () => {
     pagina += 1;
@@ -645,71 +698,95 @@ function renderHojaCalculo(
     y += 10;
   };
 
-  // Súper-cabecera de bloques (colores por sistema) + cabecera de columnas;
-  // se redibujan en cada página.
-  const cabeceras = () => {
-    let colIdx = idN; // arranca tras las columnas de identidad
-    for (const b of bloques) {
-      const x0 = xs[colIdx];
-      const w = b.columnas.reduce((s, _c, j) => s + widths[colIdx + j], 0);
-      rect(doc, x0, y, w, superH, b.sistema.color);
-      celda(doc, b.sistema.label, x0, w, y + 6.3, { size: 10, bold: true, color: C_WHITE });
-      colIdx += b.columnas.length;
-    }
-    y += superH;
-    yBorde = y;
-    cols.forEach((c, i) => {
-      rect(doc, xs[i], y, widths[i], headH, c.sistema ? c.sistema.color : C_DARK);
-      celdaCabecera(doc, c.label, xs[i], widths[i], y, headH);
-    });
-    y += headH;
-  };
-
-  // Borde exterior del tramo de tabla dibujado en la página actual.
-  const cerrarBorde = () => {
-    doc.setDrawColor(80, 80, 88);
-    doc.setLineWidth(0.4);
-    doc.rect(M, yBorde, usable, y - yBorde);
-  };
-
   encabezado();
-  cabeceras();
 
-  // Filas (con salto de página cuando no cabe la siguiente).
-  for (const f of data.filas) {
-    if (y + rowH > BOTTOM) {
-      cerrarBorde();
+  for (const sec of secciones) {
+    // Reparte el área de despiece entre las columnas de ESTA sección.
+    const despPesos = sec.columnas.map((c) => pesoColumna(c.key, true));
+    const sumDesp = despPesos.reduce((a, b) => a + b, 0) || 1;
+    const despWidths = despPesos.map((p) => (despieceArea * p) / sumDesp);
+    const despWtot = despWidths.reduce((a, b) => a + b, 0);
+    const despXs: number[] = [];
+    {
+      let ax = despX0;
+      for (const w of despWidths) {
+        despXs.push(ax);
+        ax += w;
+      }
+    }
+
+    // Banner + súper-cabecera + cabeceras de columna de la sección (se repiten
+    // al saltar de página dentro de la sección).
+    const cabecerasSeccion = () => {
+      rect(doc, M, y, usable, bannerH, [22, 22, 26]);
+      celdaFija(sec.sistema.label, M, usable, y + 6.2, 15, { bold: true, color: C_WHITE });
+      y += bannerH;
+      if (despWtot > 0) {
+        rect(doc, despX0, y, despWtot, superH, sec.sistema.color);
+        celdaFija(sec.sistema.label, despX0, despWtot, y + 5.4, 9, { bold: true, color: C_WHITE });
+      }
+      y += superH;
+      identCols.forEach((c, i) => {
+        rect(doc, identXs[i], y, identWidths[i], headH, C_DARK);
+        celdaCabecera(doc, c.label, identXs[i], identWidths[i], y, headH);
+      });
+      sec.columnas.forEach((c, j) => {
+        // La cabecera de TIPO DE SOFT.LIGHT va del color del sistema (como sus
+        // vecinas); solo las CELDAS de esa columna llevan el verde de resalte.
+        rect(doc, despXs[j], y, despWidths[j], headH, sec.sistema.color);
+        celdaCabecera(doc, c.label, despXs[j], despWidths[j], y, headH);
+      });
+      y += headH;
+    };
+
+    // Una sección nueva que ni siquiera cabe con 1 fila salta de página antes.
+    if (y + bannerH + superH + headH + rowH > BOTTOM) {
       doc.addPage();
       y = M;
       encabezado();
-      cabeceras();
     }
-    cols.forEach((c, i) => {
-      rect(doc, xs[i], y, widths[i], rowH);
-      let val = '';
-      if (c.sistema) {
-        // Solo se llena si la cortina es de ese sistema.
-        if (f.bloque === c.sistema.key) {
-          const raw = f.despiece.get(c.key);
-          if (typeof raw === 'number') val = num(raw);
-          else val = String(raw ?? '');
-        }
-      } else {
+    cabecerasSeccion();
+
+    for (const f of sec.filas) {
+      if (y + rowH > BOTTOM) {
+        doc.addPage();
+        y = M;
+        encabezado();
+        cabecerasSeccion();
+      }
+      // Identidad (texto de tamaño uniforme).
+      identCols.forEach((c, i) => {
+        rect(doc, identXs[i], y, identWidths[i], rowH);
         const raw = f[c.key as keyof FilaCalculo];
+        let val: string;
         if (NUM_IDENTIDAD.has(c.key as keyof FilaCalculo)) {
-          // ANCHO/ALTO mts a 3 decimales (la medida de levantamiento real, ej.
-          // 1,435); las demás numéricas (corte/roller/duo) a 2.
+          // ANCHO/ALTO mts a 3 decimales (la medida de levantamiento real).
           val =
             c.key === 'anchoMts' || c.key === 'altoMts'
               ? (raw as number).toFixed(3).replace('.', ',')
               : num(raw as number);
         } else val = raw === 0 ? '' : String(raw ?? '');
-      }
-      if (val) celda(doc, val, xs[i], widths[i], y + 8.3, { size: 13 });
-    });
-    y += rowH;
+        celdaFija(val, identXs[i], identWidths[i], y + 7.4, SIZE_TEXTO);
+      });
+      // Despiece (números de tamaño uniforme; TIPO DE SOFT.LIGHT en verde).
+      sec.columnas.forEach((c, j) => {
+        const esTipo = c.key === 'TIPO SOFT LIGHT';
+        const raw = f.despiece.get(c.key);
+        const val = typeof raw === 'number' ? num(raw) : String(raw ?? '');
+        rect(doc, despXs[j], y, despWidths[j], rowH, esTipo && val ? VERDE : undefined);
+        celdaFija(
+          val,
+          despXs[j],
+          despWidths[j],
+          y + 7.4,
+          SIZE_NUM,
+          esTipo && val ? { bold: true, color: VERDE_TXT } : {},
+        );
+      });
+      y += rowH;
+    }
+    y += 2.5; // separación entre secciones
   }
-  cerrarBorde();
 
   doc.save(`${variante.archivo}_OT${meta.ot}.pdf`);
 }

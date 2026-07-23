@@ -34,6 +34,7 @@ import {
   cortesOscuridad,
   familiaOscuridad,
   familiaOscuridadConDiametro,
+  normalizarMontajeBase,
   normalizarPerforacion,
   normalizarVarianteOscuridad,
   type MedidasPerfilesOscuridad,
@@ -476,6 +477,7 @@ export function contextoDespieceDesdePano(
     perfilIzqPerf?: string;
     perfilDerPerf?: string;
     perfilInfPerf?: string;
+    perfilInfMontaje?: string;
     perfilIzqMuroCm?: number;
     perfilIzqPisoCm?: number;
     perfilDerMuroCm?: number;
@@ -522,6 +524,7 @@ export function contextoDespieceDesdePano(
     izqPerf: normalizarPerforacion(p.perfilIzqPerf),
     derPerf: normalizarPerforacion(p.perfilDerPerf),
     infPerf: normalizarPerforacion(p.perfilInfPerf),
+    infMontaje: normalizarMontajeBase(p.perfilInfMontaje),
   };
   return {
     categoria: v.categoria,

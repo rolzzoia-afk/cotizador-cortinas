@@ -221,6 +221,40 @@ describe('construirInventario — bloque INSUMOS', () => {
   });
 });
 
+describe('construirInventario — kit + cadena aunque haya motor (van dentro del precio)', () => {
+  const modeloRol = {
+    sistema: 'ROLLER_SIMPLE', tipo_rol: 'ROL_SIMPLE', mecanismo: '',
+    diametro_tubo_mm: 38, codigos_tubo: 'E02;E66', dcto_tubo_cm: 3.8, dcto_tela_cm: 0.5, suma_peso_cm: 0.1,
+  };
+
+  it('ROL manual con motor DOM38: emite kit MEC + cadena + PCA04 + kit de motor (con DOM43)', () => {
+    const v = {
+      id: 'r', ubicacion: 'LIVING', producto: 'ROLLER SCREEN PREMIUM', categoria: 'ROL', color: 'BLANCO',
+      modelo: modeloRol,
+      panos: [{ ancho: 1.5, alto: 1.8, color: 'BLANCO', codCadena: 'CAD 03', largoCadena: '4mts', codPeso: 'PCA04', motorModelo: 'DOM38' }],
+    } as unknown as Ventana;
+    const codes = construirInventario([v]).insumos.map((i) => i.codigo ?? '');
+    expect(codes.some((c) => c.startsWith('MEC'))).toBe(true); // BLANCO → MEC 33
+    expect(codes.some((c) => c.startsWith('CAD'))).toBe(true);
+    expect(codes).toContain('PCA04');
+    // Kit de motor completo, con el hub DOM43 (DOM38).
+    expect(codes).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM43']));
+  });
+
+  it('categoría vendida como motor (…_MOTOR_…): sin kit de mecanismo ni cadena, pero con su motor', () => {
+    const v = {
+      id: 'g', ubicacion: 'SALA', producto: 'ROLLER SCREEN PREMIUM', categoria: 'ROL_CENEFA_OVALADA_MOTOR_GRANDE',
+      color: 'BLANCO', modelo: modeloCenefa,
+      panos: [{ ancho: 1.8, alto: 2.0, color: 'BLANCO', cenefa: 'Ovalada', codCadena: 'CAD 03', codPeso: 'PCA04', motorModelo: 'DOM38' }],
+    } as unknown as Ventana;
+    const codes = construirInventario([v]).insumos.map((i) => i.codigo ?? '');
+    expect(codes.some((c) => c.startsWith('MEC'))).toBe(false);
+    expect(codes.some((c) => c.startsWith('CAD'))).toBe(false);
+    expect(codes).not.toContain('PCA04');
+    expect(codes).toContain('DOM38'); // igual lleva su kit de motor
+  });
+});
+
 describe('construirInventario — VERTICAL (insumos VER)', () => {
   const modeloVertical = {
     sistema: 'VERTICAL',

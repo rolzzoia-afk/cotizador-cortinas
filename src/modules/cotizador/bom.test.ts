@@ -222,22 +222,37 @@ describe('calcularBOM', () => {
     expect(cadena?.especificacion).toBe('CAD01');
   });
 
-  it('con motor: NO agrega cadena ni peso, pero sí motor', () => {
+  it('con motor en categoría MANUAL: agrega cadena + peso Y el motor (van dentro del precio)', () => {
     const bom = calcularBOM([
       row({
         motorTipo: 'Somfy WireFree',
         ladoMotor: 'izq',
         largoCadena: '1.5',
+        colorCadena: 'Blanco',
+        colorPeso: 'Blanco',
         colorMecanismo: 'Cromado',
       }),
     ]);
-    expect(bom.find((i) => i.descripcion === 'Cadena')).toBeUndefined();
-    expect(bom.find((i) => i.descripcion === 'Peso de cadena')).toBeUndefined();
+    // Cadena + peso se emiten aunque el paño lleve motor.
+    expect(bom.find((i) => i.descripcion === 'Cadena')?.especificacion).toBe('1.5');
+    expect(bom.find((i) => i.descripcion === 'Peso de cadena')).toBeDefined();
+    // Y además el motor.
     const motor = bom.find((i) => i.categoria === 'MOTOR' && i.descripcion === 'Motor');
     expect(motor).toBeDefined();
     expect(motor?.especificacion).toContain('Somfy');
     expect(motor?.especificacion).toContain('Lado izq');
     expect(motor?.color).toBe('Cromado');
+  });
+
+  it('categoría vendida como motor (…_MOTOR_…): NO agrega cadena ni peso, pero sí motor', () => {
+    const ventanas = [{ id: 1, categoria: 'ROL_CENEFA_OVALADA_MOTOR_GRANDE', panos: [{ ancho: 1.5, alto: 2.0 }] }];
+    const bom = calcularBOM(
+      [row({ motorTipo: 'Somfy', largoCadena: '1.5', colorPeso: 'Blanco' })],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    expect(bom.find((i) => i.descripcion === 'Cadena')).toBeUndefined();
+    expect(bom.find((i) => i.descripcion === 'Peso de cadena')).toBeUndefined();
+    expect(bom.find((i) => i.categoria === 'MOTOR')).toBeDefined();
   });
 
   it('motor con control adicional + hub: agrega esos items', () => {
