@@ -111,6 +111,8 @@ export type OptimizerRow = {
   pano?: Pano;
   /** Código corto del tubo ("38mm_E02") — mismo origen que Excel/PDF. */
   tuberiaCod?: string;
+  /** Categoría de la ventana (SOFT_LIGHT_45mm, …) — para la etiqueta soft light. */
+  categoria?: string;
   /** Sentido/caída de la cortina (INTERNO/EXTERNO) — Fase 0 ventana. */
   sentido?: string;
   /** Dirección de cadena/cierre ("CAD [DERECHA]") — Fase 0 ventana. */
@@ -250,6 +252,7 @@ export function buildOptimizerRows(
         panoIndex: pi,
         pano: p as unknown as Pano,
         tuberiaCod,
+        categoria: v.categoria ? String(v.categoria) : undefined,
         sentido: String(v.sentido ?? ''),
         direccion: String(v.direccion ?? ''),
         piezas,

@@ -252,7 +252,7 @@ export function CotizadorFase4() {
       if (!continuar) return;
     }
     try {
-      generarEtiquetasPDF(pdfRows, metaPDF(), catalogo);
+      generarEtiquetasPDF(pdfRows, metaPDF(), catalogo, ot?.datosGenerales.adicionalesFase0);
       toast.success('Etiquetas generadas');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
