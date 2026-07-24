@@ -3353,11 +3353,11 @@ const COLUMNAS_ESPECIFICAS = [
     { key: 'pletina', titulo: 'PLETINA', buscar: ['pletina'] },
     { key: 'perfil_cortina', titulo: 'PERFIL [CORTINA VERTICAL]', buscar: ['perfil [cortina vertical]'] },
     { key: 'varilla_cortina', titulo: 'VARILLA [CORTINA VERTICAL]', buscar: ['varilla [cortina vertical]'] },
-    { key: 'perfil_izq_int', titulo: 'PERFIL (IZQ) INT', buscar: ['perfil (izq) int'] },
+    { key: 'perfil_izq_int', titulo: 'PERFIL (IZQ) INT', buscar: ['perfil (izq)'] },
     { key: 'color_perfil', titulo: 'COLOR PERFIL', buscar: ['color perfil'] },
     { key: 'separador_superior', titulo: 'SEPARADOR SUPERIOR', buscar: ['separador superior'] },
     { key: 'separador_lateral', titulo: 'SEPARADOR LATERAL', buscar: ['separador lateral'] },
-    { key: 'perfil_der_int', titulo: 'PERFIL (DER) INT', buscar: ['perfil (der) int'] },
+    { key: 'perfil_der_int', titulo: 'PERFIL (DER) INT', buscar: ['perfil (der)'] },
     { key: 'color_peso_inf', titulo: 'COLOR PESO INF. SOFT LIGHT', buscar: ['color peso inf. soft light'] },
     { key: 'peso_soft_light', titulo: 'PESO SOFT LIGHT', buscar: ['peso soft light'] },
     { key: 'cenefa_delantera', titulo: 'CENEFA DELANTERA', buscar: ['cenefa_delantera', 'cenefa delantea'] },
@@ -3365,9 +3365,9 @@ const COLUMNAS_ESPECIFICAS = [
     { key: 'cenefa_ovalada', titulo: 'CENEFA OVALADA', buscar: ['cenefa ovalada', 'cenefa_ovalada'] },
     { key: 'perfil_base', titulo: 'PERFIL BASE', buscar: ['perfil base'] },
     // Perforación (INTERNO/EXTERNO) de los perfiles SOFT LIGHT/DARK — solo rótulo.
-    { key: 'perf_izq', titulo: 'PERF. (IZQ)', buscar: ['perf. (izq)', 'perf (izq)'] },
-    { key: 'perf_der', titulo: 'PERF. (DER)', buscar: ['perf. (der)', 'perf (der)'] },
-    { key: 'perf_base', titulo: 'PERF. BASE', buscar: ['perf. base', 'perf base'] }
+    { key: 'perf_izq', titulo: 'PERF. (IZQ)', buscar: ['tipo de perforación (izq)', 'tipo de perforacion (izq)', 'perf. (izq)', 'perf (izq)'] },
+    { key: 'perf_der', titulo: 'PERF. (DER)', buscar: ['tipo de perforación (der)', 'tipo de perforacion (der)', 'perf. (der)', 'perf (der)'] },
+    { key: 'perf_base', titulo: 'PERF. BASE', buscar: ['tipo de perforación (base)', 'tipo de perforacion (base)', 'perf. base', 'perf base'] }
 ];
 
 const COLUMNAS_ESPECIALES = {
@@ -3709,7 +3709,8 @@ function expandirOrdenesDesdeExcel() {
         'TUBO', 'PESO', 'CENEFA OVALADA', 'PESO U', 'PESO INTERNO',
         'PLETINA', 'PERFIL CABEZAL', 'VARILLA',
         'PERFIL [CORTINA VERTICAL]', 'VARILLA [CORTINA VERTICAL]',
-        'PERFIL (IZQ) INT', 'PERFIL (DER) INT', 'PERFIL BASE',
+        // Rótulo nuevo 'PERFIL (IZQ)/(DER)' + el legacy '… INT' para Excels viejos.
+        'PERFIL (IZQ)', 'PERFIL (IZQ) INT', 'PERFIL (DER)', 'PERFIL (DER) INT', 'PERFIL BASE',
         'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT'
     ];
 
@@ -3717,7 +3718,9 @@ function expandirOrdenesDesdeExcel() {
     const MAPA_NOMBRES_CATALOGO = {
         'PERFIL [CORTINA VERTICAL]': 'CABEZAL VERTICAL',
         'VARILLA [CORTINA VERTICAL]': 'VARILLA VERTICAL 4 PUNTAS',
+        'PERFIL (IZQ)': 'PERFIL IZQUIERDO INTERNO',
         'PERFIL (IZQ) INT': 'PERFIL IZQUIERDO INTERNO',
+        'PERFIL (DER)': 'PERFIL DERECHO INTERNO',
         'PERFIL (DER) INT': 'PERFIL DERECHO INTERNO',
         'PESO U': 'PESO INFERIOR DE DÚO LÁGRIMA',
         'PESO': 'PESO INFERIOR ROLLER'
@@ -3735,7 +3738,9 @@ function expandirOrdenesDesdeExcel() {
         'VARILLA': 'COLOR ACCESORIOS',
         'PERFIL [CORTINA VERTICAL]': 'COLOR PERFIL',
         'VARILLA [CORTINA VERTICAL]': 'COLOR PERFIL',
+        'PERFIL (IZQ)': 'COLOR PERFIL',
         'PERFIL (IZQ) INT': 'COLOR PERFIL',
+        'PERFIL (DER)': 'COLOR PERFIL',
         'PERFIL (DER) INT': 'COLOR PERFIL',
         'PERFIL BASE': 'COLOR PERFIL',
         'CENEFA DELANTERA': 'COLOR PERFIL',
@@ -3989,15 +3994,15 @@ function expandirOrdenesDesdeExcel() {
                 // NEGRO→E33, CAFÉ→E34). Los tres cortes salen de la misma barra de
                 // zócalo (5,80 m, MEDIDAS_BARRA_DEFAULT). La perforación (INT/EXT)
                 // viaja en las columnas PERF. (IZQ)/(DER)/BASE — solo rótulo.
-                if (nombreCol === 'PERFIL (IZQ) INT' || nombreCol === 'PERFIL (DER) INT' || nombreCol === 'PERFIL BASE') {
+                if (nombreCol.startsWith('PERFIL (IZQ)') || nombreCol.startsWith('PERFIL (DER)') || nombreCol === 'PERFIL BASE') {
                     const MAPA_ZOCALO = { 'BLANCO': 'E32', 'NEGRO': 'E33', 'CAFÉ': 'E34', 'CAFE': 'E34' };
                     const codZocalo = MAPA_ZOCALO[colorDeseado] || null;
                     if (!codZocalo) {
                         log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin zócalo (E32 blanco / E33 negro / E34 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
                         continue;
                     }
-                    const perf = nombreCol === 'PERFIL (IZQ) INT' ? datosCompartidos.perf_izq
-                        : nombreCol === 'PERFIL (DER) INT' ? datosCompartidos.perf_der
+                    const perf = nombreCol.startsWith('PERFIL (IZQ)') ? datosCompartidos.perf_izq
+                        : nombreCol.startsWith('PERFIL (DER)') ? datosCompartidos.perf_der
                         : datosCompartidos.perf_base;
                     const perfTxt = perf ? ` [${String(perf).toUpperCase().trim()}]` : '';
                     orden.cod = codZocalo;
@@ -6085,7 +6090,7 @@ async function ejecutarOptimizacion() {
         'TUBO': 0, 'PESO': 1, 'PESO U': 2, 'PESO INTERNO': 3,
         'CENEFA OVALADA': 4, 'PLETINA': 5, 'PERFIL CABEZAL': 6, 'VARILLA': 7,
         'PERFIL [CORTINA VERTICAL]': 6, 'VARILLA [CORTINA VERTICAL]': 7,
-        'PERFIL (IZQ) INT': 8, 'PERFIL (DER) INT': 9,
+        'PERFIL (IZQ)': 8, 'PERFIL (IZQ) INT': 8, 'PERFIL (DER)': 9, 'PERFIL (DER) INT': 9,
         'PERFIL BASE': 10, 'CENEFA DELANTERA': 11, 'CENEFA TRASERA': 12, 'PESO SOFT LIGHT': 13
     };
     SistemaInventario.resultadosOptimizacion.sort((a, b) => {

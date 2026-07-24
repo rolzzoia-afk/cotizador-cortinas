@@ -113,16 +113,16 @@ describe('SOFT LIGHT — Excel de órdenes', () => {
     expect(aoa[1][col(aoa, 'PESO SOFT LIGHT')]).toBe(257.4);
     // Código/color del peso inferior (E24 blanco).
     expect(String(aoa[1][col(aoa, 'COLOR PESO INF. SOFT LIGHT')])).toContain('E24');
-    // Perforación de los laterales (a piso, EXTERNO): PERF. (IZQ)/(DER) = EXTERNO.
-    expect(aoa[1][col(aoa, 'PERF. (IZQ)')]).toBe('EXTERNO');
-    expect(aoa[1][col(aoa, 'PERF. (DER)')]).toBe('EXTERNO');
-    expect(aoa[1][col(aoa, 'PERFIL (IZQ) INT')]).toBe(250);
+    // Perforación de los laterales (a piso, EXTERNO): TIPO DE PERFORACIÓN (IZQ)/(DER) = EXTERNO.
+    expect(aoa[1][col(aoa, 'TIPO DE PERFORACIÓN (IZQ)')]).toBe('EXTERNO');
+    expect(aoa[1][col(aoa, 'TIPO DE PERFORACIÓN (DER)')]).toBe('EXTERNO');
+    expect(aoa[1][col(aoa, 'PERFIL (IZQ)')]).toBe(250);
   });
 
   it('SEMI sin superficie: perfiles pendientes → medida vacía + advertencia', () => {
     const { aoa, advertencias } = generarOrdenesOptimizador('300-2', [ventana('SEMI', false)]);
     // Laterales activos (default) pero sin muro/piso ni perforación (SEMI): sin medida.
-    expect(aoa[1][col(aoa, 'PERFIL (IZQ) INT')]).toBe('');
+    expect(aoa[1][col(aoa, 'PERFIL (IZQ)')]).toBe('');
     expect(advertencias.some((a) => a.includes('definir') && a.includes('Fase 2'))).toBe(true);
   });
 });

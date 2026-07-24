@@ -103,6 +103,21 @@ const PERF_POR_PERFIL: Record<string, string> = {
   'PERFIL BASE': 'PERF. BASE',
 };
 
+/**
+ * Rótulos que se MUESTRAN en el encabezado del Excel (fila 0). La CLAVE interna
+ * de cada columna (routing de cortes/perforación en `fila[...]`, `columnaExcel`,
+ * `PERF_POR_PERFIL`) NO cambia — solo el texto visible. El optimizador legacy
+ * detecta las columnas por este rótulo (ver optimizador.html: COLUMNAS_CORTE y
+ * los `buscar` de COLUMNAS_ESPECIFICAS).
+ */
+const ENCABEZADOS_DISPLAY: Record<string, string> = {
+  'PERFIL (IZQ) INT': 'PERFIL (IZQ)',
+  'PERFIL (DER) INT': 'PERFIL (DER)',
+  'PERF. (IZQ)': 'TIPO DE PERFORACIÓN (IZQ)',
+  'PERF. (DER)': 'TIPO DE PERFORACIÓN (DER)',
+  'PERF. BASE': 'TIPO DE PERFORACIÓN (BASE)',
+};
+
 function celdaConMedida(val: string | number | undefined): boolean {
   return val !== undefined && val !== '' && val !== 0;
 }
@@ -196,7 +211,7 @@ export function generarOrdenesOptimizador(
   opts?: OpcionesOrdenesOptimizador,
 ): ResultadoOrdenes {
   const advertencias: string[] = [];
-  const aoa: (string | number)[][] = [[...COLUMNAS]];
+  const aoa: (string | number)[][] = [COLUMNAS.map((c) => ENCABEZADOS_DISPLAY[c] ?? c)];
   const adicionalesFase0 = opts?.adicionalesFase0;
 
   for (const v of ventanas) {
