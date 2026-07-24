@@ -173,12 +173,12 @@ export function construirCalculoGeneral(
           const perfTag =
             c.perforacion === 'INTERNO' ? ' INT' : c.perforacion === 'EXTERNO' ? ' EXT' : '';
           if (/^Perfil (izquierdo|derecho)/.test(c.componente)) {
-            const med = c.pendienteMedida ? 'definir F2' : String(c.medidaCm);
+            const med = c.pendienteMedida ? 'definir F2' : num(c.medidaCm);
             perfLateral.push(`${med}${perfTag}`.trim());
             continue;
           }
           if (/^Perfil inferior/.test(c.componente)) {
-            const med = c.pendienteMedida ? 'definir F2' : String(c.medidaCm);
+            const med = c.pendienteMedida ? 'definir F2' : num(c.medidaCm);
             despiece.set('PERFIL BASE', `${med}${perfTag}`.trim());
             continue;
           }
@@ -657,22 +657,31 @@ function renderHojaCalculo(
   let y = M;
   let pagina = 0;
 
-  // Celda a tamaño FIJO (nunca encoge): lo que no cabe se recorta con "…".
+  // Celda a tamaño FIJO: lo que no cabe se recorta con "…". Con `minSize` primero
+  // ENCOGE la fuente (hasta minSize) para tratar de que quepa entero — útil para
+  // tokens largos ("240 INT / 240 EXT") que no deben perder dato por elipsis.
   const celdaFija = (
     txt: string,
     x: number,
     w: number,
     yText: number,
     size: number,
-    o: { bold?: boolean; color?: RGB } = {},
+    o: { bold?: boolean; color?: RGB; minSize?: number } = {},
   ) => {
     if (!txt) return;
     doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
-    doc.setFontSize(size);
     const c = o.color ?? [25, 25, 30];
     doc.setTextColor(c[0], c[1], c[2]);
-    let t = txt;
     const maxW = w - 1.4;
+    let fSize = size;
+    doc.setFontSize(fSize);
+    if (o.minSize) {
+      while (fSize > o.minSize && doc.getTextWidth(txt) > maxW) {
+        fSize -= 0.5;
+        doc.setFontSize(fSize);
+      }
+    }
+    let t = txt;
     if (doc.getTextWidth(t) > maxW) {
       while (t.length > 1 && doc.getTextWidth(t + '…') > maxW) t = t.slice(0, -1);
       t += '…';
@@ -772,15 +781,21 @@ function renderHojaCalculo(
       sec.columnas.forEach((c, j) => {
         const esTipo = c.key === 'TIPO SOFT LIGHT';
         const raw = f.despiece.get(c.key);
-        const val = typeof raw === 'number' ? num(raw) : String(raw ?? '');
+        const esNum = typeof raw === 'number';
+        const val = esNum ? num(raw) : String(raw ?? '');
         rect(doc, despXs[j], y, despWidths[j], rowH, esTipo && val ? VERDE : undefined);
+        // Los números quedan a SIZE_NUM; los tokens string (perfiles "240 INT /
+        // 240 EXT", TIPO) encogen hasta 6,5 antes de recortar para no perder dato.
         celdaFija(
           val,
           despXs[j],
           despWidths[j],
           y + 7.4,
           SIZE_NUM,
-          esTipo && val ? { bold: true, color: VERDE_TXT } : {},
+          {
+            ...(esTipo && val ? { bold: true, color: VERDE_TXT } : {}),
+            ...(esNum ? {} : { minSize: 6.5 }),
+          },
         );
       });
       y += rowH;

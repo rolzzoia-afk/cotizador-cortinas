@@ -507,6 +507,61 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
     expect(d.insumos.find((i) => i.codigo === 'MEC39')).toBeDefined();
   });
 
+  // ── Oscuridad (soft light 45/CC) sobre E78: cenefa OVALADA IMPLÍCITA ──
+  // El soft light no guarda 'Ovalada' en el paño (la categoría SOFT_LIGHT_* ya lo
+  // implica) → antes salía el kit MEC completo; ahora comparte la armadura mixta.
+  const modeloSoft45 = (mec = 'MEC_18_OVALADA_BLANCO') => ({
+    sistema: 'SOFT_LIGHT', tipo_rol: 'SOFT_LIGHT_INTERNO_45mm',
+    mecanismo: mec, diametro_tubo_mm: 45,
+    codigos_tubo: 'E04; E05; E39; E46; E78', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+  });
+  const ventSoft45 = (color = 'BLANCO', mec = 'MEC_18_OVALADA_BLANCO', cenefa?: string) =>
+    ({
+      id: `s${color}`, ubicacion: 'SOFT', producto: 'ROLLER SCREEN PREMIUM', color,
+      categoria: 'SOFT_LIGHT_45mm', modelo: modeloSoft45(mec),
+      panos: [{ ancho: 2.5, alto: 2.3, color, ...(cenefa ? { cenefa } : {}) }],
+    }) as unknown as Ventana;
+
+  it('SOFT LIGHT 45 BLANCO + E78 (ovalada implícita) → 2 TAPAS (MEC 39) + 2 PIVOTES (MEC 18), sin kit completo', () => {
+    const d = construirInventario([ventSoft45('BLANCO')]);
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_39)).toMatchObject({
+      cantidad: 2, unidad: 'TAPAS', grupo: 'PRODUCCION',
+    });
+    expect(d.insumos.find((i) => i.descripcion === PIV_18)).toMatchObject({
+      cantidad: 2, unidad: 'PIVOTES', grupo: 'PRODUCCION',
+    });
+    // El kit ovalada completo ya NO se lista (lo reemplaza la armadura mixta).
+    expect(d.insumos.some((i) => (i.descripcion || '').includes('OVALADA') && !i.unidad)).toBe(false);
+  });
+
+  it('SOFT LIGHT 45 NEGRO + E78 → MEC 38 (TAPAS) y MEC 23 (PIVOTES)', () => {
+    const d = construirInventario([ventSoft45('NEGRO', 'MEC_23_OVALADA_NEGRO')]);
+    expect(d.insumos.find((i) => i.descripcion === TAPAS_38)?.unidad).toBe('TAPAS');
+    expect(d.insumos.find((i) => i.descripcion === PIV_23)?.unidad).toBe('PIVOTES');
+  });
+
+  it('SOFT LIGHT con cenefa CUADRADA (CC) + E78 → también armadura mixta', () => {
+    const d = construirInventario([ventSoft45('BLANCO', 'MEC_18_OVALADA_BLANCO', 'Cuadrada a muro')]);
+    expect(tieneUnidad(d, 'TAPAS')).toBe(true);
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(true);
+  });
+
+  it('SOFT LIGHT 38 mm (tubo E02, sin banda E78) → NO agrega tapas/pivotes', () => {
+    const v = {
+      id: 's38', ubicacion: 'SOFT', producto: 'ROLLER SCREEN PREMIUM', color: 'BLANCO',
+      categoria: 'SOFT_LIGHT_38mm',
+      modelo: {
+        sistema: 'SOFT_LIGHT', tipo_rol: 'SOFT_LIGHT_INTERNO_38mm',
+        mecanismo: 'MEC_18_OVALADA_BLANCO', diametro_tubo_mm: 38,
+        codigos_tubo: 'E02; E66', dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+      },
+      panos: [{ ancho: 2.0, alto: 2.0, color: 'BLANCO' }],
+    } as unknown as Ventana;
+    const d = construirInventario([v]);
+    expect(tieneUnidad(d, 'TAPAS')).toBe(false);
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+  });
+
   it('ROL banda E78 sin cenefa (roller simple 45 mm) → NO agrega las líneas', () => {
     const v = {
       id: 'y', ubicacion: 'PZA', producto: 'ROLLER', color: 'BLANCO',
