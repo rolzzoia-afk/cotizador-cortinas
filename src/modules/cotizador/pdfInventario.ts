@@ -53,6 +53,7 @@ import {
   esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { calculoVertical } from '@/modules/descuentos/despiece';
 import {
   COD_HUB_DOMOTICA,
@@ -229,9 +230,13 @@ export function consolidarInsumos(
       // arma el mecanismo ovalada completo: por eso ese kit no se lista, solo las
       // tapas y los pivotes (más abajo).
       const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
+      // Los sistemas de oscuridad (soft light 38/45/CC, Dark) usan el kit ovalada y
+      // su cenefa suele ser IMPLÍCITA (p.cenefa vacío, categoría SOFT_LIGHT_*): sobre
+      // tubo E78 llevan la misma armadura mixta. Oscuranti es 63 mm (E47) → nunca E78.
+      const esOscuridad = familiaOscuridad(v.categoria, p.cenefa as string | undefined) != null;
       const ovaladaSistema =
-        ovalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
-      const esE78Ovalada =
+        ovalada || esOscuridad || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
+      const esE78Mixta =
         ovaladaSistema &&
         codigoTuberiaDeChip(
           tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria),
@@ -250,7 +255,7 @@ export function consolidarInsumos(
         // E78 + ovalada NO usa el mecanismo completo (se desglosa en tapas +
         // pivotes), así que su kit NO se lista; el resto sí lleva su mecanismo.
         // Dual: 1 kit por ventana (no ×2 paños) → se emite solo una vez.
-        if (chip && num != null && !esE78Ovalada) {
+        if (chip && num != null && !esE78Mixta) {
           const esDualChip = esChipDual(chip);
           if (!esDualChip || !dualKitEmitido) {
             const cod = `MEC${String(num).padStart(2, '0')}`;
@@ -315,7 +320,7 @@ export function consolidarInsumos(
       // porque no hay kit 45 gris). Van al taller = PRODUCCIÓN. El dúo lleva 2
       // tubos → 4+4; resto 2+2. Se resuelve por COLOR (no por el chip de
       // mecanismo) para que también aplique a las ovaladas motorizadas.
-      if (esE78Ovalada) {
+      if (esE78Mixta) {
         const nMix = esCategoriaDuo(v.categoria) ? 4 : 2;
         const colorAcc = normalizarColorAccesorio(colorAccesoriosDePano(p, v.color));
         const mecTapas = MEC_KIT_OVALADA_POR_COLOR[colorAcc];

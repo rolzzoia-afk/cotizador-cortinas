@@ -247,7 +247,8 @@ describe('construirCalculoGeneral', () => {
     expect(f.despiece.get('ALTO TELA')).toBe(275);
     // Izq a muro (alto+10 = 260) EXT, der a piso (alto = 250) EXT → "260 EXT / 250 EXT".
     expect(String(f.despiece.get('PERFIL LATERAL'))).toBe('260 EXT / 250 EXT');
-    expect(String(f.despiece.get('PERFIL BASE'))).toContain('EXT');
+    // Perfil base EXTERNO dentro = 250 + 0,08 = 250,1 → token con coma es-CL (no "250.1").
+    expect(String(f.despiece.get('PERFIL BASE'))).toBe('250,1 EXT');
     // Dimensionado: la mesa de tela no ve cenefa ni perfiles.
     const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'SOFT');
     const dimLabels = (dim?.columnas ?? []).map((c) => c.label);

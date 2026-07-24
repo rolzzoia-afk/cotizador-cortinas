@@ -195,9 +195,10 @@ const DIRECCIONES = [
   'CIERRE [MEDIO]',
 ];
 const SENTIDOS = ['INTERNO', 'EXTERNO'];
-// Sistemas de oscuridad (Soft Light / Dark / Oscuranti): la variante de
-// instalación se asigna desde Fase 1 e incluye SEMI (además de INTERNO/EXTERNO).
-const SENTIDOS_OSCURIDAD = ['INTERNO', 'SEMI', 'EXTERNO'];
+// Sistemas de oscuridad (Soft Light / Dark / Oscuranti): SIEMPRE caen INTERNO
+// (la caída es el armado tela/tubo, no la variante). La variante de instalación
+// (INTERNO/SEMI/EXTERNO) se elige en Fase 2, no en Fase 1.
+const CAIDA_OSCURIDAD = 'INTERNO';
 const esCategoriaOscuridad = (categoria: string | undefined): boolean =>
   familiaOscuridad(categoria) != null;
 const CATEGORIAS_MECANISMO = [
@@ -290,8 +291,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // Columnas COD SEC / DIRECC. / SENT. solo en la cotización final (Fase 3).
   // La columna INVERTIDA va en ambos modos (+1 a los colspans).
   const showCols = modo === 'fase3';
-  const colSpanTotal = showCols ? 19 : 16;
-  const colSpanInfo = showCols ? 12 : 9;
+  const colSpanTotal = showCols ? 18 : 16;
+  const colSpanInfo = showCols ? 11 : 9;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId } = useAuth();
   const { catalogo, refresh: refreshCatalogo } = useCatalogoProductos();
@@ -367,15 +368,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       () => crypto.randomUUID(),
       dctDeCodigo,
     );
-    // Compat: una OT de oscuridad guardada ANTES de separar caída/variante trae
-    // la variante en `sentido` y `oscuridadVariante` vacío. Se migra: la variante
-    // pasa a su campo y la caída conserva solo valores válidos (INTERNO/EXTERNO);
-    // 'SEMI' no es una caída → se limpia para que el vendedor la fije a mano.
-    const filasMigradas = nuevasFilas.map((f) =>
-      esCategoriaOscuridad(f.categoria) && !f.oscuridadVariante && f.sentido
-        ? { ...f, oscuridadVariante: f.sentido, sentido: SENTIDOS.includes(f.sentido) ? f.sentido : '' }
-        : f,
-    );
+    // Oscuridad: la caída SIEMPRE es INTERNO (corrige OTs viejas con caída
+    // EXTERNO/SEMI). Compat: una OT guardada ANTES de separar caída/variante trae
+    // la variante en `sentido` y `oscuridadVariante` vacío → se recupera al campo.
+    const filasMigradas = nuevasFilas.map((f) => {
+      if (!esCategoriaOscuridad(f.categoria)) return f;
+      const oscuridadVariante = f.oscuridadVariante || f.sentido || '';
+      return { ...f, oscuridadVariante, sentido: CAIDA_OSCURIDAD };
+    });
     setFilas(filasMigradas.length ? filasMigradas : [nuevaFila()]);
     // Adicionales = manuales persistidos + cenefas DERIVADAS de los paños.
     // 'INST' (instalación base) es automático → se descarta. Los derivados de
@@ -894,8 +894,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         codIntValidos: new Set(Object.keys(catalogo)),
         categorias: new Set(CATEGORIAS_MECANISMO),
         direcciones: new Set(DIRECCIONES),
-        // SENT. CORT es la caída del enrollado (INTERNO/EXTERNO). El tipo de soft
-        // light (variante, incluido SEMI) va aparte, en la columna TIPO SL.
+        // SENT. CORT es la caída del enrollado (INTERNO/EXTERNO). En oscuridad la
+        // caída es INTERNO fija y la variante (interno/semi/externo) se elige en Fase 2.
         sentidos: new Set(SENTIDOS),
       };
 
@@ -905,16 +905,22 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       for (const c of cortinas) {
         const categoria = canonizar(c.categoria, CATEGORIAS_MECANISMO);
         const direccion = canonizar(c.direccion, DIRECCIONES);
-        // La vertical no tiene sentido de caída: si el Excel trae algo, se ignora.
-        const sentido = esCategoriaVertical(categoria) ? '' : canonizar(c.sentido, SENTIDOS);
+        // Caída (SENT. CORT): la vertical no se enrolla → vacío. Los sistemas de
+        // oscuridad SIEMPRE caen INTERNO (aunque el Excel traiga otra cosa; la
+        // variante interno/semi/externo se elige en Fase 2). Resto: del Excel.
+        const sentido = esCategoriaVertical(categoria)
+          ? ''
+          : esCategoriaOscuridad(categoria)
+            ? CAIDA_OSCURIDAD
+            : canonizar(c.sentido, SENTIDOS);
         const fila: FilaUI = {
           id: crypto.randomUUID(),
           codInt: c.codInt,
           categoria,
           direccion,
           sentido,
-          // Oscuridad: la variante (TIPO SL) parte en INTERNO y se ajusta en la
-          // grilla; el Excel de cotización no la trae (solo la caída).
+          // Oscuridad: la variante parte en INTERNO y se elige en Fase 2 (el Excel
+          // de cotización no la trae). La caída ya quedó fija en INTERNO arriba.
           oscuridadVariante: esCategoriaOscuridad(categoria) ? 'INTERNO' : '',
           cantidad: c.cantidad || 1,
           ubicacion: c.ubicacion,
@@ -1327,7 +1333,6 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Th className="min-w-[8rem]">COD SEC</Th>
                     <Th className="min-w-[8rem]">DIRECC. CAD/CIERRE</Th>
                     <Th className="min-w-[6rem]">SENT. CORT</Th>
-                    <Th className="min-w-[6rem]">TIPO SL</Th>
                   </>
                 )}
                 <Th className="min-w-[3.5rem]">CANT</Th>
@@ -1358,12 +1363,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
                     {showCols && (
                       <>
-                        <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
+                        <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, esCategoriaOscuridad(v) ? { categoria: v, sentido: CAIDA_OSCURIDAD } : { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
                         <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
                         <Td>
-                          {/* SENT. CORT = caída del enrollado (INTERNO/EXTERNO),
-                              dato de la cotización. NO es el tipo de soft light.
-                              La vertical no se enrolla → no tiene caída. */}
+                          {/* SENT. CORT = caída del enrollado (armado tela/tubo).
+                              La vertical no se enrolla → sin caída. Los sistemas de
+                              oscuridad SIEMPRE caen INTERNO (la variante interno/semi/
+                              externo se elige en Fase 2). Resto: INTERNO/EXTERNO. */}
                           {esCategoriaVertical(f.categoria) ? (
                             <span
                               className="text-muted-foreground"
@@ -1371,22 +1377,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                             >
                               —
                             </span>
+                          ) : esCategoriaOscuridad(f.categoria) ? (
+                            <span
+                              className="text-muted-foreground"
+                              title="Los sistemas de oscuridad siempre caen INTERNO; la variante (interno/semi/externo) se elige en Fase 2"
+                            >
+                              INTERNO
+                            </span>
                           ) : (
                             <SelectCell value={f.sentido} onChange={(v) => setFila(f.id, { sentido: v })} opciones={SENTIDOS} invalido={errs?.has('sentido')} />
-                          )}
-                        </Td>
-                        <Td>
-                          {/* TIPO SL = variante del sistema de oscuridad
-                              (INTERNO/SEMI/EXTERNO), independiente de la caída.
-                              Solo aplica a soft light / dark / oscuranti. */}
-                          {esCategoriaOscuridad(f.categoria) ? (
-                            <SelectCell
-                              value={f.oscuridadVariante || ''}
-                              onChange={(v) => setFila(f.id, { oscuridadVariante: v })}
-                              opciones={SENTIDOS_OSCURIDAD}
-                            />
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
                           )}
                         </Td>
                       </>
