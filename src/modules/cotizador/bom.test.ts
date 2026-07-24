@@ -360,7 +360,7 @@ describe('calcularBOM — insumos de instalación', () => {
     expect(bom.find((i) => i.especificacion === 'TAR01')?.cantidad).toBe(4);
   });
 
-  it('motor DOM41 + domótica: kit DOM por cortina + 1 solo DOM43 por OT', () => {
+  it('motor DOM41 + domótica: kit DOM por cortina + 1 solo DOM43 y 1 solo DOM05 (router) por OT', () => {
     const bom = calcularBOM(
       [
         row({ motorModelo: 'DOM41', motorDomotica: true }),
@@ -372,6 +372,10 @@ describe('calcularBOM — insumos de instalación', () => {
     const dom43 = bom.filter((i) => i.especificacion === 'DOM43');
     expect(dom43).toHaveLength(1);
     expect(dom43[0].cantidad).toBe(1);
+    // El router de la casa (DOM05) acompaña al hub, 1 solo por OT.
+    const dom05 = bom.filter((i) => i.especificacion === 'DOM05');
+    expect(dom05).toHaveLength(1);
+    expect(dom05[0].cantidad).toBe(1);
     // Motor reemplaza la cadena.
     expect(bom.find((i) => i.categoria === 'CADENA')).toBeUndefined();
   });

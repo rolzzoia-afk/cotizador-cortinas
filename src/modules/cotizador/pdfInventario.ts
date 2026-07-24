@@ -57,8 +57,10 @@ import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { calculoVertical } from '@/modules/descuentos/despiece';
 import {
   COD_HUB_DOMOTICA,
+  COD_ROUTER_DOMOTICA,
   MANILLAS,
   NOMBRE_HUB_DOMOTICA,
+  NOMBRE_ROUTER_DOMOTICA,
   codigoManillaPorColor,
   esCategoriaDuo,
   esCenefaOvalada,
@@ -365,7 +367,11 @@ export function consolidarInsumos(
       }
     }
   }
-  if (llevaDomotica) bump(COD_HUB_DOMOTICA, `[${COD_HUB_DOMOTICA}] ${NOMBRE_HUB_DOMOTICA}`, 1);
+  // Domótica: hub bridge (DOM43) + router (DOM05), 1 de cada uno por OT.
+  if (llevaDomotica) {
+    bump(COD_HUB_DOMOTICA, `[${COD_HUB_DOMOTICA}] ${NOMBRE_HUB_DOMOTICA}`, 1);
+    bump(COD_ROUTER_DOMOTICA, `[${COD_ROUTER_DOMOTICA}] ${NOMBRE_ROUTER_DOMOTICA}`, 1);
+  }
 
   const out: InsumoConsolidado[] = [];
   let id = 0;

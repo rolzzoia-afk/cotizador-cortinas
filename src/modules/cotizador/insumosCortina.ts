@@ -478,6 +478,9 @@ export const COD_ENCHUFE_MOTOR = 'DOM04';
 export const NOMBRE_ENCHUFE_MOTOR = 'ENCHUFE PARA HUB USB';
 export const COD_HUB_DOMOTICA = 'DOM43';
 export const NOMBRE_HUB_DOMOTICA = 'BRIGDE HUB DOMOTICA';
+// Router de la casa: acompaña SIEMPRE al hub de domótica, 1 por OT (no por cortina).
+export const COD_ROUTER_DOMOTICA = 'DOM05';
+export const NOMBRE_ROUTER_DOMOTICA = 'ROUTER';
 
 // ── Cargador/hub del motor (opcional, tabla INSTALACIÓN) ─────────────
 // NO todos los motores llevan hub: el kit NO agrega cargador por defecto. El
@@ -623,7 +626,7 @@ export function panoLlevaDomotica(p: Partial<Pano>): boolean {
   return !!p.motorDomotica || (p.motorTipo || '').trim().toUpperCase() === 'CON DOMÓTICA';
 }
 
-/** ¿Alguna cortina de la OT lleva domótica? (agrega 1× DOM43 por OT). */
+/** ¿Alguna cortina de la OT lleva domótica? (agrega 1× DOM43 + 1× DOM05 router por OT). */
 export function otLlevaDomotica(ventanas: Ventana[]): boolean {
   return ventanas.some((v) => (v.panos || []).some(panoLlevaDomotica));
 }

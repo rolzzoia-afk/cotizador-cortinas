@@ -15,8 +15,10 @@ import type { OptimizerRow } from './tela';
 import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
   COD_HUB_DOMOTICA,
+  COD_ROUTER_DOMOTICA,
   MANILLAS,
   NOMBRE_HUB_DOMOTICA,
+  NOMBRE_ROUTER_DOMOTICA,
   codigoManillaPorColor,
   insumosDePano,
   insumosMotorDePano,
@@ -239,9 +241,11 @@ export function calcularBOM(
     }
   });
 
-  // Domótica: 1 bridge hub (DOM43) por OT (consolida con "hub USB adicional").
+  // Domótica: 1 bridge hub (DOM43) + 1 router (DOM05) por OT (el hub consolida
+  // con "hub USB adicional"; el router es de la casa, uno solo por OT).
   if (llevaDomotica) {
     add(`MOT|${COD_HUB_DOMOTICA}|`, 'MOTOR', NOMBRE_HUB_DOMOTICA, COD_HUB_DOMOTICA, '', 1, 'unid.');
+    add(`MOT|${COD_ROUTER_DOMOTICA}|`, 'MOTOR', NOMBRE_ROUTER_DOMOTICA, COD_ROUTER_DOMOTICA, '', 1, 'unid.');
   }
 
   return [...acc.values()].sort((a, b) => {
