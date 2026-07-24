@@ -53,6 +53,37 @@ export const PESO_OSCURIDAD_POR_COLOR: Record<string, string> = {
   NEGRO: 'E44',
 };
 
+/** Perfil ZÓCALO (lateral/base) de soft light / dark: código por color de perfil.
+ *  Barra de 5,80 m; mismo mapeo que el optimizador legacy (café ≡ madera). */
+export const ZOCALO_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E32',
+  NEGRO: 'E33',
+  CAFÉ: 'E34',
+};
+
+/** Perfil SEPARADOR de soft light / dark: código por color (E41/E42/E43). */
+export const SEPARADOR_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E41',
+  NEGRO: 'E42',
+  CAFÉ: 'E43',
+};
+
+/** Color de perfil canónico: 'CAFE' (sin tilde) y 'MADERA' → clave 'CAFÉ'. */
+function colorPerfilCanonico(color: string | null | undefined): string {
+  const c = colorCanonico(color);
+  return c === 'MADERA' || c === 'CAFE' ? 'CAFÉ' : c;
+}
+
+/** Código del perfil zócalo (E32/E33/E34) por color; '' si el color no calza. */
+export function codigoZocaloPerfil(color: string | null | undefined): string {
+  return ZOCALO_POR_COLOR[colorPerfilCanonico(color)] || '';
+}
+
+/** Código del perfil separador (E41/E42/E43) por color; '' si el color no calza. */
+export function codigoSeparadorPerfil(color: string | null | undefined): string {
+  return SEPARADOR_POR_COLOR[colorPerfilCanonico(color)] || '';
+}
+
 /**
  * Código de inventario de una pieza del despiece, según su columna del Excel
  * de órdenes (misma lógica que el optimizador de estructura).

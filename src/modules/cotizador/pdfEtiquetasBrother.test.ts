@@ -21,9 +21,11 @@ vi.mock('jspdf', async (importOriginal) => {
 import {
   agruparEtiquetasPanos,
   codigoPerfilVertical,
+  esFilaSoftLight,
   especTuboEtiqueta,
   familiaTelaEtiqueta,
   fmtMedidaCm,
+  generarEtiquetasPDF,
   generarEtiquetasPanosPDF,
   ladoCadenaEtiqueta,
   ordenDobleEtiqueta,
@@ -32,7 +34,12 @@ import {
   tipoCortinaEtiqueta,
   tipoCortinaEtiquetaGrupo,
 } from './pdfEtiquetasBrother';
+import { codigoSeparadorPerfil, codigoZocaloPerfil } from '@/modules/descuentos/codigos-estructura';
 import type { OptimizerRow } from './tela';
+
+const pz = (columnaExcel: string, medidaCm: number, cod = '') => ({
+  componente: columnaExcel, columnaExcel, medidaCm, cod, color: '',
+});
 
 describe('fmtMedidaCm', () => {
   it('coma decimal es-CL y sin ",0" redundante', () => {
@@ -313,5 +320,66 @@ describe('generarEtiquetasPanosPDF — omite paños de colmena', () => {
     const n = generarEtiquetasPanosPDF([fila('A', 1, 'V1'), fila('B', 2, 'V2')], meta, {});
     expect(n).toBe(2);
     expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
+  });
+});
+
+describe('códigos de perfil zócalo / separador por color', () => {
+  it('zócalo E32/E33/E34 y separador E41/E42/E43 por color (café ≡ madera)', () => {
+    expect(codigoZocaloPerfil('BLANCO')).toBe('E32');
+    expect(codigoZocaloPerfil('NEG')).toBe('E33');
+    expect(codigoZocaloPerfil('CAFÉ')).toBe('E34');
+    expect(codigoZocaloPerfil('MADERA')).toBe('E34');
+    expect(codigoSeparadorPerfil('BLANCO')).toBe('E41');
+    expect(codigoSeparadorPerfil('NEGRO')).toBe('E42');
+    expect(codigoSeparadorPerfil('CAFE')).toBe('E43');
+    expect(codigoSeparadorPerfil('MADERA')).toBe('E43');
+    // Color sin código fijo → '' (la etiqueta cae al color).
+    expect(codigoZocaloPerfil('AZUL')).toBe('');
+    expect(codigoSeparadorPerfil('')).toBe('');
+  });
+});
+
+describe('esFilaSoftLight', () => {
+  const row = (piezas: ReturnType<typeof pz>[]): OptimizerRow =>
+    ({ piezas } as unknown as OptimizerRow);
+  it('true solo si tiene PESO SOFT LIGHT y CENEFA OVALADA', () => {
+    expect(esFilaSoftLight(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA OVALADA', 263)]))).toBe(true);
+    // Roller (PESO roller + sin cenefa ovalada) → false.
+    expect(esFilaSoftLight(row([pz('PESO', 250)]))).toBe(false);
+    // Dark/CC sin la cenefa OVALADA (usan CENEFA DELANTERA) → false.
+    expect(esFilaSoftLight(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)]))).toBe(false);
+  });
+});
+
+describe('generarEtiquetasPDF — soft light usa página 62×146', () => {
+  it('la etiqueta soft light mide 146 mm de alto (vs 100 del roller)', () => {
+    docsGuardados.length = 0;
+    const softRow = {
+      codInt: 'SC 02',
+      producto: 'ROLLER SCREEN PREMIUM',
+      tipo: 'PREMIUM',
+      ubicacion: 'LIVING',
+      categoria: 'SOFT_LIGHT_45mm',
+      anchoCm: 250,
+      altoCm: 230,
+      tuberiaCod: '45mm_E78',
+      sentido: 'INTERNO',
+      pano: { tipoTela: 'SCR', oscuridadVariante: 'EXTERNO', color: 'BLANCO' },
+      piezas: [
+        pz('TUBO', 245.7),
+        pz('PESO SOFT LIGHT', 243),
+        pz('CENEFA OVALADA', 263.2),
+        pz('Tela (ancho)', 242.8),
+        pz('PERFIL (IZQ) INT', 240),
+        pz('PERFIL (DER) INT', 240),
+        pz('PERFIL BASE', 236.7),
+      ],
+    } as unknown as OptimizerRow;
+    generarEtiquetasPDF([softRow], { ot: '267-23', cliente: 'LUZ LIVIANA', fecha: '2026-07-24' }, {});
+    expect(docsGuardados).toHaveLength(1);
+    const doc = docsGuardados[0] as jsPDF;
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
+    expect(doc.internal.pageSize.getHeight()).toBeCloseTo(146, 1);
   });
 });
