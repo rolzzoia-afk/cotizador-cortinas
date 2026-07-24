@@ -328,35 +328,45 @@ describe('insumosVerticalDePano', () => {
 });
 
 describe('insumosMotorDePano', () => {
-  it('DOM38 → motor + control DOM39 + cable DOM40 + enchufe DOM04 + cargador DOM43 (hub domótica)', () => {
+  it('DOM38 sin elección de cargador → motor + control + cable, SIN hub ni DOM04 (default)', () => {
+    // No todos los motores llevan hub: el kit no agrega cargador por defecto.
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM43']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34']);
   });
-  it('DOM38: cargador cambia a DOM33 cuando el paño lo pide (sin DOM43 ni DOM03)', () => {
+  it("'NINGUNO' explícito → igual que sin elección (sin hub ni DOM04)", () => {
+    const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'NINGUNO' }));
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34']);
+  });
+  it('DOM38 + hub DOM43 elegido → agrega DOM04 (enchufe del hub) + DOM43', () => {
+    const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM43' }));
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM43']);
+  });
+  it('DOM38 + adaptador DOM33 → DOM33 sin DOM04 (el enchufe alimenta al hub, no al adaptador)', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM33' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM33']);
-    expect(out.some((i) => i.codigo === 'DOM43' || i.codigo === 'DOM03')).toBe(false);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34', 'DOM33']);
+    expect(out.some((i) => i.codigo === 'DOM43' || i.codigo === 'DOM03' || i.codigo === 'DOM04')).toBe(false);
   });
-  it('DOM38: se puede forzar DOM03 a mano en Fase 2', () => {
+  it('DOM38 + HUB USB DOM03 forzado → DOM04 + DOM03', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM03' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM03']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM03']);
   });
-  it('DOM41: motor + DOM42 + DOM04 + cargador DOM03, SIN cable DOM40 (#28); controles/hub adicionales', () => {
+  it('DOM41: motor + DOM42, SIN cable DOM40 (#28) y sin hub por defecto; controles/hub adicionales', () => {
     const base = insumosMotorDePano(pano({ motorModelo: 'DOM41' }));
-    expect(base.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42', 'DOM04', 'DOM03']); // sin DOM40
+    expect(base.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42']); // sin DOM40, sin hub
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM41', motorControlAdicCant: 2, motorHubUsbCant: 1 }));
-    expect(out.some((i) => i.codigo === 'DOM40')).toBe(false);
+    expect(out.some((i) => i.codigo === 'DOM34')).toBe(false);
     const ctrl = out.filter((i) => i.codigo === 'DOM42').reduce((a, i) => a + i.cantidad, 0);
     expect(ctrl).toBe(3); // 1 del kit + 2 adicionales
+    // Los hubs ADICIONALES (explícitos) siguen saliendo aunque el kit no lleve cargador.
     expect(out.find((i) => i.codigo === 'DOM43')?.cantidad).toBe(1);
   });
   it("'CABLE' futuro o sin motor → sin códigos", () => {
     expect(insumosMotorDePano(pano({ motorModelo: 'CABLE' }))).toEqual([]);
     expect(insumosMotorDePano(pano({}))).toEqual([]);
   });
-  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38+DOM39 (y su cargador DOM43)', () => {
+  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38+DOM39 (+cable)', () => {
     const porChip = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada' }));
-    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM43']);
+    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34']);
     const porCategoria = insumosMotorDePano(pano({ motorModelo: 'DOM41' }), 'ROL_CENEFA_OVALADA_MOTOR_GRANDE');
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.

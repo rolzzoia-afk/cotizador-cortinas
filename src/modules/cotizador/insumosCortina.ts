@@ -471,44 +471,37 @@ const NOMBRE_CONTROL: Record<string, string> = {
   DOM39: 'CONTROL REMOTO BIDIRECCIONAL',
   DOM42: 'CONTROL REMOTO LIVORNO 15 CH [MERYGATE]',
 };
-export const COD_CABLE_MOTOR = 'DOM40';
-export const NOMBRE_CABLE_MOTOR = 'CABLE TIPO C 1 MTS';
+// Cable de carga del DOM38 (Tronic Plus a batería): código DOM34.
+export const COD_CABLE_MOTOR = 'DOM34';
+export const NOMBRE_CABLE_MOTOR = 'CABLE DE CARGA';
 export const COD_ENCHUFE_MOTOR = 'DOM04';
 export const NOMBRE_ENCHUFE_MOTOR = 'ENCHUFE PARA HUB USB';
 export const COD_HUB_DOMOTICA = 'DOM43';
 export const NOMBRE_HUB_DOMOTICA = 'BRIGDE HUB DOMOTICA';
 
-// ── Cargador del motor (1 por motor, tabla INSTALACIÓN) ──────────────
-// El cargador POR DEFECTO depende del motor: el DOM38 (Tronic Plus batería)
-// lleva el hub de domótica DOM43; el DOM41 (Merygate) lleva el HUB USB DOM03.
-// En Fase 2 el vendedor puede cambiarlo por DOM33 (enchufe adaptador motor
-// grande) o forzar el otro hub. Su código DOM cae en INSTALACIÓN del inventario.
+// ── Cargador/hub del motor (opcional, tabla INSTALACIÓN) ─────────────
+// NO todos los motores llevan hub: el kit NO agrega cargador por defecto. El
+// vendedor lo elige en Fase 2 (`motorCargador`): DOM43 (hub domótica, típico
+// del DOM38), DOM03 (HUB USB, típico del DOM41) o DOM33 (enchufe adaptador
+// motor grande). 'NINGUNO' (o sin elección) = el motor va sin hub/cargador.
 export const COD_CARGADOR_MOTOR = 'DOM03';
 export const NOMBRE_CARGADOR_MOTOR = 'HUB USB [1 QR]';
 export const COD_CARGADOR_MOTOR_ALT = 'DOM33';
 export const NOMBRE_CARGADOR_MOTOR_ALT = 'ENCHUFE ADAPTADOR MOTOR GRANDE';
-
-/** Cargador por DEFECTO según el modelo de motor: DOM38 → DOM43, resto → DOM03. */
-export function cargadorPorDefectoMotor(modeloMotor?: string): { codigo: string; descripcion: string } {
-  return (modeloMotor || '').toUpperCase() === 'DOM38'
-    ? { codigo: COD_HUB_DOMOTICA, descripcion: NOMBRE_HUB_DOMOTICA } // DOM43
-    : { codigo: COD_CARGADOR_MOTOR, descripcion: NOMBRE_CARGADOR_MOTOR }; // DOM03
-}
+export const COD_CARGADOR_NINGUNO = 'NINGUNO';
 
 /**
- * Cargador del motor del paño. Por defecto depende del motor (DOM38 → DOM43 ·
- * DOM41 → DOM03); una elección manual en Fase 2 (`motorCargador`) la sobreescribe.
- * `modeloMotor` es el modelo EFECTIVO (con la coerción ovalada DOM41→DOM38).
+ * Cargador/hub del motor del paño según la elección de Fase 2 (`motorCargador`).
+ * Sin elección (o 'NINGUNO') → null: el motor no lleva hub ni cargador.
  */
 export function cargadorMotorDePano(
   p: Partial<Pano>,
-  modeloMotor?: string,
-): { codigo: string; descripcion: string } {
+): { codigo: string; descripcion: string } | null {
   const elegido = (p.motorCargador || '').toUpperCase();
   if (elegido === COD_CARGADOR_MOTOR_ALT) return { codigo: COD_CARGADOR_MOTOR_ALT, descripcion: NOMBRE_CARGADOR_MOTOR_ALT }; // DOM33
   if (elegido === COD_HUB_DOMOTICA) return { codigo: COD_HUB_DOMOTICA, descripcion: NOMBRE_HUB_DOMOTICA }; // DOM43
   if (elegido === COD_CARGADOR_MOTOR) return { codigo: COD_CARGADOR_MOTOR, descripcion: NOMBRE_CARGADOR_MOTOR }; // DOM03
-  return cargadorPorDefectoMotor(modeloMotor);
+  return null; // 'NINGUNO' o sin elección → sin hub/cargador
 }
 
 /** ¿El paño lleva un motor con código DOM (no 'CABLE' futuro ni vacío)? */
@@ -575,9 +568,11 @@ export function codigoManillaPorColor(color: string | undefined): string {
 }
 
 /**
- * Kit de motor del paño: motor + control + enchufe DOM04, más los controles y
- * hubs adicionales. El cable DOM40 se agrega SOLO al DOM38 (Tronic Plus a batería;
- * el DOM41 no lo lleva). Vacío si el modelo es 'CABLE' (futuro) o no hay motor.
+ * Kit de motor del paño: motor + control, más los controles y hubs adicionales.
+ * El cable de carga DOM34 se agrega SOLO al DOM38 (Tronic Plus a batería; el
+ * DOM41 no lo lleva). El hub/cargador es OPCIONAL (elección del vendedor en Fase
+ * 2): si se elige un hub (DOM43/DOM03) va acompañado de su enchufe DOM04; con
+ * DOM33 o sin elección no va ni hub ni DOM04. Vacío si es 'CABLE' o no hay motor.
  * F15: la cenefa ovalada NO admite DOM41 → cae a DOM38. La regla vive acá (en la
  * derivación del BOM), no solo en la UI, para que una OT importada o cargada sin
  * re-editar la cenefa tampoco emita el kit DOM41 prohibido.
@@ -591,15 +586,20 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
     { codigo: m.motor, descripcion: m.nombre, color: '', cantidad: 1 },
     { codigo: m.control, descripcion: NOMBRE_CONTROL[m.control], color: '', cantidad: 1 },
   ];
-  // Cable tipo C (DOM40): solo el Tronic Plus a batería (DOM38).
+  // Cable de carga (DOM34): solo el Tronic Plus a batería (DOM38).
   if (modelo === 'DOM38') {
     out.push({ codigo: COD_CABLE_MOTOR, descripcion: NOMBRE_CABLE_MOTOR, color: '', cantidad: 1 });
   }
-  out.push({ codigo: COD_ENCHUFE_MOTOR, descripcion: NOMBRE_ENCHUFE_MOTOR, color: '', cantidad: 1 });
-  // Cargador del motor (1 por motor): por defecto DOM43 en el DOM38 / DOM03 en el
-  // DOM41, o DOM33 si se cambió en Fase 2. Cae por defecto en INSTALACIÓN.
-  const cargador = cargadorMotorDePano(p, modelo);
-  out.push({ codigo: cargador.codigo, descripcion: cargador.descripcion, color: '', cantidad: 1 });
+  // Hub/cargador opcional (elección Fase 2). El enchufe DOM04 alimenta al hub:
+  // va SOLO cuando el cargador elegido es un hub (DOM43/DOM03), no con DOM33.
+  const cargador = cargadorMotorDePano(p);
+  if (cargador) {
+    const esHub = cargador.codigo === COD_HUB_DOMOTICA || cargador.codigo === COD_CARGADOR_MOTOR;
+    if (esHub) {
+      out.push({ codigo: COD_ENCHUFE_MOTOR, descripcion: NOMBRE_ENCHUFE_MOTOR, color: '', cantidad: 1 });
+    }
+    out.push({ codigo: cargador.codigo, descripcion: cargador.descripcion, color: '', cantidad: 1 });
+  }
   // Controles adicionales (mismo código que el control del kit).
   const ctrlAdic = Number(p.motorControlAdicCant) || (p.motorControlAdic ? 1 : 0);
   if (ctrlAdic > 0) {

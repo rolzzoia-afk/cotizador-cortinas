@@ -62,20 +62,30 @@ describe('SOFT LIGHT — banda E78 (tubo 45 mm)', () => {
     tipo_rol: `SOFT_LIGHT_EXTERNO_${diam}mm`,
     diametro_tubo_mm: diam,
   });
-  const ctx = () =>
+  const ctx = (color?: string) =>
     contextoDespieceDesdePano(
-      { categoria: 'SOFT_LIGHT_38mm', sentido: 'EXTERNO', alto: 2.5 },
-      { alto: 2.5, cenefa: 'Ovalada', oscuridadVariante: 'EXTERNO', perfilIzqPiso: true, perfilDerPiso: true },
+      { categoria: 'SOFT_LIGHT_38mm', sentido: 'EXTERNO', alto: 2.5, color },
+      { alto: 2.5, cenefa: 'Ovalada', oscuridadVariante: 'EXTERNO', color, perfilIzqPiso: true, perfilDerPiso: true },
     );
 
   it('modelo 45 mm: el corte de TUBO usa la fórmula de 45 (cenefa/tela/peso NO cambian)', () => {
     const d38 = calcularDespiece(modeloSoft(38), 250, ctx());
     const d45 = calcularDespiece(modeloSoft(45), 250, ctx());
-    expect(medida(d38.cortes, 'Tubo')).toBe(261.4); // 38 mm
-    expect(medida(d45.cortes, 'Tubo')).toBe(263.2); // 45 mm (banda E78)
+    expect(medida(d38.cortes, 'Tubo')).toBe(261.4); // 38 mm: ancho + 11,4
+    expect(medida(d45.cortes, 'Tubo')).toBe(260.1); // 45 mm (banda E78) blanco: cenefa − 3,1
     // El resto es idéntico entre 38 y 45.
     for (const comp of ['Cenefa', 'Tela (ancho)', 'Peso', 'Perfil izquierdo a Piso', 'Alto tela']) {
       expect(medida(d45.cortes, comp)).toBe(medida(d38.cortes, comp));
+    }
+  });
+
+  it('45 mm negro: contextoDespieceDesdePano acarrea el color → tubo = cenefa − 2,9', () => {
+    const d45n = calcularDespiece(modeloSoft(45), 250, ctx('NEGRO'));
+    expect(medida(d45n.cortes, 'Tubo')).toBe(260.3); // 263,2 − 2,9
+    // Cenefa/tela/peso siguen iguales al blanco (solo el tubo depende del color).
+    const d45b = calcularDespiece(modeloSoft(45), 250, ctx('BLANCO'));
+    for (const comp of ['Cenefa', 'Tela (ancho)', 'Peso']) {
+      expect(medida(d45n.cortes, comp)).toBe(medida(d45b.cortes, comp));
     }
   });
 });

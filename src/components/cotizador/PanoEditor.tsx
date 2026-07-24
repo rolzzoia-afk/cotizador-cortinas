@@ -145,16 +145,27 @@ const OPCIONES_MONTAJE_BASE = [
   { value: 'PARED', label: 'Pared a pared' },
 ] as const;
 
-// Cargador del motor: el default depende del motor (DOM38 → hub domótica DOM43;
-// DOM41 → HUB USB DOM03). DOM33 (adaptador) es la alternativa manual en ambos.
+// Cargador/hub del motor: OPCIONAL — no todos los motores llevan hub, así que
+// el default es 'No lleva' y el vendedor lo agrega cuando el cliente lo compra.
+// El hub típico depende del motor (DOM38 → hub domótica DOM43; DOM41 → HUB USB
+// DOM03); DOM33 (adaptador) es la alternativa manual en ambos.
 const OPCIONES_CARGADOR_DOM38 = [
+  { value: 'NINGUNO', label: 'No lleva' },
   { value: 'DOM43', label: 'Hub domótica (DOM43)' },
   { value: 'DOM33', label: 'Adaptador (DOM33)' },
 ] as const;
 const OPCIONES_CARGADOR_DOM41 = [
+  { value: 'NINGUNO', label: 'No lleva' },
   { value: 'DOM03', label: 'HUB USB (DOM03)' },
   { value: 'DOM33', label: 'Adaptador (DOM33)' },
 ] as const;
+// Etiquetas para mostrar un cargador guardado que no está en las opciones del
+// modelo actual (ej. DOM03 guardado y luego el motor cambió a DOM38).
+const LABEL_CARGADOR: Record<string, string> = {
+  DOM43: 'Hub domótica (DOM43)',
+  DOM03: 'HUB USB (DOM03)',
+  DOM33: 'Adaptador (DOM33)',
+};
 
 const OPCIONES_VARIANTE_OSCURIDAD = [
   { value: 'INTERNO', label: 'Interno' },
@@ -266,8 +277,11 @@ export function PanoEditor({
   // Soft light SEMI: el perfil base va SIEMPRE con perforación EXTERNA (fija).
   const perfBaseSemiForzada =
     !!familia && esFamiliaSoftLight(familia) && varianteOscuridad === 'SEMI';
+  // Color de accesorios (mismo resolutor que producción): el tubo del soft light
+  // 45 mm negro se corta distinto (cenefa − 2,9 en vez de − 3,1).
+  const colorAccesoriosRaw = colorAccesoriosDePano(pano, colorVentana);
   const cortesOsc = familia
-    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff)
+    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff, {}, colorAccesoriosRaw)
     : [];
   const componentesOsc = cortesOsc.filter((c) => !c.perfil);
   const colorPesoInfOscuridad = familia
@@ -285,7 +299,7 @@ export function PanoEditor({
   const esVerticalCat = catUpper.includes('VERTICAL');
   const categoriaImplicaOvalada = catUpper.includes('CENEFA_OVALADA');
   // Color de accesorios único (Medidas): el mismo resolutor que producción.
-  const colorAccesorios = colorAccesorioCorto(colorAccesoriosDePano(pano, colorVentana));
+  const colorAccesorios = colorAccesorioCorto(colorAccesoriosRaw);
   // Cierre Vertical/Medio solo aplica a VERTICAL; el resto ve Izq/Der
   // (más el valor guardado de OTs viejas, para no esconderlo).
   const opcionesCierre = esVerticalCat
@@ -301,21 +315,24 @@ export function PanoEditor({
   const opcionesMotorModelo = cenefaEsOvalada
     ? OPCIONES_MOTOR_MODELO.filter((o) => o.value !== 'DOM41')
     : OPCIONES_MOTOR_MODELO;
-  // Cargador del motor: default y opciones según el motor EFECTIVO (DOM41 con
-  // cenefa ovalada cae a DOM38). DOM38 → DOM43 (hub domótica); resto → DOM03.
+  // Cargador/hub del motor: opciones según el motor EFECTIVO (DOM41 con cenefa
+  // ovalada cae a DOM38). Default 'No lleva' — no todos los motores llevan hub.
+  // Un cargador guardado que no está en las opciones del modelo (cambio de motor)
+  // se agrega como opción extra para no esconder el dato ni desalinear el kit.
   const motorModeloEfectivo =
     (pano.motorModelo || '').toUpperCase() === 'DOM41' && cenefaEsOvalada
       ? 'DOM38'
       : (pano.motorModelo || '').toUpperCase();
-  const cargadorDefault = motorModeloEfectivo === 'DOM38' ? 'DOM43' : 'DOM03';
-  const opcionesCargador =
-    motorModeloEfectivo === 'DOM38' ? OPCIONES_CARGADOR_DOM38 : OPCIONES_CARGADOR_DOM41;
   const cargadorGuardado = (pano.motorCargador || '').toUpperCase();
+  const opcionesCargadorBase =
+    motorModeloEfectivo === 'DOM38' ? OPCIONES_CARGADOR_DOM38 : OPCIONES_CARGADOR_DOM41;
+  const opcionesCargador: readonly { value: string; label: string }[] =
+    LABEL_CARGADOR[cargadorGuardado] && !opcionesCargadorBase.some((o) => o.value === cargadorGuardado)
+      ? [...opcionesCargadorBase, { value: cargadorGuardado, label: LABEL_CARGADOR[cargadorGuardado] }]
+      : opcionesCargadorBase;
   const cargadorValue = opcionesCargador.some((o) => o.value === cargadorGuardado)
     ? cargadorGuardado
-    : cargadorGuardado === 'DOM33'
-      ? 'DOM33'
-      : cargadorDefault;
+    : 'NINGUNO';
   // OTs viejas guardan 'Cuadrada' a secas: se muestra como chip extra para
   // no esconder el dato (al elegir muro/techo queda con el valor nuevo).
   const opcionesCenefa =
@@ -1081,8 +1098,8 @@ export function PanoEditor({
           <RadioRow
             label="Cargador"
             value={cargadorValue}
-            options={opcionesCargador as unknown as readonly { value: string; label: string }[]}
-            onChange={(v) => onChange({ motorCargador: v || cargadorDefault })}
+            options={opcionesCargador}
+            onChange={(v) => onChange({ motorCargador: v || 'NINGUNO' })}
           />
           <div className="flex flex-wrap items-end gap-4 pt-1">
             <div className="max-w-[150px]">

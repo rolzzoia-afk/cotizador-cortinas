@@ -128,10 +128,18 @@ const CENEFA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
 };
 const TUBO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-3.0, 4.8, 11.4],
-  SOFT_LIGHT_45: [-1.2, 6.6, 13.2],
+  // Soft light 45 mm (0,45_1,2mm) BLANCO: tubo = cenefa − 3,1 (fórmula usuario 2026-07-24).
+  SOFT_LIGHT_45: [-4.3, 3.5, 10.1],
   SOFT_LIGHT_CC: [-6.1, 1.5, 9.4],
   OSCURANTI: [-6.1, 1.5, 9.4],
   DARK: [-6.1, 1.5, 9.4],
+};
+// Tubo con accesorios NEGROS. Único caso donde el corte de oscuridad depende del
+// color: en el 45 mm el tubo es cenefa − 2,9 (en vez de − 3,1 del blanco), o sea
+// +0,2 sobre la tabla blanca. La tela se compensa (tubo − 3,1) y queda idéntica.
+// El resto de familias/colores usa TUBO_ADJ (fallback en cortesOscuridad).
+const TUBO_ADJ_NEGRO: Partial<Record<FamiliaOscuridad, [number, number, number]>> = {
+  SOFT_LIGHT_45: [-4.1, 3.7, 10.3],
 };
 const PESO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-7.0, 0.8, 7.4],
@@ -171,6 +179,10 @@ const FAMILIAS_SOFT_LIGHT: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45
 /** ¿Es un sistema soft light (38/45/cenefa cuadrada)? (No Oscuranti/Dark.) */
 export function esFamiliaSoftLight(familia: FamiliaOscuridad): boolean {
   return FAMILIAS_SOFT_LIGHT.includes(familia);
+}
+/** ¿Los accesorios del paño son negros? (Elige la tabla de tubo del 45 mm.) */
+export function esColorAccesoriosNegro(valor: string | null | undefined): boolean {
+  return (valor || '').trim().toUpperCase().startsWith('NEG');
 }
 // Perfiles laterales (sobre el ALTO): a muro suma 10, a piso sin ajuste.
 const PERFIL_LATERAL_MURO_SUMA = 10;
@@ -340,6 +352,8 @@ export function medidaPerfilOscuridad(
  * @param anchoCm   ancho nominal (cm)
  * @param altoCm    alto nominal (cm) — necesario para perfiles laterales
  * @param perfiles  interruptores ON/OFF
+ * @param medidas   overrides manuales de medida por perfil
+ * @param colorAccesorios color de accesorios (solo el TUBO del 45 mm difiere: negro = cenefa − 2,9)
  */
 export function cortesOscuridad(
   familia: FamiliaOscuridad,
@@ -348,6 +362,7 @@ export function cortesOscuridad(
   altoCm: number,
   perfiles: PerfilesOscuridad = {},
   medidas: MedidasPerfilesOscuridad = {},
+  colorAccesorios?: string | null,
 ): CorteOscuridad[] {
   const cortes: CorteOscuridad[] = [];
   if (!anchoCm || anchoCm <= 0) return cortes;
@@ -373,7 +388,11 @@ export function cortesOscuridad(
     cortes.push({ componente: 'Cenefa', columnaExcel: 'CENEFA OVALADA', medidaCm: cenefaFront });
   }
 
-  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r1(anchoCm + TUBO_ADJ[familia][vi]) });
+  // Tubo: en el 45 mm con accesorios negros usa la tabla NEGRA (cenefa − 2,9);
+  // el resto de familias/colores cae al fallback blanco.
+  const tuboAdj =
+    (esColorAccesoriosNegro(colorAccesorios) ? TUBO_ADJ_NEGRO[familia] : undefined) ?? TUBO_ADJ[familia];
+  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r1(anchoCm + tuboAdj[vi]) });
   cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r1(anchoCm + TELA_ADJ[familia][vi]) });
   cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r1(anchoCm + PESO_ADJ[familia][vi]) });
 
