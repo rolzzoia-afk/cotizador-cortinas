@@ -210,7 +210,7 @@ describe('construirInventario — bloque INSUMOS', () => {
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const codes = d.insumos.map((i) => i.codigo);
-    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM43']));
+    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM43', 'DOM05']));
     expect(codes).not.toContain('DOM34'); // #28: el DOM41 no lleva cable
     // Sin cargador elegido, el kit no trae hub propio ni su enchufe DOM04.
     expect(codes).not.toContain('DOM04');
@@ -218,8 +218,10 @@ describe('construirInventario — bloque INSUMOS', () => {
     const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
     expect(grupo('DOM41')).toBe('INSTALACION');
     expect(grupo('DOM42')).toBe('INSTALACION');
-    // DOM43 aparece una sola vez (el de domótica, 1 por OT).
+    // DOM43 (hub) y DOM05 (router) aparecen una sola vez cada uno (1 por OT).
     expect(d.insumos.filter((i) => i.codigo === 'DOM43')).toHaveLength(1);
+    expect(d.insumos.filter((i) => i.codigo === 'DOM05')).toHaveLength(1);
+    expect(grupo('DOM05')).toBe('INSTALACION');
   });
 });
 
@@ -250,6 +252,8 @@ describe('construirInventario — kit + cadena aunque haya motor (van dentro del
     } as unknown as Ventana;
     const codesHub = construirInventario([conHub]).insumos.map((i) => i.codigo ?? '');
     expect(codesHub).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM43']));
+    // El router DOM05 depende del flag de domótica, NO de elegir DOM43 como cargador.
+    expect(codesHub).not.toContain('DOM05');
   });
 
   it('categoría vendida como motor (…_MOTOR_…): sin kit de mecanismo ni cadena, pero con su motor', () => {
