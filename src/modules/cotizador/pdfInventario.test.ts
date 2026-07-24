@@ -210,13 +210,15 @@ describe('construirInventario — bloque INSUMOS', () => {
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const codes = d.insumos.map((i) => i.codigo);
-    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM04', 'DOM43']));
-    expect(codes).not.toContain('DOM40'); // #28: el DOM41 no lleva cable
+    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM43']));
+    expect(codes).not.toContain('DOM34'); // #28: el DOM41 no lleva cable
+    // Sin cargador elegido, el kit no trae hub propio ni su enchufe DOM04.
+    expect(codes).not.toContain('DOM04');
     // Sin cenefa ovalada, todo el kit va a INSTALACIÓN (incluido el motor).
     const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
     expect(grupo('DOM41')).toBe('INSTALACION');
     expect(grupo('DOM42')).toBe('INSTALACION');
-    // DOM43 aparece una sola vez.
+    // DOM43 aparece una sola vez (el de domótica, 1 por OT).
     expect(d.insumos.filter((i) => i.codigo === 'DOM43')).toHaveLength(1);
   });
 });
@@ -227,7 +229,7 @@ describe('construirInventario — kit + cadena aunque haya motor (van dentro del
     diametro_tubo_mm: 38, codigos_tubo: 'E02;E66', dcto_tubo_cm: 3.8, dcto_tela_cm: 0.5, suma_peso_cm: 0.1,
   };
 
-  it('ROL manual con motor DOM38: emite kit MEC + cadena + PCA04 + kit de motor (con DOM43)', () => {
+  it('ROL manual con motor DOM38: emite kit MEC + cadena + PCA04 + kit de motor (hub solo si se elige)', () => {
     const v = {
       id: 'r', ubicacion: 'LIVING', producto: 'ROLLER SCREEN PREMIUM', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloRol,
@@ -237,8 +239,17 @@ describe('construirInventario — kit + cadena aunque haya motor (van dentro del
     expect(codes.some((c) => c.startsWith('MEC'))).toBe(true); // BLANCO → MEC 33
     expect(codes.some((c) => c.startsWith('CAD'))).toBe(true);
     expect(codes).toContain('PCA04');
-    // Kit de motor completo, con el hub DOM43 (DOM38).
-    expect(codes).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM40', 'DOM04', 'DOM43']));
+    // Kit de motor sin cargador elegido: motor + control + cable, sin hub ni DOM04.
+    expect(codes).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM34']));
+    expect(codes).not.toContain('DOM43');
+    expect(codes).not.toContain('DOM04');
+    // Con hub DOM43 elegido en Fase 2, el kit lo suma junto a su enchufe DOM04.
+    const conHub = {
+      ...v, id: 'r2',
+      panos: [{ ...(v.panos![0] as object), motorCargador: 'DOM43' }],
+    } as unknown as Ventana;
+    const codesHub = construirInventario([conHub]).insumos.map((i) => i.codigo ?? '');
+    expect(codesHub).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM43']));
   });
 
   it('categoría vendida como motor (…_MOTOR_…): sin kit de mecanismo ni cadena, pero con su motor', () => {
@@ -315,15 +326,16 @@ describe('construirInventario — clasificación por cenefa ovalada', () => {
     const v = {
       id: 'ov', ubicacion: 'LIVING', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloCenefa,
-      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'OVALADA', motorModelo: 'DOM41' }],
+      // Con hub elegido (DOM43) para verificar el grupo del enchufe DOM04.
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'OVALADA', motorModelo: 'DOM41', motorCargador: 'DOM43' }],
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
     // DOM41 en cenefa ovalada degrada a DOM38 (Tronic Plus con cable).
     expect(grupo('DOM38')).toBe('PRODUCCION'); // el motor
     expect(grupo('DOM39')).toBe('INSTALACION'); // control
-    expect(grupo('DOM40')).toBe('INSTALACION'); // cable
-    expect(grupo('DOM04')).toBe('INSTALACION'); // enchufe
+    expect(grupo('DOM34')).toBe('INSTALACION'); // cable
+    expect(grupo('DOM04')).toBe('INSTALACION'); // enchufe del hub
   });
 
   it('mecanismo de cenefa ovalada → PRODUCCIÓN', () => {

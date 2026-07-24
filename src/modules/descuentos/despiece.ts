@@ -48,6 +48,9 @@ import {
   type TogglesBeeblack,
   type VarianteBeeblack,
 } from './reglas-beeblack';
+// Resolutor de color de accesorios (mecanismo → peso → cadena → tela → ventana).
+// chips.ts NO importa despiece (solo reglas-mecanismo/tuberia), así que no hay ciclo.
+import { colorAccesoriosDePano } from './chips';
 
 export type ContextoDespiece = {
   categoria?: string;
@@ -58,6 +61,8 @@ export type ContextoDespiece = {
   cenefa?: string | null;
   /** Variante de instalación elegida en Fase 2 (INTERNO|SEMI|EXTERNO). */
   oscuridadVariante?: string | null;
+  /** Color de accesorios ya resuelto (solo el tubo del soft light 45 mm depende de él). */
+  colorAccesorios?: string | null;
   /** Interruptores ON/OFF de perfiles (Fase 2). */
   perfiles?: PerfilesOscuridad;
   /** Medidas manuales (cm) que sobreescriben la calculada de cada perfil. */
@@ -215,6 +220,7 @@ export function calcularDespiece(
       altoCm,
       ctx?.perfiles ?? {},
       ctx?.perfilesMedidas ?? {},
+      ctx?.colorAccesorios,
     );
     for (const c of cortesOsc) {
       cortes.push({
@@ -460,11 +466,15 @@ export const MODELO_DESPIECE_STUB: import('./tipos').ModeloDespiece = {
 
 /** Construye el contexto de despiece desde ventana + paño (Fase 2 / Excel). */
 export function contextoDespieceDesdePano(
-  v: { categoria?: string; sentido?: string | null; alto?: number | string; oscuridadVariante?: string | null },
+  v: { categoria?: string; sentido?: string | null; alto?: number | string; oscuridadVariante?: string | null; color?: string | null },
   p: {
     alto?: number | string;
     cenefa?: string | null;
     oscuridadVariante?: string | null;
+    color?: string | null;
+    colorMecanismo?: string | null;
+    colorPeso?: string | null;
+    colorCadena?: string | null;
     perfilIzqMuro?: boolean;
     perfilIzqPiso?: boolean;
     perfilDerMuro?: boolean;
@@ -534,6 +544,9 @@ export function contextoDespieceDesdePano(
     verticalDctoAltoFinalCm: extras?.verticalDctoAltoFinalCm,
     cenefa: p.cenefa,
     oscuridadVariante,
+    // Color de accesorios (mecanismo → peso → cadena → tela → ventana): solo el
+    // tubo del soft light 45 mm lo usa (negro = cenefa − 2,9).
+    colorAccesorios: colorAccesoriosDePano(p, v.color),
     perfiles: aplicarDefaultsPerfiles(
       perfilesBase,
       familiaOsc,

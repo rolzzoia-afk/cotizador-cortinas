@@ -149,10 +149,10 @@ export function chipMecanismoPorColor(
 /** Color de accesorios del paño: mecanismo → peso → cadena → tela → ventana. */
 export function colorAccesoriosDePano(
   p: Partial<{
-    colorMecanismo?: string;
-    colorPeso?: string;
-    colorCadena?: string;
-    color?: string;
+    colorMecanismo?: string | null;
+    colorPeso?: string | null;
+    colorCadena?: string | null;
+    color?: string | null;
   }>,
   ventanaColor?: string | null,
 ): string {

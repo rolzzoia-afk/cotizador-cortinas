@@ -24,10 +24,10 @@ const CASOS: Caso[] = [
   { familia: 'SOFT_LIGHT_38', variante: 'INTERNO', ancho: 296.9, alto: 180, comp: { Cenefa: 295.7, Tubo: 293.9, 'Tela (ancho)': 289.7, Peso: 289.9 } },
   { familia: 'SOFT_LIGHT_38', variante: 'SEMI', ancho: 200, alto: 200, comp: { Cenefa: 206.6, Tubo: 204.8, 'Tela (ancho)': 200.6, Peso: 200.8 } },
   { familia: 'SOFT_LIGHT_38', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { Cenefa: 213.2, Tubo: 211.4, 'Tela (ancho)': 207.2, Peso: 207.4 } },
-  // ── SOFT LIGHT 45 MM ──
-  { familia: 'SOFT_LIGHT_45', variante: 'INTERNO', ancho: 200, alto: 200, comp: { Cenefa: 198.8, Tubo: 198.8, 'Tela (ancho)': 192.8, Peso: 193 } },
-  { familia: 'SOFT_LIGHT_45', variante: 'SEMI', ancho: 200, alto: 200, comp: { Cenefa: 206.6, Tubo: 206.6, 'Tela (ancho)': 200.6, Peso: 200.8 } },
-  { familia: 'SOFT_LIGHT_45', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { Cenefa: 213.2, Tubo: 213.2, 'Tela (ancho)': 207.2, Peso: 207.4 } },
+  // ── SOFT LIGHT 45 MM ── (tubo = cenefa − 3,1; resto igual al 38 salvo el tubo)
+  { familia: 'SOFT_LIGHT_45', variante: 'INTERNO', ancho: 200, alto: 200, comp: { Cenefa: 198.8, Tubo: 195.7, 'Tela (ancho)': 192.8, Peso: 193 } },
+  { familia: 'SOFT_LIGHT_45', variante: 'SEMI', ancho: 200, alto: 200, comp: { Cenefa: 206.6, Tubo: 203.5, 'Tela (ancho)': 200.6, Peso: 200.8 } },
+  { familia: 'SOFT_LIGHT_45', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { Cenefa: 213.2, Tubo: 210.1, 'Tela (ancho)': 207.2, Peso: 207.4 } },
   // ── SOFT LIGHT CON CENEFA CUADRADA (38 y 45) ──
   { familia: 'SOFT_LIGHT_CC', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.7, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
@@ -148,6 +148,41 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
   it('override inválido (0 o negativo) cae a la medida calculada', () => {
     const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { izqMuro: true }, { izqMuro: 0 });
     expect(medida(cortes, 'Perfil izquierdo a Muro')).toBe(210);
+  });
+});
+
+describe('cortesOscuridad — tubo 45 mm por color de accesorios', () => {
+  // Único corte de oscuridad que depende del color: soft light 45 mm negro corta
+  // el TUBO en cenefa − 2,9 (blanco = cenefa − 3,1, o sea +0,2 sobre el negro).
+  it('45 mm negro: tubo = cenefa − 2,9 (blanco + 0,2); cenefa/tela/peso NO cambian', () => {
+    const blanco = { INTERNO: 195.7, SEMI: 203.5, EXTERNO: 210.1 } as const;
+    const negro = { INTERNO: 195.9, SEMI: 203.7, EXTERNO: 210.3 } as const;
+    for (const variante of ['INTERNO', 'SEMI', 'EXTERNO'] as const) {
+      const b = cortesOscuridad('SOFT_LIGHT_45', variante, 200, 200, {}, {}, 'BLANCO');
+      const n = cortesOscuridad('SOFT_LIGHT_45', variante, 200, 200, {}, {}, 'NEGRO');
+      expect(medida(b, 'Tubo'), `blanco ${variante}`).toBe(blanco[variante]);
+      expect(medida(n, 'Tubo'), `negro ${variante}`).toBe(negro[variante]);
+      // El resto es idéntico entre colores.
+      for (const comp of ['Cenefa', 'Tela (ancho)', 'Peso']) {
+        expect(medida(n, comp), `${comp} ${variante}`).toBe(medida(b, comp));
+      }
+    }
+  });
+
+  it('el color NO afecta el tubo del 38 mm (solo el 45 tiene tabla negra)', () => {
+    const b = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, {}, {}, 'BLANCO');
+    const n = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, {}, {}, 'NEGRO');
+    expect(medida(b, 'Tubo')).toBe(211.4);
+    expect(medida(n, 'Tubo')).toBe(211.4);
+  });
+
+  it('gris / vacío / sin color → tabla blanca (default)', () => {
+    const gris = cortesOscuridad('SOFT_LIGHT_45', 'EXTERNO', 200, 200, {}, {}, 'GRIS');
+    const vacio = cortesOscuridad('SOFT_LIGHT_45', 'EXTERNO', 200, 200, {}, {}, '');
+    const sinColor = cortesOscuridad('SOFT_LIGHT_45', 'EXTERNO', 200, 200);
+    expect(medida(gris, 'Tubo')).toBe(210.1);
+    expect(medida(vacio, 'Tubo')).toBe(210.1);
+    expect(medida(sinColor, 'Tubo')).toBe(210.1);
   });
 });
 
