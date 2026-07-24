@@ -176,6 +176,21 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     expect(aoa[1][idxColorPerfil]).toBe('BLANCO');
   });
 
+  it('encabezado (fila 0): rótulos legibles PERFIL (IZQ)/(DER) y TIPO DE PERFORACIÓN', () => {
+    // El texto VISIBLE del encabezado cambió; la CLAVE interna (COLUMNAS, y por
+    // ende el routing de datos) sigue igual → los datos caen en la misma posición.
+    const { aoa } = generarOrdenesOptimizador('266-2', [ventanaSoftLight(2.969, 'PZA 3-G2')]);
+    const enc = aoa[0] as string[];
+    expect(enc[col('PERFIL (IZQ) INT')]).toBe('PERFIL (IZQ)');
+    expect(enc[col('PERFIL (DER) INT')]).toBe('PERFIL (DER)');
+    expect(enc[col('PERF. (IZQ)')]).toBe('TIPO DE PERFORACIÓN (IZQ)');
+    expect(enc[col('PERF. (DER)')]).toBe('TIPO DE PERFORACIÓN (DER)');
+    expect(enc[col('PERF. BASE')]).toBe('TIPO DE PERFORACIÓN (BASE)');
+    // Los rótulos viejos ya no aparecen en el encabezado.
+    expect(enc).not.toContain('PERFIL (IZQ) INT');
+    expect(enc).not.toContain('PERF. (IZQ)');
+  });
+
   it('cenefa delantera → PERFIL SUPERIOR (CENEF.PRO) con la misma medida', () => {
     const v = ventanaSoftLight(2.969, 'PZA 3-G2');
     v.categoria = 'OSCURANTI_63mm';
