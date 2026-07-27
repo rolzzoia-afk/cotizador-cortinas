@@ -23,7 +23,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import jsPDF from 'jspdf';
 import type { Ventana, CatalogoProductos } from '@/modules/cotizador/types';
-import type { VentanaItem } from '@/modules/ots/types';
+import type { AdicionalFase0Persistido, VentanaItem } from '@/modules/ots/types';
 import { ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
@@ -68,6 +68,8 @@ import {
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
+  llevaCenefaCuadradaImplicita,
+  motoresFaltantesInventario,
   panoLlevaDomotica,
   tapaCenefaCuadrada,
 } from './insumosCortina';
@@ -195,6 +197,9 @@ export function consolidarInsumos(
   filas: FilaCalculo[],
   cadenas: CadenaInsumo[] = [],
   usarTuboE78 = false,
+  /** Adicionales de Fase 0: para que TODO motor cobrado (aunque no calce con un
+   *  paño por ubicación) salga en el inventario con su cantidad real. */
+  adicionalesFase0?: AdicionalFase0Persistido[],
 ): InsumoConsolidado[] {
   const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo; unidad?: string }>();
   // `grupoOverride` fuerza la tabla (el motor de una cortina ovalada va a
@@ -215,6 +220,10 @@ export function consolidarInsumos(
     else acc.set(key, { codigo, descripcion, cantidad, grupo, unidad });
   };
   let llevaDomotica = false;
+  // Motores ya emitidos por paño (por código ORIGINAL del paño) y el grupo con que
+  // se colocó cada código: para el top-up de motores cobrados sin paño (ver abajo).
+  const motorEmitidoPorCodigo: Record<string, number> = {};
+  const grupoMotorPorCodigo: Record<string, GrupoInsumo | undefined> = {};
   for (const v of ventanas) {
     const modelo = (v.modelo as ModeloDespiece | null | undefined) ?? null;
     // Dual: el kit de mecanismo es 1 por ventana (un solo bracket dual).
@@ -343,8 +352,16 @@ export function consolidarInsumos(
       const motorInsumos = insumosMotorDePano(p, v.categoria);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
-          const grupo = ovalada && esCodigoMotor(ins.codigo) ? 'PRODUCCION' : undefined;
+          const esUnidad = esCodigoMotor(ins.codigo);
+          const grupo = ovalada && esUnidad ? 'PRODUCCION' : undefined;
           bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad, grupo);
+          if (esUnidad) {
+            // Se cuenta por el código ORIGINAL del paño (motorModelo) — el kit pudo
+            // remapear DOM41→DOM38 en ovalada, y el top-up compara contra lo cobrado.
+            const orig = (p.motorModelo || '').toUpperCase();
+            if (orig) motorEmitidoPorCodigo[orig] = (motorEmitidoPorCodigo[orig] || 0) + ins.cantidad;
+            grupoMotorPorCodigo[ins.codigo.toUpperCase()] = grupo;
+          }
         }
       } else if (p.motorModelo || p.motorTipo) {
         // Motor legacy o 'CABLE' futuro (sin código DOM): línea genérica, para que
@@ -353,19 +370,38 @@ export function consolidarInsumos(
         bump(undefined, etiqueta ? `MOTOR ${etiqueta}` : 'MOTOR', 1, ovalada ? 'PRODUCCION' : undefined);
       }
       if (panoLlevaDomotica(p)) llevaDomotica = true;
-      // Tapa de cenefa cuadrada: 1 o 2 según cenefaTapa. Lleva código por color
-      // (TAP32 negro / TAP33 blanco / TAP34 café) para que bodega enlace stock,
-      // pero se FUERZA a INSTALACIÓN (se coloca en terreno): su código TAP caería
-      // en INSUMOS por defecto. Gris u otro color sale sin código.
-      if (esCenefaCuadrada(p.cenefa)) {
-        const n = p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
+      // Tapa de cenefa cuadrada. Lleva código por color (TAP32 negro / TAP33
+      // blanco / TAP34 café) para que bodega enlace stock, pero se FUERZA a
+      // INSTALACIÓN (se coloca en terreno): su código TAP caería en INSUMOS por
+      // defecto. Gris u otro color sale sin código.
+      //   · Adicional roller (cenefa cuadrada elegible): 1 o 2 según cenefaTapa,
+      //     color de tapa elegido.
+      //   · DARK (cenefa cuadrada implícita, p.cenefa vacío): SIEMPRE 2, color de
+      //     accesorios del paño.
+      const darkCuadrada = llevaCenefaCuadradaImplicita(v.categoria);
+      if (esCenefaCuadrada(p.cenefa) || darkCuadrada) {
+        const n = darkCuadrada
+          ? 2
+          : p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
         if (n > 0) {
-          const tapa = tapaCenefaCuadrada(p.colorTapa);
+          const colorTapa = darkCuadrada ? colorAccesoriosDePano(p, v.color) : p.colorTapa;
+          const tapa = tapaCenefaCuadrada(colorTapa);
           const desc = tapa.codigo ? `[${tapa.codigo}] ${tapa.descripcion}` : tapa.descripcion;
           bump(tapa.codigo, desc, n, 'INSTALACION');
         }
       }
     }
+  }
+  // Top-up de motores COBRADOS (adicionales Fase 0) que no calzaron con un paño:
+  // la diferencia sale como unidad de motor, en el mismo grupo que ya usa ese
+  // código (para que consoliden en una sola línea con la cantidad total).
+  for (const falta of motoresFaltantesInventario(adicionalesFase0, motorEmitidoPorCodigo)) {
+    bump(
+      falta.codigo,
+      `[${falta.codigo}] ${falta.descripcion}`,
+      falta.cantidad,
+      grupoMotorPorCodigo[falta.codigo.toUpperCase()],
+    );
   }
   // Domótica: hub bridge (DOM43) + router (DOM05), 1 de cada uno por OT.
   if (llevaDomotica) {
@@ -427,6 +463,8 @@ export function construirInventario(
    *  codCadena guardado (OT no sincronizada en Fase 2). Vacío = sin resolución. */
   cadenas: CadenaInsumo[] = [],
   usarTuboE78 = false,
+  /** Adicionales Fase 0: para el top-up de motores cobrados (ver consolidarInsumos). */
+  adicionalesFase0?: AdicionalFase0Persistido[],
 ): Inventario {
   const { filas } = construirCalculoGeneral(ventanas, catalogo, params, undefined, {
     usarTuboE78,
@@ -452,7 +490,7 @@ export function construirInventario(
   }));
   return {
     filas: filasInv,
-    insumos: consolidarInsumos(ventanas, filas, cadenas, usarTuboE78),
+    insumos: consolidarInsumos(ventanas, filas, cadenas, usarTuboE78, adicionalesFase0),
     etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
     notas: notasTerreno(ventanas),
   };
@@ -614,8 +652,9 @@ export function generarPdfInventario(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   cadenas: CadenaInsumo[] = [],
   usarTuboE78 = false,
+  adicionalesFase0?: AdicionalFase0Persistido[],
 ): void {
-  const data = construirInventario(ventanas, catalogo, params, cadenas, usarTuboE78);
+  const data = construirInventario(ventanas, catalogo, params, cadenas, usarTuboE78, adicionalesFase0);
   if (data.filas.length === 0) {
     throw new Error('No hay cortinas en la OT.');
   }

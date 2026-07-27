@@ -19,8 +19,8 @@ import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
 import { medidaCorteCenefaCuadrada, tiraCenefaOvalada } from '@/modules/descuentos/adicionales-cenefa';
 import { codigoTuberiaDeChip } from '@/modules/descuentos/reglas-tuberia';
 import { normalizarVarianteOscuridad } from '@/modules/descuentos/reglas-oscuridad';
-import { codigoSeparadorPerfil, codigoZocaloPerfil } from '@/modules/descuentos/codigos-estructura';
-import { colorPerfilDesdeAdicional } from '@/modules/descuentos/adicionales-perfil';
+import { codigoCenefaCuadrada, codigoSeparadorPerfil, codigoZocaloPerfil } from '@/modules/descuentos/codigos-estructura';
+import { colorPerfilDesdeAdicional, colorPerfilFilaExcel } from '@/modules/descuentos/adicionales-perfil';
 import { esCenefaCuadrada } from './fase2';
 
 const EMPTY_PANO: Partial<Pano> = {};
@@ -48,6 +48,8 @@ const ALTO_PAGINA = 100;
 const ALTO_PAGINA_VERTICAL = 106;
 // La estructura SOFT LIGHT agrega la sección PERFILES (2×3: zócalo + separador)
 // y la fila TIPO DE SOFT.LIGHT → etiqueta más larga (medida del .lbx: 145,3 mm).
+// DARK usa el mismo largo (su .lbx mide 146,5 mm: mismas secciones, cenefas
+// cuadradas del/tra en producción y fila TIPO DE DARK | VELCRO).
 const ALTO_PAGINA_SOFT_LIGHT = 146;
 const ALTO_PANO = 51; // bloques contiguos, 3 mm arriba y 0 abajo (offset del corte)
 // Alto real del diseño de cenefa (medido del .lbx): bajo esta línea se recorta.
@@ -60,8 +62,10 @@ const BLANCO: [number, number, number] = [255, 255, 255];
 
 /** Medida en cm sin sufijo, coma decimal es-CL ("172,0" → "172"). */
 export function fmtMedidaCm(n: number): string {
-  const s = n.toFixed(1);
-  return (s.endsWith('.0') ? s.slice(0, -2) : s).replace('.', ',');
+  // El despiece redondea a 2 decimales (mm literales de DARK): la etiqueta los
+  // conserva tal cual ("295,05", como el .lbx), recortando ceros de cola
+  // ("250,50" → "250,5" · "230,00" → "230").
+  return n.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 }
 
 /** Familia grande de la etiqueta de paños: BK→BLACKOUT, SCR→SCREEN, DU→DUO. */
@@ -399,9 +403,20 @@ function dibujarEstructuraVertical(
 // misma medida por lado) y la franja TIPO DE SOFT.LIGHT (variante de instalación).
 
 /** ¿La fila es soft light? Tiene el PESO SOFT LIGHT y la CENEFA OVALADA del motor
- *  de oscuridad (Dark/CC quedan fuera → etiqueta roller genérica). */
+ *  de oscuridad (CC/Oscuranti quedan fuera → etiqueta roller genérica; DARK tiene
+ *  etiqueta propia, ver esFilaDark). */
 export function esFilaSoftLight(row: OptimizerRow): boolean {
   return !!pieza(row, 'PESO SOFT LIGHT') && !!pieza(row, 'CENEFA OVALADA');
+}
+
+/** ¿La fila es DARK? Peso de oscuridad + cenefa cuadrada delantera Y trasera —
+ *  solo DARK corta la trasera (soft light CC / Oscuranti no llevan esta etiqueta). */
+export function esFilaDark(row: OptimizerRow): boolean {
+  return (
+    !!pieza(row, 'PESO SOFT LIGHT') &&
+    !!pieza(row, 'CENEFA DELANTERA') &&
+    !!pieza(row, 'CENEFA TRASERA')
+  );
 }
 
 function dibujarEstructuraSoftLight(
@@ -491,7 +506,7 @@ function dibujarEstructuraSoftLight(
   // su zócalo (E32/33/34) y su separador (E41/42/43) a la MISMA medida; sin perfil
   // en ese lado → N/A en ambas celdas.
   const perfLado = (
-    yTop: number, colExcel: string, labZoc: string, labSep: string, tipoColor: 'izq' | 'der' | 'inf',
+    yTop: number, colExcel: string, sepColExcel: string, labZoc: string, labSep: string, tipoColor: 'izq' | 'der' | 'inf',
   ) => {
     const pz = pieza(row, colExcel);
     const hayMedida = !!pz && pz.medidaCm > 0;
@@ -499,11 +514,16 @@ function dibujarEstructuraSoftLight(
     const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
     celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil), `ZOCALO ${subColor}`.trim(), medida);
-    celdaPerfil(30.4, yTop, 29.5, labSep, codigoSeparadorPerfil(colorPerfil), 'PERFIL SEPARADOR', medida);
+    // Separador: se dibuja SOLO si está activado (tiene su propia pieza con medida);
+    // sin separador → celda vacía (N/A, sin código).
+    const psep = pieza(row, sepColExcel);
+    const haySep = !!psep && psep.medidaCm > 0;
+    const medidaSep = haySep ? fmtMedidaCm(psep!.medidaCm) : 'N/A';
+    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil) : '', 'PERFIL SEPARADOR', medidaSep);
   };
-  perfLado(69, 'PERFIL (IZQ) INT', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
-  perfLado(82.4, 'PERFIL (DER) INT', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
-  perfLado(95.8, 'PERFIL BASE', 'PERFIL.BASE', 'PERFIL.SEPAR(BASE)', 'inf');
+  perfLado(69, 'PERFIL (IZQ) INT', 'SEPARADOR (IZQ)', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
+  perfLado(82.4, 'PERFIL (DER) INT', 'SEPARADOR (DER)', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
+  perfLado(95.8, 'PERFIL BASE', 'SEPARADOR BASE', 'PERFIL.BASE', 'PERFIL.SEPAR(BASE)', 'inf');
 
   // ── TIPO DE SOFT.LIGHT (variante de instalación) ──
   doc.setDrawColor(...NEGRO);
@@ -527,6 +547,176 @@ function dibujarEstructuraSoftLight(
   if (telaDesc) txt(doc, telaDesc, 15.9, 135.7, 4.8, { bold: false, align: 'center', max: 26 });
 
   // Caja terreno: caída / cadena / accesorios + franja accionamiento
+  doc.rect(30.4, 120.6, 29.5, 13.3, 'S');
+  const caida = String(p.armado || row.sentido || '—').toUpperCase();
+  txt(doc, `CAIDA: ${caida}`, 32, 124.2, 7.5, { max: 24, hScale: 0.8 });
+  txt(doc, `CADENA: ${ladoCadenaEtiqueta(row.direccion)}`, 32, 128.4, 7.5, { max: 24, hScale: 0.8 });
+  txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 132.6, 7.5, { max: 24, hScale: 0.8 });
+  doc.setFillColor(...NEGRO);
+  doc.rect(30.225, 133.7, 29.85, 5.7, 'F');
+  const codCad = String(p.codCadena || '').toUpperCase();
+  txt(doc, codCad ? `ACCIONAMIENTO: [${codCad}]` : 'ACCIONAMIENTO:', 31.3, 137, 7.5, {
+    bold: false, color: BLANCO, max: 30, hScale: 0.85,
+  });
+  txt(doc, textoAccionamiento(p), 31.3, 139.1, 4, { color: BLANCO, max: 34 });
+
+  // ── Barra DIMENSIONADO: ancho × alto terminados ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 139.4, 58.75, 5.2, 'F');
+  txt(doc, 'ANCHO:', 3.8, 143, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(anchoCm), 14.2, 143.2, 9.2, { color: BLANCO, hScale: 1.03 });
+  txt(doc, 'ALTO:', 32.6, 143, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(altoCm), 40.4, 143.2, 9.2, { color: BLANCO, hScale: 1.03 });
+}
+
+// ── ETIQUETA ESTRUCTURA/ARMADO DARK (62×145,3) ───────────────────────
+// Réplica de docs/referencias/ETIQ.ESTRUCTURA-ARMADO (SOFTWARE) - DARK.lbx.
+// Mismo esqueleto que la etiqueta soft light, con tres diferencias del .lbx:
+//   · columna derecha de producción: CEF.CUADRADA.DEL y CEF.CUADRADA.TRA
+//     (dos cajas apiladas, código E29/E30/E31 por color de perfil) en vez de
+//     la cenefa ovalada + franja CON/SIN TIRA;
+//   · fila doble TIPO DE DARK (variante) | VELCRO.CENEF.C (ancho velcro =
+//     cenefa delantera; el alto 15 cm es fijo y no se imprime);
+//   · título DARK.
+
+function dibujarEstructuraDark(
+  doc: jsPDF,
+  row: OptimizerRow,
+  n: number,
+  total: number,
+  meta: MetaPDF,
+  catalogo: CatalogoProductos,
+  adicionales?: AdicionalFase0Persistido[],
+) {
+  const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
+  const anchoCm = row.anchoCm || 0;
+  const altoCm = row.altoCm || 0;
+  const colorAcc = colorPesoNormalizado(p.colorMecanismo || p.color) || '—';
+
+  // ── Encabezado negro: DARK + Cortina n/N + [tipoTela] + QR ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 3, 58.75, 20, 'F');
+  txt(doc, 'DARK', 3.7, 12.4, 13, { color: BLANCO, max: 12, hScale: 1 });
+  txt(doc, `Cortina ${n}/${total}`, 3.7, 16.4, 9.5, { color: BLANCO, hScale: 1.02 });
+  const chipTela = String(p.tipoTela || '').toUpperCase().replace(/^SCR$/, 'SC');
+  if (chipTela) txt(doc, `[${chipTela}]`, 21.3, 11.4, 9.9, { color: BLANCO, hScale: 1.02 });
+  qr(doc, 41.7, 4.4, 17, true);
+
+  // ── Ubicación + OT + cliente ──
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 23, 58.4, 11.8, 'S');
+  txt(doc, 'UBICACIÓN:', 2.9, 26.3, 6, { bold: false, hScale: 0.83 });
+  const ubic = (row.ubicacion || '—').toUpperCase();
+  txt(doc, ubic, 2.4, 32.6, ubic.length > 9 ? 11 : 19.3, { max: 18, hScale: ubic.length > 9 ? 1 : 1.03 });
+  txt(doc, String(meta.cliente || '').toUpperCase(), 58.3, 26.3, 6, {
+    bold: false, align: 'right', max: 26, hScale: 0.83,
+  });
+  txt(doc, String(meta.ot), 58.3, 32.6, 19.3, { align: 'right', hScale: 1.03 });
+
+  // ── INFORMACIÓN PRODUCCIÓN ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 34.8, 58.75, 5.2, 'F');
+  txt(doc, 'INFORMACIÓN PRODUCCIÓN', 30.7, 38.4, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+
+  // Columna izquierda: TUBO / PESO / TELA (igual que soft light)
+  doc.rect(1.5, 40, 28.9, 23.7, 'S');
+  const pzTubo = pieza(row, 'TUBO');
+  txt(doc, conCod('TUBO', codCorto(pzTubo) || (row.tuberiaCod || '').split('_').pop() || ''), 3.1, 44.2, 8.2, { hScale: 0.73 });
+  txt(doc, pzTubo ? fmtMedidaCm(pzTubo.medidaCm) : 'N/A', 29.4, 45.7, 14.6, { align: 'right', hScale: 0.79 });
+  const espec = especTuboEtiqueta(row.tuberiaCod, p.tuberia);
+  if (espec) txt(doc, espec, 3.1, 46.9, 4.4, { bold: false, hScale: 1.08 });
+  const pzPeso = pieza(row, 'PESO SOFT LIGHT');
+  txt(doc, conCod('PESO', codCorto(pzPeso)), 3.1, 51.9, 8.4, { hScale: 0.77 });
+  txt(doc, pzPeso ? fmtMedidaCm(pzPeso.medidaCm) : 'N/A', 29.4, 53.4, 14.6, { align: 'right', hScale: 0.79 });
+  txt(doc, `PESO SOFT.LIGHT/DARK`, 3.1, 55.4, 4, { bold: false, max: 30 });
+  const pzTela = (row.piezas || []).find((x) => x.componente.toUpperCase().startsWith('TELA'));
+  txt(doc, 'TELA:', 3.1, 59.8, 7.5, { hScale: 0.8 });
+  if (pzTela) txt(doc, fmtMedidaCm(pzTela.medidaCm), 29.4, 61.3, 14.6, { align: 'right', hScale: 0.79 });
+  txt(doc, 'DIMENSIONADO', 3.1, 62.5, 4, { bold: false, hScale: 0.86 });
+
+  // Columna derecha: CEF.CUADRADA.DEL / CEF.CUADRADA.TRA (dos cajas apiladas).
+  // Código E29/E30/E31 por COLOR PERFIL (misma regla que la columna del Excel);
+  // sin color de perfil cae al color de accesorios.
+  const colorCenefa =
+    colorPerfilFilaExcel(adicionales, row.categoria, {
+      izq: !!pieza(row, 'PERFIL (IZQ) INT'),
+      der: !!pieza(row, 'PERFIL (DER) INT'),
+      inf: !!pieza(row, 'PERFIL BASE'),
+    }) || colorAcc;
+  const codCef = codigoCenefaCuadrada(colorCenefa);
+  const celdaCenefa = (top: number, alto: number, label: string, colExcel: string) => {
+    doc.setDrawColor(...NEGRO);
+    doc.setLineWidth(0.35);
+    doc.rect(30.4, top, 29.5, alto, 'S');
+    const pz = pieza(row, colExcel);
+    txt(doc, conCod(label, codCef), 31.5, top + 3, 7, { hScale: 0.62, max: 30 });
+    txt(doc, 'CENEFA CUADRADA', 31.5, top + 5.5, 4, { bold: false });
+    txt(doc, pz ? fmtMedidaCm(pz.medidaCm) : 'N/A', 59.1, top + 10.9, pz ? 11.5 : 10, { align: 'right', hScale: 0.79 });
+  };
+  celdaCenefa(40, 11.8, 'CEF.CUADRADA.DEL', 'CENEFA DELANTERA');
+  celdaCenefa(51.8, 11.9, 'CEF.CUADRADA.TRA', 'CENEFA TRASERA');
+
+  // ── PERFILES (grilla 2×3: zócalo izq | separador der — igual que soft light) ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 63.7, 58.75, 5.2, 'F');
+  txt(doc, 'PERFILES', 30.7, 67.3, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+
+  const celdaPerfil = (
+    x: number, top: number, w: number, label: string, cod: string, sub: string, medida: string,
+  ) => {
+    doc.setDrawColor(...NEGRO);
+    doc.setLineWidth(0.3);
+    doc.rect(x, top, w, 13.4, 'S');
+    txt(doc, cod ? `${label}: [${cod}]` : `${label}:`, x + 1.5, top + 2.7, 7, { hScale: 0.62, max: 30 });
+    txt(doc, sub, x + 1.5, top + 5.8, 4, { bold: false, max: 24 });
+    txt(doc, medida, x + 1.5, top + 11.4, 12, { hScale: 0.9 });
+  };
+  const perfLado = (
+    yTop: number, colExcel: string, sepColExcel: string, labZoc: string, labSep: string, tipoColor: 'izq' | 'der' | 'inf',
+  ) => {
+    const pz = pieza(row, colExcel);
+    const hayMedida = !!pz && pz.medidaCm > 0;
+    const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
+    const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
+    const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
+    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil), `ZOCALO ${subColor}`.trim(), medida);
+    // Separador: se dibuja SOLO si está activado (tiene su propia pieza con medida);
+    // sin separador → celda vacía (N/A, sin código).
+    const psep = pieza(row, sepColExcel);
+    const haySep = !!psep && psep.medidaCm > 0;
+    const medidaSep = haySep ? fmtMedidaCm(psep!.medidaCm) : 'N/A';
+    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil) : '', 'PERFIL SEPARADOR', medidaSep);
+  };
+  perfLado(69, 'PERFIL (IZQ) INT', 'SEPARADOR (IZQ)', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
+  perfLado(82.4, 'PERFIL (DER) INT', 'SEPARADOR (DER)', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
+  perfLado(95.8, 'PERFIL BASE', 'SEPARADOR BASE', 'PERFIL.BASE', 'PERFIL.SEPAR(BASE)', 'inf');
+
+  // ── Fila doble: TIPO DE DARK (variante) | VELCRO.CENEF.C (= cenefa delantera) ──
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 109.5, 28.9, 5, 'S');
+  doc.rect(30.4, 109.5, 29.5, 5, 'S');
+  const variante = normalizarVarianteOscuridad(p.oscuridadVariante ?? row.sentido, 'INTERNO');
+  txt(doc, `TIPO DE DARK:  ${variante}`, 15.95, 112.9, 7, { align: 'center', hScale: 0.8, max: 27 });
+  const pzDel = pieza(row, 'CENEFA DELANTERA');
+  txt(doc, `VELCRO.CENEF.C:  ${pzDel ? fmtMedidaCm(pzDel.medidaCm) : 'N/A'}`, 45.15, 112.9, 7, {
+    align: 'center', hScale: 0.8, max: 28,
+  });
+
+  // ── INFORMACIÓN TERRENO (igual que soft light) ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 115.4, 58.75, 5.2, 'F');
+  txt(doc, 'INFORMACIÓN TERRENO', 30.7, 119, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+
+  doc.rect(1.5, 120.6, 28.9, 18.8, 'S');
+  const codInt = row.codInt || '—';
+  txt(doc, codInt, 15.9, 131.7, codInt.length > 6 ? 15 : 23.7, {
+    align: 'center', max: 10, hScale: codInt.length > 6 ? 1 : 0.8,
+  });
+  const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
+  if (telaDesc) txt(doc, telaDesc, 15.9, 135.7, 4.8, { bold: false, align: 'center', max: 26 });
+
   doc.rect(30.4, 120.6, 29.5, 13.3, 'S');
   const caida = String(p.armado || row.sentido || '—').toUpperCase();
   txt(doc, `CAIDA: ${caida}`, 32, 124.2, 7.5, { max: 24, hScale: 0.8 });
@@ -575,6 +765,13 @@ function dibujarEstructura(
   const esVertical = (row.tuberiaCod || '').toUpperCase() === 'VERTICAL';
   if (esVertical) {
     dibujarEstructuraVertical(doc, row, n, total, meta, catalogo);
+    return;
+  }
+  // DARK (cenefa cuadrada del/tra + velcro): etiqueta propia (réplica del .lbx
+  // de DARK). Va ANTES que soft light: comparte el PESO SOFT LIGHT pero corta
+  // cenefas cuadradas en vez de ovalada.
+  if (esFilaDark(row)) {
+    dibujarEstructuraDark(doc, row, n, total, meta, catalogo, adicionales);
     return;
   }
   // Soft light (cenefa ovalada): etiqueta propia con la sección PERFILES
@@ -966,11 +1163,11 @@ export function generarEtiquetasPDF(
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
   const cenefas = rows.filter((r) => esCenefaCuadrada((r.pano || EMPTY_PANO).cenefa as string));
-  // La vertical usa 106 mm y el soft light 146 mm (secciones extra); el resto 100 mm.
+  // La vertical usa 106 mm; soft light y DARK 146 mm (secciones extra); resto 100 mm.
   const altoPagina = (r: OptimizerRow) =>
     (r.tuberiaCod || '').toUpperCase() === 'VERTICAL'
       ? ALTO_PAGINA_VERTICAL
-      : esFilaSoftLight(r)
+      : esFilaSoftLight(r) || esFilaDark(r)
         ? ALTO_PAGINA_SOFT_LIGHT
         : ALTO_PAGINA;
   const doc = new jsPDF('p', 'mm', [ANCHO, altoPagina(rows[0])]);

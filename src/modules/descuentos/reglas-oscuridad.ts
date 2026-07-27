@@ -12,6 +12,12 @@
 // dorados (reglas-oscuridad.test.ts). Si la planilla cambia, editar SOLO
 // las tablas de abajo.
 //
+// DARK: sus cortes (cenefa cuadrada del/tra, tubo, tela, peso) salen de la
+// pizarra oficial 2026-07-27, donde los ajustes en "mm" son milímetros
+// LITERALES (0,3mm=0,03cm · 0,6mm=0,06cm · 0,2mm=0,02cm). Por eso el módulo
+// redondea a 2 decimales (ver r2). DARK_45MM comparte estas tablas hasta que
+// lleguen sus fórmulas propias.
+//
 // Mapeo a columnas del Excel de órdenes (las reconoce el optimizador
 // legacy en COLUMNAS_CORTE):
 //   Tubo            → TUBO
@@ -46,13 +52,17 @@ export type PerforacionPerfil = 'INTERNO' | 'EXTERNO';
 export type MontajeBaseOscuridad = 'DENTRO' | 'PARED';
 
 export type PerfilesOscuridad = {
-  /** Superficie (define la MEDIDA): muro = alto+10, piso = alto. Se elige en Fase 2. */
+  /** Superficie (define la MEDIDA): muro = alto+10, piso = alto, marco (dentro del
+   *  marco) = alto (sin descuento). Se elige en Fase 2. */
   izqMuro?: boolean;
   izqPiso?: boolean;
+  izqMarco?: boolean;
   derMuro?: boolean;
   derPiso?: boolean;
+  derMarco?: boolean;
   infMuro?: boolean;
   infPiso?: boolean;
+  infMarco?: boolean;
   /**
    * Perfil ACTIVO (lleva perfil izq/der/base), independiente de la superficie.
    * La variante en Fase 1 activa los laterales aunque la superficie (medida)
@@ -69,24 +79,35 @@ export type PerfilesOscuridad = {
   /** Montaje del perfil base (soft light INTERNO): 'DENTRO' (default) = ancho − 13,3;
    *  'PARED' = ancho completo. Se elige en Fase 2; sin efecto en otras familias/variantes. */
   infMontaje?: MontajeBaseOscuridad;
+  /** Perfiles SEPARADORES (E41/E42/E43) por lado — activación independiente; la
+   *  medida sale del perfil del mismo lado salvo override manual (ver sep*Cm). */
+  sepIzq?: boolean;
+  sepDer?: boolean;
+  sepInf?: boolean;
 };
 
-/** Claves de SUPERFICIE de perfil (definen la medida: muro=alto+10, piso=alto). */
+/** Claves de SUPERFICIE de perfil (definen la medida: muro=alto+10, piso/marco=alto). */
 export type SuperficiePerfilKey =
   | 'izqMuro'
   | 'izqPiso'
+  | 'izqMarco'
   | 'derMuro'
   | 'derPiso'
+  | 'derMarco'
   | 'infMuro'
-  | 'infPiso';
+  | 'infPiso'
+  | 'infMarco';
 
-/** Medidas manuales (cm) que sobreescriben la calculada de cada perfil (solo superficies). */
-export type MedidasPerfilesOscuridad = Partial<Record<SuperficiePerfilKey, number>>;
+/** Claves con override de medida manual: superficies + separadores por lado. */
+export type MedidaPerfilKey = SuperficiePerfilKey | 'sepIzq' | 'sepDer' | 'sepInf';
+
+/** Medidas manuales (cm) que sobreescriben la calculada de cada perfil/separador. */
+export type MedidasPerfilesOscuridad = Partial<Record<MedidaPerfilKey, number>>;
 
 /** Devuelve el override si es un número válido (> 0); si no, la medida calculada. */
 function aplicarOverride(calculada: number, override: number | undefined): number {
   return typeof override === 'number' && Number.isFinite(override) && override > 0
-    ? r1(override)
+    ? r2(override)
     : calculada;
 }
 
@@ -106,15 +127,21 @@ export type CorteOscuridad = {
 export const PERFILES_OSCURIDAD: Array<{ key: SuperficiePerfilKey; label: string }> = [
   { key: 'izqMuro', label: 'Perfil izquierdo a Muro' },
   { key: 'izqPiso', label: 'Perfil izquierdo a Piso' },
+  { key: 'izqMarco', label: 'Perfil izquierdo dentro del Marco' },
   { key: 'derMuro', label: 'Perfil derecho a Muro' },
   { key: 'derPiso', label: 'Perfil derecho a Piso' },
+  { key: 'derMarco', label: 'Perfil derecho dentro del Marco' },
   { key: 'infMuro', label: 'Perfil inferior a Muro' },
   { key: 'infPiso', label: 'Perfil inferior al Piso' },
+  { key: 'infMarco', label: 'Perfil inferior dentro del Marco' },
 ];
 
 export const VARIANTES_OSCURIDAD: VarianteOscuridad[] = ['INTERNO', 'SEMI', 'EXTERNO'];
 
-const r1 = (n: number) => Math.round(n * 10) / 10;
+// Redondeo a 2 decimales (centésimas de cm = décimas de mm). DARK trae ajustes en
+// milímetros literales (0,3mm / 0,6mm / 0,2mm de la pizarra 2026-07-27), así que 1
+// decimal los borraría; el resto de familias usa ajustes de 1 decimal y no se ve afectado.
+const r2 = (n: number) => Math.round(n * 100) / 100;
 
 const VI: Record<VarianteOscuridad, number> = { INTERNO: 0, SEMI: 1, EXTERNO: 2 };
 
@@ -124,7 +151,8 @@ const CENEFA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_45: [-1.2, 6.6, 13.2],
   SOFT_LIGHT_CC: [-0.3, 7.5, 15.8],
   OSCURANTI: [-0.3, 7.5, 15.8],
-  DARK: [-0.3, 7.5, 15.8],
+  // DARK: cenefa cuadrada delantera = ancho − 0,3mm (pizarra 2026-07-27, mm literal).
+  DARK: [-0.03, 7.5, 15.8],
 };
 const TUBO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-3.0, 4.8, 11.4],
@@ -132,7 +160,9 @@ const TUBO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_45: [-4.3, 3.5, 10.1],
   SOFT_LIGHT_CC: [-6.1, 1.5, 9.4],
   OSCURANTI: [-6.1, 1.5, 9.4],
-  DARK: [-6.1, 1.5, 9.4],
+  // DARK: tubo = cenefa trasera (= delantera − 1) − 4,8/5/5,4 cm (pizarra 2026-07-27).
+  //   INT = ancho − 5,83 · SEMI = ancho + 1,5 · EXT = ancho + 9,4.
+  DARK: [-5.83, 1.5, 9.4],
 };
 // Tubo con accesorios NEGROS. Único caso donde el corte de oscuridad depende del
 // color: en el 45 mm el tubo es cenefa − 2,9 (en vez de − 3,1 del blanco), o sea
@@ -146,14 +176,16 @@ const PESO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_45: [-7.0, 0.8, 7.4],
   SOFT_LIGHT_CC: [-6.5, 1.1, 9.0],
   OSCURANTI: [-6.5, 1.1, 9.0],
-  DARK: [-6.5, 1.1, 9.0],
+  // DARK: peso = tela + 0,2mm (pizarra 2026-07-27). INT −5,87 · SEMI +1,46 · EXT +9,36.
+  DARK: [-5.87, 1.46, 9.36],
 };
 const TELA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-7.2, 0.6, 7.2],
   SOFT_LIGHT_45: [-7.2, 0.6, 7.2],
   SOFT_LIGHT_CC: [-6.7, 0.9, 8.8],
   OSCURANTI: [-6.7, 0.9, 8.8],
-  DARK: [-6.7, 0.9, 8.8],
+  // DARK: tela = tubo − 0,6mm (pizarra 2026-07-27). INT −5,89 · SEMI +1,44 · EXT +9,34.
+  DARK: [-5.89, 1.44, 9.34],
 };
 // Cenefa trasera (solo DARK): cenefa delantera − 1.
 const CENEFA_TRASERA_DESC = 1;
@@ -209,6 +241,8 @@ export function familiaOscuridad(
   const esCuadrada = (cenefaTipo || '').trim().toUpperCase().startsWith('CUADRADA');
   if (cat === 'SOFT_LIGHT_38MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_38';
   if (cat === 'SOFT_LIGHT_45MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_45';
+  // DARK_45MM comparte hoy las fórmulas del 38 (pizarra 2026-07-27). Cuando lleguen
+  // las fórmulas propias del 45 se separa en su familia (patrón SOFT_LIGHT_38/_45).
   if (cat === 'DARK_38MM' || cat === 'DARK_45MM') return 'DARK';
   if (cat === 'OSCURANTI_63MM') return 'OSCURANTI';
   return null;
@@ -259,14 +293,24 @@ const CON_LATERALES_SIEMPRE: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_
  * en soft light / dark los dos LATERALES van siempre activos y su perforación
  * (INTERNO/EXTERNO) sale de la variante (SEMI = sin definir). Los flags que el
  * paño ya trae (Fase 2) mandan; solo se rellenan los que están sin definir. El
- * perfil base (inferior) NO se activa por defecto (se elige en Fase 2).
+ * perfil base (inferior) NO se activa por defecto (se elige en Fase 2), pero en
+ * los sistemas INTERNOS su perforación nace EXTERNA (pizarra 2026-07-27) — esto
+ * aplica a TODA familia de oscuridad, Oscuranti incluido.
  */
 export function aplicarDefaultsPerfiles(
   base: PerfilesOscuridad,
   familia: FamiliaOscuridad | null,
   variante: VarianteOscuridad,
 ): PerfilesOscuridad {
-  if (!familia || !CON_LATERALES_SIEMPRE.includes(familia)) return base;
+  if (!familia) return base;
+  // Perfil BASE de un sistema INTERNO → perforación EXTERNA por defecto (editable).
+  const infPerfDefault: PerforacionPerfil | undefined =
+    variante === 'INTERNO' ? 'EXTERNO' : undefined;
+  // Los laterales solo se auto-activan (con su perforación por variante) en las
+  // familias cuyos laterales son parte física del sistema.
+  if (!CON_LATERALES_SIEMPRE.includes(familia)) {
+    return { ...base, infPerf: base.infPerf ?? infPerfDefault };
+  }
   const perfVariante: PerforacionPerfil | undefined =
     variante === 'INTERNO' ? 'INTERNO' : variante === 'EXTERNO' ? 'EXTERNO' : undefined;
   return {
@@ -275,6 +319,7 @@ export function aplicarDefaultsPerfiles(
     derActivo: base.derActivo ?? true,
     izqPerf: base.izqPerf ?? perfVariante,
     derPerf: base.derPerf ?? perfVariante,
+    infPerf: base.infPerf ?? infPerfDefault,
   };
 }
 
@@ -296,7 +341,7 @@ export function cenefaFrontOscuridad(
   variante: VarianteOscuridad,
   anchoCm: number,
 ): number {
-  return r1(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
+  return r2(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
 }
 
 /**
@@ -317,9 +362,9 @@ export function medidaPerfilBaseOscuridad(
     const adj = INF_SOFTLIGHT_ADJ[variante];
     // SEMI (DENTRO null) → siempre pared a pared; INTERNO/EXTERNO default DENTRO.
     const delta = adj.DENTRO === null || montaje === 'PARED' ? adj.PARED : adj.DENTRO;
-    return r1(anchoCm + delta);
+    return r2(anchoCm + delta);
   }
-  return r1(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
+  return r2(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
 }
 
 /** ¿Se ofrece el selector Dentro/Pared del perfil base? Soft light salvo SEMI (fijo). */
@@ -339,9 +384,10 @@ export function medidaPerfilOscuridad(
   altoCm: number,
   infMontaje?: MontajeBaseOscuridad,
 ): number {
-  if (key === 'izqMuro' || key === 'derMuro') return r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
-  if (key === 'izqPiso' || key === 'derPiso') return r1(altoCm);
-  // inferior (muro/piso): soft light INTERNO usa montaje; resto = cenefa − descuento.
+  if (key === 'izqMuro' || key === 'derMuro') return r2(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  // piso y marco (dentro del marco) = alto real, sin descuento.
+  if (key === 'izqPiso' || key === 'derPiso' || key === 'izqMarco' || key === 'derMarco') return r2(altoCm);
+  // inferior (muro/piso/marco): soft light INTERNO usa montaje; resto = cenefa − descuento.
   return medidaPerfilBaseOscuridad(familia, variante, anchoCm, infMontaje);
 }
 
@@ -368,7 +414,7 @@ export function cortesOscuridad(
   if (!anchoCm || anchoCm <= 0) return cortes;
   const vi = VI[variante];
   const conCenefaCuad = CON_CENEFA_DELANTERA.includes(familia);
-  const cenefaFront = r1(anchoCm + CENEFA_ADJ[familia][vi]);
+  const cenefaFront = r2(anchoCm + CENEFA_ADJ[familia][vi]);
 
   if (conCenefaCuad) {
     cortes.push({ componente: 'Cenefa Delantera', columnaExcel: 'CENEFA DELANTERA', medidaCm: cenefaFront });
@@ -376,7 +422,7 @@ export function cortesOscuridad(
       cortes.push({
         componente: 'Cenefa Trasera',
         columnaExcel: 'CENEFA TRASERA',
-        medidaCm: r1(cenefaFront - CENEFA_TRASERA_DESC),
+        medidaCm: r2(cenefaFront - CENEFA_TRASERA_DESC),
       });
       cortes.push({ componente: 'Ancho Tela Velcro', columnaExcel: '', medidaCm: cenefaFront });
       cortes.push({ componente: 'Alto Tela Velcro', columnaExcel: '', medidaCm: ALTO_TELA_VELCRO_CM });
@@ -392,77 +438,131 @@ export function cortesOscuridad(
   // el resto de familias/colores cae al fallback blanco.
   const tuboAdj =
     (esColorAccesoriosNegro(colorAccesorios) ? TUBO_ADJ_NEGRO[familia] : undefined) ?? TUBO_ADJ[familia];
-  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r1(anchoCm + tuboAdj[vi]) });
-  cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r1(anchoCm + TELA_ADJ[familia][vi]) });
-  cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r1(anchoCm + PESO_ADJ[familia][vi]) });
+  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r2(anchoCm + tuboAdj[vi]) });
+  cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r2(anchoCm + TELA_ADJ[familia][vi]) });
+  cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r2(anchoCm + PESO_ADJ[familia][vi]) });
 
   // ── Perfiles (activos) ──
-  // La MEDIDA depende de la superficie (muro = alto+10, piso = alto); la
+  // La MEDIDA depende de la superficie (muro = alto+10; piso y marco = alto); la
   // PERFORACIÓN (INT/EXT) es una anotación de taller aparte. Un perfil puede
   // estar ACTIVO (asignado en Fase 1) con la superficie/medida pendiente para
-  // Fase 2. Retro-compat: muro/piso marcado implica activo.
+  // Fase 2. Retro-compat: muro/piso/marco marcado implica activo.
   const altoOk = altoCm > 0;
-  const lateralMuro = r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
-  const lateralPiso = r1(altoCm);
+  const lateralMuro = r2(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  const lateralPiso = r2(altoCm);
   // Soft light INTERNO: ancho − 13,3 (dentro de laterales) o ancho (pared a pared);
   // resto de variantes/familias = cenefa frontal − descuento de variante.
   const inferior = medidaPerfilBaseOscuridad(familia, variante, anchoCm, perfiles.infMontaje);
 
-  // Un lateral: elige superficie (muro gana), aplica override y anota perforación.
+  type PerfilEff = { medida: number; superficie: 'muro' | 'piso' | 'marco' | null; pendiente: boolean };
+  // Medida efectiva de un lateral (muro = alto+10; piso/marco = alto), respetando
+  // el override manual. pendiente = sin superficie ni override (o sin alto).
+  const medidaLateralEff = (
+    muro: boolean | undefined,
+    piso: boolean | undefined,
+    marco: boolean | undefined,
+    override: number | undefined,
+  ): PerfilEff => {
+    const superficie = muro ? 'muro' : piso ? 'piso' : marco ? 'marco' : null;
+    const overrideOk = typeof override === 'number' && Number.isFinite(override) && override > 0;
+    const pendiente = !altoOk || (superficie === null && !overrideOk);
+    const base = superficie === 'muro' ? lateralMuro : lateralPiso; // piso/marco = alto
+    return { medida: pendiente ? 0 : aplicarOverride(base, override), superficie, pendiente };
+  };
+
+  // Un lateral: elige superficie (muro gana, luego piso, luego marco), aplica
+  // override y anota perforación. Devuelve su medida efectiva (para el separador).
   const emitLateral = (
     activo: boolean | undefined,
     muro: boolean | undefined,
     piso: boolean | undefined,
+    marco: boolean | undefined,
     columna: string,
     lado: 'izquierdo' | 'derecho',
     override: number | undefined,
     perf: PerforacionPerfil | undefined,
-  ) => {
-    if (!(activo || muro || piso) || !altoOk) return;
-    const superficie = muro ? 'muro' : piso ? 'piso' : null;
-    const overrideOk = typeof override === 'number' && Number.isFinite(override) && override > 0;
-    // Sin superficie ni override → medida pendiente (se llena en Fase 2).
-    const pendienteMedida = superficie === null && !overrideOk;
-    const base = superficie === 'piso' ? lateralPiso : lateralMuro; // default muro al mostrar
+  ): PerfilEff => {
+    const eff = medidaLateralEff(muro, piso, marco, override);
+    if (!(activo || muro || piso || marco) || !altoOk) return eff;
     const nombre =
-      superficie === 'piso'
+      eff.superficie === 'piso'
         ? `Perfil ${lado} a Piso`
-        : superficie === 'muro'
-          ? `Perfil ${lado} a Muro`
-          : `Perfil ${lado}`;
+        : eff.superficie === 'marco'
+          ? `Perfil ${lado} dentro del Marco`
+          : eff.superficie === 'muro'
+            ? `Perfil ${lado} a Muro`
+            : `Perfil ${lado}`;
     cortes.push({
       componente: nombre,
       columnaExcel: columna,
-      medidaCm: pendienteMedida ? 0 : aplicarOverride(base, override),
+      medidaCm: eff.medida,
       perfil: true,
       perforacion: perf,
-      pendienteMedida,
+      pendienteMedida: eff.pendiente,
     });
+    return eff;
   };
-  emitLateral(perfiles.izqActivo, perfiles.izqMuro, perfiles.izqPiso, 'PERFIL (IZQ) INT', 'izquierdo', perfiles.izqMuro ? medidas.izqMuro : medidas.izqPiso, perfiles.izqPerf);
-  emitLateral(perfiles.derActivo, perfiles.derMuro, perfiles.derPiso, 'PERFIL (DER) INT', 'derecho', perfiles.derMuro ? medidas.derMuro : medidas.derPiso, perfiles.derPerf);
+  const effIzq = emitLateral(perfiles.izqActivo, perfiles.izqMuro, perfiles.izqPiso, perfiles.izqMarco, 'PERFIL (IZQ) INT', 'izquierdo', perfiles.izqMuro ? medidas.izqMuro : perfiles.izqPiso ? medidas.izqPiso : medidas.izqMarco, perfiles.izqPerf);
+  const effDer = emitLateral(perfiles.derActivo, perfiles.derMuro, perfiles.derPiso, perfiles.derMarco, 'PERFIL (DER) INT', 'derecho', perfiles.derMuro ? medidas.derMuro : perfiles.derPiso ? medidas.derPiso : medidas.derMarco, perfiles.derPerf);
 
-  // Inferior (perfil base): sobre la cenefa frontal (muro y piso miden igual).
-  const infActivo = perfiles.infActivo || perfiles.infMuro || perfiles.infPiso;
+  // Inferior (perfil base): sobre la cenefa frontal (muro/piso/marco miden igual).
+  const infActivo = perfiles.infActivo || perfiles.infMuro || perfiles.infPiso || perfiles.infMarco;
+  const infOverride = perfiles.infMuro ? medidas.infMuro : perfiles.infPiso ? medidas.infPiso : medidas.infMarco;
+  const infOverrideOk = typeof infOverride === 'number' && Number.isFinite(infOverride) && infOverride > 0;
+  const infSuperficie: PerfilEff['superficie'] = perfiles.infMuro ? 'muro' : perfiles.infPiso ? 'piso' : perfiles.infMarco ? 'marco' : null;
+  const infPendiente = infSuperficie === null && !infOverrideOk;
+  const effInf: PerfilEff = {
+    medida: infPendiente ? 0 : aplicarOverride(inferior, infOverride),
+    superficie: infSuperficie,
+    pendiente: infPendiente,
+  };
   if (infActivo) {
-    const superficie = perfiles.infMuro ? 'muro' : perfiles.infPiso ? 'piso' : null;
-    const override = perfiles.infMuro ? medidas.infMuro : medidas.infPiso;
-    const overrideOk = typeof override === 'number' && Number.isFinite(override) && override > 0;
-    const pendienteMedida = superficie === null && !overrideOk;
     const nombre =
-      superficie === 'piso' ? 'Perfil inferior al Piso' : superficie === 'muro' ? 'Perfil inferior a Muro' : 'Perfil inferior';
+      infSuperficie === 'piso'
+        ? 'Perfil inferior al Piso'
+        : infSuperficie === 'marco'
+          ? 'Perfil inferior dentro del Marco'
+          : infSuperficie === 'muro'
+            ? 'Perfil inferior a Muro'
+            : 'Perfil inferior';
     // Soft light SEMI: el perfil base SIEMPRE va con perforación EXTERNA (no se elige).
     const infPerf =
       esFamiliaSoftLight(familia) && variante === 'SEMI' ? 'EXTERNO' : perfiles.infPerf;
     cortes.push({
       componente: nombre,
       columnaExcel: 'PERFIL BASE',
-      medidaCm: pendienteMedida ? 0 : aplicarOverride(inferior, override),
+      medidaCm: effInf.medida,
       perfil: true,
       perforacion: infPerf,
-      pendienteMedida,
+      pendienteMedida: effInf.pendiente,
     });
   }
+
+  // ── Separadores (E41/E42/E43) ──
+  // Perfil independiente que comparte la MEDIDA del perfil del mismo lado (incl.
+  // su override); un override propio del separador manda. Sin medida derivable →
+  // pendiente (Fase 2). No lleva perforación. Aplica a toda familia de oscuridad.
+  const emitSeparador = (
+    activo: boolean | undefined,
+    columna: string,
+    nombre: string,
+    overrideSep: number | undefined,
+    fallback: PerfilEff,
+  ) => {
+    if (!activo) return;
+    const overrideOk = typeof overrideSep === 'number' && Number.isFinite(overrideSep) && overrideSep > 0;
+    const pendienteMedida = overrideOk ? false : fallback.pendiente;
+    cortes.push({
+      componente: nombre,
+      columnaExcel: columna,
+      medidaCm: pendienteMedida ? 0 : overrideOk ? r2(overrideSep as number) : fallback.medida,
+      perfil: true,
+      pendienteMedida,
+    });
+  };
+  emitSeparador(perfiles.sepIzq, 'SEPARADOR (IZQ)', 'Separador izquierdo', medidas.sepIzq, effIzq);
+  emitSeparador(perfiles.sepDer, 'SEPARADOR (DER)', 'Separador derecho', medidas.sepDer, effDer);
+  emitSeparador(perfiles.sepInf, 'SEPARADOR BASE', 'Separador base', medidas.sepInf, effInf);
 
   return cortes;
 }

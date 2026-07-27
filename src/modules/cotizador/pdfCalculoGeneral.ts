@@ -520,11 +520,12 @@ const SIN_DIMENSIONADO_VERTICAL = new Set([
 ]);
 
 // Piezas de TALLER de los sistemas de oscuridad (Soft Light / Oscuranti / Dark):
-// la cenefa (soft light "normal") y los perfiles los corta el taller, no la mesa
-// de tela. La mesa solo ve TELA + ALTO TELA. (CENEFA DELANTERA/TRASERA de las
-// familias con cenefa cuadrada mantienen su comportamiento previo.)
+// la cenefa (ovalada o cuadrada DEL/TRA, aluminio) y los perfiles los corta el
+// taller, no la mesa de tela. La mesa solo ve TELA + ALTO TELA (+ el VELCRO de
+// DARK, que sí es tela: ancho/alto tela velcro quedan en el Dimensionado).
 const SIN_DIMENSIONADO_OSCURIDAD = new Set([
-  'CENEFA', 'PERFIL LATERAL', 'PERFIL BASE', 'TIPO DE SOFT.LIGHT',
+  'CENEFA', 'CENEFA DELANTERA', 'CENEFA TRASERA',
+  'PERFIL LATERAL', 'PERFIL BASE', 'TIPO DE SOFT.LIGHT',
 ]);
 
 export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {

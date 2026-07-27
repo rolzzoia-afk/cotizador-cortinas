@@ -21,6 +21,7 @@ vi.mock('jspdf', async (importOriginal) => {
 import {
   agruparEtiquetasPanos,
   codigoPerfilVertical,
+  esFilaDark,
   esFilaSoftLight,
   especTuboEtiqueta,
   familiaTelaEtiqueta,
@@ -42,10 +43,14 @@ const pz = (columnaExcel: string, medidaCm: number, cod = '') => ({
 });
 
 describe('fmtMedidaCm', () => {
-  it('coma decimal es-CL y sin ",0" redundante', () => {
+  it('coma decimal es-CL, hasta 2 decimales, sin ceros de cola', () => {
     expect(fmtMedidaCm(250.5)).toBe('250,5');
     expect(fmtMedidaCm(230)).toBe('230');
-    expect(fmtMedidaCm(295.05)).toBe('295,1'); // despiece redondea a 1 decimal
+    // DARK usa mm literales → el despiece trae centésimas y la etiqueta las conserva.
+    expect(fmtMedidaCm(295.05)).toBe('295,05');
+    expect(fmtMedidaCm(194.17)).toBe('194,17');
+    expect(fmtMedidaCm(199.97)).toBe('199,97');
+    expect(fmtMedidaCm(250.5)).toBe('250,5'); // ,50 → ,5
   });
 });
 
@@ -351,6 +356,22 @@ describe('esFilaSoftLight', () => {
   });
 });
 
+describe('esFilaDark', () => {
+  const row = (piezas: ReturnType<typeof pz>[]): OptimizerRow =>
+    ({ piezas } as unknown as OptimizerRow);
+  it('true solo con PESO SOFT LIGHT + cenefa cuadrada DELANTERA y TRASERA', () => {
+    expect(
+      esFilaDark(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263), pz('CENEFA TRASERA', 262)])),
+    ).toBe(true);
+    // Soft light CC / Oscuranti: delantera sin trasera → false (etiqueta roller).
+    expect(esFilaDark(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)]))).toBe(false);
+    // Soft light ovalada → false (tiene su propia etiqueta).
+    expect(esFilaDark(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA OVALADA', 263)]))).toBe(false);
+    // Roller → false.
+    expect(esFilaDark(row([pz('PESO', 250)]))).toBe(false);
+  });
+});
+
 describe('generarEtiquetasPDF — soft light usa página 62×146', () => {
   it('la etiqueta soft light mide 146 mm de alto (vs 100 del roller)', () => {
     docsGuardados.length = 0;
@@ -376,6 +397,40 @@ describe('generarEtiquetasPDF — soft light usa página 62×146', () => {
       ],
     } as unknown as OptimizerRow;
     generarEtiquetasPDF([softRow], { ot: '267-23', cliente: 'LUZ LIVIANA', fecha: '2026-07-24' }, {});
+    expect(docsGuardados).toHaveLength(1);
+    const doc = docsGuardados[0] as jsPDF;
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
+    expect(doc.internal.pageSize.getHeight()).toBeCloseTo(146, 1);
+  });
+});
+
+describe('generarEtiquetasPDF — DARK usa página 62×146', () => {
+  it('la etiqueta DARK (cenefas del/tra + velcro) mide 146 mm de alto', () => {
+    docsGuardados.length = 0;
+    const darkRow = {
+      codInt: 'SC 64',
+      producto: 'ROLLER BLACKOUT',
+      tipo: 'PREMIUM',
+      ubicacion: 'LIVING',
+      categoria: 'DARK_38mm',
+      anchoCm: 251.5,
+      altoCm: 230,
+      tuberiaCod: '38mm_E02',
+      sentido: 'INTERNO',
+      pano: { tipoTela: 'BK', oscuridadVariante: 'EXTERNO', color: 'NEGRO' },
+      piezas: [
+        pz('TUBO', 260.9),
+        pz('PESO SOFT LIGHT', 260.93),
+        pz('CENEFA DELANTERA', 267.3),
+        pz('CENEFA TRASERA', 266.3),
+        pz('Tela (ancho)', 260.84),
+        pz('PERFIL (IZQ) INT', 240),
+        pz('PERFIL (DER) INT', 240),
+        pz('PERFIL BASE', 254.7),
+      ],
+    } as unknown as OptimizerRow;
+    generarEtiquetasPDF([darkRow], { ot: '2525', cliente: 'ADRIANA PASCUZZO', fecha: '2026-07-27' }, {});
     expect(docsGuardados).toHaveLength(1);
     const doc = docsGuardados[0] as jsPDF;
     expect(doc.getNumberOfPages()).toBe(1);

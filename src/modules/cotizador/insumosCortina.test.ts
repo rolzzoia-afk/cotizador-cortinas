@@ -12,12 +12,15 @@ import {
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
+  llevaCenefaCuadradaImplicita,
   llevaTapasPeso,
   manillaDesdeAdicional,
+  motoresFaltantesInventario,
   otLlevaDomotica,
   panoLlevaDomotica,
   tarugoDeMaterial,
 } from './insumosCortina';
+import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 
 const pano = (p: Partial<Pano>): Partial<Pano> => p;
 
@@ -113,9 +116,26 @@ describe('bracketDeCenefa', () => {
     expect(bracketDeCenefa('Cuadrada', '', 'PARED')?.codigo).toBe('BRA05');
     expect(bracketDeCenefa('Cuadrada', '')?.codigo).toBe('BRA05');
   });
-  it('sin cenefa → null', () => {
+  it('DARK (cenefa cuadrada implícita, cenefa vacía) → BRA05 muro / BRA04 techo', () => {
+    expect(bracketDeCenefa('No', '', 'PARED', 'DARK_38mm')?.codigo).toBe('BRA05');
+    expect(bracketDeCenefa('', '', '', 'DARK_45mm')?.codigo).toBe('BRA05');
+    expect(bracketDeCenefa('No', '', 'TECHO', 'DARK_38mm')?.codigo).toBe('BRA04');
+  });
+  it('sin cenefa → null (categoría no-DARK)', () => {
     expect(bracketDeCenefa('No', '')).toBeNull();
     expect(bracketDeCenefa('', '')).toBeNull();
+    expect(bracketDeCenefa('No', '', '', 'SOFT_LIGHT_38mm')).toBeNull();
+  });
+});
+
+describe('llevaCenefaCuadradaImplicita', () => {
+  it('DARK sí; soft light / oscuranti / roller no', () => {
+    expect(llevaCenefaCuadradaImplicita('DARK_38mm')).toBe(true);
+    expect(llevaCenefaCuadradaImplicita('DARK_45mm')).toBe(true);
+    expect(llevaCenefaCuadradaImplicita('SOFT_LIGHT_38mm')).toBe(false);
+    expect(llevaCenefaCuadradaImplicita('OSCURANTI_63mm')).toBe(false);
+    expect(llevaCenefaCuadradaImplicita('ROL')).toBe(false);
+    expect(llevaCenefaCuadradaImplicita('')).toBe(false);
   });
 });
 
@@ -149,6 +169,12 @@ describe('cantidadTarugos', () => {
   });
   it('cenefa cuadrada: 1/bracket', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA', cenefa: 'Cuadrada a muro' }), 'ROL', 1.5)).toBe(3);
+  });
+  it('DARK (cenefa cuadrada implícita): 1/bracket; madera → 0', () => {
+    // cantidadBrackets(2,0)=4 · (2,5)=5 · (3,0)=6
+    expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'DARK_38mm', 2.0)).toBe(4);
+    expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'DARK_38mm', 2.5)).toBe(5);
+    expect(cantidadTarugos(pano({ materialTipo: 'MADERA' }), 'DARK_38mm', 3.0)).toBe(0);
   });
   it('dúo sin cenefa se fija con brackets → 4 tarugos como el roller (no 0)', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(4);
@@ -371,6 +397,40 @@ describe('insumosMotorDePano', () => {
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.
     expect(insumosMotorDePano(pano({ motorModelo: 'DOM41' }))[0].codigo).toBe('DOM41');
+  });
+});
+
+describe('motoresFaltantesInventario', () => {
+  const adic = (
+    codInt: string, cantidad: number, ubicacion = 'LIVING',
+  ): AdicionalFase0Persistido => ({ codInt, cantidad, descuento: 0, ubicacion });
+
+  it('3 motores cobrados con 1 emitido → faltan 2 (solo la unidad de motor)', () => {
+    const out = motoresFaltantesInventario([adic('DOM 38', 3)], { DOM38: 1 });
+    expect(out).toEqual([{ codigo: 'DOM38', descripcion: expect.any(String), color: '', cantidad: 2 }]);
+  });
+
+  it('sin ningún paño emitido → salen todos los cobrados', () => {
+    const out = motoresFaltantesInventario([adic('DOM 38', 3)], {});
+    expect(out[0]).toMatchObject({ codigo: 'DOM38', cantidad: 3 });
+  });
+
+  it('la ubicación no importa: un motor cobrado en cualquier ubicación cuenta', () => {
+    const out = motoresFaltantesInventario([adic('DOM41', 2, 'UBIC-QUE-NO-CALZA')], { DOM41: 0 });
+    expect(out[0]).toMatchObject({ codigo: 'DOM41', cantidad: 2 });
+  });
+
+  it('emitido ≥ cobrado → no agrega nada (nunca resta un motor puesto en Fase 2)', () => {
+    expect(motoresFaltantesInventario([adic('DOM38', 1)], { DOM38: 2 })).toEqual([]);
+    expect(motoresFaltantesInventario(undefined, { DOM38: 1 })).toEqual([]);
+  });
+
+  it("normaliza el código con espacio ('DOM 38' → DOM38) e ignora no-motores", () => {
+    const out = motoresFaltantesInventario(
+      [adic('DOM 38', 2), adic('DOM39', 5), adic('DOM43', 1)],
+      {},
+    );
+    expect(out).toEqual([{ codigo: 'DOM38', descripcion: expect.any(String), color: '', cantidad: 2 }]);
   });
 });
 

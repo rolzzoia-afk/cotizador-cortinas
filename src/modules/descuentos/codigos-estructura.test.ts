@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { codigoEstructura } from './codigos-estructura';
+import { codigoCenefaCuadrada, codigoEstructura } from './codigos-estructura';
 
 describe('codigoEstructura', () => {
   it('TUBO / PLETINA usan el código de tubería', () => {
@@ -45,5 +45,21 @@ describe('codigoEstructura', () => {
     expect(codigoEstructura('PESO SOFT LIGHT', 'NEGRO', '')).toBe('E44');
     expect(codigoEstructura('PESO SOFT LIGHT', 'NEG', '')).toBe('E44');
     expect(codigoEstructura('PESO SOFT LIGHT', 'GRIS', '')).toBe(''); // soft light no va gris
+  });
+});
+
+describe('codigoCenefaCuadrada (Dark/Oscuranti, por color de perfil)', () => {
+  it('NEGRO→E29, BLANCO→E30, CAFÉ/CAFE/MADERA→E31', () => {
+    expect(codigoCenefaCuadrada('NEGRO')).toBe('E29');
+    expect(codigoCenefaCuadrada('BLANCO')).toBe('E30');
+    expect(codigoCenefaCuadrada('CAFÉ')).toBe('E31');
+    expect(codigoCenefaCuadrada('CAFE')).toBe('E31'); // sin tilde
+    expect(codigoCenefaCuadrada('MADERA')).toBe('E31'); // café ≡ madera
+  });
+
+  it('color sin mapeo → vacío', () => {
+    expect(codigoCenefaCuadrada('GRIS')).toBe('');
+    expect(codigoCenefaCuadrada('')).toBe('');
+    expect(codigoCenefaCuadrada(null)).toBe('');
   });
 });

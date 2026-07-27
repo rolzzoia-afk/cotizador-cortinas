@@ -13,7 +13,6 @@ import {
   OPCIONES_COLOR_TAPA_CUADRADA,
   OPCIONES_COLOR_TAPA_OVALADA,
   OPCIONES_CORTES,
-  OPCIONES_INSTALACION,
   OPCIONES_LADO_MOTOR,
   OPCIONES_LARGO_CADENA,
   OPCIONES_MANILLA_COLOR,
@@ -23,8 +22,6 @@ import {
   OPCIONES_MOTOR_MODELO,
   OPCIONES_ORDEN_DOBLE,
   OPCIONES_RELACION_MARCO,
-  OPCIONES_SEPARADOR,
-  OPCIONES_SOFT_DARK,
   OPCIONES_SUPLEMENTO,
   OPCIONES_SUPERFICIE,
   OPCIONES_TIPO_MECANISMO,
@@ -54,12 +51,14 @@ import {
   normalizarMontajeBase,
   normalizarPerforacion,
   normalizarVarianteOscuridad,
+  type MedidasPerfilesOscuridad,
   type PerfilesOscuridad,
   type PerforacionPerfil,
   type SuperficiePerfilKey,
   type VarianteOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
 import { codigoTuberiaDeChip, diametroDeCodigoTubo } from '@/modules/descuentos/reglas-tuberia';
+import { codigoSeparadorPerfil } from '@/modules/descuentos/codigos-estructura';
 import { colorPerfilDesdeAdicional, type TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
@@ -105,9 +104,10 @@ type Props = {
 };
 
 // Perfiles de oscuridad POR LADO (izq / der / base). Cada lado tiene: activo,
-// perforación (INT/EXT, anotación de taller), superficie (muro/piso = medida) y
-// override cm. La variante en Fase 1 activa los laterales; la superficie y el
-// perfil base se completan en Fase 2.
+// perforación (INT/EXT, anotación de taller), superficie (muro/piso/marco = medida)
+// y override cm. La variante en Fase 1 activa los laterales; la superficie y el
+// perfil base se completan en Fase 2. "Marco" (dentro del marco, solo INTERNO)
+// mide como piso (alto real).
 type LadoPerfil = {
   side: 'izq' | 'der' | 'inf';
   label: string;
@@ -115,17 +115,24 @@ type LadoPerfil = {
   perf: keyof Pano;
   muro: keyof Pano;
   piso: keyof Pano;
+  marco: keyof Pano;
   muroKey: SuperficiePerfilKey;
   pisoKey: SuperficiePerfilKey;
+  marcoKey: SuperficiePerfilKey;
   muroCm: keyof Pano;
   pisoCm: keyof Pano;
+  marcoCm: keyof Pano;
   tipoAdic: TipoPerfilAdicional;
+  /** Separador (E41/E42/E43) del mismo lado. */
+  sepActivo: keyof Pano;
+  sepCm: keyof Pano;
+  sepColumna: string;
 };
 
 const PERFILES_LADO: LadoPerfil[] = [
-  { side: 'izq', label: 'Perfil izquierdo', activo: 'perfilIzqActivo', perf: 'perfilIzqPerf', muro: 'perfilIzqMuro', piso: 'perfilIzqPiso', muroKey: 'izqMuro', pisoKey: 'izqPiso', muroCm: 'perfilIzqMuroCm', pisoCm: 'perfilIzqPisoCm', tipoAdic: 'izq' },
-  { side: 'der', label: 'Perfil derecho', activo: 'perfilDerActivo', perf: 'perfilDerPerf', muro: 'perfilDerMuro', piso: 'perfilDerPiso', muroKey: 'derMuro', pisoKey: 'derPiso', muroCm: 'perfilDerMuroCm', pisoCm: 'perfilDerPisoCm', tipoAdic: 'der' },
-  { side: 'inf', label: 'Perfil base', activo: 'perfilInfActivo', perf: 'perfilInfPerf', muro: 'perfilInfMuro', piso: 'perfilInfPiso', muroKey: 'infMuro', pisoKey: 'infPiso', muroCm: 'perfilInfMuroCm', pisoCm: 'perfilInfPisoCm', tipoAdic: 'inf' },
+  { side: 'izq', label: 'Perfil izquierdo', activo: 'perfilIzqActivo', perf: 'perfilIzqPerf', muro: 'perfilIzqMuro', piso: 'perfilIzqPiso', marco: 'perfilIzqMarco', muroKey: 'izqMuro', pisoKey: 'izqPiso', marcoKey: 'izqMarco', muroCm: 'perfilIzqMuroCm', pisoCm: 'perfilIzqPisoCm', marcoCm: 'perfilIzqMarcoCm', tipoAdic: 'izq', sepActivo: 'separadorIzq', sepCm: 'separadorIzqCm', sepColumna: 'SEPARADOR (IZQ)' },
+  { side: 'der', label: 'Perfil derecho', activo: 'perfilDerActivo', perf: 'perfilDerPerf', muro: 'perfilDerMuro', piso: 'perfilDerPiso', marco: 'perfilDerMarco', muroKey: 'derMuro', pisoKey: 'derPiso', marcoKey: 'derMarco', muroCm: 'perfilDerMuroCm', pisoCm: 'perfilDerPisoCm', marcoCm: 'perfilDerMarcoCm', tipoAdic: 'der', sepActivo: 'separadorDer', sepCm: 'separadorDerCm', sepColumna: 'SEPARADOR (DER)' },
+  { side: 'inf', label: 'Perfil base', activo: 'perfilInfActivo', perf: 'perfilInfPerf', muro: 'perfilInfMuro', piso: 'perfilInfPiso', marco: 'perfilInfMarco', muroKey: 'infMuro', pisoKey: 'infPiso', marcoKey: 'infMarco', muroCm: 'perfilInfMuroCm', pisoCm: 'perfilInfPisoCm', marcoCm: 'perfilInfMarcoCm', tipoAdic: 'inf', sepActivo: 'separadorInf', sepCm: 'separadorInfCm', sepColumna: 'SEPARADOR BASE' },
 ];
 
 const OPCIONES_PERFORACION = [
@@ -133,15 +140,18 @@ const OPCIONES_PERFORACION = [
   { value: 'EXTERNO', label: 'Ext' },
 ] as const;
 
+// Superficie del perfil = MEDIDA. Muro = alto+10; piso y marco = alto real. La
+// opción "Dentro del marco" solo se ofrece en sistemas INTERNOS.
 const OPCIONES_SUPERFICIE_PERFIL = [
-  { value: 'muro', label: 'Muro' },
-  { value: 'piso', label: 'Piso' },
+  { value: 'muro', label: 'Muro', soloInterno: false },
+  { value: 'piso', label: 'Piso', soloInterno: false },
+  { value: 'marco', label: 'Dentro del marco', soloInterno: true },
 ] as const;
 
 // Montaje del perfil base (solo soft light INTERNO): entre los laterales (más
 // corto, ancho − 13,3) o de pared a pared (ancho completo).
 const OPCIONES_MONTAJE_BASE = [
-  { value: 'DENTRO', label: 'Dentro laterales' },
+  { value: 'DENTRO', label: 'Dentro de perfiles' },
   { value: 'PARED', label: 'Pared a pared' },
 ] as const;
 
@@ -255,10 +265,13 @@ export function PanoEditor({
   const perfilesOsc: PerfilesOscuridad = {
     izqMuro: !!pano.perfilIzqMuro,
     izqPiso: !!pano.perfilIzqPiso,
+    izqMarco: !!pano.perfilIzqMarco,
     derMuro: !!pano.perfilDerMuro,
     derPiso: !!pano.perfilDerPiso,
+    derMarco: !!pano.perfilDerMarco,
     infMuro: !!pano.perfilInfMuro,
     infPiso: !!pano.perfilInfPiso,
+    infMarco: !!pano.perfilInfMarco,
     izqActivo: !!pano.perfilIzqActivo,
     derActivo: !!pano.perfilDerActivo,
     infActivo: !!pano.perfilInfActivo,
@@ -266,6 +279,25 @@ export function PanoEditor({
     derPerf: normalizarPerforacion(pano.perfilDerPerf),
     infPerf: normalizarPerforacion(pano.perfilInfPerf),
     infMontaje: normalizarMontajeBase(pano.perfilInfMontaje),
+    sepIzq: !!pano.separadorIzq,
+    sepDer: !!pano.separadorDer,
+    sepInf: !!pano.separadorInf,
+  };
+  // Overrides de medida (perfiles + separadores) para que la vista previa calce
+  // con el Excel/despiece (los separadores derivan su medida del perfil del lado).
+  const medidasOsc: MedidasPerfilesOscuridad = {
+    izqMuro: pano.perfilIzqMuroCm,
+    izqPiso: pano.perfilIzqPisoCm,
+    izqMarco: pano.perfilIzqMarcoCm,
+    derMuro: pano.perfilDerMuroCm,
+    derPiso: pano.perfilDerPisoCm,
+    derMarco: pano.perfilDerMarcoCm,
+    infMuro: pano.perfilInfMuroCm,
+    infPiso: pano.perfilInfPisoCm,
+    infMarco: pano.perfilInfMarcoCm,
+    sepIzq: pano.separadorIzqCm,
+    sepDer: pano.separadorDerCm,
+    sepInf: pano.separadorInfCm,
   };
   // Efectivo con defaults de la variante (laterales activos + perforación) — el
   // mismo criterio que el despiece, para que la UI muestre lo que sale en el Excel.
@@ -281,7 +313,7 @@ export function PanoEditor({
   // 45 mm negro se corta distinto (cenefa − 2,9 en vez de − 3,1).
   const colorAccesoriosRaw = colorAccesoriosDePano(pano, colorVentana);
   const cortesOsc = familia
-    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff, {}, colorAccesoriosRaw)
+    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff, medidasOsc, colorAccesoriosRaw)
     : [];
   const componentesOsc = cortesOsc.filter((c) => !c.perfil);
   const colorPesoInfOscuridad = familia
@@ -339,10 +371,6 @@ export function PanoEditor({
     pano.cenefa && esCenefaCuadrada(pano.cenefa) && !OPCIONES_CENEFA.includes(pano.cenefa as never)
       ? [...OPCIONES_CENEFA, pano.cenefa]
       : OPCIONES_CENEFA;
-  // Soft/Dark legacy fuera de familia de oscuridad: solo si hay dato guardado.
-  const softDarkLegacy =
-    !familia &&
-    !!((pano.softDark && pano.softDark !== 'N/A') || pano.instalacion || pano.separador);
   const varianteBeeblack: VarianteBeeblack = normalizarVarianteBeeblack(
     pano.beeblackVariante ?? sentidoVentana,
     'INTERNO',
@@ -737,15 +765,16 @@ export function PanoEditor({
           <div className="space-y-1">
             {PERFILES_LADO.map((L) => {
               const activo = !!perfilesOscEff[`${L.side}Activo` as keyof PerfilesOscuridad];
-              const superficie = pano[L.muro] ? 'muro' : pano[L.piso] ? 'piso' : '';
+              const superficie = pano[L.muro] ? 'muro' : pano[L.piso] ? 'piso' : pano[L.marco] ? 'marco' : '';
               const perf =
                 (perfilesOscEff[`${L.side}Perf` as keyof PerfilesOscuridad] as PerforacionPerfil | undefined) ?? '';
               // Soft light SEMI: la perforación del perfil base es fija EXTERNA.
               const perfBaseForzada = L.side === 'inf' && perfBaseSemiForzada;
               const perfEfectiva: PerforacionPerfil | '' = perfBaseForzada ? 'EXTERNO' : perf;
-              // Medida según la superficie elegida (muro = alto+10, piso = alto).
+              // Medida según la superficie elegida (muro = alto+10; piso y marco = alto).
               // El perfil base soft light INTERNO además depende del montaje.
-              const surfaceKey: SuperficiePerfilKey = superficie === 'piso' ? L.pisoKey : L.muroKey;
+              const surfaceKey: SuperficiePerfilKey =
+                superficie === 'piso' ? L.pisoKey : superficie === 'marco' ? L.marcoKey : L.muroKey;
               const medida = superficie
                 ? medidaPerfilOscuridad(
                     familia,
@@ -756,15 +785,21 @@ export function PanoEditor({
                     L.side === 'inf' ? montajeBase : undefined,
                   )
                 : 0;
-              const overrideField = superficie === 'piso' ? L.pisoCm : L.muroCm;
+              const overrideField =
+                superficie === 'piso' ? L.pisoCm : superficie === 'marco' ? L.marcoCm : L.muroCm;
               const override = superficie ? (pano[overrideField] as number | undefined) : undefined;
               const colorPerfil = colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria);
-              // Elegir superficie: marca muro XOR piso (limpia el otro) y activa el perfil.
+              // Elegir superficie: marca una (muro/piso/marco) y limpia las otras + sus
+              // overrides; activa el perfil. "Marco" solo se ofrece en INTERNO.
               const setSuperficie = (s: string) =>
                 onChange({
                   [L.activo]: true,
                   [L.muro]: s === 'muro',
                   [L.piso]: s === 'piso',
+                  [L.marco]: s === 'marco',
+                  ...(s !== 'muro' ? { [L.muroCm]: undefined } : {}),
+                  ...(s !== 'piso' ? { [L.pisoCm]: undefined } : {}),
+                  ...(s !== 'marco' ? { [L.marcoCm]: undefined } : {}),
                 } as Partial<Pano>);
               return (
                 <div key={L.side} className="rounded border border-border/60 bg-card/40 px-2 py-1.5 space-y-1">
@@ -780,7 +815,14 @@ export function PanoEditor({
                             // reaparezca una medida vieja.
                             ...(e.target.checked
                               ? {}
-                              : { [L.muro]: false, [L.piso]: false, [L.muroCm]: undefined, [L.pisoCm]: undefined }),
+                              : {
+                                  [L.muro]: false,
+                                  [L.piso]: false,
+                                  [L.marco]: false,
+                                  [L.muroCm]: undefined,
+                                  [L.pisoCm]: undefined,
+                                  [L.marcoCm]: undefined,
+                                }),
                           } as Partial<Pano>)
                         }
                       />
@@ -829,10 +871,13 @@ export function PanoEditor({
                           ))
                         )}
                       </div>
-                      {/* Superficie muro/piso → medida */}
+                      {/* Instalación muro/piso/marco → medida. "Dentro del marco"
+                          solo en sistemas INTERNOS (o si ya venía seleccionada). */}
                       <div className="flex items-center gap-1">
-                        <span className="text-muted-foreground">Sup.</span>
-                        {OPCIONES_SUPERFICIE_PERFIL.map((o) => (
+                        <span className="text-muted-foreground">Inst.</span>
+                        {OPCIONES_SUPERFICIE_PERFIL.filter(
+                          (o) => !o.soloInterno || varianteOscuridad === 'INTERNO' || superficie === o.value,
+                        ).map((o) => (
                           <button
                             key={o.value}
                             type="button"
@@ -891,7 +936,7 @@ export function PanoEditor({
                           <span className="text-muted-foreground">cm</span>
                         </div>
                       ) : (
-                        <span className="text-amber-500">definir muro/piso</span>
+                        <span className="text-amber-500">definir instalación</span>
                       )}
                       {!perfEfectiva && <span className="text-amber-500">definir perforación</span>}
                     </div>
@@ -900,29 +945,80 @@ export function PanoEditor({
               );
             })}
           </div>
-          {/* Soft / Dark (legacy) vive dentro de la sección de oscuridad. */}
-          <RadioRow
-            label="Soft / Dark"
-            value={pano.softDark || 'N/A'}
-            options={OPCIONES_SOFT_DARK}
-            onChange={(v) => onChange({ softDark: v })}
-          />
-          {pano.softDark && pano.softDark !== 'N/A' && (
-            <>
-              <RadioRow
-                label="Instalación"
-                value={pano.instalacion || ''}
-                options={OPCIONES_INSTALACION}
-                onChange={(v) => onChange({ instalacion: v })}
-              />
-              <RadioRow
-                label="Separador"
-                value={pano.separador || ''}
-                options={OPCIONES_SEPARADOR}
-                onChange={(v) => onChange({ separador: v })}
-              />
-            </>
-          )}
+          {/* Perfiles SEPARADORES (E41/E42/E43) — para todo sistema de oscuridad.
+              Se activan por lado; la medida sale del perfil del mismo lado salvo
+              que el vendedor ingrese una medida especial. */}
+          <div className="space-y-1">
+            <div className="text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
+              Perfiles separadores
+            </div>
+            {PERFILES_LADO.map((L) => {
+              const activo = !!pano[L.sepActivo];
+              const corte = cortesOsc.find((c) => c.columnaExcel === L.sepColumna);
+              const override = pano[L.sepCm] as number | undefined;
+              const pendiente = !corte || corte.pendienteMedida;
+              const medida = corte && !corte.pendienteMedida ? corte.medidaCm : 0;
+              const colorPerfil = colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria);
+              const codigoSep = codigoSeparadorPerfil(colorPerfil);
+              const sepLabel = L.label.replace('Perfil', 'Separador');
+              return (
+                <div key={L.side} className="rounded border border-border/60 bg-card/40 px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="flex items-center gap-1.5 text-[0.72rem] text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={activo}
+                        onChange={(e) =>
+                          onChange({
+                            [L.sepActivo]: e.target.checked,
+                            ...(e.target.checked ? {} : { [L.sepCm]: undefined }),
+                          } as Partial<Pano>)
+                        }
+                      />
+                      {sepLabel}
+                    </label>
+                    {codigoSep && (
+                      <span
+                        className={cn(
+                          'text-[0.62rem] uppercase tracking-wide',
+                          activo ? 'text-muted-foreground' : 'text-muted-foreground/40',
+                        )}
+                        title="Código del separador según color del perfil"
+                      >
+                        {codigoSep}
+                      </span>
+                    )}
+                  </div>
+                  {activo && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5 text-[0.68rem]">
+                      {pendiente && typeof override !== 'number' ? (
+                        <span className="text-amber-500">definir medida (o activar el perfil del lado)</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={typeof override === 'number' ? override : medida > 0 ? medida : ''}
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const v = raw === '' ? undefined : parseFloat(raw);
+                              onChange({ [L.sepCm]: Number.isFinite(v as number) ? v : undefined } as Partial<Pano>);
+                            }}
+                            className={cn(
+                              'h-6 w-[64px] rounded border bg-card px-1 text-right font-mono text-[0.7rem] text-foreground',
+                              typeof override === 'number' ? 'border-amber-500/60' : 'border-border',
+                            )}
+                            title={typeof override === 'number' ? `Del perfil: ${medida}` : 'Medida del perfil del lado (editable)'}
+                          />
+                          <span className="text-muted-foreground">cm</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </Section>
       )}
 
@@ -1127,34 +1223,6 @@ export function PanoEditor({
             options={OPCIONES_LADO_MOTOR}
             onChange={(v) => onChange({ ladoMotor: v })}
           />
-        </Section>
-      )}
-
-      {/* 12. SOFT / DARK — escape legacy: fuera de oscuridad solo si hay dato */}
-      {softDarkLegacy && (
-        <Section title="Soft / Dark">
-          <RadioRow
-            label=""
-            value={pano.softDark || 'N/A'}
-            options={OPCIONES_SOFT_DARK}
-            onChange={(v) => onChange({ softDark: v })}
-          />
-          {pano.softDark && pano.softDark !== 'N/A' && (
-            <>
-              <RadioRow
-                label="Instalación"
-                value={pano.instalacion || ''}
-                options={OPCIONES_INSTALACION}
-                onChange={(v) => onChange({ instalacion: v })}
-              />
-              <RadioRow
-                label="Separador"
-                value={pano.separador || ''}
-                options={OPCIONES_SEPARADOR}
-                onChange={(v) => onChange({ separador: v })}
-              />
-            </>
-          )}
         </Section>
       )}
 

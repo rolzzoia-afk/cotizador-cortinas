@@ -218,6 +218,39 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
   });
 });
 
+describe('generarOrdenesOptimizador — perforación base EXTERNA (INTERNO) + separadores', () => {
+  it('INTERNO con base y laterales a muro → PERF. BASE = EXTERNO, sin advertencias', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2', 'INTERNO');
+    Object.assign(v.panos[0], {
+      perfilIzqMuro: true, perfilDerMuro: true, perfilInfMuro: true,
+    });
+    const { aoa, advertencias } = generarOrdenesOptimizador('266-2', [v]);
+    expect(aoa[1][col('PERF. BASE')]).toBe('EXTERNO');
+    // Laterales INTERNO conservan su perforación interna.
+    expect(aoa[1][col('PERF. (IZQ)')]).toBe('INTERNO');
+    expect(advertencias).toHaveLength(0);
+  });
+
+  it('separador activo → columna SEPARADOR con la medida del perfil del lado + COLOR PERFIL', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2', 'INTERNO');
+    Object.assign(v.panos[0], { perfilIzqMuro: true, separadorIzq: true });
+    const adicionales = [
+      { codInt: 'SOFTLIZQ', cantidad: 1, descuento: 0, ubicacion: 'PERFIL IZQ', colorAcc: 'BLANCO' },
+    ];
+    const { aoa } = generarOrdenesOptimizador('266-2', [v], { adicionalesFase0: adicionales });
+    expect(aoa[1][col('SEPARADOR (IZQ)')]).toBe(210); // = perfil izq a muro (alto 200 + 10)
+    expect(aoa[1][col('COLOR PERFIL')]).toBe('BLANCO');
+  });
+
+  it('separador sin perfil del lado ni medida → celda vacía + advertencia', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2', 'INTERNO');
+    v.panos[0].separadorDer = true; // separador der sin perfil der con superficie
+    const { aoa, advertencias } = generarOrdenesOptimizador('266-2', [v]);
+    expect(aoa[1][col('SEPARADOR (DER)')]).toBe('');
+    expect(advertencias.some((a) => a.includes('Separador') && a.includes('Fase 2'))).toBe(true);
+  });
+});
+
 describe('generarOrdenesOptimizador — cuadro de cenefas cuadradas (verticales/roller)', () => {
   const cenefaCuadrada = [
     { codInt: 'CENF C', cantidad: 2.694, descuento: 0, ubicacion: 'LIVING', colorAcc: 'CAFÉ' },
