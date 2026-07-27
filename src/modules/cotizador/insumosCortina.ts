@@ -8,6 +8,7 @@
 // Módulo puro (sin React/Supabase).
 // ─────────────────────────────────────────────────────────────────────
 import type { Pano, Ventana } from './types';
+import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { esCenefaCuadrada } from './fase2';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import {
@@ -199,9 +200,20 @@ export function cantidadBrackets(anchoM: number): number {
 }
 
 /**
+ * DARK lleva cenefa cuadrada SIEMPRE (implícita): su `p.cenefa` viene vacío/'No'
+ * porque la cenefa cuadrada es parte fija del sistema, no un adicional elegible.
+ * Sirve para engancharla a los mismos insumos de cenefa cuadrada del roller
+ * (tapas TAP32/33/34, brackets BRA04/05, tarugos).
+ */
+export function llevaCenefaCuadradaImplicita(categoria?: string | null): boolean {
+  return familiaOscuridad(categoria) === 'DARK';
+}
+
+/**
  * Bracket que corresponde a la cenefa del paño:
  *  - Ovalada → BRA01 (corto) / BRA02 (largo) según `bracketTipo` (default CORTO).
  *  - Cuadrada a techo → BRA04 · a muro → BRA05 · 'Cuadrada' legacy → según superficie.
+ *  - DARK (cenefa cuadrada implícita) → BRA04/BRA05 según la superficie del paño.
  *  - Sin cenefa → null.
  */
 export function bracketDeCenefa(
@@ -215,10 +227,12 @@ export function bracketDeCenefa(
       ? { codigo: 'BRA02', descripcion: 'BRACKET LARGO' }
       : { codigo: 'BRA01', descripcion: 'BRACKET CORTO' };
   }
-  if (esCenefaCuadrada(cenefa)) {
+  if (esCenefaCuadrada(cenefa) || llevaCenefaCuadradaImplicita(categoria)) {
     const c = (cenefa || '').trim().toUpperCase();
-    // Variantes nuevas explícitas; el 'Cuadrada' legacy cae a muro salvo techo.
-    const aTecho = c.includes('TECHO') || (c === 'CUADRADA' && (superficie || '').toUpperCase() === 'TECHO');
+    const sup = (superficie || '').toUpperCase();
+    // 'a muro' explícito manda; si no, techo cuando la superficie es TECHO
+    // ('Cuadrada' legacy y DARK implícita se deciden por la superficie del paño).
+    const aTecho = c.includes('TECHO') || (!c.includes('MURO') && sup === 'TECHO');
     return aTecho
       ? { codigo: 'BRA04', descripcion: 'BRACKET L CENEFA CUADRADA TECHO' }
       : { codigo: 'BRA05', descripcion: 'BRACKET L CENEFA CUADRADA MURO' };
@@ -243,7 +257,7 @@ export function cantidadTarugos(
     const aTecho = (p.superficie || '').toUpperCase() === 'TECHO';
     return brackets * (aTecho ? 1 : 2);
   }
-  if (esCenefaCuadrada(p.cenefa)) return brackets * 1;
+  if (esCenefaCuadrada(p.cenefa) || llevaCenefaCuadradaImplicita(categoria)) return brackets * 1;
   // Vertical (lamas): se fija con brackets al muro, 1 tarugo por bracket según
   // la superficie (igual criterio que el roller, pero por cantidad de brackets).
   if (esCategoriaVertical(categoria)) return brackets;
@@ -612,6 +626,40 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
   const hub = Number(p.motorHubUsbCant) || (p.motorHubUsb ? 1 : 0);
   if (hub > 0) {
     out.push({ codigo: COD_HUB_DOMOTICA, descripcion: NOMBRE_HUB_DOMOTICA, color: '', cantidad: hub });
+  }
+  return out;
+}
+
+/**
+ * Unidades de motor COBRADAS en la cotización final (adicionales de Fase 0) que
+ * faltan en el inventario respecto de lo ya emitido por los paños. Cuenta por
+ * código de motor (DOM38/DOM41) SIN filtrar por ubicación: todo motor cobrado
+ * debe salir, calce o no con un paño (p.ej. 3 motores en una sola ubicación con
+ * un solo paño → faltan 2). Devuelve SOLO la unidad de motor; el control, el
+ * cable y la domótica los pone el vendedor en Fase 2 (kit por paño, sin tocar).
+ *
+ * @param emitidosPorCodigo unidades ya emitidas por los paños, por código ORIGINAL
+ *   del motor del paño (`p.motorModelo`), para no descontar de más cuando el kit
+ *   remapea el modelo (DOM41→DOM38 en cenefa ovalada).
+ */
+export function motoresFaltantesInventario(
+  adicionales: AdicionalFase0Persistido[] | undefined,
+  emitidosPorCodigo: Record<string, number>,
+): InsumoCortina[] {
+  if (!adicionales?.length) return [];
+  const cobradoPorCodigo: Record<string, number> = {};
+  for (const a of adicionales) {
+    const cod = codigoMotorDesdeAdicional(a.codInt);
+    const cant = Math.round(Number(a.cantidad) || 0);
+    if (!cod || cant <= 0) continue;
+    cobradoPorCodigo[cod] = (cobradoPorCodigo[cod] || 0) + cant;
+  }
+  const out: InsumoCortina[] = [];
+  for (const cod of Object.keys(cobradoPorCodigo)) {
+    const faltan = cobradoPorCodigo[cod] - (emitidosPorCodigo[cod] || 0);
+    if (faltan > 0) {
+      out.push({ codigo: cod, descripcion: MOTORES[cod].nombre, color: '', cantidad: faltan });
+    }
   }
   return out;
 }

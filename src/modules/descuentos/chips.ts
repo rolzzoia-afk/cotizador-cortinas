@@ -409,13 +409,15 @@ export function modeloDesdeChipMecanismo(
 }
 
 /**
- * Soft light 38 mm: la banda 2,2–3,0 m con el toggle E78 de la OT sube al MISMO
- * sistema en 45 mm (tubo E78 + corte de tubo 45 mm); fuera de banda / toggle off
- * vuelve a 38 mm. Los modelos soft light no traen mecanismo, así que se
- * desambiguan por sistema + tipo_rol (mismo variante INTERNO/SEMI/EXTERNO, solo
- * cambia el "38mm"↔"45mm"). Devuelve el modelo actual si no hay fila destino.
+ * Oscuridad 38 mm (SOFT LIGHT y DARK): la banda 2,2–3,0 m con el toggle E78 de la
+ * OT sube al MISMO sistema en 45 mm (tubo E78); fuera de banda / toggle off vuelve
+ * a 38 mm. Estos modelos no traen mecanismo, así que se desambiguan por sistema +
+ * tipo_rol (mismo variante INTERNO/SEMI/EXTERNO, solo cambia el "38mm"↔"45mm").
+ * Devuelve el modelo actual si no hay fila destino. Nota: en soft light el swap a
+ * 45 mm además cambia el CORTE del tubo (familiaOscuridadConDiametro remapea
+ * SOFT_LIGHT_38→_45); DARK comparte tablas 38/45, así que solo cambia el tubo/kit.
  */
-function modeloSoftLight38PorBandaE78(
+function modeloOscuridad38PorBandaE78(
   modelos: ModeloDespiece[],
   anchoM: number,
   modeloActual: ModeloDespiece | null,
@@ -454,10 +456,12 @@ export function modeloPorAncho(
   color: string | null | undefined,
   usarTuboE78 = false,
 ): ModeloDespiece | null {
-  // Soft light 38 mm tiene su propia banda E78 (swap 38↔45 mm por sistema/tipo_rol,
-  // no por mecanismo): va antes de la maquinaria roller basada en número MEC.
-  if ((categoria || '').trim() === 'SOFT_LIGHT_38mm') {
-    return modeloSoftLight38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78);
+  // Oscuridad 38 mm (soft light y DARK) tiene su propia banda E78 (swap 38↔45 mm
+  // por sistema/tipo_rol, no por mecanismo): va antes de la maquinaria roller
+  // basada en número MEC. DARK usa el mismo mecanismo que soft light (E78 por OT).
+  const catTrim = (categoria || '').trim();
+  if (catTrim === 'SOFT_LIGHT_38mm' || catTrim === 'DARK_38mm') {
+    return modeloOscuridad38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78);
   }
   const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, usarTuboE78);
   if (aplicada) {

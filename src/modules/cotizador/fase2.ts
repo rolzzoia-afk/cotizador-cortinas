@@ -137,9 +137,6 @@ export const OPCIONES_MOTOR_MODELO = [
   { value: 'CABLE', label: 'Con cable' },
 ] as const;
 export const OPCIONES_LADO_MOTOR = ['IZQUIERDA', 'DERECHA'] as const;
-export const OPCIONES_SOFT_DARK = ['N/A', 'SOFT', 'DARK'] as const;
-export const OPCIONES_INSTALACION = ['INT', 'SEMI', 'EXT', 'M-M', 'T-M', 'P-T'] as const;
-export const OPCIONES_SEPARADOR = ['2.5cm', '3.0cm', '[U]'] as const;
 export const OPCIONES_TUBERIA = [
   // Descripciones largas por código (fuente única: DESCRIPCION_TUBERIA en
   // reglas-tuberia.ts). E53 (0,40mm - 2mm) se quitó 2026-07-08.
@@ -202,9 +199,6 @@ export function crearPanoVacio(): Pano {
     motorControlAdicCant: 0,
     motorHubUsbCant: 0,
     ladoMotor: '',
-    softDark: 'N/A',
-    instalacion: '',
-    separador: '',
     cortes: '',
     verVideo: false,
     relacionMarco: '',

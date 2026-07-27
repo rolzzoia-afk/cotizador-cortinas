@@ -79,8 +79,16 @@ export function CotizadorFase4() {
   // Componentes consolidados (siempre frescos desde el optimizador).
   // El ajuste manual se hace con la columna "Adicional" de la hoja.
   const invItems = useMemo(
-    () => (pdfRows && ot ? calcularBOM(pdfRows, ot.storeVentanas, !!ot.datosGenerales?.usarTuboE78) : []),
-    [pdfRows, ot?.storeVentanas, ot?.datosGenerales?.usarTuboE78],
+    () =>
+      pdfRows && ot
+        ? calcularBOM(
+            pdfRows,
+            ot.storeVentanas,
+            !!ot.datosGenerales?.usarTuboE78,
+            ot.datosGenerales?.adicionalesFase0,
+          )
+        : [],
+    [pdfRows, ot?.storeVentanas, ot?.datosGenerales?.usarTuboE78, ot?.datosGenerales?.adicionalesFase0],
   );
 
   // Inicializar estado de entrega del inventario desde lo guardado en la OT.
@@ -164,7 +172,7 @@ export function CotizadorFase4() {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
         empresa: empresaNombre ?? undefined,
-      }, parametros, cadenas, !!ot.datosGenerales.usarTuboE78);
+      }, parametros, cadenas, !!ot.datosGenerales.usarTuboE78, ot.datosGenerales.adicionalesFase0);
       toast.success('Hoja de inventario generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

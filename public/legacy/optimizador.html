@@ -1574,17 +1574,19 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.14"; // 2026-07-23: SOFT LIGHT — peso E24/E44 + perfiles zócalo E32/E33/E34 (barra 580) con perforación
+const VERSION_ACTUAL = "5.15"; // 2026-07-27: perfiles SEPARADORES E41/E42/E43 (barra 580) por COLOR PERFIL, para todo sistema de oscuridad
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
 // Largo de barra virgen (cm) por código cuando el catálogo del operario no lo
 // trae. Los perfiles/varillas verticales vienen en barras de 5,80 m (el fallback
 // genérico MM_TUBO_ORIGINAL es 5,78 m, de los tubos roller). El zócalo de los
-// perfiles SOFT LIGHT/DARK (E32/E33/E34) también es barra de 5,80 m.
+// perfiles SOFT LIGHT/DARK (E32/E33/E34) también es barra de 5,80 m, igual que
+// los perfiles separadores (E41/E42/E43).
 const MEDIDAS_BARRA_DEFAULT = {
     'VER61': 580, 'VER62': 580, 'VER63': 580,
     'E32': 580, 'E33': 580, 'E34': 580,
+    'E41': 580, 'E42': 580, 'E43': 580,
 };
 const STOCK_MINIMO = 10; // Umbral de alerta: códigos con ≤ este número de tubos enteros disponibles
 
@@ -3711,6 +3713,8 @@ function expandirOrdenesDesdeExcel() {
         'PERFIL [CORTINA VERTICAL]', 'VARILLA [CORTINA VERTICAL]',
         // Rótulo nuevo 'PERFIL (IZQ)/(DER)' + el legacy '… INT' para Excels viejos.
         'PERFIL (IZQ)', 'PERFIL (IZQ) INT', 'PERFIL (DER)', 'PERFIL (DER) INT', 'PERFIL BASE',
+        // Perfiles separadores (E41/E42/E43) por lado — barra 5,80 m como el zócalo.
+        'SEPARADOR (IZQ)', 'SEPARADOR (DER)', 'SEPARADOR BASE',
         'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT'
     ];
 
@@ -3743,6 +3747,9 @@ function expandirOrdenesDesdeExcel() {
         'PERFIL (DER)': 'COLOR PERFIL',
         'PERFIL (DER) INT': 'COLOR PERFIL',
         'PERFIL BASE': 'COLOR PERFIL',
+        'SEPARADOR (IZQ)': 'COLOR PERFIL',
+        'SEPARADOR (DER)': 'COLOR PERFIL',
+        'SEPARADOR BASE': 'COLOR PERFIL',
         'CENEFA DELANTERA': 'COLOR PERFIL',
         'CENEFA TRASERA': 'COLOR PERFIL',
         'PESO SOFT LIGHT': 'COLOR PESO INF. SOFT LIGHT',
@@ -4012,6 +4019,27 @@ function expandirOrdenesDesdeExcel() {
                     SistemaInventario.ordenes.push(orden);
                     ordenesDeEstaFila++;
                     log(`✓ ${nombreCol}${perfTxt}: ${codZocalo} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: SEPARADOR (IZQ)/(DER)/BASE de los sistemas de
+                // oscuridad = perfil separador por COLOR PERFIL (BLANCO→E41,
+                // NEGRO→E42, CAFÉ→E43). Barra 5,80 m (MEDIDAS_BARRA_DEFAULT), igual
+                // que el zócalo. No lleva perforación.
+                if (nombreCol.startsWith('SEPARADOR')) {
+                    const MAPA_SEPARADOR = { 'BLANCO': 'E41', 'NEGRO': 'E42', 'CAFÉ': 'E43', 'CAFE': 'E43' };
+                    const codSep = MAPA_SEPARADOR[colorDeseado] || null;
+                    if (!codSep) {
+                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin separador (E41 blanco / E42 negro / E43 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codSep;
+                    orden.codigoExtraido = codSep;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codSep] || null;
+                    orden.tuberia = `${nombreCol} - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ ${nombreCol}: ${codSep} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
                     continue;
                 }
 

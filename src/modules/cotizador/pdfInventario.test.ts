@@ -202,6 +202,35 @@ describe('construirInventario — bloque INSUMOS', () => {
     expect(otro?.grupo).toBe('INSTALACION');
   });
 
+  it('DARK: cenefa cuadrada IMPLÍCITA → 2 tapas por color de accesorios + BRA05 muro', () => {
+    const modeloDark = {
+      sistema: 'DARK_ROLLER', tipo_rol: 'DARK_INTERNO_38mm', mecanismo: '',
+      diametro_tubo_mm: 38, codigos_tubo: 'E02;E66',
+    };
+    const mk = (colorAcc: string) =>
+      ({
+        id: 'd' + colorAcc, ubicacion: 'LIVING', producto: 'ROLLER BLACKOUT',
+        categoria: 'DARK_38mm', color: colorAcc, modelo: modeloDark,
+        // Sin cenefa (viene implícita); material vulcanita para exigir tarugos.
+        panos: [{ ancho: 2.0, alto: 2.3, color: colorAcc, colorMecanismo: colorAcc, materialTipo: 'VULCANITA' }],
+      }) as unknown as Ventana;
+    const blanco = construirInventario([mk('BLANCO')]);
+    const tapaB = blanco.insumos.find((i) => i.codigo === 'TAP33');
+    expect(tapaB?.descripcion).toBe('[TAP33] TAPA CENEFA CUADRADA BLANCO');
+    expect(tapaB?.cantidad).toBe(2); // SIEMPRE 2 en DARK
+    expect(tapaB?.grupo).toBe('INSTALACION');
+    // Cenefa cuadrada a muro (default) → BRA05 × cantidadBrackets(2,0)=4.
+    const bra = blanco.insumos.find((i) => i.codigo === 'BRA05');
+    expect(bra?.cantidad).toBe(4);
+    expect(bra?.grupo).toBe('INSTALACION');
+    // Tarugos vulcanita: 1 por bracket = 4.
+    const tar = blanco.insumos.find((i) => i.codigo === 'TAR01');
+    expect(tar?.cantidad).toBe(4);
+    // Negro → TAP32.
+    const tapaN = construirInventario([mk('NEGRO')]).insumos.find((i) => i.codigo === 'TAP32');
+    expect(tapaN?.cantidad).toBe(2);
+  });
+
   it('motor DOM41 + domótica (sin ovalada) → kit DOM (sin DOM40) en INSTALACIÓN + 1 DOM43 por OT', () => {
     const v = {
       id: 'm', ubicacion: 'DORM', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
@@ -390,6 +419,33 @@ describe('construirInventario — clasificación por cenefa ovalada', () => {
     expect(dom38).toHaveLength(2); // NO se consolidan entre tablas
     expect(dom38.map((i) => i.grupo).sort()).toEqual(['INSTALACION', 'PRODUCCION']);
     expect(dom38.every((i) => i.cantidad === 1)).toBe(true);
+  });
+});
+
+describe('construirInventario — top-up de motores cobrados (cantidad Fase 1 → Fase 4)', () => {
+  const modeloRol = {
+    sistema: 'ROLLER_SIMPLE', tipo_rol: 'ROL_SIMPLE', mecanismo: '',
+    diametro_tubo_mm: 38, codigos_tubo: 'E02;E66', dcto_tubo_cm: 3.8, dcto_tela_cm: 0.5, suma_peso_cm: 0.1,
+  };
+  const vMotor = {
+    id: 'm', ubicacion: 'LIVING', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO', modelo: modeloRol,
+    panos: [{ ancho: 1.5, alto: 1.8, color: 'BLANCO', motorModelo: 'DOM38' }],
+  } as unknown as Ventana;
+  const cant = (d: ReturnType<typeof construirInventario>, cod: string) =>
+    d.insumos.filter((i) => i.codigo === cod).reduce((s, i) => s + i.cantidad, 0);
+
+  it('3 DOM38 cobrados en una ubicación con 1 paño → DOM38 ×3; control/cable ×1', () => {
+    const adic = [{ codInt: 'DOM 38', cantidad: 3, descuento: 0, ubicacion: 'LIVING' }];
+    const d = construirInventario([vMotor], {}, undefined, [], false, adic);
+    expect(cant(d, 'DOM38')).toBe(3);
+    expect(cant(d, 'DOM39')).toBe(1);
+    expect(cant(d, 'DOM34')).toBe(1);
+    // Una sola fila DOM38 (el top-up consolida con el kit del paño).
+    expect(d.insumos.filter((i) => i.codigo === 'DOM38')).toHaveLength(1);
+  });
+
+  it('sin adicionales de motor: 1 motor por paño (sin regresión)', () => {
+    expect(cant(construirInventario([vMotor]), 'DOM38')).toBe(1);
   });
 });
 

@@ -68,6 +68,15 @@ export const SEPARADOR_POR_COLOR: Record<string, string> = {
   CAFÉ: 'E43',
 };
 
+/** Cenefa CUADRADA (Dark / Oscuranti): código por color de PERFIL (E29/E30/E31).
+ *  Mismo criterio que zócalo/separador (café ≡ madera). Catálogo del optimizador:
+ *  CENEFA CUADRADA|NEGRO=E29 · BLANCO=E30 · CAFÉ=E31. */
+export const CENEFA_CUADRADA_POR_COLOR: Record<string, string> = {
+  NEGRO: 'E29',
+  BLANCO: 'E30',
+  CAFÉ: 'E31',
+};
+
 /** Color de perfil canónico: 'CAFE' (sin tilde) y 'MADERA' → clave 'CAFÉ'. */
 function colorPerfilCanonico(color: string | null | undefined): string {
   const c = colorCanonico(color);
@@ -82,6 +91,11 @@ export function codigoZocaloPerfil(color: string | null | undefined): string {
 /** Código del perfil separador (E41/E42/E43) por color; '' si el color no calza. */
 export function codigoSeparadorPerfil(color: string | null | undefined): string {
   return SEPARADOR_POR_COLOR[colorPerfilCanonico(color)] || '';
+}
+
+/** Código de la cenefa cuadrada (E29/E30/E31) por color de perfil; '' si no calza. */
+export function codigoCenefaCuadrada(color: string | null | undefined): string {
+  return CENEFA_CUADRADA_POR_COLOR[colorPerfilCanonico(color)] || '';
 }
 
 /**

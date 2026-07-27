@@ -477,10 +477,13 @@ export function contextoDespieceDesdePano(
     colorCadena?: string | null;
     perfilIzqMuro?: boolean;
     perfilIzqPiso?: boolean;
+    perfilIzqMarco?: boolean;
     perfilDerMuro?: boolean;
     perfilDerPiso?: boolean;
+    perfilDerMarco?: boolean;
     perfilInfMuro?: boolean;
     perfilInfPiso?: boolean;
+    perfilInfMarco?: boolean;
     perfilIzqActivo?: boolean;
     perfilDerActivo?: boolean;
     perfilInfActivo?: boolean;
@@ -490,10 +493,19 @@ export function contextoDespieceDesdePano(
     perfilInfMontaje?: string;
     perfilIzqMuroCm?: number;
     perfilIzqPisoCm?: number;
+    perfilIzqMarcoCm?: number;
     perfilDerMuroCm?: number;
     perfilDerPisoCm?: number;
+    perfilDerMarcoCm?: number;
     perfilInfMuroCm?: number;
     perfilInfPisoCm?: number;
+    perfilInfMarcoCm?: number;
+    separadorIzq?: boolean;
+    separadorDer?: boolean;
+    separadorInf?: boolean;
+    separadorIzqCm?: number;
+    separadorDerCm?: number;
+    separadorInfCm?: number;
     beeblackVariante?: string | null;
     beeblackManillaIzq?: boolean;
     beeblackManillaDer?: boolean;
@@ -524,10 +536,13 @@ export function contextoDespieceDesdePano(
   const perfilesBase: PerfilesOscuridad = {
     izqMuro: p.perfilIzqMuro,
     izqPiso: p.perfilIzqPiso,
+    izqMarco: p.perfilIzqMarco,
     derMuro: p.perfilDerMuro,
     derPiso: p.perfilDerPiso,
+    derMarco: p.perfilDerMarco,
     infMuro: p.perfilInfMuro,
     infPiso: p.perfilInfPiso,
+    infMarco: p.perfilInfMarco,
     izqActivo: p.perfilIzqActivo,
     derActivo: p.perfilDerActivo,
     infActivo: p.perfilInfActivo,
@@ -535,6 +550,9 @@ export function contextoDespieceDesdePano(
     derPerf: normalizarPerforacion(p.perfilDerPerf),
     infPerf: normalizarPerforacion(p.perfilInfPerf),
     infMontaje: normalizarMontajeBase(p.perfilInfMontaje),
+    sepIzq: p.separadorIzq,
+    sepDer: p.separadorDer,
+    sepInf: p.separadorInf,
   };
   return {
     categoria: v.categoria,
@@ -555,10 +573,16 @@ export function contextoDespieceDesdePano(
     perfilesMedidas: {
       izqMuro: p.perfilIzqMuroCm,
       izqPiso: p.perfilIzqPisoCm,
+      izqMarco: p.perfilIzqMarcoCm,
       derMuro: p.perfilDerMuroCm,
       derPiso: p.perfilDerPisoCm,
+      derMarco: p.perfilDerMarcoCm,
       infMuro: p.perfilInfMuroCm,
       infPiso: p.perfilInfPisoCm,
+      infMarco: p.perfilInfMarcoCm,
+      sepIzq: p.separadorIzqCm,
+      sepDer: p.separadorDerCm,
+      sepInf: p.separadorInfCm,
     },
     beeblackVariante: p.beeblackVariante,
     beeblackToggles: {

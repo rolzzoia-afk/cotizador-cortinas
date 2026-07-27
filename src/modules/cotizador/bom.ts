@@ -3,7 +3,7 @@
 // Acumula tubería/mecanismo/cadena/motor/manilla/cenefa por especificación
 // desde las filas del optimizador (OptimizerRow con pano).
 
-import type { BomItem } from '@/modules/ots/types';
+import type { AdicionalFase0Persistido, BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
@@ -20,10 +20,14 @@ import {
   NOMBRE_HUB_DOMOTICA,
   NOMBRE_ROUTER_DOMOTICA,
   codigoManillaPorColor,
+  esCodigoMotor,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
+  llevaCenefaCuadradaImplicita,
+  motoresFaltantesInventario,
   panoLlevaDomotica,
+  tapaCenefaCuadrada,
 } from './insumosCortina';
 
 const EMPTY_PANO: Partial<Pano> = {};
@@ -47,6 +51,8 @@ export function calcularBOM(
   rows: OptimizerRow[],
   ventanas?: VentanaItem[],
   usarTuboE78 = false,
+  /** Adicionales Fase 0: para el top-up de motores cobrados (ver más abajo). */
+  adicionalesFase0?: AdicionalFase0Persistido[],
 ): BomItem[] {
   const acc = new Map<string, BomItem>();
   const add = (
@@ -67,6 +73,9 @@ export function calcularBOM(
   };
 
   let llevaDomotica = false;
+  // Motores emitidos por paño (por código ORIGINAL) para el top-up de motores
+  // cobrados que no calzaron con un paño (ver después del forEach).
+  const motorEmitidoPorCodigo: Record<string, number> = {};
   // Dual: el kit de mecanismo es UNO por ventana (un solo bracket dual) → se
   // emite una sola vez aunque la ventana tenga 2 paños.
   const dualMecEmitido = new Set<string>();
@@ -174,6 +183,10 @@ export function calcularBOM(
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
           add(`MOT|${ins.codigo}|${ins.color}`, 'MOTOR', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
+          if (esCodigoMotor(ins.codigo)) {
+            const orig = (p.motorModelo || '').toUpperCase();
+            if (orig) motorEmitidoPorCodigo[orig] = (motorEmitidoPorCodigo[orig] || 0) + ins.cantidad;
+          }
         }
       } else {
         const ladoMot = p.ladoMotor || '';
@@ -208,6 +221,12 @@ export function calcularBOM(
         const tapKey = `TAPA|${cenColor}`;
         add(tapKey, 'CENEFA', 'Tapa de cenefa', '', cenColor, tapasCount, 'unid.');
       }
+    } else if (llevaCenefaCuadradaImplicita(categoria)) {
+      // DARK: cenefa cuadrada implícita → SIEMPRE 2 tapas con código por color de
+      // accesorios (TAP32 negro / TAP33 blanco / TAP34 café).
+      const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+      const tapa = tapaCenefaCuadrada(colorAcc);
+      add(`TAPA|CUAD|${tapa.codigo || colorAcc}`, 'CENEFA', tapa.descripcion, tapa.codigo ?? '', colorAcc, 2, 'unid.');
     }
 
     // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos. Dual:
@@ -241,6 +260,11 @@ export function calcularBOM(
     }
   });
 
+  // Top-up de motores COBRADOS (adicionales Fase 0) que no calzaron con un paño:
+  // la diferencia sale como unidad de motor y consolida con el kit por su código.
+  for (const falta of motoresFaltantesInventario(adicionalesFase0, motorEmitidoPorCodigo)) {
+    add(`MOT|${falta.codigo}|`, 'MOTOR', falta.descripcion, falta.codigo, '', falta.cantidad, 'unid.');
+  }
   // Domótica: 1 bridge hub (DOM43) + 1 router (DOM05) por OT (el hub consolida
   // con "hub USB adicional"; el router es de la casa, uno solo por OT).
   if (llevaDomotica) {

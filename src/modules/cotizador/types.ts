@@ -46,13 +46,17 @@ export type Pano = {
   cierreAlturaCm?: number | string;
   /** Sistemas de oscuridad: variante de instalación 'INTERNO'|'SEMI'|'EXTERNO'. */
   oscuridadVariante?: string;
-  /** Sistemas de oscuridad: interruptores ON/OFF de perfiles (superficie = MEDIDA). */
+  /** Sistemas de oscuridad: interruptores ON/OFF de perfiles (superficie = MEDIDA).
+   *  Marco = "dentro del marco" (solo variante INTERNO): mide como piso (alto real). */
   perfilIzqMuro?: boolean;
   perfilIzqPiso?: boolean;
+  perfilIzqMarco?: boolean;
   perfilDerMuro?: boolean;
   perfilDerPiso?: boolean;
+  perfilDerMarco?: boolean;
   perfilInfMuro?: boolean;
   perfilInfPiso?: boolean;
+  perfilInfMarco?: boolean;
   /**
    * Perfil ACTIVO (lleva perfil izq/der/base), independiente de la superficie
    * (muro/piso). La variante en Fase 1 activa los laterales; la superficie
@@ -79,10 +83,24 @@ export type Pano = {
   /** Medida manual (cm) que sobreescribe la calculada por perfil (ajuste de terreno). */
   perfilIzqMuroCm?: number;
   perfilIzqPisoCm?: number;
+  perfilIzqMarcoCm?: number;
   perfilDerMuroCm?: number;
   perfilDerPisoCm?: number;
+  perfilDerMarcoCm?: number;
   perfilInfMuroCm?: number;
   perfilInfPisoCm?: number;
+  perfilInfMarcoCm?: number;
+  /**
+   * Perfiles SEPARADORES (E41/E42/E43) — activación independiente por lado
+   * (izq/der/base) para todos los sistemas de oscuridad. La medida sale del
+   * perfil del mismo lado salvo override manual (separadorXxxCm).
+   */
+  separadorIzq?: boolean;
+  separadorDer?: boolean;
+  separadorInf?: boolean;
+  separadorIzqCm?: number;
+  separadorDerCm?: number;
+  separadorInfCm?: number;
   /** BEEBLACK: variante de instalación 'INTERNO'|'EXTERNO_SEMI'. */
   beeblackVariante?: string;
   /** BEEBLACK INTERNO: manillas ON/OFF. */
@@ -149,9 +167,6 @@ export type Pano = {
    */
   motorCargador?: string;
   ladoMotor?: string;
-  softDark?: string;
-  instalacion?: string;
-  separador?: string;
   cortes?: string;
   verVideo?: boolean;
   relacionMarco?: string;

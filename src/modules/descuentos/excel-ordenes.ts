@@ -75,6 +75,9 @@ export const COLUMNAS = [
   'PERF. (DER)',
   'PERFIL BASE',
   'PERF. BASE',
+  'SEPARADOR (IZQ)',
+  'SEPARADOR (DER)',
+  'SEPARADOR BASE',
   'PERFIL SUPERIOR (ANCHO)',
   'PERFIL INFERIOR (ANCHO)',
   'PERFIL LATERAL IZQ (ALTO)',
@@ -257,15 +260,18 @@ export function generarOrdenesOptimizador(
         }
         // Perforación (INTERNO/EXTERNO) de los perfiles de oscuridad → columnas
         // PERF. El taller las lee junto a la medida. Advertencia si un perfil está
-        // activo pero le falta la medida (superficie) o la perforación (SEMI).
+        // activo pero le falta la medida (superficie) o la perforación (SEMI). Los
+        // separadores no llevan perforación: solo avisan si les falta la medida.
         for (const c of d.cortes) {
+          const esSeparador = c.columnaExcel.startsWith('SEPARADOR');
           const perfCol = PERF_POR_PERFIL[c.columnaExcel];
-          if (!perfCol) continue;
-          if (c.perforacion) fila[perfCol] = c.perforacion;
-          if (c.pendienteMedida || !c.perforacion) {
+          if (!perfCol && !esSeparador) continue;
+          if (perfCol && c.perforacion) fila[perfCol] = c.perforacion;
+          const faltaPerf = !esSeparador && !c.perforacion;
+          if (c.pendienteMedida || faltaPerf) {
             const falta = [
-              c.pendienteMedida ? 'medida (muro/piso)' : null,
-              !c.perforacion ? 'perforación (int/ext)' : null,
+              c.pendienteMedida ? (esSeparador ? 'medida' : 'medida (muro/piso/marco)') : null,
+              faltaPerf ? 'perforación (int/ext)' : null,
             ]
               .filter(Boolean)
               .join(' y ');
@@ -323,9 +329,9 @@ export function generarOrdenesOptimizador(
           );
         }
         const colorPerfil = colorPerfilFilaExcel(adicionalesFase0, v.categoria, {
-          izq: celdaConMedida(fila['PERFIL (IZQ) INT']),
-          der: celdaConMedida(fila['PERFIL (DER) INT']),
-          inf: celdaConMedida(fila['PERFIL BASE']),
+          izq: celdaConMedida(fila['PERFIL (IZQ) INT']) || celdaConMedida(fila['SEPARADOR (IZQ)']),
+          der: celdaConMedida(fila['PERFIL (DER) INT']) || celdaConMedida(fila['SEPARADOR (DER)']),
+          inf: celdaConMedida(fila['PERFIL BASE']) || celdaConMedida(fila['SEPARADOR BASE']),
         });
         if (colorPerfil) fila['COLOR PERFIL'] = colorPerfil;
         // Perfil superior = misma medida que cenefa delantera (CENEF.PRO).

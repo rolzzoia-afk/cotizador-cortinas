@@ -247,8 +247,8 @@ describe('construirCalculoGeneral', () => {
     expect(f.despiece.get('ALTO TELA')).toBe(275);
     // Izq a muro (alto+10 = 260) EXT, der a piso (alto = 250) EXT → "260 EXT / 250 EXT".
     expect(String(f.despiece.get('PERFIL LATERAL'))).toBe('260 EXT / 250 EXT');
-    // Perfil base EXTERNO dentro = 250 + 0,08 = 250,1 → token con coma es-CL (no "250.1").
-    expect(String(f.despiece.get('PERFIL BASE'))).toBe('250,1 EXT');
+    // Perfil base EXTERNO dentro = 250 + 0,08 = 250,08 (2 decimales) → token coma es-CL.
+    expect(String(f.despiece.get('PERFIL BASE'))).toBe('250,08 EXT');
     // Dimensionado: la mesa de tela no ve cenefa ni perfiles.
     const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'SOFT');
     const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
@@ -257,6 +257,31 @@ describe('construirCalculoGeneral', () => {
     expect(dimLabels).not.toContain('CENEFA');
     expect(dimLabels).not.toContain('PERFIL LATERAL');
     expect(dimLabels).not.toContain('PERFIL BASE');
+  });
+
+  it('dark: el Dimensionado oculta las cenefas cuadradas (aluminio) y deja el velcro (tela)', () => {
+    const v = ventRoller(2.0, 'DARK INT');
+    (v as { categoria: string }).categoria = 'DARK_38mm';
+    (v as { alto: number }).alto = 2.3;
+    v.sentido = 'INTERNO';
+    Object.assign(v.panos[0], { alto: 2.3, oscuridadVariante: 'INTERNO' });
+    const data = construirCalculoGeneral([v]);
+    const bloque = data.bloques.find((b) => b.sistema.key === 'DARK');
+    expect(bloque).toBeTruthy();
+    // Cálculo General: las cenefas cuadradas y el velcro SÍ están.
+    const labels = bloque!.columnas.map((c) => c.label);
+    expect(labels).toContain('CENEFA DELANTERA');
+    expect(labels).toContain('CENEFA TRASERA');
+    expect(labels).toContain('ANCHO TELA VELCRO');
+    // Dimensionado (mesa de tela): fuera el aluminio, queda solo la tela + velcro.
+    const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'DARK');
+    const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
+    expect(dimLabels).not.toContain('CENEFA DELANTERA');
+    expect(dimLabels).not.toContain('CENEFA TRASERA');
+    expect(dimLabels).toContain('ANCHO TELA VELCRO');
+    expect(dimLabels).toContain('ALTO TELA VELCRO');
+    expect(dimLabels).toContain('TELA');
+    expect(dimLabels).toContain('ALTO TELA');
   });
 
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {
@@ -346,15 +371,19 @@ describe('aplicarVariante — DIMENSIONADO', () => {
     expect(labels[labels.length - 1]).toBe('ALTO');
   });
 
-  it('también excluye los pesos del dúo (PESO INTERNO / PESO U) y la cenefa ovalada', () => {
+  it('también excluye los pesos del dúo (PESO INTERNO / PESO U) y las cenefas', () => {
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('PESO INTERNO (E13)')).toBe(true);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('PESO U (LÁGRIMA)')).toBe(true);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA')).toBe(true);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA (CON TIRA)')).toBe(true);
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA OVALADA (SIN TIRA)')).toBe(true);
-    // Pero no toca otros componentes.
+    // Cenefas cuadradas (aluminio, DARK/CC): fuera de la mesa de tela (2026-07-27).
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA DELANTERA')).toBe(true);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA TRASERA')).toBe(true);
+    // Pero no toca otros componentes (el velcro de DARK es tela y queda).
     expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CIERRE DE ALTURA')).toBe(false);
-    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('CENEFA DELANTERA')).toBe(false);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('ANCHO TELA VELCRO')).toBe(false);
+    expect(VARIANTE_DIMENSIONADO.sinDespiece?.('ALTO TELA VELCRO')).toBe(false);
   });
 });
 

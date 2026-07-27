@@ -196,7 +196,6 @@ export function generarPDFProduccion(
       r.anchoCm.toFixed(1) + ' cm',
       r.altoCm.toFixed(1) + ' cm',
       telaLabel,
-      p.separador ? 'SÍ' : 'NO',
       p.mecanismo || '—',
       p.colorMecanismo || '—',
     ];
@@ -206,8 +205,8 @@ export function generarPDFProduccion(
     state,
     'ETIQUETAS ROLLER',
     [34, 197, 94],
-    ['OT','CLIENTE','UBIC.','CADENA','ARMADO','ANCHO','ALTO','COD TELA','SEPAR.','MECANISMO','COLOR'],
-    [12, 30, 28, 26, 16, 18, 18, 45, 14, 28, 22],
+    ['OT','CLIENTE','UBIC.','CADENA','ARMADO','ANCHO','ALTO','COD TELA','MECANISMO','COLOR'],
+    [12, 30, 28, 26, 16, 18, 18, 45, 28, 22],
     rollerData,
     6.5,
   );
@@ -359,9 +358,6 @@ export function validarDatosParaEtiquetas(rows: OptimizerRow[]): string[] {
     if (!p.armado) missingFields.push(`Paño ${panoNum} (${loc}): Falta ARMADO (Interno/Externo)`);
     if (!p.colorMecanismo) missingFields.push(`Paño ${panoNum} (${loc}): Falta COLOR MECANISMO`);
     if (!p.colorPeso) missingFields.push(`Paño ${panoNum} (${loc}): Falta COLOR PESO`);
-    if (!p.instalacion) {
-      missingFields.push(`Paño ${panoNum} (${loc}): Falta TIPO INSTALACIÓN`);
-    }
   });
   return missingFields;
 }
