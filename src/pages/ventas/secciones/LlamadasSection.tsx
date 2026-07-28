@@ -14,7 +14,8 @@ import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import SectionHeader from '../components/SectionHeader';
 import NumInput from '../components/NumInput';
-import { iniciales, slugify } from '../utils/helpers';
+import { iniciales, slugify, textoPeriodo } from '../utils/helpers';
+import type { Periodo } from '../Ventas.types';
 
 interface LlamadasSectionProps {
   vendedoras: string[];
@@ -22,6 +23,8 @@ interface LlamadasSectionProps {
   totalLlamadas: number;
   getVal: (clave: string) => number;
   setVal: (clave: string, valor: number) => void;
+  periodo?: Periodo;
+  editable?: boolean;
 }
 
 export default function LlamadasSection({
@@ -30,14 +33,17 @@ export default function LlamadasSection({
   totalLlamadas,
   getVal,
   setVal,
+  periodo = 'dia',
+  editable = true,
 }: LlamadasSectionProps) {
+  const txt = textoPeriodo(periodo);
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <SectionHeader
         icon={<Phone className="h-4 w-4" />}
         iconBg="rgba(245,158,11,0.15)"
         iconColor="#f59e0b"
-        title="Llamadas diarias"
+        title={`Llamadas ${txt.adjetivo}`}
         sub="Cotizaciones atendidas por vendedora"
         right={
           <div className="text-right text-[22px] font-extrabold text-foreground">
@@ -103,11 +109,12 @@ export default function LlamadasSection({
               <div className="flex flex-col gap-2">
                 <div className="flex flex-col gap-1">
                   <Label className="text-[12px] uppercase tracking-wide text-muted-foreground">
-                    Llamadas del día
+                    Llamadas {txt.delLapso}
                   </Label>
                   <NumInput
                     value={ll}
                     onChange={(nv) => setVal('ll_llamadas_' + slugify(v), nv)}
+                    disabled={!editable}
                     className="w-full rounded-md border border-border bg-card px-1.5 py-1.5 text-center text-xl font-bold text-foreground focus:border-accent focus:outline-none"
                   />
                 </div>
@@ -118,6 +125,7 @@ export default function LlamadasSection({
                   <NumInput
                     value={cot}
                     onChange={(nv) => setVal('ll_cotz_' + slugify(v), nv)}
+                    disabled={!editable}
                     className="w-full rounded-md border border-border bg-card px-1.5 py-1.5 text-center text-xl font-bold text-foreground focus:border-accent focus:outline-none"
                   />
                 </div>

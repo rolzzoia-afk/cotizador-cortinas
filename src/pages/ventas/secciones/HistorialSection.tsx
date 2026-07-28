@@ -31,7 +31,8 @@ export default function HistorialSection({ historial, periodo }: HistorialSectio
   if (periodo === 'dia' || historial.length === 0) return null;
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    // Aparece al pasar a semana/mes: entra con fundido para no dar el salto.
+    <div className="animate-in fade-in slide-in-from-bottom-2 rounded-2xl border border-border bg-card p-5 duration-500">
       <SectionHeader
         icon={<TrendingUp className="h-4 w-4" />}
         iconBg="rgba(99,102,241,0.15)"

@@ -9,6 +9,8 @@ interface NumInputProps {
   className?: string;
   min?: number;
   max?: number;
+  /** En modo semana/mes el valor es un total acumulado: no se edita. */
+  disabled?: boolean;
 }
 
 export default function NumInput({
@@ -17,6 +19,7 @@ export default function NumInput({
   className,
   min = 0,
   max,
+  disabled = false,
 }: NumInputProps) {
   return (
     <input
@@ -24,14 +27,18 @@ export default function NumInput({
       value={value}
       min={min}
       max={max}
+      disabled={disabled}
+      readOnly={disabled}
       onChange={(e) => {
+        if (disabled) return;
         const raw = Number(e.target.value) || 0;
         let v = Math.max(min, raw);
         if (max != null) v = Math.min(max, v);
         onChange(v);
       }}
       className={cn(
-        '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+        '[appearance:textfield] transition-opacity duration-300 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none',
+        disabled && 'cursor-default opacity-70',
         className,
       )}
     />
