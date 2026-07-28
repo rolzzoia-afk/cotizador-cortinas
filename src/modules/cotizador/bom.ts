@@ -19,12 +19,12 @@ import {
   MANILLAS,
   NOMBRE_HUB_DOMOTICA,
   NOMBRE_ROUTER_DOMOTICA,
+  cenefaCuadradaTapasFijas,
   codigoManillaPorColor,
   esCodigoMotor,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
-  llevaCenefaCuadradaImplicita,
   motoresFaltantesInventario,
   panoLlevaDomotica,
   tapaCenefaCuadrada,
@@ -211,7 +211,15 @@ export function calcularBOM(
     }
 
     const cenefaTipo = p.cenefa || 'No';
-    if (cenefaTipo && cenefaTipo !== 'No') {
+    if (cenefaCuadradaTapasFijas(categoria, p.cenefa)) {
+      // Oscuridad con cenefa cuadrada (DARK y OSCURANTI implícitas · SOFT LIGHT CC): SIEMPRE 2
+      // tapas por color de accesorios (TAP32 negro / TAP33 blanco / TAP34 café). La
+      // cenefa en sí viaja por el Excel de órdenes (CENEFA DELANTERA), no como
+      // línea de BOM ni con las tapas del selector `cenefaTapa`.
+      const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+      const tapa = tapaCenefaCuadrada(colorAcc);
+      add(`TAPA|CUAD|${tapa.codigo || colorAcc}`, 'CENEFA', tapa.descripcion, tapa.codigo ?? '', colorAcc, 2, 'unid.');
+    } else if (cenefaTipo && cenefaTipo !== 'No') {
       const cenColor = p.colorTapa || '';
       const cenKey = `CENEFA|${cenefaTipo}|${cenColor}`;
       add(cenKey, 'CENEFA', `Cenefa ${cenefaTipo}`, cenefaTipo, cenColor, 1, 'unid.');
@@ -221,12 +229,6 @@ export function calcularBOM(
         const tapKey = `TAPA|${cenColor}`;
         add(tapKey, 'CENEFA', 'Tapa de cenefa', '', cenColor, tapasCount, 'unid.');
       }
-    } else if (llevaCenefaCuadradaImplicita(categoria)) {
-      // DARK: cenefa cuadrada implícita → SIEMPRE 2 tapas con código por color de
-      // accesorios (TAP32 negro / TAP33 blanco / TAP34 café).
-      const colorAcc = colorAccesoriosDePano(p, ventanaColor);
-      const tapa = tapaCenefaCuadrada(colorAcc);
-      add(`TAPA|CUAD|${tapa.codigo || colorAcc}`, 'CENEFA', tapa.descripcion, tapa.codigo ?? '', colorAcc, 2, 'unid.');
     }
 
     // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos. Dual:

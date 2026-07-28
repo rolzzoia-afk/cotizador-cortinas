@@ -65,10 +65,10 @@ import {
   esCategoriaDuo,
   esCenefaOvalada,
   esCodigoMotor,
+  cenefaCuadradaTapasFijas,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
-  llevaCenefaCuadradaImplicita,
   motoresFaltantesInventario,
   panoLlevaDomotica,
   tapaCenefaCuadrada,
@@ -374,17 +374,17 @@ export function consolidarInsumos(
       // blanco / TAP34 café) para que bodega enlace stock, pero se FUERZA a
       // INSTALACIÓN (se coloca en terreno): su código TAP caería en INSUMOS por
       // defecto. Gris u otro color sale sin código.
-      //   · Adicional roller (cenefa cuadrada elegible): 1 o 2 según cenefaTapa,
-      //     color de tapa elegido.
-      //   · DARK (cenefa cuadrada implícita, p.cenefa vacío): SIEMPRE 2, color de
-      //     accesorios del paño.
-      const darkCuadrada = llevaCenefaCuadradaImplicita(v.categoria);
-      if (esCenefaCuadrada(p.cenefa) || darkCuadrada) {
-        const n = darkCuadrada
+      //   · Oscuridad con cenefa cuadrada (DARK y OSCURANTI implícitas · SOFT
+      //     LIGHT CC): SIEMPRE 2, color de accesorios del paño.
+      //   · Adicional roller/vertical (cenefa cuadrada elegible): 1 o 2 según
+      //     cenefaTapa, color de tapa elegido.
+      const tapasFijas = cenefaCuadradaTapasFijas(v.categoria, p.cenefa);
+      if (esCenefaCuadrada(p.cenefa) || tapasFijas) {
+        const n = tapasFijas
           ? 2
           : p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
         if (n > 0) {
-          const colorTapa = darkCuadrada ? colorAccesoriosDePano(p, v.color) : p.colorTapa;
+          const colorTapa = tapasFijas ? colorAccesoriosDePano(p, v.color) : p.colorTapa;
           const tapa = tapaCenefaCuadrada(colorTapa);
           const desc = tapa.codigo ? `[${tapa.codigo}] ${tapa.descripcion}` : tapa.descripcion;
           bump(tapa.codigo, desc, n, 'INSTALACION');

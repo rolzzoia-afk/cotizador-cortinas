@@ -199,8 +199,20 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     const { aoa } = generarOrdenesOptimizador('266-2', [v]);
     const idxCenefaDel = 9;
     const idxPerfilSup = 10;
-    expect(aoa[1][idxCenefaDel]).toBe(296.6); // 296.9 − 0.3
-    expect(aoa[1][idxPerfilSup]).toBe(296.6);
+    expect(aoa[1][idxCenefaDel]).toBe(296.87); // 296.9 − 0.3 mm (pizarra 2026-07-28)
+    expect(aoa[1][idxPerfilSup]).toBe(296.87);
+  });
+
+  it('OSCURANTI: columna SEPARADOR SUPERIOR = cenefa delantera, sin advertencia de perforación', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2');
+    v.categoria = 'OSCURANTI_63mm';
+    v.modelo = { ...softLight38, sistema: 'OSCURANTI' };
+    const { aoa, advertencias } = generarOrdenesOptimizador('266-2', [v]);
+    const enc = aoa[0] as string[];
+    const idxSepSup = enc.indexOf('SEPARADOR SUPERIOR');
+    expect(idxSepSup).toBeGreaterThan(-1);
+    expect(aoa[1][idxSepSup]).toBe(296.87); // = cenefa delantera
+    expect(advertencias.some((a) => a.includes('Separador superior'))).toBe(false);
   });
 
   it('peso soft light → COLOR PESO INF. SOFT LIGHT con código por color', () => {

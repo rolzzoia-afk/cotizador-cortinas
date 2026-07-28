@@ -78,6 +78,9 @@ export const COLUMNAS = [
   'SEPARADOR (IZQ)',
   'SEPARADOR (DER)',
   'SEPARADOR BASE',
+  // Oscuranti: separador rectangular 50×25 (E50/E49/E52) = medida de la cenefa
+  // delantera. Siempre presente en oscuranti, no es opt-in como los otros.
+  'SEPARADOR SUPERIOR',
   'PERFIL SUPERIOR (ANCHO)',
   'PERFIL INFERIOR (ANCHO)',
   'PERFIL LATERAL IZQ (ALTO)',
@@ -328,10 +331,14 @@ export function generarOrdenesOptimizador(
             `"${ubic}": sistema de oscuridad — perfiles NO incluidos, revisar manualmente.`,
           );
         }
+        // El separador SUPERIOR (oscuranti) también necesita COLOR PERFIL para que el
+        // optimizador le asigne E50/E49/E52, aunque los laterales estén pendientes:
+        // habilita la búsqueda por los tres lados (prioridad izq → der → inf).
+        const sepSuperior = celdaConMedida(fila['SEPARADOR SUPERIOR']);
         const colorPerfil = colorPerfilFilaExcel(adicionalesFase0, v.categoria, {
-          izq: celdaConMedida(fila['PERFIL (IZQ) INT']) || celdaConMedida(fila['SEPARADOR (IZQ)']),
-          der: celdaConMedida(fila['PERFIL (DER) INT']) || celdaConMedida(fila['SEPARADOR (DER)']),
-          inf: celdaConMedida(fila['PERFIL BASE']) || celdaConMedida(fila['SEPARADOR BASE']),
+          izq: celdaConMedida(fila['PERFIL (IZQ) INT']) || celdaConMedida(fila['SEPARADOR (IZQ)']) || sepSuperior,
+          der: celdaConMedida(fila['PERFIL (DER) INT']) || celdaConMedida(fila['SEPARADOR (DER)']) || sepSuperior,
+          inf: celdaConMedida(fila['PERFIL BASE']) || celdaConMedida(fila['SEPARADOR BASE']) || sepSuperior,
         });
         if (colorPerfil) fila['COLOR PERFIL'] = colorPerfil;
         // Perfil superior = misma medida que cenefa delantera (CENEF.PRO).

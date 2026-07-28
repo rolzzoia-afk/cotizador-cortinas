@@ -19,7 +19,11 @@ import {
   contextoDespieceDesdePano,
   MODELO_DESPIECE_STUB,
 } from '@/modules/descuentos/despiece';
-import { familiaOscuridad, normalizarVarianteOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import {
+  esFamiliaDark,
+  familiaOscuridad,
+  normalizarVarianteOscuridad,
+} from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
@@ -48,8 +52,8 @@ function bloqueDe(categoria: string | undefined, cenefaTipo: string | undefined)
   if (esCategoriaBeeblack(categoria)) return BLOQUES.BEEBLACK;
   const fam = familiaOscuridad(categoria, cenefaTipo);
   if (fam === 'OSCURANTI') return BLOQUES.OSCU;
-  if (fam === 'DARK') return BLOQUES.DARK;
-  if (fam) return BLOQUES.SOFT; // SOFT_LIGHT_38/45/CC
+  if (fam && esFamiliaDark(fam)) return BLOQUES.DARK; // 38 y 45
+  if (fam) return BLOQUES.SOFT; // SOFT_LIGHT_38/45/CC/CC_45
   return BLOQUES.ROLLER;
 }
 
@@ -523,6 +527,8 @@ const SIN_DIMENSIONADO_VERTICAL = new Set([
 // la cenefa (ovalada o cuadrada DEL/TRA, aluminio) y los perfiles los corta el
 // taller, no la mesa de tela. La mesa solo ve TELA + ALTO TELA (+ el VELCRO de
 // DARK, que sí es tela: ancho/alto tela velcro quedan en el Dimensionado).
+// Los SEPARADORES (superior de oscuranti + izq/der/base de las tres familias)
+// también son aluminio: se filtran por prefijo en `sinDespiece`.
 const SIN_DIMENSIONADO_OSCURIDAD = new Set([
   'CENEFA', 'CENEFA DELANTERA', 'CENEFA TRASERA',
   'PERFIL LATERAL', 'PERFIL BASE', 'TIPO DE SOFT.LIGHT',
@@ -535,6 +541,7 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   sinDespiece: (label) =>
     label === 'TUBO' || label === 'PESO' || label.startsWith('PESO ') ||
     label.startsWith('CENEFA OVALADA') || // incluye "(CON/SIN TIRA)"
+    label.startsWith('SEPARADOR') || // SUPERIOR / IZQUIERDO / DERECHO / BASE
     SIN_DIMENSIONADO_VERTICAL.has(label) ||
     SIN_DIMENSIONADO_OSCURIDAD.has(label),
   conjuntoPanos: true,

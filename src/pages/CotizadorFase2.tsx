@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
   ClipboardCheck,
@@ -63,6 +64,11 @@ import {
   esPesoSeleccionable,
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
+import {
+  pendientesFase2,
+  pendientesPorVentana,
+  type PendienteFase2,
+} from '@/modules/cotizador/fase2-completitud';
 import { PanoEditor } from '@/components/cotizador/PanoEditor';
 import { PostInstalacion } from '@/components/cotizador/PostInstalacion';
 import type { Pano, Ventana } from '@/modules/cotizador/types';
@@ -121,6 +127,7 @@ export function CotizadorFase2() {
   const [avanzando, setAvanzando] = useState(false);
   // Conjuntos de cortinas invertidas: dialog "¿Juntar con otra cortina?" y
   // los ids que ya dijeron "No juntar" (no volver a preguntar en la sesión).
+  const [dialogPendientes, setDialogPendientes] = useState(false);
   const [dialogJuntar, setDialogJuntar] = useState(false);
   const [juntarDescartado, setJuntarDescartado] = useState<Set<string | number>>(new Set());
 
@@ -128,6 +135,13 @@ export function CotizadorFase2() {
     () => ((ot?.storeVentanas || []) as unknown as Ventana[]),
     [ot],
   );
+  // Datos que faltan para producir (bloquean el paso a Fase 3).
+  const pendientes = useMemo(() => pendientesFase2(ventanas), [ventanas]);
+  const pendientesDe = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const p of pendientes) m.set(String(p.ventanaId), (m.get(String(p.ventanaId)) ?? 0) + 1);
+    return m;
+  }, [pendientes]);
 
   // Color de destacado por conjunto (grupoId → índice en la paleta, por
   // orden de aparición en storeVentanas).
@@ -760,6 +774,12 @@ export function CotizadorFase2() {
       toast.error('Agrega al menos 1 ventana antes de avanzar');
       return;
     }
+    // Bloqueo de avance: la OT no pasa a Fase 3 con datos a medias. Lo que falta
+    // se muestra en un panel, ventana por ventana, para completarlo ahí mismo.
+    if (pendientes.length > 0) {
+      setDialogPendientes(true);
+      return;
+    }
     setAvanzando(true);
     try {
       const dg = {
@@ -912,6 +932,13 @@ export function CotizadorFase2() {
                       <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
                         {tipoVentanaLabel(v.panos.length)} · {resumenPanos(v.panos)}
                       </div>
+                      {/* Datos que faltan para producir: la OT no avanza con esto pendiente. */}
+                      {(pendientesDe.get(String(v.id)) ?? 0) > 0 && (
+                        <div className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[0.6rem] font-semibold text-amber-600">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          {pendientesDe.get(String(v.id))} por completar
+                        </div>
+                      )}
                       <div className="mt-1 flex justify-end gap-1">
                         <button
                           onClick={(e) => {
@@ -1246,6 +1273,15 @@ export function CotizadorFase2() {
       {tab === 'ventanas' && !ventanaForm && ventanas.length > 0 && (
         <div className="border-t border-border bg-card/60 px-4 py-2.5">
           <div className="flex items-center justify-end gap-2">
+            {pendientes.length > 0 && (
+              <button
+                onClick={() => setDialogPendientes(true)}
+                className="mr-auto flex items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600 hover:bg-amber-500/20"
+              >
+                <AlertTriangle className="h-3.5 w-3.5" />
+                {pendientes.length} {pendientes.length === 1 ? 'dato' : 'datos'} por completar
+              </button>
+            )}
             <Button variant="outline" onClick={() => navigate('/panel')}>
               Volver al Panel
             </Button>
@@ -1255,6 +1291,20 @@ export function CotizadorFase2() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Pendientes de Fase 2: qué falta, ventana por ventana. Se abre al intentar
+          avanzar con datos incompletos (o desde el aviso de la barra inferior). */}
+      {dialogPendientes && (
+        <PendientesFase2Dialog
+          pendientes={pendientes}
+          onCerrar={() => setDialogPendientes(false)}
+          onIrAVentana={(id) => {
+            const v = ventanas.find((x) => String(x.id) === String(id));
+            setDialogPendientes(false);
+            if (v) iniciarEdicion(v);
+          }}
+        />
       )}
 
       {/* Dialog "¿Juntar con otra cortina?" (conjuntos de invertidas) */}
@@ -1271,6 +1321,74 @@ export function CotizadorFase2() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Panel de lo que falta para producir, agrupado por ventana. Bloquea el paso a
+ * Fase 3: sin esto, los datos incompletos aparecían recién en Fase 4 (celdas
+ * vacías del Excel, "definir F2" en el Cálculo General, 0 tarugos).
+ */
+function PendientesFase2Dialog({
+  pendientes,
+  onCerrar,
+  onIrAVentana,
+}: {
+  pendientes: PendienteFase2[];
+  onCerrar: () => void;
+  onIrAVentana: (ventanaId: string | number) => void;
+}) {
+  const grupos = pendientesPorVentana(pendientes);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-lg border border-border bg-card shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <h3 className="flex items-center gap-1.5 text-sm font-semibold text-amber-600">
+              <AlertTriangle className="h-4 w-4" /> Falta completar la Fase 2
+            </h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              La OT no puede avanzar con datos a medias: el taller los necesita para cortar y armar.
+            </p>
+          </div>
+          <button
+            onClick={onCerrar}
+            className="rounded p-1 text-muted-foreground hover:bg-card hover:text-foreground"
+            title="Cerrar"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <ul className="divide-y divide-border overflow-y-auto">
+          {grupos.map((g) => (
+            <li key={String(g.ventanaId)} className="px-4 py-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium">{g.ubicacion || '(sin ubicación)'}</span>
+                <button
+                  onClick={() => onIrAVentana(g.ventanaId)}
+                  className="shrink-0 rounded border border-accent/30 bg-accent/10 px-2 py-0.5 text-[0.7rem] text-accent hover:bg-accent/20"
+                >
+                  Completar
+                </button>
+              </div>
+              <ul className="mt-1 space-y-0.5">
+                {g.items.map((p, i) => (
+                  <li key={i} className="text-xs text-muted-foreground">
+                    · {p.panoIdx !== null ? `Paño ${p.panoIdx + 1}: ` : ''}
+                    {p.mensaje}
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+        <div className="flex justify-end border-t border-border px-4 py-2.5">
+          <Button variant="outline" onClick={onCerrar}>
+            Entendido
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

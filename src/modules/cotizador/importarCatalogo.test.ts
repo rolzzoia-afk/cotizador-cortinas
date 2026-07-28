@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parsearCatalogoExcel, diffCatalogo, aplicarCatalogo } from './importarCatalogo';
+import {
+  parsearCatalogoExcel,
+  diffCatalogo,
+  aplicarCatalogo,
+  claveCatalogoCanonica,
+  normCod,
+} from './importarCatalogo';
 import type { CatalogoProductos } from './types';
 
 // Arma un workbook con una hoja "Productos" como el Excel maestro:
@@ -162,5 +168,36 @@ describe('aplicarCatalogo', () => {
     expect(catalogo['BK 68'].colorGrupo).toBe('negro'); // preserva campo previo
     expect(catalogo['BK 68'].categoria).toBe('A'); // sin CATEGORIA en el Excel no se borra
     expect(anchoRollo['SC 93']).toBe(2.98);
+  });
+});
+
+// El COD_INT del catálogo lleva espacio ("DOM 42") pero las planillas de insumos
+// lo escriben pegado ("DOM42"): al teclearlo o importarlo hay que resolver igual.
+describe('claveCatalogoCanonica', () => {
+  const cat: CatalogoProductos = {
+    'DOM 42': { cod: 'ACCESORIO', producto: 'CONTROL 15 CANALES', tipo: 'ACCESORIO', descripcion: '', precio: 35000 },
+    'SC 64': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+  };
+
+  it('coincidencia exacta', () => {
+    expect(claveCatalogoCanonica(cat, 'DOM 42')).toBe('DOM 42');
+  });
+
+  it('sin espacio y en minúsculas resuelve a la llave real', () => {
+    expect(claveCatalogoCanonica(cat, 'DOM42')).toBe('DOM 42');
+    expect(claveCatalogoCanonica(cat, 'dom42')).toBe('DOM 42');
+    expect(claveCatalogoCanonica(cat, 'dom 42')).toBe('DOM 42');
+    expect(claveCatalogoCanonica(cat, '  DOM   42 ')).toBe('DOM 42');
+  });
+
+  it('sin match o vacío → null', () => {
+    expect(claveCatalogoCanonica(cat, 'DOM 99')).toBeNull();
+    expect(claveCatalogoCanonica(cat, '')).toBeNull();
+    expect(claveCatalogoCanonica(cat, undefined)).toBeNull();
+  });
+
+  it('normCod: trim, colapsa espacios y mayúsculas', () => {
+    expect(normCod('  sc   64 ')).toBe('SC 64');
+    expect(normCod(null)).toBe('');
   });
 });

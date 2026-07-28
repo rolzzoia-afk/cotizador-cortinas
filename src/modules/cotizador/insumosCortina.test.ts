@@ -5,6 +5,7 @@ import {
   cantidadBrackets,
   cantidadSuplementosAuto,
   cantidadTarugos,
+  cenefaCuadradaTapasFijas,
   codigoManillaPorColor,
   codigoMotorDesdeAdicional,
   esAdicionalHubDomotica,
@@ -129,13 +130,28 @@ describe('bracketDeCenefa', () => {
 });
 
 describe('llevaCenefaCuadradaImplicita', () => {
-  it('DARK sí; soft light / oscuranti / roller no', () => {
+  it('DARK y OSCURANTI sí; soft light / roller no', () => {
     expect(llevaCenefaCuadradaImplicita('DARK_38mm')).toBe(true);
     expect(llevaCenefaCuadradaImplicita('DARK_45mm')).toBe(true);
+    // Oscuranti lleva su cenefa cuadrada delantera siempre (pizarra 2026-07-28).
+    expect(llevaCenefaCuadradaImplicita('OSCURANTI_63mm')).toBe(true);
     expect(llevaCenefaCuadradaImplicita('SOFT_LIGHT_38mm')).toBe(false);
-    expect(llevaCenefaCuadradaImplicita('OSCURANTI_63mm')).toBe(false);
     expect(llevaCenefaCuadradaImplicita('ROL')).toBe(false);
     expect(llevaCenefaCuadradaImplicita('')).toBe(false);
+  });
+});
+
+describe('cenefaCuadradaTapasFijas', () => {
+  it('DARK/OSCURANTI (cenefa implícita) y soft light con cenefa CUADRADA → tapas fijas', () => {
+    expect(cenefaCuadradaTapasFijas('DARK_38mm')).toBe(true);
+    expect(cenefaCuadradaTapasFijas('OSCURANTI_63mm')).toBe(true);
+    expect(cenefaCuadradaTapasFijas('SOFT_LIGHT_38mm', 'Cuadrada a muro')).toBe(true);
+    expect(cenefaCuadradaTapasFijas('SOFT_LIGHT_45mm', 'Cuadrada a techo')).toBe(true);
+  });
+  it('soft light OVALADA y roller cuadrada → NO fijas (siguen el selector)', () => {
+    expect(cenefaCuadradaTapasFijas('SOFT_LIGHT_38mm', 'Ovalada')).toBe(false);
+    expect(cenefaCuadradaTapasFijas('SOFT_LIGHT_38mm')).toBe(false);
+    expect(cenefaCuadradaTapasFijas('ROL', 'Cuadrada a muro')).toBe(false);
   });
 });
 
@@ -353,36 +369,44 @@ describe('insumosVerticalDePano', () => {
   });
 });
 
+// Regla del taller: lo ÚNICO que sale solo al motorizar es el cable DOM34 del
+// DOM38. Los CONTROLES (DOM39/DOM42) y la domótica se piden en Fase 2.
 describe('insumosMotorDePano', () => {
-  it('DOM38 sin elección de cargador → motor + control + cable, SIN hub ni DOM04 (default)', () => {
+  it('DOM38 sin elección de cargador → motor + cable, SIN control ni hub ni DOM04', () => {
     // No todos los motores llevan hub: el kit no agrega cargador por defecto.
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34']);
   });
   it("'NINGUNO' explícito → igual que sin elección (sin hub ni DOM04)", () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'NINGUNO' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34']);
+  });
+  it('los controles salen SOLO de la cantidad pedida en Fase 2', () => {
+    const sinPedir = insumosMotorDePano(pano({ motorModelo: 'DOM38' }));
+    expect(sinPedir.some((i) => i.codigo === 'DOM39')).toBe(false);
+    const conDos = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorControlAdicCant: 2 }));
+    expect(conDos.find((i) => i.codigo === 'DOM39')?.cantidad).toBe(2);
   });
   it('DOM38 + hub DOM43 elegido → agrega DOM04 (enchufe del hub) + DOM43', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM43' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM43']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34', 'DOM04', 'DOM43']);
   });
   it('DOM38 + adaptador DOM33 → DOM33 sin DOM04 (el enchufe alimenta al hub, no al adaptador)', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM33' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34', 'DOM33']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34', 'DOM33']);
     expect(out.some((i) => i.codigo === 'DOM43' || i.codigo === 'DOM03' || i.codigo === 'DOM04')).toBe(false);
   });
   it('DOM38 + HUB USB DOM03 forzado → DOM04 + DOM03', () => {
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM38', motorCargador: 'DOM03' }));
-    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM03']);
+    expect(out.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34', 'DOM04', 'DOM03']);
   });
-  it('DOM41: motor + DOM42, SIN cable DOM40 (#28) y sin hub por defecto; controles/hub adicionales', () => {
+  it('DOM41: solo el motor (sin control, sin cable) + controles/hub pedidos en Fase 2', () => {
     const base = insumosMotorDePano(pano({ motorModelo: 'DOM41' }));
-    expect(base.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42']); // sin DOM40, sin hub
+    expect(base.map((i) => i.codigo)).toEqual(['DOM41']); // sin DOM42, sin cable (#28), sin hub
     const out = insumosMotorDePano(pano({ motorModelo: 'DOM41', motorControlAdicCant: 2, motorHubUsbCant: 1 }));
     expect(out.some((i) => i.codigo === 'DOM34')).toBe(false);
     const ctrl = out.filter((i) => i.codigo === 'DOM42').reduce((a, i) => a + i.cantidad, 0);
-    expect(ctrl).toBe(3); // 1 del kit + 2 adicionales
+    expect(ctrl).toBe(2); // solo los pedidos en Fase 2
     // Los hubs ADICIONALES (explícitos) siguen saliendo aunque el kit no lleve cargador.
     expect(out.find((i) => i.codigo === 'DOM43')?.cantidad).toBe(1);
   });
@@ -390,9 +414,12 @@ describe('insumosMotorDePano', () => {
     expect(insumosMotorDePano(pano({ motorModelo: 'CABLE' }))).toEqual([]);
     expect(insumosMotorDePano(pano({}))).toEqual([]);
   });
-  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38+DOM39 (+cable)', () => {
+  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38 (+cable)', () => {
     const porChip = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada' }));
-    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM39', 'DOM34']);
+    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34']);
+    // Y el control pedido pasa a ser el del DOM38 (DOM39), no el DOM42.
+    const conControl = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada', motorControlAdicCant: 1 }));
+    expect(conControl.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34', 'DOM39']);
     const porCategoria = insumosMotorDePano(pano({ motorModelo: 'DOM41' }), 'ROL_CENEFA_OVALADA_MOTOR_GRANDE');
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.

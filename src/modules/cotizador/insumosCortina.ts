@@ -16,7 +16,11 @@ import {
   esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
-import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import {
+  esFamiliaDark,
+  esFamiliaSoftLightCC,
+  familiaOscuridad,
+} from '@/modules/descuentos/reglas-oscuridad';
 
 export type InsumoCortina = {
   /** Código del insumo (TAP01, TOR02, BRA01, TAR01, DOM38…), sin corchetes. */
@@ -200,13 +204,26 @@ export function cantidadBrackets(anchoM: number): number {
 }
 
 /**
- * DARK lleva cenefa cuadrada SIEMPRE (implícita): su `p.cenefa` viene vacío/'No'
- * porque la cenefa cuadrada es parte fija del sistema, no un adicional elegible.
- * Sirve para engancharla a los mismos insumos de cenefa cuadrada del roller
- * (tapas TAP32/33/34, brackets BRA04/05, tarugos).
+ * DARK y OSCURANTI llevan cenefa cuadrada SIEMPRE (implícita): su `p.cenefa` viene
+ * vacío/'No' porque la cenefa cuadrada es parte fija del sistema, no un adicional
+ * elegible. Sirve para engancharla a los mismos insumos de cenefa cuadrada del
+ * roller (tapas TAP32/33/34, brackets BRA04/05, tarugos).
  */
 export function llevaCenefaCuadradaImplicita(categoria?: string | null): boolean {
-  return familiaOscuridad(categoria) === 'DARK';
+  const fam = familiaOscuridad(categoria);
+  return !!fam && (esFamiliaDark(fam) || fam === 'OSCURANTI');
+}
+
+/**
+ * ¿La cenefa cuadrada de este paño lleva tapas FIJAS (2 por cortina, color de
+ * accesorios), como un sistema de oscuridad? true para DARK y OSCURANTI (cenefa
+ * implícita) y para SOFT LIGHT con cenefa CUADRADA (38 y 45 mm). En
+ * cambio, la cenefa cuadrada de un ROLLER/VERTICAL sigue la política del selector
+ * `cenefaTapa`.
+ */
+export function cenefaCuadradaTapasFijas(categoria?: string | null, cenefa?: string | null): boolean {
+  const fam = familiaOscuridad(categoria, cenefa);
+  return !!fam && (esFamiliaDark(fam) || esFamiliaSoftLightCC(fam) || fam === 'OSCURANTI');
 }
 
 /**
@@ -585,11 +602,14 @@ export function codigoManillaPorColor(color: string | undefined): string {
 }
 
 /**
- * Kit de motor del paño: motor + control, más los controles y hubs adicionales.
- * El cable de carga DOM34 se agrega SOLO al DOM38 (Tronic Plus a batería; el
- * DOM41 no lo lleva). El hub/cargador es OPCIONAL (elección del vendedor en Fase
- * 2): si se elige un hub (DOM43/DOM03) va acompañado de su enchufe DOM04; con
- * DOM33 o sin elección no va ni hub ni DOM04. Vacío si es 'CABLE' o no hay motor.
+ * Kit de motor del paño. Lo ÚNICO automático es la unidad de motor y, con el
+ * DOM38 (Tronic Plus a batería), su cable de carga DOM34 — regla del taller
+ * "DOM38 = DOM34"; el DOM41 no lo lleva. Los CONTROLES (DOM39/DOM42) y la
+ * DOMÓTICA se activan en FASE 2: control por la cantidad del paño
+ * (motorControlAdicCant) y hub/router por su toggle. El hub/cargador es
+ * OPCIONAL (elección del vendedor en Fase 2): si se elige un hub (DOM43/DOM03)
+ * va acompañado de su enchufe DOM04; con DOM33 o sin elección no va ni hub ni
+ * DOM04. Vacío si es 'CABLE' o no hay motor.
  * F15: la cenefa ovalada NO admite DOM41 → cae a DOM38. La regla vive acá (en la
  * derivación del BOM), no solo en la UI, para que una OT importada o cargada sin
  * re-editar la cenefa tampoco emita el kit DOM41 prohibido.
@@ -601,7 +621,6 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
   if (!m) return [];
   const out: InsumoCortina[] = [
     { codigo: m.motor, descripcion: m.nombre, color: '', cantidad: 1 },
-    { codigo: m.control, descripcion: NOMBRE_CONTROL[m.control], color: '', cantidad: 1 },
   ];
   // Cable de carga (DOM34): solo el Tronic Plus a batería (DOM38).
   if (modelo === 'DOM38') {
@@ -617,7 +636,8 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
     }
     out.push({ codigo: cargador.codigo, descripcion: cargador.descripcion, color: '', cantidad: 1 });
   }
-  // Controles adicionales (mismo código que el control del kit).
+  // Controles del paño (DOM39 del DOM38 · DOM42 del DOM41): NO son automáticos,
+  // salen solo de la cantidad que se pide en Fase 2.
   const ctrlAdic = Number(p.motorControlAdicCant) || (p.motorControlAdic ? 1 : 0);
   if (ctrlAdic > 0) {
     out.push({ codigo: m.control, descripcion: NOMBRE_CONTROL[m.control], color: '', cantidad: ctrlAdic });

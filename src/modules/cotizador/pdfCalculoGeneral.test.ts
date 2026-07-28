@@ -569,6 +569,38 @@ describe('TIPO DE SOFT.LIGHT separado de la caída (ARMADO) — #C4/C5', () => {
   });
 });
 
+// Los SEPARADORES (superior de oscuranti + izq/der/base de toda la oscuridad)
+// son perfiles de aluminio que corta el taller: el Cálculo General los muestra,
+// la mesa de tela (Dimensionado) no.
+describe('Dimensionado sin separadores (aluminio, no es mesa de tela)', () => {
+  const oscuVent = (): Ventana => {
+    const v = ventRoller(2.0, 'PIEZA');
+    (v as { categoria: string }).categoria = 'OSCURANTI_63mm';
+    (v as { alto: number }).alto = 2.0;
+    Object.assign(v.panos![0], {
+      alto: 2.0,
+      oscuridadVariante: 'EXTERNO',
+      perfilIzqPiso: true, // superficie del lateral (si no, queda "definir F2")
+      separadorIzq: true, // separador lateral activado a mano
+    });
+    return v;
+  };
+
+  it('el CG completo lista SEPARADOR SUPERIOR; el Dimensionado no', () => {
+    const data = construirCalculoGeneral([oscuVent()]);
+    const bloque = data.bloques.find((b) => b.sistema.key === 'OSCU')!;
+    const labels = bloque.columnas.map((c) => c.label);
+    expect(labels).toContain('SEPARADOR SUPERIOR');
+    expect(labels).toContain('SEPARADOR IZQUIERDO');
+    // El Dimensionado deja solo la tela.
+    const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'OSCU');
+    const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
+    expect(dimLabels.some((l) => l.startsWith('SEPARADOR'))).toBe(false);
+    expect(dimLabels).toContain('TELA');
+    expect(dimLabels).toContain('ALTO TELA');
+  });
+});
+
 // El rediseño del Cálculo General agrupa por SISTEMA en secciones (una banda por
 // tipo de cortina). El builder ya entrega los bloques en el orden fijo del render
 // (ROLLER → SOFT → OSCU → DARK → BEEBLACK → VERTICAL) y cada uno con SOLO sus

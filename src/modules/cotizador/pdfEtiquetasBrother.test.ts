@@ -23,6 +23,8 @@ import {
   codigoPerfilVertical,
   esFilaDark,
   esFilaSoftLight,
+  esFilaSoftLightCC,
+  esFilaOscuranti,
   especTuboEtiqueta,
   familiaTelaEtiqueta,
   fmtMedidaCm,
@@ -372,6 +374,54 @@ describe('esFilaDark', () => {
   });
 });
 
+describe('esFilaSoftLightCC', () => {
+  const row = (categoria: string, piezas: ReturnType<typeof pz>[]): OptimizerRow =>
+    ({ categoria, piezas } as unknown as OptimizerRow);
+  it('true: soft light con cenefa cuadrada delantera SIN trasera', () => {
+    expect(
+      esFilaSoftLightCC(row('SOFT_LIGHT_38mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
+    ).toBe(true);
+  });
+  it('false: Oscuranti tiene la MISMA firma de piezas pero NO es soft light', () => {
+    expect(
+      esFilaSoftLightCC(row('OSCURANTI_63mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
+    ).toBe(false);
+  });
+  it('false: con cenefa TRASERA es DARK, no CC', () => {
+    expect(
+      esFilaSoftLightCC(
+        row('SOFT_LIGHT_38mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263), pz('CENEFA TRASERA', 262)]),
+      ),
+    ).toBe(false);
+  });
+  it('false: soft light ovalada (cenefa ovalada, no delantera)', () => {
+    expect(
+      esFilaSoftLightCC(row('SOFT_LIGHT_45mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA OVALADA', 263)])),
+    ).toBe(false);
+  });
+});
+
+describe('esFilaOscuranti', () => {
+  const row = (categoria: string, piezas: ReturnType<typeof pz>[]): OptimizerRow =>
+    ({ categoria, piezas } as unknown as OptimizerRow);
+  it('true: categoría OSCURANTI con peso de oscuridad + cenefa delantera', () => {
+    expect(
+      esFilaOscuranti(row('OSCURANTI_63mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
+    ).toBe(true);
+  });
+  it('false: soft light CC tiene la MISMA firma de piezas pero otra categoría', () => {
+    expect(
+      esFilaOscuranti(row('SOFT_LIGHT_38mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
+    ).toBe(false);
+  });
+  it('false: roller / soft light ovalada', () => {
+    expect(esFilaOscuranti(row('ROL', [pz('PESO', 250)]))).toBe(false);
+    expect(
+      esFilaOscuranti(row('SOFT_LIGHT_45mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA OVALADA', 263)])),
+    ).toBe(false);
+  });
+});
+
 describe('generarEtiquetasPDF — soft light usa página 62×146', () => {
   it('la etiqueta soft light mide 146 mm de alto (vs 100 del roller)', () => {
     docsGuardados.length = 0;
@@ -433,6 +483,74 @@ describe('generarEtiquetasPDF — DARK usa página 62×146', () => {
     generarEtiquetasPDF([darkRow], { ot: '2525', cliente: 'ADRIANA PASCUZZO', fecha: '2026-07-27' }, {});
     expect(docsGuardados).toHaveLength(1);
     const doc = docsGuardados[0] as jsPDF;
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
+    expect(doc.internal.pageSize.getHeight()).toBeCloseTo(146, 1);
+  });
+});
+
+describe('generarEtiquetasPDF — soft light CC: estructura 146 + página de cenefa cuadrada', () => {
+  it('genera la etiqueta de estructura de 146 mm y ADEMÁS la página extra de cenefa cuadrada', () => {
+    docsGuardados.length = 0;
+    const ccRow = {
+      codInt: 'SC 10',
+      producto: 'ROLLER BLACKOUT',
+      tipo: 'PREMIUM',
+      ubicacion: 'PIEZA',
+      categoria: 'SOFT_LIGHT_38mm',
+      anchoCm: 200,
+      altoCm: 200,
+      tuberiaCod: '38mm_E66',
+      sentido: 'INTERNO',
+      pano: { tipoTela: 'BK', oscuridadVariante: 'INTERNO', color: 'BLANCO', cenefa: 'Cuadrada a muro' },
+      piezas: [
+        pz('TUBO', 193.9),
+        pz('PESO SOFT LIGHT', 193.5),
+        pz('CENEFA DELANTERA', 199.7),
+        pz('Tela (ancho)', 193.3),
+        pz('PERFIL (IZQ) INT', 210),
+        pz('PERFIL (DER) INT', 210),
+      ],
+    } as unknown as OptimizerRow;
+    generarEtiquetasPDF([ccRow], { ot: '268-1', cliente: 'CLIENTE CC', fecha: '2026-07-27' }, {});
+    expect(docsGuardados).toHaveLength(1);
+    const doc = docsGuardados[0] as jsPDF;
+    // 2 páginas: estructura (146 mm) + página extra de cenefa cuadrada (100 mm).
+    expect(doc.getNumberOfPages()).toBe(2);
+    doc.setPage(1);
+    expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
+    expect(doc.internal.pageSize.getHeight()).toBeCloseTo(146, 1);
+  });
+});
+
+describe('generarEtiquetasPDF — OSCURANTI usa página 62×146', () => {
+  it('la etiqueta oscuranti (cenefa cuadrada + separador superior) mide 146 mm', () => {
+    docsGuardados.length = 0;
+    const oscRow = {
+      codInt: 'SC 64',
+      producto: 'ROLLER BLACKOUT',
+      tipo: 'PREMIUM',
+      ubicacion: 'LIVING',
+      categoria: 'OSCURANTI_63mm',
+      anchoCm: 251.5,
+      altoCm: 230,
+      tuberiaCod: '63mm_E47',
+      sentido: 'EXTERNO',
+      pano: { tipoTela: 'BK', oscuridadVariante: 'EXTERNO', color: 'NEGRO' },
+      piezas: [
+        pz('TUBO', 260.9),
+        pz('PESO SOFT LIGHT', 260.86),
+        pz('CENEFA DELANTERA', 267.3),
+        pz('SEPARADOR SUPERIOR', 267.3),
+        pz('Tela (ancho)', 260.84),
+        pz('PERFIL (IZQ) INT', 240),
+        pz('PERFIL (DER) INT', 240),
+      ],
+    } as unknown as OptimizerRow;
+    generarEtiquetasPDF([oscRow], { ot: '269-1', cliente: 'CLIENTE OSC', fecha: '2026-07-28' }, {});
+    expect(docsGuardados).toHaveLength(1);
+    const doc = docsGuardados[0] as jsPDF;
+    // Sin cenefa elegible en el paño: una sola página, la de estructura.
     expect(doc.getNumberOfPages()).toBe(1);
     expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
     expect(doc.internal.pageSize.getHeight()).toBeCloseTo(146, 1);

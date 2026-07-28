@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { construirHojaCorte, filasCorteVisibles, partirHojaCorte, type FilaCorteCortina } from './pdfCorteOptimizacion';
 import { buildOptimizerRows, asignarJuntoEnOrden, autoOptimizar } from './tela';
+import { MODELO_DESPIECE_STUB } from '@/modules/descuentos/despiece';
 import type { PanoColmena } from './planCorte';
 import type { CatalogoProductos } from './types';
 import type { OT, VentanaItem } from '@/modules/ots/types';
@@ -205,6 +206,49 @@ describe('construirHojaCorte — telas invertidas', () => {
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(true);
     expect(hoja.cortinas[0].comentario).toBe('INVERTIDA');
+  });
+});
+
+// OSCURIDAD invertida (OT de prueba 267-26, OSCURANTI externo): la tela se corta
+// MÁS ancha que la medida nominal (+9,34 cm en externo), así que el paño rotado
+// consume ESE ancho del rollo, no el nominal.
+describe('construirHojaCorte — oscuridad invertida usa el ancho de CORTE real', () => {
+  const ventOscu = (ancho: number): VentanaItem =>
+    ({
+      id: `o${ancho}`,
+      ubicacion: 'Living',
+      codInt: 'SC 64',
+      producto: 'ROLLER SCREEN PREMIUM',
+      tipo: 'PREMIUM',
+      categoria: 'OSCURANTI_63mm',
+      grupoId: null,
+      alto: 2.3,
+      precio: 0,
+      cantidad: 1,
+      modelo: MODELO_DESPIECE_STUB,
+      panos: [{ ancho, alto: 2.3, oscuridadVariante: 'EXTERNO' }],
+    }) as unknown as VentanaItem;
+
+  it('EXTERNO 3,00: TOTAL PAÑOS y OPTIMIZADOR van al corte real 3,093 (no 3,00 / 2,55)', () => {
+    const ventanas = [ventOscu(3.0)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(309.34, 2);
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.cortinas[0].invertida).toBe(true);
+    expect(hoja.cortinas[0].corteAncho35).toBe(3.093);
+    expect(hoja.panos[0].altoCortePano).toBe(3.093); // antes mostraba 3,00
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['SC 64']).toBe(3.093); // antes sumaba el alto de corte (2,55)
+  });
+
+  it('borde: nominal 2,90 entra, pero la tela real (2,9934) + borde no → invertida', () => {
+    const ventanas = [ventOscu(2.9)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(299.34, 2);
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.cortinas[0].invertida).toBe(true);
+    expect(hoja.cortinas[0].comentario).toBe('INVERTIDA');
+    expect(hoja.panos[0].altoCortePano).toBe(2.993);
   });
 });
 

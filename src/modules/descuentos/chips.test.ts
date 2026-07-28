@@ -304,6 +304,44 @@ describe('mecanismoParaPano — pre-selección Fase 2', () => {
   });
 });
 
+describe('mecanismoParaPano — soft light CC usa kit simple (como DARK)', () => {
+  it('SOFT_LIGHT_38mm + cenefa Cuadrada + BCO → kit simple MEC 33 (NO ovalada MEC 39)', () => {
+    const mec = mecanismoParaPano(
+      { colorPeso: 'BCO', mecanismo: '', cenefa: 'Cuadrada a muro' },
+      'Blanco',
+      null,
+      OPCIONES_MECANISMO,
+      'SOFT_LIGHT_38mm',
+    );
+    expect(mec).toContain('[MEC 33]');
+    expect(mec).not.toContain('[MEC 39]');
+  });
+
+  it('SOFT_LIGHT_38mm + cenefa Cuadrada + NEG → kit simple MEC 32', () => {
+    expect(
+      mecanismoParaPano(
+        { colorMecanismo: 'NEG', mecanismo: '', cenefa: 'Cuadrada a techo' },
+        '',
+        null,
+        OPCIONES_MECANISMO,
+        'SOFT_LIGHT_38mm',
+      ),
+    ).toContain('[MEC 32]');
+  });
+
+  it('SOFT_LIGHT_38mm con cenefa OVALADA conserva el kit ovalada MEC 39 (regresión)', () => {
+    expect(
+      mecanismoParaPano(
+        { colorPeso: 'BCO', mecanismo: '', cenefa: 'Ovalada' },
+        'Blanco',
+        null,
+        OPCIONES_MECANISMO,
+        'SOFT_LIGHT_38mm',
+      ),
+    ).toContain('[MEC 39]');
+  });
+});
+
 describe('opcionesMecanismoFiltradas — categorías especiales', () => {
   const modelos = [m('MEC_05_LZ90_BLANCO')];
 

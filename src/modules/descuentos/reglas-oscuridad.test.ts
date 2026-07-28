@@ -7,6 +7,7 @@ import {
   montajeBaseDisponible,
   normalizarVarianteOscuridad,
   type FamiliaOscuridad,
+  type MontajeBaseOscuridad,
   type VarianteOscuridad,
 } from './reglas-oscuridad';
 
@@ -33,15 +34,25 @@ const CASOS: Caso[] = [
   { familia: 'SOFT_LIGHT_CC', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.7, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'EXTERNO', ancho: 200, alto: 240, comp: { 'Cenefa Delantera': 215.8, Tubo: 209.4, 'Tela (ancho)': 208.8, Peso: 209 } },
-  // ── OSCURANTI ──
-  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.7, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
-  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
-  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, Tubo: 209.4, 'Tela (ancho)': 208.8, Peso: 209 } },
+  // ── OSCURANTI 0,63 mm ── (pizarra 2026-07-28, mm literal: cenefa del = ancho − 0,03 =
+  // separador superior · tubo = cenefa − 5,8/6/6,4 · tela = tubo − 0,06 · peso = tela + 0,02)
+  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.97, 'Separador superior': 199.97, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
+  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Separador superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 201.44, Peso: 201.46 } },
+  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Separador superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 209.34, Peso: 209.36 } },
   // ── DARK ── (pizarra 2026-07-27, mm literal: cenefa del = ancho − 0,03 · trasera = del − 1 ·
   // tubo = trasera − 4,8/5/5,4 · tela = tubo − 0,06 · peso = tela + 0,02 · velcro = del, alto 15)
   { familia: 'DARK', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.97, 'Cenefa Trasera': 198.97, 'Ancho Tela Velcro': 199.97, 'Alto Tela Velcro': 15, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
   { familia: 'DARK', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Cenefa Trasera': 206.5, 'Ancho Tela Velcro': 207.5, 'Alto Tela Velcro': 15, Tubo: 201.5, 'Tela (ancho)': 201.44, Peso: 201.46 } },
   { familia: 'DARK', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Cenefa Trasera': 214.8, 'Ancho Tela Velcro': 215.8, 'Alto Tela Velcro': 15, Tubo: 209.4, 'Tela (ancho)': 209.34, Peso: 209.36 } },
+  // ── DARK 0,45_1,2mm ── (pizarra 2026-07-28): mismo encadenado que el DARK 38.
+  { familia: 'DARK_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.97, 'Cenefa Trasera': 298.97, 'Ancho Tela Velcro': 299.97, 'Alto Tela Velcro': 15, Tubo: 294.17, 'Tela (ancho)': 294.11, Peso: 294.13 } },
+  { familia: 'DARK_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, 'Cenefa Trasera': 306.5, Tubo: 301.5, 'Tela (ancho)': 301.44, Peso: 301.46 } },
+  { familia: 'DARK_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, 'Cenefa Trasera': 314.8, Tubo: 309.4, 'Tela (ancho)': 309.34, Peso: 309.36 } },
+  // ── SOFT LIGHT CENEFA CUADRADA 0,45_1,2mm ── (pizarra 2026-07-28): igual que el
+  // DARK 45 pero SIN cenefa trasera ni velcro (tubo = cenefa delantera − 5,8/6/6,4).
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.97, Tubo: 294.17, 'Tela (ancho)': 294.11, Peso: 294.13 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, Tubo: 301.5, 'Tela (ancho)': 301.44, Peso: 301.46 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, Tubo: 309.4, 'Tela (ancho)': 309.34, Peso: 309.36 } },
 ];
 
 const medida = (cortes: ReturnType<typeof cortesOscuridad>, nombre: string) =>
@@ -71,11 +82,41 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     expect(cortes.filter((c) => c.columnaExcel === 'PERFIL (IZQ) INT')).toHaveLength(1);
   });
 
-  it('perfil inferior (no soft-light-INTERNO) = cenefa frontal − descuento de variante', () => {
-    const semi = cortesOscuridad('OSCURANTI', 'SEMI', 200, 200, { infPiso: true });
+  it('perfil inferior DARK = cenefa frontal − descuento de variante', () => {
+    const semi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infPiso: true });
     expect(medida(semi, 'Perfil inferior al Piso')).toBe(201.2); // 207.5 − 6.3
-    const oscInterno = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMuro: true });
-    expect(medida(oscInterno, 'Perfil inferior a Muro')).toBe(186.7); // 199.7 − 13
+    const interno = cortesOscuridad('DARK', 'INTERNO', 200, 200, { infMuro: true });
+    expect(medida(interno, 'Perfil inferior a Muro')).toBe(187.37); // 199.97 − 12.6
+  });
+
+  it('perfil base OSCURANTI = ancho real por variante y montaje (pizarra 2026-07-28)', () => {
+    // INTERNO: dentro = ancho − 13,3 (default) · pared a pared = ancho real.
+    const intDentro = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMuro: true });
+    expect(medida(intDentro, 'Perfil inferior a Muro')).toBe(186.7);
+    const intPared = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(intPared, 'Perfil inferior a Muro')).toBe(200);
+    // SEMI: solo pared a pared = ancho − 7,5 (ignora el montaje "dentro").
+    const semi = cortesOscuridad('OSCURANTI', 'SEMI', 200, 200, { infPiso: true });
+    expect(medida(semi, 'Perfil inferior al Piso')).toBe(192.5);
+    const semiDentro = cortesOscuridad('OSCURANTI', 'SEMI', 200, 200, { infPiso: true, infMontaje: 'DENTRO' });
+    expect(medida(semiDentro, 'Perfil inferior al Piso')).toBe(192.5);
+    // EXTERNO: dentro = ancho − 0,8 (default) · pared a pared = ancho + 14.
+    const extDentro = cortesOscuridad('OSCURANTI', 'EXTERNO', 200, 200, { infMuro: true });
+    expect(medida(extDentro, 'Perfil inferior a Muro')).toBe(199.2);
+    const extPared = cortesOscuridad('OSCURANTI', 'EXTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(extPared, 'Perfil inferior a Muro')).toBe(214);
+  });
+
+  it('el separador SUPERIOR de oscuranti va SIEMPRE y mide como la cenefa delantera', () => {
+    const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, {});
+    const sep = cortes.find((c) => c.columnaExcel === 'SEPARADOR SUPERIOR');
+    expect(sep?.medidaCm).toBe(199.97);
+    expect(sep?.perforacion).toBeUndefined();
+    // No lo llevan las demás familias con cenefa cuadrada.
+    for (const fam of ['DARK', 'SOFT_LIGHT_CC'] as const) {
+      const otros = cortesOscuridad(fam, 'INTERNO', 200, 200, {});
+      expect(otros.some((c) => c.columnaExcel === 'SEPARADOR SUPERIOR'), fam).toBe(false);
+    }
   });
 
   it('perfil base SOFT LIGHT INTERNO = ancho − 13,3 (dentro laterales, default)', () => {
@@ -121,11 +162,11 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     expect(ext.find((c) => c.columnaExcel === 'PERFIL BASE')?.perforacion).toBe('INTERNO');
   });
 
-  it('el montaje del base NO afecta Oscuranti/Dark (no son soft light)', () => {
-    const oscPared = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
-    expect(medida(oscPared, 'Perfil inferior a Muro')).toBe(186.7); // 199,7 − 13, montaje ignorado
+  it('el montaje del base NO afecta a DARK (mide sobre la cenefa)', () => {
     const darkSemi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infMuro: true, infMontaje: 'PARED' });
     expect(medida(darkSemi, 'Perfil inferior a Muro')).toBe(201.2); // 207,5 − 6,3
+    const darkInt = cortesOscuridad('DARK', 'INTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
+    expect(medida(darkInt, 'Perfil inferior a Muro')).toBe(187.37); // 199,97 − 12,6
   });
 
   it('sin perfiles ON no agrega cortes de perfil', () => {
@@ -163,14 +204,20 @@ describe('aplicarDefaultsPerfiles — perforación base EXTERNA en INTERNO (piza
     expect(r.derActivo).toBe(true);
   });
 
-  it('OSCURANTI INTERNO: base EXTERNA aunque los laterales NO se auto-activan', () => {
-    const r = aplicarDefaultsPerfiles({}, 'OSCURANTI', 'INTERNO');
-    expect(r.infPerf).toBe('EXTERNO');
-    expect(r.izqActivo).toBeUndefined();
-    expect(r.izqPerf).toBeUndefined();
+  it('OSCURANTI: laterales auto-activados y base EXTERNA en las TRES variantes', () => {
+    const interno = aplicarDefaultsPerfiles({}, 'OSCURANTI', 'INTERNO');
+    expect(interno.infPerf).toBe('EXTERNO');
+    expect(interno.izqActivo).toBe(true);
+    expect(interno.derActivo).toBe(true);
+    expect(interno.izqPerf).toBe('INTERNO');
+    // Pizarra: pared a pared int/ext perforación externa · semi "siempre externa".
+    expect(aplicarDefaultsPerfiles({}, 'OSCURANTI', 'SEMI').infPerf).toBe('EXTERNO');
+    expect(aplicarDefaultsPerfiles({}, 'OSCURANTI', 'EXTERNO').infPerf).toBe('EXTERNO');
+    // Sigue siendo un default editable.
+    expect(aplicarDefaultsPerfiles({ infPerf: 'INTERNO' }, 'OSCURANTI', 'SEMI').infPerf).toBe('INTERNO');
   });
 
-  it('EXTERNO / SEMI: el base NO recibe default de perforación', () => {
+  it('EXTERNO / SEMI: el base NO recibe default de perforación (salvo oscuranti)', () => {
     expect(aplicarDefaultsPerfiles({}, 'SOFT_LIGHT_38', 'EXTERNO').infPerf).toBeUndefined();
     expect(aplicarDefaultsPerfiles({}, 'DARK', 'SEMI').infPerf).toBeUndefined();
   });
@@ -195,9 +242,9 @@ describe('cortesOscuridad — superficie "dentro del marco" (mide como piso = al
     expect(medida(c, 'Perfil derecho dentro del Marco')).toBe(195);
   });
 
-  it('inferior marco = medida base normal (cenefa − descuento en Oscuranti)', () => {
+  it('inferior marco = medida base normal (ancho − 13,3 en Oscuranti INTERNO)', () => {
     const c = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, { infMarco: true });
-    expect(medida(c, 'Perfil inferior dentro del Marco')).toBe(186.7); // 199,7 − 13
+    expect(medida(c, 'Perfil inferior dentro del Marco')).toBe(186.7);
   });
 });
 
@@ -279,10 +326,65 @@ describe('montajeBaseDisponible', () => {
     expect(montajeBaseDisponible('SOFT_LIGHT_CC', 'SEMI')).toBe(false); // SEMI = pared fija
   });
 
-  it('Oscuranti/Dark y familia nula nunca ofrecen selector', () => {
-    expect(montajeBaseDisponible('OSCURANTI', 'INTERNO')).toBe(false);
+  it('oscuranti INTERNO/EXTERNO ofrecen selector; SEMI no (solo pared a pared)', () => {
+    expect(montajeBaseDisponible('OSCURANTI', 'INTERNO')).toBe(true);
+    expect(montajeBaseDisponible('OSCURANTI', 'EXTERNO')).toBe(true);
+    expect(montajeBaseDisponible('OSCURANTI', 'SEMI')).toBe(false);
+  });
+
+  it('Dark 38 y familia nula nunca ofrecen selector', () => {
     expect(montajeBaseDisponible('DARK', 'EXTERNO')).toBe(false);
     expect(montajeBaseDisponible(null, 'INTERNO')).toBe(false);
+  });
+
+  it('0,45_1,2mm (DARK 45 / soft light CC 45): INTERNO y EXTERNO sí, SEMI no', () => {
+    expect(montajeBaseDisponible('DARK_45', 'INTERNO')).toBe(true);
+    expect(montajeBaseDisponible('DARK_45', 'EXTERNO')).toBe(true);
+    expect(montajeBaseDisponible('DARK_45', 'SEMI')).toBe(false);
+    expect(montajeBaseDisponible('SOFT_LIGHT_CC_45', 'INTERNO')).toBe(true);
+    expect(montajeBaseDisponible('SOFT_LIGHT_CC_45', 'SEMI')).toBe(false);
+  });
+});
+
+// Pizarras 0,45_1,2mm (2026-07-28): el perfil BASE se mide sobre el ANCHO REAL,
+// por variante y montaje (no como el DARK 38, que lo saca de la cenefa).
+describe('perfil base 0,45_1,2mm por montaje (DARK 45 / soft light CC 45)', () => {
+  const base = (
+    familia: FamiliaOscuridad,
+    variante: VarianteOscuridad,
+    infMontaje?: MontajeBaseOscuridad,
+  ) =>
+    medida(
+      cortesOscuridad(familia, variante, 300, 230, { infPiso: true, infMontaje }),
+      'Perfil inferior al Piso',
+    );
+
+  for (const familia of ['DARK_45', 'SOFT_LIGHT_CC_45'] as FamiliaOscuridad[]) {
+    it(`${familia}: dentro / pared a pared por variante`, () => {
+      expect(base(familia, 'INTERNO')).toBe(286.7); // 300 − 13,3
+      expect(base(familia, 'INTERNO', 'PARED')).toBe(300); // ancho real
+      expect(base(familia, 'SEMI')).toBe(292.5); // solo pared: 300 − 7,5
+      expect(base(familia, 'SEMI', 'PARED')).toBe(292.5);
+      expect(base(familia, 'EXTERNO')).toBe(299.92); // 300 − 0,8 mm
+      expect(base(familia, 'EXTERNO', 'PARED')).toBe(314); // 300 + 14
+    });
+  }
+
+  it('la perforación del base nace EXTERNA en las tres variantes (editable)', () => {
+    for (const variante of ['INTERNO', 'SEMI', 'EXTERNO'] as VarianteOscuridad[]) {
+      const eff = aplicarDefaultsPerfiles({}, 'DARK_45', variante);
+      expect(eff.infPerf, variante).toBe('EXTERNO');
+      // Y los laterales se activan solos, como en el resto de la oscuridad.
+      expect(eff.izqActivo).toBe(true);
+      expect(eff.derActivo).toBe(true);
+    }
+  });
+
+  it('regresión: el DARK 38 sigue midiendo el base desde la cenefa', () => {
+    // cenefa EXTERNO 215,8 − 12,6 = 203,2 (tabla INF_DESC, sin montaje).
+    expect(
+      medida(cortesOscuridad('DARK', 'EXTERNO', 200, 200, { infPiso: true }), 'Perfil inferior al Piso'),
+    ).toBe(203.2);
   });
 });
 
@@ -291,9 +393,11 @@ describe('familiaOscuridad / normalizarVarianteOscuridad', () => {
     expect(familiaOscuridad('SOFT_LIGHT_38mm', 'Ovalada')).toBe('SOFT_LIGHT_38');
     expect(familiaOscuridad('SOFT_LIGHT_38mm', 'Cuadrada')).toBe('SOFT_LIGHT_CC');
     expect(familiaOscuridad('SOFT_LIGHT_45mm', '')).toBe('SOFT_LIGHT_45');
-    expect(familiaOscuridad('SOFT_LIGHT_45mm', 'Cuadrada')).toBe('SOFT_LIGHT_CC');
+    // El 45 con cenefa cuadrada tiene pizarra propia (0,45_1,2mm).
+    expect(familiaOscuridad('SOFT_LIGHT_45mm', 'Cuadrada')).toBe('SOFT_LIGHT_CC_45');
     expect(familiaOscuridad('OSCURANTI_63mm', '')).toBe('OSCURANTI');
     expect(familiaOscuridad('DARK_38mm', '')).toBe('DARK');
+    expect(familiaOscuridad('DARK_45mm', '')).toBe('DARK_45');
     expect(familiaOscuridad('ROL', '')).toBeNull();
   });
 

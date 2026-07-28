@@ -21,7 +21,31 @@ import type { CatalogoProductos, Producto } from './types';
 export type FilaCatalogo = { codInt: string; producto: Producto; anchoRollo: number | null };
 
 /** Normaliza un COD_INT: trim, colapsa espacios, mayúsculas (claves tipo "BK 13"). */
-const normCod = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+export const normCod = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
+
+/**
+ * Clave REAL del catálogo para un COD_INT tecleado/importado, tolerante a
+ * mayúsculas y a los espacios del código: las llaves llevan espacio ("DOM 42")
+ * pero las planillas de insumos escriben "DOM42". Prioridad: coincidencia exacta
+ * → normalizada (trim/espacios/mayúsculas) → sin espacios. `null` si no existe.
+ */
+export function claveCatalogoCanonica(
+  catalogo: CatalogoProductos,
+  texto: string | undefined | null,
+): string | null {
+  const crudo = String(texto ?? '').trim();
+  if (!crudo) return null;
+  if (catalogo[crudo]) return crudo;
+  const buscado = normCod(crudo);
+  const sinEspacios = buscado.replace(/\s+/g, '');
+  let porSinEspacios: string | null = null;
+  for (const k of Object.keys(catalogo)) {
+    const n = normCod(k);
+    if (n === buscado) return k;
+    if (!porSinEspacios && n.replace(/\s+/g, '') === sinEspacios) porSinEspacios = k;
+  }
+  return porSinEspacios;
+}
 /** Normaliza una cabecera: minúsculas sin acentos, para mapear columnas. */
 const normHeader = (s: unknown) =>
   String(s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
