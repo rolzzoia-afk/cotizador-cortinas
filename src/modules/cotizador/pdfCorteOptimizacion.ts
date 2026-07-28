@@ -103,6 +103,16 @@ const aMetros = (cm: number) => parseFloat((cm / 100).toFixed(3));
 /** Redondea metros a 3 decimales sin ceros sobrantes. */
 const redM = (m: number) => parseFloat(m.toFixed(3));
 
+/**
+ * Ancho (m) que la pieza consume a lo ancho del rollo: el de CORTE real cuando
+ * el despiece lo entrega (oscuridad — Soft Light / Oscuranti / Dark, donde la
+ * tela sale MÁS ancha que el nominal en semi/externo) y el ancho nominal en el
+ * resto. En roller el corte es ancho−3,5 (menor que el nominal), así que seguir
+ * con el nominal es lo conservador y no se toca.
+ */
+const anchoConsumidoM = (r: OptimizerRow) =>
+  typeof r.anchoCorteTelaCm === 'number' ? redM(r.anchoCorteTelaCm / 100) : redM(r.ancho);
+
 /** Tipo corto = última palabra del producto ("ROLLER SCREEN PREMIUM" → "PREMIUM"). */
 const tipoCorto = (producto: string) => {
   const partes = String(producto || '').trim().toUpperCase().split(/\s+/);
@@ -140,12 +150,16 @@ export function construirHojaCorte(
 
   // ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no
   // está definido, se auto-marca cuando el ancho + borde supera el rollo.
-  // Se compara contra `r.ancho` = ancho REAL de la pieza a lo ancho del rollo.
+  // Se compara contra el ancho CONSUMIDO (el de corte real en oscuridad, el
+  // nominal en el resto): un externo de 2,90 nominal corta 2,9934 de tela y
+  // tampoco entra a lo ancho del rollo.
   // La VERTICAL NUNCA se invierte: su tela se corta en lamas de 8,9 cm que
   // siempre entran a lo ancho del rollo (una ventana ancha = más lamas, en
   // varias pasadas). Si se invirtiera, las lamas quedarían acostadas.
   const esInvertida = (r: OptimizerRow) =>
-    r.esVertical ? false : (r.pano?.invertida ?? debeInvertirPano(r.ancho, r.anchoRollo, params.bordeCm));
+    r.esVertical
+      ? false
+      : (r.pano?.invertida ?? debeInvertirPano(anchoConsumidoM(r), r.anchoRollo, params.bordeCm));
 
   // Pasadas del rollo para una vertical más ancha que el rollo: se cortan las
   // lamas en varias franjas a lo largo del rollo (ceil(ancho / ancho rollo)).
@@ -185,7 +199,7 @@ export function construirHojaCorte(
     // Más ancha que el rollo y no rota → no cabe. El aviso va en COMENTARIO;
     // CORTAR JUNTO siempre muestra la letra del paño (nunca "RR"). La vertical
     // se excluye: nunca "no cabe" (se corta en lamas), lleva su propio aviso.
-    const noCabe = !inv && !r.esVertical && r.ancho > r.anchoRollo;
+    const noCabe = !inv && !r.esVertical && anchoConsumidoM(r) > r.anchoRollo;
     const pasadas = pasadasVertical(r);
     const pano = juntoNum.get(claveJunto(r, idx)) ?? 0;
     const colmena = colmenaDePieza(pid);
@@ -251,7 +265,12 @@ export function construirHojaCorte(
     const corteReal = Math.max(...grupo.map((g) => redM(g.altoCorte)));
     const altoMax = Math.max(...grupo.map((g) => redM(g.altoReal)));
     // Ancho de la pieza a lo ancho del rollo (en la vertical ya viene invertido).
-    const anchoMax = Math.max(...grupo.map((g) => redM(g.ancho)));
+    // En oscuridad manda el ancho de CORTE real (mayor que el nominal en
+    // semi/externo): un paño invertido se corta a ESA medida, no a la nominal.
+    const anchoMax = Math.max(...grupo.map((g) => anchoConsumidoM(g)));
+    // ¿El grupo trae ancho de corte propio del despiece (oscuridad)? Solo en ese
+    // caso el total del OPTIMIZADOR usa el ancho consumido para las invertidas.
+    const conCorteTela = grupo.some((g) => typeof g.anchoCorteTelaCm === 'number');
     // Origen colmena del paño (si alguna de sus piezas sale de un sobrante):
     // ubicación · medida, para que la cortadora sepa de dónde tomar la tela.
     let colmena = '';
@@ -282,9 +301,12 @@ export function construirHojaCorte(
     // Solo los paños de ROLLO suman al OPTIMIZADOR (los de colmena ya están
     // cortados). El COD_INT se registra igual —aunque sume 0— para que su fila no
     // desaparezca. La reserva por paño de rollo = "alto máximo a utilizar".
+    // Paño INVERTIDO de oscuridad: el rollo se baja a lo largo del ANCHO de
+    // corte real (lo mismo que muestra TOTAL PAÑOS), no del alto. En roller se
+    // mantiene el criterio manual de siempre (alto de corte).
     const claveOpt = `${ref.codInt}|${vert}`;
     const prev = metrosPorCod.get(claveOpt);
-    const suma = colmena ? 0 : inv ? corteReal : altoMax;
+    const suma = colmena ? 0 : inv ? (conCorteTela ? anchoMax : corteReal) : altoMax;
     if (prev) prev.metros += suma;
     else metrosPorCod.set(claveOpt, { codInt: ref.codInt, metros: suma, esVertical: vert });
   }

@@ -42,6 +42,8 @@ import {
   WHATSAPP_MESSAGES,
 } from '@/modules/ots/constants';
 import type { DatosGenerales, OT, OTEstado, SubEtapaProd } from '@/modules/ots/types';
+import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
+import type { Ventana } from '@/modules/cotizador/types';
 import { confirmar } from '@/components/ui/confirm';
 
 const EMPTY_FORM: DatosGenerales = {
@@ -165,9 +167,18 @@ export function Panel() {
     }
   };
 
-  const handleMoverEstado = async (id: string, nuevoEstado: OTEstado) => {
+  const handleMoverEstado = async (ot: OT, nuevoEstado: OTEstado) => {
+    // Mismo bloqueo que el botón de Fase 2: una OT de terreno no se aprueba con
+    // datos a medias (acá se esquivaba el gate avanzando desde el Panel).
+    if (ot.estado === 'terreno' && nuevoEstado === 'aprobada') {
+      const faltan = pendientesFase2((ot.storeVentanas || []) as unknown as Ventana[]);
+      if (faltan.length > 0) {
+        toast.error(`Falta completar la Fase 2: ${resumenPendientes(faltan)}.`);
+        return;
+      }
+    }
     try {
-      await moverEstado(id, nuevoEstado);
+      await moverEstado(ot.id, nuevoEstado);
     } catch (e) {
       toast.error('Error al mover estado');
     }
@@ -324,7 +335,7 @@ export function Panel() {
                           localStorage.setItem('activeOTId', ot.id);
                           navigate(`/ots/${ot.id}/${ruta}`);
                         }}
-                        onMoverEstado={(est) => handleMoverEstado(ot.id, est)}
+                        onMoverEstado={(est) => handleMoverEstado(ot, est)}
                         onMoverSub={(sub) => moverSubEtapa(ot.id, sub)}
                         onArchivar={() => handleArchivar(ot)}
                         onWhatsApp={() => handleWhatsApp(ot)}

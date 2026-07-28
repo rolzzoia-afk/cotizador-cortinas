@@ -45,6 +45,7 @@ import {
   aplicarDefaultsPerfiles,
   cortesOscuridad,
   esFamiliaSoftLight,
+  esFamiliaSoftLightCC,
   familiaOscuridadConDiametro,
   medidaPerfilOscuridad,
   montajeBaseDisponible,
@@ -664,7 +665,10 @@ export function PanoEditor({
             />
           </>
         )}
-        {esCenefaCuadrada(pano.cenefa) && (
+        {/* Soft light con cenefa CUADRADA (familias SOFT_LIGHT_CC / _CC_45): las
+            tapas son fijas (2, color de accesorios), como DARK → no se ofrecen los
+            selectores. Las cenefas cuadradas de roller/vertical sí los muestran. */}
+        {esCenefaCuadrada(pano.cenefa) && !(familia && esFamiliaSoftLightCC(familia)) && (
           <>
             <RadioRow
               label="Tapas"
@@ -1198,8 +1202,10 @@ export function PanoEditor({
             onChange={(v) => onChange({ motorCargador: v || 'NINGUNO' })}
           />
           <div className="flex flex-wrap items-end gap-4 pt-1">
+            {/* El control NO es automático: el motor solo emite su unidad (y el
+                cable DOM34 si es DOM38). Lo que se ponga acá es lo que se pide. */}
             <div className="max-w-[150px]">
-              <Label>Controles adicionales</Label>
+              <Label>Controles</Label>
               <Input
                 type="number"
                 min={0}

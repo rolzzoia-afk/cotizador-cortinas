@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Copy, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
@@ -9,6 +9,9 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
+import { claveCatalogoCanonica } from '@/modules/cotizador/importarCatalogo';
+import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
+import type { Ventana as VentanaFase2 } from '@/modules/cotizador/types';
 import { recargoTarjetaEfectivo, useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
 import {
@@ -214,8 +217,9 @@ const N = (s?: string) => (s || '').toUpperCase();
 const CHIP_DE_CODINT: Record<string, string> = {
   // MOT
   'DOM 01': 'MOT', 'DOM 02': 'MOT', 'DOM 03': 'MOT', 'DOM 05': 'MOT', INSTMOT: 'MOT',
-  // MOTOR MG
-  'DOM 33': 'MOTOR_MG', 'DOM 34': 'MOTOR_MG', 'DOM 38': 'MOTOR_MG', 'DOM 39': 'MOTOR_MG', INSTMOTMG: 'MOTOR_MG',
+  // MOTOR MG (DOM 41 motor Merygate + DOM 42 su control Livorno 15 CH)
+  'DOM 33': 'MOTOR_MG', 'DOM 34': 'MOTOR_MG', 'DOM 38': 'MOTOR_MG', 'DOM 39': 'MOTOR_MG',
+  'DOM 41': 'MOTOR_MG', 'DOM 42': 'MOTOR_MG', INSTMOTMG: 'MOTOR_MG',
   // SOFT
   SOFTLDER: 'SOFT', SOFTLIZQ: 'SOFT', 'CENF O': 'SOFT', INSTSOFT: 'SOFT',
   // OSCURA
@@ -770,23 +774,33 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
 
   const productosFiltrados = useMemo(() => {
     const q = busqueda.trim().toUpperCase();
+    // Los COD_INT del catálogo llevan espacio ("DOM 42") pero en las planillas de
+    // insumos se escriben pegados ("DOM42"): se busca también sin espacios.
+    const qPegado = q.replace(/\s+/g, '');
     const filtro = filtroActivo ? FILTROS_CATALOGO.find((f) => f.id === filtroActivo) : null;
     return Object.entries(catalogo)
       .filter(([ci, p]) => {
         if (filtro && !filtro.match(p, ci)) return false;
         if (q) {
           const hay = `${ci} ${p.producto || ''} ${p.cod || ''}`.toUpperCase();
-          if (!hay.includes(q)) return false;
+          if (!hay.includes(q) && !hay.replace(/\s+/g, '').includes(qPegado)) return false;
         }
         return true;
       })
       .sort((a, b) => (a[1].producto || '').localeCompare(b[1].producto || ''));
   }, [catalogo, filtroActivo, busqueda]);
 
+  // COD_INT tal como vive en el catálogo ("DOM42" tecleado → "DOM 42"). Si no
+  // existe se devuelve lo escrito (para que la celda quede marcada en rojo).
+  const canonizarCodInt = useCallback(
+    (ci: string | undefined): string => claveCatalogoCanonica(catalogo, ci) ?? (ci ?? ''),
+    [catalogo],
+  );
+
   // DCT% por defecto (0–100) del código, tomado del catálogo. Autollena la
   // columna al elegir/importar un COD_INT; el usuario lo puede editar después.
   const dctDeCodigo = (ci: string | undefined): number =>
-    Math.round((Number(catalogo[(ci || '').trim()]?.descuento) || 0) * 100);
+    Math.round((Number(catalogo[canonizarCodInt(ci)]?.descuento) || 0) * 100);
 
   const agregarProducto = (codInt: string) => {
     const prod = catalogo[codInt];
@@ -810,6 +824,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   };
 
   const setFila = (id: string, patch: Partial<FilaUI>) => {
+    // El COD_INT se guarda como está en el catálogo ("sc64" → "SC 64"): así el
+    // producto, el precio y el DCT% se resuelven aunque se teclee sin espacio.
+    if ('codInt' in patch) patch = { ...patch, codInt: canonizarCodInt(patch.codInt) };
     // Al cambiar el COD_INT, autollenar el DCT% con el descuento del código
     // (salvo que el patch ya traiga un descuento explícito).
     let conDct =
@@ -903,6 +920,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       const nuevas: FilaUI[] = [];
       const errores = new Map<string, Set<CampoFase0>>();
       for (const c of cortinas) {
+        // "SC64" en la planilla → "SC 64" del catálogo (antes quedaba en rojo).
+        c.codInt = canonizarCodInt(c.codInt);
         const categoria = canonizar(c.categoria, CATEGORIAS_MECANISMO);
         const direccion = canonizar(c.direccion, DIRECCIONES);
         // Caída (SENT. CORT): la vertical no se enrolla → vacío. Los sistemas de
@@ -942,15 +961,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // La instalación base es automática (Fase 2): no se importa como adicional.
         if (esInstalacionBase(a.codInt)) continue;
         const id = crypto.randomUUID();
+        // "DOM42" de la planilla de insumos → "DOM 42" del catálogo.
+        const codInt = canonizarCodInt(a.codInt);
         nuevosAdic.push({
           id,
-          codInt: a.codInt,
+          codInt,
           cantidad: a.cantidad || 1,
-          descuento: dctDeCodigo(a.codInt),
+          descuento: dctDeCodigo(codInt),
           ubicacion: a.ubicacion,
           colorAcc: a.colorAcc,
         });
-        if (!a.codInt || !catalogo[a.codInt.trim()]) erroresAdic.set(id, new Set(['codInt']));
+        if (!codInt || !catalogo[codInt]) erroresAdic.set(id, new Set(['codInt']));
       }
 
       // Dual (roller doble tela): las 2 filas ROL_DUAL de la misma UBIC se
@@ -992,6 +1013,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   };
 
   const setAdic = (id: string, patch: Partial<AdicionalUI>) => {
+    // Mismo criterio que las cortinas: se guarda la llave real del catálogo
+    // ("dom42" → "DOM 42"), así el adicional trae producto, precio y DCT%.
+    if ('codInt' in patch) patch = { ...patch, codInt: canonizarCodInt(patch.codInt) };
     const conDct =
       'codInt' in patch && !('descuento' in patch)
         ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
@@ -1037,6 +1061,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     modo === 'fase3' &&
     !!otCargada &&
     ['produccion', 'lista', 'instalada', 'archivada'].includes(otCargada.estado);
+
+  // Una OT que sigue en TERRENO no puede trabajarse en Fase 3 con la Fase 2 a
+  // medias (se llegaba acá por URL o por el menú "Ir a fase" del Panel).
+  useEffect(() => {
+    if (modo !== 'fase3' || !otCargada || otCargada.estado !== 'terreno') return;
+    const faltan = pendientesFase2((otCargada.storeVentanas || []) as unknown as VentanaFase2[]);
+    if (faltan.length === 0) return;
+    toast.error(`Falta completar la Fase 2: ${resumenPendientes(faltan)}.`);
+    navigate(`/ots/${otCargada.id}/fase2`, { replace: true });
+  }, [modo, otCargada, navigate]);
 
   return (
     <div className="min-h-full bg-background text-foreground">

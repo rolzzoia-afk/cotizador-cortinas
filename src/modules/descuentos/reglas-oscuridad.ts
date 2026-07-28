@@ -36,9 +36,11 @@ export type VarianteOscuridad = 'INTERNO' | 'SEMI' | 'EXTERNO';
 export type FamiliaOscuridad =
   | 'SOFT_LIGHT_38'
   | 'SOFT_LIGHT_45'
-  | 'SOFT_LIGHT_CC' // Soft Light con cenefa cuadrada (38 y 45 son idénticas)
+  | 'SOFT_LIGHT_CC' // Soft Light 38 mm con cenefa cuadrada
+  | 'SOFT_LIGHT_CC_45' // Soft Light 45 mm (0,45_1,2mm) con cenefa cuadrada
   | 'OSCURANTI'
-  | 'DARK';
+  | 'DARK' // Dark 38 mm
+  | 'DARK_45'; // Dark 0,45_1,2mm (pizarra 2026-07-28)
 
 /** Perforación (anotación de taller) de un perfil: no cambia la medida. */
 export type PerforacionPerfil = 'INTERNO' | 'EXTERNO';
@@ -150,19 +152,30 @@ const CENEFA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-1.2, 6.6, 13.2],
   SOFT_LIGHT_45: [-1.2, 6.6, 13.2],
   SOFT_LIGHT_CC: [-0.3, 7.5, 15.8],
-  OSCURANTI: [-0.3, 7.5, 15.8],
+  // OSCURANTI: cenefa cuadrada delantera = ancho − 0,3mm (pizarra 2026-07-28, mm
+  // literal, igual que DARK). SEMI/EXTERNO suman cm enteros.
+  OSCURANTI: [-0.03, 7.5, 15.8],
   // DARK: cenefa cuadrada delantera = ancho − 0,3mm (pizarra 2026-07-27, mm literal).
   DARK: [-0.03, 7.5, 15.8],
+  // Sistemas 0,45_1,2mm (pizarras 2026-07-28): mismo encadenado que DARK 38.
+  DARK_45: [-0.03, 7.5, 15.8],
+  SOFT_LIGHT_CC_45: [-0.03, 7.5, 15.8],
 };
 const TUBO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-3.0, 4.8, 11.4],
   // Soft light 45 mm (0,45_1,2mm) BLANCO: tubo = cenefa − 3,1 (fórmula usuario 2026-07-24).
   SOFT_LIGHT_45: [-4.3, 3.5, 10.1],
   SOFT_LIGHT_CC: [-6.1, 1.5, 9.4],
-  OSCURANTI: [-6.1, 1.5, 9.4],
+  // OSCURANTI: tubo = cenefa delantera (= separador superior) − 5,8/6/6,4 cm
+  // (pizarra 2026-07-28). INT = ancho − 5,83 · SEMI = ancho + 1,5 · EXT = ancho + 9,4.
+  OSCURANTI: [-5.83, 1.5, 9.4],
   // DARK: tubo = cenefa trasera (= delantera − 1) − 4,8/5/5,4 cm (pizarra 2026-07-27).
   //   INT = ancho − 5,83 · SEMI = ancho + 1,5 · EXT = ancho + 9,4.
   DARK: [-5.83, 1.5, 9.4],
+  // 0,45_1,2mm: DARK 45 = cenefa trasera − 4,8/5/5,4 · soft light CC 45 = cenefa
+  // delantera − 5,8/6/6,4. Ambos encadenados dan los mismos netos sobre el ancho.
+  DARK_45: [-5.83, 1.5, 9.4],
+  SOFT_LIGHT_CC_45: [-5.83, 1.5, 9.4],
 };
 // Tubo con accesorios NEGROS. Único caso donde el corte de oscuridad depende del
 // color: en el 45 mm el tubo es cenefa − 2,9 (en vez de − 3,1 del blanco), o sea
@@ -175,27 +188,39 @@ const PESO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-7.0, 0.8, 7.4],
   SOFT_LIGHT_45: [-7.0, 0.8, 7.4],
   SOFT_LIGHT_CC: [-6.5, 1.1, 9.0],
-  OSCURANTI: [-6.5, 1.1, 9.0],
+  // OSCURANTI: peso = tela + 0,2mm (pizarra 2026-07-28).
+  OSCURANTI: [-5.87, 1.46, 9.36],
   // DARK: peso = tela + 0,2mm (pizarra 2026-07-27). INT −5,87 · SEMI +1,46 · EXT +9,36.
   DARK: [-5.87, 1.46, 9.36],
+  DARK_45: [-5.87, 1.46, 9.36],
+  SOFT_LIGHT_CC_45: [-5.87, 1.46, 9.36],
 };
 const TELA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-7.2, 0.6, 7.2],
   SOFT_LIGHT_45: [-7.2, 0.6, 7.2],
   SOFT_LIGHT_CC: [-6.7, 0.9, 8.8],
-  OSCURANTI: [-6.7, 0.9, 8.8],
+  // OSCURANTI: tela = tubo − 0,6mm (pizarra 2026-07-28).
+  OSCURANTI: [-5.89, 1.44, 9.34],
   // DARK: tela = tubo − 0,6mm (pizarra 2026-07-27). INT −5,89 · SEMI +1,44 · EXT +9,34.
   DARK: [-5.89, 1.44, 9.34],
+  DARK_45: [-5.89, 1.44, 9.34],
+  SOFT_LIGHT_CC_45: [-5.89, 1.44, 9.34],
 };
 // Cenefa trasera (solo DARK): cenefa delantera − 1.
 const CENEFA_TRASERA_DESC = 1;
 // Perfil inferior: cenefa delantera − descuento por familia y variante [INTERNO, SEMI, EXTERNO].
+// Hoy solo lo usa DARK: soft light mide sobre el ancho real (INF_SOFTLIGHT_ADJ) y
+// oscuranti también, por montaje (INF_OSCURANTI_ADJ).
 const INF_DESC: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [12.6, 6.3, 12.6],
   SOFT_LIGHT_45: [12.6, 6.3, 12.6],
   SOFT_LIGHT_CC: [12.6, 6.3, 12.6],
   OSCURANTI: [13, 6.3, 12.6],
   DARK: [12.6, 6.3, 12.6],
+  // Las familias 0,45_1,2mm miden el base sobre el ANCHO por montaje
+  // (INF_45_ADJ); estas entradas no se usan (quedan por completitud del Record).
+  DARK_45: [12.6, 6.3, 12.6],
+  SOFT_LIGHT_CC_45: [12.6, 6.3, 12.6],
 };
 // Soft light: el perfil base NO se mide sobre la cenefa sino sobre el ANCHO REAL
 // directo, con un ajuste neto por variante y montaje (dentro de los laterales /
@@ -207,10 +232,50 @@ const INF_SOFTLIGHT_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARE
   SEMI: { DENTRO: null, PARED: 7.5 },
   EXTERNO: { DENTRO: 0.08, PARED: 14 },
 };
+// Oscuranti: igual que soft light, el perfil base se mide sobre el ANCHO REAL con
+// ajuste por variante y montaje (pizarra 2026-07-28). SEMI solo va pared a pared.
+//   INTERNO: dentro = ancho − 13,3 · pared = ancho (perforación externa).
+//   SEMI:    pared = ancho − 7,5 (perforación siempre externa).
+//   EXTERNO: dentro = ancho − 0,8 · pared = ancho + 14 (perforación externa).
+const INF_OSCURANTI_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }> = {
+  INTERNO: { DENTRO: -13.3, PARED: 0 },
+  SEMI: { DENTRO: null, PARED: -7.5 },
+  EXTERNO: { DENTRO: -0.8, PARED: 14 },
+};
+// Sistemas 0,45_1,2mm (DARK 45 y soft light cenefa cuadrada 45, pizarras
+// 2026-07-28): el perfil base se mide sobre el ANCHO REAL por variante y montaje.
+//   INTERNO: dentro = ancho − 13,3 · pared = ancho.
+//   SEMI:    solo pared a pared = ancho − 7,5.
+//   EXTERNO: dentro = ancho − 0,8 MM (0,08 cm) · pared = ancho + 14.
+// La perforación del base es EXTERNA en las tres variantes (default editable).
+const INF_45_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }> = {
+  INTERNO: { DENTRO: -13.3, PARED: 0 },
+  SEMI: { DENTRO: null, PARED: -7.5 },
+  EXTERNO: { DENTRO: -0.08, PARED: 14 },
+};
 const FAMILIAS_SOFT_LIGHT: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC'];
-/** ¿Es un sistema soft light (38/45/cenefa cuadrada)? (No Oscuranti/Dark.) */
+/**
+ * ¿Es un sistema soft light de los que miden el base con INF_SOFTLIGHT_ADJ
+ * (38/45 ovalada + cenefa cuadrada 38)? El soft light cenefa cuadrada de 45
+ * tiene su propia tabla (INF_45_ADJ), así que NO entra acá.
+ */
 export function esFamiliaSoftLight(familia: FamiliaOscuridad): boolean {
   return FAMILIAS_SOFT_LIGHT.includes(familia);
+}
+const FAMILIAS_45: FamiliaOscuridad[] = ['DARK_45', 'SOFT_LIGHT_CC_45'];
+/** ¿Sistema 0,45_1,2mm (DARK 45 / soft light cenefa cuadrada 45)? */
+export function esFamilia45(familia: FamiliaOscuridad): boolean {
+  return FAMILIAS_45.includes(familia);
+}
+const FAMILIAS_DARK: FamiliaOscuridad[] = ['DARK', 'DARK_45'];
+/** ¿Sistema DARK (38 o 45)? Lleva cenefa trasera y tira de velcro. */
+export function esFamiliaDark(familia: FamiliaOscuridad): boolean {
+  return FAMILIAS_DARK.includes(familia);
+}
+const FAMILIAS_CC: FamiliaOscuridad[] = ['SOFT_LIGHT_CC', 'SOFT_LIGHT_CC_45'];
+/** ¿Soft light con cenefa CUADRADA (38 o 45)? */
+export function esFamiliaSoftLightCC(familia: FamiliaOscuridad): boolean {
+  return FAMILIAS_CC.includes(familia);
 }
 /** ¿Los accesorios del paño son negros? (Elige la tabla de tubo del 45 mm.) */
 export function esColorAccesoriosNegro(valor: string | null | undefined): boolean {
@@ -221,7 +286,9 @@ const PERFIL_LATERAL_MURO_SUMA = 10;
 // Alto de la tira de velcro (DARK): fijo.
 const ALTO_TELA_VELCRO_CM = 15;
 
-const CON_CENEFA_DELANTERA: FamiliaOscuridad[] = ['SOFT_LIGHT_CC', 'OSCURANTI', 'DARK'];
+const CON_CENEFA_DELANTERA: FamiliaOscuridad[] = [
+  'SOFT_LIGHT_CC', 'SOFT_LIGHT_CC_45', 'OSCURANTI', 'DARK', 'DARK_45',
+];
 
 export function esFamiliaConCenefaCuadrada(familia: FamiliaOscuridad): boolean {
   return CON_CENEFA_DELANTERA.includes(familia);
@@ -240,10 +307,10 @@ export function familiaOscuridad(
   // Prefijo: cubre 'Cuadrada a muro' / 'a techo' y el 'Cuadrada' legacy.
   const esCuadrada = (cenefaTipo || '').trim().toUpperCase().startsWith('CUADRADA');
   if (cat === 'SOFT_LIGHT_38MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_38';
-  if (cat === 'SOFT_LIGHT_45MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_45';
-  // DARK_45MM comparte hoy las fórmulas del 38 (pizarra 2026-07-27). Cuando lleguen
-  // las fórmulas propias del 45 se separa en su familia (patrón SOFT_LIGHT_38/_45).
-  if (cat === 'DARK_38MM' || cat === 'DARK_45MM') return 'DARK';
+  // El soft light 45 con cenefa CUADRADA tiene pizarra propia (0,45_1,2mm).
+  if (cat === 'SOFT_LIGHT_45MM') return esCuadrada ? 'SOFT_LIGHT_CC_45' : 'SOFT_LIGHT_45';
+  if (cat === 'DARK_38MM') return 'DARK';
+  if (cat === 'DARK_45MM') return 'DARK_45';
   if (cat === 'OSCURANTI_63MM') return 'OSCURANTI';
   return null;
 }
@@ -286,7 +353,10 @@ export function normalizarMontajeBase(
 }
 
 /** Familias cuyos LATERALES son parte física del sistema (siempre presentes). */
-const CON_LATERALES_SIEMPRE: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC', 'DARK'];
+const CON_LATERALES_SIEMPRE: FamiliaOscuridad[] = [
+  'SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC', 'SOFT_LIGHT_CC_45',
+  'DARK', 'DARK_45', 'OSCURANTI',
+];
 
 /**
  * Aplica los defaults de perfiles que impone la VARIANTE (asignada en Fase 1):
@@ -295,7 +365,9 @@ const CON_LATERALES_SIEMPRE: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_
  * paño ya trae (Fase 2) mandan; solo se rellenan los que están sin definir. El
  * perfil base (inferior) NO se activa por defecto (se elige en Fase 2), pero en
  * los sistemas INTERNOS su perforación nace EXTERNA (pizarra 2026-07-27) — esto
- * aplica a TODA familia de oscuridad, Oscuranti incluido.
+ * aplica a TODA familia de oscuridad. En oscuranti nace EXTERNA en las tres
+ * variantes (pizarra 2026-07-28: pared a pared int/ext externa, semi "siempre
+ * externa"); en todos los casos es un default editable en Fase 2.
  */
 export function aplicarDefaultsPerfiles(
   base: PerfilesOscuridad,
@@ -304,8 +376,11 @@ export function aplicarDefaultsPerfiles(
 ): PerfilesOscuridad {
   if (!familia) return base;
   // Perfil BASE de un sistema INTERNO → perforación EXTERNA por defecto (editable).
+  // En oscuranti y en los 0,45_1,2mm nace EXTERNA en las tres variantes.
   const infPerfDefault: PerforacionPerfil | undefined =
-    variante === 'INTERNO' ? 'EXTERNO' : undefined;
+    variante === 'INTERNO' || familia === 'OSCURANTI' || esFamilia45(familia)
+      ? 'EXTERNO'
+      : undefined;
   // Los laterales solo se auto-activan (con su perforación por variante) en las
   // familias cuyos laterales son parte física del sistema.
   if (!CON_LATERALES_SIEMPRE.includes(familia)) {
@@ -350,7 +425,9 @@ export function cenefaFrontOscuridad(
  *   INTERNO: dentro = ancho − 13,3 · pared = ancho.
  *   EXTERNO: dentro = ancho + 0,08 · pared = ancho + 14.
  *   SEMI:    siempre pared a pared = ancho + 7,5 (no tiene "dentro").
- * Oscuranti/Dark = cenefa frontal − descuento de variante.
+ * Oscuranti también va sobre el ancho real, con su propia tabla (INF_OSCURANTI_ADJ),
+ * y los 0,45_1,2mm (DARK 45 / soft light CC 45) con INF_45_ADJ.
+ * Dark 38 = cenefa frontal − descuento de variante.
  */
 export function medidaPerfilBaseOscuridad(
   familia: FamiliaOscuridad,
@@ -358,21 +435,34 @@ export function medidaPerfilBaseOscuridad(
   anchoCm: number,
   montaje?: MontajeBaseOscuridad,
 ): number {
-  if (esFamiliaSoftLight(familia)) {
-    const adj = INF_SOFTLIGHT_ADJ[variante];
+  const adjAncho = esFamiliaSoftLight(familia)
+    ? INF_SOFTLIGHT_ADJ[variante]
+    : familia === 'OSCURANTI'
+      ? INF_OSCURANTI_ADJ[variante]
+      : esFamilia45(familia)
+        ? INF_45_ADJ[variante]
+        : null;
+  if (adjAncho) {
     // SEMI (DENTRO null) → siempre pared a pared; INTERNO/EXTERNO default DENTRO.
-    const delta = adj.DENTRO === null || montaje === 'PARED' ? adj.PARED : adj.DENTRO;
+    const delta = adjAncho.DENTRO === null || montaje === 'PARED' ? adjAncho.PARED : adjAncho.DENTRO;
     return r2(anchoCm + delta);
   }
   return r2(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
 }
 
-/** ¿Se ofrece el selector Dentro/Pared del perfil base? Soft light salvo SEMI (fijo). */
+/**
+ * ¿Se ofrece el selector Dentro/Pared del perfil base? Soft light, oscuranti y
+ * los 0,45_1,2mm, salvo en SEMI (que solo va pared a pared en todas ellas).
+ */
 export function montajeBaseDisponible(
   familia: FamiliaOscuridad | null,
   variante: VarianteOscuridad,
 ): boolean {
-  return !!familia && esFamiliaSoftLight(familia) && INF_SOFTLIGHT_ADJ[variante].DENTRO !== null;
+  if (!familia) return false;
+  if (esFamiliaSoftLight(familia)) return INF_SOFTLIGHT_ADJ[variante].DENTRO !== null;
+  if (familia === 'OSCURANTI') return INF_OSCURANTI_ADJ[variante].DENTRO !== null;
+  if (esFamilia45(familia)) return INF_45_ADJ[variante].DENTRO !== null;
+  return false;
 }
 
 /** Medida (cm) de UN perfil individual, esté ON u OFF (para mostrar en la UI). */
@@ -418,7 +508,17 @@ export function cortesOscuridad(
 
   if (conCenefaCuad) {
     cortes.push({ componente: 'Cenefa Delantera', columnaExcel: 'CENEFA DELANTERA', medidaCm: cenefaFront });
-    if (familia === 'DARK') {
+    // Oscuranti: el perfil SEPARADOR SUPERIOR (rectangular 50×25, E50/E49/E52) va
+    // siempre y mide lo mismo que la cenefa delantera (pizarra 2026-07-28). No es
+    // opt-in como los separadores laterales/base: es parte del sistema.
+    if (familia === 'OSCURANTI') {
+      cortes.push({
+        componente: 'Separador superior',
+        columnaExcel: 'SEPARADOR SUPERIOR',
+        medidaCm: cenefaFront,
+      });
+    }
+    if (esFamiliaDark(familia)) {
       cortes.push({
         componente: 'Cenefa Trasera',
         columnaExcel: 'CENEFA TRASERA',

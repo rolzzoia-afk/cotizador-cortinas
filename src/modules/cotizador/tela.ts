@@ -97,7 +97,8 @@ export type OptimizerRow = {
   /**
    * Sistemas de oscuridad (Soft Light / Oscuranti / Dark): ancho de corte REAL de
    * la tela (cm), tomado del despiece (ancho + TELA_ADJ). Reemplaza al ancho−3,5
-   * roller en `calcularPanos`. El empaque en paños sigue por ancho nominal.
+   * roller en `calcularPanos`, y es el ancho que se empaca en el paño y el que
+   * consume el rollo cuando la cortina va invertida (pdfCorteOptimizacion).
    */
   anchoCorteTelaCm?: number;
   m2: number;
@@ -220,7 +221,7 @@ export function buildOptimizerRows(
       );
       const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params);
       // Oscuridad: la tela se corta al ancho REAL del despiece (ancho + TELA_ADJ),
-      // no al ancho−3,5 del roller. El empaque en paños sigue por ancho nominal.
+      // no al ancho−3,5 del roller. Ese ancho es también el que se empaca.
       const anchoCorteTelaCm = familiaOscuridad(v.categoria, p.cenefa as string | null | undefined)
         ? piezas.find((pz) => pz.componente === 'Tela (ancho)')?.medidaCm
         : undefined;
@@ -302,6 +303,15 @@ type PanoBin = {
 
 const EPS = 1e-9;
 
+/**
+ * Ancho (m) que la cortina ocupa a lo ancho del paño: el de CORTE real cuando el
+ * despiece lo entrega (oscuridad — en semi/externo la tela sale MÁS ancha que la
+ * medida nominal) y el nominal en el resto. En roller el corte es ancho−3,5, o
+ * sea menor que el nominal: empacar por nominal es lo conservador y no cambia.
+ */
+const anchoEmpaque = (r: OptimizerRow) =>
+  typeof r.anchoCorteTelaCm === 'number' ? r.anchoCorteTelaCm / 100 : r.ancho;
+
 function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
   const bins: PanoBin[] = [];
   let juntoCode = 64;
@@ -313,10 +323,11 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
     // comparte (se corta rotada). Vertical y roller de la MISMA tela nunca
     // comparten paño: van en hojas de corte separadas (se cortan en mesas
     // distintas), así que ningún paño queda a caballo entre las dos hojas.
+    const anchoOcupado = anchoEmpaque(r);
     let mejor: PanoBin | null = null;
     for (const b of bins) {
       if (b.codInt !== r.codInt || b.esVertical !== !!r.esVertical) continue;
-      if (b.anchoRollo - b.usado + EPS < r.ancho) continue; // no entra
+      if (b.anchoRollo - b.usado + EPS < anchoOcupado) continue; // no entra
       if (!mejor || b.usado > mejor.usado) mejor = b;
     }
     if (!mejor) {
@@ -332,7 +343,7 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
       };
       bins.push(mejor);
     }
-    mejor.usado += r.ancho;
+    mejor.usado += anchoOcupado;
     return { ...r, junto: mejor.junto, numeroPano: mejor.numeroPano, anchoPano: mejor.usado };
   });
 }

@@ -369,6 +369,8 @@ describe('calcularBOM — insumos de instalación', () => {
       vent('ROL', 'BCO'),
     );
     expect(bom.find((i) => i.especificacion === 'DOM41')?.cantidad).toBe(2);
+    // El control NO es automático: sin pedirlo en Fase 2 no sale.
+    expect(bom.find((i) => i.especificacion === 'DOM42')).toBeUndefined();
     const dom43 = bom.filter((i) => i.especificacion === 'DOM43');
     expect(dom43).toHaveLength(1);
     expect(dom43[0].cantidad).toBe(1);

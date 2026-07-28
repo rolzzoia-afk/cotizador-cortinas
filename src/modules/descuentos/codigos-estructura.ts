@@ -68,6 +68,15 @@ export const SEPARADOR_POR_COLOR: Record<string, string> = {
   CAFÉ: 'E43',
 };
 
+/** Perfil SEPARADOR SUPERIOR de oscuranti: "separador rectangular 50×25", código
+ *  por color de perfil (E50/E49/E52). Es OTRO perfil que el separador lateral
+ *  (E41/E42/E43); barra de 5,80 m igual que el resto. */
+export const SEPARADOR_SUPERIOR_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E50',
+  NEGRO: 'E49',
+  CAFÉ: 'E52',
+};
+
 /** Cenefa CUADRADA (Dark / Oscuranti): código por color de PERFIL (E29/E30/E31).
  *  Mismo criterio que zócalo/separador (café ≡ madera). Catálogo del optimizador:
  *  CENEFA CUADRADA|NEGRO=E29 · BLANCO=E30 · CAFÉ=E31. */
@@ -91,6 +100,11 @@ export function codigoZocaloPerfil(color: string | null | undefined): string {
 /** Código del perfil separador (E41/E42/E43) por color; '' si el color no calza. */
 export function codigoSeparadorPerfil(color: string | null | undefined): string {
   return SEPARADOR_POR_COLOR[colorPerfilCanonico(color)] || '';
+}
+
+/** Código del separador SUPERIOR de oscuranti (E50/E49/E52); '' si el color no calza. */
+export function codigoSeparadorSuperior(color: string | null | undefined): string {
+  return SEPARADOR_SUPERIOR_POR_COLOR[colorPerfilCanonico(color)] || '';
 }
 
 /** Código de la cenefa cuadrada (E29/E30/E31) por color de perfil; '' si no calza. */

@@ -231,11 +231,65 @@ describe('construirInventario — bloque INSUMOS', () => {
     expect(tapaN?.cantidad).toBe(2);
   });
 
+  it('SOFT LIGHT CC: cenefa cuadrada → 2 tapas por color de accesorios aunque no se elija cenefaTapa', () => {
+    const modeloSL = {
+      sistema: 'SOFT_LIGHT', tipo_rol: 'SOFT_LIGHT_INTERNO_38mm', mecanismo: '',
+      diametro_tubo_mm: 38, codigos_tubo: 'E02;E66',
+    };
+    const mk = (colorAcc: string) =>
+      ({
+        id: 's' + colorAcc, ubicacion: 'PIEZA', producto: 'ROLLER BLACKOUT',
+        categoria: 'SOFT_LIGHT_38mm', color: colorAcc, modelo: modeloSL,
+        // Cenefa cuadrada a muro SIN cenefaTapa elegido → igual salen 2 fijas.
+        panos: [{ ancho: 2.0, alto: 2.0, color: colorAcc, colorMecanismo: colorAcc, cenefa: 'Cuadrada a muro' }],
+      }) as unknown as Ventana;
+    const blanco = construirInventario([mk('BLANCO')]);
+    const tapaB = blanco.insumos.find((i) => i.codigo === 'TAP33');
+    expect(tapaB?.cantidad).toBe(2); // SIEMPRE 2, como DARK
+    expect(tapaB?.grupo).toBe('INSTALACION');
+    expect(blanco.insumos.find((i) => i.codigo === 'BRA05')?.cantidad).toBe(4); // muro, ancho 2,0
+    // Negro → TAP32 ×2.
+    expect(construirInventario([mk('NEGRO')]).insumos.find((i) => i.codigo === 'TAP32')?.cantidad).toBe(2);
+  });
+
+  it('OSCURANTI: cenefa cuadrada IMPLÍCITA → 2 tapas color accesorios + BRA05 + tarugos', () => {
+    const modeloOsc = {
+      sistema: 'OSCURANTI', tipo_rol: 'OSCURANTI_INTERNO_63mm', mecanismo: '',
+      diametro_tubo_mm: 63, codigos_tubo: 'E47',
+    };
+    const mk = (colorAcc: string) =>
+      ({
+        id: 'o' + colorAcc, ubicacion: 'LIVING', producto: 'ROLLER BLACKOUT',
+        categoria: 'OSCURANTI_63mm', color: colorAcc, modelo: modeloOsc,
+        // Sin cenefa elegida (es implícita, como DARK); vulcanita para exigir tarugos.
+        panos: [{ ancho: 2.0, alto: 2.3, color: colorAcc, colorMecanismo: colorAcc, materialTipo: 'VULCANITA' }],
+      }) as unknown as Ventana;
+    const blanco = construirInventario([mk('BLANCO')]);
+    const tapaB = blanco.insumos.find((i) => i.codigo === 'TAP33');
+    expect(tapaB?.cantidad).toBe(2); // SIEMPRE 2, como DARK
+    expect(tapaB?.grupo).toBe('INSTALACION');
+    expect(blanco.insumos.find((i) => i.codigo === 'BRA05')?.cantidad).toBe(4);
+    expect(blanco.insumos.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(4);
+    // Tapas de peso de oscuridad (a presión, 2 por paño) sin regresión.
+    expect(blanco.insumos.find((i) => i.codigo === 'TAP26')?.cantidad).toBe(2);
+    // Negro → TAP32 ×2.
+    expect(construirInventario([mk('NEGRO')]).insumos.find((i) => i.codigo === 'TAP32')?.cantidad).toBe(2);
+  });
+
+  it('roller con cenefa cuadrada SIGUE el selector cenefaTapa (regresión, no fijas)', () => {
+    const v = {
+      id: 'r', ubicacion: 'SALA', producto: 'ROLLER', categoria: 'ROL', color: 'CAFÉ', modelo: modeloCenefa,
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'CAFÉ', cenefa: 'Cuadrada a muro', colorTapa: 'CAFÉ', cenefaTapa: 'CON_1_TAPA' }],
+    } as unknown as Ventana;
+    const tap = construirInventario([v]).insumos.find((i) => i.codigo === 'TAP34');
+    expect(tap?.cantidad).toBe(1); // 1 según el selector, NO 2 fijas
+  });
+
   it('motor DOM41 + domótica (sin ovalada) → kit DOM (sin DOM40) en INSTALACIÓN + 1 DOM43 por OT', () => {
     const v = {
       id: 'm', ubicacion: 'DORM', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloCenefa,
-      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', motorModelo: 'DOM41', motorDomotica: true }],
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', motorModelo: 'DOM41', motorDomotica: true, motorControlAdicCant: 1 }],
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const codes = d.insumos.map((i) => i.codigo);
@@ -270,14 +324,15 @@ describe('construirInventario — kit + cadena aunque haya motor (van dentro del
     expect(codes.some((c) => c.startsWith('MEC'))).toBe(true); // BLANCO → MEC 33
     expect(codes.some((c) => c.startsWith('CAD'))).toBe(true);
     expect(codes).toContain('PCA04');
-    // Kit de motor sin cargador elegido: motor + control + cable, sin hub ni DOM04.
-    expect(codes).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM34']));
+    // Kit de motor sin nada elegido: motor + cable. El control se pide en Fase 2.
+    expect(codes).toEqual(expect.arrayContaining(['DOM38', 'DOM34']));
+    expect(codes).not.toContain('DOM39');
     expect(codes).not.toContain('DOM43');
     expect(codes).not.toContain('DOM04');
-    // Con hub DOM43 elegido en Fase 2, el kit lo suma junto a su enchufe DOM04.
+    // Con hub DOM43 y 1 control elegidos en Fase 2, el kit los suma (+DOM04 del hub).
     const conHub = {
       ...v, id: 'r2',
-      panos: [{ ...(v.panos![0] as object), motorCargador: 'DOM43' }],
+      panos: [{ ...(v.panos![0] as object), motorCargador: 'DOM43', motorControlAdicCant: 1 }],
     } as unknown as Ventana;
     const codesHub = construirInventario([conHub]).insumos.map((i) => i.codigo ?? '');
     expect(codesHub).toEqual(expect.arrayContaining(['DOM38', 'DOM39', 'DOM34', 'DOM04', 'DOM43']));
@@ -359,8 +414,9 @@ describe('construirInventario — clasificación por cenefa ovalada', () => {
     const v = {
       id: 'ov', ubicacion: 'LIVING', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloCenefa,
-      // Con hub elegido (DOM43) para verificar el grupo del enchufe DOM04.
-      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'OVALADA', motorModelo: 'DOM41', motorCargador: 'DOM43' }],
+      // Con hub elegido (DOM43) para verificar el grupo del enchufe DOM04, y un
+      // control pedido en Fase 2 (ya no sale solo con el motor).
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', cenefa: 'OVALADA', motorModelo: 'DOM41', motorCargador: 'DOM43', motorControlAdicCant: 1 }],
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
@@ -434,11 +490,11 @@ describe('construirInventario — top-up de motores cobrados (cantidad Fase 1 �
   const cant = (d: ReturnType<typeof construirInventario>, cod: string) =>
     d.insumos.filter((i) => i.codigo === cod).reduce((s, i) => s + i.cantidad, 0);
 
-  it('3 DOM38 cobrados en una ubicación con 1 paño → DOM38 ×3; control/cable ×1', () => {
+  it('3 DOM38 cobrados en una ubicación con 1 paño → DOM38 ×3; cable ×1 (el control se pide en F2)', () => {
     const adic = [{ codInt: 'DOM 38', cantidad: 3, descuento: 0, ubicacion: 'LIVING' }];
     const d = construirInventario([vMotor], {}, undefined, [], false, adic);
     expect(cant(d, 'DOM38')).toBe(3);
-    expect(cant(d, 'DOM39')).toBe(1);
+    expect(cant(d, 'DOM39')).toBe(0);
     expect(cant(d, 'DOM34')).toBe(1);
     // Una sola fila DOM38 (el top-up consolida con el kit del paño).
     expect(d.insumos.filter((i) => i.codigo === 'DOM38')).toHaveLength(1);

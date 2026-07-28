@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.15"; // 2026-07-27: perfiles SEPARADORES E41/E42/E43 (barra 580) por COLOR PERFIL, para todo sistema de oscuridad
+const VERSION_ACTUAL = "5.18"; // 2026-07-28: OSCURANTI — columna SEPARADOR SUPERIOR → separador rectangular 50×25 por COLOR PERFIL (E50 blanco / E49 negro / E52 café), barra 5,80 m
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1582,11 +1582,14 @@ const MM_KERF = 3;
 // trae. Los perfiles/varillas verticales vienen en barras de 5,80 m (el fallback
 // genérico MM_TUBO_ORIGINAL es 5,78 m, de los tubos roller). El zócalo de los
 // perfiles SOFT LIGHT/DARK (E32/E33/E34) también es barra de 5,80 m, igual que
-// los perfiles separadores (E41/E42/E43).
+// los perfiles separadores (E41/E42/E43) y el separador rectangular superior de
+// oscuranti (E49/E50/E52).
 const MEDIDAS_BARRA_DEFAULT = {
     'VER61': 580, 'VER62': 580, 'VER63': 580,
     'E32': 580, 'E33': 580, 'E34': 580,
     'E41': 580, 'E42': 580, 'E43': 580,
+    'E29': 580, 'E30': 580, 'E31': 580,
+    'E49': 580, 'E50': 580, 'E52': 580,
 };
 const STOCK_MINIMO = 10; // Umbral de alerta: códigos con ≤ este número de tubos enteros disponibles
 
@@ -3715,13 +3718,16 @@ function expandirOrdenesDesdeExcel() {
         'PERFIL (IZQ)', 'PERFIL (IZQ) INT', 'PERFIL (DER)', 'PERFIL (DER) INT', 'PERFIL BASE',
         // Perfiles separadores (E41/E42/E43) por lado — barra 5,80 m como el zócalo.
         'SEPARADOR (IZQ)', 'SEPARADOR (DER)', 'SEPARADOR BASE',
+        // Oscuranti: separador rectangular 50×25 superior (E50/E49/E52), barra 5,80 m.
+        'SEPARADOR SUPERIOR',
         'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT'
     ];
 
     // Traductor: nombre columna en Libro4 → nombre exacto en el Catálogo
+    // NOTA: 'PERFIL [CORTINA VERTICAL]' y 'VARILLA [CORTINA VERTICAL]' (rótulos
+    // legacy) NO van aquí: los resuelve la excepción dura del cabezal/varilla
+    // (VER61/62/63). Traducirlos al catálogo daba VER35/VER42 por color/fallback.
     const MAPA_NOMBRES_CATALOGO = {
-        'PERFIL [CORTINA VERTICAL]': 'CABEZAL VERTICAL',
-        'VARILLA [CORTINA VERTICAL]': 'VARILLA VERTICAL 4 PUNTAS',
         'PERFIL (IZQ)': 'PERFIL IZQUIERDO INTERNO',
         'PERFIL (IZQ) INT': 'PERFIL IZQUIERDO INTERNO',
         'PERFIL (DER)': 'PERFIL DERECHO INTERNO',
@@ -3740,8 +3746,10 @@ function expandirOrdenesDesdeExcel() {
         // (VER63) es única, pero igual se le asigna la columna para trazabilidad.
         'PERFIL CABEZAL': 'COLOR ACCESORIOS',
         'VARILLA': 'COLOR ACCESORIOS',
-        'PERFIL [CORTINA VERTICAL]': 'COLOR PERFIL',
-        'VARILLA [CORTINA VERTICAL]': 'COLOR PERFIL',
+        // Rótulos LEGACY de planillas viejas: el cabezal Vertilux va por COLOR
+        // ACCESORIOS (igual que 'PERFIL CABEZAL'), no por COLOR PERFIL.
+        'PERFIL [CORTINA VERTICAL]': 'COLOR ACCESORIOS',
+        'VARILLA [CORTINA VERTICAL]': 'COLOR ACCESORIOS',
         'PERFIL (IZQ)': 'COLOR PERFIL',
         'PERFIL (IZQ) INT': 'COLOR PERFIL',
         'PERFIL (DER)': 'COLOR PERFIL',
@@ -3750,6 +3758,7 @@ function expandirOrdenesDesdeExcel() {
         'SEPARADOR (IZQ)': 'COLOR PERFIL',
         'SEPARADOR (DER)': 'COLOR PERFIL',
         'SEPARADOR BASE': 'COLOR PERFIL',
+        'SEPARADOR SUPERIOR': 'COLOR PERFIL',
         'CENEFA DELANTERA': 'COLOR PERFIL',
         'CENEFA TRASERA': 'COLOR PERFIL',
         'PESO SOFT LIGHT': 'COLOR PESO INF. SOFT LIGHT',
@@ -3945,7 +3954,9 @@ function expandirOrdenesDesdeExcel() {
                 // Excepción dura: PERFIL CABEZAL (vertical) = cabezal Vertilux, código
                 // por color de accesorios. Negro → VER61 | Blanco (o cualquier otro,
                 // no hay vertical gris) → VER62. Barra virgen 5,80 m (MEDIDAS_BARRA_DEFAULT).
-                if (nombreCol === 'PERFIL CABEZAL') {
+                // Acepta también el rótulo LEGACY 'PERFIL [CORTINA VERTICAL]' de las
+                // planillas viejas del taller (si no, caía al catálogo → VER35 en blanco).
+                if (nombreCol === 'PERFIL CABEZAL' || nombreCol === 'PERFIL [CORTINA VERTICAL]') {
                     const codPerfil = colorDeseado === 'NEGRO' ? 'VER61' : 'VER62';
                     orden.cod = codPerfil;
                     orden.codigoExtraido = codPerfil;
@@ -3959,7 +3970,9 @@ function expandirOrdenesDesdeExcel() {
 
                 // Excepción dura: VARILLA (vertical) = varilla Vertilux, código único
                 // VER63 sin importar color. Barra virgen 5,80 m (MEDIDAS_BARRA_DEFAULT).
-                if (nombreCol === 'VARILLA') {
+                // Acepta también el rótulo LEGACY 'VARILLA [CORTINA VERTICAL]' de las
+                // planillas viejas del taller (si no, caía al catálogo → VER42 aluminio).
+                if (nombreCol === 'VARILLA' || nombreCol === 'VARILLA [CORTINA VERTICAL]') {
                     orden.cod = 'VER63';
                     orden.codigoExtraido = 'VER63';
                     orden.reemplazo = SistemaInventario.catalogoReemplazos['VER63'] || null;
@@ -4026,6 +4039,28 @@ function expandirOrdenesDesdeExcel() {
                 // oscuridad = perfil separador por COLOR PERFIL (BLANCO→E41,
                 // NEGRO→E42, CAFÉ→E43). Barra 5,80 m (MEDIDAS_BARRA_DEFAULT), igual
                 // que el zócalo. No lleva perforación.
+                // Excepción dura: SEPARADOR SUPERIOR (oscuranti) = separador
+                // RECTANGULAR 50×25 por COLOR PERFIL (BLANCO→E50, NEGRO→E49,
+                // CAFÉ/MADERA→E52). Es OTRO perfil que el separador lateral/base
+                // (E41/E42/E43), así que va ANTES del startsWith('SEPARADOR').
+                // Barra 5,80 m (MEDIDAS_BARRA_DEFAULT).
+                if (nombreCol === 'SEPARADOR SUPERIOR') {
+                    const MAPA_SEP_SUP = { 'BLANCO': 'E50', 'NEGRO': 'E49', 'CAFÉ': 'E52', 'CAFE': 'E52', 'MADERA': 'E52' };
+                    const codSepSup = MAPA_SEP_SUP[colorDeseado] || null;
+                    if (!codSepSup) {
+                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin separador superior (E50 blanco / E49 negro / E52 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codSepSup;
+                    orden.codigoExtraido = codSepSup;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codSepSup] || null;
+                    orden.tuberia = `${nombreCol} - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ ${nombreCol}: ${codSepSup} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
                 if (nombreCol.startsWith('SEPARADOR')) {
                     const MAPA_SEPARADOR = { 'BLANCO': 'E41', 'NEGRO': 'E42', 'CAFÉ': 'E43', 'CAFE': 'E43' };
                     const codSep = MAPA_SEPARADOR[colorDeseado] || null;
@@ -4040,6 +4075,28 @@ function expandirOrdenesDesdeExcel() {
                     SistemaInventario.ordenes.push(orden);
                     ordenesDeEstaFila++;
                     log(`✓ ${nombreCol}: ${codSep} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: CENEFA DELANTERA / CENEFA TRASERA (cenefa CUADRADA
+                // de DARK y soft light CC) = perfil de cenefa cuadrada por COLOR
+                // PERFIL (NEGRO→E29, BLANCO→E30, CAFÉ→E31). Barra 5,80 m. Sin el mapeo
+                // caían al catálogo (llave "CENEFA DELANTERA|COLOR" inexistente) y se
+                // descartaban en silencio.
+                if (nombreCol === 'CENEFA DELANTERA' || nombreCol === 'CENEFA TRASERA') {
+                    const MAPA_CENEFA_CUAD = { 'BLANCO': 'E30', 'NEGRO': 'E29', 'CAFÉ': 'E31', 'CAFE': 'E31' };
+                    const codCenC = MAPA_CENEFA_CUAD[colorDeseado] || null;
+                    if (!codCenC) {
+                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin cenefa cuadrada (E29 negro / E30 blanco / E31 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codCenC;
+                    orden.codigoExtraido = codCenC;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codCenC] || null;
+                    orden.tuberia = `${nombreCol} - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ ${nombreCol}: ${codCenC} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
                     continue;
                 }
 
@@ -6119,7 +6176,8 @@ async function ejecutarOptimizacion() {
         'CENEFA OVALADA': 4, 'PLETINA': 5, 'PERFIL CABEZAL': 6, 'VARILLA': 7,
         'PERFIL [CORTINA VERTICAL]': 6, 'VARILLA [CORTINA VERTICAL]': 7,
         'PERFIL (IZQ)': 8, 'PERFIL (IZQ) INT': 8, 'PERFIL (DER)': 9, 'PERFIL (DER) INT': 9,
-        'PERFIL BASE': 10, 'CENEFA DELANTERA': 11, 'CENEFA TRASERA': 12, 'PESO SOFT LIGHT': 13
+        'PERFIL BASE': 10, 'CENEFA DELANTERA': 11, 'CENEFA TRASERA': 12, 'PESO SOFT LIGHT': 13,
+        'SEPARADOR SUPERIOR': 14
     };
     SistemaInventario.resultadosOptimizacion.sort((a, b) => {
         const otA = String(a.orden.ot || a.orden.otAsignada || '');

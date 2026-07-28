@@ -28,6 +28,9 @@ import {
 // Binding local (los del bloque `export { … } from` no quedan disponibles en el
 // cuerpo del módulo): resincronizarChipsPanos los usa.
 import { canonizarChipTuberia, tuberiaParaPano } from './reglas-tuberia';
+// familiaOscuridad: para distinguir soft light con cenefa CUADRADA (kit simple,
+// como DARK) del soft light ovalado (kit MEC 39/38). reglas-oscuridad es hoja (sin ciclo).
+import { esFamiliaSoftLightCC, familiaOscuridad } from './reglas-oscuridad';
 
 export {
   REGLAS_MECANISMO,
@@ -171,7 +174,7 @@ export function colorAccesoriosDePano(
  * luego inventario por color, reemplazando legacy/vacío.
  */
 export function mecanismoParaPano(
-  p: Partial<{ mecanismo?: string; dual?: boolean; dualLado?: string; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string }>,
+  p: Partial<{ mecanismo?: string; dual?: boolean; dualLado?: string; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string; cenefa?: string }>,
   ventanaColor: string | undefined,
   modelo: ModeloDespiece | null | undefined,
   opciones: readonly string[],
@@ -217,7 +220,13 @@ export function mecanismoParaPano(
     }
   }
 
-  const mecCat = mecPorCategoriaYColor(categoria || '', colorAcc);
+  // Soft light con cenefa CUADRADA (familias SOFT_LIGHT_CC / _CC_45): usa el kit
+  // SIMPLE por color (MEC 33/32/34), igual que DARK — NO el kit ovalada MEC 39/38
+  // de la regla de categoría del soft light. Saltamos la regla de categoría para
+  // que caiga al fallback por color. El soft light OVALADO conserva su kit ovalada.
+  const famCC = familiaOscuridad(categoria, p.cenefa);
+  const esSoftLightCC = !!famCC && esFamiliaSoftLightCC(famCC);
+  const mecCat = esSoftLightCC ? null : mecPorCategoriaYColor(categoria || '', colorAcc);
   if (mecCat != null) {
     const chipCat = chipMecanismoPorNumero(mecCat, opciones);
     if (chipCat) {
