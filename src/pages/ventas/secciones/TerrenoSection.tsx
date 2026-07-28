@@ -11,7 +11,8 @@ import {
 import { cn } from '@/lib/utils';
 import SectionHeader from '../components/SectionHeader';
 import NumInput from '../components/NumInput';
-import { slugify } from '../utils/helpers';
+import { slugify, textoPeriodo } from '../utils/helpers';
+import type { Periodo } from '../Ventas.types';
 
 type TerrenoEntry = {
   nombre: string;
@@ -23,9 +24,17 @@ type TerrenoEntry = {
 interface TerrenoSectionProps {
   terrenoData: TerrenoEntry[];
   setVal: (clave: string, valor: number) => void;
+  periodo?: Periodo;
+  editable?: boolean;
 }
 
-export default function TerrenoSection({ terrenoData, setVal }: TerrenoSectionProps) {
+export default function TerrenoSection({
+  terrenoData,
+  setVal,
+  periodo = 'dia',
+  editable = true,
+}: TerrenoSectionProps) {
+  const txt = textoPeriodo(periodo);
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <SectionHeader
@@ -33,7 +42,7 @@ export default function TerrenoSection({ terrenoData, setVal }: TerrenoSectionPr
         iconBg="rgba(14,165,233,0.15)"
         iconColor="#38bdf8"
         title="Vendedores en terreno"
-        sub="Visitas del día y tasa de cierre por vendedor"
+        sub={`Visitas ${txt.delLapso} y tasa de cierre por vendedor`}
       />
       <div className="overflow-x-auto">
         <table className="w-full border-collapse">
@@ -111,6 +120,7 @@ export default function TerrenoSection({ terrenoData, setVal }: TerrenoSectionPr
                     <NumInput
                       value={d.total}
                       onChange={(v) => setVal('ter_total_' + slugify(d.nombre), v)}
+                      disabled={!editable}
                       className="w-16 rounded-md border border-border bg-card px-1.5 py-1 text-center text-base font-bold text-foreground focus:border-accent focus:outline-none"
                     />
                   </td>
@@ -118,6 +128,7 @@ export default function TerrenoSection({ terrenoData, setVal }: TerrenoSectionPr
                     <NumInput
                       value={d.cerradas}
                       onChange={(v) => setVal('ter_cerradas_' + slugify(d.nombre), v)}
+                      disabled={!editable}
                       className="w-16 rounded-md border border-border bg-card px-1.5 py-1 text-center text-base font-bold text-foreground focus:border-accent focus:outline-none"
                     />
                   </td>

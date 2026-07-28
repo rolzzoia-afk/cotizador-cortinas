@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils';
 import SectionHeader from '../components/SectionHeader';
 import NumInput from '../components/NumInput';
 import Gauge from '../components/Gauge';
+import { textoPeriodo } from '../utils/helpers';
+import type { Periodo } from '../Ventas.types';
 
 interface CierreSectionProps {
   envVal: number;
@@ -14,6 +16,8 @@ interface CierreSectionProps {
   pctCierre: number;
   pendientes: number;
   setVal: (clave: string, valor: number) => void;
+  periodo?: Periodo;
+  editable?: boolean;
 }
 
 export default function CierreSection({
@@ -23,7 +27,10 @@ export default function CierreSection({
   pctCierre,
   pendientes,
   setVal,
+  periodo = 'dia',
+  editable = true,
 }: CierreSectionProps) {
+  const txt = textoPeriodo(periodo);
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <SectionHeader
@@ -31,7 +38,7 @@ export default function CierreSection({
         iconBg="rgba(239,68,68,0.15)"
         iconColor="#ef4444"
         title="Cierre de ventas"
-        sub="Cotizaciones enviadas vs cerradas definitivamente"
+        sub={`Cotizaciones enviadas vs cerradas definitivamente ${txt.sufijo}`}
       />
       <div className="grid gap-4 md:grid-cols-2">
         <div className="rounded-xl border border-border bg-secondary p-4 text-center">
@@ -39,6 +46,7 @@ export default function CierreSection({
           <NumInput
             value={envVal}
             onChange={(v) => setVal('cierre_enviadas', v)}
+            disabled={!editable}
             className="w-full border-0 border-b-2 border-border bg-transparent text-center text-5xl font-extrabold leading-none text-foreground focus:border-accent focus:outline-none"
           />
         </div>
@@ -47,6 +55,7 @@ export default function CierreSection({
           <NumInput
             value={cerVal}
             onChange={(v) => setVal('cierre_cerradas', v)}
+            disabled={!editable}
             className={cn(
               'w-full border-0 border-b-2 bg-transparent text-center text-5xl font-extrabold leading-none text-foreground focus:outline-none',
               errorCierre

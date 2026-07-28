@@ -1,8 +1,10 @@
 // Orquestador del Panel KPI Ventas.
 //
-// Carga 2 datasets (config + registros del día) + opcionalmente historial
-// (cuando periodo != 'dia'). Deriva memos y compone 6 secciones
-// independientes. Cada sección recibe slices por props.
+// Carga 2 datasets (config + filas del rango activo). El rango depende del
+// botón Hoy/Semana/Mes: 'dia' trae solo la fecha, 'semana' desde el lunes de
+// esa semana y 'mes' desde el 1°, siempre hasta la fecha seleccionada. Las
+// tarjetas muestran la SUMA del rango (solo-lectura fuera de 'dia', porque
+// Guardar escribe contra la fecha activa) y el gráfico, el día a día.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +17,14 @@ import { Button } from '@/components/ui/button';
 
 import type { KpiConfig, Periodo, Registro } from './ventas/Ventas.types';
 import { DEFAULT_CONFIG, CANAL_COLORS } from './ventas/Ventas.config';
-import { hoyISO, slugify } from './ventas/utils/helpers';
+import {
+  construirHistorial,
+  hoyISO,
+  rangoPeriodo,
+  slugify,
+  sumarRegistros,
+  textoPeriodo,
+} from './ventas/utils/helpers';
 import ConfigDialog from './ventas/components/ConfigDialog';
 import CanalesSection from './ventas/secciones/CanalesSection';
 import LlamadasSection from './ventas/secciones/LlamadasSection';
@@ -32,10 +41,11 @@ export function Ventas() {
   const [fechaActiva, setFechaActiva] = useState<string>(hoyISO());
   const [periodo, setPeriodo] = useState<Periodo>('dia');
   const [registros, setRegistros] = useState<Record<string, number>>({});
-  const [historial, setHistorial] = useState<
-    { label: string; Mensajes: number; Llamadas: number; Cierres: number }[]
-  >([]);
+  const [filas, setFilas] = useState<Registro[]>([]);
+  // `loading` solo cubre la primera carga (pantalla completa); los cambios de
+  // fecha/período usan `refrescando`, que mantiene el panel en pantalla.
   const [loading, setLoading] = useState(true);
+  const [refrescando, setRefrescando] = useState(false);
   const [saving, setSaving] = useState(false);
   const [ultimoGuardado, setUltimoGuardado] = useState<Date | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
@@ -61,70 +71,49 @@ export function Ventas() {
     })();
   }, [empresaId]);
 
-  // Cargar registros del día activo
+  // Rango de fechas que alimenta las tarjetas: día suelto, semana (desde el
+  // lunes) o mes (desde el 1°), siempre hasta la fecha seleccionada.
+  const rango = useMemo(() => rangoPeriodo(fechaActiva, periodo), [fechaActiva, periodo]);
+  // Solo el día suelto es editable: Guardar upserta contra `fechaActiva`, así
+  // que guardar un total de semana escribiría la suma en la fila de un día.
+  const editable = periodo === 'dia';
+  const txt = textoPeriodo(periodo);
+
+  // Cargar los registros del rango activo (suma para las tarjetas).
+  // Al cambiar de período NO se desmonta el panel: los datos anteriores quedan
+  // a la vista, atenuados, hasta que llegan los nuevos (transición suave).
   useEffect(() => {
     if (!empresaId) return;
+    let cancelado = false;
+    setRefrescando(true);
     (async () => {
-      setLoading(true);
-      const { data } = await supabase
-        .from('kpi_registros')
-        .select('clave, valor')
-        .eq('empresa_id', empresaId)
-        .eq('fecha', fechaActiva);
-      const map: Record<string, number> = {};
-      (data || []).forEach((r: { clave: string; valor: number }) => {
-        map[r.clave] = Number(r.valor) || 0;
-      });
-      setRegistros(map);
-      setLoading(false);
-    })();
-  }, [empresaId, fechaActiva]);
-
-  // Cargar historial cuando cambia periodo
-  useEffect(() => {
-    if (!empresaId || periodo === 'dia') {
-      setHistorial([]);
-      return;
-    }
-    (async () => {
-      const hoy = new Date(fechaActiva + 'T12:00:00');
-      const dias = periodo === 'semana' ? 6 : 29;
-      const fechas: string[] = [];
-      for (let i = dias; i >= 0; i--) {
-        const d = new Date(hoy);
-        d.setDate(d.getDate() - i);
-        fechas.push(d.toISOString().split('T')[0]);
-      }
       const { data } = await supabase
         .from('kpi_registros')
         .select('fecha, clave, valor')
         .eq('empresa_id', empresaId)
-        .gte('fecha', fechas[0])
-        .lte('fecha', fechas[fechas.length - 1]);
-      const porFecha: Record<string, Record<string, number>> = {};
-      fechas.forEach((f) => {
-        porFecha[f] = {};
-      });
-      (data || []).forEach((r: Registro) => {
-        if (porFecha[r.fecha]) porFecha[r.fecha][r.clave] = Number(r.valor) || 0;
-      });
-      const hist = fechas.map((f) => {
-        const d = new Date(f + 'T12:00:00');
-        const label = d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short' });
-        const Mensajes = config.canales.reduce(
-          (s, c) => s + (porFecha[f]['canal_' + slugify(c)] || 0),
-          0,
-        );
-        const Llamadas = config.vendedoras.reduce(
-          (s, v) => s + (porFecha[f]['ll_llamadas_' + slugify(v)] || 0),
-          0,
-        );
-        const Cierres = porFecha[f]['cierre_cerradas'] || 0;
-        return { label, Mensajes, Llamadas, Cierres };
-      });
-      setHistorial(hist);
+        .gte('fecha', rango.desde)
+        .lte('fecha', rango.hasta);
+      // Si el usuario ya cambió de período, esta respuesta quedó obsoleta.
+      if (cancelado) return;
+      const rows = (data || []) as Registro[];
+      setFilas(rows);
+      setRegistros(sumarRegistros(rows));
+      setLoading(false);
+      setRefrescando(false);
     })();
-  }, [empresaId, periodo, fechaActiva, config.canales, config.vendedoras]);
+    return () => {
+      cancelado = true;
+    };
+  }, [empresaId, rango.desde, rango.hasta]);
+
+  // Evolución día a día del mismo rango (solo en semana/mes)
+  const historial = useMemo(
+    () =>
+      periodo === 'dia'
+        ? []
+        : construirHistorial(filas, rango, config.canales, config.vendedoras),
+    [filas, rango, periodo, config.canales, config.vendedoras],
+  );
 
   // Setters de valores individuales
   const setVal = (clave: string, valor: number) =>
@@ -178,7 +167,9 @@ export function Ventas() {
   const pendientes = Math.max(0, envVal - cerAjustado);
 
   const handleGuardar = async () => {
-    if (!empresaId) return;
+    // Fuera de 'dia' los valores son totales del rango: guardarlos escribiría
+    // la suma completa en la fila de `fechaActiva`.
+    if (!empresaId || !editable) return;
     setSaving(true);
     const ahora = new Date().toISOString();
     const rows = Object.entries(registros).map(([clave, valor]) => ({
@@ -248,7 +239,7 @@ export function Ventas() {
           <div className="flex items-center gap-2">
             <span className="text-base font-bold text-foreground">KPI Ventas</span>
             <span className="rounded-full border border-accent/30 bg-accent/20 px-2 py-0.5 text-[12px] font-semibold text-accent">
-              DIARIO
+              {txt.chip}
             </span>
           </div>
         </div>
@@ -271,7 +262,17 @@ export function Ventas() {
           >
             <Settings className="h-4 w-4" /> Configurar
           </Button>
-          <Button onClick={handleGuardar} disabled={saving} size="sm" className="gap-1.5">
+          <Button
+            onClick={handleGuardar}
+            disabled={saving || !editable}
+            size="sm"
+            className="gap-1.5"
+            title={
+              editable
+                ? undefined
+                : 'Los totales de semana/mes son solo lectura — vuelve a Hoy para editar'
+            }
+          >
             <CloudUpload className="h-4 w-4" /> Guardar
           </Button>
         </div>
@@ -287,16 +288,27 @@ export function Ventas() {
           onChange={(e) => setFechaActiva(e.target.value)}
           className="rounded-md border border-border bg-card px-2.5 py-1 text-sm text-foreground focus:border-accent focus:outline-none"
         />
-        <div className="ml-auto flex gap-1.5">
+        {!editable && (
+          <span className="animate-in fade-in slide-in-from-left-1 rounded-md border border-warning/30 bg-warning/10 px-2 py-1 text-[11px] text-warning duration-300">
+            Totales acumulados desde el {new Date(rango.desde + 'T12:00:00').toLocaleDateString('es-CL')} ({rango.dias} días) — solo lectura
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-1.5">
+          <div
+            className={cn(
+              'h-3.5 w-3.5 rounded-full border-2 border-accent/30 border-t-accent transition-opacity duration-200',
+              refrescando ? 'animate-spin opacity-100' : 'opacity-0',
+            )}
+          />
           {(['dia', 'semana', 'mes'] as Periodo[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriodo(p)}
               className={cn(
-                'rounded-md border px-3 py-1 text-xs transition-colors',
+                'rounded-md border px-3 py-1 text-xs transition-all duration-200',
                 periodo === p
-                  ? 'border-accent bg-accent/15 text-accent'
-                  : 'border-border bg-transparent text-muted-foreground hover:border-accent/50',
+                  ? 'border-accent bg-accent/15 font-semibold text-accent'
+                  : 'border-border bg-transparent text-muted-foreground hover:border-accent/50 hover:text-foreground',
               )}
             >
               {p === 'dia' ? 'Hoy' : p === 'semana' ? 'Semana' : 'Mes'}
@@ -305,13 +317,20 @@ export function Ventas() {
         </div>
       </div>
 
-      <div className="mx-auto flex max-w-6xl flex-col gap-5 px-5 py-6">
+      <div
+        className={cn(
+          'mx-auto flex max-w-6xl flex-col gap-5 px-5 py-6 transition-opacity duration-300',
+          refrescando && 'opacity-50',
+        )}
+      >
         <CanalesSection
           canales={config.canales}
           totalCanales={totalCanales}
           canalesChartData={canalesChartData}
           getVal={getVal}
           setVal={setVal}
+          periodo={periodo}
+          editable={editable}
         />
         <LlamadasSection
           vendedoras={config.vendedoras}
@@ -319,12 +338,17 @@ export function Ventas() {
           totalLlamadas={totalLlamadas}
           getVal={getVal}
           setVal={setVal}
+          periodo={periodo}
+          editable={editable}
         />
         <MetaVisitasSection
           vendedoras={config.vendedoras}
           metaVisitas={config.meta_visitas}
           getVal={getVal}
           setVal={setVal}
+          periodo={periodo}
+          dias={rango.dias}
+          editable={editable}
         />
         <CierreSection
           envVal={envVal}
@@ -333,8 +357,15 @@ export function Ventas() {
           pctCierre={pctCierre}
           pendientes={pendientes}
           setVal={setVal}
+          periodo={periodo}
+          editable={editable}
         />
-        <TerrenoSection terrenoData={terrenoData} setVal={setVal} />
+        <TerrenoSection
+          terrenoData={terrenoData}
+          setVal={setVal}
+          periodo={periodo}
+          editable={editable}
+        />
         <HistorialSection historial={historial} periodo={periodo} />
       </div>
 

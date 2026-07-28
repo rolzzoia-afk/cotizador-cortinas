@@ -12,7 +12,8 @@ import { CircleDot, MessageCircle } from 'lucide-react';
 import SectionHeader from '../components/SectionHeader';
 import NumInput from '../components/NumInput';
 import { CANAL_COLORS } from '../Ventas.config';
-import { slugify } from '../utils/helpers';
+import { slugify, textoPeriodo } from '../utils/helpers';
+import type { Periodo } from '../Ventas.types';
 
 interface CanalesSectionProps {
   canales: string[];
@@ -20,6 +21,8 @@ interface CanalesSectionProps {
   canalesChartData: Array<{ name: string; value: number; color: string }>;
   getVal: (clave: string) => number;
   setVal: (clave: string, valor: number) => void;
+  periodo?: Periodo;
+  editable?: boolean;
 }
 
 export default function CanalesSection({
@@ -28,7 +31,10 @@ export default function CanalesSection({
   canalesChartData,
   getVal,
   setVal,
+  periodo = 'dia',
+  editable = true,
 }: CanalesSectionProps) {
+  const txt = textoPeriodo(periodo);
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <SectionHeader
@@ -36,7 +42,7 @@ export default function CanalesSection({
         iconBg="rgba(99,102,241,0.15)"
         iconColor="#818cf8"
         title="Fuente de cotizaciones"
-        sub="Cantidad de mensajes recibidos por canal hoy"
+        sub={`Cantidad de mensajes recibidos por canal ${txt.sufijo}`}
         right={
           <div className="text-right text-[22px] font-extrabold text-foreground">
             {totalCanales}
@@ -70,6 +76,7 @@ export default function CanalesSection({
                 <NumInput
                   value={v}
                   onChange={(nv) => setVal('canal_' + slugify(canal), nv)}
+                  disabled={!editable}
                   className="w-full border-0 border-b-2 border-border bg-transparent text-center text-[28px] font-extrabold text-foreground focus:border-accent focus:outline-none"
                 />
                 <div className="mt-1.5 text-[11px] text-muted-foreground">{pct}% del total</div>
