@@ -70,6 +70,7 @@ import {
   type PendienteFase2,
 } from '@/modules/cotizador/fase2-completitud';
 import { PanoEditor } from '@/components/cotizador/PanoEditor';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { PostInstalacion } from '@/components/cotizador/PostInstalacion';
 import type { Pano, Ventana } from '@/modules/cotizador/types';
 import { confirmar } from '@/components/ui/confirm';
@@ -205,6 +206,10 @@ export function CotizadorFase2() {
     const categoriaImplicaOvalada = (v.categoria || '')
       .toUpperCase()
       .includes('CENEFA_OVALADA');
+    // El BEEBLACK no lleva tubo (su estructura son los perfiles/riel): nunca se
+    // le asigna tubería y se limpia la que hayan recibido las OT guardadas antes
+    // de este gate, que la tomaban del prefill genérico por ancho.
+    const esBeeblackV = esCategoriaBeeblack(v.categoria);
     // La categoría ROL_DUAL implica mecanismo dual: fuerza dual=true en los paños
     // (sin esto quedaba un kit simple con modelo dual → BOM/despiece incoherentes).
     const categoriaImplicaDual = categoriaEsDual(v.categoria || '');
@@ -235,15 +240,17 @@ export function CotizadorFase2() {
         // Canoniza siempre el chip guardado (solo formato): una OT vieja con
         // "0,38mm [E02] 1,2mm" migra a "E02-TUBO…" aunque no haya modelo/ancho
         // para pre-seleccionar, así el chip guardado queda resaltado en el editor.
-        const tuberia = canonizarChipTuberia(
-          modeloEf && anchoM > 0
-            ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, OPCIONES_TUBERIA, v.categoria)
-            : forzarTuberia && modeloEf
-              ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, OPCIONES_TUBERIA, v.categoria) ||
-                (p.tuberia as string)
-              : (p.tuberia as string) || '',
-          OPCIONES_TUBERIA,
-        );
+        const tuberia = esBeeblackV
+          ? ''
+          : canonizarChipTuberia(
+              modeloEf && anchoM > 0
+                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, OPCIONES_TUBERIA, v.categoria)
+                : forzarTuberia && modeloEf
+                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, OPCIONES_TUBERIA, v.categoria) ||
+                    (p.tuberia as string)
+                  : (p.tuberia as string) || '',
+              OPCIONES_TUBERIA,
+            );
         const cenefa =
           categoriaImplicaOvalada && (!p.cenefa || p.cenefa === 'No')
             ? 'Ovalada'

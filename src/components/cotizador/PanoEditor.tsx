@@ -61,7 +61,11 @@ import {
   type VarianteOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
 import { codigoTuberiaDeChip, diametroDeCodigoTubo } from '@/modules/descuentos/reglas-tuberia';
-import { codigoSeparadorPerfil } from '@/modules/descuentos/codigos-estructura';
+import {
+  codigoManillaBeeblack,
+  codigoPerfilBeeblack,
+  codigoSeparadorPerfil,
+} from '@/modules/descuentos/codigos-estructura';
 import { colorPerfilDesdeAdicional, type TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
@@ -346,6 +350,9 @@ export function PanoEditor({
 
   // ── BEEBLACK ──
   const esBeeblack = esCategoriaBeeblack(categoria);
+  // Color que resuelve los códigos de perfil/riel del beeblack (mismo criterio
+  // que el badge de los separadores).
+  const colorPerfilBb = pano.color || colorVentana;
   // Dúo (día/noche): pide el cierre de altura medido en terreno.
   const esDuo = (categoria || '').toUpperCase().includes('DUO');
 
@@ -1347,15 +1354,38 @@ export function PanoEditor({
         </Section>
       )}
 
-      {/* 13. TUBERÍA */}
-      <Section title="Tubería">
-        <RadioRow
-          label=""
-          value={pano.tuberia || ''}
-          options={opcionesTuberia}
-          onChange={(v) => onChange({ tuberia: v })}
-        />
-      </Section>
+      {/* 13. TUBERÍA — el BEEBLACK no lleva tubo: su estructura son los PERFILES
+          (riel SML04/05/06 y agarraderas SML10/11/12, por color de accesorios),
+          así que en su lugar se muestran esos códigos, sin selector. */}
+      {esBeeblack ? (
+        <Section title="Perfiles (no lleva tubería)">
+          <div className="space-y-1">
+            {[
+              { label: 'Riel — perfiles sup./inf. y laterales', codigo: codigoPerfilBeeblack(colorPerfilBb) },
+              { label: 'Agarradera — manillas', codigo: codigoManillaBeeblack(colorPerfilBb) },
+            ].map((r) => (
+              <div
+                key={r.label}
+                className="flex items-center justify-between gap-2 rounded border border-border/60 bg-card/40 px-2 py-1"
+              >
+                <span className="text-[0.72rem] text-foreground">{r.label}</span>
+                <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[0.68rem] text-muted-foreground">
+                  {r.codigo || '—'}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      ) : (
+        <Section title="Tubería">
+          <RadioRow
+            label=""
+            value={pano.tuberia || ''}
+            options={opcionesTuberia}
+            onChange={(v) => onChange({ tuberia: v })}
+          />
+        </Section>
+      )}
 
       {/* 14. NOTAS DE TERRENO — agrupa retiro/material/cortes/comentarios.
           Colapsada por defecto; lo anotado sale en la hoja de INVENTARIO. */}

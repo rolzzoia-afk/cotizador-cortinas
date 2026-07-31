@@ -12,7 +12,9 @@
 // | Perfil superior/inferior (ancho) | −5,7 | −2    | +1  |
 // | Perfil lateral izq/der (alto)    | −5,7 | −2    | +1  |
 // | Manilla (alto)                   | −5   | −1,3  | +1,7|
-// | Alto de tela                     | −3,2 | −0,05 | +3,5|  ← SEMI es −0,5 MM
+// | Alto de tela                     | −3,2 | −0,5  | +3,5|  ← la pizarra anota
+//     el de SEMI como "0,5 MM": son 5 mm = 0,5 cm (corrección del usuario 2026-07-31;
+//     antes estaba tomado como 0,05 cm y la tela salía 4,5 mm larga).
 // | Ancho de tela                    | −4,7 | −1    | +2  |
 // | Lamas = ancho real / divisor + 10 (entero HACIA ARRIBA) | /1,5 | /1,55 | /1,55 |
 //
@@ -122,7 +124,7 @@ export const AJUSTES_BEEBLACK: Record<
   { perfilAncho: number; perfilLateral: number; manilla: number; anchoTela: number; altoTela: number; lamasDivisor: number }
 > = {
   INTERNO: { perfilAncho: -5.7, perfilLateral: -5.7, manilla: -5, anchoTela: -4.7, altoTela: -3.2, lamasDivisor: 1.5 },
-  SEMI: { perfilAncho: -2, perfilLateral: -2, manilla: -1.3, anchoTela: -1, altoTela: -0.05, lamasDivisor: 1.55 },
+  SEMI: { perfilAncho: -2, perfilLateral: -2, manilla: -1.3, anchoTela: -1, altoTela: -0.5, lamasDivisor: 1.55 },
   EXTERNO: { perfilAncho: 1, perfilLateral: 1, manilla: 1.7, anchoTela: 2, altoTela: 3.5, lamasDivisor: 1.55 },
 };
 
@@ -136,10 +138,10 @@ const PERFIL_LATERAL_POR_INSTALACION: Partial<Record<InstalacionBeeblack, number
 export const LAMAS_EXTRA = 10;
 
 /** A 1 decimal, TRUNCANDO (regla del usuario 2026-07-31): ninguna medida de corte lleva
- *  más de un decimal y ninguna puede PASARSE de lo que da la fórmula. El −0,5 mm del
- *  alto de tela SEMI queda en la tabla y al salir se recorta hacia abajo
- *  (130 − 0,05 = 129,95 → 129,9), que es como se corta en la mesa. El épsilon absorbe
- *  el polvo binario del punto flotante sin tapar señales reales. */
+ *  más de un decimal y ninguna puede PASARSE de lo que da la fórmula. Con la tabla ya
+ *  en décimas no queda ningún ajuste que recortar; el truncado sigue como red de
+ *  seguridad para los overrides manuales y para absorber el polvo binario del punto
+ *  flotante (el épsilon es más chico que cualquier ajuste real). */
 const t1 = (n: number) => Math.floor(n * 10 + 1e-7) / 10;
 
 function aplicarOverride(calculada: number, override: number | undefined): number {

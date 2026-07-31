@@ -26,8 +26,8 @@ const CASOS: Array<{
 }> = [
   // 200/1,5 + 10 = 143,33 → 144
   { variante: 'INTERNO', perfilAncho: 194.3, lateral: 124.3, manilla: 125, anchoTela: 195.3, altoTela: 126.8, lamas: 144 },
-  // 200/1,55 + 10 = 139,03 → 140 · el −0,5 MM del alto se trunca a 1 decimal (129,9)
-  { variante: 'SEMI', perfilAncho: 198, lateral: 128, manilla: 128.7, anchoTela: 199, altoTela: 129.9, lamas: 140 },
+  // 200/1,55 + 10 = 139,03 → 140 · el "0,5 MM" del alto son 5 mm (130 − 0,5 = 129,5)
+  { variante: 'SEMI', perfilAncho: 198, lateral: 128, manilla: 128.7, anchoTela: 199, altoTela: 129.5, lamas: 140 },
   { variante: 'EXTERNO', perfilAncho: 201, lateral: 131, manilla: 131.7, anchoTela: 202, altoTela: 133.5, lamas: 140 },
 ];
 
@@ -48,12 +48,13 @@ describe('cortesBeeblack — goldens por variante (200 × 130 cm)', () => {
   }
 
   // "Los cálculos se pasan" (usuario, 2026-07-31): el recorte a la décima TRUNCA.
-  // El −0,5 mm del alto de tela SEMI es el único ajuste con centésimas del motor.
-  it('SEMI: el alto de tela nunca supera alto − 0,05', () => {
+  // El alto de tela SEMI descuenta 0,5 cm — la pizarra lo anota "0,5 MM", pero son
+  // 5 milímetros (corrección del usuario el mismo día).
+  it('SEMI: el alto de tela nunca supera alto − 0,5', () => {
     for (const alto of [130, 210.5, 247.3]) {
       const emitido = medida(cortesBeeblack('SEMI', 200, alto), 'Alto tela')!;
-      expect(emitido, `alto ${alto}`).toBeLessThanOrEqual(alto - 0.05);
-      expect(alto - 0.05 - emitido, `alto ${alto}`).toBeLessThan(0.1);
+      expect(emitido, `alto ${alto}`).toBeLessThanOrEqual(alto - 0.5);
+      expect(alto - 0.5 - emitido, `alto ${alto}`).toBeLessThan(0.1);
     }
   });
 });

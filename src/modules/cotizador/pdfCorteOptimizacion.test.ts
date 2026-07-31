@@ -229,26 +229,26 @@ describe('construirHojaCorte — oscuridad invertida usa el ancho de CORTE real'
       panos: [{ ancho, alto: 2.3, oscuridadVariante: 'EXTERNO' }],
     }) as unknown as VentanaItem;
 
-  it('EXTERNO 3,00: TOTAL PAÑOS y OPTIMIZADOR van al corte real 3,093 (no 3,00 / 2,55)', () => {
+  it('EXTERNO 3,00: TOTAL PAÑOS y OPTIMIZADOR van al corte real 3,088 (no 3,00 / 2,55)', () => {
     const ventanas = [ventOscu(3.0)];
     const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
-    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(309.3, 2);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(308.8, 2); // 300 + 15,8 − 6,4 − 0,6
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(true);
-    expect(hoja.cortinas[0].corteAncho35).toBe(3.093);
-    expect(hoja.panos[0].altoCortePano).toBe(3.093); // antes mostraba 3,00
+    expect(hoja.cortinas[0].corteAncho35).toBe(3.088);
+    expect(hoja.panos[0].altoCortePano).toBe(3.088); // antes mostraba 3,00
     const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
-    expect(m['SC 64']).toBe(3.093); // antes sumaba el alto de corte (2,55)
+    expect(m['SC 64']).toBe(3.088); // antes sumaba el alto de corte (2,55)
   });
 
-  it('borde: nominal 2,90 entra, pero la tela real (2,9934) + borde no → invertida', () => {
+  it('borde: nominal 2,90 entra, pero la tela real (2,988) + borde no → invertida', () => {
     const ventanas = [ventOscu(2.9)];
     const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
-    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(299.3, 2);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(298.8, 2); // 290 + 15,8 − 6,4 − 0,6
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(true);
     expect(hoja.cortinas[0].comentario).toBe('INVERTIDA');
-    expect(hoja.panos[0].altoCortePano).toBe(2.993);
+    expect(hoja.panos[0].altoCortePano).toBe(2.988);
   });
 });
 

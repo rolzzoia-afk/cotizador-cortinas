@@ -14,12 +14,16 @@ import {
 // Valores DORADOS extraídos celda por celda de SISTEMAS OSCURIDAD.xlsx (soft
 // light) y de las pizarras de DARK/OSCURANTI/0,45_1,2mm, con el redondeo a 1
 // decimal de la regla del usuario 2026-07-31.
-// En las familias de pizarra la cadena se lee ENCADENADA desde la pieza frontal
-// ya recortada (la que sale impresa): tubo → tela = tubo − 0,6 mm → peso =
-// tela + 0,2 mm. Con un decimal eso deja SIEMPRE peso = tela = tubo − 0,1.
-// El recorte TRUNCA (nunca redondea hacia arriba): una pieza que se pasa no
-// entra en el vano. Por eso INTERNO, el único ajuste con centésimas (−0,3 mm),
-// baja de 200 a 199,9 y arrastra toda su cadena.
+// En las familias de pizarra la cadena está ENCADENADA (frontal → tubo → tela =
+// tubo − 0,6 → peso = tela + 0,2) y viaja EXACTA: el truncado a 1 decimal es solo
+// de impresión, así que ninguna pieza arrastra el recorte de la anterior. El
+// recorte TRUNCA (nunca redondea hacia arriba): una pieza que se pasa no entra en
+// el vano.
+// ESCALA (corrección del usuario 2026-07-31): los "0,3 / 0,6 / 0,2 / 0,8 mm" de
+// las pizarras son 3 / 6 / 2 / 8 MILÍMETROS = décimas de cm, no centésimas. El
+// testigo está a la vista en esta misma tabla: OSCURANTI y SOFT_LIGHT_CC_45
+// encadenados dan los MISMOS números que la tabla neta de SOFT_LIGHT_CC, que
+// salió del xlsx y nunca se tocó.
 // Cada bloque: [familia, variante, ancho, alto, { componente: totalCm }].
 type Caso = {
   familia: FamiliaOscuridad;
@@ -42,26 +46,28 @@ const CASOS: Caso[] = [
   { familia: 'SOFT_LIGHT_CC', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.7, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'EXTERNO', ancho: 200, alto: 240, comp: { 'Cenefa Delantera': 215.8, Tubo: 209.4, 'Tela (ancho)': 208.8, Peso: 209 } },
-  // ── OSCURANTI 0,63 mm ── (pizarra 2026-07-28, mm literal: perfil superior = ancho − 0,03 ·
-  // tubo = perfil − 5,8/6/6,4 · tela = tubo − 0,06 · peso = tela + 0,02). Su pieza frontal
+  // ── OSCURANTI 0,63 mm ── (pizarra 2026-07-28: perfil superior = ancho − 0,3 ·
+  // tubo = perfil − 5,8/6/6,4 · tela = tubo − 0,6 · peso = tela + 0,2). Su pieza frontal
   // es el PERFIL SUPERIOR: NO corta cenefa cuadrada delantera (corrección 2026-07-30).
-  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 199.9, Tubo: 194.1, 'Tela (ancho)': 194, Peso: 194 } },
-  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Perfil superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 201.4, Peso: 201.4 } },
-  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 209.3, Peso: 209.3 } },
-  // ── DARK ── (pizarra 2026-07-27, mm literal: cenefa del = ancho − 0,03 · trasera = del − 1 ·
-  // tubo = trasera − 4,8/5/5,4 · tela = tubo − 0,06 · peso = tela + 0,02 · velcro = del, alto 15)
-  { familia: 'DARK', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.9, 'Cenefa Trasera': 198.9, 'Ancho Tela Velcro': 199.9, 'Alto Tela Velcro': 15, Tubo: 194.1, 'Tela (ancho)': 194, Peso: 194 } },
-  { familia: 'DARK', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Cenefa Trasera': 206.5, 'Ancho Tela Velcro': 207.5, 'Alto Tela Velcro': 15, Tubo: 201.5, 'Tela (ancho)': 201.4, Peso: 201.4 } },
-  { familia: 'DARK', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Cenefa Trasera': 214.8, 'Ancho Tela Velcro': 215.8, 'Alto Tela Velcro': 15, Tubo: 209.4, 'Tela (ancho)': 209.3, Peso: 209.3 } },
+  // Los tres casos caen EXACTO sobre la tabla neta de SOFT_LIGHT_CC (arriba): es el
+  // cotejo independiente de que la escala de la pizarra son décimas, no centésimas.
+  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 199.7, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
+  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Perfil superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
+  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 208.8, Peso: 209 } },
+  // ── DARK ── (pizarra 2026-07-27: cenefa del = ancho − 0,3 · trasera = del − 1 ·
+  // tubo = trasera − 4,8/5/5,4 · tela = tubo − 0,6 · peso = tela + 0,2 · velcro = del, alto 15)
+  { familia: 'DARK', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.7, 'Cenefa Trasera': 198.7, 'Ancho Tela Velcro': 199.7, 'Alto Tela Velcro': 15, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
+  { familia: 'DARK', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Cenefa Trasera': 206.5, 'Ancho Tela Velcro': 207.5, 'Alto Tela Velcro': 15, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
+  { familia: 'DARK', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Cenefa Trasera': 214.8, 'Ancho Tela Velcro': 215.8, 'Alto Tela Velcro': 15, Tubo: 209.4, 'Tela (ancho)': 208.8, Peso: 209 } },
   // ── DARK 0,45_1,2mm ── (pizarra 2026-07-28): mismo encadenado que el DARK 38.
-  { familia: 'DARK_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.9, 'Cenefa Trasera': 298.9, 'Ancho Tela Velcro': 299.9, 'Alto Tela Velcro': 15, Tubo: 294.1, 'Tela (ancho)': 294, Peso: 294 } },
-  { familia: 'DARK_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, 'Cenefa Trasera': 306.5, Tubo: 301.5, 'Tela (ancho)': 301.4, Peso: 301.4 } },
-  { familia: 'DARK_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, 'Cenefa Trasera': 314.8, Tubo: 309.4, 'Tela (ancho)': 309.3, Peso: 309.3 } },
+  { familia: 'DARK_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.7, 'Cenefa Trasera': 298.7, 'Ancho Tela Velcro': 299.7, 'Alto Tela Velcro': 15, Tubo: 293.9, 'Tela (ancho)': 293.3, Peso: 293.5 } },
+  { familia: 'DARK_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, 'Cenefa Trasera': 306.5, Tubo: 301.5, 'Tela (ancho)': 300.9, Peso: 301.1 } },
+  { familia: 'DARK_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, 'Cenefa Trasera': 314.8, Tubo: 309.4, 'Tela (ancho)': 308.8, Peso: 309 } },
   // ── SOFT LIGHT CENEFA CUADRADA 0,45_1,2mm ── (pizarra 2026-07-28): igual que el
   // DARK 45 pero SIN cenefa trasera ni velcro (tubo = cenefa delantera − 5,8/6/6,4).
-  { familia: 'SOFT_LIGHT_CC_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.9, Tubo: 294.1, 'Tela (ancho)': 294, Peso: 294 } },
-  { familia: 'SOFT_LIGHT_CC_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, Tubo: 301.5, 'Tela (ancho)': 301.4, Peso: 301.4 } },
-  { familia: 'SOFT_LIGHT_CC_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, Tubo: 309.4, 'Tela (ancho)': 309.3, Peso: 309.3 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.7, Tubo: 293.9, 'Tela (ancho)': 293.3, Peso: 293.5 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, Tubo: 301.5, 'Tela (ancho)': 300.9, Peso: 301.1 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, Tubo: 309.4, 'Tela (ancho)': 308.8, Peso: 309 } },
 ];
 
 const medida = (cortes: ReturnType<typeof cortesOscuridad>, nombre: string) =>
@@ -95,7 +101,7 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     const semi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infPiso: true });
     expect(medida(semi, 'Perfil inferior al Piso')).toBe(201.2); // 207.5 − 6.3
     const interno = cortesOscuridad('DARK', 'INTERNO', 200, 200, { infMuro: true });
-    expect(medida(interno, 'Perfil inferior a Muro')).toBe(187.3); // cenefa 199,9 − 12,6
+    expect(medida(interno, 'Perfil inferior a Muro')).toBe(187.1); // cenefa 199,7 − 12,6
   });
 
   it('perfil base OSCURANTI = ancho real por variante y montaje (pizarra 2026-07-28)', () => {
@@ -109,9 +115,10 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     expect(medida(semi, 'Perfil inferior al Piso')).toBe(192.5);
     const semiDentro = cortesOscuridad('OSCURANTI', 'SEMI', 200, 200, { infPiso: true, infMontaje: 'DENTRO' });
     expect(medida(semiDentro, 'Perfil inferior al Piso')).toBe(192.5);
-    // EXTERNO: dentro = ancho − 0,8 MM (0,08 cm, default) · pared a pared = ancho + 14.
+    // EXTERNO: dentro = ancho − 0,8 (la pizarra dice "0,8 MM" = 8 mm, default) ·
+    // pared a pared = ancho + 14.
     const extDentro = cortesOscuridad('OSCURANTI', 'EXTERNO', 200, 200, { infMuro: true });
-    expect(medida(extDentro, 'Perfil inferior a Muro')).toBe(199.9);
+    expect(medida(extDentro, 'Perfil inferior a Muro')).toBe(199.2);
     const extPared = cortesOscuridad('OSCURANTI', 'EXTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
     expect(medida(extPared, 'Perfil inferior a Muro')).toBe(214);
   });
@@ -119,7 +126,7 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
   it('oscuranti lleva PERFIL SUPERIOR y NO cenefa cuadrada delantera', () => {
     const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, {});
     const perf = cortes.find((c) => c.columnaExcel === 'PERFIL SUPERIOR (CENEF.PRO)');
-    expect(perf?.medidaCm).toBe(199.9); // 200 − 0,3 mm, truncado
+    expect(perf?.medidaCm).toBe(199.7); // 200 − 0,3
     expect(perf?.perforacion).toBeUndefined();
     // La cenefa cuadrada E29/E30/E31 es de DARK y soft light CC: en oscuranti se
     // cortaba de más junto al perfil rectangular 50×25 (corrección 2026-07-30).
@@ -150,13 +157,13 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     expect(medida(dentro, 'Perfil inferior a Muro')).toBe(283.6);
   });
 
-  it('perfil base SOFT LIGHT EXTERNO: dentro = ancho + 0,08 (default) · pared = ancho + 14', () => {
-    // "+0,8 mm" literal = 0,08 cm: al truncar a 1 decimal esos 0,8 mm no llegan a
-    // la décima y la medida se queda en el ancho real (nunca lo pasa).
+  it('perfil base SOFT LIGHT EXTERNO: dentro = ancho + 0,8 (default) · pared = ancho + 14', () => {
+    // El "+0,8 mm" de la planilla son 8 mm (corrección 2026-07-31): el base sobresale
+    // 8 mm del vano, no 0,8.
     const dentro = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true });
-    expect(medida(dentro, 'Perfil inferior a Muro')).toBe(200); // 200 + 0,08 → 200
+    expect(medida(dentro, 'Perfil inferior a Muro')).toBe(200.8);
     const dentroBig = cortesOscuridad('SOFT_LIGHT_45', 'EXTERNO', 296.9, 180, { infMuro: true, infMontaje: 'DENTRO' });
-    expect(medida(dentroBig, 'Perfil inferior a Muro')).toBe(296.9); // 296,9 + 0,08 → 296,9
+    expect(medida(dentroBig, 'Perfil inferior a Muro')).toBe(297.7); // 296,9 + 0,8
     const pared = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
     expect(medida(pared, 'Perfil inferior a Muro')).toBe(214); // 200 + 14
   });
@@ -182,7 +189,7 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     const darkSemi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infMuro: true, infMontaje: 'PARED' });
     expect(medida(darkSemi, 'Perfil inferior a Muro')).toBe(201.2); // 207,5 − 6,3
     const darkInt = cortesOscuridad('DARK', 'INTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
-    expect(medida(darkInt, 'Perfil inferior a Muro')).toBe(187.3); // cenefa 199,9 − 12,6
+    expect(medida(darkInt, 'Perfil inferior a Muro')).toBe(187.1); // cenefa 199,7 − 12,6
   });
 
   it('sin perfiles ON no agrega cortes de perfil', () => {
@@ -381,7 +388,7 @@ describe('perfil base 0,45_1,2mm por montaje (DARK 45 / soft light CC 45)', () =
       expect(base(familia, 'INTERNO', 'PARED')).toBe(300); // ancho real
       expect(base(familia, 'SEMI')).toBe(292.5); // solo pared: 300 − 7,5
       expect(base(familia, 'SEMI', 'PARED')).toBe(292.5);
-      expect(base(familia, 'EXTERNO')).toBe(299.9); // 300 − 0,8 mm
+      expect(base(familia, 'EXTERNO')).toBe(299.2); // 300 − 0,8 ("0,8 MM" = 8 mm)
       expect(base(familia, 'EXTERNO', 'PARED')).toBe(314); // 300 + 14
     });
   }
@@ -469,25 +476,82 @@ describe('redondeo: como máximo 1 decimal', () => {
   });
 });
 
-// El usuario recalculó a mano la OT #DARK-OSCURANTI (2026-07-31) y encontró el
-// peso 1 mm más largo que la tela en SEMI/EXTERNO: el motor sacaba cada pieza
-// del ancho con un neto exacto (tela +1,44 · peso +1,46) y las redondeaba por
-// separado. La pizarra encadena, y sobre los valores IMPRESOS (tubo → tela =
-// −0,6 mm → peso = +0,2 mm) el peso siempre cae en la misma décima que la tela.
-describe('familias de pizarra: la cadena parte del valor impreso', () => {
-  const MM_LITERALES: FamiliaOscuridad[] = ['OSCURANTI', 'DARK', 'DARK_45', 'SOFT_LIGHT_CC_45'];
+// Regla del usuario (2026-07-31, tras cotejar su planilla con la app): "los
+// cálculos tienen que ser exactos… los resultados que se imprimen en las hojas
+// son los que tienen que mostrar solo un decimal". La cadena viaja con todos sus
+// decimales y el truncado se aplica SOLO al emitir cada pieza; si el eslabón
+// siguiente partiera del valor impreso, el recorte se acumularía. Con la escala
+// corregida (los "mm" de las pizarras son décimas) ya no quedan centésimas en
+// juego, así que hoy el truncado no mueve ninguna medida: la arquitectura queda
+// como red de seguridad.
+describe('familias de pizarra: la cadena viaja exacta y se trunca al imprimir', () => {
+  const FAMILIAS_PIZARRA: FamiliaOscuridad[] = ['OSCURANTI', 'DARK', 'DARK_45', 'SOFT_LIGHT_CC_45'];
+  const VARIANTES: VarianteOscuridad[] = ['INTERNO', 'SEMI', 'EXTERNO'];
+  const ANCHOS = [200, 220, 227.5, 250, 296.9, 330];
+  const t1 = (n: number) => Math.floor(n * 10 + 1e-7) / 10;
+  // Ajuste de la pieza frontal y paso del tubo, tal cual la pizarra.
+  const FRONTAL = { INTERNO: -0.3, SEMI: 7.5, EXTERNO: 15.8 } as const;
+  const PASO_TUBO = {
+    OSCURANTI: { INTERNO: 5.8, SEMI: 6, EXTERNO: 6.4 },
+    SOFT_LIGHT_CC_45: { INTERNO: 5.8, SEMI: 6, EXTERNO: 6.4 },
+    DARK: { INTERNO: 4.8, SEMI: 5, EXTERNO: 5.4 },
+    DARK_45: { INTERNO: 4.8, SEMI: 5, EXTERNO: 5.4 },
+  } as const;
+  // Cadena EXACTA de la pizarra, recalculada acá sin tocar el motor.
+  const exactas = (familia: FamiliaOscuridad, variante: VarianteOscuridad, ancho: number) => {
+    const frontal = ancho + FRONTAL[variante];
+    const trasera = frontal - 1; // solo DARK la corta
+    const esDark = familia === 'DARK' || familia === 'DARK_45';
+    const tubo = (esDark ? trasera : frontal) - PASO_TUBO[familia as keyof typeof PASO_TUBO][variante];
+    const tela = tubo - 0.6;
+    return { frontal, trasera, tubo, tela, peso: tela + 0.2 };
+  };
 
-  it('peso = tela = tubo − 0,1 en toda familia, variante y ancho', () => {
-    for (const familia of MM_LITERALES) {
-      for (const variante of ['INTERNO', 'SEMI', 'EXTERNO'] as VarianteOscuridad[]) {
-        for (const ancho of [200, 220, 227.5, 296.9, 330]) {
+  it('cada pieza impresa = truncado de su fórmula exacta (sin arrastrar el recorte)', () => {
+    for (const familia of FAMILIAS_PIZARRA) {
+      for (const variante of VARIANTES) {
+        for (const ancho of ANCHOS) {
+          const e = exactas(familia, variante, ancho);
           const cortes = cortesOscuridad(familia, variante, ancho, 230);
-          const etiqueta = `${familia} ${variante} ${ancho}`;
-          const tubo = medida(cortes, 'Tubo')!;
-          const tela = medida(cortes, 'Tela (ancho)')!;
-          const peso = medida(cortes, 'Peso')!;
-          expect(tela, `${etiqueta} — tela`).toBe(Math.round((tubo - 0.1) * 10) / 10);
-          expect(peso, `${etiqueta} — peso`).toBe(tela);
+          const q = `${familia} ${variante} ${ancho}`;
+          const frontal = medida(cortes, familia === 'OSCURANTI' ? 'Perfil superior' : 'Cenefa Delantera');
+          expect(frontal, `${q} — frontal`).toBe(t1(e.frontal));
+          expect(medida(cortes, 'Tubo'), `${q} — tubo`).toBe(t1(e.tubo));
+          expect(medida(cortes, 'Tela (ancho)'), `${q} — tela`).toBe(t1(e.tela));
+          expect(medida(cortes, 'Peso'), `${q} — peso`).toBe(t1(e.peso));
+          if (familia === 'DARK' || familia === 'DARK_45') {
+            expect(medida(cortes, 'Cenefa Trasera'), `${q} — trasera`).toBe(t1(e.trasera));
+          }
+        }
+      }
+    }
+  });
+
+  // "Los cálculos se pasan": al recortar hay que TRUNCAR, no redondear — una pieza
+  // más larga que la fórmula no entra en el vano. Y con la cadena exacta ninguna
+  // se queda corta más de una décima (antes la tela INTERNO perdía 0,11).
+  it('ninguna pieza supera su exacta ni se aleja 0,1 de ella', () => {
+    for (const familia of FAMILIAS_PIZARRA) {
+      for (const variante of VARIANTES) {
+        for (const ancho of ANCHOS) {
+          const e = exactas(familia, variante, ancho);
+          const cortes = cortesOscuridad(familia, variante, ancho, 230);
+          const pares: Array<[string, number]> = [
+            [familia === 'OSCURANTI' ? 'Perfil superior' : 'Cenefa Delantera', e.frontal],
+            ['Tubo', e.tubo],
+            ['Tela (ancho)', e.tela],
+            ['Peso', e.peso],
+          ];
+          if (familia === 'DARK' || familia === 'DARK_45') pares.push(['Cenefa Trasera', e.trasera]);
+          for (const [comp, exacto] of pares) {
+            const emitido = medida(cortes, comp)!;
+            const q = `${familia} ${variante} ${ancho} — ${comp}`;
+            // El margen de 1e-9 es polvo binario, no holgura: 199,7 − 5,8 se
+            // guarda como 193.89999999999998 y el motor (con su épsilon) emite
+            // los 193,9 correctos.
+            expect(emitido, q).toBeLessThanOrEqual(exacto + 1e-9);
+            expect(exacto - emitido, q).toBeLessThan(0.1);
+          }
         }
       }
     }
@@ -498,39 +562,62 @@ describe('familias de pizarra: la cadena parte del valor impreso', () => {
     const dark = cortesOscuridad('DARK', 'SEMI', 220, 230);
     expect(medida(dark, 'Cenefa Trasera')).toBe(226.5);
     expect(medida(dark, 'Tubo')).toBe(221.5);
-    expect(medida(dark, 'Peso')).toBe(221.4); // antes 221,5
+    expect(medida(dark, 'Peso')).toBe(221.1); // tela 220,9 + 0,2
     // OSCURANTI 330 EXTERNO: perfil superior 345,8 → tubo 345,8 − 6,4 = 339,4.
     const oscu = cortesOscuridad('OSCURANTI', 'EXTERNO', 330, 230);
     expect(medida(oscu, 'Perfil superior')).toBe(345.8);
     expect(medida(oscu, 'Tubo')).toBe(339.4);
-    expect(medida(oscu, 'Peso')).toBe(339.3); // antes 339,4
+    expect(medida(oscu, 'Peso')).toBe(339); // tela 338,8 + 0,2
+  });
+
+  // El PESO se ve 2 mm más largo que la tela (antes, con los mm tomados como
+  // literales, eran 0,2 mm y a una décima las dos piezas salían iguales — el
+  // usuario reclamó justamente eso: "el peso nunca debería ser igual a la tela").
+  it('el peso sale 0,2 cm sobre la tela, y se NOTA en la hoja', () => {
+    for (const familia of FAMILIAS_PIZARRA) {
+      for (const variante of VARIANTES) {
+        const cortes = cortesOscuridad(familia, variante, 250, 230);
+        const tela = medida(cortes, 'Tela (ancho)')!;
+        const peso = medida(cortes, 'Peso')!;
+        expect(Number((peso - tela).toFixed(2)), `${familia} ${variante}`).toBe(0.2);
+      }
+    }
+  });
+
+  // El cuadro que mandó el usuario, celda por celda (oscuranti INTERNO 330), ya
+  // con la escala corregida: los "mm" de la pizarra son décimas de cm.
+  it('cuadro del usuario: oscuranti INTERNO 330', () => {
+    const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 330, 230);
+    expect(medida(cortes, 'Perfil superior')).toBe(329.7); // 330 − 0,3
+    expect(medida(cortes, 'Tubo')).toBe(323.9); // 329,7 − 5,8
+    expect(medida(cortes, 'Tela (ancho)')).toBe(323.3); // 323,9 − 0,6
+    expect(medida(cortes, 'Peso')).toBe(323.5); // 323,3 + 0,2
+  });
+
+  // El cotejo que fija la ESCALA: la tabla de SOFT_LIGHT_CC salió del xlsx en
+  // décimas y nunca se tocó. Si los "mm" de las pizarras fueran literales, la
+  // cadena de OSCURANTI/CC_45 (misma geometría, cenefa cuadrada + tubo 5,8/6/6,4)
+  // no podría caer encima de ella.
+  it('la cadena encadenada reproduce la tabla NETA de SOFT_LIGHT_CC (misma geometría)', () => {
+    for (const variante of VARIANTES) {
+      for (const ancho of ANCHOS) {
+        const cc = cortesOscuridad('SOFT_LIGHT_CC', variante, ancho, 230);
+        for (const familia of ['OSCURANTI', 'SOFT_LIGHT_CC_45'] as FamiliaOscuridad[]) {
+          const enc = cortesOscuridad(familia, variante, ancho, 230);
+          const q = `${familia} ${variante} ${ancho}`;
+          const frontal = medida(enc, familia === 'OSCURANTI' ? 'Perfil superior' : 'Cenefa Delantera');
+          expect(frontal, `${q} — frontal`).toBe(medida(cc, 'Cenefa Delantera'));
+          for (const comp of ['Tubo', 'Tela (ancho)', 'Peso']) {
+            expect(medida(enc, comp), `${q} — ${comp}`).toBe(medida(cc, comp));
+          }
+        }
+      }
+    }
   });
 
   it('soft light de tabla conserva su peso (tela + 0,2 cm, no encadena)', () => {
     const soft = cortesOscuridad('SOFT_LIGHT_38', 'SEMI', 200, 200);
     expect(medida(soft, 'Tela (ancho)')).toBe(200.6);
     expect(medida(soft, 'Peso')).toBe(200.8);
-  });
-
-  // "Los cálculos se pasan" (usuario, 2026-07-31): al recortar a la décima hay que
-  // TRUNCAR, no redondear — una pieza más larga que la fórmula no entra en el vano.
-  it('ninguna medida emitida supera a su fórmula exacta', () => {
-    const EXACTO: Record<string, (ancho: number, variante: VarianteOscuridad) => number> = {
-      // Pieza frontal INTERNO: ancho − 0,3 mm (el único ajuste con centésimas).
-      'Perfil superior': (a) => a - 0.03,
-      'Cenefa Delantera': (a) => a - 0.03,
-      'Cenefa Trasera': (a) => a - 0.03 - 1,
-    };
-    for (const familia of MM_LITERALES) {
-      for (const ancho of [200, 220, 250, 296.9, 330]) {
-        for (const c of cortesOscuridad(familia, 'INTERNO', ancho, 230)) {
-          const exacto = EXACTO[c.componente]?.(ancho, 'INTERNO');
-          if (exacto === undefined) continue;
-          expect(c.medidaCm, `${familia} ${ancho} — ${c.componente}`).toBeLessThanOrEqual(exacto);
-          // …y no se queda corto de más: como mucho una décima por debajo.
-          expect(exacto - c.medidaCm, `${familia} ${ancho} — ${c.componente}`).toBeLessThan(0.1);
-        }
-      }
-    }
   });
 });
