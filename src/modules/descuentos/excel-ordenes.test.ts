@@ -199,7 +199,7 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     const { aoa } = generarOrdenesOptimizador('266-2', [v]);
     const idxCenefaDel = 9;
     const idxPerfilSup = 10;
-    expect(aoa[1][idxPerfilSup]).toBe(296.9); // 296,9 − 0,3 mm → 1 decimal
+    expect(aoa[1][idxPerfilSup]).toBe(296.8); // 296,9 − 0,3 mm = 296,87, truncado
     // Si además saliera la cenefa cuadrada, el optimizador cortaría dos piezas
     // (E29/E30/E31 + E50/E49/E52) para la misma ventana (corrección 2026-07-30).
     expect(aoa[1][idxCenefaDel]).toBe('');
@@ -215,7 +215,7 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     const idxSepSup = enc.indexOf('SEPARADOR SUPERIOR');
     expect(idxPerfSup).toBeGreaterThan(-1);
     expect(idxSepSup).toBeGreaterThan(-1);
-    expect(aoa[1][idxPerfSup]).toBe(296.9); // ancho − 0,3 mm → 1 decimal
+    expect(aoa[1][idxPerfSup]).toBe(296.8); // ancho − 0,3 mm, truncado a 1 decimal
     // El separador superior es un separador más (E41/E42/E43), no se emite solo.
     expect(aoa[1][idxSepSup]).toBe('');
     // El perfil superior no lleva perforación: no debe pedirla en Fase 2.

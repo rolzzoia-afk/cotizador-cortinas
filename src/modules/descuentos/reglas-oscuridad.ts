@@ -12,12 +12,16 @@
 // dorados (reglas-oscuridad.test.ts). Si la planilla cambia, editar SOLO
 // las tablas de abajo.
 //
-// DARK: sus cortes (cenefa cuadrada del/tra, tubo, tela, peso) salen de la
-// pizarra oficial 2026-07-27, donde los ajustes en "mm" son milímetros
-// LITERALES (0,3mm=0,03cm · 0,6mm=0,06cm · 0,2mm=0,02cm). Las tablas los
-// conservan, pero la medida que sale del motor se redondea a 1 decimal (ver
-// r1): el taller no corta centésimas de centímetro. DARK_45MM comparte estas
-// tablas hasta que lleguen sus fórmulas propias.
+// DARK / OSCURANTI / 0,45_1,2mm: sus cortes salen de las pizarras oficiales
+// (2026-07-27 y 2026-07-28), donde los ajustes escritos en "mm" son milímetros
+// LITERALES (0,3mm=0,03cm · 0,6mm=0,06cm · 0,2mm=0,02cm) y la cadena se lee
+// ENCADENADA — cada pieza se mide sobre la ANTERIOR, no sobre el ancho:
+//   pieza frontal → tubo → tela → peso.
+// Como el taller no corta centésimas, cada medida se recorta a la décima por
+// DEFECTO (t1: trunca, nunca redondea hacia arriba — una pieza pasada no entra)
+// y el motor encadena desde ese valor, o sea el mismo número que el operario lee
+// en el papel. Por eso el peso (tela + 0,2 mm) sale SIEMPRE igual a la tela.
+// DARK_45MM comparte estas tablas hasta que lleguen sus fórmulas propias.
 //
 // Mapeo a columnas del Excel de órdenes (las reconoce el optimizador
 // legacy en COLUMNAS_CORTE):
@@ -111,7 +115,7 @@ export type MedidasPerfilesOscuridad = Partial<Record<MedidaPerfilKey, number>>;
 /** Devuelve el override si es un número válido (> 0); si no, la medida calculada. */
 function aplicarOverride(calculada: number, override: number | undefined): number {
   return typeof override === 'number' && Number.isFinite(override) && override > 0
-    ? r1(override)
+    ? t1(override)
     : calculada;
 }
 
@@ -142,12 +146,28 @@ export const PERFILES_OSCURIDAD: Array<{ key: SuperficiePerfilKey; label: string
 
 export const VARIANTES_OSCURIDAD: VarianteOscuridad[] = ['INTERNO', 'SEMI', 'EXTERNO'];
 
-// Redondeo a 1 decimal (regla del usuario 2026-07-31: ninguna medida de corte lleva
-// más de un decimal). Los ajustes en milímetros literales de DARK/OSCURANTI siguen en
-// las tablas y encadenan como siempre; lo que se redondea es cada medida emitida.
-const r1 = (n: number) => Math.round(n * 10) / 10;
+// A 1 decimal, TRUNCANDO (regla del usuario 2026-07-31): ninguna medida de corte lleva
+// más de un decimal y ninguna puede PASARSE de lo que da la fórmula — una pieza que
+// sobra no entra en el vano. Los milímetros literales siguen en las tablas: lo que se
+// recorta es cada medida emitida (ancho 330 − 0,3 mm = 329,97 → 329,9, nunca 330).
+// El épsilon absorbe el polvo binario (337,49999999999994) sin tapar señales reales:
+// el ajuste más chico de las pizarras es 0,02 cm, o sea 0,2 en unidades de décima.
+const t1 = (n: number) => Math.floor(n * 10 + 1e-7) / 10;
 
 const VI: Record<VarianteOscuridad, number> = { INTERNO: 0, SEMI: 1, EXTERNO: 2 };
+
+/**
+ * Familias soft light "de tabla": sus descuentos son NETOS sobre el ancho, en cm
+ * con un decimal (SISTEMAS OSCURIDAD.xlsx). No encadenan — y el truncado no las
+ * toca porque las tablas ya vienen en décimas (salvo el base EXTERNO "dentro",
+ * que es +0,8 mm).
+ */
+export type FamiliaSoftLightNeta = 'SOFT_LIGHT_38' | 'SOFT_LIGHT_45' | 'SOFT_LIGHT_CC';
+/**
+ * Familias de PIZARRA (milímetros literales): tubo, tela y peso se miden en
+ * cadena sobre la medida ya emitida de la pieza anterior (ver TUBO_PASO).
+ */
+type FamiliaEncadenada = Exclude<FamiliaOscuridad, FamiliaSoftLightNeta>;
 
 // Ajuste neto sobre el ANCHO por [INTERNO, SEMI, EXTERNO].
 const CENEFA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
@@ -163,51 +183,44 @@ const CENEFA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   DARK_45: [-0.03, 7.5, 15.8],
   SOFT_LIGHT_CC_45: [-0.03, 7.5, 15.8],
 };
-const TUBO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
+const TUBO_ADJ: Record<FamiliaSoftLightNeta, [number, number, number]> = {
   SOFT_LIGHT_38: [-3.0, 4.8, 11.4],
   // Soft light 45 mm (0,45_1,2mm) BLANCO: tubo = cenefa − 3,1 (fórmula usuario 2026-07-24).
   SOFT_LIGHT_45: [-4.3, 3.5, 10.1],
   SOFT_LIGHT_CC: [-6.1, 1.5, 9.4],
-  // OSCURANTI: tubo = cenefa delantera (= separador superior) − 5,8/6/6,4 cm
-  // (pizarra 2026-07-28). INT = ancho − 5,83 · SEMI = ancho + 1,5 · EXT = ancho + 9,4.
-  OSCURANTI: [-5.83, 1.5, 9.4],
-  // DARK: tubo = cenefa trasera (= delantera − 1) − 4,8/5/5,4 cm (pizarra 2026-07-27).
-  //   INT = ancho − 5,83 · SEMI = ancho + 1,5 · EXT = ancho + 9,4.
-  DARK: [-5.83, 1.5, 9.4],
-  // 0,45_1,2mm: DARK 45 = cenefa trasera − 4,8/5/5,4 · soft light CC 45 = cenefa
-  // delantera − 5,8/6/6,4. Ambos encadenados dan los mismos netos sobre el ancho.
-  DARK_45: [-5.83, 1.5, 9.4],
-  SOFT_LIGHT_CC_45: [-5.83, 1.5, 9.4],
 };
 // Tubo con accesorios NEGROS. Único caso donde el corte de oscuridad depende del
 // color: en el 45 mm el tubo es cenefa − 2,9 (en vez de − 3,1 del blanco), o sea
 // +0,2 sobre la tabla blanca. La tela se compensa (tubo − 3,1) y queda idéntica.
 // El resto de familias/colores usa TUBO_ADJ (fallback en cortesOscuridad).
-const TUBO_ADJ_NEGRO: Partial<Record<FamiliaOscuridad, [number, number, number]>> = {
+const TUBO_ADJ_NEGRO: Partial<Record<FamiliaSoftLightNeta, [number, number, number]>> = {
   SOFT_LIGHT_45: [-4.1, 3.7, 10.3],
 };
-const PESO_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
+const PESO_ADJ: Record<FamiliaSoftLightNeta, [number, number, number]> = {
   SOFT_LIGHT_38: [-7.0, 0.8, 7.4],
   SOFT_LIGHT_45: [-7.0, 0.8, 7.4],
   SOFT_LIGHT_CC: [-6.5, 1.1, 9.0],
-  // OSCURANTI: peso = tela + 0,2mm (pizarra 2026-07-28).
-  OSCURANTI: [-5.87, 1.46, 9.36],
-  // DARK: peso = tela + 0,2mm (pizarra 2026-07-27). INT −5,87 · SEMI +1,46 · EXT +9,36.
-  DARK: [-5.87, 1.46, 9.36],
-  DARK_45: [-5.87, 1.46, 9.36],
-  SOFT_LIGHT_CC_45: [-5.87, 1.46, 9.36],
 };
-const TELA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
+const TELA_ADJ: Record<FamiliaSoftLightNeta, [number, number, number]> = {
   SOFT_LIGHT_38: [-7.2, 0.6, 7.2],
   SOFT_LIGHT_45: [-7.2, 0.6, 7.2],
   SOFT_LIGHT_CC: [-6.7, 0.9, 8.8],
-  // OSCURANTI: tela = tubo − 0,6mm (pizarra 2026-07-28).
-  OSCURANTI: [-5.89, 1.44, 9.34],
-  // DARK: tela = tubo − 0,6mm (pizarra 2026-07-27). INT −5,89 · SEMI +1,44 · EXT +9,34.
-  DARK: [-5.89, 1.44, 9.34],
-  DARK_45: [-5.89, 1.44, 9.34],
-  SOFT_LIGHT_CC_45: [-5.89, 1.44, 9.34],
 };
+// ── Cadena de las familias de PIZARRA (mm literales) ──
+// Paso del TUBO desde la pieza frontal ya emitida, por [INTERNO, SEMI, EXTERNO]:
+//   OSCURANTI      → desde el PERFIL SUPERIOR   − 5,8 / 6 / 6,4 (pizarra 2026-07-28)
+//   soft light CC 45 → desde la CENEFA DELANTERA − 5,8 / 6 / 6,4 (pizarra 2026-07-28)
+//   DARK y DARK 45 → desde la CENEFA TRASERA    − 4,8 / 5 / 5,4 (pizarras 07-27/28)
+const TUBO_PASO: Record<FamiliaEncadenada, [number, number, number]> = {
+  OSCURANTI: [5.8, 6, 6.4],
+  SOFT_LIGHT_CC_45: [5.8, 6, 6.4],
+  DARK: [4.8, 5, 5.4],
+  DARK_45: [4.8, 5, 5.4],
+};
+/** Tela = tubo − 0,6 mm. */
+const TELA_PASO_CM = 0.06;
+/** Peso = tela + 0,2 mm (con 1 decimal, el peso queda siempre igual a la tela). */
+const PESO_PASO_CM = 0.02;
 // Cenefa trasera (solo DARK): cenefa delantera − 1.
 const CENEFA_TRASERA_DESC = 1;
 // Perfil inferior: cenefa delantera − descuento por familia y variante [INTERNO, SEMI, EXTERNO].
@@ -238,11 +251,11 @@ const INF_SOFTLIGHT_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARE
 // ajuste por variante y montaje (pizarra 2026-07-28). SEMI solo va pared a pared.
 //   INTERNO: dentro = ancho − 13,3 · pared = ancho (perforación externa).
 //   SEMI:    pared = ancho − 7,5 (perforación siempre externa).
-//   EXTERNO: dentro = ancho − 0,8 · pared = ancho + 14 (perforación externa).
+//   EXTERNO: dentro = ancho − 0,8 MM (0,08 cm) · pared = ancho + 14 (perf. externa).
 const INF_OSCURANTI_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }> = {
   INTERNO: { DENTRO: -13.3, PARED: 0 },
   SEMI: { DENTRO: null, PARED: -7.5 },
-  EXTERNO: { DENTRO: -0.8, PARED: 14 },
+  EXTERNO: { DENTRO: -0.08, PARED: 14 },
 };
 // Sistemas 0,45_1,2mm (DARK 45 y soft light cenefa cuadrada 45, pizarras
 // 2026-07-28): el perfil base se mide sobre el ANCHO REAL por variante y montaje.
@@ -259,9 +272,10 @@ const FAMILIAS_SOFT_LIGHT: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45
 /**
  * ¿Es un sistema soft light de los que miden el base con INF_SOFTLIGHT_ADJ
  * (38/45 ovalada + cenefa cuadrada 38)? El soft light cenefa cuadrada de 45
- * tiene su propia tabla (INF_45_ADJ), así que NO entra acá.
+ * tiene su propia tabla (INF_45_ADJ), así que NO entra acá. Son también las
+ * familias que cortan con descuento NETO sobre el ancho (no encadenan).
  */
-export function esFamiliaSoftLight(familia: FamiliaOscuridad): boolean {
+export function esFamiliaSoftLight(familia: FamiliaOscuridad): familia is FamiliaSoftLightNeta {
   return FAMILIAS_SOFT_LIGHT.includes(familia);
 }
 const FAMILIAS_45: FamiliaOscuridad[] = ['DARK_45', 'SOFT_LIGHT_CC_45'];
@@ -418,7 +432,7 @@ export function cenefaFrontOscuridad(
   variante: VarianteOscuridad,
   anchoCm: number,
 ): number {
-  return r1(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
+  return t1(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
 }
 
 /**
@@ -447,9 +461,9 @@ export function medidaPerfilBaseOscuridad(
   if (adjAncho) {
     // SEMI (DENTRO null) → siempre pared a pared; INTERNO/EXTERNO default DENTRO.
     const delta = adjAncho.DENTRO === null || montaje === 'PARED' ? adjAncho.PARED : adjAncho.DENTRO;
-    return r1(anchoCm + delta);
+    return t1(anchoCm + delta);
   }
-  return r1(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
+  return t1(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
 }
 
 /**
@@ -476,9 +490,9 @@ export function medidaPerfilOscuridad(
   altoCm: number,
   infMontaje?: MontajeBaseOscuridad,
 ): number {
-  if (key === 'izqMuro' || key === 'derMuro') return r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  if (key === 'izqMuro' || key === 'derMuro') return t1(altoCm + PERFIL_LATERAL_MURO_SUMA);
   // piso y marco (dentro del marco) = alto real, sin descuento.
-  if (key === 'izqPiso' || key === 'derPiso' || key === 'izqMarco' || key === 'derMarco') return r1(altoCm);
+  if (key === 'izqPiso' || key === 'derPiso' || key === 'izqMarco' || key === 'derMarco') return t1(altoCm);
   // inferior (muro/piso/marco): soft light INTERNO usa montaje; resto = cenefa − descuento.
   return medidaPerfilBaseOscuridad(familia, variante, anchoCm, infMontaje);
 }
@@ -506,7 +520,10 @@ export function cortesOscuridad(
   if (!anchoCm || anchoCm <= 0) return cortes;
   const vi = VI[variante];
   const conCenefaCuad = CON_CENEFA_DELANTERA.includes(familia);
-  const cenefaFront = r1(anchoCm + CENEFA_ADJ[familia][vi]);
+  const cenefaFront = t1(anchoCm + CENEFA_ADJ[familia][vi]);
+  // Cenefa trasera (solo DARK): se mide sobre la DELANTERA ya emitida, y es la
+  // pieza desde la que arranca el tubo.
+  const cenefaTrasera = t1(cenefaFront - CENEFA_TRASERA_DESC);
 
   if (conCenefaCuad) {
     // Oscuranti: su pieza frontal ES el PERFIL SUPERIOR (rectangular 50×25,
@@ -528,7 +545,7 @@ export function cortesOscuridad(
       cortes.push({
         componente: 'Cenefa Trasera',
         columnaExcel: 'CENEFA TRASERA',
-        medidaCm: r1(cenefaFront - CENEFA_TRASERA_DESC),
+        medidaCm: cenefaTrasera,
       });
       cortes.push({ componente: 'Ancho Tela Velcro', columnaExcel: '', medidaCm: cenefaFront });
       cortes.push({ componente: 'Alto Tela Velcro', columnaExcel: '', medidaCm: ALTO_TELA_VELCRO_CM });
@@ -540,13 +557,30 @@ export function cortesOscuridad(
     cortes.push({ componente: 'Cenefa', columnaExcel: 'CENEFA OVALADA', medidaCm: cenefaFront });
   }
 
-  // Tubo: en el 45 mm con accesorios negros usa la tabla NEGRA (cenefa − 2,9);
-  // el resto de familias/colores cae al fallback blanco.
-  const tuboAdj =
-    (esColorAccesoriosNegro(colorAccesorios) ? TUBO_ADJ_NEGRO[familia] : undefined) ?? TUBO_ADJ[familia];
-  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r1(anchoCm + tuboAdj[vi]) });
-  cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r1(anchoCm + TELA_ADJ[familia][vi]) });
-  cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r1(anchoCm + PESO_ADJ[familia][vi]) });
+  // ── Tubo · Tela · Peso ──
+  // Soft light "de tabla": descuento NETO sobre el ancho. En el 45 mm con
+  // accesorios negros el tubo usa la tabla NEGRA (cenefa − 2,9); el resto de
+  // familias/colores cae al fallback blanco.
+  // Familias de PIZARRA (mm literales): la cadena arranca de la pieza frontal ya
+  // emitida —la cenefa trasera en DARK, la delantera/perfil superior en el
+  // resto— y cada eslabón parte del valor redondeado que sale impreso.
+  let tubo: number;
+  let tela: number;
+  let peso: number;
+  if (esFamiliaSoftLight(familia)) {
+    const tuboAdj =
+      (esColorAccesoriosNegro(colorAccesorios) ? TUBO_ADJ_NEGRO[familia] : undefined) ?? TUBO_ADJ[familia];
+    tubo = t1(anchoCm + tuboAdj[vi]);
+    tela = t1(anchoCm + TELA_ADJ[familia][vi]);
+    peso = t1(anchoCm + PESO_ADJ[familia][vi]);
+  } else {
+    tubo = t1((esFamiliaDark(familia) ? cenefaTrasera : cenefaFront) - TUBO_PASO[familia][vi]);
+    tela = t1(tubo - TELA_PASO_CM);
+    peso = t1(tela + PESO_PASO_CM);
+  }
+  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: tubo });
+  cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: tela });
+  cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: peso });
 
   // ── Perfiles (activos) ──
   // La MEDIDA depende de la superficie (muro = alto+10; piso y marco = alto); la
@@ -554,8 +588,8 @@ export function cortesOscuridad(
   // estar ACTIVO (asignado en Fase 1) con la superficie/medida pendiente para
   // Fase 2. Retro-compat: muro/piso/marco marcado implica activo.
   const altoOk = altoCm > 0;
-  const lateralMuro = r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
-  const lateralPiso = r1(altoCm);
+  const lateralMuro = t1(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  const lateralPiso = t1(altoCm);
   // Soft light INTERNO: ancho − 13,3 (dentro de laterales) o ancho (pared a pared);
   // resto de variantes/familias = cenefa frontal − descuento de variante.
   const inferior = medidaPerfilBaseOscuridad(familia, variante, anchoCm, perfiles.infMontaje);
@@ -661,7 +695,7 @@ export function cortesOscuridad(
     cortes.push({
       componente: nombre,
       columnaExcel: columna,
-      medidaCm: pendienteMedida ? 0 : overrideOk ? r1(overrideSep as number) : fallback.medida,
+      medidaCm: pendienteMedida ? 0 : overrideOk ? t1(overrideSep as number) : fallback.medida,
       perfil: true,
       pendienteMedida,
     });
