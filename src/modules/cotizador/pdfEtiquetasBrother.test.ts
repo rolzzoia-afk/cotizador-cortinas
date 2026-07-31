@@ -48,7 +48,7 @@ describe('fmtMedidaCm', () => {
   it('coma decimal es-CL, hasta 2 decimales, sin ceros de cola', () => {
     expect(fmtMedidaCm(250.5)).toBe('250,5');
     expect(fmtMedidaCm(230)).toBe('230');
-    // DARK usa mm literales → el despiece trae centésimas y la etiqueta las conserva.
+    // Tolera centésimas (hoy solo llegarían de un override manual): las conserva.
     expect(fmtMedidaCm(295.05)).toBe('295,05');
     expect(fmtMedidaCm(194.17)).toBe('194,17');
     expect(fmtMedidaCm(199.97)).toBe('199,97');

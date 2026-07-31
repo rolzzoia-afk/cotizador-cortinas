@@ -494,10 +494,10 @@ describe('asignarJuntoEnOrden', () => {
         panos: [{ ancho: 1.45, alto: 2.3, oscuridadVariante: 'EXTERNO' }],
       }) as unknown as VentanaItem;
     const rows = buildOptimizerRows([oscu(1), oscu(2)], cat);
-    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(154.3, 2);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(153.8, 2); // 145 + 15,8 − 6,4 − 0,6
     const out = asignarJuntoEnOrden(rows);
     expect(out[0].junto).not.toBe(out[1].junto); // antes compartían paño
-    expect(out[0].anchoPano).toBeCloseTo(1.543, 4); // acumula el corte real
+    expect(out[0].anchoPano).toBeCloseTo(1.538, 4); // acumula el corte real
   });
 
   it('empieza nuevo junto si cambia codInt', () => {

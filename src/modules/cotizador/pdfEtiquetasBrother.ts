@@ -73,9 +73,9 @@ const BLANCO: [number, number, number] = [255, 255, 255];
 
 /** Medida en cm sin sufijo, coma decimal es-CL ("172,0" → "172"). */
 export function fmtMedidaCm(n: number): string {
-  // El despiece redondea a 2 decimales (mm literales de DARK): la etiqueta los
-  // conserva tal cual ("295,05", como el .lbx), recortando ceros de cola
-  // ("250,50" → "250,5" · "230,00" → "230").
+  // Admite hasta 2 decimales, como el .lbx ("295,05"), recortando ceros de cola
+  // ("250,50" → "250,5" · "230,00" → "230"). Hoy el despiece emite a 1 decimal
+  // truncado, así que el segundo decimal solo aparecería vía override manual.
   return n.toFixed(2).replace(/\.?0+$/, '').replace('.', ',');
 }
 
