@@ -55,6 +55,25 @@ describe('construirFilasCortinas', () => {
     expect(filas[1].ubicacion).toBe('TERRAZA DER');
   });
 
+  // El beeblack no lleva tubo: su estructura son los perfiles (riel SML04/05/06).
+  // Hasta 2026-07-31 la Fase 2 le asignaba un chip por el prefill genérico y la
+  // hoja de inventario lo imprimía, contradiciendo al BOM y al Excel de órdenes.
+  it('BEEBLACK: la columna TUBERÍA va vacía aunque la OT traiga un chip guardado', () => {
+    const [f] = construirFilasCortinas([
+      {
+        id: 'bb',
+        ubicacion: 'LIVING',
+        producto: 'BEEBLACK BLACKOUT',
+        tipo: '',
+        color: 'NEGRO',
+        alto: 1.3,
+        categoria: 'BEEBLACK',
+        panos: [{ ancho: 2, alto: 1.3, tuberia: 'E02-TUBO 1.2 / Ø 38 mm', beeblackVariante: 'INTERNO' }],
+      } as unknown as VentanaItem,
+    ]);
+    expect(f.tuberia).toBe('');
+  });
+
   it('codPeso de Fase 2 aparece en peso cadena', () => {
     const [f] = construirFilasCortinas([
       {

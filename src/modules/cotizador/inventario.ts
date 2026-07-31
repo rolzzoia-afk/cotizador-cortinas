@@ -25,6 +25,7 @@ import {
   normalizarColorAccesorio,
   tuberiaParaPano,
 } from '@/modules/descuentos/chips';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 
 // ── Tipos ────────────────────────────────────────────────────────────
@@ -145,13 +146,18 @@ export function construirFilasCortinas(
         anchoM,
         usarTuboE78,
       );
-      const tubChip = tuberiaParaPano(
-        anchoM,
-        modelo,
-        p.tuberia as string,
-        OPCIONES_TUBERIA,
-        v.categoria as string,
-      );
+      // El BEEBLACK no lleva tubo: su estructura son los perfiles. La columna
+      // TUBERÍA queda vacía (igual que en el BOM y en el Excel de órdenes),
+      // incluso si la OT trae un chip guardado de antes del gate de Fase 2.
+      const tubChip = esCategoriaBeeblack(v.categoria as string)
+        ? ''
+        : tuberiaParaPano(
+            anchoM,
+            modelo,
+            p.tuberia as string,
+            OPCIONES_TUBERIA,
+            v.categoria as string,
+          );
       filas.push({
         id,
         // Dual: cada paño muestra SU tela; si no, la de la ventana.
