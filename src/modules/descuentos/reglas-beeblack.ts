@@ -135,14 +135,16 @@ const PERFIL_LATERAL_POR_INSTALACION: Partial<Record<InstalacionBeeblack, number
 /** Lamas: ancho real / divisor + 10, redondeado HACIA ARRIBA a entero. */
 export const LAMAS_EXTRA = 10;
 
-/** Redondeo a 1 decimal (regla del usuario 2026-07-31): ninguna medida de corte lleva
- *  más de un decimal. El −0,5 mm del alto de tela SEMI queda en la tabla pero se
- *  redondea al salir (130 → 130), que es como se corta en la mesa. */
-const r1 = (n: number) => Math.round(n * 10) / 10;
+/** A 1 decimal, TRUNCANDO (regla del usuario 2026-07-31): ninguna medida de corte lleva
+ *  más de un decimal y ninguna puede PASARSE de lo que da la fórmula. El −0,5 mm del
+ *  alto de tela SEMI queda en la tabla y al salir se recorta hacia abajo
+ *  (130 − 0,05 = 129,95 → 129,9), que es como se corta en la mesa. El épsilon absorbe
+ *  el polvo binario del punto flotante sin tapar señales reales. */
+const t1 = (n: number) => Math.floor(n * 10 + 1e-7) / 10;
 
 function aplicarOverride(calculada: number, override: number | undefined): number {
   return typeof override === 'number' && Number.isFinite(override) && override > 0
-    ? r1(override)
+    ? t1(override)
     : calculada;
 }
 
@@ -206,16 +208,16 @@ function calcularMedidas(
   // mismas 4 barras, y las lamas y la tela salen sobre el alto real).
   const anchoBase = cierreVertical ? altoCm : anchoCm;
   const altoBase = cierreVertical ? anchoCm : altoCm;
-  const perfilAncho = r1(anchoBase + a.perfilAncho);
-  const perfilLateral = r1(altoBase + ajusteLateral);
+  const perfilAncho = t1(anchoBase + a.perfilAncho);
+  const perfilLateral = t1(altoBase + ajusteLateral);
   return {
     perfilSupAncho: perfilAncho,
     perfilInfAncho: perfilAncho,
     perfilLatIzq: perfilLateral,
     perfilLatDer: perfilLateral,
-    manilla: r1(altoBase + a.manilla),
-    anchoTela: r1(anchoBase + a.anchoTela),
-    altoTela: r1(altoBase + a.altoTela),
+    manilla: t1(altoBase + a.manilla),
+    anchoTela: t1(anchoBase + a.anchoTela),
+    altoTela: t1(altoBase + a.altoTela),
     // Cantidad de pliegues del acordeón (unidades, no cm): siempre hacia arriba.
     totalLamas: Math.ceil(anchoBase / a.lamasDivisor + LAMAS_EXTRA),
   };
@@ -265,7 +267,7 @@ export function cortesBeeblack(
     { componente: 'Total lamas', columnaExcel: '', medidaCm: aplicarOverride(m.totalLamas, overrides.totalLamas) },
   ];
 
-  const manilla = r1(m.manilla);
+  const manilla = t1(m.manilla);
   if (toggles.manillaIzq) {
     cortes.push({
       componente: 'Manilla izq (alto)',
