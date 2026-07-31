@@ -49,6 +49,56 @@ export const OPCIONES_COLOR_TAPA_OVALADA = ['NEG', 'BCO', 'GRS'] as const;
 // blanco y café → TAP32/TAP33/TAP34).
 export const OPCIONES_COLOR_TAPA_CUADRADA = ['NEG', 'BCO', 'CAFÉ'] as const;
 export const OPCIONES_SUPERFICIE = ['TECHO', 'PARED'] as const;
+
+// ── Perfiles de los sistemas de oscuridad (bloque PERFILES de Fase 2) ──
+export type LadoPerfilOscuridad = 'izq' | 'der' | 'inf';
+export type SuperficiePerfilOscuridad = 'muro' | 'piso' | 'marco';
+
+/**
+ * Apaga el PERFIL BASE por completo: su marca, la superficie elegida, las tres
+ * medidas manuales y el separador base (que hereda la medida del base y, sin
+ * base, quedaría pendiente bloqueando el avance de Fase 2).
+ */
+export function parcheApagarPerfilBase(): Partial<Pano> {
+  return {
+    perfilInfActivo: false,
+    perfilInfMuro: false,
+    perfilInfPiso: false,
+    perfilInfMarco: false,
+    perfilInfMuroCm: undefined,
+    perfilInfPisoCm: undefined,
+    perfilInfMarcoCm: undefined,
+    separadorInf: false,
+    separadorInfCm: undefined,
+  };
+}
+
+/**
+ * Parche del paño al elegir la instalación de un perfil de oscuridad. La
+ * superficie es un radio exclusivo: activa el perfil, apaga las otras dos
+ * superficies y limpia sus medidas manuales.
+ *
+ * Regla 2026-07-30: un LATERAL a PISO baja hasta el suelo, así que el perfil
+ * base deja de existir y se apaga solo (aplica a todas las familias de
+ * oscuridad). Es una ayuda, no un bloqueo: se puede volver a encender a mano.
+ */
+export function parcheSuperficiePerfil(
+  lado: LadoPerfilOscuridad,
+  superficie: SuperficiePerfilOscuridad,
+): Partial<Pano> {
+  const L = lado === 'izq' ? 'Izq' : lado === 'der' ? 'Der' : 'Inf';
+  const patch: Record<string, unknown> = {
+    [`perfil${L}Activo`]: true,
+    [`perfil${L}Muro`]: superficie === 'muro',
+    [`perfil${L}Piso`]: superficie === 'piso',
+    [`perfil${L}Marco`]: superficie === 'marco',
+  };
+  if (superficie !== 'muro') patch[`perfil${L}MuroCm`] = undefined;
+  if (superficie !== 'piso') patch[`perfil${L}PisoCm`] = undefined;
+  if (superficie !== 'marco') patch[`perfil${L}MarcoCm`] = undefined;
+  if (superficie === 'piso' && lado !== 'inf') Object.assign(patch, parcheApagarPerfilBase());
+  return patch as Partial<Pano>;
+}
 export const OPCIONES_MATERIAL_TIPO = ['VULCANITA', 'CONCRETO', 'MADERA', 'CERÁMICA'] as const;
 /** Tipo de bracket de la cenefa ovalada: corto (BRA01) o largo (BRA02). */
 export const OPCIONES_BRACKET_TIPO = ['CORTO', 'LARGO'] as const;

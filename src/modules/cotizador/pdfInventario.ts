@@ -54,23 +54,22 @@ import {
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { calculoVertical } from '@/modules/descuentos/despiece';
 import {
-  COD_HUB_DOMOTICA,
-  COD_ROUTER_DOMOTICA,
   MANILLAS,
-  NOMBRE_HUB_DOMOTICA,
-  NOMBRE_ROUTER_DOMOTICA,
   codigoManillaPorColor,
   esCategoriaDuo,
   esCenefaOvalada,
   esCodigoMotor,
   cenefaCuadradaTapasFijas,
+  beeblackEsDoble,
+  faltantesDomoticaInventario,
+  insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
-  motoresFaltantesInventario,
-  panoLlevaDomotica,
+  registrarKitEmitido,
   tapaCenefaCuadrada,
 } from './insumosCortina';
 
@@ -219,10 +218,10 @@ export function consolidarInsumos(
     if (prev) prev.cantidad += cantidad;
     else acc.set(key, { codigo, descripcion, cantidad, grupo, unidad });
   };
-  let llevaDomotica = false;
-  // Motores ya emitidos por paño (por código ORIGINAL del paño) y el grupo con que
-  // se colocó cada código: para el top-up de motores cobrados sin paño (ver abajo).
-  const motorEmitidoPorCodigo: Record<string, number> = {};
+  // Kit de motor ya emitido por paño (la unidad, por código ORIGINAL del paño) y
+  // el grupo con que se colocó cada código: para el top-up de lo cobrado en Fase 1
+  // que no salió por ningún paño (ver abajo).
+  const kitEmitidoPorCodigo: Record<string, number> = {};
   const grupoMotorPorCodigo: Record<string, GrupoInsumo | undefined> = {};
   for (const v of ventanas) {
     const modelo = (v.modelo as ModeloDespiece | null | undefined) ?? null;
@@ -324,6 +323,24 @@ export function consolidarInsumos(
           );
         }
       }
+      // BEEBLACK: kit SML propio, 1 por CORTINA (no por paño) — en el doble se
+      // emite una vez con las cantidades ya duplicadas. Todo a PRODUCCIÓN salvo
+      // la tapa de esquinero. La barra de la manilla NO es insumo: se cobra en
+      // Fase 1 y se corta por la hoja de estructura.
+      if (esCategoriaBeeblack(v.categoria) && pi === 0) {
+        for (const it of insumosBeeblackDeCortina(
+          colorAccesoriosDePano(p, v.color),
+          beeblackEsDoble(p, (v.panos || []).length),
+        )) {
+          bump(
+            it.codigo,
+            `[${it.codigo}] ${it.descripcion}`,
+            it.calcular ? 0 : it.cantidad,
+            it.grupo,
+            it.calcular ? 'CALCULAR' : undefined,
+          );
+        }
+      }
       // TUBO E78 + cenefa ovalada: armadura mixta que reemplaza al mecanismo
       // completo (por eso arriba no se lista el kit) — tapas del kit ovalada de
       // bodega (39 blanco / 38 negro / 12 gris, según color de accesorios) +
@@ -355,13 +372,10 @@ export function consolidarInsumos(
           const esUnidad = esCodigoMotor(ins.codigo);
           const grupo = ovalada && esUnidad ? 'PRODUCCION' : undefined;
           bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad, grupo);
-          if (esUnidad) {
-            // Se cuenta por el código ORIGINAL del paño (motorModelo) — el kit pudo
-            // remapear DOM41→DOM38 en ovalada, y el top-up compara contra lo cobrado.
-            const orig = (p.motorModelo || '').toUpperCase();
-            if (orig) motorEmitidoPorCodigo[orig] = (motorEmitidoPorCodigo[orig] || 0) + ins.cantidad;
-            grupoMotorPorCodigo[ins.codigo.toUpperCase()] = grupo;
-          }
+          // La unidad se cuenta por el código ORIGINAL del paño (el kit pudo
+          // remapear DOM41→DOM38 en ovalada); el resto del kit, por el suyo.
+          registrarKitEmitido(kitEmitidoPorCodigo, ins, p.motorModelo);
+          if (esUnidad) grupoMotorPorCodigo[ins.codigo.toUpperCase()] = grupo;
         }
       } else if (p.motorModelo || p.motorTipo) {
         // Motor legacy o 'CABLE' futuro (sin código DOM): línea genérica, para que
@@ -369,7 +383,6 @@ export function consolidarInsumos(
         const etiqueta = (p.motorTipo || (p.motorModelo === 'CABLE' ? 'CON CABLE' : '')).trim();
         bump(undefined, etiqueta ? `MOTOR ${etiqueta}` : 'MOTOR', 1, ovalada ? 'PRODUCCION' : undefined);
       }
-      if (panoLlevaDomotica(p)) llevaDomotica = true;
       // Tapa de cenefa cuadrada. Lleva código por color (TAP32 negro / TAP33
       // blanco / TAP34 café) para que bodega enlace stock, pero se FUERZA a
       // INSTALACIÓN (se coloca en terreno): su código TAP caería en INSUMOS por
@@ -392,21 +405,16 @@ export function consolidarInsumos(
       }
     }
   }
-  // Top-up de motores COBRADOS (adicionales Fase 0) que no calzaron con un paño:
-  // la diferencia sale como unidad de motor, en el mismo grupo que ya usa ese
-  // código (para que consoliden en una sola línea con la cantidad total).
-  for (const falta of motoresFaltantesInventario(adicionalesFase0, motorEmitidoPorCodigo)) {
+  // Top-up de lo COBRADO en Fase 1 (motores + su cable, controles, hubs con su
+  // router y adaptador) que no salió por los paños. La unidad de motor consolida
+  // en el mismo grupo que ya usa ese código; el resto cae en INSTALACIÓN.
+  for (const falta of faltantesDomoticaInventario(adicionalesFase0, kitEmitidoPorCodigo)) {
     bump(
       falta.codigo,
       `[${falta.codigo}] ${falta.descripcion}`,
       falta.cantidad,
       grupoMotorPorCodigo[falta.codigo.toUpperCase()],
     );
-  }
-  // Domótica: hub bridge (DOM43) + router (DOM05), 1 de cada uno por OT.
-  if (llevaDomotica) {
-    bump(COD_HUB_DOMOTICA, `[${COD_HUB_DOMOTICA}] ${NOMBRE_HUB_DOMOTICA}`, 1);
-    bump(COD_ROUTER_DOMOTICA, `[${COD_ROUTER_DOMOTICA}] ${NOMBRE_ROUTER_DOMOTICA}`, 1);
   }
 
   const out: InsumoConsolidado[] = [];

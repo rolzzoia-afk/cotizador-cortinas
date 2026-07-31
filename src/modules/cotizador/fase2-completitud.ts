@@ -139,7 +139,8 @@ export function pendientesFase2(ventanas: Ventana[]): PendienteFase2[] {
         if (!txt(p.motorModelo)) falta('falta el modelo de motor');
         if (!txt(p.ladoMotor)) falta('falta el lado del motor');
       }
-      // BEEBLACK: sin variante no hay componentes.
+      // BEEBLACK: sin variante no hay componentes (todas las medidas salen de
+      // ella). Las manillas son opt-in y pueden ser 0, 1 o 2: no se exigen.
       if (esBeeblack && !txt(p.beeblackVariante)) falta('falta la variante BEEBLACK');
 
       // ── Oscuridad: perfiles sin superficie o sin perforación ──

@@ -404,14 +404,19 @@ describe('esFilaSoftLightCC', () => {
 describe('esFilaOscuranti', () => {
   const row = (categoria: string, piezas: ReturnType<typeof pz>[]): OptimizerRow =>
     ({ categoria, piezas } as unknown as OptimizerRow);
-  it('true: categoría OSCURANTI con peso de oscuridad + cenefa delantera', () => {
+  it('true: categoría OSCURANTI con peso de oscuridad + perfil superior', () => {
     expect(
-      esFilaOscuranti(row('OSCURANTI_63mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
+      esFilaOscuranti(
+        row('OSCURANTI_63mm', [pz('PESO SOFT LIGHT', 250), pz('PERFIL SUPERIOR (CENEF.PRO)', 263)]),
+      ),
     ).toBe(true);
   });
-  it('false: soft light CC tiene la MISMA firma de piezas pero otra categoría', () => {
+  it('false: soft light CC lleva cenefa cuadrada delantera, no perfil superior', () => {
     expect(
       esFilaOscuranti(row('SOFT_LIGHT_38mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
+    ).toBe(false);
+    expect(
+      esFilaOscuranti(row('OSCURANTI_63mm', [pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)])),
     ).toBe(false);
   });
   it('false: roller / soft light ovalada', () => {
@@ -524,7 +529,7 @@ describe('generarEtiquetasPDF — soft light CC: estructura 146 + página de cen
 });
 
 describe('generarEtiquetasPDF — OSCURANTI usa página 62×146', () => {
-  it('la etiqueta oscuranti (cenefa cuadrada + separador superior) mide 146 mm', () => {
+  it('la etiqueta oscuranti (cenefa cuadrada + perfil superior) mide 146 mm', () => {
     docsGuardados.length = 0;
     const oscRow = {
       codInt: 'SC 64',
@@ -541,7 +546,7 @@ describe('generarEtiquetasPDF — OSCURANTI usa página 62×146', () => {
         pz('TUBO', 260.9),
         pz('PESO SOFT LIGHT', 260.86),
         pz('CENEFA DELANTERA', 267.3),
-        pz('SEPARADOR SUPERIOR', 267.3),
+        pz('PERFIL SUPERIOR (CENEF.PRO)', 267.3),
         pz('Tela (ancho)', 260.84),
         pz('PERFIL (IZQ) INT', 240),
         pz('PERFIL (DER) INT', 240),

@@ -285,7 +285,7 @@ describe('construirInventario — bloque INSUMOS', () => {
     expect(tap?.cantidad).toBe(1); // 1 según el selector, NO 2 fijas
   });
 
-  it('motor DOM41 + domótica (sin ovalada) → kit DOM (sin DOM40) en INSTALACIÓN + 1 DOM43 por OT', () => {
+  it('motor DOM41 + domótica (sin ovalada) → kit DOM en INSTALACIÓN; el hub sale de lo vendido', () => {
     const v = {
       id: 'm', ubicacion: 'DORM', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
       modelo: modeloCenefa,
@@ -293,18 +293,36 @@ describe('construirInventario — bloque INSUMOS', () => {
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const codes = d.insumos.map((i) => i.codigo);
-    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42', 'DOM43', 'DOM05']));
+    expect(codes).toEqual(expect.arrayContaining(['DOM41', 'DOM42']));
     expect(codes).not.toContain('DOM34'); // #28: el DOM41 no lleva cable
     // Sin cargador elegido, el kit no trae hub propio ni su enchufe DOM04.
     expect(codes).not.toContain('DOM04');
+    // Regla 2026-07-30: el hub y el router ya no son "1 por OT" por tener domótica;
+    // salen de los DOM43 vendidos en Fase 1 (ver el bloque de top-up).
+    expect(codes).not.toContain('DOM43');
+    expect(codes).not.toContain('DOM05');
     // Sin cenefa ovalada, todo el kit va a INSTALACIÓN (incluido el motor).
     const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
     expect(grupo('DOM41')).toBe('INSTALACION');
     expect(grupo('DOM42')).toBe('INSTALACION');
-    // DOM43 (hub) y DOM05 (router) aparecen una sola vez cada uno (1 por OT).
-    expect(d.insumos.filter((i) => i.codigo === 'DOM43')).toHaveLength(1);
-    expect(d.insumos.filter((i) => i.codigo === 'DOM05')).toHaveLength(1);
+  });
+
+  it('1 hub vendido → DOM43 + su router DOM05 y su adaptador DOM33, en INSTALACIÓN', () => {
+    const v = {
+      id: 'm', ubicacion: 'DORM', producto: 'ROLLER', categoria: 'ROL', color: 'BLANCO',
+      modelo: modeloCenefa,
+      panos: [{ ancho: 1.5, alto: 2.0, color: 'BLANCO', motorModelo: 'DOM41', motorDomotica: true }],
+    } as unknown as Ventana;
+    const d = construirInventario([v], {}, undefined, [], false, [
+      { codInt: 'DOM 43', cantidad: 1, descuento: 0, ubicacion: 'DORM' },
+    ]);
+    const cant = (c: string) => d.insumos.find((i) => i.codigo === c)?.cantidad;
+    const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
+    expect(cant('DOM43')).toBe(1);
+    expect(cant('DOM05')).toBe(1);
+    expect(cant('DOM33')).toBe(1);
     expect(grupo('DOM05')).toBe('INSTALACION');
+    expect(grupo('DOM33')).toBe('INSTALACION');
   });
 });
 
@@ -490,14 +508,27 @@ describe('construirInventario — top-up de motores cobrados (cantidad Fase 1 �
   const cant = (d: ReturnType<typeof construirInventario>, cod: string) =>
     d.insumos.filter((i) => i.codigo === cod).reduce((s, i) => s + i.cantidad, 0);
 
-  it('3 DOM38 cobrados en una ubicación con 1 paño → DOM38 ×3; cable ×1 (el control se pide en F2)', () => {
+  it('3 DOM38 cobrados en una ubicación con 1 paño → DOM38 ×3 y cable ×3 (DOM38 = DOM34)', () => {
     const adic = [{ codInt: 'DOM 38', cantidad: 3, descuento: 0, ubicacion: 'LIVING' }];
     const d = construirInventario([vMotor], {}, undefined, [], false, adic);
     expect(cant(d, 'DOM38')).toBe(3);
+    // El motor viene SIN cable: uno por unidad, no uno por paño (regla 2026-07-30).
+    expect(cant(d, 'DOM34')).toBe(3);
+    // El control sale de lo VENDIDO: sin DOM39 cobrado no hay control.
     expect(cant(d, 'DOM39')).toBe(0);
-    expect(cant(d, 'DOM34')).toBe(1);
     // Una sola fila DOM38 (el top-up consolida con el kit del paño).
     expect(d.insumos.filter((i) => i.codigo === 'DOM38')).toHaveLength(1);
+  });
+
+  it('5 motores y 2 controles vendidos → 2 controles (no uno por motor)', () => {
+    const adic = [
+      { codInt: 'DOM 38', cantidad: 5, descuento: 0, ubicacion: 'LIVING' },
+      { codInt: 'DOM 39', cantidad: 2, descuento: 0, ubicacion: 'LIVING' },
+    ];
+    const d = construirInventario([vMotor], {}, undefined, [], false, adic);
+    expect(cant(d, 'DOM38')).toBe(5);
+    expect(cant(d, 'DOM34')).toBe(5);
+    expect(cant(d, 'DOM39')).toBe(2);
   });
 
   it('sin adicionales de motor: 1 motor por paño (sin regresión)', () => {
@@ -825,5 +856,58 @@ describe('construirInventario — dual (ROL_DUAL)', () => {
     expect(tapas.reduce((s, t) => s + t.cantidad, 0)).toBe(4);
     const tarugos = d.insumos.filter((i) => (i.codigo || '').startsWith('TAR'));
     expect(tarugos.reduce((s, t) => s + t.cantidad, 0)).toBe(4);
+  });
+});
+
+// BEEBLACK: kit SML propio, 1 por CORTINA. Todo a PRODUCCIÓN salvo la tapa de
+// esquinero; el doble dobla todo menos esquineros y tapas.
+describe('construirInventario — BEEBLACK', () => {
+  const panoBb = (extra: Partial<Pano> = {}): Partial<Pano> => ({
+    ancho: 2, alto: 1.3, color: 'NEGRO', beeblackVariante: 'INTERNO', ...extra,
+  });
+  const vBb = (panos: Partial<Pano>[], color = 'NEGRO') =>
+    ({
+      id: 'bb', ubicacion: 'LIVING', codInt: 'BEE-BK', producto: 'BEEBLACK BLACKOUT',
+      categoria: 'BEEBLACK', color, alto: 1.3, modelo: null, panos,
+    }) as unknown as Ventana;
+
+  it('el kit va a PRODUCCIÓN y solo la tapa de esquinero a INSTALACIÓN', () => {
+    const d = construirInventario([vBb([panoBb()])]);
+    const porCod = Object.fromEntries(
+      d.insumos.filter((i) => (i.codigo || '').startsWith('SML')).map((i) => [i.codigo, i]),
+    );
+    expect(porCod.SML46).toMatchObject({ cantidad: 2, grupo: 'PRODUCCION' });
+    expect(porCod.SML17).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' });
+    expect(porCod.SML26).toMatchObject({ cantidad: 2, grupo: 'PRODUCCION' });
+    expect(porCod.SML32).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' });
+    expect(porCod.SML31).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' });
+    expect(porCod.SML35).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' });
+    // Tira magnética y felpa: sin número, con el rótulo CALCULAR.
+    expect(porCod.SML33).toMatchObject({ cantidad: 0, unidad: 'CALCULAR', grupo: 'PRODUCCION' });
+    expect(porCod.SML34).toMatchObject({ cantidad: 0, unidad: 'CALCULAR', grupo: 'PRODUCCION' });
+    // Lo único de terreno.
+    expect(porCod.SML48).toMatchObject({ cantidad: 4, grupo: 'INSTALACION' });
+    const enInstalacion = d.insumos.filter(
+      (i) => (i.codigo || '').startsWith('SML') && i.grupo === 'INSTALACION',
+    );
+    expect(enInstalacion.map((i) => i.codigo)).toEqual(['SML48']);
+  });
+
+  it('DOBLE: el kit sale UNA vez con todo ×2, salvo esquineros y sus tapas', () => {
+    const d = construirInventario([vBb([panoBb({ dual: true }), panoBb({ dual: true })])]);
+    const cant = (cod: string) =>
+      d.insumos.filter((i) => i.codigo === cod).reduce((s, i) => s + i.cantidad, 0);
+    expect(cant('SML46')).toBe(4);
+    expect(cant('SML26')).toBe(4);
+    expect(cant('SML32')).toBe(8);
+    expect(cant('SML17')).toBe(4); // una sola estructura
+    expect(cant('SML48')).toBe(4);
+    // Y no se emite dos veces (una por paño).
+    expect(d.insumos.filter((i) => i.codigo === 'SML17')).toHaveLength(1);
+  });
+
+  it('una cortina que no es beeblack no emite códigos SML', () => {
+    const d = construirInventario([ventana('LIVING', 1.5, 2)]);
+    expect(d.insumos.some((i) => (i.codigo || '').startsWith('SML'))).toBe(false);
   });
 });

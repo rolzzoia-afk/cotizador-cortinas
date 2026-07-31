@@ -7,7 +7,12 @@ import type { CatalogoProductos, Pano } from './types';
 import type { VentanaItem } from '@/modules/ots/types';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
-import { calcularDespiece, contextoDespieceDesdePano } from '@/modules/descuentos/despiece';
+import {
+  calcularDespiece,
+  contextoDespieceDesdePano,
+  MODELO_DESPIECE_STUB,
+} from '@/modules/descuentos/despiece';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
@@ -142,13 +147,17 @@ function piezasDespiece(
   tuberiaCod: string,
   params: ParametrosCorte,
 ): PiezaEtiqueta[] {
+  // BEEBLACK no tiene modelo de fabricación (usa el stub, igual que el Excel de
+  // órdenes y el Cálculo General): sin esta excepción sus filas iban sin piezas.
   const modelo = (v.modelo as ModeloDespiece | null | undefined) ?? null;
-  if (!modelo || !(anchoCm > 0)) return [];
+  if ((!modelo && !esCategoriaBeeblack(v.categoria)) || !(anchoCm > 0)) return [];
   const ctx = contextoDespieceDesdePano(
     {
       categoria: v.categoria as string | undefined,
       sentido: v.sentido as string | null | undefined,
       alto: v.alto as number | string | undefined,
+      // El cierre del beeblack (DE ARRIBA ABAJO gira la cortina 90°).
+      direccion: v.direccion as string | null | undefined,
     },
     p as Parameters<typeof contextoDespieceDesdePano>[1],
     {
@@ -157,7 +166,7 @@ function piezasDespiece(
     },
   );
   const color = colorAccesoriosDePano(p, v.color as string | undefined);
-  return calcularDespiece(modelo, anchoCm, ctx).cortes.map((c) => ({
+  return calcularDespiece(modelo ?? MODELO_DESPIECE_STUB, anchoCm, ctx).cortes.map((c) => ({
     componente: c.componente,
     columnaExcel: c.columnaExcel,
     medidaCm: c.medidaCm,
@@ -199,20 +208,11 @@ export function buildOptimizerRows(
       // el ancho real × (alto + extraVertical), y de ahí se dimensionan después
       // las lamas de 8,9 cm. La RESERVA sigue siendo la del roller (alto + 25),
       // igual que la planilla manual (OT 2923: alto 2,34 → corte 2,39, real 2,59).
+      // BEEBLACK: la tela (acordeón) se corta al ancho/alto propios de la variante
+      // (pizarra 2026-07-29), no con los descuentos del roller.
       const esPletina = esCategoriaPletina(v.categoria);
       const esVertical = esCategoriaVertical(v.categoria);
-      const altoReal = esPletina
-        ? (isDuo ? altoM * 2 : altoM)
-        : (isDuo ? altoExtra * 2 : altoExtra);
-      const altoCorte = esVertical
-        ? altoM + params.extraVerticalCm / 100
-        : esPletina
-          ? (isDuo ? altoM * 2 : altoM)
-          : (isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra);
-      const m2 = parseFloat((altoReal * anchoM).toFixed(4));
-      const anchoRollo = obtenerAnchoRollo(tela.codInt, catalogo, params.anchoRolloDefaultM);
-      const cod = derivarCod(tela.producto || '');
-      const panoLabel = panos.length > 1 ? ` P${pi + 1}` : '';
+      const esBeeblack = esCategoriaBeeblack(v.categoria);
       const tuberiaCod = tuberiaCodigoCorto(
         (v.modelo as ModeloDespiece | null | undefined) ?? null,
         String(p.tuberia || ''),
@@ -220,11 +220,33 @@ export function buildOptimizerRows(
         v.categoria,
       );
       const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params);
+      const altoTelaBbM = esBeeblack
+        ? (piezas.find((pz) => pz.componente === 'Alto tela')?.medidaCm ?? 0) / 100
+        : 0;
+      const altoReal = esBeeblack
+        ? altoTelaBbM || altoM
+        : esPletina
+          ? (isDuo ? altoM * 2 : altoM)
+          : (isDuo ? altoExtra * 2 : altoExtra);
+      const altoCorte = esBeeblack
+        ? altoTelaBbM || altoM
+        : esVertical
+          ? altoM + params.extraVerticalCm / 100
+          : esPletina
+            ? (isDuo ? altoM * 2 : altoM)
+            : (isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra);
+      const m2 = parseFloat((altoReal * anchoM).toFixed(4));
+      const anchoRollo = obtenerAnchoRollo(tela.codInt, catalogo, params.anchoRolloDefaultM);
+      const cod = derivarCod(tela.producto || '');
+      const panoLabel = panos.length > 1 ? ` P${pi + 1}` : '';
       // Oscuridad: la tela se corta al ancho REAL del despiece (ancho + TELA_ADJ),
       // no al ancho−3,5 del roller. Ese ancho es también el que se empaca.
-      const anchoCorteTelaCm = familiaOscuridad(v.categoria, p.cenefa as string | null | undefined)
-        ? piezas.find((pz) => pz.componente === 'Tela (ancho)')?.medidaCm
-        : undefined;
+      // BEEBLACK: igual, con su propio 'Ancho tela' por variante.
+      const anchoCorteTelaCm = esBeeblack
+        ? piezas.find((pz) => pz.componente === 'Ancho tela')?.medidaCm
+        : familiaOscuridad(v.categoria, p.cenefa as string | null | undefined)
+          ? piezas.find((pz) => pz.componente === 'Tela (ancho)')?.medidaCm
+          : undefined;
       rows.push({
         rowIdx,
         cod,

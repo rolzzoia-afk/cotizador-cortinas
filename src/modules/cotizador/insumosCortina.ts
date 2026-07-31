@@ -21,6 +21,7 @@ import {
   esFamiliaSoftLightCC,
   familiaOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
+import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
 
 export type InsumoCortina = {
   /** Código del insumo (TAP01, TOR02, BRA01, TAR01, DOM38…), sin corchetes. */
@@ -401,18 +402,20 @@ export function insumosDePano(
   return out;
 }
 
-// ── VERTICAL (lamas) — insumos VER de la cortina ─────────────────────
-/** Insumo VER de una cortina vertical. `calcular` = la cantidad se define en
- *  terreno (cordón, cadena inferior): la hoja imprime "CALCULAR" en vez del número. */
-export type InsumoVertical = {
+// ── Kits de cortina por sistema (VERTICAL, BEEBLACK) ─────────────────
+/** Pieza del kit propio de un sistema, con su cuadro de destino en la hoja de
+ *  inventario. `calcular` = la cantidad se define midiendo (cordón de la
+ *  vertical, tira magnética del beeblack): la hoja imprime "CALCULAR" en vez
+ *  del número. */
+export type InsumoKitCortina = {
   codigo: string;
   descripcion: string;
   cantidad: number;
-  /** Cuadro de la hoja de inventario: PRODUCCIÓN (peso lama + sujetador, lo que
-   *  se monta sobre la tela), ESTRUCTURA (cordón, carritos, kit, pesos) o
-   *  INSTALACIÓN (terreno: brackets, cadena inferior). */
+  /** Cuadro de la hoja de inventario: PRODUCCIÓN (lo que se monta sobre la tela
+   *  o arma el sistema), ESTRUCTURA (ferretería del sistema) o INSTALACIÓN
+   *  (terreno: brackets, cadena inferior, tapas de esquinero). */
   grupo: 'PRODUCCION' | 'ESTRUCTURA' | 'INSTALACION';
-  /** true → cantidad a calcular en terreno; se imprime "CALCULAR". */
+  /** true → cantidad a calcular midiendo; se imprime "CALCULAR". */
   calcular?: boolean;
 };
 
@@ -440,7 +443,7 @@ export function insumosVerticalDePano(ctx: {
   colorAcc?: string | null;
   anchoM: number;
   carritos: number;
-}): InsumoVertical[] {
+}): InsumoKitCortina[] {
   const negro = verticalEsNegro(ctx.colorAcc);
   const carritos = Math.max(0, Math.round(ctx.carritos) || 0);
   const brackets = cantidadBrackets(ctx.anchoM);
@@ -464,7 +467,7 @@ export function insumosVerticalDePano(ctx: {
 
   // Imanes (VER55): las verticales de más de 3 m de ancho llevan 2 carritos con
   // imán extra para que las lamas no se abran. Se SUMAN a los carritos normales.
-  const imanes: InsumoVertical[] =
+  const imanes: InsumoKitCortina[] =
     ctx.anchoM > 3
       ? [
           {
@@ -490,6 +493,86 @@ export function insumosVerticalDePano(ctx: {
     // INSTALACIÓN (terreno): se cuelga y se cierra.
     { codigo: 'VER38', descripcion: 'BRACKET VERTICAL VERTILUX', cantidad: brackets, grupo: 'INSTALACION' },
     { ...cadenaInferior, cantidad: 0, grupo: 'INSTALACION', calcular: true },
+  ];
+}
+
+// ── BEEBLACK (cierre horizontal con lamas) — kit SML ─────────────────
+// Lista del usuario (2026-07-31). TODO el kit va al cuadro de PRODUCCIÓN salvo
+// la TAPA DE ESQUINERO, que se coloca en terreno (INSTALACIÓN). El color sale de
+// los ACCESORIOS de la cortina; el café comparte el carro inferior (SML46 "gris
+// oscuro") y el carro de nylon (SML26) con el negro, pero tiene su propio
+// esquinero (SML18) y su tapa (SML49).
+//
+// La BARRA de la manilla NO está acá: se cobra como accesorio en Fase 1 y se
+// corta por la hoja de estructura. De la manilla, el kit solo lleva sus carros
+// inferiores (SML45/46) y su felpa magnética (SML34).
+
+type ColorKitBeeblack = 'BLANCO' | 'NEGRO' | 'CAFÉ';
+
+/** Color del kit BEEBLACK. Gris o cualquier color no catalogado usa el set
+ *  blanco (no hay beeblack gris). */
+function colorKitBeeblack(colorAcc: string | null | undefined): ColorKitBeeblack {
+  const c = colorPesoNormalizado(colorAcc);
+  if (c === 'NEGRO') return 'NEGRO';
+  if (c === 'CAFÉ') return 'CAFÉ';
+  return 'BLANCO';
+}
+
+/**
+ * ¿La cortina BEEBLACK es DOBLE (screen + blackout)? Son 2 telas sobre UNA
+ * estructura: su kit va ×2 salvo los esquineros y sus tapas. El flag `dual` lo
+ * pone Fase 1 (2 filas con la misma UBIC marcadas DOBLE) o Fase 2 a mano.
+ */
+export function beeblackEsDoble(p: Partial<Pano>, totalPanos?: number): boolean {
+  return !!p.dual || (totalPanos ?? 1) > 1;
+}
+
+/**
+ * Kit SML de UNA cortina BEEBLACK (no por paño: en el doble se emite una vez,
+ * con las cantidades ya duplicadas). Los ESQUINEROS y sus TAPAS pertenecen a la
+ * estructura —una sola por cortina— así que no se duplican; el resto sí, porque
+ * es ferretería de cada tela. La tira magnética del riel (SML33) y la felpa de
+ * la manilla (SML34) van "CALCULAR": se miden en el taller.
+ */
+export function insumosBeeblackDeCortina(
+  colorAcc: string | null | undefined,
+  doble = false,
+): InsumoKitCortina[] {
+  const color = colorKitBeeblack(colorAcc);
+  const oscuro = color !== 'BLANCO';
+  const porTela = (n: number) => (doble ? n * 2 : n);
+
+  const carroManilla = oscuro
+    ? { codigo: 'SML46', descripcion: 'CARRO INFERIOR PERFIL MANILLA [GRIS OSCURO]' }
+    : { codigo: 'SML45', descripcion: 'CARRO INFERIOR PERFIL MANILLA [BLANCO]' };
+  const esquinero =
+    color === 'CAFÉ'
+      ? { codigo: 'SML18', descripcion: 'ESQUINERO GRANDE [CAFÉ]' }
+      : color === 'NEGRO'
+        ? { codigo: 'SML17', descripcion: 'ESQUINERO GRANDE [NEGRO]' }
+        : { codigo: 'SML16', descripcion: 'ESQUINERO GRANDE [BLANCO]' };
+  const carroNylon = oscuro
+    ? { codigo: 'SML26', descripcion: 'CARRO TRANSPORTADOR GUÍA DE NYLON [NEGRO]' }
+    : { codigo: 'SML25', descripcion: 'CARRO TRANSPORTADOR GUÍA DE NYLON [BLANCO]' };
+  const tapaEsquinero =
+    color === 'CAFÉ'
+      ? { codigo: 'SML49', descripcion: 'TAPA ESQUINERO BASIC - CAFÉ' }
+      : color === 'NEGRO'
+        ? { codigo: 'SML48', descripcion: 'TAPA ESQUINERO BASIC - NEGRO' }
+        : { codigo: 'SML47', descripcion: 'TAPA ESQUINERO BASIC - BLANCO' };
+
+  return [
+    // PRODUCCIÓN (taller): todo el armado del cierre.
+    { ...carroManilla, cantidad: porTela(2), grupo: 'PRODUCCION' },
+    { ...esquinero, cantidad: 4, grupo: 'PRODUCCION' },
+    { ...carroNylon, cantidad: porTela(2), grupo: 'PRODUCCION' },
+    { codigo: 'SML33', descripcion: 'TIRA MAGNÉTICA DEL RIEL LATERAL', cantidad: 0, grupo: 'PRODUCCION', calcular: true },
+    { codigo: 'SML34', descripcion: 'ZUNCHO MAGNÉTICO - FELPA TIRA MAGNÉTICA PARA MANILLA', cantidad: 0, grupo: 'PRODUCCION', calcular: true },
+    { codigo: 'SML32', descripcion: 'TAPA DE COBRE', cantidad: porTela(4), grupo: 'PRODUCCION' },
+    { codigo: 'SML31', descripcion: 'CLIP DE ALAMBRE DE ALEACION', cantidad: porTela(4), grupo: 'PRODUCCION' },
+    { codigo: 'SML35', descripcion: 'RODILLO GUIA DE CUERDA', cantidad: porTela(4), grupo: 'PRODUCCION' },
+    // INSTALACIÓN (terreno): la tapa que cubre cada esquinero.
+    { ...tapaEsquinero, cantidad: 4, grupo: 'INSTALACION' },
   ];
 }
 
@@ -651,37 +734,82 @@ export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): Insumo
 }
 
 /**
- * Unidades de motor COBRADAS en la cotización final (adicionales de Fase 0) que
- * faltan en el inventario respecto de lo ya emitido por los paños. Cuenta por
- * código de motor (DOM38/DOM41) SIN filtrar por ubicación: todo motor cobrado
- * debe salir, calce o no con un paño (p.ej. 3 motores en una sola ubicación con
- * un solo paño → faltan 2). Devuelve SOLO la unidad de motor; el control, el
- * cable y la domótica los pone el vendedor en Fase 2 (kit por paño, sin tocar).
+ * Motores, controles y domótica COBRADOS en la cotización (adicionales de Fase 0)
+ * que faltan en el inventario respecto de lo ya emitido por los paños. Cuenta por
+ * código, SIN filtrar por ubicación: todo lo cobrado debe salir, calce o no con un
+ * paño (3 motores en una ubicación con un solo paño → faltan 2).
  *
- * @param emitidosPorCodigo unidades ya emitidas por los paños, por código ORIGINAL
- *   del motor del paño (`p.motorModelo`), para no descontar de más cuando el kit
- *   remapea el modelo (DOM41→DOM38 en cenefa ovalada).
+ * Reglas del taller cerradas el 2026-07-30:
+ *  1. Unidad de motor (DOM38/DOM41) por la cantidad vendida.
+ *  2. **DOM38 = DOM34**: el Tronic Plus viene SIN cable, así que va uno por CADA
+ *     unidad de motor (el kit por paño ya puso el suyo; acá salen los del top-up).
+ *  3. **Controles** (DOM39/DOM42) por la cantidad VENDIDA, nunca uno por motor.
+ *  4. **Hub DOM43** por la cantidad vendida, y cada hub arrastra su router DOM05
+ *     y su adaptador DOM33 (antes el hub y el router eran "1 por OT" fijo).
+ *
+ * @param emitidosPorCodigo lo ya emitido por los paños. La UNIDAD de motor va por
+ *   el código ORIGINAL del paño (`p.motorModelo`), para no descontar de más cuando
+ *   el kit remapea el modelo (DOM41→DOM38 en cenefa ovalada); el resto del kit
+ *   (cable, controles, hub, router, adaptador) por su propio código.
  */
-export function motoresFaltantesInventario(
+export function faltantesDomoticaInventario(
   adicionales: AdicionalFase0Persistido[] | undefined,
   emitidosPorCodigo: Record<string, number>,
 ): InsumoCortina[] {
-  if (!adicionales?.length) return [];
-  const cobradoPorCodigo: Record<string, number> = {};
+  const out: InsumoCortina[] = [];
+  if (!adicionales?.length) return out;
+  const cobrado: Record<string, number> = {};
   for (const a of adicionales) {
-    const cod = codigoMotorDesdeAdicional(a.codInt);
+    const cod = (a.codInt || '').replace(/\s+/g, '').toUpperCase();
     const cant = Math.round(Number(a.cantidad) || 0);
     if (!cod || cant <= 0) continue;
-    cobradoPorCodigo[cod] = (cobradoPorCodigo[cod] || 0) + cant;
+    cobrado[cod] = (cobrado[cod] || 0) + cant;
   }
-  const out: InsumoCortina[] = [];
-  for (const cod of Object.keys(cobradoPorCodigo)) {
-    const faltan = cobradoPorCodigo[cod] - (emitidosPorCodigo[cod] || 0);
-    if (faltan > 0) {
-      out.push({ codigo: cod, descripcion: MOTORES[cod].nombre, color: '', cantidad: faltan });
-    }
+  // Lo que falta de un código para llegar al total requerido.
+  const faltan = (cod: string, total: number) => total - (emitidosPorCodigo[cod] || 0);
+  const push = (cod: string, descripcion: string, cant: number) => {
+    if (cant > 0) out.push({ codigo: cod, descripcion, color: '', cantidad: cant });
+  };
+
+  // 1 + 2. Unidades de motor cobradas que no salieron por ningún paño, con su cable.
+  let cablesFaltantes = 0;
+  for (const cod of Object.keys(MOTORES)) {
+    const n = faltan(cod, cobrado[cod] || 0);
+    if (n <= 0) continue;
+    push(cod, MOTORES[cod].nombre, n);
+    if (cod === 'DOM38') cablesFaltantes += n;
+  }
+  push(COD_CABLE_MOTOR, NOMBRE_CABLE_MOTOR, cablesFaltantes);
+
+  // 3. Controles por cantidad vendida.
+  for (const cod of Object.keys(NOMBRE_CONTROL)) {
+    push(cod, NOMBRE_CONTROL[cod], faltan(cod, cobrado[cod] || 0));
+  }
+
+  // 4. Hubs vendidos: cada uno arrastra router (DOM05) y adaptador (DOM33).
+  const hubs = cobrado[COD_HUB_DOMOTICA] || 0;
+  if (hubs > 0) {
+    push(COD_HUB_DOMOTICA, NOMBRE_HUB_DOMOTICA, faltan(COD_HUB_DOMOTICA, hubs));
+    push(COD_ROUTER_DOMOTICA, NOMBRE_ROUTER_DOMOTICA, faltan(COD_ROUTER_DOMOTICA, hubs));
+    push(COD_CARGADOR_MOTOR_ALT, NOMBRE_CARGADOR_MOTOR_ALT, faltan(COD_CARGADOR_MOTOR_ALT, hubs));
   }
   return out;
+}
+
+/**
+ * Registra en el acumulador de "ya emitido" una línea del kit de motor de un paño.
+ * La unidad de motor se cuenta por el código ORIGINAL del paño (el kit pudo
+ * remapear DOM41→DOM38 en cenefa ovalada) y el resto por su propio código.
+ */
+export function registrarKitEmitido(
+  emitidos: Record<string, number>,
+  ins: InsumoCortina,
+  motorModeloOriginal: string | undefined,
+): void {
+  const clave = esCodigoMotor(ins.codigo)
+    ? (motorModeloOriginal || '').toUpperCase()
+    : ins.codigo.toUpperCase();
+  if (clave) emitidos[clave] = (emitidos[clave] || 0) + ins.cantidad;
 }
 
 /**
@@ -694,7 +822,11 @@ export function panoLlevaDomotica(p: Partial<Pano>): boolean {
   return !!p.motorDomotica || (p.motorTipo || '').trim().toUpperCase() === 'CON DOMÓTICA';
 }
 
-/** ¿Alguna cortina de la OT lleva domótica? (agrega 1× DOM43 + 1× DOM05 router por OT). */
+/**
+ * ¿Alguna cortina de la OT lleva domótica? Solo marca el flag de la cortina; el
+ * hub, el router y el adaptador salen de lo VENDIDO en Fase 1 (ver
+ * `faltantesDomoticaInventario`), no de este gate.
+ */
 export function otLlevaDomotica(ventanas: Ventana[]): boolean {
   return ventanas.some((v) => (v.panos || []).some(panoLlevaDomotica));
 }

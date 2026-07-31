@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Pano } from './types';
 import {
+  beeblackEsDoble,
   bracketDeCenefa,
   cantidadBrackets,
   cantidadSuplementosAuto,
@@ -10,13 +11,14 @@ import {
   codigoMotorDesdeAdicional,
   esAdicionalHubDomotica,
   esCategoriaDuo,
+  insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
   llevaCenefaCuadradaImplicita,
   llevaTapasPeso,
   manillaDesdeAdicional,
-  motoresFaltantesInventario,
+  faltantesDomoticaInventario,
   otLlevaDomotica,
   panoLlevaDomotica,
   tarugoDeMaterial,
@@ -369,6 +371,91 @@ describe('insumosVerticalDePano', () => {
   });
 });
 
+// Kit SML del BEEBLACK (lista del usuario 2026-07-31). Todo a PRODUCCIÓN salvo
+// la tapa de esquinero; el doble dobla todo menos esquineros y sus tapas.
+describe('insumosBeeblackDeCortina', () => {
+  const cod = (out: ReturnType<typeof insumosBeeblackDeCortina>) =>
+    Object.fromEntries(out.map((i) => [i.codigo, i]));
+
+  it('set BLANCO simple: códigos, cantidades y cuadros', () => {
+    const m = cod(insumosBeeblackDeCortina('BLANCO'));
+    expect(m.SML45).toMatchObject({ cantidad: 2, grupo: 'PRODUCCION' }); // carro inferior manilla
+    expect(m.SML16).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' }); // esquinero grande
+    expect(m.SML25).toMatchObject({ cantidad: 2, grupo: 'PRODUCCION' }); // carro guía de nylon
+    expect(m.SML32).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' }); // tapa de cobre
+    expect(m.SML31).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' }); // clip de alambre
+    expect(m.SML35).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' }); // rodillo guía de cuerda
+    // La tapa del esquinero es lo ÚNICO que se coloca en terreno.
+    expect(m.SML47).toMatchObject({ cantidad: 4, grupo: 'INSTALACION' });
+    // Nada del set oscuro.
+    expect(m.SML46).toBeUndefined();
+    expect(m.SML17).toBeUndefined();
+    expect(m.SML26).toBeUndefined();
+    expect(m.SML48).toBeUndefined();
+  });
+
+  it('la tira magnética y la felpa van CALCULAR (cantidad 0)', () => {
+    const calc = insumosBeeblackDeCortina('BLANCO').filter((i) => i.calcular);
+    expect(calc.map((i) => i.codigo).sort()).toEqual(['SML33', 'SML34']);
+    expect(calc.every((i) => i.cantidad === 0 && i.grupo === 'PRODUCCION')).toBe(true);
+  });
+
+  it('set NEGRO: carro inferior SML46, esquinero SML17, nylon SML26, tapa SML48', () => {
+    const m = cod(insumosBeeblackDeCortina('NEGRO'));
+    expect(m.SML46).toMatchObject({ cantidad: 2, grupo: 'PRODUCCION' });
+    expect(m.SML17).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' });
+    expect(m.SML26).toMatchObject({ cantidad: 2, grupo: 'PRODUCCION' });
+    expect(m.SML48).toMatchObject({ cantidad: 4, grupo: 'INSTALACION' });
+    expect(m.SML45).toBeUndefined();
+  });
+
+  it('set CAFÉ: esquinero y tapa propios, pero comparte SML46/SML26 con el negro', () => {
+    const m = cod(insumosBeeblackDeCortina('CAFÉ'));
+    expect(m.SML18).toMatchObject({ cantidad: 4, grupo: 'PRODUCCION' });
+    expect(m.SML49).toMatchObject({ cantidad: 4, grupo: 'INSTALACION' });
+    expect(m.SML46).toBeDefined();
+    expect(m.SML26).toBeDefined();
+    expect(m.SML16).toBeUndefined();
+    expect(m.SML17).toBeUndefined();
+  });
+
+  it('gris o color desconocido cae al set BLANCO', () => {
+    expect(cod(insumosBeeblackDeCortina('GRIS')).SML16).toBeDefined();
+    expect(cod(insumosBeeblackDeCortina('')).SML45).toBeDefined();
+  });
+
+  it('DOBLE: todo ×2 salvo esquineros y sus tapas (son de la estructura)', () => {
+    const m = cod(insumosBeeblackDeCortina('BLANCO', true));
+    expect(m.SML45.cantidad).toBe(4);
+    expect(m.SML25.cantidad).toBe(4);
+    expect(m.SML32.cantidad).toBe(8);
+    expect(m.SML31.cantidad).toBe(8);
+    expect(m.SML35.cantidad).toBe(8);
+    // Una sola estructura → 4 esquineros y 4 tapas, igual que en el simple.
+    expect(m.SML16.cantidad).toBe(4);
+    expect(m.SML47.cantidad).toBe(4);
+    // Los CALCULAR siguen sin número.
+    expect(m.SML33.cantidad).toBe(0);
+  });
+
+  it('la BARRA de la manilla no es insumo: solo sus carros y su felpa', () => {
+    // La agarradera (SML10/11/12) se cobra en Fase 1 y se corta por estructura.
+    const codigos = insumosBeeblackDeCortina('BLANCO').map((i) => i.codigo);
+    expect(codigos).not.toContain('SML10');
+    expect(codigos).not.toContain('SML11');
+    expect(codigos).not.toContain('SML12');
+  });
+});
+
+describe('beeblackEsDoble', () => {
+  it('lo marca el flag dual del paño o tener más de un paño', () => {
+    expect(beeblackEsDoble(pano({ dual: true }))).toBe(true);
+    expect(beeblackEsDoble(pano({}), 2)).toBe(true);
+    expect(beeblackEsDoble(pano({}), 1)).toBe(false);
+    expect(beeblackEsDoble(pano({}))).toBe(false);
+  });
+});
+
 // Regla del taller: lo ÚNICO que sale solo al motorizar es el cable DOM34 del
 // DOM38. Los CONTROLES (DOM39/DOM42) y la domótica se piden en Fase 2.
 describe('insumosMotorDePano', () => {
@@ -427,37 +514,62 @@ describe('insumosMotorDePano', () => {
   });
 });
 
-describe('motoresFaltantesInventario', () => {
+describe('faltantesDomoticaInventario', () => {
   const adic = (
     codInt: string, cantidad: number, ubicacion = 'LIVING',
   ): AdicionalFase0Persistido => ({ codInt, cantidad, descuento: 0, ubicacion });
+  const cant = (out: ReturnType<typeof faltantesDomoticaInventario>, cod: string) =>
+    out.find((i) => i.codigo === cod)?.cantidad ?? 0;
 
-  it('3 motores cobrados con 1 emitido → faltan 2 (solo la unidad de motor)', () => {
-    const out = motoresFaltantesInventario([adic('DOM 38', 3)], { DOM38: 1 });
-    expect(out).toEqual([{ codigo: 'DOM38', descripcion: expect.any(String), color: '', cantidad: 2 }]);
+  it('3 motores cobrados con 1 emitido → faltan 2, con sus 2 cables (DOM38 = DOM34)', () => {
+    const out = faltantesDomoticaInventario([adic('DOM 38', 3)], { DOM38: 1, DOM34: 1 });
+    expect(cant(out, 'DOM38')).toBe(2);
+    expect(cant(out, 'DOM34')).toBe(2);
   });
 
   it('sin ningún paño emitido → salen todos los cobrados', () => {
-    const out = motoresFaltantesInventario([adic('DOM 38', 3)], {});
-    expect(out[0]).toMatchObject({ codigo: 'DOM38', cantidad: 3 });
+    const out = faltantesDomoticaInventario([adic('DOM 38', 3)], {});
+    expect(cant(out, 'DOM38')).toBe(3);
+    expect(cant(out, 'DOM34')).toBe(3);
   });
 
-  it('la ubicación no importa: un motor cobrado en cualquier ubicación cuenta', () => {
-    const out = motoresFaltantesInventario([adic('DOM41', 2, 'UBIC-QUE-NO-CALZA')], { DOM41: 0 });
-    expect(out[0]).toMatchObject({ codigo: 'DOM41', cantidad: 2 });
+  it('el DOM41 no lleva cable de carga', () => {
+    const out = faltantesDomoticaInventario([adic('DOM41', 2, 'UBIC-QUE-NO-CALZA')], { DOM41: 0 });
+    expect(cant(out, 'DOM41')).toBe(2);
+    expect(cant(out, 'DOM34')).toBe(0);
   });
 
   it('emitido ≥ cobrado → no agrega nada (nunca resta un motor puesto en Fase 2)', () => {
-    expect(motoresFaltantesInventario([adic('DOM38', 1)], { DOM38: 2 })).toEqual([]);
-    expect(motoresFaltantesInventario(undefined, { DOM38: 1 })).toEqual([]);
+    expect(faltantesDomoticaInventario([adic('DOM38', 1)], { DOM38: 2, DOM34: 2 })).toEqual([]);
+    expect(faltantesDomoticaInventario(undefined, { DOM38: 1 })).toEqual([]);
   });
 
-  it("normaliza el código con espacio ('DOM 38' → DOM38) e ignora no-motores", () => {
-    const out = motoresFaltantesInventario(
-      [adic('DOM 38', 2), adic('DOM39', 5), adic('DOM43', 1)],
-      {},
-    );
-    expect(out).toEqual([{ codigo: 'DOM38', descripcion: expect.any(String), color: '', cantidad: 2 }]);
+  it('los CONTROLES salen por la cantidad vendida, no uno por motor', () => {
+    const out = faltantesDomoticaInventario([adic('DOM 38', 5), adic('DOM 39', 2)], {});
+    expect(cant(out, 'DOM38')).toBe(5);
+    expect(cant(out, 'DOM39')).toBe(2);
+    // Sin controles vendidos no sale ninguno, por muchos motores que haya.
+    expect(cant(faltantesDomoticaInventario([adic('DOM38', 5)], {}), 'DOM39')).toBe(0);
+  });
+
+  it('cada HUB vendido arrastra su router DOM05 y su adaptador DOM33', () => {
+    const out = faltantesDomoticaInventario([adic('DOM 43', 2)], {});
+    expect(cant(out, 'DOM43')).toBe(2);
+    expect(cant(out, 'DOM05')).toBe(2);
+    expect(cant(out, 'DOM33')).toBe(2);
+  });
+
+  it('sin hub vendido no hay router ni adaptador', () => {
+    const out = faltantesDomoticaInventario([adic('DOM 38', 1)], {});
+    expect(cant(out, 'DOM05')).toBe(0);
+    expect(cant(out, 'DOM33')).toBe(0);
+  });
+
+  it('descuenta lo que el kit de Fase 2 ya emitió (hub elegido como cargador)', () => {
+    const out = faltantesDomoticaInventario([adic('DOM43', 1)], { DOM43: 1, DOM33: 1 });
+    expect(cant(out, 'DOM43')).toBe(0);
+    expect(cant(out, 'DOM33')).toBe(0);
+    expect(cant(out, 'DOM05')).toBe(1); // el router no lo pone ningún kit
   });
 });
 

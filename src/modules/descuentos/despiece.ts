@@ -43,6 +43,7 @@ import {
 import {
   cortesBeeblack,
   esCategoriaBeeblack,
+  esCierreVerticalBeeblack,
   normalizarVarianteBeeblack,
   type MedidasBeeblack,
   type TogglesBeeblack,
@@ -71,10 +72,15 @@ export type ContextoDespiece = {
   verticalExtraAltoCm?: number;
   /** VERTICAL: cm que se RESTAN al alto de corte para el alto final de la lama. */
   verticalDctoAltoFinalCm?: number;
-  /** BEEBLACK: variante INTERNO | EXTERNO_SEMI. */
+  /** BEEBLACK: variante INTERNO | SEMI | EXTERNO. */
   beeblackVariante?: string | null;
+  /** BEEBLACK: tipo de instalación (Fase 2). Solo mueve los perfiles laterales:
+   *  EXTERNO + FUERA DEL MARCO usa alto + 2 en vez de alto + 1. */
+  beeblackInstalacion?: string | null;
   beeblackToggles?: TogglesBeeblack;
   beeblackMedidas?: MedidasBeeblack;
+  /** BEEBLACK con cierre DE ARRIBA ABAJO: ancho y alto cambian de papel. */
+  beeblackCierreVertical?: boolean;
 };
 
 export type CorteDespiece = {
@@ -195,6 +201,8 @@ export function calcularDespiece(
       altoCm,
       ctx?.beeblackToggles ?? {},
       ctx?.beeblackMedidas ?? {},
+      !!ctx?.beeblackCierreVertical,
+      ctx?.beeblackInstalacion,
     );
     for (const c of cortesBb) {
       cortes.push({ componente: c.componente, columnaExcel: c.columnaExcel, medidaCm: c.medidaCm });
@@ -231,10 +239,12 @@ export function calcularDespiece(
         pendienteMedida: c.pendienteMedida,
       });
     }
-    // ALTO de corte de la tela (reserva roller = alto + 25): la mesa corta la
-    // pieza a este alto y el Excel de órdenes llena su columna ALTO TELA.
+    // ALTO de corte de la tela (reserva roller = alto + 25): lo usa la mesa de
+    // dimensionado (Cálculo General, que lee el `componente`). NO viaja al Excel
+    // de órdenes: esa hoja es de ESTRUCTURA y la tela no es una pieza de metal
+    // (`columnaExcel: ''`, igual que el ancho de tela y el velcro de DARK).
     if (altoCm > 0) {
-      cortes.push({ componente: 'Alto tela', columnaExcel: 'ALTO TELA', medidaCm: r1(altoCm + 25) });
+      cortes.push({ componente: 'Alto tela', columnaExcel: '', medidaCm: r1(altoCm + 25) });
     }
     if (modelo.notas) notas.push(modelo.notas);
     return { cortes, aproximado: false, notas };
@@ -466,7 +476,7 @@ export const MODELO_DESPIECE_STUB: import('./tipos').ModeloDespiece = {
 
 /** Construye el contexto de despiece desde ventana + paño (Fase 2 / Excel). */
 export function contextoDespieceDesdePano(
-  v: { categoria?: string; sentido?: string | null; alto?: number | string; oscuridadVariante?: string | null; color?: string | null },
+  v: { categoria?: string; sentido?: string | null; alto?: number | string; oscuridadVariante?: string | null; color?: string | null; direccion?: string | null },
   p: {
     alto?: number | string;
     cenefa?: string | null;
@@ -503,16 +513,15 @@ export function contextoDespieceDesdePano(
     separadorIzq?: boolean;
     separadorDer?: boolean;
     separadorInf?: boolean;
+    separadorSup?: boolean;
     separadorIzqCm?: number;
     separadorDerCm?: number;
     separadorInfCm?: number;
+    separadorSupCm?: number;
     beeblackVariante?: string | null;
+    beeblackInstalacion?: string | null;
     beeblackManillaIzq?: boolean;
     beeblackManillaDer?: boolean;
-    beeblackExtraSupInfIzq?: boolean;
-    beeblackExtraSupInfDer?: boolean;
-    beeblackExtraLatSup?: boolean;
-    beeblackExtraLatInf?: boolean;
     beeblackPerfilSupAnchoCm?: number;
     beeblackPerfilInfAnchoCm?: number;
     beeblackPerfilLatIzqCm?: number;
@@ -585,13 +594,18 @@ export function contextoDespieceDesdePano(
       sepInf: p.separadorInfCm,
     },
     beeblackVariante: p.beeblackVariante,
+    // Instalación elegida en Fase 2 — el motor la canoniza contra la variante.
+    beeblackInstalacion: p.beeblackInstalacion,
+    // El cierre viene de la cotización (columna CIERRE de la planilla beeblack).
+    beeblackCierreVertical: esCierreVerticalBeeblack(v.direccion),
     beeblackToggles: {
       manillaIzq: p.beeblackManillaIzq,
       manillaDer: p.beeblackManillaDer,
-      extraAnchoIzq: p.beeblackExtraSupInfIzq,
-      extraAnchoDer: p.beeblackExtraSupInfDer,
-      extraAltoSup: p.beeblackExtraLatSup,
-      extraAltoInf: p.beeblackExtraLatInf,
+      // Separadores: mismos campos del paño que usa la oscuridad (+ el superior).
+      sepIzq: p.separadorIzq,
+      sepDer: p.separadorDer,
+      sepSup: p.separadorSup,
+      sepInf: p.separadorInf,
     },
     beeblackMedidas: {
       perfilSupAncho: p.beeblackPerfilSupAnchoCm,
@@ -603,6 +617,10 @@ export function contextoDespieceDesdePano(
       anchoTela: p.beeblackAnchoTelaCm,
       altoTela: p.beeblackAltoTelaCm,
       totalLamas: p.beeblackTotalLamasCm,
+      sepIzq: p.separadorIzqCm,
+      sepDer: p.separadorDerCm,
+      sepSup: p.separadorSupCm,
+      sepInf: p.separadorInfCm,
     },
   };
 }

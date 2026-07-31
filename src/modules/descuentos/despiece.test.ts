@@ -304,38 +304,52 @@ describe('calcularDespiece — pletina y oscuridad', () => {
 describe('calcularDespiece — BEEBLACK', () => {
   const stub: ModeloDespiece = { ...base, sistema: 'STUB', tipo_rol: 'STUB', mecanismo: '' };
 
-  it('INTERNO 200×130.1 enruta a reglas beeblack (golden Excel)', () => {
+  it('INTERNO 200×130 enruta a reglas beeblack (pizarra 2026-07-29)', () => {
     const d = calcularDespiece(stub, 200, {
       categoria: 'BEEBLACK',
-      altoCm: 130.1,
+      altoCm: 130,
       beeblackVariante: 'INTERNO',
       beeblackToggles: { manillaIzq: true, manillaDer: true },
     });
     expect(d.aproximado).toBe(false);
     expect(corte(d, 'PERFIL SUPERIOR (ANCHO)')).toBe(194.3);
-    expect(corte(d, 'ANCHO TELA')).toBe(195.3);
-    expect(corte(d, 'TOTAL LAMAS CORTE')).toBe(140.2);
-    expect(corte(d, 'MANILLA IZQ (ALTO)')).toBe(125.1);
+    expect(corte(d, 'MANILLA IZQ (ALTO)')).toBe(125);
     expect(corte(d, 'TUBO')).toBeUndefined();
+    // La tela y las lamas son de la mesa: no tienen columna en la estructura.
+    expect(corte(d, 'ANCHO TELA')).toBeUndefined();
+    expect(corte(d, 'TOTAL LAMAS CORTE')).toBeUndefined();
+    expect(d.cortes.find((c) => c.componente === 'Ancho tela')?.medidaCm).toBe(195.3);
+    expect(d.cortes.find((c) => c.componente === 'Total lamas')?.medidaCm).toBe(144);
   });
 
-  it('EXTERNO_SEMI 150×130 extras ON', () => {
-    const d = calcularDespiece(stub, 150, {
+  it('SEMI y EXTERNO 200×130 con sus propias tablas', () => {
+    const bb = (variante: string) =>
+      calcularDespiece(stub, 200, {
+        categoria: 'BEEBLACK',
+        altoCm: 130,
+        beeblackVariante: variante,
+        beeblackToggles: { manillaIzq: true },
+      });
+    const semi = bb('SEMI');
+    expect(corte(semi, 'PERFIL SUPERIOR (ANCHO)')).toBe(198);
+    expect(corte(semi, 'PERFIL LATERAL IZQ (ALTO)')).toBe(128);
+    expect(corte(semi, 'MANILLA IZQ (ALTO)')).toBe(128.7);
+    const ext = bb('EXTERNO');
+    expect(corte(ext, 'PERFIL SUPERIOR (ANCHO)')).toBe(201);
+    expect(corte(ext, 'MANILLA IZQ (ALTO)')).toBe(131.7);
+    // Los paños guardados con el valor legacy siguen calculando como EXTERNO.
+    expect(corte(bb('EXTERNO_SEMI'), 'PERFIL SUPERIOR (ANCHO)')).toBe(201);
+  });
+
+  it('los separadores del paño (izq/der/sup/base) también salen en beeblack', () => {
+    const d = calcularDespiece(stub, 200, {
       categoria: 'BEEBLACK',
       altoCm: 130,
-      beeblackVariante: 'EXTERNO_SEMI',
-      beeblackToggles: {
-        extraAnchoIzq: true,
-        extraAnchoDer: true,
-        extraAltoSup: true,
-        extraAltoInf: true,
-        manillaIzq: true,
-        manillaDer: true,
-      },
+      beeblackVariante: 'INTERNO',
+      beeblackToggles: { sepIzq: true, sepSup: true },
     });
-    expect(corte(d, 'PERFIL SUPERIOR (ANCHO)')).toBe(151);
-    expect(corte(d, 'PERFIL LATERAL IZQ (ALTO)')).toBe(131);
-    expect(corte(d, 'MANILLA IZQ (ALTO)')).toBe(131.7);
-    expect(corte(d, 'TOTAL LAMAS CORTE')).toBe(110.9);
+    expect(corte(d, 'SEPARADOR (IZQ)')).toBe(124.3); // = perfil lateral
+    expect(corte(d, 'SEPARADOR SUPERIOR')).toBe(194.3); // = perfil superior
+    expect(corte(d, 'SEPARADOR (DER)')).toBeUndefined();
   });
 });

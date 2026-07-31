@@ -32,10 +32,15 @@ const normUbic = (u: string): string => (u || '').toUpperCase().trim().replace(/
 /**
  * Agrupa las filas dual por ubicación y ordena cada par con la SCREEN primero.
  * `tipoTelaDe(codInt)` devuelve 'SCR' | 'BK' | 'DU' | '' para decidir el orden.
+ *
+ * `esDual` permite sumar otros casos de doble tela con el mismo patrón: el
+ * BEEBLACK marcado DOBLE en la planilla (blackout + mosquitero en la misma
+ * ubicación) usa exactamente esta lógica. Por defecto, solo las categorías dual.
  */
 export function emparejarDualesFase0<T extends FilaEmparejable>(
   filas: T[],
   tipoTelaDe: (fila: T) => string,
+  esDual: (fila: T) => boolean = (f) => categoriaEsDual(f.categoria),
 ): ResultadoEmparejado<T> {
   const grupos: T[][] = [];
   const avisos: string[] = [];
@@ -44,7 +49,7 @@ export function emparejarDualesFase0<T extends FilaEmparejable>(
   const dualPorUbic = new Map<string, T[]>();
 
   for (const f of filas) {
-    if (!categoriaEsDual(f.categoria)) {
+    if (!esDual(f)) {
       grupos.push([f]);
       continue;
     }
@@ -61,10 +66,10 @@ export function emparejarDualesFase0<T extends FilaEmparejable>(
 
   // Ordena y valida cada grupo dual (los singletons no-dual quedan intactos).
   for (const g of grupos) {
-    if (g.length < 2 || !categoriaEsDual(g[0].categoria)) {
-      if (categoriaEsDual(g[0].categoria) && g.length === 1) {
+    if (g.length < 2 || !esDual(g[0])) {
+      if (esDual(g[0]) && g.length === 1) {
         avisos.push(
-          `Dual "${g[0].ubicacion}" tiene una sola tela: se importa como dual de 1 paño (completá la segunda en Fase 2).`,
+          `Dual "${g[0].ubicacion}" tiene una sola tela: se importa como dual de 1 paño (completar la segunda en Fase 2).`,
         );
       }
       continue;
@@ -81,7 +86,7 @@ export function emparejarDualesFase0<T extends FilaEmparejable>(
     const [a, b] = g;
     if (a.ancho !== b.ancho || a.alto !== b.alto) {
       avisos.push(
-        `Dual "${a.ubicacion}": las dos telas tienen medidas distintas (${a.ancho}×${a.alto} vs ${b.ancho}×${b.alto}). Revisá el Excel.`,
+        `Dual "${a.ubicacion}": las dos telas tienen medidas distintas (${a.ancho}×${a.alto} vs ${b.ancho}×${b.alto}). Revisar el Excel.`,
       );
     }
   }

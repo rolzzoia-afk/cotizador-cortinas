@@ -9,6 +9,8 @@
 //   · PESO (roller)    → NEGRO→E14 · BLANCO→E15 · GRIS→E16
 //   · PESO U (lágrima) → NEGRO→E18 · BLANCO→E19 · GRIS→E20
 //   · CENEFA OVALADA   → NEGRO→E26 · BLANCO→E27 · GRIS→E28
+//   · BEEBLACK perfiles→ BLANCO→SML04 · NEGRO→SML05 · CAFÉ→SML06 (los 4 iguales)
+//   · BEEBLACK manillas→ BLANCO→SML10 · NEGRO→SML11 · CAFÉ→SML12 (agarradera)
 //
 // Si el color no tiene código fijo (otro color), devuelve '' y la etiqueta
 // cae al color como identificador.
@@ -68,10 +70,11 @@ export const SEPARADOR_POR_COLOR: Record<string, string> = {
   CAFÉ: 'E43',
 };
 
-/** Perfil SEPARADOR SUPERIOR de oscuranti: "separador rectangular 50×25", código
- *  por color de perfil (E50/E49/E52). Es OTRO perfil que el separador lateral
- *  (E41/E42/E43); barra de 5,80 m igual que el resto. */
-export const SEPARADOR_SUPERIOR_POR_COLOR: Record<string, string> = {
+/** PERFIL SUPERIOR de oscuranti (columna "PERFIL SUPERIOR (CENEF.PRO)"): perfil
+ *  rectangular 50×25, código por color de perfil (E50/E49/E52). Es OTRO perfil
+ *  que el separador (E41/E42/E43); barra de 5,80 m igual que el resto. Va
+ *  siempre en oscuranti; soft light y DARK no lo llevan. */
+export const PERFIL_SUPERIOR_POR_COLOR: Record<string, string> = {
   BLANCO: 'E50',
   NEGRO: 'E49',
   CAFÉ: 'E52',
@@ -84,6 +87,22 @@ export const CENEFA_CUADRADA_POR_COLOR: Record<string, string> = {
   NEGRO: 'E29',
   BLANCO: 'E30',
   CAFÉ: 'E31',
+};
+
+/** BEEBLACK: los CUATRO perfiles (superior, inferior y los dos laterales) salen
+ *  del MISMO riel, por color de accesorios. Barra de 6,00 m. */
+export const PERFIL_BEEBLACK_POR_COLOR: Record<string, string> = {
+  BLANCO: 'SML04',
+  NEGRO: 'SML05',
+  CAFÉ: 'SML06',
+};
+
+/** BEEBLACK: la manilla es la AGARRADERA (magnetic bidirectional track shift).
+ *  Se cobra como accesorio en Fase 1 y se corta acá, no es insumo de kit. */
+export const MANILLA_BEEBLACK_POR_COLOR: Record<string, string> = {
+  BLANCO: 'SML10',
+  NEGRO: 'SML11',
+  CAFÉ: 'SML12',
 };
 
 /** Color de perfil canónico: 'CAFE' (sin tilde) y 'MADERA' → clave 'CAFÉ'. */
@@ -102,14 +121,24 @@ export function codigoSeparadorPerfil(color: string | null | undefined): string 
   return SEPARADOR_POR_COLOR[colorPerfilCanonico(color)] || '';
 }
 
-/** Código del separador SUPERIOR de oscuranti (E50/E49/E52); '' si el color no calza. */
-export function codigoSeparadorSuperior(color: string | null | undefined): string {
-  return SEPARADOR_SUPERIOR_POR_COLOR[colorPerfilCanonico(color)] || '';
+/** Código del PERFIL SUPERIOR de oscuranti (E50/E49/E52); '' si el color no calza. */
+export function codigoPerfilSuperior(color: string | null | undefined): string {
+  return PERFIL_SUPERIOR_POR_COLOR[colorPerfilCanonico(color)] || '';
 }
 
 /** Código de la cenefa cuadrada (E29/E30/E31) por color de perfil; '' si no calza. */
 export function codigoCenefaCuadrada(color: string | null | undefined): string {
   return CENEFA_CUADRADA_POR_COLOR[colorPerfilCanonico(color)] || '';
+}
+
+/** Código del riel BEEBLACK (SML04/05/06) por color; '' si el color no calza. */
+export function codigoPerfilBeeblack(color: string | null | undefined): string {
+  return PERFIL_BEEBLACK_POR_COLOR[colorPerfilCanonico(color)] || '';
+}
+
+/** Código de la agarradera BEEBLACK (SML10/11/12) por color; '' si no calza. */
+export function codigoManillaBeeblack(color: string | null | undefined): string {
+  return MANILLA_BEEBLACK_POR_COLOR[colorPerfilCanonico(color)] || '';
 }
 
 /**
@@ -139,6 +168,15 @@ export function codigoEstructura(
       return PESO_OSCURIDAD_POR_COLOR[color] || '';
     case 'CENEFA OVALADA':
       return CENEFA_OVALADA_POR_COLOR[color] || '';
+    // BEEBLACK: los 4 perfiles son el mismo riel; las manillas, la agarradera.
+    case 'PERFIL SUPERIOR (ANCHO)':
+    case 'PERFIL INFERIOR (ANCHO)':
+    case 'PERFIL LATERAL IZQ (ALTO)':
+    case 'PERFIL LATERAL DER (ALTO)':
+      return codigoPerfilBeeblack(colorAccesorios);
+    case 'MANILLA IZQ (ALTO)':
+    case 'MANILLA DER (ALTO)':
+      return codigoManillaBeeblack(colorAccesorios);
     default:
       return '';
   }

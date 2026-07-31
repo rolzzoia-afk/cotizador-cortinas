@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { codigoCenefaCuadrada, codigoEstructura, codigoSeparadorSuperior } from './codigos-estructura';
+import {
+  codigoCenefaCuadrada,
+  codigoEstructura,
+  codigoManillaBeeblack,
+  codigoPerfilBeeblack,
+  codigoPerfilSuperior,
+} from './codigos-estructura';
 
 describe('codigoEstructura', () => {
   it('TUBO / PLETINA usan el código de tubería', () => {
@@ -48,19 +54,19 @@ describe('codigoEstructura', () => {
   });
 });
 
-describe('codigoSeparadorSuperior (oscuranti, rectangular 50×25, por color de perfil)', () => {
+describe('codigoPerfilSuperior (oscuranti, perfil rectangular 50×25, por color de perfil)', () => {
   it('BLANCO→E50, NEGRO→E49, CAFÉ/CAFE/MADERA→E52', () => {
-    expect(codigoSeparadorSuperior('BLANCO')).toBe('E50');
-    expect(codigoSeparadorSuperior('NEGRO')).toBe('E49');
-    expect(codigoSeparadorSuperior('CAFÉ')).toBe('E52');
-    expect(codigoSeparadorSuperior('CAFE')).toBe('E52'); // sin tilde
-    expect(codigoSeparadorSuperior('MADERA')).toBe('E52'); // madera ≡ café
+    expect(codigoPerfilSuperior('BLANCO')).toBe('E50');
+    expect(codigoPerfilSuperior('NEGRO')).toBe('E49');
+    expect(codigoPerfilSuperior('CAFÉ')).toBe('E52');
+    expect(codigoPerfilSuperior('CAFE')).toBe('E52'); // sin tilde
+    expect(codigoPerfilSuperior('MADERA')).toBe('E52'); // madera ≡ café
   });
 
   it('color sin mapeo o vacío → vacío', () => {
-    expect(codigoSeparadorSuperior('GRIS')).toBe('');
-    expect(codigoSeparadorSuperior('')).toBe('');
-    expect(codigoSeparadorSuperior(null)).toBe('');
+    expect(codigoPerfilSuperior('GRIS')).toBe('');
+    expect(codigoPerfilSuperior('')).toBe('');
+    expect(codigoPerfilSuperior(null)).toBe('');
   });
 });
 
@@ -77,5 +83,35 @@ describe('codigoCenefaCuadrada (Dark/Oscuranti, por color de perfil)', () => {
     expect(codigoCenefaCuadrada('GRIS')).toBe('');
     expect(codigoCenefaCuadrada('')).toBe('');
     expect(codigoCenefaCuadrada(null)).toBe('');
+  });
+});
+
+// BEEBLACK: los CUATRO perfiles salen del mismo riel; las manillas son las
+// agarraderas (se cobran en Fase 1 y se cortan por la hoja de estructura).
+describe('BEEBLACK — riel de perfiles y agarradera', () => {
+  it('los 4 perfiles usan el mismo código por color', () => {
+    for (const col of [
+      'PERFIL SUPERIOR (ANCHO)',
+      'PERFIL INFERIOR (ANCHO)',
+      'PERFIL LATERAL IZQ (ALTO)',
+      'PERFIL LATERAL DER (ALTO)',
+    ]) {
+      expect(codigoEstructura(col, 'BLANCO', ''), col).toBe('SML04');
+      expect(codigoEstructura(col, 'NEGRO', ''), col).toBe('SML05');
+      expect(codigoEstructura(col, 'CAFÉ', ''), col).toBe('SML06');
+    }
+  });
+
+  it('las manillas usan la agarradera SML10/11/12', () => {
+    expect(codigoEstructura('MANILLA IZQ (ALTO)', 'BLANCO', '')).toBe('SML10');
+    expect(codigoEstructura('MANILLA DER (ALTO)', 'NEGRO', '')).toBe('SML11');
+    expect(codigoEstructura('MANILLA IZQ (ALTO)', 'CAFE', '')).toBe('SML12'); // sin tilde
+  });
+
+  it('helpers directos y colores sin mapeo', () => {
+    expect(codigoPerfilBeeblack('MADERA')).toBe('SML06'); // madera ≡ café
+    expect(codigoManillaBeeblack('MADERA')).toBe('SML12');
+    expect(codigoPerfilBeeblack('GRIS')).toBe('');
+    expect(codigoManillaBeeblack(null)).toBe('');
   });
 });

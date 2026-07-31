@@ -98,13 +98,11 @@ export const CAMPOS_PANO_CONJUNTO = [
   'separadorIzq',
   'separadorDer',
   'separadorInf',
+  'separadorSup',
   'beeblackVariante',
+  'beeblackInstalacion',
   'beeblackManillaIzq',
   'beeblackManillaDer',
-  'beeblackExtraSupInfIzq',
-  'beeblackExtraSupInfDer',
-  'beeblackExtraLatSup',
-  'beeblackExtraLatInf',
 ] as const satisfies readonly (keyof Pano)[];
 
 const num = (x: unknown): number => parseFloat(String(x ?? 0)) || 0;

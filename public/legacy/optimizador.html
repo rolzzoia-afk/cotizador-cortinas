@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.18"; // 2026-07-28: OSCURANTI — columna SEPARADOR SUPERIOR → separador rectangular 50×25 por COLOR PERFIL (E50 blanco / E49 negro / E52 café), barra 5,80 m
+const VERSION_ACTUAL = "5.20"; // 2026-07-31: BEEBLACK — los 4 perfiles se cortan del MISMO riel (SML04 blanco / SML05 negro / SML06 café) y las manillas de la agarradera (SML10/11/12), barra 6,00 m. Antes sus columnas no estaban en COLUMNAS_CORTE y no se cortaba nada
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1590,6 +1590,9 @@ const MEDIDAS_BARRA_DEFAULT = {
     'E41': 580, 'E42': 580, 'E43': 580,
     'E29': 580, 'E30': 580, 'E31': 580,
     'E49': 580, 'E50': 580, 'E52': 580,
+    // BEEBLACK: riel de los 4 perfiles y agarradera de las manillas — barra 6,00 m.
+    'SML04': 600, 'SML05': 600, 'SML06': 600,
+    'SML10': 600, 'SML11': 600, 'SML12': 600,
 };
 const STOCK_MINIMO = 10; // Umbral de alerta: códigos con ≤ este número de tubos enteros disponibles
 
@@ -3717,10 +3720,17 @@ function expandirOrdenesDesdeExcel() {
         // Rótulo nuevo 'PERFIL (IZQ)/(DER)' + el legacy '… INT' para Excels viejos.
         'PERFIL (IZQ)', 'PERFIL (IZQ) INT', 'PERFIL (DER)', 'PERFIL (DER) INT', 'PERFIL BASE',
         // Perfiles separadores (E41/E42/E43) por lado — barra 5,80 m como el zócalo.
-        'SEPARADOR (IZQ)', 'SEPARADOR (DER)', 'SEPARADOR BASE',
-        // Oscuranti: separador rectangular 50×25 superior (E50/E49/E52), barra 5,80 m.
-        'SEPARADOR SUPERIOR',
-        'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT'
+        // Los cuatro son OPCIONALES y salen del MISMO perfil separador.
+        'SEPARADOR (IZQ)', 'SEPARADOR (DER)', 'SEPARADOR BASE', 'SEPARADOR SUPERIOR',
+        // Oscuranti: perfil rectangular 50×25 superior (E50/E49/E52), barra 5,80 m.
+        // Va SIEMPRE en oscuranti; soft light y DARK llevan solo la cenefa.
+        'PERFIL SUPERIOR (CENEF.PRO)',
+        'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT',
+        // BEEBLACK: los 4 perfiles salen del MISMO riel (SML04/05/06) y las
+        // manillas de la agarradera (SML10/11/12). Barra 6,00 m.
+        'PERFIL SUPERIOR (ANCHO)', 'PERFIL INFERIOR (ANCHO)',
+        'PERFIL LATERAL IZQ (ALTO)', 'PERFIL LATERAL DER (ALTO)',
+        'MANILLA IZQ (ALTO)', 'MANILLA DER (ALTO)'
     ];
 
     // Traductor: nombre columna en Libro4 → nombre exacto en el Catálogo
@@ -3759,8 +3769,17 @@ function expandirOrdenesDesdeExcel() {
         'SEPARADOR (DER)': 'COLOR PERFIL',
         'SEPARADOR BASE': 'COLOR PERFIL',
         'SEPARADOR SUPERIOR': 'COLOR PERFIL',
+        'PERFIL SUPERIOR (CENEF.PRO)': 'COLOR PERFIL',
         'CENEFA DELANTERA': 'COLOR PERFIL',
         'CENEFA TRASERA': 'COLOR PERFIL',
+        // BEEBLACK: perfiles y manillas por COLOR PERFIL (excel-ordenes lo llena
+        // con el color de accesorios de la cortina).
+        'PERFIL SUPERIOR (ANCHO)': 'COLOR PERFIL',
+        'PERFIL INFERIOR (ANCHO)': 'COLOR PERFIL',
+        'PERFIL LATERAL IZQ (ALTO)': 'COLOR PERFIL',
+        'PERFIL LATERAL DER (ALTO)': 'COLOR PERFIL',
+        'MANILLA IZQ (ALTO)': 'COLOR PERFIL',
+        'MANILLA DER (ALTO)': 'COLOR PERFIL',
         'PESO SOFT LIGHT': 'COLOR PESO INF. SOFT LIGHT',
         'PESO': 'COLOR ACCESORIOS'
     };
@@ -3790,6 +3809,18 @@ function expandirOrdenesDesdeExcel() {
     for (let i = filaEncabezado + 1; i < SistemaInventario.datosCrudosOrdenes.length; i++) {
         const fila = SistemaInventario.datosCrudosOrdenes[i];
         if (!fila || fila.every(c => c === null || c === undefined || String(c).trim() === '')) continue;
+
+        // FIN de la tabla de paños: la hoja ORDENES anexa abajo el cuadro
+        // "CENEFAS CUADRADAS PARA VERTICALES O ROLLER" (título + su propio
+        // encabezado + filas), separado por una fila en blanco. Esa fila vacía NO
+        // detiene el recorrido — hay que cortar en el título. Si no, las columnas
+        // del cuadro caen bajo los índices de la tabla principal y una celda que el
+        // cortador llene a mano ("MEDIDA DE SOBRANTE") se leería como TUBO y
+        // generaría una orden de corte fantasma.
+        if (String(fila[0] || '').trim().toUpperCase().startsWith('CENEFAS CUADRADAS')) {
+            log('📋 Fin de la tabla de paños: empieza el cuadro de cenefas cuadradas (no se procesa).', 'info');
+            break;
+        }
 
         // Extraer datos compartidos de la fila (OT, UBIC, TUBERIA, COLOR, etc.)
         const datosCompartidos = {};
@@ -4009,6 +4040,29 @@ function expandirOrdenesDesdeExcel() {
                     continue;
                 }
 
+                // Excepción dura: PERFIL SUPERIOR (CENEF.PRO) de OSCURANTI = perfil
+                // RECTANGULAR 50×25 por COLOR PERFIL (BLANCO→E50, NEGRO→E49,
+                // CAFÉ/MADERA→E52). Barra 5,80 m (MEDIDAS_BARRA_DEFAULT). Va SIEMPRE
+                // en oscuranti (soft light y DARK llevan solo la cenefa) y es OTRO
+                // perfil que el separador (E41/E42/E43) y que el zócalo (E32/33/34):
+                // por eso se resuelve ANTES que el bloque genérico de perfiles.
+                if (nombreCol === 'PERFIL SUPERIOR (CENEF.PRO)') {
+                    const MAPA_PERFIL_SUP = { 'BLANCO': 'E50', 'NEGRO': 'E49', 'CAFÉ': 'E52', 'CAFE': 'E52', 'MADERA': 'E52' };
+                    const codPerfSup = MAPA_PERFIL_SUP[colorDeseado] || null;
+                    if (!codPerfSup) {
+                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin perfil superior (E50 blanco / E49 negro / E52 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codPerfSup;
+                    orden.codigoExtraido = codPerfSup;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codPerfSup] || null;
+                    orden.tuberia = `${nombreCol} - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ ${nombreCol}: ${codPerfSup} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
                 // Excepción dura: PERFIL (IZQ)/(DER) INT y PERFIL BASE de los
                 // sistemas SOFT LIGHT/DARK = zócalo por COLOR PERFIL (BLANCO→E32,
                 // NEGRO→E33, CAFÉ→E34). Los tres cortes salen de la misma barra de
@@ -4035,32 +4089,12 @@ function expandirOrdenesDesdeExcel() {
                     continue;
                 }
 
-                // Excepción dura: SEPARADOR (IZQ)/(DER)/BASE de los sistemas de
-                // oscuridad = perfil separador por COLOR PERFIL (BLANCO→E41,
+                // Excepción dura: SEPARADOR (IZQ)/(DER)/BASE/SUPERIOR de los sistemas
+                // de oscuridad = perfil separador por COLOR PERFIL (BLANCO→E41,
                 // NEGRO→E42, CAFÉ→E43). Barra 5,80 m (MEDIDAS_BARRA_DEFAULT), igual
-                // que el zócalo. No lleva perforación.
-                // Excepción dura: SEPARADOR SUPERIOR (oscuranti) = separador
-                // RECTANGULAR 50×25 por COLOR PERFIL (BLANCO→E50, NEGRO→E49,
-                // CAFÉ/MADERA→E52). Es OTRO perfil que el separador lateral/base
-                // (E41/E42/E43), así que va ANTES del startsWith('SEPARADOR').
-                // Barra 5,80 m (MEDIDAS_BARRA_DEFAULT).
-                if (nombreCol === 'SEPARADOR SUPERIOR') {
-                    const MAPA_SEP_SUP = { 'BLANCO': 'E50', 'NEGRO': 'E49', 'CAFÉ': 'E52', 'CAFE': 'E52', 'MADERA': 'E52' };
-                    const codSepSup = MAPA_SEP_SUP[colorDeseado] || null;
-                    if (!codSepSup) {
-                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin separador superior (E50 blanco / E49 negro / E52 café). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
-                        continue;
-                    }
-                    orden.cod = codSepSup;
-                    orden.codigoExtraido = codSepSup;
-                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codSepSup] || null;
-                    orden.tuberia = `${nombreCol} - ${colorDeseado}`;
-                    SistemaInventario.ordenes.push(orden);
-                    ordenesDeEstaFila++;
-                    log(`✓ ${nombreCol}: ${codSepSup} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
-                    continue;
-                }
-
+                // que el zócalo. No lleva perforación. Los CUATRO son opcionales y
+                // salen del mismo perfil: el superior NO es un caso aparte (hasta
+                // v5.18 se mapeaba a E50/E49/E52 — eso es el PERFIL SUPERIOR).
                 if (nombreCol.startsWith('SEPARADOR')) {
                     const MAPA_SEPARADOR = { 'BLANCO': 'E41', 'NEGRO': 'E42', 'CAFÉ': 'E43', 'CAFE': 'E43' };
                     const codSep = MAPA_SEPARADOR[colorDeseado] || null;
@@ -4075,6 +4109,34 @@ function expandirOrdenesDesdeExcel() {
                     SistemaInventario.ordenes.push(orden);
                     ordenesDeEstaFila++;
                     log(`✓ ${nombreCol}: ${codSep} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                    continue;
+                }
+
+                // Excepción dura: BEEBLACK. Los CUATRO perfiles (superior, inferior y
+                // los dos laterales) salen del MISMO riel — SML04 blanco / SML05 negro
+                // / SML06 café — y las manillas de la agarradera SML10/11/12. Barra
+                // 6,00 m (MEDIDAS_BARRA_DEFAULT). Sus separadores ya se cortan arriba
+                // con el separador común E41/E42/E43.
+                if (nombreCol === 'PERFIL SUPERIOR (ANCHO)' || nombreCol === 'PERFIL INFERIOR (ANCHO)'
+                    || nombreCol === 'PERFIL LATERAL IZQ (ALTO)' || nombreCol === 'PERFIL LATERAL DER (ALTO)'
+                    || nombreCol === 'MANILLA IZQ (ALTO)' || nombreCol === 'MANILLA DER (ALTO)') {
+                    const esManilla = nombreCol.startsWith('MANILLA');
+                    const MAPA_BB = esManilla
+                        ? { 'BLANCO': 'SML10', 'NEGRO': 'SML11', 'CAFÉ': 'SML12', 'CAFE': 'SML12' }
+                        : { 'BLANCO': 'SML04', 'NEGRO': 'SML05', 'CAFÉ': 'SML06', 'CAFE': 'SML06' };
+                    const codBb = MAPA_BB[colorDeseado] || null;
+                    if (!codBb) {
+                        const set = esManilla ? 'SML10 blanco / SML11 negro / SML12 café' : 'SML04 blanco / SML05 negro / SML06 café';
+                        log(`⚠️ ${nombreCol}: color perfil "${colorDeseado}" sin perfil beeblack (${set}). Ubic ${datosCompartidos.ubic || '?'}.`, 'warn');
+                        continue;
+                    }
+                    orden.cod = codBb;
+                    orden.codigoExtraido = codBb;
+                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codBb] || null;
+                    orden.tuberia = `${nombreCol} - ${colorDeseado}`;
+                    SistemaInventario.ordenes.push(orden);
+                    ordenesDeEstaFila++;
+                    log(`✓ ${nombreCol}: ${codBb} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
                     continue;
                 }
 

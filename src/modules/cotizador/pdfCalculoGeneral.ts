@@ -24,7 +24,12 @@ import {
   familiaOscuridad,
   normalizarVarianteOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
-import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import {
+  esCategoriaBeeblack,
+  LABEL_INSTALACION_BEEBLACK,
+  normalizarInstalacionBeeblack,
+  normalizarVarianteBeeblack,
+} from '@/modules/descuentos/reglas-beeblack';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
@@ -181,7 +186,10 @@ export function construirCalculoGeneral(
             perfLateral.push(`${med}${perfTag}`.trim());
             continue;
           }
-          if (/^Perfil inferior/.test(c.componente)) {
+          // Oscuridad: el perfil inferior se muestra como PERFIL BASE. El
+          // 'Perfil inferior (ancho)' de BEEBLACK NO entra aquí: tiene columna
+          // propia, igual que el superior y los laterales.
+          if (/^Perfil inferior/.test(c.componente) && !esBee) {
             const med = c.pendienteMedida ? 'definir F2' : num(c.medidaCm);
             despiece.set('PERFIL BASE', `${med}${perfTag}`.trim());
             continue;
@@ -215,6 +223,24 @@ export function construirCalculoGeneral(
               (v.sentido as string),
             'INTERNO',
           ),
+        );
+      }
+      // BEEBLACK: la variante manda todas las medidas (INTERNO/SEMI/EXTERNO), así
+      // que se imprime en su propia columna igual que el TIPO DE SOFT.LIGHT.
+      if (esBee) {
+        const varianteBee = normalizarVarianteBeeblack(
+          (p as { beeblackVariante?: string }).beeblackVariante ?? (v.sentido as string),
+          'INTERNO',
+        );
+        // El tipo de instalación va pegado a la variante y mueve los laterales
+        // (EXTERNO + fuera del marco = alto + 2), así que se imprime con ella.
+        const instalacionBee = normalizarInstalacionBeeblack(
+          (p as { beeblackInstalacion?: string }).beeblackInstalacion,
+          varianteBee,
+        );
+        despiece.set(
+          'TIPO DE BEEBLACK',
+          `${varianteBee} — ${LABEL_INSTALACION_BEEBLACK[instalacionBee].toUpperCase()}`,
         );
       }
       // Dúo: se detecta SOLO por producto, igual que el corte real (tela.ts
@@ -346,7 +372,7 @@ export function construirCalculoGeneral(
     // Al final del bloque (como en la hoja manual): primero ALTO MESA DE CORTE
     // (dúo del Dimensionado), luego ALTO TELA (oscuridad), ALTO y, cerrando el
     // bloque soft light, el TIPO DE SOFT.LIGHT (variante por fila).
-    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO TELA', 'ALTO', 'TIPO SOFT LIGHT']) {
+    for (const colFin of ['ALTO MESA DE CORTE', 'ALTO TELA', 'ALTO', 'TIPO SOFT LIGHT', 'TIPO DE BEEBLACK']) {
       const idx = cols.indexOf(colFin);
       if (idx >= 0) {
         cols.splice(idx, 1);
@@ -527,11 +553,24 @@ const SIN_DIMENSIONADO_VERTICAL = new Set([
 // la cenefa (ovalada o cuadrada DEL/TRA, aluminio) y los perfiles los corta el
 // taller, no la mesa de tela. La mesa solo ve TELA + ALTO TELA (+ el VELCRO de
 // DARK, que sí es tela: ancho/alto tela velcro quedan en el Dimensionado).
-// Los SEPARADORES (superior de oscuranti + izq/der/base de las tres familias)
-// también son aluminio: se filtran por prefijo en `sinDespiece`.
+// Los SEPARADORES (izq/der/base/superior, opcionales) también son aluminio: se
+// filtran por prefijo en `sinDespiece`. El PERFIL SUPERIOR (rectangular 50×25 de
+// oscuranti) igual: es perfil de taller, no tela.
 const SIN_DIMENSIONADO_OSCURIDAD = new Set([
   'CENEFA', 'CENEFA DELANTERA', 'CENEFA TRASERA',
-  'PERFIL LATERAL', 'PERFIL BASE', 'TIPO DE SOFT.LIGHT',
+  'PERFIL LATERAL', 'PERFIL BASE', 'PERFIL SUPERIOR', 'TIPO DE SOFT.LIGHT',
+]);
+
+// BEEBLACK: la mesa de tela solo ve el paño de acordeón (ancho/alto de tela) y
+// las LAMAS, que indican dónde cortar el ancho. Perfiles y manillas son aluminio
+// de taller; los separadores ya se filtran por prefijo en `sinDespiece`.
+const SIN_DIMENSIONADO_BEEBLACK = new Set([
+  'PERFIL SUPERIOR (ANCHO)',
+  'PERFIL INFERIOR (ANCHO)',
+  'PERFIL LATERAL IZQ (ALTO)',
+  'PERFIL LATERAL DER (ALTO)',
+  'MANILLA IZQ (ALTO)',
+  'MANILLA DER (ALTO)',
 ]);
 
 export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
@@ -543,7 +582,8 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
     label.startsWith('CENEFA OVALADA') || // incluye "(CON/SIN TIRA)"
     label.startsWith('SEPARADOR') || // SUPERIOR / IZQUIERDO / DERECHO / BASE
     SIN_DIMENSIONADO_VERTICAL.has(label) ||
-    SIN_DIMENSIONADO_OSCURIDAD.has(label),
+    SIN_DIMENSIONADO_OSCURIDAD.has(label) ||
+    SIN_DIMENSIONADO_BEEBLACK.has(label),
   conjuntoPanos: true,
   altoMesaCorteDuo: true,
 };

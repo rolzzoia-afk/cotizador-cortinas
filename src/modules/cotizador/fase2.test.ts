@@ -10,6 +10,8 @@ import {
   OPCIONES_MECANISMO_DUAL,
   OPCIONES_MECANISMO_RESOLUCION,
   OPCIONES_TUBERIA,
+  parcheApagarPerfilBase,
+  parcheSuperficiePerfil,
 } from './fase2';
 
 describe('crearPanoVacio', () => {
@@ -82,5 +84,55 @@ describe('esCenefaCuadrada', () => {
     expect(esCenefaCuadrada('')).toBe(false);
     expect(esCenefaCuadrada(undefined)).toBe(false);
     expect(esCenefaCuadrada(null)).toBe(false);
+  });
+});
+
+describe('parcheSuperficiePerfil — instalación del perfil de oscuridad', () => {
+  it('la superficie es exclusiva: marca una y limpia las medidas manuales de las otras', () => {
+    const p = parcheSuperficiePerfil('izq', 'muro');
+    expect(p.perfilIzqActivo).toBe(true);
+    expect(p.perfilIzqMuro).toBe(true);
+    expect(p.perfilIzqPiso).toBe(false);
+    expect(p.perfilIzqMarco).toBe(false);
+    expect('perfilIzqMuroCm' in p).toBe(false); // la medida de la superficie elegida se respeta
+    expect(p.perfilIzqPisoCm).toBeUndefined();
+    expect(p.perfilIzqMarcoCm).toBeUndefined();
+  });
+
+  it('un LATERAL a piso apaga el perfil base y su separador', () => {
+    for (const lado of ['izq', 'der'] as const) {
+      const p = parcheSuperficiePerfil(lado, 'piso');
+      expect(p.perfilInfActivo, lado).toBe(false);
+      expect(p.perfilInfMuro, lado).toBe(false);
+      expect(p.perfilInfPiso, lado).toBe(false);
+      expect(p.perfilInfMarco, lado).toBe(false);
+      expect(p.perfilInfPisoCm, lado).toBeUndefined();
+      // El separador base hereda la medida del base: sin base quedaría pendiente
+      // y bloquearía el avance de Fase 2.
+      expect(p.separadorInf, lado).toBe(false);
+      expect(p.separadorInfCm, lado).toBeUndefined();
+    }
+  });
+
+  it('muro y "dentro del marco" NO tocan el perfil base', () => {
+    for (const sup of ['muro', 'marco'] as const) {
+      const p = parcheSuperficiePerfil('der', sup);
+      expect('perfilInfActivo' in p, sup).toBe(false);
+      expect('separadorInf' in p, sup).toBe(false);
+    }
+  });
+
+  it('el perfil base a piso no se apaga a sí mismo', () => {
+    const p = parcheSuperficiePerfil('inf', 'piso');
+    expect(p.perfilInfActivo).toBe(true);
+    expect(p.perfilInfPiso).toBe(true);
+    expect('separadorInf' in p).toBe(false);
+  });
+
+  it('parcheApagarPerfilBase limpia marca, superficie, medidas y separador', () => {
+    const p = parcheApagarPerfilBase();
+    expect(p.perfilInfActivo).toBe(false);
+    expect(p.perfilInfMuroCm).toBeUndefined();
+    expect(p.separadorInf).toBe(false);
   });
 });

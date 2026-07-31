@@ -91,26 +91,28 @@ export type Pano = {
   perfilInfPisoCm?: number;
   perfilInfMarcoCm?: number;
   /**
-   * Perfiles SEPARADORES (E41/E42/E43) — activación independiente por lado
-   * (izq/der/base) para todos los sistemas de oscuridad. La medida sale del
+   * Perfiles SEPARADORES (E41/E42/E43) — activación independiente por lado.
+   * Oscuridad usa izq/der/base; BEEBLACK además el superior. La medida sale del
    * perfil del mismo lado salvo override manual (separadorXxxCm).
    */
   separadorIzq?: boolean;
   separadorDer?: boolean;
   separadorInf?: boolean;
+  separadorSup?: boolean;
   separadorIzqCm?: number;
   separadorDerCm?: number;
   separadorInfCm?: number;
-  /** BEEBLACK: variante de instalación 'INTERNO'|'EXTERNO_SEMI'. */
+  separadorSupCm?: number;
+  /** BEEBLACK: variante de instalación 'INTERNO'|'SEMI'|'EXTERNO'
+   *  (los paños viejos pueden traer el legacy 'EXTERNO_SEMI'). */
   beeblackVariante?: string;
-  /** BEEBLACK INTERNO: manillas ON/OFF. */
+  /** BEEBLACK: tipo de instalación elegido en Fase 2 — 'DENTRO_DEL_MARCO' |
+   *  'TECHO_A_MURO' | 'FUERA_DEL_MARCO'. Va pegado a la variante y solo mueve
+   *  los perfiles laterales (EXTERNO + fuera del marco = alto + 2). */
+  beeblackInstalacion?: string;
+  /** BEEBLACK: manillas ON/OFF — opt-in en Fase 2, hasta 2 (screen + blackout). */
   beeblackManillaIzq?: boolean;
   beeblackManillaDer?: boolean;
-  /** BEEBLACK EXTERNO_SEMI: extras +3 cm por lado/extremo. */
-  beeblackExtraSupInfIzq?: boolean;
-  beeblackExtraSupInfDer?: boolean;
-  beeblackExtraLatSup?: boolean;
-  beeblackExtraLatInf?: boolean;
   /** BEEBLACK: overrides cm de terreno. */
   beeblackPerfilSupAnchoCm?: number;
   beeblackPerfilInfAnchoCm?: number;
@@ -206,7 +208,8 @@ export type Ventana = {
    * la sobreescribe si el vendedor la cambia por paño en Fase 2).
    */
   oscuridadVariante?: string;
-  /** Dirección cadena/cierre de Fase 0 (CAD [IZQUIERDA], etc.). */
+  /** Dirección cadena/cierre de Fase 0 (CAD [IZQUIERDA], etc.). En BEEBLACK es
+   *  el CIERRE: IZQUIERDA-DERECHA, DERECHA-IZQUIERDA o DE ARRIBA ABAJO. */
   direccion?: string;
   /**
    * Modelo de fabricación elegido (snapshot del catálogo de descuentos al

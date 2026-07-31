@@ -27,7 +27,8 @@
 //   Perfil izq      → PERFIL (IZQ) INT
 //   Perfil der      → PERFIL (DER) INT
 //   Perfil inferior → PERFIL BASE
-//   Tela / Velcro   → '' (viaja por el flujo de telas)
+//   Perfil superior → PERFIL SUPERIOR (CENEF.PRO)  [solo OSCURANTI]
+//   Tela / Velcro   → '' (viaja por el flujo de telas, no por la estructura)
 // Módulo puro: sin React/Supabase.
 // ─────────────────────────────────────────────────────────────────────
 
@@ -507,16 +508,20 @@ export function cortesOscuridad(
   const cenefaFront = r2(anchoCm + CENEFA_ADJ[familia][vi]);
 
   if (conCenefaCuad) {
-    cortes.push({ componente: 'Cenefa Delantera', columnaExcel: 'CENEFA DELANTERA', medidaCm: cenefaFront });
-    // Oscuranti: el perfil SEPARADOR SUPERIOR (rectangular 50×25, E50/E49/E52) va
-    // siempre y mide lo mismo que la cenefa delantera (pizarra 2026-07-28). No es
-    // opt-in como los separadores laterales/base: es parte del sistema.
+    // Oscuranti: su pieza frontal ES el PERFIL SUPERIOR (rectangular 50×25,
+    // E50/E49/E52) y va SIEMPRE — NO lleva además la cenefa cuadrada
+    // (E29/E30/E31), o el optimizador cortaría las dos para la misma ventana
+    // (corrección 2026-07-30). Soft light CC y DARK son al revés: cenefa
+    // cuadrada delantera y nada de perfil superior. Distinto del SEPARADOR
+    // superior/laterales, que son opcionales y salen del común E41/E42/E43.
     if (familia === 'OSCURANTI') {
       cortes.push({
-        componente: 'Separador superior',
-        columnaExcel: 'SEPARADOR SUPERIOR',
+        componente: 'Perfil superior',
+        columnaExcel: 'PERFIL SUPERIOR (CENEF.PRO)',
         medidaCm: cenefaFront,
       });
+    } else {
+      cortes.push({ componente: 'Cenefa Delantera', columnaExcel: 'CENEFA DELANTERA', medidaCm: cenefaFront });
     }
     if (esFamiliaDark(familia)) {
       cortes.push({
