@@ -26,8 +26,8 @@ const CASOS: Array<{
 }> = [
   // 200/1,5 + 10 = 143,33 → 144
   { variante: 'INTERNO', perfilAncho: 194.3, lateral: 124.3, manilla: 125, anchoTela: 195.3, altoTela: 126.8, lamas: 144 },
-  // 200/1,55 + 10 = 139,03 → 140 · alto tela = alto − 0,5 MM
-  { variante: 'SEMI', perfilAncho: 198, lateral: 128, manilla: 128.7, anchoTela: 199, altoTela: 129.95, lamas: 140 },
+  // 200/1,55 + 10 = 139,03 → 140 · el −0,5 MM del alto se redondea a 1 decimal (130)
+  { variante: 'SEMI', perfilAncho: 198, lateral: 128, manilla: 128.7, anchoTela: 199, altoTela: 130, lamas: 140 },
   { variante: 'EXTERNO', perfilAncho: 201, lateral: 131, manilla: 131.7, anchoTela: 202, altoTela: 133.5, lamas: 140 },
 ];
 

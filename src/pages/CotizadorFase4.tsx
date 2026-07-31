@@ -226,13 +226,20 @@ export function CotizadorFase4() {
     try {
       const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
       // Letras de "cortar junto" por pieza (mismas que la hoja de corte/paños).
-      let juntoPorPieza: Map<string, string> | undefined;
+      // Viaja también si el paño se corta invertido: el Dimensionado lo rotula
+      // junto a la letra en las cortinas oscuranti.
+      let juntoPorPieza: Map<string, { letra: string; invertida: boolean }> | undefined;
       if (pdfRows && pdfRows.length > 0) {
         const cortinas = construirHojaCorte(pdfRows, [], ot, parametros).cortinas;
         juntoPorPieza = new Map();
         pdfRows.forEach((r, i) => {
           const letra = cortinas[i]?.cortarJunto;
-          if (letra) juntoPorPieza!.set(`${r.ventanaId}_${r.panoIndex}`, letra);
+          if (letra) {
+            juntoPorPieza!.set(`${r.ventanaId}_${r.panoIndex}`, {
+              letra,
+              invertida: !!cortinas[i]?.invertida,
+            });
+          }
         });
       }
       generarPdfDimensionado(ventanas, catalogo, {

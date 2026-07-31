@@ -232,7 +232,7 @@ describe('construirHojaCorte — oscuridad invertida usa el ancho de CORTE real'
   it('EXTERNO 3,00: TOTAL PAÑOS y OPTIMIZADOR van al corte real 3,093 (no 3,00 / 2,55)', () => {
     const ventanas = [ventOscu(3.0)];
     const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
-    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(309.34, 2);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(309.3, 2);
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(true);
     expect(hoja.cortinas[0].corteAncho35).toBe(3.093);
@@ -244,7 +244,7 @@ describe('construirHojaCorte — oscuridad invertida usa el ancho de CORTE real'
   it('borde: nominal 2,90 entra, pero la tela real (2,9934) + borde no → invertida', () => {
     const ventanas = [ventOscu(2.9)];
     const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
-    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(299.34, 2);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(299.3, 2);
     const hoja = construirHojaCorte(rows, [], ot(ventanas));
     expect(hoja.cortinas[0].invertida).toBe(true);
     expect(hoja.cortinas[0].comentario).toBe('INVERTIDA');

@@ -342,6 +342,48 @@ describe('mecanismoParaPano — soft light CC usa kit simple (como DARK)', () =>
   });
 });
 
+// El DARK sobre tubería 0,45 usa el kit COMPLETO de 45 mm y nada de la armadura
+// de cenefa ovalada (regla del usuario 2026-07-31).
+describe('mecanismoParaPano — DARK 0,45 usa el kit 45 completo', () => {
+  const modelo45 = { diametro_tubo_mm: 45 } as never;
+  const dark45 = (color: string, mecanismo = '') =>
+    mecanismoParaPano({ colorMecanismo: color, mecanismo }, '', modelo45, OPCIONES_MECANISMO, 'DARK_45mm');
+
+  it('blanco → MEC 18 · negro → MEC 23', () => {
+    expect(dark45('BCO')).toContain('[MEC 18]');
+    expect(dark45('NEG')).toContain('[MEC 23]');
+  });
+
+  it('café y gris caen al kit negro (no hay kit 45 de esos colores)', () => {
+    expect(dark45('CAFÉ')).toContain('[MEC 23]');
+    expect(dark45('GRS')).toContain('[MEC 23]');
+  });
+
+  it('NO usa el kit simple de 38 ni el ovalada', () => {
+    const mec = dark45('NEG');
+    expect(mec).not.toContain('[MEC 32]');
+    expect(mec).not.toContain('[MEC 38]');
+  });
+
+  it('corrige una OT guardada con el kit simple, pero respeta otra elección', () => {
+    // MEC 32 es kit de inventario: lo pisa el que corresponde al diámetro.
+    expect(dark45('NEG', 'KIT SIMPLE NEGRO 38MM [MEC 32]')).toContain('[MEC 23]');
+    // Un chip fuera de los kits de inventario se respeta.
+    expect(dark45('NEG', 'OVALADA NEGRO [MEC 38]')).toContain('[MEC 38]');
+  });
+
+  it('el DARK de 38 mm conserva el kit simple por color', () => {
+    const mec = mecanismoParaPano(
+      { colorMecanismo: 'NEG', mecanismo: '' },
+      '',
+      { diametro_tubo_mm: 38 } as never,
+      OPCIONES_MECANISMO,
+      'DARK_38mm',
+    );
+    expect(mec).toContain('[MEC 32]');
+  });
+});
+
 describe('opcionesMecanismoFiltradas — categorías especiales', () => {
   const modelos = [m('MEC_05_LZ90_BLANCO')];
 

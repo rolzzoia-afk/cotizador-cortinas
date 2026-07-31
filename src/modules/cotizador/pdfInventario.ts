@@ -53,7 +53,7 @@ import {
   esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
-import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import { esFamiliaDark, familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { calculoVertical } from '@/modules/descuentos/despiece';
 import {
@@ -240,12 +240,15 @@ export function consolidarInsumos(
       // arma el mecanismo ovalada completo: por eso ese kit no se lista, solo las
       // tapas y los pivotes (más abajo).
       const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
-      // Los sistemas de oscuridad (soft light 38/45/CC, Dark) usan el kit ovalada y
-      // su cenefa suele ser IMPLÍCITA (p.cenefa vacío, categoría SOFT_LIGHT_*): sobre
+      // Los sistemas de oscuridad (soft light 38/45/CC) usan el kit ovalada y su
+      // cenefa suele ser IMPLÍCITA (p.cenefa vacío, categoría SOFT_LIGHT_*): sobre
       // tubo E78 llevan la misma armadura mixta. Oscuranti es 63 mm (E47) → nunca E78.
-      const esOscuridad = familiaOscuridad(v.categoria, p.cenefa as string | undefined) != null;
+      // El DARK queda FUERA (regla del usuario 2026-07-31): sobre tubería 0,45 usa el
+      // kit COMPLETO MEC 18/23, sin nada de la armadura de cenefa ovalada.
+      const famOsc = familiaOscuridad(v.categoria, p.cenefa as string | undefined);
+      const esOscuridadOvalada = famOsc != null && !esFamiliaDark(famOsc);
       const ovaladaSistema =
-        ovalada || esOscuridad || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
+        ovalada || esOscuridadOvalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
       const esE78Mixta =
         ovaladaSistema &&
         codigoTuberiaDeChip(

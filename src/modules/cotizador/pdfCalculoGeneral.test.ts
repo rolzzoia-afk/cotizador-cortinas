@@ -247,8 +247,8 @@ describe('construirCalculoGeneral', () => {
     expect(f.despiece.get('ALTO TELA')).toBe(275);
     // Izq a muro (alto+10 = 260) EXT, der a piso (alto = 250) EXT → "260 EXT / 250 EXT".
     expect(String(f.despiece.get('PERFIL LATERAL'))).toBe('260 EXT / 250 EXT');
-    // Perfil base EXTERNO dentro = 250 + 0,08 = 250,08 (2 decimales) → token coma es-CL.
-    expect(String(f.despiece.get('PERFIL BASE'))).toBe('250,08 EXT');
+    // Perfil base EXTERNO dentro = 250 + 0,08 → 250,1 (1 decimal) con coma es-CL.
+    expect(String(f.despiece.get('PERFIL BASE'))).toBe('250,1 EXT');
     // Dimensionado: la mesa de tela no ve cenefa ni perfiles.
     const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'SOFT');
     const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
@@ -495,15 +495,44 @@ describe('CONJUNTO PAÑOS (Dimensionado, #27)', () => {
   it('juntoPorPieza puebla fila.conjunto; VARIANTE_DIMENSIONADO trae conjuntoPanos', () => {
     const vents = [ventRoller(1.4, 'LIVING'), ventRoller(1.5, 'COMEDOR')];
     const junto = new Map([
-      ['vLIVING_0', 'A'],
-      ['vCOMEDOR_0', 'B'],
+      ['vLIVING_0', { letra: 'A', invertida: false }],
+      ['vCOMEDOR_0', { letra: 'B', invertida: true }],
     ]);
     const data = construirCalculoGeneral(vents, {}, undefined, junto);
+    // Roller: la letra sola, aunque el paño vaya invertido.
     expect(data.filas.map((f) => f.conjunto)).toEqual(['A', 'B']);
     expect(VARIANTE_DIMENSIONADO.conjuntoPanos).toBe(true);
     // Sin el mapa la columna queda vacía.
     const sinMapa = construirCalculoGeneral(vents, {});
     expect(sinMapa.filas.every((f) => f.conjunto === '')).toBe(true);
+  });
+
+  // Solo OSCURANTI rotula la inversión: su corte consume el ancho REAL y se
+  // invierte más seguido, así que el taller necesita verlo en el Dimensionado.
+  it('en OSCURANTI la letra avisa "(INVERTIDA)"; en el resto no', () => {
+    const vOsc = {
+      id: 'vOSC', ubicacion: 'LIVING', codInt: 'BK 69', producto: 'OSCURANTI',
+      categoria: 'OSCURANTI_63mm', color: 'NEGRO', alto: 2, cantidad: 1,
+      modelo: { sistema: 'OSCURANTI', diametro_tubo_mm: 63, dcto_tubo_cm: 0, codigos_tubo: 'E47' },
+      panos: [{ ancho: 3, alto: 2, color: 'NEGRO', oscuridadVariante: 'INTERNO' }],
+    } as unknown as Parameters<typeof construirCalculoGeneral>[0][number];
+
+    const invertida = construirCalculoGeneral(
+      [vOsc], {}, undefined, new Map([['vOSC_0', { letra: 'G', invertida: true }]]),
+    );
+    expect(invertida.filas[0].conjunto).toBe('G (INVERTIDA)');
+
+    const derecha = construirCalculoGeneral(
+      [vOsc], {}, undefined, new Map([['vOSC_0', { letra: 'G', invertida: false }]]),
+    );
+    expect(derecha.filas[0].conjunto).toBe('G');
+
+    // Un roller invertido NO lo rotula (ya se cubre arriba con COMEDOR).
+    const roller = construirCalculoGeneral(
+      [ventRoller(1.4, 'LIVING')], {}, undefined,
+      new Map([['vLIVING_0', { letra: 'C', invertida: true }]]),
+    );
+    expect(roller.filas[0].conjunto).toBe('C');
   });
 });
 

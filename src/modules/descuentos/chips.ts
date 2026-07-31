@@ -30,7 +30,11 @@ import {
 import { canonizarChipTuberia, tuberiaParaPano } from './reglas-tuberia';
 // familiaOscuridad: para distinguir soft light con cenefa CUADRADA (kit simple,
 // como DARK) del soft light ovalado (kit MEC 39/38). reglas-oscuridad es hoja (sin ciclo).
-import { esFamiliaSoftLightCC, familiaOscuridad } from './reglas-oscuridad';
+import {
+  esFamiliaSoftLightCC,
+  familiaOscuridad,
+  familiaOscuridadConDiametro,
+} from './reglas-oscuridad';
 
 export {
   REGLAS_MECANISMO,
@@ -217,6 +221,30 @@ export function mecanismoParaPano(
       if (nStored != null && esMecLegacy(nStored)) return chipAncho;
       if (opciones.includes(trimmed)) return trimmed;
       return chipAncho;
+    }
+  }
+
+  // DARK sobre tubería 0,45 (familia DARK_45): kit COMPLETO de 45 mm por color —
+  // MEC 18 blanco, MEC 23 el resto (no existe kit 45 café ni gris; el usuario los
+  // manda al negro). El DARK no usa NADA de la armadura de cenefa ovalada, así que
+  // este kit entero es el que baja al inventario (regla del usuario 2026-07-31).
+  // El DARK de 38 mm conserva el kit simple por color. Un kit elegido a mano se
+  // respeta salvo que sea otro kit de inventario: ahí manda el que corresponde,
+  // igual que en las demás reglas (así se corrigen las OT guardadas con MEC 32).
+  const famDiam = familiaOscuridadConDiametro(categoria, p.cenefa, modelo?.diametro_tubo_mm);
+  if (famDiam === 'DARK_45') {
+    const chip45 = chipMecanismoPorNumero(
+      normalizarColorAccesorio(colorAcc).startsWith('B') ? 18 : 23,
+      opciones,
+    );
+    if (chip45) {
+      const trimmed = ((p.mecanismo as string) || '').trim();
+      if (!trimmed) return chip45;
+      const nStored = numeroMecDeChip(trimmed);
+      if (nStored === numeroMecDeChip(chip45)) return trimmed;
+      if (nStored != null && esKitInventarioMec(nStored)) return chip45;
+      if (opciones.includes(trimmed)) return trimmed;
+      return chip45;
     }
   }
 

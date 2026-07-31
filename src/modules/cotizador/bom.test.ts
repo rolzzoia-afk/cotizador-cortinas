@@ -105,6 +105,19 @@ describe('calcularBOM', () => {
     expect(ins.some((i) => i.especificacion === 'VER37')).toBe(false);
   });
 
+  // El DARK sobre tubería 0,45 usa el kit COMPLETO de 45; el inventario emite la
+  // misma línea (antes decía MEC 32 acá y tapas+pivotes allá).
+  it('DARK 45: el mecanismo es el kit completo MEC 23, no el kit simple de 38', () => {
+    const ventanas = [{
+      id: 1, categoria: 'DARK_45mm', color: 'NEGRO',
+      modelo: { sistema: 'DARK_ROLLER', diametro_tubo_mm: 45, codigos_tubo: 'E78', dcto_tubo_cm: 1.8 },
+      panos: [{ ancho: 2.5, alto: 2.3, color: 'NEGRO' }],
+    }];
+    const bom = calcularBOM([row({ color: 'NEGRO' })], ventanas as Parameters<typeof calcularBOM>[1]);
+    const mec = bom.filter((i) => i.categoria === 'MECANISMO');
+    expect(mec.map((i) => i.especificacion)).toEqual(['MEC 23']);
+  });
+
   // BEEBLACK: kit SML propio, 1 por CORTINA. El BOM debe decir lo mismo que la
   // hoja de inventario (antes ninguno de los dos lo emitía).
   it('BEEBLACK: emite su kit SML una vez por cortina, con CALCULAR en la tira y la felpa', () => {

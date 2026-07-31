@@ -693,6 +693,40 @@ describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) +
     expect(tieneUnidad(d, 'PIVOTES')).toBe(true);
   });
 
+  // DARK: la excepción. No usa NADA de la armadura de cenefa ovalada — sobre
+  // tubería 0,45 lleva el kit COMPLETO MEC 18/23, y va al cuadro de INSTALACIÓN
+  // (regla del usuario 2026-07-31).
+  const ventDark45 = (color: string) =>
+    ({
+      id: `d${color}`, ubicacion: 'DARK', producto: 'ROLLER BLACKOUT DARK', color,
+      categoria: 'DARK_45mm',
+      modelo: {
+        sistema: 'DARK_ROLLER', tipo_rol: 'DARK_INTERNO_45mm', mecanismo: '',
+        diametro_tubo_mm: 45, codigos_tubo: 'E04; E05; E39; E46; E78',
+        dcto_tubo_cm: 1.8, suma_peso_cm: 0.1,
+      },
+      panos: [{ ancho: 2.5, alto: 2.3, color }],
+    }) as unknown as Ventana;
+
+  it('DARK 45 NEGRO + E78 → kit COMPLETO [MEC23] en INSTALACIÓN, sin tapas ni pivotes', () => {
+    const d = construirInventario([ventDark45('NEGRO')]);
+    expect(tieneUnidad(d, 'TAPAS')).toBe(false);
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+    expect(d.insumos.find((i) => i.codigo === 'MEC23')).toMatchObject({
+      descripcion: '[MEC23] 0,45mm NGR [MEC 23]', cantidad: 1, grupo: 'INSTALACION',
+    });
+    // Y nada de cenefa ovalada.
+    expect(d.insumos.some((i) => (i.descripcion || '').includes('OVALADA'))).toBe(false);
+  });
+
+  it('DARK 45 BLANCO + E78 → [MEC18] completo', () => {
+    const d = construirInventario([ventDark45('BLANCO')]);
+    expect(d.insumos.find((i) => i.codigo === 'MEC18')).toMatchObject({
+      descripcion: '[MEC18] 0,45mm BCO [MEC 18]', cantidad: 1, grupo: 'INSTALACION',
+    });
+    expect(tieneUnidad(d, 'PIVOTES')).toBe(false);
+  });
+
   it('SOFT LIGHT 38 mm (tubo E02, sin banda E78) → NO agrega tapas/pivotes', () => {
     const v = {
       id: 's38', ubicacion: 'SOFT', producto: 'ROLLER SCREEN PREMIUM', color: 'BLANCO',
