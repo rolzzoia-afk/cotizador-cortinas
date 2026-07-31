@@ -480,7 +480,7 @@ describe('asignarJuntoEnOrden', () => {
 
   it('OSCURIDAD: empaca por el ancho de CORTE real, no por el nominal', () => {
     // Dos oscuranti EXTERNO de 1,45 nominal: 1,45+1,45 = 2,90 entra en el rollo
-    // de 2,98, pero la tela real es 154,34 c/u (+9,34) → 3,0868, no entra.
+    // de 2,98, pero la tela real es 154,3 c/u (+9,3) → 3,086, no entra.
     const cat = mkCat({ SC: { anchoRollo: 2.98 } });
     const oscu = (id: number) =>
       ({
@@ -494,10 +494,10 @@ describe('asignarJuntoEnOrden', () => {
         panos: [{ ancho: 1.45, alto: 2.3, oscuridadVariante: 'EXTERNO' }],
       }) as unknown as VentanaItem;
     const rows = buildOptimizerRows([oscu(1), oscu(2)], cat);
-    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(154.34, 2);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(154.3, 2);
     const out = asignarJuntoEnOrden(rows);
     expect(out[0].junto).not.toBe(out[1].junto); // antes compartían paño
-    expect(out[0].anchoPano).toBeCloseTo(1.5434, 4); // acumula el corte real
+    expect(out[0].anchoPano).toBeCloseTo(1.543, 4); // acumula el corte real
   });
 
   it('empieza nuevo junto si cambia codInt', () => {

@@ -14,9 +14,10 @@
 //
 // DARK: sus cortes (cenefa cuadrada del/tra, tubo, tela, peso) salen de la
 // pizarra oficial 2026-07-27, donde los ajustes en "mm" son milímetros
-// LITERALES (0,3mm=0,03cm · 0,6mm=0,06cm · 0,2mm=0,02cm). Por eso el módulo
-// redondea a 2 decimales (ver r2). DARK_45MM comparte estas tablas hasta que
-// lleguen sus fórmulas propias.
+// LITERALES (0,3mm=0,03cm · 0,6mm=0,06cm · 0,2mm=0,02cm). Las tablas los
+// conservan, pero la medida que sale del motor se redondea a 1 decimal (ver
+// r1): el taller no corta centésimas de centímetro. DARK_45MM comparte estas
+// tablas hasta que lleguen sus fórmulas propias.
 //
 // Mapeo a columnas del Excel de órdenes (las reconoce el optimizador
 // legacy en COLUMNAS_CORTE):
@@ -110,7 +111,7 @@ export type MedidasPerfilesOscuridad = Partial<Record<MedidaPerfilKey, number>>;
 /** Devuelve el override si es un número válido (> 0); si no, la medida calculada. */
 function aplicarOverride(calculada: number, override: number | undefined): number {
   return typeof override === 'number' && Number.isFinite(override) && override > 0
-    ? r2(override)
+    ? r1(override)
     : calculada;
 }
 
@@ -141,10 +142,10 @@ export const PERFILES_OSCURIDAD: Array<{ key: SuperficiePerfilKey; label: string
 
 export const VARIANTES_OSCURIDAD: VarianteOscuridad[] = ['INTERNO', 'SEMI', 'EXTERNO'];
 
-// Redondeo a 2 decimales (centésimas de cm = décimas de mm). DARK trae ajustes en
-// milímetros literales (0,3mm / 0,6mm / 0,2mm de la pizarra 2026-07-27), así que 1
-// decimal los borraría; el resto de familias usa ajustes de 1 decimal y no se ve afectado.
-const r2 = (n: number) => Math.round(n * 100) / 100;
+// Redondeo a 1 decimal (regla del usuario 2026-07-31: ninguna medida de corte lleva
+// más de un decimal). Los ajustes en milímetros literales de DARK/OSCURANTI siguen en
+// las tablas y encadenan como siempre; lo que se redondea es cada medida emitida.
+const r1 = (n: number) => Math.round(n * 10) / 10;
 
 const VI: Record<VarianteOscuridad, number> = { INTERNO: 0, SEMI: 1, EXTERNO: 2 };
 
@@ -417,7 +418,7 @@ export function cenefaFrontOscuridad(
   variante: VarianteOscuridad,
   anchoCm: number,
 ): number {
-  return r2(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
+  return r1(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
 }
 
 /**
@@ -446,9 +447,9 @@ export function medidaPerfilBaseOscuridad(
   if (adjAncho) {
     // SEMI (DENTRO null) → siempre pared a pared; INTERNO/EXTERNO default DENTRO.
     const delta = adjAncho.DENTRO === null || montaje === 'PARED' ? adjAncho.PARED : adjAncho.DENTRO;
-    return r2(anchoCm + delta);
+    return r1(anchoCm + delta);
   }
-  return r2(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
+  return r1(cenefaFrontOscuridad(familia, variante, anchoCm) - descPerfilInferior(familia, variante));
 }
 
 /**
@@ -475,9 +476,9 @@ export function medidaPerfilOscuridad(
   altoCm: number,
   infMontaje?: MontajeBaseOscuridad,
 ): number {
-  if (key === 'izqMuro' || key === 'derMuro') return r2(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  if (key === 'izqMuro' || key === 'derMuro') return r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
   // piso y marco (dentro del marco) = alto real, sin descuento.
-  if (key === 'izqPiso' || key === 'derPiso' || key === 'izqMarco' || key === 'derMarco') return r2(altoCm);
+  if (key === 'izqPiso' || key === 'derPiso' || key === 'izqMarco' || key === 'derMarco') return r1(altoCm);
   // inferior (muro/piso/marco): soft light INTERNO usa montaje; resto = cenefa − descuento.
   return medidaPerfilBaseOscuridad(familia, variante, anchoCm, infMontaje);
 }
@@ -505,7 +506,7 @@ export function cortesOscuridad(
   if (!anchoCm || anchoCm <= 0) return cortes;
   const vi = VI[variante];
   const conCenefaCuad = CON_CENEFA_DELANTERA.includes(familia);
-  const cenefaFront = r2(anchoCm + CENEFA_ADJ[familia][vi]);
+  const cenefaFront = r1(anchoCm + CENEFA_ADJ[familia][vi]);
 
   if (conCenefaCuad) {
     // Oscuranti: su pieza frontal ES el PERFIL SUPERIOR (rectangular 50×25,
@@ -527,7 +528,7 @@ export function cortesOscuridad(
       cortes.push({
         componente: 'Cenefa Trasera',
         columnaExcel: 'CENEFA TRASERA',
-        medidaCm: r2(cenefaFront - CENEFA_TRASERA_DESC),
+        medidaCm: r1(cenefaFront - CENEFA_TRASERA_DESC),
       });
       cortes.push({ componente: 'Ancho Tela Velcro', columnaExcel: '', medidaCm: cenefaFront });
       cortes.push({ componente: 'Alto Tela Velcro', columnaExcel: '', medidaCm: ALTO_TELA_VELCRO_CM });
@@ -543,9 +544,9 @@ export function cortesOscuridad(
   // el resto de familias/colores cae al fallback blanco.
   const tuboAdj =
     (esColorAccesoriosNegro(colorAccesorios) ? TUBO_ADJ_NEGRO[familia] : undefined) ?? TUBO_ADJ[familia];
-  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r2(anchoCm + tuboAdj[vi]) });
-  cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r2(anchoCm + TELA_ADJ[familia][vi]) });
-  cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r2(anchoCm + PESO_ADJ[familia][vi]) });
+  cortes.push({ componente: 'Tubo', columnaExcel: 'TUBO', medidaCm: r1(anchoCm + tuboAdj[vi]) });
+  cortes.push({ componente: 'Tela (ancho)', columnaExcel: '', medidaCm: r1(anchoCm + TELA_ADJ[familia][vi]) });
+  cortes.push({ componente: 'Peso', columnaExcel: 'PESO SOFT LIGHT', medidaCm: r1(anchoCm + PESO_ADJ[familia][vi]) });
 
   // ── Perfiles (activos) ──
   // La MEDIDA depende de la superficie (muro = alto+10; piso y marco = alto); la
@@ -553,8 +554,8 @@ export function cortesOscuridad(
   // estar ACTIVO (asignado en Fase 1) con la superficie/medida pendiente para
   // Fase 2. Retro-compat: muro/piso/marco marcado implica activo.
   const altoOk = altoCm > 0;
-  const lateralMuro = r2(altoCm + PERFIL_LATERAL_MURO_SUMA);
-  const lateralPiso = r2(altoCm);
+  const lateralMuro = r1(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  const lateralPiso = r1(altoCm);
   // Soft light INTERNO: ancho − 13,3 (dentro de laterales) o ancho (pared a pared);
   // resto de variantes/familias = cenefa frontal − descuento de variante.
   const inferior = medidaPerfilBaseOscuridad(familia, variante, anchoCm, perfiles.infMontaje);
@@ -660,7 +661,7 @@ export function cortesOscuridad(
     cortes.push({
       componente: nombre,
       columnaExcel: columna,
-      medidaCm: pendienteMedida ? 0 : overrideOk ? r2(overrideSep as number) : fallback.medida,
+      medidaCm: pendienteMedida ? 0 : overrideOk ? r1(overrideSep as number) : fallback.medida,
       perfil: true,
       pendienteMedida,
     });

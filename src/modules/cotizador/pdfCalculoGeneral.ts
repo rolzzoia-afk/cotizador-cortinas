@@ -86,7 +86,8 @@ export type FilaCalculo = {
   codPeso: string;
   suplementos: string;
   manillas: string;
-  /** Letra de "cortar junto" (A/B/RR…) para la columna CONJUNTO PAÑOS del Dimensionado. */
+  /** Letra de "cortar junto" (A/B/RR…) para la columna CONJUNTO PAÑOS del
+   *  Dimensionado. En oscuranti se le suma " (INVERTIDA)" si el paño se corta girado. */
   conjunto: string;
   cant: number;
   producto: string;
@@ -141,13 +142,16 @@ const IDENTIDAD: { key: keyof FilaCalculo; label: string }[] = [
 
 const NUM_IDENTIDAD = new Set<keyof FilaCalculo>(['anchoMts', 'altoMts']);
 
+/** Paño físico de la hoja de corte: su letra y si se corta girado 90°. */
+export type JuntoPieza = { letra: string; invertida: boolean };
+
 /** Construye los datos de la hoja CALCULO GENERAL para las ventanas de una OT. */
 export function construirCalculoGeneral(
   ventanas: Ventana[],
   catalogo: CatalogoProductos = {},
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   /** Letras de "cortar junto" por pieza (`${ventanaId}_${panoIndex}` → letra). */
-  juntoPorPieza?: Map<string, string>,
+  juntoPorPieza?: Map<string, JuntoPieza>,
   /** Dimensionado: en filas dúo reemplaza la columna ALTO por ALTO MESA DE CORTE.
    *  usarTuboE78: habilita la banda 2,2–3,0 m (kit 45 mm/E78) para esta OT. */
   opts?: { altoMesaCorteDuo?: boolean; usarTuboE78?: boolean },
@@ -325,7 +329,13 @@ export function construirCalculoGeneral(
         codPeso,
         suplementos: (p.suplementos as string) || '',
         manillas: manillaCant > 0 ? `${manillaCant} ${(p.manillaColor as string) || ''}`.trim() : '',
-        conjunto: juntoPorPieza?.get(`${v.id}_${i}`) ?? '',
+        // OSCURANTI: el taller necesita ver que el paño va girado, porque su corte
+        // consume el ancho REAL (mayor que el nominal) y se invierte más seguido.
+        conjunto: (() => {
+          const j = juntoPorPieza?.get(`${v.id}_${i}`);
+          if (!j) return '';
+          return famOscFila === 'OSCURANTI' && j.invertida ? `${j.letra} (INVERTIDA)` : j.letra;
+        })(),
         cant: 1,
         producto: tela.producto || '',
         codInt: tela.codInt || '',
@@ -499,8 +509,9 @@ function pesoColumna(key: string, esDespiece: boolean): number {
       return 1.1; // angosta: valores cortos (BLANCO/NEGRO); la cabecera se achica si hace falta
     case 'armado':
     case 'manillas':
-    case 'conjunto':
       return 1.1;
+    case 'conjunto':
+      return 1.6; // la letra sola es corta, pero oscuranti agrega " (INVERTIDA)"
     case 'codInt':
       return 0.72; // angosta: "SC 02"; la cabecera "COD_IN" se achica si no cabe
     case 'codSec':
@@ -620,7 +631,7 @@ export function generarPdfDimensionado(
   catalogo: CatalogoProductos,
   meta: MetaCalculo,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
-  juntoPorPieza?: Map<string, string>,
+  juntoPorPieza?: Map<string, JuntoPieza>,
   usarTuboE78 = false,
 ): void {
   renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO, juntoPorPieza, usarTuboE78);
@@ -632,7 +643,7 @@ function renderHojaCalculo(
   meta: MetaCalculo,
   params: ParametrosCorte,
   variante: VarianteHojaCalculo,
-  juntoPorPieza?: Map<string, string>,
+  juntoPorPieza?: Map<string, JuntoPieza>,
   usarTuboE78 = false,
 ): void {
   if (!ventanas || ventanas.length === 0) {
@@ -743,9 +754,16 @@ function renderHojaCalculo(
     doc.setFontSize(13);
     doc.setTextColor(30, 30, 38);
     doc.text(variante.titulo, M, y + 5);
-    // Número de OT grande y destacado.
+    // Número de OT grande y destacado. Encoge para no pisar la fecha: las OT con
+    // nombre ("OT #DARK-OSCURANTI") no caben a 24 pt en el hueco hasta M + 130.
+    const textoOT = `OT ${meta.ot}`;
+    const anchoOT = M + 130 - (M + 62) - 4; // hueco menos un aire de 4 mm
     doc.setFontSize(24);
-    doc.text(`OT ${meta.ot}`, M + 62, y + 6.5);
+    const medido = doc.getTextWidth(textoOT);
+    if (medido > anchoOT) {
+      doc.setFontSize(Math.max(9, (24 * anchoOT) / medido));
+    }
+    doc.text(textoOT, M + 62, y + 6.5);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.text('FECHA OT: ___/___/____      RESPONSABLE OT: __________', M + 130, y + 5);
@@ -823,7 +841,16 @@ function renderHojaCalculo(
               ? (raw as number).toFixed(3).replace('.', ',')
               : num(raw as number);
         } else val = raw === 0 ? '' : String(raw ?? '');
-        celdaFija(val, identXs[i], identWidths[i], y + 7.4, SIZE_TEXTO);
+        // El conjunto puede llevar el sufijo "(INVERTIDA)": se encoge antes que
+        // recortarse, para no perder el aviso al final del texto.
+        celdaFija(
+          val,
+          identXs[i],
+          identWidths[i],
+          y + 7.4,
+          SIZE_TEXTO,
+          c.key === 'conjunto' ? { minSize: 6 } : undefined,
+        );
       });
       // Despiece (números de tamaño uniforme; TIPO DE SOFT.LIGHT en verde).
       sec.columnas.forEach((c, j) => {

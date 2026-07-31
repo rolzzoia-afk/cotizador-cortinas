@@ -135,12 +135,14 @@ const PERFIL_LATERAL_POR_INSTALACION: Partial<Record<InstalacionBeeblack, number
 /** Lamas: ancho real / divisor + 10, redondeado HACIA ARRIBA a entero. */
 export const LAMAS_EXTRA = 10;
 
-/** Los ajustes de tela traen centésimas (SEMI = −0,5 mm): se conservan. */
-const r2 = (n: number) => Math.round(n * 100) / 100;
+/** Redondeo a 1 decimal (regla del usuario 2026-07-31): ninguna medida de corte lleva
+ *  más de un decimal. El −0,5 mm del alto de tela SEMI queda en la tabla pero se
+ *  redondea al salir (130 → 130), que es como se corta en la mesa. */
+const r1 = (n: number) => Math.round(n * 10) / 10;
 
 function aplicarOverride(calculada: number, override: number | undefined): number {
   return typeof override === 'number' && Number.isFinite(override) && override > 0
-    ? r2(override)
+    ? r1(override)
     : calculada;
 }
 
@@ -204,16 +206,16 @@ function calcularMedidas(
   // mismas 4 barras, y las lamas y la tela salen sobre el alto real).
   const anchoBase = cierreVertical ? altoCm : anchoCm;
   const altoBase = cierreVertical ? anchoCm : altoCm;
-  const perfilAncho = r2(anchoBase + a.perfilAncho);
-  const perfilLateral = r2(altoBase + ajusteLateral);
+  const perfilAncho = r1(anchoBase + a.perfilAncho);
+  const perfilLateral = r1(altoBase + ajusteLateral);
   return {
     perfilSupAncho: perfilAncho,
     perfilInfAncho: perfilAncho,
     perfilLatIzq: perfilLateral,
     perfilLatDer: perfilLateral,
-    manilla: r2(altoBase + a.manilla),
-    anchoTela: r2(anchoBase + a.anchoTela),
-    altoTela: r2(altoBase + a.altoTela),
+    manilla: r1(altoBase + a.manilla),
+    anchoTela: r1(anchoBase + a.anchoTela),
+    altoTela: r1(altoBase + a.altoTela),
     // Cantidad de pliegues del acordeón (unidades, no cm): siempre hacia arriba.
     totalLamas: Math.ceil(anchoBase / a.lamasDivisor + LAMAS_EXTRA),
   };
@@ -263,7 +265,7 @@ export function cortesBeeblack(
     { componente: 'Total lamas', columnaExcel: '', medidaCm: aplicarOverride(m.totalLamas, overrides.totalLamas) },
   ];
 
-  const manilla = r2(m.manilla);
+  const manilla = r1(m.manilla);
   if (toggles.manillaIzq) {
     cortes.push({
       componente: 'Manilla izq (alto)',

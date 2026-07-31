@@ -11,7 +11,10 @@ import {
   type VarianteOscuridad,
 } from './reglas-oscuridad';
 
-// Valores DORADOS extraídos celda por celda de SISTEMAS OSCURIDAD.xlsx.
+// Valores DORADOS extraídos celda por celda de SISTEMAS OSCURIDAD.xlsx, con el
+// redondeo a 1 decimal de la regla del usuario 2026-07-31: los ajustes en mm
+// literales siguen en las tablas, pero cada eslabón de la cadena emite décimas
+// (por eso en DARK/OSCURANTI el peso, que era tela + 0,2 mm, coincide con la tela).
 // Cada bloque: [familia, variante, ancho, alto, { componente: totalCm }].
 type Caso = {
   familia: FamiliaOscuridad;
@@ -37,23 +40,23 @@ const CASOS: Caso[] = [
   // ── OSCURANTI 0,63 mm ── (pizarra 2026-07-28, mm literal: perfil superior = ancho − 0,03 ·
   // tubo = perfil − 5,8/6/6,4 · tela = tubo − 0,06 · peso = tela + 0,02). Su pieza frontal
   // es el PERFIL SUPERIOR: NO corta cenefa cuadrada delantera (corrección 2026-07-30).
-  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 199.97, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
-  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Perfil superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 201.44, Peso: 201.46 } },
-  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 209.34, Peso: 209.36 } },
+  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 200, Tubo: 194.2, 'Tela (ancho)': 194.1, Peso: 194.1 } },
+  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Perfil superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 201.4, Peso: 201.5 } },
+  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 209.3, Peso: 209.4 } },
   // ── DARK ── (pizarra 2026-07-27, mm literal: cenefa del = ancho − 0,03 · trasera = del − 1 ·
   // tubo = trasera − 4,8/5/5,4 · tela = tubo − 0,06 · peso = tela + 0,02 · velcro = del, alto 15)
-  { familia: 'DARK', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.97, 'Cenefa Trasera': 198.97, 'Ancho Tela Velcro': 199.97, 'Alto Tela Velcro': 15, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
-  { familia: 'DARK', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Cenefa Trasera': 206.5, 'Ancho Tela Velcro': 207.5, 'Alto Tela Velcro': 15, Tubo: 201.5, 'Tela (ancho)': 201.44, Peso: 201.46 } },
-  { familia: 'DARK', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Cenefa Trasera': 214.8, 'Ancho Tela Velcro': 215.8, 'Alto Tela Velcro': 15, Tubo: 209.4, 'Tela (ancho)': 209.34, Peso: 209.36 } },
+  { familia: 'DARK', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 200, 'Cenefa Trasera': 199, 'Ancho Tela Velcro': 200, 'Alto Tela Velcro': 15, Tubo: 194.2, 'Tela (ancho)': 194.1, Peso: 194.1 } },
+  { familia: 'DARK', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Cenefa Trasera': 206.5, 'Ancho Tela Velcro': 207.5, 'Alto Tela Velcro': 15, Tubo: 201.5, 'Tela (ancho)': 201.4, Peso: 201.5 } },
+  { familia: 'DARK', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Cenefa Trasera': 214.8, 'Ancho Tela Velcro': 215.8, 'Alto Tela Velcro': 15, Tubo: 209.4, 'Tela (ancho)': 209.3, Peso: 209.4 } },
   // ── DARK 0,45_1,2mm ── (pizarra 2026-07-28): mismo encadenado que el DARK 38.
-  { familia: 'DARK_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.97, 'Cenefa Trasera': 298.97, 'Ancho Tela Velcro': 299.97, 'Alto Tela Velcro': 15, Tubo: 294.17, 'Tela (ancho)': 294.11, Peso: 294.13 } },
-  { familia: 'DARK_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, 'Cenefa Trasera': 306.5, Tubo: 301.5, 'Tela (ancho)': 301.44, Peso: 301.46 } },
-  { familia: 'DARK_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, 'Cenefa Trasera': 314.8, Tubo: 309.4, 'Tela (ancho)': 309.34, Peso: 309.36 } },
+  { familia: 'DARK_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 300, 'Cenefa Trasera': 299, 'Ancho Tela Velcro': 300, 'Alto Tela Velcro': 15, Tubo: 294.2, 'Tela (ancho)': 294.1, Peso: 294.1 } },
+  { familia: 'DARK_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, 'Cenefa Trasera': 306.5, Tubo: 301.5, 'Tela (ancho)': 301.4, Peso: 301.5 } },
+  { familia: 'DARK_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, 'Cenefa Trasera': 314.8, Tubo: 309.4, 'Tela (ancho)': 309.3, Peso: 309.4 } },
   // ── SOFT LIGHT CENEFA CUADRADA 0,45_1,2mm ── (pizarra 2026-07-28): igual que el
   // DARK 45 pero SIN cenefa trasera ni velcro (tubo = cenefa delantera − 5,8/6/6,4).
-  { familia: 'SOFT_LIGHT_CC_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 299.97, Tubo: 294.17, 'Tela (ancho)': 294.11, Peso: 294.13 } },
-  { familia: 'SOFT_LIGHT_CC_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, Tubo: 301.5, 'Tela (ancho)': 301.44, Peso: 301.46 } },
-  { familia: 'SOFT_LIGHT_CC_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, Tubo: 309.4, 'Tela (ancho)': 309.34, Peso: 309.36 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'INTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 300, Tubo: 294.2, 'Tela (ancho)': 294.1, Peso: 294.1 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'SEMI', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 307.5, Tubo: 301.5, 'Tela (ancho)': 301.4, Peso: 301.5 } },
+  { familia: 'SOFT_LIGHT_CC_45', variante: 'EXTERNO', ancho: 300, alto: 230, comp: { 'Cenefa Delantera': 315.8, Tubo: 309.4, 'Tela (ancho)': 309.3, Peso: 309.4 } },
 ];
 
 const medida = (cortes: ReturnType<typeof cortesOscuridad>, nombre: string) =>
@@ -87,7 +90,7 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     const semi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infPiso: true });
     expect(medida(semi, 'Perfil inferior al Piso')).toBe(201.2); // 207.5 − 6.3
     const interno = cortesOscuridad('DARK', 'INTERNO', 200, 200, { infMuro: true });
-    expect(medida(interno, 'Perfil inferior a Muro')).toBe(187.37); // 199.97 − 12.6
+    expect(medida(interno, 'Perfil inferior a Muro')).toBe(187.4); // 200 − 12,6
   });
 
   it('perfil base OSCURANTI = ancho real por variante y montaje (pizarra 2026-07-28)', () => {
@@ -111,7 +114,7 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
   it('oscuranti lleva PERFIL SUPERIOR y NO cenefa cuadrada delantera', () => {
     const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, {});
     const perf = cortes.find((c) => c.columnaExcel === 'PERFIL SUPERIOR (CENEF.PRO)');
-    expect(perf?.medidaCm).toBe(199.97);
+    expect(perf?.medidaCm).toBe(200);
     expect(perf?.perforacion).toBeUndefined();
     // La cenefa cuadrada E29/E30/E31 es de DARK y soft light CC: en oscuranti se
     // cortaba de más junto al perfil rectangular 50×25 (corrección 2026-07-30).
@@ -143,11 +146,11 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
   });
 
   it('perfil base SOFT LIGHT EXTERNO: dentro = ancho + 0,08 (default) · pared = ancho + 14', () => {
-    // "+0,8 mm" literal = 0,08 cm. Con redondeo a 2 decimales (r2) queda exacto.
+    // "+0,8 mm" literal = 0,08 cm; al redondear a 1 decimal sube a la décima.
     const dentro = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true });
-    expect(medida(dentro, 'Perfil inferior a Muro')).toBe(200.08); // 200 + 0,08
+    expect(medida(dentro, 'Perfil inferior a Muro')).toBe(200.1); // 200 + 0,08 → 200,1
     const dentroBig = cortesOscuridad('SOFT_LIGHT_45', 'EXTERNO', 296.9, 180, { infMuro: true, infMontaje: 'DENTRO' });
-    expect(medida(dentroBig, 'Perfil inferior a Muro')).toBe(296.98); // 296,9 + 0,08
+    expect(medida(dentroBig, 'Perfil inferior a Muro')).toBe(297); // 296,9 + 0,08 → 297
     const pared = cortesOscuridad('SOFT_LIGHT_38', 'EXTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
     expect(medida(pared, 'Perfil inferior a Muro')).toBe(214); // 200 + 14
   });
@@ -173,7 +176,7 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     const darkSemi = cortesOscuridad('DARK', 'SEMI', 200, 200, { infMuro: true, infMontaje: 'PARED' });
     expect(medida(darkSemi, 'Perfil inferior a Muro')).toBe(201.2); // 207,5 − 6,3
     const darkInt = cortesOscuridad('DARK', 'INTERNO', 200, 200, { infMuro: true, infMontaje: 'PARED' });
-    expect(medida(darkInt, 'Perfil inferior a Muro')).toBe(187.37); // 199,97 − 12,6
+    expect(medida(darkInt, 'Perfil inferior a Muro')).toBe(187.4); // 200 − 12,6
   });
 
   it('sin perfiles ON no agrega cortes de perfil', () => {
@@ -372,7 +375,7 @@ describe('perfil base 0,45_1,2mm por montaje (DARK 45 / soft light CC 45)', () =
       expect(base(familia, 'INTERNO', 'PARED')).toBe(300); // ancho real
       expect(base(familia, 'SEMI')).toBe(292.5); // solo pared: 300 − 7,5
       expect(base(familia, 'SEMI', 'PARED')).toBe(292.5);
-      expect(base(familia, 'EXTERNO')).toBe(299.92); // 300 − 0,8 mm
+      expect(base(familia, 'EXTERNO')).toBe(299.9); // 300 − 0,8 mm
       expect(base(familia, 'EXTERNO', 'PARED')).toBe(314); // 300 + 14
     });
   }
@@ -425,5 +428,37 @@ describe('familiaOscuridad / normalizarVarianteOscuridad', () => {
     expect(normalizarVarianteOscuridad('semi')).toBe('SEMI');
     expect(normalizarVarianteOscuridad('EXTERNO')).toBe('EXTERNO');
     expect(normalizarVarianteOscuridad('')).toBe('INTERNO');
+  });
+});
+
+// Regla del usuario 2026-07-31: ninguna medida de corte puede traer más de un
+// decimal (el Excel mostraba 219,97 · 214,13 · 201,44…).
+describe('redondeo: como máximo 1 decimal', () => {
+  const decimales = (n: number) => {
+    const s = String(n);
+    const i = s.indexOf('.');
+    return i < 0 ? 0 : s.length - i - 1;
+  };
+
+  it('ningún corte de oscuridad pasa de 1 decimal, en toda familia y variante', () => {
+    const familias: FamiliaOscuridad[] = [
+      'SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC', 'SOFT_LIGHT_CC_45',
+      'OSCURANTI', 'DARK', 'DARK_45',
+    ];
+    const variantes: VarianteOscuridad[] = ['INTERNO', 'SEMI', 'EXTERNO'];
+    // Anchos con y sin decimal, para que el encadenado arrastre centésimas.
+    for (const familia of familias) {
+      for (const variante of variantes) {
+        for (const ancho of [200, 296.9, 145.7]) {
+          const cortes = cortesOscuridad(familia, variante, ancho, 230, {
+            izqMuro: true, derPiso: true, infMuro: true, sepIzq: true, sepInf: true,
+          });
+          for (const c of cortes) {
+            expect(decimales(c.medidaCm), `${familia} ${variante} ${ancho} — ${c.componente}=${c.medidaCm}`)
+              .toBeLessThanOrEqual(1);
+          }
+        }
+      }
+    }
   });
 });
