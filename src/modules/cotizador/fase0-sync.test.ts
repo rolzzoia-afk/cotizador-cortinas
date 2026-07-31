@@ -124,7 +124,7 @@ describe('fase0-sync', () => {
     expect(out.cenefa).toBe('Cuadrada');
   });
 
-  it('BEEBLACK INTERNO → variante y manillas ON por defecto', () => {
+  it('BEEBLACK INTERNO → variante precargada, manillas SIN activar', () => {
     const ventana = {
       id: '1',
       categoria: 'BEEBLACK',
@@ -133,11 +133,12 @@ describe('fase0-sync', () => {
     } as Ventana;
     const out = enriquecerPanoDesdeFase0(ventana.panos[0], ventana);
     expect(out.beeblackVariante).toBe('INTERNO');
-    expect(out.beeblackManillaIzq).toBe(true);
-    expect(out.beeblackManillaDer).toBe(true);
+    // Las manillas se habilitan a mano en Fase 2 (1 o 2 según screen/blackout).
+    expect(out.beeblackManillaIzq).toBeUndefined();
+    expect(out.beeblackManillaDer).toBeUndefined();
   });
 
-  it('BEEBLACK EXTERNO → variante EXTERNO_SEMI', () => {
+  it('BEEBLACK EXTERNO → variante EXTERNO (el SEMI se elige en Fase 2)', () => {
     const ventana = {
       id: '1',
       categoria: 'BEEBLACK',
@@ -145,7 +146,17 @@ describe('fase0-sync', () => {
       panos: [{ ancho: 1.5, alto: 1.3, color: 'BLANCO' } as Pano],
     } as Ventana;
     const out = enriquecerPanoDesdeFase0(ventana.panos[0], ventana);
-    expect(out.beeblackVariante).toBe('EXTERNO_SEMI');
+    expect(out.beeblackVariante).toBe('EXTERNO');
+  });
+
+  it('BEEBLACK: no pisa la variante ya elegida en Fase 2', () => {
+    const ventana = {
+      id: '1',
+      categoria: 'BEEBLACK',
+      sentido: 'EXTERNO',
+      panos: [{ ancho: 1.5, alto: 1.3, color: 'BLANCO', beeblackVariante: 'SEMI' } as Pano],
+    } as Ventana;
+    expect(enriquecerPanoDesdeFase0(ventana.panos[0], ventana).beeblackVariante).toBe('SEMI');
   });
 });
 

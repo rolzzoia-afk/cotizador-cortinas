@@ -105,6 +105,47 @@ describe('calcularBOM', () => {
     expect(ins.some((i) => i.especificacion === 'VER37')).toBe(false);
   });
 
+  // BEEBLACK: kit SML propio, 1 por CORTINA. El BOM debe decir lo mismo que la
+  // hoja de inventario (antes ninguno de los dos lo emitía).
+  it('BEEBLACK: emite su kit SML una vez por cortina, con CALCULAR en la tira y la felpa', () => {
+    const ventanas = [{
+      id: 1, categoria: 'BEEBLACK', color: 'NEGRO', modelo: null,
+      panos: [{ ancho: 2, alto: 1.3, color: 'NEGRO' }],
+    }];
+    const bom = calcularBOM([row({ color: 'NEGRO' })], ventanas as Parameters<typeof calcularBOM>[1]);
+    const spec = Object.fromEntries(
+      bom.filter((i) => (i.especificacion || '').startsWith('SML')).map((i) => [i.especificacion, i]),
+    );
+    expect(spec.SML46?.cantidad).toBe(2);
+    expect(spec.SML17?.cantidad).toBe(4);
+    expect(spec.SML26?.cantidad).toBe(2);
+    expect(spec.SML35?.cantidad).toBe(4);
+    expect(spec.SML48?.cantidad).toBe(4);
+    expect(spec.SML33?.unidad).toBe('CALCULAR');
+    expect(spec.SML33?.cantidad).toBe(0);
+    expect(spec.SML34?.unidad).toBe('CALCULAR');
+  });
+
+  it('BEEBLACK doble: el 2º paño no repite el kit y las cantidades ya vienen ×2', () => {
+    const ventanas = [{
+      id: 1, categoria: 'BEEBLACK', color: 'BLANCO', modelo: null,
+      panos: [{ ancho: 2, alto: 1.3, color: 'BLANCO', dual: true }, { ancho: 2, alto: 1.3, color: 'BLANCO', dual: true }],
+    }];
+    const bom = calcularBOM(
+      [
+        row({ color: 'BLANCO', dual: true }, { panoIndex: 0 }),
+        row({ color: 'BLANCO', dual: true }, { panoIndex: 1 }),
+      ],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    const spec = Object.fromEntries(
+      bom.filter((i) => (i.especificacion || '').startsWith('SML')).map((i) => [i.especificacion, i]),
+    );
+    expect(spec.SML45?.cantidad).toBe(4); // ×2 (una por tela)
+    expect(spec.SML16?.cantidad).toBe(4); // esquineros: una sola estructura
+    expect(spec.SML47?.cantidad).toBe(4); // sus tapas, tampoco doblan
+  });
+
   it('agrupa tubos con mismo largo + spec + color', () => {
     const bom = calcularBOM([row({ color: 'Blanco' }), row({ color: 'Blanco' })]);
     const tubos = bom.filter((i) => i.categoria === 'TUBERÍA');
@@ -360,7 +401,7 @@ describe('calcularBOM — insumos de instalación', () => {
     expect(bom.find((i) => i.especificacion === 'TAR01')?.cantidad).toBe(4);
   });
 
-  it('motor DOM41 + domótica: kit DOM por cortina + 1 solo DOM43 y 1 solo DOM05 (router) por OT', () => {
+  it('motor DOM41 + domótica sin hub vendido: NO aparecen hub ni router', () => {
     const bom = calcularBOM(
       [
         row({ motorModelo: 'DOM41', motorDomotica: true }),
@@ -371,15 +412,27 @@ describe('calcularBOM — insumos de instalación', () => {
     expect(bom.find((i) => i.especificacion === 'DOM41')?.cantidad).toBe(2);
     // El control NO es automático: sin pedirlo en Fase 2 no sale.
     expect(bom.find((i) => i.especificacion === 'DOM42')).toBeUndefined();
-    const dom43 = bom.filter((i) => i.especificacion === 'DOM43');
-    expect(dom43).toHaveLength(1);
-    expect(dom43[0].cantidad).toBe(1);
-    // El router de la casa (DOM05) acompaña al hub, 1 solo por OT.
-    const dom05 = bom.filter((i) => i.especificacion === 'DOM05');
-    expect(dom05).toHaveLength(1);
-    expect(dom05[0].cantidad).toBe(1);
+    // Regla 2026-07-30: el hub y el router salen de lo VENDIDO en Fase 1, ya no
+    // "1 por OT" por el solo hecho de que una cortina tenga domótica.
+    expect(bom.find((i) => i.especificacion === 'DOM43')).toBeUndefined();
+    expect(bom.find((i) => i.especificacion === 'DOM05')).toBeUndefined();
     // Motor reemplaza la cadena.
     expect(bom.find((i) => i.categoria === 'CADENA')).toBeUndefined();
+  });
+
+  it('2 hubs vendidos en Fase 1 → 2 DOM43 + 2 DOM05 (router) + 2 DOM33 (adaptador)', () => {
+    const bom = calcularBOM(
+      [row({ motorModelo: 'DOM38', motorDomotica: true })],
+      vent('ROL', 'BCO'),
+      false,
+      [{ codInt: 'DOM 43', cantidad: 2, descuento: 0, ubicacion: 'DORM' }],
+    );
+    const cant = (cod: string) => bom.find((i) => i.especificacion === cod)?.cantidad;
+    expect(cant('DOM43')).toBe(2);
+    expect(cant('DOM05')).toBe(2);
+    expect(cant('DOM33')).toBe(2);
+    // DOM38 = DOM34: el kit del paño ya puso su cable, no se duplica.
+    expect(cant('DOM34')).toBe(1);
   });
 
   it('mecanismo dual: una sola línea "Mecanismo Dual" con la spec del chip [MEC 01]', () => {

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import * as XLSX from 'xlsx';
-import { parsearExcelFase0, validarFilaFase0, canonizar } from './importarExcelFase0';
+import {
+  parsearExcelFase0,
+  validarFilaFase0,
+  canonizar,
+  categoriaImplicita,
+} from './importarExcelFase0';
 
 // Encabezados tal cual la planilla "INFORMACIÓN DEL PRODUCTO".
 const HEADER = [
@@ -43,6 +48,9 @@ describe('parsearExcelFase0', () => {
       colorAcc: 'GRIS',
       ancho: 2.72,
       alto: 1.6,
+      // Columna exclusiva de la planilla beeblack: vacía en el formato estándar.
+      // Ojo: el TIPO de esta planilla dice DELUX, no SIMPLE/DOBLE → se ignora.
+      tipoSimpleDoble: '',
     });
   });
 
@@ -159,7 +167,7 @@ describe('validarFilaFase0', () => {
   const base = {
     codInt: 'BK 69', categoria: 'ROL', direccion: 'CAD [IZQUIERDA]',
     sentido: 'EXTERNO', cantidad: 1, ubicacion: 'A', colorAcc: 'GRIS',
-    ancho: 2.72, alto: 1.6,
+    ancho: 2.72, alto: 1.6, tipoSimpleDoble: '',
   };
 
   it('fila correcta no tiene campos inválidos', () => {
@@ -196,5 +204,116 @@ describe('canonizar', () => {
 
   it('devuelve el valor recortado si no coincide ninguna opción', () => {
     expect(canonizar('  raro ', ['ROL'])).toBe('raro');
+  });
+});
+
+// La planilla real de beeblack ("COTIZACIÓN … BEEBLACK") renombra tres columnas
+// en las mismas posiciones: COD SEC → TIPO DE INSTALACIÓN, DIRECC. CAD/CIERRE →
+// CIERRE y SENT. CORT → TIPO (SIMPLE|DOBLE). El TIPO de PREMIUM/DELUX sigue ahí.
+const HEADER_BEEBLACK = [
+  'COD', 'TIPO DE INSTALACIÓN', 'CIERRE', 'TIPO', 'CANT', 'PRODUCTO',
+  'COD_INT', 'TIPO', 'DESCRIPCIÓN', 'UBIC.', 'COLOR ACCESORIOS', 'ANCHO', 'ALTO',
+];
+
+function libroBeeblack(filas: unknown[][]) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([HEADER_BEEBLACK, ...filas]), 'Hoja1');
+  return wb;
+}
+
+describe('parsearExcelFase0 — planilla BEEBLACK', () => {
+  it('lee CIERRE y TIPO (SIMPLE/DOBLE) de sus columnas propias', () => {
+    const wb = libroBeeblack([
+      ['', 'DENTRO_DEL_MARCO', 'IZQUIERDA-DERECHA', 'DOBLE', 1, 'BEEBLACK-MOSQUITERO',
+       'BEE-SC', 'PREMIUM', 'K-108S', 'DORMITORIO', 'NEGRO', '2,000', '1,300'],
+    ]);
+    const { cortinas } = parsearExcelFase0(wb);
+    expect(cortinas[0]).toMatchObject({
+      codInt: 'BEE-SC',
+      direccion: 'IZQUIERDA-DERECHA',
+      tipoSimpleDoble: 'DOBLE',
+      ancho: 2,
+      alto: 1.3,
+    });
+    // Sin COD SEC, la categoría queda vacía y la deduce el importador.
+    expect(cortinas[0].categoria).toBe('');
+  });
+
+  it('la columna TIPO DE INSTALACIÓN se ignora: sus 5 valores no son los reales', () => {
+    const wb = libroBeeblack([
+      ['', 'PISO_TECHO_PERFIL_MEDIO', 'IZQUIERDA-DERECHA', 'SIMPLE', 1, 'BEEBLACK-BLACKOUT',
+       'BEE-BK', 'PREMIUM', 'FB-2589', 'LIVING', 'NEGRO', '2,000', '1,300'],
+    ]);
+    const fila = parsearExcelFase0(wb).cortinas[0];
+    // La instalación real (dentro del marco / techo a muro / fuera del marco) se
+    // elige en Fase 2, junto a la variante.
+    expect(Object.keys(fila)).not.toContain('instalacion');
+    // Y no contamina ningún otro campo de la fila.
+    expect(fila.categoria).toBe('');
+    expect(fila.direccion).toBe('IZQUIERDA-DERECHA');
+  });
+
+  it('la segunda columna TIPO (PREMIUM/DELUX) no se confunde con SIMPLE/DOBLE', () => {
+    const wb = libroBeeblack([
+      ['', 'FUERA_DEL_MARCO', 'DE ARRIBA ABAJO', '', 1, 'BEEBLACK-BLACKOUT',
+       'BEE-BK', 'PREMIUM', 'FB-2589', 'LIVING', 'NEGRO', '2,000', '1,300'],
+    ]);
+    expect(parsearExcelFase0(wb).cortinas[0].tipoSimpleDoble).toBe('');
+  });
+
+  it('categoriaImplicita deduce BEEBLACK de los códigos BEE-*', () => {
+    expect(categoriaImplicita('BEE-BK')).toBe('BEEBLACK');
+    expect(categoriaImplicita('BEE-SC04')).toBe('BEEBLACK');
+    expect(categoriaImplicita('BK 69')).toBe('');
+    expect(categoriaImplicita('')).toBe('');
+    expect(categoriaImplicita(undefined)).toBe('');
+  });
+});
+
+describe('validarFilaFase0 — BEEBLACK', () => {
+  const opts = {
+    ...OPTS,
+    categorias: new Set([...OPTS.categorias, 'BEEBLACK']),
+    codIntValidos: new Set([...OPTS.codIntValidos, 'BEE-SC']),
+    direccionesBeeblack: new Set(['IZQUIERDA-DERECHA', 'DERECHA-IZQUIERDA', 'DE ARRIBA ABAJO']),
+  };
+  const bb = {
+    codInt: 'BEE-SC', categoria: 'BEEBLACK', direccion: 'DE ARRIBA ABAJO', sentido: '',
+    cantidad: 1, ubicacion: 'DORM', colorAcc: 'NEGRO', ancho: 2, alto: 1.3,
+    tipoSimpleDoble: 'DOBLE',
+  };
+
+  it('acepta sus cierres propios y no exige SENT. CORT', () => {
+    expect(validarFilaFase0(bb, opts)).toEqual([]);
+    expect(validarFilaFase0({ ...bb, direccion: 'IZQUIERDA-DERECHA' }, opts)).toEqual([]);
+  });
+
+  it('un cierre de roller NO vale en beeblack (y viceversa)', () => {
+    expect(validarFilaFase0({ ...bb, direccion: 'CAD [IZQUIERDA]' }, opts)).toContain('direccion');
+    expect(
+      validarFilaFase0({ ...bb, categoria: 'ROL', codInt: 'BK 69', sentido: 'INTERNO' }, opts),
+    ).toContain('direccion');
+  });
+});
+
+describe('parsearExcelFase0 — beeblack en la planilla ESTÁNDAR', () => {
+  it('el marcador DOBLE se acepta en SENT. CORT (que el beeblack no usa)', () => {
+    const wb = libro([
+      ['', 'BEEBLACK', 'IZQUIERDA-DERECHA', 'DOBLE', 1, '', 'BEE-BK', 'PREMIUM', '',
+       'DORM', 'NEGRO', '1,600', '1,300'],
+    ]);
+    const f = parsearExcelFase0(wb).cortinas[0];
+    expect(f.tipoSimpleDoble).toBe('DOBLE');
+    expect(f.sentido).toBe(''); // 'DOBLE' no es una caída: no queda en rojo
+    expect(f.categoria).toBe('BEEBLACK');
+  });
+
+  it('un SENT. CORT normal sigue intacto', () => {
+    const wb = libro([
+      ['', 'ROL', 'CAD [DERECHA]', 'INTERNO', 1, '', 'BK 69', 'DELUX', '', 'A', 'GRIS', '2,72', '1,6'],
+    ]);
+    const f = parsearExcelFase0(wb).cortinas[0];
+    expect(f.sentido).toBe('INTERNO');
+    expect(f.tipoSimpleDoble).toBe('');
   });
 });

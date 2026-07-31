@@ -116,10 +116,11 @@ describe('SOFT LIGHT — Excel de órdenes', () => {
 
   const col = (aoa: (string | number)[][], nombre: string) => aoa[0].indexOf(nombre);
 
-  it('EXTERNO: CENEFA OVALADA + ALTO TELA + PESO SOFT LIGHT + color/código del peso', () => {
+  it('EXTERNO: CENEFA OVALADA + PESO SOFT LIGHT + color/código del peso (sin tela)', () => {
     const { aoa } = generarOrdenesOptimizador('300-1', [ventana('EXTERNO')]);
     expect(aoa[1][col(aoa, 'CENEFA OVALADA')]).toBe(263.2);
-    expect(aoa[1][col(aoa, 'ALTO TELA')]).toBe(275);
+    // La hoja es de ESTRUCTURA: el alto de la tela vive en el Cálculo General.
+    expect(aoa[1][col(aoa, 'ALTO TELA')]).toBe('');
     expect(aoa[1][col(aoa, 'PESO SOFT LIGHT')]).toBe(257.4);
     // Código/color del peso inferior (E24 blanco).
     expect(String(aoa[1][col(aoa, 'COLOR PESO INF. SOFT LIGHT')])).toContain('E24');

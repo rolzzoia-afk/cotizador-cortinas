@@ -38,7 +38,8 @@ import type { ParametrosCorte } from '@/modules/cotizador/parametrosCorte';
 
 /** Columna del Excel con el color/código del peso inferior de oscuridad. */
 const COLUMNA_COLOR_PESO_OSCURIDAD = 'COLOR PESO INF. SOFT LIGHT';
-/** Perfil superior de cenefa profesional: misma medida que CENEFA DELANTERA. */
+/** Perfil superior de cenefa profesional (oscuranti): rectangular 50×25
+ *  E50/E49/E52, misma medida que CENEFA DELANTERA. Lo emite el despiece. */
 const COLUMNA_PERFIL_SUPERIOR = 'PERFIL SUPERIOR (CENEF.PRO)';
 import { tuberiaCodigoCorto } from './reglas-tuberia';
 
@@ -75,11 +76,12 @@ export const COLUMNAS = [
   'PERF. (DER)',
   'PERFIL BASE',
   'PERF. BASE',
+  // Separadores (E41/E42/E43): TODOS opcionales, se piden por paño. El superior
+  // no es exclusivo de oscuranti ni automático — el perfil rectangular 50×25 que
+  // sí va siempre en oscuranti es PERFIL SUPERIOR (CENEF.PRO), más arriba.
   'SEPARADOR (IZQ)',
   'SEPARADOR (DER)',
   'SEPARADOR BASE',
-  // Oscuranti: separador rectangular 50×25 (E50/E49/E52) = medida de la cenefa
-  // delantera. Siempre presente en oscuranti, no es opt-in como los otros.
   'SEPARADOR SUPERIOR',
   'PERFIL SUPERIOR (ANCHO)',
   'PERFIL INFERIOR (ANCHO)',
@@ -253,8 +255,13 @@ export function generarOrdenesOptimizador(
         // cortes de aluminio; el resto del despiece (carritos/lamas/alto de tela)
         // es referencia y no debe ensuciar el archivo.
         const esVert = esCategoriaVertical(v.categoria);
+        // BEEBLACK doble (screen + blackout): UNA estructura y DOS telas. El 2º
+        // paño trae solo su tela, así que no repite perfiles ni manillas — mismo
+        // criterio que el dual roller con las fijaciones (bom.ts `omitirFijaciones`).
+        const bbSegundaTela = esBeeblack && !!p.dual && i > 0;
         for (const c of d.cortes) {
           if (!c.columnaExcel || c.columnaExcel === 'CENEFA OVALADA') continue;
+          if (bbSegundaTela) continue;
           if (esVert && c.columnaExcel !== 'PERFIL CABEZAL' && c.columnaExcel !== 'VARILLA') continue;
           // Perfil de oscuridad sin superficie (muro/piso) elegida: medida pendiente
           // → celda vacía + advertencia (se llena en Fase 2). Los demás cortes van.
@@ -290,6 +297,15 @@ export function generarOrdenesOptimizador(
             fila['ALTO MESA DE CORTE'] = altoP + EXTRA_MESA_PLETINA_DUO_CM;
           } else {
             fila['ALTO TELA'] = altoP;
+          }
+        }
+        // BEEBLACK: sus perfiles y separadores también se cortan por COLOR PERFIL
+        // en el optimizador, pero no pasan por los adicionales de perfil de la
+        // oscuridad: el color sale del propio paño.
+        if (esBeeblack) {
+          const colorBb = String((p.color as string) || v.color || '').trim();
+          if (colorBb && d.cortes.some((c) => c.columnaExcel && c.medidaCm > 0)) {
+            fila['COLOR PERFIL'] = colorBb;
           }
         }
         if (!esBeeblack) {
@@ -331,20 +347,16 @@ export function generarOrdenesOptimizador(
             `"${ubic}": sistema de oscuridad — perfiles NO incluidos, revisar manualmente.`,
           );
         }
-        // El separador SUPERIOR (oscuranti) también necesita COLOR PERFIL para que el
-        // optimizador le asigne E50/E49/E52, aunque los laterales estén pendientes:
-        // habilita la búsqueda por los tres lados (prioridad izq → der → inf).
-        const sepSuperior = celdaConMedida(fila['SEPARADOR SUPERIOR']);
+        // El PERFIL SUPERIOR (oscuranti, rectangular 50×25) también necesita COLOR
+        // PERFIL para que el optimizador le asigne E50/E49/E52, aunque los laterales
+        // estén pendientes: habilita la búsqueda por los tres lados (izq → der → inf).
+        const perfilSup = celdaConMedida(fila[COLUMNA_PERFIL_SUPERIOR]);
         const colorPerfil = colorPerfilFilaExcel(adicionalesFase0, v.categoria, {
-          izq: celdaConMedida(fila['PERFIL (IZQ) INT']) || celdaConMedida(fila['SEPARADOR (IZQ)']) || sepSuperior,
-          der: celdaConMedida(fila['PERFIL (DER) INT']) || celdaConMedida(fila['SEPARADOR (DER)']) || sepSuperior,
-          inf: celdaConMedida(fila['PERFIL BASE']) || celdaConMedida(fila['SEPARADOR BASE']) || sepSuperior,
+          izq: celdaConMedida(fila['PERFIL (IZQ) INT']) || celdaConMedida(fila['SEPARADOR (IZQ)']) || perfilSup,
+          der: celdaConMedida(fila['PERFIL (DER) INT']) || celdaConMedida(fila['SEPARADOR (DER)']) || perfilSup,
+          inf: celdaConMedida(fila['PERFIL BASE']) || celdaConMedida(fila['SEPARADOR BASE']) || perfilSup,
         });
         if (colorPerfil) fila['COLOR PERFIL'] = colorPerfil;
-        // Perfil superior = misma medida que cenefa delantera (CENEF.PRO).
-        if (celdaConMedida(fila['CENEFA DELANTERA'])) {
-          fila[COLUMNA_PERFIL_SUPERIOR] = fila['CENEFA DELANTERA'];
-        }
         }
       }
       aoa.push(COLUMNAS.map((col) => fila[col] ?? ''));
@@ -354,8 +366,10 @@ export function generarOrdenesOptimizador(
   // Filas reales de paños (antes de anexar el cuadro de cenefas cuadradas).
   const filasPanos = aoa.length - 1;
 
-  // Cuadro de cenefas cuadradas: misma hoja, separado por una fila en blanco
-  // (la fila vacía corta la lectura automática del optimizador legacy).
+  // Cuadro de cenefas cuadradas: misma hoja, separado por una fila en blanco.
+  // OJO: la fila vacía NO corta la lectura del optimizador legacy (solo la
+  // saltea); lo que corta es el TÍTULO — el optimizador hace break al verlo
+  // (optimizador.html v5.19). Si se renombra el título, ajustar allá también.
   const cenefaRows = filasCenefaCuadrada(ventanas, adicionalesFase0);
   if (cenefaRows.length) {
     aoa.push([]);

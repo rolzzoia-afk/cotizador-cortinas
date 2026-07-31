@@ -28,6 +28,8 @@ import {
   OPCIONES_TIPO_TELA,
   OPCIONES_TUBERIA,
   esCenefaCuadrada,
+  parcheSuperficiePerfil,
+  type SuperficiePerfilOscuridad,
 } from '@/modules/cotizador/fase2';
 import type { Pano } from '@/modules/cotizador/types';
 import { debeInvertirPano } from '@/modules/cotizador/tela';
@@ -65,10 +67,13 @@ import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad'
 import {
   cortesBeeblack,
   esCategoriaBeeblack,
+  esCierreVerticalBeeblack,
+  INSTALACIONES_BEEBLACK,
+  LABEL_INSTALACION_BEEBLACK,
   medidaComponenteBeeblack,
+  normalizarInstalacionBeeblack,
   normalizarVarianteBeeblack,
-  TOGGLES_BEEBLACK_EXTERNO,
-  TOGGLES_BEEBLACK_INTERNO,
+  TOGGLES_BEEBLACK,
   type TogglesBeeblack,
   type VarianteBeeblack,
 } from '@/modules/descuentos/reglas-beeblack';
@@ -98,6 +103,8 @@ type Props = {
   sentidoVentana?: string | null;
   /** Variante de oscuridad de la ventana (INTERNO/SEMI/EXTERNO), asignada en Fase 1. */
   varianteVentana?: string | null;
+  /** Dirección/cierre de la ventana. En BEEBLACK, 'DE ARRIBA ABAJO' gira la cortina. */
+  direccionVentana?: string | null;
   /** Adicionales Fase 0 (colores de perfiles). */
   adicionalesFase0?: AdicionalFase0Persistido[];
   /** Ancho del rollo (m) para auto-sugerir corte invertido. Default 2,98. */
@@ -186,17 +193,32 @@ const OPCIONES_VARIANTE_OSCURIDAD = [
 
 const OPCIONES_VARIANTE_BEEBLACK = [
   { value: 'INTERNO', label: 'Interno' },
-  { value: 'EXTERNO_SEMI', label: 'Externo o Semi' },
+  { value: 'SEMI', label: 'Semi' },
+  { value: 'EXTERNO', label: 'Externo' },
 ] as const;
 
 const BEEBLACK_TOGGLE_FIELD: Record<keyof TogglesBeeblack, keyof Pano> = {
   manillaIzq: 'beeblackManillaIzq',
   manillaDer: 'beeblackManillaDer',
-  extraAnchoIzq: 'beeblackExtraSupInfIzq',
-  extraAnchoDer: 'beeblackExtraSupInfDer',
-  extraAltoSup: 'beeblackExtraLatSup',
-  extraAltoInf: 'beeblackExtraLatInf',
+  sepIzq: 'separadorIzq',
+  sepDer: 'separadorDer',
+  sepSup: 'separadorSup',
+  sepInf: 'separadorInf',
 };
+
+// Separadores del BEEBLACK (E41/E42/E43): opt-in por lado, la medida la hereda
+// del perfil de ese lado (laterales → alto, superior/inferior → ancho).
+const BEEBLACK_SEPARADORES: Array<{
+  key: 'sepIzq' | 'sepDer' | 'sepSup' | 'sepInf';
+  label: string;
+  cm: keyof Pano;
+  columna: string;
+}> = [
+  { key: 'sepSup', label: 'Separador superior', cm: 'separadorSupCm', columna: 'SEPARADOR SUPERIOR' },
+  { key: 'sepInf', label: 'Separador base', cm: 'separadorInfCm', columna: 'SEPARADOR BASE' },
+  { key: 'sepIzq', label: 'Separador izquierdo', cm: 'separadorIzqCm', columna: 'SEPARADOR (IZQ)' },
+  { key: 'sepDer', label: 'Separador derecho', cm: 'separadorDerCm', columna: 'SEPARADOR (DER)' },
+];
 
 const BEEBLACK_MANILLA_MEDIDA_FIELD: Record<'manillaIzq' | 'manillaDer', keyof Pano> = {
   manillaIzq: 'beeblackManillaIzqCm',
@@ -215,7 +237,7 @@ const BEEBLACK_FIJO_ROWS: Array<{
   { key: 'perfilLatDer', label: 'Perfil lateral der (alto)', field: 'beeblackPerfilLatDerCm', calcKey: 'perfilLatDer' },
   { key: 'anchoTela', label: 'Ancho tela', field: 'beeblackAnchoTelaCm', calcKey: 'anchoTela' },
   { key: 'altoTela', label: 'Alto tela', field: 'beeblackAltoTelaCm', calcKey: 'altoTela' },
-  { key: 'totalLamas', label: 'Total lamas corte', field: 'beeblackTotalLamasCm', calcKey: 'totalLamas' },
+  { key: 'totalLamas', label: 'Total lamas (unidades)', field: 'beeblackTotalLamasCm', calcKey: 'totalLamas' },
 ];
 
 export function PanoEditor({
@@ -232,6 +254,7 @@ export function PanoEditor({
   colorVentana,
   sentidoVentana,
   varianteVentana,
+  direccionVentana,
   adicionalesFase0,
   anchoRollo = 2.98,
 }: Props) {
@@ -376,15 +399,23 @@ export function PanoEditor({
     pano.beeblackVariante ?? sentidoVentana,
     'INTERNO',
   );
+  // Tipo de instalación: solo EXTERNO tiene dos opciones (techo a muro / fuera
+  // del marco, que corta los laterales 1 cm más largos). Se canoniza contra la
+  // variante, así un cambio de variante nunca deja una instalación imposible.
+  const instalacionBeeblack = normalizarInstalacionBeeblack(
+    pano.beeblackInstalacion,
+    varianteBeeblack,
+  );
+  const opcionesInstalacionBb = INSTALACIONES_BEEBLACK[varianteBeeblack];
   const anchoCmBb = (parseFloat(String(pano.ancho ?? 0)) || 0) * 100;
   const altoCmBb = (parseFloat(String(pano.alto ?? 0)) || 0) * 100;
   const togglesBeeblack: TogglesBeeblack = {
     manillaIzq: pano.beeblackManillaIzq,
     manillaDer: pano.beeblackManillaDer,
-    extraAnchoIzq: pano.beeblackExtraSupInfIzq,
-    extraAnchoDer: pano.beeblackExtraSupInfDer,
-    extraAltoSup: pano.beeblackExtraLatSup,
-    extraAltoInf: pano.beeblackExtraLatInf,
+    sepIzq: pano.separadorIzq,
+    sepDer: pano.separadorDer,
+    sepSup: pano.separadorSup,
+    sepInf: pano.separadorInf,
   };
   const overridesBeeblack = {
     perfilSupAncho: pano.beeblackPerfilSupAnchoCm,
@@ -396,13 +427,26 @@ export function PanoEditor({
     anchoTela: pano.beeblackAnchoTelaCm,
     altoTela: pano.beeblackAltoTelaCm,
     totalLamas: pano.beeblackTotalLamasCm,
+    sepIzq: pano.separadorIzqCm,
+    sepDer: pano.separadorDerCm,
+    sepSup: pano.separadorSupCm,
+    sepInf: pano.separadorInfCm,
   };
+  // Cierre DE ARRIBA ABAJO: la cortina va girada 90° y ancho/alto cambian de
+  // papel en todas las fórmulas (el preview de abajo ya sale invertido).
+  const cierreVerticalBb = esCierreVerticalBeeblack(direccionVentana);
   const componentesBb =
     esBeeblack && anchoCmBb > 0 && altoCmBb > 0
-      ? cortesBeeblack(varianteBeeblack, anchoCmBb, altoCmBb, togglesBeeblack, overridesBeeblack)
+      ? cortesBeeblack(
+          varianteBeeblack,
+          anchoCmBb,
+          altoCmBb,
+          togglesBeeblack,
+          overridesBeeblack,
+          cierreVerticalBb,
+          instalacionBeeblack,
+        )
       : [];
-  const togglesBeeblackUi =
-    varianteBeeblack === 'INTERNO' ? TOGGLES_BEEBLACK_INTERNO : TOGGLES_BEEBLACK_EXTERNO;
   return (
     <div className="space-y-3">
       {/* 0. MEDIDAS */}
@@ -794,17 +838,10 @@ export function PanoEditor({
               const override = superficie ? (pano[overrideField] as number | undefined) : undefined;
               const colorPerfil = colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria);
               // Elegir superficie: marca una (muro/piso/marco) y limpia las otras + sus
-              // overrides; activa el perfil. "Marco" solo se ofrece en INTERNO.
+              // overrides; activa el perfil. "Marco" solo se ofrece en INTERNO. Un
+              // LATERAL a piso apaga además el perfil base (llega hasta el suelo).
               const setSuperficie = (s: string) =>
-                onChange({
-                  [L.activo]: true,
-                  [L.muro]: s === 'muro',
-                  [L.piso]: s === 'piso',
-                  [L.marco]: s === 'marco',
-                  ...(s !== 'muro' ? { [L.muroCm]: undefined } : {}),
-                  ...(s !== 'piso' ? { [L.pisoCm]: undefined } : {}),
-                  ...(s !== 'marco' ? { [L.marcoCm]: undefined } : {}),
-                } as Partial<Pano>);
+                onChange(parcheSuperficiePerfil(L.side, s as SuperficiePerfilOscuridad));
               return (
                 <div key={L.side} className="rounded border border-border/60 bg-card/40 px-2 py-1.5 space-y-1">
                   <div className="flex items-center justify-between gap-2">
@@ -1030,11 +1067,71 @@ export function PanoEditor({
       {esBeeblack && (
         <Section title="BEEBLACK — cierre horizontal">
           <RadioRow
-            label="Instalación"
+            label="Variante"
             value={varianteBeeblack}
             options={OPCIONES_VARIANTE_BEEBLACK as unknown as readonly { value: string; label: string }[]}
-            onChange={(v) => onChange({ beeblackVariante: v || 'INTERNO' })}
+            onChange={(v) => {
+              const nueva = normalizarVarianteBeeblack(v, 'INTERNO');
+              onChange({
+                beeblackVariante: nueva,
+                // La instalación se reajusta sola: cada variante tiene su lista.
+                beeblackInstalacion: normalizarInstalacionBeeblack(
+                  pano.beeblackInstalacion,
+                  nueva,
+                ),
+              });
+            }}
           />
+          {/* Tipo de instalación: INTERNO y SEMI tienen una sola posible (se
+              muestra como dato); EXTERNO elige entre techo a muro y fuera del
+              marco, que es lo único que cambia la medida de los laterales. */}
+          {opcionesInstalacionBb.length > 1 ? (
+            <RadioRow
+              label="Instalación"
+              value={instalacionBeeblack}
+              options={opcionesInstalacionBb.map((i) => ({
+                value: i,
+                label: LABEL_INSTALACION_BEEBLACK[i],
+              }))}
+              onChange={(v) =>
+                onChange({
+                  beeblackInstalacion: normalizarInstalacionBeeblack(v, varianteBeeblack),
+                })
+              }
+            />
+          ) : (
+            <div className="flex items-center gap-2 rounded border border-border/60 bg-card/40 px-2 py-1 text-[0.7rem]">
+              <span className="text-muted-foreground">Instalación:</span>
+              <span className="text-foreground">
+                {LABEL_INSTALACION_BEEBLACK[instalacionBeeblack]}
+              </span>
+            </div>
+          )}
+          {direccionVentana && (
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-border/60 bg-card/40 px-2 py-1 text-[0.7rem]">
+              <span className="text-muted-foreground">
+                Cierre: <span className="font-mono text-foreground">{direccionVentana}</span>
+                {cierreVerticalBb && (
+                  <span className="ml-1 text-amber-500">— gira 90°: lamas sobre el alto</span>
+                )}
+              </span>
+            </div>
+          )}
+          {/* Doble = un beeblack con SCREEN + BLACKOUT: una sola estructura y dos
+              telas (cada una con su manilla). Se marca en los dos paños; el 2º no
+              repite perfiles ni manillas en la hoja de estructura. */}
+          <label className="flex items-center justify-between gap-2 rounded border border-border/60 bg-card/40 px-2 py-1">
+            <span className="text-[0.72rem] text-foreground">
+              Doble (screen + blackout)
+              <span className="ml-1 text-muted-foreground">— una estructura, dos telas</span>
+            </span>
+            <input
+              type="checkbox"
+              checked={!!pano.dual}
+              onChange={(e) => onChange({ dual: e.target.checked })}
+              className="h-4 w-4 accent-emerald-500"
+            />
+          </label>
           {componentesBb.length > 0 && (
             <div className="rounded border border-border/60 bg-background/40 p-2 text-[0.7rem]">
               <div className="mb-1 font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1054,13 +1151,7 @@ export function PanoEditor({
             {BEEBLACK_FIJO_ROWS.map((row) => {
               const medida =
                 anchoCmBb > 0 && altoCmBb > 0
-                  ? medidaComponenteBeeblack(
-                      varianteBeeblack,
-                      row.calcKey,
-                      anchoCmBb,
-                      altoCmBb,
-                      togglesBeeblack,
-                    )
+                  ? medidaComponenteBeeblack(varianteBeeblack, row.calcKey, anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack)
                   : 0;
               const override = pano[row.field] as number | undefined;
               return (
@@ -1073,54 +1164,78 @@ export function PanoEditor({
                 />
               );
             })}
-            {togglesBeeblackUi.map((t) => {
+          </div>
+          {/* Manillas: opt-in en Fase 2. Un beeblack puede llevar 2 (screen +
+              blackout: una manilla por tela). */}
+          <div className="space-y-1">
+            <div className="text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
+              Manillas
+            </div>
+            {TOGGLES_BEEBLACK.map((t) => {
               const field = BEEBLACK_TOGGLE_FIELD[t.key];
-              const checked = !!pano[field];
-              if (t.key === 'manillaIzq' || t.key === 'manillaDer') {
-                const medidaField = BEEBLACK_MANILLA_MEDIDA_FIELD[t.key];
-                const medida =
-                  anchoCmBb > 0 && altoCmBb > 0
-                    ? medidaComponenteBeeblack(
-                        varianteBeeblack,
-                        t.key,
-                        anchoCmBb,
-                        altoCmBb,
-                        togglesBeeblack,
-                      )
-                    : 0;
-                const override = pano[medidaField] as number | undefined;
-                return (
-                  <PerfilToggle
-                    key={t.key}
-                    label={t.label}
-                    medida={medida}
-                    override={typeof override === 'number' ? override : undefined}
-                    checked={checked}
-                    onToggle={(v) => onChange({ [field]: v } as Partial<Pano>)}
-                    onMedidaChange={(v) => onChange({ [medidaField]: v } as Partial<Pano>)}
-                  />
-                );
-              }
+              const medidaField = BEEBLACK_MANILLA_MEDIDA_FIELD[t.key as 'manillaIzq' | 'manillaDer'];
+              const medida =
+                anchoCmBb > 0 && altoCmBb > 0
+                  ? medidaComponenteBeeblack(varianteBeeblack, t.key as 'manillaIzq', anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack)
+                  : 0;
+              const override = pano[medidaField] as number | undefined;
               return (
-                <div
+                <PerfilToggle
                   key={t.key}
-                  className="flex items-center justify-between gap-2 rounded border border-border/60 bg-card/40 px-2 py-1"
-                >
-                  <span className="text-[0.72rem] text-foreground">{t.label}</span>
-                  <button
-                    type="button"
-                    onClick={() => onChange({ [field]: !checked } as Partial<Pano>)}
-                    aria-pressed={checked}
-                    className={cn(
-                      'w-12 rounded-full border px-2 py-0.5 text-[0.62rem] font-semibold uppercase tracking-wide transition-colors',
-                      checked
-                        ? 'border-emerald-500/50 bg-emerald-500/20 text-emerald-300'
-                        : 'border-border bg-card text-muted-foreground hover:bg-card',
-                    )}
-                  >
-                    {checked ? 'ON' : 'OFF'}
-                  </button>
-                </div>
+                  label={t.label}
+                  medida={medida}
+                  override={typeof override === 'number' ? override : undefined}
+                  checked={!!pano[field]}
+                  onToggle={(v) =>
+                    onChange({
+                      [field]: v,
+                      ...(v ? {} : { [medidaField]: undefined }),
+                    } as Partial<Pano>)
+                  }
+                  onMedidaChange={(v) => onChange({ [medidaField]: v } as Partial<Pano>)}
+                />
+              );
+            })}
+          </div>
+          {/* Separadores (E41/E42/E43): opt-in por lado, misma lógica que en los
+              sistemas de oscuridad — heredan la medida del perfil de ese lado. */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <div className="text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                Perfiles separadores
+              </div>
+              {codigoSeparadorPerfil(pano.color || colorVentana) && (
+                <span className="rounded bg-card px-1.5 py-0.5 font-mono text-[0.62rem] text-muted-foreground">
+                  {codigoSeparadorPerfil(pano.color || colorVentana)}
+                </span>
+              )}
+            </div>
+            {BEEBLACK_SEPARADORES.map((s) => {
+              const corte = componentesBb.find((c) => c.columnaExcel === s.columna);
+              const heredada = medidaComponenteBeeblack(
+                varianteBeeblack,
+                s.key === 'sepIzq' ? 'perfilLatIzq' : s.key === 'sepDer' ? 'perfilLatDer' : s.key === 'sepSup' ? 'perfilSupAncho' : 'perfilInfAncho',
+                anchoCmBb,
+                altoCmBb,
+                cierreVerticalBb,
+                instalacionBeeblack,
+              );
+              const override = pano[s.cm] as number | undefined;
+              return (
+                <PerfilToggle
+                  key={s.key}
+                  label={s.label}
+                  medida={corte?.medidaCm ?? (anchoCmBb > 0 && altoCmBb > 0 ? heredada : 0)}
+                  override={typeof override === 'number' ? override : undefined}
+                  checked={!!pano[BEEBLACK_TOGGLE_FIELD[s.key]]}
+                  onToggle={(v) =>
+                    onChange({
+                      [BEEBLACK_TOGGLE_FIELD[s.key]]: v,
+                      ...(v ? {} : { [s.cm]: undefined }),
+                    } as Partial<Pano>)
+                  }
+                  onMedidaChange={(v) => onChange({ [s.cm]: v } as Partial<Pano>)}
+                />
               );
             })}
           </div>

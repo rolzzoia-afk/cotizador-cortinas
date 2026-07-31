@@ -34,11 +34,12 @@ const CASOS: Caso[] = [
   { familia: 'SOFT_LIGHT_CC', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.7, Tubo: 193.9, 'Tela (ancho)': 193.3, Peso: 193.5 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, Tubo: 201.5, 'Tela (ancho)': 200.9, Peso: 201.1 } },
   { familia: 'SOFT_LIGHT_CC', variante: 'EXTERNO', ancho: 200, alto: 240, comp: { 'Cenefa Delantera': 215.8, Tubo: 209.4, 'Tela (ancho)': 208.8, Peso: 209 } },
-  // ── OSCURANTI 0,63 mm ── (pizarra 2026-07-28, mm literal: cenefa del = ancho − 0,03 =
-  // separador superior · tubo = cenefa − 5,8/6/6,4 · tela = tubo − 0,06 · peso = tela + 0,02)
-  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.97, 'Separador superior': 199.97, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
-  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 207.5, 'Separador superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 201.44, Peso: 201.46 } },
-  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 215.8, 'Separador superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 209.34, Peso: 209.36 } },
+  // ── OSCURANTI 0,63 mm ── (pizarra 2026-07-28, mm literal: perfil superior = ancho − 0,03 ·
+  // tubo = perfil − 5,8/6/6,4 · tela = tubo − 0,06 · peso = tela + 0,02). Su pieza frontal
+  // es el PERFIL SUPERIOR: NO corta cenefa cuadrada delantera (corrección 2026-07-30).
+  { familia: 'OSCURANTI', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 199.97, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
+  { familia: 'OSCURANTI', variante: 'SEMI', ancho: 200, alto: 200, comp: { 'Perfil superior': 207.5, Tubo: 201.5, 'Tela (ancho)': 201.44, Peso: 201.46 } },
+  { familia: 'OSCURANTI', variante: 'EXTERNO', ancho: 200, alto: 200, comp: { 'Perfil superior': 215.8, Tubo: 209.4, 'Tela (ancho)': 209.34, Peso: 209.36 } },
   // ── DARK ── (pizarra 2026-07-27, mm literal: cenefa del = ancho − 0,03 · trasera = del − 1 ·
   // tubo = trasera − 4,8/5/5,4 · tela = tubo − 0,06 · peso = tela + 0,02 · velcro = del, alto 15)
   { familia: 'DARK', variante: 'INTERNO', ancho: 200, alto: 200, comp: { 'Cenefa Delantera': 199.97, 'Cenefa Trasera': 198.97, 'Ancho Tela Velcro': 199.97, 'Alto Tela Velcro': 15, Tubo: 194.17, 'Tela (ancho)': 194.11, Peso: 194.13 } },
@@ -107,15 +108,21 @@ describe('cortesOscuridad — perfiles ON/OFF', () => {
     expect(medida(extPared, 'Perfil inferior a Muro')).toBe(214);
   });
 
-  it('el separador SUPERIOR de oscuranti va SIEMPRE y mide como la cenefa delantera', () => {
+  it('oscuranti lleva PERFIL SUPERIOR y NO cenefa cuadrada delantera', () => {
     const cortes = cortesOscuridad('OSCURANTI', 'INTERNO', 200, 200, {});
-    const sep = cortes.find((c) => c.columnaExcel === 'SEPARADOR SUPERIOR');
-    expect(sep?.medidaCm).toBe(199.97);
-    expect(sep?.perforacion).toBeUndefined();
-    // No lo llevan las demás familias con cenefa cuadrada.
+    const perf = cortes.find((c) => c.columnaExcel === 'PERFIL SUPERIOR (CENEF.PRO)');
+    expect(perf?.medidaCm).toBe(199.97);
+    expect(perf?.perforacion).toBeUndefined();
+    // La cenefa cuadrada E29/E30/E31 es de DARK y soft light CC: en oscuranti se
+    // cortaba de más junto al perfil rectangular 50×25 (corrección 2026-07-30).
+    expect(cortes.some((c) => c.columnaExcel === 'CENEFA DELANTERA')).toBe(false);
+    // Nunca sale por la columna de separadores (esos son E41/E42/E43, opcionales).
+    expect(cortes.some((c) => c.columnaExcel === 'SEPARADOR SUPERIOR')).toBe(false);
+    // Soft light CC y DARK son al revés: cenefa delantera y ningún perfil superior.
     for (const fam of ['DARK', 'SOFT_LIGHT_CC'] as const) {
       const otros = cortesOscuridad(fam, 'INTERNO', 200, 200, {});
-      expect(otros.some((c) => c.columnaExcel === 'SEPARADOR SUPERIOR'), fam).toBe(false);
+      expect(otros.some((c) => c.columnaExcel === 'PERFIL SUPERIOR (CENEF.PRO)'), fam).toBe(false);
+      expect(otros.some((c) => c.columnaExcel === 'CENEFA DELANTERA'), fam).toBe(true);
     }
   });
 

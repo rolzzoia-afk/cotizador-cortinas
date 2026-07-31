@@ -8,25 +8,23 @@ import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { calculoVertical } from '@/modules/descuentos/despiece';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
 import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
 import {
-  COD_HUB_DOMOTICA,
-  COD_ROUTER_DOMOTICA,
   MANILLAS,
-  NOMBRE_HUB_DOMOTICA,
-  NOMBRE_ROUTER_DOMOTICA,
+  beeblackEsDoble,
   cenefaCuadradaTapasFijas,
   codigoManillaPorColor,
-  esCodigoMotor,
+  faltantesDomoticaInventario,
+  insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
-  motoresFaltantesInventario,
-  panoLlevaDomotica,
+  registrarKitEmitido,
   tapaCenefaCuadrada,
 } from './insumosCortina';
 
@@ -72,10 +70,9 @@ export function calcularBOM(
     }
   };
 
-  let llevaDomotica = false;
-  // Motores emitidos por paño (por código ORIGINAL) para el top-up de motores
-  // cobrados que no calzaron con un paño (ver después del forEach).
-  const motorEmitidoPorCodigo: Record<string, number> = {};
+  // Kit de motor emitido por paño (la unidad, por código ORIGINAL) para el top-up
+  // de lo cobrado en Fase 1 que no calzó con un paño (ver después del forEach).
+  const kitEmitidoPorCodigo: Record<string, number> = {};
   // Dual: el kit de mecanismo es UNO por ventana (un solo bracket dual) → se
   // emite una sola vez aunque la ventana tenga 2 paños.
   const dualMecEmitido = new Set<string>();
@@ -117,9 +114,15 @@ export function calcularBOM(
     const tubLargoM = ((anchoCm - 3.8) / 100).toFixed(2);
     const tubColor = mecColor || p.color || '';
     const tubEspec = tubSpec ? `${tubSpec} · ${tubLargoM}m` : `${tubLargoM}m`;
-    // Sistemas sin tubo ni kit de mecanismo: pletina (velcro) y vertical (perfil
-    // cabezal + varilla). NO van al inventario ni como tubería ni como mecanismo.
-    const esPletinaCat = esCategoriaPletina(categoria) || esCategoriaVertical(categoria);
+    // Sistemas sin tubo ni kit de mecanismo: pletina (velcro), vertical (perfil
+    // cabezal + varilla) y beeblack (cierre horizontal con lamas). NO van al
+    // inventario ni como tubería ni como mecanismo — el PDF de inventario ya los
+    // excluía por `categoriaRequiereMecanismo`, así que sin beeblack aquí los dos
+    // documentos se contradecían.
+    const esPletinaCat =
+      esCategoriaPletina(categoria) ||
+      esCategoriaVertical(categoria) ||
+      esCategoriaBeeblack(categoria);
     if (!esPletinaCat) {
       const tubKey = `TUB|${tubSpec}|${tubLargoM}|${tubColor}`;
       add(tubKey, 'TUBERÍA', 'Tubo', tubEspec, tubColor, 1, 'unid.');
@@ -139,10 +142,6 @@ export function calcularBOM(
     } else if (mecSpec) {
       const mecKey = `MEC|${mecSpec}|${mecColor}`;
       add(mecKey, 'MECANISMO', 'Mecanismo', mecSpec, mecColor, 1, 'unid.');
-    }
-
-    if (panoLlevaDomotica(p)) {
-      llevaDomotica = true;
     }
 
     const tieneMotor = !!(p.motorModelo || p.motorTipo);
@@ -183,10 +182,7 @@ export function calcularBOM(
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
           add(`MOT|${ins.codigo}|${ins.color}`, 'MOTOR', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
-          if (esCodigoMotor(ins.codigo)) {
-            const orig = (p.motorModelo || '').toUpperCase();
-            if (orig) motorEmitidoPorCodigo[orig] = (motorEmitidoPorCodigo[orig] || 0) + ins.cantidad;
-          }
+          registrarKitEmitido(kitEmitidoPorCodigo, ins, p.motorModelo);
         }
       } else {
         const ladoMot = p.ladoMotor || '';
@@ -260,18 +256,34 @@ export function calcularBOM(
         );
       }
     }
+
+    // BEEBLACK: kit SML propio, 1 por CORTINA (no por paño) — en el doble se
+    // emite una vez con las cantidades ya duplicadas (salvo esquineros y tapas,
+    // que son de la estructura). La barra de la manilla no es insumo: se cobra
+    // en Fase 1 y se corta por la hoja de estructura.
+    if (esCategoriaBeeblack(categoria) && (row.panoIndex ?? 0) === 0) {
+      for (const it of insumosBeeblackDeCortina(
+        colorAccesoriosDePano(p, ventanaColor),
+        beeblackEsDoble(p),
+      )) {
+        add(
+          `INS|${it.codigo}|`,
+          'INSUMO',
+          it.descripcion,
+          it.codigo,
+          '',
+          it.calcular ? 0 : it.cantidad,
+          it.calcular ? 'CALCULAR' : 'unid.',
+        );
+      }
+    }
   });
 
-  // Top-up de motores COBRADOS (adicionales Fase 0) que no calzaron con un paño:
-  // la diferencia sale como unidad de motor y consolida con el kit por su código.
-  for (const falta of motoresFaltantesInventario(adicionalesFase0, motorEmitidoPorCodigo)) {
+  // Top-up de lo COBRADO en Fase 1 (motores + su cable DOM34, controles, hubs con
+  // su router DOM05 y adaptador DOM33) que no salió por los paños. Consolida con
+  // el kit por su código.
+  for (const falta of faltantesDomoticaInventario(adicionalesFase0, kitEmitidoPorCodigo)) {
     add(`MOT|${falta.codigo}|`, 'MOTOR', falta.descripcion, falta.codigo, '', falta.cantidad, 'unid.');
-  }
-  // Domótica: 1 bridge hub (DOM43) + 1 router (DOM05) por OT (el hub consolida
-  // con "hub USB adicional"; el router es de la casa, uno solo por OT).
-  if (llevaDomotica) {
-    add(`MOT|${COD_HUB_DOMOTICA}|`, 'MOTOR', NOMBRE_HUB_DOMOTICA, COD_HUB_DOMOTICA, '', 1, 'unid.');
-    add(`MOT|${COD_ROUTER_DOMOTICA}|`, 'MOTOR', NOMBRE_ROUTER_DOMOTICA, COD_ROUTER_DOMOTICA, '', 1, 'unid.');
   }
 
   return [...acc.values()].sort((a, b) => {

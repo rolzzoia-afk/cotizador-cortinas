@@ -1210,6 +1210,7 @@ export function CotizadorFase2() {
                   colorVentana={ventanaForm.color}
                   sentidoVentana={ventanaForm.sentido}
                   varianteVentana={ventanaForm.oscuridadVariante}
+                  direccionVentana={ventanaForm.direccion}
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
                   anchoRollo={obtenerAnchoRollo(
                     (categoriaEsDual(ventanaForm.categoria || '')

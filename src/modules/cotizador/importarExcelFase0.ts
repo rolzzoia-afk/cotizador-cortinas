@@ -17,17 +17,20 @@
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 
 export type FilaImportadaFase0 = {
   codInt: string;
   categoria: string; // COD SEC (mecanismo)
-  direccion: string; // DIRECC. CAD/CIERRE
+  direccion: string; // DIRECC. CAD/CIERRE — en beeblack, la columna CIERRE
   sentido: string; // SENT. CORT
   cantidad: number;
   ubicacion: string; // UBIC.
   colorAcc: string; // COLOR ACCESORIOS
   ancho: number; // metros
   alto: number; // metros
+  /** BEEBLACK: columna TIPO (SIMPLE | DOBLE). DOBLE = blackout + mosquitero. */
+  tipoSimpleDoble: string;
 };
 
 // Adicional importado (instalaciones, cenefas, motores, controles, traslados…).
@@ -60,10 +63,16 @@ export const norm = (s: unknown): string =>
     .replace(/[̀-ͯ]/g, '')
     .replace(/[^A-Z0-9]/g, '');
 
-// Encabezado normalizado → campo de la fila.
+// Encabezado normalizado → campo de la fila. Conviven los dos formatos de la
+// planilla "Formato de Cotizacion": el estándar (COD SEC / DIRECC. CAD/CIERRE /
+// SENT. CORT) y el de BEEBLACK, que renombró esas mismas columnas a TIPO DE
+// INSTALACIÓN / CIERRE / TIPO. Gana la primera columna que reclama cada campo.
+// TIPO DE INSTALACIÓN queda a propósito sin mapear: sus 5 valores no son los
+// tipos reales de instalación (pizarra 2026-07-30), que se eligen en Fase 2.
 const COLUMNAS: Record<string, keyof FilaImportadaFase0> = {
   CODSEC: 'categoria',
   DIRECCCADCIERRE: 'direccion',
+  CIERRE: 'direccion',
   SENTCORT: 'sentido',
   CANT: 'cantidad',
   CODINT: 'codInt',
@@ -72,6 +81,21 @@ const COLUMNAS: Record<string, keyof FilaImportadaFase0> = {
   ANCHO: 'ancho',
   ALTO: 'alto',
 };
+
+// La columna TIPO no se puede mapear por nombre: la planilla estándar ya usa
+// TIPO para PREMIUM/DELUX y la de beeblack tiene DOS columnas TIPO (simple/doble
+// y premium/delux). Se resuelve por VALOR: solo SIMPLE y DOBLE cuentan.
+const VALORES_SIMPLE_DOBLE = ['SIMPLE', 'DOBLE'];
+const esValorSimpleDoble = (v: unknown): boolean => VALORES_SIMPLE_DOBLE.includes(norm(v));
+
+/**
+ * Categoría deducida del COD_INT cuando la planilla no trae COD SEC: la de
+ * beeblack renombró esa columna, pero sus telas tienen prefijo propio
+ * (BEE-BK / BEE-SC / BEE-TRAS…). '' si no se puede deducir.
+ */
+export function categoriaImplicita(codInt: string | undefined): string {
+  return norm(codInt).startsWith('BEE') ? 'BEEBLACK' : '';
+}
 
 // Convierte un valor de medida es-CL a número en metros.
 // La coma es SIEMPRE separador decimal; el punto (si coexiste) es de miles.
@@ -155,7 +179,9 @@ export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
   const otCliente = otClienteDeEncabezado(matriz, headerIdx);
 
   const colDe = new Map<number, keyof FilaImportadaFase0>();
+  const idxTipo: number[] = [];
   (matriz[headerIdx] || []).forEach((h, idx) => {
+    if (norm(h) === 'TIPO') idxTipo.push(idx);
     const campo = COLUMNAS[norm(h)];
     if (campo && !Array.from(colDe.values()).includes(campo)) colDe.set(idx, campo);
   });
@@ -199,12 +225,28 @@ export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
       colorAcc: '',
       ancho: 0,
       alto: 0,
+      tipoSimpleDoble: '',
     };
     for (const [idx, campo] of colDe) {
       const v = r[idx];
       if (campo === 'ancho' || campo === 'alto') f[campo] = metros(v);
       else if (campo === 'cantidad') f.cantidad = entero(v);
       else f[campo] = texto(v);
+    }
+    // TIPO por valor: la primera columna TIPO que diga SIMPLE o DOBLE (las que
+    // traen PREMIUM/DELUX se ignoran).
+    for (const idx of idxTipo) {
+      if (esValorSimpleDoble(r[idx])) {
+        f.tipoSimpleDoble = norm(r[idx]);
+        break;
+      }
+    }
+    // En la planilla ESTÁNDAR no existe la columna TIPO simple/doble: si el
+    // beeblack se cotiza ahí, el marcador se escribe en SENT. CORT (que el
+    // beeblack no usa: no se enrolla).
+    if (!f.tipoSimpleDoble && esValorSimpleDoble(f.sentido)) {
+      f.tipoSimpleDoble = norm(f.sentido);
+      f.sentido = '';
     }
     // Salta filas totalmente vacías (relleno al final de la planilla).
     if (!f.codInt && !f.ubicacion && !f.ancho && !f.alto) continue;
@@ -219,22 +261,34 @@ export type OpcionesValidacion = {
   categorias: Set<string>;
   direcciones: Set<string>;
   sentidos: Set<string>;
+  /** Direcciones válidas de BEEBLACK (IZQUIERDA-DERECHA / DE ARRIBA ABAJO / …). */
+  direccionesBeeblack?: Set<string>;
 };
 
 /**
  * Devuelve la lista de campos llave inválidos de una fila (vacía = fila OK).
  * Se usa para pintar en rojo las celdas a corregir a mano tras importar.
  *
- * SENT. CORT no aplica a la cortina VERTICAL: el interno/externo describe la
- * caída del enrollado del roller, y la vertical corre de lado con carritos.
- * En esas filas el campo no se exige (y la grilla lo muestra como "—").
+ * SENT. CORT no aplica ni a la cortina VERTICAL ni al BEEBLACK: el interno/
+ * externo describe la caída del enrollado del roller, la vertical corre de lado
+ * con carritos y el beeblack elige su variante de instalación en Fase 2. En esas
+ * filas el campo no se exige (y la grilla lo muestra como "—").
+ *
+ * El BEEBLACK además tiene su propia lista de cierres (corre de lado o de arriba
+ * abajo), distinta de las cadenas/cierres del roller.
  */
 export function validarFilaFase0(f: FilaImportadaFase0, opts: OpcionesValidacion): CampoFase0[] {
   const malos: CampoFase0[] = [];
+  const esBeeblack = esCategoriaBeeblack(f.categoria);
+  const direcciones = esBeeblack ? (opts.direccionesBeeblack ?? opts.direcciones) : opts.direcciones;
   if (!f.codInt || !opts.codIntValidos.has(f.codInt)) malos.push('codInt');
   if (!f.categoria || !opts.categorias.has(f.categoria)) malos.push('categoria');
-  if (!f.direccion || !opts.direcciones.has(f.direccion)) malos.push('direccion');
-  if (!esCategoriaVertical(f.categoria) && (!f.sentido || !opts.sentidos.has(f.sentido))) {
+  if (!f.direccion || !direcciones.has(f.direccion)) malos.push('direccion');
+  if (
+    !esCategoriaVertical(f.categoria) &&
+    !esBeeblack &&
+    (!f.sentido || !opts.sentidos.has(f.sentido))
+  ) {
     malos.push('sentido');
   }
   if (!(f.ancho > 0)) malos.push('ancho');

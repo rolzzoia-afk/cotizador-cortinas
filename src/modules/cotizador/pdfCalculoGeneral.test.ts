@@ -586,16 +586,18 @@ describe('Dimensionado sin separadores (aluminio, no es mesa de tela)', () => {
     return v;
   };
 
-  it('el CG completo lista SEPARADOR SUPERIOR; el Dimensionado no', () => {
+  it('el CG completo lista PERFIL SUPERIOR y los separadores; el Dimensionado no', () => {
     const data = construirCalculoGeneral([oscuVent()]);
     const bloque = data.bloques.find((b) => b.sistema.key === 'OSCU')!;
     const labels = bloque.columnas.map((c) => c.label);
-    expect(labels).toContain('SEPARADOR SUPERIOR');
+    // Oscuranti: el rectangular 50×25 va siempre (columna propia, no separador).
+    expect(labels).toContain('PERFIL SUPERIOR');
     expect(labels).toContain('SEPARADOR IZQUIERDO');
-    // El Dimensionado deja solo la tela.
+    // El Dimensionado deja solo la tela: el perfil superior es aluminio de taller.
     const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'OSCU');
     const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
     expect(dimLabels.some((l) => l.startsWith('SEPARADOR'))).toBe(false);
+    expect(dimLabels).not.toContain('PERFIL SUPERIOR');
     expect(dimLabels).toContain('TELA');
     expect(dimLabels).toContain('ALTO TELA');
   });

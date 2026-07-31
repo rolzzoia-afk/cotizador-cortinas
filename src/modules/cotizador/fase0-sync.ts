@@ -117,6 +117,12 @@ export function tipoTelaDesdeProducto(
 
   const ci = (codInt || '').trim().toUpperCase();
 
+  // BEEBLACK: el mosquitero (BEE-SC) hace de screen —va al vidrio— y el
+  // blackout (BEE-BK) por dentro, igual que en las roller duales.
+  if (ci.startsWith('BEE-SC')) return 'SCR';
+
+  if (ci.startsWith('BEE-BK')) return 'BK';
+
   if (ci.startsWith('BK')) return 'BK';
 
   if (ci.startsWith('DU') || ci.includes('DUO')) return 'DU';
@@ -401,16 +407,16 @@ export function enriquecerPanoDesdeFase0(
     }
   }
 
-  if (esCategoriaBeeblack(ventana.categoria)) {
-    const variante =
-      pano.beeblackVariante || normalizarVarianteBeeblack(ventana.sentido, 'INTERNO');
-    if (!pano.beeblackVariante) {
-      patch.beeblackVariante = variante;
-    }
-    if (variante === 'INTERNO') {
-      if (pano.beeblackManillaIzq === undefined) patch.beeblackManillaIzq = true;
-      if (pano.beeblackManillaDer === undefined) patch.beeblackManillaDer = true;
-    }
+  // BEEBLACK: Fase 1 precarga la variante desde el sentido (interno → INTERNO,
+  // externo → EXTERNO); el SEMI y cualquier corrección se eligen en Fase 2, igual
+  // que en los sistemas de oscuridad. Las MANILLAS no se activan solas: se
+  // habilitan a mano en Fase 2 (un beeblack puede llevar 1 o 2 según si tiene
+  // screen + blackout).
+  // El TIPO DE INSTALACIÓN no se precarga: sus valores no viajan desde la
+  // cotización y el motor lo resuelve al default de la variante hasta que se
+  // elija en Fase 2.
+  if (esCategoriaBeeblack(ventana.categoria) && !pano.beeblackVariante) {
+    patch.beeblackVariante = normalizarVarianteBeeblack(ventana.sentido, 'INTERNO');
   }
 
   return Object.keys(patch).length > 0 ? { ...pano, ...patch } : pano;

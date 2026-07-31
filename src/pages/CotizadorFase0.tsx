@@ -73,8 +73,11 @@ import {
   parsearExcelFase0,
   validarFilaFase0,
   canonizar,
+  categoriaImplicita,
+  norm,
   type CampoFase0,
 } from '@/modules/cotizador/importarExcelFase0';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -122,7 +125,8 @@ type FilaUI = {
 // demás paños de la misma ventana (`vid`) para que no diverjan (el re-agrupado
 // toma el primer paño). ancho/alto/color/descuento quedan por paño.
 const CAMPOS_NIVEL_VENTANA: (keyof FilaUI)[] = [
-  'codInt', 'categoria', 'direccion', 'sentido', 'oscuridadVariante', 'cantidad', 'ubicacion',
+  'codInt', 'categoria', 'direccion', 'sentido', 'oscuridadVariante',
+  'cantidad', 'ubicacion',
 ];
 const nuevaFila = (): FilaUI => ({
   id: crypto.randomUUID(),
@@ -197,6 +201,9 @@ const DIRECCIONES = [
   'CIERRE [IZQUIERDO]',
   'CIERRE [MEDIO]',
 ];
+// BEEBLACK: su planilla renombra DIRECC. CAD/CIERRE a "CIERRE" y trae otros
+// valores — el acordeón corre de lado o de arriba abajo, no lleva cadena.
+const DIRECCIONES_BEEBLACK = ['IZQUIERDA-DERECHA', 'DERECHA-IZQUIERDA', 'DE ARRIBA ABAJO'];
 const SENTIDOS = ['INTERNO', 'EXTERNO'];
 // Sistemas de oscuridad (Soft Light / Dark / Oscuranti): SIEMPRE caen INTERNO
 // (la caída es el armado tela/tubo, no la variante). La variante de instalación
@@ -911,6 +918,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         codIntValidos: new Set(Object.keys(catalogo)),
         categorias: new Set(CATEGORIAS_MECANISMO),
         direcciones: new Set(DIRECCIONES),
+        direccionesBeeblack: new Set(DIRECCIONES_BEEBLACK),
         // SENT. CORT es la caída del enrollado (INTERNO/EXTERNO). En oscuridad la
         // caída es INTERNO fija y la variante (interno/semi/externo) se elige en Fase 2.
         sentidos: new Set(SENTIDOS),
@@ -919,19 +927,30 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // ── Cortinas ──
       const nuevas: FilaUI[] = [];
       const errores = new Map<string, Set<CampoFase0>>();
+      // Filas beeblack marcadas DOBLE (columna TIPO): se emparejan por UBIC.
+      const beeblackDoble = new Set<string>();
       for (const c of cortinas) {
         // "SC64" en la planilla → "SC 64" del catálogo (antes quedaba en rojo).
         c.codInt = canonizarCodInt(c.codInt);
-        const categoria = canonizar(c.categoria, CATEGORIAS_MECANISMO);
-        const direccion = canonizar(c.direccion, DIRECCIONES);
+        // La planilla de beeblack no trae COD SEC (renombró esa columna a TIPO DE
+        // INSTALACIÓN): la categoría se deduce de sus códigos BEE-*.
+        const categoria =
+          canonizar(c.categoria, CATEGORIAS_MECANISMO) || categoriaImplicita(c.codInt);
+        const esBeeblack = esCategoriaBeeblack(categoria);
+        const direccion = canonizar(
+          c.direccion,
+          esBeeblack ? DIRECCIONES_BEEBLACK : DIRECCIONES,
+        );
         // Caída (SENT. CORT): la vertical no se enrolla → vacío. Los sistemas de
         // oscuridad SIEMPRE caen INTERNO (aunque el Excel traiga otra cosa; la
-        // variante interno/semi/externo se elige en Fase 2). Resto: del Excel.
-        const sentido = esCategoriaVertical(categoria)
-          ? ''
-          : esCategoriaOscuridad(categoria)
-            ? CAIDA_OSCURIDAD
-            : canonizar(c.sentido, SENTIDOS);
+        // variante interno/semi/externo se elige en Fase 2). El beeblack tampoco
+        // se enrolla: su variante también se elige en Fase 2. Resto: del Excel.
+        const sentido =
+          esCategoriaVertical(categoria) || esBeeblack
+            ? ''
+            : esCategoriaOscuridad(categoria)
+              ? CAIDA_OSCURIDAD
+              : canonizar(c.sentido, SENTIDOS);
         const fila: FilaUI = {
           id: crypto.randomUUID(),
           codInt: c.codInt,
@@ -948,6 +967,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           alto: c.alto,
           descuento: dctDeCodigo(c.codInt),
         };
+        // El beeblack DOBLE se empareja después, por ubicación.
+        if (esBeeblack && norm(c.tipoSimpleDoble) === 'DOBLE') beeblackDoble.add(fila.id);
         const malos = validarFilaFase0({ ...c, categoria, direccion, sentido }, opts);
         if (malos.length) errores.set(fila.id, new Set(malos));
         nuevas.push(fila);
@@ -977,12 +998,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // Dual (roller doble tela): las 2 filas ROL_DUAL de la misma UBIC se
       // fusionan en UNA cortina de 2 paños (SCR primero = tela al vidrio) con un
       // `vid` compartido + `panoIndex` 0/1. Las no-dual quedan como filas sueltas.
-      const { grupos, avisos } = emparejarDualesFase0(nuevas, (f) =>
-        tipoTelaDesdeProducto(catalogo[f.codInt.trim()]?.cod, f.codInt),
+      // El BEEBLACK marcado DOBLE (blackout + mosquitero en la misma ubicación)
+      // usa el mismo camino: mosquitero al vidrio primero.
+      const esFilaDoble = (f: FilaUI) => categoriaEsDual(f.categoria) || beeblackDoble.has(f.id);
+      const { grupos, avisos } = emparejarDualesFase0(
+        nuevas,
+        (f) => tipoTelaDesdeProducto(catalogo[f.codInt.trim()]?.cod, f.codInt),
+        esFilaDoble,
       );
       const nuevasEmparejadas: FilaUI[] = [];
       for (const g of grupos) {
-        if (g.length >= 2 && categoriaEsDual(g[0].categoria)) {
+        if (g.length >= 2 && esFilaDoble(g[0])) {
           const vid = crypto.randomUUID();
           g.forEach((f, i) => nuevasEmparejadas.push({ ...f, vid, panoIndex: i }));
         } else {
@@ -1398,16 +1424,22 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     {showCols && (
                       <>
                         <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, esCategoriaOscuridad(v) ? { categoria: v, sentido: CAIDA_OSCURIDAD } : { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
-                        <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
+                        {/* El beeblack no lleva cadena: su cierre corre de lado o
+                            de arriba abajo (lista propia de su planilla). */}
+                        <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={esCategoriaBeeblack(f.categoria) ? DIRECCIONES_BEEBLACK : DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
                         <Td>
                           {/* SENT. CORT = caída del enrollado (armado tela/tubo).
                               La vertical no se enrolla → sin caída. Los sistemas de
                               oscuridad SIEMPRE caen INTERNO (la variante interno/semi/
                               externo se elige en Fase 2). Resto: INTERNO/EXTERNO. */}
-                          {esCategoriaVertical(f.categoria) ? (
+                          {esCategoriaVertical(f.categoria) || esCategoriaBeeblack(f.categoria) ? (
                             <span
                               className="text-muted-foreground"
-                              title="La cortina vertical no tiene sentido de caída"
+                              title={
+                                esCategoriaBeeblack(f.categoria)
+                                  ? 'El beeblack no se enrolla; su variante de instalación se elige en Fase 2'
+                                  : 'La cortina vertical no tiene sentido de caída'
+                              }
                             >
                               —
                             </span>

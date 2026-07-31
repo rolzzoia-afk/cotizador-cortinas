@@ -191,7 +191,7 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     expect(enc).not.toContain('PERF. (IZQ)');
   });
 
-  it('cenefa delantera → PERFIL SUPERIOR (CENEF.PRO) con la misma medida', () => {
+  it('OSCURANTI: solo PERFIL SUPERIOR (CENEF.PRO); la CENEFA DELANTERA queda vacía', () => {
     const v = ventanaSoftLight(2.969, 'PZA 3-G2');
     v.categoria = 'OSCURANTI_63mm';
     v.modelo = { ...softLight38, sistema: 'OSCURANTI' };
@@ -199,20 +199,50 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     const { aoa } = generarOrdenesOptimizador('266-2', [v]);
     const idxCenefaDel = 9;
     const idxPerfilSup = 10;
-    expect(aoa[1][idxCenefaDel]).toBe(296.87); // 296.9 − 0.3 mm (pizarra 2026-07-28)
-    expect(aoa[1][idxPerfilSup]).toBe(296.87);
+    expect(aoa[1][idxPerfilSup]).toBe(296.87); // 296.9 − 0.3 mm (pizarra 2026-07-28)
+    // Si además saliera la cenefa cuadrada, el optimizador cortaría dos piezas
+    // (E29/E30/E31 + E50/E49/E52) para la misma ventana (corrección 2026-07-30).
+    expect(aoa[1][idxCenefaDel]).toBe('');
   });
 
-  it('OSCURANTI: columna SEPARADOR SUPERIOR = cenefa delantera, sin advertencia de perforación', () => {
+  it('OSCURANTI: el PERFIL SUPERIOR va siempre; SEPARADOR SUPERIOR queda vacío (es opt-in)', () => {
     const v = ventanaSoftLight(2.969, 'PZA 3-G2');
     v.categoria = 'OSCURANTI_63mm';
     v.modelo = { ...softLight38, sistema: 'OSCURANTI' };
     const { aoa, advertencias } = generarOrdenesOptimizador('266-2', [v]);
     const enc = aoa[0] as string[];
+    const idxPerfSup = enc.indexOf('PERFIL SUPERIOR (CENEF.PRO)');
     const idxSepSup = enc.indexOf('SEPARADOR SUPERIOR');
+    expect(idxPerfSup).toBeGreaterThan(-1);
     expect(idxSepSup).toBeGreaterThan(-1);
-    expect(aoa[1][idxSepSup]).toBe(296.87); // = cenefa delantera
-    expect(advertencias.some((a) => a.includes('Separador superior'))).toBe(false);
+    expect(aoa[1][idxPerfSup]).toBe(296.87); // ancho − 0,3 mm
+    // El separador superior es un separador más (E41/E42/E43), no se emite solo.
+    expect(aoa[1][idxSepSup]).toBe('');
+    // El perfil superior no lleva perforación: no debe pedirla en Fase 2.
+    expect(advertencias.some((a) => a.includes('Perfil superior'))).toBe(false);
+  });
+
+  it('soft light / DARK NO llevan perfil superior: solo la cenefa', () => {
+    const idxPerfilSup = 10;
+    const vSoft = ventanaSoftLight(2.969, 'PZA 3-G2');
+    expect(generarOrdenesOptimizador('266-2', [vSoft]).aoa[1][idxPerfilSup]).toBe('');
+    const vDark = ventanaSoftLight(2.969, 'PZA 3-G2');
+    vDark.categoria = 'DARK_38mm';
+    vDark.modelo = { ...softLight38, sistema: 'DARK' };
+    vDark.panos[0].cenefa = 'Cuadrada';
+    const { aoa } = generarOrdenesOptimizador('266-2', [vDark]);
+    expect(aoa[1][9]).toBeGreaterThan(0); // sí corta la cenefa delantera
+    expect(aoa[1][idxPerfilSup]).toBe('');
+  });
+
+  it('la TELA no viaja a la hoja de estructura (ALTO TELA vacío en oscuridad)', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2');
+    v.categoria = 'OSCURANTI_63mm';
+    v.modelo = { ...softLight38, sistema: 'OSCURANTI' };
+    const { aoa } = generarOrdenesOptimizador('266-2', [v]);
+    const idxAltoTela = (aoa[0] as string[]).indexOf('ALTO TELA');
+    expect(idxAltoTela).toBeGreaterThan(-1); // la columna existe (pletina/beeblack)
+    expect(aoa[1][idxAltoTela]).toBe('');
   });
 
   it('peso soft light → COLOR PESO INF. SOFT LIGHT con código por color', () => {
@@ -395,7 +425,7 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
           ancho: anchoM,
           alto: altoM,
           color: 'BLANCO',
-          beeblackVariante: sentido === 'INTERNO' ? 'INTERNO' : 'EXTERNO_SEMI',
+          beeblackVariante: sentido,
           beeblackManillaIzq: true,
           beeblackManillaDer: true,
           ...panoExtra,
@@ -404,32 +434,57 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     } as Ventana;
   }
 
-  it('INTERNO 200×130.1 — columnas BEEBLACK sin tubo/peso roller', () => {
+  it('INTERNO 200×130 — perfiles y manillas; la tela NO va a la estructura', () => {
     const { aoa, advertencias } = generarOrdenesOptimizador('888', [
-      ventanaBeeblack(2, 1.301, 'INTERNO'),
+      ventanaBeeblack(2, 1.3, 'INTERNO'),
     ]);
     expect(advertencias).toHaveLength(0);
     const fila = aoa[1];
     expect(fila[idxTubo]).toBe('');
     expect(fila[idxPerfilSupAncho]).toBe(194.3);
-    expect(fila[idxAnchoTela]).toBe(195.3);
-    expect(fila[idxTotalLamas]).toBe(140.2);
-    expect(fila[idxManillaIzq]).toBe(125.1);
+    expect(fila[idxManillaIzq]).toBe(125);
+    // La hoja es de ESTRUCTURA: la tela y las lamas viven en el Cálculo General.
+    expect(fila[idxAnchoTela]).toBe('');
+    expect(fila[idxTotalLamas]).toBe('');
+    // COLOR PERFIL: el optimizador lo necesita para resolver el código por color.
+    expect(fila[(aoa[0] as string[]).indexOf('COLOR PERFIL')]).toBe('BLANCO');
   });
 
-  it('EXTERNO_SEMI 150×130 extras ON — integración Fase 4', () => {
-    const { aoa } = generarOrdenesOptimizador('888', [
-      ventanaBeeblack(1.5, 1.3, 'EXTERNO', {
-        beeblackExtraSupInfIzq: true,
-        beeblackExtraSupInfDer: true,
-        beeblackExtraLatSup: true,
-        beeblackExtraLatInf: true,
-      }),
-    ]);
+  it('EXTERNO 150×130 — tabla propia de la variante', () => {
+    const { aoa } = generarOrdenesOptimizador('888', [ventanaBeeblack(1.5, 1.3, 'EXTERNO')]);
     const fila = aoa[1];
     expect(fila[idxPerfilSupAncho]).toBe(151);
-    expect(fila[idxTotalLamas]).toBe(110.9);
     expect(fila[idxManillaIzq]).toBe(131.7);
+  });
+
+  it('SEMI 150×130 — tabla propia (ya no comparte con externo)', () => {
+    const { aoa } = generarOrdenesOptimizador('888', [ventanaBeeblack(1.5, 1.3, 'SEMI')]);
+    expect(aoa[1][idxPerfilSupAncho]).toBe(148);
+    expect(aoa[1][idxManillaIzq]).toBe(128.7);
+  });
+
+  it('separadores opt-in del paño → columnas SEPARADOR', () => {
+    const { aoa } = generarOrdenesOptimizador('888', [
+      ventanaBeeblack(2, 1.3, 'INTERNO', { separadorSup: true, separadorIzq: true }),
+    ]);
+    const enc = aoa[0] as string[];
+    expect(aoa[1][enc.indexOf('SEPARADOR SUPERIOR')]).toBe(194.3);
+    expect(aoa[1][enc.indexOf('SEPARADOR (IZQ)')]).toBe(124.3);
+    expect(aoa[1][enc.indexOf('SEPARADOR (DER)')]).toBe('');
+  });
+
+  it('doble (screen + blackout): una sola estructura, el 2º paño solo trae tela', () => {
+    const v = ventanaBeeblack(2, 1.3, 'INTERNO');
+    v.panos = [
+      { ...v.panos[0], dual: true, codInt: 'SC 64' },
+      { ...v.panos[0], dual: true, codInt: 'BK 18' },
+    ] as Pano[];
+    const { aoa } = generarOrdenesOptimizador('888', [v]);
+    expect(aoa).toHaveLength(3); // encabezado + 2 paños
+    expect(aoa[1][idxPerfilSupAncho]).toBe(194.3);
+    expect(aoa[2][idxPerfilSupAncho]).toBe(''); // no repite los perfiles
+    expect(aoa[2][idxManillaIzq]).toBe('');
+    expect(aoa[2][2]).toBe('BK 18'); // COD_INT: cada paño con su tela
   });
 });
 

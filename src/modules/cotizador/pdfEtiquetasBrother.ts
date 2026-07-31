@@ -20,9 +20,15 @@ import { medidaCorteCenefaCuadrada, tiraCenefaOvalada } from '@/modules/descuent
 import { codigoTuberiaDeChip } from '@/modules/descuentos/reglas-tuberia';
 import { normalizarVarianteOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import {
+  esCategoriaBeeblack,
+  LABEL_INSTALACION_BEEBLACK,
+  normalizarInstalacionBeeblack,
+  normalizarVarianteBeeblack,
+} from '@/modules/descuentos/reglas-beeblack';
+import {
   codigoCenefaCuadrada,
   codigoSeparadorPerfil,
-  codigoSeparadorSuperior,
+  codigoPerfilSuperior,
   codigoZocaloPerfil,
 } from '@/modules/descuentos/codigos-estructura';
 import { colorPerfilDesdeAdicional, colorPerfilFilaExcel } from '@/modules/descuentos/adicionales-perfil';
@@ -99,6 +105,9 @@ export function tipoCortinaEtiqueta(producto?: string, tipo?: string): string {
  */
 export function tipoCortinaEtiquetaGrupo(rows: OptimizerRow[]): string {
   if (rows.length === 0) return '—';
+  // BEEBLACK: el producto de la tela no dice el sistema (la etiqueta oficial
+  // rotula BEE-BLACK), así que manda la categoría.
+  if (rows.every((r) => esCategoriaBeeblack(r.categoria))) return 'BEE-BLACK';
   const esVertical = (r: OptimizerRow) => (r.tuberiaCod || '').toUpperCase() === 'VERTICAL';
   const nVert = rows.filter(esVertical).length;
   if (nVert === rows.length) return 'VERTICAL';
@@ -436,13 +445,14 @@ export function esFilaSoftLightCC(row: OptimizerRow): boolean {
   );
 }
 
-/** ¿La fila es OSCURANTI? Misma firma de piezas que soft light CC (peso de oscuridad
- *  + cenefa delantera sin trasera), se distingue por la categoría OSCURANTI_63mm. */
+/** ¿La fila es OSCURANTI? Peso de oscuridad + su PERFIL SUPERIOR (rectangular
+ *  50×25): desde 2026-07-30 oscuranti NO corta cenefa cuadrada delantera —esa es
+ *  de DARK y soft light CC—, así que el perfil superior es su firma propia. */
 export function esFilaOscuranti(row: OptimizerRow): boolean {
   return (
     (row.categoria || '').toUpperCase().includes('OSCURANTI') &&
     !!pieza(row, 'PESO SOFT LIGHT') &&
-    !!pieza(row, 'CENEFA DELANTERA')
+    !!pieza(row, 'PERFIL SUPERIOR (CENEF.PRO)')
   );
 }
 
@@ -919,8 +929,8 @@ function dibujarEstructuraSoftLightCC(
 // Réplica de docs/referencias/ETIQ.ESTRUCTURA-ARMADO (SOFTWARE) - OSCURANTI (1).lbx.
 // Mismo esqueleto que DARK; las diferencias del .lbx:
 //   · título OSCURANTI y sub del tubo "TUBO (.63mm)" (tubo fijo E47);
-//   · columna derecha: CEF.CUADRADA.DEL (E29/30/31) arriba y PERFIL.SEP.SUPERIOR
-//     (separador rectangular 50×25, E50/E49/E52) abajo — misma medida, el separador
+//   · columna derecha: CEF.CUADRADA.DEL (E29/30/31) arriba y PERFIL.SUPERIOR
+//     (perfil rectangular 50×25, E50/E49/E52) abajo — misma medida, el perfil
 //     superior mide igual que la cenefa delantera;
 //   · franja inferior ÚNICA TIPO DE OSCURANTI (sin velcro, que es solo de DARK).
 function dibujarEstructuraOscuranti(
@@ -978,9 +988,9 @@ function dibujarEstructuraOscuranti(
   if (pzTela) txt(doc, fmtMedidaCm(pzTela.medidaCm), 29.4, 61.3, 14.6, { align: 'right', hScale: 0.79 });
   txt(doc, 'DIMENSIONADO', 3.1, 62.5, 4, { bold: false, hScale: 0.86 });
 
-  // Columna derecha: CEF.CUADRADA.DEL + PERFIL.SEP.SUPERIOR (dos cajas apiladas).
-  // Ambas por COLOR PERFIL: la cenefa E29/E30/E31 y el separador superior
-  // E50/E49/E52 (rectangular 50×25). El separador superior mide lo mismo que la
+  // Columna derecha: CEF.CUADRADA.DEL + PERFIL.SUPERIOR (dos cajas apiladas).
+  // Ambas por COLOR PERFIL: la cenefa E29/E30/E31 y el perfil superior
+  // E50/E49/E52 (rectangular 50×25). El perfil superior mide lo mismo que la
   // cenefa delantera, pero se lee de su propia columna del Excel.
   const colorPerfilFila =
     colorPerfilFilaExcel(adicionales, row.categoria, {
@@ -1001,8 +1011,8 @@ function dibujarEstructuraOscuranti(
   };
   celdaDer(40, 11.8, 'CEF.CUADRADA.DEL', codigoCenefaCuadrada(colorPerfilFila), 'CENEFA CUADRADA', 'CENEFA DELANTERA');
   celdaDer(
-    51.8, 11.9, 'PERFIL.SEP.SUPERIOR', codigoSeparadorSuperior(colorPerfilFila),
-    'PERFIL SEPARADOR', 'SEPARADOR SUPERIOR',
+    51.8, 11.9, 'PERFIL.SUPERIOR', codigoPerfilSuperior(colorPerfilFila),
+    'RECTANGULAR 50×25', 'PERFIL SUPERIOR (CENEF.PRO)',
   );
 
   // ── PERFILES (grilla 2×3: zócalo izq | separador der) ──
@@ -1106,6 +1116,12 @@ function dibujarEstructura(
   const esVertical = (row.tuberiaCod || '').toUpperCase() === 'VERTICAL';
   if (esVertical) {
     dibujarEstructuraVertical(doc, row, n, total, meta, catalogo);
+    return;
+  }
+  // BEEBLACK (cierre horizontal con lamas): etiqueta propia (réplica del .lbx
+  // de BEE-BLACK). Sin tubo ni peso: 4 perfiles + lamas + lado de cierre.
+  if (esFilaBeeblack(row)) {
+    dibujarEstructuraBeeblack(doc, row, n, total, meta, catalogo);
     return;
   }
   // DARK (cenefa cuadrada del/tra + velcro): etiqueta propia (réplica del .lbx
@@ -1363,6 +1379,116 @@ function dibujarEstructura(
   txt(doc, fmtMedidaCm(altoCm), 40.4, 91.4, 9.2, { color: BLANCO, hScale: 1.03 });
 }
 
+// ── ETIQUETA ESTRUCTURA BEEBLACK (62×100) ────────────────────────────
+// Réplica de docs/referencias/ETIQ.ESTRUCTURA-ESTRUCTURA (SOFTWARE) - BEE-BLACK.lbx.
+// Mismo encabezado/pie que el roller, pero la sección de producción es una
+// grilla 2×3: perfil superior | lateral izq · perfil inferior | lateral der ·
+// cantidad de lamas | lado de cierre. Sin tubo, peso ni cenefa.
+
+/** ¿La fila es un BEEBLACK? Se distingue por sus perfiles (no por la tela). */
+export function esFilaBeeblack(row: OptimizerRow): boolean {
+  return esCategoriaBeeblack(row.categoria) || !!pieza(row, 'PERFIL SUPERIOR (ANCHO)');
+}
+
+function dibujarEstructuraBeeblack(
+  doc: jsPDF,
+  row: OptimizerRow,
+  n: number,
+  total: number,
+  meta: MetaPDF,
+  catalogo: CatalogoProductos,
+) {
+  const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
+  const anchoCm = row.anchoCm || 0;
+  const altoCm = row.altoCm || 0;
+  const colorAcc = colorPesoNormalizado(p.colorMecanismo || p.color) || '—';
+
+  // ── Encabezado negro: BEE-BLACK + Cortina n/N + [tipoTela] + QR ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 3, 58.75, 20, 'F');
+  txt(doc, 'BEE-BLACK', 3.7, 12.4, 13, { color: BLANCO, max: 27, hScale: 1 });
+  txt(doc, `Cortina ${n}/${total}`, 3.7, 16.4, 9.5, { color: BLANCO, hScale: 1.02 });
+  const chipTela = String(p.tipoTela || '').toUpperCase().replace(/^SCR$/, 'SC');
+  if (chipTela) txt(doc, `[${chipTela}]`, 33.9, 11.4, 9.9, { color: BLANCO, hScale: 1.02 });
+  qr(doc, 41.7, 4.4, 17, true);
+
+  // ── Ubicación + OT + cliente ──
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 23, 58.4, 11.8, 'S');
+  txt(doc, 'UBICACIÓN:', 2.9, 26.3, 6, { bold: false, hScale: 0.83 });
+  const ubic = (row.ubicacion || '—').toUpperCase();
+  txt(doc, ubic, 2.4, 32.6, ubic.length > 9 ? 11 : 19.3, { max: 18, hScale: ubic.length > 9 ? 1 : 1.03 });
+  txt(doc, String(meta.cliente || '').toUpperCase(), 58.3, 26.3, 6, {
+    bold: false, align: 'right', max: 26, hScale: 0.83,
+  });
+  txt(doc, String(meta.ot), 58.3, 32.6, 19.3, { align: 'right', hScale: 1.03 });
+
+  // ── INFORMACIÓN PRODUCCIÓN ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 34.8, 58.75, 5.2, 'F');
+  txt(doc, 'INFORMACIÓN PRODUCCIÓN', 30.7, 38.4, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+
+  // Grilla 2×3. Cada celda: rótulo con su código + medida grande a la derecha.
+  const celda = (x: number, y: number, w: number, label: string, valor: string) => {
+    doc.setDrawColor(...NEGRO);
+    doc.setLineWidth(0.35);
+    doc.rect(x, y, w, 10.4, 'S');
+    txt(doc, label, x + 1.6, y + 3.6, 7, { hScale: 0.68, max: 30 });
+    txt(doc, valor, x + w - 0.8, y + 9.4, valor.length > 6 ? 12 : 15.5, {
+      align: 'right', hScale: 0.79,
+    });
+  };
+  const medida = (col: string) => {
+    const pz = pieza(row, col);
+    return pz ? fmtMedidaCm(pz.medidaCm) : 'N/A';
+  };
+  const cod = (col: string) => codCorto(pieza(row, col));
+  celda(1.5, 40, 28.9, conCod('PERFIL SUPERIOR', cod('PERFIL SUPERIOR (ANCHO)')), medida('PERFIL SUPERIOR (ANCHO)'));
+  celda(30.4, 40, 29.5, conCod('PERFIL.LAT (IZQ)', cod('PERFIL LATERAL IZQ (ALTO)')), medida('PERFIL LATERAL IZQ (ALTO)'));
+  celda(1.5, 50.4, 28.9, conCod('PERFIL INFERIOR', cod('PERFIL INFERIOR (ANCHO)')), medida('PERFIL INFERIOR (ANCHO)'));
+  celda(30.4, 50.4, 29.5, conCod('PERFIL.LAT (DER)', cod('PERFIL LATERAL DER (ALTO)')), medida('PERFIL LATERAL DER (ALTO)'));
+  // Lamas: cantidad de pliegues del acordeón (unidades, no cm).
+  const lamas = (row.piezas || []).find((x) => x.componente === 'Total lamas');
+  celda(1.5, 60.8, 28.9, 'CANT.LAMAS:', lamas ? String(Math.round(lamas.medidaCm)) : 'N/A');
+  // El armador necesita saber cómo se instala: cambia el largo de los laterales.
+  const instalacionBee = normalizarInstalacionBeeblack(
+    p.beeblackInstalacion,
+    normalizarVarianteBeeblack(p.beeblackVariante, 'INTERNO'),
+  );
+  celda(
+    30.4, 60.8, 29.5,
+    `CIERRE · ${LABEL_INSTALACION_BEEBLACK[instalacionBee].toUpperCase()}:`,
+    ladoCadenaEtiqueta(row.direccion),
+  );
+
+  // ── INFORMACIÓN TERRENO ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 71.4, 58.75, 5.2, 'F');
+  txt(doc, 'INFORMACIÓN TERRENO', 30.7, 75, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 76.3, 28.9, 9.9, 'S');
+  const codInt = row.codInt || '—';
+  txt(doc, codInt, 15.9, 82.6, codInt.length > 6 ? 15 : 20.5, {
+    align: 'center', max: 10, hScale: codInt.length > 6 ? 1 : 0.8,
+  });
+  const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
+  if (telaDesc) txt(doc, telaDesc, 15.9, 85.4, 4.8, { bold: false, align: 'center', max: 26 });
+
+  doc.rect(30.4, 76.3, 29.5, 9.9, 'S');
+  txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 81.8, 7.5, { max: 24, hScale: 0.8 });
+
+  // ── DIMENSIONADO: ancho × alto terminados ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 88.3, 58.75, 5.2, 'F');
+  txt(doc, 'ANCHO:', 3.8, 91.9, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(anchoCm), 14.2, 92.1, 9.2, { color: BLANCO, hScale: 1.03 });
+  txt(doc, 'ALTO:', 32.6, 91.9, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(altoCm), 40.4, 92.1, 9.2, { color: BLANCO, hScale: 1.03 });
+}
+
 // ── ETIQUETA CENEFA CUADRADA (62×54,9) ───────────────────────────────
 
 function dibujarCenefaCuadrada(
@@ -1484,12 +1610,28 @@ function dibujarPano(
   // Grupos grandes ("A-A-A-A…") bajan de cuerpo para no pisar el N° de OT.
   txt(doc, junto, 58.3, 32.7, junto.length > 7 ? 10.5 : 18.4, { align: 'right', max: 15 });
 
-  // Caja tela: codInt grande + descripción (34,1 → 50,8, ancho hasta 30)
-  doc.rect(1.5, 34.1, 28.5, 16.7, 'S');
+  // Caja tela: codInt grande + descripción (34,1 → 50,8, ancho hasta 30).
+  // BEEBLACK: la tela es un acordeón y la CANTIDAD DE LAMAS es la que dice dónde
+  // cortar el ancho, así que la mesa la necesita en la etiqueta del paño: la caja
+  // de tela cede los primeros 4,9 mm a una franja CANT.LAMAS (réplica del .lbx
+  // ETIQ.PAÑOS (SOFTWARE) - PAÑOS (BEE-BLACK)).
+  const lamas = (row.piezas || []).find((x) => x.componente === 'Total lamas');
+  const conLamas = !!lamas && lamas.medidaCm > 0;
+  if (conLamas) {
+    doc.rect(1.5, 34.1, 28.5, 4.9, 'S');
+    txt(doc, `CANT.LAMAS: ${Math.round(lamas!.medidaCm)}`, 3.3, 37.7, 8.4, { max: 26, hScale: 0.85 });
+  }
+  const telaY = conLamas ? 39 : 34.1;
+  doc.rect(1.5, telaY, 28.5, conLamas ? 11.8 : 16.7, 'S');
   const codInt = row.codInt || '—';
-  txt(doc, codInt, 15.6, 44.4, codInt.length > 6 ? 15 : 22.7, { align: 'center', max: 10 });
+  txt(doc, codInt, 15.6, conLamas ? 46 : 44.4, codInt.length > 6 ? 15 : 22.7, {
+    align: 'center',
+    max: 10,
+  });
   const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
-  if (telaDesc) txt(doc, telaDesc, 15.6, 48.4, 4.7, { bold: false, align: 'center', max: 26 });
+  if (telaDesc) {
+    txt(doc, telaDesc, 15.6, conLamas ? 49.2 : 48.4, 4.7, { bold: false, align: 'center', max: 26 });
+  }
 
   // Columna derecha (30 → 59,9): ALTO grande + TIPO DE CORTINA
   doc.rect(30, 34.1, 29.9, 6.9, 'S');
