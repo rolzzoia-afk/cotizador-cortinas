@@ -30,7 +30,10 @@ import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCort
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
 import {
   COD_PESO_AUTO,
+  LARGO_CADENA_VERTICAL,
   codCadenaAutoPorAlto,
+  codCadenaVertical,
+  colorCadenaVertical,
   derivarLargoColor,
   descripcionCadenaInventario,
   textoPesoCadenaInventario,
@@ -55,7 +58,7 @@ import {
 } from '@/modules/descuentos/reglas-mecanismo';
 import { esFamiliaDark, familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
-import { calculoVertical } from '@/modules/descuentos/despiece';
+import { calculoVertical, cordonBeeblackDePano } from '@/modules/descuentos/despiece';
 import {
   MANILLAS,
   codigoManillaPorColor,
@@ -65,6 +68,7 @@ import {
   cenefaCuadradaTapasFijas,
   beeblackEsDoble,
   faltantesDomoticaInventario,
+  faltantesManillasInventario,
   insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
@@ -312,8 +316,22 @@ export function consolidarInsumos(
       // inferior) se emiten con cantidad 0 + unidad "CALCULAR": no llevan número.
       if (esCategoriaVertical(v.categoria) && modelo) {
         const carritos = calculoVertical(modelo, anchoM * 100, 0).carritos;
+        const colorAccVert = colorAccesoriosDePano(p, v.color);
+        // Cadena de la vertical: SIEMPRE la de 3 m (CAD04 negro / CAD06 resto),
+        // calculada por color de accesorios — el alto no la cambia. Espejo de
+        // `calcularBOM`, para que la hoja y el cuadro COMPONENTES coincidan.
+        const cadVert = codCadenaVertical(colorAccVert);
+        bump(
+          cadVert,
+          descripcionCadenaInventario({
+            codCadena: cadVert,
+            largoCadena: LARGO_CADENA_VERTICAL,
+            colorCadena: colorCadenaVertical(colorAccVert),
+          }),
+          1,
+        );
         for (const it of insumosVerticalDePano({
-          colorAcc: colorAccesoriosDePano(p, v.color),
+          colorAcc: colorAccVert,
           anchoM,
           carritos,
         })) {
@@ -334,6 +352,7 @@ export function consolidarInsumos(
         for (const it of insumosBeeblackDeCortina(
           colorAccesoriosDePano(p, v.color),
           beeblackEsDoble(p, (v.panos || []).length),
+          cordonBeeblackDePano(v, p),
         )) {
           bump(
             it.codigo,
@@ -423,7 +442,19 @@ export function consolidarInsumos(
   const out: InsumoConsolidado[] = [];
   let id = 0;
   // Manillas primero (instalación), luego el resto de insumos ya clasificados.
-  for (const m of consolidarManillas(filas)) {
+  const manillas = consolidarManillas(filas);
+  // Top-up de las manillas COBRADAS en Fase 1 que no bajaron a ningún paño
+  // (el cruce por ubicación falla en ventanas de varios paños — ver
+  // faltantesManillasInventario). Sin esto se perdían del inventario.
+  const manillasEmitidas: Record<string, number> = {};
+  for (const m of manillas) if (m.codigo) manillasEmitidas[m.codigo] = (manillasEmitidas[m.codigo] || 0) + m.cantidad;
+  for (const falta of faltantesManillasInventario(adicionalesFase0, manillasEmitidas)) {
+    const desc = `[${falta.codigo}] ${falta.descripcion}`;
+    const ya = manillas.find((m) => m.descripcion === desc);
+    if (ya) ya.cantidad += falta.cantidad;
+    else manillas.push({ codigo: falta.codigo, descripcion: desc, cantidad: falta.cantidad });
+  }
+  for (const m of manillas) {
     out.push({ id: ++id, codigo: m.codigo, descripcion: m.descripcion, cantidad: m.cantidad, grupo: 'INSTALACION' });
   }
   for (const it of acc.values()) {

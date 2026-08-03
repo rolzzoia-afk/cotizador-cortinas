@@ -65,6 +65,13 @@ describe('BEEBLACK — Cálculo General', () => {
     expect(fila.despiece.get('PERFIL INFERIOR (ANCHO)')).toBe(194.3);
   });
 
+  it('no lleva la columna ALTO del roller: su medida buena es ALTO TELA', () => {
+    expect(labels).not.toContain('ALTO');
+    expect(fila.despiece.get('ALTO')).toBeUndefined();
+    // Y la reserva de tela sale de la pizarra (126,8), no de alto+25 = 155.
+    expect(fila.altoRollerCm).toBe(126.8);
+  });
+
   it('cierra con la variante y su instalación en TIPO DE BEEBLACK', () => {
     expect(fila.despiece.get('TIPO DE BEEBLACK')).toBe('INTERNO — DENTRO DEL MARCO');
     expect(labels[labels.length - 1]).toBe('TIPO DE BEEBLACK');

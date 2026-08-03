@@ -19,6 +19,7 @@ import {
   llevaTapasPeso,
   manillaDesdeAdicional,
   faltantesDomoticaInventario,
+  faltantesManillasInventario,
   otLlevaDomotica,
   panoLlevaDomotica,
   tarugoDeMaterial,
@@ -395,9 +396,33 @@ describe('insumosBeeblackDeCortina', () => {
   });
 
   it('la tira magnética y la felpa van CALCULAR (cantidad 0)', () => {
-    const calc = insumosBeeblackDeCortina('BLANCO').filter((i) => i.calcular);
+    // Sin medida de cordón (Fase 2 sin llenar) el cordón también sale CALCULAR.
+    const calc = insumosBeeblackDeCortina('BLANCO', false, 250).filter((i) => i.calcular);
     expect(calc.map((i) => i.codigo).sort()).toEqual(['SML33', 'SML34']);
     expect(calc.every((i) => i.cantidad === 0 && i.grupo === 'PRODUCCION')).toBe(true);
+  });
+
+  describe('cordón', () => {
+    it('blanco SML36 / oscuro SML37, con los cm que le pasan', () => {
+      expect(cod(insumosBeeblackDeCortina('BLANCO', false, 250.4)).SML36).toMatchObject({
+        cantidad: 250.4,
+        grupo: 'PRODUCCION',
+      });
+      expect(cod(insumosBeeblackDeCortina('NEGRO', false, 250.4)).SML37).toBeDefined();
+      expect(cod(insumosBeeblackDeCortina('CAFÉ', false, 250.4)).SML37).toBeDefined();
+      expect(cod(insumosBeeblackDeCortina('BLANCO', false, 250.4)).SML37).toBeUndefined();
+    });
+
+    it('el doble NO lo duplica: una estructura, un recorrido de cordón', () => {
+      expect(cod(insumosBeeblackDeCortina('BLANCO', true, 250.4)).SML36.cantidad).toBe(250.4);
+    });
+
+    it('sin medida sale CALCULAR en vez de un 0 engañoso', () => {
+      expect(cod(insumosBeeblackDeCortina('BLANCO')).SML36).toMatchObject({
+        cantidad: 0,
+        calcular: true,
+      });
+    });
   });
 
   it('set NEGRO: carro inferior SML46, esquinero SML17, nylon SML26, tapa SML48', () => {
@@ -511,6 +536,38 @@ describe('insumosMotorDePano', () => {
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.
     expect(insumosMotorDePano(pano({ motorModelo: 'DOM41' }))[0].codigo).toBe('DOM41');
+  });
+});
+
+describe('faltantesManillasInventario', () => {
+  const adic = (
+    codInt: string, cantidad: number, ubicacion = 'LIVING',
+  ): AdicionalFase0Persistido => ({ codInt, cantidad, descuento: 0, ubicacion });
+  const cant = (out: ReturnType<typeof faltantesManillasInventario>, cod: string) =>
+    out.find((i) => i.codigo === cod)?.cantidad ?? 0;
+
+  // El caso real: en un beeblack doble la ventana tiene 2 paños, así que su
+  // ubicación es "LIVING-G1"/"LIVING-G2" y el cruce con el adicional "LIVING"
+  // falla → manillaCant queda 0 y la manilla cobrada no salía en ningún lado.
+  it('manillas cobradas que no bajaron a ningún paño salen igual', () => {
+    const out = faltantesManillasInventario([adic('HER 49', 2), adic('HER 48', 2)], {});
+    expect(cant(out, 'HER49')).toBe(2);
+    expect(cant(out, 'HER48')).toBe(2);
+    expect(out.find((i) => i.codigo === 'HER49')?.descripcion).toBe('MANILLA PLANA CAFE');
+  });
+
+  it('descuenta lo que ya emitieron los paños', () => {
+    expect(cant(faltantesManillasInventario([adic('HER48', 3)], { HER48: 1 }), 'HER48')).toBe(2);
+  });
+
+  it('emitido ≥ cobrado → no agrega nada (no duplica la manilla de Fase 2)', () => {
+    expect(faltantesManillasInventario([adic('HER48', 2)], { HER48: 2 })).toEqual([]);
+    expect(faltantesManillasInventario([adic('HER48', 1)], { HER48: 5 })).toEqual([]);
+    expect(faltantesManillasInventario(undefined, {})).toEqual([]);
+  });
+
+  it('ignora los adicionales que no son manillas', () => {
+    expect(faltantesManillasInventario([adic('DOM38', 2), adic('INST', 1)], {})).toEqual([]);
   });
 });
 

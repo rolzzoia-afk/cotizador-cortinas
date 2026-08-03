@@ -473,7 +473,7 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     expect(aoa[1][enc.indexOf('SEPARADOR (DER)')]).toBe('');
   });
 
-  it('doble (screen + blackout): una sola estructura, el 2º paño solo trae tela', () => {
+  it('doble (screen + blackout): una sola estructura, pero la manilla de CADA tela', () => {
     const v = ventanaBeeblack(2, 1.3, 'INTERNO');
     v.panos = [
       { ...v.panos[0], dual: true, codInt: 'SC 64' },
@@ -483,8 +483,21 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     expect(aoa).toHaveLength(3); // encabezado + 2 paños
     expect(aoa[1][idxPerfilSupAncho]).toBe(194.3);
     expect(aoa[2][idxPerfilSupAncho]).toBe(''); // no repite los perfiles
-    expect(aoa[2][idxManillaIzq]).toBe('');
     expect(aoa[2][2]).toBe('BK 18'); // COD_INT: cada paño con su tela
+    // La manilla es POR TELA y su toggle vive en el paño: la del blackout se
+    // perdía porque el 2º paño descartaba todos sus cortes.
+    expect(aoa[2][idxManillaIzq]).toBe(125);
+  });
+
+  it('el 2º paño sin manilla marcada no la inventa', () => {
+    const v = ventanaBeeblack(2, 1.3, 'INTERNO');
+    v.panos = [
+      { ...v.panos[0], dual: true, codInt: 'SC 64' },
+      { ...v.panos[0], dual: true, codInt: 'BK 18', beeblackManillaIzq: false },
+    ] as Pano[];
+    const { aoa } = generarOrdenesOptimizador('888', [v]);
+    expect(aoa[1][idxManillaIzq]).toBe(125);
+    expect(aoa[2][idxManillaIzq]).toBe('');
   });
 });
 

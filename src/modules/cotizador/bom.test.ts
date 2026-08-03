@@ -88,6 +88,63 @@ describe('calcularBOM', () => {
     expect(bom.filter((i) => i.categoria === 'MECANISMO')).toHaveLength(0);
   });
 
+  // Regla del usuario 2026-08-03: la vertical SÍ lleva cadena de roller, pero
+  // siempre la de 3 m y con el color de los accesorios. Y NO lleva el "Peso de
+  // cadena" del roller: su peso es el VER52/VER64 del kit.
+  it('VERTICAL: cadena de 3 m por color (CAD06 blanca) y NINGÚN peso de cadena de roller', () => {
+    const ventanas = [{
+      id: 1,
+      categoria: 'VERTICAL',
+      color: 'Blanco',
+      modelo: { sistema: 'VERTICAL', dcto_tubo_cm: 1.8, dcto_perfiles_cm: 1.7 },
+      panos: [{ ancho: 1.5, alto: 1.8, color: 'Blanco' }],
+    }];
+    // El paño trae colorPeso/colorCadena (los rellena fase0-sync a TODOS) y
+    // hasta un codCadena stale de cuando la ventana era ROL: se ignoran.
+    const bom = calcularBOM(
+      [row({ color: 'Blanco', colorPeso: 'BCO', colorCadena: 'BCO', codCadena: 'CAD16', largoCadena: '2.4mts' })],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    const cadenas = bom.filter((i) => i.categoria === 'CADENA');
+    expect(cadenas).toHaveLength(1);
+    expect(cadenas[0].descripcion).toBe('Cadena');
+    expect(cadenas[0].especificacion).toBe('CAD06');
+    expect(cadenas[0].color).toBe('BCO');
+    expect(cadenas[0].cantidad).toBe(1);
+    // El "Peso de cadena · BCO" sin código ya no existe (duplicaba al VER52).
+    expect(bom.some((i) => i.descripcion === 'Peso de cadena')).toBe(false);
+    expect(bom.some((i) => i.especificacion === 'CAD16')).toBe(false);
+  });
+
+  it('VERTICAL negra: la cadena de 3 m es CAD04', () => {
+    const ventanas = [{
+      id: 1,
+      categoria: 'VERTICAL',
+      color: 'NEGRO',
+      modelo: { sistema: 'VERTICAL', dcto_tubo_cm: 1.8, dcto_perfiles_cm: 1.7 },
+      panos: [{ ancho: 1.5, alto: 1.8, color: 'NEGRO' }],
+    }];
+    const bom = calcularBOM([row({ color: 'NEGRO' })], ventanas as Parameters<typeof calcularBOM>[1]);
+    const cadenas = bom.filter((i) => i.categoria === 'CADENA');
+    expect(cadenas).toHaveLength(1);
+    expect(cadenas[0].especificacion).toBe('CAD04');
+    expect(cadenas[0].color).toBe('NEG');
+  });
+
+  it('BEEBLACK: sin cadena ni peso de cadena aunque el paño traiga los colores', () => {
+    const ventanas = [{
+      id: 1,
+      categoria: 'BEEBLACK',
+      color: 'Blanco',
+      panos: [{ ancho: 1.5, alto: 1.8, color: 'Blanco' }],
+    }];
+    const bom = calcularBOM(
+      [row({ color: 'Blanco', colorPeso: 'BCO', colorCadena: 'BCO' })],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    expect(bom.filter((i) => i.categoria === 'CADENA')).toHaveLength(0);
+  });
+
   it('VERTICAL negro: peso cordón + peso cadena son VER64 → una línea consolidada ×2', () => {
     const ventanas = [{
       id: 1,

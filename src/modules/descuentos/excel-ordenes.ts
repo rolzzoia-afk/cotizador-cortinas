@@ -24,6 +24,7 @@ import {
   tiraCenefaOvalada,
   ubicPanoVentana,
 } from './adicionales-cenefa';
+import { colorAccesoriosDePano } from './chips';
 import { colorPerfilFilaExcel } from './adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from './peso-oscuridad';
 import { esCategoriaPletina, esCategoriaVertical } from './reglas-mecanismo';
@@ -241,7 +242,9 @@ export function generarOrdenesOptimizador(
         COD_INT: ((p as { codInt?: string }).codInt as string) || v.codInt || '',
         TUBERIA: esBeeblack ? '' : tuberiaDe(v, String(p.tuberia || ''), anchoM),
         'UBIC.': ubic,
-        'COLOR ACCESORIOS': (p.color as string) || v.color || '',
+        // Mismo resolutor que Fase 2 y el BOM: `p.color` a secas se
+        // desalineaba del resto cuando el paño traía colorMecanismo propio.
+        'COLOR ACCESORIOS': colorAccesoriosDePano(p, v.color),
       };
       const puedeDespiece = anchoCm > 0 && (v.modelo || esBeeblack);
       if (puedeDespiece) {
@@ -256,12 +259,15 @@ export function generarOrdenesOptimizador(
         // es referencia y no debe ensuciar el archivo.
         const esVert = esCategoriaVertical(v.categoria);
         // BEEBLACK doble (screen + blackout): UNA estructura y DOS telas. El 2º
-        // paño trae solo su tela, así que no repite perfiles ni manillas — mismo
-        // criterio que el dual roller con las fijaciones (bom.ts `omitirFijaciones`).
+        // paño trae solo su tela, así que no repite los PERFILES — mismo criterio
+        // que el dual roller con las fijaciones (bom.ts `omitirFijaciones`). Las
+        // MANILLAS sí pasan: hay una por tela y su toggle vive en cada paño, así
+        // que la del blackout (paño 2) se perdía y el taller no la cortaba.
         const bbSegundaTela = esBeeblack && !!p.dual && i > 0;
+        const esCorteManilla = (col: string) => col.startsWith('MANILLA ');
         for (const c of d.cortes) {
           if (!c.columnaExcel || c.columnaExcel === 'CENEFA OVALADA') continue;
-          if (bbSegundaTela) continue;
+          if (bbSegundaTela && !esCorteManilla(c.columnaExcel)) continue;
           if (esVert && c.columnaExcel !== 'PERFIL CABEZAL' && c.columnaExcel !== 'VARILLA') continue;
           // Perfil de oscuridad sin superficie (muro/piso) elegida: medida pendiente
           // → celda vacía + advertencia (se llena en Fase 2). Los demás cortes van.

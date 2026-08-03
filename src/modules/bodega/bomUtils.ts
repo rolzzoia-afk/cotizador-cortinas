@@ -1,7 +1,13 @@
 // Pure helpers para el módulo bodega: extracción del BOM, rack lookup,
 // matching fuzzy de insumos.
 
-import { resolverCodCadenaBom } from '@/modules/cotizador/cadenas';
+import {
+  codCadenaVertical,
+  colorCadenaVertical,
+  resolverCodCadenaBom,
+} from '@/modules/cotizador/cadenas';
+import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 
 export type OT = {
   id: string;
@@ -247,6 +253,7 @@ type OptRow = {
   altoReal?: string | number;
   alto?: string | number;
   producto?: string;
+  categoria?: string;
   pano?: Record<string, unknown>;
 };
 
@@ -255,6 +262,7 @@ type Ventana = {
   ancho?: string | number;
   alto?: string | number;
   producto?: string;
+  categoria?: string;
   panos?: Record<string, unknown>[];
 };
 
@@ -399,18 +407,28 @@ export function extraerInsumosBOM(
     return r ? r.display : '';
   };
 
-  const processPano = (p: Pano) => {
-    const cadCod = String(p.codCadena || '').trim();
-    const cadLargo = String(p.largoCadena || '');
-    const cadColor = String(p.colorCadena || 'BCO');
-    if (cadCod || cadLargo) {
-      // Si hay código del inventario (CAD01…) va en la especificación para
-      // enlazar al stock; si no, cae al largo antiguo.
-      const spec = cadCod || cadLargo;
-      add(`CAD|${spec}|${cadColor}`, 'CADENA', `Cadena ${cadLargo || cadCod}`, spec, cadColor, 1, 'unid.', '');
-      const pesoCod = String(p.codPeso || '').trim();
-      const pesoColor = String(p.colorPeso || cadColor);
-      add(`PESO|${pesoCod || pesoColor}`, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.', '');
+  const processPano = (p: Pano, categoria = '') => {
+    // La VERTICAL lleva SIEMPRE la cadena de 3 m por color de accesorios
+    // (CAD04 negro / CAD06 resto), calculada — nunca la que quedó guardada en
+    // el paño. El BEEBLACK no lleva cadena. Espejo de `calcularBOM`.
+    if (esCategoriaVertical(categoria)) {
+      const colorAcc = String(p.colorMecanismo || p.colorPeso || p.colorCadena || p.color || '');
+      const cadVert = codCadenaVertical(colorAcc);
+      const colVert = colorCadenaVertical(colorAcc);
+      add(`CAD|${cadVert}|${colVert}`, 'CADENA', 'Cadena 3mts', cadVert, colVert, 1, 'unid.', '');
+    } else if (!esCategoriaBeeblack(categoria)) {
+      const cadCod = String(p.codCadena || '').trim();
+      const cadLargo = String(p.largoCadena || '');
+      const cadColor = String(p.colorCadena || 'BCO');
+      if (cadCod || cadLargo) {
+        // Si hay código del inventario (CAD01…) va en la especificación para
+        // enlazar al stock; si no, cae al largo antiguo.
+        const spec = cadCod || cadLargo;
+        add(`CAD|${spec}|${cadColor}`, 'CADENA', `Cadena ${cadLargo || cadCod}`, spec, cadColor, 1, 'unid.', '');
+        const pesoCod = String(p.codPeso || '').trim();
+        const pesoColor = String(p.colorPeso || cadColor);
+        add(`PESO|${pesoCod || pesoColor}`, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.', '');
+      }
     }
 
     const mec = String(p.mecanismo || '');
@@ -461,14 +479,14 @@ export function extraerInsumosBOM(
   const rows = (dg.optimizerRows as OptRow[]) || [];
 
   if (rows.length) {
-    rows.forEach((row) => processPano((row.pano || {}) as Pano));
+    rows.forEach((row) => processPano((row.pano || {}) as Pano, row.categoria || ''));
     return [...acc.values()];
   }
 
   const ventanas = (ot.items || []) as Ventana[];
   ventanas.forEach((v) => {
     const panos = Array.isArray(v.panos) && v.panos.length ? v.panos : [v as Pano];
-    panos.forEach((p) => processPano(p));
+    panos.forEach((p) => processPano(p, v.categoria || ''));
   });
   return [...acc.values()];
 }

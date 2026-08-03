@@ -650,18 +650,26 @@ export function PanoEditor({
       {/* 4. COLORES ACCESORIOS (detalle por pieza; el control único de
           "Color accesorios" de arriba pinta los tres de una vez). */}
       <Section title="Colores accesorios">
-        <RadioRow
-          label="Peso inf."
-          value={pano.colorPeso || ''}
-          options={OPCIONES_ACCESORIO_COLOR}
-          onChange={(v) => onChange({ colorPeso: v })}
-        />
-        <RadioRow
-          label="Cadena"
-          value={pano.colorCadena || ''}
-          options={OPCIONES_ACCESORIO_COLOR}
-          onChange={(v) => onChange({ colorCadena: v })}
-        />
+        {/* La vertical no elige peso ni cadena de roller: su peso es el VER52/
+            VER64 del kit y su cadena es la de 3 m que fija el color de
+            accesorios. Mostrar estos radios solo confundía (la sección
+            "Cadena" y el bloque de peso ya están ocultos para vertical). */}
+        {!esVerticalCat && (
+          <RadioRow
+            label="Peso inf."
+            value={pano.colorPeso || ''}
+            options={OPCIONES_ACCESORIO_COLOR}
+            onChange={(v) => onChange({ colorPeso: v })}
+          />
+        )}
+        {!esVerticalCat && (
+          <RadioRow
+            label="Cadena"
+            value={pano.colorCadena || ''}
+            options={OPCIONES_ACCESORIO_COLOR}
+            onChange={(v) => onChange({ colorCadena: v })}
+          />
+        )}
         <RadioRow
           label="Mecanismo"
           value={pano.colorMecanismo || ''}

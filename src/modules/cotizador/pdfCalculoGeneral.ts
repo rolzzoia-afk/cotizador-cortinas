@@ -266,15 +266,24 @@ export function construirCalculoGeneral(
       // VERTICAL: el alto de corte NO es alto+25 sino alto+extraVertical, y ya
       // viene del despiece como ALTO DE CORTE (junto con ALTO FINAL), así que
       // la columna ALTO genérica se omite para no mostrar una medida falsa.
+      // BEEBLACK: su tela NO lleva el +25 del roller — se corta a la medida de
+      // su pizarra, que ya viaja como ALTO TELA (alto ± ajuste de variante).
+      // `altoRollerCm` también alimenta la reserva de tela del inventario, así
+      // que tomarlo de ahí evita pedir 25 cm de más por cortina.
       const esVerticalFila = esCategoriaVertical(v.categoria);
       const esPletinaFila = esCategoriaPletina(v.categoria);
+      const altoTelaBbCm = esBee ? Number(despiece.get('ALTO TELA')) || 0 : 0;
       const altoRollerCm = esVerticalFila
         ? r1(altoCm + params.extraVerticalCm)
-        : r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
+        : esBee && altoTelaBbCm > 0
+          ? altoTelaBbCm
+          : r1(altoCm + (esPletinaFila ? 0 : params.extraAltoCm));
       const altoDuoCm = r1(altoCm * 2 + (esPletinaFila ? 0 : params.extraDuoCm));
       // Oscuridad: el alto de la tela ya viaja como columna ALTO TELA (alto+25)
       // desde el despiece; la columna ALTO genérica se omite para no duplicarla.
-      if (altoCm > 0 && !esVerticalFila && !famOscFila) {
+      // El beeblack va por lo mismo: su ALTO TELA es la medida buena y la
+      // columna ALTO solo confundía al taller.
+      if (altoCm > 0 && !esVerticalFila && !famOscFila && !esBee) {
         if (opts?.altoMesaCorteDuo && esDuoFila) {
           // Dimensionado: la tela dúo se corta DOBLADA en la mesa, así que en vez
           // del ALTO se muestra ALTO MESA DE CORTE = alto + extraMesaDuo (la mitad

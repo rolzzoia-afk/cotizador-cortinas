@@ -12,7 +12,7 @@ import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalog
 import { claveCatalogoCanonica } from '@/modules/cotizador/importarCatalogo';
 import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
 import type { Ventana as VentanaFase2 } from '@/modules/cotizador/types';
-import { recargoTarjetaEfectivo, useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
 import {
   chipDualPorLadoColor,
@@ -32,8 +32,16 @@ import {
   type AdicionalResultado,
 } from '@/modules/cotizador/motorFase0';
 import { formatCLP } from '@/modules/cotizador/calculos';
-import type { Producto } from '@/modules/cotizador/types';
 import { categoriasTela } from '@/modules/cotizador/categoriaTela';
+import { categoriasDeVentanas } from '@/modules/cotizador/terminos';
+import { useTerminos } from '@/modules/cotizador/terminosStore';
+import { useLayoutDoc } from '@/modules/cotizador/docCotizacionStore';
+import {
+  bloquesEnFlujo,
+  bloquesJuntoATotales,
+  esSeccion,
+  flotantesDe,
+} from '@/modules/cotizador/docCotizacion';
 import {
   dualLadoDesdeDireccion,
   enriquecerVentanaDesdeFase0,
@@ -60,8 +68,9 @@ import {
 } from '@/modules/descuentos/adicionales-cenefa';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
-import BannerCuotas from '@/components/cotizador/BannerCuotas';
+import BloqueDocRender, { SeccionDocumento } from '@/components/cotizador/BloquesDocumento';
 import { estiloChipHex, useChipsColores } from '@/modules/cotizador/chipsColores';
+import { FILTROS_CATALOGO } from '@/modules/cotizador/filtrosCatalogo';
 import { COMUNAS_SANTIAGO } from '@/modules/cotizador/comunas';
 import {
   REGIONES_CHILE,
@@ -219,60 +228,6 @@ const CATEGORIAS_MECANISMO = [
   'OSCURANTI_63mm', 'BEEBLACK',
 ];
 
-const N = (s?: string) => (s || '').toUpperCase();
-
-const CHIP_DE_CODINT: Record<string, string> = {
-  // MOT
-  'DOM 01': 'MOT', 'DOM 02': 'MOT', 'DOM 03': 'MOT', 'DOM 05': 'MOT', INSTMOT: 'MOT',
-  // MOTOR MG (DOM 41 motor Merygate + DOM 42 su control Livorno 15 CH)
-  'DOM 33': 'MOTOR_MG', 'DOM 34': 'MOTOR_MG', 'DOM 38': 'MOTOR_MG', 'DOM 39': 'MOTOR_MG',
-  'DOM 41': 'MOTOR_MG', 'DOM 42': 'MOTOR_MG', INSTMOTMG: 'MOTOR_MG',
-  // SOFT
-  SOFTLDER: 'SOFT', SOFTLIZQ: 'SOFT', 'CENF O': 'SOFT', INSTSOFT: 'SOFT',
-  // OSCURA
-  'CEN-PRO': 'OSCURA', 'P-DER': 'OSCURA', 'P-IZQ': 'OSCURA', 'P-INST': 'OSCURA',
-  // MOT VERT
-  'MOT 01': 'MOT_VERT', 'MOT 03': 'MOT_VERT', 'INSTMOT-VERT': 'MOT_VERT',
-  // MOTOR GRANDE
-  'DOM 35': 'MOTOR_GRANDE', 'DOM 36': 'MOTOR_GRANDE', 'DOM 37': 'MOTOR_GRANDE', INSTMOTCA: 'MOTOR_GRANDE',
-};
-
-type Filtro = {
-  id: string;
-  label: string;
-  cls: string;
-  /** Color por defecto del chip (equivalente hex de sus clases Tailwind). */
-  hexDefault: string;
-  match: (p: Producto, codInt: string) => boolean;
-};
-const enChip = (ci: string, chip: string) => CHIP_DE_CODINT[ci.trim()] === chip;
-const FILTROS_CATALOGO: Filtro[] = [
-  { id: 'BK', label: 'BK', cls: 'bg-amber-100 text-amber-900 border-amber-400', hexDefault: '#fef3c7',
-    match: (p) => ['BLACKOUT_P', 'BLACKOUT_D', 'BLACKOUT_S'].includes(N(p.cod)) },
-  { id: 'BK_V', label: 'BK VERT', cls: 'bg-orange-200 text-orange-900 border-orange-400', hexDefault: '#fed7aa',
-    match: (p) => N(p.cod).startsWith('BLACKOUT_V') },
-  { id: 'SCR', label: 'SCR', cls: 'bg-green-200 text-green-900 border-green-500', hexDefault: '#bbf7d0',
-    match: (p) => ['SCREEN_P', 'SCREEN_D', 'SCREEN_S'].includes(N(p.cod)) },
-  { id: 'SC_V', label: 'SC VERT', cls: 'bg-emerald-300 text-emerald-900 border-emerald-600', hexDefault: '#6ee7b7',
-    match: (p) => N(p.cod).startsWith('SCREEN_V') },
-  { id: 'DUO_BK', label: 'DUO BK', cls: 'bg-sky-200 text-sky-900 border-sky-400', hexDefault: '#bae6fd',
-    match: (p) => N(p.cod).startsWith('DUOBK') },
-  { id: 'DUO_POLI', label: 'DUO POLI', cls: 'bg-blue-200 text-blue-900 border-blue-500', hexDefault: '#bfdbfe',
-    match: (p) => N(p.cod).startsWith('DUOPOLI') },
-  { id: 'SOFT', label: 'SOFT', cls: 'bg-lime-400 text-lime-950 border-lime-600', hexDefault: '#a3e635',
-    match: (_p, ci) => enChip(ci, 'SOFT') },
-  { id: 'OSCURA', label: 'OSCURA', cls: 'bg-teal-400 text-teal-950 border-teal-600', hexDefault: '#2dd4bf',
-    match: (_p, ci) => enChip(ci, 'OSCURA') },
-  { id: 'MOT_VERT', label: 'MOT VERT', cls: 'bg-purple-300 text-purple-950 border-purple-600', hexDefault: '#d8b4fe',
-    match: (_p, ci) => enChip(ci, 'MOT_VERT') },
-  { id: 'MOT', label: 'MOT', cls: 'bg-amber-700 text-white border-amber-800', hexDefault: '#b45309',
-    match: (_p, ci) => enChip(ci, 'MOT') },
-  { id: 'MOTOR_GRANDE', label: 'MOTOR GRANDE', cls: 'bg-fuchsia-500 text-white border-fuchsia-700', hexDefault: '#d946ef',
-    match: (_p, ci) => enChip(ci, 'MOTOR_GRANDE') },
-  { id: 'MOTOR_MG', label: 'MOTOR MG', cls: 'bg-gray-400 text-gray-950 border-gray-600', hexDefault: '#9ca3af',
-    match: (_p, ci) => enChip(ci, 'MOTOR_MG') },
-];
-
 const esCortinaTipo = (tipo: string): boolean =>
   ['PREMIUM', 'DELUX', 'STANDARD', 'BASIC'].includes((tipo || '').toUpperCase().trim());
 
@@ -309,6 +264,20 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const { catalogo, refresh: refreshCatalogo } = useCatalogoProductos();
   const { anchoRollo, refresh: refreshAnchoRollo } = useAnchoRollo();
   const { parametros } = useParametrosCotizador();
+  const { terminos } = useTerminos();
+  const { layout: layoutDoc } = useLayoutDoc();
+  // El orden del documento lo define el layout de Admin → Documento. Se aplica
+  // con `order` de flexbox sobre el contenedor, así que las secciones se quedan
+  // escritas donde están y solo cambia dónde se dibujan.
+  const ordenDoc = useMemo(() => {
+    const m = new Map<string, number>();
+    layoutDoc.bloques.forEach((b, i) => m.set(b.id, i + 1));
+    return (id: string) => m.get(id) ?? 99;
+  }, [layoutDoc]);
+  const bloquesTotales = useMemo(
+    () => bloquesJuntoATotales(layoutDoc.bloques).filter((b) => b.visible),
+    [layoutDoc],
+  );
   const { modelos: modelosDespiece } = useDescuentosModelo();
 
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
@@ -1075,6 +1044,19 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     [filas, catalogo],
   );
 
+  // Categorías de PRODUCTO de la cotización (ROL, BEEBLACK, DARK_38mm…): con
+  // ellas y con las de tela se eligen los términos y condiciones que aplican.
+  const catsProducto = useMemo(
+    () => categoriasDeVentanas(filas.map((f) => ({ categoria: f.categoria }))),
+    [filas],
+  );
+
+  // Lo que necesitan los bloques configurables para dibujarse.
+  const datosBloques = useMemo(
+    () => ({ terminos, categorias: catsProducto, telas: catsTela, parametros, fmtPct }),
+    [terminos, catsProducto, catsTela, parametros],
+  );
+
   // Cuántos paños tiene cada ventana (para el badge "Paño n/m" en la grilla).
   const panosPorVid = useMemo(() => {
     const m = new Map<string, number>();
@@ -1164,8 +1146,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         </div>
       </div>
 
-      <div className="px-5 py-4">
+      {/* flex-col: el orden de las secciones y de los bloques del admin lo
+          decide `order`, según el layout de Admin → Documento. */}
+      <div className="flex flex-col px-5 py-4">
         {/* DATOS DEL CLIENTE */}
+        <SeccionDocumento
+          orden={ordenDoc('datos_cliente')}
+          flotantes={flotantesDe(layoutDoc.bloques, 'datos_cliente')}
+        >
         <section className="mb-4 grid gap-3 rounded-lg border border-border bg-card/40 p-4 md:grid-cols-2 lg:grid-cols-3">
           <Campo label="Nombre" value={cliente.nombre} onChange={(v) => setCliente({ ...cliente, nombre: v })} />
           {!editOtId && (
@@ -1243,8 +1231,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             </label>
           )}
         </section>
+        </SeccionDocumento>
 
         {/* CATÁLOGO con chips */}
+        <SeccionDocumento
+          orden={ordenDoc('catalogo')}
+          flotantes={flotantesDe(layoutDoc.bloques, 'catalogo')}
+        >
         <section className="mb-4 rounded-lg border border-border bg-card/40 p-3 print:hidden">
           <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             Catálogo · elige una categoría y agrega con un clic
@@ -1367,8 +1360,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             </div>
           )}
         </section>
+        </SeccionDocumento>
 
         {/* GRILLA UNIFICADA (cortinas + adicionales con mismas columnas) */}
+        <SeccionDocumento
+          orden={ordenDoc('cortinas')}
+          flotantes={flotantesDe(layoutDoc.bloques, 'cortinas')}
+        >
         <section className="overflow-x-auto rounded-lg border border-border bg-card/40">
           <datalist id="codint-options">
             {Object.entries(catalogo).map(([k, p]) => (
@@ -1682,8 +1680,25 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           </section>
         )}
 
+        </SeccionDocumento>
+
         {/* TOTALES (los controles de Instalación / Envío / % región viven
             junto a los datos del cliente; acá solo van los montos). */}
+        <SeccionDocumento
+          orden={ordenDoc('totales')}
+          flotantes={flotantesDe(layoutDoc.bloques, 'totales')}
+        >
+        {/* Los bloques marcados "junto a los totales" (por defecto, los
+            términos) ocupan el espacio que quedaba vacío a la izquierda del
+            recuadro de precios. En pantallas chicas se apilan. */}
+        <div className="flex flex-col gap-4 md:flex-row md:items-start print:flex-row print:items-start">
+          {bloquesTotales.length > 0 && (
+            <div className="min-w-0 flex-1">
+              {bloquesTotales.map((b) => (
+                <BloqueDocRender key={b.id} bloque={b} datos={datosBloques} />
+              ))}
+            </div>
+          )}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
           <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
@@ -1732,6 +1747,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             </Button>
           )}
         </section>
+        </div>
+        </SeccionDocumento>
 
         {editarProducto !== undefined && (
           <ProductoCatalogoDialog
@@ -1759,22 +1776,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           />
         )}
 
-        <section className="mt-4 rounded-lg border border-border bg-card/40 p-4 text-[11px] leading-relaxed text-muted-foreground">
-          <div className="mb-1 font-semibold text-foreground">Condiciones</div>
-          Cotización válida por 5 días. Pago: 50% para iniciar la fabricación y 50% al finalizar la
-          instalación.{' '}
-          {parametros.proveedorTarjeta === 'flow'
-            ? `Tarjeta de crédito vía Flow (recargo ${fmtPct(recargoTarjetaEfectivo(parametros))}%): las cuotas y sus intereses dependen de tu banco.`
-            : `Tarjeta de crédito hasta 12 cuotas sin interés (recargo Mercado Pago ${fmtPct(recargoTarjetaEfectivo(parametros))}%).`}{' '}
-          Primera visita sin costo previa cotización (RM en AVN). Las cortinas se fabrican a medida;
-          una vez confeccionadas no hay devolución de dinero. Verificar stock de la tela antes de pagar.
-        </section>
-
-        {/* Banner de cuotas al pie de la cotización (visible también al imprimir).
-            Con Flow no hay 12 cuotas sin interés: el banner cambia de mensaje. */}
-        <div className="mt-6 flex justify-center pb-4">
-          <BannerCuotas proveedor={parametros.proveedorTarjeta} />
-        </div>
+        {/* Bloques del admin (términos, banner de cuotas, cuadros de texto e
+            imágenes). Van todos acá y cada uno se ubica con su `order`, así que
+            pueden quedar entre cualquier par de secciones. Mismo componente que
+            usa la vista previa del editor: lo que se configura es lo que se
+            imprime. */}
+        {bloquesEnFlujo(layoutDoc.bloques).map((b) =>
+          esSeccion(b.tipo) || !b.visible ? null : (
+            <div key={b.id} style={{ order: ordenDoc(b.id) }}>
+              <BloqueDocRender bloque={b} datos={datosBloques} />
+            </div>
+          ),
+        )}
       </div>
     </div>
   );

@@ -183,7 +183,7 @@ function colorCadenaCorto(color: string | null | undefined): string {
 }
 
 /** Cadena del inventario que calza un largo ('4mts'…) y color (BCO/NEG/GRS). */
-function codCadenaPorLargoColor(
+export function codCadenaPorLargoColor(
   largo: string,
   colorCod: string,
   insumos: CadenaInsumo[],
@@ -218,6 +218,32 @@ export function codCadenaAutoPorAlto(
   else if (altoM >= 0.5) largo = '1.4mts';
   else return null;
   return codCadenaPorLargoColor(largo, colorCod, insumos);
+}
+
+// ── Cadena de la VERTICAL ─────────────────────────────────────────────
+// Regla del usuario (2026-08-03): la cortina vertical SÍ lleva cadena de
+// roller, pero SIEMPRE la de 3 metros — el alto no la cambia, a diferencia del
+// roller (`codCadenaAutoPorAlto`). El color lo definen los accesorios: negro →
+// CAD04, cualquier otro → CAD06. No hay verticales con accesorios grises, así
+// que un 'GRS' heredado cae a la blanca (mismo criterio que el kit VER, donde
+// gris usa el set blanco).
+
+/** Cadena de 3 m blanca / negra: los dos únicos códigos que usa la vertical. */
+export const COD_CADENA_VERTICAL_BLANCO = 'CAD06';
+export const COD_CADENA_VERTICAL_NEGRO = 'CAD04';
+/** Largo de la cadena de la vertical, para los campos de display. */
+export const LARGO_CADENA_VERTICAL = '3mts';
+
+/** Código de cadena de una VERTICAL según el color de accesorios. */
+export function codCadenaVertical(colorAcc: string | null | undefined): string {
+  return colorCadenaCorto(colorAcc) === 'NEG'
+    ? COD_CADENA_VERTICAL_NEGRO
+    : COD_CADENA_VERTICAL_BLANCO;
+}
+
+/** Color corto (BCO/NEG) que acompaña a la cadena de la vertical. */
+export function colorCadenaVertical(colorAcc: string | null | undefined): string {
+  return colorCadenaCorto(colorAcc) === 'NEG' ? 'NEG' : 'BCO';
 }
 
 // ─────────────────────────────────────────────────────────────────────

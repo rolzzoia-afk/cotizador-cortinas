@@ -537,6 +537,7 @@ export function beeblackEsDoble(p: Partial<Pano>, totalPanos?: number): boolean 
 export function insumosBeeblackDeCortina(
   colorAcc: string | null | undefined,
   doble = false,
+  cordonCm = 0,
 ): InsumoKitCortina[] {
   const color = colorKitBeeblack(colorAcc);
   const oscuro = color !== 'BLANCO';
@@ -560,6 +561,12 @@ export function insumosBeeblackDeCortina(
       : color === 'NEGRO'
         ? { codigo: 'SML48', descripcion: 'TAPA ESQUINERO BASIC - NEGRO' }
         : { codigo: 'SML47', descripcion: 'TAPA ESQUINERO BASIC - BLANCO' };
+  // Cordón: se corta del rollo por METRO, así que la cantidad son los cm que
+  // pide la fórmula (perfil superior + lateral + 30). Va por ESTRUCTURA: el
+  // doble tiene un solo recorrido de cordón, por eso no pasa por `porTela`.
+  const cordon = oscuro
+    ? { codigo: 'SML37', descripcion: 'CORDON NEGRO' }
+    : { codigo: 'SML36', descripcion: 'CORDON BLANCO REFORZADO (2500M)' };
 
   return [
     // PRODUCCIÓN (taller): todo el armado del cierre.
@@ -571,6 +578,14 @@ export function insumosBeeblackDeCortina(
     { codigo: 'SML32', descripcion: 'TAPA DE COBRE', cantidad: porTela(4), grupo: 'PRODUCCION' },
     { codigo: 'SML31', descripcion: 'CLIP DE ALAMBRE DE ALEACION', cantidad: porTela(4), grupo: 'PRODUCCION' },
     { codigo: 'SML35', descripcion: 'RODILLO GUIA DE CUERDA', cantidad: porTela(4), grupo: 'PRODUCCION' },
+    // Sin medidas (Fase 2 incompleta) sale CALCULAR en vez de un 0 engañoso.
+    {
+      ...cordon,
+      descripcion: `${cordon.descripcion} (CM)`,
+      cantidad: cordonCm > 0 ? cordonCm : 0,
+      grupo: 'PRODUCCION',
+      ...(cordonCm > 0 ? {} : { calcular: true }),
+    },
     // INSTALACIÓN (terreno): la tapa que cubre cada esquinero.
     { ...tapaEsquinero, cantidad: 4, grupo: 'INSTALACION' },
   ];
@@ -792,6 +807,40 @@ export function faltantesDomoticaInventario(
     push(COD_HUB_DOMOTICA, NOMBRE_HUB_DOMOTICA, faltan(COD_HUB_DOMOTICA, hubs));
     push(COD_ROUTER_DOMOTICA, NOMBRE_ROUTER_DOMOTICA, faltan(COD_ROUTER_DOMOTICA, hubs));
     push(COD_CARGADOR_MOTOR_ALT, NOMBRE_CARGADOR_MOTOR_ALT, faltan(COD_CARGADOR_MOTOR_ALT, hubs));
+  }
+  return out;
+}
+
+/**
+ * Manillas planas COBRADAS en Fase 1 que no salieron por ningún paño.
+ *
+ * Espejo de `faltantesDomoticaInventario`, y por el mismo motivo: la manilla
+ * llega al paño por `manillaCant`, que se precarga cruzando la UBICACIÓN del
+ * adicional con la del paño. Ese cruce falla cuando la ventana tiene varios
+ * paños (un beeblack doble es "LIVING-G1"/"LIVING-G2" contra el "LIVING" del
+ * adicional), y entonces la manilla cobrada no aparecía en ninguna hoja. Con
+ * este top-up sale igual, sin importar la ubicación.
+ *
+ * @param emitidasPorCodigo lo ya emitido por los paños, por código HER.
+ */
+export function faltantesManillasInventario(
+  adicionales: AdicionalFase0Persistido[] | undefined,
+  emitidasPorCodigo: Record<string, number>,
+): InsumoCortina[] {
+  const out: InsumoCortina[] = [];
+  if (!adicionales?.length) return out;
+  const cobrado: Record<string, number> = {};
+  for (const a of adicionales) {
+    const man = manillaDesdeAdicional(a.codInt);
+    const cant = Math.round(Number(a.cantidad) || 0);
+    if (!man || cant <= 0) continue;
+    cobrado[man.codigo] = (cobrado[man.codigo] || 0) + cant;
+  }
+  for (const cod of Object.keys(cobrado)) {
+    const faltan = cobrado[cod] - (emitidasPorCodigo[cod] || 0);
+    if (faltan > 0) {
+      out.push({ codigo: cod, descripcion: MANILLAS[cod].nombre, color: MANILLAS[cod].color, cantidad: faltan });
+    }
   }
   return out;
 }

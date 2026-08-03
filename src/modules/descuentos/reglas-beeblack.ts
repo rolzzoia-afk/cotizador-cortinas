@@ -225,6 +225,24 @@ function calcularMedidas(
   };
 }
 
+/**
+ * Cordón del beeblack (SML36 blanco / SML37 negro), en cm.
+ * Fórmula del taller: perfil superior + perfil lateral + 30 cm de holgura.
+ */
+export const EXTRA_CORDON_BEEBLACK_CM = 30;
+
+export function cordonBeeblackCm(
+  variante: VarianteBeeblack,
+  anchoCm: number,
+  altoCm: number,
+  cierreVertical = false,
+  instalacion?: string | null,
+): number {
+  if (!anchoCm || anchoCm <= 0 || !altoCm || altoCm <= 0) return 0;
+  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion);
+  return t1(m.perfilSupAncho + m.perfilLatIzq + EXTRA_CORDON_BEEBLACK_CM);
+}
+
 /** Medida calculada de un componente (preview de la UI). */
 export function medidaComponenteBeeblack(
   variante: VarianteBeeblack,
