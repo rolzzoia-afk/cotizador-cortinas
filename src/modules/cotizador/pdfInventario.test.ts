@@ -389,13 +389,13 @@ describe('construirInventario — VERTICAL (insumos VER)', () => {
 
   it('blanco: PRODUCCIÓN (peso lama/sujetador) + ESTRUCTURA (peso cordón/carrito/cordón/kit/peso cadena) + INSTALACIÓN (bracket)', () => {
     const by = Object.fromEntries(construirInventario([vVert('BLANCO')]).insumos.map((i) => [i.codigo, i]));
-    // ancho 2,12 → perfil 210,2 · varilla 208,5 · floor(/8) = 26 carritos; brackets = 4.
+    // ancho 2,12 → perfil 210,2 · varilla 208,5 · floor(/8) = 26, + 1 = 27 carritos; brackets = 4.
     // PRODUCCIÓN (montaje sobre la tela)
-    expect(by.VER41).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' });
-    expect(by.VER45).toMatchObject({ cantidad: 26, grupo: 'PRODUCCION' });
+    expect(by.VER41).toMatchObject({ cantidad: 27, grupo: 'PRODUCCION' });
+    expect(by.VER45).toMatchObject({ cantidad: 27, grupo: 'PRODUCCION' });
     // ESTRUCTURA (ferretería del sistema)
     expect(by.VER37).toMatchObject({ cantidad: 1, grupo: 'ESTRUCTURA' });
-    expect(by.VER40).toMatchObject({ cantidad: 26, grupo: 'ESTRUCTURA' });
+    expect(by.VER40).toMatchObject({ cantidad: 27, grupo: 'ESTRUCTURA' });
     expect(by.VER50).toMatchObject({ cantidad: 1, grupo: 'ESTRUCTURA' });
     expect(by.VER52).toMatchObject({ cantidad: 1, grupo: 'ESTRUCTURA' });
     // INSTALACIÓN
@@ -408,7 +408,7 @@ describe('construirInventario — VERTICAL (insumos VER)', () => {
   it('negro: peso cordón + peso cadena consolidan a [VER64] ×2 en ESTRUCTURA; cordón VER59, sujetador VER56, cadena inferior VER58', () => {
     const by = Object.fromEntries(construirInventario([vVert('NEGRO')]).insumos.map((i) => [i.codigo, i]));
     expect(by.VER59?.unidad).toBe('CALCULAR');
-    expect(by.VER56?.cantidad).toBe(26);
+    expect(by.VER56?.cantidad).toBe(27);
     expect(by.VER58?.unidad).toBe('CALCULAR');
     // El peso del cordón es VER64 (= peso de cadena): una sola línea consolidada ×2.
     expect(by.VER64).toMatchObject({ cantidad: 2, grupo: 'ESTRUCTURA' });

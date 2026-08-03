@@ -232,12 +232,12 @@ describe('calcularDespiece — pletina y oscuridad', () => {
     expect(corte(d, 'TUBO')).toBeUndefined();
   });
 
-  it('vertical: perfil/varilla encadenados y carritos con floor (fórmulas del taller)', () => {
+  it('vertical: perfil/varilla encadenados y carritos con floor + 1 (fórmulas del taller)', () => {
     const d = calcularDespiece(mVertical, 150, { altoCm: 180 });
     expect(corte(d, 'PERFIL CABEZAL')).toBe(148.2); // 150 − 1,8
     expect(corte(d, 'VARILLA')).toBe(146.5); // 148,2 − 1,7
-    expect(corte(d, 'CARRITOS')).toBe(18); // floor(146,5 / 8) = floor(18,31)
-    expect(corte(d, 'LAMAS')).toBe(18); // una por carrito (como la ferretería)
+    expect(corte(d, 'CARRITOS')).toBe(19); // floor(146,5 / 8) = 18, + 1 de holgura
+    expect(corte(d, 'LAMAS')).toBe(19); // una por carrito (como la ferretería)
     expect(corte(d, 'REPUESTO')).toBe(2); // tela extra, no se instala
     expect(corte(d, 'ALTO TELA')).toBe(185); // 180 + 5 (componente "Alto de corte")
     expect(corte(d, 'ALTO FINAL LAMA')).toBe(172); // 185 − 13 (componente "Alto final")
@@ -248,12 +248,12 @@ describe('calcularDespiece — pletina y oscuridad', () => {
     expect(corte(d, 'PESO')).toBeUndefined();
   });
 
-  it('vertical: la división exacta NO suma un carrito de más', () => {
-    // 131,5 → perfil 129,7 → varilla 128,0 → 128/8 = 16 justo.
+  it('vertical: la división exacta también lleva el carrito extra', () => {
+    // 131,5 → perfil 129,7 → varilla 128,0 → 128/8 = 16 justo, + 1 = 17.
     const d = calcularDespiece(mVertical, 131.5, { altoCm: 200 });
     expect(corte(d, 'VARILLA')).toBe(128);
-    expect(corte(d, 'CARRITOS')).toBe(16);
-    expect(corte(d, 'LAMAS')).toBe(16);
+    expect(corte(d, 'CARRITOS')).toBe(17);
+    expect(corte(d, 'LAMAS')).toBe(17);
   });
 
   it('vertical: los cm de tela salen del contexto (parámetros de corte)', () => {
@@ -271,7 +271,7 @@ describe('calcularDespiece — pletina y oscuridad', () => {
     expect(corte(d, 'PERFIL CABEZAL')).toBe(148.2);
     expect(corte(d, 'ALTO TELA')).toBeUndefined();
     expect(corte(d, 'ALTO FINAL LAMA')).toBeUndefined();
-    expect(corte(d, 'LAMAS')).toBe(18);
+    expect(corte(d, 'LAMAS')).toBe(19);
     expect(corte(d, 'REPUESTO')).toBe(2);
   });
 
