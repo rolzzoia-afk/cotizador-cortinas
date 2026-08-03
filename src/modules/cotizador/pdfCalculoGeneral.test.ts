@@ -73,7 +73,7 @@ const modeloVertical: ModeloDespiece = {
   ancho_max_m: 6,
 };
 
-/** Vertical 1,50 × 1,80 → cabezal 148,2 · varilla 146,5 · 18 carritos · 20 lamas. */
+/** Vertical 1,50 × 1,80 → cabezal 148,2 · varilla 146,5 · 19 carritos · 19 lamas + 2 repuesto. */
 function ventVertical(): Ventana {
   const v = ventRoller(1.5, 'LIVING');
   (v as { categoria: string }).categoria = 'VERTICAL';
@@ -178,8 +178,8 @@ describe('construirCalculoGeneral', () => {
     expect(f.bloque).toBe('VERTICAL');
     expect(f.despiece.get('PERFIL CABEZAL')).toBe(148.2);
     expect(f.despiece.get('VARILLA')).toBe(146.5);
-    expect(f.despiece.get('CARRITOS')).toBe(18);
-    expect(f.despiece.get('LAMAS')).toBe(18); // una por carrito
+    expect(f.despiece.get('CARRITOS')).toBe(19);
+    expect(f.despiece.get('LAMAS')).toBe(19); // una por carrito
     expect(f.despiece.get('REPUESTO')).toBe(2); // tela extra, aparte
     expect(f.despiece.get('ALTO DE CORTE')).toBe(185); // ex "ALTO TELA"
     expect(f.despiece.get('ALTO FINAL')).toBe(172); // ex "ALTO FINAL LAMA"

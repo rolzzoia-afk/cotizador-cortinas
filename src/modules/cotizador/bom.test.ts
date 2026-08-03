@@ -71,10 +71,10 @@ describe('calcularBOM', () => {
     const bom = calcularBOM([row({ color: 'Blanco' })], ventanas as Parameters<typeof calcularBOM>[1]);
     const ins = bom.filter((i) => i.categoria === 'INSUMO');
     const spec = Object.fromEntries(ins.map((i) => [i.especificacion, i]));
-    // carritos ancho 1,5 → perfil 148,2 · varilla 146,5 · floor(/8) = 18.
-    expect(spec.VER40?.cantidad).toBe(18); // carrito
-    expect(spec.VER41?.cantidad).toBe(18); // peso lama
-    expect(spec.VER45?.cantidad).toBe(18); // sujetador blanco
+    // carritos ancho 1,5 → perfil 148,2 · varilla 146,5 · floor(/8) = 18, + 1 = 19.
+    expect(spec.VER40?.cantidad).toBe(19); // carrito
+    expect(spec.VER41?.cantidad).toBe(19); // peso lama
+    expect(spec.VER45?.cantidad).toBe(19); // sujetador blanco
     expect(spec.VER37?.cantidad).toBe(1); // peso cordón
     expect(spec.VER50?.cantidad).toBe(1); // kit
     expect(spec.VER52?.cantidad).toBe(1); // peso cadena blanco

@@ -115,6 +115,8 @@ export const PESO_VS_TUBO_CM = 0.4;
 export const ANCHO_LAMA_VERTICAL_CM = 8.9;
 /** Un carrito cada 8 cm de varilla (la varilla se divide en este paso). */
 export const PASO_CARRITO_VERTICAL_CM = 8;
+/** Carrito EXTRA que se suma SIEMPRE después del floor (regla del taller 2026-08-03). */
+export const EXTRA_CARRITO_VERTICAL = 1;
 /** Lamas de TELA extra que se cortan de más, siempre, como repuesto (no se
  *  instalan: la ferretería —peso de lama, sujetador— es 1 por carrito). */
 export const LAMAS_REPUESTO_VERTICAL = 2;
@@ -130,7 +132,7 @@ export type CalculoVertical = {
   perfilCabezalCm: number;
   /** Corte de la varilla = perfil cabezal − dcto_perfiles_cm. */
   varillaCm: number;
-  /** Carritos que entran en la varilla (uno cada 8 cm, redondeando HACIA ABAJO). */
+  /** Carritos: uno cada 8 cm de varilla (floor) MÁS uno de holgura. */
   carritos: number;
   /** Lamas que se instalan = una por carrito. */
   lamas: number;
@@ -159,8 +161,12 @@ export function calculoVertical(
   const dctoFinal = opts?.dctoAltoFinalCm ?? DCTO_ALTO_FINAL_VERTICAL_DEFAULT_CM;
   const perfilCabezalCm = r1(anchoCm - modelo.dcto_tubo_cm);
   const varillaCm = r1(perfilCabezalCm - modelo.dcto_perfiles_cm);
-  // Hacia abajo: un carrito de más no entra en la varilla.
-  const carritos = varillaCm > 0 ? Math.floor(varillaCm / PASO_CARRITO_VERTICAL_CM) : 0;
+  // Los que entran en la varilla (floor) más uno de holgura: el taller siempre
+  // monta un carrito extra, incluso cuando la división da exacta.
+  const carritos =
+    varillaCm > 0
+      ? Math.floor(varillaCm / PASO_CARRITO_VERTICAL_CM) + EXTRA_CARRITO_VERTICAL
+      : 0;
   // Una lama por carrito (igual que el peso de lama y el sujetador de bodega);
   // el repuesto es tela EXTRA que se corta aparte, no va montada.
   const lamas = carritos;
