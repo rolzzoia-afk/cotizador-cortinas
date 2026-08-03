@@ -127,13 +127,69 @@ describe('construirPanosDeGrupo', () => {
     expect(panos[1]).toMatchObject({ mecanismo: 'MEC 32', ancho: 1.2, color: 'X' });
   });
 
-  it('grupo nuevo (sin origPanos) crea paños simples', () => {
+  it('grupo nuevo (sin origPanos) crea paños con sus colores derivados', () => {
     const filas: FilaReconcile[] = [
       { id: 'a', panoIndex: 0, codInt: '', categoria: '', direccion: '', sentido: '', cantidad: 1, ubicacion: '', colorAcc: 'NEG', ancho: 2, alto: 2, descuento: 0 },
     ];
     expect(construirPanosDeGrupo(filas, undefined)).toEqual([
-      { ancho: 2, alto: 2, color: 'NEG', descuento: 0 },
+      {
+        ancho: 2,
+        alto: 2,
+        color: 'NEG',
+        colorMecanismo: 'NEG',
+        colorPeso: 'NEG',
+        colorCadena: 'NEG',
+        descuento: 0,
+      },
     ]);
+  });
+
+  // El bug: cambiar el color en la cotización de una OT ya guardada no llegaba
+  // a Fase 2 ni al BOM, porque `colorAccesoriosDePano` mira colorMecanismo
+  // ANTES que color, y ese seguía con el valor viejo.
+  describe('cambio de color de accesorios desde la cotización', () => {
+    const filaColor = (colorAcc: string): FilaReconcile[] => [
+      { id: 'a', vid: 'v1', panoIndex: 0, codInt: '', categoria: '', direccion: '', sentido: '', cantidad: 1, ubicacion: '', colorAcc, ancho: 2.2, alto: 2.5, descuento: 0 },
+    ];
+
+    it('propaga el color nuevo a mecanismo, peso y cadena', () => {
+      const orig = [
+        { ancho: 2.2, alto: 2.5, color: 'BCO', colorMecanismo: 'BCO', colorPeso: 'BCO', colorCadena: 'BCO', mecanismo: 'MEC 33' },
+      ];
+      expect(construirPanosDeGrupo(filaColor('NEG'), orig)[0]).toMatchObject({
+        color: 'NEG',
+        colorMecanismo: 'NEG',
+        colorPeso: 'NEG',
+        colorCadena: 'NEG',
+      });
+    });
+
+    it('sin cambio de color respeta los colores editados a mano en terreno', () => {
+      const orig = [
+        { ancho: 2.2, alto: 2.5, color: 'BCO', colorMecanismo: 'BCO', colorPeso: 'NEG', colorCadena: 'BCO' },
+      ];
+      // El resolutor da BCO (manda colorMecanismo) y la fila trae BCO: no toca nada.
+      expect(construirPanosDeGrupo(filaColor('BCO'), orig)[0]).toMatchObject({
+        colorPeso: 'NEG',
+      });
+    });
+
+    it('compara contra el color RESUELTO, no contra pano.color', () => {
+      // Paño incoherente de una OT vieja: color BCO pero mecanismo NEG (manda NEG).
+      const orig = [{ ancho: 2.2, alto: 2.5, color: 'BCO', colorMecanismo: 'NEG' }];
+      // La fila pide BCO → sí es un cambio real respecto del resuelto (NEG).
+      expect(construirPanosDeGrupo(filaColor('BCO'), orig)[0]).toMatchObject({
+        colorMecanismo: 'BCO',
+        colorCadena: 'BCO',
+      });
+    });
+
+    it('nombre largo y código corto son el mismo color: no fuerza cambio', () => {
+      const orig = [{ ancho: 2.2, alto: 2.5, color: 'BLANCO', colorMecanismo: 'BCO', colorPeso: 'NEG' }];
+      expect(construirPanosDeGrupo(filaColor('BLANCO'), orig)[0]).toMatchObject({
+        colorPeso: 'NEG',
+      });
+    });
   });
 
   it('guarda el DCT% de la fila en el paño', () => {

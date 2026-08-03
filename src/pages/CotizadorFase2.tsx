@@ -47,6 +47,7 @@ import {
 import { JuntarConjuntoDialog } from '@/components/cotizador/JuntarConjuntoDialog';
 import { CATEGORIAS_FASE1, catBadgeColor } from '@/modules/cotizador/categorias';
 import {
+  colorAccesorioCorto,
   direccionDesdeCierre,
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
@@ -58,6 +59,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import {
   codCadenaAutoPorAlto,
+  codCadenaPorLargoColor,
   COD_PESO_AUTO,
   derivarLargoColor,
   esCadenaRoller,
@@ -266,13 +268,29 @@ export function CotizadorFase2() {
           !(v.categoria || '').toUpperCase().includes('MOTOR');
         const cadPatch: Partial<Pano> = {};
         if (llevaCadena) {
-          if (!p.codCadena) {
-            const cod = codCadenaAutoPorAlto(
-              parseFloat(String(p.alto)) || 0,
-              colorAccesoriosDePano(p, v.color),
-              v.categoria,
-              cadenas,
-            );
+          const colorAcc = colorAccesoriosDePano(p, v.color);
+          // Se rehace la cadena si falta, y también si la que hay quedó de OTRO
+          // color: pasa cuando el vendedor cambia el color de accesorios desde
+          // la cotización (Fase 1), donde no hay catálogo de insumos para
+          // elegir el código nuevo. El largo elegido a mano se respeta: se
+          // busca el mismo largo en el color correcto.
+          const colorActual = p.codCadena ? derivarLargoColor(p.codCadena, cadenas).colorCadena : '';
+          const desalineada =
+            !!p.codCadena && !!colorActual && colorActual !== colorAccesorioCorto(colorAcc);
+          if (!p.codCadena || desalineada) {
+            const largoActual = p.codCadena
+              ? derivarLargoColor(p.codCadena, cadenas).largoCadena
+              : '';
+            const cod =
+              (desalineada && largoActual
+                ? codCadenaPorLargoColor(largoActual, colorAccesorioCorto(colorAcc), cadenas)
+                : null) ??
+              codCadenaAutoPorAlto(
+                parseFloat(String(p.alto)) || 0,
+                colorAcc,
+                v.categoria,
+                cadenas,
+              );
             if (cod) {
               const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
               cadPatch.codCadena = cod;

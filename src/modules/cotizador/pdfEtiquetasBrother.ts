@@ -62,6 +62,10 @@ const ALTO_PAGINA_VERTICAL = 106;
 // DARK usa el mismo largo (su .lbx mide 146,5 mm: mismas secciones, cenefas
 // cuadradas del/tra en producción y fila TIPO DE DARK | VELCRO).
 const ALTO_PAGINA_SOFT_LIGHT = 146;
+// El BEEBLACK con manillas suma una fila de celdas a su grilla de producción
+// (las manillas son opt-in por paño), así que su etiqueta crece esa fila.
+const ALTO_FILA_MANILLA_BB = 10.4;
+const ALTO_PAGINA_BEEBLACK_MANILLA = ALTO_PAGINA + ALTO_FILA_MANILLA_BB;
 const ALTO_PANO = 51; // bloques contiguos, 3 mm arriba y 0 abajo (offset del corte)
 // Alto real del diseño de cenefa (medido del .lbx): bajo esta línea se recorta.
 const FIN_CENEFA = 54.9;
@@ -218,14 +222,19 @@ function txt(
   doc.setFontSize(size);
   doc.setTextColor(...(opts.color || NEGRO));
   const t = opts.max ? s.substring(0, opts.max) : s;
-  const esc = opts.hScale;
-  if (esc && esc !== 1) {
+  const esc = opts.hScale ?? 1;
+  if (esc !== 1) {
     let xx = x;
     if (opts.align === 'right') xx = x - doc.getTextWidth(t) * esc;
     else if (opts.align === 'center') xx = x - (doc.getTextWidth(t) * esc) / 2;
     doc.text(t, xx, y, { horizontalScale: esc });
   } else {
-    doc.text(t, x, y, { align: opts.align || 'left' });
+    // `horizontalScale: 1` explícito, aunque sea el valor natural: jsPDF emite
+    // el operador Tz SOLO cuando se le pasa la opción, y nunca lo restaura. Sin
+    // esto, un texto condensado anterior (p. ej. CANT.LAMAS al 0,85) dejaba la
+    // escala activa y los siguientes salían angostos y descentrados — el align
+    // se calcula con el ancho al 100 % pero se dibuja al 85 %.
+    doc.text(t, x, y, { align: opts.align || 'left', horizontalScale: 1 });
   }
 }
 
@@ -1435,9 +1444,11 @@ function dibujarEstructuraBeeblack(
     doc.setLineWidth(0.35);
     doc.rect(x, y, w, 10.4, 'S');
     txt(doc, label, x + 1.6, y + 3.6, 7, { hScale: 0.68, max: 30 });
-    txt(doc, valor, x + w - 0.8, y + 9.4, valor.length > 6 ? 12 : 15.5, {
-      align: 'right', hScale: 0.79,
-    });
+    // Las medidas son números cortos, pero el CIERRE trae texto
+    // ("IZQUIERDA-DERECHA", 17 caracteres): a 12 pt se salía de la celda y se
+    // montaba sobre la cantidad de lamas de al lado.
+    const sizeValor = valor.length > 12 ? 7 : valor.length > 6 ? 12 : 15.5;
+    txt(doc, valor, x + w - 0.8, y + 9.4, sizeValor, { align: 'right', hScale: 0.79 });
   };
   const medida = (col: string) => {
     const pz = pieza(row, col);
@@ -1462,31 +1473,48 @@ function dibujarEstructuraBeeblack(
     ladoCadenaEtiqueta(row.direccion),
   );
 
+  // Manillas: se cortan de la agarradera (SML10/11/12) y son opt-in por paño,
+  // así que solo ocupan su fila cuando esta cortina las lleva. Sin esto el
+  // armador no tenía la medida en ninguna etiqueta.
+  const manIzq = pieza(row, 'MANILLA IZQ (ALTO)');
+  const manDer = pieza(row, 'MANILLA DER (ALTO)');
+  const filaManillas = !!manIzq || !!manDer;
+  if (filaManillas) {
+    if (manIzq) {
+      celda(1.5, 71.2, 28.9, conCod('MANILLA (IZQ)', cod('MANILLA IZQ (ALTO)')), medida('MANILLA IZQ (ALTO)'));
+    }
+    if (manDer) {
+      celda(30.4, 71.2, 29.5, conCod('MANILLA (DER)', cod('MANILLA DER (ALTO)')), medida('MANILLA DER (ALTO)'));
+    }
+  }
+  // Todo lo de abajo baja una fila cuando hay manillas (la página crece igual).
+  const dy = filaManillas ? ALTO_FILA_MANILLA_BB : 0;
+
   // ── INFORMACIÓN TERRENO ──
   doc.setFillColor(...NEGRO);
-  doc.rect(1.325, 71.4, 58.75, 5.2, 'F');
-  txt(doc, 'INFORMACIÓN TERRENO', 30.7, 75, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+  doc.rect(1.325, 71.4 + dy, 58.75, 5.2, 'F');
+  txt(doc, 'INFORMACIÓN TERRENO', 30.7, 75 + dy, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
 
   doc.setDrawColor(...NEGRO);
   doc.setLineWidth(0.35);
-  doc.rect(1.5, 76.3, 28.9, 9.9, 'S');
+  doc.rect(1.5, 76.3 + dy, 28.9, 9.9, 'S');
   const codInt = row.codInt || '—';
-  txt(doc, codInt, 15.9, 82.6, codInt.length > 6 ? 15 : 20.5, {
+  txt(doc, codInt, 15.9, 82.6 + dy, codInt.length > 6 ? 15 : 20.5, {
     align: 'center', max: 10, hScale: codInt.length > 6 ? 1 : 0.8,
   });
   const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
-  if (telaDesc) txt(doc, telaDesc, 15.9, 85.4, 4.8, { bold: false, align: 'center', max: 26 });
+  if (telaDesc) txt(doc, telaDesc, 15.9, 85.4 + dy, 4.8, { bold: false, align: 'center', max: 26 });
 
-  doc.rect(30.4, 76.3, 29.5, 9.9, 'S');
-  txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 81.8, 7.5, { max: 24, hScale: 0.8 });
+  doc.rect(30.4, 76.3 + dy, 29.5, 9.9, 'S');
+  txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 81.8 + dy, 7.5, { max: 24, hScale: 0.8 });
 
   // ── DIMENSIONADO: ancho × alto terminados ──
   doc.setFillColor(...NEGRO);
-  doc.rect(1.325, 88.3, 58.75, 5.2, 'F');
-  txt(doc, 'ANCHO:', 3.8, 91.9, 6.1, { color: BLANCO, hScale: 1.02 });
-  txt(doc, fmtMedidaCm(anchoCm), 14.2, 92.1, 9.2, { color: BLANCO, hScale: 1.03 });
-  txt(doc, 'ALTO:', 32.6, 91.9, 6.1, { color: BLANCO, hScale: 1.02 });
-  txt(doc, fmtMedidaCm(altoCm), 40.4, 92.1, 9.2, { color: BLANCO, hScale: 1.03 });
+  doc.rect(1.325, 88.3 + dy, 58.75, 5.2, 'F');
+  txt(doc, 'ANCHO:', 3.8, 91.9 + dy, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(anchoCm), 14.2, 92.1 + dy, 9.2, { color: BLANCO, hScale: 1.03 });
+  txt(doc, 'ALTO:', 32.6, 91.9 + dy, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(altoCm), 40.4, 92.1 + dy, 9.2, { color: BLANCO, hScale: 1.03 });
 }
 
 // ── ETIQUETA CENEFA CUADRADA (62×54,9) ───────────────────────────────
@@ -1623,14 +1651,16 @@ function dibujarPano(
   }
   const telaY = conLamas ? 39 : 34.1;
   doc.rect(1.5, telaY, 28.5, conLamas ? 11.8 : 16.7, 'S');
+  // Centro EXACTO de la caja (1,5 → 30,0). Antes se centraba en 15,6.
+  const cxTela = 15.75;
   const codInt = row.codInt || '—';
-  txt(doc, codInt, 15.6, conLamas ? 46 : 44.4, codInt.length > 6 ? 15 : 22.7, {
+  txt(doc, codInt, cxTela, conLamas ? 46 : 44.4, codInt.length > 6 ? 15 : 22.7, {
     align: 'center',
     max: 10,
   });
   const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
   if (telaDesc) {
-    txt(doc, telaDesc, 15.6, conLamas ? 49.2 : 48.4, 4.7, { bold: false, align: 'center', max: 26 });
+    txt(doc, telaDesc, cxTela, conLamas ? 49.2 : 48.4, 4.7, { bold: false, align: 'center', max: 26 });
   }
 
   // Columna derecha (30 → 59,9): ALTO grande + TIPO DE CORTINA
@@ -1667,7 +1697,9 @@ export function generarEtiquetasPDF(
       ? ALTO_PAGINA_VERTICAL
       : esFilaSoftLight(r) || esFilaDark(r) || esFilaSoftLightCC(r) || esFilaOscuranti(r)
         ? ALTO_PAGINA_SOFT_LIGHT
-        : ALTO_PAGINA;
+        : esFilaBeeblack(r) && (pieza(r, 'MANILLA IZQ (ALTO)') || pieza(r, 'MANILLA DER (ALTO)'))
+          ? ALTO_PAGINA_BEEBLACK_MANILLA
+          : ALTO_PAGINA;
   const doc = new jsPDF('p', 'mm', [ANCHO, altoPagina(rows[0])]);
   let first = true;
   let nCenefa = 0;

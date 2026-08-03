@@ -41,6 +41,7 @@ import {
   type PerfilesOscuridad,
 } from './reglas-oscuridad';
 import {
+  cordonBeeblackCm,
   cortesBeeblack,
   esCategoriaBeeblack,
   esCierreVerticalBeeblack,
@@ -623,4 +624,30 @@ export function contextoDespieceDesdePano(
       sepInf: p.separadorInfCm,
     },
   };
+}
+
+/**
+ * Cm de cordón que consume un BEEBLACK (SML36/SML37), resueltos desde la
+ * ventana y el paño igual que el resto del despiece: variante, cierre e
+ * instalación salen del mismo contexto, así el cordón nunca se desfasa de los
+ * perfiles con los que se calcula.
+ */
+export function cordonBeeblackDePano(
+  v: Parameters<typeof contextoDespieceDesdePano>[0],
+  p: Parameters<typeof contextoDespieceDesdePano>[1] & { ancho?: number | string },
+): number {
+  if (!esCategoriaBeeblack(v.categoria)) return 0;
+  const ctx = contextoDespieceDesdePano(v, p);
+  const anchoCm = (parseFloat(String(p.ancho ?? 0)) || 0) * 100;
+  const variante = normalizarVarianteBeeblack(
+    ctx.beeblackVariante ?? ctx.sentido,
+    'INTERNO',
+  ) as VarianteBeeblack;
+  return cordonBeeblackCm(
+    variante,
+    anchoCm,
+    ctx.altoCm ?? 0,
+    !!ctx.beeblackCierreVertical,
+    ctx.beeblackInstalacion,
+  );
 }

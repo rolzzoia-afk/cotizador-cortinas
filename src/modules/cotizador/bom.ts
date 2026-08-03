@@ -8,8 +8,9 @@ import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { codCadenaVertical, colorCadenaVertical } from './cadenas';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
-import { calculoVertical } from '@/modules/descuentos/despiece';
+import { calculoVertical, cordonBeeblackDePano } from '@/modules/descuentos/despiece';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
@@ -20,6 +21,7 @@ import {
   cenefaCuadradaTapasFijas,
   codigoManillaPorColor,
   faltantesDomoticaInventario,
+  faltantesManillasInventario,
   insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
@@ -73,6 +75,8 @@ export function calcularBOM(
   // Kit de motor emitido por paño (la unidad, por código ORIGINAL) para el top-up
   // de lo cobrado en Fase 1 que no calzó con un paño (ver después del forEach).
   const kitEmitidoPorCodigo: Record<string, number> = {};
+  /** Manillas ya emitidas por los paños, por código HER (para el top-up). */
+  const manillasEmitidas: Record<string, number> = {};
   // Dual: el kit de mecanismo es UNO por ventana (un solo bracket dual) → se
   // emite una sola vez aunque la ventana tenga 2 paños.
   const dualMecEmitido = new Set<string>();
@@ -151,9 +155,17 @@ export function calcularBOM(
     // el gate es por categoría, no por `tieneMotor`.
     const catEsMotor = (categoria || '').toUpperCase().includes('MOTOR');
 
-    // Cadena + peso: se emiten aunque el paño lleve motor; solo se omiten en las
-    // categorías vendidas como motor.
-    if (!catEsMotor) {
+    // Cadena + peso: se emiten aunque el paño lleve motor; se omiten en las
+    // categorías vendidas como motor y en las que NO llevan cadena de roller
+    // (VERTICAL — tiene la suya, más abajo — y BEEBLACK). Sin ese segundo gate,
+    // cualquier paño con `colorPeso` (que `fase0-sync` rellena a TODOS) emitía
+    // un "Peso de cadena · BCO" sin código que duplicaba al VER52 de la
+    // vertical, y una ventana convertida ROL→VERTICAL arrastraba su `codCadena`
+    // viejo para siempre. Ojo: se excluyen esas dos categorías por nombre, NO
+    // con `categoriaRequiereMecanismo`, porque esa devuelve false para categoría
+    // vacía y una fila sin ventana asociada es un roller normal.
+    const catSinCadenaRoller = esCategoriaVertical(categoria) || esCategoriaBeeblack(categoria);
+    if (!catEsMotor && !catSinCadenaRoller) {
       // Cadena. Si el cotizador eligió la cadena real del inventario,
       // `codCadena` (CAD01…) va en la especificación para enlazar al stock
       // (mismo patrón que el mecanismo). Si no, cae al largo de texto antiguo.
@@ -204,6 +216,7 @@ export function calcularBOM(
       const manDesc = manCod ? MANILLAS[manCod].nombre : 'Manilla';
       const manKey = `MAN|${manColor}`;
       add(manKey, 'MANILLA', manDesc, manCod, manColor, manCant, 'unid.');
+      if (manCod) manillasEmitidas[manCod] = (manillasEmitidas[manCod] || 0) + manCant;
     }
 
     const cenefaTipo = p.cenefa || 'No';
@@ -240,8 +253,15 @@ export function calcularBOM(
     // (cantidad 0 + unidad, se miden en terreno).
     if (esCategoriaVertical(categoria) && modelo) {
       const carritos = calculoVertical(modelo, anchoM * 100, 0).carritos;
+      const colorAccVert = colorAccesoriosDePano(p, ventanaColor);
+      // Cadena de la vertical: SIEMPRE la de 3 m, color por accesorios
+      // (negro CAD04 / resto CAD06). Se calcula, no se lee del paño: así una
+      // OT vieja con `codCadena` de roller se corrige sola al recalcular.
+      const cadVert = codCadenaVertical(colorAccVert);
+      const cadVertColor = colorCadenaVertical(colorAccVert);
+      add(`CAD|${cadVert}|${cadVertColor}`, 'CADENA', 'Cadena', cadVert, cadVertColor, 1, 'unid.');
       for (const it of insumosVerticalDePano({
-        colorAcc: colorAccesoriosDePano(p, ventanaColor),
+        colorAcc: colorAccVert,
         anchoM,
         carritos,
       })) {
@@ -265,6 +285,7 @@ export function calcularBOM(
       for (const it of insumosBeeblackDeCortina(
         colorAccesoriosDePano(p, ventanaColor),
         beeblackEsDoble(p),
+        v ? cordonBeeblackDePano(v, { ...p, ancho: anchoM }) : 0,
       )) {
         add(
           `INS|${it.codigo}|`,
@@ -284,6 +305,11 @@ export function calcularBOM(
   // el kit por su código.
   for (const falta of faltantesDomoticaInventario(adicionalesFase0, kitEmitidoPorCodigo)) {
     add(`MOT|${falta.codigo}|`, 'MOTOR', falta.descripcion, falta.codigo, '', falta.cantidad, 'unid.');
+  }
+  // Ídem con las manillas planas cobradas: el cruce por ubicación no las baja al
+  // paño cuando la ventana tiene varios paños (beeblack doble), así que salen acá.
+  for (const falta of faltantesManillasInventario(adicionalesFase0, manillasEmitidas)) {
+    add(`MAN|${falta.color}`, 'MANILLA', falta.descripcion, falta.codigo, falta.color, falta.cantidad, 'unid.');
   }
 
   return [...acc.values()].sort((a, b) => {
