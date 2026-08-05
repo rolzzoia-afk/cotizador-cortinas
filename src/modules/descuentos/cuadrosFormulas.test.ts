@@ -136,6 +136,25 @@ describe('construirCuadros — los totales salen del motor real', () => {
     expect(lateral?.medidaCm).toBe(234.3); // 240 − 5,7
   });
 
+  // La manilla es ESTRUCTURA del beeblack (va sin marcarla en Fase 2), así que
+  // el cuadro del catálogo tiene que mostrar su fórmula igual que la del perfil.
+  // Cuando era opt-in, el cuadro llamaba al motor sin toggles y la fila NO
+  // existía: la fórmula de la manilla no se veía ni se podía calibrar.
+  it('BEE BLACK muestra la fila de la MANILLA en las tres variantes', () => {
+    // Pizarra del taller: alto real − 5 (INTERNO) · − 1,3 (SEMI) · + 1,7 (EXTERNO).
+    const esperado = { INTERNO: [235, -5], SEMI: [238.7, -1.3], EXTERNO: [241.7, 1.7] } as const;
+    for (const [variante, [medidaCm, ajusteCm]] of Object.entries(esperado)) {
+      const c = cuadro(cuadros, `BEEBLACK|${variante}`);
+      const manilla = c.filas.find((f) => f.componente === 'Manilla izq (alto)');
+      expect(manilla, variante).toBeDefined();
+      expect(manilla?.medidaCm, variante).toBe(medidaCm);
+      // Se mide contra el ALTO de prueba (240), no contra el ancho.
+      expect(manilla?.referencia, variante).toBe('alto');
+      expect(manilla?.ajusteCm, variante).toBe(ajusteCm);
+      expect(manilla?.columnaExcel, variante).toBe('MANILLA IZQ (ALTO)');
+    }
+  });
+
   it('sin catálogo los cuadros igual se construyen (no explotan)', () => {
     const sinNada = construirCuadros([], MEDIDA_PRUEBA_DEFAULT);
     expect(sinNada.length).toBeGreaterThan(0);
@@ -252,6 +271,18 @@ describe('qué número edita cada fila', () => {
       'beeblack.ajustes.EXTERNO.perfilLateral',
     );
     expect(fila('BEEBLACK|SEMI', 'Total lamas')?.campo).toBe('beeblack.ajustes.SEMI.lamasDivisor');
+  });
+
+  it('la manilla del beeblack es editable desde su cuadro', () => {
+    expect(fila('BEEBLACK|INTERNO', 'Manilla izq (alto)')?.campo).toBe(
+      'beeblack.ajustes.INTERNO.manilla',
+    );
+    expect(fila('BEEBLACK|SEMI', 'Manilla izq (alto)')?.campo).toBe(
+      'beeblack.ajustes.SEMI.manilla',
+    );
+    expect(fila('BEEBLACK|EXTERNO', 'Manilla izq (alto)')?.campo).toBe(
+      'beeblack.ajustes.EXTERNO.manilla',
+    );
   });
 
   it('las cantidades de la vertical no se editan desde el cuadro (van en constantes)', () => {

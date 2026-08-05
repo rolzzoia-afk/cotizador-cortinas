@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   cortesBeeblack,
   instalacionDefaultBeeblack,
+  manillasActivasBeeblack,
   medidaComponenteBeeblack,
   normalizarInstalacionBeeblack,
   normalizarVarianteBeeblack,
@@ -131,12 +132,64 @@ describe('cortesBeeblack — la tela NO viaja a la hoja de estructura', () => {
   });
 });
 
-describe('cortesBeeblack — manillas y separadores (opt-in)', () => {
-  it('manillas OFF no generan cortes', () => {
+describe('cortesBeeblack — la manilla es estructura', () => {
+  it('sin decisión va UNA manilla (la izquierda), como el tubo de un roller', () => {
     const cortes = cortesBeeblack('INTERNO', 200, 130, {});
+    expect(medida(cortes, 'Manilla izq (alto)')).toBe(125); // alto 130 − 5
+    expect(medida(cortes, 'Manilla der (alto)')).toBeUndefined();
+  });
+
+  it('golden OT #3161: INTERNO 82 × 49,3 → manilla 44,3 sin marcar nada', () => {
+    expect(medida(cortesBeeblack('INTERNO', 82, 49.3, {}), 'Manilla izq (alto)')).toBe(44.3);
+  });
+
+  it('apagarla a mano se respeta: ninguna manilla', () => {
+    const cortes = cortesBeeblack('INTERNO', 200, 130, { manillaIzq: false, manillaDer: false });
     expect(medida(cortes, 'Manilla izq (alto)')).toBeUndefined();
     expect(medida(cortes, 'Manilla der (alto)')).toBeUndefined();
   });
+
+  it('la segunda manilla (la del blackout del doble) sigue siendo opt-in', () => {
+    const cortes = cortesBeeblack('INTERNO', 200, 130, { manillaIzq: true, manillaDer: true });
+    expect(medida(cortes, 'Manilla izq (alto)')).toBe(125);
+    expect(medida(cortes, 'Manilla der (alto)')).toBe(125);
+  });
+
+  it('con cierre de arriba abajo la manilla sale del ancho real, sin marcarla', () => {
+    // Girada 90°: ancho y alto cambian de papel ⇒ 200 − 5 = 195.
+    const cortes = cortesBeeblack('INTERNO', 200, 130, {}, {}, true);
+    expect(medida(cortes, 'Manilla izq (alto)')).toBe(195);
+  });
+
+  it('la manilla se emite con el ALUMINIO, antes de la tela', () => {
+    // El Cálculo General arma las columnas de cada bloque por orden de aparición
+    // del despiece: si la manilla saliera al final, su columna quedaría suelta
+    // entre las de tela en vez de junto a los perfiles del mismo riel.
+    const cortes = cortesBeeblack('INTERNO', 200, 130, {});
+    expect(cortes.map((c) => c.componente)).toEqual([
+      'Perfil superior (ancho)',
+      'Perfil inferior (ancho)',
+      'Perfil lateral izq (alto)',
+      'Perfil lateral der (alto)',
+      'Manilla izq (alto)',
+      'Ancho tela',
+      'Alto tela',
+      'Total lamas',
+    ]);
+  });
+
+  it('manillasActivasBeeblack es la misma verdad que usa la casilla de Fase 2', () => {
+    expect(manillasActivasBeeblack({})).toEqual({ izq: true, der: false });
+    expect(manillasActivasBeeblack({ manillaIzq: false })).toEqual({ izq: false, der: false });
+    expect(manillasActivasBeeblack({ manillaDer: true })).toEqual({ izq: false, der: true });
+    expect(manillasActivasBeeblack({ manillaIzq: true, manillaDer: true })).toEqual({
+      izq: true,
+      der: true,
+    });
+  });
+});
+
+describe('cortesBeeblack — separadores (opt-in)', () => {
 
   it('separadores OFF no generan cortes', () => {
     const cortes = cortesBeeblack('INTERNO', 200, 130, {});

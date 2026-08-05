@@ -71,6 +71,7 @@ import {
   esCierreVerticalBeeblack,
   INSTALACIONES_BEEBLACK,
   LABEL_INSTALACION_BEEBLACK,
+  manillasActivasBeeblack,
   medidaComponenteBeeblack,
   normalizarInstalacionBeeblack,
   normalizarVarianteBeeblack,
@@ -469,6 +470,9 @@ export function PanoEditor({
     sepSup: pano.separadorSupCm,
     sepInf: pano.separadorInfCm,
   };
+  // Manillas efectivas (la izquierda es estructura: va sin marcarla). Misma
+  // función que usa el motor de cortes.
+  const manillasBb = manillasActivasBeeblack(togglesBeeblack);
   // Cierre DE ARRIBA ABAJO: la cortina va girada 90° y ancho/alto cambian de
   // papel en todas las fórmulas (el preview de abajo ya sale invertido).
   const cierreVerticalBb = esCierreVerticalBeeblack(direccionVentana);
@@ -1212,8 +1216,11 @@ export function PanoEditor({
               );
             })}
           </div>
-          {/* Manillas: opt-in en Fase 2. Un beeblack puede llevar 2 (screen +
-              blackout: una manilla por tela). */}
+          {/* Manillas: la IZQUIERDA va sola (es estructura, como el tubo de un
+              roller) y la casilla arranca marcada; la DERECHA es opt-in, para el
+              beeblack doble (screen + blackout: una manilla por tela).
+              `manillasActivasBeeblack` es la MISMA función que usa el motor de
+              cortes, así que la casilla nunca puede discrepar de lo que se corta. */}
           <div className="space-y-1">
             <div className="text-[0.7rem] font-semibold uppercase tracking-wide text-muted-foreground">
               Manillas
@@ -1226,16 +1233,22 @@ export function PanoEditor({
                   ? medidaComponenteBeeblack(varianteBeeblack, t.key as 'manillaIzq', anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack, formulas.beeblack)
                   : 0;
               const override = pano[medidaField] as number | undefined;
+              const checked = t.key === 'manillaIzq' ? manillasBb.izq : manillasBb.der;
               return (
                 <PerfilToggle
                   key={t.key}
                   label={t.label}
                   medida={medida}
                   override={typeof override === 'number' ? override : undefined}
-                  checked={!!pano[field]}
+                  checked={checked}
                   onToggle={(v) =>
                     onChange({
                       [field]: v,
+                      // Al tocar una casilla se deja EXPLÍCITO el estado de la otra
+                      // (hasta ahora podía ser `undefined` = sin decisión): así
+                      // marcar la derecha no apaga sola a la izquierda.
+                      [BEEBLACK_TOGGLE_FIELD[t.key === 'manillaIzq' ? 'manillaDer' : 'manillaIzq']]:
+                        t.key === 'manillaIzq' ? manillasBb.der : manillasBb.izq,
                       ...(v ? {} : { [medidaField]: undefined }),
                     } as Partial<Pano>)
                   }

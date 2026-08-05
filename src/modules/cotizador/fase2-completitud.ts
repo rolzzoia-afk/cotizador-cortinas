@@ -150,7 +150,8 @@ export function pendientesFase2(
         if (!txt(p.ladoMotor)) falta('falta el lado del motor');
       }
       // BEEBLACK: sin variante no hay componentes (todas las medidas salen de
-      // ella). Las manillas son opt-in y pueden ser 0, 1 o 2: no se exigen.
+      // ella). La manilla NO se exige: es estructura y el motor la emite sola
+      // (manillasActivasBeeblack); la segunda es opt-in.
       if (esBeeblack && !txt(p.beeblackVariante)) falta('falta la variante BEEBLACK');
 
       // ── Oscuridad: perfiles sin superficie o sin perforación ──
