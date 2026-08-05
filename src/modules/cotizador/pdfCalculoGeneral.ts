@@ -24,6 +24,7 @@ import {
   familiaOscuridad,
   normalizarVarianteOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
+import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 import {
   esCategoriaBeeblack,
   LABEL_INSTALACION_BEEBLACK,
@@ -34,10 +35,15 @@ import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/re
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
-import { OPCIONES_MECANISMO_RESOLUCION } from './fase2';
+import { opcionesMecanismoResolucion } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import { colorPesoCadena } from './cadenas';
 import { telaDePano } from './telaPano';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 
 type RGB = [number, number, number];
 
@@ -52,10 +58,14 @@ const BLOQUES: Record<string, BloqueSistema> = {
   VERTICAL: { key: 'VERTICAL', label: 'VERTICAL', color: [56, 118, 29] },
 };
 
-function bloqueDe(categoria: string | undefined, cenefaTipo: string | undefined): BloqueSistema {
+function bloqueDe(
+  categoria: string | undefined,
+  cenefaTipo: string | undefined,
+  tipos?: readonly TipoCortina[],
+): BloqueSistema {
   if (esCategoriaVertical(categoria)) return BLOQUES.VERTICAL;
   if (esCategoriaBeeblack(categoria)) return BLOQUES.BEEBLACK;
-  const fam = familiaOscuridad(categoria, cenefaTipo);
+  const fam = familiaOscuridad(categoria, cenefaTipo, tipos);
   if (fam === 'OSCURANTI') return BLOQUES.OSCU;
   if (fam && esFamiliaDark(fam)) return BLOQUES.DARK; // 38 y 45
   if (fam) return BLOQUES.SOFT; // SOFT_LIGHT_38/45/CC/CC_45
@@ -154,8 +164,16 @@ export function construirCalculoGeneral(
   juntoPorPieza?: Map<string, JuntoPieza>,
   /** Dimensionado: en filas dúo reemplaza la columna ALTO por ALTO MESA DE CORTE.
    *  usarTuboE78: habilita la banda 2,2–3,0 m (kit 45 mm/E78) para esta OT. */
-  opts?: { altoMesaCorteDuo?: boolean; usarTuboE78?: boolean },
+  opts?: {
+    altoMesaCorteDuo?: boolean;
+    usarTuboE78?: boolean;
+    formulas?: FormulasFamilias;
+    /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
+    reglas?: ReglasSeleccion;
+  },
 ): CalculoGeneral {
+  const reglas = opts?.reglas ?? REGLAS_SELECCION_DEFAULT;
+  const opcMec = opcionesMecanismoResolucion(reglas.mecanismo);
   const filas: FilaCalculo[] = [];
 
   for (const v of ventanas) {
@@ -166,14 +184,16 @@ export function construirCalculoGeneral(
       const anchoCm = anchoM * 100;
       const altoCm = altoM * 100;
       const esBee = esCategoriaBeeblack(v.categoria);
-      const bloque = bloqueDe(v.categoria, p.cenefa as string);
+      const bloque = bloqueDe(v.categoria, p.cenefa as string, reglas.tipos);
 
-      const famOscFila = familiaOscuridad(v.categoria, p.cenefa as string | undefined);
+      const famOscFila = familiaOscuridad(v.categoria, p.cenefa as string | undefined, reglas.tipos);
       const despiece = new Map<string, number | string>();
       if (anchoCm > 0 && (v.modelo || esBee)) {
         const ctx = contextoDespieceDesdePano(v, p, {
           verticalExtraAltoCm: params.extraVerticalCm,
           verticalDctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
+          formulas: opts?.formulas,
+          tipos: reglas.tipos,
         });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
@@ -271,7 +291,7 @@ export function construirCalculoGeneral(
       // `altoRollerCm` también alimenta la reserva de tela del inventario, así
       // que tomarlo de ahí evita pedir 25 cm de más por cortina.
       const esVerticalFila = esCategoriaVertical(v.categoria);
-      const esPletinaFila = esCategoriaPletina(v.categoria);
+      const esPletinaFila = esCategoriaPletina(v.categoria, reglas.tipos);
       const altoTelaBbCm = esBee ? Number(despiece.get('ALTO TELA')) || 0 : 0;
       const altoRollerCm = esVerticalFila
         ? r1(altoCm + params.extraVerticalCm)
@@ -308,10 +328,11 @@ export function construirCalculoGeneral(
         { ...p, mecanismo: p.mecanismo as string },
         v.color as string,
         v.modelo,
-        OPCIONES_MECANISMO_RESOLUCION,
+        opcMec,
         v.categoria,
         anchoM,
         opts?.usarTuboE78 ?? false,
+        reglas,
       );
       const codMecanismo =
         [mecChip, (p.colorMecanismo as string) || ''].filter(Boolean).join(' ') ||
@@ -325,7 +346,16 @@ export function construirCalculoGeneral(
         // compacto sigue en tuberiaCodigoCorto para Excel/etiqueta/tela.
         tuberia: esBee
           ? ''
-          : descripcionTuberia(tuberiaCodigoCorto(v.modelo, String(p.tuberia || ''), anchoM, v.categoria)),
+          : descripcionTuberia(
+              tuberiaCodigoCorto(
+                v.modelo,
+                String(p.tuberia || ''),
+                anchoM,
+                v.categoria,
+                reglas.tuberia,
+              ),
+              reglas.tuberia,
+            ),
         tipoRol: (v.modelo?.tipo_rol as string) || '',
         codMecanismo,
         accionamiento: codCadena
@@ -630,8 +660,20 @@ export function generarPdfCalculoGeneral(
   meta: MetaCalculo,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   usarTuboE78 = false,
+  formulas?: FormulasFamilias,
+  reglas?: ReglasSeleccion,
 ): void {
-  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_CALCULO_GENERAL, undefined, usarTuboE78);
+  renderHojaCalculo(
+    ventanas,
+    catalogo,
+    meta,
+    params,
+    VARIANTE_CALCULO_GENERAL,
+    undefined,
+    usarTuboE78,
+    formulas,
+    reglas,
+  );
 }
 
 /** Genera y descarga el PDF DIMENSIONADO (cálculo general solo-tela). */
@@ -642,8 +684,20 @@ export function generarPdfDimensionado(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   juntoPorPieza?: Map<string, JuntoPieza>,
   usarTuboE78 = false,
+  formulas?: FormulasFamilias,
+  reglas?: ReglasSeleccion,
 ): void {
-  renderHojaCalculo(ventanas, catalogo, meta, params, VARIANTE_DIMENSIONADO, juntoPorPieza, usarTuboE78);
+  renderHojaCalculo(
+    ventanas,
+    catalogo,
+    meta,
+    params,
+    VARIANTE_DIMENSIONADO,
+    juntoPorPieza,
+    usarTuboE78,
+    formulas,
+    reglas,
+  );
 }
 
 function renderHojaCalculo(
@@ -654,6 +708,8 @@ function renderHojaCalculo(
   variante: VarianteHojaCalculo,
   juntoPorPieza?: Map<string, JuntoPieza>,
   usarTuboE78 = false,
+  formulas?: FormulasFamilias,
+  reglas?: ReglasSeleccion,
 ): void {
   if (!ventanas || ventanas.length === 0) {
     throw new Error('No hay ventanas en la OT.');
@@ -661,6 +717,8 @@ function renderHojaCalculo(
   const data = construirCalculoGeneral(ventanas, catalogo, params, juntoPorPieza, {
     altoMesaCorteDuo: variante.altoMesaCorteDuo,
     usarTuboE78,
+    formulas,
+    reglas,
   });
   if (data.filas.length === 0) throw new Error('No hay cortinas para calcular.');
   const { identidad, bloques } = aplicarVariante(data, variante);

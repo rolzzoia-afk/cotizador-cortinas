@@ -52,6 +52,68 @@ describe('mecanismoParaPano — kit reforzado MEC 40/41 (#18)', () => {
   });
 });
 
+// El kit debe seguir al color de accesorios igual que la cadena (que conserva
+// el largo y cambia el color): acá se conserva la FAMILIA — un reforzado no
+// baja a simple. Antes de este fix, un kit de inventario guardado se quedaba
+// con el color viejo hasta que alguien tocara el chip a mano.
+describe('mecanismoParaPano — el kit sigue al color de accesorios', () => {
+  const SIMPLE_BCO = 'KIT SIMPLE BLANCO 38MM [MEC 33]';
+  const REFORZADO_BCO = 'KIT REFORZADO BLANCO 38MM [MEC 41]';
+  const kit = (p: Parameters<typeof mecanismoParaPano>[0], color: string, categoria = 'ROL') =>
+    mecanismoParaPano(p, color, null, OPCIONES_MECANISMO_RESOLUCION, categoria, 1.5);
+
+  it('kit simple blanco + color NEG → kit simple negro', () => {
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'NEG')).toContain('[MEC 32]');
+  });
+
+  it('el color del PAÑO manda sobre el de la ventana', () => {
+    expect(kit({ mecanismo: SIMPLE_BCO, colorMecanismo: 'GRS' }, 'BCO')).toContain('[MEC 34]');
+  });
+
+  it('mismo color: devuelve el chip guardado sin cambios', () => {
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'BCO')).toBe(SIMPLE_BCO);
+  });
+
+  it('kit REFORZADO blanco + NEG → reforzado negro (no baja al simple)', () => {
+    expect(kit({ mecanismo: REFORZADO_BCO }, 'NEG')).toContain('[MEC 40]');
+  });
+
+  it('reforzado + GRS: no hay reforzado gris, se conserva el guardado', () => {
+    expect(kit({ mecanismo: REFORZADO_BCO }, 'GRS')).toBe(REFORZADO_BCO);
+  });
+
+  it('color sin kit de bodega (MET): conserva el guardado', () => {
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'MET')).toBe(SIMPLE_BCO);
+  });
+
+  it('el recolor no pisa las reglas: la de oscuranti sigue fijando MEC 28', () => {
+    // Y el soft light ovalado sigue yendo a su kit ovalada, no al simple.
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'NEG', 'OSCURANTI_63mm')).toContain('[MEC 28]');
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'NEG', 'SOFT_LIGHT_38mm')).toContain('[MEC 38]');
+  });
+
+  it('DARK 38 mm (sin regla de categoría) con kit blanco + NEG → MEC 32', () => {
+    // El caso reportado desde Fase 2: el botón de color cambiaba la cadena pero
+    // el kit se quedaba en «KIT SIMPLE BLANCO» con los accesorios en negro.
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'NEG', 'DARK_38mm')).toContain('[MEC 32]');
+  });
+
+  it('el kit 45 mm fuera de banda (elección manual) NO se recolorea', () => {
+    // 18/23 no son familia de color: dentro de la banda los mueve la regla por
+    // ancho; fuera de ella son manuales y se respetan.
+    const manual45 = '0,45mm BCO [MEC 18]';
+    expect(kit({ mecanismo: manual45 }, 'GRS')).toBe(manual45);
+  });
+
+  it('dentro de la banda 2,2–3,0 m manda la regla por ancho, no el recolor', () => {
+    expect(
+      mecanismoParaPano(
+        { mecanismo: SIMPLE_BCO }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true,
+      ),
+    ).toContain('[MEC 23]');
+  });
+});
+
 describe('modeloPorAncho — soft light 38 mm banda E78', () => {
   const soft = (variante: string, diam: 38 | 45): ModeloDespiece => ({
     ...m('', diam),
@@ -713,7 +775,7 @@ describe('resincronizarChipsPanos — recálculo de chips al re-guardar (Fase 0)
     expect(String(panos[0].mecanismo)).toContain('[MEC 18]');
     expect(codigoTuberiaDeChip(String(panos[0].tuberia))).toBe('E78');
   });
-  it('paño dual: no toca sus chips', () => {
+  it('paño dual del mismo color: no toca sus chips ni la tubería', () => {
     const dualPano: Record<string, unknown> = {
       ancho: 2.5, color: 'BCO', dual: true,
       mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', tuberia: 'x',
@@ -724,6 +786,64 @@ describe('resincronizarChipsPanos — recálculo de chips al re-guardar (Fase 0)
     );
     expect(dualPano.mecanismo).toBe('DUAL DERECHO BLANCO [MEC 01]');
     expect(dualPano.tuberia).toBe('x');
+  });
+
+  it('cambio de color en Fase 1: el kit sigue al color nuevo', () => {
+    const panos: Record<string, unknown>[] = [
+      { ancho: 1.5, color: 'NEG', colorMecanismo: 'NEG', mecanismo: 'KIT SIMPLE BLANCO 38MM [MEC 33]', tuberia: '' },
+    ];
+    resincronizarChipsPanos(panos, 'NEG', m('MEC_07_ROLLER_NEGRO', 38), 'ROL', OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, false);
+    expect(String(panos[0].mecanismo)).toContain('[MEC 32]');
+  });
+
+  it('cambio de color en un dual: recolorea el chip y sus lado/color derivados', () => {
+    const dualPano: Record<string, unknown> = {
+      ancho: 2.5, color: 'NEG', colorMecanismo: 'NEG', dual: true,
+      mecanismo: 'DUAL IZQUIERDO BLANCO [MEC 02]', dualLado: 'IZQUIERDO', dualColor: 'BCO', tuberia: 'x',
+    };
+    resincronizarChipsPanos(
+      [dualPano], 'NEG', m('MEC_02_DUAL_IZQUIERDO_BLANCO', 38), 'ROL_DUAL',
+      OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, false,
+    );
+    expect(dualPano.mecanismo).toBe('DUAL IZQUIERDO NEGRO [MEC 04]');
+    expect(dualPano.dualLado).toBe('IZQUIERDO');
+    expect(dualPano.dualColor).toBe('NEG');
+    // La tubería del dual sigue sin derivarse del modelo.
+    expect(dualPano.tuberia).toBe('x');
+  });
+
+  it('dual con paños de distinto color: el kit es UNO por ventana (se espeja del primero)', () => {
+    // Un solo bracket dual → un solo chip. Sin el espejado, dos filas con
+    // colores distintos dejaban chips duales divergentes en la misma ventana.
+    const panos: Record<string, unknown>[] = [
+      { ancho: 2.5, dual: true, colorMecanismo: 'NEG', mecanismo: 'DUAL DERECHO BLANCO [MEC 01]' },
+      { ancho: 2.5, dual: true, colorMecanismo: 'BCO', mecanismo: 'DUAL DERECHO BLANCO [MEC 01]' },
+    ];
+    resincronizarChipsPanos(
+      panos, 'NEG', m('MEC_01_DUAL_DERECHO_BLANCO', 38), 'ROL_DUAL',
+      OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, false,
+    );
+    expect(panos.map((p) => p.mecanismo)).toEqual([
+      'DUAL DERECHO NEGRO [MEC 03]',
+      'DUAL DERECHO NEGRO [MEC 03]',
+    ]);
+    expect(panos.every((p) => p.dualColor === 'NEG')).toBe(true);
+  });
+
+  it('ventana ROL_DUAL cuyo paño aún no trae el flag: igual se trata como dual', () => {
+    // Pasa con una OT creada en Fase 1 y todavía no abierta en Fase 2 (es Fase 2
+    // quien escribe `dual` en el paño). Sin la regla por categoría, acá le
+    // habríamos puesto un kit SIMPLE y una tubería.
+    const pano: Record<string, unknown> = {
+      ancho: 2.5, color: 'NEG', colorMecanismo: 'NEG',
+      mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', tuberia: 'x',
+    };
+    resincronizarChipsPanos(
+      [pano], 'NEG', m('MEC_01_DUAL_DERECHO_BLANCO', 38), 'ROL_DUAL',
+      OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, false,
+    );
+    expect(pano.mecanismo).toBe('DUAL DERECHO NEGRO [MEC 03]');
+    expect(pano.tuberia).toBe('x');
   });
 });
 
@@ -751,10 +871,10 @@ describe('mecanismos duales', () => {
     expect(ladoColorDesdeChipDual('KIT SIMPLE BLANCO 38MM [MEC 33]')).toBeNull();
   });
 
-  it('mecanismoParaPano dual: conserva chip dual guardado; lo deriva del lado/color; dual=false lo reemplaza', () => {
-    // Conserva el chip dual ya elegido.
+  it('mecanismoParaPano dual: conserva el chip del mismo color; lo deriva del lado/color; dual=false lo reemplaza', () => {
+    // Mismo color que el chip guardado: lo conserva tal cual.
     expect(
-      mecanismoParaPano({ dual: true, mecanismo: 'DUAL IZQUIERDO NEGRO [MEC 04]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
+      mecanismoParaPano({ dual: true, mecanismo: 'DUAL IZQUIERDO NEGRO [MEC 04]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
     ).toBe('DUAL IZQUIERDO NEGRO [MEC 04]');
     // OT vieja dual sin chip: deriva de dualLado + color.
     expect(
@@ -764,6 +884,26 @@ describe('mecanismos duales', () => {
     expect(
       mecanismoParaPano({ dual: false, mecanismo: 'DUAL DERECHO BLANCO [MEC 01]' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
     ).toContain('[MEC 33]');
+  });
+
+  it('mecanismoParaPano dual: al cambiar el color recolorea el chip conservando el LADO', () => {
+    // El caso del vendedor: OT dual blanca que pasa a negra desde el botón de
+    // color de accesorios. Cambia el color, NO el lado.
+    expect(
+      mecanismoParaPano({ dual: true, mecanismo: 'DUAL IZQUIERDO BLANCO [MEC 02]' }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
+    ).toBe('DUAL IZQUIERDO NEGRO [MEC 04]');
+    // El color del PAÑO manda sobre el de la ventana.
+    expect(
+      mecanismoParaPano({ dual: true, mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', colorMecanismo: 'NEG' }, 'BCO', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
+    ).toBe('DUAL DERECHO NEGRO [MEC 03]');
+    // MIXTO no existe en gris: cae a DERECHO gris (tabla lado×color).
+    expect(
+      mecanismoParaPano({ dual: true, mecanismo: 'DUAL MIXTO NEGRO [MEC 20]' }, 'GRS', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
+    ).toBe('DUAL DERECHO GRIS [MEC 24]');
+    // Color sin chips duales (MET/CAFÉ): conserva el guardado en vez de vaciarlo.
+    expect(
+      mecanismoParaPano({ dual: true, mecanismo: 'DUAL DERECHO BLANCO [MEC 01]' }, 'MET', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL'),
+    ).toBe('DUAL DERECHO BLANCO [MEC 01]');
   });
 
   it('modeloDesdeChipMecanismo encuentra el modelo ROLLER_DUAL cero-padded', () => {

@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { normalizarUbicacion } from './adicionales-cenefa';
+import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
 export type TipoPerfilAdicional = 'izq' | 'der' | 'inf';
 
@@ -37,8 +38,11 @@ function familiaAdicional(codInt: string): 'SOFT' | 'OSCURA' | 'OTRO' {
   return 'OTRO';
 }
 
-function familiaCategoria(categoria: string | undefined | null): 'SOFT' | 'OSCURA' | 'OTRO' {
-  const cat = (categoria || '').trim().toUpperCase();
+function familiaCategoria(
+  categoria: string | undefined | null,
+  tipos?: readonly TipoCortina[],
+): 'SOFT' | 'OSCURA' | 'OTRO' {
+  const cat = categoriaEfectiva(categoria, tipos).trim().toUpperCase();
   if (cat.includes('SOFT_LIGHT')) return 'SOFT';
   if (cat.includes('OSCURANTI') || cat.includes('DARK')) return 'OSCURA';
   return 'OTRO';
@@ -57,9 +61,13 @@ function tipoPerfilDeAdicional(adic: AdicionalFase0Persistido): TipoPerfilAdicio
   return null;
 }
 
-function puntajeAdicional(adic: AdicionalFase0Persistido, categoria: string | undefined | null): number {
+function puntajeAdicional(
+  adic: AdicionalFase0Persistido,
+  categoria: string | undefined | null,
+  tipos?: readonly TipoCortina[],
+): number {
   const famAdic = familiaAdicional(adic.codInt);
-  const famCat = familiaCategoria(categoria);
+  const famCat = familiaCategoria(categoria, tipos);
   if (famCat !== 'OTRO' && famAdic === famCat) return 2;
   if (famAdic !== 'OTRO') return 1;
   return 0;
@@ -70,13 +78,14 @@ export function buscarAdicionalPerfil(
   tipo: TipoPerfilAdicional,
   adicionales: AdicionalFase0Persistido[] | undefined,
   categoria?: string | null,
+  tipos?: readonly TipoCortina[],
 ): AdicionalFase0Persistido | null {
   if (!adicionales?.length) return null;
   let mejor: AdicionalFase0Persistido | null = null;
   let mejorPuntaje = -1;
   for (const adic of adicionales) {
     if (tipoPerfilDeAdicional(adic) !== tipo) continue;
-    const p = puntajeAdicional(adic, categoria);
+    const p = puntajeAdicional(adic, categoria, tipos);
     if (p > mejorPuntaje) {
       mejor = adic;
       mejorPuntaje = p;
@@ -90,8 +99,9 @@ export function colorPerfilDesdeAdicional(
   tipo: TipoPerfilAdicional,
   adicionales: AdicionalFase0Persistido[] | undefined,
   categoria?: string | null,
+  tipos?: readonly TipoCortina[],
 ): string {
-  const adic = buscarAdicionalPerfil(tipo, adicionales, categoria);
+  const adic = buscarAdicionalPerfil(tipo, adicionales, categoria, tipos);
   return (adic?.colorAcc || '').trim();
 }
 
@@ -103,17 +113,18 @@ export function colorPerfilFilaExcel(
   adicionales: AdicionalFase0Persistido[] | undefined,
   categoria: string | undefined | null,
   perfilesActivos: { izq?: boolean; der?: boolean; inf?: boolean },
+  tipos?: readonly TipoCortina[],
 ): string {
   if (perfilesActivos.izq) {
-    const c = colorPerfilDesdeAdicional('izq', adicionales, categoria);
+    const c = colorPerfilDesdeAdicional('izq', adicionales, categoria, tipos);
     if (c) return c;
   }
   if (perfilesActivos.der) {
-    const c = colorPerfilDesdeAdicional('der', adicionales, categoria);
+    const c = colorPerfilDesdeAdicional('der', adicionales, categoria, tipos);
     if (c) return c;
   }
   if (perfilesActivos.inf) {
-    const c = colorPerfilDesdeAdicional('inf', adicionales, categoria);
+    const c = colorPerfilDesdeAdicional('inf', adicionales, categoria, tipos);
     if (c) return c;
   }
   return '';

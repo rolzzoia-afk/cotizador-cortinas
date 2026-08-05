@@ -1,6 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────
 // REGLAS SOFT LIGHT 38 mm — SISTEMAS OSCURIDAD.xlsx
 //
+// Solo lo usa la cenefa comprada como ADICIONAL (CENF O) en Fase 0: el paño
+// se corta con el motor de `reglas-oscuridad.ts`, que es el vigente.
+//
 // Tres variantes según instalación (sentido de la cortina en Fase 0):
 //   INTERNO → cenefa = ancho − 1.2
 //   SEMI    → cenefa = ancho + 6.6
@@ -9,7 +12,13 @@
 //   tubo = cenefa − 1.8
 //   peso = cenefa − 5.8
 //   tela = peso − 0.2
+//
+// El ajuste de cenefa NO se declara acá: sale de la MISMA tabla que corta el
+// paño (`formulas.oscuridad.cenefaAdj.SOFT_LIGHT_38`). Antes era una copia y
+// editar una sin la otra dejaba la cenefa del adicional desalineada de la del
+// paño para la misma ventana.
 // ─────────────────────────────────────────────────────────────────────
+import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
 import type { ModeloDespiece } from './tipos';
 
 export type VarianteSoftLight = 'INTERNO' | 'SEMI' | 'EXTERNO';
@@ -20,16 +29,16 @@ export type CortesSoftLight38 = {
   tela: number;
 };
 
-const DCTO_TUBO_DESDE_CENEFA = 1.8;
-const DCTO_PESO_DESDE_CENEFA = 5.8;
-const DCTO_TELA_DESDE_PESO = 0.2;
+/** Índice de la variante en las tablas de oscuridad ([INTERNO, SEMI, EXTERNO]). */
+const VI: Record<VarianteSoftLight, 0 | 1 | 2> = { INTERNO: 0, SEMI: 1, EXTERNO: 2 };
 
 /** Ajuste sobre el ancho nominal para obtener la medida de cenefa (cm). */
-export const SOFT_LIGHT_38_AJUSTE_CENEFA: Record<VarianteSoftLight, number> = {
-  INTERNO: -1.2,
-  SEMI: 6.6,
-  EXTERNO: 13.2,
-};
+export function ajusteCenefaSoftLight38(
+  variante: VarianteSoftLight,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): number {
+  return formulas.oscuridad.cenefaAdj.SOFT_LIGHT_38[VI[variante]];
+}
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
@@ -58,18 +67,27 @@ export function varianteSoftLight38(opts: {
   return 'INTERNO';
 }
 
-export function cortesSoftLight38(anchoCm: number, variante: VarianteSoftLight): CortesSoftLight38 {
-  const cenefa = medidaCenefaSoftLight38(anchoCm, variante);
-  const tubo = cenefa - DCTO_TUBO_DESDE_CENEFA;
-  const peso = cenefa - DCTO_PESO_DESDE_CENEFA;
+export function cortesSoftLight38(
+  anchoCm: number,
+  variante: VarianteSoftLight,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): CortesSoftLight38 {
+  const a = formulas.adicionales;
+  const cenefa = medidaCenefaSoftLight38(anchoCm, variante, formulas);
+  const tubo = cenefa - a.softLightTuboDesdeCenefaCm;
+  const peso = cenefa - a.softLightPesoDesdeCenefaCm;
   return {
     tubo: r1(tubo),
     peso: r1(peso),
-    tela: r1(peso - DCTO_TELA_DESDE_PESO),
+    tela: r1(peso - a.softLightTelaDesdePesoCm),
   };
 }
 
 /** Medida de cenefa Soft Light 38 mm (cm) según variante interno/semi/externo. */
-export function medidaCenefaSoftLight38(anchoCm: number, variante: VarianteSoftLight): number {
-  return r1(anchoCm + SOFT_LIGHT_38_AJUSTE_CENEFA[variante]);
+export function medidaCenefaSoftLight38(
+  anchoCm: number,
+  variante: VarianteSoftLight,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): number {
+  return r1(anchoCm + ajusteCenefaSoftLight38(variante, formulas));
 }

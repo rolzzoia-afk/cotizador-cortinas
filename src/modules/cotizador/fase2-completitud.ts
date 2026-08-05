@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import { calcularDespiece, contextoDespieceDesdePano } from '@/modules/descuentos/despiece';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import {
   categoriaRequiereMecanismo,
@@ -22,6 +23,10 @@ import {
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCenefaCuadrada } from './fase2';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import {
   cenefaCuadradaTapasFijas,
   esCenefaOvalada,
@@ -56,7 +61,12 @@ const COLUMNAS_PERFIL = new Set(['PERFIL (IZQ) INT', 'PERFIL (DER) INT', 'PERFIL
  * Fase 1 nunca pasan por el editor de Fase 2, así que el gate no puede confiar
  * en que alguien las haya guardado.
  */
-export function pendientesFase2(ventanas: Ventana[]): PendienteFase2[] {
+export function pendientesFase2(
+  ventanas: Ventana[],
+  formulas?: FormulasFamilias,
+  /** Reglas editadas en Admin: definen qué categorías llevan mecanismo. */
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+): PendienteFase2[] {
   const out: PendienteFase2[] = [];
 
   for (const v of ventanas || []) {
@@ -76,11 +86,11 @@ export function pendientesFase2(ventanas: Ventana[]): PendienteFase2[] {
     const categoria = txt(v.categoria);
     const esBeeblack = esCategoriaBeeblack(categoria);
     const esVertical = esCategoriaVertical(categoria);
-    const esPletina = esCategoriaPletina(categoria);
+    const esPletina = esCategoriaPletina(categoria, reglas.tipos);
     // Sin modelo de fabricación no hay medidas de corte (excel-ordenes.ts avisa
     // lo mismo, pero recién en Fase 4 y cuando el Excel ya salió).
     if (!v.modelo && !esBeeblack) add('falta el modelo de fabricación');
-    const requiereMec = !!categoria && categoriaRequiereMecanismo(categoria);
+    const requiereMec = !!categoria && categoriaRequiereMecanismo(categoria, reglas.mecanismo);
 
     panos.forEach((p, i) => {
       const falta = (mensaje: string) => add(mensaje, i);
@@ -111,20 +121,20 @@ export function pendientesFase2(ventanas: Ventana[]): PendienteFase2[] {
 
       // Superficie (techo/pared): decide el bracket de la cenefa (BRA04/BRA05).
       const llevaCenefa =
-        esCenefaOvalada(p.cenefa as string, categoria) ||
+        esCenefaOvalada(p.cenefa as string, categoria, reglas.tipos) ||
         esCenefaCuadrada(p.cenefa as string) ||
-        llevaCenefaCuadradaImplicita(categoria);
+        llevaCenefaCuadradaImplicita(categoria, reglas.tipos);
       if (llevaCenefa && !txt(p.superficie)) falta('falta la superficie (techo/pared)');
 
       // Cenefa OVALADA: tapa, bracket y tira van al Excel y al inventario.
-      if (esCenefaOvalada(p.cenefa as string, categoria)) {
+      if (esCenefaOvalada(p.cenefa as string, categoria, reglas.tipos)) {
         if (!txt(p.colorTapa)) falta('falta el color de tapa de la cenefa');
         if (!txt(p.bracketTipo)) falta('falta el tipo de bracket');
         if (!txt(p.cenefaTira)) falta('falta definir la tira de la cenefa (con/sin)');
       }
       // Cenefa CUADRADA elegible (roller/vertical): tapas + color. En oscuridad
       // las tapas son fijas por sistema, así que no se pregunta.
-      if (esCenefaCuadrada(p.cenefa as string) && !cenefaCuadradaTapasFijas(categoria, p.cenefa as string)) {
+      if (esCenefaCuadrada(p.cenefa as string) && !cenefaCuadradaTapasFijas(categoria, p.cenefa as string, reglas.tipos)) {
         if (!txt(p.cenefaTapa)) falta('falta el tipo de tapas de la cenefa');
         if (!txt(p.colorTapa)) falta('falta el color de tapa de la cenefa');
       }
@@ -146,11 +156,12 @@ export function pendientesFase2(ventanas: Ventana[]): PendienteFase2[] {
       // ── Oscuridad: perfiles sin superficie o sin perforación ──
       // Se usa el MISMO despiece que el Excel de órdenes, para que el gate y sus
       // advertencias nunca discrepen (excel-ordenes.ts, bloque de PERF).
-      const fam = familiaOscuridad(categoria, p.cenefa as string | undefined);
+      const fam = familiaOscuridad(categoria, p.cenefa as string | undefined, reglas.tipos);
       if (fam && v.modelo && ancho > 0) {
         const ctx = contextoDespieceDesdePano(
           v as Parameters<typeof contextoDespieceDesdePano>[0],
           p as Parameters<typeof contextoDespieceDesdePano>[1],
+          { formulas, tipos: reglas.tipos },
         );
         const d = calcularDespiece(v.modelo as ModeloDespiece, ancho * 100, ctx);
         for (const c of d.cortes) {

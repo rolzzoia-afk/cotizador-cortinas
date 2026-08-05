@@ -2,7 +2,17 @@
 // Portados desde public/legacy/index.html líneas 3096-4120.
 
 import type { Pano, Ventana } from './types';
-import { DESCRIPCION_TUBERIA } from '@/modules/descuentos/reglas-tuberia';
+import {
+  opcionesTuberiaResolucion,
+  opcionesTuberiaUI,
+} from '@/modules/descuentos/reglas-tuberia';
+import {
+  MECANISMOS_DUAL,
+  chipsMecanismoOcultos,
+  opcionesMecanismoResolucion,
+  opcionesMecanismoUI,
+} from '@/modules/descuentos/reglas-mecanismo';
+import { coloresParaUso } from '@/modules/descuentos/coloresAccesorio';
 
 export const TIPOS_VENTANA = [
   { value: 1, label: 'Simple', icono: '▯' },
@@ -28,8 +38,11 @@ export const OPCIONES_ARMADO = ['Interno', 'Externo'] as const;
 export const OPCIONES_TIPO_TELA = ['SCR', 'BK', 'DU'] as const;
 export const OPCIONES_LARGO_CADENA = ['0.75', '1mts', '2.4mts', '3mts', '4mts', 'ROLLO'] as const;
 export const OPCIONES_CIERRE_VERT = ['Izquierda', 'Derecha', 'Vertical', 'Medio'] as const;
-export const OPCIONES_MANILLA_COLOR = ['NEG', 'BCO', 'CAFÉ'] as const;
-export const OPCIONES_ACCESORIO_COLOR = ['MET', 'NEG', 'BCO', 'GRS'] as const;
+// Colores: DERIVADOS del catálogo (coloresAccesorio.ts), que dice en qué
+// selector aparece cada uno. Estas cuatro listas son las de fábrica; Fase 2 usa
+// las del catálogo guardado, que el admin puede ampliar con colores nuevos.
+export const OPCIONES_MANILLA_COLOR = coloresParaUso('manilla');
+export const OPCIONES_ACCESORIO_COLOR = coloresParaUso('accesorio');
 // La cuadrada se separa por tipo de instalación (muro / techo). Las OTs
 // viejas guardan 'Cuadrada' a secas: usar esCenefaCuadrada() para detectar
 // cualquiera de las tres variantes.
@@ -44,10 +57,10 @@ export const OPCIONES_CENEFA_TIRA = ['CON TIRA', 'SIN TIRA'] as const;
 // hoja de órdenes): MURO_MURO −0,5 · CON_1_TAPA +1 · CON_2_TAPAS +2.
 // MURO_MURO es la opción base (reemplaza a "sin tapa": son lo mismo).
 export const OPCIONES_CENEFA_TAPA = ['MURO_MURO', 'CON_1_TAPA', 'CON_2_TAPAS'] as const;
-export const OPCIONES_COLOR_TAPA_OVALADA = ['NEG', 'BCO', 'GRS'] as const;
+export const OPCIONES_COLOR_TAPA_OVALADA = coloresParaUso('tapaOvalada');
 // Sin gris: la tapa de cenefa cuadrada no existe en ese color (solo negro,
 // blanco y café → TAP32/TAP33/TAP34).
-export const OPCIONES_COLOR_TAPA_CUADRADA = ['NEG', 'BCO', 'CAFÉ'] as const;
+export const OPCIONES_COLOR_TAPA_CUADRADA = coloresParaUso('tapaCuadrada');
 export const OPCIONES_SUPERFICIE = ['TECHO', 'PARED'] as const;
 
 // ── Perfiles de los sistemas de oscuridad (bloque PERFILES de Fase 2) ──
@@ -106,67 +119,20 @@ export const OPCIONES_ORDEN_DOBLE = [
   { value: 'BK_VID_SCR', label: 'BK al vidrio · SCR por delante' },
   { value: 'SCR_VID_BK', label: 'SCR al vidrio · BK por delante' },
 ] as const;
-export const OPCIONES_MECANISMO = [
-  // Inventario bodega (default por color de accesorios — ver reglas-mecanismo.ts)
-  'KIT SIMPLE NEGRO 38MM [MEC 32]',
-  'KIT SIMPLE BLANCO 38MM [MEC 33]',
-  'KIT SIMPLE GRIS 38MM [MEC 34]',
-  // Kits reforzados (mismo tubo 38 mm; inventario MEC 40/41 - ROLZZO).
-  'KIT REFORZADO NEGRO 38MM [MEC 40]',
-  'KIT REFORZADO BLANCO 38MM [MEC 41]',
-  // Kits bodega de cenefa ovalada por color (Dúo manual 38 / Soft Light 38 /
-  // Roller cenefa ovalada 38; ver reglas-mecanismo.ts). Nemotécnicos de
-  // inventario: MECANISMO OVALADO GRIS/NEGRO/BLANCO - ROLZZO.
-  'OVALADA GRIS [MEC 12]',
-  'OVALADA NEGRO [MEC 38]',
-  'OVALADA BLANCO [MEC 39]',
-  // Kits 45 mm (tubo E78) — banda 2,2–3,0 m por color y elección manual
-  // (2026-07-14; antes eran legacy). MEC 18 DECORELLI · MEC 23 ROLZZO.
-  '0,45mm BCO [MEC 18]',
-  '0,45mm NGR [MEC 23]',
-  // Fijo de Oscuranti 63 mm (regla de categoría).
-  '0,63mm BCO [MEC 28]',
-  // Pletina (velcro): sin kit de mecanismo. Solo se ofrece en categorías pletina
-  // (opcionesMecanismoFiltradas) y NO emite insumo en el inventario.
-  'VELCRO',
-] as const;
+// Las listas de chips se DERIVAN del catálogo de reglas-mecanismo.ts (valores
+// de fábrica). Admin puede editarlo: en ese caso las páginas usan las listas de
+// `derivarOpciones(reglas)` en vez de estas constantes.
+/** Chips de mecanismo que se ofrecen en el editor de paño. */
+export const OPCIONES_MECANISMO = opcionesMecanismoUI();
 
-// Chips MEC legacy del Excel: ya NO se ofrecen en el editor (al guardar,
-// reglas-mecanismo.legacyReemplazar los cambia por kits de inventario), pero
-// siguen en la lista de RESOLUCIÓN para que OTs viejas con estos chips
-// guardados —o modelos MEC_XX cuyo color no mapea a kit (p.ej. TRANSPARENTE)—
-// sigan mostrando su mecanismo en PDFs e inventario.
-// (MEC 18/23 pasaron a la lista de UI 2026-07-14, junto con el tubo E78.)
-export const CHIPS_MECANISMO_LEGACY = [
-  'LZ 38 MERG BCO [MEC 05]',
-  'OVALADA NEG [MEC 09]',
-  'OVALADA BCO [MEC 10]',
-  'LZ50 MERG BCO [MEC 06]',
-  'LZ50 SFLX NGR [MEC 11]',
-  'LZ50 SFLX GRIS [MEC 13]',
-  'LZ50 SFLX BCO [MEC 14]',
-] as const;
+/** Chips MEC legacy: ya no se ofrecen, pero se siguen resolviendo. */
+export const CHIPS_MECANISMO_LEGACY = chipsMecanismoOcultos();
 
-// Mecanismos dual (producto duo día/noche con dos rollers en un bracket).
-// Formato cero-padded [MEC 01] para que modeloDesdeChipMecanismo encuentre el
-// modelo ROLLER_DUAL 'MEC_01_DUAL_…' en el catálogo (descuentos_modelo).
-export const OPCIONES_MECANISMO_DUAL = [
-  'DUAL DERECHO BLANCO [MEC 01]',
-  'DUAL IZQUIERDO BLANCO [MEC 02]',
-  'DUAL DERECHO NEGRO [MEC 03]',
-  'DUAL IZQUIERDO NEGRO [MEC 04]',
-  'DUAL MIXTO BLANCO [MEC 19]',
-  'DUAL MIXTO NEGRO [MEC 20]',
-  'DUAL DERECHO GRIS [MEC 24]',
-  'DUAL IZQUIERDO GRIS [MEC 25]',
-] as const;
+/** Mecanismos dual (producto dúo día/noche con dos rollers en un bracket). */
+export const OPCIONES_MECANISMO_DUAL = MECANISMOS_DUAL;
 
 /** Lista completa para RESOLVER mecanismos (UI limpia + dual + legacy guardados). */
-export const OPCIONES_MECANISMO_RESOLUCION = [
-  ...OPCIONES_MECANISMO,
-  ...OPCIONES_MECANISMO_DUAL,
-  ...CHIPS_MECANISMO_LEGACY,
-] as const;
+export const OPCIONES_MECANISMO_RESOLUCION = opcionesMecanismoResolucion();
 export const OPCIONES_DUAL_LADO = ['DERECHO', 'IZQUIERDO', 'MIXTO'] as const;
 export const OPCIONES_DUAL_COLOR = ['NEG', 'BCO', 'GRS'] as const;
 // Tipo de mecanismo: simple (kits 32/33/34 por color) o dual (los 8 de arriba).
@@ -187,18 +153,14 @@ export const OPCIONES_MOTOR_MODELO = [
   { value: 'CABLE', label: 'Con cable' },
 ] as const;
 export const OPCIONES_LADO_MOTOR = ['IZQUIERDA', 'DERECHA'] as const;
-export const OPCIONES_TUBERIA = [
-  // Descripciones largas por código (fuente única: DESCRIPCION_TUBERIA en
-  // reglas-tuberia.ts). E53 (0,40mm - 2mm) se quitó 2026-07-08.
-  DESCRIPCION_TUBERIA.E02, // 'E02-TUBO 1.2 / Ø 38 mm'
-  DESCRIPCION_TUBERIA.E66, // 'E66 - TUBO (.40mm) - 2.5mm'
-  DESCRIPCION_TUBERIA.E78, // 'E78 - TUBO 43MM(ESP1.2)(5.8)' — default 45 mm desde 2026-07-14
-  DESCRIPCION_TUBERIA.E05, // 'E05 - TUBO Ø 45 mm' — histórico (en desuso), sigue seleccionable
-  DESCRIPCION_TUBERIA.E47, // 'E47 - TUBO Ø 63 mm'
-  DESCRIPCION_TUBERIA.E65, // 'E65 - TUBO (.63mm)' — default para roller >3 m
-  'VELCRO',
-  'VERTICAL', // cortina de lamas: perfil cabezal + varilla (sin tubo)
-] as const;
+// Descripciones largas por código, derivadas del catálogo `tubos` de
+// reglas-tuberia.ts + las pseudo-tuberías VELCRO/VERTICAL al final. Un tubo
+// marcado 'oculto' desaparece de acá pero se sigue resolviendo (así se retiró
+// el E53 en 2026-07-08).
+export const OPCIONES_TUBERIA = opcionesTuberiaUI();
+
+/** Lista completa para RESOLVER tuberías (incluye las ocultas). */
+export const OPCIONES_TUBERIA_RESOLUCION = opcionesTuberiaResolucion();
 export const OPCIONES_CORTES = ['Nada', 'Plumavit', 'Rodapié', 'Ambos'] as const;
 export const OPCIONES_RELACION_MARCO = ['N/A', 'Dentro', 'Fuera'] as const;
 // Suplemento seleccionable (opcional). '' = sin suplemento.

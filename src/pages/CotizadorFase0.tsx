@@ -50,11 +50,10 @@ import {
 import { emparejarDualesFase0 } from '@/modules/cotizador/fase0-dual';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
-import {
-  OPCIONES_MECANISMO_DUAL,
-  OPCIONES_MECANISMO_RESOLUCION,
-  OPCIONES_TUBERIA,
-} from '@/modules/cotizador/fase2';
+import { categoriasParaSelect, type TipoCortina } from '@/modules/descuentos/tiposCortina';
+import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
+import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
 import {
   agruparFilasPorVentana,
@@ -218,15 +217,10 @@ const SENTIDOS = ['INTERNO', 'EXTERNO'];
 // (la caída es el armado tela/tubo, no la variante). La variante de instalación
 // (INTERNO/SEMI/EXTERNO) se elige en Fase 2, no en Fase 1.
 const CAIDA_OSCURIDAD = 'INTERNO';
-const esCategoriaOscuridad = (categoria: string | undefined): boolean =>
-  familiaOscuridad(categoria) != null;
-const CATEGORIAS_MECANISMO = [
-  'ROL', 'ROL_DUAL', 'ROL_MANUAL_CENEFA_OVALADA_38mm', 'ROL_MANUAL_CENEFA_OVALADA_45mm',
-  'ROL_CENEFA_OVALADA_MOTOR_PEQUEÑO', 'ROL_CENEFA_OVALADA_MOTOR_GRANDE', 'PLETINA_ROLLER_V',
-  'DUO_MANUAL_38mm', 'DUO_MANUAL_45mm', 'DUO_MOTOR_PEQUEÑO_38mm', 'DUO_MOTOR_GRANDE_45mm',
-  'PLETINA_DUO_V', 'VERTICAL', 'SOFT_LIGHT_38mm', 'SOFT_LIGHT_45mm', 'DARK_38mm', 'DARK_45mm',
-  'OSCURANTI_63mm', 'BEEBLACK',
-];
+const esCategoriaOscuridad = (
+  categoria: string | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean => familiaOscuridad(categoria, undefined, tipos) != null;
 
 const esCortinaTipo = (tipo: string): boolean =>
   ['PREMIUM', 'DELUX', 'STANDARD', 'BASIC'].includes((tipo || '').toUpperCase().trim());
@@ -279,6 +273,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     [layoutDoc],
   );
   const { modelos: modelosDespiece } = useDescuentosModelo();
+  // Reglas de tubería/mecanismo editables en Admin. Al guardar se resincronizan
+  // y PERSISTEN los chips de cada paño, así que Guardar espera a `loadingReglas`
+  // (si no, una empresa con reglas propias guardaría con las de fábrica).
+  const { reglas, loading: loadingReglas } = useReglasSeleccion();
+  // Categorías que se ofrecen: las nativas + los tipos de cortina propios
+  // activos (Admin → Catálogo técnico). Es la misma lista que valida el import.
+  const categoriasSelect = useMemo(() => categoriasParaSelect(reglas.tipos), [reglas.tipos]);
 
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
   // N° de OT manual (transición desde el Excel legado): si viene, la OT se
@@ -306,6 +307,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // Tubo E78: habilita la banda 2,2–3,0 m (kit 45 mm + tubo E78) para esta OT.
   // Default false = el rango usa tubo E66 (38 mm) con kit normal.
   const [usarTuboE78, setUsarTuboE78] = useState(false);
+  const opcSel = useMemo(() => derivarOpciones(reglas, usarTuboE78), [reglas, usarTuboE78]);
+  /** Hay algo que dependa del toggle E78: alguna regla con gate o un ítem
+   *  marcado "solo con E78". Sin nada de eso, el botón no tiene sentido. */
+  const hayOptInE78 = useMemo(
+    () =>
+      reglas.mecanismo.reglasAncho.some((r) => r.requiereTuboE78) ||
+      reglas.tuberia.tubos.some((t) => t.estado === 'opt_in') ||
+      reglas.mecanismo.mecanismos.some((m) => m.estado === 'opt_in'),
+    [reglas],
+  );
 
   const [guardandoOT, setGuardandoOT] = useState(false);
   // Celdas a corregir a mano tras importar un Excel: id de fila → campos inválidos.
@@ -352,7 +363,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // EXTERNO/SEMI). Compat: una OT guardada ANTES de separar caída/variante trae
     // la variante en `sentido` y `oscuridadVariante` vacío → se recupera al campo.
     const filasMigradas = nuevasFilas.map((f) => {
-      if (!esCategoriaOscuridad(f.categoria)) return f;
+      if (!esCategoriaOscuridad(f.categoria, reglas.tipos)) return f;
       const oscuridadVariante = f.oscuridadVariante || f.sentido || '';
       return { ...f, oscuridadVariante, sentido: CAIDA_OSCURIDAD };
     });
@@ -397,6 +408,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // fabricación elegido por categoría y color) y sigue el flujo en Fase 2.
   const guardarComoOT = async (opts?: { aProduccion?: boolean }) => {
     if (!empresaId) return;
+    // Guardar resincroniza los chips de cada paño: hacerlo antes de que lleguen
+    // las reglas de la empresa los escribiría con las de fábrica.
+    if (loadingReglas) {
+      toast.error('Todavía se están cargando las reglas del catálogo. Reintenta en un segundo.');
+      return;
+    }
     if (!cliente.nombre.trim()) {
       toast.error('Ingresa el nombre del cliente antes de guardar la OT.');
       return;
@@ -426,7 +443,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // 63 mm/E65), igual que sincronizarChips en Fase 2. Sin esto una cortina
         // importada nace en 38 mm y el Excel de órdenes/optimizador salía en E66
         // hasta abrirla a mano en Fase 2.
-        const esDual = categoriaEsDual(head.categoria);
+        const esDual = categoriaEsDual(head.categoria, reglas.tipos);
         const anchoGrupo = g.filas.reduce((mx, f) => Math.max(mx, f.ancho || 0), 0);
         let modeloCalc = modeloVentanaPorAncho(
           modelosDespiece,
@@ -434,6 +451,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           head.colorAcc,
           anchoGrupo,
           usarTuboE78,
+          reglas.mecanismo,
+          reglas.tipos,
         );
         // Dual: refinar el modelo al mecanismo dual exacto por lado+color (los 8
         // modelos comparten descuentos, así que es coherencia del snapshot).
@@ -445,7 +464,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           );
           const modeloDual = chip
             ? modeloDesdeChipMecanismo(
-                modelosParaCategoria(modelosDespiece, head.categoria),
+                modelosParaCategoria(modelosDespiece, head.categoria, reglas.tipos),
                 chip,
               )
             : null;
@@ -487,23 +506,25 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 origModelo,
                 head.colorAcc,
                 usarTuboE78,
+                reglas.mecanismo,
+                reglas.tipos,
               )
             : modeloCalc;
         // Re-sincroniza los chips de mecanismo/tubería de los paños con el modelo
         // recalculado: baja MEC 18/23 → kit por color y E78 → E66 si eran auto (el
         // Excel de órdenes/etiquetas priorizan el CHIP guardado; un chip E78
-        // huérfano con modelo 38 daría "38mm_E78"). Dual conserva sus chips.
-        if (!esDual) {
-          resincronizarChipsPanos(
-            panos,
-            head.colorAcc,
-            modeloFinal,
-            head.categoria,
-            OPCIONES_MECANISMO_RESOLUCION,
-            OPCIONES_TUBERIA,
-            usarTuboE78,
-          );
-        }
+        // huérfano con modelo 38 daría "38mm_E78"). También realinea el kit al
+        // COLOR de accesorios de la fila (el dual solo eso: conserva su lado).
+        resincronizarChipsPanos(
+          panos,
+          head.colorAcc,
+          modeloFinal,
+          head.categoria,
+          opcSel.mecanismoResolucion,
+          opcSel.tuberiaUI,
+          usarTuboE78,
+          reglas,
+        );
         const ventana: Record<string, unknown> = {
           ...(orig ?? { id: crypto.randomUUID(), grupoId: null }),
           ubicacion: head.ubicacion || '',
@@ -521,7 +542,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           // Variante de oscuridad (INTERNO/SEMI/EXTERNO), independiente de la
           // caída. En oscuridad se fija SIEMPRE (default INTERNO) para que el
           // despiece no tenga que caer al `sentido` (que ahora es la caída).
-          oscuridadVariante: esCategoriaOscuridad(head.categoria)
+          oscuridadVariante: esCategoriaOscuridad(head.categoria, reglas.tipos)
             ? (head.oscuridadVariante || 'INTERNO')
             : (head.oscuridadVariante || ''),
           panos,
@@ -823,7 +844,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // Dual: cada paño (fila) mantiene SU tela → el codInt NO se replica a los
       // demás paños de la ventana (el resto de campos nivel-ventana sí).
       const catEfectiva = (conDct.categoria as string) ?? fila?.categoria ?? '';
-      const esDualFila = categoriaEsDual(catEfectiva);
+      const esDualFila = categoriaEsDual(catEfectiva, reglas.tipos);
       const soloVentana = (): Partial<FilaUI> => {
         const sub: Partial<FilaUI> = {};
         for (const k of CAMPOS_NIVEL_VENTANA) {
@@ -885,7 +906,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       if (otCliente && !editOtId) setOtManual(otCliente);
       const opts = {
         codIntValidos: new Set(Object.keys(catalogo)),
-        categorias: new Set(CATEGORIAS_MECANISMO),
+        categorias: new Set(categoriasSelect),
         direcciones: new Set(DIRECCIONES),
         direccionesBeeblack: new Set(DIRECCIONES_BEEBLACK),
         // SENT. CORT es la caída del enrollado (INTERNO/EXTERNO). En oscuridad la
@@ -904,7 +925,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // La planilla de beeblack no trae COD SEC (renombró esa columna a TIPO DE
         // INSTALACIÓN): la categoría se deduce de sus códigos BEE-*.
         const categoria =
-          canonizar(c.categoria, CATEGORIAS_MECANISMO) || categoriaImplicita(c.codInt);
+          canonizar(c.categoria, categoriasSelect) || categoriaImplicita(c.codInt);
         const esBeeblack = esCategoriaBeeblack(categoria);
         const direccion = canonizar(
           c.direccion,
@@ -917,7 +938,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         const sentido =
           esCategoriaVertical(categoria) || esBeeblack
             ? ''
-            : esCategoriaOscuridad(categoria)
+            : esCategoriaOscuridad(categoria, reglas.tipos)
               ? CAIDA_OSCURIDAD
               : canonizar(c.sentido, SENTIDOS);
         const fila: FilaUI = {
@@ -928,7 +949,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           sentido,
           // Oscuridad: la variante parte en INTERNO y se elige en Fase 2 (el Excel
           // de cotización no la trae). La caída ya quedó fija en INTERNO arriba.
-          oscuridadVariante: esCategoriaOscuridad(categoria) ? 'INTERNO' : '',
+          oscuridadVariante: esCategoriaOscuridad(categoria, reglas.tipos) ? 'INTERNO' : '',
           cantidad: c.cantidad || 1,
           ubicacion: c.ubicacion,
           colorAcc: c.colorAcc,
@@ -969,7 +990,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // `vid` compartido + `panoIndex` 0/1. Las no-dual quedan como filas sueltas.
       // El BEEBLACK marcado DOBLE (blackout + mosquitero en la misma ubicación)
       // usa el mismo camino: mosquitero al vidrio primero.
-      const esFilaDoble = (f: FilaUI) => categoriaEsDual(f.categoria) || beeblackDoble.has(f.id);
+      const esFilaDoble = (f: FilaUI) => categoriaEsDual(f.categoria, reglas.tipos) || beeblackDoble.has(f.id);
       const { grupos, avisos } = emparejarDualesFase0(
         nuevas,
         (f) => tipoTelaDesdeProducto(catalogo[f.codInt.trim()]?.cod, f.codInt),
@@ -1202,15 +1223,19 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               { value: 'cobro_destino', label: 'Cobro en destino', tono: 'mal' },
             ]}
           />
-          <CampoEstado
-            label="Tubo E78 (2,2–3,0 m)"
-            value={usarTuboE78 ? 'si' : 'no'}
-            onChange={(v) => setUsarTuboE78(v === 'si')}
-            opciones={[
-              { value: 'no', label: 'Desactivado (tubo E66)' },
-              { value: 'si', label: 'Activado (kit 45 + tubo E78)', tono: 'ok' },
-            ]}
-          />
+          {/* Solo si alguna regla o algún ítem del catálogo depende del toggle
+              (con los valores de fábrica, las 3 reglas de banda lo piden). */}
+          {(hayOptInE78 || usarTuboE78) && (
+            <CampoEstado
+              label="Tubo E78 (2,2–3,0 m)"
+              value={usarTuboE78 ? 'si' : 'no'}
+              onChange={(v) => setUsarTuboE78(v === 'si')}
+              opciones={[
+                { value: 'no', label: 'Desactivado (tubo E66)' },
+                { value: 'si', label: 'Activado (kit 45 + tubo E78)', tono: 'ok' },
+              ]}
+            />
+          )}
           {region && !sinInstalacion && (
             <label className="block">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
@@ -1421,7 +1446,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
                     {showCols && (
                       <>
-                        <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, esCategoriaOscuridad(v) ? { categoria: v, sentido: CAIDA_OSCURIDAD } : { categoria: v })} opciones={CATEGORIAS_MECANISMO} invalido={errs?.has('categoria')} /></Td>
+                        <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, esCategoriaOscuridad(v, reglas.tipos) ? { categoria: v, sentido: CAIDA_OSCURIDAD } : { categoria: v })} opciones={categoriasSelect} invalido={errs?.has('categoria')} /></Td>
                         {/* El beeblack no lleva cadena: su cierre corre de lado o
                             de arriba abajo (lista propia de su planilla). */}
                         <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={esCategoriaBeeblack(f.categoria) ? DIRECCIONES_BEEBLACK : DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
@@ -1441,7 +1466,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                             >
                               —
                             </span>
-                          ) : esCategoriaOscuridad(f.categoria) ? (
+                          ) : esCategoriaOscuridad(f.categoria, reglas.tipos) ? (
                             <span
                               className="text-muted-foreground"
                               title="Los sistemas de oscuridad siempre caen INTERNO; la variante (interno/semi/externo) se elige en Fase 2"

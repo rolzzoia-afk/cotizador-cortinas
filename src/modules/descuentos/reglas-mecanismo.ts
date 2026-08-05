@@ -9,9 +9,17 @@
 //   2. reglasCategoria (primera que coincida) → MEC por tipo de cortina
 //   3. colorAMec → kits inventario 32/33/34 para rollers estándar
 //
-// Los chips visibles deben existir en OPCIONES_MECANISMO (fase2.ts).
+// Todo MEC que una regla nombre debe existir en el catálogo `mecanismos`
+// (fase2.ts deriva de ahí OPCIONES_MECANISMO); el editor de Admin lo valida.
 // Tuberías: ver reglas-tuberia.ts
+//
+// Estas tablas son los VALORES DE FÁBRICA. Admin → Catálogo técnico puede
+// editarlas y guardarlas en configuracion.reglas_seleccion; desde ahí viajan
+// por parámetro opcional (ver reglasSeleccion.ts). Sin nada guardado, todas
+// las funciones de este módulo usan exactamente estos defaults.
 // ─────────────────────────────────────────────────────────────────────
+
+import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
 /** Coincidencia exacta de categoría o substring (case insensitive). */
 export type MatchCategoria = string | { includes: string };
@@ -61,6 +69,67 @@ export type ReglaMecAncho = {
   requiereTuboE78?: boolean;
   /** Nota que ve el operario en Fase 2 cuando la regla está activa. */
   nota: string;
+};
+
+/**
+ * Estado de un ítem del catálogo (tubo o mecanismo):
+ *  · activo  → se ofrece en el selector de Fase 2.
+ *  · oculto  → ya no se ofrece, pero se sigue RESOLVIENDO (OTs viejas que lo
+ *              tienen guardado conservan su chip en PDFs e inventario).
+ *  · opt_in  → se ofrece solo cuando la OT tiene el tubo E78 activado.
+ * Hoy el único opt-in real es el E78, y quien lo pide es la REGLA de banda
+ * (`requiereTuboE78`), no el tubo. Si algún día hace falta un segundo toggle,
+ * la migración es `datosGenerales.togglesOT?: Record<string, boolean>` leyendo
+ * `?? usarTuboE78` para la clave 'E78'.
+ */
+export type EstadoCatalogo = 'activo' | 'oculto' | 'opt_in';
+
+/** Chip de mecanismo del catálogo editable. */
+export type MecanismoCatalogo = {
+  /** Chip EXACTO como se guarda en la OT. Debe traer '[MEC n]' salvo VELCRO. */
+  chip: string;
+  estado: EstadoCatalogo;
+};
+
+/**
+ * Mecanismos DUAL (producto dúo día/noche con dos rollers en un bracket).
+ * NO son editables desde Admin: el chip se deriva de lado × color por lógica
+ * (ver DUAL_LADO_COLOR_A_MEC en chips.ts), no de una tabla de datos.
+ * Formato cero-padded [MEC 01] para que modeloDesdeChipMecanismo encuentre el
+ * modelo ROLLER_DUAL 'MEC_01_DUAL_…' en el catálogo (descuentos_modelo).
+ */
+export const MECANISMOS_DUAL = [
+  'DUAL DERECHO BLANCO [MEC 01]',
+  'DUAL IZQUIERDO BLANCO [MEC 02]',
+  'DUAL DERECHO NEGRO [MEC 03]',
+  'DUAL IZQUIERDO NEGRO [MEC 04]',
+  'DUAL MIXTO BLANCO [MEC 19]',
+  'DUAL MIXTO NEGRO [MEC 20]',
+  'DUAL DERECHO GRIS [MEC 24]',
+  'DUAL IZQUIERDO GRIS [MEC 25]',
+] as const;
+
+/** Forma completa de las reglas de mecanismo (lo que Admin puede editar). */
+export type ReglasMecanismo = {
+  categoriasSinMecanismo: readonly string[];
+  kitsInventario: readonly number[];
+  legacyReemplazar: readonly number[];
+  reglasAncho: readonly ReglaMecAncho[];
+  colorAMec: Record<string, number>;
+  /** Kits REFORZADOS por color (misma familia que colorAMec, otra línea de
+   *  bodega). Vive aparte para que un cambio de color de accesorios recoloree
+   *  el kit SIN degradar un reforzado a simple — ver `mecRecoloreado`. */
+  colorAMecReforzado: Record<string, number>;
+  aliasColorModelo: Record<string, string>;
+  reglasCategoria: readonly ReglaMecCategoria[];
+  /** Catálogo de chips no-duales: los de UI + los ocultos (legacy). */
+  mecanismos: readonly MecanismoCatalogo[];
+  /** Banda del tubo E78 para la oscuridad 38 mm (SOFT LIGHT y DARK): dentro de
+   *  ella el modelo sube a 45 mm. Es un swap de MODELO, no de kit, por eso no
+   *  vive en reglasAncho. */
+  bandaOscuridadE78: { anchoMinM: number; anchoMaxM: number };
+  /** Kit de bodega de cenefa ovalada por color (ver MEC_KIT_OVALADA_POR_COLOR). */
+  kitOvaladaPorColor: Record<string, number>;
 };
 
 /**
@@ -166,6 +235,16 @@ export const REGLAS_MECANISMO = {
     GRIS: 34,
     NEG: 32,
     NEGRO: 32,
+  } as const satisfies Record<string, number>,
+
+  /** Mapeo color accesorios → kit REFORZADO (misma familia, otra línea de
+   *  bodega). No hay reforzado gris: un reforzado en GRS se conserva tal cual
+   *  en vez de degradarse al kit simple. */
+  colorAMecReforzado: {
+    BCO: 41,
+    BLANCO: 41,
+    NEG: 40,
+    NEGRO: 40,
   } as const satisfies Record<string, number>,
 
   /** Alias de color para buscar modelos en el catálogo Excel. */
@@ -314,9 +393,105 @@ export const REGLAS_MECANISMO = {
       colores: ['GRS', 'GRIS'],
     },
   ] as readonly ReglaMecCategoria[],
-} as const;
+
+  /**
+   * Catálogo de chips de mecanismo (sin los duales, que son lógica). El ORDEN
+   * es el del selector de Fase 2. Los 'oculto' ya no se ofrecen —al guardar,
+   * legacyReemplazar los cambia por kits de inventario— pero siguen en la lista
+   * de RESOLUCIÓN para que OTs viejas con estos chips guardados (o modelos
+   * MEC_XX cuyo color no mapea a kit, p.ej. TRANSPARENTE) sigan mostrando su
+   * mecanismo en PDFs e inventario.
+   */
+  mecanismos: [
+    // Inventario bodega (default por color de accesorios — ver colorAMec).
+    { chip: 'KIT SIMPLE NEGRO 38MM [MEC 32]', estado: 'activo' },
+    { chip: 'KIT SIMPLE BLANCO 38MM [MEC 33]', estado: 'activo' },
+    { chip: 'KIT SIMPLE GRIS 38MM [MEC 34]', estado: 'activo' },
+    // Kits reforzados (mismo tubo 38 mm; inventario MEC 40/41 - ROLZZO).
+    { chip: 'KIT REFORZADO NEGRO 38MM [MEC 40]', estado: 'activo' },
+    { chip: 'KIT REFORZADO BLANCO 38MM [MEC 41]', estado: 'activo' },
+    // Kits bodega de cenefa ovalada por color (Dúo manual 38 / Soft Light 38 /
+    // Roller cenefa ovalada 38). Nemotécnicos de inventario: MECANISMO OVALADO
+    // GRIS/NEGRO/BLANCO - ROLZZO.
+    { chip: 'OVALADA GRIS [MEC 12]', estado: 'activo' },
+    { chip: 'OVALADA NEGRO [MEC 38]', estado: 'activo' },
+    { chip: 'OVALADA BLANCO [MEC 39]', estado: 'activo' },
+    // Kits 45 mm (tubo E78) — banda 2,2–3,0 m por color y elección manual
+    // (2026-07-14; antes eran legacy). MEC 18 DECORELLI · MEC 23 ROLZZO.
+    { chip: '0,45mm BCO [MEC 18]', estado: 'activo' },
+    { chip: '0,45mm NGR [MEC 23]', estado: 'activo' },
+    // Fijo de Oscuranti 63 mm (regla de categoría).
+    { chip: '0,63mm BCO [MEC 28]', estado: 'activo' },
+    // Pletina (velcro): sin kit de mecanismo. Solo se ofrece en categorías
+    // pletina (opcionesMecanismoFiltradas) y NO emite insumo en el inventario.
+    { chip: 'VELCRO', estado: 'activo' },
+    // Chips MEC legacy del Excel (MEC 18/23 pasaron a la lista de UI 2026-07-14,
+    // junto con el tubo E78).
+    { chip: 'LZ 38 MERG BCO [MEC 05]', estado: 'oculto' },
+    { chip: 'OVALADA NEG [MEC 09]', estado: 'oculto' },
+    { chip: 'OVALADA BCO [MEC 10]', estado: 'oculto' },
+    { chip: 'LZ50 MERG BCO [MEC 06]', estado: 'oculto' },
+    { chip: 'LZ50 SFLX NGR [MEC 11]', estado: 'oculto' },
+    { chip: 'LZ50 SFLX GRIS [MEC 13]', estado: 'oculto' },
+    { chip: 'LZ50 SFLX BCO [MEC 14]', estado: 'oculto' },
+  ] as readonly MecanismoCatalogo[],
+
+  /**
+   * Banda del tubo E78 en la oscuridad 38 mm (SOFT LIGHT y DARK): con el toggle
+   * de la OT activado, un ancho dentro de la banda sube el MODELO a 45 mm
+   * (mismo sistema, tipo_rol "38mm"→"45mm"). Va aparte de reglasAncho porque
+   * esas cortinas no traen mecanismo: el swap es por sistema/tipo_rol.
+   */
+  bandaOscuridadE78: { anchoMinM: 2.2, anchoMaxM: 3.0 },
+
+  /** Kit ovalada de bodega por color — ver MEC_KIT_OVALADA_POR_COLOR. */
+  kitOvaladaPorColor: MEC_KIT_OVALADA_POR_COLOR,
+} as const satisfies ReglasMecanismo;
+
+// ── Derivaciones del catálogo de mecanismos ──────────────────────────
+// fase2.ts re-exporta estas listas con sus nombres históricos
+// (OPCIONES_MECANISMO, CHIPS_MECANISMO_LEGACY, OPCIONES_MECANISMO_RESOLUCION).
+
+/** Chips que se OFRECEN en Fase 2 (activos + opt-in si la OT lo habilitó). */
+export function opcionesMecanismoUI(
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  usarTuboE78 = false,
+): readonly string[] {
+  return reglas.mecanismos
+    .filter((m) => m.estado === 'activo' || (m.estado === 'opt_in' && usarTuboE78))
+    .map((m) => m.chip);
+}
+
+/** Chips que ya no se ofrecen pero se siguen resolviendo (legacy guardados). */
+export function chipsMecanismoOcultos(
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): readonly string[] {
+  return reglas.mecanismos.filter((m) => m.estado === 'oculto').map((m) => m.chip);
+}
+
+/**
+ * Lista completa para RESOLVER mecanismos: todo lo del catálogo (incluidos los
+ * ocultos y los opt-in) + los duales. Los contextos de CÁLCULO (BOM, inventario,
+ * PDFs) usan SIEMPRE esta, nunca la de UI: un chip retirado tiene que seguir
+ * resolviendo las OTs que lo guardaron.
+ */
+export function opcionesMecanismoResolucion(
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): readonly string[] {
+  const ofrecidos = reglas.mecanismos
+    .filter((m) => m.estado !== 'oculto')
+    .map((m) => m.chip);
+  return [...ofrecidos, ...MECANISMOS_DUAL, ...chipsMecanismoOcultos(reglas)];
+}
 
 // ── Helpers de normalización ─────────────────────────────────────────
+
+/** Extrae el número MEC de un chip, ej. '… [MEC 33]' → 33. Vive acá (leaf puro)
+ *  para que el validador de reglas pueda usarlo sin depender de chips.ts. */
+export function numeroMecDeChip(chip: string | null | undefined): number | null {
+  const m = (chip || '').toUpperCase().match(/\[MEC (\d+)\]/);
+  return m ? parseInt(m[1], 10) : null;
+}
 
 export function normalizarColorAccesorio(color: string | null | undefined): string {
   const c = (color || '').toUpperCase().trim();
@@ -348,8 +523,11 @@ export function colorCoincide(
 /** ¿La categoría es pletina (velcro, sin tubo)? PLETINA_ROLLER_V / PLETINA_DUO_V.
  *  Vive acá (leaf puro) para poder usarse tanto en chips.ts como en el cotizador
  *  (insumosCortina, tela, excel-ordenes…) sin ciclos de import. */
-export function esCategoriaPletina(categoria: string | null | undefined): boolean {
-  return (categoria || '').toUpperCase().includes('PLETINA');
+export function esCategoriaPletina(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return categoriaEfectiva(categoria, tipos).toUpperCase().includes('PLETINA');
 }
 
 /** ¿La categoría es VERTICAL (cortina de lamas)? Sin tubo ni mecanismo roller:
@@ -359,33 +537,71 @@ export function esCategoriaVertical(categoria: string | null | undefined): boole
   return (categoria || '').trim().toUpperCase() === 'VERTICAL';
 }
 
-export function categoriaRequiereMecanismo(categoria: string): boolean {
+export function categoriaRequiereMecanismo(
+  categoria: string,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
   const c = normalizarCategoria(categoria);
   if (!c) return false;
-  return !REGLAS_MECANISMO.categoriasSinMecanismo.some(
-    (sin) => c === sin.toUpperCase(),
-  );
+  return !reglas.categoriasSinMecanismo.some((sin) => c === sin.toUpperCase());
 }
 
-export function numeroMecPorColor(color: string | null | undefined): number | null {
+export function numeroMecPorColor(
+  color: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): number | null {
   const norm = normalizarColorAccesorio(color);
-  return REGLAS_MECANISMO.colorAMec[norm as keyof typeof REGLAS_MECANISMO.colorAMec] ?? null;
+  return reglas.colorAMec[norm] ?? null;
 }
 
-export function esKitInventarioMec(num: number): boolean {
-  return (REGLAS_MECANISMO.kitsInventario as readonly number[]).includes(num);
+export function esKitInventarioMec(
+  num: number,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
+  return reglas.kitsInventario.includes(num);
 }
 
-export function esMecLegacy(num: number): boolean {
-  return (REGLAS_MECANISMO.legacyReemplazar as readonly number[]).includes(num);
+/**
+ * El MISMO kit en otro color de accesorios, o null si no corresponde cambiarlo.
+ *
+ * Al cambiar el color en Fase 1 o Fase 2 el kit debe seguir al color igual que
+ * la cadena, pero conservando la FAMILIA: un reforzado blanco pasa a reforzado
+ * negro, no al kit simple. Cada familia es un mapa color → MEC; si el kit
+ * guardado no pertenece a ninguna (kits 45 mm, ovalada, duales) o la familia no
+ * tiene ese color (no existe reforzado gris), devuelve null = conservar.
+ *
+ * Los kits 45 mm (18/23) quedan FUERA a propósito: dentro de la banda 2,2–3,0 m
+ * ya los recolorea la regla por ancho (`mecPorColor`), y fuera de la banda un
+ * kit 45 es elección manual (gris) que se respeta.
+ */
+export function mecRecoloreado(
+  num: number,
+  color: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): number | null {
+  const norm = normalizarColorAccesorio(color);
+  for (const familia of [reglas.colorAMec, reglas.colorAMecReforzado]) {
+    if (!Object.values(familia).includes(num)) continue;
+    const destino = familia[norm];
+    return destino != null && destino !== num ? destino : null;
+  }
+  return null;
+}
+
+export function esMecLegacy(
+  num: number,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
+  return reglas.legacyReemplazar.includes(num);
 }
 
 /** Primera regla de categoría que aplica para la ventana y color dados. */
 export function reglaCategoriaAplicable(
   categoria: string,
   color: string | null | undefined,
-): (typeof REGLAS_MECANISMO.reglasCategoria)[number] | null {
-  for (const regla of REGLAS_MECANISMO.reglasCategoria) {
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): ReglaMecCategoria | null {
+  for (const regla of reglas.reglasCategoria) {
     if (!categoriaCoincide(categoria, regla.categoria)) continue;
     if (regla.fijo || colorCoincide(color, regla.colores)) return regla;
   }
@@ -396,8 +612,9 @@ export function reglaCategoriaAplicable(
 export function mecPorCategoriaYColor(
   categoria: string,
   color: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): number | null {
-  return reglaCategoriaAplicable(categoria, color)?.mec ?? null;
+  return reglaCategoriaAplicable(categoria, color, reglas)?.mec ?? null;
 }
 
 /**
@@ -410,9 +627,10 @@ export function reglaAnchoAplicable(
   anchoM: number,
   color?: string | null,
   usarTuboE78 = false,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): { regla: ReglaMecAncho; mec: number } | null {
   const c = normalizarCategoria(categoria);
-  for (const r of REGLAS_MECANISMO.reglasAncho) {
+  for (const r of reglas.reglasAncho) {
     if (c !== r.categoria.toUpperCase()) continue;
     // Las reglas de banda 2,2–3,0 m (tubo E78) solo aplican si la OT lo activó.
     if (r.requiereTuboE78 && !usarTuboE78) continue;
@@ -431,8 +649,9 @@ export function mecPorAncho(
   anchoM: number,
   color?: string | null,
   usarTuboE78 = false,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): number | null {
-  return reglaAnchoAplicable(categoria, anchoM, color, usarTuboE78)?.mec ?? null;
+  return reglaAnchoAplicable(categoria, anchoM, color, usarTuboE78, reglas)?.mec ?? null;
 }
 
 /**
@@ -441,10 +660,14 @@ export function mecPorAncho(
  * salir de la banda: con regla = fue automático y vuelve; sin regla (gris ROL)
  * = fue elección manual y se respeta.
  */
-export function colorConBandaAncho(categoria: string, color?: string | null): boolean {
+export function colorConBandaAncho(
+  categoria: string,
+  color?: string | null,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
   const c = normalizarCategoria(categoria);
   const col = normalizarColorAccesorio(color);
-  return REGLAS_MECANISMO.reglasAncho.some(
+  return reglas.reglasAncho.some(
     (r) => c === r.categoria.toUpperCase() && r.mecPorColor?.[col] != null,
   );
 }
@@ -454,26 +677,32 @@ export function colorConBandaAncho(categoria: string, color?: string | null): bo
  * 3 m). Sirve para saber cuándo hay que VOLVER a 38 mm al bajar de ese ancho —
  * OSCURANTI y las ovaladas, que también son 63 mm, no tienen regla → no se tocan.
  */
-export function categoriaTieneReglaAncho(categoria: string): boolean {
+export function categoriaTieneReglaAncho(
+  categoria: string,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
   const c = normalizarCategoria(categoria);
-  return REGLAS_MECANISMO.reglasAncho.some((r) => c === r.categoria.toUpperCase());
+  return reglas.reglasAncho.some((r) => c === r.categoria.toUpperCase());
 }
 
 /** true si la categoría tiene una regla fija (ignora color al forzar MEC). */
-export function mecEsFijoPorCategoria(categoria: string): boolean {
-  return REGLAS_MECANISMO.reglasCategoria.some(
+export function mecEsFijoPorCategoria(
+  categoria: string,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
+  return reglas.reglasCategoria.some(
     (r) => r.fijo && categoriaCoincide(categoria, r.categoria),
   );
 }
 
-export function colorParaBusquedaModelo(color: string | null | undefined): string[] {
+export function colorParaBusquedaModelo(
+  color: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): string[] {
   const norm = normalizarColorAccesorio(color);
   if (!norm) return [];
   const aliases = [norm];
-  const alias =
-    REGLAS_MECANISMO.aliasColorModelo[
-      norm as keyof typeof REGLAS_MECANISMO.aliasColorModelo
-    ];
+  const alias = reglas.aliasColorModelo[norm];
   if (alias) aliases.push(alias);
   return aliases;
 }

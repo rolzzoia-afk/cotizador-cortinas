@@ -16,6 +16,14 @@ import {
   esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
+import {
+  COLORES_BUILTIN,
+  colorPorCodigo,
+  insumoDeColor,
+  nombreDeColor,
+  type ColorAccesorio,
+} from '@/modules/descuentos/coloresAccesorio';
 import {
   esFamiliaDark,
   esFamiliaSoftLightCC,
@@ -91,8 +99,13 @@ export const TAPAS_CENEFA_CUADRADA_POR_COLOR: Record<string, { codigo: string; c
  */
 export function tapaCenefaCuadrada(
   colorTapa: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
 ): { codigo?: string; descripcion: string } {
   const c = (colorTapa || '').trim().toUpperCase();
+  const propio = insumoDeColor(colorTapa, 'tapaCuadrada', colores);
+  if (propio) {
+    return { codigo: propio, descripcion: `TAPA CENEFA CUADRADA ${nombreDeColor(colorTapa, colores)}` };
+  }
   const m = TAPAS_CENEFA_CUADRADA_POR_COLOR[c];
   if (m) return { codigo: m.codigo, descripcion: `TAPA CENEFA CUADRADA ${m.color}` };
   return { descripcion: `TAPA CENEFA CUADRADA ${(colorTapa || '').trim()}`.trim() };
@@ -117,8 +130,14 @@ export const TAPAS_PESO_OSCURIDAD_POR_PANO = 2;
  */
 export function tapaPesoOscuridad(
   colorAcc: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
 ): { codigo?: string; descripcion: string; color: string } {
   const c = (colorAcc || '').trim().toUpperCase();
+  const propio = insumoDeColor(colorAcc, 'tapaOscuridad', colores);
+  if (propio) {
+    const nombre = nombreDeColor(colorAcc, colores);
+    return { codigo: propio, descripcion: `TAPA PESO SOFT.LIGHT/DARK - ${nombre}`, color: nombre };
+  }
   const m = TAPAS_PESO_OSCURIDAD_POR_COLOR[c];
   if (m) return { codigo: m.codigo, descripcion: `TAPA PESO SOFT.LIGHT/DARK - ${m.color}`, color: m.color };
   return { descripcion: `TAPA PESO SOFT.LIGHT/DARK - ${(colorAcc || '').trim()}`.trim(), color: (colorAcc || '').trim() };
@@ -150,26 +169,106 @@ function colorTapaCorto(color: string | null | undefined): 'BCO' | 'NEG' | 'GRS'
   return null;
 }
 
+/**
+ * ¿Este color es uno de los cinco de fábrica?
+ *
+ * Los de fábrica ya tienen su comportamiento histórico decidido pieza por pieza
+ * (el metálico, por ejemplo, nunca emitió tapas de peso roller ni sus
+ * tornillos). Un color dado de alta en Admin, en cambio, NO puede desaparecer
+ * en silencio: si no trae código, la pieza igual se emite con su descripción
+ * para que en bodega se vea que falta catalogarla.
+ */
+function esColorDeFabrica(color: string | null | undefined): boolean {
+  return colorPorCodigo(color, COLORES_BUILTIN) != null;
+}
+
+/**
+ * Tapa de peso roller izquierda y derecha para un color: primero lo que el
+ * color declare en el catálogo, luego la tabla de fábrica. `null` = este color
+ * no lleva tapas (solo para los colores de fábrica que nunca las llevaron).
+ */
+function tapasPesoDeColor(
+  colorAcc: string | null | undefined,
+  colores: readonly ColorAccesorio[] | undefined,
+): { izq: string; der: string; nombreIzq: string; nombreDer: string; color: string } | null {
+  const cc = colorTapaCorto(colorAcc);
+  const izq = insumoDeColor(colorAcc, 'tapaPesoIzq', colores) ?? (cc ? TAPAS_PESO_POR_COLOR[cc].izq : '');
+  const der = insumoDeColor(colorAcc, 'tapaPesoDer', colores) ?? (cc ? TAPAS_PESO_POR_COLOR[cc].der : '');
+  const etiqueta = cc || (colorAcc || '').trim().toUpperCase();
+  if (!izq && !der) {
+    if (esColorDeFabrica(colorAcc) || !etiqueta) return null;
+    return {
+      izq: '',
+      der: '',
+      nombreIzq: `TAPA PESO ${etiqueta} ROLLER [IZQUIERDO]`,
+      nombreDer: `TAPA PESO ${etiqueta} ROLLER [DERECHO]`,
+      color: etiqueta,
+    };
+  }
+  return {
+    izq,
+    der,
+    nombreIzq: NOMBRE_TAPA[izq] || `TAPA PESO ${etiqueta} ROLLER [IZQUIERDO]`,
+    nombreDer: NOMBRE_TAPA[der] || `TAPA PESO ${etiqueta} ROLLER [DERECHO]`,
+    color: etiqueta,
+  };
+}
+
+/** Tapa exterior de peso dúo para un color (overlay → tabla → descriptiva). */
+function tapaDuoDeColor(
+  colorAcc: string | null | undefined,
+  colores: readonly ColorAccesorio[] | undefined,
+): { codigo: string; descripcion: string; color: string } | null {
+  const cc = colorTapaCorto(colorAcc);
+  const cod = insumoDeColor(colorAcc, 'tapaDuo', colores) ?? (cc ? TAPAS_DUO_POR_COLOR[cc] : '');
+  const etiqueta = cc || (colorAcc || '').trim().toUpperCase();
+  if (!cod) {
+    if (esColorDeFabrica(colorAcc) || !etiqueta) return null;
+    return {
+      codigo: '',
+      descripcion: `[TAPA DE PESO DUO] DUO 4 EXTERIOR ${etiqueta}`,
+      color: etiqueta,
+    };
+  }
+  return {
+    codigo: cod,
+    descripcion: NOMBRE_TAPA_DUO[cod] || `[TAPA DE PESO DUO] DUO 4 EXTERIOR ${etiqueta}`,
+    color: etiqueta,
+  };
+}
+
 /** ¿La categoría lleva peso inferior con tapas de peso ROLLER (izq+der + tornillos)?
  *  Roller (incl. motorizados), cenefa ovalada, DUAL y la pletina roller
  *  (PLETINA_ROLLER_V, que también tiene barra de peso roller). Excluye DÚO,
  *  pletina dúo, oscuridad, vertical… */
-export function llevaTapasPeso(categoria: string | null | undefined): boolean {
-  const c = (categoria || '').trim().toUpperCase();
+export function llevaTapasPeso(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  const c = categoriaEfectiva(categoria, tipos).trim().toUpperCase();
   if (!c) return false;
   if (c === 'PLETINA_ROLLER_V') return true;
   return c === 'ROL' || (c.startsWith('ROL_') && !c.includes('PLETINA'));
 }
 
 /** ¿La categoría es dúo (día/noche, doble tela)? Excluye PLETINA_DUO_V. */
-export function esCategoriaDuo(categoria: string | null | undefined): boolean {
-  return (categoria || '').trim().toUpperCase().startsWith('DUO');
+export function esCategoriaDuo(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return categoriaEfectiva(categoria, tipos).trim().toUpperCase().startsWith('DUO');
 }
 
 /** ¿Lleva el juego de tapas de peso DÚO (a presión, con tapa interna)? Los dúos
  *  normales y la pletina dúo (PLETINA_DUO_V), que también tiene barra de peso dúo. */
-export function llevaTapasDuo(categoria: string | null | undefined): boolean {
-  return esCategoriaDuo(categoria) || (categoria || '').trim().toUpperCase() === 'PLETINA_DUO_V';
+export function llevaTapasDuo(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return (
+    esCategoriaDuo(categoria, tipos) ||
+    categoriaEfectiva(categoria, tipos).trim().toUpperCase() === 'PLETINA_DUO_V'
+  );
 }
 
 /**
@@ -189,9 +288,13 @@ export function tarugoDeMaterial(
 }
 
 /** ¿La cenefa del paño es ovalada? (chip 'Ovalada' o categoría que la implica). */
-export function esCenefaOvalada(cenefa: string | null | undefined, categoria?: string): boolean {
+export function esCenefaOvalada(
+  cenefa: string | null | undefined,
+  categoria?: string,
+  tipos?: readonly TipoCortina[],
+): boolean {
   if ((cenefa || '').trim().toUpperCase() === 'OVALADA') return true;
-  return (categoria || '').toUpperCase().includes('CENEFA_OVALADA');
+  return categoriaEfectiva(categoria, tipos).toUpperCase().includes('CENEFA_OVALADA');
 }
 
 /**
@@ -210,8 +313,11 @@ export function cantidadBrackets(anchoM: number): number {
  * elegible. Sirve para engancharla a los mismos insumos de cenefa cuadrada del
  * roller (tapas TAP32/33/34, brackets BRA04/05, tarugos).
  */
-export function llevaCenefaCuadradaImplicita(categoria?: string | null): boolean {
-  const fam = familiaOscuridad(categoria);
+export function llevaCenefaCuadradaImplicita(
+  categoria?: string | null,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  const fam = familiaOscuridad(categoria, undefined, tipos);
   return !!fam && (esFamiliaDark(fam) || fam === 'OSCURANTI');
 }
 
@@ -222,8 +328,12 @@ export function llevaCenefaCuadradaImplicita(categoria?: string | null): boolean
  * cambio, la cenefa cuadrada de un ROLLER/VERTICAL sigue la política del selector
  * `cenefaTapa`.
  */
-export function cenefaCuadradaTapasFijas(categoria?: string | null, cenefa?: string | null): boolean {
-  const fam = familiaOscuridad(categoria, cenefa);
+export function cenefaCuadradaTapasFijas(
+  categoria?: string | null,
+  cenefa?: string | null,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  const fam = familiaOscuridad(categoria, cenefa, tipos);
   return !!fam && (esFamiliaDark(fam) || esFamiliaSoftLightCC(fam) || fam === 'OSCURANTI');
 }
 
@@ -239,13 +349,14 @@ export function bracketDeCenefa(
   bracketTipo: string | null | undefined,
   superficie?: string | null,
   categoria?: string,
+  tipos?: readonly TipoCortina[],
 ): { codigo: string; descripcion: string } | null {
-  if (esCenefaOvalada(cenefa, categoria)) {
+  if (esCenefaOvalada(cenefa, categoria, tipos)) {
     return (bracketTipo || 'CORTO').toUpperCase() === 'LARGO'
       ? { codigo: 'BRA02', descripcion: 'BRACKET LARGO' }
       : { codigo: 'BRA01', descripcion: 'BRACKET CORTO' };
   }
-  if (esCenefaCuadrada(cenefa) || llevaCenefaCuadradaImplicita(categoria)) {
+  if (esCenefaCuadrada(cenefa) || llevaCenefaCuadradaImplicita(categoria, tipos)) {
     const c = (cenefa || '').trim().toUpperCase();
     const sup = (superficie || '').toUpperCase();
     // 'a muro' explícito manda; si no, techo cuando la superficie es TECHO
@@ -268,22 +379,24 @@ export function cantidadTarugos(
   p: Partial<Pano>,
   categoria: string | null | undefined,
   anchoM: number,
+  tipos?: readonly TipoCortina[],
 ): number {
   if (!tarugoDeMaterial(p.materialTipo)) return 0;
   const brackets = cantidadBrackets(anchoM);
-  if (esCenefaOvalada(p.cenefa, categoria || undefined)) {
+  if (esCenefaOvalada(p.cenefa, categoria || undefined, tipos)) {
     const aTecho = (p.superficie || '').toUpperCase() === 'TECHO';
     return brackets * (aTecho ? 1 : 2);
   }
-  if (esCenefaCuadrada(p.cenefa) || llevaCenefaCuadradaImplicita(categoria)) return brackets * 1;
+  if (esCenefaCuadrada(p.cenefa) || llevaCenefaCuadradaImplicita(categoria, tipos))
+    return brackets * 1;
   // Vertical (lamas): se fija con brackets al muro, 1 tarugo por bracket según
   // la superficie (igual criterio que el roller, pero por cantidad de brackets).
   if (esCategoriaVertical(categoria)) return brackets;
   // Pletina (velcro): se pega, sin tarugos/fijaciones (aunque lleve tapas de peso).
-  if (esCategoriaPletina(categoria)) return 0;
+  if (esCategoriaPletina(categoria, tipos)) return 0;
   // Roller o dúo sin cenefa: 4 tarugos (se instalan con brackets al muro). El
   // dúo no lleva tapas peso roller, pero igual se fija con tarugos.
-  return llevaTapasPeso(categoria) || esCategoriaDuo(categoria) ? 4 : 0;
+  return llevaTapasPeso(categoria, tipos) || esCategoriaDuo(categoria, tipos) ? 4 : 0;
 }
 
 /**
@@ -317,19 +430,22 @@ export function insumosDePano(
      * tapas de peso y sus tornillos SÍ van por paño (una barra de peso por tela).
      */
     omitirFijaciones?: boolean;
+    /** Tipos de cortina propios, para resolver la categoría a su molde. */
+    tipos?: readonly TipoCortina[];
+    /** Catálogo de colores: sus códigos propios ganan sobre las tablas de acá. */
+    colores?: readonly ColorAccesorio[];
   },
 ): InsumoCortina[] {
   const out: InsumoCortina[] = [];
-  const { categoria, ventanaColor, anchoM, omitirFijaciones } = ctx;
+  const { categoria, ventanaColor, anchoM, omitirFijaciones, tipos, colores } = ctx;
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
-  const cc = colorTapaCorto(colorAcc);
 
   // Tapas de peso + sus tornillos (solo roller, por color de accesorios).
-  if (llevaTapasPeso(categoria)) {
-    if (cc) {
-      const { izq, der } = TAPAS_PESO_POR_COLOR[cc];
-      out.push({ codigo: izq, descripcion: NOMBRE_TAPA[izq], color: cc, cantidad: 1 });
-      out.push({ codigo: der, descripcion: NOMBRE_TAPA[der], color: cc, cantidad: 1 });
+  if (llevaTapasPeso(categoria, tipos)) {
+    const tapas = tapasPesoDeColor(colorAcc, colores);
+    if (tapas) {
+      out.push({ codigo: tapas.izq, descripcion: tapas.nombreIzq, color: tapas.color, cantidad: 1 });
+      out.push({ codigo: tapas.der, descripcion: tapas.nombreDer, color: tapas.color, cantidad: 1 });
       out.push({
         codigo: COD_TORNILLO_TAPA,
         descripcion: NOMBRE_TORNILLO_TAPA,
@@ -337,21 +453,26 @@ export function insumosDePano(
         cantidad: TORNILLOS_TAPA_PESO_POR_PANO,
       });
     }
-  } else if (familiaOscuridad(categoria, p.cenefa)) {
+  } else if (familiaOscuridad(categoria, p.cenefa, tipos)) {
     // Soft Light / Dark: 2 tapas de peso a PRESIÓN, SIN tornillos (TAP26 blanco /
     // TAP31 negro). Gris no se vende → item sin código, solo descripción.
-    const tapa = tapaPesoOscuridad(colorAcc);
+    const tapa = tapaPesoOscuridad(colorAcc, colores);
     out.push({
       codigo: tapa.codigo ?? '',
       descripcion: tapa.descripcion,
       color: tapa.color,
       cantidad: TAPAS_PESO_OSCURIDAD_POR_PANO,
     });
-  } else if (llevaTapasDuo(categoria)) {
+  } else if (llevaTapasDuo(categoria, tipos)) {
     // Dúo (y pletina dúo): tapas a presión, SIN tornillos. 2 exteriores por color + 2 internas (TAP13).
-    if (cc) {
-      const ext = TAPAS_DUO_POR_COLOR[cc];
-      out.push({ codigo: ext, descripcion: NOMBRE_TAPA_DUO[ext], color: cc, cantidad: TAPAS_DUO_EXTERIOR_POR_PANO });
+    const ext = tapaDuoDeColor(colorAcc, colores);
+    if (ext) {
+      out.push({
+        codigo: ext.codigo,
+        descripcion: ext.descripcion,
+        color: ext.color,
+        cantidad: TAPAS_DUO_EXTERIOR_POR_PANO,
+      });
     }
     out.push({
       codigo: COD_TAPA_DUO_INTERNA,
@@ -362,7 +483,7 @@ export function insumosDePano(
   }
 
   // Tornillos de la cenefa ovalada (6 por cenefa).
-  if (esCenefaOvalada(p.cenefa, categoria)) {
+  if (esCenefaOvalada(p.cenefa, categoria, tipos)) {
     out.push({
       codigo: COD_TORNILLO_TAPA,
       descripcion: NOMBRE_TORNILLO_TAPA,
@@ -373,7 +494,9 @@ export function insumosDePano(
 
   // Brackets (por cenefa; cantidad por ancho). Fijación por cortina: en dual
   // el 2º paño no las emite (un solo bracket dual sostiene ambos rollers).
-  const bracket = omitirFijaciones ? null : bracketDeCenefa(p.cenefa, p.bracketTipo, p.superficie, categoria);
+  const bracket = omitirFijaciones
+    ? null
+    : bracketDeCenefa(p.cenefa, p.bracketTipo, p.superficie, categoria, tipos);
   if (bracket) {
     out.push({ ...bracket, color: '', cantidad: cantidadBrackets(anchoM) });
   }
@@ -381,7 +504,7 @@ export function insumosDePano(
   // Tarugos según material (vulcanita/concreto/cerámica; madera no lleva). Igual
   // que los brackets: 1 juego por cortina (el 2º paño dual no los emite).
   const tarugo = omitirFijaciones ? null : tarugoDeMaterial(p.materialTipo);
-  const tarugos = omitirFijaciones ? 0 : cantidadTarugos(p, categoria, anchoM);
+  const tarugos = omitirFijaciones ? 0 : cantidadTarugos(p, categoria, anchoM, tipos);
   if (tarugo && tarugos > 0) {
     out.push({ codigo: tarugo.codigo, descripcion: tarugo.descripcion, color: '', cantidad: tarugos });
   }
@@ -691,7 +814,12 @@ export function manillaDesdeAdicional(codInt: string | undefined): { codigo: str
  * código corto ('NEG'/'BCO'/'CAFÉ') y el nombre largo (NEGRO/BLANCO/CAFE).
  * '' si el color no calza con ninguna manilla.
  */
-export function codigoManillaPorColor(color: string | undefined): string {
+export function codigoManillaPorColor(
+  color: string | undefined,
+  colores?: readonly ColorAccesorio[],
+): string {
+  const propio = insumoDeColor(color, 'manilla', colores);
+  if (propio) return propio;
   const c = (color || '').toUpperCase().trim();
   if (c === 'NEG' || c === 'NEGRO') return 'HER47';
   if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'HER48';
@@ -712,9 +840,13 @@ export function codigoManillaPorColor(color: string | undefined): string {
  * derivación del BOM), no solo en la UI, para que una OT importada o cargada sin
  * re-editar la cenefa tampoco emita el kit DOM41 prohibido.
  */
-export function insumosMotorDePano(p: Partial<Pano>, categoria?: string): InsumoCortina[] {
+export function insumosMotorDePano(
+  p: Partial<Pano>,
+  categoria?: string,
+  tipos?: readonly TipoCortina[],
+): InsumoCortina[] {
   let modelo = (p.motorModelo || '').toUpperCase();
-  if (modelo === 'DOM41' && esCenefaOvalada(p.cenefa, categoria)) modelo = 'DOM38';
+  if (modelo === 'DOM41' && esCenefaOvalada(p.cenefa, categoria, tipos)) modelo = 'DOM38';
   const m = MOTORES[modelo];
   if (!m) return [];
   const out: InsumoCortina[] = [

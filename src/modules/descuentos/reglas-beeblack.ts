@@ -137,6 +137,41 @@ const PERFIL_LATERAL_POR_INSTALACION: Partial<Record<InstalacionBeeblack, number
 /** Lamas: ancho real / divisor + 10, redondeado HACIA ARRIBA a entero. */
 export const LAMAS_EXTRA = 10;
 
+/**
+ * Los números de la pizarra del beeblack, juntos para poder editarlos desde
+ * Admin (`formulasFamilias.ts`). Las funciones de este archivo los reciben
+ * como último parámetro opcional; sin pasarlos, se usan estos.
+ *
+ * Fuera de acá queda la estructura: que el cierre de arriba abajo intercambie
+ * ancho y alto, o qué instalaciones admite cada variante, no son números.
+ */
+export type FormulasBeeblack = {
+  ajustes: Record<
+    VarianteBeeblack,
+    {
+      perfilAncho: number;
+      perfilLateral: number;
+      manilla: number;
+      anchoTela: number;
+      altoTela: number;
+      lamasDivisor: number;
+    }
+  >;
+  /** Lateral cuando la instalación es FUERA DEL MARCO (pisa el de la variante). */
+  perfilLateralFueraMarcoCm: number;
+  /** Cordón = perfil superior + perfil lateral + esto. */
+  extraCordonCm: number;
+  /** Lamas = ceil(ancho / divisor + esto). */
+  lamasExtra: number;
+};
+
+export const FORMULAS_BEEBLACK_DEFAULT: FormulasBeeblack = {
+  ajustes: AJUSTES_BEEBLACK,
+  perfilLateralFueraMarcoCm: PERFIL_LATERAL_POR_INSTALACION.FUERA_DEL_MARCO ?? 2,
+  extraCordonCm: 30,
+  lamasExtra: LAMAS_EXTRA,
+};
+
 /** A 1 decimal, TRUNCANDO (regla del usuario 2026-07-31): ninguna medida de corte lleva
  *  más de un decimal y ninguna puede PASARSE de lo que da la fórmula. Con la tabla ya
  *  en décimas no queda ningún ajuste que recortar; el truncado sigue como red de
@@ -199,12 +234,13 @@ function calcularMedidas(
   altoCm: number,
   cierreVertical = false,
   instalacion?: string | null,
+  f: FormulasBeeblack = FORMULAS_BEEBLACK_DEFAULT,
 ): MedidasCalculadas {
-  const a = AJUSTES_BEEBLACK[variante];
+  const a = f.ajustes[variante];
   // La instalación se canoniza contra la variante: solo puede mover el lateral
   // si es una instalación posible para esa variante (FUERA DEL MARCO ⇒ EXTERNO).
   const inst = normalizarInstalacionBeeblack(instalacion, variante);
-  const ajusteLateral = PERFIL_LATERAL_POR_INSTALACION[inst] ?? a.perfilLateral;
+  const ajusteLateral = inst === 'FUERA_DEL_MARCO' ? f.perfilLateralFueraMarcoCm : a.perfilLateral;
   // Cierre de arriba abajo: la cortina va girada 90°, así que ancho y alto
   // intercambian su papel en TODAS las fórmulas de la pizarra (se cortan las
   // mismas 4 barras, y las lamas y la tela salen sobre el alto real).
@@ -221,7 +257,7 @@ function calcularMedidas(
     anchoTela: t1(anchoBase + a.anchoTela),
     altoTela: t1(altoBase + a.altoTela),
     // Cantidad de pliegues del acordeón (unidades, no cm): siempre hacia arriba.
-    totalLamas: Math.ceil(anchoBase / a.lamasDivisor + LAMAS_EXTRA),
+    totalLamas: Math.ceil(anchoBase / a.lamasDivisor + f.lamasExtra),
   };
 }
 
@@ -237,10 +273,11 @@ export function cordonBeeblackCm(
   altoCm: number,
   cierreVertical = false,
   instalacion?: string | null,
+  f: FormulasBeeblack = FORMULAS_BEEBLACK_DEFAULT,
 ): number {
   if (!anchoCm || anchoCm <= 0 || !altoCm || altoCm <= 0) return 0;
-  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion);
-  return t1(m.perfilSupAncho + m.perfilLatIzq + EXTRA_CORDON_BEEBLACK_CM);
+  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion, f);
+  return t1(m.perfilSupAncho + m.perfilLatIzq + f.extraCordonCm);
 }
 
 /** Medida calculada de un componente (preview de la UI). */
@@ -251,8 +288,9 @@ export function medidaComponenteBeeblack(
   altoCm: number,
   cierreVertical = false,
   instalacion?: string | null,
+  f: FormulasBeeblack = FORMULAS_BEEBLACK_DEFAULT,
 ): number {
-  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion);
+  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion, f);
   if (componente === 'manillaIzq' || componente === 'manillaDer') return m.manilla;
   return m[componente as keyof MedidasCalculadas];
 }
@@ -266,10 +304,11 @@ export function cortesBeeblack(
   overrides: MedidasBeeblack = {},
   cierreVertical = false,
   instalacion?: string | null,
+  f: FormulasBeeblack = FORMULAS_BEEBLACK_DEFAULT,
 ): CorteBeeblack[] {
   if (!anchoCm || anchoCm <= 0 || !altoCm || altoCm <= 0) return [];
 
-  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion);
+  const m = calcularMedidas(variante, anchoCm, altoCm, cierreVertical, instalacion, f);
   const perfilSup = aplicarOverride(m.perfilSupAncho, overrides.perfilSupAncho);
   const perfilInf = aplicarOverride(m.perfilInfAncho, overrides.perfilInfAncho);
   const perfilIzq = aplicarOverride(m.perfilLatIzq, overrides.perfilLatIzq);

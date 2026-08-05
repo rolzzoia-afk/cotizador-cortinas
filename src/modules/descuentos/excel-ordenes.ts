@@ -35,6 +35,7 @@ import {
   MODELO_DESPIECE_STUB,
 } from './despiece';
 import { esCategoriaBeeblack } from './reglas-beeblack';
+import type { FormulasFamilias } from './formulasFamilias';
 import type { ParametrosCorte } from '@/modules/cotizador/parametrosCorte';
 
 /** Columna del Excel con el color/código del peso inferior de oscuridad. */
@@ -43,11 +44,17 @@ const COLUMNA_COLOR_PESO_OSCURIDAD = 'COLOR PESO INF. SOFT LIGHT';
  *  E50/E49/E52, misma medida que CENEFA DELANTERA. Lo emite el despiece. */
 const COLUMNA_PERFIL_SUPERIOR = 'PERFIL SUPERIOR (CENEF.PRO)';
 import { tuberiaCodigoCorto } from './reglas-tuberia';
+import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from './reglasSeleccion';
+import type { TipoCortina } from './tiposCortina';
 
 export type OpcionesOrdenesOptimizador = {
   adicionalesFase0?: AdicionalFase0Persistido[];
   /** Parámetros de corte de la empresa (hoy los usa el despiece vertical). */
   params?: ParametrosCorte;
+  /** Fórmulas de corte editadas en Admin (sin esto, las de fábrica). */
+  formulas?: FormulasFamilias;
+  /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
+  reglas?: ReglasSeleccion;
 };
 
 export const COLUMNAS = [
@@ -157,11 +164,15 @@ const CENEFA_CUADRADA_COLUMNAS = [
 // cenefa cuadrada cuya UBIC. corresponde al adicional (fuente única en Fase 2).
 // La UBIC. del adicional suele ser general ("LIVING") y la del paño específica
 // ("LIVING-G1"), por eso se matchea por prefijo.
-function tapaCenefaDeUbic(ventanas: Ventana[], ubicAdicional: string): string {
+function tapaCenefaDeUbic(
+  ventanas: Ventana[],
+  ubicAdicional: string,
+  tipos?: readonly TipoCortina[],
+): string {
   const key = normalizarUbicacion(ubicAdicional);
   if (!key) return '';
   for (const v of ventanas) {
-    if (!esRollerOVertical(v.categoria)) continue;
+    if (!esRollerOVertical(v.categoria, tipos)) continue;
     const panos = v.panos || [];
     for (let i = 0; i < panos.length; i++) {
       const p = panos[i];
@@ -182,22 +193,24 @@ function tapaCenefaDeUbic(ventanas: Ventana[], ubicAdicional: string): string {
 function filasCenefaCuadrada(
   ventanas: Ventana[],
   adicionalesFase0: AdicionalFase0Persistido[] | undefined,
+  formulas?: FormulasFamilias,
+  tipos?: readonly TipoCortina[],
 ): (string | number)[][] {
   const cenefas = (adicionalesFase0 ?? []).filter(
     (a) => a.codInt && a.cantidad > 0 && esAdicionalCenefaCuadrada(a.codInt),
   );
   if (cenefas.length === 0) return [];
-  if (!ventanas.some((v) => esRollerOVertical(v.categoria))) return [];
+  if (!ventanas.some((v) => esRollerOVertical(v.categoria, tipos))) return [];
   return cenefas.map((c) => {
     const anchoInicial = Math.round(c.cantidad * 100 * 10) / 10;
-    const tapa = tapaCenefaDeUbic(ventanas, c.ubicacion || '');
+    const tapa = tapaCenefaDeUbic(ventanas, c.ubicacion || '', tipos);
     return [
       anchoInicial,
       c.colorAcc || '',
       c.ubicacion || '',
       'CENEFA CUADRADA',
       etiquetaTipInstCenefa(tapa),
-      medidaCorteCenefaCuadrada(anchoInicial, tapa),
+      medidaCorteCenefaCuadrada(anchoInicial, tapa, formulas),
       '',
       '',
       '',
@@ -209,8 +222,13 @@ function filasCenefaCuadrada(
 // (p.tuberia), no del primer código del modelo: el operario puede cambiar
 // el tubo en Fase 2 y el Excel debe reflejar esa elección (igual que el PDF
 // y la etiqueta). Origen único: tuberiaCodigoCorto.
-function tuberiaDe(v: Ventana, tuberiaPano: string | undefined, anchoM: number): string {
-  return tuberiaCodigoCorto(v.modelo, tuberiaPano, anchoM, v.categoria);
+function tuberiaDe(
+  v: Ventana,
+  tuberiaPano: string | undefined,
+  anchoM: number,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+): string {
+  return tuberiaCodigoCorto(v.modelo, tuberiaPano, anchoM, v.categoria, reglas.tuberia);
 }
 
 /** Construye las filas del Excel de órdenes (una por paño). */
@@ -240,7 +258,7 @@ export function generarOrdenesOptimizador(
         'COD SEC': v.categoria || '',
         // Dual: cada paño lleva SU tela; si no, la de la ventana.
         COD_INT: ((p as { codInt?: string }).codInt as string) || v.codInt || '',
-        TUBERIA: esBeeblack ? '' : tuberiaDe(v, String(p.tuberia || ''), anchoM),
+        TUBERIA: esBeeblack ? '' : tuberiaDe(v, String(p.tuberia || ''), anchoM, opts?.reglas),
         'UBIC.': ubic,
         // Mismo resolutor que Fase 2 y el BOM: `p.color` a secas se
         // desalineaba del resto cuando el paño traía colorMecanismo propio.
@@ -251,6 +269,8 @@ export function generarOrdenesOptimizador(
         const ctx = contextoDespieceDesdePano(v, p, {
           verticalExtraAltoCm: opts?.params?.extraVerticalCm,
           verticalDctoAltoFinalCm: opts?.params?.dctoAltoFinalVerticalCm,
+          formulas: opts?.formulas,
+          tipos: opts?.reglas?.tipos,
         });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
@@ -296,7 +316,7 @@ export function generarOrdenesOptimizador(
         }
         // Pletina (velcro): altos exactos como el Excel manual. Roller → ALTO
         // TELA = alto; dúo → ALTO TELA = 2×alto y ALTO MESA DE CORTE = alto + 10.
-        if (esCategoriaPletina(v.categoria)) {
+        if (esCategoriaPletina(v.categoria, opts?.reglas?.tipos)) {
           const altoP = Math.round((parseFloat(String(v.alto ?? p.alto ?? 0)) || 0) * 100);
           if (modelo.sistema === 'PLETINA_DUO') {
             fila['ALTO TELA'] = altoP * 2;
@@ -317,16 +337,17 @@ export function generarOrdenesOptimizador(
         if (!esBeeblack) {
         // Color/código del peso inferior de oscuridad, junto a PESO SOFT LIGHT.
         if (celdaConMedida(fila[COLUMNA_PESO_OSCURIDAD])) {
-          const colorPesoVal = colorPesoInfOscuridadExcel((p.colorPeso as string) || p.color || v.color);
+          const colorPesoVal = colorPesoInfOscuridadExcel((p.colorPeso as string) || p.color || v.color, opts?.reglas?.colores);
           if (colorPesoVal) fila[COLUMNA_COLOR_PESO_OSCURIDAD] = colorPesoVal;
         }
         const adicCenefa = buscarAdicionalCenefaOvalada(ubic, adicionalesFase0);
         if (adicCenefa) {
-          const medida = cenefaOvaladaDesdeAdicional(adicCenefa, modelo, {
-            anchoPanoCm: anchoCm,
-            categoria: v.categoria,
-            sentido: v.sentido,
-          });
+          const medida = cenefaOvaladaDesdeAdicional(
+            adicCenefa,
+            modelo,
+            { anchoPanoCm: anchoCm, categoria: v.categoria, sentido: v.sentido },
+            opts?.formulas,
+          );
           if (medida != null) {
             fila['CENEFA OVALADA'] = medida;
             fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined, adicCenefa.conTira);
@@ -376,7 +397,7 @@ export function generarOrdenesOptimizador(
   // OJO: la fila vacía NO corta la lectura del optimizador legacy (solo la
   // saltea); lo que corta es el TÍTULO — el optimizador hace break al verlo
   // (optimizador.html v5.19). Si se renombra el título, ajustar allá también.
-  const cenefaRows = filasCenefaCuadrada(ventanas, adicionalesFase0);
+  const cenefaRows = filasCenefaCuadrada(ventanas, adicionalesFase0, opts?.formulas, opts?.reglas?.tipos);
   if (cenefaRows.length) {
     aoa.push([]);
     aoa.push([CENEFA_CUADRADA_TITULO]);

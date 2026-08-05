@@ -10,11 +10,17 @@ import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/regla
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { codCadenaVertical, colorCadenaVertical } from './cadenas';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { calculoVertical, cordonBeeblackDePano } from '@/modules/descuentos/despiece';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { Pano } from './types';
 import type { OptimizerRow } from './tela';
-import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
+import { opcionesMecanismoResolucion } from '@/modules/descuentos/reglas-mecanismo';
+import { opcionesTuberiaResolucion } from '@/modules/descuentos/reglas-tuberia';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import {
   MANILLAS,
   beeblackEsDoble,
@@ -53,7 +59,15 @@ export function calcularBOM(
   usarTuboE78 = false,
   /** Adicionales Fase 0: para el top-up de motores cobrados (ver más abajo). */
   adicionalesFase0?: AdicionalFase0Persistido[],
+  /** Fórmulas de corte editadas en Admin (sin esto, las de fábrica). */
+  formulas?: FormulasFamilias,
+  /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): BomItem[] {
+  // Contexto de CÁLCULO: siempre las listas de RESOLUCIÓN, nunca las de UI —
+  // un chip o un tubo retirado tiene que seguir resolviendo las OTs viejas.
+  const opcMec = opcionesMecanismoResolucion(reglas.mecanismo);
+  const opcTub = opcionesTuberiaResolucion(reglas.tuberia);
   const acc = new Map<string, BomItem>();
   const add = (
     key: string,
@@ -93,10 +107,11 @@ export function calcularBOM(
       p,
       ventanaColor,
       modelo,
-      OPCIONES_MECANISMO_RESOLUCION,
+      opcMec,
       categoria,
       anchoM,
       usarTuboE78,
+      reglas,
     );
     const mecSpec = extraerSpec(mecChip || (p.mecanismo as string));
     const mecColor = colorAccesoriosDePano(p, ventanaColor) || p.colorMecanismo || '';
@@ -105,8 +120,9 @@ export function calcularBOM(
       anchoM,
       modelo,
       p.tuberia as string,
-      OPCIONES_TUBERIA,
+      opcTub,
       categoria,
+      reglas.tuberia,
     );
     // El chip de tubería ahora es una descripción larga sin corchetes; el
     // código (E02…) es la especificación del stock. Fallback a extraerSpec
@@ -124,7 +140,7 @@ export function calcularBOM(
     // excluía por `categoriaRequiereMecanismo`, así que sin beeblack aquí los dos
     // documentos se contradecían.
     const esPletinaCat =
-      esCategoriaPletina(categoria) ||
+      esCategoriaPletina(categoria, reglas.tipos) ||
       esCategoriaVertical(categoria) ||
       esCategoriaBeeblack(categoria);
     if (!esPletinaCat) {
@@ -190,7 +206,7 @@ export function calcularBOM(
     if (tieneMotor) {
       // Motor nuevo (DOM38/DOM41): kit con códigos DOM. Motor legacy o 'CABLE'
       // futuro: línea genérica como antes.
-      const motorInsumos = insumosMotorDePano(p, categoria);
+      const motorInsumos = insumosMotorDePano(p, categoria, reglas.tipos);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
           add(`MOT|${ins.codigo}|${ins.color}`, 'MOTOR', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
@@ -212,7 +228,7 @@ export function calcularBOM(
     const manCant = parseInt(String(p.manillaCant ?? '0')) || 0;
     if (manCant > 0) {
       const manColor = p.manillaColor || '';
-      const manCod = codigoManillaPorColor(manColor);
+      const manCod = codigoManillaPorColor(manColor, reglas.colores);
       const manDesc = manCod ? MANILLAS[manCod].nombre : 'Manilla';
       const manKey = `MAN|${manColor}`;
       add(manKey, 'MANILLA', manDesc, manCod, manColor, manCant, 'unid.');
@@ -220,13 +236,13 @@ export function calcularBOM(
     }
 
     const cenefaTipo = p.cenefa || 'No';
-    if (cenefaCuadradaTapasFijas(categoria, p.cenefa)) {
+    if (cenefaCuadradaTapasFijas(categoria, p.cenefa, reglas.tipos)) {
       // Oscuridad con cenefa cuadrada (DARK y OSCURANTI implícitas · SOFT LIGHT CC): SIEMPRE 2
       // tapas por color de accesorios (TAP32 negro / TAP33 blanco / TAP34 café). La
       // cenefa en sí viaja por el Excel de órdenes (CENEFA DELANTERA), no como
       // línea de BOM ni con las tapas del selector `cenefaTapa`.
       const colorAcc = colorAccesoriosDePano(p, ventanaColor);
-      const tapa = tapaCenefaCuadrada(colorAcc);
+      const tapa = tapaCenefaCuadrada(colorAcc, reglas.colores);
       add(`TAPA|CUAD|${tapa.codigo || colorAcc}`, 'CENEFA', tapa.descripcion, tapa.codigo ?? '', colorAcc, 2, 'unid.');
     } else if (cenefaTipo && cenefaTipo !== 'No') {
       const cenColor = p.colorTapa || '';
@@ -243,7 +259,7 @@ export function calcularBOM(
     // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos. Dual:
     // el 2º+ paño omite las fijaciones (1 juego por cortina); las tapas van ×paño.
     const omitirFijaciones = !!p.dual && (row.panoIndex ?? 0) > 0;
-    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM, omitirFijaciones })) {
+    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM, omitirFijaciones, tipos: reglas.tipos, colores: reglas.colores })) {
       add(`INS|${ins.codigo}|${ins.color}`, 'INSUMO', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
     }
 
@@ -285,7 +301,7 @@ export function calcularBOM(
       for (const it of insumosBeeblackDeCortina(
         colorAccesoriosDePano(p, ventanaColor),
         beeblackEsDoble(p),
-        v ? cordonBeeblackDePano(v, { ...p, ancho: anchoM }) : 0,
+        v ? cordonBeeblackDePano(v, { ...p, ancho: anchoM }, formulas) : 0,
       )) {
         add(
           `INS|${it.codigo}|`,

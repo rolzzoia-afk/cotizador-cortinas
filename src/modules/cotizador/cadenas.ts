@@ -10,6 +10,8 @@
 //
 // Este módulo es lógica pura (sin React ni Supabase) para poder testearlo.
 // ─────────────────────────────────────────────────────────────────────
+import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
+import { COLORES_BUILTIN, colorPorCodigo } from '@/modules/descuentos/coloresAccesorio';
 
 /** Forma mínima de un insumo-cadena que necesitamos acá. */
 export type CadenaInsumo = {
@@ -168,18 +170,25 @@ export function derivarLargoColor(
           ? 'GRS'
           : colorNombre === 'METAL'
             ? 'MET'
-            : '';
+            : // Cadena de un color que no es de fábrica: se devuelve su propio
+              // nombre en vez de ''. Sin esto, el par código↔color no cerraba y
+              // Fase 2 veía un "cambio de color" falso en cada sincronización,
+              // rehaciendo la cadena una y otra vez.
+              colorNombre;
 
   return { largoCadena, colorCadena };
 }
 
-/** Color de accesorios normalizado a BCO/NEG/GRS, o '' si no aplica (MET/CAFÉ). */
+/** Color de accesorios normalizado a BCO/NEG/GRS. Los colores de fábrica que no
+ *  tienen cadena propia (metálico, café) devuelven '' y no auto-seleccionan: la
+ *  elige el vendedor. Un color dado de alta en Admin devuelve su nombre, para
+ *  buscar en el inventario la cadena de ese color si existe. */
 function colorCadenaCorto(color: string | null | undefined): string {
   const c = normalizar(color);
   if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'BCO';
   if (c === 'NEG' || c === 'NEGRO' || c === 'NEGRA') return 'NEG';
   if (c === 'GRS' || c === 'GRI' || c === 'GRIS' || c === 'GRISE' || c === 'GRISES') return 'GRS';
-  return '';
+  return colorPorCodigo(c, COLORES_BUILTIN) ? '' : c;
 }
 
 /** Cadena del inventario que calza un largo ('4mts'…) y color (BCO/NEG/GRS). */
@@ -206,10 +215,11 @@ export function codCadenaAutoPorAlto(
   colorAcc: string | null | undefined,
   categoria: string | null | undefined,
   insumos: CadenaInsumo[],
+  tipos?: readonly TipoCortina[],
 ): string | null {
   const colorCod = colorCadenaCorto(colorAcc);
   if (!colorCod || !(altoM > 0)) return null;
-  const esDuo = normalizar(categoria).startsWith('DUO');
+  const esDuo = normalizar(categoriaEfectiva(categoria, tipos)).startsWith('DUO');
   let largo: string;
   if (esDuo) largo = '1.4mts';
   else if (altoM >= 2.0) largo = '4mts';
