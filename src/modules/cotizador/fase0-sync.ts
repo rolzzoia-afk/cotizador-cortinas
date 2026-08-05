@@ -409,9 +409,10 @@ export function enriquecerPanoDesdeFase0(
 
   // BEEBLACK: Fase 1 precarga la variante desde el sentido (interno → INTERNO,
   // externo → EXTERNO); el SEMI y cualquier corrección se eligen en Fase 2, igual
-  // que en los sistemas de oscuridad. Las MANILLAS no se activan solas: se
-  // habilitan a mano en Fase 2 (un beeblack puede llevar 1 o 2 según si tiene
-  // screen + blackout).
+  // que en los sistemas de oscuridad. La MANILLA no se precarga acá a propósito:
+  // es estructura y su default vive en el MOTOR (manillasActivasBeeblack), así
+  // que un paño sin decisión igual la corta. La segunda manilla (screen +
+  // blackout) sigue siendo opt-in en Fase 2.
   // El TIPO DE INSTALACIÓN no se precarga: sus valores no viajan desde la
   // cotización y el motor lo resuelve al default de la variante hasta que se
   // elija en Fase 2.

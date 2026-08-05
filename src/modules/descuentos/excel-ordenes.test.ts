@@ -489,15 +489,36 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     expect(aoa[2][idxManillaIzq]).toBe(125);
   });
 
-  it('el 2º paño sin manilla marcada no la inventa', () => {
+  it('el 2º paño con la manilla APAGADA a mano no la corta', () => {
     const v = ventanaBeeblack(2, 1.3, 'INTERNO');
     v.panos = [
       { ...v.panos[0], dual: true, codInt: 'SC 64' },
-      { ...v.panos[0], dual: true, codInt: 'BK 18', beeblackManillaIzq: false },
+      {
+        ...v.panos[0],
+        dual: true,
+        codInt: 'BK 18',
+        beeblackManillaIzq: false,
+        beeblackManillaDer: false,
+      },
     ] as Pano[];
     const { aoa } = generarOrdenesOptimizador('888', [v]);
     expect(aoa[1][idxManillaIzq]).toBe(125);
     expect(aoa[2][idxManillaIzq]).toBe('');
+  });
+
+  it('sin tocar ninguna casilla la manilla sale igual: es estructura', () => {
+    // Regresión OT #3161: el beeblack llegaba a producción sin manilla porque
+    // nadie la marcaba en Fase 2. Ahora va sola, como el tubo de un roller.
+    const v = ventanaBeeblack(0.82, 0.493, 'INTERNO');
+    v.panos = [
+      {
+        ...v.panos[0],
+        beeblackManillaIzq: undefined,
+        beeblackManillaDer: undefined,
+      },
+    ] as Pano[];
+    const { aoa } = generarOrdenesOptimizador('888', [v]);
+    expect(aoa[1][idxManillaIzq]).toBe(44.3);
   });
 });
 

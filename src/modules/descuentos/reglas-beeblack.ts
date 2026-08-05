@@ -38,8 +38,10 @@ export type VarianteBeeblack = 'INTERNO' | 'SEMI' | 'EXTERNO';
 export type InstalacionBeeblack = 'DENTRO_DEL_MARCO' | 'TECHO_A_MURO' | 'FUERA_DEL_MARCO';
 
 export type TogglesBeeblack = {
-  /** Manillas: SIEMPRE opt-in en Fase 2 (hasta 2: un beeblack puede llevar
-   *  screen + blackout, una manilla por tela). */
+  /** Manillas (hasta 2: un beeblack puede llevar screen + blackout, una manilla
+   *  por tela). La IZQUIERDA es estructura: va sola si nadie decidió nada
+   *  (`undefined` en ambas ⇒ `cortesBeeblack` la emite igual); un `false`
+   *  explícito la apaga. La DERECHA sigue siendo opt-in. */
   manillaIzq?: boolean;
   manillaDer?: boolean;
   /** Perfiles SEPARADORES (E41/E42/E43) por lado — opt-in, como en oscuridad. */
@@ -112,11 +114,27 @@ export function normalizarInstalacionBeeblack(
   return posibles.find((i) => i === v) ?? instalacionDefaultBeeblack(variante);
 }
 
-/** Manillas y separadores: todos opt-in, iguales en las 3 variantes. */
+/** Manillas, iguales en las 3 variantes. Cuál viene marcada lo decide
+ *  `manillasActivasBeeblack` (la izquierda es estructura: arranca prendida). */
 export const TOGGLES_BEEBLACK: Array<{ key: keyof TogglesBeeblack; label: string }> = [
   { key: 'manillaIzq', label: 'Manilla izquierda' },
   { key: 'manillaDer', label: 'Manilla derecha' },
 ];
+
+/**
+ * Qué manillas lleva realmente el paño. La IZQUIERDA es estructura: si nadie
+ * decidió nada (ambas `undefined`) va igual, como el tubo o el peso de un roller.
+ * Un `false` explícito la apaga; la DERECHA (la del blackout en un doble) es
+ * opt-in. Lo usan el motor de cortes y la casilla de Fase 2, para que la UI no
+ * pueda mostrar algo distinto de lo que se corta.
+ */
+export function manillasActivasBeeblack(toggles: TogglesBeeblack = {}): {
+  izq: boolean;
+  der: boolean;
+} {
+  const sinDecision = toggles.manillaIzq === undefined && toggles.manillaDer === undefined;
+  return { izq: sinDecision ? true : !!toggles.manillaIzq, der: !!toggles.manillaDer };
+}
 
 /** Ajustes en cm sobre la medida REAL, por variante (pizarra 2026-07-29). */
 export const AJUSTES_BEEBLACK: Record<
@@ -314,20 +332,21 @@ export function cortesBeeblack(
   const perfilIzq = aplicarOverride(m.perfilLatIzq, overrides.perfilLatIzq);
   const perfilDer = aplicarOverride(m.perfilLatDer, overrides.perfilLatDer);
 
+  // El ORDEN importa: el Cálculo General arma las columnas de cada bloque por
+  // orden de aparición del despiece, así que primero va todo el ALUMINIO (los 4
+  // perfiles y las manillas, que salen del mismo riel) y después la tela.
   const cortes: CorteBeeblack[] = [
     { componente: 'Perfil superior (ancho)', columnaExcel: 'PERFIL SUPERIOR (ANCHO)', medidaCm: perfilSup },
     { componente: 'Perfil inferior (ancho)', columnaExcel: 'PERFIL INFERIOR (ANCHO)', medidaCm: perfilInf },
     { componente: 'Perfil lateral izq (alto)', columnaExcel: 'PERFIL LATERAL IZQ (ALTO)', medidaCm: perfilIzq },
     { componente: 'Perfil lateral der (alto)', columnaExcel: 'PERFIL LATERAL DER (ALTO)', medidaCm: perfilDer },
-    // Tela y lamas: columnaExcel '' → NO viajan al Excel de estructura, solo al
-    // Cálculo General / Dimensionado y a la mesa de corte (ver tela.ts).
-    { componente: 'Ancho tela', columnaExcel: '', medidaCm: aplicarOverride(m.anchoTela, overrides.anchoTela) },
-    { componente: 'Alto tela', columnaExcel: '', medidaCm: aplicarOverride(m.altoTela, overrides.altoTela) },
-    { componente: 'Total lamas', columnaExcel: '', medidaCm: aplicarOverride(m.totalLamas, overrides.totalLamas) },
   ];
 
   const manilla = t1(m.manilla);
-  if (toggles.manillaIzq) {
+  // La manilla es ESTRUCTURA: todo beeblack lleva una sin marcarla en Fase 2
+  // (ver manillasActivasBeeblack). Los toggles quedan como override.
+  const manillas = manillasActivasBeeblack(toggles);
+  if (manillas.izq) {
     cortes.push({
       componente: 'Manilla izq (alto)',
       columnaExcel: 'MANILLA IZQ (ALTO)',
@@ -335,7 +354,7 @@ export function cortesBeeblack(
       toggle: true,
     });
   }
-  if (toggles.manillaDer) {
+  if (manillas.der) {
     cortes.push({
       componente: 'Manilla der (alto)',
       columnaExcel: 'MANILLA DER (ALTO)',
@@ -343,6 +362,14 @@ export function cortesBeeblack(
       toggle: true,
     });
   }
+
+  // Tela y lamas: columnaExcel '' → NO viajan al Excel de estructura, solo al
+  // Cálculo General / Dimensionado y a la mesa de corte (ver tela.ts).
+  cortes.push(
+    { componente: 'Ancho tela', columnaExcel: '', medidaCm: aplicarOverride(m.anchoTela, overrides.anchoTela) },
+    { componente: 'Alto tela', columnaExcel: '', medidaCm: aplicarOverride(m.altoTela, overrides.altoTela) },
+    { componente: 'Total lamas', columnaExcel: '', medidaCm: aplicarOverride(m.totalLamas, overrides.totalLamas) },
+  );
 
   // ── Separadores (E41/E42/E43) ──
   // Mismo criterio que los sistemas de oscuridad: perfil independiente opt-in que

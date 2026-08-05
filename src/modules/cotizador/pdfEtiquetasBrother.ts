@@ -69,10 +69,6 @@ const ALTO_PAGINA_VERTICAL = 106;
 // DARK usa el mismo largo (su .lbx mide 146,5 mm: mismas secciones, cenefas
 // cuadradas del/tra en producción y fila TIPO DE DARK | VELCRO).
 const ALTO_PAGINA_SOFT_LIGHT = 146;
-// El BEEBLACK con manillas suma una fila de celdas a su grilla de producción
-// (las manillas son opt-in por paño), así que su etiqueta crece esa fila.
-const ALTO_FILA_MANILLA_BB = 10.4;
-const ALTO_PAGINA_BEEBLACK_MANILLA = ALTO_PAGINA + ALTO_FILA_MANILLA_BB;
 const ALTO_PANO = 51; // bloques contiguos, 3 mm arriba y 0 abajo (offset del corte)
 // Alto real del diseño de cenefa (medido del .lbx): bajo esta línea se recorta.
 const FIN_CENEFA = 54.9;
@@ -1411,10 +1407,11 @@ function dibujarEstructura(
 }
 
 // ── ETIQUETA ESTRUCTURA BEEBLACK (62×100) ────────────────────────────
-// Réplica de docs/referencias/ETIQ.ESTRUCTURA-ESTRUCTURA (SOFTWARE) - BEE-BLACK.lbx.
+// Réplica de docs/referencias/ETIQ.ESTRUCTURA-ESTRUCTURA (SOFTWARE) - BEE-BLACK (1).lbx.
 // Mismo encabezado/pie que el roller, pero la sección de producción es una
 // grilla 2×3: perfil superior | lateral izq · perfil inferior | lateral der ·
-// cantidad de lamas | lado de cierre. Sin tubo, peso ni cenefa.
+// cantidad de lamas | MANILLA. Sin tubo, peso ni cenefa. El lado de cierre y la
+// instalación bajaron a INFORMACIÓN TERRENO, junto al color de accesorios.
 
 /** ¿La fila es un BEEBLACK? Se distingue por sus perfiles (no por la tela). */
 export function esFilaBeeblack(row: OptimizerRow): boolean {
@@ -1484,59 +1481,63 @@ function dibujarEstructuraBeeblack(
   // Lamas: cantidad de pliegues del acordeón (unidades, no cm).
   const lamas = (row.piezas || []).find((x) => x.componente === 'Total lamas');
   celda(1.5, 60.8, 28.9, 'CANT.LAMAS:', lamas ? String(Math.round(lamas.medidaCm)) : 'N/A');
-  // El armador necesita saber cómo se instala: cambia el largo de los laterales.
+
+  // MANILLA: celda fija de la grilla, al lado de las lamas. Es estructura (todo
+  // beeblack lleva una, ver manillasActivasBeeblack) y se corta de la agarradera
+  // SML10/11/12. Un beeblack doble lleva dos —una por tela, misma medida—, así
+  // que se rotulan juntas: "44,3 ×2". Si alguien las midió distinto se muestran
+  // las dos medidas.
+  const manIzq = pieza(row, 'MANILLA IZQ (ALTO)');
+  const manDer = pieza(row, 'MANILLA DER (ALTO)');
+  const manPz = manIzq || manDer;
+  const manValor = !manPz
+    ? 'N/A'
+    : manIzq && manDer
+      ? manIzq.medidaCm === manDer.medidaCm
+        ? `${fmtMedidaCm(manIzq.medidaCm)} ×2`
+        : `${fmtMedidaCm(manIzq.medidaCm)} / ${fmtMedidaCm(manDer.medidaCm)}`
+      : fmtMedidaCm(manPz.medidaCm);
+  celda(30.4, 60.8, 29.5, conCod('MANILLA', codCorto(manPz)), manValor);
+
+  // ── INFORMACIÓN TERRENO ──
+  doc.setFillColor(...NEGRO);
+  doc.rect(1.325, 71.4, 58.75, 5.2, 'F');
+  txt(doc, 'INFORMACIÓN TERRENO', 30.7, 75, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
+
+  doc.setDrawColor(...NEGRO);
+  doc.setLineWidth(0.35);
+  doc.rect(1.5, 76.3, 28.9, 9.9, 'S');
+  const codInt = row.codInt || '—';
+  txt(doc, codInt, 15.9, 82.6, codInt.length > 6 ? 15 : 20.5, {
+    align: 'center', max: 10, hScale: codInt.length > 6 ? 1 : 0.8,
+  });
+  const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
+  if (telaDesc) txt(doc, telaDesc, 15.9, 85.4, 4.8, { bold: false, align: 'center', max: 26 });
+
+  // Caja derecha: 3 líneas a 6,5 pt. El CIERRE bajó acá desde la grilla (su
+  // celda ahora es la manilla) y la INSTALACIÓN va en su propia línea: junta
+  // con el cierre medía 43 mm y la caja tiene 28 mm útiles.
   const instalacionBee = normalizarInstalacionBeeblack(
     p.beeblackInstalacion,
     normalizarVarianteBeeblack(p.beeblackVariante, 'INTERNO'),
   );
-  celda(
-    30.4, 60.8, 29.5,
-    `CIERRE · ${LABEL_INSTALACION_BEEBLACK[instalacionBee].toUpperCase()}:`,
-    ladoCadenaEtiqueta(row.direccion),
+  doc.rect(30.4, 76.3, 29.5, 9.9, 'S');
+  txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 79.3, 6.5, { max: 26, hScale: 0.8 });
+  txt(doc, `CIERRE: ${ladoCadenaEtiqueta(row.direccion)}`, 32, 82.2, 6.5, { max: 28, hScale: 0.75 });
+  txt(
+    doc,
+    `INST.: ${LABEL_INSTALACION_BEEBLACK[instalacionBee].toUpperCase()}`,
+    32, 85.1, 6.5,
+    { max: 26, hScale: 0.8 },
   );
-
-  // Manillas: se cortan de la agarradera (SML10/11/12) y son opt-in por paño,
-  // así que solo ocupan su fila cuando esta cortina las lleva. Sin esto el
-  // armador no tenía la medida en ninguna etiqueta.
-  const manIzq = pieza(row, 'MANILLA IZQ (ALTO)');
-  const manDer = pieza(row, 'MANILLA DER (ALTO)');
-  const filaManillas = !!manIzq || !!manDer;
-  if (filaManillas) {
-    if (manIzq) {
-      celda(1.5, 71.2, 28.9, conCod('MANILLA (IZQ)', cod('MANILLA IZQ (ALTO)')), medida('MANILLA IZQ (ALTO)'));
-    }
-    if (manDer) {
-      celda(30.4, 71.2, 29.5, conCod('MANILLA (DER)', cod('MANILLA DER (ALTO)')), medida('MANILLA DER (ALTO)'));
-    }
-  }
-  // Todo lo de abajo baja una fila cuando hay manillas (la página crece igual).
-  const dy = filaManillas ? ALTO_FILA_MANILLA_BB : 0;
-
-  // ── INFORMACIÓN TERRENO ──
-  doc.setFillColor(...NEGRO);
-  doc.rect(1.325, 71.4 + dy, 58.75, 5.2, 'F');
-  txt(doc, 'INFORMACIÓN TERRENO', 30.7, 75 + dy, 9.5, { color: BLANCO, align: 'center', hScale: 1.02 });
-
-  doc.setDrawColor(...NEGRO);
-  doc.setLineWidth(0.35);
-  doc.rect(1.5, 76.3 + dy, 28.9, 9.9, 'S');
-  const codInt = row.codInt || '—';
-  txt(doc, codInt, 15.9, 82.6 + dy, codInt.length > 6 ? 15 : 20.5, {
-    align: 'center', max: 10, hScale: codInt.length > 6 ? 1 : 0.8,
-  });
-  const telaDesc = (catalogo[row.codInt]?.descripcion || '').toUpperCase();
-  if (telaDesc) txt(doc, telaDesc, 15.9, 85.4 + dy, 4.8, { bold: false, align: 'center', max: 26 });
-
-  doc.rect(30.4, 76.3 + dy, 29.5, 9.9, 'S');
-  txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 81.8 + dy, 7.5, { max: 24, hScale: 0.8 });
 
   // ── DIMENSIONADO: ancho × alto terminados ──
   doc.setFillColor(...NEGRO);
-  doc.rect(1.325, 88.3 + dy, 58.75, 5.2, 'F');
-  txt(doc, 'ANCHO:', 3.8, 91.9 + dy, 6.1, { color: BLANCO, hScale: 1.02 });
-  txt(doc, fmtMedidaCm(anchoCm), 14.2, 92.1 + dy, 9.2, { color: BLANCO, hScale: 1.03 });
-  txt(doc, 'ALTO:', 32.6, 91.9 + dy, 6.1, { color: BLANCO, hScale: 1.02 });
-  txt(doc, fmtMedidaCm(altoCm), 40.4, 92.1 + dy, 9.2, { color: BLANCO, hScale: 1.03 });
+  doc.rect(1.325, 88.3, 58.75, 5.2, 'F');
+  txt(doc, 'ANCHO:', 3.8, 91.9, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(anchoCm), 14.2, 92.1, 9.2, { color: BLANCO, hScale: 1.03 });
+  txt(doc, 'ALTO:', 32.6, 91.9, 6.1, { color: BLANCO, hScale: 1.02 });
+  txt(doc, fmtMedidaCm(altoCm), 40.4, 92.1, 9.2, { color: BLANCO, hScale: 1.03 });
 }
 
 // ── ETIQUETA CENEFA CUADRADA (62×54,9) ───────────────────────────────
@@ -1720,9 +1721,7 @@ export function generarEtiquetasPDF(
       ? ALTO_PAGINA_VERTICAL
       : esFilaSoftLight(r) || esFilaDark(r) || esFilaSoftLightCC(r) || esFilaOscuranti(r)
         ? ALTO_PAGINA_SOFT_LIGHT
-        : esFilaBeeblack(r) && (pieza(r, 'MANILLA IZQ (ALTO)') || pieza(r, 'MANILLA DER (ALTO)'))
-          ? ALTO_PAGINA_BEEBLACK_MANILLA
-          : ALTO_PAGINA;
+        : ALTO_PAGINA;
   const doc = new jsPDF('p', 'mm', [ANCHO, altoPagina(rows[0])]);
   let first = true;
   let nCenefa = 0;
