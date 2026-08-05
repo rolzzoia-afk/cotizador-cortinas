@@ -3,6 +3,7 @@ import {
   aplicarVariante,
   construirCalculoGeneral,
   envolverEtiqueta,
+  pesoColumna,
   VARIANTE_DIMENSIONADO,
 } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
@@ -658,5 +659,72 @@ describe('Secciones por tipo de cortina (rediseño CG) — #C5', () => {
     const fSoft = data.filas.find((f) => f.bloque === 'SOFT')!;
     expect(fSoft.despiece.get('TELA')).toBe(200.6); // 2,00 → soft light SEMI
     expect(fSoft.despiece.get('ALTO TELA')).toBe(225); // alto 2,00 + 25
+  });
+});
+
+// El ancho de cada columna sale de estos pesos relativos: dentro de una banda,
+// el área se reparte proporcionalmente. La banda BEEBLACK repartía todo a
+// partes iguales, así que la variante se recortaba ("INTERNO — DE…") mientras
+// tres columnas de números cortos sobraban.
+describe('pesoColumna — anchos de la banda BEEBLACK', () => {
+  const COLS_BEE = [
+    'PERFIL SUPERIOR (ANCHO)',
+    'PERFIL INFERIOR (ANCHO)',
+    'PERFIL LATERAL IZQ (ALTO)',
+    'PERFIL LATERAL DER (ALTO)',
+    'ANCHO TELA',
+    'TOTAL LAMAS',
+    'MANILLA IZQ (ALTO)',
+    'MANILLA DER (ALTO)',
+    'ALTO TELA',
+    'TIPO DE BEEBLACK',
+  ];
+
+  it('TIPO DE BEEBLACK es la más ancha de su banda (texto largo)', () => {
+    const tipo = pesoColumna('TIPO DE BEEBLACK', true);
+    for (const c of COLS_BEE.filter((c) => c !== 'TIPO DE BEEBLACK')) {
+      expect(tipo).toBeGreaterThan(pesoColumna(c, true));
+    }
+    // Más ancha incluso que la columna de texto largo de oscuridad.
+    expect(tipo).toBeGreaterThan(pesoColumna('PERFIL LATERAL', true));
+  });
+
+  it('ANCHO TELA / TOTAL LAMAS / ALTO TELA son más angostas que una numérica normal', () => {
+    const normal = pesoColumna('CUALQUIER COLUMNA', true);
+    for (const c of ['ANCHO TELA', 'TOTAL LAMAS', 'ALTO TELA']) {
+      expect(pesoColumna(c, true)).toBeLessThan(normal);
+    }
+  });
+
+  it('la banda no engorda: su peso total queda como estaba (la identidad no pierde ancho)', () => {
+    const total = COLS_BEE.reduce((s, c) => s + pesoColumna(c, true), 0);
+    // Antes: 10 columnas × 1.15 = 11.5.
+    expect(total).toBeGreaterThan(11);
+    expect(total).toBeLessThan(12);
+  });
+
+  it('los perfiles del beeblack no se confunden con los de oscuridad', () => {
+    // Oscuridad usa las etiquetas sin sufijo y conserva su ancho generoso.
+    expect(pesoColumna('PERFIL LATERAL', true)).toBe(1.95);
+    expect(pesoColumna('PERFIL BASE', true)).toBe(1.75);
+    expect(pesoColumna('PERFIL LATERAL IZQ (ALTO)', true)).toBeLessThan(1.95);
+  });
+});
+
+describe('pesoColumna — identidad', () => {
+  it('COD_IN se ensancha: el beeblack trae "BEE-SC02", no "SC 02"', () => {
+    expect(pesoColumna('codInt', false)).toBeGreaterThan(0.72);
+  });
+
+  it('ANCHO/ALTO REAL son más angostas que una numérica genérica', () => {
+    const generica = pesoColumna('otraCosa', false);
+    expect(pesoColumna('anchoMts', false)).toBeLessThan(generica);
+    expect(pesoColumna('altoMts', false)).toBe(pesoColumna('anchoMts', false));
+  });
+
+  it('las columnas de texto largo no se tocaron', () => {
+    expect(pesoColumna('producto', false)).toBe(2.4);
+    expect(pesoColumna('descripcion', false)).toBe(1.9);
+    expect(pesoColumna('tuberia', false)).toBe(2.4);
   });
 });

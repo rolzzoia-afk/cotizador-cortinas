@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { emparejarDualesFase0, type FilaEmparejable } from './fase0-dual';
+import { emparejarDualesFase0, esGrupoDobleTela, type FilaEmparejable } from './fase0-dual';
 
 // tipo de tela por COD_INT: SC*→SCR, BK*→BK.
 const tipoTelaDe = (f: FilaEmparejable): string => {
@@ -116,5 +116,34 @@ describe('emparejarDualesFase0 — BEEBLACK marcado DOBLE', () => {
     );
     expect(grupos).toHaveLength(1);
     expect(avisos.some((a) => a.includes('una sola tela'))).toBe(true);
+  });
+});
+
+// Decide si cada paño guarda SU tela. El beeblack doble la necesita: sin esto
+// los dos paños se guardaban sin codInt propio y al reabrir la OT ambos
+// mostraban la SCREEN (la que queda primera tras el emparejado), perdiendo el
+// blackout.
+describe('esGrupoDobleTela', () => {
+  it('beeblack con 2 filas → tela por paño', () => {
+    expect(esGrupoDobleTela('BEEBLACK', 2)).toBe(true);
+  });
+
+  it('beeblack simple (1 fila) → tela de la ventana', () => {
+    expect(esGrupoDobleTela('BEEBLACK', 1)).toBe(false);
+  });
+
+  it('roller dual → tela por paño con cualquier tamaño de grupo', () => {
+    expect(esGrupoDobleTela('ROL_DUAL', 2)).toBe(true);
+    expect(esGrupoDobleTela('ROL_DUAL', 1)).toBe(true);
+  });
+
+  it('roller normal de 2 paños → NO es doble tela (son 2 cortinas)', () => {
+    expect(esGrupoDobleTela('ROL', 2)).toBe(false);
+  });
+
+  it('sin nFilas responde "¿puede llevar tela por paño?" (espejo al editar)', () => {
+    expect(esGrupoDobleTela('BEEBLACK')).toBe(true);
+    expect(esGrupoDobleTela('BEEBLACK_MOSQ')).toBe(true);
+    expect(esGrupoDobleTela('ROL')).toBe(false);
   });
 });

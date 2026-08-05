@@ -286,6 +286,65 @@ describe('etiquetas por color de accesorios', () => {
       { cod: 'INS 95-1', color: 'BLANCA', cantidad: 1 },
     ]);
   });
+
+  // El beeblack doble es UNA cortina con 2 paños (blackout + mosquitero en la
+  // misma ubicación): lleva 1 etiqueta, igual que su kit SML.
+  it('beeblack doble (2 paños, 1 cortina) → 1 sola etiqueta', () => {
+    expect(
+      construirEtiquetas([
+        {
+          id: 'bee',
+          color: 'NEGRO',
+          categoria: 'BEEBLACK',
+          panos: [
+            { ancho: 2.5, alto: 2.5 },
+            { ancho: 2.5, alto: 2.5 },
+          ],
+        } as VentanaItem,
+      ]),
+    ).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 1 }]);
+  });
+
+  it('beeblack simple → 1 etiqueta', () => {
+    expect(
+      construirEtiquetas([
+        { id: 'bee1', color: 'NEGRO', categoria: 'BEEBLACK', panos: [{ ancho: 2.5, alto: 2.5 }] } as VentanaItem,
+      ]),
+    ).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 1 }]);
+  });
+
+  it('ventana roller de 2 paños → 2 etiquetas (son 2 cortinas)', () => {
+    expect(
+      construirEtiquetas([
+        {
+          id: 'rol',
+          color: 'NEGRO',
+          categoria: 'ROLLER',
+          panos: [
+            { ancho: 1.5, alto: 1.8 },
+            { ancho: 1.5, alto: 1.8 },
+          ],
+        } as VentanaItem,
+      ]),
+    ).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 2 }]);
+  });
+
+  // Decisión 2026-08-05: el dual sigue contando por paño (no se tocó).
+  it('roller dual → 2 etiquetas (sin cambio)', () => {
+    expect(
+      construirEtiquetas([
+        {
+          id: 'dual',
+          color: 'NEGRO',
+          categoria: 'ROL_DUAL',
+          panos: [
+            { ancho: 1.5, alto: 1.8, dual: true },
+            { ancho: 1.5, alto: 1.8, dual: true },
+          ],
+        } as VentanaItem,
+      ]),
+    ).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 2 }]);
+  });
 });
 
 describe('totalItem', () => {

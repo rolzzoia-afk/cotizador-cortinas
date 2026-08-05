@@ -518,8 +518,18 @@ function celdaCabecera(doc: jsPDF, label: string, x: number, w: number, yTop: nu
   }
 }
 
+/** Columnas numéricas propias del beeblack (con sufijo (ANCHO)/(ALTO)). */
+const COLS_NUM_BEEBLACK = new Set([
+  'PERFIL SUPERIOR (ANCHO)',
+  'PERFIL INFERIOR (ANCHO)',
+  'PERFIL LATERAL IZQ (ALTO)',
+  'PERFIL LATERAL DER (ALTO)',
+  'MANILLA IZQ (ALTO)',
+  'MANILLA DER (ALTO)',
+]);
+
 /** Peso (ancho relativo) de cada columna: texto largo más ancho. */
-function pesoColumna(key: string, esDespiece: boolean): number {
+export function pesoColumna(key: string, esDespiece: boolean): number {
   if (key === 'ALTO MESA DE CORTE') return 1.6; // etiqueta larga
   if (key.startsWith('CENEFA OVALADA')) return 1.55; // etiqueta larga (con/sin tira)
   // Columnas de oscuridad con contenido largo: se ensanchan para que el texto
@@ -527,6 +537,19 @@ function pesoColumna(key: string, esDespiece: boolean): number {
   if (key === 'PERFIL LATERAL') return 1.95;
   if (key === 'PERFIL BASE') return 1.75;
   if (key === 'TIPO SOFT LIGHT') return 1.8;
+  // BEEBLACK: su banda repartía todo a partes iguales, así que la variante
+  // ("INTERNO — DENTRO DEL MARCO") se recortaba mientras las columnas de
+  // números cortos sobraban de ancho. La variante se lleva lo que devuelven
+  // las numéricas, y el total de la banda queda como estaba: así la identidad
+  // (PRODUCTO, DESCRIPCIÓN) no pierde milímetros.
+  if (key === 'TIPO DE BEEBLACK') return 2.8;
+  if (key === 'ANCHO TELA' || key === 'TOTAL LAMAS') return 0.95;
+  // ALTO TELA la comparten soft light / oscuranti / dark: ahí también es un
+  // número corto, así que angostarla no les quita nada.
+  if (key === 'ALTO TELA') return 0.95;
+  // Perfiles y manillas del beeblack (exclusivos: los de oscuridad son
+  // "PERFIL SUPERIOR"/"PERFIL LATERAL", sin sufijo) — números de 5 caracteres.
+  if (COLS_NUM_BEEBLACK.has(key)) return 1.0;
   if (esDespiece) return 1.15;
   switch (key) {
     case 'codMecanismo':
@@ -552,11 +575,16 @@ function pesoColumna(key: string, esDespiece: boolean): number {
     case 'conjunto':
       return 1.6; // la letra sola es corta, pero oscuranti agrega " (INVERTIDA)"
     case 'codInt':
-      return 0.72; // angosta: "SC 02"; la cabecera "COD_IN" se achica si no cabe
+      // Estaba calibrada para "SC 02" y el beeblack trae "BEE-SC02": se ensancha
+      // lo justo para que entre sin recortar (y encoge la fuente antes, ver render).
+      return 0.95;
     case 'codSec':
       return 0.9;
     case 'cant':
       return 0.6;
+    case 'anchoMts':
+    case 'altoMts':
+      return 0.8; // "2,500": más angostas que una numérica de despiece
     default:
       return 1.0; // numéricas
   }
@@ -908,15 +936,16 @@ function renderHojaCalculo(
               ? (raw as number).toFixed(3).replace('.', ',')
               : num(raw as number);
         } else val = raw === 0 ? '' : String(raw ?? '');
-        // El conjunto puede llevar el sufijo "(INVERTIDA)": se encoge antes que
-        // recortarse, para no perder el aviso al final del texto.
+        // El conjunto puede llevar el sufijo "(INVERTIDA)" y el codInt del
+        // beeblack es largo ("BEE-SC02"): encogen antes que recortarse, para no
+        // perder el final del texto.
         celdaFija(
           val,
           identXs[i],
           identWidths[i],
           y + 7.4,
           SIZE_TEXTO,
-          c.key === 'conjunto' ? { minSize: 6 } : undefined,
+          c.key === 'conjunto' || c.key === 'codInt' ? { minSize: 6 } : undefined,
         );
       });
       // Despiece (números de tamaño uniforme; TIPO DE SOFT.LIGHT en verde).
