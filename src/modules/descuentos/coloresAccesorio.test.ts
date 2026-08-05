@@ -26,6 +26,7 @@ import {
 } from './reglasSeleccion';
 import { REGLAS_MECANISMO } from './reglas-mecanismo';
 import { REGLAS_TUBERIA } from './reglas-tuberia';
+import { REGLAS_CADENA } from './reglas-cadena';
 
 /** Un color dado de alta en Admin, con parte de sus códigos completados. */
 const DORADO: ColorAccesorio = {
@@ -198,6 +199,7 @@ describe('persistencia dentro de las reglas de selección', () => {
       tuberia: REGLAS_TUBERIA,
       tipos: [],
       colores: COLORES_BUILTIN,
+      cadenas: REGLAS_CADENA,
     });
     expect(r.errores).toEqual([]);
     expect(r.avisos.join(' ')).toContain('DOR');

@@ -51,7 +51,11 @@ import {
   respaldarFormulas,
   useFormulasFamilias,
 } from '@/modules/descuentos/formulasStore';
-import type { ReglaMecAncho, ReglaMecCategoria } from '@/modules/descuentos/reglas-mecanismo';
+import type {
+  MatchCategoria,
+  ReglaMecAncho,
+  ReglaMecCategoria,
+} from '@/modules/descuentos/reglas-mecanismo';
 import type { ReglaTuboCategoria } from '@/modules/descuentos/reglas-tuberia';
 
 /** Qué hereda cada molde, en palabras del taller. */
@@ -205,7 +209,7 @@ export function TiposCortinaSection() {
   const reglasCopiadas = () => {
     const base = tipo.base.toUpperCase();
     const cat = tipo.categoria;
-    const mismaBase = (c: string | { includes: string }) =>
+    const mismaBase = (c: MatchCategoria) =>
       typeof c === 'string' && c.trim().toUpperCase() === base;
     const anchoNuevas: ReglaMecAncho[] = reglas.mecanismo.reglasAncho
       .filter((r) => mismaBase(r.categoria))
@@ -253,6 +257,7 @@ export function TiposCortinaSection() {
         tuberia,
         tipos: [...otros, tipo],
         colores: reglas.colores,
+        cadenas: reglas.cadenas,
       });
 
       if (esOscuridad && Object.keys(parche).length > 0) {

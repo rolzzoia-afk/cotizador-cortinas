@@ -49,7 +49,9 @@ import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { insumosDePano, type InsumoCortina } from './insumosCortina';
 import {
   codCadenaAutoPorAlto,
+  colorCadenaCorto,
   derivarLargoColor,
+  largoCadenaAuto,
   type CadenaInsumo,
 } from './cadenas';
 
@@ -91,6 +93,8 @@ export type ResultadoProbador = {
   /** Chip de tubería, o '' si la categoría no lleva tubo. */
   tubo: string;
   cadena: { cod: string; largo: string; color: string } | null;
+  /** Qué decidió la cadena, en palabras (espejo de `reglaKit`). */
+  reglaCadena: string;
   cortes: CorteProbador[];
   insumos: InsumoCortina[];
   /** Lo que quedó a mano o sin catalogar, para verlo antes de vender. */
@@ -180,13 +184,14 @@ export function resolverCortinaDePrueba(
   const tuberiaCod = codigoTuberiaDeChip(tubo);
 
   // ── Cadena automática por alto + color, contra el inventario
-  const codCadena = codCadenaAutoPorAlto(altoM, color, categoria, cadenas, reglas.tipos);
+  const codCadena = codCadenaAutoPorAlto(altoM, color, categoria, cadenas, reglas.tipos, reglas.cadenas);
   const cadena = codCadena
     ? (() => {
-        const d = derivarLargoColor(codCadena, cadenas);
+        const d = derivarLargoColor(codCadena, cadenas, reglas.cadenas);
         return { cod: codCadena, largo: d.largoCadena, color: d.colorCadena };
       })()
     : null;
+  const reglaCadena = explicarCadena(altoM, color, categoria, reglas, !!cadena);
   if (!cadena && cadenas.length > 0 && categoriaRequiereMecanismo(categoria, reglas.mecanismo)) {
     avisos.push(
       'No hay en el inventario una cadena de este largo y color: la elige el vendedor en Fase 2.',
@@ -237,7 +242,7 @@ export function resolverCortinaDePrueba(
     avisos.push('Sin variante elegida se usa INTERNO, que es el default de Fase 1.');
   }
 
-  return { modelo, kit, reglaKit, tubo, cadena, cortes, insumos, avisos };
+  return { modelo, kit, reglaKit, tubo, cadena, reglaCadena, cortes, insumos, avisos };
 }
 
 /**
@@ -268,4 +273,41 @@ function explicarKit(
     return 'kit por color de accesorios';
   }
   return 'kit guardado / del modelo del catálogo';
+}
+
+/**
+ * En palabras, qué decidió la cadena. Mismo orden que `codCadenaAutoPorAlto`:
+ * la categoría manda sobre la escalera, y el color puede vetar las dos.
+ */
+function explicarCadena(
+  altoM: number,
+  color: string,
+  categoria: string,
+  reglas: ReglasSeleccion,
+  hayCadena: boolean,
+): string {
+  if (esCategoriaVertical(categoria)) {
+    return `vertical: cadena fija de ${reglas.cadenas.verticalLargo === '3mts' ? '3 m' : reglas.cadenas.verticalLargo}`;
+  }
+  if (!categoriaRequiereMecanismo(categoria, reglas.mecanismo)) {
+    return 'esta cortina no lleva cadena';
+  }
+  // El color veta antes que cualquier regla: los metálicos y cafés no tienen
+  // cadena propia, así que la pone el vendedor por más que el alto calce.
+  if (!colorCadenaCorto(color)) {
+    return 'este color no tiene cadena: la elige el vendedor';
+  }
+  const elegido = largoCadenaAuto(altoM, categoria, reglas.tipos, reglas.cadenas);
+  if (!elegido) {
+    // Sin largo hay dos motivos posibles: el alto quedó bajo el tramo más chico
+    // o el color no tiene cadena (metálicos y cafés).
+    const bajoElMinimo = reglas.cadenas.tramosAlto.every((t) => altoM < t.altoMinM);
+    return bajoElMinimo
+      ? 'el alto queda bajo el tramo más chico: la elige el vendedor'
+      : 'la elige el vendedor';
+  }
+  if (!hayCadena) {
+    return `${elegido.motivo} — pero no hay una de ese color en el inventario`;
+  }
+  return elegido.motivo;
 }

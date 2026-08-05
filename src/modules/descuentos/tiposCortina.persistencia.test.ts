@@ -6,6 +6,7 @@ import { FORMULAS_DEFAULT, conCampoEditado, normalizarFormulas } from './formula
 import { construirCuadros } from './cuadrosFormulas';
 import { REGLAS_MECANISMO } from './reglas-mecanismo';
 import { REGLAS_TUBERIA } from './reglas-tuberia';
+import { REGLAS_CADENA } from './reglas-cadena';
 import { COLORES_BUILTIN } from './coloresAccesorio';
 import type { TipoCortina } from './tiposCortina';
 
@@ -54,6 +55,7 @@ describe('normalizar los tipos guardados', () => {
       tuberia: REGLAS_TUBERIA,
       tipos: [{ ...TIPO, categoria: 'DARK_38mm' }],
       colores: COLORES_BUILTIN,
+      cadenas: REGLAS_CADENA,
     });
     expect(r.errores.join(' ')).toContain('ya existe');
   });
@@ -79,6 +81,7 @@ describe('normalizar los tipos guardados', () => {
       tuberia: REGLAS_TUBERIA,
       tipos: [{ ...TIPO, activo: false }],
       colores: COLORES_BUILTIN,
+      cadenas: REGLAS_CADENA,
     });
     expect(r.errores).toEqual([]);
     expect(r.avisos.join(' ')).toContain('desactivado');

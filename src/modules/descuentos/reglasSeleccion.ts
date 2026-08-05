@@ -31,6 +31,14 @@ import {
   type TuboCatalogo,
 } from './reglas-tuberia';
 import {
+  LARGOS_CADENA,
+  REGLAS_CADENA,
+  type CadenaCatalogo,
+  type ReglaCadenaCategoria,
+  type ReglasCadena,
+  type TramoCadenaAlto,
+} from './reglas-cadena';
+import {
   BASES_PERMITIDAS,
   GRUPO_TIPOS_PROPIOS,
   RE_CATEGORIA,
@@ -57,6 +65,8 @@ export type ReglasSeleccion = {
   /** Colores de accesorios: qué se ofrece en cada selector y, si el color lo
    *  declara, con qué códigos de insumo se fabrica. */
   colores: readonly ColorAccesorio[];
+  /** Cadena de mando: catálogo, escalera por alto y regla de la vertical. */
+  cadenas: ReglasCadena;
 };
 
 export const REGLAS_SELECCION_DEFAULT: ReglasSeleccion = {
@@ -64,6 +74,7 @@ export const REGLAS_SELECCION_DEFAULT: ReglasSeleccion = {
   tuberia: REGLAS_TUBERIA,
   tipos: [],
   colores: COLORES_BUILTIN,
+  cadenas: REGLAS_CADENA,
 };
 
 /** Las cinco listas que consumen el editor de paños y los módulos de cálculo. */
@@ -158,13 +169,15 @@ function mapaPorDiametro(v: unknown): Record<number, string> | null {
   return Object.keys(out).length > 0 ? out : null;
 }
 
-/** Categoría de una regla: string exacta o { includes } (substring). */
+/** Categoría de una regla: string exacta, { includes } o { empiezaCon }. */
 function matchCategoria(v: unknown): MatchCategoria | null {
   const s = texto(v);
   if (s) return s;
   if (esObjeto(v)) {
     const inc = texto(v.includes);
     if (inc) return { includes: inc };
+    const pre = texto(v.empiezaCon);
+    if (pre) return { empiezaCon: pre };
   }
   return null;
 }
@@ -433,6 +446,74 @@ function normalizarColores(crudo: unknown): readonly ColorAccesorio[] {
   return out.length > 0 ? out : COLORES_BUILTIN;
 }
 
+function saneaCadena(f: Record<string, unknown>): CadenaCatalogo | null {
+  const codigo = texto(f.codigo).toUpperCase().replace(/\s+/g, '');
+  const largo = texto(f.largo);
+  if (!codigo || !largo) return null;
+  const descripcion = texto(f.descripcion);
+  return {
+    codigo,
+    largo,
+    color: texto(f.color).toUpperCase(),
+    ...(descripcion ? { descripcion } : {}),
+    estado: estado(f.estado),
+  };
+}
+
+function saneaTramoCadena(f: Record<string, unknown>): TramoCadenaAlto | null {
+  const altoMinM = numOpt(f.altoMinM);
+  const largo = texto(f.largo);
+  if (altoMinM == null || altoMinM <= 0 || !largo) return null;
+  return { altoMinM, largo };
+}
+
+function saneaReglaCadenaCategoria(f: Record<string, unknown>): ReglaCadenaCategoria | null {
+  const categoria = matchCategoria(f.categoria);
+  const largo = texto(f.largo);
+  if (!categoria || !largo) return null;
+  return { descripcion: texto(f.descripcion), categoria, largo };
+}
+
+/**
+ * Cadenas guardadas. El CATÁLOGO puede quedar vacío (es el estado de fábrica:
+ * el largo y el color se derivan del nemotécnico del insumo), pero la escalera
+ * por alto no: sin tramos no habría auto-selección para nadie.
+ */
+function normalizarCadenas(crudo: unknown): ReglasCadena {
+  if (!esObjeto(crudo)) return REGLAS_CADENA;
+  let cadenas: readonly CadenaCatalogo[] = REGLAS_CADENA.cadenas;
+  if (Array.isArray(crudo.cadenas)) {
+    const out: CadenaCatalogo[] = [];
+    const vistos = new Set<string>();
+    for (const fila of crudo.cadenas) {
+      const limpia = esObjeto(fila) ? saneaCadena(fila) : null;
+      if (!limpia || vistos.has(limpia.codigo)) {
+        console.warn('[reglas_seleccion] cadena inválida o repetida descartada');
+        continue;
+      }
+      vistos.add(limpia.codigo);
+      out.push(limpia);
+    }
+    cadenas = out; // lista vacía = estado de fábrica, no un error
+  }
+  const verticalPorColor = mapaTextos(crudo.verticalPorColor);
+  return {
+    cadenas,
+    tramosAlto: filas(crudo.tramosAlto, REGLAS_CADENA.tramosAlto, saneaTramoCadena, 'tramosAlto'),
+    reglasCategoria: Array.isArray(crudo.reglasCategoria)
+      ? (crudo.reglasCategoria
+          .map((f) => (esObjeto(f) ? saneaReglaCadenaCategoria(f) : null))
+          .filter(Boolean) as ReglaCadenaCategoria[])
+      : REGLAS_CADENA.reglasCategoria,
+    verticalPorColor: verticalPorColor
+      ? Object.fromEntries(Object.entries(verticalPorColor).map(([k, v]) => [k, v.toUpperCase()]))
+      : REGLAS_CADENA.verticalPorColor,
+    verticalDefault:
+      texto(crudo.verticalDefault).toUpperCase() || REGLAS_CADENA.verticalDefault,
+    verticalLargo: texto(crudo.verticalLargo) || REGLAS_CADENA.verticalLargo,
+  };
+}
+
 export function normalizarReglasSeleccion(crudo: unknown): ReglasSeleccion {
   if (!esObjeto(crudo)) return REGLAS_SELECCION_DEFAULT;
   return {
@@ -440,6 +521,7 @@ export function normalizarReglasSeleccion(crudo: unknown): ReglasSeleccion {
     tuberia: normalizarTuberia(crudo.tuberia),
     tipos: normalizarTipos(crudo.tipos),
     colores: normalizarColores(crudo.colores),
+    cadenas: normalizarCadenas(crudo.cadenas),
   };
 }
 
@@ -652,14 +734,77 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
     }
   }
 
+  // ── Cadenas
+  const cad = r.cadenas;
+  const largosValidos = new Set<string>(LARGOS_CADENA);
+  if (cad.tramosAlto.length === 0) {
+    errores.push('La escalera de cadena por alto no puede quedar vacía.');
+  }
+  const codsCadena = new Set<string>();
+  for (const c of cad.cadenas) {
+    if (codsCadena.has(c.codigo)) {
+      errores.push(`La cadena «${c.codigo}» está repetida en el catálogo.`);
+    }
+    codsCadena.add(c.codigo);
+    if (!largosValidos.has(c.largo)) {
+      errores.push(`La cadena «${c.codigo}» tiene un largo desconocido («${c.largo}»).`);
+    }
+  }
+  // Dos cadenas ACTIVAS del mismo largo y color: la auto-selección toma la
+  // primera del inventario y la otra nunca se elige sola.
+  const parVisto = new Map<string, string>();
+  for (const c of cad.cadenas) {
+    if (c.estado !== 'activo' || !c.color) continue;
+    const llave = `${c.largo}|${c.color}`;
+    const previo = parVisto.get(llave);
+    if (previo) {
+      avisos.push(
+        `«${previo}» y «${c.codigo}» son del mismo largo y color: al elegir sola gana la primera del inventario.`,
+      );
+    } else {
+      parVisto.set(llave, c.codigo);
+    }
+  }
+  const altosVistos = new Set<number>();
+  for (const t2 of cad.tramosAlto) {
+    if (altosVistos.has(t2.altoMinM)) {
+      errores.push(`Hay dos tramos de cadena que empiezan en ${String(t2.altoMinM).replace('.', ',')} m.`);
+    }
+    altosVistos.add(t2.altoMinM);
+    if (!largosValidos.has(t2.largo)) {
+      errores.push(
+        `El tramo desde ${String(t2.altoMinM).replace('.', ',')} m usa un largo desconocido («${t2.largo}»).`,
+      );
+    }
+  }
+  for (const rc of cad.reglasCategoria) {
+    if (!largosValidos.has(rc.largo)) {
+      errores.push(`La regla de cadena «${rc.descripcion || 'por categoría'}» usa un largo desconocido («${rc.largo}»).`);
+    }
+  }
+  if (!cad.verticalDefault) {
+    errores.push('La cadena de la vertical no puede quedar sin código por defecto.');
+  }
+  // Una cadena oculta se sigue resolviendo en OTs viejas, pero si la regla de
+  // la vertical la nombra, esa cortina nace con una cadena que Fase 2 no ofrece.
+  for (const cod of [cad.verticalDefault, ...Object.values(cad.verticalPorColor)]) {
+    if (cod && cad.cadenas.some((c) => c.codigo === cod && c.estado === 'oculto')) {
+      avisos.push(`La vertical usa la cadena «${cod}», que está oculta en el catálogo.`);
+    }
+  }
+
   return { errores, avisos };
 }
 
 export type {
+  CadenaCatalogo,
   ColorAccesorio,
   EstadoCatalogo,
   InsumosColor,
   MecanismoCatalogo,
+  ReglaCadenaCategoria,
+  ReglasCadena,
   TipoCortina,
+  TramoCadenaAlto,
   TuboCatalogo,
 };

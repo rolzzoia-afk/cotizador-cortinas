@@ -21,8 +21,14 @@
 
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
-/** Coincidencia exacta de categoría o substring (case insensitive). */
-export type MatchCategoria = string | { includes: string };
+/**
+ * Coincidencia de categoría (case insensitive): exacta, substring o prefijo.
+ *
+ * `empiezaCon` no es un lujo: la regla del dúo para la cadena es "la categoría
+ * EMPIEZA con DUO" — con `includes` se llevaría por delante a PLETINA_DUO_V,
+ * que usa la escalera por alto como cualquier roller.
+ */
+export type MatchCategoria = string | { includes: string } | { empiezaCon: string };
 
 export type ReglaMecCategoria = {
   /** Nota para quien edita las reglas; no afecta la lógica. */
@@ -506,7 +512,22 @@ function normalizarCategoria(categoria: string): string {
 export function categoriaCoincide(categoria: string, match: MatchCategoria): boolean {
   const c = normalizarCategoria(categoria);
   if (typeof match === 'string') return c === match.toUpperCase();
+  if ('empiezaCon' in match) return c.startsWith(match.empiezaCon.toUpperCase());
   return c.includes(match.includes.toUpperCase());
+}
+
+/** La categoría de una regla en palabras, para el editor de Admin. */
+export function textoCategoria(match: MatchCategoria): string {
+  if (typeof match === 'string') return match;
+  if ('empiezaCon' in match) return match.empiezaCon;
+  return match.includes;
+}
+
+/** Texto de la categoría con su modo ("contiene «DUO»"), para columnas informativas. */
+export function textoCategoriaConModo(match: MatchCategoria): string {
+  if (typeof match === 'string') return match;
+  if ('empiezaCon' in match) return `empieza con «${match.empiezaCon}»`;
+  return `contiene «${match.includes}»`;
 }
 
 export function colorCoincide(

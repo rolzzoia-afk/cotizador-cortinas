@@ -342,3 +342,105 @@ describe('validarReglasSeleccion', () => {
     expect(validarReglasSeleccion(r).avisos.some((a) => a.includes('se superponen'))).toBe(true);
   });
 });
+
+describe('cadenas — normalización y validación', () => {
+  it('un catálogo de cadenas guardado REEMPLAZA al de fábrica', () => {
+    const r = normalizarReglasSeleccion({
+      cadenas: {
+        cadenas: [{ codigo: 'cad90', largo: '4mts', color: 'dorado', estado: 'activo' }],
+      },
+    });
+    expect(r.cadenas.cadenas).toEqual([
+      { codigo: 'CAD90', largo: '4mts', color: 'DORADO', estado: 'activo' },
+    ]);
+    // Lo no guardado se queda con lo de fábrica.
+    expect(r.cadenas.tramosAlto).toEqual(REGLAS_SELECCION_DEFAULT.cadenas.tramosAlto);
+  });
+
+  it('un catálogo VACÍO es legítimo: el largo se deduce del nombre del insumo', () => {
+    const r = normalizarReglasSeleccion({ cadenas: { cadenas: [] } });
+    expect(r.cadenas.cadenas).toEqual([]);
+  });
+
+  it('descarta cadenas corruptas y repetidas', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = normalizarReglasSeleccion({
+      cadenas: {
+        cadenas: [
+          { codigo: 'CAD01', largo: '3mts', color: 'GRS', estado: 'activo' },
+          { codigo: 'CAD01', largo: '4mts', color: 'GRS', estado: 'activo' }, // repetida
+          { largo: '3mts' }, // sin código
+          'basura',
+        ],
+      },
+    });
+    expect(r.cadenas.cadenas.map((c) => c.codigo)).toEqual(['CAD01']);
+    expect(r.cadenas.cadenas[0].largo).toBe('3mts'); // gana la primera
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it('si la escalera queda vacía al sanear, vuelve la de fábrica', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = normalizarReglasSeleccion({ cadenas: { tramosAlto: [{ largo: '' }, {}] } });
+    expect(r.cadenas.tramosAlto).toEqual(REGLAS_SELECCION_DEFAULT.cadenas.tramosAlto);
+    warn.mockRestore();
+  });
+
+  it('sobrevive la ida y vuelta por JSON', () => {
+    const r = normalizarReglasSeleccion(
+      JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT)),
+    );
+    expect(r.cadenas).toEqual(REGLAS_SELECCION_DEFAULT.cadenas);
+    expect(sonReglasDefault(r)).toBe(true);
+  });
+
+  it('conserva el modo «empieza con» de la regla del dúo', () => {
+    const r = normalizarReglasSeleccion(JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT)));
+    expect(r.cadenas.reglasCategoria[0].categoria).toEqual({ empiezaCon: 'DUO' });
+  });
+
+  it('rechaza un largo desconocido y dos tramos que empiezan igual', () => {
+    const r = clonar();
+    r.cadenas = {
+      ...r.cadenas,
+      cadenas: [{ codigo: 'CAD99', largo: '7mts', color: 'BCO', estado: 'activo' }],
+      tramosAlto: [
+        { altoMinM: 2, largo: '4mts' },
+        { altoMinM: 2, largo: '3mts' },
+      ],
+    };
+    const { errores } = validarReglasSeleccion(r);
+    expect(errores.some((e) => e.includes('largo desconocido'))).toBe(true);
+    expect(errores.some((e) => e.includes('dos tramos'))).toBe(true);
+  });
+
+  it('avisa cuando dos cadenas activas son del mismo largo y color', () => {
+    const r = clonar();
+    r.cadenas = {
+      ...r.cadenas,
+      cadenas: [
+        { codigo: 'CAD05', largo: '4mts', color: 'BCO', estado: 'activo' },
+        { codigo: 'CAD21', largo: '4mts', color: 'BCO', estado: 'activo' },
+      ],
+    };
+    const { avisos, errores } = validarReglasSeleccion(r);
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('mismo largo y color'))).toBe(true);
+  });
+
+  it('avisa si la vertical usa una cadena oculta', () => {
+    const r = clonar();
+    r.cadenas = {
+      ...r.cadenas,
+      cadenas: [{ codigo: 'CAD06', largo: '3mts', color: 'BCO', estado: 'oculto' }],
+    };
+    expect(validarReglasSeleccion(r).avisos.some((a) => a.includes('está oculta'))).toBe(true);
+  });
+
+  it('no deja vaciar la escalera de alturas', () => {
+    const r = clonar();
+    r.cadenas = { ...r.cadenas, tramosAlto: [] };
+    expect(validarReglasSeleccion(r).errores.some((e) => e.includes('escalera'))).toBe(true);
+  });
+});

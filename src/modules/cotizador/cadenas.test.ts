@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   esCadenaRoller,
+  codCadenaVertical,
+  colorCadenaVertical,
+  largoCadenaAuto,
   cadenasRoller,
   codCadenaAutoPorAlto,
   etiquetaCadena,
@@ -14,6 +17,7 @@ import {
   type CadenaInsumo,
 } from './cadenas';
 import { OPCIONES_LARGO_CADENA } from './fase2';
+import { REGLAS_CADENA, type ReglasCadena } from '@/modules/descuentos/reglas-cadena';
 
 // Inventario para las reglas de auto-selección (#25): 3m/4m + 2,4m + 1,40m.
 const INV_AUTO: CadenaInsumo[] = [
@@ -220,5 +224,98 @@ describe('descripcionCadenaInventario', () => {
   it('sin codCadena (motor / OT vieja) devuelve el largo tal cual', () => {
     expect(descripcionCadenaInventario({ largoCadena: '4mts' })).toBe('4mts');
     expect(descripcionCadenaInventario({})).toBe('');
+  });
+});
+
+// ── Catálogo editable (Admin → Catálogo técnico → Cadenas) ───────────
+// Las reglas viajan por parámetro con default: sin nada guardado, todo lo de
+// arriba sigue igual. Estos casos prueban lo que cambia al editarlas.
+describe('reglas de cadena editables', () => {
+  it('mover un tramo cambia la cadena que se elige sola', () => {
+    // De fábrica, 1,90 m cae en el tramo de 1,4 → cadena de 3 m.
+    expect(codCadenaAutoPorAlto(1.9, 'BCO', 'ROL', INV_AUTO)).toBe('CAD06');
+    // Bajando el tramo de los 4 m a 1,8 → la misma cortina pasa a 4 m.
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      tramosAlto: [
+        { altoMinM: 1.8, largo: '4mts' },
+        { altoMinM: 1.4, largo: '3mts' },
+        { altoMinM: 0.8, largo: '2.4mts' },
+      ],
+    };
+    const inv = [
+      ...INV_AUTO,
+      { cod: 'CAD05', nemotecnico: 'CADENA INFINITA 4 METROS [BLANCO]', color: 'BLANCO', status: 'OK' },
+    ];
+    expect(codCadenaAutoPorAlto(1.9, 'BCO', 'ROL', inv, undefined, reglas)).toBe('CAD05');
+  });
+
+  it('la regla del dúo es "empieza con", no "contiene": la pletina dúo usa la escalera', () => {
+    // DUO_BK arranca con DUO → cadena corta de 1,40 m.
+    expect(largoCadenaAuto(2.5, 'DUOBK')?.largo).toBe('1.4mts');
+    // PLETINA_DUO_V contiene "DUO" pero no empieza con él: manda el alto.
+    expect(largoCadenaAuto(2.5, 'PLETINA_DUO_V')?.largo).toBe('4mts');
+  });
+
+  it('el motivo dice por qué se eligió ese largo', () => {
+    expect(largoCadenaAuto(2.5, 'ROL')?.motivo).toContain('desde 2 m');
+    expect(largoCadenaAuto(2.5, 'DUOBK')?.motivo).toContain('Dúo');
+    expect(largoCadenaAuto(0.3, 'ROL')).toBeNull(); // bajo el tramo más chico
+  });
+
+  it('una cadena declarada manda sobre el nombre del insumo', () => {
+    // El nemotécnico no deja adivinar nada: sin declararla, sale sin largo.
+    const inv: CadenaInsumo[] = [
+      { cod: 'CAD90', nemotecnico: 'CADENA ESPECIAL PEDIDO', color: 'DORADO', status: 'OK' },
+    ];
+    expect(derivarLargoColor('CAD90', inv)).toEqual({ largoCadena: '', colorCadena: 'DORADO' });
+
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      cadenas: [{ codigo: 'CAD90', largo: '4mts', color: 'DORADO', estado: 'activo' }],
+    };
+    expect(derivarLargoColor('CAD90', inv, reglas)).toEqual({
+      largoCadena: '4mts',
+      colorCadena: 'DORADO',
+    });
+    // Y ya se elige sola para una cortina alta de accesorios dorados.
+    expect(codCadenaAutoPorAlto(2.4, 'DORADO', 'ROL', inv, undefined, reglas)).toBe('CAD90');
+  });
+
+  it('una cadena oculta sale del selector pero las OTs viejas la siguen resolviendo', () => {
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      cadenas: [{ codigo: 'CAD06', largo: '3mts', color: 'BCO', estado: 'oculto' }],
+    };
+    expect(cadenasRoller(INV_AUTO, {}, reglas).map((c) => c.cod)).not.toContain('CAD06');
+    // Se sigue resolviendo: una OT guardada con CAD06 no pierde su cadena.
+    expect(derivarLargoColor('CAD06', INV_AUTO, reglas)).toEqual({
+      largoCadena: '3mts',
+      colorCadena: 'BCO',
+    });
+    // Y deja de auto-seleccionarse (ya no está entre las ofrecidas).
+    expect(codCadenaAutoPorAlto(1.5, 'BCO', 'ROL', INV_AUTO, undefined, reglas)).toBeNull();
+  });
+
+  it('la cadena de la vertical es editable por color', () => {
+    expect(codCadenaVertical('NEG')).toBe('CAD04');
+    expect(codCadenaVertical('BCO')).toBe('CAD06');
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      verticalPorColor: { NEG: 'CAD03', NEGRO: 'CAD03' },
+      verticalDefault: 'CAD05',
+    };
+    expect(codCadenaVertical('NEG', reglas)).toBe('CAD03');
+    expect(codCadenaVertical('GRS', reglas)).toBe('CAD05'); // cae al default
+    expect(colorCadenaVertical('GRS', reglas)).toBe('BCO');
+  });
+
+  it('un código declarado que no calza el patrón CAD igual es cadena de roller', () => {
+    expect(esCadenaRoller('CADENA-X')).toBe(false);
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      cadenas: [{ codigo: 'CADENA-X', largo: '3mts', color: 'BCO', estado: 'activo' }],
+    };
+    expect(esCadenaRoller('CADENA-X', reglas)).toBe(true);
   });
 });

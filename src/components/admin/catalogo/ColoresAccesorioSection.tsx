@@ -424,9 +424,10 @@ export function ColoresAccesorioSection({ valor, mecanismos, onChange }: Props) 
                 </div>
               ))}
               <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px]">
-                La CADENA no se pide acá: se elige sola si en el inventario existe una cadena de
-                este color (se busca por el nombre «{color.nombre || '—'}»). Si no existe, la elige
-                el vendedor de la lista.
+                La CADENA no se pide acá: se elige sola si existe una de este color (se busca por el
+                nombre «{color.nombre || '—'}»). Si no la encuentra, la pone el vendedor. Para
+                declarar el largo y el color de una cadena, o dar de alta una nueva, andá a la
+                sección <strong>Cadenas</strong>.
               </div>
             </div>
           )}

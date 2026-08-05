@@ -12,6 +12,17 @@
 // ─────────────────────────────────────────────────────────────────────
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { COLORES_BUILTIN, colorPorCodigo } from '@/modules/descuentos/coloresAccesorio';
+import { categoriaCoincide } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  LARGO_DESCRIPCION,
+  REGLAS_CADENA,
+  cadenaDeclarada,
+  codCadenaVerticalDeColor,
+  largoCadenaPorAltoCategoria,
+  type ReglasCadena,
+} from '@/modules/descuentos/reglas-cadena';
+
+export { LARGO_DESCRIPCION };
 
 /** Forma mínima de un insumo-cadena que necesitamos acá. */
 export type CadenaInsumo = {
@@ -22,24 +33,34 @@ export type CadenaInsumo = {
 };
 
 /**
- * Identifica las cadenas "roller" del inventario: códigos CAD01…CAD16.
- * Excluye cadenas de cortina vertical (VER..) y cualquier otra familia.
+ * Identifica las cadenas "roller" del inventario: códigos CAD01…CAD16, más
+ * cualquiera declarada en el catálogo (una cadena nueva puede no calzar el
+ * patrón). Excluye cadenas de cortina vertical (VER..) y otras familias.
  */
-export function esCadenaRoller(cod: string | null | undefined): boolean {
-  return /^CAD\d{2}$/i.test((cod || '').trim());
+export function esCadenaRoller(
+  cod: string | null | undefined,
+  reglas: ReglasCadena = REGLAS_CADENA,
+): boolean {
+  const c = (cod || '').trim();
+  if (/^CAD\d{2}$/i.test(c)) return true;
+  return !!cadenaDeclarada(c, reglas);
 }
 
 /**
  * Lista de cadenas roller para mostrar en el selector del cotizador.
- * Opcionalmente excluye las agotadas (por defecto las oculta).
+ * Opcionalmente excluye las agotadas (por defecto las oculta). Las declaradas
+ * como `oculto` en el catálogo tampoco se ofrecen, pero se siguen resolviendo
+ * en las OTs que ya las tienen guardadas (ver `derivarLargoColor`).
  */
 export function cadenasRoller(
   insumos: CadenaInsumo[],
   opts: { incluirAgotadas?: boolean } = {},
+  reglas: ReglasCadena = REGLAS_CADENA,
 ): CadenaInsumo[] {
   return insumos
-    .filter((i) => esCadenaRoller(i.cod))
+    .filter((i) => esCadenaRoller(i.cod, reglas))
     .filter((i) => opts.incluirAgotadas || (i.status || '').toUpperCase() !== 'AGOTADO')
+    .filter((i) => opts.incluirAgotadas || cadenaDeclarada(i.cod, reglas)?.estado !== 'oculto')
     .sort((a, b) => (a.cod || '').localeCompare(b.cod || ''));
 }
 
@@ -144,9 +165,16 @@ export function resolverCodCadenaBom(
 export function derivarLargoColor(
   cod: string,
   insumos: CadenaInsumo[],
+  reglas: ReglasCadena = REGLAS_CADENA,
 ): { largoCadena: string; colorCadena: string } {
+  // El catálogo manda sobre la adivinanza del nemotécnico. Se consulta incluso
+  // si la cadena está oculta: una OT vieja que la tenga se sigue resolviendo.
+  const decl = cadenaDeclarada(cod, reglas);
+  if (decl?.largo && decl.color) {
+    return { largoCadena: decl.largo, colorCadena: colorCadenaCorto(decl.color) || decl.color };
+  }
   const c = insumos.find((i) => normalizar(i.cod) === normalizar(cod));
-  if (!c) return { largoCadena: '', colorCadena: '' };
+  if (!c) return { largoCadena: decl?.largo || '', colorCadena: decl?.color || '' };
   const nemo = normalizar(c.nemotecnico);
 
   let largoCadena = '';
@@ -160,7 +188,9 @@ export function derivarLargoColor(
   else if (nemo.includes('80 CM')) largoCadena = '0.75';
   else if (nemo.includes('ROLLO')) largoCadena = 'ROLLO';
 
-  const colorNombre = normalizar(c.color) || '';
+  if (decl?.largo) largoCadena = decl.largo;
+
+  const colorNombre = normalizar(decl?.color || c.color) || '';
   const colorCadena =
     colorNombre === 'BLANCO'
       ? 'BCO'
@@ -183,7 +213,7 @@ export function derivarLargoColor(
  *  tienen cadena propia (metálico, café) devuelven '' y no auto-seleccionan: la
  *  elige el vendedor. Un color dado de alta en Admin devuelve su nombre, para
  *  buscar en el inventario la cadena de ese color si existe. */
-function colorCadenaCorto(color: string | null | undefined): string {
+export function colorCadenaCorto(color: string | null | undefined): string {
   const c = normalizar(color);
   if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'BCO';
   if (c === 'NEG' || c === 'NEGRO' || c === 'NEGRA') return 'NEG';
@@ -196,19 +226,36 @@ export function codCadenaPorLargoColor(
   largo: string,
   colorCod: string,
   insumos: CadenaInsumo[],
+  reglas: ReglasCadena = REGLAS_CADENA,
 ): string | null {
-  const match = cadenasRoller(insumos).find((c) => {
-    const d = derivarLargoColor(c.cod as string, insumos);
+  const match = cadenasRoller(insumos, {}, reglas).find((c) => {
+    const d = derivarLargoColor(c.cod as string, insumos, reglas);
     return d.largoCadena === largo && d.colorCadena === colorCod;
   });
   return match ? (match.cod as string) : null;
 }
 
 /**
- * Cadena a auto-seleccionar según el ALTO y el color de accesorios. Dúo → 1,40 m
- * (CAD17/18/19). Roller por alto: ≥2 m → 4 m · ≥1,4 m → 3 m · ≥0,8 m → 2,4 m ·
- * ≥0,5 m → 1,4 m · <0,5 m → sin auto. Color MET/CAFÉ → null (lo elige el vendedor).
- * Devuelve el cod CAD que calza largo+color en el inventario, o null.
+ * Largo y motivo que le corresponden a una cortina, sin mirar el inventario.
+ * Separado de `codCadenaAutoPorAlto` para que el banco de pruebas pueda decir
+ * POR QUÉ se eligió esa cadena (mismo criterio que `explicarKit`).
+ */
+export function largoCadenaAuto(
+  altoM: number,
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+  reglas: ReglasCadena = REGLAS_CADENA,
+): { largo: string; motivo: string } | null {
+  const cat = normalizar(categoriaEfectiva(categoria, tipos));
+  return largoCadenaPorAltoCategoria(altoM, cat, reglas, categoriaCoincide);
+}
+
+/**
+ * Cadena a auto-seleccionar según el ALTO y el color de accesorios, con la
+ * escalera y las reglas por categoría del catálogo (de fábrica: dúo → 1,40 m;
+ * ≥2 m → 4 m · ≥1,4 → 3 m · ≥0,8 → 2,4 m · ≥0,5 → 1,4 m · menos → sin auto).
+ * Color MET/CAFÉ → null (lo elige el vendedor). Devuelve el cod CAD que calza
+ * largo+color en el inventario, o null.
  */
 export function codCadenaAutoPorAlto(
   altoM: number,
@@ -216,18 +263,13 @@ export function codCadenaAutoPorAlto(
   categoria: string | null | undefined,
   insumos: CadenaInsumo[],
   tipos?: readonly TipoCortina[],
+  reglas: ReglasCadena = REGLAS_CADENA,
 ): string | null {
   const colorCod = colorCadenaCorto(colorAcc);
   if (!colorCod || !(altoM > 0)) return null;
-  const esDuo = normalizar(categoriaEfectiva(categoria, tipos)).startsWith('DUO');
-  let largo: string;
-  if (esDuo) largo = '1.4mts';
-  else if (altoM >= 2.0) largo = '4mts';
-  else if (altoM >= 1.4) largo = '3mts';
-  else if (altoM >= 0.8) largo = '2.4mts';
-  else if (altoM >= 0.5) largo = '1.4mts';
-  else return null;
-  return codCadenaPorLargoColor(largo, colorCod, insumos);
+  const elegido = largoCadenaAuto(altoM, categoria, tipos, reglas);
+  if (!elegido) return null;
+  return codCadenaPorLargoColor(elegido.largo, colorCod, insumos, reglas);
 }
 
 // ── Cadena de la VERTICAL ─────────────────────────────────────────────
@@ -245,15 +287,22 @@ export const COD_CADENA_VERTICAL_NEGRO = 'CAD04';
 export const LARGO_CADENA_VERTICAL = '3mts';
 
 /** Código de cadena de una VERTICAL según el color de accesorios. */
-export function codCadenaVertical(colorAcc: string | null | undefined): string {
-  return colorCadenaCorto(colorAcc) === 'NEG'
-    ? COD_CADENA_VERTICAL_NEGRO
-    : COD_CADENA_VERTICAL_BLANCO;
+export function codCadenaVertical(
+  colorAcc: string | null | undefined,
+  reglas: ReglasCadena = REGLAS_CADENA,
+): string {
+  return codCadenaVerticalDeColor(colorCadenaCorto(colorAcc), reglas);
 }
 
 /** Color corto (BCO/NEG) que acompaña a la cadena de la vertical. */
-export function colorCadenaVertical(colorAcc: string | null | undefined): string {
-  return colorCadenaCorto(colorAcc) === 'NEG' ? 'NEG' : 'BCO';
+export function colorCadenaVertical(
+  colorAcc: string | null | undefined,
+  reglas: ReglasCadena = REGLAS_CADENA,
+): string {
+  const corto = colorCadenaCorto(colorAcc);
+  // El color acompaña al código: si ese color tiene cadena propia declarada, se
+  // conserva; si cae al default (la blanca), el color de display es el blanco.
+  return reglas.verticalPorColor[normalizar(corto)] ? corto : 'BCO';
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -343,17 +392,6 @@ export function textoPesoCadenaInventario(
   if (norm === 'MET') return 'METAL';
   return cp;
 }
-
-/** Largo del cotizador → texto largo para la hoja de inventario (Fase 4). */
-const LARGO_DESCRIPCION: Record<string, string> = {
-  '0.75': '80 CM',
-  '1mts': '1,2 METROS',
-  '1.4mts': '1,4 METROS',
-  '2.4mts': '2,4 METROS',
-  '3mts': '3 METROS',
-  '4mts': '4 METROS',
-  ROLLO: 'ROLLO',
-};
 
 /**
  * Descripción larga de la cadena para la columna ACCIONAMIENTO del inventario:
