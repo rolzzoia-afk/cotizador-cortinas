@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, FlaskConical } from 'lucide-react';
+import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 import { Input } from '@/components/ui/input';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
@@ -34,6 +35,7 @@ import { resolverCortinaDePrueba } from '@/modules/cotizador/probadorCortina';
 const fmt = (n: number) => String(Math.round(n * 100) / 100).replace('.', ',');
 
 export function ProbadorCortinaSection() {
+  const { empresaId } = useAuth();
   const { modelos, loading: loadingModelos } = useDescuentosModelo();
   const { reglas, loading: loadingReglas } = useReglasSeleccion();
   const { formulas, loading: loadingFormulas } = useFormulasFamilias();
@@ -47,16 +49,22 @@ export function ProbadorCortinaSection() {
   const [variante, setVariante] = useState<VarianteOscuridad>('INTERNO');
   const [usarE78, setUsarE78] = useState(false);
 
-  // Cadenas del inventario, para probar la auto-selección por alto y color
-  // (mismo criterio que Fase 2: solo las CAD de roller).
+  // Cadenas del inventario, para probar la auto-selección por alto y color.
+  // La consulta es la MISMA que la de Fase 2 —con `status` y acotada a la
+  // empresa—: sin el estado, el banco podía elegir sola una cadena agotada que
+  // Fase 2 nunca ofrece.
   useEffect(() => {
+    if (!empresaId) return;
     supabase
       .from('insumos')
-      .select('cod, nemotecnico, color')
+      .select('cod,nemotecnico,color,status')
+      .eq('empresa_id', empresaId)
       .then(({ data }) => {
-        if (data) setCadenas((data as CadenaInsumo[]).filter((i) => esCadenaRoller(i.cod)));
+        if (data) {
+          setCadenas((data as CadenaInsumo[]).filter((i) => esCadenaRoller(i.cod, reglas.cadenas)));
+        }
       });
-  }, []);
+  }, [empresaId, reglas.cadenas]);
 
   const cargando = loadingModelos || loadingReglas || loadingFormulas;
 
@@ -224,15 +232,13 @@ export function ProbadorCortinaSection() {
             </Tarjeta>
             <Tarjeta titulo="Cadena automática">
               {r.cadena ? (
-                <>
-                  <div className="font-medium">{r.cadena.cod}</div>
-                  <div className="text-muted-foreground">
-                    {r.cadena.largo} · {r.cadena.color}
-                  </div>
-                </>
+                <div className="font-medium">
+                  {r.cadena.cod} · {r.cadena.largo} · {r.cadena.color}
+                </div>
               ) : (
-                <span className="text-muted-foreground">la elige el vendedor</span>
+                <div className="font-medium">— la elige el vendedor —</div>
               )}
+              <div className="text-muted-foreground">{r.reglaCadena}</div>
             </Tarjeta>
           </div>
 

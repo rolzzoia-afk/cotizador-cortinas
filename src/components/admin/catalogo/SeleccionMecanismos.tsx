@@ -12,6 +12,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import {
   MECANISMOS_DUAL,
   numeroMecDeChip,
+  textoCategoria,
   type EstadoCatalogo,
   type MecanismoCatalogo,
   type ReglaMecAncho,
@@ -28,15 +29,7 @@ const ESTADOS: Array<{ valor: EstadoCatalogo; label: string }> = [
   { valor: 'activo', label: 'Se ofrece' },
   { valor: 'oculto', label: 'Oculto (solo OTs viejas)' },
   { valor: 'opt_in', label: 'Solo con E78 activado' },
-];
-
-
-
-function textoCategoria(categoria: string | { includes: string }): string {
-  return typeof categoria === 'string' ? categoria : categoria.includes;
-}
-
-/** Escribe la clave corta Y la larga: el motor normaliza a cualquiera de las dos. */
+];/** Escribe la clave corta Y la larga: el motor normaliza a cualquiera de las dos. */
 function setColor(
   mapa: Record<string, number>,
   color: string,

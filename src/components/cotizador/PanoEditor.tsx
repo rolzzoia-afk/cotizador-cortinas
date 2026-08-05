@@ -271,7 +271,7 @@ export function PanoEditor({
   formulas = FORMULAS_DEFAULT,
   reglas = REGLAS_SELECCION_DEFAULT,
 }: Props) {
-  const cadenasDisponibles = cadenasRoller(cadenas);
+  const cadenasDisponibles = cadenasRoller(cadenas, {}, reglas.cadenas);
   const pesosDisponibles = pesosSeleccionables(pesos);
 
   // Colores del catálogo (Admin puede agregar los suyos). Cada selector ofrece
@@ -608,7 +608,7 @@ export function PanoEditor({
                     onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
                     return;
                   }
-                  const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+                  const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
                   onChange({ codCadena: cod, largoCadena, colorCadena });
                 }}
               >

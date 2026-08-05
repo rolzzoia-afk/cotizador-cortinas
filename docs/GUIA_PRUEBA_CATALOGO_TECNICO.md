@@ -36,7 +36,7 @@ respaldo automático antes de cada cambio, así que siempre se puede deshacer.
 | Modelo de fabricación | La fila del catálogo que se usó. Si dice «sin fila en el catálogo», esa categoría no tiene modelo y el despiece sale en cero. |
 | Kit de mecanismo | El kit elegido y, debajo, **por qué**: regla por ancho, regla por categoría, kit por color, o «lo elige el vendedor». |
 | Tubería | El tubo que quedaría en el paño. |
-| Cadena automática | El código CAD que se auto-seleccionaría por alto y color. |
+| Cadena automática | El código CAD que se auto-seleccionaría por alto y color y, debajo, **por qué**: el tramo que ganó, la regla del dúo, la vertical, o por qué no eligió ninguna. |
 | Cortes | Cada pieza con su medida y su código de bodega. Un guion en Código significa que esa pieza no tiene código para ese color. |
 | Insumos | Lo que bajaría a bodega por paño: tapas, tornillos, brackets, tarugos. |
 | Revisa esto | Avisos: piezas sin catalogar, kit manual, cadena que no existe en inventario. |
@@ -168,7 +168,36 @@ auto-selecciona; si no, avisa que la elige el vendedor.
 
 ---
 
-## 8. La pasada completa (una vez, al final)
+## 8. Cadenas
+
+**Qué tocar** — En *Cadenas*, la escalera «Qué largo según el alto»: cambia el
+tramo que arranca en 2 m y ponlo en 1,8. Guarda.
+
+**Qué debe pasar** — En el banco, un ROL de 1,90 m con accesorios blancos pasa
+de la cadena de 3 m a la de 4 m, y abajo dice «desde 1,8 m». Con 1,70 m sigue en
+la de 3 m.
+
+**Lo que conviene mirar en la tabla** — La columna «Cuándo se usa» te dice, para
+cada código, en qué situación lo elige la app: un tramo de alto, el dúo, la
+vertical, o «solo a mano». El largo y el color en gris son los que la app deduce
+del nombre del insumo; si los corriges, quedan fijos y mandan sobre el nombre.
+
+**Otras tres que vale la pena probar**
+
+- **Ocultar una cadena**: ponla en «Oculta». Desaparece del selector de Fase 2 y
+  deja de elegirse sola, pero una OT vieja que la tenga la sigue mostrando.
+- **Cadena nueva**: agrega `CAD21`, largo 4 m, color blanco. Aparece en la tabla
+  con el aviso «no está en Inventario» — eso es correcto: para que Fase 2 la
+  ofrezca de verdad, hay que crear también el insumo en Inventario.
+- **La regla del dúo** dice «empieza con DUO», no «contiene». Eso es a propósito:
+  con «contiene», la PLETINA_DUO_V se llevaría la cadena corta, y esa usa la
+  escalera por alto como cualquier roller.
+
+**Volver atrás** — Restaurar respaldo de reglas.
+
+---
+
+## 9. La pasada completa (una vez, al final)
 
 Cuando las secciones de arriba estén bien, vale la pena una OT de prueba real:
 

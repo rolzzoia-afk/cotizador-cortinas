@@ -304,9 +304,16 @@ export function consolidarInsumos(
           bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
         } else {
           const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
-          const codCad = codCadenaAutoPorAlto(altoM, colorAccesoriosDePano(p, v.color), v.categoria, cadenas, reglas.tipos);
+          const codCad = codCadenaAutoPorAlto(
+            altoM,
+            colorAccesoriosDePano(p, v.color),
+            v.categoria,
+            cadenas,
+            reglas.tipos,
+            reglas.cadenas,
+          );
           if (codCad) {
-            const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas);
+            const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas, reglas.cadenas);
             bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1, grupoOvalada);
           }
         }
@@ -337,13 +344,13 @@ export function consolidarInsumos(
         // Cadena de la vertical: SIEMPRE la de 3 m (CAD04 negro / CAD06 resto),
         // calculada por color de accesorios — el alto no la cambia. Espejo de
         // `calcularBOM`, para que la hoja y el cuadro COMPONENTES coincidan.
-        const cadVert = codCadenaVertical(colorAccVert);
+        const cadVert = codCadenaVertical(colorAccVert, reglas.cadenas);
         bump(
           cadVert,
           descripcionCadenaInventario({
             codCadena: cadVert,
             largoCadena: LARGO_CADENA_VERTICAL,
-            colorCadena: colorCadenaVertical(colorAccVert),
+            colorCadena: colorCadenaVertical(colorAccVert, reglas.cadenas),
           }),
           1,
         );

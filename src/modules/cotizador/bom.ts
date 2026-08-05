@@ -273,8 +273,8 @@ export function calcularBOM(
       // Cadena de la vertical: SIEMPRE la de 3 m, color por accesorios
       // (negro CAD04 / resto CAD06). Se calcula, no se lee del paño: así una
       // OT vieja con `codCadena` de roller se corrige sola al recalcular.
-      const cadVert = codCadenaVertical(colorAccVert);
-      const cadVertColor = colorCadenaVertical(colorAccVert);
+      const cadVert = codCadenaVertical(colorAccVert, reglas.cadenas);
+      const cadVertColor = colorCadenaVertical(colorAccVert, reglas.cadenas);
       add(`CAD|${cadVert}|${cadVertColor}`, 'CADENA', 'Cadena', cadVert, cadVertColor, 1, 'unid.');
       for (const it of insumosVerticalDePano({
         colorAcc: colorAccVert,

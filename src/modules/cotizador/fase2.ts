@@ -36,7 +36,18 @@ export const PANO_COLORS = [
 // Opciones de selects/radios por campo.
 export const OPCIONES_ARMADO = ['Interno', 'Externo'] as const;
 export const OPCIONES_TIPO_TELA = ['SCR', 'BK', 'DU'] as const;
-export const OPCIONES_LARGO_CADENA = ['0.75', '1mts', '2.4mts', '3mts', '4mts', 'ROLLO'] as const;
+// Incluye '1.4mts' (cadena corta del dúo y de los altos 0,5–0,8 m): la
+// auto-selección ya la elegía, pero el radio de respaldo —el que se usa cuando
+// no hay catálogo de insumos cargado— no sabía mostrarla.
+export const OPCIONES_LARGO_CADENA = [
+  '0.75',
+  '1mts',
+  '1.4mts',
+  '2.4mts',
+  '3mts',
+  '4mts',
+  'ROLLO',
+] as const;
 export const OPCIONES_CIERRE_VERT = ['Izquierda', 'Derecha', 'Vertical', 'Medio'] as const;
 // Colores: DERIVADOS del catálogo (coloresAccesorio.ts), que dice en qué
 // selector aparece cada uno. Estas cuatro listas son las de fábrica; Fase 2 usa

@@ -38,6 +38,7 @@ import {
 } from '@/modules/descuentos/reglasSeleccionStore';
 import { SeleccionTuberias } from './SeleccionTuberias';
 import { SeleccionMecanismos } from './SeleccionMecanismos';
+import { SeleccionCadenas } from './SeleccionCadenas';
 import { ColoresAccesorioSection } from './ColoresAccesorioSection';
 
 export function SeleccionCatalogoSection() {
@@ -188,6 +189,11 @@ export function SeleccionCatalogoSection() {
       <SeleccionMecanismos
         valor={draft.mecanismo}
         onChange={(m) => editar({ mecanismo: m })}
+        paleta={draft.colores}
+      />
+      <SeleccionCadenas
+        valor={draft.cadenas}
+        onChange={(c) => editar({ cadenas: c })}
         paleta={draft.colores}
       />
 

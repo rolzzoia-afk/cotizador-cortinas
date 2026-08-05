@@ -21,6 +21,8 @@ import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from './reglasSeleccio
 import { especTuboEtiqueta } from '@/modules/cotizador/pdfEtiquetasBrother';
 import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from '@/modules/cotizador/fase2';
 import type { ModeloDespiece } from './tipos';
+import { resolverCortinaDePrueba } from '@/modules/cotizador/probadorCortina';
+import type { CadenaInsumo } from '@/modules/cotizador/cadenas';
 
 function clonar(): ReglasSeleccion {
   return JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT)) as ReglasSeleccion;
@@ -289,3 +291,54 @@ describe('sin overrides el comportamiento es el de siempre', () => {
 function opcionesMecanismoUIDe(r: ReglasSeleccion): readonly string[] {
   return r.mecanismo.mecanismos.filter((m) => m.estado === 'activo').map((m) => m.chip);
 }
+
+// ── Cadenas: lo editado en Admin tiene que llegar al banco de pruebas ──
+describe('cadenas editadas en Admin llegan al motor', () => {
+  const INV: CadenaInsumo[] = [
+    { cod: 'CAD05', nemotecnico: 'CADENA INFINITA 4 METROS [BLANCO]', color: 'BLANCO', status: 'OK' },
+    { cod: 'CAD06', nemotecnico: 'CADENA INFINITA 3 METROS [BLANCO]', color: 'BLANCO', status: 'OK' },
+  ];
+  const modelos: ModeloDespiece[] = [
+    { ...modelo('LZ50 SFLX BCO [MEC 33]'), tipo_rol: 'ROL', sistema: 'CENEFA_OVALADA' },
+  ];
+
+  it('bajar el tramo de 4 m mueve la cadena del banco de pruebas', () => {
+    const base = { categoria: 'ROL', anchoM: 1.5, altoM: 1.9, color: 'BCO' };
+    const deps = { modelos, cadenas: INV };
+    // De fábrica: 1,90 m → cadena de 3 m.
+    expect(resolverCortinaDePrueba(base, deps).cadena?.cod).toBe('CAD06');
+
+    const r = clonar();
+    r.cadenas.tramosAlto = [
+      { altoMinM: 1.8, largo: '4mts' },
+      { altoMinM: 1.4, largo: '3mts' },
+    ];
+    const conRegla = resolverCortinaDePrueba(base, { ...deps, reglas: r });
+    expect(conRegla.cadena?.cod).toBe('CAD05');
+    expect(conRegla.reglaCadena).toContain('desde 1,8 m');
+  });
+
+  it('el banco explica por qué eligió esa cadena', () => {
+    const deps = { modelos, cadenas: INV };
+    expect(
+      resolverCortinaDePrueba({ categoria: 'ROL', anchoM: 1.5, altoM: 2.4, color: 'BCO' }, deps)
+        .reglaCadena,
+    ).toContain('desde 2 m');
+    // Color sin cadena propia: la pone el vendedor.
+    expect(
+      resolverCortinaDePrueba({ categoria: 'ROL', anchoM: 1.5, altoM: 2.4, color: 'MET' }, deps)
+        .reglaCadena,
+    ).toContain('vendedor');
+  });
+
+  it('ocultar una cadena en Admin la saca de la auto-selección', () => {
+    const r = clonar();
+    r.cadenas.cadenas = [{ codigo: 'CAD05', largo: '4mts', color: 'BCO', estado: 'oculto' }];
+    const res = resolverCortinaDePrueba(
+      { categoria: 'ROL', anchoM: 1.5, altoM: 2.4, color: 'BCO' },
+      { modelos, cadenas: INV, reglas: r },
+    );
+    expect(res.cadena).toBeNull();
+    expect(res.reglaCadena).toContain('no hay una de ese color');
+  });
+});

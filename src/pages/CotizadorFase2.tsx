@@ -290,20 +290,27 @@ export function CotizadorFase2() {
             !!p.codCadena && !!colorActual && colorActual !== colorAccesorioCorto(colorAcc);
           if (!p.codCadena || desalineada) {
             const largoActual = p.codCadena
-              ? derivarLargoColor(p.codCadena, cadenas).largoCadena
+              ? derivarLargoColor(p.codCadena, cadenas, reglas.cadenas).largoCadena
               : '';
             const cod =
               (desalineada && largoActual
-                ? codCadenaPorLargoColor(largoActual, colorAccesorioCorto(colorAcc), cadenas)
+                ? codCadenaPorLargoColor(
+                    largoActual,
+                    colorAccesorioCorto(colorAcc),
+                    cadenas,
+                    reglas.cadenas,
+                  )
                 : null) ??
               codCadenaAutoPorAlto(
                 parseFloat(String(p.alto)) || 0,
                 colorAcc,
                 v.categoria,
                 cadenas,
+                reglas.tipos,
+                reglas.cadenas,
               );
             if (cod) {
-              const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+              const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
               cadPatch.codCadena = cod;
               cadPatch.largoCadena = largoCadena;
               cadPatch.colorCadena = colorCadena;
@@ -581,9 +588,16 @@ export function CotizadorFase2() {
         const pn = nuevo.panos[idx];
         if ((v.categoria || '').toUpperCase().includes('MOTOR') || pn.motorModelo || pn.motorTipo) return;
         if (!categoriaRequiereMecanismo(v.categoria)) return;
-        const cod = codCadenaAutoPorAlto(altoIdx(), colorAccesoriosDePano(pn, v.color), v.categoria, cadenas);
+        const cod = codCadenaAutoPorAlto(
+          altoIdx(),
+          colorAccesoriosDePano(pn, v.color),
+          v.categoria,
+          cadenas,
+          reglas.tipos,
+          reglas.cadenas,
+        );
         if (cod && cod !== pn.codCadena) {
-          const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas);
+          const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
           setPano({ codCadena: cod, largoCadena, colorCadena });
         }
         if (!nuevo.panos[idx].codPeso) setPano({ codPeso: COD_PESO_AUTO });

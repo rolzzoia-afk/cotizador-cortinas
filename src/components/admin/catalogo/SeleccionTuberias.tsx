@@ -16,7 +16,11 @@ import {
   type ReglasTuberia,
   type TuboCatalogo,
 } from '@/modules/descuentos/reglas-tuberia';
-import type { EstadoCatalogo } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  textoCategoria as textoCategoriaSimple,
+  textoCategoriaConModo,
+  type EstadoCatalogo,
+} from '@/modules/descuentos/reglas-mecanismo';
 
 const ESTADOS: Array<{ valor: EstadoCatalogo; label: string }> = [
   { valor: 'activo', label: 'Se ofrece' },
@@ -24,10 +28,8 @@ const ESTADOS: Array<{ valor: EstadoCatalogo; label: string }> = [
   { valor: 'opt_in', label: 'Solo con E78 activado' },
 ];
 
-/** La categoría de una regla puede ser exacta o un "contiene". */
-function textoCategoria(categoria: string | { includes: string }): string {
-  return typeof categoria === 'string' ? categoria : `contiene «${categoria.includes}»`;
-}
+/** La categoría de una regla puede ser exacta, un "contiene" o un "empieza con". */
+const textoCategoria = textoCategoriaConModo;
 
 /** Motivos por los que la app puede elegir cada código (columna informativa). */
 function motivosPorCodigo(t: ReglasTuberia, codigosDelCatalogo: string[]) {
@@ -474,7 +476,7 @@ function ReglaTuboFila({
   selCodigo: (v: string, on: (c: string) => void) => JSX.Element;
 }) {
   const esIncluye = typeof regla.categoria !== 'string';
-  const textoCat = typeof regla.categoria === 'string' ? regla.categoria : regla.categoria.includes;
+  const textoCat = textoCategoriaSimple(regla.categoria);
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-xs">
       <Input
