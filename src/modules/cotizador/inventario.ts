@@ -102,12 +102,19 @@ export const CLAVE_ETIQUETAS = 'ETIQUETAS|INS 95-1';
 /**
  * Líneas de etiquetas de la OT: 1 etiqueta por paño, agrupadas por código
  * según el color de accesorios (una OT mixta genera una línea por color).
+ *
+ * Excepción BEEBLACK: el doble son 2 paños de UNA cortina (blackout +
+ * mosquitero en la misma ubicación), así que lleva UNA etiqueta — mismo
+ * criterio que su kit SML en la hoja de inventario. El color sale del paño 0.
  */
 export function construirEtiquetas(ventanas: VentanaItem[]): EtiquetaLinea[] {
   const acc = new Map<string, EtiquetaLinea>();
   for (const v of ventanas) {
-    for (const p of (v.panos || []) as Partial<Pano>[]) {
-      const { cod, color } = codigoEtiqueta(colorAccesoriosDePano(p, v.color as string));
+    const panos = (v.panos || []) as Partial<Pano>[];
+    const bee = esCategoriaBeeblack(String(v.categoria || ''));
+    for (let pi = 0; pi < panos.length; pi++) {
+      if (bee && pi > 0) continue;
+      const { cod, color } = codigoEtiqueta(colorAccesoriosDePano(panos[pi], v.color as string));
       const prev = acc.get(cod);
       if (prev) prev.cantidad++;
       else acc.set(cod, { cod, color, cantidad: 1 });

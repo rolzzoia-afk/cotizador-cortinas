@@ -14,7 +14,8 @@
 //      resto del kit de motor, tapa de cenefa cuadrada, etc.). Cada tabla se
 //      imprime solo si tiene filas.
 //   3. ETIQUETAS ROLZZO: una fila por código según color de accesorios
-//      (blancos/grises → INS 95-1 blanca; resto → INS 95 negra), 1 por paño.
+//      (blancos/grises → INS 95-1 blanca; resto → INS 95 negra), 1 por paño
+//      —salvo el beeblack doble, que es UNA cortina y lleva 1 etiqueta—.
 //   4. NOTAS DE TERRENO: lo que el vendedor anotó en Fase 2 (retiro,
 //      material de instalación, cortes, suplementos, comentarios) por
 //      ubicación — solo se imprime si alguna cortina tiene notas.
@@ -123,7 +124,8 @@ export type Inventario = {
   filas: FilaInventario[];
   /** Insumos consolidados de la OT (manillas + tapas/tornillos/brackets/tarugos/motor). */
   insumos: InsumoConsolidado[];
-  /** Etiquetas por código según color de accesorios (blancos → INS 95-1). */
+  /** Etiquetas por código según color de accesorios (blancos → INS 95-1).
+   *  1 por paño; el beeblack doble cuenta como 1 sola cortina. */
   etiquetas: EtiquetaLinea[];
   /** Notas de terreno de Fase 2, una fila por paño con algo anotado. */
   notas: NotaTerreno[];

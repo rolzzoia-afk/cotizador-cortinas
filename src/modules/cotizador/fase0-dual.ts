@@ -11,6 +11,30 @@
 // Módulo puro (sin React, sin catálogo): el tipo de tela lo resuelve el caller.
 // ─────────────────────────────────────────────────────────────────────
 import { categoriaEsDual } from '@/modules/descuentos/tipos';
+import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+
+/**
+ * ¿Los paños de esta ventana llevan UNA TELA CADA UNO (en vez de compartir la
+ * de la ventana)?
+ *
+ * Pasa en el roller dual y en el BEEBLACK DOBLE — blackout + mosquitero en la
+ * misma ubicación, que la planilla marca DOBLE y llega como 2 filas. En el
+ * beeblack esa marca no se persiste, así que se deduce del grupo: una ventana
+ * beeblack con más de un paño ES el doble.
+ *
+ * Sin `nFilas` responde "¿PUEDE llevar tela por paño?", que es lo que necesita
+ * el espejo de campos al editar una celda (ahí todavía no se sabe el grupo, y
+ * en un beeblack simple no hay hermanos a los que replicar nada).
+ */
+export function esGrupoDobleTela(
+  categoria: string,
+  nFilas?: number,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  if (categoriaEsDual(categoria, tipos)) return true;
+  return esCategoriaBeeblack(categoria) && (nFilas === undefined || nFilas > 1);
+}
 
 export type FilaEmparejable = {
   categoria: string;

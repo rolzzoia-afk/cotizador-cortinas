@@ -47,7 +47,7 @@ import {
   enriquecerVentanaDesdeFase0,
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
-import { emparejarDualesFase0 } from '@/modules/cotizador/fase0-dual';
+import { emparejarDualesFase0, esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { categoriasParaSelect, type TipoCortina } from '@/modules/descuentos/tiposCortina';
@@ -444,6 +444,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // importada nace en 38 mm y el Excel de órdenes/optimizador salía en E66
         // hasta abrirla a mano en Fase 2.
         const esDual = categoriaEsDual(head.categoria, reglas.tipos);
+        // El beeblack doble también lleva una tela por paño (blackout +
+        // mosquitero): sin esto los dos paños se guardaban sin codInt propio y
+        // al reabrir ambos heredaban la tela de la ventana (la SCREEN, que es
+        // la que queda de cabeza tras el emparejado).
+        const telaPorPano = esGrupoDobleTela(head.categoria, g.filas.length, reglas.tipos);
         const anchoGrupo = g.filas.reduce((mx, f) => Math.max(mx, f.ancho || 0), 0);
         let modeloCalc = modeloVentanaPorAncho(
           modelosDespiece,
@@ -477,11 +482,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         const panos = construirPanosDeGrupo(
           g.filas,
           orig?.panos as Record<string, unknown>[] | undefined,
-          { persistirCodInt: esDual },
+          { persistirCodInt: telaPorPano },
         );
-        // Dual: cada paño lleva SU tela (producto/descripción/tipoTela del catálogo);
+        // Cada paño lleva SU tela (producto/descripción/tipoTela del catálogo);
         // la ventana conserva la del paño 0 (head) para consumidores nivel-ventana.
-        if (esDual) {
+        if (telaPorPano) {
           panos.forEach((p, i) => {
             const f = g.filas[i];
             const prodP = f ? catalogo[(f.codInt || '').trim()] : undefined;
@@ -841,14 +846,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // Los campos de nivel ventana se replican a los demás paños del mismo vid.
       const espejo =
         !!vid && Object.keys(conDct).some((k) => CAMPOS_NIVEL_VENTANA.includes(k as keyof FilaUI));
-      // Dual: cada paño (fila) mantiene SU tela → el codInt NO se replica a los
-      // demás paños de la ventana (el resto de campos nivel-ventana sí).
+      // Dual y beeblack doble: cada paño (fila) mantiene SU tela → el codInt NO
+      // se replica a los demás paños de la ventana (el resto de campos
+      // nivel-ventana sí).
       const catEfectiva = (conDct.categoria as string) ?? fila?.categoria ?? '';
-      const esDualFila = categoriaEsDual(catEfectiva, reglas.tipos);
+      const telaPorPanoFila = esGrupoDobleTela(catEfectiva, undefined, reglas.tipos);
       const soloVentana = (): Partial<FilaUI> => {
         const sub: Partial<FilaUI> = {};
         for (const k of CAMPOS_NIVEL_VENTANA) {
-          if (k === 'codInt' && esDualFila) continue;
+          if (k === 'codInt' && telaPorPanoFila) continue;
           if (k in conDct) (sub as Record<string, unknown>)[k] = (conDct as Record<string, unknown>)[k];
         }
         return sub;
