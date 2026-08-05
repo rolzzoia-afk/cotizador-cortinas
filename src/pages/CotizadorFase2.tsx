@@ -22,10 +22,7 @@ import { Label } from '@/components/ui/label';
 import { useOT } from '@/modules/ots/hooks';
 import {
   crearPanoVacio,
-  OPCIONES_MECANISMO,
   OPCIONES_MECANISMO_DUAL,
-  OPCIONES_MECANISMO_RESOLUCION,
-  OPCIONES_TUBERIA,
   PANO_COLORS,
   postInstalacionVacia,
   resumenPanos,
@@ -35,6 +32,9 @@ import {
 } from '@/modules/cotizador/fase2';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
+import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { obtenerAnchoRollo } from '@/modules/cotizador/tela';
 import {
   COLORES_CONJUNTO,
@@ -45,7 +45,7 @@ import {
   quitarDeConjunto,
 } from '@/modules/cotizador/conjuntos';
 import { JuntarConjuntoDialog } from '@/components/cotizador/JuntarConjuntoDialog';
-import { CATEGORIAS_FASE1, catBadgeColor } from '@/modules/cotizador/categorias';
+import { categoriasFase1ConTipos, catBadgeColor } from '@/modules/cotizador/categorias';
 import {
   colorAccesorioCorto,
   direccionDesdeCierre,
@@ -112,12 +112,20 @@ export function CotizadorFase2() {
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo } = useCatalogoProductos();
   const { parametros } = useParametrosCotizador();
+  const { formulas } = useFormulasFamilias();
+  // Reglas de tubería/mecanismo editables en Admin. `loadingReglas` entra al
+  // gate de la página: al abrir una ventana se sincronizan y GUARDAN chips, así
+  // que no puede correr con las reglas de fábrica si la empresa tiene otras.
+  const { reglas, loading: loadingReglas } = useReglasSeleccion();
 
   const { empresaId } = useAuth();
   const { modelos } = useDescuentosModelo();
   // Tubo E78 activado en esta OT: habilita la banda 2,2–3,0 m (kit 45 mm/E78).
   // Default false → el rango usa tubo E66 (38 mm) con kit normal.
   const usarE78 = !!ot?.datosGenerales?.usarTuboE78;
+  // Listas de chips derivadas del catálogo (un tubo/kit oculto deja de
+  // ofrecerse; los opt-in aparecen solo con el tubo E78 activado en la OT).
+  const opcSel = useMemo(() => derivarOpciones(reglas, usarE78), [reglas, usarE78]);
   const [tab, setTab] = useState<Tab>('ventanas');
   const [cadenas, setCadenas] = useState<CadenaInsumo[]>([]);
   const [pesos, setPesos] = useState<CadenaInsumo[]>([]);
@@ -139,7 +147,10 @@ export function CotizadorFase2() {
     [ot],
   );
   // Datos que faltan para producir (bloquean el paso a Fase 3).
-  const pendientes = useMemo(() => pendientesFase2(ventanas), [ventanas]);
+  const pendientes = useMemo(
+    () => pendientesFase2(ventanas, formulas, reglas),
+    [ventanas, formulas, reglas],
+  );
   const pendientesDe = useMemo(() => {
     const m = new Map<string, number>();
     for (const p of pendientes) m.set(String(p.ventanaId), (m.get(String(p.ventanaId)) ?? 0) + 1);
@@ -214,7 +225,7 @@ export function CotizadorFase2() {
     const esBeeblackV = esCategoriaBeeblack(v.categoria);
     // La categoría ROL_DUAL implica mecanismo dual: fuerza dual=true en los paños
     // (sin esto quedaba un kit simple con modelo dual → BOM/despiece incoherentes).
-    const categoriaImplicaDual = categoriaEsDual(v.categoria || '');
+    const categoriaImplicaDual = categoriaEsDual(v.categoria || '', reglas.tipos);
     const esDualV = categoriaImplicaDual || (v.panos || []).some((p) => p.dual);
     // Modelo efectivo por ANCHO (roller simple >3 m → fila 63 mm/tubo E65; al
     // bajar de 3 m vuelve al 38 mm). Es la contraparte "al abrir/sincronizar" de
@@ -228,7 +239,7 @@ export function CotizadorFase2() {
     const colorRef = colorAccesoriosDePano(v.panos?.[0] || {}, v.color);
     const modeloEf = esDualV
       ? modelo
-      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78);
+      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos);
     return {
       ...v,
       modelo: modeloEf,
@@ -237,7 +248,7 @@ export function CotizadorFase2() {
         const pDual = dual === !!p.dual ? p : { ...p, dual };
         const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
         const mecanismo =
-          mecanismoParaPano(pDual, v.color, modeloEf, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM, usarE78) ||
+          mecanismoParaPano(pDual, v.color, modeloEf, opcSel.mecanismoResolucion, v.categoria, anchoM, usarE78, reglas) ||
           p.mecanismo;
         // Canoniza siempre el chip guardado (solo formato): una OT vieja con
         // "0,38mm [E02] 1,2mm" migra a "E02-TUBO…" aunque no haya modelo/ancho
@@ -246,12 +257,12 @@ export function CotizadorFase2() {
           ? ''
           : canonizarChipTuberia(
               modeloEf && anchoM > 0
-                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, OPCIONES_TUBERIA, v.categoria)
+                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia)
                 : forzarTuberia && modeloEf
-                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, OPCIONES_TUBERIA, v.categoria) ||
+                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia) ||
                     (p.tuberia as string)
                   : (p.tuberia as string) || '',
-              OPCIONES_TUBERIA,
+              opcSel.tuberiaUI,
             );
         const cenefa =
           categoriaImplicaOvalada && (!p.cenefa || p.cenefa === 'No')
@@ -323,7 +334,7 @@ export function CotizadorFase2() {
     if (!ventanaForm || panoEnEdicion?.dual) return null;
     const anchoM = parseFloat(String(panoEnEdicion?.ancho ?? 0)) || 0;
     const color = colorAccesoriosDePano(panoEnEdicion || {}, ventanaForm.color);
-    return reglaAnchoAplicable(ventanaForm.categoria, anchoM, color, usarE78);
+    return reglaAnchoAplicable(ventanaForm.categoria, anchoM, color, usarE78, reglas.mecanismo);
   }, [
     ventanaForm?.categoria,
     ventanaForm?.color,
@@ -334,30 +345,32 @@ export function CotizadorFase2() {
     panoEnEdicion?.colorCadena,
     panoEnEdicion?.color,
     usarE78,
+    reglas,
   ]);
   const mecFijoPorAncho = reglaFijaPorAncho?.mec ?? null;
 
   const opcionesMecVentana = useMemo(() => {
-    if (!ventanaForm) return OPCIONES_MECANISMO;
+    if (!ventanaForm) return opcSel.mecanismoUI;
     const stored = (panoEnEdicion?.mecanismo as string) || '';
     // Mecanismo dual: la lista son los 8 chips duales (+ escape del guardado).
     if (panoEnEdicion?.dual) {
-      const base: string[] = [...OPCIONES_MECANISMO_DUAL];
+      const base: string[] = [...opcSel.mecanismoDual];
       if (stored && !base.includes(stored)) base.push(stored);
       return base;
     }
     // Fijo por ancho (>3 m → MEC 28 · banda 2,2–3,0 → MEC 18/23): solo el chip
     // forzado, sin los kits que "rebotan".
     if (mecFijoPorAncho != null) {
-      const chip = chipMecanismoPorNumero(mecFijoPorAncho, OPCIONES_MECANISMO);
+      const chip = chipMecanismoPorNumero(mecFijoPorAncho, opcSel.mecanismoUI);
       if (chip) return [chip];
     }
     const opts = opcionesMecanismoFiltradas(
       modelos,
       ventanaForm.categoria,
       colorAccesoriosDePano(panoEnEdicion || {}, ventanaForm.color),
-      OPCIONES_MECANISMO,
+      opcSel.mecanismoUI,
       stored,
+      reglas.mecanismo,
     );
     // Escape: un chip legacy guardado (OT vieja) se muestra igual aunque ya
     // no se ofrezca en la lista limpia.
@@ -373,19 +386,21 @@ export function CotizadorFase2() {
     panoEnEdicion?.dual,
     mecFijoPorAncho,
     modelos,
+    opcSel,
+    reglas,
   ]);
 
   // Cascada mecanismo → tubería: el chip de tubería solo ofrece las opciones
   // compatibles con el diámetro del mecanismo elegido (o del modelo si no
   // hay mecanismo). La tubería guardada siempre se conserva (OTs viejas).
   const opcionesTubVentana = useMemo(() => {
-    if (!ventanaForm) return OPCIONES_TUBERIA;
-    const base = opcionesTuberiaFiltradas(OPCIONES_TUBERIA, {
+    if (!ventanaForm) return opcSel.tuberiaUI;
+    const base = opcionesTuberiaFiltradas(opcSel.tuberiaUI, {
       mecanismoChip: (panoEnEdicion?.mecanismo as string) || null,
       modelo: ventanaForm.modelo ?? null,
       categoria: ventanaForm.categoria,
       tuberiaActual: (panoEnEdicion?.tuberia as string) || null,
-    });
+    }, reglas.tuberia);
     // Fijo por ancho: el tubo queda en el de la regla (>3 m → E65 · banda
     // 2,2–3,0 → E78); no se ofrecen los demás.
     if (reglaFijaPorAncho != null) {
@@ -395,7 +410,7 @@ export function CotizadorFase2() {
       if (soloFijo.length > 0) return soloFijo;
     }
     return base;
-  }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, reglaFijaPorAncho]);
+  }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, reglaFijaPorAncho, opcSel, reglas]);
 
   // Pre-seleccionar mecanismo inventario al editar o cambiar paño/color accesorios
   useEffect(() => {
@@ -435,7 +450,7 @@ export function CotizadorFase2() {
     let modelo = v.modelo ?? null;
     if (!modelo && v.categoria) {
       modelo = elegirModeloPorColor(
-        modelosParaCategoria(modelos, v.categoria),
+        modelosParaCategoria(modelos, v.categoria, reglas.tipos),
         (v.panos?.[0]?.colorMecanismo as string) ||
           (v.panos?.[0]?.color as string) ||
           v.color,
@@ -446,7 +461,7 @@ export function CotizadorFase2() {
     const p0 = v.panos?.[0];
     // Dual por flag guardado O por categoría ROL_DUAL (que implica dual aunque el
     // paño no traiga el flag, p.ej. OT creada eligiendo esa categoría).
-    const esDualOT = !!p0 && (p0.dual || categoriaEsDual(v.categoria || ''));
+    const esDualOT = !!p0 && (p0.dual || categoriaEsDual(v.categoria || '', reglas.tipos));
     if (esDualOT && (!modelo || modelo.sistema !== 'ROLLER_DUAL')) {
       const chipDual =
         (esChipDual(p0!.mecanismo as string) && (p0!.mecanismo as string)) ||
@@ -519,7 +534,7 @@ export function CotizadorFase2() {
   // existen como modelo en su categoría, por eso los fallbacks explícitos.
   const aplicarCascadaMecanismo = (nuevo: Ventana, idx: number, chip: string): Ventana => {
     const dual = esChipDual(chip);
-    const candidatos = modelosParaCategoria(modelos, dual ? 'ROL_DUAL' : nuevo.categoria);
+    const candidatos = modelosParaCategoria(modelos, dual ? 'ROL_DUAL' : nuevo.categoria, reglas.tipos);
     let nm = modeloDesdeChipMecanismo(candidatos, chip);
     if (!nm && !dual) {
       // Kit por color (sin modelo propio) o vuelta de 63/45 mm/dual al 38 de la
@@ -533,9 +548,9 @@ export function CotizadorFase2() {
     if (nm) nuevo = { ...nuevo, modelo: nm };
     const anchoMidx = parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
     const tuberiaActual = nuevo.panos[idx]?.tuberia as string;
-    const corregida = tuberiaCorregidaPorMecanismo(chip, tuberiaActual, anchoMidx, OPCIONES_TUBERIA, nuevo.categoria, nm ?? nuevo.modelo);
+    const corregida = tuberiaCorregidaPorMecanismo(chip, tuberiaActual, anchoMidx, opcSel.tuberiaUI, nuevo.categoria, nm ?? nuevo.modelo, reglas.tuberia);
     const tub = corregida ??
-      (nm ? tuberiaParaPano(anchoMidx, nm, tuberiaActual, OPCIONES_TUBERIA, nuevo.categoria) : null);
+      (nm ? tuberiaParaPano(anchoMidx, nm, tuberiaActual, opcSel.tuberiaUI, nuevo.categoria, reglas.tuberia) : null);
     if (tub && tub !== tuberiaActual) {
       nuevo = { ...nuevo, panos: nuevo.panos.map((p, i) => (i === idx ? { ...p, tuberia: tub } : p)) };
     }
@@ -553,7 +568,7 @@ export function CotizadorFase2() {
       };
       const anchoIdx = () => parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
       const altoIdx = () => parseFloat(String(nuevo.panos[idx]?.alto ?? 0)) || 0;
-      const esDualVentana = categoriaEsDual(v.categoria || '');
+      const esDualVentana = categoriaEsDual(v.categoria || '', reglas.tipos);
       // Dual: el mecanismo (lado+color) es UNO por ventana (un solo bracket dual)
       // → se espeja lado/color/mecanismo a TODOS los paños. Cada paño mantiene su
       // tela (codInt); solo se comparte la parte del kit.
@@ -597,7 +612,7 @@ export function CotizadorFase2() {
         } else {
           const chip = mecanismoParaPano(
             { ...nuevo.panos[idx], dual: false, mecanismo: '' },
-            v.color, null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(), usarE78,
+            v.color, null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas,
           );
           setPano({ mecanismo: chip, dualLado: '', dualColor: '' });
           if (chip) nuevo = aplicarCascadaMecanismo(nuevo, idx, chip);
@@ -630,8 +645,24 @@ export function CotizadorFase2() {
       // Cambio de color de accesorios → represelecciona el mecanismo (con ancho,
       // para respetar la regla >3 m = MEC 28). Dual: represelecciona chip por color.
       if (patch.colorMecanismo !== undefined || patch.colorPeso !== undefined || patch.colorCadena !== undefined || patch.color !== undefined) {
-        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(), usarE78);
-        if (mec && mec !== nuevo.panos[idx].mecanismo) setPano({ mecanismo: mec });
+        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas);
+        if (mec && mec !== nuevo.panos[idx].mecanismo) {
+          if (esChipDual(mec)) {
+            // El kit dual es UNO por ventana: el chip recoloreado (mismo lado,
+            // color nuevo) se espeja a todos los paños, igual que al cambiar el
+            // lado. La cascada realinea modelo y tubería.
+            const lc = ladoColorDesdeChipDual(mec);
+            const mod: Partial<Pano> = {
+              mecanismo: mec,
+              ...(lc ? { dualLado: lc.lado, dualColor: lc.dualColor } : {}),
+            };
+            if (esDualVentana || nuevo.panos[idx].dual) espejarADual(mod);
+            else setPano(mod);
+            nuevo = aplicarCascadaMecanismo(nuevo, idx, mec);
+          } else {
+            setPano({ mecanismo: mec });
+          }
+        }
         recomputarCadena();
       }
 
@@ -641,12 +672,12 @@ export function CotizadorFase2() {
       // Cambio de ancho → si cruza 3 m cambia el mecanismo (MEC 28 ↔ kit), y en
       // todo caso ajusta la tubería (E02/E66 y E47/E65).
       if (patch.ancho !== undefined) {
-        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoIdx(), usarE78);
+        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas);
         if (mec && mec !== nuevo.panos[idx].mecanismo) {
           setPano({ mecanismo: mec });
           nuevo = aplicarCascadaMecanismo(nuevo, idx, mec);
         } else if (nuevo.modelo) {
-          const tub = tuberiaParaPano(anchoIdx(), nuevo.modelo, nuevo.panos[idx].tuberia as string, OPCIONES_TUBERIA, v.categoria);
+          const tub = tuberiaParaPano(anchoIdx(), nuevo.modelo, nuevo.panos[idx].tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia);
           if (tub && tub !== nuevo.panos[idx].tuberia) setPano({ tuberia: tub });
         }
       }
@@ -681,7 +712,7 @@ export function CotizadorFase2() {
     };
     // Dual: la ventana refleja la tela del paño 0 (para consumidores nivel-ventana);
     // cada paño conserva la suya en codInt/producto/descripcion.
-    if (categoriaEsDual(ventBase.categoria || '') && primer) {
+    if (categoriaEsDual(ventBase.categoria || '', reglas.tipos) && primer) {
       if (primer.codInt) ventBase.codInt = primer.codInt;
       if (primer.producto) ventBase.producto = primer.producto;
       if (primer.descripcion) ventBase.descripcion = primer.descripcion;
@@ -825,7 +856,7 @@ export function CotizadorFase2() {
     }
   };
 
-  if (loading) {
+  if (loading || loadingReglas) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
         <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando…
@@ -905,7 +936,7 @@ export function CotizadorFase2() {
             ) : (
               <ul className="divide-y divide-border">
                 {ventanas.map((v) => {
-                  const badge = catBadgeColor(v.categoria || '');
+                  const badge = catBadgeColor(v.categoria || '', reglas.tipos);
                   const activa = editandoId === v.id;
                   const claseGrupo = claseDeGrupo(v.grupoId);
                   return (
@@ -1100,7 +1131,7 @@ export function CotizadorFase2() {
                           const categoria = e.target.value;
                           // Pre-seleccionar el modelo de fabricación cuando la
                           // categoría mapea a candidatos del catálogo.
-                          const candidatos = modelosParaCategoria(modelos, categoria);
+                          const candidatos = modelosParaCategoria(modelos, categoria, reglas.tipos);
                           const actualSirve =
                             ventanaForm.modelo &&
                             candidatos.some(
@@ -1127,7 +1158,7 @@ export function CotizadorFase2() {
                         className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
                       >
                         <option value="">— Selecciona —</option>
-                        {CATEGORIAS_FASE1.map((g) => (
+                        {categoriasFase1ConTipos(reglas.tipos).map((g) => (
                           <optgroup key={g.label} label={g.label}>
                             {g.options.map((o) => (
                               <option key={o.value} value={o.value}>
@@ -1140,19 +1171,19 @@ export function CotizadorFase2() {
                     </div>
                     <div>
                       <Label>
-                        {categoriaEsDual(ventanaForm.categoria || '')
+                        {categoriaEsDual(ventanaForm.categoria || '', reglas.tipos)
                           ? `Producto (paño ${panoActivo + 1})`
                           : 'Producto'}
                       </Label>
                       <ProductoSelectorFase2
                         value={
-                          categoriaEsDual(ventanaForm.categoria || '')
+                          categoriaEsDual(ventanaForm.categoria || '', reglas.tipos)
                             ? ventanaForm.panos[panoActivo]?.codInt || ''
                             : ventanaForm.codInt
                         }
                         catalogo={catalogo}
                         onSelect={(sel) => {
-                          if (categoriaEsDual(ventanaForm.categoria || '')) {
+                          if (categoriaEsDual(ventanaForm.categoria || '', reglas.tipos)) {
                             // Dual: cada paño tiene SU tela.
                             actualizarPano(panoActivo, {
                               codInt: sel.codInt,
@@ -1237,8 +1268,10 @@ export function CotizadorFase2() {
                   varianteVentana={ventanaForm.oscuridadVariante}
                   direccionVentana={ventanaForm.direccion}
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
+                  formulas={formulas}
+                  reglas={reglas}
                   anchoRollo={obtenerAnchoRollo(
-                    (categoriaEsDual(ventanaForm.categoria || '')
+                    (categoriaEsDual(ventanaForm.categoria || '', reglas.tipos)
                       ? ventanaForm.panos[panoActivo]?.codInt
                       : '') || ventanaForm.codInt,
                     catalogo,

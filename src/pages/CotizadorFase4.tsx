@@ -18,6 +18,8 @@ import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
 import { SUB_ETAPA_META } from '@/modules/cotizador/fase4';
 import { formatCLP } from '@/modules/cotizador/calculos';
@@ -59,6 +61,10 @@ export function CotizadorFase4() {
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
   const { parametros, loading: loadingParams } = useParametrosCotizador();
+  const { formulas, loading: loadingFormulas } = useFormulasFamilias();
+  // Las reglas entran al mismo gate que las fórmulas: el plan de corte que sale
+  // de acá se GUARDA, así que no puede calcularse con las de fábrica.
+  const { reglas, loading: loadingReglas } = useReglasSeleccion();
   const { empresaId, empresaNombre } = useAuth();
   const [avanzando, setAvanzando] = useState(false);
   const [cambiandoSub, setCambiandoSub] = useState(false);
@@ -67,14 +73,16 @@ export function CotizadorFase4() {
   const [invSaving, setInvSaving] = useState(false);
 
   const pdfRows = useMemo(() => {
-    if (!ot || loadingCat || loadingParams) return null;
-    const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros);
+    // Se espera también a las fórmulas: con las de fábrica el plan saldría con
+    // otras medidas y quedaría guardado así.
+    if (!ot || loadingCat || loadingParams || loadingFormulas || loadingReglas) return null;
+    const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros, formulas, reglas);
     if (fresh.length === 0) return [];
     const guardado = ot.datosGenerales?.optimizerRows;
     const restored = restorePlanGuardado(fresh, guardado);
     const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
     return tieneJunto ? restored : asignarJuntoEnOrden(restored);
-  }, [ot, loadingCat, catalogo, loadingParams, parametros]);
+  }, [ot, loadingCat, catalogo, loadingParams, parametros, loadingFormulas, formulas, loadingReglas, reglas]);
 
   // Componentes consolidados (siempre frescos desde el optimizador).
   // El ajuste manual se hace con la columna "Adicional" de la hoja.
@@ -86,9 +94,17 @@ export function CotizadorFase4() {
             ot.storeVentanas,
             !!ot.datosGenerales?.usarTuboE78,
             ot.datosGenerales?.adicionalesFase0,
+            formulas,
+            reglas,
           )
         : [],
-    [pdfRows, ot?.storeVentanas, ot?.datosGenerales?.usarTuboE78, ot?.datosGenerales?.adicionalesFase0],
+    [
+      pdfRows,
+      ot?.storeVentanas,
+      ot?.datosGenerales?.usarTuboE78,
+      ot?.datosGenerales?.adicionalesFase0,
+      formulas,
+    ],
   );
 
   // Inicializar estado de entrega del inventario desde lo guardado en la OT.
@@ -172,7 +188,7 @@ export function CotizadorFase4() {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
         empresa: empresaNombre ?? undefined,
-      }, parametros, cadenas, !!ot.datosGenerales.usarTuboE78, ot.datosGenerales.adicionalesFase0);
+      }, parametros, cadenas, !!ot.datosGenerales.usarTuboE78, ot.datosGenerales.adicionalesFase0, formulas, reglas);
       toast.success('Hoja de inventario generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -187,6 +203,8 @@ export function CotizadorFase4() {
       const res = descargarExcelOrdenes(ot.datosGenerales.ot || '—', ventanas, {
         adicionalesFase0: ot.datosGenerales.adicionalesFase0,
         params: parametros,
+        formulas,
+        reglas,
       });
       if (res.advertencias.length > 0) {
         toast.warning(
@@ -211,7 +229,7 @@ export function CotizadorFase4() {
       generarPdfCalculoGeneral(ventanas, catalogo, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
-      }, parametros, !!ot.datosGenerales.usarTuboE78);
+      }, parametros, !!ot.datosGenerales.usarTuboE78, formulas, reglas);
       toast.success('Cálculo general generado');
     } catch (e) {
       toast.error('Error generando cálculo general: ' + (e instanceof Error ? e.message : String(e)));
@@ -245,7 +263,7 @@ export function CotizadorFase4() {
       generarPdfDimensionado(ventanas, catalogo, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
-      }, parametros, juntoPorPieza, !!ot.datosGenerales.usarTuboE78);
+      }, parametros, juntoPorPieza, !!ot.datosGenerales.usarTuboE78, formulas, reglas);
       toast.success('Dimensionado generado');
     } catch (e) {
       toast.error('Error generando dimensionado: ' + (e instanceof Error ? e.message : String(e)));
@@ -267,7 +285,13 @@ export function CotizadorFase4() {
       if (!continuar) return;
     }
     try {
-      generarEtiquetasPDF(pdfRows, metaPDF(), catalogo, ot?.datosGenerales.adicionalesFase0);
+      generarEtiquetasPDF(
+        pdfRows,
+        metaPDF(),
+        catalogo,
+        ot?.datosGenerales.adicionalesFase0,
+        reglas.colores,
+      );
       toast.success('Etiquetas generadas');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -372,7 +396,7 @@ export function CotizadorFase4() {
         .eq('disponible', true);
       const panos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
       // Plan y deducción con los MISMOS params: el retazo debe calzar el layout.
-      const plan = generarPlanCorte([ot], panos, parametros);
+      const plan = generarPlanCorte([ot], panos, parametros, formulas);
       const deducciones = deduccionesColmena(plan, parametros);
       // Sobrantes de rollo reutilizables (≥120×180, ya gateados por planCorte):
       // se ofrecen para sumar a la colmena con confirmación física del operario.

@@ -148,12 +148,16 @@ export function DocumentoSection() {
       {loading ? (
         <p className="text-xs text-muted-foreground">Cargando…</p>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
+        // `minmax(0,1fr)` + `min-w-0`: sin eso, el track de la vista previa no
+        // puede achicarse por debajo del ancho natural de la tabla de la maqueta
+        // de cortinas (12 columnas sin cortar ≈ 900 px) y el panel de la derecha
+        // terminaba pintado FUERA del borde del card.
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
           {/* Vista previa: el documento completo, en orden. Mismo contenedor
               que la cotización real (`flex flex-col px-5 py-4`) — las maquetas
               y los bloques traen sus propios márgenes. */}
           <div
-            className="flex flex-col rounded-lg border bg-background px-5 py-4"
+            className="flex min-w-0 flex-col rounded-lg border bg-background px-5 py-4"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();

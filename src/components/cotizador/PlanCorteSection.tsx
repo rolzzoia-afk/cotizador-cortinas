@@ -21,6 +21,8 @@ import {
 } from '@/modules/cotizador/planCorte';
 import { retazoSugerido } from '@/modules/cotizador/colmenaCorte';
 import { useParametrosCotizador, type ParametrosCorte } from '@/modules/cotizador/parametros';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import type { ColmenaPano } from '@/modules/admin/colmena';
 import type { OT } from '@/modules/ots/types';
 import type { Database } from '@/types/database';
@@ -630,6 +632,8 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
 export function PlanCorteSection({ ot }: { ot: OT }) {
   const { empresaId } = useAuth();
   const { parametros, loading: loadingParams } = useParametrosCotizador();
+  const { formulas, loading: loadingFormulas } = useFormulasFamilias();
+  const { reglas } = useReglasSeleccion();
   const [colmenaPanos, setColmenaPanos] = useState<ColmenaPano[] | null>(null);
   const [ots, setOts] = useState<OT[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -699,10 +703,10 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
   const plan: Plan | null = useMemo(() => {
     // Espera los parámetros de corte: un plan con defaults no se recalcularía.
-    if (!colmenaPanos || !ots || loadingParams) return null;
+    if (!colmenaPanos || !ots || loadingParams || loadingFormulas) return null;
     const panos = colmenaPanos.map(rowToPano);
-    return generarPlanCorte(ots, panos, parametros);
-  }, [colmenaPanos, ots, loadingParams, parametros]);
+    return generarPlanCorte(ots, panos, parametros, formulas, reglas.tipos);
+  }, [colmenaPanos, ots, loadingParams, parametros, loadingFormulas, formulas]);
 
   const resumen = plan ? resumenPlan(plan) : null;
   const otNum = ot.datosGenerales.ot || String(ot.id);

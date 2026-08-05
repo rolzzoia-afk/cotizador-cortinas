@@ -42,6 +42,7 @@
 //   Tela / Velcro   → '' (viaja por el flujo de telas, no por la estructura)
 // Módulo puro: sin React/Supabase.
 // ─────────────────────────────────────────────────────────────────────
+import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
 export type VarianteOscuridad = 'INTERNO' | 'SEMI' | 'EXTERNO';
 
@@ -277,6 +278,145 @@ const INF_45_ADJ: Record<VarianteOscuridad, { DENTRO: number | null; PARED: numb
   SEMI: { DENTRO: null, PARED: -7.5 },
   EXTERNO: { DENTRO: -0.8, PARED: 14 },
 };
+// Perfiles laterales (sobre el ALTO): a muro suma 10, a piso sin ajuste.
+const PERFIL_LATERAL_MURO_SUMA = 10;
+// Alto de la tira de velcro (DARK): fijo.
+const ALTO_TELA_VELCRO_CM = 15;
+
+/**
+ * Todos los números de las pizarras de oscuridad, en un solo objeto para que
+ * se puedan editar desde Admin (`formulasFamilias.ts`). Las funciones de este
+ * archivo lo reciben como último parámetro opcional: sin pasarlo, se usan
+ * estos valores y el comportamiento es el de siempre.
+ *
+ * Lo que NO entra acá es la ESTRUCTURA: qué familias existen, cuáles encadenan
+ * y cuáles cortan neto, o que SEMI no tenga montaje "dentro" (el `null` de las
+ * tablas INF_*). Eso es física del sistema, no un número a calibrar.
+ */
+export type FormulasOscuridad = {
+  cenefaAdj: Record<FamiliaOscuridad, [number, number, number]>;
+  tuboAdj: Record<FamiliaSoftLightNeta, [number, number, number]>;
+  tuboAdjNegro: Partial<Record<FamiliaSoftLightNeta, [number, number, number]>>;
+  pesoAdj: Record<FamiliaSoftLightNeta, [number, number, number]>;
+  telaAdj: Record<FamiliaSoftLightNeta, [number, number, number]>;
+  tuboPaso: Record<FamiliaEncadenada, [number, number, number]>;
+  telaPasoCm: number;
+  pesoPasoCm: number;
+  cenefaTraseraDesc: number;
+  infDesc: Record<FamiliaOscuridad, [number, number, number]>;
+  /** Ajuste del perfil base por variante: [dentro, pared]. `null` = solo pared. */
+  infSoftlight: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }>;
+  infOscuranti: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }>;
+  inf45: Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }>;
+  /** Perfil lateral a muro = alto + esto (piso y marco van al alto exacto). */
+  perfilLateralMuroSuma: number;
+  /** Alto de la tela de velcro (DARK): medida fija, no depende de la ventana. */
+  altoTelaVelcroCm: number;
+  /** Los sistemas de oscuridad cortan la tela con este extra sobre el alto. */
+  altoTelaExtraCm: number;
+  /**
+   * Números PROPIOS de los tipos de cortina creados desde Admin, por categoría.
+   * Mapa ABIERTO (a diferencia del resto, que son tablas cerradas por familia):
+   * un tipo montado sobre DARK usa la mecánica de DARK con estos números.
+   */
+  porTipo: Record<string, ParcheOscuridad>;
+};
+
+/** Terna de una tabla de oscuridad: [INTERNO, SEMI, EXTERNO]. */
+export type TernaVariantes = [number, number, number];
+
+/** Tabla del perfil base por variante: [dentro, pared]; `null` = solo pared. */
+export type TablaPerfilBase = Record<VarianteOscuridad, { DENTRO: number | null; PARED: number }>;
+
+/**
+ * Números propios de un TIPO de cortina montado sobre una familia de oscuridad.
+ * Cada clave presente PISA la fila de la familia base; las ausentes se heredan.
+ * No incluye los escalares compartidos (paso de tela, paso de peso, cenefa
+ * trasera, velcro): esos son física del encadenado, no calibración por sistema.
+ */
+export type ParcheOscuridad = {
+  cenefaAdj?: TernaVariantes;
+  /** Solo si el molde es soft light (corte neto). */
+  tuboAdj?: TernaVariantes;
+  tuboAdjNegro?: TernaVariantes;
+  pesoAdj?: TernaVariantes;
+  telaAdj?: TernaVariantes;
+  /** Solo si el molde encadena (dark, oscuranti, soft light con cenefa cuadrada 45). */
+  tuboPaso?: TernaVariantes;
+  infDesc?: TernaVariantes;
+  /** Pisa la tabla de perfil base que lea el molde (softlight / oscuranti / 45). */
+  infBase?: TablaPerfilBase;
+};
+
+export const FORMULAS_OSCURIDAD_DEFAULT: FormulasOscuridad = {
+  cenefaAdj: CENEFA_ADJ,
+  tuboAdj: TUBO_ADJ,
+  tuboAdjNegro: TUBO_ADJ_NEGRO,
+  pesoAdj: PESO_ADJ,
+  telaAdj: TELA_ADJ,
+  tuboPaso: TUBO_PASO,
+  telaPasoCm: TELA_PASO_CM,
+  pesoPasoCm: PESO_PASO_CM,
+  cenefaTraseraDesc: CENEFA_TRASERA_DESC,
+  infDesc: INF_DESC,
+  infSoftlight: INF_SOFTLIGHT_ADJ,
+  infOscuranti: INF_OSCURANTI_ADJ,
+  inf45: INF_45_ADJ,
+  perfilLateralMuroSuma: PERFIL_LATERAL_MURO_SUMA,
+  altoTelaVelcroCm: ALTO_TELA_VELCRO_CM,
+  altoTelaExtraCm: 25,
+  porTipo: {},
+};
+
+/**
+ * Fórmulas de oscuridad con la familia BASE pisada por el parche del tipo.
+ *
+ * Es lo que permite que un tipo creado desde Admin tenga números propios sin
+ * abrir el union de familias: el motor sigue recibiendo una familia conocida
+ * (la del molde) y una tabla ya parchada. El parcheo es POR LLAMADA, así que en
+ * una misma orden pueden convivir un DARK nativo y un tipo montado sobre DARK
+ * sin contaminarse.
+ *
+ * Sin parche devuelve el MISMO objeto (identidad), para no copiar en cada paño.
+ */
+export function formulasOscuridadParaTipo(
+  f: FormulasOscuridad,
+  categoria: string | null | undefined,
+  familia: FamiliaOscuridad,
+): FormulasOscuridad {
+  const clave = (categoria || '').trim();
+  const parche = clave ? f.porTipo?.[clave] : undefined;
+  if (!parche) return f;
+
+  const out: FormulasOscuridad = { ...f };
+  const pisar = <K extends keyof FormulasOscuridad>(
+    campo: K,
+    valor: TernaVariantes | undefined,
+  ) => {
+    if (!valor) return;
+    // La tabla es por familia: se clona y se reemplaza SOLO la fila del molde.
+    out[campo] = { ...(f[campo] as object), [familia]: valor } as FormulasOscuridad[K];
+  };
+
+  pisar('cenefaAdj', parche.cenefaAdj);
+  pisar('infDesc', parche.infDesc);
+  if (esFamiliaSoftLight(familia)) {
+    pisar('tuboAdj', parche.tuboAdj);
+    pisar('tuboAdjNegro', parche.tuboAdjNegro);
+    pisar('pesoAdj', parche.pesoAdj);
+    pisar('telaAdj', parche.telaAdj);
+  } else {
+    pisar('tuboPaso', parche.tuboPaso);
+  }
+  if (parche.infBase) {
+    // Cada molde lee una tabla distinta de perfil base; se pisa la que use.
+    if (esFamiliaSoftLight(familia)) out.infSoftlight = parche.infBase;
+    else if (familia === 'OSCURANTI') out.infOscuranti = parche.infBase;
+    else if (esFamilia45(familia)) out.inf45 = parche.infBase;
+  }
+  return out;
+}
+
 const FAMILIAS_SOFT_LIGHT: FamiliaOscuridad[] = ['SOFT_LIGHT_38', 'SOFT_LIGHT_45', 'SOFT_LIGHT_CC'];
 /**
  * ¿Es un sistema soft light de los que miden el base con INF_SOFTLIGHT_ADJ
@@ -306,11 +446,6 @@ export function esFamiliaSoftLightCC(familia: FamiliaOscuridad): boolean {
 export function esColorAccesoriosNegro(valor: string | null | undefined): boolean {
   return (valor || '').trim().toUpperCase().startsWith('NEG');
 }
-// Perfiles laterales (sobre el ALTO): a muro suma 10, a piso sin ajuste.
-const PERFIL_LATERAL_MURO_SUMA = 10;
-// Alto de la tira de velcro (DARK): fijo.
-const ALTO_TELA_VELCRO_CM = 15;
-
 const CON_CENEFA_DELANTERA: FamiliaOscuridad[] = [
   'SOFT_LIGHT_CC', 'SOFT_LIGHT_CC_45', 'OSCURANTI', 'DARK', 'DARK_45',
 ];
@@ -319,16 +454,22 @@ export function esFamiliaConCenefaCuadrada(familia: FamiliaOscuridad): boolean {
   return CON_CENEFA_DELANTERA.includes(familia);
 }
 
-function descPerfilInferior(familia: FamiliaOscuridad, variante: VarianteOscuridad): number {
-  return INF_DESC[familia][VI[variante]];
+function descPerfilInferior(
+  familia: FamiliaOscuridad,
+  variante: VarianteOscuridad,
+  f: FormulasOscuridad = FORMULAS_OSCURIDAD_DEFAULT,
+): number {
+  return f.infDesc[familia][VI[variante]];
 }
 
 /** Deriva la familia de oscuridad desde la categoría del cotizador + tipo de cenefa del paño. */
 export function familiaOscuridad(
   categoria: string | undefined | null,
   cenefaTipo?: string | null,
+  tipos?: readonly TipoCortina[],
 ): FamiliaOscuridad | null {
-  const cat = (categoria || '').trim().toUpperCase();
+  // Un tipo de cortina propio se despieza con la mecánica de su molde.
+  const cat = categoriaEfectiva(categoria, tipos).trim().toUpperCase();
   // Prefijo: cubre 'Cuadrada a muro' / 'a techo' y el 'Cuadrada' legacy.
   const esCuadrada = (cenefaTipo || '').trim().toUpperCase().startsWith('CUADRADA');
   if (cat === 'SOFT_LIGHT_38MM') return esCuadrada ? 'SOFT_LIGHT_CC' : 'SOFT_LIGHT_38';
@@ -352,8 +493,9 @@ export function familiaOscuridadConDiametro(
   categoria: string | undefined | null,
   cenefaTipo: string | undefined | null,
   diametroTuboMm?: number | null,
+  tipos?: readonly TipoCortina[],
 ): FamiliaOscuridad | null {
-  const fam = familiaOscuridad(categoria, cenefaTipo);
+  const fam = familiaOscuridad(categoria, cenefaTipo, tipos);
   return fam === 'SOFT_LIGHT_38' && diametroTuboMm === 45 ? 'SOFT_LIGHT_45' : fam;
 }
 
@@ -440,8 +582,9 @@ export function cenefaFrontOscuridad(
   familia: FamiliaOscuridad,
   variante: VarianteOscuridad,
   anchoCm: number,
+  f: FormulasOscuridad = FORMULAS_OSCURIDAD_DEFAULT,
 ): number {
-  return t1(anchoCm + CENEFA_ADJ[familia][VI[variante]]);
+  return t1(anchoCm + f.cenefaAdj[familia][VI[variante]]);
 }
 
 /**
@@ -459,13 +602,14 @@ export function medidaPerfilBaseOscuridad(
   variante: VarianteOscuridad,
   anchoCm: number,
   montaje?: MontajeBaseOscuridad,
+  f: FormulasOscuridad = FORMULAS_OSCURIDAD_DEFAULT,
 ): number {
   const adjAncho = esFamiliaSoftLight(familia)
-    ? INF_SOFTLIGHT_ADJ[variante]
+    ? f.infSoftlight[variante]
     : familia === 'OSCURANTI'
-      ? INF_OSCURANTI_ADJ[variante]
+      ? f.infOscuranti[variante]
       : esFamilia45(familia)
-        ? INF_45_ADJ[variante]
+        ? f.inf45[variante]
         : null;
   if (adjAncho) {
     // SEMI (DENTRO null) → siempre pared a pared; INTERNO/EXTERNO default DENTRO.
@@ -474,8 +618,8 @@ export function medidaPerfilBaseOscuridad(
   }
   // DARK 38: cenefa frontal − descuento. Se mide sobre la cenefa EXACTA (no la
   // impresa) y se trunca una sola vez, como el resto de la cadena.
-  const cenefaExacta = anchoCm + CENEFA_ADJ[familia][VI[variante]];
-  return t1(cenefaExacta - descPerfilInferior(familia, variante));
+  const cenefaExacta = anchoCm + f.cenefaAdj[familia][VI[variante]];
+  return t1(cenefaExacta - descPerfilInferior(familia, variante, f));
 }
 
 /**
@@ -501,12 +645,13 @@ export function medidaPerfilOscuridad(
   anchoCm: number,
   altoCm: number,
   infMontaje?: MontajeBaseOscuridad,
+  f: FormulasOscuridad = FORMULAS_OSCURIDAD_DEFAULT,
 ): number {
-  if (key === 'izqMuro' || key === 'derMuro') return t1(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  if (key === 'izqMuro' || key === 'derMuro') return t1(altoCm + f.perfilLateralMuroSuma);
   // piso y marco (dentro del marco) = alto real, sin descuento.
   if (key === 'izqPiso' || key === 'derPiso' || key === 'izqMarco' || key === 'derMarco') return t1(altoCm);
   // inferior (muro/piso/marco): soft light INTERNO usa montaje; resto = cenefa − descuento.
-  return medidaPerfilBaseOscuridad(familia, variante, anchoCm, infMontaje);
+  return medidaPerfilBaseOscuridad(familia, variante, anchoCm, infMontaje, f);
 }
 
 /**
@@ -527,6 +672,7 @@ export function cortesOscuridad(
   perfiles: PerfilesOscuridad = {},
   medidas: MedidasPerfilesOscuridad = {},
   colorAccesorios?: string | null,
+  f: FormulasOscuridad = FORMULAS_OSCURIDAD_DEFAULT,
 ): CorteOscuridad[] {
   const cortes: CorteOscuridad[] = [];
   if (!anchoCm || anchoCm <= 0) return cortes;
@@ -536,11 +682,11 @@ export function cortesOscuridad(
   // el siguiente eslabón partiera del valor impreso, el recorte se acumularía
   // (oscuranti INT 330 daba tela 324,0 cuando la fórmula da 324,11 — 1,1 mm de
   // menos, más que el truncado de una sola pieza).
-  const cenefaExacta = anchoCm + CENEFA_ADJ[familia][vi];
+  const cenefaExacta = anchoCm + f.cenefaAdj[familia][vi];
   const cenefaFront = t1(cenefaExacta);
   // Cenefa trasera (solo DARK): se mide sobre la DELANTERA exacta, y es la pieza
   // desde la que arranca el tubo.
-  const traseraExacta = cenefaExacta - CENEFA_TRASERA_DESC;
+  const traseraExacta = cenefaExacta - f.cenefaTraseraDesc;
   const cenefaTrasera = t1(traseraExacta);
 
   if (conCenefaCuad) {
@@ -566,7 +712,7 @@ export function cortesOscuridad(
         medidaCm: cenefaTrasera,
       });
       cortes.push({ componente: 'Ancho Tela Velcro', columnaExcel: '', medidaCm: cenefaFront });
-      cortes.push({ componente: 'Alto Tela Velcro', columnaExcel: '', medidaCm: ALTO_TELA_VELCRO_CM });
+      cortes.push({ componente: 'Alto Tela Velcro', columnaExcel: '', medidaCm: f.altoTelaVelcroCm });
     }
   } else {
     // Soft Light "normal": la cenefa frontal la corta el taller y SIEMPRE viaja
@@ -587,15 +733,15 @@ export function cortesOscuridad(
   let peso: number;
   if (esFamiliaSoftLight(familia)) {
     const tuboAdj =
-      (esColorAccesoriosNegro(colorAccesorios) ? TUBO_ADJ_NEGRO[familia] : undefined) ?? TUBO_ADJ[familia];
+      (esColorAccesoriosNegro(colorAccesorios) ? f.tuboAdjNegro[familia] : undefined) ?? f.tuboAdj[familia];
     tubo = t1(anchoCm + tuboAdj[vi]);
-    tela = t1(anchoCm + TELA_ADJ[familia][vi]);
-    peso = t1(anchoCm + PESO_ADJ[familia][vi]);
+    tela = t1(anchoCm + f.telaAdj[familia][vi]);
+    peso = t1(anchoCm + f.pesoAdj[familia][vi]);
   } else {
     const tuboExacto =
-      (esFamiliaDark(familia) ? traseraExacta : cenefaExacta) - TUBO_PASO[familia][vi];
-    const telaExacta = tuboExacto - TELA_PASO_CM;
-    const pesoExacto = telaExacta + PESO_PASO_CM;
+      (esFamiliaDark(familia) ? traseraExacta : cenefaExacta) - f.tuboPaso[familia][vi];
+    const telaExacta = tuboExacto - f.telaPasoCm;
+    const pesoExacto = telaExacta + f.pesoPasoCm;
     tubo = t1(tuboExacto);
     tela = t1(telaExacta);
     peso = t1(pesoExacto);
@@ -610,11 +756,11 @@ export function cortesOscuridad(
   // estar ACTIVO (asignado en Fase 1) con la superficie/medida pendiente para
   // Fase 2. Retro-compat: muro/piso/marco marcado implica activo.
   const altoOk = altoCm > 0;
-  const lateralMuro = t1(altoCm + PERFIL_LATERAL_MURO_SUMA);
+  const lateralMuro = t1(altoCm + f.perfilLateralMuroSuma);
   const lateralPiso = t1(altoCm);
   // Soft light INTERNO: ancho − 13,3 (dentro de laterales) o ancho (pared a pared);
   // resto de variantes/familias = cenefa frontal − descuento de variante.
-  const inferior = medidaPerfilBaseOscuridad(familia, variante, anchoCm, perfiles.infMontaje);
+  const inferior = medidaPerfilBaseOscuridad(familia, variante, anchoCm, perfiles.infMontaje, f);
 
   type PerfilEff = { medida: number; superficie: 'muro' | 'piso' | 'marco' | null; pendiente: boolean };
   // Medida efectiva de un lateral (muro = alto+10; piso/marco = alto), respetando

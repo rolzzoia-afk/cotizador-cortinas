@@ -39,7 +39,7 @@ import {
   textoPesoCadenaInventario,
   type CadenaInsumo,
 } from './cadenas';
-import { esCenefaCuadrada, OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
+import { esCenefaCuadrada } from './fase2';
 import {
   categoriaRequiereMecanismo,
   chipMecanismoPorNumero,
@@ -52,12 +52,19 @@ import {
 } from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
-  MEC_KIT_OVALADA_POR_COLOR,
   esCategoriaVertical,
   normalizarColorAccesorio,
+  opcionesMecanismoResolucion,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { opcionesTuberiaResolucion } from '@/modules/descuentos/reglas-tuberia';
+import type { ColorAccesorio } from '@/modules/descuentos/coloresAccesorio';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import { esFamiliaDark, familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { calculoVertical, cordonBeeblackDePano } from '@/modules/descuentos/despiece';
 import {
   MANILLAS,
@@ -132,6 +139,7 @@ const mts3 = (n: number) => n.toFixed(3).replace('.', ',');
  */
 export function consolidarManillas(
   filas: FilaCalculo[],
+  colores?: readonly ColorAccesorio[],
 ): { codigo?: string; descripcion: string; cantidad: number }[] {
   const acc = new Map<string, { codigo?: string; cantidad: number }>();
   for (const f of filas) {
@@ -141,8 +149,8 @@ export function consolidarManillas(
     const n = parseInt(cant || '', 10);
     if (!n) continue;
     const col = (color || '').trim();
-    const cod = codigoManillaPorColor(col);
-    const descripcion = cod ? `[${cod}] ${MANILLAS[cod].nombre}` : `MANILLA ${col}`.trim();
+    const cod = codigoManillaPorColor(col, colores);
+    const descripcion = cod && MANILLAS[cod] ? `[${cod}] ${MANILLAS[cod].nombre}` : cod ? `[${cod}] MANILLA ${col}`.trim() : `MANILLA ${col}`.trim();
     const prev = acc.get(descripcion) || { codigo: cod || undefined, cantidad: 0 };
     acc.set(descripcion, { codigo: cod || undefined, cantidad: prev.cantidad + n });
   }
@@ -180,9 +188,9 @@ function grupoInsumo(codigo: string | undefined, descripcion: string): GrupoInsu
  * de la armadura E78 ovalada: "[MEC39] OVALADA BLANCO [MEC 39]" en vez de solo
  * "MEC 39" (así el bodeguero ve de qué kit salen). Cae a "MEC N" si no hay chip.
  */
-function descKitMec(num: number): string {
+function descKitMec(num: number, opcMec: readonly string[]): string {
   const cod = `MEC${String(num).padStart(2, '0')}`;
-  const chip = chipMecanismoPorNumero(num, OPCIONES_MECANISMO_RESOLUCION);
+  const chip = chipMecanismoPorNumero(num, opcMec);
   return chip ? `[${cod}] ${chip}` : `MEC ${num}`;
 }
 
@@ -203,7 +211,14 @@ export function consolidarInsumos(
   /** Adicionales de Fase 0: para que TODO motor cobrado (aunque no calce con un
    *  paño por ubicación) salga en el inventario con su cantidad real. */
   adicionalesFase0?: AdicionalFase0Persistido[],
+  /** Fórmulas de corte editadas en Admin (el cordón beeblack sale de ellas). */
+  formulas?: FormulasFamilias,
+  /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): InsumoConsolidado[] {
+  // Consolidar es CÁLCULO: listas de resolución (incluye chips y tubos retirados).
+  const opcMec = opcionesMecanismoResolucion(reglas.mecanismo);
+  const opcTub = opcionesTuberiaResolucion(reglas.tuberia);
   const acc = new Map<string, { codigo?: string; descripcion: string; cantidad: number; grupo: GrupoInsumo; unidad?: string }>();
   // `grupoOverride` fuerza la tabla (el motor de una cortina ovalada va a
   // PRODUCCIÓN aunque su código DOM caiga por defecto en INSTALACIÓN). La clave
@@ -243,26 +258,26 @@ export function consolidarInsumos(
       // armadura es MIXTA (tapas del kit ovalada + pivotes del kit 45) y NO se
       // arma el mecanismo ovalada completo: por eso ese kit no se lista, solo las
       // tapas y los pivotes (más abajo).
-      const ovalada = esCenefaOvalada(p.cenefa, v.categoria);
+      const ovalada = esCenefaOvalada(p.cenefa, v.categoria, reglas.tipos);
       // Los sistemas de oscuridad (soft light 38/45/CC) usan el kit ovalada y su
       // cenefa suele ser IMPLÍCITA (p.cenefa vacío, categoría SOFT_LIGHT_*): sobre
       // tubo E78 llevan la misma armadura mixta. Oscuranti es 63 mm (E47) → nunca E78.
       // El DARK queda FUERA (regla del usuario 2026-07-31): sobre tubería 0,45 usa el
       // kit COMPLETO MEC 18/23, sin nada de la armadura de cenefa ovalada.
-      const famOsc = familiaOscuridad(v.categoria, p.cenefa as string | undefined);
+      const famOsc = familiaOscuridad(v.categoria, p.cenefa as string | undefined, reglas.tipos);
       const esOscuridadOvalada = famOsc != null && !esFamiliaDark(famOsc);
       const ovaladaSistema =
         ovalada || esOscuridadOvalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
       const esE78Mixta =
         ovaladaSistema &&
         codigoTuberiaDeChip(
-          tuberiaParaPano(anchoM, modelo, p.tuberia as string, OPCIONES_TUBERIA, v.categoria),
+          tuberiaParaPano(anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia),
         ) === 'E78';
 
       // Mecanismo + cadena + peso: toda categoría con mecanismo que NO se venda
       // como motor (aunque el paño lleve un motor, va dentro del precio).
-      if (!catEsMotor && categoriaRequiereMecanismo(v.categoria)) {
-        const chip = mecanismoParaPano(p, v.color, modelo, OPCIONES_MECANISMO_RESOLUCION, v.categoria, anchoM, usarTuboE78);
+      if (!catEsMotor && categoriaRequiereMecanismo(v.categoria, reglas.mecanismo)) {
+        const chip = mecanismoParaPano(p, v.color, modelo, opcMec, v.categoria, anchoM, usarTuboE78, reglas);
         const num = numeroMecDeChip(chip);
         // Una cortina con mecanismo de cenefa ovalada se arma en el taller: su
         // mecanismo Y su cadena van a PRODUCCIÓN. El resto de cadenas, a
@@ -287,7 +302,7 @@ export function consolidarInsumos(
           bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
         } else {
           const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
-          const codCad = codCadenaAutoPorAlto(altoM, colorAccesoriosDePano(p, v.color), v.categoria, cadenas);
+          const codCad = codCadenaAutoPorAlto(altoM, colorAccesoriosDePano(p, v.color), v.categoria, cadenas, reglas.tipos);
           if (codCad) {
             const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas);
             bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1, grupoOvalada);
@@ -352,7 +367,7 @@ export function consolidarInsumos(
         for (const it of insumosBeeblackDeCortina(
           colorAccesoriosDePano(p, v.color),
           beeblackEsDoble(p, (v.panos || []).length),
-          cordonBeeblackDePano(v, p),
+          cordonBeeblackDePano(v, p, formulas),
         )) {
           bump(
             it.codigo,
@@ -371,10 +386,10 @@ export function consolidarInsumos(
       // tubos → 4+4; resto 2+2. Se resuelve por COLOR (no por el chip de
       // mecanismo) para que también aplique a las ovaladas motorizadas.
       if (esE78Mixta) {
-        const nMix = esCategoriaDuo(v.categoria) ? 4 : 2;
+        const nMix = esCategoriaDuo(v.categoria, reglas.tipos) ? 4 : 2;
         const colorAcc = normalizarColorAccesorio(colorAccesoriosDePano(p, v.color));
-        const mecTapas = MEC_KIT_OVALADA_POR_COLOR[colorAcc];
-        if (mecTapas != null) bump(undefined, descKitMec(mecTapas), nMix, 'PRODUCCION', 'TAPAS');
+        const mecTapas = reglas.mecanismo.kitOvaladaPorColor[colorAcc];
+        if (mecTapas != null) bump(undefined, descKitMec(mecTapas, opcMec), nMix, 'PRODUCCION', 'TAPAS');
         // Pivotes: solo blanco→18 / negro→23. Gris (y colores sin kit 45) queda
         // manual — decisión del usuario 2026-07-15: sin línea automática.
         const mecPivotes =
@@ -383,12 +398,12 @@ export function consolidarInsumos(
             : colorAcc === 'BCO' || colorAcc === 'BLANCO'
               ? 18
               : null;
-        if (mecPivotes != null) bump(undefined, descKitMec(mecPivotes), nMix, 'PRODUCCION', 'PIVOTES');
+        if (mecPivotes != null) bump(undefined, descKitMec(mecPivotes, opcMec), nMix, 'PRODUCCION', 'PIVOTES');
       }
       // El MOTOR de una cortina con cenefa ovalada va a PRODUCCIÓN; el resto del
       // kit (control, cable, enchufe) y los motores de cortinas normales, a
       // INSTALACIÓN (grupo por defecto).
-      const motorInsumos = insumosMotorDePano(p, v.categoria);
+      const motorInsumos = insumosMotorDePano(p, v.categoria, reglas.tipos);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
           const esUnidad = esCodigoMotor(ins.codigo);
@@ -413,14 +428,14 @@ export function consolidarInsumos(
       //     LIGHT CC): SIEMPRE 2, color de accesorios del paño.
       //   · Adicional roller/vertical (cenefa cuadrada elegible): 1 o 2 según
       //     cenefaTapa, color de tapa elegido.
-      const tapasFijas = cenefaCuadradaTapasFijas(v.categoria, p.cenefa);
+      const tapasFijas = cenefaCuadradaTapasFijas(v.categoria, p.cenefa, reglas.tipos);
       if (esCenefaCuadrada(p.cenefa) || tapasFijas) {
         const n = tapasFijas
           ? 2
           : p.cenefaTapa === 'CON_2_TAPAS' ? 2 : p.cenefaTapa === 'CON_1_TAPA' ? 1 : 0;
         if (n > 0) {
           const colorTapa = tapasFijas ? colorAccesoriosDePano(p, v.color) : p.colorTapa;
-          const tapa = tapaCenefaCuadrada(colorTapa);
+          const tapa = tapaCenefaCuadrada(colorTapa, reglas.colores);
           const desc = tapa.codigo ? `[${tapa.codigo}] ${tapa.descripcion}` : tapa.descripcion;
           bump(tapa.codigo, desc, n, 'INSTALACION');
         }
@@ -442,7 +457,7 @@ export function consolidarInsumos(
   const out: InsumoConsolidado[] = [];
   let id = 0;
   // Manillas primero (instalación), luego el resto de insumos ya clasificados.
-  const manillas = consolidarManillas(filas);
+  const manillas = consolidarManillas(filas, reglas.colores);
   // Top-up de las manillas COBRADAS en Fase 1 que no bajaron a ningún paño
   // (el cruce por ubicación falla en ventanas de varios paños — ver
   // faltantesManillasInventario). Sin esto se perdían del inventario.
@@ -507,9 +522,15 @@ export function construirInventario(
   usarTuboE78 = false,
   /** Adicionales Fase 0: para el top-up de motores cobrados (ver consolidarInsumos). */
   adicionalesFase0?: AdicionalFase0Persistido[],
+  /** Fórmulas de corte editadas en Admin (sin esto, las de fábrica). */
+  formulas?: FormulasFamilias,
+  /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): Inventario {
   const { filas } = construirCalculoGeneral(ventanas, catalogo, params, undefined, {
     usarTuboE78,
+    formulas,
+    reglas,
   });
   const filasInv: FilaInventario[] = filas.map((f, i) => ({
     id: i + 1,
@@ -532,7 +553,15 @@ export function construirInventario(
   }));
   return {
     filas: filasInv,
-    insumos: consolidarInsumos(ventanas, filas, cadenas, usarTuboE78, adicionalesFase0),
+    insumos: consolidarInsumos(
+      ventanas,
+      filas,
+      cadenas,
+      usarTuboE78,
+      adicionalesFase0,
+      formulas,
+      reglas,
+    ),
     etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
     notas: notasTerreno(ventanas),
   };
@@ -695,8 +724,19 @@ export function generarPdfInventario(
   cadenas: CadenaInsumo[] = [],
   usarTuboE78 = false,
   adicionalesFase0?: AdicionalFase0Persistido[],
+  formulas?: FormulasFamilias,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): void {
-  const data = construirInventario(ventanas, catalogo, params, cadenas, usarTuboE78, adicionalesFase0);
+  const data = construirInventario(
+    ventanas,
+    catalogo,
+    params,
+    cadenas,
+    usarTuboE78,
+    adicionalesFase0,
+    formulas,
+    reglas,
+  );
   if (data.filas.length === 0) {
     throw new Error('No hay cortinas en la OT.');
   }

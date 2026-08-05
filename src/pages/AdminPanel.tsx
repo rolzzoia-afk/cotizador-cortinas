@@ -21,6 +21,7 @@ import {
   Home,
   LineChart,
   Package,
+  Ruler,
   Server,
   Users,
 } from 'lucide-react';
@@ -33,19 +34,27 @@ import { ParametrosCotizadorSection } from '@/components/admin/ParametrosCotizad
 import { ComisionesTarjetaSection } from '@/components/admin/ComisionesTarjetaSection';
 import { UsuariosRolesSection } from '@/components/admin/UsuariosRolesSection';
 import { SuscripcionSection } from '@/components/admin/SuscripcionSection';
-import { DescuentosCatalogoSection } from '@/components/admin/DescuentosCatalogoSection';
 import { TerminosSection } from '@/components/admin/TerminosSection';
 import { DocumentoSection } from '@/components/admin/DocumentoSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 import VistaSistema from './admin/vistas/VistaSistema';
 import VistaInventario from './admin/vistas/VistaInventario';
+import VistaCatalogo from './admin/vistas/VistaCatalogo';
 
-type Tab = 'sistema' | 'inventario' | 'cotizador' | 'usuarios' | 'agente' | 'auditoria';
+type Tab =
+  | 'sistema'
+  | 'inventario'
+  | 'cotizador'
+  | 'catalogo'
+  | 'usuarios'
+  | 'agente'
+  | 'auditoria';
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Server }> = [
   { id: 'sistema', label: 'Sistema', icon: Server },
   { id: 'inventario', label: 'Inventario', icon: Package },
   { id: 'cotizador', label: 'Cotizador', icon: Calculator },
+  { id: 'catalogo', label: 'Catálogo técnico', icon: Ruler },
   { id: 'usuarios', label: 'Usuarios', icon: Users },
   { id: 'agente', label: 'Agente IA', icon: Bot },
   { id: 'auditoria', label: 'Auditoría', icon: ClipboardList },
@@ -69,7 +78,8 @@ export function AdminPanel() {
       <header>
         <h1 className="text-2xl font-bold">Panel de Administrador</h1>
         <p className="text-sm text-muted-foreground">
-          Sistema y taller · Inventario · Cotizador · Usuarios · Agente IA · Auditoría.
+          Sistema y taller · Inventario · Cotizador · Catálogo técnico · Usuarios · Agente IA ·
+          Auditoría.
         </p>
       </header>
 
@@ -104,9 +114,9 @@ export function AdminPanel() {
           <ComisionesTarjetaSection />
           <TerminosSection />
           <DocumentoSection />
-          <DescuentosCatalogoSection />
         </div>
       )}
+      {tab === 'catalogo' && <VistaCatalogo />}
       {tab === 'usuarios' && (
         <div className="space-y-6">
           <SuscripcionSection />

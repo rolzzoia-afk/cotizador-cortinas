@@ -13,12 +13,19 @@ import {
   MODELO_DESPIECE_STUB,
 } from '@/modules/descuentos/despiece';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { telaDePano } from './telaPano';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
+import type { ColorAccesorio } from '@/modules/descuentos/coloresAccesorio';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 export function derivarCod(producto: string): string {
@@ -146,6 +153,9 @@ function piezasDespiece(
   anchoCm: number,
   tuberiaCod: string,
   params: ParametrosCorte,
+  formulas?: FormulasFamilias,
+  tipos?: readonly TipoCortina[],
+  colores?: readonly ColorAccesorio[],
 ): PiezaEtiqueta[] {
   // BEEBLACK no tiene modelo de fabricación (usa el stub, igual que el Excel de
   // órdenes y el Cálculo General): sin esta excepción sus filas iban sin piezas.
@@ -163,6 +173,8 @@ function piezasDespiece(
     {
       verticalExtraAltoCm: params.extraVerticalCm,
       verticalDctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
+      formulas,
+      tipos,
     },
   );
   const color = colorAccesoriosDePano(p, v.color as string | undefined);
@@ -170,7 +182,7 @@ function piezasDespiece(
     componente: c.componente,
     columnaExcel: c.columnaExcel,
     medidaCm: c.medidaCm,
-    cod: codigoEstructura(c.columnaExcel, color, tuberiaCod),
+    cod: codigoEstructura(c.columnaExcel, color, tuberiaCod, colores),
     color,
   }));
 }
@@ -180,6 +192,8 @@ export function buildOptimizerRows(
   ventanas: VentanaItem[],
   catalogo: CatalogoProductos,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  formulas?: FormulasFamilias,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): OptimizerRow[] {
   const rows: OptimizerRow[] = [];
   let rowIdx = 0;
@@ -210,7 +224,7 @@ export function buildOptimizerRows(
       // igual que la planilla manual (OT 2923: alto 2,34 → corte 2,39, real 2,59).
       // BEEBLACK: la tela (acordeón) se corta al ancho/alto propios de la variante
       // (pizarra 2026-07-29), no con los descuentos del roller.
-      const esPletina = esCategoriaPletina(v.categoria);
+      const esPletina = esCategoriaPletina(v.categoria, reglas.tipos);
       const esVertical = esCategoriaVertical(v.categoria);
       const esBeeblack = esCategoriaBeeblack(v.categoria);
       const tuberiaCod = tuberiaCodigoCorto(
@@ -218,8 +232,9 @@ export function buildOptimizerRows(
         String(p.tuberia || ''),
         anchoM,
         v.categoria,
+        reglas.tuberia,
       );
-      const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params);
+      const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params, formulas, reglas.tipos, reglas.colores);
       const altoTelaBbM = esBeeblack
         ? (piezas.find((pz) => pz.componente === 'Alto tela')?.medidaCm ?? 0) / 100
         : 0;
@@ -244,7 +259,7 @@ export function buildOptimizerRows(
       // BEEBLACK: igual, con su propio 'Ancho tela' por variante.
       const anchoCorteTelaCm = esBeeblack
         ? piezas.find((pz) => pz.componente === 'Ancho tela')?.medidaCm
-        : familiaOscuridad(v.categoria, p.cenefa as string | null | undefined)
+        : familiaOscuridad(v.categoria, p.cenefa as string | null | undefined, reglas.tipos)
           ? piezas.find((pz) => pz.componente === 'Tela (ancho)')?.medidaCm
           : undefined;
       rows.push({

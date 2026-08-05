@@ -17,8 +17,15 @@ import type { OptimizerRow, PiezaEtiqueta } from './tela';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
 import { medidaCorteCenefaCuadrada, tiraCenefaOvalada } from '@/modules/descuentos/adicionales-cenefa';
-import { codigoTuberiaDeChip } from '@/modules/descuentos/reglas-tuberia';
+import {
+  REGLAS_TUBERIA,
+  codigoTuberiaDeChip,
+  espesorTuboPorCodigo,
+  type ReglasTuberia,
+} from '@/modules/descuentos/reglas-tuberia';
 import { normalizarVarianteOscuridad } from '@/modules/descuentos/reglas-oscuridad';
+import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
+import type { ColorAccesorio } from '@/modules/descuentos/coloresAccesorio';
 import {
   esCategoriaBeeblack,
   LABEL_INSTALACION_BEEBLACK,
@@ -151,22 +158,26 @@ export function ordenDobleEtiqueta(ordenDobleOpcion?: string): string {
   return '';
 }
 
-/** Espesor de pared por código de tubo (fallback cuando el chip no lo trae). */
-const ESPESOR_TUBO_POR_CODIGO: Record<string, string> = { E02: '1,2', E66: '2,5', E78: '1,2' };
-
 /**
  * Espec del tubo "38 mm de 1,2 mm": diámetro del código corto ("38mm_E02")
  * + espesor del texto del chip de tubería. El chip largo actual
  * ("E02-TUBO 1.2 / Ø 38 mm") no siempre expone el espesor con "mm" pegado,
- * así que se cae al mapa por código.
+ * así que se cae al `espesorMm` del catálogo de tubos (editable en Admin).
  */
-export function especTuboEtiqueta(tuberiaCod?: string, tuberiaChip?: string): string {
+export function especTuboEtiqueta(
+  tuberiaCod?: string,
+  tuberiaChip?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): string {
   const dia = (tuberiaCod || '').match(/(\d{2,3})\s*mm/i);
   if (!dia) return '';
   const espesores = [...(tuberiaChip || '').matchAll(/(\d+[.,]\d+)\s*mm/gi)];
+  const delCatalogo = espesorTuboPorCodigo(reglas)[codigoTuberiaDeChip(tuberiaChip)];
   const esp = espesores.length
     ? espesores[espesores.length - 1][1]
-    : ESPESOR_TUBO_POR_CODIGO[codigoTuberiaDeChip(tuberiaChip)] || '';
+    : delCatalogo != null
+      ? String(delCatalogo)
+      : '';
   return esp ? `${dia[1]} mm de ${esp.replace('.', ',')} mm` : `${dia[1]} mm`;
 }
 
@@ -445,9 +456,12 @@ export function esFilaDark(row: OptimizerRow): boolean {
 /** ¿La fila es SOFT LIGHT con cenefa CUADRADA? Peso de oscuridad + cenefa delantera,
  *  SIN trasera (esa es DARK). Oscuranti tiene la MISMA firma de piezas, así que se
  *  discrimina por la categoría (SOFT_LIGHT_*); Oscuranti tiene su propia etiqueta. */
-export function esFilaSoftLightCC(row: OptimizerRow): boolean {
+export function esFilaSoftLightCC(
+  row: OptimizerRow,
+  tipos?: readonly TipoCortina[],
+): boolean {
   return (
-    (row.categoria || '').toUpperCase().includes('SOFT_LIGHT') &&
+    categoriaEfectiva(row.categoria, tipos).toUpperCase().includes('SOFT_LIGHT') &&
     !!pieza(row, 'PESO SOFT LIGHT') &&
     !!pieza(row, 'CENEFA DELANTERA') &&
     !pieza(row, 'CENEFA TRASERA')
@@ -457,9 +471,12 @@ export function esFilaSoftLightCC(row: OptimizerRow): boolean {
 /** ¿La fila es OSCURANTI? Peso de oscuridad + su PERFIL SUPERIOR (rectangular
  *  50×25): desde 2026-07-30 oscuranti NO corta cenefa cuadrada delantera —esa es
  *  de DARK y soft light CC—, así que el perfil superior es su firma propia. */
-export function esFilaOscuranti(row: OptimizerRow): boolean {
+export function esFilaOscuranti(
+  row: OptimizerRow,
+  tipos?: readonly TipoCortina[],
+): boolean {
   return (
-    (row.categoria || '').toUpperCase().includes('OSCURANTI') &&
+    categoriaEfectiva(row.categoria, tipos).toUpperCase().includes('OSCURANTI') &&
     !!pieza(row, 'PESO SOFT LIGHT') &&
     !!pieza(row, 'PERFIL SUPERIOR (CENEF.PRO)')
   );
@@ -473,6 +490,7 @@ function dibujarEstructuraSoftLight(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
+  colores?: readonly ColorAccesorio[],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const anchoCm = row.anchoCm || 0;
@@ -559,13 +577,13 @@ function dibujarEstructuraSoftLight(
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
     const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
-    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil), `ZOCALO ${subColor}`.trim(), medida);
+    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     // Separador: se dibuja SOLO si está activado (tiene su propia pieza con medida);
     // sin separador → celda vacía (N/A, sin código).
     const psep = pieza(row, sepColExcel);
     const haySep = !!psep && psep.medidaCm > 0;
     const medidaSep = haySep ? fmtMedidaCm(psep!.medidaCm) : 'N/A';
-    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil) : '', 'PERFIL SEPARADOR', medidaSep);
+    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil, colores) : '', 'PERFIL SEPARADOR', medidaSep);
   };
   perfLado(69, 'PERFIL (IZQ) INT', 'SEPARADOR (IZQ)', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
   perfLado(82.4, 'PERFIL (DER) INT', 'SEPARADOR (DER)', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
@@ -633,6 +651,7 @@ function dibujarEstructuraDark(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
+  colores?: readonly ColorAccesorio[],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const anchoCm = row.anchoCm || 0;
@@ -690,7 +709,7 @@ function dibujarEstructuraDark(
       der: !!pieza(row, 'PERFIL (DER) INT'),
       inf: !!pieza(row, 'PERFIL BASE'),
     }) || colorAcc;
-  const codCef = codigoCenefaCuadrada(colorCenefa);
+  const codCef = codigoCenefaCuadrada(colorCenefa, colores);
   const celdaCenefa = (top: number, alto: number, label: string, colExcel: string) => {
     doc.setDrawColor(...NEGRO);
     doc.setLineWidth(0.35);
@@ -726,13 +745,13 @@ function dibujarEstructuraDark(
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
     const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
-    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil), `ZOCALO ${subColor}`.trim(), medida);
+    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     // Separador: se dibuja SOLO si está activado (tiene su propia pieza con medida);
     // sin separador → celda vacía (N/A, sin código).
     const psep = pieza(row, sepColExcel);
     const haySep = !!psep && psep.medidaCm > 0;
     const medidaSep = haySep ? fmtMedidaCm(psep!.medidaCm) : 'N/A';
-    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil) : '', 'PERFIL SEPARADOR', medidaSep);
+    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil, colores) : '', 'PERFIL SEPARADOR', medidaSep);
   };
   perfLado(69, 'PERFIL (IZQ) INT', 'SEPARADOR (IZQ)', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
   perfLado(82.4, 'PERFIL (DER) INT', 'SEPARADOR (DER)', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
@@ -796,6 +815,7 @@ function dibujarEstructuraSoftLightCC(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
+  colores?: readonly ColorAccesorio[],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const anchoCm = row.anchoCm || 0;
@@ -852,7 +872,7 @@ function dibujarEstructuraSoftLightCC(
       der: !!pieza(row, 'PERFIL (DER) INT'),
       inf: !!pieza(row, 'PERFIL BASE'),
     }) || colorAcc;
-  const codCef = codigoCenefaCuadrada(colorCenefa);
+  const codCef = codigoCenefaCuadrada(colorCenefa, colores);
   doc.rect(30.4, 40, 29.5, 23.7, 'S');
   const pzDel = pieza(row, 'CENEFA DELANTERA');
   txt(doc, conCod('CEF.CUADRADA', codCef), 31.5, 44.6, 8.4, { hScale: 0.6, max: 30 });
@@ -882,11 +902,11 @@ function dibujarEstructuraSoftLightCC(
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
     const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
-    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil), `ZOCALO ${subColor}`.trim(), medida);
+    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     const psep = pieza(row, sepColExcel);
     const haySep = !!psep && psep.medidaCm > 0;
     const medidaSep = haySep ? fmtMedidaCm(psep!.medidaCm) : 'N/A';
-    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil) : '', 'PERFIL SEPARADOR', medidaSep);
+    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil, colores) : '', 'PERFIL SEPARADOR', medidaSep);
   };
   perfLado(69, 'PERFIL (IZQ) INT', 'SEPARADOR (IZQ)', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
   perfLado(82.4, 'PERFIL (DER) INT', 'SEPARADOR (DER)', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
@@ -950,6 +970,7 @@ function dibujarEstructuraOscuranti(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
+  colores?: readonly ColorAccesorio[],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const anchoCm = row.anchoCm || 0;
@@ -1018,9 +1039,9 @@ function dibujarEstructuraOscuranti(
     txt(doc, sub, 31.5, top + 5.5, 4, { bold: false, max: 30 });
     txt(doc, pz ? fmtMedidaCm(pz.medidaCm) : 'N/A', 59.1, top + 10.9, pz ? 11.5 : 10, { align: 'right', hScale: 0.79 });
   };
-  celdaDer(40, 11.8, 'CEF.CUADRADA.DEL', codigoCenefaCuadrada(colorPerfilFila), 'CENEFA CUADRADA', 'CENEFA DELANTERA');
+  celdaDer(40, 11.8, 'CEF.CUADRADA.DEL', codigoCenefaCuadrada(colorPerfilFila, colores), 'CENEFA CUADRADA', 'CENEFA DELANTERA');
   celdaDer(
-    51.8, 11.9, 'PERFIL.SUPERIOR', codigoPerfilSuperior(colorPerfilFila),
+    51.8, 11.9, 'PERFIL.SUPERIOR', codigoPerfilSuperior(colorPerfilFila, colores),
     'RECTANGULAR 50×25', 'PERFIL SUPERIOR (CENEF.PRO)',
   );
 
@@ -1047,11 +1068,11 @@ function dibujarEstructuraOscuranti(
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
     const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
-    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil), `ZOCALO ${subColor}`.trim(), medida);
+    celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     const psep = pieza(row, sepColExcel);
     const haySep = !!psep && psep.medidaCm > 0;
     const medidaSep = haySep ? fmtMedidaCm(psep!.medidaCm) : 'N/A';
-    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil) : '', 'PERFIL SEPARADOR', medidaSep);
+    celdaPerfil(30.4, yTop, 29.5, labSep, haySep ? codigoSeparadorPerfil(colorPerfil, colores) : '', 'PERFIL SEPARADOR', medidaSep);
   };
   perfLado(69, 'PERFIL (IZQ) INT', 'SEPARADOR (IZQ)', 'PERFIL.LAT[IZQ]', 'PERFIL.SEPAR[IZQ]', 'izq');
   perfLado(82.4, 'PERFIL (DER) INT', 'SEPARADOR (DER)', 'PERFIL.LAT[DER]', 'PERFIL.SEPAR[DER]', 'der');
@@ -1109,6 +1130,7 @@ function dibujarEstructura(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
+  colores?: readonly ColorAccesorio[],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const anchoCm = row.anchoCm || 0;
@@ -1137,27 +1159,27 @@ function dibujarEstructura(
   // de DARK). Va ANTES que soft light: comparte el PESO SOFT LIGHT pero corta
   // cenefas cuadradas en vez de ovalada.
   if (esFilaDark(row)) {
-    dibujarEstructuraDark(doc, row, n, total, meta, catalogo, adicionales);
+    dibujarEstructuraDark(doc, row, n, total, meta, catalogo, adicionales, colores);
     return;
   }
   // OSCURANTI: misma firma de piezas que soft light CC (cenefa delantera sin
   // trasera), se distingue por categoría. Etiqueta propia con la celda del
   // separador SUPERIOR (E50/E49/E52) bajo la cenefa cuadrada.
   if (esFilaOscuranti(row)) {
-    dibujarEstructuraOscuranti(doc, row, n, total, meta, catalogo, adicionales);
+    dibujarEstructuraOscuranti(doc, row, n, total, meta, catalogo, adicionales, colores);
     return;
   }
   // Soft light con cenefa CUADRADA: misma etiqueta que soft light pero con la
   // cenefa cuadrada delantera (E29/30/31), sin trasera ni velcro. Va ANTES que
   // el soft light ovalado y DESPUÉS del DARK (mismo PESO SOFT LIGHT).
   if (esFilaSoftLightCC(row)) {
-    dibujarEstructuraSoftLightCC(doc, row, n, total, meta, catalogo, adicionales);
+    dibujarEstructuraSoftLightCC(doc, row, n, total, meta, catalogo, adicionales, colores);
     return;
   }
   // Soft light (cenefa ovalada): etiqueta propia con la sección PERFILES
   // (zócalo + separador) y TIPO DE SOFT.LIGHT (réplica del .lbx de soft light).
   if (esFilaSoftLight(row)) {
-    dibujarEstructuraSoftLight(doc, row, n, total, meta, catalogo, adicionales);
+    dibujarEstructuraSoftLight(doc, row, n, total, meta, catalogo, adicionales, colores);
     return;
   }
   const pzCef = pieza(row, 'CENEFA OVALADA');
@@ -1685,6 +1707,7 @@ export function generarEtiquetasPDF(
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
+  colores?: readonly ColorAccesorio[],
 ): void {
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
@@ -1707,7 +1730,7 @@ export function generarEtiquetasPDF(
   rows.forEach((row, i) => {
     if (!first) doc.addPage([ANCHO, altoPagina(row)], 'p');
     first = false;
-    dibujarEstructura(doc, row, i + 1, rows.length, meta, catalogo, adicionales);
+    dibujarEstructura(doc, row, i + 1, rows.length, meta, catalogo, adicionales, colores);
 
     if (esCenefaCuadrada((row.pano || EMPTY_PANO).cenefa as string)) {
       nCenefa += 1;

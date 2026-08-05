@@ -20,14 +20,19 @@ import {
   esMecLegacy,
   mecPorAncho,
   mecPorCategoriaYColor,
+  mecRecoloreado,
   normalizarColorAccesorio,
+  numeroMecDeChip,
   numeroMecPorColor,
   reglaAnchoAplicable,
   reglaCategoriaAplicable,
+  type ReglasMecanismo,
 } from './reglas-mecanismo';
 // Binding local (los del bloque `export { … } from` no quedan disponibles en el
 // cuerpo del módulo): resincronizarChipsPanos los usa.
 import { canonizarChipTuberia, tuberiaParaPano } from './reglas-tuberia';
+import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from './reglasSeleccion';
+import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 // familiaOscuridad: para distinguir soft light con cenefa CUADRADA (kit simple,
 // como DARK) del soft light ovalado (kit MEC 39/38). reglas-oscuridad es hoja (sin ciclo).
 import {
@@ -40,9 +45,11 @@ export {
   REGLAS_MECANISMO,
   categoriaRequiereMecanismo,
   normalizarColorAccesorio,
+  numeroMecDeChip,
   numeroMecPorColor,
   mecPorAncho,
   mecPorCategoriaYColor,
+  mecRecoloreado,
   reglaAnchoAplicable,
   reglaCategoriaAplicable,
   colorParaBusquedaModelo,
@@ -131,24 +138,22 @@ export function chipMecanismoDeModelo(
   return opciones.find((o) => o.toUpperCase().includes(`[MEC ${m[1]}]`)) ?? null;
 }
 
-/** Extrae el número MEC de un chip, ej. '… [MEC 33]' → 33. */
-export function numeroMecDeChip(chip: string | null | undefined): number | null {
-  const m = (chip || '').toUpperCase().match(/\[MEC (\d+)\]/);
-  return m ? parseInt(m[1], 10) : null;
-}
-
 /** true si el chip es un MEC legacy del Excel (no inventario 32/33/34). */
-export function esMecLegacyInventario(chip: string | null | undefined): boolean {
+export function esMecLegacyInventario(
+  chip: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): boolean {
   const n = numeroMecDeChip(chip);
-  return n != null && esMecLegacy(n);
+  return n != null && esMecLegacy(n, reglas);
 }
 
 /** Chip default por color de accesorios (BCO→33, GRS→34, NEG→32). */
 export function chipMecanismoPorColor(
   color: string | null | undefined,
   opciones: readonly string[],
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): string | null {
-  const num = numeroMecPorColor(color);
+  const num = numeroMecPorColor(color, reglas);
   if (num == null) return null;
   return chipMecanismoPorNumero(num, opciones);
 }
@@ -185,12 +190,14 @@ export function mecanismoParaPano(
   categoria?: string,
   anchoM?: number,
   usarTuboE78 = false,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): string {
+  const rm = reglas.mecanismo;
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
 
   // Pletina (velcro): mecanismo fijo VELCRO. No lleva kit de mecanismo por color
   // ni por categoría (y en el inventario NO se emite insumo — ver bom/pdfInventario).
-  if (esCategoriaPletina(categoria)) return 'VELCRO';
+  if (esCategoriaPletina(categoria, reglas.tipos)) return 'VELCRO';
 
   // VERTICAL: su estructura es perfil cabezal + varilla + carritos, no un kit
   // de mecanismo roller. Sin esta guarda, ahora que la categoría tiene modelo,
@@ -198,9 +205,15 @@ export function mecanismoParaPano(
   if (esCategoriaVertical(categoria)) return '';
 
   // Rama dual: usa los chips [MEC 01..25], no los kits por color ni la categoría.
+  // El chip guardado se RECOLOREA al color de accesorios conservando el lado
+  // (igual que el kit simple y la cadena); si el color no tiene chip dual
+  // (MET/CAFÉ: los 8 duales solo existen en BCO/NEG/GRS) se conserva el guardado.
   if (p.dual) {
     const storedDual = ((p.mecanismo as string) || '').trim();
-    if (esChipDual(storedDual)) return storedDual;
+    if (esChipDual(storedDual)) {
+      const lado = ladoColorDesdeChipDual(storedDual)?.lado ?? p.dualLado;
+      return chipDualPorLadoColor(lado, colorAcc, opciones) || storedDual;
+    }
     const chipDual = chipDualPorLadoColor(p.dualLado, colorAcc, opciones);
     return chipDual || storedDual;
   }
@@ -209,7 +222,8 @@ export function mecanismoParaPano(
   // ANTES que la de categoría: el dúo manual 38 tiene regla de categoría
   // (kit ovalada 38) que la banda debe poder pisar. MEC 28 es "legacy" en el
   // catálogo, así que forzarlo acá evita que la sync lo revierta al kit color.
-  const mecAncho = anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc, usarTuboE78) : null;
+  const mecAncho =
+    anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc, usarTuboE78, rm) : null;
   if (mecAncho != null) {
     const chipAncho = chipMecanismoPorNumero(mecAncho, opciones);
     if (chipAncho) {
@@ -217,10 +231,17 @@ export function mecanismoParaPano(
       if (!trimmed) return chipAncho;
       const nStored = numeroMecDeChip(trimmed);
       if (nStored === mecAncho) return trimmed;
-      if (nStored != null && esKitInventarioMec(nStored)) return chipAncho;
-      if (nStored != null && esMecLegacy(nStored)) return chipAncho;
+      if (nStored != null && esKitInventarioMec(nStored, rm)) return chipAncho;
+      if (nStored != null && esMecLegacy(nStored, rm)) return chipAncho;
       if (opciones.includes(trimmed)) return trimmed;
       return chipAncho;
+    } else {
+      // El MEC de la regla no tiene chip en la lista: la regla se ignora en
+      // silencio y decide la de categoría/color. El editor de Admin lo valida
+      // como ERROR, así que esto solo pasa con datos viejos o corruptos.
+      console.warn(
+        `[reglas] el MEC ${mecAncho} de la regla por ancho no tiene chip: se ignora la regla`,
+      );
     }
   }
 
@@ -231,7 +252,12 @@ export function mecanismoParaPano(
   // El DARK de 38 mm conserva el kit simple por color. Un kit elegido a mano se
   // respeta salvo que sea otro kit de inventario: ahí manda el que corresponde,
   // igual que en las demás reglas (así se corrigen las OT guardadas con MEC 32).
-  const famDiam = familiaOscuridadConDiametro(categoria, p.cenefa, modelo?.diametro_tubo_mm);
+  const famDiam = familiaOscuridadConDiametro(
+    categoria,
+    p.cenefa,
+    modelo?.diametro_tubo_mm,
+    reglas.tipos,
+  );
   if (famDiam === 'DARK_45') {
     const chip45 = chipMecanismoPorNumero(
       normalizarColorAccesorio(colorAcc).startsWith('B') ? 18 : 23,
@@ -242,7 +268,7 @@ export function mecanismoParaPano(
       if (!trimmed) return chip45;
       const nStored = numeroMecDeChip(trimmed);
       if (nStored === numeroMecDeChip(chip45)) return trimmed;
-      if (nStored != null && esKitInventarioMec(nStored)) return chip45;
+      if (nStored != null && esKitInventarioMec(nStored, rm)) return chip45;
       if (opciones.includes(trimmed)) return trimmed;
       return chip45;
     }
@@ -252,9 +278,9 @@ export function mecanismoParaPano(
   // SIMPLE por color (MEC 33/32/34), igual que DARK — NO el kit ovalada MEC 39/38
   // de la regla de categoría del soft light. Saltamos la regla de categoría para
   // que caiga al fallback por color. El soft light OVALADO conserva su kit ovalada.
-  const famCC = familiaOscuridad(categoria, p.cenefa);
+  const famCC = familiaOscuridad(categoria, p.cenefa, reglas.tipos);
   const esSoftLightCC = !!famCC && esFamiliaSoftLightCC(famCC);
-  const mecCat = esSoftLightCC ? null : mecPorCategoriaYColor(categoria || '', colorAcc);
+  const mecCat = esSoftLightCC ? null : mecPorCategoriaYColor(categoria || '', colorAcc, rm);
   if (mecCat != null) {
     const chipCat = chipMecanismoPorNumero(mecCat, opciones);
     if (chipCat) {
@@ -263,25 +289,39 @@ export function mecanismoParaPano(
       if (!trimmed) return chipCat;
       const nStored = numeroMecDeChip(trimmed);
       if (nStored === mecCat) return trimmed;
-      if (nStored != null && esKitInventarioMec(nStored)) return chipCat;
+      if (nStored != null && esKitInventarioMec(nStored, rm)) return chipCat;
       if (opciones.includes(trimmed)) return trimmed;
       return chipCat;
+    } else {
+      console.warn(
+        `[reglas] el MEC ${mecCat} de la regla por categoría no tiene chip: se ignora la regla`,
+      );
     }
   }
 
-  const porColor = chipMecanismoPorColor(colorAcc, opciones);
+  const porColor = chipMecanismoPorColor(colorAcc, opciones, rm);
   const stored = (p.mecanismo as string) || '';
-  const inventario = opcionesInventarioMec(opciones);
+  const inventario = opcionesInventarioMec(opciones, rm);
 
   if (porColor) {
     const nStored = numeroMecDeChip(stored.trim());
     if (
       !stored.trim() ||
       nStored == null ||
-      esMecLegacy(nStored) ||
+      esMecLegacy(nStored, rm) ||
       !inventario.includes(stored)
     ) {
       return porColor;
+    }
+    // El kit guardado sigue al COLOR de accesorios conservando su familia: un
+    // simple blanco pasa a simple negro y un reforzado blanco a reforzado negro
+    // (no se degrada a simple). Es lo mismo que hace la cadena, que conserva el
+    // largo y cambia el color. Sin esto, cambiar el color en Fase 1 o Fase 2
+    // dejaba el kit del color viejo hasta que alguien tocara el chip a mano.
+    const nRecolor = mecRecoloreado(nStored, colorAcc, rm);
+    if (nRecolor != null) {
+      const chipRecolor = chipMecanismoPorNumero(nRecolor, opciones);
+      if (chipRecolor) return chipRecolor;
     }
     // Kit 45 mm puesto por la banda 2,2–3,0 m: al salir de la banda vuelve al
     // kit por color — solo para colores CON regla de banda; sin regla (gris en
@@ -293,8 +333,8 @@ export function mecanismoParaPano(
     // 45 mm, el BOM/inventario muestra kit 45 + E78 coherentes.
     if (
       nStored != null &&
-      esMecDeBanda(nStored) &&
-      colorConBandaAncho(categoria || '', colorAcc) &&
+      esMecDeBanda(nStored, rm) &&
+      colorConBandaAncho(categoria || '', colorAcc, rm) &&
       !(modelo && modelo.diametro_tubo_mm === 45)
     ) {
       return porColor;
@@ -302,12 +342,12 @@ export function mecanismoParaPano(
     return stored;
   }
 
-  return chipMecanismoEfectivo(stored, colorAcc, modelo, opciones);
+  return chipMecanismoEfectivo(stored, colorAcc, modelo, opciones, rm);
 }
 
 /** true si el número MEC es de los que fuerza alguna banda por ancho+color. */
-function esMecDeBanda(num: number): boolean {
-  return REGLAS_MECANISMO.reglasAncho.some(
+function esMecDeBanda(num: number, reglas: ReglasMecanismo = REGLAS_MECANISMO): boolean {
+  return reglas.reglasAncho.some(
     (r) => r.mecPorColor && Object.values(r.mecPorColor).includes(num),
   );
 }
@@ -321,12 +361,13 @@ export function chipMecanismoEfectivo(
   colorAccesorios: string | null | undefined,
   modelo: ModeloDespiece | null | undefined,
   opciones: readonly string[],
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): string {
-  const porColor = chipMecanismoPorColor(colorAccesorios, opciones);
+  const porColor = chipMecanismoPorColor(colorAccesorios, opciones, reglas);
   const trimmed = (stored || '').trim();
   if (porColor) {
     const nStored = numeroMecDeChip(trimmed);
-    if (!trimmed || (nStored != null && esMecLegacy(nStored))) {
+    if (!trimmed || (nStored != null && esMecLegacy(nStored, reglas))) {
       return porColor;
     }
     return trimmed;
@@ -348,16 +389,20 @@ export function chipMecanismoParaPano(
   colorAccesorios: string | null | undefined,
   opciones: readonly string[],
   stored?: string | null,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): string | null {
-  const efectivo = chipMecanismoEfectivo(stored, colorAccesorios, modelo, opciones);
+  const efectivo = chipMecanismoEfectivo(stored, colorAccesorios, modelo, opciones, reglas);
   return efectivo || null;
 }
 
 /** Chips de inventario bodega (kitsInventario) siempre disponibles en Fase 2. */
-export function opcionesInventarioMec(opcionesBase: readonly string[]): string[] {
+export function opcionesInventarioMec(
+  opcionesBase: readonly string[],
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): string[] {
   return opcionesBase.filter((o) => {
     const n = numeroMecDeChip(o);
-    return n != null && esKitInventarioMec(n);
+    return n != null && esKitInventarioMec(n, reglas);
   });
 }
 
@@ -371,13 +416,15 @@ export function opcionesMecanismoFiltradas(
   colorAccesorios: string | null | undefined,
   opcionesBase: readonly string[],
   mecanismoActual?: string,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
 ): readonly string[] {
-  if (!categoriaRequiereMecanismo(categoria)) return [];
+  if (!categoriaRequiereMecanismo(categoria, reglas)) return [];
 
   // Pletina (velcro): la única opción de mecanismo es VELCRO.
-  if (esCategoriaPletina(categoria)) return ['VELCRO'];
+  if (esCategoriaPletina(categoria, tipos)) return ['VELCRO'];
 
-  const regla = reglaCategoriaAplicable(categoria, colorAccesorios);
+  const regla = reglaCategoriaAplicable(categoria, colorAccesorios, reglas);
   if (regla) {
     const opts = [...opcionesBase];
     if (
@@ -390,7 +437,7 @@ export function opcionesMecanismoFiltradas(
     return opts;
   }
 
-  const inventario = opcionesInventarioMec(opcionesBase);
+  const inventario = opcionesInventarioMec(opcionesBase, reglas);
 
   if (inventario.length > 0) {
     const opts = [...inventario];
@@ -398,17 +445,17 @@ export function opcionesMecanismoFiltradas(
       mecanismoActual &&
       !opts.includes(mecanismoActual) &&
       opcionesBase.includes(mecanismoActual) &&
-      !esMecLegacyInventario(mecanismoActual)
+      !esMecLegacyInventario(mecanismoActual, reglas)
     ) {
       opts.push(mecanismoActual);
     }
     return opts;
   }
 
-  const chipColor = chipMecanismoPorColor(colorAccesorios, opcionesBase);
+  const chipColor = chipMecanismoPorColor(colorAccesorios, opcionesBase, reglas);
   if (chipColor) return [chipColor];
 
-  const candidatos = modelosParaCategoria(modelos, categoria);
+  const candidatos = modelosParaCategoria(modelos, categoria, tipos);
   const chipsCategoria = [
     ...new Set(
       candidatos
@@ -459,9 +506,11 @@ function modeloOscuridad38PorBandaE78(
   anchoM: number,
   modeloActual: ModeloDespiece | null,
   usarTuboE78: boolean,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): ModeloDespiece | null {
   if (!modeloActual) return modeloActual;
-  const enBanda = usarTuboE78 && anchoM > 2.2 && anchoM <= 3.0;
+  const banda = reglas.bandaOscuridadE78;
+  const enBanda = usarTuboE78 && anchoM > banda.anchoMinM && anchoM <= banda.anchoMaxM;
   const objetivoDiam = enBanda ? 45 : 38;
   if (modeloActual.diametro_tubo_mm === objetivoDiam) return modeloActual;
   const tipoObjetivo = modeloActual.tipo_rol.replace(enBanda ? '38mm' : '45mm', enBanda ? '45mm' : '38mm');
@@ -492,15 +541,17 @@ export function modeloPorAncho(
   modeloActual: ModeloDespiece | null,
   color: string | null | undefined,
   usarTuboE78 = false,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
 ): ModeloDespiece | null {
   // Oscuridad 38 mm (soft light y DARK) tiene su propia banda E78 (swap 38↔45 mm
   // por sistema/tipo_rol, no por mecanismo): va antes de la maquinaria roller
   // basada en número MEC. DARK usa el mismo mecanismo que soft light (E78 por OT).
-  const catTrim = (categoria || '').trim();
+  const catTrim = categoriaEfectiva(categoria, tipos).trim();
   if (catTrim === 'SOFT_LIGHT_38mm' || catTrim === 'DARK_38mm') {
-    return modeloOscuridad38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78);
+    return modeloOscuridad38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78, reglas);
   }
-  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, usarTuboE78);
+  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, usarTuboE78, reglas);
   if (aplicada) {
     // La fila destino puede vivir en otra categoría (dúo 38 → filas MANUAL_45)
     // y el número MEC puede repetirse por color (MEC 18 ovalada blanco Y gris):
@@ -509,23 +560,23 @@ export function modeloPorAncho(
     // 39/38/12 pero filas MEC_18/23_OVALADA) → usa modeloMecPorColor si existe.
     const mecFila =
       aplicada.regla.modeloMecPorColor?.[normalizarColorAccesorio(color)] ?? aplicada.mec;
-    const cands = modelosParaCategoria(modelos, aplicada.regla.categoriaModelo ?? categoria);
+    const cands = modelosParaCategoria(modelos, aplicada.regla.categoriaModelo ?? categoria, tipos);
     const delMec = cands.filter((c) => mecanismoCoincideNumero(c.mecanismo, mecFila));
     const up = delMec.length > 0 ? elegirModeloPorColor(delMec, color) : null;
     if (up) return up;
     // Catálogo sin la fila forzada: no dejar colgado un modelo de otra banda.
     if (modeloActual && modeloActual.diametro_tubo_mm !== 38) {
-      return modeloBase38PorColor(modelos, categoria, color) ?? modeloActual;
+      return modeloBase38PorColor(modelos, categoria, color, tipos) ?? modeloActual;
     }
     return modeloActual;
   }
   // Sin regla de ancho vigente: si el modelo quedó forzado por ancho (63 mm, o
   // 45 mm en un color CON regla de banda), volver al 38 mm por color.
-  if (categoriaTieneReglaAncho(categoria) && modeloActual) {
+  if (categoriaTieneReglaAncho(categoria, reglas) && modeloActual) {
     const forzado =
       modeloActual.diametro_tubo_mm === 63 ||
-      (modeloActual.diametro_tubo_mm === 45 && colorConBandaAncho(categoria, color));
-    if (forzado) return modeloBase38PorColor(modelos, categoria, color) ?? modeloActual;
+      (modeloActual.diametro_tubo_mm === 45 && colorConBandaAncho(categoria, color, reglas));
+    if (forzado) return modeloBase38PorColor(modelos, categoria, color, tipos) ?? modeloActual;
   }
   return modeloActual;
 }
@@ -543,20 +594,25 @@ export function modeloVentanaPorAncho(
   color: string | null | undefined,
   anchoM: number,
   usarTuboE78 = false,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
 ): ModeloDespiece | null {
-  const base = elegirModeloPorColor(modelosParaCategoria(modelos, categoria), color);
-  if (categoriaEsDual(categoria)) return base;
-  return modeloPorAncho(modelos, categoria, anchoM, base, color, usarTuboE78);
+  const base = elegirModeloPorColor(modelosParaCategoria(modelos, categoria, tipos), color);
+  if (categoriaEsDual(categoria, tipos)) return base;
+  return modeloPorAncho(modelos, categoria, anchoM, base, color, usarTuboE78, reglas, tipos);
 }
 
 /**
- * Re-sincroniza los chips de MECANISMO y TUBERÍA de los paños NO dual de una
- * ventana con su modelo/categoría/ancho actuales — la contraparte pura de
+ * Re-sincroniza los chips de MECANISMO y TUBERÍA de los paños de una ventana
+ * con su modelo/categoría/ancho/color actuales — la contraparte pura de
  * `sincronizarChips` (Fase 2) para usar al re-guardar en Fase 1. Al cambiar el
  * flag `usarTuboE78` de la OT baja los kits/tubos de banda automáticos (MEC 18/23
  * → kit por color, E78 → E66) y respeta las elecciones manuales (E05, gris). El
  * `modelo` debe venir YA recalculado por ancho (modeloPorAncho con el flag), así
  * la tubería derivada del diámetro coincide con el kit. Muta los paños in situ.
+ *
+ * La ventana DUAL solo recolorea su chip (el lado se conserva): no lleva regla
+ * por ancho ni tubería derivada del modelo, así que nada más le aplica.
  */
 export function resincronizarChipsPanos(
   panos: Array<Record<string, unknown>>,
@@ -566,9 +622,42 @@ export function resincronizarChipsPanos(
   opcionesMec: readonly string[],
   opcionesTub: readonly string[],
   usarTuboE78 = false,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): void {
+  // Igual que `sincronizarChips` en Fase 2: la categoría ROL_DUAL implica dual
+  // aunque el paño todavía no traiga el flag (lo pone Fase 2 al abrirla).
+  const esDual =
+    categoriaEsDual(categoria || '', reglas.tipos) || panos.some((p) => !!p.dual);
+
+  // Dual: el kit es UNO por ventana (un solo bracket), así que se resuelve del
+  // primer paño y se espeja — igual que hace Fase 2 al tocar el lado o el color.
+  // El lado/color derivados acompañan al chip (los leen el editor y el Excel).
+  if (esDual) {
+    const ref = panos[0];
+    if (!ref) return;
+    const mec = mecanismoParaPano(
+      { ...(ref as Parameters<typeof mecanismoParaPano>[0]), dual: true },
+      ventanaColor,
+      modelo,
+      opcionesMec,
+      categoria,
+      parseFloat(String(ref.ancho ?? 0)) || 0,
+      usarTuboE78,
+      reglas,
+    );
+    if (!mec) return;
+    const lc = ladoColorDesdeChipDual(mec);
+    for (const p of panos) {
+      p.mecanismo = mec;
+      if (lc) {
+        p.dualLado = lc.lado;
+        p.dualColor = lc.dualColor;
+      }
+    }
+    return;
+  }
+
   for (const p of panos) {
-    if (p.dual) continue;
     const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
     const mec = mecanismoParaPano(
       p as Parameters<typeof mecanismoParaPano>[0],
@@ -578,11 +667,19 @@ export function resincronizarChipsPanos(
       categoria,
       anchoM,
       usarTuboE78,
+      reglas,
     );
     if (mec) p.mecanismo = mec;
     if (modelo && anchoM > 0) {
       p.tuberia = canonizarChipTuberia(
-        tuberiaParaPano(anchoM, modelo, (p.tuberia as string) || '', opcionesTub, categoria),
+        tuberiaParaPano(
+          anchoM,
+          modelo,
+          (p.tuberia as string) || '',
+          opcionesTub,
+          categoria,
+          reglas.tuberia,
+        ),
         opcionesTub,
       );
     }
@@ -607,8 +704,9 @@ export function modeloBase38PorColor(
   modelos: ModeloDespiece[],
   categoria: string,
   color: string | null | undefined,
+  tipos?: readonly TipoCortina[],
 ): ModeloDespiece | null {
-  const cands = modelosParaCategoria(modelos, categoria).filter(
+  const cands = modelosParaCategoria(modelos, categoria, tipos).filter(
     (m) => m.diametro_tubo_mm === 38,
   );
   return elegirModeloPorColor(cands, color);

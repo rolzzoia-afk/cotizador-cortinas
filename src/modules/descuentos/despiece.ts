@@ -34,12 +34,14 @@ import {
   cortesOscuridad,
   familiaOscuridad,
   familiaOscuridadConDiametro,
+  formulasOscuridadParaTipo,
   normalizarMontajeBase,
   normalizarPerforacion,
   normalizarVarianteOscuridad,
   type MedidasPerfilesOscuridad,
   type PerfilesOscuridad,
 } from './reglas-oscuridad';
+import type { TipoCortina } from './tiposCortina';
 import {
   cordonBeeblackCm,
   cortesBeeblack,
@@ -53,6 +55,7 @@ import {
 // Resolutor de color de accesorios (mecanismo → peso → cadena → tela → ventana).
 // chips.ts NO importa despiece (solo reglas-mecanismo/tuberia), así que no hay ciclo.
 import { colorAccesoriosDePano } from './chips';
+import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
 
 export type ContextoDespiece = {
   categoria?: string;
@@ -82,6 +85,16 @@ export type ContextoDespiece = {
   beeblackMedidas?: MedidasBeeblack;
   /** BEEBLACK con cierre DE ARRIBA ABAJO: ancho y alto cambian de papel. */
   beeblackCierreVertical?: boolean;
+  /**
+   * Fórmulas de corte editadas desde Admin → Catálogo técnico. Sin esto se
+   * usan las de fábrica (`FORMULAS_DEFAULT`) y el despiece es el de siempre.
+   */
+  formulas?: FormulasFamilias;
+  /**
+   * Tipos de cortina propios creados desde Admin. Sirven para resolver la
+   * categoría a su MOLDE y aplicar el parche de números del tipo.
+   */
+  tipos?: readonly TipoCortina[];
 };
 
 export type CorteDespiece = {
@@ -155,22 +168,28 @@ export function calculoVertical(
   modelo: Pick<ModeloDespiece, 'dcto_tubo_cm' | 'dcto_perfiles_cm'>,
   anchoCm: number,
   altoCm: number,
-  opts?: { extraAltoCm?: number; dctoAltoFinalCm?: number },
+  opts?: {
+    extraAltoCm?: number;
+    dctoAltoFinalCm?: number;
+    /** Paso, carrito extra y repuesto editados en Admin. */
+    formulas?: FormulasFamilias['vertical'];
+  },
 ): CalculoVertical {
   const extra = opts?.extraAltoCm ?? EXTRA_ALTO_VERTICAL_DEFAULT_CM;
   const dctoFinal = opts?.dctoAltoFinalCm ?? DCTO_ALTO_FINAL_VERTICAL_DEFAULT_CM;
+  const fv = opts?.formulas ?? FORMULAS_DEFAULT.vertical;
   const perfilCabezalCm = r1(anchoCm - modelo.dcto_tubo_cm);
   const varillaCm = r1(perfilCabezalCm - modelo.dcto_perfiles_cm);
   // Los que entran en la varilla (floor) más uno de holgura: el taller siempre
   // monta un carrito extra, incluso cuando la división da exacta.
   const carritos =
-    varillaCm > 0
-      ? Math.floor(varillaCm / PASO_CARRITO_VERTICAL_CM) + EXTRA_CARRITO_VERTICAL
+    varillaCm > 0 && fv.pasoCarritoCm > 0
+      ? Math.floor(varillaCm / fv.pasoCarritoCm) + fv.extraCarrito
       : 0;
   // Una lama por carrito (igual que el peso de lama y el sujetador de bodega);
   // el repuesto es tela EXTRA que se corta aparte, no va montada.
   const lamas = carritos;
-  const repuesto = lamas > 0 ? LAMAS_REPUESTO_VERTICAL : 0;
+  const repuesto = lamas > 0 ? fv.lamasRepuesto : 0;
   const altoCorteCm = altoCm > 0 ? r1(altoCm + extra) : 0;
   const altoFinalCm = altoCorteCm > 0 ? r1(altoCorteCm - dctoFinal) : 0;
   return { perfilCabezalCm, varillaCm, carritos, lamas, repuesto, altoCorteCm, altoFinalCm };
@@ -194,6 +213,8 @@ export function calcularDespiece(
   const cortes: CorteDespiece[] = [];
   const notas: string[] = [];
   if (!anchoCm || anchoCm <= 0) return { cortes, aproximado: false, notas: ['Sin ancho.'] };
+  // Fórmulas editadas en Admin, o las de fábrica si la OT se calcula sin ellas.
+  const f = ctx?.formulas ?? FORMULAS_DEFAULT;
 
   // ── BEEBLACK: cierre horizontal con lamas ──
   if (esCategoriaBeeblack(ctx?.categoria)) {
@@ -210,6 +231,7 @@ export function calcularDespiece(
       ctx?.beeblackMedidas ?? {},
       !!ctx?.beeblackCierreVertical,
       ctx?.beeblackInstalacion,
+      f.beeblack,
     );
     for (const c of cortesBb) {
       cortes.push({ componente: c.componente, columnaExcel: c.columnaExcel, medidaCm: c.medidaCm });
@@ -221,13 +243,21 @@ export function calcularDespiece(
   // (Soft Light 38/45, Soft Light con cenefa cuadrada, Oscuranti, Dark).
   // El diámetro del modelo manda: un soft light 38 mm sobre tubo 45 mm (banda
   // E78) usa el corte de tubo de 45 mm (cenefa/tela/peso no cambian).
-  const familia = familiaOscuridadConDiametro(ctx?.categoria, ctx?.cenefa, modelo.diametro_tubo_mm);
+  const familia = familiaOscuridadConDiametro(
+    ctx?.categoria,
+    ctx?.cenefa,
+    modelo.diametro_tubo_mm,
+    ctx?.tipos,
+  );
   if (familia) {
     const variante = normalizarVarianteOscuridad(
       ctx?.oscuridadVariante ?? ctx?.sentido,
       'INTERNO',
     );
     const altoCm = ctx?.altoCm ?? 0;
+    // Un tipo de cortina propio corta con la mecánica de su molde y sus
+    // propios números (si el admin se los cambió).
+    const fOsc = formulasOscuridadParaTipo(f.oscuridad, ctx?.categoria, familia);
     const cortesOsc = cortesOscuridad(
       familia,
       variante,
@@ -236,6 +266,7 @@ export function calcularDespiece(
       ctx?.perfiles ?? {},
       ctx?.perfilesMedidas ?? {},
       ctx?.colorAccesorios,
+      fOsc,
     );
     for (const c of cortesOsc) {
       cortes.push({
@@ -251,7 +282,11 @@ export function calcularDespiece(
     // de órdenes: esa hoja es de ESTRUCTURA y la tela no es una pieza de metal
     // (`columnaExcel: ''`, igual que el ancho de tela y el velcro de DARK).
     if (altoCm > 0) {
-      cortes.push({ componente: 'Alto tela', columnaExcel: '', medidaCm: r1(altoCm + 25) });
+      cortes.push({
+        componente: 'Alto tela',
+        columnaExcel: '',
+        medidaCm: r1(altoCm + f.oscuridad.altoTelaExtraCm),
+      });
     }
     if (modelo.notas) notas.push(modelo.notas);
     return { cortes, aproximado: false, notas };
@@ -321,6 +356,7 @@ export function calcularDespiece(
     const cv = calculoVertical(modelo, anchoCm, ctx?.altoCm ?? 0, {
       extraAltoCm: ctx?.verticalExtraAltoCm,
       dctoAltoFinalCm: ctx?.verticalDctoAltoFinalCm,
+      formulas: f.vertical,
     });
     cortes.push({
       componente: 'Perfil cabezal',
@@ -373,7 +409,7 @@ export function calcularDespiece(
     // taller confirmada con OT 3074 (roller) y la cenefa ovalada. Referencial:
     // viaja por el flujo de telas, no por el Excel de órdenes.
     if (modelo.suma_peso_cm > 0) {
-      const refTela = baseTubo - PESO_VS_TUBO_CM; // = peso
+      const refTela = baseTubo - f.roller.pesoVsTuboCm; // = peso
       cortes.push({
         componente: 'Tela (ancho)',
         columnaExcel: '',
@@ -418,7 +454,7 @@ export function calcularDespiece(
       cortes.push({
         componente: 'Peso',
         columnaExcel: columnaPesoExcel(modelo),
-        medidaCm: r1(baseTubo - PESO_VS_TUBO_CM),
+        medidaCm: r1(baseTubo - f.roller.pesoVsTuboCm),
       });
     }
   }
@@ -539,8 +575,13 @@ export function contextoDespieceDesdePano(
     beeblackAltoTelaCm?: number;
     beeblackTotalLamasCm?: number;
   },
-  /** Parámetros de corte que el despiece necesita (hoy solo los de VERTICAL). */
-  extras?: { verticalExtraAltoCm?: number; verticalDctoAltoFinalCm?: number },
+  /** Parámetros de corte y fórmulas editables que el despiece necesita. */
+  extras?: {
+    verticalExtraAltoCm?: number;
+    verticalDctoAltoFinalCm?: number;
+    formulas?: FormulasFamilias;
+    tipos?: readonly TipoCortina[];
+  },
 ): ContextoDespiece {
   // El alto suele vivir en la VENTANA, no en el paño (igual que en tela.ts):
   // sin este fallback, vertical y oscuridad quedaban con altoCm = 0.
@@ -548,7 +589,7 @@ export function contextoDespieceDesdePano(
   // Variante (Fase 1) y familia: para auto-activar los laterales con su
   // perforación (soft light / dark). Prioridad paño → ventana → sentido.
   const oscuridadVariante = p.oscuridadVariante ?? v.oscuridadVariante ?? v.sentido;
-  const familiaOsc = familiaOscuridad(v.categoria, p.cenefa);
+  const familiaOsc = familiaOscuridad(v.categoria, p.cenefa, extras?.tipos);
   const perfilesBase: PerfilesOscuridad = {
     izqMuro: p.perfilIzqMuro,
     izqPiso: p.perfilIzqPiso,
@@ -576,6 +617,8 @@ export function contextoDespieceDesdePano(
     altoCm,
     verticalExtraAltoCm: extras?.verticalExtraAltoCm,
     verticalDctoAltoFinalCm: extras?.verticalDctoAltoFinalCm,
+    formulas: extras?.formulas,
+    tipos: extras?.tipos,
     cenefa: p.cenefa,
     oscuridadVariante,
     // Color de accesorios (mecanismo → peso → cadena → tela → ventana): solo el
@@ -641,9 +684,10 @@ export function contextoDespieceDesdePano(
 export function cordonBeeblackDePano(
   v: Parameters<typeof contextoDespieceDesdePano>[0],
   p: Parameters<typeof contextoDespieceDesdePano>[1] & { ancho?: number | string },
+  formulas?: FormulasFamilias,
 ): number {
   if (!esCategoriaBeeblack(v.categoria)) return 0;
-  const ctx = contextoDespieceDesdePano(v, p);
+  const ctx = contextoDespieceDesdePano(v, p, { formulas });
   const anchoCm = (parseFloat(String(p.ancho ?? 0)) || 0) * 100;
   const variante = normalizarVarianteBeeblack(
     ctx.beeblackVariante ?? ctx.sentido,
@@ -655,5 +699,6 @@ export function cordonBeeblackDePano(
     ctx.altoCm ?? 0,
     !!ctx.beeblackCierreVertical,
     ctx.beeblackInstalacion,
+    (formulas ?? FORMULAS_DEFAULT).beeblack,
   );
 }

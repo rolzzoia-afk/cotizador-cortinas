@@ -18,7 +18,12 @@ import type { BomItem, VentanaItem } from '@/modules/ots/types';
 import type { Pano } from './types';
 import { textoPesoCadenaInventario } from './cadenas';
 import { telaDePano } from './telaPano';
-import { OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA } from './fase2';
+import { opcionesMecanismoResolucion } from '@/modules/descuentos/reglas-mecanismo';
+import { opcionesTuberiaResolucion } from '@/modules/descuentos/reglas-tuberia';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import {
   colorAccesoriosDePano,
   mecanismoParaPano,
@@ -127,7 +132,10 @@ function fmtAccionamiento(p: Partial<Pano>): string {
 export function construirFilasCortinas(
   ventanas: VentanaItem[],
   usarTuboE78 = false,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
 ): FilaCortina[] {
+  const opcMec = opcionesMecanismoResolucion(reglas.mecanismo);
+  const opcTub = opcionesTuberiaResolucion(reglas.tuberia);
   const filas: FilaCortina[] = [];
   let id = 0;
   for (const v of ventanas) {
@@ -141,10 +149,11 @@ export function construirFilasCortinas(
         { ...p, mecanismo: p.mecanismo as string },
         v.color as string,
         modelo,
-        OPCIONES_MECANISMO_RESOLUCION,
+        opcMec,
         v.categoria as string,
         anchoM,
         usarTuboE78,
+        reglas,
       );
       // El BEEBLACK no lleva tubo: su estructura son los perfiles. La columna
       // TUBERÍA queda vacía (igual que en el BOM y en el Excel de órdenes),
@@ -155,8 +164,9 @@ export function construirFilasCortinas(
             anchoM,
             modelo,
             p.tuberia as string,
-            OPCIONES_TUBERIA,
+            opcTub,
             v.categoria as string,
+            reglas.tuberia,
           );
       filas.push({
         id,

@@ -11,12 +11,11 @@
 // ─────────────────────────────────────────────────────────────────────
 import type { AdicionalFase0Persistido, VentanaItem } from '@/modules/ots/types';
 import { medidaCenefaSoftLight38, varianteSoftLight38 } from './reglas-soft-light';
+import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
 import type { ModeloDespiece } from './tipos';
+import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
-
-/** Descuentos cenefa ovalada manual 38 mm (catálogo roller). */
-const DCTO_CENEFA_OVALADA_38 = { tubo: 1.8, cenefa: 1.5 };
 
 const CODIGOS_CENEFA_OVALADA = new Set(['CENF O', 'CENFO', 'CENEFA OVALADA']);
 const CODIGOS_CENEFA_CUADRADA = new Set(['CENF C', 'CENFC', 'CEN-PRO', 'CEN PRO']);
@@ -51,8 +50,11 @@ export function esAdicionalCenefa(codInt: string): boolean {
 // El TIP. INST sale del "Tapas" del paño (OPCIONES_CENEFA_TAPA, Fase 2).
 
 /** Categoría roller o vertical (única donde aplica el cuadro de cenefa cuadrada). */
-export function esRollerOVertical(categoria: string | undefined | null): boolean {
-  const c = (categoria || '').toUpperCase();
+export function esRollerOVertical(
+  categoria: string | undefined | null,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  const c = categoriaEfectiva(categoria, tipos).toUpperCase();
   return c.startsWith('ROL') || c.includes('VERTICAL');
 }
 
@@ -61,23 +63,31 @@ export function esRollerOVertical(categoria: string | undefined | null): boolean
  * instalación: CON 1 TAPA +1 · CON 2 TAPAS +2 · MURO A MURO −0,5.
  * MURO_MURO es la opción base (incluye el legacy SIN_TAPA: son lo mismo).
  */
-export function ajusteCenefaCuadradaCm(tipInst: string | undefined): number {
+export function ajusteCenefaCuadradaCm(
+  tipInst: string | undefined,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): number {
+  const a = formulas.adicionales;
   switch ((tipInst || '').toUpperCase().trim()) {
     case 'CON_1_TAPA':
-      return 1;
+      return a.cuadradaCon1TapaCm;
     case 'CON_2_TAPAS':
-      return 2;
+      return a.cuadradaCon2TapasCm;
     case 'MURO_MURO':
     case 'SIN_TAPA': // legacy → muro a muro
     default:
-      return -0.5;
+      return a.cuadradaMuroMuroCm;
   }
 }
 
 /** Ancho de corte estimado de la cenefa cuadrada = ancho inicial + ajuste. */
-export function medidaCorteCenefaCuadrada(anchoInicialCm: number, tipInst: string | undefined): number {
+export function medidaCorteCenefaCuadrada(
+  anchoInicialCm: number,
+  tipInst: string | undefined,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): number {
   if (!(anchoInicialCm > 0)) return 0;
-  return r1(anchoInicialCm + ajusteCenefaCuadradaCm(tipInst));
+  return r1(anchoInicialCm + ajusteCenefaCuadradaCm(tipInst, formulas));
 }
 
 /** Etiqueta de TIP. INST para la hoja de órdenes (vacío/legacy → MURO_MURO). */
@@ -215,21 +225,31 @@ export function buscarAdicionalCenefaOvalada(
   return null;
 }
 
-function dctosCenefaOvaladaRoller(modelo: ModeloDespiece): { tubo: number; cenefa: number } {
+function dctosCenefaOvaladaRoller(
+  modelo: ModeloDespiece,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): { tubo: number; cenefa: number } {
   if (
     (modelo.sistema === 'CENEFA_OVALADA' || modelo.sistema === 'CENEFA_OVALADA_DUO') &&
     modelo.dcto_cenefa_cm > 0
   ) {
     return { tubo: modelo.dcto_tubo_cm, cenefa: modelo.dcto_cenefa_cm };
   }
-  return DCTO_CENEFA_OVALADA_38;
+  return {
+    tubo: formulas.adicionales.cenefaOvaladaTuboCm,
+    cenefa: formulas.adicionales.cenefaOvaladaCenefaCm,
+  };
 }
 
-export function medidaCorteCenefaOvaladaRoller(anchoNominalCm: number, modelo: ModeloDespiece): number | null {
+export function medidaCorteCenefaOvaladaRoller(
+  anchoNominalCm: number,
+  modelo: ModeloDespiece,
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
+): number | null {
   if (!anchoNominalCm || anchoNominalCm <= 0) return null;
   // La cenefa ovalada (tapa) se corta al ancho menos su propio despeje, NO el del
   // tubo: es la pieza más ancha (igual que el despiece del modelo).
-  const { cenefa } = dctosCenefaOvaladaRoller(modelo);
+  const { cenefa } = dctosCenefaOvaladaRoller(modelo, formulas);
   return r1(anchoNominalCm - cenefa);
 }
 
@@ -248,6 +268,7 @@ export function cenefaOvaladaDesdeAdicional(
   adicional: AdicionalFase0Persistido,
   modelo: ModeloDespiece,
   ctx: ContextoCenefaAdicional = {},
+  formulas: FormulasFamilias = FORMULAS_DEFAULT,
 ): number | null {
   const ancho = anchoNominalCenefaCorte(adicional, ctx.anchoPanoCm ?? 0);
   if (!ancho || ancho <= 0) return null;
@@ -258,9 +279,9 @@ export function cenefaOvaladaDesdeAdicional(
     modelo,
   });
   if (varianteSl) {
-    return medidaCenefaSoftLight38(ancho, varianteSl);
+    return medidaCenefaSoftLight38(ancho, varianteSl, formulas);
   }
-  return medidaCorteCenefaOvaladaRoller(ancho, modelo);
+  return medidaCorteCenefaOvaladaRoller(ancho, modelo, formulas);
 }
 
 export function indexCenefasOvaladasAdicionales(

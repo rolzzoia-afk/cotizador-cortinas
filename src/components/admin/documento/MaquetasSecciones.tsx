@@ -38,7 +38,9 @@ function CampoMaqueta({ label, valor, tono }: { label: string; valor?: string; t
 
 function MaquetaDatosCliente() {
   return (
-    <section className="mb-4 grid gap-3 rounded-lg border border-border bg-card/40 p-4 md:grid-cols-2 lg:grid-cols-3">
+    // Sin `lg:` — los breakpoints miden el VIEWPORT, no esta vista previa, que
+    // es bastante más angosta que la página real.
+    <section className="mb-4 grid gap-3 rounded-lg border border-border bg-card/40 p-4 sm:grid-cols-2">
       <CampoMaqueta label="Nombre" valor="María Pérez" />
       <CampoMaqueta label="N° OT (Excel manual)" />
       <CampoMaqueta label="RUT" valor="12.345.678-9" />
@@ -75,7 +77,7 @@ function MaquetaCatalogo() {
         <span className="rounded-md border border-border p-1 text-muted-foreground">
           <Palette className="h-3.5 w-3.5" />
         </span>
-        <div className="relative ml-auto w-56">
+        <div className="relative ml-auto w-56 max-w-full">
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <div className="flex h-8 items-center rounded-md border border-input bg-background pl-7 text-xs text-muted-foreground">
             Buscar por nombre, código…
@@ -105,8 +107,10 @@ const FILAS_EJEMPLO = [
 
 function MaquetaCortinas() {
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card/40">
-      <table className="w-full text-xs">
+    // `overflow-x-auto` como en la grilla real de Fase 1: la tabla no cabe
+    // entera en la vista previa y debe scrollear, no empujar el layout.
+    <section className="overflow-x-auto rounded-lg border border-border bg-card/40">
+      <table className="w-full min-w-[46rem] text-xs">
         <thead className="bg-card/60 text-[11px] uppercase tracking-wide text-muted-foreground">
           <tr className="border-b border-border">
             <th colSpan={7} className="px-2 py-1.5 text-center font-semibold">

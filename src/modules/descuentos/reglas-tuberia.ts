@@ -1,11 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────
 // REGLAS DE TUBERÍA — Cotizador Fase 2 / Inventario Fase 4 / Optimizador
 //
-// Edita este archivo para cambiar qué tubo se pre-selecciona según ancho
-// y diámetro. Los chips deben existir en OPCIONES_TUBERIA (fase2.ts).
+// Qué tubo se pre-selecciona según ancho y diámetro. Todo código que una regla
+// nombre debe existir en el catálogo `tubos` (fase2.ts deriva de ahí
+// OPCIONES_TUBERIA); el editor de Admin lo valida.
+//
+// Estas tablas son los VALORES DE FÁBRICA. Admin → Catálogo técnico puede
+// editarlas y guardarlas en configuracion.reglas_seleccion; desde ahí viajan
+// por parámetro opcional (ver reglasSeleccion.ts). Sin nada guardado, todas
+// las funciones de este módulo usan exactamente estos defaults.
 // ─────────────────────────────────────────────────────────────────────
 import type { ModeloDespiece } from './tipos';
-import { categoriaCoincide, type MatchCategoria } from './reglas-mecanismo';
+import {
+  categoriaCoincide,
+  type EstadoCatalogo,
+  type MatchCategoria,
+} from './reglas-mecanismo';
+import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
 /**
  * Subconjunto de ModeloDespiece que usan las reglas de tubo. Permite pasar
@@ -32,6 +43,53 @@ export type ReglaTuboCategoria = {
   codigo: string;
 };
 
+/** Regla por ancho del tubo de 63 mm (E47 hasta el tope, E65 por encima). */
+export type ReglaTubo63 = {
+  descripcion: string;
+  diametroMm: number;
+  /** Ancho máximo (m) inclusive para usar E47. Por encima → E65. */
+  anchoMaxE47M: number;
+  codigoHasta: string;
+  codigoDesde: string;
+};
+
+/** Tubo del catálogo editable (Admin → Catálogo técnico). */
+export type TuboCatalogo = {
+  /** Código de bodega, único (E02, E66…). */
+  codigo: string;
+  /** Texto del chip en Fase 2 y en las hojas de cálculo/inventario. */
+  descripcion: string;
+  diametroMm: number;
+  /** Espesor de pared (mm) para la etiqueta Brother; null = no se imprime. */
+  espesorMm: number | null;
+  estado: EstadoCatalogo;
+  /**
+   * true = las reglas por ancho/categoría pueden ASIGNARLO y PISARLO. false =
+   * elección manual: si el operario lo eligió, ninguna regla se lo cambia
+   * (E05, en desuso pero conservado; E47, que fija la regla de OSCURANTI).
+   */
+  autoPorAncho: boolean;
+};
+
+/** Forma completa de las reglas de tubería (lo que Admin puede editar). */
+export type ReglasTuberia = {
+  reglaE02E66: ReglaE02E66;
+  regla63: ReglaTubo63;
+  codigoPorDiametro: Record<number, string>;
+  /** El ORDEN manda: el primero es el que se auto-selecciona en 45 mm. */
+  tubos45mm: readonly string[];
+  reglasCategoria: readonly ReglaTuboCategoria[];
+  /** Catálogo de tubos con estado (activo | oculto | opt_in). */
+  tubos: readonly TuboCatalogo[];
+};
+
+/**
+ * Pseudo-tuberías estructurales: no son tubos y NO se editan desde Admin.
+ * VELCRO = pletina (sin tubo) · VERTICAL = perfil cabezal + varilla.
+ * Van siempre al final del selector.
+ */
+export const PSEUDO_TUBERIAS = ['VELCRO', 'VERTICAL'] as const;
+
 export const REGLAS_TUBERIA = {
   /**
    * Tubo 38 mm: hasta anchoMaxE02M → E02; más ancho → E66 (más rígido).
@@ -55,7 +113,7 @@ export const REGLAS_TUBERIA = {
     anchoMaxE47M: 3.0,
     codigoHasta: 'E47',
     codigoDesde: 'E65',
-  } as const,
+  } as const satisfies ReglaTubo63,
 
   /** Código de tubo por diámetro cuando no aplica regla de categoría ni E02/E66.
    *  45 mm: E78 es el default nuevo (2026-07-14); E05 quedó en desuso pero sigue
@@ -80,7 +138,71 @@ export const REGLAS_TUBERIA = {
       codigo: 'E47',
     },
   ] as const satisfies readonly ReglaTuboCategoria[],
-} as const;
+
+  /**
+   * Catálogo de tubos. El ORDEN es el del selector de Fase 2.
+   *  · estado 'oculto' → deja de ofrecerse pero se sigue resolviendo (una OT
+   *    vieja que lo tenga guardado conserva su chip). Así se retiró el E53.
+   *  · autoPorAncho false → elección manual respetada: ninguna regla lo pisa.
+   *  · espesorMm alimenta la etiqueta Brother (antes era una tabla aparte).
+   */
+  tubos: [
+    { codigo: 'E02', descripcion: 'E02-TUBO 1.2 / Ø 38 mm', diametroMm: 38, espesorMm: 1.2, estado: 'activo', autoPorAncho: true },
+    { codigo: 'E66', descripcion: 'E66 - TUBO (.40mm) - 2.5mm', diametroMm: 38, espesorMm: 2.5, estado: 'activo', autoPorAncho: true },
+    // Default de 45 mm desde 2026-07-14 (la banda 2,2–3,0 m lo pide por regla).
+    { codigo: 'E78', descripcion: 'E78 - TUBO 43MM(ESP1.2)(5.8)', diametroMm: 45, espesorMm: 1.2, estado: 'activo', autoPorAncho: true },
+    // Histórico (en desuso): sigue seleccionable a mano y nunca se pisa solo.
+    { codigo: 'E05', descripcion: 'E05 - TUBO Ø 45 mm', diametroMm: 45, espesorMm: null, estado: 'activo', autoPorAncho: false },
+    // Lo fija la regla de categoría de OSCURANTI; no es un auto por ancho.
+    { codigo: 'E47', descripcion: 'E47 - TUBO Ø 63 mm', diametroMm: 63, espesorMm: null, estado: 'activo', autoPorAncho: false },
+    // Default para roller >3 m.
+    { codigo: 'E65', descripcion: 'E65 - TUBO (.63mm)', diametroMm: 63, espesorMm: null, estado: 'activo', autoPorAncho: true },
+  ] as readonly TuboCatalogo[],
+} as const satisfies ReglasTuberia;
+
+// ── Derivaciones del catálogo de tubos ───────────────────────────────
+
+/** Chips que se OFRECEN en Fase 2 (+ las pseudo-tuberías al final). */
+export function opcionesTuberiaUI(
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+  usarTuboE78 = false,
+): readonly string[] {
+  const ofrecidos = reglas.tubos
+    .filter((t) => t.estado === 'activo' || (t.estado === 'opt_in' && usarTuboE78))
+    .map((t) => t.descripcion);
+  return [...ofrecidos, ...PSEUDO_TUBERIAS];
+}
+
+/**
+ * Lista completa para RESOLVER tuberías: TODOS los tubos del catálogo, también
+ * los ocultos. Los contextos de CÁLCULO (BOM, inventario, PDFs) usan siempre
+ * esta: un tubo retirado tiene que seguir resolviendo las OTs que lo guardaron.
+ */
+export function opcionesTuberiaResolucion(
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): readonly string[] {
+  return [...reglas.tubos.map((t) => t.descripcion), ...PSEUDO_TUBERIAS];
+}
+
+/** Espesor de pared (mm) por código, para la etiqueta Brother. */
+export function espesorTuboPorCodigo(
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const t of reglas.tubos) {
+    if (t.espesorMm != null) out[t.codigo.toUpperCase()] = t.espesorMm;
+  }
+  return out;
+}
+
+/** Diámetros con al menos un tubo en el catálogo, en orden de aparición. */
+function diametrosDelCatalogo(reglas: ReglasTuberia): number[] {
+  const vistos: number[] = [];
+  for (const t of reglas.tubos) {
+    if (t.diametroMm > 0 && !vistos.includes(t.diametroMm)) vistos.push(t.diametroMm);
+  }
+  return vistos;
+}
 
 function codigosTuboModelo(m: ModeloTubo): string[] {
   return (m.codigos_tubo || '')
@@ -89,22 +211,33 @@ function codigosTuboModelo(m: ModeloTubo): string[] {
     .filter(Boolean);
 }
 
-export function codigoTuboPorCategoria(categoria: string): string | null {
-  for (const regla of REGLAS_TUBERIA.reglasCategoria) {
+export function codigoTuboPorCategoria(
+  categoria: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): string | null {
+  for (const regla of reglas.reglasCategoria) {
     if (categoriaCoincide(categoria, regla.categoria)) return regla.codigo;
   }
   return null;
 }
 
-export function aplicaReglaE02E66(modelo: ModeloTubo, categoria?: string): boolean {
-  if (codigoTuboPorCategoria(categoria || '')) return false;
-  return modelo.diametro_tubo_mm === REGLAS_TUBERIA.reglaE02E66.diametroMm;
+export function aplicaReglaE02E66(
+  modelo: ModeloTubo,
+  categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): boolean {
+  if (codigoTuboPorCategoria(categoria || '', reglas)) return false;
+  return modelo.diametro_tubo_mm === reglas.reglaE02E66.diametroMm;
 }
 
 /** Aplica la regla E47/E65 por ancho (63 mm sin regla de categoría, p.ej. OSCURANTI). */
-export function aplicaRegla63(modelo: ModeloTubo, categoria?: string): boolean {
-  if (codigoTuboPorCategoria(categoria || '')) return false;
-  return modelo.diametro_tubo_mm === REGLAS_TUBERIA.regla63.diametroMm;
+export function aplicaRegla63(
+  modelo: ModeloTubo,
+  categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): boolean {
+  if (codigoTuboPorCategoria(categoria || '', reglas)) return false;
+  return modelo.diametro_tubo_mm === reglas.regla63.diametroMm;
 }
 
 /**
@@ -120,12 +253,14 @@ export function codigoTuboPorAncho(
   m: ModeloTubo,
   anchoM: number,
   categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): string {
-  const porCat = codigoTuboPorCategoria(categoria || '');
+  const porCat = codigoTuboPorCategoria(categoria || '', reglas);
   if (porCat) return porCat;
 
-  const { reglaE02E66, regla63, codigoPorDiametro } = REGLAS_TUBERIA;
-  const diam = m.diametro_tubo_mm > 0 ? m.diametro_tubo_mm : diametroDesdeCategoria(categoria) ?? 0;
+  const { reglaE02E66, regla63, codigoPorDiametro } = reglas;
+  const diam =
+    m.diametro_tubo_mm > 0 ? m.diametro_tubo_mm : diametroDesdeCategoria(categoria, reglas) ?? 0;
 
   if (diam === reglaE02E66.diametroMm && anchoM > 0) {
     return anchoM > reglaE02E66.anchoMaxE02M
@@ -149,25 +284,30 @@ export function codigoTuboPorAncho(
  * de Cálculo General / Inventario. El Excel de órdenes y la etiqueta Brother
  * NO la usan (siguen con el código compacto "38mm_E02", ver tuberiaCodigoCorto).
  */
-export const DESCRIPCION_TUBERIA: Record<string, string> = {
-  E02: 'E02-TUBO 1.2 / Ø 38 mm',
-  E66: 'E66 - TUBO (.40mm) - 2.5mm',
-  E78: 'E78 - TUBO 43MM(ESP1.2)(5.8)',
-  E05: 'E05 - TUBO Ø 45 mm',
-  E47: 'E47 - TUBO Ø 63 mm',
-  E65: 'E65 - TUBO (.63mm)',
-};
+export function descripcionesTuberia(
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const t of reglas.tubos) out[t.codigo.toUpperCase()] = t.descripcion;
+  return out;
+}
+
+/** Descripciones de fábrica (las editadas viajan por parámetro). */
+export const DESCRIPCION_TUBERIA: Record<string, string> = descripcionesTuberia();
 
 /**
  * Descripción larga a partir de un código corto ("38mm_E02"), un chip (viejo
  * "0,38mm [E02] 1,2mm" o nuevo "E02-TUBO…") o un código pelado ("E02").
  * Fallback: devuelve la entrada tal cual (VELCRO, vacío, códigos sin mapa).
  */
-export function descripcionTuberia(valor: string | null | undefined): string {
+export function descripcionTuberia(
+  valor: string | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): string {
   const s = (valor || '').trim();
   if (!s) return '';
   const m = s.toUpperCase().match(/E\d{2}/);
-  return (m && DESCRIPCION_TUBERIA[m[0]]) || s;
+  return (m && descripcionesTuberia(reglas)[m[0]]) || s;
 }
 
 /**
@@ -194,10 +334,11 @@ export function tuberiaCodigoCorto(
   tuberiaChip: string | null | undefined,
   anchoM: number,
   categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): string {
   const codChip = codigoTuberiaDeChip(tuberiaChip);
   if (modelo && modelo.diametro_tubo_mm > 0) {
-    const cod = codChip || codigoTuboPorAncho(modelo, anchoM, categoria);
+    const cod = codChip || codigoTuboPorAncho(modelo, anchoM, categoria, reglas);
     return cod ? `${modelo.diametro_tubo_mm}mm_${cod}` : `${modelo.diametro_tubo_mm}mm`;
   }
   if (codChip) return codChip;
@@ -252,19 +393,20 @@ export function chipTuberiaDeModelo(
   modelo: ModeloTubo,
   opciones: readonly string[],
   categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): string | null {
   if (modelo.diametro_tubo_mm <= 0) {
     // Sin tubo: VERTICAL usa su propio chip; el resto (pletina) es velcro.
     const objetivo = modelo.sistema === 'VERTICAL' ? 'VERTICAL' : 'VELCRO';
     return opciones.find((o) => o.toUpperCase() === objetivo) ?? null;
   }
-  const codigo = codigoTuboPorAncho(modelo, 0, categoria) ||
-    REGLAS_TUBERIA.codigoPorDiametro[modelo.diametro_tubo_mm];
+  const codigo = codigoTuboPorAncho(modelo, 0, categoria, reglas) ||
+    reglas.codigoPorDiametro[modelo.diametro_tubo_mm];
   const chip = codigo ? chipTuberiaPorCodigo(codigo, opciones) : null;
   if (chip) return chip;
   // El código del modelo (codigos_tubo[0], p.ej. E01) puede no ser un chip
   // seleccionable → cae al primer tubo estándar de ese diámetro.
-  for (const c of codigosTuberiaCompatibles(modelo.diametro_tubo_mm)) {
+  for (const c of codigosTuberiaCompatibles(modelo.diametro_tubo_mm, reglas)) {
     const alt = chipTuberiaPorCodigo(c, opciones);
     if (alt) return alt;
   }
@@ -279,11 +421,12 @@ export function chipTuberiaPorAncho(
   anchoM: number,
   opciones: readonly string[],
   categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): string | null {
-  const code = codigoTuboPorAncho(modelo, anchoM, categoria);
+  const code = codigoTuboPorAncho(modelo, anchoM, categoria, reglas);
   const chip = chipTuberiaPorCodigo(code, opciones);
   if (chip) return chip;
-  return chipTuberiaDeModelo(modelo, opciones, categoria);
+  return chipTuberiaDeModelo(modelo, opciones, categoria, reglas);
 }
 
 /**
@@ -292,7 +435,11 @@ export function chipTuberiaPorAncho(
  * roller >3 m (E65) y pasa a OSCURANTI —siempre E47— tiene que perder el E65.
  * Sin E65 en el set, ese tubo guardado sobrevivía y OSCURANTI quedaba en E65.
  */
-const TUBOS_AUTO_POR_ANCHO = new Set(['E02', 'E66', 'E65', 'E78']);
+function tubosAutoPorAncho(reglas: ReglasTuberia): Set<string> {
+  return new Set(
+    reglas.tubos.filter((t) => t.autoPorAncho).map((t) => t.codigo.toUpperCase()),
+  );
+}
 
 /**
  * Tubería que debe quedar en el paño: pre-selecciona según reglas;
@@ -304,6 +451,7 @@ export function tuberiaParaPano(
   stored: string | null | undefined,
   opciones: readonly string[],
   categoria?: string,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): string {
   if (!modelo || anchoM <= 0) {
     // Sin modelo o sin ancho no corre la regla por ancho; pero si la categoría
@@ -312,15 +460,15 @@ export function tuberiaParaPano(
     // 45 mm → E78, aunque el modelo sea null o el mecanismo sea "kit simple 38MM").
     const trimmed = (stored || '').trim();
     if (!trimmed) {
-      const dCat = diametroDesdeCategoria(categoria);
-      const codCatDiam = dCat != null ? REGLAS_TUBERIA.codigoPorDiametro[dCat] : undefined;
+      const dCat = diametroDesdeCategoria(categoria, reglas);
+      const codCatDiam = dCat != null ? reglas.codigoPorDiametro[dCat] : undefined;
       const chip = codCatDiam ? chipTuberiaPorCodigo(codCatDiam, opciones) : null;
       if (chip) return chip;
     }
     return trimmed;
   }
 
-  const esperado = chipTuberiaPorAncho(modelo, anchoM, opciones, categoria);
+  const esperado = chipTuberiaPorAncho(modelo, anchoM, opciones, categoria, reglas);
   if (!esperado) return (stored || '').trim();
 
   if (!(stored || '').trim()) return esperado;
@@ -328,10 +476,11 @@ export function tuberiaParaPano(
   // actual ("E02-TUBO…") sin cambiar el código. VELCRO/E53 (sin chip base) quedan.
   const trimmed = canonizarChipTuberia(stored, opciones);
 
-  const codCat = codigoTuboPorCategoria(categoria || '');
+  const auto = tubosAutoPorAncho(reglas);
+  const codCat = codigoTuboPorCategoria(categoria || '', reglas);
   if (codCat) {
     const cs = codigoTuberiaDeChip(trimmed);
-    if (!cs || TUBOS_AUTO_POR_ANCHO.has(cs)) return esperado;
+    if (!cs || auto.has(cs)) return esperado;
     return trimmed;
   }
 
@@ -339,14 +488,16 @@ export function tuberiaParaPano(
   // tubos auto de otras franjas (E02/E66/E65 → E78); respeta E05 y cualquier
   // elección manual guardada.
   const diamMod =
-    modelo.diametro_tubo_mm > 0 ? modelo.diametro_tubo_mm : diametroDesdeCategoria(categoria);
+    modelo.diametro_tubo_mm > 0
+      ? modelo.diametro_tubo_mm
+      : diametroDesdeCategoria(categoria, reglas);
   if (diamMod === 45) {
     const cs = codigoTuberiaDeChip(trimmed);
-    if (!cs || TUBOS_AUTO_POR_ANCHO.has(cs)) return esperado;
+    if (!cs || auto.has(cs)) return esperado;
     return trimmed;
   }
 
-  if (aplicaReglaE02E66(modelo, categoria) || aplicaRegla63(modelo, categoria)) {
+  if (aplicaReglaE02E66(modelo, categoria, reglas) || aplicaRegla63(modelo, categoria, reglas)) {
     // Ajuste fino por ancho: E02↔E66 (38 mm) y E47↔E65 (63 mm).
     const codEsp = codigoTuberiaDeChip(esperado);
     const codStored = codigoTuberiaDeChip(trimmed);
@@ -362,18 +513,24 @@ export function tuberiaParaPano(
 // diametro_tubo_mm. No existe (ni hace falta) una tabla mecanismo→tubo.
 
 /** Diámetro (mm) al que pertenece un CÓDIGO de tubo (E66→38 · E78/E05→45 · E47/E65→63); null si no se reconoce. */
-export function diametroDeCodigoTubo(codigo: string | null | undefined): number | null {
+export function diametroDeCodigoTubo(
+  codigo: string | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): number | null {
   const up = (codigo || '').trim().toUpperCase();
   if (!up) return null;
-  for (const d of [38, 45, 63]) {
-    if (codigosTuberiaCompatibles(d).includes(up)) return d;
+  for (const d of diametrosDelCatalogo(reglas)) {
+    if (codigosTuberiaCompatibles(d, reglas).includes(up)) return d;
   }
   return null;
 }
 
 /** Códigos de tubo compatibles con un diámetro: 38→[E02,E66], 45→[E78,E05], 63→[E47,E65]. */
-export function codigosTuberiaCompatibles(diametroMm: number): string[] {
-  const { reglaE02E66, regla63, tubos45mm, codigoPorDiametro } = REGLAS_TUBERIA;
+export function codigosTuberiaCompatibles(
+  diametroMm: number,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): string[] {
+  const { reglaE02E66, regla63, tubos45mm, codigoPorDiametro } = reglas;
   if (diametroMm === reglaE02E66.diametroMm) {
     return [reglaE02E66.codigoHasta, reglaE02E66.codigoDesde];
   }
@@ -384,7 +541,9 @@ export function codigosTuberiaCompatibles(diametroMm: number): string[] {
     return [regla63.codigoHasta, regla63.codigoDesde];
   }
   const cod = codigoPorDiametro[diametroMm];
-  return cod ? [cod] : [];
+  if (cod) return [cod];
+  // Diámetro dado de alta en el catálogo sin regla propia: sus tubos, en orden.
+  return reglas.tubos.filter((t) => t.diametroMm === diametroMm).map((t) => t.codigo);
 }
 
 /**
@@ -392,10 +551,13 @@ export function codigosTuberiaCompatibles(diametroMm: number): string[] {
  * "0,63mm…"→63 · "0,45mm…"→45. NO incluye las heurísticas OVALADA/LZ/DUAL
  * (ambiguas: esos sistemas existen hoy en 38 Y 45 mm). null si no hay mm explícito.
  */
-function diametroExplicitoDesdeChip(chip: string | null | undefined): number | null {
+function diametroExplicitoDesdeChip(
+  chip: string | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): number | null {
   const s = (chip || '').trim().toUpperCase();
   if (!s) return null;
-  const valido = (d: number) => (codigosTuberiaCompatibles(d).length > 0 ? d : null);
+  const valido = (d: number) => (codigosTuberiaCompatibles(d, reglas).length > 0 ? d : null);
   // "0,63MM" / "0.45MM" — formato de las opciones de tubería en el chip.
   const conComa = s.match(/0[.,](\d{2})\s*MM/);
   if (conComa) return valido(parseInt(conComa[1], 10));
@@ -415,11 +577,14 @@ function diametroExplicitoDesdeChip(chip: string | null | undefined): number | n
  * 38 mm). Hoy hay cenefa ovalada y LZ de 45 mm, así que esto es solo el último
  * recurso; cuando hay modelo con diámetro real, `diametroEfectivo` lo prefiere.
  */
-export function diametroDesdeChipMecanismo(chip: string | null | undefined): number | null {
-  const explicito = diametroExplicitoDesdeChip(chip);
+export function diametroDesdeChipMecanismo(
+  chip: string | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): number | null {
+  const explicito = diametroExplicitoDesdeChip(chip, reglas);
   if (explicito != null) return explicito;
   const s = (chip || '').trim().toUpperCase();
-  const valido = (d: number) => (codigosTuberiaCompatibles(d).length > 0 ? d : null);
+  const valido = (d: number) => (codigosTuberiaCompatibles(d, reglas).length > 0 ? d : null);
   // Ovaladas (nuevas y legacy), kits LZ y duales: heurística a 38 mm.
   if (s.includes('OVALADA')) return valido(38);
   if (s.includes('LZ')) return valido(38);
@@ -433,11 +598,20 @@ export function diametroDesdeChipMecanismo(chip: string | null | undefined): num
  * Fuente secundaria para la ventana nueva (aún sin producto/modelo pero con la
  * categoría ya elegida). null si la categoría no codifica mm o no tiene regla.
  */
-export function diametroDesdeCategoria(categoria: string | null | undefined): number | null {
-  const m = (categoria || '').toUpperCase().match(/(\d{2})\s*MM/);
+export function diametroDesdeCategoria(
+  categoria: string | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+  tipos?: readonly TipoCortina[],
+): number | null {
+  // Un tipo propio puede no traer el diámetro en el nombre: cae al de su molde.
+  const nombre = (categoria || '').toUpperCase();
+  const conMm = /(\d{2})\s*MM/.test(nombre)
+    ? nombre
+    : categoriaEfectiva(categoria, tipos).toUpperCase();
+  const m = conMm.match(/(\d{2})\s*MM/);
   if (!m) return null;
   const d = parseInt(m[1], 10);
-  return codigosTuberiaCompatibles(d).length > 0 ? d : null;
+  return codigosTuberiaCompatibles(d, reglas).length > 0 ? d : null;
 }
 
 /**
@@ -457,13 +631,14 @@ function diametroEfectivo(
   mecanismoChip: string | null | undefined,
   modelo: ModeloTubo | null | undefined,
   categoria: string | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): number | null {
   if (modelo && modelo.diametro_tubo_mm > 0) return modelo.diametro_tubo_mm;
-  const porCat = diametroDesdeCategoria(categoria);
+  const porCat = diametroDesdeCategoria(categoria, reglas);
   if (porCat != null) return porCat;
-  const explicito = diametroExplicitoDesdeChip(mecanismoChip);
+  const explicito = diametroExplicitoDesdeChip(mecanismoChip, reglas);
   if (explicito != null) return explicito;
-  return diametroDesdeChipMecanismo(mecanismoChip); // heurística (explícito ya fue null)
+  return diametroDesdeChipMecanismo(mecanismoChip, reglas); // heurística (explícito ya fue null)
 }
 
 /**
@@ -483,6 +658,7 @@ export function opcionesTuberiaFiltradas(
     categoria?: string;
     tuberiaActual?: string | null;
   },
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): readonly string[] {
   const stored = (ctx.tuberiaActual || '').trim();
   const conStored = (base: (string | null)[]): readonly string[] => {
@@ -498,7 +674,7 @@ export function opcionesTuberiaFiltradas(
   };
 
   // 1. Regla por categoría (gana sobre el mecanismo, igual que en codigoTuboPorAncho).
-  const codCat = codigoTuboPorCategoria(ctx.categoria || '');
+  const codCat = codigoTuboPorCategoria(ctx.categoria || '', reglas);
   if (codCat) {
     const chip = chipTuberiaPorCodigo(codCat, opciones);
     return chip ? conStored([chip]) : [...opciones];
@@ -509,21 +685,21 @@ export function opcionesTuberiaFiltradas(
   if (
     ctx.modelo &&
     ctx.modelo.diametro_tubo_mm <= 0 &&
-    diametroDesdeCategoria(ctx.categoria) == null &&
-    diametroExplicitoDesdeChip(ctx.mecanismoChip) == null
+    diametroDesdeCategoria(ctx.categoria, reglas) == null &&
+    diametroExplicitoDesdeChip(ctx.mecanismoChip, reglas) == null
   ) {
-    const chip = chipTuberiaDeModelo(ctx.modelo, opciones, ctx.categoria);
+    const chip = chipTuberiaDeModelo(ctx.modelo, opciones, ctx.categoria, reglas);
     return chip ? conStored([chip]) : [...opciones];
   }
 
   // 3. Diámetro efectivo: categoría (spec) → chip explícito → modelo → heurística.
   //    La categoría manda: una cenefa ovalada 45 mm cae al "kit simple 38MM"
   //    (placeholder) y ese 38 del kit NO debe fijar el tubo en 38 mm.
-  const d = diametroEfectivo(ctx.mecanismoChip, ctx.modelo, ctx.categoria);
+  const d = diametroEfectivo(ctx.mecanismoChip, ctx.modelo, ctx.categoria, reglas);
   if (d == null) return [...opciones];
 
   // 3. Diámetro → chips compatibles.
-  const codes = codigosTuberiaCompatibles(d);
+  const codes = codigosTuberiaCompatibles(d, reglas);
   if (codes.length === 0) return [...opciones];
   const chips = codes.map((c) => chipTuberiaPorCodigo(c, opciones)).filter(Boolean);
   if (chips.length === 0) return [...opciones];
@@ -543,13 +719,14 @@ export function tuberiaCorregidaPorMecanismo(
   opciones: readonly string[],
   categoria?: string,
   modelo?: ModeloTubo | null,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): string | null {
-  const codCat = codigoTuboPorCategoria(categoria || '');
+  const codCat = codigoTuboPorCategoria(categoria || '', reglas);
   // Diámetro con el modelo como fuente real (gana a la heurística OVALADA/LZ→38).
-  const d = codCat ? null : diametroEfectivo(mecanismoChip, modelo, categoria);
+  const d = codCat ? null : diametroEfectivo(mecanismoChip, modelo, categoria, reglas);
   if (!codCat && d == null) return null;
 
-  const compatibles = codCat ? [codCat] : codigosTuberiaCompatibles(d!);
+  const compatibles = codCat ? [codCat] : codigosTuberiaCompatibles(d!, reglas);
   if (compatibles.length === 0) return null;
 
   const actual = codigoTuberiaDeChip(tuberiaActual);
@@ -562,5 +739,6 @@ export function tuberiaCorregidaPorMecanismo(
     anchoM,
     opciones,
     categoria,
+    reglas,
   );
 }

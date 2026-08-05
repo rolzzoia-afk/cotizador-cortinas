@@ -4,18 +4,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   OPCIONES_ARMADO,
-  OPCIONES_ACCESORIO_COLOR,
   OPCIONES_BRACKET_TIPO,
   OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
   OPCIONES_CENEFA_TIRA,
   OPCIONES_CIERRE_VERT,
-  OPCIONES_COLOR_TAPA_CUADRADA,
-  OPCIONES_COLOR_TAPA_OVALADA,
   OPCIONES_CORTES,
   OPCIONES_LADO_MOTOR,
   OPCIONES_LARGO_CADENA,
-  OPCIONES_MANILLA_COLOR,
   OPCIONES_MATERIAL_TIPO,
   OPCIONES_DUAL_LADO,
   OPCIONES_MECANISMO,
@@ -36,6 +32,7 @@ import { debeInvertirPano } from '@/modules/cotizador/tela';
 import { cantidadSuplementosAuto } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
+import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import {
   cadenasRoller,
   etiquetaCadena,
@@ -81,6 +78,11 @@ import {
   type TogglesBeeblack,
   type VarianteBeeblack,
 } from '@/modules/descuentos/reglas-beeblack';
+import { FORMULAS_DEFAULT, type FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
+import {
+  REGLAS_SELECCION_DEFAULT,
+  type ReglasSeleccion,
+} from '@/modules/descuentos/reglasSeleccion';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 
 type Props = {
@@ -113,6 +115,11 @@ type Props = {
   adicionalesFase0?: AdicionalFase0Persistido[];
   /** Ancho del rollo (m) para auto-sugerir corte invertido. Default 2,98. */
   anchoRollo?: number;
+  /** Fórmulas de corte editadas en Admin (Catálogo técnico). */
+  formulas?: FormulasFamilias;
+  /** Reglas de tubería/mecanismo editadas en Admin (para leer el diámetro de un
+   *  tubo dado de alta ahí). Sin esto, las de fábrica. */
+  reglas?: ReglasSeleccion;
 };
 
 // Perfiles de oscuridad POR LADO (izq / der / base). Cada lado tiene: activo,
@@ -261,9 +268,31 @@ export function PanoEditor({
   direccionVentana,
   adicionalesFase0,
   anchoRollo = 2.98,
+  formulas = FORMULAS_DEFAULT,
+  reglas = REGLAS_SELECCION_DEFAULT,
 }: Props) {
   const cadenasDisponibles = cadenasRoller(cadenas);
   const pesosDisponibles = pesosSeleccionables(pesos);
+
+  // Colores del catálogo (Admin puede agregar los suyos). Cada selector ofrece
+  // los de SU uso, más el valor guardado si el color ya se retiró: una OT vieja
+  // nunca pierde su botón, igual que con los chips de mecanismo legacy.
+  const coloresAcc = opcionesColorConGuardado(
+    coloresParaUso('accesorio', reglas.colores),
+    colorAccesorioCorto(colorAccesoriosDePano(pano, colorVentana)),
+  );
+  const coloresManilla = opcionesColorConGuardado(
+    coloresParaUso('manilla', reglas.colores),
+    pano.manillaColor as string,
+  );
+  const coloresTapaOvalada = opcionesColorConGuardado(
+    coloresParaUso('tapaOvalada', reglas.colores),
+    pano.colorTapa as string,
+  );
+  const coloresTapaCuadrada = opcionesColorConGuardado(
+    coloresParaUso('tapaCuadrada', reglas.colores),
+    pano.colorTapa as string,
+  );
 
   // Corte invertido (rotado): se auto-sugiere cuando la cortina + borde (4 cm)
   // no entra en el ancho del rollo. El flag explícito del usuario manda.
@@ -280,7 +309,8 @@ export function PanoEditor({
   const familia = familiaOscuridadConDiametro(
     categoria,
     pano.cenefa,
-    diametroDeCodigoTubo(codigoTuberiaDeChip(pano.tuberia as string)),
+    diametroDeCodigoTubo(codigoTuberiaDeChip(pano.tuberia as string), reglas.tuberia),
+    reglas.tipos,
   );
   // La variante sale del paño → de la ventana (Fase 1). El `sentidoVentana` queda
   // como último recurso solo para OTs viejas donde la variante viajaba en la caída.
@@ -341,7 +371,7 @@ export function PanoEditor({
   // 45 mm negro se corta distinto (cenefa − 2,9 en vez de − 3,1).
   const colorAccesoriosRaw = colorAccesoriosDePano(pano, colorVentana);
   const cortesOsc = familia
-    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff, medidasOsc, colorAccesoriosRaw)
+    ? cortesOscuridad(familia, varianteOscuridad, anchoCmOsc, altoCmOsc, perfilesOscEff, medidasOsc, colorAccesoriosRaw, formulas.oscuridad)
     : [];
   const componentesOsc = cortesOsc.filter((c) => !c.perfil);
   const colorPesoInfOscuridad = familia
@@ -452,6 +482,7 @@ export function PanoEditor({
           overridesBeeblack,
           cierreVerticalBb,
           instalacionBeeblack,
+          formulas.beeblack,
         )
       : [];
   return (
@@ -487,7 +518,7 @@ export function PanoEditor({
               <RadioRow
                 label=""
                 value={colorAccesorios}
-                options={OPCIONES_ACCESORIO_COLOR}
+                options={coloresAcc}
                 onChange={(v) =>
                   onChange({ color: v, colorMecanismo: v, colorCadena: v, colorPeso: v })
                 }
@@ -641,7 +672,7 @@ export function PanoEditor({
           <RadioRow
             label="Color"
             value={pano.manillaColor || ''}
-            options={OPCIONES_MANILLA_COLOR}
+            options={coloresManilla}
             onChange={(v) => onChange({ manillaColor: v })}
           />
         </div>
@@ -658,7 +689,7 @@ export function PanoEditor({
           <RadioRow
             label="Peso inf."
             value={pano.colorPeso || ''}
-            options={OPCIONES_ACCESORIO_COLOR}
+            options={coloresAcc}
             onChange={(v) => onChange({ colorPeso: v })}
           />
         )}
@@ -666,14 +697,14 @@ export function PanoEditor({
           <RadioRow
             label="Cadena"
             value={pano.colorCadena || ''}
-            options={OPCIONES_ACCESORIO_COLOR}
+            options={coloresAcc}
             onChange={(v) => onChange({ colorCadena: v })}
           />
         )}
         <RadioRow
           label="Mecanismo"
           value={pano.colorMecanismo || ''}
-          options={OPCIONES_ACCESORIO_COLOR}
+          options={coloresAcc}
           onChange={(v) => onChange({ colorMecanismo: v })}
         />
       </Section>
@@ -713,7 +744,7 @@ export function PanoEditor({
             <RadioRow
               label="Color tapa"
               value={pano.colorTapa || ''}
-              options={OPCIONES_COLOR_TAPA_OVALADA}
+              options={coloresTapaOvalada}
               onChange={(v) => onChange({ colorTapa: v })}
             />
             <RadioRow
@@ -738,7 +769,7 @@ export function PanoEditor({
             <RadioRow
               label="Color tapa"
               value={pano.colorTapa || ''}
-              options={OPCIONES_COLOR_TAPA_CUADRADA}
+              options={coloresTapaCuadrada}
               onChange={(v) => onChange({ colorTapa: v })}
             />
           </>
@@ -846,6 +877,7 @@ export function PanoEditor({
                     anchoCmOsc,
                     altoCmOsc,
                     L.side === 'inf' ? montajeBase : undefined,
+                    formulas.oscuridad,
                   )
                 : 0;
               const overrideField =
@@ -1166,7 +1198,7 @@ export function PanoEditor({
             {BEEBLACK_FIJO_ROWS.map((row) => {
               const medida =
                 anchoCmBb > 0 && altoCmBb > 0
-                  ? medidaComponenteBeeblack(varianteBeeblack, row.calcKey, anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack)
+                  ? medidaComponenteBeeblack(varianteBeeblack, row.calcKey, anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack, formulas.beeblack)
                   : 0;
               const override = pano[row.field] as number | undefined;
               return (
@@ -1191,7 +1223,7 @@ export function PanoEditor({
               const medidaField = BEEBLACK_MANILLA_MEDIDA_FIELD[t.key as 'manillaIzq' | 'manillaDer'];
               const medida =
                 anchoCmBb > 0 && altoCmBb > 0
-                  ? medidaComponenteBeeblack(varianteBeeblack, t.key as 'manillaIzq', anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack)
+                  ? medidaComponenteBeeblack(varianteBeeblack, t.key as 'manillaIzq', anchoCmBb, altoCmBb, cierreVerticalBb, instalacionBeeblack, formulas.beeblack)
                   : 0;
               const override = pano[medidaField] as number | undefined;
               return (
@@ -1234,6 +1266,7 @@ export function PanoEditor({
                 altoCmBb,
                 cierreVerticalBb,
                 instalacionBeeblack,
+                formulas.beeblack,
               );
               const override = pano[s.cm] as number | undefined;
               return (

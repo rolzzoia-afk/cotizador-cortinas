@@ -19,6 +19,8 @@ import { useAuth } from '@/lib/auth';
 import { useOT } from '@/modules/ots/hooks';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import {
   asignarJuntoEnOrden,
   autoOptimizar,
@@ -43,6 +45,8 @@ export function CotizadorTela() {
   const { ot, loading, guardar } = useOT(otId);
   const { catalogo, loading: loadingCat } = useCatalogoProductos();
   const { parametros, loading: loadingParams } = useParametrosCotizador();
+  const { formulas, loading: loadingFormulas } = useFormulasFamilias();
+  const { reglas, loading: loadingReglas } = useReglasSeleccion();
   const { empresaId } = useAuth();
   const [rows, setRows] = useState<OptimizerRow[] | null>(null);
   const [saving, setSaving] = useState(false);
@@ -63,19 +67,19 @@ export function CotizadorTela() {
     () => () => {
       // Espera también los parámetros de corte: las filas viven en state
       // editable y no se reconstruyen cuando el hook llega tarde.
-      if (!ot || loadingCat || loadingParams) return;
-      const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros);
+      if (!ot || loadingCat || loadingParams || loadingFormulas || loadingReglas) return;
+      const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros, formulas, reglas);
       const guardado = ot.datosGenerales?.optimizerRows;
       const restored = restorePlanGuardado(fresh, guardado);
       const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
       setRows(tieneJunto ? restored : asignarJuntoEnOrden(restored));
     },
-    [ot, loadingCat, catalogo, loadingParams, parametros],
+    [ot, loadingCat, catalogo, loadingParams, parametros, loadingFormulas, formulas, loadingReglas, reglas],
   );
 
   // Auto-cargar cuando hay OT, catálogo y parámetros listos
   useEffect(() => {
-    if (ot && !loadingCat && !loadingParams && rows === null) {
+    if (ot && !loadingCat && !loadingParams && !loadingFormulas && !loadingReglas && rows === null) {
       cargar();
     }
   }, [ot, loadingCat, loadingParams, rows, cargar]);
@@ -162,7 +166,7 @@ export function CotizadorTela() {
   // el guardado (o auto) para las demás.
   const filasOptimizadasDe = (o: OT): OptimizerRow[] => {
     if (String(o.id) === String(ot?.id) && rows) return rows;
-    const fresh = buildOptimizerRows(o.storeVentanas, catalogo, parametros);
+    const fresh = buildOptimizerRows(o.storeVentanas, catalogo, parametros, formulas, reglas);
     const guardado = o.datosGenerales?.optimizerRows as unknown[] | undefined;
     const restored = restorePlanGuardado(fresh, guardado);
     const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');

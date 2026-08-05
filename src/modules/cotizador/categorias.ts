@@ -1,5 +1,14 @@
 // Categorías del select de Fase 1, agrupadas por optgroup.
 // Portado de legacy index.html líneas 1242-1271.
+//
+// Los TIPOS DE CORTINA propios creados desde Admin se suman a esta lista con
+// `categoriasFase1ConTipos(tipos)`; cada uno se comporta como su molde.
+import {
+  GRUPO_TIPOS_PROPIOS,
+  categoriaEfectiva,
+  tiposActivos,
+  type TipoCortina,
+} from '@/modules/descuentos/tiposCortina';
 
 export type CategoriaOption = { value: string; label: string };
 export type CategoriaGroup = { label: string; options: CategoriaOption[] };
@@ -54,10 +63,37 @@ export const CATEGORIAS_FASE1: CategoriaGroup[] = [
   },
 ];
 
+/**
+ * Categorías de Fase 1 con los tipos propios ACTIVOS. Cada tipo va en su grupo
+ * (o en «Tipos propios»); los grupos nuevos se agregan al final.
+ */
+export function categoriasFase1ConTipos(
+  tipos?: readonly TipoCortina[],
+): CategoriaGroup[] {
+  const propios = tiposActivos(tipos);
+  if (propios.length === 0) return CATEGORIAS_FASE1;
+  const grupos: CategoriaGroup[] = CATEGORIAS_FASE1.map((g) => ({
+    label: g.label,
+    options: [...g.options],
+  }));
+  for (const t of propios) {
+    const etiqueta = t.grupo?.trim() || GRUPO_TIPOS_PROPIOS;
+    const opcion = { value: t.categoria, label: t.nombre || t.categoria };
+    const grupo = grupos.find((g) => g.label === etiqueta);
+    if (grupo) grupo.options.push(opcion);
+    else grupos.push({ label: etiqueta, options: [opcion] });
+  }
+  return grupos;
+}
+
 // Color del badge según la categoría.
 // Portado de catBadge() líneas ~3053-3062 (colores inferidos de optgroup labels).
-export function catBadgeColor(categoria: string): { bg: string; color: string; border: string } {
-  const cat = (categoria || '').toUpperCase();
+// Un tipo propio hereda el color de su molde.
+export function catBadgeColor(
+  categoria: string,
+  tipos?: readonly TipoCortina[],
+): { bg: string; color: string; border: string } {
+  const cat = categoriaEfectiva(categoria, tipos).toUpperCase();
   if (cat.includes('MOTOR'))
     return {
       bg: 'rgba(251,146,60,0.15)',

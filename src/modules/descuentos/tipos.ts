@@ -2,6 +2,7 @@
 // Tipos y helpers PUROS del catálogo de descuentos de fabricación.
 // (sin React/Supabase para poder usarse en el motor de despiece y tests)
 // ─────────────────────────────────────────────────────────────────────
+import { tipoPorCategoria, type TipoCortina } from './tiposCortina';
 
 export type ModeloDespiece = {
   sistema: string;
@@ -71,9 +72,31 @@ const MAPEO_CATEGORIA: Record<string, ReglaCategoria> = {
   VERTICAL: { sistemas: ['VERTICAL'] },
 };
 
+/**
+ * Regla de catálogo de una categoría. Un TIPO propio usa sus filas propias si
+ * las declaró (`sistemas`), y si no hereda las de su molde.
+ */
+function reglaDeCategoria(
+  categoria: string,
+  tipos?: readonly TipoCortina[],
+): ReglaCategoria | null {
+  const cat = (categoria || '').trim();
+  const tipo = tipoPorCategoria(cat, tipos);
+  if (tipo) {
+    if (tipo.sistemas && tipo.sistemas.length > 0) {
+      return {
+        sistemas: [...tipo.sistemas],
+        ...(tipo.tipoIncluye ? { tipoIncluye: tipo.tipoIncluye } : {}),
+      };
+    }
+    return MAPEO_CATEGORIA[tipo.base.trim()] ?? null;
+  }
+  return MAPEO_CATEGORIA[cat] ?? null;
+}
+
 /** true si la categoría del cotizador es roller dual (mecanismo dual [MEC 01-25]). */
-export function categoriaEsDual(categoria: string): boolean {
-  const regla = MAPEO_CATEGORIA[(categoria || '').trim()];
+export function categoriaEsDual(categoria: string, tipos?: readonly TipoCortina[]): boolean {
+  const regla = reglaDeCategoria(categoria, tipos);
   return !!regla && regla.sistemas.includes('ROLLER_DUAL');
 }
 
@@ -81,8 +104,9 @@ export function categoriaEsDual(categoria: string): boolean {
 export function modelosParaCategoria(
   modelos: ModeloDespiece[],
   categoria: string,
+  tipos?: readonly TipoCortina[],
 ): ModeloDespiece[] {
-  const regla = MAPEO_CATEGORIA[(categoria || '').trim()];
+  const regla = reglaDeCategoria(categoria, tipos);
   if (!regla) return [];
   return modelos.filter(
     (m) =>
@@ -129,8 +153,9 @@ export function validarAnchoCategoria(
   modelos: ModeloDespiece[],
   categoria: string,
   anchoM: number,
+  tipos?: readonly TipoCortina[],
 ): string | null {
-  const candidatos = modelosParaCategoria(modelos, categoria);
+  const candidatos = modelosParaCategoria(modelos, categoria, tipos);
   if (candidatos.length === 0 || anchoM <= 0) return null;
   const maxAncho = Math.max(...candidatos.map((m) => m.ancho_max_m || 0));
   if (maxAncho <= 0 || anchoM <= maxAncho) return null;

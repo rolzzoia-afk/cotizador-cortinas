@@ -14,7 +14,26 @@
 //
 // Si el color no tiene código fijo (otro color), devuelve '' y la etiqueta
 // cae al color como identificador.
+//
+// Un color dado de alta en Admin puede traer sus PROPIOS códigos: se consultan
+// primero (overlay) y estas tablas quedan como respaldo. Los colores de fábrica
+// no declaran nada, así que siguen resolviendo por acá.
 // ─────────────────────────────────────────────────────────────────────
+import {
+  insumoDeColor,
+  type ColorAccesorio,
+  type InsumosColor,
+} from './coloresAccesorio';
+
+/** El código que el color declaró para esta pieza, o el de la tabla de fábrica. */
+function conOverlay(
+  campo: keyof InsumosColor,
+  color: string | null | undefined,
+  colores: readonly ColorAccesorio[] | undefined,
+  fallback: string,
+): string {
+  return insumoDeColor(color, campo, colores) ?? fallback;
+}
 
 /** Normaliza color de accesorios (corto "NEG"/largo "NEGRO"/plural) a canónico. */
 function colorCanonico(color: string | null | undefined): string {
@@ -112,23 +131,45 @@ function colorPerfilCanonico(color: string | null | undefined): string {
 }
 
 /** Código del perfil zócalo (E32/E33/E34) por color; '' si el color no calza. */
-export function codigoZocaloPerfil(color: string | null | undefined): string {
-  return ZOCALO_POR_COLOR[colorPerfilCanonico(color)] || '';
+export function codigoZocaloPerfil(
+  color: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
+): string {
+  return conOverlay('zocalo', color, colores, ZOCALO_POR_COLOR[colorPerfilCanonico(color)] || '');
 }
 
 /** Código del perfil separador (E41/E42/E43) por color; '' si el color no calza. */
-export function codigoSeparadorPerfil(color: string | null | undefined): string {
-  return SEPARADOR_POR_COLOR[colorPerfilCanonico(color)] || '';
+export function codigoSeparadorPerfil(
+  color: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
+): string {
+  return conOverlay('separador', color, colores, SEPARADOR_POR_COLOR[colorPerfilCanonico(color)] || '');
 }
 
 /** Código del PERFIL SUPERIOR de oscuranti (E50/E49/E52); '' si el color no calza. */
-export function codigoPerfilSuperior(color: string | null | undefined): string {
-  return PERFIL_SUPERIOR_POR_COLOR[colorPerfilCanonico(color)] || '';
+export function codigoPerfilSuperior(
+  color: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
+): string {
+  return conOverlay(
+    'perfilSuperior',
+    color,
+    colores,
+    PERFIL_SUPERIOR_POR_COLOR[colorPerfilCanonico(color)] || '',
+  );
 }
 
 /** Código de la cenefa cuadrada (E29/E30/E31) por color de perfil; '' si no calza. */
-export function codigoCenefaCuadrada(color: string | null | undefined): string {
-  return CENEFA_CUADRADA_POR_COLOR[colorPerfilCanonico(color)] || '';
+export function codigoCenefaCuadrada(
+  color: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
+): string {
+  return conOverlay(
+    'cenefaCuadrada',
+    color,
+    colores,
+    CENEFA_CUADRADA_POR_COLOR[colorPerfilCanonico(color)] || '',
+  );
 }
 
 /** Código del riel BEEBLACK (SML04/05/06) por color; '' si el color no calza. */
@@ -150,8 +191,11 @@ export function codigoEstructura(
   columnaExcel: string,
   colorAccesorios: string | null | undefined,
   tuberiaCod: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
 ): string {
   const color = colorCanonico(colorAccesorios);
+  const overlay = (campo: keyof InsumosColor, fallback: string) =>
+    conOverlay(campo, colorAccesorios, colores, fallback);
   switch (columnaExcel) {
     case 'TUBO':
     case 'PLETINA':
@@ -159,15 +203,15 @@ export function codigoEstructura(
     case 'PESO INTERNO':
       return COD_PESO_INTERNO;
     case 'PESO':
-      return PESO_ROLLER_POR_COLOR[color] || '';
+      return overlay('pesoRoller', PESO_ROLLER_POR_COLOR[color] || '');
     case 'PESO U':
-      return PESO_U_POR_COLOR[color] || '';
+      return overlay('pesoU', PESO_U_POR_COLOR[color] || '');
     case 'PESO SOFT LIGHT':
       // Peso inferior de oscuridad (Soft Light / Dark): E24 blanco / E44 negro.
       // Gris no aplica (soft light no se vende en gris) → cae al color.
-      return PESO_OSCURIDAD_POR_COLOR[color] || '';
+      return overlay('pesoOscuridad', PESO_OSCURIDAD_POR_COLOR[color] || '');
     case 'CENEFA OVALADA':
-      return CENEFA_OVALADA_POR_COLOR[color] || '';
+      return overlay('cenefaOvalada', CENEFA_OVALADA_POR_COLOR[color] || '');
     // BEEBLACK: los 4 perfiles son el mismo riel; las manillas, la agarradera.
     case 'PERFIL SUPERIOR (ANCHO)':
     case 'PERFIL INFERIOR (ANCHO)':

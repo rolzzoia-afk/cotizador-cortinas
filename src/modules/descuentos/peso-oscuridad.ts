@@ -6,6 +6,7 @@
 // PESO SOFT LIGHT (optimizador legacy). Formato: "E24 [BLANCO]".
 // Módulo puro: sin React/Supabase.
 // ─────────────────────────────────────────────────────────────────────
+import { insumoDeColor, type ColorAccesorio } from './coloresAccesorio';
 
 /** Código de inventario del peso inferior de oscuridad por color (normalizado). */
 const PESO_INF_OSCURIDAD_POR_COLOR: Record<string, string> = {
@@ -24,9 +25,16 @@ export function colorPesoNormalizado(color: string | undefined | null): string {
   return c;
 }
 
-/** Código de inventario del peso inferior de oscuridad para un color dado. */
-export function codigoPesoInfOscuridad(color: string | undefined | null): string {
-  return PESO_INF_OSCURIDAD_POR_COLOR[colorPesoNormalizado(color)] || '';
+/** Código de inventario del peso inferior de oscuridad para un color dado.
+ *  Un color del catálogo con código propio gana sobre la tabla de fábrica. */
+export function codigoPesoInfOscuridad(
+  color: string | undefined | null,
+  colores?: readonly ColorAccesorio[],
+): string {
+  return (
+    insumoDeColor(color, 'pesoOscuridad', colores) ??
+    (PESO_INF_OSCURIDAD_POR_COLOR[colorPesoNormalizado(color)] || '')
+  );
 }
 
 /**
@@ -34,9 +42,12 @@ export function codigoPesoInfOscuridad(color: string | undefined | null): string
  * Formato "E24 [BLANCO]" si hay código; si no, solo "[BLANCO]" para que el
  * optimizador resuelva el código por catálogo. Vacío si no hay color.
  */
-export function colorPesoInfOscuridadExcel(color: string | undefined | null): string {
+export function colorPesoInfOscuridadExcel(
+  color: string | undefined | null,
+  colores?: readonly ColorAccesorio[],
+): string {
   const colorFull = colorPesoNormalizado(color);
   if (!colorFull) return '';
-  const cod = PESO_INF_OSCURIDAD_POR_COLOR[colorFull];
+  const cod = codigoPesoInfOscuridad(color, colores);
   return cod ? `${cod} [${colorFull}]` : colorFull;
 }
