@@ -750,6 +750,19 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
       {plan && (
         <div className="p-3">
+          {/* La colmena está apagada en Parámetros de corte: el motor ya ignoró
+              los paños disponibles, así que se avisa para que nadie crea que la
+              colmena "no tenía nada" que calzara. */}
+          {parametros.usarColmenaPanos === false && (
+            <div className="mb-2 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[0.72rem] text-warning">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                <strong>Colmena desactivada</strong> en Optimizador de Tela → Parámetros de corte:
+                este plan corta todo de rollo nuevo, aunque haya paños disponibles.
+              </span>
+            </div>
+          )}
+
           {plan.otsIncluidas.length > 1 && (
             <div className="mb-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-[0.72rem] text-accent">
               <strong>Plan combinado · {plan.otsIncluidas.length} OTs en producción:</strong>

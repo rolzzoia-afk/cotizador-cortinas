@@ -168,6 +168,11 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
     // Proveedor de tarjeta: string acotado; cualquier otra cosa → default.
     const prov = (raw as Record<string, unknown>).proveedorTarjeta;
     out.proveedorTarjeta = prov === 'flow' ? 'flow' : 'mercadopago';
+    // Colmena: el único parámetro BOOLEANO, así que no entra en CLAVES_NUMERICAS.
+    // Solo un `false` explícito la apaga; cualquier otra cosa (ausente, string,
+    // null de una versión vieja) deja el default de fábrica, que es usarla.
+    const usarColmena = (raw as Record<string, unknown>).usarColmenaPanos;
+    if (typeof usarColmena === 'boolean') out.usarColmenaPanos = usarColmena;
   }
   // margenInsumo = 0 dividiría por cero.
   if (out.margenInsumo <= 0) out.margenInsumo = PARAMETROS_DEFAULT.margenInsumo;

@@ -55,6 +55,19 @@ describe('normalizarParametros', () => {
     expect(normalizarParametros({ proveedorTarjeta: 42 }).proveedorTarjeta).toBe('mercadopago');
   });
 
+  it('usarColmenaPanos: solo un false explícito apaga la colmena', () => {
+    // Es el único parámetro booleano: no entra en las claves numéricas y se
+    // sanea aparte. Lo guardado por una versión vieja no trae el campo, y ahí
+    // el default de fábrica (usarla) tiene que mandar.
+    expect(PARAMETROS_DEFAULT.usarColmenaPanos).toBe(true);
+    expect(normalizarParametros({ usarColmenaPanos: false }).usarColmenaPanos).toBe(false);
+    expect(normalizarParametros({ usarColmenaPanos: true }).usarColmenaPanos).toBe(true);
+    expect(normalizarParametros({}).usarColmenaPanos).toBe(true);
+    expect(normalizarParametros({ usarColmenaPanos: 'no' }).usarColmenaPanos).toBe(true);
+    expect(normalizarParametros({ usarColmenaPanos: 0 }).usarColmenaPanos).toBe(true);
+    expect(normalizarParametros({ usarColmenaPanos: null }).usarColmenaPanos).toBe(true);
+  });
+
   it('recargoTarjetaFlow: numérico se conserva, inválido cae al default', () => {
     expect(normalizarParametros({ recargoTarjetaFlow: 0.05 }).recargoTarjetaFlow).toBe(0.05);
     expect(normalizarParametros({ recargoTarjetaFlow: 'x' }).recargoTarjetaFlow).toBe(

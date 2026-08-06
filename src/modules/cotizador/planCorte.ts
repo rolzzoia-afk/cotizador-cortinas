@@ -284,6 +284,13 @@ export function generarPlanCorte(
   const ROLL_W_UTIL = params.anchoRolloPlanCm - MARGEN * 2;
   const multiOT = ots.length > 1;
 
+  // Colmena apagada en los parámetros de corte: el plan corta TODO de rollo
+  // nuevo. Se vacía la lista acá —una sola vez, en el motor— porque este es el
+  // único camino por el que pasan el plan de la UI, el Excel de corte, el PDF,
+  // las etiquetas de paños y el descuento de inventario al confirmar el corte:
+  // sin piezas de origen colmena, ninguno de esos la toca.
+  const colmena = params.usarColmenaPanos === false ? [] : colmenaPanos;
+
   // ── Umbrales de reuso de SOBRANTES (ajustados 2026-06 para igualar el
   //    corte manual; ver comparación OT ANGELICA) ─────────────────────
   // Ventana de alto: un sobrante sirve si su alto está dentro de +VENTANA_ALTO
@@ -386,7 +393,7 @@ export function generarPlanCorte(
     // (Regla 1 abajo toma la primera del orden). En el best-fit (Regla 2) la
     // antigüedad solo desempata cuando sobra y tipo son idénticos: la decide
     // la optimización (minimizar colmena), no la fecha.
-    const disponiblesOrdenados = colmenaPanos
+    const disponiblesOrdenados = colmena
       .filter((s) => s.cod.toUpperCase().trim() === codInt)
       .sort(ordenFifo);
 
