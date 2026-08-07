@@ -2,7 +2,7 @@
 // anterior / corregido), cantidad de cortes, errores y OTs. Click expande
 // para mostrar la tabla detallada.
 
-import { ChevronDown, FileSpreadsheet, Scissors } from 'lucide-react';
+import { ChevronDown, FileSpreadsheet, Scissors, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import PlanTabla from './PlanTabla';
 import { extraerOTs } from '../utils/parsers';
@@ -21,6 +21,10 @@ interface PlanCardProps {
   onRegistrarError: (idx: number) => void;
   onMarcarSobranteInexistente: (idx: number, descripcion: string) => void;
   onDescargarExcel: () => void;
+  /** Deshacer el plan y devolver la colmena al estado anterior. Solo se pasa
+   *  para el ÚLTIMO plan guardado y si quien mira es admin. */
+  onRevertir?: () => void;
+  revirtiendo?: boolean;
 }
 
 export default function PlanCard({
@@ -34,6 +38,8 @@ export default function PlanCard({
   onRegistrarError,
   onMarcarSobranteInexistente,
   onDescargarExcel,
+  onRevertir,
+  revirtiendo,
 }: PlanCardProps) {
   const fechaStr = fmtFechaHora(plan.fecha);
   const nCortes = plan.resultados.length;
@@ -124,6 +130,17 @@ export default function PlanCard({
         >
           <FileSpreadsheet className="h-4 w-4" />
         </button>
+        {onRevertir && (
+          <button
+            onClick={onRevertir}
+            disabled={revirtiendo}
+            title="Deshacer este plan y devolver la colmena al estado anterior"
+            aria-label="Deshacer plan"
+            className="flex shrink-0 items-center justify-center border-l border-border px-3 text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
+          >
+            <Undo2 className={cn('h-4 w-4', revirtiendo && 'animate-pulse')} />
+          </button>
+        )}
       </div>
       {expandido && (
         <div className="border-t border-border">

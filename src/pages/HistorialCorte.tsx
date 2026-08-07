@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { esRolAdmin } from '@/lib/roles';
 import { exportarPlanComoExcel } from '@/modules/planes-corte/exportar-excel';
 import { Input } from '@/components/ui/input';
 import { confirmar } from '@/components/ui/confirm';
@@ -46,6 +47,7 @@ export function HistorialCorte() {
   const [filtro, setFiltro] = useState('');
   const [loading, setLoading] = useState(true);
   const [modalCtx, setModalCtx] = useState<CorteCtx | null>(null);
+  const [revirtiendo, setRevirtiendo] = useState<string | null>(null);
 
   const cargarPlanes = async () => {
     if (!empresaId) return;
@@ -184,6 +186,24 @@ export function HistorialCorte() {
     if (!q) return planes;
     return planes.filter((p) => extraerOTs(p).some((ot) => ot.toLowerCase().includes(q)));
   }, [planes, filtro]);
+
+  // Último plan GUARDADO (por fecha, no por correlativo: el correlativo ordena
+  // por urgencia de entrega). Es el único que se puede deshacer, y se calcula
+  // sobre `planes` —no sobre los visibles— para que un filtro no habilite el
+  // botón en un plan que no es el último.
+  const idUltimoPlan = useMemo(() => {
+    // Un plan sin fecha no se puede deshacer: la reversa localiza sus eventos
+    // de inventario por el instante en que se guardó.
+    const ms = (p: Plan) => (p.fecha ? new Date(p.fecha).getTime() : NaN);
+    let ultimo: Plan | null = null;
+    for (const p of planes) {
+      if (Number.isNaN(ms(p))) continue;
+      if (!ultimo || ms(p) > ms(ultimo)) ultimo = p;
+    }
+    return ultimo?.id ?? null;
+  }, [planes]);
+
+  const puedeRevertir = esRolAdmin(perfil?.rol);
 
   // Agrupar por OTs: cada grupo ordenado por fecha desc, el [0] es el ACTUAL.
   // El correlativo se asigna después por fecha de entrega más urgente.
@@ -334,6 +354,68 @@ export function HistorialCorte() {
     cargarTubos();
   };
 
+  // ── Deshacer un plan completo ──────────────────────────────────────────
+  // Borra el plan y devuelve la colmena al estado previo a esa optimización.
+  // Toda la lógica (y sus guards) vive en la RPC `revertir_plan_corte`, que es
+  // transaccional: o queda todo revertido o no queda nada. Acá solo se pide
+  // confirmación y se muestra el resumen.
+  const revertirPlan = async (plan: Plan, correlativo?: number | null) => {
+    const ots = extraerOTs(plan).join(', ') || 's/OT';
+    const ok = await confirmar(
+      `¿Deshacer el plan ${correlativo != null ? `CORR ${correlativo}` : ''} (OT ${ots})?\n\n` +
+        `Se elimina del historial y la colmena vuelve al estado justo anterior: se borran los ` +
+        `sobrantes que creó y se reingresan los tubos que consumió. Los ingresos manuales ` +
+        `posteriores se conservan.\n\n` +
+        `Solo se puede si no hubo cortes ni planes después de este.`,
+    );
+    if (!ok) return;
+
+    setRevirtiendo(plan.id);
+    try {
+      const { data, error } = await supabase.rpc(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        'revertir_plan_corte' as any,
+        { p_plan_id: plan.id, p_nota: `Deshecho desde Historial de Corte (OT ${ots})` },
+      );
+      if (error) {
+        toast.error('No se pudo deshacer: ' + error.message, { duration: 10000 });
+        return;
+      }
+      const r = data as {
+        sobrantes_borrados: number;
+        tubos_reingresados: number;
+        reingresos_silenciosos: number;
+        fantasmas_omitidos: number;
+        preservados: number;
+        colmena_antes: number;
+        colmena_despues: number;
+      } | null;
+      toast.success(
+        `Plan deshecho. Colmena ${r?.colmena_antes} → ${r?.colmena_despues}: ` +
+          `${r?.sobrantes_borrados} sobrantes borrados, ${r?.tubos_reingresados} tubos reingresados` +
+          (r?.preservados ? `, ${r.preservados} conservados` : ''),
+        { duration: 10000 },
+      );
+      // Avisos de los casos raros que la RPC detecta y resuelve sola.
+      if (r?.reingresos_silenciosos) {
+        toast.info(
+          `${r.reingresos_silenciosos} tubo(s) habían desaparecido sin cortarse y se recuperaron.`,
+          { duration: 12000 },
+        );
+      }
+      if (r?.fantasmas_omitidos) {
+        toast.warning(
+          `${r.fantasmas_omitidos} tubo(s) del respaldo ya estaban cortados de antes y no se reingresaron.`,
+          { duration: 12000 },
+        );
+      }
+      await cargarPlanes();
+      cargarTubos();
+    } finally {
+      setRevirtiendo(null);
+    }
+  };
+
   const modalPlan = modalCtx ? planes.find((p) => p.id === modalCtx.planId) || null : null;
 
   if (loading) {
@@ -421,6 +503,15 @@ export function HistorialCorte() {
                         marcarSobranteInexistente(actual.id, idx, desc)
                       }
                       onDescargarExcel={() => exportarPlanComoExcel({ ...actual, correlativo })}
+                      // Deshacer solo el ÚLTIMO plan guardado: revertir uno
+                      // anterior arrastraría el trabajo hecho después (la RPC
+                      // también lo rechaza, esto evita el intento).
+                      onRevertir={
+                        puedeRevertir && actual.id === idUltimoPlan
+                          ? () => revertirPlan(actual, correlativo)
+                          : undefined
+                      }
+                      revirtiendo={revirtiendo === actual.id}
                     />
                     {anteriores.length > 0 && (
                       <>
