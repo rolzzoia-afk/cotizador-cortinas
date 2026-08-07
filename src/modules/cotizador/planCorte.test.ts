@@ -162,6 +162,61 @@ describe('generarPlanCorte', () => {
     expect(plan.sinStock).toHaveLength(0);
   });
 
+  // El taller puede apagar la colmena para que el optimizador corte SOLO tela
+  // nueva. El interruptor vive en el motor porque por acá pasan el plan de la
+  // UI, el Excel de corte, el PDF, las etiquetas y el descuento de inventario.
+  it('colmena apagada: el match exacto se ignora y la pieza sale del rollo', () => {
+    const ot = hacerOT([
+      {
+        codInt: 'SC001',
+        producto: 'Roller SC',
+        ubicacion: 'Living',
+        panos: [{ ancho: 1.46, alto: 2.05 }],
+      },
+    ]);
+    const sobrante = pano('SC001', 150, 230); // calzaría EXACTO
+    const plan = generarPlanCorte([ot], [sobrante], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      usarColmenaPanos: false,
+    });
+    expect(plan.sobrantes).toHaveLength(0);
+    expect(plan.rollo).toHaveLength(1);
+    expect(plan.sinStock).toHaveLength(0);
+  });
+
+  it('el default de fábrica sigue usando la colmena', () => {
+    const ot = hacerOT([
+      {
+        codInt: 'SC001',
+        producto: 'Roller SC',
+        ubicacion: 'Living',
+        panos: [{ ancho: 1.46, alto: 2.05 }],
+      },
+    ]);
+    const sobrante = pano('SC001', 150, 230);
+    expect(PARAMETROS_CORTE_DEFAULT.usarColmenaPanos).toBe(true);
+    const plan = generarPlanCorte([ot], [sobrante], PARAMETROS_CORTE_DEFAULT);
+    expect(plan.sobrantes).toHaveLength(1);
+  });
+
+  it('colmena apagada: tampoco se usa por best-fit (Regla 2)', () => {
+    const ot = hacerOT([
+      {
+        codInt: 'SC001',
+        producto: 'Roller SC',
+        ubicacion: 'Living',
+        panos: [{ ancho: 1.46, alto: 2.05 }],
+      },
+    ]);
+    // Sobrante ancho que en condiciones normales empaqueta la pieza y deja franja.
+    const plan = generarPlanCorte([ot], [pano('SC001', 280, 235)], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      usarColmenaPanos: false,
+    });
+    expect(plan.sobrantes).toHaveLength(0);
+    expect(plan.rollo).toHaveLength(1);
+  });
+
   it('Regla 2: remanente de ancho ≥120×180 se registra como colmena', () => {
     const ot = hacerOT([
       {

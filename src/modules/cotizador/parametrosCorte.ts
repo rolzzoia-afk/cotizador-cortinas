@@ -51,6 +51,13 @@ export type ParametrosCorte = {
   colmenaMinAltoCm: number;
   /** Días sin uso para que una colmena disponible pase a alerta (Reglas Rolzzo v1.0). */
   diasAlertaColmena: number;
+  /**
+   * ¿El plan de corte puede reutilizar paños de la colmena? Apagado, el
+   * optimizador corta TODO de rollo nuevo aunque la colmena tenga paños
+   * disponibles (y no los descuenta al confirmar el corte). Los sobrantes se
+   * siguen registrando como inventario físico: esto solo decide si se usan.
+   */
+  usarColmenaPanos: boolean;
 };
 
 export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
@@ -69,4 +76,7 @@ export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   colmenaMinAnchoCm: 120,
   colmenaMinAltoCm: 180,
   diasAlertaColmena: 90,
+  // De fábrica la colmena SÍ se usa (comportamiento histórico). Se apaga desde
+  // el tab "Parámetros de corte" del Optimizador de Tela.
+  usarColmenaPanos: true,
 };

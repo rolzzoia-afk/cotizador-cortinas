@@ -28,8 +28,14 @@ import {
 
 type Grupo = 'corte' | 'rollo' | 'colmena';
 
+/** Los campos con caja de texto son los numéricos; `usarColmenaPanos` es un
+ *  interruptor y se dibuja aparte, al final del grupo Colmena. */
+type ClaveNumericaCorte = {
+  [K in keyof ParametrosCorte]: ParametrosCorte[K] extends number ? K : never;
+}[keyof ParametrosCorte];
+
 type CampoDef = {
-  key: keyof ParametrosCorte;
+  key: ClaveNumericaCorte;
   label: string;
   hint: string;
   grupo: Grupo;
@@ -144,6 +150,7 @@ export function ParametrosCorteTab() {
   const { empresaId, perfil } = useAuth();
   const { parametros, loading, refresh } = useParametrosCotizador();
   const [valores, setValores] = useState<Record<string, string>>({});
+  const [usarColmena, setUsarColmena] = useState(true);
   const [saving, setSaving] = useState(false);
   const puedeEditar = esRolAdmin(perfil?.rol);
 
@@ -152,11 +159,12 @@ export function ParametrosCorteTab() {
     const v: Record<string, string> = {};
     for (const c of CAMPOS) v[c.key] = String(parametros[c.key]);
     setValores(v);
+    setUsarColmena(parametros.usarColmenaPanos !== false);
   }, [loading, parametros]);
 
   const onGuardar = async () => {
     if (!empresaId || !puedeEditar) return;
-    const nuevos = { ...parametros };
+    const nuevos = { ...parametros, usarColmenaPanos: usarColmena };
     for (const c of CAMPOS) {
       const n = parseFloat((valores[c.key] ?? '').replace(',', '.'));
       if (!Number.isFinite(n) || n < 0) {
@@ -182,6 +190,7 @@ export function ParametrosCorteTab() {
     const v: Record<string, string> = {};
     for (const c of CAMPOS) v[c.key] = String(PARAMETROS_CORTE_DEFAULT[c.key]);
     setValores(v);
+    setUsarColmena(PARAMETROS_CORTE_DEFAULT.usarColmenaPanos);
     toast.info('Valores por defecto cargados. Presiona Guardar para aplicarlos.');
   };
 
@@ -243,6 +252,38 @@ export function ParametrosCorteTab() {
                   </div>
                 ))}
               </div>
+
+              {/* Interruptor: es el único parámetro que no es un número, y
+                  decide si el plan de corte puede reutilizar la colmena. */}
+              {g.key === 'colmena' && (
+                <label
+                  className={`mt-4 flex items-start gap-2.5 rounded-md border p-3 text-xs ${
+                    usarColmena ? 'border-border bg-secondary/30' : 'border-warning/50 bg-warning/10'
+                  } ${puedeEditar ? 'cursor-pointer' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    disabled={!puedeEditar}
+                    checked={usarColmena}
+                    onChange={(e) => setUsarColmena(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-semibold">Usar colmena de paños en el optimizador</span>
+                    <span className="block text-[12px] leading-tight text-muted-foreground">
+                      Apagado, el plan de corte ignora la colmena y corta todo de rollo nuevo,
+                      aunque haya paños disponibles. Los sobrantes se siguen registrando como
+                      inventario físico: esto solo decide si se usan.
+                    </span>
+                    {!usarColmena && (
+                      <span className="mt-1 flex items-center gap-1 font-semibold text-warning">
+                        <AlertTriangle className="h-3 w-3" />
+                        Los planes nuevos cortarán solo tela nueva.
+                      </span>
+                    )}
+                  </span>
+                </label>
+              )}
             </div>
           ))}
 
