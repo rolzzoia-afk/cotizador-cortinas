@@ -48,7 +48,8 @@ import {
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0, esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
-import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaVertical, mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
+import { categoriaTieneLineaB, esLineaB, gamaTelaEsB } from '@/modules/cotizador/lineaB';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { categoriasParaSelect, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
@@ -123,6 +124,11 @@ type FilaUI = {
    * PanoEditor: undefined = auto según ancho de rollo; el click lo fija.
    */
   invertida?: boolean;
+  /**
+   * Línea de fabricación B (gama económica) EXPLÍCITA — por paño, tri-estado
+   * igual que `invertida`: undefined = auto según la categoría de la tela.
+   */
+  lineaB?: boolean;
   /** id de la ventana original (si la fila viene de una OT existente). */
   vid?: string;
   /** índice del paño dentro de su ventana (una fila por paño en la cotización). */
@@ -249,10 +255,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [params] = useSearchParams();
   const { id: editOtId } = useParams();
   // Columnas COD SEC / DIRECC. / SENT. solo en la cotización final (Fase 3).
-  // La columna INVERTIDA va en ambos modos (+1 a los colspans).
+  // Las columnas INVERTIDA y CATEGORÍA van en ambos modos (+2 a los colspans).
   const showCols = modo === 'fase3';
-  const colSpanTotal = showCols ? 18 : 16;
-  const colSpanInfo = showCols ? 11 : 9;
+  const colSpanTotal = showCols ? 19 : 17;
+  const colSpanInfo = showCols ? 12 : 10;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId } = useAuth();
   const { catalogo, refresh: refreshCatalogo } = useCatalogoProductos();
@@ -450,6 +456,20 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // la que queda de cabeza tras el emparejado).
         const telaPorPano = esGrupoDobleTela(head.categoria, g.filas.length, reglas.tipos);
         const anchoGrupo = g.filas.reduce((mx, f) => Math.max(mx, f.ancho || 0), 0);
+        // Categoría de FABRICACIÓN (A o B) por paño: lo forzado en la columna,
+        // o la gama comercial de su tela. El MODELO es uno por ventana, así que
+        // lo decide el primer paño (igual que la categoría o el color).
+        //
+        // Va con `esLineaB` —NO con `gamaTelaEsB`— porque acá se decide con qué
+        // herrajes se GUARDA la cortina, y la categoría B solo existe en roller
+        // simple, ovalada y dúo 38. Con la versión sin guarda, un soft light con
+        // tela de gama B se guardaba con el tubo E01 (visto en la OT 268-3).
+        // El distintivo de la grilla sí usa la versión sin guarda, a propósito:
+        // ahí se muestra la gama de la TELA, no la de fabricación.
+        const lineaBFilas = g.filas.map((f) =>
+          esLineaB(f, head.codInt, catalogo, head.categoria, reglas.mecanismo, reglas.tipos),
+        );
+        const lineaBVentana = lineaBFilas[0] ?? false;
         let modeloCalc = modeloVentanaPorAncho(
           modelosDespiece,
           head.categoria,
@@ -458,6 +478,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           usarTuboE78,
           reglas.mecanismo,
           reglas.tipos,
+          lineaBVentana,
         );
         // Dual: refinar el modelo al mecanismo dual exacto por lado+color (los 8
         // modelos comparten descuentos, así que es coherencia del snapshot).
@@ -513,6 +534,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 usarTuboE78,
                 reglas.mecanismo,
                 reglas.tipos,
+                lineaBVentana,
               )
             : modeloCalc;
         // Re-sincroniza los chips de mecanismo/tubería de los paños con el modelo
@@ -529,6 +551,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           opcSel.tuberiaUI,
           usarTuboE78,
           reglas,
+          lineaBFilas,
         );
         const ventana: Record<string, unknown> = {
           ...(orig ?? { id: crypto.randomUUID(), grupoId: null }),
@@ -1101,7 +1124,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // medias (se llegaba acá por URL o por el menú "Ir a fase" del Panel).
   useEffect(() => {
     if (modo !== 'fase3' || !otCargada || otCargada.estado !== 'terreno') return;
-    const faltan = pendientesFase2((otCargada.storeVentanas || []) as unknown as VentanaFase2[]);
+    const faltan = pendientesFase2(
+      (otCargada.storeVentanas || []) as unknown as VentanaFase2[],
+      undefined,
+      reglas,
+      catalogo,
+    );
     if (faltan.length === 0) return;
     toast.error(`Falta completar la Fase 2: ${resumenPendientes(faltan)}.`);
     navigate(`/ots/${otCargada.id}/fase2`, { replace: true });
@@ -1407,7 +1435,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             ))}
           </datalist>
 
-          <table className="w-full min-w-[1760px] border-collapse text-xs">
+          <table className="w-full min-w-[1830px] border-collapse text-xs">
             <thead className="bg-card text-[12px] uppercase tracking-wide text-muted-foreground">
               <tr className="border-b border-border">
                 <th colSpan={colSpanInfo} className="px-2 py-1.5 text-center font-semibold">Información del producto</th>
@@ -1430,6 +1458,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 <Th className="min-w-[5rem]">TIPO</Th>
                 <Th className="min-w-[10rem]">DESCRIPCIÓN</Th>
                 <Th className="min-w-[4.5rem] text-center">INVERTIDA</Th>
+                <Th className="min-w-[5.5rem] text-center">CATEGORÍA</Th>
                 <Th className="min-w-[5rem]">UBIC.</Th>
                 <Th className="min-w-[7rem]">COLOR ACCESORIOS</Th>
                 <Th className="min-w-[5rem] border-l border-border">ANCHO</Th>
@@ -1523,6 +1552,57 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                             )}
                           >
                             <RotateCw className={cn('h-4 w-4', invEfectiva && 'stroke-[2.5]')} />
+                          </button>
+                        );
+                      })()}
+                    </Td>
+                    <Td className="text-center">
+                      {(() => {
+                        // Efectivo = flag explícito, o la gama comercial de la
+                        // tela. El clic lo fuerza para casos especiales (tela mal
+                        // catalogada, o una cortina que va con otros herrajes).
+                        // Acá SÍ va la versión sin guarda: el distintivo informa
+                        // la gama de la TELA aunque el sistema no tenga herrajes
+                        // B (lo aclara el globo, y `aplica` lo detecta abajo).
+                        // Lo que se GUARDA usa `esLineaB`, con la guarda puesta.
+                        const bEfectiva = f.lineaB ?? gamaTelaEsB(f.codInt, catalogo);
+                        const forzada = f.lineaB !== undefined;
+                        // La línea B solo tiene herrajes propios en roller simple,
+                        // cenefa ovalada y dúo 38: en el resto de los sistemas la
+                        // gama de la tela no cambia nada de la fabricación.
+                        const aplica =
+                          !f.categoria || categoriaTieneLineaB(f.categoria, reglas.mecanismo, reglas.tipos);
+                        const sinReceta =
+                          bEfectiva &&
+                          aplica &&
+                          !!f.categoria &&
+                          mecLineaB(f.categoria, f.colorAcc, reglas.mecanismo, reglas.tipos) == null;
+                        return (
+                          <button
+                            onClick={() => setFila(f.id, { lineaB: !bEfectiva })}
+                            title={
+                              (bEfectiva
+                                ? 'Categoría B (gama económica: kit B, tubo E01). Clic para fabricarla en la categoría A.'
+                                : 'Categoría A. Clic para fabricarla en la categoría B.') +
+                              (forzada ? ' Forzada a mano.' : ' Según la tela del catálogo.') +
+                              (bEfectiva && !aplica
+                                ? ' Este sistema no tiene herrajes de categoría B: se fabrica igual que siempre.'
+                                : '') +
+                              (sinReceta
+                                ? ' ⚠ La categoría B no tiene herrajes en este color: usa blanco o negro.'
+                                : '')
+                            }
+                            className={cn(
+                              'rounded-md border px-2 py-0.5 font-mono text-xs font-bold transition-colors',
+                              sinReceta
+                                ? 'border-destructive/50 bg-destructive/15 text-destructive'
+                                : bEfectiva
+                                  ? 'border-amber-500/40 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
+                                  : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25',
+                              forzada && 'ring-1 ring-current',
+                            )}
+                          >
+                            {bEfectiva ? 'B' : 'A'}
                           </button>
                         );
                       })()}

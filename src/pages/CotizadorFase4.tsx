@@ -205,6 +205,7 @@ export function CotizadorFase4() {
         params: parametros,
         formulas,
         reglas,
+        catalogo,
       });
       if (res.advertencias.length > 0) {
         toast.warning(

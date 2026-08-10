@@ -197,8 +197,8 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     v.modelo = { ...softLight38, sistema: 'OSCURANTI' };
     v.panos[0].cenefa = 'Cuadrada';
     const { aoa } = generarOrdenesOptimizador('266-2', [v]);
-    const idxCenefaDel = 9;
-    const idxPerfilSup = 10;
+    const idxCenefaDel = col('CENEFA DELANTERA');
+    const idxPerfilSup = col('PERFIL SUPERIOR (CENEF.PRO)');
     expect(aoa[1][idxPerfilSup]).toBe(296.6); // 296,9 − 0,3
     // Si además saliera la cenefa cuadrada, el optimizador cortaría dos piezas
     // (E29/E30/E31 + E50/E49/E52) para la misma ventana (corrección 2026-07-30).
@@ -223,7 +223,7 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
   });
 
   it('soft light / DARK NO llevan perfil superior: solo la cenefa', () => {
-    const idxPerfilSup = 10;
+    const idxPerfilSup = col('PERFIL SUPERIOR (CENEF.PRO)');
     const vSoft = ventanaSoftLight(2.969, 'PZA 3-G2');
     expect(generarOrdenesOptimizador('266-2', [vSoft]).aoa[1][idxPerfilSup]).toBe('');
     const vDark = ventanaSoftLight(2.969, 'PZA 3-G2');
@@ -231,7 +231,7 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     vDark.modelo = { ...softLight38, sistema: 'DARK' };
     vDark.panos[0].cenefa = 'Cuadrada';
     const { aoa } = generarOrdenesOptimizador('266-2', [vDark]);
-    expect(aoa[1][9]).toBeGreaterThan(0); // sí corta la cenefa delantera
+    expect(aoa[1][col('CENEFA DELANTERA')]).toBeGreaterThan(0); // sí corta la cenefa delantera
     expect(aoa[1][idxPerfilSup]).toBe('');
   });
 
@@ -246,7 +246,7 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
   });
 
   it('peso soft light → COLOR PESO INF. SOFT LIGHT con código por color', () => {
-    const idxColorPesoInf = 16;
+    const idxColorPesoInf = col('COLOR PESO INF. SOFT LIGHT');
     const vBco = ventanaSoftLight(2.969, 'PZA 3-G2');
     vBco.panos[0].colorPeso = 'BCO';
     const { aoa: aoaBco } = generarOrdenesOptimizador('266-2', [vBco]);
@@ -714,5 +714,74 @@ describe('generarOrdenesOptimizador — VERTICAL (lamas)', () => {
     expect(conParams.aoa[1][idxPerfilCabezal]).toBe(base.aoa[1][idxPerfilCabezal]);
     expect(conParams.aoa[1][idxVarilla]).toBe(base.aoa[1][idxVarilla]);
     expect(conParams.aoa[1][idxAltoTelaV]).toBe('');
+  });
+});
+
+describe('generarOrdenesOptimizador — columna CATEGORIA (gama económica)', () => {
+  const CAT = {
+    'TR 02': { cod: 'ROL', producto: 'Roller B', precio: 0, categoria: 'B' },
+    'TR 01': { cod: 'ROL', producto: 'Roller A', precio: 0, categoria: 'A' },
+  } as unknown as import('@/modules/cotizador/types').CatalogoProductos;
+  const idxCAT = col('CATEGORIA');
+
+  it('una cortina de tela B se marca con B; la de tela A queda vacía', () => {
+    const vB = ventana('');
+    const { aoa: aoaB } = generarOrdenesOptimizador('266-2', [vB], { catalogo: CAT });
+    expect(aoaB[1][idxCAT]).toBe('B');
+
+    const vA = ventana('');
+    vA.codInt = 'TR 01';
+    const { aoa: aoaA } = generarOrdenesOptimizador('266-2', [vA], { catalogo: CAT });
+    expect(aoaA[1][idxCAT]).toBe('');
+  });
+
+  it('sin catálogo (o forzada a la categoría A) la columna queda vacía', () => {
+    expect(generarOrdenesOptimizador('266-2', [ventana('')]).aoa[1][idxCAT]).toBe('');
+    const v = ventana('');
+    (v.panos[0] as Pano).lineaB = false;
+    expect(generarOrdenesOptimizador('266-2', [v], { catalogo: CAT }).aoa[1][idxCAT]).toBe('');
+  });
+
+  it('la tubería de una cortina B es el E01, sin importar el ancho', () => {
+    const v = ventana('');
+    v.panos[0].ancho = 2.8; // en la categoría A este ancho pediría E66
+    const { aoa } = generarOrdenesOptimizador('266-2', [v], { catalogo: CAT });
+    expect(aoa[1][idxTUBERIA]).toBe('38mm_E01');
+  });
+});
+
+// La gama de la TELA no cambia la estructura de los sistemas de oscuridad. Un
+// soft light con tela de gama B se fabrica con los herrajes de siempre: sale
+// SIN marca de categoría y con su tubo E02, nunca con el E01 de la categoría B.
+// (Regresión de la OT 268-3: el guardado de Fase 1 usaba la versión sin guarda
+// y le dejaba el chip E01 al paño.)
+describe('generarOrdenesOptimizador — la categoría B no se mete en la oscuridad', () => {
+  const CAT_B = {
+    'BK 78': { cod: 'BK', producto: 'Blackout gama B', precio: 0, categoria: 'B' },
+  } as unknown as import('@/modules/cotizador/types').CatalogoProductos;
+
+  function softLightTelaB(tuberiaPano = ''): Ventana {
+    const v = ventana(tuberiaPano);
+    v.codInt = 'BK 78';
+    v.categoria = 'SOFT_LIGHT_38mm';
+    v.color = 'BLANCO';
+    v.modelo = { ...softLight38, tipo_rol: 'SOFT_LIGHT_INTERNO_38mm' };
+    v.panos = [{ ancho: 2, alto: 2.3, color: 'BLANCO', tuberia: tuberiaPano } as Pano];
+    return v;
+  }
+
+  it('no marca la columna CATEGORIA y usa el tubo de siempre', () => {
+    const { aoa } = generarOrdenesOptimizador('268-3', [softLightTelaB()], { catalogo: CAT_B });
+    expect(aoa[1][col('CATEGORIA')]).toBe('');
+    expect(String(aoa[1][col('TUBERIA')])).not.toContain('E01');
+  });
+
+  it('el mismo blackout en un ROLLER sí entra en la categoría B', () => {
+    const v = softLightTelaB();
+    v.categoria = 'ROL';
+    v.modelo = modelo;
+    const { aoa } = generarOrdenesOptimizador('268-3', [v], { catalogo: CAT_B });
+    expect(aoa[1][col('CATEGORIA')]).toBe('B');
+    expect(String(aoa[1][col('TUBERIA')])).toContain('E01');
   });
 });

@@ -81,6 +81,8 @@ export type ReglasTuberia = {
   reglasCategoria: readonly ReglaTuboCategoria[];
   /** Catálogo de tubos con estado (activo | oculto | opt_in). */
   tubos: readonly TuboCatalogo[];
+  /** LÍNEA B: su tubo es uno solo, sin regla por ancho (E01, 38 mm 0,8). */
+  tuboLineaB: string;
 };
 
 /**
@@ -157,7 +159,13 @@ export const REGLAS_TUBERIA = {
     { codigo: 'E47', descripcion: 'E47 - TUBO Ø 63 mm', diametroMm: 63, espesorMm: null, estado: 'activo', autoPorAncho: false },
     // Default para roller >3 m.
     { codigo: 'E65', descripcion: 'E65 - TUBO (.63mm)', diametroMm: 63, espesorMm: null, estado: 'activo', autoPorAncho: true },
+    // LÍNEA B (gama económica): único tubo de la línea, en todo ancho. Oculto
+    // porque en una cortina normal no se ofrece; lo pone la rama de línea B.
+    { codigo: 'E01', descripcion: 'E01 - TUBO 0.8 / Ø 38 mm', diametroMm: 38, espesorMm: 0.8, estado: 'oculto', autoPorAncho: false },
   ] as readonly TuboCatalogo[],
+
+  /** LÍNEA B: E01 en todo ancho — nunca sube a E66/E78/E65. */
+  tuboLineaB: 'E01',
 } as const satisfies ReglasTuberia;
 
 // ── Derivaciones del catálogo de tubos ───────────────────────────────
@@ -254,7 +262,12 @@ export function codigoTuboPorAncho(
   anchoM: number,
   categoria?: string,
   reglas: ReglasTuberia = REGLAS_TUBERIA,
+  lineaB = false,
 ): string {
+  // LÍNEA B: un solo tubo en todo ancho. Va primero porque su gracia es
+  // justamente NO tener regla por ancho (nunca sube a E66/E78/E65).
+  if (lineaB && reglas.tuboLineaB) return reglas.tuboLineaB;
+
   const porCat = codigoTuboPorCategoria(categoria || '', reglas);
   if (porCat) return porCat;
 
@@ -335,10 +348,11 @@ export function tuberiaCodigoCorto(
   anchoM: number,
   categoria?: string,
   reglas: ReglasTuberia = REGLAS_TUBERIA,
+  lineaB = false,
 ): string {
   const codChip = codigoTuberiaDeChip(tuberiaChip);
   if (modelo && modelo.diametro_tubo_mm > 0) {
-    const cod = codChip || codigoTuboPorAncho(modelo, anchoM, categoria, reglas);
+    const cod = codChip || codigoTuboPorAncho(modelo, anchoM, categoria, reglas, lineaB);
     return cod ? `${modelo.diametro_tubo_mm}mm_${cod}` : `${modelo.diametro_tubo_mm}mm`;
   }
   if (codChip) return codChip;
@@ -422,10 +436,18 @@ export function chipTuberiaPorAncho(
   opciones: readonly string[],
   categoria?: string,
   reglas: ReglasTuberia = REGLAS_TUBERIA,
+  lineaB = false,
 ): string | null {
-  const code = codigoTuboPorAncho(modelo, anchoM, categoria, reglas);
+  const code = codigoTuboPorAncho(modelo, anchoM, categoria, reglas, lineaB);
   const chip = chipTuberiaPorCodigo(code, opciones);
   if (chip) return chip;
+  // El tubo de la línea B está OCULTO en el catálogo, así que no aparece en la
+  // lista de UI que llega por `opciones`. Se arma su chip desde el catálogo
+  // para que la cortina B quede con su tubo aunque el selector no lo ofrezca.
+  if (lineaB) {
+    const desc = descripcionesTuberia(reglas)[code.toUpperCase()];
+    if (desc) return desc;
+  }
   return chipTuberiaDeModelo(modelo, opciones, categoria, reglas);
 }
 
@@ -452,7 +474,18 @@ export function tuberiaParaPano(
   opciones: readonly string[],
   categoria?: string,
   reglas: ReglasTuberia = REGLAS_TUBERIA,
+  lineaB = false,
 ): string {
+  // LÍNEA B: un solo tubo, sin regla por ancho ni por categoría, y se pone
+  // aunque no haya modelo todavía (la cortina B nace con su tubo).
+  if (lineaB && reglas.tuboLineaB) {
+    return (
+      chipTuberiaPorCodigo(reglas.tuboLineaB, opciones) ??
+      descripcionesTuberia(reglas)[reglas.tuboLineaB.toUpperCase()] ??
+      (stored || '').trim()
+    );
+  }
+
   if (!modelo || anchoM <= 0) {
     // Sin modelo o sin ancho no corre la regla por ancho; pero si la categoría
     // fija el diámetro (…_45mm/…_63mm, un único código sin regla de ancho) y no
@@ -589,6 +622,8 @@ export function diametroDesdeChipMecanismo(
   if (s.includes('OVALADA')) return valido(38);
   if (s.includes('LZ')) return valido(38);
   if (s.includes('DUAL')) return valido(38);
+  // LÍNEA B: toda la gama económica va sobre el tubo E01, que es de 38 mm.
+  if (s.includes('CAT.B')) return valido(38);
   return null;
 }
 

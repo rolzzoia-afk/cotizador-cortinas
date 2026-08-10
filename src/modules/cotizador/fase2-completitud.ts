@@ -19,6 +19,7 @@ import {
   categoriaRequiereMecanismo,
   esCategoriaPletina,
   esCategoriaVertical,
+  mecLineaB,
 } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
@@ -32,7 +33,8 @@ import {
   esCenefaOvalada,
   llevaCenefaCuadradaImplicita,
 } from './insumosCortina';
-import type { Pano, Ventana } from './types';
+import type { CatalogoProductos, Pano, Ventana } from './types';
+import { esLineaB } from './lineaB';
 
 /** Un dato que falta para producir. `panoIdx` null = es de la ventana entera. */
 export type PendienteFase2 = {
@@ -66,6 +68,9 @@ export function pendientesFase2(
   formulas?: FormulasFamilias,
   /** Reglas editadas en Admin: definen qué categorías llevan mecanismo. */
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  /** Catálogo de telas: resuelve la línea (A/B) de cada paño. Sin él, el chequeo
+   *  de línea B no corre (los llamadores que no lo pasan no lo necesitan). */
+  catalogo?: CatalogoProductos,
 ): PendienteFase2[] {
   const out: PendienteFase2[] = [];
 
@@ -101,6 +106,18 @@ export function pendientesFase2(
 
       // Mecanismo: misma condición que validarVentana (categorías que lo llevan).
       if (requiereMec && !txt(p.mecanismo)) falta('falta el mecanismo');
+      // CATEGORÍA B: solo existe receta en blanco y negro (roller simple, cenefa
+      // ovalada y dúo 38). Sin receta el motor no elige kit ni códigos de
+      // bodega, así que la OT no puede seguir: hay que corregir el color o
+      // fabricar la cortina en la categoría A.
+      if (catalogo && requiereMec && esLineaB(p, v.codInt, catalogo, categoria, reglas.mecanismo, reglas.tipos)) {
+        const colorAcc = colorAccesoriosDePano(p, v.color);
+        if (mecLineaB(categoria, colorAcc, reglas.mecanismo, reglas.tipos) == null) {
+          falta(
+            `la categoría B no tiene herrajes para «${txt(colorAcc) || 'sin color'}» en ${categoria || 'este sistema'}: usa accesorios blancos o negros, o pasa la cortina a la categoría A`,
+          );
+        }
+      }
       // Tubería: viaja al Excel de órdenes (columna TUBERIA). La vertical no lleva.
       if (!esVertical && !esBeeblack && !txt(p.tuberia)) falta('falta la tubería');
       // Color de accesorios: define códigos de kit, tapas y peso; además es una

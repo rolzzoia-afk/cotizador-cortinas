@@ -100,19 +100,38 @@ export function categoriaEsDual(categoria: string, tipos?: readonly TipoCortina[
   return !!regla && regla.sistemas.includes('ROLLER_DUAL');
 }
 
-/** Modelos del catálogo compatibles con una categoría del cotizador. */
+/**
+ * ¿Esta fila del catálogo es de la LÍNEA B (gama económica)?
+ *
+ * La marca vive en `notas` y no en una columna nueva a propósito: la línea B no
+ * cambia la forma del despiece (mismos campos, otros números), así que no
+ * justifica migrar la tabla. Las filas B las crea Admin con la nota puesta.
+ */
+export function esFilaLineaB(m: Pick<ModeloDespiece, 'notas'>): boolean {
+  return (m.notas || '').toUpperCase().includes('LINEA B');
+}
+
+/** Modelos del catálogo compatibles con una categoría del cotizador.
+ *  `lineaB` separa las dos líneas: una cortina A nunca puede caer en una fila B
+ *  (ni al revés) aunque el color calce, porque sus descuentos son distintos. */
 export function modelosParaCategoria(
   modelos: ModeloDespiece[],
   categoria: string,
   tipos?: readonly TipoCortina[],
+  lineaB?: boolean,
 ): ModeloDespiece[] {
   const regla = reglaDeCategoria(categoria, tipos);
   if (!regla) return [];
-  return modelos.filter(
+  const compatibles = modelos.filter(
     (m) =>
       regla.sistemas.includes(m.sistema) &&
       (!regla.tipoIncluye || m.tipo_rol.toUpperCase().includes(regla.tipoIncluye.toUpperCase())),
   );
+  if (lineaB === undefined) return compatibles;
+  const deLaLinea = compatibles.filter((m) => esFilaLineaB(m) === lineaB);
+  // Sin filas de esa línea (catálogo sin dar de alta todavía) se devuelven
+  // todas: mejor cotizar con la fila de la otra línea que quedarse sin modelo.
+  return deLaLinea.length > 0 ? deLaLinea : compatibles;
 }
 
 /**

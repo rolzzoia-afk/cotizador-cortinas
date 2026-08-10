@@ -134,6 +134,16 @@ export type Pano = {
    * (telas con dirección/diseño no se pueden rotar). Lo lee la hoja de corte.
    */
   invertida?: boolean;
+  /**
+   * Línea de fabricación B (gama económica): kits MEC 06/15/37/44/45, tubo E01,
+   * pesos E40/E69-B, cenefas E60/E72-B y, en dúo, peso U E25/E70-B + peso
+   * interno E79-B/E71-B.
+   *
+   * Tri-estado como `invertida`: undefined = auto por la categoría comercial de
+   * la tela (catálogo, columna A/B); true/false = forzado a mano en la grilla de
+   * Fase 1/3 o en el editor de paño. Ver modules/cotizador/lineaB.ts.
+   */
+  lineaB?: boolean;
   retiro?: number;
   superficie?: string;
   materialTipo?: string;

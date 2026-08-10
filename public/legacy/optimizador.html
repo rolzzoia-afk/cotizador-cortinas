@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.20"; // 2026-07-31: BEEBLACK — los 4 perfiles se cortan del MISMO riel (SML04 blanco / SML05 negro / SML06 café) y las manillas de la agarradera (SML10/11/12), barra 6,00 m. Antes sus columnas no estaban en COLUMNAS_CORTE y no se cortaba nada
+const VERSION_ACTUAL = "5.21"; // 2026-08-07: LÍNEA B (gama económica) — el Excel trae una columna LÍNEA; con 'B' los accesorios se buscan primero con la llave "<COMPONENTE>|<COLOR>|B" (peso E40/E69-B, cenefa E60/E72-B, peso U E25/E70-B, peso interno E79-B/E71-B). Sin esa llave, o sin la columna, corta igual que antes
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -3386,6 +3386,10 @@ const COLUMNAS_ESPECIALES = {
     'reemplazo': { key: 'reemplazo', titulo: 'Reemplazo', esNumero: false, buscar: [], deriving: true },
     'ubic': { key: 'ubic', titulo: 'UBIC.', esNumero: false, buscar: ['ubic.'] },
     'color': { key: 'color', titulo: 'COLOR', esNumero: false, buscar: ['color accesorios'] },
+    // Categoría de fabricación: 'B' = gama económica (otras barras de peso y
+    // cenefa en el mismo color). Vacío o columna ausente = categoría A de
+    // siempre. Se aceptan los dos nombres: la columna se llamó LÍNEA al nacer.
+    'categoria': { key: 'categoria', titulo: 'CATEGORÍA', esNumero: false, buscar: ['categoria', 'categoría', 'linea', 'línea'] },
     'tubo': { key: 'tubo', titulo: 'TUBO', esNumero: true, buscar: ['tubo'] },
     'peso': { key: 'peso', titulo: 'PESO', esNumero: true, buscar: ['peso'] },
     'ot': { key: 'otAsignada', titulo: 'OT', esNumero: false, buscar: ['ot'] }
@@ -3914,6 +3918,33 @@ function expandirOrdenesDesdeExcel() {
                     }
                 }
 
+                // ── CATEGORÍA B (gama económica, v5.21) ──────────────────────
+                // Misma pieza y mismo color, pero OTRA barra: peso E40/E69-B,
+                // cenefa E60/E72-B, peso U E25/E70-B, peso interno E79-B/E71-B.
+                // Se resuelve con la llave "<COMPONENTE>|<COLOR>|B" del catálogo,
+                // y va ANTES de las excepciones duras porque justamente esas son
+                // las que tienen clavado el código de la categoría A (E13, E18/19/20).
+                // Si el taller todavía no cargó la llave, cae a la lógica de
+                // siempre: la cortina se corta como categoría A, con un aviso.
+                const esLineaB = String(datosCompartidos.categoria || '').trim().toUpperCase() === 'B';
+                if (esLineaB) {
+                    const nombreCatB = (MAPA_NOMBRES_CATALOGO[nombreCol] || nombreCol).toUpperCase().trim();
+                    const codB = colorDeseado
+                        ? SistemaInventario.catalogoAccesorios[`${nombreCatB}|${colorDeseado}|B`]
+                        : null;
+                    if (codB) {
+                        orden.cod = codB;
+                        orden.codigoExtraido = codB;
+                        orden.reemplazo = SistemaInventario.catalogoReemplazos[codB] || null;
+                        orden.tuberia = `${nombreCol} (CAT. B) - ${colorDeseado || 'SIN COLOR'}`;
+                        SistemaInventario.ordenes.push(orden);
+                        ordenesDeEstaFila++;
+                        log(`✓ ${nombreCol} CATEGORÍA B: ${codB} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
+                        continue;
+                    }
+                    log(`⚠️ CATEGORÍA B sin barra propia para ${nombreCol} en ${colorDeseado || 'SIN COLOR'}: se corta de la barra de la categoría A. Agrega la llave "${nombreCatB}|${colorDeseado}|B" al catálogo de accesorios.`, 'warn');
+                }
+
                 // Excepción dura: PESO INTERNO siempre es E13, sin importar color
                 if (nombreCol === 'PESO INTERNO') {
                     orden.cod = 'E13';
@@ -4166,6 +4197,8 @@ function expandirOrdenesDesdeExcel() {
                 const nombreCatalogo = (MAPA_NOMBRES_CATALOGO[nombreCol] || nombreCol).toUpperCase().trim();
                 let llaveDiccionario = `${nombreCatalogo}|${colorDeseado}`;
                 let codigoAccesorio = null;
+                // (La línea B ya se resolvió más arriba, antes de las excepciones
+                //  duras; acá solo llega lo que se corta de la barra de siempre.)
                 if (colorDeseado) {
                     codigoAccesorio = SistemaInventario.catalogoAccesorios[llaveDiccionario] || null;
                 }
