@@ -31,6 +31,7 @@ import type { Pano } from '@/modules/cotizador/types';
 import { debeInvertirPano } from '@/modules/cotizador/tela';
 import { cantidadSuplementosAuto } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
+import { mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
 import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import {
@@ -100,6 +101,9 @@ type Props = {
   opcionesTuberia?: readonly string[];
   /** Nota cuando el mecanismo quedó fijo (p.ej. roller >3 m → 63 mm). */
   mecanismoFijoNota?: string;
+  /** Línea de fabricación B (gama económica) efectiva de este paño. La resuelve
+   *  Fase 2 con el catálogo de telas; acá solo se muestra y se deja forzar. */
+  lineaB?: boolean;
   /** Ocultar sección mecanismo (VERTICAL, BEEBLACK). */
   ocultarMecanismo?: boolean;
   /** Categoría de la ventana (para detectar sistemas de oscuridad). */
@@ -261,6 +265,7 @@ export function PanoEditor({
   opcionesMecanismo = OPCIONES_MECANISMO,
   opcionesTuberia = OPCIONES_TUBERIA,
   mecanismoFijoNota,
+  lineaB = false,
   ocultarMecanismo = false,
   categoria,
   colorVentana,
@@ -300,6 +305,13 @@ export function PanoEditor({
   const anchoPanoM = parseFloat(String(pano.ancho)) || 0;
   const debeInvertir = debeInvertirPano(anchoPanoM, anchoRollo);
   const invertida = pano.invertida ?? debeInvertir;
+  // Línea B: solo hay herrajes en blanco y negro. Sin receta, el gate de Fase 2
+  // bloquea el avance; acá se avisa apenas se elige el color.
+  const sinRecetaLineaB =
+    lineaB &&
+    !!categoria &&
+    mecLineaB(categoria, colorAccesoriosDePano(pano, colorVentana), reglas.mecanismo, reglas.tipos) ==
+      null;
   // Cantidad auto de suplementos (roller 2 / cenefa 1 por bracket); editable.
   const suplementoAuto = cantidadSuplementosAuto(pano, categoria, anchoPanoM);
 
@@ -544,6 +556,23 @@ export function PanoEditor({
           {pano.invertida === false && debeInvertir && (
             <span className="text-[0.7rem] text-destructive">
               ¡no entra normal! confirma que esta tela no se puede rotar
+            </span>
+          )}
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Checkbox
+            label="Categoría B (gama económica)"
+            checked={lineaB}
+            onChange={(v) => onChange({ lineaB: v })}
+          />
+          {pano.lineaB === undefined && (
+            <span className="text-[0.7rem] text-muted-foreground">
+              auto: {lineaB ? 'la tela es de gama B' : 'la tela es de gama A'}
+            </span>
+          )}
+          {lineaB && sinRecetaLineaB && (
+            <span className="text-[0.7rem] text-destructive">
+              la categoría B no tiene herrajes en este color: usa blanco o negro
             </span>
           )}
         </div>

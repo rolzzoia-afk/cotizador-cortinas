@@ -103,6 +103,10 @@ export function calcularBOM(
     const ventanaColor = (v?.color as string) || (p.color as string) || '';
     const anchoM = row.ancho || parseFloat(String(p.ancho ?? 0)) || 0;
 
+    // Línea de fabricación (A o B) ya resuelta en buildOptimizerRows: acá no
+    // llega el catálogo de telas, así que viaja horneada en la fila.
+    const lineaB = row.lineaB ?? false;
+
     const mecChip = mecanismoParaPano(
       p,
       ventanaColor,
@@ -112,6 +116,7 @@ export function calcularBOM(
       anchoM,
       usarTuboE78,
       reglas,
+      lineaB,
     );
     const mecSpec = extraerSpec(mecChip || (p.mecanismo as string));
     const mecColor = colorAccesoriosDePano(p, ventanaColor) || p.colorMecanismo || '';
@@ -123,6 +128,7 @@ export function calcularBOM(
       opcTub,
       categoria,
       reglas.tuberia,
+      lineaB,
     );
     // El chip de tubería ahora es una descripción larga sin corchetes; el
     // código (E02…) es la especificación del stock. Fallback a extraerSpec

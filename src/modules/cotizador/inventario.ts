@@ -15,7 +15,8 @@
 
 import { jsPDF } from 'jspdf';
 import type { BomItem, VentanaItem } from '@/modules/ots/types';
-import type { Pano } from './types';
+import type { CatalogoProductos, Pano } from './types';
+import { esLineaB } from './lineaB';
 import { textoPesoCadenaInventario } from './cadenas';
 import { telaDePano } from './telaPano';
 import { opcionesMecanismoResolucion } from '@/modules/descuentos/reglas-mecanismo';
@@ -140,6 +141,8 @@ export function construirFilasCortinas(
   ventanas: VentanaItem[],
   usarTuboE78 = false,
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  /** Catálogo de telas: resuelve la línea (A o B) de cada paño. */
+  catalogo?: CatalogoProductos,
 ): FilaCortina[] {
   const opcMec = opcionesMecanismoResolucion(reglas.mecanismo);
   const opcTub = opcionesTuberiaResolucion(reglas.tuberia);
@@ -152,6 +155,7 @@ export function construirFilasCortinas(
       id++;
       const manCant = parseInt(String(p.manillaCant ?? '0')) || 0;
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
+      const lineaB = esLineaB(p as Pano, v.codInt as string | undefined, catalogo, v.categoria as string, reglas.mecanismo, reglas.tipos);
       const mecChip = mecanismoParaPano(
         { ...p, mecanismo: p.mecanismo as string },
         v.color as string,
@@ -161,6 +165,7 @@ export function construirFilasCortinas(
         anchoM,
         usarTuboE78,
         reglas,
+        lineaB,
       );
       // El BEEBLACK no lleva tubo: su estructura son los perfiles. La columna
       // TUBERÍA queda vacía (igual que en el BOM y en el Excel de órdenes),
@@ -174,6 +179,7 @@ export function construirFilasCortinas(
             opcTub,
             v.categoria as string,
             reglas.tuberia,
+            lineaB,
           );
       filas.push({
         id,

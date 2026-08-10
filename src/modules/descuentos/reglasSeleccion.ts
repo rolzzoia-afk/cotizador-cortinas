@@ -20,7 +20,9 @@ import {
   type MecanismoCatalogo,
   type ReglaMecAncho,
   type ReglaMecCategoria,
+  type ReglaMecLineaB,
   type ReglasMecanismo,
+  type ReglasMecanismoLineaB,
 } from './reglas-mecanismo';
 import {
   REGLAS_TUBERIA,
@@ -269,6 +271,47 @@ function saneaReglaCategoriaMec(f: Record<string, unknown>): ReglaMecCategoria |
   };
 }
 
+function saneaReglaLineaB(f: Record<string, unknown>): ReglaMecLineaB | null {
+  const categoria = matchCategoria(f.categoria);
+  const mecPorColor = mapaNumeros(f.mecPorColor);
+  if (!categoria || !mecPorColor) return null;
+  const manuales = esObjeto(f.kitsManualesPorColor)
+    ? Object.entries(f.kitsManualesPorColor).reduce<Record<string, readonly number[]>>(
+        (acc, [k, v]) => {
+          const nums = Array.isArray(v)
+            ? v.map((x) => numOpt(x)).filter((n): n is number => n != null)
+            : [];
+          if (k.trim() && nums.length > 0) acc[k.trim().toUpperCase()] = nums;
+          return acc;
+        },
+        {},
+      )
+    : {};
+  return {
+    descripcion: texto(f.descripcion),
+    categoria,
+    mecPorColor,
+    ...(Object.keys(manuales).length > 0 ? { kitsManualesPorColor: manuales } : {}),
+  };
+}
+
+function normalizarLineaB(crudo: unknown): ReglasMecanismoLineaB {
+  const d = REGLAS_MECANISMO.lineaB;
+  if (!esObjeto(crudo)) return d;
+  const codigos = esObjeto(crudo.codigoInsumoPorMec)
+    ? Object.entries(crudo.codigoInsumoPorMec).reduce<Record<number, string>>((acc, [k, v]) => {
+        const n = numOpt(k);
+        const cod = texto(v);
+        if (n != null && cod) acc[n] = cod;
+        return acc;
+      }, {})
+    : null;
+  return {
+    reglas: filas(crudo.reglas, d.reglas, saneaReglaLineaB, 'reglas de línea B'),
+    codigoInsumoPorMec: codigos && Object.keys(codigos).length > 0 ? codigos : d.codigoInsumoPorMec,
+  };
+}
+
 function saneaTubo(f: Record<string, unknown>): TuboCatalogo | null {
   const codigo = texto(f.codigo).toUpperCase();
   const descripcion = texto(f.descripcion);
@@ -291,11 +334,59 @@ function saneaReglaCategoriaTubo(f: Record<string, unknown>): ReglaTuboCategoria
   return { descripcion: texto(f.descripcion), categoria, codigo };
 }
 
+/**
+ * Repone en el catálogo GUARDADO las piezas de fábrica que sus propias reglas
+ * necesitan y que no están.
+ *
+ * Por qué hace falta: el catálogo guardado REEMPLAZA al de fábrica (a propósito
+ * — el admin puede borrar filas). Entonces, cuando el código estrena un chip o
+ * un tubo, las empresas que alguna vez guardaron el catálogo desde Admin se
+ * quedan con una regla que apunta a algo que su lista no tiene, y el motor no
+ * puede escribir el chip: la cortina sale sin kit y sin tubería, en silencio.
+ * Pasó al estrenar la categoría B (los 4 chips CAT.B y el tubo E01).
+ *
+ * Se reponen SOLO las piezas que una regla nombra, y entran como `oculto`: no
+ * cambian lo que se ofrece en Fase 2 ni pisan nada de lo que el admin editó.
+ * Si la pieza tampoco existe en fábrica, no se inventa: el validador la
+ * reporta como error, que es lo correcto.
+ */
+function reponerMecanismosDeReglas(m: ReglasMecanismo): readonly MecanismoCatalogo[] {
+  const disponibles = new Set(
+    opcionesMecanismoResolucion(m)
+      .map((c) => numeroMecDeChip(c))
+      .filter((n): n is number => n != null),
+  );
+  const repuestos: MecanismoCatalogo[] = [];
+  for (const { mec } of mecsReferenciados(m)) {
+    if (disponibles.has(mec)) continue;
+    const fabrica = REGLAS_MECANISMO.mecanismos.find((x) => numeroMecDeChip(x.chip) === mec);
+    if (!fabrica) continue; // no existe ni en fábrica → lo denuncia el validador
+    disponibles.add(mec);
+    repuestos.push({ chip: fabrica.chip, estado: 'oculto' });
+  }
+  return repuestos.length > 0 ? [...m.mecanismos, ...repuestos] : m.mecanismos;
+}
+
+/** Igual que `reponerMecanismosDeReglas`, para los códigos de tubo. */
+function reponerTubosDeReglas(t: ReglasTuberia): readonly TuboCatalogo[] {
+  const disponibles = new Set(t.tubos.map((x) => x.codigo.toUpperCase()));
+  const repuestos: TuboCatalogo[] = [];
+  for (const cod of codigosTuboReferenciados(t)) {
+    const clave = cod.toUpperCase();
+    if (!clave || disponibles.has(clave)) continue;
+    const fabrica = REGLAS_TUBERIA.tubos.find((x) => x.codigo.toUpperCase() === clave);
+    if (!fabrica) continue;
+    disponibles.add(clave);
+    repuestos.push({ ...fabrica, estado: 'oculto' });
+  }
+  return repuestos.length > 0 ? [...t.tubos, ...repuestos] : t.tubos;
+}
+
 function normalizarMecanismo(crudo: unknown): ReglasMecanismo {
   const d = REGLAS_MECANISMO;
   if (!esObjeto(crudo)) return d;
   const banda = esObjeto(crudo.bandaOscuridadE78) ? crudo.bandaOscuridadE78 : {};
-  return {
+  const saneado: ReglasMecanismo = {
     categoriasSinMecanismo: listaTextos(crudo.categoriasSinMecanismo, d.categoriasSinMecanismo),
     kitsInventario: Array.isArray(crudo.kitsInventario)
       ? listaNumeros(crudo.kitsInventario, d.kitsInventario)
@@ -319,7 +410,9 @@ function normalizarMecanismo(crudo: unknown): ReglasMecanismo {
       anchoMaxM: num(banda.anchoMaxM, d.bandaOscuridadE78.anchoMaxM),
     },
     kitOvaladaPorColor: mapaNumeros(crudo.kitOvaladaPorColor) ?? d.kitOvaladaPorColor,
+    lineaB: normalizarLineaB(crudo.lineaB),
   };
+  return { ...saneado, mecanismos: reponerMecanismosDeReglas(saneado) };
 }
 
 function normalizarTuberia(crudo: unknown): ReglasTuberia {
@@ -327,7 +420,7 @@ function normalizarTuberia(crudo: unknown): ReglasTuberia {
   if (!esObjeto(crudo)) return d;
   const e0266 = esObjeto(crudo.reglaE02E66) ? crudo.reglaE02E66 : {};
   const r63 = esObjeto(crudo.regla63) ? crudo.regla63 : {};
-  return {
+  const saneado: ReglasTuberia = {
     reglaE02E66: {
       descripcion: texto(e0266.descripcion) || d.reglaE02E66.descripcion,
       diametroMm: num(e0266.diametroMm, d.reglaE02E66.diametroMm),
@@ -351,7 +444,9 @@ function normalizarTuberia(crudo: unknown): ReglasTuberia {
       'reglasCategoria (tubería)',
     ),
     tubos: filas(crudo.tubos, d.tubos, saneaTubo, 'tubos'),
+    tuboLineaB: texto(crudo.tuboLineaB).toUpperCase() || d.tuboLineaB,
   };
+  return { ...saneado, tubos: reponerTubosDeReglas(saneado) };
 }
 
 function saneaTipo(f: Record<string, unknown>): TipoCortina | null {
@@ -558,7 +653,30 @@ function mecsReferenciados(m: ReglasMecanismo): Array<{ mec: number; donde: stri
   for (const n of Object.values(m.kitOvaladaPorColor)) {
     out.push({ mec: n, donde: 'el kit ovalada por color' });
   }
+  // Categoría B (gama económica): sus kits también son reglas, y si el chip no
+  // está en el catálogo la cortina sale sin mecanismo. Faltaba mirarlos.
+  for (const r of m.lineaB.reglas) {
+    const donde = `la categoría B «${r.descripcion || r.categoria}»`;
+    for (const n of Object.values(r.mecPorColor)) out.push({ mec: n, donde });
+    for (const nums of Object.values(r.kitsManualesPorColor ?? {})) {
+      for (const n of nums) out.push({ mec: n, donde });
+    }
+  }
   return out;
+}
+
+/** Todos los códigos de tubo que las reglas de tubería nombran. */
+function codigosTuboReferenciados(t: ReglasTuberia): string[] {
+  return [
+    t.reglaE02E66.codigoHasta,
+    t.reglaE02E66.codigoDesde,
+    t.regla63.codigoHasta,
+    t.regla63.codigoDesde,
+    ...Object.values(t.codigoPorDiametro),
+    ...t.tubos45mm,
+    ...t.reglasCategoria.map((rc) => rc.codigo),
+    t.tuboLineaB,
+  ].filter(Boolean);
 }
 
 export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion {
@@ -623,14 +741,19 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
 
   const estadoDe = (cod: string) =>
     t.tubos.find((x) => x.codigo.toUpperCase() === cod.toUpperCase())?.estado;
-  const revisarCodigo = (cod: string, donde: string) => {
+  // `avisarOculto: false` para las reglas que asignan un tubo que NO se ofrece
+  // a propósito (la categoría B con el E01): ahí «oculto» es el diseño, no un
+  // descuido, y el aviso sería ruido en cada guardado.
+  const revisarCodigo = (cod: string, donde: string, avisarOculto = true) => {
     if (!cod) return;
     if (!codigosTubo.has(cod.toUpperCase())) {
       errores.push(`El tubo «${cod}» que usa ${donde} no existe en el catálogo de tuberías.`);
       return;
     }
     const est = estadoDe(cod);
-    if (est === 'oculto') {
+    if (est === 'oculto' && !avisarOculto) {
+      // sin aviso: asignación deliberada a un tubo que no se ofrece
+    } else if (est === 'oculto') {
       avisos.push(`${donde} asigna el tubo «${cod}», que está oculto: se sigue calculando, pero ya no se ofrece.`);
     } else if (est === 'opt_in') {
       avisos.push(`${donde} asigna el tubo «${cod}», que solo aparece con el tubo E78 activado en la OT.`);
@@ -645,6 +768,7 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
     revisarCodigo(cod, `el tubo por defecto de ${diam} mm`);
   }
   for (const cod of t.tubos45mm) revisarCodigo(cod, 'la lista de tubos de 45 mm');
+  revisarCodigo(t.tuboLineaB, 'la categoría B', false);
   for (const rc of t.reglasCategoria) {
     revisarCodigo(rc.codigo, `la regla «${rc.descripcion || rc.codigo}»`);
   }

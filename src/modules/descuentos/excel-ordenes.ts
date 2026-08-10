@@ -10,7 +10,8 @@
 // PESO INTERNO, PESO SOFT LIGHT, PLETINA).
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
-import type { Ventana } from '@/modules/cotizador/types';
+import type { CatalogoProductos, Pano, Ventana } from '@/modules/cotizador/types';
+import { esLineaB } from '@/modules/cotizador/lineaB';
 import { esCenefaCuadrada } from '@/modules/cotizador/fase2';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import {
@@ -55,6 +56,9 @@ export type OpcionesOrdenesOptimizador = {
   formulas?: FormulasFamilias;
   /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
   reglas?: ReglasSeleccion;
+  /** Catálogo de telas: resuelve la categoría (A o B) de cada paño para la
+   *  columna CATEGORIA, que le dice al optimizador de qué barra cortar. */
+  catalogo?: CatalogoProductos;
 };
 
 export const COLUMNAS = [
@@ -64,6 +68,9 @@ export const COLUMNAS = [
   'TUBERIA',
   'UBIC.',
   'COLOR ACCESORIOS',
+  // Categoría de fabricación: 'B' = gama económica (otras barras de peso y
+  // cenefa). El optimizador la lee para elegir la barra; vacío = categoría A.
+  'CATEGORIA',
   'TUBO',
   'PESO',
   'CENEFA OVALADA',
@@ -227,8 +234,9 @@ function tuberiaDe(
   tuberiaPano: string | undefined,
   anchoM: number,
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  lineaB = false,
 ): string {
-  return tuberiaCodigoCorto(v.modelo, tuberiaPano, anchoM, v.categoria, reglas.tuberia);
+  return tuberiaCodigoCorto(v.modelo, tuberiaPano, anchoM, v.categoria, reglas.tuberia, lineaB);
 }
 
 /** Construye las filas del Excel de órdenes (una por paño). */
@@ -253,16 +261,19 @@ export function generarOrdenesOptimizador(
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const anchoCm = anchoM * 100;
       const ubic = ubicPanoVentana(v.ubicacion || '', i, panos.length);
+      const lineaB = esLineaB(p as Pano, v.codInt, opts?.catalogo, v.categoria, opts?.reglas?.mecanismo, opts?.reglas?.tipos);
       const fila: Record<string, string | number> = {
         OT: numeroOT,
         'COD SEC': v.categoria || '',
         // Dual: cada paño lleva SU tela; si no, la de la ventana.
         COD_INT: ((p as { codInt?: string }).codInt as string) || v.codInt || '',
-        TUBERIA: esBeeblack ? '' : tuberiaDe(v, String(p.tuberia || ''), anchoM, opts?.reglas),
+        TUBERIA: esBeeblack ? '' : tuberiaDe(v, String(p.tuberia || ''), anchoM, opts?.reglas, lineaB),
         'UBIC.': ubic,
         // Mismo resolutor que Fase 2 y el BOM: `p.color` a secas se
         // desalineaba del resto cuando el paño traía colorMecanismo propio.
         'COLOR ACCESORIOS': colorAccesoriosDePano(p, v.color),
+        // Solo la categoría B se marca: el optimizador lee la celda vacía como A.
+        CATEGORIA: lineaB ? 'B' : '',
       };
       const puedeDespiece = anchoCm > 0 && (v.modelo || esBeeblack);
       if (puedeDespiece) {

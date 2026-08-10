@@ -43,6 +43,8 @@ import {
 } from '@/modules/ots/constants';
 import type { DatosGenerales, OT, OTEstado, SubEtapaProd } from '@/modules/ots/types';
 import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
+import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import type { Ventana } from '@/modules/cotizador/types';
 import { confirmar } from '@/components/ui/confirm';
 
@@ -82,6 +84,10 @@ export function Panel() {
     restaurar,
     eliminarDefinitivo,
   } = useOTs();
+  // Los necesita el bloqueo de abajo: sin catálogo de telas no se sabe qué
+  // cortinas son de categoría B, y sin reglas se evalúa contra las de fábrica.
+  const { catalogo } = useCatalogoProductos();
+  const { reglas } = useReglasSeleccion();
 
   const [busqueda, setBusqueda] = useState('');
   const [archivoOpen, setArchivoOpen] = useState(false);
@@ -169,9 +175,16 @@ export function Panel() {
 
   const handleMoverEstado = async (ot: OT, nuevoEstado: OTEstado) => {
     // Mismo bloqueo que el botón de Fase 2: una OT de terreno no se aprueba con
-    // datos a medias (acá se esquivaba el gate avanzando desde el Panel).
+    // datos a medias (acá se esquivaba el gate avanzando desde el Panel). Va con
+    // las MISMAS entradas que Fase 2 y Fase 3: sin `catalogo` no corría el
+    // chequeo de la categoría B y una cortina sin herrajes se aprobaba igual.
     if (ot.estado === 'terreno' && nuevoEstado === 'aprobada') {
-      const faltan = pendientesFase2((ot.storeVentanas || []) as unknown as Ventana[]);
+      const faltan = pendientesFase2(
+        (ot.storeVentanas || []) as unknown as Ventana[],
+        undefined,
+        reglas,
+        catalogo,
+      );
       if (faltan.length > 0) {
         toast.error(`Falta completar la Fase 2: ${resumenPendientes(faltan)}.`);
         return;

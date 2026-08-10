@@ -48,6 +48,7 @@ export function ProbadorCortinaSection() {
   const [cenefa, setCenefa] = useState('No');
   const [variante, setVariante] = useState<VarianteOscuridad>('INTERNO');
   const [usarE78, setUsarE78] = useState(false);
+  const [lineaB, setLineaB] = useState(false);
 
   // Cadenas del inventario, para probar la auto-selección por alto y color.
   // La consulta es la MISMA que la de Fase 2 —con `status` y acotada a la
@@ -91,6 +92,7 @@ export function ProbadorCortinaSection() {
         cenefa,
         variante: esOscuridad ? variante : undefined,
         usarTuboE78: usarE78,
+        lineaB,
       },
       { modelos, reglas, formulas, cadenas },
     );
@@ -104,6 +106,7 @@ export function ProbadorCortinaSection() {
     variante,
     esOscuridad,
     usarE78,
+    lineaB,
     modelos,
     reglas,
     formulas,
@@ -202,6 +205,14 @@ export function ProbadorCortinaSection() {
             onChange={(e) => setUsarE78(e.target.checked)}
           />
           Tubo E78 activado en la OT
+        </label>
+        <label className="flex items-end gap-2 pb-2 text-xs">
+          <input
+            type="checkbox"
+            checked={lineaB}
+            onChange={(e) => setLineaB(e.target.checked)}
+          />
+          Categoría B (gama económica)
         </label>
       </div>
 

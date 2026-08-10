@@ -56,7 +56,7 @@ describe('derivación desde los valores de fábrica', () => {
     expect(OPCIONES_MECANISMO).toEqual(opcionesMecanismoUI());
   });
 
-  it('los legacy son los 7 chips ocultos', () => {
+  it('los ocultos: 7 chips legacy del Excel + los 4 kits de la línea B', () => {
     expect(chipsMecanismoOcultos()).toEqual([
       'LZ 38 MERG BCO [MEC 05]',
       'OVALADA NEG [MEC 09]',
@@ -65,6 +65,12 @@ describe('derivación desde los valores de fábrica', () => {
       'LZ50 SFLX NGR [MEC 11]',
       'LZ50 SFLX GRIS [MEC 13]',
       'LZ50 SFLX BCO [MEC 14]',
+      // LÍNEA B: ocultos porque no se ofrecen en una cortina normal; los pone
+      // la rama de línea B, que arma su propio selector.
+      'LZ50 PEQUEÑO NGR CAT.B [MEC 15]',
+      'OVALADA BCO CAT.B [MEC 37]',
+      'ROLLER BCO CAT.B [MEC 44]',
+      'OVALADA NGR CAT.B [MEC 45]',
     ]);
     expect(CHIPS_MECANISMO_LEGACY).toEqual(chipsMecanismoOcultos());
   });
@@ -72,7 +78,7 @@ describe('derivación desde los valores de fábrica', () => {
   it('la lista de resolución es UI + duales + ocultos, sin repetidos', () => {
     const res = opcionesMecanismoResolucion();
     expect(OPCIONES_MECANISMO_RESOLUCION).toEqual(res);
-    expect(res).toHaveLength(12 + 8 + 7);
+    expect(res).toHaveLength(12 + 8 + 11); // UI + duales + ocultos (7 legacy + 4 de línea B)
     expect(new Set(res).size).toBe(res.length);
   });
 
@@ -98,11 +104,13 @@ describe('derivación desde los valores de fábrica', () => {
       E05: 'E05 - TUBO Ø 45 mm',
       E47: 'E47 - TUBO Ø 63 mm',
       E65: 'E65 - TUBO (.63mm)',
+      // Tubo de la LÍNEA B: oculto en el selector, pero resuelve como los demás.
+      E01: 'E01 - TUBO 0.8 / Ø 38 mm',
     });
   });
 
   it('los espesores derivados son los que usaba la etiqueta Brother', () => {
-    expect(espesorTuboPorCodigo()).toEqual({ E02: 1.2, E66: 2.5, E78: 1.2 });
+    expect(espesorTuboPorCodigo()).toEqual({ E01: 0.8, E02: 1.2, E66: 2.5, E78: 1.2 });
   });
 
   it('los tubos que las reglas pueden pisar son E02/E66/E78/E65', () => {
@@ -205,8 +213,16 @@ describe('normalizarReglasSeleccion', () => {
         ],
       },
     });
-    expect(r.tuberia.tubos).toHaveLength(1);
-    expect(r.tuberia.tubos[0].codigo).toBe('E02');
+    const codigos = r.tuberia.tubos.map((t) => t.codigo);
+    expect(codigos[0]).toBe('E02');
+    // Las dos filas corruptas se descartaron: ni la vacía ni la E77 (que
+    // tampoco existe en fábrica) entran.
+    expect(codigos).not.toContain('');
+    expect(codigos).not.toContain('E77');
+    // Los demás códigos que quedaron son los que las reglas de fábrica nombran
+    // y este catálogo recortado no traía: se reponen para que el motor pueda
+    // resolverlos (ver «un catálogo guardado viejo se repone solo»).
+    expect(r.tuberia.tubos.slice(1).every((t) => t.estado === 'oculto')).toBe(true);
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });
@@ -442,5 +458,115 @@ describe('cadenas — normalización y validación', () => {
     const r = clonar();
     r.cadenas = { ...r.cadenas, tramosAlto: [] };
     expect(validarReglasSeleccion(r).errores.some((e) => e.includes('escalera'))).toBe(true);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// El catálogo guardado REEMPLAZA al de fábrica (a propósito: el admin puede
+// borrar filas). El precio de eso es que, al estrenar un chip o un tubo, las
+// empresas que ya habían guardado su catálogo se quedaban con una regla que
+// apunta a algo que su lista no tiene — y el motor no podía escribir el chip:
+// la cortina salía sin kit y sin tubería, EN SILENCIO. Pasó de verdad al
+// estrenar la categoría B (los 4 chips CAT.B y el tubo E01, OT 268-3).
+// ─────────────────────────────────────────────────────────────────────
+describe('un catálogo guardado viejo se repone solo', () => {
+  /** Reglas de fábrica menos las piezas que estrenó la categoría B. */
+  function guardadoSinPiezasB(): Record<string, unknown> {
+    const r = clonar();
+    r.mecanismo.mecanismos = r.mecanismo.mecanismos.filter((m) => !m.chip.includes('CAT.B'));
+    r.tuberia.tubos = r.tuberia.tubos.filter((t) => t.codigo !== 'E01');
+    return r as unknown as Record<string, unknown>;
+  }
+
+  it('repone los chips que las reglas nombran y no estaban', () => {
+    const viejo = guardadoSinPiezasB();
+    const nums = (r: ReglasSeleccion) =>
+      new Set(
+        opcionesMecanismoResolucion(r.mecanismo)
+          .map((c) => c.match(/\[MEC (\d+)\]/)?.[1])
+          .filter(Boolean),
+      );
+    // Antes del saneo faltan los kits de la categoría B…
+    expect((viejo as any).mecanismo.mecanismos.some((m: any) => m.chip.includes('CAT.B'))).toBe(false);
+    // …y después están los cuatro.
+    const sano = normalizarReglasSeleccion(viejo);
+    for (const mec of ['15', '37', '44', '45']) {
+      expect(nums(sano).has(mec), `MEC ${mec}`).toBe(true);
+    }
+  });
+
+  it('repone el tubo de la categoría B (E01)', () => {
+    const sano = normalizarReglasSeleccion(guardadoSinPiezasB());
+    expect(sano.tuberia.tubos.map((t) => t.codigo)).toContain('E01');
+    expect(sano.tuberia.tuboLineaB).toBe('E01');
+  });
+
+  it('lo repuesto entra OCULTO: no cambia lo que se ofrece en Fase 2', () => {
+    const sano = normalizarReglasSeleccion(guardadoSinPiezasB());
+    const ui = opcionesMecanismoUI(sano.mecanismo);
+    expect(ui.some((c) => c.includes('CAT.B'))).toBe(false);
+    expect(opcionesTuberiaUI(sano.tuberia).some((c) => c.includes('E01'))).toBe(false);
+    // …pero sí se puede RESOLVER.
+    expect(chipsMecanismoOcultos(sano.mecanismo).some((c) => c.includes('CAT.B'))).toBe(true);
+  });
+
+  it('NO resucita una fila borrada a la que ninguna regla apunta', () => {
+    const r = clonar();
+    // Un chip que el admin puede borrar legítimamente: ninguna regla lo nombra.
+    const chipVictima = r.mecanismo.mecanismos.find((m) => !mecEnAlgunaRegla(r, m.chip));
+    expect(chipVictima, 'el catálogo de fábrica debería tener alguno').toBeTruthy();
+    r.mecanismo.mecanismos = r.mecanismo.mecanismos.filter((m) => m.chip !== chipVictima!.chip);
+    const sano = normalizarReglasSeleccion(r as unknown as Record<string, unknown>);
+    expect(sano.mecanismo.mecanismos.some((m) => m.chip === chipVictima!.chip)).toBe(false);
+  });
+
+  it('no toca nada cuando el catálogo guardado ya está completo', () => {
+    const r = clonar();
+    const sano = normalizarReglasSeleccion(r as unknown as Record<string, unknown>);
+    expect(sano.mecanismo.mecanismos).toEqual(REGLAS_SELECCION_DEFAULT.mecanismo.mecanismos);
+    expect(sano.tuberia.tubos).toEqual(REGLAS_SELECCION_DEFAULT.tuberia.tubos);
+  });
+});
+
+/** ¿Alguna regla nombra el MEC de este chip? (helper del test de arriba) */
+function mecEnAlgunaRegla(r: ReglasSeleccion, chip: string): boolean {
+  const n = Number(chip.match(/\[MEC (\d+)\]/)?.[1] ?? NaN);
+  if (Number.isNaN(n)) return true; // VELCRO y compañía: no arriesgar
+  const m = r.mecanismo;
+  const enReglas =
+    m.reglasAncho.some((x) => x.mec === n || Object.values(x.mecPorColor ?? {}).includes(n)) ||
+    m.reglasCategoria.some((x) => x.mec === n) ||
+    Object.values(m.colorAMec).includes(n) ||
+    Object.values(m.colorAMecReforzado).includes(n) ||
+    Object.values(m.kitOvaladaPorColor).includes(n) ||
+    m.lineaB.reglas.some(
+      (x) =>
+        Object.values(x.mecPorColor).includes(n) ||
+        Object.values(x.kitsManualesPorColor ?? {}).some((l) => l.includes(n)),
+    );
+  return enReglas;
+}
+
+describe('el validador mira también la categoría B', () => {
+  it('denuncia un kit de la categoría B que no existe ni en fábrica', () => {
+    const r = clonar();
+    r.mecanismo.lineaB.reglas = [
+      { descripcion: 'inventada', categoria: 'ROL', mecPorColor: { BLANCO: 97 } },
+    ];
+    const { errores } = validarReglasSeleccion(r);
+    expect(errores.some((e) => e.includes('MEC 97') && e.includes('categoría B'))).toBe(true);
+  });
+
+  it('denuncia un tubo de la categoría B que no existe', () => {
+    const r = clonar();
+    r.tuberia.tuboLineaB = 'E99';
+    const { errores } = validarReglasSeleccion(r);
+    expect(errores.some((e) => e.includes('E99') && e.includes('categoría B'))).toBe(true);
+  });
+
+  it('el E01 oculto NO genera aviso: no ofrecerlo es el diseño', () => {
+    const { avisos, errores } = validarReglasSeleccion(clonar());
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('E01'))).toBe(false);
   });
 });

@@ -53,10 +53,12 @@ import {
 } from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
+  codigoInsumoMec,
   esCategoriaVertical,
   normalizarColorAccesorio,
   opcionesMecanismoResolucion,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { esLineaB } from './lineaB';
 import { opcionesTuberiaResolucion } from '@/modules/descuentos/reglas-tuberia';
 import type { ColorAccesorio } from '@/modules/descuentos/coloresAccesorio';
 import {
@@ -217,6 +219,8 @@ export function consolidarInsumos(
   formulas?: FormulasFamilias,
   /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  /** Catálogo de telas: resuelve la línea (A o B) de cada paño. */
+  catalogo?: CatalogoProductos,
 ): InsumoConsolidado[] {
   // Consolidar es CÁLCULO: listas de resolución (incluye chips y tubos retirados).
   const opcMec = opcionesMecanismoResolucion(reglas.mecanismo);
@@ -270,16 +274,17 @@ export function consolidarInsumos(
       const esOscuridadOvalada = famOsc != null && !esFamiliaDark(famOsc);
       const ovaladaSistema =
         ovalada || esOscuridadOvalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
+      const lineaB = esLineaB(p, v.codInt, catalogo, v.categoria, reglas.mecanismo, reglas.tipos);
       const esE78Mixta =
         ovaladaSistema &&
         codigoTuberiaDeChip(
-          tuberiaParaPano(anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia),
+          tuberiaParaPano(anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia, lineaB),
         ) === 'E78';
 
       // Mecanismo + cadena + peso: toda categoría con mecanismo que NO se venda
       // como motor (aunque el paño lleve un motor, va dentro del precio).
       if (!catEsMotor && categoriaRequiereMecanismo(v.categoria, reglas.mecanismo)) {
-        const chip = mecanismoParaPano(p, v.color, modelo, opcMec, v.categoria, anchoM, usarTuboE78, reglas);
+        const chip = mecanismoParaPano(p, v.color, modelo, opcMec, v.categoria, anchoM, usarTuboE78, reglas, lineaB);
         const num = numeroMecDeChip(chip);
         // Una cortina con mecanismo de cenefa ovalada se arma en el taller: su
         // mecanismo Y su cadena van a PRODUCCIÓN. El resto de cadenas, a
@@ -292,7 +297,8 @@ export function consolidarInsumos(
         if (chip && num != null && !esE78Mixta) {
           const esDualChip = esChipDual(chip);
           if (!esDualChip || !dualKitEmitido) {
-            const cod = `MEC${String(num).padStart(2, '0')}`;
+            // Los kits de la línea B llevan sufijo en bodega (MEC44-B/MEC45-B).
+            const cod = codigoInsumoMec(num, reglas.mecanismo);
             bump(cod, `[${cod}] ${chip}`, 1);
             if (esDualChip) dualKitEmitido = true;
           }
@@ -570,6 +576,7 @@ export function construirInventario(
       adicionalesFase0,
       formulas,
       reglas,
+      catalogo,
     ),
     etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
     notas: notasTerreno(ventanas),

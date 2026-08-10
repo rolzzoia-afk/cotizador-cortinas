@@ -13,7 +13,8 @@
 // ─────────────────────────────────────────────────────────────────────
 import jsPDF from 'jspdf';
 import type { Ventana } from '@/modules/cotizador/types';
-import type { CatalogoProductos } from '@/modules/cotizador/types';
+import type { CatalogoProductos, Pano } from '@/modules/cotizador/types';
+import { esLineaB } from './lineaB';
 import {
   calcularDespiece,
   contextoDespieceDesdePano,
@@ -333,6 +334,7 @@ export function construirCalculoGeneral(
         anchoM,
         opts?.usarTuboE78 ?? false,
         reglas,
+        esLineaB(p as Pano, v.codInt as string | undefined, catalogo, v.categoria, reglas.mecanismo, reglas.tipos),
       );
       const codMecanismo =
         [mecChip, (p.colorMecanismo as string) || ''].filter(Boolean).join(' ') ||

@@ -78,6 +78,33 @@ export type ReglaMecAncho = {
 };
 
 /**
+ * Regla de la LÍNEA B (gama económica). Es una tabla aparte de `reglasCategoria`
+ * porque la línea B no es un tipo de cortina distinto: es la MISMA cortina
+ * (roller simple, cenefa ovalada, dúo) fabricada con otro juego de herrajes.
+ * Solo hay receta en blanco y negro; un color sin entrada NO cae a los kits de
+ * la línea A — queda sin kit y el gate de Fase 2 bloquea la OT.
+ */
+export type ReglaMecLineaB = {
+  /** Nota para quien edita las reglas; no afecta la lógica. */
+  descripcion: string;
+  categoria: MatchCategoria;
+  /** MEC por color de accesorios (claves cortas y largas, como colorAMec). */
+  mecPorColor: Record<string, number>;
+  /** MEC que el operario puede elegir a mano además del default de su color.
+   *  Roller simple blanco: MEC 06 por defecto, MEC 44 como alternativa. */
+  kitsManualesPorColor?: Record<string, readonly number[]>;
+};
+
+/** Bloque completo de la línea B dentro de las reglas de mecanismo. */
+export type ReglasMecanismoLineaB = {
+  reglas: readonly ReglaMecLineaB[];
+  /** MEC cuyo código de bodega NO es `MEC<nn>` (los de la línea B llevan
+   *  sufijo: MEC44-B, MEC45-B). Lo usa el inventario para que la línea calce
+   *  con la tabla `insumos`. */
+  codigoInsumoPorMec: Record<number, string>;
+};
+
+/**
  * Estado de un ítem del catálogo (tubo o mecanismo):
  *  · activo  → se ofrece en el selector de Fase 2.
  *  · oculto  → ya no se ofrece, pero se sigue RESOLVIENDO (OTs viejas que lo
@@ -136,6 +163,8 @@ export type ReglasMecanismo = {
   bandaOscuridadE78: { anchoMinM: number; anchoMaxM: number };
   /** Kit de bodega de cenefa ovalada por color (ver MEC_KIT_OVALADA_POR_COLOR). */
   kitOvaladaPorColor: Record<string, number>;
+  /** LÍNEA B (gama económica) — ver ReglasMecanismoLineaB. */
+  lineaB: ReglasMecanismoLineaB;
 };
 
 /**
@@ -440,6 +469,13 @@ export const REGLAS_MECANISMO = {
     { chip: 'LZ50 SFLX NGR [MEC 11]', estado: 'oculto' },
     { chip: 'LZ50 SFLX GRIS [MEC 13]', estado: 'oculto' },
     { chip: 'LZ50 SFLX BCO [MEC 14]', estado: 'oculto' },
+    // LÍNEA B (gama económica). Ocultos: no se ofrecen en una cortina normal;
+    // los elige la rama de línea B, que además arma su propio selector.
+    // MEC 06 (arriba) es el default del roller simple blanco B.
+    { chip: 'LZ50 PEQUEÑO NGR CAT.B [MEC 15]', estado: 'oculto' },
+    { chip: 'OVALADA BCO CAT.B [MEC 37]', estado: 'oculto' },
+    { chip: 'ROLLER BCO CAT.B [MEC 44]', estado: 'oculto' },
+    { chip: 'OVALADA NGR CAT.B [MEC 45]', estado: 'oculto' },
   ] as readonly MecanismoCatalogo[],
 
   /**
@@ -452,6 +488,43 @@ export const REGLAS_MECANISMO = {
 
   /** Kit ovalada de bodega por color — ver MEC_KIT_OVALADA_POR_COLOR. */
   kitOvaladaPorColor: MEC_KIT_OVALADA_POR_COLOR,
+
+  /**
+   * LÍNEA B — gama económica (pizarra 2026-08-07). Herrajes propios: kits
+   * MEC 06/15/37/44/45, tubo E01, pesos E40/E69-B, cenefas E60/E72-B y, en dúo,
+   * peso U E25/E70-B + peso interno E79-B/E71-B.
+   *
+   * Solo existe receta en BLANCO y NEGRO. Un color sin entrada (gris, café…)
+   * NO cae a los kits de la línea A: se queda sin kit y `pendientesFase2`
+   * bloquea la OT pidiendo blanco/negro o forzar la línea A.
+   *
+   * La cenefa ovalada comparte kit entre roller y dúo, igual que en la línea A.
+   */
+  lineaB: {
+    reglas: [
+      {
+        descripcion: 'Roller simple B — MEC 06 blanco (default) · MEC 15 negro',
+        categoria: 'ROL',
+        mecPorColor: { BCO: 6, BLANCO: 6, NEG: 15, NEGRO: 15 },
+        // El blanco tiene dos herrajes en la pizarra: LZ50 (MEC 06, tubo −3,8)
+        // y el kit roller CAT.B (MEC 44, tubo −3,4). El operario elige.
+        kitsManualesPorColor: { BCO: [44], BLANCO: [44] },
+      },
+      {
+        descripcion: 'Roller cenefa ovalada 38 B — MEC 37 blanco · MEC 45 negro',
+        categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+        mecPorColor: { BCO: 37, BLANCO: 37, NEG: 45, NEGRO: 45 },
+      },
+      {
+        descripcion: 'Dúo cenefa ovalada 38 B — MEC 37 blanco · MEC 45 negro',
+        categoria: 'DUO_MANUAL_38mm',
+        mecPorColor: { BCO: 37, BLANCO: 37, NEG: 45, NEGRO: 45 },
+      },
+    ] as readonly ReglaMecLineaB[],
+
+    /** Los kits B de bodega llevan sufijo; el resto es MEC<nn> como siempre. */
+    codigoInsumoPorMec: { 44: 'MEC44-B', 45: 'MEC45-B' } as Record<number, string>,
+  },
 } as const satisfies ReglasMecanismo;
 
 // ── Derivaciones del catálogo de mecanismos ──────────────────────────
@@ -614,6 +687,78 @@ export function esMecLegacy(
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): boolean {
   return reglas.legacyReemplazar.includes(num);
+}
+
+// ── LÍNEA B ────────────────────────────────────────────────────────────
+
+/** Primera regla de línea B que aplica a la categoría dada (con tipos propios). */
+export function reglaLineaBAplicable(
+  categoria: string,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
+): ReglaMecLineaB | null {
+  const efectiva = categoriaEfectiva(categoria, tipos);
+  for (const regla of reglas.lineaB.reglas) {
+    if (categoriaCoincide(efectiva, regla.categoria)) return regla;
+  }
+  return null;
+}
+
+/**
+ * Kit de la línea B para esta categoría y color, o null si no hay receta.
+ * `null` es una respuesta legítima y significativa: la línea B solo existe en
+ * blanco y negro, y quien llama NO debe caer a los kits de la línea A (el gate
+ * de Fase 2 bloquea la OT hasta que se corrija el color o se fuerce la línea A).
+ */
+export function mecLineaB(
+  categoria: string,
+  color: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
+): number | null {
+  const regla = reglaLineaBAplicable(categoria, reglas, tipos);
+  if (!regla) return null;
+  return regla.mecPorColor[normalizarColorAccesorio(color)] ?? null;
+}
+
+/** Kits de línea B que el operario puede elegir para esta categoría y color:
+ *  el default primero, luego las alternativas de la pizarra. */
+export function kitsLineaB(
+  categoria: string,
+  color: string | null | undefined,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
+): readonly number[] {
+  const regla = reglaLineaBAplicable(categoria, reglas, tipos);
+  if (!regla) return [];
+  const norm = normalizarColorAccesorio(color);
+  const def = regla.mecPorColor[norm];
+  if (def == null) return [];
+  const manuales = regla.kitsManualesPorColor?.[norm] ?? [];
+  return [def, ...manuales.filter((n) => n !== def)];
+}
+
+/** ¿Este MEC es una elección válida de línea B para esta categoría y color? */
+export function esKitLineaBValido(
+  categoria: string,
+  color: string | null | undefined,
+  num: number,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return kitsLineaB(categoria, color, reglas, tipos).includes(num);
+}
+
+/**
+ * Código de bodega del kit. Los de la línea B llevan sufijo (MEC44-B, MEC45-B);
+ * el resto es MEC<nn> con cero a la izquierda, como siempre. Sin esto la línea
+ * del inventario no calzaría con la tabla `insumos`.
+ */
+export function codigoInsumoMec(
+  num: number,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): string {
+  return reglas.lineaB.codigoInsumoPorMec[num] ?? `MEC${String(num).padStart(2, '0')}`;
 }
 
 /** Primera regla de categoría que aplica para la ventana y color dados. */

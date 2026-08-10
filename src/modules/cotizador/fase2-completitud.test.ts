@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { pendientesFase2, pendientesPorVentana, resumenPendientes } from './fase2-completitud';
-import type { Pano, Ventana } from './types';
+import type { CatalogoProductos, Pano, Ventana } from './types';
+import { esLineaB } from './lineaB';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 
 const modeloRoller: ModeloDespiece = {
@@ -206,5 +207,69 @@ describe('resumen y agrupación', () => {
     const grupos = pendientesPorVentana(p);
     expect(grupos.map((g) => g.ubicacion)).toEqual(['LIVING', 'PIEZA']);
     expect(grupos[0].items).toHaveLength(1);
+  });
+});
+
+describe('pendientesFase2 — categoría B (solo hay herrajes en blanco y negro)', () => {
+  // Catálogo mínimo: una tela de gama B y una de gama A.
+  const CAT = {
+    'SC 99': { cod: 'SCREEN_P', producto: 'SCREEN B', precio: 0, categoria: 'B' },
+    'SC 64': { cod: 'SCREEN_P', producto: 'SCREEN A', precio: 0, categoria: 'A' },
+  } as unknown as CatalogoProductos;
+
+  const conTela = (codInt: string, pano: Partial<Pano> = {}) =>
+    ventOk({ codInt }, pano);
+
+  it('una cortina de tela B con accesorios grises no deja avanzar', () => {
+    const p = pendientesFase2([conTela('SC 99', { color: 'GRIS' })], undefined, undefined, CAT);
+    expect(p).toHaveLength(1);
+    expect(p[0].mensaje).toContain('categoría B no tiene herrajes');
+    expect(p[0].mensaje).toContain('GRIS');
+  });
+
+  it('la misma cortina en blanco o negro pasa sin problema', () => {
+    for (const color of ['BLANCO', 'NEGRO']) {
+      expect(pendientesFase2([conTela('SC 99', { color })], undefined, undefined, CAT)).toEqual([]);
+    }
+  });
+
+  it('forzar la categoría A en esa cortina la destraba (los herrajes A sí tienen gris)', () => {
+    const v = conTela('SC 99', { color: 'GRIS', lineaB: false });
+    expect(pendientesFase2([v], undefined, undefined, CAT)).toEqual([]);
+  });
+
+  it('forzar la categoría B en una tela A sí aplica el chequeo', () => {
+    const v = conTela('SC 64', { color: 'GRIS', lineaB: true });
+    expect(pendientesFase2([v], undefined, undefined, CAT)[0]?.mensaje).toContain('categoría B');
+  });
+
+  it('sin catálogo el chequeo no corre (los llamadores que no lo pasan no lo necesitan)', () => {
+    expect(pendientesFase2([conTela('SC 99', { color: 'GRIS' })])).toEqual([]);
+  });
+});
+
+describe('la categoría B solo aplica donde tiene recetas', () => {
+  const CAT = {
+    'SC 99': { cod: 'SCREEN_P', producto: 'SCREEN B', precio: 0, categoria: 'B' },
+  } as unknown as CatalogoProductos;
+
+  it('una tela de gama B en un sistema de oscuridad NO entra en la categoría B', () => {
+    // La gama comercial de la tela no cambia la estructura de un soft light:
+    // sus perfiles, tubo y peso son los suyos, no los de la gama económica.
+    expect(esLineaB({ lineaB: undefined, codInt: 'SC 99' }, 'SC 99', CAT, 'SOFT_LIGHT_38mm')).toBe(false);
+    expect(esLineaB({ lineaB: undefined, codInt: 'SC 99' }, 'SC 99', CAT, 'BEEBLACK')).toBe(false);
+    expect(esLineaB({ lineaB: undefined, codInt: 'SC 99' }, 'SC 99', CAT, 'VERTICAL')).toBe(false);
+    // …ni siquiera forzándola a mano: no hay herrajes B para esos sistemas.
+    expect(esLineaB({ lineaB: true, codInt: 'SC 99' }, 'SC 99', CAT, 'DARK_38mm')).toBe(false);
+  });
+
+  it('en roller simple, ovalada y dúo 38 sí entra', () => {
+    for (const cat of ['ROL', 'ROL_MANUAL_CENEFA_OVALADA_38mm', 'DUO_MANUAL_38mm']) {
+      expect(esLineaB({ lineaB: undefined, codInt: 'SC 99' }, 'SC 99', CAT, cat)).toBe(true);
+    }
+  });
+
+  it('sin categoría responde solo por la tela (el distintivo A/B de la grilla)', () => {
+    expect(esLineaB({ lineaB: undefined, codInt: 'SC 99' }, 'SC 99', CAT)).toBe(true);
   });
 });

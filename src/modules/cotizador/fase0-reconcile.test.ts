@@ -90,6 +90,21 @@ describe('explotarVentanasAFilas', () => {
     const { filas } = explotarVentanasAFilas([v], genIdSeq());
     expect(filas.map((f) => f.invertida)).toEqual([true, false, undefined]);
   });
+
+  it('la línea B viaja igual: solo el flag explícito, el auto se resuelve al vuelo', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      codInt: 'SC 64',
+      alto: 2,
+      panos: [
+        { ancho: 1.5, alto: 2, lineaB: true },
+        { ancho: 1.5, alto: 2, lineaB: false },
+        { ancho: 1.5, alto: 2 }, // sin flag → lo decide la tela del catálogo
+      ],
+    };
+    const { filas } = explotarVentanasAFilas([v], genIdSeq());
+    expect(filas.map((f) => f.lineaB)).toEqual([true, false, undefined]);
+  });
 });
 
 describe('agruparFilasPorVentana', () => {
@@ -214,6 +229,23 @@ describe('construirPanosDeGrupo', () => {
     expect(panos[0].invertida).toBe(false);
     expect(panos[1].invertida).toBe(true);
     expect('invertida' in panos[2]).toBe(false);
+  });
+
+  it('escribe lineaB solo si es explícita; con undefined preserva la del paño', () => {
+    const base = { id: 'a', vid: 'v1', panoIndex: 0, codInt: '', categoria: '', direccion: '', sentido: '', cantidad: 1, ubicacion: '', colorAcc: '', ancho: 1.5, alto: 2, descuento: 0 };
+    const filas: FilaReconcile[] = [
+      { ...base, lineaB: false },
+      { ...base, id: 'b', panoIndex: 1 },
+      { ...base, id: 'c', panoIndex: 2 },
+    ];
+    const panos = construirPanosDeGrupo(filas, [
+      { ancho: 9, alto: 9, lineaB: true }, // la fila la pasa a línea A
+      { ancho: 9, alto: 9, lineaB: true }, // la fila no opina → se preserva
+      { ancho: 9, alto: 9 }, // nunca hubo flag → sigue en auto por la tela
+    ]);
+    expect(panos[0].lineaB).toBe(false);
+    expect(panos[1].lineaB).toBe(true);
+    expect('lineaB' in panos[2]).toBe(false);
   });
 });
 

@@ -17,7 +17,10 @@ import {
   esCategoriaPletina,
   esCategoriaVertical,
   esKitInventarioMec,
+  esKitLineaBValido,
   esMecLegacy,
+  kitsLineaB,
+  mecLineaB,
   mecPorAncho,
   mecPorCategoriaYColor,
   mecRecoloreado,
@@ -191,6 +194,7 @@ export function mecanismoParaPano(
   anchoM?: number,
   usarTuboE78 = false,
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  lineaB = false,
 ): string {
   const rm = reglas.mecanismo;
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
@@ -216,6 +220,31 @@ export function mecanismoParaPano(
     }
     const chipDual = chipDualPorLadoColor(p.dualLado, colorAcc, opciones);
     return chipDual || storedDual;
+  }
+
+  // LÍNEA B (gama económica): juego de herrajes propio. Va ANTES de la regla
+  // por ancho y de la de categoría porque la línea B no participa de las bandas
+  // (45 mm / 63 mm): su tubo es E01 en todo ancho y el ancho máximo lo acota la
+  // fila del catálogo. Retornar acá también evita el reemplazo de MEC legacy,
+  // así el MEC 06 de una cortina B se conserva mientras que en una cortina A
+  // (lineaB=false) sigue migrando al kit por color, como siempre.
+  if (lineaB) {
+    const numB = mecLineaB(categoria || '', colorAcc, rm, reglas.tipos);
+    if (numB != null) {
+      const trimmed = ((p.mecanismo as string) || '').trim();
+      const nStored = numeroMecDeChip(trimmed);
+      // Kit B elegido a mano y válido para esta categoría y color (el roller
+      // simple blanco admite MEC 06 o MEC 44): se respeta. Al cambiar el color
+      // deja de ser válido y cae al default del color nuevo = recoloreo.
+      if (nStored != null && esKitLineaBValido(categoria || '', colorAcc, nStored, rm, reglas.tipos)) {
+        return trimmed;
+      }
+      return chipMecanismoPorNumero(numB, opciones) || trimmed;
+    }
+    // Color sin receta B (gris, café…): NO caer a los kits de la línea A —
+    // serían herrajes de otra línea. Se deja lo guardado y `pendientesFase2`
+    // bloquea la OT pidiendo blanco/negro o forzar la línea A.
+    return ((p.mecanismo as string) || '').trim();
   }
 
   // Regla por ancho (>3 m → MEC 28 · banda 2,2–3,0 → kit 45 por color). Va
@@ -418,11 +447,24 @@ export function opcionesMecanismoFiltradas(
   mecanismoActual?: string,
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
   tipos?: readonly TipoCortina[],
+  lineaB = false,
+  /** Chips de RESOLUCIÓN (incluyen los ocultos): los kits B están ocultos, así
+   *  que no llegan por `opcionesBase`. Sin esto el selector B saldría vacío. */
+  opcionesResolucion?: readonly string[],
 ): readonly string[] {
   if (!categoriaRequiereMecanismo(categoria, reglas)) return [];
 
   // Pletina (velcro): la única opción de mecanismo es VELCRO.
   if (esCategoriaPletina(categoria, tipos)) return ['VELCRO'];
+
+  // LÍNEA B: solo sus propios kits (default del color + alternativas). Un color
+  // sin receta deja la lista vacía y el gate de Fase 2 lo explica.
+  if (lineaB) {
+    const desde = opcionesResolucion ?? opcionesBase;
+    return kitsLineaB(categoria, colorAccesorios, reglas, tipos)
+      .map((n) => chipMecanismoPorNumero(n, desde))
+      .filter((c): c is string => !!c);
+  }
 
   const regla = reglaCategoriaAplicable(categoria, colorAccesorios, reglas);
   if (regla) {
@@ -543,7 +585,24 @@ export function modeloPorAncho(
   usarTuboE78 = false,
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
   tipos?: readonly TipoCortina[],
+  lineaB = false,
 ): ModeloDespiece | null {
+  // LÍNEA B: no participa de las bandas por ancho (su tubo es E01 siempre). Su
+  // fila se elige por el número del kit B; el ancho máximo lo acota la fila.
+  if (lineaB) {
+    const numB = mecLineaB(categoria || '', color, reglas, tipos);
+    if (numB == null) return modeloActual;
+    const cands = modelosParaCategoria(modelos, categoria, tipos, true);
+    const nStored = modeloActual ? numeroMecDeModelo(modeloActual) : null;
+    // Kit B alternativo ya elegido (MEC 44 en el simple blanco): conservar su fila.
+    const buscado =
+      nStored != null && esKitLineaBValido(categoria || '', color, nStored, reglas, tipos)
+        ? nStored
+        : numB;
+    const delMec = cands.filter((c) => mecanismoCoincideNumero(c.mecanismo, buscado));
+    return delMec[0] ?? modeloActual;
+  }
+
   // Oscuridad 38 mm (soft light y DARK) tiene su propia banda E78 (swap 38↔45 mm
   // por sistema/tipo_rol, no por mecanismo): va antes de la maquinaria roller
   // basada en número MEC. DARK usa el mismo mecanismo que soft light (E78 por OT).
@@ -596,10 +655,14 @@ export function modeloVentanaPorAncho(
   usarTuboE78 = false,
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
   tipos?: readonly TipoCortina[],
+  lineaB = false,
 ): ModeloDespiece | null {
-  const base = elegirModeloPorColor(modelosParaCategoria(modelos, categoria, tipos), color);
+  // El filtro por línea impide que una cortina A caiga en una fila B (o al
+  // revés) solo porque su mecanismo contiene el color buscado.
+  const cands = modelosParaCategoria(modelos, categoria, tipos, lineaB);
+  const base = elegirModeloPorColor(cands, color);
   if (categoriaEsDual(categoria, tipos)) return base;
-  return modeloPorAncho(modelos, categoria, anchoM, base, color, usarTuboE78, reglas, tipos);
+  return modeloPorAncho(modelos, categoria, anchoM, base, color, usarTuboE78, reglas, tipos, lineaB);
 }
 
 /**
@@ -623,7 +686,11 @@ export function resincronizarChipsPanos(
   opcionesTub: readonly string[],
   usarTuboE78 = false,
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  /** Línea B efectiva por paño (mismo índice que `panos`). El llamador la
+   *  calcula con el catálogo de telas; ausente = toda la ventana es línea A. */
+  lineaBPorPano?: readonly boolean[],
 ): void {
+  const esB = (i: number) => lineaBPorPano?.[i] ?? false;
   // Igual que `sincronizarChips` en Fase 2: la categoría ROL_DUAL implica dual
   // aunque el paño todavía no traiga el flag (lo pone Fase 2 al abrirla).
   const esDual =
@@ -644,6 +711,7 @@ export function resincronizarChipsPanos(
       parseFloat(String(ref.ancho ?? 0)) || 0,
       usarTuboE78,
       reglas,
+      esB(0),
     );
     if (!mec) return;
     const lc = ladoColorDesdeChipDual(mec);
@@ -657,8 +725,9 @@ export function resincronizarChipsPanos(
     return;
   }
 
-  for (const p of panos) {
+  panos.forEach((p, i) => {
     const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
+    const b = esB(i);
     const mec = mecanismoParaPano(
       p as Parameters<typeof mecanismoParaPano>[0],
       ventanaColor,
@@ -668,9 +737,11 @@ export function resincronizarChipsPanos(
       anchoM,
       usarTuboE78,
       reglas,
+      b,
     );
     if (mec) p.mecanismo = mec;
-    if (modelo && anchoM > 0) {
+    // La línea B fija su tubo aunque todavía no haya modelo (no depende de él).
+    if (b || (modelo && anchoM > 0)) {
       p.tuberia = canonizarChipTuberia(
         tuberiaParaPano(
           anchoM,
@@ -679,11 +750,18 @@ export function resincronizarChipsPanos(
           opcionesTub,
           categoria,
           reglas.tuberia,
+          b,
         ),
         opcionesTub,
       );
     }
-  }
+  });
+}
+
+/** Número MEC de la fila del catálogo ('MEC_44_LZ50_B_BLANCO' → 44). */
+function numeroMecDeModelo(m: ModeloDespiece): number | null {
+  const match = (m.mecanismo || '').toUpperCase().match(/^MEC_0?(\d+)(?:_|$)/);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 /** true si el mecanismo del catálogo es 'MEC_<num>_…' (o cero-padded). */
@@ -705,8 +783,9 @@ export function modeloBase38PorColor(
   categoria: string,
   color: string | null | undefined,
   tipos?: readonly TipoCortina[],
+  lineaB?: boolean,
 ): ModeloDespiece | null {
-  const cands = modelosParaCategoria(modelos, categoria, tipos).filter(
+  const cands = modelosParaCategoria(modelos, categoria, tipos, lineaB).filter(
     (m) => m.diametro_tubo_mm === 38,
   );
   return elegirModeloPorColor(cands, color);

@@ -68,6 +68,36 @@ export const CENEFA_OVALADA_POR_COLOR: Record<string, string> = {
 /** Peso interno de dúo: constante de taller (E13), sin importar color. */
 export const COD_PESO_INTERNO = 'E13';
 
+// ── LÍNEA B (gama económica) ─────────────────────────────────────────
+// Herrajes propios, solo en blanco y negro (pizarra 2026-08-07). Un color sin
+// entrada devuelve '' igual que en la línea A; además el gate de Fase 2 no deja
+// avanzar una cortina B en un color sin receta.
+
+/** Peso inferior roller línea B: rectangular blanco E40 · roller negro E69-B. */
+export const PESO_ROLLER_B_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E40',
+  NEGRO: 'E69-B',
+};
+
+/** Cenefa ovalada línea B. */
+export const CENEFA_OVALADA_B_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E60',
+  NEGRO: 'E72-B',
+};
+
+/** Peso U (lágrima) de dúo línea B. */
+export const PESO_U_B_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E25',
+  NEGRO: 'E70-B',
+};
+
+/** Peso interno de dúo línea B. A diferencia de la línea A —donde es E13 fijo—
+ *  en la B depende del color: redondo "O" blanco E79-B · negro E71-B. */
+export const PESO_INTERNO_B_POR_COLOR: Record<string, string> = {
+  BLANCO: 'E79-B',
+  NEGRO: 'E71-B',
+};
+
 /** Peso inferior de sistemas de oscuridad (Soft Light / Dark): código por color. */
 export const PESO_OSCURIDAD_POR_COLOR: Record<string, string> = {
   BLANCO: 'E24',
@@ -192,6 +222,7 @@ export function codigoEstructura(
   colorAccesorios: string | null | undefined,
   tuberiaCod: string | null | undefined,
   colores?: readonly ColorAccesorio[],
+  lineaB = false,
 ): string {
   const color = colorCanonico(colorAccesorios);
   const overlay = (campo: keyof InsumosColor, fallback: string) =>
@@ -201,16 +232,20 @@ export function codigoEstructura(
     case 'PLETINA':
       return tuberiaCod || '';
     case 'PESO INTERNO':
-      return COD_PESO_INTERNO;
+      // En la línea B el peso interno SÍ depende del color (en la A es E13 fijo).
+      return lineaB ? PESO_INTERNO_B_POR_COLOR[color] || '' : COD_PESO_INTERNO;
     case 'PESO':
+      if (lineaB) return PESO_ROLLER_B_POR_COLOR[color] || '';
       return overlay('pesoRoller', PESO_ROLLER_POR_COLOR[color] || '');
     case 'PESO U':
+      if (lineaB) return PESO_U_B_POR_COLOR[color] || '';
       return overlay('pesoU', PESO_U_POR_COLOR[color] || '');
     case 'PESO SOFT LIGHT':
       // Peso inferior de oscuridad (Soft Light / Dark): E24 blanco / E44 negro.
       // Gris no aplica (soft light no se vende en gris) → cae al color.
       return overlay('pesoOscuridad', PESO_OSCURIDAD_POR_COLOR[color] || '');
     case 'CENEFA OVALADA':
+      if (lineaB) return CENEFA_OVALADA_B_POR_COLOR[color] || '';
       return overlay('cenefaOvalada', CENEFA_OVALADA_POR_COLOR[color] || '');
     // BEEBLACK: los 4 perfiles son el mismo riel; las manillas, la agarradera.
     case 'PERFIL SUPERIOR (ANCHO)':

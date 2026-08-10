@@ -22,6 +22,7 @@ import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { telaDePano } from './telaPano';
+import { esLineaB } from './lineaB';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
@@ -132,6 +133,9 @@ export type OptimizerRow = {
   direccion?: string;
   /** Piezas del despiece (medida de corte + código de estructura) para etiquetas. */
   piezas?: PiezaEtiqueta[];
+  /** Línea de fabricación B (gama económica) ya resuelta para este paño. Se
+   *  hornea acá porque el BOM y el Excel de órdenes no reciben el catálogo. */
+  lineaB?: boolean;
 };
 
 /** Una pieza del despiece para la etiqueta: medida de corte real + su código. */
@@ -156,6 +160,7 @@ function piezasDespiece(
   formulas?: FormulasFamilias,
   tipos?: readonly TipoCortina[],
   colores?: readonly ColorAccesorio[],
+  lineaB = false,
 ): PiezaEtiqueta[] {
   // BEEBLACK no tiene modelo de fabricación (usa el stub, igual que el Excel de
   // órdenes y el Cálculo General): sin esta excepción sus filas iban sin piezas.
@@ -182,7 +187,7 @@ function piezasDespiece(
     componente: c.componente,
     columnaExcel: c.columnaExcel,
     medidaCm: c.medidaCm,
-    cod: codigoEstructura(c.columnaExcel, color, tuberiaCod, colores),
+    cod: codigoEstructura(c.columnaExcel, color, tuberiaCod, colores, lineaB),
     color,
   }));
 }
@@ -227,14 +232,16 @@ export function buildOptimizerRows(
       const esPletina = esCategoriaPletina(v.categoria, reglas.tipos);
       const esVertical = esCategoriaVertical(v.categoria);
       const esBeeblack = esCategoriaBeeblack(v.categoria);
+      const lineaB = esLineaB(p as unknown as Pano, v.codInt as string | undefined, catalogo, v.categoria, reglas.mecanismo, reglas.tipos);
       const tuberiaCod = tuberiaCodigoCorto(
         (v.modelo as ModeloDespiece | null | undefined) ?? null,
         String(p.tuberia || ''),
         anchoM,
         v.categoria,
         reglas.tuberia,
+        lineaB,
       );
-      const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params, formulas, reglas.tipos, reglas.colores);
+      const piezas = piezasDespiece(v, p as unknown as Pano, anchoCm, tuberiaCod, params, formulas, reglas.tipos, reglas.colores, lineaB);
       const altoTelaBbM = esBeeblack
         ? (piezas.find((pz) => pz.componente === 'Alto tela')?.medidaCm ?? 0) / 100
         : 0;
@@ -294,6 +301,7 @@ export function buildOptimizerRows(
         sentido: String(v.sentido ?? ''),
         direccion: String(v.direccion ?? ''),
         piezas,
+        lineaB,
       });
     });
   }

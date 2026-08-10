@@ -31,6 +31,7 @@ import {
   type PostInstalacionData,
 } from '@/modules/cotizador/fase2';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { esLineaB, lineaBPorPano } from '@/modules/cotizador/lineaB';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
@@ -148,8 +149,8 @@ export function CotizadorFase2() {
   );
   // Datos que faltan para producir (bloquean el paso a Fase 3).
   const pendientes = useMemo(
-    () => pendientesFase2(ventanas, formulas, reglas),
-    [ventanas, formulas, reglas],
+    () => pendientesFase2(ventanas, formulas, reglas, catalogo),
+    [ventanas, formulas, reglas, catalogo],
   );
   const pendientesDe = useMemo(() => {
     const m = new Map<string, number>();
@@ -237,18 +238,23 @@ export function CotizadorFase2() {
       0,
     );
     const colorRef = colorAccesoriosDePano(v.panos?.[0] || {}, v.color);
+    // Línea de fabricación (A o B) por paño; el modelo es uno por ventana, así
+    // que lo decide el primero (igual que el color de referencia).
+    const lineasB = lineaBPorPano(v as Parameters<typeof lineaBPorPano>[0], catalogo);
+    const lineaBRef = lineasB[0] ?? false;
     const modeloEf = esDualV
       ? modelo
-      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos);
+      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos, lineaBRef);
     return {
       ...v,
       modelo: modeloEf,
-      panos: v.panos.map((p) => {
+      panos: v.panos.map((p, pi) => {
         const dual = categoriaImplicaDual || !!p.dual;
         const pDual = dual === !!p.dual ? p : { ...p, dual };
         const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
+        const lineaB = lineasB[pi] ?? false;
         const mecanismo =
-          mecanismoParaPano(pDual, v.color, modeloEf, opcSel.mecanismoResolucion, v.categoria, anchoM, usarE78, reglas) ||
+          mecanismoParaPano(pDual, v.color, modeloEf, opcSel.mecanismoResolucion, v.categoria, anchoM, usarE78, reglas, lineaB) ||
           p.mecanismo;
         // Canoniza siempre el chip guardado (solo formato): una OT vieja con
         // "0,38mm [E02] 1,2mm" migra a "E02-TUBO…" aunque no haya modelo/ancho
@@ -256,12 +262,15 @@ export function CotizadorFase2() {
         const tuberia = esBeeblackV
           ? ''
           : canonizarChipTuberia(
-              modeloEf && anchoM > 0
-                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia)
-                : forzarTuberia && modeloEf
-                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia) ||
-                    (p.tuberia as string)
-                  : (p.tuberia as string) || '',
+              // La línea B fija su tubo (E01) aunque todavía no haya modelo.
+              lineaB
+                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, true)
+                : modeloEf && anchoM > 0
+                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia)
+                  : forzarTuberia && modeloEf
+                    ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia) ||
+                      (p.tuberia as string)
+                    : (p.tuberia as string) || '',
               opcSel.tuberiaUI,
             );
         const cenefa =
@@ -378,6 +387,10 @@ export function CotizadorFase2() {
       opcSel.mecanismoUI,
       stored,
       reglas.mecanismo,
+      reglas.tipos,
+      esLineaB(panoEnEdicion ?? null, ventanaForm.codInt, catalogo, ventanaForm.categoria, reglas.mecanismo, reglas.tipos),
+      // Los kits de la línea B están ocultos: no llegan por la lista de UI.
+      opcSel.mecanismoResolucion,
     );
     // Escape: un chip legacy guardado (OT vieja) se muestra igual aunque ya
     // no se ofrezca en la lista limpia.
@@ -391,10 +404,12 @@ export function CotizadorFase2() {
     panoEnEdicion?.color,
     panoEnEdicion?.mecanismo,
     panoEnEdicion?.dual,
+    panoEnEdicion?.lineaB,
     mecFijoPorAncho,
     modelos,
     opcSel,
     reglas,
+    catalogo,
   ]);
 
   // Cascada mecanismo → tubería: el chip de tubería solo ofrece las opciones
@@ -534,6 +549,10 @@ export function CotizadorFase2() {
   const actualizarVentana = (patch: Partial<Ventana>) =>
     setVentanaForm((v) => (v ? { ...v, ...patch } : v));
 
+  /** Línea de fabricación (A o B) del paño idx: lo forzado, o su tela. */
+  const lineaBDe = (v: Ventana, idx: number) =>
+    esLineaB(v.panos?.[idx] ?? null, v.codInt, catalogo, v.categoria, reglas.mecanismo, reglas.tipos);
+
   // Sincronización inversa mecanismo → modelo + tubería. Al elegir un chip
   // (a mano, por ancho >3 m = MEC 28, dual, o kit por color) se actualiza el
   // modelo de fabricación y se corrige la tubería si quedó incompatible con el
@@ -541,7 +560,10 @@ export function CotizadorFase2() {
   // existen como modelo en su categoría, por eso los fallbacks explícitos.
   const aplicarCascadaMecanismo = (nuevo: Ventana, idx: number, chip: string): Ventana => {
     const dual = esChipDual(chip);
-    const candidatos = modelosParaCategoria(modelos, dual ? 'ROL_DUAL' : nuevo.categoria, reglas.tipos);
+    const lineaB = lineaBDe(nuevo, idx);
+    const candidatos = modelosParaCategoria(
+      modelos, dual ? 'ROL_DUAL' : nuevo.categoria, reglas.tipos, dual ? undefined : lineaB,
+    );
     let nm = modeloDesdeChipMecanismo(candidatos, chip);
     if (!nm && !dual) {
       // Kit por color (sin modelo propio) o vuelta de 63/45 mm/dual al 38 de la
@@ -549,15 +571,19 @@ export function CotizadorFase2() {
       const curr = nuevo.modelo;
       if (!curr || curr.diametro_tubo_mm !== 38 || curr.sistema === 'ROLLER_DUAL') {
         const color = colorAccesoriosDePano(nuevo.panos[idx] || {}, nuevo.color);
-        nm = modeloBase38PorColor(modelos, nuevo.categoria, color);
+        nm = modeloBase38PorColor(modelos, nuevo.categoria, color, reglas.tipos, lineaB);
       }
     }
     if (nm) nuevo = { ...nuevo, modelo: nm };
     const anchoMidx = parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
     const tuberiaActual = nuevo.panos[idx]?.tuberia as string;
-    const corregida = tuberiaCorregidaPorMecanismo(chip, tuberiaActual, anchoMidx, opcSel.tuberiaUI, nuevo.categoria, nm ?? nuevo.modelo, reglas.tuberia);
+    const corregida = lineaB
+      ? null
+      : tuberiaCorregidaPorMecanismo(chip, tuberiaActual, anchoMidx, opcSel.tuberiaUI, nuevo.categoria, nm ?? nuevo.modelo, reglas.tuberia);
     const tub = corregida ??
-      (nm ? tuberiaParaPano(anchoMidx, nm, tuberiaActual, opcSel.tuberiaUI, nuevo.categoria, reglas.tuberia) : null);
+      (nm || lineaB
+        ? tuberiaParaPano(anchoMidx, nm, tuberiaActual, opcSel.tuberiaUI, nuevo.categoria, reglas.tuberia, lineaB)
+        : null);
     if (tub && tub !== tuberiaActual) {
       nuevo = { ...nuevo, panos: nuevo.panos.map((p, i) => (i === idx ? { ...p, tuberia: tub } : p)) };
     }
@@ -626,7 +652,7 @@ export function CotizadorFase2() {
         } else {
           const chip = mecanismoParaPano(
             { ...nuevo.panos[idx], dual: false, mecanismo: '' },
-            v.color, null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas,
+            v.color, null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas, lineaBDe(nuevo, idx),
           );
           setPano({ mecanismo: chip, dualLado: '', dualColor: '' });
           if (chip) nuevo = aplicarCascadaMecanismo(nuevo, idx, chip);
@@ -659,7 +685,7 @@ export function CotizadorFase2() {
       // Cambio de color de accesorios → represelecciona el mecanismo (con ancho,
       // para respetar la regla >3 m = MEC 28). Dual: represelecciona chip por color.
       if (patch.colorMecanismo !== undefined || patch.colorPeso !== undefined || patch.colorCadena !== undefined || patch.color !== undefined) {
-        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas);
+        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas, lineaBDe(nuevo, idx));
         if (mec && mec !== nuevo.panos[idx].mecanismo) {
           if (esChipDual(mec)) {
             // El kit dual es UNO por ventana: el chip recoloreado (mismo lado,
@@ -686,12 +712,12 @@ export function CotizadorFase2() {
       // Cambio de ancho → si cruza 3 m cambia el mecanismo (MEC 28 ↔ kit), y en
       // todo caso ajusta la tubería (E02/E66 y E47/E65).
       if (patch.ancho !== undefined) {
-        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas);
+        const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas, lineaBDe(nuevo, idx));
         if (mec && mec !== nuevo.panos[idx].mecanismo) {
           setPano({ mecanismo: mec });
           nuevo = aplicarCascadaMecanismo(nuevo, idx, mec);
         } else if (nuevo.modelo) {
-          const tub = tuberiaParaPano(anchoIdx(), nuevo.modelo, nuevo.panos[idx].tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia);
+          const tub = tuberiaParaPano(anchoIdx(), nuevo.modelo, nuevo.panos[idx].tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, lineaBDe(nuevo, idx));
           if (tub && tub !== nuevo.panos[idx].tuberia) setPano({ tuberia: tub });
         }
       }
@@ -1275,6 +1301,7 @@ export function CotizadorFase2() {
                   opcionesMecanismo={opcionesMecVentana}
                   opcionesTuberia={opcionesTubVentana}
                   mecanismoFijoNota={reglaFijaPorAncho?.regla.nota}
+                  lineaB={esLineaB(ventanaForm.panos[panoActivo] ?? null, ventanaForm.codInt, catalogo, ventanaForm.categoria, reglas.mecanismo, reglas.tipos)}
                   ocultarMecanismo={!categoriaRequiereMecanismo(ventanaForm.categoria)}
                   categoria={ventanaForm.categoria}
                   colorVentana={ventanaForm.color}

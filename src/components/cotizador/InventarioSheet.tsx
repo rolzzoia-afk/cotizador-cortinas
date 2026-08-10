@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import type { BomItem } from '@/modules/ots/types';
 import type { OT } from '@/modules/ots/types';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
+import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import {
   claveEtiquetas,
   claveItem,
@@ -43,9 +44,10 @@ const hoy = () => new Date().toISOString().split('T')[0];
 export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresaNombre, dirty, guardando, onGuardar }: Props) {
   const usarE78 = !!ot.datosGenerales?.usarTuboE78;
   const { reglas } = useReglasSeleccion();
+  const { catalogo } = useCatalogoProductos();
   const filas = useMemo(
-    () => construirFilasCortinas(ot.storeVentanas || [], usarE78, reglas),
-    [ot.storeVentanas, usarE78, reglas],
+    () => construirFilasCortinas(ot.storeVentanas || [], usarE78, reglas, catalogo),
+    [ot.storeVentanas, usarE78, reglas, catalogo],
   );
   // Etiquetas por color de accesorios (blancos → INS 95-1; resto → INS 95).
   const etiquetas = useMemo(() => construirEtiquetas(ot.storeVentanas || []), [ot.storeVentanas]);

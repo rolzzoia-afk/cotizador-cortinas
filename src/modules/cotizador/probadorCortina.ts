@@ -66,6 +66,8 @@ export type EntradaProbador = {
   /** Solo sistemas de oscuridad. */
   variante?: VarianteOscuridad;
   usarTuboE78?: boolean;
+  /** Línea de fabricación B (gama económica): kits, tubo y códigos propios. */
+  lineaB?: boolean;
 };
 
 export type DepsProbador = {
@@ -125,6 +127,7 @@ export function resolverCortinaDePrueba(
   const { modelos, cadenas = [] } = deps;
   const { categoria, anchoM, altoM, color, cenefa } = entrada;
   const usarE78 = !!entrada.usarTuboE78;
+  const lineaB = !!entrada.lineaB;
   const avisos: string[] = [];
 
   const opc = derivarOpciones(reglas, usarE78);
@@ -180,7 +183,7 @@ export function resolverCortinaDePrueba(
   const tubo =
     esBeeblack || !modelo
       ? ''
-      : tuberiaParaPano(anchoM, modelo, '', opc.tuberiaUI, categoria, reglas.tuberia) || '';
+      : tuberiaParaPano(anchoM, modelo, '', opc.tuberiaUI, categoria, reglas.tuberia, lineaB) || '';
   const tuberiaCod = codigoTuberiaDeChip(tubo);
 
   // ── Cadena automática por alto + color, contra el inventario
@@ -211,7 +214,7 @@ export function resolverCortinaDePrueba(
           componente: c.componente,
           columnaExcel: c.columnaExcel,
           medidaCm: c.medidaCm,
-          cod: codigoEstructura(c.columnaExcel, color, tuberiaCod, reglas.colores),
+          cod: codigoEstructura(c.columnaExcel, color, tuberiaCod, reglas.colores, lineaB),
         }))
       : [];
   const sinCodigo = cortes.filter((c) => !c.cod && COLUMNAS_CON_CODIGO.has(c.columnaExcel));

@@ -435,6 +435,11 @@ describe('diametroDesdeChipMecanismo', () => {
       'LZ50 SFLX NGR [MEC 11]': 38,
       'LZ50 SFLX GRIS [MEC 13]': 38,
       'LZ50 SFLX BCO [MEC 14]': 38,
+      // LÍNEA B (gama económica): todos sobre tubo E01, de 38 mm.
+      'LZ50 PEQUEÑO NGR CAT.B [MEC 15]': 38,
+      'OVALADA BCO CAT.B [MEC 37]': 38,
+      'ROLLER BCO CAT.B [MEC 44]': 38,
+      'OVALADA NGR CAT.B [MEC 45]': 38,
       '0,45mm BCO [MEC 18]': 45,
       '0,45mm NGR [MEC 23]': 45,
       // OPCIONES_MECANISMO_DUAL (todos tubo 38 mm)
