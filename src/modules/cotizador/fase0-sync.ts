@@ -6,8 +6,11 @@ import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 
 import {
   buscarAdicionalCenefaEnUbic,
+  candidatosCenefaEnUbic,
+  cenefaAdicionalEsDelPano,
   etiquetaConTira,
   tipoCenefaDesdeAdicional,
+  tiraCenefaOvalada,
   ubicPanoVentana,
 } from '@/modules/descuentos/adicionales-cenefa';
 import { esCategoriaBeeblack, normalizarVarianteBeeblack } from '@/modules/descuentos/reglas-beeblack';
@@ -237,6 +240,14 @@ export type OpcionesEnriquecerFase0 = {
 
   totalPanos?: number;
 
+  /**
+   * Todas las cortinas de la cotización. Sirve para decidir a CUÁL le toca una
+   * cenefa cuando varias comparten la misma UBIC. (la ubicación no identifica
+   * una cortina). Sin esto se conserva el comportamiento histórico: la cenefa
+   * de la ubicación es de este paño.
+   */
+  ventanasOT?: readonly VentanaFase0[];
+
 };
 
 
@@ -355,7 +366,18 @@ export function enriquecerPanoDesdeFase0(
 
   const adicCenefa = buscarAdicionalCenefaEnUbic(ubic, opts?.adicionalesFase0);
 
-  if (adicCenefa) {
+  // …pero solo si esa cenefa es de ESTA cortina. Con varias cortinas en la misma
+  // UBIC. la que la lleva por categoría se la queda (OT 3169: un soft light y dos
+  // roller en PPAL, y la única cenefa comprada quedaba marcada en las tres).
+  const esMiCenefa =
+    !!adicCenefa &&
+    cenefaAdicionalEsDelPano(
+      adicCenefa,
+      { ventanaId: String(ventana.id ?? ''), panoIndex },
+      candidatosCenefaEnUbic(ubic, opts?.ventanasOT),
+    );
+
+  if (adicCenefa && esMiCenefa) {
 
     if (!pano.cenefa || pano.cenefa === 'No') {
 
@@ -367,7 +389,22 @@ export function enriquecerPanoDesdeFase0(
 
     if (!pano.cenefaTira) {
 
-      patch.cenefaTira = etiquetaConTira(adicCenefa.conTira);
+      // La OVALADA arranca CON TIRA (regla 2026-07-20): solo un dato explícito
+      // del adicional la deja sin tira. Antes se escribía SIN TIRA cuando el
+      // adicional no traía el flag —el caso de una cenefa cargada a mano en
+      // Fase 1, que no tiene ese interruptor— y ese dato quedaba GUARDADO en el
+      // paño, así que la pantalla, la etiqueta y el Excel de órdenes la pedían
+      // sin tira. La cuadrada no lleva tira y sigue como estaba.
+
+      const tipoCenefa = patch.cenefa ?? pano.cenefa;
+
+      patch.cenefaTira =
+
+        tipoCenefa === 'Ovalada'
+
+          ? tiraCenefaOvalada(null, adicCenefa.conTira)
+
+          : etiquetaConTira(adicCenefa.conTira);
 
     }
 
@@ -434,6 +471,9 @@ export function enriquecerVentanaDesdeFase0(
 
   adicionalesFase0?: AdicionalFase0Persistido[],
 
+  /** Todas las cortinas de la cotización (ver `OpcionesEnriquecerFase0.ventanasOT`). */
+  ventanasOT?: readonly VentanaFase0[],
+
 ): VentanaFase0 {
 
   const panos = ventana.panos?.length ? ventana.panos : [{ ancho: '', alto: '', color: '' } as Pano];
@@ -453,6 +493,8 @@ export function enriquecerVentanaDesdeFase0(
         panoIndex: i,
 
         totalPanos,
+
+        ventanasOT,
 
       }),
 

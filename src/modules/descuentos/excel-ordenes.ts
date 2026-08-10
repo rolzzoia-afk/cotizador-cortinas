@@ -16,6 +16,8 @@ import { esCenefaCuadrada } from '@/modules/cotizador/fase2';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import {
   buscarAdicionalCenefaOvalada,
+  candidatosCenefaEnUbic,
+  cenefaAdicionalEsDelPano,
   cenefaOvaladaDesdeAdicional,
   esAdicionalCenefaCuadrada,
   esRollerOVertical,
@@ -351,8 +353,25 @@ export function generarOrdenesOptimizador(
           const colorPesoVal = colorPesoInfOscuridadExcel((p.colorPeso as string) || p.color || v.color, opts?.reglas?.colores);
           if (colorPesoVal) fila[COLUMNA_COLOR_PESO_OSCURIDAD] = colorPesoVal;
         }
+        // La cenefa comprada es de UNA cortina: con varias en la misma UBIC. se
+        // resuelve por categoría (la que la lleva por diseño se la queda) y, si
+        // empatan, por el ancho más parecido a la cantidad del adicional.
         const adicCenefa = buscarAdicionalCenefaOvalada(ubic, adicionalesFase0);
-        if (adicCenefa) {
+        const candidatosCenefa = candidatosCenefaEnUbic(ubic, ventanas);
+        const cenefaEsDeEstaCortina =
+          !!adicCenefa &&
+          cenefaAdicionalEsDelPano(
+            adicCenefa,
+            { ventanaId: String(v.id ?? ''), panoIndex: i },
+            candidatosCenefa,
+            opts?.reglas?.tipos,
+          );
+        if (adicCenefa && cenefaEsDeEstaCortina && candidatosCenefa.length > 1) {
+          advertencias.push(
+            `"${ubic}": ${candidatosCenefa.length} cortinas comparten esa ubicación y hay una sola cenefa comprada — se asignó a "${v.codInt || v.categoria || 'esta cortina'}" (${anchoM} m). Si va en otra, separá las ubicaciones en la cotización.`,
+          );
+        }
+        if (adicCenefa && cenefaEsDeEstaCortina) {
           const medida = cenefaOvaladaDesdeAdicional(
             adicCenefa,
             modelo,

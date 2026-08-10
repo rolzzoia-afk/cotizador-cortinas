@@ -63,8 +63,7 @@ import {
 } from '@/modules/cotizador/fase0-reconcile';
 import {
   derivarAdicionalesCenefaDesdeVentanas,
-  existeCenefaManualEnUbic,
-  tipoCenefaDesdeAdicional,
+  filtrarDerivadosPorCupoManual,
 } from '@/modules/descuentos/adicionales-cenefa';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
@@ -382,10 +381,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       (a) => !esInstalacionBase(a.codInt),
     );
     const manuales = persistidos.filter((a) => a.origen !== 'pano');
-    const derivados = derivarAdicionalesCenefaDesdeVentanas(vts).filter((d) => {
-      const tipo = tipoCenefaDesdeAdicional(d.codInt);
-      return tipo ? !existeCenefaManualEnUbic(manuales, tipo, d.ubicacion || '') : true;
-    });
+    // Una cenefa escrita a mano tapa UNA cortina, no todas las de esa ubicación:
+    // con tres cortinas en la misma UBIC. se cobraba una sola (OT 3169).
+    const derivados = filtrarDerivadosPorCupoManual(
+      derivarAdicionalesCenefaDesdeVentanas(vts),
+      manuales,
+    );
     const derivadosUI: AdicionalUI[] = derivados.map((d) => ({
       id: crypto.randomUUID(),
       codInt: d.codInt,
@@ -576,13 +577,21 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           panos,
           modelo: modeloFinal,
         };
-        return enriquecerVentanaDesdeFase0(
-          ventana as never,
-          catalogo,
-          adicionalesGuardados,
-        ) as unknown as Record<string, unknown>;
+        return ventana;
       };
-      const ventanas = agruparFilasPorVentana(validas).map(construirVentanaGrupo);
+      // Dos pasadas: primero se arman TODAS las ventanas y recién después se
+      // enriquecen, porque decidir a qué cortina le toca una cenefa necesita ver
+      // a las que comparten su ubicación.
+      const ventanasBase = agruparFilasPorVentana(validas).map(construirVentanaGrupo);
+      const ventanas = ventanasBase.map(
+        (v) =>
+          enriquecerVentanaDesdeFase0(
+            v as never,
+            catalogo,
+            adicionalesGuardados,
+            ventanasBase as never,
+          ) as unknown as Record<string, unknown>,
+      );
       const now = new Date().toISOString();
 
       // ── Editando una OT existente: actualizar la MISMA OT ──

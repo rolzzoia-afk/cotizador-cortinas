@@ -3,13 +3,18 @@ import {
   ajusteCenefaCuadradaCm,
   anchoNominalCenefaCorte,
   buscarAdicionalCenefaOvalada,
+  candidatosCenefaEnUbic,
+  cenefaAdicionalEsDelPano,
   cenefaOvaladaDesdeAdicional,
+  cortinaDeLaCenefa,
   derivarAdicionalesCenefaDesdeVentanas,
   esAdicionalCenefaOvalada,
   esRollerOVertical,
   etiquetaTipInstCenefa,
   existeCenefaManualEnUbic,
+  filtrarDerivadosPorCupoManual,
   indexCenefasOvaladasAdicionales,
+  llevaCenefaPorCategoria,
   medidaCorteCenefaCuadrada,
   medidaCorteCenefaOvalada,
   ubicacionCoincideConAdicional,
@@ -244,5 +249,135 @@ describe('existeCenefaManualEnUbic (dedup contra manuales)', () => {
     expect(existeCenefaManualEnUbic(manuales, 'Cuadrada', 'LIVING')).toBe(false);
     expect(existeCenefaManualEnUbic(manuales, 'Ovalada', 'COCINA')).toBe(false);
     expect(existeCenefaManualEnUbic([], 'Ovalada', 'LIVING')).toBe(false);
+  });
+});
+
+// ── A qué CORTINA le toca la cenefa (OT 3169) ────────────────────────────
+// Tres cortinas escritas "PPAL" (un soft light de 2,81 y dos roller) y una sola
+// cenefa comprada: la app se la marcaba a las tres y cobraba una.
+describe('llevaCenefaPorCategoria', () => {
+  it('ovalada: el soft light y los sistemas de cenefa ovalada la llevan; el roller simple no', () => {
+    expect(llevaCenefaPorCategoria('Ovalada', { categoria: 'SOFT_LIGHT_45mm' })).toBe(true);
+    expect(llevaCenefaPorCategoria('Ovalada', { categoria: 'SOFT_LIGHT_38mm' })).toBe(true);
+    expect(llevaCenefaPorCategoria('Ovalada', { categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm' })).toBe(true);
+    expect(llevaCenefaPorCategoria('Ovalada', { categoria: 'ROL' })).toBe(false);
+  });
+
+  it('el dúo la lleva por su SISTEMA, aunque su categoría no lo diga', () => {
+    // DUO_MANUAL_38mm se fabrica con el sistema CENEFA_OVALADA_DUO.
+    expect(llevaCenefaPorCategoria('Ovalada', { categoria: 'DUO_MANUAL_38mm' })).toBe(false);
+    expect(
+      llevaCenefaPorCategoria('Ovalada', {
+        categoria: 'DUO_MANUAL_38mm',
+        sistemaModelo: 'CENEFA_OVALADA_DUO',
+      }),
+    ).toBe(true);
+  });
+
+  it('un soft light con cuadrada elegida deja de ser candidato a la ovalada', () => {
+    const sl = { categoria: 'SOFT_LIGHT_45mm', cenefaPano: 'Cuadrada a muro' };
+    expect(llevaCenefaPorCategoria('Ovalada', sl)).toBe(false);
+    expect(llevaCenefaPorCategoria('Cuadrada', sl)).toBe(true);
+  });
+
+  it('cuadrada: DARK y oscuranti la llevan puesta; el roller no', () => {
+    expect(llevaCenefaPorCategoria('Cuadrada', { categoria: 'DARK_38mm' })).toBe(true);
+    expect(llevaCenefaPorCategoria('Cuadrada', { categoria: 'OSCURANTI_63mm' })).toBe(true);
+    expect(llevaCenefaPorCategoria('Cuadrada', { categoria: 'ROL' })).toBe(false);
+  });
+});
+
+describe('cortinaDeLaCenefa', () => {
+  // La cotización real: PPAL con un soft light de 2,81 y dos roller.
+  const ppal = (): ReturnType<typeof candidatosCenefaEnUbic> => [
+    { ventanaId: 'sl', panoIndex: 0, categoria: 'SOFT_LIGHT_45mm', anchoM: 2.81 },
+    { ventanaId: 'r1', panoIndex: 0, categoria: 'ROL', anchoM: 1.357 },
+    { ventanaId: 'r2', panoIndex: 0, categoria: 'ROL', anchoM: 1.455 },
+  ];
+
+  it('gana la que lleva cenefa por categoría (el soft light)', () => {
+    expect(cortinaDeLaCenefa(ppal(), { cantidad: 2.81 }, 'Ovalada')?.ventanaId).toBe('sl');
+    // Y sigue ganando aunque la cantidad del adicional apunte a otro ancho: la
+    // categoría manda sobre el desempate.
+    expect(cortinaDeLaCenefa(ppal(), { cantidad: 1.36 }, 'Ovalada')?.ventanaId).toBe('sl');
+  });
+
+  it('sin ninguna candidata por categoría desempata el ancho más parecido', () => {
+    const soloRoller = ppal().slice(1);
+    expect(cortinaDeLaCenefa(soloRoller, { cantidad: 1.45 }, 'Ovalada')?.ventanaId).toBe('r2');
+    expect(cortinaDeLaCenefa(soloRoller, { cantidad: 1.3 }, 'Ovalada')?.ventanaId).toBe('r1');
+    // Sin cantidad utilizable no se inventa nada: la primera.
+    expect(cortinaDeLaCenefa(soloRoller, { cantidad: 0 }, 'Ovalada')?.ventanaId).toBe('r1');
+  });
+
+  it('una sola cortina en la ubicación → esa; ninguna → null', () => {
+    expect(cortinaDeLaCenefa(ppal().slice(0, 1), { cantidad: 9 }, 'Ovalada')?.ventanaId).toBe('sl');
+    expect(cortinaDeLaCenefa([], { cantidad: 1 }, 'Ovalada')).toBeNull();
+  });
+});
+
+describe('candidatosCenefaEnUbic / cenefaAdicionalEsDelPano', () => {
+  const ventanas: VentanaItem[] = [
+    { id: 'sl', ubicacion: 'PPAL', categoria: 'SOFT_LIGHT_45mm', panos: [{ ancho: 2.81, alto: 2.4 }] },
+    { id: 'r1', ubicacion: 'PPAL', categoria: 'ROL', panos: [{ ancho: 1.357, alto: 2.4 }] },
+    { id: 'r2', ubicacion: 'PPAL', categoria: 'ROL', panos: [{ ancho: 1.455, alto: 2.4 }] },
+    { id: 'otra', ubicacion: 'VISITA', categoria: 'ROL', panos: [{ ancho: 1.66, alto: 1.93 }] },
+  ];
+  const adic = { codInt: 'CENF O', cantidad: 2.81 };
+
+  it('junta las tres cortinas de PPAL y deja fuera la de VISITA', () => {
+    expect(candidatosCenefaEnUbic('PPAL', ventanas).map((c) => c.ventanaId)).toEqual([
+      'sl', 'r1', 'r2',
+    ]);
+    expect(candidatosCenefaEnUbic('visita', ventanas)).toHaveLength(1);
+    expect(candidatosCenefaEnUbic('', ventanas)).toEqual([]);
+  });
+
+  it('la cenefa es del soft light, no de los roller vecinos', () => {
+    const cands = candidatosCenefaEnUbic('PPAL', ventanas);
+    expect(cenefaAdicionalEsDelPano(adic, { ventanaId: 'sl', panoIndex: 0 }, cands)).toBe(true);
+    expect(cenefaAdicionalEsDelPano(adic, { ventanaId: 'r1', panoIndex: 0 }, cands)).toBe(false);
+    expect(cenefaAdicionalEsDelPano(adic, { ventanaId: 'r2', panoIndex: 0 }, cands)).toBe(false);
+  });
+
+  it('sin candidatos (quien llama no pasó las ventanas) no cambia nada', () => {
+    expect(cenefaAdicionalEsDelPano(adic, { ventanaId: 'r1', panoIndex: 0 }, [])).toBe(true);
+  });
+
+  it('los paños de UNA ventana se separan con -G1/-G2 y no compiten con otra ventana', () => {
+    const dosPanos: VentanaItem[] = [
+      { id: 'v1', ubicacion: 'COMEDOR', categoria: 'ROL', panos: [{ ancho: 1, alto: 2 }, { ancho: 2, alto: 2 }] },
+    ];
+    expect(candidatosCenefaEnUbic('COMEDOR-G2', dosPanos)).toEqual([
+      { ventanaId: 'v1', panoIndex: 1, categoria: 'ROL', anchoM: 2, cenefaPano: null, sistemaModelo: null },
+    ]);
+  });
+});
+
+describe('filtrarDerivadosPorCupoManual', () => {
+  const derivado = (ubic: string, cantidad: number) => ({
+    codInt: 'CENF O', cantidad, descuento: 0, ubicacion: ubic, origen: 'pano' as const,
+  });
+
+  it('una cenefa manual tapa UNA cortina, no todas las de la ubicación', () => {
+    const manuales = [{ codInt: 'CENF O', cantidad: 2.81, descuento: 0, ubicacion: 'PPAL' }];
+    const derivados = [derivado('PPAL', 2.81), derivado('PPAL', 1.357), derivado('PPAL', 1.455)];
+    const out = filtrarDerivadosPorCupoManual(derivados, manuales);
+    expect(out.map((a) => a.cantidad)).toEqual([1.357, 1.455]);
+  });
+
+  it('dos manuales tapan dos derivados; sin manuales no se descarta ninguno', () => {
+    const manuales = [
+      { codInt: 'CENF O', cantidad: 1, descuento: 0, ubicacion: 'PPAL' },
+      { codInt: 'CENF O', cantidad: 1, descuento: 0, ubicacion: 'ppal' }, // se normaliza igual
+    ];
+    const derivados = [derivado('PPAL', 1), derivado('PPAL', 2), derivado('PPAL', 3)];
+    expect(filtrarDerivadosPorCupoManual(derivados, manuales)).toHaveLength(1);
+    expect(filtrarDerivadosPorCupoManual(derivados, [])).toHaveLength(3);
+  });
+
+  it('el cupo es por TIPO: una cuadrada manual no tapa una ovalada derivada', () => {
+    const manuales = [{ codInt: 'CENF C', cantidad: 1, descuento: 0, ubicacion: 'PPAL' }];
+    expect(filtrarDerivadosPorCupoManual([derivado('PPAL', 1)], manuales)).toHaveLength(1);
   });
 });

@@ -151,6 +151,31 @@ describe('generarOrdenesOptimizador — cenefa ovalada desde adicionales Fase 0'
     expect(aoa[1][idxTUBO]).toBe(141.7); // el tubo NO se mueve por la cenefa
   });
 
+  // OT 3169: soft light + dos roller escritos "PPAL" y UNA sola cenefa comprada.
+  it('varias cortinas en una UBIC.: la cenefa es de la que la lleva por categoría', () => {
+    const sl = ventanaSoftLight(2.81, 'PPAL');
+    sl.categoria = 'SOFT_LIGHT_45mm';
+    sl.modelo = { ...softLight38, tipo_rol: 'SOFT_LIGHT_INTERNO_45mm', diametro_tubo_mm: 45 };
+    const rol = ventana('');
+    rol.id = 'rol';
+    rol.ubicacion = 'PPAL';
+    rol.panos = [{ ancho: 1.455, alto: 2, color: 'NEGRO' } as Pano];
+    const adicional = [
+      { codInt: 'CENF O', cantidad: 2.81, descuento: 30, ubicacion: 'PPAL', colorAcc: 'BLANCO' },
+    ];
+    const { aoa, advertencias } = generarOrdenesOptimizador('3169', [sl, rol], {
+      adicionalesFase0: adicional,
+    });
+    // El soft light se queda la cenefa (281 − 1,5) y el color del adicional.
+    expect(aoa[1][idxCENEFA]).toBe(279.5);
+    expect(aoa[1][col('COLOR ACCESORIOS')]).toBe('BLANCO');
+    // El roller vecino NO la hereda: sin cenefa en el paño, su celda va vacía y
+    // conserva su propio color de accesorios.
+    expect(aoa[2][idxCENEFA]).toBe('');
+    expect(aoa[2][col('COLOR ACCESORIOS')]).toBe('NEGRO');
+    expect(advertencias.some((a) => a.includes('PPAL') && a.includes('comparten esa ubicación'))).toBe(true);
+  });
+
   it('roller con cenefa Ovalada sin adicional: la cenefa igual viaja al taller', () => {
     // Mismo criterio que el soft light: si la cortina lleva cenefa, hay que
     // cortarla. Antes esta fila salía vacía y el taller no la veía.
