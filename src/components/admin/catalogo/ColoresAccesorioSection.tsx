@@ -25,6 +25,7 @@ import {
   CAMPOS_INSUMO_COLOR,
   CAMPOS_MEC,
   CODIGOS_BUILTIN,
+  GRUPO_INSUMOS_B,
   NOMBRE_USO,
   USOS_COLOR,
   validarColores,
@@ -246,8 +247,13 @@ export function ColoresAccesorioSection({ valor, mecanismos, onChange }: Props) 
     );
   };
 
+  // Los códigos de la categoría B no cuentan como "falta completar": casi
+  // ningún color los usa y se editan en su propia sección del catálogo.
   const sinCompletar = CAMPOS_INSUMO_COLOR.filter(
-    (c) => !CAMPOS_MEC.has(c.campo) && color.insumos?.[c.campo] == null,
+    (c) =>
+      !CAMPOS_MEC.has(c.campo) &&
+      c.grupo !== GRUPO_INSUMOS_B &&
+      color.insumos?.[c.campo] == null,
   );
 
   return (

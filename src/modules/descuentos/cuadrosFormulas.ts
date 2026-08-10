@@ -23,7 +23,7 @@ import {
   type SuperficiePerfilKey,
   type VarianteOscuridad,
 } from './reglas-oscuridad';
-import { modelosParaCategoria, type ModeloDespiece } from './tipos';
+import { esFilaLineaB, modelosParaCategoria, type ModeloDespiece } from './tipos';
 import {
   GRUPO_TIPOS_PROPIOS,
   baseEsOscuridad,
@@ -85,6 +85,8 @@ export type CuadroFormula = {
   notas: string[];
   /** No hay fila en el catálogo para este sistema: se calculó con valores en cero. */
   sinModelo: boolean;
+  /** La fila es de categoría B (gama económica). Solo en la vista de catálogo. */
+  lineaB?: boolean;
 };
 
 export type MedidaPrueba = { anchoCm: number; altoCm: number };
@@ -217,7 +219,10 @@ function modeloDe(
   def: DefinicionCuadro,
   tipos?: readonly TipoCortina[],
 ): ModeloDespiece | null {
-  const candidatos = modelosParaCategoria(modelos, def.categoria, tipos);
+  // `false` explícito: el cuadro por definición es el de la línea A. Sin esto,
+  // una fila de categoría B podía ganar el cuadro por orden de tabla y quedar
+  // presentada como LA fórmula de la categoría.
+  const candidatos = modelosParaCategoria(modelos, def.categoria, tipos, false);
   if (candidatos.length === 0) return null;
   if (!def.diametroMm) return candidatos[0];
   return candidatos.find((m) => m.diametro_tubo_mm === def.diametroMm) ?? candidatos[0];
@@ -482,6 +487,7 @@ export function construirCuadrosDeCatalogo(
         aproximado: despiece.aproximado,
         notas: despiece.notas,
         sinModelo: false,
+        lineaB: esFilaLineaB(m),
       } satisfies CuadroFormula;
     });
 }

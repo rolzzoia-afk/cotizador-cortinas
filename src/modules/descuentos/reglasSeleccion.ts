@@ -15,6 +15,7 @@ import {
   numeroMecDeChip,
   opcionesMecanismoResolucion,
   opcionesMecanismoUI,
+  textoCategoria,
   type EstadoCatalogo,
   type MatchCategoria,
   type MecanismoCatalogo,
@@ -40,6 +41,10 @@ import {
   type ReglasCadena,
   type TramoCadenaAlto,
 } from './reglas-cadena';
+import {
+  CAMPOS_ESTRUCTURA_B,
+  codigoEstructuraBEfectivo,
+} from './codigos-estructura';
 import {
   BASES_PERMITIDAS,
   GRUPO_TIPOS_PROPIOS,
@@ -420,6 +425,11 @@ function normalizarTuberia(crudo: unknown): ReglasTuberia {
   if (!esObjeto(crudo)) return d;
   const e0266 = esObjeto(crudo.reglaE02E66) ? crudo.reglaE02E66 : {};
   const r63 = esObjeto(crudo.regla63) ? crudo.regla63 : {};
+  const rB = esObjeto(crudo.reglaLineaB) ? crudo.reglaLineaB : {};
+  // Antes de la banda de la categoría B, su tubo era uno solo guardado como
+  // texto (`tuboLineaB: 'E01'`). Una configuración de esa época se lee como el
+  // tramo delgado de la banda y el resto sale de fábrica.
+  const tuboLineaBLegacy = texto(crudo.tuboLineaB).toUpperCase();
   const saneado: ReglasTuberia = {
     reglaE02E66: {
       descripcion: texto(e0266.descripcion) || d.reglaE02E66.descripcion,
@@ -444,7 +454,14 @@ function normalizarTuberia(crudo: unknown): ReglasTuberia {
       'reglasCategoria (tubería)',
     ),
     tubos: filas(crudo.tubos, d.tubos, saneaTubo, 'tubos'),
-    tuboLineaB: texto(crudo.tuboLineaB).toUpperCase() || d.tuboLineaB,
+    reglaLineaB: {
+      descripcion: texto(rB.descripcion) || d.reglaLineaB.descripcion,
+      anchoMaxM: num(rB.anchoMaxM, d.reglaLineaB.anchoMaxM),
+      codigoHasta:
+        texto(rB.codigoHasta).toUpperCase() || tuboLineaBLegacy || d.reglaLineaB.codigoHasta,
+      codigoDesde: texto(rB.codigoDesde).toUpperCase() || d.reglaLineaB.codigoDesde,
+      categoriaDesde: matchCategoria(rB.categoriaDesde) ?? d.reglaLineaB.categoriaDesde,
+    },
   };
   return { ...saneado, tubos: reponerTubosDeReglas(saneado) };
 }
@@ -675,7 +692,8 @@ function codigosTuboReferenciados(t: ReglasTuberia): string[] {
     ...Object.values(t.codigoPorDiametro),
     ...t.tubos45mm,
     ...t.reglasCategoria.map((rc) => rc.codigo),
-    t.tuboLineaB,
+    t.reglaLineaB.codigoHasta,
+    t.reglaLineaB.codigoDesde,
   ].filter(Boolean);
 }
 
@@ -768,7 +786,8 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
     revisarCodigo(cod, `el tubo por defecto de ${diam} mm`);
   }
   for (const cod of t.tubos45mm) revisarCodigo(cod, 'la lista de tubos de 45 mm');
-  revisarCodigo(t.tuboLineaB, 'la categoría B', false);
+  revisarCodigo(t.reglaLineaB.codigoHasta, 'la categoría B', false);
+  revisarCodigo(t.reglaLineaB.codigoDesde, 'la categoría B sobre el ancho de corte', false);
   for (const rc of t.reglasCategoria) {
     revisarCodigo(rc.codigo, `la regla «${rc.descripcion || rc.codigo}»`);
   }
@@ -799,6 +818,38 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
 
   if (m.bandaOscuridadE78.anchoMaxM <= m.bandaOscuridadE78.anchoMinM) {
     errores.push('En la banda del tubo E78 de oscuridad, el ancho máximo debe ser mayor que el mínimo.');
+  }
+
+  // ── Categoría B
+  if (!(t.reglaLineaB.anchoMaxM > 0)) {
+    errores.push('En la categoría B, el ancho de corte entre los dos tubos debe ser mayor que cero.');
+  }
+  // Un código de bodega declarado para un kit que no existe no rompe nada, pero
+  // significa que la línea del inventario nunca va a salir con ese código.
+  for (const [clave, cod] of Object.entries(m.lineaB.codigoInsumoPorMec)) {
+    const n = Number(clave);
+    if (!Number.isFinite(n) || numsDisponibles.has(n)) continue;
+    avisos.push(
+      `El código de bodega «${cod}» de la categoría B es del MEC ${clave}, que no está en el catálogo de mecanismos.`,
+    );
+  }
+  // Un color con kit de categoría B pero sin ninguno de sus códigos de
+  // estructura: el peso y la cenefa saldrían sin código de bodega.
+  const coloresBAvisados = new Set<string>();
+  for (const rb of m.lineaB.reglas) {
+    for (const clave of Object.keys(rb.mecPorColor)) {
+      const color = colorPorCodigo(clave, r.colores);
+      const nombre = color?.nombre || clave;
+      if (coloresBAvisados.has(nombre.toUpperCase())) continue;
+      const tieneAlguno = CAMPOS_ESTRUCTURA_B.some(
+        (c) => codigoEstructuraBEfectivo(c.campo, nombre, r.colores) !== '',
+      );
+      if (tieneAlguno) continue;
+      coloresBAvisados.add(nombre.toUpperCase());
+      avisos.push(
+        `La categoría B tiene kit para «${clave}», pero ese color no tiene códigos de estructura de categoría B: el peso y la cenefa saldrían sin código de bodega.`,
+      );
+    }
   }
 
   // ── Tipos de cortina propios
@@ -844,6 +895,18 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
       mapasDeColor.push({
         mapa: ra.mecPorColor,
         donde: `la regla por ancho «${ra.descripcion || ra.categoria}»`,
+      });
+    }
+  }
+  for (const rb of m.lineaB.reglas) {
+    const donde = `la categoría B «${rb.descripcion || textoCategoria(rb.categoria)}»`;
+    mapasDeColor.push({ mapa: rb.mecPorColor, donde });
+    if (rb.kitsManualesPorColor) {
+      mapasDeColor.push({
+        mapa: Object.fromEntries(
+          Object.entries(rb.kitsManualesPorColor).map(([k, v]) => [k, v[0] ?? 0]),
+        ),
+        donde,
       });
     }
   }

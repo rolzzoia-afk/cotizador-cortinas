@@ -29,9 +29,11 @@ import {
   duplicarFila,
   etiquetaRespaldo,
   filaNueva,
+  notasConLineaB,
   validarFila,
   type FilaCatalogo,
 } from '@/modules/descuentos/catalogoEdicionModelos';
+import { esFilaLineaB } from '@/modules/descuentos/tipos';
 import {
   cargarRespaldos,
   eliminarFilaCatalogo,
@@ -224,6 +226,11 @@ export function ModelosCatalogoSection() {
                                     INACTIVO
                                   </span>
                                 )}
+                                {esFilaLineaB(f) && (
+                                  <span className="rounded bg-warning/15 px-1 text-[9px] font-semibold text-warning">
+                                    CATEGORÍA B
+                                  </span>
+                                )}
                               </span>
                             </td>
                             {CAMPOS_NUMERICOS.map((c) => (
@@ -325,6 +332,17 @@ export function ModelosCatalogoSection() {
                 valor={edicion.notas}
                 onChange={(v) => setEdicion({ ...edicion, notas: v })}
               />
+
+              <label className="flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={esFilaLineaB(edicion)}
+                  onChange={(e) =>
+                    setEdicion({ ...edicion, notas: notasConLineaB(edicion.notas, e.target.checked) })
+                  }
+                />
+                Categoría B (gama económica) — la marca queda escrita en las notas
+              </label>
 
               <label className="flex items-center gap-2 text-xs">
                 <input

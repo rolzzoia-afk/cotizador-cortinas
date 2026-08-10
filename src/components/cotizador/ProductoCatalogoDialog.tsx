@@ -68,6 +68,12 @@ export default function ProductoCatalogoDialog({
         ? String(prev.anchoRollo)
         : '',
   );
+  // Gama comercial: 'A' | 'B' | '' (sin clasificar). La B hace que la cortina
+  // nazca en categoría B, con su propio juego de herrajes.
+  const [gama, setGama] = useState(() => {
+    const g = String(prev?.categoria ?? '').trim().toUpperCase();
+    return g === 'A' || g === 'B' ? g : '';
+  });
   const [saving, setSaving] = useState(false);
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
 
@@ -112,6 +118,8 @@ export default function ProductoCatalogoDialog({
       descripcion: descripcion.trim(),
       precio: precioNum,
       descuento: dctoNum / 100,
+      // Siempre presente: `undefined` es «sin clasificar» y borra la gama previa.
+      categoria: gama || undefined,
     };
     setSaving(true);
     try {
@@ -243,6 +251,23 @@ export default function ProductoCatalogoDialog({
               placeholder="ej. 2,98"
               className="border-border bg-secondary text-right"
             />
+          </div>
+          <div className="col-span-2">
+            <Label className="mb-1 text-xs">Gama (categoría comercial)</Label>
+            <select
+              value={gama}
+              onChange={(e) => setGama(e.target.value)}
+              className="h-9 w-full rounded-md border border-border bg-secondary px-2 text-sm"
+            >
+              <option value="">— sin clasificar —</option>
+              <option value="A">A (estándar)</option>
+              <option value="B">B (gama económica)</option>
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Una tela de gama B hace que la cortina nazca en categoría B, con su propio juego de
+              herrajes, en las categorías que tienen receta (roller simple, cenefa ovalada 38 y dúo
+              38). Al reimportar el Excel del catálogo, la gama se vuelve a leer de la planilla.
+            </p>
           </div>
         </div>
 

@@ -184,6 +184,24 @@ export function normalizarRespaldos(crudo: unknown): RespaldoCatalogo[] {
     .slice(0, MAX_RESPALDOS);
 }
 
+/** El token con el que una fila se declara de categoría B. Vive en `notas`
+ *  (texto libre) desde que nació la línea B; `esFilaLineaB` lo busca ahí. */
+const TOKEN_LINEA_B = 'LINEA B';
+
+/**
+ * Agrega o quita la marca de categoría B de las notas de una fila, conservando
+ * el resto del texto. Idempotente: marcar dos veces no duplica el token.
+ */
+export function notasConLineaB(notas: string | null | undefined, marcar: boolean): string {
+  const limpio = (notas || '')
+    .replace(/\s*[·|,;-]?\s*L[IÍ]NEA\s+B\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/^\s*[·|,;-]\s*/, '')
+    .trim();
+  if (!marcar) return limpio;
+  return limpio ? `${limpio} · ${TOKEN_LINEA_B}` : TOKEN_LINEA_B;
+}
+
 /** Etiqueta legible de un respaldo: "4 ago 2026, 16:23 · 67 modelos". */
 export function etiquetaRespaldo(r: RespaldoCatalogo): string {
   const d = new Date(r.fecha);

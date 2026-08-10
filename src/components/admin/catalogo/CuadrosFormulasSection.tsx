@@ -273,7 +273,14 @@ function Cuadro({
   return (
     <div className="overflow-hidden rounded-md border">
       <div className="bg-muted/60 px-2 py-1.5">
-        <div className="text-[11px] font-bold uppercase tracking-wide">{cuadro.titulo}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wide">{cuadro.titulo}</span>
+          {cuadro.lineaB && (
+            <span className="rounded bg-warning/15 px-1 text-[9px] font-semibold text-warning">
+              CATEGORÍA B
+            </span>
+          )}
+        </div>
         <div className="text-[10px] text-muted-foreground">{cuadro.subtitulo}</div>
       </div>
 

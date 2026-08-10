@@ -225,6 +225,45 @@ describe('construirCuadrosDeCatalogo', () => {
     expect(medida(c, 'Peso')).toBe(195.8); // tubo − 0,4
     expect(medida(c, 'Tela (ancho)')).toBe(195.7); // peso − 0,1
   });
+
+  it('marca las filas de categoría B para poder distinguirlas', () => {
+    const conB = [
+      ...tabulares,
+      modelo({
+        sistema: 'ROLLER_SIMPLE',
+        tipo_rol: 'ROL_SIMPLE',
+        mecanismo: 'MEC_06_LZ50_B_BLANCO',
+        diametro_tubo_mm: 38,
+        dcto_tubo_cm: 3.8,
+        notas: 'LINEA B',
+      }),
+    ];
+    const cuadros = construirCuadrosDeCatalogo(conB, { anchoCm: 200, altoCm: 240 });
+    expect(cuadros.map((c) => !!c.lineaB)).toEqual([false, true]);
+  });
+});
+
+// El cuadro por definición muestra LA fórmula de una categoría: si una fila de
+// categoría B lo ganara por orden de tabla, el taller leería los descuentos de
+// la gama económica creyendo que son los de siempre.
+describe('los cuadros por definición ignoran las filas de categoría B', () => {
+  it('con la fila B primera en la tabla, el cuadro sigue siendo el de la línea A', () => {
+    // Misma categoría, puesta ANTES: sin el filtro por línea ganaba por orden de
+    // tabla y el taller leía los descuentos de la gama económica.
+    const conB: ModeloDespiece[] = [
+      modelo({
+        sistema: 'VERTICAL',
+        tipo_rol: 'VERTICAL_LAMAS_89',
+        dcto_tubo_cm: 9.9,
+        dcto_perfiles_cm: 9.9,
+        notas: 'LINEA B',
+      }),
+      ...CATALOGO,
+    ];
+    const base = cuadro(construirCuadros(CATALOGO, MEDIDA_PRUEBA_DEFAULT), 'VERTICAL');
+    const conFilaB = cuadro(construirCuadros(conB, MEDIDA_PRUEBA_DEFAULT), 'VERTICAL');
+    expect(conFilaB.filas).toEqual(base.filas);
+  });
 });
 
 describe('qué número edita cada fila', () => {

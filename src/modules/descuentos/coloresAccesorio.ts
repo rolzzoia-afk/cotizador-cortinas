@@ -74,7 +74,24 @@ export type InsumosColor = {
   separador?: string;
   /** Perfil superior de oscuranti (E50 en blanco). */
   perfilSuperior?: string;
+  // ── Categoría B (gama económica) ──────────────────────────────────
+  // La misma cortina con otro juego de herrajes: su peso y su cenefa tienen
+  // código PROPIO por color. Van aparte de los campos de arriba (que son los
+  // de la línea A) porque las dos líneas conviven en la misma OT.
+  /** Barra de peso roller de categoría B (E40 en blanco). */
+  pesoRollerB?: string;
+  /** Peso U de dúo de categoría B (E25 en blanco). */
+  pesoUB?: string;
+  /** Peso interno de dúo de categoría B (E79-B en blanco). En la línea A este
+   *  peso es E13 fijo, sin importar el color. */
+  pesoInternoB?: string;
+  /** Cenefa ovalada de categoría B (E60 en blanco). */
+  cenefaOvaladaB?: string;
 };
+
+/** Grupo de `CAMPOS_INSUMO_COLOR` con los códigos de la categoría B. Se edita
+ *  en su propia sección del catálogo técnico, no en el asistente de colores. */
+export const GRUPO_INSUMOS_B = 'Categoría B';
 
 /** Campos de `InsumosColor`, en el orden en que los pregunta el asistente. */
 export const CAMPOS_INSUMO_COLOR: ReadonlyArray<{
@@ -100,6 +117,10 @@ export const CAMPOS_INSUMO_COLOR: ReadonlyArray<{
   { campo: 'zocalo', label: 'Perfil zócalo', grupo: 'Perfiles y pesos', ejemplo: 'E32' },
   { campo: 'separador', label: 'Perfil separador', grupo: 'Perfiles y pesos', ejemplo: 'E41' },
   { campo: 'perfilSuperior', label: 'Perfil superior (oscuranti)', grupo: 'Perfiles y pesos', ejemplo: 'E50' },
+  { campo: 'pesoRollerB', label: 'Barra de peso roller (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E40' },
+  { campo: 'pesoUB', label: 'Peso U de dúo (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E25' },
+  { campo: 'pesoInternoB', label: 'Peso interno de dúo (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E79-B' },
+  { campo: 'cenefaOvaladaB', label: 'Cenefa ovalada (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E60' },
 ];
 
 /** Los campos de `InsumosColor` que son número de MEC y no código de insumo. */

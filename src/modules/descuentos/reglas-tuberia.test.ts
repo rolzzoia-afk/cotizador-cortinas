@@ -435,7 +435,9 @@ describe('diametroDesdeChipMecanismo', () => {
       'LZ50 SFLX NGR [MEC 11]': 38,
       'LZ50 SFLX GRIS [MEC 13]': 38,
       'LZ50 SFLX BCO [MEC 14]': 38,
-      // LÍNEA B (gama económica): todos sobre tubo E01, de 38 mm.
+      // CATEGORÍA B: 38 es el diámetro de su FILA de despiece. El tubo real lo
+      // fija la banda por ancho (E01 Ø38 hasta 2,5 m · E39 Ø45 por encima), no
+      // esta heurística — que solo filtra el selector, donde la B no elige.
       'LZ50 PEQUEÑO NGR CAT.B [MEC 15]': 38,
       'OVALADA BCO CAT.B [MEC 37]': 38,
       'ROLLER BCO CAT.B [MEC 44]': 38,
