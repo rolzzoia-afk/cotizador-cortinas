@@ -12,6 +12,7 @@
 import type { AdicionalFase0Persistido, VentanaItem } from '@/modules/ots/types';
 import { medidaCenefaSoftLight, varianteSoftLight } from './reglas-soft-light';
 import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
+import { familiaOscuridad } from './reglas-oscuridad';
 import type { ModeloDespiece } from './tipos';
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
@@ -154,6 +155,134 @@ export function ubicacionCoincideConAdicional(ubicFila: string, ubicAdicional: s
   return !!fila && fila === adic;
 }
 
+// ── A qué CORTINA le toca la cenefa ──────────────────────────────────────
+// La UBIC. no identifica una cortina: el sufijo -G1/-G2 solo separa los paños
+// DENTRO de una ventana, así que dos cortinas escritas "PPAL" comparten clave.
+// Cuando eso pasa hay que mirar la CATEGORÍA (regla del dueño 2026-08-10): si
+// una de las cortinas lleva cenefa por diseño y las otras no, la cenefa es de
+// esa. En la OT 3169 un soft light y dos roller compartían PPAL, y la única
+// cenefa comprada terminó marcada en las tres.
+
+/** Una cortina que compite por la cenefa de una UBIC. compartida. */
+export type CandidatoCenefa = {
+  /** Ventana a la que pertenece; lo usa quien llama para reconocer al ganador. */
+  ventanaId: string;
+  /** Índice del paño dentro de su ventana. */
+  panoIndex: number;
+  categoria?: string | null;
+  /** Ancho vendido en METROS: la misma unidad que `cantidad` del adicional. */
+  anchoM: number;
+  /** Cenefa ya elegida en el paño, si la hay. */
+  cenefaPano?: string | null;
+  /** `sistema` del modelo de fabricación (CENEFA_OVALADA, CENEFA_OVALADA_DUO…). */
+  sistemaModelo?: string | null;
+};
+
+/** Forma mínima de una ventana para armar candidatos (Ventana y VentanaItem calzan). */
+type VentanaConPanos = {
+  id?: string | number;
+  ubicacion?: string | null;
+  categoria?: string | null;
+  modelo?: { sistema?: string } | null;
+  panos?: ReadonlyArray<{ ancho?: number | string; cenefa?: unknown }> | null;
+};
+
+/**
+ * ¿Esta cortina lleva cenefa POR DISEÑO? El soft light ovalado y todo sistema
+ * «cenefa ovalada» (incluido el dúo, cuyo `sistema` es CENEFA_OVALADA_DUO
+ * aunque su categoría no lo diga) traen la ovalada puesta; DARK, oscuranti y el
+ * soft light con cenefa cuadrada traen la cuadrada. En un roller simple la
+ * cenefa es opcional y la elige quien vende, así que no dice nada.
+ */
+export function llevaCenefaPorCategoria(
+  tipo: 'Ovalada' | 'Cuadrada',
+  cortina: { categoria?: string | null; cenefaPano?: string | null; sistemaModelo?: string | null },
+  tipos?: readonly TipoCortina[],
+): boolean {
+  // La cenefa del paño entra en el cálculo de la familia: un soft light al que
+  // le eligieron cuadrada deja de ser candidato a la ovalada, y al revés.
+  const fam = familiaOscuridad(cortina.categoria, cortina.cenefaPano, tipos);
+  const esSoftLightOvalado = fam === 'SOFT_LIGHT_38' || fam === 'SOFT_LIGHT_45';
+  if (tipo === 'Ovalada') {
+    if (esSoftLightOvalado) return true;
+    if ((cortina.sistemaModelo || '').toUpperCase().includes('CENEFA_OVALADA')) return true;
+    return categoriaEfectiva(cortina.categoria, tipos).toUpperCase().includes('CENEFA_OVALADA');
+  }
+  // Cuadrada: cualquier sistema de oscuridad que no sea el soft light ovalado.
+  return !!fam && !esSoftLightOvalado;
+}
+
+/** Cortinas de la cotización que caen en la MISMA UBIC. que `ubic`. */
+export function candidatosCenefaEnUbic(
+  ubic: string,
+  ventanas: readonly VentanaConPanos[] | undefined,
+): CandidatoCenefa[] {
+  const key = normalizarUbicacion(ubic);
+  if (!key || !ventanas?.length) return [];
+  const out: CandidatoCenefa[] = [];
+  for (const v of ventanas) {
+    const panos = v.panos || [];
+    const total = panos.length;
+    panos.forEach((p, i) => {
+      if (normalizarUbicacion(ubicPanoVentana(v.ubicacion || '', i, total)) !== key) return;
+      out.push({
+        ventanaId: String(v.id ?? ''),
+        panoIndex: i,
+        categoria: v.categoria,
+        anchoM: parseFloat(String(p.ancho ?? 0)) || 0,
+        cenefaPano: typeof p.cenefa === 'string' ? p.cenefa : null,
+        sistemaModelo: v.modelo?.sistema ?? null,
+      });
+    });
+  }
+  return out;
+}
+
+/**
+ * De todas las cortinas que comparten una UBIC., ¿a cuál le toca esta cenefa?
+ * Gana la que la lleva por CATEGORÍA; entre iguales desempata el ancho más
+ * parecido a la cantidad del adicional (que ES el ancho en metros). Con una
+ * sola cortina en la ubicación devuelve esa, como siempre.
+ */
+export function cortinaDeLaCenefa(
+  candidatos: readonly CandidatoCenefa[],
+  adicional: { cantidad?: number },
+  tipo: 'Ovalada' | 'Cuadrada',
+  tipos?: readonly TipoCortina[],
+): CandidatoCenefa | null {
+  if (candidatos.length === 0) return null;
+  if (candidatos.length === 1) return candidatos[0];
+
+  const porCategoria = candidatos.filter((c) => llevaCenefaPorCategoria(tipo, c, tipos));
+  const finalistas = porCategoria.length > 0 ? porCategoria : candidatos;
+  if (finalistas.length === 1) return finalistas[0];
+
+  const objetivo = Number(adicional.cantidad) || 0;
+  if (!(objetivo > 0)) return finalistas[0];
+  // Empate exacto → la primera, para que el resultado no dependa del orden de
+  // recorrido cuando dos cortinas iguales comparten ubicación.
+  return finalistas.reduce((mejor, c) =>
+    Math.abs(c.anchoM - objetivo) < Math.abs(mejor.anchoM - objetivo) - 1e-9 ? c : mejor,
+  );
+}
+
+/** ¿Esta cenefa le corresponde a ESTE paño? (false si es de una cortina vecina). */
+export function cenefaAdicionalEsDelPano(
+  adicional: { cantidad?: number; codInt?: string },
+  pano: { ventanaId: string; panoIndex: number },
+  candidatos: readonly CandidatoCenefa[],
+  tipos?: readonly TipoCortina[],
+): boolean {
+  // Sin candidatos (quien llama no pasó las ventanas) no se cambia nada: el
+  // comportamiento histórico es "la cenefa de la UBIC. es mía".
+  if (candidatos.length === 0) return true;
+  const tipo = adicional.codInt ? tipoCenefaDesdeAdicional(adicional.codInt) : null;
+  if (!tipo) return true;
+  const gana = cortinaDeLaCenefa(candidatos, adicional, tipo, tipos);
+  if (!gana) return true;
+  return gana.ventanaId === pano.ventanaId && gana.panoIndex === pano.panoIndex;
+}
+
 // ── Mapeo FORWARD paño → adicional de cenefa ─────────────────────────────
 // Al reconciliar la cotización, cada paño con cenefa genera un adicional
 // cobrable (Ovalada → CENF O, Cuadrada → CENF C), vinculado por UBIC. a su
@@ -192,6 +321,43 @@ export function derivarAdicionalesCenefaDesdeVentanas(
         origen: 'pano',
       });
     });
+  }
+  return out;
+}
+
+/**
+ * Descarta los derivados que ya están cubiertos por una línea MANUAL, contando
+ * por CUPO: una cenefa escrita a mano tapa UNA cortina, no todas las de esa
+ * ubicación. Antes la pregunta era «¿hay alguna manual acá?» y con tres cortinas
+ * en la misma UBIC. se cobraba una sola (OT 3169).
+ */
+export function filtrarDerivadosPorCupoManual(
+  derivados: readonly AdicionalFase0Persistido[],
+  manuales: readonly AdicionalFase0Persistido[],
+): AdicionalFase0Persistido[] {
+  const clave = (a: AdicionalFase0Persistido, tipo: 'Ovalada' | 'Cuadrada') =>
+    `${tipo}|${normalizarUbicacion(a.ubicacion || '')}`;
+  const cupo = new Map<string, number>();
+  for (const m of manuales) {
+    const tipo = m.codInt ? tipoCenefaDesdeAdicional(m.codInt) : null;
+    if (!tipo) continue;
+    const k = clave(m, tipo);
+    cupo.set(k, (cupo.get(k) ?? 0) + 1);
+  }
+  const out: AdicionalFase0Persistido[] = [];
+  for (const d of derivados) {
+    const tipo = d.codInt ? tipoCenefaDesdeAdicional(d.codInt) : null;
+    if (!tipo) {
+      out.push(d);
+      continue;
+    }
+    const k = clave(d, tipo);
+    const restante = cupo.get(k) ?? 0;
+    if (restante > 0) {
+      cupo.set(k, restante - 1);
+      continue;
+    }
+    out.push(d);
   }
   return out;
 }

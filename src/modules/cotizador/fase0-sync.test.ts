@@ -106,6 +106,91 @@ describe('fase0-sync', () => {
     expect(out.panos[0].cenefaTira).toBe('CON TIRA');
   });
 
+  // La cenefa cargada A MANO en Fase 1 no trae el dato de la tira: esa pantalla
+  // no tiene el interruptor. Traducir "sin dato" como SIN TIRA dejaba esa tira
+  // ESCRITA en el paño, y de ahí pasaba a la pantalla de terreno, a la etiqueta
+  // y al Excel de órdenes (OT 268-5).
+  const cenefaEnUbic = (codInt: string, conTira?: boolean) => {
+    const ventana = {
+      id: '1',
+      ubicacion: 'PPAL',
+      codInt: 'BK 18',
+      panos: [{ ancho: 2.81, alto: 2, color: 'NEGRO' } as Pano],
+    } as Ventana;
+    const adicional: Record<string, unknown> = {
+      codInt,
+      cantidad: 2.81,
+      descuento: 30,
+      ubicacion: 'PPAL',
+    };
+    if (conTira !== undefined) adicional.conTira = conTira;
+    return enriquecerVentanaDesdeFase0(ventana, undefined, [adicional as never]).panos[0];
+  };
+
+  it('cenefa ovalada SIN dato de tira en el adicional → CON TIRA (el default)', () => {
+    expect(cenefaEnUbic('CENF O').cenefaTira).toBe('CON TIRA');
+  });
+
+  it('cenefa ovalada con la tira apagada a propósito → SIN TIRA', () => {
+    expect(cenefaEnUbic('CENF O', false).cenefaTira).toBe('SIN TIRA');
+  });
+
+  it('cenefa cuadrada sin dato de tira → SIN TIRA, que no lleva', () => {
+    const p = cenefaEnUbic('CENF C');
+    expect(p.cenefa).toBe('Cuadrada');
+    expect(p.cenefaTira).toBe('SIN TIRA');
+  });
+
+  // OT 3169: tres cortinas escritas "PPAL" y UNA sola cenefa comprada. La
+  // ubicación no identifica una cortina, así que la cenefa se le marcaba a las
+  // tres y el taller cortaba tres.
+  describe('varias cortinas en la MISMA ubicación', () => {
+    const softLight = {
+      id: 'sl',
+      ubicacion: 'PPAL',
+      categoria: 'SOFT_LIGHT_45mm',
+      codInt: 'BK 60',
+      panos: [{ ancho: 2.81, alto: 2.398, color: 'NEGRO' } as Pano],
+    } as Ventana;
+    const roller = (id: string, ancho: number) =>
+      ({
+        id,
+        ubicacion: 'PPAL',
+        categoria: 'ROL',
+        codInt: 'SC 65',
+        panos: [{ ancho, alto: 2.398, color: 'NEGRO' } as Pano],
+      }) as Ventana;
+    const todas = [softLight, roller('r1', 1.357), roller('r2', 1.455)];
+    const adicionales = [
+      { codInt: 'CENF O', cantidad: 2.81, descuento: 30, ubicacion: 'PPAL', colorAcc: 'NEGRO' },
+    ];
+
+    it('la cenefa queda en el soft light y NO contagia a los roller', () => {
+      const [sl, r1, r2] = todas.map((v) =>
+        enriquecerVentanaDesdeFase0(v, undefined, adicionales, todas),
+      );
+      expect(sl.panos[0].cenefa).toBe('Ovalada');
+      expect(sl.panos[0].cenefaTira).toBe('CON TIRA');
+      expect(r1.panos[0].cenefa).toBeUndefined();
+      expect(r2.panos[0].cenefa).toBeUndefined();
+      // Tampoco se les contagia la tira ni el color de tapa.
+      expect(r1.panos[0].cenefaTira).toBeUndefined();
+      expect(r1.panos[0].colorTapa).toBeUndefined();
+    });
+
+    it('sin la lista de ventanas se conserva el comportamiento histórico', () => {
+      const r1 = enriquecerVentanaDesdeFase0(roller('r1', 1.357), undefined, adicionales);
+      expect(r1.panos[0].cenefa).toBe('Ovalada');
+    });
+
+    it('una cortina sola en su ubicación sigue tomando su cenefa', () => {
+      const sola = { ...roller('r1', 1.357), ubicacion: 'VISITA' } as Ventana;
+      const adicVisita = [{ codInt: 'CENF O', cantidad: 1.357, descuento: 0, ubicacion: 'VISITA' }];
+      const out = enriquecerVentanaDesdeFase0(sola, undefined, adicVisita, [sola]);
+      expect(out.panos[0].cenefa).toBe('Ovalada');
+    });
+  });
+
   it('adicional CEN-PRO → pre-selecciona cenefa Cuadrada', () => {
     const ventana = {
       id: '1',

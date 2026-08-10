@@ -498,7 +498,9 @@ export function CotizadorFase2() {
       if (md) modelo = md;
     }
     const adicionalesFase0 = ot?.datosGenerales.adicionalesFase0;
-    const enriquecida = enriquecerVentanaDesdeFase0(v, catalogo, adicionalesFase0);
+    // `ventanas` viaja para resolver a qué cortina le toca una cenefa cuando
+    // varias comparten la misma UBIC. (la ubicación no identifica una cortina).
+    const enriquecida = enriquecerVentanaDesdeFase0(v, catalogo, adicionalesFase0, ventanas);
     const panos =
       enriquecida.panos.length > 0
         ? enriquecida.panos
@@ -507,6 +509,7 @@ export function CotizadorFase2() {
               adicionalesFase0,
               panoIndex: 0,
               totalPanos: 1,
+              ventanasOT: ventanas,
             }),
           ];
     const base: Ventana = { ...enriquecida, modelo, panos };
