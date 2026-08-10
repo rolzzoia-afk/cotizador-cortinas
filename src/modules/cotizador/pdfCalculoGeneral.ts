@@ -325,6 +325,14 @@ export function construirCalculoGeneral(
       // que la hoja de Fase 4 (regla de categoría → kit inventario por color
       // 32/33/34, pisando los MEC legacy del modelo Excel como MEC_05/MEC_10).
       // Si no resuelve a un chip, cae al id del modelo (comportamiento previo).
+      const lineaB = esLineaB(
+        p as Pano,
+        v.codInt as string | undefined,
+        catalogo,
+        v.categoria,
+        reglas.mecanismo,
+        reglas.tipos,
+      );
       const mecChip = mecanismoParaPano(
         { ...p, mecanismo: p.mecanismo as string },
         v.color as string,
@@ -334,7 +342,7 @@ export function construirCalculoGeneral(
         anchoM,
         opts?.usarTuboE78 ?? false,
         reglas,
-        esLineaB(p as Pano, v.codInt as string | undefined, catalogo, v.categoria, reglas.mecanismo, reglas.tipos),
+        lineaB,
       );
       const codMecanismo =
         [mecChip, (p.colorMecanismo as string) || ''].filter(Boolean).join(' ') ||
@@ -355,6 +363,7 @@ export function construirCalculoGeneral(
                 anchoM,
                 v.categoria,
                 reglas.tuberia,
+                lineaB,
               ),
               reglas.tuberia,
             ),

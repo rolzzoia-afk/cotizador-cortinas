@@ -98,6 +98,32 @@ export const PESO_INTERNO_B_POR_COLOR: Record<string, string> = {
   NEGRO: 'E71-B',
 };
 
+/** Las cuatro piezas cuyo código cambia en la categoría B, con su tabla de
+ *  fábrica. Un color puede pisar cualquiera declarando el campo en `insumos`;
+ *  el catálogo técnico usa esta lista para dibujar la tabla y el validador para
+ *  avisar cuando un color con kit B no tiene con qué armar el despiece. */
+export const CAMPOS_ESTRUCTURA_B: ReadonlyArray<{
+  campo: keyof InsumosColor;
+  label: string;
+  fabrica: Record<string, string>;
+}> = [
+  { campo: 'pesoRollerB', label: 'Barra de peso roller', fabrica: PESO_ROLLER_B_POR_COLOR },
+  { campo: 'pesoUB', label: 'Peso U de dúo', fabrica: PESO_U_B_POR_COLOR },
+  { campo: 'pesoInternoB', label: 'Peso interno de dúo', fabrica: PESO_INTERNO_B_POR_COLOR },
+  { campo: 'cenefaOvaladaB', label: 'Cenefa ovalada', fabrica: CENEFA_OVALADA_B_POR_COLOR },
+];
+
+/** Código de categoría B que le queda a un color para una pieza: lo que el
+ *  color declaró, o la tabla de fábrica. '' cuando no hay ninguno de los dos. */
+export function codigoEstructuraBEfectivo(
+  campo: keyof InsumosColor,
+  color: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
+): string {
+  const fila = CAMPOS_ESTRUCTURA_B.find((c) => c.campo === campo);
+  return conOverlay(campo, color, colores, fila?.fabrica[colorCanonico(color)] || '');
+}
+
 /** Peso inferior de sistemas de oscuridad (Soft Light / Dark): código por color. */
 export const PESO_OSCURIDAD_POR_COLOR: Record<string, string> = {
   BLANCO: 'E24',
@@ -233,19 +259,21 @@ export function codigoEstructura(
       return tuberiaCod || '';
     case 'PESO INTERNO':
       // En la línea B el peso interno SÍ depende del color (en la A es E13 fijo).
-      return lineaB ? PESO_INTERNO_B_POR_COLOR[color] || '' : COD_PESO_INTERNO;
+      return lineaB
+        ? overlay('pesoInternoB', PESO_INTERNO_B_POR_COLOR[color] || '')
+        : COD_PESO_INTERNO;
     case 'PESO':
-      if (lineaB) return PESO_ROLLER_B_POR_COLOR[color] || '';
+      if (lineaB) return overlay('pesoRollerB', PESO_ROLLER_B_POR_COLOR[color] || '');
       return overlay('pesoRoller', PESO_ROLLER_POR_COLOR[color] || '');
     case 'PESO U':
-      if (lineaB) return PESO_U_B_POR_COLOR[color] || '';
+      if (lineaB) return overlay('pesoUB', PESO_U_B_POR_COLOR[color] || '');
       return overlay('pesoU', PESO_U_POR_COLOR[color] || '');
     case 'PESO SOFT LIGHT':
       // Peso inferior de oscuridad (Soft Light / Dark): E24 blanco / E44 negro.
       // Gris no aplica (soft light no se vende en gris) → cae al color.
       return overlay('pesoOscuridad', PESO_OSCURIDAD_POR_COLOR[color] || '');
     case 'CENEFA OVALADA':
-      if (lineaB) return CENEFA_OVALADA_B_POR_COLOR[color] || '';
+      if (lineaB) return overlay('cenefaOvaladaB', CENEFA_OVALADA_B_POR_COLOR[color] || '');
       return overlay('cenefaOvalada', CENEFA_OVALADA_POR_COLOR[color] || '');
     // BEEBLACK: los 4 perfiles son el mismo riel; las manillas, la agarradera.
     case 'PERFIL SUPERIOR (ANCHO)':

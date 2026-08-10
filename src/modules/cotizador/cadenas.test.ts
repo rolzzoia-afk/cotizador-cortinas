@@ -44,8 +44,13 @@ describe('codCadenaAutoPorAlto', () => {
     expect(codCadenaAutoPorAlto(1.0, 'NEG', 'ROL', INV_AUTO)).toBe('CAD14');
     expect(codCadenaAutoPorAlto(0.6, 'NEG', 'ROL', INV_AUTO)).toBe('CAD18');
   });
-  it('dúo → siempre 1,40 m (por color); gris corto roller → 2,4 gris (CAD20)', () => {
-    expect(codCadenaAutoPorAlto(2.3, 'GRS', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD19');
+  it('el dúo usa la MISMA escalera que el roller (corrección 2026-08-10)', () => {
+    // Caso de la OT 268-4: un dúo de 1,93 m salía con la cadena corta de 70 cm.
+    expect(codCadenaAutoPorAlto(1.93, 'BCO', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD06');
+    // Un dúo bajo igual llega a la corta, pero por el tramo de 0,5 m.
+    expect(codCadenaAutoPorAlto(0.6, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD18');
+  });
+  it('gris corto roller → 2,4 gris (CAD20)', () => {
     expect(codCadenaAutoPorAlto(1.0, 'GRS', 'ROL', INV_AUTO)).toBe('CAD20');
   });
   it('MET/CAFÉ → null; alto <0,5 → null', () => {
@@ -250,17 +255,31 @@ describe('reglas de cadena editables', () => {
     expect(codCadenaAutoPorAlto(1.9, 'BCO', 'ROL', inv, undefined, reglas)).toBe('CAD05');
   });
 
-  it('la regla del dúo es "empieza con", no "contiene": la pletina dúo usa la escalera', () => {
-    // DUO_BK arranca con DUO → cadena corta de 1,40 m.
-    expect(largoCadenaAuto(2.5, 'DUOBK')?.largo).toBe('1.4mts');
+  it('una regla por categoría gana sobre la escalera, con match "empieza con"', () => {
+    // De fábrica ya no hay regla por categoría: hasta el dúo manda el alto.
+    expect(largoCadenaAuto(2.5, 'DUOBK')?.largo).toBe('4mts');
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      reglasCategoria: [
+        { descripcion: 'Dúo: cadena corta', categoria: { empiezaCon: 'DUO' }, largo: '1.4mts' },
+      ],
+    };
+    // DUOBK arranca con DUO → la regla lo agarra.
+    expect(largoCadenaAuto(2.5, 'DUOBK', undefined, reglas)?.largo).toBe('1.4mts');
     // PLETINA_DUO_V contiene "DUO" pero no empieza con él: manda el alto.
-    expect(largoCadenaAuto(2.5, 'PLETINA_DUO_V')?.largo).toBe('4mts');
+    expect(largoCadenaAuto(2.5, 'PLETINA_DUO_V', undefined, reglas)?.largo).toBe('4mts');
   });
 
   it('el motivo dice por qué se eligió ese largo', () => {
     expect(largoCadenaAuto(2.5, 'ROL')?.motivo).toContain('desde 2 m');
-    expect(largoCadenaAuto(2.5, 'DUOBK')?.motivo).toContain('Dúo');
     expect(largoCadenaAuto(0.3, 'ROL')).toBeNull(); // bajo el tramo más chico
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      reglasCategoria: [
+        { descripcion: 'Dúo: cadena corta', categoria: { empiezaCon: 'DUO' }, largo: '1.4mts' },
+      ],
+    };
+    expect(largoCadenaAuto(2.5, 'DUOBK', undefined, reglas)?.motivo).toContain('Dúo');
   });
 
   it('una cadena declarada manda sobre el nombre del insumo', () => {

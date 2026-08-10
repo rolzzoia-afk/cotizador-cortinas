@@ -45,6 +45,12 @@ export function guardarProductoEnCatalogo(
   }
 
   nuevoCat[keyNueva] = { ...(prev ?? {}), ...cambios };
+  // El merge conserva lo que el diálogo no edita, así que borrar un campo hay
+  // que pedirlo explícitamente: `categoria: undefined` es «sin clasificar», no
+  // «no lo toques». Sin esto no se podía sacarle la gama a una tela.
+  if ('categoria' in cambios && cambios.categoria === undefined) {
+    delete nuevoCat[keyNueva].categoria;
+  }
   if (anchoRolloM != null && anchoRolloM > 0) {
     nuevoAncho[keyNueva] = anchoRolloM;
     nuevoCat[keyNueva].anchoRollo = anchoRolloM;

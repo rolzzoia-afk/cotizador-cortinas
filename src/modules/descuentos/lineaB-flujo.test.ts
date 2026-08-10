@@ -21,7 +21,7 @@ import {
   mecLineaB,
   numeroMecDeChip,
 } from './reglas-mecanismo';
-import { codigoTuboPorAncho, tuberiaParaPano } from './reglas-tuberia';
+import { codigoTuboPorAncho, tuberiaCodigoCorto, tuberiaParaPano } from './reglas-tuberia';
 import { esFilaLineaB, modelosParaCategoria } from './tipos';
 import {
   OPCIONES_MECANISMO,
@@ -236,19 +236,78 @@ describe('línea B — la fila del catálogo y sus medidas de corte', () => {
   });
 });
 
-describe('línea B — tubo E01 en todo ancho', () => {
-  it('nunca sube a E66/E78/E65 por ancho', () => {
-    for (const ancho of [1.0, 2.5, 3.5]) {
-      expect(codigoTuboPorAncho(B_SIMPLE_MEC06, ancho, 'ROL', undefined, true)).toBe('E01');
+// La categoría B tiene UNA sola banda por ancho, la suya: hasta 2,5 m el tubo
+// delgado E01 (Ø38 0,8) y por encima el E39 (Ø45 1,2), porque el E01 no aguanta
+// esos anchos. No participa de ninguna banda de la categoría A. El tramo ancho
+// SOLO existe en roller simple: la ovalada y el dúo B no tienen tubo para eso.
+describe('categoría B — su propia banda de tubo (E01 / E39)', () => {
+  const tuboB = (ancho: number, categoria = 'ROL', modelo = B_SIMPLE_MEC06) =>
+    codigoTuboPorAncho(modelo, ancho, categoria, undefined, true);
+
+  it('hasta 2,5 m va el E01; el 2,50 exacto todavía es E01', () => {
+    expect(tuboB(1.0)).toBe('E01');
+    expect(tuboB(2.2)).toBe('E01');
+    expect(tuboB(2.5)).toBe('E01');
+  });
+
+  it('sobre 2,5 m el roller simple pasa al E39', () => {
+    expect(tuboB(2.51)).toBe('E39');
+    expect(tuboB(2.8)).toBe('E39');
+    expect(tuboB(3.0)).toBe('E39');
+  });
+
+  it('el E39 SOLO existe en roller simple: la ovalada y el dúo se quedan en E01', () => {
+    const oval = 'ROL_MANUAL_CENEFA_OVALADA_38mm';
+    expect(tuboB(2.8, oval, B_OVAL_BCO)).toBe('E01');
+    expect(tuboB(3.0, oval, B_OVAL_NEG)).toBe('E01');
+    expect(tuboB(2.8, 'DUO_MANUAL_38mm', B_DUO_BCO)).toBe('E01');
+    // Lo que corta a esas cortinas es el ancho máximo de su fila, no el tubo.
+    expect(B_OVAL_BCO.ancho_max_m).toBeLessThanOrEqual(2.5);
+  });
+
+  it('el match de la categoría es EXACTO: «ROL_MANUAL_…» no es «ROL»', () => {
+    // Con un `includes` en vez de igualdad, la ovalada se llevaría el E39 solo
+    // porque su nombre empieza con ROL. Este test fija justamente eso.
+    expect(tuboB(2.8, 'ROL')).toBe('E39');
+    expect(tuboB(2.8, 'ROL_MANUAL_CENEFA_OVALADA_38mm', B_OVAL_BCO)).toBe('E01');
+  });
+
+  it('no participa de las bandas de la categoría A (E66/E78/E65)', () => {
+    for (const ancho of [1.0, 2.5, 2.8, 3.5]) {
+      expect(['E01', 'E39']).toContain(tuboB(ancho));
     }
-    // La misma cortina en línea A sí obedece la regla E02/E66.
+    // La misma cortina en la categoría A sí obedece la regla E02/E66.
     expect(codigoTuboPorAncho(A_SIMPLE_BCO, 1.0, 'ROL')).toBe('E02');
     expect(codigoTuboPorAncho(A_SIMPLE_BCO, 2.5, 'ROL')).toBe('E66');
   });
 
-  it('el chip sale del catálogo aunque E01 esté oculto en el selector', () => {
-    const chip = tuberiaParaPano(1.5, B_SIMPLE_MEC06, '', OPCIONES_TUBERIA, 'ROL', undefined, true);
-    expect(chip).toContain('E01');
+  it('el ancho mueve el TUBO pero no el KIT', () => {
+    expect(numeroMecDeChip(mecB({}, 'BLANCO', 'ROL', 2.8))).toBe(6);
+    expect(numeroMecDeChip(mecB({}, 'NEGRO', 'ROL', 2.8))).toBe(15);
+  });
+
+  it('el chip sale del catálogo aunque los dos tubos estén ocultos', () => {
+    const chipAngosto = tuberiaParaPano(
+      1.5, B_SIMPLE_MEC06, '', OPCIONES_TUBERIA, 'ROL', undefined, true,
+    );
+    expect(chipAngosto).toContain('E01');
+    const chipAncho = tuberiaParaPano(
+      2.8, B_SIMPLE_MEC06, '', OPCIONES_TUBERIA, 'ROL', undefined, true,
+    );
+    expect(chipAncho).toContain('E39');
+    // La ovalada ancha se queda con su E01.
+    const chipOval = tuberiaParaPano(
+      2.8, B_OVAL_BCO, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_38mm', undefined, true,
+    );
+    expect(chipOval).toContain('E01');
+  });
+
+  it('el rótulo lleva el diámetro REAL del tubo, no el de la fila de despiece', () => {
+    // La fila del catálogo es de 38 mm y sirve para los dos tubos; el E39 es de 45.
+    expect(tuberiaCodigoCorto(B_SIMPLE_MEC06, '', 1.5, 'ROL', undefined, true)).toBe('38mm_E01');
+    expect(tuberiaCodigoCorto(B_SIMPLE_MEC06, '', 2.8, 'ROL', undefined, true)).toBe('45mm_E39');
+    // En la categoría A manda el diámetro del modelo, como siempre.
+    expect(tuberiaCodigoCorto(A_SIMPLE_BCO, '', 1.5, 'ROL')).toBe('38mm_E02');
   });
 });
 

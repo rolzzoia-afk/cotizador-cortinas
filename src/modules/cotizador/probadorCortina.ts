@@ -28,8 +28,11 @@ import {
   categoriaRequiereMecanismo,
   reglaAnchoAplicable,
   reglaCategoriaAplicable,
+  reglaLineaBAplicable,
   numeroMecPorColor,
+  textoCategoria,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { categoriaTieneLineaB } from './lineaB';
 import {
   REGLAS_SELECCION_DEFAULT,
   derivarOpciones,
@@ -127,8 +130,16 @@ export function resolverCortinaDePrueba(
   const { modelos, cadenas = [] } = deps;
   const { categoria, anchoM, altoM, color, cenefa } = entrada;
   const usarE78 = !!entrada.usarTuboE78;
-  const lineaB = !!entrada.lineaB;
   const avisos: string[] = [];
+  // Mismo gate que en producción (`esLineaB`): la categoría B solo existe donde
+  // tiene recetas. Sin esto el banco mostraba un soft light con tubo E01, cosa
+  // que en una OT real no pasa nunca.
+  const lineaB = !!entrada.lineaB && categoriaTieneLineaB(categoria, reglas.mecanismo, reglas.tipos);
+  if (entrada.lineaB && !lineaB) {
+    avisos.push(
+      'Esta categoría no tiene recetas de categoría B: se fabrica con los herrajes de siempre.',
+    );
+  }
 
   const opc = derivarOpciones(reglas, usarE78);
   const esBeeblack = esCategoriaBeeblack(categoria);
@@ -143,6 +154,7 @@ export function resolverCortinaDePrueba(
     usarE78,
     reglas.mecanismo,
     reglas.tipos,
+    lineaB,
   );
   if (!modelo && !esBeeblack) {
     avisos.push(
@@ -173,10 +185,15 @@ export function resolverCortinaDePrueba(
     anchoM,
     usarE78,
     reglas,
+    lineaB,
   );
-  const reglaKit = explicarKit(categoria, anchoM, color, usarE78, reglas, kit);
+  const reglaKit = explicarKit(categoria, anchoM, color, usarE78, reglas, kit, lineaB);
   if (!kit && categoriaRequiereMecanismo(categoria, reglas.mecanismo) && !esVertical) {
-    avisos.push('Ninguna regla elige un kit para este color: lo tiene que poner el vendedor.');
+    avisos.push(
+      lineaB
+        ? 'Este color no tiene kit de categoría B: la OT queda bloqueada en Fase 2 hasta cambiar el color o pasarla a la categoría A.'
+        : 'Ninguna regla elige un kit para este color: lo tiene que poner el vendedor.',
+    );
   }
 
   // ── Tubería (el beeblack no lleva: su estructura son los perfiles)
@@ -226,6 +243,9 @@ export function resolverCortinaDePrueba(
   }
 
   // ── Insumos de bodega del paño
+  // Sin `lineaB` a propósito: las tapas, los brackets y los tarugos son los
+  // mismos en las dos líneas. Lo único que cambia es el código del KIT, y ese
+  // lo emite el inventario (bom.ts / pdfInventario.ts) con `codigoInsumoMec`.
   const insumos = insumosDePano(pano, {
     categoria,
     ventanaColor: color,
@@ -260,7 +280,18 @@ function explicarKit(
   usarE78: boolean,
   reglas: ReglasSeleccion,
   kit: string,
+  lineaB = false,
 ): string {
+  // La categoría B decide ANTES que todo lo demás (incluida la regla por
+  // ancho), y un color sin receta no cae a los kits de la línea A.
+  if (lineaB) {
+    const regla = reglaLineaBAplicable(categoria, reglas.mecanismo, reglas.tipos);
+    if (regla) {
+      return kit
+        ? `categoría B por color (regla «${regla.descripcion || textoCategoria(regla.categoria)}»)`
+        : 'categoría B: este color no tiene kit, y no cae a los de la línea A';
+    }
+  }
   if (!kit) return 'ninguna regla aplica: lo elige el vendedor';
   if (kit === 'VELCRO') return 'pletina: va con velcro, sin kit de mecanismo';
 

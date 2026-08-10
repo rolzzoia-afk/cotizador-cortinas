@@ -104,13 +104,23 @@ describe('derivación desde los valores de fábrica', () => {
       E05: 'E05 - TUBO Ø 45 mm',
       E47: 'E47 - TUBO Ø 63 mm',
       E65: 'E65 - TUBO (.63mm)',
-      // Tubo de la LÍNEA B: oculto en el selector, pero resuelve como los demás.
+      // Tubos de la CATEGORÍA B: ocultos en el selector, resuelven como los demás.
       E01: 'E01 - TUBO 0.8 / Ø 38 mm',
+      E39: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45) (GAMA B)',
     });
   });
 
   it('los espesores derivados son los que usaba la etiqueta Brother', () => {
-    expect(espesorTuboPorCodigo()).toEqual({ E01: 0.8, E02: 1.2, E66: 2.5, E78: 1.2 });
+    // OJO con el E39: el «.43/.45» de su nombre es el CALIBRE, no la pared —
+    // igual que el «(.40mm)» del E66, cuyo espesor es 2,5. El suyo es el 1,2
+    // que dice «ESP».
+    expect(espesorTuboPorCodigo()).toEqual({
+      E01: 0.8,
+      E02: 1.2,
+      E39: 1.2,
+      E66: 2.5,
+      E78: 1.2,
+    });
   });
 
   it('los tubos que las reglas pueden pisar son E02/E66/E78/E65', () => {
@@ -359,6 +369,67 @@ describe('validarReglasSeleccion', () => {
   });
 });
 
+describe('validarReglasSeleccion — categoría B', () => {
+  it('rechaza un ancho de corte que no separa los dos tubos', () => {
+    const r = clonar();
+    r.tuberia.reglaLineaB = { ...r.tuberia.reglaLineaB, anchoMaxM: 0 };
+    expect(
+      validarReglasSeleccion(r).errores.some((e) => e.includes('ancho de corte')),
+    ).toBe(true);
+  });
+
+  it('avisa cuando un color con kit de categoría B no tiene códigos de estructura', () => {
+    const r = clonar();
+    r.colores = [
+      ...r.colores,
+      {
+        codigo: 'DOR',
+        nombre: 'DORADO',
+        usos: { accesorio: true, manilla: false, tapaOvalada: false, tapaCuadrada: false },
+      },
+    ];
+    r.mecanismo.lineaB = {
+      ...r.mecanismo.lineaB,
+      reglas: r.mecanismo.lineaB.reglas.map((x, i) =>
+        i === 0 ? { ...x, mecPorColor: { ...x.mecPorColor, DOR: 6 } } : x,
+      ),
+    };
+    const { errores, avisos } = validarReglasSeleccion(r);
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('DOR') && a.includes('códigos de estructura'))).toBe(true);
+  });
+
+  it('el blanco y el negro no avisan: sus códigos vienen de fábrica', () => {
+    expect(validarReglasSeleccion(REGLAS_SELECCION_DEFAULT).avisos).toEqual([]);
+  });
+
+  it('avisa cuando el código de bodega es de un MEC que no está en el catálogo', () => {
+    const r = clonar();
+    r.mecanismo.lineaB = {
+      ...r.mecanismo.lineaB,
+      codigoInsumoPorMec: { ...r.mecanismo.lineaB.codigoInsumoPorMec, 99: 'MEC99-B' },
+    };
+    expect(
+      validarReglasSeleccion(r).avisos.some((a) => a.includes('MEC99-B') && a.includes('MEC 99')),
+    ).toBe(true);
+  });
+
+  it('avisa cuando una regla de categoría B nombra un color fuera del catálogo', () => {
+    const r = clonar();
+    r.mecanismo.lineaB = {
+      ...r.mecanismo.lineaB,
+      reglas: r.mecanismo.lineaB.reglas.map((x, i) =>
+        i === 0 ? { ...x, mecPorColor: { ...x.mecPorColor, AZL: 6 } } : x,
+      ),
+    };
+    expect(
+      validarReglasSeleccion(r).avisos.some(
+        (a) => a.includes('AZL') && a.includes('no está en el catálogo de colores'),
+      ),
+    ).toBe(true);
+  });
+});
+
 describe('cadenas — normalización y validación', () => {
   it('un catálogo de cadenas guardado REEMPLAZA al de fábrica', () => {
     const r = normalizarReglasSeleccion({
@@ -411,8 +482,14 @@ describe('cadenas — normalización y validación', () => {
     expect(sonReglasDefault(r)).toBe(true);
   });
 
-  it('conserva el modo «empieza con» de la regla del dúo', () => {
-    const r = normalizarReglasSeleccion(JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT)));
+  it('conserva el modo «empieza con» de una regla de cadena por categoría', () => {
+    // De fábrica la lista viene vacía (el dúo usa la escalera como el roller),
+    // así que lo que se prueba es que el modo del match sobreviva el guardado.
+    const crudo = JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT));
+    crudo.cadenas.reglasCategoria = [
+      { descripcion: 'Dúo: cadena corta', categoria: { empiezaCon: 'DUO' }, largo: '1.4mts' },
+    ];
+    const r = normalizarReglasSeleccion(crudo);
     expect(r.cadenas.reglasCategoria[0].categoria).toEqual({ empiezaCon: 'DUO' });
   });
 
@@ -495,10 +572,22 @@ describe('un catálogo guardado viejo se repone solo', () => {
     }
   });
 
-  it('repone el tubo de la categoría B (E01)', () => {
+  it('repone los DOS tubos de la categoría B (E01 y E39)', () => {
     const sano = normalizarReglasSeleccion(guardadoSinPiezasB());
-    expect(sano.tuberia.tubos.map((t) => t.codigo)).toContain('E01');
-    expect(sano.tuberia.tuboLineaB).toBe('E01');
+    const codigos = sano.tuberia.tubos.map((t) => t.codigo);
+    expect(codigos).toContain('E01');
+    expect(codigos).toContain('E39');
+    expect(sano.tuberia.reglaLineaB.codigoHasta).toBe('E01');
+    expect(sano.tuberia.reglaLineaB.codigoDesde).toBe('E39');
+  });
+
+  it('una configuración vieja con `tuboLineaB` suelto se lee como el tramo delgado', () => {
+    const viejo = guardadoSinPiezasB();
+    delete (viejo as { tuberia?: { reglaLineaB?: unknown } }).tuberia?.reglaLineaB;
+    ((viejo as Record<string, Record<string, unknown>>).tuberia).tuboLineaB = 'E01';
+    const sano = normalizarReglasSeleccion(viejo);
+    expect(sano.tuberia.reglaLineaB.codigoHasta).toBe('E01');
+    expect(sano.tuberia.reglaLineaB.codigoDesde).toBe('E39'); // el resto, de fábrica
   });
 
   it('lo repuesto entra OCULTO: no cambia lo que se ofrece en Fase 2', () => {
@@ -557,16 +646,18 @@ describe('el validador mira también la categoría B', () => {
     expect(errores.some((e) => e.includes('MEC 97') && e.includes('categoría B'))).toBe(true);
   });
 
-  it('denuncia un tubo de la categoría B que no existe', () => {
+  it('denuncia los tubos de la categoría B que no existen, en los dos tramos', () => {
     const r = clonar();
-    r.tuberia.tuboLineaB = 'E99';
+    r.tuberia.reglaLineaB = { ...r.tuberia.reglaLineaB, codigoHasta: 'E98', codigoDesde: 'E99' };
     const { errores } = validarReglasSeleccion(r);
+    expect(errores.some((e) => e.includes('E98') && e.includes('categoría B'))).toBe(true);
     expect(errores.some((e) => e.includes('E99') && e.includes('categoría B'))).toBe(true);
   });
 
-  it('el E01 oculto NO genera aviso: no ofrecerlo es el diseño', () => {
+  it('los tubos ocultos de la categoría B NO generan aviso: no ofrecerlos es el diseño', () => {
     const { avisos, errores } = validarReglasSeleccion(clonar());
     expect(errores).toEqual([]);
     expect(avisos.some((a) => a.includes('E01'))).toBe(false);
+    expect(avisos.some((a) => a.includes('E39'))).toBe(false);
   });
 });

@@ -50,6 +50,14 @@ function motivosPorCodigo(t: ReglasTuberia, codigosDelCatalogo: string[]) {
     anotar(cod, i === 0 ? '45 mm (se elige solo)' : '45 mm (manual)'),
   );
   for (const r of t.reglasCategoria) anotar(r.codigo, r.descripcion || textoCategoria(r.categoria));
+  // La banda de la categoría B se edita en su propia sección, pero sus dos
+  // tubos son de este catálogo: sin esta anotación se veían «sin uso».
+  const cortB = String(t.reglaLineaB.anchoMaxM).replace('.', ',');
+  anotar(t.reglaLineaB.codigoHasta, `categoría B hasta ${cortB} m`);
+  anotar(
+    t.reglaLineaB.codigoDesde,
+    `categoría B sobre ${cortB} m (${textoCategoria(t.reglaLineaB.categoriaDesde)})`,
+  );
   for (const cod of codigosDelCatalogo) anotar(cod, 'listado en un modelo del catálogo');
   return filas;
 }

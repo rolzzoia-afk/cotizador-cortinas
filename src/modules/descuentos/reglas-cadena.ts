@@ -93,13 +93,11 @@ export const REGLAS_CADENA: ReglasCadena = {
     { altoMinM: 0.8, largo: '2.4mts' },
     { altoMinM: 0.5, largo: '1.4mts' },
   ],
-  reglasCategoria: [
-    {
-      descripcion: 'Dúo: cadena corta de 1,40 m, sin importar el alto',
-      categoria: { empiezaCon: 'DUO' },
-      largo: '1.4mts',
-    },
-  ],
+  // El dúo se rige por la MISMA escalera que el roller (corrección 2026-08-10):
+  // antes tenía acá una regla propia que le fijaba la cadena corta de 1,40 m sin
+  // mirar el alto, y una cortina de casi 2 m salía con 70 cm de cadena. Un dúo
+  // bajo igual llega a la corta por el tramo de 0,5 m.
+  reglasCategoria: [],
   // La vertical lleva SIEMPRE la de 3 m; solo el color la cambia. No hay
   // verticales con accesorios grises, así que un GRS heredado cae a la blanca
   // (mismo criterio que su kit VER).

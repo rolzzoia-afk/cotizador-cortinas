@@ -308,6 +308,87 @@ describe('colores de accesorios nuevos', () => {
   });
 });
 
+// El interruptor «Categoría B» tiene que mover TODO: la fila del catálogo, el
+// kit, el tubo y los códigos de corte. Estaba a medio cablear (solo movía el
+// tubo y los códigos), así que el banco mostraba un kit de la línea A.
+describe('categoría B (gama económica)', () => {
+  const CATALOGO_B: ModeloDespiece[] = [
+    ...CATALOGO,
+    modelo({
+      sistema: 'ROLLER_SIMPLE',
+      tipo_rol: 'MANUAL_38',
+      mecanismo: 'MEC_06_LZ50_B_BLANCO',
+      diametro_tubo_mm: 38,
+      dcto_tubo_cm: 3.8,
+      dcto_tela_cm: 0.5,
+      suma_peso_cm: 0.1,
+      notas: 'LINEA B',
+    }),
+    modelo({
+      sistema: 'ROLLER_SIMPLE',
+      tipo_rol: 'MANUAL_38',
+      mecanismo: 'MEC_15_LZ50_B_NEGRO',
+      diametro_tubo_mm: 38,
+      dcto_tubo_cm: 3.3,
+      dcto_tela_cm: 0.5,
+      suma_peso_cm: 0.1,
+      notas: 'LINEA B',
+    }),
+  ];
+  const probar = (over: { color?: string; anchoM?: number; categoria?: string; lineaB?: boolean }) =>
+    resolverCortinaDePrueba(
+      {
+        categoria: over.categoria ?? 'ROL',
+        anchoM: over.anchoM ?? 1.5,
+        altoM: 2.4,
+        color: over.color ?? 'BCO',
+        lineaB: over.lineaB ?? true,
+      },
+      { modelos: CATALOGO_B, cadenas: CADENAS },
+    );
+
+  it('blanco: fila B del catálogo, kit MEC 06, tubo E01 y peso E40', () => {
+    const r = probar({});
+    expect(r.modelo?.mecanismo).toBe('MEC_06_LZ50_B_BLANCO');
+    expect(r.kit).toContain('[MEC 06]');
+    expect(r.reglaKit).toContain('categoría B');
+    expect(r.tubo).toContain('E01');
+    expect(codigo(r, 'Peso')).toBe('E40');
+  });
+
+  it('negro: kit MEC 15 y peso E69-B', () => {
+    const r = probar({ color: 'NEG' });
+    expect(r.modelo?.mecanismo).toBe('MEC_15_LZ50_B_NEGRO');
+    expect(r.kit).toContain('[MEC 15]');
+    expect(codigo(r, 'Peso')).toBe('E69-B');
+  });
+
+  it('sobre el ancho de corte pasa al E39', () => {
+    expect(probar({ anchoM: 2.8 }).tubo).toContain('E39');
+    expect(probar({ anchoM: 2.4 }).tubo).toContain('E01');
+  });
+
+  it('el gris no tiene receta: sin kit y con aviso de bloqueo', () => {
+    const r = probar({ color: 'GRS' });
+    expect(r.kit).toBe('');
+    expect(r.reglaKit).toContain('no cae a los de la línea A');
+    expect(r.avisos.join(' ')).toContain('bloqueada');
+  });
+
+  it('una categoría sin recetas B avisa y se resuelve como la línea A', () => {
+    const r = probar({ categoria: 'OSCURANTI_63mm', anchoM: 2.0 });
+    expect(r.avisos.join(' ')).toContain('no tiene recetas de categoría B');
+    // El tubo NO es el E01 de la categoría B: manda el modelo de siempre.
+    expect(r.tubo).not.toContain('E01');
+  });
+
+  it('sin el interruptor todo sigue siendo línea A', () => {
+    const r = probar({ lineaB: false });
+    expect(r.modelo?.mecanismo).toBe('MEC_33_ROLLER_BLANCO');
+    expect(codigo(r, 'Peso')).toBe('E15');
+  });
+});
+
 describe('casos borde: el banco no explota', () => {
   it('categoría sin filas en el catálogo avisa y devuelve cortes vacíos', () => {
     const r = resolverCortinaDePrueba(

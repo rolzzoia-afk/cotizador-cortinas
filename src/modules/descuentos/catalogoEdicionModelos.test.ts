@@ -11,7 +11,9 @@ import {
   validarFila,
   type FilaCatalogo,
   type RespaldoCatalogo,
+  notasConLineaB,
 } from './catalogoEdicionModelos';
+import { esFilaLineaB } from './tipos';
 
 const fila = (over: Partial<FilaCatalogo> = {}): FilaCatalogo => ({
   ...filaNueva('ROLLER_SIMPLE'),
@@ -165,5 +167,35 @@ describe('respaldos', () => {
 
   it('una fecha ilegible se muestra tal cual, sin romper', () => {
     expect(etiquetaRespaldo({ fecha: 'ayer', motivo: '', filas: [] })).toContain('ayer');
+  });
+});
+
+// La marca de categoría B vive en el texto libre de `notas` desde que nació la
+// línea B. El checkbox del diálogo la escribe y la borra con este helper, sin
+// tocar el resto de la nota ni cambiar el esquema de la tabla.
+describe('notasConLineaB', () => {
+  it('marca una fila sin notas', () => {
+    expect(notasConLineaB('', true)).toBe('LINEA B');
+    expect(notasConLineaB(null, true)).toBe('LINEA B');
+  });
+
+  it('conserva el resto del texto al marcar y al desmarcar', () => {
+    expect(notasConLineaB('pizarra 07-08', true)).toBe('pizarra 07-08 · LINEA B');
+    expect(notasConLineaB('pizarra 07-08 · LINEA B', false)).toBe('pizarra 07-08');
+  });
+
+  it('es idempotente: marcar dos veces no duplica el token', () => {
+    const una = notasConLineaB('nota', true);
+    expect(notasConLineaB(una, true)).toBe(una);
+    expect(esFilaLineaB({ notas: una })).toBe(true);
+  });
+
+  it('reconoce la marca escrita a mano, con tilde o en minúsculas', () => {
+    expect(notasConLineaB('algo, línea b', false)).toBe('algo');
+    expect(notasConLineaB('linea b', false)).toBe('');
+  });
+
+  it('desmarcar una fila que nunca estuvo marcada no cambia nada', () => {
+    expect(notasConLineaB('gama alta', false)).toBe('gama alta');
   });
 });

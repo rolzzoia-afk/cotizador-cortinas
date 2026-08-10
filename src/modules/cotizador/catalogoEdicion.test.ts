@@ -6,6 +6,7 @@ import {
   normCod,
   tiposDelCatalogo,
 } from './catalogoEdicion';
+import { gamaTelaEsB } from './lineaB';
 import type { CatalogoProductos, Producto } from './types';
 
 const prod = (over: Partial<Producto> = {}): Producto => ({
@@ -75,5 +76,38 @@ describe('helpers de datalist', () => {
 
   it('normCod colapsa espacios y sube a mayúsculas', () => {
     expect(normCod('  bk   09 ')).toBe('BK 09');
+  });
+});
+
+// La gama comercial de la tela (A/B) dispara la categoría B de la cortina. Antes
+// solo se podía poner reimportando el Excel; ahora se edita en el diálogo, y por
+// eso hay que poder DEJARLA VACÍA (el merge conservaba el valor anterior).
+describe('gama comercial de la tela', () => {
+  const conGama: CatalogoProductos = { 'BK 09': prod({ categoria: 'B' }) };
+
+  it('guarda la gama elegida', () => {
+    const r = guardarProductoEnCatalogo(CAT, AR, 'BK 09', 'BK 09', prod({ categoria: 'B' }), null);
+    expect(r.catalogo['BK 09'].categoria).toBe('B');
+    expect(gamaTelaEsB('BK 09', r.catalogo)).toBe(true);
+  });
+
+  it('«sin clasificar» borra la gama que tenía', () => {
+    const r = guardarProductoEnCatalogo(
+      conGama,
+      AR,
+      'BK 09',
+      'BK 09',
+      prod({ categoria: undefined }),
+      null,
+    );
+    expect(r.catalogo['BK 09'].categoria).toBeUndefined();
+    expect(gamaTelaEsB('BK 09', r.catalogo)).toBe(false);
+  });
+
+  it('un guardado que no menciona la gama la conserva', () => {
+    const sinGama = prod();
+    delete sinGama.categoria;
+    const r = guardarProductoEnCatalogo(conGama, AR, 'BK 09', 'BK 09', sinGama, null);
+    expect(r.catalogo['BK 09'].categoria).toBe('B');
   });
 });
