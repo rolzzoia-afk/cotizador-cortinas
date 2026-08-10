@@ -7,7 +7,7 @@ import {
   sonDefault,
 } from './formulasFamilias';
 import { calcularDespiece, calculoVertical, MODELO_DESPIECE_STUB } from './despiece';
-import { cortesSoftLight38, medidaCenefaSoftLight38 } from './reglas-soft-light';
+import { cortesSoftLight38, medidaCenefaSoftLight } from './reglas-soft-light';
 import { medidaCorteCenefaCuadrada } from './adicionales-cenefa';
 import type { ModeloDespiece } from './tipos';
 
@@ -191,7 +191,7 @@ describe('la cenefa del adicional sale de la misma tabla que la del paño', () =
       altoCm: 240,
       oscuridadVariante: 'INTERNO',
     }).cortes.find((c) => c.componente === 'Cenefa')?.medidaCm;
-    expect(medidaCenefaSoftLight38(200, 'INTERNO')).toBe(delPano);
+    expect(medidaCenefaSoftLight(200, 'SOFT_LIGHT_38', 'INTERNO')).toBe(delPano);
   });
 
   it('al editar la tabla, el adicional se mueve con el paño', () => {
@@ -203,7 +203,7 @@ describe('la cenefa del adicional sale de la misma tabla que la del paño', () =
       formulas: f,
     }).cortes.find((c) => c.componente === 'Cenefa')?.medidaCm;
     expect(delPano).toBe(198);
-    expect(medidaCenefaSoftLight38(200, 'INTERNO', f)).toBe(198);
+    expect(medidaCenefaSoftLight(200, 'SOFT_LIGHT_38', 'INTERNO', f)).toBe(198);
     expect(cortesSoftLight38(200, 'INTERNO', f).tubo).toBe(196.2); // 198 − 1,8
   });
 

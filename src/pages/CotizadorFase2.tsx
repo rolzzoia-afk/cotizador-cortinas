@@ -298,9 +298,15 @@ export function CotizadorFase2() {
           const desalineada =
             !!p.codCadena && !!colorActual && colorActual !== colorAccesorioCorto(colorAcc);
           if (!p.codCadena || desalineada) {
-            const largoActual = p.codCadena
-              ? derivarLargoColor(p.codCadena, cadenas, reglas.cadenas).largoCadena
-              : '';
+            // El largo GUARDADO en el paño manda sobre el que se deriva del
+            // código: si bodega reasignó ese código a otra cadena (pasó con
+            // CAD17, que era la blanca de 1,40 m y quedó como la gris de 1,2),
+            // el derivado ya no es el largo que se vendió y buscarlo en el
+            // color nuevo daría una cadena más corta sin que nadie lo note.
+            // Si ese largo ya no existe en el inventario, cae al automático.
+            const largoActual =
+              String(p.largoCadena ?? '').trim() ||
+              (p.codCadena ? derivarLargoColor(p.codCadena, cadenas, reglas.cadenas).largoCadena : '');
             const cod =
               (desalineada && largoActual
                 ? codCadenaPorLargoColor(

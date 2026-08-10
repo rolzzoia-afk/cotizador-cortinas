@@ -100,6 +100,34 @@ describe('adicionales-cenefa', () => {
   });
 });
 
+// Antes solo se reconocía el soft light 38: un 45 mm caía al despeje del roller
+// (−1,5), que en INTERNO acertaba por casualidad y en SEMI/EXTERNO no tenía nada
+// que ver con su pizarra (OT 3169).
+describe('cenefa del adicional en soft light 45 mm', () => {
+  const modeloSl45: ModeloDespiece = {
+    ...modeloSoftLight,
+    tipo_rol: 'SOFT_LIGHT_INTERNO_45mm',
+    diametro_tubo_mm: 45,
+  };
+  const adic281 = { codInt: 'CENF O', cantidad: 2.81, descuento: 0, ubicacion: 'PPAL' };
+  const medida = (categoria: string, sentido: string, modelo = modeloSl45) =>
+    cenefaOvaladaDesdeAdicional(adic281, modelo, { anchoPanoCm: 281, categoria, sentido });
+
+  it('INTERNO: 281 → 279,5 (el 38 daría 279,8)', () => {
+    expect(medida('SOFT_LIGHT_45mm', 'INTERNO')).toBe(279.5);
+    expect(medida('SOFT_LIGHT_38mm', 'INTERNO', modeloSoftLight)).toBe(279.8);
+  });
+
+  it('SEMI y EXTERNO usan la tabla de oscuridad, no el despeje del roller', () => {
+    expect(medida('SOFT_LIGHT_45mm', 'SEMI')).toBe(287.6); // 281 + 6,6
+    expect(medida('SOFT_LIGHT_45mm', 'EXTERNO')).toBe(294.2); // 281 + 13,2
+  });
+
+  it('un soft light 38 sobre tubo de 45 (banda E78) corta como 45', () => {
+    expect(medida('SOFT_LIGHT_38mm', 'INTERNO')).toBe(279.5);
+  });
+});
+
 describe('cenefa cuadrada (verticales/roller)', () => {
   it('ajuste por TIP. INST: +1 / +2 / −0,5 (muro a muro es la base)', () => {
     expect(ajusteCenefaCuadradaCm('CON_1_TAPA')).toBe(1);

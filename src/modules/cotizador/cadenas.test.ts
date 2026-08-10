@@ -6,6 +6,7 @@ import {
   largoCadenaAuto,
   cadenasRoller,
   codCadenaAutoPorAlto,
+  codCadenaPorLargoColor,
   etiquetaCadena,
   resolverCodCadenaLegacy,
   resolverCodCadenaBom,
@@ -19,37 +20,76 @@ import {
 import { OPCIONES_LARGO_CADENA } from './fase2';
 import { REGLAS_CADENA, type ReglasCadena } from '@/modules/descuentos/reglas-cadena';
 
-// Inventario para las reglas de auto-selección (#25): 3m/4m + 2,4m + 1,40m.
+// Inventario para las reglas de auto-selección, con el lineup vigente desde el
+// 2026-08-10: 1,2 m (60 cm) · 1,6 m (80 cm) · 2,4 m · 3 m · 4 m. Las de 1,40 m
+// (70 cm) quedaron agotadas y solo se resuelven en OTs viejas.
 const INV_AUTO: CadenaInsumo[] = [
   { cod: 'CAD03', nemotecnico: 'CADENA INFINITA 4 METROS [NEGRO]', color: 'NEGRO', status: 'OK' },
   { cod: 'CAD04', nemotecnico: 'CADENA INFINITA 3 METROS [NEGRO]', color: 'NEGRO', status: 'OK' },
   { cod: 'CAD06', nemotecnico: 'CADENA INFINITA 3 METROS [BLANCO]', color: 'BLANCO', status: 'OK' },
+  { cod: 'CAD08', nemotecnico: 'CADENA INFINITA 1,2 METROS - 60 CM [NEGRO]', color: 'NEGRO', status: 'OK' },
+  { cod: 'CAD12', nemotecnico: 'CADENA INFINITA 1,6 METROS - 80 CM [NEGRO]', color: 'NEGRO', status: 'OK' },
   { cod: 'CAD14', nemotecnico: 'CADENA 2.4 MTS NEGRA', color: 'NEGRO', status: 'OK' },
   { cod: 'CAD16', nemotecnico: 'CADENA 2.4 MTS BLANCA', color: 'BLANCO', status: 'OK' },
-  { cod: 'CAD18', nemotecnico: 'CADENA NEGRO - 1,40 MTS (70 CM) SIN FIN', color: 'NEGRO', status: 'OK' },
-  { cod: 'CAD19', nemotecnico: 'CADENA GRIS - 1,40 MTS (70 CM) SIN FIN', color: 'GRIS', status: 'OK' },
+  { cod: 'CAD17', nemotecnico: 'CADENA INFINITA 1,2 METROS - 60 CM [GRIS]', color: 'GRIS', status: 'OK' },
+  { cod: 'CAD18', nemotecnico: 'CADENA NEGRO - 1,40 MTS (70 CM) SIN FIN', color: 'NEGRO', status: 'AGOTADO' },
   { cod: 'CAD20', nemotecnico: 'CADENA 2.4 MTS - GRIS', color: 'GRIS', status: 'OK' },
+  { cod: 'CAD21', nemotecnico: 'CADENA INFINITA 1,6 METROS - 80 CM [GRIS]', color: 'GRIS', status: 'OK' },
 ];
 
-describe('derivarLargoColor (1,40 m)', () => {
-  it('reconoce "1,40 MTS" como 1.4mts', () => {
+describe('derivarLargoColor: lineup vigente y legacy', () => {
+  it('la de 1,40 m (agotada) se sigue resolviendo en OTs viejas', () => {
     expect(derivarLargoColor('CAD18', INV_AUTO)).toEqual({ largoCadena: '1.4mts', colorCadena: 'NEG' });
+  });
+  it('"1,6 METROS - 80 CM" es el largo interno 0.75 (80 cm de caída)', () => {
+    expect(derivarLargoColor('CAD12', INV_AUTO)).toEqual({ largoCadena: '0.75', colorCadena: 'NEG' });
+    expect(derivarLargoColor('CAD21', INV_AUTO)).toEqual({ largoCadena: '0.75', colorCadena: 'GRS' });
+  });
+  it('"1,2 METROS - 60 CM" es el largo interno 1mts', () => {
+    expect(derivarLargoColor('CAD08', INV_AUTO)).toEqual({ largoCadena: '1mts', colorCadena: 'NEG' });
+    expect(derivarLargoColor('CAD17', INV_AUTO)).toEqual({ largoCadena: '1mts', colorCadena: 'GRS' });
   });
 });
 
 describe('codCadenaAutoPorAlto', () => {
-  it('roller por alto: 2,5→4m · 1,6→3m · 1,0→2,4m · 0,6→1,4m', () => {
+  it('roller por alto: 2,5→4m · 1,6→3m · 1,0→2,4m · 0,6→1,2m', () => {
     expect(codCadenaAutoPorAlto(2.5, 'NEG', 'ROL', INV_AUTO)).toBe('CAD03');
     expect(codCadenaAutoPorAlto(1.6, 'BCO', 'ROL', INV_AUTO)).toBe('CAD06');
     expect(codCadenaAutoPorAlto(1.0, 'NEG', 'ROL', INV_AUTO)).toBe('CAD14');
-    expect(codCadenaAutoPorAlto(0.6, 'NEG', 'ROL', INV_AUTO)).toBe('CAD18');
+    // El peldaño bajo pedía la de 1,40 m hasta que bodega la dio de baja.
+    expect(codCadenaAutoPorAlto(0.6, 'NEG', 'ROL', INV_AUTO)).toBe('CAD08');
   });
-  it('el dúo usa la MISMA escalera que el roller (corrección 2026-08-10)', () => {
+  it('el dúo tiene escalera propia (regla del dueño 2026-08-10)', () => {
     // Caso de la OT 268-4: un dúo de 1,93 m salía con la cadena corta de 70 cm.
     expect(codCadenaAutoPorAlto(1.93, 'BCO', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD06');
-    // Un dúo bajo igual llega a la corta, pero por el tramo de 0,5 m.
-    expect(codCadenaAutoPorAlto(0.6, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD18');
+    // ≥2,1 → 4 m · ≥1,6 → 3 m · ≥1,4 → 2,4 m · ≥0,9 → 1,6 m · ≥0,6 → 1,2 m.
+    expect(codCadenaAutoPorAlto(2.2, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD03');
+    expect(codCadenaAutoPorAlto(1.6, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD04');
+    expect(codCadenaAutoPorAlto(1.4, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD14');
+    expect(codCadenaAutoPorAlto(0.9, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD12');
+    expect(codCadenaAutoPorAlto(0.6, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD08');
+    // Bajo el último peldaño del dúo la elige el vendedor: NO cae a la del roller.
+    expect(codCadenaAutoPorAlto(0.55, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBeNull();
   });
+  it('un dúo de 1,3 m usa 1,6 m; un roller del mismo alto usa 2,4 m', () => {
+    expect(codCadenaAutoPorAlto(1.3, 'NEG', 'DUO_MANUAL_38mm', INV_AUTO)).toBe('CAD12');
+    expect(codCadenaAutoPorAlto(1.3, 'NEG', 'ROL', INV_AUTO)).toBe('CAD14');
+  });
+  it('la pletina de dúo NO entra en la escalera del dúo (no empieza con DUO)', () => {
+    expect(codCadenaAutoPorAlto(1.3, 'NEG', 'PLETINA_DUO_V', INV_AUTO)).toBe('CAD14');
+  });
+  // Fase 2 conserva el largo elegido cuando solo cambia el color de accesorios
+  // (codCadenaPorLargoColor). Con el lineup nuevo, un paño viejo de 1,40 m ya no
+  // encuentra pareja en ningún color → devuelve null y la cadena se recalcula
+  // por la escalera, en vez de caer a una más corta del mismo código reasignado.
+  it('el largo 1,40 m ya no existe en el inventario vigente', () => {
+    expect(codCadenaPorLargoColor('1.4mts', 'BCO', INV_AUTO)).toBeNull();
+    expect(codCadenaPorLargoColor('1.4mts', 'NEG', INV_AUTO)).toBeNull(); // CAD18 agotada
+    // Los largos vigentes sí resuelven.
+    expect(codCadenaPorLargoColor('0.75', 'GRS', INV_AUTO)).toBe('CAD21');
+    expect(codCadenaPorLargoColor('1mts', 'GRS', INV_AUTO)).toBe('CAD17');
+  });
+
   it('gris corto roller → 2,4 gris (CAD20)', () => {
     expect(codCadenaAutoPorAlto(1.0, 'GRS', 'ROL', INV_AUTO)).toBe('CAD20');
   });
@@ -256,7 +296,7 @@ describe('reglas de cadena editables', () => {
   });
 
   it('una regla por categoría gana sobre la escalera, con match "empieza con"', () => {
-    // De fábrica ya no hay regla por categoría: hasta el dúo manda el alto.
+    // De fábrica el dúo trae escalera propia: 2,5 m alcanza su tramo de 2,1.
     expect(largoCadenaAuto(2.5, 'DUOBK')?.largo).toBe('4mts');
     const reglas: ReglasCadena = {
       ...REGLAS_CADENA,
@@ -270,9 +310,22 @@ describe('reglas de cadena editables', () => {
     expect(largoCadenaAuto(2.5, 'PLETINA_DUO_V', undefined, reglas)?.largo).toBe('4mts');
   });
 
+  it('la escalera de una categoría REEMPLAZA a la general', () => {
+    // Un dúo de 1,5 m: su escalera propia da 2,4 m; la general daría 3 m.
+    expect(largoCadenaAuto(1.5, 'DUO_MANUAL_38mm')?.largo).toBe('2.4mts');
+    expect(largoCadenaAuto(1.5, 'ROL')?.largo).toBe('3mts');
+    // Bajo el último tramo del dúo NO se cae al peldaño del roller.
+    expect(largoCadenaAuto(0.55, 'DUO_MANUAL_38mm')).toBeNull();
+    expect(largoCadenaAuto(0.55, 'ROL')?.largo).toBe('1mts');
+  });
+
   it('el motivo dice por qué se eligió ese largo', () => {
     expect(largoCadenaAuto(2.5, 'ROL')?.motivo).toContain('desde 2 m');
     expect(largoCadenaAuto(0.3, 'ROL')).toBeNull(); // bajo el tramo más chico
+    // Con escalera propia el motivo nombra la regla Y el tramo que ganó.
+    const motivoDuo = largoCadenaAuto(1.5, 'DUO_MANUAL_38mm')?.motivo ?? '';
+    expect(motivoDuo).toContain('Dúo');
+    expect(motivoDuo).toContain('desde 1,4 m');
     const reglas: ReglasCadena = {
       ...REGLAS_CADENA,
       reglasCategoria: [

@@ -181,7 +181,10 @@ type FamiliaEncadenada = Exclude<FamiliaOscuridad, FamiliaSoftLightNeta>;
 // Ajuste neto sobre el ANCHO por [INTERNO, SEMI, EXTERNO].
 const CENEFA_ADJ: Record<FamiliaOscuridad, [number, number, number]> = {
   SOFT_LIGHT_38: [-1.2, 6.6, 13.2],
-  SOFT_LIGHT_45: [-1.2, 6.6, 13.2],
+  // El 45 mm descuenta 1,5 en INTERNO (no 1,2 como el 38): corrección del dueño
+  // 2026-08-10 con la OT 3169 (ancho 281 → cenefa 279,5, que es lo que ya cobraba
+  // el Excel de órdenes). Tubo/tela/peso son netos sobre el ancho y no cambian.
+  SOFT_LIGHT_45: [-1.5, 6.6, 13.2],
   SOFT_LIGHT_CC: [-0.3, 7.5, 15.8],
   // OSCURANTI: perfil superior = ancho − 0,3 (la pizarra 2026-07-28 lo anota
   // "0,3 mm" = 3 mm). SEMI/EXTERNO suman cm enteros.

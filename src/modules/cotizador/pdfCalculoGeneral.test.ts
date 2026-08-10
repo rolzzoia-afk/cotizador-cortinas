@@ -334,6 +334,15 @@ describe('construirCalculoGeneral', () => {
     expect(labels).not.toContain('CENEFA OVALADA');
   });
 
+  // OT 3169: el roller simple no trae dcto_cenefa (la ovalada la elige el
+  // vendedor) y su columna salía vacía en el Cálculo General.
+  it('un ROLLER SIMPLE con cenefa Ovalada también trae la columna', () => {
+    const v = ventRoller(1.455, 'PPAL');
+    v.panos![0].cenefa = 'Ovalada';
+    const [f] = construirCalculoGeneral([v]).filas;
+    expect(f.despiece.get('CENEFA OVALADA (CON TIRA)')).toBe(144); // 145,5 − 1,5
+  });
+
   it('paño ovalado sin tira definida → cae en "(CON TIRA)" por defecto', () => {
     const modeloCenefa: ModeloDespiece = { ...modeloRoller, dcto_cenefa_cm: 1.5 };
     const v = ventRoller(1.45, 'PIEZA 1');

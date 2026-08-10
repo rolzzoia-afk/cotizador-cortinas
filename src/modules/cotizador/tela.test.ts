@@ -299,6 +299,35 @@ describe('buildOptimizerRows', () => {
     expect(cenefa?.color).toBe('NEGRO');
   });
 
+  // OT 3169: el roller simple con cenefa ovalada llegaba a la etiqueta de
+  // estructura sin la pieza, y salía impresa como "CEF. OV.: N/A".
+  it('piezas: un ROLLER SIMPLE con cenefa Ovalada también trae la tapa y su código', () => {
+    const modelo = {
+      sistema: 'ROLLER_SIMPLE',
+      tipo_rol: 'ROL_SIMPLE',
+      diametro_tubo_mm: 38,
+      codigos_tubo: 'E02;E66',
+      dcto_tubo_cm: 3.8,
+      suma_peso_cm: 0.1,
+    };
+    const rows = buildOptimizerRows(
+      [
+        v({
+          categoria: 'ROL',
+          modelo,
+          color: 'NEGRO',
+          panos: [{ ancho: 1.455, alto: 2.4, cenefa: 'Ovalada' }],
+        } as unknown as Partial<VentanaItem>),
+      ],
+      cat,
+    );
+    const cenefa = (rows[0].piezas || []).find((p) => p.columnaExcel === 'CENEFA OVALADA');
+    expect(cenefa?.medidaCm).toBe(144); // 145,5 − 1,5
+    expect(cenefa?.cod).toBe('E26'); // cenefa ovalada negro
+    // El tubo no se mueve: sigue siendo ancho − dcto_tubo.
+    expect((rows[0].piezas || []).find((p) => p.columnaExcel === 'TUBO')?.medidaCm).toBe(141.7);
+  });
+
   it('OSCURIDAD (soft light): la tela se corta al ancho REAL del despiece, no ancho−3,5', () => {
     // Interno, ancho 2,969 m (296,9 cm) → TELA_ADJ −7,2 → corte 289,7 (golden).
     const rows = buildOptimizerRows(

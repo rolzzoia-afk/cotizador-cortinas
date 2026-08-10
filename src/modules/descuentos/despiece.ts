@@ -55,6 +55,10 @@ import {
 // Resolutor de color de accesorios (mecanismo → peso → cadena → tela → ventana).
 // chips.ts NO importa despiece (solo reglas-mecanismo/tuberia), así que no hay ciclo.
 import { colorAccesoriosDePano } from './chips';
+// La medida de la cenefa ovalada la comparte con el adicional CENF O de Fase 0:
+// una sola fórmula para el Excel de órdenes, la etiqueta y el cálculo general.
+// adicionales-cenefa no importa despiece, así que no hay ciclo.
+import { medidaCorteCenefaOvaladaRoller } from './adicionales-cenefa';
 import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
 
 export type ContextoDespiece = {
@@ -387,6 +391,10 @@ export function calcularDespiece(
     return { cortes, aproximado: false, notas };
   }
 
+  // Cenefa ovalada elegida en el paño (Fase 2) sobre un modelo que no la trae en
+  // sus descuentos: mismo criterio que el adicional CENF O de Fase 0.
+  const cenefaOvaladaDelPano = String(ctx?.cenefa ?? '').trim().toUpperCase() === 'OVALADA';
+
   // En cenefa ovalada la TAPA (cenefa) es la pieza más ancha = ancho − dcto_cenefa,
   // y el TUBO va detrás, deducido por tubo + cenefa. (Antes el tubo restaba solo
   // dcto_tubo y la cenefa restaba ambos → quedaban invertidos vs. el manual.)
@@ -461,12 +469,25 @@ export function calcularDespiece(
 
   // Cenefa ovalada: la TAPA cubre el ancho con su propio despeje = ancho − dcto_cenefa
   // (es la pieza más ancha; el tubo va detrás, ya deducido tubo + cenefa en baseTubo).
+  //
+  // También se emite cuando la cenefa la eligió el VENDEDOR en el paño y el
+  // modelo no la trae en sus descuentos (roller simple, dual, pletina roller:
+  // `dcto_cenefa_cm` = 0). Antes de esto la medida existía solo en el Excel de
+  // órdenes —que la saca del adicional CENF O de Fase 0— y la etiqueta de
+  // estructura salía con "CEF. OV.: N/A" en cortinas que sí la llevan (OT 3169).
+  // La medida sale de la MISMA función que usa el Excel, así que ambos caminos
+  // no pueden divergir. El TUBO no cambia: su gate sigue mirando el modelo.
   if (modelo.dcto_cenefa_cm > 0) {
     cortes.push({
       componente: 'Cenefa ovalada',
       columnaExcel: 'CENEFA OVALADA',
       medidaCm: r1(anchoCm - modelo.dcto_cenefa_cm),
     });
+  } else if (cenefaOvaladaDelPano) {
+    const medida = medidaCorteCenefaOvaladaRoller(anchoCm, modelo, f);
+    if (medida != null) {
+      cortes.push({ componente: 'Cenefa ovalada', columnaExcel: 'CENEFA OVALADA', medidaCm: medida });
+    }
   }
 
   // Cenefas delantera/trasera (sistemas de oscuridad / cenefa cuadrada)

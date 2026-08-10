@@ -353,6 +353,9 @@ describe('esFilaSoftLight', () => {
     expect(esFilaSoftLight(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA OVALADA', 263)]))).toBe(true);
     // Roller (PESO roller + sin cenefa ovalada) → false.
     expect(esFilaSoftLight(row([pz('PESO', 250)]))).toBe(false);
+    // Un ROLLER con cenefa ovalada sigue siendo roller: desde la OT 3169 su
+    // despiece también trae la tapa, y el peso roller es lo que los separa.
+    expect(esFilaSoftLight(row([pz('PESO', 250), pz('CENEFA OVALADA', 263)]))).toBe(false);
     // Dark/CC sin la cenefa OVALADA (usan CENEFA DELANTERA) → false.
     expect(esFilaSoftLight(row([pz('PESO SOFT LIGHT', 250), pz('CENEFA DELANTERA', 263)]))).toBe(false);
   });

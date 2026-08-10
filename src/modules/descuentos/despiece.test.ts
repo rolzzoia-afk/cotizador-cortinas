@@ -90,6 +90,42 @@ describe('calcularDespiece — cenefa ovalada manual 38 (ancho 250)', () => {
   });
 });
 
+// OT 3169: los roller simples con cenefa ovalada salían con "CEF. OV.: N/A" en
+// la etiqueta de estructura. Su modelo no trae dcto_cenefa (la ovalada la eligió
+// el vendedor en Fase 2), así que el despiece no emitía la pieza; la medida vivía
+// solo en el Excel de órdenes, que la saca del adicional CENF O de Fase 0.
+describe('calcularDespiece — cenefa ovalada elegida en el paño (roller simple)', () => {
+  const m: ModeloDespiece = {
+    ...base,
+    sistema: 'ROLLER_SIMPLE',
+    tipo_rol: 'ROL_SIMPLE',
+    mecanismo: 'MEC_11_LZ50_SINFLEX_NEGRO',
+    dcto_tubo_cm: 3.8,
+    suma_peso_cm: 0.1,
+  };
+
+  it('con cenefa Ovalada corta la tapa = ancho − 1,5 y NO mueve el tubo', () => {
+    const d = calcularDespiece(m, 145.5, { cenefa: 'Ovalada' });
+    expect(corte(d, 'CENEFA OVALADA')).toBe(144); // 145,5 − 1,5 (igual que el Excel)
+    // El tubo sigue siendo ancho − dcto_tubo: la ovalada del paño no lo cambia.
+    expect(corte(d, 'TUBO')).toBe(141.7);
+    expect(corte(d, 'PESO')).toBe(141.3);
+  });
+
+  it('sin cenefa (o cuadrada) no corta ninguna tapa ovalada', () => {
+    expect(corte(calcularDespiece(m, 145.5), 'CENEFA OVALADA')).toBeUndefined();
+    expect(corte(calcularDespiece(m, 145.5, { cenefa: 'No' }), 'CENEFA OVALADA')).toBeUndefined();
+    expect(
+      corte(calcularDespiece(m, 145.5, { cenefa: 'Cuadrada a muro' }), 'CENEFA OVALADA'),
+    ).toBeUndefined();
+  });
+
+  it('un modelo que SÍ trae dcto_cenefa manda sobre el default', () => {
+    const conDcto: ModeloDespiece = { ...m, sistema: 'CENEFA_OVALADA', dcto_cenefa_cm: 2 };
+    expect(corte(calcularDespiece(conDcto, 250, { cenefa: 'Ovalada' }), 'CENEFA OVALADA')).toBe(248);
+  });
+});
+
 describe('calcularDespiece — DÚO manual 38 (ancho 200)', () => {
   const m: ModeloDespiece = {
     ...base,

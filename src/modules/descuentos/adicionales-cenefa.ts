@@ -10,7 +10,7 @@
 //     va detrás (ancho − dcto_tubo − dcto_cenefa). La tapa es la más ancha.
 // ─────────────────────────────────────────────────────────────────────
 import type { AdicionalFase0Persistido, VentanaItem } from '@/modules/ots/types';
-import { medidaCenefaSoftLight38, varianteSoftLight38 } from './reglas-soft-light';
+import { medidaCenefaSoftLight, varianteSoftLight } from './reglas-soft-light';
 import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
 import type { ModeloDespiece } from './tipos';
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
@@ -26,6 +26,8 @@ export type ContextoCenefaAdicional = {
   anchoPanoCm?: number;
   categoria?: string;
   sentido?: string | null;
+  /** Tipos de cortina propios: una categoría nueva corta como su molde. */
+  tipos?: readonly TipoCortina[];
 };
 
 export function normalizarUbicacion(ubic: string): string {
@@ -273,13 +275,17 @@ export function cenefaOvaladaDesdeAdicional(
   const ancho = anchoNominalCenefaCorte(adicional, ctx.anchoPanoCm ?? 0);
   if (!ancho || ancho <= 0) return null;
 
-  const varianteSl = varianteSoftLight38({
+  // Soft light (38 y 45): su cenefa la fija la tabla de oscuridad, la misma que
+  // corta el paño. Antes solo se reconocía el 38 y el 45 caía al despeje del
+  // roller (−1,5), que en SEMI/EXTERNO no tiene nada que ver con su pizarra.
+  const sl = varianteSoftLight({
     categoria: ctx.categoria,
     sentido: ctx.sentido,
     modelo,
+    tipos: ctx.tipos,
   });
-  if (varianteSl) {
-    return medidaCenefaSoftLight38(ancho, varianteSl, formulas);
+  if (sl) {
+    return medidaCenefaSoftLight(ancho, sl.familia, sl.variante, formulas);
   }
   return medidaCorteCenefaOvaladaRoller(ancho, modelo, formulas);
 }
