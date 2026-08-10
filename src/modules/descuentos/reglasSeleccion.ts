@@ -579,11 +579,24 @@ function saneaTramoCadena(f: Record<string, unknown>): TramoCadenaAlto | null {
   return { altoMinM, largo };
 }
 
+/**
+ * Regla de cadena por categoría: o fija un largo, o trae su propia escalera por
+ * alto (el dúo). Sin ninguna de las dos la regla no dice nada y se descarta.
+ */
 function saneaReglaCadenaCategoria(f: Record<string, unknown>): ReglaCadenaCategoria | null {
   const categoria = matchCategoria(f.categoria);
+  if (!categoria) return null;
   const largo = texto(f.largo);
-  if (!categoria || !largo) return null;
-  return { descripcion: texto(f.descripcion), categoria, largo };
+  const tramosAlto = Array.isArray(f.tramosAlto)
+    ? (f.tramosAlto
+        .map((t) => (esObjeto(t) ? saneaTramoCadena(t) : null))
+        .filter(Boolean) as TramoCadenaAlto[])
+    : [];
+  if (!largo && tramosAlto.length === 0) return null;
+  const regla: ReglaCadenaCategoria = { descripcion: texto(f.descripcion), categoria };
+  if (tramosAlto.length > 0) regla.tramosAlto = tramosAlto;
+  else regla.largo = largo;
+  return regla;
 }
 
 /**
@@ -952,21 +965,29 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
       parVisto.set(llave, c.codigo);
     }
   }
-  const altosVistos = new Set<number>();
-  for (const t2 of cad.tramosAlto) {
-    if (altosVistos.has(t2.altoMinM)) {
-      errores.push(`Hay dos tramos de cadena que empiezan en ${String(t2.altoMinM).replace('.', ',')} m.`);
+  const revisarEscalera = (tramos: readonly TramoCadenaAlto[], donde: string) => {
+    const altosVistos = new Set<number>();
+    for (const t2 of tramos) {
+      if (altosVistos.has(t2.altoMinM)) {
+        errores.push(
+          `${donde}: hay dos tramos que empiezan en ${String(t2.altoMinM).replace('.', ',')} m.`,
+        );
+      }
+      altosVistos.add(t2.altoMinM);
+      if (!largosValidos.has(t2.largo)) {
+        errores.push(
+          `${donde}: el tramo desde ${String(t2.altoMinM).replace('.', ',')} m usa un largo desconocido («${t2.largo}»).`,
+        );
+      }
     }
-    altosVistos.add(t2.altoMinM);
-    if (!largosValidos.has(t2.largo)) {
-      errores.push(
-        `El tramo desde ${String(t2.altoMinM).replace('.', ',')} m usa un largo desconocido («${t2.largo}»).`,
-      );
-    }
-  }
+  };
+  revisarEscalera(cad.tramosAlto, 'La escalera de cadena por alto');
   for (const rc of cad.reglasCategoria) {
-    if (!largosValidos.has(rc.largo)) {
-      errores.push(`La regla de cadena «${rc.descripcion || 'por categoría'}» usa un largo desconocido («${rc.largo}»).`);
+    const nombre = rc.descripcion || 'por categoría';
+    if (rc.tramosAlto?.length) {
+      revisarEscalera(rc.tramosAlto, `La escalera de la regla «${nombre}»`);
+    } else if (!rc.largo || !largosValidos.has(rc.largo)) {
+      errores.push(`La regla de cadena «${nombre}» usa un largo desconocido («${rc.largo || ''}»).`);
     }
   }
   if (!cad.verticalDefault) {

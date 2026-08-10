@@ -483,14 +483,61 @@ describe('cadenas — normalización y validación', () => {
   });
 
   it('conserva el modo «empieza con» de una regla de cadena por categoría', () => {
-    // De fábrica la lista viene vacía (el dúo usa la escalera como el roller),
-    // así que lo que se prueba es que el modo del match sobreviva el guardado.
     const crudo = JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT));
     crudo.cadenas.reglasCategoria = [
       { descripcion: 'Dúo: cadena corta', categoria: { empiezaCon: 'DUO' }, largo: '1.4mts' },
     ];
     const r = normalizarReglasSeleccion(crudo);
     expect(r.cadenas.reglasCategoria[0].categoria).toEqual({ empiezaCon: 'DUO' });
+    expect(r.cadenas.reglasCategoria[0].tramosAlto).toBeUndefined();
+  });
+
+  it('una regla por categoría puede traer su propia escalera (el dúo)', () => {
+    const crudo = JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT));
+    crudo.cadenas.reglasCategoria = [
+      {
+        descripcion: 'Dúo',
+        categoria: { empiezaCon: 'DUO' },
+        tramosAlto: [
+          { altoMinM: 1.6, largo: '3mts' },
+          { altoMinM: 0.9, largo: '0.75' },
+          { largo: '' }, // corrupto: se descarta sin tumbar la regla
+        ],
+      },
+    ];
+    const r = normalizarReglasSeleccion(crudo);
+    expect(r.cadenas.reglasCategoria[0].tramosAlto).toEqual([
+      { altoMinM: 1.6, largo: '3mts' },
+      { altoMinM: 0.9, largo: '0.75' },
+    ]);
+    // Con escalera propia la regla no fija un largo único.
+    expect(r.cadenas.reglasCategoria[0].largo).toBeUndefined();
+  });
+
+  it('una regla sin largo ni escalera se descarta (no dice nada)', () => {
+    const crudo = JSON.parse(JSON.stringify(REGLAS_SELECCION_DEFAULT));
+    crudo.cadenas.reglasCategoria = [{ descripcion: 'vacía', categoria: 'DUO' }];
+    expect(normalizarReglasSeleccion(crudo).cadenas.reglasCategoria).toEqual([]);
+  });
+
+  it('valida los tramos de la escalera propia de una regla', () => {
+    const r = clonar();
+    r.cadenas = {
+      ...r.cadenas,
+      reglasCategoria: [
+        {
+          descripcion: 'Dúo',
+          categoria: { empiezaCon: 'DUO' },
+          tramosAlto: [
+            { altoMinM: 1.6, largo: '9mts' },
+            { altoMinM: 1.6, largo: '3mts' },
+          ],
+        },
+      ],
+    };
+    const { errores } = validarReglasSeleccion(r);
+    expect(errores.some((e) => e.includes('«Dúo»') && e.includes('largo desconocido'))).toBe(true);
+    expect(errores.some((e) => e.includes('«Dúo»') && e.includes('dos tramos'))).toBe(true);
   });
 
   it('rechaza un largo desconocido y dos tramos que empiezan igual', () => {

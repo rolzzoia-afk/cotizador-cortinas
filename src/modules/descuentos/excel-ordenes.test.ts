@@ -135,6 +135,31 @@ describe('generarOrdenesOptimizador — cenefa ovalada desde adicionales Fase 0'
     const { aoa } = generarOrdenesOptimizador('266-2', [v]);
     expect(aoa[1][idxCENEFA]).toBe('');
   });
+
+  // OT 3169: al enseñarle al despiece a cortar la ovalada del paño, la fila del
+  // Excel NO se mueve — el adicional sigue mandando y el loop genérico salta esa
+  // columna. Lo que cambia es la etiqueta de estructura, que antes decía N/A.
+  it('roller con cenefa Ovalada: el adicional sigue mandando sobre el despiece', () => {
+    const v = ventana('');
+    v.ubicacion = 'PZA 3';
+    v.panos = [{ ancho: 1.455, alto: 2, color: 'NEGRO', cenefa: 'Ovalada' } as Pano];
+    const adicional = [
+      { codInt: 'CENF O', cantidad: 1.455, descuento: 0, ubicacion: 'PZA 3', colorAcc: 'NEGRO' },
+    ];
+    const { aoa } = generarOrdenesOptimizador('3169', [v], { adicionalesFase0: adicional });
+    expect(aoa[1][idxCENEFA]).toBe(144); // 145,5 − 1,5
+    expect(aoa[1][idxTUBO]).toBe(141.7); // el tubo NO se mueve por la cenefa
+  });
+
+  it('roller con cenefa Ovalada sin adicional: la cenefa igual viaja al taller', () => {
+    // Mismo criterio que el soft light: si la cortina lleva cenefa, hay que
+    // cortarla. Antes esta fila salía vacía y el taller no la veía.
+    const v = ventana('');
+    v.ubicacion = 'SALA';
+    v.panos = [{ ancho: 1.455, alto: 2, color: 'NEGRO', cenefa: 'Ovalada' } as Pano];
+    const { aoa } = generarOrdenesOptimizador('3169', [v]);
+    expect(aoa[1][idxCENEFA]).toBe(144);
+  });
 });
 
 describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {

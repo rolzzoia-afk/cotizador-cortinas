@@ -178,9 +178,12 @@ export function derivarLargoColor(
   const nemo = normalizar(c.nemotecnico);
 
   let largoCadena = '';
-  // '2.4' / '1.4' van PRIMERO: "2.4 METROS" también contiene "4 METRO", y
-  // "1,40 MTS" (cadena dúo/corta) no dice "METRO" y caería sin largo.
+  // '2.4' / '1.6' / '1.4' van PRIMERO: "2.4 METROS" también contiene "4 METRO",
+  // y "1,40 MTS" (la cadena corta legacy) no dice "METRO" y caería sin largo.
+  // La de 1,6 m se nombra por su caída ("80 CM") desde siempre; se la reconoce
+  // por las dos formas para no depender de cómo la escriba bodega.
   if (nemo.includes('2.4') || nemo.includes('2,4')) largoCadena = '2.4mts';
+  else if (nemo.includes('1.6') || nemo.includes('1,6')) largoCadena = '0.75';
   else if (nemo.includes('1.4') || nemo.includes('1,4')) largoCadena = '1.4mts';
   else if (nemo.includes('3 METRO')) largoCadena = '3mts';
   else if (nemo.includes('4 METRO')) largoCadena = '4mts';
@@ -252,8 +255,11 @@ export function largoCadenaAuto(
 
 /**
  * Cadena a auto-seleccionar según el ALTO y el color de accesorios, con la
- * escalera y las reglas por categoría del catálogo (de fábrica: dúo → 1,40 m;
- * ≥2 m → 4 m · ≥1,4 → 3 m · ≥0,8 → 2,4 m · ≥0,5 → 1,4 m · menos → sin auto).
+ * escalera y las reglas por categoría del catálogo. De fábrica:
+ *   · roller y demás → ≥2 m → 4 m · ≥1,4 → 3 m · ≥0,8 → 2,4 m · ≥0,5 → 1,2 m
+ *   · dúo (escalera propia) → ≥2,1 → 4 m · ≥1,6 → 3 m · ≥1,4 → 2,4 m ·
+ *     ≥0,9 → 1,6 m · ≥0,6 → 1,2 m
+ * Por debajo del último peldaño no hay auto: la elige el vendedor.
  * Color MET/CAFÉ → null (lo elige el vendedor). Devuelve el cod CAD que calza
  * largo+color en el inventario, o null.
  */

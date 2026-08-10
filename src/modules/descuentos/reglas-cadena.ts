@@ -30,11 +30,18 @@ export const LARGOS_CADENA = [
 
 export type LargoCadena = (typeof LARGOS_CADENA)[number];
 
-/** Largo interno → texto para las hojas de inventario y los selectores. */
+/**
+ * Largo interno → texto para las hojas de inventario y los selectores.
+ *
+ * Las claves son históricas y nombran la cadena por el LARGO DE CAÍDA; bodega
+ * las nombra por el largo del lazo, que es el doble: '0.75' es la cadena de
+ * 1,6 m (80 cm de caída) y '1mts' la de 1,2 m (60 cm). El texto usa los dos
+ * para que nadie tenga que traducir.
+ */
 export const LARGO_DESCRIPCION: Record<string, string> = {
-  '0.75': '80 CM',
-  '1mts': '1,2 METROS',
-  '1.4mts': '1,4 METROS',
+  '0.75': '1,6 METROS - 80 CM',
+  '1mts': '1,2 METROS - 60 CM',
+  '1.4mts': '1,4 METROS - 70 CM',
   '2.4mts': '2,4 METROS',
   '3mts': '3 METROS',
   '4mts': '4 METROS',
@@ -64,11 +71,16 @@ export type TramoCadenaAlto = {
   largo: string;
 };
 
-/** Categoría que fija el largo sin mirar el alto (el dúo). */
+/**
+ * Regla propia de una categoría. Puede fijar un `largo` sin mirar el alto, o
+ * traer su propia escalera (`tramosAlto`), que REEMPLAZA a la general — el dúo
+ * necesita más cadena que un roller del mismo alto.
+ */
 export type ReglaCadenaCategoria = {
   descripcion: string;
   categoria: MatchCategoria;
-  largo: string;
+  largo?: string;
+  tramosAlto?: readonly TramoCadenaAlto[];
 };
 
 export type ReglasCadena = {
@@ -86,18 +98,32 @@ export type ReglasCadena = {
 
 export const REGLAS_CADENA: ReglasCadena = {
   cadenas: [],
-  // ≥2 m → 4 m · ≥1,4 → 3 m · ≥0,8 → 2,4 m · ≥0,5 → 1,4 m · menos → sin auto.
+  // ≥2 m → 4 m · ≥1,4 → 3 m · ≥0,8 → 2,4 m · ≥0,5 → 1,2 m · menos → sin auto.
+  // El peldaño bajo pedía la de 1,40 m hasta el 2026-08-10; bodega la dio de
+  // baja (CAD18/CAD19) y en su lugar va la de 1,2 m.
   tramosAlto: [
     { altoMinM: 2.0, largo: '4mts' },
     { altoMinM: 1.4, largo: '3mts' },
     { altoMinM: 0.8, largo: '2.4mts' },
-    { altoMinM: 0.5, largo: '1.4mts' },
+    { altoMinM: 0.5, largo: '1mts' },
   ],
-  // El dúo se rige por la MISMA escalera que el roller (corrección 2026-08-10):
-  // antes tenía acá una regla propia que le fijaba la cadena corta de 1,40 m sin
-  // mirar el alto, y una cortina de casi 2 m salía con 70 cm de cadena. Un dúo
-  // bajo igual llega a la corta por el tramo de 0,5 m.
-  reglasCategoria: [],
+  // El dúo pide más cadena que un roller del mismo alto: la tela baja y vuelve a
+  // subir, así que el lazo tiene que recorrer el doble. Escalera dictada por el
+  // dueño el 2026-08-10 (antes: primero una cadena fija de 1,40 m sin mirar el
+  // alto — un dúo de 1,93 m salía con 70 cm —, después la escalera del roller).
+  reglasCategoria: [
+    {
+      descripcion: 'Dúo: escalera propia',
+      categoria: { empiezaCon: 'DUO' },
+      tramosAlto: [
+        { altoMinM: 2.1, largo: '4mts' },
+        { altoMinM: 1.6, largo: '3mts' },
+        { altoMinM: 1.4, largo: '2.4mts' },
+        { altoMinM: 0.9, largo: '0.75' },
+        { altoMinM: 0.6, largo: '1mts' },
+      ],
+    },
+  ],
   // La vertical lleva SIEMPRE la de 3 m; solo el color la cambia. No hay
   // verticales con accesorios grises, así que un GRS heredado cae a la blanca
   // (mismo criterio que su kit VER).
@@ -126,6 +152,20 @@ export function cadenaOculta(
   return cadenaDeclarada(cod, reglas)?.estado === 'oculto';
 }
 
+/** Tramo que le toca a un alto: del más alto al más bajo, gana el primero que alcanza. */
+function tramoParaAlto(
+  altoM: number,
+  tramos: readonly TramoCadenaAlto[],
+): TramoCadenaAlto | null {
+  if (!(altoM > 0)) return null;
+  const ordenados = [...tramos].sort((a, b) => b.altoMinM - a.altoMinM);
+  return ordenados.find((t) => altoM >= t.altoMinM) ?? null;
+}
+
+function motivoTramo(t: TramoCadenaAlto): string {
+  return `desde ${String(t.altoMinM).replace('.', ',')} m → ${LARGO_DESCRIPCION[t.largo] || t.largo}`;
+}
+
 /** Largo que corresponde a una cortina, o null si la elige el vendedor. */
 export function largoCadenaPorAltoCategoria(
   altoM: number,
@@ -134,22 +174,19 @@ export function largoCadenaPorAltoCategoria(
   coincide: (categoria: string, match: MatchCategoria) => boolean,
 ): { largo: string; motivo: string } | null {
   for (const r of reglas.reglasCategoria) {
-    if (coincide(categoriaEfectivaNorm, r.categoria)) {
-      return { largo: r.largo, motivo: r.descripcion || 'regla por categoría' };
+    if (!coincide(categoriaEfectivaNorm, r.categoria)) continue;
+    // La escalera de la categoría REEMPLAZA a la general: si ningún tramo llega,
+    // la cadena la elige el vendedor (no se cae al peldaño del roller).
+    if (r.tramosAlto?.length) {
+      const t = tramoParaAlto(altoM, r.tramosAlto);
+      if (!t) return null;
+      const motivo = motivoTramo(t);
+      return { largo: t.largo, motivo: r.descripcion ? `${r.descripcion} — ${motivo}` : motivo };
     }
+    if (r.largo) return { largo: r.largo, motivo: r.descripcion || 'regla por categoría' };
   }
-  if (!(altoM > 0)) return null;
-  // Del tramo más alto al más bajo: gana el primero que el alto alcanza.
-  const ordenados = [...reglas.tramosAlto].sort((a, b) => b.altoMinM - a.altoMinM);
-  for (const t of ordenados) {
-    if (altoM >= t.altoMinM) {
-      return {
-        largo: t.largo,
-        motivo: `desde ${String(t.altoMinM).replace('.', ',')} m → ${LARGO_DESCRIPCION[t.largo] || t.largo}`,
-      };
-    }
-  }
-  return null;
+  const t = tramoParaAlto(altoM, reglas.tramosAlto);
+  return t ? { largo: t.largo, motivo: motivoTramo(t) } : null;
 }
 
 /** Código de cadena de una VERTICAL según el color de accesorios (corto: BCO/NEG/GRS). */

@@ -356,7 +356,7 @@ export function generarOrdenesOptimizador(
           const medida = cenefaOvaladaDesdeAdicional(
             adicCenefa,
             modelo,
-            { anchoPanoCm: anchoCm, categoria: v.categoria, sentido: v.sentido },
+            { anchoPanoCm: anchoCm, categoria: v.categoria, sentido: v.sentido, tipos: opts?.reglas?.tipos },
             opts?.formulas,
           );
           if (medida != null) {

@@ -1,27 +1,33 @@
 // ─────────────────────────────────────────────────────────────────────
-// REGLAS SOFT LIGHT 38 mm — SISTEMAS OSCURIDAD.xlsx
+// REGLAS SOFT LIGHT (38 y 45 mm) — SISTEMAS OSCURIDAD.xlsx
 //
 // Solo lo usa la cenefa comprada como ADICIONAL (CENF O) en Fase 0: el paño
 // se corta con el motor de `reglas-oscuridad.ts`, que es el vigente.
 //
 // Tres variantes según instalación (sentido de la cortina en Fase 0):
-//   INTERNO → cenefa = ancho − 1.2
-//   SEMI    → cenefa = ancho + 6.6
-//   EXTERNO → cenefa = ancho + 13.2
+//   38 mm → INTERNO: ancho − 1,2 · SEMI: + 6,6 · EXTERNO: + 13,2
+//   45 mm → INTERNO: ancho − 1,5 · SEMI: + 6,6 · EXTERNO: + 13,2
 // Luego, para todas:
 //   tubo = cenefa − 1.8
 //   peso = cenefa − 5.8
 //   tela = peso − 0.2
 //
 // El ajuste de cenefa NO se declara acá: sale de la MISMA tabla que corta el
-// paño (`formulas.oscuridad.cenefaAdj.SOFT_LIGHT_38`). Antes era una copia y
-// editar una sin la otra dejaba la cenefa del adicional desalineada de la del
-// paño para la misma ventana.
+// paño (`formulas.oscuridad.cenefaAdj`). Antes era una copia y editar una sin
+// la otra dejaba la cenefa del adicional desalineada de la del paño para la
+// misma ventana. Por el mismo motivo la FAMILIA la resuelve
+// `familiaOscuridadConDiametro`, que es la que usa el motor: un soft light 38
+// montado sobre tubo de 45 (banda E78) corta como 45.
 // ─────────────────────────────────────────────────────────────────────
 import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
+import { familiaOscuridadConDiametro } from './reglas-oscuridad';
 import type { ModeloDespiece } from './tipos';
+import type { TipoCortina } from './tiposCortina';
 
 export type VarianteSoftLight = 'INTERNO' | 'SEMI' | 'EXTERNO';
+
+/** Familias de soft light con cenefa OVALADA (la cuadrada tiene pizarra propia). */
+export type FamiliaCenefaSoftLight = 'SOFT_LIGHT_38' | 'SOFT_LIGHT_45';
 
 export type CortesSoftLight38 = {
   tubo: number;
@@ -33,33 +39,49 @@ export type CortesSoftLight38 = {
 const VI: Record<VarianteSoftLight, 0 | 1 | 2> = { INTERNO: 0, SEMI: 1, EXTERNO: 2 };
 
 /** Ajuste sobre el ancho nominal para obtener la medida de cenefa (cm). */
-export function ajusteCenefaSoftLight38(
+export function ajusteCenefaSoftLight(
+  familia: FamiliaCenefaSoftLight,
   variante: VarianteSoftLight,
   formulas: FormulasFamilias = FORMULAS_DEFAULT,
 ): number {
-  return formulas.oscuridad.cenefaAdj.SOFT_LIGHT_38[VI[variante]];
+  return formulas.oscuridad.cenefaAdj[familia][VI[variante]];
 }
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
-export function esCategoriaSoftLight38(categoria: string | undefined): boolean {
-  return (categoria || '').trim().toUpperCase() === 'SOFT_LIGHT_38MM';
-}
-
-/** Variante Soft Light 38 mm: prioriza sentido de la ventana, luego tipo_rol del modelo. */
-export function varianteSoftLight38(opts: {
+/**
+ * Familia y variante de la cenefa OVALADA de un soft light, o null si la
+ * cortina no es soft light. La familia sigue al motor (categoría + diámetro del
+ * tubo); la variante prioriza el sentido de la ventana y cae al tipo_rol del
+ * modelo.
+ */
+export function varianteSoftLight(opts: {
   categoria?: string;
   sentido?: string | null;
   modelo?: ModeloDespiece | null;
-}): VarianteSoftLight | null {
-  if (!esCategoriaSoftLight38(opts.categoria)) return null;
+  tipos?: readonly TipoCortina[];
+}): { familia: FamiliaCenefaSoftLight; variante: VarianteSoftLight } | null {
+  // La cenefa del adicional CENF O es ovalada por definición → cenefaTipo null.
+  const fam = familiaOscuridadConDiametro(
+    opts.categoria,
+    null,
+    opts.modelo?.diametro_tubo_mm,
+    opts.tipos,
+  );
+  if (fam !== 'SOFT_LIGHT_38' && fam !== 'SOFT_LIGHT_45') return null;
+  return { familia: fam, variante: varianteDeSentidoOModelo(opts.sentido, opts.modelo) };
+}
 
-  const sentido = (opts.sentido || '').toUpperCase();
-  if (sentido.includes('INTERNO')) return 'INTERNO';
-  if (sentido.includes('EXTERNO')) return 'EXTERNO';
-  if (sentido.includes('SEMI')) return 'SEMI';
+function varianteDeSentidoOModelo(
+  sentido: string | null | undefined,
+  modelo: ModeloDespiece | null | undefined,
+): VarianteSoftLight {
+  const s = (sentido || '').toUpperCase();
+  if (s.includes('INTERNO')) return 'INTERNO';
+  if (s.includes('EXTERNO')) return 'EXTERNO';
+  if (s.includes('SEMI')) return 'SEMI';
 
-  const tipo = (opts.modelo?.tipo_rol || '').toUpperCase();
+  const tipo = (modelo?.tipo_rol || '').toUpperCase();
   if (tipo.includes('INTERNO')) return 'INTERNO';
   if (tipo.includes('EXTERNO')) return 'EXTERNO';
   if (tipo.includes('SEMI')) return 'SEMI';
@@ -73,7 +95,7 @@ export function cortesSoftLight38(
   formulas: FormulasFamilias = FORMULAS_DEFAULT,
 ): CortesSoftLight38 {
   const a = formulas.adicionales;
-  const cenefa = medidaCenefaSoftLight38(anchoCm, variante, formulas);
+  const cenefa = medidaCenefaSoftLight(anchoCm, 'SOFT_LIGHT_38', variante, formulas);
   const tubo = cenefa - a.softLightTuboDesdeCenefaCm;
   const peso = cenefa - a.softLightPesoDesdeCenefaCm;
   return {
@@ -83,11 +105,12 @@ export function cortesSoftLight38(
   };
 }
 
-/** Medida de cenefa Soft Light 38 mm (cm) según variante interno/semi/externo. */
-export function medidaCenefaSoftLight38(
+/** Medida de cenefa de un soft light (cm) según familia y variante. */
+export function medidaCenefaSoftLight(
   anchoCm: number,
+  familia: FamiliaCenefaSoftLight,
   variante: VarianteSoftLight,
   formulas: FormulasFamilias = FORMULAS_DEFAULT,
 ): number {
-  return r1(anchoCm + ajusteCenefaSoftLight38(variante, formulas));
+  return r1(anchoCm + ajusteCenefaSoftLight(familia, variante, formulas));
 }

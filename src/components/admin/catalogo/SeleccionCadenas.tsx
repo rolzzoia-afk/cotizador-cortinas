@@ -22,6 +22,7 @@ import {
   type CadenaCatalogo,
   type ReglaCadenaCategoria,
   type ReglasCadena,
+  type TramoCadenaAlto,
 } from '@/modules/descuentos/reglas-cadena';
 import {
   textoCategoria,
@@ -50,6 +51,80 @@ type FilaCadena = {
   color: string;
 };
 
+/** Selector de largo de cadena (mismo control en toda la sección). */
+function SelectorLargo({
+  valor,
+  onChange,
+}: {
+  valor: string;
+  onChange: (largo: string) => void;
+}) {
+  return (
+    <select
+      className="h-8 rounded-md border bg-background px-2 text-xs"
+      value={valor}
+      onChange={(e) => onChange(e.target.value)}
+    >
+      <option value="">— sin largo —</option>
+      {LARGOS_CADENA.map((l) => (
+        <option key={l} value={l}>
+          {LARGO_DESCRIPCION[l]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Editor de una escalera por alto: la general y la propia de una categoría. */
+function EditorEscalera({
+  tramos,
+  onChange,
+}: {
+  tramos: readonly TramoCadenaAlto[];
+  onChange: (t: TramoCadenaAlto[]) => void;
+}) {
+  const set = (i: number, patch: Partial<TramoCadenaAlto>) =>
+    onChange(tramos.map((t, k) => (k === i ? { ...t, ...patch } : t)));
+  return (
+    <div className="space-y-1.5">
+      {[...tramos]
+        .map((t, i) => ({ t, i }))
+        .sort((a, b) => b.t.altoMinM - a.t.altoMinM)
+        .map(({ t, i }) => (
+          <div key={i} className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-xs">
+            <span className="text-muted-foreground">Desde</span>
+            <Input
+              className="h-8 w-20 text-xs"
+              value={metros(t.altoMinM)}
+              onChange={(e) => {
+                const n = parseFloat(e.target.value.replace(',', '.'));
+                if (Number.isFinite(n)) set(i, { altoMinM: n });
+              }}
+            />
+            <span className="text-muted-foreground">m de alto →</span>
+            <SelectorLargo valor={t.largo} onChange={(largo) => set(i, { largo })} />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              onClick={() => onChange(tramos.filter((_, k) => k !== i))}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </div>
+        ))}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onChange([...tramos, { altoMinM: 1, largo: '3mts' }])}
+      >
+        <Plus className="mr-1 h-3.5 w-3.5" />
+        Agregar tramo
+      </Button>
+    </div>
+  );
+}
+
 /** Por qué la app puede elegir cada código (columna informativa). */
 function motivosPorFila(fila: FilaCadena, r: ReglasCadena): string[] {
   const out: string[] = [];
@@ -62,7 +137,12 @@ function motivosPorFila(fila: FilaCadena, r: ReglasCadena): string[] {
     return out;
   }
   for (const rc of r.reglasCategoria) {
-    if (rc.largo === fila.largo) out.push(rc.descripcion || textoCategoria(rc.categoria));
+    const nombre = rc.descripcion || textoCategoria(rc.categoria);
+    if (rc.largo === fila.largo) out.push(nombre);
+    const tramoCat = [...(rc.tramosAlto ?? [])]
+      .sort((a, b) => b.altoMinM - a.altoMinM)
+      .find((t) => t.largo === fila.largo);
+    if (tramoCat) out.push(`${nombre}: alto ≥ ${metros(tramoCat.altoMinM)} m`);
   }
   const tramos = [...r.tramosAlto].sort((a, b) => b.altoMinM - a.altoMinM);
   for (const t of tramos) {
@@ -168,18 +248,7 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
   };
 
   const selLargo = (v: string, on: (l: string) => void) => (
-    <select
-      className="h-8 rounded-md border bg-background px-2 text-xs"
-      value={v}
-      onChange={(e) => on(e.target.value)}
-    >
-      <option value="">— sin largo —</option>
-      {LARGOS_CADENA.map((l) => (
-        <option key={l} value={l}>
-          {LARGO_DESCRIPCION[l]}
-        </option>
-      ))}
-    </select>
+    <SelectorLargo valor={v} onChange={on} />
   );
 
   const coloresAcc = useMemo(() => coloresParaUso('accesorio', paleta), [paleta]);
@@ -199,13 +268,6 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
       ))}
     </select>
   );
-
-  const setTramo = (i: number, patch: Partial<{ altoMinM: number; largo: string }>) => {
-    onChange({
-      ...valor,
-      tramosAlto: valor.tramosAlto.map((t, k) => (k === i ? { ...t, ...patch } : t)),
-    });
-  };
 
   const setReglaCat = (i: number, patch: Partial<ReglaCadenaCategoria>) => {
     onChange({
@@ -364,53 +426,11 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
 
       {/* ── Escalera por alto ─────────────────────────────────────── */}
       <div className="mt-5">
-        <div className="mb-2 flex items-center gap-2">
-          <h3 className="text-xs font-semibold">Qué largo según el alto</h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto"
-            onClick={() =>
-              onChange({ ...valor, tramosAlto: [...valor.tramosAlto, { altoMinM: 1, largo: '3mts' }] })
-            }
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Agregar tramo
-          </Button>
-        </div>
-        <div className="space-y-1.5">
-          {[...valor.tramosAlto]
-            .map((t, i) => ({ t, i }))
-            .sort((a, b) => b.t.altoMinM - a.t.altoMinM)
-            .map(({ t, i }) => (
-              <div
-                key={i}
-                className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-xs"
-              >
-                <span className="text-muted-foreground">Desde</span>
-                <Input
-                  className="h-8 w-20 text-xs"
-                  value={metros(t.altoMinM)}
-                  onChange={(e) => {
-                    const n = parseFloat(e.target.value.replace(',', '.'));
-                    if (Number.isFinite(n)) setTramo(i, { altoMinM: n });
-                  }}
-                />
-                <span className="text-muted-foreground">m de alto →</span>
-                {selLargo(t.largo, (largo) => setTramo(i, { largo }))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="ml-auto"
-                  onClick={() =>
-                    onChange({ ...valor, tramosAlto: valor.tramosAlto.filter((_, k) => k !== i) })
-                  }
-                >
-                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                </Button>
-              </div>
-            ))}
-        </div>
+        <h3 className="mb-2 text-xs font-semibold">Qué largo según el alto</h3>
+        <EditorEscalera
+          tramos={valor.tramosAlto}
+          onChange={(tramosAlto) => onChange({ ...valor, tramosAlto })}
+        />
         <p className="mt-1.5 text-[11px] text-muted-foreground">
           Gana el tramo más alto que la cortina alcance. Bajo el tramo más chico no se elige ninguna:
           la pone el vendedor.
@@ -420,7 +440,7 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
       {/* ── Reglas por categoría ──────────────────────────────────── */}
       <div className="mt-5">
         <div className="mb-2 flex items-center gap-2">
-          <h3 className="text-xs font-semibold">Largo fijo por tipo de cortina</h3>
+          <h3 className="text-xs font-semibold">Reglas por tipo de cortina</h3>
           <Button
             variant="ghost"
             size="sm"
@@ -448,11 +468,10 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
                   ? 'empiezaCon'
                   : 'includes';
             const txt = textoCategoria(r.categoria);
+            const conEscalera = !!r.tramosAlto?.length;
             return (
-              <div
-                key={i}
-                className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-xs"
-              >
+              <div key={i} className="rounded-md border p-2 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
                 <Input
                   className="h-8 min-w-[14rem] flex-1 text-xs"
                   placeholder="Para qué sirve esta regla"
@@ -491,10 +510,31 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
                   }}
                 />
                 <span className="text-muted-foreground">→</span>
-                {selLargo(r.largo, (largo) => setReglaCat(i, { largo }))}
+                <select
+                  className="h-8 rounded-md border bg-background px-2 text-xs"
+                  value={conEscalera ? 'escalera' : 'fijo'}
+                  onChange={(e) =>
+                    setReglaCat(
+                      i,
+                      e.target.value === 'escalera'
+                        ? { largo: undefined, tramosAlto: [...valor.tramosAlto] }
+                        : { largo: r.largo || '3mts', tramosAlto: undefined },
+                    )
+                  }
+                >
+                  <option value="fijo">Siempre el mismo largo</option>
+                  <option value="escalera">Escalera propia por alto</option>
+                </select>
+                {!conEscalera && (
+                  <SelectorLargo
+                    valor={r.largo ?? ''}
+                    onChange={(largo) => setReglaCat(i, { largo })}
+                  />
+                )}
                 <Button
                   variant="ghost"
                   size="sm"
+                  className="ml-auto"
                   onClick={() =>
                     onChange({
                       ...valor,
@@ -504,6 +544,15 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
                 >
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
+                </div>
+                {conEscalera && (
+                  <div className="mt-2 border-l-2 pl-3">
+                    <EditorEscalera
+                      tramos={r.tramosAlto ?? []}
+                      onChange={(tramosAlto) => setReglaCat(i, { tramosAlto })}
+                    />
+                  </div>
+                )}
               </div>
             );
           })}
@@ -513,6 +562,10 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
             </p>
           )}
         </div>
+        <p className="mt-1.5 text-[11px] text-muted-foreground">
+          Una regla con escalera propia <strong>reemplaza</strong> a la general para ese tipo de
+          cortina: si la cortina no alcanza ningún tramo suyo, la cadena la pone el vendedor.
+        </p>
       </div>
 
       {/* ── Vertical ──────────────────────────────────────────────── */}
