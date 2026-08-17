@@ -8,21 +8,25 @@ describe('letraPano', () => {
     expect(letraPano(26)).toBe('Z');
   });
 
-  it('sigue estilo Excel después de la Z (nunca da la vuelta)', () => {
+  it('después de la Z repite la misma letra: AA, BB, CC… (nunca da la vuelta)', () => {
     expect(letraPano(27)).toBe('AA');
-    expect(letraPano(28)).toBe('AB');
-    expect(letraPano(52)).toBe('AZ');
-    expect(letraPano(53)).toBe('BA');
-    expect(letraPano(78)).toBe('BZ');
-    expect(letraPano(79)).toBe('CA');
-    expect(letraPano(88)).toBe('CJ'); // el último paño de la OT 268-6
-    expect(letraPano(702)).toBe('ZZ');
-    expect(letraPano(703)).toBe('AAA');
+    expect(letraPano(28)).toBe('BB');
+    expect(letraPano(29)).toBe('CC');
+    expect(letraPano(44)).toBe('RR');
+    expect(letraPano(52)).toBe('ZZ');
   });
 
-  it('las letras son únicas (704 paños, 704 letras distintas)', () => {
-    const letras = Array.from({ length: 704 }, (_, i) => letraPano(i + 1));
-    expect(new Set(letras).size).toBe(704);
+  it('cada vuelta al abecedario suma una copia de la letra', () => {
+    expect(letraPano(53)).toBe('AAA');
+    expect(letraPano(54)).toBe('BBB');
+    expect(letraPano(78)).toBe('ZZZ');
+    expect(letraPano(79)).toBe('AAAA');
+    expect(letraPano(88)).toBe('JJJJ'); // el último paño de la OT 268-6
+  });
+
+  it('las letras son únicas (260 paños = 10 vueltas, 260 letras distintas)', () => {
+    const letras = Array.from({ length: 260 }, (_, i) => letraPano(i + 1));
+    expect(new Set(letras).size).toBe(260);
   });
 
   it('fuera de rango → cadena vacía', () => {

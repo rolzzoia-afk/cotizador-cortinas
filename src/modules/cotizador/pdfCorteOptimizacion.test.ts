@@ -215,6 +215,53 @@ describe('construirHojaCorte — telas invertidas', () => {
   });
 });
 
+// Las letras de paño son A…Z, AA, BB, CC… así que el paño 44 se llama "RR", que
+// era también la marca vieja de «no cabe». La hoja no puede confundirlas.
+describe('construirHojaCorte — el paño 44 se llama "RR" y es un paño normal', () => {
+  const vent = (i: number, ancho: number): VentanaItem => ({
+    id: `v${i}`,
+    ubicacion: `L${i}`,
+    codInt: 'BK 18',
+    producto: 'ROLLER BLACKOUT DELUX',
+    tipo: 'DELUX',
+    categoria: 'ROL',
+    grupoId: null,
+    alto: 1.8,
+    precio: 0,
+    cantidad: 1,
+    panos: [{ ancho, alto: 1.8 }],
+  });
+
+  it('dos cortinas del paño 44 se cortan JUNTAS, como cualquier otro paño', () => {
+    // 43 cortinas de 2 m: cada una su paño (A…Z, AA…QQ). Luego dos de 1,2 m que
+    // caben juntas en el paño 44 = "RR".
+    const ventanas = [
+      ...Array.from({ length: 43 }, (_, i) => vent(i + 1, 2)),
+      vent(44, 1.2),
+      vent(45, 1.2),
+    ];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+    expect(rows[43].junto).toBe('RR');
+    expect(rows[44].junto).toBe('RR');
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.totalPanos).toBe(44);
+    expect(hoja.cortinas[43].cortarJunto).toBe('RR');
+    expect(hoja.cortinas[44].cortarJunto).toBe('RR');
+  });
+
+  it('un plan VIEJO con "RR" sin n° de paño (la marca de «no cabe») sigue separando cada fila', () => {
+    const ventanas = [vent(1, 3.5), vent(2, 3.5)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat)).map((r) => ({
+      ...r,
+      junto: 'RR',
+      numeroPano: '',
+      invertida: false,
+    }));
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.totalPanos).toBe(2);
+  });
+});
+
 // OSCURIDAD invertida (OT de prueba 267-26, OSCURANTI externo): la tela se corta
 // MÁS ancha que la medida nominal (+9,34 cm en externo), así que el paño rotado
 // consume ESE ancho del rollo, no el nominal.
@@ -639,9 +686,10 @@ describe('construirHojaCorte — OT 268-6 (88 cortinas, >26 paños)', () => {
     expect(m['SC 64']).toBeCloseTo(98.6, 3);
   });
 
-  it('las letras siguen estilo Excel: paño 27 = AA, paño 88 = CJ', () => {
+  it('las letras repiten la suya en cada vuelta: paño 27 = AA, paño 28 = BB, paño 88 = JJJJ', () => {
     expect(hoja.cortinas[26].cortarJunto).toBe('AA');
-    expect(hoja.cortinas[87].cortarJunto).toBe('CJ');
+    expect(hoja.cortinas[27].cortarJunto).toBe('BB');
+    expect(hoja.cortinas[87].cortarJunto).toBe('JJJJ');
   });
 });
 

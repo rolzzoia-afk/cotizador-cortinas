@@ -743,10 +743,11 @@ describe('asignarJuntoEnOrden — más de 26 paños', () => {
   }));
   const out = asignarJuntoEnOrden(buildOptimizerRows(ventanas as never, cat));
 
-  it('las letras NO dan la vuelta: después de la Z viene AA', () => {
+  it('las letras NO dan la vuelta: después de la Z viene AA, BB, CC…', () => {
     expect(out[25].junto).toBe('Z');
     expect(out[26].junto).toBe('AA'); // antes volvía a la 'A' del paño 1
-    expect(out[29].junto).toBe('AD');
+    expect(out[27].junto).toBe('BB');
+    expect(out[29].junto).toBe('DD');
   });
 
   it('30 paños con 30 letras distintas y numeración corrida', () => {
