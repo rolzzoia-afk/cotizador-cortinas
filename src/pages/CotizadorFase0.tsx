@@ -30,6 +30,7 @@ import { useOT } from '@/modules/ots/hooks';
 import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
 import {
   cotizarFase0,
+  textoInstalacion,
   type LineaResultado,
   type AdicionalResultado,
 } from '@/modules/cotizador/motorFase0';
@@ -58,6 +59,7 @@ import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
+import { codigosInstalacionAutomatica } from '@/modules/cotizador/reglasPrecios';
 import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
 import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
@@ -70,6 +72,14 @@ import {
   derivarAdicionalesCenefaDesdeVentanas,
   filtrarDerivadosPorCupoManual,
 } from '@/modules/descuentos/adicionales-cenefa';
+import { PanelFamilia, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
 import BloqueDocRender, { SeccionDocumento } from '@/components/cotizador/BloquesDocumento';
@@ -243,13 +253,10 @@ const TOPE_FILAS_CATALOGO = 500;
 // % es-CL con hasta 2 decimales: 0.138 → "13,8" · 0.0415 → "4,15".
 const fmtPct = (v: number) => (Math.round(v * 10000) / 100).toLocaleString('es-CL');
 
-// COD_INT de las instalaciones que el motor calcula SOLO (regla 4+ gratis /
-// región). Se filtran de los adicionales manuales para no cobrarlas dos veces;
-// las de motor, soft o cenefa —INSTMOT, INSTSOFT, INSTCENF…— sí siguen siendo
-// manuales. `INST-BB` es la del beeblack: su fila la arma el motor con el
-// precio del sistema, igual que la roller.
-const CODS_INSTALACION_BASE = new Set(['INST', 'INST-BB']);
-const esInstalacionBase = (ci: string) => CODS_INSTALACION_BASE.has((ci || '').trim().toUpperCase());
+// Las instalaciones que el motor calcula SOLO salen de las reglas: la roller
+// ('INST') más el código que declare cada sistema (el beeblack, 'INST-BB'). Un
+// sistema nuevo trae el suyo y queda cubierto sin tocar esta pantalla. Ver
+// `codigosInstalacionAutomatica`.
 
 /**
  * Cotizador compartido. `modo` define el papel en el flujo:
@@ -307,6 +314,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // Categorías que se ofrecen: las nativas + los tipos de cortina propios
   // activos (Admin → Catálogo técnico). Es la misma lista que valida el import.
   const categoriasSelect = useMemo(() => categoriasParaSelect(reglas.tipos), [reglas.tipos]);
+  // Instalaciones que arma el motor solo: se filtran de los adicionales para no
+  // cobrarlas dos veces.
+  const esInstalacionBase = useCallback(
+    (ci: string) =>
+      codigosInstalacionAutomatica(reglasPrecios.sistemas).has((ci || '').trim().toUpperCase()),
+    [reglasPrecios.sistemas],
+  );
 
   const [cliente, setCliente] = useState<Cliente>(EMPTY_CLIENTE);
   // N° de OT manual (transición desde el Excel legado): si viene, la OT se
@@ -314,6 +328,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // autocompleta al importar un Excel que traiga "OT CLIENTE" en el encabezado.
   const [otManual, setOtManual] = useState('');
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
+  /** Familia cuyo desglose de precio se está mirando (null = ninguno). */
+  const [desgloseCod, setDesgloseCod] = useState<string | null>(null);
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
   // null = ningún filtro (la tabla ni se dibuja) · FILTRO_TODOS = el catálogo
   // entero · id de chip = ese chip. Arranca en null para no cargar la página
@@ -795,6 +811,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // MÁS tela gasta (externo): antes se cotizaban todas como internas y la
       // diferencia se regalaba. Ver empaqueFase0.ts.
       anchoEmpaqueM: anchoEmpaquePeorCasoM(f.categoria, f.ancho, formulas, reglas.tipos),
+      // Para la fila de instalación: en Fase 3 una ventana puede venir partida
+      // en varios paños (un dual son dos telas y UNA instalación). En Fase 1
+      // las filas no tienen ventana todavía y se cuentan de a una.
+      ventanaId: f.vid,
     }));
     // La instalación base ('INST') se calcula automáticamente; se excluye de los
     // adicionales que van al motor para no cobrarla dos veces aunque alguien la
@@ -817,6 +837,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion, reglasPrecios,
     );
   }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion, reglasPrecios, formulas, reglas.tipos]);
+
+  /** La familia que está mirando el desglose, si el diálogo está abierto. */
+  const familiaDesglose = useMemo(
+    () => (desgloseCod ? resultado.familias.find((f) => f.cod === desgloseCod) ?? null : null),
+    [desgloseCod, resultado.familias],
+  );
 
   // ¿Alguna fila se está cotizando al peor caso de montaje? (para el aviso)
   const conPeorCaso = useMemo(
@@ -893,8 +919,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
 
   // DCT% por defecto (0–100) del código, tomado del catálogo. Autollena la
   // columna al elegir/importar un COD_INT; el usuario lo puede editar después.
+  // Se conservan hasta 2 decimales: el `Math.round` de antes convertía un
+  // 37,5 % del catálogo en 38 % y esa media unidad se perdía en cada línea.
   const dctDeCodigo = (ci: string | undefined): number =>
-    Math.round((Number(catalogo[canonizarCodInt(ci)]?.descuento) || 0) * 100);
+    Math.round((Number(catalogo[canonizarCodInt(ci)]?.descuento) || 0) * 10000) / 100;
 
   const agregarProducto = (codInt: string) => {
     const prod = catalogo[codInt];
@@ -1723,9 +1751,22 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Td className="border-l border-border text-right text-muted-foreground">
                       {ln ? ln.m2.toFixed(2) : '—'}
                     </Td>
-                    <Td className="text-right">{ln ? formatCLP(ln.valorUnit) : '—'}</Td>
+                    <Td className="text-right">
+                      {ln ? (
+                        <button
+                          type="button"
+                          onClick={() => setDesgloseCod(ln.cod)}
+                          className="underline decoration-dotted underline-offset-2 hover:text-accent print:no-underline"
+                          title="Ver cómo se armó este precio"
+                        >
+                          {formatCLP(ln.valorUnit)}
+                        </button>
+                      ) : (
+                        '—'
+                      )}
+                    </Td>
                     <Td>
-                      <CellInput type="number" min={0} max={100} step="1" value={f.descuento || ''}
+                      <CellInput type="number" min={0} max={100} step="0.5" value={f.descuento || ''}
                         onChange={(e) => setFila(f.id, { descuento: parseFloat(e.target.value) || 0 })}
                         className="w-14 text-right" placeholder="0" />
                     </Td>
@@ -1828,7 +1869,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Td className="border-l border-border text-center text-muted-foreground">—</Td>
                     <Td className="text-right">{r ? formatCLP(r.precioUnit) : '—'}</Td>
                     <Td>
-                      <CellInput type="number" min={0} max={100} step="1" value={a.descuento || ''}
+                      <CellInput type="number" min={0} max={100} step="0.5" value={a.descuento || ''}
                         onChange={(e) => setAdic(a.id, { descuento: parseFloat(e.target.value) || 0 })}
                         className="w-14 text-right" placeholder="0" />
                     </Td>
@@ -1890,27 +1931,59 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
           {/* Bajo el mínimo de cortinas la instalación se cobra: mostrarla acá
               para que el subtotal no suba sin explicación. Con 4+ (o sin
-              instalación) la línea vale 0 y no se muestra. */}
+              instalación) la línea vale 0 y no se muestra. El texto dice el
+              MOTIVO: antes decía «bajo el mínimo» incluso en una cotización de
+              región con más cortinas que el mínimo. */}
           {resultado.instalacion.total > 0 && (
-            <FilaTotal
-              label={`Instalación (${resultado.instalacion.cantidad} ${
-                resultado.instalacion.cantidad === 1 ? 'cortina' : 'cortinas'
-              }, bajo el mínimo de ${parametros.instalacionGratisMinCortinas})`}
-              valor={formatCLP(resultado.instalacion.total)}
-            />
+            <>
+              <FilaTotal
+                label={`Instalación (${textoInstalacion(
+                  resultado.instalacion,
+                  parametros.instalacionGratisMinCortinas,
+                )})`}
+                valor={formatCLP(resultado.instalacion.total)}
+              />
+              {/* Con dos sistemas en juego (roller + beeblack) se instala a dos
+                  precios: sin el desglose el total no cuadra a ojo. */}
+              {resultado.instalacion.partes.length > 1 &&
+                resultado.instalacion.partes.map((p) => (
+                  <div
+                    key={p.sistema}
+                    className="flex justify-between pl-3 text-[11px] text-muted-foreground"
+                  >
+                    <span>
+                      {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
+                    </span>
+                    <span>{formatCLP(p.total)}</span>
+                  </div>
+                ))}
+            </>
           )}
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
-          <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
+          <FilaTotal label={`IVA ${Math.round(parametros.iva * 100)}%`} valor={formatCLP(t.ivaTransferencia)} />
           {conPeorCaso && (
             <p className="pt-1 text-[11px] leading-snug text-muted-foreground">
               Los sistemas de oscuridad se cotizan con el consumo de tela del montaje más caro
               (externo) mientras la instalación no se defina en Fase 2.
             </p>
           )}
+          {/* Lo que el motor no pudo resolver: una tela fuera del catálogo o una
+              familia sin precio dejan líneas en $0, y hasta ahora eso pasaba en
+              silencio y el documento se mandaba igual. */}
+          {resultado.avisos.length > 0 && (
+            <div className="mt-1 rounded-md border border-warning/40 bg-warning/10 p-2 text-[11px] leading-snug print:hidden">
+              {resultado.avisos.map((a, i) => (
+                <p key={i}>{a.mensaje}</p>
+              ))}
+            </div>
+          )}
           <FilaTotal label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
           <div className="my-1 border-t border-border" />
           <FilaTotal label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />
-          <FilaTotal label="Abono 50% (inicio)" valor={formatCLP(t.abono50)} />
+          <FilaTotal
+            label={`Abono ${Math.round(parametros.abonoInicial * 100)}% (inicio)`}
+            valor={formatCLP(t.abono50)}
+          />
           <div className="my-1 border-t border-border" />
           {modo === 'fase3' ? (
             readOnlyFase3 ? (
@@ -1980,6 +2053,33 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             onClose={() => setEditarColores(false)}
           />
         )}
+
+        {/* Cómo se armó el precio de una familia. Es el mismo panel del
+            probador de Admin: la vendedora ve exactamente lo que vería quien
+            edita los precios, sin tener que entrar al Admin. */}
+        <Dialog open={desgloseCod !== null} onOpenChange={(v) => !v && setDesgloseCod(null)}>
+          <DialogContent className="max-w-4xl print:hidden">
+            <DialogHeader>
+              <DialogTitle>Cómo se armó este precio</DialogTitle>
+              <DialogDescription>
+                Las cortinas de una misma familia se cotizan juntas: se suma la tela ya optimizada
+                por paños, los materiales, la mano de obra y el traslado, y ese total se reparte
+                entre los metros cuadrados de todas. Por eso agregar o quitar una cortina cambia el
+                precio de las demás de su familia.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[70vh] overflow-y-auto">
+              {familiaDesglose && (
+                <PanelFamilia
+                  f={familiaDesglose}
+                  piezas={nombresDePiezas(
+                    resultado.lineas.filter((l) => l.cod === familiaDesglose.cod),
+                  )}
+                />
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Bloques del admin (términos, banner de cuotas, cuadros de texto e
             imágenes). Van todos acá y cada uno se ubica con su `order`, así que

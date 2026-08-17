@@ -7,7 +7,7 @@
 // que se vea el efecto antes de guardar.
 // ─────────────────────────────────────────────────────────────────────
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ClipboardList, Plus, RotateCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, ClipboardList, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCLP } from '@/lib/formatters';
@@ -32,6 +32,10 @@ type Props = {
   margenInsumo: number;
   /** Sistemas con precios y margen propios: sus familias van en su bloque. */
   sistemas: Record<string, SistemaPrecio>;
+  /** Paso de lama vigente: manda las cantidades «por lama» de las verticales. */
+  pasoLamaM: number;
+  /** COD de familia que existen en el catálogo, para ofrecerles receta propia. */
+  familiasCatalogo?: string[];
   onChange: (r: Record<string, LineaReceta[]>) => void;
 };
 
@@ -117,16 +121,18 @@ function EditorCantidad({ q, onChange }: { q: CantidadReceta; onChange: (q: Cant
   );
 }
 
-function Familia({ fam, lineas, insumos, margenInsumo, onChange }: {
+function Familia({ fam, lineas, insumos, margenInsumo, pasoLamaM, onChange }: {
   fam: string;
   lineas: LineaReceta[];
   insumos: Record<string, InsumoPrecio>;
   margenInsumo: number;
+  /** El paso de lama vigente: manda las cantidades de tipo «por lama». */
+  pasoLamaM: number;
   onChange: (l: LineaReceta[]) => void;
 }) {
   const [abierta, setAbierta] = useState(false);
   const codigos = Object.keys(insumos).sort((a, b) => a.localeCompare(b, 'es'));
-  const previa = materialesFamilia(lineas, EJEMPLO, insumos, margenInsumo);
+  const previa = materialesFamilia(lineas, EJEMPLO, insumos, margenInsumo, pasoLamaM);
   const esDefault = JSON.stringify(lineas) === JSON.stringify(RECETAS_DEFAULT[fam]);
 
   const editarLinea = (i: number, patch: Partial<LineaReceta>) =>
@@ -190,8 +196,18 @@ function Familia({ fam, lineas, insumos, margenInsumo, onChange }: {
                     <td className="px-1 py-1.5">
                       <EditorCantidad q={l.cantidad} onChange={(q) => editarLinea(i, { cantidad: q })} />
                       <div className="mt-0.5 text-[0.65rem] text-muted-foreground">
-                        {explicarCantidad(l.cantidad)}
+                        {explicarCantidad(l.cantidad, pasoLamaM)}
                       </div>
+                      {/* Hay líneas que parecen un error y son la réplica
+                          deliberada de una fórmula equivocada del Excel: sin
+                          este cartel, cualquiera las "corrige" y desalinea los
+                          precios. */}
+                      {l.nota && (
+                        <div className="mt-1 flex max-w-[15rem] items-start gap-1 rounded border border-warning/40 bg-warning/10 p-1 text-[0.62rem] leading-snug">
+                          <AlertTriangle className="mt-px h-3 w-3 shrink-0 text-warning" />
+                          <span>{l.nota}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-1 py-1.5">
                       <select
@@ -256,6 +272,8 @@ export function RecetasFamiliasSection({
   insumos,
   margenInsumo,
   sistemas,
+  pasoLamaM,
+  familiasCatalogo = [],
   onChange,
 }: Props) {
   const orden = [...FAMILIAS_CON_RECETA, RECETA_VERTICAL_KEY, RECETA_DUO_GENERICO_KEY];
@@ -271,10 +289,25 @@ export function RecetasFamiliasSection({
         lineas={recetas[fam] ?? []}
         insumos={sis ? { ...insumos, ...sis.insumos } : insumos}
         margenInsumo={sis?.margenInsumo ?? margenInsumo}
+        pasoLamaM={pasoLamaM}
         onChange={(l) => onChange({ ...recetas, [fam]: l })}
       />
     );
   };
+
+  // Familias de sistema y las agregadas a mano: cualquier receta que no esté en
+  // el orden de siempre. Sin esto, una familia nueva quedaba invisible.
+  const deSistemas = new Set(Object.values(sistemas).flatMap((s) => s.familias));
+  const conocidas = new Set([...orden, ...deSistemas]);
+  const extras = Object.keys(recetas)
+    .filter((f) => !conocidas.has(f))
+    .sort((a, b) => a.localeCompare(b, 'es'));
+
+  // Familias que el catálogo tiene pero que no tienen receta propia: se cotizan
+  // con la de respaldo, y hasta ahora no había dónde darles la suya.
+  const sinReceta = familiasCatalogo
+    .filter((f) => !recetas[f]?.length)
+    .sort((a, b) => a.localeCompare(b, 'es'));
 
   return (
     <section className="rounded-lg border bg-card p-5">
@@ -302,6 +335,51 @@ export function RecetasFamiliasSection({
             <div className="space-y-1.5">{s.familias.map(fila)}</div>
           </div>
         ) : null,
+      )}
+
+      {extras.length > 0 && (
+        <div className="mt-4">
+          <h3 className="mb-1.5 text-xs font-semibold">
+            Agregadas a mano
+            <span className="ml-2 font-normal text-muted-foreground">
+              familias que no vienen de fábrica
+            </span>
+          </h3>
+          <div className="space-y-1.5">{extras.map(fila)}</div>
+        </div>
+      )}
+
+      {sinReceta.length > 0 && (
+        <div className="mt-4 rounded-md border border-warning/40 bg-warning/10 p-3">
+          <p className="mb-2 text-xs">
+            <strong>
+              {sinReceta.length === 1
+                ? 'Una familia del catálogo no tiene materiales propios'
+                : `${sinReceta.length} familias del catálogo no tienen materiales propios`}
+            </strong>
+            : se cotizan con la receta de respaldo (la roller de su gama, o la de dúo si el código
+            empieza con DUO). Darle la suya empieza por una copia de la de fábrica.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {sinReceta.map((fam) => (
+              <Button
+                key={fam}
+                variant="outline"
+                size="sm"
+                className="h-7 text-[0.7rem]"
+                onClick={() =>
+                  onChange({
+                    ...recetas,
+                    [fam]: (RECETAS_DEFAULT[fam] ?? recetas[RECETA_VERTICAL_KEY] ?? []).map((l) => ({ ...l })),
+                  })
+                }
+              >
+                <Plus className="mr-1 h-3 w-3" />
+                {nombreFamilia(fam)}
+              </Button>
+            ))}
+          </div>
+        </div>
       )}
     </section>
   );

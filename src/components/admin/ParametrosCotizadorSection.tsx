@@ -63,6 +63,12 @@ const CAMPOS: CampoDef[] = [
     hint: '0 = se cobra completa; editable para cotizaciones a región',
     modo: 'pct',
   },
+  {
+    key: 'abonoInicial',
+    label: 'Abono para empezar (%)',
+    hint: 'Parte del total que se pide de anticipo. 50 = la mitad, como siempre',
+    modo: 'pct',
+  },
 ];
 
 // margenInsumo se guarda como divisor (0.65) pero se edita como margen (35%).

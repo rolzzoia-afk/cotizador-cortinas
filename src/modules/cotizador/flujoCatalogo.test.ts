@@ -117,16 +117,29 @@ describe('avisosCatalogo', () => {
     const sinReferencia = { ...CAT };
     delete sinReferencia['BK-D'];
     const r = avisosCatalogo(sinReferencia, {}, REGLAS_PRECIOS_DEFAULT);
-    expect(r.referenciasRotas).toContainEqual({ cod: 'BLACKOUT_D', codInt: 'BK-D' });
+    expect(r.referenciasRotas).toContainEqual({ cod: 'BLACKOUT_D', codInt: 'BK-D', mandaAhora: 'BK 09' });
   });
 
-  it('marca la vertical que quedó sin su roller equivalente (cotizaría la tela a $0)', () => {
+  it('la vertical que quedó sin su roller equivalente cae al máximo de su familia, y se avisa', () => {
     const sinBase = { ...CAT };
     delete sinBase['BK-D'];
     const r = avisosCatalogo(sinBase, {}, REGLAS_PRECIOS_DEFAULT);
-    // La vertical no cae al máximo de su familia: se queda en cero.
-    expect(flujoDeProducto(CAT['VER 01'], 'VER 01', sinBase).precioMl).toBe(0);
-    expect(r.referenciasRotas).toContainEqual({ cod: 'BLACKOUT_V_D', codInt: 'BK-D' });
+    // Antes se quedaba en $0 (tela gratis). Ahora hay un solo respaldo para
+    // todos: la tela más cara de la familia, que acá es la propia VER 01.
+    const f = flujoDeProducto(CAT['VER 01'], 'VER 01', sinBase);
+    expect(f.precioMl).toBe(12345);
+    expect(f.origenPrecio).toBe('maxFamilia');
+    expect(f.referenciaDeclaradaRota).toBe('BK-D');
+    expect(r.referenciasRotas).toContainEqual({ cod: 'BLACKOUT_V_D', codInt: 'BK-D', mandaAhora: 'VER 01' });
+  });
+
+  it('una familia donde NINGUNA tela tiene precio queda en sinPrecio (y no en $0 mudo)', () => {
+    const gratis: CatalogoProductos = {
+      'X 01': prod({ cod: 'FAMILIA_X', producto: 'ROLLER X', tipo: 'PREMIUM', precio: 0 }),
+    };
+    const f = flujoDeProducto(gratis['X 01'], 'X 01', gratis);
+    expect(f.origenPrecio).toBe('sinPrecio');
+    expect(f.precioMl).toBe(0);
   });
 
   it('marca las familias que solo se distinguen por mayúsculas', () => {

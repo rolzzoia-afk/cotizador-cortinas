@@ -1,3 +1,4 @@
+
 // ─────────────────────────────────────────────────────────────────────
 // Motor de cálculo Fase 0 — réplica fiel del Excel "COTIZADOR FINAL".
 //
@@ -25,6 +26,7 @@ import {
   type TotalesCotizacion,
 } from './preciosFase0';
 import {
+  PASO_LAMA_M,
   REGLAS_PRECIOS_DEFAULT,
   explicarCantidad,
   insumosParaFamilia,
@@ -58,6 +60,13 @@ export type FilaFase0 = {
    * siguen saliendo del ancho nominal de la ventana.
    */
   anchoEmpaqueM?: number;
+  /**
+   * A qué VENTANA pertenece esta fila. Solo lo usa la fila de instalación: el
+   * Excel cuenta ventanas instaladas, no paños, así que un dual (dos telas en
+   * la misma ventana, un solo bracket) se instala una vez. Sin este dato se
+   * cuentan las piezas, como venía haciéndose.
+   */
+  ventanaId?: string;
 };
 
 export type LineaResultado = {
@@ -118,7 +127,7 @@ export type ResultadoFamilia = {
   /** Regalo incluido en el costo de la familia. */
   regalo: number;
   /** Solo verticales cobradas por lamas: de dónde salen los metros de tela. */
-  lamas?: { total: number; porPasada: number };
+  lamas?: { total: number; porPasada: number; minimoUnaPasada: boolean };
   /** Nombre del sistema con reglas propias que cotizó esta familia (beeblack). */
   sistema?: string;
 };
@@ -150,6 +159,31 @@ export type InstalacionResultado = {
   partes: ParteInstalacion[];
 };
 
+/** Algo que la cotización no pudo resolver y que cambia lo que se cobra. */
+export type AvisoCotizacion = {
+  /** `catalogo` = la tela no existe · `tela` = no se pudo fijar el $/m. */
+  tipo: 'catalogo' | 'tela';
+  /** COD_INT de la fila (tipo `catalogo`) o COD de la familia (tipo `tela`). */
+  codigo: string;
+  mensaje: string;
+};
+
+/**
+ * Por qué la fila de instalación vale lo que vale, para el recuadro de totales.
+ * El texto viejo decía «bajo el mínimo» siempre, incluso en una cotización de
+ * región con más cortinas que el mínimo, y le contaba eso al cliente.
+ */
+export function textoInstalacion(i: InstalacionResultado, minGratis: number): string {
+  const n = `${i.cantidad} ${i.cantidad === 1 ? 'cortina' : 'cortinas'}`;
+  if (i.sinInstalacion) return `${n}, sin instalación`;
+  if (i.region) {
+    const pct = Math.round(i.descuento * 100);
+    return pct >= 100 ? `${n}, región: sin costo` : `${n}, región: ${pct} % de descuento`;
+  }
+  if (i.cantidad >= minGratis) return `${n}, ${minGratis} o más: sin costo`;
+  return `${n}, bajo el mínimo de ${minGratis}`;
+}
+
 export type ResultadoCotizacion = {
   familias: ResultadoFamilia[];
   lineas: LineaResultado[];
@@ -157,6 +191,11 @@ export type ResultadoCotizacion = {
   instalacion: InstalacionResultado;
   subtotalNeto: number;
   totales: TotalesCotizacion;
+  /**
+   * Lo que quedó sin resolver. Vacío en una cotización sana. La UI los muestra
+   * para que nadie mande un documento con una línea en $0 sin enterarse.
+   */
+  avisos: AvisoCotizacion[];
 };
 
 // ── Lista de materiales ───────────────────────────────────────────────
@@ -172,8 +211,20 @@ type PiezaMaterial = { ancho: number; alto: number };
 const enTramo = (ancho: number, f?: FiltroAncho): boolean =>
   (f?.min === undefined || ancho >= f.min) && (f?.max === undefined || ancho <= f.max);
 
-/** Cuánto se necesita de un insumo, según su regla. */
-function cantidadDeLinea(q: CantidadReceta, piezas: PiezaMaterial[]): number {
+/**
+ * Cuánto se necesita de un insumo, según su regla.
+ *
+ * `pasoLamaM` es cada cuánto se monta una lama: gobierna los carritos, los
+ * pesos y los espaciadores de una vertical. Es el MISMO número con el que se
+ * cobra la tela por lamas (`metrosTelaVerticalPorLamas`); antes acá estaba
+ * clavado en `÷ 0,8 × 10` (= ÷ 0,08), así que editar el paso en Admin movía la
+ * tela y dejaba la ferretería contada con el paso viejo.
+ */
+function cantidadDeLinea(
+  q: CantidadReceta,
+  piezas: PiezaMaterial[],
+  pasoLamaM: number = PASO_LAMA_M,
+): number {
   switch (q.tipo) {
     case 'porCortina':
       return piezas.filter((p) => enTramo(p.ancho, q.filtroAncho)).length * (q.factor ?? 1);
@@ -189,8 +240,10 @@ function cantidadDeLinea(q: CantidadReceta, piezas: PiezaMaterial[]): number {
       return piezas.reduce((s, p) => s + p.alto, 0) * (q.factor ?? 1);
     case 'fijo':
       return q.cantidad;
-    case 'lamas':
-      return (piezas.reduce((s, p) => s + p.ancho, 0) / 0.8) * 10 * (q.factor ?? 1);
+    case 'lamas': {
+      const paso = pasoLamaM > 0 ? pasoLamaM : PASO_LAMA_M;
+      return (piezas.reduce((s, p) => s + p.ancho, 0) / paso) * (q.factor ?? 1);
+    }
   }
 }
 
@@ -207,6 +260,8 @@ export function materialesFamilia(
   piezas: PiezaMaterial[],
   insumos: ReglasPrecios['insumos'],
   margenInsumo: number = MARGEN_INSUMO,
+  /** Paso de lama vigente: solo lo usan las líneas de tipo `lamas` (verticales). */
+  pasoLamaM: number = PASO_LAMA_M,
 ): { lineas: LineaMaterialDesglose[]; total: number } {
   const lineas: LineaMaterialDesglose[] = [];
   let total = 0;
@@ -214,17 +269,18 @@ export function materialesFamilia(
     const ins = insumos[l.insumo];
     const valorMaximo = ins?.valorMaximo ?? 0;
     const precioUnit = l.precio === 'costo' ? valorMaximo : valorMaximo / margenInsumo;
-    const cantidad = cantidadDeLinea(l.cantidad, piezas);
+    const cantidad = cantidadDeLinea(l.cantidad, piezas, pasoLamaM);
     const sub = precioUnit * cantidad;
     total += sub;
     lineas.push({
       insumo: l.insumo,
       descripcion: ins?.descripcion ?? '',
-      regla: explicarCantidad(l.cantidad),
+      regla: explicarCantidad(l.cantidad, pasoLamaM),
       precio: l.precio,
       precioUnit,
       cantidad,
       total: sub,
+      ...(l.nota ? { nota: l.nota } : {}),
     });
   }
   return { lineas, total };
@@ -292,29 +348,36 @@ export function empacarPanos(piezas: PiezaEmpaque[], anchoRollo: number): PanoPr
       acc += ocupa;
     }
   }
-  // Letras estilo Excel (…Z, AA, AB…): con >26 paños el fromCharCode de antes
+  // Letras A…Z, AA, BB…: con >26 paños el fromCharCode de antes
   // imprimía basura ('[', '\'…) en el desglose del probador.
   return panos.map((p, i) => ({ ...p, letra: letraPano(i + 1) }));
 }
 
+/** Metros de tela de una familia roller/dúo: la suma de los altos de paño. */
 export function metrosTelaPorPanos(piezas: PiezaEmpaque[], anchoRollo: number): number {
   return empacarPanos(piezas, anchoRollo).reduce((s, p) => s + p.alto, 0);
 }
 
-// Clasificación de familia a partir del COD (BLACKOUT_P, DUOBK_D, etc.)
-function clasificar(cod: string) {
-  const isDuoBk = cod.startsWith('DUOBK');
-  const isDuoPoli = cod.startsWith('DUOPOLI');
-  const isDuo = isDuoBk || isDuoPoli || cod.startsWith('DUO');
-  const isScreen = cod.startsWith('SCREEN');
-  const gama = cod.endsWith('_D') ? 'D' : cod.endsWith('_S') ? 'S' : 'P';
-  // ¿Es una familia con receta exacta decodificada?
-  // Beeblack incluido: su receta salió de la copia beeblack del Excel y calza
-  // al peso con la cotización COTJS-10384.
-  const exacto =
+/**
+ * ¿Esta familia tiene una receta propia, decodificada del Excel y validada
+ * contra cotizaciones reales? Las que no, se cotizan con una receta de
+ * respaldo, y el desglose lo dice.
+ *
+ * Beeblack: su receta salió de la copia beeblack del Excel y calza al peso con
+ * la cotización COTJS-10384. Verticales: las 6 comparten la receta VERTICAL,
+ * que calza fórmula por fórmula con la hoja «Cotizador Verticales».
+ *
+ * Antes esto devolvía seis campos (isDuo, isScreen, gama…) de los que solo se
+ * usaba `exacto`: eran restos del cálculo hardcodeado, y el motor deduce dúo y
+ * vertical por otra vía —que además mira el NOMBRE del producto, no solo el
+ * COD—, así que tenerlos acá invitaba a usar la deducción equivocada.
+ */
+function recetaEsExacta(cod: string): boolean {
+  return (
     /^(BLACKOUT|SCREEN|DUOBK|DUOPOLI)_(P|D|S)$/.test(cod) ||
-    /^BEE_(BK|MOSQ|TRAS)$/.test(cod);
-  return { isDuoBk, isDuoPoli, isDuo, isScreen, gama, exacto };
+    /^(BLACKOUT|SCREEN)_V_(P|D|S)$/.test(cod) ||
+    /^BEE_(BK|MOSQ|TRAS)$/.test(cod)
+  );
 }
 
 // ── VERTICALES ────────────────────────────────────────────────────────
@@ -342,48 +405,65 @@ export function metrosTelaVertical(
  *
  * Las lamas se cuentan con la misma regla que usa la receta para carritos y
  * pesos: `ancho ÷ paso`.
+ *
+ * Con `minimoUnaPasada` el piso es una pasada por cortina: nadie paga menos
+ * tela de la que paga hoy, y el escalón del doble desaparece igual.
  */
 export function metrosTelaVerticalPorLamas(
   piezas: { ancho: number; altoReal: number }[],
   telaVertical: TelaVertical,
 ): number {
   const porPasada = lamasPorPasada(telaVertical);
-  return piezas.reduce(
-    (s, p) => s + (p.ancho / telaVertical.pasoLamaM / porPasada) * p.altoReal,
-    0,
-  );
+  const piso = telaVertical.minimoUnaPasada ? 1 : 0;
+  return piezas.reduce((s, p) => {
+    const pasadas = lamasDeCortina(p.ancho, telaVertical) / porPasada;
+    return s + Math.max(piso, pasadas) * p.altoReal;
+  }, 0);
 }
 
 /** Cuántas lamas lleva una cortina de este ancho. */
 export const lamasDeCortina = (ancho: number, telaVertical: TelaVertical): number =>
-  ancho / telaVertical.pasoLamaM;
+  ancho / (telaVertical.pasoLamaM > 0 ? telaVertical.pasoLamaM : PASO_LAMA_M);
 
 // Precio de tela (CLP/m) por familia:
 // - Vertical: precio del COD_INT base del roller equivalente (regla del Excel).
 // - Roller / dúo: precio del ARQUETIPO de la familia (SC-P, BK-D…). El Excel
 //   usa ese valor fijo por gama, no el MAX; el MAX se inflaba con códigos
 //   sueltos o BEEBLACK mal etiquetados (ej. SCREEN_P a 48.415 vs arquetipo
-//   31.582), sobreprecio que se veía sobre todo en SCREEN. Si el arquetipo no
-//   está en el catálogo (p.ej. fixtures de test), cae al MAX de la familia.
+//   31.582), sobreprecio que se veía sobre todo en SCREEN.
+// - Beeblack: arquetipo vacío A PROPÓSITO → el MAX de la familia, que es el
+//   `MAXIFS` literal del Excel.
+//
+// Si la tela de referencia no está en el catálogo o vale 0, se cae al MÁXIMO de
+// la familia. Antes la rama vertical retornaba 0 y la familia terminaba
+// cobrando la primera tela que hubiera creado el grupo, así que el precio
+// dependía del ORDEN de las filas de la cotización; y con un `baseVertical`
+// roto la tela salía gratis. Ahora hay un solo respaldo para todos, que además
+// es el que la pantalla del Admin viene prometiendo.
+//
 // El Excel redondea al peso (ej. 41.868 en vez de 41.867,69) → Math.round.
-// Devuelve también QUÉ tela fijó el precio, que es lo que muestra el desglose.
-// Exportada para que el Admin muestre el $/m con que se cobra cada familia sin
-// tener que repetir esta cascada (si divergiera, mostraría un precio que no es
-// el que cobra la app).
+// Devuelve QUÉ tela fijó el precio y POR QUÉ, que es lo que muestra el
+// desglose. Exportada para que el Admin muestre el $/m con que se cobra cada
+// familia sin repetir esta cascada (si divergiera, mostraría un precio que no
+// es el que cobra la app).
+
+/** De dónde salió el $/m de una familia. */
+export type MotivoPrecioMl = 'base' | 'arquetipo' | 'maximo' | 'sinPrecio';
+
 export function precioMlPorCod(
   cod: string,
   catalogo: CatalogoProductos,
   reglas: ReglasPrecios,
-): { precio: number; arquetipo: string } {
+): { precio: number; arquetipo: string; motivo: MotivoPrecioMl } {
   const baseV = reglas.baseVertical[cod];
   if (baseV) {
-    const p = catalogo[baseV];
-    return { precio: Math.round(Number(p?.precio) || 0), arquetipo: baseV };
+    const pBase = Number(catalogo[baseV]?.precio) || 0;
+    if (pBase > 0) return { precio: Math.round(pBase), arquetipo: baseV, motivo: 'base' };
   }
   const arq = reglas.arquetipos[cod];
   if (arq) {
     const pArq = Number(catalogo[arq]?.precio) || 0;
-    if (pArq > 0) return { precio: Math.round(pArq), arquetipo: arq };
+    if (pArq > 0) return { precio: Math.round(pArq), arquetipo: arq, motivo: 'arquetipo' };
   }
   let max = 0;
   let codIntMax = '';
@@ -394,7 +474,11 @@ export function precioMlPorCod(
       if (precio > max) { max = precio; codIntMax = k; }
     }
   }
-  return { precio: Math.round(max), arquetipo: codIntMax };
+  return {
+    precio: Math.round(max),
+    arquetipo: codIntMax,
+    motivo: max > 0 ? 'maximo' : 'sinPrecio',
+  };
 }
 
 // ── Cálculo principal ─────────────────────────────────────────────────
@@ -431,6 +515,14 @@ export function cotizarFase0(
     sistema?: SistemaPrecio;
   };
   const grupos = new Map<string, Grupo>();
+  const avisos: AvisoCotizacion[] = [];
+  const avisado = new Set<string>();
+  const avisar = (a: AvisoCotizacion) => {
+    const k = `${a.tipo}|${a.codigo}`;
+    if (avisado.has(k)) return;
+    avisado.add(k);
+    avisos.push(a);
+  };
 
   /** Metros que se suman al alto vendido: el sistema manda sobre el parámetro. */
   const extraAltoDe = (sis?: SistemaPrecio) => sis?.extraAltoM ?? params.extraAltoCm / 100;
@@ -438,7 +530,17 @@ export function cotizarFase0(
   // Resolver cada fila a su COD (familia) y agrupar.
   const codDeFila: (string | null)[] = validas.map((f) => {
     const prod = catalogo[f.codInt];
-    if (!prod) return null;
+    if (!prod) {
+      // Sin producto no hay familia, ni receta, ni precio: la línea vale 0 y se
+      // avisa. Antes caía igual en la rama final de instalación y esa cortina
+      // fantasma se cobraba a $17.500.
+      avisar({
+        tipo: 'catalogo',
+        codigo: f.codInt,
+        mensaje: `«${f.codInt}» no está en el catálogo de productos: esa cortina se cotiza en $0.`,
+      });
+      return null;
+    }
     const cod = prod.cod || f.codInt;
     const nombre = (prod.producto || '').toUpperCase();
     const esDuo = cod.startsWith('DUO') || nombre.includes('DUO');
@@ -455,6 +557,15 @@ export function cotizarFase0(
     let g = grupos.get(cod);
     if (!g) {
       const tela = precioMlPorCod(cod, catalogo, reglas);
+      if (tela.motivo === 'sinPrecio') {
+        avisar({
+          tipo: 'tela',
+          codigo: cod,
+          mensaje:
+            `La familia «${cod}» no tiene ninguna tela con precio en el catálogo: ` +
+            'su tela se cotiza en $0. Revisa Admin → Precios → Tela de referencia.',
+        });
+      }
       g = {
         cod,
         esDuo,
@@ -462,9 +573,11 @@ export function cotizarFase0(
         sistema,
         // Ancho de rollo de respaldo (2,45 histórico del Excel de precios, ≠
         // 2,98 del corte de tela): último recurso, en producción
-        // ancho_rollo_data o el catálogo resuelven antes.
-        anchoRollo: anchoRolloMap[f.codInt] ?? (Number(prod.anchoRollo) || reglas.anchoRolloFallbackM),
-        precioMl: tela.precio || Number(prod.precio) || 0,
+        // ancho_rollo_data o el catálogo resuelven antes. `||` y no `??`: un
+        // ancho guardado en 0 tiene que caer al respaldo, si no cada pieza se
+        // va a un paño propio y la tela se cobra de más.
+        anchoRollo: anchoRolloMap[f.codInt] || Number(prod.anchoRollo) || reglas.anchoRolloFallbackM,
+        precioMl: tela.precio,
         arquetipo: tela.arquetipo,
         piezas: [],
       };
@@ -486,7 +599,9 @@ export function cotizarFase0(
     // de roller (2,45/2,48/2,78…), que no es el de la tela vertical.
     const porLamas = g.esVertical && reglas.telaVertical.modo === 'lamas';
     const metrosTela = !g.esVertical
-      ? panos.reduce((s, p) => s + p.alto, 0)
+      ? // Los paños ya están armados: sumar sus altos es `metrosTelaPorPanos`
+        // sin volver a empacar.
+        panos.reduce((s, p) => s + p.alto, 0)
       : porLamas
         ? metrosTelaVerticalPorLamas(g.piezas, reglas.telaVertical)
         : metrosTelaVertical(g.piezas, g.anchoRollo);
@@ -498,6 +613,7 @@ export function cotizarFase0(
       g.piezas,
       insumosParaFamilia(cod, reglas),
       g.sistema?.margenInsumo ?? params.margenInsumo,
+      reglas.telaVertical.pasoLamaM,
     );
     const manoObra =
       (g.sistema
@@ -523,7 +639,7 @@ export function cotizarFase0(
       traslado,
       costoTotal,
       precioM2,
-      exacto: clasificar(cod).exacto,
+      exacto: recetaEsExacta(cod),
       arquetipoCodInt: g.arquetipo,
       panos,
       materiales: materiales.lineas,
@@ -534,6 +650,7 @@ export function cotizarFase0(
             lamas: {
               total: g.piezas.reduce((s, p) => s + lamasDeCortina(p.ancho, reglas.telaVertical), 0),
               porPasada: lamasPorPasada(reglas.telaVertical),
+              minimoUnaPasada: reglas.telaVertical.minimoUnaPasada,
             },
           }
         : {}),
@@ -552,13 +669,17 @@ export function cotizarFase0(
     // producto (m² × precio/m²), sin el cargo de instalación embebido.
     // El beeblack embebe un valor distinto del que cobra la fila de abajo
     // (41.650 vs 35.000): es así en el Excel, ver `SistemaPrecio`.
-    const instalacion = sinInstalacion
-      ? 0
-      : g?.sistema
-        ? g.sistema.instalacionEmbebida
-        : g?.esVertical
-          ? params.instalacionVertical
-          : params.instalacionRoller;
+    // Sin `g` la tela no existe en el catálogo: la línea vale 0 entera (ya se
+    // avisó arriba). Antes caía en la rama roller y cobraba $17.500 de
+    // instalación por una cortina que no se podía ni fabricar.
+    const instalacion =
+      sinInstalacion || !g
+        ? 0
+        : g.sistema
+          ? g.sistema.instalacionEmbebida
+          : g.esVertical
+            ? params.instalacionVertical
+            : params.instalacionRoller;
     const valorUnit = m2 * precioM2 + instalacion;
     const cant = Math.max(1, f.cantidad);
     const descuento = Math.max(0, Math.min(1, f.descuento ?? 0));
@@ -605,17 +726,32 @@ export function cotizarFase0(
   // otro precio que el roller (35.000 vs 17.500), así que la fila lleva un
   // tramo por cada uno. El MÍNIMO para que salga gratis se mira sobre el
   // total, como el `SUM(F25:F32)` del Excel, que suma todas las filas.
+  // Se cuenta por VENTANA cuando las filas la declaran (`ventanaId`): un dual
+  // son dos telas en la misma ventana y se instala UNA vez, que es como lo
+  // cuenta el Excel. Las filas sin `ventanaId` cuentan por pieza, como siempre.
   const porSistema = new Map<string, { cantidad: number; precioUnit: number }>();
+  const ventanasVistas = new Set<string>();
   let nInstalables = 0;
-  for (const [, g] of grupos) {
-    if (g.esVertical) continue;
-    nInstalables += g.piezas.length;
+  const sumar = (clave: string, precioUnit: number, cuantas: number) => {
+    nInstalables += cuantas;
+    const prev = porSistema.get(clave);
+    if (prev) prev.cantidad += cuantas;
+    else porSistema.set(clave, { cantidad: cuantas, precioUnit });
+  };
+  validas.forEach((f, i) => {
+    const cod = codDeFila[i];
+    const g = cod ? grupos.get(cod) : undefined;
+    if (!g || g.esVertical) return;
     const clave = g.sistema?.nombre ?? 'Roller';
     const precioUnit = g.sistema?.instalacionLinea ?? params.instalacionRoller;
-    const prev = porSistema.get(clave);
-    if (prev) prev.cantidad += g.piezas.length;
-    else porSistema.set(clave, { cantidad: g.piezas.length, precioUnit });
-  }
+    if (f.ventanaId) {
+      if (ventanasVistas.has(f.ventanaId)) return;
+      ventanasVistas.add(f.ventanaId);
+      sumar(clave, precioUnit, 1);
+      return;
+    }
+    sumar(clave, precioUnit, Math.max(1, f.cantidad));
+  });
   const minGratis = params.instalacionGratisMinCortinas ?? PARAMETROS_DEFAULT.instalacionGratisMinCortinas;
   const descRM = params.instalacionDescuentoRM ?? PARAMETROS_DEFAULT.instalacionDescuentoRM;
   const descRegion = params.instalacionDescuentoRegion ?? PARAMETROS_DEFAULT.instalacionDescuentoRegion;
@@ -675,6 +811,8 @@ export function cotizarFase0(
     totales: calcularTotales(subtotalNeto, {
       iva: params.iva,
       recargoTarjeta: recargoTarjetaEfectivo(params),
+      abonoInicial: params.abonoInicial,
     }),
+    avisos,
   };
 }

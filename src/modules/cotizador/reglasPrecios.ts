@@ -41,9 +41,9 @@ export type FiltroAncho = { min?: number; max?: number };
  * - `sumaAltos`: suma los altos TAL COMO SE VENDIERON, sin el extra de 0,25 m
  *   y sin duplicar el dúo. Es el único término que usa el alto crudo.
  * - `fijo`: una cantidad constante por familia, sin importar cuántas cortinas.
- * - `lamas`: las lamas de una cortina vertical, `(suma de anchos ÷ 0,8) × 10`.
- *   Los dos números son de la fórmula del Excel y no se parametrizan porque
- *   solo esa receta los usa.
+ * - `lamas`: las lamas de una cortina vertical, `suma de anchos ÷ paso de lama`
+ *   (el paso vive en `telaVertical.pasoLamaM`; de fábrica 0,08 m, que es el
+ *   `÷ 0,8 × 10` del Excel escrito de otra forma).
  */
 export type CantidadReceta =
   | { tipo: 'porCortina'; factor?: number; filtroAncho?: FiltroAncho }
@@ -64,6 +64,13 @@ export type LineaReceta = {
   insumo: string;
   precio: 'venta' | 'costo';
   cantidad: CantidadReceta;
+  /**
+   * Por qué esta línea es rara. Se muestra en el Admin junto a la línea: hay
+   * cantidades que a la vista parecen un error y son la réplica deliberada de
+   * una fórmula equivocada del Excel (ver `RECETA_BEEBLACK`). Sin la nota,
+   * cualquiera que abra la receta la "corrige" y desalinea los precios.
+   */
+  nota?: string;
 };
 
 /** Una línea ya resuelta, para mostrar el desglose del precio. */
@@ -76,6 +83,8 @@ export type LineaMaterialDesglose = {
   precioUnit: number;
   cantidad: number;
   total: number;
+  /** La nota de la receta, si la línea tiene una. */
+  nota?: string;
 };
 
 export type InsumoPrecio = { descripcion?: string; valorMaximo: number };
@@ -99,10 +108,24 @@ export type TelaVertical = {
   modo: 'panos' | 'lamas';
   /** Ancho de una lama (m). */
   anchoLamaM: number;
-  /** Cada cuánto se monta una lama (m). Menor que el ancho: se traslapan. */
+  /**
+   * Cada cuánto se monta una lama (m). Menor que el ancho: se traslapan.
+   * Gobierna las DOS cuentas de lamas: los metros de tela y la ferretería de la
+   * receta (carritos, pesos, espaciadores).
+   */
   pasoLamaM: number;
   /** Ancho real del rollo de tela vertical (m). */
   anchoRolloVerticalM: number;
+  /**
+   * Cobrar al menos UNA pasada completa por cortina (solo en modo `lamas`).
+   *
+   * Con `false` se cobra la fracción exacta, así que una vertical angosta paga
+   * bastante menos que hoy. Con `true` el piso es una pasada —lo mismo que se
+   * cobra hoy por paños en cualquier cortina que quepa en el rollo—, y la
+   * fracción solo empieza a contar de la segunda pasada en adelante: se borra
+   * el escalón sin bajarle el precio a las cortinas comunes.
+   */
+  minimoUnaPasada: boolean;
 };
 
 /**
@@ -138,9 +161,35 @@ export type SistemaPrecio = {
   instalacionEmbebida: number;
   /** Instalación que se cobra en la fila de abajo cuando no llega al mínimo. */
   instalacionLinea: number;
+  /**
+   * COD_INT con el que la instalación de este sistema figura en el catálogo de
+   * productos. Fase 1 lo excluye de los adicionales que manda al motor: la fila
+   * la arma el motor sola, y sin esto se cobraría dos veces si alguien lo
+   * agrega a mano. Vacío = el sistema no tiene código propio de instalación.
+   */
+  codigoInstalacion: string;
   /** VALOR MAXIMO propios; ganan sobre el mapa global. */
   insumos: Record<string, InsumoPrecio>;
 };
+
+/**
+ * COD_INT de instalación que el motor calcula SOLO: el de la roller (`INST`)
+ * más el que declare cada sistema. Fase 1 los filtra de los adicionales
+ * manuales para no cobrarlos dos veces; las instalaciones de motor, soft o
+ * cenefa —INSTMOT, INSTSOFT, INSTCENF…— siguen siendo manuales.
+ */
+export const COD_INSTALACION_ROLLER = 'INST';
+
+export function codigosInstalacionAutomatica(
+  sistemas: Record<string, SistemaPrecio>,
+): Set<string> {
+  const out = new Set([COD_INSTALACION_ROLLER]);
+  for (const s of Object.values(sistemas)) {
+    const c = (s.codigoInstalacion || '').trim().toUpperCase();
+    if (c) out.add(c);
+  }
+  return out;
+}
 
 export type ReglasPrecios = {
   /** VALOR MAXIMO por código de insumo (la hoja Insumos del Excel). */
@@ -166,7 +215,8 @@ export type ReglasPrecios = {
 // la suma se hace en este orden para que el total salga bit a bit igual que
 // antes y los goldens (cotizaciones reales) no se muevan ni un peso.
 
-const v = (insumo: string, cantidad: CantidadReceta): LineaReceta => ({ insumo, precio: 'venta', cantidad });
+const v = (insumo: string, cantidad: CantidadReceta, nota?: string): LineaReceta =>
+  ({ insumo, precio: 'venta', cantidad, ...(nota ? { nota } : {}) });
 const c = (insumo: string, cantidad: CantidadReceta): LineaReceta => ({ insumo, precio: 'costo', cantidad });
 const porCortina = (factor?: number, filtroAncho?: FiltroAncho): CantidadReceta => ({ tipo: 'porCortina', factor, filtroAncho });
 const sumaAnchos = (factor?: number, extra?: { masFijoM?: number; filtroAncho?: FiltroAncho }): CantidadReceta =>
@@ -175,7 +225,13 @@ const sumaAnchos = (factor?: number, extra?: { masFijoM?: number; filtroAncho?: 
 /** Tubo del roller/dúo gama premium y delux: Ø38 hasta 2,19 m, Ø45 desde 2,191. */
 const TUBOS_PD: LineaReceta[] = [
   v('E 02', sumaAnchos(undefined, { filtroAncho: { max: 2.19 } })),
-  v('E 05', sumaAnchos(undefined, { filtroAncho: { min: 2.191 } })),
+  v(
+    'E 05',
+    sumaAnchos(undefined, { filtroAncho: { min: 2.191 } }),
+    'El corte del Excel deja un hueco entre 2,19 y 2,191: una cortina de 2,1905 m ' +
+      'no suma tubo por ninguna de las dos líneas. Se conserva tal cual; para cerrarlo, ' +
+      'bajar este mínimo a 2,19.',
+  ),
 ];
 
 /** Roller blackout y screen, gamas premium y delux (las 4 comparten receta). */
@@ -282,18 +338,26 @@ const RECETA_VERTICAL: LineaReceta[] = [
  *    cantidad ya viene `Σaltos × 4` y el total la vuelve a multiplicar por 4
  *    (`=(W121*U121)*V121`)—, o sea `Σaltos × 16`.
  */
+const NOTA_SLM01_ALTO =
+  'Réplica de un error del Excel: es la fila «ALTO» del panel beeblack, pero su ' +
+  'celda de total apunta a la fila «ANCHO» (=U115*W115), así que el riel se cobra ' +
+  'dos veces por ancho y nunca por alto. Se dejó igual para calzar con lo ya ' +
+  'cotizado. Para corregirlo, cambiar esta línea a «suma de los altos × 2».';
+
+const NOTA_SML38 =
+  'Réplica de un error del Excel: la cantidad ya viene multiplicada por 4 y la ' +
+  'celda de total la vuelve a multiplicar por 4 (=(W121*U121)*V121), o sea × 16. ' +
+  'Para corregirlo, poner el factor en 4.';
+
 const RECETA_BEEBLACK: LineaReceta[] = [
   v('SLM01', sumaAnchos(2)),
-  // Fila «ALTO» del panel: cobra el ancho por el error de arriba.
-  v('SLM01', sumaAnchos(2)),
+  v('SLM01', sumaAnchos(2), NOTA_SLM01_ALTO),
   v('SML10', { tipo: 'sumaAltos', factor: 1 }),
   v('SML34', { tipo: 'sumaAltos', factor: 4 }),
   v('SML13', porCortina()),
   v('SML35', porCortina(12)),
-  // 4 × 4: el multiplicador del Excel entra dos veces (ver arriba).
-  v('SML38', { tipo: 'sumaAltos', factor: 16 }),
-  // El kit de armado aparece DOS veces en el panel, cada una por cortina.
-  v('SML13', porCortina()),
+  v('SML38', { tipo: 'sumaAltos', factor: 16 }, NOTA_SML38),
+  v('SML13', porCortina(), 'El kit de armado aparece DOS veces en el panel del Excel, cada una por cortina.'),
   v('PUB 01', porCortina()),
   v('MAT00001', porCortina()),
   v('CAJA0001', porCortina()),
@@ -340,6 +404,12 @@ export const FAMILIAS_CON_RECETA = [
   'SCREEN_P', 'SCREEN_D', 'SCREEN_S',
   'DUOBK_P', 'DUOBK_D', 'DUOBK_S',
   'DUOPOLI_P', 'DUOPOLI_D', 'DUOPOLI_S',
+] as const;
+
+/** Las 6 familias de cortina vertical (todas comparten la receta VERTICAL). */
+export const FAMILIAS_VERTICALES = [
+  'BLACKOUT_V_P', 'BLACKOUT_V_D', 'BLACKOUT_V_S',
+  'SCREEN_V_P', 'SCREEN_V_D', 'SCREEN_V_S',
 ] as const;
 
 // Descripciones de los insumos (venían como comentarios en preciosFase0.ts).
@@ -559,6 +629,7 @@ export const SISTEMA_BEEBLACK_DEFAULT: SistemaPrecio = {
   traslado: 47600,
   instalacionEmbebida: 41650,
   instalacionLinea: 35000,
+  codigoInstalacion: 'INST-BB',
   insumos: expandirInsumos(INSUMOS_BEEBLACK_VM, GRUPOS_INSUMO_BEEBLACK),
 };
 
@@ -645,7 +716,14 @@ export const TELA_VERTICAL_DEFAULT: TelaVertical = {
   anchoLamaM: 0.089,
   pasoLamaM: 0.08,
   anchoRolloVerticalM: 2.95,
+  // Nace en true para que estrenar el cobro por lamas no baje ningún precio: el
+  // piso sigue siendo una pasada, igual que hoy. Se apaga para cobrar la
+  // fracción exacta también en las cortinas angostas.
+  minimoUnaPasada: true,
 };
+
+/** Paso de lama de fábrica: el respaldo cuando no llegan las reglas. */
+export const PASO_LAMA_M = TELA_VERTICAL_DEFAULT.pasoLamaM;
 
 export const REGLAS_PRECIOS_DEFAULT: ReglasPrecios = {
   insumos: insumosDeFabrica(),
@@ -767,20 +845,29 @@ function saneaReceta(crudo: unknown): LineaReceta[] | null {
     if (!insumo) continue;
     const cantidad = saneaCantidad(o.cantidad);
     if (!cantidad) continue;
-    lineas.push({ insumo, precio: o.precio === 'costo' ? 'costo' : 'venta', cantidad });
+    const nota = typeof o.nota === 'string' && o.nota.trim() ? o.nota.trim() : undefined;
+    lineas.push({
+      insumo,
+      precio: o.precio === 'costo' ? 'costo' : 'venta',
+      cantidad,
+      ...(nota ? { nota } : {}),
+    });
   }
   return lineas;
 }
 
+/**
+ * Un mapa «familia → código» guardado. El string vacío es un valor VÁLIDO:
+ * significa «cobrar la tela más cara de la familia», que es la fórmula original
+ * del Excel. Antes se ignoraba salvo donde el default ya era vacío, así que
+ * borrar el código de una vertical era un no-op silencioso: se guardaba y al
+ * recargar volvía el valor anterior.
+ */
 function saneaMapaTexto(crudo: unknown, porDefecto: Record<string, string>): Record<string, string> {
   const out = { ...porDefecto };
   if (crudo && typeof crudo === 'object') {
     for (const [k, val] of Object.entries(crudo as Record<string, unknown>)) {
-      const s = String(val ?? '').trim();
-      // Un valor vacío se ignora, SALVO donde el vacío significa algo: en los
-      // arquetipos quiere decir «cobrar la tela más cara de la familia», así
-      // que hay que poder volver a él después de haber fijado un código.
-      if (s || (k in porDefecto && porDefecto[k] === '')) out[k] = s;
+      out[k] = String(val ?? '').trim();
     }
   }
   return out;
@@ -834,6 +921,10 @@ function saneaSistemas(crudo: unknown): Record<string, SistemaPrecio> {
       traslado: numeroFinito(o.traslado, base?.traslado ?? 0),
       instalacionEmbebida: numeroFinito(o.instalacionEmbebida, base?.instalacionEmbebida ?? 0),
       instalacionLinea: numeroFinito(o.instalacionLinea, base?.instalacionLinea ?? 0),
+      codigoInstalacion:
+        typeof o.codigoInstalacion === 'string'
+          ? o.codigoInstalacion.trim().toUpperCase()
+          : base?.codigoInstalacion ?? '',
       insumos: Object.keys(insumos).length ? insumos : base?.insumos ?? {},
     };
   }
@@ -910,6 +1001,8 @@ function saneaTelaVertical(crudo: unknown): TelaVertical {
     anchoLamaM: positivo(o.anchoLamaM, d.anchoLamaM),
     pasoLamaM: positivo(o.pasoLamaM, d.pasoLamaM),
     anchoRolloVerticalM: positivo(o.anchoRolloVerticalM, d.anchoRolloVerticalM),
+    minimoUnaPasada:
+      typeof o.minimoUnaPasada === 'boolean' ? o.minimoUnaPasada : d.minimoUnaPasada,
   };
 }
 
@@ -954,6 +1047,54 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
     for (const [cod, ins] of Object.entries(s.insumos)) {
       if (!Number.isFinite(ins.valorMaximo) || ins.valorMaximo <= 0) {
         errores.push(`${dónde}: el insumo «${cod}» tiene un valor inválido.`);
+      }
+    }
+    // Cada familia tiene que tener con qué cotizarse.
+    for (const fam of s.familias) {
+      if (!reglas.recetas[fam]?.length) {
+        avisos.push(
+          `${dónde} incluye la familia «${fam}», que no tiene lista de materiales propia: se le va a aplicar la receta de respaldo.`,
+        );
+      }
+    }
+    // Un insumo que la receta del sistema nombra y que se sacó de SU tabla se
+    // cobra al precio general, en silencio y por otro valor. Pasa con `PUB 01`
+    // y `MAT00001`, que valen muy distinto en el beeblack.
+    const propioDeFabrica = SISTEMAS_DEFAULT[clave]?.insumos ?? {};
+    for (const fam of s.familias) {
+      for (const l of reglas.recetas[fam] ?? []) {
+        if (s.insumos[l.insumo] || !reglas.insumos[l.insumo]) continue;
+        if (!propioDeFabrica[l.insumo]) continue;
+        avisos.push(
+          `${dónde}: «${l.insumo}» ya no está en su tabla de precios, así que se cobra al valor general ` +
+            `($${Math.round(reglas.insumos[l.insumo].valorMaximo).toLocaleString('es-CL')}) ` +
+            `en vez del suyo ($${Math.round(propioDeFabrica[l.insumo].valorMaximo).toLocaleString('es-CL')}).`,
+        );
+      }
+    }
+  }
+
+  // Dos sistemas con el mismo nombre se funden en un solo tramo de la fila de
+  // instalación, con el precio del primero; y una familia reclamada por dos
+  // gana el que esté antes, que no es una regla que nadie pueda ver.
+  const nombresVistos = new Map<string, string>();
+  const familiaDe = new Map<string, string>();
+  for (const [clave, s] of Object.entries(reglas.sistemas)) {
+    const nombre = (s.nombre || clave).trim().toUpperCase();
+    const previa = nombresVistos.get(nombre);
+    if (previa) {
+      errores.push(
+        `Los sistemas «${previa}» y «${clave}» se llaman igual (${s.nombre}): la fila de instalación los sumaría como uno solo.`,
+      );
+    } else {
+      nombresVistos.set(nombre, clave);
+    }
+    for (const fam of s.familias) {
+      const dueño = familiaDe.get(fam);
+      if (dueño) {
+        errores.push(`La familia «${fam}» está en dos sistemas a la vez («${dueño}» y «${clave}»).`);
+      } else {
+        familiaDe.set(fam, clave);
       }
     }
   }
@@ -1064,6 +1205,27 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
       'Las lamas verticales se montan más separadas que su propio ancho, así que quedarían huecos entre ellas. Normalmente se traslapan.',
     );
   }
+
+  // Las verticales cobran la tela del código que diga `baseVertical`. Un código
+  // que no existe ya no las deja en $0 (se cae al máximo de la familia), pero
+  // igual conviene saberlo: el precio deja de ser el que alguien eligió.
+  for (const fam of FAMILIAS_VERTICALES) {
+    if (!(fam in reglas.baseVertical)) {
+      errores.push(`La familia vertical «${fam}» no tiene de dónde sacar el precio de su tela.`);
+    }
+  }
+  if (tv.modo === 'lamas') {
+    const conBaseDeRoller = FAMILIAS_VERTICALES.filter(
+      (fam) => reglas.baseVertical[fam] && reglas.baseVertical[fam] === BASE_VERTICAL_DEFAULT[fam],
+    );
+    if (conBaseDeRoller.length) {
+      avisos.push(
+        `Las verticales se cobran por lamas (el consumo real) pero ${
+          conBaseDeRoller.length === 1 ? 'una familia sigue' : `${conBaseDeRoller.length} familias siguen`
+        } pagando la tela del roller. Si es a propósito, ignora este aviso.`,
+      );
+    }
+  }
   if (!Number.isFinite(reglas.regalo) || reglas.regalo < 0) {
     errores.push('El regalo tiene que ser un monto de cero para arriba.');
   }
@@ -1084,7 +1246,7 @@ function tramoEnPalabras(f?: FiltroAncho): string {
 }
 
 /** La regla de cantidad contada en castellano, para mostrarla al lado del número. */
-export function explicarCantidad(q: CantidadReceta): string {
+export function explicarCantidad(q: CantidadReceta, pasoLamaM: number = PASO_LAMA_M): string {
   const f = q.tipo === 'fijo' ? undefined : q.factor;
   const veces = f === undefined || f === 1 ? '' : ` × ${String(f).replace('.', ',')}`;
   switch (q.tipo) {
@@ -1105,7 +1267,9 @@ export function explicarCantidad(q: CantidadReceta): string {
       return `suma de los altos vendidos${veces}`;
     case 'fijo':
       return `${String(q.cantidad).replace('.', ',')} por familia, sin importar cuántas cortinas`;
-    case 'lamas':
-      return `lamas de la cortina: suma de anchos ÷ 0,8 × 10${veces}`;
+    case 'lamas': {
+      const paso = pasoLamaM > 0 ? pasoLamaM : PASO_LAMA_M;
+      return `lamas de la cortina: suma de anchos ÷ ${nMetros(paso)} (paso de lama)${veces}`;
+    }
   }
 }

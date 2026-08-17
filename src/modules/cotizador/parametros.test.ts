@@ -5,13 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   IVA,
-  MARGEN_INSUMO,
   RECARGO_TARJETA,
   RECARGO_TARJETA_FLOW,
   PARAMETROS_DEFAULT,
   calcularTotales,
   normalizarParametros,
-  precioVentaInsumo,
   recargoTarjetaEfectivo,
 } from './preciosFase0';
 
@@ -134,14 +132,41 @@ describe('calcularTotales con parámetros custom', () => {
   });
 });
 
-describe('precioVentaInsumo con margen custom', () => {
-  it('default usa MARGEN_INSUMO histórico', () => {
-    expect(precioVentaInsumo('CAD 03')).toBeCloseTo(1190 / MARGEN_INSUMO, 5);
+describe('abono inicial', () => {
+  it('de fábrica es la mitad del total', () => {
+    expect(PARAMETROS_DEFAULT.abonoInicial).toBe(0.5);
+    expect(calcularTotales(100000).abono50).toBeCloseTo(59500, 5); // 119.000 ÷ 2
   });
-  it('margen custom cambia el precio de venta', () => {
-    expect(precioVentaInsumo('CAD 03', 0.5)).toBeCloseTo(2380, 5);
+
+  it('se puede pedir otra parte', () => {
+    expect(calcularTotales(100000, { abonoInicial: 0.4 }).abono50).toBeCloseTo(47600, 5);
   });
-  it('insumo desconocido → 0', () => {
-    expect(precioVentaInsumo('NO-EXISTE')).toBe(0);
+
+  it('un abono de 0 o negativo cae al de fábrica en vez de dejar el anticipo en $0', () => {
+    expect(normalizarParametros({ abonoInicial: 0 }).abonoInicial).toBe(0.5);
+    expect(normalizarParametros({ abonoInicial: -1 }).abonoInicial).toBe(0.5);
+  });
+
+  it('un abono mayor que el total se recorta al total', () => {
+    expect(normalizarParametros({ abonoInicial: 3 }).abonoInicial).toBe(1);
+  });
+});
+
+describe('parámetros disparatados no multiplican el total', () => {
+  it('un IVA tecleado como 19 (en vez de 0,19) cae al de fábrica', () => {
+    expect(normalizarParametros({ iva: 19 }).iva).toBe(PARAMETROS_DEFAULT.iva);
+  });
+
+  it('un recargo de tarjeta mayor que 100 % también', () => {
+    expect(normalizarParametros({ recargoTarjeta: 13.8 }).recargoTarjeta).toBe(
+      PARAMETROS_DEFAULT.recargoTarjeta,
+    );
+  });
+
+  it('los valores razonables se respetan', () => {
+    expect(normalizarParametros({ iva: 0.12, recargoTarjeta: 0.05 })).toMatchObject({
+      iva: 0.12,
+      recargoTarjeta: 0.05,
+    });
   });
 });

@@ -215,7 +215,15 @@ export function ProductosCatalogoSection() {
               {avisos.referenciasRotas.map((r) => (
                 <li key={r.cod}>
                   La familia <strong>{r.cod}</strong> apunta a la tela <strong>{r.codInt}</strong>,
-                  que no está en el catálogo o vale 0: mientras tanto cobra la más cara del grupo.
+                  que no está en el catálogo o vale 0.{' '}
+                  {r.mandaAhora ? (
+                    <>
+                      Mientras tanto cobra la más cara del grupo,{' '}
+                      <strong>{r.mandaAhora}</strong>.
+                    </>
+                  ) : (
+                    <>Y ninguna tela de esa familia tiene precio, así que su tela se cobra en $0.</>
+                  )}
                 </li>
               ))}
               {avisos.familiasCasiIguales.map((g) => (

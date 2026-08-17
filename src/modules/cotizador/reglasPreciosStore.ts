@@ -21,8 +21,18 @@ export const MAX_RESPALDOS_PRECIOS = 10;
 export type RespaldoPrecios = {
   fecha: string;
   motivo: string;
+  /** Quién lo dejó (correo). Los respaldos viejos no lo tienen. */
+  autor?: string;
   reglas: ReglasPrecios;
 };
+
+/**
+ * Evento que avisa que los precios cambiaron. `useReglasPrecios` mantiene una
+ * copia por componente, así que sin esto guardar en Admin dejaba las otras
+ * secciones —y cualquier pestaña de Fase 1 abierta— mostrando los precios
+ * viejos hasta recargar.
+ */
+const EVENTO_CAMBIO = 'rolzzo:reglas-precios';
 
 export async function cargarReglasPrecios(empresaId: string): Promise<ReglasPrecios> {
   const { data, error } = await supabase
@@ -58,6 +68,7 @@ export async function guardarReglasPrecios(
     { onConflict: 'empresa_id,clave' },
   );
   if (error) throw error;
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(EVENTO_CAMBIO));
 }
 
 export async function cargarRespaldosPrecios(empresaId: string): Promise<RespaldoPrecios[]> {
@@ -77,6 +88,7 @@ export async function cargarRespaldosPrecios(empresaId: string): Promise<Respald
       .map((r) => ({
         fecha: r.fecha as string,
         motivo: (r.motivo as string) || '',
+        ...(typeof r.autor === 'string' && r.autor ? { autor: r.autor as string } : {}),
         reglas: normalizarReglasPrecios(r.reglas),
       }));
   } catch {
@@ -92,13 +104,15 @@ export async function respaldarReglasPrecios(
   empresaId: string,
   reglas: ReglasPrecios,
   motivo: string,
+  /** Quién está guardando: sin esto, un cambio de precios es anónimo. */
+  autor?: string,
 ): Promise<void> {
   try {
     const previos = await cargarRespaldosPrecios(empresaId);
-    const lista = [{ fecha: new Date().toISOString(), motivo, reglas }, ...previos].slice(
-      0,
-      MAX_RESPALDOS_PRECIOS,
-    );
+    const lista = [
+      { fecha: new Date().toISOString(), motivo, ...(autor ? { autor } : {}), reglas },
+      ...previos,
+    ].slice(0, MAX_RESPALDOS_PRECIOS);
     await supabase.from('configuracion').upsert(
       {
         empresa_id: empresaId,
@@ -142,6 +156,19 @@ export function useReglasPrecios(): {
 
   useEffect(() => {
     cargar();
+  }, [cargar]);
+
+  // Otra sección de la misma pantalla (o la pestaña de precios mientras Fase 1
+  // está abierta) acaba de guardar: recargar en vez de seguir mostrando lo
+  // viejo. `focus` cubre el caso de dos ventanas del navegador.
+  useEffect(() => {
+    const alCambiar = () => void cargar();
+    window.addEventListener(EVENTO_CAMBIO, alCambiar);
+    window.addEventListener('focus', alCambiar);
+    return () => {
+      window.removeEventListener(EVENTO_CAMBIO, alCambiar);
+      window.removeEventListener('focus', alCambiar);
+    };
   }, [cargar]);
 
   return { reglas, loading, refresh: cargar };
