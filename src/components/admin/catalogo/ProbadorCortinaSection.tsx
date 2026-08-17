@@ -204,7 +204,7 @@ export function ProbadorCortinaSection() {
             checked={usarE78}
             onChange={(e) => setUsarE78(e.target.checked)}
           />
-          Tubo E78 activado en la OT
+          Tubo E39 activado en la OT
         </label>
         <label className="flex items-end gap-2 pb-2 text-xs">
           <input

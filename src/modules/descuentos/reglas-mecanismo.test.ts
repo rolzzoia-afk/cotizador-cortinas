@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   REGLAS_MECANISMO,
   categoriaRequiereMecanismo,
+  kitTraeCadenaIncorporada,
   colorConBandaAncho,
   mecEsFijoPorCategoria,
   mecPorAncho,
@@ -144,14 +145,14 @@ describe('REGLAS_MECANISMO — reglasAncho (banda 2,2–3,0 → kit 45 · >3 →
     expect(regla?.categoriaModelo).toBe('ROL_MANUAL_CENEFA_OVALADA_45mm');
     expect(regla?.modeloMecPorColor?.BCO).toBe(10); // fila 45 = MEC_10 blanco
     expect(regla?.modeloMecPorColor?.NEG).toBe(9); //  fila 45 = MEC_09 negro
-    expect(regla?.tubo).toBe('E78');
+    expect(regla?.tubo).toBe('E39');
     // Sin flag (default) no sube: se queda en 38 mm.
     expect(mecPorAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 2.5, 'BCO')).toBeNull();
   });
   it('la regla trae el tubo y la nota para la UI (flag E78 ON)', () => {
-    expect(reglaAnchoAplicable('ROL', 2.5, 'BCO', true)?.regla.tubo).toBe('E78');
+    expect(reglaAnchoAplicable('ROL', 2.5, 'BCO', true)?.regla.tubo).toBe('E39');
     expect(reglaAnchoAplicable('ROL', 3.5, 'GRS')?.regla.tubo).toBe('E65'); // >3 m sin flag
-    expect(reglaAnchoAplicable('ROL', 2.5, 'NEG', true)?.regla.nota).toContain('E78');
+    expect(reglaAnchoAplicable('ROL', 2.5, 'NEG', true)?.regla.nota).toContain('E39');
   });
   it('colorConBandaAncho: decide la vuelta automática 45→38 (NO gateado por el flag)', () => {
     expect(colorConBandaAncho('ROL', 'BCO')).toBe(true);
@@ -161,5 +162,20 @@ describe('REGLAS_MECANISMO — reglasAncho (banda 2,2–3,0 → kit 45 · >3 →
     expect(colorConBandaAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 'BCO')).toBe(true);
     expect(colorConBandaAncho('ROL_MANUAL_CENEFA_OVALADA_38mm', 'GRS')).toBe(false);
     expect(colorConBandaAncho('OSCURANTI_63mm', 'BCO')).toBe(false);
+  });
+});
+
+describe('kitTraeCadenaIncorporada (MEC 06, 2026-08-14)', () => {
+  it('el MEC 06 trae la cadena incorporada', () => {
+    expect(kitTraeCadenaIncorporada('LZ50 BLANCO [MEC 06]')).toBe(true);
+    expect(kitTraeCadenaIncorporada('lz50 blanco [mec 06]')).toBe(true);
+  });
+
+  it('el resto de los kits sigue con cadena aparte', () => {
+    expect(kitTraeCadenaIncorporada('KIT SIMPLE [MEC 33]')).toBe(false);
+    expect(kitTraeCadenaIncorporada('KIT B NEGRO [MEC 15]')).toBe(false);
+    expect(kitTraeCadenaIncorporada('KIT B [MEC 44]')).toBe(false);
+    expect(kitTraeCadenaIncorporada('')).toBe(false);
+    expect(kitTraeCadenaIncorporada(undefined)).toBe(false);
   });
 });

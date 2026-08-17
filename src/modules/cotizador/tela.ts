@@ -21,6 +21,7 @@ import {
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import { letraPano } from './letras';
 import { telaDePano } from './telaPano';
 import { esLineaB } from './lineaB';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
@@ -170,6 +171,10 @@ function piezasDespiece(
     {
       categoria: v.categoria as string | undefined,
       sentido: v.sentido as string | null | undefined,
+      // Montaje de la VENTANA (interno/semi/externo): sin él, un paño que no
+      // trae el suyo caía a INTERNO —el que menos tela consume— y el corte
+      // salía más angosto que el que ya imprime el Cálculo General.
+      oscuridadVariante: v.oscuridadVariante as string | null | undefined,
       alto: v.alto as number | string | undefined,
       // El cierre del beeblack (DE ARRIBA ABAJO gira la cortina 90°).
       direccion: v.direccion as string | null | undefined,
@@ -180,6 +185,10 @@ function piezasDespiece(
       verticalDctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
       formulas,
       tipos,
+      // El PESO INTERNO se rotula con el código de SU línea (E13 en la A;
+      // E79-B/E71-B por color en la B).
+      lineaB,
+      colores,
     },
   );
   const color = colorAccesoriosDePano(p, v.color as string | undefined);
@@ -359,7 +368,6 @@ const anchoEmpaque = (r: OptimizerRow) =>
 
 function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
   const bins: PanoBin[] = [];
-  let juntoCode = 64;
   let panoNum = 0;
   return orden.map((r) => {
     // Best-fit: paño del mismo COD_INT (y mismo tipo vertical/roller) con MENOR
@@ -377,13 +385,15 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
     }
     if (!mejor) {
       panoNum++;
-      juntoCode = juntoCode >= 90 ? 65 : juntoCode + 1;
       mejor = {
         codInt: r.codInt,
         esVertical: !!r.esVertical,
         usado: 0,
         anchoRollo: r.anchoRollo,
-        junto: String.fromCharCode(juntoCode),
+        // Estilo Excel (…Z, AA, AB…): las letras NUNCA se repiten. Antes daban
+        // la vuelta en la Z y una OT con >26 paños fusionaba paños distintos
+        // en la hoja de corte (268-6: 88 cortinas → decía 26 paños).
+        junto: letraPano(panoNum),
         numeroPano: panoNum,
       };
       bins.push(mejor);

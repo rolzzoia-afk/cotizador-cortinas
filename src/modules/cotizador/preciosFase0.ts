@@ -49,9 +49,12 @@ export const PUBLICIDAD = 1400;
 //  Roller Blackout / Screen / Dúo, que es la primera capa a construir.)
 export const INSUMO_VALOR_MAXIMO: Record<string, number> = {
   // Tubos / perfiles
-  'E 02': 3729.1625, // Tubo Ø38 (roller, ancho ≤ 2,19 m)
-  'E 02-1': 3729.1625, // Tubo (variante standard)
-  'E 05': 8958.220833, // Tubo .45 (roller, ancho ≥ 2,191 m)
+  // Los tres precios actualizados el 2026-08-11 contra la copia más nueva del
+  // Excel (COTJS-10491-5): antes 3.729,1625 / 8.958,220833 / 3.570. Eran el
+  // ÚNICO origen del desvío que se veía en roller y en verticales.
+  'E 02': 4462.5, // Tubo Ø38 (roller, ancho ≤ 2,19 m)
+  'E 02-1': 4462.5, // Tubo (variante standard)
+  'E 05': 10536.458333, // Tubo .45 (roller, ancho ≥ 2,191 m)
   'E 15': 4583.235417, // Peso inferior roller (por metro)
   'E 26': 9252.99375, // Perfil superior cenefa dúo (por metro)
   'E 18': 4638.76875, // Peso lágrima dúo (por metro)
@@ -90,7 +93,7 @@ export const INSUMO_VALOR_MAXIMO: Record<string, number> = {
   'VER 08': 142.8, // Conductor de cordón
   'VER 09': 785.4, // Unidad de control
   'VER 10': 95.2, // Freno eje 3 vías
-  'VER 11': 3570, // Peso cordón vertical
+  'VER 11': 7735, // Peso cordón vertical (costo 6.500 × 1,19; antes 3.570)
   'VER 15': 202.3, // Cadena inferior vertical (por metro de alto)
   'VER 22': 202.3, // Cordón cortina vertical (por metro de alto)
   'VER 24': 89.25, // Tope cordón

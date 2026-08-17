@@ -4,6 +4,10 @@ import type { jsPDF } from 'jspdf';
 // Captura el documento al guardar (save vive en la instancia, no en el
 // prototipo): subclase real de jsPDF, así las medidas de página son las reales.
 const docsGuardados = vi.hoisted(() => [] as unknown[]);
+// Todo lo que se imprime con text(), de todas las páginas de todos los docs.
+// jsPDF cuelga sus métodos de la INSTANCIA (no del prototipo), así que se
+// envuelve acá, al construir.
+const textosImpresos = vi.hoisted(() => [] as string[]);
 vi.mock('jspdf', async (importOriginal) => {
   const mod = await importOriginal<typeof import('jspdf')>();
   class JsPDFCaptura extends mod.jsPDF {
@@ -12,6 +16,11 @@ vi.mock('jspdf', async (importOriginal) => {
       (this as { save: unknown }).save = () => {
         docsGuardados.push(this);
         return this;
+      };
+      const textOriginal = (this as { text: (...a: unknown[]) => unknown }).text.bind(this);
+      (this as { text: unknown }).text = (s: string | string[], ...rest: unknown[]) => {
+        textosImpresos.push(Array.isArray(s) ? s.join(' ') : String(s));
+        return textOriginal(s, ...rest);
       };
     }
   }
@@ -528,6 +537,47 @@ describe('generarEtiquetasPDF — soft light CC: estructura 146 + página de cen
     doc.setPage(1);
     expect(doc.internal.pageSize.getWidth()).toBeCloseTo(62, 1);
     expect(doc.internal.pageSize.getHeight()).toBeCloseTo(146, 1);
+  });
+});
+
+describe('generarEtiquetasPDF — página de cenefa cuadrada: ANCHO DE CENEFA', () => {
+  // OT 3181: vertical de 2,737 en LIVING con cenefa cuadrada VENDIDA a 2,747
+  // (cantidad del adicional CENF C en Fase 1). Imprimía 273,2 (cortina −0,5).
+  const verticalRow = {
+    codInt: 'SCREEN_V_P',
+    producto: 'CORTINA VERTICAL SCREEN',
+    tipo: 'PREMIUM',
+    ubicacion: 'LIVING',
+    categoria: 'VERTICAL',
+    ancho: 2.737,
+    anchoCm: 273.7,
+    altoCm: 200,
+    tuberiaCod: 'VERTICAL',
+    pano: { tipoTela: 'SCR', color: 'NEGRO', cenefa: 'Cuadrada a muro', cenefaTapa: 'MURO_MURO' },
+    piezas: [pz('PERFIL VERTICAL', 271.9), pz('VARILLA', 272)],
+  } as unknown as OptimizerRow;
+  const meta = { ot: '3181', cliente: 'FRANK', fecha: '2026-08-17' };
+
+  it('imprime la cantidad vendida en Fase 1 (2,747 → 274,7), no el ancho de la cortina', () => {
+    docsGuardados.length = 0;
+    textosImpresos.length = 0;
+    generarEtiquetasPDF([verticalRow], meta, {}, [
+      { codInt: 'CENF C', cantidad: 2.747, descuento: 0, ubicacion: 'LIVING' },
+    ]);
+    expect(docsGuardados).toHaveLength(1);
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
+    expect(textosImpresos).toContain('274,7');
+    expect(textosImpresos).not.toContain('273,2');
+  });
+
+  it('sin adicional que calce, se estima desde la cortina como antes (273,7 − 0,5 = 273,2)', () => {
+    docsGuardados.length = 0;
+    textosImpresos.length = 0;
+    generarEtiquetasPDF([verticalRow], meta, {}, [
+      { codInt: 'CENF C', cantidad: 2.747, descuento: 0, ubicacion: 'COMEDOR' },
+    ]);
+    expect(textosImpresos).toContain('273,2');
+    expect(textosImpresos).not.toContain('274,7');
   });
 });
 

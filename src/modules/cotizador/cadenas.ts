@@ -324,6 +324,16 @@ export const PESOS_SELECCIONABLES = ['PCA01', 'PCA04'] as const;
 /** Peso de cadena que se auto-selecciona en Fase 2 (transparente cuadrado). */
 export const COD_PESO_AUTO = 'PCA04';
 
+/**
+ * Peso de cadena automático según la gama: la categoría B lleva SIEMPRE el
+ * PCA01 (huevo blanco), sea con accesorios blancos o negros — pedido
+ * 2026-08-14; la gama A sigue con el PCA04 transparente. El selector manual
+ * del paño permite cambiarlo después.
+ */
+export function codPesoAuto(lineaB: boolean | undefined): string {
+  return lineaB ? 'PCA01' : COD_PESO_AUTO;
+}
+
 /** ¿Es un peso ofrecible en el selector? */
 export function esPesoSeleccionable(cod: string | null | undefined): boolean {
   const c = (cod || '').toUpperCase().trim();

@@ -139,19 +139,20 @@ export const REGLAS_TUBERIA = {
   } as const satisfies ReglaTubo63,
 
   /** Código de tubo por diámetro cuando no aplica regla de categoría ni E02/E66.
-   *  45 mm: E78 es el default nuevo (2026-07-14); E05 quedó en desuso pero sigue
-   *  seleccionable a mano (ver tubos45mm). */
+   *  45 mm: E39 (el mismo tubo que hasta 2026-08-14 se llamaba E78); E05 quedó
+   *  en desuso pero sigue seleccionable a mano (ver tubos45mm). */
   codigoPorDiametro: {
-    45: 'E78',
+    45: 'E39',
     63: 'E47',
   } as Record<number, string>,
 
   /**
-   * Tubos 45 mm seleccionables (sin regla por ancho): E78 (default nuevo,
-   * 2026-07-14) y E05 (histórico, en desuso pero conservado para OTs viejas y
-   * elección manual). El primero es el que se auto-selecciona.
+   * Tubos 45 mm seleccionables (sin regla por ancho): E39 (default; se llamaba
+   * E78 hasta 2026-08-14, es la MISMA barra Ø45 esp 1,2) y E05 (histórico, en
+   * desuso pero conservado para OTs viejas y elección manual). El primero es el
+   * que se auto-selecciona.
    */
-  tubos45mm: ['E78', 'E05'] as const,
+  tubos45mm: ['E39', 'E05'] as const,
 
   /** Reglas por categoría — tienen prioridad sobre E02/E66 y el diámetro del modelo Excel. */
   reglasCategoria: [
@@ -172,21 +173,24 @@ export const REGLAS_TUBERIA = {
   tubos: [
     { codigo: 'E02', descripcion: 'E02-TUBO 1.2 / Ø 38 mm', diametroMm: 38, espesorMm: 1.2, estado: 'activo', autoPorAncho: true },
     { codigo: 'E66', descripcion: 'E66 - TUBO (.40mm) - 2.5mm', diametroMm: 38, espesorMm: 2.5, estado: 'activo', autoPorAncho: true },
-    // Default de 45 mm desde 2026-07-14 (la banda 2,2–3,0 m lo pide por regla).
-    { codigo: 'E78', descripcion: 'E78 - TUBO 43MM(ESP1.2)(5.8)', diametroMm: 45, espesorMm: 1.2, estado: 'activo', autoPorAncho: true },
+    // Tubo de 45 mm (Ø45, esp 1,2). Es el MISMO fierro que la categoría B ya
+    // pedía como E39 y que la línea A pedía como E78: desde 2026-08-14 los dos
+    // usan este código. El «.43 / .45» del nemotécnico es el CALIBRE, no la
+    // pared (mismo estilo que el «(.40mm)» del E66, cuya pared es 2,5).
+    { codigo: 'E39', descripcion: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45)', diametroMm: 45, espesorMm: 1.2, estado: 'activo', autoPorAncho: true },
+    // Nombre viejo del mismo tubo (2026-07-14 → 2026-08-14). OCULTO: no se
+    // ofrece, pero se sigue resolviendo para que las OTs de esa época —cuyos
+    // paños guardaron el chip 'E78 - …'— conserven su rótulo.
+    { codigo: 'E78', descripcion: 'E78 - TUBO 43MM(ESP1.2)(5.8)', diametroMm: 45, espesorMm: 1.2, estado: 'oculto', autoPorAncho: false },
     // Histórico (en desuso): sigue seleccionable a mano y nunca se pisa solo.
     { codigo: 'E05', descripcion: 'E05 - TUBO Ø 45 mm', diametroMm: 45, espesorMm: null, estado: 'activo', autoPorAncho: false },
     // Lo fija la regla de categoría de OSCURANTI; no es un auto por ancho.
     { codigo: 'E47', descripcion: 'E47 - TUBO Ø 63 mm', diametroMm: 63, espesorMm: null, estado: 'activo', autoPorAncho: false },
     // Default para roller >3 m.
     { codigo: 'E65', descripcion: 'E65 - TUBO (.63mm)', diametroMm: 63, espesorMm: null, estado: 'activo', autoPorAncho: true },
-    // CATEGORÍA B (gama económica): sus dos tubos. Ocultos porque en una cortina
-    // normal no se ofrecen; los pone la rama de categoría B según el ancho.
+    // CATEGORÍA B (gama económica): su tubo de 38. Oculto porque en una cortina
+    // normal no se ofrece; lo pone la rama de categoría B según el ancho.
     { codigo: 'E01', descripcion: 'E01 - TUBO 0.8 / Ø 38 mm', diametroMm: 38, espesorMm: 0.8, estado: 'oculto', autoPorAncho: false },
-    // El «.43 / .45» del nemotécnico es el CALIBRE, no la pared (mismo estilo
-    // que el «(.40mm)» del E66, cuya pared es 2,5). El espesor es el que dice
-    // «ESP»: 1,2 mm, igual que el E78.
-    { codigo: 'E39', descripcion: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45) (GAMA B)', diametroMm: 45, espesorMm: 1.2, estado: 'oculto', autoPorAncho: false },
   ] as readonly TuboCatalogo[],
 
   /**

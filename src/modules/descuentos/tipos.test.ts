@@ -124,7 +124,7 @@ describe('codigoTuboPorAncho — regla E02/E66 por ancho', () => {
     expect(codigoTuboPorAncho(soft38, 2.97)).toBe('E66');
   });
   it('45mm: usa codigoPorDiametro (E78 default), no la regla E02/E66', () => {
-    expect(codigoTuboPorAncho(roll45, 2.97)).toBe('E78');
+    expect(codigoTuboPorAncho(roll45, 2.97)).toBe('E39');
   });
   it('sin códigos en catálogo: 38 mm sigue regla E02/E66 por diámetro', () => {
     expect(codigoTuboPorAncho({ ...soft38, codigos_tubo: '' }, 2.5)).toBe('E66');

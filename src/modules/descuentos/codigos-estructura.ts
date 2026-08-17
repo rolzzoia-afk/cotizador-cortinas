@@ -98,6 +98,18 @@ export const PESO_INTERNO_B_POR_COLOR: Record<string, string> = {
   NEGRO: 'E71-B',
 };
 
+/** Tapa de peso roller línea B: la MISMA tapa en ambos lados (×2 por cortina). */
+export const TAPA_PESO_B_POR_COLOR: Record<string, string> = {
+  BLANCO: 'TAP18',
+  NEGRO: 'TAP28-B',
+};
+
+/** Tapa exterior de dúo línea B: TAP17 chantilly, única para blanco y negro. */
+export const TAPA_DUO_B_POR_COLOR: Record<string, string> = {
+  BLANCO: 'TAP17',
+  NEGRO: 'TAP17',
+};
+
 /** Las cuatro piezas cuyo código cambia en la categoría B, con su tabla de
  *  fábrica. Un color puede pisar cualquiera declarando el campo en `insumos`;
  *  el catálogo técnico usa esta lista para dibujar la tabla y el validador para
@@ -111,6 +123,8 @@ export const CAMPOS_ESTRUCTURA_B: ReadonlyArray<{
   { campo: 'pesoUB', label: 'Peso U de dúo', fabrica: PESO_U_B_POR_COLOR },
   { campo: 'pesoInternoB', label: 'Peso interno de dúo', fabrica: PESO_INTERNO_B_POR_COLOR },
   { campo: 'cenefaOvaladaB', label: 'Cenefa ovalada', fabrica: CENEFA_OVALADA_B_POR_COLOR },
+  { campo: 'tapaPesoB', label: 'Tapa de peso roller (×2)', fabrica: TAPA_PESO_B_POR_COLOR },
+  { campo: 'tapaDuoB', label: 'Tapa de dúo exterior', fabrica: TAPA_DUO_B_POR_COLOR },
 ];
 
 /** Código de categoría B que le queda a un color para una pieza: lo que el

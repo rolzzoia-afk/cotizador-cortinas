@@ -1,0 +1,296 @@
+import { describe, it, expect } from 'vitest';
+import {
+  BASE_VERTICAL_PROPIA,
+  GRUPOS_INSUMO,
+  REGLAS_PRECIOS_DEFAULT,
+  RECETAS_DEFAULT,
+  claveReceta,
+  conValoresMaximos,
+  grupoDelInsumo,
+  lamasPorPasada,
+  explicarCantidad,
+  normalizarReglasPrecios,
+  resolverReceta,
+  sonReglasPreciosDefault,
+  validarReglasPrecios,
+  type LineaReceta,
+  type ReglasPrecios,
+} from './reglasPrecios';
+
+const clonar = (r: ReglasPrecios): ReglasPrecios => JSON.parse(JSON.stringify(r));
+
+describe('normalizarReglasPrecios', () => {
+  it('sin nada guardado devuelve las reglas de fábrica', () => {
+    expect(sonReglasPreciosDefault(normalizarReglasPrecios(undefined))).toBe(true);
+    expect(sonReglasPreciosDefault(normalizarReglasPrecios(null))).toBe(true);
+    expect(sonReglasPreciosDefault(normalizarReglasPrecios('cualquier cosa'))).toBe(true);
+    expect(sonReglasPreciosDefault(normalizarReglasPrecios({}))).toBe(true);
+  });
+
+  it('una receta guardada REEMPLAZA la de su familia y no toca las demás', () => {
+    const r = normalizarReglasPrecios({
+      recetas: { SCREEN_P: [{ insumo: 'E 15', precio: 'venta', cantidad: { tipo: 'sumaAnchos' } }] },
+    });
+    expect(r.recetas.SCREEN_P).toHaveLength(1);
+    expect(r.recetas.BLACKOUT_D).toEqual(RECETAS_DEFAULT.BLACKOUT_D);
+  });
+
+  it('repone el precio de fábrica de un insumo que una receta usa y el guardado no trae', () => {
+    // Guardan un mapa de insumos con UNO solo; la receta de fábrica nombra muchos.
+    const r = normalizarReglasPrecios({ insumos: { 'E 02': { valorMaximo: 5000 } } });
+    expect(r.insumos['E 02'].valorMaximo).toBe(5000);
+    // MEC 18 lo usa la receta roller: tiene que volver con su precio de fábrica.
+    expect(r.insumos['MEC 18'].valorMaximo).toBe(REGLAS_PRECIOS_DEFAULT.insumos['MEC 18'].valorMaximo);
+  });
+
+  it('acepta un insumo guardado como número suelto (formato viejo)', () => {
+    const r = normalizarReglasPrecios({ insumos: { 'E 05': 12345 } });
+    expect(r.insumos['E 05'].valorMaximo).toBe(12345);
+  });
+
+  it('descarta líneas y valores corruptos sin romper el resto', () => {
+    const r = normalizarReglasPrecios({
+      insumos: { 'E 02': { valorMaximo: 'hola' }, ' E 05 ': { valorMaximo: 9 } },
+      recetas: {
+        SCREEN_P: [
+          { insumo: '', precio: 'venta', cantidad: { tipo: 'porCortina' } },
+          { insumo: 'E 15', precio: 'venta', cantidad: { tipo: 'inventado' } },
+          { insumo: 'E 15', precio: 'venta', cantidad: { tipo: 'porCortina', factor: 2 } },
+        ],
+      },
+      regalo: -50,
+      anchoRolloFallbackM: 0,
+    });
+    expect(r.recetas.SCREEN_P).toEqual([
+      { insumo: 'E 15', precio: 'venta', cantidad: { tipo: 'porCortina', factor: 2, filtroAncho: undefined } },
+    ]);
+    // El precio corrupto se descarta, pero como las recetas usan E 02 vuelve
+    // con el valor de fábrica: nunca queda una línea cobrándose $0.
+    expect(r.insumos['E 02'].valorMaximo).toBe(REGLAS_PRECIOS_DEFAULT.insumos['E 02'].valorMaximo);
+    expect(r.insumos['E 05'].valorMaximo).toBe(9); // la clave venía con espacios
+    expect(r.regalo).toBe(0);
+    expect(r.anchoRolloFallbackM).toBe(REGLAS_PRECIOS_DEFAULT.anchoRolloFallbackM);
+  });
+
+  it('los arquetipos se mezclan por clave: lo guardado pisa, el resto queda de fábrica', () => {
+    const r = normalizarReglasPrecios({ arquetipos: { SCREEN_P: 'SC-OTRO' } });
+    expect(r.arquetipos.SCREEN_P).toBe('SC-OTRO');
+    expect(r.arquetipos.BLACKOUT_D).toBe('BK-D');
+  });
+});
+
+describe('validarReglasPrecios', () => {
+  it('las reglas de fábrica no tienen errores', () => {
+    expect(validarReglasPrecios(REGLAS_PRECIOS_DEFAULT).errores).toEqual([]);
+  });
+
+  it('un insumo que una receta nombra pero no tiene precio es un ERROR', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    delete r.insumos['MEC 18'];
+    const { errores } = validarReglasPrecios(r);
+    expect(errores.some((e) => e.includes('MEC 18') && e.includes('$0'))).toBe(true);
+  });
+
+  it('un precio en cero o negativo es un ERROR', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.insumos['E 02'] = { valorMaximo: 0 };
+    expect(validarReglasPrecios(r).errores.some((e) => e.includes('E 02'))).toBe(true);
+  });
+
+  it('una familia sin materiales es un ERROR', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.recetas.SCREEN_P = [];
+    expect(validarReglasPrecios(r).errores.some((e) => e.includes('sin materiales'))).toBe(true);
+  });
+
+  it('un tramo de anchos al revés es un ERROR', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.recetas.SCREEN_P = [
+      { insumo: 'E 02', precio: 'venta', cantidad: { tipo: 'sumaAnchos', filtroAncho: { min: 3, max: 1 } } },
+    ];
+    expect(validarReglasPrecios(r).errores.some((e) => e.includes('al revés'))).toBe(true);
+  });
+
+  it('el hueco entre los dos tubos sale como AVISO, no como error', () => {
+    const { errores, avisos } = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT);
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('hueco'))).toBe(true);
+  });
+
+  it('un insumo agregado a mano que nadie usa sale como AVISO', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.insumos['XXX 99'] = { valorMaximo: 1000 };
+    expect(validarReglasPrecios(r).avisos.some((a) => a.includes('XXX 99'))).toBe(true);
+  });
+
+  it('las variantes de fábrica sin uso NO ensucian los avisos', () => {
+    // Están en la lista para poder cambiarlas por la que usa la receta; que
+    // ninguna receta las nombre es lo normal, no algo para revisar.
+    const avisos = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT).avisos;
+    expect(avisos.some((a) => a.includes('ZUN 01'))).toBe(false);
+    expect(avisos.some((a) => a.includes('ninguna familia lo usa'))).toBe(false);
+  });
+
+  it('dos variantes del mismo material con precios distintos salen como AVISO', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.insumos['ZUN 01'] = { valorMaximo: 999 };
+    const { errores, avisos } = validarReglasPrecios(r);
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('ZUN 06') && a.includes('ZUN 01'))).toBe(true);
+  });
+});
+
+describe('tela de las verticales', () => {
+  it('de fábrica se cobra por paños, como la planilla', () => {
+    expect(REGLAS_PRECIOS_DEFAULT.telaVertical.modo).toBe('panos');
+    expect(REGLAS_PRECIOS_DEFAULT.telaVertical.anchoRolloVerticalM).toBe(2.95);
+  });
+
+  it('lo guardado antes de que existiera el cobro por lamas queda en paños', () => {
+    const viejo = clonar(REGLAS_PRECIOS_DEFAULT) as Record<string, unknown>;
+    delete viejo.telaVertical;
+    const r = normalizarReglasPrecios(viejo);
+    expect(r.telaVertical).toEqual(REGLAS_PRECIOS_DEFAULT.telaVertical);
+  });
+
+  it('un modo desconocido o un número inválido caen en el valor de fábrica', () => {
+    const r = normalizarReglasPrecios({
+      telaVertical: { modo: 'inventado', anchoLamaM: 0, pasoLamaM: -1, anchoRolloVerticalM: 3.2 },
+    });
+    expect(r.telaVertical.modo).toBe('panos');
+    expect(r.telaVertical.anchoLamaM).toBe(0.089);
+    expect(r.telaVertical.pasoLamaM).toBe(0.08);
+    expect(r.telaVertical.anchoRolloVerticalM).toBe(3.2); // este sí era válido
+  });
+
+  it('un rollo más angosto que una lama es un ERROR', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.telaVertical = { ...r.telaVertical, anchoRolloVerticalM: 0.05 };
+    expect(validarReglasPrecios(r).errores.some((e) => e.includes('más angosto'))).toBe(true);
+  });
+
+  it('lamas montadas más separadas que su ancho sale como AVISO', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.telaVertical = { ...r.telaVertical, pasoLamaM: 0.12 };
+    const { errores, avisos } = validarReglasPrecios(r);
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('huecos'))).toBe(true);
+  });
+
+  it('una pasada del rollo de fábrica rinde 33 lamas', () => {
+    expect(lamasPorPasada(REGLAS_PRECIOS_DEFAULT.telaVertical)).toBe(33);
+  });
+
+  it('la tela propia cubre las mismas familias que la del roller', () => {
+    expect(Object.keys(BASE_VERTICAL_PROPIA).sort()).toEqual(
+      Object.keys(REGLAS_PRECIOS_DEFAULT.baseVertical).sort(),
+    );
+  });
+});
+
+describe('la hoja Insumos completa', () => {
+  const insumos = REGLAS_PRECIOS_DEFAULT.insumos;
+
+  it('trae los 41 que usan las recetas más las variantes de la planilla', () => {
+    // 41 con receta + 39 variantes/sueltos = los 80 que se pueden elegir.
+    expect(Object.keys(insumos).length).toBe(80);
+  });
+
+  it('cada variante cobra lo mismo que el material del que es alternativa', () => {
+    for (const [representante, variantes] of Object.entries(GRUPOS_INSUMO)) {
+      for (const cod of variantes) {
+        expect(insumos[cod]?.valorMaximo).toBe(insumos[representante].valorMaximo);
+      }
+    }
+  });
+
+  it('todos los códigos nuevos traen descripción', () => {
+    for (const [cod, ins] of Object.entries(insumos)) {
+      expect(ins.descripcion, `${cod} sin descripción`).toBeTruthy();
+    }
+  });
+
+  it('los dos materiales sueltos de la planilla traen su propio precio', () => {
+    expect(insumos['TAP 13'].valorMaximo).toBe(142.8);
+    expect(insumos.MER0014.valorMaximo).toBe(59.5);
+  });
+
+  it('grupoDelInsumo responde igual desde el representante que desde la variante', () => {
+    const desdeArriba = grupoDelInsumo('ZUN 06');
+    expect(desdeArriba).toContain('ZUN 03');
+    expect(grupoDelInsumo('ZUN 03')).toEqual(desdeArriba);
+    expect(grupoDelInsumo('MAT00001')).toEqual([]); // no comparte con nadie
+  });
+});
+
+describe('explicarCantidad — la regla contada en castellano', () => {
+  const casos: [LineaReceta['cantidad'], string][] = [
+    [{ tipo: 'porCortina' }, '1 por cada cortina'],
+    [{ tipo: 'porCortina', factor: 2 }, '2 por cada cortina'],
+    [{ tipo: 'porCortina', factor: 2, filtroAncho: { min: 2.2 } }, '2 por cada cortina de 2,2 m de ancho o más'],
+    [{ tipo: 'sumaAnchos' }, 'suma de los anchos de las cortinas'],
+    [{ tipo: 'sumaAnchos', factor: 2 }, 'suma de los anchos de las cortinas × 2'],
+    [{ tipo: 'sumaAnchos', filtroAncho: { max: 2.19 } }, 'suma de los anchos de las cortinas de hasta 2,19 m de ancho'],
+    [{ tipo: 'sumaAnchos', masFijoM: 0.2 }, 'suma de los anchos de las cortinas, más 0,2 m fijos'],
+    [{ tipo: 'sumaAltos', factor: 5 }, 'suma de los altos vendidos × 5'],
+    [{ tipo: 'fijo', cantidad: 4 }, '4 por familia, sin importar cuántas cortinas'],
+    [{ tipo: 'porCortinaCuadrado', factor: 2 }, 'cantidad de cortinas al cuadrado × 2'],
+    [{ tipo: 'lamas' }, 'lamas de la cortina: suma de anchos ÷ 0,8 × 10'],
+  ];
+  for (const [cantidad, esperado] of casos) {
+    it(`${cantidad.tipo} → «${esperado}»`, () => {
+      expect(explicarCantidad(cantidad)).toBe(esperado);
+    });
+  }
+
+  it('cada línea de cada receta de fábrica se puede explicar', () => {
+    for (const lineas of Object.values(RECETAS_DEFAULT)) {
+      for (const l of lineas) expect(explicarCantidad(l.cantidad).length).toBeGreaterThan(3);
+    }
+  });
+});
+
+describe('conValoresMaximos', () => {
+  it('cambia solo los precios pedidos y conserva el resto', () => {
+    const r = conValoresMaximos({ 'E 02': 1 });
+    expect(r.insumos['E 02'].valorMaximo).toBe(1);
+    expect(r.insumos['E 05'].valorMaximo).toBe(REGLAS_PRECIOS_DEFAULT.insumos['E 05'].valorMaximo);
+    expect(r.recetas).toBe(REGLAS_PRECIOS_DEFAULT.recetas);
+  });
+});
+
+describe('resolverReceta', () => {
+  it('cada familia conocida usa la suya', () => {
+    expect(resolverReceta('DUOBK_P', false)).toBe(RECETAS_DEFAULT.DUOBK_P);
+    expect(resolverReceta('SCREEN_S', false)).toBe(RECETAS_DEFAULT.SCREEN_S);
+  });
+
+  it('una familia desconocida cae en la de su gama', () => {
+    expect(resolverReceta('FOO_S', false)).toBe(RECETAS_DEFAULT.BLACKOUT_S);
+    expect(resolverReceta('SCREENX_S', false)).toBe(RECETAS_DEFAULT.SCREEN_S);
+    expect(resolverReceta('FOO_P', false)).toBe(RECETAS_DEFAULT.BLACKOUT_P);
+  });
+});
+
+describe('claveReceta — el nombre de la receta que se termina usando', () => {
+  const CODS = [
+    'BLACKOUT_P', 'BLACKOUT_D', 'BLACKOUT_S', 'SCREEN_P', 'SCREEN_D', 'SCREEN_S',
+    'DUOBK_P', 'DUOBK_D', 'DUOBK_S', 'DUOPOLI_P', 'DUOPOLI_D', 'DUOPOLI_S',
+    'FOO_P', 'FOO_S', 'SCREENX_S', 'DUO_X', 'BEEBLACK', '',
+  ];
+
+  it('nombra exactamente la receta que devuelve resolverReceta', () => {
+    for (const cod of CODS) {
+      for (const esVertical of [false, true]) {
+        expect(RECETAS_DEFAULT[claveReceta(cod, esVertical)]).toBe(resolverReceta(cod, esVertical));
+      }
+    }
+  });
+
+  it('la familia con receta propia se nombra a sí misma; la desconocida no', () => {
+    expect(claveReceta('DUOPOLI_D', false)).toBe('DUOPOLI_D');
+    expect(claveReceta('DUO_X', false)).toBe('DUO_GENERICO');
+    expect(claveReceta('BEEBLACK', false)).toBe('BLACKOUT_P');
+    expect(claveReceta('BLACKOUT_D', true)).toBe('VERTICAL');
+  });
+});

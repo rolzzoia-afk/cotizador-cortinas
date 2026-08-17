@@ -51,6 +51,11 @@ export function guardarProductoEnCatalogo(
   if ('categoria' in cambios && cambios.categoria === undefined) {
     delete nuevoCat[keyNueva].categoria;
   }
+  // Ídem para el chip del catálogo de Fase 1: `undefined` = «vuelve al
+  // automático», y sin este borrado el chip elegido a mano quedaba pegado.
+  if ('chip' in cambios && cambios.chip === undefined) {
+    delete nuevoCat[keyNueva].chip;
+  }
   if (anchoRolloM != null && anchoRolloM > 0) {
     nuevoAncho[keyNueva] = anchoRolloM;
     nuevoCat[keyNueva].anchoRollo = anchoRolloM;

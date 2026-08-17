@@ -124,11 +124,16 @@ export function etiquetaConTira(val?: boolean | string | null): EtiquetaConTira 
  * explícito la deja sin tira. `adicionalConTira` (flag del adicional del Excel)
  * es el respaldo cuando el paño no define nada. Usar en TODA lectura de la tira
  * ovalada (UI, Excel de órdenes, cálculo general, etiquetas, precio).
+ *
+ * CATEGORÍA B (2026-08-14): sus cenefas van SIEMPRE sin tira — gana incluso a
+ * un 'CON TIRA' guardado en el paño («todas automáticamente», sin excepciones).
  */
 export function tiraCenefaOvalada(
   cenefaTira?: boolean | string | null,
   adicionalConTira?: boolean | null,
+  lineaB?: boolean,
 ): EtiquetaConTira {
+  if (lineaB) return 'SIN TIRA';
   if (String(cenefaTira ?? '').trim() !== '') return etiquetaConTira(cenefaTira);
   if (adicionalConTira != null) return etiquetaConTira(adicionalConTira);
   return 'CON TIRA';
@@ -153,6 +158,44 @@ export function ubicacionCoincideConAdicional(ubicFila: string, ubicAdicional: s
   const fila = normalizarUbicacion(ubicFila);
   const adic = normalizarUbicacion(ubicAdicional);
   return !!fila && fila === adic;
+}
+
+/**
+ * Ancho (cm) de la cenefa CUADRADA tal como se VENDIÓ en Fase 1: la cantidad
+ * del adicional CENF C es el ancho en metros (×100). Es lo que imprime la
+ * etiqueta y lo que el Excel de órdenes pone como ANCHO INICIAL; el ancho de la
+ * cortina NO sirve, porque la cenefa se vende aparte y puede ser más ancha
+ * (tapa los soportes) o más angosta.
+ *
+ * La UBIC. de la fila viene con sufijo de paño (" P2" en el optimizador,
+ * "-G2" en el Excel) y la del adicional suele ser la general ("LIVING"), así
+ * que se acepta igual, misma base o prefijo. Si varias cenefas calzan (dos
+ * cortinas con cuadrada en la misma UBIC.) gana la de cantidad más parecida al
+ * ancho del paño, el mismo desempate que `cortinaDeLaCenefa`. Sin adicional
+ * que calce devuelve null y quien llama decide el respaldo.
+ */
+export function anchoCenefaCuadradaDeclaradoCm(
+  ubicFila: string,
+  anchoPanoM: number,
+  adicionales: AdicionalFase0Persistido[] | undefined,
+): number | null {
+  if (!adicionales?.length) return null;
+  const key = normalizarUbicacion(ubicFila);
+  if (!key) return null;
+  const base = key.replace(/(?:\s+P|-G)\d+$/, '');
+  let mejor: { rango: number; dist: number; cm: number } | null = null;
+  for (const a of adicionales) {
+    if (!a.codInt || !(a.cantidad > 0) || !esAdicionalCenefaCuadrada(a.codInt)) continue;
+    const ubic = normalizarUbicacion(a.ubicacion || '');
+    if (!ubic) continue;
+    const rango = ubic === key ? 0 : ubic === base ? 1 : ubic.startsWith(base) || base.startsWith(ubic) ? 2 : -1;
+    if (rango < 0) continue;
+    const dist = anchoPanoM > 0 ? Math.abs(a.cantidad - anchoPanoM) : 0;
+    if (!mejor || rango < mejor.rango || (rango === mejor.rango && dist < mejor.dist - 1e-9)) {
+      mejor = { rango, dist, cm: r1(a.cantidad * 100) };
+    }
+  }
+  return mejor ? mejor.cm : null;
 }
 
 // ── A qué CORTINA le toca la cenefa ──────────────────────────────────────

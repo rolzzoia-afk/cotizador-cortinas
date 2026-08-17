@@ -115,7 +115,7 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
         anchoRollo,
         aceptados,
       );
-      await guardarCatalogoProductos(empresaId, nuevoCat);
+      await guardarCatalogoProductos(empresaId, nuevoCat, 'antes de importar el Excel del catálogo');
       await guardarAnchoRollo(empresaId, nuevoAncho);
       await refresh();
       toast.success(`Catálogo actualizado: ${aceptados.length} código(s).`);

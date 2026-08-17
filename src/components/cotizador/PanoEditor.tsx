@@ -761,19 +761,26 @@ export function PanoEditor({
               onChange({
                 cenefa: v,
                 // Ovalada arranca CON TIRA por default; el resto sin tira.
-                cenefaTira: v === 'Ovalada' ? 'CON TIRA' : 'SIN TIRA',
+                // Categoría B: SIEMPRE sin tira (pedido 2026-08-14).
+                cenefaTira: !lineaB && v === 'Ovalada' ? 'CON TIRA' : 'SIN TIRA',
               })
             }
           />
         )}
         {(pano.cenefa === 'Ovalada' || cenefaFijaOvalada) && (
           <>
-            <RadioRow
-              label="Tira"
-              value={pano.cenefaTira || (cenefaEsOvalada ? 'CON TIRA' : 'SIN TIRA')}
-              options={OPCIONES_CENEFA_TIRA}
-              onChange={(v) => onChange({ cenefaTira: v })}
-            />
+            {lineaB ? (
+              <p className="text-[11px] text-muted-foreground">
+                Tira: <strong>SIN TIRA</strong> — las cenefas de categoría B van siempre sin tira.
+              </p>
+            ) : (
+              <RadioRow
+                label="Tira"
+                value={pano.cenefaTira || (cenefaEsOvalada ? 'CON TIRA' : 'SIN TIRA')}
+                options={OPCIONES_CENEFA_TIRA}
+                onChange={(v) => onChange({ cenefaTira: v })}
+              />
+            )}
             <RadioRow
               label="Color tapa"
               value={pano.colorTapa || ''}

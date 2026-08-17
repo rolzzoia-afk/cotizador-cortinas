@@ -32,6 +32,7 @@ import {
 } from '@/modules/cotizador/fase2';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { esLineaB, lineaBPorPano } from '@/modules/cotizador/lineaB';
+import { kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
@@ -61,7 +62,7 @@ import { useAuth } from '@/lib/auth';
 import {
   codCadenaAutoPorAlto,
   codCadenaPorLargoColor,
-  COD_PESO_AUTO,
+  codPesoAuto,
   derivarLargoColor,
   esCadenaRoller,
   esPesoSeleccionable,
@@ -286,8 +287,20 @@ export function CotizadorFase2() {
         const llevaCadena =
           categoriaRequiereMecanismo(v.categoria) &&
           !(v.categoria || '').toUpperCase().includes('MOTOR');
+        // El MEC 06 (kit B) trae la cadena INCORPORADA: no se asigna ninguna, y
+        // si el paño arrastraba una de antes (cambió de kit), se limpia. El
+        // peso de cadena sí va — la cadena del kit no trae el suyo.
+        const cadenaIncorporada = kitTraeCadenaIncorporada(mecanismo);
         const cadPatch: Partial<Pano> = {};
-        if (llevaCadena) {
+        if (llevaCadena && cadenaIncorporada) {
+          if (p.codCadena || p.largoCadena || p.colorCadena) {
+            cadPatch.codCadena = '';
+            cadPatch.largoCadena = '';
+            cadPatch.colorCadena = '';
+          }
+          if (!p.codPeso) cadPatch.codPeso = codPesoAuto(lineaB);
+        }
+        if (llevaCadena && !cadenaIncorporada) {
           const colorAcc = colorAccesoriosDePano(p, v.color);
           // Se rehace la cadena si falta, y también si la que hay quedó de OTRO
           // color: pasa cuando el vendedor cambia el color de accesorios desde
@@ -331,7 +344,8 @@ export function CotizadorFase2() {
               cadPatch.colorCadena = colorCadena;
             }
           }
-          if (!p.codPeso) cadPatch.codPeso = COD_PESO_AUTO;
+          // Gama B: siempre PCA01 (blanco), sea cual sea el color de accesorios.
+          if (!p.codPeso) cadPatch.codPeso = codPesoAuto(lineaB);
         }
         return {
           ...p,
@@ -618,11 +632,23 @@ export function CotizadorFase2() {
         nuevo = { ...nuevo, panos: nuevo.panos.map((p) => ({ ...p, ...mod })) };
       };
       // Recalcula la cadena auto por ALTO + color (roller/dúo manual); setea si
-      // cambió. El peso se auto-fija (PCA04) si está vacío. No pisa un peso manual.
+      // cambió. El peso se auto-fija (PCA04; PCA01 en gama B) si está vacío.
+      // No pisa un peso manual.
       const recomputarCadena = () => {
         const pn = nuevo.panos[idx];
         if ((v.categoria || '').toUpperCase().includes('MOTOR') || pn.motorModelo || pn.motorTipo) return;
         if (!categoriaRequiereMecanismo(v.categoria)) return;
+        const lineaB =
+          lineaBPorPano(nuevo as Parameters<typeof lineaBPorPano>[0], catalogo)[idx] ?? false;
+        // Kit con cadena incorporada (MEC 06): limpiar la cadena y quedarse
+        // solo con el peso.
+        if (kitTraeCadenaIncorporada(pn.mecanismo)) {
+          if (pn.codCadena || pn.largoCadena || pn.colorCadena) {
+            setPano({ codCadena: '', largoCadena: '', colorCadena: '' });
+          }
+          if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
+          return;
+        }
         const cod = codCadenaAutoPorAlto(
           altoIdx(),
           colorAccesoriosDePano(pn, v.color),
@@ -635,7 +661,7 @@ export function CotizadorFase2() {
           const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
           setPano({ codCadena: cod, largoCadena, colorCadena });
         }
-        if (!nuevo.panos[idx].codPeso) setPano({ codPeso: COD_PESO_AUTO });
+        if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
       };
 
       // Toggle tipo Simple/Dual: represelecciona mecanismo + modelo + tubería.
@@ -941,9 +967,9 @@ export function CotizadorFase2() {
               {usarE78 && (
                 <span
                   className="rounded-full border border-success/40 bg-success/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-success"
-                  title="Esta OT usa el tubo E78 (kit 45 mm) en la banda 2,2–3,0 m"
+                  title="Esta OT usa el tubo E39 (kit 45 mm) en la banda 2,2–3,0 m"
                 >
-                  Tubo E78
+                  Tubo E39
                 </span>
               )}
             </div>

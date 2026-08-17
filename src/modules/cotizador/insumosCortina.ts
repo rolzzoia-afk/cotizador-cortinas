@@ -78,6 +78,23 @@ export const NOMBRE_TAPA_DUO_INTERNA = '[TAPA DE PESO DUO] DUO INTERNO';
 export const TAPAS_DUO_EXTERIOR_POR_PANO = 2;
 export const TAPAS_DUO_INTERNA_POR_PANO = 2;
 
+// ── Tapas de la CATEGORÍA B (pedido 2026-08-14) ──────────────────────
+// El roller B usa la MISMA tapa en ambos lados (×2 por cortina): TAP18 blanca /
+// TAP28-B negra. El dúo B lleva la exterior única TAP17 (chantilly, sirve para
+// blanco y negro); la interna TAP13 se mantiene igual que en la A. El gris no
+// existe en la gama B (la selección lo bloquea), así que si llegara un color
+// sin tapa B se cae a la tapa de la línea A.
+export const TAPAS_PESO_B_POR_COLOR: Record<string, string> = {
+  BCO: 'TAP18',
+  NEG: 'TAP28-B',
+};
+const NOMBRE_TAPA_B: Record<string, string> = {
+  TAP18: 'TAPA PESO ROLLER CAT. B (BLANCA)',
+  'TAP28-B': 'TAPA PESO ROLLER CAT. B (NEGRO)',
+};
+export const COD_TAPA_DUO_B = 'TAP17';
+export const NOMBRE_TAPA_DUO_B = '[TAPA DE PESO DUO] TAPA DUO CHANTILLY BLANCA - NEGRA';
+
 // ── Tapa de cenefa cuadrada (por color de tapa) ──────────────────────
 // A diferencia de las tapas de PESO (que van a bodega), estas se colocan en
 // terreno, así que el inventario las lista en la tabla de INSTALACIÓN aunque su
@@ -190,8 +207,18 @@ function esColorDeFabrica(color: string | null | undefined): boolean {
 function tapasPesoDeColor(
   colorAcc: string | null | undefined,
   colores: readonly ColorAccesorio[] | undefined,
+  lineaB = false,
 ): { izq: string; der: string; nombreIzq: string; nombreDer: string; color: string } | null {
   const cc = colorTapaCorto(colorAcc);
+  // Categoría B: una sola tapa (misma en ambos lados). Overlay del color →
+  // tabla B de fábrica; si el color no tiene tapa B, cae a la de la línea A.
+  if (lineaB) {
+    const codB = insumoDeColor(colorAcc, 'tapaPesoB', colores) ?? (cc ? TAPAS_PESO_B_POR_COLOR[cc] || '' : '');
+    if (codB) {
+      const nombre = NOMBRE_TAPA_B[codB] || `TAPA PESO ROLLER CAT. B (${cc || colorAcc || ''})`;
+      return { izq: codB, der: codB, nombreIzq: nombre, nombreDer: nombre, color: cc || (colorAcc || '').trim().toUpperCase() };
+    }
+  }
   const izq = insumoDeColor(colorAcc, 'tapaPesoIzq', colores) ?? (cc ? TAPAS_PESO_POR_COLOR[cc].izq : '');
   const der = insumoDeColor(colorAcc, 'tapaPesoDer', colores) ?? (cc ? TAPAS_PESO_POR_COLOR[cc].der : '');
   const etiqueta = cc || (colorAcc || '').trim().toUpperCase();
@@ -218,8 +245,18 @@ function tapasPesoDeColor(
 function tapaDuoDeColor(
   colorAcc: string | null | undefined,
   colores: readonly ColorAccesorio[] | undefined,
+  lineaB = false,
 ): { codigo: string; descripcion: string; color: string } | null {
   const cc = colorTapaCorto(colorAcc);
+  // Dúo categoría B: TAP17 única para blanco y negro (overlay editable).
+  if (lineaB) {
+    const codB = insumoDeColor(colorAcc, 'tapaDuoB', colores) ?? COD_TAPA_DUO_B;
+    return {
+      codigo: codB,
+      descripcion: codB === COD_TAPA_DUO_B ? NOMBRE_TAPA_DUO_B : NOMBRE_TAPA_DUO[codB] || NOMBRE_TAPA_DUO_B,
+      color: cc || (colorAcc || '').trim().toUpperCase(),
+    };
+  }
   const cod = insumoDeColor(colorAcc, 'tapaDuo', colores) ?? (cc ? TAPAS_DUO_POR_COLOR[cc] : '');
   const etiqueta = cc || (colorAcc || '').trim().toUpperCase();
   if (!cod) {
@@ -434,15 +471,18 @@ export function insumosDePano(
     tipos?: readonly TipoCortina[];
     /** Catálogo de colores: sus códigos propios ganan sobre las tablas de acá. */
     colores?: readonly ColorAccesorio[];
+    /** Categoría B (gama económica): cambia las tapas de peso (TAP18/TAP28-B ×2
+     *  en roller, TAP17 exterior en dúo — la interna TAP13 no cambia). */
+    lineaB?: boolean;
   },
 ): InsumoCortina[] {
   const out: InsumoCortina[] = [];
-  const { categoria, ventanaColor, anchoM, omitirFijaciones, tipos, colores } = ctx;
+  const { categoria, ventanaColor, anchoM, omitirFijaciones, tipos, colores, lineaB } = ctx;
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
 
   // Tapas de peso + sus tornillos (solo roller, por color de accesorios).
   if (llevaTapasPeso(categoria, tipos)) {
-    const tapas = tapasPesoDeColor(colorAcc, colores);
+    const tapas = tapasPesoDeColor(colorAcc, colores, lineaB);
     if (tapas) {
       out.push({ codigo: tapas.izq, descripcion: tapas.nombreIzq, color: tapas.color, cantidad: 1 });
       out.push({ codigo: tapas.der, descripcion: tapas.nombreDer, color: tapas.color, cantidad: 1 });
@@ -465,7 +505,7 @@ export function insumosDePano(
     });
   } else if (llevaTapasDuo(categoria, tipos)) {
     // Dúo (y pletina dúo): tapas a presión, SIN tornillos. 2 exteriores por color + 2 internas (TAP13).
-    const ext = tapaDuoDeColor(colorAcc, colores);
+    const ext = tapaDuoDeColor(colorAcc, colores, lineaB);
     if (ext) {
       out.push({
         codigo: ext.codigo,

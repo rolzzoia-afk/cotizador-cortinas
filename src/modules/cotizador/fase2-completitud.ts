@@ -19,6 +19,7 @@ import {
   categoriaRequiereMecanismo,
   esCategoriaPletina,
   esCategoriaVertical,
+  kitTraeCadenaIncorporada,
   mecLineaB,
 } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
@@ -128,9 +129,10 @@ export function pendientesFase2(
       if (!txt(p.materialTipo)) falta('falta el material de instalación');
 
       // Cadena y peso: solo donde hay mecanismo manual (el motor la reemplaza).
+      // El MEC 06 trae la cadena incorporada — exige el peso, no la cadena.
       const llevaMotor = !!txt(p.motorModelo) || !!txt(p.motorTipo) || !!txt(p.ladoMotor);
       if (requiereMec && !llevaMotor && !esVertical) {
-        if (!txt(p.codCadena)) falta('falta la cadena');
+        if (!txt(p.codCadena) && !kitTraeCadenaIncorporada(p.mecanismo)) falta('falta la cadena');
         if (!txt(p.codPeso)) falta('falta el peso de cadena');
       }
       // Manilla: si se pidió cantidad, hace falta el color para el código.
@@ -144,10 +146,13 @@ export function pendientesFase2(
       if (llevaCenefa && !txt(p.superficie)) falta('falta la superficie (techo/pared)');
 
       // Cenefa OVALADA: tapa, bracket y tira van al Excel y al inventario.
+      // La categoría B no pregunta la tira: va SIEMPRE sin tira (2026-08-14).
       if (esCenefaOvalada(p.cenefa as string, categoria, reglas.tipos)) {
         if (!txt(p.colorTapa)) falta('falta el color de tapa de la cenefa');
         if (!txt(p.bracketTipo)) falta('falta el tipo de bracket');
-        if (!txt(p.cenefaTira)) falta('falta definir la tira de la cenefa (con/sin)');
+        const esB =
+          !!catalogo && esLineaB(p, v.codInt, catalogo, categoria, reglas.mecanismo, reglas.tipos);
+        if (!esB && !txt(p.cenefaTira)) falta('falta definir la tira de la cenefa (con/sin)');
       }
       // Cenefa CUADRADA elegible (roller/vertical): tapas + color. En oscuridad
       // las tapas son fijas por sistema, así que no se pregunta.

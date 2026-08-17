@@ -25,6 +25,15 @@ import {
   normCod,
   tiposDelCatalogo,
 } from '@/modules/cotizador/catalogoEdicion';
+import { flujoDeProducto } from '@/modules/cotizador/flujoCatalogo';
+import {
+  CHIP_IDS,
+  FILTROS_CATALOGO,
+  chipDeProducto,
+  labelChip,
+} from '@/modules/cotizador/filtrosCatalogo';
+import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
+import { formatCLP } from '@/lib/formatters';
 import type { CatalogoProductos, Producto } from '@/modules/cotizador/types';
 
 interface ProductoCatalogoDialogProps {
@@ -74,11 +83,43 @@ export default function ProductoCatalogoDialog({
     const g = String(prev?.categoria ?? '').trim().toUpperCase();
     return g === 'A' || g === 'B' ? g : '';
   });
+  // Chip del catálogo de Fase 1. '' = automático (se deduce del COD_INT o de la
+  // familia); un id explícito lo fija a mano.
+  const [chip, setChip] = useState(() => {
+    const c = String(prev?.chip ?? '').trim().toUpperCase();
+    return CHIP_IDS.includes(c) ? c : '';
+  });
   const [saving, setSaving] = useState(false);
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
 
+  // Dónde caería el producto si se deja en automático, con lo escrito ahora.
+  const chipAuto = useMemo(
+    () =>
+      chipDeProducto(
+        { cod: cod.trim(), producto: nombre.trim(), tipo: '', descripcion: '', precio: 0 },
+        normCod(ci),
+      ),
+    [cod, nombre, ci],
+  );
+
   const familias = useMemo(() => familiasDelCatalogo(catalogo), [catalogo]);
   const tipos = useMemo(() => tiposDelCatalogo(catalogo), [catalogo]);
+
+  // Qué le pasaría a este producto al cotizarlo, con lo que hay escrito ahora
+  // mismo en el formulario. Es solo lectura: evita descubrir recién en la
+  // cotización que la familia tecleada no tiene receta ni tela de referencia.
+  const { reglas } = useReglasPrecios();
+  const flujo = useMemo(() => {
+    if (!cod.trim()) return null;
+    const provisorio: Producto = {
+      cod: cod.trim(),
+      producto: nombre.trim(),
+      tipo: tipo.trim(),
+      descripcion: descripcion.trim(),
+      precio: num(precio) ?? 0,
+    };
+    return flujoDeProducto(provisorio, normCod(ci) || 'NUEVO', catalogo, reglas);
+  }, [cod, nombre, tipo, descripcion, precio, ci, catalogo, reglas]);
 
   const guardar = async () => {
     if (!empresaId) return;
@@ -120,11 +161,17 @@ export default function ProductoCatalogoDialog({
       descuento: dctoNum / 100,
       // Siempre presente: `undefined` es «sin clasificar» y borra la gama previa.
       categoria: gama || undefined,
+      // Ídem: `undefined` devuelve el producto al chip automático.
+      chip: chip || undefined,
     };
     setSaving(true);
     try {
       const r = guardarProductoEnCatalogo(catalogo, anchoRollo, codInt, key, cambios, anchoNum);
-      await guardarCatalogoProductos(empresaId, r.catalogo);
+      await guardarCatalogoProductos(
+        empresaId,
+        r.catalogo,
+        esNuevo ? `antes de crear ${key}` : `antes de editar ${codInt}`,
+      );
       await guardarAnchoRollo(empresaId, r.anchoRollo);
       toast.success(esNuevo ? `Código ${key} creado.` : `Código ${key} guardado.`);
       onSaved();
@@ -145,7 +192,7 @@ export default function ProductoCatalogoDialog({
     setSaving(true);
     try {
       const r = eliminarProductoDeCatalogo(catalogo, anchoRollo, codInt);
-      await guardarCatalogoProductos(empresaId, r.catalogo);
+      await guardarCatalogoProductos(empresaId, r.catalogo, `antes de eliminar ${codInt}`);
       await guardarAnchoRollo(empresaId, r.anchoRollo);
       toast.success(`Código ${codInt} eliminado del catálogo.`);
       onSaved();
@@ -253,6 +300,27 @@ export default function ProductoCatalogoDialog({
             />
           </div>
           <div className="col-span-2">
+            <Label className="mb-1 text-xs">Chip del catálogo (Fase 1)</Label>
+            <select
+              value={chip}
+              onChange={(e) => setChip(e.target.value)}
+              className="h-9 w-full rounded-md border border-border bg-secondary px-2 text-sm"
+            >
+              <option value="">— automático ({labelChip(chipAuto)}) —</option>
+              {FILTROS_CATALOGO.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              En qué categoría del catálogo de Fase 1 se ve este código. En automático se deduce de
+              la familia; lo que no calza en ninguna cae en «Otros». Elige uno a mano cuando el
+              automático no acierte (un motor nuevo, por ejemplo, para que salga junto a sus
+              hermanos).
+            </p>
+          </div>
+          <div className="col-span-2">
             <Label className="mb-1 text-xs">Gama (categoría comercial)</Label>
             <select
               value={gama}
@@ -270,6 +338,36 @@ export default function ProductoCatalogoDialog({
             </p>
           </div>
         </div>
+
+        {flujo && (
+          <div className="rounded-md border border-border bg-secondary/40 p-2 text-[11px]">
+            {flujo.entra === 'adicional' ? (
+              <>
+                Con el tipo «{tipo.trim() || '(vacío)'}» este código entra a la cotización como{' '}
+                <strong>adicional</strong>: se cobra su precio × cantidad, sin medidas ni
+                materiales. Para que se cobre como cortina, el tipo debe ser PREMIUM, DELUX,
+                STANDARD o BASIC.
+              </>
+            ) : (
+              <>
+                Se cobra como <strong>cortina</strong>, con la receta de materiales{' '}
+                <span className="font-mono">{flujo.recetaKey}</span>
+                {!flujo.recetaPropia && ' (de respaldo: la familia no tiene receta propia)'}
+                {flujo.telaReferencia ? (
+                  <>
+                    , y la tela se paga a {formatCLP(flujo.precioMl)}/m según{' '}
+                    <span className="font-mono">{flujo.telaReferencia}</span>
+                    {flujo.origenPrecio === 'maxFamilia' &&
+                      ', que es la tela más cara de la familia porque no hay ninguna declarada como referencia'}
+                    .
+                  </>
+                ) : (
+                  <>. La familia todavía no tiene ninguna tela que fije el precio por metro.</>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {!esNuevo && normCod(ci) !== codInt && (
           <p className="text-[11px] text-amber-400">

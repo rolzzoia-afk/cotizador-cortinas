@@ -317,7 +317,7 @@ export function SeleccionCadenas({ valor, onChange, paleta }: Props) {
             {filas.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-2 py-4 text-center text-muted-foreground">
-                  No hay cadenas en el inventario. Agregá una acá o cargalas en Inventario.
+                  No hay cadenas en el inventario. Agrega una aquí o cárgalas en Inventario.
                 </td>
               </tr>
             )}

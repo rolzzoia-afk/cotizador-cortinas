@@ -703,3 +703,54 @@ describe('calcularPanos', () => {
     expect(panos[0].anchoCorteCm).toBe(146); // 150 − 4
   });
 });
+
+describe('buildOptimizerRows — el montaje de la VENTANA manda cuando el paño no trae el suyo', () => {
+  const cat = mkCat({ SC: { anchoRollo: 2.98 } });
+  const ventana = (variantePano?: string) =>
+    ({
+      id: 1,
+      ubicacion: 'L',
+      codInt: 'SC',
+      producto: 'p',
+      categoria: 'OSCURANTI_63mm',
+      alto: 2.3,
+      oscuridadVariante: 'EXTERNO',
+      modelo: MODELO_DESPIECE_STUB,
+      panos: [{ ancho: 1.45, alto: 2.3, ...(variantePano ? { oscuridadVariante: variantePano } : {}) }],
+    }) as unknown as VentanaItem;
+
+  it('paño SIN variante: hereda el EXTERNO de la ventana (antes caía a interno)', () => {
+    const rows = buildOptimizerRows([ventana()], cat);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(153.8, 2); // 145 + 15,8 − 6,4 − 0,6
+  });
+
+  it('la variante del PAÑO sigue mandando sobre la de la ventana', () => {
+    const rows = buildOptimizerRows([ventana('INTERNO')], cat);
+    expect(rows[0].anchoCorteTelaCm).toBeCloseTo(138.3, 2); // interno corta menos
+  });
+});
+
+// ── letras de paño >26 (bug OT 268-6: 88 cortinas de 2 m) ────────
+describe('asignarJuntoEnOrden — más de 26 paños', () => {
+  // 30 cortinas de 2 m en rollo de 2,98: ninguna comparte paño → 30 paños.
+  const cat = mkCat({ SC: { anchoRollo: 2.98 } });
+  const ventanas = Array.from({ length: 30 }, (_, i) => ({
+    id: i + 1,
+    ubicacion: 'L',
+    codInt: 'SC',
+    producto: 'p',
+    panos: [{ ancho: 2, alto: 2 }],
+  }));
+  const out = asignarJuntoEnOrden(buildOptimizerRows(ventanas as never, cat));
+
+  it('las letras NO dan la vuelta: después de la Z viene AA', () => {
+    expect(out[25].junto).toBe('Z');
+    expect(out[26].junto).toBe('AA'); // antes volvía a la 'A' del paño 1
+    expect(out[29].junto).toBe('AD');
+  });
+
+  it('30 paños con 30 letras distintas y numeración corrida', () => {
+    expect(new Set(out.map((r) => r.junto)).size).toBe(30);
+    expect(out.map((r) => r.numeroPano)).toEqual(Array.from({ length: 30 }, (_, i) => i + 1));
+  });
+});

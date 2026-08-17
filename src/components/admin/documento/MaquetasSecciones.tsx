@@ -51,7 +51,7 @@ function MaquetaDatosCliente() {
       <CampoMaqueta label="Región" valor="Metropolitana" />
       <CampoMaqueta label="Instalación" valor="Incluye instalación" tono="ok" />
       <CampoMaqueta label="Envío" valor="Gratis" tono="ok" />
-      <CampoMaqueta label="Tubo E78 (2,2–3,0 m)" valor="Desactivado (tubo E66)" tono="ok" />
+      <CampoMaqueta label="Tubo E39 (2,2–3,0 m)" valor="Desactivado (tubo E66)" tono="ok" />
     </section>
   );
 }

@@ -86,7 +86,7 @@ describe('derivación desde los valores de fábrica', () => {
     expect(opcionesTuberiaUI()).toEqual([
       'E02-TUBO 1.2 / Ø 38 mm',
       'E66 - TUBO (.40mm) - 2.5mm',
-      'E78 - TUBO 43MM(ESP1.2)(5.8)',
+      'E39 - TUBO .43 - ESP 1.2 (TUBO .45)',
       'E05 - TUBO Ø 45 mm',
       'E47 - TUBO Ø 63 mm',
       'E65 - TUBO (.63mm)',
@@ -100,13 +100,14 @@ describe('derivación desde los valores de fábrica', () => {
     expect(descripcionesTuberia()).toEqual({
       E02: 'E02-TUBO 1.2 / Ø 38 mm',
       E66: 'E66 - TUBO (.40mm) - 2.5mm',
+      // El de 45 mm (antes E78, mismo fierro). El E78 queda oculto y resuelve.
+      E39: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45)',
       E78: 'E78 - TUBO 43MM(ESP1.2)(5.8)',
       E05: 'E05 - TUBO Ø 45 mm',
       E47: 'E47 - TUBO Ø 63 mm',
       E65: 'E65 - TUBO (.63mm)',
-      // Tubos de la CATEGORÍA B: ocultos en el selector, resuelven como los demás.
+      // Tubo de 38 de la CATEGORÍA B: oculto en el selector, resuelve igual.
       E01: 'E01 - TUBO 0.8 / Ø 38 mm',
-      E39: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45) (GAMA B)',
     });
   });
 
@@ -125,7 +126,7 @@ describe('derivación desde los valores de fábrica', () => {
 
   it('los tubos que las reglas pueden pisar son E02/E66/E78/E65', () => {
     const auto = REGLAS_TUBERIA.tubos.filter((t) => t.autoPorAncho).map((t) => t.codigo);
-    expect(new Set(auto)).toEqual(new Set(['E02', 'E66', 'E78', 'E65']));
+    expect(new Set(auto)).toEqual(new Set(['E02', 'E66', 'E39', 'E65']));
   });
 
   it('derivarOpciones junta las cinco listas', () => {
@@ -150,10 +151,10 @@ describe('estados del catálogo', () => {
   it('un tubo opt-in solo aparece con el tubo E78 activado en la OT', () => {
     const r = clonar();
     r.tuberia.tubos = r.tuberia.tubos.map((t) =>
-      t.codigo === 'E78' ? { ...t, estado: 'opt_in' as const } : t,
+      t.codigo === 'E39' ? { ...t, estado: 'opt_in' as const } : t,
     );
-    expect(opcionesTuberiaUI(r.tuberia, false)).not.toContain('E78 - TUBO 43MM(ESP1.2)(5.8)');
-    expect(opcionesTuberiaUI(r.tuberia, true)).toContain('E78 - TUBO 43MM(ESP1.2)(5.8)');
+    expect(opcionesTuberiaUI(r.tuberia, false)).not.toContain('E39 - TUBO .43 - ESP 1.2 (TUBO .45)');
+    expect(opcionesTuberiaUI(r.tuberia, true)).toContain('E39 - TUBO .43 - ESP 1.2 (TUBO .45)');
   });
 
   it('un mecanismo oculto sale de la UI y queda en resolución', () => {
@@ -246,9 +247,9 @@ describe('normalizarReglasSeleccion', () => {
 
   it('re-numera las claves de codigoPorDiametro (el JSON las guarda como texto)', () => {
     const r = normalizarReglasSeleccion({
-      tuberia: { codigoPorDiametro: { '45': 'E78', '63': 'E47', '50': 'E90' } },
+      tuberia: { codigoPorDiametro: { '45': 'E39', '63': 'E47', '50': 'E90' } },
     });
-    expect(r.tuberia.codigoPorDiametro[45]).toBe('E78');
+    expect(r.tuberia.codigoPorDiametro[45]).toBe('E39');
     expect(r.tuberia.codigoPorDiametro[50]).toBe('E90');
   });
 

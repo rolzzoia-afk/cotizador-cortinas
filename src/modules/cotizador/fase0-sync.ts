@@ -18,6 +18,7 @@ import { categoriaEsDual } from '@/modules/descuentos/tipos';
 import { chipDualPorLadoColor } from '@/modules/descuentos/chips';
 import { codigoMotorDesdeAdicional, esAdicionalHubDomotica, manillaDesdeAdicional } from './insumosCortina';
 import { OPCIONES_MECANISMO_DUAL } from './fase2';
+import { esLineaB } from './lineaB';
 import type { CatalogoProductos, Pano, Ventana } from './types';
 
 // Clave de ubicación para el match de motor: sin espacios ni separadores, así
@@ -395,16 +396,23 @@ export function enriquecerPanoDesdeFase0(
       // Fase 1, que no tiene ese interruptor— y ese dato quedaba GUARDADO en el
       // paño, así que la pantalla, la etiqueta y el Excel de órdenes la pedían
       // sin tira. La cuadrada no lleva tira y sigue como estaba.
+      // CATEGORÍA B (2026-08-14): sus cenefas van SIEMPRE sin tira.
 
       const tipoCenefa = patch.cenefa ?? pano.cenefa;
 
+      const lineaB = esLineaB(pano, ventana.codInt, catalogo, ventana.categoria);
+
       patch.cenefaTira =
 
-        tipoCenefa === 'Ovalada'
+        lineaB
 
-          ? tiraCenefaOvalada(null, adicCenefa.conTira)
+          ? 'SIN TIRA'
 
-          : etiquetaConTira(adicCenefa.conTira);
+          : tipoCenefa === 'Ovalada'
+
+            ? tiraCenefaOvalada(null, adicCenefa.conTira)
+
+            : etiquetaConTira(adicCenefa.conTira);
 
     }
 

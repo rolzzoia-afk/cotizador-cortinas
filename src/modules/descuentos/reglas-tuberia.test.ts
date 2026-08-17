@@ -162,7 +162,8 @@ describe('canonizarChipTuberia', () => {
 // ── Cascada mecanismo → tubería ──────────────────────────────────────
 const E02 = DESCRIPCION_TUBERIA.E02;
 const E66 = DESCRIPCION_TUBERIA.E66;
-const E78 = DESCRIPCION_TUBERIA.E78;
+// El tubo de 45 mm: E39 desde 2026-08-14 (antes E78, mismo fierro).
+const E78 = DESCRIPCION_TUBERIA.E39;
 const E05 = DESCRIPCION_TUBERIA.E05;
 const E47 = DESCRIPCION_TUBERIA.E47;
 const E65 = DESCRIPCION_TUBERIA.E65;
@@ -171,7 +172,7 @@ const pletina0: ModeloDespiece = { ...soft38, diametro_tubo_mm: 0, codigos_tubo:
 describe('codigosTuberiaCompatibles', () => {
   it('38 → [E02, E66]; 45 → [E78, E05]; 63 → [E47, E65]; desconocido → []', () => {
     expect(codigosTuberiaCompatibles(38)).toEqual(['E02', 'E66']);
-    expect(codigosTuberiaCompatibles(45)).toEqual(['E78', 'E05']);
+    expect(codigosTuberiaCompatibles(45)).toEqual(['E39', 'E05']);
     expect(codigosTuberiaCompatibles(63)).toEqual(['E47', 'E65']);
     expect(codigosTuberiaCompatibles(50)).toEqual([]);
     expect(codigosTuberiaCompatibles(0)).toEqual([]);
@@ -202,8 +203,8 @@ const CHIP_OVALADA = 'OVALADA NEG [MEC 09]';
 
 describe('tubo 45 mm: E78 default, E05 histórico', () => {
   it('paño 45 mm nuevo (sin tubería guardada) → E78', () => {
-    expect(cod(tuberiaParaPano(2.5, roller45, '', OPCIONES_TUBERIA))).toBe('E78');
-    expect(cod(chipTuberiaPorAncho(roller45, 2.5, OPCIONES_TUBERIA))).toBe('E78');
+    expect(cod(tuberiaParaPano(2.5, roller45, '', OPCIONES_TUBERIA))).toBe('E39');
+    expect(cod(chipTuberiaPorAncho(roller45, 2.5, OPCIONES_TUBERIA))).toBe('E39');
   });
   it('OT vieja con E05 guardado → conserva E05 (no lo pisa)', () => {
     expect(cod(tuberiaParaPano(2.5, roller45, E05, OPCIONES_TUBERIA))).toBe('E05');
@@ -255,7 +256,7 @@ describe('cenefa ovalada: el diámetro sale del modelo/categoría, no de OVALADA
   it('corrige la tubería a E78 al elegir mecanismo OVALADA con modelo 45 mm', () => {
     expect(
       cod(tuberiaCorregidaPorMecanismo(CHIP_OVALADA, E02, 2.5, OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_45mm', roller45)),
-    ).toBe('E78');
+    ).toBe('E39');
   });
   it('modelo 45 mm con E05 ya compatible → null (no pisa el histórico)', () => {
     expect(
@@ -284,7 +285,7 @@ describe('cenefa ovalada: el diámetro sale del modelo/categoría, no de OVALADA
   it('categoría 45 mm + kit simple 38MM → corrige la tubería a E78', () => {
     expect(
       cod(tuberiaCorregidaPorMecanismo(KIT_38, E02, 2.5, OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_45mm', roller45)),
-    ).toBe('E78');
+    ).toBe('E39');
   });
   it('roller simple "ROL" (sin mm en categoría) + kit simple 38MM → sigue en 38 mm', () => {
     // La categoría sin mm no aporta diámetro → manda el chip explícito (38 mm).
@@ -295,16 +296,16 @@ describe('cenefa ovalada: el diámetro sale del modelo/categoría, no de OVALADA
 
   // Default (pre-selección) por categoría, aunque el modelo sea null o falte el ancho.
   it('default sin modelo pero categoría 45 mm → E78 (no espera al producto)', () => {
-    expect(cod(tuberiaParaPano(2.5, null, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_45mm'))).toBe('E78');
+    expect(cod(tuberiaParaPano(2.5, null, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_45mm'))).toBe('E39');
   });
   it('default con ancho 0 y categoría 45 mm → E78', () => {
-    expect(cod(tuberiaParaPano(0, roller45, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_45mm'))).toBe('E78');
+    expect(cod(tuberiaParaPano(0, roller45, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_45mm'))).toBe('E39');
   });
   it('codigoTuboPorAncho: el modelo real manda; la categoría decide sin modelo', () => {
     // El diámetro del MODELO gana (la banda 2,2–3,0 fuerza la fila 45 aunque la
     // categoría diga _38mm); la categoría con mm solo decide sin modelo cargado.
-    expect(codigoTuboPorAncho(roller45, 2.5, 'DUO_MANUAL_38mm')).toBe('E78');
-    expect(codigoTuboPorAncho({ ...ovalada38, diametro_tubo_mm: 0 }, 2.5, 'ROL_MANUAL_CENEFA_OVALADA_45mm')).toBe('E78');
+    expect(codigoTuboPorAncho(roller45, 2.5, 'DUO_MANUAL_38mm')).toBe('E39');
+    expect(codigoTuboPorAncho({ ...ovalada38, diametro_tubo_mm: 0 }, 2.5, 'ROL_MANUAL_CENEFA_OVALADA_45mm')).toBe('E39');
     expect(codigoTuboPorAncho(ovalada38, 2.5, 'ROL_MANUAL_CENEFA_OVALADA_38mm')).toBe('E66');
   });
 });
@@ -313,11 +314,11 @@ describe('cenefa ovalada: el diámetro sale del modelo/categoría, no de OVALADA
 // la fila 45 por modeloPorAncho, el tubo guardado de otra franja se corrige.
 describe('tubo de la banda 2,2–3,0 m (modelo 45 forzado)', () => {
   it('cortina que crece a la banda con E02/E66 guardado → E78', () => {
-    expect(cod(tuberiaParaPano(2.5, roller45, E02, OPCIONES_TUBERIA, 'ROL'))).toBe('E78');
-    expect(cod(tuberiaParaPano(2.5, roller45, E66, OPCIONES_TUBERIA, 'ROL'))).toBe('E78');
+    expect(cod(tuberiaParaPano(2.5, roller45, E02, OPCIONES_TUBERIA, 'ROL'))).toBe('E39');
+    expect(cod(tuberiaParaPano(2.5, roller45, E66, OPCIONES_TUBERIA, 'ROL'))).toBe('E39');
   });
   it('dúo manual 38 en banda (modelo 45): E66 guardado → E78 aunque la categoría diga 38', () => {
-    expect(cod(tuberiaParaPano(2.5, roller45, E66, OPCIONES_TUBERIA, 'DUO_MANUAL_38mm'))).toBe('E78');
+    expect(cod(tuberiaParaPano(2.5, roller45, E66, OPCIONES_TUBERIA, 'DUO_MANUAL_38mm'))).toBe('E39');
   });
   it('E05 guardado (manual/histórico) NO se pisa en la banda', () => {
     expect(cod(tuberiaParaPano(2.5, roller45, E05, OPCIONES_TUBERIA, 'ROL'))).toBe('E05');

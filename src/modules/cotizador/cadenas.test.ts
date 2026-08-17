@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
+  COD_PESO_AUTO,
+  codPesoAuto,
   esCadenaRoller,
   codCadenaVertical,
   colorCadenaVertical,
@@ -389,5 +391,17 @@ describe('reglas de cadena editables', () => {
       cadenas: [{ codigo: 'CADENA-X', largo: '3mts', color: 'BCO', estado: 'activo' }],
     };
     expect(esCadenaRoller('CADENA-X', reglas)).toBe(true);
+  });
+});
+
+describe('codPesoAuto — el peso de cadena por gama', () => {
+  it('gama A: PCA04 transparente (el de siempre)', () => {
+    expect(codPesoAuto(false)).toBe('PCA04');
+    expect(codPesoAuto(undefined)).toBe('PCA04');
+    expect(codPesoAuto(false)).toBe(COD_PESO_AUTO);
+  });
+
+  it('gama B: SIEMPRE PCA01 blanco, sea cual sea el color de accesorios', () => {
+    expect(codPesoAuto(true)).toBe('PCA01');
   });
 });
