@@ -1788,13 +1788,55 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   </tr>
                 );
               })}
-              {/* Botón agregar cortina */}
+              {/* Botón agregar cortina + categoría de todas de una vez */}
               <tr className="print:hidden">
                 <td colSpan={colSpanTotal} className="border-t border-border bg-card/40 px-2 py-2">
-                  <Button size="sm" variant="outline" className="gap-1"
-                    onClick={() => setFilas((p) => [...p, nuevaFila()])}>
-                    <Plus className="h-3.5 w-3.5" /> Agregar cortina
-                  </Button>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    <Button size="sm" variant="outline" className="gap-1"
+                      onClick={() => setFilas((p) => [...p, nuevaFila()])}>
+                      <Plus className="h-3.5 w-3.5" /> Agregar cortina
+                    </Button>
+                    {/* Con muchas cortinas, cambiar la categoría una por una es
+                        un suplicio: estos tres botones la fijan en TODAS las
+                        filas de una vez (mismo efecto que el distintivo A/B de
+                        cada fila). «Según tela» borra lo forzado y vuelve a la
+                        gama de la tela del catálogo. */}
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>Categoría de todas:</span>
+                      {(
+                        [
+                          { txt: 'A', lineaB: false, title: 'Fabricar TODAS las cortinas en la categoría A' },
+                          { txt: 'B', lineaB: true, title: 'Fabricar TODAS las cortinas en la categoría B (gama económica: kit B, tubo E01)' },
+                          { txt: 'Según tela', lineaB: undefined, title: 'Quitar lo forzado a mano: cada cortina vuelve a la gama de su tela en el catálogo' },
+                        ] as { txt: string; lineaB: boolean | undefined; title: string }[]
+                      ).map((op) => (
+                        <button
+                          key={op.txt}
+                          type="button"
+                          title={op.title}
+                          onClick={() => {
+                            const n = filas.filter((f) => f.codInt).length;
+                            setFilas((prev) => prev.map((f) => ({ ...f, lineaB: op.lineaB })));
+                            toast.success(
+                              op.lineaB === undefined
+                                ? `${n} ${n === 1 ? 'cortina vuelve' : 'cortinas vuelven'} a la categoría de su tela.`
+                                : `${n} ${n === 1 ? 'cortina' : 'cortinas'} a la categoría ${op.txt}.`,
+                            );
+                          }}
+                          className={cn(
+                            'rounded-md border px-2 py-0.5 font-mono text-xs font-bold transition-colors',
+                            op.lineaB === true
+                              ? 'border-amber-500/40 bg-amber-500/15 text-amber-400 hover:bg-amber-500/25'
+                              : op.lineaB === false
+                                ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
+                                : 'border-border text-muted-foreground hover:bg-muted',
+                          )}
+                        >
+                          {op.txt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </td>
               </tr>
               {/* Divisor ADICIONALES */}
