@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   REGLAS_PRECIOS_DEFAULT,
@@ -45,7 +46,7 @@ import { SistemasPreciosSection } from './SistemasPreciosSection';
 import { TelasArquetiposSection } from './TelasArquetiposSection';
 
 export function ReglasPreciosSection() {
-  const { empresaId } = useAuth();
+  const { empresaId, user } = useAuth();
   const confirmar = useConfirm();
   const { reglas, loading, refresh } = useReglasPrecios();
   const { parametros } = useParametrosCotizador();
@@ -74,6 +75,24 @@ export function ReglasPreciosSection() {
     for (const lineas of Object.values(draft.recetas)) for (const l of lineas) s.add(l.insumo);
     return s;
   }, [draft.recetas]);
+  /** Las familias que de verdad existen en el catálogo de la empresa. */
+  const familiasCatalogo = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of Object.values(catalogo)) {
+      const cod = (p?.cod || '').trim();
+      if (cod && esCortinaTipo(p?.tipo)) s.add(cod);
+    }
+    return [...s].sort((a, b) => a.localeCompare(b, 'es'));
+  }, [catalogo]);
+
+  // Cambiar de pestaña o cerrar con el borrador sucio se llevaba todo sin
+  // preguntar. El navegador solo deja avisar, no impedir.
+  useEffect(() => {
+    if (!dirty) return;
+    const avisar = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', avisar);
+    return () => window.removeEventListener('beforeunload', avisar);
+  }, [dirty]);
 
   const editar = (patch: Partial<ReglasPrecios>) => {
     setDraft((d) => ({ ...d, ...patch }));
@@ -108,7 +127,12 @@ export function ReglasPreciosSection() {
     if (!ok) return;
     setGuardando(true);
     try {
-      await respaldarReglasPrecios(empresaId, reglas, 'antes de editar los precios');
+      await respaldarReglasPrecios(
+        empresaId,
+        reglas,
+        'antes de editar los precios',
+        user?.email ?? undefined,
+      );
       await guardarReglasPrecios(empresaId, draft);
       await refresh();
       setDirty(false);
@@ -211,17 +235,33 @@ export function ReglasPreciosSection() {
               className="h-8 w-32 text-xs"
             />
           </label>
-          <p className="max-w-md text-[0.7rem] text-muted-foreground">
-            El ancho de respaldo se usa solo si la tela no tiene ancho de rollo cargado en ninguna
-            parte. Si aparece seguido en el probador, conviene revisar el catálogo de telas.
-          </p>
         </div>
+        <ul className="mt-2 ml-4 list-disc space-y-1 text-[0.7rem] text-muted-foreground">
+          <li>
+            <strong>Regalo por familia:</strong> se suma UNA vez a cada familia (no por cortina) y
+            entra al costo antes de repartirlo entre los metros cuadrados, así que se diluye en el
+            valor del m². Hoy está en {draft.regalo === 0 ? 'cero, o sea no se cobra nada' : 'un valor distinto de cero'}.
+          </li>
+          <li>
+            <strong>Ancho de rollo de respaldo:</strong> se usa solo si la tela no tiene ancho de
+            rollo cargado en ninguna parte. Si aparece seguido en el probador, conviene revisar el
+            catálogo de telas. Ojo: el optimizador de corte tiene su propio ancho por defecto
+            ({parametros.anchoRolloDefaultM} m) y son cosas distintas — este de acá replica el del
+            Excel de precios.
+          </li>
+          <li>
+            <strong>La tela extra por cortina</strong> ({parametros.extraAltoCm} cm) también mueve
+            todos los precios y se edita en el tab <em>Optimizador de tela → Parámetros de corte</em>,
+            no acá: es el mismo número con el que el taller corta.
+          </li>
+        </ul>
       </section>
 
       <ProbadorCotizacionSection reglas={draft} hayErrores={errores.length > 0} />
 
       <SistemasPreciosSection
         valor={draft.sistemas}
+        familiasCatalogo={familiasCatalogo}
         onChange={(sistemas) => editar({ sistemas })}
       />
 
@@ -242,6 +282,7 @@ export function ReglasPreciosSection() {
           usados={usados}
           recetas={draft.recetas}
           sistema={{ clave, nombre: s.nombre, familias: s.familias }}
+          precioEnGeneral={(cod) => draft.insumos[cod]?.valorMaximo}
           onChange={(insumos) =>
             editar({ sistemas: { ...draft.sistemas, [clave]: { ...s, insumos } } })
           }
@@ -254,6 +295,8 @@ export function ReglasPreciosSection() {
         insumos={draft.insumos}
         margenInsumo={parametros.margenInsumo}
         sistemas={draft.sistemas}
+        pasoLamaM={draft.telaVertical.pasoLamaM}
+        familiasCatalogo={familiasCatalogo}
         onChange={(recetas) => editar({ recetas })}
       />
 
@@ -281,7 +324,10 @@ export function ReglasPreciosSection() {
                   <div className="font-medium">
                     {new Date(r.fecha).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' })}
                   </div>
-                  <div className="text-muted-foreground">{r.motivo}</div>
+                  <div className="text-muted-foreground">
+                    {r.motivo}
+                    {r.autor ? ` · ${r.autor}` : ''}
+                  </div>
                 </div>
                 <Button
                   variant="ghost"

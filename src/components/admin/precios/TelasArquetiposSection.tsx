@@ -13,10 +13,10 @@ import type { CatalogoProductos } from '@/modules/cotizador/types';
 import {
   BASE_VERTICAL_DEFAULT,
   BASE_VERTICAL_PROPIA,
-  FAMILIAS_CON_RECETA,
   lamasPorPasada,
   type TelaVertical,
 } from '@/modules/cotizador/reglasPrecios';
+import { nombreFamilia } from './nombresFamilias';
 
 type Patch = {
   arquetipos?: Record<string, string>;
@@ -32,17 +32,6 @@ type Props = {
   onChange: (patch: Patch) => void;
 };
 
-const NOMBRE_FAMILIA: Record<string, string> = {
-  BLACKOUT_P: 'Blackout premium', BLACKOUT_D: 'Blackout delux', BLACKOUT_S: 'Blackout standard',
-  SCREEN_P: 'Screen premium', SCREEN_D: 'Screen delux', SCREEN_S: 'Screen standard',
-  DUOBK_P: 'Dúo blackout premium', DUOBK_D: 'Dúo blackout delux', DUOBK_S: 'Dúo blackout standard',
-  DUOPOLI_P: 'Dúo poliéster premium', DUOPOLI_D: 'Dúo poliéster delux', DUOPOLI_S: 'Dúo poliéster standard',
-  BEE_BK: 'Beeblack blackout', BEE_MOSQ: 'Beeblack mosquitero', BEE_TRAS: 'Beeblack traslúcida',
-  BLACKOUT_V_P: 'Vertical blackout premium', BLACKOUT_V_D: 'Vertical blackout delux',
-  BLACKOUT_V_S: 'Vertical blackout standard', SCREEN_V_P: 'Vertical screen premium',
-  SCREEN_V_D: 'Vertical screen delux', SCREEN_V_S: 'Vertical screen standard',
-};
-
 /** La tela más cara de una familia: la regla del Excel cuando no hay código fijo. */
 function maxDeFamilia(fam: string, catalogo: CatalogoProductos) {
   let codInt = '';
@@ -55,14 +44,27 @@ function maxDeFamilia(fam: string, catalogo: CatalogoProductos) {
   return { codInt, precio };
 }
 
+/**
+ * Lo que la app va a cobrar de verdad por metro en esta familia. Misma cascada
+ * que `precioMlPorCod` del motor: el código declarado si está en el catálogo
+ * con precio, y si no, la tela más cara de la familia. Se calcula acá y no se
+ * llama al motor porque esta tabla trabaja sobre el BORRADOR, que todavía no
+ * es un `ReglasPrecios` completo.
+ */
+function precioEfectivo(fam: string, codInt: string, catalogo: CatalogoProductos) {
+  const declarado = codInt.trim();
+  const pDeclarado = declarado ? Number(catalogo[declarado]?.precio) || 0 : 0;
+  if (pDeclarado > 0) return { precio: pDeclarado, manda: declarado, roto: '' };
+  const max = maxDeFamilia(fam, catalogo);
+  return { precio: max.precio, manda: max.codInt, roto: declarado };
+}
+
 function Tabla({
-  titulo, mapa, catalogo, permiteMaximo, onChange,
+  titulo, mapa, catalogo, onChange,
 }: {
   titulo: string;
   mapa: Record<string, string>;
   catalogo: CatalogoProductos;
-  /** Familias donde dejar el código vacío es una regla, no un olvido. */
-  permiteMaximo?: (fam: string) => boolean;
   onChange: (m: Record<string, string>) => void;
 }) {
   const claves = Object.keys(mapa).sort((a, b) => a.localeCompare(b, 'es'));
@@ -81,27 +83,33 @@ function Tabla({
           <tbody>
             {claves.map((fam) => {
               const codInt = mapa[fam];
-              const alMaximo = !codInt.trim() && !!permiteMaximo?.(fam);
-              const max = alMaximo ? maxDeFamilia(fam, catalogo) : null;
-              const precio = alMaximo ? max?.precio ?? 0 : Number(catalogo[codInt]?.precio) || 0;
+              const { precio, manda, roto } = precioEfectivo(fam, codInt, catalogo);
               return (
                 <tr key={fam} className="border-t">
                   <td className="px-2 py-1">
-                    {NOMBRE_FAMILIA[fam] ?? fam}
+                    {nombreFamilia(fam)}
                     <span className="ml-1.5 font-mono text-[0.65rem] text-muted-foreground">{fam}</span>
                   </td>
                   <td className="px-2 py-1">
                     <Input
                       value={codInt}
-                      placeholder={permiteMaximo?.(fam) ? 'la más cara' : undefined}
+                      placeholder="la más cara"
                       onChange={(e) => onChange({ ...mapa, [fam]: e.target.value.toUpperCase() })}
                       className="h-7 w-32 font-mono text-xs"
                     />
-                    {alMaximo && (
-                      <div className="mt-0.5 text-[0.65rem] text-muted-foreground">
-                        {max?.codInt ? `hoy manda ${max.codInt}` : 'ninguna tela de esta familia en el catálogo'}
+                    {/* Siempre se dice qué código manda: con el campo vacío es
+                        la regla del máximo, y con un código roto es el aviso de
+                        que lo escrito no se está usando. */}
+                    {roto ? (
+                      <div className="mt-0.5 flex items-center gap-1 text-[0.65rem] text-warning">
+                        <AlertTriangle className="h-3 w-3" />
+                        {manda ? `${roto} no está en el catálogo: manda ${manda}` : `${roto} no está en el catálogo`}
                       </div>
-                    )}
+                    ) : !codInt.trim() ? (
+                      <div className="mt-0.5 text-[0.65rem] text-muted-foreground">
+                        {manda ? `hoy manda ${manda}` : 'ninguna tela de esta familia en el catálogo'}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-2 py-1 text-right">
                     {precio > 0 ? (
@@ -109,7 +117,7 @@ function Tabla({
                     ) : (
                       <span className="inline-flex items-center gap-1 text-warning">
                         <AlertTriangle className="h-3 w-3" />
-                        no está en el catálogo
+                        sin precio
                       </span>
                     )}
                   </td>
@@ -174,6 +182,26 @@ function TelaVerticalControl({
         </span>
       </label>
 
+      {porLamas && (
+        <label className="mt-2 flex items-start gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={valor.minimoUnaPasada}
+            onChange={(e) => onChange({ telaVertical: { ...valor, minimoUnaPasada: e.target.checked } })}
+            className="mt-0.5"
+          />
+          <span>
+            <strong>Cobrar al menos una pasada completa por cortina</strong>
+            <span className="mt-1 block text-muted-foreground">
+              Con esto puesto, una cortina de hasta {cubre.toFixed(2)} m paga una pasada entera —lo
+              mismo que paga hoy—, y recién de ahí para arriba se cobra la fracción. Sin esto, las
+              verticales angostas bajan de precio: una de 2 m paga {((2 / valor.pasoLamaM) / porPasada * 100).toFixed(0)} % de
+              una pasada en vez del 100 %.
+            </span>
+          </span>
+        </label>
+      )}
+
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <label className="text-xs">
           <span className="mb-1 block text-muted-foreground">Ancho de la lama (m)</span>
@@ -211,6 +239,11 @@ function TelaVerticalControl({
           tela vertical del catálogo tienen cargado el ancho de los rollos de roller.
         </p>
       </div>
+      <p className="mt-2 text-[0.7rem] text-muted-foreground">
+        <strong>Cada cuánto se monta la lama</strong> manda las dos cuentas de la vertical: los
+        metros de tela y la ferretería de la receta (carritos, pesos y espaciadores, que van «suma
+        de anchos ÷ este número»). Cambiarlo mueve las dos a la vez.
+      </p>
     </div>
   );
 }
@@ -222,9 +255,13 @@ export function TelasArquetiposSection({
   catalogo,
   onChange,
 }: Props) {
-  const faltantes = [...FAMILIAS_CON_RECETA].filter(
-    (f) => !(Number(catalogo[arquetipos[f]]?.precio) > 0),
-  );
+  // Un código escrito que el catálogo no tiene: la app lo ignora y cobra la
+  // tela más cara de la familia. Se revisan las DOS tablas — antes solo se
+  // miraban las 12 roller, y una vertical rota pasaba sin decir nada.
+  const rotas = [
+    ...Object.entries(arquetipos),
+    ...Object.entries(baseVertical),
+  ].filter(([, cod]) => cod.trim() && !(Number(catalogo[cod.trim()]?.precio) > 0));
   return (
     <section className="rounded-lg border bg-card p-5">
       <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -246,15 +283,18 @@ export function TelasArquetiposSection({
         <strong>Dejar el código en blanco</strong> cobra <em>la tela más cara de la familia</em>,
         que es la fórmula original del Excel. Las familias beeblack vienen así; las roller y dúo no,
         porque en la planilla ese máximo se contaminaba con telas de otra familia y salía ~65 % más
-        caro. Se puede escribir un código para fijarlo, o borrarlo para volver al máximo.
+        caro. Se puede escribir un código para fijarlo, o borrarlo para volver al máximo. Lo mismo
+        vale si el código escrito no existe: la app cae al máximo igual, y la tabla lo avisa.
       </p>
 
       <TelaVerticalControl valor={telaVertical} onChange={onChange} />
-      {faltantes.length > 0 && (
+      {rotas.length > 0 && (
         <p className="mb-3 rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
-          {faltantes.length === 1 ? 'Una familia tiene' : `${faltantes.length} familias tienen`} un
-          código que no está en el catálogo de productos. Mientras siga así, esas cortinas se cobran
-          con la tela más cara de su familia, que puede ser bastante más que lo que corresponde.
+          {rotas.length === 1 ? 'Una familia apunta a un código' : `${rotas.length} familias apuntan a códigos`}{' '}
+          que no está{rotas.length === 1 ? '' : 'n'} en el catálogo de productos:{' '}
+          <span className="font-mono">{rotas.map(([, c]) => c).join(', ')}</span>. Mientras siga así,
+          esas cortinas se cobran con la tela más cara de su familia, que puede ser bastante más que
+          lo que corresponde.
         </p>
       )}
       <div className="grid gap-4 md:grid-cols-2">
@@ -262,7 +302,6 @@ export function TelasArquetiposSection({
           titulo="Roller, dúo y beeblack"
           mapa={arquetipos}
           catalogo={catalogo}
-          permiteMaximo={(fam) => !(FAMILIAS_CON_RECETA as readonly string[]).includes(fam)}
           onChange={(m) => onChange({ arquetipos: m })}
         />
         <Tabla titulo="Verticales" mapa={baseVertical} catalogo={catalogo} onChange={(m) => onChange({ baseVertical: m })} />

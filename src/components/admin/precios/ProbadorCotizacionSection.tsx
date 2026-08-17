@@ -14,18 +14,30 @@
 // aplicarlo.
 // ─────────────────────────────────────────────────────────────────────
 import { useMemo, useState } from 'react';
-import { FlaskConical, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, FlaskConical, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCLP } from '@/lib/formatters';
+import { PanelFamilia, m2, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
 import { useAnchoRollo, useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
-import { cotizarFase0, type ResultadoFamilia } from '@/modules/cotizador/motorFase0';
+import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
+import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { categoriasParaSelect } from '@/modules/descuentos/tiposCortina';
+import { cotizarFase0, textoInstalacion } from '@/modules/cotizador/motorFase0';
 import type { ReglasPrecios } from '@/modules/cotizador/reglasPrecios';
 
 type FilaPrueba = {
   id: string;
   codInt: string;
+  /**
+   * Categoría de cortina. Solo importa en oscuridad y beeblack, donde la tela
+   * se corta a otra medida según el montaje: sin ella no se puede reproducir el
+   * consumo real de esas cortinas. Vacía = se cotiza con el ancho nominal.
+   */
+  categoria: string;
   ancho: number;
   alto: number;
   cantidad: number;
@@ -35,146 +47,12 @@ type FilaPrueba = {
 const nuevaFila = (codInt = ''): FilaPrueba => ({
   id: Math.random().toString(36).slice(2),
   codInt,
+  categoria: '',
   ancho: 1.5,
   alto: 2.3,
   cantidad: 1,
   descuento: 0,
 });
-
-const m2 = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 2 });
-const mts = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 3 });
-
-function PanelFamilia({ f, lineas }: { f: ResultadoFamilia; lineas: { i: number; codInt: string; ancho: number; alto: number }[] }) {
-  const nombreCortina = (i: number) => {
-    const l = lineas[i];
-    return l ? `${l.codInt} ${m2(l.ancho)}×${m2(l.alto)}` : `cortina ${i + 1}`;
-  };
-  return (
-    <div className="rounded-md border">
-      <header className="flex flex-wrap items-baseline gap-2 border-b bg-muted/40 px-3 py-2">
-        <span className="text-xs font-semibold">{f.cod}</span>
-        <span className="text-xs text-muted-foreground">
-          {f.piezas} {f.piezas === 1 ? 'cortina' : 'cortinas'} · {m2(f.m2Total)} m²
-        </span>
-        {f.sistema && (
-          <span className="rounded bg-success/20 px-1.5 py-0.5 text-[0.65rem]">
-            sistema {f.sistema}: margen, mano de obra e instalación propios
-          </span>
-        )}
-        {!f.exacto && (
-          <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[0.65rem]">
-            sin receta propia: se usa la de respaldo
-          </span>
-        )}
-      </header>
-
-      <div className="grid gap-3 p-3 md:grid-cols-2">
-        <div>
-          <h4 className="mb-1 text-[0.7rem] font-semibold uppercase text-muted-foreground">
-            Tela — {mts(f.metrosTela)} m × {formatCLP(f.precioMl)}
-          </h4>
-          <p className="mb-1.5 text-[0.7rem] text-muted-foreground">
-            Precio por metro tomado de <span className="font-mono">{f.arquetipoCodInt || '—'}</span>.
-          </p>
-          {f.panos.length > 0 ? (
-            <table className="w-full text-[0.7rem]">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="py-0.5 text-left font-medium">Paño</th>
-                  <th className="py-0.5 text-left font-medium">Se cortan juntas</th>
-                  <th className="py-0.5 text-right font-medium">Alto que manda</th>
-                </tr>
-              </thead>
-              <tbody>
-                {f.panos.map((p) => (
-                  <tr key={p.letra} className="border-t">
-                    <td className="py-0.5 font-medium">{p.letra}</td>
-                    <td className="py-0.5">{p.cortinas.map(nombreCortina).join(' + ')}</td>
-                    <td className="py-0.5 text-right">{mts(p.alto)} m</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : f.lamas ? (
-            <p className="text-[0.7rem] text-muted-foreground">
-              {m2(f.lamas.total)} lamas en total, y de cada pasada del rollo salen{' '}
-              {f.lamas.porPasada} → {mts(f.metrosTela)} m de tela. Se cobra la fracción de pasada
-              que se usa, sin saltar al paño entero.
-            </p>
-          ) : (
-            <p className="text-[0.7rem] text-muted-foreground">
-              Las verticales no comparten paño: cada una paga paños enteros de su ancho de rollo,
-              como en la planilla.
-            </p>
-          )}
-          <p className="mt-1.5 text-xs font-medium">Tela: {formatCLP(f.costoTela)}</p>
-        </div>
-
-        <div>
-          <h4 className="mb-1 text-[0.7rem] font-semibold uppercase text-muted-foreground">Materiales</h4>
-          <div className="max-h-56 overflow-y-auto">
-            <table className="w-full text-[0.7rem]">
-              <thead className="sticky top-0 bg-card text-muted-foreground">
-                <tr>
-                  <th className="py-0.5 text-left font-medium">Insumo</th>
-                  <th className="py-0.5 text-left font-medium">Cuánto</th>
-                  <th className="py-0.5 text-right font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {f.materiales.map((l, i) => (
-                  <tr key={`${l.insumo}-${i}`} className="border-t">
-                    <td className="py-0.5">
-                      <span className="font-mono">{l.insumo}</span>
-                      {l.precio === 'costo' && (
-                        <span className="ml-1 text-[0.6rem] text-muted-foreground">a costo</span>
-                      )}
-                      {l.descripcion && (
-                        <div className="text-[0.6rem] text-muted-foreground">{l.descripcion}</div>
-                      )}
-                    </td>
-                    <td className="py-0.5 text-muted-foreground">
-                      {m2(l.cantidad)} — {l.regla}
-                    </td>
-                    <td className="py-0.5 text-right">{formatCLP(l.total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-1.5 text-xs font-medium">Materiales: {formatCLP(f.costoMateriales)}</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 border-t px-3 py-2 text-xs sm:grid-cols-3">
-        <span className="text-muted-foreground">Mano de obra</span>
-        <span className="text-right sm:text-left">{formatCLP(f.manoObra)}</span>
-        <span className="hidden sm:block" />
-        <span className="text-muted-foreground">Traslado</span>
-        <span className="text-right sm:text-left">{formatCLP(f.traslado)}</span>
-        <span className="hidden sm:block" />
-        {f.regalo > 0 && (
-          <>
-            <span className="text-muted-foreground">Regalo</span>
-            <span className="text-right sm:text-left">{formatCLP(f.regalo)}</span>
-            <span className="hidden sm:block" />
-          </>
-        )}
-        <span className="font-medium">Costo total</span>
-        <span className="text-right font-medium sm:text-left">{formatCLP(f.costoTotal)}</span>
-        <span className="hidden sm:block" />
-      </div>
-
-      <div className="border-t bg-success/10 px-3 py-2 text-xs">
-        <strong>Valor del m² = {formatCLP(f.precioM2)}</strong>{' '}
-        <span className="text-muted-foreground">
-          ({formatCLP(f.costoTotal)} ÷ {m2(f.m2Total)} m²). Cada cortina de esta familia se cobra a
-          este valor por sus metros cuadrados.
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export function ProbadorCotizacionSection({
   reglas,
@@ -186,12 +64,23 @@ export function ProbadorCotizacionSection({
   const { catalogo, loading } = useCatalogoProductos();
   const { anchoRollo } = useAnchoRollo();
   const { parametros } = useParametrosCotizador();
+  const { reglas: reglasSeleccion } = useReglasSeleccion();
+  const { formulas } = useFormulasFamilias();
   const [filas, setFilas] = useState<FilaPrueba[]>([nuevaFila()]);
+  const [region, setRegion] = useState(false);
+  const [sinInstalacion, setSinInstalacion] = useState(false);
+  const categorias = useMemo(
+    () => categoriasParaSelect(reglasSeleccion.tipos),
+    [reglasSeleccion.tipos],
+  );
 
+  // Solo telas de CORTINA: las mismas que Fase 1 deja elegir como cortina. Antes
+  // el filtro era una lista de códigos escrita a mano acá, distinta de la del
+  // motor, y dejaba entrar adicionales.
   const telas = useMemo(
     () =>
       Object.entries(catalogo)
-        .filter(([, p]) => Number(p?.precio) > 0 && !/^(ACCESORIO|INSTALACION|INST)$/i.test(String(p?.cod ?? '')))
+        .filter(([, p]) => Number(p?.precio) > 0 && esCortinaTipo(p?.tipo))
         .map(([codInt, p]) => ({ codInt, etiqueta: `${codInt} — ${p.producto ?? ''}`.slice(0, 52), cod: p.cod }))
         .sort((a, b) => a.codInt.localeCompare(b.codInt, 'es')),
     [catalogo],
@@ -204,16 +93,24 @@ export function ProbadorCotizacionSection({
       validas.map((f) => ({
         codInt: f.codInt, ancho: f.ancho, alto: f.alto,
         cantidad: f.cantidad, descuento: f.descuento / 100,
+        // Igual que Fase 1: en oscuridad y beeblack la tela se corta a otra
+        // medida según el montaje, que recién se sabe en Fase 2, así que se
+        // empaqueta con el PEOR caso. Sin categoría no aplica y devuelve
+        // undefined, o sea el ancho nominal.
+        anchoEmpaqueM: anchoEmpaquePeorCasoM(f.categoria, f.ancho, formulas, reglasSeleccion.tipos),
       })),
       catalogo,
       anchoRollo,
       [],
       parametros,
-      false,
-      false,
+      region,
+      sinInstalacion,
       reglas,
     );
-  }, [validas, catalogo, anchoRollo, parametros, reglas, hayErrores]);
+  }, [
+    validas, catalogo, anchoRollo, parametros, reglas, hayErrores,
+    region, sinInstalacion, formulas, reglasSeleccion.tipos,
+  ]);
 
   const editar = (id: string, patch: Partial<FilaPrueba>) =>
     setFilas((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
@@ -225,16 +122,34 @@ export function ProbadorCotizacionSection({
         <h2 className="text-sm font-semibold text-muted-foreground">Probar una cotización</h2>
       </header>
       <p className="mb-3 text-xs text-muted-foreground">
-        Arma una cotización de mentira y muestra de dónde sale cada peso. Usa lo que hay{' '}
-        <strong>en pantalla</strong>, incluso sin guardar, así se puede ver el efecto de un cambio
-        antes de aplicarlo. Calcula con la misma función que cotiza de verdad.
+        Arma una cotización de mentira y muestra de dónde sale cada peso. Calcula con la misma
+        función que cotiza de verdad, usando las <strong>reglas que hay en pantalla</strong> aunque
+        no estén guardadas, así se ve el efecto de un cambio antes de aplicarlo. La mano de obra, el
+        traslado, la instalación y el IVA salen de «Parámetros de cotización»{' '}
+        <strong>ya guardados</strong>: si los acabas de editar más abajo, guarda para verlos acá.
       </p>
+
+      <div className="mb-3 flex flex-wrap gap-4 text-xs">
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={region} onChange={(e) => setRegion(e.target.checked)} />
+          Cotización de región
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={sinInstalacion}
+            onChange={(e) => setSinInstalacion(e.target.checked)}
+          />
+          Sin instalación (el cliente retira)
+        </label>
+      </div>
 
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-xs">
           <thead className="bg-muted/60 text-muted-foreground">
             <tr>
               <th className="px-2 py-1.5 text-left font-medium">Tela</th>
+              <th className="px-2 py-1.5 text-left font-medium">Categoría</th>
               <th className="px-2 py-1.5 text-left font-medium">Ancho (m)</th>
               <th className="px-2 py-1.5 text-left font-medium">Alto (m)</th>
               <th className="px-2 py-1.5 text-left font-medium">Cant.</th>
@@ -254,6 +169,19 @@ export function ProbadorCotizacionSection({
                     <option value="">— elegir tela —</option>
                     {telas.map((t) => (
                       <option key={t.codInt} value={t.codInt}>{t.etiqueta}</option>
+                    ))}
+                  </select>
+                </td>
+                <td className="px-2 py-1">
+                  <select
+                    value={f.categoria}
+                    onChange={(e) => editar(f.id, { categoria: e.target.value })}
+                    className="h-7 w-44 rounded-md border border-input bg-background px-1 text-xs"
+                    title="Solo cambia el cálculo en oscuridad y beeblack, donde la tela se corta según el montaje"
+                  >
+                    <option value="">— sin categoría —</option>
+                    {categorias.map((c) => (
+                      <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
                 </td>
@@ -307,13 +235,23 @@ export function ProbadorCotizacionSection({
 
       {resultado && (
         <div className="mt-4 space-y-3">
+          {resultado.avisos.length > 0 && (
+            <div className="rounded-md border border-warning/40 bg-warning/10 p-2 text-xs">
+              <div className="mb-1 flex items-center gap-1.5 font-semibold">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                El motor no pudo resolver todo
+              </div>
+              <ul className="ml-4 list-disc space-y-0.5">
+                {resultado.avisos.map((a, i) => <li key={i}>{a.mensaje}</li>)}
+              </ul>
+            </div>
+          )}
+
           {resultado.familias.map((f) => (
             <PanelFamilia
               key={f.cod}
               f={f}
-              lineas={resultado.lineas
-                .map((l, i) => ({ i, codInt: l.codInt, ancho: l.ancho, alto: l.alto, cod: l.cod }))
-                .filter((l) => l.cod === f.cod)}
+              piezas={nombresDePiezas(resultado.lineas.filter((l) => l.cod === f.cod))}
             />
           ))}
 
@@ -352,24 +290,33 @@ export function ProbadorCotizacionSection({
           </div>
 
           <div className="ml-auto max-w-xs space-y-0.5 rounded-md border bg-card/40 p-3 text-xs">
-            {resultado.instalacion.total > 0 && (
+            {/* La fila de instalación se muestra SIEMPRE que haya cortinas
+                instalables: con total 0 hay que decir por qué es gratis, no
+                hacerla desaparecer. */}
+            {resultado.instalacion.cantidad > 0 && (
               <>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
-                    Instalación ({resultado.instalacion.cantidad} bajo el mínimo)
+                    Instalación ({textoInstalacion(resultado.instalacion, parametros.instalacionGratisMinCortinas)})
                   </span>
-                  <span>{formatCLP(resultado.instalacion.total)}</span>
+                  <span>
+                    {resultado.instalacion.total > 0
+                      ? formatCLP(resultado.instalacion.total)
+                      : resultado.instalacion.sinInstalacion
+                        ? '—'
+                        : 'GRATIS'}
+                  </span>
                 </div>
-                {/* Con dos sistemas en juego el precio por cortina no es uno solo. */}
-                {resultado.instalacion.partes.length > 1 &&
-                  resultado.instalacion.partes.map((p) => (
-                    <div key={p.sistema} className="flex justify-between pl-3 text-[0.7rem] text-muted-foreground">
-                      <span>
-                        {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
-                      </span>
-                      <span>{formatCLP(p.total)}</span>
-                    </div>
-                  ))}
+                {/* Los tramos: con dos sistemas en juego el precio por cortina
+                    no es uno solo (roller 17.500 vs beeblack 35.000). */}
+                {resultado.instalacion.partes.map((p) => (
+                  <div key={p.sistema} className="flex justify-between pl-3 text-[0.7rem] text-muted-foreground">
+                    <span>
+                      {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
+                    </span>
+                    <span>{formatCLP(p.total)}</span>
+                  </div>
+                ))}
               </>
             )}
             <div className="flex justify-between">

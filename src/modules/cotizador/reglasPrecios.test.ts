@@ -238,13 +238,17 @@ describe('explicarCantidad — la regla contada en castellano', () => {
     [{ tipo: 'sumaAltos', factor: 5 }, 'suma de los altos vendidos × 5'],
     [{ tipo: 'fijo', cantidad: 4 }, '4 por familia, sin importar cuántas cortinas'],
     [{ tipo: 'porCortinaCuadrado', factor: 2 }, 'cantidad de cortinas al cuadrado × 2'],
-    [{ tipo: 'lamas' }, 'lamas de la cortina: suma de anchos ÷ 0,8 × 10'],
+    [{ tipo: 'lamas' }, 'lamas de la cortina: suma de anchos ÷ 0,08 m (paso de lama)'],
   ];
   for (const [cantidad, esperado] of casos) {
     it(`${cantidad.tipo} → «${esperado}»`, () => {
       expect(explicarCantidad(cantidad)).toBe(esperado);
     });
   }
+
+  it('las lamas se explican con el paso vigente, no con el de fábrica', () => {
+    expect(explicarCantidad({ tipo: 'lamas' }, 0.1)).toContain('÷ 0,1 m');
+  });
 
   it('cada línea de cada receta de fábrica se puede explicar', () => {
     for (const lineas of Object.values(RECETAS_DEFAULT)) {
@@ -435,7 +439,70 @@ describe('tela de referencia vacía = la más cara de la familia', () => {
     expect(fijado.arquetipos.BEE_BK).toBe('BEE-BK');
     const vuelto = normalizarReglasPrecios({ arquetipos: { BEE_BK: '' } });
     expect(vuelto.arquetipos.BEE_BK).toBe('');
-    // En una familia cuyo default trae código, el vacío se sigue ignorando.
-    expect(normalizarReglasPrecios({ arquetipos: { BLACKOUT_P: '' } }).arquetipos.BLACKOUT_P).toBe('BK-P');
+  });
+
+  // Antes el vacío solo se respetaba donde el default ya era vacío, así que
+  // borrar el código de una roller o de una vertical era un no-op silencioso:
+  // se guardaba y al recargar reaparecía el valor anterior.
+  it('el vacío se guarda en CUALQUIER familia, aunque el default traiga código', () => {
+    expect(normalizarReglasPrecios({ arquetipos: { BLACKOUT_P: '' } }).arquetipos.BLACKOUT_P).toBe('');
+    expect(
+      normalizarReglasPrecios({ baseVertical: { BLACKOUT_V_D: '' } }).baseVertical.BLACKOUT_V_D,
+    ).toBe('');
+  });
+
+  it('vaciar una roller sí es un error de validación (ahí el vacío no es una regla)', () => {
+    const vacia = normalizarReglasPrecios({ arquetipos: { BLACKOUT_P: '' } });
+    expect(validarReglasPrecios(vacia).errores.some((e) => e.includes('BLACKOUT_P'))).toBe(true);
+  });
+});
+
+describe('validación de sistemas y verticales', () => {
+  it('dos sistemas con el mismo nombre son un error (se fundirían en la instalación)', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.sistemas.otro = { ...r.sistemas.beeblack, familias: ['OTRA_FAM'] };
+    const e = validarReglasPrecios(r).errores.join(' ');
+    expect(e).toContain('se llaman igual');
+  });
+
+  it('una familia en dos sistemas a la vez es un error', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.sistemas.otro = { ...r.sistemas.beeblack, nombre: 'Otro', familias: ['BEE_BK'] };
+    expect(validarReglasPrecios(r).errores.some((x) => x.includes('dos sistemas'))).toBe(true);
+  });
+
+  it('sacar un insumo de la tabla del sistema avisa que pasa a cobrar el precio general', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    delete r.sistemas.beeblack.insumos['PUB 01'];
+    const av = validarReglasPrecios(r).avisos.join(' ');
+    expect(av).toContain('PUB 01');
+    expect(av).toContain('valor general');
+    // Y NO es un error: la receta igual encuentra el precio global.
+    expect(validarReglasPrecios(r).errores.some((x) => x.includes('PUB 01'))).toBe(false);
+  });
+
+  it('una familia vertical sin base es un error', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    delete (r.baseVertical as Record<string, string>).SCREEN_V_P;
+    expect(validarReglasPrecios(r).errores.some((x) => x.includes('SCREEN_V_P'))).toBe(true);
+  });
+
+  it('cobrar por lamas con la tela del roller avisa (pero no bloquea)', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.telaVertical = { ...r.telaVertical, modo: 'lamas' };
+    const v = validarReglasPrecios(r);
+    expect(v.errores).toEqual([]);
+    expect(v.avisos.join(' ')).toContain('la tela del roller');
+  });
+
+  it('con la tela propia de cada vertical, el aviso desaparece', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.telaVertical = { ...r.telaVertical, modo: 'lamas' };
+    r.baseVertical = { ...BASE_VERTICAL_PROPIA };
+    expect(validarReglasPrecios(r).avisos.join(' ')).not.toContain('la tela del roller');
+  });
+
+  it('las reglas de fábrica no tienen errores ni avisos de sistema', () => {
+    expect(validarReglasPrecios(REGLAS_PRECIOS_DEFAULT).errores).toEqual([]);
   });
 });

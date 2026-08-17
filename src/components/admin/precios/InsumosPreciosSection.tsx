@@ -46,6 +46,11 @@ type Props = {
    * familias que ofrece el menú «usar en…».
    */
   sistema?: { clave: string; nombre: string; familias: string[] };
+  /**
+   * Solo con `sistema`: el precio que tiene ese código en la tabla GENERAL, que
+   * es el que se cobraría si se saca de acá. `undefined` = no está en la general.
+   */
+  precioEnGeneral?: (cod: string) => number | undefined;
 };
 
 type Alta = { cod: string; descripcion: string; valorMaximo: string };
@@ -66,6 +71,7 @@ export function InsumosPreciosSection({
   onChange,
   onUsarEnFamilia,
   sistema,
+  precioEnGeneral,
 }: Props) {
   const { empresaId } = useAuth();
   const confirmar = useConfirm();
@@ -135,10 +141,22 @@ export function InsumosPreciosSection({
     const esDeFabrica = sistema
       ? !!REGLAS_PRECIOS_DEFAULT.sistemas[sistema.clave]?.insumos[cod]
       : !!REGLAS_PRECIOS_DEFAULT.insumos[cod];
+    // Sacarlo de la tabla de un SISTEMA no lo deja sin precio si el código
+    // también está en la general: pasa a cobrarse a ese otro valor, en
+    // silencio. Es justo lo que hay que decir antes de borrarlo.
+    const precioGeneral = sistema ? precioEnGeneral?.(cod) : undefined;
     const partes = [`Se quita «${cod}» de la lista de precios.`];
-    if (enFamilias.length) {
+    if (enFamilias.length && precioGeneral && precioGeneral > 0) {
       partes.push(
-        `Lo usan ${enFamilias.length} recetas (${enFamilias.map(nombreFamilia).join(', ')}), ` +
+        `Lo usan ${enFamilias.length} receta${enFamilias.length === 1 ? '' : 's'} ` +
+          `(${enFamilias.map(nombreFamilia).join(', ')}). No van a quedar sin precio: pasan a ` +
+          `cobrarlo al valor GENERAL, ${formatCLP(Math.round(precioGeneral))} en vez de ` +
+          `${formatCLP(Math.round(valor[cod]?.valorMaximo ?? 0))}.`,
+      );
+    } else if (enFamilias.length) {
+      partes.push(
+        `Lo usan ${enFamilias.length} receta${enFamilias.length === 1 ? '' : 's'} ` +
+          `(${enFamilias.map(nombreFamilia).join(', ')}), ` +
           'así que quedarían sin precio y no se va a poder guardar hasta sacarlo de ahí también.',
       );
     }
@@ -246,11 +264,11 @@ export function InsumosPreciosSection({
 
       <p className="mb-3 text-xs text-muted-foreground">
         El <strong>valor máximo</strong> es lo que cuesta el material. El precio con el que se cobra
-        sale de dividirlo por el margen ({Math.round((1 - margenInsumo) * 100)} %), salvo las líneas
-        que la receta marca «a costo». Un insumo recién agregado no cambia ningún precio hasta que
-        entre en la receta de alguna familia. Las variantes de color o de proveedor de un mismo
-        material comparten precio: aparecen en la lista para poder cambiar una por otra, y por eso
-        muchas figuran «sin uso».
+        sale de <strong>dividirlo por {String(margenInsumo).replace('.', ',')}</strong> —o sea, un
+        margen del {Math.round((1 - margenInsumo) * 100)} %—, salvo las líneas que la receta marca
+        «a costo». Un insumo recién agregado no cambia ningún precio hasta que entre en la receta de
+        alguna familia. Las variantes de color o de proveedor de un mismo material comparten precio:
+        aparecen en la lista para poder cambiar una por otra, y por eso muchas figuran «sin uso».
       </p>
       {sistema ? (
         <p className="mb-3 text-xs text-muted-foreground">
@@ -263,7 +281,7 @@ export function InsumosPreciosSection({
         <p className="mb-3 text-xs text-muted-foreground">
           La <strong>mano de obra</strong>, la <strong>instalación</strong> y el{' '}
           <strong>traslado</strong> también son insumos en la planilla, pero acá se editan más
-          abajo, en «Parámetros del cotizador»: el cálculo los toma de ahí.
+          abajo, en «Parámetros de cotización»: el cálculo los toma de ahí.
         </p>
       )}
 

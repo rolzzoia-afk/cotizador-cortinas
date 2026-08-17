@@ -31,11 +31,12 @@ export const esCortinaTipo = (tipo: string | undefined): boolean =>
 /**
  * De dónde salió el precio por metro de la familia, en el orden que usa el
  * motor: la tela base del roller equivalente (verticales), la tela de
- * referencia de la familia, o —si no hay ninguna— la tela MÁS CARA de la
- * familia. Este último caso es el riesgoso: basta que entre un código ajeno con
- * ese mismo COD para que suba el precio de todas.
+ * referencia de la familia, o —si ninguna de las dos está en el catálogo con
+ * precio— la tela MÁS CARA de la familia. Este último caso es el riesgoso:
+ * basta que entre un código ajeno con ese mismo COD para que suba el precio de
+ * todas. `sinPrecio` es peor: ninguna tela de la familia tiene precio.
  */
-export type OrigenPrecio = 'baseVertical' | 'arquetipo' | 'maxFamilia';
+export type OrigenPrecio = 'baseVertical' | 'arquetipo' | 'maxFamilia' | 'sinPrecio';
 
 export type FlujoProducto = {
   entra: 'cortina' | 'adicional';
@@ -51,6 +52,11 @@ export type FlujoProducto = {
   telaReferencia: string;
   precioMl: number;
   origenPrecio: OrigenPrecio;
+  /**
+   * La tela de referencia que alguien declaró en Admin y que el catálogo no
+   * tiene (o vale 0), así que no se está usando. Vacío = todo en orden.
+   */
+  referenciaDeclaradaRota: string;
 };
 
 // El motor deduce vertical y dúo así (motorFase0.ts, dentro de cotizarFase0).
@@ -75,12 +81,16 @@ export function flujoDeProducto(
   const esVertical = esVerticalDe(cod, nombre);
   const entra = esCortinaTipo(producto.tipo) ? 'cortina' : 'adicional';
 
-  const { precio, arquetipo } = precioMlPorCod(cod, catalogo, reglas);
-  const origenPrecio: OrigenPrecio = reglas.baseVertical[cod]
-    ? 'baseVertical'
-    : reglas.arquetipos[cod] && arquetipo === reglas.arquetipos[cod]
-      ? 'arquetipo'
-      : 'maxFamilia';
+  // El motivo lo decide el propio motor: acá no se vuelve a deducir para que no
+  // pueda decir una cosa distinta de la que se cobra.
+  const { precio, arquetipo, motivo } = precioMlPorCod(cod, catalogo, reglas);
+  const origenPrecio: OrigenPrecio =
+    motivo === 'base' ? 'baseVertical' : motivo === 'arquetipo' ? 'arquetipo' : motivo === 'maximo' ? 'maxFamilia' : 'sinPrecio';
+  // Con el precio ya resuelto por el máximo, la referencia declarada que no se
+  // usó es justamente la que está rota.
+  const declarada = (reglas.baseVertical[cod] || reglas.arquetipos[cod] || '').trim();
+  const referenciaDeclaradaRota =
+    declarada && arquetipo !== declarada ? declarada : '';
 
   const clave = entra === 'cortina' ? claveReceta(cod, esVertical, reglas.recetas) : null;
 
@@ -94,6 +104,7 @@ export function flujoDeProducto(
     telaReferencia: arquetipo,
     precioMl: precio,
     origenPrecio,
+    referenciaDeclaradaRota,
   };
 }
 
@@ -106,8 +117,12 @@ export type AvisosCatalogo = {
   familiasSinReferencia: { cod: string; telas: number; telaMasCara: string }[];
   /** Telas de cortina sin ancho de rollo: cotizan con el ancho de respaldo. */
   telasSinAncho: string[];
-  /** Telas de referencia que apuntan a un COD_INT que no está o vale 0. */
-  referenciasRotas: { cod: string; codInt: string }[];
+  /**
+   * Telas de referencia que apuntan a un COD_INT que no está o vale 0. El
+   * motor cae al máximo de la familia: `mandaAhora` es el código que terminó
+   * fijando el precio ('' si la familia entera está sin precio).
+   */
+  referenciasRotas: { cod: string; codInt: string; mandaAhora: string }[];
   /**
    * Familias que solo se distinguen por mayúsculas (BLACKOUT_p vs BLACKOUT_P).
    * El Excel las trata como una sola; acá se cobran por separado, y la de la
@@ -156,19 +171,24 @@ export function avisosCatalogo(
     if (vistas.has(f.cod)) continue;
     vistas.add(f.cod);
 
-    // Una vertical sin su roller equivalente en el catálogo cotiza la tela a $0
-    // y no cae al máximo: el motor no tiene respaldo para ese caso.
-    if (f.origenPrecio === 'baseVertical' && !(f.precioMl > 0)) {
-      referenciasRotas.push({ cod: f.cod, codInt: f.telaReferencia });
+    // Tela de referencia declarada que el catálogo no tiene (o vale 0): el
+    // motor la ignora y cobra la más cara de la familia, así que el precio
+    // dejó de ser el que alguien eligió.
+    if (f.referenciaDeclaradaRota) {
+      referenciasRotas.push({
+        cod: f.cod,
+        codInt: f.referenciaDeclaradaRota,
+        mandaAhora: f.telaReferencia,
+      });
       continue;
     }
 
-    if (f.origenPrecio === 'maxFamilia') {
+    if (f.origenPrecio === 'maxFamilia' || f.origenPrecio === 'sinPrecio') {
       const declarada = reglas.arquetipos[f.cod];
       if (declarada) {
         // Hay tela de referencia declarada, pero el catálogo no la tiene (o vale 0)
         // y por eso cayó al máximo.
-        referenciasRotas.push({ cod: f.cod, codInt: declarada });
+        referenciasRotas.push({ cod: f.cod, codInt: declarada, mandaAhora: f.telaReferencia });
       } else {
         const telas = Object.values(catalogo).filter(
           (q) => q && (q.cod || '') === f.cod && esCortinaTipo(q.tipo),

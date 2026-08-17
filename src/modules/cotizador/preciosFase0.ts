@@ -40,8 +40,8 @@ export const MANO_OBRA_DUO = 25000;
 export const MANO_OBRA_VERTICAL = 62000;
 // Traslado: se cobra 1 por cada TIPO de cortina cotizado (roller, dúo, screen, vertical…).
 export const TRASLADO = 55000; // 55.000,61 en el Excel
-// Publicidad / etiqueta por cortina (incluido en la lista de materiales).
-export const PUBLICIDAD = 1400;
+// La publicidad no está acá: es un insumo más de la receta (`PUB 01`), y su
+// precio sale de la lista editable como cualquier otro.
 
 // ── Precios de insumos (VALOR MAXIMO del Excel) ───────────────────────
 // Se usan para la lista de materiales por familia. Precio de venta = valor / 0,65.
@@ -131,6 +131,8 @@ export type ParametrosCotizador = {
   instalacionDescuentoRM: number;
   /** Descuento de instalación para región (0–1; editable, 0 = se cobra full). */
   instalacionDescuentoRegion: number;
+  /** Parte del total que se pide como abono para empezar a fabricar (0–1). */
+  abonoInicial: number;
 } & ParametrosCorte; // parámetros de corte/dimensionado (tab del Optimizador de Tela)
 
 export const PARAMETROS_DEFAULT: ParametrosCotizador = {
@@ -148,6 +150,7 @@ export const PARAMETROS_DEFAULT: ParametrosCotizador = {
   instalacionGratisMinCortinas: 4,
   instalacionDescuentoRM: 1, // 100% = gratis
   instalacionDescuentoRegion: 0, // 0% = se cobra (editable por empresa)
+  abonoInicial: 0.5, // la mitad, como siempre
   ...PARAMETROS_CORTE_DEFAULT,
 };
 
@@ -183,6 +186,13 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
   out.instalacionDescuentoRM = Math.min(1, Math.max(0, out.instalacionDescuentoRM));
   out.instalacionDescuentoRegion = Math.min(1, Math.max(0, out.instalacionDescuentoRegion));
   out.instalacionGratisMinCortinas = Math.max(0, Math.round(out.instalacionGratisMinCortinas));
+  // Abono en [0,1]; 0 dejaría el documento pidiendo $0 de anticipo.
+  out.abonoInicial = out.abonoInicial > 0 ? Math.min(1, out.abonoInicial) : PARAMETROS_DEFAULT.abonoInicial;
+  // Un IVA o un recargo desbocados salen de un dedo, no de una decisión: un
+  // 19 tecleado donde iba 0,19 multiplicaría el total por 20.
+  if (out.iva > 1) out.iva = PARAMETROS_DEFAULT.iva;
+  if (out.recargoTarjeta > 1) out.recargoTarjeta = PARAMETROS_DEFAULT.recargoTarjeta;
+  if (out.recargoTarjetaFlow > 1) out.recargoTarjetaFlow = PARAMETROS_DEFAULT.recargoTarjetaFlow;
   // Corte: un rollo de ancho 0 rompería el empaquetado.
   if (out.anchoRolloDefaultM <= 0) out.anchoRolloDefaultM = PARAMETROS_DEFAULT.anchoRolloDefaultM;
   if (out.anchoRolloPlanCm <= 2 * out.margenRolloCm) {
@@ -199,15 +209,8 @@ export function recargoTarjetaEfectivo(p: ParametrosCotizador): number {
 }
 
 // ── Tipo de resultado del motor de precio ─────────────────────────────
-export type LineaPrecio = {
-  codInt: string;
-  ancho: number; // m
-  alto: number; // m
-  cantidad: number;
-  m2: number; // alto_real × ancho
-  precioUnit: number; // m² × precio/m² combinado + instalación
-  total: number; // precioUnit × cantidad − descuento
-};
+// El resultado por línea vive en `motorFase0.ts` (`LineaResultado`), que es lo
+// que el motor devuelve de verdad.
 
 export type TotalesCotizacion = {
   subtotalNeto: number; // suma de líneas (sin IVA)
@@ -216,7 +219,9 @@ export type TotalesCotizacion = {
   subtotalTarjeta: number; // subtotal × 1,138
   ivaTarjeta: number;
   totalTarjeta: number;
-  abono50: number; // 50% para iniciar fabricación
+  /** Abono para iniciar fabricación. El nombre dice 50 por historia: la parte
+   *  la decide `abonoInicial`, que es editable. */
+  abono50: number;
 };
 
 // Totales finales a partir del subtotal neto (suma de líneas).
@@ -224,10 +229,11 @@ export type TotalesCotizacion = {
 // (módulo parametros.ts); sin opts se usan los defaults históricos.
 export function calcularTotales(
   subtotalNeto: number,
-  opts?: { iva?: number; recargoTarjeta?: number },
+  opts?: { iva?: number; recargoTarjeta?: number; abonoInicial?: number },
 ): TotalesCotizacion {
   const iva = opts?.iva ?? IVA;
   const recargo = opts?.recargoTarjeta ?? RECARGO_TARJETA;
+  const abono = opts?.abonoInicial ?? PARAMETROS_DEFAULT.abonoInicial;
   const ivaTransferencia = subtotalNeto * iva;
   const totalTransferencia = subtotalNeto + ivaTransferencia;
   const subtotalTarjeta = subtotalNeto * (1 + recargo);
@@ -240,12 +246,6 @@ export function calcularTotales(
     subtotalTarjeta,
     ivaTarjeta,
     totalTarjeta,
-    abono50: totalTransferencia / 2,
+    abono50: totalTransferencia * abono,
   };
-}
-
-// Precio de venta de un insumo a partir de su VALOR MAXIMO.
-export function precioVentaInsumo(codInt: string, margenInsumo: number = MARGEN_INSUMO): number {
-  const v = INSUMO_VALOR_MAXIMO[codInt];
-  return v ? v / margenInsumo : 0;
 }

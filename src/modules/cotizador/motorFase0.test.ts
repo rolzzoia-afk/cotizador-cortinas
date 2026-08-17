@@ -5,6 +5,7 @@ import {
   metrosTelaPorPanos,
   metrosTelaVertical,
   metrosTelaVerticalPorLamas,
+  textoInstalacion,
 } from './motorFase0';
 import { PARAMETROS_DEFAULT } from './preciosFase0';
 import {
@@ -107,7 +108,8 @@ describe('motorFase0 — armado de paños', () => {
 });
 
 describe('motorFase0 — tela vertical cobrada por lamas', () => {
-  const LAMAS: TelaVertical = { ...TELA_VERTICAL_DEFAULT, modo: 'lamas' };
+  // Fracción pura: sin el piso de una pasada, para poder medir la fórmula sola.
+  const LAMAS: TelaVertical = { ...TELA_VERTICAL_DEFAULT, modo: 'lamas', minimoUnaPasada: false };
   // Rollo 2,95 ÷ lama 0,089 = 33,1 → 33 lamas por pasada.
   const POR_PASADA = 33;
 
@@ -166,8 +168,66 @@ describe('motorFase0 — tela vertical cobrada por lamas', () => {
     expect(panos.familias[0].lamas).toBeUndefined();
     // Por lamas: 31,25 lamas ÷ 33 × 2,25 m.
     expect(lamas.familias[0].metrosTela).toBeCloseTo((31.25 / POR_PASADA) * 2.25, 4);
-    expect(lamas.familias[0].lamas).toEqual({ total: 31.25, porPasada: POR_PASADA });
+    expect(lamas.familias[0].lamas).toEqual({ total: 31.25, porPasada: POR_PASADA, minimoUnaPasada: false });
     expect(lamas.familias[0].costoTela).toBeLessThan(panos.familias[0].costoTela);
+  });
+
+  // El piso de una pasada es lo que hace que estrenar el cobro por lamas no le
+  // baje el precio a nadie: bajo 2,64 m se cobra igual que hoy, y de ahí para
+  // arriba se cobra la fracción en vez del salto al doble.
+  describe('mínimo de una pasada', () => {
+    const CON_MINIMO: TelaVertical = { ...TELA_VERTICAL_DEFAULT, modo: 'lamas', minimoUnaPasada: true };
+    const m = (ancho: number, tv: TelaVertical) =>
+      metrosTelaVerticalPorLamas([{ ancho, altoReal: 2.25 }], tv);
+
+    it('viene puesto de fábrica', () => {
+      expect(TELA_VERTICAL_DEFAULT.minimoUnaPasada).toBe(true);
+    });
+
+    it('una cortina angosta paga la pasada entera, igual que hoy por paños', () => {
+      expect(m(2, CON_MINIMO)).toBeCloseTo(2.25, 4);
+      expect(m(2, CON_MINIMO)).toBeCloseTo(metrosTelaVertical([{ ancho: 2, altoReal: 2.25 }], 2.95), 4);
+      // Sin el mínimo pagaría 25/33 de pasada.
+      expect(m(2, LAMAS)).toBeCloseTo((25 / POR_PASADA) * 2.25, 4);
+    });
+
+    it('justo en el borde de la pasada (33 lamas = 2,64 m) los dos modos coinciden', () => {
+      expect(m(2.64, CON_MINIMO)).toBeCloseTo(2.25, 4);
+      expect(m(2.64, LAMAS)).toBeCloseTo(2.25, 4);
+    });
+
+    it('sobre una pasada cobra la fracción, no el doble', () => {
+      // 3,00 m = 37,5 lamas = 1,136 pasadas → 2,557 m.
+      expect(m(3.0, CON_MINIMO)).toBeCloseTo((37.5 / POR_PASADA) * 2.25, 4);
+      // Por paños esa misma cortina cruza el rollo de 2,95 y paga el DOBLE.
+      expect(metrosTelaVertical([{ ancho: 3.0, altoReal: 2.25 }], 2.95)).toBeCloseTo(4.5, 4);
+    });
+
+    it('nunca cobra menos de una pasada, por angosta que sea la cortina', () => {
+      for (const ancho of [0.4, 0.8, 1.5, 2.0, 2.4, 2.64]) {
+        expect(m(ancho, CON_MINIMO)).toBeCloseTo(2.25, 4);
+      }
+    });
+
+    // Ojo con esta asimetría, que es la parte honesta del cambio: una pasada
+    // cubre 33 lamas = 2,64 m de cortina, pero por paños una cortina entra
+    // entera mientras quepa en el ANCHO DEL ROLLO del código (2,48 · 2,98…).
+    // Entre esos dos números el cobro por lamas sale algo más caro que hoy.
+    it('entre 2,64 m y el ancho del rollo cobra un poco MÁS que por paños', () => {
+      // Rollo 2,98 (el más común del catálogo): 2,80 m entra en un paño.
+      expect(metrosTelaVertical([{ ancho: 2.8, altoReal: 2.25 }], 2.98)).toBeCloseTo(2.25, 4);
+      // Por lamas son 35 lamas = 1,06 pasadas.
+      expect(m(2.8, CON_MINIMO)).toBeCloseTo((35 / POR_PASADA) * 2.25, 4);
+      expect(m(2.8, CON_MINIMO)).toBeGreaterThan(2.25);
+    });
+
+    it('con el rollo angosto del catálogo (2,48) el cobro por lamas es más barato en todo el tramo', () => {
+      for (const ancho of [2.5, 2.64, 2.9, 3.5]) {
+        expect(m(ancho, CON_MINIMO)).toBeLessThan(
+          metrosTelaVertical([{ ancho, altoReal: 2.25 }], 2.48),
+        );
+      }
+    });
   });
 });
 
@@ -785,5 +845,202 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.lineas[0].instalacionEmbebida).toBe(0);
     expect(r.instalacion.total).toBe(0);
     expect(r.instalacion.partes).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Lo que pasa cuando los datos NO están bien: una cotización nunca debe
+// cobrar un número inventado en silencio.
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — datos incompletos', () => {
+  const CAT_MIN: CatalogoProductos = {
+    'BK 09': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 27176 },
+    'BK-D': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 31000 },
+  };
+
+  it('una tela que no está en el catálogo se cotiza en $0 y avisa (antes cobraba $17.500)', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'NO-EXISTE', ancho: 1.5, alto: 2, cantidad: 1 }],
+      CAT_MIN, {},
+    );
+    expect(r.lineas[0].valorUnit).toBe(0);
+    expect(r.lineas[0].instalacionEmbebida).toBe(0);
+    expect(r.lineas[0].total).toBe(0);
+    expect(r.subtotalNeto).toBe(0);
+    expect(r.avisos).toHaveLength(1);
+    expect(r.avisos[0]).toMatchObject({ tipo: 'catalogo', codigo: 'NO-EXISTE' });
+  });
+
+  it('el aviso sale UNA vez aunque el código se repita en varias filas', () => {
+    const r = cotizarFase0(
+      [
+        { codInt: 'NO-EXISTE', ancho: 1.5, alto: 2, cantidad: 1 },
+        { codInt: 'NO-EXISTE', ancho: 1.2, alto: 2, cantidad: 1 },
+      ],
+      CAT_MIN, {},
+    );
+    expect(r.avisos).toHaveLength(1);
+  });
+
+  it('una cotización sana no trae ningún aviso', () => {
+    const r = cotizarFase0([{ codInt: 'BK 09', ancho: 1.5, alto: 2, cantidad: 1 }], CAT_MIN, {});
+    expect(r.avisos).toEqual([]);
+  });
+
+  it('con la tela de referencia rota, la familia cae al MÁXIMO en vez de cobrar la tela gratis', () => {
+    // Sin BK-D en el catálogo, el arquetipo de BLACKOUT_D no resuelve.
+    const sinArquetipo: CatalogoProductos = { 'BK 09': CAT_MIN['BK 09'] };
+    const r = cotizarFase0([{ codInt: 'BK 09', ancho: 1.5, alto: 2, cantidad: 1 }], sinArquetipo, {});
+    expect(r.familias[0].precioMl).toBe(27176);
+    expect(r.familias[0].arquetipoCodInt).toBe('BK 09');
+    expect(r.avisos).toEqual([]);
+  });
+
+  it('una familia donde ninguna tela tiene precio avisa en vez de cobrar $0 callada', () => {
+    const gratis: CatalogoProductos = {
+      'X 01': { cod: 'FAM_X', producto: 'ROLLER X', tipo: 'PREMIUM', descripcion: '', precio: 0 },
+    };
+    const r = cotizarFase0([{ codInt: 'X 01', ancho: 1.5, alto: 2, cantidad: 1 }], gratis, {});
+    expect(r.familias[0].costoTela).toBe(0);
+    expect(r.avisos.some((a) => a.tipo === 'tela' && a.codigo === 'FAM_X')).toBe(true);
+  });
+
+  it('el precio de la familia NO depende del orden de las filas', () => {
+    const cat: CatalogoProductos = {
+      'BK 09': CAT_MIN['BK 09'],
+      'BK 10': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 23782 },
+    };
+    const a = cotizarFase0(
+      [
+        { codInt: 'BK 10', ancho: 1.5, alto: 2, cantidad: 1 },
+        { codInt: 'BK 09', ancho: 1.5, alto: 2, cantidad: 1 },
+      ],
+      cat, {},
+    );
+    const b = cotizarFase0(
+      [
+        { codInt: 'BK 09', ancho: 1.5, alto: 2, cantidad: 1 },
+        { codInt: 'BK 10', ancho: 1.5, alto: 2, cantidad: 1 },
+      ],
+      cat, {},
+    );
+    expect(a.familias[0].precioMl).toBe(b.familias[0].precioMl);
+    expect(a.subtotalNeto).toBeCloseTo(b.subtotalNeto, 6);
+  });
+
+  it('un ancho de rollo guardado en 0 cae al de respaldo y no manda cada pieza a su paño', () => {
+    const filas = [
+      { codInt: 'BK 09', ancho: 1.0, alto: 2, cantidad: 1 },
+      { codInt: 'BK 09', ancho: 1.0, alto: 2, cantidad: 1 },
+    ];
+    const cero = cotizarFase0(filas, CAT_MIN, { 'BK 09': 0 });
+    const sinDato = cotizarFase0(filas, CAT_MIN, {});
+    // Respaldo 2,45: las dos cortinas de 1 m comparten paño.
+    expect(cero.familias[0].panos).toHaveLength(1);
+    expect(cero.familias[0].metrosTela).toBeCloseTo(sinDato.familias[0].metrosTela, 6);
+  });
+});
+
+describe('motorFase0 — el paso de lama gobierna tela y ferretería juntas', () => {
+  const CAT_V: CatalogoProductos = {
+    'BK-V-P': { cod: 'BLACKOUT_V_P', producto: 'CORTINA VERTICAL BLACKOUT PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 29231 },
+  };
+  const cotizar = (pasoLamaM: number) =>
+    cotizarFase0(
+      [{ codInt: 'BK-V-P', ancho: 2.4, alto: 2, cantidad: 1 }],
+      CAT_V, { 'BK-V-P': 2.45 }, [], PARAMETROS_DEFAULT, false, false,
+      {
+        ...REGLAS_PRECIOS_DEFAULT,
+        baseVertical: { ...REGLAS_PRECIOS_DEFAULT.baseVertical, BLACKOUT_V_P: 'BK-V-P' },
+        telaVertical: { ...TELA_VERTICAL_DEFAULT, modo: 'lamas', minimoUnaPasada: false, pasoLamaM },
+      },
+    );
+
+  // El `÷ 0,8 × 10` viejo era el paso 0,08 escrito de otra forma: con el paso
+  // de fábrica el número no puede cambiar.
+  it('con el paso de fábrica, la ferretería da lo mismo que la fórmula vieja', () => {
+    const lamas = cotizar(0.08).familias[0].materiales.find((l) => l.insumo === 'VER 02');
+    expect(lamas?.cantidad).toBeCloseTo((2.4 / 0.8) * 10, 6);
+  });
+
+  it('cambiar el paso mueve la tela Y los carritos en la misma proporción', () => {
+    const a = cotizar(0.08).familias[0];
+    const b = cotizar(0.1).familias[0];
+    const carritos = (f: typeof a) => f.materiales.find((l) => l.insumo === 'VER 02')?.cantidad ?? 0;
+    // Con lamas más separadas se necesitan menos: 2,4/0,1 = 24 en vez de 30.
+    expect(carritos(b)).toBeCloseTo(24, 6);
+    expect(carritos(b) / carritos(a)).toBeCloseTo(0.8, 6);
+    expect(b.metrosTela / a.metrosTela).toBeCloseTo(0.8, 6);
+  });
+
+  it('la regla en castellano nombra el paso vigente', () => {
+    const linea = cotizar(0.1).familias[0].materiales.find((l) => l.insumo === 'VER 02');
+    expect(linea?.regla).toContain('0,1 m');
+  });
+});
+
+describe('motorFase0 — la fila de instalación cuenta VENTANAS, no paños', () => {
+  const CAT: CatalogoProductos = {
+    'BK 09': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 27176 },
+    'BK-D': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 31000 },
+  };
+  const fila = (over: Record<string, unknown> = {}) =>
+    ({ codInt: 'BK 09', ancho: 1.3, alto: 2.3, cantidad: 1, ...over });
+
+  it('un dual (dos paños, una ventana) se instala UNA vez', () => {
+    const r = cotizarFase0(
+      [fila({ ventanaId: 'V1' }), fila({ ventanaId: 'V1' }), fila({ ventanaId: 'V2' })],
+      CAT, {},
+    );
+    expect(r.instalacion.cantidad).toBe(2); // dos ventanas, no tres paños
+    expect(r.instalacion.total).toBe(2 * 17500);
+  });
+
+  it('sin ventanaId se cuenta por pieza, como siempre (regresión)', () => {
+    const r = cotizarFase0([fila(), fila(), fila()], CAT, {});
+    expect(r.instalacion.cantidad).toBe(3);
+  });
+
+  it('una fila con cantidad 3 y sin ventana son 3 instalaciones', () => {
+    const r = cotizarFase0([fila({ cantidad: 3 })], CAT, {});
+    expect(r.instalacion.cantidad).toBe(3);
+  });
+
+  it('contar por ventana puede dejar la cotización bajo el mínimo, y entonces se cobra', () => {
+    // 4 paños repartidos en 3 ventanas: por paños habría llegado al mínimo.
+    const r = cotizarFase0(
+      [
+        fila({ ventanaId: 'V1' }), fila({ ventanaId: 'V1' }),
+        fila({ ventanaId: 'V2' }), fila({ ventanaId: 'V3' }),
+      ],
+      CAT, {},
+    );
+    expect(r.instalacion.cantidad).toBe(3);
+    expect(r.instalacion.gratis).toBe(false);
+    expect(r.instalacion.total).toBe(3 * 17500);
+  });
+});
+
+describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () => {
+  const base = {
+    cantidad: 2, precioUnit: 17500, descuento: 0, total: 35000,
+    gratis: false, region: false, sinInstalacion: false, partes: [],
+  };
+  it('bajo el mínimo lo dice', () => {
+    expect(textoInstalacion(base, 4)).toBe('2 cortinas, bajo el mínimo de 4');
+  });
+  it('llegando al mínimo no dice «bajo»', () => {
+    expect(textoInstalacion({ ...base, cantidad: 5 }, 4)).toBe('5 cortinas, 4 o más: sin costo');
+  });
+  it('región con descuento parcial lo dice, aunque supere el mínimo', () => {
+    expect(textoInstalacion({ ...base, cantidad: 6, region: true, descuento: 0.5 }, 4)).toBe(
+      '6 cortinas, región: 50 % de descuento',
+    );
+  });
+  it('sin instalación lo dice', () => {
+    expect(textoInstalacion({ ...base, sinInstalacion: true }, 4)).toBe('2 cortinas, sin instalación');
+  });
+  it('una sola cortina va en singular', () => {
+    expect(textoInstalacion({ ...base, cantidad: 1 }, 4)).toBe('1 cortina, bajo el mínimo de 4');
   });
 });
