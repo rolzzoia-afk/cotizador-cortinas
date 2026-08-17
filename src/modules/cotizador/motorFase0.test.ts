@@ -627,3 +627,163 @@ describe('motorFase0 — ancho de empaque (peor caso de montaje)', () => {
     expect(empacarPanos(piezas, 2.98)).toHaveLength(1);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// BEEBLACK — sistema con reglas propias: margen 0,60, un metro entero de tela
+// extra, mano de obra 83.300, traslado 47.600 e instalación 41.650 embebida +
+// 35.000 en la fila de abajo. Sale de la copia beeblack del Excel, cuyo panel
+// reusa BLACKOUT_P / SCREEN_P / SCREEN_D con otra lista de materiales.
+// ─────────────────────────────────────────────────────────────────────
+
+// La tela beeblack se cobra al MÁXIMO de su familia (no a una tela de
+// referencia). BEE-BK va a 48.500 porque es lo que el panel de la copia tenía
+// tecleado; el catálogo real trae 48.415,15 (hay un caso que lo mide).
+const CAT_BB: CatalogoProductos = {
+  ...CAT,
+  'BEE-BK01': { cod: 'BEE_BK', producto: 'BEEBLACK BLACKOUT WATERPROOF', tipo: 'PREMIUM', descripcion: 'FB-2589-NEGRO', precio: 8760.92 },
+  'BEE-BK': { cod: 'BEE_BK', producto: 'BEEBLACK-BLACKOUT WATERPROFF', tipo: 'PREMIUM', descripcion: '', precio: 48500 },
+  'BEE-SC01': { cod: 'BEE_MOSQ', producto: 'BEEBLACK MOSQUITERO', tipo: 'PREMIUM', descripcion: '', precio: 16138.54 },
+  'BEE-SC': { cod: 'BEE_MOSQ', producto: 'BEEBLACK-MOSQUITERO', tipo: 'PREMIUM', descripcion: '', precio: 48500 },
+};
+const AR_BB: Record<string, number> = {
+  ...AR,
+  'BEE-BK01': 2.98, 'BEE-BK': 2.98, 'BEE-SC01': 2.98, 'BEE-SC': 2.98,
+};
+
+describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
+  // Una cortina BEE-BK01 de 0,82 × 0,493 con 40 % de descuento.
+  const FILA = { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 1, descuento: 0.4 };
+  const cotizar = () => cotizarFase0([FILA], CAT_BB, AR_BB);
+
+  it('usa el metro entero de tela extra, no los 25 cm del roller', () => {
+    const f = cotizar().familias[0];
+    // Alto real = 0,493 + 1,00 = 1,493 (Optimizador!K10 de la copia).
+    expect(f.metrosTela).toBeCloseTo(1.493, 6);
+    expect(f.m2Total).toBeCloseTo(1.22426, 6);
+  });
+
+  it('la lista de materiales suma lo mismo que el panel del Excel (X137)', () => {
+    const f = cotizar().familias[0];
+    expect(f.costoMateriales).toBeCloseTo(307094.5727, 3);
+    // Los dos rieles laterales cobran el ANCHO por partida doble: es un error
+    // de fórmula del Excel que se replica a propósito (ver RECETA_BEEBLACK).
+    const rieles = f.materiales.filter((l) => l.insumo === 'SLM01');
+    expect(rieles).toHaveLength(2);
+    expect(rieles[0].total).toBeCloseTo(68330.6, 3);
+    expect(rieles[1].total).toBeCloseTo(rieles[0].total, 6);
+    // El zuncho simple lleva el x4 aplicado dos veces: suma de altos x 16.
+    const zuncho = f.materiales.find((l) => l.insumo === 'SML38');
+    expect(zuncho?.cantidad).toBeCloseTo(0.493 * 16, 6);
+    expect(zuncho?.total).toBeCloseTo(525.8456, 3);
+  });
+
+  it('mano de obra, traslado y margen son los del sistema, no los del roller', () => {
+    const f = cotizar().familias[0];
+    expect(f.sistema).toBe('Beeblack');
+    expect(f.manoObra).toBe(83300);
+    expect(f.traslado).toBe(47600);
+    // Publicidad: 3.076,8 ÷ 0,60 = 5.128 (en el roller son 1.400 ÷ 0,65).
+    expect(f.materiales.find((l) => l.insumo === 'PUB 01')?.precioUnit).toBeCloseTo(5128, 6);
+    expect(f.exacto).toBe(true);
+  });
+
+  it('la tela se cobra al MÁXIMO de la familia, no a una tela de referencia', () => {
+    const f = cotizar().familias[0];
+    // BEE-BK (48.500) le gana a la tela elegida, BEE-BK01 (8.760,92).
+    expect(f.arquetipoCodInt).toBe('BEE-BK');
+    expect(f.precioMl).toBe(48500);
+    expect(f.costoTela).toBeCloseTo(72410.5, 3);
+  });
+
+  it('VALOR M2 y VAL. UNIT calzan al peso con la cotización', () => {
+    const r = cotizar();
+    const f = r.familias[0];
+    expect(f.costoTotal).toBeCloseTo(510405.0727, 3);
+    expect(f.precioM2).toBeCloseTo(416909.0493, 3);
+    // Instalación embebida 41.650, distinta de la que cobra la fila de abajo.
+    expect(r.lineas[0].instalacionEmbebida).toBe(41650);
+    expect(r.lineas[0].valorUnit).toBeCloseTo(552055.0727, 3);
+    expect(r.lineas[0].total).toBeCloseTo(331233.0436, 3);
+  });
+
+  it('la fila de instalación cobra 35.000 bajo el mínimo de 4', () => {
+    const r = cotizar();
+    expect(r.instalacion.cantidad).toBe(1);
+    expect(r.instalacion.precioUnit).toBe(35000);
+    expect(r.instalacion.total).toBe(35000);
+    expect(r.instalacion.gratis).toBe(false);
+    expect(r.instalacion.partes).toEqual([
+      { sistema: 'Beeblack', cantidad: 1, precioUnit: 35000, total: 35000 },
+    ]);
+  });
+
+  it('subtotal, IVA y total de la cotización', () => {
+    const r = cotizar();
+    expect(r.subtotalNeto).toBeCloseTo(366233.0436, 3);
+    expect(r.totales.totalTransferencia).toBeCloseTo(435817.3219, 3);
+  });
+
+  it('con el precio del catálogo real (48.415,15) la tela baja $126,91', () => {
+    const cat = { ...CAT_BB, 'BEE-BK': { ...CAT_BB['BEE-BK'], precio: 48415.153846 } };
+    const r = cotizarFase0([FILA], cat, AR_BB);
+    // El 48.500 del panel estaba tecleado a mano; el máximo del catálogo es
+    // 48.415,15, que el motor redondea al peso como hace el Excel.
+    expect(r.familias[0].precioMl).toBe(48415);
+    expect(r.lineas[0].valorUnit).toBeCloseTo(551928.1677, 3);
+    // La diferencia es solo la tela: (48.500 − 48.415) × 1,493 m.
+    expect(552055.0727 - r.lineas[0].valorUnit).toBeCloseTo(85 * 1.493, 3);
+  });
+
+  it('con 4 beeblack la instalación sale gratis (mismo mínimo que el roller)', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 4 }],
+      CAT_BB, AR_BB,
+    );
+    expect(r.instalacion.cantidad).toBe(4);
+    expect(r.instalacion.total).toBe(0);
+    expect(r.instalacion.gratis).toBe(true);
+  });
+
+  it('el panel plantilla de 3,00 × 3,00 da el VALOR M2 de la copia (90.765,59)', () => {
+    // Cortina de ejemplo de la copia «SOLO BK O SOLO MOSQUITERO»: su celda
+    // T147 dice 90.765,59377777779.
+    const r = cotizarFase0([{ codInt: 'BEE-BK', ancho: 3, alto: 3, cantidad: 1 }], CAT_BB, AR_BB);
+    expect(r.familias[0].m2Total).toBeCloseTo(12, 6);
+    expect(r.familias[0].metrosTela).toBeCloseTo(4, 6);
+    expect(r.familias[0].precioM2).toBeCloseTo(90765.5938, 3);
+  });
+
+  it('roller y beeblack juntos: cada uno con su receta y su instalación', () => {
+    const r = cotizarFase0(
+      [
+        { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 1 },
+        { codInt: 'SC 34', ancho: 1.124, alto: 1.3, cantidad: 1 },
+      ],
+      CAT_BB, AR_BB,
+    );
+    const bb = r.familias.find((f) => f.cod === 'BEE_BK');
+    const rol = r.familias.find((f) => f.cod === 'SCREEN_P');
+    expect(bb?.sistema).toBe('Beeblack');
+    expect(rol?.sistema).toBeUndefined();
+    // El roller conserva sus números: 25 cm de extra, MO 19.500, traslado 55.000.
+    expect(rol?.manoObra).toBe(19500);
+    expect(rol?.traslado).toBe(55000);
+    expect(rol?.metrosTela).toBeCloseTo(1.55, 6);
+    // Dos tramos de instalación a precios distintos; 2 cortinas < 4 → se cobran.
+    expect(r.instalacion.cantidad).toBe(2);
+    expect(r.instalacion.partes).toHaveLength(2);
+    expect(r.instalacion.partes.find((p) => p.sistema === 'Beeblack')?.total).toBe(35000);
+    expect(r.instalacion.partes.find((p) => p.sistema === 'Roller')?.total).toBe(17500);
+    expect(r.instalacion.total).toBe(52500);
+  });
+
+  it('sin instalación no se embebe ni se cobra', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 1 }],
+      CAT_BB, AR_BB, [], PARAMETROS_DEFAULT, false, true,
+    );
+    expect(r.lineas[0].instalacionEmbebida).toBe(0);
+    expect(r.instalacion.total).toBe(0);
+    expect(r.instalacion.partes).toEqual([]);
+  });
+});

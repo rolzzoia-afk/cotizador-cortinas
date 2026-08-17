@@ -18,9 +18,11 @@ import {
   RECETA_DUO_GENERICO_KEY,
   RECETA_VERTICAL_KEY,
   explicarCantidad,
+  sistemaDeFamilia,
   type CantidadReceta,
   type InsumoPrecio,
   type LineaReceta,
+  type SistemaPrecio,
 } from '@/modules/cotizador/reglasPrecios';
 import { nombreFamilia } from './nombresFamilias';
 
@@ -28,6 +30,8 @@ type Props = {
   recetas: Record<string, LineaReceta[]>;
   insumos: Record<string, InsumoPrecio>;
   margenInsumo: number;
+  /** Sistemas con precios y margen propios: sus familias van en su bloque. */
+  sistemas: Record<string, SistemaPrecio>;
   onChange: (r: Record<string, LineaReceta[]>) => void;
 };
 
@@ -247,8 +251,31 @@ function Familia({ fam, lineas, insumos, margenInsumo, onChange }: {
   );
 }
 
-export function RecetasFamiliasSection({ recetas, insumos, margenInsumo, onChange }: Props) {
+export function RecetasFamiliasSection({
+  recetas,
+  insumos,
+  margenInsumo,
+  sistemas,
+  onChange,
+}: Props) {
   const orden = [...FAMILIAS_CON_RECETA, RECETA_VERTICAL_KEY, RECETA_DUO_GENERICO_KEY];
+  const fila = (fam: string) => {
+    // Una familia de sistema se cotiza con SU tabla de precios y SU margen: la
+    // vista previa tiene que usar los mismos, o mostraría un total que la app
+    // nunca cobra.
+    const sis = sistemaDeFamilia(fam, sistemas);
+    return (
+      <Familia
+        key={fam}
+        fam={fam}
+        lineas={recetas[fam] ?? []}
+        insumos={sis ? { ...insumos, ...sis.insumos } : insumos}
+        margenInsumo={sis?.margenInsumo ?? margenInsumo}
+        onChange={(l) => onChange({ ...recetas, [fam]: l })}
+      />
+    );
+  };
+
   return (
     <section className="rounded-lg border bg-card p-5">
       <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -261,18 +288,21 @@ export function RecetasFamiliasSection({ recetas, insumos, margenInsumo, onChang
         vuelvan a abrir. La receta de <em>dúo sin receta propia</em> es un respaldo: solo se usa si
         aparece un dúo con un código que no está en esta lista.
       </p>
-      <div className="space-y-1.5">
-        {orden.map((fam) => (
-          <Familia
-            key={fam}
-            fam={fam}
-            lineas={recetas[fam] ?? []}
-            insumos={insumos}
-            margenInsumo={margenInsumo}
-            onChange={(l) => onChange({ ...recetas, [fam]: l })}
-          />
-        ))}
-      </div>
+      <div className="space-y-1.5">{orden.map(fila)}</div>
+
+      {Object.entries(sistemas).map(([clave, s]) =>
+        s.familias.length ? (
+          <div key={clave} className="mt-4">
+            <h3 className="mb-1.5 text-xs font-semibold">
+              {s.nombre}
+              <span className="ml-2 font-normal text-muted-foreground">
+                margen {Math.round((1 - s.margenInsumo) * 100)} %, con sus propios precios de insumo
+              </span>
+            </h3>
+            <div className="space-y-1.5">{s.familias.map(fila)}</div>
+          </div>
+        ) : null,
+      )}
     </section>
   );
 }

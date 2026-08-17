@@ -107,14 +107,25 @@ export const CLAVE_ETIQUETAS = 'ETIQUETAS|INS 95-1';
  * Excepción BEEBLACK: el doble son 2 paños de UNA cortina (blackout +
  * mosquitero en la misma ubicación), así que lleva UNA etiqueta — mismo
  * criterio que su kit SML en la hoja de inventario. El color sale del paño 0.
+ *
+ * Excepción CATEGORÍA B (decisión 2026-08-17): la gama económica se entrega
+ * SIN etiqueta Rolzzo, así que sus paños no suman. Ojo: esto es la etiqueta
+ * del INVENTARIO (INS 95 / INS 95-1); las etiquetas Brother de estructura y
+ * paño se imprimen igual que en la A. Sin `catalogo` solo cuenta el flag
+ * forzado del paño (`lineaB: true`); con él, también la gama de la tela.
  */
-export function construirEtiquetas(ventanas: VentanaItem[]): EtiquetaLinea[] {
+export function construirEtiquetas(
+  ventanas: VentanaItem[],
+  catalogo?: CatalogoProductos,
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+): EtiquetaLinea[] {
   const acc = new Map<string, EtiquetaLinea>();
   for (const v of ventanas) {
     const panos = (v.panos || []) as Partial<Pano>[];
     const bee = esCategoriaBeeblack(String(v.categoria || ''));
     for (let pi = 0; pi < panos.length; pi++) {
       if (bee && pi > 0) continue;
+      if (esLineaB(panos[pi] as Pano, v.codInt as string | undefined, catalogo, v.categoria as string, reglas.mecanismo, reglas.tipos)) continue;
       const { cod, color } = codigoEtiqueta(colorAccesoriosDePano(panos[pi], v.color as string));
       const prev = acc.get(cod);
       if (prev) prev.cantidad++;

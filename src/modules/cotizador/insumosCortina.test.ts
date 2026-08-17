@@ -672,19 +672,38 @@ describe('cantidadSuplementosAuto', () => {
 });
 
 describe('insumosDePano — tapas de la categoría B (2026-08-14)', () => {
-  it('roller B blanco → TAP18 en AMBOS lados (×2) + tornillos', () => {
+  it('roller B blanco → TAP18 en AMBOS lados (×2), a presión: SIN tornillos', () => {
     const out = insumosDePano(pano({ color: 'BCO' }), { categoria: 'ROL', anchoM: 1.5, lineaB: true });
     const tapas = out.filter((i) => i.codigo === 'TAP18');
     expect(tapas).toHaveLength(2); // misma tapa izquierda y derecha
-    expect(out.find((i) => i.codigo === 'TOR02')?.cantidad).toBe(2);
+    // Aclaración 2026-08-17: la tapa B se coloca a presión, no lleva TOR02.
+    expect(out.some((i) => i.codigo === 'TOR02')).toBe(false);
     // Y ninguna tapa de la línea A.
     expect(out.some((i) => ['TAP19', 'TAP01'].includes(i.codigo))).toBe(false);
   });
 
-  it('roller B negro → TAP28-B ×2', () => {
+  it('roller B negro → TAP28-B ×2, sin tornillos', () => {
     const out = insumosDePano(pano({ color: 'NEG' }), { categoria: 'ROL', anchoM: 1.5, lineaB: true });
     expect(out.filter((i) => i.codigo === 'TAP28-B')).toHaveLength(2);
     expect(out.some((i) => ['TAP04', 'TAP05'].includes(i.codigo))).toBe(false);
+    expect(out.some((i) => i.codigo === 'TOR02')).toBe(false);
+  });
+
+  it('roller B con cenefa ovalada: la cenefa SÍ conserva sus 6 tornillos (solo se van los de la tapa)', () => {
+    const out = insumosDePano(pano({ color: 'BCO', cenefa: 'Ovalada' }), {
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+      anchoM: 1.5,
+      lineaB: true,
+    });
+    const tor = out.filter((i) => i.codigo === 'TOR02').reduce((a, i) => a + i.cantidad, 0);
+    expect(tor).toBe(6);
+  });
+
+  it('un color B sin tapa propia cae a la tapa de la línea A, y esa sí se atornilla', () => {
+    // El gris no existe en la gama B: si llegara, usa TAP20/TAP10 con sus 2 TOR02.
+    const out = insumosDePano(pano({ color: 'GRS' }), { categoria: 'ROL', anchoM: 1.5, lineaB: true });
+    expect(out.map((i) => i.codigo)).toEqual(expect.arrayContaining(['TAP20', 'TAP10']));
+    expect(out.find((i) => i.codigo === 'TOR02')?.cantidad).toBe(2);
   });
 
   it('dúo B (blanco o negro) → exterior TAP17 ×2, y la interna TAP13 SE MANTIENE', () => {

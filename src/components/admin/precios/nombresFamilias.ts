@@ -18,6 +18,9 @@ export const NOMBRE_FAMILIA: Record<string, string> = {
   DUOPOLI_P: 'Dúo poliéster premium',
   DUOPOLI_D: 'Dúo poliéster delux',
   DUOPOLI_S: 'Dúo poliéster standard',
+  BEE_BK: 'Beeblack blackout',
+  BEE_MOSQ: 'Beeblack mosquitero',
+  BEE_TRAS: 'Beeblack traslúcida',
   [RECETA_VERTICAL_KEY]: 'Cortinas verticales',
   [RECETA_DUO_GENERICO_KEY]: 'Dúo sin receta propia (respaldo)',
 };

@@ -346,8 +346,6 @@ export function generarPDFProduccion(
 export function validarDatosParaEtiquetas(rows: OptimizerRow[]): string[] {
   const missingFields: string[] = [];
   rows.forEach((row, idx) => {
-    // La gama B no lleva etiquetas: no tiene sentido exigirle los campos.
-    if (row.lineaB) return;
     const panoNum = idx + 1;
     const p = row.pano || EMPTY_PANO;
     const loc = row.ubicacion || '';

@@ -1,16 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import {
   BASE_VERTICAL_PROPIA,
+  FAMILIAS_BEEBLACK,
   GRUPOS_INSUMO,
   REGLAS_PRECIOS_DEFAULT,
   RECETAS_DEFAULT,
   claveReceta,
   conValoresMaximos,
   grupoDelInsumo,
+  insumosParaFamilia,
   lamasPorPasada,
   explicarCantidad,
   normalizarReglasPrecios,
   resolverReceta,
+  sistemaDeFamilia,
   sonReglasPreciosDefault,
   validarReglasPrecios,
   type LineaReceta,
@@ -292,5 +295,147 @@ describe('claveReceta — el nombre de la receta que se termina usando', () => {
     expect(claveReceta('DUO_X', false)).toBe('DUO_GENERICO');
     expect(claveReceta('BEEBLACK', false)).toBe('BLACKOUT_P');
     expect(claveReceta('BLACKOUT_D', true)).toBe('VERTICAL');
+  });
+
+  it('las tres familias beeblack tienen receta propia', () => {
+    for (const fam of FAMILIAS_BEEBLACK) {
+      expect(claveReceta(fam, false)).toBe(fam);
+      expect(RECETAS_DEFAULT[fam]).toBeDefined();
+    }
+  });
+});
+
+describe('sistemas con reglas propias (beeblack)', () => {
+  const bb = REGLAS_PRECIOS_DEFAULT.sistemas.beeblack;
+
+  it('trae los números de la copia beeblack del Excel', () => {
+    expect(bb.margenInsumo).toBe(0.6);
+    expect(bb.extraAltoM).toBe(1);
+    expect(bb.manoObra).toBe(83300);
+    expect(bb.traslado).toBe(47600);
+    // Los dos valores de instalación son distintos a propósito.
+    expect(bb.instalacionEmbebida).toBe(41650);
+    expect(bb.instalacionLinea).toBe(35000);
+  });
+
+  it('sistemaDeFamilia encuentra las beeblack y deja fuera al resto', () => {
+    for (const fam of FAMILIAS_BEEBLACK) {
+      expect(sistemaDeFamilia(fam)?.nombre).toBe('Beeblack');
+    }
+    expect(sistemaDeFamilia('BLACKOUT_P')).toBeUndefined();
+    expect(sistemaDeFamilia('VERTICAL')).toBeUndefined();
+  });
+
+  it('sus precios de insumo PISAN a los generales', () => {
+    // PUB 01 y MAT00001 existen en las dos listas con valores distintos.
+    expect(REGLAS_PRECIOS_DEFAULT.insumos['PUB 01'].valorMaximo).toBe(1400);
+    expect(bb.insumos['PUB 01'].valorMaximo).toBe(3076.8);
+    const paraBb = insumosParaFamilia('BEE_BK', REGLAS_PRECIOS_DEFAULT);
+    expect(paraBb['PUB 01'].valorMaximo).toBe(3076.8);
+    expect(paraBb.MAT00001.valorMaximo).toBe(30768);
+    // Un insumo que solo está en la lista general sigue disponible.
+    expect(paraBb['E 02'].valorMaximo).toBe(REGLAS_PRECIOS_DEFAULT.insumos['E 02'].valorMaximo);
+    // Una familia sin sistema no ve los precios beeblack.
+    const paraRoller = insumosParaFamilia('BLACKOUT_P', REGLAS_PRECIOS_DEFAULT);
+    expect(paraRoller['PUB 01'].valorMaximo).toBe(1400);
+    expect(paraRoller.SLM01).toBeUndefined();
+  });
+
+  it('las variantes de color comparten precio con su representante', () => {
+    expect(bb.insumos.SLM02.valorMaximo).toBe(bb.insumos.SLM01.valorMaximo);
+    expect(bb.insumos.SML36.valorMaximo).toBe(bb.insumos.SML35.valorMaximo);
+    expect(grupoDelInsumo('SLM02')).toEqual(['SLM01', 'SLM02', 'SLM03']);
+  });
+
+  it('la receta replica los dos errores de fórmula del Excel', () => {
+    const receta = RECETAS_DEFAULT.BEE_BK;
+    const rieles = receta.filter((l) => l.insumo === 'SLM01');
+    // Las dos filas del riel suman ANCHOS: la de «alto» del Excel copia el
+    // total de la de «ancho».
+    expect(rieles).toHaveLength(2);
+    for (const r of rieles) expect(r.cantidad).toEqual({ tipo: 'sumaAnchos', factor: 2 });
+    // El zuncho lleva el x4 dos veces.
+    const zuncho = receta.find((l) => l.insumo === 'SML38');
+    expect(zuncho?.cantidad).toEqual({ tipo: 'sumaAltos', factor: 16 });
+    // Las tres telas comparten la misma lista.
+    expect(RECETAS_DEFAULT.BEE_MOSQ).toBe(receta);
+    expect(RECETAS_DEFAULT.BEE_TRAS).toBe(receta);
+  });
+
+  it('lo guardado completa campo por campo contra el de fábrica', () => {
+    const r = normalizarReglasPrecios({
+      sistemas: { beeblack: { manoObra: 90000 } },
+    });
+    expect(r.sistemas.beeblack.manoObra).toBe(90000);
+    // Lo que no venía guardado queda como de fábrica.
+    expect(r.sistemas.beeblack.margenInsumo).toBe(0.6);
+    expect(r.sistemas.beeblack.familias).toEqual([...FAMILIAS_BEEBLACK]);
+    expect(r.sistemas.beeblack.insumos.SLM01.valorMaximo).toBe(24999);
+  });
+
+  it('acepta un sistema inventado por la empresa', () => {
+    const r = normalizarReglasPrecios({
+      sistemas: { toldos: { nombre: 'Toldos', familias: ['TOLDO_P'], manoObra: 50000 } },
+    });
+    expect(r.sistemas.toldos.nombre).toBe('Toldos');
+    expect(r.sistemas.toldos.manoObra).toBe(50000);
+    // Sin margen guardado cae al del roller, no a cero.
+    expect(r.sistemas.toldos.margenInsumo).toBe(0.65);
+    // Y el beeblack de fábrica sigue ahí.
+    expect(r.sistemas.beeblack.manoObra).toBe(83300);
+  });
+
+  it('valida los números del sistema', () => {
+    const malo = clonar(REGLAS_PRECIOS_DEFAULT);
+    malo.sistemas.beeblack.margenInsumo = 0;
+    malo.sistemas.beeblack.manoObra = -1;
+    const { errores } = validarReglasPrecios(malo);
+    expect(errores.some((e) => e.includes('margen'))).toBe(true);
+    expect(errores.some((e) => e.includes('mano de obra'))).toBe(true);
+  });
+
+  it('una receta de sistema no exige que su insumo esté en la lista general', () => {
+    // SLM01 solo vive en la tabla del beeblack: no puede dar error.
+    const { errores } = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT);
+    expect(errores).toEqual([]);
+    // Pero si se le borra de las dos, sí.
+    const sinRiel = clonar(REGLAS_PRECIOS_DEFAULT);
+    delete sinRiel.sistemas.beeblack.insumos.SLM01;
+    expect(validarReglasPrecios(sinRiel).errores.some((e) => e.includes('SLM01'))).toBe(true);
+  });
+
+  it('reponer insumos de fábrica respeta la tabla del sistema', () => {
+    // Se guarda una lista general mínima; las líneas beeblack se cobran con la
+    // tabla del sistema, así que SLM01 no debe colarse a la lista general.
+    const r = normalizarReglasPrecios({ insumos: { 'E 02': 4462.5 } });
+    expect(r.insumos.SLM01).toBeUndefined();
+    expect(r.sistemas.beeblack.insumos.SLM01.valorMaximo).toBe(24999);
+    // Y un insumo de receta roller sí se repone.
+    expect(r.insumos['MEC 18']).toBeDefined();
+  });
+});
+
+describe('tela de referencia vacía = la más cara de la familia', () => {
+  it('las beeblack vienen sin código y las roller con el suyo', () => {
+    for (const fam of FAMILIAS_BEEBLACK) {
+      expect(REGLAS_PRECIOS_DEFAULT.arquetipos[fam]).toBe('');
+    }
+    expect(REGLAS_PRECIOS_DEFAULT.arquetipos.BLACKOUT_P).toBe('BK-P');
+  });
+
+  it('el vacío no es un error de validación en las beeblack, pero sí en las roller', () => {
+    expect(validarReglasPrecios(REGLAS_PRECIOS_DEFAULT).errores).toEqual([]);
+    const sinTela = clonar(REGLAS_PRECIOS_DEFAULT);
+    sinTela.arquetipos.BLACKOUT_P = '';
+    expect(validarReglasPrecios(sinTela).errores.some((e) => e.includes('BLACKOUT_P'))).toBe(true);
+  });
+
+  it('se puede fijar un código y volver a dejarlo vacío', () => {
+    const fijado = normalizarReglasPrecios({ arquetipos: { BEE_BK: 'BEE-BK' } });
+    expect(fijado.arquetipos.BEE_BK).toBe('BEE-BK');
+    const vuelto = normalizarReglasPrecios({ arquetipos: { BEE_BK: '' } });
+    expect(vuelto.arquetipos.BEE_BK).toBe('');
+    // En una familia cuyo default trae código, el vacío se sigue ignorando.
+    expect(normalizarReglasPrecios({ arquetipos: { BLACKOUT_P: '' } }).arquetipos.BLACKOUT_P).toBe('BK-P');
   });
 });

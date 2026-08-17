@@ -37,17 +37,32 @@ const NOMBRE_FAMILIA: Record<string, string> = {
   SCREEN_P: 'Screen premium', SCREEN_D: 'Screen delux', SCREEN_S: 'Screen standard',
   DUOBK_P: 'Dúo blackout premium', DUOBK_D: 'Dúo blackout delux', DUOBK_S: 'Dúo blackout standard',
   DUOPOLI_P: 'Dúo poliéster premium', DUOPOLI_D: 'Dúo poliéster delux', DUOPOLI_S: 'Dúo poliéster standard',
+  BEE_BK: 'Beeblack blackout', BEE_MOSQ: 'Beeblack mosquitero', BEE_TRAS: 'Beeblack traslúcida',
   BLACKOUT_V_P: 'Vertical blackout premium', BLACKOUT_V_D: 'Vertical blackout delux',
   BLACKOUT_V_S: 'Vertical blackout standard', SCREEN_V_P: 'Vertical screen premium',
   SCREEN_V_D: 'Vertical screen delux', SCREEN_V_S: 'Vertical screen standard',
 };
 
+/** La tela más cara de una familia: la regla del Excel cuando no hay código fijo. */
+function maxDeFamilia(fam: string, catalogo: CatalogoProductos) {
+  let codInt = '';
+  let precio = 0;
+  for (const [k, p] of Object.entries(catalogo)) {
+    if (p?.cod !== fam) continue;
+    const n = Number(p.precio) || 0;
+    if (n > precio) { precio = n; codInt = k; }
+  }
+  return { codInt, precio };
+}
+
 function Tabla({
-  titulo, mapa, catalogo, onChange,
+  titulo, mapa, catalogo, permiteMaximo, onChange,
 }: {
   titulo: string;
   mapa: Record<string, string>;
   catalogo: CatalogoProductos;
+  /** Familias donde dejar el código vacío es una regla, no un olvido. */
+  permiteMaximo?: (fam: string) => boolean;
   onChange: (m: Record<string, string>) => void;
 }) {
   const claves = Object.keys(mapa).sort((a, b) => a.localeCompare(b, 'es'));
@@ -66,8 +81,9 @@ function Tabla({
           <tbody>
             {claves.map((fam) => {
               const codInt = mapa[fam];
-              const prod = catalogo[codInt];
-              const precio = Number(prod?.precio) || 0;
+              const alMaximo = !codInt.trim() && !!permiteMaximo?.(fam);
+              const max = alMaximo ? maxDeFamilia(fam, catalogo) : null;
+              const precio = alMaximo ? max?.precio ?? 0 : Number(catalogo[codInt]?.precio) || 0;
               return (
                 <tr key={fam} className="border-t">
                   <td className="px-2 py-1">
@@ -77,9 +93,15 @@ function Tabla({
                   <td className="px-2 py-1">
                     <Input
                       value={codInt}
+                      placeholder={permiteMaximo?.(fam) ? 'la más cara' : undefined}
                       onChange={(e) => onChange({ ...mapa, [fam]: e.target.value.toUpperCase() })}
                       className="h-7 w-32 font-mono text-xs"
                     />
+                    {alMaximo && (
+                      <div className="mt-0.5 text-[0.65rem] text-muted-foreground">
+                        {max?.codInt ? `hoy manda ${max.codInt}` : 'ninguna tela de esta familia en el catálogo'}
+                      </div>
+                    )}
                   </td>
                   <td className="px-2 py-1 text-right">
                     {precio > 0 ? (
@@ -220,6 +242,12 @@ export function TelasArquetiposSection({
         se replica esa regla, y es editable: al activar el cobro por lamas, las verticales pasan a
         su propia tela, y cualquier código se puede cambiar a mano en la tabla.
       </p>
+      <p className="mb-3 text-xs text-muted-foreground">
+        <strong>Dejar el código en blanco</strong> cobra <em>la tela más cara de la familia</em>,
+        que es la fórmula original del Excel. Las familias beeblack vienen así; las roller y dúo no,
+        porque en la planilla ese máximo se contaminaba con telas de otra familia y salía ~65 % más
+        caro. Se puede escribir un código para fijarlo, o borrarlo para volver al máximo.
+      </p>
 
       <TelaVerticalControl valor={telaVertical} onChange={onChange} />
       {faltantes.length > 0 && (
@@ -230,7 +258,13 @@ export function TelasArquetiposSection({
         </p>
       )}
       <div className="grid gap-4 md:grid-cols-2">
-        <Tabla titulo="Roller y dúo" mapa={arquetipos} catalogo={catalogo} onChange={(m) => onChange({ arquetipos: m })} />
+        <Tabla
+          titulo="Roller, dúo y beeblack"
+          mapa={arquetipos}
+          catalogo={catalogo}
+          permiteMaximo={(fam) => !(FAMILIAS_CON_RECETA as readonly string[]).includes(fam)}
+          onChange={(m) => onChange({ arquetipos: m })}
+        />
         <Tabla titulo="Verticales" mapa={baseVertical} catalogo={catalogo} onChange={(m) => onChange({ baseVertical: m })} />
       </div>
     </section>

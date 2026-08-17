@@ -243,12 +243,13 @@ const TOPE_FILAS_CATALOGO = 500;
 // % es-CL con hasta 2 decimales: 0.138 → "13,8" · 0.0415 → "4,15".
 const fmtPct = (v: number) => (Math.round(v * 10000) / 100).toLocaleString('es-CL');
 
-// COD_INT de la instalación roller base. Desde Fase 2 la instalación se calcula
-// automáticamente (regla 4+ gratis / región), así que se filtra de los
-// adicionales manuales para no cobrarla dos veces (la instalación de motor,
-// soft, cenefa —INSTMOT, INSTSOFT, INSTCENF…— sí siguen siendo manuales).
-const COD_INSTALACION_BASE = 'INST';
-const esInstalacionBase = (ci: string) => (ci || '').trim().toUpperCase() === COD_INSTALACION_BASE;
+// COD_INT de las instalaciones que el motor calcula SOLO (regla 4+ gratis /
+// región). Se filtran de los adicionales manuales para no cobrarlas dos veces;
+// las de motor, soft o cenefa —INSTMOT, INSTSOFT, INSTCENF…— sí siguen siendo
+// manuales. `INST-BB` es la del beeblack: su fila la arma el motor con el
+// precio del sistema, igual que la roller.
+const CODS_INSTALACION_BASE = new Set(['INST', 'INST-BB']);
+const esInstalacionBase = (ci: string) => CODS_INSTALACION_BASE.has((ci || '').trim().toUpperCase());
 
 /**
  * Cotizador compartido. `modo` define el papel en el flujo:

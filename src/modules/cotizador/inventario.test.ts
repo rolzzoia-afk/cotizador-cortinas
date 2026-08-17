@@ -329,6 +329,45 @@ describe('etiquetas por color de accesorios', () => {
     ).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 2 }]);
   });
 
+  // Aclaración 2026-08-17: la gama B se entrega SIN etiqueta Rolzzo. (Sus
+  // etiquetas Brother de estructura y paño sí se imprimen: son otra cosa.)
+  describe('categoría B: sin etiqueta Rolzzo', () => {
+    const CAT = {
+      'BK 60': { cod: 'BK', producto: 'Blackout', precio: 0, categoria: 'A' },
+      'BK 78': { cod: 'BK', producto: 'Blackout gama B', precio: 0, categoria: 'B' },
+    } as unknown as NonNullable<Parameters<typeof construirEtiquetas>[1]>;
+    const rol = (codInt: string, pano: Record<string, unknown> = {}): VentanaItem =>
+      ({ id: codInt, color: 'NEGRO', codInt, categoria: 'ROL', panos: [{ ancho: 1.5, alto: 1.8, ...pano }] }) as VentanaItem;
+
+    it('la tela de gama B (por catálogo) no suma etiqueta; la A sí', () => {
+      expect(construirEtiquetas([rol('BK 78'), rol('BK 60')], CAT)).toEqual([
+        { cod: 'INS 95', color: 'NEGRA', cantidad: 1 },
+      ]);
+    });
+
+    it('OT toda de gama B → sin filas de etiquetas', () => {
+      expect(construirEtiquetas([rol('BK 78'), rol('BK 78')], CAT)).toEqual([]);
+    });
+
+    it('el flag forzado del paño manda sobre la tela (y vale sin catálogo)', () => {
+      // Tela A forzada a B → sin etiqueta; tela B forzada a A → con etiqueta.
+      expect(construirEtiquetas([rol('BK 60', { lineaB: true })], CAT)).toEqual([]);
+      expect(construirEtiquetas([rol('BK 78', { lineaB: false })], CAT)).toEqual([
+        { cod: 'INS 95', color: 'NEGRA', cantidad: 1 },
+      ]);
+      expect(construirEtiquetas([rol('BK 60', { lineaB: true })])).toEqual([]);
+    });
+
+    it('una tela B en un sistema sin recetas B (soft light) NO es categoría B: lleva su etiqueta', () => {
+      const soft = { ...rol('BK 78'), categoria: 'SOFT_LIGHT_38mm' } as VentanaItem;
+      expect(construirEtiquetas([soft], CAT)).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 1 }]);
+    });
+
+    it('sin catálogo, la gama de la tela no se conoce: se cuenta como siempre (regresión)', () => {
+      expect(construirEtiquetas([rol('BK 78')])).toEqual([{ cod: 'INS 95', color: 'NEGRA', cantidad: 1 }]);
+    });
+  });
+
   // Decisión 2026-08-05: el dual sigue contando por paño (no se tocó).
   it('roller dual → 2 etiquetas (sin cambio)', () => {
     expect(

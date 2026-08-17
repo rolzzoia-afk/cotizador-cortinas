@@ -105,11 +105,50 @@ export type TelaVertical = {
   anchoRolloVerticalM: number;
 };
 
+/**
+ * Un SISTEMA de cortina que se cotiza con reglas propias, no con las del
+ * roller. El beeblack es el primero: en el Excel vive en una copia aparte que
+ * reusa los paneles del Cotizador pero con OTRA hoja Insumos y otros
+ * parámetros —margen 0,60 en vez de 0,65, un metro entero de tela extra,
+ * mano de obra y traslado propios, y dos instalaciones distintas—.
+ *
+ * Los `insumos` del sistema son SU hoja Insumos: se consultan ANTES que el
+ * mapa global, así `PUB 01` y `MAT00001` pueden valer una cosa en el roller y
+ * otra en el beeblack sin tener que inventarles un código nuevo.
+ *
+ * `instalacionEmbebida` ≠ `instalacionLinea` a propósito: el Excel mete
+ * `Insumos!INST` (41.650) dentro del VAL. UNIT de cada cortina y cobra
+ * `Productos!INST` (35.000) en la fila de instalación de abajo. En el roller
+ * los dos son 17.500 y no se nota; acá sí.
+ */
+export type SistemaPrecio = {
+  /** Cómo se llama en pantalla. */
+  nombre: string;
+  /** COD de familia que se cotizan con este sistema. */
+  familias: string[];
+  /** Divisor del margen (0,60 = margen 40 %). */
+  margenInsumo: number;
+  /** Metros que se suman al alto vendido para calcular la tela y los m². */
+  extraAltoM: number;
+  /** Mano de obra por cortina. */
+  manoObra: number;
+  /** Traslado, uno por familia. */
+  traslado: number;
+  /** Instalación que va DENTRO del VAL. UNIT de cada cortina. */
+  instalacionEmbebida: number;
+  /** Instalación que se cobra en la fila de abajo cuando no llega al mínimo. */
+  instalacionLinea: number;
+  /** VALOR MAXIMO propios; ganan sobre el mapa global. */
+  insumos: Record<string, InsumoPrecio>;
+};
+
 export type ReglasPrecios = {
   /** VALOR MAXIMO por código de insumo (la hoja Insumos del Excel). */
   insumos: Record<string, InsumoPrecio>;
   /** Lista de materiales por familia. Claves: los 12 COD + VERTICAL + DUO_GENERICO. */
   recetas: Record<string, LineaReceta[]>;
+  /** Sistemas con reglas propias (hoy solo el beeblack). */
+  sistemas: Record<string, SistemaPrecio>;
   /** Familia → COD_INT de la tela que fija el precio por metro. */
   arquetipos: Record<string, string>;
   /** Familia vertical → COD_INT del roller equivalente, de donde sale su tela. */
@@ -225,6 +264,45 @@ const RECETA_VERTICAL: LineaReceta[] = [
   v('MAT00001', porCortina()),
 ];
 
+/**
+ * BEEBLACK. Sale del panel del Cotizador de la copia beeblack del Excel, que
+ * es la misma en las dos copias que hay (verificado línea por línea). Las tres
+ * telas —blackout, mosquitero y traslúcida— comparten esta lista.
+ *
+ * Dos líneas replican un ERROR de fórmula del Excel a propósito (decisión del
+ * dueño 2026-08-17: primero calzar con lo que se cotizó; corregirlo es un clic
+ * en Admin → Precios → Materiales por familia):
+ *
+ *  · El riel lateral SLM01 ocupa DOS filas, rotuladas «ANCHO» y «ALTO». La de
+ *    ALTO muestra `Σaltos × 2` en la columna de cantidad, pero su celda de
+ *    TOTAL apunta a la fila de ANCHO (`=U115*W115`), así que lo que de verdad
+ *    se cobra es `Σanchos × 2` DOS VECES. Acá se replica el cobro, no el
+ *    rótulo: la segunda línea también suma anchos.
+ *  · El zuncho simple SML38 lleva el multiplicador 4 aplicado dos veces —la
+ *    cantidad ya viene `Σaltos × 4` y el total la vuelve a multiplicar por 4
+ *    (`=(W121*U121)*V121`)—, o sea `Σaltos × 16`.
+ */
+const RECETA_BEEBLACK: LineaReceta[] = [
+  v('SLM01', sumaAnchos(2)),
+  // Fila «ALTO» del panel: cobra el ancho por el error de arriba.
+  v('SLM01', sumaAnchos(2)),
+  v('SML10', { tipo: 'sumaAltos', factor: 1 }),
+  v('SML34', { tipo: 'sumaAltos', factor: 4 }),
+  v('SML13', porCortina()),
+  v('SML35', porCortina(12)),
+  // 4 × 4: el multiplicador del Excel entra dos veces (ver arriba).
+  v('SML38', { tipo: 'sumaAltos', factor: 16 }),
+  // El kit de armado aparece DOS veces en el panel, cada una por cortina.
+  v('SML13', porCortina()),
+  v('PUB 01', porCortina()),
+  v('MAT00001', porCortina()),
+  v('CAJA0001', porCortina()),
+  v('CIN0002', porCortina()),
+];
+
+/** COD de familia que se cotizan como beeblack. */
+export const FAMILIAS_BEEBLACK = ['BEE_BK', 'BEE_MOSQ', 'BEE_TRAS'] as const;
+
 /** Clave de la receta que se usa para una vertical, sea de la gama que sea. */
 export const RECETA_VERTICAL_KEY = 'VERTICAL';
 /**
@@ -249,6 +327,9 @@ export const RECETAS_DEFAULT: Record<string, LineaReceta[]> = {
   DUOPOLI_P: recetaDuo({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
   DUOPOLI_D: recetaDuo({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
   DUOPOLI_S: recetaDuo({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
+  BEE_BK: RECETA_BEEBLACK,
+  BEE_MOSQ: RECETA_BEEBLACK,
+  BEE_TRAS: RECETA_BEEBLACK,
   [RECETA_VERTICAL_KEY]: RECETA_VERTICAL,
   [RECETA_DUO_GENERICO_KEY]: recetaDuo({ materialesVarios: null }),
 };
@@ -345,6 +426,51 @@ const DESCRIPCIONES: Record<string, string> = {
   // Materiales que no comparten grupo con ninguno de los de arriba.
   'TAP 13': 'Tapa peso dúo interior (dúo 2 a 5)',
   MER0014: 'Conector para cadena roller',
+  // ── Beeblack (su hoja Insumos tiene estos códigos y estos precios) ──
+  SLM01: 'Riel lateral honeycomb — blanco',
+  SLM02: 'Riel lateral honeycomb — negro',
+  SLM03: 'Riel lateral honeycomb — café',
+  SML10: 'Agarradera magnética bidireccional — blanca',
+  SML11: 'Agarradera magnética bidireccional — negra',
+  SML12: 'Agarradera magnética bidireccional — café',
+  SML13: 'Kit de armado (herrajes con carritos) — blanco',
+  SML14: 'Kit de armado (herrajes con carritos) — negro',
+  SML15: 'Kit de armado (herrajes con carritos) — café',
+  SML33: 'Tira magnética del riel lateral',
+  SML34: 'Zuncho magnético — felpa con tira magnética',
+  SML35: 'Cuerda de tracción 300D — blanca',
+  SML36: 'Cuerda de tracción 300D — negra',
+  SML37: 'Cuerda de tracción 300D — café',
+  SML38: 'Zuncho simple',
+  CAJA0001: 'Caja de embalaje',
+  CIN0002: 'Cinta doble contacto (beeblack)',
+};
+
+/**
+ * VALOR MAXIMO de la hoja Insumos de la copia BEEBLACK. Ojo con `PUB 01` y
+ * `MAT00001`: existen también en el roller, con otro precio (1.400 y 1.300).
+ * Por eso viven en el sistema y no en el mapa global.
+ */
+const INSUMOS_BEEBLACK_VM: Record<string, number> = {
+  SLM01: 24999,
+  SML10: 19230,
+  SML13: 15384,
+  SML34: 649.2048,
+  SML35: 27.6912,
+  SML38: 39.9984,
+  'PUB 01': 3076.8,
+  MAT00001: 30768,
+  CAJA0001: 10768.8,
+  CIN0002: 15470,
+};
+
+/** Variantes de color del beeblack: comparten VALOR MAXIMO con su representante. */
+export const GRUPOS_INSUMO_BEEBLACK: Record<string, string[]> = {
+  SLM01: ['SLM02', 'SLM03'],
+  SML10: ['SML11', 'SML12'],
+  SML13: ['SML14', 'SML15'],
+  SML34: ['SML33'],
+  SML35: ['SML36', 'SML37'],
 };
 
 /**
@@ -400,21 +526,97 @@ const insumosDeFabrica = (): Record<string, InsumoPrecio> => {
   return out;
 };
 
+/** Insumos de un sistema: su tabla de precios más las variantes de su grupo. */
+const expandirInsumos = (
+  valores: Record<string, number>,
+  grupos: Record<string, string[]>,
+): Record<string, InsumoPrecio> => {
+  const out: Record<string, InsumoPrecio> = {};
+  for (const [cod, valorMaximo] of Object.entries(valores)) {
+    out[cod] = { valorMaximo, descripcion: DESCRIPCIONES[cod] };
+  }
+  for (const [representante, variantes] of Object.entries(grupos)) {
+    const valorMaximo = valores[representante];
+    if (valorMaximo === undefined) continue;
+    for (const cod of variantes) out[cod] = { valorMaximo, descripcion: DESCRIPCIONES[cod] };
+  }
+  return out;
+};
+
+/**
+ * El sistema BEEBLACK de fábrica. Todos los números salen de la copia beeblack
+ * del Excel (hoja `Cotizador`, panel de la familia, y su hoja `Insumos`):
+ * margen `T113` = 0,60 · extra de alto `Optimizador!I10` = 1 m · mano de obra
+ * `MAN 01` = 83.300 · traslado `TRAS` = 47.600 · instalación embebida
+ * `Insumos!INST` = 41.650 · fila de instalación `Productos!INST` = 35.000.
+ */
+export const SISTEMA_BEEBLACK_DEFAULT: SistemaPrecio = {
+  nombre: 'Beeblack',
+  familias: [...FAMILIAS_BEEBLACK],
+  margenInsumo: 0.6,
+  extraAltoM: 1,
+  manoObra: 83300,
+  traslado: 47600,
+  instalacionEmbebida: 41650,
+  instalacionLinea: 35000,
+  insumos: expandirInsumos(INSUMOS_BEEBLACK_VM, GRUPOS_INSUMO_BEEBLACK),
+};
+
+export const SISTEMAS_DEFAULT: Record<string, SistemaPrecio> = {
+  beeblack: SISTEMA_BEEBLACK_DEFAULT,
+};
+
+/**
+ * El sistema con el que se cotiza una familia, o `undefined` si va con las
+ * reglas normales (roller, dúo y verticales).
+ */
+export function sistemaDeFamilia(
+  cod: string,
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): SistemaPrecio | undefined {
+  for (const s of Object.values(sistemas)) {
+    if (s.familias.includes(cod)) return s;
+  }
+  return undefined;
+}
+
+/** Precios de insumo que se usan para una familia: los del sistema ganan. */
+export function insumosParaFamilia(
+  cod: string,
+  reglas: Pick<ReglasPrecios, 'insumos' | 'sistemas'>,
+): Record<string, InsumoPrecio> {
+  const sis = sistemaDeFamilia(cod, reglas.sistemas);
+  return sis ? { ...reglas.insumos, ...sis.insumos } : reglas.insumos;
+}
+
 /** Con qué otros códigos comparte precio este insumo en el Excel. */
 export function grupoDelInsumo(cod: string): string[] {
-  if (GRUPOS_INSUMO[cod]) return [cod, ...GRUPOS_INSUMO[cod]];
-  for (const [representante, variantes] of Object.entries(GRUPOS_INSUMO)) {
-    if (variantes.includes(cod)) return [representante, ...variantes];
+  for (const grupos of [GRUPOS_INSUMO, GRUPOS_INSUMO_BEEBLACK]) {
+    if (grupos[cod]) return [cod, ...grupos[cod]];
+    for (const [representante, variantes] of Object.entries(grupos)) {
+      if (variantes.includes(cod)) return [representante, ...variantes];
+    }
   }
   return [];
 }
 
-/** Familia → COD_INT de la tela cuyo precio por metro se cobra. */
+/**
+ * Familia → COD_INT de la tela cuyo precio por metro se cobra.
+ *
+ * Vacío significa «la tela más cara de la familia»: es la fórmula literal del
+ * Excel (`MAX.SI.CONJUNTO(Precio de Venta; COD; familia)`). Las 12 familias
+ * roller no la usan porque en el Excel ese máximo se contamina —las telas BEE-
+ * cuelgan de los COD roller y lo inflan ~65 %—, así que ahí se cobra un código
+ * fijo. En el beeblack no hay tal contaminación: sus telas tienen COD propio,
+ * y ahí el máximo ES la regla (decisión del dueño 2026-08-17). Se puede
+ * escribir un código a mano para fijarlo, y borrarlo para volver al máximo.
+ */
 export const ARQUETIPOS_DEFAULT: Record<string, string> = {
   BLACKOUT_P: 'BK-P', BLACKOUT_D: 'BK-D', BLACKOUT_S: 'BK-S',
   SCREEN_P: 'SC-P', SCREEN_D: 'SC-D', SCREEN_S: 'SC-S',
   DUOBK_P: 'DB-P', DUOBK_D: 'DB-D', DUOBK_S: 'DB-S',
   DUOPOLI_P: 'DUOP-P', DUOPOLI_D: 'DUOP-D', DUOPOLI_S: 'DUOP-S',
+  BEE_BK: '', BEE_MOSQ: '', BEE_TRAS: '',
 };
 
 /** Vertical → COD_INT del roller equivalente (de ahí sale su precio de tela). */
@@ -448,6 +650,7 @@ export const TELA_VERTICAL_DEFAULT: TelaVertical = {
 export const REGLAS_PRECIOS_DEFAULT: ReglasPrecios = {
   insumos: insumosDeFabrica(),
   recetas: RECETAS_DEFAULT,
+  sistemas: SISTEMAS_DEFAULT,
   arquetipos: ARQUETIPOS_DEFAULT,
   baseVertical: BASE_VERTICAL_DEFAULT,
   regalo: 0,
@@ -518,6 +721,9 @@ export function resolverReceta(
 const numeroFinito = (x: unknown, porDefecto: number): number =>
   typeof x === 'number' && Number.isFinite(x) ? x : porDefecto;
 
+/** Margen del roller: último recurso para un sistema inventado sin margen. */
+const MARGEN_POR_DEFECTO = 0.65;
+
 function saneaFiltro(crudo: unknown): FiltroAncho | undefined {
   if (!crudo || typeof crudo !== 'object') return undefined;
   const o = crudo as Record<string, unknown>;
@@ -571,8 +777,65 @@ function saneaMapaTexto(crudo: unknown, porDefecto: Record<string, string>): Rec
   if (crudo && typeof crudo === 'object') {
     for (const [k, val] of Object.entries(crudo as Record<string, unknown>)) {
       const s = String(val ?? '').trim();
-      if (s) out[k] = s;
+      // Un valor vacío se ignora, SALVO donde el vacío significa algo: en los
+      // arquetipos quiere decir «cobrar la tela más cara de la familia», así
+      // que hay que poder volver a él después de haber fijado un código.
+      if (s || (k in porDefecto && porDefecto[k] === '')) out[k] = s;
     }
+  }
+  return out;
+}
+
+/** Un mapa de precios de insumo guardado, saneado (número suelto o {valorMaximo}). */
+function saneaInsumos(crudo: unknown): Record<string, InsumoPrecio> {
+  const out: Record<string, InsumoPrecio> = {};
+  if (!crudo || typeof crudo !== 'object') return out;
+  for (const [cod, val] of Object.entries(crudo as Record<string, unknown>)) {
+    const codLimpio = cod.trim();
+    if (!codLimpio) continue;
+    if (typeof val === 'number') {
+      if (Number.isFinite(val)) out[codLimpio] = { valorMaximo: val, descripcion: DESCRIPCIONES[codLimpio] };
+      continue;
+    }
+    if (!val || typeof val !== 'object') continue;
+    const iv = val as Record<string, unknown>;
+    if (typeof iv.valorMaximo !== 'number' || !Number.isFinite(iv.valorMaximo)) continue;
+    const descripcion = typeof iv.descripcion === 'string' ? iv.descripcion : DESCRIPCIONES[codLimpio];
+    out[codLimpio] = { valorMaximo: iv.valorMaximo, descripcion };
+  }
+  return out;
+}
+
+/**
+ * Sistemas guardados. Cada campo cae al de fábrica por separado, así un
+ * sistema guardado a medias (o uno de fábrica que gane campos nuevos en el
+ * código) no deja el cálculo sin números. Un sistema que no existe de fábrica
+ * —alguien creó el suyo— se acepta con defaults razonables.
+ */
+function saneaSistemas(crudo: unknown): Record<string, SistemaPrecio> {
+  const out: Record<string, SistemaPrecio> = {};
+  for (const [clave, base] of Object.entries(SISTEMAS_DEFAULT)) out[clave] = base;
+  if (!crudo || typeof crudo !== 'object') return out;
+  for (const [clave, val] of Object.entries(crudo as Record<string, unknown>)) {
+    const k = clave.trim();
+    if (!k || !val || typeof val !== 'object') continue;
+    const o = val as Record<string, unknown>;
+    const base = SISTEMAS_DEFAULT[k];
+    const familias = Array.isArray(o.familias)
+      ? o.familias.map((f) => String(f ?? '').trim()).filter(Boolean)
+      : base?.familias ?? [];
+    const insumos = saneaInsumos(o.insumos);
+    out[k] = {
+      nombre: typeof o.nombre === 'string' && o.nombre.trim() ? o.nombre.trim() : base?.nombre ?? k,
+      familias,
+      margenInsumo: numeroFinito(o.margenInsumo, base?.margenInsumo ?? MARGEN_POR_DEFECTO),
+      extraAltoM: numeroFinito(o.extraAltoM, base?.extraAltoM ?? 0.25),
+      manoObra: numeroFinito(o.manoObra, base?.manoObra ?? 0),
+      traslado: numeroFinito(o.traslado, base?.traslado ?? 0),
+      instalacionEmbebida: numeroFinito(o.instalacionEmbebida, base?.instalacionEmbebida ?? 0),
+      instalacionLinea: numeroFinito(o.instalacionLinea, base?.instalacionLinea ?? 0),
+      insumos: Object.keys(insumos).length ? insumos : base?.insumos ?? {},
+    };
   }
   return out;
 }
@@ -591,22 +854,7 @@ function saneaMapaTexto(crudo: unknown, porDefecto: Record<string, string>): Rec
 export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
   const o = (crudo && typeof crudo === 'object' ? crudo : {}) as Record<string, unknown>;
 
-  const insumos: Record<string, InsumoPrecio> = {};
-  if (o.insumos && typeof o.insumos === 'object') {
-    for (const [cod, val] of Object.entries(o.insumos as Record<string, unknown>)) {
-      const codLimpio = cod.trim();
-      if (!codLimpio) continue;
-      if (typeof val === 'number') {
-        if (Number.isFinite(val)) insumos[codLimpio] = { valorMaximo: val, descripcion: DESCRIPCIONES[codLimpio] };
-        continue;
-      }
-      if (!val || typeof val !== 'object') continue;
-      const iv = val as Record<string, unknown>;
-      if (typeof iv.valorMaximo !== 'number' || !Number.isFinite(iv.valorMaximo)) continue;
-      const descripcion = typeof iv.descripcion === 'string' ? iv.descripcion : DESCRIPCIONES[codLimpio];
-      insumos[codLimpio] = { valorMaximo: iv.valorMaximo, descripcion };
-    }
-  }
+  const insumos = saneaInsumos(o.insumos);
   const usarInsumosGuardados = Object.keys(insumos).length > 0;
   const insumosFinal = usarInsumosGuardados ? insumos : insumosDeFabrica();
 
@@ -618,13 +866,19 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
     }
   }
 
+  const sistemas = saneaSistemas(o.sistemas);
+
   // Reponer los insumos de fábrica que alguna receta vigente nombre y que el
-  // guardado no traiga: si no, esa línea se cobraría a $0 en silencio.
+  // guardado no traiga: si no, esa línea se cobraría a $0 en silencio. Una
+  // receta de sistema busca primero en SU tabla; solo si tampoco está ahí se
+  // repone en la global.
   if (usarInsumosGuardados) {
     const fabrica = insumosDeFabrica();
-    for (const lineas of Object.values(recetas)) {
+    for (const [fam, lineas] of Object.entries(recetas)) {
+      const propios = sistemaDeFamilia(fam, sistemas)?.insumos;
       for (const l of lineas) {
-        if (!insumosFinal[l.insumo] && fabrica[l.insumo]) insumosFinal[l.insumo] = fabrica[l.insumo];
+        if (propios?.[l.insumo] || insumosFinal[l.insumo]) continue;
+        if (fabrica[l.insumo]) insumosFinal[l.insumo] = fabrica[l.insumo];
       }
     }
   }
@@ -633,6 +887,7 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
   return {
     insumos: insumosFinal,
     recetas,
+    sistemas,
     arquetipos: saneaMapaTexto(o.arquetipos, ARQUETIPOS_DEFAULT),
     baseVertical: saneaMapaTexto(o.baseVertical, BASE_VERTICAL_DEFAULT),
     regalo: Math.max(0, numeroFinito(o.regalo, 0)),
@@ -680,16 +935,42 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
     }
   }
 
+  for (const [clave, s] of Object.entries(reglas.sistemas)) {
+    const dónde = `El sistema «${s.nombre || clave}»`;
+    if (!(s.margenInsumo > 0)) errores.push(`${dónde} tiene un margen inválido: tiene que ser mayor que cero.`);
+    if (!Number.isFinite(s.extraAltoM) || s.extraAltoM < 0) errores.push(`${dónde} tiene un extra de alto inválido.`);
+    for (const [campo, etiqueta] of [
+      ['manoObra', 'la mano de obra'],
+      ['traslado', 'el traslado'],
+      ['instalacionEmbebida', 'la instalación incluida en el precio'],
+      ['instalacionLinea', 'la instalación que se cobra aparte'],
+    ] as const) {
+      const n = s[campo];
+      if (!Number.isFinite(n) || n < 0) errores.push(`${dónde}: ${etiqueta} tiene que ser un monto de cero para arriba.`);
+    }
+    if (!s.familias.length) {
+      avisos.push(`${dónde} no tiene ninguna familia asignada, así que no se le aplica a nada.`);
+    }
+    for (const [cod, ins] of Object.entries(s.insumos)) {
+      if (!Number.isFinite(ins.valorMaximo) || ins.valorMaximo <= 0) {
+        errores.push(`${dónde}: el insumo «${cod}» tiene un valor inválido.`);
+      }
+    }
+  }
+
   const usados = new Set<string>();
   for (const [fam, lineas] of Object.entries(reglas.recetas)) {
     if (!lineas.length) {
       errores.push(`La familia «${fam}» se quedó sin materiales: agrega al menos una línea o restaura la de fábrica.`);
       continue;
     }
+    // Una familia de sistema cobra con SU tabla de precios; la global es el
+    // respaldo (así una línea compartida no obliga a duplicar el código).
+    const propios = sistemaDeFamilia(fam, reglas.sistemas)?.insumos;
     lineas.forEach((l, i) => {
       usados.add(l.insumo);
       const dónde = `«${fam}», línea ${i + 1} (${l.insumo})`;
-      if (!reglas.insumos[l.insumo]) {
+      if (!propios?.[l.insumo] && !reglas.insumos[l.insumo]) {
         errores.push(`${dónde}: ese insumo no está en la lista de precios, así que se cobraría $0.`);
       }
       const q = l.cantidad;
@@ -737,21 +1018,30 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
   // En el Excel las variantes de un mismo material comparten precio por
   // construcción (el VALOR MAXIMO es el máximo del grupo). Acá se pueden
   // separar, pero conviene que se note.
-  for (const [representante, variantes] of Object.entries(GRUPOS_INSUMO)) {
-    const base = reglas.insumos[representante]?.valorMaximo;
-    if (base === undefined) continue;
-    const distintas = variantes.filter(
-      (c) => reglas.insumos[c] && reglas.insumos[c].valorMaximo !== base,
-    );
-    if (distintas.length) {
-      avisos.push(
-        `«${representante}» y ${distintas.map((c) => `«${c}»`).join(', ')} son el mismo material en el Excel y ahí cobran igual, pero acá tienen precios distintos.`,
-      );
+  const revisarGrupos = (
+    grupos: Record<string, string[]>,
+    mapa: Record<string, InsumoPrecio>,
+  ) => {
+    for (const [representante, variantes] of Object.entries(grupos)) {
+      const base = mapa[representante]?.valorMaximo;
+      if (base === undefined) continue;
+      const distintas = variantes.filter((c) => mapa[c] && mapa[c].valorMaximo !== base);
+      if (distintas.length) {
+        avisos.push(
+          `«${representante}» y ${distintas.map((c) => `«${c}»`).join(', ')} son el mismo material en el Excel y ahí cobran igual, pero acá tienen precios distintos.`,
+        );
+      }
     }
-  }
+  };
+  revisarGrupos(GRUPOS_INSUMO, reglas.insumos);
+  for (const s of Object.values(reglas.sistemas)) revisarGrupos(GRUPOS_INSUMO_BEEBLACK, s.insumos);
 
-  for (const [fam, codInt] of Object.entries(reglas.arquetipos)) {
-    if (!codInt.trim()) errores.push(`La familia «${fam}» se quedó sin tela de referencia.`);
+  // Solo las 12 familias roller EXIGEN tela de referencia: en las demás el
+  // vacío es una regla («la más cara de la familia»), no un olvido.
+  for (const fam of FAMILIAS_CON_RECETA) {
+    if (!(reglas.arquetipos[fam] ?? '').trim()) {
+      errores.push(`La familia «${fam}» se quedó sin tela de referencia.`);
+    }
   }
   if (!(reglas.anchoRolloFallbackM > 0)) {
     errores.push('El ancho de rollo de respaldo tiene que ser mayor que cero.');

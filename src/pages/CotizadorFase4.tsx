@@ -340,18 +340,14 @@ export function CotizadorFase4() {
       if (!continuar) return;
     }
     try {
-      const n = generarEtiquetasPDF(
+      generarEtiquetasPDF(
         pdfRows,
         metaPDF(),
         catalogo,
         ot?.datosGenerales.adicionalesFase0,
         reglas.colores,
       );
-      if (n === 0) {
-        toast.info('Todas las cortinas son de gama B — no llevan etiquetas.');
-      } else {
-        toast.success('Etiquetas generadas');
-      }
+      toast.success('Etiquetas generadas');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error generando etiquetas: ' + msg);
@@ -386,9 +382,7 @@ export function CotizadorFase4() {
         piezasColmena.has(pieceId(ot.id, r.ventanaId, r.panoIndex)),
       );
       if (n === 0) {
-        toast.info(
-          'Sin etiquetas que imprimir: los paños salen de la colmena o son de gama B.',
-        );
+        toast.info('Todos los paños salen de la colmena — no hay etiquetas que imprimir.');
       } else {
         toast.success(`${n} etiqueta(s) de paño generada(s)`);
       }

@@ -27,13 +27,16 @@ import {
 import {
   REGLAS_PRECIOS_DEFAULT,
   explicarCantidad,
+  insumosParaFamilia,
   lamasPorPasada,
   resolverReceta,
+  sistemaDeFamilia,
   type CantidadReceta,
   type FiltroAncho,
   type LineaMaterialDesglose,
   type LineaReceta,
   type ReglasPrecios,
+  type SistemaPrecio,
   type TelaVertical,
 } from './reglasPrecios';
 import type { CatalogoProductos } from './types';
@@ -116,6 +119,8 @@ export type ResultadoFamilia = {
   regalo: number;
   /** Solo verticales cobradas por lamas: de dónde salen los metros de tela. */
   lamas?: { total: number; porPasada: number };
+  /** Nombre del sistema con reglas propias que cotizó esta familia (beeblack). */
+  sistema?: string;
 };
 
 // Línea de instalación (regla "4+ cortinas roller = gratis" del Excel, hoja
@@ -124,6 +129,15 @@ export type ResultadoFamilia = {
 // replica la fila del Excel: cantidad = nº de cortinas roller/dúo, precio =
 // instalación por cortina, con descuento 100% (gratis) al llegar al mínimo en
 // RM, o el % de región (editable). Total 0 → no altera el subtotal (RM 4+).
+/** Un tramo de la fila de instalación: las cortinas que se instalan al mismo precio. */
+export type ParteInstalacion = {
+  /** Nombre del sistema, o 'Roller' para las que van con las reglas normales. */
+  sistema: string;
+  cantidad: number;
+  precioUnit: number;
+  total: number;
+};
+
 export type InstalacionResultado = {
   cantidad: number; // nº de cortinas roller/dúo instalables
   precioUnit: number; // instalación por cortina
@@ -132,6 +146,8 @@ export type InstalacionResultado = {
   gratis: boolean; // descuento >= 1
   region: boolean; // si se cotizó como región
   sinInstalacion: boolean; // true = cliente retira / solo cortina (sin instalación)
+  /** Desglose cuando conviven sistemas que cobran distinto (roller + beeblack). */
+  partes: ParteInstalacion[];
 };
 
 export type ResultadoCotizacion = {
@@ -293,8 +309,11 @@ function clasificar(cod: string) {
   const isScreen = cod.startsWith('SCREEN');
   const gama = cod.endsWith('_D') ? 'D' : cod.endsWith('_S') ? 'S' : 'P';
   // ¿Es una familia con receta exacta decodificada?
+  // Beeblack incluido: su receta salió de la copia beeblack del Excel y calza
+  // al peso con la cotización COTJS-10384.
   const exacto =
-    /^(BLACKOUT|SCREEN|DUOBK|DUOPOLI)_(P|D|S)$/.test(cod);
+    /^(BLACKOUT|SCREEN|DUOBK|DUOPOLI)_(P|D|S)$/.test(cod) ||
+    /^BEE_(BK|MOSQ|TRAS)$/.test(cod);
   return { isDuoBk, isDuoPoli, isDuo, isScreen, gama, exacto };
 }
 
@@ -408,8 +427,13 @@ export function cotizarFase0(
     precioMl: number;
     arquetipo: string;
     piezas: Pieza[];
+    /** Sistema con reglas propias (beeblack), si esta familia va con uno. */
+    sistema?: SistemaPrecio;
   };
   const grupos = new Map<string, Grupo>();
+
+  /** Metros que se suman al alto vendido: el sistema manda sobre el parámetro. */
+  const extraAltoDe = (sis?: SistemaPrecio) => sis?.extraAltoM ?? params.extraAltoCm / 100;
 
   // Resolver cada fila a su COD (familia) y agrupar.
   const codDeFila: (string | null)[] = validas.map((f) => {
@@ -419,7 +443,8 @@ export function cotizarFase0(
     const nombre = (prod.producto || '').toUpperCase();
     const esDuo = cod.startsWith('DUO') || nombre.includes('DUO');
     const esVertical = /(_V_|-V$|-V-)/.test(cod) || nombre.includes('VERTICAL');
-    const altoReal = altoRealM(f.alto, esDuo, params.extraAltoCm / 100);
+    const sistema = sistemaDeFamilia(cod, reglas.sistemas);
+    const altoReal = altoRealM(f.alto, esDuo, extraAltoDe(sistema));
     const pieza: Pieza = {
       ancho: f.ancho,
       alto: f.alto,
@@ -434,6 +459,7 @@ export function cotizarFase0(
         cod,
         esDuo,
         esVertical,
+        sistema,
         // Ancho de rollo de respaldo (2,45 histórico del Excel de precios, ≠
         // 2,98 del corte de tela): último recurso, en producción
         // ancho_rollo_data o el catálogo resuelven antes.
@@ -465,19 +491,23 @@ export function cotizarFase0(
         ? metrosTelaVerticalPorLamas(g.piezas, reglas.telaVertical)
         : metrosTelaVertical(g.piezas, g.anchoRollo);
     const costoTela = g.precioMl * metrosTela;
+    // Un sistema propio (beeblack) trae su tabla de precios y su margen: los
+    // suyos ganan sobre los globales, y lo que no define cae al roller.
     const materiales = materialesFamilia(
       resolverReceta(cod, g.esVertical, reglas.recetas),
       g.piezas,
-      reglas.insumos,
-      params.margenInsumo,
+      insumosParaFamilia(cod, reglas),
+      g.sistema?.margenInsumo ?? params.margenInsumo,
     );
     const manoObra =
-      (g.esVertical
-        ? params.manoObraVertical
-        : g.esDuo
-          ? params.manoObraDuo
-          : params.manoObraRoller) * n;
-    const traslado = params.traslado;
+      (g.sistema
+        ? g.sistema.manoObra
+        : g.esVertical
+          ? params.manoObraVertical
+          : g.esDuo
+            ? params.manoObraDuo
+            : params.manoObraRoller) * n;
+    const traslado = g.sistema?.traslado ?? params.traslado;
     const costoTotal = costoTela + materiales.total + manoObra + reglas.regalo + traslado;
     const precioM2 = m2Total > 0 ? costoTotal / m2Total : 0;
     pm2PorCod.set(cod, precioM2);
@@ -498,6 +528,7 @@ export function cotizarFase0(
       panos,
       materiales: materiales.lineas,
       regalo: reglas.regalo,
+      ...(g.sistema ? { sistema: g.sistema.nombre } : {}),
       ...(porLamas
         ? {
             lamas: {
@@ -514,16 +545,20 @@ export function cotizarFase0(
     const cod = codDeFila[i];
     const g = cod ? grupos.get(cod) : undefined;
     const esDuo = g?.esDuo ?? false;
-    const altoReal = altoRealM(f.alto, esDuo, params.extraAltoCm / 100);
+    const altoReal = altoRealM(f.alto, esDuo, extraAltoDe(g?.sistema));
     const m2 = altoReal * f.ancho;
     const precioM2 = cod ? pm2PorCod.get(cod) ?? 0 : 0;
     // Sin instalación: el cliente retira / solo cortina → VAL. UNIT = precio del
     // producto (m² × precio/m²), sin el cargo de instalación embebido.
+    // El beeblack embebe un valor distinto del que cobra la fila de abajo
+    // (41.650 vs 35.000): es así en el Excel, ver `SistemaPrecio`.
     const instalacion = sinInstalacion
       ? 0
-      : g?.esVertical
-        ? params.instalacionVertical
-        : params.instalacionRoller;
+      : g?.sistema
+        ? g.sistema.instalacionEmbebida
+        : g?.esVertical
+          ? params.instalacionVertical
+          : params.instalacionRoller;
     const valorUnit = m2 * precioM2 + instalacion;
     const cant = Math.max(1, f.cantidad);
     const descuento = Math.max(0, Math.min(1, f.descuento ?? 0));
@@ -566,8 +601,21 @@ export function cotizarFase0(
   //   • RM y nº ≥ mínimo → descuento RM (default 100% → total 0, no suma).
   //   • RM y nº < mínimo → sin descuento (se cobra la instalación aparte).
   //   • Región           → descuento de región (editable por empresa).
+  // Las cortinas instalables se cuentan por SISTEMA: el beeblack se cobra a
+  // otro precio que el roller (35.000 vs 17.500), así que la fila lleva un
+  // tramo por cada uno. El MÍNIMO para que salga gratis se mira sobre el
+  // total, como el `SUM(F25:F32)` del Excel, que suma todas las filas.
+  const porSistema = new Map<string, { cantidad: number; precioUnit: number }>();
   let nInstalables = 0;
-  for (const [, g] of grupos) if (!g.esVertical) nInstalables += g.piezas.length;
+  for (const [, g] of grupos) {
+    if (g.esVertical) continue;
+    nInstalables += g.piezas.length;
+    const clave = g.sistema?.nombre ?? 'Roller';
+    const precioUnit = g.sistema?.instalacionLinea ?? params.instalacionRoller;
+    const prev = porSistema.get(clave);
+    if (prev) prev.cantidad += g.piezas.length;
+    else porSistema.set(clave, { cantidad: g.piezas.length, precioUnit });
+  }
   const minGratis = params.instalacionGratisMinCortinas ?? PARAMETROS_DEFAULT.instalacionGratisMinCortinas;
   const descRM = params.instalacionDescuentoRM ?? PARAMETROS_DEFAULT.instalacionDescuentoRM;
   const descRegion = params.instalacionDescuentoRegion ?? PARAMETROS_DEFAULT.instalacionDescuentoRegion;
@@ -590,15 +638,24 @@ export function cotizarFase0(
       : alcanzaMinimo
         ? clamp01(descRM)
         : 0;
-  const totalInstal =
+  const partes: ParteInstalacion[] =
     sinInstalacion || nInstalables === 0
-      ? 0
-      : params.instalacionRoller * nInstalables * (1 - descInstal);
+      ? []
+      : [...porSistema].map(([sistema, p]) => ({
+          sistema,
+          cantidad: p.cantidad,
+          precioUnit: p.precioUnit,
+          total: p.precioUnit * p.cantidad * (1 - descInstal),
+        }));
+  const totalInstal = partes.reduce((s, p) => s + p.total, 0);
   const instalacion: InstalacionResultado = {
     cantidad: nInstalables,
-    precioUnit: params.instalacionRoller,
+    // El precio por cortina solo tiene sentido con un sistema en juego; con
+    // varios manda el desglose de `partes`.
+    precioUnit: partes.length === 1 ? partes[0].precioUnit : params.instalacionRoller,
     descuento: descInstal,
     total: totalInstal,
+    partes,
     // "GRATIS" sólo si no se cobra extra y (es región 100% off o llega al mínimo
     // de cortinas en RM).
     gratis: !sinInstalacion && totalInstal === 0 && (region || alcanzaMinimo),

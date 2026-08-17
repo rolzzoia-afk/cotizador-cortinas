@@ -339,6 +339,43 @@ describe('generarEtiquetasPanosPDF — omite paños de colmena', () => {
   });
 });
 
+// Aclaración 2026-08-17: la categoría B se fabrica CON sus etiquetas Brother
+// (estructura y paño). Lo que no lleva es la etiqueta Rolzzo del inventario
+// (INS 95 / INS 95-1), que vive en inventario.ts. Entre el 14 y el 17 se filtró
+// acá por error: estos tests fijan que ya no se filtra.
+describe('categoría B: sí lleva etiquetas Brother', () => {
+  const meta = { ot: '3190', cliente: 'CLIENTE B', fecha: '2026-08-17' };
+  const filaB = (junto: string, numeroPano: number, lineaB: boolean): OptimizerRow =>
+    ({
+      codInt: 'BK 78',
+      producto: 'ROLLER BLACKOUT GAMA B',
+      tipo: 'BLACKOUT',
+      junto,
+      numeroPano,
+      ventanaId: `V${numeroPano}`,
+      panoIndex: 0,
+      altoCorte: 2.1,
+      ancho: 1.5,
+      alto: 2,
+      lineaB,
+      pano: { tipoTela: 'BK', mecanismo: 'MEC 06 LZ50 B BLANCO', tuberia: 'E01' },
+    }) as unknown as OptimizerRow;
+
+  it('etiquetas de ESTRUCTURA: una OT toda B imprime una por cortina', () => {
+    docsGuardados.length = 0;
+    const n = generarEtiquetasPDF([filaB('A', 1, true), filaB('B', 2, true)], meta, {});
+    expect(n).toBe(2);
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
+  });
+
+  it('etiquetas de PAÑO: la B cuenta igual que la A (2 paños → 2 etiquetas)', () => {
+    docsGuardados.length = 0;
+    const n = generarEtiquetasPanosPDF([filaB('A', 1, true), filaB('B', 2, false)], meta, {});
+    expect(n).toBe(2);
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
+  });
+});
+
 describe('códigos de perfil zócalo / separador por color', () => {
   it('zócalo E32/E33/E34 y separador E41/E42/E43 por color (café ≡ madera)', () => {
     expect(codigoZocaloPerfil('BLANCO')).toBe('E32');
