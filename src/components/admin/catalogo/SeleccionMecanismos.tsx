@@ -28,7 +28,7 @@ import {
 const ESTADOS: Array<{ valor: EstadoCatalogo; label: string }> = [
   { valor: 'activo', label: 'Se ofrece' },
   { valor: 'oculto', label: 'Oculto (solo OTs viejas)' },
-  { valor: 'opt_in', label: 'Solo con E78 activado' },
+  { valor: 'opt_in', label: 'Solo con E39 activado' },
 ];/** Escribe la clave corta Y la larga: el motor normaliza a cualquiera de las dos. */
 function setColor(
   mapa: Record<string, number>,
@@ -357,10 +357,10 @@ export function SeleccionMecanismos({ valor, onChange, paleta }: Props) {
 
       {/* ── Banda de oscuridad ───────────────────────────────────── */}
       <div className="mt-4 rounded-md border p-3 text-xs">
-        <div className="mb-1 font-medium">Banda del tubo E78 en oscuridad de 38 mm</div>
+        <div className="mb-1 font-medium">Banda del tubo E39 en oscuridad de 38 mm</div>
         <p className="mb-2 text-[11px] text-muted-foreground">
           Soft light y DARK de 38 mm no llevan kit de mecanismo: dentro de esta banda (y con el tubo
-          E78 activado en la OT) lo que cambia es el <strong>modelo</strong>, que pasa a 45 mm.
+          E39 activado en la OT) lo que cambia es el <strong>modelo</strong>, que pasa a 45 mm.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           desde
@@ -535,7 +535,7 @@ function ReglaAnchoFila({
               onChange(e.target.checked ? { ...regla, requiereTuboE78: true } : resto);
             }}
           />
-          Solo con E78 activado
+          Solo con E39 activado
         </label>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">

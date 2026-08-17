@@ -16,7 +16,11 @@ import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow, PiezaEtiqueta } from './tela';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
-import { medidaCorteCenefaCuadrada, tiraCenefaOvalada } from '@/modules/descuentos/adicionales-cenefa';
+import {
+  anchoCenefaCuadradaDeclaradoCm,
+  medidaCorteCenefaCuadrada,
+  tiraCenefaOvalada,
+} from '@/modules/descuentos/adicionales-cenefa';
 import {
   REGLAS_TUBERIA,
   codigoTuberiaDeChip,
@@ -1548,11 +1552,17 @@ function dibujarCenefaCuadrada(
   n: number,
   total: number,
   meta: MetaPDF,
+  adicionales?: AdicionalFase0Persistido[],
 ) {
   const p = (row.pano || EMPTY_PANO) as Partial<Pano>;
   const anchoCm = row.anchoCm || 0;
   const tapaTexto = (p.cenefaTapa && tapaLabels[p.cenefaTapa]) || 'MURO A MURO';
-  const anchoCenefa = medidaCorteCenefaCuadrada(anchoCm, p.cenefaTapa);
+  // El ANCHO DE CENEFA es el que se VENDIÓ en Fase 1 (cantidad del adicional
+  // CENF C, en metros), no el de la cortina: la cenefa se vende aparte y puede
+  // ser más ancha. Solo sin adicional que calce se estima desde el paño.
+  const anchoCenefa =
+    anchoCenefaCuadradaDeclaradoCm(row.ubicacion || '', row.ancho || 0, adicionales) ??
+    medidaCorteCenefaCuadrada(anchoCm, p.cenefaTapa);
   const colorCenefa =
     colorPesoNormalizado(p.colorTapa || p.colorMecanismo || p.color) || '—';
   const ubic = (row.ubicacion || '—').toUpperCase();
@@ -1704,15 +1714,19 @@ function dibujarPano(
  * de las plantillas P-touch (docs/referencias).
  */
 export function generarEtiquetasPDF(
-  rows: OptimizerRow[],
+  todas: OptimizerRow[],
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
   colores?: readonly ColorAccesorio[],
-): void {
-  if (!rows || rows.length === 0) {
+): number {
+  if (!todas || todas.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
+  // La gama B se arma sin etiquetas (decisión 2026-08-14): se filtra ANTES de
+  // los totales para que el "Cortina n/N" cuente solo las que sí se imprimen.
+  const rows = todas.filter((r) => !r.lineaB);
+  if (rows.length === 0) return 0;
   const cenefas = rows.filter((r) => esCenefaCuadrada((r.pano || EMPTY_PANO).cenefa as string));
   // La vertical usa 106 mm; los sistemas de oscuridad (soft light, DARK, soft light
   // CC y oscuranti) 146 mm por las secciones extra; el resto 100 mm.
@@ -1734,12 +1748,13 @@ export function generarEtiquetasPDF(
     if (esCenefaCuadrada((row.pano || EMPTY_PANO).cenefa as string)) {
       nCenefa += 1;
       doc.addPage([ANCHO, ALTO_PAGINA], 'p');
-      dibujarCenefaCuadrada(doc, row, nCenefa, cenefas.length, meta);
+      dibujarCenefaCuadrada(doc, row, nCenefa, cenefas.length, meta, adicionales);
       lineaDeCorte(doc, FIN_CENEFA);
     }
   });
 
   doc.save(`Etiquetas_${meta.ot}.pdf`);
+  return rows.length;
 }
 
 /** Grupo de cortinas que comparten paño físico (misma letra + N° de paño). */
@@ -1804,9 +1819,12 @@ export function generarEtiquetasPanosPDF(
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
   const todos = agruparEtiquetasPanos(rows);
+  // Gama B sin etiquetas: se cae el paño solo si TODAS sus cortinas son B — un
+  // paño mixto A+B conserva la suya (la parte A la necesita para identificarse).
+  const sinB = todos.filter((g) => !g.rows.every((r) => r.lineaB));
   const grupos = esDeColmena
-    ? todos.filter((g) => !g.rows.some(esDeColmena))
-    : todos;
+    ? sinB.filter((g) => !g.rows.some(esDeColmena))
+    : sinB;
   if (grupos.length === 0) return 0;
   // Página exacta 62×54: orientación 'l' porque jsPDF voltea las páginas
   // "apaisadas" (ancho > alto) cuando se le pide 'p'.

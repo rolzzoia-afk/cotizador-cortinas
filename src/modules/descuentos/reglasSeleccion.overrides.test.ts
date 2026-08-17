@@ -164,10 +164,10 @@ describe('override de las reglas de tubería', () => {
     // Un modelo cuyo código propio (E04) no es un chip seleccionable: el tubo
     // sale de la lista de compatibles del diámetro, y ahí manda el ORDEN.
     const m45 = { ...modelo('MEC_18', 45), codigos_tubo: 'E04' };
-    expect(chipTuberiaDeModelo(m45, OPCIONES_TUBERIA)).toBe('E78 - TUBO 43MM(ESP1.2)(5.8)');
+    expect(chipTuberiaDeModelo(m45, OPCIONES_TUBERIA)).toBe('E39 - TUBO .43 - ESP 1.2 (TUBO .45)');
 
     const r = clonar();
-    r.tuberia.tubos45mm = ['E05', 'E78'];
+    r.tuberia.tubos45mm = ['E05', 'E39'];
     delete (r.tuberia.codigoPorDiametro as Record<number, string>)[45];
     expect(chipTuberiaDeModelo(m45, OPCIONES_TUBERIA, undefined, r.tuberia)).toBe(
       'E05 - TUBO Ø 45 mm',

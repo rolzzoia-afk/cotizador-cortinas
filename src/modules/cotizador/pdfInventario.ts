@@ -30,7 +30,7 @@ import { construirCalculoGeneral, type FilaCalculo } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
 import {
-  COD_PESO_AUTO,
+  codPesoAuto,
   LARGO_CADENA_VERTICAL,
   codCadenaAutoPorAlto,
   codCadenaVertical,
@@ -55,6 +55,7 @@ import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
   codigoInsumoMec,
   esCategoriaVertical,
+  kitTraeCadenaIncorporada,
   normalizarColorAccesorio,
   opcionesMecanismoResolucion,
 } from '@/modules/descuentos/reglas-mecanismo';
@@ -275,11 +276,12 @@ export function consolidarInsumos(
       const ovaladaSistema =
         ovalada || esOscuridadOvalada || (modelo?.sistema || '').toUpperCase().includes('CENEFA_OVALADA');
       const lineaB = esLineaB(p, v.codInt, catalogo, v.categoria, reglas.mecanismo, reglas.tipos);
-      const esE78Mixta =
-        ovaladaSistema &&
-        codigoTuberiaDeChip(
-          tuberiaParaPano(anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia, lineaB),
-        ) === 'E78';
+      // Armadura mixta del tubo de 45 mm. Se aceptan los DOS códigos: E39 es el
+      // nombre desde 2026-08-14 y E78 el que quedó guardado en las OTs viejas.
+      const codTuboPano = codigoTuberiaDeChip(
+        tuberiaParaPano(anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia, lineaB),
+      );
+      const esE78Mixta = ovaladaSistema && (codTuboPano === 'E39' || codTuboPano === 'E78');
 
       // Mecanismo + cadena + peso: toda categoría con mecanismo que NO se venda
       // como motor (aunque el paño lleve un motor, va dentro del precio).
@@ -306,7 +308,10 @@ export function consolidarInsumos(
         // Cadena: usa la elegida en Fase 2 (codCadena); si el paño no la guardó
         // (OT no sincronizada en Fase 2), la resuelve por alto + color con el
         // catálogo de cadenas — igual que Fase 2 — para que no falte en la hoja.
-        if (p.codCadena) {
+        // El MEC 06 trae la cadena incorporada: ni la guardada ni el fallback.
+        if (kitTraeCadenaIncorporada(p.mecanismo)) {
+          // sin línea de cadena
+        } else if (p.codCadena) {
           bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
         } else {
           const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
@@ -323,11 +328,11 @@ export function consolidarInsumos(
             bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1, grupoOvalada);
           }
         }
-        // El peso de cadena es fijo (PCA04, transparente) para toda cortina de
-        // cadena: se emite SIEMPRE, aunque el paño no lo tenga guardado — igual
-        // que el mecanismo, que se resuelve en vivo. Si en Fase 2 se eligió otro
+        // El peso de cadena se emite SIEMPRE, aunque el paño no lo tenga
+        // guardado — igual que el mecanismo, que se resuelve en vivo (PCA04
+        // transparente; en gama B, PCA01 blanco). Si en Fase 2 se eligió otro
         // peso, se respeta.
-        const cp = (p.codPeso || COD_PESO_AUTO).replace(/\s+/g, '').toUpperCase();
+        const cp = (p.codPeso || codPesoAuto(lineaB)).replace(/\s+/g, '').toUpperCase();
         bump(cp, `[${cp}] ${textoPesoCadenaInventario({ codPeso: cp })}`.trim(), 1);
       }
 
@@ -337,6 +342,7 @@ export function consolidarInsumos(
         ventanaColor: v.color,
         anchoM,
         omitirFijaciones: !!p.dual && pi > 0,
+        lineaB,
       })) {
         bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
       }

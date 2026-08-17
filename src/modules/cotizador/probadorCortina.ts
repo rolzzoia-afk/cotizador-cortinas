@@ -243,15 +243,15 @@ export function resolverCortinaDePrueba(
   }
 
   // ── Insumos de bodega del paño
-  // Sin `lineaB` a propósito: las tapas, los brackets y los tarugos son los
-  // mismos en las dos líneas. Lo único que cambia es el código del KIT, y ese
-  // lo emite el inventario (bom.ts / pdfInventario.ts) con `codigoInsumoMec`.
+  // Desde 2026-08-14 la categoría B también cambia las TAPAS de peso
+  // (TAP18/TAP28-B ×2 en roller, TAP17 en dúo), así que el flag viaja.
   const insumos = insumosDePano(pano, {
     categoria,
     ventanaColor: color,
     anchoM,
     tipos: reglas.tipos,
     colores: reglas.colores,
+    lineaB,
   });
   const insumosSinCodigo = insumos.filter((i) => !i.codigo);
   if (insumosSinCodigo.length > 0) {

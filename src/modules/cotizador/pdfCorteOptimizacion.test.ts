@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { construirHojaCorte, filasCorteVisibles, partirHojaCorte, type FilaCorteCortina } from './pdfCorteOptimizacion';
+import {
+  construirHojaCorte,
+  filasCorteVisibles,
+  partirHojaCorte,
+  totalesPorTipoDeTela,
+  type FilaCorteCortina,
+} from './pdfCorteOptimizacion';
 import { buildOptimizerRows, asignarJuntoEnOrden, autoOptimizar } from './tela';
 import { MODELO_DESPIECE_STUB } from '@/modules/descuentos/despiece';
 import type { PanoColmena } from './planCorte';
@@ -530,5 +536,142 @@ describe('construirHojaCorte — paño de colmena NO va a TOTAL PAÑOS (OT 267-1
     const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
     // Único paño y sale de colmena → 0 metros de rollo, pero la fila igual aparece.
     expect(m['SC 64']).toBe(0);
+  });
+});
+
+describe('totalesPorTipoDeTela', () => {
+  const nombreDe = (codInt: string) => cat[codInt]?.producto ?? codInt;
+
+  it('suma dos COD_INT del MISMO producto en una sola fila', () => {
+    const total = totalesPorTipoDeTela(
+      [
+        { codInt: 'SC 64', metros: 2.05, esVertical: false },
+        { codInt: 'SC 65', metros: 1.8, esVertical: false },
+      ],
+      // Dos partidas del mismo screen premium (mismo nombre de producto).
+      (c) => (c === 'SC 65' ? 'ROLLER SCREEN PREMIUM' : nombreDe(c)),
+    );
+    expect(total).toHaveLength(1);
+    expect(total[0]).toEqual({
+      producto: 'ROLLER SCREEN PREMIUM',
+      metros: 3.85,
+      esVertical: false,
+    });
+  });
+
+  it('NO mezcla roller y vertical aunque el producto se llame igual (hojas separadas)', () => {
+    const total = totalesPorTipoDeTela(
+      [
+        { codInt: 'SC 64', metros: 2, esVertical: false },
+        { codInt: 'SC 64', metros: 3, esVertical: true },
+      ],
+      nombreDe,
+    );
+    expect(total).toHaveLength(2);
+    expect(total.find((t) => !t.esVertical)?.metros).toBe(2);
+    expect(total.find((t) => t.esVertical)?.metros).toBe(3);
+  });
+
+  it('sin nombre en el catálogo cae al COD_INT (no deja la fila sin rótulo)', () => {
+    const total = totalesPorTipoDeTela([{ codInt: 'XX 99', metros: 1.2, esVertical: false }], () => '');
+    expect(total[0].producto).toBe('XX 99');
+  });
+
+  it('sale de la hoja real: los metros por producto calzan con los del OPTIMIZADOR', () => {
+    const mixtas: VentanaItem[] = [
+      {
+        id: 'roller', ubicacion: 'LIVING', codInt: 'SC 64',
+        producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'ROL',
+        grupoId: null, alto: 1.8, precio: 0, cantidad: 1,
+        panos: [{ ancho: 1.5, alto: 1.8 }],
+      },
+      {
+        id: 'vert', ubicacion: 'SALA', codInt: 'SC 02',
+        producto: 'CORTINA VERTICAL SCREEN PREMIUM', tipo: 'PREMIUM', categoria: 'VERTICAL',
+        grupoId: null, alto: 2.0, precio: 0, cantidad: 1,
+        panos: [{ ancho: 1.8, alto: 2.0 }],
+      },
+    ];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(mixtas, cat));
+    const hoja = construirHojaCorte(rows, [], ot(mixtas));
+    const total = totalesPorTipoDeTela(hoja.optimizador, nombreDe);
+    const sumaOpt = hoja.optimizador.reduce((s, o) => s + o.metros, 0);
+    const sumaTot = total.reduce((s, t) => s + t.metros, 0);
+    expect(parseFloat(sumaTot.toFixed(3))).toBe(parseFloat(sumaOpt.toFixed(3)));
+  });
+});
+
+// ── Bug OT 268-6: >26 paños y la vuelta del abecedario ──────────────
+// 88 cortinas de 2 m (48 de alto 2,4 + 40 de 1,5): ninguna comparte paño, pero
+// las letras daban la vuelta en la Z y la hoja fusionaba por LETRA los paños
+// 1/27/53/79 en uno solo — decía 26 paños, todos de 2,650, y reservaba un
+// tercio de la tela real.
+describe('construirHojaCorte — OT 268-6 (88 cortinas, >26 paños)', () => {
+  const ventana268 = (i: number, codInt: string, alto: number): VentanaItem =>
+    ({
+      id: `v${i}`, ubicacion: `VENT ${i}`, codInt, producto: 'ROLLER', tipo: 'PREMIUM',
+      categoria: 'ROL', grupoId: null, alto, precio: 0, cantidad: 1,
+      panos: [{ ancho: 2, alto }],
+    }) as unknown as VentanaItem;
+  // 24+24 de 2,4 y 20+20 de 1,5, alternando BK 18 / SC 64 como la OT real.
+  const ventanas: VentanaItem[] = [];
+  for (let i = 0; i < 48; i++) ventanas.push(ventana268(i, i % 2 ? 'SC 64' : 'BK 18', 2.4));
+  for (let i = 48; i < 88; i++) ventanas.push(ventana268(i, i % 2 ? 'SC 64' : 'BK 18', 1.5));
+
+  const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+  const hoja = construirHojaCorte(rows, [], ot(ventanas));
+
+  it('88 paños, no 26: ninguna cortina de 2 m comparte rollo', () => {
+    expect(hoja.totalPanos).toBe(88);
+    expect(new Set(hoja.cortinas.map((c) => c.pano)).size).toBe(88);
+  });
+
+  it('las bajas conservan SU altura: 48 paños de 2,65 y 40 de 1,75', () => {
+    const altos = hoja.panos.map((p) => p.altoMaxUtilizar);
+    expect(altos.filter((a) => a === 2.65)).toHaveLength(48);
+    expect(altos.filter((a) => a === 1.75)).toHaveLength(40);
+  });
+
+  it('el OPTIMIZADOR reserva la tela completa (98,6 m por tela, no ~34)', () => {
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    // 24×2,65 + 20×1,75 = 98,6 por cada tela.
+    expect(m['BK 18']).toBeCloseTo(98.6, 3);
+    expect(m['SC 64']).toBeCloseTo(98.6, 3);
+  });
+
+  it('las letras siguen estilo Excel: paño 27 = AA, paño 88 = CJ', () => {
+    expect(hoja.cortinas[26].cortarJunto).toBe('AA');
+    expect(hoja.cortinas[87].cortarJunto).toBe('CJ');
+  });
+});
+
+describe('construirHojaCorte — plan GUARDADO con letras repetidas (pre-arreglo)', () => {
+  // Un plan guardado antes del arreglo trae la vuelta del abecedario: dos paños
+  // distintos con la letra 'A' pero numeroPano 1 y 27. No deben fusionarse.
+  const vent = (i: number, alto: number): VentanaItem =>
+    ({
+      id: `v${i}`, ubicacion: 'L', codInt: 'SC 64', producto: 'ROLLER SCREEN PREMIUM',
+      tipo: 'PREMIUM', categoria: 'ROL', grupoId: null, alto, precio: 0, cantidad: 1,
+      panos: [{ ancho: 2, alto }],
+    }) as unknown as VentanaItem;
+
+  it('misma letra + numeroPano distinto = paños DISTINTOS (cada uno su altura)', () => {
+    const rows = buildOptimizerRows([vent(1, 2.4), vent(2, 1.5)], cat).map((r, i) => ({
+      ...r,
+      junto: 'A',
+      numeroPano: i === 0 ? 1 : 27,
+    }));
+    const hoja = construirHojaCorte(rows, [], ot([vent(1, 2.4), vent(2, 1.5)]));
+    expect(hoja.totalPanos).toBe(2);
+    expect(hoja.panos.map((p) => p.altoMaxUtilizar).sort()).toEqual([1.75, 2.65]);
+  });
+
+  it('misma letra + mismo numeroPano (o ambos vacíos) = SIGUEN cortándose juntas', () => {
+    const base = buildOptimizerRows([vent(1, 2.4), vent(2, 1.5)], cat);
+    // Angostas para que quepan juntas en el rollo (grupo a mano solo por letra).
+    const angostas = base.map((r) => ({ ...r, ancho: 1.2, junto: 'A', numeroPano: '' }));
+    const hoja = construirHojaCorte(angostas, [], ot([vent(1, 2.4), vent(2, 1.5)]));
+    expect(hoja.totalPanos).toBe(1);
+    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.65); // manda la más alta
   });
 });

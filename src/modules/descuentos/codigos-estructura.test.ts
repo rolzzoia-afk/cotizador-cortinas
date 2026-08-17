@@ -103,6 +103,8 @@ describe('codigoEstructura — categoría B', () => {
       'pesoUB',
       'pesoInternoB',
       'cenefaOvaladaB',
+      'tapaPesoB',
+      'tapaDuoB',
     ]);
   });
 });

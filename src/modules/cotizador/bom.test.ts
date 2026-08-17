@@ -608,3 +608,29 @@ describe('bomToOrdenMaterialesRows', () => {
     expect(rows[0].color).toBeNull();
   });
 });
+
+describe('calcularBOM — MEC 06 con cadena incorporada (2026-08-14)', () => {
+  it('un paño con MEC 06 y cadena guardada NO emite línea de CADENA (el peso sí)', () => {
+    const rows = [
+      row({
+        mecanismo: 'LZ50 BLANCO [MEC 06]',
+        codCadena: 'CAD01',
+        largoCadena: '1mts',
+        colorCadena: 'BCO',
+        codPeso: 'PCA01',
+        color: 'BCO',
+      }),
+    ];
+    const bom = calcularBOM(rows as never);
+    expect(bom.some((b) => b.descripcion === 'Cadena')).toBe(false);
+    expect(bom.find((b) => b.descripcion === 'Peso de cadena')?.especificacion).toBe('PCA01');
+  });
+
+  it('con otro kit la cadena sale como siempre (regresión)', () => {
+    const rows = [
+      row({ mecanismo: 'KIT [MEC 33]', codCadena: 'CAD01', codPeso: 'PCA04', color: 'BCO' }),
+    ];
+    const bom = calcularBOM(rows as never);
+    expect(bom.some((b) => b.descripcion === 'Cadena')).toBe(true);
+  });
+});

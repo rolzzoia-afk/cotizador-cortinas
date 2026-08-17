@@ -52,7 +52,7 @@ import GuardarSobranteRolloDialog, {
 } from './telas/dialogs/GuardarSobranteRolloDialog';
 import type { SubEtapaProd } from '@/modules/ots/types';
 import type { Ventana as VentanaCotizador } from '@/modules/cotizador/types';
-import { descargarExcelOrdenes } from '@/modules/descuentos/excel-ordenes';
+import { descargarExcelOrdenes, generarOrdenesOptimizador } from '@/modules/descuentos/excel-ordenes';
 import { confirmar } from '@/components/ui/confirm';
 
 export function CotizadorFase4() {
@@ -220,6 +220,60 @@ export function CotizadorFase4() {
     }
   };
 
+  // Envía las órdenes DIRECTO al optimizador, sin pasar por el Excel: el
+  // generador ya produce la matriz que el optimizador lee (mismas columnas), así
+  // que se deja en `configuracion` y el optimizador la levanta al abrirse. El
+  // botón de descarga queda como respaldo (y para mandar el archivo por correo).
+  const [enviandoOpt, setEnviandoOpt] = useState(false);
+  const onEnviarAlOptimizador = async () => {
+    if (!ot || !empresaId) return;
+    setEnviandoOpt(true);
+    try {
+      const ventanas = (ot.storeVentanas || []) as unknown as VentanaCotizador[];
+      const numeroOT = ot.datosGenerales.ot || '—';
+      const res = generarOrdenesOptimizador(numeroOT, ventanas, {
+        adicionalesFase0: ot.datosGenerales.adicionalesFase0,
+        params: parametros,
+        formulas,
+        reglas,
+        catalogo,
+      });
+      if (res.filas === 0) {
+        toast.error('No hay cortes que enviar: revisa las medidas de la OT.');
+        return;
+      }
+      const { error } = await supabase.from('configuracion').upsert(
+        {
+          empresa_id: empresaId,
+          clave: 'opt_ordenes_crudos',
+          valor: JSON.stringify({
+            ot: numeroOT,
+            aoa: res.aoa,
+            filas: res.filas,
+            ts: new Date().toISOString(),
+          }),
+        },
+        { onConflict: 'empresa_id,clave' },
+      );
+      if (error) throw error;
+      if (res.advertencias.length > 0) {
+        toast.warning(
+          `Órdenes enviadas (${res.filas} cortes) con ${res.advertencias.length} advertencia(s): ` +
+            res.advertencias[0],
+        );
+      } else {
+        toast.success(`${res.filas} cortes enviados al Optimizador.`);
+      }
+      navigate('/optimizador');
+    } catch (e) {
+      toast.error(
+        'No se pudieron enviar las órdenes: ' + (e instanceof Error ? e.message : String(e)),
+      );
+    } finally {
+      setEnviandoOpt(false);
+    }
+  };
+
   const onCalculoGeneral = () => {
     if (!ot || (ot.storeVentanas || []).length === 0) {
       toast.error('No hay ventanas en la OT.');
@@ -286,14 +340,18 @@ export function CotizadorFase4() {
       if (!continuar) return;
     }
     try {
-      generarEtiquetasPDF(
+      const n = generarEtiquetasPDF(
         pdfRows,
         metaPDF(),
         catalogo,
         ot?.datosGenerales.adicionalesFase0,
         reglas.colores,
       );
-      toast.success('Etiquetas generadas');
+      if (n === 0) {
+        toast.info('Todas las cortinas son de gama B — no llevan etiquetas.');
+      } else {
+        toast.success('Etiquetas generadas');
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error generando etiquetas: ' + msg);
@@ -328,7 +386,9 @@ export function CotizadorFase4() {
         piezasColmena.has(pieceId(ot.id, r.ventanaId, r.panoIndex)),
       );
       if (n === 0) {
-        toast.info('Todos los paños salen de la colmena — no hay etiquetas que imprimir.');
+        toast.info(
+          'Sin etiquetas que imprimir: los paños salen de la colmena o son de gama B.',
+        );
       } else {
         toast.success(`${n} etiqueta(s) de paño generada(s)`);
       }
@@ -762,6 +822,20 @@ export function CotizadorFase4() {
             >
               <FileDown className="h-3.5 w-3.5" />
               Excel órdenes (optimizador)
+            </Button>
+            <Button
+              size="sm"
+              onClick={onEnviarAlOptimizador}
+              disabled={!ot || (ot.storeVentanas || []).length === 0 || enviandoOpt}
+              className="gap-1.5"
+              title="Manda las órdenes directo al Optimizador, sin descargar ni volver a subir el Excel"
+            >
+              {enviandoOpt ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Scissors className="h-3.5 w-3.5" />
+              )}
+              {enviandoOpt ? 'Enviando…' : 'Enviar al optimizador'}
             </Button>
             <Button
               size="sm"

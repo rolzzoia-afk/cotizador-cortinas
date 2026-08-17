@@ -389,3 +389,45 @@ describe('calcularDespiece — BEEBLACK', () => {
     expect(corte(d, 'SEPARADOR (DER)')).toBeUndefined();
   });
 });
+
+// El rótulo del PESO INTERNO lleva su código de bodega. En la línea A es E13
+// fijo; en la B depende del color (E79-B blanco / E71-B negro) — antes decía
+// "(E13)" siempre y la hoja de estructura de una cortina B salía con el código
+// de la línea A (pedido 2026-08-14).
+describe('rótulo del peso interno por línea', () => {
+  const modeloDuo: ModeloDespiece = {
+    ...base,
+    sistema: 'CENEFA_OVALADA_DUO',
+    tipo_rol: 'DUO_CENEFA_OV_MANUAL_38mm',
+    mecanismo: 'MEC_09_OVALADA_NEGRO',
+    dcto_tubo_cm: 1.8,
+    dcto_tela_cm: 0.5,
+    dcto_cenefa_cm: 1.5,
+    peso_interno_duo_cm: 0.2,
+    peso_u_duo_cm: 0.3,
+  };
+  const nombres = (d: ReturnType<typeof calcularDespiece>) =>
+    d.cortes.filter((c) => c.columnaExcel === 'PESO INTERNO').map((c) => c.componente);
+
+  it('línea A: E13 fijo, sin importar el color', () => {
+    expect(nombres(calcularDespiece(modeloDuo, 200))).toEqual(['Peso interno (E13)']);
+    expect(nombres(calcularDespiece(modeloDuo, 200, { colorAccesorios: 'NEG' }))).toEqual([
+      'Peso interno (E13)',
+    ]);
+  });
+
+  it('línea B: el código sale por color (E79-B blanco / E71-B negro)', () => {
+    expect(nombres(calcularDespiece(modeloDuo, 200, { lineaB: true, colorAccesorios: 'BCO' }))).toEqual([
+      'Peso interno (E79-B)',
+    ]);
+    expect(nombres(calcularDespiece(modeloDuo, 200, { lineaB: true, colorAccesorios: 'NEG' }))).toEqual([
+      'Peso interno (E71-B)',
+    ]);
+  });
+
+  it('la MEDIDA no cambia por línea (solo el rótulo)', () => {
+    const a = calcularDespiece(modeloDuo, 200);
+    const b = calcularDespiece(modeloDuo, 200, { lineaB: true, colorAccesorios: 'BCO' });
+    expect(corte(b, 'PESO INTERNO')).toBe(corte(a, 'PESO INTERNO'));
+  });
+});

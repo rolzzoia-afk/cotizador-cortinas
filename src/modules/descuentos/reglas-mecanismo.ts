@@ -170,7 +170,7 @@ export type ReglasMecanismo = {
 /**
  * Kits de bodega de cenefa ovalada por color de accesorios (39 blanco · 38
  * negro · 12 gris). Se usan en TODAS las cenefa ovalada, de 38 y de 45 mm
- * (tubo E78): desde 2026-07-15 la ovalada 45 mm ya NO usa los MEC 09/10 legacy
+ * (tubo E39): desde 2026-07-15 la ovalada 45 mm ya NO usa los MEC 09/10 legacy
  * del Excel, sino este mismo kit que las roller y dúo 38 mm. Compartido por las
  * reglas de categoría (45 mm) y la banda dúo, y por el inventario (líneas de
  * tapas). Un color sin entrada (transparente, café…) deja el mecanismo manual.
@@ -205,7 +205,7 @@ export const REGLAS_MECANISMO = {
    * de la regla de color Y de la de categoría. Se evalúan EN ORDEN; gana la
    * primera cuyo rango y color calcen.
    *  · Roller simple sobre 3 m → kit 63 mm (MEC 28, tubo E65).
-   *  · Banda 2,2–3,0 m (2026-07-14, tubo E78): ROL usa los kits 45 mm por color
+   *  · Banda 2,2–3,0 m (2026-07-14, tubo E39): ROL usa los kits 45 mm por color
    *    (blanco MEC 18 DECORELLI · negro MEC 23 ROLZZO; GRIS queda manual porque
    *    no hay kit 45 gris). El dúo manual pasa a los kits ovalada 45 del
    *    catálogo dúo (blanco/gris MEC 18 · negro MEC 23).
@@ -220,17 +220,17 @@ export const REGLAS_MECANISMO = {
       nota: 'Fijo por ancho >3 m: mecanismo y tubo de 63 mm (MEC 28 · E65). Un kit de 38 mm no aguanta esa luz.',
     },
     {
-      descripcion: 'Roller simple 2,2–3,0 m → kit 45 mm por color (tubo E78); gris queda manual',
+      descripcion: 'Roller simple 2,2–3,0 m → kit 45 mm por color (tubo E39); gris queda manual',
       categoria: 'ROL',
       anchoMinM: 2.2,
       anchoMaxM: 3.0,
       mecPorColor: { BCO: 18, BLANCO: 18, NEG: 23, NEGRO: 23 },
-      tubo: 'E78',
+      tubo: 'E39',
       requiereTuboE78: true,
-      nota: 'Fijo por ancho 2,2–3,0 m: kit 45 mm por color y tubo E78. Con accesorios grises la elección queda manual.',
+      nota: 'Fijo por ancho 2,2–3,0 m: kit 45 mm por color y tubo E39. Con accesorios grises la elección queda manual.',
     },
     {
-      descripcion: 'Dúo manual 38 mm de 2,2–3,0 m → kit ovalada de bodega por color (tubo E78)',
+      descripcion: 'Dúo manual 38 mm de 2,2–3,0 m → kit ovalada de bodega por color (tubo E39)',
       categoria: 'DUO_MANUAL_38mm',
       anchoMinM: 2.2,
       anchoMaxM: 3.0,
@@ -240,12 +240,12 @@ export const REGLAS_MECANISMO = {
       mecPorColor: MEC_KIT_OVALADA_POR_COLOR,
       modeloMecPorColor: { BCO: 18, BLANCO: 18, GRS: 18, GRIS: 18, NEG: 23, NEGRO: 23 },
       categoriaModelo: 'DUO_MANUAL_45mm',
-      tubo: 'E78',
+      tubo: 'E39',
       requiereTuboE78: true,
-      nota: 'Fijo por ancho 2,2–3,0 m: kit ovalada de bodega por color y tubo E78.',
+      nota: 'Fijo por ancho 2,2–3,0 m: kit ovalada de bodega por color y tubo E39.',
     },
     {
-      descripcion: 'Cenefa ovalada roller 38 mm de 2,2–3,0 m → fila 45 mm por color (tubo E78); gris queda en 38 mm',
+      descripcion: 'Cenefa ovalada roller 38 mm de 2,2–3,0 m → fila 45 mm por color (tubo E39); gris queda en 38 mm',
       categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
       anchoMinM: 2.2,
       anchoMaxM: 3.0,
@@ -256,9 +256,9 @@ export const REGLAS_MECANISMO = {
       mecPorColor: { BCO: 39, BLANCO: 39, NEG: 38, NEGRO: 38 },
       modeloMecPorColor: { BCO: 10, BLANCO: 10, NEG: 9, NEGRO: 9 },
       categoriaModelo: 'ROL_MANUAL_CENEFA_OVALADA_45mm',
-      tubo: 'E78',
+      tubo: 'E39',
       requiereTuboE78: true,
-      nota: 'Fijo por ancho 2,2–3,0 m (Tubo E78 activado): fila cenefa ovalada 45 mm y tubo E78. Con accesorios grises queda en 38 mm.',
+      nota: 'Fijo por ancho 2,2–3,0 m (Tubo E39 activado): fila cenefa ovalada 45 mm y tubo E39. Con accesorios grises queda en 38 mm.',
     },
   ] as readonly ReglaMecAncho[],
 
@@ -383,7 +383,7 @@ export const REGLAS_MECANISMO = {
     },
     // Roller manual con cenefa ovalada: misma familia de kits ovalada que la dúo
     // (confirmado 2026-07-07). Los motorizados no entran (el motor reemplaza al
-    // mecanismo). Desde 2026-07-15 el 45 mm (tubo E78) usa el MISMO kit ovalada
+    // mecanismo). Desde 2026-07-15 el 45 mm (tubo E39) usa el MISMO kit ovalada
     // de bodega que el 38 mm — antes caía al kit simple 32/33/34.
     {
       descripcion: 'Roller manual cenefa ovalada 38 mm blanco → MEC 39 ovalada',
@@ -451,7 +451,7 @@ export const REGLAS_MECANISMO = {
     { chip: 'OVALADA GRIS [MEC 12]', estado: 'activo' },
     { chip: 'OVALADA NEGRO [MEC 38]', estado: 'activo' },
     { chip: 'OVALADA BLANCO [MEC 39]', estado: 'activo' },
-    // Kits 45 mm (tubo E78) — banda 2,2–3,0 m por color y elección manual
+    // Kits 45 mm (tubo E39) — banda 2,2–3,0 m por color y elección manual
     // (2026-07-14; antes eran legacy). MEC 18 DECORELLI · MEC 23 ROLZZO.
     { chip: '0,45mm BCO [MEC 18]', estado: 'activo' },
     { chip: '0,45mm NGR [MEC 23]', estado: 'activo' },
@@ -461,7 +461,7 @@ export const REGLAS_MECANISMO = {
     // pletina (opcionesMecanismoFiltradas) y NO emite insumo en el inventario.
     { chip: 'VELCRO', estado: 'activo' },
     // Chips MEC legacy del Excel (MEC 18/23 pasaron a la lista de UI 2026-07-14,
-    // junto con el tubo E78).
+    // junto con el tubo E39).
     { chip: 'LZ 38 MERG BCO [MEC 05]', estado: 'oculto' },
     { chip: 'OVALADA NEG [MEC 09]', estado: 'oculto' },
     { chip: 'OVALADA BCO [MEC 10]', estado: 'oculto' },
@@ -570,6 +570,18 @@ export function opcionesMecanismoResolucion(
 export function numeroMecDeChip(chip: string | null | undefined): number | null {
   const m = (chip || '').toUpperCase().match(/\[MEC (\d+)\]/);
   return m ? parseInt(m[1], 10) : null;
+}
+
+/** Kits que TRAEN la cadena incorporada: no se les asigna cadena aparte (ni
+ *  código, ni largo, ni línea en el BOM/inventario). Hoy solo el MEC 06
+ *  (LZ50 blanco del roller simple categoría B) — confirmado 2026-08-14.
+ *  El peso de cadena SÍ va (la cadena del kit no trae el suyo). */
+export const KITS_CON_CADENA_INCORPORADA: ReadonlySet<number> = new Set([6]);
+
+/** ¿El chip de mecanismo del paño es un kit con cadena incorporada? */
+export function kitTraeCadenaIncorporada(chipMecanismo: string | null | undefined): boolean {
+  const n = numeroMecDeChip(chipMecanismo);
+  return n !== null && KITS_CON_CADENA_INCORPORADA.has(n);
 }
 
 export function normalizarColorAccesorio(color: string | null | undefined): string {
@@ -798,7 +810,7 @@ export function reglaAnchoAplicable(
   const c = normalizarCategoria(categoria);
   for (const r of reglas.reglasAncho) {
     if (c !== r.categoria.toUpperCase()) continue;
-    // Las reglas de banda 2,2–3,0 m (tubo E78) solo aplican si la OT lo activó.
+    // Las reglas de banda 2,2–3,0 m (tubo E39) solo aplican si la OT lo activó.
     if (r.requiereTuboE78 && !usarTuboE78) continue;
     if (!(anchoM > r.anchoMinM)) continue;
     if (r.anchoMaxM != null && anchoM > r.anchoMaxM) continue;

@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { respaldarCatalogo } from './catalogoRespaldos';
 import type { CatalogoProductos } from './types';
 
 // Persiste el catálogo de productos completo en `configuracion`
 // (clave 'catalogo_productos_data'). Espeja `guardarParametros` en parametros.ts.
+//
+// Antes de escribir toma una foto del catálogo anterior. Como se guarda el blob
+// entero, un guardado desde una pestaña con datos viejos —o una importación de
+// Excel— pisa todos los precios de una vez; el respaldo es la vuelta atrás.
+// Está acá y no en cada llamador para que cubra por igual al diálogo de
+// producto, al clonador de códigos y al importador.
 export async function guardarCatalogoProductos(
   empresaId: string,
   catalogo: CatalogoProductos,
+  motivo = 'antes de guardar el catálogo',
 ): Promise<void> {
+  await respaldarCatalogo(empresaId, motivo);
   const { error } = await supabase.from('configuracion').upsert(
     { empresa_id: empresaId, clave: 'catalogo_productos_data', valor: JSON.stringify(catalogo) },
     { onConflict: 'empresa_id,clave' },

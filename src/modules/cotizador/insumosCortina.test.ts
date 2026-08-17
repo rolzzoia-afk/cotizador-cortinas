@@ -670,3 +670,43 @@ describe('cantidadSuplementosAuto', () => {
     expect(cantidadSuplementosAuto(pano({ cenefa: 'Cuadrada a muro' }), 'ROL', 2.0)).toBe(4);
   });
 });
+
+describe('insumosDePano — tapas de la categoría B (2026-08-14)', () => {
+  it('roller B blanco → TAP18 en AMBOS lados (×2) + tornillos', () => {
+    const out = insumosDePano(pano({ color: 'BCO' }), { categoria: 'ROL', anchoM: 1.5, lineaB: true });
+    const tapas = out.filter((i) => i.codigo === 'TAP18');
+    expect(tapas).toHaveLength(2); // misma tapa izquierda y derecha
+    expect(out.find((i) => i.codigo === 'TOR02')?.cantidad).toBe(2);
+    // Y ninguna tapa de la línea A.
+    expect(out.some((i) => ['TAP19', 'TAP01'].includes(i.codigo))).toBe(false);
+  });
+
+  it('roller B negro → TAP28-B ×2', () => {
+    const out = insumosDePano(pano({ color: 'NEG' }), { categoria: 'ROL', anchoM: 1.5, lineaB: true });
+    expect(out.filter((i) => i.codigo === 'TAP28-B')).toHaveLength(2);
+    expect(out.some((i) => ['TAP04', 'TAP05'].includes(i.codigo))).toBe(false);
+  });
+
+  it('dúo B (blanco o negro) → exterior TAP17 ×2, y la interna TAP13 SE MANTIENE', () => {
+    for (const color of ['BCO', 'NEG']) {
+      const out = insumosDePano(pano({ color }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5, lineaB: true });
+      expect(out.find((i) => i.codigo === 'TAP17')?.cantidad).toBe(2);
+      expect(out.find((i) => i.codigo === 'TAP13')?.cantidad).toBe(2);
+      expect(out.some((i) => ['TAP12', 'TAP11'].includes(i.codigo))).toBe(false);
+    }
+  });
+
+  it('sin lineaB todo queda como siempre (regresión)', () => {
+    const out = insumosDePano(pano({ color: 'BCO' }), { categoria: 'ROL', anchoM: 1.5 });
+    const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
+    expect(map).toEqual({ TAP19: 1, TAP01: 1, TOR02: 2 });
+  });
+
+  it('el overlay del color pisa la tabla B de fábrica', () => {
+    const colores = [
+      { codigo: 'NEG', nombre: 'NEGRO', insumos: { tapaPesoB: 'TAP99-B' } },
+    ] as unknown as Parameters<typeof insumosDePano>[1]['colores'];
+    const out = insumosDePano(pano({ color: 'NEG' }), { categoria: 'ROL', anchoM: 1.5, lineaB: true, colores });
+    expect(out.filter((i) => i.codigo === 'TAP99-B')).toHaveLength(2);
+  });
+});

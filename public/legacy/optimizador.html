@@ -1220,7 +1220,7 @@
                 <summary>Resultado del Plan de Corte</summary>
                 <div class="tabla-scroll" style="max-height:320px; margin-top:8px;">
                     <table>
-                        <thead><tr><th>Colmena</th><th>Código</th><th>Color</th><th>Medida a Cortar (cm)</th><th>Tubo Origen (cm)</th><th>Sobrante (cm)</th><th>Acción</th></tr></thead>
+                        <thead><tr><th>Colmena</th><th>Código</th><th>Color</th><th>Perforación</th><th>Medida a Cortar (cm)</th><th>Tubo Origen (cm)</th><th>Sobrante (cm)</th><th>Acción</th></tr></thead>
                         <tbody id="tbodyStagingPlan"></tbody>
                     </table>
                 </div>
@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.21"; // 2026-08-07: LÍNEA B (gama económica) — el Excel trae una columna LÍNEA; con 'B' los accesorios se buscan primero con la llave "<COMPONENTE>|<COLOR>|B" (peso E40/E69-B, cenefa E60/E72-B, peso U E25/E70-B, peso interno E79-B/E71-B). Sin esa llave, o sin la columna, corta igual que antes
+const VERSION_ACTUAL = "5.22"; // 2026-08-14: (1) el PLAN DE CORTE muestra la PERFORACIÓN del zócalo (INT/EXT) en pantalla y en el Excel exportado — antes solo viajaba dentro del rótulo; (2) las órdenes pueden llegar DIRECTO desde la app (clave `opt_ordenes_crudos`), sin descargar y volver a subir el Excel; (3) el tubo de 45 mm pasó a llamarse E39 (antes E78; se siguen aceptando los dos)
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1915,6 +1915,16 @@ async function cargarDesdeSupabase() {
             }
         } catch (errOrd) {
             console.warn("No se pudo cargar clave dedicada de órdenes:", errOrd.message);
+        }
+
+        // Órdenes enviadas DIRECTO desde la app (Fase 4 → "Enviar al optimizador").
+        // Llegan como la misma matriz que traería el Excel, así que se procesan con
+        // el mismo parser. No pisa trabajo en curso: si ya hay órdenes cargadas se
+        // ofrece un botón y decide el operario.
+        try {
+            await revisarOrdenesDesdeApp();
+        } catch (errApp) {
+            console.warn("No se pudieron leer las órdenes enviadas desde la app:", errApp.message);
         }
     } catch (error) {
         console.error("Error cargando inventario desde Supabase:", error);
@@ -4114,6 +4124,10 @@ function expandirOrdenesDesdeExcel() {
                     orden.codigoExtraido = codZocalo;
                     orden.reemplazo = SistemaInventario.catalogoReemplazos[codZocalo] || null;
                     orden.tuberia = `${nombreCol}${perfTxt} - ${colorDeseado}`;
+                    // La perforación (INTERNO/EXTERNO) viaja como campo propio para
+                    // que el PLAN DE CORTE (pantalla + Excel exportado) la muestre;
+                    // antes solo quedaba embebida en el rótulo `tuberia`.
+                    orden.perforacion = perf ? String(perf).toUpperCase().trim() : '';
                     SistemaInventario.ordenes.push(orden);
                     ordenesDeEstaFila++;
                     log(`✓ ${nombreCol}${perfTxt}: ${codZocalo} (${colorDeseado}) para ${datosCompartidos.ubic || '?'} — ${medidaNum} cm`, 'info');
@@ -4267,6 +4281,89 @@ async function cargarOrdenes(event) {
         }
     } catch (e) { alert('Error: ' + e.message); console.error(e); }
     finally { procesandoExcel = false; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ÓRDENES ENVIADAS DESDE LA APP (Fase 4 → "Enviar al optimizador")
+// La app deja en `configuracion` (clave `opt_ordenes_crudos`) la MISMA matriz
+// que traería el Excel de estructura, así que se procesa con el mismo parser
+// (`expandirOrdenesDesdeExcel`) — sin descargar ni volver a subir el archivo.
+// El input de Excel sigue funcionando igual, como respaldo.
+// ══════════════════════════════════════════════════════════════════════════
+let _ordenesAppPendientes = null;   // { ot, aoa, filas, ts }
+let _ordenesAppTsAplicado = null;   // ts ya aplicado en esta sesión
+
+async function revisarOrdenesDesdeApp() {
+    const raw = await _supabaseLeer('opt_ordenes_crudos');
+    if (!raw) return;
+    const paquete = JSON.parse(raw);
+    if (!paquete || !Array.isArray(paquete.aoa) || paquete.aoa.length === 0) return;
+    if (paquete.ts && paquete.ts === _ordenesAppTsAplicado) return;  // ya cargado
+    _ordenesAppPendientes = paquete;
+
+    // Mesa vacía → se cargan solas. Con trabajo en curso NO se pisa nada: se
+    // muestra el aviso y decide el operario.
+    const hayTrabajo = (SistemaInventario.ordenes || []).length > 0;
+    if (!hayTrabajo) {
+        aplicarOrdenesDesdeApp();
+    } else {
+        mostrarAvisoOrdenesApp();
+    }
+}
+
+function mostrarAvisoOrdenesApp() {
+    const p = _ordenesAppPendientes;
+    if (!p) return;
+    let box = document.getElementById('avisoOrdenesApp');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'avisoOrdenesApp';
+        box.style.cssText = 'margin:12px 0;padding:12px 14px;border:1px solid var(--warning);border-radius:8px;background:rgba(255,193,7,0.08);display:flex;align-items:center;gap:12px;flex-wrap:wrap;';
+        const cont = document.getElementById('estadoOrdenes')?.closest('div')?.parentElement
+            || document.body.firstElementChild;
+        cont.insertBefore(box, cont.firstChild);
+    }
+    box.innerHTML = `
+        <span style="flex:1;min-width:240px;">
+            📥 La OT <strong>${p.ot || '—'}</strong> mandó <strong>${p.filas || p.aoa.length - 1}</strong> cortes desde el cotizador.
+            Ya hay órdenes cargadas en la mesa: cargarlas las <strong>reemplaza</strong>.
+        </span>
+        <button class="btn" onclick="aplicarOrdenesDesdeApp()">Traer órdenes de la OT ${p.ot || ''}</button>
+        <button class="btn btn-warning" onclick="descartarOrdenesApp()">Ahora no</button>
+    `;
+    box.style.display = 'flex';
+}
+
+function descartarOrdenesApp() {
+    const box = document.getElementById('avisoOrdenesApp');
+    if (box) box.style.display = 'none';
+    if (_ordenesAppPendientes) _ordenesAppTsAplicado = _ordenesAppPendientes.ts;
+}
+
+function aplicarOrdenesDesdeApp() {
+    const p = _ordenesAppPendientes;
+    if (!p) return;
+    procesandoExcel = true;
+    try {
+        SistemaInventario.datosCrudosOrdenes = p.aoa;
+        const filasConMultiCorte = expandirOrdenesDesdeExcel();
+        actualizarTablaOrdenes();
+        document.getElementById('estadoOrdenes').textContent = `✓ ${SistemaInventario.ordenes.length} órdenes (desde la app)`;
+        document.getElementById('estadoOrdenes').className = 'estado-archivo estado-ok';
+        verificarListo();
+        log(`📥 Órdenes recibidas del cotizador (OT ${p.ot || '—'}): ${SistemaInventario.ordenes.length} (${filasConMultiCorte} filas expandidas a multi-corte)`, 'success');
+        guardarSistema();
+        guardarEnSupabase();
+        if (_currentUser && _currentUser.email) {
+            _supabaseGuardar(`opt_ordenes_${_currentUser.email}`, JSON.stringify(SistemaInventario.ordenes));
+        }
+        _ordenesAppTsAplicado = p.ts;
+        const box = document.getElementById('avisoOrdenesApp');
+        if (box) box.style.display = 'none';
+    } catch (e) {
+        alert('Error al cargar las órdenes enviadas desde la app: ' + e.message);
+        console.error(e);
+    } finally { procesandoExcel = false; }
 }
 
 async function cargarColmenas(event) {
@@ -4781,10 +4878,11 @@ const MERMA_MAX_MM = 100;              // ≤ 10 cm → merma (desechar)
 const ZONA_PROHIBIDA_MIN_MM = 101;     // 10.1 cm
 const ZONA_PROHIBIDA_MAX_MM = 1299;    // 129.9 cm
 
-// Regla especial de merma POR CÓDIGO: E78 (tubo 45 mm, barra virgen 579 cm)
+// Regla especial de merma POR CÓDIGO: el tubo de 45 mm (barra virgen 579 cm)
 // desecha sobrantes de hasta 50 cm para no acumular pedacitos en la colmena.
-// Solo aplica al código exacto; el resto de códigos usa MERMA_MAX_MM (10 cm).
-const MERMA_MAX_POR_COD_MM = { 'E78': 500 };
+// Se llama E39 desde 2026-08-14; el E78 (su nombre anterior) sigue en la tabla
+// para los Excels y planes de esa época. El resto usa MERMA_MAX_MM (10 cm).
+const MERMA_MAX_POR_COD_MM = { 'E39': 500, 'E78': 500 };
 function mermaMaxMm(cod) {
     const m = MERMA_MAX_POR_COD_MM[normalizarCodigo(cod || '')];
     return m != null ? m : MERMA_MAX_MM;
@@ -6638,10 +6736,15 @@ function renderizarStaging(resultados) {
         else if (r.fuente === 'merma') accionTag = '<span class="tag-accion badge-merma">MERMA</span>';
         else accionTag = '<span class="tag-accion" style="background:rgba(99,102,241,0.2);color:#a5b4fc;">COLMENA</span>';
 
+        // Perforación del perfil (INTERNO/EXTERNO): la trae la orden desde el
+        // Excel de estructura. Solo los zócalos la tienen; el resto va vacía.
+        const perfOrden = ordenOriginal.perforacion || '';
+
         let filas = `<tr class="fila-cortar">
             <td>${r.colmena || r.nombreMaterialNuevo || '-'}</td>
             <td>${codigoDisplay}</td>
             <td>${color}</td>
+            <td>${perfOrden || '-'}</td>
             <td>${formatearValor(r.medida_cm)}</td>
             <td>${formatearValor(r.medida_origen)}</td>
             <td>${formatearValor(r.sobrante_cm)}</td>
@@ -6664,6 +6767,7 @@ function renderizarStaging(resultados) {
             filas += `<tr class="${claseRow}">
                 <td>${r.colmena_sobrante || '-'}</td>
                 <td>${codigoDisplay}</td>
+                <td></td>
                 <td></td>
                 <td colspan="2">${formatearValor(r.sobrante_cm)} cm</td>
                 <td></td>
@@ -8123,7 +8227,9 @@ async function exportarResultados() {
         }
     }
     // COLOR va después de Código (columna 5, índice 5)
-    const datosExcel = [['OT', 'Ubicación', 'Acción', 'Colmena', 'Código', 'Color', 'Medida a Cortar (cm)', 'Tubo Origen (cm)', 'Lote', 'Paquete', 'Serial', 'Fecha Serial']];
+    // "Perforación" (INT/EXT del zócalo) va junto al color: el cortador la
+    // necesita para taladrar el perfil, y antes solo viajaba dentro del rótulo.
+    const datosExcel = [['OT', 'Ubicación', 'Acción', 'Colmena', 'Código', 'Color', 'Perforación', 'Medida a Cortar (cm)', 'Tubo Origen (cm)', 'Lote', 'Paquete', 'Serial', 'Fecha Serial']];
 
     SistemaInventario.resultadosOptimizacion.forEach(item => {
         const res = item.resultado;
@@ -8171,6 +8277,7 @@ async function exportarResultados() {
             _colmenaExcel,
             codigoExcel,
             color,
+            ord.perforacion || '-',
             res.medida_cm,
             res.medida_origen || '-',
             s.lote || '-',
@@ -8204,6 +8311,7 @@ async function exportarResultados() {
                 colmenaDestino,
                 codigoExcel,
                 color,
+                '',
                 res.sobrante_cm,
                 '-',
                 s.lote || ord.lote || '-',
@@ -8237,11 +8345,13 @@ async function exportarResultados() {
         }
 
         // Mapa clave (codigo|medida) → índice de grupo que produce ese sobrante
+        // OJO con los índices: con la columna "Perforación" (índice 6, v5.22)
+        // la medida a cortar pasó a 7 y el tubo origen a 8.
         const productorDe = new Map();
         grupos.forEach((g, gi) => {
             g.forEach(row => {
                 if (row[2] === 'RESERVAR EN MESA') {
-                    productorDe.set(`${row[4]}|${row[6]}`, gi); // codigo|medida
+                    productorDe.set(`${row[4]}|${row[7]}`, gi); // codigo|medida
                 }
             });
         });
@@ -8253,7 +8363,7 @@ async function exportarResultados() {
             for (let ci = 0; ci < grupos.length; ci++) {
                 const corte = grupos[ci][0];
                 if (corte[3] !== 'MESA') continue;         // no consume desde mesa
-                const clave = `${corte[4]}|${corte[7]}`; // codigo|tuboOrigen
+                const clave = `${corte[4]}|${corte[8]}`; // codigo|tuboOrigen
                 const pi    = productorDe.get(clave);
                 if (pi === undefined || pi <= ci) continue; // ya está antes o no existe
 

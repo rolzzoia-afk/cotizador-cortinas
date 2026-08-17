@@ -284,6 +284,10 @@ export function generarOrdenesOptimizador(
           verticalDctoAltoFinalCm: opts?.params?.dctoAltoFinalVerticalCm,
           formulas: opts?.formulas,
           tipos: opts?.reglas?.tipos,
+          // Para que el PESO INTERNO se rotule con el código de SU línea
+          // (E13 en la A; E79-B/E71-B por color en la B).
+          lineaB,
+          colores: opts?.reglas?.colores,
         });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
@@ -368,7 +372,7 @@ export function generarOrdenesOptimizador(
           );
         if (adicCenefa && cenefaEsDeEstaCortina && candidatosCenefa.length > 1) {
           advertencias.push(
-            `"${ubic}": ${candidatosCenefa.length} cortinas comparten esa ubicación y hay una sola cenefa comprada — se asignó a "${v.codInt || v.categoria || 'esta cortina'}" (${anchoM} m). Si va en otra, separá las ubicaciones en la cotización.`,
+            `"${ubic}": ${candidatosCenefa.length} cortinas comparten esa ubicación y hay una sola cenefa comprada — se asignó a "${v.codInt || v.categoria || 'esta cortina'}" (${anchoM} m). Si va en otra, separa las ubicaciones en la cotización.`,
           );
         }
         if (adicCenefa && cenefaEsDeEstaCortina) {
@@ -380,7 +384,7 @@ export function generarOrdenesOptimizador(
           );
           if (medida != null) {
             fila['CENEFA OVALADA'] = medida;
-            fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined, adicCenefa.conTira);
+            fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined, adicCenefa.conTira, lineaB);
             if (adicCenefa.colorAcc) {
               fila['COLOR ACCESORIOS'] = adicCenefa.colorAcc;
             }
@@ -396,7 +400,7 @@ export function generarOrdenesOptimizador(
           const cenefaDespiece = d.cortes.find((c) => c.columnaExcel === 'CENEFA OVALADA');
           if (cenefaDespiece) {
             fila['CENEFA OVALADA'] = cenefaDespiece.medidaCm;
-            fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined);
+            fila['CON TIRA'] = tiraCenefaOvalada(p.cenefaTira as string | undefined, undefined, lineaB);
           }
         }
         if (d.aproximado) {

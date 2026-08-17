@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ajusteCenefaCuadradaCm,
+  anchoCenefaCuadradaDeclaradoCm,
   anchoNominalCenefaCorte,
   buscarAdicionalCenefaOvalada,
   candidatosCenefaEnUbic,
@@ -12,6 +13,7 @@ import {
   esRollerOVertical,
   etiquetaTipInstCenefa,
   existeCenefaManualEnUbic,
+  tiraCenefaOvalada,
   filtrarDerivadosPorCupoManual,
   indexCenefasOvaladasAdicionales,
   llevaCenefaPorCategoria,
@@ -149,6 +151,46 @@ describe('cenefa cuadrada (verticales/roller)', () => {
     expect(medidaCorteCenefaCuadrada(269.4, 'CON_2_TAPAS')).toBe(271.4);
     expect(medidaCorteCenefaCuadrada(269.4, undefined)).toBe(268.9);
     expect(medidaCorteCenefaCuadrada(0, 'MURO_MURO')).toBe(0);
+  });
+
+  describe('anchoCenefaCuadradaDeclaradoCm — el ancho de la etiqueta es el VENDIDO en Fase 1', () => {
+    // OT 3181: vertical de 2,737 en LIVING con cenefa cuadrada vendida a 2,747.
+    // La etiqueta imprimía 273,2 (ancho de la cortina −0,5); debe decir 274,7.
+    const vendida = [{ codInt: 'CENF C', cantidad: 2.747, descuento: 0, ubicacion: 'LIVING' }];
+
+    it('toma la cantidad del adicional (×100), no el ancho de la cortina', () => {
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 2.737, vendida)).toBe(274.7);
+    });
+
+    it('la fila con sufijo de paño calza con la UBIC. general del adicional', () => {
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING P2', 2.737, vendida)).toBe(274.7);
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING-G2', 2.737, vendida)).toBe(274.7);
+    });
+
+    it('la UBIC. exacta le gana a la general, y entre iguales gana la de ancho más parecido', () => {
+      const dos = [
+        { codInt: 'CENF C', cantidad: 1.5, descuento: 0, ubicacion: 'LIVING' },
+        { codInt: 'CENF C', cantidad: 2.747, descuento: 0, ubicacion: 'LIVING-G2' },
+      ];
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING-G2', 1.5, dos)).toBe(274.7);
+      const mismaUbic = [
+        { codInt: 'CENF C', cantidad: 1.5, descuento: 0, ubicacion: 'LIVING' },
+        { codInt: 'CENF C', cantidad: 2.747, descuento: 0, ubicacion: 'LIVING' },
+      ];
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 2.737, mismaUbic)).toBe(274.7);
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 1.48, mismaUbic)).toBe(150);
+    });
+
+    it('ignora la ovalada, otra UBIC. y cantidades en cero; sin calce devuelve null', () => {
+      const otros = [
+        { codInt: 'CENF O', cantidad: 2.747, descuento: 0, ubicacion: 'LIVING' },
+        { codInt: 'CENF C', cantidad: 2.747, descuento: 0, ubicacion: 'COMEDOR' },
+        { codInt: 'CENF C', cantidad: 0, descuento: 0, ubicacion: 'LIVING' },
+      ];
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 2.737, otros)).toBeNull();
+      expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 2.737, undefined)).toBeNull();
+      expect(anchoCenefaCuadradaDeclaradoCm('', 2.737, vendida)).toBeNull();
+    });
   });
 
   it('esRollerOVertical: ROL* y VERTICAL', () => {
@@ -379,5 +421,19 @@ describe('filtrarDerivadosPorCupoManual', () => {
   it('el cupo es por TIPO: una cuadrada manual no tapa una ovalada derivada', () => {
     const manuales = [{ codInt: 'CENF C', cantidad: 1, descuento: 0, ubicacion: 'PPAL' }];
     expect(filtrarDerivadosPorCupoManual([derivado('PPAL', 1)], manuales)).toHaveLength(1);
+  });
+});
+
+describe('tiraCenefaOvalada — categoría B siempre SIN TIRA (2026-08-14)', () => {
+  it('la B fuerza SIN TIRA aunque el paño tenga CON TIRA guardado', () => {
+    expect(tiraCenefaOvalada('CON TIRA', undefined, true)).toBe('SIN TIRA');
+    expect(tiraCenefaOvalada(undefined, true, true)).toBe('SIN TIRA');
+    expect(tiraCenefaOvalada('', null, true)).toBe('SIN TIRA');
+  });
+
+  it('sin lineaB todo sigue igual (regresión: default CON TIRA)', () => {
+    expect(tiraCenefaOvalada(undefined, undefined, false)).toBe('CON TIRA');
+    expect(tiraCenefaOvalada('SIN TIRA', undefined, false)).toBe('SIN TIRA');
+    expect(tiraCenefaOvalada(undefined, undefined)).toBe('CON TIRA');
   });
 });

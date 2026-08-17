@@ -112,7 +112,11 @@ export default function ClonarCodigoDialog({ onClose, onSaved }: ClonarCodigoDia
         precio: precioNum,
         anchoRollo: anchoNum,
       };
-      await guardarCatalogoProductos(empresaId, { ...catalogo, [codigo]: nuevoProducto });
+      await guardarCatalogoProductos(
+        empresaId,
+        { ...catalogo, [codigo]: nuevoProducto },
+        `antes de clonar ${codigo}`,
+      );
       await guardarAnchoRollo(empresaId, { ...anchoRollo, [codigo]: anchoNum });
       await refresh();
       toast.success(`Código ${codigo} creado (hereda de ${baseCod}).`);

@@ -55,6 +55,8 @@ import {
 // Resolutor de color de accesorios (mecanismo → peso → cadena → tela → ventana).
 // chips.ts NO importa despiece (solo reglas-mecanismo/tuberia), así que no hay ciclo.
 import { colorAccesoriosDePano } from './chips';
+import { codigoEstructura } from './codigos-estructura';
+import type { ColorAccesorio } from './coloresAccesorio';
 // La medida de la cenefa ovalada la comparte con el adicional CENF O de Fase 0:
 // una sola fórmula para el Excel de órdenes, la etiqueta y el cálculo general.
 // adicionales-cenefa no importa despiece, así que no hay ciclo.
@@ -99,6 +101,14 @@ export type ContextoDespiece = {
    * categoría a su MOLDE y aplicar el parche de números del tipo.
    */
   tipos?: readonly TipoCortina[];
+  /**
+   * Categoría B (gama económica). Solo se usa para ROTULAR el peso interno con
+   * su código real: en la línea A es E13 fijo, y en la B depende del color
+   * (E79-B blanco / E71-B negro). Las MEDIDAS no cambian por línea.
+   */
+  lineaB?: boolean;
+  /** Colores de accesorios del catálogo: sus códigos propios pisan las tablas. */
+  colores?: readonly ColorAccesorio[];
 };
 
 export type CorteDespiece = {
@@ -201,6 +211,23 @@ export function calculoVertical(
 
 function columnaPesoExcel(modelo: ModeloDespiece): string {
   return SISTEMAS_OSCURIDAD.includes(modelo.sistema) ? COLUMNA_PESO_OSCURIDAD : 'PESO';
+}
+
+/**
+ * Rótulo del peso interno de un dúo, CON su código de bodega. En la línea A es
+ * E13 fijo; en la B depende del color (E79-B blanco / E71-B negro, editable por
+ * color en el catálogo técnico). Antes decía "(E13)" siempre y una cortina de
+ * categoría B salía con el código equivocado en la hoja de estructura.
+ */
+function rotuloPesoInterno(ctx?: ContextoDespiece): string {
+  const cod = codigoEstructura(
+    'PESO INTERNO',
+    ctx?.colorAccesorios ?? '',
+    '',
+    ctx?.colores,
+    !!ctx?.lineaB,
+  );
+  return cod ? `Peso interno (${cod})` : 'Peso interno';
 }
 
 /**
@@ -320,7 +347,7 @@ export function calcularDespiece(
       }
       if (modelo.peso_interno_duo_cm > 0) {
         cortes.push({
-          componente: 'Peso interno (E13)',
+          componente: rotuloPesoInterno(ctx),
           columnaExcel: 'PESO INTERNO',
           medidaCm: r1(anchoCm - modelo.peso_interno_duo_cm),
         });
@@ -445,7 +472,7 @@ export function calcularDespiece(
       }
       if (modelo.peso_interno_duo_cm > 0) {
         cortes.push({
-          componente: 'Peso interno (E13)',
+          componente: rotuloPesoInterno(ctx),
           columnaExcel: 'PESO INTERNO',
           medidaCm: r1(baseTubo - modelo.dcto_tela_cm),
         });
@@ -602,6 +629,10 @@ export function contextoDespieceDesdePano(
     verticalDctoAltoFinalCm?: number;
     formulas?: FormulasFamilias;
     tipos?: readonly TipoCortina[];
+    /** Categoría B: solo rotula el peso interno con su código (E79-B/E71-B). */
+    lineaB?: boolean;
+    /** Colores del catálogo, para el overlay de códigos por color. */
+    colores?: readonly ColorAccesorio[];
   },
 ): ContextoDespiece {
   // El alto suele vivir en la VENTANA, no en el paño (igual que en tela.ts):
@@ -640,6 +671,8 @@ export function contextoDespieceDesdePano(
     verticalDctoAltoFinalCm: extras?.verticalDctoAltoFinalCm,
     formulas: extras?.formulas,
     tipos: extras?.tipos,
+    lineaB: extras?.lineaB,
+    colores: extras?.colores,
     cenefa: p.cenefa,
     oscuridadVariante,
     // Color de accesorios (mecanismo → peso → cadena → tela → ventana): solo el

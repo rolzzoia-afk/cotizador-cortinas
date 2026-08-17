@@ -25,7 +25,7 @@ import {
 const ESTADOS: Array<{ valor: EstadoCatalogo; label: string }> = [
   { valor: 'activo', label: 'Se ofrece' },
   { valor: 'oculto', label: 'Oculto (solo OTs viejas)' },
-  { valor: 'opt_in', label: 'Solo con E78 activado' },
+  { valor: 'opt_in', label: 'Solo con E39 activado' },
 ];
 
 /** La categoría de una regla puede ser exacta, un "contiene" o un "empieza con". */

@@ -37,6 +37,8 @@ type OrdenLike = {
   cod?: string | null;
   componente?: string | null;
   con_tira?: string | null;
+  /** Perforación del perfil zócalo (INTERNO/EXTERNO) — v5.22 del optimizador. */
+  perforacion?: string | null;
   lote?: string | null;
   paquete?: string | null;
   serial?:
@@ -100,6 +102,7 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
       'Colmena',
       'Código',
       'Color',
+      'Perforación',
       'Medida a Cortar (cm)',
       'Tubo Origen (cm)',
       'Lote',
@@ -165,6 +168,7 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
       _colmenaExcel as string | number,
       codigoExcel,
       color,
+      ord.perforacion || '-',
       res.medida_cm ?? '-',
       res.medida_origen ?? '-',
       s.lote || '-',
@@ -197,6 +201,7 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
         colmenaDestino,
         codigoExcel,
         color,
+        '',
         res.sobrante_cm ?? 0,
         '-',
         s.lote || ord.lote || '-',
@@ -224,8 +229,10 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
   const productorDe = new Map<string, number>();
   grupos.forEach((g, gi) => {
     g.forEach((row) => {
+      // Índices: con la columna "Perforación" (6, v5.22) la medida a cortar
+      // quedó en 7 y el tubo origen en 8.
       if (row[2] === 'RESERVAR EN MESA') {
-        productorDe.set(`${row[4]}|${row[6]}`, gi);
+        productorDe.set(`${row[4]}|${row[7]}`, gi);
       }
     });
   });
@@ -236,7 +243,7 @@ export function exportarPlanComoExcel(plan: PlanParaExportar): void {
     for (let ci = 0; ci < grupos.length; ci++) {
       const corte = grupos[ci][0];
       if (corte[3] !== 'MESA') continue;
-      const clave = `${corte[4]}|${corte[7]}`;
+      const clave = `${corte[4]}|${corte[8]}`;
       const pi = productorDe.get(clave);
       if (pi === undefined || pi <= ci) continue;
       const [productor] = grupos.splice(pi, 1);

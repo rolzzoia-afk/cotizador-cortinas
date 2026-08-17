@@ -7,7 +7,7 @@ import type { AdicionalFase0Persistido, BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
-import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical, kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
 import { codCadenaVertical, colorCadenaVertical } from './cadenas';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
@@ -191,10 +191,12 @@ export function calcularBOM(
       // Cadena. Si el cotizador eligió la cadena real del inventario,
       // `codCadena` (CAD01…) va en la especificación para enlazar al stock
       // (mismo patrón que el mecanismo). Si no, cae al largo de texto antiguo.
+      // El MEC 06 trae la cadena INCORPORADA: no se emite línea aunque el paño
+      // arrastre una guardada de antes de cambiar el kit.
       const cadCod = (p.codCadena || '').trim();
       const cadLargo = p.largoCadena ? String(p.largoCadena) : '';
       const cadColor = p.colorCadena || '';
-      if (cadCod || cadLargo) {
+      if ((cadCod || cadLargo) && !kitTraeCadenaIncorporada(p.mecanismo)) {
         const cadKey = `CAD|${cadCod || cadLargo}|${cadColor}`;
         add(cadKey, 'CADENA', 'Cadena', cadCod || cadLargo, cadColor, 1, 'unid.');
       }
@@ -265,7 +267,7 @@ export function calcularBOM(
     // Insumos de instalación: tapas de peso, tornillos, brackets, tarugos. Dual:
     // el 2º+ paño omite las fijaciones (1 juego por cortina); las tapas van ×paño.
     const omitirFijaciones = !!p.dual && (row.panoIndex ?? 0) > 0;
-    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM, omitirFijaciones, tipos: reglas.tipos, colores: reglas.colores })) {
+    for (const ins of insumosDePano(p, { categoria, ventanaColor, anchoM, omitirFijaciones, tipos: reglas.tipos, colores: reglas.colores, lineaB: row.lineaB })) {
       add(`INS|${ins.codigo}|${ins.color}`, 'INSUMO', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');
     }
 

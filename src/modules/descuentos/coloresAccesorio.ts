@@ -87,6 +87,12 @@ export type InsumosColor = {
   pesoInternoB?: string;
   /** Cenefa ovalada de categoría B (E60 en blanco). */
   cenefaOvaladaB?: string;
+  /** Tapa de peso roller de categoría B — la MISMA tapa en ambos lados
+   *  (TAP18 en blanco, TAP28-B en negro), ×2 por cortina. */
+  tapaPesoB?: string;
+  /** Tapa exterior de peso dúo de categoría B (TAP17, chantilly blanca-negra,
+   *  única para ambos colores). La interna TAP13 se mantiene como en la A. */
+  tapaDuoB?: string;
 };
 
 /** Grupo de `CAMPOS_INSUMO_COLOR` con los códigos de la categoría B. Se edita
@@ -121,6 +127,8 @@ export const CAMPOS_INSUMO_COLOR: ReadonlyArray<{
   { campo: 'pesoUB', label: 'Peso U de dúo (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E25' },
   { campo: 'pesoInternoB', label: 'Peso interno de dúo (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E79-B' },
   { campo: 'cenefaOvaladaB', label: 'Cenefa ovalada (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'E60' },
+  { campo: 'tapaPesoB', label: 'Tapa de peso roller ×2 (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'TAP18' },
+  { campo: 'tapaDuoB', label: 'Tapa de peso dúo exterior (categoría B)', grupo: GRUPO_INSUMOS_B, ejemplo: 'TAP17' },
 ];
 
 /** Los campos de `InsumosColor` que son número de MEC y no código de insumo. */

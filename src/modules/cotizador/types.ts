@@ -12,6 +12,14 @@ export type Producto = {
   descuento?: number;
   /** Categoría comercial de la tela ('A' | 'B'), de la planilla TELAS DEPURADAS. */
   categoria?: string;
+  /**
+   * Chip del catálogo de Fase 1 donde se muestra este producto (id de
+   * FILTROS_CATALOGO). Ausente = automático: se deduce del COD_INT o de la
+   * familia, y si no calza en ninguno cae en «Otros». Se elige a mano cuando el
+   * automático no acierta — p. ej. un motor nuevo cuyo `cod` es ACCESORIO como
+   * todos, que se quiere ver junto a sus hermanos en MOTOR MG.
+   */
+  chip?: string;
 };
 
 // Mapa de catálogo: COD_INT → Producto. Se guarda en Supabase `configuracion`

@@ -19,6 +19,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import jsPDF from 'jspdf';
 import { debeInvertirPano, type OptimizerRow } from './tela';
+import { letraPano } from './letras';
 import { generarPlanCorte, type PanoColmena } from './planCorte';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { PiezaColmenaSnap } from './colmenaCorte';
@@ -73,6 +74,29 @@ export type HojaCorte = {
   totalPanos: number;
   optimizador: MetrosOptimizador[];
 };
+
+export type TotalPorTela = { producto: string; metros: number; esVertical: boolean };
+
+/**
+ * Agrupa los metros del bloque OPTIMIZADOR por NOMBRE DE PRODUCTO: dos COD_INT
+ * distintos de la misma tela (ej. dos partidas del mismo blackout) se suman en
+ * una sola fila, que es como se compra la tela. Roller y vertical NO se mezclan
+ * aunque compartan producto: cada hoja del Excel lleva su propio total.
+ */
+export function totalesPorTipoDeTela(
+  optimizador: MetrosOptimizador[],
+  nombreDe: (codInt: string) => string,
+): TotalPorTela[] {
+  const acc = new Map<string, TotalPorTela>();
+  for (const o of optimizador) {
+    const producto = nombreDe(o.codInt) || o.codInt;
+    const clave = `${producto}|${o.esVertical}`;
+    const prev = acc.get(clave);
+    if (prev) prev.metros += o.metros;
+    else acc.set(clave, { producto, metros: o.metros, esVertical: o.esVertical });
+  }
+  return [...acc.values()].map((t) => ({ ...t, metros: parseFloat(t.metros.toFixed(3)) }));
+}
 
 export const pieceId = (otId: string | number, ventanaId: string | number, panoIndex: number) =>
   `${otId}_${ventanaId}_p${panoIndex}`;
@@ -170,7 +194,14 @@ export function construirHojaCorte(
 
   // Clave de paño por fila:
   //  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
-  //  · resto → letra "cortar junto" del optimizador (cortinas lado a lado)
+  //  · resto → letra "cortar junto" del optimizador + N° DE PAÑO. La letra sola
+  //    no basta: los planes GUARDADOS antes del arreglo de letras daban la
+  //    vuelta en la Z, y en una OT con >26 paños la misma letra nombraba paños
+  //    DISTINTOS — la hoja los fusionaba y reservaba un tercio de la tela
+  //    (OT 268-6: 88 cortinas de 2 m → decía 26 paños). Con el n° en la clave,
+  //    la misma letra con n° distinto son paños distintos; con el mismo n° (o
+  //    ambos vacíos, como en los grupos armados a mano solo por letra) se
+  //    siguen cortando juntos.
   // (Planes antiguos podían traer junto = "RR" en varias filas: se separan por
   //  índice para que cada una quede en su propio paño y no colapsen en uno.)
   // Sufijo ·V: vertical y roller NUNCA comparten paño (van en hojas separadas).
@@ -180,7 +211,7 @@ export function construirHojaCorte(
     const suf = r.esVertical ? '·V' : '';
     if (esInvertida(r)) return `INV#${idx}${suf}`;
     if (r.junto === 'RR') return `RR#${idx}${suf}`;
-    return `${r.junto || `·${idx}`}${suf}`;
+    return `${r.junto || `·${idx}`}#${String(r.numeroPano ?? '')}${suf}`;
   };
 
   // N.º de paño por clave (orden de aparición): primera clave → 1, etc.
@@ -189,8 +220,7 @@ export function construirHojaCorte(
     const k = claveJunto(r, idx);
     if (!juntoNum.has(k)) juntoNum.set(k, juntoNum.size + 1);
   });
-  const letra = (pano: number) =>
-    pano >= 1 && pano <= 26 ? String.fromCharCode(64 + pano) : String(pano);
+  const letra = letraPano; // …Z, AA, AB… — mismas letras que asigna el optimizador
 
   // ── Bloque 1: una fila por cortina ──
   const cortinas: FilaCorteCortina[] = rows.map((r, idx) => {

@@ -773,7 +773,7 @@ describe('resincronizarChipsPanos — recálculo de chips al re-guardar (Fase 0)
     const panos: Record<string, unknown>[] = [{ ancho: 2.5, color: 'BCO', mecanismo: '', tuberia: '' }];
     resincronizarChipsPanos(panos, 'BCO', rol45, 'ROL', OPCIONES_MECANISMO_RESOLUCION, OPCIONES_TUBERIA, true);
     expect(String(panos[0].mecanismo)).toContain('[MEC 18]');
-    expect(codigoTuberiaDeChip(String(panos[0].tuberia))).toBe('E78');
+    expect(codigoTuberiaDeChip(String(panos[0].tuberia))).toBe('E39');
   });
   it('paño dual del mismo color: no toca sus chips ni la tubería', () => {
     const dualPano: Record<string, unknown> = {

@@ -8,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { esRolAdmin } from '@/lib/roles';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
+import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { claveCatalogoCanonica } from '@/modules/cotizador/importarCatalogo';
 import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
 import type { Ventana as VentanaFase2 } from '@/modules/cotizador/types';
@@ -54,6 +56,9 @@ import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { categoriasParaSelect, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
+import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
 import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
 import {
@@ -69,7 +74,7 @@ import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialo
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
 import BloqueDocRender, { SeccionDocumento } from '@/components/cotizador/BloquesDocumento';
 import { estiloChipHex, useChipsColores } from '@/modules/cotizador/chipsColores';
-import { FILTROS_CATALOGO } from '@/modules/cotizador/filtrosCatalogo';
+import { CHIP_OTROS, FILTROS_CATALOGO, chipDeProducto } from '@/modules/cotizador/filtrosCatalogo';
 import { COMUNAS_SANTIAGO } from '@/modules/cotizador/comunas';
 import {
   REGIONES_CHILE,
@@ -227,8 +232,13 @@ const esCategoriaOscuridad = (
   tipos?: readonly TipoCortina[],
 ): boolean => familiaOscuridad(categoria, undefined, tipos) != null;
 
-const esCortinaTipo = (tipo: string): boolean =>
-  ['PREMIUM', 'DELUX', 'STANDARD', 'BASIC'].includes((tipo || '').toUpperCase().trim());
+// Filtro especial del catálogo: lista TODO (no es un chip, no vive en
+// FILTROS_CATALOGO). Antes "Todos" solo limpiaba el filtro y no mostraba nada,
+// así que un producto sin chip solo se encontraba por el buscador.
+const FILTRO_TODOS = '__TODOS__';
+// Cuántas filas del catálogo se dibujan de una (mismo tope que la tabla de
+// Admin → Precios); el resto se alcanza afinando la búsqueda.
+const TOPE_FILAS_CATALOGO = 500;
 
 // % es-CL con hasta 2 decimales: 0.138 → "13,8" · 0.0415 → "4,15".
 const fmtPct = (v: number) => (Math.round(v * 10000) / 100).toLocaleString('es-CL');
@@ -259,7 +269,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const colSpanTotal = showCols ? 19 : 17;
   const colSpanInfo = showCols ? 12 : 10;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
-  const { empresaId } = useAuth();
+  const { empresaId, perfil } = useAuth();
+  // Los precios del catálogo se editan en Admin → Precios. Acá se ven y se
+  // cotizan; crear o cambiar un código toca el precio de todas las cotizaciones
+  // futuras, así que queda en manos del administrador.
+  const esAdmin = esRolAdmin(perfil?.rol);
   const { catalogo, refresh: refreshCatalogo } = useCatalogoProductos();
   const { anchoRollo, refresh: refreshAnchoRollo } = useAnchoRollo();
   const { parametros } = useParametrosCotizador();
@@ -282,6 +296,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // y PERSISTEN los chips de cada paño, así que Guardar espera a `loadingReglas`
   // (si no, una empresa con reglas propias guardaría con las de fábrica).
   const { reglas, loading: loadingReglas } = useReglasSeleccion();
+  // Precios de insumo y recetas por familia (Admin → Precios). Mismo cuidado:
+  // cotizar con las de fábrica y guardar dejaría precios que no son los de la
+  // empresa escritos en la OT.
+  const { reglas: reglasPrecios, loading: loadingPrecios } = useReglasPrecios();
+  // Fórmulas del despiece (Admin → Catálogo técnico): de acá sale cuánta tela
+  // consume cada montaje, para cotizar la oscuridad al peor caso.
+  const { formulas } = useFormulasFamilias();
   // Categorías que se ofrecen: las nativas + los tipos de cortina propios
   // activos (Admin → Catálogo técnico). Es la misma lista que valida el import.
   const categoriasSelect = useMemo(() => categoriasParaSelect(reglas.tipos), [reglas.tipos]);
@@ -293,6 +314,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [otManual, setOtManual] = useState('');
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
+  // null = ningún filtro (la tabla ni se dibuja) · FILTRO_TODOS = el catálogo
+  // entero · id de chip = ese chip. Arranca en null para no cargar la página
+  // con cientos de filas de una.
   const [filtroActivo, setFiltroActivo] = useState<string | null>(null);
   const [busqueda, setBusqueda] = useState('');
   // Editor del catálogo: undefined = cerrado, null = producto nuevo, string = editar ese COD_INT.
@@ -419,6 +443,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // las reglas de la empresa los escribiría con las de fábrica.
     if (loadingReglas) {
       toast.error('Todavía se están cargando las reglas del catálogo. Reintenta en un segundo.');
+      return;
+    }
+    if (loadingPrecios) {
+      toast.error('Todavía se están cargando los precios. Reintenta en un segundo.');
       return;
     }
     if (!cliente.nombre.trim()) {
@@ -761,6 +789,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       alto: f.alto,
       cantidad: f.cantidad,
       descuento: f.descuento / 100,
+      // Oscuridad y beeblack: la tela se corta a otra medida según el montaje,
+      // que se elige recién en Fase 2. Mientras no se sepa, se cotiza el que
+      // MÁS tela gasta (externo): antes se cotizaban todas como internas y la
+      // diferencia se regalaba. Ver empaqueFase0.ts.
+      anchoEmpaqueM: anchoEmpaquePeorCasoM(f.categoria, f.ancho, formulas, reglas.tipos),
     }));
     // La instalación base ('INST') se calcula automáticamente; se excluye de los
     // adicionales que van al motor para no cobrarla dos veces aunque alguien la
@@ -779,8 +812,21 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
         }
       : parametros;
-    return cotizarFase0(filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion);
-  }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion]);
+    return cotizarFase0(
+      filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion, reglasPrecios,
+    );
+  }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion, reglasPrecios, formulas, reglas.tipos]);
+
+  // ¿Alguna fila se está cotizando al peor caso de montaje? (para el aviso)
+  const conPeorCaso = useMemo(
+    () =>
+      filas.some(
+        (f) =>
+          f.ancho > 0 &&
+          anchoEmpaquePeorCasoM(f.categoria, f.ancho, formulas, reglas.tipos) !== undefined,
+      ),
+    [filas, formulas, reglas.tipos],
+  );
 
   const lineaDeFila = useMemo(() => {
     const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
@@ -811,7 +857,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // Los COD_INT del catálogo llevan espacio ("DOM 42") pero en las planillas de
     // insumos se escriben pegados ("DOM42"): se busca también sin espacios.
     const qPegado = q.replace(/\s+/g, '');
-    const filtro = filtroActivo ? FILTROS_CATALOGO.find((f) => f.id === filtroActivo) : null;
+    // TODOS no filtra: lista el catálogo entero (con tope de filas más abajo).
+    const filtro =
+      filtroActivo && filtroActivo !== FILTRO_TODOS
+        ? FILTROS_CATALOGO.find((f) => f.id === filtroActivo)
+        : null;
     return Object.entries(catalogo)
       .filter(([ci, p]) => {
         if (filtro && !filtro.match(p, ci)) return false;
@@ -823,6 +873,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       })
       .sort((a, b) => (a[1].producto || '').localeCompare(b[1].producto || ''));
   }, [catalogo, filtroActivo, busqueda]);
+
+  // Chips a dibujar: «Otros» solo aparece si de verdad hay algo ahí, para no
+  // mostrarle a la vendedora una categoría vacía.
+  const chipsVisibles = useMemo(() => {
+    const hayOtros = Object.entries(catalogo).some(
+      ([ci, p]) => chipDeProducto(p, ci) === CHIP_OTROS,
+    );
+    return hayOtros ? FILTROS_CATALOGO : FILTROS_CATALOGO.filter((f) => f.id !== CHIP_OTROS);
+  }, [catalogo]);
 
   // COD_INT tal como vive en el catálogo ("DOM42" tecleado → "DOM 42"). Si no
   // existe se devuelve lo escrito (para que la celda quede marcada en rojo).
@@ -1270,12 +1329,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               (con los valores de fábrica, las 3 reglas de banda lo piden). */}
           {(hayOptInE78 || usarTuboE78) && (
             <CampoEstado
-              label="Tubo E78 (2,2–3,0 m)"
+              label="Tubo E39 (2,2–3,0 m)"
               value={usarTuboE78 ? 'si' : 'no'}
               onChange={(v) => setUsarTuboE78(v === 'si')}
               opciones={[
                 { value: 'no', label: 'Desactivado (tubo E66)' },
-                { value: 'si', label: 'Activado (kit 45 + tubo E78)', tono: 'ok' },
+                { value: 'si', label: 'Activado (kit 45 + tubo E39)', tono: 'ok' },
               ]}
             />
           )}
@@ -1312,17 +1371,20 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           </div>
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
             <button
-              onClick={() => setFiltroActivo(null)}
+              onClick={() =>
+                setFiltroActivo(filtroActivo === FILTRO_TODOS ? null : FILTRO_TODOS)
+              }
+              title="Ver el catálogo completo"
               className={cn(
                 'rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors',
-                filtroActivo === null
+                filtroActivo === FILTRO_TODOS
                   ? 'border-foreground bg-foreground text-background'
                   : 'border-border bg-card text-muted-foreground hover:bg-secondary',
               )}
             >
               Todos
             </button>
-            {FILTROS_CATALOGO.map((f) => (
+            {chipsVisibles.map((f) => (
               <button
                 key={f.id}
                 onClick={() => setFiltroActivo(filtroActivo === f.id ? null : f.id)}
@@ -1352,15 +1414,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 className="h-8 pl-7 text-xs"
               />
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8 gap-1 text-xs"
-              onClick={() => setEditarProducto(null)}
-              title="Crear un código nuevo en el catálogo"
-            >
-              <Plus className="h-3.5 w-3.5" /> Nuevo producto
-            </Button>
+            {esAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 gap-1 text-xs"
+                onClick={() => setEditarProducto(null)}
+                title="Crear un código nuevo en el catálogo"
+              >
+                <Plus className="h-3.5 w-3.5" /> Nuevo producto
+              </Button>
+            )}
           </div>
 
           {hayFiltro ? (
@@ -1384,7 +1448,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       </td>
                     </tr>
                   )}
-                  {productosFiltrados.slice(0, 200).map(([ci, p]) => (
+                  {productosFiltrados.slice(0, TOPE_FILAS_CATALOGO).map(([ci, p]) => (
                     <tr key={ci} className="border-t border-border hover:bg-secondary/40">
                       <Td className="font-semibold">{ci}</Td>
                       <Td className="text-muted-foreground">{p.producto}</Td>
@@ -1395,13 +1459,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       </Td>
                       <Td className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => setEditarProducto(ci)}
-                            className="rounded border border-border p-1 text-muted-foreground hover:border-accent/40 hover:text-accent"
-                            title="Editar este producto del catálogo"
-                          >
-                            <Pencil className="h-3 w-3" />
-                          </button>
+                          {esAdmin && (
+                            <button
+                              onClick={() => setEditarProducto(ci)}
+                              className="rounded border border-border p-1 text-muted-foreground hover:border-accent/40 hover:text-accent"
+                              title="Editar este producto del catálogo"
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </button>
+                          )}
                           <button
                             onClick={() => agregarProducto(ci)}
                             className="rounded bg-accent px-2 py-0.5 text-[12px] font-semibold text-accent-foreground hover:bg-accent/90"
@@ -1415,9 +1481,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   ))}
                 </tbody>
               </table>
-              {productosFiltrados.length > 200 && (
+              {productosFiltrados.length > TOPE_FILAS_CATALOGO && (
                 <div className="border-t border-border bg-card/60 px-3 py-1 text-[12px] text-muted-foreground">
-                  Mostrando 200 de {productosFiltrados.length} — refina la búsqueda para ver el resto.
+                  Mostrando {TOPE_FILAS_CATALOGO} de {productosFiltrados.length} — refina la
+                  búsqueda para ver el resto.
                 </div>
               )}
             </div>
@@ -1820,8 +1887,25 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             </div>
           )}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
+          {/* Bajo el mínimo de cortinas la instalación se cobra: mostrarla acá
+              para que el subtotal no suba sin explicación. Con 4+ (o sin
+              instalación) la línea vale 0 y no se muestra. */}
+          {resultado.instalacion.total > 0 && (
+            <FilaTotal
+              label={`Instalación (${resultado.instalacion.cantidad} ${
+                resultado.instalacion.cantidad === 1 ? 'cortina' : 'cortinas'
+              }, bajo el mínimo de ${parametros.instalacionGratisMinCortinas})`}
+              valor={formatCLP(resultado.instalacion.total)}
+            />
+          )}
           <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
           <FilaTotal label="IVA 19%" valor={formatCLP(t.ivaTransferencia)} />
+          {conPeorCaso && (
+            <p className="pt-1 text-[11px] leading-snug text-muted-foreground">
+              Los sistemas de oscuridad se cotizan con el consumo de tela del montaje más caro
+              (externo) mientras la instalación no se defina en Fase 2.
+            </p>
+          )}
           <FilaTotal label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
           <div className="my-1 border-t border-border" />
           <FilaTotal label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />

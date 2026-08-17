@@ -195,6 +195,10 @@ export function construirCalculoGeneral(
           verticalDctoAltoFinalCm: params.dctoAltoFinalVerticalCm,
           formulas: opts?.formulas,
           tipos: reglas.tipos,
+          // El PESO INTERNO se rotula con el código de SU línea (E13 en la A;
+          // E79-B/E71-B por color en la B).
+          lineaB: esLineaB(p, v.codInt as string | undefined, catalogo, v.categoria, reglas.mecanismo, reglas.tipos),
+          colores: reglas.colores,
         });
         const modelo = v.modelo ?? MODELO_DESPIECE_STUB;
         const d = calcularDespiece(modelo, anchoCm, ctx);
@@ -225,7 +229,8 @@ export function construirCalculoGeneral(
           // del paño: "CENEFA OVALADA (CON TIRA)" / "(SIN TIRA)". La medida de
           // corte es la misma; solo cambia la etiqueta. Cada paño llena una.
           if (comp === 'CENEFA OVALADA') {
-            comp = `CENEFA OVALADA (${tiraCenefaOvalada(p.cenefaTira as string | undefined)})`;
+            const filaB = esLineaB(p, v.codInt as string | undefined, catalogo, v.categoria, reglas.mecanismo, reglas.tipos);
+            comp = `CENEFA OVALADA (${tiraCenefaOvalada(p.cenefaTira as string | undefined, undefined, filaB)})`;
           }
           // Oscuridad: "TELA (ANCHO)" se muestra como TELA (como la planilla manual).
           if (comp === 'TELA (ANCHO)' && famOscFila) comp = 'TELA';

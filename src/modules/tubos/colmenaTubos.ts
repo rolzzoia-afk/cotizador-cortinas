@@ -41,8 +41,10 @@ export type FamiliaTubo =
 
 /** Códigos E que son PESO (roller, dúo lágrima, interno, oscuridad). */
 const PESOS = new Set(['E13', 'E14', 'E15', 'E16', 'E18', 'E19', 'E20', 'E24', 'E44']);
-/** Códigos E que son TUBO (por diámetro). */
-const TUBOS = new Set(['E02', 'E05', 'E47', 'E65', 'E66', 'E78']);
+/** Códigos E que son TUBO (por diámetro). E01/E39 son los de la categoría B
+ *  (el E39 es además el de 45 mm de toda la línea desde 2026-08-14; el E78 es
+ *  su nombre viejo y sigue acá por la colmena y el historial). */
+const TUBOS = new Set(['E01', 'E02', 'E05', 'E39', 'E47', 'E65', 'E66', 'E78']);
 /** Cenefas: ovaladas E26-E28 y cuadradas E29-E31. */
 const CENEFAS = new Set(['E26', 'E27', 'E28', 'E29', 'E30', 'E31']);
 /** Perfiles de oscuridad: zócalo E32-E34, separador E41-E43, superior E49/E50/E52. */
