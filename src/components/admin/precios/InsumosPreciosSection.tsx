@@ -40,6 +40,12 @@ type Props = {
   onChange: (v: Record<string, InsumoPrecio>) => void;
   /** Agrega el insumo a la receta de esa familia (la mutación vive en la contenedora). */
   onUsarEnFamilia: (cod: string, familia: string) => void;
+  /**
+   * Un sistema con precios propios (beeblack). Cuando viene, la sección edita
+   * SU tabla en vez de la general: cambia el título, la explicación y las
+   * familias que ofrece el menú «usar en…».
+   */
+  sistema?: { clave: string; nombre: string; familias: string[] };
 };
 
 type Alta = { cod: string; descripcion: string; valorMaximo: string };
@@ -59,6 +65,7 @@ export function InsumosPreciosSection({
   recetas,
   onChange,
   onUsarEnFamilia,
+  sistema,
 }: Props) {
   const { empresaId } = useAuth();
   const confirmar = useConfirm();
@@ -120,9 +127,14 @@ export function InsumosPreciosSection({
   const editar = (cod: string, patch: Partial<InsumoPrecio>) =>
     onChange({ ...valor, [cod]: { ...valor[cod], ...patch } });
 
+  /** Familias que puede recibir un insumo de esta tabla. */
+  const familiasDisponibles = sistema ? sistema.familias : ORDEN_FAMILIAS;
+
   const quitar = async (cod: string) => {
     const enFamilias = familiasPorInsumo.get(cod) ?? [];
-    const esDeFabrica = !!REGLAS_PRECIOS_DEFAULT.insumos[cod];
+    const esDeFabrica = sistema
+      ? !!REGLAS_PRECIOS_DEFAULT.sistemas[sistema.clave]?.insumos[cod]
+      : !!REGLAS_PRECIOS_DEFAULT.insumos[cod];
     const partes = [`Se quita «${cod}» de la lista de precios.`];
     if (enFamilias.length) {
       partes.push(
@@ -211,7 +223,9 @@ export function InsumosPreciosSection({
     <section className="rounded-lg border bg-card p-5">
       <header className="mb-3 flex flex-wrap items-center gap-2">
         <Package className="h-5 w-5 text-success" />
-        <h2 className="text-sm font-semibold text-muted-foreground">Precios de insumo</h2>
+        <h2 className="text-sm font-semibold text-muted-foreground">
+          {sistema ? `Precios de insumo — ${sistema.nombre}` : 'Precios de insumo'}
+        </h2>
         <span className="text-xs text-muted-foreground">({Object.keys(valor).length})</span>
         <div className="ml-auto flex items-center gap-2">
           <div className="relative">
@@ -238,11 +252,20 @@ export function InsumosPreciosSection({
         material comparten precio: aparecen en la lista para poder cambiar una por otra, y por eso
         muchas figuran «sin uso».
       </p>
-      <p className="mb-3 text-xs text-muted-foreground">
-        La <strong>mano de obra</strong>, la <strong>instalación</strong> y el{' '}
-        <strong>traslado</strong> también son insumos en la planilla, pero acá se editan más abajo,
-        en «Parámetros del cotizador»: el cálculo los toma de ahí.
-      </p>
+      {sistema ? (
+        <p className="mb-3 text-xs text-muted-foreground">
+          Estos precios son <strong>solo del {sistema.nombre.toLowerCase()}</strong> y{' '}
+          <strong>pisan</strong> a los de la lista general cuando el código está en las dos: la
+          publicidad y los materiales varios, por ejemplo, valen bastante más acá. Lo que no esté en
+          esta tabla se cobra con el precio general.
+        </p>
+      ) : (
+        <p className="mb-3 text-xs text-muted-foreground">
+          La <strong>mano de obra</strong>, la <strong>instalación</strong> y el{' '}
+          <strong>traslado</strong> también son insumos en la planilla, pero acá se editan más
+          abajo, en «Parámetros del cotizador»: el cálculo los toma de ahí.
+        </p>
+      )}
 
       {alta && (
         <div className="mb-3 rounded-md border border-success/40 bg-success/10 p-3">
@@ -373,7 +396,7 @@ export function InsumosPreciosSection({
                             ? 'usar en…'
                             : 'sin uso · usar en…'}
                       </option>
-                      {ORDEN_FAMILIAS.map((f) => (
+                      {familiasDisponibles.map((f) => (
                         <option key={f} value={f} disabled={enFamilias.includes(f)}>
                           {nombreFamilia(f)}
                           {enFamilias.includes(f) ? ' (ya lo lleva)' : ''}

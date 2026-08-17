@@ -15,7 +15,8 @@
 //      imprime solo si tiene filas.
 //   3. ETIQUETAS ROLZZO: una fila por código según color de accesorios
 //      (blancos/grises → INS 95-1 blanca; resto → INS 95 negra), 1 por paño
-//      —salvo el beeblack doble, que es UNA cortina y lleva 1 etiqueta—.
+//      —salvo el beeblack doble, que es UNA cortina y lleva 1 etiqueta, y la
+//      categoría B, que se entrega sin etiqueta Rolzzo—.
 //   4. NOTAS DE TERRENO: lo que el vendedor anotó en Fase 2 (retiro,
 //      material de instalación, cortes, suplementos, comentarios) por
 //      ubicación — solo se imprime si alguna cortina tiene notas.
@@ -584,7 +585,7 @@ export function construirInventario(
       reglas,
       catalogo,
     ),
-    etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[]),
+    etiquetas: construirEtiquetas(ventanas as unknown as VentanaItem[], catalogo, reglas),
     notas: notasTerreno(ventanas),
   };
 }

@@ -41,6 +41,7 @@ import {
 import { ProbadorCotizacionSection } from './ProbadorCotizacionSection';
 import { InsumosPreciosSection } from './InsumosPreciosSection';
 import { RecetasFamiliasSection } from './RecetasFamiliasSection';
+import { SistemasPreciosSection } from './SistemasPreciosSection';
 import { TelasArquetiposSection } from './TelasArquetiposSection';
 
 export function ReglasPreciosSection() {
@@ -78,6 +79,22 @@ export function ReglasPreciosSection() {
     setDraft((d) => ({ ...d, ...patch }));
     setDirty(true);
   };
+
+  /** Suma un insumo a la receta de una familia, venga de la lista que venga. */
+  const agregarAReceta = (cod: string, familia: string) =>
+    setDraft((d) => {
+      setDirty(true);
+      return {
+        ...d,
+        recetas: {
+          ...d.recetas,
+          [familia]: [
+            ...(d.recetas[familia] ?? []),
+            { insumo: cod, precio: 'venta', cantidad: { tipo: 'porCortina' } },
+          ],
+        },
+      };
+    });
 
   const onGuardar = async () => {
     if (!empresaId || errores.length > 0) return;
@@ -203,29 +220,40 @@ export function ReglasPreciosSection() {
 
       <ProbadorCotizacionSection reglas={draft} hayErrores={errores.length > 0} />
 
+      <SistemasPreciosSection
+        valor={draft.sistemas}
+        onChange={(sistemas) => editar({ sistemas })}
+      />
+
       <InsumosPreciosSection
         valor={draft.insumos}
         margenInsumo={parametros.margenInsumo}
         usados={usados}
         recetas={draft.recetas}
         onChange={(insumos) => editar({ insumos })}
-        onUsarEnFamilia={(cod, familia) =>
-          editar({
-            recetas: {
-              ...draft.recetas,
-              [familia]: [
-                ...(draft.recetas[familia] ?? []),
-                { insumo: cod, precio: 'venta', cantidad: { tipo: 'porCortina' } },
-              ],
-            },
-          })
-        }
+        onUsarEnFamilia={agregarAReceta}
       />
+
+      {Object.entries(draft.sistemas).map(([clave, s]) => (
+        <InsumosPreciosSection
+          key={clave}
+          valor={s.insumos}
+          margenInsumo={s.margenInsumo}
+          usados={usados}
+          recetas={draft.recetas}
+          sistema={{ clave, nombre: s.nombre, familias: s.familias }}
+          onChange={(insumos) =>
+            editar({ sistemas: { ...draft.sistemas, [clave]: { ...s, insumos } } })
+          }
+          onUsarEnFamilia={agregarAReceta}
+        />
+      ))}
 
       <RecetasFamiliasSection
         recetas={draft.recetas}
         insumos={draft.insumos}
         margenInsumo={parametros.margenInsumo}
+        sistemas={draft.sistemas}
         onChange={(recetas) => editar({ recetas })}
       />
 

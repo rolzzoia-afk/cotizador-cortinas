@@ -49,8 +49,12 @@ export function InventarioSheet({ ot, items, estado, onChange, readOnly, empresa
     () => construirFilasCortinas(ot.storeVentanas || [], usarE78, reglas, catalogo),
     [ot.storeVentanas, usarE78, reglas, catalogo],
   );
-  // Etiquetas por color de accesorios (blancos → INS 95-1; resto → INS 95).
-  const etiquetas = useMemo(() => construirEtiquetas(ot.storeVentanas || []), [ot.storeVentanas]);
+  // Etiquetas por color de accesorios (blancos → INS 95-1; resto → INS 95). La
+  // categoría B no lleva: por eso necesita el catálogo (gama de la tela) y las reglas.
+  const etiquetas = useMemo(
+    () => construirEtiquetas(ot.storeVentanas || [], catalogo, reglas),
+    [ot.storeVentanas, catalogo, reglas],
+  );
   const empresa = (empresaNombre || 'Rolzzo').toUpperCase();
 
   const setEntrega = (clave: string, patch: Partial<EntregaItem>) => {

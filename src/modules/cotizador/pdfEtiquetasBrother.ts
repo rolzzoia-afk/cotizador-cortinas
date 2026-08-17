@@ -1714,19 +1714,17 @@ function dibujarPano(
  * de las plantillas P-touch (docs/referencias).
  */
 export function generarEtiquetasPDF(
-  todas: OptimizerRow[],
+  rows: OptimizerRow[],
   meta: MetaPDF,
   catalogo: CatalogoProductos,
   adicionales?: AdicionalFase0Persistido[],
   colores?: readonly ColorAccesorio[],
 ): number {
-  if (!todas || todas.length === 0) {
+  if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
-  // La gama B se arma sin etiquetas (decisión 2026-08-14): se filtra ANTES de
-  // los totales para que el "Cortina n/N" cuente solo las que sí se imprimen.
-  const rows = todas.filter((r) => !r.lineaB);
-  if (rows.length === 0) return 0;
+  // La gama B imprime su etiqueta de estructura igual que la A: lo que NO lleva
+  // es la etiqueta Rolzzo del inventario (ver inventario.ts), que es otra cosa.
   const cenefas = rows.filter((r) => esCenefaCuadrada((r.pano || EMPTY_PANO).cenefa as string));
   // La vertical usa 106 mm; los sistemas de oscuridad (soft light, DARK, soft light
   // CC y oscuranti) 146 mm por las secciones extra; el resto 100 mm.
@@ -1819,12 +1817,9 @@ export function generarEtiquetasPanosPDF(
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
   const todos = agruparEtiquetasPanos(rows);
-  // Gama B sin etiquetas: se cae el paño solo si TODAS sus cortinas son B — un
-  // paño mixto A+B conserva la suya (la parte A la necesita para identificarse).
-  const sinB = todos.filter((g) => !g.rows.every((r) => r.lineaB));
   const grupos = esDeColmena
-    ? sinB.filter((g) => !g.rows.some(esDeColmena))
-    : sinB;
+    ? todos.filter((g) => !g.rows.some(esDeColmena))
+    : todos;
   if (grupos.length === 0) return 0;
   // Página exacta 62×54: orientación 'l' porque jsPDF voltea las páginas
   // "apaisadas" (ancho > alto) cuando se le pide 'p'.

@@ -56,6 +56,11 @@ function PanelFamilia({ f, lineas }: { f: ResultadoFamilia; lineas: { i: number;
         <span className="text-xs text-muted-foreground">
           {f.piezas} {f.piezas === 1 ? 'cortina' : 'cortinas'} · {m2(f.m2Total)} m²
         </span>
+        {f.sistema && (
+          <span className="rounded bg-success/20 px-1.5 py-0.5 text-[0.65rem]">
+            sistema {f.sistema}: margen, mano de obra e instalación propios
+          </span>
+        )}
         {!f.exacto && (
           <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[0.65rem]">
             sin receta propia: se usa la de respaldo
@@ -348,12 +353,24 @@ export function ProbadorCotizacionSection({
 
           <div className="ml-auto max-w-xs space-y-0.5 rounded-md border bg-card/40 p-3 text-xs">
             {resultado.instalacion.total > 0 && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">
-                  Instalación ({resultado.instalacion.cantidad} bajo el mínimo)
-                </span>
-                <span>{formatCLP(resultado.instalacion.total)}</span>
-              </div>
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    Instalación ({resultado.instalacion.cantidad} bajo el mínimo)
+                  </span>
+                  <span>{formatCLP(resultado.instalacion.total)}</span>
+                </div>
+                {/* Con dos sistemas en juego el precio por cortina no es uno solo. */}
+                {resultado.instalacion.partes.length > 1 &&
+                  resultado.instalacion.partes.map((p) => (
+                    <div key={p.sistema} className="flex justify-between pl-3 text-[0.7rem] text-muted-foreground">
+                      <span>
+                        {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
+                      </span>
+                      <span>{formatCLP(p.total)}</span>
+                    </div>
+                  ))}
+              </>
             )}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal neto</span>

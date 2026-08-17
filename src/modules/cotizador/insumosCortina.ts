@@ -80,10 +80,12 @@ export const TAPAS_DUO_INTERNA_POR_PANO = 2;
 
 // ── Tapas de la CATEGORÍA B (pedido 2026-08-14) ──────────────────────
 // El roller B usa la MISMA tapa en ambos lados (×2 por cortina): TAP18 blanca /
-// TAP28-B negra. El dúo B lleva la exterior única TAP17 (chantilly, sirve para
-// blanco y negro); la interna TAP13 se mantiene igual que en la A. El gris no
-// existe en la gama B (la selección lo bloquea), así que si llegara un color
-// sin tapa B se cae a la tapa de la línea A.
+// TAP28-B negra, y va A PRESIÓN — sin los 2 tornillos TOR02 de la línea A
+// (aclaración 2026-08-17). El dúo B lleva la exterior única TAP17 (chantilly,
+// sirve para blanco y negro); la interna TAP13 se mantiene igual que en la A.
+// El gris no existe en la gama B (la selección lo bloquea), así que si llegara
+// un color sin tapa B se cae a la tapa de la línea A (que sí lleva tornillos,
+// porque ES la tapa de la A).
 export const TAPAS_PESO_B_POR_COLOR: Record<string, string> = {
   BCO: 'TAP18',
   NEG: 'TAP28-B',
@@ -208,15 +210,31 @@ function tapasPesoDeColor(
   colorAcc: string | null | undefined,
   colores: readonly ColorAccesorio[] | undefined,
   lineaB = false,
-): { izq: string; der: string; nombreIzq: string; nombreDer: string; color: string } | null {
+): {
+  izq: string;
+  der: string;
+  nombreIzq: string;
+  nombreDer: string;
+  color: string;
+  /** La tapa va a presión: no lleva los tornillos TOR02 (tapas de la categoría B). */
+  aPresion?: boolean;
+} | null {
   const cc = colorTapaCorto(colorAcc);
-  // Categoría B: una sola tapa (misma en ambos lados). Overlay del color →
-  // tabla B de fábrica; si el color no tiene tapa B, cae a la de la línea A.
+  // Categoría B: una sola tapa (misma en ambos lados), a presión. Overlay del
+  // color → tabla B de fábrica; si el color no tiene tapa B, cae a la de la
+  // línea A (que sí se atornilla).
   if (lineaB) {
     const codB = insumoDeColor(colorAcc, 'tapaPesoB', colores) ?? (cc ? TAPAS_PESO_B_POR_COLOR[cc] || '' : '');
     if (codB) {
       const nombre = NOMBRE_TAPA_B[codB] || `TAPA PESO ROLLER CAT. B (${cc || colorAcc || ''})`;
-      return { izq: codB, der: codB, nombreIzq: nombre, nombreDer: nombre, color: cc || (colorAcc || '').trim().toUpperCase() };
+      return {
+        izq: codB,
+        der: codB,
+        nombreIzq: nombre,
+        nombreDer: nombre,
+        color: cc || (colorAcc || '').trim().toUpperCase(),
+        aPresion: true,
+      };
     }
   }
   const izq = insumoDeColor(colorAcc, 'tapaPesoIzq', colores) ?? (cc ? TAPAS_PESO_POR_COLOR[cc].izq : '');
@@ -472,7 +490,8 @@ export function insumosDePano(
     /** Catálogo de colores: sus códigos propios ganan sobre las tablas de acá. */
     colores?: readonly ColorAccesorio[];
     /** Categoría B (gama económica): cambia las tapas de peso (TAP18/TAP28-B ×2
-     *  en roller, TAP17 exterior en dúo — la interna TAP13 no cambia). */
+     *  en roller, a presión y SIN tornillos TOR02; TAP17 exterior en dúo — la
+     *  interna TAP13 no cambia). */
     lineaB?: boolean;
   },
 ): InsumoCortina[] {
@@ -486,12 +505,16 @@ export function insumosDePano(
     if (tapas) {
       out.push({ codigo: tapas.izq, descripcion: tapas.nombreIzq, color: tapas.color, cantidad: 1 });
       out.push({ codigo: tapas.der, descripcion: tapas.nombreDer, color: tapas.color, cantidad: 1 });
-      out.push({
-        codigo: COD_TORNILLO_TAPA,
-        descripcion: NOMBRE_TORNILLO_TAPA,
-        color: '',
-        cantidad: TORNILLOS_TAPA_PESO_POR_PANO,
-      });
+      // Categoría B: la tapa (TAP18 / TAP28-B) va A PRESIÓN, sin tornillos
+      // (decisión 2026-08-17). Se atornillan solo las tapas de la línea A.
+      if (!tapas.aPresion) {
+        out.push({
+          codigo: COD_TORNILLO_TAPA,
+          descripcion: NOMBRE_TORNILLO_TAPA,
+          color: '',
+          cantidad: TORNILLOS_TAPA_PESO_POR_PANO,
+        });
+      }
     }
   } else if (familiaOscuridad(categoria, p.cenefa, tipos)) {
     // Soft Light / Dark: 2 tapas de peso a PRESIÓN, SIN tornillos (TAP26 blanco /
