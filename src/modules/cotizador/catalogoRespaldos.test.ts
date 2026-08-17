@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// catalogoRespaldos.ts importa el cliente supabase (para leer/escribir las
+// fotos); en CI no hay VITE_SUPABASE_* y el módulo real lanza al importarse.
+// Acá solo se prueban las funciones puras, que no lo tocan.
+vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+
 import {
   MAX_RESPALDOS_CATALOGO,
   codigosDelRespaldo,
