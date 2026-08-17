@@ -390,9 +390,9 @@ function empacarBestFit(orden: OptimizerRow[]): OptimizerRow[] {
         esVertical: !!r.esVertical,
         usado: 0,
         anchoRollo: r.anchoRollo,
-        // Estilo Excel (…Z, AA, AB…): las letras NUNCA se repiten. Antes daban
-        // la vuelta en la Z y una OT con >26 paños fusionaba paños distintos
-        // en la hoja de corte (268-6: 88 cortinas → decía 26 paños).
+        // A…Z, AA, BB, CC… AAA: las letras NUNCA se repiten. Antes daban la
+        // vuelta en la Z y una OT con >26 paños fusionaba paños distintos en
+        // la hoja de corte (268-6: 88 cortinas → decía 26 paños).
         junto: letraPano(panoNum),
         numeroPano: panoNum,
       };
