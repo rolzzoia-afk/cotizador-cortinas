@@ -1668,8 +1668,17 @@ function dibujarPano(
   });
   txt(doc, String(meta.ot), 2.9, 32.7, 18.4);
   txt(doc, 'SE CORTA JUNTO:', 58.3, 26.2, 5.6, { align: 'right' });
-  // Grupos grandes ("A-A-A-A…") bajan de cuerpo para no pisar el N° de OT.
-  txt(doc, junto, 58.3, 32.7, junto.length > 7 ? 10.5 : 18.4, { align: 'right', max: 15 });
+  // El cuerpo de las letras se decide por ANCHO IMPRESO contra el espacio que
+  // deja el N° de OT, no por conteo de caracteres: una letra de vuelta ancha
+  // («WWWW» en una OT con 80+ paños) o un N° de OT largo pueden juntarse, y la
+  // regla vieja por caracteres («más de 7») los dejaba pasar a 18,4 montados.
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18.4);
+  const libreJunto = 58.3 - (2.9 + doc.getTextWidth(String(meta.ot))) - 2;
+  const anchoJunto18 = doc.getTextWidth(junto);
+  doc.setFontSize(10.5);
+  const cj = cuerpoTextoJunto(anchoJunto18, doc.getTextWidth(junto), libreJunto);
+  txt(doc, junto, 58.3, 32.7, cj.size, { align: 'right', hScale: cj.hScale });
 
   // Caja tela: codInt grande + descripción (34,1 → 50,8, ancho hasta 30).
   // BEEBLACK: la tela es un acordeón y la CANTIDAD DE LAMAS es la que dice dónde
@@ -1755,13 +1764,30 @@ export function generarEtiquetasPDF(
   return rows.length;
 }
 
+/**
+ * Cuerpo y compresión del texto SE CORTA JUNTO para que NUNCA pise el N° de
+ * OT: 18,4 si el ancho impreso cabe en el espacio libre; si no, 10,5; y si ni
+ * así cabe (muchas cortinas con letras de vuelta, «UUU-UUU-UUU…»), se condensa
+ * con hScale como los rótulos de las plantillas .lbx. Piso 0,4: más angosto ya
+ * no se lee, y preferimos un texto apretado a uno montado sobre la OT.
+ */
+export function cuerpoTextoJunto(
+  anchoA18: number,
+  anchoA10: number,
+  libre: number,
+): { size: number; hScale: number } {
+  if (anchoA18 <= libre) return { size: 18.4, hScale: 1 };
+  if (anchoA10 <= libre) return { size: 10.5, hScale: 1 };
+  return { size: 10.5, hScale: Math.max(0.4, libre / anchoA10) };
+}
+
 /** Grupo de cortinas que comparten paño físico (misma letra + N° de paño). */
 export type GrupoEtiquetaPano = {
   /** Fila representativa: la de mayor alto de corte (define el tiro de tela). */
   row: OptimizerRow;
   /** Todas las filas del paño (para decidir si alguna sale de colmena). */
   rows: OptimizerRow[];
-  /** Texto SE CORTA JUNTO: "A" si va sola, "A-A" si viajan 2 cortinas, etc. */
+  /** Texto SE CORTA JUNTO: la letra del paño tal cual ("A", "UUU"). */
   junto: string;
   cortinas: number;
 };
@@ -1771,6 +1797,11 @@ export type GrupoEtiquetaPano = {
  * cortan juntas (misma letra + mismo N° de paño) comparten UNA etiqueta.
  * Filas sin letra o sin N° de paño (planes legacy) quedan cada una con la
  * suya, igual que antes.
+ *
+ * La etiqueta muestra la letra del paño A SECAS: antes un corte en conjunto
+ * repetía la letra por cortina ("A-A"), pero con las letras de vuelta la
+ * repetición ya viene EN la letra y un dúo de la tercera imprimía «UUU-UUU»
+ * — el taller lee la misma letra que la hoja de corte: «UUU».
  */
 export function agruparEtiquetasPanos(rows: OptimizerRow[]): GrupoEtiquetaPano[] {
   const grupos: GrupoEtiquetaPano[] = [];
@@ -1791,19 +1822,13 @@ export function agruparEtiquetasPanos(rows: OptimizerRow[]): GrupoEtiquetaPano[]
       if ((row.altoCorte || 0) > (previo.row.altoCorte || 0)) previo.row = row;
     }
   });
-  for (const g of grupos) {
-    if (g.cortinas > 1) {
-      const letra = (g.row.junto || '').trim();
-      g.junto = Array(g.cortinas).fill(letra).join('-');
-    }
-  }
   return grupos;
 }
 
 /**
  * Etiquetas de PAÑOS (una por paño FÍSICO de tela cortado), formato oficial.
  * Un corte en conjunto (varias cortinas en el mismo tiro) lleva UNA etiqueta
- * con la letra repetida ("A-A") y el alto mayor del grupo.
+ * con la letra del paño y el alto mayor del grupo.
  */
 export function generarEtiquetasPanosPDF(
   rows: OptimizerRow[],
