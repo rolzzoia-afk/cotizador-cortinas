@@ -30,6 +30,7 @@ vi.mock('jspdf', async (importOriginal) => {
 import {
   agruparEtiquetasPanos,
   codigoPerfilVertical,
+  cuerpoTextoJunto,
   esFilaDark,
   esFilaSoftLight,
   esFilaSoftLightCC,
@@ -191,14 +192,14 @@ describe('agruparEtiquetasPanos', () => {
   const fila = (junto: string, numeroPano: number | string, altoCorte = 2.65): OptimizerRow =>
     ({ codInt: 'SC 64', junto, numeroPano, altoCorte }) as unknown as OptimizerRow;
 
-  it('corte en conjunto → UNA etiqueta con la letra repetida ("A-A")', () => {
+  it('corte en conjunto → UNA etiqueta con la letra del paño a secas', () => {
     const grupos = agruparEtiquetasPanos([
       fila('A', 1),
       fila('A', 1),
       fila('B', 2),
     ]);
     expect(grupos).toHaveLength(2);
-    expect(grupos[0].junto).toBe('A-A');
+    expect(grupos[0].junto).toBe('A');
     expect(grupos[0].cortinas).toBe(2);
     expect(grupos[1].junto).toBe('B');
   });
@@ -209,10 +210,13 @@ describe('agruparEtiquetasPanos', () => {
     expect(grupos[0].row.altoCorte).toBe(2.65);
   });
 
-  it('tres cortinas juntas → "A-A-A"', () => {
-    const grupos = agruparEtiquetasPanos([fila('A', 1), fila('A', 1), fila('A', 1)]);
+  it('letra de vuelta: el dúo imprime «UUU» tal cual, NO «UUU-UUU»', () => {
+    // La repetición por cortina ("A-A") venía de las letras simples; con las
+    // letras de vuelta la repetición ya viene EN la letra y confundía.
+    const grupos = agruparEtiquetasPanos([fila('UUU', 73), fila('UUU', 73), fila('UUU', 73)]);
     expect(grupos).toHaveLength(1);
-    expect(grupos[0].junto).toBe('A-A-A');
+    expect(grupos[0].junto).toBe('UUU');
+    expect(grupos[0].cortinas).toBe(3);
   });
 
   it('misma letra pero distinto N° de paño NO se agrupa (letras se reciclan tras la Z)', () => {
@@ -230,6 +234,32 @@ describe('agruparEtiquetasPanos', () => {
       fila('A', ''),
     ]);
     expect(grupos).toHaveLength(5);
+  });
+});
+
+describe('cuerpoTextoJunto', () => {
+  // Anchos medidos por jsPDF (mm) para un espacio libre típico de ~30 mm
+  // junto a una OT corta ("#3187-B"). La regla vieja contaba caracteres y
+  // dejaba pasar a 18,4 textos que impresos se montaban sobre el N° de OT.
+  it('una letra sola o de vuelta corta ("A", "UUU") queda a 18,4', () => {
+    expect(cuerpoTextoJunto(4.5, 2.6, 30)).toEqual({ size: 18.4, hScale: 1 });
+    expect(cuerpoTextoJunto(14.2, 8.1, 30)).toEqual({ size: 18.4, hScale: 1 });
+  });
+
+  it('si a 18,4 no cabe (letra ancha + OT larga), baja a 10,5', () => {
+    expect(cuerpoTextoJunto(30.7, 17.5, 30)).toEqual({ size: 10.5, hScale: 1 });
+  });
+
+  it('un grupo enorme se condensa con hScale en vez de pisar la OT', () => {
+    const r = cuerpoTextoJunto(66, 37.6, 30);
+    expect(r.size).toBe(10.5);
+    expect(r.hScale).toBeCloseTo(30 / 37.6, 6);
+    // Con la compresión, el ancho impreso queda EXACTO al espacio libre.
+    expect(37.6 * r.hScale).toBeCloseTo(30, 6);
+  });
+
+  it('la compresión tiene piso 0,4: apretado se lee, montado no', () => {
+    expect(cuerpoTextoJunto(200, 120, 30).hScale).toBe(0.4);
   });
 });
 
