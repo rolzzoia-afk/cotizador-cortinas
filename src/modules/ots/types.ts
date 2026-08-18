@@ -99,6 +99,56 @@ export type DatosGenerales = {
   usarTuboE78?: boolean;
   /** Descuento de colmena al confirmar el corte general (Fase 4) — guard de idempotencia. */
   corteGeneralColmena?: import('@/modules/cotizador/colmenaCorte').CorteGeneralColmena;
+  /** Lo que quedó de la visita a terreno: video, informe, checklist y firma. */
+  visita?: VisitaTerreno;
+};
+
+/** Respuesta a una pregunta del resumen de visita. `null` = todavía sin contestar. */
+export type RespuestaChecklistVisita = { respuesta: boolean | null; notas?: string };
+
+/** Foto de la visita: path en el bucket privado + la nota que le puso el vendedor. */
+export type FotoVisita = { path: string; nota?: string; subidaEl?: string };
+
+/**
+ * Dónde estaba el teléfono cuando el cliente firmó.
+ *
+ * Es un RESPALDO: si más adelante el cliente discute la visita, queda la firma
+ * y el lugar donde se dio. No se usa para validar nada ni bloquea la firma.
+ */
+export type GeoFirma = {
+  lat: number;
+  lng: number;
+  /** Radio de incertidumbre que informa el navegador (m). */
+  precisionM?: number;
+  capturadaEl: string;
+};
+
+/**
+ * La visita a terreno, tal como queda registrada en la OT.
+ *
+ * El video, las fotos y la firma viven en el bucket privado `visitas` (paths,
+ * no URLs: el bucket no es público y se abre con URL firmada). El informe lo
+ * redacta la IA a partir de la transcripción, pero queda EDITABLE: lo que vale
+ * es lo que el vendedor deja escrito.
+ */
+export type VisitaTerreno = {
+  videoPath?: string;
+  /** Audio extraído del video (wav mono 16 kHz): permite regenerar sin resubir. */
+  audioPath?: string;
+  /** Fotos de respaldo de la visita (no entran al informe ni a la cotización). */
+  fotos?: FotoVisita[];
+  transcripcion?: string;
+  informe?: string;
+  informeGeneradoEl?: string;
+  firmaPath?: string;
+  firmadoEl?: string;
+  firmanteNombre?: string;
+  /** Dónde se firmó. Ausente cuando el teléfono no la entregó (ver `firmaGeoMotivo`). */
+  firmaGeo?: GeoFirma;
+  /** Por qué NO hay ubicación (permiso denegado, sin señal…). También es constancia. */
+  firmaGeoMotivo?: string;
+  /** id de la pregunta → respuesta. Una pregunta borrada en Admin no borra su respuesta. */
+  checklist?: Record<string, RespuestaChecklistVisita>;
 };
 
 // Estructura mínima de una ventana/ítem dentro de OT.items. El cotizador

@@ -11,6 +11,7 @@ import {
   Loader2,
   MessageCircle,
   Plus,
+  Ruler,
   Scissors,
   Search,
   Trash2,
@@ -26,6 +27,7 @@ import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -95,6 +97,9 @@ export function Panel() {
   const [nuevoOpen, setNuevoOpen] = useState(false);
   const [nuevoForm, setNuevoForm] = useState<DatosGenerales>({ ...EMPTY_FORM });
   const [creando, setCreando] = useState(false);
+  // Dónde arranca la OT nueva: en la cotización (lo de siempre) o midiendo en
+  // terreno. Los dos caminos terminan en Fase 3.
+  const [destinoNueva, setDestinoNueva] = useState<'fase1' | 'terreno'>('fase1');
 
   const activas = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -157,14 +162,21 @@ export function Panel() {
       return;
     }
     setCreando(true);
+    const aTerreno = destinoNueva === 'terreno';
     try {
-      const ot = await crearOT({ ...nuevoForm, cliente, ot: numeroOT });
-      toast.success('OT creada');
+      const ot = await crearOT(
+        { ...nuevoForm, cliente, ot: numeroOT },
+        aTerreno ? 'terreno' : 'cotizacion',
+      );
+      toast.success(aTerreno ? 'OT creada — a cargar las cortinas' : 'OT creada');
       setNuevoOpen(false);
       setNuevoForm({ ...EMPTY_FORM, fecha: new Date().toISOString().split('T')[0] });
-      // Al crear, abrir directamente en Fase 1 React
       localStorage.setItem('activeOTId', ot.id);
-      navigate(`/ots/${ot.id}/fase1`);
+      // Terreno: se abre la vista guiada con la primera ventana ya empezada.
+      // Los precios los calcula Fase 3 cuando la OT llegue ahí.
+      navigate(
+        aTerreno ? `/ots/${ot.id}/fase2?vista=interactiva&nueva=1` : `/ots/${ot.id}/fase1`,
+      );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error al crear: ' + msg);
@@ -292,10 +304,33 @@ export function Panel() {
               </button>
             )}
           </div>
-          <Button onClick={() => setNuevoOpen(true)} size="sm" className="shrink-0 gap-1">
+          <Button
+            onClick={() => {
+              setDestinoNueva('fase1');
+              setNuevoOpen(true);
+            }}
+            size="sm"
+            className="shrink-0 gap-1"
+          >
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Nueva OT</span>
             <span className="sm:hidden">Nueva</span>
+          </Button>
+          {/* Visita en la casa del cliente: la OT nace en Terreno y se abre
+              directo en la vista guiada, sin pasar por la cotización. */}
+          <Button
+            onClick={() => {
+              setDestinoNueva('terreno');
+              setNuevoOpen(true);
+            }}
+            size="sm"
+            variant="outline"
+            className="shrink-0 gap-1"
+            title="Crear la OT y cargar las cortinas midiendo en terreno"
+          >
+            <Ruler className="h-4 w-4" />
+            <span className="hidden sm:inline">Nueva OT — Terreno</span>
+            <span className="sm:hidden">Terreno</span>
           </Button>
         </div>
       </div>
@@ -437,7 +472,15 @@ export function Panel() {
       <Dialog open={nuevoOpen} onOpenChange={(v) => (v ? null : setNuevoOpen(false))}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
-            <DialogTitle>Nueva OT</DialogTitle>
+            <DialogTitle>
+              {destinoNueva === 'terreno' ? 'Nueva OT — Terreno' : 'Nueva OT'}
+            </DialogTitle>
+            {destinoNueva === 'terreno' && (
+              <DialogDescription>
+                Se abre midiendo en terreno. Los precios se calculan después, en la
+                cotización final.
+              </DialogDescription>
+            )}
           </DialogHeader>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="sm:col-span-2">
@@ -526,7 +569,7 @@ export function Panel() {
             </Button>
             <Button onClick={handleCrear} disabled={creando}>
               {creando && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
-              Crear y abrir cotizador
+              {destinoNueva === 'terreno' ? 'Crear y medir en terreno' : 'Crear y abrir cotizador'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -13,7 +13,9 @@ export type UseOTs = {
   ots: OT[];
   loading: boolean;
   online: boolean;
-  crearOT: (datosGenerales: OT['datosGenerales']) => Promise<OT>;
+  /** Crea la OT. `estado` permite abrirla ya en Terreno (visita en la casa del
+   *  cliente, sin cotización previa); sin él nace en cotización, como siempre. */
+  crearOT: (datosGenerales: OT['datosGenerales'], estado?: OTEstado) => Promise<OT>;
   moverEstado: (id: string, nuevoEstado: OTEstado) => Promise<void>;
   moverSubEtapa: (id: string, subEtapa: SubEtapaProd) => Promise<void>;
   archivar: (id: string) => Promise<void>;
@@ -119,11 +121,11 @@ export function useOTs(): UseOTs {
   );
 
   const crearOT: UseOTs['crearOT'] = useCallback(
-    async (dg) => {
+    async (dg, estado = 'cotizacion') => {
       const now = new Date().toISOString();
       const ot: OT = {
         id: crypto.randomUUID(),
-        estado: 'cotizacion',
+        estado,
         subEtapa: null,
         datosGenerales: dg,
         storeVentanas: [],
