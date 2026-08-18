@@ -362,7 +362,9 @@ describe('generarOrdenesOptimizador — cuadro de cenefas cuadradas (verticales/
     const { aoa, filas } = generarOrdenesOptimizador('266-4', [ventanaCenefaCuadrada('MURO_MURO')], {
       adicionalesFase0: cenefaCuadrada,
     });
-    expect(filas).toBe(1); // filas reportadas = solo paños, sin el cuadro
+    // filas = cortes de la tabla principal: el paño Y la fila de corte de la
+    // cenefa (el cuadro informativo de abajo sigue sin contar).
+    expect(filas).toBe(2);
     const tituloIdx = aoa.findIndex((r) => String(r[0]).startsWith('CENEFAS CUADRADAS'));
     expect(tituloIdx).toBeGreaterThan(0);
     expect(aoa[tituloIdx - 1]).toEqual([]); // fila en blanco antes del cuadro
@@ -407,6 +409,47 @@ describe('generarOrdenesOptimizador — cuadro de cenefas cuadradas (verticales/
   it('sin adicionales de cenefa cuadrada no anexa el cuadro', () => {
     const { aoa } = generarOrdenesOptimizador('266-4', [ventana('')]);
     expect(aoa.some((r) => String(r[0]).startsWith('CENEFAS CUADRADAS'))).toBe(false);
+  });
+
+  // ── La cenefa cuadrada TAMBIÉN es un corte: fila propia en la tabla ──
+  // principal, para que el optimizador la corte de la barra E29/E30/E31.
+  // Antes solo iba en el cuadro informativo (que el optimizador saltea) y
+  // esa estructura no se cortaba nunca.
+  it('emite una fila de CORTE en la tabla principal, con COLOR PERFIL y la medida de corte', () => {
+    const { aoa } = generarOrdenesOptimizador('266-4', [ventanaCenefaCuadrada('MURO_MURO')], {
+      adicionalesFase0: cenefaCuadrada,
+    });
+    const tituloIdx = aoa.findIndex((r) => String(r[0]).startsWith('CENEFAS CUADRADAS'));
+    // La fila de corte vive ANTES del cuadro informativo (dentro de la tabla).
+    const filaCorte = aoa
+      .slice(1, tituloIdx)
+      .find((r) => r[col('COD SEC')] === 'CENEFA CUADRADA');
+    expect(filaCorte).toBeDefined();
+    expect(filaCorte![col('OT')]).toBe('266-4');
+    expect(filaCorte![col('COD_INT')]).toBe('CENF C');
+    expect(filaCorte![col('UBIC.')]).toBe('LIVING');
+    // El optimizador asigna E29/E30/E31 por COLOR PERFIL: sin esta celda, la
+    // orden se descartaría en silencio.
+    expect(filaCorte![col('COLOR PERFIL')]).toBe('CAFÉ');
+    expect(filaCorte![col('CENEFA CUADRADA')]).toBe(268.9); // 269,4 − 0,5 (muro a muro)
+    // Sin tubo ni tela: la fila es SOLO el corte de la cenefa.
+    expect(filaCorte![idxTUBO]).toBe('');
+    expect(filaCorte![idxTUBERIA]).toBe('');
+  });
+
+  it('la medida de la fila de corte respeta el TIP. INST (+1 con una tapa)', () => {
+    const { aoa } = generarOrdenesOptimizador('266-4', [ventanaCenefaCuadrada('CON_1_TAPA')], {
+      adicionalesFase0: cenefaCuadrada,
+    });
+    const filaCorte = aoa.find((r) => r[col('COD SEC')] === 'CENEFA CUADRADA');
+    expect(filaCorte![col('CENEFA CUADRADA')]).toBe(270.4);
+  });
+
+  it('sin cortinas roller/vertical tampoco emite la fila de corte', () => {
+    const { aoa } = generarOrdenesOptimizador('266-4', [ventanaSoftLight(2.969, 'LIVING')], {
+      adicionalesFase0: cenefaCuadrada,
+    });
+    expect(aoa.some((r) => r[col('COD SEC')] === 'CENEFA CUADRADA')).toBe(false);
   });
 });
 

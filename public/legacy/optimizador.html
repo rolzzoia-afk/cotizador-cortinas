@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.22"; // 2026-08-14: (1) el PLAN DE CORTE muestra la PERFORACIÓN del zócalo (INT/EXT) en pantalla y en el Excel exportado — antes solo viajaba dentro del rótulo; (2) las órdenes pueden llegar DIRECTO desde la app (clave `opt_ordenes_crudos`), sin descargar y volver a subir el Excel; (3) el tubo de 45 mm pasó a llamarse E39 (antes E78; se siguen aceptando los dos)
+const VERSION_ACTUAL = "5.23"; // 2026-08-18: la CENEFA CUADRADA suelta (adicional de roller/vertical) ahora SÍ se optimiza — llega como columna propia en la tabla principal y se corta de la barra E29/E30/E31 por COLOR PERFIL, igual que la delantera/trasera de DARK/soft light CC. Antes solo iba en el cuadro informativo del final del Excel (que este optimizador saltea a propósito) y esa estructura no se cortaba nunca.
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -3740,6 +3740,10 @@ function expandirOrdenesDesdeExcel() {
         // Va SIEMPRE en oscuranti; soft light y DARK llevan solo la cenefa.
         'PERFIL SUPERIOR (CENEF.PRO)',
         'CENEFA DELANTERA', 'CENEFA TRASERA', 'PESO SOFT LIGHT',
+        // Cenefa cuadrada SUELTA (adicional de roller/vertical): mismo perfil
+        // E29/E30/E31 que la delantera/trasera. Antes solo iba en el cuadro
+        // informativo del final del Excel y no se cortaba nunca.
+        'CENEFA CUADRADA',
         // BEEBLACK: los 4 perfiles salen del MISMO riel (SML04/05/06) y las
         // manillas de la agarradera (SML10/11/12). Barra 6,00 m.
         'PERFIL SUPERIOR (ANCHO)', 'PERFIL INFERIOR (ANCHO)',
@@ -3786,6 +3790,7 @@ function expandirOrdenesDesdeExcel() {
         'PERFIL SUPERIOR (CENEF.PRO)': 'COLOR PERFIL',
         'CENEFA DELANTERA': 'COLOR PERFIL',
         'CENEFA TRASERA': 'COLOR PERFIL',
+        'CENEFA CUADRADA': 'COLOR PERFIL',
         // BEEBLACK: perfiles y manillas por COLOR PERFIL (excel-ordenes lo llena
         // con el color de accesorios de la cortina).
         'PERFIL SUPERIOR (ANCHO)': 'COLOR PERFIL',
@@ -4186,11 +4191,13 @@ function expandirOrdenesDesdeExcel() {
                 }
 
                 // Excepción dura: CENEFA DELANTERA / CENEFA TRASERA (cenefa CUADRADA
-                // de DARK y soft light CC) = perfil de cenefa cuadrada por COLOR
+                // de DARK y soft light CC) y CENEFA CUADRADA suelta (adicional de
+                // roller/vertical) = perfil de cenefa cuadrada por COLOR
                 // PERFIL (NEGRO→E29, BLANCO→E30, CAFÉ→E31). Barra 5,80 m. Sin el mapeo
                 // caían al catálogo (llave "CENEFA DELANTERA|COLOR" inexistente) y se
                 // descartaban en silencio.
-                if (nombreCol === 'CENEFA DELANTERA' || nombreCol === 'CENEFA TRASERA') {
+                if (nombreCol === 'CENEFA DELANTERA' || nombreCol === 'CENEFA TRASERA'
+                    || nombreCol === 'CENEFA CUADRADA') {
                     const MAPA_CENEFA_CUAD = { 'BLANCO': 'E30', 'NEGRO': 'E29', 'CAFÉ': 'E31', 'CAFE': 'E31' };
                     const codCenC = MAPA_CENEFA_CUAD[colorDeseado] || null;
                     if (!codCenC) {
