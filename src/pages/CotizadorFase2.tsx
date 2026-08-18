@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   ClipboardCheck,
+  Copy,
+  FileText,
+  LayoutGrid,
   Link2,
   Loader2,
   Pencil,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   Unlink,
   X,
@@ -105,8 +109,17 @@ import {
   tuberiaParaPano,
 } from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
+import { InformeVisita } from '@/components/cotizador/visita/InformeVisita';
+import type { VisitaTerreno } from '@/modules/ots/types';
+import { WizardTerreno } from '@/components/cotizador/wizard/WizardTerreno';
+import { ReplicarDialog } from '@/components/cotizador/wizard/ReplicarDialog';
+import { varianteViz } from '@/modules/cotizador/wizard/cortinaViz';
+import { replicarEnVentanas } from '@/modules/cotizador/wizard/replicar';
 
-type Tab = 'ventanas' | 'post';
+type Tab = 'ventanas' | 'visita' | 'post';
+/** Cómo se edita la ventana: la ficha de siempre o el wizard con el dibujo. */
+type Vista = 'ficha' | 'interactiva';
+const CLAVE_VISTA = 'fase2Vista';
 
 export function CotizadorFase2() {
   const { id: otId } = useParams();
@@ -129,6 +142,24 @@ export function CotizadorFase2() {
   // ofrecerse; los opt-in aparecen solo con el tubo E78 activado en la OT).
   const opcSel = useMemo(() => derivarOpciones(reglas, usarE78), [reglas, usarE78]);
   const [tab, setTab] = useState<Tab>('ventanas');
+  // La vista elegida se recuerda entre visitas (y se puede forzar por URL, que
+  // es como llega el vendedor desde «Nueva OT — Terreno» del Panel).
+  const [params, setParams] = useSearchParams();
+  const [vista, setVista] = useState<Vista>(() => {
+    const dePath = params.get('vista');
+    if (dePath === 'interactiva' || dePath === 'ficha') return dePath;
+    return typeof localStorage !== 'undefined' && localStorage.getItem(CLAVE_VISTA) === 'interactiva'
+      ? 'interactiva'
+      : 'ficha';
+  });
+  const cambiarVista = useCallback((v: Vista) => {
+    setVista(v);
+    try {
+      localStorage.setItem(CLAVE_VISTA, v);
+    } catch {
+      // Modo privado / storage lleno: la vista igual funciona en esta sesión.
+    }
+  }, []);
   const [cadenas, setCadenas] = useState<CadenaInsumo[]>([]);
   const [pesos, setPesos] = useState<CadenaInsumo[]>([]);
   const [editandoId, setEditandoId] = useState<string | number | null>(null);
@@ -136,12 +167,14 @@ export function CotizadorFase2() {
   const [panoActivo, setPanoActivo] = useState(0);
   const [postData, setPostData] = useState<PostInstalacionData>(postInstalacionVacia());
   const [savingPost, setSavingPost] = useState(false);
+  const [savingVisita, setSavingVisita] = useState(false);
   const [savingVentana, setSavingVentana] = useState(false);
   const [avanzando, setAvanzando] = useState(false);
   // Conjuntos de cortinas invertidas: dialog "¿Juntar con otra cortina?" y
   // los ids que ya dijeron "No juntar" (no volver a preguntar en la sesión).
   const [dialogPendientes, setDialogPendientes] = useState(false);
   const [dialogJuntar, setDialogJuntar] = useState(false);
+  const [dialogReplicar, setDialogReplicar] = useState(false);
   const [juntarDescartado, setJuntarDescartado] = useState<Set<string | number>>(new Set());
 
   const ventanas: Ventana[] = useMemo(
@@ -569,6 +602,44 @@ export function CotizadorFase2() {
     setDialogJuntar(false);
   };
 
+  // `?nueva=1`: la OT se acaba de crear desde el Panel y llega directo a cargar
+  // su primera cortina. Se consume una sola vez (se limpia el parámetro) para
+  // que recargar la página no abra otra ventana en blanco.
+  useEffect(() => {
+    if (!ot || params.get('nueva') !== '1') return;
+    if (ventanas.length === 0 && editandoId == null) iniciarNueva();
+    const limpio = new URLSearchParams(params);
+    limpio.delete('nueva');
+    setParams(limpio, { replace: true });
+    // `iniciarNueva` se re-crea en cada render; el gate real es el parámetro.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ot, params]);
+
+  /** Variante de dibujo de la ventana en edición (null = sin vista interactiva). */
+  const varianteVentana = useMemo(
+    () => (ventanaForm ? varianteViz(ventanaForm.categoria, reglas.tipos) : null),
+    [ventanaForm?.categoria, reglas.tipos],
+  );
+
+  // Cambio de categoría: pre-selecciona el modelo de fabricación que le
+  // corresponde (por color de accesorios) y re-sincroniza los chips. Lo usan la
+  // ficha y el wizard, para que elegir el sistema haga lo mismo en las dos.
+  const cambiarCategoria = (categoria: string) => {
+    setVentanaForm((v) => {
+      if (!v) return v;
+      const candidatos = modelosParaCategoria(modelos, categoria, reglas.tipos);
+      const actualSirve =
+        v.modelo && candidatos.some((m) => claveModelo(m) === claveModelo(v.modelo!));
+      const nuevoModelo = actualSirve
+        ? v.modelo!
+        : elegirModeloPorColor(
+            candidatos,
+            (v.panos?.[0]?.colorMecanismo as string) || (v.panos?.[0]?.color as string) || v.color,
+          ) ?? v.modelo ?? null;
+      return sincronizarChips({ ...v, categoria, modelo: nuevoModelo }, nuevoModelo, !actualSirve);
+    });
+  };
+
   const actualizarVentana = (patch: Partial<Ventana>) =>
     setVentanaForm((v) => (v ? { ...v, ...patch } : v));
 
@@ -870,6 +941,28 @@ export function CotizadorFase2() {
     }
   };
 
+  // «Replicar información»: la ficha de la cortina en edición se copia a las
+  // elegidas (sin tocar sus medidas ni su ubicación) en un solo guardado.
+  const replicarEn = async (ids: Array<string | number>) => {
+    if (!ot || !ventanaForm || ids.length === 0) return;
+    setSavingVentana(true);
+    try {
+      // La cortina en edición participa con lo que hay en pantalla: si todavía
+      // no se guardó, igual es la fuente de la copia.
+      const base = ventanas.map((v) => (v.id === ventanaForm.id ? ventanaForm : v));
+      const nuevas = replicarEnVentanas(base, ventanaForm, ids);
+      await guardar({ storeVentanas: nuevas });
+      setDialogReplicar(false);
+      toast.success(
+        `Configuración copiada a ${ids.length} ${ids.length === 1 ? 'cortina' : 'cortinas'}`,
+      );
+    } catch (e) {
+      toast.error('Error al replicar: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSavingVentana(false);
+    }
+  };
+
   const quitarDelConjunto = async () => {
     if (!ot || !ventanaForm?.grupoId) return;
     try {
@@ -878,6 +971,21 @@ export function CotizadorFase2() {
       toast.success('Cortina quitada del conjunto');
     } catch {
       toast.error('Error al quitar del conjunto');
+    }
+  };
+
+  // La visita (video, informe, checklist y firma) vive junto al resto de los
+  // datos generales de la OT, igual que la post-instalación.
+  const guardarVisita = async (visita: VisitaTerreno) => {
+    if (!ot) return;
+    setSavingVisita(true);
+    try {
+      await guardar({ datosGenerales: { ...(ot.datosGenerales || {}), visita } });
+    } catch (e) {
+      toast.error('Error al guardar la visita: ' + (e instanceof Error ? e.message : String(e)));
+      throw e;
+    } finally {
+      setSavingVisita(false);
     }
   };
 
@@ -979,14 +1087,31 @@ export function CotizadorFase2() {
             </p>
           </div>
         </div>
-        <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
-          <TabBtn active={tab === 'ventanas'} onClick={() => setTab('ventanas')}>
-            Ventanas
-          </TabBtn>
-          <TabBtn active={tab === 'post'} onClick={() => setTab('post')}>
-            <ClipboardCheck className="h-3.5 w-3.5" /> Post-instalación
-          </TabBtn>
-        </nav>
+        <div className="flex items-center gap-2">
+          {/* Las dos formas de cargar la ficha. Editan lo mismo: cambiar de
+              vista no pierde nada de lo que ya se escribió. */}
+          {tab === 'ventanas' && (
+            <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
+              <TabBtn active={vista === 'ficha'} onClick={() => cambiarVista('ficha')}>
+                <LayoutGrid className="h-3.5 w-3.5" /> Ficha
+              </TabBtn>
+              <TabBtn active={vista === 'interactiva'} onClick={() => cambiarVista('interactiva')}>
+                <Sparkles className="h-3.5 w-3.5" /> Guiada
+              </TabBtn>
+            </nav>
+          )}
+          <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
+            <TabBtn active={tab === 'ventanas'} onClick={() => setTab('ventanas')}>
+              Ventanas
+            </TabBtn>
+            <TabBtn active={tab === 'visita'} onClick={() => setTab('visita')}>
+              <FileText className="h-3.5 w-3.5" /> Visita
+            </TabBtn>
+            <TabBtn active={tab === 'post'} onClick={() => setTab('post')}>
+              <ClipboardCheck className="h-3.5 w-3.5" /> Post-instalación
+            </TabBtn>
+          </nav>
+        </div>
       </div>
 
       {tab === 'ventanas' && (
@@ -1123,8 +1248,47 @@ export function CotizadorFase2() {
                   </Button>
                 )}
               </div>
+            ) : vista === 'interactiva' && varianteVentana ? (
+              /* Vista guiada: un paso a la vez con la cortina armándose al lado.
+                 Edita el MISMO `ventanaForm` que la ficha. */
+              <WizardTerreno
+                ventana={ventanaForm}
+                variante={varianteVentana}
+                panoActivo={panoActivo}
+                onPanoActivo={setPanoActivo}
+                catalogo={catalogo}
+                reglas={reglas}
+                formulas={formulas}
+                cadenas={cadenas}
+                pesos={pesos}
+                opcionesMecanismo={opcionesMecVentana}
+                opcionesTuberia={opcionesTubVentana}
+                notaMecanismo={reglaFijaPorAncho?.regla.nota}
+                lineaB={esLineaB(
+                  ventanaForm.panos[panoActivo] ?? null,
+                  ventanaForm.codInt,
+                  catalogo,
+                  ventanaForm.categoria,
+                  reglas.mecanismo,
+                  reglas.tipos,
+                )}
+                guardando={savingVentana}
+                onVentana={actualizarVentana}
+                onPano={(patch) => actualizarPano(panoActivo, patch)}
+                onCategoria={cambiarCategoria}
+                onGuardar={guardarVentana}
+                onCancelar={cancelarEdicion}
+                onReplicar={ventanas.length > 1 ? () => setDialogReplicar(true) : undefined}
+              />
             ) : (
               <>
+                {vista === 'interactiva' && !varianteVentana && (
+                  <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.75rem] text-amber-600">
+                    {ventanaForm.categoria
+                      ? `«${ventanaForm.categoria}» se fabrica distinto a un roller, así que la vista guiada no la dibuja: se carga con la ficha de siempre.`
+                      : 'Elige el tipo de cortina para ver la vista guiada. Los sistemas de oscuridad, las verticales y el beeblack se cargan siempre con la ficha.'}
+                  </div>
+                )}
                 {/* Datos de la ventana */}
                 {(() => {
                   const claseForm = claseDeGrupo(ventanaForm.grupoId);
@@ -1156,6 +1320,17 @@ export function CotizadorFase2() {
                       )}
                     </h3>
                     <div className="flex items-center gap-1.5">
+                      {ventanas.length > 1 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 gap-1 px-2 text-xs"
+                          onClick={() => setDialogReplicar(true)}
+                          title="Copiar esta ficha a otras cortinas de la OT (sin tocar sus medidas)"
+                        >
+                          <Copy className="h-3 w-3" /> Replicar
+                        </Button>
+                      )}
                       {ventanaForm.grupoId ? (
                         <Button
                           size="sm"
@@ -1202,34 +1377,7 @@ export function CotizadorFase2() {
                       <Label>Categoría</Label>
                       <select
                         value={ventanaForm.categoria}
-                        onChange={(e) => {
-                          const categoria = e.target.value;
-                          // Pre-seleccionar el modelo de fabricación cuando la
-                          // categoría mapea a candidatos del catálogo.
-                          const candidatos = modelosParaCategoria(modelos, categoria, reglas.tipos);
-                          const actualSirve =
-                            ventanaForm.modelo &&
-                            candidatos.some(
-                              (m) => claveModelo(m) === claveModelo(ventanaForm.modelo!),
-                            );
-                          const nuevoModelo = actualSirve
-                            ? ventanaForm.modelo!
-                            : elegirModeloPorColor(
-                                candidatos,
-                                (ventanaForm.panos?.[0]?.colorMecanismo as string) ||
-                                  (ventanaForm.panos?.[0]?.color as string) ||
-                                  ventanaForm.color,
-                              ) ?? ventanaForm.modelo ?? null;
-                          setVentanaForm((v) =>
-                            v
-                              ? sincronizarChips(
-                                  { ...v, categoria, modelo: nuevoModelo },
-                                  nuevoModelo,
-                                  !actualSirve,
-                                )
-                              : v,
-                          );
-                        }}
+                        onChange={(e) => cambiarCategoria(e.target.value)}
                         className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
                       >
                         <option value="">— Selecciona —</option>
@@ -1379,6 +1527,22 @@ export function CotizadorFase2() {
         </div>
       )}
 
+      {tab === 'visita' && (
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="mx-auto max-w-3xl">
+            <InformeVisita
+              otId={ot.id}
+              empresaId={empresaId}
+              visita={ot.datosGenerales?.visita ?? {}}
+              ventanas={ventanas}
+              tipos={reglas.tipos}
+              guardando={savingVisita}
+              onGuardar={guardarVisita}
+            />
+          </div>
+        </div>
+      )}
+
       {tab === 'post' && (
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="mx-auto max-w-3xl">
@@ -1454,6 +1618,17 @@ export function CotizadorFase2() {
             setDialogJuntar(false);
             setJuntarDescartado((prev) => new Set(prev).add(ventanaForm.id));
           }}
+        />
+      )}
+
+      {ventanaForm && (
+        <ReplicarDialog
+          open={dialogReplicar}
+          onOpenChange={setDialogReplicar}
+          origen={ventanaForm}
+          candidatas={ventanas.filter((v) => v.id !== ventanaForm.id)}
+          guardando={savingVentana}
+          onReplicar={replicarEn}
         />
       )}
     </div>

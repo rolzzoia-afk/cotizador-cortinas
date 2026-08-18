@@ -35,6 +35,8 @@ import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { UsuariosRolesSection } from '@/components/admin/UsuariosRolesSection';
 import { SuscripcionSection } from '@/components/admin/SuscripcionSection';
 import { TerminosSection } from '@/components/admin/TerminosSection';
+import { ChecklistVisitaSection } from '@/components/admin/ChecklistVisitaSection';
+import { BloquesInformeSection } from '@/components/admin/BloquesInformeSection';
 import { DocumentoSection } from '@/components/admin/DocumentoSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 // El tab «Optimizador» calcula la hoja de corte de una OT (tablas pesadas y la
@@ -130,6 +132,8 @@ export function AdminPanel() {
       {tab === 'cotizador' && (
         <div className="space-y-6">
           <TerminosSection />
+          <ChecklistVisitaSection />
+          <BloquesInformeSection />
           <DocumentoSection />
         </div>
       )}

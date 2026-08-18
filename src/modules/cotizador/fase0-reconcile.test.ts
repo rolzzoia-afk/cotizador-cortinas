@@ -41,6 +41,37 @@ describe('explotarVentanasAFilas', () => {
     expect(orig['v1']).toBe(v);
   });
 
+  // Una cotización puede empezar en Terreno (Fase 2) sin pasar por Fase 1: esas
+  // ventanas nacen sin precio ni DCT%, y Fase 3 tiene que poder cotizarlas.
+  it('una ventana creada en Terreno llega a Fase 3 con todo lo que se necesita', () => {
+    const v: VentanaItem = {
+      id: 'v-terreno',
+      ubicacion: 'DORMITORIO',
+      codInt: 'BK 18',
+      producto: 'ROLLER BLACKOUT DELUX',
+      categoria: 'ROL',
+      color: 'BLANCO',
+      alto: 2.3,
+      cantidad: 1,
+      precio: 0,
+      panos: [{ ancho: 1.855, alto: 2.3, color: 'BCO', mecanismo: 'SINFLEX BLANCO [MEC 33]' }],
+    };
+    const { filas } = explotarVentanasAFilas([v], genIdSeq(), (cod) => (cod === 'BK 18' ? 20 : 0));
+    expect(filas).toHaveLength(1);
+    expect(filas[0]).toMatchObject({
+      codInt: 'BK 18',
+      categoria: 'ROL',
+      ubicacion: 'DORMITORIO',
+      ancho: 1.855,
+      alto: 2.3,
+      cantidad: 1,
+      vid: 'v-terreno',
+      panoIndex: 0,
+    });
+    // Sin DCT guardado (nadie lo tecleó en terreno) cae al del catálogo.
+    expect(filas[0].descuento).toBe(20);
+  });
+
   it('ventana sin paños emite una fila (ancho 0)', () => {
     const v: VentanaItem = { id: 'v1', codInt: 'BK 18', alto: 2, panos: [] };
     const { filas } = explotarVentanasAFilas([v], genIdSeq());
