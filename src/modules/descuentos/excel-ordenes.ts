@@ -79,6 +79,11 @@ export const COLUMNAS = [
   'CENEFA DELANTERA',
   COLUMNA_PERFIL_SUPERIOR,
   'CENEFA TRASERA',
+  // Cenefa cuadrada suelta (adicional CENF C de roller/vertical): una fila
+  // propia por cenefa con la medida de corte, para que el optimizador la corte
+  // de la barra E29/E30/E31. Antes solo iba en el cuadro informativo de abajo
+  // — que el optimizador saltea — y esa estructura no se cortaba nunca.
+  'CENEFA CUADRADA',
   'CON TIRA',
   'PESO U',
   'PESO INTERNO',
@@ -193,18 +198,29 @@ function tapaCenefaDeUbic(
   return '';
 }
 
+/** Una cenefa cuadrada de la OT, con su medida de corte ya calculada. */
+type CenefaCuadradaOT = {
+  anchoInicial: number;
+  color: string;
+  ubicacion: string;
+  tapa: string;
+  codInt: string;
+  corte: number;
+};
+
 /**
- * Filas del cuadro de cenefas cuadradas. Aplica solo si hay adicionales de
- * cenefa cuadrada Y la OT tiene cortinas roller o vertical. ANCHO INICIAL sale
- * de la cantidad declarada del adicional (×100); el TIP. INST y el ajuste del
- * ANCHO CORTE EST. salen del "Tapas" del paño (Fase 2).
+ * Las cenefas cuadradas de la OT (adicionales de Fase 1). Aplica solo si hay
+ * adicionales de cenefa cuadrada Y la OT tiene cortinas roller o vertical.
+ * ANCHO INICIAL sale de la cantidad declarada del adicional (×100); el
+ * TIP. INST y el ajuste del ANCHO CORTE EST. salen del "Tapas" del paño
+ * (Fase 2). Fuente única para el cuadro informativo Y las filas de corte.
  */
-function filasCenefaCuadrada(
+function cenefasCuadradasDeOT(
   ventanas: Ventana[],
   adicionalesFase0: AdicionalFase0Persistido[] | undefined,
   formulas?: FormulasFamilias,
   tipos?: readonly TipoCortina[],
-): (string | number)[][] {
+): CenefaCuadradaOT[] {
   const cenefas = (adicionalesFase0 ?? []).filter(
     (a) => a.codInt && a.cantidad > 0 && esAdicionalCenefaCuadrada(a.codInt),
   );
@@ -213,18 +229,30 @@ function filasCenefaCuadrada(
   return cenefas.map((c) => {
     const anchoInicial = Math.round(c.cantidad * 100 * 10) / 10;
     const tapa = tapaCenefaDeUbic(ventanas, c.ubicacion || '', tipos);
-    return [
+    return {
       anchoInicial,
-      c.colorAcc || '',
-      c.ubicacion || '',
-      'CENEFA CUADRADA',
-      etiquetaTipInstCenefa(tapa),
-      medidaCorteCenefaCuadrada(anchoInicial, tapa, formulas),
-      '',
-      '',
-      '',
-    ];
+      color: c.colorAcc || '',
+      ubicacion: c.ubicacion || '',
+      tapa,
+      codInt: c.codInt,
+      corte: medidaCorteCenefaCuadrada(anchoInicial, tapa, formulas),
+    };
   });
+}
+
+/** Filas del cuadro informativo de cenefas cuadradas (lo completa el cortador). */
+function filasCenefaCuadrada(cenefas: CenefaCuadradaOT[]): (string | number)[][] {
+  return cenefas.map((c) => [
+    c.anchoInicial,
+    c.color,
+    c.ubicacion,
+    'CENEFA CUADRADA',
+    etiquetaTipInstCenefa(c.tapa),
+    c.corte,
+    '',
+    '',
+    '',
+  ]);
 }
 
 // El código del tubo se toma del que REALMENTE se eligió en el paño
@@ -424,14 +452,31 @@ export function generarOrdenesOptimizador(
     });
   }
 
-  // Filas reales de paños (antes de anexar el cuadro de cenefas cuadradas).
+  // Las cenefas cuadradas sueltas TAMBIÉN son cortes: cada una entra como fila
+  // de la tabla principal (columna CENEFA CUADRADA + COLOR PERFIL) para que el
+  // optimizador la corte de la barra E29/E30/E31. El cuadro de abajo es solo
+  // informativo y el optimizador lo saltea a propósito.
+  const cenefas = cenefasCuadradasDeOT(ventanas, adicionalesFase0, opts?.formulas, opts?.reglas?.tipos);
+  for (const c of cenefas) {
+    const fila: Record<string, string | number> = {
+      OT: numeroOT,
+      'COD SEC': 'CENEFA CUADRADA',
+      COD_INT: c.codInt,
+      'UBIC.': c.ubicacion,
+      'COLOR PERFIL': c.color,
+      'CENEFA CUADRADA': c.corte,
+    };
+    aoa.push(COLUMNAS.map((col) => fila[col] ?? ''));
+  }
+
+  // Filas reales de cortes (antes de anexar el cuadro informativo).
   const filasPanos = aoa.length - 1;
 
   // Cuadro de cenefas cuadradas: misma hoja, separado por una fila en blanco.
   // OJO: la fila vacía NO corta la lectura del optimizador legacy (solo la
   // saltea); lo que corta es el TÍTULO — el optimizador hace break al verlo
   // (optimizador.html v5.19). Si se renombra el título, ajustar allá también.
-  const cenefaRows = filasCenefaCuadrada(ventanas, adicionalesFase0, opts?.formulas, opts?.reglas?.tipos);
+  const cenefaRows = filasCenefaCuadrada(cenefas);
   if (cenefaRows.length) {
     aoa.push([]);
     aoa.push([CENEFA_CUADRADA_TITULO]);
