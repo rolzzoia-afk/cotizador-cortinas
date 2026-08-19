@@ -22,11 +22,20 @@ import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esUrlFotoSegura, lineaFoto } from './imagenesInforme';
+import {
+  INTROS_INFORME_DEFAULT,
+  textoIntro,
+  type FamiliaTexto,
+  type IntrosInforme,
+} from './introsInforme';
 
 const txt = (v: unknown) => String(v ?? '').trim();
 
-/** Familia de cortina a efectos del texto de pasos de luz. */
-export type FamiliaTexto = 'duo' | 'blackout' | 'screen' | 'oscuridad' | 'vertical';
+// Las advertencias de pasos de luz (y sus fotos referenciales) se editan en
+// Admin: viven en `introsInforme.ts`. Se re-exporta el tipo para no obligar a
+// quien ya importaba `FamiliaTexto` desde acá a cambiar de puerta.
+export type { FamiliaTexto };
 
 /**
  * Familia para el texto de pasos de luz.
@@ -50,34 +59,6 @@ export function familiaTexto(
   if (tipoTela === 'SCR' || producto.includes('SCREEN')) return 'screen';
   return 'blackout';
 }
-
-/**
- * Advertencia de pasos de luz por familia. Textos calcados del correo real: son
- * los que la empresa ya usa y el cliente ya aceptó, no una redacción nueva.
- */
-const INTRO_POR_FAMILIA: Record<FamiliaTexto, string> = {
-  duo:
-    'Se explican los pasos de luz de las cortinas duo blackout, recordando que aunque estas ' +
-    'sean duo blackout siempre existirán pasos de luz entre sus lamas y laterales.',
-  blackout:
-    'Se explican los pasos de luz de las cortinas blackout, recordando que con estas siempre ' +
-    'tendrás pasos de luz laterales y en la parte superior.',
-  screen:
-    'Se explica que las cortinas screen permiten el paso de luz por diseño: de día no se ve ' +
-    'desde afuera hacia adentro, pero sí dejan pasar claridad.',
-  oscuridad:
-    'Se explican los sistemas de oscuridad: los perfiles laterales y/o la cenefa reducen el ' +
-    'paso de luz, y el porcentaje de oscuridad indicado en la cotización se alcanza con esos ' +
-    'perfiles instalados y empastados.',
-  vertical:
-    'Se explican los pasos de luz de las cortinas verticales, que siempre dejan paso de luz ' +
-    'entre sus lamas.',
-};
-
-/** Cortina dividida en varios paños: paso de luz al centro. */
-const NOTA_VARIOS_PANOS =
-  'Se explica que una cortina dividida en varios paños suma un paso de luz al centro de ' +
-  'entre 4 y 7 cm.';
 
 /** Descripción del tipo de cortina de una ventana, para el bullet. */
 function textoTipo(v: Ventana): string {
@@ -124,7 +105,9 @@ function textoExtras(p: Pano | undefined): string[] {
 }
 
 /** Ventanas agrupadas por ubicación, respetando el orden en que fueron cargadas. */
-function porUbicacion(ventanas: Ventana[]): Array<{ ubicacion: string; ventanas: Ventana[] }> {
+function porUbicacion(
+  ventanas: Ventana[],
+): Array<{ ubicacion: string; ventanas: Ventana[] }> {
   const orden: string[] = [];
   const mapa = new Map<string, Ventana[]>();
   for (const v of ventanas) {
@@ -151,6 +134,14 @@ const firmaVentana = (v: Ventana): string => {
 
 export type OpcionesEsqueleto = {
   tipos?: readonly TipoCortina[];
+  /** Las advertencias de pasos de luz de la empresa (Admin). Default: fábrica. */
+  intros?: IntrosInforme;
+  /**
+   * La foto de catálogo de una tela, por COD_INT — la ficha «LUXOR DUO GRIS
+   * CLARO» del correo. Devuelve '' o undefined si esa tela no tiene foto
+   * cargada, y entonces la sección de esa habitación va sin imagen.
+   */
+  fotoDeTela?: (codInt: string) => string | undefined;
 };
 
 /**
@@ -169,12 +160,17 @@ export function esqueletoInforme(
   if (lista.length === 0) return '';
 
   const bloques: string[] = [];
+  const intros = opts.intros ?? INTROS_INFORME_DEFAULT;
 
-  // ── Intro: una advertencia por cada familia presente, sin repetir ──
+  // ── Intro: una advertencia por cada familia presente, sin repetir. Cada una
+  //    baja con sus fotos referenciales, como el correo que se manda a mano ──
   const familias = new Set<FamiliaTexto>(lista.map((v) => familiaTexto(v, opts.tipos)));
-  const intro = [...familias].map((f) => INTRO_POR_FAMILIA[f]);
-  if (lista.some((v) => (v.panos ?? []).length > 1)) intro.push(NOTA_VARIOS_PANOS);
-  if (intro.length) bloques.push(intro.join('\n\n'));
+  const intro = [...familias].map((f) => textoIntro(intros, f));
+  if (lista.some((v) => (v.panos ?? []).length > 1)) {
+    intro.push(textoIntro(intros, 'varios-panos'));
+  }
+  const introTexto = intro.filter(Boolean).join('\n\n');
+  if (introTexto) bloques.push(introTexto);
 
   // ── Una sección numerada por ubicación ──
   let n = 0;
@@ -195,6 +191,10 @@ export function esqueletoInforme(
       const p = (v.panos ?? [])[0];
       const sufijo = cant > 1 ? ` (×${cant})` : '';
       lineas.push(`   - Tipo de Cortina: ${textoTipo(v)}${sufijo}`);
+      // La ficha de la tela va pegada al bullet que la nombra, igual que en el
+      // correo. Si esa tela no tiene foto cargada en el catálogo, no va nada.
+      const fotoTela = opts.fotoDeTela?.(txt(v.codInt)) ?? '';
+      if (fotoTela && esUrlFotoSegura(fotoTela)) lineas.push(lineaFoto(fotoTela));
       const color = colorAccesoriosDePano(p ?? {}, v.color);
       if (color) {
         lineas.push(`   - Color de Accesorios: ${color} (mecanismos, cadenas y soportes).`);

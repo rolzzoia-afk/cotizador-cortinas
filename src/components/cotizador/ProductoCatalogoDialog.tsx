@@ -34,6 +34,8 @@ import {
 } from '@/modules/cotizador/filtrosCatalogo';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
 import { formatCLP } from '@/lib/formatters';
+import { FotosInformeEditor, fotosHuerfanas } from '@/components/admin/FotosInformeEditor';
+import { borrarFotoInforme } from '@/modules/visita/informeAssetsStore';
 import type { CatalogoProductos, Producto } from '@/modules/cotizador/types';
 
 interface ProductoCatalogoDialogProps {
@@ -89,6 +91,9 @@ export default function ProductoCatalogoDialog({
     const c = String(prev?.chip ?? '').trim().toUpperCase();
     return CHIP_IDS.includes(c) ? c : '';
   });
+  // Ficha de la tela: la lámina que va en la sección de esa habitación del
+  // INFORME CLIENTE. Se maneja como lista de una para reusar el cargador.
+  const [foto, setFoto] = useState<string[]>(prev?.foto ? [prev.foto] : []);
   const [saving, setSaving] = useState(false);
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
 
@@ -163,6 +168,7 @@ export default function ProductoCatalogoDialog({
       categoria: gama || undefined,
       // Ídem: `undefined` devuelve el producto al chip automático.
       chip: chip || undefined,
+      foto: foto[0] || undefined,
     };
     setSaving(true);
     try {
@@ -173,6 +179,10 @@ export default function ProductoCatalogoDialog({
         esNuevo ? `antes de crear ${key}` : `antes de editar ${codInt}`,
       );
       await guardarAnchoRollo(empresaId, r.anchoRollo);
+      // La ficha anterior se borra del bucket recién con el guardado hecho.
+      for (const url of fotosHuerfanas(prev?.foto ? [prev.foto] : [], foto)) {
+        await borrarFotoInforme(url);
+      }
       toast.success(esNuevo ? `Código ${key} creado.` : `Código ${key} guardado.`);
       onSaved();
       onClose();
@@ -318,6 +328,22 @@ export default function ProductoCatalogoDialog({
               la familia; lo que no calza en ninguna cae en «Otros». Elige uno a mano cuando el
               automático no acierte (un motor nuevo, por ejemplo, para que salga junto a sus
               hermanos).
+            </p>
+          </div>
+          <div className="col-span-2">
+            <Label className="mb-1 text-xs">Ficha de la tela (informe de visita)</Label>
+            <FotosInformeEditor
+              fotos={foto}
+              onChange={setFoto}
+              grupo={`tela-${normCod(ci) || 'nueva'}`}
+              max={1}
+              etiqueta="Subir ficha"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              La lámina del producto (nombre, gama, código, ancho máximo). Sale en la sección de la
+              habitación del INFORME CLIENTE de la visita, igual que en el correo que se manda a
+              mano. Sin ficha, esa habitación va sin imagen. No se usa en la cotización ni en
+              producción.
             </p>
           </div>
           <div className="col-span-2">

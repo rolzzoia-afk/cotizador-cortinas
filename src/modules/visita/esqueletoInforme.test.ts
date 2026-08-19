@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { esqueletoInforme, familiaTexto, tieneOscuridad } from './esqueletoInforme';
+import { normalizarIntrosInforme } from './introsInforme';
 import type { Pano, Ventana } from '@/modules/cotizador/types';
 
 const pano = (extra: Partial<Pano> = {}): Pano =>
@@ -175,6 +176,43 @@ describe('esqueletoInforme — introducción', () => {
     ]);
     expect(out.match(/entre sus lamas y laterales/g)).toHaveLength(1);
     expect(out.match(/laterales y en la parte superior/g)).toHaveLength(1);
+  });
+});
+
+describe('esqueletoInforme — fotos', () => {
+  const URL_DUO = 'https://p.supabase.co/storage/v1/object/public/informe-assets/e/duo/1.jpg';
+  const URL_TELA = 'https://p.supabase.co/storage/v1/object/public/informe-assets/e/tela/bk73.jpg';
+
+  const intros = normalizarIntrosInforme({
+    intros: [{ id: 'duo', texto: 'Pasos de luz del dúo.', fotos: [URL_DUO], activo: true }],
+  });
+
+  it('la foto de la intro baja debajo de su texto', () => {
+    const out = esqueletoInforme([ventana({ categoria: 'DUO', panos: [pano({ tipoTela: 'DU' })] })], {
+      intros,
+    });
+    expect(out).toContain(`Pasos de luz del dúo.\n[foto: ${URL_DUO}]`);
+  });
+
+  it('la ficha de la tela va pegada al bullet que la nombra', () => {
+    const out = esqueletoInforme([ventana()], { fotoDeTela: (c) => (c === 'BK 73' ? URL_TELA : '') });
+    const lineas = out.split('\n');
+    const i = lineas.findIndex((l) => l.includes('Tipo de Cortina:'));
+    expect(lineas[i + 1]).toBe(`[foto: ${URL_TELA}]`);
+  });
+
+  it('una tela SIN ficha cargada no deja marcador ni línea vacía', () => {
+    const out = esqueletoInforme([ventana()], { fotoDeTela: () => undefined });
+    expect(out).not.toContain('[foto:');
+  });
+
+  it('una URL insegura del catálogo NO llega al informe', () => {
+    const out = esqueletoInforme([ventana()], { fotoDeTela: () => 'javascript:alert(1)' });
+    expect(out).not.toContain('[foto:');
+  });
+
+  it('sin intros propias usa las de fábrica, que no traen foto', () => {
+    expect(esqueletoInforme([ventana()])).not.toContain('[foto:');
   });
 });
 

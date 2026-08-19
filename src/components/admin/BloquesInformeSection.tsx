@@ -26,6 +26,11 @@ import {
   type BloquesInforme,
 } from '@/modules/visita/bloquesInforme';
 import { guardarBloquesInforme, useBloquesInforme } from '@/modules/visita/bloquesInformeStore';
+import { borrarFotoInforme } from '@/modules/visita/informeAssetsStore';
+import { FotosInformeEditor, fotosHuerfanas } from './FotosInformeEditor';
+
+/** Todas las fotos de una configuración, para saber cuáles quedaron huérfanas. */
+const fotosDe = (c: BloquesInforme): string[] => c.bloques.flatMap((b) => b.fotos ?? []);
 
 function idLibre(base: string, usados: Set<string>): string {
   const raiz = idDeBloque(base) || `bloque-${Date.now().toString(36)}`;
@@ -66,6 +71,7 @@ export function BloquesInformeSection() {
             id: idLibre('bloque nuevo', usados),
             titulo: '',
             texto: '',
+            fotos: [],
             orden: d.bloques.length + 1,
             activo: true,
             condicion: 'siempre' as const,
@@ -97,7 +103,14 @@ export function BloquesInformeSection() {
     }
     setSaving(true);
     try {
-      await guardarBloquesInforme(empresaId, normalizarBloquesInforme(draft));
+      const limpio = normalizarBloquesInforme(draft);
+      await guardarBloquesInforme(empresaId, limpio);
+      // Recién ahora se borran del bucket las fotos que se quitaron: si se
+      // borraran al quitarlas, salir sin guardar dejaría el informe apuntando a
+      // un archivo que ya no existe.
+      for (const url of fotosHuerfanas(fotosDe(bloques), fotosDe(limpio))) {
+        await borrarFotoInforme(url);
+      }
       await refresh();
       setDirty(false);
       toast.success('Bloques del informe guardados');
@@ -123,6 +136,8 @@ export function BloquesInformeSection() {
         Los textos fijos que van al final del INFORME CLIENTE, después de lo conversado en la
         visita. Se pegan <strong>tal cual</strong> quedan acá: la IA no los reescribe. Marca
         «Solo con sistemas de oscuridad» para que un bloque no aparezca en órdenes de puro roller.
+        Las fotos que le cargues bajan debajo de su texto y viajan pegadas al correo cuando la
+        vendedora usa <strong>Copiar</strong>.
       </p>
 
       {loading ? (
@@ -222,6 +237,12 @@ export function BloquesInformeSection() {
                   rows={4}
                   placeholder="El texto que va al informe, tal cual lo lee el cliente."
                   className="w-full rounded-md border border-border bg-card px-2 py-1.5 text-xs"
+                />
+                <Label className="mt-2 block text-[11px]">Fotos (van debajo del texto)</Label>
+                <FotosInformeEditor
+                  fotos={b.fotos ?? []}
+                  onChange={(fotos) => setBloque(b.id, { fotos })}
+                  grupo={`bloque-${b.id}`}
                 />
               </div>
             ))}
