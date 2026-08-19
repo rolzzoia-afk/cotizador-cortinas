@@ -193,6 +193,74 @@ describe('validarFilaFase0', () => {
     expect(validarFilaFase0({ ...base, categoria: 'VERTICAL', sentido: 'ZZZ' }, opts)).toEqual([]);
     // El resto de categorías lo sigue exigiendo.
     expect(validarFilaFase0({ ...base, sentido: '' }, opts)).toEqual(['sentido']);
+    // La vertical SÍ lleva cierre: la dirección se sigue exigiendo.
+    expect(validarFilaFase0({ ...base, categoria: 'VERTICAL', direccion: '' }, opts)).toEqual([
+      'direccion',
+    ]);
+  });
+
+  it('PLETINA (velcro) no exige NI dirección NI sentido: va pegada, sin cadena', () => {
+    const opts = {
+      ...OPTS,
+      categorias: new Set([...OPTS.categorias, 'PLETINA_ROLLER_V', 'PLETINA_DUO_V']),
+    };
+    for (const categoria of ['PLETINA_ROLLER_V', 'PLETINA_DUO_V']) {
+      expect(
+        validarFilaFase0({ ...base, categoria, direccion: '', sentido: '' }, opts),
+      ).toEqual([]);
+      // Aunque la planilla traiga basura en esas columnas, tampoco se marca.
+      expect(
+        validarFilaFase0({ ...base, categoria, direccion: 'ZZZ', sentido: 'ZZZ' }, opts),
+      ).toEqual([]);
+    }
+    // El COD_INT y las medidas se siguen exigiendo igual que a cualquier cortina.
+    expect(
+      validarFilaFase0(
+        { ...base, categoria: 'PLETINA_ROLLER_V', codInt: 'XX 99', ancho: 0 },
+        opts,
+      ).sort(),
+    ).toEqual(['ancho', 'codInt']);
+  });
+
+  it('un tipo propio con base PLETINA también queda exento (resuelve por `tipos`)', () => {
+    const opts = {
+      ...OPTS,
+      categorias: new Set([...OPTS.categorias, 'VELCRO_COCINA']),
+      tipos: [
+        {
+          categoria: 'VELCRO_COCINA',
+          nombre: 'Velcro cocina',
+          grupo: 'Pletina',
+          base: 'PLETINA_ROLLER_V',
+          activo: true,
+        },
+      ],
+    };
+    expect(
+      validarFilaFase0({ ...base, categoria: 'VELCRO_COCINA', direccion: '', sentido: '' }, opts),
+    ).toEqual([]);
+  });
+
+  // Fase 1 (cotización de entrada) OCULTA las columnas COD SEC / DIRECC. / SENT.:
+  // marcarlas dejaba la importación trabada — la celda roja no se puede corregir
+  // sin su columna en pantalla, y el guardado se bloquea mientras haya errores.
+  describe('modo fase1 (columnas reducidas)', () => {
+    const fase1 = { ...OPTS, modo: 'fase1' as const };
+
+    it('la planilla mínima (COD_INT + medidas) importa sin nada en rojo', () => {
+      const minima = { ...base, categoria: '', direccion: '', sentido: '' };
+      expect(validarFilaFase0(minima, fase1)).toEqual([]);
+      // En Fase 3, esa misma fila sí reclama las tres columnas.
+      expect(validarFilaFase0(minima, OPTS).sort()).toEqual(
+        ['categoria', 'direccion', 'sentido'].sort(),
+      );
+    });
+
+    it('sigue exigiendo lo que Fase 1 SÍ muestra: COD_INT, ancho y alto', () => {
+      expect(
+        validarFilaFase0({ ...base, codInt: 'XX 99', ancho: 0, alto: -1 }, fase1).sort(),
+      ).toEqual(['alto', 'ancho', 'codInt'].sort());
+    });
   });
 });
 

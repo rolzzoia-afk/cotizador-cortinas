@@ -16,6 +16,7 @@ import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import {
+  categoriaLlevaCadenaRoller,
   categoriaRequiereMecanismo,
   esCategoriaPletina,
   esCategoriaVertical,
@@ -128,10 +129,12 @@ export function pendientesFase2(
       // (insumosCortina.cantidadTarugos devuelve 0 si no hay material).
       if (!txt(p.materialTipo)) falta('falta el material de instalación');
 
-      // Cadena y peso: solo donde hay mecanismo manual (el motor la reemplaza).
+      // Cadena y peso: solo donde hay mecanismo manual (el motor la reemplaza) y
+      // en los sistemas que llevan cadena de roller — la vertical tiene la suya y
+      // ni el beeblack ni la pletina (velcro, paño pegado) llevan ninguna.
       // El MEC 06 trae la cadena incorporada — exige el peso, no la cadena.
       const llevaMotor = !!txt(p.motorModelo) || !!txt(p.motorTipo) || !!txt(p.ladoMotor);
-      if (requiereMec && !llevaMotor && !esVertical) {
+      if (requiereMec && !llevaMotor && categoriaLlevaCadenaRoller(categoria, reglas.tipos)) {
         if (!txt(p.codCadena) && !kitTraeCadenaIncorporada(p.mecanismo)) falta('falta la cadena');
         if (!txt(p.codPeso)) falta('falta el peso de cadena');
       }

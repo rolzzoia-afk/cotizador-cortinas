@@ -54,6 +54,7 @@ import {
 } from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
+  categoriaLlevaCadenaRoller,
   codigoInsumoMec,
   esCategoriaVertical,
   kitTraeCadenaIncorporada,
@@ -306,35 +307,42 @@ export function consolidarInsumos(
             if (esDualChip) dualKitEmitido = true;
           }
         }
-        // Cadena: usa la elegida en Fase 2 (codCadena); si el paño no la guardó
-        // (OT no sincronizada en Fase 2), la resuelve por alto + color con el
-        // catálogo de cadenas — igual que Fase 2 — para que no falte en la hoja.
-        // El MEC 06 trae la cadena incorporada: ni la guardada ni el fallback.
-        if (kitTraeCadenaIncorporada(p.mecanismo)) {
-          // sin línea de cadena
-        } else if (p.codCadena) {
-          bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
-        } else {
-          const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
-          const codCad = codCadenaAutoPorAlto(
-            altoM,
-            colorAccesoriosDePano(p, v.color),
-            v.categoria,
-            cadenas,
-            reglas.tipos,
-            reglas.cadenas,
-          );
-          if (codCad) {
-            const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas, reglas.cadenas);
-            bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1, grupoOvalada);
+        // Cadena y peso SOLO en los sistemas que llevan cadena de roller. La
+        // PLETINA (velcro) tiene mecanismo —VELCRO— pero es un paño PEGADO: no
+        // sube ni baja, así que no lleva ni cadena ni peso de cadena. Sin este
+        // gate el peso se emitía igual (se resuelve en vivo, no depende de que el
+        // paño lo tenga guardado) y la hoja pedía un insumo que no se usa.
+        if (categoriaLlevaCadenaRoller(v.categoria, reglas.tipos)) {
+          // Cadena: usa la elegida en Fase 2 (codCadena); si el paño no la guardó
+          // (OT no sincronizada en Fase 2), la resuelve por alto + color con el
+          // catálogo de cadenas — igual que Fase 2 — para que no falte en la hoja.
+          // El MEC 06 trae la cadena incorporada: ni la guardada ni el fallback.
+          if (kitTraeCadenaIncorporada(p.mecanismo)) {
+            // sin línea de cadena
+          } else if (p.codCadena) {
+            bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
+          } else {
+            const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
+            const codCad = codCadenaAutoPorAlto(
+              altoM,
+              colorAccesoriosDePano(p, v.color),
+              v.categoria,
+              cadenas,
+              reglas.tipos,
+              reglas.cadenas,
+            );
+            if (codCad) {
+              const { largoCadena, colorCadena } = derivarLargoColor(codCad, cadenas, reglas.cadenas);
+              bump(codCad.toUpperCase(), descripcionCadenaInventario({ codCadena: codCad, largoCadena, colorCadena }), 1, grupoOvalada);
+            }
           }
+          // El peso de cadena se emite SIEMPRE, aunque el paño no lo tenga
+          // guardado — igual que el mecanismo, que se resuelve en vivo (PCA04
+          // transparente; en gama B, PCA01 blanco). Si en Fase 2 se eligió otro
+          // peso, se respeta.
+          const cp = (p.codPeso || codPesoAuto(lineaB)).replace(/\s+/g, '').toUpperCase();
+          bump(cp, `[${cp}] ${textoPesoCadenaInventario({ codPeso: cp })}`.trim(), 1);
         }
-        // El peso de cadena se emite SIEMPRE, aunque el paño no lo tenga
-        // guardado — igual que el mecanismo, que se resuelve en vivo (PCA04
-        // transparente; en gama B, PCA01 blanco). Si en Fase 2 se eligió otro
-        // peso, se respeta.
-        const cp = (p.codPeso || codPesoAuto(lineaB)).replace(/\s+/g, '').toUpperCase();
-        bump(cp, `[${cp}] ${textoPesoCadenaInventario({ codPeso: cp })}`.trim(), 1);
       }
 
       // Dual: el 2º+ paño omite las fijaciones (1 juego por cortina); tapas ×paño.

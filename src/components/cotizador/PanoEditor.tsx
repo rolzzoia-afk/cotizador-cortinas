@@ -39,7 +39,7 @@ import type { Pano } from '@/modules/cotizador/types';
 import { debeInvertirPano } from '@/modules/cotizador/tela';
 import { cantidadSuplementosAuto } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
-import { mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
 import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import {
@@ -412,6 +412,9 @@ export function PanoEditor({
   const esMotorCat = catUpper.includes('MOTOR');
   const esVerticalCat = catUpper.includes('VERTICAL');
   const categoriaImplicaOvalada = catUpper.includes('CENEFA_OVALADA');
+  // PLETINA (velcro): el paño va PEGADO, no sube ni baja. Sin cadena, sin peso
+  // de cadena y sin lado de accionamiento — la sección entera no aplica.
+  const esPletinaCat = esCategoriaPletina(categoria, reglas.tipos);
   // Color de accesorios único (Medidas): el mismo resolutor que producción.
   const colorAccesorios = colorAccesorioCorto(colorAccesoriosRaw);
   // Cierre Vertical/Medio solo aplica a VERTICAL; el resto ve Izq/Der
@@ -634,51 +637,56 @@ export function PanoEditor({
 
       {/* 2. CADENA — la vertical no lleva cadena roller (usa su propio peso de
           cadena VER, que se lista en la hoja de inventario); conserva solo el
-          Cierre (que sí aplica: es el lado de accionamiento de las lamas). */}
-      <Section title="Cadena">
-        {!esVerticalCat &&
-          (cadenasDisponibles.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
-              <select
-                className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
-                value={pano.codCadena || ''}
-                onChange={(e) => {
-                  const cod = e.target.value;
-                  if (!cod) {
-                    onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
-                    return;
-                  }
-                  const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
-                  onChange({ codCadena: cod, largoCadena, colorCadena });
-                }}
-              >
-                <option value="">— Sin cadena —</option>
-                {cadenasDisponibles.map((c) => (
-                  <option key={c.cod} value={c.cod as string}>
-                    {etiquetaCadena(c)}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : (
-            <RadioRow
-              label="Largo"
-              value={String(pano.largoCadena || '')}
-              options={OPCIONES_LARGO_CADENA}
-              onChange={(v) => onChange({ largoCadena: v })}
-            />
-          ))}
-        <RadioRow
-          label="Cierre"
-          value={pano.cierreVert || ''}
-          options={opcionesCierre}
-          onChange={(v) => onChange({ cierreVert: v })}
-        />
-      </Section>
+          Cierre (que sí aplica: es el lado de accionamiento de las lamas).
+          La PLETINA (velcro) no muestra nada: el paño va pegado, no sube ni baja,
+          así que no hay cadena que elegir ni lado por donde accionarla. */}
+      {!esPletinaCat && (
+        <Section title="Cadena">
+          {!esVerticalCat &&
+            (cadenasDisponibles.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
+                <select
+                  className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+                  value={pano.codCadena || ''}
+                  onChange={(e) => {
+                    const cod = e.target.value;
+                    if (!cod) {
+                      onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
+                      return;
+                    }
+                    const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
+                    onChange({ codCadena: cod, largoCadena, colorCadena });
+                  }}
+                >
+                  <option value="">— Sin cadena —</option>
+                  {cadenasDisponibles.map((c) => (
+                    <option key={c.cod} value={c.cod as string}>
+                      {etiquetaCadena(c)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : (
+              <RadioRow
+                label="Largo"
+                value={String(pano.largoCadena || '')}
+                options={OPCIONES_LARGO_CADENA}
+                onChange={(v) => onChange({ largoCadena: v })}
+              />
+            ))}
+          <RadioRow
+            label="Cierre"
+            value={pano.cierreVert || ''}
+            options={opcionesCierre}
+            onChange={(v) => onChange({ cierreVert: v })}
+          />
+        </Section>
+      )}
 
-      {/* 2b. PESO DE CADENA — no aplica a la vertical (lleva su peso VER propio). */}
-      {!esVerticalCat && pesosDisponibles.length > 0 && (
+      {/* 2b. PESO DE CADENA — no aplica a la vertical (lleva su peso VER propio)
+          ni a la pletina de velcro (no lleva cadena de la que colgarlo). */}
+      {!esVerticalCat && !esPletinaCat && pesosDisponibles.length > 0 && (
         <Section title="Peso de cadena">
           <div className="flex flex-wrap items-center gap-2">
             <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Peso</span>

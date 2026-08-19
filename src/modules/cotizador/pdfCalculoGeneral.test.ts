@@ -137,6 +137,12 @@ describe('construirCalculoGeneral', () => {
     // Despiece directo del ancho: pletina/tela = 80 − 0,8 ; peso = 80 − 0,7.
     expect(f.despiece.get('PLETINA')).toBe(79.2);
     expect(f.despiece.get('PESO')).toBe(79.3);
+    // El velcro no lleva cadena: aunque el paño la traiga guardada de una OT
+    // vieja, la hoja no la imprime (el inventario tampoco la pide).
+    expect(f.accionamiento).toBe('');
+    expect(f.pesoCadena).toBe('');
+    expect(f.codCadena).toBe('');
+    expect(f.codPeso).toBe('');
   });
 
   it('pletina dúo: ALTO = 2×alto (sin +30); Dimensionado → ALTO MESA = alto+10', () => {

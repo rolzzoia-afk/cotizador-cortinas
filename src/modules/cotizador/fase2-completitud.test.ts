@@ -102,6 +102,28 @@ describe('pendientesFase2 — datos del paño', () => {
     expect(conMotor).not.toContain('falta el peso de cadena');
   });
 
+  it('la PLETINA (velcro) no reclama cadena ni peso: el paño va pegado', () => {
+    const velcro = mensajes([
+      ventOk({ categoria: 'PLETINA_ROLLER_V' } as Partial<Ventana>, {
+        codCadena: '',
+        codPeso: '',
+        mecanismo: 'VELCRO',
+      }),
+    ]);
+    expect(velcro).not.toContain('falta la cadena');
+    expect(velcro).not.toContain('falta el peso de cadena');
+    // Y lo que SÍ lleva se sigue exigiendo (el velcro se atornilla igual).
+    const sinMaterial = mensajes([
+      ventOk({ categoria: 'PLETINA_ROLLER_V' } as Partial<Ventana>, {
+        codCadena: '',
+        codPeso: '',
+        mecanismo: 'VELCRO',
+        materialTipo: '',
+      }),
+    ]);
+    expect(sinMaterial).toContain('falta el material de instalación');
+  });
+
   it('manilla: el color solo se exige si hay cantidad', () => {
     expect(sinDato({ manillaCant: 2, manillaColor: '' })).toContain('falta el color de la manilla');
     expect(sinDato({ manillaCant: 0, manillaColor: '' })).not.toContain('falta el color de la manilla');

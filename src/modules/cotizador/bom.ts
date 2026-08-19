@@ -7,7 +7,12 @@ import type { AdicionalFase0Persistido, BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
-import { esCategoriaPletina, esCategoriaVertical, kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  categoriaLlevaCadenaRoller,
+  esCategoriaPletina,
+  esCategoriaVertical,
+  kitTraeCadenaIncorporada,
+} from '@/modules/descuentos/reglas-mecanismo';
 import { codCadenaVertical, colorCadenaVertical } from './cadenas';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
@@ -179,15 +184,12 @@ export function calcularBOM(
 
     // Cadena + peso: se emiten aunque el paño lleve motor; se omiten en las
     // categorías vendidas como motor y en las que NO llevan cadena de roller
-    // (VERTICAL — tiene la suya, más abajo — y BEEBLACK). Sin ese segundo gate,
-    // cualquier paño con `colorPeso` (que `fase0-sync` rellena a TODOS) emitía
-    // un "Peso de cadena · BCO" sin código que duplicaba al VER52 de la
-    // vertical, y una ventana convertida ROL→VERTICAL arrastraba su `codCadena`
-    // viejo para siempre. Ojo: se excluyen esas dos categorías por nombre, NO
-    // con `categoriaRequiereMecanismo`, porque esa devuelve false para categoría
-    // vacía y una fila sin ventana asociada es un roller normal.
-    const catSinCadenaRoller = esCategoriaVertical(categoria) || esCategoriaBeeblack(categoria);
-    if (!catEsMotor && !catSinCadenaRoller) {
+    // (VERTICAL —tiene la suya, más abajo—, BEEBLACK y PLETINA/velcro; ver
+    // `categoriaLlevaCadenaRoller`). Sin ese segundo gate, cualquier paño con
+    // `colorPeso` (que `fase0-sync` rellena a TODOS) emitía un "Peso de cadena ·
+    // BCO" sin código que duplicaba al VER52 de la vertical, y una ventana
+    // convertida ROL→VERTICAL arrastraba su `codCadena` viejo para siempre.
+    if (!catEsMotor && categoriaLlevaCadenaRoller(categoria, reglas.tipos)) {
       // Cadena. Si el cotizador eligió la cadena real del inventario,
       // `codCadena` (CAD01…) va en la especificación para enlazar al stock
       // (mismo patrón que el mecanismo). Si no, cae al largo de texto antiguo.

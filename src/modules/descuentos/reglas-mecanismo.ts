@@ -20,6 +20,8 @@
 // ─────────────────────────────────────────────────────────────────────
 
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
+// `reglas-beeblack` es leaf (sin imports): se puede traer acá sin ciclo.
+import { esCategoriaBeeblack } from './reglas-beeblack';
 
 /**
  * Coincidencia de categoría (case insensitive): exacta, substring o prefijo.
@@ -641,6 +643,32 @@ export function esCategoriaPletina(
  *  `esCategoriaPletina`, para usarse desde el cotizador sin ciclos de import. */
 export function esCategoriaVertical(categoria: string | null | undefined): boolean {
   return (categoria || '').trim().toUpperCase() === 'VERTICAL';
+}
+
+/**
+ * ¿La categoría lleva CADENA DE ROLLER (cadena + peso de cadena)?
+ *
+ * No la llevan tres sistemas, cada uno por su motivo:
+ *   · VERTICAL — tiene la suya (CAD04/CAD06 de 3 m + peso VER), por otro camino.
+ *   · BEEBLACK — corre de lado con manilla, no con cadena.
+ *   · PLETINA (velcro) — es un paño FIJO pegado con velcro: no sube ni baja,
+ *     así que no hay cadena, ni peso de cadena, ni lado de accionamiento.
+ *
+ * Una categoría VACÍA devuelve `true` a propósito: una fila sin ventana asociada
+ * es un roller normal. Por eso el gate es por nombre y no por
+ * `categoriaRequiereMecanismo` (que da false para categoría vacía) — si no,
+ * cualquier paño con `colorPeso` (que `fase0-sync` rellena a TODOS) emitía un
+ * "Peso de cadena · BCO" sin código.
+ */
+export function categoriaLlevaCadenaRoller(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return (
+    !esCategoriaVertical(categoria) &&
+    !esCategoriaBeeblack(categoria) &&
+    !esCategoriaPletina(categoria, tipos)
+  );
 }
 
 export function categoriaRequiereMecanismo(
