@@ -37,6 +37,7 @@ import { SuscripcionSection } from '@/components/admin/SuscripcionSection';
 import { TerminosSection } from '@/components/admin/TerminosSection';
 import { ChecklistVisitaSection } from '@/components/admin/ChecklistVisitaSection';
 import { BloquesInformeSection } from '@/components/admin/BloquesInformeSection';
+import { IntrosInformeSection } from '@/components/admin/IntrosInformeSection';
 import { DocumentoSection } from '@/components/admin/DocumentoSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 // El tab «Optimizador» calcula la hoja de corte de una OT (tablas pesadas y la
@@ -133,6 +134,9 @@ export function AdminPanel() {
         <div className="space-y-6">
           <TerminosSection />
           <ChecklistVisitaSection />
+          {/* El informe se arma de arriba abajo: primero los pasos de luz, después
+              las habitaciones (datos de la orden) y al final los bloques fijos. */}
+          <IntrosInformeSection />
           <BloquesInformeSection />
           <DocumentoSection />
         </div>

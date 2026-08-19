@@ -12,6 +12,7 @@ import {
   ImagePlus,
   ListTree,
   Loader2,
+  RefreshCw,
   Save,
   Sparkles,
   Trash2,
@@ -44,8 +45,17 @@ import {
 import { useChecklistVisita } from '@/modules/visita/checklistVisitaStore';
 import { pendientesChecklist, preguntasActivas } from '@/modules/visita/checklistVisita';
 import { esqueletoInforme, tieneOscuridad } from '@/modules/visita/esqueletoInforme';
-import { textoBloques } from '@/modules/visita/bloquesInforme';
+import { textoBloques, textosBloques } from '@/modules/visita/bloquesInforme';
+import { actualizarFotosYBloques } from '@/modules/visita/actualizarInforme';
 import { useBloquesInforme } from '@/modules/visita/bloquesInformeStore';
+import { useIntrosInforme } from '@/modules/visita/introsInformeStore';
+import {
+  fotosDelInforme,
+  informeAHtml,
+  informeATextoPlano,
+  urlDeLineaFoto,
+} from '@/modules/visita/imagenesInforme';
+import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import type { FotoVisita, GeoFirma, VisitaTerreno } from '@/modules/ots/types';
 import type { Ventana } from '@/modules/cotizador/types';
 import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
@@ -73,6 +83,8 @@ export function InformeVisita({
 }: Props) {
   const { checklist, loading: cargandoChecklist } = useChecklistVisita();
   const { bloques } = useBloquesInforme();
+  const { intros } = useIntrosInforme();
+  const { catalogo } = useCatalogoProductos();
   const [borrador, setBorrador] = useState<VisitaTerreno>(visita);
   const [subiendo, setSubiendo] = useState(false);
   const [generando, setGenerando] = useState(false);
@@ -127,12 +139,19 @@ export function InformeVisita({
 
   const parche = (p: Partial<VisitaTerreno>) => setBorrador((v) => ({ ...v, ...p }));
 
+  // La ficha de cada tela sale del catálogo, por COD_INT. Sin foto cargada esa
+  // habitación va sin imagen — nunca se inventa una.
+  const fotoDeTela = useCallback(
+    (codInt: string) => catalogo[codInt.trim()]?.foto,
+    [catalogo],
+  );
+
   // El esqueleto sale de la orden, no del modelo: tipo de cortina, tela,
   // accesorios y caída ya están cargados dato por dato. Al modelo solo se le
   // pide lo que aporta el video — lo conversado.
   const armarEsqueleto = useCallback(
-    () => esqueletoInforme(ventanas, { tipos }),
-    [ventanas, tipos],
+    () => esqueletoInforme(ventanas, { tipos, intros, fotoDeTela }),
+    [ventanas, tipos, intros, fotoDeTela],
   );
 
   /** Los textos fijos de Admin que cierran el informe (rodapié, oscuridad…). */
@@ -140,6 +159,40 @@ export function InformeVisita({
     () => textoBloques(bloques, tieneOscuridad(ventanas, tipos)),
     [bloques, ventanas, tipos],
   );
+
+  /** Los mismos, uno por uno: así se puede agregar SOLO el que falta. */
+  const listaBloques = useCallback(
+    () => textosBloques(bloques, tieneOscuridad(ventanas, tipos)),
+    [bloques, ventanas, tipos],
+  );
+
+  /**
+   * Pone al día un informe ya escrito sin pisarlo: mete las fotos que se
+   * cargaron en Admin después de armarlo y los bloques que no estaban. No borra
+   * ni reescribe nada, así que es seguro incluso sobre un texto editado a mano.
+   */
+  const actualizarInforme = () => {
+    const actual = (borrador.informe ?? '').trim();
+    if (!actual) return;
+    const r = actualizarFotosYBloques(actual, armarEsqueleto(), listaBloques());
+    const nada = r.fotosAgregadas === 0 && r.bloquesAgregados === 0;
+    if (nada && r.fotosSinUbicar === 0) {
+      toast.info('El informe ya estaba al día: no había fotos ni bloques nuevos.');
+      return;
+    }
+    if (!nada) parche({ informe: r.texto });
+    const partes = [
+      r.fotosAgregadas ? `${r.fotosAgregadas} foto(s)` : '',
+      r.bloquesAgregados ? `${r.bloquesAgregados} bloque(s)` : '',
+    ].filter(Boolean);
+    if (partes.length) toast.success(`Se agregó ${partes.join(' y ')} — lo escrito quedó intacto`);
+    if (r.fotosSinUbicar > 0) {
+      toast.warning(
+        `${r.fotosSinUbicar} foto(s) no se pudieron ubicar: ese texto cambió desde que se armó ` +
+          'el informe. Pégalas a mano donde correspondan.',
+      );
+    }
+  };
 
   const armarDesdeLaOrden = async () => {
     const esqueleto = armarEsqueleto();
@@ -157,14 +210,44 @@ export function InformeVisita({
     toast.success('Informe armado con los datos de la orden — agrégale lo que conversaste');
   };
 
+  /**
+   * Copia el informe CON FORMATO: el portapapeles lleva las dos versiones, HTML
+   * y texto plano, y el correo elige la que entiende. Así las fotos se pegan en
+   * su lugar, como el correo que se manda a mano.
+   *
+   * `ClipboardItem` no existe en todos los navegadores (y falla si la pestaña
+   * perdió el foco): ahí cae a texto plano, que igual lleva los links de las
+   * fotos para arrastrarlas a mano.
+   */
   const copiarInforme = async () => {
     const texto = (borrador.informe ?? '').trim();
     if (!texto) return;
+    const plano = informeATextoPlano(texto);
+    const conFotos = fotosDelInforme(texto).length;
     try {
-      await navigator.clipboard.writeText(texto);
-      toast.success('Informe copiado — pégalo en el correo');
+      if (typeof ClipboardItem === 'function' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/html': new Blob([informeAHtml(texto)], { type: 'text/html' }),
+            'text/plain': new Blob([plano], { type: 'text/plain' }),
+          }),
+        ]);
+        toast.success(
+          conFotos
+            ? `Informe copiado con sus ${conFotos} foto(s) — pégalo en el correo`
+            : 'Informe copiado — pégalo en el correo',
+        );
+        return;
+      }
+      await navigator.clipboard.writeText(plano);
+      toast.success('Informe copiado como texto — las fotos van como link');
     } catch {
-      toast.error('El navegador no dejó copiar. Selecciona el texto y usa Ctrl+C.');
+      try {
+        await navigator.clipboard.writeText(plano);
+        toast.warning('Copiado sin formato: las fotos quedaron como link.');
+      } catch {
+        toast.error('El navegador no dejó copiar. Selecciona el texto y usa Ctrl+C.');
+      }
     }
   };
 
@@ -257,11 +340,8 @@ export function InformeVisita({
       setPaso(`Subiendo ${minutos.toFixed(1)} min de audio…`);
       const audioPath = await subirAudioVisita(empresaId, otId, wav);
       setPaso('Transcribiendo y redactando el informe…');
-      const { transcripcion, informe } = await generarInformeVisita(
-        otId,
-        audioPath,
-        armarEsqueleto(),
-      );
+      const esqueleto = armarEsqueleto();
+      const { transcripcion, informe } = await generarInformeVisita(otId, audioPath, esqueleto);
       // Los bloques fijos los pega la app, no el modelo: son compromisos
       // comerciales que deben salir palabra por palabra como los dejó Admin.
       const nueva: VisitaTerreno = {
@@ -274,6 +354,16 @@ export function InformeVisita({
       setBorrador(nueva);
       await onGuardar(nueva);
       toast.success('Informe redactado — revísalo y corrige lo que haga falta');
+      // Al modelo se le pide que copie los marcadores de foto tal cual, pero si
+      // igual se comió alguno más vale decirlo que mandar el correo sin la foto.
+      const perdidas =
+        fotosDelInforme(esqueleto).length - fotosDelInforme(informe).length;
+      if (perdidas > 0) {
+        toast.warning(
+          `La IA dejó fuera ${perdidas} foto(s). Usa «Armar desde la orden» para recuperarlas, ` +
+            'o pégalas a mano en el correo.',
+        );
+      }
     } catch (e) {
       if (e instanceof AudioNoDecodificable) toast.error(e.message);
       else toast.error('No se pudo generar: ' + (e instanceof Error ? e.message : String(e)));
@@ -496,6 +586,16 @@ export function InformeVisita({
           </Button>
           <Button
             size="sm"
+            variant="outline"
+            className="gap-1"
+            disabled={ocupado || firmada || !(borrador.informe ?? '').trim()}
+            onClick={actualizarInforme}
+            title="Agrega las fotos y los bloques que se cargaron en Admin después de armar el informe, sin tocar lo escrito"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Actualizar fotos y bloques
+          </Button>
+          <Button
+            size="sm"
             variant="ghost"
             className="gap-1"
             disabled={!(borrador.informe ?? '').trim()}
@@ -517,6 +617,15 @@ export function InformeVisita({
           <p className="mt-1 text-[0.68rem] text-amber-500">
             El cliente ya firmó este informe. Para cambiarlo, vuelve a pedir la firma.
           </p>
+        )}
+        {/* Vista previa: así se ve lo que se pega en el correo. Las líneas
+            `[foto: …]` del textarea son las que acá salen como imagen. */}
+        {fotosDelInforme(borrador.informe ?? '').length > 0 && (
+          <div className="mt-3">
+            <SeccionColapsable title="Vista previa (así llega al correo)">
+              <VistaPreviaInforme texto={borrador.informe ?? ''} />
+            </SeccionColapsable>
+          </div>
         )}
         {borrador.transcripcion && (
           <div className="mt-3">
@@ -646,6 +755,43 @@ export function InformeVisita({
           Guardar visita
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * El informe como lo va a ver el cliente: los párrafos tal cual y las líneas
+ * `[foto: …]` convertidas en imagen.
+ *
+ * Se dibuja con React —recorriendo las líneas— y NO con el HTML que arma
+ * `informeAHtml`: ese HTML se escribe para el portapapeles, y meterlo acá
+ * obligaría a un `dangerouslySetInnerHTML` sobre texto que alguien escribió en
+ * Admin. La vista previa es para mirar, no vale correr el riesgo.
+ */
+function VistaPreviaInforme({ texto }: { texto: string }) {
+  const lineas = texto.replace(/\r\n?/g, '\n').split('\n');
+  return (
+    <div className="space-y-1 rounded-md border border-border bg-card/60 p-3">
+      {lineas.map((linea, i) => {
+        const url = urlDeLineaFoto(linea);
+        if (url) {
+          return (
+            <img
+              key={i}
+              src={url}
+              alt=""
+              loading="lazy"
+              className="my-2 max-h-64 rounded-md border border-border"
+            />
+          );
+        }
+        if (!linea.trim()) return <div key={i} className="h-2" />;
+        return (
+          <p key={i} className="whitespace-pre-wrap text-[0.72rem] leading-relaxed text-foreground">
+            {linea}
+          </p>
+        );
+      })}
     </div>
   );
 }

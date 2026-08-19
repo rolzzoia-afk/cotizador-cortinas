@@ -13,8 +13,12 @@
 // Se editan en Admin como el resumen de visita. El bloque de oscuridad lleva
 // `condicion: 'oscuridad'` para no aparecer en una orden que solo trae roller.
 //
+// Un bloque puede llevar fotos: bajan como líneas `[foto: …]` debajo del texto
+// y al copiar el informe se convierten en `<img>` (ver `imagenesInforme.ts`).
+//
 // Módulo PURO (sin React ni Supabase).
 // ─────────────────────────────────────────────────────────────────────
+import { normalizarFotos, textoConFotos } from './imagenesInforme';
 
 /** Cuándo entra un bloque al informe. */
 export type CondicionBloque = 'siempre' | 'oscuridad';
@@ -25,6 +29,12 @@ export type BloqueInforme = {
   /** Encabezado opcional (va en su propia línea antes del texto). */
   titulo?: string;
   texto: string;
+  /**
+   * URLs públicas de las fotos que acompañan al bloque, en el orden en que van
+   * al correo. Bajan como líneas `[foto: …]` debajo del texto — ver
+   * `imagenesInforme.ts`.
+   */
+  fotos?: string[];
   orden: number;
   activo: boolean;
   condicion: CondicionBloque;
@@ -151,6 +161,7 @@ export function normalizarBloquesInforme(raw: unknown): BloquesInforme {
       id,
       titulo: titulo || undefined,
       texto,
+      fotos: normalizarFotos(b.fotos),
       orden: Number.isFinite(b.orden) ? Number(b.orden) : bloques.length + 1,
       activo: b.activo !== false,
       condicion: b.condicion === 'oscuridad' ? 'oscuridad' : 'siempre',
@@ -168,11 +179,21 @@ export function bloquesActivos(c: BloquesInforme, hayOscuridad: boolean): Bloque
     .sort((a, b) => a.orden - b.orden);
 }
 
+/**
+ * Cada bloque aplicable como su propio texto (título + cuerpo + fotos).
+ *
+ * En lista y no unidos, porque el bloque de oscuridad tiene DOS párrafos: quien
+ * quiera separarlos otra vez no puede partir por la línea en blanco.
+ */
+export function textosBloques(c: BloquesInforme, hayOscuridad: boolean): string[] {
+  return bloquesActivos(c, hayOscuridad).map((b) =>
+    textoConFotos(b.titulo ? `${b.titulo}\n${b.texto}` : b.texto, b.fotos),
+  );
+}
+
 /** El texto que se pega al final del informe (vacío si no aplica ninguno). */
 export function textoBloques(c: BloquesInforme, hayOscuridad: boolean): string {
-  return bloquesActivos(c, hayOscuridad)
-    .map((b) => (b.titulo ? `${b.titulo}\n${b.texto}` : b.texto))
-    .join('\n\n');
+  return textosBloques(c, hayOscuridad).join('\n\n');
 }
 
 /** Mueve un bloque un lugar arriba o abajo, renumerando el orden. */

@@ -20,6 +20,13 @@ export type Producto = {
    * todos, que se quiere ver junto a sus hermanos en MOTOR MG.
    */
   chip?: string;
+  /**
+   * URL pública de la ficha de la tela (la lámina «LUXOR DUO GRIS CLARO» con
+   * gama, código y ancho máximo). Se muestra en la sección de la habitación del
+   * INFORME CLIENTE, igual que en el correo que se manda a mano. Vacío = esa
+   * habitación va sin imagen.
+   */
+  foto?: string;
 };
 
 // Mapa de catálogo: COD_INT → Producto. Se guarda en Supabase `configuracion`

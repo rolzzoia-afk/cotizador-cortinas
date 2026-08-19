@@ -76,6 +76,9 @@ Reglas que NO se rompen:
 - No inventes medidas, precios, plazos ni compromisos. Si algo no está en el
   esqueleto ni en la transcripción, no lo menciones.
 - No agregues secciones de habitaciones que no estén en el esqueleto.
+- Las líneas con el formato [foto: https://...] son marcadores de imagen: van
+  TAL CUAL, en su misma posición y en su propia línea. No las traduzcas, no las
+  describas, no las muevas, no las borres y no inventes otras nuevas.
 
 Lo que SÍ agregas, cuando la transcripción lo respalde:
 - En la habitación que corresponda, una línea nueva que empiece con

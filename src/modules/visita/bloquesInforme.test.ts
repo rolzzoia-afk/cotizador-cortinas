@@ -121,6 +121,29 @@ describe('textoBloques', () => {
     const c: BloquesInforme = { bloques: [bloque('x', { condicion: 'oscuridad' })] };
     expect(textoBloques(c, false)).toBe('');
   });
+
+  it('las fotos del bloque bajan debajo de su texto', () => {
+    const url = 'https://p.supabase.co/storage/v1/object/public/informe-assets/e/b/1.jpg';
+    const c: BloquesInforme = {
+      bloques: [{ ...bloque('a', { texto: 'Rodapié.' }), fotos: [url] }],
+    };
+    expect(textoBloques(c, false)).toBe(`Rodapié.\n[foto: ${url}]`);
+  });
+});
+
+describe('fotos guardadas', () => {
+  it('`normalizarBloquesInforme` limpia las URLs inseguras', () => {
+    const url = 'https://p.supabase.co/storage/v1/object/public/informe-assets/e/b/1.jpg';
+    const out = normalizarBloquesInforme({
+      bloques: [{ ...bloque('a'), fotos: [url, 'javascript:alert(1)', url] }],
+    });
+    expect(out.bloques[0].fotos).toEqual([url]);
+  });
+
+  it('un bloque sin fotos queda con lista vacía, no undefined', () => {
+    const out = normalizarBloquesInforme({ bloques: [bloque('a')] });
+    expect(out.bloques[0].fotos).toEqual([]);
+  });
 });
 
 describe('moverBloque', () => {
