@@ -9,9 +9,11 @@ import {
 } from './motorFase0';
 import { PARAMETROS_DEFAULT } from './preciosFase0';
 import {
+  RECETAS_DEFAULT,
   REGLAS_PRECIOS_DEFAULT,
   TELA_VERTICAL_DEFAULT,
   conValoresMaximos,
+  type ReglasPrecios,
   type TelaVertical,
 } from './reglasPrecios';
 import type { CatalogoProductos } from './types';
@@ -696,8 +698,10 @@ describe('motorFase0 — ancho de empaque (peor caso de montaje)', () => {
 // ─────────────────────────────────────────────────────────────────────
 
 // La tela beeblack se cobra al MÁXIMO de su familia (no a una tela de
-// referencia). BEE-BK va a 48.500 porque es lo que el panel de la copia tenía
-// tecleado; el catálogo real trae 48.415,15 (hay un caso que lo mide).
+// referencia). BEE-BK va a 48.500: lo tecleado en el panel de la copia, que
+// desde el 2026-08-19 es también el valor del catálogo real
+// (sql/20260819_tela_beeblack_48500.sql). Un caso mide el 48.415,15 calculado
+// con el que se cotizó hasta entonces.
 const CAT_BB: CatalogoProductos = {
   ...CAT,
   'BEE-BK01': { cod: 'BEE_BK', producto: 'BEEBLACK BLACKOUT WATERPROOF', tipo: 'PREMIUM', descripcion: 'FB-2589-NEGRO', precio: 8760.92 },
@@ -710,10 +714,27 @@ const AR_BB: Record<string, number> = {
   'BEE-BK01': 2.98, 'BEE-BK': 2.98, 'BEE-SC01': 2.98, 'BEE-SC': 2.98,
 };
 
+// La copia de TRINA tiene la celda del riel ROTA: la fila «ALTO» copia el
+// total de la de «ANCHO» (=U115*W115), así que el riel se cobra dos veces por
+// ancho. La receta de fábrica sigue a la copia canónica (COTAP-8003, decisión
+// del dueño 2026-08-19), de modo que esta cotización —que se cobró así— se
+// reproduce con la receta de SU copia, igual que los goldens con los insumos
+// de su época.
+const REGLAS_TRINA: ReglasPrecios = {
+  ...REGLAS_PRECIOS_DEFAULT,
+  recetas: {
+    ...REGLAS_PRECIOS_DEFAULT.recetas,
+    BEE_BK: RECETAS_DEFAULT.BEE_BK.map((l) =>
+      l.insumo === 'SLM01' ? { ...l, cantidad: { tipo: 'sumaAnchos' as const, factor: 2 } } : l,
+    ),
+  },
+};
+
 describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
   // Una cortina BEE-BK01 de 0,82 × 0,493 con 40 % de descuento.
   const FILA = { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 1, descuento: 0.4 };
-  const cotizar = () => cotizarFase0([FILA], CAT_BB, AR_BB);
+  const cotizar = () =>
+    cotizarFase0([FILA], CAT_BB, AR_BB, [], PARAMETROS_DEFAULT, false, false, REGLAS_TRINA);
 
   it('usa el metro entero de tela extra, no los 25 cm del roller', () => {
     const f = cotizar().familias[0];
@@ -725,8 +746,8 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
   it('la lista de materiales suma lo mismo que el panel del Excel (X137)', () => {
     const f = cotizar().familias[0];
     expect(f.costoMateriales).toBeCloseTo(307094.5727, 3);
-    // Los dos rieles laterales cobran el ANCHO por partida doble: es un error
-    // de fórmula del Excel que se replica a propósito (ver RECETA_BEEBLACK).
+    // Los dos rieles laterales cobran el ANCHO por partida doble: es la celda
+    // rota de la copia de TRINA (por eso este bloque pasa REGLAS_TRINA).
     const rieles = f.materiales.filter((l) => l.insumo === 'SLM01');
     expect(rieles).toHaveLength(2);
     expect(rieles[0].total).toBeCloseTo(68330.6, 3);
@@ -783,10 +804,10 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.totales.totalTransferencia).toBeCloseTo(435817.3219, 3);
   });
 
-  it('con el precio del catálogo real (48.415,15) la tela baja $126,91', () => {
+  it('con el 48.415,15 que el catálogo traía hasta el 2026-08-19 la tela baja $126,91', () => {
     const cat = { ...CAT_BB, 'BEE-BK': { ...CAT_BB['BEE-BK'], precio: 48415.153846 } };
-    const r = cotizarFase0([FILA], cat, AR_BB);
-    // El 48.500 del panel estaba tecleado a mano; el máximo del catálogo es
+    const r = cotizarFase0([FILA], cat, AR_BB, [], PARAMETROS_DEFAULT, false, false, REGLAS_TRINA);
+    // El 48.500 del panel estaba tecleado a mano; el máximo calculado era
     // 48.415,15, que el motor redondea al peso como hace el Excel.
     expect(r.familias[0].precioMl).toBe(48415);
     expect(r.lineas[0].valorUnit).toBeCloseTo(551928.1677, 3);
@@ -806,7 +827,8 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
 
   it('el panel plantilla de 3,00 × 3,00 da el VALOR M2 de la copia (90.765,59)', () => {
     // Cortina de ejemplo de la copia «SOLO BK O SOLO MOSQUITERO»: su celda
-    // T147 dice 90.765,59377777779.
+    // T147 dice 90.765,59377777779. Va con la receta de fábrica: en una
+    // cortina cuadrada (ancho = alto) la celda del riel rota no se nota.
     const r = cotizarFase0([{ codInt: 'BEE-BK', ancho: 3, alto: 3, cantidad: 1 }], CAT_BB, AR_BB);
     expect(r.familias[0].m2Total).toBeCloseTo(12, 6);
     expect(r.familias[0].metrosTela).toBeCloseTo(4, 6);
@@ -845,6 +867,67 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.lineas[0].instalacionEmbebida).toBe(0);
     expect(r.instalacion.total).toBe(0);
     expect(r.instalacion.partes).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// COTAP-8003 (14-07-2026): la cotización que fija la receta beeblack CANÓNICA.
+// Su copia del Excel tiene la fila «ALTO» del riel SLM01 corregida (cobra los
+// altos, como dice su rótulo) y el dueño la declaró la buena el 2026-08-19,
+// así que se cotiza con las reglas de fábrica tal cual. Cuatro cortinas
+// BEE-BK03 con 40 % de descuento; los valores esperados son los PESOS EXACTOS
+// del formato de cotización.
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — beeblack (COTAP-8003, la copia canónica)', () => {
+  const CAT_COTAP: CatalogoProductos = {
+    ...CAT_BB,
+    'BEE-BK03': { cod: 'BEE_BK', producto: 'BEEBLACK BLACKOUT WATERPROOF', tipo: 'PREMIUM', descripcion: 'FB-6622-BEIGE', precio: 7839 },
+  };
+  const AR_COTAP = { ...AR_BB, 'BEE-BK03': 2.98 };
+  const FILAS = [
+    { codInt: 'BEE-BK03', ancho: 2.549, alto: 1.728, cantidad: 1, descuento: 0.4 },
+    { codInt: 'BEE-BK03', ancho: 1.583, alto: 2.35, cantidad: 1, descuento: 0.4 },
+    { codInt: 'BEE-BK03', ancho: 1.188, alto: 1.726, cantidad: 1, descuento: 0.4 },
+    { codInt: 'BEE-BK03', ancho: 1.476, alto: 1.729, cantidad: 1, descuento: 0.4 },
+  ];
+  const cotizar = () => cotizarFase0(FILAS, CAT_COTAP, AR_COTAP);
+
+  it('el riel cobra los anchos ×2 y los altos ×2 (la celda corregida)', () => {
+    const f = cotizar().familias[0];
+    const rieles = f.materiales.filter((l) => l.insumo === 'SLM01');
+    expect(rieles).toHaveLength(2);
+    // Σanchos = 6,796 → ×2 = 13,592 · Σaltos = 7,533 → ×2 = 15,066.
+    expect(rieles[0].cantidad).toBeCloseTo(13.592, 6);
+    expect(rieles[0].total).toBeCloseTo(566310.68, 2);
+    expect(rieles[1].cantidad).toBeCloseTo(15.066, 6);
+    expect(rieles[1].total).toBeCloseTo(627724.89, 2);
+    expect(f.costoMateriales).toBeCloseTo(2083998.793, 3);
+  });
+
+  it('la tela comparte tiros: las dos angostas viajan en un solo paño', () => {
+    const f = cotizar().familias[0];
+    // 1,188 + 1,476 = 2,664 caben en el rollo de 2,98; la de 1,583 y la de
+    // 2,549 van solas. MTS = 2,729 + 3,35 + 2,728. La tela manda BEE-BK a
+    // 48.500 (el MÁXIMO de la familia, tal como el panel de la copia).
+    expect(f.panos).toHaveLength(3);
+    expect(f.metrosTela).toBeCloseTo(8.807, 6);
+    expect(f.precioMl).toBe(48500);
+    expect(f.costoTela).toBeCloseTo(427139.5, 3);
+  });
+
+  it('los cuatro VAL. UNIT calzan AL PESO con el formato de cotización', () => {
+    const r = cotizar();
+    expect(r.familias[0].precioM2).toBeCloseTo(148128.1869, 3);
+    const esperados = [1071685, 827181, 521361, 638311];
+    r.lineas.forEach((l, i) => expect(Math.round(l.valorUnit)).toBe(esperados[i]));
+  });
+
+  it('subtotal y total transferencia, al peso; instalación gratis por 4', () => {
+    const r = cotizar();
+    expect(Math.round(r.subtotalNeto)).toBe(1835123);
+    expect(Math.round(r.totales.totalTransferencia)).toBe(2183796);
+    expect(r.instalacion.gratis).toBe(true);
+    expect(r.instalacion.total).toBe(0);
   });
 });
 
