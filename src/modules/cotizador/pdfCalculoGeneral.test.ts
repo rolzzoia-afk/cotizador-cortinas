@@ -403,6 +403,30 @@ describe('aplicarVariante — DIMENSIONADO', () => {
   });
 });
 
+// Una ventana en ángulo se corta como varias piezas, pero se instala como una
+// sola cortina: el taller tiene que verlo en la columna de ubicación.
+describe('UBIC — ventana en ángulo', () => {
+  const bow = (): Ventana => {
+    const v = ventRoller(1.2, 'LIVING');
+    return {
+      ...v,
+      formaVentana: 'bow',
+      panos: [v.panos[0], { ...v.panos[0] }, { ...v.panos[0] }],
+    } as Ventana;
+  };
+
+  it('el rótulo acompaña a la ubicación en TODAS las filas de la ventana', () => {
+    const filas = construirCalculoGeneral([bow()]).filas;
+    expect(filas).toHaveLength(3);
+    for (const f of filas) expect(f.ubic).toContain('(BOW WINDOW)');
+  });
+
+  it('una ventana recta no cambia: sin rótulo, la UBIC queda como antes', () => {
+    const [fila] = construirCalculoGeneral([ventRoller(1.745, 'PPAL IZQ')]).filas;
+    expect(fila.ubic).toBe('PPAL IZQ');
+  });
+});
+
 // El Dimensionado muestra en las filas dúo ALTO MESA DE CORTE (alto + 10) en
 // vez de ALTO, porque la tela dúo se corta doblada en la mesa.
 describe('ALTO MESA DE CORTE (Dimensionado dúo)', () => {

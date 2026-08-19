@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -113,8 +113,16 @@ import { InformeVisita } from '@/components/cotizador/visita/InformeVisita';
 import type { VisitaTerreno } from '@/modules/ots/types';
 import { WizardTerreno } from '@/components/cotizador/wizard/WizardTerreno';
 import { ReplicarDialog } from '@/components/cotizador/wizard/ReplicarDialog';
+import { SelectorNuevaVentana } from '@/components/cotizador/wizard/SelectorNuevaVentana';
+import { ResumenVentanas } from '@/components/cotizador/wizard/ResumenVentanas';
 import { varianteViz } from '@/modules/cotizador/wizard/cortinaViz';
 import { replicarEnVentanas } from '@/modules/cotizador/wizard/replicar';
+import {
+  aplicarSeleccion,
+  rotuloForma,
+  ventanaHermana,
+  type SeleccionVentanas,
+} from '@/modules/cotizador/wizard/selectorVentanas';
 
 type Tab = 'ventanas' | 'visita' | 'post';
 /** Cómo se edita la ventana: la ficha de siempre o el wizard con el dibujo. */
@@ -176,6 +184,20 @@ export function CotizadorFase2() {
   const [dialogJuntar, setDialogJuntar] = useState(false);
   const [dialogReplicar, setDialogReplicar] = useState(false);
   const [juntarDescartado, setJuntarDescartado] = useState<Set<string | number>>(new Set());
+  // Pantalla «¿qué vas a cargar?» (cuántas ventanas o qué modelo especial).
+  const [selectorNueva, setSelectorNueva] = useState(false);
+  // Cuántas cortinas más de ESTA misma ventana quedan por cargar. Se van
+  // creando al guardar cada una: si el vendedor abandona a mitad de camino, la
+  // OT no queda con fichas vacías que después nadie sabe si sobran o faltan.
+  const [hermanasPendientes, setHermanasPendientes] = useState(0);
+  // Id de la cortina detrás de la cual va la que se está cargando, para que las
+  // de una misma ventana queden juntas en la lista y no al final de la orden.
+  const [insertarTrasId, setInsertarTrasId] = useState<string | number | null>(null);
+  // Qué cortina está abierta AHORA. En terreno el guardado puede tardar
+  // segundos: cuando vuelve hay que saber si el vendedor sigue en la misma
+  // cortina o ya se fue a otra (el valor capturado en el closure mentiría).
+  const editandoIdRef = useRef<string | number | null>(null);
+  editandoIdRef.current = editandoId;
 
   const ventanas: Ventana[] = useMemo(
     () => ((ot?.storeVentanas || []) as unknown as Ventana[]),
@@ -518,6 +540,11 @@ export function CotizadorFase2() {
 
   const iniciarEdicion = (v: Ventana) => {
     setDialogJuntar(false);
+    setSelectorNueva(false);
+    // Abrir otra cortina corta el flujo de las hermanas: el contador es de la
+    // ventana que se estaba cargando, no de esta.
+    setHermanasPendientes(0);
+    setInsertarTrasId(null);
     setEditandoId(v.id);
     // Autocompletar el modelo de fabricación si la ventana tiene categoría
     // pero aún no tiene modelo (OTs creadas antes o desde el Panel). El
@@ -574,25 +601,55 @@ export function CotizadorFase2() {
     }
   };
 
-  const iniciarNueva = () => {
-    const nueva: Ventana = {
-      id: crypto.randomUUID(),
-      ubicacion: '',
-      codInt: '',
-      producto: '',
-      tipo: '',
-      color: 'Blanco',
-      alto: 0,
-      precio: 0,
-      cantidad: 1,
-      categoria: '',
-      grupoId: null,
-      grupoOrden: 0,
-      panos: [crearPanoVacio()],
-    };
-    setEditandoId(nueva.id);
-    setVentanaForm(nueva);
+  /** La cortina en blanco con la que arranca cualquier carga nueva. */
+  const ventanaEnBlanco = (): Ventana => ({
+    id: crypto.randomUUID(),
+    ubicacion: '',
+    codInt: '',
+    producto: '',
+    tipo: '',
+    color: 'Blanco',
+    alto: 0,
+    precio: 0,
+    cantidad: 1,
+    categoria: '',
+    grupoId: null,
+    grupoOrden: 0,
+    panos: [crearPanoVacio()],
+  });
+
+  /** Abre una cortina (nueva o hermana) en el editor. */
+  const abrirEnEditor = (v: Ventana) => {
+    setSelectorNueva(false);
+    setEditandoId(v.id);
+    setVentanaForm(v);
     setPanoActivo(0);
+  };
+
+  /** Cargar algo nuevo empieza siempre por elegir QUÉ se va a cargar. */
+  const abrirSelector = () => {
+    setEditandoId(null);
+    setVentanaForm(null);
+    setPanoActivo(0);
+    setDialogJuntar(false);
+    setHermanasPendientes(0);
+    setInsertarTrasId(null);
+    setSelectorNueva(true);
+  };
+
+  const confirmarSeleccion = (sel: SeleccionVentanas) => {
+    const { ventana, hermanasPendientes: pend } = aplicarSeleccion(ventanaEnBlanco(), sel);
+    setHermanasPendientes(pend);
+    setInsertarTrasId(null);
+    abrirEnEditor(ventana);
+  };
+
+  /** Otra cortina igual a esta, en la misma ventana: solo faltan las medidas. */
+  const replicarComoNueva = (origen: Ventana) => {
+    setHermanasPendientes(0);
+    setInsertarTrasId(origen.id);
+    abrirEnEditor(ventanaHermana(origen));
+    toast.info('Ficha copiada. Toma las medidas de esta cortina.');
   };
 
   const cancelarEdicion = () => {
@@ -600,6 +657,11 @@ export function CotizadorFase2() {
     setVentanaForm(null);
     setPanoActivo(0);
     setDialogJuntar(false);
+    setSelectorNueva(false);
+    // Abandonar deja de arrastrar las hermanas pendientes: si no, la siguiente
+    // cortina que se abriera heredaría un contador que ya no significa nada.
+    setHermanasPendientes(0);
+    setInsertarTrasId(null);
   };
 
   // `?nueva=1`: la OT se acaba de crear desde el Panel y llega directo a cargar
@@ -607,11 +669,11 @@ export function CotizadorFase2() {
   // que recargar la página no abra otra ventana en blanco.
   useEffect(() => {
     if (!ot || params.get('nueva') !== '1') return;
-    if (ventanas.length === 0 && editandoId == null) iniciarNueva();
+    if (ventanas.length === 0 && editandoId == null) setSelectorNueva(true);
     const limpio = new URLSearchParams(params);
     limpio.delete('nueva');
     setParams(limpio, { replace: true });
-    // `iniciarNueva` se re-crea en cada render; el gate real es el parámetro.
+    // El gate real es el parámetro, que se consume una sola vez.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ot, params]);
 
@@ -874,12 +936,40 @@ export function CotizadorFase2() {
     setSavingVentana(true);
     try {
       const existe = ventanas.find((v) => v.id === vent.id);
-      const nuevasVentanas = existe
-        ? ventanas.map((v) => (v.id === vent.id ? vent : v))
-        : [...ventanas, vent];
+      let nuevasVentanas: Ventana[];
+      if (existe) {
+        nuevasVentanas = ventanas.map((v) => (v.id === vent.id ? vent : v));
+      } else {
+        // Las cortinas de una misma ventana van juntas: la nueva se mete detrás
+        // de su origen, no al final de la orden.
+        const pos = insertarTrasId == null
+          ? -1
+          : ventanas.findIndex((v) => String(v.id) === String(insertarTrasId));
+        nuevasVentanas = [...ventanas];
+        nuevasVentanas.splice(pos < 0 ? ventanas.length : pos + 1, 0, vent);
+      }
       await guardar({ storeVentanas: nuevasVentanas });
-      toast.success(existe ? 'Ventana actualizada' : 'Ventana agregada');
-      cancelarEdicion();
+      // Si mientras se guardaba el vendedor abrió otra cortina de la lista, la
+      // cadena ya se cortó: encadenar acá le cerraría encima lo que esté
+      // escribiendo y crearía una cortina que nadie pidió.
+      const sigueEnEsta = editandoIdRef.current === vent.id;
+      if (hermanasPendientes > 0 && sigueEnEsta) {
+        // Siguiente cortina de la misma ventana: la ficha ya copiada, a medir.
+        // `hermanasPendientes` incluye la que se abre ahora.
+        const porCargar = hermanasPendientes;
+        setHermanasPendientes(porCargar - 1);
+        setInsertarTrasId(vent.id);
+        abrirEnEditor(ventanaHermana(vent));
+        toast.success(
+          `Cortina guardada — queda${porCargar === 1 ? '' : 'n'} ${porCargar} por medir en ` +
+            `${vent.ubicacion || 'esta ventana'}.`,
+        );
+      } else if (!sigueEnEsta) {
+        toast.success(existe ? 'Ventana actualizada' : 'Ventana agregada');
+      } else {
+        toast.success(existe ? 'Ventana actualizada' : 'Ventana agregada');
+        cancelarEdicion();
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error al guardar: ' + msg);
@@ -1123,7 +1213,7 @@ export function CotizadorFase2() {
                 Ventanas de la OT
               </h3>
               <button
-                onClick={iniciarNueva}
+                onClick={abrirSelector}
                 className="flex items-center gap-1 rounded border border-accent/30 bg-accent/10 px-2 py-1 text-[0.7rem] text-accent hover:bg-accent/20"
               >
                 <Plus className="h-3 w-3" /> Nueva
@@ -1188,6 +1278,12 @@ export function CotizadorFase2() {
                       <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
                         {tipoVentanaLabel(v.panos.length)} · {resumenPanos(v.panos)}
                       </div>
+                      {/* Ventana en ángulo: sus paños son caras, no cortinas. */}
+                      {rotuloForma(v) && (
+                        <div className="mt-1 inline-block rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[0.6rem] font-semibold text-accent">
+                          {rotuloForma(v)}
+                        </div>
+                      )}
                       {/* Datos que faltan para producir: la OT no avanza con esto pendiente. */}
                       {(pendientesDe.get(String(v.id)) ?? 0) > 0 && (
                         <div className="mt-1 inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[0.6rem] font-semibold text-amber-600">
@@ -1226,13 +1322,28 @@ export function CotizadorFase2() {
 
           {/* Editor */}
           <section className="flex-1 overflow-y-auto p-4">
-            {!ventanaForm ? (
+            {selectorNueva ? (
+              /* Lo primero: cuántas cortinas van, o qué modelo especial es. */
+              <SelectorNuevaVentana onConfirmar={confirmarSeleccion} onAtras={cancelarEdicion} />
+            ) : !ventanaForm ? (
+              vista === 'interactiva' && ventanas.length > 0 ? (
+                /* Vista guiada sin nada abierto: las ventanas de la orden
+                   dibujadas, para ver de un vistazo qué falta. */
+                <ResumenVentanas
+                  ventanas={ventanas}
+                  catalogo={catalogo}
+                  reglas={reglas}
+                  onEditar={iniciarEdicion}
+                  onReplicar={replicarComoNueva}
+                  onNueva={abrirSelector}
+                />
+              ) : (
               <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
                 <Pencil className="h-10 w-10 opacity-40" />
                 <p className="text-sm">
                   Selecciona una ventana de la lista o crea una nueva para editar.
                 </p>
-                <Button onClick={iniciarNueva} className="gap-1" size="sm">
+                <Button onClick={abrirSelector} className="gap-1" size="sm">
                   <Plus className="h-4 w-4" /> Nueva ventana
                 </Button>
                 {ventanas.length > 0 && (
@@ -1248,10 +1359,37 @@ export function CotizadorFase2() {
                   </Button>
                 )}
               </div>
-            ) : vista === 'interactiva' && varianteVentana ? (
+              )
+            ) : (
+              <>
+                {/* La cadena de «N ventanas»: sin esto, el vendedor solo tiene un
+                    toast que ya se fue y no sabe cuántas le faltan por medir. */}
+                {hermanasPendientes > 0 && (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-[0.75rem] text-accent">
+                    <span>
+                      Después de esta quedan <strong>{hermanasPendientes}</strong> por medir en{' '}
+                      <strong>{ventanaForm.ubicacion || 'esta ventana'}</strong>: al guardarla se
+                      abre la siguiente con la misma ficha.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHermanasPendientes(0);
+                        toast.info('Listo: no se abrirán más cortinas de esta ventana.');
+                      }}
+                      className="rounded border border-accent/40 px-2 py-0.5 hover:bg-accent/20"
+                    >
+                      No cargar las que faltan
+                    </button>
+                  </div>
+                )}
+                {vista === 'interactiva' && varianteVentana ? (
               /* Vista guiada: un paso a la vez con la cortina armándose al lado.
                  Edita el MISMO `ventanaForm` que la ficha. */
               <WizardTerreno
+                /* Remontar al cambiar de cortina: la siguiente hermana tiene que
+                   arrancar en «medidas», no en el paso donde quedó la anterior. */
+                key={String(ventanaForm.id)}
                 ventana={ventanaForm}
                 variante={varianteVentana}
                 panoActivo={panoActivo}
@@ -1316,6 +1454,11 @@ export function CotizadorFase2() {
                           }}
                         >
                           Conjunto
+                        </span>
+                      )}
+                      {rotuloForma(ventanaForm) && (
+                        <span className="rounded border border-accent/40 bg-accent/10 px-1.5 py-0.5 text-[0.6rem] font-semibold text-accent">
+                          {rotuloForma(ventanaForm)}
                         </span>
                       )}
                     </h3>
@@ -1522,6 +1665,8 @@ export function CotizadorFase2() {
                   </Button>
                 </div>
               </>
+                )}
+              </>
             )}
           </section>
         </div>
@@ -1568,8 +1713,9 @@ export function CotizadorFase2() {
         </div>
       )}
 
-      {/* Barra fija inferior para avanzar a Fase 3 (solo visible en tab ventanas con editor cerrado) */}
-      {tab === 'ventanas' && !ventanaForm && ventanas.length > 0 && (
+      {/* Barra fija inferior para avanzar a Fase 3 (solo visible en tab ventanas
+          con el editor cerrado y sin una carga a medio empezar) */}
+      {tab === 'ventanas' && !ventanaForm && !selectorNueva && ventanas.length > 0 && (
         <div className="border-t border-border bg-card/60 px-4 py-2.5">
           <div className="flex items-center justify-end gap-2">
             {pendientes.length > 0 && (

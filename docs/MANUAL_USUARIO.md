@@ -33,6 +33,8 @@ Una cotización puede nacer de dos maneras, y las dos terminan en la **Fase 3** 
 - **Nueva OT** — se cotiza en el escritorio, con precios desde el primer momento.
 - **Nueva OT — Terreno** — se va a la casa del cliente y se cargan las cortinas midiendo. Los precios los calcula la Fase 3 después, con lo que se midió.
 
+El **número de OT** funciona igual en los dos casos: se puede teclear (por ejemplo, el del Excel) o dejar en blanco, y ahí la orden toma sola el correlativo del mes. Si el número tecleado ya existe, la app avisa y no crea la orden duplicada.
+
 ### Fase 2: la vista guiada
 
 En Fase 2 hay dos formas de cargar cada cortina, con el mismo resultado:
@@ -40,7 +42,24 @@ En Fase 2 hay dos formas de cargar cada cortina, con el mismo resultado:
 - **Ficha**: la planilla de siempre, con todo a la vista. Sirve para cualquier tipo de cortina.
 - **Guiada**: un paso a la vez, y la cortina se va dibujando al lado a medida que se llena. Se puede hacer clic en cualquier pieza del dibujo —el tubo, la cadena, la cenefa— para saltar a ese paso. Cubre roller, dual y dúo; las verticales, los sistemas de oscuridad y el beeblack se cargan siempre con la ficha.
 
-Cambiar de vista no pierde nada de lo escrito. El botón **Replicar** copia la ficha de una cortina a las demás de la OT (tela, colores, mecanismo, cenefa, instalación) **sin tocar sus medidas ni su ubicación**: en una casa donde son todas iguales, se carga una y se replica.
+Cambiar de vista no pierde nada de lo escrito.
+
+#### Antes de medir: ¿qué vas a cargar?
+
+Cada vez que se aprieta **Nueva**, lo primero es decir qué hay en ese muro:
+
+- **Ventanas estándar (1, 2, 3, 4 o más)**: son **cortinas separadas en la misma ventana**, cada una con su tubo y su medida. Se carga la primera completa y, al guardarla, **la siguiente aparece sola con la misma ficha ya copiada**: solo hay que tomarle las medidas. Así hasta completar las que se pidieron. Quedan una al lado de la otra en la lista. Mientras dura la tanda, arriba del editor se ve cuántas faltan, con un botón **No cargar las que faltan** para cortarla antes.
+- **Ventanas especiales (bow window, en L, en U, triangular)**: es **UNA sola cortina** con un paño por cara del ángulo (bow y U llevan 3, la L lleva 2, la triangular 1). El modelo queda anotado en la cortina y aparece en el informe del cliente y en el Dimensionado del taller, para que nadie los confunda con cortinas sueltas.
+
+Si el tipo de ventana no aparece en la lista, se toma como una ventana individual.
+
+#### El resumen de las ventanas
+
+En la vista **Guiada**, cuando no hay ninguna cortina abierta, se ven **todas las de la orden dibujadas**, agrupadas por ubicación y con sus medidas anotadas. Las que aún no tienen medidas salen marcadas. Al tocar una se abre su ficha completa abajo, para mirar; para cambiar algo está el botón **Editar**, que la abre en la vista guiada.
+
+Desde ahí también se puede **Replicar información**: crea **otra cortina igual a continuación**, en la misma ventana, con toda la ficha copiada —incluida la cantidad de paños y el modelo especial— y las medidas en blanco. Es lo que se usa cuando en la misma ventana van dos cortinas idénticas y solo cambian los centímetros.
+
+El botón **Replicar** de la ficha hace algo distinto: copia la ficha de una cortina **a otras que ya existen** en la OT (tela, colores, mecanismo, cenefa, instalación) **sin tocar sus medidas ni su ubicación**. En una casa donde son todas iguales, se carga una y se replica a las demás.
 
 ### Fase 2: la visita
 
@@ -52,7 +71,11 @@ La pestaña **Visita** guarda lo que quedó de haber estado en la casa:
    - **Armar desde la orden**: arma las secciones con los datos ya cargados, sin IA. Sirve aunque todavía no haya video.
    - **Generar informe con IA**: hace lo mismo y además le agrega, habitación por habitación, lo que se conversó en el video. Los datos duros (telas, códigos, colores) no los escribe el modelo: se copian de la orden, para que no pueda equivocarlos.
 
-   En los dos casos **el texto queda editable: lo que vale es lo que quede escrito ahí**. El botón **Copiar** lo deja listo para pegar en el correo.
+   **Las fotos van adentro del informe**, igual que en el correo que se manda a mano: la foto referencial de pasos de luz debajo de su explicación y la ficha de la tela en cada habitación. En el texto se ven como una línea `[foto: …]`; abajo hay una **vista previa** que muestra cómo va a llegar. Se mueven o se borran como cualquier línea. Las fotos se cargan una sola vez en **Admin** (pasos de luz, bloques del informe y la ficha de cada tela en el catálogo).
+
+   Si cargas una foto en Admin **después** de haber armado el informe, el botón **Actualizar fotos y bloques** la mete en su lugar **sin tocar lo que ya está escrito** (no hay que rearmarlo y perder lo conversado). Solo agrega: nunca borra ni reescribe, y apretarlo dos veces no duplica nada.
+
+   En los dos casos **el texto queda editable: lo que vale es lo que quede escrito ahí**. El botón **Copiar** lo deja listo para pegar en el correo, **con las fotos incluidas** — se pegan en su lugar, no hay que adjuntarlas aparte.
 4. **Resumen de visita**: las preguntas que hay que dejar conversadas antes de irse (tiempos, pasos de luz, estacionamiento, techos y muros). Se editan en **Admin → Cotizador → Resumen de visita**.
 5. **Firma del cliente**: se firma con el dedo en pantalla. Al guardar la firma **se registra también la ubicación** como respaldo: si más adelante el cliente discute la visita, queda la firma y el lugar donde se dio, con un link al mapa. Si el teléfono no entrega la ubicación (el cliente no da el permiso, o no hay señal), **la firma se guarda igual** y queda anotado el motivo. Una vez firmado, el informe queda bloqueado; para cambiarlo hay que volver a pedir la firma.
 
@@ -76,21 +99,35 @@ El video, las fotos y la firma se guardan en un almacén privado de la empresa: 
 - **Parámetros de cotización**: IVA, margen de insumos, recargo tarjeta, instalación, mano de obra y traslado de TU empresa. "Restaurar defaults" vuelve a los valores históricos.
 - **Cargar inventario base desde Excel**: reseteo completo del inventario de tubos a partir del conteo físico.
 - **Resumen de visita** (en Cotizador): las preguntas que el vendedor confirma con el cliente antes de irse. Se agregan, se ordenan y se apagan. Las respuestas se guardan por pregunta, así que apagar o borrar una acá **no** toca lo ya contestado en OTs anteriores.
-- **Bloques del informe de visita** (en Cotizador): los textos fijos que cierran el INFORME CLIENTE (corte de rodapié, «la medida considera los mecanismos», termopanel/aire/rack, límite de perforación, sistemas de oscuridad). Se pegan **tal cual** quedan escritos: la IA no los reescribe. Un bloque marcado «Solo oscuridad» aparece únicamente si la orden trae Soft Light, Dark, Oscuranti o BeeBlack.
+- **Pasos de luz del informe de visita** (en Cotizador): con lo que abre el INFORME CLIENTE, una advertencia por tipo de cortina (duo, blackout, screen, sistemas de oscuridad, vertical) más la nota de las cortinas de varios paños. Cada una lleva sus **fotos referenciales**. Solo entran las que la orden efectivamente trae.
+- **Bloques del informe de visita** (en Cotizador): los textos fijos que cierran el INFORME CLIENTE (corte de rodapié, «la medida considera los mecanismos», termopanel/aire/rack, límite de perforación, sistemas de oscuridad). Se pegan **tal cual** quedan escritos: la IA no los reescribe. También admiten fotos. Un bloque marcado «Solo oscuridad» aparece únicamente si la orden trae Soft Light, Dark, Oscuranti o BeeBlack.
+- **Ficha de la tela** (en Precios → Catálogo de productos, al editar un código): la lámina del producto con su nombre, gama y ancho máximo. Sale en la sección de la habitación del informe de visita. No se usa en la cotización ni en producción.
 - **Agente IA**: documentos (FAQ, tono, precios…) que alimentan al asistente de WhatsApp, mensaje de derivación y playground para probarlo. El agente SOLO responde lo que está en la FAQ; todo lo demás lo deriva a una vendedora.
 - **Forzar actualización**: recarga el optimizador en todos los navegadores del taller (usar después de cada deploy).
 - **Ojo de Dios**: vista de control transversal (colmena, correcciones, reconciliación, reportes, salud del inventario).
 
 ## Preguntas frecuentes
 
+- **Importé un Excel en Fase 1 y me pedía el mecanismo, la dirección y el sentido**: ya no. Fase 1 solo exige lo que muestra —producto, ubicación, ancho y alto—; el COD SEC, la dirección de cadena y el sentido de corte se capturan en Terreno y se completan en la Fase 3.
+- **La cortina de velcro no me deja elegir cadena**: es correcto. El paño va pegado con velcro, no sube ni baja, así que no lleva cadena, ni peso de cadena, ni lado de accionamiento. En el cotizador esas dos columnas aparecen como "—" y en Fase 2 no se pregunta nada de cadena.
 - **¿Por qué un corte dice TUBO NUEVO y el sobrante va a una colmena?** El corte sale de un tubo nuevo de fábrica; lo que sobra se guarda en la posición indicada.
 - **El Excel no trae correlativo**: pasa solo en planes antiguos; desde junio 2026 el Excel del optimizador y el del historial traen el mismo correlativo.
 - **Un sobrante del plan no está físicamente**: marcarlo "No existe" en el Historial de Corte para que el inventario quede cuadrado.
 - **¿Quién puede borrar/restaurar planes o aplicar correcciones retroactivas?** Solo admins (bloqueado también a nivel de base de datos).
 - **La vista guiada no dibuja esta cortina**: es de un sistema que se fabrica distinto a un roller (vertical, oscuridad o beeblack). Se carga con la ficha, que tiene exactamente los mismos campos.
+- **Elegí «3 ventanas» y solo veo una**: es así. Se carga la primera y, al guardarla, aparece la segunda con la ficha ya copiada (solo faltan las medidas), y después la tercera. El aviso al guardar dice cuántas quedan.
+- **Elegí «3 ventanas» y me arrepentí**: aprieta **No cargar las que faltan** en el aviso de arriba (o **Cancelar**, si tampoco quieres la que estás llenando). Lo ya guardado queda; las que faltaban no se crean.
+- **Empecé una tanda y me fui a revisar otra cortina de la lista**: la tanda se corta ahí — la app no vuelve sola a ella. Para seguir, aprieta **Nueva** y elige las que falten.
+- **¿Cuándo uso «bow window» y cuándo «3 ventanas»?** Si es **una sola cortina** que da la vuelta siguiendo el ángulo del muro, es bow window (o en L, o en U). Si son **cortinas distintas**, cada una con su tubo y su cadena, aunque estén pegadas, son 3 ventanas.
+- **Mi ventana no es de ninguna de esas formas**: cárgala como ventana individual, y deja la explicación en el comentario de la cortina.
 - **«No se pudo leer el audio de este archivo»**: el video viene en un formato que el navegador no sabe abrir. Grabar con la cámara normal del teléfono (mp4) y volver a intentar.
 - **Repliqué la ficha y las medidas no cambiaron**: es a propósito. Replicar copia la configuración, nunca lo que se fue a medir.
 - **El informe no menciona una habitación**: solo aparecen las cortinas cargadas en la orden. Si falta una ventana, agrégala en Fase 2 y vuelve a tocar «Armar desde la orden».
 - **Cambié un bloque en Admin y el informe viejo sigue igual**: los bloques se pegan al momento de armar el informe. Vuelve a armarlo (o edita el texto a mano) para que tome los nuevos.
+- **Pegué el informe en el correo y las fotos no salieron**: pega con `Ctrl+V` en el cuerpo del correo (no en un cuadro de «texto sin formato»). Si el navegador no dejó copiar con formato, el aviso lo dice y las fotos quedan como link: ábrelo y arrástralo al correo.
+- **La foto que cargué no aparece en el informe**: dos motivos posibles. (1) Quedó en un tipo de cortina que esa orden no tiene — la advertencia de duo solo entra si la orden trae una duo; revisa en qué bloque de «Pasos de luz» la cargaste. (2) El informe ya estaba armado antes: aprieta **Actualizar fotos y bloques**.
+- **Avisó que no pudo ubicar una foto**: el texto del que colgaba esa foto se reescribió (a mano o por la IA), así que la app no adivina dónde ponerla — prefiere avisarte antes que dejarla en el lugar equivocado. Pégala donde corresponda, o vuelve a armar el informe.
+- **Una habitación salió sin la foto de la tela**: ese código todavía no tiene ficha cargada. Se sube en **Admin → Precios → Catálogo de productos**, editando el código.
+- **La IA me dejó fuera una foto**: pasa muy de vez en cuando. El aviso lo dice al terminar; aprieta **Armar desde la orden** para recuperarlas y vuelve a agregar lo conversado, o pega la foto a mano en el correo.
 - **¿Por qué me pide permiso de ubicación al firmar?** Para dejar registrado dónde se dio la firma, como respaldo ante un reclamo posterior. Se pide una sola vez por dispositivo. Si se rechaza, la firma se guarda igual.
 - **La firma dice "sin ubicación"**: el teléfono no la entregó — permiso rechazado, sin señal de GPS (pasa en subterráneos), o la app abierta por una dirección que no es `https`. La firma es válida igual; el motivo queda anotado en la orden.

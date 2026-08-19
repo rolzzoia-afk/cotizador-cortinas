@@ -46,6 +46,7 @@ import {
   type ReglasSeleccion,
 } from '@/modules/descuentos/reglasSeleccion';
 import { colorPesoCadena } from './cadenas';
+import { rotuloForma } from './wizard/selectorVentanas';
 import { telaDePano } from './telaPano';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
@@ -183,6 +184,9 @@ export function construirCalculoGeneral(
 
   for (const v of ventanas) {
     const panos = v.panos || [];
+    // Bow window / en L / en U / triangular: el rótulo acompaña a la ubicación
+    // en todas las filas de la ventana (ver la columna UBIC más abajo).
+    const rotuloVentana = rotuloForma(v) ? `(${rotuloForma(v)})` : '';
     panos.forEach((p, i) => {
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
@@ -404,7 +408,11 @@ export function construirCalculoGeneral(
         producto: tela.producto || '',
         codInt: tela.codInt || '',
         descripcion: catalogo[tela.codInt]?.descripcion || tela.descripcion || '',
-        ubic: ubicPanoVentana(v.ubicacion || '', i, panos.length),
+        // Ventana en ángulo: el taller tiene que ver que estos paños arman UNA
+        // sola ventana, no cortinas sueltas que se instalan por separado.
+        ubic: [ubicPanoVentana(v.ubicacion || '', i, panos.length), rotuloVentana]
+          .filter(Boolean)
+          .join(' '),
         colorAcc: (p.color as string) || v.color || '',
         cadena: (v.direccion as string) || '',
         armado: (p.armado as string) || (v.sentido as string) || '',

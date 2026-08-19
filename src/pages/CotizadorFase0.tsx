@@ -27,6 +27,7 @@ import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { categoriaEsDual, modelosParaCategoria } from '@/modules/descuentos/tipos';
 import { otToRow } from '@/modules/ots/mappers';
 import { useOT } from '@/modules/ots/hooks';
+import { puertoSupabaseNumeroOT, resolverNumeroOT } from '@/modules/ots/numeroOT';
 import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
 import {
   cotizarFase0,
@@ -695,27 +696,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       }
 
       // ── Cotización nueva: N° manual (Excel legado) o correlativo automático ──
-      let numOT = otManual.trim();
-      if (numOT) {
-        const { data: dups, error: errDup } = await supabase
-          .from('ots')
-          .select('id')
-          .eq('empresa_id', empresaId)
-          .eq('numero_ot', numOT)
-          .limit(1);
-        if (errDup) throw errDup;
-        if ((dups ?? []).length > 0) {
-          toast.error(
-            `Ya existe una OT con el número ${numOT}. Usa otro (ej. ${numOT}-B) o deja el campo vacío para el correlativo automático.`,
-          );
-          return;
-        }
-      } else {
-        const { data: numGen, error: errNum } = await supabase.rpc('generar_numero_ot' as never, {
-          p_empresa_id: empresaId,
-        } as never);
-        if (errNum) throw errNum;
-        numOT = String(numGen ?? '');
+      let numOT: string;
+      try {
+        numOT = await resolverNumeroOT(puertoSupabaseNumeroOT, empresaId, otManual);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : String(e));
+        return;
       }
 
       const ot: OT = {

@@ -29,6 +29,7 @@ import {
   type PiezaViz,
   type VarianteViz,
 } from '@/modules/cotizador/wizard/cortinaViz';
+import { rotuloForma } from '@/modules/cotizador/wizard/selectorVentanas';
 import { PANO_COLORS } from '@/modules/cotizador/fase2';
 import { pendientesFase2 } from '@/modules/cotizador/fase2-completitud';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
@@ -111,6 +112,15 @@ export function WizardTerreno(props: Props) {
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       {/* ── Columna del paso ── */}
       <div className="order-2 flex flex-col gap-3 lg:order-1">
+        {/* Ventana en ángulo: acá no se ve el encabezado de la ficha, y saber
+            que los paños son caras de una sola ventana cambia cómo se mide. */}
+        {rotuloForma(ventana) && (
+          <div className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[0.68rem] text-accent">
+            <strong className="font-semibold">{rotuloForma(ventana)}</strong> — un paño por cara de
+            la ventana.
+          </div>
+        )}
+
         {/* Rail de pasos */}
         <div className="flex flex-wrap gap-1">
           {pasos.map((p, i) => {

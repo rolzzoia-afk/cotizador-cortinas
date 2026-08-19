@@ -208,6 +208,14 @@ export type Pano = {
   comentarioFinal?: string;
 };
 
+/**
+ * Forma de la ventana física cuando NO es rectangular. Una cortina por ventana
+ * especial: los paños son las caras del ángulo (bow 3, L 2, U 3, triangular 1),
+ * y el rótulo viaja al informe del cliente y al dimensionado para que el taller
+ * y el instalador sepan que las piezas arman UNA sola ventana en ángulo.
+ */
+export type FormaVentana = 'bow' | 'ele' | 'u' | 'triangular';
+
 export type Ventana = {
   id: string | number;
   ubicacion: string;
@@ -243,6 +251,8 @@ export type Ventana = {
    * este módulo a descuentos: la forma real es ModeloDespiece.
    */
   modelo?: import('@/modules/descuentos/tipos').ModeloDespiece | null;
+  /** Ventana en ángulo (bow window, en L, en U, triangular). Sin valor = recta. */
+  formaVentana?: FormaVentana | null;
 };
 
 // Ítem en construcción dentro de Fase 1 (antes de enviar a Fase 2).
