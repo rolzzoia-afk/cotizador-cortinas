@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.23"; // 2026-08-18: la CENEFA CUADRADA suelta (adicional de roller/vertical) ahora SÍ se optimiza — llega como columna propia en la tabla principal y se corta de la barra E29/E30/E31 por COLOR PERFIL, igual que la delantera/trasera de DARK/soft light CC. Antes solo iba en el cuadro informativo del final del Excel (que este optimizador saltea a propósito) y esa estructura no se cortaba nunca.
+const VERSION_ACTUAL = "5.24"; // 2026-08-19: E40 (BLANCO) y E69-B (NEGRO) — los pesos roller de línea B — entran a PESO_COLOR_FIJO: nunca se reemplazan entre sí por color distinto, igual que E18/E19/E20. Acompaña la carga física de estructuras Gama B a la colmena (sql/20260819_carga_estructuras_gama_b.sql).
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -4915,7 +4915,8 @@ function normalizarCodigo(codigo) { return String(codigo).trim().toUpperCase(); 
 // Pesos color-específicos: NUNCA aceptar reemplazo cross-color aunque el
 // catálogo lo permita. Operario subió catálogo con E19→E20 (peso blanco
 // reemplazado por peso gris) y una cortina blanca quedó con peso gris.
-const PESO_COLOR_FIJO = { 'E18': 'NEGRO', 'E19': 'BLANCO', 'E20': 'GRIS' };
+// E40/E69-B son los pesos roller de línea B (en colmena desde 2026-08-19).
+const PESO_COLOR_FIJO = { 'E18': 'NEGRO', 'E19': 'BLANCO', 'E20': 'GRIS', 'E40': 'BLANCO', 'E69-B': 'NEGRO' };
 
 // Códigos con lista blanca de reemplazos: solo se aceptan los equivalentes
 // listados aquí, aunque el catálogo diga otra cosa. E13 (peso interno dúo)
