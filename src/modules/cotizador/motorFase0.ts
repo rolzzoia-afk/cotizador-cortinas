@@ -364,7 +364,9 @@ export function metrosTelaPorPanos(piezas: PiezaEmpaque[], anchoRollo: number): 
  * respaldo, y el desglose lo dice.
  *
  * Beeblack: su receta salió de la copia beeblack del Excel y calza al peso con
- * la cotización COTJS-10384. Verticales: las 6 comparten la receta VERTICAL,
+ * la cotización COTAP-8003 (la copia canónica desde el 2026-08-19; la de
+ * COTJS-10384 tiene rota la celda del riel y su golden pasa SU receta).
+ * Verticales: las 6 comparten la receta VERTICAL,
  * que calza fórmula por fórmula con la hoja «Cotizador Verticales».
  *
  * Antes esto devolvía seis campos (isDuo, isScreen, gama…) de los que solo se

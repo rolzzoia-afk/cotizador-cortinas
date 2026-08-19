@@ -325,24 +325,27 @@ const RECETA_VERTICAL: LineaReceta[] = [
  * es la misma en las dos copias que hay (verificado línea por línea). Las tres
  * telas —blackout, mosquitero y traslúcida— comparten esta lista.
  *
- * Dos líneas replican un ERROR de fórmula del Excel a propósito (decisión del
- * dueño 2026-08-17: primero calzar con lo que se cotizó; corregirlo es un clic
- * en Admin → Precios → Materiales por familia):
+ * Una línea replica un ERROR de fórmula del Excel a propósito (decisión del
+ * dueño 2026-08-17; corregirlo es un clic en Admin → Precios → Materiales por
+ * familia): el zuncho simple SML38 lleva el multiplicador 4 aplicado dos veces
+ * —la cantidad ya viene `Σaltos × 4` y el total la vuelve a multiplicar por 4
+ * (`=(W121*U121)*V121`)—, o sea `Σaltos × 16`. La copia canónica también lo
+ * tiene, verificado al peso contra COTAP-8003.
  *
- *  · El riel lateral SLM01 ocupa DOS filas, rotuladas «ANCHO» y «ALTO». La de
- *    ALTO muestra `Σaltos × 2` en la columna de cantidad, pero su celda de
- *    TOTAL apunta a la fila de ANCHO (`=U115*W115`), así que lo que de verdad
- *    se cobra es `Σanchos × 2` DOS VECES. Acá se replica el cobro, no el
- *    rótulo: la segunda línea también suma anchos.
- *  · El zuncho simple SML38 lleva el multiplicador 4 aplicado dos veces —la
- *    cantidad ya viene `Σaltos × 4` y el total la vuelve a multiplicar por 4
- *    (`=(W121*U121)*V121`)—, o sea `Σaltos × 16`.
+ * El riel lateral SLM01 ocupa DOS filas, «ANCHO» y «ALTO» (los 4 perfiles
+ * salen del mismo riel: arriba/abajo por ancho, costados por alto). Algunas
+ * copias tienen la celda de total de la fila ALTO apuntando a la de ANCHO
+ * (`=U115*W115`), o sea cobran `Σanchos × 2` DOS VECES; la app replicó ese
+ * cobro hasta el 2026-08-19, cuando el dueño fijó como canónica la copia con
+ * la celda corregida (cotización COTAP-8003, calza al peso). La de TRINA
+ * (COTJS-10384) es de las rotas: su golden cotiza con la receta de SU copia.
  */
 const NOTA_SLM01_ALTO =
-  'Réplica de un error del Excel: es la fila «ALTO» del panel beeblack, pero su ' +
-  'celda de total apunta a la fila «ANCHO» (=U115*W115), así que el riel se cobra ' +
-  'dos veces por ancho y nunca por alto. Se dejó igual para calzar con lo ya ' +
-  'cotizado. Para corregirlo, cambiar esta línea a «suma de los altos × 2».';
+  'Fila «ALTO» del riel: los costados, suma de los altos × 2. Ojo: algunas ' +
+  'copias del Excel tienen esta celda rota (su total apunta a la fila «ANCHO» ' +
+  'y cobran los anchos dos veces); la copia canónica la tiene corregida ' +
+  '(decisión del 2026-08-19, cotización COTAP-8003). No volver a «suma de los ' +
+  'anchos» para calzar con una copia rota.';
 
 const NOTA_SML38 =
   'Réplica de un error del Excel: la cantidad ya viene multiplicada por 4 y la ' +
@@ -351,7 +354,7 @@ const NOTA_SML38 =
 
 const RECETA_BEEBLACK: LineaReceta[] = [
   v('SLM01', sumaAnchos(2)),
-  v('SLM01', sumaAnchos(2), NOTA_SLM01_ALTO),
+  v('SLM01', { tipo: 'sumaAltos', factor: 2 }, NOTA_SLM01_ALTO),
   v('SML10', { tipo: 'sumaAltos', factor: 1 }),
   v('SML34', { tipo: 'sumaAltos', factor: 4 }),
   v('SML13', porCortina()),

@@ -351,14 +351,17 @@ describe('sistemas con reglas propias (beeblack)', () => {
     expect(grupoDelInsumo('SLM02')).toEqual(['SLM01', 'SLM02', 'SLM03']);
   });
 
-  it('la receta replica los dos errores de fórmula del Excel', () => {
+  it('el riel cobra ancho×2 y alto×2; el zuncho conserva el ×16 del Excel', () => {
     const receta = RECETAS_DEFAULT.BEE_BK;
     const rieles = receta.filter((l) => l.insumo === 'SLM01');
-    // Las dos filas del riel suman ANCHOS: la de «alto» del Excel copia el
-    // total de la de «ancho».
+    // Los 4 perfiles del mismo riel: arriba/abajo por ancho, costados por
+    // alto. La copia canónica (COTAP-8003, decisión del 2026-08-19) cobra así;
+    // otras copias tienen la fila «ALTO» rota (copia el total de la de ancho).
     expect(rieles).toHaveLength(2);
-    for (const r of rieles) expect(r.cantidad).toEqual({ tipo: 'sumaAnchos', factor: 2 });
-    // El zuncho lleva el x4 dos veces.
+    expect(rieles[0].cantidad).toEqual({ tipo: 'sumaAnchos', factor: 2 });
+    expect(rieles[1].cantidad).toEqual({ tipo: 'sumaAltos', factor: 2 });
+    // El zuncho lleva el x4 dos veces: ese error SÍ está en la copia canónica
+    // y se replica a propósito.
     const zuncho = receta.find((l) => l.insumo === 'SML38');
     expect(zuncho?.cantidad).toEqual({ tipo: 'sumaAltos', factor: 16 });
     // Las tres telas comparten la misma lista.
