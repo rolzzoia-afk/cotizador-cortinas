@@ -18,6 +18,11 @@ const CAMPOS_PROPIOS_DEL_PANO = [
   'alto',
   'cierreAlturaCm',
   'comentarioFinal',
+  // Girar el paño depende del ancho de ESA cortina y de su conjunto: lo fuerza
+  // `juntarVentanas` en los miembros y si no, lo decide el optimizador solo. Un
+  // `true` heredado gana sobre esa decisión y corta rotada una cortina que no
+  // lo necesita, gastando tela de más.
+  'invertida',
   // Medidas de terreno de los sistemas con perfiles: son de esa ventana.
   'perfilIzqMuroCm',
   'perfilIzqPisoCm',
@@ -53,6 +58,9 @@ const CAMPOS_PROPIOS_DE_LA_VENTANA = [
   'precio',
   'subtotal',
   'panos',
+  // La forma es de la ventana física, no de la ficha: replicar una bow window
+  // en cortinas rectas les estamparía «BOW WINDOW» en el informe y el corte.
+  'formaVentana',
 ] as const satisfies readonly (keyof Ventana)[];
 
 /** La ficha de un paño sin lo que es propio de su ventana. */

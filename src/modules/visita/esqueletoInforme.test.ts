@@ -99,6 +99,22 @@ describe('esqueletoInforme — datos de cada cortina', () => {
     expect(out).toContain('Tipo de Cortina: ROLLER BLACKOUT BK 73 EVEREST (1 paño entero)');
   });
 
+  it('la ventana en ángulo se nombra: el cliente aprueba una cortina especial', () => {
+    const out = esqueletoInforme([
+      ventana({ formaVentana: 'bow', panos: [pano(), pano(), pano()] }),
+    ]);
+    expect(out).toContain('Tipo de Cortina: ROLLER BLACKOUT BK 73 EVEREST (3 paños) — BOW WINDOW');
+  });
+
+  it('dos cortinas iguales de forma distinta NO se colapsan en una línea', () => {
+    const out = esqueletoInforme([
+      ventana({ ubicacion: 'Living', formaVentana: 'bow' }),
+      ventana({ ubicacion: 'Living' }),
+    ]);
+    expect(out).not.toContain('(×2)');
+    expect(out.match(/Tipo de Cortina/g)).toHaveLength(2);
+  });
+
   it('una cortina de 2 paños lo dice (suma un paso de luz al centro)', () => {
     const out = esqueletoInforme([ventana({ panos: [pano(), pano()] })]);
     expect(out).toContain('(2 paños)');

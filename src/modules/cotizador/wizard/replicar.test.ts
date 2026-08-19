@@ -67,6 +67,16 @@ describe('replicarConfiguracion', () => {
     expect(out.grupoOrden).toBe(2);
   });
 
+  it('la forma de la ventana es física: no se replica ni pisa la del destino', () => {
+    const o = vent({ formaVentana: 'bow' });
+    // Una cortina recta no debe terminar rotulada «BOW WINDOW» en el informe.
+    expect(replicarConfiguracion(o, vent({ id: 'v2' })).formaVentana).toBeFalsy();
+    // Y una que SÍ es especial conserva la suya.
+    expect(
+      replicarConfiguracion(vent(), vent({ id: 'v2', formaVentana: 'ele' })).formaVentana,
+    ).toBe('ele');
+  });
+
   it('el precio del destino no se toca: lo recalcula la cotización', () => {
     const destino = vent({ id: 'v2', precio: 0 });
     expect(replicarConfiguracion(origen, destino).precio).toBe(0);
@@ -76,6 +86,14 @@ describe('replicarConfiguracion', () => {
     const o = vent({}, [pano({ cierreAlturaCm: 4 })]);
     const destino = vent({ id: 'v2' }, [pano({ cierreAlturaCm: 7 })]);
     expect(replicarConfiguracion(o, destino).panos[0].cierreAlturaCm).toBe(7);
+  });
+
+  it('el giro del corte no se replica: depende del ancho y del conjunto propios', () => {
+    // Un `invertida: true` heredado gana sobre la decisión del optimizador y
+    // cortaría rotada una cortina que no lo necesita.
+    const o = vent({}, [pano({ invertida: true } as never)]);
+    const destino = vent({ id: 'v2' }, [pano()]);
+    expect(replicarConfiguracion(o, destino).panos[0].invertida).toBeFalsy();
   });
 
   it('el comentario para el taller es de esa cortina: no se replica', () => {

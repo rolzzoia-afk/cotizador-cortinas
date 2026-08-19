@@ -42,6 +42,7 @@ import {
   type CadenaInsumo,
 } from './cadenas';
 import { esCenefaCuadrada } from './fase2';
+import { rotuloForma } from './wizard/selectorVentanas';
 import {
   categoriaRequiereMecanismo,
   chipMecanismoPorNumero,
@@ -517,6 +518,7 @@ export function notasTerreno(ventanas: Ventana[]): NotaTerreno[] {
   const out: NotaTerreno[] = [];
   for (const v of ventanas) {
     const panos = v.panos || [];
+    const rotuloVentana = rotuloForma(v) ? `(${rotuloForma(v)})` : '';
     panos.forEach((p, i) => {
       const partes: string[] = [];
       const retiro = Number(p.retiro) || 0;
@@ -533,7 +535,11 @@ export function notasTerreno(ventanas: Ventana[]): NotaTerreno[] {
       if (p.comentarioFinal) partes.push(`Nota: ${p.comentarioFinal}`);
       if (partes.length === 0) return;
       out.push({
-        ubic: ubicPanoVentana(v.ubicacion || '', i, panos.length),
+        // Mismo rótulo de ventana en ángulo que la hoja de corte: si una tabla
+        // dice «(BOW WINDOW)» y la otra no, parecen dos cortinas distintas.
+        ubic: [ubicPanoVentana(v.ubicacion || '', i, panos.length), rotuloVentana]
+          .filter(Boolean)
+          .join(' '),
         notas: partes.join(' · '),
       });
     });

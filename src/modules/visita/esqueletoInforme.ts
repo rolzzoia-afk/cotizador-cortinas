@@ -22,6 +22,7 @@ import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { rotuloForma } from '@/modules/cotizador/wizard/selectorVentanas';
 import { esUrlFotoSegura, lineaFoto } from './imagenesInforme';
 import {
   INTROS_INFORME_DEFAULT,
@@ -66,7 +67,11 @@ function textoTipo(v: Ventana): string {
   const base = partes.join(' ');
   const n = (v.panos ?? []).length;
   const panos = n > 1 ? `(${n} paños)` : n === 1 ? '(1 paño entero)' : '';
-  return [base || '(sin producto)', panos].filter(Boolean).join(' ');
+  // La ventana en ángulo se nombra en el informe: el cliente aprueba una
+  // cortina que se fabrica distinto, y sus paños no son cortinas separadas.
+  const forma = rotuloForma(v);
+  const linea = [base || '(sin producto)', panos].filter(Boolean).join(' ');
+  return forma ? `${linea} — ${forma}` : linea;
 }
 
 /** Caída: sentido de la cortina + si va dentro o fuera del marco. */
@@ -105,7 +110,7 @@ function textoExtras(p: Pano | undefined): string[] {
 }
 
 /** Ventanas agrupadas por ubicación, respetando el orden en que fueron cargadas. */
-function porUbicacion(
+export function porUbicacion(
   ventanas: Ventana[],
 ): Array<{ ubicacion: string; ventanas: Ventana[] }> {
   const orden: string[] = [];

@@ -34,6 +34,8 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import { useOTs } from '@/modules/ots/hooks';
+import { resolverNumeroOT } from '@/modules/ots/numeroOT';
+import { puertoSupabaseNumeroOT } from '@/modules/ots/numeroOTStore';
 import {
   calcularPorcentaje,
   colorProgreso,
@@ -74,7 +76,7 @@ const CANALES = [
 
 export function Panel() {
   const navigate = useNavigate();
-  const { empresaNombre } = useAuth();
+  const { empresaNombre, empresaId } = useAuth();
   const {
     ots,
     loading,
@@ -156,7 +158,7 @@ export function Panel() {
 
   const handleCrear = async () => {
     const cliente = (nuevoForm.cliente || '').trim();
-    const numeroOT = (nuevoForm.ot || '').trim();
+    let numeroOT = (nuevoForm.ot || '').trim();
     if (!cliente && !numeroOT) {
       toast.error('Ingresa al menos cliente o número de OT');
       return;
@@ -164,6 +166,12 @@ export function Panel() {
     setCreando(true);
     const aTerreno = destinoNueva === 'terreno';
     try {
+      // Terreno: la OT nace con folio, igual que en Fase 1 — el tecleado (si no
+      // está repetido) o el correlativo del mes. Sin esto la orden viajaba a la
+      // casa del cliente sin número y no había cómo nombrarla por teléfono.
+      if (aTerreno && empresaId) {
+        numeroOT = await resolverNumeroOT(puertoSupabaseNumeroOT, empresaId, numeroOT);
+      }
       const ot = await crearOT(
         { ...nuevoForm, cliente, ot: numeroOT },
         aTerreno ? 'terreno' : 'cotizacion',
@@ -179,7 +187,8 @@ export function Panel() {
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      toast.error('Error al crear: ' + msg);
+      // El número repetido ya trae su mensaje escrito para el usuario.
+      toast.error(msg.startsWith('Ya existe una OT') ? msg : 'Error al crear: ' + msg);
     } finally {
       setCreando(false);
     }
@@ -496,8 +505,13 @@ export function Panel() {
               <Input
                 value={nuevoForm.ot || ''}
                 onChange={(e) => setNuevoForm((f) => ({ ...f, ot: e.target.value }))}
-                placeholder="2913"
+                placeholder={destinoNueva === 'terreno' ? 'vacío = automático' : '2913'}
               />
+              {destinoNueva === 'terreno' && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Déjalo vacío y la OT toma el correlativo del mes.
+                </p>
+              )}
             </div>
             <div>
               <Label>Fecha</Label>
