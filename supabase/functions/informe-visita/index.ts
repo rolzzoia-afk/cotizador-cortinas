@@ -1,13 +1,17 @@
 // Edge Function: informe-visita
 //
-// Recibe { otId, audioPath } desde Fase 2, baja el audio de la visita del
-// bucket privado `visitas`, lo transcribe y le pide a Claude que redacte el
-// INFORME CLIENTE con esa transcripción más los datos reales de la OT.
+// Recibe { otId, audioPath, esqueleto? } desde Fase 2, baja el audio de la
+// visita del bucket privado `visitas`, lo transcribe y le pide a Claude que
+// redacte el INFORME CLIENTE.
+//
+// Con `esqueleto`, el modelo COMPLETA una estructura que la app ya armó con los
+// datos reales de la orden, en vez de redactar desde cero: así no puede
+// equivocar una tela ni un código en un documento que el cliente aprueba.
 //
 // El vendedor puede editar el texto después: esto es un borrador que le ahorra
 // escribir, no la última palabra.
 //
-// Secrets: ANTHROPIC_API_KEY (ya existe) y GROQ_API_KEY (nuevo).
+// Secrets: ANTHROPIC_API_KEY y GROQ_API_KEY.
 
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
