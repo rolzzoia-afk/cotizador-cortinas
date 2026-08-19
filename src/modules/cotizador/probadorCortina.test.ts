@@ -416,4 +416,18 @@ describe('casos borde: el banco no explota', () => {
     expect(r.kit).toBe('VELCRO');
     expect(r.reglaKit).toContain('velcro');
   });
+
+  it('la pletina no lleva cadena: el paño va pegado, no sube ni baja', () => {
+    const cadenas = [
+      { cod: 'CAD06', nemotecnico: 'CADENA INFINITA 4 METROS BLANCA', color: 'BLANCO', status: 'OK' },
+    ];
+    const r = resolverCortinaDePrueba(
+      { categoria: 'PLETINA_ROLLER_V', anchoM: 1.5, altoM: 2.4, color: 'BCO' },
+      { modelos: CATALOGO, cadenas },
+    );
+    expect(r.cadena).toBeNull();
+    expect(r.reglaCadena).toBe('el velcro no lleva cadena: el paño va pegado');
+    // Y no se avisa que "falta" una cadena en el inventario: no se busca ninguna.
+    expect(r.avisos.some((a) => a.includes('cadena de este largo'))).toBe(false);
+  });
 });

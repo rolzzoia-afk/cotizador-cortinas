@@ -47,7 +47,7 @@ import {
   type VarianteOscuridad,
 } from '@/modules/descuentos/reglas-oscuridad';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
-import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { codigoEstructura } from '@/modules/descuentos/codigos-estructura';
 import { insumosDePano, type InsumoCortina } from './insumosCortina';
 import {
@@ -203,8 +203,11 @@ export function resolverCortinaDePrueba(
       : tuberiaParaPano(anchoM, modelo, '', opc.tuberiaUI, categoria, reglas.tuberia, lineaB) || '';
   const tuberiaCod = codigoTuberiaDeChip(tubo);
 
-  // ── Cadena automática por alto + color, contra el inventario
-  const codCadena = codCadenaAutoPorAlto(altoM, color, categoria, cadenas, reglas.tipos, reglas.cadenas);
+  // ── Cadena automática por alto + color, contra el inventario. La PLETINA
+  //    (velcro) queda fuera: el paño va pegado, no sube ni baja.
+  const codCadena = esCategoriaPletina(categoria, reglas.tipos)
+    ? null
+    : codCadenaAutoPorAlto(altoM, color, categoria, cadenas, reglas.tipos, reglas.cadenas);
   const cadena = codCadena
     ? (() => {
         const d = derivarLargoColor(codCadena, cadenas, reglas.cadenas);
@@ -212,7 +215,12 @@ export function resolverCortinaDePrueba(
       })()
     : null;
   const reglaCadena = explicarCadena(altoM, color, categoria, reglas, !!cadena);
-  if (!cadena && cadenas.length > 0 && categoriaRequiereMecanismo(categoria, reglas.mecanismo)) {
+  if (
+    !cadena &&
+    cadenas.length > 0 &&
+    !esCategoriaPletina(categoria, reglas.tipos) &&
+    categoriaRequiereMecanismo(categoria, reglas.mecanismo)
+  ) {
     avisos.push(
       'No hay en el inventario una cadena de este largo y color: la elige el vendedor en Fase 2.',
     );
@@ -322,6 +330,10 @@ function explicarCadena(
 ): string {
   if (esCategoriaVertical(categoria)) {
     return `vertical: cadena fija de ${reglas.cadenas.verticalLargo === '3mts' ? '3 m' : reglas.cadenas.verticalLargo}`;
+  }
+  // El velcro tiene mecanismo (VELCRO) pero es un paño PEGADO: no sube ni baja.
+  if (esCategoriaPletina(categoria, reglas.tipos)) {
+    return 'el velcro no lleva cadena: el paño va pegado';
   }
   if (!categoriaRequiereMecanismo(categoria, reglas.mecanismo)) {
     return 'esta cortina no lleva cadena';

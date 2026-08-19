@@ -51,7 +51,11 @@ import {
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0, esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
-import { esCategoriaVertical, mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  esCategoriaPletina,
+  esCategoriaVertical,
+  mecLineaB,
+} from '@/modules/descuentos/reglas-mecanismo';
 import { categoriaTieneLineaB, esLineaB, gamaTelaEsB } from '@/modules/cotizador/lineaB';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
 import { categoriasParaSelect, type TipoCortina } from '@/modules/descuentos/tiposCortina';
@@ -960,6 +964,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     if ('categoria' in patch && esCategoriaVertical(patch.categoria)) {
       conDct = { ...conDct, sentido: '' };
     }
+    // PLETINA (velcro): el paño va PEGADO, no se enrolla ni lleva cadena. Se
+    // limpian las dos: sin cadena no hay lado de accionamiento (DIRECC.) y sin
+    // enrollado no hay caída (SENT.). Las dos celdas pasan a mostrar "—".
+    if ('categoria' in patch && esCategoriaPletina(patch.categoria, reglas.tipos)) {
+      conDct = { ...conDct, direccion: '', sentido: '' };
+    }
     setFilas((prev) => {
       const fila = prev.find((f) => f.id === id);
       const vid = fila?.vid;
@@ -1038,6 +1048,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // SENT. CORT es la caída del enrollado (INTERNO/EXTERNO). En oscuridad la
         // caída es INTERNO fija y la variante (interno/semi/externo) se elige en Fase 2.
         sentidos: new Set(SENTIDOS),
+        tipos: reglas.tipos,
+        // Fase 1 no muestra COD SEC / DIRECC. / SENT.: no se exigen. Marcarlas
+        // dejaba la planilla mínima de entrada trabada — la celda roja no se
+        // puede corregir sin su columna, y el guardado se bloquea con errores.
+        modo,
       };
 
       // ── Cortinas ──
@@ -1053,16 +1068,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         const categoria =
           canonizar(c.categoria, categoriasSelect) || categoriaImplicita(c.codInt);
         const esBeeblack = esCategoriaBeeblack(categoria);
-        const direccion = canonizar(
-          c.direccion,
-          esBeeblack ? DIRECCIONES_BEEBLACK : DIRECCIONES,
-        );
+        // PLETINA (velcro): paño pegado, sin cadena ni enrollado → ni dirección
+        // ni caída, aunque la planilla traiga algo escrito en esas columnas.
+        const esPletina = esCategoriaPletina(categoria, reglas.tipos);
+        const direccion = esPletina
+          ? ''
+          : canonizar(c.direccion, esBeeblack ? DIRECCIONES_BEEBLACK : DIRECCIONES);
         // Caída (SENT. CORT): la vertical no se enrolla → vacío. Los sistemas de
         // oscuridad SIEMPRE caen INTERNO (aunque el Excel traiga otra cosa; la
         // variante interno/semi/externo se elige en Fase 2). El beeblack tampoco
         // se enrolla: su variante también se elige en Fase 2. Resto: del Excel.
         const sentido =
-          esCategoriaVertical(categoria) || esBeeblack
+          esCategoriaVertical(categoria) || esBeeblack || esPletina
             ? ''
             : esCategoriaOscuridad(categoria, reglas.tipos)
               ? CAIDA_OSCURIDAD
@@ -1581,27 +1598,45 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 const prod = f.codInt ? catalogo[f.codInt.trim()] : undefined;
                 const ln = lineaDeFila.get(f.id);
                 const errs = erroresImport.get(f.id);
+                // PLETINA (velcro): paño pegado, sin cadena ni enrollado → las dos
+                // columnas de accionamiento/caída no aplican y se muestran "—".
+                const esPletinaFila = esCategoriaPletina(f.categoria, reglas.tipos);
                 return (
                   <tr key={f.id} className="border-t border-border align-middle">
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
                     {showCols && (
                       <>
                         <Td><SelectCell value={f.categoria} onChange={(v) => setFila(f.id, esCategoriaOscuridad(v, reglas.tipos) ? { categoria: v, sentido: CAIDA_OSCURIDAD } : { categoria: v })} opciones={categoriasSelect} invalido={errs?.has('categoria')} /></Td>
-                        {/* El beeblack no lleva cadena: su cierre corre de lado o
-                            de arriba abajo (lista propia de su planilla). */}
-                        <Td><SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={esCategoriaBeeblack(f.categoria) ? DIRECCIONES_BEEBLACK : DIRECCIONES} invalido={errs?.has('direccion')} /></Td>
+                        <Td>
+                          {/* La pletina va pegada con velcro: sin cadena no hay
+                              lado de accionamiento que elegir. El beeblack sí lo
+                              tiene, pero con su lista propia: su cierre corre de
+                              lado o de arriba abajo, no lleva cadena. */}
+                          {esPletinaFila ? (
+                            <span
+                              className="text-muted-foreground"
+                              title="La cortina de velcro no lleva cadena: no tiene lado de accionamiento"
+                            >
+                              —
+                            </span>
+                          ) : (
+                            <SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={esCategoriaBeeblack(f.categoria) ? DIRECCIONES_BEEBLACK : DIRECCIONES} invalido={errs?.has('direccion')} />
+                          )}
+                        </Td>
                         <Td>
                           {/* SENT. CORT = caída del enrollado (armado tela/tubo).
                               La vertical no se enrolla → sin caída. Los sistemas de
                               oscuridad SIEMPRE caen INTERNO (la variante interno/semi/
                               externo se elige en Fase 2). Resto: INTERNO/EXTERNO. */}
-                          {esCategoriaVertical(f.categoria) || esCategoriaBeeblack(f.categoria) ? (
+                          {esCategoriaVertical(f.categoria) || esCategoriaBeeblack(f.categoria) || esPletinaFila ? (
                             <span
                               className="text-muted-foreground"
                               title={
                                 esCategoriaBeeblack(f.categoria)
                                   ? 'El beeblack no se enrolla; su variante de instalación se elige en Fase 2'
-                                  : 'La cortina vertical no tiene sentido de caída'
+                                  : esPletinaFila
+                                    ? 'La cortina de velcro no se enrolla: el paño va pegado'
+                                    : 'La cortina vertical no tiene sentido de caída'
                               }
                             >
                               —

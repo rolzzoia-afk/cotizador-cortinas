@@ -22,7 +22,6 @@ import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
 import { SUB_ETAPA_META } from '@/modules/cotizador/fase4';
-import { formatCLP } from '@/modules/cotizador/calculos';
 import {
   asignarJuntoEnOrden,
   buildOptimizerRows,
@@ -705,10 +704,14 @@ export function CotizadorFase4() {
         <div className="mb-4 grid gap-3 sm:grid-cols-3">
           <Card label="Ventanas" value={String(ventanasCount)} hint="en esta OT" />
           <Card label="Paños totales" value={String(totalPanos)} hint="suma de paños" />
+          {/* Fase 4 es la hoja del TALLER: nada de plata. El total c/IVA es dato
+              comercial (vive en Fase 1 y Fase 3) y esta pantalla se imprime y se
+              pasea por el galpón. Lo que sí necesita producción es la fecha de
+              entrega: es la que ordena el CORRELATIVO del plan de corte. */}
           <Card
-            label="Total c/IVA"
-            value={formatCLP(ot.totalConIva || 0)}
-            hint={ot.datosGenerales.fechaEntrega ? `Entrega: ${ot.datosGenerales.fechaEntrega}` : '—'}
+            label="Fecha de entrega"
+            value={ot.datosGenerales.fechaEntrega || '—'}
+            hint="ordena la prioridad de corte"
           />
         </div>
 

@@ -32,7 +32,11 @@ import {
   normalizarInstalacionBeeblack,
   normalizarVarianteBeeblack,
 } from '@/modules/descuentos/reglas-beeblack';
-import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  categoriaLlevaCadenaRoller,
+  esCategoriaPletina,
+  esCategoriaVertical,
+} from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
@@ -320,11 +324,16 @@ export function construirCalculoGeneral(
         }
       }
 
-      const codCadena = (p.codCadena as string) || '';
-      const largoCadena = String(p.largoCadena ?? '');
-      const codPeso = (p.codPeso as string) || '';
+      // Cadena y peso solo en los sistemas que llevan cadena de roller. Una OT
+      // vieja puede traerlos guardados en un paño de PLETINA (velcro) —el paño va
+      // pegado, no sube ni baja—: si igual se imprimieran, el taller buscaría una
+      // cadena que la hoja de inventario ya no pide.
+      const llevaCadena = categoriaLlevaCadenaRoller(v.categoria, reglas.tipos);
+      const codCadena = llevaCadena ? (p.codCadena as string) || '' : '';
+      const largoCadena = llevaCadena ? String(p.largoCadena ?? '') : '';
+      const codPeso = llevaCadena ? (p.codPeso as string) || '' : '';
       // Color PROPIO del peso de cadena (PCA04→TRANSPARENTE), no el de accesorios.
-      const colorPeso = colorPesoCadena(p);
+      const colorPeso = llevaCadena ? colorPesoCadena(p) : '';
       const manillaCant = Number(p.manillaCant) || 0;
       // COD MECANISMO = el kit que entrega bodega, resuelto con el MISMO motor
       // que la hoja de Fase 4 (regla de categoría → kit inventario por color

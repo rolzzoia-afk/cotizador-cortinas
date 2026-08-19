@@ -18,6 +18,7 @@ import {
 } from '@/modules/descuentos/reglasSeleccion';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import {
+  categoriaLlevaCadenaRoller,
   categoriaRequiereMecanismo,
   kitTraeCadenaIncorporada,
 } from '@/modules/descuentos/reglas-mecanismo';
@@ -80,6 +81,18 @@ export function codTelaDePaso(ctx: CtxPaso): string {
 function requiereMecanismo(ctx: CtxPaso): boolean {
   const c = txt(ctx.ventana.categoria);
   return !!c && categoriaRequiereMecanismo(c, reglasDe(ctx).mecanismo);
+}
+
+/**
+ * ¿Hay algo que preguntar sobre el accionamiento? La PLETINA (velcro) tiene
+ * mecanismo —VELCRO— pero es un paño PEGADO: no sube ni baja, así que no lleva
+ * cadena, ni peso de cadena, ni lado de mando.
+ */
+function requiereAccionamiento(ctx: CtxPaso): boolean {
+  return (
+    requiereMecanismo(ctx) &&
+    categoriaLlevaCadenaRoller(txt(ctx.ventana.categoria), reglasDe(ctx).tipos)
+  );
 }
 
 function esDuo(ctx: CtxPaso): boolean {
@@ -147,7 +160,7 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     titulo: 'Cadena o motor',
     ayuda: 'Cómo se sube y se baja la cortina, y por qué lado queda el mando.',
     pieza: 'accionamiento',
-    aplica: (ctx) => requiereMecanismo(ctx),
+    aplica: (ctx) => requiereAccionamiento(ctx),
     campos: (ctx) => {
       if (panoLlevaMotor(ctx.pano)) {
         return [

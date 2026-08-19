@@ -145,6 +145,24 @@ describe('calcularBOM', () => {
     expect(bom.filter((i) => i.categoria === 'CADENA')).toHaveLength(0);
   });
 
+  it('PLETINA (velcro): sin cadena ni peso, aunque el paño los traiga guardados', () => {
+    // El paño va PEGADO: no sube ni baja. `fase0-sync` rellena `colorPeso`/
+    // `colorCadena` a TODOS, y una OT vieja puede arrastrar un `codCadena`.
+    for (const categoria of ['PLETINA_ROLLER_V', 'PLETINA_DUO_V']) {
+      const ventanas = [{
+        id: 1,
+        categoria,
+        color: 'Blanco',
+        panos: [{ ancho: 1.5, alto: 1.8, color: 'Blanco' }],
+      }];
+      const bom = calcularBOM(
+        [row({ color: 'Blanco', codCadena: 'CAD03', colorCadena: 'BCO', codPeso: 'PCA04', colorPeso: 'BCO' })],
+        ventanas as Parameters<typeof calcularBOM>[1],
+      );
+      expect(bom.filter((i) => i.categoria === 'CADENA')).toHaveLength(0);
+    }
+  });
+
   it('VERTICAL negro: peso cordón + peso cadena son VER64 → una línea consolidada ×2', () => {
     const ventanas = [{
       id: 1,

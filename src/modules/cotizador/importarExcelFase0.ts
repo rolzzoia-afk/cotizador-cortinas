@@ -11,13 +11,19 @@
 // sentido, cantidad, ubicación, color, ancho y alto). Las columnas
 // derivadas del catálogo (COD, PRODUCTO, TIPO, DESCRIPCIÓN) se ignoran.
 //
+// El PARSEO lee todas las columnas que encuentre; lo que cambia por fase es qué
+// se EXIGE (ver `validarFilaFase0` y su opción `modo`): en Fase 1 la grilla no
+// muestra COD SEC / DIRECC. CAD-CIERRE / SENT. CORT —se capturan en Terreno—, así
+// que una planilla mínima (COD_INT, UBIC., ANCHO, ALTO) entra sin nada en rojo.
+//
 // ANCHO y ALTO vienen en METROS, en formato es-CL (coma decimal: "2,720").
 //
 // Lógica pura (sin React/Supabase) para poder testearla.
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
-import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 
 export type FilaImportadaFase0 = {
   codInt: string;
@@ -263,33 +269,55 @@ export type OpcionesValidacion = {
   sentidos: Set<string>;
   /** Direcciones válidas de BEEBLACK (IZQUIERDA-DERECHA / DE ARRIBA ABAJO / …). */
   direccionesBeeblack?: Set<string>;
+  /** Tipos de cortina del catálogo, para resolver las categorías propias. */
+  tipos?: readonly TipoCortina[];
+  /**
+   * Modo de la grilla que va a mostrar los errores. Fase 1 OCULTA las columnas
+   * COD SEC / DIRECC. CAD-CIERRE / SENT. CORT (se capturan en Terreno), así que
+   * ahí no se exigen: marcarlas dejaba la importación trabada — la celda roja no
+   * se puede corregir porque su columna no está en pantalla, y el guardado se
+   * bloquea mientras queden errores. Default 'fase3' (se exige todo).
+   */
+  modo?: 'fase1' | 'fase3';
 };
 
 /**
  * Devuelve la lista de campos llave inválidos de una fila (vacía = fila OK).
  * Se usa para pintar en rojo las celdas a corregir a mano tras importar.
  *
- * SENT. CORT no aplica ni a la cortina VERTICAL ni al BEEBLACK: el interno/
- * externo describe la caída del enrollado del roller, la vertical corre de lado
- * con carritos y el beeblack elige su variante de instalación en Fase 2. En esas
+ * Solo se exige lo que la grilla MUESTRA: en Fase 1 el mecanismo, la dirección
+ * y la caída no están en pantalla (ver `modo`), así que la planilla mínima de
+ * entrada —COD_INT, UBIC., ANCHO y ALTO— importa sin dejar nada en rojo.
+ *
+ * SENT. CORT no aplica a la cortina VERTICAL, al BEEBLACK ni a la PLETINA
+ * (velcro): el interno/externo describe la caída del enrollado del roller, la
+ * vertical corre de lado con carritos, el beeblack elige su variante de
+ * instalación en Fase 2 y el paño de velcro va pegado, no se enrolla. En esas
  * filas el campo no se exige (y la grilla lo muestra como "—").
  *
- * El BEEBLACK además tiene su propia lista de cierres (corre de lado o de arriba
- * abajo), distinta de las cadenas/cierres del roller.
+ * DIRECC. CAD/CIERRE tampoco aplica a la PLETINA: sin cadena no hay lado de
+ * accionamiento. El BEEBLACK sí la lleva, pero con su propia lista de cierres
+ * (corre de lado o de arriba abajo), distinta de las cadenas del roller.
  */
 export function validarFilaFase0(f: FilaImportadaFase0, opts: OpcionesValidacion): CampoFase0[] {
   const malos: CampoFase0[] = [];
-  const esBeeblack = esCategoriaBeeblack(f.categoria);
-  const direcciones = esBeeblack ? (opts.direccionesBeeblack ?? opts.direcciones) : opts.direcciones;
   if (!f.codInt || !opts.codIntValidos.has(f.codInt)) malos.push('codInt');
-  if (!f.categoria || !opts.categorias.has(f.categoria)) malos.push('categoria');
-  if (!f.direccion || !direcciones.has(f.direccion)) malos.push('direccion');
-  if (
-    !esCategoriaVertical(f.categoria) &&
-    !esBeeblack &&
-    (!f.sentido || !opts.sentidos.has(f.sentido))
-  ) {
-    malos.push('sentido');
+  if (opts.modo !== 'fase1') {
+    const esBeeblack = esCategoriaBeeblack(f.categoria);
+    const esPletina = esCategoriaPletina(f.categoria, opts.tipos);
+    const direcciones = esBeeblack
+      ? (opts.direccionesBeeblack ?? opts.direcciones)
+      : opts.direcciones;
+    if (!f.categoria || !opts.categorias.has(f.categoria)) malos.push('categoria');
+    if (!esPletina && (!f.direccion || !direcciones.has(f.direccion))) malos.push('direccion');
+    if (
+      !esCategoriaVertical(f.categoria) &&
+      !esBeeblack &&
+      !esPletina &&
+      (!f.sentido || !opts.sentidos.has(f.sentido))
+    ) {
+      malos.push('sentido');
+    }
   }
   if (!(f.ancho > 0)) malos.push('ancho');
   if (!(f.alto > 0)) malos.push('alto');

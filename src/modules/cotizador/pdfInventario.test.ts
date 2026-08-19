@@ -129,6 +129,20 @@ describe('construirInventario', () => {
     const d = construirInventario([v]); // sin catálogo de cadenas
     expect(d.insumos.some((i) => (i.codigo || '').startsWith('CAD'))).toBe(false);
   });
+
+  it('PLETINA (velcro): ni cadena ni peso de cadena, aunque el paño los traiga', () => {
+    // El velcro tiene mecanismo (VELCRO) pero el paño va PEGADO: no sube ni baja.
+    // Ojo: el peso se emite EN VIVO (no depende del `codPeso` guardado), así que
+    // sin este gate la hoja pedía un PCA04 que nadie usa.
+    const v = ventana('LIVING', 1.5, 2.0);
+    (v as { categoria: string }).categoria = 'PLETINA_ROLLER_V';
+    const cadenas = [
+      { cod: 'CAD05', nemotecnico: 'CADENA INFINITA 4 METROS NEGRA', color: 'NEGRO', status: 'OK' },
+    ];
+    const d = construirInventario([v], {}, undefined, cadenas);
+    expect(d.insumos.some((i) => (i.codigo || '').startsWith('CAD'))).toBe(false);
+    expect(d.insumos.some((i) => (i.codigo || '').startsWith('PCA'))).toBe(false);
+  });
 });
 
 // Las manillas se consolidan por color al inicio del bloque INSUMOS, seguidas

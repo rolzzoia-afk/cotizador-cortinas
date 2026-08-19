@@ -109,10 +109,22 @@ describe('pasosAplicables', () => {
     ]);
   });
 
-  it('la pletina SÍ lleva mecanismo: no se salta ningún paso', () => {
+  it('la pletina lleva mecanismo (VELCRO) pero NO accionamiento', () => {
     // De fábrica solo la vertical y el beeblack van sin kit, y ninguna de las
-    // dos tiene vista guiada: en el wizard el paso siempre aparece.
-    expect(idsAplicables(ctxDe(ventLlena({ categoria: 'PLETINA_ROLLER_V' })))).toContain('mecanismo');
+    // dos tiene vista guiada: el paso de mecanismo siempre aparece. El de
+    // accionamiento no: el paño va PEGADO, no sube ni baja, así que no hay
+    // cadena, ni peso de cadena, ni lado de mando que preguntar.
+    const ids = idsAplicables(ctxDe(ventLlena({ categoria: 'PLETINA_ROLLER_V' })));
+    expect(ids).toContain('mecanismo');
+    expect(ids).not.toContain('accionamiento');
+    expect(ids).toContain('tela');
+  });
+
+  it('el wizard de la pletina nunca pide MENOS que el gate de Fase 2', () => {
+    // Misma paridad que el resto: si se completan los pasos, la ventana no
+    // puede quedar bloqueando el paso a Fase 3.
+    const v = ventLlena({ categoria: 'PLETINA_ROLLER_V' }, { codCadena: '', codPeso: '' });
+    expect(pendientesFase2([v])).toEqual([]);
   });
 
   it('si Admin marca una categoría «sin mecanismo», el wizard se salta ese paso', () => {

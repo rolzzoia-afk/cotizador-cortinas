@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REGLAS_MECANISMO,
+  categoriaLlevaCadenaRoller,
   categoriaRequiereMecanismo,
   kitTraeCadenaIncorporada,
   colorConBandaAncho,
@@ -177,5 +178,50 @@ describe('kitTraeCadenaIncorporada (MEC 06, 2026-08-14)', () => {
     expect(kitTraeCadenaIncorporada('KIT B [MEC 44]')).toBe(false);
     expect(kitTraeCadenaIncorporada('')).toBe(false);
     expect(kitTraeCadenaIncorporada(undefined)).toBe(false);
+  });
+});
+
+describe('categoriaLlevaCadenaRoller', () => {
+  it('el roller y el dúo llevan cadena de roller', () => {
+    expect(categoriaLlevaCadenaRoller('ROL')).toBe(true);
+    expect(categoriaLlevaCadenaRoller('ROL_DUAL')).toBe(true);
+    expect(categoriaLlevaCadenaRoller('DUO_MANUAL_38mm')).toBe(true);
+    expect(categoriaLlevaCadenaRoller('SOFT_LIGHT_38')).toBe(true);
+  });
+
+  it('la VERTICAL no: tiene la suya (CAD04/CAD06 de 3 m + peso VER)', () => {
+    expect(categoriaLlevaCadenaRoller('VERTICAL')).toBe(false);
+  });
+
+  it('el BEEBLACK no: corre de lado con manilla', () => {
+    expect(categoriaLlevaCadenaRoller('BEEBLACK')).toBe(false);
+  });
+
+  it('la PLETINA (velcro) no: el paño va pegado, no sube ni baja', () => {
+    expect(categoriaLlevaCadenaRoller('PLETINA_ROLLER_V')).toBe(false);
+    expect(categoriaLlevaCadenaRoller('PLETINA_DUO_V')).toBe(false);
+  });
+
+  it('un tipo PROPIO con base pletina también queda fuera (resuelve por `tipos`)', () => {
+    const tipos = [
+      {
+        categoria: 'VELCRO_COCINA',
+        nombre: 'Velcro cocina',
+        grupo: 'Pletina',
+        base: 'PLETINA_ROLLER_V',
+        activo: true,
+      },
+    ];
+    expect(categoriaLlevaCadenaRoller('VELCRO_COCINA', tipos)).toBe(false);
+    // Sin el catálogo de tipos no se puede resolver: cae a "lleva" (roller normal).
+    expect(categoriaLlevaCadenaRoller('VELCRO_COCINA')).toBe(true);
+  });
+
+  it('categoría VACÍA = roller normal: una fila sin ventana asociada lleva cadena', () => {
+    // El gate es por nombre y NO por `categoriaRequiereMecanismo` justamente por
+    // esto (esa devuelve false para categoría vacía).
+    expect(categoriaLlevaCadenaRoller('')).toBe(true);
+    expect(categoriaLlevaCadenaRoller(undefined)).toBe(true);
+    expect(categoriaLlevaCadenaRoller(null)).toBe(true);
   });
 });
