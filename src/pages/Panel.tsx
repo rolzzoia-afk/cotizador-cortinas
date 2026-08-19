@@ -34,7 +34,8 @@ import {
 } from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import { useOTs } from '@/modules/ots/hooks';
-import { puertoSupabaseNumeroOT, resolverNumeroOT } from '@/modules/ots/numeroOT';
+import { resolverNumeroOT } from '@/modules/ots/numeroOT';
+import { puertoSupabaseNumeroOT } from '@/modules/ots/numeroOTStore';
 import {
   calcularPorcentaje,
   colorProgreso,

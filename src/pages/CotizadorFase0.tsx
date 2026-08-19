@@ -27,7 +27,8 @@ import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { categoriaEsDual, modelosParaCategoria } from '@/modules/descuentos/tipos';
 import { otToRow } from '@/modules/ots/mappers';
 import { useOT } from '@/modules/ots/hooks';
-import { puertoSupabaseNumeroOT, resolverNumeroOT } from '@/modules/ots/numeroOT';
+import { resolverNumeroOT } from '@/modules/ots/numeroOT';
+import { puertoSupabaseNumeroOT } from '@/modules/ots/numeroOTStore';
 import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
 import {
   cotizarFase0,
