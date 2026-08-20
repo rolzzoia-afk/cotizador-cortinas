@@ -383,5 +383,128 @@ describe('pasoDePieza — el clic en el dibujo lleva a su paso', () => {
     expect(pasoDePieza('tubo')).toBe('tubo');
     expect(pasoDePieza('accionamiento')).toBe('accionamiento');
     expect(pasoDePieza('despliegue')).toBe('terreno');
+    expect(pasoDePieza('perfiles')).toBe('perfiles');
+  });
+});
+
+describe('el wizard del BEEBLACK', () => {
+  const ventBee = (over: Partial<Ventana> = {}, pano: Partial<Pano> = {}) =>
+    ventLlena(
+      {
+        categoria: 'BEEBLACK',
+        modelo: undefined,
+        direccion: 'IZQUIERDA-DERECHA',
+        ...over,
+      } as Partial<Ventana>,
+      { tuberia: '', mecanismo: '', codCadena: '', codPeso: '', beeblackVariante: 'INTERNO', ...pano },
+    );
+
+  it('no pregunta tubo, mecanismo, peso ni cenefa: no los lleva', () => {
+    const ids = idsAplicables(ctxDe(ventBee(), 'beeblack'));
+    expect(ids).not.toContain('tubo');
+    expect(ids).not.toContain('mecanismo');
+    expect(ids).not.toContain('peso');
+    expect(ids).not.toContain('cenefa');
+    expect(ids).toContain('tela');
+  });
+
+  it('las medidas piden la variante en vez del modelo: de ella salen TODAS las medidas', () => {
+    const sinVariante = ctxDe(ventBee({}, { beeblackVariante: '' }), 'beeblack');
+    expect(faltantesPaso(pasoPorId('medidas'), sinVariante)).toEqual(['variante beeblack']);
+    expect(pasoCompleto(pasoPorId('medidas'), ctxDe(ventBee(), 'beeblack'))).toBe(true);
+  });
+
+  it('el accionamiento es el cierre: hacia dónde corre el acordeón', () => {
+    const sinCierre = ctxDe(ventBee({ direccion: '' } as Partial<Ventana>), 'beeblack');
+    expect(idsAplicables(sinCierre)).toContain('accionamiento');
+    expect(faltantesPaso(pasoPorId('accionamiento'), sinCierre)).toEqual([
+      'cierre (hacia dónde corre el acordeón)',
+    ]);
+    expect(pasoCompleto(pasoPorId('accionamiento'), ctxDe(ventBee(), 'beeblack'))).toBe(true);
+  });
+
+  it('el wizard del beeblack nunca pide MENOS que el gate de Fase 2', () => {
+    expect(pendientesFase2([ventBee()])).toEqual([]);
+  });
+
+  it('el acordeón (tela) no espera a un tubo que no existe', () => {
+    const t = targetsProgreso(ctxDe(ventBee(), 'beeblack'));
+    expect(t.tubo).toBe(1);
+    expect(t.tela).toBe(1);
+    expect(t.despliegue).toBe(1);
+  });
+});
+
+describe('el wizard de la oscuridad (paso «Perfiles y guías»)', () => {
+  const ventDark = (over: Partial<Ventana> = {}, pano: Partial<Pano> = {}) =>
+    ventLlena({ categoria: 'DARK_38mm', ...over } as Partial<Ventana>, pano);
+
+  it('el paso aplica solo a los sistemas de oscuridad', () => {
+    expect(idsAplicables(ctxDe(ventDark(), 'oscuridad'))).toContain('perfiles');
+    expect(idsAplicables(ctxDe(ventLlena()))).not.toContain('perfiles');
+    expect(idsAplicables(ctxDe(ventLlena({ categoria: 'VERTICAL' }), 'vertical'))).not.toContain(
+      'perfiles',
+    );
+  });
+
+  it('pide instalación y perforación por perfil, como el gate', () => {
+    // En INTERNO/EXTERNO la perforación nace resuelta por la variante (mismos
+    // defaults que el despiece); lo pendiente es la instalación de cada perfil.
+    const faltan = faltantesPaso(pasoPorId('perfiles'), ctxDe(ventDark(), 'oscuridad'));
+    expect(faltan.some((f) => f.includes('instalación'))).toBe(true);
+    expect(faltan.some((f) => f.includes('perforación'))).toBe(false);
+    // En SEMI la variante no define la perforación de los laterales: se pide.
+    const semi = ctxDe(ventDark({}, { oscuridadVariante: 'SEMI' } as Partial<Pano>), 'oscuridad');
+    const faltanSemi = faltantesPaso(pasoPorId('perfiles'), semi);
+    expect(faltanSemi.some((f) => f.includes('perforación'))).toBe(true);
+  });
+
+  it('con los perfiles resueltos el paso queda completo', () => {
+    const ctx = ctxDe(
+      ventDark(
+        {},
+        {
+          perfilIzqActivo: true,
+          perfilIzqMuro: true,
+          perfilIzqPerf: 'INTERNO',
+          perfilDerActivo: true,
+          perfilDerMuro: true,
+          perfilDerPerf: 'INTERNO',
+          perfilInfActivo: true,
+          perfilInfMuro: true,
+          perfilInfPerf: 'INTERNO',
+        } as Partial<Pano>,
+      ),
+      'oscuridad',
+    );
+    expect(faltantesPaso(pasoPorId('perfiles'), ctx)).toEqual([]);
+  });
+
+  it('la cenefa implícita del DARK no exige elegirla: la pone el sistema', () => {
+    // p.cenefa queda vacío a propósito (cenefa cuadrada implícita, tapas fijas).
+    const ctx = ctxDe(ventDark({}, { cenefa: '' }), 'oscuridad');
+    expect(pasoCompleto(pasoPorId('cenefa'), ctx)).toBe(true);
+  });
+
+  it('el SOFT LIGHT tampoco: su cenefa (ovalada) viene con el sistema', () => {
+    // La cenefa es el primer eslabón de su cadena de corte: el taller la corta
+    // aunque la ficha no marque nada. «Cuadrada» elegida (familia CC, tapas
+    // fijas) tampoco agrega preguntas — mismo criterio que el gate.
+    const sl = ctxDe(ventLlena({ categoria: 'SOFT_LIGHT_38mm' }, { cenefa: '' }), 'oscuridad');
+    expect(pasoCompleto(pasoPorId('cenefa'), sl)).toBe(true);
+    const cc = ctxDe(
+      ventLlena({ categoria: 'SOFT_LIGHT_38mm' }, { cenefa: 'Cuadrada a muro' }),
+      'oscuridad',
+    );
+    expect(pasoCompleto(pasoPorId('cenefa'), cc)).toBe(true);
+  });
+
+  it('un separador activado sin medida deja el paso pendiente (paridad con el gate)', () => {
+    const ctx = ctxDe(
+      ventDark({}, { separadorIzq: true } as Partial<Pano>),
+      'oscuridad',
+    );
+    const faltan = faltantesPaso(pasoPorId('perfiles'), ctx);
+    expect(faltan.some((f) => f.toUpperCase().includes('SEPARADOR'))).toBe(true);
   });
 });

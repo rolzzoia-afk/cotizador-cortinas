@@ -28,11 +28,18 @@ import {
   OPCIONES_RELACION_MARCO,
   OPCIONES_SUPLEMENTO,
   OPCIONES_SUPERFICIE,
+  OPCIONES_MONTAJE_BASE,
+  OPCIONES_PERFORACION,
+  OPCIONES_SUPERFICIE_PERFIL,
   OPCIONES_TIPO_MECANISMO,
   OPCIONES_TIPO_TELA,
   OPCIONES_TUBERIA,
+  OPCIONES_VARIANTE_OSCURIDAD,
+  PERFILES_LADO,
   esCenefaCuadrada,
+  medidasPerfilesDePano,
   parcheSuperficiePerfil,
+  perfilesOscuridadDePano,
   type SuperficiePerfilOscuridad,
 } from '@/modules/cotizador/fase2';
 import type { Pano } from '@/modules/cotizador/types';
@@ -61,7 +68,6 @@ import {
   medidaPerfilOscuridad,
   montajeBaseDisponible,
   normalizarMontajeBase,
-  normalizarPerforacion,
   normalizarVarianteOscuridad,
   type MedidasPerfilesOscuridad,
   type PerfilesOscuridad,
@@ -75,7 +81,7 @@ import {
   codigoPerfilBeeblack,
   codigoSeparadorPerfil,
 } from '@/modules/descuentos/codigos-estructura';
-import { colorPerfilDesdeAdicional, type TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
+import { colorPerfilDesdeAdicional } from '@/modules/descuentos/adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
   CIERRES_BEEBLACK,
@@ -142,57 +148,10 @@ type Props = {
   reglas?: ReglasSeleccion;
 };
 
-// Perfiles de oscuridad POR LADO (izq / der / base). Cada lado tiene: activo,
-// perforación (INT/EXT, anotación de taller), superficie (muro/piso/marco = medida)
-// y override cm. La variante en Fase 1 activa los laterales; la superficie y el
-// perfil base se completan en Fase 2. "Marco" (dentro del marco, solo INTERNO)
-// mide como piso (alto real).
-type LadoPerfil = {
-  side: 'izq' | 'der' | 'inf';
-  label: string;
-  activo: keyof Pano;
-  perf: keyof Pano;
-  muro: keyof Pano;
-  piso: keyof Pano;
-  marco: keyof Pano;
-  muroKey: SuperficiePerfilKey;
-  pisoKey: SuperficiePerfilKey;
-  marcoKey: SuperficiePerfilKey;
-  muroCm: keyof Pano;
-  pisoCm: keyof Pano;
-  marcoCm: keyof Pano;
-  tipoAdic: TipoPerfilAdicional;
-  /** Separador (E41/E42/E43) del mismo lado. */
-  sepActivo: keyof Pano;
-  sepCm: keyof Pano;
-  sepColumna: string;
-};
-
-const PERFILES_LADO: LadoPerfil[] = [
-  { side: 'izq', label: 'Perfil izquierdo', activo: 'perfilIzqActivo', perf: 'perfilIzqPerf', muro: 'perfilIzqMuro', piso: 'perfilIzqPiso', marco: 'perfilIzqMarco', muroKey: 'izqMuro', pisoKey: 'izqPiso', marcoKey: 'izqMarco', muroCm: 'perfilIzqMuroCm', pisoCm: 'perfilIzqPisoCm', marcoCm: 'perfilIzqMarcoCm', tipoAdic: 'izq', sepActivo: 'separadorIzq', sepCm: 'separadorIzqCm', sepColumna: 'SEPARADOR (IZQ)' },
-  { side: 'der', label: 'Perfil derecho', activo: 'perfilDerActivo', perf: 'perfilDerPerf', muro: 'perfilDerMuro', piso: 'perfilDerPiso', marco: 'perfilDerMarco', muroKey: 'derMuro', pisoKey: 'derPiso', marcoKey: 'derMarco', muroCm: 'perfilDerMuroCm', pisoCm: 'perfilDerPisoCm', marcoCm: 'perfilDerMarcoCm', tipoAdic: 'der', sepActivo: 'separadorDer', sepCm: 'separadorDerCm', sepColumna: 'SEPARADOR (DER)' },
-  { side: 'inf', label: 'Perfil base', activo: 'perfilInfActivo', perf: 'perfilInfPerf', muro: 'perfilInfMuro', piso: 'perfilInfPiso', marco: 'perfilInfMarco', muroKey: 'infMuro', pisoKey: 'infPiso', marcoKey: 'infMarco', muroCm: 'perfilInfMuroCm', pisoCm: 'perfilInfPisoCm', marcoCm: 'perfilInfMarcoCm', tipoAdic: 'inf', sepActivo: 'separadorInf', sepCm: 'separadorInfCm', sepColumna: 'SEPARADOR BASE' },
-];
-
-const OPCIONES_PERFORACION = [
-  { value: 'INTERNO', label: 'Int' },
-  { value: 'EXTERNO', label: 'Ext' },
-] as const;
-
-// Superficie del perfil = MEDIDA. Muro = alto+10; piso y marco = alto real. La
-// opción "Dentro del marco" solo se ofrece en sistemas INTERNOS.
-const OPCIONES_SUPERFICIE_PERFIL = [
-  { value: 'muro', label: 'Muro', soloInterno: false },
-  { value: 'piso', label: 'Piso', soloInterno: false },
-  { value: 'marco', label: 'Dentro del marco', soloInterno: true },
-] as const;
-
-// Montaje del perfil base (solo soft light INTERNO): entre los laterales (más
-// corto, ancho − 13,3) o de pared a pared (ancho completo).
-const OPCIONES_MONTAJE_BASE = [
-  { value: 'DENTRO', label: 'Dentro de perfiles' },
-  { value: 'PARED', label: 'Pared a pared' },
-] as const;
+// Perfiles de oscuridad POR LADO (izq / der / base): la tabla vive en fase2.ts
+// (PERFILES_LADO), compartida con el paso «Perfiles» del wizard de terreno.
+// La variante en Fase 1 activa los laterales; la superficie y el perfil base se
+// completan en Fase 2. "Marco" (dentro del marco, solo INTERNO) mide como piso.
 
 // Cargador/hub del motor: OPCIONAL — no todos los motores llevan hub, así que
 // el default es 'No lleva' y el vendedor lo agrega cuando el cliente lo compra.
@@ -215,12 +174,6 @@ const LABEL_CARGADOR: Record<string, string> = {
   DOM03: 'HUB USB (DOM03)',
   DOM33: 'Adaptador (DOM33)',
 };
-
-const OPCIONES_VARIANTE_OSCURIDAD = [
-  { value: 'INTERNO', label: 'Interno' },
-  { value: 'SEMI', label: 'Semi' },
-  { value: 'EXTERNO', label: 'Externo' },
-] as const;
 
 const OPCIONES_VARIANTE_BEEBLACK = [
   { value: 'INTERNO', label: 'Interno' },
@@ -349,43 +302,11 @@ export function PanoEditor({
   );
   const anchoCmOsc = (parseFloat(String(pano.ancho ?? 0)) || 0) * 100;
   const altoCmOsc = (parseFloat(String(pano.alto ?? 0)) || 0) * 100;
-  const perfilesOsc: PerfilesOscuridad = {
-    izqMuro: !!pano.perfilIzqMuro,
-    izqPiso: !!pano.perfilIzqPiso,
-    izqMarco: !!pano.perfilIzqMarco,
-    derMuro: !!pano.perfilDerMuro,
-    derPiso: !!pano.perfilDerPiso,
-    derMarco: !!pano.perfilDerMarco,
-    infMuro: !!pano.perfilInfMuro,
-    infPiso: !!pano.perfilInfPiso,
-    infMarco: !!pano.perfilInfMarco,
-    izqActivo: !!pano.perfilIzqActivo,
-    derActivo: !!pano.perfilDerActivo,
-    infActivo: !!pano.perfilInfActivo,
-    izqPerf: normalizarPerforacion(pano.perfilIzqPerf),
-    derPerf: normalizarPerforacion(pano.perfilDerPerf),
-    infPerf: normalizarPerforacion(pano.perfilInfPerf),
-    infMontaje: normalizarMontajeBase(pano.perfilInfMontaje),
-    sepIzq: !!pano.separadorIzq,
-    sepDer: !!pano.separadorDer,
-    sepInf: !!pano.separadorInf,
-  };
-  // Overrides de medida (perfiles + separadores) para que la vista previa calce
-  // con el Excel/despiece (los separadores derivan su medida del perfil del lado).
-  const medidasOsc: MedidasPerfilesOscuridad = {
-    izqMuro: pano.perfilIzqMuroCm,
-    izqPiso: pano.perfilIzqPisoCm,
-    izqMarco: pano.perfilIzqMarcoCm,
-    derMuro: pano.perfilDerMuroCm,
-    derPiso: pano.perfilDerPisoCm,
-    derMarco: pano.perfilDerMarcoCm,
-    infMuro: pano.perfilInfMuroCm,
-    infPiso: pano.perfilInfPisoCm,
-    infMarco: pano.perfilInfMarcoCm,
-    sepIzq: pano.separadorIzqCm,
-    sepDer: pano.separadorDerCm,
-    sepInf: pano.separadorInfCm,
-  };
+  // La traducción Pano → perfiles/medidas vive en fase2.ts, compartida con el
+  // paso «Perfiles» del wizard (los separadores derivan su medida del perfil
+  // del mismo lado, salvo medida especial del vendedor).
+  const perfilesOsc: PerfilesOscuridad = perfilesOscuridadDePano(pano);
+  const medidasOsc: MedidasPerfilesOscuridad = medidasPerfilesDePano(pano);
   // Efectivo con defaults de la variante (laterales activos + perforación) — el
   // mismo criterio que el despiece, para que la UI muestre lo que sale en el Excel.
   const perfilesOscEff = aplicarDefaultsPerfiles(perfilesOsc, familia, varianteOscuridad);

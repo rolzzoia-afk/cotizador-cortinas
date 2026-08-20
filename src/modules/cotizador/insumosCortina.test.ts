@@ -132,6 +132,17 @@ describe('bracketDeCenefa', () => {
     expect(bracketDeCenefa('', '')).toBeNull();
     expect(bracketDeCenefa('No', '', '', 'SOFT_LIGHT_38mm')).toBeNull();
   });
+  it('el DÚO sin tipo elegido emite el LARGO: su receta cobra BRA02 (2026-08-20)', () => {
+    // La cenefa del dúo va por SISTEMA (CENEFA_OVALADA_DUO), la marque la ficha o no.
+    expect(bracketDeCenefa('', '', '', 'DUO_MANUAL_38mm')?.codigo).toBe('BRA02');
+    expect(bracketDeCenefa('Ovalada', '', '', 'DUO_MOTOR_GRANDE_45mm')?.codigo).toBe('BRA02');
+    // Un CORTO elegido a mano sigue ganando.
+    expect(bracketDeCenefa('Ovalada', 'CORTO', '', 'DUO_MANUAL_38mm')?.codigo).toBe('BRA01');
+    // El roller de cenefa ovalada conserva su default CORTO…
+    expect(bracketDeCenefa('', '', '', 'ROL_MANUAL_CENEFA_OVALADA_38mm')?.codigo).toBe('BRA01');
+    // …y la pletina dúo (velcro) sigue sin cenefa.
+    expect(bracketDeCenefa('', '', '', 'PLETINA_DUO_V')).toBeNull();
+  });
 });
 
 describe('llevaCenefaCuadradaImplicita', () => {
@@ -282,10 +293,12 @@ describe('insumosDePano', () => {
     // Las tapas de peso del dúo van a presión: sus 2 tornillos NO se emiten.
     // Los 6 TOR02 son los de la cenefa ovalada, que el dúo lleva por sistema.
     expect(map.TOR02).toBe(6);
-    expect(map.BRA01).toBe(3); // cantidadBrackets(1,5)
+    // Sin bracket elegido, el dúo emite el LARGO: su receta cobra BRA02 ×3
+    // (decisión del dueño 2026-08-20).
+    expect(map.BRA02).toBe(3); // cantidadBrackets(1,5)
     // Color fuera de mapa (MET): sin tapa exterior, pero la cenefa va igual.
     const met = insumosDePano(pano({ color: 'MET' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
-    expect(met.map((i) => i.codigo)).toEqual(['TAP13', 'TOR02', 'BRA01']);
+    expect(met.map((i) => i.codigo)).toEqual(['TAP13', 'TOR02', 'BRA02']);
   });
   it('SOFT LIGHT → 2 tapas de peso TAP26/TAP31 por color, a presión (SIN tornillos)', () => {
     const blanco = insumosDePano(pano({ color: 'BCO', cenefa: 'Ovalada' }), { categoria: 'SOFT_LIGHT_38mm', anchoM: 2.5 });

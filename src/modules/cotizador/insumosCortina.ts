@@ -419,7 +419,11 @@ export function cenefaCuadradaTapasFijas(
 
 /**
  * Bracket que corresponde a la cenefa del paño:
- *  - Ovalada → BRA01 (corto) / BRA02 (largo) según `bracketTipo` (default CORTO).
+ *  - Ovalada → BRA01 (corto) / BRA02 (largo) según `bracketTipo`. Default
+ *    CORTO — salvo el DÚO, cuyo default es LARGO: su receta de precios cobra
+ *    BRA02 ×3, así que mientras nadie elija, el BOM tiene que emitir lo que se
+ *    cobró (decisión del dueño 2026-08-20). Se resuelve por SISTEMA
+ *    (CENEFA_OVALADA_DUO), no por el nombre de la categoría.
  *  - Cuadrada a techo → BRA04 · a muro → BRA05 · 'Cuadrada' legacy → según superficie.
  *  - DARK (cenefa cuadrada implícita) → BRA04/BRA05 según la superficie del paño.
  *  - Sin cenefa → null.
@@ -432,7 +436,11 @@ export function bracketDeCenefa(
   tipos?: readonly TipoCortina[],
 ): { codigo: string; descripcion: string } | null {
   if (esCenefaOvalada(cenefa, categoria, tipos)) {
-    return (bracketTipo || 'CORTO').toUpperCase() === 'LARGO'
+    const esDuoOvalada = sistemasDeCategoria(categoria ?? '', tipos).some((s) =>
+      s.toUpperCase().startsWith('CENEFA_OVALADA_DUO'),
+    );
+    const tipo = bracketTipo || (esDuoOvalada ? 'LARGO' : 'CORTO');
+    return tipo.toUpperCase() === 'LARGO'
       ? { codigo: 'BRA02', descripcion: 'BRACKET LARGO' }
       : { codigo: 'BRA01', descripcion: 'BRACKET CORTO' };
   }

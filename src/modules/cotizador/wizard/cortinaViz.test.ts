@@ -44,13 +44,18 @@ describe('varianteViz — qué categorías tienen dibujo', () => {
     expect(varianteViz('VERTICAL')).toBe('vertical');
   });
 
-  it('lo que se fabrica distinto NO se dibuja como roller', () => {
-    // Mostrarles un roller genérico confundiría más de lo que ayuda: estas
-    // categorías se cargan solo con la ficha clásica.
-    expect(varianteViz('BEEBLACK')).toBeNull();
-    expect(varianteViz('SOFT_LIGHT_38mm')).toBeNull();
-    expect(varianteViz('DARK_45mm')).toBeNull();
-    expect(varianteViz('OSCURANTI_63mm')).toBeNull();
+  it('lo que se fabrica distinto tiene SU dibujo, no el del roller', () => {
+    // La oscuridad dibuja guías + zócalo + cajón; el oscuranti aparte (su tubo
+    // de 63 mm se nota) y el beeblack es un acordeón con marco (2026-08-20).
+    expect(varianteViz('BEEBLACK')).toBe('beeblack');
+    expect(varianteViz('SOFT_LIGHT_38mm')).toBe('oscuridad');
+    expect(varianteViz('SOFT_LIGHT_45mm')).toBe('oscuridad');
+    expect(varianteViz('DARK_38mm')).toBe('oscuridad');
+    expect(varianteViz('DARK_45mm')).toBe('oscuridad');
+    expect(varianteViz('OSCURANTI_63mm')).toBe('oscuranti');
+  });
+
+  it('sin categoría no hay dibujo', () => {
     expect(varianteViz('')).toBeNull();
     expect(varianteViz(undefined)).toBeNull();
   });
@@ -100,6 +105,46 @@ describe('estiloVizDePano — cómo se pinta', () => {
     expect(estiloVizDePano(vent(), { cenefa: 'No' } as Pano).cenefa).toBe('no');
     expect(estiloVizDePano(vent(), { cenefa: 'Ovalada' } as Pano).cenefa).toBe('ovalada');
     expect(estiloVizDePano(vent(), { cenefa: 'Cuadrada a techo' } as Pano).cenefa).toBe('cuadrada');
+  });
+
+  it('DARK y OSCURANTI dibujan el cajón aunque la ficha no marque cenefa (implícita)', () => {
+    // El despiece la corta por sistema; el dibujo tiene que mostrarla igual.
+    const dark = estiloVizDePano(vent({ categoria: 'DARK_38mm' }), { cenefa: '' } as Pano, undefined, 'oscuridad');
+    expect(dark.cenefa).toBe('cuadrada');
+    const osc = estiloVizDePano(vent({ categoria: 'OSCURANTI_63mm' }), { cenefa: '' } as Pano, undefined, 'oscuranti');
+    expect(osc.cenefa).toBe('cuadrada');
+    // El soft light también trae la suya, pero OVALADA (primer eslabón de su
+    // cadena de corte): sin elegir nada se dibuja la ovalada del sistema…
+    const sl = estiloVizDePano(vent({ categoria: 'SOFT_LIGHT_38mm' }), { cenefa: '' } as Pano, undefined, 'oscuridad');
+    expect(sl.cenefa).toBe('ovalada');
+    // …y con «Cuadrada» elegida pasa a familia CC (espejo del DARK): cajón.
+    const cc = estiloVizDePano(
+      vent({ categoria: 'SOFT_LIGHT_38mm' }),
+      { cenefa: 'Cuadrada a muro' } as Pano,
+      undefined,
+      'oscuridad',
+    );
+    expect(cc.cenefa).toBe('cuadrada');
+  });
+
+  it('en el beeblack el cierre de la VENTANA define el RECORRIDO del acordeón', () => {
+    // 'IZQUIERDA-DERECHA' = parte anclado a la IZQUIERDA y cierra hacia la
+    // derecha (es un recorrido, no el lado del mando — el bug 2026-08-20 lo
+    // espejaba al revés). 'DE ARRIBA ABAJO' baja desde el riel superior.
+    const bee = (direccion: string) =>
+      estiloVizDePano(
+        vent({ categoria: 'BEEBLACK', direccion } as Partial<Ventana>),
+        {} as Pano,
+        undefined,
+        'beeblack',
+      );
+    expect(bee('IZQUIERDA-DERECHA').beeCierre).toBe('izq-der');
+    expect(bee('DERECHA-IZQUIERDA').beeCierre).toBe('der-izq');
+    expect(bee('DE ARRIBA ABAJO').beeCierre).toBe('arriba-abajo');
+    // Sin cierre elegido todavía, se dibuja el recorrido más común.
+    expect(bee('').beeCierre).toBe('izq-der');
+    // Las demás variantes no traen recorrido de acordeón.
+    expect(estiloVizDePano(vent(), {} as Pano).beeCierre).toBeUndefined();
   });
 
   it('en dual cada paño trae su tela; en el resto manda la de la ventana', () => {

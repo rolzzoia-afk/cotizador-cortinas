@@ -2,6 +2,7 @@
 // campos que la ficha clásica y despacha por el mismo `onPano`/`onVentana`
 // (que en la página son `actualizarPano`/`actualizarVentana`, con todas sus
 // cascadas), así que las dos vistas guardan exactamente lo mismo.
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RadioRow } from '@/components/cotizador/editorPano/controles';
@@ -15,12 +16,46 @@ import {
   OPCIONES_CORTES,
   OPCIONES_LADO_MOTOR,
   OPCIONES_MATERIAL_TIPO,
+  OPCIONES_MONTAJE_BASE,
   OPCIONES_MOTOR_MODELO,
+  OPCIONES_PERFORACION,
   OPCIONES_SUPERFICIE,
+  OPCIONES_SUPERFICIE_PERFIL,
   OPCIONES_SUPLEMENTO,
   OPCIONES_TIPO_TELA,
+  OPCIONES_VARIANTE_OSCURIDAD,
+  PERFILES_LADO,
   esCenefaCuadrada,
+  parcheSuperficiePerfil,
+  perfilesOscuridadDePano,
+  type SuperficiePerfilOscuridad,
 } from '@/modules/cotizador/fase2';
+import {
+  aplicarDefaultsPerfiles,
+  esFamiliaSoftLight,
+  familiaOscuridadConDiametro,
+  medidaPerfilOscuridad,
+  montajeBaseDisponible,
+  normalizarMontajeBase,
+  normalizarVarianteOscuridad,
+  type PerforacionPerfil,
+  type SuperficiePerfilKey,
+} from '@/modules/descuentos/reglas-oscuridad';
+import {
+  codigoTuberiaDeChip,
+  diametroDeCodigoTubo,
+} from '@/modules/descuentos/reglas-tuberia';
+import {
+  CIERRES_BEEBLACK,
+  esCategoriaBeeblack,
+  normalizarInstalacionBeeblack,
+  normalizarVarianteBeeblack,
+} from '@/modules/descuentos/reglas-beeblack';
+import {
+  cenefaCuadradaTapasFijas,
+  llevaCenefaCuadradaImplicita,
+} from '@/modules/cotizador/insumosCortina';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { categoriasFase1ConTipos } from '@/modules/cotizador/categorias';
 import {
   derivarLargoColor,
@@ -66,10 +101,18 @@ export type PropsPaso = {
   opcionesTuberia: readonly string[];
   notaMecanismo?: string;
   lineaB: boolean;
+  /** Fórmulas de corte editadas en Admin (las usan las medidas de los perfiles). */
+  formulas?: FormulasFamilias;
   onVentana: (patch: Partial<Ventana>) => void;
   onPano: (patch: Partial<Pano>) => void;
   onCategoria: (categoria: string) => void;
 };
+
+const OPCIONES_VARIANTE_BEEBLACK = [
+  { value: 'INTERNO', label: 'Interno' },
+  { value: 'SEMI', label: 'Semi' },
+  { value: 'EXTERNO', label: 'Externo' },
+] as const;
 
 /** Fila de dato calculado: lo que el sistema resuelve solo y conviene mostrar. */
 function Derivado({ label, valor, nota }: { label: string; valor: string; nota?: string }) {
@@ -165,6 +208,29 @@ export function CuerpoPaso(props: PropsPaso) {
             options={['Interno', 'Externo']}
             onChange={(v) => onPano({ armado: v })}
           />
+          {esCategoriaBeeblack(ventana.categoria) && (
+            <div className="space-y-1">
+              <RadioRow
+                label="Variante"
+                value={(pano.beeblackVariante as string) || ''}
+                options={OPCIONES_VARIANTE_BEEBLACK as unknown as readonly { value: string; label: string }[]}
+                onChange={(v) => {
+                  const nueva = normalizarVarianteBeeblack(v, 'INTERNO');
+                  onPano({
+                    beeblackVariante: nueva,
+                    // La instalación se reajusta sola: cada variante tiene su lista.
+                    beeblackInstalacion: normalizarInstalacionBeeblack(
+                      pano.beeblackInstalacion,
+                      nueva,
+                    ),
+                  });
+                }}
+              />
+              <p className="text-[0.68rem] text-muted-foreground">
+                Del beeblack TODAS las medidas salen de la variante: sin ella no hay componentes.
+              </p>
+            </div>
+          )}
         </div>
       );
 
@@ -270,6 +336,30 @@ export function CuerpoPaso(props: PropsPaso) {
             <p className="text-[0.68rem] text-muted-foreground">
               La cadena de mando de la vertical es propia (no la de roller) y cuelga del lado del
               cierre.
+            </p>
+          </div>
+        );
+      }
+      // El BEEBLACK no lleva cadena ni motor: se abre y cierra con la manilla.
+      // Lo único que se pregunta es el cierre — hacia dónde corre el acordeón —
+      // que es de la VENTANA y llega a Fase 3 como DIRECC. CAD/CIERRE.
+      if (esCategoriaBeeblack(ventana.categoria)) {
+        const cierre = ventana.direccion || '';
+        return (
+          <div className="space-y-2">
+            <RadioRow
+              label="Cierre"
+              value={cierre}
+              options={
+                cierre && !(CIERRES_BEEBLACK as readonly string[]).includes(cierre)
+                  ? [...CIERRES_BEEBLACK, cierre]
+                  : [...CIERRES_BEEBLACK]
+              }
+              onChange={(v) => onVentana({ direccion: v })}
+            />
+            <p className="text-[0.68rem] text-muted-foreground">
+              DE ARRIBA ABAJO gira la cortina 90°: las lamas se cuentan sobre el alto y el corte
+              intercambia ancho y alto.
             </p>
           </div>
         );
@@ -511,6 +601,187 @@ export function CuerpoPaso(props: PropsPaso) {
       );
     }
 
+    case 'perfiles': {
+      // Versión compacta de la sección «Sistema de oscuridad — perfiles» de la
+      // ficha: variante + instalación y perforación por perfil. Los separadores
+      // y las medidas especiales quedan en la vista Ficha (no bloquean el gate
+      // salvo que alguien active un separador sin medida — el resumen lo avisa).
+      const categoria = ventana.categoria || '';
+      const familia = familiaOscuridadConDiametro(
+        categoria,
+        pano.cenefa,
+        diametroDeCodigoTubo(codigoTuberiaDeChip(pano.tuberia as string), reglas.tuberia),
+        reglas.tipos,
+      );
+      if (!familia) return null;
+      const variante = normalizarVarianteOscuridad(
+        (pano.oscuridadVariante as string) ?? ventana.oscuridadVariante ?? ventana.sentido,
+        'INTERNO',
+      );
+      const eff = aplicarDefaultsPerfiles(perfilesOscuridadDePano(pano), familia, variante);
+      const anchoCm = (parseFloat(String(pano.ancho ?? 0)) || 0) * 100;
+      const altoCm = (parseFloat(String(pano.alto ?? ventana.alto ?? 0)) || 0) * 100;
+      const montajeBase = normalizarMontajeBase(pano.perfilInfMontaje) ?? 'DENTRO';
+      const mostrarMontaje = montajeBaseDisponible(familia, variante);
+      // Soft light SEMI: el perfil base va SIEMPRE con perforación EXTERNA (fija).
+      const perfBaseForzada = esFamiliaSoftLight(familia) && variante === 'SEMI';
+      return (
+        <div className="space-y-3">
+          <RadioRow
+            label="Instalación"
+            value={variante}
+            options={OPCIONES_VARIANTE_OSCURIDAD as unknown as readonly { value: string; label: string }[]}
+            onChange={(v) => onPano({ oscuridadVariante: v || 'INTERNO' })}
+          />
+          <div className="space-y-1">
+            {PERFILES_LADO.map((L) => {
+              const activo =
+                L.side === 'izq' ? eff.izqActivo : L.side === 'der' ? eff.derActivo : eff.infActivo;
+              const superficie = pano[L.muro]
+                ? 'muro'
+                : pano[L.piso]
+                  ? 'piso'
+                  : pano[L.marco]
+                    ? 'marco'
+                    : '';
+              const perf: PerforacionPerfil | '' =
+                (L.side === 'izq' ? eff.izqPerf : L.side === 'der' ? eff.derPerf : eff.infPerf) ??
+                '';
+              const forzada = L.side === 'inf' && perfBaseForzada;
+              const surfaceKey: SuperficiePerfilKey =
+                superficie === 'piso' ? L.pisoKey : superficie === 'marco' ? L.marcoKey : L.muroKey;
+              const medida =
+                superficie && anchoCm > 0 && altoCm > 0
+                  ? medidaPerfilOscuridad(
+                      familia,
+                      variante,
+                      surfaceKey,
+                      anchoCm,
+                      altoCm,
+                      L.side === 'inf' ? montajeBase : undefined,
+                      props.formulas?.oscuridad,
+                    )
+                  : 0;
+              return (
+                <div key={L.side} className="space-y-1 rounded border border-border/60 bg-card/40 px-2 py-1.5">
+                  <label className="flex items-center gap-1.5 text-[0.72rem] text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={activo}
+                      onChange={(e) =>
+                        onPano({
+                          [L.activo]: e.target.checked,
+                          // Al desactivar, limpia superficie/override para que no
+                          // reaparezca una medida vieja — igual que la ficha.
+                          ...(e.target.checked
+                            ? {}
+                            : {
+                                [L.muro]: false,
+                                [L.piso]: false,
+                                [L.marco]: false,
+                                [L.muroCm]: undefined,
+                                [L.pisoCm]: undefined,
+                                [L.marcoCm]: undefined,
+                              }),
+                        } as Partial<Pano>)
+                      }
+                    />
+                    {L.label}
+                  </label>
+                  {activo && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pl-5 text-[0.68rem]">
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Perf.</span>
+                        {forzada ? (
+                          <span
+                            className="rounded bg-primary/80 px-1.5 py-0.5 text-[0.66rem] uppercase text-primary-foreground"
+                            title="Soft light SEMI: perforación del perfil base fija en Externa"
+                          >
+                            Ext (fija)
+                          </span>
+                        ) : (
+                          OPCIONES_PERFORACION.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => onPano({ [L.perf]: o.value } as Partial<Pano>)}
+                              className={cn(
+                                'rounded px-1.5 py-0.5 text-[0.66rem] uppercase',
+                                perf === o.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground hover:text-foreground',
+                              )}
+                            >
+                              {o.label}
+                            </button>
+                          ))
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-muted-foreground">Inst.</span>
+                        {OPCIONES_SUPERFICIE_PERFIL.filter(
+                          (o) => !o.soloInterno || variante === 'INTERNO' || superficie === o.value,
+                        ).map((o) => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() =>
+                              onPano(parcheSuperficiePerfil(L.side, o.value as SuperficiePerfilOscuridad))
+                            }
+                            className={cn(
+                              'rounded px-1.5 py-0.5 text-[0.66rem]',
+                              superficie === o.value
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted text-muted-foreground hover:text-foreground',
+                            )}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                      {L.side === 'inf' && mostrarMontaje && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">Base</span>
+                          {OPCIONES_MONTAJE_BASE.map((o) => (
+                            <button
+                              key={o.value}
+                              type="button"
+                              onClick={() => onPano({ perfilInfMontaje: o.value } as Partial<Pano>)}
+                              className={cn(
+                                'rounded px-1.5 py-0.5 text-[0.66rem]',
+                                montajeBase === o.value
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-muted text-muted-foreground hover:text-foreground',
+                              )}
+                            >
+                              {o.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {superficie ? (
+                        medida > 0 && (
+                          <span className="font-mono text-foreground">{medida} cm</span>
+                        )
+                      ) : (
+                        <span className="text-amber-500">definir instalación</span>
+                      )}
+                      {!forzada && !perf && (
+                        <span className="text-amber-500">definir perforación</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[0.68rem] text-muted-foreground">
+            Los separadores y las medidas especiales de cada perfil se ajustan en la vista Ficha.
+          </p>
+        </div>
+      );
+    }
+
     case 'terreno':
       return (
         <div className="space-y-3">
@@ -540,6 +811,51 @@ export function CuerpoPaso(props: PropsPaso) {
       );
 
     case 'cenefa': {
+      // DARK y OSCURANTI llevan cenefa cuadrada POR SISTEMA (implícita, tapas
+      // fijas): no hay nada que elegir, solo saber que va.
+      if (llevaCenefaCuadradaImplicita(ventana.categoria, reglas.tipos) && !pano.cenefa) {
+        return (
+          <div className="space-y-3">
+            <Derivado
+              label="Tipo"
+              valor="Cuadrada"
+              nota="fija por el sistema de oscuridad — tapas fijas, no se pregunta"
+            />
+          </div>
+        );
+      }
+      // SOFT LIGHT: siempre lleva cenefa — la OVALADA propia del sistema
+      // (primer eslabón de su cadena de corte) o, si se elige, la CUADRADA
+      // (familia CC, espejo del DARK con tapas fijas). «No» no existe acá:
+      // el taller la corta igual. El dato legacy 'Ovalada' explícito cae a la
+      // rama general (pregunta tira/tapa/bracket, igual que el gate).
+      const famOscCategoria = familiaOscuridadConDiametro(
+        ventana.categoria,
+        undefined,
+        undefined,
+        reglas.tipos,
+      );
+      const esSoftLight =
+        !!famOscCategoria && !llevaCenefaCuadradaImplicita(ventana.categoria, reglas.tipos);
+      if (esSoftLight && pano.cenefa !== 'Ovalada') {
+        const OVALADA_SISTEMA = 'Ovalada (del sistema)';
+        return (
+          <div className="space-y-3">
+            <RadioRow
+              label="Tipo"
+              value={
+                esCenefaCuadrada(pano.cenefa as string) ? (pano.cenefa as string) : OVALADA_SISTEMA
+              }
+              options={[OVALADA_SISTEMA, 'Cuadrada a muro', 'Cuadrada a techo']}
+              onChange={(v) => onPano({ cenefa: v === OVALADA_SISTEMA ? '' : v })}
+            />
+            <p className="text-[0.68rem] text-muted-foreground">
+              El soft light siempre lleva cenefa: la ovalada viene con el sistema; con «Cuadrada»
+              se fabrica como el DARK (tapas fijas, no se pregunta).
+            </p>
+          </div>
+        );
+      }
       const cenefaFija = cenefaOvalada && pano.cenefa !== 'Ovalada';
       return (
         <div className="space-y-3">
@@ -589,7 +905,10 @@ export function CuerpoPaso(props: PropsPaso) {
               />
             </>
           )}
-          {esCenefaCuadrada(pano.cenefa as string) && (
+          {/* En oscuridad la cuadrada lleva tapas FIJAS por sistema: no se
+              pregunta (misma guardia que el gate y la ficha). */}
+          {esCenefaCuadrada(pano.cenefa as string) &&
+            !cenefaCuadradaTapasFijas(ventana.categoria, pano.cenefa as string, reglas.tipos) && (
             <>
               <RadioRow
                 label="Tapas"

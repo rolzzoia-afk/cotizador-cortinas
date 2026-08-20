@@ -54,8 +54,9 @@ const num = (v: unknown): number => parseFloat(String(v ?? 0)) || 0;
 
 // Columnas del Excel de órdenes que son PERFILES con perforación (mismas llaves
 // que `PERF_POR_PERFIL` en excel-ordenes.ts). Los separadores se detectan por
-// prefijo: llevan medida pero no perforación.
-const COLUMNAS_PERFIL = new Set(['PERFIL (IZQ) INT', 'PERFIL (DER) INT', 'PERFIL BASE']);
+// prefijo: llevan medida pero no perforación. Exportada para que el paso
+// «Perfiles» del wizard pida EXACTAMENTE lo mismo que este gate.
+export const COLUMNAS_PERFIL = new Set(['PERFIL (IZQ) INT', 'PERFIL (DER) INT', 'PERFIL BASE']);
 
 /**
  * Todo lo que le falta a la OT para pasar a Fase 3, ventana por ventana y paño

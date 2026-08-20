@@ -27,7 +27,9 @@
 // entra en el vano) es solo de IMPRESIÓN: cada pieza se trunca al emitirse, pero
 // el eslabón siguiente parte del valor exacto. Con todos los ajustes ya en
 // décimas el truncado casi nunca muerde; queda como red de seguridad.
-// DARK_45MM comparte estas tablas hasta que lleguen sus fórmulas propias.
+// DARK_45MM: la pizarra propia (confirmada por el dueño 2026-08-20) trae el
+// MISMO encadenado que el DARK 38 — compartir estas tablas es lo correcto, no
+// un provisorio. Lo único propio del 45 es el perfil base por montaje (INF_45_ADJ).
 //
 // Mapeo a columnas del Excel de órdenes (las reconoce el optimizador
 // legacy en COLUMNAS_CORTE):

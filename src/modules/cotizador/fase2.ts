@@ -5,6 +5,14 @@ import type { Pano, Ventana } from './types';
 import { categoriaEsDual } from '@/modules/descuentos/tipos';
 import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 import {
+  normalizarMontajeBase,
+  normalizarPerforacion,
+  type MedidasPerfilesOscuridad,
+  type PerfilesOscuridad,
+  type SuperficiePerfilKey,
+} from '@/modules/descuentos/reglas-oscuridad';
+import type { TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
+import {
   opcionesTuberiaResolucion,
   opcionesTuberiaUI,
 } from '@/modules/descuentos/reglas-tuberia';
@@ -129,6 +137,117 @@ export function parcheSuperficiePerfil(
   if (superficie === 'piso' && lado !== 'inf') Object.assign(patch, parcheApagarPerfilBase());
   return patch as Partial<Pano>;
 }
+
+/**
+ * Un perfil de oscuridad POR LADO (izq / der / base): qué campos del paño le
+ * pertenecen. Es UNA tabla para la ficha (PanoEditor) y el paso «Perfiles» del
+ * wizard de terreno — dos copias terminarían divergiendo campo a campo.
+ */
+export type LadoPerfil = {
+  side: LadoPerfilOscuridad;
+  label: string;
+  activo: keyof Pano;
+  perf: keyof Pano;
+  muro: keyof Pano;
+  piso: keyof Pano;
+  marco: keyof Pano;
+  muroKey: SuperficiePerfilKey;
+  pisoKey: SuperficiePerfilKey;
+  marcoKey: SuperficiePerfilKey;
+  muroCm: keyof Pano;
+  pisoCm: keyof Pano;
+  marcoCm: keyof Pano;
+  tipoAdic: TipoPerfilAdicional;
+  /** Separador (E41/E42/E43) del mismo lado. */
+  sepActivo: keyof Pano;
+  sepCm: keyof Pano;
+  sepColumna: string;
+};
+
+export const PERFILES_LADO: readonly LadoPerfil[] = [
+  { side: 'izq', label: 'Perfil izquierdo', activo: 'perfilIzqActivo', perf: 'perfilIzqPerf', muro: 'perfilIzqMuro', piso: 'perfilIzqPiso', marco: 'perfilIzqMarco', muroKey: 'izqMuro', pisoKey: 'izqPiso', marcoKey: 'izqMarco', muroCm: 'perfilIzqMuroCm', pisoCm: 'perfilIzqPisoCm', marcoCm: 'perfilIzqMarcoCm', tipoAdic: 'izq', sepActivo: 'separadorIzq', sepCm: 'separadorIzqCm', sepColumna: 'SEPARADOR (IZQ)' },
+  { side: 'der', label: 'Perfil derecho', activo: 'perfilDerActivo', perf: 'perfilDerPerf', muro: 'perfilDerMuro', piso: 'perfilDerPiso', marco: 'perfilDerMarco', muroKey: 'derMuro', pisoKey: 'derPiso', marcoKey: 'derMarco', muroCm: 'perfilDerMuroCm', pisoCm: 'perfilDerPisoCm', marcoCm: 'perfilDerMarcoCm', tipoAdic: 'der', sepActivo: 'separadorDer', sepCm: 'separadorDerCm', sepColumna: 'SEPARADOR (DER)' },
+  { side: 'inf', label: 'Perfil base', activo: 'perfilInfActivo', perf: 'perfilInfPerf', muro: 'perfilInfMuro', piso: 'perfilInfPiso', marco: 'perfilInfMarco', muroKey: 'infMuro', pisoKey: 'infPiso', marcoKey: 'infMarco', muroCm: 'perfilInfMuroCm', pisoCm: 'perfilInfPisoCm', marcoCm: 'perfilInfMarcoCm', tipoAdic: 'inf', sepActivo: 'separadorInf', sepCm: 'separadorInfCm', sepColumna: 'SEPARADOR BASE' },
+] as const;
+
+export const OPCIONES_PERFORACION = [
+  { value: 'INTERNO', label: 'Int' },
+  { value: 'EXTERNO', label: 'Ext' },
+] as const;
+
+// Superficie del perfil = MEDIDA. Muro = alto+10; piso y marco = alto real. La
+// opción "Dentro del marco" solo se ofrece en sistemas INTERNOS.
+export const OPCIONES_SUPERFICIE_PERFIL = [
+  { value: 'muro', label: 'Muro', soloInterno: false },
+  { value: 'piso', label: 'Piso', soloInterno: false },
+  { value: 'marco', label: 'Dentro del marco', soloInterno: true },
+] as const;
+
+// Montaje del perfil base (solo soft light INTERNO): entre los laterales (más
+// corto, ancho − 13,3) o de pared a pared (ancho completo).
+export const OPCIONES_MONTAJE_BASE = [
+  { value: 'DENTRO', label: 'Dentro de perfiles' },
+  { value: 'PARED', label: 'Pared a pared' },
+] as const;
+
+export const OPCIONES_VARIANTE_OSCURIDAD = [
+  { value: 'INTERNO', label: 'Interno' },
+  { value: 'SEMI', label: 'Semi' },
+  { value: 'EXTERNO', label: 'Externo' },
+] as const;
+
+/**
+ * Los campos de perfiles de oscuridad del paño, con la forma que consume el
+ * despiece (`cortesOscuridad`). Una sola traducción Pano → PerfilesOscuridad
+ * para la ficha, el paso «Perfiles» del wizard y el cálculo de su avance.
+ *
+ * OJO: los flags viajan CRUDOS (sin `!!`): `undefined` significa «sin definir»
+ * y deja que `aplicarDefaultsPerfiles` active los laterales según la variante —
+ * exactamente como `contextoDespieceDesdePano` (el despiece del Excel). Un
+ * `false` explícito (el vendedor lo desactivó) sí se respeta.
+ */
+export function perfilesOscuridadDePano(p: Pano): PerfilesOscuridad {
+  return {
+    izqMuro: p.perfilIzqMuro,
+    izqPiso: p.perfilIzqPiso,
+    izqMarco: p.perfilIzqMarco,
+    derMuro: p.perfilDerMuro,
+    derPiso: p.perfilDerPiso,
+    derMarco: p.perfilDerMarco,
+    infMuro: p.perfilInfMuro,
+    infPiso: p.perfilInfPiso,
+    infMarco: p.perfilInfMarco,
+    izqActivo: p.perfilIzqActivo,
+    derActivo: p.perfilDerActivo,
+    infActivo: p.perfilInfActivo,
+    izqPerf: normalizarPerforacion(p.perfilIzqPerf),
+    derPerf: normalizarPerforacion(p.perfilDerPerf),
+    infPerf: normalizarPerforacion(p.perfilInfPerf),
+    infMontaje: normalizarMontajeBase(p.perfilInfMontaje),
+    sepIzq: p.separadorIzq,
+    sepDer: p.separadorDer,
+    sepInf: p.separadorInf,
+  };
+}
+
+/** Overrides de medida de los perfiles y separadores, tal como los guarda el paño. */
+export function medidasPerfilesDePano(p: Pano): MedidasPerfilesOscuridad {
+  return {
+    izqMuro: p.perfilIzqMuroCm,
+    izqPiso: p.perfilIzqPisoCm,
+    izqMarco: p.perfilIzqMarcoCm,
+    derMuro: p.perfilDerMuroCm,
+    derPiso: p.perfilDerPisoCm,
+    derMarco: p.perfilDerMarcoCm,
+    infMuro: p.perfilInfMuroCm,
+    infPiso: p.perfilInfPisoCm,
+    infMarco: p.perfilInfMarcoCm,
+    sepIzq: p.separadorIzqCm,
+    sepDer: p.separadorDerCm,
+    sepInf: p.separadorInfCm,
+  };
+}
+
 export const OPCIONES_MATERIAL_TIPO = ['VULCANITA', 'CONCRETO', 'MADERA', 'CERÁMICA'] as const;
 /** Tipo de bracket de la cenefa ovalada: corto (BRA01) o largo (BRA02). */
 export const OPCIONES_BRACKET_TIPO = ['CORTO', 'LARGO'] as const;

@@ -12,6 +12,7 @@
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { esCenefaCuadrada } from '../fase2';
+import { llevaCenefaCuadradaImplicita } from '../insumosCortina';
 import type { CatalogoProductos, Pano, Ventana } from '../types';
 
 /** Cada pieza que se dibuja por separado y se puede clicar para ir a su paso. */
@@ -22,6 +23,7 @@ export type PiezaViz =
   | 'accionamiento'
   | 'tela'
   | 'peso'
+  | 'perfiles'
   | 'despliegue'
   | 'cenefa';
 
@@ -32,6 +34,7 @@ export const PIEZAS_VIZ: readonly PiezaViz[] = [
   'accionamiento',
   'tela',
   'peso',
+  'perfiles',
   'despliegue',
   'cenefa',
 ] as const;
@@ -44,20 +47,22 @@ export const NOMBRE_PIEZA: Record<PiezaViz, string> = {
   accionamiento: 'Cadena o motor',
   tela: 'Tela',
   peso: 'Peso inferior',
+  perfiles: 'Perfiles y guías',
   despliegue: 'Cortina desplegada',
   cenefa: 'Cenefa',
 };
 
 /** Qué silueta se dibuja. `null` = esta categoría no tiene vista interactiva. */
-export type VarianteViz = 'roller' | 'dual' | 'duo' | 'vertical';
+export type VarianteViz = 'roller' | 'dual' | 'duo' | 'vertical' | 'oscuridad' | 'oscuranti' | 'beeblack';
 
 /**
  * Variante de dibujo de una categoría. El roller y sus parientes directos
- * (dual = dos rollos en un bracket, dúo = tela de bandas) comparten dibujo, y
- * la VERTICAL tiene el suyo (riel cabezal + lamas colgando, del catálogo de
- * diseños del dueño 2026-08-19). Los sistemas de oscuridad y el beeblack se
- * fabrican distinto y mostrarles un roller genérico confundiría más de lo que
- * ayuda: siguen sin dibujo.
+ * (dual = dos rollos en un bracket, dúo = tela de bandas) comparten dibujo; la
+ * VERTICAL tiene el suyo (riel cabezal + lamas colgando, catálogo de diseños
+ * del dueño 2026-08-19). Los sistemas de OSCURIDAD dibujan el esqueleto del
+ * roller MÁS sus señas: guías laterales, zócalo y cajón — el OSCURANTI aparte
+ * porque su tubo de 63 mm se nota. El BEEBLACK es un acordeón que corre de
+ * lado: marco + panel plisado con manilla (pedido del dueño 2026-08-20).
  */
 export function varianteViz(
   categoria: string | null | undefined,
@@ -66,6 +71,9 @@ export function varianteViz(
   const c = categoriaEfectiva(categoria ?? '', tipos).toUpperCase().trim();
   if (!c) return null;
   if (c === 'VERTICAL') return 'vertical';
+  if (c.includes('BEEBLACK')) return 'beeblack';
+  if (c.startsWith('OSCURANTI')) return 'oscuranti';
+  if (c.startsWith('DARK_') || c.startsWith('SOFT_LIGHT_')) return 'oscuridad';
   if (c === 'ROL_DUAL') return 'dual';
   if (c.startsWith('DUO') || c === 'PLETINA_DUO_V') return 'duo';
   if (c === 'ROL' || c === 'PLETINA_ROLLER_V' || c.startsWith('ROL_')) return 'roller';
@@ -98,6 +106,12 @@ export type EstiloViz = {
   accionamiento: 'cadena' | 'motor';
   /** Lado de la cadena o del motor, visto de frente. */
   lado: 'izquierda' | 'derecha';
+  /**
+   * Beeblack: el RECORRIDO del cierre — 'izq-der' = el panel parte anclado a
+   * la izquierda y cierra hacia la derecha; 'arriba-abajo' baja desde el riel
+   * superior. Es un recorrido, no el lado del mando (por eso no usa `lado`).
+   */
+  beeCierre?: 'izq-der' | 'der-izq' | 'arriba-abajo';
 };
 
 /** Normaliza color de accesorios (corto "NEG" / largo "NEGRO" / plural) a canónico. */
@@ -175,12 +189,30 @@ export function estiloVizDePano(
   p: Pano,
   catalogo?: CatalogoProductos,
   variante: VarianteViz = 'roller',
+  tipos?: readonly TipoCortina[],
 ): EstiloViz {
   const colorAcc = colorAccesorioCanonico(colorAccesoriosDePano(p, v.color));
   const cenefaTxt = String(p.cenefa ?? '').trim().toUpperCase();
   const motor = panoLlevaMotor(p);
-  // El lado lo manda el motor cuando hay motor, y la posición de cadena cuando no.
-  const ladoTxt = motor ? String(p.ladoMotor ?? '') : String(p.cierreVert ?? '');
+  // El lado lo manda el motor cuando hay motor, y la posición de cadena cuando
+  // no. El BEEBLACK no tiene cadena: su lado es hacia dónde corre el acordeón
+  // (el cierre de la VENTANA — 'DERECHA-IZQUIERDA' parte anclado a la derecha).
+  const ladoTxt =
+    variante === 'beeblack'
+      ? String(v.direccion ?? '')
+      : motor
+        ? String(p.ladoMotor ?? '')
+        : String(p.cierreVert ?? '');
+  // DARK y OSCURANTI llevan cenefa cuadrada POR SISTEMA (implícita): el cajón
+  // se dibuja aunque la ficha no la marque — igual que el despiece la corta.
+  const cajonImplicito =
+    (variante === 'oscuridad' || variante === 'oscuranti') &&
+    llevaCenefaCuadradaImplicita(v.categoria, tipos);
+  // El SOFT LIGHT también trae la suya, pero OVALADA (primer eslabón de su
+  // cadena de corte); solo si la ficha elige «Cuadrada» pasa a familia CC y
+  // se dibuja el cajón. Sin elección, se dibuja la ovalada del sistema.
+  const ovaladaImplicita =
+    variante === 'oscuridad' && !llevaCenefaCuadradaImplicita(v.categoria, tipos);
   // La tela vive en el paño solo en dual; en el resto es de la ventana.
   const codTela = (variante === 'dual' && p.codInt) || v.codInt;
   /** Una capa de la dual. Solo el primer rollo hereda la tela de la ventana:
@@ -203,9 +235,26 @@ export function estiloVizDePano(
         ? [capa(v.panos?.[0], true), capa(v.panos?.[1], false)]
         : undefined,
     cenefa:
-      cenefaTxt === 'OVALADA' ? 'ovalada' : esCenefaCuadrada(cenefaTxt) ? 'cuadrada' : 'no',
+      cenefaTxt === 'OVALADA'
+        ? 'ovalada'
+        : esCenefaCuadrada(cenefaTxt) || cajonImplicito
+          ? 'cuadrada'
+          : ovaladaImplicita
+            ? 'ovalada'
+            : 'no',
     accionamiento: motor ? 'motor' : 'cadena',
     lado: ladoTxt.toUpperCase().startsWith('IZQ') ? 'izquierda' : 'derecha',
+    // El cierre del beeblack nombra el RECORRIDO: 'IZQUIERDA-DERECHA' parte
+    // anclado a la izquierda y cierra hacia la derecha (no es el lado del
+    // mando); 'DE ARRIBA ABAJO' baja desde el riel superior.
+    beeCierre:
+      variante === 'beeblack'
+        ? ladoTxt.toUpperCase().includes('ARRIBA')
+          ? 'arriba-abajo'
+          : ladoTxt.toUpperCase().startsWith('DER')
+            ? 'der-izq'
+            : 'izq-der'
+        : undefined,
   };
 }
 
