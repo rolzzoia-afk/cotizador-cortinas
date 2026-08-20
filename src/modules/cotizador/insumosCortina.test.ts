@@ -11,11 +11,13 @@ import {
   codigoMotorDesdeAdicional,
   esAdicionalHubDomotica,
   esCategoriaDuo,
+  esCenefaOvalada,
   insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
   insumosVerticalDePano,
   llevaCenefaCuadradaImplicita,
+  llevaCenefaOvaladaImplicita,
   llevaTapasPeso,
   manillaDesdeAdicional,
   faltantesDomoticaInventario,
@@ -144,6 +146,34 @@ describe('llevaCenefaCuadradaImplicita', () => {
   });
 });
 
+describe('llevaCenefaOvaladaImplicita — la cenefa que trae el SISTEMA', () => {
+  it('el dúo la lleva aunque su categoría no diga «cenefa ovalada»', () => {
+    // Se fabrica en CENEFA_OVALADA_DUO y todas sus filas traen dcto_cenefa_cm:
+    // el despiece corta la cenefa siempre. Mirando el TEXTO de la categoría el
+    // dúo quedaba sin tapa, sin bracket y sin línea de cenefa en el BOM.
+    expect(llevaCenefaOvaladaImplicita('DUO_MANUAL_38mm')).toBe(true);
+    expect(llevaCenefaOvaladaImplicita('DUO_MANUAL_45mm')).toBe(true);
+    expect(llevaCenefaOvaladaImplicita('DUO_MOTOR_PEQUEÑO_38mm')).toBe(true);
+    expect(llevaCenefaOvaladaImplicita('DUO_MOTOR_GRANDE_45mm')).toBe(true);
+    // Y el roller ovalado, que ya la llevaba por el nombre.
+    expect(llevaCenefaOvaladaImplicita('ROL_MANUAL_CENEFA_OVALADA_38mm')).toBe(true);
+  });
+
+  it('la pletina dúo (velcro) NO lleva cenefa, ni el roller simple', () => {
+    expect(llevaCenefaOvaladaImplicita('PLETINA_DUO_V')).toBe(false);
+    expect(llevaCenefaOvaladaImplicita('PLETINA_ROLLER_V')).toBe(false);
+    expect(llevaCenefaOvaladaImplicita('ROL')).toBe(false);
+    expect(llevaCenefaOvaladaImplicita('VERTICAL')).toBe(false);
+    expect(llevaCenefaOvaladaImplicita('')).toBe(false);
+  });
+
+  it('y el dúo cuenta como cenefa ovalada aunque su ficha esté vacía', () => {
+    expect(esCenefaOvalada('', 'DUO_MANUAL_38mm')).toBe(true);
+    expect(esCenefaOvalada('No', 'DUO_MANUAL_38mm')).toBe(true);
+    expect(esCenefaOvalada('', 'PLETINA_DUO_V')).toBe(false);
+  });
+});
+
 describe('cenefaCuadradaTapasFijas', () => {
   it('DARK/OSCURANTI (cenefa implícita) y soft light con cenefa CUADRADA → tapas fijas', () => {
     expect(cenefaCuadradaTapasFijas('DARK_38mm')).toBe(true);
@@ -195,10 +225,17 @@ describe('cantidadTarugos', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'DARK_38mm', 2.5)).toBe(5);
     expect(cantidadTarugos(pano({ materialTipo: 'MADERA' }), 'DARK_38mm', 3.0)).toBe(0);
   });
-  it('dúo sin cenefa se fija con brackets → 4 tarugos como el roller (no 0)', () => {
-    expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(4);
-    expect(cantidadTarugos(pano({ materialTipo: 'CONCRETO' }), 'DUO_MOTOR_PEQUEÑO_38mm', 1.5)).toBe(4);
+  it('el dúo trae su cenefa ovalada puesta: tarugos de cenefa (2/bracket a muro, 1 a techo)', () => {
+    // El dúo se fabrica en el sistema CENEFA_OVALADA_DUO: la cenefa va SIEMPRE,
+    // así que se fija como cualquier ovalada y no con los 4 del roller pelado.
+    // cantidadBrackets(1,5) = 3.
+    expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(6);
+    expect(
+      cantidadTarugos(pano({ materialTipo: 'CONCRETO', superficie: 'TECHO' }), 'DUO_MOTOR_PEQUEÑO_38mm', 1.5),
+    ).toBe(3);
     expect(cantidadTarugos(pano({ materialTipo: 'MADERA' }), 'DUO_MANUAL_38mm', 1.5)).toBe(0);
+    // La pletina dúo (velcro) NO lleva cenefa: se pega, sin fijaciones.
+    expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'PLETINA_DUO_V', 1.5)).toBe(0);
   });
   it('pletina (velcro): 0 tarugos aunque tenga material', () => {
     expect(cantidadTarugos(pano({ materialTipo: 'VULCANITA' }), 'PLETINA_ROLLER_V', 1.5)).toBe(0);
@@ -237,15 +274,18 @@ describe('insumosDePano', () => {
     );
     expect(cer.find((i) => i.codigo === 'TAR03')?.cantidad).toBe(6);
   });
-  it('DÚO → 2 tapas exteriores por color + 2 TAP13, SIN tornillos (a presión)', () => {
+  it('DÚO → 2 tapas exteriores por color + 2 TAP13 (a presión) + los fierros de su cenefa', () => {
     const out = insumosDePano(pano({ color: 'NEG' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
     const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
     expect(map.TAP11).toBe(2); // exterior negro
     expect(map.TAP13).toBe(2); // interno
-    expect(out.some((i) => i.codigo === 'TOR02')).toBe(false); // a presión
-    // Color fuera de mapa (MET): solo las 2 internas.
+    // Las tapas de peso del dúo van a presión: sus 2 tornillos NO se emiten.
+    // Los 6 TOR02 son los de la cenefa ovalada, que el dúo lleva por sistema.
+    expect(map.TOR02).toBe(6);
+    expect(map.BRA01).toBe(3); // cantidadBrackets(1,5)
+    // Color fuera de mapa (MET): sin tapa exterior, pero la cenefa va igual.
     const met = insumosDePano(pano({ color: 'MET' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
-    expect(met.map((i) => i.codigo)).toEqual(['TAP13']);
+    expect(met.map((i) => i.codigo)).toEqual(['TAP13', 'TOR02', 'BRA01']);
   });
   it('SOFT LIGHT → 2 tapas de peso TAP26/TAP31 por color, a presión (SIN tornillos)', () => {
     const blanco = insumosDePano(pano({ color: 'BCO', cenefa: 'Ovalada' }), { categoria: 'SOFT_LIGHT_38mm', anchoM: 2.5 });
@@ -262,9 +302,9 @@ describe('insumosDePano', () => {
     expect(tapaGris?.codigo).toBe('');
     expect(tapaGris?.cantidad).toBe(2);
   });
-  it('dúo vulcanita sin cenefa → 4 tarugos TAR01 (además de las tapas dúo)', () => {
+  it('dúo vulcanita → 6 tarugos TAR01 (2 por bracket de su cenefa, a muro)', () => {
     const out = insumosDePano(pano({ color: 'GRS', materialTipo: 'VULCANITA' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
-    expect(out.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(4);
+    expect(out.find((i) => i.codigo === 'TAR01')?.cantidad).toBe(6);
   });
   it('pletina roller → tapas roller (2 + TOR02), SIN tarugos aunque haya material', () => {
     const out = insumosDePano(pano({ color: 'BCO', materialTipo: 'VULCANITA' }), { categoria: 'PLETINA_ROLLER_V', anchoM: 0.8 });

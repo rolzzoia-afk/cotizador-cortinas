@@ -11,6 +11,7 @@ import {
   OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
   OPCIONES_CENEFA_TIRA,
+  OPCIONES_CIERRE_VERT,
   OPCIONES_CORTES,
   OPCIONES_LADO_MOTOR,
   OPCIONES_MATERIAL_TIPO,
@@ -29,6 +30,7 @@ import {
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
 import { colorAccesorioCorto, tipoTelaDesdeProducto } from '@/modules/cotizador/fase0-sync';
+import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { esCenefaOvalada } from '@/modules/cotizador/insumosCortina';
@@ -248,6 +250,30 @@ export function CuerpoPaso(props: PropsPaso) {
       );
 
     case 'accionamiento': {
+      // La VERTICAL no lleva cadena de roller: lo único que se pregunta es el
+      // Cierre (lado del mando de las lamas), el MISMO radio de la ficha con
+      // Vertical/Medio incluidos. Llega a Fase 3 como DIRECC. CAD/CIERRE.
+      if (esCategoriaVertical(ventana.categoria)) {
+        return (
+          <div className="space-y-2">
+            <RadioRow
+              label="Cierre"
+              value={pano.cierreVert || ''}
+              options={
+                pano.cierreVert &&
+                !(OPCIONES_CIERRE_VERT as readonly string[]).includes(pano.cierreVert)
+                  ? [...OPCIONES_CIERRE_VERT, pano.cierreVert]
+                  : [...OPCIONES_CIERRE_VERT]
+              }
+              onChange={(v) => onPano({ cierreVert: v })}
+            />
+            <p className="text-[0.68rem] text-muted-foreground">
+              La cadena de mando de la vertical es propia (no la de roller) y cuelga del lado del
+              cierre.
+            </p>
+          </div>
+        );
+      }
       const cargadorOpts =
         (pano.motorModelo || '').toUpperCase() === 'DOM38' ? CARGADOR_DOM38 : CARGADOR_DOM41;
       const cadenasDisponibles = cadenasRoller(props.cadenas, {}, reglas.cadenas);
@@ -408,6 +434,14 @@ export function CuerpoPaso(props: PropsPaso) {
                 }
               }}
             />
+            {esDual && (
+              <p className="mt-1 text-[0.68rem] text-muted-foreground">
+                {panoIdx === 0
+                  ? 'El paño 1 es el rollo que va al vidrio: normalmente la screen.'
+                  : 'El paño 2 es el rollo de adentro: normalmente el blackout.'}{' '}
+                Cada uno lleva su propia tela.
+              </p>
+            )}
           </div>
           <RadioRow
             label="Tipo"

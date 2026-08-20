@@ -25,15 +25,20 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useOT } from '@/modules/ots/hooks';
 import {
+  asegurarPanosDual,
   crearPanoVacio,
+  esCampoPropioDelRollo,
+  etiquetaPanos,
   OPCIONES_MECANISMO_DUAL,
   PANO_COLORS,
+  PANOS_DUAL,
   postInstalacionVacia,
+  quitarPanoDualAutomatico,
   resumenPanos,
-  tipoVentanaLabel,
   validarVentana,
   type PostInstalacionData,
 } from '@/modules/cotizador/fase2';
+import { llevaCenefaOvaladaImplicita } from '@/modules/cotizador/insumosCortina';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { esLineaB, lineaBPorPano } from '@/modules/cotizador/lineaB';
 import { kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
@@ -54,10 +59,10 @@ import { JuntarConjuntoDialog } from '@/components/cotizador/JuntarConjuntoDialo
 import { categoriasFase1ConTipos, catBadgeColor } from '@/modules/cotizador/categorias';
 import {
   colorAccesorioCorto,
-  direccionDesdeCierre,
   enriquecerPanoDesdeFase0,
   enriquecerVentanaDesdeFase0,
   sentidoDesdeArmado,
+  sincronizarDireccionConCierre,
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
 import { ProductoSelectorFase2 } from '@/components/cotizador/ProductoSelectorFase2';
@@ -273,9 +278,11 @@ export function CotizadorFase2() {
     modelo: ModeloDespiece | null,
     forzarTuberia = false,
   ): Ventana => {
-    const categoriaImplicaOvalada = (v.categoria || '')
-      .toUpperCase()
-      .includes('CENEFA_OVALADA');
+    // La cenefa ovalada la trae el SISTEMA en que se fabrica la cortina, no el
+    // nombre de la categoría: el DÚO se fabrica en CENEFA_OVALADA_DUO y por
+    // mirar el texto se le perdía la cenefa (2026-08-20). La pletina dúo
+    // (velcro) queda fuera: su sistema es PLETINA_DUO y no lleva.
+    const categoriaImplicaOvalada = llevaCenefaOvaladaImplicita(v.categoria, reglas.tipos);
     // El BEEBLACK no lleva tubo (su estructura son los perfiles/riel): nunca se
     // le asigna tubería y se limpia la que hayan recibido las OT guardadas antes
     // de este gate, que la tomaban del prefill genérico por ancho.
@@ -333,6 +340,13 @@ export function CotizadorFase2() {
           categoriaImplicaOvalada && (!p.cenefa || p.cenefa === 'No')
             ? 'Ovalada'
             : p.cenefa;
+        // La ovalada va CON TIRA por default (la categoría B, siempre sin).
+        // Se escribe cuando la cenefa la pone el SISTEMA: si no, quedaba como
+        // un pendiente que bloqueaba Fase 3 por un dato que no se elige.
+        const tiraPatch: Partial<Pano> =
+          categoriaImplicaOvalada && cenefa === 'Ovalada' && !String(p.cenefaTira ?? '').trim()
+            ? { cenefaTira: lineaB ? 'SIN TIRA' : 'CON TIRA' }
+            : {};
         // Si quedó un chip dual, rellena lado/color derivados (coherencia con el
         // toggle Simple/Dual, que sí los setea).
         const lc = dual && esChipDual(mecanismo) ? ladoColorDesdeChipDual(mecanismo) : null;
@@ -410,6 +424,7 @@ export function CotizadorFase2() {
           ...cadPatch,
           tuberia,
           cenefa,
+          ...tiraPatch,
         };
       }),
     };
@@ -698,9 +713,26 @@ export function CotizadorFase2() {
             candidatos,
             (v.panos?.[0]?.colorMecanismo as string) || (v.panos?.[0]?.color as string) || v.color,
           ) ?? v.modelo ?? null;
-      return sincronizarChips({ ...v, categoria, modelo: nuevoModelo }, nuevoModelo, !actualSirve);
+      // La DUAL son dos telas en la misma cortina: el sistema define cuántos
+      // paños lleva, porque el editor ya no pregunta la cantidad. Al salir de
+      // la dual se retira el rollo que se creó solo (si nunca recibió tela) y
+      // se baja el flag dual, salvo en beeblack, donde significa DOBLE.
+      const eraDual = categoriaEsDual(v.categoria || '', reglas.tipos);
+      const seraDual = categoriaEsDual(categoria, reglas.tipos);
+      let base: Ventana = { ...v, categoria, modelo: nuevoModelo };
+      if (seraDual) base = asegurarPanosDual(base, reglas.tipos);
+      else if (eraDual && !esCategoriaBeeblack(categoria)) base = quitarPanoDualAutomatico(base);
+      return sincronizarChips(base, nuevoModelo, !actualSirve);
     });
   };
+
+  // El paño abierto no puede quedar fuera de rango cuando la ventana pierde
+  // uno (salir de la dual): con el índice viejo, editar un campo escribía un
+  // paño fantasma en esa posición.
+  useEffect(() => {
+    const n = ventanaForm?.panos.length ?? 0;
+    if (n > 0 && panoActivo > n - 1) setPanoActivo(n - 1);
+  }, [ventanaForm?.panos.length, panoActivo]);
 
   const actualizarVentana = (patch: Partial<Ventana>) =>
     setVentanaForm((v) => (v ? { ...v, ...patch } : v));
@@ -749,15 +781,29 @@ export function CotizadorFase2() {
   const actualizarPano = (idx: number, patch: Partial<Pano>) =>
     setVentanaForm((v) => {
       if (!v) return v;
-      const panos = [...v.panos];
-      panos[idx] = { ...panos[idx], ...patch };
-      let nuevo: Ventana = { ...v, panos };
+      const esDualVentana = categoriaEsDual(v.categoria || '', reglas.tipos);
+      // En la DUAL los dos rollos son la MISMA cortina: comparten ventana,
+      // bracket, medidas, herrajes e instalación. Lo único propio de cada rollo
+      // es su TELA y el lado de su cadena (en MIXTO va una por lado), así que
+      // todo lo demás se escribe en los dos. Sin esto el segundo rollo nacía en
+      // blanco y había que cargarle la ficha entera de nuevo — el atajo era
+      // partir la dual en dos cortinas, que cobra dos instalaciones y pide dos
+      // kits (2026-08-20).
+      const aplicar = (ps: Pano[], mod: Partial<Pano>): Pano[] => {
+        if (!esDualVentana) return ps.map((p, i) => (i === idx ? { ...p, ...mod } : p));
+        const comun: Record<string, unknown> = {};
+        const propio: Record<string, unknown> = {};
+        for (const [k, val] of Object.entries(mod)) {
+          (esCampoPropioDelRollo(k) ? propio : comun)[k] = val;
+        }
+        return ps.map((p, i) => (i === idx ? { ...p, ...comun, ...propio } : { ...p, ...comun }));
+      };
+      let nuevo: Ventana = { ...v, panos: aplicar([...v.panos], patch) };
       const setPano = (mod: Partial<Pano>) => {
-        nuevo = { ...nuevo, panos: nuevo.panos.map((p, i) => (i === idx ? { ...p, ...mod } : p)) };
+        nuevo = { ...nuevo, panos: aplicar(nuevo.panos, mod) };
       };
       const anchoIdx = () => parseFloat(String(nuevo.panos[idx]?.ancho ?? 0)) || 0;
       const altoIdx = () => parseFloat(String(nuevo.panos[idx]?.alto ?? 0)) || 0;
-      const esDualVentana = categoriaEsDual(v.categoria || '', reglas.tipos);
       // Dual: el mecanismo (lado+color) es UNO por ventana (un solo bracket dual)
       // → se espeja lado/color/mecanismo a TODOS los paños. Cada paño mantiene su
       // tela (codInt); solo se comparte la parte del kit.
@@ -913,10 +959,17 @@ export function CotizadorFase2() {
       ...ventanaForm,
       alto: parseFloat(String(primer?.alto)) || ventanaForm.alto || 0,
       color: primer?.color || ventanaForm.color || 'Blanco',
-      // Sentido/dirección para la cotización (Fase 1/3): se derivan del primer
-      // paño (armado/cierre) si no venían de Fase 0. No afectan el precio.
-      sentido: ventanaForm.sentido || sentidoDesdeArmado(primer?.armado) || undefined,
-      direccion: ventanaForm.direccion || direccionDesdeCierre(primer?.cierreVert) || undefined,
+      // Sentido/dirección para la cotización (Fase 1/3): lo que el vendedor fijó
+      // en Fase 2 (armado/cierre del primer paño) MANDA sobre lo que venía de
+      // Fase 0 — antes solo se derivaban si venían vacíos, y corregir el lado
+      // en terreno dejaba la cotización final con el lado viejo. En el beeblack
+      // la dirección es su CIERRE (IZQUIERDA-DERECHA…) y no sale de cierreVert.
+      // No afectan el precio; la grilla de Fase 3 re-fuerza el INTERNO de
+      // oscuridad al cargar.
+      sentido: sentidoDesdeArmado(primer?.armado) || ventanaForm.sentido || undefined,
+      direccion: esCategoriaBeeblack(ventanaForm.categoria ?? '')
+        ? ventanaForm.direccion || undefined
+        : sincronizarDireccionConCierre(ventanaForm.direccion, primer?.cierreVert) || undefined,
     };
     // Dual: la ventana refleja la tela del paño 0 (para consumidores nivel-ventana);
     // cada paño conserva la suya en codInt/producto/descripcion.
@@ -1276,7 +1329,11 @@ export function CotizadorFase2() {
                         </span>
                       </div>
                       <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
-                        {tipoVentanaLabel(v.panos.length)} · {resumenPanos(v.panos)}
+                        {etiquetaPanos(
+                          v.panos.length,
+                          categoriaEsDual(v.categoria || '', reglas.tipos),
+                        )}{' '}
+                        · {resumenPanos(v.panos)}
                       </div>
                       {/* Ventana en ángulo: sus paños son caras, no cortinas. */}
                       {rotuloForma(v) && (
@@ -1383,6 +1440,33 @@ export function CotizadorFase2() {
                     </button>
                   </div>
                 )}
+                {/* Dual a medias: la de un solo rollo llega de un Excel con el par
+                    incompleto o de una OT cargada antes de que el sistema creara
+                    el segundo paño solo. Se avisa acá —sobre la ficha Y sobre la
+                    vista guiada— con el botón que la completa, para que nadie la
+                    parta en dos cortinas (dos instalaciones, dos kits). */}
+                {categoriaEsDual(ventanaForm.categoria || '', reglas.tipos) &&
+                  ventanaForm.panos.length < PANOS_DUAL && (
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.75rem] text-amber-600">
+                      <span>
+                        Esta dual tiene <strong>una sola tela</strong>. Es UNA cortina con dos
+                        rollos en el mismo bracket: si la cargaste como dos cortinas separadas,
+                        agrégale acá la segunda tela y borra la otra (así no cobra dos
+                        instalaciones ni pide dos kits).
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVentanaForm((v) => (v ? asegurarPanosDual(v, reglas.tipos) : v));
+                          setPanoActivo(PANOS_DUAL - 1);
+                          toast.info('Listo: elige la tela del segundo rollo en el paño 2.');
+                        }}
+                        className="rounded border border-amber-500/40 px-2 py-0.5 hover:bg-amber-500/20"
+                      >
+                        Agregar la segunda tela
+                      </button>
+                    </div>
+                  )}
                 {vista === 'interactiva' && varianteVentana ? (
               /* Vista guiada: un paso a la vez con la cortina armándose al lado.
                  Edita el MISMO `ventanaForm` que la ficha. */
@@ -1424,7 +1508,7 @@ export function CotizadorFase2() {
                   <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.75rem] text-amber-600">
                     {ventanaForm.categoria
                       ? `«${ventanaForm.categoria}» se fabrica distinto a un roller, así que la vista guiada no la dibuja: se carga con la ficha de siempre.`
-                      : 'Elige el tipo de cortina para ver la vista guiada. Los sistemas de oscuridad, las verticales y el beeblack se cargan siempre con la ficha.'}
+                      : 'Elige el tipo de cortina para ver la vista guiada. Los sistemas de oscuridad y el beeblack se cargan siempre con la ficha.'}
                   </div>
                 )}
                 {/* Datos de la ventana */}
@@ -1567,6 +1651,13 @@ export function CotizadorFase2() {
                           }
                         }}
                       />
+                      {categoriaEsDual(ventanaForm.categoria || '', reglas.tipos) && (
+                        <p className="mt-1 text-[0.68rem] text-muted-foreground">
+                          Cada rollo lleva su tela: el <strong>paño 1</strong> es el que va al
+                          vidrio (normalmente la screen) y el <strong>paño 2</strong> el de
+                          adentro.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <Label>Cantidad</Label>
@@ -1634,6 +1725,7 @@ export function CotizadorFase2() {
                   sentidoVentana={ventanaForm.sentido}
                   varianteVentana={ventanaForm.oscuridadVariante}
                   direccionVentana={ventanaForm.direccion}
+                  onDireccionVentana={(v) => actualizarVentana({ direccion: v })}
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
                   formulas={formulas}
                   reglas={reglas}

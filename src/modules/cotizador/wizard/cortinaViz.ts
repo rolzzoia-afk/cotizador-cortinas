@@ -49,13 +49,15 @@ export const NOMBRE_PIEZA: Record<PiezaViz, string> = {
 };
 
 /** Qué silueta se dibuja. `null` = esta categoría no tiene vista interactiva. */
-export type VarianteViz = 'roller' | 'dual' | 'duo';
+export type VarianteViz = 'roller' | 'dual' | 'duo' | 'vertical';
 
 /**
- * Variante de dibujo de una categoría. Solo el roller y sus parientes directos
- * (dual = dos rollos en un bracket, dúo = tela de bandas) tienen dibujo: las
- * verticales, los sistemas de oscuridad y el beeblack se fabrican distinto y
- * mostrarles un roller genérico confundiría más de lo que ayuda.
+ * Variante de dibujo de una categoría. El roller y sus parientes directos
+ * (dual = dos rollos en un bracket, dúo = tela de bandas) comparten dibujo, y
+ * la VERTICAL tiene el suyo (riel cabezal + lamas colgando, del catálogo de
+ * diseños del dueño 2026-08-19). Los sistemas de oscuridad y el beeblack se
+ * fabrican distinto y mostrarles un roller genérico confundiría más de lo que
+ * ayuda: siguen sin dibujo.
  */
 export function varianteViz(
   categoria: string | null | undefined,
@@ -63,11 +65,20 @@ export function varianteViz(
 ): VarianteViz | null {
   const c = categoriaEfectiva(categoria ?? '', tipos).toUpperCase().trim();
   if (!c) return null;
+  if (c === 'VERTICAL') return 'vertical';
   if (c === 'ROL_DUAL') return 'dual';
   if (c.startsWith('DUO') || c === 'PLETINA_DUO_V') return 'duo';
   if (c === 'ROL' || c === 'PLETINA_ROLLER_V' || c.startsWith('ROL_')) return 'roller';
   return null;
 }
+
+/** Una tela del dibujo: con qué color y con qué textura se pinta. */
+export type CapaTela = {
+  hex: string;
+  patron: 'screen' | 'solida' | 'bandas';
+  /** false = a ese rollo todavía no le eligieron tela (se dibuja tenue). */
+  definida: boolean;
+};
 
 /** Colores y texturas con que se pinta el dibujo. */
 export type EstiloViz = {
@@ -76,9 +87,13 @@ export type EstiloViz = {
   /** Nombre canónico del color de accesorios ('NEGRO'|'BLANCO'|'GRIS'|…). */
   herrajesColor: string;
   telaHex: string;
-  telaPatron: 'screen' | 'solida' | 'bandas';
-  /** Dual: la tela del segundo rollo (el de atrás). */
-  telaTraseraHex?: string;
+  telaPatron: CapaTela['patron'];
+  /**
+   * Dual: las DOS telas, en orden de montaje — [0] la del rollo que va al
+   * vidrio (paño 1, la screen) y [1] la del rollo de adelante (paño 2, el
+   * blackout). El dibujo las cuelga a distinta altura para que se vean las dos.
+   */
+  telaDual?: readonly [CapaTela, CapaTela];
   cenefa: 'no' | 'ovalada' | 'cuadrada';
   accionamiento: 'cadena' | 'motor';
   /** Lado de la cadena o del motor, visto de frente. */
@@ -168,14 +183,24 @@ export function estiloVizDePano(
   const ladoTxt = motor ? String(p.ladoMotor ?? '') : String(p.cierreVert ?? '');
   // La tela vive en el paño solo en dual; en el resto es de la ventana.
   const codTela = (variante === 'dual' && p.codInt) || v.codInt;
+  /** Una capa de la dual. Solo el primer rollo hereda la tela de la ventana:
+   *  al guardar, la ventana refleja justamente la suya. */
+  const capa = (pp: Pano | undefined, heredaDeLaVentana: boolean): CapaTela => {
+    const cod = String(pp?.codInt ?? '').trim() || (heredaDeLaVentana ? String(v.codInt ?? '').trim() : '');
+    return {
+      hex: telaHexDeProducto(cod, catalogo),
+      patron: patronDeTipoTela(pp?.tipoTela),
+      definida: !!cod,
+    };
+  };
   return {
     herrajesHex: HERRAJE_HEX[colorAcc] ?? HERRAJE_HEX.GRIS,
     herrajesColor: colorAcc,
     telaHex: telaHexDeProducto(codTela, catalogo),
     telaPatron: variante === 'duo' ? 'bandas' : patronDeTipoTela(p.tipoTela),
-    telaTraseraHex:
+    telaDual:
       variante === 'dual'
-        ? telaHexDeProducto(v.panos?.[1]?.codInt || v.codInt, catalogo)
+        ? [capa(v.panos?.[0], true), capa(v.panos?.[1], false)]
         : undefined,
     cenefa:
       cenefaTxt === 'OVALADA' ? 'ovalada' : esCenefaCuadrada(cenefaTxt) ? 'cuadrada' : 'no',
@@ -206,6 +231,14 @@ export const VIZ = {
   cola: 92,
   /** Caída máxima. */
   caidaMax: 600,
+  /** Dual: cuánto más abajo queda el rollo de ADELANTE (el paño 2). */
+  dualDy: 34,
+  /**
+   * Dual: hasta dónde baja la tela de adelante, como fracción de la del vidrio.
+   * La de atrás (screen) va entera y esta queda a media ventana — que es como
+   * se usa la cortina y, de paso, la única forma de VER las dos telas.
+   */
+  dualFrente: 0.5,
   /** Grosor de tela (mm de la vuelta): engorda el rollo al enrollar. */
   grosor: 4.4,
 } as const;

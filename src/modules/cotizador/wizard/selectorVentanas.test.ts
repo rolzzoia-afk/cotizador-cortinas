@@ -48,11 +48,12 @@ const enBlanco = (): Ventana =>
   ]);
 
 describe('formas de ventana', () => {
-  it('cada forma trae las caras que le corresponden: bow 3, L 2, U 3, triangular 1', () => {
+  it('cada forma trae las caras que le corresponden: bow 3, L 2, triangular 1', () => {
     expect(formaDef('bow')?.panos).toBe(3);
     expect(formaDef('ele')?.panos).toBe(2);
-    expect(formaDef('u')?.panos).toBe(3);
     expect(formaDef('triangular')?.panos).toBe(1);
+    // La «ventana en U» se eliminó (2026-08-19): era lo mismo que un bow window.
+    expect(FORMAS_VENTANA).toHaveLength(3);
   });
 
   it('rotuloForma devuelve el rótulo del modelo, y vacío si la ventana es recta', () => {
@@ -98,7 +99,7 @@ describe('aplicarSeleccion — especial', () => {
   });
 
   it('no deja hermanas pendientes: el ángulo es una sola ventana', () => {
-    const r = aplicarSeleccion(enBlanco(), { tipo: 'especial', forma: 'u' });
+    const r = aplicarSeleccion(enBlanco(), { tipo: 'especial', forma: 'ele' });
     expect(r.hermanasPendientes).toBe(0);
   });
 

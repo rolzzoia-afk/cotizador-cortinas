@@ -17,6 +17,7 @@ import {
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
+import { sistemasDeCategoria } from '@/modules/descuentos/tipos';
 import {
   COLORES_BUILTIN,
   colorPorCodigo,
@@ -342,6 +343,27 @@ export function tarugoDeMaterial(
   return null;
 }
 
+/**
+ * ¿La categoría trae cenefa OVALADA por diseño? El roller de cenefa ovalada y
+ * el DÚO: sus sistemas del catálogo se llaman `CENEFA_OVALADA` y
+ * `CENEFA_OVALADA_DUO`, y TODAS sus filas traen `dcto_cenefa_cm`, así que el
+ * despiece corta la cenefa siempre — la marque alguien en la ficha o no.
+ *
+ * Se resuelve por SISTEMA y no por el texto de la categoría, que es justo lo
+ * que dejaba al dúo afuera: «DUO_MANUAL_38mm» no dice cenefa por ningún lado, y
+ * sus cortinas quedaban sin tapa, sin bracket y sin la línea de cenefa en el
+ * BOM (2026-08-20). La pletina dúo (velcro) NO entra: su sistema es
+ * PLETINA_DUO y no lleva cenefa.
+ */
+export function llevaCenefaOvaladaImplicita(
+  categoria?: string | null,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return sistemasDeCategoria(categoria ?? '', tipos).some((s) =>
+    s.toUpperCase().startsWith('CENEFA_OVALADA'),
+  );
+}
+
 /** ¿La cenefa del paño es ovalada? (chip 'Ovalada' o categoría que la implica). */
 export function esCenefaOvalada(
   cenefa: string | null | undefined,
@@ -349,6 +371,9 @@ export function esCenefaOvalada(
   tipos?: readonly TipoCortina[],
 ): boolean {
   if ((cenefa || '').trim().toUpperCase() === 'OVALADA') return true;
+  if (llevaCenefaOvaladaImplicita(categoria, tipos)) return true;
+  // Respaldo por nombre: una categoría que se llama «cenefa ovalada» pero que
+  // todavía no tiene fila en el catálogo igual la lleva.
   return categoriaEfectiva(categoria, tipos).toUpperCase().includes('CENEFA_OVALADA');
 }
 

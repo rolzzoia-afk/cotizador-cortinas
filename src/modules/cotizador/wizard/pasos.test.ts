@@ -110,10 +110,9 @@ describe('pasosAplicables', () => {
   });
 
   it('la pletina lleva mecanismo (VELCRO) pero NO accionamiento', () => {
-    // De fábrica solo la vertical y el beeblack van sin kit, y ninguna de las
-    // dos tiene vista guiada: el paso de mecanismo siempre aparece. El de
-    // accionamiento no: el paño va PEGADO, no sube ni baja, así que no hay
-    // cadena, ni peso de cadena, ni lado de mando que preguntar.
+    // La pletina sí lleva kit (VELCRO), así que el paso de mecanismo aparece.
+    // El de accionamiento no: el paño va PEGADO, no sube ni baja, así que no
+    // hay cadena, ni peso de cadena, ni lado de mando que preguntar.
     const ids = idsAplicables(ctxDe(ventLlena({ categoria: 'PLETINA_ROLLER_V' })));
     expect(ids).toContain('mecanismo');
     expect(ids).not.toContain('accionamiento');
@@ -125,6 +124,53 @@ describe('pasosAplicables', () => {
     // puede quedar bloqueando el paso a Fase 3.
     const v = ventLlena({ categoria: 'PLETINA_ROLLER_V' }, { codCadena: '', codPeso: '' });
     expect(pendientesFase2([v])).toEqual([]);
+  });
+
+  it('la vertical no pregunta tubo, mecanismo ni peso: no los lleva', () => {
+    // Riel cabezal + carritos + lamas: ni tubo ni peso inferior de roller (el
+    // gate tampoco los exige).
+    const ids = idsAplicables(ctxDe(ventLlena({ categoria: 'VERTICAL' }), 'vertical'));
+    expect(ids).not.toContain('tubo');
+    expect(ids).not.toContain('mecanismo');
+    expect(ids).not.toContain('peso');
+    expect(ids).toContain('tela');
+    expect(ids).toContain('cenefa');
+  });
+
+  it('la vertical SÍ pregunta el cierre: sin él la DIRECC. de Fase 3 quedaba en blanco', () => {
+    // El paso «Cadena o motor» aplica solo para el lado del mando (el «Cierre»
+    // de la ficha): la vertical no lleva cadena de roller ni motor.
+    const sinCierre = ctxDe(ventLlena({ categoria: 'VERTICAL' }, { cierreVert: '' }), 'vertical');
+    expect(idsAplicables(sinCierre)).toContain('accionamiento');
+    const paso = pasoPorId('accionamiento');
+    expect(paso.campos(sinCierre).map((c) => c.etiqueta)).toEqual(['cierre (lado del mando)']);
+    expect(faltantesPaso(paso, sinCierre)).toEqual(['cierre (lado del mando)']);
+    const conCierre = ctxDe(ventLlena({ categoria: 'VERTICAL' }), 'vertical');
+    expect(pasoCompleto(paso, conCierre)).toBe(true);
+  });
+
+  it('vertical con manillas pedidas: el paso del peso vuelve a pedir su color', () => {
+    // Paridad con el gate, que exige el color de manilla cuando hay cantidad.
+    const ids = idsAplicables(
+      ctxDe(ventLlena({ categoria: 'VERTICAL' }, { manillaCant: 2 }), 'vertical'),
+    );
+    expect(ids).toContain('peso');
+  });
+
+  it('el wizard de la vertical nunca pide MENOS que el gate de Fase 2', () => {
+    const v = ventLlena(
+      { categoria: 'VERTICAL' },
+      { tuberia: '', mecanismo: '', codCadena: '', codPeso: '' },
+    );
+    expect(pendientesFase2([v])).toEqual([]);
+  });
+
+  it('en la vertical las lamas (tela) no esperan a un tubo que no existe', () => {
+    const ctx = ctxDe(ventLlena({ categoria: 'VERTICAL' }), 'vertical');
+    const t = targetsProgreso(ctx);
+    expect(t.tubo).toBe(1);
+    expect(t.tela).toBe(1);
+    expect(t.despliegue).toBe(1);
   });
 
   it('si Admin marca una categoría «sin mecanismo», el wizard se salta ese paso', () => {
@@ -205,6 +251,19 @@ describe('avance de cada paso', () => {
     expect(faltantesPaso(pasoPorId('tela'), sinTela)).toContain('tela');
     const conTela = ctxDe(ventLlena({ categoria: 'ROL_DUAL', codInt: '' }, { codInt: 'SC 64' }), 'dual');
     expect(pasoCompleto(pasoPorId('tela'), conTela)).toBe(true);
+  });
+
+  it('el SEGUNDO rollo de la dual no hereda la tela de la ventana: la suya se elige', () => {
+    // La tela de la ventana es la del rollo 1 (al guardar se copia de él). Si
+    // el rollo 2 cayera ahí, se cortarían dos telas iguales sin aviso — mismo
+    // criterio que el gate de Fase 2.
+    const v = ventLlena({ categoria: 'ROL_DUAL', codInt: 'SC 64' }, { codInt: 'SC 64' });
+    v.panos.push(panoLleno({ codInt: '' }));
+    const rollo2: CtxPaso = { ventana: v, pano: v.panos[1], panoIdx: 1, variante: 'dual' };
+    expect(faltantesPaso(pasoPorId('tela'), rollo2)).toContain('tela');
+    expect(pasoCompleto(pasoPorId('tela'), { ...rollo2, pano: panoLleno({ codInt: 'BK 10' }) })).toBe(
+      true,
+    );
   });
 });
 

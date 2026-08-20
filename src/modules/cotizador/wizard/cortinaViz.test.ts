@@ -40,10 +40,13 @@ describe('varianteViz — qué categorías tienen dibujo', () => {
     expect(varianteViz('PLETINA_DUO_V')).toBe('duo');
   });
 
+  it('la vertical dibuja su riel con lamas (catálogo de diseños 2026-08-19)', () => {
+    expect(varianteViz('VERTICAL')).toBe('vertical');
+  });
+
   it('lo que se fabrica distinto NO se dibuja como roller', () => {
     // Mostrarles un roller genérico confundiría más de lo que ayuda: estas
     // categorías se cargan solo con la ficha clásica.
-    expect(varianteViz('VERTICAL')).toBeNull();
     expect(varianteViz('BEEBLACK')).toBeNull();
     expect(varianteViz('SOFT_LIGHT_38mm')).toBeNull();
     expect(varianteViz('DARK_45mm')).toBeNull();
@@ -111,6 +114,39 @@ describe('estiloVizDePano — cómo se pinta', () => {
     expect(estiloVizDePano(v, v.panos[0], catalogo, 'dual').telaHex).toBe(
       telaHexDeProducto('SC 64', catalogo),
     );
+  });
+
+  it('la dual entrega las DOS telas: [0] la del vidrio, [1] la de adelante', () => {
+    // El dibujo cuelga las dos a distinta altura; sin este par solo se veía una.
+    const catalogo = {
+      'SC 64': { descripcion: 'CS 9000 BLANCO' },
+      'BK 18': { descripcion: 'CS 0303 NEGRO' },
+    } as unknown as CatalogoProductos;
+    const v = vent({ codInt: 'SC 64' }, { codInt: 'SC 64', tipoTela: 'SCR' });
+    v.panos.push({ ancho: 1.5, alto: 2, color: '', codInt: 'BK 18', tipoTela: 'BK' } as Pano);
+    const e = estiloVizDePano(v, v.panos[0], catalogo, 'dual');
+    expect(e.telaDual?.[0]).toEqual({
+      hex: telaHexDeProducto('SC 64', catalogo),
+      patron: 'screen',
+      definida: true,
+    });
+    expect(e.telaDual?.[1]).toEqual({
+      hex: telaHexDeProducto('BK 18', catalogo),
+      patron: 'solida',
+      definida: true,
+    });
+  });
+
+  it('el rollo de adelante sin tela queda marcado (se dibuja tenue), no copia la del otro', () => {
+    // Solo el rollo 1 hereda la tela de la ventana: es la suya.
+    const v = vent({ categoria: 'ROL_DUAL', codInt: 'BK 18' });
+    const e = estiloVizDePano(v, v.panos[0], undefined, 'dual');
+    expect(e.telaDual?.[0].definida).toBe(true);
+    expect(e.telaDual?.[1].definida).toBe(false);
+  });
+
+  it('fuera de la dual no hay par de telas', () => {
+    expect(estiloVizDePano(vent(), vent().panos[0], undefined, 'roller').telaDual).toBeUndefined();
   });
 });
 

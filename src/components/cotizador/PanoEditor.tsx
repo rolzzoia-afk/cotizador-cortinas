@@ -37,7 +37,10 @@ import {
 } from '@/modules/cotizador/fase2';
 import type { Pano } from '@/modules/cotizador/types';
 import { debeInvertirPano } from '@/modules/cotizador/tela';
-import { cantidadSuplementosAuto } from '@/modules/cotizador/insumosCortina';
+import {
+  cantidadSuplementosAuto,
+  llevaCenefaOvaladaImplicita,
+} from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { esCategoriaPletina, mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
 import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
@@ -75,6 +78,7 @@ import {
 import { colorPerfilDesdeAdicional, type TipoPerfilAdicional } from '@/modules/descuentos/adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
+  CIERRES_BEEBLACK,
   cortesBeeblack,
   esCategoriaBeeblack,
   esCierreVerticalBeeblack,
@@ -124,6 +128,9 @@ type Props = {
   varianteVentana?: string | null;
   /** Dirección/cierre de la ventana. En BEEBLACK, 'DE ARRIBA ABAJO' gira la cortina. */
   direccionVentana?: string | null;
+  /** Editor del cierre del BEEBLACK (campo de la VENTANA, no del paño). Sin
+   *  esto el cierre se muestra de solo lectura, como antes. */
+  onDireccionVentana?: (direccion: string) => void;
   /** Adicionales Fase 0 (colores de perfiles). */
   adicionalesFase0?: AdicionalFase0Persistido[];
   /** Ancho del rollo (m) para auto-sugerir corte invertido. Default 2,98. */
@@ -280,6 +287,7 @@ export function PanoEditor({
   sentidoVentana,
   varianteVentana,
   direccionVentana,
+  onDireccionVentana,
   adicionalesFase0,
   anchoRollo = 2.98,
   formulas = FORMULAS_DEFAULT,
@@ -411,19 +419,24 @@ export function PanoEditor({
   const catUpper = (categoria || '').toUpperCase();
   const esMotorCat = catUpper.includes('MOTOR');
   const esVerticalCat = catUpper.includes('VERTICAL');
-  const categoriaImplicaOvalada = catUpper.includes('CENEFA_OVALADA');
+  // Por SISTEMA, no por el nombre: el dúo se fabrica en CENEFA_OVALADA_DUO y su
+  // categoría no lo dice (2026-08-20). La pletina dúo no lleva cenefa.
+  const categoriaImplicaOvalada = llevaCenefaOvaladaImplicita(categoria, reglas.tipos);
   // PLETINA (velcro): el paño va PEGADO, no sube ni baja. Sin cadena, sin peso
   // de cadena y sin lado de accionamiento — la sección entera no aplica.
   const esPletinaCat = esCategoriaPletina(categoria, reglas.tipos);
   // Color de accesorios único (Medidas): el mismo resolutor que producción.
   const colorAccesorios = colorAccesorioCorto(colorAccesoriosRaw);
-  // Cierre Vertical/Medio solo aplica a VERTICAL; el resto ve Izq/Der
-  // (más el valor guardado de OTs viejas, para no esconderlo).
+  // El cierre Medio solo aplica a VERTICAL; el resto ve Izq/Der. Un valor
+  // guardado que ya no se ofrece (el legacy «Vertical», u otro de OTs viejas)
+  // se conserva como opción para no esconder el dato.
+  const conCierreGuardado = (base: readonly string[]) =>
+    pano.cierreVert && !base.includes(pano.cierreVert)
+      ? [...base, pano.cierreVert]
+      : [...base];
   const opcionesCierre = esVerticalCat
-    ? OPCIONES_CIERRE_VERT
-    : OPCIONES_CIERRE_VERT.filter(
-        (o) => o === 'Izquierda' || o === 'Derecha' || o === pano.cierreVert,
-      );
+    ? conCierreGuardado(OPCIONES_CIERRE_VERT)
+    : conCierreGuardado(['Izquierda', 'Derecha']);
   // Cenefa fija Ovalada cuando la categoría la implica (salvo dato legacy distinto).
   const cenefaFijaOvalada =
     categoriaImplicaOvalada && !esCenefaCuadrada(pano.cenefa);
@@ -639,8 +652,10 @@ export function PanoEditor({
           cadena VER, que se lista en la hoja de inventario); conserva solo el
           Cierre (que sí aplica: es el lado de accionamiento de las lamas).
           La PLETINA (velcro) no muestra nada: el paño va pegado, no sube ni baja,
-          así que no hay cadena que elegir ni lado por donde accionarla. */}
-      {!esPletinaCat && (
+          así que no hay cadena que elegir ni lado por donde accionarla.
+          El BEEBLACK tampoco: corre de lado con manilla (el BOM nunca emite
+          cadena para él) y su cierre es de la VENTANA, en su sección propia. */}
+      {!esPletinaCat && !esBeeblack && (
         <Section title="Cadena">
           {!esVerticalCat &&
             (cadenasDisponibles.length > 0 ? (
@@ -684,9 +699,9 @@ export function PanoEditor({
         </Section>
       )}
 
-      {/* 2b. PESO DE CADENA — no aplica a la vertical (lleva su peso VER propio)
-          ni a la pletina de velcro (no lleva cadena de la que colgarlo). */}
-      {!esVerticalCat && !esPletinaCat && pesosDisponibles.length > 0 && (
+      {/* 2b. PESO DE CADENA — no aplica a la vertical (lleva su peso VER propio),
+          ni a la pletina de velcro ni al beeblack (sin cadena de la que colgarlo). */}
+      {!esVerticalCat && !esPletinaCat && !esBeeblack && pesosDisponibles.length > 0 && (
         <Section title="Peso de cadena">
           <div className="flex flex-wrap items-center gap-2">
             <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Peso</span>
@@ -1210,15 +1225,45 @@ export function PanoEditor({
               </span>
             </div>
           )}
-          {direccionVentana && (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-border/60 bg-card/40 px-2 py-1 text-[0.7rem]">
-              <span className="text-muted-foreground">
-                Cierre: <span className="font-mono text-foreground">{direccionVentana}</span>
-                {cierreVerticalBb && (
-                  <span className="ml-1 text-amber-500">— gira 90°: lamas sobre el alto</span>
-                )}
-              </span>
+          {/* El cierre es de la VENTANA (columna DIRECC. CAD/CIERRE en Fase 3) y
+              GIRA las fórmulas 90° cuando es DE ARRIBA ABAJO. Antes era un chip
+              de solo lectura: una OT nacida en Terreno no tenía dónde fijarlo
+              hasta Fase 3 (incongruencia reportada 2026-08-20). */}
+          {onDireccionVentana ? (
+            <div className="space-y-1">
+              <RadioRow
+                label="Cierre"
+                value={direccionVentana || ''}
+                options={
+                  direccionVentana && !(CIERRES_BEEBLACK as readonly string[]).includes(direccionVentana)
+                    ? [...CIERRES_BEEBLACK, direccionVentana]
+                    : [...CIERRES_BEEBLACK]
+                }
+                onChange={onDireccionVentana}
+              />
+              {cierreVerticalBb && (
+                <p className="text-[0.7rem] text-amber-500">
+                  DE ARRIBA ABAJO gira la cortina 90°: las lamas se cuentan sobre el alto y el
+                  corte intercambia ancho y alto.
+                </p>
+              )}
+              {!direccionVentana && (
+                <p className="text-[0.7rem] text-amber-500">
+                  falta el cierre: hacia dónde corre el acordeón
+                </p>
+              )}
             </div>
+          ) : (
+            direccionVentana && (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded border border-border/60 bg-card/40 px-2 py-1 text-[0.7rem]">
+                <span className="text-muted-foreground">
+                  Cierre: <span className="font-mono text-foreground">{direccionVentana}</span>
+                  {cierreVerticalBb && (
+                    <span className="ml-1 text-amber-500">— gira 90°: lamas sobre el alto</span>
+                  )}
+                </span>
+              </div>
+            )
           )}
           {/* Doble = un beeblack con SCREEN + BLACKOUT: una sola estructura y dos
               telas (cada una con su manilla). Se marca en los dos paños; el 2º no

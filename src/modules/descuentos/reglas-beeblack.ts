@@ -222,6 +222,17 @@ export function normalizarVarianteBeeblack(
 }
 
 /**
+ * Los tres cierres del beeblack, tal como los rotula su planilla (columna
+ * CIERRE, que en la grilla estándar es DIRECC. CAD/CIERRE). Es UNA lista para
+ * la grilla de Fase 3 y la ficha de Fase 2: dos copias terminarían divergiendo.
+ */
+export const CIERRES_BEEBLACK = [
+  'IZQUIERDA-DERECHA',
+  'DERECHA-IZQUIERDA',
+  'DE ARRIBA ABAJO',
+] as const;
+
+/**
  * ¿El beeblack cierra DE ARRIBA ABAJO? Su planilla ofrece tres cierres:
  * IZQUIERDA-DERECHA, DERECHA-IZQUIERDA (el acordeón corre de lado, caso normal)
  * y DE ARRIBA ABAJO, donde la cortina va girada 90°: las lamas se cuentan sobre

@@ -101,6 +101,24 @@ describe('fichaResumen', () => {
     expect(f['Corte']).toBe('PLUMAVIT');
   });
 
+  it('la dual muestra SUS DOS telas, rotuladas por su lugar en la ventana', () => {
+    // Con una sola fila «Tela» quedaba fuera la mitad de la cortina.
+    const f = filas(
+      vent({ categoria: 'ROL_DUAL', codInt: 'SC 64', descripcion: 'SCREEN 3%' }, [
+        pano({ codInt: 'SC 64', descripcion: 'SCREEN 3%', tipoTela: 'SCR' }),
+        pano({ codInt: 'BK 18', descripcion: 'EVEREST', tipoTela: 'BK' }),
+      ]),
+    );
+    expect(f['Tela (al vidrio)']).toBe('SCR SCREEN 3%');
+    expect(f['Tela (adelante)']).toBe('BK EVEREST');
+    expect(f['Tela']).toBeUndefined();
+  });
+
+  it('la dual a la que le falta el segundo rollo lo dice, no repite la primera tela', () => {
+    const f = filas(vent({ categoria: 'ROL_DUAL' }, [pano({ codInt: 'SC 64' })]));
+    expect(f['Tela (adelante)']).toBe('falta elegirla');
+  });
+
   it('nombra el modelo especial cuando la ventana va en ángulo', () => {
     expect(filas(vent({ formaVentana: 'bow' }))['Modelo']).toBe('BOW WINDOW');
     expect(filas(vent())['Modelo']).toBeUndefined();

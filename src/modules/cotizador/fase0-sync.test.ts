@@ -11,6 +11,7 @@ import {
   motorAdicionalParaUbic,
   otTraeHubDomotica,
   sentidoDesdeArmado,
+  sincronizarDireccionConCierre,
   tipoTelaDesdeProducto,
   tipoTelaDesdeVentana,
 } from './fase0-sync';
@@ -44,6 +45,23 @@ describe('fase0-sync', () => {
     expect(direccionDesdeCierre('Derecha')).toBe('CAD [DERECHA]');
     expect(direccionDesdeCierre('Medio')).toBe('CIERRE [MEDIO]');
     expect(direccionDesdeCierre('Vertical')).toBe('');
+  });
+
+  it('el cierre corregido en Fase 2 actualiza la DIRECC. conservando el prefijo', () => {
+    // Sin dirección previa: el recíproco simple.
+    expect(sincronizarDireccionConCierre('', 'Izquierda')).toBe('CAD [IZQUIERDA]');
+    // El lado cambió: se actualiza, CAD sigue CAD y CIERRE sigue CIERRE.
+    expect(sincronizarDireccionConCierre('CAD [IZQUIERDA]', 'Derecha')).toBe('CAD [DERECHA]');
+    expect(sincronizarDireccionConCierre('CIERRE [DERECHO]', 'Izquierda')).toBe('CIERRE [IZQUIERDO]');
+    // Medio no existe como CAD: cae a CIERRE [MEDIO].
+    expect(sincronizarDireccionConCierre('CAD [DERECHA]', 'Medio')).toBe('CIERRE [MEDIO]');
+    // Sin cambio real, queda igual.
+    expect(sincronizarDireccionConCierre('CIERRE [MEDIO]', 'Medio')).toBe('CIERRE [MEDIO]');
+    // Lo que no es dirección de cadena roller NO se toca: el cierre del
+    // beeblack, un cierre vacío o el legacy «Vertical» (sin destino).
+    expect(sincronizarDireccionConCierre('IZQUIERDA-DERECHA', 'Derecha')).toBe('IZQUIERDA-DERECHA');
+    expect(sincronizarDireccionConCierre('CAD [IZQUIERDA]', '')).toBe('CAD [IZQUIERDA]');
+    expect(sincronizarDireccionConCierre('CAD [IZQUIERDA]', 'Vertical')).toBe('CAD [IZQUIERDA]');
   });
 
   it('color accesorios → código corto', () => {
@@ -373,6 +391,38 @@ describe('fase0-sync — manilla desde adicionales de Fase 0', () => {
     const out = enriquecerVentanaDesdeFase0(ventana, undefined, adic);
     expect(out.panos[0].manillaCant).toBe(1); // respeta lo elegido
     expect(out.panos[0].manillaColor).toBe('NEG');
+  });
+});
+
+describe('fase0-sync — la cenefa que trae el sistema', () => {
+  it('el DÚO llega a Fase 2 con su cenefa ovalada y CON TIRA', () => {
+    // Va dentro del precio de la familia, así que no hay adicional que la
+    // marque: la pone el sistema (2026-08-20).
+    const ventana = {
+      id: '1', categoria: 'DUO_MANUAL_38mm', codInt: 'DU 12', color: 'NEGRO', panos: [],
+    } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0({ ancho: 1.66, alto: 2, color: 'NEGRO' } as Pano, ventana);
+    expect(out.cenefa).toBe('Ovalada');
+    expect(out.cenefaTira).toBe('CON TIRA');
+  });
+
+  it('la pletina dúo (velcro) NO recibe cenefa', () => {
+    const ventana = {
+      id: '2', categoria: 'PLETINA_DUO_V', codInt: 'DU 12', color: 'NEGRO', panos: [],
+    } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0({ ancho: 1.5, alto: 2, color: 'NEGRO' } as Pano, ventana);
+    expect(out.cenefa).toBeUndefined();
+  });
+
+  it('no pisa una cenefa ya elegida en terreno', () => {
+    const ventana = {
+      id: '3', categoria: 'DUO_MANUAL_38mm', codInt: 'DU 12', color: 'NEGRO', panos: [],
+    } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0(
+      { ancho: 1.5, alto: 2, color: 'NEGRO', cenefa: 'Cuadrada a muro' } as Pano,
+      ventana,
+    );
+    expect(out.cenefa).toBe('Cuadrada a muro');
   });
 });
 

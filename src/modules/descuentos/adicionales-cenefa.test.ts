@@ -6,6 +6,7 @@ import {
   buscarAdicionalCenefaOvalada,
   candidatosCenefaEnUbic,
   cenefaAdicionalEsDelPano,
+  cenefaIncluidaEnElPrecio,
   cenefaOvaladaDesdeAdicional,
   cortinaDeLaCenefa,
   derivarAdicionalesCenefaDesdeVentanas,
@@ -221,6 +222,28 @@ describe('derivarAdicionalesCenefaDesdeVentanas (paño → adicional)', () => {
     expect(derivarAdicionalesCenefaDesdeVentanas([v])).toEqual([
       { codInt: 'CENF O', cantidad: 2.5, descuento: 0, ubicacion: 'LIVING', colorAcc: 'GRS', conTira: true, origen: 'pano' },
     ]);
+  });
+
+  it('el DÚO no genera CENF O: su cenefa ya va en el precio de la familia', () => {
+    // Las recetas dúo incluyen el perfil E 26 y el mecanismo MEC 09, así que
+    // derivar el adicional cobraría la cenefa dos veces (2026-08-20).
+    const duo: VentanaItem = {
+      id: 'v1',
+      ubicacion: 'VISITA',
+      categoria: 'DUO_MANUAL_38mm',
+      cantidad: 1,
+      color: 'NEGRO',
+      panos: [{ ancho: 1.66, alto: 2, cenefa: 'Ovalada', colorTapa: 'NEG' }],
+    } as unknown as VentanaItem;
+    expect(derivarAdicionalesCenefaDesdeVentanas([duo])).toEqual([]);
+    expect(cenefaIncluidaEnElPrecio('DUO_MANUAL_38mm')).toBe(true);
+    // El roller de cenefa ovalada SÍ se cobra aparte: su receta no la trae.
+    const roller: VentanaItem = {
+      ...duo,
+      categoria: 'ROL_MANUAL_CENEFA_OVALADA_38mm',
+    } as unknown as VentanaItem;
+    expect(cenefaIncluidaEnElPrecio('ROL_MANUAL_CENEFA_OVALADA_38mm')).toBe(false);
+    expect(derivarAdicionalesCenefaDesdeVentanas([roller])).toHaveLength(1);
   });
 
   it('1 paño Ovalada SIN dato de tira → CENF O con conTira true (default 2026-07-20)', () => {

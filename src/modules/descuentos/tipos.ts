@@ -94,6 +94,21 @@ function reglaDeCategoria(
   return MAPEO_CATEGORIA[cat] ?? null;
 }
 
+/**
+ * Sistemas del catálogo en que se fabrica una categoría (vacío si no se conoce).
+ *
+ * Es la forma HONESTA de preguntar de qué sistema es una cortina: el nombre de
+ * la categoría no siempre lo dice — el dúo se fabrica en `CENEFA_OVALADA_DUO`
+ * pero se llama `DUO_MANUAL_38mm`, y por mirar el texto se le perdía la cenefa
+ * (2026-08-20).
+ */
+export function sistemasDeCategoria(
+  categoria: string,
+  tipos?: readonly TipoCortina[],
+): string[] {
+  return reglaDeCategoria(categoria, tipos)?.sistemas ?? [];
+}
+
 /** true si la categoría del cotizador es roller dual (mecanismo dual [MEC 01-25]). */
 export function categoriaEsDual(categoria: string, tipos?: readonly TipoCortina[]): boolean {
   const regla = reglaDeCategoria(categoria, tipos);

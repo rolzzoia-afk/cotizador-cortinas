@@ -40,7 +40,7 @@ El **número de OT** funciona igual en los dos casos: se puede teclear (por ejem
 En Fase 2 hay dos formas de cargar cada cortina, con el mismo resultado:
 
 - **Ficha**: la planilla de siempre, con todo a la vista. Sirve para cualquier tipo de cortina.
-- **Guiada**: un paso a la vez, y la cortina se va dibujando al lado a medida que se llena. Se puede hacer clic en cualquier pieza del dibujo —el tubo, la cadena, la cenefa— para saltar a ese paso. Cubre roller, dual y dúo; las verticales, los sistemas de oscuridad y el beeblack se cargan siempre con la ficha.
+- **Guiada**: un paso a la vez, y la cortina se va dibujando al lado a medida que se llena. Se puede hacer clic en cualquier pieza del dibujo —el tubo, la cadena, la cenefa— para saltar a ese paso. Cubre roller, dual, dúo y vertical (la vertical se dibuja con su riel y sus lamas, y no pregunta tubo ni peso porque no los lleva); los sistemas de oscuridad y el beeblack se cargan siempre con la ficha.
 
 Cambiar de vista no pierde nada de lo escrito.
 
@@ -49,9 +49,25 @@ Cambiar de vista no pierde nada de lo escrito.
 Cada vez que se aprieta **Nueva**, lo primero es decir qué hay en ese muro:
 
 - **Ventanas estándar (1, 2, 3, 4 o más)**: son **cortinas separadas en la misma ventana**, cada una con su tubo y su medida. Se carga la primera completa y, al guardarla, **la siguiente aparece sola con la misma ficha ya copiada**: solo hay que tomarle las medidas. Así hasta completar las que se pidieron. Quedan una al lado de la otra en la lista. Mientras dura la tanda, arriba del editor se ve cuántas faltan, con un botón **No cargar las que faltan** para cortarla antes.
-- **Ventanas especiales (bow window, en L, en U, triangular)**: es **UNA sola cortina** con un paño por cara del ángulo (bow y U llevan 3, la L lleva 2, la triangular 1). El modelo queda anotado en la cortina y aparece en el informe del cliente y en el Dimensionado del taller, para que nadie los confunda con cortinas sueltas.
+- **Ventanas especiales (bow window, en L, triangular)**: es **UNA sola cortina** con un paño por cara del ángulo (el bow lleva 3, la L lleva 2, la triangular 1). El modelo queda anotado en la cortina y aparece en el informe del cliente y en el Dimensionado del taller, para que nadie los confunda con cortinas sueltas. Una ventana en U se carga como bow window: son las mismas tres caras.
 
 Si el tipo de ventana no aparece en la lista, se toma como una ventana individual.
+
+#### La cortina dual: dos telas, UNA cortina
+
+La dual (ROL_DUAL) son **dos rollos montados en el mismo bracket**, no dos cortinas. Al elegirla, la app **crea sola el segundo rollo** y aparecen las pestañas **Paño 1** y **Paño 2**:
+
+- **Paño 1** es el rollo que va al vidrio (normalmente la screen); **paño 2** el de adentro (el blackout). Cada uno lleva **su propia tela**: es lo único que se elige por separado.
+- El dibujo muestra **los dos rollos**: el del vidrio cae entero y el de adelante queda a media ventana, que es como se usa y la única forma de ver las dos telas juntas. Si al de adelante todavía no se le eligió tela, se dibuja tenue y punteado.
+- Todo lo demás —medidas, herrajes, cenefa, instalación— se escribe en los dos a la vez, porque es la misma cortina. En la lista aparece como **«Dual (2 rollos)»**.
+- El kit dual, las fijaciones y **la instalación se cobran una sola vez**. Por eso una dual **nunca** se carga como dos cortinas separadas: así se pagan dos instalaciones y el taller pide dos kits.
+- Si una dual quedó con **una sola tela** (viene de un Excel con el par incompleto, o de una orden vieja), el editor lo avisa arriba con el botón **Agregar la segunda tela**, y la orden no pasa a Fase 3 hasta completarla. Si estaba cargada como dos cortinas: se le agrega la segunda tela a una y se borra la otra.
+
+#### La cortina dúo: la cenefa va sola
+
+La dúo **siempre lleva su cenefa ovalada** — es parte del sistema, no un adicional. Por eso la app la pone sola: la cortina nace con **Cenefa: Ovalada — fija por categoría** y **CON TIRA**, y solo queda elegir el **color de tapa** y el **tipo de bracket**. Como la cenefa ya está dentro del precio de la dúo, **no se cobra aparte**: no hace falta agregar una línea CENF O en la cotización.
+
+La **pletina dúo** (la que va pegada con velcro) no lleva cenefa.
 
 #### El resumen de las ventanas
 
@@ -114,12 +130,16 @@ El video, las fotos y la firma se guardan en un almacén privado de la empresa: 
 - **El Excel no trae correlativo**: pasa solo en planes antiguos; desde junio 2026 el Excel del optimizador y el del historial traen el mismo correlativo.
 - **Un sobrante del plan no está físicamente**: marcarlo "No existe" en el Historial de Corte para que el inventario quede cuadrado.
 - **¿Quién puede borrar/restaurar planes o aplicar correcciones retroactivas?** Solo admins (bloqueado también a nivel de base de datos).
-- **La vista guiada no dibuja esta cortina**: es de un sistema que se fabrica distinto a un roller (vertical, oscuridad o beeblack). Se carga con la ficha, que tiene exactamente los mismos campos.
+- **La vista guiada no dibuja esta cortina**: es de un sistema que se fabrica distinto a un roller (oscuridad o beeblack). Se carga con la ficha, que tiene exactamente los mismos campos.
 - **Elegí «3 ventanas» y solo veo una**: es así. Se carga la primera y, al guardarla, aparece la segunda con la ficha ya copiada (solo faltan las medidas), y después la tercera. El aviso al guardar dice cuántas quedan.
 - **Elegí «3 ventanas» y me arrepentí**: aprieta **No cargar las que faltan** en el aviso de arriba (o **Cancelar**, si tampoco quieres la que estás llenando). Lo ya guardado queda; las que faltaban no se crean.
 - **Empecé una tanda y me fui a revisar otra cortina de la lista**: la tanda se corta ahí — la app no vuelve sola a ella. Para seguir, aprieta **Nueva** y elige las que falten.
-- **¿Cuándo uso «bow window» y cuándo «3 ventanas»?** Si es **una sola cortina** que da la vuelta siguiendo el ángulo del muro, es bow window (o en L, o en U). Si son **cortinas distintas**, cada una con su tubo y su cadena, aunque estén pegadas, son 3 ventanas.
+- **¿Cuándo uso «bow window» y cuándo «3 ventanas»?** Si es **una sola cortina** que da la vuelta siguiendo el ángulo del muro, es bow window (o en L). Si son **cortinas distintas**, cada una con su tubo y su cadena, aunque estén pegadas, son 3 ventanas.
 - **Mi ventana no es de ninguna de esas formas**: cárgala como ventana individual, y deja la explicación en el comentario de la cortina.
+- **A la dúo le apareció la cenefa sola**: es la regla — la dúo siempre la lleva y ya está incluida en su precio. Antes había que acordarse de marcarla, y si no, el taller no recibía ni la tapa ni el bracket.
+- **¿Le agrego la cenefa a la dúo en la cotización?** No. Va en el precio del sistema; agregar una línea CENF O la cobraría dos veces.
+- **¿La dual va como una cortina o como dos?** Como **UNA**, con sus dos rollos (paño 1 al vidrio, paño 2 adentro). Cargarla como dos cortinas cobra dos instalaciones y le pide dos kits al taller. Si ya está cargada así, abre una, aprieta **Agregar la segunda tela**, elígela y borra la otra cortina.
+- **Cambié la dual a otro sistema y desapareció un paño**: es a propósito. Al salir de la dual se retira el rollo que la app había creado sola, siempre que no le hayas elegido tela; si se la elegiste, el paño se queda.
 - **«No se pudo leer el audio de este archivo»**: el video viene en un formato que el navegador no sabe abrir. Grabar con la cámara normal del teléfono (mp4) y volver a intentar.
 - **Repliqué la ficha y las medidas no cambiaron**: es a propósito. Replicar copia la configuración, nunca lo que se fue a medir.
 - **El informe no menciona una habitación**: solo aparecen las cortinas cargadas en la orden. Si falta una ventana, agrégala en Fase 2 y vuelve a tocar «Armar desde la orden».
