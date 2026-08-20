@@ -173,11 +173,16 @@ export const CortinaViz = memo(function CortinaViz({
   // 'arriba-abajo' baja desde el riel superior (geometría propia).
   const beeCierre = estilo.beeCierre ?? 'izq-der';
   const beeVert = esBee && beeCierre === 'arriba-abajo';
-  // Cuánto del vano cubre el panel: plegado compacto → casi entero al desplegar.
-  const beeAncho = (VIZ_W - 8) * mezcla(0.16, 0.97, easeInOut(tDesp));
-  const beeAlto = (beeBot - beeTop - 12) * mezcla(0.16, 0.97, easeInOut(tDesp));
+  // Cuánto del vano cubre el panel. En las fotos del panal real (dueño,
+  // 2026-08-20) el panel abierto queda COMPRIMIDO contra el riel, casi
+  // invisible: el mínimo es chico y los pliegues no desaparecen — son un
+  // NÚMERO FIJO que se aprieta (ver BEE_PLIEGUES*).
+  const beeAncho = (VIZ_W - 8) * mezcla(0.07, 0.97, easeInOut(tDesp));
+  const beeAlto = (beeBot - beeTop - 12) * mezcla(0.07, 0.97, easeInOut(tDesp));
   const beeX0 = x0 + 4;
   const beeY0 = beeTop + 6;
+  const BEE_PLIEGUES = Math.max(8, Math.round((VIZ_W - 8) / PLIEGUE_W));
+  const BEE_PLIEGUES_V = Math.max(8, Math.round((beeBot - beeTop - 12) / PLIEGUE_W));
 
   const apertura = esVertical
     ? 1 - easeInOut(tDesp) * clamp01(tTela * 2)
@@ -603,20 +608,30 @@ export const CortinaViz = memo(function CortinaViz({
         />
       )}
 
-      {/* ── Soportes ── */}
-      <Pieza pieza="soportes" hit={{ x: x0 - 56, y: cy - 66, w: VIZ_W + 112, h: 132 }}>
-        {p.soportes < 0.02 ? (
-          <>
-            <Fantasma x={x0 - 40} y={cy - 56} w={28} h={112} />
-            <Fantasma x={x1 + 12} y={cy - 56} w={28} h={112} />
-          </>
-        ) : (
-          <>
-            {soporte('izq')}
-            {soporte('der')}
-          </>
-        )}
-      </Pieza>
+      {/* ── Soportes ──
+          El BEEBLACK no lleva los soportes del roller: su marco se ancla
+          directo (dueño, 2026-08-20). Su pieza «soportes» ES el marco, que se
+          dibuja abajo con tSop; acá solo queda el clic (el riel superior) y la
+          silueta punteada mientras falte la instalación. */}
+      {esBee ? (
+        <Pieza pieza="soportes" hit={{ x: x0 - 16, y: beeTop - 26, w: VIZ_W + 32, h: 52 }}>
+          {tSop < 0.02 && <Fantasma x={x0 - 6} y={beeTop - 16} w={VIZ_W + 12} h={26} />}
+        </Pieza>
+      ) : (
+        <Pieza pieza="soportes" hit={{ x: x0 - 56, y: cy - 66, w: VIZ_W + 112, h: 132 }}>
+          {p.soportes < 0.02 ? (
+            <>
+              <Fantasma x={x0 - 40} y={cy - 56} w={28} h={112} />
+              <Fantasma x={x1 + 12} y={cy - 56} w={28} h={112} />
+            </>
+          ) : (
+            <>
+              {soporte('izq')}
+              {soporte('der')}
+            </>
+          )}
+        </Pieza>
+      )}
 
       {/* ── Vertical: el riel cabezal entra con los soportes (no tiene paso propio) ── */}
       {esVertical && tSop > 0.02 && (
@@ -652,6 +667,12 @@ export const CortinaViz = memo(function CortinaViz({
           <rect x={x0} y={beeBot - 8} width={VIZ_W} height={16} rx={4} fill={url('gHerr')} />
           <rect x={x0 - 6} y={beeTop - 16} width={11} height={beeBot - beeTop + 24} rx={3} fill={url('gHerrPlano')} />
           <rect x={x1 - 5} y={beeTop - 16} width={11} height={beeBot - beeTop + 24} rx={3} fill={url('gHerrPlano')} />
+          {/* Las tapas de esquina del marco (se ven en las fotos del panal). */}
+          {([[x0 - 6, beeTop - 16], [x1 - 5, beeTop - 16], [x0 - 6, beeBot - 3], [x1 - 5, beeBot - 3]] as const).map(
+            ([ex, ey], i) => (
+              <rect key={i} x={ex} y={ey} width={11} height={11} rx={2} fill={tono(herr, -0.55)} />
+            ),
+          )}
         </g>
       )}
 
@@ -761,29 +782,24 @@ export const CortinaViz = memo(function CortinaViz({
                   height={beeBot - beeTop - 12}
                   fill={patronTela}
                 />
-                {/* Pliegues del acordeón: franjas alternadas + línea de doblez. */}
-                {Array.from({ length: Math.ceil(beeAncho / PLIEGUE_W) }, (_, i) => {
-                  const px = beeX0 + i * PLIEGUE_W;
-                  const w = Math.min(PLIEGUE_W, beeAncho - i * PLIEGUE_W);
-                  if (w <= 1) return null;
+                {/* Pliegues en ZIGZAG, como el panal real (fotos del dueño
+                    2026-08-20): cada pliegue tiene una cara a la luz y otra en
+                    sombra con la arista brillante al medio. El NÚMERO es fijo:
+                    al abrir no desaparecen, se aprietan contra el riel. */}
+                {Array.from({ length: BEE_PLIEGUES }, (_, i) => {
+                  const pw = beeAncho / BEE_PLIEGUES;
+                  const px = beeX0 + i * pw;
+                  const h = beeBot - beeTop - 12;
                   return (
                     <g key={i}>
-                      <rect
-                        x={r3(px)}
-                        y={beeTop + 6}
-                        width={r3(w)}
-                        height={beeBot - beeTop - 12}
-                        fill={i % 2 ? '#000' : '#fff'}
-                        opacity={i % 2 ? 0.13 : 0.07}
-                      />
-                      <rect
-                        x={r3(px)}
-                        y={beeTop + 6}
-                        width={1.6}
-                        height={beeBot - beeTop - 12}
-                        fill="#000"
-                        opacity={0.22}
-                      />
+                      <rect x={r3(px)} y={beeTop + 6} width={r3(pw / 2)} height={h} fill="#fff" opacity={0.1} />
+                      <rect x={r3(px + pw / 2)} y={beeTop + 6} width={r3(pw / 2)} height={h} fill="#000" opacity={0.16} />
+                      {pw > 5 && (
+                        <>
+                          <rect x={r3(px + pw / 2 - 0.8)} y={beeTop + 6} width={1.6} height={h} fill="#fff" opacity={0.3} />
+                          <rect x={r3(px)} y={beeTop + 6} width={1.2} height={h} fill="#000" opacity={0.28} />
+                        </>
+                      )}
                     </g>
                   );
                 })}
@@ -794,12 +810,21 @@ export const CortinaViz = memo(function CortinaViz({
                   height={beeBot - beeTop - 12}
                   fill={url('gTelaH')}
                 />
-                {/* Borde de avance (donde va la manilla). */}
+                {/* El perfil MÓVIL: la barra de aluminio que viaja con el borde
+                    del panel — con el panel abierto es lo que más se ve. */}
                 <rect
-                  x={r3(beeX0 + beeAncho - 5)}
-                  y={beeTop + 6}
-                  width={5}
-                  height={beeBot - beeTop - 12}
+                  x={r3(beeX0 + beeAncho - 6)}
+                  y={beeTop + 4}
+                  width={13}
+                  height={beeBot - beeTop - 8}
+                  rx={3}
+                  fill={url('gHerrPlano')}
+                />
+                <rect
+                  x={r3(beeX0 + beeAncho + 4.5)}
+                  y={beeTop + 4}
+                  width={2.5}
+                  height={beeBot - beeTop - 8}
                   fill="#000"
                   opacity={0.28}
                 />
@@ -823,17 +848,18 @@ export const CortinaViz = memo(function CortinaViz({
                 />
               )
             ) : (
+              /* El agarre va MONTADO sobre el perfil móvil (misma línea). */
               <g opacity={r3(clamp01(tAcc * 3))}>
                 <rect
-                  x={r3(beeX0 + beeAncho - 12)}
+                  x={r3(beeX0 + beeAncho - 9)}
                   y={(beeTop + beeBot) / 2 - 60}
-                  width={13}
+                  width={19}
                   height={120}
-                  rx={6}
+                  rx={7}
                   fill={url('gHerr')}
                 />
                 <rect
-                  x={r3(beeX0 + beeAncho - 10)}
+                  x={r3(beeX0 + beeAncho - 5)}
                   y={(beeTop + beeBot) / 2 - 56}
                   width={3}
                   height={112}
@@ -857,39 +883,39 @@ export const CortinaViz = memo(function CortinaViz({
             ) : (
               <g opacity={r3(clamp01(tTela * 3))}>
                 <rect x={beeX0} y={beeY0} width={VIZ_W - 8} height={r3(beeAlto)} fill={patronTela} />
-                {/* Pliegues horizontales: franjas alternadas + línea de doblez. */}
-                {Array.from({ length: Math.ceil(beeAlto / PLIEGUE_W) }, (_, i) => {
-                  const py = beeY0 + i * PLIEGUE_W;
-                  const h = Math.min(PLIEGUE_W, beeAlto - i * PLIEGUE_W);
-                  if (h <= 1) return null;
+                {/* Pliegues horizontales en ZIGZAG (número fijo, se aprietan
+                    contra el riel superior al abrir — fotos del dueño). */}
+                {Array.from({ length: BEE_PLIEGUES_V }, (_, i) => {
+                  const ph = beeAlto / BEE_PLIEGUES_V;
+                  const py = beeY0 + i * ph;
                   return (
                     <g key={i}>
-                      <rect
-                        x={beeX0}
-                        y={r3(py)}
-                        width={VIZ_W - 8}
-                        height={r3(h)}
-                        fill={i % 2 ? '#000' : '#fff'}
-                        opacity={i % 2 ? 0.13 : 0.07}
-                      />
-                      <rect
-                        x={beeX0}
-                        y={r3(py)}
-                        width={VIZ_W - 8}
-                        height={1.6}
-                        fill="#000"
-                        opacity={0.22}
-                      />
+                      <rect x={beeX0} y={r3(py)} width={VIZ_W - 8} height={r3(ph / 2)} fill="#fff" opacity={0.1} />
+                      <rect x={beeX0} y={r3(py + ph / 2)} width={VIZ_W - 8} height={r3(ph / 2)} fill="#000" opacity={0.16} />
+                      {ph > 5 && (
+                        <>
+                          <rect x={beeX0} y={r3(py + ph / 2 - 0.8)} width={VIZ_W - 8} height={1.6} fill="#fff" opacity={0.3} />
+                          <rect x={beeX0} y={r3(py)} width={VIZ_W - 8} height={1.2} fill="#000" opacity={0.28} />
+                        </>
+                      )}
                     </g>
                   );
                 })}
                 <rect x={beeX0} y={beeY0} width={VIZ_W - 8} height={r3(beeAlto)} fill={url('gTelaH')} />
-                {/* Borde de avance (donde va la manilla). */}
+                {/* El perfil MÓVIL acostado, viajando con el borde inferior. */}
                 <rect
-                  x={beeX0}
-                  y={r3(beeY0 + beeAlto - 5)}
-                  width={VIZ_W - 8}
-                  height={5}
+                  x={beeX0 - 2}
+                  y={r3(beeY0 + beeAlto - 6)}
+                  width={VIZ_W - 4}
+                  height={13}
+                  rx={3}
+                  fill={url('gHerrPlano')}
+                />
+                <rect
+                  x={beeX0 - 2}
+                  y={r3(beeY0 + beeAlto + 4.5)}
+                  width={VIZ_W - 4}
+                  height={2.5}
                   fill="#000"
                   opacity={0.28}
                 />
@@ -913,18 +939,19 @@ export const CortinaViz = memo(function CortinaViz({
                 />
               )
             ) : (
+              /* El agarre va MONTADO sobre el perfil móvil (misma línea). */
               <g opacity={r3(clamp01(tAcc * 3))}>
                 <rect
                   x={(x0 + x1) / 2 - 60}
-                  y={r3(beeY0 + beeAlto - 12)}
+                  y={r3(beeY0 + beeAlto - 9)}
                   width={120}
-                  height={13}
-                  rx={6}
+                  height={19}
+                  rx={7}
                   fill={url('gHerr')}
                 />
                 <rect
                   x={(x0 + x1) / 2 - 56}
-                  y={r3(beeY0 + beeAlto - 10)}
+                  y={r3(beeY0 + beeAlto - 5)}
                   width={112}
                   height={3}
                   fill={tono(herr, 0.5)}
