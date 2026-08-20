@@ -62,7 +62,7 @@ function Miniatura({
   );
 
   if (!variante || !estilo) {
-    // Verticales, beeblack y sistemas de oscuridad no tienen dibujo: se nombran.
+    // Beeblack y sistemas de oscuridad no tienen dibujo: se nombran.
     return (
       <div className="flex h-full min-h-[5.5rem] items-center justify-center px-2 text-center">
         <span className="text-[0.68rem] uppercase tracking-wide text-muted-foreground">

@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.24"; // 2026-08-19: E40 (BLANCO) y E69-B (NEGRO) — los pesos roller de línea B — entran a PESO_COLOR_FIJO: nunca se reemplazan entre sí por color distinto, igual que E18/E19/E20. Acompaña la carga física de estructuras Gama B a la colmena (sql/20260819_carga_estructuras_gama_b.sql).
+const VERSION_ACTUAL = "5.26"; // 2026-08-20: (a) regla tubos GRISES vs BLANCO — en una misma ubicación (misma OT + UBIC, o mismo grupo -G#) no se combinan E03 (blanco) con E02/E39/E66/E01 (grises); el reemplazo cross-familia se bloquea cuando la ubicación tiene más de un tubo, y si las órdenes ya vienen mezcladas del Excel se advierte. (b) tubos DESCONTINUADOS — el optimizador lee configuracion.reglas_seleccion (catálogo técnico de Admin) y ningún tubo 'oculto' (hoy E66) se ofrece como reemplazo, aunque el catálogo de reemplazos lo liste; abrir tubo nuevo de un código descontinuado advierte en el log.
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -1752,6 +1752,7 @@ document.addEventListener("DOMContentLoaded", () => {
       await cargarDesdeSupabase();
       await cargarColmenaFinalDesdeSupabase();
       await cargarCatalogoDesdeSupabase();
+      await cargarTubosDescontinuados();
       // Mostrar reservas pendientes de sesiones anteriores
       renderizarPanelReservas();
 
@@ -2028,6 +2029,7 @@ async function refrescarInventarioCompleto() {
     document.getElementById('loading-overlay').style.display = 'flex';
     try {
         await cargarCatalogoDesdeSupabase();
+        await cargarTubosDescontinuados();
         await cargarSerialesDesdeSupabase();
         await cargarColmenaFinalDesdeSupabase();
         log('🔄 Inventario refrescado desde la base de datos.', 'success');
@@ -4925,7 +4927,73 @@ const PESO_COLOR_FIJO = { 'E18': 'NEGRO', 'E19': 'BLANCO', 'E20': 'GRIS', 'E40':
 // las 2 reversas de la OT dúo 3088-B (2026-07-02/03).
 const REEMPLAZO_SOLO_LISTA_BLANCA = { 'E13': [] };
 
-function buscarReemplazos(codigo) {
+// ── Tubos DESCONTINUADOS (dueño, 2026-08-20) ────────────────────────
+// Un tubo 'oculto' en el catálogo técnico de la app (Admin → Catálogo técnico
+// → Tuberías, guardado en configuracion.reglas_seleccion) está descontinuado
+// o retirado del uso nuevo: el optimizador NO lo ofrece como REEMPLAZO aunque
+// el catálogo de reemplazos lo liste (caso E66 → E39). Las órdenes que lo
+// piden DIRECTAMENTE (OTs viejas) sí se siguen cortando de su stock — pero si
+// piden abrir un tubo NUEVO de ese código, se advierte (ya no se compra).
+// Variable de módulo (no en SistemaInventario: el estado persistido viaja por
+// JSON y un Set no sobrevive el parse). Vacío = comportamiento de siempre.
+let TUBOS_DESCONTINUADOS = new Set();
+
+async function cargarTubosDescontinuados() {
+    try {
+        const valor = await _supabaseLeer('reglas_seleccion');
+        if (!valor) return;
+        const datos = typeof valor === 'string' ? JSON.parse(valor) : valor;
+        const tubos = datos && datos.tuberia && Array.isArray(datos.tuberia.tubos)
+            ? datos.tuberia.tubos : [];
+        const set = new Set();
+        for (const t of tubos) {
+            if (t && t.estado === 'oculto' && t.codigo) set.add(normalizarCodigo(t.codigo));
+        }
+        TUBOS_DESCONTINUADOS = set;
+        if (set.size > 0) {
+            log(`🚫 Tubos descontinuados según el catálogo técnico: ${[...set].join(', ')} — no se usarán como reemplazo.`, 'info');
+        }
+    } catch (e) {
+        console.warn('[tubosDescontinuados] No se pudo leer el catálogo técnico:', e.message);
+    }
+}
+
+// Tubos GRISES vs BLANCO (dueño, 2026-08-20): en una MISMA UBICACIÓN no se
+// combinan tubos grises (E02/E39/E66, y E01 que es el mismo fierro gris de 38
+// en 0,8) con el blanco (E03) — cortinas vecinas quedarían con tubos de color
+// distinto. El guard bloquea el reemplazo cross-familia SOLO cuando la
+// ubicación tiene más de un tubo; una cortina sola en su ubicación puede tomar
+// cualquier reemplazo del catálogo. "Misma ubicación" = misma OT + mismo texto
+// de UBIC, o mismo grupo -G# (LIVING IZQ-G1 y LIVING DER-G1 van juntas).
+// E53 queda FUERA a propósito: sus datos se contradicen (el catálogo lo rotula
+// BLANCO pero COD_NORMALIZACION lo trata como el mismo fierro que E66); si el
+// dueño lo define, agregarlo aquí.
+const TUBO_FAMILIA_COLOR = { 'E03': 'BLANCO', 'E02': 'GRIS', 'E39': 'GRIS', 'E66': 'GRIS', 'E01': 'GRIS' };
+
+function _familiaTubo(cod) { return TUBO_FAMILIA_COLOR[normalizarCodigo(cod)] || null; }
+
+function _esOrdenDeTubo(o) {
+    const comp = (o.componente || '').toUpperCase();
+    return comp.includes('TUBER') || comp.includes('TUBO');
+}
+
+// ¿Hay OTRO tubo en la misma ubicación que esta orden? (misma OT + misma UBIC,
+// o mismo grupo -G#). Con vecina, el color del tubo tiene que ser consistente.
+function _tuboComparteUbicacion(orden) {
+    if (!orden) return false;
+    const ubic = String(orden.ubic || '').trim().toUpperCase();
+    if (!ubic) return false;
+    const ot = String(orden.ot || '').trim().toUpperCase();
+    const grupo = _extraerGrupo(orden.ubic);
+    return SistemaInventario.ordenes.some(o => {
+        if (o.id === orden.id || !_esOrdenDeTubo(o)) return false;
+        if (String(o.ot || '').trim().toUpperCase() !== ot) return false;
+        const oUbic = String(o.ubic || '').trim().toUpperCase();
+        return oUbic === ubic || (grupo !== null && _extraerGrupo(o.ubic) === grupo);
+    });
+}
+
+function buscarReemplazos(codigo, orden = null) {
     const codNormalizado = normalizarCodigo(codigo);
     let reemplazos = null;
     for (const [key, value] of Object.entries(SistemaInventario.catalogoReemplazos)) {
@@ -4947,6 +5015,17 @@ function buscarReemplazos(codigo) {
         reemplazos = filtrados;
     }
 
+    // ── Tubos descontinuados: nunca se ofrecen como reemplazo ──
+    if (TUBOS_DESCONTINUADOS.size > 0) {
+        const filtrados = reemplazos.filter(r => !TUBOS_DESCONTINUADOS.has(normalizarCodigo(r)));
+        if (filtrados.length < reemplazos.length) {
+            const bloqueados = reemplazos.filter(r => !filtrados.includes(r)).join(', ');
+            log(`🚫 Reemplazo ${codNormalizado} → ${bloqueados} bloqueado: descontinuado en el catálogo técnico. Si falta stock, sale tubo nuevo ${codNormalizado}.`, 'warn');
+        }
+        if (filtrados.length === 0) return null;
+        reemplazos = filtrados;
+    }
+
     const colorOriginal = PESO_COLOR_FIJO[codNormalizado];
     if (colorOriginal) {
         const filtrados = reemplazos.filter(r => {
@@ -4956,6 +5035,21 @@ function buscarReemplazos(codigo) {
         if (filtrados.length < reemplazos.length) {
             const bloqueados = reemplazos.filter(r => !filtrados.includes(r)).join(', ');
             log(`⚠️ Pesos color-fijo: bloqueando reemplazo ${codNormalizado}(${colorOriginal}) → ${bloqueados} (color distinto). Arregla el catálogo o pide stock del color correcto.`, 'warn');
+        }
+        if (filtrados.length === 0) return null;
+        return filtrados;
+    }
+
+    // ── Tubos grises vs blanco: en una misma ubicación no se combinan ──
+    const familiaOrden = _familiaTubo(codNormalizado);
+    if (familiaOrden && orden && _tuboComparteUbicacion(orden)) {
+        const filtrados = reemplazos.filter(r => {
+            const fam = _familiaTubo(r);
+            return !fam || fam === familiaOrden;
+        });
+        if (filtrados.length < reemplazos.length) {
+            const bloqueados = reemplazos.filter(r => !filtrados.includes(r)).join(', ');
+            log(`⚠️ Tubos grises/blancos: bloqueando reemplazo ${codNormalizado} (${familiaOrden}) → ${bloqueados} en "${orden.ubic || '-'}" — la ubicación tiene más de un tubo y no se combinan grises con blancos. Si no hay stock de la familia, sale tubo nuevo ${codNormalizado}.`, 'warn');
         }
         if (filtrados.length === 0) return null;
         return filtrados;
@@ -5461,6 +5555,32 @@ function detectarConflictosGrupo(ordenes) {
     return conflictos;
 }
 
+// Regla tubos grises vs blanco (dueño, 2026-08-20): el guard de buscarReemplazos
+// evita que la mezcla la INTRODUZCA un reemplazo; esto revisa si las órdenes YA
+// vienen mezcladas desde el Excel (el optimizador corta lo que la orden pide,
+// así que solo advierte — la corrección va en el Excel, antes de cortar).
+function advertirMezclaTubosGrisBlanco(ordenes) {
+    const porUbic = {};
+    for (const o of ordenes) {
+        if (!_esOrdenDeTubo(o)) continue;
+        const fam = _familiaTubo(o.cod);
+        if (!fam) continue;
+        const ubic = String(o.ubic || '').trim().toUpperCase();
+        if (!ubic) continue;
+        const grupo = _extraerGrupo(o.ubic);
+        const ot = String(o.ot || '').trim().toUpperCase();
+        const key = grupo !== null ? `${ot}|G:${grupo}` : `${ot}|U:${ubic}`;
+        if (!porUbic[key]) porUbic[key] = { ubic: o.ubic, ot: o.ot, cods: new Set(), fams: new Set() };
+        porUbic[key].cods.add(normalizarCodigo(o.cod));
+        porUbic[key].fams.add(fam);
+    }
+    for (const g of Object.values(porUbic)) {
+        if (g.fams.size > 1) {
+            log(`⚠️ "${g.ubic}"${g.ot ? ` (OT ${g.ot})` : ''} trae tubos GRISES y BLANCOS mezclados en las órdenes (${[...g.cods].join(' + ')}). No se combinan en una misma ubicación: corrige el Excel antes de cortar.`, 'warn');
+        }
+    }
+}
+
 function mostrarModalConflictos(conflictos) {
     return new Promise(resolve => {
         _conflictoGrupo.conflictos = conflictos;
@@ -5684,6 +5804,13 @@ async function ejecutarOptimizacion() {
         const continuar = await mostrarModalConflictos(conflictos);
         if (!continuar) return; // usuario canceló
     }
+
+    // ── Tubos grises vs blanco: avisar si las órdenes ya vienen mezcladas ──
+    advertirMezclaTubosGrisBlanco(SistemaInventario.ordenes);
+
+    // ── Tubos descontinuados: releer el catálogo técnico antes de asignar
+    // (si Admin descontinuó un tubo con la sesión abierta, acá se entera).
+    await cargarTubosDescontinuados();
 
     // ── RESETEO MANDATORIO: limpiar TODO el estado residual de optimizaciones previas ──
     SistemaInventario.colmenasDisponibles = [];
@@ -5983,7 +6110,7 @@ async function ejecutarOptimizacion() {
             }
         } else {
             // Si se forzó tubo nuevo, saltar búsqueda de reemplazos
-            const listaReemplazos = orden._forzarNuevo ? null : buscarReemplazos(codOrden);
+            const listaReemplazos = orden._forzarNuevo ? null : buscarReemplazos(codOrden, orden);
             if (listaReemplazos) {
                 for (const codReemplazo of listaReemplazos) {
                     const tuboReemplazo = buscarTubosParaOrden(codReemplazo, orden.medida_mm, codOrden);
@@ -6095,7 +6222,7 @@ async function ejecutarOptimizacion() {
                 let serialDisponible = buscarSerialDisponible(codOrden);
                 let codParaTuboNuevo = codOrden;
                 if (!serialDisponible) {
-                    const reemplazosParaNuevo = buscarReemplazos(codOrden);
+                    const reemplazosParaNuevo = buscarReemplazos(codOrden, orden);
                     if (reemplazosParaNuevo && reemplazosParaNuevo.length > 0) {
                         for (const codReemp of reemplazosParaNuevo) {
                             const serialReemp = buscarSerialDisponible(codReemp);
@@ -6110,6 +6237,13 @@ async function ejecutarOptimizacion() {
                     if (!serialDisponible) log(`⚠️ No hay serial para ${codOrden} ni sus reemplazos`, 'warn');
                 }
                 const codBuscarMedida = String(codParaTuboNuevo || '').trim().toUpperCase();
+                // Un código descontinuado ya no se compra: si el flujo llegó
+                // hasta acá pidiendo abrir un tubo NUEVO de ese código (orden
+                // vieja sin stock ni reemplazo válido), el cortador tiene que
+                // saberlo antes de buscar una barra que no existe.
+                if (TUBOS_DESCONTINUADOS.has(codBuscarMedida)) {
+                    log(`⚠️ ${codBuscarMedida} está DESCONTINUADO en el catálogo técnico y esta orden pide abrir un tubo nuevo ${codBuscarMedida}. Revisa la orden o consigue la barra antes de cortar.`, 'warn');
+                }
                 let medidaNuevoCm = SistemaInventario.catalogoMedidas[codBuscarMedida] || MEDIDAS_BARRA_DEFAULT[codBuscarMedida] || (MM_TUBO_ORIGINAL / 10);
 
                 // Rectificación al vuelo: si hay un override de medida real, usarlo

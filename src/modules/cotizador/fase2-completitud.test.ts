@@ -73,6 +73,57 @@ describe('pendientesFase2 — datos de la ventana', () => {
   });
 });
 
+describe('pendientesFase2 — la cenefa del dúo', () => {
+  const modeloDuo = { ...modeloRoller, sistema: 'CENEFA_OVALADA_DUO', tipo_rol: 'DUO_CENEFA_OV_MANUAL_38mm' } as ModeloDespiece;
+  const duo = (pano: Partial<Pano> = {}): Ventana =>
+    ventOk(
+      { categoria: 'DUO_MANUAL_38mm', modelo: modeloDuo } as Partial<Ventana>,
+      { cierreAlturaCm: 12, ...pano },
+    );
+
+  it('el dúo pide los datos de SU cenefa aunque la ficha no la nombre', () => {
+    // Su sistema es CENEFA_OVALADA_DUO: la cenefa va siempre, y sin tapa ni
+    // bracket el BOM no puede emitirlos.
+    const m = mensajes([duo()]);
+    expect(m).toContain('falta el color de tapa de la cenefa');
+    expect(m).toContain('falta el tipo de bracket');
+  });
+
+  it('con la ficha de la cenefa completa, el dúo no bloquea', () => {
+    expect(
+      pendientesFase2([duo({ colorTapa: 'NEG', bracketTipo: 'CORTO', cenefaTira: 'CON TIRA', superficie: 'TECHO' })]),
+    ).toEqual([]);
+  });
+});
+
+describe('pendientesFase2 — dual (dos rollos, una cortina)', () => {
+  const modeloDual = { ...modeloRoller, sistema: 'ROLLER_DUAL', tipo_rol: 'ROL_DUAL' } as ModeloDespiece;
+  const dual = (panos: Partial<Pano>[]): Ventana =>
+    ({
+      ...ventOk({ categoria: 'ROL_DUAL', modelo: modeloDual } as Partial<Ventana>),
+      panos: panos.map((p) => panoOk({ mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', dual: true, ...p })),
+    }) as unknown as Ventana;
+
+  it('una dual con un solo rollo no puede producirse', () => {
+    // Es el caso de la dual partida en dos cortinas: cada mitad se ve completa
+    // por separado, pero cobra dos instalaciones y pide dos kits.
+    const m = mensajes([dual([{ codInt: 'SC 10' }])]);
+    expect(m).toContain('la dual lleva DOS telas: falta el segundo rollo');
+  });
+
+  it('el segundo rollo sin tela también se avisa (si no, se cortan dos telas iguales)', () => {
+    const p = pendientesFase2([dual([{ codInt: 'SC 10' }, { codInt: '' }])]);
+    const tela = p.find((x) => x.mensaje === 'falta la tela de este rollo');
+    expect(tela?.panoIdx).toBe(1);
+    // El primero SÍ puede caer a la tela de la ventana: es la suya.
+    expect(p.filter((x) => x.mensaje === 'falta la tela de este rollo')).toHaveLength(1);
+  });
+
+  it('la dual con sus dos telas no tiene pendientes', () => {
+    expect(pendientesFase2([dual([{ codInt: 'SC 10' }, { codInt: 'BK 10' }])])).toEqual([]);
+  });
+});
+
 describe('pendientesFase2 — datos del paño', () => {
   const sinDato = (over: Partial<Pano>) => mensajes([ventOk({}, over)]);
 

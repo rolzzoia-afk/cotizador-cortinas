@@ -25,7 +25,8 @@ import {
 } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
-import { esCenefaCuadrada } from './fase2';
+import { categoriaEsDual } from '@/modules/descuentos/tipos';
+import { PANOS_DUAL, esCenefaCuadrada } from './fase2';
 import {
   REGLAS_SELECCION_DEFAULT,
   type ReglasSeleccion,
@@ -94,6 +95,16 @@ export function pendientesFase2(
     const esBeeblack = esCategoriaBeeblack(categoria);
     const esVertical = esCategoriaVertical(categoria);
     const esPletina = esCategoriaPletina(categoria, reglas.tipos);
+    // DUAL: son DOS telas en la MISMA cortina (un rollo cada una, un solo
+    // bracket). Con un solo paño la cortina no existe como tal, y partirla en
+    // dos cortinas cobra dos instalaciones y duplica kit y fijaciones. El
+    // editor la completa sola al elegir el sistema (asegurarPanosDual); esto
+    // atrapa las que ya venían a medias (Excel con el par incompleto, OTs
+    // cargadas antes del 2026-08-20).
+    const esDual = categoriaEsDual(categoria, reglas.tipos);
+    if (esDual && panos.length < PANOS_DUAL) {
+      add('la dual lleva DOS telas: falta el segundo rollo');
+    }
     // Sin modelo de fabricación no hay medidas de corte (excel-ordenes.ts avisa
     // lo mismo, pero recién en Fase 4 y cuando el Excel ya salió).
     if (!v.modelo && !esBeeblack) add('falta el modelo de fabricación');
@@ -108,6 +119,11 @@ export function pendientesFase2(
 
       // Mecanismo: misma condición que validarVentana (categorías que lo llevan).
       if (requiereMec && !txt(p.mecanismo)) falta('falta el mecanismo');
+      // Dual: la tela del SEGUNDO rollo en adelante no tiene de dónde caerse.
+      // La del primero sí (al guardar, la ventana refleja su tela), así que ahí
+      // el fallback es correcto; en el segundo, sin código se cortan dos telas
+      // iguales y nadie se entera hasta el taller.
+      if (esDual && i > 0 && !txt(p.codInt)) falta('falta la tela de este rollo');
       // CATEGORÍA B: solo existe receta en blanco y negro (roller simple, cenefa
       // ovalada y dúo 38). Sin receta el motor no elige kit ni códigos de
       // bodega, así que la OT no puede seguir: hay que corregir el color o

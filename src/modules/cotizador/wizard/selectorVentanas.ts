@@ -33,14 +33,16 @@ export type FormaVentanaDef = {
 };
 
 /**
- * Las cuatro del mockup. Si aparece una ventana que no calza en ninguna, la
+ * Las formas del mockup. Si aparece una ventana que no calza en ninguna, la
  * nota del selector manda tomarla como ventana individual — mejor una cortina
  * recta bien medida que una forma inventada que nadie sabe fabricar.
+ *
+ * La «ventana en U» se eliminó el 2026-08-19 por orden del dueño: es lo mismo
+ * que un bow window (tres caras) y tener dos nombres para lo mismo confundía.
  */
 export const FORMAS_VENTANA: readonly FormaVentanaDef[] = [
   { id: 'bow', etiqueta: 'Bow window', rotulo: 'BOW WINDOW', panos: 3 },
   { id: 'ele', etiqueta: 'Ventana en L', rotulo: 'VENTANA EN L', panos: 2 },
-  { id: 'u', etiqueta: 'Ventana en U', rotulo: 'VENTANA EN U', panos: 3 },
   { id: 'triangular', etiqueta: 'Triangular', rotulo: 'TRIANGULAR', panos: 1 },
 ] as const;
 

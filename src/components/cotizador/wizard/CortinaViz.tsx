@@ -40,7 +40,7 @@ type Props = {
   className?: string;
 };
 
-const { x0, x1, cy, tr, gx0, gx1, gy0, gy1, cola, caidaMax } = VIZ;
+const { x0, x1, cy, tr, gx0, gx1, gy0, gy1, cola, caidaMax, dualDy, dualFrente } = VIZ;
 const RMAX = radioRollo(caidaMax);
 
 /** Aclara/oscurece un hex para armar los degradados del herraje. */
@@ -128,7 +128,36 @@ export const CortinaViz = memo(function CortinaViz({
   const barraY = cy + caida;
   const telaTop = cy + radio * 0.5;
   const telaH = Math.max(0, barraY - telaTop);
-  const apertura = 1 - clamp01((barraY - gy0) / (gy1 - gy0));
+
+  // ── Dual: el segundo rollo ──
+  // Son dos cortinas en un bracket, así que se dibujan las dos: la del vidrio
+  // (paño 1, la screen) baja entera y la de adelante (paño 2, el blackout)
+  // queda a media ventana. Es como se usa —y la única manera de ver las dos
+  // telas de un vistazo (pedido del dueño 2026-08-20).
+  const esDual = variante === 'dual';
+  const cyF = cy + dualDy;
+  const caidaF = caida * dualFrente;
+  const enrolladoF = tDesp > 0 ? Math.max(0, caidaMax - caidaF) : envuelto;
+  const radioF = tTela > 0.02 ? radioRollo(enrolladoF) : tr;
+  const barraYF = cyF + caidaF;
+  const telaTopF = cyF + radioF * 0.5;
+  const telaHF = Math.max(0, barraYF - telaTopF);
+
+  // ── Vertical: riel cabezal + lamas colgando (catálogo de diseños 2026-08-19).
+  // Las lamas aparecen una a una con la tela y GIRAN de canto a cerradas con el
+  // despliegue, que es como se ve una vertical de verdad al cerrarla.
+  const esVertical = variante === 'vertical';
+  const LAMA_W = 54;
+  const LAMA_PASO = 60;
+  const lamasN = Math.floor((VIZ_W - 12) / LAMA_PASO);
+  const lamasX0 = x0 + (VIZ_W - (lamasN * LAMA_PASO - (LAMA_PASO - LAMA_W))) / 2;
+  const lamaTop = cy + 24;
+  const lamaBot = gy1 + 6;
+  const lamaWAhora = LAMA_W * mezcla(0.34, 1, easeInOut(tDesp));
+
+  const apertura = esVertical
+    ? 1 - easeInOut(tDesp) * clamp01(tTela * 2)
+    : 1 - clamp01((barraY - gy0) / (gy1 - gy0));
   // Espejo cuando el mando va a la izquierda: se voltea el grupo completo del
   // mecanismo sobre el centro del tubo.
   const espejo = estilo.lado === 'izquierda';
@@ -183,6 +212,42 @@ export const CortinaViz = memo(function CortinaViz({
     [uid],
   );
 
+  /** Textura de UNA tela (se define una por rollo en la dual). */
+  const patronTelaDefs = (
+    nombre: string,
+    hex: string,
+    patron: EstiloViz['telaPatron'],
+  ): React.ReactNode => {
+    if (patron === 'solida') {
+      return (
+        <pattern key={nombre} id={id(nombre)} width={8} height={8} patternUnits="userSpaceOnUse">
+          <rect width={8} height={8} fill={hex} />
+          <rect width={8} height={0.8} fill="#000" opacity={0.05} />
+        </pattern>
+      );
+    }
+    if (patron === 'bandas') {
+      return (
+        <pattern key={nombre} id={id(nombre)} width={12} height={48} patternUnits="userSpaceOnUse">
+          <rect width={12} height={48} fill={hex} />
+          <rect width={12} height={22} fill="#fff" opacity={0.2} />
+          <rect y={22} width={12} height={2} fill="#000" opacity={0.14} />
+          <rect y={46} width={12} height={2} fill="#000" opacity={0.14} />
+        </pattern>
+      );
+    }
+    return (
+      <pattern key={nombre} id={id(nombre)} width={6} height={6} patternUnits="userSpaceOnUse">
+        <rect width={6} height={6} fill={hex} />
+        <rect width={6} height={1.4} fill="#000" opacity={0.16} />
+        <rect y={3} width={6} height={1.2} fill="#fff" opacity={0.09} />
+        <rect width={1.4} height={6} fill="#000" opacity={0.1} />
+        <rect x={3.2} width={1.2} height={6} fill="#fff" opacity={0.07} />
+        <rect x={1.6} y={1.6} width={1.4} height={1.4} fill="#000" opacity={0.07} />
+      </pattern>
+    );
+  };
+
   // Degradados que sí dependen del color de accesorios y de la tela.
   const defsColor = (
     <defs>
@@ -228,37 +293,11 @@ export const CortinaViz = memo(function CortinaViz({
         <stop offset="26%" stopColor="#fff" stopOpacity={0.02} />
         <stop offset="100%" stopColor="#000" stopOpacity={0} />
       </linearGradient>
-      {/* Textura de la tela: tejido screen, blackout liso o bandas del dúo. */}
-      {estilo.telaPatron === 'screen' && (
-        <pattern id={id('pTela')} width={6} height={6} patternUnits="userSpaceOnUse">
-          <rect width={6} height={6} fill={estilo.telaHex} />
-          <rect width={6} height={1.4} fill="#000" opacity={0.16} />
-          <rect y={3} width={6} height={1.2} fill="#fff" opacity={0.09} />
-          <rect width={1.4} height={6} fill="#000" opacity={0.1} />
-          <rect x={3.2} width={1.2} height={6} fill="#fff" opacity={0.07} />
-          <rect x={1.6} y={1.6} width={1.4} height={1.4} fill="#000" opacity={0.07} />
-        </pattern>
-      )}
-      {estilo.telaPatron === 'solida' && (
-        <pattern id={id('pTela')} width={8} height={8} patternUnits="userSpaceOnUse">
-          <rect width={8} height={8} fill={estilo.telaHex} />
-          <rect width={8} height={0.8} fill="#000" opacity={0.05} />
-        </pattern>
-      )}
-      {estilo.telaPatron === 'bandas' && (
-        <pattern id={id('pTela')} width={12} height={48} patternUnits="userSpaceOnUse">
-          <rect width={12} height={48} fill={estilo.telaHex} />
-          <rect width={12} height={22} fill="#fff" opacity={0.2} />
-          <rect y={22} width={12} height={2} fill="#000" opacity={0.14} />
-          <rect y={46} width={12} height={2} fill="#000" opacity={0.14} />
-        </pattern>
-      )}
-      {estilo.telaTraseraHex && (
-        <pattern id={id('pTelaB')} width={6} height={6} patternUnits="userSpaceOnUse">
-          <rect width={6} height={6} fill={estilo.telaTraseraHex} />
-          <rect width={6} height={1.4} fill="#000" opacity={0.14} />
-          <rect y={3} width={6} height={1.2} fill="#fff" opacity={0.08} />
-        </pattern>
+      {/* Textura de la tela: tejido screen, blackout liso o bandas del dúo.
+          La dual define una por rollo (cada uno lleva su tela). */}
+      {patronTelaDefs('pTela', estilo.telaHex, estilo.telaPatron)}
+      {estilo.telaDual?.map((capa, i) =>
+        patronTelaDefs(i === 0 ? 'pTelaVidrio' : 'pTelaFrente', capa.hex, capa.patron),
       )}
     </defs>
   );
@@ -403,10 +442,51 @@ export const CortinaViz = memo(function CortinaViz({
     </g>
   );
 
-  const rollo = (dx: number, dr: number, patron: string, key: string) => {
-    const rr = Math.max(tr, radio + dr);
+  /** Un paño de tela colgando: la tela, la luz que la atraviesa y sus sombras. */
+  const panelTela = (top: number, bot: number, patron: string, solida: boolean, key: string) => {
+    const h = Math.max(0, bot - top);
+    if (h <= 2) return null;
+    // Retroiluminación: solo el tramo de tela que tapa el vidrio.
+    const bx = Math.max(x0 + 3, gx0);
+    const bw = Math.min(x1 - 3, gx1) - bx;
+    const by = Math.max(top, gy0);
+    const bh = Math.min(bot, gy1) - by;
     return (
-      <g key={key} transform={`translate(0,${r3(dx)})`}>
+      <g key={key}>
+        <rect x={x0 + 3} y={r3(top)} width={VIZ_W - 6} height={r3(h)} fill={patron} />
+        {bw > 0 && bh > 0 && (
+          <rect
+            x={bx}
+            y={r3(by)}
+            width={bw}
+            height={r3(bh)}
+            fill="#fff6e2"
+            opacity={solida ? 0.05 : 0.15}
+            style={{ mixBlendMode: 'screen' }}
+          />
+        )}
+        <rect x={x0 + 3} y={r3(top)} width={VIZ_W - 6} height={r3(h)} fill={url('gTelaH')} />
+        <rect x={x0 + 3} y={r3(top)} width={VIZ_W - 6} height={r3(Math.min(h, 100))} fill={url('gTelaV')} />
+        <rect x={x0 + 3} y={r3(bot - 30)} width={VIZ_W - 6} height={30} fill="#000" opacity={0.1} />
+        <rect x={x0 + 3} y={r3(top)} width={3} height={r3(h)} fill="#000" opacity={0.2} />
+        <rect x={x1 - 6} y={r3(top)} width={3} height={r3(h)} fill="#000" opacity={0.26} />
+      </g>
+    );
+  };
+
+  /** Barra inferior del rollo de adelante (la dual lleva una por paño). */
+  const barraDual = (y: number) => (
+    <g>
+      <rect x={x0 - 2} y={r3(y - 20)} width={VIZ_W + 4} height={20} rx={3} fill={url('gHerr')} />
+      <rect x={x0 - 2} y={r3(y - 18)} width={VIZ_W + 4} height={2} fill={tono(herr, 0.45)} opacity={0.4} />
+      <rect x={x0 - 2} y={r3(y - 5)} width={VIZ_W + 4} height={5} fill="#000" opacity={0.32} />
+    </g>
+  );
+
+  const rollo = (dy: number, radioRollo0: number, patron: string, key: string) => {
+    const rr = Math.max(tr, radioRollo0);
+    return (
+      <g key={key} transform={`translate(0,${r3(dy)})`}>
         <rect x={x0 + 2} y={cy - rr} width={VIZ_W - 4} height={2 * rr} rx={5} fill={patron} />
         <rect x={x0 + 2} y={cy - rr} width={VIZ_W - 4} height={2 * rr} rx={5} fill={url('gTelaH')} />
         <rect x={x0 + 2} y={cy - rr * 0.6} width={VIZ_W - 4} height={6} fill="#fff" opacity={0.09} />
@@ -459,7 +539,7 @@ export const CortinaViz = memo(function CortinaViz({
       />
 
       {/* Sombra del conjunto sobre el nicho */}
-      {tTubo > 0.3 && (
+      {!esVertical && tTubo > 0.3 && (
         <rect
           x={x0 + 20}
           y={cy - radio + 24}
@@ -468,6 +548,18 @@ export const CortinaViz = memo(function CortinaViz({
           rx={8}
           fill="#171310"
           opacity={r3(0.3 * tTubo)}
+          filter={url('fSuave')}
+        />
+      )}
+      {esVertical && tSop > 0.3 && (
+        <rect
+          x={x0 + 16}
+          y={cy - 8}
+          width={VIZ_W}
+          height={lamaBot - cy}
+          rx={8}
+          fill="#171310"
+          opacity={r3(0.22 * tSop)}
           filter={url('fSuave')}
         />
       )}
@@ -487,7 +579,32 @@ export const CortinaViz = memo(function CortinaViz({
         )}
       </Pieza>
 
+      {/* ── Vertical: el riel cabezal entra con los soportes (no tiene paso propio) ── */}
+      {esVertical && tSop > 0.02 && (
+        <g opacity={r3(clamp01(tSop * 2))}>
+          <rect x={x0} y={cy - 18} width={VIZ_W} height={36} rx={4} fill={url('gHerr')} />
+          <rect x={x0} y={cy - 10} width={VIZ_W} height={3} fill={tono(herr, 0.5)} opacity={0.35} />
+          <rect x={x0} y={cy + 12} width={VIZ_W} height={6} fill="#000" opacity={0.25} />
+          <rect x={x0 - 4} y={cy - 18} width={8} height={36} rx={2} fill={url('gTapa')} />
+          <rect x={x1 - 4} y={cy - 18} width={8} height={36} rx={2} fill={url('gTapa')} />
+        </g>
+      )}
+
+      {/* Vertical: la cadena de mando cuelga del lado del cierre. */}
+      {esVertical && (
+        <g transform={espejo ? flip : undefined}>
+          <Pieza pieza="accionamiento" hit={{ x: x1 + 20, y: cy - 30, w: 90, h: 380 }}>
+            {tAcc < 0.02 ? (
+              <Fantasma x={x1 + 34} y={cy + 24} w={38} h={300} rx={18} />
+            ) : (
+              cadena()
+            )}
+          </Pieza>
+        </g>
+      )}
+
       {/* ── Tubo ── */}
+      {!esVertical && (
       <Pieza pieza="tubo" hit={{ x: x0 - 8, y: cy - tr - 10, w: VIZ_W + 16, h: tr * 2 + 20 }}>
         {tTubo < 0.02 ? (
           <Fantasma x={x0} y={cy - tr} w={VIZ_W} h={tr * 2} rx={tr} />
@@ -500,9 +617,9 @@ export const CortinaViz = memo(function CortinaViz({
             <rect x={x0} y={cy - tr * 0.5} width={VIZ_W} height={4} fill={tono(herr, 0.7)} opacity={0.3} />
             <ellipse cx={x0 + 4} cy={cy} rx={9} ry={tr} fill={url('gTapa')} />
             <ellipse cx={x1 - 4} cy={cy} rx={9} ry={tr} fill={url('gTapa')} />
-            {/* Dual: el segundo tubo, detrás y un poco más abajo. */}
-            {variante === 'dual' && (
-              <g transform="translate(0,34)" opacity={0.9}>
+            {/* Dual: el tubo del rollo de ADELANTE, un poco más abajo. */}
+            {esDual && (
+              <g transform={`translate(0,${dualDy})`} opacity={0.9}>
                 <rect x={x0} y={cy - tr + 6} width={VIZ_W} height={tr * 2 - 12} rx={4} fill={url('gTubo')} />
                 <ellipse cx={x1 - 4} cy={cy} rx={8} ry={tr - 6} fill={url('gTapa')} />
               </g>
@@ -510,8 +627,10 @@ export const CortinaViz = memo(function CortinaViz({
           </g>
         )}
       </Pieza>
+      )}
 
       {/* ── Mecanismo y accionamiento (espejados si el mando va a la izquierda) ── */}
+      {!esVertical && (
       <g transform={espejo ? flip : undefined}>
         <Pieza pieza="mecanismo" hit={{ x: x1 - 14, y: cy - 34, w: 96, h: 68 }}>
           {tMec < 0.02 ? (
@@ -543,54 +662,78 @@ export const CortinaViz = memo(function CortinaViz({
           )}
         </Pieza>
       </g>
+      )}
+
+      {/* ── Vertical: las lamas son la tela ── */}
+      {esVertical && (
+        <Pieza pieza="tela" hit={{ x: x0, y: lamaTop, w: VIZ_W, h: lamaBot - lamaTop }}>
+          {tTela < 0.02 ? (
+            <Fantasma x={x0 + 8} y={lamaTop + 6} w={VIZ_W - 16} h={380} />
+          ) : (
+            <g>
+              {Array.from({ length: lamasN }, (_, i) => {
+                const op = clamp01(tTela * lamasN - i);
+                if (op <= 0.01) return null;
+                const cxL = lamasX0 + i * LAMA_PASO + LAMA_W / 2;
+                const w = Math.max(10, lamaWAhora);
+                const xL = cxL - w / 2;
+                const caidaLama = -46 * (1 - easeOut(op));
+                return (
+                  <g key={i} opacity={r3(op)} transform={`translate(0,${r3(caidaLama)})`}>
+                    {/* Carrito: el gancho que la cuelga del riel. */}
+                    <rect x={r3(cxL - 2.5)} y={cy + 12} width={5} height={14} rx={1.5} fill={tono(herr, -0.35)} />
+                    <rect x={r3(xL)} y={lamaTop} width={r3(w)} height={lamaBot - lamaTop} rx={3} fill={patronTela} />
+                    <rect x={r3(xL)} y={lamaTop} width={r3(w)} height={lamaBot - lamaTop} rx={3} fill={url('gTelaH')} />
+                    <rect x={r3(xL + w - 4)} y={lamaTop} width={4} height={lamaBot - lamaTop} fill="#000" opacity={0.16} />
+                  </g>
+                );
+              })}
+            </g>
+          )}
+        </Pieza>
+      )}
 
       {/* ── Tela + peso + despliegue ── */}
+      {!esVertical && (
       <Pieza pieza="tela" hit={{ x: x0, y: cy - RMAX, w: VIZ_W, h: Math.max(120, telaH + RMAX) }}>
         {tTela < 0.02 ? (
           <Fantasma x={x0 + 3} y={cy + 30} w={VIZ_W - 6} h={200} />
         ) : (
           <g opacity={r3(clamp01(tTela * 5))}>
-            {telaH > 2 && (
-              <g>
-                <rect x={x0 + 3} y={telaTop} width={VIZ_W - 6} height={telaH} fill={patronTela} />
-                {/* Retroiluminación: la parte de la tela que tapa el vidrio. */}
-                {(() => {
-                  const bx = Math.max(x0 + 3, gx0);
-                  const bw = Math.min(x1 - 3, gx1) - bx;
-                  const by = Math.max(telaTop, gy0);
-                  const bh = Math.min(barraY, gy1) - by;
-                  if (bw <= 0 || bh <= 0) return null;
-                  return (
-                    <rect
-                      x={bx}
-                      y={by}
-                      width={bw}
-                      height={bh}
-                      fill="#fff6e2"
-                      opacity={estilo.telaPatron === 'solida' ? 0.05 : 0.15}
-                      style={{ mixBlendMode: 'screen' }}
-                    />
-                  );
-                })()}
-                <rect x={x0 + 3} y={telaTop} width={VIZ_W - 6} height={telaH} fill={url('gTelaH')} />
-                <rect
-                  x={x0 + 3}
-                  y={telaTop}
-                  width={VIZ_W - 6}
-                  height={Math.min(telaH, 100)}
-                  fill={url('gTelaV')}
-                />
-                <rect x={x0 + 3} y={barraY - 30} width={VIZ_W - 6} height={30} fill="#000" opacity={0.1} />
-                <rect x={x0 + 3} y={telaTop} width={3} height={telaH} fill="#000" opacity={0.2} />
-                <rect x={x1 - 6} y={telaTop} width={3} height={telaH} fill="#000" opacity={0.26} />
-              </g>
+            {esDual && estilo.telaDual ? (
+              (() => {
+                const [vidrio, frente] = estilo.telaDual;
+                return (
+                  <>
+                    {/* Rollo del vidrio (paño 1): baja entero. */}
+                    {panelTela(telaTop, barraY, url('pTelaVidrio'), vidrio.patron === 'solida', 'panelVidrio')}
+                    {rollo(0, radio, url('pTelaVidrio'), 'rollo1')}
+                    {/* Rollo de adelante (paño 2): a media caída, delante del otro.
+                        Sin tela elegida se dibuja tenue y punteado, como el resto
+                        de las piezas que faltan. */}
+                    <g opacity={frente.definida ? 1 : 0.55}>
+                      {panelTela(telaTopF, barraYF, url('pTelaFrente'), frente.patron === 'solida', 'panelFrente')}
+                      {telaHF > 2 && !frente.definida && (
+                        <Fantasma x={x0 + 3} y={telaTopF} w={VIZ_W - 6} h={telaHF} rx={2} />
+                      )}
+                      {telaHF > 2 && barraDual(barraYF)}
+                      {rollo(dualDy, radioF, url('pTelaFrente'), 'rollo2')}
+                    </g>
+                  </>
+                );
+              })()
+            ) : (
+              <>
+                {panelTela(telaTop, barraY, patronTela, estilo.telaPatron === 'solida', 'panel')}
+                {rollo(0, radio, patronTela, 'rollo1')}
+              </>
             )}
-            {variante === 'dual' && estilo.telaTraseraHex && rollo(34, -6, url('pTelaB'), 'rollo2')}
-            {rollo(0, 0, patronTela, 'rollo1')}
           </g>
         )}
       </Pieza>
+      )}
 
+      {!esVertical && (
       <Pieza pieza="peso" hit={{ x: x0 - 10, y: barraY - 34, w: VIZ_W + 20, h: 44 }}>
         {tPeso < 0.02 ? (
           <Fantasma x={x0 - 2} y={barraY - 26} w={VIZ_W + 4} h={26} rx={3} />
@@ -616,13 +759,25 @@ export const CortinaViz = memo(function CortinaViz({
           </g>
         )}
       </Pieza>
+      )}
 
       {/* Zona de clic del despliegue: el vidrio que la cortina va tapando. */}
+      {!esVertical && (
       <Pieza pieza="despliegue" hit={{ x: gx0, y: barraY + 12, w: gx1 - gx0, h: Math.max(20, gy1 - barraY - 12) }}>
         {tDesp < 0.02 && tTela > 0.02 && (
           <Fantasma x={gx0 + 6} y={barraY + 20} w={gx1 - gx0 - 12} h={Math.max(24, gy1 - barraY - 30)} />
         )}
       </Pieza>
+      )}
+      {/* Vertical: el despliegue son las lamas girando de canto a cerradas. El
+          clic va en el tramo bajo del vidrio para no taparle el clic a la tela. */}
+      {esVertical && (
+      <Pieza pieza="despliegue" hit={{ x: gx0, y: gy0 + (gy1 - gy0) * 0.6, w: gx1 - gx0, h: (gy1 - gy0) * 0.4 }}>
+        {tDesp < 0.02 && tTela > 0.02 && (
+          <Fantasma x={gx0 + 6} y={gy0 + (gy1 - gy0) * 0.6} w={gx1 - gx0 - 12} h={(gy1 - gy0) * 0.4 - 8} />
+        )}
+      </Pieza>
+      )}
 
       {/* ── Cenefa ── */}
       {estilo.cenefa !== 'no' && (

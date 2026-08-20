@@ -71,11 +71,18 @@ const txt = (v: unknown): string => String(v ?? '').trim();
 const num = (v: unknown): number => parseFloat(String(v ?? 0)) || 0;
 const reglasDe = (ctx: CtxPaso): ReglasSeleccion => ctx.reglas ?? REGLAS_SELECCION_DEFAULT;
 
-/** La tela vive en el paño solo en dual; en el resto es de la ventana. */
+/**
+ * La tela vive en el paño solo en dual; en el resto es de la ventana.
+ *
+ * En la dual, el fallback a la tela de la ventana vale SOLO para el primer
+ * rollo (al guardar, la ventana refleja justamente su tela). Del segundo en
+ * adelante hay que elegirla: sin código propio se cortarían dos telas iguales
+ * sin que nadie lo note — mismo criterio que el gate de Fase 2.
+ */
 export function codTelaDePaso(ctx: CtxPaso): string {
-  return ctx.variante === 'dual'
-    ? txt(ctx.pano.codInt) || txt(ctx.ventana.codInt)
-    : txt(ctx.ventana.codInt);
+  if (ctx.variante !== 'dual') return txt(ctx.ventana.codInt);
+  const propia = txt(ctx.pano.codInt);
+  return ctx.panoIdx > 0 ? propia : propia || txt(ctx.ventana.codInt);
 }
 
 function requiereMecanismo(ctx: CtxPaso): boolean {
@@ -144,7 +151,9 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     titulo: 'Tubo',
     ayuda: 'El tubo sobre el que se enrolla la tela. Lo acota el ancho de la cortina.',
     pieza: 'tubo',
-    aplica: () => true,
+    // La vertical no tiene tubo: su estructura es riel cabezal + carritos, y el
+    // gate de Fase 2 tampoco le exige tubería.
+    aplica: (ctx) => ctx.variante !== 'vertical',
     campos: (ctx) => [{ etiqueta: 'tubería', ok: !!txt(ctx.pano.tuberia) }],
   },
   {
@@ -160,8 +169,15 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     titulo: 'Cadena o motor',
     ayuda: 'Cómo se sube y se baja la cortina, y por qué lado queda el mando.',
     pieza: 'accionamiento',
-    aplica: (ctx) => requiereAccionamiento(ctx),
+    // La VERTICAL no lleva cadena de roller (la suya va por otro camino), pero
+    // SÍ tiene lado de mando: el «Cierre» de la ficha. Sin preguntarlo acá, la
+    // columna DIRECC. CAD/CIERRE de la cotización final quedaba en blanco para
+    // toda vertical cargada por el wizard.
+    aplica: (ctx) => ctx.variante === 'vertical' || requiereAccionamiento(ctx),
     campos: (ctx) => {
+      if (ctx.variante === 'vertical') {
+        return [{ etiqueta: 'cierre (lado del mando)', ok: !!txt(ctx.pano.cierreVert) }];
+      }
       if (panoLlevaMotor(ctx.pano)) {
         return [
           { etiqueta: 'modelo de motor', ok: !!txt(ctx.pano.motorModelo) },
@@ -182,7 +198,7 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
   {
     id: 'tela',
     titulo: 'Tela',
-    ayuda: 'La tela que se ve. En dual, cada paño lleva la suya.',
+    ayuda: 'La tela que se ve. En dual cada rollo lleva la suya: el paño 1 es el que va al vidrio.',
     pieza: 'tela',
     aplica: () => true,
     campos: (ctx) => [
@@ -195,7 +211,10 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     titulo: 'Peso inferior y manilla',
     ayuda: 'La barra que tensa la tela abajo. Su código sale del color de accesorios.',
     pieza: 'peso',
-    aplica: () => true,
+    // La vertical no lleva peso inferior de roller (cada lama trae el suyo).
+    // El paso vuelve solo si alguien le pidió manillas — el gate exige el color
+    // cuando hay cantidad, y el wizard nunca pide menos que el gate.
+    aplica: (ctx) => ctx.variante !== 'vertical' || num(ctx.pano.manillaCant) > 0,
     campos: (ctx) => {
       const campos: CampoPaso[] = [];
       // La manilla es opcional: solo si se pidió alguna hace falta su color.

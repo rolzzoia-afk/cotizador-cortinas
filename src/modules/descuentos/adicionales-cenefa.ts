@@ -13,7 +13,7 @@ import type { AdicionalFase0Persistido, VentanaItem } from '@/modules/ots/types'
 import { medidaCenefaSoftLight, varianteSoftLight } from './reglas-soft-light';
 import { FORMULAS_DEFAULT, type FormulasFamilias } from './formulasFamilias';
 import { familiaOscuridad } from './reglas-oscuridad';
-import type { ModeloDespiece } from './tipos';
+import { sistemasDeCategoria, type ModeloDespiece } from './tipos';
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -332,12 +332,35 @@ export function cenefaAdicionalEsDelPano(
 // cortina. Se marcan origen:'pano' para regenerarse en cada apertura sin
 // acumularse; la dedup contra manuales evita cobrar dos veces la misma.
 
+/**
+ * ¿La cenefa de esta cortina YA está dentro del precio de su sistema?
+ *
+ * El DÚO sí: las seis recetas de familia (las DUOBK y las DUOPOLI) incluyen el
+ * perfil de cenefa **E 26** y su mecanismo MEC 09, así que derivar además un
+ * CENF O la cobraría DOS veces. El roller de cenefa ovalada NO: su receta es la
+ * del roller simple —sin perfil de cenefa— y la cenefa se cobra con el adicional.
+ *
+ * Una línea CENF O escrita a mano se respeta igual: esto solo apaga el cobro
+ * AUTOMÁTICO (2026-08-20, confirmado por el dueño).
+ */
+export function cenefaIncluidaEnElPrecio(
+  categoria?: string | null,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  return sistemasDeCategoria(categoria ?? '', tipos).some(
+    (s) => s.toUpperCase() === 'CENEFA_OVALADA_DUO',
+  );
+}
+
 /** Deriva los adicionales de cenefa cobrables desde los paños de las ventanas. */
 export function derivarAdicionalesCenefaDesdeVentanas(
   ventanas: VentanaItem[],
+  tipos?: readonly TipoCortina[],
 ): AdicionalFase0Persistido[] {
   const out: AdicionalFase0Persistido[] = [];
   for (const v of ventanas) {
+    // La cenefa que ya va en el precio del sistema no se cobra aparte.
+    if (cenefaIncluidaEnElPrecio(v.categoria, tipos)) continue;
     const panos = v.panos || [];
     const total = panos.length;
     panos.forEach((p, i) => {

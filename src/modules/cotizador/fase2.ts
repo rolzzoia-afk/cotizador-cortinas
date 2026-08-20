@@ -2,6 +2,8 @@
 // Portados desde public/legacy/index.html líneas 3096-4120.
 
 import type { Pano, Ventana } from './types';
+import { categoriaEsDual } from '@/modules/descuentos/tipos';
+import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 import {
   opcionesTuberiaResolucion,
   opcionesTuberiaUI,
@@ -48,7 +50,11 @@ export const OPCIONES_LARGO_CADENA = [
   '4mts',
   'ROLLO',
 ] as const;
-export const OPCIONES_CIERRE_VERT = ['Izquierda', 'Derecha', 'Vertical', 'Medio'] as const;
+// «Vertical» salió de las opciones el 2026-08-20: era un valor legacy sin
+// destino en la DIRECC. CAD/CIERRE de Fase 3 (direccionDesdeCierre lo mapea a
+// vacío). Si viene guardado en una OT vieja, los selectores lo conservan como
+// opción extra para no esconder el dato.
+export const OPCIONES_CIERRE_VERT = ['Izquierda', 'Derecha', 'Medio'] as const;
 // Colores: DERIVADOS del catálogo (coloresAccesorio.ts), que dice en qué
 // selector aparece cada uno. Estas cuatro listas son las de fábrica; Fase 2 usa
 // las del catálogo guardado, que el admin puede ampliar con colores nuevos.
@@ -234,6 +240,80 @@ export function crearPanoVacio(): Pano {
   };
 }
 
+// ═══════════════════════════════════════════════════════════
+// DUAL: dos telas en UNA cortina
+// ═══════════════════════════════════════════════════════════
+
+/** Paños de una dual: un rollo por tela, los dos en el mismo bracket. */
+export const PANOS_DUAL = 2;
+
+/**
+ * Lo único que NO comparten los dos rollos de una dual: su tela y el lado de su
+ * cadena (el kit MIXTO lleva una por lado). Todo el resto —medidas, bracket,
+ * herrajes, cenefa, instalación— es de la cortina, no del rollo, así que el
+ * editor lo escribe en los dos paños a la vez.
+ */
+export const CAMPOS_PROPIOS_DEL_ROLLO = [
+  'codInt',
+  'producto',
+  'descripcion',
+  'tipoTela',
+  'cierreVert',
+] as const;
+
+const PROPIOS_DEL_ROLLO = new Set<string>(CAMPOS_PROPIOS_DEL_ROLLO);
+
+/** ¿Este campo es de UN rollo de la dual (y no de la cortina entera)? */
+export function esCampoPropioDelRollo(campo: string): boolean {
+  return PROPIOS_DEL_ROLLO.has(campo);
+}
+
+/** El otro rollo de la dual: misma ficha (comparten ventana, bracket, herrajes
+ *  y medidas), tela en blanco — cada rollo lleva la suya. */
+function panoHermanoDual(p: Pano | undefined): Pano {
+  const base = p ? { ...p } : crearPanoVacio();
+  return { ...base, dual: true, codInt: '', producto: '', descripcion: '', tipoTela: '' };
+}
+
+/**
+ * Completa los paños que la dual necesita por diseño: DOS (screen al vidrio +
+ * blackout). El segundo se crea con la ficha del primero y sin su tela.
+ *
+ * Sin esto, una dual cargada en Terreno quedaba con un solo rollo —el control
+ * «cantidad de paños» se sacó del editor en 2026-07-09— y el vendedor terminaba
+ * partiéndola en DOS cortinas: doble kit dual, doble juego de fijaciones y dos
+ * instalaciones cobradas (2026-08-20).
+ */
+export function asegurarPanosDual(v: Ventana, tipos?: readonly TipoCortina[]): Ventana {
+  if (!categoriaEsDual(v.categoria || '', tipos)) return v;
+  const panos = v.panos || [];
+  if (panos.length >= PANOS_DUAL) return v;
+  const extra: Pano[] = [];
+  while (panos.length + extra.length < PANOS_DUAL) extra.push(panoHermanoDual(panos[0]));
+  return { ...v, panos: [...panos, ...extra] };
+}
+
+/**
+ * Contraparte de `asegurarPanosDual` al cambiar a un sistema de UNA tela: saca
+ * el paño que la dual había creado sola y baja el flag `dual` de los que quedan
+ * (si no, el BOM seguía emitiendo el bracket dual en una cortina simple).
+ *
+ * El paño solo se va si NUNCA recibió tela propia: lo que el vendedor alcanzó a
+ * cargar no se borra por cambiar de categoría.
+ *
+ * NO llamarla si el destino es BEEBLACK: ahí `dual` significa DOBLE (blackout +
+ * mosquitero sobre la misma estructura) y bajarlo cambiaría su kit.
+ */
+export function quitarPanoDualAutomatico(v: Ventana): Ventana {
+  const panos = v.panos || [];
+  const sobra = panos.length === PANOS_DUAL && !String(panos[1]?.codInt ?? '').trim();
+  const quedan = sobra ? panos.slice(0, 1) : panos;
+  return {
+    ...v,
+    panos: quedan.map((p) => (p.dual ? { ...p, dual: false, dualLado: '', dualColor: '' } : p)),
+  };
+}
+
 // Ajusta el array de paños al nuevo tamaño N (1-6).
 export function ajustarPanos(panos: Pano[], n: number): Pano[] {
   const next = [...panos];
@@ -246,6 +326,16 @@ export function ajustarPanos(panos: Pano[], n: number): Pano[] {
 export function tipoVentanaLabel(n: number): string {
   const t = TIPOS_VENTANA.find((x) => x.value === n);
   return t ? t.label : `${n} paños`;
+}
+
+/**
+ * Rótulo de la lista de cortinas. La dual cuenta ROLLOS y no paños: decir
+ * «Doble» ahí sonaba a dos cortinas —justo la confusión que la hace cargarse
+ * partida en dos— y de paso deja a la vista la que quedó con un solo rollo.
+ */
+export function etiquetaPanos(n: number, esDual: boolean): string {
+  if (!esDual) return tipoVentanaLabel(n);
+  return `Dual (${n} ${n === 1 ? 'rollo' : 'rollos'})`;
 }
 
 // Resumen textual de paños: "100cm·SCR | 150cm·BK".

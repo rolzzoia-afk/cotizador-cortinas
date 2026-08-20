@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  asegurarPanosDual,
+  CAMPOS_PROPIOS_DEL_ROLLO,
   CHIPS_MECANISMO_LEGACY,
   crearPanoVacio,
+  esCampoPropioDelRollo,
   esCenefaCuadrada,
+  etiquetaPanos,
   OPCIONES_CENEFA,
   OPCIONES_LARGO_CADENA,
   OPCIONES_MATERIAL_TIPO,
@@ -12,7 +16,9 @@ import {
   OPCIONES_TUBERIA,
   parcheApagarPerfilBase,
   parcheSuperficiePerfil,
+  quitarPanoDualAutomatico,
 } from './fase2';
+import type { Pano, Ventana } from './types';
 
 describe('crearPanoVacio', () => {
   it('tela y colores de accesorios parten VACÍOS (los rellena fase0-sync con el dato real)', () => {
@@ -25,6 +31,95 @@ describe('crearPanoVacio', () => {
     expect(p.colorCadena).toBe('');
     expect(p.colorMecanismo).toBe('');
     expect(p.color).toBe('');
+  });
+});
+
+describe('dual — dos rollos, UNA cortina', () => {
+  const vent = (categoria: string, panos: Partial<Pano>[]): Ventana =>
+    ({
+      id: 'v1',
+      ubicacion: 'Living',
+      categoria,
+      codInt: 'SC 10',
+      producto: 'SCREEN',
+      tipo: '',
+      color: 'BCO',
+      alto: 2.5,
+      precio: 0,
+      cantidad: 1,
+      panos: panos.map((p) => ({ ...crearPanoVacio(), ...p })),
+    }) as unknown as Ventana;
+
+  it('elegir ROL_DUAL completa el segundo rollo con la ficha del primero, sin su tela', () => {
+    // El editor ya no pregunta la cantidad de paños: la dual la define sola.
+    const v = asegurarPanosDual(
+      vent('ROL_DUAL', [
+        { ancho: '2.5', alto: '2.5', materialTipo: 'Muro', codInt: 'SC 10', producto: 'SCREEN', tipoTela: 'SCR' },
+      ]),
+    );
+    expect(v.panos).toHaveLength(2);
+    // Comparten ventana y bracket: las medidas y la instalación se copian.
+    expect(v.panos[1].ancho).toBe('2.5');
+    expect(v.panos[1].materialTipo).toBe('Muro');
+    expect(v.panos[1].dual).toBe(true);
+    // La tela NO: cada rollo lleva la suya (si se copiara, se cortarían dos
+    // telas iguales y el error aparecería recién en el taller).
+    expect(v.panos[1].codInt).toBe('');
+    expect(v.panos[1].tipoTela).toBe('');
+  });
+
+  it('no toca la dual que ya viene con sus dos telas (import de Fase 1)', () => {
+    const v = vent('ROL_DUAL', [{ codInt: 'SC 10' }, { codInt: 'BK 10' }]);
+    expect(asegurarPanosDual(v)).toBe(v);
+  });
+
+  it('un roller simple no gana paños', () => {
+    const v = vent('ROL', [{ ancho: '2.5' }]);
+    expect(asegurarPanosDual(v).panos).toHaveLength(1);
+  });
+
+  it('al salir de la dual se va el rollo que se creó solo y baja el flag dual', () => {
+    // Si el flag se quedara, el BOM seguiría emitiendo el bracket dual en una
+    // cortina simple.
+    const v = quitarPanoDualAutomatico(
+      vent('ROL', [
+        { ancho: '2.5', dual: true, dualLado: 'DERECHO', mecanismo: 'DUAL DERECHO BLANCO [MEC 01]' },
+        { ancho: '2.5', dual: true, codInt: '' },
+      ]),
+    );
+    expect(v.panos).toHaveLength(1);
+    expect(v.panos[0].dual).toBe(false);
+    expect(v.panos[0].dualLado).toBe('');
+  });
+
+  it('pero NO borra el rollo al que ya le eligieron tela', () => {
+    const v = quitarPanoDualAutomatico(
+      vent('ROL', [{ codInt: 'SC 10', dual: true }, { codInt: 'BK 10', dual: true }]),
+    );
+    expect(v.panos).toHaveLength(2);
+    expect(v.panos.every((p) => p.dual === false)).toBe(true);
+  });
+
+  it('en la lista la dual cuenta ROLLOS, no paños («Doble» sonaba a dos cortinas)', () => {
+    expect(etiquetaPanos(2, true)).toBe('Dual (2 rollos)');
+    expect(etiquetaPanos(1, true)).toBe('Dual (1 rollo)');
+    expect(etiquetaPanos(2, false)).toBe('Doble');
+  });
+
+  it('lo propio del rollo es su tela y el lado de su cadena; el resto es de la cortina', () => {
+    // En MIXTO cada rollo lleva su cadena por un lado distinto, por eso el
+    // cierre no se espeja. Las medidas sí: es la misma ventana.
+    expect([...CAMPOS_PROPIOS_DEL_ROLLO]).toEqual([
+      'codInt',
+      'producto',
+      'descripcion',
+      'tipoTela',
+      'cierreVert',
+    ]);
+    expect(esCampoPropioDelRollo('codInt')).toBe(true);
+    expect(esCampoPropioDelRollo('cierreVert')).toBe(true);
+    expect(esCampoPropioDelRollo('ancho')).toBe(false);
+    expect(esCampoPropioDelRollo('materialTipo')).toBe(false);
   });
 });
 

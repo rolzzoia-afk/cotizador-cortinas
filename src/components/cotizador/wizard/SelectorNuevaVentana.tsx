@@ -53,17 +53,29 @@ function SiluetaEstandar({ n }: { n: number }) {
   );
 }
 
-/** Las cuatro especiales, en perspectiva como el mockup. */
+/**
+ * Las cuatro especiales, como en el mockup: PANELES en perspectiva, no un
+ * contorno plano. Cada paño es un panel cerrado; las alas se abren hacia quien
+ * mira, con el borde externo más alto porque está más cerca.
+ */
 const SILUETAS_ESPECIALES: Record<FormaVentana, JSX.Element> = {
-  // Bow window: dos alas abiertas hacia el observador.
+  // Bow window: un biombo de tres paneles, las alas bien abiertas.
   bow: (
-    <polyline points="8,58 26,44 26,10 74,10 74,44 92,58" fill="none" strokeWidth="1.5" />
+    <>
+      <polygon points="38,12 72,12 72,50 38,50" fill="none" strokeWidth="1.5" />
+      <polygon points="38,12 12,5 12,57 38,50" fill="none" strokeWidth="1.5" />
+      <polygon points="72,12 98,5 98,57 72,50" fill="none" strokeWidth="1.5" />
+    </>
   ),
-  // Ventana en L: un ala y el frente.
-  ele: <polyline points="14,56 34,42 34,10 86,10 86,52" fill="none" strokeWidth="1.5" />,
-  // Ventana en U: tres caras, las laterales hacia atrás.
-  u: <polyline points="10,10 10,52 34,44 76,44 100,52 100,10" fill="none" strokeWidth="1.5" />,
-  triangular: <polygon points="12,10 12,52 94,52" fill="none" strokeWidth="1.5" />,
+  // Ventana en L: el frente y un ala abierta a la izquierda.
+  ele: (
+    <>
+      <polygon points="44,10 96,10 96,52 44,52" fill="none" strokeWidth="1.5" />
+      <polygon points="44,10 18,3 18,59 44,52" fill="none" strokeWidth="1.5" />
+    </>
+  ),
+  // Triángulo rectángulo con la vertical a la derecha, como el boceto.
+  triangular: <polygon points="98,8 98,54 14,54" fill="none" strokeWidth="1.5" />,
 };
 
 function Tarjeta({
@@ -184,7 +196,7 @@ export function SelectorNuevaVentana({ onConfirmar, onAtras }: Props) {
         <h4 className="mb-2 rounded bg-accent/20 px-3 py-1.5 text-[0.72rem] font-semibold uppercase tracking-wide text-accent">
           Ventanas especiales
         </h4>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {FORMAS_VENTANA.map((f) => (
             <Tarjeta
               key={f.id}

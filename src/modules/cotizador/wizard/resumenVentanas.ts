@@ -14,6 +14,8 @@
 // ─────────────────────────────────────────────────────────────────────
 import { porUbicacion } from '@/modules/visita/esqueletoInforme';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
+import { categoriaEsDual } from '@/modules/descuentos/tipos';
+import { telaDePano } from '../telaPano';
 import { rotuloForma } from './selectorVentanas';
 import type { Pano, Ventana } from '../types';
 
@@ -66,6 +68,27 @@ function textoCenefa(p: Pano | undefined): string {
 }
 
 /**
+ * Las filas de tela de una DUAL: una por rollo, rotuladas por su lugar en la
+ * ventana (el paño 1 va al vidrio). `null` = no es dual, la tela va como
+ * siempre en una sola fila.
+ */
+function filasTelaDual(v: Ventana): Array<[string, string]> | null {
+  if (!categoriaEsDual(txt(v.categoria))) return null;
+  const panos = v.panos ?? [];
+  return ['Tela (al vidrio)', 'Tela (adelante)'].map((rotulo, i) => {
+    const p = panos[i];
+    // Solo el primer rollo hereda la tela de la ventana: es la suya. Al
+    // segundo, sin tela propia, hay que elegírsela — y se dice.
+    if (!p || (i > 0 && !txt(p.codInt))) return [rotulo, 'falta elegirla'];
+    const tela = telaDePano(v, p);
+    const desc = [txt(p.tipoTela), txt(tela.descripcion) || txt(tela.producto)]
+      .filter(Boolean)
+      .join(' ');
+    return [rotulo, desc || txt(tela.codInt) || 'falta elegirla'];
+  });
+}
+
+/**
  * Las filas de la ficha de solo lectura, en el orden del mockup.
  *
  * Solo aparece lo que tiene dato: una ficha llena de guiones no dice nada, y
@@ -77,7 +100,9 @@ export function fichaResumen(v: Ventana): FilaResumen[] {
     ['Ubicación', txt(v.ubicacion)],
     ['Modelo', rotuloForma(v)],
     ['Tipo', [txt(v.producto), txt(v.codInt)].filter(Boolean).join(' · ')],
-    ['Tela', [txt(p?.tipoTela), txt(v.descripcion)].filter(Boolean).join(' ')],
+    // La dual lleva DOS telas (un rollo cada una): mostrar solo la primera
+    // dejaba la mitad de la cortina fuera de la ficha.
+    ...(filasTelaDual(v) ?? [['Tela', [txt(p?.tipoTela), txt(v.descripcion)].filter(Boolean).join(' ')]]),
     ['Cenefa', textoCenefa(p)],
     ['Armado', txt(v.sentido)],
     ['Accesorios', txt(colorAccesoriosDePano(p ?? {}, v.color))],

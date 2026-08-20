@@ -16,7 +16,12 @@ import {
 import { esCategoriaBeeblack, normalizarVarianteBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { categoriaEsDual } from '@/modules/descuentos/tipos';
 import { chipDualPorLadoColor } from '@/modules/descuentos/chips';
-import { codigoMotorDesdeAdicional, esAdicionalHubDomotica, manillaDesdeAdicional } from './insumosCortina';
+import {
+  codigoMotorDesdeAdicional,
+  esAdicionalHubDomotica,
+  llevaCenefaOvaladaImplicita,
+  manillaDesdeAdicional,
+} from './insumosCortina';
 import { OPCIONES_MECANISMO_DUAL } from './fase2';
 import { esLineaB } from './lineaB';
 import type { CatalogoProductos, Pano, Ventana } from './types';
@@ -201,6 +206,39 @@ export function direccionDesdeCierre(cierreVert: string | undefined | null): str
   if (c.includes('DERECHA') || c.includes('DERECHO')) return 'CAD [DERECHA]';
   if (c.includes('MEDIO')) return 'CIERRE [MEDIO]';
   return '';
+}
+
+/**
+ * La DIRECC. CAD/CIERRE de la cotización, puesta al día con el cierre que el
+ * vendedor eligió en Fase 2.
+ *
+ * Antes la dirección solo se derivaba cuando venía VACÍA de Fase 0: corregir el
+ * lado en terreno dejaba la cotización final con el lado viejo. Ahora el cierre
+ * de Fase 2 manda, pero SIN perder lo que el mapeo simple no distingue: si la
+ * dirección venía como CIERRE [.], se actualiza el lado conservando el prefijo
+ * (el recíproco ciego la volvería CAD [.]).
+ *
+ * No se toca: una dirección en otro formato (el CIERRE del beeblack:
+ * IZQUIERDA-DERECHA…), un cierre vacío, o el legacy «Vertical» (sin destino).
+ */
+export function sincronizarDireccionConCierre(
+  direccion: string | undefined | null,
+  cierreVert: string | undefined | null,
+): string {
+  const dir = (direccion || '').trim();
+  const c = (cierreVert || '').toUpperCase();
+  if (!c || c.includes('VERTICAL')) return dir;
+  if (!dir) return direccionDesdeCierre(cierreVert);
+  const d = dir.toUpperCase();
+  if (d.startsWith('CAD')) {
+    if (c.includes('MEDIO')) return 'CIERRE [MEDIO]';
+    return c.includes('IZQUIERDA') ? 'CAD [IZQUIERDA]' : 'CAD [DERECHA]';
+  }
+  if (d.startsWith('CIERRE')) {
+    if (c.includes('MEDIO')) return 'CIERRE [MEDIO]';
+    return c.includes('IZQUIERDA') ? 'CIERRE [IZQUIERDO]' : 'CIERRE [DERECHO]';
+  }
+  return dir;
 }
 
 
@@ -424,6 +462,25 @@ export function enriquecerPanoDesdeFase0(
 
     }
 
+  }
+
+  // Cenefa que trae el SISTEMA (el dúo, el roller de cenefa ovalada): no hay
+  // adicional que la marque —va dentro del precio de la familia— así que se
+  // pone acá, con su tira por default. Sin esto la cortina llegaba a Fase 2 sin
+  // cenefa: nadie le pedía tapa ni bracket y el BOM no los emitía (2026-08-20).
+  if (llevaCenefaOvaladaImplicita(ventana.categoria) && !patch.cenefa && (!pano.cenefa || pano.cenefa === 'No')) {
+    patch.cenefa = 'Ovalada';
+  }
+  if (
+    (patch.cenefa === 'Ovalada' || pano.cenefa === 'Ovalada') &&
+    !patch.cenefaTira &&
+    !String(pano.cenefaTira ?? '').trim() &&
+    llevaCenefaOvaladaImplicita(ventana.categoria)
+  ) {
+    // La ovalada va CON TIRA por default; la categoría B, siempre sin.
+    patch.cenefaTira = esLineaB(pano, ventana.codInt, catalogo, ventana.categoria)
+      ? 'SIN TIRA'
+      : 'CON TIRA';
   }
 
   // Motor: si la cotización trae un adicional-motor (DOM38/DOM41) en la MISMA

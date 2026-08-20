@@ -106,7 +106,7 @@ import {
   norm,
   type CampoFase0,
 } from '@/modules/cotizador/importarExcelFase0';
-import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import { CIERRES_BEEBLACK, esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -237,7 +237,8 @@ const DIRECCIONES = [
 ];
 // BEEBLACK: su planilla renombra DIRECC. CAD/CIERRE a "CIERRE" y trae otros
 // valores — el acordeón corre de lado o de arriba abajo, no lleva cadena.
-const DIRECCIONES_BEEBLACK = ['IZQUIERDA-DERECHA', 'DERECHA-IZQUIERDA', 'DE ARRIBA ABAJO'];
+// La lista vive en reglas-beeblack: la comparte la ficha de Fase 2.
+const DIRECCIONES_BEEBLACK = [...CIERRES_BEEBLACK] as string[];
 const SENTIDOS = ['INTERNO', 'EXTERNO'];
 // Sistemas de oscuridad (Soft Light / Dark / Oscuranti): SIEMPRE caen INTERNO
 // (la caída es el armado tela/tubo, no la variante). La variante de instalación
@@ -431,7 +432,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // Una cenefa escrita a mano tapa UNA cortina, no todas las de esa ubicación:
     // con tres cortinas en la misma UBIC. se cobraba una sola (OT 3169).
     const derivados = filtrarDerivadosPorCupoManual(
-      derivarAdicionalesCenefaDesdeVentanas(vts),
+      // Los `tipos` deciden en qué sistema se fabrica cada categoría: sin ellos,
+      // un tipo propio montado sobre el dúo cobraría su cenefa dos veces.
+      derivarAdicionalesCenefaDesdeVentanas(vts, reglas.tipos),
       manuales,
     );
     const derivadosUI: AdicionalUI[] = derivados.map((d) => ({
