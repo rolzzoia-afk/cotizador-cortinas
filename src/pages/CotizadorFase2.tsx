@@ -119,6 +119,7 @@ import type { VisitaTerreno } from '@/modules/ots/types';
 import { WizardTerreno } from '@/components/cotizador/wizard/WizardTerreno';
 import { ReplicarDialog } from '@/components/cotizador/wizard/ReplicarDialog';
 import { SelectorNuevaVentana } from '@/components/cotizador/wizard/SelectorNuevaVentana';
+import { SelectorTipoCortina } from '@/components/cotizador/wizard/SelectorTipoCortina';
 import { ResumenVentanas } from '@/components/cotizador/wizard/ResumenVentanas';
 import { varianteViz } from '@/modules/cotizador/wizard/cortinaViz';
 import { replicarEnVentanas } from '@/modules/cotizador/wizard/replicar';
@@ -191,6 +192,9 @@ export function CotizadorFase2() {
   const [juntarDescartado, setJuntarDescartado] = useState<Set<string | number>>(new Set());
   // Pantalla «¿qué vas a cargar?» (cuántas ventanas o qué modelo especial).
   const [selectorNueva, setSelectorNueva] = useState(false);
+  // Segunda pantalla: «selecciona el tipo de cortina». Guarda la selección de
+  // la primera (cantidad o forma) mientras el vendedor elige el sistema.
+  const [seleccionTipo, setSeleccionTipo] = useState<SeleccionVentanas | null>(null);
   // Cuántas cortinas más de ESTA misma ventana quedan por cargar. Se van
   // creando al guardar cada una: si el vendedor abandona a mitad de camino, la
   // OT no queda con fichas vacías que después nadie sabe si sobran o faltan.
@@ -556,6 +560,7 @@ export function CotizadorFase2() {
   const iniciarEdicion = (v: Ventana) => {
     setDialogJuntar(false);
     setSelectorNueva(false);
+    setSeleccionTipo(null);
     // Abrir otra cortina corta el flujo de las hermanas: el contador es de la
     // ventana que se estaba cargando, no de esta.
     setHermanasPendientes(0);
@@ -649,14 +654,30 @@ export function CotizadorFase2() {
     setDialogJuntar(false);
     setHermanasPendientes(0);
     setInsertarTrasId(null);
+    setSeleccionTipo(null);
     setSelectorNueva(true);
   };
 
+  /** Cantidad/forma elegida → falta el tipo de cortina (pantalla visual). */
   const confirmarSeleccion = (sel: SeleccionVentanas) => {
-    const { ventana, hermanasPendientes: pend } = aplicarSeleccion(ventanaEnBlanco(), sel);
+    setSelectorNueva(false);
+    setSeleccionTipo(sel);
+  };
+
+  /** Tipo elegido → recién ahí se crea la cortina y se abre el wizard. */
+  const confirmarTipo = (categoria: string) => {
+    if (!seleccionTipo) return;
+    const { ventana, hermanasPendientes: pend } = aplicarSeleccion(
+      ventanaEnBlanco(),
+      seleccionTipo,
+    );
+    setSeleccionTipo(null);
     setHermanasPendientes(pend);
     setInsertarTrasId(null);
     abrirEnEditor(ventana);
+    // La misma cascada que el select de la ficha/wizard: modelo de fabricación
+    // por color, chips sincronizados y el 2.º rollo si el sistema es dual.
+    cambiarCategoria(categoria);
   };
 
   /** Otra cortina igual a esta, en la misma ventana: solo faltan las medidas. */
@@ -673,6 +694,7 @@ export function CotizadorFase2() {
     setPanoActivo(0);
     setDialogJuntar(false);
     setSelectorNueva(false);
+    setSeleccionTipo(null);
     // Abandonar deja de arrastrar las hermanas pendientes: si no, la siguiente
     // cortina que se abriera heredaría un contador que ya no significa nada.
     setHermanasPendientes(0);
@@ -1382,6 +1404,16 @@ export function CotizadorFase2() {
             {selectorNueva ? (
               /* Lo primero: cuántas cortinas van, o qué modelo especial es. */
               <SelectorNuevaVentana onConfirmar={confirmarSeleccion} onAtras={cancelarEdicion} />
+            ) : seleccionTipo ? (
+              /* Lo segundo: qué sistema es, elegido mirando el dibujo. */
+              <SelectorTipoCortina
+                tipos={reglas.tipos}
+                onConfirmar={confirmarTipo}
+                onAtras={() => {
+                  setSeleccionTipo(null);
+                  setSelectorNueva(true);
+                }}
+              />
             ) : !ventanaForm ? (
               vista === 'interactiva' && ventanas.length > 0 ? (
                 /* Vista guiada sin nada abierto: las ventanas de la orden
@@ -1507,8 +1539,8 @@ export function CotizadorFase2() {
                 {vista === 'interactiva' && !varianteVentana && (
                   <div className="mb-3 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[0.75rem] text-amber-600">
                     {ventanaForm.categoria
-                      ? `«${ventanaForm.categoria}» se fabrica distinto a un roller, así que la vista guiada no la dibuja: se carga con la ficha de siempre.`
-                      : 'Elige el tipo de cortina para ver la vista guiada. Los sistemas de oscuridad y el beeblack se cargan siempre con la ficha.'}
+                      ? `«${ventanaForm.categoria}» no tiene dibujo en la vista guiada: se carga con la ficha de siempre.`
+                      : 'Elige el tipo de cortina para ver la vista guiada.'}
                   </div>
                 )}
                 {/* Datos de la ventana */}
@@ -1807,7 +1839,7 @@ export function CotizadorFase2() {
 
       {/* Barra fija inferior para avanzar a Fase 3 (solo visible en tab ventanas
           con el editor cerrado y sin una carga a medio empezar) */}
-      {tab === 'ventanas' && !ventanaForm && !selectorNueva && ventanas.length > 0 && (
+      {tab === 'ventanas' && !ventanaForm && !selectorNueva && !seleccionTipo && ventanas.length > 0 && (
         <div className="border-t border-border bg-card/60 px-4 py-2.5">
           <div className="flex items-center justify-end gap-2">
             {pendientes.length > 0 && (

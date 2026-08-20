@@ -27,7 +27,23 @@ import {
   esCenefaOvalada,
   llevaCenefaCuadradaImplicita,
 } from '../insumosCortina';
-import { esCenefaCuadrada } from '../fase2';
+import {
+  esCenefaCuadrada,
+  medidasPerfilesDePano,
+  perfilesOscuridadDePano,
+} from '../fase2';
+import {
+  aplicarDefaultsPerfiles,
+  cortesOscuridad,
+  familiaOscuridadConDiametro,
+  normalizarVarianteOscuridad,
+} from '@/modules/descuentos/reglas-oscuridad';
+import {
+  codigoTuberiaDeChip,
+  diametroDeCodigoTubo,
+} from '@/modules/descuentos/reglas-tuberia';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
+import { COLUMNAS_PERFIL } from '../fase2-completitud';
 import { esLineaB } from '../lineaB';
 import type { CatalogoProductos, Pano, Ventana } from '../types';
 import { panoLlevaMotor, PIEZAS_VIZ, type PiezaViz, type VarianteViz } from './cortinaViz';
@@ -40,6 +56,7 @@ export type IdPaso =
   | 'accionamiento'
   | 'tela'
   | 'peso'
+  | 'perfiles'
   | 'terreno'
   | 'cenefa'
   | 'resumen';
@@ -54,6 +71,8 @@ export type CtxPaso = {
   variante: VarianteViz;
   reglas?: ReglasSeleccion;
   catalogo?: CatalogoProductos;
+  /** Fórmulas de corte editadas en Admin (las usan los perfiles de oscuridad). */
+  formulas?: FormulasFamilias;
 };
 
 export type PasoWizard = {
@@ -115,6 +134,74 @@ function cenefaOvalada(ctx: CtxPaso): boolean {
   );
 }
 
+/**
+ * Familia de oscuridad del contexto, con el diámetro del tubo YA elegido —
+ * el mismo criterio que la ficha y el despiece (un soft light 38 sobre tubo
+ * de 45 corta como 45).
+ */
+export function familiaOscuridadDePaso(ctx: CtxPaso) {
+  const reglas = reglasDe(ctx);
+  return familiaOscuridadConDiametro(
+    txt(ctx.ventana.categoria),
+    ctx.pano.cenefa as string,
+    diametroDeCodigoTubo(codigoTuberiaDeChip(ctx.pano.tuberia as string), reglas.tuberia),
+    reglas.tipos,
+  );
+}
+
+/** Variante de instalación de la oscuridad (paño → ventana → default INTERNO). */
+export function varianteOscuridadDePaso(ctx: CtxPaso) {
+  return normalizarVarianteOscuridad(
+    (ctx.pano.oscuridadVariante as string) ?? ctx.ventana.oscuridadVariante ?? ctx.ventana.sentido,
+    'INTERNO',
+  );
+}
+
+/**
+ * Los datos que a los perfiles de oscuridad les faltan, con el MISMO despiece
+ * que usa el gate de Fase 2 (`pendientesFase2`) y el Excel de órdenes: por cada
+ * perfil, su instalación (muro/piso/marco) y su perforación (int/ext); por cada
+ * separador activado, su medida. También los resueltos, para que el avance del
+ * paso sea proporcional.
+ */
+export function camposPerfilesOscuridad(ctx: CtxPaso): CampoPaso[] {
+  const fam = familiaOscuridadDePaso(ctx);
+  if (!fam) return [];
+  const anchoCm = num(ctx.pano.ancho) * 100;
+  const altoCm = num(ctx.pano.alto ?? ctx.ventana.alto) * 100;
+  // Sin medidas todavía no hay despiece que revisar (mismo criterio que el gate).
+  if (anchoCm <= 0 || altoCm <= 0) return [];
+  const perfiles = aplicarDefaultsPerfiles(
+    perfilesOscuridadDePano(ctx.pano),
+    fam,
+    varianteOscuridadDePaso(ctx),
+  );
+  const cortes = cortesOscuridad(
+    fam,
+    varianteOscuridadDePaso(ctx),
+    anchoCm,
+    altoCm,
+    perfiles,
+    medidasPerfilesDePano(ctx.pano),
+    colorAccesoriosDePano(ctx.pano, ctx.ventana.color),
+    ctx.formulas?.oscuridad,
+  );
+  const out: CampoPaso[] = [];
+  for (const c of cortes) {
+    // Mismo criterio de «esto es un perfil» que el gate y el Excel de órdenes:
+    // las 3 columnas con perforación + los separadores (medida, sin perforación).
+    const esSeparador = c.columnaExcel.startsWith('SEPARADOR');
+    if (esSeparador) {
+      out.push({ etiqueta: `${c.componente}: medida`, ok: !c.pendienteMedida });
+      continue;
+    }
+    if (!COLUMNAS_PERFIL.has(c.columnaExcel)) continue;
+    out.push({ etiqueta: `${c.componente}: instalación`, ok: !c.pendienteMedida });
+    out.push({ etiqueta: `${c.componente}: perforación (int/ext)`, ok: !!c.perforacion });
+  }
+  return out;
+}
+
 export const PASOS_WIZARD: readonly PasoWizard[] = [
   {
     id: 'medidas',
@@ -122,13 +209,24 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     ayuda: 'Dónde va la cortina, de qué sistema es y cuánto mide.',
     pieza: null,
     aplica: () => true,
-    campos: (ctx) => [
-      { etiqueta: 'ubicación', ok: !!txt(ctx.ventana.ubicacion) },
-      { etiqueta: 'tipo de cortina', ok: !!txt(ctx.ventana.categoria) },
-      { etiqueta: 'modelo de fabricación', ok: !!ctx.ventana.modelo },
-      { etiqueta: 'ancho', ok: num(ctx.pano.ancho) > 0 },
-      { etiqueta: 'alto', ok: num(ctx.pano.alto ?? ctx.ventana.alto) > 0 },
-    ],
+    campos: (ctx) => {
+      const campos: CampoPaso[] = [
+        { etiqueta: 'ubicación', ok: !!txt(ctx.ventana.ubicacion) },
+        { etiqueta: 'tipo de cortina', ok: !!txt(ctx.ventana.categoria) },
+      ];
+      // El BEEBLACK no tiene modelo de despiece: TODAS sus medidas salen de la
+      // variante (interno/semi/externo) — el gate de Fase 2 exige exactamente eso.
+      if (ctx.variante === 'beeblack') {
+        campos.push({ etiqueta: 'variante beeblack', ok: !!txt(ctx.pano.beeblackVariante) });
+      } else {
+        campos.push({ etiqueta: 'modelo de fabricación', ok: !!ctx.ventana.modelo });
+      }
+      campos.push(
+        { etiqueta: 'ancho', ok: num(ctx.pano.ancho) > 0 },
+        { etiqueta: 'alto', ok: num(ctx.pano.alto ?? ctx.ventana.alto) > 0 },
+      );
+      return campos;
+    },
   },
   {
     id: 'soportes',
@@ -151,9 +249,9 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     titulo: 'Tubo',
     ayuda: 'El tubo sobre el que se enrolla la tela. Lo acota el ancho de la cortina.',
     pieza: 'tubo',
-    // La vertical no tiene tubo: su estructura es riel cabezal + carritos, y el
-    // gate de Fase 2 tampoco le exige tubería.
-    aplica: (ctx) => ctx.variante !== 'vertical',
+    // La vertical no tiene tubo (riel cabezal + carritos) y el beeblack tampoco
+    // (sus 4 perfiles salen del mismo riel): el gate no les exige tubería.
+    aplica: (ctx) => ctx.variante !== 'vertical' && ctx.variante !== 'beeblack',
     campos: (ctx) => [{ etiqueta: 'tubería', ok: !!txt(ctx.pano.tuberia) }],
   },
   {
@@ -172,11 +270,18 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     // La VERTICAL no lleva cadena de roller (la suya va por otro camino), pero
     // SÍ tiene lado de mando: el «Cierre» de la ficha. Sin preguntarlo acá, la
     // columna DIRECC. CAD/CIERRE de la cotización final quedaba en blanco para
-    // toda vertical cargada por el wizard.
-    aplica: (ctx) => ctx.variante === 'vertical' || requiereAccionamiento(ctx),
+    // toda vertical cargada por el wizard. El BEEBLACK igual: sin cadena, pero
+    // su cierre (hacia dónde corre el acordeón) es la misma columna.
+    aplica: (ctx) =>
+      ctx.variante === 'vertical' || ctx.variante === 'beeblack' || requiereAccionamiento(ctx),
     campos: (ctx) => {
       if (ctx.variante === 'vertical') {
         return [{ etiqueta: 'cierre (lado del mando)', ok: !!txt(ctx.pano.cierreVert) }];
+      }
+      if (ctx.variante === 'beeblack') {
+        return [
+          { etiqueta: 'cierre (hacia dónde corre el acordeón)', ok: !!txt(ctx.ventana.direccion) },
+        ];
       }
       if (panoLlevaMotor(ctx.pano)) {
         return [
@@ -213,8 +318,12 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     pieza: 'peso',
     // La vertical no lleva peso inferior de roller (cada lama trae el suyo).
     // El paso vuelve solo si alguien le pidió manillas — el gate exige el color
-    // cuando hay cantidad, y el wizard nunca pide menos que el gate.
-    aplica: (ctx) => ctx.variante !== 'vertical' || num(ctx.pano.manillaCant) > 0,
+    // cuando hay cantidad, y el wizard nunca pide menos que el gate. El BEEBLACK
+    // tampoco: su manilla es estructura y el motor la emite solo.
+    aplica: (ctx) =>
+      ctx.variante === 'beeblack'
+        ? false
+        : ctx.variante !== 'vertical' || num(ctx.pano.manillaCant) > 0,
     campos: (ctx) => {
       const campos: CampoPaso[] = [];
       // La manilla es opcional: solo si se pidió alguna hace falta su color.
@@ -228,6 +337,16 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     },
   },
   {
+    id: 'perfiles',
+    titulo: 'Perfiles y guías',
+    ayuda: 'Los perfiles que sellan la luz por los costados y abajo: por dónde va cada uno y su perforación.',
+    pieza: 'perfiles',
+    // Solo los sistemas de oscuridad (DARK / SOFT LIGHT / OSCURANTI) llevan
+    // guías laterales y zócalo; en el resto la pieza cuenta como lista.
+    aplica: (ctx) => !!familiaOscuridadDePaso(ctx),
+    campos: (ctx) => camposPerfilesOscuridad(ctx),
+  },
+  {
     id: 'terreno',
     titulo: 'Terreno',
     ayuda: 'Lo que hay que resolver en la instalación: cortes, suplementos y avisos.',
@@ -238,15 +357,25 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
   {
     id: 'cenefa',
     titulo: 'Cenefa',
-    ayuda: 'La caja que tapa el rollo. «No lleva» también es una respuesta.',
+    ayuda:
+      'La caja que tapa el rollo. En roller «No lleva» también es una respuesta; los sistemas de oscuridad traen la suya.',
     pieza: 'cenefa',
-    aplica: () => true,
+    // El beeblack no lleva cenefa: es un acordeón dentro de su marco.
+    aplica: (ctx) => ctx.variante !== 'beeblack',
     campos: (ctx) => {
-      const campos: CampoPaso[] = [
-        { etiqueta: 'cenefa', ok: !!txt(ctx.pano.cenefa) },
-      ];
       const categoria = txt(ctx.ventana.categoria);
       const tipos = reglasDe(ctx).tipos;
+      const campos: CampoPaso[] = [
+        {
+          etiqueta: 'cenefa',
+          // Toda familia de oscuridad trae cenefa POR SISTEMA: DARK y OSCURANTI
+          // la cuadrada implícita, y el SOFT LIGHT la OVALADA propia (primer
+          // eslabón de su cadena de corte; con «Cuadrada» pasa a familia CC).
+          // El despiece la corta aunque la ficha no marque nada, así que acá no
+          // se exige elegirla — mismo criterio que el gate de Fase 2.
+          ok: !!txt(ctx.pano.cenefa) || !!familiaOscuridadDePaso(ctx),
+        },
+      ];
       if (cenefaOvalada(ctx)) {
         campos.push({ etiqueta: 'color de tapa', ok: !!txt(ctx.pano.colorTapa) });
         campos.push({ etiqueta: 'tipo de bracket', ok: !!txt(ctx.pano.bracketTipo) });
@@ -314,7 +443,9 @@ const PREREQUISITOS: Record<PiezaViz, PiezaViz[]> = {
   accionamiento: ['mecanismo'],
   tela: ['tubo'],
   peso: ['tela'],
-  despliegue: ['tela', 'peso', 'accionamiento'],
+  // Las guías y el zócalo se atornillan al marco: piden los soportes, no la tela.
+  perfiles: ['soportes'],
+  despliegue: ['tela', 'peso', 'accionamiento', 'perfiles'],
   cenefa: ['tubo'],
 };
 

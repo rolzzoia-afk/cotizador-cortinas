@@ -57,12 +57,13 @@ function Miniatura({
     [ventana, pano, variante, reglas, catalogo],
   );
   const estilo = useMemo(
-    () => (variante && pano ? estiloVizDePano(ventana, pano, catalogo, variante) : null),
-    [ventana, pano, catalogo, variante],
+    () =>
+      variante && pano ? estiloVizDePano(ventana, pano, catalogo, variante, reglas.tipos) : null,
+    [ventana, pano, catalogo, variante, reglas.tipos],
   );
 
   if (!variante || !estilo) {
-    // Beeblack y sistemas de oscuridad no tienen dibujo: se nombran.
+    // Una categoría sin dibujo (tipo propio con molde desconocido): se nombra.
     return (
       <div className="flex h-full min-h-[5.5rem] items-center justify-center px-2 text-center">
         <span className="text-[0.68rem] uppercase tracking-wide text-muted-foreground">

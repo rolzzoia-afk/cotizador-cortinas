@@ -66,15 +66,15 @@ export function WizardTerreno(props: Props) {
   const pano = ventana.panos[panoActivo] ?? ventana.panos[0];
 
   const ctx: CtxPaso = useMemo(
-    () => ({ ventana, pano, panoIdx: panoActivo, variante, reglas, catalogo }),
-    [ventana, pano, panoActivo, variante, reglas, catalogo],
+    () => ({ ventana, pano, panoIdx: panoActivo, variante, reglas, catalogo, formulas: props.formulas }),
+    [ventana, pano, panoActivo, variante, reglas, catalogo, props.formulas],
   );
 
   const pasos = useMemo(() => pasosAplicables(ctx), [ctx]);
   const progreso = useMemo(() => targetsProgreso(ctx), [ctx]);
   const estilo = useMemo(
-    () => estiloVizDePano(ventana, pano, catalogo, variante),
-    [ventana, pano, catalogo, variante],
+    () => estiloVizDePano(ventana, pano, catalogo, variante, reglas.tipos),
+    [ventana, pano, catalogo, variante, reglas.tipos],
   );
 
   const [idPaso, setIdPaso] = useState<IdPaso>('medidas');
@@ -234,6 +234,7 @@ export function WizardTerreno(props: Props) {
               opcionesTuberia={props.opcionesTuberia}
               notaMecanismo={props.notaMecanismo}
               lineaB={props.lineaB}
+              formulas={props.formulas}
               onVentana={props.onVentana}
               onPano={props.onPano}
               onCategoria={props.onCategoria}

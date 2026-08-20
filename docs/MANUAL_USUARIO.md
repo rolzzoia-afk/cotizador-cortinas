@@ -40,7 +40,11 @@ El **número de OT** funciona igual en los dos casos: se puede teclear (por ejem
 En Fase 2 hay dos formas de cargar cada cortina, con el mismo resultado:
 
 - **Ficha**: la planilla de siempre, con todo a la vista. Sirve para cualquier tipo de cortina.
-- **Guiada**: un paso a la vez, y la cortina se va dibujando al lado a medida que se llena. Se puede hacer clic en cualquier pieza del dibujo —el tubo, la cadena, la cenefa— para saltar a ese paso. Cubre roller, dual, dúo y vertical (la vertical se dibuja con su riel y sus lamas, y no pregunta tubo ni peso porque no los lleva); los sistemas de oscuridad y el beeblack se cargan siempre con la ficha.
+- **Guiada**: un paso a la vez, y la cortina se va dibujando al lado a medida que se llena. Se puede hacer clic en cualquier pieza del dibujo —el tubo, la cadena, la cenefa— para saltar a ese paso. Cubre todos los sistemas, cada uno con su dibujo:
+  - **Roller, dual y dúo**: el rollo con su tela; la dual muestra los dos rollos (el del vidrio extendido, el de adelante a media caída).
+  - **Vertical**: riel cabezal y lamas colgando; no pregunta tubo ni peso porque no los lleva.
+  - **Oscuridad (DARK / SOFT LIGHT / OSCURANTI)**: el esqueleto del roller más sus señas — **guías laterales**, **zócalo** y el **cajón** (DARK y OSCURANTI lo llevan por sistema, sin marcarlo; el OSCURANTI además dibuja su tubo de 63 mm más gordo). Tiene un paso propio, **«Perfiles y guías»**: ahí se elige la instalación de cada perfil (muro / piso / dentro del marco) y su perforación (int/ext) — exactamente lo mismo que el gate exige para pasar a Fase 3. Los separadores y las medidas especiales se ajustan en la vista Ficha.
+  - **Beeblack**: el marco con su panel acordeón corriendo hacia el lado del cierre, con la manilla en el borde. No pregunta tubo, mecanismo, peso ni cenefa (no los lleva); pide la **variante** (interno/semi/externo, de la que salen todas las medidas) y el **cierre**.
 
 Cambiar de vista no pierde nada de lo escrito.
 
@@ -52,6 +56,12 @@ Cada vez que se aprieta **Nueva**, lo primero es decir qué hay en ese muro:
 - **Ventanas especiales (bow window, en L, triangular)**: es **UNA sola cortina** con un paño por cara del ángulo (el bow lleva 3, la L lleva 2, la triangular 1). El modelo queda anotado en la cortina y aparece en el informe del cliente y en el Dimensionado del taller, para que nadie los confunda con cortinas sueltas. Una ventana en U se carga como bow window: son las mismas tres caras.
 
 Si el tipo de ventana no aparece en la lista, se toma como una ventana individual.
+
+#### Después: selecciona el tipo de cortina
+
+Elegida la cantidad (o el modelo especial), viene la pantalla **«Selecciona el tipo de cortina»**: los sistemas dibujados y agrupados como en la carpeta de vendedores — **Roller** (SC/BK, Dual, Dúo), **Verticales**, **Sistemas de oscuridad** (Soft Light, Dark Roller, Oscuranti), **Beeblack** y **Toldos**. Se toca la tarjeta del sistema y, si la familia tiene variantes (dúo manual o motor, roller con cenefa, 38 o 45 mm), aparecen como **chips** para afinar; la tarjeta sola ya elige la variante más común. Es el mismo «Tipo de cortina» del select de la ficha, elegido mirando el dibujo — y con **N ventanas se elige una sola vez**: las hermanas heredan la ficha completa.
+
+Lo que la app todavía no cotiza (**S. Dreams** y **Toldos**) sale gris con «Próximamente»: se ve, pero no se puede elegir. Los **tipos propios** creados en Admin aparecen como tarjetas en la sección de su grupo.
 
 #### La cortina dual: dos telas, UNA cortina
 
@@ -130,7 +140,7 @@ El video, las fotos y la firma se guardan en un almacén privado de la empresa: 
 - **El Excel no trae correlativo**: pasa solo en planes antiguos; desde junio 2026 el Excel del optimizador y el del historial traen el mismo correlativo.
 - **Un sobrante del plan no está físicamente**: marcarlo "No existe" en el Historial de Corte para que el inventario quede cuadrado.
 - **¿Quién puede borrar/restaurar planes o aplicar correcciones retroactivas?** Solo admins (bloqueado también a nivel de base de datos).
-- **La vista guiada no dibuja esta cortina**: es de un sistema que se fabrica distinto a un roller (oscuridad o beeblack). Se carga con la ficha, que tiene exactamente los mismos campos.
+- **La vista guiada no dibuja esta cortina**: su tipo no tiene dibujo (un tipo propio con un molde que la app no reconoce). Se carga con la ficha, que tiene exactamente los mismos campos. La oscuridad y el beeblack ya tienen su dibujo, así que este aviso solo debería aparecer en tipos raros.
 - **Elegí «3 ventanas» y solo veo una**: es así. Se carga la primera y, al guardarla, aparece la segunda con la ficha ya copiada (solo faltan las medidas), y después la tercera. El aviso al guardar dice cuántas quedan.
 - **Elegí «3 ventanas» y me arrepentí**: aprieta **No cargar las que faltan** en el aviso de arriba (o **Cancelar**, si tampoco quieres la que estás llenando). Lo ya guardado queda; las que faltaban no se crean.
 - **Empecé una tanda y me fui a revisar otra cortina de la lista**: la tanda se corta ahí — la app no vuelve sola a ella. Para seguir, aprieta **Nueva** y elige las que falten.

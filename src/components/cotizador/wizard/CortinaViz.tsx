@@ -118,13 +118,16 @@ export const CortinaViz = memo(function CortinaViz({
   const tPeso = clamp01(p.peso);
   const tDesp = clamp01(p.despliegue);
   const tCen = estilo.cenefa === 'no' ? 0 : clamp01(p.cenefa);
+  const tPerf = clamp01(p.perfiles);
 
   // ── Estado del rollo ──
   const colaAhora = cola * easeOut(clamp01(tTela * 1.35 - 0.25));
   const caida = tDesp > 0 ? mezcla(colaAhora, caidaMax, easeInOut(tDesp)) : colaAhora;
   const envuelto = tTela > 0 ? mezcla(0, caidaMax - cola, easeInOut(clamp01(tTela * 1.25))) : 0;
   const enrollado = tDesp > 0 ? Math.max(0, caidaMax - caida) : envuelto;
-  const radio = tTela > 0.02 ? radioRollo(enrollado) : tr;
+  // El OSCURANTI monta tubo de 63 mm: se dibuja más gordo que el resto.
+  const trE = variante === 'oscuranti' ? tr + 9 : tr;
+  const radio = tTela > 0.02 ? Math.max(radioRollo(enrollado), trE) : trE;
   const barraY = cy + caida;
   const telaTop = cy + radio * 0.5;
   const telaH = Math.max(0, barraY - telaTop);
@@ -155,12 +158,36 @@ export const CortinaViz = memo(function CortinaViz({
   const lamaBot = gy1 + 6;
   const lamaWAhora = LAMA_W * mezcla(0.34, 1, easeInOut(tDesp));
 
+  // ── Oscuridad (DARK / SOFT LIGHT / OSCURANTI): el esqueleto del roller más
+  // guías laterales, zócalo y cajón. El OSCURANTI solo cambia el tubo (63 mm).
+  const esOscuridad = variante === 'oscuridad' || variante === 'oscuranti';
+
+  // ── Beeblack: acordeón que corre de lado dentro de su marco ──
+  const esBee = variante === 'beeblack';
+  const conRollo = !esVertical && !esBee;
+  const beeTop = cy - 10;
+  const beeBot = gy1 + 8;
+  const PLIEGUE_W = 34;
+  // El cierre nombra el RECORRIDO del panel: la base dibuja anclado a la
+  // IZQUIERDA cerrando hacia la derecha; 'der-izq' se espeja entero y
+  // 'arriba-abajo' baja desde el riel superior (geometría propia).
+  const beeCierre = estilo.beeCierre ?? 'izq-der';
+  const beeVert = esBee && beeCierre === 'arriba-abajo';
+  // Cuánto del vano cubre el panel: plegado compacto → casi entero al desplegar.
+  const beeAncho = (VIZ_W - 8) * mezcla(0.16, 0.97, easeInOut(tDesp));
+  const beeAlto = (beeBot - beeTop - 12) * mezcla(0.16, 0.97, easeInOut(tDesp));
+  const beeX0 = x0 + 4;
+  const beeY0 = beeTop + 6;
+
   const apertura = esVertical
     ? 1 - easeInOut(tDesp) * clamp01(tTela * 2)
-    : 1 - clamp01((barraY - gy0) / (gy1 - gy0));
-  // Espejo cuando el mando va a la izquierda: se voltea el grupo completo del
-  // mecanismo sobre el centro del tubo.
-  const espejo = estilo.lado === 'izquierda';
+    : esBee
+      ? 1 -
+        (tTela > 0.02 ? (beeVert ? beeAlto / (beeBot - beeTop - 12) : beeAncho / (VIZ_W - 8)) : 0)
+      : 1 - clamp01((barraY - gy0) / (gy1 - gy0));
+  // Espejo cuando el mando va a la izquierda (en el beeblack, cuando el cierre
+  // corre de derecha a izquierda): se voltea el grupo completo sobre el centro.
+  const espejo = esBee ? beeCierre === 'der-izq' : estilo.lado === 'izquierda';
   const flip = `translate(${r3((x0 + x1))},0) scale(-1,1)`;
 
   const herr = estilo.herrajesHex;
@@ -539,7 +566,7 @@ export const CortinaViz = memo(function CortinaViz({
       />
 
       {/* Sombra del conjunto sobre el nicho */}
-      {!esVertical && tTubo > 0.3 && (
+      {conRollo && tTubo > 0.3 && (
         <rect
           x={x0 + 20}
           y={cy - radio + 24}
@@ -557,6 +584,18 @@ export const CortinaViz = memo(function CortinaViz({
           y={cy - 8}
           width={VIZ_W}
           height={lamaBot - cy}
+          rx={8}
+          fill="#171310"
+          opacity={r3(0.22 * tSop)}
+          filter={url('fSuave')}
+        />
+      )}
+      {esBee && tSop > 0.3 && (
+        <rect
+          x={x0 + 16}
+          y={beeTop - 4}
+          width={VIZ_W}
+          height={beeBot - beeTop + 12}
           rx={8}
           fill="#171310"
           opacity={r3(0.22 * tSop)}
@@ -603,20 +642,33 @@ export const CortinaViz = memo(function CortinaViz({
         </g>
       )}
 
+      {/* ── Beeblack: el marco (rieles arriba, abajo y a los lados) entra con
+          los soportes — los 4 perfiles salen del mismo riel. ── */}
+      {esBee && tSop > 0.02 && (
+        <g opacity={r3(clamp01(tSop * 2))}>
+          <rect x={x0} y={beeTop - 16} width={VIZ_W} height={26} rx={4} fill={url('gHerr')} />
+          <rect x={x0} y={beeTop - 10} width={VIZ_W} height={3} fill={tono(herr, 0.5)} opacity={0.35} />
+          <rect x={x0} y={beeTop + 4} width={VIZ_W} height={5} fill="#000" opacity={0.25} />
+          <rect x={x0} y={beeBot - 8} width={VIZ_W} height={16} rx={4} fill={url('gHerr')} />
+          <rect x={x0 - 6} y={beeTop - 16} width={11} height={beeBot - beeTop + 24} rx={3} fill={url('gHerrPlano')} />
+          <rect x={x1 - 5} y={beeTop - 16} width={11} height={beeBot - beeTop + 24} rx={3} fill={url('gHerrPlano')} />
+        </g>
+      )}
+
       {/* ── Tubo ── */}
-      {!esVertical && (
-      <Pieza pieza="tubo" hit={{ x: x0 - 8, y: cy - tr - 10, w: VIZ_W + 16, h: tr * 2 + 20 }}>
+      {conRollo && (
+      <Pieza pieza="tubo" hit={{ x: x0 - 8, y: cy - trE - 10, w: VIZ_W + 16, h: trE * 2 + 20 }}>
         {tTubo < 0.02 ? (
-          <Fantasma x={x0} y={cy - tr} w={VIZ_W} h={tr * 2} rx={tr} />
+          <Fantasma x={x0} y={cy - trE} w={VIZ_W} h={trE * 2} rx={trE} />
         ) : (
           <g
             opacity={r3(clamp01(tTubo * 3))}
             transform={`translate(0,${r3(-230 * (1 - easeBack(tTubo)))})`}
           >
-            <rect x={x0} y={cy - tr} width={VIZ_W} height={tr * 2} rx={4} fill={url('gTubo')} />
-            <rect x={x0} y={cy - tr * 0.5} width={VIZ_W} height={4} fill={tono(herr, 0.7)} opacity={0.3} />
-            <ellipse cx={x0 + 4} cy={cy} rx={9} ry={tr} fill={url('gTapa')} />
-            <ellipse cx={x1 - 4} cy={cy} rx={9} ry={tr} fill={url('gTapa')} />
+            <rect x={x0} y={cy - trE} width={VIZ_W} height={trE * 2} rx={4} fill={url('gTubo')} />
+            <rect x={x0} y={cy - trE * 0.5} width={VIZ_W} height={4} fill={tono(herr, 0.7)} opacity={0.3} />
+            <ellipse cx={x0 + 4} cy={cy} rx={9} ry={trE} fill={url('gTapa')} />
+            <ellipse cx={x1 - 4} cy={cy} rx={9} ry={trE} fill={url('gTapa')} />
             {/* Dual: el tubo del rollo de ADELANTE, un poco más abajo. */}
             {esDual && (
               <g transform={`translate(0,${dualDy})`} opacity={0.9}>
@@ -630,7 +682,7 @@ export const CortinaViz = memo(function CortinaViz({
       )}
 
       {/* ── Mecanismo y accionamiento (espejados si el mando va a la izquierda) ── */}
-      {!esVertical && (
+      {conRollo && (
       <g transform={espejo ? flip : undefined}>
         <Pieza pieza="mecanismo" hit={{ x: x1 - 14, y: cy - 34, w: 96, h: 68 }}>
           {tMec < 0.02 ? (
@@ -638,7 +690,7 @@ export const CortinaViz = memo(function CortinaViz({
           ) : (
             <g opacity={r3(clamp01(tMec * 3))}>
               <g transform={`translate(${r3(60 * (1 - easeBack(clamp01(tMec * 1.6))))},0)`}>
-                <rect x={x1 - 10} y={cy - tr - 3} width={34} height={tr * 2 + 6} rx={5} fill={url('gHerr')} />
+                <rect x={x1 - 10} y={cy - trE - 3} width={34} height={trE * 2 + 6} rx={5} fill={url('gHerr')} />
                 <rect x={x1 + 24} y={cy - 19} width={12} height={38} rx={3} fill={tono(herr, -0.3)} />
                 <rect x={x1 + 36} y={cy - 25} width={30} height={50} rx={7} fill={url('gHerr')} />
                 <rect x={x1 + 36} y={cy - 13} width={30} height={2.5} fill={tono(herr, 0.5)} opacity={0.35} />
@@ -693,8 +745,199 @@ export const CortinaViz = memo(function CortinaViz({
         </Pieza>
       )}
 
+      {/* ── Beeblack: el panel acordeón es la tela; corre desde el lado donde
+          parte el cierre y la manilla viaja en su borde. ── */}
+      {esBee && !beeVert && (
+        <g transform={espejo ? flip : undefined}>
+          <Pieza pieza="tela" hit={{ x: x0, y: beeTop + 6, w: VIZ_W, h: beeBot - beeTop - 12 }}>
+            {tTela < 0.02 ? (
+              <Fantasma x={x0 + 8} y={beeTop + 12} w={r3((VIZ_W - 8) * 0.4)} h={beeBot - beeTop - 24} />
+            ) : (
+              <g opacity={r3(clamp01(tTela * 3))}>
+                <rect
+                  x={beeX0}
+                  y={beeTop + 6}
+                  width={r3(beeAncho)}
+                  height={beeBot - beeTop - 12}
+                  fill={patronTela}
+                />
+                {/* Pliegues del acordeón: franjas alternadas + línea de doblez. */}
+                {Array.from({ length: Math.ceil(beeAncho / PLIEGUE_W) }, (_, i) => {
+                  const px = beeX0 + i * PLIEGUE_W;
+                  const w = Math.min(PLIEGUE_W, beeAncho - i * PLIEGUE_W);
+                  if (w <= 1) return null;
+                  return (
+                    <g key={i}>
+                      <rect
+                        x={r3(px)}
+                        y={beeTop + 6}
+                        width={r3(w)}
+                        height={beeBot - beeTop - 12}
+                        fill={i % 2 ? '#000' : '#fff'}
+                        opacity={i % 2 ? 0.13 : 0.07}
+                      />
+                      <rect
+                        x={r3(px)}
+                        y={beeTop + 6}
+                        width={1.6}
+                        height={beeBot - beeTop - 12}
+                        fill="#000"
+                        opacity={0.22}
+                      />
+                    </g>
+                  );
+                })}
+                <rect
+                  x={beeX0}
+                  y={beeTop + 6}
+                  width={r3(beeAncho)}
+                  height={beeBot - beeTop - 12}
+                  fill={url('gTelaH')}
+                />
+                {/* Borde de avance (donde va la manilla). */}
+                <rect
+                  x={r3(beeX0 + beeAncho - 5)}
+                  y={beeTop + 6}
+                  width={5}
+                  height={beeBot - beeTop - 12}
+                  fill="#000"
+                  opacity={0.28}
+                />
+              </g>
+            )}
+          </Pieza>
+
+          {/* La manilla: siempre va (no se marca), pero el paso del cierre la arma. */}
+          <Pieza
+            pieza="accionamiento"
+            hit={{ x: r3(beeX0 + beeAncho - 26), y: (beeTop + beeBot) / 2 - 90, w: 52, h: 180 }}
+          >
+            {tAcc < 0.02 ? (
+              tTela > 0.02 && (
+                <Fantasma
+                  x={r3(beeX0 + beeAncho - 14)}
+                  y={(beeTop + beeBot) / 2 - 64}
+                  w={16}
+                  h={128}
+                  rx={8}
+                />
+              )
+            ) : (
+              <g opacity={r3(clamp01(tAcc * 3))}>
+                <rect
+                  x={r3(beeX0 + beeAncho - 12)}
+                  y={(beeTop + beeBot) / 2 - 60}
+                  width={13}
+                  height={120}
+                  rx={6}
+                  fill={url('gHerr')}
+                />
+                <rect
+                  x={r3(beeX0 + beeAncho - 10)}
+                  y={(beeTop + beeBot) / 2 - 56}
+                  width={3}
+                  height={112}
+                  fill={tono(herr, 0.5)}
+                  opacity={0.4}
+                />
+              </g>
+            )}
+          </Pieza>
+        </g>
+      )}
+
+      {/* ── Beeblack DE ARRIBA ABAJO: el panel baja plegándose desde el riel
+          superior; los pliegues van horizontales y la manilla, acostada en el
+          borde inferior de avance. ── */}
+      {esBee && beeVert && (
+        <g>
+          <Pieza pieza="tela" hit={{ x: x0, y: beeTop + 6, w: VIZ_W, h: beeBot - beeTop - 12 }}>
+            {tTela < 0.02 ? (
+              <Fantasma x={x0 + 8} y={beeY0 + 6} w={VIZ_W - 16} h={r3((beeBot - beeTop - 24) * 0.4)} />
+            ) : (
+              <g opacity={r3(clamp01(tTela * 3))}>
+                <rect x={beeX0} y={beeY0} width={VIZ_W - 8} height={r3(beeAlto)} fill={patronTela} />
+                {/* Pliegues horizontales: franjas alternadas + línea de doblez. */}
+                {Array.from({ length: Math.ceil(beeAlto / PLIEGUE_W) }, (_, i) => {
+                  const py = beeY0 + i * PLIEGUE_W;
+                  const h = Math.min(PLIEGUE_W, beeAlto - i * PLIEGUE_W);
+                  if (h <= 1) return null;
+                  return (
+                    <g key={i}>
+                      <rect
+                        x={beeX0}
+                        y={r3(py)}
+                        width={VIZ_W - 8}
+                        height={r3(h)}
+                        fill={i % 2 ? '#000' : '#fff'}
+                        opacity={i % 2 ? 0.13 : 0.07}
+                      />
+                      <rect
+                        x={beeX0}
+                        y={r3(py)}
+                        width={VIZ_W - 8}
+                        height={1.6}
+                        fill="#000"
+                        opacity={0.22}
+                      />
+                    </g>
+                  );
+                })}
+                <rect x={beeX0} y={beeY0} width={VIZ_W - 8} height={r3(beeAlto)} fill={url('gTelaH')} />
+                {/* Borde de avance (donde va la manilla). */}
+                <rect
+                  x={beeX0}
+                  y={r3(beeY0 + beeAlto - 5)}
+                  width={VIZ_W - 8}
+                  height={5}
+                  fill="#000"
+                  opacity={0.28}
+                />
+              </g>
+            )}
+          </Pieza>
+
+          {/* La manilla acostada, centrada en el borde inferior del panel. */}
+          <Pieza
+            pieza="accionamiento"
+            hit={{ x: (x0 + x1) / 2 - 90, y: r3(beeY0 + beeAlto - 26), w: 180, h: 52 }}
+          >
+            {tAcc < 0.02 ? (
+              tTela > 0.02 && (
+                <Fantasma
+                  x={(x0 + x1) / 2 - 64}
+                  y={r3(beeY0 + beeAlto - 14)}
+                  w={128}
+                  h={16}
+                  rx={8}
+                />
+              )
+            ) : (
+              <g opacity={r3(clamp01(tAcc * 3))}>
+                <rect
+                  x={(x0 + x1) / 2 - 60}
+                  y={r3(beeY0 + beeAlto - 12)}
+                  width={120}
+                  height={13}
+                  rx={6}
+                  fill={url('gHerr')}
+                />
+                <rect
+                  x={(x0 + x1) / 2 - 56}
+                  y={r3(beeY0 + beeAlto - 10)}
+                  width={112}
+                  height={3}
+                  fill={tono(herr, 0.5)}
+                  opacity={0.4}
+                />
+              </g>
+            )}
+          </Pieza>
+        </g>
+      )}
+
       {/* ── Tela + peso + despliegue ── */}
-      {!esVertical && (
+      {conRollo && (
       <Pieza pieza="tela" hit={{ x: x0, y: cy - RMAX, w: VIZ_W, h: Math.max(120, telaH + RMAX) }}>
         {tTela < 0.02 ? (
           <Fantasma x={x0 + 3} y={cy + 30} w={VIZ_W - 6} h={200} />
@@ -733,7 +976,7 @@ export const CortinaViz = memo(function CortinaViz({
       </Pieza>
       )}
 
-      {!esVertical && (
+      {conRollo && (
       <Pieza pieza="peso" hit={{ x: x0 - 10, y: barraY - 34, w: VIZ_W + 20, h: 44 }}>
         {tPeso < 0.02 ? (
           <Fantasma x={x0 - 2} y={barraY - 26} w={VIZ_W + 4} h={26} rx={3} />
@@ -762,7 +1005,7 @@ export const CortinaViz = memo(function CortinaViz({
       )}
 
       {/* Zona de clic del despliegue: el vidrio que la cortina va tapando. */}
-      {!esVertical && (
+      {conRollo && (
       <Pieza pieza="despliegue" hit={{ x: gx0, y: barraY + 12, w: gx1 - gx0, h: Math.max(20, gy1 - barraY - 12) }}>
         {tDesp < 0.02 && tTela > 0.02 && (
           <Fantasma x={gx0 + 6} y={barraY + 20} w={gx1 - gx0 - 12} h={Math.max(24, gy1 - barraY - 30)} />
@@ -777,6 +1020,79 @@ export const CortinaViz = memo(function CortinaViz({
           <Fantasma x={gx0 + 6} y={gy0 + (gy1 - gy0) * 0.6} w={gx1 - gx0 - 12} h={(gy1 - gy0) * 0.4 - 8} />
         )}
       </Pieza>
+      )}
+
+      {/* Beeblack: el despliegue es el acordeón extendiéndose. El clic va en el
+          tramo del vidrio que el panel cubre al final, para no tapar la tela
+          (con cierre DE ARRIBA ABAJO, la banda de abajo). */}
+      {esBee && (
+      <Pieza
+        pieza="despliegue"
+        hit={
+          beeVert
+            ? { x: gx0, y: gy0 + (gy1 - gy0) * 0.62, w: gx1 - gx0, h: (gy1 - gy0) * 0.38 }
+            : { x: gx0 + (gx1 - gx0) * 0.62, y: gy0, w: (gx1 - gx0) * 0.38, h: gy1 - gy0 }
+        }
+      >
+        {tDesp < 0.02 && tTela > 0.02 && (
+          beeVert ? (
+            <Fantasma x={gx0 + 8} y={gy0 + (gy1 - gy0) * 0.62} w={gx1 - gx0 - 16} h={(gy1 - gy0) * 0.38 - 8} />
+          ) : (
+            <Fantasma x={gx0 + (gx1 - gx0) * 0.62} y={gy0 + 8} w={(gx1 - gx0) * 0.38 - 8} h={gy1 - gy0 - 16} />
+          )
+        )}
+      </Pieza>
+      )}
+
+      {/* ── Oscuridad: guías laterales + zócalo (pieza «Perfiles y guías») ──
+          Las guías se atornillan al marco y la tela corre POR DENTRO; el zócalo
+          sella abajo. Son la seña de identidad del sistema, así que van sobre
+          la tela. */}
+      {esOscuridad && (
+        <>
+          <Pieza pieza="perfiles" hit={{ x: x0 - 26, y: cy + 20, w: 52, h: gy1 - cy - 6 }}>
+            {tPerf < 0.02 ? (
+              <Fantasma x={x0 - 12} y={cy + 28} w={26} h={gy1 - cy - 16} />
+            ) : (
+              <g
+                opacity={r3(clamp01(tPerf * 2.4))}
+                transform={`translate(${r3(-46 * (1 - easeBack(tPerf)))},0)`}
+              >
+                <rect x={x0 - 12} y={cy + 28} width={26} height={gy1 - cy - 12} rx={3} fill={url('gHerrPlano')} />
+                <rect x={x0 - 12} y={cy + 28} width={26} height={2} fill={tono(herr, 0.5)} opacity={0.4} />
+                <rect x={x0 + 9} y={cy + 28} width={5} height={gy1 - cy - 12} fill="#000" opacity={0.24} />
+              </g>
+            )}
+          </Pieza>
+          <Pieza pieza="perfiles" hit={{ x: x1 - 26, y: cy + 20, w: 52, h: gy1 - cy - 6 }}>
+            {tPerf < 0.02 ? (
+              <Fantasma x={x1 - 14} y={cy + 28} w={26} h={gy1 - cy - 16} />
+            ) : (
+              <g
+                opacity={r3(clamp01(tPerf * 2.4))}
+                transform={`translate(${r3(46 * (1 - easeBack(tPerf)))},0)`}
+              >
+                <rect x={x1 - 14} y={cy + 28} width={26} height={gy1 - cy - 12} rx={3} fill={url('gHerrPlano')} />
+                <rect x={x1 - 14} y={cy + 28} width={26} height={2} fill={tono(herr, 0.5)} opacity={0.4} />
+                <rect x={x1 - 14} y={cy + 28} width={5} height={gy1 - cy - 12} fill="#000" opacity={0.24} />
+              </g>
+            )}
+          </Pieza>
+          <Pieza pieza="perfiles" hit={{ x: x0 - 14, y: gy1 - 28, w: VIZ_W + 28, h: 48 }}>
+            {tPerf < 0.02 ? (
+              <Fantasma x={x0 - 10} y={gy1 - 18} w={VIZ_W + 20} h={30} rx={4} />
+            ) : (
+              <g
+                opacity={r3(clamp01(tPerf * 2.4))}
+                transform={`translate(0,${r3(64 * (1 - easeBack(tPerf)))})`}
+              >
+                <rect x={x0 - 10} y={gy1 - 18} width={VIZ_W + 20} height={30} rx={4} fill={url('gHerr')} />
+                <rect x={x0 - 10} y={gy1 - 16} width={VIZ_W + 20} height={2.5} fill={tono(herr, 0.45)} opacity={0.4} />
+                <rect x={x0 - 10} y={gy1 + 6} width={VIZ_W + 20} height={6} fill="#000" opacity={0.3} />
+              </g>
+            )}
+          </Pieza>
+        </>
       )}
 
       {/* ── Cenefa ── */}

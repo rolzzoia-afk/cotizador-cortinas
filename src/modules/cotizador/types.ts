@@ -140,7 +140,8 @@ export type Pano = {
   beeblackTotalLamasCm?: number;
   colorTapa?: string;
   cenefaTapa?: string;
-  /** Cenefa ovalada: tipo de bracket 'CORTO' (BRA01) | 'LARGO' (BRA02). Default CORTO. */
+  /** Cenefa ovalada: tipo de bracket 'CORTO' (BRA01) | 'LARGO' (BRA02).
+   *  Default CORTO — salvo el DÚO, que emite LARGO (su receta cobra BRA02). */
   bracketTipo?: string;
   /**
    * Corte invertido (rotado 90°): el alto va a lo ancho del rollo y el ancho
