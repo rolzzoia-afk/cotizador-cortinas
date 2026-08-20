@@ -26,6 +26,12 @@ export type EtiquetaConTira = 'CON TIRA' | 'SIN TIRA';
 export type ContextoCenefaAdicional = {
   anchoPanoCm?: number;
   categoria?: string;
+  /**
+   * Variante de instalación de la oscuridad (INTERNO/SEMI/EXTERNO), tal como
+   * la lee el despiece: `pano.oscuridadVariante ?? ventana.oscuridadVariante`.
+   * Manda sobre `sentido`, que en oscuridad es la caída fija (INTERNO).
+   */
+  oscuridadVariante?: string | null;
   sentido?: string | null;
   /** Tipos de cortina propios: una categoría nueva corta como su molde. */
   tipos?: readonly TipoCortina[];
@@ -512,6 +518,7 @@ export function cenefaOvaladaDesdeAdicional(
   // roller (−1,5), que en SEMI/EXTERNO no tiene nada que ver con su pizarra.
   const sl = varianteSoftLight({
     categoria: ctx.categoria,
+    oscuridadVariante: ctx.oscuridadVariante,
     sentido: ctx.sentido,
     modelo,
     tipos: ctx.tipos,

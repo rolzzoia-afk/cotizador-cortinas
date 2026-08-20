@@ -404,10 +404,20 @@ export function generarOrdenesOptimizador(
           );
         }
         if (adicCenefa && cenefaEsDeEstaCortina) {
+          // La variante va en el MISMO orden que el despiece de este paño
+          // (despiece.ts): si no, la cenefa del adicional salía INTERNO y el
+          // tubo/peso EXTERNO para la misma cortina (OT 3196).
           const medida = cenefaOvaladaDesdeAdicional(
             adicCenefa,
             modelo,
-            { anchoPanoCm: anchoCm, categoria: v.categoria, sentido: v.sentido, tipos: opts?.reglas?.tipos },
+            {
+              anchoPanoCm: anchoCm,
+              categoria: v.categoria,
+              oscuridadVariante:
+                (p.oscuridadVariante as string | undefined) ?? v.oscuridadVariante,
+              sentido: v.sentido,
+              tipos: opts?.reglas?.tipos,
+            },
             opts?.formulas,
           );
           if (medida != null) {

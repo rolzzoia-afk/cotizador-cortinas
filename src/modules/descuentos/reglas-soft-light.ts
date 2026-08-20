@@ -4,7 +4,7 @@
 // Solo lo usa la cenefa comprada como ADICIONAL (CENF O) en Fase 0: el paño
 // se corta con el motor de `reglas-oscuridad.ts`, que es el vigente.
 //
-// Tres variantes según instalación (sentido de la cortina en Fase 0):
+// Tres variantes según instalación (`oscuridadVariante`, elegida en Fase 2):
 //   38 mm → INTERNO: ancho − 1,2 · SEMI: + 6,6 · EXTERNO: + 13,2
 //   45 mm → INTERNO: ancho − 1,5 · SEMI: + 6,6 · EXTERNO: + 13,2
 // Luego, para todas:
@@ -52,11 +52,19 @@ const r1 = (n: number) => Math.round(n * 10) / 10;
 /**
  * Familia y variante de la cenefa OVALADA de un soft light, o null si la
  * cortina no es soft light. La familia sigue al motor (categoría + diámetro del
- * tubo); la variante prioriza el sentido de la ventana y cae al tipo_rol del
- * modelo.
+ * tubo); la variante se lee EN EL MISMO ORDEN que el despiece del paño
+ * (`oscuridadVariante` → `sentido` → tipo_rol del modelo).
+ *
+ * OJO: desde que la oscuridad cae INTERNO fija (PR #207), `sentido` ya NO trae
+ * la variante — esa vive en `oscuridadVariante` (paño o ventana). Leer solo el
+ * sentido dejaba la cenefa del adicional siempre en INTERNO mientras el tubo y
+ * el peso del mismo paño salían EXTERNO: tubo 230,7 > cenefa 218,1 (OT 3196,
+ * lo pilló el dueño 2026-08-20). El `sentido` queda como respaldo para las
+ * filas anteriores al cambio, que guardaban la variante ahí.
  */
 export function varianteSoftLight(opts: {
   categoria?: string;
+  oscuridadVariante?: string | null;
   sentido?: string | null;
   modelo?: ModeloDespiece | null;
   tipos?: readonly TipoCortina[];
@@ -69,24 +77,22 @@ export function varianteSoftLight(opts: {
     opts.tipos,
   );
   if (fam !== 'SOFT_LIGHT_38' && fam !== 'SOFT_LIGHT_45') return null;
-  return { familia: fam, variante: varianteDeSentidoOModelo(opts.sentido, opts.modelo) };
+  return {
+    familia: fam,
+    variante:
+      varianteDeTexto(opts.oscuridadVariante) ??
+      varianteDeTexto(opts.sentido) ??
+      varianteDeTexto(opts.modelo?.tipo_rol) ??
+      'INTERNO',
+  };
 }
 
-function varianteDeSentidoOModelo(
-  sentido: string | null | undefined,
-  modelo: ModeloDespiece | null | undefined,
-): VarianteSoftLight {
-  const s = (sentido || '').toUpperCase();
+function varianteDeTexto(valor: string | null | undefined): VarianteSoftLight | null {
+  const s = (valor || '').toUpperCase();
   if (s.includes('INTERNO')) return 'INTERNO';
   if (s.includes('EXTERNO')) return 'EXTERNO';
   if (s.includes('SEMI')) return 'SEMI';
-
-  const tipo = (modelo?.tipo_rol || '').toUpperCase();
-  if (tipo.includes('INTERNO')) return 'INTERNO';
-  if (tipo.includes('EXTERNO')) return 'EXTERNO';
-  if (tipo.includes('SEMI')) return 'SEMI';
-
-  return 'INTERNO';
+  return null;
 }
 
 export function cortesSoftLight38(

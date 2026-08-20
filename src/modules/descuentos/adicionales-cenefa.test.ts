@@ -136,6 +136,36 @@ describe('cenefa del adicional en soft light 45 mm', () => {
   });
 });
 
+// Desde que la oscuridad cae INTERNO fija (PR #207), la variante vive en
+// `oscuridadVariante` y `sentido` ya no la trae. La cenefa del adicional seguía
+// leyendo solo el sentido: salía INTERNO (218,1) mientras el tubo (230,7) y el
+// peso del mismo paño salían EXTERNO — "el tubo no puede ser más grande que la
+// cenefa" (OT 3196, dueño 2026-08-20).
+describe('la variante de la cenefa del adicional sigue al despiece (OT 3196)', () => {
+  const adic = { codInt: 'CENF O', cantidad: 2.193, descuento: 0, ubicacion: 'PPAL' };
+  const medida = (ctx: { oscuridadVariante?: string | null; sentido?: string | null }) =>
+    cenefaOvaladaDesdeAdicional(adic, modeloSoftLight, {
+      anchoPanoCm: 219.3,
+      categoria: 'SOFT_LIGHT_38mm',
+      ...ctx,
+    });
+
+  it('la fila real: caída INTERNO fija + variante EXTERNO → cenefa EXTERNO (232,5)', () => {
+    expect(medida({ sentido: 'INTERNO', oscuridadVariante: 'EXTERNO' })).toBe(232.5); // 219,3 + 13,2
+    expect(medida({ sentido: 'INTERNO', oscuridadVariante: 'SEMI' })).toBe(225.9); // 219,3 + 6,6
+    expect(medida({ sentido: 'INTERNO', oscuridadVariante: 'INTERNO' })).toBe(218.1); // 219,3 − 1,2
+  });
+
+  it('las filas viejas (variante en el sentido) siguen saliendo bien', () => {
+    expect(medida({ sentido: 'EXTERNO' })).toBe(232.5);
+    expect(medida({ sentido: 'SEMI', oscuridadVariante: '' })).toBe(225.9);
+  });
+
+  it('sin variante ni sentido cae al tipo_rol del modelo (INTERNO)', () => {
+    expect(medida({})).toBe(218.1);
+  });
+});
+
 describe('cenefa cuadrada (verticales/roller)', () => {
   it('ajuste por TIP. INST: +1 / +2 / −0,5 (muro a muro es la base)', () => {
     expect(ajusteCenefaCuadradaCm('CON_1_TAPA')).toBe(1);
