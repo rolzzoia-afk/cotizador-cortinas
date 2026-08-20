@@ -852,6 +852,45 @@ describe('generarOrdenesOptimizador — columna CATEGORIA (gama económica)', ()
 });
 
 // La gama de la TELA no cambia la estructura de los sistemas de oscuridad. Un
+// OT 3196 (dueño, 2026-08-20): soft light 38 EXTERNO con adicional CENF O. El
+// tubo salía 230,7 (EXTERNO) y la cenefa 218,1 (INTERNO): la cenefa del
+// adicional PISABA la del despiece leyendo `sentido`, que en oscuridad es la
+// caída fija INTERNO — la variante real va en `oscuridadVariante` del paño.
+describe('generarOrdenesOptimizador — la cenefa del adicional usa la variante del paño (OT 3196)', () => {
+  const adicionalPpal = [
+    { codInt: 'CENF O', cantidad: 2.193, descuento: 0, ubicacion: 'PPAL', colorAcc: 'BLANCO' },
+  ];
+  const softLightExterno = () => {
+    const v = ventanaSoftLight(2.193, 'PPAL', 'INTERNO'); // la caída fija de Fase 1
+    v.panos[0].oscuridadVariante = 'EXTERNO'; // la variante elegida en Fase 2
+    return v;
+  };
+
+  it('con el adicional: tubo 230,7 · peso SL 226,7 · cenefa 232,5 (la cenefa manda)', () => {
+    const { aoa } = generarOrdenesOptimizador('3196', [softLightExterno()], {
+      adicionalesFase0: adicionalPpal,
+    });
+    expect(aoa[1][idxTUBO]).toBe(230.7); // 219,3 + 11,4
+    expect(aoa[1][idxPESO_SOFT_LIGHT]).toBe(226.7); // 219,3 + 7,4
+    expect(aoa[1][idxCENEFA]).toBe(232.5); // 219,3 + 13,2 (antes: 218,1)
+    expect(Number(aoa[1][idxCENEFA])).toBeGreaterThan(Number(aoa[1][idxTUBO]));
+  });
+
+  it('sin el adicional el despiece da la MISMA cenefa: los dos caminos coinciden', () => {
+    const { aoa } = generarOrdenesOptimizador('3196', [softLightExterno()]);
+    expect(aoa[1][idxCENEFA]).toBe(232.5);
+    expect(aoa[1][idxTUBO]).toBe(230.7);
+  });
+
+  it('la variante de la VENTANA sirve de respaldo cuando el paño no trae la suya', () => {
+    const v = ventanaSoftLight(2.193, 'PPAL', 'INTERNO');
+    v.oscuridadVariante = 'SEMI';
+    const { aoa } = generarOrdenesOptimizador('3196', [v], { adicionalesFase0: adicionalPpal });
+    expect(aoa[1][idxCENEFA]).toBe(225.9); // 219,3 + 6,6
+    expect(aoa[1][idxTUBO]).toBe(224.1); // 219,3 + 4,8
+  });
+});
+
 // soft light con tela de gama B se fabrica con los herrajes de siempre: sale
 // SIN marca de categoría y con su tubo E02, nunca con el E01 de la categoría B.
 // (Regresión de la OT 268-3: el guardado de Fase 1 usaba la versión sin guarda
