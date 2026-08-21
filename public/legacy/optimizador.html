@@ -1574,7 +1574,8 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.26"; // 2026-08-20: (a) regla tubos GRISES vs BLANCO — en una misma ubicación (misma OT + UBIC, o mismo grupo -G#) no se combinan E03 (blanco) con E02/E39/E66/E01 (grises); el reemplazo cross-familia se bloquea cuando la ubicación tiene más de un tubo, y si las órdenes ya vienen mezcladas del Excel se advierte. (b) tubos DESCONTINUADOS — el optimizador lee configuracion.reglas_seleccion (catálogo técnico de Admin) y ningún tubo 'oculto' (hoy E66) se ofrece como reemplazo, aunque el catálogo de reemplazos lo liste; abrir tubo nuevo de un código descontinuado advierte en el log.
+const VERSION_ACTUAL = "5.27"; // 2026-08-21: los TUBOS de una orden de CATEGORÍA B (columna CATEGORÍA = B) no se reemplazan con tubos de la categoría A — E01 ya no cae a E02/E03/E53/E66: si no hay stock B, sale tubo nuevo E01. Los tubos B (E01 y el E39 compartido) salen de configuracion.reglas_seleccion (reglaLineaB). Y una orden A nunca toma el E01. Antes (v5.26) solo las barras de estructura respetaban la categoría (llaves |B).
+// v5.26 — 2026-08-20: (a) regla tubos GRISES vs BLANCO — en una misma ubicación (misma OT + UBIC, o mismo grupo -G#) no se combinan E03 (blanco) con E02/E39/E66/E01 (grises); el reemplazo cross-familia se bloquea cuando la ubicación tiene más de un tubo, y si las órdenes ya vienen mezcladas del Excel se advierte. (b) tubos DESCONTINUADOS — el optimizador lee configuracion.reglas_seleccion (catálogo técnico de Admin) y ningún tubo 'oculto' (hoy E66) se ofrece como reemplazo, aunque el catálogo de reemplazos lo liste; abrir tubo nuevo de un código descontinuado advierte en el log.
 
 const MM_TUBO_ORIGINAL = 5780;
 const MM_KERF = 3;
@@ -3891,7 +3892,19 @@ function expandirOrdenesDesdeExcel() {
                 // ─── Lógica original del TUBO ───
                 if (codTubo) {
                     orden.codigoExtraido = codTubo;
-                    orden.reemplazo = SistemaInventario.catalogoReemplazos[codTubo] || null;
+                    // La columna "Reemplazo" de la tabla muestra solo lo que la
+                    // categoría de la orden admite (la misma regla que aplica
+                    // buscarReemplazos al optimizar): una orden B no lista E02.
+                    const listaCat = SistemaInventario.catalogoReemplazos[codTubo];
+                    if (listaCat) {
+                        const { filtrados } = _filtrarReemplazosPorCategoria(
+                            datosCompartidos.categoria,
+                            String(listaCat).split(';').map(r => r.trim()).filter(r => r),
+                        );
+                        orden.reemplazo = filtrados.length > 0 ? filtrados.join('; ') : null;
+                    } else {
+                        orden.reemplazo = null;
+                    }
                     orden.cod = codTubo || orden.codSec || 'TUBO-' + orden.id;
                 } else {
                     orden.cod = orden.codSec || 'TUBO-' + orden.id;
@@ -4938,6 +4951,16 @@ const REEMPLAZO_SOLO_LISTA_BLANCA = { 'E13': [] };
 // JSON y un Set no sobrevive el parse). Vacío = comportamiento de siempre.
 let TUBOS_DESCONTINUADOS = new Set();
 
+// Tubos de la CATEGORÍA B (gama económica, dueño 2026-08-21): una orden B no
+// se corta de un tubo de la categoría A ni al revés — "no se mezclan las dos
+// categorías". Vienen de la regla `reglaLineaB` del catálogo técnico (Admin →
+// Catálogo técnico → Tuberías): `codigoHasta` es el tubo propio de la B (E01,
+// Ø38 0,8 mm) y `codigoDesde` el Ø45 sobre 2,5 m (E39), que la categoría A
+// también usa — por eso solo el primero cuenta como "solo B". Los valores de
+// fábrica quedan como respaldo si el catálogo no se pudo leer.
+let TUBOS_CATEGORIA_B = new Set(['E01', 'E39']);
+let TUBOS_SOLO_B = new Set(['E01']);
+
 async function cargarTubosDescontinuados() {
     try {
         const valor = await _supabaseLeer('reglas_seleccion');
@@ -4953,9 +4976,36 @@ async function cargarTubosDescontinuados() {
         if (set.size > 0) {
             log(`🚫 Tubos descontinuados según el catálogo técnico: ${[...set].join(', ')} — no se usarán como reemplazo.`, 'info');
         }
+        // Tubos de la categoría B (misma lectura, misma fuente).
+        const rb = datos && datos.tuberia ? datos.tuberia.reglaLineaB : null;
+        if (rb && rb.codigoHasta) {
+            const hasta = normalizarCodigo(rb.codigoHasta);
+            const desde = rb.codigoDesde ? normalizarCodigo(rb.codigoDesde) : null;
+            TUBOS_CATEGORIA_B = new Set(desde ? [hasta, desde] : [hasta]);
+            TUBOS_SOLO_B = new Set([hasta]);
+            // El tubo propio de la B figura 'oculto' en el catálogo solo para
+            // que el selector de la categoría A no lo ofrezca: NO está
+            // descontinuado. Sin esto, abrir un tubo nuevo E01 para una orden B
+            // avisaría "descontinuado" por error.
+            for (const c of TUBOS_CATEGORIA_B) TUBOS_DESCONTINUADOS.delete(c);
+            log(`🅱️ Tubos de la categoría B según el catálogo técnico: ${[...TUBOS_CATEGORIA_B].join(', ')} — una orden B no se corta de tubos de la categoría A (ni al revés con el ${hasta}).`, 'info');
+        }
     } catch (e) {
         console.warn('[tubosDescontinuados] No se pudo leer el catálogo técnico:', e.message);
     }
+}
+
+// Reemplazos de TUBO permitidos según la categoría de la orden: una orden B
+// solo acepta tubos B; una orden A (columna vacía) acepta cualquiera menos los
+// que son solo B. Devuelve { filtrados, bloqueados }.
+function _filtrarReemplazosPorCategoria(categoria, reemplazos) {
+    const esB = String(categoria || '').trim().toUpperCase() === 'B';
+    const filtrados = reemplazos.filter(r => {
+        const c = normalizarCodigo(r);
+        return esB ? TUBOS_CATEGORIA_B.has(c) : !TUBOS_SOLO_B.has(c);
+    });
+    const bloqueados = reemplazos.filter(r => !filtrados.includes(r));
+    return { esB, filtrados, bloqueados };
 }
 
 // Tubos GRISES vs BLANCO (dueño, 2026-08-20): en una MISMA UBICACIÓN no se
@@ -5021,6 +5071,24 @@ function buscarReemplazos(codigo, orden = null) {
         if (filtrados.length < reemplazos.length) {
             const bloqueados = reemplazos.filter(r => !filtrados.includes(r)).join(', ');
             log(`🚫 Reemplazo ${codNormalizado} → ${bloqueados} bloqueado: descontinuado en el catálogo técnico. Si falta stock, sale tubo nuevo ${codNormalizado}.`, 'warn');
+        }
+        if (filtrados.length === 0) return null;
+        reemplazos = filtrados;
+    }
+
+    // ── Categoría B vs A: los tubos no se mezclan (dueño, 2026-08-21) ──
+    // Una orden B (columna CATEGORÍA = B) no se corta de un tubo de la
+    // categoría A: E01 ya no cae a E02/E03/E53/E66 aunque el catálogo de
+    // reemplazos los liste. Sin stock B → tubo nuevo del código original. Y una
+    // orden A nunca toma el tubo que es solo de la B (E01). Solo tubos: las
+    // barras de estructura siguen la regla v5.21 (llave |B, o la A con aviso).
+    if (orden && _esOrdenDeTubo(orden)) {
+        const { esB, filtrados, bloqueados } = _filtrarReemplazosPorCategoria(orden.categoria, reemplazos);
+        if (bloqueados.length > 0) {
+            log(esB
+                ? `🅱️ CATEGORÍA B: bloqueando reemplazo ${codNormalizado} → ${bloqueados.join(', ')} para ${orden.ot || '?'} / ${orden.ubic || '-'} — los tubos de la categoría A no se mezclan con la B. Si no hay stock B, sale tubo nuevo ${codNormalizado}.`
+                : `⚠️ Categoría A: bloqueando reemplazo ${codNormalizado} → ${bloqueados.join(', ')} para ${orden.ot || '?'} / ${orden.ubic || '-'} — ese tubo es solo de la categoría B.`,
+                'warn');
         }
         if (filtrados.length === 0) return null;
         reemplazos = filtrados;
