@@ -16,6 +16,7 @@ import {
 import { esCategoriaBeeblack, normalizarVarianteBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import { categoriaEsDual } from '@/modules/descuentos/tipos';
 import { chipDualPorLadoColor } from '@/modules/descuentos/chips';
+import { normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 import {
   codigoMotorDesdeAdicional,
   esAdicionalHubDomotica,
@@ -243,17 +244,19 @@ export function sincronizarDireccionConCierre(
 
 
 
-/** Normaliza color de accesorios de Fase 0 al código corto de Fase 2. */
+/** Normaliza color de accesorios de Fase 0 al código corto de Fase 2. Acepta
+ *  lo que teclea la vendedora en la grilla («NEGROS», «blancas»): el plegado de
+ *  plurales y femeninos vive en `normalizarColorAccesorio`. */
 
 export function colorAccesorioCorto(color: string | undefined | null): string {
 
-  const c = (color || '').toUpperCase().trim();
+  const c = normalizarColorAccesorio(color);
 
   if (!c) return '';
 
   if (c === 'BLANCO' || c === 'BCO') return 'BCO';
 
-  if (c === 'GRIS' || c === 'GRS' || c === 'GRISE') return 'GRS';
+  if (c === 'GRIS' || c === 'GRS') return 'GRS';
 
   if (c === 'NEGRO' || c === 'NEG') return 'NEG';
 

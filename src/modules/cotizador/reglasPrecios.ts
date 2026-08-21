@@ -25,7 +25,13 @@ import { INSUMO_VALOR_MAXIMO } from './preciosFase0';
  * (`SUMIF("<=2,19")` + `SUMIF(">=2,191")`), así que se conserva; el validador
  * lo AVISA para que se note, pero no lo corrige solo.
  */
-export type FiltroAncho = { min?: number; max?: number };
+export type FiltroAncho = {
+  min?: number;
+  max?: number;
+  /** Extremos ESTRICTOS, para los `COUNTIFS("<2,10")` / `(">2,10")` de la copia B. */
+  mayorQue?: number;
+  menorQue?: number;
+};
 
 /**
  * Cómo se calcula CUÁNTO se necesita de un insumo para una familia.
@@ -170,7 +176,33 @@ export type SistemaPrecio = {
   codigoInstalacion: string;
   /** VALOR MAXIMO propios; ganan sobre el mapa global. */
   insumos: Record<string, InsumoPrecio>;
+  /**
+   * $/metro de la TELA por familia (COD), TECLEADO — la celda «PRECIO REAL» del
+   * panel del Excel. Manda sobre arquetipos y máximos. Lo usa la categoría B:
+   * su copia del Excel teclea 22.500 en el screen premium y 29.231 en el
+   * blackout delux, donde la A cobra 31.582 y 41.868. Una familia que no esté
+   * acá cae a la cascada normal (arquetipo → máximo).
+   */
+  telaPorFamilia?: Record<string, number>;
+  /**
+   * Descuento (0-1) con que Fase 1 propone las filas de este sistema al
+   * crearlas o al marcarlas. La copia B de Carlos trae 30 % en todas sus telas
+   * donde la A trae 20-25 %. Editable a mano en la fila después.
+   */
+  descuentoDefault?: number;
 };
+
+/**
+ * Clave del sistema CATEGORÍA B en `reglas.sistemas`. A diferencia del
+ * beeblack, no se le aplica a una lista de familias sino a las FILAS marcadas
+ * categoría B (la gama económica): la misma tela y la misma familia se cotizan
+ * con este sistema si la cortina va en B y con las reglas normales si va en A,
+ * cada una en su propio panel (decisión del dueño, 2026-08-21).
+ */
+export const SISTEMA_CATEGORIA_B_KEY = 'categoriaB';
+
+/** Sufijo con que se guardan las recetas B en `reglas.recetas` (`BLACKOUT_P|B`). */
+export const SUFIJO_RECETA_B = '|B';
 
 /**
  * COD_INT de instalación que el motor calcula SOLO: el de la roller (`INST`)
@@ -297,6 +329,87 @@ const recetaDuo = (opts: {
   v('PUB 01', porCortina()),
 ];
 
+// ── Recetas de la CATEGORÍA B ─────────────────────────────────────────
+// Transcritas de los paneles de la copia B del Excel (COTJS-10452-1, CARLOS,
+// 2026-08-21). Mismo esqueleto que la A con los herrajes de la gama económica:
+// el tubo estándar de 0,8 mm `E 02-1` en vez del `E 02`, el kit LZ90 `MEC 05`
+// en las cortinas chicas (y el 0,45 `MEC 18` solo en las grandes), cadena
+// `CAD 05`, peso de cadena `PCA 01`, tapas `FABR0003` y, en el dúo, el tubo
+// inferior `E 10` y el bracket `BRA 01`. Se cobran con la tabla de insumos del
+// sistema CATEGORÍA B, no con la general.
+
+const NOTA_KIT_B =
+  'La copia B cuenta el kit con "<2,10" y ">2,10" (estrictos): una cortina de 2,10 m exactos ' +
+  'no suma kit por ninguna de las dos líneas. Se conserva tal cual; para cerrarlo, poner ' +
+  'el mínimo del MEC 18 en 2,10 inclusivo.';
+
+/** Tubo de la categoría B: el estándar de 0,8 mm hasta 2,19 m, el Ø45 desde 2,191. */
+const TUBOS_B: LineaReceta[] = [
+  v('E 02-1', sumaAnchos(undefined, { filtroAncho: { max: 2.19 } })),
+  v('E 05', sumaAnchos(undefined, { filtroAncho: { min: 2.191 } })),
+];
+
+/** Roller blackout y screen, premium y delux, en categoría B. Validada al peso con CARLOS. */
+const RECETA_ROLLER_PD_B: LineaReceta[] = [
+  ...TUBOS_B,
+  v('E 15', sumaAnchos()),
+  v('MEC 05', porCortina(undefined, { menorQue: 2.1 })),
+  v('MEC 18', porCortina(undefined, { mayorQue: 2.1 }), NOTA_KIT_B),
+  v('CAD 05', porCortina()),
+  v('TOP 03', porCortina()),
+  v('INS 95', porCortina()),
+  v('PCA 01', porCortina()),
+  v('FABR0003', porCortina(2)),
+  v('ZUN 06', sumaAnchos(2)),
+  v('PUB 01', porCortina()),
+  v('MAT00001', porCortina()),
+];
+
+/** Gama standard en categoría B: un solo tubo hasta el tope, etiqueta a costo. */
+const recetaRollerStandardB = (topeTuboM: number, llevaMateriales: boolean): LineaReceta[] => [
+  v('E 02-1', sumaAnchos(undefined, { filtroAncho: { max: topeTuboM } })),
+  v('E 15', sumaAnchos()),
+  v('MEC 05', porCortina(undefined, { menorQue: 2.1 })),
+  v('MEC 18', porCortina(undefined, { mayorQue: 2.1 }), NOTA_KIT_B),
+  v('CAD 05', porCortina()),
+  v('TOP 03', porCortina()),
+  c('INS 95', porCortina()),
+  v('PCA 01', porCortina()),
+  v('FABR0003', porCortina(2)),
+  v('ZUN 06', sumaAnchos(2)),
+  v('PUB 01', porCortina()),
+  ...(llevaMateriales ? [v('MAT00001', porCortina())] : []),
+];
+
+/** Dúo en categoría B: la receta dúo de la A con los herrajes del panel B. */
+const recetaDuoB = (opts: {
+  perfilMasFijo?: boolean;
+  micaYCinta?: boolean;
+  etiquetaACosto?: boolean;
+  materialesVarios: CantidadReceta | null;
+}): LineaReceta[] => [
+  ...TUBOS_B,
+  v('E 26', sumaAnchos(undefined, opts.perfilMasFijo ? { masFijoM: 0.2 } : undefined)),
+  ...(opts.micaYCinta ? [v('MIC 01', sumaAnchos()), v('CIN 02', sumaAnchos())] : []),
+  v('E 10', sumaAnchos()),
+  v('E 13', sumaAnchos()),
+  (opts.etiquetaACosto ? c : v)('INS 95', porCortina()),
+  v('MEC 09', porCortina()),
+  v('MEC 18', porCortina(2, { min: 2.2 })),
+  v('CAD 05', porCortina()),
+  v('PCA 01', porCortina()),
+  v('ZUN 06', sumaAnchos(2)),
+  v('TAP 09', porCortina(2)),
+  ...(opts.materialesVarios ? [v('MAT00001', opts.materialesVarios)] : []),
+  v(
+    'BRA 01',
+    porCortina(3),
+    'La copia B del Excel no le pone precio al bracket del dúo (lo cobra en $0). Acá se cobra ' +
+      'al precio de la A hasta que se le cargue uno propio en el sistema categoría B.',
+  ),
+  v('PUB 01', porCortina()),
+];
+
 /** Cortina vertical: la receta no depende de la gama, es una sola. */
 const RECETA_VERTICAL: LineaReceta[] = [
   v('VER 35', sumaAnchos()),
@@ -399,6 +512,21 @@ export const RECETAS_DEFAULT: Record<string, LineaReceta[]> = {
   BEE_TRAS: RECETA_BEEBLACK,
   [RECETA_VERTICAL_KEY]: RECETA_VERTICAL,
   [RECETA_DUO_GENERICO_KEY]: recetaDuo({ materialesVarios: null }),
+  // Categoría B (ver `claveRecetaB`): las verticales no tienen receta B y
+  // caen a la de siempre con los insumos del sistema B.
+  [`BLACKOUT_P${SUFIJO_RECETA_B}`]: RECETA_ROLLER_PD_B,
+  [`BLACKOUT_D${SUFIJO_RECETA_B}`]: RECETA_ROLLER_PD_B,
+  [`BLACKOUT_S${SUFIJO_RECETA_B}`]: recetaRollerStandardB(2.5, true),
+  [`SCREEN_P${SUFIJO_RECETA_B}`]: RECETA_ROLLER_PD_B,
+  [`SCREEN_D${SUFIJO_RECETA_B}`]: RECETA_ROLLER_PD_B,
+  [`SCREEN_S${SUFIJO_RECETA_B}`]: recetaRollerStandardB(2.19, false),
+  [`DUOBK_P${SUFIJO_RECETA_B}`]: recetaDuoB({ perfilMasFijo: true, micaYCinta: true, materialesVarios: porCortina() }),
+  [`DUOBK_D${SUFIJO_RECETA_B}`]: recetaDuoB({ etiquetaACosto: true, materialesVarios: { tipo: 'porCortinaCuadrado', factor: 2 } }),
+  [`DUOBK_S${SUFIJO_RECETA_B}`]: recetaDuoB({ etiquetaACosto: true, materialesVarios: { tipo: 'porCortinaCuadrado', factor: 2 } }),
+  [`DUOPOLI_P${SUFIJO_RECETA_B}`]: recetaDuoB({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
+  [`DUOPOLI_D${SUFIJO_RECETA_B}`]: recetaDuoB({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
+  [`DUOPOLI_S${SUFIJO_RECETA_B}`]: recetaDuoB({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
+  [`${RECETA_DUO_GENERICO_KEY}${SUFIJO_RECETA_B}`]: recetaDuoB({ materialesVarios: null }),
 };
 
 /** Las 12 familias reales, en el orden en que se muestran en el Admin. */
@@ -611,7 +739,12 @@ const expandirInsumos = (
   for (const [representante, variantes] of Object.entries(grupos)) {
     const valorMaximo = valores[representante];
     if (valorMaximo === undefined) continue;
-    for (const cod of variantes) out[cod] = { valorMaximo, descripcion: DESCRIPCIONES[cod] };
+    for (const cod of variantes) {
+      // Un precio PROPIO gana sobre el de su grupo: en la copia B el MEC 05
+      // (LZ90) vale 1.963,5 aunque en la A comparta precio con el MEC 18.
+      if (valores[cod] !== undefined) continue;
+      out[cod] = { valorMaximo, descripcion: DESCRIPCIONES[cod] };
+    }
   }
   return out;
 };
@@ -636,8 +769,85 @@ export const SISTEMA_BEEBLACK_DEFAULT: SistemaPrecio = {
   insumos: expandirInsumos(INSUMOS_BEEBLACK_VM, GRUPOS_INSUMO_BEEBLACK),
 };
 
+/**
+ * La hoja Insumos de la copia CATEGORÍA B del Excel (COTJS-10452-1, CARLOS,
+ * 2026-08-21), columna VALOR MAXIMO. Es otra tabla que la de la A: el tubo es
+ * el estándar de 0,8 mm (`E 02-1`, no `E 02`), el kit chico es el LZ90 `MEC 05`
+ * con precio propio (en la A comparte precio con `MEC 18`), y casi todo vale
+ * menos (`E 15` 1.959 vs 4.583, `PUB 01` 1.000 vs 1.400…).
+ */
+const INSUMOS_B_VM: Record<string, number> = {
+  'E 02-1': 2206.4583333333335,
+  'E 05': 5330.208333333333,
+  'E 15': 1959.2854,
+  'E 10': 922.0517,
+  'E 13': 1230.3608,
+  'E 26': 6725.2354,
+  'TAP 13': 94.01,
+  FABR0003: 53.55,
+  'TAP 09': 314.16,
+  'TOP 03': 59.5,
+  MER0006: 59.5,
+  'PCA 01': 487.9,
+  'ZUN 06': 238,
+  'INS 95': 450,
+  MAT00001: 1300,
+  'MEC 05': 1963.5,
+  'MEC 06': 1963.5,
+  'MEC 18': 4999.9992,
+  'MEC 09': 2817.92,
+  'CAD 05': 487.9,
+  'CAD 13': 725.9,
+  'MIC 01': 416.5,
+  'CIN 02': 71.4,
+  // El bracket del dúo (BRA 01) está en la hoja B pero SIN valor máximo: la
+  // copia lo cobraría en $0. No se replica: sin precio propio cae al de la A
+  // (grupo BRA 02), que es plata que se perdería en silencio. La receta B del
+  // dúo lo avisa en su nota.
+  MER0014: 59.5,
+  'PUB 01': 999.9927,
+};
+
+/**
+ * El sistema CATEGORÍA B de fábrica. Todos los números salen de la copia B del
+ * Excel (COTJS-10452-1, CARLOS): `MAN 01` 15.000 · `TRAS` 45.000 · `INST`
+ * 17.500 (la misma embebida y en la fila, como la roller) · margen 0,65 ·
+ * extra de alto 0,25 · PRECIO REAL tecleado por panel · descuento 30 % en las
+ * telas. Sus recetas viven en `RECETAS_DEFAULT` con el sufijo `|B`.
+ */
+export const SISTEMA_CATEGORIA_B_DEFAULT: SistemaPrecio = {
+  nombre: 'Categoría B',
+  // No se aplica por familia sino por fila (ver SISTEMA_CATEGORIA_B_KEY).
+  familias: [],
+  margenInsumo: 0.65,
+  extraAltoM: 0.25,
+  manoObra: 15000,
+  traslado: 45000,
+  instalacionEmbebida: 17500,
+  instalacionLinea: 17500,
+  codigoInstalacion: '',
+  insumos: expandirInsumos(INSUMOS_B_VM, GRUPOS_INSUMO),
+  // La celda «PRECIO REAL» de cada panel de la copia B (fila 141).
+  telaPorFamilia: {
+    SCREEN_P: 22500,
+    SCREEN_D: 43503,
+    SCREEN_S: 31582,
+    BLACKOUT_P: 22500,
+    BLACKOUT_D: 29231,
+    BLACKOUT_S: 24000,
+    DUOBK_P: 32292,
+    DUOBK_D: 40308,
+    DUOBK_S: 32292,
+    DUOPOLI_P: 19500,
+    DUOPOLI_D: 19500,
+    DUOPOLI_S: 19500,
+  },
+  descuentoDefault: 0.3,
+};
+
 export const SISTEMAS_DEFAULT: Record<string, SistemaPrecio> = {
   beeblack: SISTEMA_BEEBLACK_DEFAULT,
+  [SISTEMA_CATEGORIA_B_KEY]: SISTEMA_CATEGORIA_B_DEFAULT,
 };
 
 /**
@@ -652,6 +862,51 @@ export function sistemaDeFamilia(
     if (s.familias.includes(cod)) return s;
   }
   return undefined;
+}
+
+/** El sistema CATEGORÍA B, si existe (se puede borrar para apagarlo). */
+export function sistemaCategoriaB(
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): SistemaPrecio | undefined {
+  return sistemas[SISTEMA_CATEGORIA_B_KEY];
+}
+
+/**
+ * El sistema con el que se cotiza UNA FILA: la categoría B manda si la fila va
+ * marcada B (sea por su tela o forzada a mano); si no, el de su familia. Un
+ * beeblack no tiene categoría B, así que su sistema gana aunque alguien marque
+ * la fila: la B solo existe donde hay recetas B.
+ */
+export function sistemaDeFila(
+  cod: string,
+  lineaB: boolean | undefined,
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): SistemaPrecio | undefined {
+  const deFamilia = sistemaDeFamilia(cod, sistemas);
+  if (deFamilia) return deFamilia;
+  return lineaB ? sistemaCategoriaB(sistemas) : undefined;
+}
+
+/**
+ * El sistema al que pertenece una RECETA por su clave: las `|B` son del
+ * sistema categoría B; el resto, el de su familia (beeblack) o ninguno. Lo
+ * usan el validador y el «reponer insumos» para buscar el precio de cada
+ * línea en la tabla correcta.
+ */
+export function sistemaDeReceta(
+  claveReceta: string,
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): SistemaPrecio | undefined {
+  if (claveReceta.endsWith(SUFIJO_RECETA_B)) return sistemaCategoriaB(sistemas);
+  return sistemaDeFamilia(claveReceta, sistemas);
+}
+
+/** Precios de insumo con los que se cotiza un grupo: los del sistema ganan. */
+export function insumosDeSistema(
+  sistema: SistemaPrecio | undefined,
+  reglas: Pick<ReglasPrecios, 'insumos'>,
+): Record<string, InsumoPrecio> {
+  return sistema ? { ...reglas.insumos, ...sistema.insumos } : reglas.insumos;
 }
 
 /** Precios de insumo que se usan para una familia: los del sistema ganan. */
@@ -797,6 +1052,41 @@ export function resolverReceta(
   return recetas[clave] ?? RECETAS_DEFAULT[clave];
 }
 
+/**
+ * Clave de la receta de una cortina de CATEGORÍA B: la de su familia con el
+ * sufijo `|B` si existe (`BLACKOUT_P|B`). Si la familia no tiene receta B
+ * (las verticales, por ejemplo), se cotiza con la receta de la A y los
+ * insumos del sistema B — mejor eso que dejarla sin materiales.
+ */
+export function claveRecetaB(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): string {
+  const base = claveReceta(cod, esVertical, recetas);
+  const b = `${base}${SUFIJO_RECETA_B}`;
+  return recetas[b] || RECETAS_DEFAULT[b] ? b : base;
+}
+
+export function resolverRecetaB(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): LineaReceta[] {
+  const clave = claveRecetaB(cod, esVertical, recetas);
+  return recetas[clave] ?? RECETAS_DEFAULT[clave];
+}
+
+/**
+ * ¿La receta B de esta familia está validada contra una cotización real? Las
+ * cuatro roller premium/delux calzan al peso con COTJS-10452-1 (CARLOS); las
+ * demás recetas B se transcribieron de los paneles de esa copia pero ninguna
+ * cotización real las ha probado todavía.
+ */
+export function recetaBEsExacta(cod: string): boolean {
+  return /^(BLACKOUT|SCREEN)_(P|D)$/.test(cod);
+}
+
 // ── Normalización ─────────────────────────────────────────────────────
 
 const numeroFinito = (x: unknown, porDefecto: number): number =>
@@ -929,8 +1219,35 @@ function saneaSistemas(crudo: unknown): Record<string, SistemaPrecio> {
           ? o.codigoInstalacion.trim().toUpperCase()
           : base?.codigoInstalacion ?? '',
       insumos: Object.keys(insumos).length ? insumos : base?.insumos ?? {},
+      ...saneaExtrasSistema(o, base),
     };
   }
+  return out;
+}
+
+/**
+ * Los campos opcionales de un sistema (tela por familia, descuento). Sin esto
+ * el guardado los PERDÍA: `saneaSistemas` rearma cada sistema campo por campo.
+ * Lo guardado manda; si no viene, se hereda lo de fábrica.
+ */
+function saneaExtrasSistema(
+  o: Record<string, unknown>,
+  base: SistemaPrecio | undefined,
+): Pick<SistemaPrecio, 'telaPorFamilia' | 'descuentoDefault'> {
+  const out: Pick<SistemaPrecio, 'telaPorFamilia' | 'descuentoDefault'> = {};
+  if (o.telaPorFamilia && typeof o.telaPorFamilia === 'object') {
+    const tela: Record<string, number> = {};
+    for (const [fam, v] of Object.entries(o.telaPorFamilia as Record<string, unknown>)) {
+      const n = numeroFinito(v, NaN);
+      if (fam.trim() && Number.isFinite(n) && n > 0) tela[fam.trim()] = n;
+    }
+    out.telaPorFamilia = tela;
+  } else if (base?.telaPorFamilia) {
+    out.telaPorFamilia = { ...base.telaPorFamilia };
+  }
+  const dcto = numeroFinito(o.descuentoDefault, NaN);
+  if (Number.isFinite(dcto)) out.descuentoDefault = Math.max(0, Math.min(1, dcto));
+  else if (base?.descuentoDefault !== undefined) out.descuentoDefault = base.descuentoDefault;
   return out;
 }
 
@@ -969,7 +1286,7 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
   if (usarInsumosGuardados) {
     const fabrica = insumosDeFabrica();
     for (const [fam, lineas] of Object.entries(recetas)) {
-      const propios = sistemaDeFamilia(fam, sistemas)?.insumos;
+      const propios = sistemaDeReceta(fam, sistemas)?.insumos;
       for (const l of lineas) {
         if (propios?.[l.insumo] || insumosFinal[l.insumo]) continue;
         if (fabrica[l.insumo]) insumosFinal[l.insumo] = fabrica[l.insumo];
@@ -1044,7 +1361,8 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
       const n = s[campo];
       if (!Number.isFinite(n) || n < 0) errores.push(`${dónde}: ${etiqueta} tiene que ser un monto de cero para arriba.`);
     }
-    if (!s.familias.length) {
+    // La categoría B no se aplica por familia sino por fila: sin familias es lo normal.
+    if (!s.familias.length && clave !== SISTEMA_CATEGORIA_B_KEY) {
       avisos.push(`${dónde} no tiene ninguna familia asignada, así que no se le aplica a nada.`);
     }
     for (const [cod, ins] of Object.entries(s.insumos)) {
@@ -1109,8 +1427,9 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
       continue;
     }
     // Una familia de sistema cobra con SU tabla de precios; la global es el
-    // respaldo (así una línea compartida no obliga a duplicar el código).
-    const propios = sistemaDeFamilia(fam, reglas.sistemas)?.insumos;
+    // respaldo (así una línea compartida no obliga a duplicar el código). Las
+    // recetas `|B` cobran con la tabla del sistema categoría B.
+    const propios = sistemaDeReceta(fam, reglas.sistemas)?.insumos;
     lineas.forEach((l, i) => {
       usados.add(l.insumo);
       const dónde = `«${fam}», línea ${i + 1} (${l.insumo})`;
@@ -1245,6 +1564,9 @@ function tramoEnPalabras(f?: FiltroAncho): string {
   if (f.min !== undefined && f.max !== undefined) return ` de entre ${nMetros(f.min)} y ${nMetros(f.max)} de ancho`;
   if (f.max !== undefined) return ` de hasta ${nMetros(f.max)} de ancho`;
   if (f.min !== undefined) return ` de ${nMetros(f.min)} de ancho o más`;
+  // Extremos estrictos (la copia B cuenta el kit con "<2,10" y ">2,10").
+  if (f.menorQue !== undefined) return ` de menos de ${nMetros(f.menorQue)} de ancho`;
+  if (f.mayorQue !== undefined) return ` de más de ${nMetros(f.mayorQue)} de ancho`;
   return '';
 }
 

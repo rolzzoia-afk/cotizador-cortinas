@@ -53,6 +53,16 @@ export type Pano = {
   colorPeso?: string;
   colorCadena?: string;
   colorMecanismo?: string;
+  /**
+   * El vendedor pidió 45 mm EN ESTA CORTINA (eligió el tubo E39 o un kit 45 a
+   * mano en Fase 2), con el interruptor «Tubo E39 (2,2–3,0 m)» de la OT
+   * apagado. Abre la banda de 45 solo para este paño: el modelo, el kit y el
+   * tubo se mantienen en 45 en cada sincronización, y apagar el interruptor de
+   * la OT no lo revierte (eso solo baja los que subieron por la banda
+   * automática). Se apaga al elegir un tubo o un kit de 38. Sin esto, el E39
+   * elegido a mano quedaba con un kit de 38 que no calza en ese tubo (OT 3195).
+   */
+  tubo45Manual?: boolean;
   cenefa?: string;
   /** 'CON TIRA' | 'SIN TIRA' — cenefa ovalada (Excel órdenes / optimizador). */
   cenefaTira?: string;

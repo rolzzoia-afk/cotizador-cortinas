@@ -155,6 +155,7 @@ export function resolverCortinaDePrueba(
     reglas.mecanismo,
     reglas.tipos,
     lineaB,
+    reglas.tuberia,
   );
   if (!modelo && !esBeeblack) {
     avisos.push(

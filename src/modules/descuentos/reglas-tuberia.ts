@@ -372,6 +372,29 @@ export function codigoTuboPorAncho(
 }
 
 /**
+ * ¿La regla de tubería le asigna a una cortina de 38 mm de este ancho un tubo
+ * de Ø45? Pasa desde que el E66 se descontinuó (2026-08-20): la banda 38 mm
+ * sobre 2,2 m nombra al E39, que es Ø45. Un kit de 38 no calza en ese tubo,
+ * así que cuando esto es true la cortina ES de 45: la fila de despiece y el
+ * kit la siguen (ver `modeloPorAncho` / `mecanismoParaPano`). Con la regla de
+ * fábrica (E66) es siempre false, y si el E66 vuelve desde Admin, también.
+ */
+export function tuboPorReglaEs45(
+  anchoM: number,
+  categoria: string | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): boolean {
+  if (!(anchoM > 0)) return false;
+  const cod = codigoTuboPorAncho(
+    { diametro_tubo_mm: reglas.reglaE02E66.diametroMm, codigos_tubo: '' },
+    anchoM,
+    categoria,
+    reglas,
+  );
+  return !!cod && diametroTuboPorCodigo(cod, reglas) === 45;
+}
+
+/**
  * Descripción larga del tubo por código, para los chips de Fase 2 y las hojas
  * de Cálculo General / Inventario. El Excel de órdenes y la etiqueta Brother
  * NO la usan (siguen con el código compacto "38mm_E02", ver tuberiaCodigoCorto).

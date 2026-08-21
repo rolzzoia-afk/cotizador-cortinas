@@ -24,6 +24,8 @@ import {
   faltantesManillasInventario,
   otLlevaDomotica,
   panoLlevaDomotica,
+  tapaCenefaCuadrada,
+  tapaPesoOscuridad,
   tarugoDeMaterial,
 } from './insumosCortina';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
@@ -73,6 +75,13 @@ describe('manillaDesdeAdicional / codigoManillaPorColor', () => {
     expect(codigoManillaPorColor('CAFE')).toBe('HER49');
     expect(codigoManillaPorColor('MET')).toBe('');
     expect(codigoManillaPorColor('')).toBe('');
+  });
+
+  it('plurales y femeninos tecleados en Fase 1 («NEGROS», «blancas») valen como el color', () => {
+    expect(codigoManillaPorColor('NEGROS')).toBe('HER47');
+    expect(codigoManillaPorColor('blancas')).toBe('HER48');
+    expect(tapaPesoOscuridad('NEGROS').codigo).toBe('TAP31');
+    expect(tapaCenefaCuadrada('BLANCOS').codigo).toBe('TAP33');
   });
 });
 

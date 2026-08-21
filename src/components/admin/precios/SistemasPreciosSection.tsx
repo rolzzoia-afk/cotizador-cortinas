@@ -13,7 +13,11 @@
 import { Layers, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { formatCLP } from '@/lib/formatters';
-import type { SistemaPrecio } from '@/modules/cotizador/reglasPrecios';
+import {
+  FAMILIAS_CON_RECETA,
+  SISTEMA_CATEGORIA_B_KEY,
+  type SistemaPrecio,
+} from '@/modules/cotizador/reglasPrecios';
 import { nombreFamilia } from './nombresFamilias';
 
 type Props = {
@@ -97,6 +101,18 @@ function Sistema({
 }) {
   const num = (campo: (typeof CAMPOS)[number]['campo']) => (v: string) =>
     onChange({ ...sistema, [campo]: Number(v) });
+  const esCategoriaB = clave === SISTEMA_CATEGORIA_B_KEY;
+  // Tela de referencia por familia: las 12 de siempre más las que ya traiga guardadas.
+  const familiasTela = Array.from(
+    new Set([...FAMILIAS_CON_RECETA, ...Object.keys(sistema.telaPorFamilia ?? {})]),
+  );
+  const setTela = (fam: string, v: string) => {
+    const tela = { ...(sistema.telaPorFamilia ?? {}) };
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) tela[fam] = n;
+    else delete tela[fam];
+    onChange({ ...sistema, telaPorFamilia: tela });
+  };
 
   const quitarFamilia = (fam: string) =>
     onChange({ ...sistema, familias: sistema.familias.filter((f) => f !== fam) });
@@ -114,7 +130,16 @@ function Sistema({
       </div>
 
       {/* Qué familias cotiza. Se edita acá porque es lo que decide a qué
-          cortinas se les aplica todo lo demás. */}
+          cortinas se les aplica todo lo demás. La categoría B es la excepción:
+          no va por familia sino por la fila marcada B en la grilla. */}
+      {esCategoriaB ? (
+        <p className="mb-3 text-[0.7rem] text-muted-foreground">
+          <span className="font-medium">Se le aplica a:</span> las cortinas marcadas{' '}
+          <strong>Categoría B</strong> en la grilla de Fase 1 (por la gama de su tela o a mano),
+          sea cual sea su familia. La A y la B de una misma tela se cotizan en paneles aparte;
+          las recetas B se editan más abajo, en «Materiales por familia» (terminan en «· Categoría B»).
+        </p>
+      ) : (
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
         <span className="text-[0.7rem] text-muted-foreground">Se le aplica a:</span>
         {sistema.familias.map((fam) => (
@@ -154,6 +179,7 @@ function Sistema({
           </select>
         )}
       </div>
+      )}
 
       <div className="flex flex-wrap items-end gap-3">
         {CAMPOS.map(({ campo, label, step, ancho, moneda }) => (
@@ -182,6 +208,52 @@ function Sistema({
           </li>
         ))}
       </ul>
+
+      {esCategoriaB && (
+        <div className="mt-3 space-y-3 border-t pt-3">
+          <label className="block text-xs">
+            <span className="mb-1 block text-muted-foreground">DCT % que se propone al marcar B</span>
+            <Input
+              type="number"
+              step="1"
+              min="0"
+              max="100"
+              value={String(Math.round((sistema.descuentoDefault ?? 0) * 10000) / 100)}
+              onChange={(e) =>
+                onChange({
+                  ...sistema,
+                  descuentoDefault: Math.max(0, Math.min(1, Number(e.target.value) / 100)),
+                })
+              }
+              className="h-8 w-24 text-right text-xs"
+            />
+            <span className="mt-0.5 block text-[0.65rem] text-muted-foreground">
+              La copia B del Excel trae 30 % en todas sus telas. Se aplica al crear la fila o al
+              cambiarla de categoría; en la fila se puede pisar a mano.
+            </span>
+          </label>
+          <div>
+            <p className="mb-1 text-xs text-muted-foreground">
+              Tela de referencia B — $ por metro, por familia (la celda «PRECIO REAL» del panel B).
+              Vacío = esa familia cobra la tela de la A.
+            </p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
+              {familiasTela.map((fam) => (
+                <label key={fam} className="flex items-center justify-between gap-2 text-[0.7rem]">
+                  <span className="truncate">{nombreFamilia(fam)}</span>
+                  <Input
+                    type="number"
+                    step="1"
+                    value={sistema.telaPorFamilia?.[fam] ?? ''}
+                    onChange={(e) => setTela(fam, e.target.value)}
+                    className="h-7 w-24 text-right text-xs"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {Object.keys(sistema.insumos).length > 0 && (
         <p className="mt-2 text-[0.7rem] text-muted-foreground">

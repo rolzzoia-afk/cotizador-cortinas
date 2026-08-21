@@ -41,7 +41,12 @@ import {
 import { llevaCenefaOvaladaImplicita } from '@/modules/cotizador/insumosCortina';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { esLineaB, lineaBPorPano } from '@/modules/cotizador/lineaB';
-import { kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
+import {
+  esKit45,
+  esKitInventarioMec,
+  kitTraeCadenaIncorporada,
+  numeroMecDeChip,
+} from '@/modules/descuentos/reglas-mecanismo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
@@ -102,6 +107,7 @@ import {
   codigoTuberiaDeChip,
   colorAccesoriosDePano,
   esChipDual,
+  kitPorTuboElegido,
   ladoColorDesdeChipDual,
   mecanismoParaPano,
   modeloBase38PorColor,
@@ -113,6 +119,7 @@ import {
   tuberiaCorregidaPorMecanismo,
   tuberiaParaPano,
 } from '@/modules/descuentos/chips';
+import { tuboPorReglaEs45 } from '@/modules/descuentos/reglas-tuberia';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { InformeVisita } from '@/components/cotizador/visita/InformeVisita';
 import type { VisitaTerreno } from '@/modules/ots/types';
@@ -309,9 +316,12 @@ export function CotizadorFase2() {
     // que lo decide el primero (igual que el color de referencia).
     const lineasB = lineaBPorPano(v as Parameters<typeof lineaBPorPano>[0], catalogo);
     const lineaBRef = lineasB[0] ?? false;
+    // 45 mm pedido a mano en algún paño (tubo E39 / kit 45 elegido en Fase 2):
+    // mantiene la ventana en 45 aunque el interruptor de la OT esté apagado.
+    const tubo45ManualRef = (v.panos || []).some((p) => !!p.tubo45Manual);
     const modeloEf = esDualV
       ? modelo
-      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos, lineaBRef);
+      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos, lineaBRef, tubo45ManualRef, reglas.tuberia);
     return {
       ...v,
       modelo: modeloEf,
@@ -444,7 +454,12 @@ export function CotizadorFase2() {
     if (!ventanaForm || panoEnEdicion?.dual) return null;
     const anchoM = parseFloat(String(panoEnEdicion?.ancho ?? 0)) || 0;
     const color = colorAccesoriosDePano(panoEnEdicion || {}, ventanaForm.color);
-    return reglaAnchoAplicable(ventanaForm.categoria, anchoM, color, usarE78, reglas.mecanismo);
+    // La banda también se abre cuando la regla de tubería ya asigna un Ø45 a
+    // este ancho (E66 descontinuado → E39): no hay tubo de 38 al que volver,
+    // así que se fija el kit/tubo igual que con el interruptor. El 45 pedido a
+    // mano NO fija los chips: desde ellos se vuelve a 38.
+    const abre45 = usarE78 || tuboPorReglaEs45(anchoM, ventanaForm.categoria, reglas.tuberia);
+    return reglaAnchoAplicable(ventanaForm.categoria, anchoM, color, abre45, reglas.mecanismo);
   }, [
     ventanaForm?.categoria,
     ventanaForm?.color,
@@ -458,6 +473,13 @@ export function CotizadorFase2() {
     reglas,
   ]);
   const mecFijoPorAncho = reglaFijaPorAncho?.mec ?? null;
+  // Nota bajo el mecanismo: la regla por ancho si aplica; si no, el 45 pedido a
+  // mano en esta cortina (que no restringe los chips: desde ellos se vuelve a 38).
+  const notaMecanismo =
+    reglaFijaPorAncho?.regla.nota ??
+    (panoEnEdicion?.tubo45Manual
+      ? 'Tubo de 45 mm elegido en esta cortina: kit de 45 mm por color (MEC 18 blanco · MEC 23 negro). Para volver a 38 mm elige el tubo E02/E66 o un kit de 38.'
+      : undefined);
 
   const opcionesMecVentana = useMemo(() => {
     if (!ventanaForm) return opcSel.mecanismoUI;
@@ -948,6 +970,19 @@ export function CotizadorFase2() {
       // Cambio de ancho → si cruza 3 m cambia el mecanismo (MEC 28 ↔ kit), y en
       // todo caso ajusta la tubería (E02/E66 y E47/E65).
       if (patch.ancho !== undefined) {
+        // Primero el modelo: al cruzar 2,2 m la regla de tubería pasa a Ø45 (o
+        // al bajar, vuelve a 38) y la fila de despiece tiene que seguirla para
+        // que el kit de abajo la vea. Sin esto, la cortina quedaba con la fila
+        // vieja hasta guardar y reabrir.
+        if (!esDualVentana && !nuevo.panos[idx].dual) {
+          const nmAncho = modeloPorAncho(
+            modelos, v.categoria || '', anchoIdx(), nuevo.modelo ?? null,
+            colorAccesoriosDePano(nuevo.panos[idx], v.color),
+            usarE78, reglas.mecanismo, reglas.tipos, lineaBDe(nuevo, idx),
+            !!nuevo.panos[idx].tubo45Manual, reglas.tuberia,
+          );
+          if (nmAncho && nmAncho !== nuevo.modelo) nuevo = { ...nuevo, modelo: nmAncho };
+        }
         const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas, lineaBDe(nuevo, idx));
         if (mec && mec !== nuevo.panos[idx].mecanismo) {
           setPano({ mecanismo: mec });
@@ -958,8 +993,43 @@ export function CotizadorFase2() {
         }
       }
 
+      // Cambio manual del TUBO → el kit sigue al diámetro (un Ø45 lleva el kit
+      // de 45 por color; un Ø38 devuelve el kit por color) y la cortina queda
+      // marcada como «45 pedido a mano»: eso es lo que la mantiene en 45 al
+      // guardar y reabrir aunque el interruptor de la OT esté apagado. Antes el
+      // E39 elegido acá quedaba con un kit de 38 que no calza en ese tubo.
+      if (typeof patch.tuberia === 'string' && patch.tuberia && !nuevo.panos[idx].dual) {
+        const lineaB = lineaBDe(nuevo, idx);
+        const r = kitPorTuboElegido(
+          nuevo.panos[idx], v.color, v.categoria, patch.tuberia, opcSel.mecanismoResolucion, reglas, lineaB,
+        );
+        if (r) {
+          const cambiaKit = !!r.mecanismo && r.mecanismo !== nuevo.panos[idx].mecanismo;
+          setPano({ tubo45Manual: r.tubo45Manual, ...(cambiaKit ? { mecanismo: r.mecanismo! } : {}) });
+          if (cambiaKit) {
+            // La cascada cruza el modelo a la fila del kit y conserva el tubo
+            // elegido (ya calza con el diámetro).
+            nuevo = aplicarCascadaMecanismo(nuevo, idx, r.mecanismo!);
+          } else {
+            // El kit no cambia (ovalada/dúo, o ya era el correcto): cruzar el
+            // modelo a la fila del diámetro pedido para que el despiece lo vea ya.
+            const nm = modeloPorAncho(
+              modelos, v.categoria || '', anchoIdx(), nuevo.modelo ?? null,
+              colorAccesoriosDePano(nuevo.panos[idx], v.color),
+              usarE78, reglas.mecanismo, reglas.tipos, lineaB, r.tubo45Manual, reglas.tuberia,
+            );
+            if (nm && nm !== nuevo.modelo) nuevo = { ...nuevo, modelo: nm };
+          }
+        }
+      }
+
       // Cambio manual del chip de MECANISMO → modelo + tubería (y lado/color si dual).
       if (typeof patch.mecanismo === 'string' && patch.mecanismo) {
+        // Un kit de 45 elegido a mano marca la cortina como «45 pedido a mano»
+        // (igual que elegir el tubo E39); un kit de 38 la desmarca.
+        const nMec = numeroMecDeChip(patch.mecanismo);
+        if (esKit45(nMec)) setPano({ tubo45Manual: true });
+        else if (nMec != null && esKitInventarioMec(nMec, reglas.mecanismo)) setPano({ tubo45Manual: false });
         if (esChipDual(patch.mecanismo)) {
           const lc = ladoColorDesdeChipDual(patch.mecanismo);
           // En una ventana dual el kit es único → espeja el chip a todos los paños.
@@ -1517,7 +1587,7 @@ export function CotizadorFase2() {
                 pesos={pesos}
                 opcionesMecanismo={opcionesMecVentana}
                 opcionesTuberia={opcionesTubVentana}
-                notaMecanismo={reglaFijaPorAncho?.regla.nota}
+                notaMecanismo={notaMecanismo}
                 lineaB={esLineaB(
                   ventanaForm.panos[panoActivo] ?? null,
                   ventanaForm.codInt,
@@ -1749,7 +1819,7 @@ export function CotizadorFase2() {
                   pesos={pesos}
                   opcionesMecanismo={opcionesMecVentana}
                   opcionesTuberia={opcionesTubVentana}
-                  mecanismoFijoNota={reglaFijaPorAncho?.regla.nota}
+                  mecanismoFijoNota={notaMecanismo}
                   lineaB={esLineaB(ventanaForm.panos[panoActivo] ?? null, ventanaForm.codInt, catalogo, ventanaForm.categoria, reglas.mecanismo, reglas.tipos)}
                   ocultarMecanismo={!categoriaRequiereMecanismo(ventanaForm.categoria)}
                   categoria={ventanaForm.categoria}

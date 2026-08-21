@@ -5,8 +5,12 @@ import {
   GRUPOS_INSUMO,
   REGLAS_PRECIOS_DEFAULT,
   RECETAS_DEFAULT,
+  SISTEMA_CATEGORIA_B_KEY,
   claveReceta,
+  claveRecetaB,
   conValoresMaximos,
+  sistemaCategoriaB,
+  sistemaDeFila,
   grupoDelInsumo,
   insumosParaFamilia,
   lamasPorPasada,
@@ -507,5 +511,73 @@ describe('validación de sistemas y verticales', () => {
 
   it('las reglas de fábrica no tienen errores ni avisos de sistema', () => {
     expect(validarReglasPrecios(REGLAS_PRECIOS_DEFAULT).errores).toEqual([]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// CATEGORÍA B — sistema con reglas propias que se elige POR FILA (no por
+// familia). Números de la copia B del Excel (COTJS-10452-1, CARLOS, 2026-08-21).
+// ─────────────────────────────────────────────────────────────────────
+describe('sistema categoría B', () => {
+  const b = sistemaCategoriaB(REGLAS_PRECIOS_DEFAULT.sistemas)!;
+
+  it('trae los números de la copia B: MO 15.000, traslado 45.000, tela tecleada, 30 %', () => {
+    expect(b.manoObra).toBe(15000);
+    expect(b.traslado).toBe(45000);
+    expect(b.instalacionEmbebida).toBe(17500);
+    expect(b.margenInsumo).toBe(0.65);
+    expect(b.extraAltoM).toBe(0.25);
+    expect(b.telaPorFamilia?.SCREEN_P).toBe(22500);
+    expect(b.telaPorFamilia?.BLACKOUT_D).toBe(29231);
+    expect(b.descuentoDefault).toBe(0.3);
+    // Su hoja Insumos: tubo estándar y kit LZ90 con precio propio.
+    expect(b.insumos['E 02-1']?.valorMaximo).toBeCloseTo(2206.458, 2);
+    expect(b.insumos['MEC 05']?.valorMaximo).toBe(1963.5);
+    expect(b.insumos['MEC 18']?.valorMaximo).toBeCloseTo(5000, 0);
+  });
+
+  it('se elige por fila: B manda salvo que la familia ya tenga sistema (beeblack)', () => {
+    const sistemas = REGLAS_PRECIOS_DEFAULT.sistemas;
+    expect(sistemaDeFila('BLACKOUT_D', true, sistemas)?.nombre).toBe('Categoría B');
+    expect(sistemaDeFila('BLACKOUT_D', false, sistemas)).toBeUndefined();
+    expect(sistemaDeFila('BEE_BK', true, sistemas)?.nombre).toBe('Beeblack');
+  });
+
+  it('las recetas B existen para las 12 roller/dúo y las verticales caen a la de siempre', () => {
+    for (const fam of ['BLACKOUT_P', 'BLACKOUT_D', 'BLACKOUT_S', 'SCREEN_P', 'SCREEN_D', 'SCREEN_S', 'DUOBK_P', 'DUOBK_D', 'DUOBK_S', 'DUOPOLI_P', 'DUOPOLI_D', 'DUOPOLI_S']) {
+      expect(claveRecetaB(fam, false), fam).toBe(`${fam}|B`);
+      expect(RECETAS_DEFAULT[`${fam}|B`].some((l) => l.insumo === 'E 02-1'), fam).toBe(true);
+      expect(RECETAS_DEFAULT[`${fam}|B`].some((l) => l.insumo === 'E 02'), fam).toBe(false);
+    }
+    expect(claveRecetaB('BLACKOUT_V_P', true)).toBe(claveReceta('BLACKOUT_V_P', true));
+  });
+
+  it('el guardado conserva la tela por familia y el descuento (antes se perdían al rearmar)', () => {
+    const guardado = {
+      sistemas: {
+        [SISTEMA_CATEGORIA_B_KEY]: {
+          nombre: 'Categoría B',
+          familias: [],
+          manoObra: 16000,
+          telaPorFamilia: { SCREEN_P: 21000, BLACKOUT_D: 0, ' ': 5 },
+          descuentoDefault: 0.25,
+        },
+      },
+    };
+    const r = normalizarReglasPrecios(guardado);
+    const s = sistemaCategoriaB(r.sistemas)!;
+    expect(s.manoObra).toBe(16000);
+    expect(s.traslado).toBe(45000); // hereda lo que no vino
+    expect(s.telaPorFamilia).toEqual({ SCREEN_P: 21000 }); // 0 y claves vacías se descartan
+    expect(s.descuentoDefault).toBe(0.25);
+    // Sin los campos, se heredan los de fábrica.
+    const sinExtras = normalizarReglasPrecios({ sistemas: { [SISTEMA_CATEGORIA_B_KEY]: { manoObra: 1 } } });
+    expect(sistemaCategoriaB(sinExtras.sistemas)?.telaPorFamilia?.BLACKOUT_D).toBe(29231);
+    expect(sistemaCategoriaB(sinExtras.sistemas)?.descuentoDefault).toBe(0.3);
+  });
+
+  it('sin familias no es un aviso para la B (se aplica por fila)', () => {
+    const { avisos } = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT);
+    expect(avisos.some((a) => a.includes('Categoría B') && a.includes('familia'))).toBe(false);
   });
 });

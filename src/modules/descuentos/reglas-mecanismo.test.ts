@@ -8,6 +8,7 @@ import {
   mecEsFijoPorCategoria,
   mecPorAncho,
   mecPorCategoriaYColor,
+  normalizarColorAccesorio,
   numeroMecPorColor,
   reglaAnchoAplicable,
   reglaCategoriaAplicable,
@@ -21,6 +22,28 @@ describe('REGLAS_MECANISMO — colorAMec', () => {
     expect(numeroMecPorColor('GRIS')).toBe(34);
     expect(numeroMecPorColor('NEG')).toBe(32);
     expect(numeroMecPorColor('NEGRO')).toBe(32);
+  });
+
+  it('plurales y femeninos tecleados en Fase 1 valen como el color (2026-08-21)', () => {
+    // «NEGROS» en la columna COLOR ACCESORIOS dejaba el kit en blanco: no
+    // calzaba con ninguna regla y caía al default.
+    expect(normalizarColorAccesorio('NEGROS')).toBe('NEGRO');
+    expect(normalizarColorAccesorio(' blancas ')).toBe('BLANCO');
+    expect(normalizarColorAccesorio('Grises')).toBe('GRIS');
+    expect(normalizarColorAccesorio('CAFES')).toBe('CAFÉ');
+    // Las formas de fábrica no se tocan (las tablas nombran corta y larga).
+    expect(normalizarColorAccesorio('NEG')).toBe('NEG');
+    expect(normalizarColorAccesorio('NEGRO')).toBe('NEGRO');
+    // Un color dado de alta en Admin pasa tal cual.
+    expect(normalizarColorAccesorio('DORADO')).toBe('DORADO');
+
+    expect(numeroMecPorColor('NEGROS')).toBe(32);
+    expect(numeroMecPorColor('BLANCOS')).toBe(33);
+    expect(numeroMecPorColor('BLANCAS')).toBe(33);
+    expect(numeroMecPorColor('GRISES')).toBe(34);
+    // Y las reglas por color también: la banda 2,2–3,0 y su guarda.
+    expect(mecPorAncho('ROL', 2.5, 'NEGROS', true)).toBe(23);
+    expect(colorConBandaAncho('ROL', 'BLANCOS')).toBe(true);
   });
 });
 

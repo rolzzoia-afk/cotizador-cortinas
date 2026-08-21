@@ -8,6 +8,7 @@ import {
   chipTuberiaDeModelo,
   codigoTuberiaDeChip,
   esChipDual,
+  kitPorTuboElegido,
   ladoColorDesdeChipDual,
   mecanismoParaPano,
   modeloDesdeChipMecanismo,
@@ -26,6 +27,9 @@ import {
   OPCIONES_TUBERIA,
 } from '@/modules/cotizador/fase2';
 import type { ModeloDespiece } from './tipos';
+import { REGLAS_MECANISMO } from './reglas-mecanismo';
+import { REGLAS_TUBERIA, tuboPorReglaEs45, type ReglasTuberia } from './reglas-tuberia';
+import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from './reglasSeleccion';
 
 const m = (mecanismo: string, diametro = 38): ModeloDespiece => ({
   sistema: 'ROLLER_SIMPLE', tipo_rol: 'ROL_SIMPLE', mecanismo,
@@ -111,6 +115,16 @@ describe('mecanismoParaPano — el kit sigue al color de accesorios', () => {
         { mecanismo: SIMPLE_BCO }, 'NEG', null, OPCIONES_MECANISMO_RESOLUCION, 'ROL', 2.5, true,
       ),
     ).toContain('[MEC 23]');
+  });
+
+  it('«NEGROS» / «BLANCAS» tecleados en Fase 1 cuentan como el color (2026-08-21)', () => {
+    // La vendedora escribe el color en plural en la grilla y la cortina salía
+    // con el kit blanco por defecto: ninguna regla reconocía «NEGROS».
+    expect(kit({}, 'NEGROS')).toContain('[MEC 32]');
+    expect(kit({ mecanismo: SIMPLE_BCO }, 'negros')).toContain('[MEC 32]');
+    expect(kit({ mecanismo: REFORZADO_BCO }, 'NEGRAS')).toContain('[MEC 40]');
+    expect(kit({}, 'BLANCAS')).toBe(SIMPLE_BCO);
+    expect(kit({}, 'GRISES')).toContain('[MEC 34]');
   });
 });
 
@@ -909,5 +923,173 @@ describe('mecanismos duales', () => {
   it('modeloDesdeChipMecanismo encuentra el modelo ROLLER_DUAL cero-padded', () => {
     const dual = m('MEC_01_DUAL_DERECHO_BLANCO');
     expect(modeloDesdeChipMecanismo([dual], 'DUAL DERECHO BLANCO [MEC 01]')?.mecanismo).toBe('MEC_01_DUAL_DERECHO_BLANCO');
+  });
+});
+
+describe('el kit sigue al tubo: E39 (Ø45) elegido a mano con el interruptor de la OT apagado (OT 3195, 2026-08-21)', () => {
+  const E39 = 'E39 - TUBO .43 - ESP 1.2 (TUBO .45)';
+  const E02 = 'E02-TUBO 1.2 / Ø 38 mm';
+  const E65 = 'E65 - TUBO 63 mm';
+  const SIMPLE_BCO = 'KIT SIMPLE BLANCO 38MM [MEC 33]';
+  const K45_BCO = '0,45mm BCO [MEC 18]';
+  const rol38 = m('MEC_07_ROLLER_BLANCO', 38);
+  const rol45b = m('MEC_18_045_DECORELLI_BLANCO', 45);
+  const rol45n = m('MEC_23_045_ROLZZO_NEGRO', 45);
+  const modelosRol = [rol38, rol45b, rol45n];
+  const OPC = OPCIONES_MECANISMO_RESOLUCION;
+
+  describe('kitPorTuboElegido — lo que cambia al tocar el chip del tubo', () => {
+    it('ROL + E39: kit de 45 por color y la cortina queda marcada «45 a mano»', () => {
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'ROL', E39, OPC)).toEqual({
+        mecanismo: K45_BCO, tubo45Manual: true,
+      });
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'NEG', 'ROL', E39, OPC)?.mecanismo).toContain('[MEC 23]');
+      // Gris/café: no hay kit 45 de ese color → al negro (como el DARK 45).
+      expect(kitPorTuboElegido({ mecanismo: 'KIT SIMPLE GRIS 38MM [MEC 34]' }, 'GRS', 'ROL', E39, OPC)?.mecanismo).toContain('[MEC 23]');
+      // Un 45 ya elegido en gris se respeta.
+      expect(kitPorTuboElegido({ mecanismo: K45_BCO }, 'GRS', 'ROL', E39, OPC)).toEqual({ mecanismo: null, tubo45Manual: true });
+    });
+    it('ROL + tubo de 38: desmarca y baja un kit de 45 al kit por color', () => {
+      expect(kitPorTuboElegido({ mecanismo: K45_BCO }, 'BCO', 'ROL', E02, OPC)).toEqual({
+        mecanismo: SIMPLE_BCO, tubo45Manual: false,
+      });
+      // Un kit de 38 ya puesto no se toca.
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'ROL', E02, OPC)).toEqual({ mecanismo: null, tubo45Manual: false });
+    });
+    it('ROL + tubo de 63: kit de 63 (MEC 28)', () => {
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'ROL', E65, OPC)?.mecanismo).toContain('[MEC 28]');
+    });
+    it('ovalada / dúo: el kit ovalada sirve en 38 y 45, solo queda la marca', () => {
+      expect(kitPorTuboElegido({ mecanismo: 'KIT OVALADA BLANCO [MEC 39]' }, 'BCO', 'DUO_MANUAL_38mm', E39, OPC)).toEqual({ mecanismo: null, tubo45Manual: true });
+      expect(kitPorTuboElegido({ mecanismo: 'KIT OVALADA BLANCO [MEC 39]' }, 'BCO', 'ROL_MANUAL_CENEFA_OVALADA_38mm', E02, OPC)).toEqual({ mecanismo: null, tubo45Manual: false });
+    });
+    it('no opina: VELCRO/vacío, dual, categoría B, oscuridad, pletina, vertical', () => {
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'ROL', 'VELCRO', OPC)).toBeNull();
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'ROL', '', OPC)).toBeNull();
+      expect(kitPorTuboElegido({ mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', dual: true }, 'BCO', 'ROL', E39, OPC)).toBeNull();
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'ROL', E39, OPC, undefined, true)).toBeNull();
+      expect(kitPorTuboElegido({ mecanismo: SIMPLE_BCO }, 'BCO', 'DARK_38mm', E39, OPC)).toBeNull();
+      expect(kitPorTuboElegido({ mecanismo: '' }, 'BCO', 'VERTICAL', E39, OPC)).toBeNull();
+    });
+  });
+
+  describe('mecanismoParaPano — con el modelo en 45 mm el roller simple lleva el kit de 45', () => {
+    it('modelo 45 + kit de 38 guardado → kit de 45 por color (interruptor apagado)', () => {
+      expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'BCO', rol45b, OPC, 'ROL', 2.47, false)).toContain('[MEC 18]');
+      expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'NEG', rol45n, OPC, 'ROL', 2.47, false)).toContain('[MEC 23]');
+      // Y también fuera de la banda: manda el diámetro, no el ancho.
+      expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'BCO', rol45b, OPC, 'ROL', 1.8, false)).toContain('[MEC 18]');
+    });
+    it('modelo 45 + blanco/negro: el kit 45 se recolorea con el color, como la banda', () => {
+      expect(mecanismoParaPano({ mecanismo: K45_BCO }, 'NEG', rol45n, OPC, 'ROL', 2.47, false)).toContain('[MEC 23]');
+    });
+    it('modelo 45 + gris: un kit 45 elegido se respeta; sin kit 45 cae al negro', () => {
+      expect(mecanismoParaPano({ mecanismo: K45_BCO }, 'GRS', rol45b, OPC, 'ROL', 2.47, false)).toBe(K45_BCO);
+      expect(mecanismoParaPano({ mecanismo: 'KIT SIMPLE GRIS 38MM [MEC 34]' }, 'GRS', rol45b, OPC, 'ROL', 2.47, false)).toContain('[MEC 23]');
+    });
+    it('la marca «45 a mano» abre la banda del paño aunque el interruptor esté apagado', () => {
+      expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO, tubo45Manual: true }, 'BCO', null, OPC, 'ROL', 2.47, false)).toContain('[MEC 18]');
+    });
+    it('sin marca ni modelo 45, nada cambia: kit por color 38 (regresión)', () => {
+      expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'BCO', rol38, OPC, 'ROL', 2.47, false)).toBe(SIMPLE_BCO);
+    });
+  });
+
+  describe('modeloPorAncho — la marca «45 a mano» sube y mantiene la fila de 45', () => {
+    it('ROL 2,47 m blanco, interruptor apagado + marca → fila DECORELLI 45', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'BCO', false, undefined, undefined, false, true)).toBe(rol45b);
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'NEG', false, undefined, undefined, false, true)).toBe(rol45n);
+    });
+    it('con marca, la fila 45 NO se revierte al apagar el interruptor ni al salir de la banda', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol45b, 'BCO', false, undefined, undefined, false, true)).toBe(rol45b);
+      expect(modeloPorAncho(modelosRol, 'ROL', 1.8, rol45b, 'BCO', false, undefined, undefined, false, true)).toBe(rol45b);
+    });
+    it('sin marca sigue igual que siempre: apagar el interruptor revierte la banda automática', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol45b, 'BCO', false)).toBe(rol38);
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'BCO', false)).toBe(rol38);
+    });
+  });
+
+  describe('resincronizarChipsPanos — al re-guardar desde Fase 1 el 45 a mano se conserva', () => {
+    it('modelo 45 (ya recalculado con la marca) + E39 + MEC 33 guardado → MEC 18 + E39', () => {
+      const panos: Array<Record<string, unknown>> = [
+        { ancho: 2.47, alto: 2.0, mecanismo: SIMPLE_BCO, tuberia: E39, tubo45Manual: true },
+      ];
+      resincronizarChipsPanos(panos, 'BCO', rol45b, 'ROL', OPC, OPCIONES_TUBERIA, false);
+      expect(panos[0].mecanismo).toContain('[MEC 18]');
+      expect(codigoTuberiaDeChip(panos[0].tuberia as string)).toBe('E39');
+    });
+  });
+});
+
+describe('E66 descontinuado → la regla de tubería asigna E39 (Ø45) sobre 2,2 m: fila y kit siguen al tubo (OT 3195, 2026-08-21)', () => {
+  // La configuración VIVA desde el SQL 20260820 (la fábrica sigue con E66).
+  const reglasTub39: ReglasTuberia = {
+    ...REGLAS_TUBERIA,
+    reglaE02E66: { ...REGLAS_TUBERIA.reglaE02E66, codigoDesde: 'E39' },
+  };
+  const reglasSel39: ReglasSeleccion = { ...REGLAS_SELECCION_DEFAULT, tuberia: reglasTub39 };
+  const SIMPLE_BCO = 'KIT SIMPLE BLANCO 38MM [MEC 33]';
+  const rol38 = m('MEC_07_ROLLER_BLANCO', 38);
+  const rol45b = m('MEC_18_045_DECORELLI_BLANCO', 45);
+  const rol45n = m('MEC_23_045_ROLZZO_NEGRO', 45);
+  const rol63 = m('MEC_28_63mm_BLANCO_DER_IZQ', 63);
+  const modelosRol = [rol38, rol45b, rol45n, rol63];
+  const OPC = OPCIONES_MECANISMO_RESOLUCION;
+  const RM = REGLAS_MECANISMO;
+
+  it('tuboPorReglaEs45: con la regla viva, sobre 2,2 m es Ø45; con la de fábrica (E66) nunca', () => {
+    expect(tuboPorReglaEs45(2.47, 'ROL', reglasTub39)).toBe(true);
+    expect(tuboPorReglaEs45(2.2, 'ROL', reglasTub39)).toBe(false);
+    expect(tuboPorReglaEs45(2.47, 'ROL', REGLAS_TUBERIA)).toBe(false);
+    // La categoría con tubo propio (oscuranti → E47) no entra.
+    expect(tuboPorReglaEs45(2.47, 'OSCURANTI_63mm', reglasTub39)).toBe(false);
+  });
+
+  it('modeloPorAncho: ROL 2,47 m, interruptor apagado → fila de 45 por color (blanco DECORELLI, negro ROLZZO)', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'BCO', false, RM, undefined, false, false, reglasTub39)).toBe(rol45b);
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'NEG', false, RM, undefined, false, false, reglasTub39)).toBe(rol45n);
+    // Gris no tiene fila en la banda: igual es de 45 → la fila del kit 45 negro.
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'GRS', false, RM, undefined, false, false, reglasTub39)).toBe(rol45n);
+  });
+
+  it('modeloPorAncho: bajo 2,2 m sigue en 38 y sobre 3 m manda el 63 (estructural)', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.0, rol38, 'BCO', false, RM, undefined, false, false, reglasTub39)).toBe(rol38);
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.0, rol45b, 'BCO', false, RM, undefined, false, false, reglasTub39)).toBe(rol38);
+    expect(modeloPorAncho(modelosRol, 'ROL', 3.2, rol38, 'BCO', false, RM, undefined, false, false, reglasTub39)).toBe(rol63);
+  });
+
+  it('modeloPorAncho: con la regla de fábrica (E66) nada cambia', () => {
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'BCO', false, RM, undefined, false, false, REGLAS_TUBERIA)).toBe(rol38);
+    expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol45b, 'BCO', false, RM, undefined, false, false, REGLAS_TUBERIA)).toBe(rol38);
+  });
+
+  it('mecanismoParaPano: ROL 2,47 m con kit de 38 guardado → kit de 45 por color, aunque la fila siga en 38', () => {
+    expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'BCO', rol38, OPC, 'ROL', 2.47, false, reglasSel39)).toContain('[MEC 18]');
+    expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'NEG', rol38, OPC, 'ROL', 2.47, false, reglasSel39)).toContain('[MEC 23]');
+    expect(mecanismoParaPano({ mecanismo: 'KIT SIMPLE GRIS 38MM [MEC 34]' }, 'GRS', rol38, OPC, 'ROL', 2.47, false, reglasSel39)).toContain('[MEC 23]');
+    // Bajo 2,2 m: kit de 38 por color, como siempre.
+    expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'BCO', rol38, OPC, 'ROL', 2.0, false, reglasSel39)).toBe(SIMPLE_BCO);
+    // Con la regla de fábrica (E66) el kit de 38 se queda.
+    expect(mecanismoParaPano({ mecanismo: SIMPLE_BCO }, 'BCO', rol38, OPC, 'ROL', 2.47, false)).toBe(SIMPLE_BCO);
+  });
+
+  it('la ovalada y el dúo conservan su kit ovalada (sirve en 38 y 45); solo cruza la fila', () => {
+    expect(mecanismoParaPano({ mecanismo: '' }, 'BCO', null, OPC, 'ROL_MANUAL_CENEFA_OVALADA_38mm', 2.47, false, reglasSel39)).toContain('[MEC 39]');
+    expect(mecanismoParaPano({ mecanismo: '' }, 'NEG', null, OPC, 'DUO_MANUAL_38mm', 2.47, false, reglasSel39)).toContain('[MEC 38]');
+  });
+
+  it('modeloVentanaPorAncho: una cortina NUEVA de 2,47 m nace en 45 (Fase 1 al guardar/importar)', () => {
+    expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.47, false, RM, undefined, false, reglasTub39)).toBe(rol45b);
+    expect(modeloVentanaPorAncho(modelosRol, 'ROL', 'BCO', 2.0, false, RM, undefined, false, reglasTub39)).toBe(rol38);
+  });
+
+  it('resincronizarChipsPanos: la OT guardada con E39 + MEC 33 (fila 38) se corrige al re-guardar', () => {
+    const panos: Array<Record<string, unknown>> = [
+      { ancho: 2.47, alto: 2.0, mecanismo: SIMPLE_BCO, tuberia: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45)' },
+    ];
+    resincronizarChipsPanos(panos, 'BCO', rol38, 'ROL', OPC, OPCIONES_TUBERIA, false, reglasSel39);
+    expect(panos[0].mecanismo).toContain('[MEC 18]');
+    expect(codigoTuberiaDeChip(panos[0].tuberia as string)).toBe('E39');
   });
 });

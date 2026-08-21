@@ -126,6 +126,8 @@ describe('codigoPerfilVertical', () => {
   it('negro → VER61; blanco/gris/otro → VER62 (no hay vertical gris)', () => {
     expect(codigoPerfilVertical('NEGRO')).toBe('VER61');
     expect(codigoPerfilVertical('NEG')).toBe('VER61');
+    // Plural tecleado en Fase 1: sigue siendo negro.
+    expect(codigoPerfilVertical('NEGROS')).toBe('VER61');
     expect(codigoPerfilVertical('BLANCO')).toBe('VER62');
     expect(codigoPerfilVertical('BCO')).toBe('VER62');
     expect(codigoPerfilVertical('GRIS')).toBe('VER62');
