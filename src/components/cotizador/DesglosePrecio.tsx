@@ -40,6 +40,11 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
     <div className="rounded-md border">
       <header className="flex flex-wrap items-baseline gap-2 border-b bg-muted/40 px-3 py-2">
         <span className="text-xs font-semibold">{f.cod}</span>
+        {f.lineaB && (
+          <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.65rem] text-amber-700">
+            Categoría B: panel aparte, con sus herrajes y su tela de referencia
+          </span>
+        )}
         <span className="text-xs text-muted-foreground">
           {f.piezas} {f.piezas === 1 ? 'cortina' : 'cortinas'} · {m2(f.m2Total)} m²
         </span>
@@ -50,7 +55,9 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
         )}
         {!f.exacto && (
           <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[0.65rem]">
-            sin receta propia: se usa la de respaldo
+            {f.lineaB
+              ? 'receta B transcrita del Excel, sin cotización real que la valide todavía'
+              : 'sin receta propia: se usa la de respaldo'}
           </span>
         )}
       </header>
@@ -61,7 +68,15 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
             Tela — {mts(f.metrosTela)} m × {formatCLP(f.precioMl)}
           </h4>
           <p className="mb-1.5 text-[0.7rem] text-muted-foreground">
-            Precio por metro tomado de <span className="font-mono">{f.arquetipoCodInt || '—'}</span>.
+            {f.arquetipoCodInt ? (
+              <>
+                Precio por metro tomado de <span className="font-mono">{f.arquetipoCodInt}</span>.
+              </>
+            ) : f.lineaB ? (
+              <>Precio por metro tecleado para la categoría B de esta familia (Admin → Precios → Sistemas).</>
+            ) : (
+              <>Precio por metro: el máximo de la familia.</>
+            )}
           </p>
           {f.panos.length > 0 ? (
             <table className="w-full text-[0.7rem]">

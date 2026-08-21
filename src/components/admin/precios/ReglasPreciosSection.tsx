@@ -28,6 +28,8 @@ import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   REGLAS_PRECIOS_DEFAULT,
+  SISTEMA_CATEGORIA_B_KEY,
+  SUFIJO_RECETA_B,
   sonReglasPreciosDefault,
   validarReglasPrecios,
   type ReglasPrecios,
@@ -281,7 +283,16 @@ export function ReglasPreciosSection() {
           margenInsumo={s.margenInsumo}
           usados={usados}
           recetas={draft.recetas}
-          sistema={{ clave, nombre: s.nombre, familias: s.familias }}
+          sistema={{
+            clave,
+            nombre: s.nombre,
+            // La categoría B no tiene familias: sus recetas son las `|B`, y ahí
+            // es donde el menú «usar en…» tiene que poder meter un insumo.
+            familias:
+              clave === SISTEMA_CATEGORIA_B_KEY
+                ? Object.keys(draft.recetas).filter((k) => k.endsWith(SUFIJO_RECETA_B))
+                : s.familias,
+          }}
           precioEnGeneral={(cod) => draft.insumos[cod]?.valorMaximo}
           onChange={(insumos) =>
             editar({ sistemas: { ...draft.sistemas, [clave]: { ...s, insumos } } })

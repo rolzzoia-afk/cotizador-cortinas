@@ -121,7 +121,7 @@ export function tapaCenefaCuadrada(
   colorTapa: string | null | undefined,
   colores?: readonly ColorAccesorio[],
 ): { codigo?: string; descripcion: string } {
-  const c = (colorTapa || '').trim().toUpperCase();
+  const c = normalizarColorAccesorio(colorTapa);
   const propio = insumoDeColor(colorTapa, 'tapaCuadrada', colores);
   if (propio) {
     return { codigo: propio, descripcion: `TAPA CENEFA CUADRADA ${nombreDeColor(colorTapa, colores)}` };
@@ -152,7 +152,7 @@ export function tapaPesoOscuridad(
   colorAcc: string | null | undefined,
   colores?: readonly ColorAccesorio[],
 ): { codigo?: string; descripcion: string; color: string } {
-  const c = (colorAcc || '').trim().toUpperCase();
+  const c = normalizarColorAccesorio(colorAcc);
   const propio = insumoDeColor(colorAcc, 'tapaOscuridad', colores);
   if (propio) {
     const nombre = nombreDeColor(colorAcc, colores);
@@ -916,10 +916,10 @@ export function codigoManillaPorColor(
 ): string {
   const propio = insumoDeColor(color, 'manilla', colores);
   if (propio) return propio;
-  const c = (color || '').toUpperCase().trim();
+  const c = normalizarColorAccesorio(color);
   if (c === 'NEG' || c === 'NEGRO') return 'HER47';
-  if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'HER48';
-  if (c === 'CAFÉ' || c === 'CAFE') return 'HER49';
+  if (c === 'BCO' || c === 'BLANCO') return 'HER48';
+  if (c === 'CAFÉ') return 'HER49';
   return '';
 }
 

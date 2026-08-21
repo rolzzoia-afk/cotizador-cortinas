@@ -23,6 +23,8 @@ import { useAnchoRollo, useCatalogoProductos } from '@/modules/cotizador/catalog
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
+import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
+import { gamaTelaEsB } from '@/modules/cotizador/lineaB';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { categoriasParaSelect } from '@/modules/descuentos/tiposCortina';
@@ -98,6 +100,14 @@ export function ProbadorCotizacionSection({
         // empaqueta con el PEOR caso. Sin categoría no aplica y devuelve
         // undefined, o sea el ancho nominal.
         anchoEmpaqueM: anchoEmpaquePeorCasoM(f.categoria, f.ancho, formulas, reglasSeleccion.tipos),
+        // Corte invertido automático (la cortina no entra en el rollo), la
+        // misma regla que la grilla de Fase 1; el probador no tiene el forzado.
+        invertida: debeInvertirPano(
+          f.ancho,
+          resolverAnchoRollo(f.codInt, anchoRollo, catalogo, parametros.anchoRolloDefaultM),
+        ),
+        // Categoría B por la gama de la tela (el probador no tiene el forzado).
+        lineaB: gamaTelaEsB(f.codInt, catalogo),
       })),
       catalogo,
       anchoRollo,
@@ -251,7 +261,7 @@ export function ProbadorCotizacionSection({
             <PanelFamilia
               key={f.cod}
               f={f}
-              piezas={nombresDePiezas(resultado.lineas.filter((l) => l.cod === f.cod))}
+              piezas={nombresDePiezas(resultado.lineas.filter((l) => l.clave === f.clave))}
             />
           ))}
 

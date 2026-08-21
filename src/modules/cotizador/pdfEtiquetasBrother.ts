@@ -16,6 +16,7 @@ import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow, PiezaEtiqueta } from './tela';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
+import { normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 import {
   anchoCenefaCuadradaDeclaradoCm,
   medidaCorteCenefaCuadrada,
@@ -147,7 +148,7 @@ export function sistemaEtiquetaEstructura(
  * misma regla que `insumosVerticalDePano` y el optimizador de estructura.
  */
 export function codigoPerfilVertical(colorAcc?: string): string {
-  const c = (colorAcc || '').toUpperCase().trim();
+  const c = normalizarColorAccesorio(colorAcc);
   return c === 'NEG' || c === 'NEGRO' ? 'VER61' : 'VER62';
 }
 

@@ -691,6 +691,180 @@ describe('motorFase0 — ancho de empaque (peor caso de montaje)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// Corte INVERTIDO (rotado 90° en el rollo): el alto real va a lo ancho del
+// rollo y el ancho de la cortina corre a lo largo. Antes el icono de la grilla
+// no llegaba al motor y no movía un peso (dueño, 2026-08-21).
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — corte invertido', () => {
+  it('empacarPanos: `largoRollo` manda sobre el alto real en los metros del tiro', () => {
+    // Una pieza de 3,00 × 2,25 rotada ocupa 2,25 del rollo y consume 3,00 m.
+    const piezas = [{ ancho: 3.0, altoReal: 2.25, anchoEmpaque: 2.25, largoRollo: 3.0 }];
+    const [pano] = empacarPanos(piezas, 2.98);
+    expect(pano.ancho).toBeCloseTo(2.25, 3);
+    expect(pano.alto).toBeCloseTo(3.0, 3);
+    expect(metrosTelaPorPanos(piezas, 2.98)).toBeCloseTo(3.0, 3);
+  });
+
+  it('dos piezas invertidas comparten tiro si sus altos caben a lo ancho del rollo', () => {
+    const piezas = [
+      { ancho: 3.0, altoReal: 1.45, anchoEmpaque: 1.45, largoRollo: 3.0 },
+      { ancho: 2.6, altoReal: 1.5, anchoEmpaque: 1.5, largoRollo: 2.6 },
+    ];
+    const panos = empacarPanos(piezas, 2.98);
+    expect(panos).toHaveLength(1);
+    expect(panos[0].alto).toBeCloseTo(3.0, 3); // el tiro lo manda la más larga
+  });
+
+  it('cotizarFase0: invertir cambia la tela cobrada, no los m² ni los materiales', () => {
+    // 3,00 × 2,00 en rollo de 2,98: derecha no entra (y hoy se cobraba un solo
+    // tiro de 2,25); rotada entra de sobra y gasta 3,00 m de rollo.
+    const fila = { codInt: 'BK 18', ancho: 3.0, alto: 2.0, cantidad: 1 };
+    const derecha = cotizarFase0([fila], CAT, AR);
+    const invertida = cotizarFase0([{ ...fila, invertida: true }], CAT, AR);
+    const fam = (r: typeof derecha) => r.familias.find((x) => x.cod === 'BLACKOUT_D')!;
+    expect(fam(derecha).metrosTela).toBeCloseTo(2.25, 3);
+    expect(fam(invertida).metrosTela).toBeCloseTo(3.0, 3);
+    expect(fam(invertida).panos[0].ancho).toBeCloseTo(2.25, 3);
+    // m² y materiales (tubo por suma de anchos, kit por cortina) son los mismos.
+    expect(fam(invertida).m2Total).toBeCloseTo(fam(derecha).m2Total, 6);
+    expect(fam(invertida).costoMateriales).toBeCloseTo(fam(derecha).costoMateriales, 6);
+    expect(invertida.lineas[0].m2).toBeCloseTo(derecha.lineas[0].m2, 6);
+    // Más tela → más VALOR M² → más VAL. UNIT.
+    expect(invertida.lineas[0].valorUnit).toBeGreaterThan(derecha.lineas[0].valorUnit);
+  });
+
+  it('la inversión no toca a la vertical (se cobra por lamas/pasadas)', () => {
+    const fila = { codInt: 'SC 34-V', ancho: 3.0, alto: 2.0, cantidad: 1 };
+    const a = cotizarFase0([fila], CAT, AR);
+    const b = cotizarFase0([{ ...fila, invertida: true }], CAT, AR);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+
+  it('sin `invertida` el resultado es idéntico al de siempre (regresión)', () => {
+    const filas = [
+      { codInt: 'SC 34', ancho: 1.124, alto: 1.3, cantidad: 1 },
+      { codInt: 'BK 18', ancho: 0.992, alto: 1.31, cantidad: 1 },
+    ];
+    const a = cotizarFase0(filas, CAT, AR);
+    const b = cotizarFase0(filas.map((f) => ({ ...f, invertida: false })), CAT, AR);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// CATEGORÍA B — el sistema con reglas propias de la gama económica. Golden:
+// COTJS-10452-1 (CARLOS, 2026-08-21), la copia B del Excel: tubo estándar
+// E 02-1, kit MEC 05 (LZ90) bajo 2,10 m y MEC 18 sobre 2,10, tela de
+// referencia TECLEADA por panel (screen 22.500, blackout delux 29.231), mano
+// de obra 15.000 y traslado 45.000. Los VAL. UNIT salen al peso.
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — categoría B (COTJS-10452-1, CARLOS)', () => {
+  const CAT_B: CatalogoProductos = {
+    ...CAT,
+    'SC 47': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: '', precio: 34272 },
+    // En la copia de Carlos BK 83 es BLACKOUT DELUX (precio propio 21.786, pero
+    // el panel teclea 29.231). En el catálogo vivo figura como BLACKOUT_P: ojo.
+    'BK 83': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'PREMIUM', descripcion: 'BEIGE TEXTURE - GAMA B', precio: 0, categoria: 'B' },
+  };
+  const AR_B: Record<string, number> = { ...AR, 'SC 47': 2.98, 'BK 83': 2.75 };
+  const filas = [
+    { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1, descuento: 0.3, lineaB: true },
+    { codInt: 'SC 47', ancho: 1.455, alto: 2.37, cantidad: 1, descuento: 0.3, lineaB: true },
+    { codInt: 'BK 83', ancho: 2.28, alto: 2.375, cantidad: 1, descuento: 0.3, lineaB: true },
+    { codInt: 'BK 83', ancho: 0.844, alto: 1.4, cantidad: 1, descuento: 0.3, lineaB: true },
+    { codInt: 'BK 83', ancho: 1.412, alto: 2.36, cantidad: 1, descuento: 0.3, lineaB: true },
+    { codInt: 'BK 83', ancho: 1.385, alto: 2.36, cantidad: 1, descuento: 0.3, lineaB: true },
+  ];
+  // Formato de Cotización, columna VAL. UNIT.
+  const EXCEL = [103540.996, 104136.436, 192129.053, 58132.983, 125029.479, 122973.321];
+  const r = cotizarFase0(filas, CAT_B, AR_B);
+  const fam = (clave: string) => r.familias.find((f) => f.clave === clave)!;
+
+  it('los paneles son los de la B: tela tecleada, metros y materiales al peso', () => {
+    const sc = fam('SCREEN_P|B');
+    const bk = fam('BLACKOUT_D|B');
+    expect(sc.lineaB).toBe(true);
+    expect(sc.precioMl).toBe(22500);
+    expect(sc.metrosTela).toBeCloseTo(2.62, 3);
+    expect(sc.costoMateriales).toBeCloseTo(38727.45, 0);
+    expect(sc.precioM2).toBeCloseTo(22726.7, 0);
+    expect(bk.precioMl).toBe(29231);
+    expect(bk.metrosTela).toBeCloseTo(7.845, 3);
+    expect(bk.costoMateriales).toBeCloseTo(93947.67, 0);
+    expect(bk.precioM2).toBeCloseTo(29177.79, 0);
+    // Kit por ancho: 3 LZ90 (MEC 05) y 1 del 0,45 (MEC 18); tubo estándar hasta
+    // 2,19 y Ø45 para la de 2,28.
+    const cant = (ins: string) => bk.materiales.find((m) => m.insumo === ins)?.cantidad;
+    expect(cant('MEC 05')).toBe(3);
+    expect(cant('MEC 18')).toBe(1);
+    expect(cant('E 02-1')).toBeCloseTo(3.641, 3);
+    expect(cant('E 05')).toBeCloseTo(2.28, 3);
+    expect(bk.manoObra).toBe(60000);
+    expect(bk.traslado).toBe(45000);
+  });
+
+  it('los 6 VAL. UNIT calzan con el Formato de Cotización', () => {
+    r.lineas.forEach((l, i) => expect(l.valorUnit).toBeCloseTo(EXCEL[i], 0));
+    expect(r.lineas.every((l) => l.lineaB && l.clave.endsWith('|B'))).toBe(true);
+  });
+
+  it('A y B de la misma tela son paneles distintos, y la A no se mueve', () => {
+    const sola = cotizarFase0([{ codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1 }], CAT_B, AR_B);
+    const mixta = cotizarFase0(
+      [
+        { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1 },
+        { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1, lineaB: true },
+      ],
+      CAT_B,
+      AR_B,
+    );
+    expect(mixta.familias.map((f) => f.clave).sort()).toEqual(['SCREEN_P', 'SCREEN_P|B']);
+    expect(mixta.lineas[0].valorUnit).toBeCloseTo(sola.lineas[0].valorUnit, 6);
+    expect(mixta.lineas[1].valorUnit).toBeLessThan(mixta.lineas[0].valorUnit);
+  });
+
+  it('un beeblack marcado B sigue siendo beeblack (no tiene categoría B)', () => {
+    const catBee: CatalogoProductos = {
+      ...CAT,
+      'BEE-BK03': { cod: 'BEE_BK', producto: 'BEEBLACK BLACKOUT', tipo: 'PREMIUM', descripcion: '', precio: 48500 },
+    };
+    const fila = { codInt: 'BEE-BK03', ancho: 1.5, alto: 1.7, cantidad: 1 };
+    const a = cotizarFase0([fila], catBee, { 'BEE-BK03': 2.98 });
+    const b = cotizarFase0([{ ...fila, lineaB: true }], catBee, { 'BEE-BK03': 2.98 });
+    expect(b.familias[0].clave).toBe('BEE_BK');
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+
+  it('una vertical con tela B se cotiza como siempre: la copia B no trae verticales', () => {
+    const fila = { codInt: 'SC 34-V', ancho: 2.0, alto: 2.0, cantidad: 1 };
+    const a = cotizarFase0([fila], CAT, AR);
+    const b = cotizarFase0([{ ...fila, lineaB: true }], CAT, AR);
+    expect(b.familias[0].clave).toBe('SCREEN_V_P');
+    expect(b.familias[0].lineaB).toBe(false);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+
+  it('sin el sistema categoriaB, marcar B no cambia nada', () => {
+    const sin: ReglasPrecios = {
+      ...REGLAS_PRECIOS_DEFAULT,
+      sistemas: { beeblack: REGLAS_PRECIOS_DEFAULT.sistemas.beeblack },
+    };
+    const a = cotizarFase0(filas.map((f) => ({ ...f, lineaB: false })), CAT_B, AR_B, [], PARAMETROS_DEFAULT, false, false, sin);
+    const b = cotizarFase0(filas, CAT_B, AR_B, [], PARAMETROS_DEFAULT, false, false, sin);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+
+  it('el kit de 2,10 m exactos no suma por ninguna línea (fiel al Excel, con nota)', () => {
+    const r210 = cotizarFase0([{ codInt: 'BK 83', ancho: 2.1, alto: 2, cantidad: 1, lineaB: true }], CAT_B, AR_B);
+    const mat = r210.familias[0].materiales;
+    expect(mat.find((m) => m.insumo === 'MEC 05')?.cantidad).toBe(0);
+    const m18 = mat.find((m) => m.insumo === 'MEC 18');
+    expect(m18?.cantidad).toBe(0);
+    expect(m18?.nota).toContain('2,10');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // BEEBLACK — sistema con reglas propias: margen 0,60, un metro entero de tela
 // extra, mano de obra 83.300, traslado 47.600 e instalación 41.650 embebida +
 // 35.000 en la fila de abajo. Sale de la copia beeblack del Excel, cuyo panel

@@ -586,10 +586,37 @@ export function kitTraeCadenaIncorporada(chipMecanismo: string | null | undefine
   return n !== null && KITS_CON_CADENA_INCORPORADA.has(n);
 }
 
+/**
+ * Plurales, femeninos y erratas que las vendedoras teclean en la columna COLOR
+ * ACCESORIOS de Fase 1 («NEGROS», «BLANCAS», «GRISE»). Nombran el mismo color,
+ * así que se pliegan al nombre de fábrica ANTES de cualquier comparación; sin
+ * esto «NEGROS» no calzaba con ninguna regla y el kit, la cadena, el peso y las
+ * tapas salían del color por defecto (blanco). Solo los cinco colores de
+ * fábrica: un color dado de alta en Admin pasa tal cual.
+ */
+const VARIANTES_COLOR_ACCESORIO: Readonly<Record<string, string>> = {
+  NEGROS: 'NEGRO',
+  NEGRA: 'NEGRO',
+  NEGRAS: 'NEGRO',
+  BLANCOS: 'BLANCO',
+  BLANCA: 'BLANCO',
+  BLANCAS: 'BLANCO',
+  GRISES: 'GRIS',
+  GRISE: 'GRIS',
+  CAFE: 'CAFÉ',
+  CAFES: 'CAFÉ',
+  CAFÉS: 'CAFÉ',
+};
+
+/**
+ * Color de accesorios listo para comparar: mayúsculas, sin espacios y con las
+ * variantes tecleadas plegadas a su nombre de fábrica (ver
+ * `VARIANTES_COLOR_ACCESORIO`). Las formas corta y larga («NEG»/«NEGRO») se
+ * conservan tal cual: las tablas de reglas nombran las dos.
+ */
 export function normalizarColorAccesorio(color: string | null | undefined): string {
   const c = (color || '').toUpperCase().trim();
-  if (c === 'GRISE') return 'GRIS';
-  return c;
+  return VARIANTES_COLOR_ACCESORIO[c] ?? c;
 }
 
 function normalizarCategoria(categoria: string): string {
@@ -693,6 +720,23 @@ export function esKitInventarioMec(
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
 ): boolean {
   return reglas.kitsInventario.includes(num);
+}
+
+/**
+ * Kits de 45 mm del roller simple: MEC 18 (DECORELLI blanco) y MEC 23 (ROLZZO
+ * negro). Son los ÚNICOS que calzan en un tubo Ø45 (E39/E05): un kit de 38 no
+ * entra en ese tubo. No existe kit 45 gris ni café: van al negro (decisión del
+ * usuario 2026-07-31 para el DARK 45, y la misma acá).
+ */
+export const MECS_KIT_45: readonly number[] = [18, 23];
+
+export function esKit45(num: number | null | undefined): boolean {
+  return num != null && MECS_KIT_45.includes(num);
+}
+
+/** Kit de 45 mm por color de accesorios: blanco → MEC 18, el resto → MEC 23. */
+export function mecKit45PorColor(color: string | null | undefined): number {
+  return normalizarColorAccesorio(color).startsWith('B') ? 18 : 23;
 }
 
 /**
@@ -876,6 +920,25 @@ export function colorConBandaAncho(
   return reglas.reglasAncho.some(
     (r) => c === r.categoria.toUpperCase() && r.mecPorColor?.[col] != null,
   );
+}
+
+/**
+ * La regla de banda de 45 mm de la categoría (la que pide el interruptor de la
+ * OT), si la tiene. Sirve para entrar a la banda por otro camino —el 45 pedido
+ * a mano en la cortina, o la regla de tubería que ya asigna un Ø45— y para
+ * el color sin fila en la regla (gris en el roller simple).
+ */
+export function reglaBanda45(
+  categoria: string,
+  reglas: ReglasMecanismo = REGLAS_MECANISMO,
+): ReglaMecAncho | null {
+  const c = normalizarCategoria(categoria);
+  return reglas.reglasAncho.find((r) => r.requiereTuboE78 && c === r.categoria.toUpperCase()) ?? null;
+}
+
+/** ¿El ancho cae dentro de la banda de la regla? (>mín estricto, ≤máx). */
+export function anchoEnBanda(anchoM: number, regla: ReglaMecAncho): boolean {
+  return anchoM > regla.anchoMinM && (regla.anchoMaxM == null || anchoM <= regla.anchoMaxM);
 }
 
 /**

@@ -11,15 +11,18 @@ import type { ModeloDespiece } from './tipos';
 import { categoriaEsDual, elegirModeloPorColor, modelosParaCategoria } from './tipos';
 import {
   REGLAS_MECANISMO,
+  anchoEnBanda,
   categoriaRequiereMecanismo,
   categoriaTieneReglaAncho,
   colorConBandaAncho,
   esCategoriaPletina,
   esCategoriaVertical,
+  esKit45,
   esKitInventarioMec,
   esKitLineaBValido,
   esMecLegacy,
   kitsLineaB,
+  mecKit45PorColor,
   mecLineaB,
   mecPorAncho,
   mecPorCategoriaYColor,
@@ -28,12 +31,20 @@ import {
   numeroMecDeChip,
   numeroMecPorColor,
   reglaAnchoAplicable,
+  reglaBanda45,
   reglaCategoriaAplicable,
   type ReglasMecanismo,
 } from './reglas-mecanismo';
 // Binding local (los del bloque `export { … } from` no quedan disponibles en el
 // cuerpo del módulo): resincronizarChipsPanos los usa.
-import { canonizarChipTuberia, tuberiaParaPano } from './reglas-tuberia';
+import {
+  canonizarChipTuberia,
+  codigoTuberiaDeChip,
+  diametroTuboPorCodigo,
+  tuberiaParaPano,
+  tuboPorReglaEs45,
+  type ReglasTuberia,
+} from './reglas-tuberia';
 import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from './reglasSeleccion';
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 // familiaOscuridad: para distinguir soft light con cenefa CUADRADA (kit simple,
@@ -186,7 +197,7 @@ export function colorAccesoriosDePano(
  * luego inventario por color, reemplazando legacy/vacío.
  */
 export function mecanismoParaPano(
-  p: Partial<{ mecanismo?: string; dual?: boolean; dualLado?: string; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string; cenefa?: string }>,
+  p: Partial<{ mecanismo?: string; dual?: boolean; dualLado?: string; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string; cenefa?: string; tubo45Manual?: boolean }>,
   ventanaColor: string | undefined,
   modelo: ModeloDespiece | null | undefined,
   opciones: readonly string[],
@@ -198,6 +209,13 @@ export function mecanismoParaPano(
 ): string {
   const rm = reglas.mecanismo;
   const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+  // La cortina es de 45 cuando lo pide el interruptor de la OT, cuando este
+  // paño lo pidió a mano (`Pano.tubo45Manual`) o cuando la REGLA DE TUBERÍA ya
+  // le asigna un tubo Ø45 a este ancho (desde 2026-08-20 la banda 38 mm >2,2 m
+  // nombra al E39, porque el E66 se descontinuó). En los tres casos el kit
+  // sigue al tubo: un kit de 38 no calza en un Ø45.
+  const tuboAutoEs45 = anchoM != null && tuboPorReglaEs45(anchoM, categoria, reglas.tuberia);
+  const banda45 = usarTuboE78 || !!p.tubo45Manual || tuboAutoEs45;
 
   // Pletina (velcro): mecanismo fijo VELCRO. No lleva kit de mecanismo por color
   // ni por categoría (y en el inventario NO se emite insumo — ver bom/pdfInventario).
@@ -252,7 +270,7 @@ export function mecanismoParaPano(
   // (kit ovalada 38) que la banda debe poder pisar. MEC 28 es "legacy" en el
   // catálogo, así que forzarlo acá evita que la sync lo revierta al kit color.
   const mecAncho =
-    anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc, usarTuboE78, rm) : null;
+    anchoM != null ? mecPorAncho(categoria || '', anchoM, colorAcc, banda45, rm) : null;
   if (mecAncho != null) {
     const chipAncho = chipMecanismoPorNumero(mecAncho, opciones);
     if (chipAncho) {
@@ -288,10 +306,7 @@ export function mecanismoParaPano(
     reglas.tipos,
   );
   if (famDiam === 'DARK_45') {
-    const chip45 = chipMecanismoPorNumero(
-      normalizarColorAccesorio(colorAcc).startsWith('B') ? 18 : 23,
-      opciones,
-    );
+    const chip45 = chipMecanismoPorNumero(mecKit45PorColor(colorAcc), opciones);
     if (chip45) {
       const trimmed = ((p.mecanismo as string) || '').trim();
       if (!trimmed) return chip45;
@@ -325,6 +340,25 @@ export function mecanismoParaPano(
       console.warn(
         `[reglas] el MEC ${mecCat} de la regla por categoría no tiene chip: se ignora la regla`,
       );
+    }
+  }
+
+  // El kit sigue al DIÁMETRO del tubo: con el modelo en 45 mm, o con la regla
+  // de tubería asignando un Ø45 a este ancho, el roller simple lleva el kit de
+  // 45 por color — un kit de 38 no calza en ese tubo. Antes solo lo hacía la
+  // banda con el interruptor de la OT; con él apagado, la cortina quedaba con
+  // E39 y kit de 38 (OT 3195, 2026-08-21). Solo donde el kit sale de la familia
+  // por color: la ovalada y el dúo usan su kit ovalada en 38 y 45 (regla de
+  // categoría, arriba) y la oscuridad tiene su propio 45 (DARK_45, arriba).
+  // Un 45 elegido a mano en un color SIN regla de banda (gris) se respeta, como
+  // siempre; en blanco/negro se recolorea como hace la banda.
+  if (!famCC && (modelo?.diametro_tubo_mm === 45 || tuboAutoEs45)) {
+    const chip45 = chipMecanismoPorNumero(mecKit45PorColor(colorAcc), opciones);
+    if (chip45) {
+      const trimmed = ((p.mecanismo as string) || '').trim();
+      const nStored = numeroMecDeChip(trimmed);
+      if (esKit45(nStored) && !colorConBandaAncho(categoria || '', colorAcc, rm)) return trimmed;
+      return chip45;
     }
   }
 
@@ -586,6 +620,11 @@ export function modeloPorAncho(
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
   tipos?: readonly TipoCortina[],
   lineaB = false,
+  /** Algún paño de la ventana pidió 45 mm a mano (`Pano.tubo45Manual`). */
+  tubo45Manual = false,
+  /** Reglas de tubería vigentes: si a este ancho le asignan un tubo Ø45 (E66
+   *  descontinuado → E39), la cortina es de 45 aunque nadie lo pida. */
+  reglasTuberia?: ReglasTuberia,
 ): ModeloDespiece | null {
   // LÍNEA B: no participa de las bandas por ancho (su tubo es E01 siempre). Su
   // fila se elige por el número del kit B; el ancho máximo lo acota la fila.
@@ -606,11 +645,20 @@ export function modeloPorAncho(
   // Oscuridad 38 mm (soft light y DARK) tiene su propia banda E78 (swap 38↔45 mm
   // por sistema/tipo_rol, no por mecanismo): va antes de la maquinaria roller
   // basada en número MEC. DARK usa el mismo mecanismo que soft light (E78 por OT).
+  // La cortina es de 45 cuando lo pide el interruptor de la OT, cuando un paño
+  // lo pidió a mano (`Pano.tubo45Manual`) o cuando la REGLA DE TUBERÍA le
+  // asigna un tubo Ø45 a este ancho (desde 2026-08-20 la banda 38 mm >2,2 m
+  // nombra al E39 porque el E66 se descontinuó): un kit de 38 no calza en ese
+  // tubo, así que la fila de despiece sigue al tubo. Si el E66 vuelve desde
+  // Admin, todo vuelve solo a 38. El 45 a mano no aplica a la oscuridad (su 45
+  // es una categoría propia que se elige en Fase 1); el de la regla, sí.
+  const tuboAutoEs45 = !!reglasTuberia && tuboPorReglaEs45(anchoM, categoria, reglasTuberia);
   const catTrim = categoriaEfectiva(categoria, tipos).trim();
   if (catTrim === 'SOFT_LIGHT_38mm' || catTrim === 'DARK_38mm') {
-    return modeloOscuridad38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78, reglas);
+    return modeloOscuridad38PorBandaE78(modelos, anchoM, modeloActual, usarTuboE78 || tuboAutoEs45, reglas);
   }
-  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, usarTuboE78, reglas);
+  const abre45 = usarTuboE78 || tubo45Manual || tuboAutoEs45;
+  const aplicada = reglaAnchoAplicable(categoria || '', anchoM, color, abre45, reglas);
   if (aplicada) {
     // La fila destino puede vivir en otra categoría (dúo 38 → filas MANUAL_45)
     // y el número MEC puede repetirse por color (MEC 18 ovalada blanco Y gris):
@@ -629,15 +677,91 @@ export function modeloPorAncho(
     }
     return modeloActual;
   }
-  // Sin regla de ancho vigente: si el modelo quedó forzado por ancho (63 mm, o
-  // 45 mm en un color CON regla de banda), volver al 38 mm por color.
+  // El color no tiene fila en la regla de banda (gris en el roller simple) pero
+  // el tubo ES de Ø45 —lo pidió el paño a mano o lo asigna la regla de
+  // tubería—: igual hay que fabricar en 45 → la fila del kit 45 por color
+  // (MEC 23: no hay kit 45 gris, va al negro como en el DARK 45). Solo si esa
+  // fila existe en el catálogo; si no (ovalada roller gris, sin fila 45), se
+  // queda en 38. Con el interruptor de la OT a secas el gris sigue MANUAL
+  // (decisión de 2026-07-15): ahí el tubo de 38 todavía es una opción.
+  if (tubo45Manual || tuboAutoEs45) {
+    const banda = reglaBanda45(categoria || '', reglas);
+    if (banda && anchoEnBanda(anchoM, banda)) {
+      const cands = modelosParaCategoria(modelos, banda.categoriaModelo ?? categoria, tipos);
+      const delMec = cands.filter((c) => mecanismoCoincideNumero(c.mecanismo, mecKit45PorColor(color)));
+      const up = delMec.length > 0 ? elegirModeloPorColor(delMec, color) : null;
+      if (up) return up;
+    }
+  }
+  // Sin banda vigente: si el modelo quedó forzado por ancho (63 mm, o 45 mm en
+  // un color CON regla de banda), volver al 38 mm por color. El 45 pedido a
+  // mano o asignado por la regla de tubería no fue la banda de la OT: se
+  // respeta, igual que el gris.
   if (categoriaTieneReglaAncho(categoria, reglas) && modeloActual) {
     const forzado =
       modeloActual.diametro_tubo_mm === 63 ||
-      (modeloActual.diametro_tubo_mm === 45 && colorConBandaAncho(categoria, color, reglas));
+      (modeloActual.diametro_tubo_mm === 45 &&
+        !abre45 &&
+        colorConBandaAncho(categoria, color, reglas));
     if (forzado) return modeloBase38PorColor(modelos, categoria, color, tipos) ?? modeloActual;
   }
   return modeloActual;
+}
+
+/**
+ * Lo que debe cambiar en el paño cuando el vendedor elige un TUBO a mano en
+ * Fase 2: el kit sigue al diámetro del tubo, y la cortina queda marcada (o
+ * desmarcada) como «45 pedido a mano» (`Pano.tubo45Manual`).
+ *
+ *  · Ø45 (E39/E05): en el roller simple el kit pasa al de 45 por color (un kit
+ *    de 38 no calza en ese tubo); en la ovalada y el dúo el kit ovalada sirve en
+ *    los dos diámetros y no cambia — solo queda la marca, que cruza el modelo a
+ *    la fila de 45.
+ *  · Ø38 (E02/E66): se apaga la marca y un kit de 45 vuelve al kit por color.
+ *  · Ø63 (E47/E65): el kit es el de 63 mm (MEC 28), como la regla de >3 m.
+ *
+ * `null` cuando el tubo no dice nada del kit: VELCRO/vacío, dual (kit propio),
+ * pletina, vertical, categoría B (su banda es otra) y oscuridad (su 45 es una
+ * categoría propia en Fase 1). `mecanismo` null = conservar el actual.
+ */
+export function kitPorTuboElegido(
+  p: Partial<{ mecanismo?: string; dual?: boolean; colorMecanismo?: string; colorPeso?: string; colorCadena?: string; color?: string; cenefa?: string }>,
+  ventanaColor: string | undefined,
+  categoria: string | undefined,
+  chipTuberia: string,
+  opciones: readonly string[],
+  reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  lineaB = false,
+): { mecanismo: string | null; tubo45Manual: boolean } | null {
+  if (p.dual || lineaB) return null;
+  if (esCategoriaPletina(categoria, reglas.tipos) || esCategoriaVertical(categoria)) return null;
+  if (familiaOscuridad(categoria, p.cenefa, reglas.tipos)) return null;
+  const diam = diametroTuboPorCodigo(codigoTuberiaDeChip(chipTuberia), reglas.tuberia);
+  if (diam == null) return null;
+
+  const rm = reglas.mecanismo;
+  const colorAcc = colorAccesoriosDePano(p, ventanaColor);
+  const actual = ((p.mecanismo as string) || '').trim();
+  const nActual = numeroMecDeChip(actual);
+  // Kit propio de la categoría (ovalada / dúo): sirve en 38 y 45, no se toca.
+  const kitDeCategoria = mecPorCategoriaYColor(categoria || '', colorAcc, rm) != null;
+
+  if (diam === 45) {
+    if (kitDeCategoria) return { mecanismo: null, tubo45Manual: true };
+    const chip45 = chipMecanismoPorNumero(mecKit45PorColor(colorAcc), opciones);
+    // Un 45 ya elegido en un color sin regla de banda (gris) se respeta.
+    const conservar = esKit45(nActual) && !colorConBandaAncho(categoria || '', colorAcc, rm);
+    return { mecanismo: conservar ? null : chip45, tubo45Manual: true };
+  }
+  if (diam === 63) {
+    return { mecanismo: chipMecanismoPorNumero(28, opciones), tubo45Manual: false };
+  }
+  // Ø38: baja el kit de 45 (o el de 63) al kit por color; el resto se conserva.
+  const bajar = esKit45(nActual) || nActual === 28;
+  return {
+    mecanismo: bajar && !kitDeCategoria ? chipMecanismoPorColor(colorAcc, opciones, rm) : null,
+    tubo45Manual: false,
+  };
 }
 
 /**
@@ -656,13 +780,17 @@ export function modeloVentanaPorAncho(
   reglas: ReglasMecanismo = REGLAS_MECANISMO,
   tipos?: readonly TipoCortina[],
   lineaB = false,
+  /** Reglas de tubería vigentes (ver `modeloPorAncho`). */
+  reglasTuberia?: ReglasTuberia,
 ): ModeloDespiece | null {
   // El filtro por línea impide que una cortina A caiga en una fila B (o al
   // revés) solo porque su mecanismo contiene el color buscado.
   const cands = modelosParaCategoria(modelos, categoria, tipos, lineaB);
   const base = elegirModeloPorColor(cands, color);
   if (categoriaEsDual(categoria, tipos)) return base;
-  return modeloPorAncho(modelos, categoria, anchoM, base, color, usarTuboE78, reglas, tipos, lineaB);
+  return modeloPorAncho(
+    modelos, categoria, anchoM, base, color, usarTuboE78, reglas, tipos, lineaB, false, reglasTuberia,
+  );
 }
 
 /**

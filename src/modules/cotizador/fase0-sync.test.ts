@@ -69,6 +69,17 @@ describe('fase0-sync', () => {
     expect(colorAccesorioCorto('GRIS')).toBe('GRS');
   });
 
+  it('acepta plurales y femeninos tecleados en Fase 1 («NEGROS», «blancas»)', () => {
+    // Con «NEGROS» los chips de color de Fase 2 quedaban sin marcar y el kit,
+    // la cadena y el peso salían blancos (2026-08-21).
+    expect(colorAccesorioCorto('NEGROS')).toBe('NEG');
+    expect(colorAccesorioCorto('negras')).toBe('NEG');
+    expect(colorAccesorioCorto('BLANCOS')).toBe('BCO');
+    expect(colorAccesorioCorto(' Blancas ')).toBe('BCO');
+    expect(colorAccesorioCorto('GRISES')).toBe('GRS');
+    expect(colorAccesorioCorto('CAFES')).toBe('CAFÉ');
+  });
+
   it('enriquecerPano solo rellena vacíos', () => {
     const ventana = {
       id: '1',

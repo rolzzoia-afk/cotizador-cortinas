@@ -7,6 +7,7 @@
 // Módulo puro: sin React/Supabase.
 // ─────────────────────────────────────────────────────────────────────
 import { insumoDeColor, type ColorAccesorio } from './coloresAccesorio';
+import { normalizarColorAccesorio } from './reglas-mecanismo';
 
 /** Código de inventario del peso inferior de oscuridad por color (normalizado). */
 const PESO_INF_OSCURIDAD_POR_COLOR: Record<string, string> = {
@@ -16,7 +17,9 @@ const PESO_INF_OSCURIDAD_POR_COLOR: Record<string, string> = {
 
 /** Normaliza abreviaturas/variantes de color al nombre completo en mayúsculas. */
 export function colorPesoNormalizado(color: string | undefined | null): string {
-  const c = (color || '').trim().toUpperCase().replace(/S$/, '');
+  // Plurales y femeninos («NEGROS», «BLANCAS») ya vienen plegados; la S final se
+  // sigue quitando para las abreviaturas que no están en esa tabla («NGOS»).
+  const c = normalizarColorAccesorio(color).replace(/S$/, '');
   if (!c) return '';
   if (c === 'BCO' || c === 'BLANCO' || c === 'BLANC') return 'BLANCO';
   if (c === 'NEG' || c === 'NEGRO' || c === 'NGO') return 'NEGRO';

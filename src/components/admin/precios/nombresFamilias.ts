@@ -3,6 +3,7 @@
 import {
   RECETA_DUO_GENERICO_KEY,
   RECETA_VERTICAL_KEY,
+  SUFIJO_RECETA_B,
 } from '@/modules/cotizador/reglasPrecios';
 
 export const NOMBRE_FAMILIA: Record<string, string> = {
@@ -34,4 +35,10 @@ export const NOMBRE_FAMILIA: Record<string, string> = {
 };
 
 /** El nombre legible, o la clave tal cual si es una familia agregada a mano. */
-export const nombreFamilia = (clave: string): string => NOMBRE_FAMILIA[clave] ?? clave;
+export const nombreFamilia = (clave: string): string => {
+  if (clave.endsWith(SUFIJO_RECETA_B)) {
+    const base = clave.slice(0, -SUFIJO_RECETA_B.length);
+    return `${NOMBRE_FAMILIA[base] ?? base} · Categoría B`;
+  }
+  return NOMBRE_FAMILIA[clave] ?? clave;
+};

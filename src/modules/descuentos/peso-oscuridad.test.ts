@@ -11,6 +11,8 @@ describe('peso-oscuridad', () => {
     expect(colorPesoNormalizado('blanco')).toBe('BLANCO');
     expect(colorPesoNormalizado('NEG')).toBe('NEGRO');
     expect(colorPesoNormalizado('Negro')).toBe('NEGRO');
+    expect(colorPesoNormalizado('NEGRAS')).toBe('NEGRO');
+    expect(colorPesoNormalizado('blancos')).toBe('BLANCO');
     expect(colorPesoNormalizado('')).toBe('');
   });
 

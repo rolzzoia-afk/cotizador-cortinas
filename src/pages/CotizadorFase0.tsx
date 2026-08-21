@@ -57,6 +57,7 @@ import {
   esCategoriaPletina,
   esCategoriaVertical,
   mecLineaB,
+  normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
 import { categoriaTieneLineaB, esLineaB, gamaTelaEsB } from '@/modules/cotizador/lineaB';
 import { familiaOscuridad } from '@/modules/descuentos/reglas-oscuridad';
@@ -65,7 +66,7 @@ import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
-import { codigosInstalacionAutomatica } from '@/modules/cotizador/reglasPrecios';
+import { codigosInstalacionAutomatica, sistemaCategoriaB } from '@/modules/cotizador/reglasPrecios';
 import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
 import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
@@ -534,6 +535,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           reglas.mecanismo,
           reglas.tipos,
           lineaBVentana,
+          reglas.tuberia,
         );
         // Dual: refinar el modelo al mecanismo dual exacto por lado+color (los 8
         // modelos comparten descuentos, así que es coherencia del snapshot).
@@ -577,6 +579,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // mm/E66 los colores con regla, respeta el 45 manual gris y las categorías
         // …_45mm por spec). El dual conserva su modelo (no lleva regla por ancho).
         const origModelo = orig?.modelo as ModeloDespiece | undefined;
+        // 45 mm pedido a mano en Fase 2 (tubo E39 / kit 45 en algún paño): se
+        // respeta al re-guardar aunque el interruptor de la OT esté apagado.
+        const tubo45Manual = (
+          (orig?.panos as Record<string, unknown>[] | undefined) ?? []
+        ).some((p) => !!p.tubo45Manual);
         const modeloFinal = esDual
           ? (origModelo ?? modeloCalc)
           : origModelo
@@ -590,6 +597,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 reglas.mecanismo,
                 reglas.tipos,
                 lineaBVentana,
+                tubo45Manual,
+                reglas.tuberia,
               )
             : modeloCalc;
         // Re-sincroniza los chips de mecanismo/tubería de los paños con el modelo
@@ -615,7 +624,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           producto: prod?.producto ?? orig?.producto ?? '',
           tipo: prod?.tipo ?? orig?.tipo ?? '',
           descripcion: prod?.descripcion ?? orig?.descripcion ?? '',
-          color: head.colorAcc || (orig?.color as string) || 'Blanco',
+          // Lo tecleado en la grilla («negros», «BLANCAS») se guarda con el
+          // nombre de fábrica: el Excel de órdenes, los PDFs y el optimizador
+          // comparan el texto tal cual y no pasan por los resolvers de chips.
+          color: normalizarColorAccesorio(head.colorAcc) || (orig?.color as string) || 'Blanco',
           alto: head.alto,
           precio: precio || (orig?.precio as number) || 0,
           cantidad: head.cantidad || 1,
@@ -805,6 +817,19 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // MÁS tela gasta (externo): antes se cotizaban todas como internas y la
       // diferencia se regalaba. Ver empaqueFase0.ts.
       anchoEmpaqueM: anchoEmpaquePeorCasoM(f.categoria, f.ancho, formulas, reglas.tipos),
+      // Corte invertido: lo MISMO que muestra el icono de la grilla (forzado, o
+      // auto cuando la cortina no entra en el rollo). Rotada, la pieza gasta su
+      // ancho a lo largo del rollo, así que cambia la tela que se cobra.
+      invertida:
+        f.invertida ??
+        debeInvertirPano(
+          f.ancho,
+          resolverAnchoRollo(f.codInt, anchoRollo, catalogo, parametros.anchoRolloDefaultM),
+        ),
+      // Categoría B: lo MISMO que muestra el distintivo A/B de la grilla (forzado
+      // o por la gama de la tela). La B se cotiza con su propio sistema de
+      // precios, en un panel aparte del de la A.
+      lineaB: f.lineaB ?? gamaTelaEsB(f.codInt, catalogo),
       // Para la fila de instalación: en Fase 3 una ventana puede venir partida
       // en varios paños (un dual son dos telas y UNA instalación). En Fase 1
       // las filas no tienen ventana todavía y se cuentan de a una.
@@ -833,8 +858,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion, reglasPrecios, formulas, reglas.tipos]);
 
   /** La familia que está mirando el desglose, si el diálogo está abierto. */
+  // Se busca por la CLAVE del panel (`cod` o `cod|B`): la A y la B de una misma
+  // tela son dos paneles y cada línea sabe en cuál se cotizó.
   const familiaDesglose = useMemo(
-    () => (desgloseCod ? resultado.familias.find((f) => f.cod === desgloseCod) ?? null : null),
+    () => (desgloseCod ? resultado.familias.find((f) => f.clave === desgloseCod) ?? null : null),
     [desgloseCod, resultado.familias],
   );
 
@@ -918,6 +945,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const dctDeCodigo = (ci: string | undefined): number =>
     Math.round((Number(catalogo[canonizarCodInt(ci)]?.descuento) || 0) * 10000) / 100;
 
+  // DCT% de una CORTINA según su categoría: la B propone el descuento del
+  // sistema categoría B (30 % en la copia B del Excel, editable en Admin →
+  // Precios → Sistemas); la A, el de su tela. Se aplica al crear la fila y al
+  // cambiarla de categoría; después el usuario lo puede pisar a mano.
+  const dctParaFila = (ci: string | undefined, lineaB: boolean): number => {
+    const dctoB = sistemaCategoriaB(reglasPrecios.sistemas)?.descuentoDefault;
+    return lineaB && typeof dctoB === 'number' ? Math.round(dctoB * 10000) / 100 : dctDeCodigo(ci);
+  };
+
   const agregarProducto = (codInt: string) => {
     const prod = catalogo[codInt];
     if (!prod) return;
@@ -925,8 +961,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       toast.info('La instalación se calcula sola (gratis desde 4 cortinas; % editable a región).');
       return;
     }
-    const descuento = dctDeCodigo(codInt);
     if (esCortinaTipo(prod.tipo)) {
+      const descuento = dctParaFila(codInt, gamaTelaEsB(codInt, catalogo));
       setFilas((prev) => {
         const last = prev[prev.length - 1];
         if (last && !last.codInt && last.ancho === 0 && last.alto === 0) {
@@ -935,6 +971,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         return [...prev, { ...nuevaFila(), codInt, descuento }];
       });
     } else {
+      const descuento = dctDeCodigo(codInt);
       setAdicionales((prev) => [...prev, { ...nuevoAdicional(), codInt, descuento }]);
     }
   };
@@ -944,11 +981,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // producto, el precio y el DCT% se resuelven aunque se teclee sin espacio.
     if ('codInt' in patch) patch = { ...patch, codInt: canonizarCodInt(patch.codInt) };
     // Al cambiar el COD_INT, autollenar el DCT% con el descuento del código
-    // (salvo que el patch ya traiga un descuento explícito).
-    let conDct =
-      'codInt' in patch && !('descuento' in patch)
-        ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
-        : patch;
+    // (salvo que el patch ya traiga un descuento explícito). Se resuelve más
+    // abajo, con la fila a la vista: el DCT depende de su categoría (A/B).
+    const autollenarDct = 'codInt' in patch && !('descuento' in patch);
+    let conDct: Partial<FilaUI> = patch;
     // Al pasar una fila a VERTICAL se limpia el sentido de caída: no aplica
     // (la vertical corre de lado, no se enrolla) y la celda pasa a mostrar "—".
     if ('categoria' in patch && esCategoriaVertical(patch.categoria)) {
@@ -980,7 +1016,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         return sub;
       };
       return prev.map((f) => {
-        if (f.id === id) return { ...f, ...conDct };
+        if (f.id === id) {
+          const dct = autollenarDct
+            ? {
+                descuento: dctParaFila(
+                  patch.codInt,
+                  (patch.lineaB ?? f.lineaB) ?? gamaTelaEsB(patch.codInt, catalogo),
+                ),
+              }
+            : {};
+          return { ...f, ...conDct, ...dct };
+        }
         if (espejo && f.vid === vid) return { ...f, ...soloVentana() };
         return f;
       });
@@ -1088,7 +1134,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           colorAcc: c.colorAcc,
           ancho: c.ancho,
           alto: c.alto,
-          descuento: dctDeCodigo(c.codInt),
+          descuento: dctParaFila(c.codInt, gamaTelaEsB(c.codInt, catalogo)),
         };
         // El beeblack DOBLE se empareja después, por ubicación.
         if (esBeeblack && norm(c.tipoSimpleDoble) === 'DOBLE') beeblackDoble.add(fila.id);
@@ -1709,7 +1755,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                           mecLineaB(f.categoria, f.colorAcc, reglas.mecanismo, reglas.tipos) == null;
                         return (
                           <button
-                            onClick={() => setFila(f.id, { lineaB: !bEfectiva })}
+                            onClick={() =>
+                              setFila(f.id, {
+                                lineaB: !bEfectiva,
+                                // Cambiar de categoría propone el DCT% de la nueva.
+                                descuento: dctParaFila(f.codInt, !bEfectiva),
+                              })
+                            }
                             title={
                               (bEfectiva
                                 ? 'Categoría B (gama económica: kit B, tubo E01). Clic para fabricarla en la categoría A.'
@@ -1780,7 +1832,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       {ln ? (
                         <button
                           type="button"
-                          onClick={() => setDesgloseCod(ln.cod)}
+                          onClick={() => setDesgloseCod(ln.clave)}
                           className="underline decoration-dotted underline-offset-2 hover:text-accent print:no-underline"
                           title="Ver cómo se armó este precio"
                         >
@@ -1841,7 +1893,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                           title={op.title}
                           onClick={() => {
                             const n = filas.filter((f) => f.codInt).length;
-                            setFilas((prev) => prev.map((f) => ({ ...f, lineaB: op.lineaB })));
+                            setFilas((prev) =>
+                              prev.map((f) => ({
+                                ...f,
+                                lineaB: op.lineaB,
+                                descuento: f.codInt
+                                  ? dctParaFila(f.codInt, op.lineaB ?? gamaTelaEsB(f.codInt, catalogo))
+                                  : f.descuento,
+                              })),
+                            );
                             toast.success(
                               op.lineaB === undefined
                                 ? `${n} ${n === 1 ? 'cortina vuelve' : 'cortinas vuelven'} a la categoría de su tela.`
@@ -2140,7 +2200,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 <PanelFamilia
                   f={familiaDesglose}
                   piezas={nombresDePiezas(
-                    resultado.lineas.filter((l) => l.cod === familiaDesglose.cod),
+                    resultado.lineas.filter((l) => l.clave === familiaDesglose.clave),
                   )}
                 />
               )}

@@ -12,7 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { COLORES_BUILTIN, colorPorCodigo } from '@/modules/descuentos/coloresAccesorio';
-import { categoriaCoincide } from '@/modules/descuentos/reglas-mecanismo';
+import { categoriaCoincide, normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 import {
   LARGO_DESCRIPCION,
   REGLAS_CADENA,
@@ -217,10 +217,12 @@ export function derivarLargoColor(
  *  elige el vendedor. Un color dado de alta en Admin devuelve su nombre, para
  *  buscar en el inventario la cadena de ese color si existe. */
 export function colorCadenaCorto(color: string | null | undefined): string {
-  const c = normalizar(color);
-  if (c === 'BCO' || c === 'BLANCO' || c === 'BLANCA') return 'BCO';
-  if (c === 'NEG' || c === 'NEGRO' || c === 'NEGRA') return 'NEG';
-  if (c === 'GRS' || c === 'GRI' || c === 'GRIS' || c === 'GRISE' || c === 'GRISES') return 'GRS';
+  // Plurales y femeninos tecleados en Fase 1 («NEGROS», «BLANCAS») ya vienen
+  // plegados por `normalizarColorAccesorio`.
+  const c = normalizarColorAccesorio(color);
+  if (c === 'BCO' || c === 'BLANCO') return 'BCO';
+  if (c === 'NEG' || c === 'NEGRO') return 'NEG';
+  if (c === 'GRS' || c === 'GRI' || c === 'GRIS') return 'GRS';
   return colorPorCodigo(c, COLORES_BUILTIN) ? '' : c;
 }
 
