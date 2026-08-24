@@ -1425,7 +1425,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // ninguna, la banda queda con el título pelado (nunca con el número de
         // la app, que no es lo que el cliente espera leer ahí).
         otBanda: otDetallada.trim(),
-        otCliente: otDetallada.trim() || otManual.trim() || numeroCotizacion || '',
+        // En la celda OT CLIENTE va el NÚMERO y nada más —el tecleado o el
+        // automático—; el detalle es cosa de la banda.
+        otCliente: numeroCotizacion || '',
         soloTelasB: catsTela.length === 1 && catsTela[0] === 'B',
         hayTelaB: catsTela.includes('B'),
         cliente: {
