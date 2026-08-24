@@ -25,6 +25,7 @@ import {
   VIZ,
   VIZ_W,
   type EstiloViz,
+  type PerfilesViz,
   type PiezaViz,
   type VarianteViz,
 } from '@/modules/cotizador/wizard/cortinaViz';
@@ -120,11 +121,28 @@ export const CortinaViz = memo(function CortinaViz({
   const tCen = estilo.cenefa === 'no' ? 0 : clamp01(p.cenefa);
   const tPerf = clamp01(p.perfiles);
 
+  // ── Oscuridad (DARK / SOFT LIGHT / OSCURANTI): el esqueleto del roller más
+  // guías laterales, zócalo y cajón. El OSCURANTI solo cambia el tubo (63 mm).
+  const esOscuridad = variante === 'oscuridad' || variante === 'oscuranti';
+  // Qué perfiles lleva (solo oscuridad). Sin dato: laterales sí, base no —
+  // el mismo default que impone la variante.
+  const perf: PerfilesViz = estilo.perfiles ?? {
+    izq: true,
+    der: true,
+    base: false,
+    sepIzq: false,
+    sepDer: false,
+    sepBase: false,
+  };
+
   // ── Estado del rollo ──
+  // Con zócalo, el peso aterriza sobre él, un poco antes que el roller (que
+  // baja hasta el marco); sin zócalo llega al alféizar como cualquier roller.
+  const caidaMaxE = esOscuridad && perf.base ? caidaMax - 14 : caidaMax;
   const colaAhora = cola * easeOut(clamp01(tTela * 1.35 - 0.25));
-  const caida = tDesp > 0 ? mezcla(colaAhora, caidaMax, easeInOut(tDesp)) : colaAhora;
-  const envuelto = tTela > 0 ? mezcla(0, caidaMax - cola, easeInOut(clamp01(tTela * 1.25))) : 0;
-  const enrollado = tDesp > 0 ? Math.max(0, caidaMax - caida) : envuelto;
+  const caida = tDesp > 0 ? mezcla(colaAhora, caidaMaxE, easeInOut(tDesp)) : colaAhora;
+  const envuelto = tTela > 0 ? mezcla(0, caidaMaxE - cola, easeInOut(clamp01(tTela * 1.25))) : 0;
+  const enrollado = tDesp > 0 ? Math.max(0, caidaMaxE - caida) : envuelto;
   // El OSCURANTI monta tubo de 63 mm: se dibuja más gordo que el resto.
   const trE = variante === 'oscuranti' ? tr + 9 : tr;
   const radio = tTela > 0.02 ? Math.max(radioRollo(enrollado), trE) : trE;
@@ -158,9 +176,21 @@ export const CortinaViz = memo(function CortinaViz({
   const lamaBot = gy1 + 6;
   const lamaWAhora = LAMA_W * mezcla(0.34, 1, easeInOut(tDesp));
 
-  // ── Oscuridad (DARK / SOFT LIGHT / OSCURANTI): el esqueleto del roller más
-  // guías laterales, zócalo y cajón. El OSCURANTI solo cambia el tubo (63 mm).
-  const esOscuridad = variante === 'oscuridad' || variante === 'oscuranti';
+  // ── Oscuridad: geometría de los perfiles (fotos del dueño, 2026-08-21) ──
+  // La guía es un perfil ANCHO y plano (≈ un 8 % del ancho) que nace bajo la
+  // cenefa, llega al piso y tapa el borde de la tela: la tela corre por dentro
+  // de su canal. El zócalo va ENTRE las guías, no por encima. Se dibujan solo
+  // los perfiles que la ficha lleva (el base es opcional).
+  const GUIA_W = 56;
+  const guiaTop = cy + 30;
+  const guiaBot = gy1 + 18;
+  const ZOC_H = 30;
+  const zocY = gy1 - 12;
+  const zocX0 = perf.izq ? x0 - 16 + GUIA_W : x0 - 16;
+  const zocX1 = perf.der ? x1 + 16 - GUIA_W : x1 + 16;
+  // El peso de la oscuridad es una barra más gorda (sus puntas corren por
+  // dentro de las guías) y de su propio color: solo blanco o negro.
+  const pesoH = esOscuridad ? 32 : 26;
 
   // ── Beeblack: acordeón que corre de lado dentro de su marco ──
   const esBee = variante === 'beeblack';
@@ -196,6 +226,7 @@ export const CortinaViz = memo(function CortinaViz({
   const flip = `translate(${r3((x0 + x1))},0) scale(-1,1)`;
 
   const herr = estilo.herrajesHex;
+  const peso = estilo.pesoHex;
   const patronTela = url('pTela');
 
   const defs = useMemo(
@@ -309,6 +340,45 @@ export const CortinaViz = memo(function CortinaViz({
         <stop offset="48%" stopColor={tono(herr, 0.1)} />
         <stop offset="74%" stopColor={tono(herr, -0.25)} />
         <stop offset="100%" stopColor={tono(herr, -0.5)} />
+      </linearGradient>
+      {/* El peso inferior lleva su propio color (en oscuridad, blanco o negro). */}
+      <linearGradient id={id('gPeso')} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={tono(peso, -0.35)} />
+        <stop offset="6%" stopColor={tono(peso, 0.28)} />
+        <stop offset="16%" stopColor={tono(peso, 0.45)} />
+        <stop offset="30%" stopColor={tono(peso, 0.05)} />
+        <stop offset="62%" stopColor={tono(peso, -0.15)} />
+        <stop offset="88%" stopColor={tono(peso, -0.35)} />
+        <stop offset="100%" stopColor={tono(peso, -0.5)} />
+      </linearGradient>
+      {/* Guías laterales de oscuridad: perfil plano, la luz entra por fuera. */}
+      {(['gGuiaIzq', 'gGuiaDer'] as const).map((n) => (
+        <linearGradient
+          key={n}
+          id={id(n)}
+          x1={n === 'gGuiaIzq' ? '0' : '1'}
+          y1="0"
+          x2={n === 'gGuiaIzq' ? '1' : '0'}
+          y2="0"
+        >
+          <stop offset="0%" stopColor={tono(herr, 0.3)} />
+          <stop offset="30%" stopColor={tono(herr, 0.05)} />
+          <stop offset="100%" stopColor={tono(herr, -0.3)} />
+        </linearGradient>
+      ))}
+      {/* Cenefa CUADRADA: cara plana, casi sin degradado — es una caja. */}
+      <linearGradient id={id('gCajon')} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={tono(herr, 0.1)} />
+        <stop offset="55%" stopColor={tono(herr, -0.04)} />
+        <stop offset="100%" stopColor={tono(herr, -0.26)} />
+      </linearGradient>
+      {/* Cenefa OVALADA: la cara redondeada — banda de luz arriba, sombra abajo. */}
+      <linearGradient id={id('gOval')} x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stopColor={tono(herr, -0.2)} />
+        <stop offset="16%" stopColor={tono(herr, 0.42)} />
+        <stop offset="38%" stopColor={tono(herr, 0.12)} />
+        <stop offset="72%" stopColor={tono(herr, -0.18)} />
+        <stop offset="100%" stopColor={tono(herr, -0.55)} />
       </linearGradient>
       <linearGradient id={id('gTelaH')} x1="0" y1="0" x2="1" y2="0">
         <stop offset="0%" stopColor="#000" stopOpacity={0.3} />
@@ -1004,23 +1074,24 @@ export const CortinaViz = memo(function CortinaViz({
       )}
 
       {conRollo && (
-      <Pieza pieza="peso" hit={{ x: x0 - 10, y: barraY - 34, w: VIZ_W + 20, h: 44 }}>
+      <Pieza pieza="peso" hit={{ x: x0 - 10, y: barraY - pesoH - 8, w: VIZ_W + 20, h: pesoH + 18 }}>
         {tPeso < 0.02 ? (
-          <Fantasma x={x0 - 2} y={barraY - 26} w={VIZ_W + 4} h={26} rx={3} />
+          <Fantasma x={x0 - 2} y={barraY - pesoH} w={VIZ_W + 4} h={pesoH} rx={3} />
         ) : (
           <g
             opacity={r3(clamp01(tPeso * 4))}
             transform={`translate(${r3(-70 * (1 - easeBack(tPeso)))},0)`}
           >
-            <rect x={x0 - 2} y={barraY - 26} width={VIZ_W + 4} height={26} rx={3} fill={url('gHerr')} />
-            <rect x={x0 - 2} y={barraY - 24} width={VIZ_W + 4} height={2} fill={tono(herr, 0.45)} opacity={0.4} />
+            <rect x={x0 - 2} y={barraY - pesoH} width={VIZ_W + 4} height={pesoH} rx={3} fill={url('gPeso')} />
+            <rect x={x0 - 2} y={barraY - pesoH + 2} width={VIZ_W + 4} height={2} fill={tono(peso, 0.45)} opacity={0.4} />
             <rect x={x0 - 2} y={barraY - 6} width={VIZ_W + 4} height={6} fill="#000" opacity={0.35} />
-            <rect x={x0 + VIZ_W / 2 - 62} y={barraY - 22} width={124} height={19} rx={4} fill={tono(herr, -0.55)} />
+            {/* La placa ROLZZO va hacia la derecha de la barra, como en las fotos. */}
+            <rect x={x1 - 158} y={barraY - pesoH / 2 - 8.5} width={90} height={17} rx={3} fill={tono(peso, -0.55)} />
             <text
-              x={x0 + VIZ_W / 2}
-              y={barraY - 8}
+              x={x1 - 113}
+              y={barraY - pesoH / 2 + 3.5}
               textAnchor="middle"
-              fill={tono(herr, 0.75)}
+              fill={tono(peso, 0.75)}
               opacity={0.85}
               style={{ font: '500 9px monospace', letterSpacing: '0.3em' }}
             >
@@ -1072,92 +1143,153 @@ export const CortinaViz = memo(function CortinaViz({
       )}
 
       {/* ── Oscuridad: guías laterales + zócalo (pieza «Perfiles y guías») ──
-          Las guías se atornillan al marco y la tela corre POR DENTRO; el zócalo
-          sella abajo. Son la seña de identidad del sistema, así que van sobre
-          la tela. */}
-      {esOscuridad && (
-        <>
-          <Pieza pieza="perfiles" hit={{ x: x0 - 26, y: cy + 20, w: 52, h: gy1 - cy - 6 }}>
-            {tPerf < 0.02 ? (
-              <Fantasma x={x0 - 12} y={cy + 28} w={26} h={gy1 - cy - 16} />
-            ) : (
+          Las guías se atornillan al marco y la tela corre POR DENTRO de su
+          canal (por eso tapan su borde); el zócalo sella abajo, entre las dos.
+          Son la seña de identidad del sistema, así que van sobre la tela y el
+          peso. Un perfil que la ficha no lleva no se dibuja (ni punteado): el
+          clic en su zona sigue llevando al paso, donde se activa. */}
+      {esOscuridad &&
+        (() => {
+          const guiaH = guiaBot - guiaTop;
+          const guia = (lado: 'izq' | 'der') => {
+            const izq = lado === 'izq';
+            const gx = izq ? x0 - 16 : x1 + 16 - GUIA_W;
+            const sep = izq ? perf.sepIzq : perf.sepDer;
+            return (
               <g
                 opacity={r3(clamp01(tPerf * 2.4))}
-                transform={`translate(${r3(-46 * (1 - easeBack(tPerf)))},0)`}
+                transform={`translate(${r3((izq ? -46 : 46) * (1 - easeBack(tPerf)))},0)`}
               >
-                <rect x={x0 - 12} y={cy + 28} width={26} height={gy1 - cy - 12} rx={3} fill={url('gHerrPlano')} />
-                <rect x={x0 - 12} y={cy + 28} width={26} height={2} fill={tono(herr, 0.5)} opacity={0.4} />
-                <rect x={x0 + 9} y={cy + 28} width={5} height={gy1 - cy - 12} fill="#000" opacity={0.24} />
+                {/* El separador: una lista pegada por fuera de la guía. */}
+                {sep && (
+                  <rect x={izq ? gx - 9 : gx + GUIA_W} y={guiaTop} width={9} height={guiaH} fill={tono(herr, -0.4)} />
+                )}
+                <rect x={gx} y={guiaTop} width={GUIA_W} height={guiaH} rx={2} fill={url(izq ? 'gGuiaIzq' : 'gGuiaDer')} />
+                {/* Filo de luz arriba y arista brillante por fuera. */}
+                <rect x={gx} y={guiaTop} width={GUIA_W} height={2} fill={tono(herr, 0.5)} opacity={0.45} />
+                <rect x={izq ? gx + 1 : gx + GUIA_W - 3} y={guiaTop} width={2} height={guiaH} fill={tono(herr, 0.55)} opacity={0.35} />
+                {/* El canal por donde corre la tela: la ranura oscura del borde interior. */}
+                <rect x={izq ? gx + GUIA_W - 8 : gx} y={guiaTop} width={8} height={guiaH} fill="#000" opacity={0.26} />
+                <rect x={izq ? gx + GUIA_W - 2 : gx} y={guiaTop} width={2} height={guiaH} fill="#000" opacity={0.32} />
               </g>
-            )}
-          </Pieza>
-          <Pieza pieza="perfiles" hit={{ x: x1 - 26, y: cy + 20, w: 52, h: gy1 - cy - 6 }}>
-            {tPerf < 0.02 ? (
-              <Fantasma x={x1 - 14} y={cy + 28} w={26} h={gy1 - cy - 16} />
-            ) : (
-              <g
-                opacity={r3(clamp01(tPerf * 2.4))}
-                transform={`translate(${r3(46 * (1 - easeBack(tPerf)))},0)`}
-              >
-                <rect x={x1 - 14} y={cy + 28} width={26} height={gy1 - cy - 12} rx={3} fill={url('gHerrPlano')} />
-                <rect x={x1 - 14} y={cy + 28} width={26} height={2} fill={tono(herr, 0.5)} opacity={0.4} />
-                <rect x={x1 - 14} y={cy + 28} width={5} height={gy1 - cy - 12} fill="#000" opacity={0.24} />
-              </g>
-            )}
-          </Pieza>
-          <Pieza pieza="perfiles" hit={{ x: x0 - 14, y: gy1 - 28, w: VIZ_W + 28, h: 48 }}>
-            {tPerf < 0.02 ? (
-              <Fantasma x={x0 - 10} y={gy1 - 18} w={VIZ_W + 20} h={30} rx={4} />
-            ) : (
-              <g
-                opacity={r3(clamp01(tPerf * 2.4))}
-                transform={`translate(0,${r3(64 * (1 - easeBack(tPerf)))})`}
-              >
-                <rect x={x0 - 10} y={gy1 - 18} width={VIZ_W + 20} height={30} rx={4} fill={url('gHerr')} />
-                <rect x={x0 - 10} y={gy1 - 16} width={VIZ_W + 20} height={2.5} fill={tono(herr, 0.45)} opacity={0.4} />
-                <rect x={x0 - 10} y={gy1 + 6} width={VIZ_W + 20} height={6} fill="#000" opacity={0.3} />
-              </g>
-            )}
-          </Pieza>
-        </>
-      )}
+            );
+          };
+          const hitGuia = (lado: 'izq' | 'der') => ({
+            x: lado === 'izq' ? x0 - 32 : x1 - GUIA_W,
+            y: guiaTop - 8,
+            w: GUIA_W + 16,
+            h: guiaH + 16,
+          });
+          const zocW = zocX1 - zocX0;
+          return (
+            <>
+              <Pieza pieza="perfiles" hit={hitGuia('izq')}>
+                {perf.izq &&
+                  (tPerf < 0.02 ? (
+                    <Fantasma x={x0 - 16} y={guiaTop} w={GUIA_W} h={guiaH} rx={3} />
+                  ) : (
+                    guia('izq')
+                  ))}
+              </Pieza>
+              <Pieza pieza="perfiles" hit={hitGuia('der')}>
+                {perf.der &&
+                  (tPerf < 0.02 ? (
+                    <Fantasma x={x1 + 16 - GUIA_W} y={guiaTop} w={GUIA_W} h={guiaH} rx={3} />
+                  ) : (
+                    guia('der')
+                  ))}
+              </Pieza>
+              <Pieza pieza="perfiles" hit={{ x: zocX0 - 6, y: zocY - 10, w: zocW + 12, h: ZOC_H + 24 }}>
+                {perf.base &&
+                  (tPerf < 0.02 ? (
+                    <Fantasma x={zocX0} y={zocY} w={zocW} h={ZOC_H} rx={3} />
+                  ) : (
+                    <g
+                      opacity={r3(clamp01(tPerf * 2.4))}
+                      transform={`translate(0,${r3(64 * (1 - easeBack(tPerf)))})`}
+                    >
+                      {perf.sepBase && (
+                        <rect x={zocX0} y={zocY + ZOC_H} width={zocW} height={8} fill={tono(herr, -0.4)} />
+                      )}
+                      <rect x={zocX0} y={zocY} width={zocW} height={ZOC_H} rx={3} fill={url('gHerr')} />
+                      <rect x={zocX0} y={zocY + 2} width={zocW} height={2.5} fill={tono(herr, 0.45)} opacity={0.4} />
+                      <rect x={zocX0} y={zocY + ZOC_H - 6} width={zocW} height={6} fill="#000" opacity={0.3} />
+                    </g>
+                  ))}
+              </Pieza>
+            </>
+          );
+        })()}
 
-      {/* ── Cenefa ── */}
-      {estilo.cenefa !== 'no' && (
-        <Pieza pieza="cenefa" hit={{ x: x0 - 30, y: cy - RMAX - 30, w: VIZ_W + 60, h: RMAX * 2 + 60 }}>
-          {tCen < 0.02 ? (
-            <Fantasma x={x0 - 18} y={cy - RMAX - 18} w={VIZ_W + 36} h={RMAX * 2 + 38} rx={10} />
-          ) : (
-            (() => {
-              const cy0 = cy - RMAX - 18;
-              const ch = RMAX * 2 + 38;
-              const dy = -110 * (1 - easeBack(tCen));
-              const redonda = estilo.cenefa === 'ovalada';
-              const d = redonda
-                ? `M${x0 - 18} ${cy0 + 8} Q${x0 - 18} ${cy0} ${x0 - 10} ${cy0} H${x1 + 10} Q${x1 + 18} ${cy0} ${x1 + 18} ${cy0 + 8} V${cy0 + ch - 10} Q${x1 + 18} ${cy0 + ch} ${x1 + 6} ${cy0 + ch} H${x0 - 6} Q${x0 - 18} ${cy0 + ch} ${x0 - 18} ${cy0 + ch - 10} Z`
-                : `M${x0 - 18} ${cy0} H${x1 + 18} V${cy0 + ch} H${x0 - 18} Z`;
-              return (
-                <g opacity={r3(clamp01(tCen * 3))} transform={`translate(0,${r3(dy)})`}>
+      {/* ── Cenefa ──
+          Fotos del dueño (2026-08-21): es la pieza más grande del conjunto y
+          monta POR FUERA de las guías. La OVALADA tiene la cara redondeada
+          (banda de luz arriba, sombra abajo) y tapas ovales que asoman; la
+          CUADRADA es una caja: cara plana, arista superior iluminada y tapas
+          rectas. En la oscuridad el cajón tapa además los soportes. */}
+      {estilo.cenefa !== 'no' &&
+        (() => {
+          const redonda = estilo.cenefa === 'ovalada';
+          const cx0 = esOscuridad ? x0 - 36 : x0 - 22;
+          const cx1 = esOscuridad ? x1 + 36 : x1 + 22;
+          const cw = cx1 - cx0;
+          const ch = RMAX * 2 + 30;
+          const cy0 = cy - RMAX - 14;
+          const cyB = cy0 + ch;
+          const TAPA_W = 12;
+          return (
+            <Pieza pieza="cenefa" hit={{ x: cx0, y: cy0 - 10, w: cw, h: ch + 20 }}>
+              {tCen < 0.02 ? (
+                <Fantasma x={cx0} y={cy0} w={cw} h={ch} rx={redonda ? ch / 2 : 4} />
+              ) : (
+                <g
+                  opacity={r3(clamp01(tCen * 3))}
+                  transform={`translate(0,${r3(-110 * (1 - easeBack(tCen)))})`}
+                >
+                  {/* La sombra que echa sobre la tela y las guías. */}
                   <rect
-                    x={x0 - 16}
-                    y={cy0 + ch - 6}
-                    width={VIZ_W + 32}
-                    height={24}
+                    x={cx0 + 2}
+                    y={cyB - 6}
+                    width={cw - 4}
+                    height={26}
                     rx={6}
                     fill="#141110"
-                    opacity={0.4}
+                    opacity={0.42}
                     filter={url('fCorto')}
                   />
-                  <path d={d} fill={url('gHerr')} />
-                  <rect x={x0 - 16} y={cy0 + 4} width={VIZ_W + 32} height={3} fill={tono(herr, 0.5)} opacity={0.35} />
-                  <rect x={x0 - 16} y={cy0 + ch - 22} width={VIZ_W + 32} height={14} fill="#000" opacity={0.22} />
-                  <rect x={x0 - 18} y={cy0 + ch - 7} width={VIZ_W + 36} height={7} rx={2} fill={tono(herr, -0.5)} />
+                  {redonda ? (
+                    <>
+                      {/* Tapas ovales: asoman por fuera del cuerpo. */}
+                      <ellipse cx={cx0 + TAPA_W} cy={cy0 + ch / 2} rx={TAPA_W + 4} ry={ch / 2} fill={url('gTapa')} />
+                      <ellipse cx={cx1 - TAPA_W} cy={cy0 + ch / 2} rx={TAPA_W + 4} ry={ch / 2} fill={url('gTapa')} />
+                      {/* El cuerpo: la cara redondeada. */}
+                      <rect x={cx0 + TAPA_W} y={cy0} width={cw - 2 * TAPA_W} height={ch} fill={url('gOval')} />
+                      <rect x={cx0 + TAPA_W} y={cy0 + ch * 0.14} width={cw - 2 * TAPA_W} height={3} fill="#fff" opacity={0.22} />
+                      {/* Las juntas de las tapas. */}
+                      <rect x={cx0 + TAPA_W} y={cy0} width={1.5} height={ch} fill="#000" opacity={0.35} />
+                      <rect x={cx1 - TAPA_W - 1.5} y={cy0} width={1.5} height={ch} fill="#000" opacity={0.35} />
+                    </>
+                  ) : (
+                    <>
+                      {/* La cara plana del cajón. */}
+                      <rect x={cx0} y={cy0} width={cw} height={ch} fill={url('gCajon')} />
+                      {/* La arista superior: la cara de arriba recibe la luz. */}
+                      <rect x={cx0} y={cy0} width={cw} height={9} fill={tono(herr, 0.38)} />
+                      <rect x={cx0} y={cy0 + 9} width={cw} height={1.5} fill="#000" opacity={0.3} />
+                      {/* El canto inferior, en sombra. */}
+                      <rect x={cx0} y={cyB - 4} width={cw} height={4} fill={tono(herr, -0.55)} />
+                      {/* Tapas rectas con su junta. */}
+                      <rect x={cx0} y={cy0} width={TAPA_W} height={ch} fill={url('gTapa')} />
+                      <rect x={cx1 - TAPA_W} y={cy0} width={TAPA_W} height={ch} fill={url('gTapa')} />
+                      <rect x={cx0 + TAPA_W} y={cy0} width={1.5} height={ch} fill="#000" opacity={0.3} />
+                      <rect x={cx1 - TAPA_W - 1.5} y={cy0} width={1.5} height={ch} fill="#000" opacity={0.3} />
+                    </>
+                  )}
                 </g>
-              );
-            })()
-          )}
-        </Pieza>
-      )}
+              )}
+            </Pieza>
+          );
+        })()}
 
       <rect x={0} y={0} width={VIZ.ancho} height={VIZ.alto} fill={url('gVineta')} pointerEvents="none" />
     </svg>

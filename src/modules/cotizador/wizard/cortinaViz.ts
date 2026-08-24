@@ -10,8 +10,13 @@
 // Módulo PURO (sin React, sin Supabase): se testea solo.
 // ─────────────────────────────────────────────────────────────────────
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
+import {
+  aplicarDefaultsPerfiles,
+  familiaOscuridad,
+  normalizarVarianteOscuridad,
+} from '@/modules/descuentos/reglas-oscuridad';
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
-import { esCenefaCuadrada } from '../fase2';
+import { esCenefaCuadrada, perfilesOscuridadDePano } from '../fase2';
 import { llevaCenefaCuadradaImplicita } from '../insumosCortina';
 import type { CatalogoProductos, Pano, Ventana } from '../types';
 
@@ -88,12 +93,35 @@ export type CapaTela = {
   definida: boolean;
 };
 
+/**
+ * Oscuridad: qué perfiles lleva ESTA cortina, ya con los defaults de la
+ * variante aplicados (los laterales van siempre salvo que se apaguen; el base
+ * es opcional y un lateral a piso lo apaga). El dibujo pinta solo lo que el
+ * taller va a cortar.
+ */
+export type PerfilesViz = {
+  izq: boolean;
+  der: boolean;
+  base: boolean;
+  sepIzq: boolean;
+  sepDer: boolean;
+  sepBase: boolean;
+};
+
 /** Colores y texturas con que se pinta el dibujo. */
 export type EstiloViz = {
-  /** Herrajes (soportes, tubo, mecanismo, peso): sale del color de accesorios. */
+  /** Herrajes (soportes, tubo, mecanismo): sale del color de accesorios. */
   herrajesHex: string;
   /** Nombre canónico del color de accesorios ('NEGRO'|'BLANCO'|'GRIS'|…). */
   herrajesColor: string;
+  /**
+   * El peso inferior. En la oscuridad solo existe blanco (E24) o negro (E44):
+   * un soft light café lleva peso NEGRO, como en las fotos del dueño. En el
+   * resto sigue al color de accesorios.
+   */
+  pesoHex: string;
+  /** Oscuridad: los perfiles que se dibujan. Sin valor en las demás variantes. */
+  perfiles?: PerfilesViz;
   telaHex: string;
   telaPatron: CapaTela['patron'];
   /**
@@ -128,8 +156,10 @@ const HERRAJE_HEX: Record<string, string> = {
   NEGRO: '#20242a',
   BLANCO: '#dcdad5',
   GRIS: '#8b9198',
-  CAFÉ: '#4a3a2c',
-  CAFE: '#4a3a2c',
+  // Café ≡ madera (mismo código de perfil): un marrón que se lea como madera,
+  // no como negro — en las fotos del dueño los perfiles café son claramente marrones.
+  CAFÉ: '#6b4f38',
+  CAFE: '#6b4f38',
   METALICO: '#a9b0b6',
   METÁLICO: '#a9b0b6',
 };
@@ -183,6 +213,37 @@ export function panoLlevaMotor(p: Pano): boolean {
   );
 }
 
+/**
+ * Qué perfiles de oscuridad lleva el paño, con el MISMO criterio que el
+ * despiece (`cortesOscuridad`): los flags del paño van CRUDOS a
+ * `aplicarDefaultsPerfiles` (un `!!` mataría los defaults de la variante) y un
+ * perfil con superficie marcada cuenta como activo aunque su flag venga ausente
+ * (retro-compat). `null` fuera de las familias de oscuridad.
+ */
+export function perfilesVizDePano(
+  v: Ventana,
+  p: Pano,
+  tipos?: readonly TipoCortina[],
+): PerfilesViz | null {
+  const fam = familiaOscuridad(v.categoria, p.cenefa as string, tipos);
+  if (!fam) return null;
+  // La variante se lee como en todo el despiece: paño → ventana → `sentido`
+  // de respaldo (nunca `sentido` a secas).
+  const variante = normalizarVarianteOscuridad(
+    p.oscuridadVariante ?? v.oscuridadVariante ?? v.sentido,
+    'INTERNO',
+  );
+  const f = aplicarDefaultsPerfiles(perfilesOscuridadDePano(p), fam, variante);
+  return {
+    izq: !!(f.izqActivo || f.izqMuro || f.izqPiso || f.izqMarco),
+    der: !!(f.derActivo || f.derMuro || f.derPiso || f.derMarco),
+    base: !!(f.infActivo || f.infMuro || f.infPiso || f.infMarco),
+    sepIzq: !!f.sepIzq,
+    sepDer: !!f.sepDer,
+    sepBase: !!f.sepInf,
+  };
+}
+
 /** Cómo pintar la cortina de este paño. */
 export function estiloVizDePano(
   v: Ventana,
@@ -213,6 +274,8 @@ export function estiloVizDePano(
   // se dibuja el cajón. Sin elección, se dibuja la ovalada del sistema.
   const ovaladaImplicita =
     variante === 'oscuridad' && !llevaCenefaCuadradaImplicita(v.categoria, tipos);
+  const esOscuridad = variante === 'oscuridad' || variante === 'oscuranti';
+  const herrajesHex = HERRAJE_HEX[colorAcc] ?? HERRAJE_HEX.GRIS;
   // La tela vive en el paño solo en dual; en el resto es de la ventana.
   const codTela = (variante === 'dual' && p.codInt) || v.codInt;
   /** Una capa de la dual. Solo el primer rollo hereda la tela de la ventana:
@@ -226,8 +289,15 @@ export function estiloVizDePano(
     };
   };
   return {
-    herrajesHex: HERRAJE_HEX[colorAcc] ?? HERRAJE_HEX.GRIS,
+    herrajesHex,
     herrajesColor: colorAcc,
+    // Peso de oscuridad: E24 blanco o E44 negro, nada más (ver PESO_OSCURIDAD_POR_COLOR).
+    pesoHex: esOscuridad
+      ? colorAcc === 'BLANCO'
+        ? HERRAJE_HEX.BLANCO
+        : HERRAJE_HEX.NEGRO
+      : herrajesHex,
+    perfiles: esOscuridad ? (perfilesVizDePano(v, p, tipos) ?? undefined) : undefined,
     telaHex: telaHexDeProducto(codTela, catalogo),
     telaPatron: variante === 'duo' ? 'bandas' : patronDeTipoTela(p.tipoTela),
     telaDual:
