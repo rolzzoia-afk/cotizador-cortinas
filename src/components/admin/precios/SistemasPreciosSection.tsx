@@ -16,6 +16,7 @@ import { formatCLP } from '@/lib/formatters';
 import {
   FAMILIAS_CON_RECETA,
   SISTEMA_CATEGORIA_B_KEY,
+  SISTEMA_INVERTIDA_KEY,
   type SistemaPrecio,
 } from '@/modules/cotizador/reglasPrecios';
 import { nombreFamilia } from './nombresFamilias';
@@ -102,6 +103,7 @@ function Sistema({
   const num = (campo: (typeof CAMPOS)[number]['campo']) => (v: string) =>
     onChange({ ...sistema, [campo]: Number(v) });
   const esCategoriaB = clave === SISTEMA_CATEGORIA_B_KEY;
+  const esInvertida = clave === SISTEMA_INVERTIDA_KEY;
   // Tela de referencia por familia: las 12 de siempre más las que ya traiga guardadas.
   const familiasTela = Array.from(
     new Set([...FAMILIAS_CON_RECETA, ...Object.keys(sistema.telaPorFamilia ?? {})]),
@@ -141,6 +143,16 @@ function Sistema({
         </p>
       ) : (
       <div className="mb-3 flex flex-wrap items-center gap-1.5">
+        {/* La invertida también va por fila (la cortina que se corta rotada),
+            pero solo en las familias que el Excel de cortinas mayores cambia
+            de herraje; por eso sus familias sí se editan. */}
+        {esInvertida && (
+          <p className="basis-full text-[0.7rem] text-muted-foreground">
+            Se le aplica a las cortinas que se cortan <strong>invertidas</strong> (más anchas que el
+            rollo, o forzadas con el icono de Fase 1), solo en estas familias: las demás invertidas
+            siguen con su receta de siempre. Sus recetas terminan en «· Invertida», más abajo.
+          </p>
+        )}
         <span className="text-[0.7rem] text-muted-foreground">Se le aplica a:</span>
         {sistema.familias.map((fam) => (
           <span

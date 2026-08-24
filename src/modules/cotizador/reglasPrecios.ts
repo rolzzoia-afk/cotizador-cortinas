@@ -205,6 +205,24 @@ export const SISTEMA_CATEGORIA_B_KEY = 'categoriaB';
 export const SUFIJO_RECETA_B = '|B';
 
 /**
+ * Clave del sistema INVERTIDA en `reglas.sistemas`: la cortina que se corta
+ * rotada en el rollo (más ancha que la tela, o forzada con el icono de Fase 1).
+ * Como la categoría B, se elige POR FILA —no por familia—, pero solo para las
+ * familias que nombra en `familias`: en el Excel «COTIZADOR PARA CORTINAS
+ * MAYORES A 3,00 MTS» solo los paneles roller premium/delux cambian de herraje
+ * (tubo 63 mm E 47 + kit MEC 28); la gama standard y el dúo no tienen esa
+ * fila, así que una invertida de esas familias se cotiza con su receta de
+ * siempre (y gasta igual la tela a lo largo del rollo).
+ */
+export const SISTEMA_INVERTIDA_KEY = 'invertida';
+
+/** Sufijo de las recetas de cortina invertida (`BLACKOUT_D|INV`). */
+export const SUFIJO_RECETA_INV = '|INV';
+
+/** Sistemas que se eligen por FILA y no por familia: `sistemaDeFamilia` los salta. */
+const SISTEMAS_POR_FILA = new Set([SISTEMA_CATEGORIA_B_KEY, SISTEMA_INVERTIDA_KEY]);
+
+/**
  * COD_INT de instalación que el motor calcula SOLO: el de la roller (`INST`)
  * más el que declare cada sistema. Fase 1 los filtra de los adicionales
  * manuales para no cobrarlos dos veces; las instalaciones de motor, soft o
@@ -410,6 +428,34 @@ const recetaDuoB = (opts: {
   v('PUB 01', porCortina()),
 ];
 
+// ── Receta de la cortina INVERTIDA ────────────────────────────────────
+// Panel roller premium/delux del Excel «COTIZADOR PARA CORTINAS MAYORES A 3,00
+// MTS» (golden: BK-D 4,20 × 1,70 = 562.354,53). Ese panel cambia el herraje
+// por ANCHO (≥ 3,01 m: tubo 63 mm `E 47` por metro + kit `MEC 28`; bajo eso
+// seguía con E 05 + MEC 18). El dueño decidió (2026-08-21) que el 63 mm va
+// SIEMPRE que la tela se invierta —por el icono de Fase 1 o forzada por el
+// ancho del rollo—, así que acá no hay filtro de ancho. El resto del panel es
+// el del roller de siempre.
+
+const NOTA_63 =
+  'El Excel de cortinas mayores a 3,00 m pone el 63 mm solo desde 3,01 m de ancho (bajo ' +
+  'eso, E 05 + MEC 18). Acá va en TODA cortina invertida (decisión del dueño 2026-08-21); ' +
+  'para volver al corte del Excel, ponerle un mínimo de 3,01 a esta línea.';
+
+const RECETA_ROLLER_PD_INV: LineaReceta[] = [
+  v('E 47', sumaAnchos(), NOTA_63),
+  v('E 15', sumaAnchos()),
+  v('MEC 28', porCortina(), NOTA_63),
+  v('CAD 03', porCortina()),
+  v('TOP 03', porCortina()),
+  v('INS 95', porCortina()),
+  v('PCA 04', porCortina()),
+  v('TAP 01 -19', porCortina(2)),
+  v('ZUN 06', sumaAnchos(2)),
+  v('PUB 01', porCortina()),
+  v('MAT00001', porCortina()),
+];
+
 /** Cortina vertical: la receta no depende de la gama, es una sola. */
 const RECETA_VERTICAL: LineaReceta[] = [
   v('VER 35', sumaAnchos()),
@@ -527,6 +573,12 @@ export const RECETAS_DEFAULT: Record<string, LineaReceta[]> = {
   [`DUOPOLI_D${SUFIJO_RECETA_B}`]: recetaDuoB({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
   [`DUOPOLI_S${SUFIJO_RECETA_B}`]: recetaDuoB({ micaYCinta: true, etiquetaACosto: true, materialesVarios: porCortina(2) }),
   [`${RECETA_DUO_GENERICO_KEY}${SUFIJO_RECETA_B}`]: recetaDuoB({ materialesVarios: null }),
+  // Invertida (ver `claveRecetaInv`): solo las familias que el Excel de
+  // cortinas mayores cambia de herraje. Las demás invertidas usan su receta.
+  [`BLACKOUT_P${SUFIJO_RECETA_INV}`]: RECETA_ROLLER_PD_INV,
+  [`BLACKOUT_D${SUFIJO_RECETA_INV}`]: RECETA_ROLLER_PD_INV,
+  [`SCREEN_P${SUFIJO_RECETA_INV}`]: RECETA_ROLLER_PD_INV,
+  [`SCREEN_D${SUFIJO_RECETA_INV}`]: RECETA_ROLLER_PD_INV,
 };
 
 /** Las 12 familias reales, en el orden en que se muestran en el Admin. */
@@ -548,6 +600,8 @@ const DESCRIPCIONES: Record<string, string> = {
   'E 02': 'Tubo Ø38 (roller, hasta 2,19 m)',
   'E 02-1': 'Tubo (variante standard)',
   'E 05': 'Tubo Ø45 (roller, desde 2,191 m)',
+  'E 47': 'Tubo Ø63 (roller invertida, por metro)',
+  'MEC 28': 'Kit mecanismo 63 mm (roller invertida)',
   'E 15': 'Peso inferior roller (por metro)',
   'E 26': 'Perfil superior cenefa dúo (por metro)',
   'E 18': 'Peso lágrima dúo (por metro)',
@@ -845,20 +899,63 @@ export const SISTEMA_CATEGORIA_B_DEFAULT: SistemaPrecio = {
   descuentoDefault: 0.3,
 };
 
+/**
+ * La hoja Insumos del Excel «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS»
+ * (2026-08-21), solo en lo que difiere de la tabla general: el tubo de 63 mm y
+ * su kit, que la general no tiene, y `PUB 01` / `MAT00001`, que en esa copia
+ * valen 1.625,54 (en la general 1.400 y 1.300). Se replican para que la
+ * cotización de una invertida calce AL PESO con esa planilla (pedido del
+ * dueño); si se quiere cobrar publicidad y materiales como en el roller, se
+ * borran de acá y caen a la tabla general.
+ */
+const INSUMOS_INV_VM: Record<string, number> = {
+  'E 47': 35414.995,
+  'MEC 28': 15823.668,
+  'PUB 01': 1625.54,
+  MAT00001: 1625.54,
+};
+
+/**
+ * El sistema INVERTIDA de fábrica: los números del Excel «COTIZADOR PARA
+ * CORTINAS MAYORES A 3,00 MTS» (panel BLACKOUT_D, golden BK-D 4,20 × 1,70):
+ * mano de obra 30.000 por cortina (tecleada en la celda del panel) · traslado
+ * `TRAS` 50.000 · instalación `INST` 17.500 · margen 0,65 · extra de alto 0,25,
+ * que en la invertida se suma al ANCHO (es lo que corre a lo largo del rollo).
+ * Sus recetas viven en `RECETAS_DEFAULT` con el sufijo `|INV`, solo para las
+ * familias que nombra acá; las demás invertidas siguen con las reglas de su
+ * familia (tela a lo largo del rollo incluida).
+ */
+export const SISTEMA_INVERTIDA_DEFAULT: SistemaPrecio = {
+  nombre: 'Invertida (más ancha que el rollo)',
+  familias: ['BLACKOUT_P', 'BLACKOUT_D', 'SCREEN_P', 'SCREEN_D'],
+  margenInsumo: 0.65,
+  extraAltoM: 0.25,
+  manoObra: 30000,
+  traslado: 50000,
+  instalacionEmbebida: 17500,
+  instalacionLinea: 17500,
+  codigoInstalacion: '',
+  insumos: expandirInsumos(INSUMOS_INV_VM, {}),
+};
+
 export const SISTEMAS_DEFAULT: Record<string, SistemaPrecio> = {
   beeblack: SISTEMA_BEEBLACK_DEFAULT,
   [SISTEMA_CATEGORIA_B_KEY]: SISTEMA_CATEGORIA_B_DEFAULT,
+  [SISTEMA_INVERTIDA_KEY]: SISTEMA_INVERTIDA_DEFAULT,
 };
 
 /**
  * El sistema con el que se cotiza una familia, o `undefined` si va con las
- * reglas normales (roller, dúo y verticales).
+ * reglas normales (roller, dúo y verticales). Los sistemas que se eligen por
+ * FILA (categoría B, invertida) no cuentan: sus familias son «a cuáles se les
+ * aplica cuando la fila lo pide», no «cuáles cotizan siempre con él».
  */
 export function sistemaDeFamilia(
   cod: string,
   sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
 ): SistemaPrecio | undefined {
-  for (const s of Object.values(sistemas)) {
+  for (const [clave, s] of Object.entries(sistemas)) {
+    if (SISTEMAS_POR_FILA.has(clave)) continue;
     if (s.familias.includes(cod)) return s;
   }
   return undefined;
@@ -871,34 +968,68 @@ export function sistemaCategoriaB(
   return sistemas[SISTEMA_CATEGORIA_B_KEY];
 }
 
+/** El sistema INVERTIDA, si existe (se puede borrar para apagarlo). */
+export function sistemaInvertida(
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): SistemaPrecio | undefined {
+  return sistemas[SISTEMA_INVERTIDA_KEY];
+}
+
 /**
- * El sistema con el que se cotiza UNA FILA: la categoría B manda si la fila va
- * marcada B (sea por su tela o forzada a mano); si no, el de su familia. Un
- * beeblack no tiene categoría B, así que su sistema gana aunque alguien marque
- * la fila: la B solo existe donde hay recetas B.
+ * El sistema con el que se cotiza UNA FILA: el de su familia si lo tiene (un
+ * beeblack es beeblack aunque alguien marque la fila); si no, la categoría B
+ * si la fila va marcada B (por su tela o forzada a mano); si no, la INVERTIDA
+ * si la fila se corta rotada y su familia está entre las que cambian de
+ * herraje. Una B invertida sigue siendo B: la copia B del Excel no tiene
+ * panel de invertidas.
  */
 export function sistemaDeFila(
   cod: string,
   lineaB: boolean | undefined,
   sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+  invertida?: boolean,
 ): SistemaPrecio | undefined {
   const deFamilia = sistemaDeFamilia(cod, sistemas);
   if (deFamilia) return deFamilia;
-  return lineaB ? sistemaCategoriaB(sistemas) : undefined;
+  if (lineaB) return sistemaCategoriaB(sistemas);
+  if (invertida) {
+    const inv = sistemaInvertida(sistemas);
+    if (inv?.familias.includes(cod)) return inv;
+  }
+  return undefined;
 }
 
 /**
  * El sistema al que pertenece una RECETA por su clave: las `|B` son del
- * sistema categoría B; el resto, el de su familia (beeblack) o ninguno. Lo
- * usan el validador y el «reponer insumos» para buscar el precio de cada
- * línea en la tabla correcta.
+ * sistema categoría B, las `|INV` del sistema invertida; el resto, el de su
+ * familia (beeblack) o ninguno. Lo usan el validador y el «reponer insumos»
+ * para buscar el precio de cada línea en la tabla correcta.
  */
 export function sistemaDeReceta(
   claveReceta: string,
   sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
 ): SistemaPrecio | undefined {
   if (claveReceta.endsWith(SUFIJO_RECETA_B)) return sistemaCategoriaB(sistemas);
+  if (claveReceta.endsWith(SUFIJO_RECETA_INV)) return sistemaInvertida(sistemas);
   return sistemaDeFamilia(claveReceta, sistemas);
+}
+
+/**
+ * Las claves de receta con que cotiza un sistema: la categoría B y la
+ * invertida tienen las suyas con sufijo; el resto, las de sus familias.
+ */
+export function recetasDeSistema(
+  clave: string,
+  sistema: SistemaPrecio,
+  recetas: Record<string, LineaReceta[]>,
+): string[] {
+  if (clave === SISTEMA_CATEGORIA_B_KEY) {
+    return Object.keys(recetas).filter((k) => k.endsWith(SUFIJO_RECETA_B));
+  }
+  if (clave === SISTEMA_INVERTIDA_KEY) {
+    return sistema.familias.map((f) => `${f}${SUFIJO_RECETA_INV}`);
+  }
+  return sistema.familias;
 }
 
 /** Precios de insumo con los que se cotiza un grupo: los del sistema ganan. */
@@ -1084,6 +1215,41 @@ export function resolverRecetaB(
  * cotización real las ha probado todavía.
  */
 export function recetaBEsExacta(cod: string): boolean {
+  return /^(BLACKOUT|SCREEN)_(P|D)$/.test(cod);
+}
+
+/**
+ * Clave de la receta de una cortina INVERTIDA: la de su familia con el sufijo
+ * `|INV` si existe (`BLACKOUT_D|INV`). Las familias sin receta invertida (la
+ * gama standard, el dúo, las verticales) se cotizan con su receta de siempre:
+ * el Excel de cortinas mayores no les cambia el herraje.
+ */
+export function claveRecetaInv(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): string {
+  const base = claveReceta(cod, esVertical, recetas);
+  const inv = `${base}${SUFIJO_RECETA_INV}`;
+  return recetas[inv] || RECETAS_DEFAULT[inv] ? inv : base;
+}
+
+export function resolverRecetaInv(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): LineaReceta[] {
+  const clave = claveRecetaInv(cod, esVertical, recetas);
+  return recetas[clave] ?? RECETAS_DEFAULT[clave];
+}
+
+/**
+ * ¿La receta invertida de esta familia está validada contra una cotización
+ * real? El panel BLACKOUT_D del Excel de cortinas mayores calza al peso con
+ * BK-D 4,20 × 1,70; los otros tres paneles roller premium/delux tienen las
+ * mismas fórmulas, fila por fila.
+ */
+export function recetaInvEsExacta(cod: string): boolean {
   return /^(BLACKOUT|SCREEN)_(P|D)$/.test(cod);
 }
 
@@ -1370,8 +1536,9 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
         errores.push(`${dónde}: el insumo «${cod}» tiene un valor inválido.`);
       }
     }
-    // Cada familia tiene que tener con qué cotizarse.
-    for (const fam of s.familias) {
+    // Cada familia tiene que tener con qué cotizarse (la invertida, su `|INV`).
+    const recetasDelSistema = recetasDeSistema(clave, s, reglas.recetas);
+    for (const fam of recetasDelSistema) {
       if (!reglas.recetas[fam]?.length) {
         avisos.push(
           `${dónde} incluye la familia «${fam}», que no tiene lista de materiales propia: se le va a aplicar la receta de respaldo.`,
@@ -1382,7 +1549,7 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
     // cobra al precio general, en silencio y por otro valor. Pasa con `PUB 01`
     // y `MAT00001`, que valen muy distinto en el beeblack.
     const propioDeFabrica = SISTEMAS_DEFAULT[clave]?.insumos ?? {};
-    for (const fam of s.familias) {
+    for (const fam of recetasDelSistema) {
       for (const l of reglas.recetas[fam] ?? []) {
         if (s.insumos[l.insumo] || !reglas.insumos[l.insumo]) continue;
         if (!propioDeFabrica[l.insumo]) continue;

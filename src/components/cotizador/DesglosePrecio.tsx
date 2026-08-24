@@ -34,19 +34,52 @@ export function nombresDePiezas(
   return out;
 }
 
+/**
+ * Cómo están configuradas las cortinas con las que se calculó la tarifa del
+ * panel: es lo que los botones de la grilla deciden fila por fila.
+ */
+export function comoSiFueran(f: Pick<ResultadoFamilia, 'lineaB' | 'invertida'>): string {
+  if (f.lineaB && f.invertida) return 'de categoría B e invertidas';
+  if (f.lineaB) return 'de categoría B';
+  if (f.invertida) return 'invertidas';
+  return 'de categoría A y derechas';
+}
+
 export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: string[] }) {
   const nombreCortina = (i: number) => piezas[i] ?? `cortina ${i + 1}`;
+  // La tarifa se calcula con TODA la familia configurada como este panel; si
+  // no todas se cobran acá, se dice, para que el 4 cortinas del encabezado
+  // no se lea como «cuatro B» cuando la B es una.
+  const mixta = f.piezasCobradas < f.piezas;
   return (
     <div className="rounded-md border">
       <header className="flex flex-wrap items-baseline gap-2 border-b bg-muted/40 px-3 py-2">
         <span className="text-xs font-semibold">{f.cod}</span>
         {f.lineaB && (
           <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.65rem] text-amber-700">
-            Categoría B: panel aparte, con sus herrajes y su tela de referencia
+            Categoría B: sus herrajes, su mano de obra y su tela de referencia
+          </span>
+        )}
+        {f.invertida && (
+          <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[0.65rem] text-sky-700">
+            {f.sistemaInvertida
+              ? 'Invertida: tela a lo largo del rollo (ancho + extra), tubo 63 mm y kit MEC 28, mano de obra y traslado propios'
+              : 'Invertida: tela a lo largo del rollo (ancho + extra), un tiro por cortina; herraje de siempre'}
           </span>
         )}
         <span className="text-xs text-muted-foreground">
-          {f.piezas} {f.piezas === 1 ? 'cortina' : 'cortinas'} · {m2(f.m2Total)} m²
+          {mixta ? (
+            <>
+              tarifa calculada con las {f.piezas} cortinas de la familia ({m2(f.m2Total)} m²) como si
+              todas fueran {comoSiFueran(f)} · se cobra a{' '}
+              {f.piezasCobradas === 1 ? '1 cortina' : `${f.piezasCobradas} cortinas`} (
+              {m2(f.m2Cobrados)} m²)
+            </>
+          ) : (
+            <>
+              {f.piezas} {f.piezas === 1 ? 'cortina' : 'cortinas'} · {m2(f.m2Total)} m²
+            </>
+          )}
         </span>
         {f.sistema && (
           <span className="rounded bg-success/20 px-1.5 py-0.5 text-[0.65rem]">
@@ -57,7 +90,9 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
           <span className="rounded bg-warning/20 px-1.5 py-0.5 text-[0.65rem]">
             {f.lineaB
               ? 'receta B transcrita del Excel, sin cotización real que la valide todavía'
-              : 'sin receta propia: se usa la de respaldo'}
+              : f.invertida
+                ? 'receta de invertida sin cotización real que la valide todavía'
+                : 'sin receta propia: se usa la de respaldo'}
           </span>
         )}
       </header>

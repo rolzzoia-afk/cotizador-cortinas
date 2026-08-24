@@ -28,14 +28,19 @@ import {
 import {
   PASO_LAMA_M,
   REGLAS_PRECIOS_DEFAULT,
+  SUFIJO_RECETA_B,
+  SUFIJO_RECETA_INV,
   explicarCantidad,
   insumosDeSistema,
   lamasPorPasada,
   recetaBEsExacta,
+  recetaInvEsExacta,
   resolverReceta,
   resolverRecetaB,
+  resolverRecetaInv,
   sistemaCategoriaB,
   sistemaDeFila,
+  sistemaInvertida,
   type CantidadReceta,
   type FiltroAncho,
   type LineaMaterialDesglose,
@@ -67,10 +72,13 @@ export type FilaFase0 = {
    * Corte INVERTIDO (la pieza se rota 90° en el rollo): el alto real va A LO
    * ANCHO del rollo y el ancho de la cortina corre a lo largo — es lo que de
    * verdad se corta (`debeInvertirPano` en tela.ts, forzado o automático
-   * cuando la cortina no entra en el rollo). Cambia los metros de rollo que
-   * cobra la familia; los m² de la línea y los materiales (tubo, peso…)
-   * siguen saliendo de las medidas vendidas. Antes no llegaba al motor y el
-   * icono de la grilla no movía un peso (2026-08-21).
+   * cuando la cortina no entra en el rollo). Se cobra como el Excel
+   * «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS» (dueño, 2026-08-21): cada
+   * invertida gasta su propio tiro de rollo, de ancho + extra (el mismo 0,25
+   * que lleva un alto), y las familias roller premium/delux pasan al sistema
+   * INVERTIDA (tubo 63 mm E 47 + kit MEC 28, mano de obra y traslado propios,
+   * en un panel aparte `cod|INV`). Los m² de la línea siguen saliendo de las
+   * medidas vendidas. Una fila B invertida sigue siendo B.
    */
   invertida?: boolean;
   /**
@@ -91,12 +99,23 @@ export type FilaFase0 = {
   ventanaId?: string;
 };
 
+/**
+ * Sufijos de la CLAVE de un panel de precios: `cod|B` (categoría B), `cod|INV`
+ * (corte invertido) o `cod|B|INV` (las dos). Coinciden con los de las recetas
+ * (`BLACKOUT_D|B`, `BLACKOUT_D|INV`), pero un panel `cod|B|INV` usa la receta
+ * B: la copia B del Excel no tiene panel de invertidas.
+ */
+export const SUFIJO_PANEL_B = SUFIJO_RECETA_B;
+export const SUFIJO_PANEL_INV = SUFIJO_RECETA_INV;
+
 export type LineaResultado = {
   codInt: string;
   cod: string;
-  /** Panel del que salió el precio: `cod`, o `cod|B` si se cotizó en categoría B. */
+  /** Panel del que salió el precio: `cod`, `cod|B`, `cod|INV` o `cod|B|INV`. */
   clave: string;
   lineaB: boolean;
+  /** La tela se cobra cortada rotada (panel `…|INV`). */
+  invertida: boolean;
   ancho: number;
   alto: number;
   cantidad: number;
@@ -131,11 +150,23 @@ export type AdicionalResultado = {
 
 export type ResultadoFamilia = {
   cod: string;
-  /** `cod`, o `cod|B`: la A y la B de una misma tela son paneles distintos. */
+  /** `cod`, `cod|B`, `cod|INV` o `cod|B|INV`: la A, la B y la invertida de una misma tela son paneles distintos. */
   clave: string;
   lineaB: boolean;
+  /** Panel de tela cortada rotada: ancho + extra a lo largo del rollo, un tiro por cortina. */
+  invertida: boolean;
+  /** Cotizado con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
+  sistemaInvertida: boolean;
+  /**
+   * Cortinas con las que se calculó la TARIFA: TODAS las de la familia,
+   * configuradas como este panel (como si todas fueran B, o invertidas, o
+   * ninguna). Los paños y los materiales de abajo son de esas piezas.
+   */
   piezas: number;
   m2Total: number;
+  /** Cuántas de esas cortinas se cobran de verdad con este panel, y sus m². */
+  piezasCobradas: number;
+  m2Cobrados: number;
   metrosTela: number;
   precioMl: number;
   costoTela: number;
@@ -366,13 +397,22 @@ const anchoOcupado = (p: PiezaEmpaque) =>
 const largoOcupado = (p: PiezaEmpaque) =>
   typeof p.largoRollo === 'number' && p.largoRollo > 0 ? p.largoRollo : p.altoReal;
 
+/** ¿La pieza va rotada en el rollo (consume su ancho a lo largo)? */
+const esInvertida = (p: PiezaEmpaque) => typeof p.largoRollo === 'number' && p.largoRollo > 0;
+
 /**
  * Arma los paños. Es la parte del cálculo que hace que dos cortinas angostas
  * de la misma tela compartan tiro y la de menor alto viaje gratis.
+ *
+ * Las piezas INVERTIDAS no comparten tiro: cada una es su propio paño, como el
+ * Optimizador del Excel de cortinas mayores a 3,00 m, que suma `ancho + 0,25`
+ * por cortina sin mirar si dos cabrían a lo ancho del rollo (dueño,
+ * 2026-08-21: los precios tienen que calzar con esa planilla).
  */
 export function empacarPanos(piezas: PiezaEmpaque[], anchoRollo: number): PanoPrecio[] {
-  const ordenadas = piezas
-    .map((p, i) => ({ ...p, i }))
+  const indexadas = piezas.map((p, i) => ({ ...p, i }));
+  const ordenadas = indexadas
+    .filter((p) => !esInvertida(p))
     .sort((a, b) => anchoOcupado(a) - anchoOcupado(b));
   const panos: PanoPrecio[] = [];
   let acc = 0;
@@ -390,6 +430,9 @@ export function empacarPanos(piezas: PiezaEmpaque[], anchoRollo: number): PanoPr
       last.cortinas.push(p.i);
       acc += ocupa;
     }
+  }
+  for (const p of indexadas.filter(esInvertida)) {
+    panos.push({ letra: '', alto: largoOcupado(p), ancho: anchoOcupado(p), cortinas: [p.i] });
   }
   // Letras A…Z, AA, BB…: con >26 paños el fromCharCode de antes
   // imprimía basura ('[', '\'…) en el desglose del probador.
@@ -556,21 +599,48 @@ export function cotizarFase0(
     anchoEmpaque?: number;
     largoRollo?: number;
   };
-  type Grupo = {
-    cod: string;
-    /** `cod`, o `cod|B` para el panel de la categoría B de esa misma tela. */
+  /**
+   * Lo que deciden los botones de la grilla para una fila: categoría B y corte
+   * invertido. Con eso se elige el sistema (familia > B > invertida) y la CLAVE
+   * del panel: `cod`, `cod|B`, `cod|INV` o `cod|B|INV`.
+   */
+  type Config = {
     clave: string;
     lineaB: boolean;
+    /** La tela se corta rotada (ancho + extra a lo largo del rollo, un tiro por cortina). */
+    invertida: boolean;
+    /** Cotizada con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
+    sistemaInv: boolean;
+    sistema?: SistemaPrecio;
+  };
+  type FilaResuelta = {
+    f: FilaFase0;
+    cod: string;
+    esDuo: boolean;
+    esVertical: boolean;
+    anchoRollo: number;
+    config: Config;
+  };
+  type Grupo = {
+    cod: string;
+    /** `cod`, `cod|B`, `cod|INV` o `cod|B|INV`: paneles distintos de una misma tela. */
+    clave: string;
+    lineaB: boolean;
+    invertida: boolean;
+    sistemaInv: boolean;
     esDuo: boolean;
     esVertical: boolean;
     anchoRollo: number;
     precioMl: number;
     arquetipo: string;
+    /** TODAS las cortinas de la familia, configuradas como este panel. */
     piezas: Pieza[];
-    /** Sistema con reglas propias (beeblack, categoría B), si el grupo va con uno. */
+    /** Cuántas de esas piezas se cobran de verdad con este panel, y sus m². */
+    piezasCobradas: number;
+    m2Cobrados: number;
+    /** Sistema con reglas propias (beeblack, categoría B, invertida), si el panel va con uno. */
     sistema?: SistemaPrecio;
   };
-  const grupos = new Map<string, Grupo>();
   const avisos: AvisoCotizacion[] = [];
   const avisado = new Set<string>();
   const avisar = (a: AvisoCotizacion) => {
@@ -583,9 +653,28 @@ export function cotizarFase0(
   /** Metros que se suman al alto vendido: el sistema manda sobre el parámetro. */
   const extraAltoDe = (sis?: SistemaPrecio) => sis?.extraAltoM ?? params.extraAltoCm / 100;
 
-  // Resolver cada fila a su PANEL (la familia, o la familia en categoría B) y
-  // agrupar. `codDeFila` guarda la clave del panel, que es la llave de `grupos`.
-  const codDeFila: (string | null)[] = validas.map((f) => {
+  // La categoría B es un sistema que se elige POR FILA, no por familia: la
+  // misma tela va al panel A o al panel B según el distintivo de la grilla.
+  // Un beeblack marcado B sigue siendo beeblack (no tiene categoría B).
+  // Una invertida de familia roller premium/delux va al panel INVERTIDA
+  // (tubo 63 mm, mano de obra y traslado propios); la de otras familias (y la
+  // B invertida, que sigue siendo B) conserva su receta y solo gasta la tela a
+  // lo largo del rollo, en un panel propio `cod|INV` / `cod|B|INV`.
+  const configDe = (cod: string, lineaB: boolean, invertida: boolean): Config => {
+    const sistema = sistemaDeFila(cod, lineaB, reglas.sistemas, invertida);
+    const enB = lineaB && !!sistema && sistema === sistemaCategoriaB(reglas.sistemas);
+    const sistemaInv = invertida && !!sistema && sistema === sistemaInvertida(reglas.sistemas);
+    return {
+      clave: `${cod}${enB ? SUFIJO_PANEL_B : ''}${invertida ? SUFIJO_PANEL_INV : ''}`,
+      lineaB: enB,
+      invertida,
+      sistemaInv,
+      sistema,
+    };
+  };
+
+  // ── 1. Cada fila → su familia y su configuración ─────────────────────
+  const resueltas: (FilaResuelta | null)[] = validas.map((f) => {
     const prod = catalogo[f.codInt];
     if (!prod) {
       // Sin producto no hay familia, ni receta, ni precio: la línea vale 0 y se
@@ -602,32 +691,53 @@ export function cotizarFase0(
     const nombre = (prod.producto || '').toUpperCase();
     const esDuo = cod.startsWith('DUO') || nombre.includes('DUO');
     const esVertical = /(_V_|-V$|-V-)/.test(cod) || nombre.includes('VERTICAL');
-    // La categoría B es un sistema que se elige POR FILA, no por familia: la
-    // misma tela va al panel A o al panel B según el distintivo de la grilla.
-    // Un beeblack marcado B sigue siendo beeblack (no tiene categoría B), y
-    // las VERTICALES tampoco entran: la copia B del Excel no trae ninguna
-    // (ni receta, ni mano de obra, ni instalación de vertical), así que se
-    // cotizan con las reglas de siempre aunque su tela sea de gama B.
-    const sistema = sistemaDeFila(cod, !!f.lineaB && !esVertical, reglas.sistemas);
-    const lineaB = !!f.lineaB && !!sistema && sistema === sistemaCategoriaB(reglas.sistemas);
-    const clave = lineaB ? `${cod}|B` : cod;
-    const altoReal = altoRealM(f.alto, esDuo, extraAltoDe(sistema));
-    // Pieza INVERTIDA (rotada 90°): el alto real ocupa el ancho del rollo y lo
-    // que se consume a lo largo es el ancho de la cortina (o su peor caso de
-    // oscuridad). Los m² y los materiales no cambian: la cortina vendida es la
-    // misma. La vertical se cobra por lamas/pasadas y no se invierte.
-    const invertida = !!f.invertida && !esVertical;
-    const pieza: Pieza = {
-      ancho: f.ancho,
-      alto: f.alto,
-      altoReal,
-      m2: altoReal * f.ancho,
-      anchoEmpaque: invertida ? altoReal : f.anchoEmpaqueM,
-      largoRollo: invertida ? f.anchoEmpaqueM ?? f.ancho : undefined,
+    // Las VERTICALES no entran a la categoría B: la copia B del Excel no trae
+    // ninguna (ni receta, ni mano de obra, ni instalación de vertical), así que
+    // se cotizan con las reglas de siempre aunque su tela sea de gama B. Y se
+    // cobran por lamas/pasadas: no se invierten.
+    return {
+      f,
+      cod,
+      esDuo,
+      esVertical,
+      // Ancho de rollo de respaldo (2,45 histórico del Excel de precios, ≠
+      // 2,98 del corte de tela): último recurso, en producción
+      // ancho_rollo_data o el catálogo resuelven antes. `||` y no `??`: un
+      // ancho guardado en 0 tiene que caer al respaldo, si no cada pieza se
+      // va a un paño propio y la tela se cobra de más.
+      anchoRollo: anchoRolloMap[f.codInt] || Number(prod.anchoRollo) || reglas.anchoRolloFallbackM,
+      config: configDe(cod, !!f.lineaB && !esVertical, !!f.invertida && !esVertical),
     };
-    let g = grupos.get(clave);
-    if (!g) {
-      const tela = precioMlPorCod(cod, catalogo, reglas, sistema);
+  });
+  /** Clave del panel de cada fila válida (null = sin producto). */
+  const codDeFila: (string | null)[] = resueltas.map((r) => r?.config.clave ?? null);
+
+  // ── 2. Paneles ────────────────────────────────────────────────────────
+  // Por familia, un panel por configuración presente, y CADA panel se arma con
+  // TODAS las cortinas de la familia configuradas como él: la fila B se cobra a
+  // la tarifa que tendría la familia si todas fueran B (la copia B del Excel
+  // cotiza el libro entero como B), la invertida como si todas fueran
+  // invertidas (la planilla de cortinas mayores solo tiene invertidas), y las
+  // demás como si ninguna estuviera marcada. Así marcar o invertir una cortina
+  // mueve SOLO su precio —antes sacaba la pieza del panel de las otras, que
+  // se repartían la tela y el traslado entre menos metros y se movían todas
+  // (dueño, 2026-08-21)—, el traslado nunca se cobra dos veces y una
+  // cotización toda-A, toda-B o toda-invertida da exactamente lo de siempre.
+  const porFamilia = new Map<string, FilaResuelta[]>();
+  for (const r of resueltas) {
+    if (!r) continue;
+    const lista = porFamilia.get(r.cod);
+    if (lista) lista.push(r);
+    else porFamilia.set(r.cod, [r]);
+  }
+  const grupos = new Map<string, Grupo>();
+  for (const [cod, filasFam] of porFamilia) {
+    const configs = new Map<string, Config>();
+    for (const r of filasFam) if (!configs.has(r.config.clave)) configs.set(r.config.clave, r.config);
+    // Dúo/vertical y ancho de rollo son de la familia: los de su primera fila.
+    const { esDuo, esVertical, anchoRollo } = filasFam[0];
+    for (const [clave, c] of configs) {
+      const tela = precioMlPorCod(cod, catalogo, reglas, c.sistema);
       if (tela.motivo === 'sinPrecio') {
         avisar({
           tipo: 'tela',
@@ -637,30 +747,52 @@ export function cotizarFase0(
             'su tela se cotiza en $0. Revisa Admin → Precios → Tela de referencia.',
         });
       }
-      g = {
+      const extraAlto = extraAltoDe(c.sistema);
+      const piezas: Pieza[] = [];
+      let piezasCobradas = 0;
+      let m2Cobrados = 0;
+      for (const r of filasFam) {
+        const altoReal = altoRealM(r.f.alto, esDuo, extraAlto);
+        // Pieza INVERTIDA (rotada 90°): el alto real ocupa el ancho del rollo y
+        // lo que se consume a lo largo es el ancho de la cortina (o su peor caso
+        // de oscuridad) MÁS el extra, igual que un alto (Optimizador del Excel
+        // de cortinas mayores: `ALTO A UTILIZAR = ancho + 0,25`). Los m² no
+        // cambian: la cortina vendida es la misma.
+        const pieza: Pieza = {
+          ancho: r.f.ancho,
+          alto: r.f.alto,
+          altoReal,
+          m2: altoReal * r.f.ancho,
+          anchoEmpaque: c.invertida ? altoReal : r.f.anchoEmpaqueM,
+          largoRollo: c.invertida ? (r.f.anchoEmpaqueM ?? r.f.ancho) + extraAlto : undefined,
+        };
+        const n = Math.max(1, r.f.cantidad);
+        for (let i = 0; i < n; i++) piezas.push({ ...pieza });
+        if (r.config.clave === clave) {
+          piezasCobradas += n;
+          m2Cobrados += pieza.m2 * n;
+        }
+      }
+      grupos.set(clave, {
         cod,
         clave,
-        lineaB,
+        lineaB: c.lineaB,
+        invertida: c.invertida,
+        sistemaInv: c.sistemaInv,
         esDuo,
         esVertical,
-        sistema,
-        // Ancho de rollo de respaldo (2,45 histórico del Excel de precios, ≠
-        // 2,98 del corte de tela): último recurso, en producción
-        // ancho_rollo_data o el catálogo resuelven antes. `||` y no `??`: un
-        // ancho guardado en 0 tiene que caer al respaldo, si no cada pieza se
-        // va a un paño propio y la tela se cobra de más.
-        anchoRollo: anchoRolloMap[f.codInt] || Number(prod.anchoRollo) || reglas.anchoRolloFallbackM,
+        sistema: c.sistema,
+        anchoRollo,
         precioMl: tela.precio,
         arquetipo: tela.arquetipo,
-        piezas: [],
-      };
-      grupos.set(clave, g);
+        piezas,
+        piezasCobradas,
+        m2Cobrados,
+      });
     }
-    for (let i = 0; i < Math.max(1, f.cantidad); i++) g.piezas.push({ ...pieza });
-    return clave;
-  });
+  }
 
-  // Por panel (familia, o familia en categoría B): precio/m² combinado.
+  // Por panel: precio/m² combinado.
   const familias: ResultadoFamilia[] = [];
   const pm2PorCod = new Map<string, number>();
   for (const [clave, g] of grupos) {
@@ -682,12 +814,15 @@ export function cotizarFase0(
     const costoTela = g.precioMl * metrosTela;
     // Un sistema propio (beeblack) trae su tabla de precios y su margen: los
     // suyos ganan sobre los globales, y lo que no define cae al roller.
-    // La categoría B tiene su receta (`BLACKOUT_P|B`…) y su tabla de insumos;
-    // el resto, la de su familia con los precios del sistema si lo tiene.
+    // La categoría B tiene su receta (`BLACKOUT_P|B`…) y su tabla de insumos,
+    // la invertida la suya (`BLACKOUT_D|INV`); el resto, la de su familia con
+    // los precios del sistema si lo tiene.
     const materiales = materialesFamilia(
       g.lineaB
         ? resolverRecetaB(cod, g.esVertical, reglas.recetas)
-        : resolverReceta(cod, g.esVertical, reglas.recetas),
+        : g.sistemaInv
+          ? resolverRecetaInv(cod, g.esVertical, reglas.recetas)
+          : resolverReceta(cod, g.esVertical, reglas.recetas),
       g.piezas,
       insumosDeSistema(g.sistema, reglas),
       g.sistema?.margenInsumo ?? params.margenInsumo,
@@ -709,8 +844,12 @@ export function cotizarFase0(
       cod,
       clave,
       lineaB: g.lineaB,
+      invertida: g.invertida,
+      sistemaInvertida: g.sistemaInv,
       piezas: g.piezas.length,
       m2Total,
+      piezasCobradas: g.piezasCobradas,
+      m2Cobrados: g.m2Cobrados,
       metrosTela,
       precioMl: g.precioMl,
       costoTela,
@@ -719,7 +858,11 @@ export function cotizarFase0(
       traslado,
       costoTotal,
       precioM2,
-      exacto: g.lineaB ? recetaBEsExacta(cod) : recetaEsExacta(cod),
+      exacto: g.lineaB
+        ? recetaBEsExacta(cod)
+        : g.sistemaInv
+          ? recetaInvEsExacta(cod)
+          : recetaEsExacta(cod),
       arquetipoCodInt: g.arquetipo,
       panos,
       materiales: materiales.lineas,
@@ -769,6 +912,7 @@ export function cotizarFase0(
       cod: cod ?? '',
       clave: clave ?? '',
       lineaB: g?.lineaB ?? false,
+      invertida: g?.invertida ?? false,
       ancho: f.ancho,
       alto: f.alto,
       cantidad: f.cantidad,
