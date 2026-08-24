@@ -56,6 +56,8 @@ import {
   urlDeLineaFoto,
 } from '@/modules/visita/imagenesInforme';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { resolverFotoTela, type FotosTelas } from '@/modules/visita/fotosTelas';
+import { cargarFotosTelas } from '@/modules/visita/fotosTelasStore';
 import type { FotoVisita, GeoFirma, VisitaTerreno } from '@/modules/ots/types';
 import type { Ventana } from '@/modules/cotizador/types';
 import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
@@ -139,12 +141,22 @@ export function InformeVisita({
 
   const parche = (p: Partial<VisitaTerreno>) => setBorrador((v) => ({ ...v, ...p }));
 
-  // La ficha de cada tela sale del catálogo, por COD_INT. Sin foto cargada esa
-  // habitación va sin imagen — nunca se inventa una.
-  const fotoDeTela = useCallback(
-    (codInt: string) => catalogo[codInt.trim()]?.foto,
-    [catalogo],
-  );
+  // La foto de cada tela: la ficha del catálogo de productos manda, y si el
+  // código no tiene, la foto subida en Telas → Catálogo (inventario). Sin
+  // ninguna, esa habitación va sin imagen — nunca se inventa una.
+  const [fotosTelas, setFotosTelas] = useState<FotosTelas>({});
+  useEffect(() => {
+    let vivo = true;
+    if (!empresaId) {
+      setFotosTelas({});
+      return;
+    }
+    cargarFotosTelas(empresaId).then((m) => vivo && setFotosTelas(m));
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId]);
+  const fotoDeTela = useMemo(() => resolverFotoTela(catalogo, fotosTelas), [catalogo, fotosTelas]);
 
   // El esqueleto sale de la orden, no del modelo: tipo de cortina, tela,
   // accesorios y caída ya están cargados dato por dato. Al modelo solo se le

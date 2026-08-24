@@ -5,6 +5,7 @@ import { useRef, useState } from 'react';
 import { Camera, Image as ImageIcon, Save, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { comprimirFoto } from '@/modules/visita/imagen';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {
@@ -74,24 +75,42 @@ export default function TelaDialog({
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
 
+  // La foto va al bucket público `fotos-telas`, en la carpeta de la empresa
+  // (lo exige su política). Se achica antes de subir (1920 px, JPEG) porque una
+  // foto de teléfono pasa fácil los 5 MB que admite el bucket. El nombre lleva
+  // la hora, así que nunca pisa otra: se sube SIN upsert — el upsert de
+  // Storage es un INSERT … ON CONFLICT, que con estas políticas fallaba con
+  // «new row violates row-level security policy» (2026-08-21; ver
+  // sql/20260821_fotos_telas_insumos_rls.sql).
+  // Esta foto también la usa el informe de visita cuando el código no tiene
+  // ficha en el catálogo de productos (modules/visita/fotosTelas.ts).
   const onFoto = async (file: File) => {
+    if (!empresaId) {
+      setUploadMsg('⚠ Sin empresa: vuelve a iniciar sesión.');
+      return;
+    }
     setUploading(true);
     setUploadMsg('Subiendo foto…');
     try {
-      const ext = file.name.split('.').pop() || 'jpg';
+      const { blob, contentType, ext } = await comprimirFoto(file);
       const cod = (form.codigo || 'tela').trim().toUpperCase().replace(/\s+/g, '_');
       const path = `${empresaId}/${cod}_${Date.now()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('fotos-telas')
-        .upload(path, file, { upsert: true, contentType: file.type });
+        .upload(path, blob, { upsert: false, contentType });
       if (upErr) throw upErr;
       const { data: url } = supabase.storage.from('fotos-telas').getPublicUrl(path);
       if (!url?.publicUrl) throw new Error('No se pudo obtener URL pública');
       set('foto_url', url.publicUrl);
       setUploadMsg('✓ Foto guardada');
     } catch (e) {
-      const err = e as Error;
-      setUploadMsg('⚠ ' + err.message);
+      const msg = e instanceof Error ? e.message : String(e);
+      setUploadMsg(
+        '⚠ ' +
+          (/row-level security/i.test(msg)
+            ? 'Sin permiso para subir fotos de telas: hay que correr sql/20260821_fotos_telas_insumos_rls.sql.'
+            : msg),
+      );
     } finally {
       setUploading(false);
     }
