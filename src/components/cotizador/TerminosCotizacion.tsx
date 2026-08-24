@@ -7,11 +7,13 @@
 // proveedor y del recargo vigente, que son parámetros vivos.
 
 import { useMemo } from 'react';
+import type { ParametrosCotizador } from '@/modules/cotizador/preciosFase0';
 import {
-  recargoTarjetaEfectivo,
-  type ParametrosCotizador,
-} from '@/modules/cotizador/preciosFase0';
-import { terminosParaCotizacion, type ConfigTerminos } from '@/modules/cotizador/terminos';
+  conTerminoTarjeta,
+  terminosParaCotizacion,
+  textoTerminoTarjeta,
+  type ConfigTerminos,
+} from '@/modules/cotizador/terminos';
 
 interface TerminosCotizacionProps {
   config: ConfigTerminos;
@@ -31,15 +33,16 @@ export default function TerminosCotizacion({
   parametros,
   fmtPct,
 }: TerminosCotizacionProps) {
+  // La MISMA lista que imprime el PDF descargable: si los términos configurados
+  // ya hablan de la tarjeta de crédito, no se agrega la frase automática.
   const items = useMemo(
-    () => terminosParaCotizacion(config, categorias, telas),
-    [config, categorias, telas],
+    () =>
+      conTerminoTarjeta(
+        terminosParaCotizacion(config, categorias, telas),
+        textoTerminoTarjeta(parametros, fmtPct),
+      ),
+    [config, categorias, telas, parametros, fmtPct],
   );
-
-  const textoTarjeta =
-    parametros.proveedorTarjeta === 'flow'
-      ? `Tarjeta de crédito vía Flow (recargo ${fmtPct(recargoTarjetaEfectivo(parametros))}%): las cuotas y sus intereses dependen de tu banco.`
-      : `Tarjeta de crédito hasta 12 cuotas sin interés (recargo Mercado Pago ${fmtPct(recargoTarjetaEfectivo(parametros))}%).`;
 
   return (
     <section className="mt-4 rounded-lg border border-border bg-card/40 p-4 text-[11px] leading-relaxed text-muted-foreground">
@@ -48,7 +51,6 @@ export default function TerminosCotizacion({
         {items.map((t, i) => (
           <li key={`${i}-${t.slice(0, 24)}`}>{t}</li>
         ))}
-        <li>{textoTarjeta}</li>
       </ol>
     </section>
   );

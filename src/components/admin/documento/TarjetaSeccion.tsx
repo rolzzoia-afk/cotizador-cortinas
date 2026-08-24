@@ -10,7 +10,7 @@
 // selección es un `ring`, no un borde: así ni la barra ni la selección alteran
 // el alto de la sección, que es la referencia de las posiciones flotantes.
 
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { GripVertical } from 'lucide-react';
 import { LABEL_TIPO, type TipoSeccionDoc } from '@/modules/cotizador/docCotizacion';
 import MaquetaSeccion from './MaquetasSecciones';
@@ -27,8 +27,6 @@ interface TarjetaSeccionProps {
   onSeleccionar: () => void;
   onDragStart: () => void;
   onDropEn: () => void;
-  /** Las imágenes flotantes ancladas a esta sección. */
-  children?: ReactNode;
 }
 
 export default function TarjetaSeccion({
@@ -38,7 +36,6 @@ export default function TarjetaSeccion({
   onSeleccionar,
   onDragStart,
   onDropEn,
-  children,
 }: TarjetaSeccionProps) {
   const [sobre, setSobre] = useState(false);
 
@@ -82,7 +79,6 @@ export default function TarjetaSeccion({
       <div className="pointer-events-none">
         <MaquetaSeccion tipo={tipo} />
       </div>
-      {children}
     </div>
   );
 }

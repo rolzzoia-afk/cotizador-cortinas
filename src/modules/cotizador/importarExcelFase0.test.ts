@@ -129,6 +129,33 @@ describe('parsearExcelFase0', () => {
     expect(parsearExcelFase0(wb).otCliente).toBe('');
   });
 
+  it('rescata la OT detallada de la banda (la celda sobre la fila del cliente)', () => {
+    const wb = libro(
+      [['', 'ROL', 'CAD [IZQUIERDA]', 'EXTERNO', 1, '', 'BK 69', '', '', 'A', 'GRIS', '2,72', '1,6']],
+      [
+        ['', 'COTIZACION'],
+        ['', 'N° COTJS - 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA'],
+        ['', 'NOMBRE:', '', 'JEFERSON', '', 'OT CLIENTE:', 3085],
+      ],
+    );
+    const r = parsearExcelFase0(wb);
+    expect(r.otDetallada).toBe('N° COTJS - 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA');
+    expect(r.otCliente).toBe('3085');
+  });
+
+  it('no confunde el título de la banda con la OT detallada', () => {
+    const wb = libro(
+      [['', 'ROL', 'CAD [IZQUIERDA]', 'EXTERNO', 1, '', 'BK 69', '', '', 'A', 'GRIS', '2,72', '1,6']],
+      [
+        // Sin la línea de la OT: arriba del cliente solo queda el título, que
+        // no trae dígitos → no se toma por OT.
+        ['', 'LINEA PREMIUM [CATEGORIA B]'],
+        ['', 'NOMBRE:', '', 'JEFERSON'],
+      ],
+    );
+    expect(parsearExcelFase0(wb).otDetallada).toBe('');
+  });
+
   it('si la primera hoja no tiene la tabla, la busca en las demás (.xlsm maestro)', () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(

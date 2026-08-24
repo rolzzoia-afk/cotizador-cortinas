@@ -88,8 +88,12 @@ export default function BloqueEditable({
       <div
         ref={contRef}
         style={{ width: `${bloque.ancho}%` }}
-        className={`relative rounded-md border-2 border-dashed p-1 transition ${
-          seleccionado ? 'border-accent' : 'border-transparent hover:border-border'
+        // El marco de edición va con `outline` y no con `border-2 + p-1`: el
+        // borde y el padding le robaban 6 px por lado al contenido, así que el
+        // bloque medía menos que en la cotización real. `outline` se pinta por
+        // fuera y no ocupa caja.
+        className={`relative rounded-md outline-dashed outline-2 outline-offset-1 transition ${
+          seleccionado ? 'outline-accent' : 'outline-transparent hover:outline-border'
         } ${arrastrando ? 'opacity-40' : ''} ${!bloque.visible ? 'opacity-40' : ''}`}
         onClick={onSeleccionar}
       >

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Copy, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, FileDown, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,15 @@ import { formatCLP } from '@/modules/cotizador/calculos';
 import { categoriasTela } from '@/modules/cotizador/categoriaTela';
 import { categoriasDeVentanas } from '@/modules/cotizador/terminos';
 import { useTerminos } from '@/modules/cotizador/terminosStore';
+import {
+  conTerminoTarjeta,
+  terminosParaCotizacion,
+  textoTerminoTarjeta,
+} from '@/modules/cotizador/terminos';
+import { useDatosEmpresaCotizacion } from '@/modules/cotizador/datosEmpresaCotizacionStore';
+import { otDetalladaSugerida } from '@/modules/cotizador/otDetallada';
+// Solo el tipo: el generador se carga en diferido al apretar el botón.
+import type { FilaPdfAdicional } from '@/modules/cotizador/pdfCotizacion';
 import { useLayoutDoc } from '@/modules/cotizador/docCotizacionStore';
 import {
   bloquesEnFlujo,
@@ -80,6 +89,8 @@ import {
   filtrarDerivadosPorCupoManual,
 } from '@/modules/descuentos/adicionales-cenefa';
 import { PanelFamilia, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
+import FilaTotal from '@/components/cotizador/FilaTotal';
+import { FILAS_TOTALES, NOTA_IVA } from '@/modules/cotizador/filasTotales';
 import {
   Dialog,
   DialogContent,
@@ -294,6 +305,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const { anchoRollo, refresh: refreshAnchoRollo } = useAnchoRollo();
   const { parametros } = useParametrosCotizador();
   const { terminos } = useTerminos();
+  // Los textos fijos del PDF del cliente (banco, links, bandas): Admin los edita.
+  const { datosEmpresa } = useDatosEmpresaCotizacion();
   const { layout: layoutDoc } = useLayoutDoc();
   // El orden del documento lo define el layout de Admin → Documento. Se aplica
   // con `order` de flexbox sobre el contenedor, así que las secciones se quedan
@@ -335,6 +348,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // crea con ESTE número en vez del correlativo automático de la app. Se
   // autocompleta al importar un Excel que traiga "OT CLIENTE" en el encabezado.
   const [otManual, setOtManual] = useState('');
+  // La OT DETALLADA que va bajo el título en el PDF del cliente («N° COTJS -
+  // 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA»). Es texto
+  // libre y NO el número de la OT: por eso vive aparte de `otManual`, se puede
+  // editar también en una OT ya guardada y se persiste en `datosGenerales`.
+  const [otDetallada, setOtDetallada] = useState('');
+  // Mientras nadie la toque, la OT detallada se rearma sola con lo que va
+  // entrando a la cotización; en cuanto la vendedora escribe, manda su texto
+  // (el botón «Auto» devuelve el control al automático).
+  const [otDetalladaAMano, setOtDetalladaAMano] = useState(false);
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
   /** Familia cuyo desglose de precio se está mirando (null = ninguno). */
   const [desgloseCod, setDesgloseCod] = useState<string | null>(null);
@@ -373,6 +395,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   );
 
   const [guardandoOT, setGuardandoOT] = useState(false);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
   // Celdas a corregir a mano tras importar un Excel: id de fila → campos inválidos.
   const [erroresImport, setErroresImport] = useState<Map<string, Set<CampoFase0>>>(new Map());
   // Adicionales importados con COD_INT inválido: id de adicional → { 'codInt' }.
@@ -393,6 +416,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       envio?: 'gratis' | 'cobro_destino';
       usarTuboE78?: boolean;
     };
+    // Una OT guardada con su texto lo conserva tal cual: se escribió a
+    // propósito y ya se le mandó al cliente.
+    if (dg.otDetallada) {
+      setOtDetallada(dg.otDetallada);
+      setOtDetalladaAMano(true);
+    }
     setCliente({
       nombre: dg.cliente || '',
       rut: dg.rut || '',
@@ -672,6 +701,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           direccion: cliente.direccion,
           comuna: cliente.comuna,
           regionNombre: cliente.region,
+          otDetallada: otDetallada.trim(),
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
@@ -732,6 +762,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           direccion: cliente.direccion,
           comuna: cliente.comuna,
           regionNombre: cliente.region,
+          otDetallada: otDetallada.trim(),
           ot: numOT,
           canal: 'Cotizador',
           fecha: now.split('T')[0],
@@ -1068,7 +1099,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array' });
-      const { cortinas, adicionales: adicCrudos, otCliente } = parsearExcelFase0(wb);
+      const { cortinas, adicionales: adicCrudos, otCliente, otDetallada: otDet } =
+        parsearExcelFase0(wb);
       if (cortinas.length === 0 && adicCrudos.length === 0) {
         toast.error('No se encontraron filas con COD_INT y ANCHO en la planilla.');
         return;
@@ -1076,6 +1108,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // N° de OT del encabezado del Excel manual → campo "N° OT (Excel manual)".
       // Al editar una OT existente el número no se toca (el campo no aplica).
       if (otCliente && !editOtId) setOtManual(otCliente);
+      // La OT detallada de la banda sí aplica siempre: es texto del documento
+      // del cliente, no el número con el que se crea la OT. La de la planilla
+      // gana sobre la propuesta automática.
+      if (otDet) {
+        setOtDetallada(otDet);
+        setOtDetalladaAMano(true);
+      }
       const opts = {
         codIntValidos: new Set(Object.keys(catalogo)),
         categorias: new Set(categoriasSelect),
@@ -1257,6 +1296,170 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     [terminos, catsProducto, catsTela, parametros],
   );
 
+  // El folio que va en la cotización: el de la OT si ya está guardada, si no lo
+  // que la vendedora tecleó como N° manual. Puede no haber ninguno (una Fase 1
+  // recién empezada) y aun así el PDF se descarga.
+  const numeroCotizacion =
+    (editOtId && otCargada
+      ? String((otCargada.datosGenerales as Record<string, string>)?.ot ?? '').trim()
+      : '') ||
+    otManual.trim() ||
+    null;
+
+  // La OT detallada que se propone sola: número + visita + qué se está
+  // cotizando. Se recalcula con la grilla, así que agregar una vertical la
+  // agrega al texto mientras nadie lo haya escrito a mano.
+  const otDetalladaAuto = useMemo(
+    () =>
+      otDetalladaSugerida({
+        numero: numeroCotizacion ?? '',
+        vendedor: perfil?.nombre ?? '',
+        conVisita: !!otCargada?.datosGenerales?.visita,
+        cortinas: filas
+          .filter((f) => lineaDeFila.has(f.id))
+          .map((f) => {
+            const p = catalogo[f.codInt.trim()];
+            return { cod: p?.cod || f.codInt.trim(), nombre: p?.producto || '' };
+          }),
+        adicionales: adicionales
+          .filter((a) => a.codInt.trim())
+          .map((a) => ({
+            cod: a.codInt.trim(),
+            nombre: catalogo[a.codInt.trim()]?.producto || '',
+          })),
+      }),
+    [numeroCotizacion, perfil, otCargada, filas, lineaDeFila, adicionales, catalogo],
+  );
+
+  useEffect(() => {
+    if (!otDetalladaAMano) setOtDetallada(otDetalladaAuto);
+  }, [otDetalladaAuto, otDetalladaAMano]);
+
+  /** Descarga la cotización con el formato del PDF que se manda al cliente. */
+  const descargarPdf = async () => {
+    if (!resultado.lineas.length && !resultado.adicionales.length) {
+      toast.error('No hay nada que cotizar todavía.');
+      return;
+    }
+    setGenerandoPdf(true);
+    try {
+      // Carga diferida: jspdf pesa y no tiene por qué entrar al abrir la página.
+      const [{ generarPdfCotizacion }, { LOGO_ROLZZO }, { cargarLogoDataUrl }] =
+        await Promise.all([
+          import('@/modules/cotizador/pdfCotizacion'),
+          import('@/modules/cotizador/logoRolzzo'),
+          import('@/modules/cotizador/datosEmpresaCotizacionStore'),
+        ]);
+
+      const logoPropio = datosEmpresa.encabezado.logoUrl
+        ? await cargarLogoDataUrl(datosEmpresa.encabezado.logoUrl)
+        : null;
+
+      const filasValidas = filas.filter((f) => lineaDeFila.has(f.id));
+      const cortinas = filasValidas.map((f) => {
+        const ln = lineaDeFila.get(f.id)!;
+        const prod = catalogo[f.codInt.trim()];
+        return {
+          cod: ln.cod || (prod?.cod ?? ''),
+          cantidad: ln.cantidad,
+          producto: prod?.producto ?? '',
+          codInt: f.codInt.trim(),
+          tipo: prod?.tipo ?? '',
+          descripcion: prod?.descripcion ?? '',
+          ubicacion: f.ubicacion,
+          colorAcc: f.colorAcc,
+          ancho: ln.ancho,
+          alto: ln.alto,
+          valorUnit: ln.valorUnit,
+          descuento: ln.descuento,
+          total: ln.total,
+        };
+      });
+
+      const adicionalesPdf: FilaPdfAdicional[] = adicionales
+        .filter((a) => adicResDeFila.has(a.id))
+        .map((a) => {
+          const r = adicResDeFila.get(a.id)!;
+          const prod = catalogo[a.codInt.trim()];
+          return {
+            cod: prod?.cod ?? a.codInt.trim(),
+            cantidad: r.cantidad,
+            producto: r.producto,
+            codInt: a.codInt.trim(),
+            tipo: prod?.tipo ?? '',
+            descripcion: r.descripcion,
+            ubicacion: a.ubicacion,
+            colorAcc: a.colorAcc,
+            valorUnit: r.precioUnit,
+            descuento: r.descuento,
+            total: r.total,
+          };
+        });
+
+      // La instalación no vive en la grilla (se muestra en el recuadro), pero en
+      // el documento del cliente va como una fila más de ADICIONALES.
+      const inst = resultado.instalacion;
+      if (!inst.sinInstalacion && inst.cantidad > 0) {
+        adicionalesPdf.push({
+          cod: 'INSTALACION',
+          cantidad: inst.cantidad,
+          producto: 'INSTALACION ROLLER',
+          codInt: 'INST',
+          tipo: 'INSTALACION',
+          descripcion: inst.gratis
+            ? 'GRATIS'
+            : textoInstalacion(inst, parametros.instalacionGratisMinCortinas),
+          ubicacion: '',
+          colorAcc: '',
+          valorUnit: inst.precioUnit,
+          descuento: inst.descuento,
+          total: inst.total,
+          destacadoRojo: true,
+        });
+      }
+
+      const hoy = new Date();
+      generarPdfCotizacion({
+        numero: numeroCotizacion,
+        // Bajo el título va SOLO la OT detallada: si la vendedora no escribió
+        // ninguna, la banda queda con el título pelado (nunca con el número de
+        // la app, que no es lo que el cliente espera leer ahí).
+        otBanda: otDetallada.trim(),
+        otCliente: otDetallada.trim() || otManual.trim() || numeroCotizacion || '',
+        soloTelasB: catsTela.length === 1 && catsTela[0] === 'B',
+        hayTelaB: catsTela.includes('B'),
+        cliente: {
+          nombre: cliente.nombre,
+          rut: cliente.rut,
+          mail: cliente.mail,
+          telefono: cliente.telefono,
+          direccion: cliente.direccion,
+          comuna: cliente.comuna,
+        },
+        fecha: {
+          dia: hoy.getDate(),
+          mes: hoy.getMonth() + 1,
+          anio2: hoy.getFullYear() % 100,
+        },
+        cortinas,
+        adicionales: adicionalesPdf,
+        totales: t,
+        // La MISMA lista que muestra el documento en pantalla.
+        terminos: conTerminoTarjeta(
+          terminosParaCotizacion(terminos, catsProducto, catsTela),
+          textoTerminoTarjeta(parametros, fmtPct),
+        ),
+        proveedorTarjeta: parametros.proveedorTarjeta,
+        empresa: datosEmpresa,
+        logoDataUrl: logoPropio ?? LOGO_ROLZZO,
+      });
+    } catch (e) {
+      toast.error('No se pudo generar el PDF: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setGenerandoPdf(false);
+    }
+  };
+
   // Cuántos paños tiene cada ventana (para el badge "Paño n/m" en la grilla).
   const panosPorVid = useMemo(() => {
     const m = new Map<string, number>();
@@ -1345,6 +1548,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           >
             <FileUp className="h-4 w-4" /> Importar Excel
           </Button>
+          {/* El documento tal como se le manda al cliente (el que antes se
+              sacaba a mano desde la planilla Excel). */}
+          <Button
+            onClick={descargarPdf}
+            disabled={generandoPdf}
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            title="Descargar la cotización en PDF para enviársela al cliente"
+          >
+            <FileDown className="h-4 w-4" /> {generandoPdf ? 'Generando…' : 'Descargar PDF'}
+          </Button>
           <Button onClick={() => window.print()} size="sm" variant="outline" className="gap-1.5">
             <Printer className="h-4 w-4" /> Imprimir
           </Button>
@@ -1370,6 +1585,38 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               title="Número de OT de la planilla manual (OT CLIENTE). Si se deja vacío, la app asigna su correlativo automático. Se autocompleta al importar el Excel."
             />
           )}
+          {/* Va SIEMPRE (también en una OT ya guardada): es el texto que el
+              cliente ve bajo el título de su cotización. Se propone solo y se
+              puede corregir; «Auto» vuelve a la propuesta. */}
+          <label
+            className="block"
+            title="Lo que sale en rojo bajo el título del PDF que se manda al cliente, tal como se escribe hoy en la planilla. Se arma solo con el N°, la visita y lo que se está cotizando; al escribirlo a mano manda tu texto. Vacío = la banda queda solo con el título."
+          >
+            <span className="mb-1 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-muted-foreground">
+              OT detallada (PDF)
+              {otDetalladaAMano && otDetalladaAuto && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOtDetalladaAMano(false);
+                    setOtDetallada(otDetalladaAuto);
+                  }}
+                  className="rounded border border-border px-1.5 py-0.5 text-[10px] normal-case tracking-normal text-muted-foreground hover:text-foreground"
+                  title={`Volver al texto automático: ${otDetalladaAuto}`}
+                >
+                  Auto
+                </button>
+              )}
+            </span>
+            <Input
+              value={otDetallada}
+              onChange={(e) => {
+                setOtDetallada(e.target.value);
+                setOtDetalladaAMano(true);
+              }}
+              placeholder="N° COTJS - 07979-5 -1 - VISITA - VERTICALES Y DUAL…"
+            />
+          </label>
           <Campo label="RUT" value={cliente.rut} onChange={(v) => setCliente({ ...cliente, rut: v })} />
           <Campo label="Teléfono" value={cliente.telefono} onChange={(v) => setCliente({ ...cliente, telefono: v })} />
           <Campo label="Mail" value={cliente.mail} onChange={(v) => setCliente({ ...cliente, mail: v })} />
@@ -2086,8 +2333,6 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 ))}
             </>
           )}
-          <FilaTotal label="Subtotal neto" valor={formatCLP(t.subtotalNeto)} />
-          <FilaTotal label={`IVA ${Math.round(parametros.iva * 100)}%`} valor={formatCLP(t.ivaTransferencia)} />
           {conPeorCaso && (
             <p className="pt-1 text-[11px] leading-snug text-muted-foreground">
               Los sistemas de oscuridad se cotizan con el consumo de tela del montaje más caro
@@ -2104,13 +2349,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               ))}
             </div>
           )}
-          <FilaTotal label="Total transferencia" valor={formatCLP(t.totalTransferencia)} fuerte />
-          <div className="my-1 border-t border-border" />
-          <FilaTotal label="Total tarjeta crédito" valor={formatCLP(t.totalTarjeta)} />
-          <FilaTotal
-            label={`Abono ${Math.round(parametros.abonoInicial * 100)}% (inicio)`}
-            valor={formatCLP(t.abono50)}
-          />
+          {/* Solo los dos montos que paga el cliente. El IVA no se desglosa
+              (la nota de abajo dice que va incluido) y el abono inicial ya no
+              se imprime en la cotización: `FILAS_TOTALES` manda, y la maqueta
+              de la vista previa del editor lee la misma lista. */}
+          {FILAS_TOTALES.map((f) => (
+            <div key={f.id}>
+              {f.separadorAntes && <div className="my-1 border-t border-border" />}
+              <FilaTotal label={f.label} valor={formatCLP(f.valor(t))} fuerte={f.fuerte} />
+            </div>
+          ))}
+          <p className="pt-1 text-center text-[11px] text-muted-foreground">{NOTA_IVA}</p>
           <div className="my-1 border-t border-border" />
           {modo === 'fase3' ? (
             readOnlyFase3 ? (
@@ -2382,13 +2631,3 @@ function CampoRegion({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-function FilaTotal({ label, valor, fuerte }: { label: string; valor: string; fuerte?: boolean }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className={cn('text-muted-foreground', fuerte && 'font-semibold text-foreground')}>{label}</span>
-      <span className={cn('tabular-nums', fuerte ? 'text-base font-bold text-foreground' : 'text-foreground')}>
-        {valor}
-      </span>
-    </div>
-  );
-}

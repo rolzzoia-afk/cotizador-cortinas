@@ -54,6 +54,12 @@ export type ResultadoImportFase0 = {
   adicionales: FilaAdicionalImportada[];
   /** N° de OT del Excel manual ("OT CLIENTE: 3085" del encabezado); '' si no viene. */
   otCliente: string;
+  /**
+   * La OT DETALLADA de la banda del título («N° COTJS - 07979-5 -1 -
+   * VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA»): texto libre que la
+   * vendedora escribe bajo el título. '' si la planilla la trae en blanco.
+   */
+  otDetallada: string;
 };
 
 /** Campos llave que pueden quedar "en rojo" para corregir a mano. */
@@ -153,6 +159,32 @@ function otClienteDeEncabezado(matriz: unknown[][], headerIdx: number): string {
 }
 
 /**
+ * La OT detallada de la banda del título: en el «Formato de Cotización» es la
+ * celda que va JUSTO ARRIBA de la fila del cliente (la del rótulo "NOMBRE"),
+ * debajo del título. Se busca así —y no por rótulo— porque no tiene ninguno.
+ * Para no confundirla con el título («COTIZACION», «LINEA PREMIUM…») se exige
+ * que traiga algún dígito y un largo de OT; si no calza, se devuelve vacío y
+ * la vendedora la escribe a mano.
+ */
+function otDetalladaDeBanda(matriz: unknown[][], headerIdx: number): string {
+  let filaNombre = -1;
+  for (let i = 0; i < headerIdx; i++) {
+    if ((matriz[i] || []).some((c) => norm(c) === 'NOMBRE')) {
+      filaNombre = i;
+      break;
+    }
+  }
+  if (filaNombre <= 0) return '';
+  for (let i = filaNombre - 1; i >= 0 && i >= filaNombre - 3; i--) {
+    for (const celda of matriz[i] || []) {
+      const v = texto(celda);
+      if (v.length >= 8 && /\d/.test(v)) return v;
+    }
+  }
+  return '';
+}
+
+/**
  * Parsea la hoja de la cotización y separa las filas en CORTINAS y
  * ADICIONALES, usando la fila rótulo "ADICIONALES" como límite (todo lo que
  * está debajo son adicionales). Detecta automáticamente la fila de
@@ -162,7 +194,12 @@ function otClienteDeEncabezado(matriz: unknown[][], headerIdx: number): string {
  * También rescata el N° de OT manual del encabezado ("OT CLIENTE: 3085").
  */
 export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
-  const vacio: ResultadoImportFase0 = { cortinas: [], adicionales: [], otCliente: '' };
+  const vacio: ResultadoImportFase0 = {
+    cortinas: [],
+    adicionales: [],
+    otCliente: '',
+    otDetallada: '',
+  };
 
   let matriz: unknown[][] = [];
   let headerIdx = -1;
@@ -183,6 +220,7 @@ export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
   if (headerIdx < 0) return vacio;
 
   const otCliente = otClienteDeEncabezado(matriz, headerIdx);
+  const otDetallada = otDetalladaDeBanda(matriz, headerIdx);
 
   const colDe = new Map<number, keyof FilaImportadaFase0>();
   const idxTipo: number[] = [];
@@ -259,7 +297,7 @@ export function parsearExcelFase0(wb: XLSX.WorkBook): ResultadoImportFase0 {
     cortinas.push(f);
   }
 
-  return { cortinas, adicionales, otCliente };
+  return { cortinas, adicionales, otCliente, otDetallada };
 }
 
 export type OpcionesValidacion = {
