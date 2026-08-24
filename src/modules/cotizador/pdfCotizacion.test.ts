@@ -320,14 +320,23 @@ describe('generarPdfCotizacion', () => {
   });
 
   it('usa el logo recibido y, sin logo, cae al encabezado tipográfico', () => {
-    generarPdfCotizacion(entradaDemo());
-    expect(imagenes.some((d) => d.startsWith('data:image/png'))).toBe(true);
+    const logo = 'data:image/png;base64,iVBORw0KGgoAAAA';
+    generarPdfCotizacion(entradaDemo({ logoDataUrl: logo }));
+    expect(imagenes).toContain(logo);
 
     textosImpresos.length = 0;
     imagenes.length = 0;
     generarPdfCotizacion(entradaDemo({ logoDataUrl: null }));
     expect(impreso()).toContain('Rolzzo');
-    expect(imagenes.some((d) => d.startsWith('data:image/png'))).toBe(false);
+    // Los sellos siguen dibujándose: lo que no está es el logo.
+    expect(imagenes).not.toContain(logo);
+  });
+
+  it('los sellos van con transparencia: nada de recuadros sobre el papel', () => {
+    generarPdfCotizacion(entradaDemo());
+    generarPdfCotizacion(entradaDemo({ soloTelasB: false, hayTelaB: false }));
+    // Un JPEG no tiene canal alfa y llegaba con el fondo negro al pie.
+    expect(imagenes.every((d) => !d.startsWith('data:image/jpeg'))).toBe(true);
   });
 });
 
