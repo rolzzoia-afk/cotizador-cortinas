@@ -4,6 +4,7 @@ import {
   estiloVizDePano,
   panoLlevaMotor,
   patronDeTipoTela,
+  perfilesVizDePano,
   radioRollo,
   telaHexDeProducto,
   varianteViz,
@@ -192,6 +193,65 @@ describe('estiloVizDePano — cómo se pinta', () => {
 
   it('fuera de la dual no hay par de telas', () => {
     expect(estiloVizDePano(vent(), vent().panos[0], undefined, 'roller').telaDual).toBeUndefined();
+  });
+
+  it('el peso de la oscuridad solo existe en blanco o negro: el café lleva peso NEGRO', () => {
+    // Fotos del dueño (2026-08-21): soft light con perfiles café y peso negro.
+    // Es lo que dice el catálogo (E24 blanco / E44 negro, nada más).
+    const negro = estiloVizDePano(vent(), { colorMecanismo: 'NEG' } as Pano).herrajesHex;
+    const blanco = estiloVizDePano(vent(), { colorMecanismo: 'BCO' } as Pano).herrajesHex;
+    const cafe = estiloVizDePano(
+      vent({ categoria: 'SOFT_LIGHT_38mm' }),
+      { colorMecanismo: 'CAFÉ' } as Pano,
+      undefined,
+      'oscuridad',
+    );
+    expect(cafe.herrajesHex).not.toBe(negro);
+    expect(cafe.pesoHex).toBe(negro);
+    expect(
+      estiloVizDePano(vent({ categoria: 'DARK_38mm' }), { colorMecanismo: 'BCO' } as Pano, undefined, 'oscuridad')
+        .pesoHex,
+    ).toBe(blanco);
+    // Fuera de la oscuridad el peso sigue al color de accesorios.
+    const rol = estiloVizDePano(vent(), { colorMecanismo: 'CAFÉ' } as Pano, undefined, 'roller');
+    expect(rol.pesoHex).toBe(rol.herrajesHex);
+  });
+
+  it('la oscuridad trae sus perfiles; el resto no', () => {
+    expect(estiloVizDePano(vent(), {} as Pano, undefined, 'roller').perfiles).toBeUndefined();
+    const sl = estiloVizDePano(vent({ categoria: 'SOFT_LIGHT_38mm' }), {} as Pano, undefined, 'oscuridad');
+    expect(sl.perfiles).toEqual({ izq: true, der: true, base: false, sepIzq: false, sepDer: false, sepBase: false });
+  });
+});
+
+describe('perfilesVizDePano — se dibuja lo que el taller corta', () => {
+  const sl = (pano: Partial<Pano>) =>
+    perfilesVizDePano(vent({ categoria: 'SOFT_LIGHT_38mm' }), pano as Pano);
+
+  it('sin flags, la variante manda: laterales sí, base no (mismo default que el despiece)', () => {
+    expect(sl({})).toEqual({ izq: true, der: true, base: false, sepIzq: false, sepDer: false, sepBase: false });
+  });
+
+  it('el base aparece solo al activarlo, y un lateral se puede apagar', () => {
+    expect(sl({ perfilInfActivo: true })?.base).toBe(true);
+    expect(sl({ perfilIzqActivo: false })?.izq).toBe(false);
+    expect(sl({ perfilIzqActivo: false })?.der).toBe(true);
+  });
+
+  it('retro-compat: una superficie marcada cuenta como perfil activo aunque falte el flag', () => {
+    // Igual que `cortesOscuridad`: infActivo || infMuro || infPiso || infMarco.
+    expect(sl({ perfilInfPiso: true })?.base).toBe(true);
+    expect(sl({ perfilInfMarco: true })?.base).toBe(true);
+  });
+
+  it('los separadores se dibujan por lado', () => {
+    expect(sl({ separadorIzq: true, separadorInf: true })).toMatchObject({ sepIzq: true, sepDer: false, sepBase: true });
+  });
+
+  it('el DARK y el OSCURANTI también; el roller no tiene perfiles', () => {
+    expect(perfilesVizDePano(vent({ categoria: 'DARK_45mm' }), {} as Pano)?.izq).toBe(true);
+    expect(perfilesVizDePano(vent({ categoria: 'OSCURANTI_63mm' }), {} as Pano)?.der).toBe(true);
+    expect(perfilesVizDePano(vent(), {} as Pano)).toBeNull();
   });
 });
 
