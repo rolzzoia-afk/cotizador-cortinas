@@ -259,9 +259,11 @@ export function ProbadorCotizacionSection({
 
           {resultado.familias.map((f) => (
             <PanelFamilia
-              key={f.cod}
+              key={f.clave}
               f={f}
-              piezas={nombresDePiezas(resultado.lineas.filter((l) => l.clave === f.clave))}
+              // Los paños apuntan a todas las cortinas de la familia: la tarifa
+              // de cada panel se calcula con todas, se cobre con él o no.
+              piezas={nombresDePiezas(resultado.lineas.filter((l) => l.cod === f.cod))}
             />
           ))}
 

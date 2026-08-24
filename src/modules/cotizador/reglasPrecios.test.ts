@@ -6,11 +6,17 @@ import {
   REGLAS_PRECIOS_DEFAULT,
   RECETAS_DEFAULT,
   SISTEMA_CATEGORIA_B_KEY,
+  SISTEMA_INVERTIDA_KEY,
   claveReceta,
   claveRecetaB,
+  claveRecetaInv,
   conValoresMaximos,
+  recetasDeSistema,
+  resolverRecetaInv,
   sistemaCategoriaB,
   sistemaDeFila,
+  sistemaDeReceta,
+  sistemaInvertida,
   grupoDelInsumo,
   insumosParaFamilia,
   lamasPorPasada,
@@ -579,5 +585,88 @@ describe('sistema categoría B', () => {
   it('sin familias no es un aviso para la B (se aplica por fila)', () => {
     const { avisos } = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT);
     expect(avisos.some((a) => a.includes('Categoría B') && a.includes('familia'))).toBe(false);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// INVERTIDA — la cortina que se corta rotada en el rollo. Números del Excel
+// «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS» (2026-08-21): tubo 63 mm E 47 +
+// kit MEC 28, MO 30.000, traslado 50.000. Se elige por fila, solo en las
+// familias roller premium/delux (las únicas que esa planilla cambia de herraje).
+// ─────────────────────────────────────────────────────────────────────
+describe('sistema invertida', () => {
+  const inv = sistemaInvertida(REGLAS_PRECIOS_DEFAULT.sistemas)!;
+
+  it('trae los números de esa planilla y solo las 4 familias roller premium/delux', () => {
+    expect(inv.nombre).toBe('Invertida (más ancha que el rollo)');
+    expect(inv.manoObra).toBe(30000);
+    expect(inv.traslado).toBe(50000);
+    expect(inv.instalacionEmbebida).toBe(17500);
+    expect(inv.margenInsumo).toBe(0.65);
+    expect(inv.extraAltoM).toBe(0.25);
+    expect(inv.familias).toEqual(['BLACKOUT_P', 'BLACKOUT_D', 'SCREEN_P', 'SCREEN_D']);
+    // Su hoja Insumos: el tubo 63 mm y su kit (la general no los tiene), y
+    // publicidad/materiales al precio de esa copia.
+    expect(inv.insumos['E 47']?.valorMaximo).toBeCloseTo(35414.995, 3);
+    expect(inv.insumos['MEC 28']?.valorMaximo).toBeCloseTo(15823.668, 3);
+    expect(inv.insumos['PUB 01']?.valorMaximo).toBeCloseTo(1625.54, 2);
+    expect(inv.insumos.MAT00001?.valorMaximo).toBeCloseTo(1625.54, 2);
+    expect(REGLAS_PRECIOS_DEFAULT.insumos['E 47']).toBeUndefined();
+  });
+
+  it('se elige por FILA: solo si la cortina va invertida y su familia cambia de herraje', () => {
+    const sistemas = REGLAS_PRECIOS_DEFAULT.sistemas;
+    // Tener familias no la convierte en sistema de familia: una blackout delux
+    // derecha sigue cotizando con las reglas normales.
+    expect(sistemaDeFamilia('BLACKOUT_D', sistemas)).toBeUndefined();
+    expect(insumosParaFamilia('BLACKOUT_D', REGLAS_PRECIOS_DEFAULT)['E 47']).toBeUndefined();
+    expect(sistemaDeFila('BLACKOUT_D', false, sistemas, true)).toBe(inv);
+    expect(sistemaDeFila('SCREEN_P', false, sistemas, true)).toBe(inv);
+    expect(sistemaDeFila('BLACKOUT_D', false, sistemas, false)).toBeUndefined();
+    expect(sistemaDeFila('BLACKOUT_S', false, sistemas, true)).toBeUndefined();
+    expect(sistemaDeFila('DUOBK_P', false, sistemas, true)).toBeUndefined();
+    // La B gana sobre la invertida; el beeblack, sobre todo.
+    expect(sistemaDeFila('BLACKOUT_D', true, sistemas, true)?.nombre).toBe('Categoría B');
+    expect(sistemaDeFila('BEE_BK', false, sistemas, true)?.nombre).toBe('Beeblack');
+  });
+
+  it('sus recetas |INV llevan el tubo 63 mm y el kit MEC 28 en vez de E 02/E 05 + MEC 18', () => {
+    for (const fam of inv.familias) {
+      expect(claveRecetaInv(fam, false), fam).toBe(`${fam}|INV`);
+      const ins = resolverRecetaInv(fam, false).map((l) => l.insumo);
+      expect(ins, fam).toContain('E 47');
+      expect(ins, fam).toContain('MEC 28');
+      expect(ins, fam).not.toContain('E 02');
+      expect(ins, fam).not.toContain('E 05');
+      expect(ins, fam).not.toContain('MEC 18');
+    }
+    // Sin receta invertida, la familia cae a la suya (y el motor no la manda a este sistema).
+    expect(claveRecetaInv('BLACKOUT_S', false)).toBe('BLACKOUT_S');
+    expect(claveRecetaInv('DUOBK_P', false)).toBe('DUOBK_P');
+    expect(claveRecetaInv('BLACKOUT_V_P', true)).toBe(claveReceta('BLACKOUT_V_P', true));
+    expect(sistemaDeReceta('BLACKOUT_D|INV')).toBe(inv);
+    expect(recetasDeSistema(SISTEMA_INVERTIDA_KEY, inv, RECETAS_DEFAULT)).toEqual(
+      inv.familias.map((f) => `${f}|INV`),
+    );
+  });
+
+  it('unas reglas guardadas antes de que existiera lo reciben de fábrica, sin errores de validación', () => {
+    const r = normalizarReglasPrecios({
+      sistemas: { beeblack: { manoObra: 1 } },
+      recetas: { BLACKOUT_D: RECETAS_DEFAULT.BLACKOUT_D },
+      insumos: { 'E 02': 4462.5 },
+    });
+    expect(sistemaInvertida(r.sistemas)?.manoObra).toBe(30000);
+    expect(r.recetas['BLACKOUT_D|INV']).toBeDefined();
+    const { errores, avisos } = validarReglasPrecios(r);
+    expect(errores).toEqual([]);
+    expect(avisos.some((a) => a.includes('Invertida') && a.includes('familia'))).toBe(false);
+  });
+
+  it('sacarle E 47 a su tabla avisa (se cobraría al precio general… que no existe)', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    delete r.sistemas[SISTEMA_INVERTIDA_KEY].insumos['PUB 01'];
+    const { avisos } = validarReglasPrecios(r);
+    expect(avisos.some((a) => a.includes('Invertida') && a.includes('PUB 01'))).toBe(true);
   });
 });

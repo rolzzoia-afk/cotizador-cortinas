@@ -705,31 +705,58 @@ describe('motorFase0 — corte invertido', () => {
     expect(metrosTelaPorPanos(piezas, 2.98)).toBeCloseTo(3.0, 3);
   });
 
-  it('dos piezas invertidas comparten tiro si sus altos caben a lo ancho del rollo', () => {
+  it('dos piezas invertidas NO comparten tiro: cada una es su propio paño (Excel de cortinas mayores)', () => {
+    // Aunque sus altos quepan juntos a lo ancho del rollo, el Optimizador del
+    // Excel de cortinas mayores a 3,00 m suma un tiro por cortina (dueño,
+    // 2026-08-21: los precios tienen que calzar con esa planilla).
     const piezas = [
       { ancho: 3.0, altoReal: 1.45, anchoEmpaque: 1.45, largoRollo: 3.0 },
       { ancho: 2.6, altoReal: 1.5, anchoEmpaque: 1.5, largoRollo: 2.6 },
     ];
     const panos = empacarPanos(piezas, 2.98);
-    expect(panos).toHaveLength(1);
-    expect(panos[0].alto).toBeCloseTo(3.0, 3); // el tiro lo manda la más larga
+    expect(panos).toHaveLength(2);
+    expect(panos.map((p) => p.alto)).toEqual([3.0, 2.6]);
+    expect(metrosTelaPorPanos(piezas, 2.98)).toBeCloseTo(5.6, 3);
   });
 
-  it('cotizarFase0: invertir cambia la tela cobrada, no los m² ni los materiales', () => {
+  it('una invertida no se mete en el tiro de las derechas, ni al revés', () => {
+    const piezas = [
+      { ancho: 1.0, altoReal: 2.25 },
+      { ancho: 3.0, altoReal: 1.45, anchoEmpaque: 1.45, largoRollo: 3.25 },
+      { ancho: 1.2, altoReal: 2.0 },
+    ];
+    const panos = empacarPanos(piezas, 2.98);
+    // Las dos derechas comparten tiro (1,0 + 1,2 ≤ 2,98); la invertida va sola.
+    expect(panos).toHaveLength(2);
+    expect(panos[0].cortinas.sort()).toEqual([0, 2]);
+    expect(panos[0].alto).toBeCloseTo(2.25, 3);
+    expect(panos[1].cortinas).toEqual([1]);
+    expect(panos[1].alto).toBeCloseTo(3.25, 3);
+  });
+
+  it('cotizarFase0: invertir cambia la tela cobrada (ancho + extra) y el herraje, no los m²', () => {
     // 3,00 × 2,00 en rollo de 2,98: derecha no entra (y hoy se cobraba un solo
-    // tiro de 2,25); rotada entra de sobra y gasta 3,00 m de rollo.
+    // tiro de 2,25); rotada entra de sobra y gasta 3,00 + 0,25 m de rollo. Al
+    // ser blackout delux pasa al panel INVERTIDA (tubo 63 mm + kit MEC 28).
     const fila = { codInt: 'BK 18', ancho: 3.0, alto: 2.0, cantidad: 1 };
     const derecha = cotizarFase0([fila], CAT, AR);
     const invertida = cotizarFase0([{ ...fila, invertida: true }], CAT, AR);
     const fam = (r: typeof derecha) => r.familias.find((x) => x.cod === 'BLACKOUT_D')!;
+    expect(fam(derecha).clave).toBe('BLACKOUT_D');
     expect(fam(derecha).metrosTela).toBeCloseTo(2.25, 3);
-    expect(fam(invertida).metrosTela).toBeCloseTo(3.0, 3);
+    expect(fam(invertida).clave).toBe('BLACKOUT_D|INV');
+    expect(fam(invertida).metrosTela).toBeCloseTo(3.25, 3);
     expect(fam(invertida).panos[0].ancho).toBeCloseTo(2.25, 3);
-    // m² y materiales (tubo por suma de anchos, kit por cortina) son los mismos.
+    // Los m² son los mismos: la cortina vendida es la misma.
     expect(fam(invertida).m2Total).toBeCloseTo(fam(derecha).m2Total, 6);
-    expect(fam(invertida).costoMateriales).toBeCloseTo(fam(derecha).costoMateriales, 6);
     expect(invertida.lineas[0].m2).toBeCloseTo(derecha.lineas[0].m2, 6);
-    // Más tela → más VALOR M² → más VAL. UNIT.
+    // El herraje cambia: tubo 63 mm por metro y kit MEC 28, sin E 05 ni MEC 18.
+    const ins = fam(invertida).materiales.map((m) => m.insumo);
+    expect(ins).toContain('E 47');
+    expect(ins).toContain('MEC 28');
+    expect(ins).not.toContain('E 05');
+    expect(ins).not.toContain('MEC 18');
+    expect(fam(invertida).costoMateriales).toBeGreaterThan(fam(derecha).costoMateriales);
     expect(invertida.lineas[0].valorUnit).toBeGreaterThan(derecha.lineas[0].valorUnit);
   });
 
@@ -748,6 +775,115 @@ describe('motorFase0 — corte invertido', () => {
     const a = cotizarFase0(filas, CAT, AR);
     const b = cotizarFase0(filas.map((f) => ({ ...f, invertida: false })), CAT, AR);
     expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// INVERTIDA — el sistema con reglas propias de la cortina que se corta rotada.
+// Golden: el Excel «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS» (2026-08-21),
+// panel BLACKOUT_D con BK-D 4,20 × 1,70 en rollo de 3,00: tela 4,45 m
+// (ancho + 0,25) × 41.868, tubo 63 mm E 47 por metro, kit MEC 28, mano de obra
+// 30.000, traslado 50.000, PRECIO 562.354,53 + INSTALACIÓN 17.500.
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — invertida (Excel «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS»)', () => {
+  // BK-D en rollo de 2,95: 4,20 de ancho no entra derecha → va invertida.
+  const AR_INV: Record<string, number> = { ...AR, 'BK-D': 2.95 };
+  const fila = { codInt: 'BK-D', ancho: 4.2, alto: 1.7, cantidad: 1, invertida: true };
+  const r = cotizarFase0([fila], CAT, AR_INV);
+  const f = r.familias[0];
+  const cant = (ins: string) => f.materiales.find((m) => m.insumo === ins)?.cantidad;
+  const total = (ins: string) => f.materiales.find((m) => m.insumo === ins)?.total;
+
+  it('el panel es el de la invertida: tela a lo largo del rollo + 0,25, tubo 63 mm, MO y traslado propios', () => {
+    expect(f.clave).toBe('BLACKOUT_D|INV');
+    expect(f.invertida).toBe(true);
+    expect(f.lineaB).toBe(false);
+    expect(f.sistema).toBe('Invertida (más ancha que el rollo)');
+    expect(f.exacto).toBe(true);
+    expect(f.precioMl).toBe(41868);
+    expect(f.metrosTela).toBeCloseTo(4.45, 6);
+    expect(f.costoTela).toBeCloseTo(186312.6, 1);
+    expect(f.panos).toHaveLength(1);
+    expect(f.panos[0].alto).toBeCloseTo(4.45, 6);
+    expect(f.panos[0].ancho).toBeCloseTo(1.95, 6);
+    // Herraje del panel: el tubo 63 mm por metro de ancho y el kit por cortina.
+    expect(cant('E 47')).toBeCloseTo(4.2, 6);
+    expect(total('E 47')).toBeCloseTo(228835.35, 0);
+    expect(cant('MEC 28')).toBe(1);
+    expect(total('MEC 28')).toBeCloseTo(24344.1, 0);
+    expect(f.materiales.map((m) => m.insumo)).not.toEqual(expect.arrayContaining(['E 02', 'E 05', 'MEC 18']));
+    // PUB 01 y MAT00001 con el precio de ESA hoja Insumos (1.625,54 / 0,65).
+    expect(total('PUB 01')).toBeCloseTo(2500.83, 0);
+    expect(total('MAT00001')).toBeCloseTo(2500.83, 0);
+    expect(f.costoMateriales).toBeCloseTo(296041.93, 0);
+    expect(f.manoObra).toBe(30000);
+    expect(f.traslado).toBe(50000);
+    expect(f.costoTotal).toBeCloseTo(562354.53, 0);
+    expect(f.m2Total).toBeCloseTo(8.19, 6);
+    expect(f.precioM2).toBeCloseTo(68663.56, 0);
+  });
+
+  it('el VAL. UNIT calza al peso: 562.354,53 de cortina + 17.500 de instalación', () => {
+    expect(r.lineas[0].invertida).toBe(true);
+    expect(r.lineas[0].clave).toBe('BLACKOUT_D|INV');
+    expect(r.lineas[0].instalacionEmbebida).toBe(17500);
+    expect(r.lineas[0].valorUnit).toBeCloseTo(562354.53 + 17500, 0);
+  });
+
+  it('derecha (sin invertir) la misma cortina va al panel de siempre', () => {
+    const d = cotizarFase0([{ ...fila, invertida: false }], CAT, AR_INV);
+    expect(d.familias[0].clave).toBe('BLACKOUT_D');
+    expect(d.familias[0].invertida).toBe(false);
+    expect(d.familias[0].materiales.map((m) => m.insumo)).not.toContain('E 47');
+    expect(d.familias[0].manoObra).toBe(PARAMETROS_DEFAULT.manoObraRoller);
+  });
+
+  it('la derecha y la invertida de la misma tela son paneles distintos, y la derecha no se mueve', () => {
+    const filas = [
+      { codInt: 'BK 18', ancho: 1.5, alto: 2.0, cantidad: 1 },
+      { codInt: 'BK 18', ancho: 3.2, alto: 2.0, cantidad: 1 },
+    ];
+    const derechas = cotizarFase0(filas, CAT, AR);
+    const mixta = cotizarFase0([filas[0], { ...filas[1], invertida: true }], CAT, AR);
+    expect(mixta.familias.map((x) => x.clave).sort()).toEqual(['BLACKOUT_D', 'BLACKOUT_D|INV']);
+    // La derecha vale lo mismo que si la otra no estuviera invertida.
+    expect(mixta.lineas[0].valorUnit).toBeCloseTo(derechas.lineas[0].valorUnit, 6);
+    expect(mixta.lineas[0].invertida).toBe(false);
+    expect(mixta.lineas[1].invertida).toBe(true);
+    expect(mixta.lineas[1].valorUnit).not.toBeCloseTo(derechas.lineas[1].valorUnit, 0);
+  });
+
+  it('una B invertida sigue siendo B (la copia B no tiene panel de invertidas), pero gasta la tela a lo largo', () => {
+    const b = cotizarFase0([{ ...fila, lineaB: true }], CAT, AR_INV);
+    expect(b.familias[0].clave).toBe('BLACKOUT_D|B|INV');
+    expect(b.familias[0].lineaB).toBe(true);
+    expect(b.familias[0].invertida).toBe(true);
+    expect(b.familias[0].sistemaInvertida).toBe(false);
+    expect(b.familias[0].metrosTela).toBeCloseTo(4.45, 6);
+    expect(b.familias[0].materiales.map((m) => m.insumo)).not.toContain('E 47');
+    expect(b.familias[0].manoObra).toBe(15000);
+  });
+
+  it('la gama standard y el dúo invertidos no cambian de herraje: su receta de siempre, tela a lo largo', () => {
+    const s = cotizarFase0([{ codInt: 'BK 50', ancho: 3.2, alto: 1.7, cantidad: 1, invertida: true }], CAT, AR);
+    expect(s.familias[0].clave).toBe('BLACKOUT_S|INV');
+    expect(s.familias[0].invertida).toBe(true);
+    expect(s.familias[0].sistemaInvertida).toBe(false);
+    expect(s.familias[0].sistema).toBeUndefined();
+    expect(s.familias[0].materiales.map((m) => m.insumo)).not.toContain('E 47');
+    expect(s.familias[0].metrosTela).toBeCloseTo(3.45, 6);
+    expect(s.familias[0].manoObra).toBe(PARAMETROS_DEFAULT.manoObraRoller);
+    const d = cotizarFase0([{ codInt: 'DU 25', ancho: 3.2, alto: 1.7, cantidad: 1, invertida: true }], CAT, AR);
+    expect(d.familias[0].clave).toBe('DUOBK_D|INV');
+    expect(d.familias[0].sistemaInvertida).toBe(false);
+  });
+
+  it('dos invertidas suman cada una su tiro, aunque cupieran juntas a lo ancho del rollo', () => {
+    const dos = cotizarFase0([{ ...fila, alto: 1.0, cantidad: 2 }], CAT, AR_INV);
+    expect(dos.familias[0].panos).toHaveLength(2);
+    expect(dos.familias[0].metrosTela).toBeCloseTo(8.9, 6);
+    expect(dos.familias[0].manoObra).toBe(60000);
+    expect(dos.familias[0].traslado).toBe(50000);
   });
 });
 
@@ -809,17 +945,17 @@ describe('motorFase0 — categoría B (COTJS-10452-1, CARLOS)', () => {
   });
 
   it('A y B de la misma tela son paneles distintos, y la A no se mueve', () => {
-    const sola = cotizarFase0([{ codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1 }], CAT_B, AR_B);
-    const mixta = cotizarFase0(
-      [
-        { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1 },
-        { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1, lineaB: true },
-      ],
-      CAT_B,
-      AR_B,
-    );
+    const filas = [
+      { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1 },
+      { codInt: 'SC 47', ancho: 1.445, alto: 2.37, cantidad: 1 },
+    ];
+    const ambasA = cotizarFase0(filas, CAT_B, AR_B);
+    const ambasB = cotizarFase0(filas.map((f) => ({ ...f, lineaB: true })), CAT_B, AR_B);
+    const mixta = cotizarFase0([filas[0], { ...filas[1], lineaB: true }], CAT_B, AR_B);
     expect(mixta.familias.map((f) => f.clave).sort()).toEqual(['SCREEN_P', 'SCREEN_P|B']);
-    expect(mixta.lineas[0].valorUnit).toBeCloseTo(sola.lineas[0].valorUnit, 6);
+    // Cada una vale lo que valdría si toda la familia fuera como ella.
+    expect(mixta.lineas[0].valorUnit).toBeCloseTo(ambasA.lineas[0].valorUnit, 6);
+    expect(mixta.lineas[1].valorUnit).toBeCloseTo(ambasB.lineas[1].valorUnit, 6);
     expect(mixta.lineas[1].valorUnit).toBeLessThan(mixta.lineas[0].valorUnit);
   });
 
@@ -861,6 +997,126 @@ describe('motorFase0 — categoría B (COTJS-10452-1, CARLOS)', () => {
     const m18 = mat.find((m) => m.insumo === 'MEC 18');
     expect(m18?.cantidad).toBe(0);
     expect(m18?.nota).toContain('2,10');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// CASO MIXTO — los botones de una fila (categoría B, invertida) mueven SOLO esa
+// fila. Cada panel se arma con TODAS las cortinas de la familia configuradas
+// como él, así que cada cortina vale lo que valdría si toda la familia fuera
+// como ella. Antes el panel B / INV sacaba la pieza del panel de las otras, que
+// se repartían la tela y el traslado entre menos metros y se movían todas
+// (dueño, 2026-08-21: «siguen cambiando los precios de otras cortinas que no
+// son la que estoy apretando los botones»).
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixto)', () => {
+  // La grilla del reclamo: cuatro blackout delux de la misma tela.
+  const filas = [
+    { codInt: 'BK 18', ancho: 1.8, alto: 2.2, cantidad: 1 },
+    { codInt: 'BK 18', ancho: 2.6, alto: 2.4, cantidad: 1 },
+    { codInt: 'BK 18', ancho: 1.6, alto: 2.0, cantidad: 1 },
+    { codInt: 'BK 18', ancho: 2.4, alto: 2.3, cantidad: 1 },
+  ];
+  const base = cotizarFase0(filas, CAT, AR);
+  const con = (patch: Partial<(typeof filas)[number]> & { lineaB?: boolean; invertida?: boolean }, i = 0) =>
+    cotizarFase0(filas.map((f, k) => (k === i ? { ...f, ...patch } : f)), CAT, AR);
+  const valores = (r: ReturnType<typeof cotizarFase0>) => r.lineas.map((l) => l.valorUnit);
+  const lasOtras = (r: ReturnType<typeof cotizarFase0>) => valores(r).slice(1);
+
+  it('marcar B la primera no mueve a las otras tres', () => {
+    const r = con({ lineaB: true });
+    expect(lasOtras(r)).toEqual(lasOtras(base));
+    expect(valores(r)[0]).not.toBeCloseTo(valores(base)[0], 0);
+    expect(r.lineas[0].clave).toBe('BLACKOUT_D|B');
+    expect(r.lineas.slice(1).every((l) => l.clave === 'BLACKOUT_D')).toBe(true);
+  });
+
+  it('invertir la primera no mueve a las otras tres', () => {
+    const r = con({ invertida: true });
+    expect(lasOtras(r)).toEqual(lasOtras(base));
+    expect(valores(r)[0]).not.toBeCloseTo(valores(base)[0], 0);
+    expect(r.lineas[0].clave).toBe('BLACKOUT_D|INV');
+  });
+
+  it('B e invertida a la vez: panel `cod|B|INV`, y las otras tres quietas', () => {
+    const r = con({ lineaB: true, invertida: true });
+    expect(lasOtras(r)).toEqual(lasOtras(base));
+    expect(r.lineas[0].clave).toBe('BLACKOUT_D|B|INV');
+    expect(r.lineas[0].lineaB).toBe(true);
+    expect(r.lineas[0].invertida).toBe(true);
+  });
+
+  it('cada cortina vale lo que valdría si toda la familia fuera como ella', () => {
+    const todasB = cotizarFase0(filas.map((f) => ({ ...f, lineaB: true })), CAT, AR);
+    const todasInv = cotizarFase0(filas.map((f) => ({ ...f, invertida: true })), CAT, AR);
+    expect(valores(con({ lineaB: true }))[0]).toBeCloseTo(valores(todasB)[0], 6);
+    expect(valores(con({ invertida: true }, 2))[2]).toBeCloseTo(valores(todasInv)[2], 6);
+    // Y la B de una familia mixta NO paga el traslado entero ella sola.
+    const sola = cotizarFase0([{ ...filas[0], lineaB: true }], CAT, AR);
+    expect(valores(con({ lineaB: true }))[0]).toBeLessThan(valores(sola)[0]);
+  });
+
+  it('marcar B una segunda fila tampoco mueve a la primera B', () => {
+    const una = con({ lineaB: true });
+    const dos = cotizarFase0(filas.map((f, k) => (k < 2 ? { ...f, lineaB: true } : f)), CAT, AR);
+    expect(valores(dos)[0]).toBeCloseTo(valores(una)[0], 6);
+    expect(valores(dos).slice(2)).toEqual(valores(base).slice(2));
+  });
+
+  it('el panel B se arma con las cuatro cortinas y dice a cuántas se cobra', () => {
+    const r = con({ lineaB: true });
+    const b = r.familias.find((f) => f.clave === 'BLACKOUT_D|B')!;
+    const a = r.familias.find((f) => f.clave === 'BLACKOUT_D')!;
+    expect(b.piezas).toBe(4);
+    expect(b.piezasCobradas).toBe(1);
+    expect(b.m2Cobrados).toBeCloseTo(r.lineas[0].m2, 6);
+    expect(b.m2Total).toBeCloseTo(a.m2Total, 6);
+    expect(b.traslado).toBe(45000);
+    expect(b.manoObra).toBe(15000 * 4);
+    // Los paños apuntan a las cuatro cortinas de la familia, no solo a la B.
+    expect(b.panos.flatMap((p) => p.cortinas).sort()).toEqual([0, 1, 2, 3]);
+    expect(a.piezas).toBe(4);
+    expect(a.piezasCobradas).toBe(3);
+    expect(a.m2Total).toBeCloseTo(base.familias[0].m2Total, 6);
+    expect(a.precioM2).toBeCloseTo(base.familias[0].precioM2, 6);
+  });
+
+  it('toda-A y toda-B siguen dando un solo panel, con todas cobradas (regresión)', () => {
+    expect(base.familias).toHaveLength(1);
+    expect(base.familias[0].piezasCobradas).toBe(4);
+    const todasB = cotizarFase0(filas.map((f) => ({ ...f, lineaB: true })), CAT, AR);
+    expect(todasB.familias).toHaveLength(1);
+    expect(todasB.familias[0].clave).toBe('BLACKOUT_D|B');
+    expect(todasB.familias[0].piezasCobradas).toBe(4);
+  });
+
+  it('la gama standard invertida (sin sistema propio) tampoco mueve a su compañera', () => {
+    const dosS = [
+      { codInt: 'BK 50', ancho: 1.5, alto: 2.0, cantidad: 1 },
+      { codInt: 'BK 50', ancho: 3.2, alto: 1.7, cantidad: 1 },
+    ];
+    const derechas = cotizarFase0(dosS, CAT, AR);
+    const mixta = cotizarFase0([dosS[0], { ...dosS[1], invertida: true }], CAT, AR);
+    const todasInv = cotizarFase0(dosS.map((f) => ({ ...f, invertida: true })), CAT, AR);
+    expect(mixta.lineas[0].valorUnit).toBeCloseTo(derechas.lineas[0].valorUnit, 6);
+    expect(mixta.lineas[1].valorUnit).toBeCloseTo(todasInv.lineas[1].valorUnit, 6);
+    expect(mixta.familias.map((f) => f.clave).sort()).toEqual(['BLACKOUT_S', 'BLACKOUT_S|INV']);
+  });
+
+  it('una invertida forzada (más ancha que el rollo) no rompe el panel de las derechas', () => {
+    const r = cotizarFase0(
+      [
+        { codInt: 'BK 18', ancho: 1.5, alto: 2.0, cantidad: 1 },
+        { codInt: 'BK-D', ancho: 4.2, alto: 1.7, cantidad: 1, invertida: true },
+      ],
+      CAT,
+      { ...AR, 'BK-D': 2.95 },
+    );
+    const a = r.familias.find((f) => f.clave === 'BLACKOUT_D')!;
+    expect(a.piezas).toBe(2);
+    expect(a.piezasCobradas).toBe(1);
+    expect(Number.isFinite(a.precioM2)).toBe(true);
+    expect(r.lineas[0].valorUnit).toBeGreaterThan(0);
   });
 });
 

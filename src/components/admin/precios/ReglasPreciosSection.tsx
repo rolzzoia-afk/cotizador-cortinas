@@ -28,8 +28,7 @@ import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   REGLAS_PRECIOS_DEFAULT,
-  SISTEMA_CATEGORIA_B_KEY,
-  SUFIJO_RECETA_B,
+  recetasDeSistema,
   sonReglasPreciosDefault,
   validarReglasPrecios,
   type ReglasPrecios,
@@ -182,7 +181,8 @@ export function ReglasPreciosSection() {
           optimizada por paños, los materiales, la mano de obra y el traslado, y ese total se reparte
           entre los metros cuadrados de todas. De ahí sale el <strong>valor del m²</strong>, y cada
           cortina paga sus metros cuadrados a ese valor más la instalación. Por eso agregar o quitar
-          una cortina cambia el precio de las otras de su familia.
+          una cortina cambia el precio de las otras de su familia; marcarla B o invertirla, no: su
+          valor del m² se calcula como si toda la familia fuera igual que ella.
         </p>
 
         {!sonReglasPreciosDefault(draft) && (
@@ -286,12 +286,10 @@ export function ReglasPreciosSection() {
           sistema={{
             clave,
             nombre: s.nombre,
-            // La categoría B no tiene familias: sus recetas son las `|B`, y ahí
-            // es donde el menú «usar en…» tiene que poder meter un insumo.
-            familias:
-              clave === SISTEMA_CATEGORIA_B_KEY
-                ? Object.keys(draft.recetas).filter((k) => k.endsWith(SUFIJO_RECETA_B))
-                : s.familias,
+            // La categoría B y la invertida cotizan con sus recetas con sufijo
+            // (`|B`, `|INV`): ahí es donde el menú «usar en…» tiene que poder
+            // meter un insumo.
+            familias: recetasDeSistema(clave, s, draft.recetas),
           }}
           precioEnGeneral={(cod) => draft.insumos[cod]?.valorMaximo}
           onChange={(insumos) =>

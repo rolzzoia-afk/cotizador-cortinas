@@ -2192,15 +2192,19 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 Las cortinas de una misma familia se cotizan juntas: se suma la tela ya optimizada
                 por paños, los materiales, la mano de obra y el traslado, y ese total se reparte
                 entre los metros cuadrados de todas. Por eso agregar o quitar una cortina cambia el
-                precio de las demás de su familia.
+                precio de las demás de su familia. Marcar una como B o invertirla cambia solo esa
+                cortina: su valor del m² se calcula como si toda la familia fuera igual que ella.
               </DialogDescription>
             </DialogHeader>
             <div className="max-h-[70vh] overflow-y-auto">
               {familiaDesglose && (
                 <PanelFamilia
                   f={familiaDesglose}
+                  // Los paños del panel apuntan a TODAS las cortinas de la
+                  // familia (la tarifa se calcula con todas), no solo a las que
+                  // se cobran con él.
                   piezas={nombresDePiezas(
-                    resultado.lineas.filter((l) => l.clave === familiaDesglose.clave),
+                    resultado.lineas.filter((l) => l.cod === familiaDesglose.cod),
                   )}
                 />
               )}
