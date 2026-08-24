@@ -1532,12 +1532,67 @@ describe('motorFase0 — la fila de instalación cuenta VENTANAS, no paños', ()
     expect(r.instalacion.gratis).toBe(false);
     expect(r.instalacion.total).toBe(3 * 17500);
   });
+
+  // La instalación es una línea de ADICIONALES y se negocia como cualquier
+  // otra: el % escrito a mano le gana a la regla automática.
+  describe('el % de instalación puesto a mano', () => {
+    const cotizar = (n: number, opts: { region?: boolean; sin?: boolean; manual?: number | null }) =>
+      cotizarFase0(
+        Array.from({ length: n }, () => fila()),
+        CAT, {}, [], PARAMETROS_DEFAULT, opts.region ?? false, opts.sin ?? false,
+        undefined, opts.manual ?? null,
+      );
+
+    it('le gana a «gratis por llegar al mínimo»', () => {
+      const auto = cotizar(4, {});
+      expect(auto.instalacion.total).toBe(0);
+      const r = cotizar(4, { manual: 0.5 });
+      expect(r.instalacion.descuento).toBe(0.5);
+      expect(r.instalacion.total).toBe(4 * 17500 * 0.5);
+      expect(r.instalacion.descuentoManual).toBe(true);
+    });
+
+    it('le gana al % de región', () => {
+      const r = cotizar(2, { region: true, manual: 0.4 });
+      expect(r.instalacion.descuento).toBe(0.4);
+      expect(r.instalacion.total).toBe(2 * 17500 * 0.6);
+    });
+
+    it('un 0 a mano cobra la instalación completa aunque llegue al mínimo', () => {
+      const r = cotizar(5, { manual: 0 });
+      expect(r.instalacion.total).toBe(5 * 17500);
+      expect(r.instalacion.gratis).toBe(false);
+    });
+
+    it('un 100 % a mano la deja en cero y la marca gratis', () => {
+      const r = cotizar(2, { manual: 1 });
+      expect(r.instalacion.total).toBe(0);
+      expect(r.instalacion.gratis).toBe(true);
+    });
+
+    it('sin instalación no hay nada que descontar', () => {
+      const r = cotizar(4, { sin: true, manual: 0 });
+      expect(r.instalacion.total).toBe(0);
+      expect(r.instalacion.descuentoManual).toBe(false);
+    });
+
+    it('null deja mandar a la regla automática', () => {
+      expect(cotizar(4, { manual: null }).instalacion.total).toBe(0);
+      expect(cotizar(4, { manual: null }).instalacion.descuentoManual).toBe(false);
+    });
+
+    it('el total de la cotización lo refleja', () => {
+      const auto = cotizar(4, {});
+      const r = cotizar(4, { manual: 0 });
+      expect(r.subtotalNeto - auto.subtotalNeto).toBe(4 * 17500);
+    });
+  });
 });
 
 describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () => {
   const base = {
     cantidad: 2, precioUnit: 17500, descuento: 0, total: 35000,
-    gratis: false, region: false, sinInstalacion: false, partes: [],
+    gratis: false, region: false, sinInstalacion: false, descuentoManual: false, partes: [],
   };
   it('bajo el mínimo lo dice', () => {
     expect(textoInstalacion(base, 4)).toBe('2 cortinas, bajo el mínimo de 4');
@@ -1555,5 +1610,13 @@ describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () =>
   });
   it('una sola cortina va en singular', () => {
     expect(textoInstalacion({ ...base, cantidad: 1 }, 4)).toBe('1 cortina, bajo el mínimo de 4');
+  });
+  it('el % puesto a mano manda sobre el motivo automático', () => {
+    expect(
+      textoInstalacion({ ...base, descuentoManual: true, descuento: 0.4 }, 4),
+    ).toBe('2 cortinas, 40 % de descuento');
+    expect(
+      textoInstalacion({ ...base, descuentoManual: true, descuento: 1 }, 4),
+    ).toBe('2 cortinas, sin costo');
   });
 });

@@ -214,6 +214,8 @@ export type InstalacionResultado = {
   gratis: boolean; // descuento >= 1
   region: boolean; // si se cotizó como región
   sinInstalacion: boolean; // true = cliente retira / solo cortina (sin instalación)
+  /** El % lo puso la vendedora a mano y le ganó a la regla automática. */
+  descuentoManual: boolean;
   /** Desglose cuando conviven sistemas que cobran distinto (roller + beeblack). */
   partes: ParteInstalacion[];
 };
@@ -235,6 +237,10 @@ export type AvisoCotizacion = {
 export function textoInstalacion(i: InstalacionResultado, minGratis: number): string {
   const n = `${i.cantidad} ${i.cantidad === 1 ? 'cortina' : 'cortinas'}`;
   if (i.sinInstalacion) return `${n}, sin instalación`;
+  if (i.descuentoManual) {
+    const pct = Math.round(i.descuento * 100);
+    return pct >= 100 ? `${n}, sin costo` : `${n}, ${pct} % de descuento`;
+  }
   if (i.region) {
     const pct = Math.round(i.descuento * 100);
     return pct >= 100 ? `${n}, región: sin costo` : `${n}, región: ${pct} % de descuento`;
@@ -586,6 +592,13 @@ export function cotizarFase0(
   region = false,
   sinInstalacion = false,
   reglas: ReglasPrecios = REGLAS_PRECIOS_DEFAULT,
+  /**
+   * El % de descuento de la instalación puesto a mano (0–1), que le gana a la
+   * regla automática (gratis por cantidad / región). `null` = la regla manda.
+   * Existe porque la instalación es una línea más de ADICIONALES y la
+   * vendedora la negocia como cualquier otra, sobre todo a región.
+   */
+  descuentoInstalacionManual: number | null = null,
 ): ResultadoCotizacion {
   const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
 
@@ -999,13 +1012,18 @@ export function cotizarFase0(
   // parámetro editable del Admin no hacía nada. Verificado contra la copia
   // COTAP-83447, que con 2 cortinas la cobra.
   const alcanzaMinimo = nInstalables >= minGratis;
+  // El % a mano le gana a la regla: la instalación se negocia como cualquier
+  // otro adicional. «Sin instalación» no: ahí no hay nada que cobrar.
+  const hayManual = !sinInstalacion && descuentoInstalacionManual != null;
   const descInstal = sinInstalacion
     ? 1
-    : region
-      ? clamp01(descRegion)
-      : alcanzaMinimo
-        ? clamp01(descRM)
-        : 0;
+    : hayManual
+      ? clamp01(descuentoInstalacionManual as number)
+      : region
+        ? clamp01(descRegion)
+        : alcanzaMinimo
+          ? clamp01(descRM)
+          : 0;
   const partes: ParteInstalacion[] =
     sinInstalacion || nInstalables === 0
       ? []
@@ -1026,9 +1044,10 @@ export function cotizarFase0(
     partes,
     // "GRATIS" sólo si no se cobra extra y (es región 100% off o llega al mínimo
     // de cortinas en RM).
-    gratis: !sinInstalacion && totalInstal === 0 && (region || alcanzaMinimo),
+    gratis: !sinInstalacion && totalInstal === 0 && (region || alcanzaMinimo || hayManual),
     region,
     sinInstalacion,
+    descuentoManual: hayManual,
   };
 
   const subtotalCortinas = lineas.reduce((s, l) => s + l.total, 0);
