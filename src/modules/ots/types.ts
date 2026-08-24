@@ -95,6 +95,12 @@ export type DatosGenerales = {
   region?: boolean;
   /** Descuento de instalación (0–1) para esta OT a región; si falta usa el global. */
   instalacionDescuentoRegion?: number;
+  /**
+   * Descuento de instalación (0–1) puesto A MANO en su fila de ADICIONALES.
+   * Le gana a la regla automática (gratis por cantidad / región).
+   * `null`/ausente = manda la regla.
+   */
+  instalacionDescuentoManual?: number | null;
   /** Cotización sin instalación (el cliente retira / solo cortina). */
   sinInstalacion?: boolean;
   /** Envío de la cotización: gratis o con cobro en destino (lo paga el cliente al courier). */

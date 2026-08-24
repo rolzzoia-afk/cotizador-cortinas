@@ -103,6 +103,11 @@ export type EntradaPdfCotizacion = {
   fecha: { dia: number; mes: number; anio2: number };
   cortinas: FilaPdfCortina[];
   adicionales: FilaPdfAdicional[];
+  /**
+   * Aviso en rojo bajo los adicionales: el envío con cobro en destino no está
+   * en el total y el cliente tiene que enterarse. Vacío = no se dibuja.
+   */
+  avisoEnvio?: string;
   totales: TotalesCotizacion;
   /** La lista FINAL (con el término de la tarjeta ya resuelto). */
   terminos: string[];
@@ -658,6 +663,25 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
       );
     }
   }
+
+  // El envío con cobro en destino no suma al total: sin este aviso el cliente
+  // cree que el flete está incluido.
+  const aviso = (ctx.avisoEnvio ?? '').trim();
+  if (aviso) {
+    if (y + ALTO_FILA > PIE_PAGINA) y = cabeceraTabla(doc, ctx.nuevaPagina());
+    set(doc, 'fill', ROJO_SUAVE);
+    doc.rect(MG, y, ANCHO_TABLA, ALTO_FILA, 'F');
+    set(doc, 'draw', LINEA);
+    doc.setLineWidth(0.15);
+    doc.rect(MG, y, ANCHO_TABLA, ALTO_FILA);
+    celda(doc, aviso, MG, ANCHO_TABLA, y, ALTO_FILA, {
+      bold: true,
+      color: ROJO,
+      align: 'c',
+      size: 6.4,
+    });
+    y += ALTO_FILA;
+  }
   return y + 2;
 }
 
@@ -765,14 +789,16 @@ function secImportante(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   doc.setFontSize(9.5);
   set(doc, 'text', TEXTO);
   doc.text('IMPORTANTE', cx, y + 4, { align: 'center' });
-  // Helvetica no trae el signo de advertencia: se dibuja.
+  // Helvetica no trae el signo de advertencia: se dibuja, UNO solo y a la
+  // izquierda del rótulo. Ojo: en PDF el texto se pinta con el color de
+  // RELLENO, así que el relleno se fija JUSTO antes del triángulo — dibujarlo
+  // después de un texto oscuro lo dejaba negro.
+  const dx = -16;
   set(doc, 'fill', AMARILLO);
-  for (const dx of [-16, 16]) {
-    doc.triangle(cx + dx, y + 0.8, cx + dx - 2.6, y + 5, cx + dx + 2.6, y + 5, 'F');
-    doc.setFontSize(4.6);
-    set(doc, 'text', TEXTO);
-    doc.text('!', cx + dx, y + 4.2, { align: 'center' });
-  }
+  doc.triangle(cx + dx, y + 0.8, cx + dx - 2.6, y + 5, cx + dx + 2.6, y + 5, 'F');
+  doc.setFontSize(4.6);
+  set(doc, 'text', TEXTO);
+  doc.text('!', cx + dx, y + 4.2, { align: 'center' });
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6.6);
   set(doc, 'text', TEXTO);

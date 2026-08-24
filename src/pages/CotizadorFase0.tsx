@@ -380,6 +380,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [sinInstalacion, setSinInstalacion] = useState(false);
   // Envío: gratis o cobro en destino (lo paga el cliente al courier; no suma al total).
   const [envio, setEnvio] = useState<'gratis' | 'cobro_destino'>('gratis');
+  // % de descuento de la instalación puesto a mano en su fila de ADICIONALES
+  // (0–100). null = manda la regla automática (gratis por cantidad / región).
+  const [instalDctManual, setInstalDctManual] = useState<number | null>(null);
   // Tubo E78: habilita la banda 2,2–3,0 m (kit 45 mm + tubo E78) para esta OT.
   // Default false = el rango usa tubo E66 (38 mm) con kit normal.
   const [usarTuboE78, setUsarTuboE78] = useState(false);
@@ -412,6 +415,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       adicionalesFase0?: AdicionalFase0Persistido[];
       region?: boolean;
       instalacionDescuentoRegion?: number;
+      instalacionDescuentoManual?: number | null;
       sinInstalacion?: boolean;
       envio?: 'gratis' | 'cobro_destino';
       usarTuboE78?: boolean;
@@ -486,6 +490,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     );
     setSinInstalacion(!!dg.sinInstalacion);
     setEnvio(dg.envio === 'cobro_destino' ? 'cobro_destino' : 'gratis');
+    setInstalDctManual(
+      typeof dg.instalacionDescuentoManual === 'number'
+        ? Math.round(dg.instalacionDescuentoManual * 100)
+        : null,
+    );
     setUsarTuboE78(!!dg.usarTuboE78);
     setOrigVentanas(orig as Record<string, Record<string, unknown>>);
     setCargadoEdit(true);
@@ -705,6 +714,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
+          instalacionDescuentoManual:
+            instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
           sinInstalacion,
           envio,
           usarTuboE78,
@@ -777,6 +788,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
+          instalacionDescuentoManual:
+            instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
           sinInstalacion,
           envio,
           usarTuboE78,
@@ -837,6 +850,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const regionPctEff =
     regionDescPct ?? Math.round((parametros.instalacionDescuentoRegion || 0) * 100);
 
+  // El envío con cobro en destino lo paga el cliente al courier y NO suma al
+  // total: si no se dice, el cliente cree que el flete está incluido. Va en
+  // rojo en la grilla y en el documento.
+  const avisoEnvioRegion =
+    envio !== 'cobro_destino'
+      ? ''
+      : region
+        ? 'ENVÍO A REGIÓN: EL COSTO DEL ENVÍO SE PAGA EN DESTINO Y NO ESTÁ INCLUIDO EN ESTA COTIZACIÓN.'
+        : 'ENVÍO CON COBRO EN DESTINO: EL COSTO DEL ENVÍO NO ESTÁ INCLUIDO EN ESTA COTIZACIÓN.';
+
   // La región del cliente maneja el cobro de instalación: cualquier región
   // distinta de la Metropolitana activa el cobro (con el % de región). Si el
   // campo Región está vacío, se respeta el toggle manual de abajo.
@@ -893,8 +916,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       : parametros;
     return cotizarFase0(
       filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion, reglasPrecios,
+      instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
     );
-  }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion, reglasPrecios, formulas, reglas.tipos]);
+  }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion, reglasPrecios, formulas, reglas.tipos, instalDctManual]);
 
   /** La familia que está mirando el desglose, si el diálogo está abierto. */
   // Se busca por la CLAVE del panel (`cod` o `cod|B`): la A y la B de una misma
@@ -1443,6 +1467,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         // En la celda OT CLIENTE va el NÚMERO y nada más —el tecleado o el
         // automático—; el detalle es cosa de la banda.
         otCliente: numeroCotizacion || '',
+        avisoEnvio: avisoEnvioRegion,
         soloTelasB: catsTela.length === 1 && catsTela[0] === 'B',
         hayTelaB: catsTela.includes('B'),
         cliente: {
@@ -2282,6 +2307,83 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   </tr>
                 );
               })}
+              {/* La instalación es una línea de ADICIONALES más, como en la
+                  planilla: se ve junto a las cenefas y los motores, y su DCT%
+                  se negocia igual que el de ellas (sobre todo a región). El
+                  motor sigue calculando la cantidad y el precio; lo único que
+                  se toca a mano es el %. */}
+              {!resultado.instalacion.sinInstalacion && resultado.instalacion.cantidad > 0 && (
+                <tr className="border-t border-border align-middle">
+                  <Td className="text-muted-foreground">INSTALACION</Td>
+                  {showCols && (
+                    <>
+                      <Td className="text-center text-muted-foreground">—</Td>
+                      <Td className="text-center text-muted-foreground">—</Td>
+                      <Td className="text-center text-muted-foreground">—</Td>
+                    </>
+                  )}
+                  <Td className="text-right">{resultado.instalacion.cantidad}</Td>
+                  <Td className="text-muted-foreground">
+                    INSTALACION {resultado.instalacion.partes.map((p) => p.sistema).join(' + ') || 'ROLLER'}
+                  </Td>
+                  <Td className="text-muted-foreground">INST</Td>
+                  <Td className="text-muted-foreground">INSTALACION</Td>
+                  <Td className="text-muted-foreground">
+                    {textoInstalacion(resultado.instalacion, parametros.instalacionGratisMinCortinas)}
+                  </Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                  <Td className="text-right">
+                    {resultado.instalacion.partes.length > 1
+                      ? '—'
+                      : formatCLP(resultado.instalacion.precioUnit)}
+                  </Td>
+                  <Td>
+                    <CellInput
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.5"
+                      value={
+                        instalDctManual ?? Math.round(resultado.instalacion.descuento * 1000) / 10
+                      }
+                      onChange={(e) => setInstalDctManual(parseFloat(e.target.value) || 0)}
+                      className="w-14 text-right"
+                      title="Descuento de la instalación. Si lo dejas como viene, manda la regla automática (gratis por cantidad o el % de región)."
+                    />
+                  </Td>
+                  <Td className="text-right font-semibold">
+                    {formatCLP(resultado.instalacion.total)}
+                  </Td>
+                  <Td className="text-right print:hidden">
+                    {instalDctManual != null && (
+                      <button
+                        onClick={() => setInstalDctManual(null)}
+                        className="rounded px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                        title="Volver al descuento automático"
+                      >
+                        auto
+                      </button>
+                    )}
+                  </Td>
+                </tr>
+              )}
+              {/* Envío a región con cobro en destino: el cliente tiene que
+                  saber que ese costo no está en el total. */}
+              {avisoEnvioRegion && (
+                <tr className="border-t border-border">
+                  <td
+                    colSpan={colSpanTotal}
+                    className="px-3 py-2 text-center text-xs font-semibold text-destructive"
+                  >
+                    {avisoEnvioRegion}
+                  </td>
+                </tr>
+              )}
               {/* Botón agregar adicional */}
               <tr className="print:hidden">
                 <td colSpan={colSpanTotal} className="border-t border-border bg-card/40 px-2 py-2">
@@ -2327,36 +2429,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             </div>
           )}
         <section className="mt-4 ml-auto max-w-sm space-y-1.5 rounded-lg border border-border bg-card/40 p-4 text-sm">
-          {/* Bajo el mínimo de cortinas la instalación se cobra: mostrarla acá
-              para que el subtotal no suba sin explicación. Con 4+ (o sin
-              instalación) la línea vale 0 y no se muestra. El texto dice el
-              MOTIVO: antes decía «bajo el mínimo» incluso en una cotización de
-              región con más cortinas que el mínimo. */}
-          {resultado.instalacion.total > 0 && (
-            <>
-              <FilaTotal
-                label={`Instalación (${textoInstalacion(
-                  resultado.instalacion,
-                  parametros.instalacionGratisMinCortinas,
-                )})`}
-                valor={formatCLP(resultado.instalacion.total)}
-              />
-              {/* Con dos sistemas en juego (roller + beeblack) se instala a dos
-                  precios: sin el desglose el total no cuadra a ojo. */}
-              {resultado.instalacion.partes.length > 1 &&
-                resultado.instalacion.partes.map((p) => (
-                  <div
-                    key={p.sistema}
-                    className="flex justify-between pl-3 text-[11px] text-muted-foreground"
-                  >
-                    <span>
-                      {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
-                    </span>
-                    <span>{formatCLP(p.total)}</span>
-                  </div>
-                ))}
-            </>
-          )}
+          {/* La instalación NO va acá: es una fila de ADICIONALES, junto a las
+              cenefas y los motores, con su propio DCT% editable. El recuadro
+              del precio muestra solo los montos que paga el cliente. */}
           {conPeorCaso && (
             <p className="pt-1 text-[11px] leading-snug text-muted-foreground">
               Los sistemas de oscuridad se cotizan con el consumo de tela del montaje más caro

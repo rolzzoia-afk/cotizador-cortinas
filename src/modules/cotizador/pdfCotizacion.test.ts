@@ -218,6 +218,20 @@ describe('generarPdfCotizacion', () => {
     expect(impreso()).toContain('$ -');
   });
 
+  it('el envío con cobro en destino se avisa bajo los adicionales', () => {
+    const aviso = 'ENVÍO A REGIÓN: EL COSTO DEL ENVÍO SE PAGA EN DESTINO Y NO ESTÁ INCLUIDO EN ESTA COTIZACIÓN.';
+    generarPdfCotizacion(entradaDemo({ avisoEnvio: aviso }));
+    expect(impreso()).toContain(aviso);
+    const idxAdic = textosImpresos.indexOf('ADICIONALES');
+    expect(textosImpresos.indexOf(aviso)).toBeGreaterThan(idxAdic);
+  });
+
+  it('sin envío a cobrar no se dibuja ningún aviso', () => {
+    generarPdfCotizacion(entradaDemo());
+    expect(impreso()).not.toContain('COBRO EN DESTINO');
+    expect(impreso()).not.toContain('ENVÍO A REGIÓN');
+  });
+
   it('los totales salen del MISMO descriptor que la pantalla, sin desglosar IVA', () => {
     generarPdfCotizacion(entradaDemo());
     for (const f of FILAS_TOTALES) expect(impreso()).toContain(f.label);
