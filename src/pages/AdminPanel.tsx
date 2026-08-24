@@ -39,6 +39,7 @@ import { ChecklistVisitaSection } from '@/components/admin/ChecklistVisitaSectio
 import { BloquesInformeSection } from '@/components/admin/BloquesInformeSection';
 import { IntrosInformeSection } from '@/components/admin/IntrosInformeSection';
 import { DocumentoSection } from '@/components/admin/DocumentoSection';
+import { DatosEmpresaSection } from '@/components/admin/DatosEmpresaSection';
 import { OrphanPlansBanner } from '@/components/admin/OrphanPlansBanner';
 // El tab «Optimizador» calcula la hoja de corte de una OT (tablas pesadas y la
 // consulta a la colmena): se carga al abrirlo, no al entrar al panel.
@@ -139,6 +140,8 @@ export function AdminPanel() {
           <IntrosInformeSection />
           <BloquesInformeSection />
           <DocumentoSection />
+          {/* Los textos fijos del PDF descargable de la cotización. */}
+          <DatosEmpresaSection />
         </div>
       )}
       {tab === 'precios' && <VistaPrecios />}

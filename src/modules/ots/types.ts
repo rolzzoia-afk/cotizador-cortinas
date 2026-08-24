@@ -69,6 +69,12 @@ export type DatosGenerales = {
   /** Región de Chile de la dirección del cliente (desplegable de Fase 0). */
   regionNombre?: string;
   ot?: string;
+  /**
+   * La OT DETALLADA que sale bajo el título del PDF del cliente («N° COTJS -
+   * 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA»): texto libre
+   * de la planilla, distinto del número `ot` con el que se crea la OT.
+   */
+  otDetallada?: string;
   canal?: string;
   fecha?: string;
   notas?: string;

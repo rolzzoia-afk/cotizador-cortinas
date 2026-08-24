@@ -32,6 +32,7 @@ import { guardarLayoutDoc, useLayoutDoc } from '@/modules/cotizador/docCotizacio
 import BloqueDocRender from '@/components/cotizador/BloquesDocumento';
 import BloqueEditable from './documento/BloqueEditable';
 import ImagenFlotante from './documento/ImagenFlotante';
+import LienzoEscalado from './documento/LienzoEscalado';
 import PanelBloque from './documento/PanelBloque';
 import TarjetaSeccion from './documento/TarjetaSeccion';
 
@@ -144,20 +145,24 @@ export function DocumentoSection() {
         donde quieras. Una imagen puede volverse <strong>flotante</strong> desde el panel de la
         derecha: entonces se arrastra libre por encima de la sección que elijas.
       </p>
+      <p className="mb-4 text-xs text-muted-foreground">
+        La vista previa es una <strong>réplica a escala</strong> de la página: se dibuja al ancho que
+        tiene la Fase 1 en este monitor y se achica entera, así que lo que coloques acá cae en el
+        mismo punto al entrar a la cotización.
+      </p>
 
       {loading ? (
         <p className="text-xs text-muted-foreground">Cargando…</p>
       ) : (
         // `minmax(0,1fr)` + `min-w-0`: sin eso, el track de la vista previa no
-        // puede achicarse por debajo del ancho natural de la tabla de la maqueta
-        // de cortinas (12 columnas sin cortar ≈ 900 px) y el panel de la derecha
-        // terminaba pintado FUERA del borde del card.
+        // puede achicarse por debajo del ancho natural del lienzo (que se dibuja
+        // al ancho REAL de la página) y el panel de la derecha terminaba pintado
+        // FUERA del borde del card.
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-          {/* Vista previa: el documento completo, en orden. Mismo contenedor
-              que la cotización real (`flex flex-col px-5 py-4`) — las maquetas
-              y los bloques traen sus propios márgenes. */}
-          <div
-            className="flex min-w-0 flex-col rounded-lg border bg-background px-5 py-4"
+          {/* Vista previa: el documento completo, en orden, dibujado al ancho
+              real de la Fase 1 en este monitor y achicado con `scale`. */}
+          <LienzoEscalado
+            className="rounded-lg border bg-background"
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
@@ -166,37 +171,40 @@ export function DocumentoSection() {
           >
             {bloquesEnFlujo(draft.bloques).map((b) =>
               esSeccion(b.tipo) ? (
-                <FilaSeccion
-                  key={b.id}
-                  // Los bloques "junto a los totales" se dibujan a la izquierda
-                  // de esa tarjeta, igual que en el documento real.
-                  izquierda={b.tipo === 'totales' ? bloquesTotales : []}
-                  render={(bl) => (
-                    <BloqueEditable
-                      bloque={bl}
-                      seleccionado={sel === bl.id}
-                      arrastrando={dragId === bl.id}
-                      onSeleccionar={() => setSel(bl.id)}
-                      onChange={(patch) => setBloque(bl.id, patch)}
-                      onEliminar={() => eliminar(bl.id)}
-                      onDragStart={() => setDragId(bl.id)}
-                      onDropEn={() => soltarEn(bl.id)}
-                    >
-                      <BloqueDocRender bloque={bl} datos={datosBloques} conPlaceholder />
-                    </BloqueEditable>
-                  )}
-                >
-                  <TarjetaSeccion
-                    tipo={b.tipo}
-                    seleccionada={sel === b.id}
-                    arrastrando={dragId === b.id}
-                    onSeleccionar={() => setSel(b.id)}
-                    onDragStart={() => setDragId(b.id)}
-                    onDropEn={() => soltarEn(b.id)}
+                // Las flotantes envuelven la FILA completa, igual que
+                // `SeccionDocumento` en la cotización real: en la de totales el
+                // ancla incluye los bloques de la izquierda (los términos), no
+                // solo la tarjeta de precios.
+                <SeccionEditable key={b.id} flotantes={flotantesDeSeccion(b.tipo)}>
+                  <FilaSeccion
+                    // Los bloques "junto a los totales" se dibujan a la izquierda
+                    // de esa tarjeta, igual que en el documento real.
+                    izquierda={b.tipo === 'totales' ? bloquesTotales : []}
+                    render={(bl) => (
+                      <BloqueEditable
+                        bloque={bl}
+                        seleccionado={sel === bl.id}
+                        arrastrando={dragId === bl.id}
+                        onSeleccionar={() => setSel(bl.id)}
+                        onChange={(patch) => setBloque(bl.id, patch)}
+                        onEliminar={() => eliminar(bl.id)}
+                        onDragStart={() => setDragId(bl.id)}
+                        onDropEn={() => soltarEn(bl.id)}
+                      >
+                        <BloqueDocRender bloque={bl} datos={datosBloques} conPlaceholder />
+                      </BloqueEditable>
+                    )}
                   >
-                    {flotantesDeSeccion(b.tipo)}
-                  </TarjetaSeccion>
-                </FilaSeccion>
+                    <TarjetaSeccion
+                      tipo={b.tipo}
+                      seleccionada={sel === b.id}
+                      arrastrando={dragId === b.id}
+                      onSeleccionar={() => setSel(b.id)}
+                      onDragStart={() => setDragId(b.id)}
+                      onDropEn={() => soltarEn(b.id)}
+                    />
+                  </FilaSeccion>
+                </SeccionEditable>
               ) : (
                 <BloqueEditable
                   key={b.id}
@@ -213,7 +221,7 @@ export function DocumentoSection() {
                 </BloqueEditable>
               ),
             )}
-          </div>
+          </LienzoEscalado>
 
           {/* Panel lateral */}
           <div className="space-y-4">
@@ -269,6 +277,22 @@ export function DocumentoSection() {
         </Button>
       </div>
     </section>
+  );
+}
+
+/**
+ * El envoltorio de una sección en la vista previa: ESPEJO de `SeccionDocumento`
+ * del documento real. Importa que sea el mismo box, porque las imágenes
+ * flotantes se posicionan en % de él — si acá el ancla fuera más chica (antes
+ * era solo la tarjeta de totales, sin los términos de al lado), la imagen caía
+ * en otro punto al abrir la Fase 1.
+ */
+function SeccionEditable({ flotantes, children }: { flotantes: ReactNode[]; children: ReactNode }) {
+  return (
+    <div className={flotantes.length ? 'relative' : undefined}>
+      {children}
+      {flotantes}
+    </div>
   );
 }
 
