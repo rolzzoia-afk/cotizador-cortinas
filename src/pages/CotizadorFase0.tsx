@@ -750,6 +750,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         return;
       }
 
+      // Recién ahora existe el correlativo: si la OT detallada es la propuesta
+      // automática, se rearma con él. Si no, se guardaría sin folio —una OT
+      // nueva no tiene número mientras se cotiza.
+      const detalleGuardado = otDetalladaAMano
+        ? otDetallada.trim()
+        : otDetalladaSugerida({ ...datosOtDetallada, numero: numOT });
+      setOtDetallada(detalleGuardado);
+
       const ot: OT = {
         id: crypto.randomUUID(),
         estado: 'cotizacion',
@@ -762,7 +770,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           direccion: cliente.direccion,
           comuna: cliente.comuna,
           regionNombre: cliente.region,
-          otDetallada: otDetallada.trim(),
+          otDetallada: detalleGuardado,
           ot: numOT,
           canal: 'Cotizador',
           fecha: now.split('T')[0],
@@ -1306,29 +1314,36 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     otManual.trim() ||
     null;
 
-  // La OT detallada que se propone sola: número + visita + qué se está
-  // cotizando. Se recalcula con la grilla, así que agregar una vertical la
-  // agrega al texto mientras nadie lo haya escrito a mano.
+  // Lo que la OT detallada dice de la cotización, sin el número: quién vende,
+  // si hubo visita y qué se está cotizando. Va aparte del número porque una OT
+  // nueva todavía no lo tiene —lo asigna la BD al guardar— y ahí hay que
+  // rearmar el texto con el correlativo recién asignado.
+  const datosOtDetallada = useMemo(
+    () => ({
+      vendedor: perfil?.nombre ?? '',
+      conVisita: !!otCargada?.datosGenerales?.visita,
+      cortinas: filas
+        .filter((f) => lineaDeFila.has(f.id))
+        .map((f) => {
+          const p = catalogo[f.codInt.trim()];
+          return { cod: p?.cod || f.codInt.trim(), nombre: p?.producto || '' };
+        }),
+      adicionales: adicionales
+        .filter((a) => a.codInt.trim())
+        .map((a) => ({
+          cod: a.codInt.trim(),
+          nombre: catalogo[a.codInt.trim()]?.producto || '',
+        })),
+    }),
+    [perfil, otCargada, filas, lineaDeFila, adicionales, catalogo],
+  );
+
+  // La propuesta que se ve en pantalla. Se recalcula con la grilla, así que
+  // agregar una vertical la agrega al texto mientras nadie lo haya escrito a
+  // mano.
   const otDetalladaAuto = useMemo(
-    () =>
-      otDetalladaSugerida({
-        numero: numeroCotizacion ?? '',
-        vendedor: perfil?.nombre ?? '',
-        conVisita: !!otCargada?.datosGenerales?.visita,
-        cortinas: filas
-          .filter((f) => lineaDeFila.has(f.id))
-          .map((f) => {
-            const p = catalogo[f.codInt.trim()];
-            return { cod: p?.cod || f.codInt.trim(), nombre: p?.producto || '' };
-          }),
-        adicionales: adicionales
-          .filter((a) => a.codInt.trim())
-          .map((a) => ({
-            cod: a.codInt.trim(),
-            nombre: catalogo[a.codInt.trim()]?.producto || '',
-          })),
-      }),
-    [numeroCotizacion, perfil, otCargada, filas, lineaDeFila, adicionales, catalogo],
+    () => otDetalladaSugerida({ ...datosOtDetallada, numero: numeroCotizacion ?? '' }),
+    [datosOtDetallada, numeroCotizacion],
   );
 
   useEffect(() => {
@@ -1618,6 +1633,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               }}
               placeholder="N° COTJS - 07979-5 -1 - VISITA - VERTICALES Y DUAL…"
             />
+            {/* Una OT nueva no tiene número hasta que se guarda: el correlativo
+                lo asigna la base de datos. Sin este aviso parece un error. */}
+            {!numeroCotizacion && !otDetalladaAMano && (
+              <span className="mt-1 block text-[11px] text-muted-foreground">
+                El N° se agrega al guardar la OT, o escríbelo en «N° OT (Excel manual)».
+              </span>
+            )}
           </label>
           <Campo label="RUT" value={cliente.rut} onChange={(v) => setCliente({ ...cliente, rut: v })} />
           <Campo label="Teléfono" value={cliente.telefono} onChange={(v) => setCliente({ ...cliente, telefono: v })} />
