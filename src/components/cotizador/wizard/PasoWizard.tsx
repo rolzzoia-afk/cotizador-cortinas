@@ -857,6 +857,19 @@ export function CuerpoPaso(props: PropsPaso) {
         );
       }
       const cenefaFija = cenefaOvalada && pano.cenefa !== 'Ovalada';
+      // VERTICAL: siempre lleva cenefa cuadrada (el riel cabezal va tapado),
+      // así que «No» y «Ovalada» no se ofrecen — solo dónde se atornilla. Y en
+      // cualquier categoría, el 'Cuadrada' a secas de una OT vieja se muestra
+      // como chip extra para no esconder el dato (igual que la ficha): al
+      // elegir muro/techo queda con el valor nuevo.
+      const esVerticalCenefa = esCategoriaVertical(ventana.categoria ?? '');
+      const opcionesCenefaBase: string[] = esVerticalCenefa
+        ? OPCIONES_CENEFA.filter((o) => o.startsWith('Cuadrada'))
+        : [...OPCIONES_CENEFA];
+      const opcionesCenefaTipo =
+        pano.cenefa && !opcionesCenefaBase.includes(pano.cenefa as string)
+          ? [...opcionesCenefaBase, pano.cenefa as string]
+          : opcionesCenefaBase;
       return (
         <div className="space-y-3">
           {cenefaFija ? (
@@ -865,7 +878,7 @@ export function CuerpoPaso(props: PropsPaso) {
             <RadioRow
               label="Tipo"
               value={pano.cenefa || ''}
-              options={OPCIONES_CENEFA}
+              options={opcionesCenefaTipo}
               onChange={(v) =>
                 onPano({
                   cenefa: v,
@@ -873,6 +886,12 @@ export function CuerpoPaso(props: PropsPaso) {
                 })
               }
             />
+          )}
+          {esVerticalCenefa && (
+            <p className="text-[0.68rem] text-muted-foreground">
+              La vertical siempre lleva cenefa cuadrada; acá se elige dónde se atornilla. Una
+              «Cuadrada» a secas de una OT vieja vale igual: su bracket sale de la superficie.
+            </p>
           )}
           {cenefaOvalada && (
             <>

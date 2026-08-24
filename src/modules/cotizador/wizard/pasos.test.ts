@@ -6,6 +6,7 @@ import {
   pasoDePieza,
   pasosAplicables,
   targetsProgreso,
+  targetsProgresoResumen,
   PASOS_WIZARD,
   type CtxPaso,
   type IdPaso,
@@ -313,6 +314,49 @@ describe('targetsProgreso — cómo se arma el dibujo', () => {
     const sinCadena = ctxDe(ventLlena({}, { codCadena: '', codPeso: '' }));
     expect(targetsProgreso(sinCadena).despliegue).toBe(0);
     expect(targetsProgreso(ctxDe(ventLlena())).despliegue).toBe(1);
+  });
+
+  describe('targetsProgresoResumen — el dibujo del resumen de ventanas', () => {
+    it('lo elegido se dibuja entero aunque falten datos de instalación (OT 3189, 2026-08-24)', () => {
+      // La ficha real del reclamo: tela, medidas, kit y colores elegidos, pero
+      // sin material/superficie/respecto del marco. El wizard encadena y deja
+      // la ventana pelada; el resumen dibuja la cortina y el aviso «N por
+      // completar» dice lo que falta.
+      const ctx = ctxDe(ventLlena({}, { materialTipo: '', superficie: '', relacionMarco: '' }));
+      expect(targetsProgreso(ctx).tela).toBe(0);
+      const r = targetsProgresoResumen(ctx);
+      expect(r.soportes).toBe(1);
+      expect(r.tubo).toBe(1);
+      expect(r.tela).toBe(1);
+      expect(r.peso).toBe(1);
+      expect(r.despliegue).toBe(1);
+    });
+
+    it('una ventana en blanco sigue punteada entera', () => {
+      const vacia = {
+        id: 'v', ubicacion: '', categoria: 'ROL', codInt: '', color: '', alto: 0, cantidad: 1,
+        panos: [{ ancho: '', alto: '', color: '' } as Pano],
+      } as unknown as Ventana;
+      const r = targetsProgresoResumen(ctxDe(vacia));
+      // «perfiles» no aplica en un roller (cuenta como listo, igual que en el
+      // wizard); tampoco está en su dibujo, así que no pinta nada.
+      for (const pieza of PIEZAS_VIZ) {
+        if (pieza === 'perfiles') continue;
+        expect(r[pieza], pieza).toBe(0);
+      }
+    });
+
+    it('sin tela no hay nada que colgar: el despliegue queda punteado', () => {
+      const r = targetsProgresoResumen(ctxDe(ventLlena({ codInt: '' }, { tipoTela: '' })));
+      expect(r.tela).toBe(0);
+      expect(r.despliegue).toBe(0);
+      expect(r.tubo).toBe(1);
+    });
+
+    it('con la ficha completa dibuja lo mismo que el wizard: todo en 1', () => {
+      const r = targetsProgresoResumen(ctxDe(ventLlena()));
+      for (const pieza of PIEZAS_VIZ) expect(r[pieza]).toBe(1);
+    });
   });
 
   it('un paso que no aplica no deja su pieza colgada a medias', () => {
