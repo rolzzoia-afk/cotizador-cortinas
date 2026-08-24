@@ -82,7 +82,11 @@ export type EntradaPdfCotizacion = {
    * es una descripción, no un folio.
    */
   otBanda: string;
-  /** La celda OT CLIENTE de la cabecera. Vacío = «N/A», como en la planilla. */
+  /**
+   * La celda OT CLIENTE de la cabecera: SOLO el número de la OT, el tecleado o
+   * el automático. El detalle va en la banda, no acá. Vacío = «N/A», como en
+   * la planilla.
+   */
   otCliente: string;
   /** Todas las telas son de categoría B → banda y sello propios de esa gama. */
   soloTelasB: boolean;
@@ -516,11 +520,10 @@ function secGrillaCliente(doc: jsPDF, e: EntradaPdfCotizacion, y: number): numbe
   ];
   const h = 4.8;
   const wLabelIzq = 22;
-  // El bloque del medio es más ancho que en el Excel porque la OT detallada
-  // («N° COTJS - 07979-5 -1 - VISITA-VERTICALES Y DUAL…») es larga.
+  // Los tres bloques de la cabecera, como en el Excel.
   const wIzq = 80;
   const wLabelMed = 20;
-  const wMed = 62;
+  const wMed = 58;
   const xMed = MG + wIzq;
   const xDer = xMed + wMed;
   const wDer = ANCHO_TABLA - wIzq - wMed;
@@ -545,9 +548,6 @@ function secGrillaCliente(doc: jsPDF, e: EntradaPdfCotizacion, y: number): numbe
     celda(doc, medio[i][1], xMed + wLabelMed, wMed - wLabelMed, yy, h, {
       size: 6.4,
       align: 'c',
-      // La OT detallada no cabe en una línea: se parte en dos y, si hace falta,
-      // se achica hasta entrar. Tres líneas no caben en el alto de la fila.
-      lineas: i === 0 ? 2 : 1,
     });
   }
 

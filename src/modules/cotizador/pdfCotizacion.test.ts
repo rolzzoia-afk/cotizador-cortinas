@@ -85,7 +85,7 @@ function entradaDemo(over: Partial<EntradaPdfCotizacion> = {}): EntradaPdfCotiza
   return {
     numero: 'COTJS-10427-1',
     otBanda: 'N° COTJS - 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA',
-    otCliente: 'N° COTJS - 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA',
+    otCliente: '3205-1',
     soloTelasB: true,
     hayTelaB: true,
     cliente: {
@@ -141,15 +141,17 @@ describe('generarPdfCotizacion', () => {
     expect(impreso()).toContain('VÁLIDO POR 5 DIAS');
   });
 
-  it('la OT detallada va bajo el título Y en la celda OT CLIENTE', () => {
+  it('el detalle va bajo el título y la celda OT CLIENTE lleva solo el número', () => {
     generarPdfCotizacion(entradaDemo());
-    expect(impreso()).toContain('OT CLIENTE:');
     const ot = 'N° COTJS - 07979-5 -1 - VISITA-VERTICALES Y DUAL CON CENEFA CUADRADA';
-    // Una vez en la banda (entera) y otra en la celda (partida en dos líneas).
-    expect(textosImpresos.filter((t) => t.includes('COTJS - 07979-5'))).not.toHaveLength(0);
     expect(textosImpresos).toContain(ot);
+    expect(impreso()).toContain('OT CLIENTE:');
+    expect(textosImpresos).toContain('3205-1');
+    // En la celda va el número pelado: el detalle no se repite ahí.
+    expect(textosImpresos.filter((t) => t === ot)).toHaveLength(1);
     const idxBanda = textosImpresos.indexOf('LINEA PREMIUM [CATEGORIA B]');
     expect(textosImpresos.indexOf(ot)).toBeGreaterThan(idxBanda);
+    expect(textosImpresos.indexOf('3205-1')).toBeGreaterThan(textosImpresos.indexOf(ot));
   });
 
   it('sin OT detallada la banda queda solo con el título y la celda dice N/A', () => {
