@@ -358,7 +358,7 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     id: 'cenefa',
     titulo: 'Cenefa',
     ayuda:
-      'La caja que tapa el rollo. En roller «No lleva» también es una respuesta; los sistemas de oscuridad traen la suya.',
+      'La caja que tapa el rollo. En roller «No lleva» también es una respuesta; los sistemas de oscuridad traen la suya y la vertical la lleva siempre (cuadrada).',
     pieza: 'cenefa',
     // El beeblack no lleva cenefa: es un acordeón dentro de su marco.
     aplica: (ctx) => ctx.variante !== 'beeblack',
@@ -449,6 +449,18 @@ const PREREQUISITOS: Record<PiezaViz, PiezaViz[]> = {
   cenefa: ['tubo'],
 };
 
+/** El avance del paso de cada pieza, sin mirar prerrequisitos. */
+function avancePropio(ctx: CtxPaso): Partial<Record<PiezaViz, number>> {
+  const propio: Partial<Record<PiezaViz, number>> = {};
+  for (const paso of PASOS_WIZARD) {
+    if (!paso.pieza) continue;
+    // Un paso que no aplica (mecanismo en una categoría sin kit) no bloquea:
+    // su pieza cuenta como lista.
+    propio[paso.pieza] = paso.aplica(ctx) ? avancePaso(paso, ctx) : 1;
+  }
+  return propio;
+}
+
 /**
  * Cuánto lleva armada cada pieza del dibujo, 0..1.
  *
@@ -458,13 +470,7 @@ const PREREQUISITOS: Record<PiezaViz, PiezaViz[]> = {
  * baja la cortina), así que se calcula desde sus prerrequisitos.
  */
 export function targetsProgreso(ctx: CtxPaso): Record<PiezaViz, number> {
-  const propio: Partial<Record<PiezaViz, number>> = {};
-  for (const paso of PASOS_WIZARD) {
-    if (!paso.pieza) continue;
-    // Un paso que no aplica (mecanismo en una categoría sin kit) no bloquea:
-    // su pieza cuenta como lista.
-    propio[paso.pieza] = paso.aplica(ctx) ? avancePaso(paso, ctx) : 1;
-  }
+  const propio = avancePropio(ctx);
 
   const out = {} as Record<PiezaViz, number>;
   const resolver = (pieza: PiezaViz): number => {
@@ -479,6 +485,31 @@ export function targetsProgreso(ctx: CtxPaso): Record<PiezaViz, number> {
     return out[pieza];
   };
   for (const pieza of PIEZAS_VIZ) resolver(pieza);
+  return out;
+}
+
+/**
+ * El progreso con que se dibuja una cortina en el RESUMEN de ventanas: lo que
+ * tiene algún dato se dibuja ENTERO, lo que no se ha tocado va punteado, y la
+ * cortina cuelga desplegada apenas su tela está elegida.
+ *
+ * Sin la cadena de prerrequisitos de `targetsProgreso`: esa es para armar la
+ * cortina pieza a pieza DENTRO del wizard. En el resumen castigaba de más — a
+ * una ficha con tela, medidas y colores elegidos pero sin el material de
+ * instalación se le dibujaba la ventana pelada, que se lee como «se borró la
+ * cortina» (2026-08-24). Lo que falte lo dice el aviso «N por completar», no
+ * el dibujo.
+ */
+export function targetsProgresoResumen(ctx: CtxPaso): Record<PiezaViz, number> {
+  const propio = avancePropio(ctx);
+  // La única dependencia que se conserva es la tela: el peso y el despliegue
+  // se dibujan SOBRE ella (un paso «peso» sin manilla cuenta como listo, y en
+  // una ficha en blanco dibujaría un peso flotando en una ventana pelada).
+  const telaElegida = (propio.tela ?? 0) > 0;
+  const out = {} as Record<PiezaViz, number>;
+  for (const pieza of PIEZAS_VIZ) out[pieza] = (propio[pieza] ?? 0) > 0 ? 1 : 0;
+  if (!telaElegida) out.peso = 0;
+  out.despliegue = telaElegida ? 1 : 0;
   return out;
 }
 

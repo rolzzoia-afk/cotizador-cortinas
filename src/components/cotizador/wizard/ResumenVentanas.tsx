@@ -19,7 +19,7 @@ import {
   miniaturaDe,
 } from '@/modules/cotizador/wizard/resumenVentanas';
 import { rotuloForma } from '@/modules/cotizador/wizard/selectorVentanas';
-import { targetsProgreso } from '@/modules/cotizador/wizard/pasos';
+import { targetsProgresoResumen } from '@/modules/cotizador/wizard/pasos';
 import { estiloVizDePano, varianteViz } from '@/modules/cotizador/wizard/cortinaViz';
 import type { ReglasSeleccion } from '@/modules/descuentos/reglasSeleccion';
 import type { CatalogoProductos, Ventana } from '@/modules/cotizador/types';
@@ -49,10 +49,13 @@ function Miniatura({
     [ventana.categoria, reglas.tipos],
   );
   const pano = ventana.panos?.[0];
+  // Progreso de RESUMEN: lo elegido se dibuja entero, lo no tocado punteado.
+  // El de armado por prerrequisitos es del wizard; acá dejaba la ventana
+  // pelada por un dato de instalación pendiente.
   const progreso = useMemo(
     () =>
       variante && pano
-        ? targetsProgreso({ ventana, pano, panoIdx: 0, variante, reglas, catalogo })
+        ? targetsProgresoResumen({ ventana, pano, panoIdx: 0, variante, reglas, catalogo })
         : {},
     [ventana, pano, variante, reglas, catalogo],
   );
