@@ -88,6 +88,7 @@ import {
 import {
   derivarAdicionalesCenefaDesdeVentanas,
   filtrarDerivadosPorCupoManual,
+  tipoCenefaDesdeAdicional,
 } from '@/modules/descuentos/adicionales-cenefa';
 import { PanelFamilia, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
 import FilaTotal from '@/components/cotizador/FilaTotal';
@@ -199,8 +200,13 @@ type AdicionalUI = {
   colorAcc: string;
   /** Cenefa ovalada con tira (solo derivados de paño). */
   conTira?: boolean;
-  /** 'pano' = derivado de una cenefa de paño (no editable, se regenera). */
+  /**
+   * 'pano' = derivado de una cenefa de paño: se regenera en cada apertura.
+   * Editarlo a mano lo pasa a 'manual' y deja de seguir al paño.
+   */
   origen?: 'manual' | 'pano';
+  /** La ubicación que tenía cuando era derivado, para no duplicar la cenefa. */
+  ubicacionDerivada?: string;
 };
 const nuevoAdicional = (): AdicionalUI => ({
   id: crypto.randomUUID(),
@@ -212,16 +218,19 @@ const nuevoAdicional = (): AdicionalUI => ({
 });
 
 function adicionalesToPersist(list: AdicionalUI[]): AdicionalFase0Persistido[] {
-  return list.map(({ id, codInt, cantidad, descuento, ubicacion, colorAcc, conTira, origen }) => ({
-    id,
-    codInt: codInt.trim(),
-    cantidad,
-    descuento,
-    ubicacion,
-    colorAcc,
-    conTira,
-    origen,
-  }));
+  return list.map(
+    ({ id, codInt, cantidad, descuento, ubicacion, colorAcc, conTira, origen, ubicacionDerivada }) => ({
+      id,
+      codInt: codInt.trim(),
+      cantidad,
+      descuento,
+      ubicacion,
+      colorAcc,
+      conTira,
+      origen,
+      ubicacionDerivada,
+    }),
+  );
 }
 
 function adicionalesFromPersist(raw: unknown): AdicionalUI[] {
@@ -237,6 +246,7 @@ function adicionalesFromPersist(raw: unknown): AdicionalUI[] {
       colorAcc: row.colorAcc || '',
       conTira: row.conTira,
       origen: row.origen,
+      ubicacionDerivada: row.ubicacionDerivada,
     };
   });
 }
@@ -273,6 +283,9 @@ const TOPE_FILAS_CATALOGO = 500;
 // % es-CL con hasta 2 decimales: 0.138 → "13,8" · 0.0415 → "4,15".
 const fmtPct = (v: number) => (Math.round(v * 10000) / 100).toLocaleString('es-CL');
 
+// Medida en metros con coma: 1.825 → "1,825".
+const fmtNum = (v: number) => v.toLocaleString('es-CL', { maximumFractionDigits: 3 });
+
 // Las instalaciones que el motor calcula SOLO salen de las reglas: la roller
 // ('INST') más el código que declare cada sistema (el beeblack, 'INST-BB'). Un
 // sistema nuevo trae el suyo y queda cubierto sin tocar esta pantalla. Ver
@@ -292,10 +305,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [params] = useSearchParams();
   const { id: editOtId } = useParams();
   // Columnas COD SEC / DIRECC. / SENT. solo en la cotización final (Fase 3).
-  // Las columnas INVERTIDA y CATEGORÍA van en ambos modos (+2 a los colspans).
+  // Las columnas INVERTIDA y CATEGORÍA van en ambos modos.
+  // Cuenta con Fase 3: COD, COD SEC, DIRECC., SENT., CANT, PRODUCTO, COD_INT,
+  // TIPO, DESCRIPCIÓN, INVERTIDA, CATEGORÍA, UBIC., COLOR ACC (13 de
+  // «Información del producto») + ANCHO, ALTO + M², VAL.UNIT., DCT %, TOTAL +
+  // la del botón = 20. En Fase 1 son 3 menos.
   const showCols = modo === 'fase3';
-  const colSpanTotal = showCols ? 19 : 17;
-  const colSpanInfo = showCols ? 12 : 10;
+  const colSpanTotal = showCols ? 20 : 17;
+  const colSpanInfo = showCols ? 13 : 10;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId, perfil } = useAuth();
   // Los precios del catálogo se editan en Admin → Precios. Acá se ven y se
@@ -1316,7 +1333,26 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       'codInt' in patch && !('descuento' in patch)
         ? { ...patch, descuento: dctDeCodigo(patch.codInt) }
         : patch;
-    setAdicionales((prev) => prev.map((a) => (a.id === id ? { ...a, ...conDct } : a)));
+    // Tocar a mano una cenefa derivada del paño la vuelve MANUAL: si no, al
+    // volver a abrir la OT se regenera con el ancho del paño y se come lo
+    // escrito. El soft light necesita justamente eso — su cenefa se cobra por
+    // el ancho de TELA, que no es el del paño y lo escribe la vendedora.
+    const aMano = ['cantidad', 'ubicacion', 'colorAcc'].some((k) => k in conDct);
+    setAdicionales((prev) =>
+      prev.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              ...conDct,
+              // Al promoverla se anota de qué paño venía: así sigue tapando a su
+              // gemela aunque le cambien la ubicación.
+              ...(aMano && a.origen === 'pano'
+                ? { origen: 'manual' as const, ubicacionDerivada: a.ubicacion }
+                : {}),
+            }
+          : a,
+      ),
+    );
     // Al editar el COD_INT de un adicional importado, le quitamos su marca roja.
     if ('codInt' in patch) {
       setErroresImportAdic((prev) => {
@@ -1474,7 +1510,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         adicionalesPdf.push({
           cod: 'INSTALACION',
           cantidad: inst.cantidad,
-          producto: 'INSTALACION ROLLER',
+          producto: `INSTALACION ${inst.partes.map((p) => p.sistema).join(' + ') || 'ROLLER'}`.toUpperCase(),
           codInt: 'INST',
           tipo: 'INSTALACION',
           descripcion: inst.gratis
@@ -1485,6 +1521,25 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           valorUnit: inst.precioUnit,
           descuento: inst.descuento,
           total: inst.total,
+          destacadoRojo: true,
+        });
+      }
+      // La instalación de las verticales ya está dentro del precio de cada
+      // cortina: va como fila al 100 % para que el cliente vea que se instalan
+      // (es la fila INST-VERT de la planilla, con TOTAL en $ -).
+      for (const p of inst.incluidas) {
+        adicionalesPdf.push({
+          cod: 'INSTALACION',
+          cantidad: p.cantidad,
+          producto: `INSTALACION ${p.sistema}`.toUpperCase(),
+          codInt: 'INST',
+          tipo: 'INSTALACION',
+          descripcion: 'INCLUIDA EN EL PRECIO',
+          ubicacion: '',
+          colorAcc: '',
+          valorUnit: p.precioUnit,
+          descuento: 1,
+          total: 0,
           destacadoRojo: true,
         });
       }
@@ -2311,6 +2366,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               {adicionales.map((a) => {
                 const prod = a.codInt ? catalogo[a.codInt.trim()] : undefined;
                 const r = adicResDeFila.get(a.id);
+                // En una cenefa la CANT es el ANCHO en metros (se cobra por
+                // metro lineal). Se repite bajo la columna ANCHO para que se
+                // entienda qué es ese «1,825» y se pueda comparar con la
+                // cortina: en el soft light la cenefa va por el ancho de tela,
+                // que lo escribe la vendedora y no siempre es el del paño.
+                const esCenefa = !!tipoCenefaDesdeAdicional(a.codInt ?? '');
                 return (
                   <tr key={a.id} className="border-t border-border align-middle">
                     <Td className="text-muted-foreground">
@@ -2318,9 +2379,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       {a.origen === 'pano' && (
                         <span
                           className="ml-1 rounded border border-accent/40 bg-accent/10 px-1 text-[9px] font-semibold text-accent"
-                          title="Cenefa derivada del paño en Terreno. Para quitarla, cambia la cenefa en Fase 2."
+                          title="Cenefa derivada del paño en Terreno: sigue su ancho y su ubicación. Si la editas acá, deja de seguirlo. Para quitarla, cambia la cenefa en Fase 2."
                         >
                           auto
+                        </span>
+                      )}
+                      {a.ubicacionDerivada != null && (
+                        <span
+                          className="ml-1 rounded border border-border bg-muted/40 px-1 text-[9px] font-semibold text-muted-foreground"
+                          title="Nació del paño y se editó a mano: ya no sigue al paño, manda lo que está escrito acá."
+                        >
+                          a mano
                         </span>
                       )}
                     </Td>
@@ -2334,7 +2403,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Td>
                       <CellInput type="number" step="0.01" value={a.cantidad || ''}
                         onChange={(e) => setAdic(a.id, { cantidad: parseFloat(e.target.value) || 0 })}
-                        className="w-14 text-right" />
+                        className="w-14 text-right"
+                        title={
+                          esCenefa
+                            ? 'En una cenefa esta cantidad es el ANCHO en metros: se cobra por metro lineal.'
+                            : undefined
+                        } />
                     </Td>
                     <Td className="text-muted-foreground">{prod?.producto ?? '—'}</Td>
                     <Td>
@@ -2349,18 +2423,24 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     </Td>
                     <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
                     <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
+                    {/* INVERTIDA y CATEGORÍA: un adicional no tiene ninguna de
+                        las dos, pero las celdas van igual o la fila entera se
+                        corre y la ubicación aparece bajo el rótulo equivocado. */}
+                    <Td className="text-center text-muted-foreground">—</Td>
                     <Td className="text-center text-muted-foreground">—</Td>
                     <Td>
                       <CellInput value={a.ubicacion}
                         onChange={(e) => setAdic(a.id, { ubicacion: e.target.value })}
-                        placeholder="" className="w-20" />
+                        placeholder="dorm ppal" className="w-20" />
                     </Td>
                     <Td>
                       <CellInput value={a.colorAcc}
                         onChange={(e) => setAdic(a.id, { colorAcc: e.target.value })}
                         placeholder="" className="w-24" />
                     </Td>
-                    <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                    <Td className="border-l border-border text-center text-muted-foreground">
+                      {esCenefa && a.cantidad > 0 ? fmtNum(a.cantidad) : '—'}
+                    </Td>
                     <Td className="text-center text-muted-foreground">—</Td>
                     <Td className="border-l border-border text-center text-muted-foreground">—</Td>
                     <Td className="text-right">{r ? formatCLP(r.precioUnit) : '—'}</Td>
@@ -2404,6 +2484,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   <Td className="text-muted-foreground">
                     {textoInstalacion(resultado.instalacion, parametros.instalacionGratisMinCortinas)}
                   </Td>
+                  {/* INVERTIDA · CATEGORÍA · UBIC. · COLOR ACC */}
+                  <Td className="text-center text-muted-foreground">—</Td>
                   <Td className="text-center text-muted-foreground">—</Td>
                   <Td className="text-center text-muted-foreground">—</Td>
                   <Td className="text-center text-muted-foreground">—</Td>
@@ -2445,6 +2527,46 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   </Td>
                 </tr>
               )}
+              {/* La instalación de las verticales ya va DENTRO del valor
+                  unitario de cada una, así que no se puede cobrar de nuevo;
+                  pero sin esta fila la cotización no mostraba en ninguna parte
+                  que se están cobrando $40.000 por cortina. Es la fila
+                  INST-VERT al 100 % de descuento de la planilla. */}
+              {resultado.instalacion.incluidas.map((p) => (
+                <tr key={`incl-${p.sistema}`} className="border-t border-border align-middle">
+                  <Td className="text-muted-foreground">INSTALACION</Td>
+                  {showCols && (
+                    <>
+                      <Td className="text-center text-muted-foreground">—</Td>
+                      <Td className="text-center text-muted-foreground">—</Td>
+                      <Td className="text-center text-muted-foreground">—</Td>
+                    </>
+                  )}
+                  <Td className="text-right">{p.cantidad}</Td>
+                  <Td className="text-muted-foreground">INSTALACION {p.sistema}</Td>
+                  <Td className="text-muted-foreground">INST</Td>
+                  <Td className="text-muted-foreground">INSTALACION</Td>
+                  <Td className="text-muted-foreground">
+                    Incluida en el precio de cada cortina
+                  </Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                  <Td className="text-center text-muted-foreground">—</Td>
+                  <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                  <Td className="text-right">{formatCLP(p.precioUnit)}</Td>
+                  <Td className="text-center text-muted-foreground">100</Td>
+                  <Td
+                    className="text-right font-semibold text-muted-foreground"
+                    title={`Ya cobrada: ${formatCLP(p.total)} repartidos en el valor unitario de las ${p.cantidad} cortinas.`}
+                  >
+                    $ —
+                  </Td>
+                  <Td className="text-right print:hidden" />
+                </tr>
+              ))}
               {/* Envío a región con cobro en destino: el cliente tiene que
                   saber que ese costo no está en el total. */}
               {avisoEnvioRegion && (
@@ -2531,6 +2653,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               <FilaTotal label={f.label} valor={formatCLP(f.valor(t))} fuerte={f.fuerte} />
             </div>
           ))}
+          {/* La misma leyenda que sale pegada al total con tarjeta en el PDF.
+              Con Flow no va: ahí las cuotas las pone el banco del cliente. */}
+          {paramsEff.proveedorTarjeta !== 'flow' &&
+            datosEmpresa.totales.leyendaCuotas.trim() !== '' && (
+              <p className="text-right text-[11px] font-semibold text-destructive">
+                {datosEmpresa.totales.leyendaCuotas}
+              </p>
+            )}
           <p className="pt-1 text-center text-[11px] text-muted-foreground">{NOTA_IVA}</p>
           <div className="my-1 border-t border-border" />
           {modo === 'fase3' ? (
@@ -2658,8 +2788,20 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
   );
 }
 
-function Td({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <td className={cn('whitespace-nowrap px-2 py-1.5 align-middle', className)}>{children}</td>;
+function Td({
+  children,
+  className,
+  title,
+}: {
+  children?: React.ReactNode;
+  className?: string;
+  title?: string;
+}) {
+  return (
+    <td className={cn('whitespace-nowrap px-2 py-1.5 align-middle', className)} title={title}>
+      {children}
+    </td>
+  );
 }
 
 function CellInput(props: React.InputHTMLAttributes<HTMLInputElement>) {

@@ -475,6 +475,35 @@ describe('filtrarDerivadosPorCupoManual', () => {
     const manuales = [{ codInt: 'CENF C', cantidad: 1, descuento: 0, ubicacion: 'PPAL' }];
     expect(filtrarDerivadosPorCupoManual([derivado('PPAL', 1)], manuales)).toHaveLength(1);
   });
+
+  // Una cenefa que nació del paño y se editó a mano (soft light: se cobra por
+  // el ancho de TELA, no por el del paño) sigue ocupando el cupo de SU paño.
+  describe('una derivada editada a mano no se duplica al reabrir la OT', () => {
+    it('con el ancho cambiado tapa igual a su gemela', () => {
+      const manuales = [
+        {
+          codInt: 'CENF O', cantidad: 3.1, descuento: 0,
+          ubicacion: 'PPAL', origen: 'manual' as const, ubicacionDerivada: 'PPAL',
+        },
+      ];
+      expect(filtrarDerivadosPorCupoManual([derivado('PPAL', 2.81)], manuales)).toHaveLength(0);
+    });
+
+    it('con la ubicación renombrada también, gracias a ubicacionDerivada', () => {
+      const manuales = [
+        {
+          codInt: 'CENF O', cantidad: 3.1, descuento: 0,
+          ubicacion: 'DORM 1', origen: 'manual' as const, ubicacionDerivada: 'PPAL',
+        },
+      ];
+      expect(filtrarDerivadosPorCupoManual([derivado('PPAL', 2.81)], manuales)).toHaveLength(0);
+    });
+
+    it('sin ubicacionDerivada manda la ubicación (una manual de siempre)', () => {
+      const manuales = [{ codInt: 'CENF O', cantidad: 3.1, descuento: 0, ubicacion: 'DORM 1' }];
+      expect(filtrarDerivadosPorCupoManual([derivado('PPAL', 2.81)], manuales)).toHaveLength(1);
+    });
+  });
 });
 
 describe('tiraCenefaOvalada — categoría B siempre SIN TIRA (2026-08-14)', () => {

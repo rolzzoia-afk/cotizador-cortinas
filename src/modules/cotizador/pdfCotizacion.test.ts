@@ -47,6 +47,7 @@ vi.mock('jspdf', async (importOriginal) => {
 });
 
 import { DATOS_EMPRESA_DEFAULT } from './datosEmpresaCotizacion';
+import { TIRA_PROYECTOS } from './fotosProyectos';
 import { SELLO_CUOTAS, SELLO_TARJETAS } from './logoRolzzo';
 import { FILAS_TOTALES, NOTA_IVA } from './filasTotales';
 import { calcularTotales } from './preciosFase0';
@@ -379,8 +380,59 @@ describe('generarPdfCotizacion', () => {
   it('los sellos van con transparencia: nada de recuadros sobre el papel', () => {
     generarPdfCotizacion(entradaDemo());
     generarPdfCotizacion(entradaDemo({ soloTelasB: false, hayTelaB: false }));
-    // Un JPEG no tiene canal alfa y llegaba con el fondo negro al pie.
-    expect(imagenes.every((d) => !d.startsWith('data:image/jpeg'))).toBe(true);
+    // Un JPEG no tiene canal alfa y llegaba con el fondo negro al pie. La
+    // única imagen que SÍ puede ser JPEG es la tira de fotos: va sobre papel
+    // blanco, no necesita alfa y en PNG pesaría 1,8 MB.
+    const sellosYLogo = imagenes.filter((d) => d !== TIRA_PROYECTOS);
+    expect(sellosYLogo.length).toBeGreaterThan(0);
+    expect(sellosYLogo.every((d) => !d.startsWith('data:image/jpeg'))).toBe(true);
+  });
+
+  // La tira «NUESTROS PROYECTOS Y PRODUCTOS» del Excel manual.
+  describe('la tira de proyectos', () => {
+    it('sale con sus dos bandas y la imagen', () => {
+      generarPdfCotizacion(entradaDemo());
+      expect(impreso()).toContain('NUESTROS PROYECTOS Y PRODUCTOS');
+      expect(impreso()).toContain('FABRICADOS E INSTALADOS POR CORTINAS ROLZZO');
+      expect(imagenes).toContain(TIRA_PROYECTOS);
+    });
+
+    it('apagándola en Admin desaparece entera', () => {
+      const empresa = {
+        ...DATOS_EMPRESA_DEFAULT,
+        fotosProyectos: { ...DATOS_EMPRESA_DEFAULT.fotosProyectos, visible: false },
+      };
+      generarPdfCotizacion(entradaDemo({ empresa }));
+      expect(impreso()).not.toContain('NUESTROS PROYECTOS');
+      expect(imagenes).not.toContain(TIRA_PROYECTOS);
+    });
+  });
+
+  // El rótulo rojo de las cuotas que la planilla pone junto al total tarjeta.
+  // Se busca por igualdad EXACTA: la banda del pie dice «PAGA HASTA 12 CUOTAS
+  // SIN INTERÉS» y con `toContain` cualquier prueba pasaría sola.
+  describe('la leyenda de las cuotas', () => {
+    const LEYENDA = DATOS_EMPRESA_DEFAULT.totales.leyendaCuotas;
+    const salio = () => textosImpresos.includes(LEYENDA);
+
+    it('va con Mercadopago, en cualquier categoría', () => {
+      generarPdfCotizacion(entradaDemo({ soloTelasB: false, hayTelaB: false }));
+      expect(salio()).toBe(true);
+      textosImpresos.length = 0;
+      generarPdfCotizacion(entradaDemo({ soloTelasB: true }));
+      expect(salio()).toBe(true);
+    });
+
+    it('con Flow no se promete nada: las cuotas las pone el banco', () => {
+      generarPdfCotizacion(entradaDemo({ proveedorTarjeta: 'flow' }));
+      expect(salio()).toBe(false);
+    });
+
+    it('vaciándola en Admin no sale', () => {
+      const empresa = { ...DATOS_EMPRESA_DEFAULT, totales: { leyendaCuotas: '' } };
+      generarPdfCotizacion(entradaDemo({ empresa }));
+      expect(salio()).toBe(false);
+    });
   });
 });
 

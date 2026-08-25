@@ -57,6 +57,13 @@ export type AdicionalFase0Persistido = {
    * 'pano' se regeneran en cada apertura, así que no se acumulan.
    */
   origen?: 'manual' | 'pano';
+  /**
+   * Solo en una línea que NACIÓ derivada de un paño y se editó a mano (por eso
+   * pasó a 'manual'): la ubicación que tenía como derivada. Es lo que permite
+   * que siga tapando a su gemela cuando se vuelve a abrir la OT, aunque le
+   * hayan cambiado la ubicación — si no, la cenefa se cobraría dos veces.
+   */
+  ubicacionDerivada?: string;
 };
 
 export type DatosGenerales = {

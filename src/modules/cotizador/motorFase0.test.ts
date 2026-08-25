@@ -471,6 +471,22 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
     const bk = r.familias.find((f) => f.cod === 'BLACKOUT_D')!;
     // La tela se cobra al precio del arquetipo de la familia, no al de BK 60.
     expect(bk.arquetipoCodInt).toBe('BK-D');
+    // Y se dice POR QUÉ, con qué receta y con qué números: sin esto el
+    // desglose muestra el resultado pero no la cuenta.
+    expect(bk.motivoPrecioMl).toBe('arquetipo');
+    expect(bk.claveReceta).toBe('BLACKOUT_D');
+    expect(bk.margenInsumo).toBe(PARAMETROS_DEFAULT.margenInsumo);
+    expect(bk.extraAltoM).toBe(0.25);
+    expect(bk.anchoRolloM).toBeGreaterThan(0);
+    expect(bk.instalacionEmbebida).toBe(PARAMETROS_DEFAULT.instalacionRoller);
+    // Cada línea de material se puede reconstruir con el margen expuesto.
+    for (const l of bk.materiales.filter((x) => x.precio === 'venta')) {
+      expect(l.precioUnit * bk.margenInsumo).toBeGreaterThan(0);
+    }
+    const vert = r.familias.find((f) => f.cod === 'BLACKOUT_V_D')!;
+    expect(vert.motivoPrecioMl).toBe('base');
+    expect(vert.claveReceta).toBe('VERTICAL');
+    expect(vert.instalacionEmbebida).toBe(PARAMETROS_DEFAULT.instalacionVertical);
     // La tabla de materiales suma exactamente el costo de materiales.
     for (const f of r.familias) {
       expect(f.materiales.reduce((s, l) => s + l.total, 0)).toBeCloseTo(f.costoMateriales, 6);
@@ -560,6 +576,57 @@ describe('motorFase0 — instalación gratis 4+ / región (Fase 2)', () => {
     expect(r.instalacion.total).toBe(0);
   });
 
+  // Su instalación ($40.000) va DENTRO del valor unitario de cada vertical, así
+  // que no se cobra en la fila; pero sin mostrarla nadie la ve, que era el
+  // reclamo: «tiene verticales y no aparece el ítem de instalación».
+  describe('la instalación de las verticales se muestra sin volver a cobrarse', () => {
+    const verticales = (cantidad: number) => [
+      { codInt: 'SC 34-V', ancho: 1.869, alto: 2.3, cantidad },
+    ];
+
+    it('sale como tramo incluido, con su precio por cortina', () => {
+      const r = cotizarFase0(verticales(4), CAT, AR);
+      expect(r.instalacion.incluidas).toEqual([
+        {
+          sistema: 'Vertical',
+          cantidad: 4,
+          precioUnit: 40000,
+          descuento: 0,
+          total: 160000,
+          siempreSeCobra: false,
+        },
+      ]);
+    });
+
+    it('no suma al subtotal: ya viene dentro de cada VAL. UNIT', () => {
+      const r = cotizarFase0(verticales(4), CAT, AR);
+      const cortinas = r.lineas.reduce((s, l) => s + l.total, 0);
+      expect(r.subtotalNeto).toBeCloseTo(cortinas, 6);
+      expect(r.instalacion.total).toBe(0);
+    });
+
+    it('cuenta por ventana: un dual de verticales se instala una vez', () => {
+      const r = cotizarFase0(
+        [
+          { codInt: 'SC 34-V', ancho: 1.2, alto: 2.3, cantidad: 1, ventanaId: 'v1' },
+          { codInt: 'SC 34-V', ancho: 1.2, alto: 2.3, cantidad: 1, ventanaId: 'v1' },
+        ],
+        CAT,
+        AR,
+      );
+      expect(r.instalacion.incluidas[0].cantidad).toBe(1);
+    });
+
+    it('sin instalación no hay nada que mostrar', () => {
+      const r = cotizarFase0(verticales(4), CAT, AR, [], PARAMETROS_DEFAULT, false, true);
+      expect(r.instalacion.incluidas).toEqual([]);
+    });
+
+    it('una cotización sin verticales no la inventa', () => {
+      expect(cotizarFase0(cortina(2), CAT, AR).instalacion.incluidas).toEqual([]);
+    });
+  });
+
   it('el mínimo de cortinas es configurable (min 2 → 2 cortinas ya es gratis)', () => {
     const params = { ...PARAMETROS_DEFAULT, instalacionGratisMinCortinas: 2 };
     const r = cotizarFase0(cortina(2), CAT, AR, [], params);
@@ -578,6 +645,35 @@ describe('motorFase0 — instalación gratis 4+ / región (Fase 2)', () => {
     // Con 1 cortina (bajo el mínimo) el subtotal baja DOS veces la instalación:
     // la embebida en el VAL. UNIT y el recargo de la cotización chica.
     expect(conInst.subtotalNeto - sinInst.subtotalNeto).toBeCloseTo(2 * 17500, 6);
+  });
+
+  // Esa baja del VAL. UNIT no se veía en ninguna parte, y en una cotización de
+  // puras verticales ni siquiera cambia una fila (no tienen fila): son $40.000
+  // por cortina que desaparecen del precio en silencio. Es la diferencia que
+  // aparece al comparar contra el Excel manual, que sí lo deja adentro.
+  describe('«sin instalación» avisa cuánto le sacó al valor unitario', () => {
+    const aviso = (r: ReturnType<typeof cotizarFase0>) =>
+      r.avisos.find((a) => a.tipo === 'instalacion');
+
+    it('lo dice con el detalle por tipo de cortina', () => {
+      const r = cotizarFase0(
+        [
+          { codInt: 'SC 34-V', ancho: 1.5, alto: 2.3, cantidad: 4 },
+          { codInt: 'SC 34', ancho: 1.3, alto: 2.3, cantidad: 2 },
+        ],
+        CAT, AR, [], PARAMETROS_DEFAULT, false, true,
+      );
+      const a = aviso(r);
+      expect(a).toBeDefined();
+      expect(a!.mensaje).toContain('4 verticales');
+      expect(a!.mensaje).toContain('2 roller');
+      // 4 × 40.000 + 2 × 17.500 = 195.000
+      expect(a!.mensaje).toContain('195.000');
+    });
+
+    it('con instalación no avisa nada', () => {
+      expect(aviso(cotizarFase0(cortina(2), CAT, AR))).toBeUndefined();
+    });
   });
 });
 
@@ -1224,7 +1320,14 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.instalacion.total).toBe(35000);
     expect(r.instalacion.gratis).toBe(false);
     expect(r.instalacion.partes).toEqual([
-      { sistema: 'Beeblack', cantidad: 1, precioUnit: 35000, total: 35000 },
+      {
+        sistema: 'Beeblack',
+        cantidad: 1,
+        precioUnit: 35000,
+        descuento: 0,
+        total: 35000,
+        siempreSeCobra: true,
+      },
     ]);
   });
 
@@ -1245,14 +1348,46 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(552055.0727 - r.lineas[0].valorUnit).toBeCloseTo(85 * 1.493, 3);
   });
 
-  it('con 4 beeblack la instalación sale gratis (mismo mínimo que el roller)', () => {
+  // El beeblack se arma en obra y se cobra aparte: llegar a 4 cortinas no lo
+  // regala. Decisión del dueño del 2026-08-25, contra lo que hacía la copia
+  // del Excel (ver el golden COTAP-8003, donde la fila salió en cero).
+  it('con 4 beeblack la instalación NO sale gratis: se cobra siempre', () => {
     const r = cotizarFase0(
       [{ codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 4 }],
       CAT_BB, AR_BB,
     );
     expect(r.instalacion.cantidad).toBe(4);
+    expect(r.instalacion.total).toBe(4 * 35000);
+    expect(r.instalacion.gratis).toBe(false);
+    expect(r.instalacion.partes[0].siempreSeCobra).toBe(true);
+    expect(r.instalacion.partes[0].descuento).toBe(0);
+  });
+
+  it('un % puesto a mano sí le gana: la instalación se negocia', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 4 }],
+      CAT_BB, AR_BB, [], PARAMETROS_DEFAULT, false, false, undefined, 1,
+    );
     expect(r.instalacion.total).toBe(0);
-    expect(r.instalacion.gratis).toBe(true);
+    expect(r.instalacion.descuentoManual).toBe(true);
+  });
+
+  // Las roller de la misma cotización sí llegan al mínimo gracias a ellas: el
+  // beeblack no entra al gratis, pero sí cuenta cortinas.
+  it('las beeblack suman al mínimo de las roller sin tomarlo para sí', () => {
+    const r = cotizarFase0(
+      [
+        { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 2 },
+        { codInt: 'BK 09', ancho: 1.5, alto: 1.5, cantidad: 2 },
+      ],
+      { ...CAT_BB, 'BK 09': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 27176 } },
+      AR_BB,
+    );
+    expect(r.instalacion.cantidad).toBe(4);
+    const bb = r.instalacion.partes.find((p) => p.sistema === 'Beeblack');
+    const roller = r.instalacion.partes.find((p) => p.sistema === 'Roller');
+    expect(bb?.total).toBe(2 * 35000);
+    expect(roller?.total).toBe(0);
   });
 
   it('el panel plantilla de 3,00 × 3,00 da el VALOR M2 de la copia (90.765,59)', () => {
@@ -1352,12 +1487,29 @@ describe('motorFase0 — beeblack (COTAP-8003, la copia canónica)', () => {
     r.lineas.forEach((l, i) => expect(Math.round(l.valorUnit)).toBe(esperados[i]));
   });
 
-  it('subtotal y total transferencia, al peso; instalación gratis por 4', () => {
+  // Las CORTINAS calzan al peso con el formato de cotización: eso es lo que
+  // fija la receta canónica y no se mueve.
+  it('las cuatro cortinas suman los 1.835.123 del formato', () => {
     const r = cotizar();
+    expect(Math.round(r.lineas.reduce((s, l) => s + l.total, 0))).toBe(1835123);
+  });
+
+  // ÚNICA divergencia deliberada con esta copia: ahí la fila de instalación
+  // salió en $0 (4 cortinas ⇒ gratis por cantidad). Desde el 2026-08-25 el
+  // beeblack se cobra siempre por orden del dueño: se arma en obra y no entra
+  // en el «gratis por 4», que es de las roller. Para volver a la copia tal
+  // cual hay que ponerle 100 % de descuento a mano a la fila.
+  it('la instalación beeblack se cobra: 4 × 35.000 sobre las cortinas', () => {
+    const r = cotizar();
+    expect(r.instalacion.total).toBe(140000);
+    expect(r.instalacion.gratis).toBe(false);
+    expect(Math.round(r.subtotalNeto)).toBe(1835123 + 140000);
+  });
+
+  it('con la instalación regalada a mano vuelve a dar los totales de la copia', () => {
+    const r = cotizarFase0(FILAS, CAT_COTAP, AR_COTAP, [], PARAMETROS_DEFAULT, false, false, undefined, 1);
     expect(Math.round(r.subtotalNeto)).toBe(1835123);
     expect(Math.round(r.totales.totalTransferencia)).toBe(2183796);
-    expect(r.instalacion.gratis).toBe(true);
-    expect(r.instalacion.total).toBe(0);
   });
 });
 
@@ -1592,7 +1744,12 @@ describe('motorFase0 — la fila de instalación cuenta VENTANAS, no paños', ()
 describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () => {
   const base = {
     cantidad: 2, precioUnit: 17500, descuento: 0, total: 35000,
-    gratis: false, region: false, sinInstalacion: false, descuentoManual: false, partes: [],
+    gratis: false, region: false, sinInstalacion: false, descuentoManual: false,
+    partes: [], incluidas: [],
+  };
+  const tramoBeeblack = {
+    sistema: 'Beeblack', cantidad: 1, precioUnit: 35000, descuento: 0,
+    total: 35000, siempreSeCobra: true,
   };
   it('bajo el mínimo lo dice', () => {
     expect(textoInstalacion(base, 4)).toBe('2 cortinas, bajo el mínimo de 4');
@@ -1618,5 +1775,18 @@ describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () =>
     expect(
       textoInstalacion({ ...base, descuentoManual: true, descuento: 1 }, 4),
     ).toBe('2 cortinas, sin costo');
+  });
+  // Decir «sin costo» a secas con un beeblack cobrado sería mentira en la
+  // propia fila: el gratis por cantidad es de las roller.
+  it('avisa que el sistema que se cobra aparte no entra en el gratis', () => {
+    expect(
+      textoInstalacion({ ...base, cantidad: 5, partes: [tramoBeeblack] }, 4),
+    ).toBe('5 cortinas, 4 o más: sin costo; Beeblack se cobra aparte');
+    expect(
+      textoInstalacion(
+        { ...base, cantidad: 6, region: true, descuento: 1, partes: [tramoBeeblack] },
+        4,
+      ),
+    ).toBe('6 cortinas, región: sin costo; Beeblack se cobra aparte');
   });
 });

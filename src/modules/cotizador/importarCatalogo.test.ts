@@ -5,6 +5,8 @@ import {
   diffCatalogo,
   aplicarCatalogo,
   claveCatalogoCanonica,
+  filasParaPlantilla,
+  leerDescuento,
   normCod,
 } from './importarCatalogo';
 import type { CatalogoProductos } from './types';
@@ -199,5 +201,121 @@ describe('claveCatalogoCanonica', () => {
   it('normCod: trim, colapsa espacios y mayúsculas', () => {
     expect(normCod('  sc   64 ')).toBe('SC 64');
     expect(normCod(null)).toBe('');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Subir un Excel con SOLO los descuentos: es lo que la vendedora hace cuando
+// cambia el % a muchas telas de una vez. Antes esa planilla borraba el
+// producto, el tipo y la descripción de cada código que tocaba.
+// ─────────────────────────────────────────────────────────────────────
+describe('planilla de solo descuentos', () => {
+  /** Un libro con las columnas que se le pasen, nada más. */
+  function wbSuelto(header: string[], filas: (string | number)[][]): XLSX.WorkBook {
+    const ws = XLSX.utils.aoa_to_sheet([header, ...filas]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+    return wb;
+  }
+
+  const CAT: CatalogoProductos = {
+    'BK 68': {
+      cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX',
+      descripcion: 'IGUAZU CRUDO 1903', precio: 23782, descuento: 0.2, categoria: 'A',
+    },
+  };
+
+  it('sin la columna COD igual actualiza un código que ya existe', () => {
+    const wb = wbSuelto(['COD_INT', 'DESCUENTO %'], [['BK 68', 35]]);
+    const filas = parsearCatalogoExcel(wb);
+    expect(filas).toHaveLength(1);
+    const d = diffCatalogo(CAT, filas);
+    expect(d.cambios).toHaveLength(1);
+    expect(d.cambios[0].cambiaDescuento).toBe(true);
+    expect(d.cambios[0].descuentoNuevo).toBeCloseTo(0.35, 6);
+  });
+
+  it('NO borra producto, tipo ni descripción', () => {
+    const wb = wbSuelto(['COD_INT', 'DESCUENTO %'], [['BK 68', 35]]);
+    const { catalogo } = aplicarCatalogo(CAT, {}, parsearCatalogoExcel(wb));
+    expect(catalogo['BK 68'].producto).toBe('ROLLER BLACKOUT DELUX');
+    expect(catalogo['BK 68'].tipo).toBe('DELUX');
+    expect(catalogo['BK 68'].descripcion).toBe('IGUAZU CRUDO 1903');
+    expect(catalogo['BK 68'].cod).toBe('BLACKOUT_D');
+    expect(catalogo['BK 68'].categoria).toBe('A');
+    expect(catalogo['BK 68'].precio).toBe(23782);
+    expect(catalogo['BK 68'].descuento).toBeCloseTo(0.35, 6);
+  });
+
+  it('un precio ausente no se reporta como «baja a 0»', () => {
+    const wb = wbSuelto(['COD_INT', 'DESCUENTO %'], [['BK 68', 35]]);
+    const d = diffCatalogo(CAT, parsearCatalogoExcel(wb));
+    expect(d.cambios[0].cambiaPrecio).toBe(false);
+  });
+
+  it('un código que no existe y viene sin COD se ignora con motivo', () => {
+    const wb = wbSuelto(['COD_INT', 'DESCUENTO %'], [['BK 99', 35]]);
+    const d = diffCatalogo(CAT, parsearCatalogoExcel(wb));
+    expect(d.nuevos).toHaveLength(0);
+    expect(d.ignorados).toHaveLength(1);
+    expect(d.ignorados[0].codInt).toBe('BK 99');
+    expect(d.ignorados[0].motivo).toContain('COD');
+  });
+
+  it('acepta los nombres con los que se escribe la columna a mano', () => {
+    for (const cabecera of ['DCTO', '% DCTO', 'DESCUENTO %', 'DCT %', 'Descuento']) {
+      const wb = wbSuelto(['COD_INT', cabecera], [['BK 68', 35]]);
+      const filas = parsearCatalogoExcel(wb);
+      expect(filas[0]?.producto.descuento, cabecera).toBeCloseTo(0.35, 6);
+    }
+  });
+});
+
+describe('leerDescuento — 0-1 o 0-100', () => {
+  it('una fracción se deja como está', () => {
+    expect(leerDescuento(0.3)).toEqual({ descuento: 0.3, eraPorcentaje: false });
+    expect(leerDescuento(0.05)).toEqual({ descuento: 0.05, eraPorcentaje: false });
+  });
+
+  // El 1 es 100 %: es lo que ya significa en el catálogo (la instalación
+  // regalada viene con descuento 1).
+  it('el 1 es el 100 %, no el 1 %', () => {
+    expect(leerDescuento(1)).toEqual({ descuento: 1, eraPorcentaje: false });
+  });
+
+  it('sobre 1 se lee como porcentaje y se avisa', () => {
+    expect(leerDescuento(30)).toEqual({ descuento: 0.3, eraPorcentaje: true });
+    expect(leerDescuento(100)).toEqual({ descuento: 1, eraPorcentaje: true });
+  });
+
+  it('vacío, texto o negativo → sin descuento', () => {
+    expect(leerDescuento('').descuento).toBe(0);
+    expect(leerDescuento('ninguno').descuento).toBe(0);
+    expect(leerDescuento(-5).descuento).toBe(0);
+  });
+});
+
+describe('filasParaPlantilla', () => {
+  const CAT: CatalogoProductos = {
+    'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BK DELUX', tipo: 'DELUX', descripcion: 'X', precio: 23782, descuento: 0.25 },
+  };
+
+  it('baja el catálogo con las cabeceras que el importador entiende', () => {
+    const [f] = filasParaPlantilla(CAT, { 'BK 68': 2.98 });
+    expect(f.COD_INT).toBe('BK 68');
+    expect(f.COD).toBe('BLACKOUT_D');
+    expect(f['DESCUENTO %']).toBe(25);
+    expect(f['ANCHO DE PAÑOS']).toBe(2.98);
+  });
+
+  // Lo que se baja tiene que poder volver a subirse sin cambiar nada.
+  it('ida y vuelta: bajar y volver a importar no mueve el catálogo', () => {
+    const ws = XLSX.utils.json_to_sheet(filasParaPlantilla(CAT, {}));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+    const d = diffCatalogo(CAT, parsearCatalogoExcel(wb));
+    expect(d.cambios).toHaveLength(0);
+    expect(d.nuevos).toHaveLength(0);
+    expect(d.sinCambio).toBe(1);
   });
 });

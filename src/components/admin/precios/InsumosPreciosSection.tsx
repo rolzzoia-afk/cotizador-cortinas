@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InputDecimal } from '@/components/ui/input-decimal';
 import { useConfirm } from '@/components/ui/confirm';
 import { formatCLP } from '@/lib/formatters';
 import {
@@ -62,6 +63,16 @@ const ORDEN_FAMILIAS = [...FAMILIAS_CON_RECETA, RECETA_VERTICAL_KEY, RECETA_DUO_
 
 /** Sin espacios ni guiones: así calzan «E 02» del cálculo y «E02» de la bodega. */
 const clave = (cod: string) => String(cod ?? '').toUpperCase().replace(/[\s.\-]/g, '');
+
+/** Número con coma decimal, para escribir la cuenta tal como se lee acá. */
+const textoDivisor = (n: number) =>
+  n.toLocaleString('es-CL', { maximumFractionDigits: 4 });
+
+/** Lo tecleado en el alta, aceptando coma (es-CL) además de punto. */
+const montoAlta = (s: string) => {
+  const n = parseFloat(String(s).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+};
 
 export function InsumosPreciosSection({
   valor,
@@ -210,7 +221,7 @@ export function InsumosPreciosSection({
   const confirmarAlta = () => {
     if (!alta) return;
     const cod = alta.cod.trim().toUpperCase();
-    const monto = Number(alta.valorMaximo);
+    const monto = montoAlta(alta.valorMaximo);
     if (!cod || !(monto > 0)) return;
     if (valor[cod]) {
       toast.info(`«${cod}» ya está en la lista de precios.`);
@@ -235,7 +246,7 @@ export function InsumosPreciosSection({
   };
 
   const hayInventario = inventario.size > 0;
-  const altaValida = !!alta && !!alta.cod.trim() && Number(alta.valorMaximo) > 0;
+  const altaValida = !!alta && !!alta.cod.trim() && montoAlta(alta.valorMaximo) > 0;
 
   return (
     <section className="rounded-lg border bg-card p-5">
@@ -311,8 +322,7 @@ export function InsumosPreciosSection({
             <label className="text-xs">
               <span className="mb-1 block text-muted-foreground">Valor máximo</span>
               <Input
-                type="number"
-                step="0.01"
+                inputMode="decimal"
                 value={alta.valorMaximo}
                 onChange={(e) => setAlta({ ...alta, valorMaximo: e.target.value })}
                 onKeyDown={(e) => e.key === 'Enter' && altaValida && confirmarAlta()}
@@ -365,7 +375,15 @@ export function InsumosPreciosSection({
               <th className="px-2 py-1.5 text-left font-medium">Código</th>
               <th className="px-2 py-1.5 text-left font-medium">Descripción</th>
               <th className="px-2 py-1.5 text-right font-medium">Valor máximo</th>
-              <th className="px-2 py-1.5 text-right font-medium">Precio de venta</th>
+              {/* La cuenta va en el título de la columna porque «de dónde sale
+                  este número» era la pregunta que nadie podía contestar
+                  mirando la tabla. */}
+              <th className="px-2 py-1.5 text-right font-medium">
+                Precio de venta
+                <span className="block font-normal text-[0.65rem]">
+                  = valor máximo ÷ {textoDivisor(margenInsumo)}
+                </span>
+              </th>
               <th className="px-2 py-1.5 text-left font-medium">Se usa en</th>
               <th className="w-8" />
             </tr>
@@ -389,15 +407,16 @@ export function InsumosPreciosSection({
                     />
                   </td>
                   <td className="px-2 py-1">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      value={String(ins.valorMaximo)}
-                      onChange={(e) => editar(cod, { valorMaximo: Number(e.target.value) })}
+                    <InputDecimal
+                      value={ins.valorMaximo}
+                      onChange={(valorMaximo) => editar(cod, { valorMaximo })}
                       className="h-7 w-28 text-right text-xs"
                     />
                   </td>
-                  <td className="px-2 py-1 text-right text-muted-foreground">
+                  <td
+                    className="px-2 py-1 text-right text-muted-foreground"
+                    title={`${textoDivisor(ins.valorMaximo)} ÷ ${textoDivisor(margenInsumo)} = ${formatCLP(ins.valorMaximo / margenInsumo)}`}
+                  >
                     {formatCLP(ins.valorMaximo / margenInsumo)}
                   </td>
                   <td className="px-2 py-1">

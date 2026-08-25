@@ -98,4 +98,34 @@ describe('normalizarDatosEmpresa', () => {
     const out = normalizarDatosEmpresa({ encabezado: { logoUrl: 'https://cdn/logo.png' } });
     expect(out.encabezado.logoUrl).toBe('https://cdn/logo.png');
   });
+
+  // Lo guardado por una empresa ANTES de que existieran estos campos no puede
+  // quedarse sin la leyenda ni sin la tira: son parte del documento de siempre.
+  describe('campos nuevos sobre una configuración vieja', () => {
+    const vieja = { encabezado: { titulo: 'CORTINAS ROLZZO' } };
+
+    it('la leyenda de las cuotas se repone', () => {
+      expect(normalizarDatosEmpresa(vieja).totales.leyendaCuotas).toBe(
+        'HASTA 12 CUOTAS SIN INTERÉS',
+      );
+    });
+
+    it('la tira de proyectos sale, con sus dos textos', () => {
+      const f = normalizarDatosEmpresa(vieja).fotosProyectos;
+      expect(f.visible).toBe(true);
+      expect(f.titulo).toBe('NUESTROS PROYECTOS Y PRODUCTOS');
+      expect(f.subtitulo).toContain('CORTINAS ROLZZO');
+    });
+
+    it('solo un false explícito la apaga', () => {
+      expect(normalizarDatosEmpresa({ fotosProyectos: { visible: false } }).fotosProyectos.visible)
+        .toBe(false);
+      expect(normalizarDatosEmpresa({ fotosProyectos: {} }).fotosProyectos.visible).toBe(true);
+    });
+
+    it('la leyenda vaciada a propósito se respeta (no sale nunca)', () => {
+      expect(normalizarDatosEmpresa({ totales: { leyendaCuotas: '' } }).totales.leyendaCuotas)
+        .toBe('');
+    });
+  });
 });

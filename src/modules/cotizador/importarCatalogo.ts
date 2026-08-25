@@ -18,7 +18,31 @@ import * as XLSX from 'xlsx';
 import type { WorkBook } from 'xlsx';
 import type { CatalogoProductos, Producto } from './types';
 
-export type FilaCatalogo = { codInt: string; producto: Producto; anchoRollo: number | null };
+/** Los campos del catálogo que una planilla puede traer. */
+export type CampoCatalogo =
+  | 'cod'
+  | 'producto'
+  | 'tipo'
+  | 'descripcion'
+  | 'precio'
+  | 'descuento'
+  | 'anchoRollo'
+  | 'categoria';
+
+export type FilaCatalogo = {
+  codInt: string;
+  producto: Producto;
+  anchoRollo: number | null;
+  /**
+   * Qué columnas traía DE VERDAD la planilla. Sin esto, subir un Excel de solo
+   * descuentos borraba el producto, el tipo y la descripción de cada código que
+   * tocaba, porque el objeto `producto` siempre lleva esas claves (en vacío).
+   * `undefined` = se aplica todo (una fila armada a mano, como en los tests).
+   */
+  campos?: readonly CampoCatalogo[];
+  /** El descuento venía en 0-100 y se convirtió a fracción (30 → 0,3). */
+  descuentoEraPorcentaje?: boolean;
+};
 
 /** Normaliza un COD_INT: trim, colapsa espacios, mayúsculas (claves tipo "BK 13"). */
 export const normCod = (s: unknown) => String(s ?? '').trim().replace(/\s+/g, ' ').toUpperCase();
@@ -49,6 +73,23 @@ export function claveCatalogoCanonica(
 /** Normaliza una cabecera: minúsculas sin acentos, para mapear columnas. */
 const normHeader = (s: unknown) =>
   String(s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/**
+ * Los nombres con los que cada columna puede venir escrita. Las planillas que
+ * arma la gente a mano no dicen «descuento» a secas: dicen «DCTO», «% DCTO» o
+ * «DESCUENTO %», y sin estos alias la columna se ignoraba en silencio.
+ */
+const ALIAS: Record<CampoCatalogo | 'codInt', string[]> = {
+  codInt: ['cod_int', 'cod int', 'codint'],
+  cod: ['cod', 'codigo', 'familia'],
+  producto: ['producto'],
+  tipo: ['tipo'],
+  descripcion: ['descripcion', 'diseno', 'diseño'],
+  precio: ['precio de venta', 'precio', 'precio venta', '$/m', '$ /m', 'valor'],
+  descuento: ['descuento', 'dcto', 'dcto %', '% dcto', 'descuento %', '% descuento', 'dct %', 'dct'],
+  anchoRollo: ['ancho de panos', 'ancho de paños', 'ancho rollo', 'rollo', 'ancho'],
+  categoria: ['categoria', 'gama'],
+};
 
 /** Localiza la fila de cabecera (la que tiene COD_INT) y mapea columnas por nombre. */
 function mapaColumnas(rows: unknown[][]): { headerIdx: number; col: Record<string, number> } | null {
@@ -97,20 +138,40 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
   }
   if (!m) return [];
   const { headerIdx, col } = m;
-  const cell = (r: unknown[], name: string) => (col[name] != null ? r[col[name]] : undefined);
+  /** Índice de la columna de un campo, buscando por todos sus nombres. */
+  const indice = (campo: CampoCatalogo | 'codInt'): number | null => {
+    for (const alias of ALIAS[campo]) if (col[alias] != null) return col[alias];
+    return null;
+  };
+  const columnas = new Map<CampoCatalogo | 'codInt', number>();
+  for (const campo of Object.keys(ALIAS) as Array<CampoCatalogo | 'codInt'>) {
+    const j = indice(campo);
+    if (j != null) columnas.set(campo, j);
+  }
+  const cell = (r: unknown[], campo: CampoCatalogo | 'codInt') => {
+    const j = columnas.get(campo);
+    return j != null ? r[j] : undefined;
+  };
+  // Solo se toca lo que la planilla trae: un Excel de puros descuentos no puede
+  // dejar sin producto ni descripción a los códigos que actualiza.
+  const campos = (['cod', 'producto', 'tipo', 'descripcion', 'precio', 'descuento', 'anchoRollo', 'categoria'] as const)
+    .filter((c) => columnas.has(c));
+
   const out: FilaCatalogo[] = [];
   const vistos = new Set<string>();
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const r = rows[i] || [];
-    const codInt = normCod(cell(r, 'cod_int') ?? cell(r, 'cod int'));
+    const codInt = normCod(cell(r, 'codInt'));
+    // El COD (la familia) ya no es obligatorio: sin él la fila solo puede
+    // ACTUALIZAR un código que ya existe, nunca crear uno (una tela sin familia
+    // no se sabe cotizar). `diffCatalogo` se encarga de eso.
     const cod = String(cell(r, 'cod') ?? '').trim();
-    if (!codInt || !cod) continue;
+    if (!codInt) continue;
     if (vistos.has(codInt)) continue; // primera aparición gana
     vistos.add(codInt);
-    const precio = Number(cell(r, 'precio de venta')) || 0;
-    const descRaw = Number(cell(r, 'descuento'));
-    const descuento = Number.isFinite(descRaw) ? Math.max(0, Math.min(1, descRaw)) : 0;
-    const anchoRollo = Number(cell(r, 'ancho de panos')) || null;
+    const precio = Number(cell(r, 'precio')) || 0;
+    const { descuento, eraPorcentaje } = leerDescuento(cell(r, 'descuento'));
+    const anchoRollo = Number(cell(r, 'anchoRollo')) || null;
     const catRaw = normCod(cell(r, 'categoria'));
     const categoria = catRaw === 'A' || catRaw === 'B' ? catRaw : undefined;
     const producto: Producto = {
@@ -123,9 +184,29 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
       ...(anchoRollo ? { anchoRollo } : {}),
       ...(categoria ? { categoria } : {}),
     };
-    out.push({ codInt, producto, anchoRollo });
+    out.push({
+      codInt,
+      producto,
+      anchoRollo,
+      campos,
+      ...(eraPorcentaje ? { descuentoEraPorcentaje: true } : {}),
+    });
   }
   return out;
+}
+
+/**
+ * El descuento de una celda, venga como fracción (0,3) o como porcentaje (30).
+ * Antes todo se acotaba a [0,1] a secas, así que una planilla con «30» —lo más
+ * natural de escribir— dejaba la tela con 100 % de descuento y a $0.
+ * El 1 se lee como 100 %: es lo que ya significa en el catálogo (la fila de
+ * instalación regalada viene con `descuento: 1`).
+ */
+export function leerDescuento(bruto: unknown): { descuento: number; eraPorcentaje: boolean } {
+  const n = Number(bruto);
+  if (!Number.isFinite(n) || n <= 0) return { descuento: 0, eraPorcentaje: false };
+  if (n <= 1) return { descuento: n, eraPorcentaje: false };
+  return { descuento: Math.min(1, n / 100), eraPorcentaje: true };
 }
 
 const EPS_PRECIO = 0.5; // pesos: ignora diferencias de redondeo
@@ -135,6 +216,8 @@ export type CambioExistente = {
   codInt: string; // clave real del catálogo (respeta may/min existente)
   producto: Producto;
   anchoRollo: number | null;
+  /** Las columnas que traía la planilla: viajan hasta `aplicarCatalogo`. */
+  campos?: readonly CampoCatalogo[];
   precioViejo: number;
   precioNuevo: number;
   descuentoViejo: number;
@@ -150,6 +233,8 @@ export type DiffCatalogo = {
   nuevos: FilaCatalogo[];
   cambios: CambioExistente[];
   sinCambio: number;
+  /** Filas que no se pueden aplicar, con el motivo, para decirlo en pantalla. */
+  ignorados: Array<{ codInt: string; motivo: string }>;
 };
 
 /**
@@ -163,10 +248,21 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
   for (const k of Object.keys(actual)) idx.set(normCod(k), k);
   const nuevos: FilaCatalogo[] = [];
   const cambios: CambioExistente[] = [];
+  const ignorados: Array<{ codInt: string; motivo: string }> = [];
   let sinCambio = 0;
+  const trae = (f: FilaCatalogo, campo: CampoCatalogo) => !f.campos || f.campos.includes(campo);
   for (const f of filas) {
     const realKey = idx.get(normCod(f.codInt));
     if (!realKey) {
+      // Sin COD no hay familia, y sin familia no se sabe con qué receta ni con
+      // qué tela cotizarlo: se puede actualizar un código, no inventarlo.
+      if (!f.producto.cod) {
+        ignorados.push({
+          codInt: f.codInt,
+          motivo: 'no está en el catálogo y la planilla no trae la columna COD (la familia)',
+        });
+        continue;
+      }
       nuevos.push(f);
       continue;
     }
@@ -177,15 +273,21 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
     const descuentoNuevo = Number(f.producto.descuento) || 0;
     const categoriaVieja = prev.categoria || null;
     const categoriaNueva = f.producto.categoria || null;
-    const cambiaPrecio = precioNuevo > 0 && Math.abs(precioViejo - precioNuevo) > EPS_PRECIO;
-    const cambiaDescuento = Math.abs(descuentoViejo - descuentoNuevo) > EPS_DCTO;
+    // Una columna que la planilla NO trae no cambia nada: un Excel de solo
+    // descuentos no puede reportar «precio 27.176 → 0».
+    const cambiaPrecio =
+      trae(f, 'precio') && precioNuevo > 0 && Math.abs(precioViejo - precioNuevo) > EPS_PRECIO;
+    const cambiaDescuento =
+      trae(f, 'descuento') && Math.abs(descuentoViejo - descuentoNuevo) > EPS_DCTO;
     // Una categoría ausente en el Excel no borra la existente (merge conservador).
-    const cambiaCategoria = categoriaNueva != null && categoriaNueva !== categoriaVieja;
+    const cambiaCategoria =
+      trae(f, 'categoria') && categoriaNueva != null && categoriaNueva !== categoriaVieja;
     if (cambiaPrecio || cambiaDescuento || cambiaCategoria) {
       cambios.push({
         codInt: realKey,
         producto: f.producto,
         anchoRollo: f.anchoRollo,
+        campos: f.campos,
         precioViejo,
         precioNuevo,
         descuentoViejo,
@@ -200,7 +302,7 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
       sinCambio++;
     }
   }
-  return { nuevos, cambios, sinCambio };
+  return { nuevos, cambios, sinCambio, ignorados };
 }
 
 /**
@@ -221,7 +323,19 @@ export function aplicarCatalogo(
   for (const f of aceptados) {
     const key = idx.get(normCod(f.codInt)) ?? f.codInt;
     const prev = catalogo[key];
-    const merged: Producto = { ...(prev ?? {}), ...f.producto };
+    // Solo se escriben las columnas que la planilla traía. Con el spread
+    // completo, un Excel de puros descuentos dejaba en blanco el producto, el
+    // tipo y la descripción de cada código que tocaba: `f.producto` SIEMPRE
+    // lleva esas claves, aunque el Excel no tuviera esas columnas.
+    const soloEstos = f.campos;
+    const entrante: Partial<Producto> = soloEstos
+      ? Object.fromEntries(
+          soloEstos
+            .filter((c) => c in f.producto)
+            .map((c) => [c, (f.producto as Record<string, unknown>)[c]]),
+        )
+      : f.producto;
+    const merged: Producto = { ...(prev ?? {}), ...entrante } as Producto;
     if (!(f.producto.precio > 0) && prev && Number(prev.precio) > 0) {
       merged.precio = prev.precio; // no pisar un precio válido con 0
     }
@@ -229,4 +343,30 @@ export function aplicarCatalogo(
     if (f.anchoRollo && f.anchoRollo > 0) anchoRollo[key] = f.anchoRollo;
   }
   return { catalogo, anchoRollo };
+}
+
+/**
+ * El catálogo actual como filas para bajarlo a Excel: la vendedora edita la
+ * columna de descuentos sobre esto y lo vuelve a subir. Las cabeceras son las
+ * que el importador reconoce.
+ */
+export function filasParaPlantilla(
+  catalogo: CatalogoProductos,
+  anchoRollo: Record<string, number> = {},
+): Array<Record<string, string | number>> {
+  return Object.entries(catalogo)
+    .sort(([a], [b]) => a.localeCompare(b, 'es'))
+    .map(([codInt, p]) => ({
+      COD: p.cod ?? '',
+      COD_INT: codInt,
+      PRODUCTO: p.producto ?? '',
+      TIPO: p.tipo ?? '',
+      DESCRIPCION: p.descripcion ?? '',
+      'PRECIO DE VENTA': Number(p.precio) || 0,
+      // En porcentaje, que es como la gente lo escribe; el importador lo
+      // reconoce igual (ver `leerDescuento`).
+      'DESCUENTO %': Math.round((Number(p.descuento) || 0) * 1000) / 10,
+      'ANCHO DE PAÑOS': Number(anchoRollo[codInt] ?? p.anchoRollo) || '',
+      CATEGORIA: p.categoria ?? '',
+    }));
 }

@@ -12,6 +12,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import { Layers, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { InputDecimal } from '@/components/ui/input-decimal';
 import { formatCLP } from '@/lib/formatters';
 import {
   FAMILIAS_CON_RECETA,
@@ -36,7 +37,6 @@ const CAMPOS: Array<{
   >;
   label: string;
   ayuda: string;
-  step?: string;
   ancho: string;
   moneda?: boolean;
 }> = [
@@ -44,14 +44,12 @@ const CAMPOS: Array<{
     campo: 'margenInsumo',
     label: 'Divisor del margen',
     ayuda: 'Los materiales se cobran a VALOR MÁXIMO ÷ este número. 0,60 = margen del 40 %.',
-    step: '0.01',
     ancho: 'w-24',
   },
   {
     campo: 'extraAltoM',
     label: 'Tela extra por cortina (m)',
     ayuda: 'Se suma al alto vendido para calcular la tela y los metros cuadrados.',
-    step: '0.01',
     ancho: 'w-28',
   },
   {
@@ -100,8 +98,8 @@ function Sistema({
   familiasDisponibles: string[];
   onChange: (s: SistemaPrecio) => void;
 }) {
-  const num = (campo: (typeof CAMPOS)[number]['campo']) => (v: string) =>
-    onChange({ ...sistema, [campo]: Number(v) });
+  const num = (campo: (typeof CAMPOS)[number]['campo']) => (v: number) =>
+    onChange({ ...sistema, [campo]: v });
   const esCategoriaB = clave === SISTEMA_CATEGORIA_B_KEY;
   const esInvertida = clave === SISTEMA_INVERTIDA_KEY;
   // Tela de referencia por familia: las 12 de siempre más las que ya traiga guardadas.
@@ -110,7 +108,9 @@ function Sistema({
   );
   const setTela = (fam: string, v: string) => {
     const tela = { ...(sistema.telaPorFamilia ?? {}) };
-    const n = Number(v);
+    // Vaciar la celda BORRA la tela de esa familia (vuelve a cobrar la de la
+    // gama A), así que acá el vacío sí es un valor y no se puede rechazar.
+    const n = parseFloat(v.replace(',', '.'));
     if (Number.isFinite(n) && n > 0) tela[fam] = n;
     else delete tela[fam];
     onChange({ ...sistema, telaPorFamilia: tela });
@@ -194,14 +194,12 @@ function Sistema({
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        {CAMPOS.map(({ campo, label, step, ancho, moneda }) => (
+        {CAMPOS.map(({ campo, label, ancho, moneda }) => (
           <label key={campo} className="text-xs">
             <span className="mb-1 block text-muted-foreground">{label}</span>
-            <Input
-              type="number"
-              step={step}
-              value={String(sistema[campo])}
-              onChange={(e) => num(campo)(e.target.value)}
+            <InputDecimal
+              value={sistema[campo]}
+              onChange={num(campo)}
               className={`h-8 ${ancho} text-right text-xs`}
             />
             {moneda && (
@@ -225,17 +223,10 @@ function Sistema({
         <div className="mt-3 space-y-3 border-t pt-3">
           <label className="block text-xs">
             <span className="mb-1 block text-muted-foreground">DCT % que se propone al marcar B</span>
-            <Input
-              type="number"
-              step="1"
-              min="0"
-              max="100"
-              value={String(Math.round((sistema.descuentoDefault ?? 0) * 10000) / 100)}
-              onChange={(e) =>
-                onChange({
-                  ...sistema,
-                  descuentoDefault: Math.max(0, Math.min(1, Number(e.target.value) / 100)),
-                })
+            <InputDecimal
+              value={Math.round((sistema.descuentoDefault ?? 0) * 10000) / 100}
+              onChange={(n) =>
+                onChange({ ...sistema, descuentoDefault: Math.max(0, Math.min(1, n / 100)) })
               }
               className="h-8 w-24 text-right text-xs"
             />
@@ -254,8 +245,7 @@ function Sistema({
                 <label key={fam} className="flex items-center justify-between gap-2 text-[0.7rem]">
                   <span className="truncate">{nombreFamilia(fam)}</span>
                   <Input
-                    type="number"
-                    step="1"
+                    inputMode="decimal"
                     value={sistema.telaPorFamilia?.[fam] ?? ''}
                     onChange={(e) => setTela(fam, e.target.value)}
                     className="h-7 w-24 text-right text-xs"

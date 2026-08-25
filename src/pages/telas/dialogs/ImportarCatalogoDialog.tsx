@@ -26,6 +26,7 @@ import {
   parsearCatalogoExcel,
   diffCatalogo,
   aplicarCatalogo,
+  filasParaPlantilla,
   type DiffCatalogo,
   type FilaCatalogo,
 } from '@/modules/cotizador/importarCatalogo';
@@ -77,6 +78,7 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
       }
       const d = diffCatalogo(catalogo, parsed);
       setDiff(d);
+      setHayPorcentajes(parsed.some((f) => f.descuentoEraPorcentaje));
       setOkNuevos(new Set(d.nuevos.map((n) => n.codInt)));
       setOkCambios(new Set(d.cambios.map((c) => c.codInt)));
     } catch (e) {
@@ -84,6 +86,19 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
     } finally {
       setParsing(false);
     }
+  };
+
+  /**
+   * Baja el catálogo actual en Excel para editarlo y volver a subirlo. Es el
+   * camino para cambiarle el % a muchas telas de una vez sin teclear los
+   * códigos a mano ni arriesgarse a escribirlos mal.
+   */
+  const descargarPlantilla = () => {
+    const ws = XLSX.utils.json_to_sheet(filasParaPlantilla(catalogo, anchoRollo));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Productos');
+    XLSX.writeFile(wb, 'catalogo-cortinas-rolzzo.xlsx');
+    toast.success('Plantilla descargada. Edita la columna DESCUENTO % y vuelve a subirla.');
   };
 
   const toggle = (set: Set<string>, key: string, setter: (s: Set<string>) => void) => {
@@ -94,14 +109,20 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
   };
 
   const total = okNuevos.size + okCambios.size;
+  const [hayPorcentajes, setHayPorcentajes] = useState(false);
 
   const aceptados = useMemo<FilaCatalogo[]>(() => {
     if (!diff) return [];
     const de = [
       ...diff.nuevos.filter((n) => okNuevos.has(n.codInt)),
-      ...diff.cambios
-        .filter((c) => okCambios.has(c.codInt))
-        .map((c) => ({ codInt: c.codInt, producto: c.producto, anchoRollo: c.anchoRollo })),
+      ...diff.cambios.filter((c) => okCambios.has(c.codInt)).map((c) => ({
+        codInt: c.codInt,
+        producto: c.producto,
+        anchoRollo: c.anchoRollo,
+        // `campos` tiene que viajar: es lo que impide que una planilla de solo
+        // descuentos borre el producto y la descripción de cada código.
+        campos: c.campos,
+      })),
     ];
     return de;
   }, [diff, okNuevos, okCambios]);
@@ -136,6 +157,19 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
+          <div className="rounded-lg border border-border bg-secondary/30 p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                ¿Vas a cambiarle el <strong className="text-foreground">descuento</strong> a varias
+                telas? Baja el catálogo, edita la columna <strong>DESCUENTO %</strong> y vuelve a
+                subir el archivo.
+              </p>
+              <Button variant="outline" size="sm" onClick={descargarPlantilla}>
+                Descargar plantilla
+              </Button>
+            </div>
+          </div>
+
           <div>
             <Label className="mb-1 text-xs">Archivo Excel (hoja «Productos» o «DEPURADA»)</Label>
             <input
@@ -147,6 +181,10 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
             {nombreArchivo && (
               <p className="mt-1 text-[11px] text-muted-foreground">{nombreArchivo}</p>
             )}
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Basta con <strong>COD_INT</strong> y las columnas que quieras cambiar: lo que el
+              archivo no traiga se deja como está. El descuento se acepta como 30 o como 0,3.
+            </p>
           </div>
 
           {parsing && <p className="py-4 text-center text-sm text-muted-foreground">Leyendo…</p>}
@@ -158,6 +196,32 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
                 <strong className="text-foreground">{diff.cambios.length}</strong> con cambios ·{' '}
                 {diff.sinCambio} sin cambios. Desmarca lo que no quieras aplicar.
               </p>
+
+              {/* Un «30» en la planilla se lee como 30 %, no como 3.000 %. Se
+                  avisa porque es una interpretación, no un dato. */}
+              {hayPorcentajes && (
+                <p className="rounded-md border border-border bg-secondary/40 px-2 py-1.5 text-[11px] text-muted-foreground">
+                  Los descuentos venían en porcentaje (30, 25…) y se leyeron como 30 %, 25 %.
+                  Revísalos abajo antes de aplicar.
+                </p>
+              )}
+
+              {/* Códigos que la planilla nombra pero no se pueden crear. */}
+              {diff.ignorados.length > 0 && (
+                <div className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px]">
+                  <p className="font-semibold">
+                    {diff.ignorados.length} código(s) del archivo quedaron fuera:
+                  </p>
+                  <ul className="ml-4 list-disc">
+                    {diff.ignorados.slice(0, 6).map((x) => (
+                      <li key={x.codInt}>
+                        <strong>{x.codInt}</strong>: {x.motivo}
+                      </li>
+                    ))}
+                    {diff.ignorados.length > 6 && <li>…y {diff.ignorados.length - 6} más.</li>}
+                  </ul>
+                </div>
+              )}
 
               <div className="flex max-h-[46vh] flex-col gap-3 overflow-y-auto">
                 {/* Nuevos */}
