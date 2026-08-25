@@ -108,6 +108,13 @@ export type EntradaPdfCotizacion = {
    * en el total y el cliente tiene que enterarse. Vacío = no se dibuja.
    */
   avisoEnvio?: string;
+  /**
+   * La banda de validez de ESTA cotización («DESCUENTO VÁLIDO POR 1 DÍA»).
+   * Vacío = la de la empresa. `validezAmarilla` la pinta amarilla con texto
+   * rojo, como los descuentos a plazo corto de la planilla.
+   */
+  validezTitulo?: string;
+  validezAmarilla?: boolean;
   totales: TotalesCotizacion;
   /** La lista FINAL (con el término de la tarjeta ya resuelto). */
   terminos: string[];
@@ -127,6 +134,18 @@ export type EntradaPdfCotizacion = {
  */
 export function tituloBanda(empresa: DatosEmpresaCotizacion, soloTelasB: boolean): string {
   return soloTelasB ? empresa.banda.tituloCategoriaB : empresa.banda.titulo;
+}
+
+/**
+ * ¿Va la píldora «HASTA 12 CUOTAS SIN INTERÉS»? Pide las dos cosas: categoría
+ * B (la A financia en 6) y Mercadopago, que es quien ofrece las cuotas sin
+ * interés. Con Flow no existe tal cosa: los intereses los pone el banco.
+ */
+export function llevaPildoraCuotas(e: {
+  soloTelasB: boolean;
+  proveedorTarjeta: ProveedorTarjeta;
+}): boolean {
+  return e.soloTelasB && e.proveedorTarjeta !== 'flow';
 }
 
 /** Medidas como en el Excel: 3 decimales con coma (1,460). */
@@ -451,21 +470,22 @@ function secBandaTitulo(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number 
   doc.rect(MG, y, ANCHO_TABLA, alto, 'F');
 
   // A la derecha, el sello de la planilla. La píldora «12 CUOTAS SIN INTERÉS»
-  // es de la categoría B: en una cotización de la A solo van las tarjetas,
-  // porque esa gama financia en 6 (ver los términos de cada gama).
-  const altoSello = e.soloTelasB ? 11 : 7;
-  const ratio = e.soloTelasB ? SELLO_CUOTAS_RATIO : SELLO_TARJETAS_RATIO;
+  // pide DOS cosas: categoría B (la A financia en 6) y Mercadopago, que es
+  // quien las ofrece — con Flow los intereses los pone el banco del cliente.
+  const conPildora = llevaPildoraCuotas(e);
+  const altoSello = conPildora ? 11 : 7;
+  const ratio = conPildora ? SELLO_CUOTAS_RATIO : SELLO_TARJETAS_RATIO;
   const wSello = altoSello * ratio;
   const xSello = MG + ANCHO_TABLA - wSello - 3;
   try {
     doc.addImage(
-      e.soloTelasB ? SELLO_CUOTAS : SELLO_TARJETAS,
+      conPildora ? SELLO_CUOTAS : SELLO_TARJETAS,
       xSello,
-      y + (e.soloTelasB ? (alto - altoSello) / 2 : 3),
+      y + (conPildora ? (alto - altoSello) / 2 : 3),
       wSello,
       altoSello,
     );
-    if (!e.soloTelasB && e.empresa.banda.leyendaTarjetas) {
+    if (!conPildora && e.empresa.banda.leyendaTarjetas) {
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(5);
       set(doc, 'text', BLANCO);
@@ -573,16 +593,21 @@ function secGrillaCliente(doc: jsPDF, e: EntradaPdfCotizacion, y: number): numbe
     doc.rect(xDer + i * wTercio, y + h * 2, wTercio, h);
     celda(doc, vals[i], xDer + i * wTercio, wTercio, y + h * 2, h, { size: 6.4, align: 'c' });
   }
-  set(doc, 'fill', ROJO);
+  // La validez puede cambiar por cotización (un descuento a plazo corto va en
+  // amarillo, como en la planilla); si no se dice nada, la de la empresa.
+  const validezTitulo = (e.validezTitulo ?? '').trim() || e.empresa.validez.titulo;
+  const enAmarillo = !!e.validezAmarilla;
+  set(doc, 'fill', enAmarillo ? AMARILLO : ROJO);
   doc.rect(xDer, y + h * 3, wDer, h * 2, 'F');
-  celda(doc, e.empresa.validez.titulo, xDer, wDer, y + h * 3, h, {
+  const colorValidez = enAmarillo ? ROJO : BLANCO;
+  celda(doc, validezTitulo, xDer, wDer, y + h * 3, h, {
     bold: true,
-    color: BLANCO,
+    color: colorValidez,
     align: 'c',
     size: 6.6,
   });
   celda(doc, e.empresa.validez.detalle, xDer, wDer, y + h * 4, h, {
-    color: BLANCO,
+    color: colorValidez,
     align: 'c',
     size: 5.4,
   });
@@ -878,15 +903,16 @@ function secPie(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   }
 
   // Centro: el mismo sello que la banda, para que el pie no prometa 12 cuotas
-  // en una cotización que en sus términos financia en 6.
+  // en una cotización que en sus términos financia en 6, o con Flow.
+  const conPildora = llevaPildoraCuotas(e);
   const xCentro = MG + 82;
-  const altoSello = e.soloTelasB ? 22 : 12;
-  const wSello = altoSello * (e.soloTelasB ? SELLO_CUOTAS_RATIO : SELLO_TARJETAS_RATIO);
+  const altoSello = conPildora ? 22 : 12;
+  const wSello = altoSello * (conPildora ? SELLO_CUOTAS_RATIO : SELLO_TARJETAS_RATIO);
   try {
     doc.addImage(
-      e.soloTelasB ? SELLO_CUOTAS : SELLO_TARJETAS,
+      conPildora ? SELLO_CUOTAS : SELLO_TARJETAS,
       xCentro + (52 - wSello) / 2,
-      y + 3 + (e.soloTelasB ? 0 : 5),
+      y + 3 + (conPildora ? 0 : 5),
       wSello,
       altoSello,
     );
@@ -901,7 +927,7 @@ function secPie(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
       ? `${e.empresa.banda.leyendaTarjetas} (Flow)`
       : e.empresa.banda.leyendaTarjetas,
     xCentro + 26,
-    y + 3 + (e.soloTelasB ? 22 : 17) + 3,
+    y + 3 + (conPildora ? 22 : 17) + 3,
     { align: 'center' },
   );
 
@@ -933,18 +959,28 @@ function secPie(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   return y + alto + 1;
 }
 
+/** Título y nota del pie según con qué se paga la tarjeta. */
+export function bandaFinalDe(e: EntradaPdfCotizacion): { titulo: string; nota: string } {
+  const b = e.empresa.bandaFinal;
+  return e.proveedorTarjeta === 'flow'
+    ? { titulo: b.tituloFlow, nota: b.notaFlow }
+    : { titulo: b.titulo, nota: b.nota };
+}
+
 function secBandaFinal(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
+  const { titulo, nota: textoNota } = bandaFinalDe(e);
   const alto = 7;
   set(doc, 'fill', ROJO);
   doc.rect(MG, y, ANCHO_TABLA, alto, 'F');
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   set(doc, 'text', BLANCO);
-  doc.text(e.empresa.bandaFinal.titulo, MG + ANCHO_TABLA / 2, y + 5, { align: 'center' });
+  doc.text(titulo, MG + ANCHO_TABLA / 2, y + 5, { align: 'center' });
+  if (!textoNota.trim()) return y + alto;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(4.8);
   set(doc, 'text', TEXTO);
-  const nota = doc.splitTextToSize(e.empresa.bandaFinal.nota, ANCHO_TABLA - 6) as string[];
+  const nota = doc.splitTextToSize(textoNota, ANCHO_TABLA - 6) as string[];
   nota.forEach((l, i) =>
     doc.text(l, MG + ANCHO_TABLA / 2, y + alto + 2.4 + i * 2.2, { align: 'center' }),
   );
@@ -964,8 +1000,10 @@ function altoCierre(doc: jsPDF, e: EntradaPdfCotizacion): number {
     : 0;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(4.8);
-  const lineasNota = (doc.splitTextToSize(e.empresa.bandaFinal.nota, ANCHO_TABLA - 6) as string[])
-    .length;
+  const notaFinal = bandaFinalDe(e).nota.trim();
+  const lineasNota = notaFinal
+    ? (doc.splitTextToSize(notaFinal, ANCHO_TABLA - 6) as string[]).length
+    : 0;
   const altoB = e.hayTelaB ? lineasB * 3 + 5 + 2 : 0;
   return 10 + altoB + 35 + (7 + 2.4 + lineasNota * 2.2);
 }

@@ -10,6 +10,10 @@ describe('los datos de empresa del PDF', () => {
     expect(d.transferencia.numero).toBe('220917032');
     expect(d.validez.titulo).toContain('5 DIAS');
     expect(d.bandaFinal.titulo).toContain('12 CUOTAS');
+    // Con Flow no hay cuotas sin interés: las pone el banco del cliente.
+    expect(d.bandaFinal.tituloFlow).toContain('FLOW');
+    expect(d.bandaFinal.tituloFlow).not.toContain('SIN INTERÉS');
+    expect(d.bandaFinal.notaFlow).toBe('');
     // El logo de fábrica va embebido en el generador: acá vacío a propósito.
     expect(d.encabezado.logoUrl).toBe('');
   });
