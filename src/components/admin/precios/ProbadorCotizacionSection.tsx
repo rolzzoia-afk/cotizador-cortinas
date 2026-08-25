@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { formatCLP } from '@/lib/formatters';
 import { PanelFamilia, m2, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
 import { useAnchoRollo, useCatalogoProductos } from '@/modules/cotizador/catalogo';
+import { claveCatalogoCanonica } from '@/modules/cotizador/importarCatalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
@@ -79,11 +80,19 @@ export function ProbadorCotizacionSection({
   // Solo telas de CORTINA: las mismas que Fase 1 deja elegir como cortina. Antes
   // el filtro era una lista de códigos escrita a mano acá, distinta de la del
   // motor, y dejaba entrar adicionales.
+  //
+  // Las telas SIN precio también entran: preguntar «cuánto vale la BK 10» y que
+  // el código no aparezca no explica nada; el desglose dice justamente que su
+  // familia no tiene tela con precio.
   const telas = useMemo(
     () =>
       Object.entries(catalogo)
-        .filter(([, p]) => Number(p?.precio) > 0 && esCortinaTipo(p?.tipo))
-        .map(([codInt, p]) => ({ codInt, etiqueta: `${codInt} — ${p.producto ?? ''}`.slice(0, 52), cod: p.cod }))
+        .filter(([, p]) => esCortinaTipo(p?.tipo))
+        .map(([codInt, p]) => ({
+          codInt,
+          etiqueta: `${p.producto ?? ''}${p.descripcion ? ` · ${p.descripcion}` : ''}`.slice(0, 60),
+          cod: p.cod,
+        }))
         .sort((a, b) => a.codInt.localeCompare(b.codInt, 'es')),
     [catalogo],
   );
@@ -125,6 +134,9 @@ export function ProbadorCotizacionSection({
   const editar = (id: string, patch: Partial<FilaPrueba>) =>
     setFilas((fs) => fs.map((f) => (f.id === id ? { ...f, ...patch } : f)));
 
+  // «bk10» → «BK 10»: la llave real del catálogo, igual que en Fase 1.
+  const canonizar = (ci: string) => claveCatalogoCanonica(catalogo, ci) ?? ci;
+
   return (
     <section className="rounded-lg border bg-card p-5">
       <header className="mb-3 flex flex-wrap items-center gap-2">
@@ -154,6 +166,15 @@ export function ProbadorCotizacionSection({
         </label>
       </div>
 
+      {/* Sugerencias del buscador: el código y, al lado, de qué tela se trata. */}
+      <datalist id="probador-telas">
+        {telas.map((t) => (
+          <option key={t.codInt} value={t.codInt}>
+            {t.etiqueta}
+          </option>
+        ))}
+      </datalist>
+
       <div className="overflow-x-auto rounded-md border">
         <table className="w-full text-xs">
           <thead className="bg-muted/60 text-muted-foreground">
@@ -170,17 +191,21 @@ export function ProbadorCotizacionSection({
           <tbody>
             {filas.map((f) => (
               <tr key={f.id} className="border-t">
+                {/* Escribir el código, no bajar una lista de mil telas: la
+                    pregunta de verdad es «cuánto vale la BK 10 y por qué». */}
                 <td className="px-2 py-1">
-                  <select
+                  <Input
+                    list="probador-telas"
                     value={f.codInt}
-                    onChange={(e) => editar(f.id, { codInt: e.target.value })}
-                    className="h-7 w-64 rounded-md border border-input bg-background px-1 text-xs"
-                  >
-                    <option value="">— elegir tela —</option>
-                    {telas.map((t) => (
-                      <option key={t.codInt} value={t.codInt}>{t.etiqueta}</option>
-                    ))}
-                  </select>
+                    onChange={(e) => editar(f.id, { codInt: canonizar(e.target.value) })}
+                    placeholder="ej. BK 10"
+                    className="h-7 w-40 font-mono text-xs uppercase"
+                  />
+                  <div className="mt-0.5 max-w-[16rem] truncate text-[0.65rem] text-muted-foreground">
+                    {f.codInt
+                      ? (catalogo[f.codInt]?.producto ?? 'ese código no está en el catálogo')
+                      : ''}
+                  </div>
                 </td>
                 <td className="px-2 py-1">
                   <select
@@ -325,12 +350,24 @@ export function ProbadorCotizacionSection({
                   <div key={p.sistema} className="flex justify-between pl-3 text-[0.7rem] text-muted-foreground">
                     <span>
                       {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
+                      {p.siempreSeCobra && p.total > 0 && ' (se cobra siempre)'}
                     </span>
                     <span>{formatCLP(p.total)}</span>
                   </div>
                 ))}
               </>
             )}
+            {/* Lo que ya está cobrado dentro de cada valor unitario: no suma al
+                subtotal, pero se está cobrando y hay que poder verlo. */}
+            {resultado.instalacion.incluidas.map((p) => (
+              <div key={`incl-${p.sistema}`} className="flex justify-between text-[0.7rem] text-muted-foreground">
+                <span>
+                  Instalación {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)} (ya incluida en
+                  el valor unitario)
+                </span>
+                <span>{formatCLP(p.total)}</span>
+              </div>
+            ))}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal neto</span>
               <span>{formatCLP(resultado.totales.subtotalNeto)}</span>

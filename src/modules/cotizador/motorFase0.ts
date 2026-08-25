@@ -16,6 +16,7 @@
 // Cada cortina = m² × precio/m² + instalación.
 // ─────────────────────────────────────────────────────────────────────
 
+import { formatCLP } from '@/lib/formatters';
 import {
   EXTRA_ALTO_M,
   MARGEN_INSUMO,
@@ -30,6 +31,9 @@ import {
   REGLAS_PRECIOS_DEFAULT,
   SUFIJO_RECETA_B,
   SUFIJO_RECETA_INV,
+  claveReceta,
+  claveRecetaB,
+  claveRecetaInv,
   explicarCantidad,
   insumosDeSistema,
   lamasPorPasada,
@@ -179,6 +183,18 @@ export type ResultadoFamilia = {
   // ── Desglose (lo que muestra el panel de precios del Admin) ──
   /** COD_INT de la tela que fijó el precio por metro. */
   arquetipoCodInt: string;
+  /** POR QUÉ se cobra ese $/m: arquetipo, máximo de la familia, tecleado… */
+  motivoPrecioMl: MotivoPrecioMl;
+  /** El divisor con el que se calculó cada material (VALOR MÁXIMO ÷ este). */
+  margenInsumo: number;
+  /** Metros que se le suman al alto vendido de cada cortina. */
+  extraAltoM: number;
+  /** Ancho del rollo con el que se acostaron los paños (m). */
+  anchoRolloM: number;
+  /** Qué receta se usó de verdad (con sufijo `|B` o `|INV` si corresponde). */
+  claveReceta: string;
+  /** La instalación que va DENTRO del valor unitario de cada cortina. */
+  instalacionEmbebida: number;
   /** Paños de tela y qué cortinas comparte cada uno (vacío en verticales). */
   panos: PanoPrecio[];
   /** Lista de materiales resuelta, línea por línea. */
@@ -203,7 +219,17 @@ export type ParteInstalacion = {
   sistema: string;
   cantidad: number;
   precioUnit: number;
+  /** El 0-1 que se le aplicó a ESTE tramo (puede diferir del de la fila). */
+  descuento: number;
   total: number;
+  /**
+   * Este tramo NO toma el descuento automático (llegar al mínimo de cortinas o
+   * el % de región): su instalación se cobra siempre. Son los sistemas con
+   * reglas propias, que instalan otra cosa y cobran aparte — el beeblack se
+   * arma en obra y no entra en el «gratis por 4» de las roller. Un descuento
+   * puesto a mano en la fila sí le gana, porque eso es una decisión de venta.
+   */
+  siempreSeCobra: boolean;
 };
 
 export type InstalacionResultado = {
@@ -218,12 +244,23 @@ export type InstalacionResultado = {
   descuentoManual: boolean;
   /** Desglose cuando conviven sistemas que cobran distinto (roller + beeblack). */
   partes: ParteInstalacion[];
+  /**
+   * Instalaciones que YA están dentro del valor unitario de cada cortina y por
+   * eso no se cobran en esta fila: hoy, las verticales ($40.000 c/u). Su
+   * `total` es lo que se está cobrando embebido, y **no** entra al subtotal
+   * (ya viene sumado en el precio de cada línea): es solo para mostrarlo, como
+   * la fila INST-VERT al 100 % de descuento de la planilla.
+   */
+  incluidas: ParteInstalacion[];
 };
 
 /** Algo que la cotización no pudo resolver y que cambia lo que se cobra. */
 export type AvisoCotizacion = {
-  /** `catalogo` = la tela no existe · `tela` = no se pudo fijar el $/m. */
-  tipo: 'catalogo' | 'tela';
+  /**
+   * `catalogo` = la tela no existe · `tela` = no se pudo fijar el $/m ·
+   * `instalacion` = el valor unitario cambió por la instalación.
+   */
+  tipo: 'catalogo' | 'tela' | 'instalacion';
   /** COD_INT de la fila (tipo `catalogo`) o COD de la familia (tipo `tela`). */
   codigo: string;
   mensaje: string;
@@ -241,11 +278,20 @@ export function textoInstalacion(i: InstalacionResultado, minGratis: number): st
     const pct = Math.round(i.descuento * 100);
     return pct >= 100 ? `${n}, sin costo` : `${n}, ${pct} % de descuento`;
   }
+  // Los sistemas que instalan aparte se cobran igual: decir «sin costo» a
+  // secas cuando el beeblack está cobrado sería mentirle al cliente en la
+  // propia fila.
+  const aparte = i.partes.filter((p) => p.siempreSeCobra && p.total > 0);
+  const nombresAparte = aparte.map((p) => p.sistema).join(' y ');
+  const conAparte = (base: string) =>
+    aparte.length ? `${base}; ${nombresAparte} se cobra aparte` : base;
   if (i.region) {
     const pct = Math.round(i.descuento * 100);
-    return pct >= 100 ? `${n}, región: sin costo` : `${n}, región: ${pct} % de descuento`;
+    return conAparte(
+      pct >= 100 ? `${n}, región: sin costo` : `${n}, región: ${pct} % de descuento`,
+    );
   }
-  if (i.cantidad >= minGratis) return `${n}, ${minGratis} o más: sin costo`;
+  if (i.cantidad >= minGratis) return conAparte(`${n}, ${minGratis} o más: sin costo`);
   return `${n}, bajo el mínimo de ${minGratis}`;
 }
 
@@ -646,6 +692,10 @@ export function cotizarFase0(
     anchoRollo: number;
     precioMl: number;
     arquetipo: string;
+    /** Por qué se cobra ese $/m (arquetipo, máximo de la familia, tecleado…). */
+    motivoPrecioMl: MotivoPrecioMl;
+    /** Metros que se le suman al alto vendido de cada cortina. */
+    extraAlto: number;
     /** TODAS las cortinas de la familia, configuradas como este panel. */
     piezas: Pieza[];
     /** Cuántas de esas piezas se cobran de verdad con este panel, y sus m². */
@@ -798,12 +848,25 @@ export function cotizarFase0(
         anchoRollo,
         precioMl: tela.precio,
         arquetipo: tela.arquetipo,
+        motivoPrecioMl: tela.motivo,
+        extraAlto,
         piezas,
         piezasCobradas,
         m2Cobrados,
       });
     }
   }
+
+  // Lo que cada cortina lleva de instalación DENTRO de su valor unitario.
+  // El beeblack embebe un valor distinto del que cobra la fila de abajo
+  // (41.650 vs 35.000): es así en el Excel, ver `SistemaPrecio`. La vertical
+  // embebe 40.000 y no sale en la fila que se cobra.
+  const instalacionEmbebidaDe = (g: Grupo): number =>
+    g.sistema
+      ? g.sistema.instalacionEmbebida
+      : g.esVertical
+        ? params.instalacionVertical
+        : params.instalacionRoller;
 
   // Por panel: precio/m² combinado.
   const familias: ResultadoFamilia[] = [];
@@ -830,15 +893,22 @@ export function cotizarFase0(
     // La categoría B tiene su receta (`BLACKOUT_P|B`…) y su tabla de insumos,
     // la invertida la suya (`BLACKOUT_D|INV`); el resto, la de su familia con
     // los precios del sistema si lo tiene.
+    const margenInsumo = g.sistema?.margenInsumo ?? params.margenInsumo;
+    const claveRecetaUsada = g.lineaB
+      ? claveRecetaB(cod, g.esVertical, reglas.recetas)
+      : g.sistemaInv
+        ? claveRecetaInv(cod, g.esVertical, reglas.recetas)
+        : claveReceta(cod, g.esVertical, reglas.recetas);
+    const receta = g.lineaB
+      ? resolverRecetaB(cod, g.esVertical, reglas.recetas)
+      : g.sistemaInv
+        ? resolverRecetaInv(cod, g.esVertical, reglas.recetas)
+        : resolverReceta(cod, g.esVertical, reglas.recetas);
     const materiales = materialesFamilia(
-      g.lineaB
-        ? resolverRecetaB(cod, g.esVertical, reglas.recetas)
-        : g.sistemaInv
-          ? resolverRecetaInv(cod, g.esVertical, reglas.recetas)
-          : resolverReceta(cod, g.esVertical, reglas.recetas),
+      receta,
       g.piezas,
       insumosDeSistema(g.sistema, reglas),
-      g.sistema?.margenInsumo ?? params.margenInsumo,
+      margenInsumo,
       reglas.telaVertical.pasoLamaM,
     );
     const manoObra =
@@ -877,6 +947,12 @@ export function cotizarFase0(
           ? recetaInvEsExacta(cod)
           : recetaEsExacta(cod),
       arquetipoCodInt: g.arquetipo,
+      motivoPrecioMl: g.motivoPrecioMl,
+      margenInsumo,
+      extraAltoM: g.extraAlto,
+      anchoRolloM: g.anchoRollo,
+      claveReceta: claveRecetaUsada,
+      instalacionEmbebida: sinInstalacion ? 0 : instalacionEmbebidaDe(g),
       panos,
       materiales: materiales.lineas,
       regalo: reglas.regalo,
@@ -909,14 +985,7 @@ export function cotizarFase0(
     // Sin `g` la tela no existe en el catálogo: la línea vale 0 entera (ya se
     // avisó arriba). Antes caía en la rama roller y cobraba $17.500 de
     // instalación por una cortina que no se podía ni fabricar.
-    const instalacion =
-      sinInstalacion || !g
-        ? 0
-        : g.sistema
-          ? g.sistema.instalacionEmbebida
-          : g.esVertical
-            ? params.instalacionVertical
-            : params.instalacionRoller;
+    const instalacion = sinInstalacion || !g ? 0 : instalacionEmbebidaDe(g);
     const valorUnit = m2 * precioM2 + instalacion;
     const cant = Math.max(1, f.cantidad);
     const descuento = Math.max(0, Math.min(1, f.descuento ?? 0));
@@ -969,14 +1038,22 @@ export function cotizarFase0(
   // Se cuenta por VENTANA cuando las filas la declaran (`ventanaId`): un dual
   // son dos telas en la misma ventana y se instala UNA vez, que es como lo
   // cuenta el Excel. Las filas sin `ventanaId` cuentan por pieza, como siempre.
-  const porSistema = new Map<string, { cantidad: number; precioUnit: number }>();
+  const porSistema = new Map<
+    string,
+    { cantidad: number; precioUnit: number; siempreSeCobra: boolean }
+  >();
   const ventanasVistas = new Set<string>();
   let nInstalables = 0;
-  const sumar = (clave: string, precioUnit: number, cuantas: number) => {
+  const sumar = (
+    clave: string,
+    precioUnit: number,
+    cuantas: number,
+    siempreSeCobra: boolean,
+  ) => {
     nInstalables += cuantas;
     const prev = porSistema.get(clave);
     if (prev) prev.cantidad += cuantas;
-    else porSistema.set(clave, { cantidad: cuantas, precioUnit });
+    else porSistema.set(clave, { cantidad: cuantas, precioUnit, siempreSeCobra });
   };
   validas.forEach((f, i) => {
     const cod = codDeFila[i];
@@ -985,17 +1062,36 @@ export function cotizarFase0(
     const precioUnit = g.sistema?.instalacionLinea ?? params.instalacionRoller;
     // La categoría B se instala como una roller: si cobra lo mismo, va en el
     // mismo tramo (la fila INSTALACIÓN del Excel no las separa).
-    const clave =
-      g.lineaB && precioUnit === params.instalacionRoller
-        ? 'Roller'
-        : (g.sistema?.nombre ?? 'Roller');
+    const comoRoller = precioUnit === params.instalacionRoller;
+    const clave = g.lineaB && comoRoller ? 'Roller' : (g.sistema?.nombre ?? 'Roller');
+    // Un sistema que instala a su propio precio (el beeblack, 35.000) no entra
+    // al «gratis por llegar al mínimo»: se cobra siempre. Sí sigue SUMANDO al
+    // mínimo, para que las roller de la misma cotización lleguen a los 4.
+    const siempreSeCobra = !!g.sistema && !comoRoller;
     if (f.ventanaId) {
       if (ventanasVistas.has(f.ventanaId)) return;
       ventanasVistas.add(f.ventanaId);
-      sumar(clave, precioUnit, 1);
+      sumar(clave, precioUnit, 1, siempreSeCobra);
       return;
     }
-    sumar(clave, precioUnit, Math.max(1, f.cantidad));
+    sumar(clave, precioUnit, Math.max(1, f.cantidad), siempreSeCobra);
+  });
+  // Las verticales instalan aparte y su cargo ya va dentro del valor unitario
+  // de cada una, así que no entran a la fila que se cobra; pero sin mostrarlas
+  // nadie ve que se están cobrando $40.000 por cortina.
+  const ventanasVert = new Set<string>();
+  let nVerticales = 0;
+  validas.forEach((f, i) => {
+    const cod = codDeFila[i];
+    const g = cod ? grupos.get(cod) : undefined;
+    if (!g || !g.esVertical) return;
+    if (f.ventanaId) {
+      if (ventanasVert.has(f.ventanaId)) return;
+      ventanasVert.add(f.ventanaId);
+      nVerticales += 1;
+      return;
+    }
+    nVerticales += Math.max(1, f.cantidad);
   });
   const minGratis = params.instalacionGratisMinCortinas ?? PARAMETROS_DEFAULT.instalacionGratisMinCortinas;
   const descRM = params.instalacionDescuentoRM ?? PARAMETROS_DEFAULT.instalacionDescuentoRM;
@@ -1027,15 +1123,38 @@ export function cotizarFase0(
   const partes: ParteInstalacion[] =
     sinInstalacion || nInstalables === 0
       ? []
-      : [...porSistema].map(([sistema, p]) => ({
-          sistema,
-          cantidad: p.cantidad,
-          precioUnit: p.precioUnit,
-          total: p.precioUnit * p.cantidad * (1 - descInstal),
-        }));
+      : [...porSistema].map(([sistema, p]) => {
+          // El descuento automático no le llega a los sistemas que cobran su
+          // propia instalación; uno puesto a mano sí, que para eso se pone.
+          const desc = p.siempreSeCobra && !hayManual ? 0 : descInstal;
+          return {
+            sistema,
+            cantidad: p.cantidad,
+            precioUnit: p.precioUnit,
+            descuento: desc,
+            total: p.precioUnit * p.cantidad * (1 - desc),
+            siempreSeCobra: p.siempreSeCobra,
+          };
+        });
   const totalInstal = partes.reduce((s, p) => s + p.total, 0);
+  const incluidas: ParteInstalacion[] =
+    sinInstalacion || nVerticales === 0 || !(params.instalacionVertical > 0)
+      ? []
+      : [
+          {
+            sistema: 'Vertical',
+            cantidad: nVerticales,
+            precioUnit: params.instalacionVertical,
+            descuento: 0,
+            // Ya está cobrado dentro del VAL. UNIT de cada vertical: este total
+            // NO se suma al subtotal, solo se muestra.
+            total: params.instalacionVertical * nVerticales,
+            siempreSeCobra: false,
+          },
+        ];
   const instalacion: InstalacionResultado = {
     cantidad: nInstalables,
+    incluidas,
     // El precio por cortina solo tiene sentido con un sistema en juego; con
     // varios manda el desglose de `partes`.
     precioUnit: partes.length === 1 ? partes[0].precioUnit : params.instalacionRoller,
@@ -1049,6 +1168,41 @@ export function cotizarFase0(
     sinInstalacion,
     descuentoManual: hayManual,
   };
+
+  // «Sin instalación» no solo borra la fila de abajo: también saca de cada
+  // valor unitario lo que se cobra por instalar. Es plata que desaparece del
+  // precio sin que nada lo diga en pantalla —y en las verticales ni siquiera
+  // cambia una fila, porque no tienen—, así que acá se deja dicho. El Excel
+  // manual, en cambio, deja ese cargo dentro del precio: de ahí salen las
+  // diferencias al comparar una cotización contra la planilla.
+  if (sinInstalacion) {
+    const porTipo = new Map<string, { n: number; unit: number }>();
+    validas.forEach((f, i) => {
+      const cod = codDeFila[i];
+      const g = cod ? grupos.get(cod) : undefined;
+      if (!g) return;
+      const unit = instalacionEmbebidaDe(g);
+      if (!(unit > 0)) return;
+      const nombre = g.sistema?.nombre ?? (g.esVertical ? 'verticales' : 'roller');
+      const prev = porTipo.get(nombre);
+      if (prev) prev.n += Math.max(1, f.cantidad);
+      else porTipo.set(nombre, { n: Math.max(1, f.cantidad), unit });
+    });
+    const detalle = [...porTipo]
+      .map(([nombre, p]) => `${p.n} ${nombre} × ${formatCLP(p.unit)}`)
+      .join(' · ');
+    const totalQuitado = [...porTipo.values()].reduce((s, p) => s + p.n * p.unit, 0);
+    if (totalQuitado > 0) {
+      avisar({
+        tipo: 'instalacion',
+        codigo: 'SIN-INSTALACION',
+        mensaje:
+          `Sin instalación: el valor unitario de cada cortina baja lo que costaría instalarla ` +
+          `(${detalle} = ${formatCLP(totalQuitado)} menos en total). ` +
+          'En la planilla manual ese cargo queda dentro del precio, así que ahí los valores unitarios salen más altos.',
+      });
+    }
+  }
 
   const subtotalCortinas = lineas.reduce((s, l) => s + l.total, 0);
   const subtotalAdicionales = adicionalesRes.reduce((s, a) => s + a.total, 0);

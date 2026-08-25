@@ -60,6 +60,14 @@ export type DatosEmpresaCotizacion = {
     mail: string;
   };
   botones: BotonPdf[];
+  /**
+   * La leyenda de las cuotas que va pegada al total con tarjeta, como el
+   * rótulo rojo de la planilla. Solo sale con Mercadopago: con Flow las cuotas
+   * y sus intereses los pone el banco del cliente.
+   */
+  totales: { leyendaCuotas: string };
+  /** La tira de fotos «NUESTROS PROYECTOS Y PRODUCTOS» del pie. */
+  fotosProyectos: { titulo: string; subtitulo: string; visible: boolean };
   /** El recuadro rojo que solo sale cuando la cotización trae telas B. */
   bloqueCategoriaB: { texto: string };
   /**
@@ -127,6 +135,12 @@ export const DATOS_EMPRESA_DEFAULT: DatosEmpresaCotizacion = {
       nota: 'Aclara todas tus dudas con nuestras asesoras.',
     },
   ],
+  totales: { leyendaCuotas: 'HASTA 12 CUOTAS SIN INTERÉS' },
+  fotosProyectos: {
+    titulo: 'NUESTROS PROYECTOS Y PRODUCTOS',
+    subtitulo: 'TODO NUESTRO INSTAGRAM Y PAGINA WEB SON TRABAJOS FABRICADOS E INSTALADOS POR CORTINAS ROLZZO',
+    visible: true,
+  },
   bloqueCategoriaB: {
     texto:
       'Esta cotización es la "CATEGORÍA B", fabricadas con los mismos materiales de gama media que te ofrecen la mayoría de los cortineros. Los materiales utilizados en la fabricación de estas cortinas roller o verticales NO son de la "CATEGORÍA A" que Cortinas Rolzzo siempre utiliza y compara en nuestras publicaciones',
@@ -167,6 +181,8 @@ export function normalizarDatosEmpresa(raw: unknown): DatosEmpresaCotizacion {
   const tra = (r.transferencia ?? {}) as Record<string, unknown>;
   const blo = (r.bloqueCategoriaB ?? {}) as Record<string, unknown>;
   const ban = (r.bandaFinal ?? {}) as Record<string, unknown>;
+  const tot = (r.totales ?? {}) as Record<string, unknown>;
+  const fot = (r.fotosProyectos ?? {}) as Record<string, unknown>;
 
   // Los botones se reponen enteros si la lista guardada no sirve: son 3 filas
   // con posición fija en el pie, no una lista libre.
@@ -216,6 +232,14 @@ export function normalizarDatosEmpresa(raw: unknown): DatosEmpresaCotizacion {
       mail: txtOpcional(tra.mail, d.transferencia.mail),
     },
     botones,
+    totales: { leyendaCuotas: txtOpcional(tot.leyendaCuotas, d.totales.leyendaCuotas) },
+    fotosProyectos: {
+      titulo: txtOpcional(fot.titulo, d.fotosProyectos.titulo),
+      subtitulo: txtOpcional(fot.subtitulo, d.fotosProyectos.subtitulo),
+      // Solo un `false` explícito la apaga: un guardado viejo no la tiene y
+      // tiene que salir igual.
+      visible: fot.visible !== false,
+    },
     bloqueCategoriaB: { texto: txtOpcional(blo.texto, d.bloqueCategoriaB.texto) },
     bandaFinal: {
       titulo: txtOpcional(ban.titulo, d.bandaFinal.titulo),

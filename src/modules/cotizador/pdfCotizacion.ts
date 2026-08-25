@@ -28,6 +28,7 @@ import {
   SELLO_TARJETAS,
   SELLO_TARJETAS_RATIO,
 } from './logoRolzzo';
+import { TIRA_PROYECTOS, TIRA_PROYECTOS_RATIO } from './fotosProyectos';
 import type { DatosEmpresaCotizacion } from './datosEmpresaCotizacion';
 import type { TotalesCotizacion, ProveedorTarjeta } from './preciosFase0';
 
@@ -739,6 +740,17 @@ function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
     });
     yy += h;
   }
+  // La leyenda de las cuotas, pegada al total con tarjeta como el rótulo rojo
+  // de la planilla. Con Flow no va: ahí las cuotas y sus intereses los pone el
+  // banco del cliente, y prometerlas sería mentir.
+  const leyenda = (e.empresa.totales.leyendaCuotas ?? '').trim();
+  if (leyenda && e.proveedorTarjeta !== 'flow') {
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.4);
+    set(doc, 'text', ROJO);
+    doc.text(leyenda, x + w, yy + 2.6, { align: 'right' });
+    yy += 3.4;
+  }
   doc.setFont('helvetica', 'italic');
   doc.setFontSize(6);
   set(doc, 'text', GRIS);
@@ -845,6 +857,47 @@ function secBloqueB(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
     doc.text(l, MG + ANCHO_TABLA / 2, y + 4 + i * 3, { align: 'center' }),
   );
   return y + alto + 2;
+}
+
+/** Alto de la tira de proyectos con sus dos bandas, o 0 si no va. */
+function altoFotos(e: EntradaPdfCotizacion): number {
+  if (!e.empresa.fotosProyectos.visible) return 0;
+  // banda del título + fotos + banda del subtítulo + aire.
+  return 4.5 + ANCHO_TABLA / TIRA_PROYECTOS_RATIO + 4.5 + 2;
+}
+
+/**
+ * La tira «NUESTROS PROYECTOS Y PRODUCTOS»: banda negra con el título, las
+ * fotos de lado a lado y otra banda con el cierre. Va donde la pone el Excel,
+ * entre los términos y los datos de transferencia.
+ */
+function secFotos(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
+  const f = e.empresa.fotosProyectos;
+  if (!f.visible) return y;
+  const hBanda = 4.5;
+  const hFotos = ANCHO_TABLA / TIRA_PROYECTOS_RATIO;
+
+  set(doc, 'fill', NEGRO);
+  doc.rect(MG, y, ANCHO_TABLA, hBanda, 'F');
+  celda(doc, f.titulo, MG, ANCHO_TABLA, y, hBanda, {
+    bold: true,
+    color: AZUL,
+    align: 'c',
+    size: 7.6,
+  });
+
+  doc.addImage(TIRA_PROYECTOS, 'JPEG', MG, y + hBanda, ANCHO_TABLA, hFotos);
+
+  const ySub = y + hBanda + hFotos;
+  set(doc, 'fill', NEGRO);
+  doc.rect(MG, ySub, ANCHO_TABLA, hBanda, 'F');
+  celda(doc, f.subtitulo, MG, ANCHO_TABLA, ySub, hBanda, {
+    bold: true,
+    color: BLANCO,
+    align: 'c',
+    size: 6.4,
+  });
+  return ySub + hBanda + 2;
 }
 
 function secPie(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
@@ -1005,7 +1058,7 @@ function altoCierre(doc: jsPDF, e: EntradaPdfCotizacion): number {
     ? (doc.splitTextToSize(notaFinal, ANCHO_TABLA - 6) as string[]).length
     : 0;
   const altoB = e.hayTelaB ? lineasB * 3 + 5 + 2 : 0;
-  return 10 + altoB + 35 + (7 + 2.4 + lineasNota * 2.2);
+  return 10 + altoB + altoFotos(e) + 35 + (7 + 2.4 + lineasNota * 2.2);
 }
 
 // ── Entrada pública ──────────────────────────────────────────────────
@@ -1051,6 +1104,7 @@ export function generarPdfCotizacion(entrada: EntradaPdfCotizacion): void {
   if (y + altoCierre(doc, entrada) > PIE_PAGINA) y = ctx.nuevaPagina();
   y = secImportante(doc, entrada, y);
   y = secBloqueB(doc, entrada, y);
+  y = secFotos(doc, entrada, y);
   y = secPie(doc, entrada, y);
   secBandaFinal(doc, entrada, y);
 

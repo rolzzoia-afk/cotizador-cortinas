@@ -286,6 +286,44 @@ export function DatosEmpresaSection() {
               />
             </Bloque>
 
+            <Bloque titulo="Recuadro de totales">
+              <Campo
+                label="Leyenda de las cuotas"
+                value={draft.totales.leyendaCuotas}
+                onChange={(v) => setSeccion('totales', { leyendaCuotas: v })}
+                ancho
+                ayuda="Sale en rojo pegada al total con tarjeta, como en la planilla. Con Flow no se imprime: ahí las cuotas y sus intereses los pone el banco del cliente. Vacío = no sale nunca."
+              />
+            </Bloque>
+
+            <Bloque titulo="Tira de proyectos del pie">
+              <label className="flex items-center gap-2 text-xs sm:col-span-2">
+                <input
+                  type="checkbox"
+                  checked={draft.fotosProyectos.visible}
+                  onChange={(e) => setSeccion('fotosProyectos', { visible: e.target.checked })}
+                  className="h-3.5 w-3.5"
+                />
+                <span>Mostrar la tira de fotos en el PDF</span>
+              </label>
+              <Campo
+                label="Título de la banda"
+                value={draft.fotosProyectos.titulo}
+                onChange={(v) => setSeccion('fotosProyectos', { titulo: v })}
+                ancho
+              />
+              <CampoLargo
+                label="Texto de cierre"
+                value={draft.fotosProyectos.subtitulo}
+                onChange={(v) => setSeccion('fotosProyectos', { subtitulo: v })}
+                filas={2}
+              />
+              <p className="text-[0.7rem] text-muted-foreground sm:col-span-2">
+                Las fotos son la misma tira del Excel manual y vienen con la app: por ahora se
+                cambian desde el código, no desde acá.
+              </p>
+            </Bloque>
+
             <Bloque titulo="Validez y contacto">
               <Campo
                 label="Banda de validez"

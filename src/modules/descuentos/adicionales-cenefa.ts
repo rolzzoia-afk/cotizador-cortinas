@@ -407,13 +407,16 @@ export function filtrarDerivadosPorCupoManual(
   derivados: readonly AdicionalFase0Persistido[],
   manuales: readonly AdicionalFase0Persistido[],
 ): AdicionalFase0Persistido[] {
-  const clave = (a: AdicionalFase0Persistido, tipo: 'Ovalada' | 'Cuadrada') =>
-    `${tipo}|${normalizarUbicacion(a.ubicacion || '')}`;
+  const clave = (ubic: string, tipo: 'Ovalada' | 'Cuadrada') =>
+    `${tipo}|${normalizarUbicacion(ubic || '')}`;
   const cupo = new Map<string, number>();
   for (const m of manuales) {
     const tipo = m.codInt ? tipoCenefaDesdeAdicional(m.codInt) : null;
     if (!tipo) continue;
-    const k = clave(m, tipo);
+    // Una cenefa que nació del paño y se editó a mano sigue ocupando el cupo de
+    // SU paño: se la busca por la ubicación que tenía cuando era derivada, o
+    // renombrarla haría reaparecer la gemela y se cobraría dos veces.
+    const k = clave(m.ubicacionDerivada ?? m.ubicacion ?? '', tipo);
     cupo.set(k, (cupo.get(k) ?? 0) + 1);
   }
   const out: AdicionalFase0Persistido[] = [];
@@ -423,7 +426,7 @@ export function filtrarDerivadosPorCupoManual(
       out.push(d);
       continue;
     }
-    const k = clave(d, tipo);
+    const k = clave(d.ubicacion ?? '', tipo);
     const restante = cupo.get(k) ?? 0;
     if (restante > 0) {
       cupo.set(k, restante - 1);

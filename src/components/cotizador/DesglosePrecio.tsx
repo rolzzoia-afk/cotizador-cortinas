@@ -45,6 +45,35 @@ export function comoSiFueran(f: Pick<ResultadoFamilia, 'lineaB' | 'invertida'>):
   return 'de categoría A y derechas';
 }
 
+/** De dónde salió el $/m de la familia, en castellano. */
+export function origenDelPrecioMl(f: ResultadoFamilia): string {
+  switch (f.motivoPrecioMl) {
+    case 'sistema':
+      return `tecleado para el sistema ${f.sistema ?? 'con reglas propias'} (Admin → Precios → Sistemas)`;
+    case 'base':
+      return `de ${f.arquetipoCodInt}, la tela base de las verticales de esta familia`;
+    case 'arquetipo':
+      return `de ${f.arquetipoCodInt}, la tela de referencia de la familia`;
+    case 'maximo':
+      return 'la tela MÁS CARA de la familia (la familia no tiene tela de referencia)';
+    default:
+      return 'ninguna tela de la familia tiene precio: la tela se cotiza en $0';
+  }
+}
+
+/** «4.462,5 ÷ 0,65 = 6.865» — la cuenta con la que se cobra un insumo. */
+export function formulaPrecioInsumo(
+  l: { precio: 'venta' | 'costo'; precioUnit: number },
+  margenInsumo: number,
+): string {
+  const unit = formatCLP(l.precioUnit);
+  if (l.precio === 'costo') return `${unit} (a costo, sin margen)`;
+  const valorMaximo = (l.precioUnit * margenInsumo).toLocaleString('es-CL', {
+    maximumFractionDigits: 2,
+  });
+  return `${valorMaximo} ÷ ${margenInsumo.toLocaleString('es-CL')} = ${unit}`;
+}
+
 export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: string[] }) {
   const nombreCortina = (i: number) => piezas[i] ?? `cortina ${i + 1}`;
   // La tarifa se calcula con TODA la familia configurada como este panel; si
@@ -103,15 +132,7 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
             Tela — {mts(f.metrosTela)} m × {formatCLP(f.precioMl)}
           </h4>
           <p className="mb-1.5 text-[0.7rem] text-muted-foreground">
-            {f.arquetipoCodInt ? (
-              <>
-                Precio por metro tomado de <span className="font-mono">{f.arquetipoCodInt}</span>.
-              </>
-            ) : f.lineaB ? (
-              <>Precio por metro tecleado para la categoría B de esta familia (Admin → Precios → Sistemas).</>
-            ) : (
-              <>Precio por metro: el máximo de la familia.</>
-            )}
+            Precio por metro {origenDelPrecioMl(f)}.
           </p>
           {f.panos.length > 0 ? (
             <table className="w-full text-[0.7rem]">
@@ -149,13 +170,20 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
         </div>
 
         <div>
-          <h4 className="mb-1 text-[0.7rem] font-semibold uppercase text-muted-foreground">Materiales</h4>
+          <h4 className="mb-1 text-[0.7rem] font-semibold uppercase text-muted-foreground">
+            Materiales — receta <span className="font-mono normal-case">{f.claveReceta}</span>
+          </h4>
+          <p className="mb-1.5 text-[0.7rem] text-muted-foreground">
+            Cada material se cobra a su <strong>VALOR MÁXIMO ÷ {f.margenInsumo.toLocaleString('es-CL')}</strong>{' '}
+            (margen del {Math.round((1 - f.margenInsumo) * 100)} %), salvo los marcados «a costo».
+          </p>
           <div className="max-h-56 overflow-y-auto">
             <table className="w-full text-[0.7rem]">
               <thead className="sticky top-0 bg-card text-muted-foreground">
                 <tr>
                   <th className="py-0.5 text-left font-medium">Insumo</th>
                   <th className="py-0.5 text-left font-medium">Cuánto</th>
+                  <th className="py-0.5 text-right font-medium">Precio unit.</th>
                   <th className="py-0.5 text-right font-medium">Total</th>
                 </tr>
               </thead>
@@ -179,6 +207,12 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
                           <span>{l.nota}</span>
                         </div>
                       )}
+                    </td>
+                    <td
+                      className="py-0.5 text-right text-muted-foreground"
+                      title={formulaPrecioInsumo(l, f.margenInsumo)}
+                    >
+                      {formulaPrecioInsumo(l, f.margenInsumo)}
                     </td>
                     <td className="py-0.5 text-right">{formatCLP(l.total)}</td>
                   </tr>
@@ -212,9 +246,28 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
       <div className="border-t bg-success/10 px-3 py-2 text-xs">
         <strong>Valor del m² = {formatCLP(f.precioM2)}</strong>{' '}
         <span className="text-muted-foreground">
-          ({formatCLP(f.costoTotal)} ÷ {m2(f.m2Total)} m²). Cada cortina de esta familia se cobra a
-          este valor por sus metros cuadrados.
+          ({formatCLP(f.costoTotal)} ÷ {m2(f.m2Total)} m²).
         </span>
+        {/* El último paso, el que faltaba: de la tarifa al precio de la fila.
+            Sin esto había que abrir el probador de Admin para verlo. */}
+        <div className="mt-1 text-muted-foreground">
+          Y cada cortina paga <strong>sus metros cuadrados × {formatCLP(f.precioM2)}</strong>
+          {f.instalacionEmbebida > 0 ? (
+            <>
+              {' '}
+              <strong>+ {formatCLP(f.instalacionEmbebida)}</strong> de instalación, que va DENTRO
+              del valor unitario.
+            </>
+          ) : (
+            <> (sin instalación: no se cobra ni acá ni en la fila de abajo).</>
+          )}{' '}
+          El DCT % de la fila se aplica al final, sobre ese valor unitario.
+        </div>
+        <div className="mt-1 text-[0.7rem] text-muted-foreground">
+          Los m² de cada cortina son ancho × (alto vendido + {mts(f.extraAltoM)} m
+          {f.extraAltoM > 0 ? ' de tela extra' : ''}
+          ). La tela se acuesta en un rollo de {mts(f.anchoRolloM)} m.
+        </div>
       </div>
     </div>
   );

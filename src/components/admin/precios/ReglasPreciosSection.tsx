@@ -14,7 +14,7 @@ import { AlertTriangle, Coins, History, Info, RotateCcw, Save } from 'lucide-rea
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { InputDecimal } from '@/components/ui/input-decimal';
 import { useConfirm } from '@/components/ui/confirm';
 import {
   Dialog,
@@ -46,7 +46,10 @@ import { RecetasFamiliasSection } from './RecetasFamiliasSection';
 import { SistemasPreciosSection } from './SistemasPreciosSection';
 import { TelasArquetiposSection } from './TelasArquetiposSection';
 
-export function ReglasPreciosSection() {
+/** Las pestañas de Admin → Precios. Las tres primeras son de esta sección. */
+export type TabPrecios = 'probador' | 'insumos' | 'recetas' | 'telas' | 'comercial';
+
+export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } = {}) {
   const { empresaId, user } = useAuth();
   const confirmar = useConfirm();
   const { reglas, loading, refresh } = useReglasPrecios();
@@ -59,12 +62,14 @@ export function ReglasPreciosSection() {
   const [respaldos, setRespaldos] = useState<RespaldoPrecios[]>([]);
   const [verRespaldos, setVerRespaldos] = useState(false);
 
+  // Carga lo guardado en el borrador, pero NUNCA encima de lo que se está
+  // editando: `useReglasPrecios` recarga sola en cada `focus` de la ventana, y
+  // sin esta guarda un alt-tab al Excel descartaba los cambios en silencio (el
+  // campo «volvía» al valor guardado sin que nadie tocara nada).
   useEffect(() => {
-    if (!loading) {
-      setDraft(reglas);
-      setDirty(false);
-    }
-  }, [loading, reglas]);
+    if (loading || dirty) return;
+    setDraft(reglas);
+  }, [loading, reglas, dirty]);
 
   useEffect(() => {
     if (empresaId) cargarRespaldosPrecios(empresaId).then(setRespaldos);
@@ -145,13 +150,47 @@ export function ReglasPreciosSection() {
     }
   };
 
+  // Las pestañas que edita ESTA sección. En las otras se queda montada (para no
+  // perder el borrador) pero solo deja el aviso de que hay cambios pendientes.
+  const miTab = tab === 'probador' || tab === 'insumos' || tab === 'recetas';
+  if (!miTab) {
+    return dirty ? (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
+        <AlertTriangle className="h-4 w-4" />
+        <span>
+          Tienes cambios sin guardar en los precios. Vuelve a <strong>Insumos</strong> o{' '}
+          <strong>Recetas y sistemas</strong> para guardarlos.
+        </span>
+      </div>
+    ) : null;
+  }
+
   return (
     <>
       <section className="rounded-lg border bg-card p-5">
         <header className="mb-3 flex flex-wrap items-center gap-2">
           <Coins className="h-5 w-5 text-success" />
           <h2 className="text-sm font-semibold text-muted-foreground">Cómo se arma el precio</h2>
+          {dirty && (
+            <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-[0.7rem]">
+              Cambios sin guardar
+            </span>
+          )}
           <div className="ml-auto flex gap-2">
+            {dirty && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDraft(reglas);
+                  setDirty(false);
+                  toast.info('Se descartaron los cambios: quedó lo último guardado.');
+                }}
+                disabled={guardando}
+              >
+                Descartar cambios
+              </Button>
+            )}
             <Button variant="ghost" size="sm" onClick={() => setVerRespaldos(true)} disabled={!respaldos.length}>
               <History className="mr-1 h-3.5 w-3.5" />
               Respaldos ({respaldos.length})
@@ -220,20 +259,17 @@ export function ReglasPreciosSection() {
         <div className="mt-4 flex flex-wrap items-end gap-4">
           <label className="text-xs">
             <span className="mb-1 block text-muted-foreground">Regalo por familia</span>
-            <Input
-              type="number"
-              value={String(draft.regalo)}
-              onChange={(e) => editar({ regalo: Number(e.target.value) })}
+            <InputDecimal
+              value={draft.regalo}
+              onChange={(regalo) => editar({ regalo })}
               className="h-8 w-32 text-xs"
             />
           </label>
           <label className="text-xs">
             <span className="mb-1 block text-muted-foreground">Ancho de rollo de respaldo (m)</span>
-            <Input
-              type="number"
-              step="0.01"
-              value={String(draft.anchoRolloFallbackM)}
-              onChange={(e) => editar({ anchoRolloFallbackM: Number(e.target.value) })}
+            <InputDecimal
+              value={draft.anchoRolloFallbackM}
+              onChange={(anchoRolloFallbackM) => editar({ anchoRolloFallbackM })}
               className="h-8 w-32 text-xs"
             />
           </label>
@@ -259,63 +295,77 @@ export function ReglasPreciosSection() {
         </ul>
       </section>
 
-      <ProbadorCotizacionSection reglas={draft} hayErrores={errores.length > 0} />
+      {tab === 'probador' && (
+        <ProbadorCotizacionSection reglas={draft} hayErrores={errores.length > 0} />
+      )}
 
-      <SistemasPreciosSection
-        valor={draft.sistemas}
-        familiasCatalogo={familiasCatalogo}
-        onChange={(sistemas) => editar({ sistemas })}
-      />
-
-      <InsumosPreciosSection
-        valor={draft.insumos}
-        margenInsumo={parametros.margenInsumo}
-        usados={usados}
-        recetas={draft.recetas}
-        onChange={(insumos) => editar({ insumos })}
-        onUsarEnFamilia={agregarAReceta}
-      />
-
-      {Object.entries(draft.sistemas).map(([clave, s]) => (
-        <InsumosPreciosSection
-          key={clave}
-          valor={s.insumos}
-          margenInsumo={s.margenInsumo}
-          usados={usados}
-          recetas={draft.recetas}
-          sistema={{
-            clave,
-            nombre: s.nombre,
-            // La categoría B y la invertida cotizan con sus recetas con sufijo
-            // (`|B`, `|INV`): ahí es donde el menú «usar en…» tiene que poder
-            // meter un insumo.
-            familias: recetasDeSistema(clave, s, draft.recetas),
-          }}
-          precioEnGeneral={(cod) => draft.insumos[cod]?.valorMaximo}
-          onChange={(insumos) =>
-            editar({ sistemas: { ...draft.sistemas, [clave]: { ...s, insumos } } })
-          }
-          onUsarEnFamilia={agregarAReceta}
+      {tab === 'recetas' && (
+        <SistemasPreciosSection
+          valor={draft.sistemas}
+          familiasCatalogo={familiasCatalogo}
+          onChange={(sistemas) => editar({ sistemas })}
         />
-      ))}
+      )}
 
-      <RecetasFamiliasSection
-        recetas={draft.recetas}
-        insumos={draft.insumos}
-        margenInsumo={parametros.margenInsumo}
-        sistemas={draft.sistemas}
-        pasoLamaM={draft.telaVertical.pasoLamaM}
-        familiasCatalogo={familiasCatalogo}
-        onChange={(recetas) => editar({ recetas })}
-      />
+      {tab === 'insumos' && (
+        <>
+          <InsumosPreciosSection
+            valor={draft.insumos}
+            margenInsumo={parametros.margenInsumo}
+            usados={usados}
+            recetas={draft.recetas}
+            onChange={(insumos) => editar({ insumos })}
+            onUsarEnFamilia={agregarAReceta}
+          />
 
-      <TelasArquetiposSection
-        arquetipos={draft.arquetipos}
-        baseVertical={draft.baseVertical}
-        telaVertical={draft.telaVertical}
-        catalogo={catalogo}
-        onChange={editar}
-      />
+          {Object.entries(draft.sistemas).map(([clave, s]) => (
+            <InsumosPreciosSection
+              key={clave}
+              valor={s.insumos}
+              margenInsumo={s.margenInsumo}
+              usados={usados}
+              recetas={draft.recetas}
+              sistema={{
+                clave,
+                nombre: s.nombre,
+                // La categoría B y la invertida cotizan con sus recetas con sufijo
+                // (`|B`, `|INV`): ahí es donde el menú «usar en…» tiene que poder
+                // meter un insumo.
+                familias: recetasDeSistema(clave, s, draft.recetas),
+              }}
+              precioEnGeneral={(cod) => draft.insumos[cod]?.valorMaximo}
+              onChange={(insumos) =>
+                editar({ sistemas: { ...draft.sistemas, [clave]: { ...s, insumos } } })
+              }
+              onUsarEnFamilia={agregarAReceta}
+            />
+          ))}
+        </>
+      )}
+
+      {tab === 'recetas' && (
+        <RecetasFamiliasSection
+          recetas={draft.recetas}
+          insumos={draft.insumos}
+          margenInsumo={parametros.margenInsumo}
+          sistemas={draft.sistemas}
+          pasoLamaM={draft.telaVertical.pasoLamaM}
+          familiasCatalogo={familiasCatalogo}
+          onChange={(recetas) => editar({ recetas })}
+        />
+      )}
+
+      {/* Va con las recetas: es la otra mitad de «con qué se cotiza una
+          familia» (los materiales y la tela de referencia). */}
+      {tab === 'recetas' && (
+        <TelasArquetiposSection
+          arquetipos={draft.arquetipos}
+          baseVertical={draft.baseVertical}
+          telaVertical={draft.telaVertical}
+          catalogo={catalogo}
+          onChange={editar}
+        />
+      )}
 
       <Dialog open={verRespaldos} onOpenChange={setVerRespaldos}>
         <DialogContent className="max-w-lg">
