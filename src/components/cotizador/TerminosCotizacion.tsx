@@ -38,7 +38,8 @@ export default function TerminosCotizacion({
   const items = useMemo(
     () =>
       conTerminoTarjeta(
-        terminosParaCotizacion(config, categorias, telas),
+        // El medio de pago filtra: las cuotas sin interés son de Mercadopago.
+        terminosParaCotizacion(config, categorias, telas, parametros.proveedorTarjeta),
         textoTerminoTarjeta(parametros, fmtPct),
       ),
     [config, categorias, telas, parametros, fmtPct],

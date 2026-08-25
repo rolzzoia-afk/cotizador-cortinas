@@ -105,6 +105,16 @@ export type DatosGenerales = {
   sinInstalacion?: boolean;
   /** Envío de la cotización: gratis o con cobro en destino (lo paga el cliente al courier). */
   envio?: 'gratis' | 'cobro_destino';
+  /**
+   * Con qué se paga la tarjeta en ESTA cotización. `null`/ausente = el
+   * proveedor global de Admin. Cambia el recargo, los términos de las cuotas,
+   * el sello y la banda del pie: las cuotas sin interés son de Mercadopago.
+   */
+  proveedorTarjeta?: 'mercadopago' | 'flow' | null;
+  /** Texto de la banda de validez del PDF para esta cotización ('' = el de la empresa). */
+  validezTexto?: string;
+  /** La banda de validez va amarilla con texto rojo (descuento a plazo corto). */
+  validezAmarilla?: boolean;
   /** Habilita el tubo E78 (kit 45 mm) para la banda 2,2–3,0 m de esta OT.
    *  Default (ausente/false): el rango usa tubo E66 (38 mm) con kit normal;
    *  true: ROL/dúo/cenefa ovalada 38 mm del rango suben a fila 45 mm + E78. */

@@ -258,6 +258,34 @@ export function DatosEmpresaSection() {
               />
             </Bloque>
 
+            <Bloque titulo="Banda del pie">
+              <Campo
+                label="Con Mercadopago"
+                value={draft.bandaFinal.titulo}
+                onChange={(v) => setSeccion('bandaFinal', { titulo: v })}
+                ancho
+              />
+              <CampoLargo
+                label="Nota (Mercadopago)"
+                value={draft.bandaFinal.nota}
+                onChange={(v) => setSeccion('bandaFinal', { nota: v })}
+                filas={2}
+              />
+              <Campo
+                label="Con Flow"
+                value={draft.bandaFinal.tituloFlow}
+                onChange={(v) => setSeccion('bandaFinal', { tituloFlow: v })}
+                ancho
+                ayuda="Flow no ofrece cuotas sin interés: las pone el banco del cliente."
+              />
+              <CampoLargo
+                label="Nota (Flow)"
+                value={draft.bandaFinal.notaFlow}
+                onChange={(v) => setSeccion('bandaFinal', { notaFlow: v })}
+                filas={2}
+              />
+            </Bloque>
+
             <Bloque titulo="Validez y contacto">
               <Campo
                 label="Banda de validez"
@@ -365,18 +393,7 @@ export function DatosEmpresaSection() {
                 value={draft.bloqueCategoriaB.texto}
                 onChange={(v) => setSeccion('bloqueCategoriaB', { texto: v })}
               />
-              <Campo
-                label="Banda final"
-                value={draft.bandaFinal.titulo}
-                onChange={(v) => setSeccion('bandaFinal', { titulo: v })}
-                ancho
-              />
-              <CampoLargo
-                label="Nota bajo la banda final"
-                value={draft.bandaFinal.nota}
-                onChange={(v) => setSeccion('bandaFinal', { nota: v })}
-                filas={2}
-              />
+              {/* La banda final tiene su propio bloque: cambia con el medio de pago. */}
               <Campo
                 label='Enlace del botón "VER EJEMPLO" (onda en "V")'
                 value={draft.urlEjemploOnda}

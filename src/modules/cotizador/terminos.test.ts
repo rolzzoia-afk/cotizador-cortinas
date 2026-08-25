@@ -140,9 +140,11 @@ describe('claveTermino', () => {
 });
 
 describe('TERMINOS_DEFAULT', () => {
-  const generales = terminosParaCotizacion(TERMINOS_DEFAULT, [], []);
-  const soloA = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A']);
-  const soloB = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['B']);
+  // Con Mercadopago, que es con lo que se cobra hoy: las cuotas sin interés
+  // son suyas y los términos que las prometen solo salen con él.
+  const generales = terminosParaCotizacion(TERMINOS_DEFAULT, [], [], 'mercadopago');
+  const soloA = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A'], 'mercadopago');
+  const soloB = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['B'], 'mercadopago');
 
   it('una cotización sin categoría de tela igual sale con condiciones', () => {
     expect(generales.length).toBeGreaterThan(10);
@@ -186,7 +188,7 @@ describe('TERMINOS_DEFAULT', () => {
   });
 
   it('una cotización mixta A + B trae las dos listas', () => {
-    const mixta = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A', 'B']);
+    const mixta = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A', 'B'], 'mercadopago');
     expect(mixta).toHaveLength(
       generales.length + (soloA.length - generales.length) + (soloB.length - generales.length),
     );
@@ -200,7 +202,7 @@ describe('TERMINOS_DEFAULT', () => {
   });
 
   it('corrige el typo "LIGTH" del Excel', () => {
-    const t = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A', 'B']);
+    const t = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A', 'B'], 'mercadopago');
     expect(t.some((x) => x.toUpperCase().includes('LIGTH'))).toBe(false);
     expect(t.some((x) => x.includes('"ROLLER SOFT LIGHT"'))).toBe(true);
   });
@@ -211,12 +213,45 @@ describe('el término de la tarjeta', () => {
   const fmtPct = (n: number) => (n * 100).toFixed(1).replace('.', ',');
 
   it('cada gama trae su propio término de tarjeta, así que no se agrega el automático', () => {
-    expect(hayTerminoTarjeta(terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A']))).toBe(true);
-    expect(hayTerminoTarjeta(terminosParaCotizacion(TERMINOS_DEFAULT, [], ['B']))).toBe(true);
+    expect(hayTerminoTarjeta(terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A'], 'mercadopago'))).toBe(true);
+    expect(hayTerminoTarjeta(terminosParaCotizacion(TERMINOS_DEFAULT, [], ['B'], 'mercadopago'))).toBe(true);
   });
 
   it('sin categoría de tela no hay término de tarjeta: lo pone la app', () => {
-    expect(hayTerminoTarjeta(terminosParaCotizacion(TERMINOS_DEFAULT, [], []))).toBe(false);
+    expect(hayTerminoTarjeta(terminosParaCotizacion(TERMINOS_DEFAULT, [], [], 'mercadopago'))).toBe(false);
+  });
+
+  // Flow no ofrece cuotas sin interés: los intereses los pone el banco del
+  // cliente. Prometer «6 cuotas sin interés por mercadopago» en un documento
+  // que se paga con Flow es prometer algo que no existe.
+  it('con Flow desaparecen las cuotas sin interés de Mercadopago', () => {
+    for (const tela of ['A', 'B']) {
+      const flow = terminosParaCotizacion(TERMINOS_DEFAULT, [], [tela], 'flow');
+      expect(flow.some((x) => x.toLowerCase().includes('sin interés por mercadopago'))).toBe(false);
+      expect(flow.some((x) => x.includes('Mercadopago cobra una comisión'))).toBe(false);
+      expect(flow.some((x) => x.includes('Flow no ofrece cuotas sin interés'))).toBe(true);
+    }
+  });
+
+  it('con Flow el resto de la gama sigue intacto', () => {
+    const flowA = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A'], 'flow');
+    expect(flowA.some((x) => x.includes('DARK ROLLER'))).toBe(true);
+    expect(flowA.some((x) => x.includes('Garantía de instalaciones: 3 años'))).toBe(true);
+    const flowB = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['B'], 'flow');
+    expect(flowB.some((x) => x.includes('huevo'))).toBe(true);
+  });
+
+  it('el término de Flow tampoco aparece cuando se cobra con Mercadopago', () => {
+    const mp = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A'], 'mercadopago');
+    expect(mp.some((x) => x.includes('Flow'))).toBe(false);
+  });
+
+  it('sin decir el medio de pago no sale ninguno de los dos', () => {
+    const t = terminosParaCotizacion(TERMINOS_DEFAULT, [], ['A']);
+    expect(t.some((x) => x.includes('Flow'))).toBe(false);
+    expect(t.some((x) => x.toLowerCase().includes('mercadopago'))).toBe(false);
+    // …y como no hay término de tarjeta, la app agrega el suyo.
+    expect(hayTerminoTarjeta(t)).toBe(false);
   });
 
   it('no confunde la nota de la tarjeta de débito con un término de crédito', () => {

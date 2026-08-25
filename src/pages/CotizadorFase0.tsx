@@ -46,6 +46,7 @@ import {
   textoTerminoTarjeta,
 } from '@/modules/cotizador/terminos';
 import { useDatosEmpresaCotizacion } from '@/modules/cotizador/datosEmpresaCotizacionStore';
+import type { ProveedorTarjeta } from '@/modules/cotizador/preciosFase0';
 import { otDetalladaSugerida } from '@/modules/cotizador/otDetallada';
 // Solo el tipo: el generador se carga en diferido al apretar el botón.
 import type { FilaPdfAdicional } from '@/modules/cotizador/pdfCotizacion';
@@ -383,6 +384,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // % de descuento de la instalación puesto a mano en su fila de ADICIONALES
   // (0–100). null = manda la regla automática (gratis por cantidad / región).
   const [instalDctManual, setInstalDctManual] = useState<number | null>(null);
+  // Con qué se paga la tarjeta en ESTA cotización. null = el proveedor global
+  // de Admin. Cambia el recargo, los términos, el sello y la banda del pie:
+  // las cuotas sin interés son de Mercadopago, con Flow las pone el banco.
+  const [provTarjetaOT, setProvTarjetaOT] = useState<ProveedorTarjeta | null>(null);
+  // La banda de validez de esta cotización («DESCUENTO VÁLIDO POR 1 DÍA»).
+  // Vacío = la de la empresa; el amarillo es el de los descuentos a plazo corto.
+  const [validezTexto, setValidezTexto] = useState('');
+  const [validezAmarilla, setValidezAmarilla] = useState(false);
   // Tubo E78: habilita la banda 2,2–3,0 m (kit 45 mm + tubo E78) para esta OT.
   // Default false = el rango usa tubo E66 (38 mm) con kit normal.
   const [usarTuboE78, setUsarTuboE78] = useState(false);
@@ -419,6 +428,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       sinInstalacion?: boolean;
       envio?: 'gratis' | 'cobro_destino';
       usarTuboE78?: boolean;
+      proveedorTarjeta?: ProveedorTarjeta | null;
+      validezTexto?: string;
+      validezAmarilla?: boolean;
     };
     // Una OT guardada con su texto lo conserva tal cual: se escribió a
     // propósito y ya se le mandó al cliente.
@@ -495,6 +507,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         ? Math.round(dg.instalacionDescuentoManual * 100)
         : null,
     );
+    setProvTarjetaOT(
+      dg.proveedorTarjeta === 'flow' || dg.proveedorTarjeta === 'mercadopago'
+        ? dg.proveedorTarjeta
+        : null,
+    );
+    setValidezTexto(dg.validezTexto || '');
+    setValidezAmarilla(!!dg.validezAmarilla);
     setUsarTuboE78(!!dg.usarTuboE78);
     setOrigVentanas(orig as Record<string, Record<string, unknown>>);
     setCargadoEdit(true);
@@ -719,6 +738,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           sinInstalacion,
           envio,
           usarTuboE78,
+          proveedorTarjeta: provTarjetaOT,
+          validezTexto: validezTexto.trim(),
+          validezAmarilla,
         };
         const actualizada: OT = {
           ...otCargada,
@@ -793,6 +815,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           sinInstalacion,
           envio,
           usarTuboE78,
+          proveedorTarjeta: provTarjetaOT,
+          validezTexto: validezTexto.trim(),
+          validezAmarilla,
         },
         storeVentanas: ventanas as unknown as OT['storeVentanas'],
         cotizacionCount: 1,
@@ -853,6 +878,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // El envío con cobro en destino lo paga el cliente al courier y NO suma al
   // total: si no se dice, el cliente cree que el flete está incluido. Va en
   // rojo en la grilla y en el documento.
+  // Los parámetros CON lo que esta cotización decide por su cuenta: el % de
+  // instalación a región y el medio de pago de la tarjeta (que cambia el
+  // recargo, los términos, el sello y la banda del pie).
+  const paramsEff = useMemo(() => {
+    let p = parametros;
+    if (region) {
+      p = { ...p, instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)) };
+    }
+    if (provTarjetaOT) p = { ...p, proveedorTarjeta: provTarjetaOT };
+    return p;
+  }, [parametros, region, regionPctEff, provTarjetaOT]);
+
   const avisoEnvioRegion =
     envio !== 'cobro_destino'
       ? ''
@@ -907,18 +944,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         cantidad: a.cantidad,
         descuento: a.descuento / 100,
       }));
-    // Para región, el % de descuento de instalación de esta OT sobreescribe el global.
-    const paramsEff = region
-      ? {
-          ...parametros,
-          instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
-        }
-      : parametros;
     return cotizarFase0(
       filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion, reglasPrecios,
       instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
     );
-  }, [filas, adicionales, catalogo, anchoRollo, parametros, region, regionPctEff, sinInstalacion, reglasPrecios, formulas, reglas.tipos, instalDctManual]);
+  }, [filas, adicionales, catalogo, anchoRollo, paramsEff, parametros, region, sinInstalacion, reglasPrecios, formulas, reglas.tipos, instalDctManual]);
 
   /** La familia que está mirando el desglose, si el diálogo está abierto. */
   // Se busca por la CLAVE del panel (`cod` o `cod|B`): la A y la B de una misma
@@ -1323,9 +1353,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   );
 
   // Lo que necesitan los bloques configurables para dibujarse.
+  // Con `paramsEff`: la pantalla tiene que decir lo mismo que el PDF, y el
+  // medio de pago de ESTA cotización cambia los términos y el banner.
   const datosBloques = useMemo(
-    () => ({ terminos, categorias: catsProducto, telas: catsTela, parametros, fmtPct }),
-    [terminos, catsProducto, catsTela, parametros],
+    () => ({ terminos, categorias: catsProducto, telas: catsTela, parametros: paramsEff, fmtPct }),
+    [terminos, catsProducto, catsTela, paramsEff],
   );
 
   // El folio que va en la cotización: el de la OT si ya está guardada, si no lo
@@ -1488,10 +1520,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         totales: t,
         // La MISMA lista que muestra el documento en pantalla.
         terminos: conTerminoTarjeta(
-          terminosParaCotizacion(terminos, catsProducto, catsTela),
-          textoTerminoTarjeta(parametros, fmtPct),
+          terminosParaCotizacion(terminos, catsProducto, catsTela, paramsEff.proveedorTarjeta),
+          textoTerminoTarjeta(paramsEff, fmtPct),
         ),
-        proveedorTarjeta: parametros.proveedorTarjeta,
+        validezTitulo: validezTexto.trim(),
+        validezAmarilla,
+        proveedorTarjeta: paramsEff.proveedorTarjeta,
         empresa: datosEmpresa,
         logoDataUrl: logoPropio ?? LOGO_ROLZZO,
       });
@@ -1716,6 +1750,45 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               ]}
             />
           )}
+          {/* Con qué se paga la tarjeta EN ESTA cotización: cambia el recargo,
+              los términos de las cuotas, el sello y la banda del pie. Las
+              cuotas sin interés son de Mercadopago; con Flow los intereses los
+              pone el banco del cliente. */}
+          <CampoEstado
+            label="Tarjeta de crédito"
+            value={provTarjetaOT ?? 'auto'}
+            onChange={(v) =>
+              setProvTarjetaOT(v === 'flow' ? 'flow' : v === 'mercadopago' ? 'mercadopago' : null)
+            }
+            opciones={[
+              {
+                value: 'auto',
+                label: `Como Admin (${parametros.proveedorTarjeta === 'flow' ? 'Flow' : 'Mercadopago'})`,
+              },
+              { value: 'mercadopago', label: 'Mercadopago (cuotas sin interés)', tono: 'ok' },
+              { value: 'flow', label: 'Flow (intereses del banco)', tono: 'mal' },
+            ]}
+          />
+          <label className="block">
+            <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+              Banda de validez (PDF)
+            </span>
+            <Input
+              value={validezTexto}
+              onChange={(e) => setValidezTexto(e.target.value)}
+              placeholder={datosEmpresa.validez.titulo}
+              title="El recuadro de arriba a la derecha del PDF. Vacío = el texto configurado en Admin."
+            />
+            <label className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={validezAmarilla}
+                onChange={(e) => setValidezAmarilla(e.target.checked)}
+                className="h-3 w-3 accent-warning"
+              />
+              En amarillo (descuento a plazo corto)
+            </label>
+          </label>
           {region && !sinInstalacion && (
             <label className="block">
               <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">

@@ -62,8 +62,11 @@ export type DatosEmpresaCotizacion = {
   botones: BotonPdf[];
   /** El recuadro rojo que solo sale cuando la cotización trae telas B. */
   bloqueCategoriaB: { texto: string };
-  /** La banda roja del pie. */
-  bandaFinal: { titulo: string; nota: string };
+  /**
+   * La banda roja del pie. Cambia con el medio de pago: las cuotas SIN INTERÉS
+   * son de Mercadopago; con Flow los intereses los pone el banco del cliente.
+   */
+  bandaFinal: { titulo: string; nota: string; tituloFlow: string; notaFlow: string };
   /** El chip «VER EJEMPLO» del término de la onda en "V". */
   urlEjemploOnda: string;
 };
@@ -131,6 +134,9 @@ export const DATOS_EMPRESA_DEFAULT: DatosEmpresaCotizacion = {
   bandaFinal: {
     titulo: 'PAGA HASTA 12 CUOTAS SIN INTERÉS',
     nota: 'SI PAGAS CON TARJETA DE DÉBITO SE TE APLICARÁ LA COMISIÓN DE MERCADOPAGO POR LO QUE SI VAS A PAGAR CON DÉBITO, TE RECOMENDAMOS HACER UNA TRANSFERENCIA Y TE EVITAS LA COMISIÓN',
+    // Tal cual la banda del documento de Flow, que no lleva nota debajo.
+    tituloFlow: 'PAGO CON FLOW - LOS INTERESES DEPENDERÁ DE TU BANCO',
+    notaFlow: '',
   },
   urlEjemploOnda: 'https://app.hubspot.com/documents/8349822/view/243147183?accessId=48ffc2',
 };
@@ -214,6 +220,8 @@ export function normalizarDatosEmpresa(raw: unknown): DatosEmpresaCotizacion {
     bandaFinal: {
       titulo: txtOpcional(ban.titulo, d.bandaFinal.titulo),
       nota: txtOpcional(ban.nota, d.bandaFinal.nota),
+      tituloFlow: txtOpcional(ban.tituloFlow, d.bandaFinal.tituloFlow),
+      notaFlow: txtOpcional(ban.notaFlow, d.bandaFinal.notaFlow),
     },
     urlEjemploOnda: txtOpcional(r.urlEjemploOnda, d.urlEjemploOnda),
   };

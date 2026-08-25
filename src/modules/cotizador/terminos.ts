@@ -16,7 +16,11 @@
 // Módulo puro: sin React ni Supabase (se testea directo).
 // ─────────────────────────────────────────────────────────────────────
 
-import { recargoTarjetaEfectivo, type ParametrosCotizador } from './preciosFase0';
+import {
+  recargoTarjetaEfectivo,
+  type ParametrosCotizador,
+  type ProveedorTarjeta,
+} from './preciosFase0';
 
 /** Un grupo de términos y a qué cotizaciones aplica. */
 export type GrupoTerminos = {
@@ -28,6 +32,12 @@ export type GrupoTerminos = {
   telas?: string[];
   /** Categorías de PRODUCTO a las que aplica (BEEBLACK, DARK_38mm…). Vacío = no filtra. */
   categorias?: string[];
+  /**
+   * Medio de pago con tarjeta al que aplica. Existe porque las cuotas SIN
+   * INTERÉS son de Mercadopago: con Flow las cuotas y sus intereses los pone
+   * el banco del cliente, y prometerlas sería mentir. Vacío = no filtra.
+   */
+  proveedorTarjeta?: ProveedorTarjeta;
   /** Los términos, uno por línea/ítem. */
   terminos: string[];
 };
@@ -79,7 +89,6 @@ export const TERMINOS_DEFAULT: ConfigTerminos = {
         'Instalación GRATIS mínimo de 4 cortinas roller (RM Anillo Vespucio Norte) - Premium o Delux; 3 o menos, valor instalación $17.500 c/u + IVA.',
         'Los valores pueden cambiar sin previo aviso.',
         'Cortinas Roller Blackout y Screen al utilizar zuncho y corchete en el peso inferior tienden a generar leves ondas en las telas, al ser mayor a 2 mts de ancho aún más.',
-        'Pago: Tarjeta de crédito hasta 6 cuotas sin interés por mercadopago, transferencia y de cancelar en efectivo solo 2da cuota.',
         'DARK ROLLER se instala entre 18 a 25 días hábiles por armado de estructura especial - INSTALACIÓN SOLO EN SANTIAGO.',
         'Primera visita teniendo cotización previa tiene un valor de $15.000 (RM en AVN), monto que será descontado del total del servicio en caso de aprobación del presupuesto. Las visitas adicionales que sean requeridas tendrán un costo de $20.000 cada una y no serán reembolsables en ningún caso.',
         'Screen mayor a 2,00 mts de estar expuestas a vientos constantes suelen deshilachar al tiempo por soltura de puntos.',
@@ -89,8 +98,20 @@ export const TERMINOS_DEFAULT: ConfigTerminos = {
         'GAMA ESTANDAR: Garantía 5 (cinco) años en mecanismos y sistemas (no incluye motor) - 1 año en telas.',
         'Garantías: Motor: 1 año | Sistemas de Oscuridad: 2 años | Verticales: 2 años | Sistema de Piolas: 1 año. El envío de la foto o video es primordial, todas las garantías mencionadas aplican siempre y cuando sean por falla de fábrica y no por mal uso.',
         'Garantía de instalaciones: 3 años (siempre y cuando sea defecto de la instalación como tal y no por techos o muros arenosos, vulcanitas de baja gama, filtraciones en el lugar de instalación, mal uso de las cortinas, manipulación de externos, traslado de la cortina del lugar inicial).',
-        'El recargo por Tarjeta de Crédito se debe a que la plataforma Mercadopago cobra una comisión por el uso de la plataforma y otra comisión por ofrecer cuotas sin interés; si deseas pagar en 1 cuota podemos recalcular la comisión.',
         'Las cenefas cuadradas u ovaladas sin tira pueden tener pequeñas rajas de fábrica a pesar del cuidado que le damos desde su fabricación.',
+      ],
+    },
+    // Las cuotas SIN INTERÉS y el motivo del recargo son de Mercadopago. Con
+    // Flow no aplican —los intereses los pone el banco del cliente— y en su
+    // lugar sale la frase automática de `textoTerminoTarjeta`.
+    {
+      id: 'gama-a-mercadopago',
+      nombre: 'Categoría A · Mercadopago',
+      telas: ['A'],
+      proveedorTarjeta: 'mercadopago',
+      terminos: [
+        'Pago: Tarjeta de crédito hasta 6 cuotas sin interés por mercadopago, transferencia y de cancelar en efectivo solo 2da cuota.',
+        'El recargo por Tarjeta de Crédito se debe a que la plataforma Mercadopago cobra una comisión por el uso de la plataforma y otra comisión por ofrecer cuotas sin interés; si deseas pagar en 1 cuota podemos recalcular la comisión.',
       ],
     },
     {
@@ -101,7 +122,6 @@ export const TERMINOS_DEFAULT: ConfigTerminos = {
         'Instalación básica GRATIS mínimo de 4 cortinas roller (RM Anillo Vespucio Norte) - Premium Categoría B; 3 o menos, valor instalación $17.500 c/u + IVA.',
         'Línea Premium - Categoría B se instala con peso cadena tipo "huevo".',
         'Cortinas Roller igual o mayor a 1,90 mts de alto tienden a generar una leve onda en las telas tipo corte en "V".',
-        'Pago: Tarjeta de crédito hasta 12 cuotas sin interés por mercadopago, transferencia y de cancelar en efectivo solo 2da cuota.',
         'Primera visita SIN COSTO previa cotización (RM en AVN), de tener que agendar una visita adicional tiene un costo de $20.000.',
         'Los pesos o barras inferiores pueden estar un 10% rayados por defecto de fábrica.',
         'TELA PREMIUM-CATEGORÍA B: Se fabrica hasta 2,50 mts de ancho y 2,35 mts de alto.',
@@ -109,6 +129,24 @@ export const TERMINOS_DEFAULT: ConfigTerminos = {
         'GARANTÍA ACCESORIOS GAMA PREMIUM-CATEGORÍA B: Garantía 3 (tres) años en mecanismos y sistemas (no incluye motor).',
         'Garantías: Motor: 6 meses | Soft Light: 1 año | Verticales: 2 años | Sistema de Piolas: 1 año | Cadenas: 3 años | Mecanismo: 3 años. El envío de la foto o video es primordial, todas las garantías mencionadas aplican siempre y cuando sean por falla de fábrica y no por mal uso.',
         'Garantía de instalaciones: 2 años (siempre y cuando sea defecto de la instalación como tal y no por techos o muros arenosos, vulcanitas de baja gama, filtraciones en el lugar de instalación, mal uso de las cortinas, manipulación de externos, traslado de la cortina del lugar inicial).',
+      ],
+    },
+    {
+      id: 'gama-b-mercadopago',
+      nombre: 'Categoría B · Mercadopago',
+      telas: ['B'],
+      proveedorTarjeta: 'mercadopago',
+      terminos: [
+        'Pago: Tarjeta de crédito hasta 12 cuotas sin interés por mercadopago, transferencia y de cancelar en efectivo solo 2da cuota.',
+      ],
+    },
+    {
+      id: 'flow',
+      nombre: 'Pago con Flow',
+      siempre: true,
+      proveedorTarjeta: 'flow',
+      terminos: [
+        'Pago: Tarjeta de crédito vía Flow, transferencia y de cancelar en efectivo solo 2da cuota. Las cuotas y sus intereses los define tu banco: Flow no ofrece cuotas sin interés.',
       ],
     },
   ],
@@ -212,7 +250,13 @@ export function grupoAplica(
   g: GrupoTerminos,
   catsProducto: string[],
   catsTela: string[],
+  proveedorTarjeta?: ProveedorTarjeta,
 ): boolean {
+  // El medio de pago es un FILTRO, no una asignación: un grupo atado a un
+  // proveedor no sale nunca con otro, ni siquiera si es `siempre`. Si quien
+  // llama no dice con qué se paga, tampoco: más vale que la app ponga su
+  // frase automática a prometer cuotas de una plataforma que no se usa.
+  if (g.proveedorTarjeta && g.proveedorTarjeta !== proveedorTarjeta) return false;
   if (g.siempre) return true;
   const cats = (g.categorias ?? []).map(normCat).filter(Boolean);
   const telas = (g.telas ?? []).map((t) => String(t).trim().toUpperCase()).filter(Boolean);
@@ -233,11 +277,12 @@ export function terminosParaCotizacion(
   config: ConfigTerminos,
   catsProducto: string[],
   catsTela: string[],
+  proveedorTarjeta?: ProveedorTarjeta,
 ): string[] {
   const vistos = new Set<string>();
   const out: string[] = [];
   for (const g of config.grupos) {
-    if (!grupoAplica(g, catsProducto, catsTela)) continue;
+    if (!grupoAplica(g, catsProducto, catsTela, proveedorTarjeta)) continue;
     for (const t of g.terminos) {
       const k = claveTermino(t);
       if (!k || vistos.has(k)) continue;

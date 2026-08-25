@@ -268,6 +268,34 @@ describe('generarPdfCotizacion', () => {
     expect(impreso()).toContain('VER AQUÍ');
   });
 
+  // Con Flow no hay cuotas sin interés: las pone el banco del cliente.
+  it('con Flow la banda del pie cambia y no promete cuotas sin interés', () => {
+    generarPdfCotizacion(entradaDemo({ proveedorTarjeta: 'flow' }));
+    expect(impreso()).toContain('PAGO CON FLOW');
+    expect(impreso()).not.toContain('PAGA HASTA 12 CUOTAS SIN INTERÉS');
+    // La nota de la comisión de Mercadopago tampoco corresponde.
+    expect(impreso()).not.toContain('COMISIÓN DE MERCADOPAGO');
+  });
+
+  it('con Flow no se estampa el sello de las 12 cuotas ni en categoría B', () => {
+    generarPdfCotizacion(entradaDemo({ proveedorTarjeta: 'flow' }));
+    expect(imagenes.some((i) => i === SELLO_CUOTAS)).toBe(false);
+    expect(imagenes.some((i) => i === SELLO_TARJETAS)).toBe(true);
+  });
+
+  it('la banda de validez de la cotización pisa a la de la empresa', () => {
+    generarPdfCotizacion(
+      entradaDemo({ validezTitulo: 'DESCUENTO VÁLIDO POR 1 DÍA', validezAmarilla: true }),
+    );
+    expect(impreso()).toContain('DESCUENTO VÁLIDO POR 1 DÍA');
+    expect(impreso()).not.toContain('VÁLIDO POR 5 DIAS');
+  });
+
+  it('sin validez propia manda la de la empresa', () => {
+    generarPdfCotizacion(entradaDemo());
+    expect(impreso()).toContain('VÁLIDO POR 5 DIAS');
+  });
+
   it('el recuadro de los datos bancarios se puede tocar para copiarlos', () => {
     generarPdfCotizacion(entradaDemo());
     expect(impreso()).toContain('> TOCA ESTE RECUADRO PARA COPIAR LOS DATOS');
