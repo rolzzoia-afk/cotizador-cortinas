@@ -19,6 +19,7 @@ import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
 import { normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 import {
   anchoCenefaCuadradaDeclaradoCm,
+  colorCenefaCuadradaDeclarado,
   medidaCorteCenefaCuadrada,
   tiraCenefaOvalada,
 } from '@/modules/descuentos/adicionales-cenefa';
@@ -43,7 +44,11 @@ import {
   codigoPerfilSuperior,
   codigoZocaloPerfil,
 } from '@/modules/descuentos/codigos-estructura';
-import { colorPerfilDesdeAdicional, colorPerfilFilaExcel } from '@/modules/descuentos/adicionales-perfil';
+import {
+  colorPerfilDesdeAdicional,
+  colorPerfilFilaExcel,
+  colorPerfilSistemaDesdeAdicional,
+} from '@/modules/descuentos/adicionales-perfil';
 import { esCenefaCuadrada } from './fase2';
 
 const EMPTY_PANO: Partial<Pano> = {};
@@ -576,7 +581,10 @@ function dibujarEstructuraSoftLight(
     const pz = pieza(row, colExcel);
     const hayMedida = !!pz && pz.medidaCm > 0;
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
-    const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
+    const colorPerfil =
+      colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) ||
+      colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+      colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
     celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     // Separador: se dibuja SOLO si está activado (tiene su propia pieza con medida);
@@ -709,7 +717,9 @@ function dibujarEstructuraDark(
       izq: !!pieza(row, 'PERFIL (IZQ) INT'),
       der: !!pieza(row, 'PERFIL (DER) INT'),
       inf: !!pieza(row, 'PERFIL BASE'),
-    }) || colorAcc;
+    }) ||
+    colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+    colorAcc;
   const codCef = codigoCenefaCuadrada(colorCenefa, colores);
   const celdaCenefa = (top: number, alto: number, label: string, colExcel: string) => {
     doc.setDrawColor(...NEGRO);
@@ -744,7 +754,10 @@ function dibujarEstructuraDark(
     const pz = pieza(row, colExcel);
     const hayMedida = !!pz && pz.medidaCm > 0;
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
-    const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
+    const colorPerfil =
+      colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) ||
+      colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+      colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
     celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     // Separador: se dibuja SOLO si está activado (tiene su propia pieza con medida);
@@ -872,7 +885,9 @@ function dibujarEstructuraSoftLightCC(
       izq: !!pieza(row, 'PERFIL (IZQ) INT'),
       der: !!pieza(row, 'PERFIL (DER) INT'),
       inf: !!pieza(row, 'PERFIL BASE'),
-    }) || colorAcc;
+    }) ||
+    colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+    colorAcc;
   const codCef = codigoCenefaCuadrada(colorCenefa, colores);
   doc.rect(30.4, 40, 29.5, 23.7, 'S');
   const pzDel = pieza(row, 'CENEFA DELANTERA');
@@ -901,7 +916,10 @@ function dibujarEstructuraSoftLightCC(
     const pz = pieza(row, colExcel);
     const hayMedida = !!pz && pz.medidaCm > 0;
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
-    const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
+    const colorPerfil =
+      colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) ||
+      colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+      colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
     celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     const psep = pieza(row, sepColExcel);
@@ -1028,7 +1046,9 @@ function dibujarEstructuraOscuranti(
       izq: !!pieza(row, 'PERFIL (IZQ) INT'),
       der: !!pieza(row, 'PERFIL (DER) INT'),
       inf: !!pieza(row, 'PERFIL BASE'),
-    }) || colorAcc;
+    }) ||
+    colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+    colorAcc;
   const celdaDer = (
     top: number, alto: number, label: string, cod: string, sub: string, colExcel: string,
   ) => {
@@ -1067,7 +1087,10 @@ function dibujarEstructuraOscuranti(
     const pz = pieza(row, colExcel);
     const hayMedida = !!pz && pz.medidaCm > 0;
     const medida = hayMedida ? fmtMedidaCm(pz!.medidaCm) : 'N/A';
-    const colorPerfil = colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) || colorAcc;
+    const colorPerfil =
+      colorPerfilDesdeAdicional(tipoColor, adicionales, row.categoria) ||
+      colorPerfilSistemaDesdeAdicional(adicionales, row.ubicacion) ||
+      colorAcc;
     const subColor = colorPerfil ? colorPerfil.toUpperCase() : '';
     celdaPerfil(1.5, yTop, 28.9, labZoc, codigoZocaloPerfil(colorPerfil, colores), `ZOCALO ${subColor}`.trim(), medida);
     const psep = pieza(row, sepColExcel);
@@ -1564,8 +1587,16 @@ function dibujarCenefaCuadrada(
   const anchoCenefa =
     anchoCenefaCuadradaDeclaradoCm(row.ubicacion || '', row.ancho || 0, adicionales) ??
     medidaCorteCenefaCuadrada(anchoCm, p.cenefaTapa);
+  // Mismo criterio que el ancho: manda el COLOR del adicional CENF C, porque la
+  // cenefa se vende aparte y suele ir en otro color que los accesorios de la
+  // cortina. Sin adicional que calce se cae al paño, como antes.
   const colorCenefa =
-    colorPesoNormalizado(p.colorTapa || p.colorMecanismo || p.color) || '—';
+    colorPesoNormalizado(
+      colorCenefaCuadradaDeclarado(row.ubicacion || '', row.ancho || 0, adicionales) ||
+        p.colorTapa ||
+        p.colorMecanismo ||
+        p.color,
+    ) || '—';
   const ubic = (row.ubicacion || '—').toUpperCase();
 
   // Mismo estilo que la etiqueta de paños: esquinas cuadradas, contorno

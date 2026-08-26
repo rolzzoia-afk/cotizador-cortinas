@@ -180,16 +180,16 @@ export function ubicacionCoincideConAdicional(ubicFila: string, ubicAdicional: s
  * ancho del paño, el mismo desempate que `cortinaDeLaCenefa`. Sin adicional
  * que calce devuelve null y quien llama decide el respaldo.
  */
-export function anchoCenefaCuadradaDeclaradoCm(
+export function buscarCenefaCuadradaDeclarada(
   ubicFila: string,
   anchoPanoM: number,
   adicionales: AdicionalFase0Persistido[] | undefined,
-): number | null {
+): AdicionalFase0Persistido | null {
   if (!adicionales?.length) return null;
   const key = normalizarUbicacion(ubicFila);
   if (!key) return null;
   const base = key.replace(/(?:\s+P|-G)\d+$/, '');
-  let mejor: { rango: number; dist: number; cm: number } | null = null;
+  let mejor: { rango: number; dist: number; adic: AdicionalFase0Persistido } | null = null;
   for (const a of adicionales) {
     if (!a.codInt || !(a.cantidad > 0) || !esAdicionalCenefaCuadrada(a.codInt)) continue;
     const ubic = normalizarUbicacion(a.ubicacion || '');
@@ -198,10 +198,33 @@ export function anchoCenefaCuadradaDeclaradoCm(
     if (rango < 0) continue;
     const dist = anchoPanoM > 0 ? Math.abs(a.cantidad - anchoPanoM) : 0;
     if (!mejor || rango < mejor.rango || (rango === mejor.rango && dist < mejor.dist - 1e-9)) {
-      mejor = { rango, dist, cm: r1(a.cantidad * 100) };
+      mejor = { rango, dist, adic: a };
     }
   }
-  return mejor ? mejor.cm : null;
+  return mejor ? mejor.adic : null;
+}
+
+export function anchoCenefaCuadradaDeclaradoCm(
+  ubicFila: string,
+  anchoPanoM: number,
+  adicionales: AdicionalFase0Persistido[] | undefined,
+): number | null {
+  const adic = buscarCenefaCuadradaDeclarada(ubicFila, anchoPanoM, adicionales);
+  return adic ? r1(adic.cantidad * 100) : null;
+}
+
+/**
+ * COLOR de la cenefa cuadrada tal como se VENDIÓ (columna COLOR ACCESORIOS del
+ * adicional CENF C). Es el mismo criterio que el ancho: manda lo comprado, no el
+ * color de la cortina — la cenefa se vende aparte y suele ir en otro color.
+ * Devuelve '' sin adicional que calce y quien llama decide el respaldo.
+ */
+export function colorCenefaCuadradaDeclarado(
+  ubicFila: string,
+  anchoPanoM: number,
+  adicionales: AdicionalFase0Persistido[] | undefined,
+): string {
+  return (buscarCenefaCuadradaDeclarada(ubicFila, anchoPanoM, adicionales)?.colorAcc || '').trim();
 }
 
 // ── A qué CORTINA le toca la cenefa ──────────────────────────────────────

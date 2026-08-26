@@ -226,6 +226,40 @@ describe('generarOrdenesOptimizador — SOFT LIGHT interno 38 mm', () => {
     expect(aoa[1][idxColorPerfil]).toBe('BLANCO');
   });
 
+  // El «SISTEMA DARK ROLLER» es UNO por ventana y no nombra lado, así que antes
+  // no lo veía nadie: la columna quedaba vacía y el taller cortaba los perfiles
+  // con el color de accesorios de la cortina (NEGRO) en vez del comprado (CAFÉ).
+  it('sin perfil por lado, COLOR PERFIL sale del adicional de SISTEMA de su UBIC.', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2');
+    v.panos[0].perfilIzqMuro = true;
+    const adicionales = [
+      { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'PZA 3', colorAcc: 'CAFÉ' },
+      { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'OTRA PIEZA', colorAcc: 'BLANCO' },
+    ];
+    const { aoa } = generarOrdenesOptimizador('266-2', [v], { adicionalesFase0: adicionales });
+    expect(aoa[1][col('COLOR PERFIL')]).toBe('CAFÉ');
+  });
+
+  it('el perfil por lado le gana al adicional de SISTEMA', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2');
+    v.panos[0].perfilIzqMuro = true;
+    const adicionales = [
+      { codInt: 'SOFTLIZQ', cantidad: 1, descuento: 0, ubicacion: 'PERFIL IZQ', colorAcc: 'BLANCO' },
+      { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'PZA 3', colorAcc: 'CAFÉ' },
+    ];
+    const { aoa } = generarOrdenesOptimizador('266-2', [v], { adicionalesFase0: adicionales });
+    expect(aoa[1][col('COLOR PERFIL')]).toBe('BLANCO');
+  });
+
+  it('sin perfiles activos el adicional de SISTEMA no pinta la columna', () => {
+    const v = ventanaSoftLight(2.969, 'PZA 3-G2');
+    const adicionales = [
+      { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'PZA 3', colorAcc: 'CAFÉ' },
+    ];
+    const { aoa } = generarOrdenesOptimizador('266-2', [v], { adicionalesFase0: adicionales });
+    expect(aoa[1][col('COLOR PERFIL')]).toBe('');
+  });
+
   it('encabezado (fila 0): rótulos legibles PERFIL (IZQ)/(DER) y TIPO DE PERFORACIÓN', () => {
     // El texto VISIBLE del encabezado cambió; la CLAVE interna (COLUMNAS, y por
     // ende el routing de datos) sigue igual → los datos caen en la misma posición.

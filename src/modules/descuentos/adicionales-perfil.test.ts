@@ -3,6 +3,8 @@ import {
   buscarAdicionalPerfil,
   colorPerfilDesdeAdicional,
   colorPerfilFilaExcel,
+  colorPerfilSistemaDesdeAdicional,
+  esAdicionalPerfilSistema,
 } from './adicionales-perfil';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 
@@ -38,5 +40,74 @@ describe('adicionales-perfil', () => {
 
   it('colorPerfilFilaExcel usa inferior si solo base activo', () => {
     expect(colorPerfilFilaExcel(adicionalesOscuranti, 'OSCURANTI_63mm', { inf: true })).toBe('CAFÉ');
+  });
+});
+
+// El SISTEMA DARK ROLLER se compra por VENTANA (una fila por ubicación, con su
+// color) y no nombra un lado, así que no lo veía ninguna de las funciones de
+// arriba: la hoja de estructura y las etiquetas caían al color de la cortina.
+describe('colorPerfilSistemaDesdeAdicional', () => {
+  const dark: AdicionalFase0Persistido[] = [
+    { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'PPAL', colorAcc: 'CAFÉ' },
+    { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'JOSEFA', colorAcc: 'BLANCO' },
+  ];
+
+  it('reconoce los códigos de sistema', () => {
+    expect(esAdicionalPerfilSistema('DARK')).toBe(true);
+    expect(esAdicionalPerfilSistema('p-adi')).toBe(true);
+    expect(esAdicionalPerfilSistema('P-IZQ')).toBe(false);
+    expect(esAdicionalPerfilSistema('CENF C')).toBe(false);
+  });
+
+  it('toma el color del adicional de SU ubicación', () => {
+    expect(colorPerfilSistemaDesdeAdicional(dark, 'PPAL')).toBe('CAFÉ');
+    expect(colorPerfilSistemaDesdeAdicional(dark, 'JOSEFA')).toBe('BLANCO');
+  });
+
+  it('acepta la UBIC. con sufijo de paño', () => {
+    expect(colorPerfilSistemaDesdeAdicional(dark, 'PPAL-G1')).toBe('CAFÉ');
+    expect(colorPerfilSistemaDesdeAdicional(dark, 'JOSEFA P2')).toBe('BLANCO');
+  });
+
+  it('no contesta por una ubicación ajena', () => {
+    expect(colorPerfilSistemaDesdeAdicional(dark, 'COMEDOR')).toBe('');
+  });
+
+  it('un adicional sin ubicación vale para toda la OT, pero pierde con el que calza', () => {
+    const conGlobal: AdicionalFase0Persistido[] = [
+      ...dark,
+      { codInt: 'DARK', cantidad: 1, descuento: 0, ubicacion: '', colorAcc: 'NEGRO' },
+    ];
+    expect(colorPerfilSistemaDesdeAdicional(conGlobal, 'COMEDOR')).toBe('NEGRO');
+    expect(colorPerfilSistemaDesdeAdicional(conGlobal, 'PPAL')).toBe('CAFÉ');
+  });
+
+  it('sin ubicación en la fila solo responde si no hay ambigüedad', () => {
+    expect(colorPerfilSistemaDesdeAdicional(dark)).toBe('');
+    const todosCafe = dark.map((a) => ({ ...a, colorAcc: 'CAFÉ' }));
+    expect(colorPerfilSistemaDesdeAdicional(todosCafe)).toBe('CAFÉ');
+  });
+
+  it('ignora adicionales sin color, sin cantidad o de otro tipo', () => {
+    expect(
+      colorPerfilSistemaDesdeAdicional(
+        [{ codInt: 'DARK', cantidad: 1, descuento: 0, ubicacion: 'PPAL', colorAcc: '' }],
+        'PPAL',
+      ),
+    ).toBe('');
+    expect(
+      colorPerfilSistemaDesdeAdicional(
+        [{ codInt: 'DARK', cantidad: 0, descuento: 0, ubicacion: 'PPAL', colorAcc: 'CAFÉ' }],
+        'PPAL',
+      ),
+    ).toBe('');
+    expect(colorPerfilSistemaDesdeAdicional(adicionalesOscuranti, 'PERFIL IZQ')).toBe('');
+  });
+
+  it('el perfil por lado le gana al sistema', () => {
+    const mix = [...adicionalesOscuranti, ...dark];
+    expect(colorPerfilDesdeAdicional('izq', mix, 'DARK_38mm') || colorPerfilSistemaDesdeAdicional(mix, 'JOSEFA')).toBe(
+      'CAFÉ',
+    );
   });
 });

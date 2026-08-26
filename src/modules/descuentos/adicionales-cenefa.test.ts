@@ -8,6 +8,7 @@ import {
   cenefaAdicionalEsDelPano,
   cenefaIncluidaEnElPrecio,
   cenefaOvaladaDesdeAdicional,
+  colorCenefaCuadradaDeclarado,
   cortinaDeLaCenefa,
   derivarAdicionalesCenefaDesdeVentanas,
   esAdicionalCenefaOvalada,
@@ -221,6 +222,30 @@ describe('cenefa cuadrada (verticales/roller)', () => {
       expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 2.737, otros)).toBeNull();
       expect(anchoCenefaCuadradaDeclaradoCm('LIVING', 2.737, undefined)).toBeNull();
       expect(anchoCenefaCuadradaDeclaradoCm('', 2.737, vendida)).toBeNull();
+    });
+  });
+
+  // La cenefa se vende aparte y suele ir en otro color que los accesorios de la
+  // cortina: la etiqueta imprimía el del paño e ignoraba el COLOR ACCESORIOS que
+  // la vendedora escribió en la fila del adicional.
+  describe('colorCenefaCuadradaDeclarado — el color también es el VENDIDO', () => {
+    const vendida = [
+      { codInt: 'CENF C', cantidad: 2.55, descuento: 0.4, ubicacion: 'PPAL', colorAcc: 'CAFÉ' },
+    ];
+
+    it('toma el colorAcc del adicional, con y sin sufijo de paño', () => {
+      expect(colorCenefaCuadradaDeclarado('PPAL', 2.55, vendida)).toBe('CAFÉ');
+      expect(colorCenefaCuadradaDeclarado('PPAL-G1', 2.55, vendida)).toBe('CAFÉ');
+    });
+
+    it('sin adicional que calce, o sin color escrito, devuelve vacío', () => {
+      expect(colorCenefaCuadradaDeclarado('COMEDOR', 2.55, vendida)).toBe('');
+      expect(colorCenefaCuadradaDeclarado('PPAL', 2.55, undefined)).toBe('');
+      expect(
+        colorCenefaCuadradaDeclarado('PPAL', 2.55, [
+          { codInt: 'CENF C', cantidad: 2.55, descuento: 0, ubicacion: 'PPAL' },
+        ]),
+      ).toBe('');
     });
   });
 
