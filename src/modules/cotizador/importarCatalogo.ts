@@ -350,6 +350,68 @@ export function aplicarCatalogo(
  * columna de descuentos sobre esto y lo vuelve a subir. Las cabeceras son las
  * que el importador reconoce.
  */
+/**
+ * Una MUESTRA chica del catálogo para el archivo de ejemplo: un código por
+ * familia, con precio, hasta `max` filas. Se toma del catálogo de verdad a
+ * propósito — así el ejemplo se puede subir tal cual y la app responde «0
+ * cambios», que es la forma de probar la importación sin tocar nada.
+ */
+export function filasEjemplo(
+  catalogo: CatalogoProductos,
+  anchoRollo: Record<string, number> = {},
+  max = 6,
+): Array<Record<string, string | number>> {
+  const todas = filasParaPlantilla(catalogo, anchoRollo);
+  const porFamilia = new Map<string, Record<string, string | number>>();
+  for (const f of todas) {
+    const familia = String(f.COD || '');
+    // Una fila sin familia o sin precio no enseña nada: no se puede crear ni
+    // se le nota el cambio de descuento.
+    if (!familia || !(Number(f['PRECIO DE VENTA']) > 0)) continue;
+    if (!porFamilia.has(familia)) porFamilia.set(familia, f);
+    if (porFamilia.size >= max) break;
+  }
+  return porFamilia.size > 0 ? [...porFamilia.values()] : todas.slice(0, max);
+}
+
+/**
+ * La hoja «Instrucciones» del archivo de ejemplo, en filas de celdas.
+ *
+ * Los nombres de columna van con viñeta a propósito: si alguien borra la hoja
+ * «Productos», el importador busca la primera hoja con una cabecera COD_INT, y
+ * un «COD_INT» pelado acá la convertiría en esa hoja.
+ */
+export const INSTRUCCIONES_IMPORTACION: string[][] = [
+  ['CÓMO IMPORTAR EL CATÁLOGO DE PRODUCTOS'],
+  [],
+  ['Esta planilla es un EJEMPLO. Los códigos de la hoja «Productos» son reales y traen'],
+  ['los valores que el sistema tiene hoy.'],
+  ['Súbela tal como está y la app dirá «0 cambios»: sirve para probar sin miedo.'],
+  ['Cambia un descuento, vuelve a subirla, y vas a ver ese único cambio en el resumen.'],
+  [],
+  ['REGLAS'],
+  ['1', 'La hoja se tiene que llamar «Productos» (también se acepta «DEPURADA»).'],
+  ['2', 'La única columna obligatoria es el código interno. Es la que dice a qué producto le cambias algo.'],
+  ['3', 'Solo se modifica lo que la planilla traiga: si borras la columna del precio, los precios quedan como están.'],
+  ['4', 'El descuento se puede escribir 30 o 0,3. Las dos formas significan 30 %.'],
+  ['5', 'Para CREAR un código nuevo también tiene que venir la familia (BLACKOUT_P, SCREEN_P…). Sin ella el código se ignora y la app avisa cuál quedó fuera.'],
+  ['6', 'Las filas de más o los códigos que no existan no rompen nada: quedan listados aparte.'],
+  ['7', 'Antes de guardar ves el resumen de lo nuevo y lo que cambia, y puedes desmarcar lo que no quieras aplicar.'],
+  ['8', 'Cada importación deja un respaldo, así que siempre se puede volver atrás.'],
+  [],
+  ['LAS COLUMNAS QUE LA APP RECONOCE'],
+  ['Columna', 'Qué es', 'También se acepta escrita así'],
+  ['• COD_INT', 'El código del producto. OBLIGATORIA.', 'COD INT · CODINT'],
+  ['• COD', 'La familia. Obligatoria solo para códigos nuevos.', 'CODIGO · FAMILIA'],
+  ['• PRODUCTO', 'El nombre comercial de la tela.', ''],
+  ['• TIPO', 'PREMIUM, DELUX, STANDARD, BASIC…', ''],
+  ['• DESCRIPCION', 'El diseño o el color.', 'DISEÑO'],
+  ['• PRECIO DE VENTA', 'Precio por metro, en pesos.', 'PRECIO · $/M · VALOR'],
+  ['• DESCUENTO %', 'El descuento: 30 o 0,3.', 'DCTO · % DCTO · DESCUENTO'],
+  ['• ANCHO DE PAÑOS', 'Ancho del rollo en metros.', 'ANCHO ROLLO · ROLLO · ANCHO'],
+  ['• CATEGORIA', 'A o B.', 'GAMA'],
+];
+
 export function filasParaPlantilla(
   catalogo: CatalogoProductos,
   anchoRollo: Record<string, number> = {},

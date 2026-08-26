@@ -6,6 +6,8 @@ import {
   aplicarCatalogo,
   claveCatalogoCanonica,
   filasParaPlantilla,
+  filasEjemplo,
+  INSTRUCCIONES_IMPORTACION,
   leerDescuento,
   normCod,
 } from './importarCatalogo';
@@ -317,5 +319,72 @@ describe('filasParaPlantilla', () => {
     expect(d.cambios).toHaveLength(0);
     expect(d.nuevos).toHaveLength(0);
     expect(d.sinCambio).toBe(1);
+  });
+});
+
+describe('filasEjemplo — el archivo que se entrega para aprender el formato', () => {
+  const prod = (cod: string, precio: number, descuento = 0.25) => ({
+    cod,
+    producto: `ROLLER ${cod}`,
+    tipo: 'PREMIUM',
+    descripcion: 'DISEÑO',
+    precio,
+    descuento,
+  });
+  const CAT: CatalogoProductos = {
+    'BK 68': prod('BLACKOUT_D', 23782),
+    'BK 69': prod('BLACKOUT_D', 24000), // misma familia que BK 68
+    'SC 64': prod('SCREEN_P', 21786),
+    'SC 93': prod('SCREEN_P', 0), // sin precio: no enseña nada
+    'AND': { ...prod('', 70000), tipo: 'ACCESORIO' }, // sin familia
+  };
+
+  it('trae un código por familia y deja fuera lo que no sirve de ejemplo', () => {
+    const filas = filasEjemplo(CAT, {});
+    expect(filas.map((f) => f.COD_INT)).toEqual(['BK 68', 'SC 64']);
+  });
+
+  it('respeta el máximo de filas', () => {
+    expect(filasEjemplo(CAT, {}, 1)).toHaveLength(1);
+  });
+
+  // Si el catálogo no tiene ninguna fila "de ejemplo" igual se entrega algo:
+  // un archivo vacío no le enseña el formato a nadie.
+  it('sin candidatas cae a las primeras filas del catálogo', () => {
+    const soloRaras: CatalogoProductos = { AND: CAT['AND'] };
+    expect(filasEjemplo(soloRaras, {}, 3)).toHaveLength(1);
+  });
+
+  // La promesa que hace el diálogo en pantalla: subir el ejemplo tal cual
+  // no cambia nada. Si esto se rompe, la pantalla está mintiendo.
+  it('subirlo sin editar da cero cambios', () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet(INSTRUCCIONES_IMPORTACION),
+      'Instrucciones',
+    );
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(filasEjemplo(CAT, { 'BK 68': 2.98 })),
+      'Productos',
+    );
+    const d = diffCatalogo(CAT, parsearCatalogoExcel(wb));
+    expect(d.nuevos).toHaveLength(0);
+    expect(d.cambios).toHaveLength(0);
+    expect(d.ignorados).toHaveLength(0);
+    expect(d.sinCambio).toBe(2);
+  });
+
+  // La hoja de instrucciones nombra las columnas; si alguna quedara escrita
+  // como cabecera pelada, el importador podría tomar ESA hoja por la de datos.
+  it('la hoja de instrucciones no se puede confundir con la de datos', () => {
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.aoa_to_sheet(INSTRUCCIONES_IMPORTACION),
+      'Instrucciones',
+    );
+    expect(parsearCatalogoExcel(wb)).toHaveLength(0);
   });
 });

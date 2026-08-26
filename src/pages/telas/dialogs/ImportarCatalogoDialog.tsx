@@ -27,6 +27,8 @@ import {
   diffCatalogo,
   aplicarCatalogo,
   filasParaPlantilla,
+  filasEjemplo,
+  INSTRUCCIONES_IMPORTACION,
   type DiffCatalogo,
   type FilaCatalogo,
 } from '@/modules/cotizador/importarCatalogo';
@@ -101,6 +103,27 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
     toast.success('Plantilla descargada. Edita la columna DESCUENTO % y vuelve a subirla.');
   };
 
+  /**
+   * El archivo de ejemplo: pocas filas y una hoja que explica las reglas. Es
+   * para aprender el formato y para probar — subirlo sin editarlo no cambia
+   * nada, porque los valores son los que el catálogo ya tiene.
+   */
+  const descargarEjemplo = () => {
+    const wb = XLSX.utils.book_new();
+    const instr = XLSX.utils.aoa_to_sheet(INSTRUCCIONES_IMPORTACION);
+    instr['!cols'] = [{ wch: 20 }, { wch: 82 }, { wch: 30 }];
+    // Va primera para que el archivo abra en las instrucciones; el importador
+    // igual busca «Productos» por NOMBRE, así que el orden no lo confunde.
+    XLSX.utils.book_append_sheet(wb, instr, 'Instrucciones');
+    XLSX.utils.book_append_sheet(
+      wb,
+      XLSX.utils.json_to_sheet(filasEjemplo(catalogo, anchoRollo)),
+      'Productos',
+    );
+    XLSX.writeFile(wb, 'ejemplo-importar-catalogo.xlsx');
+    toast.success('Ejemplo descargado. Súbelo tal cual: no cambia nada hasta que edites un valor.');
+  };
+
   const toggle = (set: Set<string>, key: string, setter: (s: Set<string>) => void) => {
     const next = new Set(set);
     if (next.has(key)) next.delete(key);
@@ -157,16 +180,31 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <div className="rounded-lg border border-border bg-secondary/30 p-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs text-muted-foreground">
-                ¿Vas a cambiarle el <strong className="text-foreground">descuento</strong> a varias
-                telas? Baja el catálogo, edita la columna <strong>DESCUENTO %</strong> y vuelve a
-                subir el archivo.
-              </p>
-              <Button variant="outline" size="sm" onClick={descargarPlantilla}>
-                Descargar plantilla
-              </Button>
+          <div className="flex flex-col gap-2">
+            <div className="rounded-lg border border-border bg-secondary/30 p-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-foreground">¿Es la primera vez?</strong> Baja el ejemplo:
+                  son pocas filas y trae una hoja que explica el formato. Súbelo tal cual para
+                  probar —no cambia nada— y después edita un valor para ver cómo se ve el cambio.
+                </p>
+                <Button variant="outline" size="sm" onClick={descargarEjemplo}>
+                  Descargar ejemplo
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-border bg-secondary/30 p-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs text-muted-foreground">
+                  ¿Vas a cambiarle el <strong className="text-foreground">descuento</strong> a
+                  varias telas? Baja el catálogo completo, edita la columna{' '}
+                  <strong>DESCUENTO %</strong> y vuelve a subir el archivo.
+                </p>
+                <Button variant="outline" size="sm" onClick={descargarPlantilla}>
+                  Descargar plantilla
+                </Button>
+              </div>
             </div>
           </div>
 
