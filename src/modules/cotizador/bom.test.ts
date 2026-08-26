@@ -523,6 +523,38 @@ describe('calcularBOM — insumos de instalación', () => {
     expect(cant('DOM34')).toBe(1);
   });
 
+  // Espejo del top-up de `construirInventario`: un adicional que es MATERIAL y no
+  // está en las listas de motores/manillas también tiene que llegar a los
+  // COMPONENTES de Fase 4 (que es lo que alimenta `orden_materiales`).
+  it('panel solar y motor de otro modelo comprados en Fase 1 → salen en el BOM', () => {
+    const catalogo = {
+      'INS 127': { producto: 'PANEL SOLAR', cod: 'ACCESORIO' },
+      'DOM 01': { producto: 'MOTOR (1 POR ROLLER)', cod: 'ACCESORIO' },
+      INSTMOTM: { producto: 'INSTALACION MOTOR', cod: 'INSTALACION' },
+    } as unknown as Parameters<typeof calcularBOM>[6];
+    const bom = calcularBOM(
+      [row({ motorModelo: 'DOM38', motorDomotica: true })],
+      vent('ROL', 'BCO'),
+      false,
+      [
+        { codInt: 'INS 127', cantidad: 1, descuento: 0.1, ubicacion: 'ENTRADA' },
+        { codInt: 'DOM 01', cantidad: 1, descuento: 0.4, ubicacion: 'ENTRADA' },
+        { codInt: 'INSTMOTM', cantidad: 4, descuento: 0.1, ubicacion: 'dorm ppal' },
+      ],
+      undefined,
+      undefined,
+      catalogo,
+    );
+    const item = (cod: string) => bom.find((i) => i.especificacion === cod);
+    expect(item('INS127')?.cantidad).toBe(1);
+    expect(item('INS127')?.descripcion).toBe('PANEL SOLAR');
+    expect(item('DOM01')?.cantidad).toBe(1);
+    // La instalación es mano de obra: nunca entra al BOM.
+    expect(item('INSTMOTM')).toBeUndefined();
+    // Y el motor del paño no se duplica.
+    expect(item('DOM38')?.cantidad).toBe(1);
+  });
+
   it('mecanismo dual: una sola línea "Mecanismo Dual" con la spec del chip [MEC 01]', () => {
     const bom = calcularBOM(
       [row({ dual: true, mecanismo: 'DUAL DERECHO BLANCO [MEC 01]', colorMecanismo: 'BCO' })],

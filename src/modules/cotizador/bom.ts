@@ -18,7 +18,7 @@ import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { calculoVertical, cordonBeeblackDePano } from '@/modules/descuentos/despiece';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
-import type { Pano } from './types';
+import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow } from './tela';
 import { opcionesMecanismoResolucion } from '@/modules/descuentos/reglas-mecanismo';
 import { opcionesTuberiaResolucion } from '@/modules/descuentos/reglas-tuberia';
@@ -31,6 +31,7 @@ import {
   beeblackEsDoble,
   cenefaCuadradaTapasFijas,
   codigoManillaPorColor,
+  faltantesAdicionalesInventario,
   faltantesDomoticaInventario,
   faltantesManillasInventario,
   insumosBeeblackDeCortina,
@@ -68,6 +69,8 @@ export function calcularBOM(
   formulas?: FormulasFamilias,
   /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  /** Catálogo: pone el nombre de un adicional suelto y dice cuál es instalación. */
+  catalogo?: CatalogoProductos,
 ): BomItem[] {
   // Contexto de CÁLCULO: siempre las listas de RESOLUCIÓN, nunca las de UI —
   // un chip o un tubo retirado tiene que seguir resolviendo las OTs viejas.
@@ -336,6 +339,23 @@ export function calcularBOM(
   // paño cuando la ventana tiene varios paños (beeblack doble), así que salen acá.
   for (const falta of faltantesManillasInventario(adicionalesFase0, manillasEmitidas)) {
     add(`MAN|${falta.color}`, 'MANILLA', falta.descripcion, falta.codigo, falta.color, falta.cantidad, 'unid.');
+  }
+  // Y cualquier OTRO adicional que sea material (un PANEL SOLAR, un motor de otro
+  // modelo…): antes solo llegaban los códigos de las dos listas cerradas de
+  // arriba y el resto no aparecía ni acá ni en la hoja de inventario. Va al final
+  // para poder descontar lo ya emitido.
+  const emitidoPorCodigo: Record<string, number> = {};
+  for (const it of acc.values()) {
+    const k = (it.especificacion || '').replace(/\s+/g, '').toUpperCase();
+    if (k) emitidoPorCodigo[k] = (emitidoPorCodigo[k] || 0) + it.cantidad;
+  }
+  for (const falta of faltantesAdicionalesInventario(
+    adicionalesFase0,
+    emitidoPorCodigo,
+    (cod) => catalogo?.[cod]?.producto,
+    (cod) => (catalogo?.[cod]?.cod || '').trim().toUpperCase() === 'INSTALACION',
+  )) {
+    add(`ADIC|${falta.codigo}`, 'OTRO', falta.descripcion, falta.codigo, '', falta.cantidad, 'unid.');
   }
 
   return [...acc.values()].sort((a, b) => {

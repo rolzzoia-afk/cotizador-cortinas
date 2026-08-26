@@ -548,6 +548,66 @@ describe('construirInventario — top-up de motores cobrados (cantidad Fase 1 �
   it('sin adicionales de motor: 1 motor por paño (sin regresión)', () => {
     expect(cant(construirInventario([vMotor]), 'DOM38')).toBe(1);
   });
+
+  // OT #3197: se compraron un PANEL SOLAR y un motor DOM 01 y no salían en la
+  // hoja. Los adicionales solo entraban si su código estaba en las dos listas
+  // cerradas (motores/controles y manillas); el resto se perdía sin aviso.
+  describe('cualquier otro adicional que sea MATERIAL también sale', () => {
+    const catalogo = {
+      'INS 127': { cod: 'ACCESORIO', tipo: 'ACCESORIO', producto: 'PANEL SOLAR', descripcion: 'PANEL + 2 BRAKER + EXTENSOR', precio: 58000, descuento: 0.1 },
+      'DOM 01': { cod: 'ACCESORIO', tipo: 'ACCESORIO', producto: 'MOTOR (1 POR ROLLER)', descripcion: 'DOMÓTICA-INALAMBRICO', precio: 170000, descuento: 0.4 },
+      INSTDARK: { cod: 'INSTALACION', tipo: 'INSTALACION', producto: 'INSTALACION DARK ROLLER', descripcion: '', precio: 50000, descuento: 0 },
+      DARK: { cod: 'ACCESORIO', tipo: 'ACCESORIO', producto: 'SISTEMA DARK ROLLER', descripcion: '', precio: 0, descuento: 0.25 },
+      'CENF C': { cod: 'ACCESORIO', tipo: 'ACCESORIO', producto: 'CENEFA CUADRADA', descripcion: '', precio: 40000, descuento: 0.4 },
+    } as unknown as Parameters<typeof construirInventario>[1];
+
+    const adic = [
+      { codInt: 'INS 127', cantidad: 1, descuento: 0.1, ubicacion: 'ENTRADA' },
+      { codInt: 'DOM 01', cantidad: 1, descuento: 0.4, ubicacion: 'ENTRADA' },
+      { codInt: 'INSTDARK', cantidad: 1, descuento: 0, ubicacion: 'dorm ppal' },
+      { codInt: 'DARK', cantidad: 1, descuento: 0.25, ubicacion: 'PPAL', colorAcc: 'CAFÉ' },
+      { codInt: 'CENF C', cantidad: 2.55, descuento: 0.4, ubicacion: 'PPAL', colorAcc: 'CAFÉ' },
+    ];
+
+    it('el panel solar y el motor de otro modelo aparecen con su nombre', () => {
+      const d = construirInventario([vMotor], catalogo, undefined, [], false, adic);
+      expect(cant(d, 'INS127')).toBe(1);
+      expect(cant(d, 'DOM01')).toBe(1);
+      expect(d.insumos.find((i) => i.codigo === 'INS127')?.descripcion).toBe('[INS127] PANEL SOLAR');
+      expect(d.insumos.find((i) => i.codigo === 'DOM01')?.descripcion).toBe('[DOM01] MOTOR (1 POR ROLLER)');
+    });
+
+    it('la instalación NO es material de bodega', () => {
+      const d = construirInventario([vMotor], catalogo, undefined, [], false, adic);
+      expect(cant(d, 'INSTDARK')).toBe(0);
+    });
+
+    it('los perfiles y las cenefas tampoco: se cortan, no se retiran de un rack', () => {
+      const d = construirInventario([vMotor], catalogo, undefined, [], false, adic);
+      expect(cant(d, 'DARK')).toBe(0);
+      // Ojo: la `cantidad` de una cenefa es el ANCHO en metros, no una cuenta.
+      expect(cant(d, 'CENFC')).toBe(0);
+    });
+
+    it('no duplica un código que ya salió por otro camino', () => {
+      const conMotor = [
+        { codInt: 'DOM 38', cantidad: 3, descuento: 0, ubicacion: 'LIVING' },
+        { codInt: 'HER 47', cantidad: 1, descuento: 0, ubicacion: 'LIVING' },
+      ];
+      const d = construirInventario([vMotor], catalogo, undefined, [], false, conMotor);
+      expect(cant(d, 'DOM38')).toBe(3);
+      expect(d.insumos.filter((i) => i.codigo === 'DOM38')).toHaveLength(1);
+      expect(d.insumos.filter((i) => i.codigo === 'HER47')).toHaveLength(1);
+    });
+
+    it('sin catálogo la fila sale igual, rotulada con su código', () => {
+      const d = construirInventario([vMotor], {}, undefined, [], false, [
+        { codInt: 'INS 127', cantidad: 2, descuento: 0, ubicacion: 'ENTRADA' },
+      ]);
+      expect(cant(d, 'INS127')).toBe(2);
+      expect(d.insumos.find((i) => i.codigo === 'INS127')?.descripcion).toBe('[INS127] INS 127');
+    });
+  });
 });
 
 describe('construirInventario — E78 + cenefa ovalada → tapas (kit ovalada) + pivotes (kit 45) por color', () => {
