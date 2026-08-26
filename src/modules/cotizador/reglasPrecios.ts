@@ -241,6 +241,15 @@ export function codigosInstalacionAutomatica(
   return out;
 }
 
+/**
+ * El código con el que la planilla manual escribe la instalación de las
+ * VERTICALES. NO se filtra como la de la roller: no cobra nada —los $40.000
+ * ya van dentro del precio de cada cortina— y la vendedora la usa como una
+ * línea más, con su ubicación. Cuando la cotización la trae escrita, la fila
+ * informativa que arma la app se calla (ver `incluidasVisibles`).
+ */
+export const COD_INSTALACION_VERTICAL = 'INST-VERT';
+
 export type ReglasPrecios = {
   /** VALOR MAXIMO por código de insumo (la hoja Insumos del Excel). */
   insumos: Record<string, InsumoPrecio>;
