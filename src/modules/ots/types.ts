@@ -64,6 +64,13 @@ export type AdicionalFase0Persistido = {
    * hayan cambiado la ubicación — si no, la cenefa se cobraría dos veces.
    */
   ubicacionDerivada?: string;
+  /**
+   * TIPO escrito a mano para esta línea (ej. «ACCESORIO CENEFA OVALADA») en vez
+   * del que trae el catálogo. Es SOLO el rótulo que se lee en la grilla y en el
+   * PDF del cliente: el precio lo sigue decidiendo el catálogo por `codInt`, y
+   * el motor ni siquiera recibe este campo.
+   */
+  tipo?: string;
 };
 
 export type DatosGenerales = {
@@ -108,6 +115,12 @@ export type DatosGenerales = {
    * `null`/ausente = manda la regla.
    */
   instalacionDescuentoManual?: number | null;
+  /**
+   * TIPO escrito a mano para la fila de INSTALACIÓN. Solo cambia el rótulo que
+   * se lee en la grilla y en el PDF: la cantidad y el cobro los sigue
+   * calculando el motor.
+   */
+  instalacionTipo?: string;
   /** Cotización sin instalación (el cliente retira / solo cortina). */
   sinInstalacion?: boolean;
   /** Envío de la cotización: gratis o con cobro en destino (lo paga el cliente al courier). */

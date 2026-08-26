@@ -90,6 +90,17 @@ import {
   filtrarDerivadosPorCupoManual,
   tipoCenefaDesdeAdicional,
 } from '@/modules/descuentos/adicionales-cenefa';
+import {
+  adicionalesFromPersist,
+  adicionalesToPersist,
+  incluidasVisibles,
+  instalacionTipoFromPersist,
+  instalacionTipoParaGuardar,
+  nuevoAdicional,
+  rotuloManual,
+  tipoDeAdicional,
+  type AdicionalUI,
+} from '@/modules/cotizador/adicionalesFase0';
 import { PanelFamilia, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
 import FilaTotal from '@/components/cotizador/FilaTotal';
 import { FILAS_TOTALES, NOTA_IVA } from '@/modules/cotizador/filasTotales';
@@ -190,66 +201,6 @@ const nuevaFila = (): FilaUI => ({
   alto: 0,
   descuento: 0,
 });
-
-type AdicionalUI = {
-  id: string;
-  codInt: string;
-  cantidad: number;
-  descuento: number;
-  ubicacion: string;
-  colorAcc: string;
-  /** Cenefa ovalada con tira (solo derivados de paño). */
-  conTira?: boolean;
-  /**
-   * 'pano' = derivado de una cenefa de paño: se regenera en cada apertura.
-   * Editarlo a mano lo pasa a 'manual' y deja de seguir al paño.
-   */
-  origen?: 'manual' | 'pano';
-  /** La ubicación que tenía cuando era derivado, para no duplicar la cenefa. */
-  ubicacionDerivada?: string;
-};
-const nuevoAdicional = (): AdicionalUI => ({
-  id: crypto.randomUUID(),
-  codInt: '',
-  cantidad: 1,
-  descuento: 0,
-  ubicacion: '',
-  colorAcc: '',
-});
-
-function adicionalesToPersist(list: AdicionalUI[]): AdicionalFase0Persistido[] {
-  return list.map(
-    ({ id, codInt, cantidad, descuento, ubicacion, colorAcc, conTira, origen, ubicacionDerivada }) => ({
-      id,
-      codInt: codInt.trim(),
-      cantidad,
-      descuento,
-      ubicacion,
-      colorAcc,
-      conTira,
-      origen,
-      ubicacionDerivada,
-    }),
-  );
-}
-
-function adicionalesFromPersist(raw: unknown): AdicionalUI[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.map((a) => {
-    const row = a as Partial<AdicionalFase0Persistido>;
-    return {
-      id: row.id || crypto.randomUUID(),
-      codInt: row.codInt || '',
-      cantidad: row.cantidad ?? 1,
-      descuento: row.descuento ?? 0,
-      ubicacion: row.ubicacion || '',
-      colorAcc: row.colorAcc || '',
-      conTira: row.conTira,
-      origen: row.origen,
-      ubicacionDerivada: row.ubicacionDerivada,
-    };
-  });
-}
 
 const DIRECCIONES = [
   'CAD [IZQUIERDA]',
@@ -401,6 +352,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // % de descuento de la instalación puesto a mano en su fila de ADICIONALES
   // (0–100). null = manda la regla automática (gratis por cantidad / región).
   const [instalDctManual, setInstalDctManual] = useState<number | null>(null);
+  // El TIPO escrito a mano de la fila de INSTALACIÓN. La fila la arma el motor,
+  // así que no se edita como un adicional cualquiera: solo su rótulo, sin
+  // tocar la cantidad ni lo que se cobra.
+  const [instalTipo, setInstalTipo] = useState('');
   // Con qué se paga la tarjeta en ESTA cotización. null = el proveedor global
   // de Admin. Cambia el recargo, los términos, el sello y la banda del pie:
   // las cuotas sin interés son de Mercadopago, con Flow las pone el banco.
@@ -442,6 +397,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       region?: boolean;
       instalacionDescuentoRegion?: number;
       instalacionDescuentoManual?: number | null;
+      instalacionTipo?: string;
       sinInstalacion?: boolean;
       envio?: 'gratis' | 'cobro_destino';
       usarTuboE78?: boolean;
@@ -524,6 +480,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         ? Math.round(dg.instalacionDescuentoManual * 100)
         : null,
     );
+    setInstalTipo(instalacionTipoFromPersist(dg.instalacionTipo));
     setProvTarjetaOT(
       dg.proveedorTarjeta === 'flow' || dg.proveedorTarjeta === 'mercadopago'
         ? dg.proveedorTarjeta
@@ -752,6 +709,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
           instalacionDescuentoManual:
             instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
+          instalacionTipo: instalacionTipoParaGuardar(instalTipo),
           sinInstalacion,
           envio,
           usarTuboE78,
@@ -829,6 +787,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
           instalacionDescuentoManual:
             instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
+          instalacionTipo: instalacionTipoParaGuardar(instalTipo),
           sinInstalacion,
           envio,
           usarTuboE78,
@@ -966,6 +925,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
     );
   }, [filas, adicionales, catalogo, anchoRollo, paramsEff, parametros, region, sinInstalacion, reglasPrecios, formulas, reglas.tipos, instalDctManual]);
+
+  // Lo que la app escribiría sola en la fila de INSTALACIÓN. Se usa de
+  // placeholder mientras nadie escriba nada, y es lo que se imprime en ese
+  // caso: así lo que se ve en gris es exactamente lo que va a salir.
+  const instalProductoAuto = `INSTALACION ${
+    resultado.instalacion.partes.map((p) => p.sistema).join(' + ') || 'ROLLER'
+  }`;
+  const instalDescripcionAuto = textoInstalacion(
+    resultado.instalacion,
+    parametros.instalacionGratisMinCortinas,
+  );
 
   /** La familia que está mirando el desglose, si el diálogo está abierto. */
   // Se busca por la CLAVE del panel (`cod` o `cod|B`): la A y la B de una misma
@@ -1266,7 +1236,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       const nuevosAdic: AdicionalUI[] = [];
       const erroresAdic = new Map<string, Set<'codInt'>>();
       for (const a of adicCrudos) {
-        // La instalación base es automática (Fase 2): no se importa como adicional.
+        // La instalación base es automática (Fase 2): no se importa como
+        // adicional, o se cobraría dos veces. La de las VERTICALES (INST-VERT)
+        // sí entra: no cobra nada —va dentro del precio de cada cortina— y la
+        // vendedora la usa como una línea más (le escribe la ubicación). Su
+        // gemela informativa se calla sola, ver `incluidasVisibles`.
         if (esInstalacionBase(a.codInt)) continue;
         const id = crypto.randomUUID();
         // "DOM42" de la planilla de insumos → "DOM 42" del catálogo.
@@ -1337,7 +1311,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // volver a abrir la OT se regenera con el ancho del paño y se come lo
     // escrito. El soft light necesita justamente eso — su cenefa se cobra por
     // el ancho de TELA, que no es el del paño y lo escribe la vendedora.
-    const aMano = ['cantidad', 'ubicacion', 'colorAcc'].some((k) => k in conDct);
+    // El TIPO entra en la lista por el mismo motivo: una línea derivada no se
+    // guarda, se rearma del paño en cada apertura, así que sin promoverla el
+    // rótulo escrito se perdería al recargar.
+    const aMano = ['cantidad', 'ubicacion', 'colorAcc', 'tipo'].some((k) => k in conDct);
     setAdicionales((prev) =>
       prev.map((a) =>
         a.id === id
@@ -1493,7 +1470,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             cantidad: r.cantidad,
             producto: r.producto,
             codInt: a.codInt.trim(),
-            tipo: prod?.tipo ?? '',
+            tipo: tipoDeAdicional(a.tipo, prod?.tipo),
             descripcion: r.descripcion,
             ubicacion: a.ubicacion,
             colorAcc: a.colorAcc,
@@ -1510,9 +1487,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         adicionalesPdf.push({
           cod: 'INSTALACION',
           cantidad: inst.cantidad,
-          producto: `INSTALACION ${inst.partes.map((p) => p.sistema).join(' + ') || 'ROLLER'}`.toUpperCase(),
+          producto: instalProductoAuto.toUpperCase(),
           codInt: 'INST',
-          tipo: 'INSTALACION',
+          // Lo único de esta fila que se escribe a mano.
+          tipo: rotuloManual(instalTipo, 'INSTALACION'),
           descripcion: inst.gratis
             ? 'GRATIS'
             : textoInstalacion(inst, parametros.instalacionGratisMinCortinas),
@@ -1527,7 +1505,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // La instalación de las verticales ya está dentro del precio de cada
       // cortina: va como fila al 100 % para que el cliente vea que se instalan
       // (es la fila INST-VERT de la planilla, con TOTAL en $ -).
-      for (const p of inst.incluidas) {
+      for (const p of incluidasVisibles(inst.incluidas, adicionales)) {
         adicionalesPdf.push({
           cod: 'INSTALACION',
           cantidad: p.cantidad,
@@ -2421,7 +2399,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                           erroresImportAdic.has(a.id) && 'border-destructive bg-destructive/10 text-destructive',
                         )} />
                     </Td>
-                    <Td className="text-muted-foreground">{prod?.tipo ?? '—'}</Td>
+                    {/* El TIPO se puede escribir: el del catálogo dice
+                        «ACCESORIO» a secas y no distingue una cenefa de un
+                        motor, y el cliente lee esa columna en el PDF. Es solo
+                        el rótulo — el precio lo sigue mandando el COD_INT. */}
+                    <Td>
+                      <CellInput
+                        value={a.tipo ?? ''}
+                        onChange={(e) => setAdic(a.id, { tipo: e.target.value })}
+                        placeholder={prod?.tipo || 'TIPO'}
+                        title="Cómo se lee el tipo en la cotización y en el PDF (ej. ACCESORIO CENEFA OVALADA). Vacío = el del catálogo. No cambia el precio."
+                        className="w-36" />
+                    </Td>
                     <Td className="text-muted-foreground">{prod?.descripcion ?? '—'}</Td>
                     {/* INVERTIDA y CATEGORÍA: un adicional no tiene ninguna de
                         las dos, pero las celdas van igual o la fila entera se
@@ -2475,15 +2464,22 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       <Td className="text-center text-muted-foreground">—</Td>
                     </>
                   )}
+                  {/* Todo lo demás lo arma el motor: la cantidad y la plata
+                      salen de cuántas cortinas se instalan, del mínimo de 4 y
+                      del % de región, y el texto explica esa cuenta. Lo único
+                      que se escribe es el TIPO (y el DCT %, más abajo). */}
                   <Td className="text-right">{resultado.instalacion.cantidad}</Td>
-                  <Td className="text-muted-foreground">
-                    INSTALACION {resultado.instalacion.partes.map((p) => p.sistema).join(' + ') || 'ROLLER'}
-                  </Td>
+                  <Td className="text-muted-foreground">{instalProductoAuto}</Td>
                   <Td className="text-muted-foreground">INST</Td>
-                  <Td className="text-muted-foreground">INSTALACION</Td>
-                  <Td className="text-muted-foreground">
-                    {textoInstalacion(resultado.instalacion, parametros.instalacionGratisMinCortinas)}
+                  <Td>
+                    <CellInput
+                      value={instalTipo}
+                      onChange={(e) => setInstalTipo(e.target.value)}
+                      placeholder="INSTALACION"
+                      title="Cómo se lee el tipo de esta instalación en la cotización y en el PDF. Vacío = INSTALACION. No cambia el precio."
+                      className="w-36" />
                   </Td>
+                  <Td className="text-muted-foreground">{instalDescripcionAuto}</Td>
                   {/* INVERTIDA · CATEGORÍA · UBIC. · COLOR ACC */}
                   <Td className="text-center text-muted-foreground">—</Td>
                   <Td className="text-center text-muted-foreground">—</Td>
@@ -2532,7 +2528,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   pero sin esta fila la cotización no mostraba en ninguna parte
                   que se están cobrando $40.000 por cortina. Es la fila
                   INST-VERT al 100 % de descuento de la planilla. */}
-              {resultado.instalacion.incluidas.map((p) => (
+              {incluidasVisibles(resultado.instalacion.incluidas, adicionales).map((p) => (
                 <tr key={`incl-${p.sistema}`} className="border-t border-border align-middle">
                   <Td className="text-muted-foreground">INSTALACION</Td>
                   {showCols && (

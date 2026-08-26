@@ -18,6 +18,9 @@ import {
   sistemaDeReceta,
   sistemaInvertida,
   grupoDelInsumo,
+  codigosInstalacionAutomatica,
+  COD_INSTALACION_ROLLER,
+  COD_INSTALACION_VERTICAL,
   insumosParaFamilia,
   lamasPorPasada,
   explicarCantidad,
@@ -668,5 +671,31 @@ describe('sistema invertida', () => {
     delete r.sistemas[SISTEMA_INVERTIDA_KEY].insumos['PUB 01'];
     const { avisos } = validarReglasPrecios(r);
     expect(avisos.some((a) => a.includes('Invertida') && a.includes('PUB 01'))).toBe(true);
+  });
+});
+
+describe('códigos de instalación — qué se filtra y dónde', () => {
+  const sistemas = REGLAS_PRECIOS_DEFAULT.sistemas;
+
+  it('la automática trae la roller y la que declare cada sistema', () => {
+    const auto = codigosInstalacionAutomatica(sistemas);
+    expect(auto.has(COD_INSTALACION_ROLLER)).toBe(true);
+    for (const s of Object.values(sistemas)) {
+      const c = (s.codigoInstalacion || '').trim().toUpperCase();
+      if (c) expect(auto.has(c), c).toBe(true);
+    }
+  });
+
+  // La de las verticales NO se filtra: no cobra nada y la vendedora la usa
+  // como una línea más. Lo que evita el duplicado es que la fila informativa
+  // se calle (ver `incluidasVisibles` en adicionalesFase0).
+  it('la vertical no se filtra: es una línea que se escribe a mano', () => {
+    expect(codigosInstalacionAutomatica(sistemas).has(COD_INSTALACION_VERTICAL)).toBe(false);
+  });
+
+  // Las instalaciones de motor, soft o cenefa se siguen cobrando a mano.
+  it('las instalaciones manuales no se filtran', () => {
+    const auto = codigosInstalacionAutomatica(sistemas);
+    for (const c of ['INSTMOT', 'INSTSOFT', 'INSTCENF']) expect(auto.has(c), c).toBe(false);
   });
 });
