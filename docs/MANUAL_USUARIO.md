@@ -126,6 +126,7 @@ El video, las fotos y la firma se guardan en un almacén privado de la empresa: 
 3. **Historial de Corte**: muestra cada plan con sus líneas. Ahí se registran **errores de corte** (botón ⚠ Error, con motivo y reemplazo) y se marca un sobrante como **No existe** si físicamente no está. El Excel se puede re-descargar con el correlativo.
 4. **Inventario / Colmena**: estado de los tubos por posición. El conteo físico se hace en **Conteo de inventario** y el admin puede resetear con **Cargar inventario base desde Excel**.
 5. **Bodega y Camionetas** (bodeguero): despacho y recepción de materiales con QR, carga/devolución/intercambio de insumos por camioneta.
+6. **El color de los perfiles y de la cenefa sale de su propia fila de ADICIONALES**, no del COLOR ACCESORIOS de la cortina. Si en Fase 1 el **SISTEMA DARK ROLLER** (o el PERFIL ADICIONAL) de esa ubicación va en CAFÉ, la columna **COLOR PERFIL** de la hoja de estructura y las etiquetas de zócalo, separador y cenefa cuadrada salen en CAFÉ, aunque el mecanismo de la cortina sea NEGRO. Lo mismo con la **CENEFA CUADRADA**: manda el color escrito en su fila —igual que el ancho, que ya se tomaba de ahí—. Manda siempre lo más específico: un perfil comprado por lado (P-IZQ / P-DER / P-INF) le gana al del sistema, y el del sistema le gana al de la cortina. Un adicional de sistema **sin ubicación** vale para toda la OT; con ubicación, solo para las cortinas de esa ubicación. Si esa fila queda sin color, todo sigue como antes: se usa el de los accesorios de la cortina.
 
 ## Panel Admin (solo admin)
 

@@ -81,7 +81,10 @@ import {
   codigoPerfilBeeblack,
   codigoSeparadorPerfil,
 } from '@/modules/descuentos/codigos-estructura';
-import { colorPerfilDesdeAdicional } from '@/modules/descuentos/adicionales-perfil';
+import {
+  colorPerfilDesdeAdicional,
+  colorPerfilSistemaDesdeAdicional,
+} from '@/modules/descuentos/adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
   CIERRES_BEEBLACK,
@@ -875,7 +878,9 @@ export function PanoEditor({
               const overrideField =
                 superficie === 'piso' ? L.pisoCm : superficie === 'marco' ? L.marcoCm : L.muroCm;
               const override = superficie ? (pano[overrideField] as number | undefined) : undefined;
-              const colorPerfil = colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria);
+              const colorPerfil =
+                colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria) ||
+                colorPerfilSistemaDesdeAdicional(adicionalesFase0);
               // Elegir superficie: marca una (muro/piso/marco) y limpia las otras + sus
               // overrides; activa el perfil. "Marco" solo se ofrece en INTERNO. Un
               // LATERAL a piso apaga además el perfil base (llega hasta el suelo).
@@ -1038,7 +1043,9 @@ export function PanoEditor({
               const override = pano[L.sepCm] as number | undefined;
               const pendiente = !corte || corte.pendienteMedida;
               const medida = corte && !corte.pendienteMedida ? corte.medidaCm : 0;
-              const colorPerfil = colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria);
+              const colorPerfil =
+                colorPerfilDesdeAdicional(L.tipoAdic, adicionalesFase0, categoria) ||
+                colorPerfilSistemaDesdeAdicional(adicionalesFase0);
               const codigoSep = codigoSeparadorPerfil(colorPerfil);
               const sepLabel = L.label.replace('Perfil', 'Separador');
               return (

@@ -20,6 +20,12 @@ const CODIGOS_PERFIL_IZQ = new Set(['P-IZQ', 'SOFTLIZQ', 'P IZQ']);
 const CODIGOS_PERFIL_DER = new Set(['P-DER', 'SOFTLDER', 'P DEF']);
 const CODIGOS_PERFIL_INF = new Set(['P-INF', 'P INF']);
 
+// Adicionales que cubren TODOS los perfiles de una cortina en vez de un lado:
+// «SISTEMA DARK ROLLER» (DARK) y «PERFIL ADICIONAL» (P-ADI). Se venden por
+// VENTANA —una fila por ubicación, cada una con su color— así que no se pueden
+// resolver por codInt como los P-IZQ/P-DER/P-INF: hay que calzar la UBIC.
+const CODIGOS_PERFIL_SISTEMA = new Set(['DARK', 'P-ADI', 'P ADI']);
+
 const UBIC_PERFIL_IZQ = new Set(['PERFIL IZQ']);
 const UBIC_PERFIL_DER = new Set(['PERFIL DEF', 'PERFIL DER', 'PERFIL DERECHO']);
 const UBIC_PERFIL_INF = new Set(['PERFIL INF', 'PERFIL INFERIOR']);
@@ -103,6 +109,59 @@ export function colorPerfilDesdeAdicional(
 ): string {
   const adic = buscarAdicionalPerfil(tipo, adicionales, categoria, tipos);
   return (adic?.colorAcc || '').trim();
+}
+
+export function esAdicionalPerfilSistema(codInt: string): boolean {
+  return CODIGOS_PERFIL_SISTEMA.has(normalizarCodInt(codInt));
+}
+
+/**
+ * Color de los perfiles declarado en un adicional de SISTEMA (DARK / P-ADI)
+ * para la fila de `ubicFila`.
+ *
+ * La UBIC. de la fila puede traer sufijo de paño (" P2" en el optimizador,
+ * "-G2" en el Excel) y la del adicional suele ser la general, así que se acepta
+ * igual, misma base o prefijo — mismo criterio que `anchoCenefaCuadradaDeclaradoCm`.
+ * Un adicional SIN ubicación vale para toda la OT, pero pierde contra cualquiera
+ * que sí calce.
+ *
+ * Sin ubicación en la fila (la vista de Fase 2 no la conoce) solo responde si
+ * TODOS los adicionales de sistema traen el mismo color: con dos colores
+ * distintos y nada que los desempate es mejor no contestar que contestar mal.
+ */
+export function colorPerfilSistemaDesdeAdicional(
+  adicionales: AdicionalFase0Persistido[] | undefined,
+  ubicFila?: string,
+): string {
+  if (!adicionales?.length) return '';
+  const candidatos = adicionales.filter(
+    (a) =>
+      !!a.codInt &&
+      a.cantidad > 0 &&
+      esAdicionalPerfilSistema(a.codInt) &&
+      !!(a.colorAcc || '').trim(),
+  );
+  if (!candidatos.length) return '';
+
+  const key = normalizarUbicacion(ubicFila || '');
+  const base = key.replace(/(?:\s+P|-G)\d+$/, '');
+  let mejor: { rango: number; color: string } | null = null;
+  for (const a of candidatos) {
+    const ubic = normalizarUbicacion(a.ubicacion || '');
+    let rango: number;
+    if (!ubic) rango = 3;
+    else if (!key) continue;
+    else if (ubic === key) rango = 0;
+    else if (base && ubic === base) rango = 1;
+    else if (base && (ubic.startsWith(base) || base.startsWith(ubic))) rango = 2;
+    else continue;
+    if (!mejor || rango < mejor.rango) mejor = { rango, color: (a.colorAcc as string).trim() };
+  }
+  if (mejor) return mejor.color;
+
+  if (key) return '';
+  const colores = new Set(candidatos.map((a) => (a.colorAcc as string).trim().toUpperCase()));
+  return colores.size === 1 ? (candidatos[0].colorAcc as string).trim() : '';
 }
 
 /**

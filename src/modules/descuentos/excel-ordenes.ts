@@ -28,7 +28,7 @@ import {
   ubicPanoVentana,
 } from './adicionales-cenefa';
 import { colorAccesoriosDePano } from './chips';
-import { colorPerfilFilaExcel } from './adicionales-perfil';
+import { colorPerfilFilaExcel, colorPerfilSistemaDesdeAdicional } from './adicionales-perfil';
 import { colorPesoInfOscuridadExcel } from './peso-oscuridad';
 import { esCategoriaPletina, esCategoriaVertical } from './reglas-mecanismo';
 import {
@@ -450,11 +450,20 @@ export function generarOrdenesOptimizador(
         // PERFIL para que el optimizador le asigne E50/E49/E52, aunque los laterales
         // estén pendientes: habilita la búsqueda por los tres lados (izq → der → inf).
         const perfilSup = celdaConMedida(fila[COLUMNA_PERFIL_SUPERIOR]);
-        const colorPerfil = colorPerfilFilaExcel(adicionalesFase0, v.categoria, {
+        const perfilesActivos = {
           izq: celdaConMedida(fila['PERFIL (IZQ) INT']) || celdaConMedida(fila['SEPARADOR (IZQ)']) || perfilSup,
           der: celdaConMedida(fila['PERFIL (DER) INT']) || celdaConMedida(fila['SEPARADOR (DER)']) || perfilSup,
           inf: celdaConMedida(fila['PERFIL BASE']) || celdaConMedida(fila['SEPARADOR BASE']) || perfilSup,
-        });
+        };
+        // El DARK no se compra por lado: su adicional es UNO por ventana
+        // («SISTEMA DARK ROLLER», con su color), así que cuando no hay un
+        // P-IZQ/P-DER/P-INF que mande, el color sale de ahí. Sin ninguno de los
+        // dos la celda queda vacía y el taller usa COLOR ACCESORIOS, como antes.
+        const colorPerfil =
+          colorPerfilFilaExcel(adicionalesFase0, v.categoria, perfilesActivos) ||
+          (perfilesActivos.izq || perfilesActivos.der || perfilesActivos.inf
+            ? colorPerfilSistemaDesdeAdicional(adicionalesFase0, ubic)
+            : '');
         if (colorPerfil) fila['COLOR PERFIL'] = colorPerfil;
         }
       }
