@@ -116,6 +116,21 @@ export function esAdicionalPerfilSistema(codInt: string): boolean {
 }
 
 /**
+ * ¿El adicional es un perfil, por lado o de sistema? Los perfiles se CORTAN de
+ * la barra: salen en la hoja de estructura con su medida, no como una pieza que
+ * la bodega retira de un rack.
+ */
+export function esAdicionalPerfil(codInt: string): boolean {
+  const c = normalizarCodInt(codInt);
+  return (
+    CODIGOS_PERFIL_IZQ.has(c) ||
+    CODIGOS_PERFIL_DER.has(c) ||
+    CODIGOS_PERFIL_INF.has(c) ||
+    CODIGOS_PERFIL_SISTEMA.has(c)
+  );
+}
+
+/**
  * Color de los perfiles declarado en un adicional de SISTEMA (DARK / P-ADI)
  * para la fila de `ubicFila`.
  *

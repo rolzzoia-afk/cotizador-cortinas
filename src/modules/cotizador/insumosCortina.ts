@@ -17,6 +17,8 @@ import {
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
+import { esAdicionalCenefa } from '@/modules/descuentos/adicionales-cenefa';
+import { esAdicionalPerfil } from '@/modules/descuentos/adicionales-perfil';
 import { sistemasDeCategoria } from '@/modules/descuentos/tipos';
 import {
   COLORES_BUILTIN,
@@ -1069,6 +1071,64 @@ export function faltantesManillasInventario(
     if (faltan > 0) {
       out.push({ codigo: cod, descripcion: MANILLAS[cod].nombre, color: MANILLAS[cod].color, cantidad: faltan });
     }
+  }
+  return out;
+}
+
+/**
+ * Adicionales comprados en Fase 1 que son MATERIAL y no salen por ningún otro
+ * camino de la hoja.
+ *
+ * Hasta el 2026-08-26 un adicional solo llegaba al inventario si su código
+ * pertenecía a una de dos listas cerradas: motores/controles/domótica
+ * (`faltantesDomoticaInventario`) o manillas (`faltantesManillasInventario`).
+ * Cualquier otra cosa comprada —un PANEL SOLAR `INS 127`, un motor de otro
+ * modelo `DOM 01`— desaparecía en silencio y la bodega nunca lo entregaba.
+ *
+ * Acá entra todo lo demás, salvo dos clases que a propósito NO son material de
+ * bodega:
+ *  · **La instalación** (`cod: INSTALACION` en el catálogo, o codInt `INST…`):
+ *    es mano de obra, no una pieza.
+ *  · **Perfiles y cenefas**: se CORTAN de la barra y salen en la hoja de
+ *    estructura con su medida. Además la `cantidad` de una cenefa es el ANCHO
+ *    en metros, no una cuenta de piezas.
+ *
+ * Se descuenta lo ya emitido igual que los otros dos top-ups, así que un código
+ * que ya salió por los paños o por las listas de arriba no se repite.
+ *
+ * @param nombreDeCodigo resuelve el nombre contra el catálogo (el adicional
+ *   guardado solo tiene el código). Sin nombre, la fila sale con el código.
+ */
+export function faltantesAdicionalesInventario(
+  adicionales: AdicionalFase0Persistido[] | undefined,
+  emitidosPorCodigo: Record<string, number>,
+  nombreDeCodigo?: (codInt: string) => string | undefined,
+  esInstalacion?: (codInt: string) => boolean,
+): InsumoCortina[] {
+  const out: InsumoCortina[] = [];
+  if (!adicionales?.length) return out;
+  const cobrado: Record<string, { cant: number; codInt: string }> = {};
+  for (const a of adicionales) {
+    const codInt = (a.codInt || '').trim();
+    const cod = codInt.replace(/\s+/g, '').toUpperCase();
+    const cant = Math.round(Number(a.cantidad) || 0);
+    if (!cod || cant <= 0) continue;
+    if (cod.startsWith('INST') || esInstalacion?.(codInt)) continue;
+    if (esAdicionalPerfil(codInt) || esAdicionalCenefa(codInt)) continue;
+    const prev = cobrado[cod];
+    if (prev) prev.cant += cant;
+    else cobrado[cod] = { cant, codInt };
+  }
+  for (const cod of Object.keys(cobrado)) {
+    const { cant, codInt } = cobrado[cod];
+    const faltan = cant - (emitidosPorCodigo[cod] || 0);
+    if (faltan <= 0) continue;
+    out.push({
+      codigo: cod,
+      descripcion: nombreDeCodigo?.(codInt)?.trim() || codInt,
+      color: '',
+      cantidad: faltan,
+    });
   }
   return out;
 }

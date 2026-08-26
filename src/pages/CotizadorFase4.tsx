@@ -95,6 +95,7 @@ export function CotizadorFase4() {
             ot.datosGenerales?.adicionalesFase0,
             formulas,
             reglas,
+            catalogo,
           )
         : [],
     [
@@ -103,6 +104,7 @@ export function CotizadorFase4() {
       ot?.datosGenerales?.usarTuboE78,
       ot?.datosGenerales?.adicionalesFase0,
       formulas,
+      catalogo,
     ],
   );
 

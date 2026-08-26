@@ -81,6 +81,7 @@ import {
   esCodigoMotor,
   cenefaCuadradaTapasFijas,
   beeblackEsDoble,
+  faltantesAdicionalesInventario,
   faltantesDomoticaInventario,
   faltantesManillasInventario,
   insumosBeeblackDeCortina,
@@ -502,6 +503,29 @@ export function consolidarInsumos(
   }
   for (const m of manillas) {
     out.push({ id: ++id, codigo: m.codigo, descripcion: m.descripcion, cantidad: m.cantidad, grupo: 'INSTALACION' });
+  }
+  // Último top-up: cualquier OTRO adicional comprado en Fase 1 que sea material
+  // y no haya salido por los paños ni por los dos top-ups de arriba (un PANEL
+  // SOLAR, un motor de otro modelo…). Antes solo llegaban los códigos de esas
+  // dos listas cerradas y el resto se perdía sin aviso. Va después de todo para
+  // poder descontar lo ya emitido.
+  // OJO: se cuenta sobre `manillas` YA con su top-up aplicado, no sobre
+  // `manillasEmitidas` (que es solo lo que bajó de los paños): con el mapa viejo
+  // una manilla comprada en Fase 1 salía dos veces.
+  const emitidoPorCodigo: Record<string, number> = {};
+  const sumarEmitido = (codigo: string | undefined, cantidad: number) => {
+    const k = (codigo || '').replace(/\s+/g, '').toUpperCase();
+    if (k) emitidoPorCodigo[k] = (emitidoPorCodigo[k] || 0) + cantidad;
+  };
+  for (const m of manillas) sumarEmitido(m.codigo, m.cantidad);
+  for (const it of acc.values()) sumarEmitido(it.codigo, it.cantidad);
+  for (const falta of faltantesAdicionalesInventario(
+    adicionalesFase0,
+    emitidoPorCodigo,
+    (cod) => catalogo?.[cod]?.producto,
+    (cod) => (catalogo?.[cod]?.cod || '').trim().toUpperCase() === 'INSTALACION',
+  )) {
+    bump(falta.codigo, `[${falta.codigo}] ${falta.descripcion}`, falta.cantidad);
   }
   for (const it of acc.values()) {
     out.push({ id: ++id, codigo: it.codigo, descripcion: it.descripcion, cantidad: it.cantidad, grupo: it.grupo, unidad: it.unidad });
