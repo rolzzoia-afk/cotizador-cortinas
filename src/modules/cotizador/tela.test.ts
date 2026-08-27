@@ -179,7 +179,10 @@ describe('buildOptimizerRows', () => {
     expect(rows[0].altoReal).toBeCloseTo(2.25, 2);
   });
 
-  it('VERTICAL: se corta como roller — corte alto+0,05, reserva alto+0,25', () => {
+  // A la vertical NO se le suman los 25 cm del roller: reserva = corte
+  // (dueño, 2026-08-27). Antes reservaba alto+25 para calzar con la planilla
+  // manual, y la hoja de corte pedía 20 cm de más por paño.
+  it('VERTICAL: se corta como roller y reserva lo MISMO que corta (alto+0,05)', () => {
     const rows = buildOptimizerRows(
       [v({ categoria: 'VERTICAL', alto: 1.8, panos: [{ ancho: 1.5, alto: 1.8 }] })],
       cat,
@@ -187,18 +190,29 @@ describe('buildOptimizerRows', () => {
     expect(rows[0].esVertical).toBe(true);
     expect(rows[0].ancho).toBeCloseTo(1.5, 2); // la tela NO se invierte
     expect(rows[0].altoCorte).toBeCloseTo(1.85, 2); // corte real = alto + extraVertical
-    expect(rows[0].altoReal).toBeCloseTo(2.05, 2); // reserva = alto + extraAlto (roller)
-    expect(rows[0].m2).toBeCloseTo(3.075, 3); // 2,05 × 1,50
+    expect(rows[0].altoReal).toBeCloseTo(1.85, 2); // …y la reserva es ese mismo número
+    expect(rows[0].m2).toBeCloseTo(2.775, 3); // 1,85 × 1,50
   });
 
-  it('VERTICAL: caso dorado OT 2923 (2,12×2,34) → corte 2,39 · reserva 2,59 · m² 5,4908', () => {
+  it('VERTICAL: la OT 2923 (2,12×2,34) corta y reserva 2,39 (antes reservaba 2,59)', () => {
     const rows = buildOptimizerRows(
       [v({ categoria: 'VERTICAL', alto: 2.34, panos: [{ ancho: 2.12, alto: 2.34 }] })],
       cat,
     );
     expect(rows[0].altoCorte).toBeCloseTo(2.39, 3);
-    expect(rows[0].altoReal).toBeCloseTo(2.59, 3);
-    expect(rows[0].m2).toBeCloseTo(5.4908, 4); // idéntico al M2 de la planilla manual
+    expect(rows[0].altoReal).toBeCloseTo(2.39, 3);
+    expect(rows[0].m2).toBeCloseTo(5.0668, 4); // 2,39 × 2,12 (la planilla manual daba 5,4908)
+  });
+
+  it('VERTICAL: el extra sigue saliendo del parámetro, no de una constante', () => {
+    const params = { ...PARAMETROS_CORTE_DEFAULT, extraVerticalCm: 12 };
+    const rows = buildOptimizerRows(
+      [v({ categoria: 'VERTICAL', alto: 2, panos: [{ ancho: 1.5, alto: 2 }] })],
+      cat,
+      params,
+    );
+    expect(rows[0].altoCorte).toBeCloseTo(2.12, 3);
+    expect(rows[0].altoReal).toBeCloseTo(2.12, 3);
   });
 
   it('parámetros custom: extraAltoCm/extraDuoCm/anchoRolloDefaultM gobiernan la geometría', () => {
