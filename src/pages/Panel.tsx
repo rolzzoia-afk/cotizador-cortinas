@@ -51,6 +51,8 @@ import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import type { Ventana } from '@/modules/cotizador/types';
 import { confirmar } from '@/components/ui/confirm';
+import { opcionesCanal } from '@/modules/canales/canales';
+import { useCanalesContacto } from '@/modules/canales/hooks';
 
 const EMPTY_FORM: DatosGenerales = {
   cliente: '',
@@ -64,19 +66,10 @@ const EMPTY_FORM: DatosGenerales = {
   fecha: new Date().toISOString().split('T')[0],
 };
 
-const CANALES = [
-  'Instagram',
-  'WhatsApp',
-  'Referencia',
-  'Google',
-  'Web',
-  'Llamada',
-  'Otro',
-];
-
 export function Panel() {
   const navigate = useNavigate();
   const { empresaNombre, empresaId } = useAuth();
+  const { canales: canalesConfig } = useCanalesContacto();
   const {
     ots,
     loading,
@@ -569,7 +562,7 @@ export function Panel() {
                 className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="">—</option>
-                {CANALES.map((c) => (
+                {opcionesCanal(canalesConfig, nuevoForm.canal).map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
