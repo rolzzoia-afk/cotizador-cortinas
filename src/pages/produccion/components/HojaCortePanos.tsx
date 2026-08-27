@@ -163,7 +163,7 @@ export default function HojaCortePanos({
             <thead>
               <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                 <th className="w-10 px-2 py-1.5" />
-                {['Paño', 'Tipo', 'Cod', 'Alto corte paño', 'Alto máximo a utilizar'].map((h) => (
+                {['Paño', 'Tipo', 'Cod', 'Alto corte paño', 'Alto máximo a utilizar', 'Ubicación'].map((h) => (
                   <th key={h} className="whitespace-nowrap px-2 py-1.5 font-medium">
                     {h}
                   </th>
@@ -221,6 +221,17 @@ export default function HojaCortePanos({
                       {fmt(p.altoCortePano)}
                     </td>
                     <td className="px-2 py-1.5 tabular-nums">{fmt(p.altoMaxUtilizar)}</td>
+                    {/* Para qué ventanas se corta este paño. Si sirve a varias
+                        van todas, en chips, para que se lean de una pasada. */}
+                    <td className="px-2 py-1.5">
+                      <span className="flex flex-wrap gap-1">
+                        {p.ubicaciones.map((u) => (
+                          <span key={u} className="rounded bg-secondary px-1.5 py-0.5 font-semibold">
+                            {u}
+                          </span>
+                        ))}
+                      </span>
+                    </td>
                   </tr>
                 );
               })}

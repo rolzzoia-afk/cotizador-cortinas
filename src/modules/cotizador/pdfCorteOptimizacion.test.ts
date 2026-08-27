@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
+  compactarUbicaciones,
   construirHojaCorte,
   filasCorteVisibles,
   partirHojaCorte,
+  textoUbicaciones,
   totalesPorTipoDeTela,
   type FilaCorteCortina,
 } from './pdfCorteOptimizacion';
@@ -101,6 +103,77 @@ describe('construirHojaCorte', () => {
 
   it('sin colmena, ninguna cortina trae datos de sobrante', () => {
     expect(hoja.cortinas.every((c) => c.medidaColmena === '' && c.ubicColmena === '')).toBe(true);
+  });
+
+  it('cada paño dice para qué ubicación se corta, sin repetir el nombre', () => {
+    // El paño 2 son los DOS paños de la ventana Comedor: un solo nombre.
+    expect(hoja.panos.map((p) => p.ubicaciones)).toEqual([['Living'], ['Comedor P1·P2']]);
+  });
+});
+
+// La columna UBICACIÓN de TOTAL PAÑOS: de un mismo trozo de tela salen varias
+// cortinas («cortar junto»), y el cortador necesita saber cuáles son.
+describe('construirHojaCorte — ubicaciones del paño', () => {
+  const mkVent = (id: string, ubicacion: string, ancho: number): VentanaItem => ({
+    id,
+    ubicacion,
+    codInt: 'SC 64',
+    producto: 'ROLLER SCREEN PREMIUM',
+    tipo: 'PREMIUM',
+    categoria: 'ROL',
+    grupoId: null,
+    alto: 1.8,
+    precio: 0,
+    cantidad: 1,
+    panos: [{ ancho, alto: 1.8 }],
+  });
+
+  it('un paño compartido lista TODAS sus ubicaciones', () => {
+    // 1,40 + 1,45 = 2,85 < 2,98 → las dos ventanas caben en el mismo paño.
+    const ventanas = [mkVent('v1', 'LIVING', 1.4), mkVent('v2', 'DORMITORIO', 1.45)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.panos).toHaveLength(1);
+    expect(hoja.panos[0].ubicaciones).toHaveLength(2);
+    expect(hoja.panos[0].ubicaciones).toEqual(
+      expect.arrayContaining(['LIVING', 'DORMITORIO']),
+    );
+  });
+
+  it('cada paño lleva solo lo suyo cuando no caben juntas', () => {
+    // 1,60 + 1,60 > 2,98 → un paño cada una.
+    const ventanas = [mkVent('v1', 'LIVING', 1.6), mkVent('v2', 'DORMITORIO', 1.6)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.panos).toHaveLength(2);
+    expect(hoja.panos.flatMap((p) => p.ubicaciones).sort()).toEqual(['DORMITORIO', 'LIVING']);
+    expect(hoja.panos.every((p) => p.ubicaciones.length === 1)).toBe(true);
+  });
+
+  it('una ventana sin ubicación no ensucia la celda', () => {
+    const ventanas = [mkVent('v1', '', 1.4), mkVent('v2', '   ', 1.45)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+    const hoja = construirHojaCorte(rows, [], ot(ventanas));
+    expect(hoja.panos[0].ubicaciones).toEqual([]);
+    expect(textoUbicaciones(hoja.panos[0].ubicaciones)).toBe('');
+  });
+
+  it('se imprimen separadas por «/»', () => {
+    expect(textoUbicaciones(['LIVING', 'DORMITORIO 1', 'DORMITORIO 2'])).toBe(
+      'LIVING / DORMITORIO 1 / DORMITORIO 2',
+    );
+  });
+
+  it('los paños de una misma ventana se juntan bajo su nombre', () => {
+    expect(compactarUbicaciones(['COMEDOR P1', 'COMEDOR P2', 'LIVING'])).toEqual([
+      'COMEDOR P1·P2',
+      'LIVING',
+    ]);
+    // Ventanas distintas siguen separadas; un rótulo repetido se dice una vez.
+    expect(compactarUbicaciones(['LIVING', 'LIVING', 'PIEZA 2'])).toEqual(['LIVING', 'PIEZA 2']);
+    // Un nombre que TERMINA en algo parecido no se confunde con un paño.
+    expect(compactarUbicaciones(['SALA P', 'SALA PB'])).toEqual(['SALA P', 'SALA PB']);
+    expect(compactarUbicaciones(['', '   '])).toEqual([]);
   });
 });
 

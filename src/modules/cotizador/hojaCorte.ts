@@ -47,7 +47,48 @@ export type FilaPanoResumen = {
   invertida: boolean;
   esVertical: boolean; // el paño es de una cortina vertical (hoja separada)
   colmena: string; // "A-27 · 178X210" si el paño sale de colmena; '' si es rollo
+  /**
+   * Para qué ventanas se está usando este paño: de este mismo trozo de tela
+   * salen todas esas cortinas (es lo que significa «cortar junto»). Sin
+   * repetir y en el orden en que entraron al paño, que es el orden en que el
+   * cortador las va a ir sacando. Vacío si ninguna fila trae ubicación.
+   */
+  ubicaciones: string[];
 };
+
+/** Las ubicaciones de un paño en una línea, como se imprimen: «PPAL / JOSEFA». */
+export const textoUbicaciones = (ubicaciones: string[]): string => ubicaciones.join(' / ');
+
+/**
+ * Compacta las ubicaciones de un paño para que quepan.
+ *
+ * Una ventana de varios paños llega rotulada «Comedor P1», «Comedor P2»
+ * (`buildOptimizerRows`): repetir el nombre gasta el doble de ancho y se lee
+ * peor, así que sus paños se juntan bajo un solo nombre → «Comedor P1·P2».
+ * Dos ventanas distintas siguen siendo dos entradas, y una que aparezca dos
+ * veces con el mismo rótulo se dice una sola vez.
+ */
+export function compactarUbicaciones(crudas: string[]): string[] {
+  const orden: string[] = [];
+  const panosDe = new Map<string, string[]>();
+  for (const cruda of crudas) {
+    const txt = String(cruda ?? '').trim();
+    if (!txt) continue;
+    const m = /^(.*\S)\s+P(\d+)$/.exec(txt);
+    const base = m ? m[1] : txt;
+    const etiqueta = m ? `P${m[2]}` : '';
+    if (!panosDe.has(base)) {
+      panosDe.set(base, []);
+      orden.push(base);
+    }
+    const lista = panosDe.get(base)!;
+    if (etiqueta && !lista.includes(etiqueta)) lista.push(etiqueta);
+  }
+  return orden.map((base) => {
+    const panos = panosDe.get(base)!;
+    return panos.length ? `${base} ${panos.join('·')}` : base;
+  });
+}
 
 /**
  * Filas de la tabla de corte que se imprimen: solo las que salen de colmena
@@ -309,6 +350,10 @@ export function construirHojaCorte(
         break;
       }
     }
+    // Para qué ventanas se corta este paño. Un paño puede servir a varias
+    // (eso es «cortar junto»), así que van todas, en el orden en que entraron
+    // al grupo y compactadas para que quepan en la celda.
+    const ubicaciones = compactarUbicaciones(grupo.map((g) => g.ubicacion));
     // Los paños que salen de COLMENA no van a la tabla TOTAL PAÑOS: ya están
     // cortados, la cortadora no los corta del rollo. (Igual aparecen en la tabla
     // de corte de arriba, con su columna COLMENA.) Así TOTAL PAÑOS cuenta solo
@@ -323,6 +368,7 @@ export function construirHojaCorte(
         invertida: inv,
         esVertical: vert,
         colmena,
+        ubicaciones,
       });
     }
     // Solo los paños de ROLLO suman al OPTIMIZADOR (los de colmena ya están
