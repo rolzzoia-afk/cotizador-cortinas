@@ -16,6 +16,7 @@ const Ventas = lazy(() => import('@/pages/Ventas').then((m) => ({ default: m.Ven
 const LeadsPipeline = lazy(() => import('@/pages/LeadsPipeline').then((m) => ({ default: m.LeadsPipeline })));
 const Inteligencia = lazy(() => import('@/pages/Inteligencia').then((m) => ({ default: m.Inteligencia })));
 const HistorialCorte = lazy(() => import('@/pages/HistorialCorte').then((m) => ({ default: m.HistorialCorte })));
+const Produccion = lazy(() => import('@/pages/Produccion').then((m) => ({ default: m.Produccion })));
 const Bodeguero = lazy(() => import('@/pages/Bodeguero').then((m) => ({ default: m.Bodeguero })));
 const Telas = lazy(() => import('@/pages/Telas').then((m) => ({ default: m.Telas })));
 const Inventario = lazy(() => import('@/pages/Inventario').then((m) => ({ default: m.Inventario })));
@@ -119,6 +120,7 @@ export function App() {
           <Route path="bodeguero" element={<Bodeguero />} />
           <Route path="camionetas" element={<Camionetas />} />
           <Route path="historial-corte" element={<HistorialCorte />} />
+          <Route path="produccion" element={<Produccion />} />
           <Route path="cotizador-jefe" element={<CotizadorJefe />} />
           <Route path="historial-tubos" element={<HistorialTubos />} />
           <Route path="admin" element={<AdminPanel />} />

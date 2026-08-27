@@ -27,8 +27,8 @@ function wbProductos(filas: (string | number)[][], hoja = 'Productos'): XLSX.Wor
   return wb;
 }
 // COD, Producto, COD_INT, Tipo, Descripción, FechaAlta, Proveedor, Descuento, Costo, Gan, IVA, Precio, Ancho, Categoría
-const fila = (cod: string, codint: string, tipo: string, desc: number, precio: number, ancho: number, cat = '') =>
-  [cod, `PROD ${cod}`, codint, tipo, `DESC ${codint}`, 45028, 'Prov', desc, 0, 0.65, 0.19, precio, ancho, cat];
+const fila = (cod: string, codint: string, tipo: string, desc: number, precio: number, ancho: number, cat = '', costo = 0) =>
+  [cod, `PROD ${cod}`, codint, tipo, `DESC ${codint}`, 45028, 'Prov', desc, costo, 0.65, 0.19, precio, ancho, cat];
 
 describe('parsearCatalogoExcel', () => {
   it('mapea columnas por nombre y normaliza el COD_INT', () => {
@@ -116,6 +116,35 @@ describe('diffCatalogo', () => {
     expect(d.cambios[0].cambiaDescuento).toBe(true);
     expect(d.cambios[0].cambiaPrecio).toBe(false);
     expect(d.sinCambio).toBe(1);
+  });
+
+  // La columna «Costo» del Excel maestro se leía y se botaba. Es lo que nos
+  // cuesta el metro, y de ahí sale el Costo total de la OT en Producción.
+  it('lee la columna Costo y la trata igual que el precio: un 0 no borra nada', () => {
+    const conCosto = diffCatalogo(
+      { 'BK 68': { ...actual['BK 68'], costo: 6000 } },
+      parsearCatalogoExcel(
+        wbProductos([fila('BLACKOUT_D', 'BK 68', 'DELUX', 0, 23782, 2.98, '', 7200)]),
+      ),
+    );
+    expect(conCosto.cambios).toHaveLength(1);
+    expect(conCosto.cambios[0].cambiaCosto).toBe(true);
+    expect(conCosto.cambios[0].costoViejo).toBe(6000);
+    expect(conCosto.cambios[0].costoNuevo).toBe(7200);
+
+    // El Excel real trae la columna en 0 para casi todo: no puede borrar el
+    // costo que alguien cargó a mano.
+    const enCero = diffCatalogo(
+      { 'BK 68': { ...actual['BK 68'], costo: 6000 } },
+      parsearCatalogoExcel(wbProductos([fila('BLACKOUT_D', 'BK 68', 'DELUX', 0, 23782, 2.98)])),
+    );
+    expect(enCero.cambios).toHaveLength(0);
+    const aplicado = aplicarCatalogo(
+      { 'BK 68': { ...actual['BK 68'], costo: 6000 } },
+      {},
+      parsearCatalogoExcel(wbProductos([fila('BLACKOUT_D', 'BK 68', 'DELUX', 0, 23782, 2.98)])),
+    );
+    expect(aplicado.catalogo['BK 68'].costo).toBe(6000);
   });
 
   it('precio importado en 0 no cuenta como cambio de precio', () => {
@@ -299,8 +328,12 @@ describe('leerDescuento — 0-1 o 0-100', () => {
 
 describe('filasParaPlantilla', () => {
   const CAT: CatalogoProductos = {
-    'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BK DELUX', tipo: 'DELUX', descripcion: 'X', precio: 23782, descuento: 0.25 },
+    'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BK DELUX', tipo: 'DELUX', descripcion: 'X', precio: 23782, descuento: 0.25, costo: 6000 },
   };
+
+  it('baja también el costo por metro, para poder editarlo en el Excel', () => {
+    expect(filasParaPlantilla(CAT, {})[0].COSTO).toBe(6000);
+  });
 
   it('baja el catálogo con las cabeceras que el importador entiende', () => {
     const [f] = filasParaPlantilla(CAT, { 'BK 68': 2.98 });

@@ -69,6 +69,7 @@ export default function ProductoCatalogoDialog({
   const [tipo, setTipo] = useState(prev?.tipo ?? '');
   const [descripcion, setDescripcion] = useState(prev?.descripcion ?? '');
   const [precio, setPrecio] = useState(prev?.precio ? String(prev.precio) : '');
+  const [costo, setCosto] = useState(prev?.costo ? String(prev.costo) : '');
   const [dctoPct, setDctoPct] = useState(
     prev?.descuento ? String(Math.round(prev.descuento * 100)) : '',
   );
@@ -146,6 +147,11 @@ export default function ProductoCatalogoDialog({
       toast.error('Precio inválido.');
       return;
     }
+    const costoNum = costo.trim() === '' ? null : num(costo);
+    if (costoNum != null && costoNum < 0) {
+      toast.error('Costo inválido.');
+      return;
+    }
     const dctoNum = dctoPct.trim() === '' ? 0 : num(dctoPct);
     if (dctoNum == null || dctoNum < 0 || dctoNum > 100) {
       toast.error('Descuento inválido (0 a 100 %).');
@@ -163,6 +169,8 @@ export default function ProductoCatalogoDialog({
       tipo: tipo.trim(),
       descripcion: descripcion.trim(),
       precio: precioNum,
+      // `undefined` = sin costo cargado; el Costo total lo dice en vez de suponer 0.
+      costo: costoNum || undefined,
       descuento: dctoNum / 100,
       // Siempre presente: `undefined` es «sin clasificar» y borra la gama previa.
       categoria: gama || undefined,
@@ -288,6 +296,21 @@ export default function ProductoCatalogoDialog({
               placeholder="0 = hereda arquetipo"
               className="border-border bg-secondary text-right"
             />
+          </div>
+          <div>
+            <Label className="mb-1 text-xs">Costo por metro ($, con IVA)</Label>
+            <Input
+              inputMode="decimal"
+              value={costo}
+              onChange={(e) => setCosto(e.target.value)}
+              placeholder="vacío = sin cargar"
+              className="border-border bg-secondary text-right"
+            />
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Lo que nos cuesta el metro. No cotiza nada: se usa en el «Costo total» de la OT, en
+              Producción, para saber cuánto quedó de verdad. Sin costo, esa pantalla muestra el
+              hueco en vez de suponer un número.
+            </p>
           </div>
           <div>
             <Label className="mb-1 text-xs">Descuento por defecto (%)</Label>

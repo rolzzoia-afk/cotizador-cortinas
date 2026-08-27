@@ -6,6 +6,13 @@ export type Producto = {
   tipo: string;
   descripcion: string;
   precio: number;
+  /**
+   * Lo que le cuesta a la empresa un metro de esta tela, con IVA. NO interviene
+   * en la cotización —el precio de venta es `precio`—: se usa solo en el «Costo
+   * total» de producción, para saber cuánto quedó de verdad de una OT. Ausente
+   * = todavía no se cargó, y esa pantalla lo dice en vez de suponer un número.
+   */
+  costo?: number;
   colorGrupo?: string;
   anchoRollo?: number | string;
   /** Descuento por defecto de este código (0–1). Autollena el DCT% en Fase 0. */

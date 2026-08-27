@@ -204,23 +204,44 @@ export function buscarInsumoMatchBOM(
   );
 }
 
+/**
+ * La fila CRUDA de `ubicaciones_rack` del item (rack, fila, columna), para
+ * poder pintarla en el mapa del galpón. Misma cascada que `getUbicacionBOM`:
+ * primero por el código del item, después por el insumo que le calce.
+ */
+export function getRackRawBOM(item: BOMItem, insumos: Insumo[], racks: Rack[]): Rack | null {
+  const spec = (item.especificacion || '').trim();
+  if (spec) {
+    const specNorm = spec.toUpperCase().replace(/\s/g, '');
+    const u = racks.find((r) => {
+      const rc = (r.codigo_insumo || '').toUpperCase().replace(/\s/g, '');
+      return rc === specNorm || rc.includes(specNorm) || specNorm.includes(rc);
+    });
+    if (u) return u;
+  }
+  const ins = buscarInsumoMatchBOM(item, insumos);
+  if (ins?.cod) {
+    const codNorm = ins.cod.toUpperCase().replace(/\s/g, '');
+    const u = racks.find(
+      (r) => (r.codigo_insumo || '').toUpperCase().replace(/\s/g, '') === codNorm,
+    );
+    if (u) return u;
+  }
+  return null;
+}
+
 /** Ubicación del BOM item con fallback. Retorna { display, qr } o null. */
 export function getUbicacionBOM(
   item: BOMItem,
   insumos: Insumo[],
   racks: Rack[],
 ): { display: string; qr: string } | null {
-  const spec = (item.especificacion || '').trim();
-  if (spec) {
-    const r = getRackUbicacionPorSpec(spec, racks);
-    if (r) return { display: `📍 ${r.display}`, qr: r.qr };
-  }
-  const ins = buscarInsumoMatchBOM(item, insumos);
-  if (ins) {
-    const r = getRackUbicacion(ins.cod, racks);
-    if (r) return { display: `📍 ${r.display}`, qr: r.qr };
-  }
-  return null;
+  const u = getRackRawBOM(item, insumos, racks);
+  if (!u) return null;
+  return {
+    display: `📍 ${rackToDisplayLabel(u.rack, u.fila, u.columna)}`,
+    qr: rackToQRContent(u.rack, u.fila, u.columna),
+  };
 }
 
 export function getColmenaPorCodTubo(

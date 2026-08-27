@@ -367,6 +367,21 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
                               ? `${clp(c.precioViejo)} → ${clp(c.precioNuevo)}`
                               : clp(c.precioViejo)}
                           </span>
+                          {/* El costo casi nunca cambia, pero si no se muestra
+                              la fila aparece sin ningún motivo a la vista. */}
+                          <span
+                            className={
+                              'w-40 text-right ' +
+                              (c.cambiaCosto ? 'text-amber-300' : 'text-muted-foreground')
+                            }
+                            title="Costo por metro"
+                          >
+                            {c.cambiaCosto
+                              ? `${clp(c.costoViejo)} → ${clp(c.costoNuevo)}`
+                              : c.costoViejo
+                                ? clp(c.costoViejo)
+                                : '—'}
+                          </span>
                           <span
                             className={
                               'w-24 text-right ' +

@@ -50,6 +50,12 @@ const REGLAS: Array<{ patron: RegExp; roles: string[] }> = [
   { patron: /^\/bodeguero/, roles: ['bodeguero', 'operario'] },
   { patron: /^\/camionetas/, roles: ['bodeguero', 'operario'] },
   { patron: /^\/historial-corte/, roles: ['produccion', 'dimensionado', 'operario'] },
+  // El taller en pantalla: entra todo el que trabaja una OT en el galpón. La
+  // pestaña de costos se esconde adentro, por rol.
+  {
+    patron: /^\/produccion/,
+    roles: ['produccion', 'dimensionado', 'telas', 'operario', 'pruebas', 'bodeguero'],
+  },
   { patron: /^\/historial-tubos/, roles: ['produccion', 'operario'] },
   // Flujo de OTs (cotización + fases de producción)
   {

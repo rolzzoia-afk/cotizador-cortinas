@@ -57,7 +57,11 @@ export default defineConfig({
           'charts': ['recharts'],
           'pdf': ['jspdf'],
           'excel': ['xlsx'],
-          'qr': ['qrcode.react', 'html5-qrcode'],
+          // Separados a propósito: DIBUJAR un QR (una etiqueta) es barato;
+          // LEERLO se lleva la cámara y casi todo el peso. Juntos, una pantalla
+          // que solo imprime etiquetas se bajaba el lector completo.
+          'qr': ['qrcode.react'],
+          'qr-scan': ['html5-qrcode'],
           'forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
           'query': ['@tanstack/react-query', '@tanstack/react-table'],
           'sentry': ['@sentry/react'],

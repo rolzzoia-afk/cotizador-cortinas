@@ -8,12 +8,12 @@ Guía de operación diaria, organizada por rol. El rol de cada persona se asigna
 |---|---|
 | `admin` | Todo el sistema, incluido el panel Admin y Ojo de Dios |
 | `ventas` | Panel de OTs, Cotizador, Ventas (KPIs), Leads, Inteligencia, Cotizador del Jefe (modo vendedor) |
-| `bodeguero` | Telas, Inventario, Bodega, Camionetas, Conteo de inventario |
-| `produccion` | Optimizador, Historial de Corte, Historial de Tubos, Telas |
-| `dimensionado` | Historial de Corte, Telas |
-| `telas` | Telas |
-| `operario` | Todas las secciones de taller (telas, inventario, optimizador, bodega, camionetas, historiales) |
-| `pruebas` | Panel de OTs |
+| `bodeguero` | Producción (taller), Telas, Inventario, Bodega, Camionetas, Conteo de inventario |
+| `produccion` | Producción (taller), Optimizador, Historial de Corte, Historial de Tubos, Telas |
+| `dimensionado` | Producción (taller), Historial de Corte, Telas |
+| `telas` | Producción (taller), Telas |
+| `operario` | Todas las secciones de taller (producción, telas, inventario, optimizador, bodega, camionetas, historiales) |
+| `pruebas` | Panel de OTs, Producción (taller) |
 
 Si alguien ve "No tienes acceso a esta sección", su rol no corresponde — el admin lo ajusta en Usuarios y roles.
 
@@ -118,6 +118,41 @@ El video, las fotos y la firma se guardan en un almacén privado de la empresa: 
 
 ## Flujo de taller (producción / bodega)
 
+### Producción: la OT en pantalla
+
+La sección **Producción** muestra el trabajo del taller sin papel. Se escribe **una sola vez el número de la OT arriba** y todas las pestañas trabajan sobre esa orden.
+
+- **Estructura** ya está lista: es el mismo plan de corte del Excel, con las mismas 13 columnas y los mismos colores (rojo = merma al basurero, naranjo = sobrante que se deja en la mesa, azul = corte que **sale** de la mesa, amarillo = cenefa con tira). Cada línea de corte tiene una casilla; al tocarla queda marcada con el nombre de quien la marcó y **los demás la ven al instante**, en su propio computador o tablet. Arriba va el porcentaje de avance.
+- **La casilla es solo de las líneas de CORTE.** Las de sobrante, merma y reserva acompañan a su corte y no se marcan aparte.
+- **«Marcar estructura lista»** cierra el área. Si quedan cortes sin marcar la app pregunta antes. Al cerrarla, la OT avanza sola de sub-etapa **según el flujo real**: Estructura y Paños corren en paralelo, Dimensionado espera a los paños y Armado espera a Estructura **y** Dimensionado. Una OT **nunca retrocede** sola: si el jefe la movió a mano desde el Panel, ese cambio manda.
+- **Si el plan se corrigió**, el plan nuevo empieza con el avance en cero: sus líneas ya no son las mismas y heredar marcas viejas haría cortar de más.
+- Cuando no existe un plan escrito exactamente con ese número, la app muestra el más parecido **con un aviso amarillo y el número que sí trae** — pasa con las OTs que se escribieron a mano en el Excel («3054- SERV»). Revisarlo antes de cortar.
+- **Paños** es la hoja de corte de tela, la misma del PDF: los cortes especiales arriba (los que salen de colmena, los invertidos y los verticales) y abajo **TOTAL PAÑOS**, que es lo que hay que bajar del rollo, con los metros por tela al pie. Si la OT trae verticales, salen en su propia hoja con la franja verde — el taller las corta en mesa aparte.
+- **Acá se marca el PAÑO, no la cortina**: de un mismo paño salen todas las cortinas que se cortan juntas, y ese es el trozo de tela que la cortadora baja. Los paños que salen de **colmena** no aparecen en TOTAL PAÑOS: ya están cortados. Un color en el borde izquierdo agrupa lo que va junto.
+- **La marca se pega a la cortina, no al número de paño.** Si el plan se reagrupa y lo que era el paño 3 pasa a ser el 1, la marca se va con él en vez de quedarse en un número que ya significa otra cosa.
+- Cerrar **«Paños listos»** manda la OT a **Dimensionado**.
+- **Dimensionado** y **Armado** son la hoja del **cálculo general**, con una sección por sistema y su color (roller, soft light, dark, oscuranti, beeblack, vertical), igual que en el papel. Dimensionado va recortado a lo que corta la mesa de tela —fuera la tubería, los pesos, las cenefas y los perfiles, que son de taller— y agrega la columna **CONJUNTO PAÑOS** con la misma letra de «cortar junto» que trae la hoja del cortador. Armado muestra la hoja completa. En las dos se marca **una cortina por vez**.
+- **El velcro del DARK va en su propio cuadro**, abajo del DARK, con el código de la tela de la que se corta la tira (**BK 13 / BK 81**, blackout negro) y sus dos medidas: ANCHO TELA VELCRO y ALTO TELA VELCRO. Antes iban mezcladas entre las medidas de la cortina y se leían como si salieran del mismo paño; son un corte de **otra tela**. Sale igual en el PDF y en la pantalla.
+- **El armado espera a Estructura Y a Dimensionado**, que son los dos caminos que corrían en paralelo. La pantalla **no se bloquea** —el operario puede necesitar mirar la hoja antes— pero avisa en amarillo qué falta, y vuelve a preguntar si igual se cierra el área.
+- Cerrar **«Armado listo»** manda la OT a **Prueba**.
+- **Prueba** es el control final, **cortina por cortina**: cada una queda **OK** o con un **Problema**. Un problema no es una nota suelta — deja la cortina sin aprobar, guarda el detalle pegado a ella y **manda el aviso al encargado**, porque después de esta pantalla la cortina sale del galpón y ya nadie la revisa. Aprobar una cortina que tenía problema borra la nota.
+- Prueba tiene dos botones distintos: **«Cerrar prueba»** cierra el área (y avisa si quedaron cortinas con problema), y **«OT lista para entrega»** saca la OT de producción — es exactamente el mismo paso que hace la oficina desde Fase 4.
+- **«Avisar un problema»** está en todas las pestañas, incluso en las que todavía no tienen su hoja. Deja el recado con la OT, el área y quién avisó.
+- **La bandeja de avisos** va arriba de todo y **solo aparece si hay algo pendiente**: un cartel fijo que nadie mira deja de ser un aviso. Cualquiera del taller la ve y puede marcar **Atendido** — el de la mesa de al lado suele ser el que puede resolverlo. Los atendidos quedan guardados, plegados, para ver qué se rompe seguido.
+- **Inventario** es el picking de bodega: los **mismos materiales de la hoja de inventario** repartidos en **tres bolsas** — Armado (lo que se monta sobre la tela), Estructura (ferretería del sistema) e Instalación (lo que se lleva a terreno). Dentro de cada bolsa van separados por Mecanismo, Cadenas, Motor e Insumos, como se juntan con las manos. Cada línea tiene su botón **OK** y un **📍** que abre el mapa del galpón con la celda del rack pintada; si el código es de tubería, muestra su posición en la colmena.
+- Cada bolsa lleva **dónde queda** (se elige el rack de la lista) y un botón para **imprimir su etiqueta** con QR, la OT y el área. El **primer OK arranca el reloj** y **Finalizar** lo cierra: arriba queda cuántos minutos tomó. Desmarcar y volver a marcar **no** reinicia el reloj — si no, el tiempo no serviría para nada.
+- **Esto NO descuenta stock ni pide firma.** Es preparación. El despacho de verdad —con QR, firma y descuento— sigue siendo el flujo de **Bodega**, sin cambios.
+- **Costo total** es la única pestaña que muestra plata, y **solo la ve un administrador**: si el rol no es admin, la pestaña ni siquiera aparece y los costos no se consultan. Compara lo que la OT consumió de verdad contra lo que se cobró.
+- Los **metros de tela** son los del optimizador (ya descontados los paños que salieron de colmena) y el **aluminio** son los cortes registrados en la colmena, con su merma: se cortó de la misma barra, así que también se pagó. Los **insumos** son los mismos de la hoja de inventario.
+- **Lo que no se puede saber solo se escribe a mano**: mano de obra, auto, TAG, otros, y las **fallas** de cada tela (cuántas y cuántos metros). Queda guardado en la OT con el botón **Guardar**; lo que se está escribiendo no se borra aunque la OT se recargue sola.
+- **La falla se cuenta una sola vez.** La columna *Total* de la tela son los metros consumidos (los del rollo más los perdidos), pero la plata de la falla va aparte, como **pérdida**: si entrara en los dos lados, el mismo desastre se descontaría dos veces de la ganancia.
+- **El costo del aluminio sale de bodega**, que guarda lo que cuesta una **barra entera**; el metro se saca dividiendo por el **largo de la barra** (5,80 m de fábrica, editable por OT porque hay perfiles de 5,98). Cada línea dice la cuenta que usó. Si el código no está en bodega se usa el $/m del cálculo.
+- **El costo hereda igual que el precio.** Un código que se cotiza con el precio de su tela de referencia («BK 73» se vende al precio de «BK-D») también cuesta lo que esa tela, y la pantalla dice de cuál lo sacó. Si no fuera así, esos códigos saldrían «sin costo» para siempre.
+- **Nada se inventa.** Lo que no tiene costo cargado suma $0, se marca **«sin costo»** en su propia fila y queda listado al pie de su tabla, sin cartel de alarma. En las telas el que falta es el **Costo** —que **no** es el precio de venta: es lo que nos cuesta a nosotros—, y se carga en Admin → Precios → Catálogo de productos, o de una vez subiendo el Excel maestro. En el aluminio y los insumos sale de la ficha del insumo, en Inventario.
+- El **margen** se pinta verde desde 20 % y rojo bajo eso.
+
+### El plan de corte
+
 1. **Optimizador** (producción): carga las órdenes del día, propone desde qué tubo cortar cada pieza (sobrante de colmena, reemplazo o tubo nuevo) minimizando desperdicio. Al **Confirmar**: descuenta el inventario, registra los eventos de trazabilidad, guarda el plan y descarga el Excel del plan con su **CORRELATIVO** (orden de prioridad por fecha de entrega).
 2. **Reglas del plan**:
    - *CORTAR*: cortar la medida indicada del tubo de la colmena señalada (o TUBO NUEVO).
@@ -133,7 +168,7 @@ El video, las fotos y la firma se guardan en un almacén privado de la empresa: 
 ## Panel Admin (solo admin)
 
 - **Usuarios y roles**: asignar el rol de cada integrante. Los cambios aplican al instante.
-- **Precios**: la pestaña está partida en cinco, en el orden en que se usan. **Probador**: se escribe un código (ej. «BK 10»), un ancho y un alto, y sale el precio con la cuenta completa —de dónde salió el $/m y por qué, cada material con su `VALOR MÁXIMO ÷ margen`, mano de obra, traslado, el valor del m² y el valor unitario con su instalación—. Calcula con la misma función que cotiza de verdad y con los cambios que haya **en pantalla**, aunque no estén guardados. **Insumos**: el valor máximo de cada material (y la tabla propia de cada sistema, que pisa a la general). **Recetas y sistemas**: qué materiales lleva cada familia, los sistemas con reglas propias (beeblack, categoría B, invertida) y la tela de referencia. **Catálogo de telas**: los códigos con su precio, descuento y ancho de rollo, más el importador de Excel. **Valores comerciales**: IVA, margen, instalación, mano de obra, traslado y las comisiones de tarjeta.
+- **Precios**: la pestaña está partida en cinco, en el orden en que se usan. **Probador**: se escribe un código (ej. «BK 10»), un ancho y un alto, y sale el precio con la cuenta completa —de dónde salió el $/m y por qué, cada material con su `VALOR MÁXIMO ÷ margen`, mano de obra, traslado, el valor del m² y el valor unitario con su instalación—. Calcula con la misma función que cotiza de verdad y con los cambios que haya **en pantalla**, aunque no estén guardados. **Insumos**: el valor máximo de cada material (y la tabla propia de cada sistema, que pisa a la general). **Recetas y sistemas**: qué materiales lleva cada familia, los sistemas con reglas propias (beeblack, categoría B, invertida) y la tela de referencia. **Catálogo de telas**: los códigos con su precio, descuento, **costo por metro** y ancho de rollo, más el importador de Excel. El **Costo** es lo que nos cuesta el metro con IVA: **no cotiza nada**, se usa solo en el «Costo total» de la OT en Producción. El importador ya lo lee de la columna **Costo** del Excel maestro (antes la botaba) y, como esa columna viene en 0 para casi todo, un 0 **no borra** un costo cargado a mano. **Valores comerciales**: IVA, margen, instalación, mano de obra, traslado y las comisiones de tarjeta.
 - **Cambiarle el descuento a muchas telas de una vez** (en Precios → Catálogo de telas → Importar): el botón **«Descargar plantilla»** baja el catálogo actual en Excel; se edita la columna `DESCUENTO %` y se vuelve a subir el archivo. Basta con las columnas `COD_INT` y la que se quiera cambiar: **lo que el archivo no traiga se deja como está**. El descuento se entiende escrito como `30` o como `0,3`. Antes de aplicar nada muestra el «antes → después» de cada código, con casilla por fila, y queda un respaldo automático.
 - **Aprender a armar el Excel** (mismo diálogo, botón **«Descargar ejemplo»**): baja un archivo chico —un código por familia— con una hoja **«Instrucciones»** que explica las reglas y los nombres que se aceptan para cada columna. Trae los valores que el catálogo ya tiene, así que **subirlo tal cual no cambia nada**: la app responde «0 cambios». Esa es la forma de probar la importación sin riesgo. Después se le edita un descuento, se vuelve a subir, y en el resumen aparece ese único cambio. Es el archivo para pasarle a quien vaya a preparar las planillas.
 - **Parámetros de cotización**: IVA, margen de insumos, recargo tarjeta, instalación, mano de obra y traslado de TU empresa. "Restaurar defaults" vuelve a los valores históricos.
