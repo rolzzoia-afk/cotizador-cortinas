@@ -260,7 +260,7 @@ function renderHojaCalculo(
   // filas y SOLO sus columnas de despiece. Un bloque sin columnas (despiece
   // vacío o filtrado por la variante) igual arma su sección: sus filas se
   // muestran solo con identidad.
-  const secciones = seccionesDeHoja(data, bloques);
+  const secciones = seccionesDeHoja(data, bloques, identCols);
 
   // A3 apaisado (420 × 297).
   const doc = new jsPDF('l', 'mm', 'a3');
@@ -280,17 +280,8 @@ function renderHojaCalculo(
     columnas.reduce((s, c) => s + pesoColumna(c.key, true), 0);
   const despieceMax = Math.max(0.001, ...secciones.map((sec) => despiecePeso(sec.columnas)));
   const identTotal = (usable * sumIdent) / (sumIdent + despieceMax);
-  const identWidths = identPesos.map((p) => (identTotal * p) / sumIdent);
   const despieceArea = usable - identTotal;
   const despX0 = M + identTotal;
-  const identXs: number[] = [];
-  {
-    let ax = M;
-    for (const w of identWidths) {
-      identXs.push(ax);
-      ax += w;
-    }
-  }
 
   const bannerH = 9;
   const superH = 8;
@@ -364,6 +355,23 @@ function renderHojaCalculo(
   encabezado();
 
   for (const sec of secciones) {
+    // Identidad de ESTA sección: se reparte el MISMO `identTotal` entre sus
+    // columnas. El cuadro del velcro muestra una menos, y así igual arranca y
+    // termina donde las demás — el área de despiece empieza en la misma x en
+    // todas, que es lo que las deja alineadas de un vistazo.
+    const identWidths = (() => {
+      const pesos = sec.identidad.map((c) => pesoColumna(String(c.key), false));
+      const suma = pesos.reduce((a, b) => a + b, 0) || 1;
+      return pesos.map((p) => (identTotal * p) / suma);
+    })();
+    const identXs: number[] = [];
+    {
+      let ax = M;
+      for (const w of identWidths) {
+        identXs.push(ax);
+        ax += w;
+      }
+    }
     // Reparte el área de despiece entre las columnas de ESTA sección.
     const despPesos = sec.columnas.map((c) => pesoColumna(c.key, true));
     const sumDesp = despPesos.reduce((a, b) => a + b, 0) || 1;
@@ -389,7 +397,7 @@ function renderHojaCalculo(
         celdaFija(sec.sistema.label, despX0, despWtot, y + 5.4, 9, { bold: true, color: C_WHITE });
       }
       y += superH;
-      identCols.forEach((c, i) => {
+      sec.identidad.forEach((c, i) => {
         rect(doc, identXs[i], y, identWidths[i], headH, C_DARK);
         celdaCabecera(doc, c.label, identXs[i], identWidths[i], y, headH);
       });
@@ -418,7 +426,7 @@ function renderHojaCalculo(
         cabecerasSeccion();
       }
       // Identidad (texto de tamaño uniforme).
-      identCols.forEach((c, i) => {
+      sec.identidad.forEach((c, i) => {
         rect(doc, identXs[i], y, identWidths[i], rowH);
         // El texto de la celda lo decide el modelo: es la única regla que el
         // papel y la pantalla del taller no pueden contradecirse.

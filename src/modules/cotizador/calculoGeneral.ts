@@ -650,8 +650,20 @@ export function filasDeBloque(filas: FilaCalculo[], bloqueKey: string): FilaCalc
   return filas.filter((f) => f.bloque === bloqueKey);
 }
 
+/**
+ * Columnas de identidad que NO se muestran en el cuadro del velcro.
+ *
+ * El COD_IN es el código de la tela de la CORTINA. Al lado de COD. VELCRO se
+ * leía como si la tira se cortara de esa tela, que es justo lo que este cuadro
+ * viene a desmentir. Sigue estando en la sección de arriba, que es la de la
+ * cortina.
+ */
+const SIN_IDENTIDAD_VELCRO = new Set(['codInt']);
+
 export type SeccionHoja = {
   sistema: BloqueSistema;
+  /** Las columnas de identidad de ESTA sección (el velcro muestra menos). */
+  identidad: ColumnaCalculo[];
   columnas: ColumnaCalculo[];
   filas: FilaCalculo[];
 };
@@ -668,6 +680,7 @@ export type SeccionHoja = {
 export function seccionesDeHoja(
   data: Pick<CalculoGeneral, 'filas'>,
   bloques: { sistema: BloqueSistema; columnas: ColumnaCalculo[] }[],
+  identidad: ColumnaCalculo[] = [],
 ): SeccionHoja[] {
   const cols = new Map(bloques.map((b) => [b.sistema.key, b.columnas]));
   const out: SeccionHoja[] = [];
@@ -676,7 +689,15 @@ export function seccionesDeHoja(
     if (filas.length === 0) continue;
     const columnas = cols.get(bk) ?? [];
     if (bk === BLOQUES.VELCRO.key && columnas.length === 0) continue;
-    out.push({ sistema: BLOQUES[bk], columnas, filas });
+    out.push({
+      sistema: BLOQUES[bk],
+      identidad:
+        bk === BLOQUES.VELCRO.key
+          ? identidad.filter((c) => !SIN_IDENTIDAD_VELCRO.has(c.key))
+          : identidad,
+      columnas,
+      filas,
+    });
   }
   return out;
 }

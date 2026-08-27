@@ -307,9 +307,15 @@ describe('construirCalculoGeneral', () => {
     expect(dim.bloques.find((b) => b.sistema.key === 'VELCRO')?.columnas).toHaveLength(3);
 
     // Y se dibuja como una sección más, con las MISMAS filas dark.
-    const secciones = seccionesDeHoja(data, dim.bloques);
+    const secciones = seccionesDeHoja(data, dim.bloques, dim.identidad);
     const secVelcro = secciones.find((s) => s.sistema.key === 'VELCRO');
     expect(secVelcro?.filas.map((f) => f.piezaId)).toEqual(data.filas.map((f) => f.piezaId));
+    // El COD_IN es la tela de la CORTINA: en este cuadro, al lado de COD.
+    // VELCRO, se leería como si la tira se cortara de esa tela.
+    expect(secVelcro?.identidad.map((c) => c.key)).not.toContain('codInt');
+    expect(secciones.find((s) => s.sistema.key === 'DARK')?.identidad.map((c) => c.key)).toContain(
+      'codInt',
+    );
     // Va justo después del DARK, que es la cortina a la que pertenece.
     expect(secciones.findIndex((s) => s.sistema.key === 'VELCRO')).toBe(
       secciones.findIndex((s) => s.sistema.key === 'DARK') + 1,

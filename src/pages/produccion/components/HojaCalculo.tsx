@@ -44,7 +44,7 @@ export default function HojaCalculo({
 }) {
   // Las secciones las arma el módulo puro, el mismo que usa el PDF: si cada uno
   // hiciera su lista, un cambio saldría en un papel y no en el otro.
-  const secciones = seccionesDeHoja(data, bloques);
+  const secciones = seccionesDeHoja(data, bloques, identidad);
 
   const avance = calcularAvance(
     data.filas.map((f) => f.piezaId),
@@ -79,7 +79,7 @@ export default function HojaCalculo({
               <thead>
                 <tr className="border-b text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                   <th className="w-10 px-2 py-1.5" />
-                  {identidad.map((c) => (
+                  {sec.identidad.map((c) => (
                     <th key={c.key} className="whitespace-nowrap px-2 py-1.5 font-medium">
                       {c.label}
                     </th>
@@ -125,7 +125,7 @@ export default function HojaCalculo({
                           {hecho && <Check className="h-4 w-4" />}
                         </button>
                       </td>
-                      {identidad.map((c) => (
+                      {sec.identidad.map((c) => (
                         <td
                           key={c.key}
                           className={cn(
