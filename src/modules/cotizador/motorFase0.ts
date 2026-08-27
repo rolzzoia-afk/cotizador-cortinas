@@ -29,9 +29,11 @@ import {
 import {
   PASO_LAMA_M,
   REGLAS_PRECIOS_DEFAULT,
+  SUFIJO_RECETA_2T,
   SUFIJO_RECETA_B,
   SUFIJO_RECETA_INV,
   claveReceta,
+  claveReceta2T,
   claveRecetaB,
   claveRecetaInv,
   explicarCantidad,
@@ -40,11 +42,13 @@ import {
   recetaBEsExacta,
   recetaInvEsExacta,
   resolverReceta,
+  resolverReceta2T,
   resolverRecetaB,
   resolverRecetaInv,
   sistemaCategoriaB,
   sistemaDeFila,
   sistemaInvertida,
+  tieneReceta2T,
   type CantidadReceta,
   type FiltroAncho,
   type LineaMaterialDesglose,
@@ -101,6 +105,17 @@ export type FilaFase0 = {
    * cuentan las piezas, como venía haciéndose.
    */
   ventanaId?: string;
+  /**
+   * Esta fila es la SEGUNDA TELA de una cortina de dos telas: comparte la
+   * estructura con la primera de su ventana (un beeblack doble es un solo
+   * juego de perfiles con un screen y un blackout adentro). Trae todo lo suyo
+   * —tela, manilla, kit, caja— pero no vuelve a pagar el riel, en un panel
+   * propio `cod|2T` con la receta `BEE_BK|2T` (dueño, 2026-08-27).
+   *
+   * Solo cambia el precio de las familias que TIENEN receta `|2T`: hoy las
+   * tres del beeblack. Un dual roller marcado así se cotiza como siempre.
+   */
+  segundaTela?: boolean;
 };
 
 /**
@@ -111,6 +126,8 @@ export type FilaFase0 = {
  */
 export const SUFIJO_PANEL_B = SUFIJO_RECETA_B;
 export const SUFIJO_PANEL_INV = SUFIJO_RECETA_INV;
+/** Panel de la 2.ª tela de un doble (`BEE_BK|2T`): la que no paga el riel. */
+export const SUFIJO_PANEL_2T = SUFIJO_RECETA_2T;
 
 export type LineaResultado = {
   codInt: string;
@@ -120,6 +137,8 @@ export type LineaResultado = {
   lineaB: boolean;
   /** La tela se cobra cortada rotada (panel `…|INV`). */
   invertida: boolean;
+  /** 2.ª tela de un doble: se cobró sin el riel, que pagó la primera (panel `…|2T`). */
+  segundaTela: boolean;
   ancho: number;
   alto: number;
   cantidad: number;
@@ -161,6 +180,11 @@ export type ResultadoFamilia = {
   invertida: boolean;
   /** Cotizado con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
   sistemaInvertida: boolean;
+  /**
+   * Panel de la 2.ª tela de un doble: mismo sistema y misma tela que la
+   * primera, con la receta `|2T` (sin el riel, que ya se cobró en la primera).
+   */
+  segundaTela: boolean;
   /**
    * Cortinas con las que se calculó la TARIFA: TODAS las de la familia,
    * configuradas como este panel (como si todas fueran B, o invertidas, o
@@ -661,7 +685,8 @@ export function cotizarFase0(
   /**
    * Lo que deciden los botones de la grilla para una fila: categoría B y corte
    * invertido. Con eso se elige el sistema (familia > B > invertida) y la CLAVE
-   * del panel: `cod`, `cod|B`, `cod|INV` o `cod|B|INV`.
+   * del panel: `cod`, `cod|B`, `cod|INV` o `cod|B|INV`. La 2.ª tela de un doble
+   * agrega su propio `|2T`.
    */
   type Config = {
     clave: string;
@@ -670,6 +695,8 @@ export function cotizarFase0(
     invertida: boolean;
     /** Cotizada con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
     sistemaInv: boolean;
+    /** 2.ª tela de un doble Y su familia cobra distinto la segunda (tiene receta `|2T`). */
+    segundaTela: boolean;
     sistema?: SistemaPrecio;
   };
   type FilaResuelta = {
@@ -687,6 +714,8 @@ export function cotizarFase0(
     lineaB: boolean;
     invertida: boolean;
     sistemaInv: boolean;
+    /** Panel de la 2.ª tela de un doble: la receta `|2T`, sin el riel. */
+    segundaTela: boolean;
     esDuo: boolean;
     esVertical: boolean;
     anchoRollo: number;
@@ -723,15 +752,31 @@ export function cotizarFase0(
   // (tubo 63 mm, mano de obra y traslado propios); la de otras familias (y la
   // B invertida, que sigue siendo B) conserva su receta y solo gasta la tela a
   // lo largo del rollo, en un panel propio `cod|INV` / `cod|B|INV`.
-  const configDe = (cod: string, lineaB: boolean, invertida: boolean): Config => {
+  //
+  // La 2.ª tela de un doble hace lo mismo con `|2T`, pero SOLO si su familia
+  // tiene esa receta: si no la tiene, mandarla a un panel propio partiría la
+  // familia en dos paneles idénticos y no cambiaría un peso.
+  const configDe = (
+    cod: string,
+    lineaB: boolean,
+    invertida: boolean,
+    esVertical: boolean,
+    segundaTela: boolean,
+  ): Config => {
     const sistema = sistemaDeFila(cod, lineaB, reglas.sistemas, invertida);
     const enB = lineaB && !!sistema && sistema === sistemaCategoriaB(reglas.sistemas);
     const sistemaInv = invertida && !!sistema && sistema === sistemaInvertida(reglas.sistemas);
+    const dosTelas = segundaTela && tieneReceta2T(cod, esVertical, reglas.recetas);
     return {
-      clave: `${cod}${enB ? SUFIJO_PANEL_B : ''}${invertida ? SUFIJO_PANEL_INV : ''}`,
+      clave:
+        `${cod}` +
+        `${enB ? SUFIJO_PANEL_B : ''}` +
+        `${invertida ? SUFIJO_PANEL_INV : ''}` +
+        `${dosTelas ? SUFIJO_PANEL_2T : ''}`,
       lineaB: enB,
       invertida,
       sistemaInv,
+      segundaTela: dosTelas,
       sistema,
     };
   };
@@ -769,7 +814,13 @@ export function cotizarFase0(
       // ancho guardado en 0 tiene que caer al respaldo, si no cada pieza se
       // va a un paño propio y la tela se cobra de más.
       anchoRollo: anchoRolloMap[f.codInt] || Number(prod.anchoRollo) || reglas.anchoRolloFallbackM,
-      config: configDe(cod, !!f.lineaB && !esVertical, !!f.invertida && !esVertical),
+      config: configDe(
+        cod,
+        !!f.lineaB && !esVertical,
+        !!f.invertida && !esVertical,
+        esVertical,
+        !!f.segundaTela,
+      ),
     };
   });
   /** Clave del panel de cada fila válida (null = sin producto). */
@@ -842,6 +893,7 @@ export function cotizarFase0(
         lineaB: c.lineaB,
         invertida: c.invertida,
         sistemaInv: c.sistemaInv,
+        segundaTela: c.segundaTela,
         esDuo,
         esVertical,
         sistema: c.sistema,
@@ -894,16 +946,23 @@ export function cotizarFase0(
     // la invertida la suya (`BLACKOUT_D|INV`); el resto, la de su familia con
     // los precios del sistema si lo tiene.
     const margenInsumo = g.sistema?.margenInsumo ?? params.margenInsumo;
-    const claveRecetaUsada = g.lineaB
-      ? claveRecetaB(cod, g.esVertical, reglas.recetas)
-      : g.sistemaInv
-        ? claveRecetaInv(cod, g.esVertical, reglas.recetas)
-        : claveReceta(cod, g.esVertical, reglas.recetas);
-    const receta = g.lineaB
-      ? resolverRecetaB(cod, g.esVertical, reglas.recetas)
-      : g.sistemaInv
-        ? resolverRecetaInv(cod, g.esVertical, reglas.recetas)
-        : resolverReceta(cod, g.esVertical, reglas.recetas);
+    // La 2.ª tela de un doble manda sobre las demás variantes: su receta ya es
+    // la de su familia sin el riel, y hoy solo la tienen las tres del
+    // beeblack, que no van ni a categoría B ni al sistema invertida.
+    const claveRecetaUsada = g.segundaTela
+      ? claveReceta2T(cod, g.esVertical, reglas.recetas)
+      : g.lineaB
+        ? claveRecetaB(cod, g.esVertical, reglas.recetas)
+        : g.sistemaInv
+          ? claveRecetaInv(cod, g.esVertical, reglas.recetas)
+          : claveReceta(cod, g.esVertical, reglas.recetas);
+    const receta = g.segundaTela
+      ? resolverReceta2T(cod, g.esVertical, reglas.recetas)
+      : g.lineaB
+        ? resolverRecetaB(cod, g.esVertical, reglas.recetas)
+        : g.sistemaInv
+          ? resolverRecetaInv(cod, g.esVertical, reglas.recetas)
+          : resolverReceta(cod, g.esVertical, reglas.recetas);
     const materiales = materialesFamilia(
       receta,
       g.piezas,
@@ -929,6 +988,7 @@ export function cotizarFase0(
       lineaB: g.lineaB,
       invertida: g.invertida,
       sistemaInvertida: g.sistemaInv,
+      segundaTela: g.segundaTela,
       piezas: g.piezas.length,
       m2Total,
       piezasCobradas: g.piezasCobradas,
@@ -941,6 +1001,8 @@ export function cotizarFase0(
       traslado,
       costoTotal,
       precioM2,
+      // La `|2T` no es una receta de respaldo: es la exacta de la familia
+      // menos el riel, una decisión del dueño sobre una receta ya validada.
       exacto: g.lineaB
         ? recetaBEsExacta(cod)
         : g.sistemaInv
@@ -995,6 +1057,7 @@ export function cotizarFase0(
       clave: clave ?? '',
       lineaB: g?.lineaB ?? false,
       invertida: g?.invertida ?? false,
+      segundaTela: g?.segundaTela ?? false,
       ancho: f.ancho,
       alto: f.alto,
       cantidad: f.cantidad,

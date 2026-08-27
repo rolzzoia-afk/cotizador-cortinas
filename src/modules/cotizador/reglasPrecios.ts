@@ -219,6 +219,20 @@ export const SISTEMA_INVERTIDA_KEY = 'invertida';
 /** Sufijo de las recetas de cortina invertida (`BLACKOUT_D|INV`). */
 export const SUFIJO_RECETA_INV = '|INV';
 
+/**
+ * Sufijo de las recetas de la SEGUNDA TELA de una cortina de dos telas
+ * (`BEE_BK|2T`): la que comparte estructura con la primera, así que trae todo
+ * lo suyo —su tela, su manilla, su kit, su caja— pero NO vuelve a pagar el
+ * riel, porque el riel ya se cobró en la primera (decisión del dueño,
+ * 2026-08-27: el taller corta UNA estructura y la cotización cobraba DOS).
+ *
+ * Como los sufijos `|B` e `|INV`, es una receta más: se ve y se edita en
+ * Admin → Precios → Materiales por familia, y una familia que no tenga la suya
+ * cotiza igual que siempre. Hoy solo la tiene el beeblack; el día que el dual
+ * roller quiera lo mismo, basta con crearle su `|2T`.
+ */
+export const SUFIJO_RECETA_2T = '|2T';
+
 /** Sistemas que se eligen por FILA y no por familia: `sistemaDeFamilia` los salta. */
 const SISTEMAS_POR_FILA = new Set([SISTEMA_CATEGORIA_B_KEY, SISTEMA_INVERTIDA_KEY]);
 
@@ -535,6 +549,25 @@ const RECETA_BEEBLACK: LineaReceta[] = [
   v('CIN0002', porCortina()),
 ];
 
+/**
+ * Los códigos del RIEL lateral del beeblack (blanco, negro, café). Los 4
+ * perfiles de la cortina salen de este mismo fierro —arriba y abajo por el
+ * ancho, los costados por el alto—, y por eso son las dos únicas líneas que la
+ * segunda tela de un doble NO paga: la estructura es una sola.
+ */
+export const CODIGOS_RIEL_BEEBLACK = new Set(['SLM01', 'SLM02', 'SLM03']);
+
+/**
+ * BEEBLACK, SEGUNDA TELA de un doble. Es la receta de arriba SIN el riel.
+ *
+ * Se deriva de `RECETA_BEEBLACK` en vez de copiarla para que agregar o cambiar
+ * una línea allá llegue sola acá: todo lo que no sea el riel se cobra por tela
+ * (dos telas = dos manillas, dos kits, dos cajas, dos zunchos).
+ */
+const RECETA_BEEBLACK_2A_TELA: LineaReceta[] = RECETA_BEEBLACK.filter(
+  (l) => !CODIGOS_RIEL_BEEBLACK.has(l.insumo),
+);
+
 /** COD de familia que se cotizan como beeblack. */
 export const FAMILIAS_BEEBLACK = ['BEE_BK', 'BEE_MOSQ', 'BEE_TRAS'] as const;
 
@@ -565,6 +598,11 @@ export const RECETAS_DEFAULT: Record<string, LineaReceta[]> = {
   BEE_BK: RECETA_BEEBLACK,
   BEE_MOSQ: RECETA_BEEBLACK,
   BEE_TRAS: RECETA_BEEBLACK,
+  // Segunda tela de un beeblack doble (ver `claveReceta2T`): todo lo suyo,
+  // menos el riel, que ya lo pagó la primera.
+  [`BEE_BK${SUFIJO_RECETA_2T}`]: RECETA_BEEBLACK_2A_TELA,
+  [`BEE_MOSQ${SUFIJO_RECETA_2T}`]: RECETA_BEEBLACK_2A_TELA,
+  [`BEE_TRAS${SUFIJO_RECETA_2T}`]: RECETA_BEEBLACK_2A_TELA,
   [RECETA_VERTICAL_KEY]: RECETA_VERTICAL,
   [RECETA_DUO_GENERICO_KEY]: recetaDuo({ materialesVarios: null }),
   // Categoría B (ver `claveRecetaB`): las verticales no tienen receta B y
@@ -1018,6 +1056,13 @@ export function sistemaDeReceta(
   claveReceta: string,
   sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
 ): SistemaPrecio | undefined {
+  // La segunda tela no es un sistema aparte: es la MISMA cortina sin el riel,
+  // así que cobra con la tabla de su familia. Sin este recorte, `BEE_BK|2T`
+  // no encontraba el sistema beeblack y el validador daba por no cotizables
+  // sus insumos (SLM10, SML13…), que solo viven en la tabla del sistema.
+  if (claveReceta.endsWith(SUFIJO_RECETA_2T)) {
+    return sistemaDeReceta(claveReceta.slice(0, -SUFIJO_RECETA_2T.length), sistemas);
+  }
   if (claveReceta.endsWith(SUFIJO_RECETA_B)) return sistemaCategoriaB(sistemas);
   if (claveReceta.endsWith(SUFIJO_RECETA_INV)) return sistemaInvertida(sistemas);
   return sistemaDeFamilia(claveReceta, sistemas);
@@ -1038,7 +1083,13 @@ export function recetasDeSistema(
   if (clave === SISTEMA_INVERTIDA_KEY) {
     return sistema.familias.map((f) => `${f}${SUFIJO_RECETA_INV}`);
   }
-  return sistema.familias;
+  // Las familias del sistema y, si la tienen, su receta de segunda tela: el
+  // menú «usar en…» tiene que poder meter un insumo en las dos, o agregar una
+  // línea al beeblack la dejaría fuera de sus dobles.
+  return sistema.familias.flatMap((f) => {
+    const dos = `${f}${SUFIJO_RECETA_2T}`;
+    return recetas[dos] ? [f, dos] : [f];
+  });
 }
 
 /** Precios de insumo con los que se cotiza un grupo: los del sistema ganan. */
@@ -1215,6 +1266,44 @@ export function resolverRecetaB(
 ): LineaReceta[] {
   const clave = claveRecetaB(cod, esVertical, recetas);
   return recetas[clave] ?? RECETAS_DEFAULT[clave];
+}
+
+/**
+ * Clave de la receta de la SEGUNDA TELA de una cortina de dos telas: la de su
+ * familia con el sufijo `|2T` si existe (`BEE_BK|2T`). Si la familia no la
+ * tiene —hoy, todas menos las tres del beeblack—, la segunda tela se cotiza
+ * exactamente como la primera, que es como venía siendo.
+ */
+export function claveReceta2T(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): string {
+  const base = claveReceta(cod, esVertical, recetas);
+  const dos = `${base}${SUFIJO_RECETA_2T}`;
+  return recetas[dos] || RECETAS_DEFAULT[dos] ? dos : base;
+}
+
+export function resolverReceta2T(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): LineaReceta[] {
+  const clave = claveReceta2T(cod, esVertical, recetas);
+  return recetas[clave] ?? RECETAS_DEFAULT[clave];
+}
+
+/**
+ * ¿Esta familia cobra distinto la segunda tela de un doble? Es lo que decide
+ * si la fila va a un panel propio: sin receta `|2T` no hay nada que cambiar, y
+ * mandarla a un panel aparte solo partiría la familia en dos por gusto.
+ */
+export function tieneReceta2T(
+  cod: string,
+  esVertical: boolean,
+  recetas: Record<string, LineaReceta[]> = RECETAS_DEFAULT,
+): boolean {
+  return claveReceta2T(cod, esVertical, recetas) !== claveReceta(cod, esVertical, recetas);
 }
 
 /**

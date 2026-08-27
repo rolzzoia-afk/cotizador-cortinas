@@ -1436,6 +1436,136 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// BEEBLACK DOBLE — una estructura, dos telas.
+//
+// El taller corta UN juego de perfiles (el 2.º paño no los repite,
+// `excel-ordenes.ts`) y la cotización los cobraba DOS veces, una por familia.
+// Desde el 2026-08-27 la 2.ª tela va a un panel propio `…|2T` con la receta de
+// su familia sin el riel: un riel por ventana, todo lo demás por tela.
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
+  // Mosquitero al vidrio (paño 0, el que paga la estructura) + blackout detrás.
+  const VENT = 'v1';
+  const MEDIDAS = { ancho: 1.5, alto: 1.7, cantidad: 1 };
+  const DOBLE = [
+    { codInt: 'BEE-SC01', ...MEDIDAS, ventanaId: VENT, segundaTela: false },
+    { codInt: 'BEE-BK01', ...MEDIDAS, ventanaId: VENT, segundaTela: true },
+  ];
+  const cotizar = (filas = DOBLE) => cotizarFase0(filas, CAT_BB, AR_BB);
+  const rielesDe = (f: { materiales: { insumo: string; total: number }[] }) =>
+    f.materiales.filter((l) => l.insumo === 'SLM01');
+  const totalRiel = (f: { materiales: { insumo: string; total: number }[] }) =>
+    rielesDe(f).reduce((s, l) => s + l.total, 0);
+
+  it('la 2.ª tela va a su propio panel |2T y la 1.ª se queda en el de siempre', () => {
+    const r = cotizar();
+    expect(r.lineas[0].clave).toBe('BEE_MOSQ');
+    expect(r.lineas[0].segundaTela).toBe(false);
+    expect(r.lineas[1].clave).toBe('BEE_BK|2T');
+    expect(r.lineas[1].segundaTela).toBe(true);
+    const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T');
+    expect(bk?.claveReceta).toBe('BEE_BK|2T');
+    // Sigue siendo beeblack: su sistema, su margen y su tela de referencia.
+    expect(bk?.sistema).toBe('Beeblack');
+    expect(bk?.margenInsumo).toBe(0.6);
+    expect(bk?.extraAltoM).toBe(1);
+  });
+
+  it('el riel se cobra UNA vez: entero en la 1.ª tela, cero en la 2.ª', () => {
+    const r = cotizar();
+    const mosq = r.familias.find((f) => f.clave === 'BEE_MOSQ')!;
+    const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
+    // Σanchos ×2 = 3,00 · Σaltos ×2 = 3,40 → 6,40 m a 24.999 ÷ 0,60.
+    expect(rielesDe(mosq)).toHaveLength(2);
+    expect(totalRiel(mosq)).toBeCloseTo((6.4 * 24999) / 0.6, 3);
+    expect(rielesDe(bk)).toHaveLength(0);
+    expect(totalRiel(bk)).toBe(0);
+  });
+
+  it('todo lo demás sí se cobra por tela: dos manillas, dos kits, dos cajas', () => {
+    const r = cotizar();
+    const mosq = r.familias.find((f) => f.clave === 'BEE_MOSQ')!;
+    const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
+    for (const cod of ['SML10', 'SML13', 'SML34', 'SML35', 'SML38', 'CAJA0001', 'CIN0002']) {
+      const enMosq = mosq.materiales.filter((l) => l.insumo === cod);
+      const enBk = bk.materiales.filter((l) => l.insumo === cod);
+      expect(enBk, cod).toHaveLength(enMosq.length);
+      expect(enBk.reduce((s, l) => s + l.total, 0), cod).toBeCloseTo(
+        enMosq.reduce((s, l) => s + l.total, 0),
+        3,
+      );
+    }
+    // Y la mano de obra es de las dos: se arman las dos telas.
+    expect(bk.manoObra).toBe(83300);
+    expect(mosq.manoObra).toBe(83300);
+  });
+
+  it('la ventana paga un riel, no dos: la diferencia contra el cobro viejo', () => {
+    const conRegla = cotizar();
+    // Lo mismo sin declarar la 2.ª tela es el comportamiento anterior.
+    const antes = cotizar(DOBLE.map((f) => ({ ...f, segundaTela: false })));
+    const riel = (6.4 * 24999) / 0.6;
+    expect(totalRiel(antes.familias.find((f) => f.clave === 'BEE_BK')!)).toBeCloseTo(riel, 3);
+    // Un riel entero menos, repartido en los m² de esa tela.
+    const bajaEsperada = riel / conRegla.familias.find((f) => f.clave === 'BEE_BK|2T')!.m2Total;
+    const antesM2 = antes.familias.find((f) => f.clave === 'BEE_BK')!.precioM2;
+    const ahoraM2 = conRegla.familias.find((f) => f.clave === 'BEE_BK|2T')!.precioM2;
+    expect(antesM2 - ahoraM2).toBeCloseTo(bajaEsperada, 3);
+    expect(conRegla.subtotalNeto).toBeLessThan(antes.subtotalNeto);
+  });
+
+  it('la instalación sigue siendo una sola: es la misma ventana', () => {
+    const r = cotizar();
+    expect(r.instalacion.cantidad).toBe(1);
+    expect(r.instalacion.total).toBe(35000);
+  });
+
+  it('un beeblack simple no cambia un peso', () => {
+    const fila = { codInt: 'BEE-BK01', ancho: 1.5, alto: 1.7, cantidad: 1 };
+    const solo = cotizarFase0([fila], CAT_BB, AR_BB);
+    const marcado = cotizarFase0([{ ...fila, segundaTela: true }], CAT_BB, AR_BB);
+    // Marcada como 2.ª tela SÍ cambia (es lo que pide la regla), pero sin
+    // marcar el precio es exactamente el de siempre.
+    expect(solo.lineas[0].clave).toBe('BEE_BK');
+    expect(solo.lineas[0].segundaTela).toBe(false);
+    expect(marcado.subtotalNeto).toBeLessThan(solo.subtotalNeto);
+  });
+
+  it('las dos telas de la misma familia también pagan un solo riel', () => {
+    const r = cotizarFase0(
+      [
+        { codInt: 'BEE-BK01', ...MEDIDAS, ventanaId: VENT, segundaTela: false },
+        { codInt: 'BEE-BK01', ...MEDIDAS, ventanaId: VENT, segundaTela: true },
+      ],
+      CAT_BB, AR_BB,
+    );
+    // Los dos paneles se calculan con las DOS piezas de la familia (así se
+    // reparte la tela), pero el riel solo lo tiene el panel de la 1.ª y solo
+    // esa fila se cobra ahí: la ventana termina pagando un perímetro.
+    const primera = r.familias.find((f) => f.clave === 'BEE_BK')!;
+    const segunda = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
+    expect(primera.piezas).toBe(2);
+    expect(primera.piezasCobradas).toBe(1);
+    expect(segunda.piezasCobradas).toBe(1);
+    expect(totalRiel(segunda)).toBe(0);
+    // El riel del panel de la 1.ª es el de las dos piezas, pero se lo reparten
+    // entre los m² de las dos y solo una lo paga → un perímetro cobrado.
+    const rielUno = (6.4 * 24999) / 0.6;
+    expect(totalRiel(primera)).toBeCloseTo(rielUno * 2, 3);
+    expect((totalRiel(primera) * primera.m2Cobrados) / primera.m2Total).toBeCloseTo(rielUno, 3);
+  });
+
+  it('una familia sin receta |2T se cotiza como siempre aunque se marque', () => {
+    const fila = { codInt: 'SC 34', ancho: 1.124, alto: 1.3, cantidad: 1 };
+    const a = cotizarFase0([fila], CAT_BB, AR_BB);
+    const b = cotizarFase0([{ ...fila, segundaTela: true }], CAT_BB, AR_BB);
+    expect(b.lineas[0].clave).toBe('SCREEN_P');
+    expect(b.lineas[0].segundaTela).toBe(false);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // COTAP-8003 (14-07-2026): la cotización que fija la receta beeblack CANÓNICA.
 // Su copia del Excel tiene la fila «ALTO» del riel SLM01 corregida (cobra los
 // altos, como dice su rótulo) y el dueño la declaró la buena el 2026-08-19,

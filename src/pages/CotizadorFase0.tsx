@@ -918,6 +918,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // en varios paños (un dual son dos telas y UNA instalación). En Fase 1
       // las filas no tienen ventana todavía y se cuentan de a una.
       ventanaId: f.vid,
+      // 2.ª tela de una cortina de dos telas: la que comparte estructura con la
+      // primera de su ventana. El taller corta UN juego de perfiles, así que el
+      // riel se cobra una vez (el motor solo lo aplica a las familias con
+      // receta `|2T`: hoy el beeblack). Sin `vid` no hay ventana compartida —
+      // dos filas sueltas escritas a mano son dos cortinas, y se cobran así.
+      segundaTela: !!f.vid && (f.panoIndex ?? 0) > 0,
     }));
     // La instalación base ('INST') se calcula automáticamente; se excluye de los
     // adicionales que van al motor para no cobrarla dos veces aunque alguien la

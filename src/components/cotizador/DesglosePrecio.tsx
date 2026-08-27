@@ -38,7 +38,10 @@ export function nombresDePiezas(
  * Cómo están configuradas las cortinas con las que se calculó la tarifa del
  * panel: es lo que los botones de la grilla deciden fila por fila.
  */
-export function comoSiFueran(f: Pick<ResultadoFamilia, 'lineaB' | 'invertida'>): string {
+export function comoSiFueran(
+  f: Pick<ResultadoFamilia, 'lineaB' | 'invertida' | 'segundaTela'>,
+): string {
+  if (f.segundaTela) return 'la 2.ª tela de un doble';
   if (f.lineaB && f.invertida) return 'de categoría B e invertidas';
   if (f.lineaB) return 'de categoría B';
   if (f.invertida) return 'invertidas';
@@ -87,6 +90,11 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
         {f.lineaB && (
           <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[0.65rem] text-amber-700">
             Categoría B: sus herrajes, su mano de obra y su tela de referencia
+          </span>
+        )}
+        {f.segundaTela && (
+          <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-[0.65rem] text-violet-700">
+            2.ª tela del doble: sin riel — los 4 perfiles los paga la primera tela de la ventana
           </span>
         )}
         {f.invertida && (
