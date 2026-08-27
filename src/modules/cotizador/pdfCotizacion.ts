@@ -116,6 +116,11 @@ export type EntradaPdfCotizacion = {
    */
   validezTitulo?: string;
   validezAmarilla?: boolean;
+  /**
+   * Celda CONTACTO: por dónde nos encontró el cliente (Instagram, WhatsApp,
+   * TikTok…), elegido en Fase 1. Vacío = el texto fijo de la empresa.
+   */
+  canal?: string;
   totales: TotalesCotizacion;
   /** La lista FINAL (con el término de la tarjeta ya resuelto). */
   terminos: string[];
@@ -542,7 +547,10 @@ function secGrillaCliente(doc: jsPDF, e: EntradaPdfCotizacion, y: number): numbe
     ['ESTATUS:', ''],
     ['INSTALACIÓN:', ''],
     ['FECHA INST:', ''],
-    ['CONTACTO:', e.empresa.contacto.texto],
+    // El CONTACTO es por dónde nos encontró el cliente, y se elige por
+    // cotización en Fase 1. Sin elegir cae al texto fijo de la empresa, que es
+    // lo que salía antes en todas (mismo criterio que la banda de validez).
+    ['CONTACTO:', e.canal?.trim() || e.empresa.contacto.texto],
   ];
   const h = 4.8;
   const wLabelIzq = 22;

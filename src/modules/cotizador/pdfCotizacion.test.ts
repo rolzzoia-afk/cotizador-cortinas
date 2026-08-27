@@ -161,6 +161,21 @@ describe('generarPdfCotizacion', () => {
     expect(impreso()).not.toContain('COTJS - 07979-5');
   });
 
+  // La celda CONTACTO dejó de ser el Instagram fijo de la empresa: ahora dice
+  // por dónde nos encontró el cliente, elegido en Fase 1.
+  it('la celda CONTACTO muestra el canal de ESTA cotización', () => {
+    generarPdfCotizacion(entradaDemo({ canal: 'TikTok' }));
+    expect(impreso()).toContain('CONTACTO:');
+    expect(impreso()).toContain('TikTok');
+  });
+
+  it('sin canal elegido cae al texto fijo de la empresa, como antes', () => {
+    generarPdfCotizacion(entradaDemo({ canal: '   ' }));
+    expect(impreso()).toContain('INSTAGRAM');
+    generarPdfCotizacion(entradaDemo({ canal: undefined }));
+    expect(impreso()).toContain('INSTAGRAM');
+  });
+
   it('la banda NO cae al número de la OT: ahí va texto o nada', () => {
     generarPdfCotizacion(entradaDemo({ otBanda: '', otCliente: '3201' }));
     // El número queda en su celda, no bajo el título.

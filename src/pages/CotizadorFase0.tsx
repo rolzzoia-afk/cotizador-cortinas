@@ -101,6 +101,8 @@ import {
   tipoDeAdicional,
   type AdicionalUI,
 } from '@/modules/cotizador/adicionalesFase0';
+import { canalParaGuardar, opcionesCanal } from '@/modules/canales/canales';
+import { useCanalesContacto } from '@/modules/canales/hooks';
 import { PanelFamilia, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
 import FilaTotal from '@/components/cotizador/FilaTotal';
 import { FILAS_TOTALES, NOTA_IVA } from '@/modules/cotizador/filasTotales';
@@ -363,6 +365,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // La banda de validez de esta cotización («DESCUENTO VÁLIDO POR 1 DÍA»).
   // Vacío = la de la empresa; el amarillo es el de los descuentos a plazo corto.
   const [validezTexto, setValidezTexto] = useState('');
+  /** Por dónde nos encontró el cliente (celda CONTACTO de la planilla). */
+  const [canal, setCanal] = useState('');
+  const { canales: canalesConfig } = useCanalesContacto();
   const [validezAmarilla, setValidezAmarilla] = useState(false);
   // Tubo E78: habilita la banda 2,2–3,0 m (kit 45 mm + tubo E78) para esta OT.
   // Default false = el rango usa tubo E66 (38 mm) con kit normal.
@@ -488,6 +493,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     );
     setValidezTexto(dg.validezTexto || '');
     setValidezAmarilla(!!dg.validezAmarilla);
+    setCanal(canalParaGuardar(dg.canal));
     setUsarTuboE78(!!dg.usarTuboE78);
     setOrigVentanas(orig as Record<string, Record<string, unknown>>);
     setCargadoEdit(true);
@@ -704,6 +710,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           comuna: cliente.comuna,
           regionNombre: cliente.region,
           otDetallada: otDetallada.trim(),
+          canal: canalParaGuardar(canal),
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
@@ -780,7 +787,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           regionNombre: cliente.region,
           otDetallada: detalleGuardado,
           ot: numOT,
-          canal: 'Cotizador',
+          // Antes decía 'Cotizador', que es de dónde salió el REGISTRO, no por
+          // dónde llegó el cliente: pisaba el canal y el dato no servía.
+          canal: canalParaGuardar(canal),
           fecha: now.split('T')[0],
           adicionalesFase0: adicionalesGuardados,
           region,
@@ -1558,6 +1567,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         ),
         validezTitulo: validezTexto.trim(),
         validezAmarilla,
+        canal: canalParaGuardar(canal),
         proveedorTarjeta: paramsEff.proveedorTarjeta,
         empresa: datosEmpresa,
         logoDataUrl: logoPropio ?? LOGO_ROLZZO,
@@ -1751,6 +1761,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           <CampoRegion
             value={cliente.region}
             onChange={(v) => setCliente((c) => ({ ...c, region: v }))}
+          />
+          {/* Por dónde nos encontró el cliente. Es la celda CONTACTO de la
+              planilla, que antes salía siempre con el Instagram de la empresa.
+              Se guarda en la OT para poder medirlo después. */}
+          <CampoEstado
+            label="Contacto (cómo nos encontró)"
+            value={canal}
+            onChange={setCanal}
+            opciones={[
+              { value: '', label: '— Sin definir —' },
+              ...opcionesCanal(canalesConfig, canal).map((c) => ({ value: c, label: c })),
+            ]}
           />
           <CampoEstado
             label="Instalación"
