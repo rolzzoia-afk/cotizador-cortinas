@@ -266,6 +266,9 @@ export function ProductosCatalogoSection() {
                 <th className="px-2 py-1.5 text-left font-medium">Tipo</th>
                 <th className="px-2 py-1.5 text-left font-medium">Diseño</th>
                 <th className="px-2 py-1.5 text-right font-medium">$/m</th>
+                <th className="px-2 py-1.5 text-right font-medium" title="Costo por metro con IVA">
+                  Costo
+                </th>
                 <th className="px-2 py-1.5 text-right font-medium">Dcto.</th>
                 <th className="px-2 py-1.5 text-right font-medium">Rollo</th>
                 <th className="px-2 py-1.5 text-left font-medium">Cómo se cobra</th>
@@ -289,6 +292,9 @@ export function ProductosCatalogoSection() {
                     <td className="px-2 py-1 text-muted-foreground">{p.tipo}</td>
                     <td className="px-2 py-1 text-muted-foreground">{p.descripcion}</td>
                     <td className="px-2 py-1 text-right">{formatCLP(Number(p.precio) || 0)}</td>
+                    <td className="px-2 py-1 text-right text-muted-foreground">
+                      {Number(p.costo) > 0 ? formatCLP(Number(p.costo)) : '—'}
+                    </td>
                     <td className="px-2 py-1 text-right text-muted-foreground">
                       {p.descuento ? `${Math.round(p.descuento * 100)} %` : '—'}
                     </td>
@@ -346,7 +352,7 @@ export function ProductosCatalogoSection() {
               })}
               {!filas.length && (
                 <tr>
-                  <td colSpan={9} className="px-2 py-6 text-center text-muted-foreground">
+                  <td colSpan={10} className="px-2 py-6 text-center text-muted-foreground">
                     {loading ? 'Cargando el catálogo…' : 'Ningún producto con esos filtros.'}
                   </td>
                 </tr>

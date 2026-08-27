@@ -25,6 +25,7 @@ export type CampoCatalogo =
   | 'tipo'
   | 'descripcion'
   | 'precio'
+  | 'costo'
   | 'descuento'
   | 'anchoRollo'
   | 'categoria';
@@ -86,6 +87,9 @@ const ALIAS: Record<CampoCatalogo | 'codInt', string[]> = {
   tipo: ['tipo'],
   descripcion: ['descripcion', 'diseno', 'diseño'],
   precio: ['precio de venta', 'precio', 'precio venta', '$/m', '$ /m', 'valor'],
+  // El Excel maestro trae «Costo» entre el descuento y la ganancia. Hasta ahora
+  // se leía y se botaba; es lo que le cuesta a la empresa un metro de tela.
+  costo: ['costo', 'costo neto', 'costo unitario', 'costo x metro', 'costo por metro'],
   descuento: ['descuento', 'dcto', 'dcto %', '% dcto', 'descuento %', '% descuento', 'dct %', 'dct'],
   anchoRollo: ['ancho de panos', 'ancho de paños', 'ancho rollo', 'rollo', 'ancho'],
   categoria: ['categoria', 'gama'],
@@ -154,7 +158,7 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
   };
   // Solo se toca lo que la planilla trae: un Excel de puros descuentos no puede
   // dejar sin producto ni descripción a los códigos que actualiza.
-  const campos = (['cod', 'producto', 'tipo', 'descripcion', 'precio', 'descuento', 'anchoRollo', 'categoria'] as const)
+  const campos = (['cod', 'producto', 'tipo', 'descripcion', 'precio', 'costo', 'descuento', 'anchoRollo', 'categoria'] as const)
     .filter((c) => columnas.has(c));
 
   const out: FilaCatalogo[] = [];
@@ -170,6 +174,7 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
     if (vistos.has(codInt)) continue; // primera aparición gana
     vistos.add(codInt);
     const precio = Number(cell(r, 'precio')) || 0;
+    const costo = Number(cell(r, 'costo')) || 0;
     const { descuento, eraPorcentaje } = leerDescuento(cell(r, 'descuento'));
     const anchoRollo = Number(cell(r, 'anchoRollo')) || null;
     const catRaw = normCod(cell(r, 'categoria'));
@@ -181,6 +186,7 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
       descripcion: String(cell(r, 'descripcion') ?? '').trim(),
       precio,
       descuento,
+      ...(costo ? { costo } : {}),
       ...(anchoRollo ? { anchoRollo } : {}),
       ...(categoria ? { categoria } : {}),
     };
@@ -220,11 +226,14 @@ export type CambioExistente = {
   campos?: readonly CampoCatalogo[];
   precioViejo: number;
   precioNuevo: number;
+  costoViejo: number;
+  costoNuevo: number;
   descuentoViejo: number;
   descuentoNuevo: number;
   categoriaVieja: string | null;
   categoriaNueva: string | null;
   cambiaPrecio: boolean;
+  cambiaCosto: boolean;
   cambiaDescuento: boolean;
   cambiaCategoria: boolean;
 };
@@ -269,6 +278,8 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
     const prev = actual[realKey];
     const precioViejo = Number(prev.precio) || 0;
     const precioNuevo = f.producto.precio;
+    const costoViejo = Number(prev.costo) || 0;
+    const costoNuevo = Number(f.producto.costo) || 0;
     const descuentoViejo = Number(prev.descuento) || 0;
     const descuentoNuevo = Number(f.producto.descuento) || 0;
     const categoriaVieja = prev.categoria || null;
@@ -277,12 +288,16 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
     // descuentos no puede reportar «precio 27.176 → 0».
     const cambiaPrecio =
       trae(f, 'precio') && precioNuevo > 0 && Math.abs(precioViejo - precioNuevo) > EPS_PRECIO;
+    // Mismo trato que el precio: el Excel maestro trae la columna «Costo» en 0
+    // para casi todo, y un 0 no puede borrar un costo ya cargado a mano.
+    const cambiaCosto =
+      trae(f, 'costo') && costoNuevo > 0 && Math.abs(costoViejo - costoNuevo) > EPS_PRECIO;
     const cambiaDescuento =
       trae(f, 'descuento') && Math.abs(descuentoViejo - descuentoNuevo) > EPS_DCTO;
     // Una categoría ausente en el Excel no borra la existente (merge conservador).
     const cambiaCategoria =
       trae(f, 'categoria') && categoriaNueva != null && categoriaNueva !== categoriaVieja;
-    if (cambiaPrecio || cambiaDescuento || cambiaCategoria) {
+    if (cambiaPrecio || cambiaCosto || cambiaDescuento || cambiaCategoria) {
       cambios.push({
         codInt: realKey,
         producto: f.producto,
@@ -290,11 +305,14 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
         campos: f.campos,
         precioViejo,
         precioNuevo,
+        costoViejo,
+        costoNuevo,
         descuentoViejo,
         descuentoNuevo,
         categoriaVieja,
         categoriaNueva,
         cambiaPrecio,
+        cambiaCosto,
         cambiaDescuento,
         cambiaCategoria,
       });
@@ -338,6 +356,9 @@ export function aplicarCatalogo(
     const merged: Producto = { ...(prev ?? {}), ...entrante } as Producto;
     if (!(f.producto.precio > 0) && prev && Number(prev.precio) > 0) {
       merged.precio = prev.precio; // no pisar un precio válido con 0
+    }
+    if (!(Number(f.producto.costo) > 0) && prev && Number(prev.costo) > 0) {
+      merged.costo = prev.costo; // ídem con el costo por metro
     }
     catalogo[key] = merged;
     if (f.anchoRollo && f.anchoRollo > 0) anchoRollo[key] = f.anchoRollo;
@@ -407,6 +428,11 @@ export const INSTRUCCIONES_IMPORTACION: string[][] = [
   ['• TIPO', 'PREMIUM, DELUX, STANDARD, BASIC…', ''],
   ['• DESCRIPCION', 'El diseño o el color.', 'DISEÑO'],
   ['• PRECIO DE VENTA', 'Precio por metro, en pesos.', 'PRECIO · $/M · VALOR'],
+  [
+    '• COSTO',
+    'Lo que nos cuesta un metro, con IVA. No cotiza: sale en el Costo total de producción.',
+    'COSTO NETO · COSTO POR METRO',
+  ],
   ['• DESCUENTO %', 'El descuento: 30 o 0,3.', 'DCTO · % DCTO · DESCUENTO'],
   ['• ANCHO DE PAÑOS', 'Ancho del rollo en metros.', 'ANCHO ROLLO · ROLLO · ANCHO'],
   ['• CATEGORIA', 'A o B.', 'GAMA'],
@@ -425,6 +451,7 @@ export function filasParaPlantilla(
       TIPO: p.tipo ?? '',
       DESCRIPCION: p.descripcion ?? '',
       'PRECIO DE VENTA': Number(p.precio) || 0,
+      COSTO: Number(p.costo) || 0,
       // En porcentaje, que es como la gente lo escribe; el importador lo
       // reconoce igual (ver `leerDescuento`).
       'DESCUENTO %': Math.round((Number(p.descuento) || 0) * 1000) / 10,

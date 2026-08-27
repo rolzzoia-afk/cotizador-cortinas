@@ -143,6 +143,12 @@ export type DatosGenerales = {
   corteGeneralColmena?: import('@/modules/cotizador/colmenaCorte').CorteGeneralColmena;
   /** Lo que quedó de la visita a terreno: video, informe, checklist y firma. */
   visita?: VisitaTerreno;
+  /**
+   * Lo que se escribe a mano en «Costo total» (Producción, solo administrador):
+   * mano de obra, auto, TAG y las fallas de tela. El resto de esa pantalla se
+   * calcula solo. Lo edita ÚNICAMENTE esa pantalla.
+   */
+  costosOT?: import('@/modules/produccion/costoOT').CostoManualOT;
 };
 
 /** Respuesta a una pregunta del resumen de visita. `null` = todavía sin contestar. */

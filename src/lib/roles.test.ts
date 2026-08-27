@@ -71,6 +71,18 @@ describe('puedeAccederRuta — taller', () => {
     expect(puedeAccederRuta('produccion', '/historial-corte')).toBe(true);
     expect(puedeAccederRuta('produccion', '/historial-tubos')).toBe(true);
   });
+  // /produccion es el taller en pantalla: entra todo el que trabaja una OT en
+  // el galpón, incluido el bodeguero (prepara los materiales de la orden).
+  it('todo el taller entra a /produccion', () => {
+    for (const rol of ['produccion', 'dimensionado', 'telas', 'operario', 'pruebas', 'bodeguero']) {
+      expect(puedeAccederRuta(rol, '/produccion'), `${rol} → /produccion`).toBe(true);
+    }
+  });
+  it('ventas NO entra a /produccion, y sin rol tampoco', () => {
+    expect(puedeAccederRuta('ventas', '/produccion')).toBe(false);
+    expect(puedeAccederRuta('', '/produccion')).toBe(false);
+    expect(puedeAccederRuta('rol-inventado', '/produccion')).toBe(false);
+  });
 });
 
 describe('puedeAccederRuta — roles vacíos o desconocidos', () => {

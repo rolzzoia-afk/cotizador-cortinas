@@ -20,6 +20,7 @@ const links: Array<{ to: string; label: string }> = [
   { to: '/optimizador-tela', label: 'Optim. Tela' },
   { to: '/bodeguero', label: 'Bodega' },
   { to: '/camionetas', label: 'Camionetas' },
+  { to: '/produccion', label: 'Producción' },
   { to: '/historial-corte', label: 'Historial Corte' },
   { to: '/historial-tubos', label: 'Tubos' },
   { to: '/ojo-de-dios', label: 'Ojo de Dios' },

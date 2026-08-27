@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   aplicarVariante,
+  COD_TELA_VELCRO_DARK,
   construirCalculoGeneral,
   envolverEtiqueta,
   pesoColumna,
+  seccionesDeHoja,
+  textoDespiece,
+  textoIdentidad,
   VARIANTE_DIMENSIONADO,
 } from './pdfCalculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
@@ -266,29 +270,56 @@ describe('construirCalculoGeneral', () => {
     expect(dimLabels).not.toContain('PERFIL BASE');
   });
 
-  it('dark: el Dimensionado oculta las cenefas cuadradas (aluminio) y deja el velcro (tela)', () => {
+  // El velcro es un corte de OTRA tela (blackout negro), no una medida más de
+  // la cortina: va en su propio cuadro, con el código del rollo del que sale.
+  it('dark: el velcro sale del bloque DARK y arma su propio cuadro, con su código', () => {
     const v = ventRoller(2.0, 'DARK INT');
     (v as { categoria: string }).categoria = 'DARK_38mm';
     (v as { alto: number }).alto = 2.3;
     v.sentido = 'INTERNO';
     Object.assign(v.panos[0], { alto: 2.3, oscuridadVariante: 'INTERNO' });
     const data = construirCalculoGeneral([v]);
+
     const bloque = data.bloques.find((b) => b.sistema.key === 'DARK');
     expect(bloque).toBeTruthy();
-    // Cálculo General: las cenefas cuadradas y el velcro SÍ están.
     const labels = bloque!.columnas.map((c) => c.label);
     expect(labels).toContain('CENEFA DELANTERA');
     expect(labels).toContain('CENEFA TRASERA');
-    expect(labels).toContain('ANCHO TELA VELCRO');
-    // Dimensionado (mesa de tela): fuera el aluminio, queda solo la tela + velcro.
-    const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO).bloques.find((b) => b.sistema.key === 'DARK');
-    const dimLabels = (dim?.columnas ?? []).map((c) => c.label);
+    expect(labels).not.toContain('ANCHO TELA VELCRO');
+    expect(labels).not.toContain('ALTO TELA VELCRO');
+
+    const velcro = data.bloques.find((b) => b.sistema.key === 'VELCRO');
+    expect(velcro?.columnas.map((c) => c.label)).toEqual([
+      'COD. VELCRO',
+      'ANCHO TELA VELCRO',
+      'ALTO TELA VELCRO',
+    ]);
+    expect(textoDespiece(data.filas[0], 'COD. VELCRO')).toBe(COD_TELA_VELCRO_DARK);
+
+    // Dimensionado (mesa de tela): fuera el aluminio del DARK; el cuadro del
+    // velcro queda entero, porque el velcro es tela.
+    const dim = aplicarVariante(data, VARIANTE_DIMENSIONADO);
+    const dimLabels = (dim.bloques.find((b) => b.sistema.key === 'DARK')?.columnas ?? []).map((c) => c.label);
     expect(dimLabels).not.toContain('CENEFA DELANTERA');
     expect(dimLabels).not.toContain('CENEFA TRASERA');
-    expect(dimLabels).toContain('ANCHO TELA VELCRO');
-    expect(dimLabels).toContain('ALTO TELA VELCRO');
     expect(dimLabels).toContain('TELA');
     expect(dimLabels).toContain('ALTO TELA');
+    expect(dim.bloques.find((b) => b.sistema.key === 'VELCRO')?.columnas).toHaveLength(3);
+
+    // Y se dibuja como una sección más, con las MISMAS filas dark.
+    const secciones = seccionesDeHoja(data, dim.bloques);
+    const secVelcro = secciones.find((s) => s.sistema.key === 'VELCRO');
+    expect(secVelcro?.filas.map((f) => f.piezaId)).toEqual(data.filas.map((f) => f.piezaId));
+    // Va justo después del DARK, que es la cortina a la que pertenece.
+    expect(secciones.findIndex((s) => s.sistema.key === 'VELCRO')).toBe(
+      secciones.findIndex((s) => s.sistema.key === 'DARK') + 1,
+    );
+  });
+
+  it('sin dark no hay cuadro de velcro', () => {
+    const data = construirCalculoGeneral([ventRoller(1.745, 'A')]);
+    expect(data.bloques.find((b) => b.sistema.key === 'VELCRO')).toBeUndefined();
+    expect(seccionesDeHoja(data, data.bloques).some((s) => s.sistema.key === 'VELCRO')).toBe(false);
   });
 
   it('arma un bloque ROLLER con las columnas que tienen datos', () => {
@@ -765,5 +796,45 @@ describe('pesoColumna — identidad', () => {
     expect(pesoColumna('producto', false)).toBe(2.4);
     expect(pesoColumna('descripcion', false)).toBe(1.9);
     expect(pesoColumna('tuberia', false)).toBe(2.4);
+  });
+});
+
+// El texto de cada celda es la ÚNICA regla que el PDF y la pantalla del taller
+// (/produccion → Dimensionado y Armado) no pueden contradecirse: los dos leen
+// estas funciones.
+describe('el texto de las celdas', () => {
+  const [fila] = construirCalculoGeneral([ventRoller(1.745, 'PPAL IZQ')]).filas;
+
+  it('ancho y alto reales van con 3 decimales y coma', () => {
+    expect(textoIdentidad(fila, 'anchoMts')).toBe('1,745');
+    expect(textoIdentidad(fila, 'altoMts')).toBe('1,800');
+  });
+
+  it('el texto sale tal cual', () => {
+    expect(textoIdentidad(fila, 'ubic')).toBe('PPAL IZQ');
+    expect(textoIdentidad(fila, 'codInt')).toBe('SC 64');
+  });
+
+  it('un 0 queda EN BLANCO: la hoja no imprime ceros', () => {
+    expect(textoIdentidad({ ...fila, cant: 0 }, 'cant')).toBe('');
+    expect(textoIdentidad(fila, 'cant')).toBe('1');
+  });
+
+  it('un campo que no existe no imprime «undefined»', () => {
+    expect(textoIdentidad(fila, 'noExiste')).toBe('');
+  });
+
+  it('el despiece numérico va a 2 decimales con coma', () => {
+    const f = { ...fila, despiece: new Map<string, number | string>([['TUBO', 172.5]]) };
+    expect(textoDespiece(f, 'TUBO')).toBe('172,5');
+  });
+
+  it('el despiece de texto (perfiles, tipo) sale sin tocar', () => {
+    const f = {
+      ...fila,
+      despiece: new Map<string, number | string>([['PERFIL BASE', '240 INT / 240 EXT']]),
+    };
+    expect(textoDespiece(f, 'PERFIL BASE')).toBe('240 INT / 240 EXT');
+    expect(textoDespiece(f, 'NO VA')).toBe('');
   });
 });

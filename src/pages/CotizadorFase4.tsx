@@ -22,11 +22,7 @@ import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { SUB_ETAPAS_PROD, calcularPorcentaje, colorProgreso } from '@/modules/ots/constants';
 import { SUB_ETAPA_META } from '@/modules/cotizador/fase4';
-import {
-  asignarJuntoEnOrden,
-  buildOptimizerRows,
-  restorePlanGuardado,
-} from '@/modules/cotizador/tela';
+import { filasOptimizadorDeOT } from '@/modules/cotizador/filasOptimizador';
 import { bomToOrdenMaterialesRows, calcularBOM } from '@/modules/cotizador/bom';
 import { INVENTARIO_VACIO, type InventarioEstado } from '@/modules/cotizador/inventario';
 import { InventarioSheet } from '@/components/cotizador/InventarioSheet';
@@ -75,12 +71,9 @@ export function CotizadorFase4() {
     // Se espera también a las fórmulas: con las de fábrica el plan saldría con
     // otras medidas y quedaría guardado así.
     if (!ot || loadingCat || loadingParams || loadingFormulas || loadingReglas) return null;
-    const fresh = buildOptimizerRows(ot.storeVentanas, catalogo, parametros, formulas, reglas);
-    if (fresh.length === 0) return [];
-    const guardado = ot.datosGenerales?.optimizerRows;
-    const restored = restorePlanGuardado(fresh, guardado);
-    const tieneJunto = restored.some((r) => r.junto && r.junto !== '' && r.junto !== '?');
-    return tieneJunto ? restored : asignarJuntoEnOrden(restored);
+    // La MISMA receta que usa la pantalla del taller (/produccion → Paños):
+    // si divergieran, el operario cortaría un plan distinto del que se imprime.
+    return filasOptimizadorDeOT(ot, catalogo, parametros, formulas, reglas);
   }, [ot, loadingCat, catalogo, loadingParams, parametros, loadingFormulas, formulas, loadingReglas, reglas]);
 
   // Componentes consolidados (siempre frescos desde el optimizador).

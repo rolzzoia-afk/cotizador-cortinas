@@ -17,6 +17,7 @@ import {
   Calculator,
   ClipboardCheck,
   FlaskConical,
+  Hammer,
   Layers,
   LineChart,
   LogOut,
@@ -86,6 +87,7 @@ type Role = {
 const ROLES: Role[] = [
   { title: 'Bodeguero', desc: 'Despacho y recepción de materiales con escaneo QR.', to: '/bodeguero?rol=bodeguero', icon: Package, tags: ['Despacho', 'QR', 'Stock', 'Camionetas'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'operario'] },
   { title: 'Producción', desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.', to: '/optimizador?rol=produccion', icon: Wrench, tags: ['Optimizador', 'Historial corte', 'Tubos'], categoria: 'operaciones', rolesVisibles: ['produccion', 'operario'] },
+  { title: 'Taller', desc: 'La OT en pantalla: plan de corte, avance por área y aviso de problemas.', to: '/produccion?rol=produccion', icon: Hammer, tags: ['Plan de corte', 'Avance', 'Avisos'], categoria: 'operaciones', rolesVisibles: ['produccion', 'dimensionado', 'telas', 'operario', 'pruebas', 'bodeguero'] },
   { title: 'Telas', desc: 'Gestión y control de stock de telas por rollo.', to: '/telas?rol=telas', icon: Layers, tags: ['Stock telas', 'Colmena'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario'] },
   { title: 'Dimensionado', desc: 'Corte de tela por cortina según planes de producción.', to: '/historial-corte?rol=dimensionado', icon: Ruler, tags: ['Corte tela', 'Planes de corte'], categoria: 'operaciones', rolesVisibles: ['produccion', 'dimensionado', 'operario'] },
   { title: 'Pruebas', desc: 'Control de calidad final antes de enviar a instalación.', to: '/panel?rol=pruebas', icon: ClipboardCheck, tags: ['Panel OTs', 'Control calidad'], categoria: 'operaciones', rolesVisibles: ['pruebas'] },
