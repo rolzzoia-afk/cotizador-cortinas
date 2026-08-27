@@ -3,6 +3,7 @@
 import {
   RECETA_DUO_GENERICO_KEY,
   RECETA_VERTICAL_KEY,
+  SUFIJO_RECETA_2T,
   SUFIJO_RECETA_B,
   SUFIJO_RECETA_INV,
 } from '@/modules/cotizador/reglasPrecios';
@@ -37,6 +38,12 @@ export const NOMBRE_FAMILIA: Record<string, string> = {
 
 /** El nombre legible, o la clave tal cual si es una familia agregada a mano. */
 export const nombreFamilia = (clave: string): string => {
+  // Va primero: una `|2T` es la receta de su familia sin el riel, y el nombre
+  // tiene que decir de qué familia habla («Beeblack blackout · 2.ª tela»).
+  if (clave.endsWith(SUFIJO_RECETA_2T)) {
+    const base = clave.slice(0, -SUFIJO_RECETA_2T.length);
+    return `${nombreFamilia(base)} · 2.ª tela del doble (sin riel)`;
+  }
   if (clave.endsWith(SUFIJO_RECETA_B)) {
     const base = clave.slice(0, -SUFIJO_RECETA_B.length);
     return `${NOMBRE_FAMILIA[base] ?? base} · Categoría B`;
