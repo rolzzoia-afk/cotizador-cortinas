@@ -92,12 +92,17 @@ export function compactarUbicaciones(crudas: string[]): string[] {
 
 /**
  * Filas de la tabla de corte que se imprimen: solo las que salen de colmena
- * (medidaColmena), van invertidas o son verticales (se cortan con el rollo
- * girado). Las cortinas de rollo normal no se muestran: el taller solo necesita
- * esta tabla para los cortes especiales.
+ * (medidaColmena) o van invertidas. Las cortinas de rollo normal no se
+ * muestran: el taller solo necesita esta tabla para los cortes especiales.
+ *
+ * La VERTICAL no entra por serlo. Estaba porque se corta distinto, pero en su
+ * hoja TODAS las filas son verticales, así que la tabla salía entera y sin
+ * nada que decir —cadena 0, cant 1, colmena en blanco— (dueño, 2026-08-27).
+ * Si alguna vertical llegara a salir de un sobrante, su fila aparece igual:
+ * ahí la tabla sí sirve, es donde se lee de qué sobrante tomarla.
  */
 export function filasCorteVisibles(cortinas: FilaCorteCortina[]): FilaCorteCortina[] {
-  return cortinas.filter((f) => f.invertida || f.esVertical || f.medidaColmena !== '');
+  return cortinas.filter((f) => f.invertida || f.medidaColmena !== '');
 }
 
 export type MetrosOptimizador = { codInt: string; metros: number; esVertical: boolean };

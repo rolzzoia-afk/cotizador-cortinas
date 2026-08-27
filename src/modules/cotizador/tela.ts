@@ -234,8 +234,10 @@ export function buildOptimizerRows(
       // dúo = 2×alto), SIN los extras de roller/dúo normales (Excel manual).
       // VERTICAL: se corta COMO UN ROLLER (la tela NO se invierte). La pieza es
       // el ancho real × (alto + extraVertical), y de ahí se dimensionan después
-      // las lamas de 8,9 cm. La RESERVA sigue siendo la del roller (alto + 25),
-      // igual que la planilla manual (OT 2923: alto 2,34 → corte 2,39, real 2,59).
+      // las lamas de 8,9 cm. La RESERVA es la MISMA que el corte: a la vertical
+      // no se le suman los 25 cm del roller (dueño, 2026-08-27). Antes reservaba
+      // alto + 25 para calzar con la planilla manual (OT 2923: alto 2,34 → corte
+      // 2,39, real 2,59) y la hoja de corte pedía 20 cm de más por paño.
       // BEEBLACK: la tela (acordeón) se corta al ancho/alto propios de la variante
       // (pizarra 2026-07-29), no con los descuentos del roller.
       const esPletina = esCategoriaPletina(v.categoria, reglas.tipos);
@@ -254,15 +256,19 @@ export function buildOptimizerRows(
       const altoTelaBbM = esBeeblack
         ? (piezas.find((pz) => pz.componente === 'Alto tela')?.medidaCm ?? 0) / 100
         : 0;
+      // Alto de corte de la vertical: reserva y corte son el MISMO número.
+      const altoVertical = altoM + params.extraVerticalCm / 100;
       const altoReal = esBeeblack
         ? altoTelaBbM || altoM
-        : esPletina
-          ? (isDuo ? altoM * 2 : altoM)
-          : (isDuo ? altoExtra * 2 : altoExtra);
+        : esVertical
+          ? altoVertical
+          : esPletina
+            ? (isDuo ? altoM * 2 : altoM)
+            : (isDuo ? altoExtra * 2 : altoExtra);
       const altoCorte = esBeeblack
         ? altoTelaBbM || altoM
         : esVertical
-          ? altoM + params.extraVerticalCm / 100
+          ? altoVertical
           : esPletina
             ? (isDuo ? altoM * 2 : altoM)
             : (isDuo ? altoM * 2 + params.extraDuoCm / 100 : altoExtra);

@@ -454,16 +454,18 @@ describe('construirHojaCorte — VERTICAL (OT 2923 ROSSANA)', () => {
     expect(c.comentario).toBe('VERTICAL');
   });
 
-  it('el paño corta 2,39 y reserva 2,59 (alto+25, igual que el roller)', () => {
+  // A la vertical no se le suman los 25 cm del roller (dueño, 2026-08-27): lo
+  // que corta es lo que reserva, y el OPTIMIZADOR baja esos mismos metros.
+  it('el paño corta y reserva 2,39: la vertical no suma los 25 cm', () => {
     expect(hoja.panos[0].altoCortePano).toBe(2.39);
-    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.59);
-    expect(hoja.optimizador.find((o) => o.codInt === 'SC 64')?.metros).toBe(2.59);
+    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.39);
+    expect(hoja.optimizador.find((o) => o.codInt === 'SC 64')?.metros).toBe(2.39);
   });
 });
 
 // Vertical MÁS ANCHA que el rollo (SALON 2,80 en un rollo de 2,50): nunca se
 // invierte (la tela va en lamas), el aviso dice cuántas pasadas del rollo lleva
-// y el paño conserva su alto/reserva de vertical (alto+5 / alto+25).
+// y el paño conserva su alto de vertical (alto+5, corte y reserva).
 describe('construirHojaCorte — VERTICAL más ancha que el rollo', () => {
   const ventanas: VentanaItem[] = [
     {
@@ -485,9 +487,15 @@ describe('construirHojaCorte — VERTICAL más ancha que el rollo', () => {
     expect(c.corteAncho35).toBe(''); // sin −3,5 en vertical
   });
 
-  it('el paño conserva su alto/reserva de vertical (2,45 / 2,65), no el ancho invertido', () => {
+  it('el paño conserva su alto de vertical (2,45), no el ancho invertido', () => {
     expect(hoja.panos[0].altoCortePano).toBe(2.45); // alto + 5
-    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.65); // alto + 25
+    expect(hoja.panos[0].altoMaxUtilizar).toBe(2.45); // la vertical no suma 25
+  });
+
+  // La tabla de cortes especiales es para colmena e invertidas. En la hoja
+  // vertical TODAS las filas son verticales: salía entera y sin nada que decir.
+  it('la vertical ya no llena la tabla de cortes especiales', () => {
+    expect(filasCorteVisibles(hoja.cortinas)).toEqual([]);
   });
 });
 
@@ -543,7 +551,7 @@ describe('partirHojaCorte — OT mixta (roller + vertical, tela compartida)', ()
     const sc64Vert = vertical.optimizador.find((o) => o.codInt === 'SC 64');
     expect(sc64Roller?.esVertical).toBe(false);
     expect(sc64Vert?.esVertical).toBe(true);
-    expect(sc64Vert?.metros).toBe(2.59); // alto 2,34 + 25
+    expect(sc64Vert?.metros).toBe(2.39); // alto 2,34 + 5 (la vertical no suma 25)
     // SC 02 solo existe del lado vertical.
     expect(principal.optimizador.find((o) => o.codInt === 'SC 02')).toBeUndefined();
     expect(vertical.optimizador.find((o) => o.codInt === 'SC 02')?.esVertical).toBe(true);
@@ -577,7 +585,7 @@ describe('partirHojaCorte — casos borde solo-vertical / solo-roller', () => {
   });
 });
 
-describe('filasCorteVisibles (tabla de corte solo colmena/invertidas/verticales)', () => {
+describe('filasCorteVisibles (tabla de corte solo colmena/invertidas)', () => {
   const fila = (over: Partial<FilaCorteCortina>): FilaCorteCortina =>
     ({
       cadena: 0, cant: 1, codInt: 'SC 64', tipo: 'PREMIUM',
@@ -586,15 +594,25 @@ describe('filasCorteVisibles (tabla de corte solo colmena/invertidas/verticales)
       medidaColmena: '', ubicColmena: '', ...over,
     });
 
-  it('muestra solo las filas de colmena, invertidas o verticales', () => {
+  it('muestra solo las filas de colmena o invertidas', () => {
     const cortinas = [
       fila({ codInt: 'A' }), // rollo normal → oculta
       fila({ codInt: 'B', invertida: true }), // invertida → visible
       fila({ codInt: 'C', medidaColmena: 'SC 64 (178X200)' }), // colmena → visible
       fila({ codInt: 'D' }), // rollo normal → oculta
-      fila({ codInt: 'E', esVertical: true }), // vertical (rollo girado) → visible
+      fila({ codInt: 'E', esVertical: true }), // vertical sola → OCULTA
     ];
-    expect(filasCorteVisibles(cortinas).map((f) => f.codInt)).toEqual(['B', 'C', 'E']);
+    expect(filasCorteVisibles(cortinas).map((f) => f.codInt)).toEqual(['B', 'C']);
+  });
+
+  // La vertical dejó de aparecer por serlo, pero si sale de un sobrante la
+  // tabla sí sirve: es donde se lee de qué sobrante tomarla.
+  it('una vertical que sale de colmena sí aparece', () => {
+    const cortinas = [
+      fila({ codInt: 'V', esVertical: true }),
+      fila({ codInt: 'VC', esVertical: true, medidaColmena: 'SC 02 (250X260)' }),
+    ];
+    expect(filasCorteVisibles(cortinas).map((f) => f.codInt)).toEqual(['VC']);
   });
 
   it('todas normales → lista vacía (el PDF omite la tabla de corte)', () => {
