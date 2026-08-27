@@ -19,7 +19,10 @@ import {
   restorePlanGuardado,
   type OptimizerRow,
 } from './tela';
-import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametros';
+// Del módulo PURO, no de `parametros` (que solo los re-exporta): ese arrastra
+// el cliente de Supabase, y con él la exigencia de tener las variables de
+// entorno. Este módulo no habla con la base, y sus pruebas tampoco deberían.
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { CatalogoProductos } from './types';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from '@/modules/descuentos/reglasSeleccion';
