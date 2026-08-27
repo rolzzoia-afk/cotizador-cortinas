@@ -66,8 +66,23 @@ export type DatosEmpresaCotizacion = {
    * y sus intereses los pone el banco del cliente.
    */
   totales: { leyendaCuotas: string };
-  /** La tira de fotos «NUESTROS PROYECTOS Y PRODUCTOS» del pie. */
-  fotosProyectos: { titulo: string; subtitulo: string; visible: boolean };
+  /**
+   * La tira de fotos «NUESTROS PROYECTOS Y PRODUCTOS» del pie.
+   *
+   * `url` deja la tira ENTERA clicable en el PDF (las dos bandas y las fotos):
+   * el cierre invita a ver el Instagram, así que el clic tiene que llevar ahí.
+   * `imagenUrl` reemplaza la tira de fábrica por una propia del admin, y
+   * `imagenRatio` es su proporción ancho/alto —medida al subirla— para que el
+   * PDF le reserve el alto correcto sin deformarla. 0 = la de fábrica.
+   */
+  fotosProyectos: {
+    titulo: string;
+    subtitulo: string;
+    visible: boolean;
+    url: string;
+    imagenUrl: string;
+    imagenRatio: number;
+  };
   /** El recuadro rojo que solo sale cuando la cotización trae telas B. */
   bloqueCategoriaB: { texto: string };
   /**
@@ -140,6 +155,10 @@ export const DATOS_EMPRESA_DEFAULT: DatosEmpresaCotizacion = {
     titulo: 'NUESTROS PROYECTOS Y PRODUCTOS',
     subtitulo: 'TODO NUESTRO INSTAGRAM Y PAGINA WEB SON TRABAJOS FABRICADOS E INSTALADOS POR CORTINAS ROLZZO',
     visible: true,
+    // El cierre de la tira habla del Instagram: el clic lleva ahí.
+    url: 'https://www.instagram.com/cortinasrolzzo/',
+    imagenUrl: '',
+    imagenRatio: 0,
   },
   bloqueCategoriaB: {
     texto:
@@ -163,6 +182,16 @@ function txt(v: unknown, porDefecto: string): string {
 /** Igual que `txt` pero acepta el vacío a propósito (logo, URLs opcionales). */
 function txtOpcional(v: unknown, porDefecto: string): string {
   return typeof v === 'string' ? v.trim() : porDefecto;
+}
+
+/**
+ * Proporción ancho/alto de la tira propia. Se mide en el navegador al subir la
+ * imagen; si viene rota o no se pudo medir, 0 = «usa la proporción de fábrica»
+ * (el PDF nunca divide por un número inservible).
+ */
+export function normalizarRatioTira(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v);
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 /**
@@ -236,6 +265,9 @@ export function normalizarDatosEmpresa(raw: unknown): DatosEmpresaCotizacion {
     fotosProyectos: {
       titulo: txtOpcional(fot.titulo, d.fotosProyectos.titulo),
       subtitulo: txtOpcional(fot.subtitulo, d.fotosProyectos.subtitulo),
+      url: txtOpcional(fot.url, d.fotosProyectos.url),
+      imagenUrl: txtOpcional(fot.imagenUrl, ''),
+      imagenRatio: normalizarRatioTira(fot.imagenRatio),
       // Solo un `false` explícito la apaga: un guardado viejo no la tiene y
       // tiene que salir igual.
       visible: fot.visible !== false,

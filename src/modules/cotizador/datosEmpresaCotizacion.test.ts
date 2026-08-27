@@ -117,6 +117,13 @@ describe('normalizarDatosEmpresa', () => {
       expect(f.subtitulo).toContain('CORTINAS ROLZZO');
     });
 
+    it('la tira arranca con el enlace al Instagram y sin imagen propia', () => {
+      const f = normalizarDatosEmpresa(vieja).fotosProyectos;
+      expect(f.url).toContain('instagram.com/cortinasrolzzo');
+      expect(f.imagenUrl).toBe('');
+      expect(f.imagenRatio).toBe(0);
+    });
+
     it('solo un false explícito la apaga', () => {
       expect(normalizarDatosEmpresa({ fotosProyectos: { visible: false } }).fotosProyectos.visible)
         .toBe(false);
@@ -126,6 +133,29 @@ describe('normalizarDatosEmpresa', () => {
     it('la leyenda vaciada a propósito se respeta (no sale nunca)', () => {
       expect(normalizarDatosEmpresa({ totales: { leyendaCuotas: '' } }).totales.leyendaCuotas)
         .toBe('');
+    });
+  });
+
+  describe('la imagen propia de la tira', () => {
+    it('se guarda con su proporción', () => {
+      const f = normalizarDatosEmpresa({
+        fotosProyectos: { imagenUrl: 'https://cdn/tira.jpg', imagenRatio: 9.33 },
+      }).fotosProyectos;
+      expect(f.imagenUrl).toBe('https://cdn/tira.jpg');
+      expect(f.imagenRatio).toBeCloseTo(9.33);
+    });
+
+    it('una proporción inservible queda en 0: el PDF usa la de fábrica', () => {
+      const casos = [0, -4, 'ancha', null, undefined, NaN, Infinity];
+      for (const imagenRatio of casos) {
+        expect(
+          normalizarDatosEmpresa({ fotosProyectos: { imagenRatio } }).fotosProyectos.imagenRatio,
+        ).toBe(0);
+      }
+    });
+
+    it('el enlace vaciado a propósito se respeta (tira sin clic)', () => {
+      expect(normalizarDatosEmpresa({ fotosProyectos: { url: '' } }).fotosProyectos.url).toBe('');
     });
   });
 });

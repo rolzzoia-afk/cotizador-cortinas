@@ -44,11 +44,11 @@ export async function guardarDatosEmpresa(
 }
 
 /**
- * El logo propio del admin, en dataURL, para poder meterlo al PDF (jsPDF no
- * acepta una URL remota). Devuelve null si no se puede leer: el generador cae
- * al logo de fábrica.
+ * Una imagen propia del admin (el logo, la tira de proyectos) en dataURL, para
+ * poder meterla al PDF: jsPDF no acepta una URL remota. Devuelve null si no se
+ * puede leer, y el generador cae a la imagen de fábrica.
  */
-export async function cargarLogoDataUrl(url: string): Promise<string | null> {
+export async function cargarImagenDataUrl(url: string): Promise<string | null> {
   if (!url) return null;
   try {
     const res = await fetch(url);

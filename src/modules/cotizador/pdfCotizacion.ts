@@ -128,6 +128,11 @@ export type EntradaPdfCotizacion = {
   empresa: DatosEmpresaCotizacion;
   /** dataURL. null = se dibuja el encabezado tipográfico. */
   logoDataUrl: string | null;
+  /**
+   * La tira de proyectos propia del admin, ya bajada a dataURL (jsPDF no sabe
+   * leer una URL remota). null = la tira de fábrica.
+   */
+  tiraProyectosDataUrl?: string | null;
 };
 
 // ── Helpers puros (testeables sin dibujar) ───────────────────────────
@@ -867,11 +872,46 @@ function secBloqueB(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   return y + alto + 2;
 }
 
+/**
+ * Tope de alto de la tira. La de fábrica mide ~21 mm; una imagen propia menos
+ * ancha que alta se estiraría hasta comerse media página, así que se achica y
+ * se centra en vez de deformar el cierre de la cotización.
+ */
+export const ALTO_MAX_TIRA = 45;
+
+/**
+ * Dónde y de qué tamaño va la tira. Ocupa el ancho de la tabla salvo que con
+ * su proporción quede más alta que el tope: ahí manda el alto y la imagen se
+ * centra. Un ratio inservible cae al de fábrica: nunca se divide por 0.
+ */
+export function medidasTira(ratio: number): { x: number; ancho: number; alto: number } {
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : TIRA_PROYECTOS_RATIO;
+  let ancho = ANCHO_TABLA;
+  let alto = ancho / r;
+  if (alto > ALTO_MAX_TIRA) {
+    alto = ALTO_MAX_TIRA;
+    ancho = alto * r;
+  }
+  return { x: MG + (ANCHO_TABLA - ancho) / 2, ancho, alto };
+}
+
+/** Formato que espera jsPDF, leído del propio dataURL (el admin sube PNG o JPEG). */
+function formatoImagen(dataUrl: string): 'PNG' | 'JPEG' {
+  return dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+}
+
+/** La imagen de la tira que toca: la propia del admin o la de fábrica. */
+function tiraDe(e: EntradaPdfCotizacion): { img: string; ratio: number } {
+  const propia = e.tiraProyectosDataUrl;
+  if (!propia) return { img: TIRA_PROYECTOS, ratio: TIRA_PROYECTOS_RATIO };
+  return { img: propia, ratio: e.empresa.fotosProyectos.imagenRatio };
+}
+
 /** Alto de la tira de proyectos con sus dos bandas, o 0 si no va. */
 function altoFotos(e: EntradaPdfCotizacion): number {
   if (!e.empresa.fotosProyectos.visible) return 0;
   // banda del título + fotos + banda del subtítulo + aire.
-  return 4.5 + ANCHO_TABLA / TIRA_PROYECTOS_RATIO + 4.5 + 2;
+  return 4.5 + medidasTira(tiraDe(e).ratio).alto + 4.5 + 2;
 }
 
 /**
@@ -883,7 +923,9 @@ function secFotos(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   const f = e.empresa.fotosProyectos;
   if (!f.visible) return y;
   const hBanda = 4.5;
-  const hFotos = ANCHO_TABLA / TIRA_PROYECTOS_RATIO;
+  const tira = tiraDe(e);
+  const m = medidasTira(tira.ratio);
+  const hFotos = m.alto;
 
   set(doc, 'fill', NEGRO);
   doc.rect(MG, y, ANCHO_TABLA, hBanda, 'F');
@@ -894,7 +936,17 @@ function secFotos(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
     size: 7.6,
   });
 
-  doc.addImage(TIRA_PROYECTOS, 'JPEG', MG, y + hBanda, ANCHO_TABLA, hFotos);
+  try {
+    doc.addImage(tira.img, formatoImagen(tira.img), m.x, y + hBanda, m.ancho, m.alto);
+  } catch {
+    // Una tira propia ilegible no puede tumbar la cotización: se cae a la de
+    // fábrica dentro del MISMO recuadro, para no pisar la banda de abajo.
+    try {
+      doc.addImage(TIRA_PROYECTOS, 'JPEG', m.x, y + hBanda, m.ancho, m.alto);
+    } catch {
+      /* ni con la de fábrica: mejor el hueco que un PDF caído */
+    }
+  }
 
   const ySub = y + hBanda + hFotos;
   set(doc, 'fill', NEGRO);
@@ -905,6 +957,11 @@ function secFotos(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
     align: 'c',
     size: 6.4,
   });
+
+  // El clic toma la tira entera —bandas incluidas—: el cierre invita a ver el
+  // Instagram y nadie apunta a una foto de 2 cm de alto.
+  if (f.url) doc.link(MG, y, ANCHO_TABLA, hBanda + hFotos + hBanda, { url: f.url });
+
   return ySub + hBanda + 2;
 }
 

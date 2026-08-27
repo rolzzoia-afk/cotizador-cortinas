@@ -91,6 +91,7 @@ export function DatosEmpresaSection() {
   const [draft, setDraft] = useState<DatosEmpresaCotizacion>(DATOS_EMPRESA_DEFAULT);
   const [saving, setSaving] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [subiendoTira, setSubiendoTira] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -125,6 +126,30 @@ export function DatosEmpresaSection() {
       toast.error('No se pudo subir el logo: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setSubiendo(false);
+    }
+  };
+
+  /**
+   * La tira se achica y se recomprime ANTES de subirla: jsPDF embebe la imagen
+   * entera y una foto de teléfono dejaría la cotización imposible de mandar por
+   * WhatsApp. De paso se guarda su proporción, que es lo que el PDF usa para
+   * reservarle el alto sin deformarla.
+   */
+  const subirTira = async (file: File) => {
+    if (!empresaId) return;
+    setSubiendoTira(true);
+    try {
+      const { prepararImagenTira } = await import('@/modules/cotizador/imagenTira');
+      const { archivo, ratio, bytes } = await prepararImagenTira(file);
+      const url = await subirImagenDoc(empresaId, archivo);
+      setSeccion('fotosProyectos', { imagenUrl: url, imagenRatio: ratio });
+      toast.success(
+        `Tira cargada (${Math.max(1, Math.round(bytes / 1024))} KB). Presiona Guardar para aplicarla.`,
+      );
+    } catch (e) {
+      toast.error('No se pudo subir la tira: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSubiendoTira(false);
     }
   };
 
@@ -318,10 +343,62 @@ export function DatosEmpresaSection() {
                 onChange={(v) => setSeccion('fotosProyectos', { subtitulo: v })}
                 filas={2}
               />
-              <p className="text-[0.7rem] text-muted-foreground sm:col-span-2">
-                Las fotos son la misma tira del Excel manual y vienen con la app: por ahora se
-                cambian desde el código, no desde acá.
-              </p>
+              <Campo
+                label="Enlace de la tira"
+                value={draft.fotosProyectos.url}
+                onChange={(v) => setSeccion('fotosProyectos', { url: v })}
+                placeholder="https://…"
+                ancho
+                ayuda="En el PDF la tira completa —las dos bandas y las fotos— queda clicable y lleva acá. Vacío = sin enlace."
+              />
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Imagen de la tira
+                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  {draft.fotosProyectos.imagenUrl ? (
+                    <img
+                      src={draft.fotosProyectos.imagenUrl}
+                      alt="Tira de proyectos"
+                      className="h-10 w-auto max-w-full rounded border bg-white p-1"
+                    />
+                  ) : (
+                    <span className="text-[11px] italic text-muted-foreground">
+                      Usando la tira del Excel manual, la de fábrica.
+                    </span>
+                  )}
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs hover:bg-secondary">
+                    <Upload className="h-3.5 w-3.5" />
+                    {subiendoTira ? 'Subiendo…' : 'Subir imagen'}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) subirTira(f);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {draft.fotosProyectos.imagenUrl && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setSeccion('fotosProyectos', { imagenUrl: '', imagenRatio: 0 })
+                      }
+                    >
+                      Usar la de fábrica
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[0.7rem] text-muted-foreground">
+                  Una sola imagen ancha, como la del Excel manual (queda bien en 1400 × 150). La app
+                  la achica y la comprime sola para que el PDF siga siendo liviano; si es más alta
+                  que ancha se dibuja centrada y más chica, nunca deformada.
+                </p>
+              </div>
             </Bloque>
 
             <Bloque titulo="Validez y contacto">

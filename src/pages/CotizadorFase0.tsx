@@ -1437,16 +1437,23 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     setGenerandoPdf(true);
     try {
       // Carga diferida: jspdf pesa y no tiene por qué entrar al abrir la página.
-      const [{ generarPdfCotizacion }, { LOGO_ROLZZO }, { cargarLogoDataUrl }] =
+      const [{ generarPdfCotizacion }, { LOGO_ROLZZO }, { cargarImagenDataUrl }] =
         await Promise.all([
           import('@/modules/cotizador/pdfCotizacion'),
           import('@/modules/cotizador/logoRolzzo'),
           import('@/modules/cotizador/datosEmpresaCotizacionStore'),
         ]);
 
-      const logoPropio = datosEmpresa.encabezado.logoUrl
-        ? await cargarLogoDataUrl(datosEmpresa.encabezado.logoUrl)
-        : null;
+      // Las imágenes propias del admin viajan como dataURL: jsPDF no sabe leer
+      // una URL. Si alguna no se puede bajar, se usa la de fábrica.
+      const [logoPropio, tiraPropia] = await Promise.all([
+        datosEmpresa.encabezado.logoUrl
+          ? cargarImagenDataUrl(datosEmpresa.encabezado.logoUrl)
+          : null,
+        datosEmpresa.fotosProyectos.imagenUrl && datosEmpresa.fotosProyectos.visible
+          ? cargarImagenDataUrl(datosEmpresa.fotosProyectos.imagenUrl)
+          : null,
+      ]);
 
       const filasValidas = filas.filter((f) => lineaDeFila.has(f.id));
       const cortinas = filasValidas.map((f) => {
@@ -1571,6 +1578,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         proveedorTarjeta: paramsEff.proveedorTarjeta,
         empresa: datosEmpresa,
         logoDataUrl: logoPropio ?? LOGO_ROLZZO,
+        tiraProyectosDataUrl: tiraPropia,
       });
     } catch (e) {
       toast.error('No se pudo generar el PDF: ' + (e instanceof Error ? e.message : String(e)));
