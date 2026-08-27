@@ -47,16 +47,18 @@ vi.mock('jspdf', async (importOriginal) => {
 });
 
 import { DATOS_EMPRESA_DEFAULT } from './datosEmpresaCotizacion';
-import { TIRA_PROYECTOS } from './fotosProyectos';
+import { TIRA_PROYECTOS, TIRA_PROYECTOS_RATIO } from './fotosProyectos';
 import { SELLO_CUOTAS, SELLO_TARJETAS } from './logoRolzzo';
 import { FILAS_TOTALES, NOTA_IVA } from './filasTotales';
 import { calcularTotales } from './preciosFase0';
 import {
+  ALTO_MAX_TIRA,
   ANCHO_COLUMNAS,
   ANCHO_UTIL,
   descuentoPesos,
   fmtMedida3,
   generarPdfCotizacion,
+  medidasTira,
   nombreArchivoPdf,
   textoTransferencia,
   tituloBanda,
@@ -64,6 +66,12 @@ import {
   type EntradaPdfCotizacion,
   type FilaPdfCortina,
 } from './pdfCotizacion';
+
+/** Una tira propia del admin: un JPEG de 1 × 1 de verdad, que jsPDF sí decodifica. */
+const TIRA_PROPIA =
+  'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsL' +
+  'DBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAAB' +
+  'AAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q==';
 
 const CORTINA: FilaPdfCortina = {
   cod: 'DUOBK_P',
@@ -420,6 +428,60 @@ describe('generarPdfCotizacion', () => {
       generarPdfCotizacion(entradaDemo({ empresa }));
       expect(impreso()).not.toContain('NUESTROS PROYECTOS');
       expect(imagenes).not.toContain(TIRA_PROYECTOS);
+      // Sin tira tampoco queda el enlace suelto sobre el papel.
+      expect(enlaces).not.toContain(DATOS_EMPRESA_DEFAULT.fotosProyectos.url);
+    });
+
+    it('queda clicable con el enlace de Admin', () => {
+      generarPdfCotizacion(entradaDemo());
+      expect(enlaces).toContain(DATOS_EMPRESA_DEFAULT.fotosProyectos.url);
+    });
+
+    it('sin enlace se dibuja igual, pero sin clic', () => {
+      const empresa = {
+        ...DATOS_EMPRESA_DEFAULT,
+        fotosProyectos: { ...DATOS_EMPRESA_DEFAULT.fotosProyectos, url: '' },
+      };
+      generarPdfCotizacion(entradaDemo({ empresa }));
+      expect(imagenes).toContain(TIRA_PROYECTOS);
+      expect(enlaces).not.toContain(DATOS_EMPRESA_DEFAULT.fotosProyectos.url);
+    });
+
+    it('la imagen propia del admin reemplaza a la de fábrica', () => {
+      generarPdfCotizacion(entradaDemo({ tiraProyectosDataUrl: TIRA_PROPIA }));
+      expect(imagenes).toContain(TIRA_PROPIA);
+      expect(imagenes).not.toContain(TIRA_PROYECTOS);
+    });
+
+    it('sin imagen propia sigue saliendo la de fábrica', () => {
+      generarPdfCotizacion(entradaDemo({ tiraProyectosDataUrl: null }));
+      expect(imagenes).toContain(TIRA_PROYECTOS);
+    });
+  });
+
+  // El alto de la tira decide si el cierre cabe en la página: una imagen con
+  // otra proporción no puede empujarlo fuera del papel.
+  describe('medidasTira', () => {
+    it('la de fábrica ocupa el ancho de la tabla', () => {
+      const m = medidasTira(TIRA_PROYECTOS_RATIO);
+      expect(m.ancho).toBe(ANCHO_UTIL);
+      expect(m.x).toBe(8);
+      expect(m.alto).toBeCloseTo(ANCHO_UTIL / TIRA_PROYECTOS_RATIO);
+    });
+
+    it('una imagen más alta que ancha se achica y se centra, no se deforma', () => {
+      const m = medidasTira(1); // cuadrada
+      expect(m.alto).toBe(ALTO_MAX_TIRA);
+      expect(m.ancho).toBe(ALTO_MAX_TIRA);
+      expect(m.x).toBeGreaterThan(8);
+      // Conserva la proporción que le pasaron.
+      expect(m.ancho / m.alto).toBeCloseTo(1);
+    });
+
+    it('un ratio inservible cae al de fábrica en vez de dividir por cero', () => {
+      for (const malo of [0, -3, NaN, Infinity]) {
+        expect(medidasTira(malo).alto).toBeCloseTo(ANCHO_UTIL / TIRA_PROYECTOS_RATIO);
+      }
     });
   });
 
