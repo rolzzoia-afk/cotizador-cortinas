@@ -22,7 +22,9 @@ import {
   construirHojaCorte,
   filasCorteVisibles,
   partirHojaCorte,
+  textoUbicaciones,
   type FilaCorteCortina,
+  type FilaPanoResumen,
   type HojaCorte,
 } from './hojaCorte';
 import type { PanoColmena } from './planCorte';
@@ -307,27 +309,59 @@ function renderHojaCorte(doc: jsPDF, hoja: HojaCorte, meta: MetaCorte, tema: Tem
   // corte; TOTAL PAÑOS/errores parten siempre en página nueva aunque sobre
   // espacio.
   const totalW = 16;
-  // cols2 debe caber en el tramo [M+totalW+1 .. t3x) = 23..150 = 127 mm, si no
+  // cols2 debe caber en el tramo [M+totalW+1 .. t3x) = 23..162 = 139 mm, si no
   // la última columna (COLMENA) queda tapada por la tabla de errores (cols3).
+  //
+  // UBICACIÓN se hizo lugar sin achicar ninguna columna CON DATOS: la frontera
+  // t3x se corrió 12 mm a la derecha (el bloque de errores es todo para llenar
+  // a mano, escribir en 129 mm en vez de 141 da lo mismo) y COLMENA bajó de 22
+  // a 14, que acá siempre sale en blanco —los paños de colmena no entran a
+  // esta tabla, ver `construirHojaCorte`— y es solo para anotarla a mano.
   const cols2 = [
     { label: 'PAÑOS', w: 11, k: 'pano' as const },
     { label: 'TIPO', w: 34, k: 'tipo' as const },
     { label: 'COD', w: 15, k: 'cod' as const },
     { label: 'ALTO CORTE PAÑO', w: 22, k: 'altoCortePano' as const },
     { label: 'ALTO MÁXIMO A UTILIZAR', w: 23, k: 'altoMaxUtilizar' as const },
-    { label: 'COLMENA', w: 22, k: 'colmena' as const },
+    { label: 'UBICACIÓN', w: 20, k: 'ubicaciones' as const },
+    { label: 'COLMENA', w: 14, k: 'colmena' as const },
   ];
-  // COD. SERIAL va al mismo ancho que MOTIVO (38). cols3 debe caber en
-  // [t3x .. W−M] = 150..291 = 141 mm, así que se achican las vecinas.
+  // cols3 debe caber en [t3x .. W−M] = 162..291 = 129 mm.
   const cols3 = [
-    { label: 'PAÑO ADICIONAL', w: 22 },
-    { label: 'MTS PAÑO ADIC.', w: 17 },
-    { label: 'COD. SERIAL', w: 38 },
-    { label: 'MOTIVO', w: 38 },
-    { label: 'RESPONSABLE DE ERROR', w: 25 },
+    { label: 'PAÑO ADICIONAL', w: 20 },
+    { label: 'MTS PAÑO ADIC.', w: 16 },
+    { label: 'COD. SERIAL', w: 32 },
+    { label: 'MOTIVO', w: 36 },
+    { label: 'RESPONSABLE DE ERROR', w: 24 },
   ];
-  const t3x = 150;
+  const t3x = 162;
   const rowH23 = 11.5;
+  // Un paño puede servir a varias ubicaciones y todas tienen que salir: la
+  // celda las parte en varias líneas y la FILA CRECE hasta que quepan (bloque
+  // de errores incluido, si no las dos tablas se desalinean).
+  //
+  // La letra se achica primero hasta que la PALABRA más larga entre entera —el
+  // mismo criterio que las cabeceras—: si no, jsPDF corta a mitad de palabra y
+  // «DORMITORIO» sale como «DORMITORI / O».
+  const SIZE_UBIC = 8.5;
+  const wUbic = cols2.find((c) => c.k === 'ubicaciones')!.w;
+  const altoLinea = (size: number) => size * 0.353 * 1.4;
+  const ubicDe = (p: FilaPanoResumen): { lineas: string[]; size: number } => {
+    const texto = textoUbicaciones(p.ubicaciones);
+    if (!texto) return { lineas: [], size: SIZE_UBIC };
+    const maxW = wUbic - 2;
+    doc.setFont('helvetica', 'bold');
+    let size = SIZE_UBIC;
+    doc.setFontSize(size);
+    const palabraMax = () => Math.max(...texto.split(/\s+/).map((w) => doc.getTextWidth(w)));
+    while (size > 5 && palabraMax() > maxW) {
+      size -= 0.3;
+      doc.setFontSize(size);
+    }
+    return { lineas: doc.splitTextToSize(texto, maxW) as string[], size };
+  };
+  const altoFila = (lineas: number, size: number) =>
+    Math.max(rowH23, 3.4 + lineas * altoLinea(size));
   let y23Box = 0; // borde inferior del recuadro TOTAL PAÑOS (por página)
   const cabecera23 = () => {
     rect(doc, M, y, totalW, 12, C_DARK);
@@ -370,22 +404,40 @@ function renderHojaCorte(doc: jsPDF, hoja: HojaCorte, meta: MetaCorte, tema: Tem
   if (visibles.length > 0) nuevaPagina();
   cabecera23();
   for (const p of hoja.panos) {
-    if (y + rowH23 > BOTTOM) {
+    const ubic = ubicDe(p);
+    const hFila = altoFila(ubic.lineas.length, ubic.size);
+    if (y + hFila > BOTTOM) {
       nuevaPagina();
       cabecera23();
     }
+    // Centro vertical de la fila: con una fila alta, los números y los
+    // círculos del motivo tienen que bajar con ella, no quedarse arriba.
+    // (Con el alto de siempre, 11,5, da exactamente las posiciones previas.)
+    const cy = y + hFila / 2;
     const fill = PALETA[(p.pano - 1 + PALETA.length) % PALETA.length] || PALETA[0];
     // Fila bloque 2 (resumen del paño)
     let tx = M + totalW + 1;
     for (const c of cols2) {
-      rect(doc, tx, y, c.w, rowH23, fill);
+      rect(doc, tx, y, c.w, hFila, fill);
+      if (c.k === 'ubicaciones') {
+        // Las ubicaciones ya vienen partidas al ancho de la celda: se apilan
+        // centradas en la fila.
+        const hL = altoLinea(ubic.size);
+        let uy = cy - (ubic.lineas.length * hL) / 2 + hL - hL * 0.26;
+        for (const linea of ubic.lineas) {
+          celdaTexto(doc, linea, tx, c.w, uy, { size: ubic.size, bold: true, fit: 'shrink' });
+          uy += hL;
+        }
+        tx += c.w;
+        continue;
+      }
       let val = '';
       if (c.k === 'colmena') val = p.colmena;
       else if (c.k === 'altoCortePano') val = num(p.altoCortePano);
       else if (c.k === 'altoMaxUtilizar') val = p.altoMaxUtilizar === '' ? '' : num(p.altoMaxUtilizar);
       else val = String(p[c.k] ?? '');
       if (val)
-        celdaTexto(doc, val, tx, c.w, y + 7.8, {
+        celdaTexto(doc, val, tx, c.w, cy + 2.05, {
           size: c.k === 'colmena' ? 9 : 12,
           align: c.k === 'tipo' ? 'left' : 'center',
           fit: 'shrink',
@@ -395,20 +447,20 @@ function renderHojaCorte(doc: jsPDF, hoja: HojaCorte, meta: MetaCorte, tema: Tem
     // Fila bloque 3 (errores, para llenar a mano)
     tx = t3x;
     for (const c of cols3) {
-      rect(doc, tx, y, c.w, rowH23);
+      rect(doc, tx, y, c.w, hFila);
       if (c.label === 'MOTIVO') {
         // Dos opciones con su círculo (radio) para marcar a mano, apiladas
         // para que el rótulo salga grande.
         doc.setDrawColor(90, 90, 100);
         doc.setLineWidth(0.25);
-        doc.circle(tx + 3, y + 3.4, 1.3);
-        celdaTexto(doc, 'FALLA TELA', tx + 5.2, 30, y + 4.6, { size: 8, align: 'left', fit: 'shrink' });
-        doc.circle(tx + 3, y + 8.2, 1.3);
-        celdaTexto(doc, 'ERROR CORTE', tx + 5.2, 30, y + 9.4, { size: 8, align: 'left', fit: 'shrink' });
+        doc.circle(tx + 3, cy - 2.35, 1.3);
+        celdaTexto(doc, 'FALLA TELA', tx + 5.2, 30, cy - 1.15, { size: 8, align: 'left', fit: 'shrink' });
+        doc.circle(tx + 3, cy + 2.45, 1.3);
+        celdaTexto(doc, 'ERROR CORTE', tx + 5.2, 30, cy + 3.65, { size: 8, align: 'left', fit: 'shrink' });
       }
       tx += c.w;
     }
-    y += rowH23;
+    y += hFila;
   }
   // No pisar el recuadro grande TOTAL PAÑOS cuando hay pocas filas.
   y = Math.max(y, y23Box);
