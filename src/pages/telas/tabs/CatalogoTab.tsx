@@ -2,11 +2,12 @@
 // abre TelaDialog; click en el QR abre QRTelaDialog.
 
 import { useMemo, useState } from 'react';
-import { Copy, FileUp, Pencil, Plus, QrCode, Search, Tags } from 'lucide-react';
+import { Copy, FileUp, Layers, Pencil, Plus, Printer, QrCode, Search, Tags } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useConfirm } from '@/components/ui/confirm';
 import StatCard from '../components/StatCard';
 import TelaDialog from '../dialogs/TelaDialog';
 import QRTelaDialog from '../dialogs/QRTelaDialog';
@@ -16,8 +17,18 @@ import {
   construirFilasEtiquetas,
   descargarEtiquetasPtouchXlsx,
 } from '@/modules/telas/exportEtiquetasPtouch';
+import {
+  combinarEtiquetas,
+  datosEtiquetaCatalogo,
+  htmlEtiquetasCatalogo,
+} from '@/modules/telas/etiquetaCatalogo';
+import { LOGO_ROLZZO } from '@/modules/cotizador/logoRolzzo';
 import { tipoBadgeCls } from '../utils/tipo-badge';
 import type { Colmena, SortDir, Tela, ValidadoresMap } from '../Telas.types';
+
+// Sobre esta cantidad se pregunta antes de mandar a la impresora: son
+// etiquetas físicas, no una vista previa que se pueda cerrar sin costo.
+const AVISO_DESDE = 20;
 
 interface CatalogoTabProps {
   telas: Tela[];
@@ -44,6 +55,9 @@ export default function CatalogoTab({
   const [modalQR, setModalQR] = useState<Tela | null>(null);
   const [clonar, setClonar] = useState(false);
   const [importar, setImportar] = useState(false);
+  // Selección para etiquetas, por código (el id cambia si se recarga la tabla).
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const confirmar = useConfirm();
 
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -96,6 +110,54 @@ export default function CatalogoTab({
     toast.success(
       `${lista.length} etiqueta${lista.length === 1 ? '' : 's'} exportada${lista.length === 1 ? '' : 's'}. Vincula el archivo como base de datos en P-touch Editor.`,
     );
+  };
+
+  // En el orden en que se marcaron: al combinar, la primera es la que manda
+  // (de ella salen tipo, descripción, ancho y calidad).
+  const telasSeleccionadas = useMemo(() => {
+    const porCodigo = new Map(telas.map((t) => [t.codigo, t]));
+    return [...seleccion].map((c) => porCodigo.get(c)).filter((t): t is Tela => !!t);
+  }, [telas, seleccion]);
+
+  const marcar = (codigo: string) =>
+    setSeleccion((s) => {
+      const next = new Set(s);
+      if (next.has(codigo)) next.delete(codigo);
+      else next.add(codigo);
+      return next;
+    });
+
+  const todasFiltradas = lista.length > 0 && lista.every((t) => seleccion.has(t.codigo));
+
+  const marcarTodas = () =>
+    setSeleccion(todasFiltradas ? new Set() : new Set(lista.map((t) => t.codigo)));
+
+  // Etiqueta del catálogo de muestras: se dibuja acá y se manda a la Brother
+  // con el diálogo del navegador (elegir el papel de 62 × 52 mm).
+  const imprimirEtiquetas = async (lote: Tela[], combinar = false) => {
+    if (lote.length === 0) {
+      toast.error('No hay telas para etiquetar con los filtros actuales.');
+      return;
+    }
+    const etiquetas = combinar ? [combinarEtiquetas(lote)] : lote.map(datosEtiquetaCatalogo);
+    if (
+      etiquetas.length >= AVISO_DESDE &&
+      !(await confirmar({
+        titulo: 'Imprimir etiquetas de catálogo',
+        mensaje: `Se van a imprimir ${etiquetas.length} etiquetas. ¿Seguir?`,
+        confirmLabel: 'Imprimir',
+      }))
+    ) {
+      return;
+    }
+    const w = window.open('', '_blank', 'width=860,height=680');
+    if (!w) {
+      toast.error('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.');
+      return;
+    }
+    w.document.open();
+    w.document.write(htmlEtiquetasCatalogo(etiquetas, LOGO_ROLZZO));
+    w.document.close();
   };
 
   const sort = (col: keyof Tela) => {
@@ -187,12 +249,52 @@ export default function CatalogoTab({
         >
           <Tags className="h-4 w-4" /> Etiquetas P-touch
         </Button>
+        <Button
+          variant="outline"
+          onClick={() => imprimirEtiquetas(seleccion.size ? telasSeleccionadas : lista)}
+          className="gap-1.5"
+          title={
+            seleccion.size
+              ? 'Imprimir la etiqueta de catálogo de las telas marcadas (una por tela)'
+              : 'Imprimir la etiqueta de catálogo de todas las telas filtradas'
+          }
+        >
+          <Printer className="h-4 w-4" />
+          {seleccion.size ? `Etiqueta catálogo (${seleccion.size})` : 'Etiqueta catálogo (todas)'}
+        </Button>
+        {seleccion.size >= 2 && (
+          <Button
+            variant="outline"
+            onClick={() => imprimirEtiquetas(telasSeleccionadas, true)}
+            className="gap-1.5"
+            title="Una sola etiqueta con los códigos marcados juntos («BK 11 / BK 12»); los demás datos salen de la primera que marcaste"
+          >
+            <Layers className="h-4 w-4" /> Combinar en una ({seleccion.size})
+          </Button>
+        )}
+        {seleccion.size > 0 && (
+          <button
+            onClick={() => setSeleccion(new Set())}
+            className="text-xs text-muted-foreground underline hover:text-foreground"
+          >
+            Quitar selección
+          </button>
+        )}
       </div>
 
       <div className="overflow-auto rounded-2xl border border-border bg-card">
         <table className="w-full border-collapse text-[12px]" style={{ minWidth: 1400 }}>
           <thead>
             <tr className="border-b border-border bg-white/[0.03] text-[12px] uppercase tracking-wider text-muted-foreground">
+              <th className="px-2.5 py-2">
+                <input
+                  type="checkbox"
+                  checked={todasFiltradas}
+                  onChange={marcarTodas}
+                  className="h-3.5 w-3.5 cursor-pointer align-middle accent-accent"
+                  title={todasFiltradas ? 'Desmarcar todas' : 'Marcar todas las filtradas'}
+                />
+              </th>
               {[
                 ['codigo', 'Código'],
                 ['tipo', 'Tipo'],
@@ -223,13 +325,27 @@ export default function CatalogoTab({
           <tbody>
             {lista.length === 0 ? (
               <tr>
-                <td colSpan={15} className="px-4 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={16} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   Sin resultados
                 </td>
               </tr>
             ) : (
               lista.map((t) => (
-                <tr key={t.id} className="border-b border-border hover:bg-secondary/40">
+                <tr
+                  key={t.id}
+                  className={cn(
+                    'border-b border-border hover:bg-secondary/40',
+                    seleccion.has(t.codigo) && 'bg-accent/10',
+                  )}
+                >
+                  <td className="px-2.5 py-2">
+                    <input
+                      type="checkbox"
+                      checked={seleccion.has(t.codigo)}
+                      onChange={() => marcar(t.codigo)}
+                      className="h-3.5 w-3.5 cursor-pointer align-middle accent-accent"
+                    />
+                  </td>
                   <td className="whitespace-nowrap px-2.5 py-2 font-bold">{t.codigo || '—'}</td>
                   <td className="px-2.5 py-2">
                     {t.tipo ? (
@@ -290,10 +406,17 @@ export default function CatalogoTab({
                     </button>
                     <button
                       onClick={() => setModalQR(t)}
-                      className="rounded-md border border-purple-500/30 bg-accent/10 p-1.5 text-accent hover:bg-accent/20"
+                      className="mr-1 rounded-md border border-purple-500/30 bg-accent/10 p-1.5 text-accent hover:bg-accent/20"
                       title="QR"
                     >
                       <QrCode className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => imprimirEtiquetas([t])}
+                      className="rounded-md border border-border bg-secondary p-1.5 hover:border-accent/40 hover:bg-accent/10"
+                      title="Imprimir la etiqueta de catálogo de esta tela"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
                     </button>
                   </td>
                 </tr>
@@ -311,6 +434,7 @@ export default function CatalogoTab({
           tela={modalTela}
           validadores={validadores}
           empresaId={empresaId}
+          onImprimirEtiqueta={(t) => imprimirEtiquetas([t])}
           onClose={() => setModalTela(undefined)}
           onSaved={() => {
             setModalTela(undefined);

@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { comprimirFoto } from '@/modules/visita/imagen';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { useConfirm } from '@/components/ui/confirm';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,8 @@ interface TelaDialogProps {
   empresaId: string;
   onClose: () => void;
   onSaved: () => void;
+  /** Imprime la etiqueta del catálogo de muestras (la ofrece al crear). */
+  onImprimirEtiqueta?: (tela: Tela) => void;
 }
 
 export default function TelaDialog({
@@ -36,6 +39,7 @@ export default function TelaDialog({
   empresaId,
   onClose,
   onSaved,
+  onImprimirEtiqueta,
 }: TelaDialogProps) {
   const [form, setForm] = useState<Omit<Tela, 'id'>>(
     tela
@@ -71,6 +75,7 @@ export default function TelaDialog({
   const [saving, setSaving] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
   const inputFotoRef = useRef<HTMLInputElement>(null);
+  const confirmar = useConfirm();
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -137,6 +142,20 @@ export default function TelaDialog({
       return;
     }
     toast.success(tela ? 'Tela actualizada' : 'Tela creada');
+    // La tela nueva sale con su etiqueta para el catálogo de muestras sin
+    // tener que buscarla de vuelta en la tabla. Solo al crear: editar una
+    // ficha no significa que haya que reimprimir la muestra.
+    if (!tela && onImprimirEtiqueta) {
+      const creada: Tela = { id: '', ...form, codigo: payload.codigo, posicion: payload.posicion };
+      if (await confirmar({
+        titulo: 'Etiqueta del catálogo',
+        mensaje: `¿Imprimir la etiqueta de catálogo de ${creada.codigo}?`,
+        confirmLabel: 'Imprimir',
+        cancelLabel: 'Ahora no',
+      })) {
+        onImprimirEtiqueta(creada);
+      }
+    }
     onSaved();
   };
 
