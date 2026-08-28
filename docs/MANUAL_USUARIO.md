@@ -168,6 +168,20 @@ La sección **Producción** muestra el trabajo del taller sin papel. Se escribe 
 6. **Todo lo que se compra en Fase 1 y es material sale en la hoja de inventario**: un panel solar, un motor de un modelo distinto, un accesorio nuevo del catálogo. Antes solo aparecían los motores, controles y manillas de una lista fija, y cualquier otra cosa comprada se perdía sin aviso —la bodega no la entregaba—. **No** entran la instalación (es mano de obra) ni los perfiles y cenefas, porque esos se cortan en el taller y ya salen en la hoja de estructura con su medida. Un código que ya aparece por otro camino no se repite.
 7. **El color de los perfiles y de la cenefa sale de su propia fila de ADICIONALES**, no del COLOR ACCESORIOS de la cortina. Si en Fase 1 el **SISTEMA DARK ROLLER** (o el PERFIL ADICIONAL) de esa ubicación va en CAFÉ, la columna **COLOR PERFIL** de la hoja de estructura y las etiquetas de zócalo, separador y cenefa cuadrada salen en CAFÉ, aunque el mecanismo de la cortina sea NEGRO. Lo mismo con la **CENEFA CUADRADA**: manda el color escrito en su fila —igual que el ancho, que ya se tomaba de ahí—. Manda siempre lo más específico: un perfil comprado por lado (P-IZQ / P-DER / P-INF) le gana al del sistema, y el del sistema le gana al de la cortina. Un adicional de sistema **sin ubicación** vale para toda la OT; con ubicación, solo para las cortinas de esa ubicación. Si esa fila queda sin color, todo sigue como antes: se usa el de los accesorios de la cortina.
 
+### Telas: las etiquetas del catálogo de muestras
+
+En **Telas → Catálogo** se imprimen las etiquetas que van pegadas en las muestras de los catálogos que llevan las vendedoras. Salen de la app directo a la Brother QL-810W —ya no hace falta abrir P-touch Editor ni mantener el Excel a mano—, con el mismo diseño de siempre: logo, el recuadro **CÓDIGOS**, el tipo y la calidad, la tela y el **ancho máximo**.
+
+- **Una sola**: el botón de la impresora en la fila de esa tela.
+- **Varias o todas**: se marcan con la casilla de la izquierda y se aprieta **«Etiqueta catálogo»**. Sin nada marcado, imprime **todas las telas filtradas**, así que primero conviene filtrar (por tipo, grupo o búsqueda) y después imprimir; sobre 20 etiquetas pregunta antes.
+- **Dos códigos en una misma muestra** (el caso «BK 11 / BK 12»): se marcan los dos y se aprieta **«Combinar en una»**. Los códigos salen juntos y **el resto de los datos sale de la primera que marcaste**, así que el orden importa.
+- **Al crear una tela nueva**, al guardarla la app ofrece imprimir su etiqueta al tiro. Editar una ficha ya existente no pregunta nada: cambiar un stock no significa reimprimir la muestra.
+- En el diálogo de impresión hay que elegir el **papel de 62 × 52 mm**. Si no se abre la ventana, el navegador está bloqueando las ventanas emergentes.
+- Los datos son los de la ficha de la tela. En **TELA:** va la descripción, y si esa está vacía va el **nemotécnico**, que nunca falta: así ninguna etiqueta sale sin nombre.
+- Los nombres **siempre caen adentro de su recuadro**. Uno largo se achica solo; si ni achicándolo alcanza, se reparte en dos renglones, y las palabras nunca se cortan por la mitad. Si igual sale muy chico, la descripción de esa tela es demasiado larga para la muestra (los nombres de proveedor tipo «RO ROLLER DUO 20237 DIS. 697 - 3 - 2,90 CM #37» conviene acortarlos en el catálogo).
+
+**Ojo, no confundir con «Etiquetas P-touch»**, el otro botón de la misma pantalla: ese exporta el Excel de las etiquetas de **inventario** (con QR y ubicación de rack), que se siguen imprimiendo desde P-touch Editor.
+
 ## Panel Admin (solo admin)
 
 - **Usuarios y roles**: asignar el rol de cada integrante. Los cambios aplican al instante.
