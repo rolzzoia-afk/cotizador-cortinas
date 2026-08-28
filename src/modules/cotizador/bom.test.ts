@@ -467,11 +467,31 @@ describe('calcularBOM — insumos de instalación', () => {
     const bom = calcularBOM([row({ color: 'BCO' })], vent('ROL', 'BCO'));
     const ins = bom.filter((i) => i.categoria === 'INSUMO');
     const specs = ins.map((i) => i.especificacion);
-    expect(specs).toEqual(['TAP19', 'TAP01', 'TOR02']);
+    expect(specs).toEqual(['TAP19', 'TAP01', 'TOR02', 'TOP01']);
     expect(ins.find((i) => i.especificacion === 'TOR02')?.cantidad).toBe(2);
+    // Topes de cadena: 2 por cadena, del color de accesorios.
+    expect(ins.find((i) => i.especificacion === 'TOP01')?.cantidad).toBe(2);
     // INSUMO va después de todo lo demás salvo OTRO.
     const cats = bom.map((i) => i.categoria);
     expect(cats.lastIndexOf('CENEFA')).toBeLessThan(cats.indexOf('INSUMO'));
+  });
+
+  it('dual: son dos cadenas, así que van 4 topes (las fijaciones siguen siendo una)', () => {
+    const ventanas = [{
+      id: 1, categoria: 'ROL', color: 'NEG', modelo: null,
+      panos: [{ ancho: 1, alto: 1.3, color: 'NEG', dual: true }, { ancho: 1, alto: 1.3, color: 'NEG', dual: true }],
+    }];
+    const bom = calcularBOM(
+      [
+        row({ color: 'NEG', dual: true, materialTipo: 'VULCANITA' }, { panoIndex: 0 }),
+        row({ color: 'NEG', dual: true, materialTipo: 'VULCANITA' }, { panoIndex: 1 }),
+      ],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    const cant = (spec: string) =>
+      bom.find((i) => i.especificacion === spec && i.categoria === 'INSUMO')?.cantidad;
+    expect(cant('TOP05')).toBe(4); // 2 topes por cadena × 2 cadenas
+    expect(cant('TAR01')).toBe(4); // los tarugos siguen siendo un juego por cortina
   });
 
   it('cenefa ovalada 1,5 m: 3 brackets BRA01 + tornillos (2 tapas + 6 ovalada = 8)', () => {

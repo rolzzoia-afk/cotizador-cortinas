@@ -62,6 +62,7 @@ import {
   etiquetaCadena,
   cadenasRoller,
   pesosSeleccionables,
+  topesSeleccionables,
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
 import { colorAccesorioCorto, tipoTelaDesdeProducto } from '@/modules/cotizador/fase0-sync';
@@ -97,6 +98,7 @@ export type PropsPaso = {
   reglas: ReglasSeleccion;
   cadenas: CadenaInsumo[];
   pesos: CadenaInsumo[];
+  topes: CadenaInsumo[];
   opcionesMecanismo: readonly string[];
   opcionesTuberia: readonly string[];
   notaMecanismo?: string;
@@ -368,6 +370,7 @@ export function CuerpoPaso(props: PropsPaso) {
         (pano.motorModelo || '').toUpperCase() === 'DOM38' ? CARGADOR_DOM38 : CARGADOR_DOM41;
       const cadenasDisponibles = cadenasRoller(props.cadenas, {}, reglas.cadenas);
       const pesosDisponibles = pesosSeleccionables(props.pesos);
+      const topesDisponibles = topesSeleccionables(props.topes);
       return (
         <div className="space-y-3">
           <RadioRow
@@ -482,6 +485,25 @@ export function CuerpoPaso(props: PropsPaso) {
                   >
                     <option value="">— Sin peso —</option>
                     {pesosDisponibles.map((c) => (
+                      <option key={c.cod} value={c.cod as string}>
+                        {etiquetaCadena(c)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {/* Topes: se ponen solos por el color de accesorios; el selector
+                  está para el caso raro en que haya que cambiarlos. Van 2. */}
+              {topesDisponibles.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Topes (2)</span>
+                  <select
+                    className="min-w-[220px] flex-1 rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+                    value={pano.codTope || ''}
+                    onChange={(e) => onPano({ codTope: e.target.value })}
+                  >
+                    <option value="">— Por color de accesorios —</option>
+                    {topesDisponibles.map((c) => (
                       <option key={c.cod} value={c.cod as string}>
                         {etiquetaCadena(c)}
                       </option>

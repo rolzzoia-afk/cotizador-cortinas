@@ -177,8 +177,9 @@ export function consolidarManillas(
 /**
  * Tabla de destino de un insumo por su código:
  *  • INSUMOS (bodega): tapas de peso (TAP), tornillos (TOR), tarugos (TAR),
- *    suplementos (SUB). Excepción: la tapa de cenefa cuadrada (TAP32/33/34) se
- *    coloca en terreno y su emisión la fuerza a INSTALACIÓN (ver override abajo).
+ *    suplementos (SUB) y topes de cadena (TOP). Excepción: la tapa de cenefa
+ *    cuadrada (TAP32/33/34) se coloca en terreno y su emisión la fuerza a
+ *    INSTALACIÓN (ver override abajo).
  *  • PRODUCCIÓN (taller): mecanismo de cenefa ovalada (MEC + "OVALADA"). El
  *    motor de una cortina ovalada también, pero eso se decide en
  *    `consolidarInsumos` con el contexto del paño (ver override).
@@ -189,7 +190,13 @@ export function consolidarManillas(
 function grupoInsumo(codigo: string | undefined, descripcion: string): GrupoInsumo {
   const c = (codigo || '').toUpperCase();
   const d = descripcion.toUpperCase();
-  if (c.startsWith('TAP') || c.startsWith('TOR') || c.startsWith('TAR') || c.startsWith('SUB')) {
+  if (
+    c.startsWith('TAP') ||
+    c.startsWith('TOR') ||
+    c.startsWith('TAR') ||
+    c.startsWith('SUB') ||
+    c.startsWith('TOP')
+  ) {
     return 'INSUMOS';
   }
   if (c.startsWith('MEC') && d.includes('OVALADA')) return 'PRODUCCION';
@@ -352,11 +359,17 @@ export function consolidarInsumos(
       }
 
       // Dual: el 2º+ paño omite las fijaciones (1 juego por cortina); tapas ×paño.
+      // `tipos` y `colores` van SIEMPRE: sin ellos esta hoja ignoraba el catálogo
+      // técnico y un color dado de alta en Admin salía con el código de fábrica
+      // (o sin código), mientras el cuadro COMPONENTES —que sí los pasa— mostraba
+      // el suyo. Las dos salidas tienen que decir lo mismo.
       for (const ins of insumosDePano(p, {
         categoria: v.categoria,
         ventanaColor: v.color,
         anchoM,
         omitirFijaciones: !!p.dual && pi > 0,
+        tipos: reglas.tipos,
+        colores: reglas.colores,
         lineaB,
       })) {
         bump(ins.codigo, `[${ins.codigo}] ${ins.descripcion}`, ins.cantidad);
