@@ -58,6 +58,10 @@ export type InsumosColor = {
   tapaOscuridad?: string;
   /** Manilla (HER48 en blanco). */
   manilla?: string;
+  /** Tope de cadena (TOP01 en blanco). Van 2 por cadena. Sin declarar, cae a la
+   *  tabla de fábrica de `cadenas.ts`; si ese color tampoco la tiene, el tope lo
+   *  elige el vendedor en Fase 2. */
+  topeCadena?: string;
   /** Barra de peso roller (E15 en blanco). */
   pesoRoller?: string;
   /** Peso U de dúo lágrima (E19 en blanco). */
@@ -115,6 +119,7 @@ export const CAMPOS_INSUMO_COLOR: ReadonlyArray<{
   { campo: 'tapaCuadrada', label: 'Tapa de cenefa cuadrada', grupo: 'Tapas', ejemplo: 'TAP33' },
   { campo: 'tapaOscuridad', label: 'Tapa de peso soft light / dark', grupo: 'Tapas', ejemplo: 'TAP26' },
   { campo: 'manilla', label: 'Manilla', grupo: 'Tapas', ejemplo: 'HER48' },
+  { campo: 'topeCadena', label: 'Tope de cadena (van 2)', grupo: 'Tapas', ejemplo: 'TOP01' },
   { campo: 'pesoRoller', label: 'Barra de peso roller', grupo: 'Perfiles y pesos', ejemplo: 'E15' },
   { campo: 'pesoU', label: 'Peso U (dúo lágrima)', grupo: 'Perfiles y pesos', ejemplo: 'E19' },
   { campo: 'pesoOscuridad', label: 'Peso inferior de oscuridad', grupo: 'Perfiles y pesos', ejemplo: 'E24' },

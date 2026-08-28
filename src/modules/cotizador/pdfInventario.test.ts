@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { construirInventario, notasTerreno } from './pdfInventario';
+import { REGLAS_SELECCION_DEFAULT } from '@/modules/descuentos/reglasSeleccion';
 import type { Pano, Ventana } from '@/modules/cotizador/types';
 
 const modeloCenefa = {
@@ -81,6 +82,49 @@ describe('construirInventario', () => {
     expect(grupo('CAD 03')).toBe('INSTALACION');
     expect(grupo('PCA04')).toBe('INSTALACION');
     expect(grupo('MEC32')).toBe('INSTALACION');
+  });
+
+  it('topes de cadena: 2 por cortina, por color de accesorios, en la tabla INSUMOS', () => {
+    // 2 cortinas negras → TOP05 ×4. Van con las tapas y los tornillos, que es
+    // donde el taller espera los topes, no con la cadena en INSTALACIÓN.
+    const top = data.insumos.find((i) => i.codigo === 'TOP05');
+    expect(top?.cantidad).toBe(4);
+    expect(top?.grupo).toBe('INSUMOS');
+    expect(top?.descripcion).toBe('[TOP05] TOPES NEGROS - ROLZZO');
+  });
+
+  it('el tope elegido a mano en Fase 2 le gana al del color', () => {
+    const v = ventana('LIVING', 1.5, 2.0); // accesorios NEGRO → TOP05 por defecto
+    (v.panos![0] as { codTope?: string }).codTope = 'TOP06';
+    const d = construirInventario([v]);
+    expect(d.insumos.find((i) => i.codigo === 'TOP06')?.cantidad).toBe(2);
+    expect(d.insumos.some((i) => i.codigo === 'TOP05')).toBe(false);
+  });
+
+  it('PLETINA y BEEBLACK no llevan topes (no llevan cadena)', () => {
+    for (const categoria of ['PLETINA_ROLLER_V', 'BEEBLACK_ESTANDAR']) {
+      const v = ventana('LIVING', 1.5, 2.0);
+      (v as { categoria: string }).categoria = categoria;
+      const d = construirInventario([v]);
+      expect(d.insumos.some((i) => (i.codigo || '').startsWith('TOP'))).toBe(false);
+    }
+  });
+
+  it('esta hoja usa el catálogo de colores, igual que el cuadro COMPONENTES', () => {
+    // Antes `consolidarInsumos` llamaba a `insumosDePano` sin el catálogo: un
+    // color dado de alta en Admin salía acá con el código de fábrica mientras
+    // el BOM mostraba el suyo. Las dos salidas tienen que decir lo mismo.
+    const v = ventana('LIVING', 1.5, 2.0);
+    (v.panos![0] as { color?: string }).color = 'NEG';
+    const reglas = {
+      ...REGLAS_SELECCION_DEFAULT,
+      colores: [
+        { codigo: 'NEG', nombre: 'NEGRO', usos: {}, insumos: { topeCadena: 'TOP99', tapaPesoIzq: 'TAP99' } },
+      ],
+    } as unknown as Parameters<typeof construirInventario>[7];
+    const d = construirInventario([v], {}, undefined, [], false, undefined, undefined, reglas);
+    expect(d.insumos.find((i) => i.codigo === 'TOP99')?.cantidad).toBe(2);
+    expect(d.insumos.some((i) => i.codigo === 'TAP99')).toBe(true);
   });
 
   it('etiquetas: 1 por cortina, código según color de accesorios (NEG → INS 95 negra)', () => {

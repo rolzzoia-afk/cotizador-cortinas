@@ -11,7 +11,12 @@
 // Este módulo es lógica pura (sin React ni Supabase) para poder testearlo.
 // ─────────────────────────────────────────────────────────────────────
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
-import { COLORES_BUILTIN, colorPorCodigo } from '@/modules/descuentos/coloresAccesorio';
+import {
+  COLORES_BUILTIN,
+  colorPorCodigo,
+  insumoDeColor,
+  type ColorAccesorio,
+} from '@/modules/descuentos/coloresAccesorio';
 import { categoriaCoincide, normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 import {
   LARGO_DESCRIPCION,
@@ -427,4 +432,99 @@ export function descripcionCadenaInventario(
   const color = COLOR_COD_A_NOMBRE[colorCod] || colorCod;
   const cuerpo = palabra.toUpperCase() === 'ROLLO' ? 'CADENA ROLLO' : `CADENA INFINITA ${palabra}`;
   return `[${cod}] ${[cuerpo, color].filter(Boolean).join(' ')}`.trim();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Topes de cadena: las piezas que frenan la cadena. Van DE A DOS por cadena
+// y su color sigue al de los accesorios, igual que la cadena misma.
+//
+// Hasta 2026-08-28 no se emitían en ninguna parte del flujo —solo se cobraba
+// un tope genérico en la receta de precios—, así que la bodega los sacaba de
+// memoria. A diferencia de la cadena, el código NO se adivina del inventario:
+// el TOP05 y el TOP06 están cargados SIN color, así que el mapa va declarado
+// acá y el catálogo de colores lo pisa por color (`InsumosColor.topeCadena`).
+// ─────────────────────────────────────────────────────────────────────
+
+/** Topes por cadena. Una dual (2 cadenas) lleva 4; el dúo, 2. */
+export const TOPES_POR_CADENA = 2;
+
+/** Tope de fábrica de cada color de accesorios (los cuatro que se venden). */
+export const TOPES_POR_COLOR: Readonly<Record<string, string>> = {
+  BCO: 'TOP01',
+  GRS: 'TOP04',
+  NEG: 'TOP05',
+  MET: 'TOP06',
+};
+
+/** Códigos de tope que ofrece el selector, en este orden. */
+export const TOPES_SELECCIONABLES = ['TOP01', 'TOP04', 'TOP05', 'TOP06', 'TOP03'] as const;
+
+/** Etiquetas del stock, para cuando no hay catálogo de insumos cargado. */
+const TOPE_COD_ETIQUETAS: Readonly<Record<string, string>> = {
+  TOP01: 'TOPES /F-22 BLANCOS',
+  TOP03: 'TOPES TRANSPARENTES',
+  TOP04: 'TOPES GRISES',
+  TOP05: 'TOPES NEGROS - ROLZZO',
+  TOP06: 'TOPES METALICOS - ROLZZO',
+};
+
+/** Color de accesorios plegado a la clave de `TOPES_POR_COLOR`. A diferencia
+ *  de `colorCadenaCorto`, el metálico SÍ tiene tope propio (TOP06). */
+function colorTopeCorto(color: string | null | undefined): string {
+  const c = normalizarColorAccesorio(color);
+  if (c === 'BCO' || c === 'BLANCO') return 'BCO';
+  if (c === 'NEG' || c === 'NEGRO') return 'NEG';
+  if (c === 'GRS' || c === 'GRI' || c === 'GRIS') return 'GRS';
+  if (c === 'MET' || c === 'METAL' || c === 'METALICO' || c === 'METÁLICO') return 'MET';
+  return '';
+}
+
+/** Código de tope sin espacios: «TOP 05» y «TOP05» son el mismo insumo. */
+const codTope = (cod: string | null | undefined): string =>
+  (cod || '').toUpperCase().replace(/\s+/g, '').trim();
+
+/** ¿Es un tope de cadena? */
+export function esTopeCadena(cod: string | null | undefined): boolean {
+  return /^TOP\d{2}$/.test(codTope(cod));
+}
+
+/** ¿Es un tope ofrecible en el selector? */
+export function esTopeSeleccionable(cod: string | null | undefined): boolean {
+  return (TOPES_SELECCIONABLES as readonly string[]).includes(codTope(cod));
+}
+
+/** Lista de topes para el selector, en el orden de `TOPES_SELECCIONABLES`. */
+export function topesSeleccionables(insumos: CadenaInsumo[]): CadenaInsumo[] {
+  const orden = (cod: string | null) =>
+    (TOPES_SELECCIONABLES as readonly string[]).indexOf(codTope(cod));
+  return insumos.filter((i) => esTopeSeleccionable(i.cod)).sort((a, b) => orden(a.cod) - orden(b.cod));
+}
+
+/**
+ * Tope que le corresponde a un color de accesorios: primero lo que el color
+ * declare en el catálogo técnico, después la tabla de fábrica. `null` = ese
+ * color no tiene tope catalogado y lo elige el vendedor, igual que pasa con
+ * su cadena.
+ */
+export function codTopeAuto(
+  colorAcc: string | null | undefined,
+  colores?: readonly ColorAccesorio[],
+): string | null {
+  const declarado = insumoDeColor(colorAcc, 'topeCadena', colores);
+  if (declarado) return codTope(declarado);
+  return TOPES_POR_COLOR[colorTopeCorto(colorAcc)] ?? null;
+}
+
+/**
+ * Nombre del tope para la hoja de inventario («TOPES NEGROS - ROLZZO»). Sin el
+ * código adelante: lo antepone quien emite, igual que con el peso de cadena.
+ */
+export function textoTopeInventario(
+  cod: string | null | undefined,
+  insumos?: CadenaInsumo[],
+): string {
+  const c = codTope(cod);
+  if (!c) return '';
+  const ins = insumos?.find((i) => codTope(i.cod) === c);
+  return ins?.nemotecnico?.trim() || TOPE_COD_ETIQUETAS[c] || 'TOPE DE CADENA';
 }

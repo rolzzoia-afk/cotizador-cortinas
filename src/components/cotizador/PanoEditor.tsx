@@ -57,6 +57,7 @@ import {
   etiquetaCadena,
   derivarLargoColor,
   pesosSeleccionables,
+  topesSeleccionables,
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
 import {
@@ -116,6 +117,8 @@ type Props = {
   cadenas?: CadenaInsumo[];
   /** Pesos de cadena del inventario (PCA01/PCA04) para el selector. */
   pesos?: CadenaInsumo[];
+  /** Topes de cadena del inventario (TOP01/04/05/06) para el selector. */
+  topes?: CadenaInsumo[];
   /** Opciones filtradas de mecanismo (default: todas). */
   opcionesMecanismo?: readonly string[];
   /** Opciones filtradas de tubería (default: todas). */
@@ -233,6 +236,7 @@ export function PanoEditor({
   panoNum,
   cadenas = [],
   pesos = [],
+  topes = [],
   opcionesMecanismo = OPCIONES_MECANISMO,
   opcionesTuberia = OPCIONES_TUBERIA,
   mecanismoFijoNota,
@@ -251,6 +255,7 @@ export function PanoEditor({
 }: Props) {
   const cadenasDisponibles = cadenasRoller(cadenas, {}, reglas.cadenas);
   const pesosDisponibles = pesosSeleccionables(pesos);
+  const topesDisponibles = topesSeleccionables(topes);
 
   // Colores del catálogo (Admin puede agregar los suyos). Cada selector ofrece
   // los de SU uso, más el valor guardado si el color ya se retiró: una OT vieja
@@ -642,6 +647,25 @@ export function PanoEditor({
               ))}
             </select>
           </div>
+          {/* Tope: se pone solo según el color de accesorios; el selector está
+              para el caso raro en que haya que cambiarlo. Van 2 por cadena. */}
+          {topesDisponibles.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Topes (2)</span>
+              <select
+                className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+                value={pano.codTope || ''}
+                onChange={(e) => onChange({ codTope: e.target.value })}
+              >
+                <option value="">— Por color de accesorios —</option>
+                {topesDisponibles.map((c) => (
+                  <option key={c.cod} value={c.cod as string}>
+                    {etiquetaCadena(c)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </Section>
       )}
 

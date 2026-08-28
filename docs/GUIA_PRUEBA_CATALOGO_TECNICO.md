@@ -24,8 +24,8 @@ respaldo automático antes de cada cambio, así que siempre se puede deshacer.
   Si tocaste algo y el banco no se movió, es que todavía no guardaste.
 - Prueba de humo (30 segundos): abre el banco con **ROL · 1,50 × 2,40 · BCO**.
   Debe mostrar kit blanco `[MEC 33]`, tubo de 38 mm, cadena blanca de 4 m,
-  tapas TAP19 y TAP01 con 2 tornillos TOR02, y **ningún aviso**. Si eso está
-  bien, la configuración base está sana.
+  tapas TAP19 y TAP01 con 2 tornillos TOR02, **2 topes TOP01**, y **ningún
+  aviso**. Si eso está bien, la configuración base está sana.
 
 ---
 
@@ -163,6 +163,13 @@ tapas de peso y deja el resto vacío a propósito.
 
 **Prueba extra** — Si el inventario tiene una cadena de ese color, el banco la
 auto-selecciona; si no, avisa que la elige el vendedor.
+
+**Prueba extra 2 (topes)** — El campo **«Tope de cadena (van 2)»** está en el
+mismo paso que las tapas. Si lo dejas vacío, el tope sale en la lista **sin
+código** («TOPE DE CADENA DORADO ×2») para que en bodega se vea que falta
+catalogarlo; si escribes uno, ese manda sobre la tabla de fábrica. Los cuatro
+colores de siempre ya lo traen: blanco TOP01, gris TOP04, negro TOP05 y
+metálico TOP06.
 
 **Volver atrás** — Quitar el color. Las OTs que ya lo tengan lo conservan.
 

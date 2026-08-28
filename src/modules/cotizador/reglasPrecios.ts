@@ -702,6 +702,10 @@ const DESCRIPCIONES: Record<string, string> = {
   'TAP 10': 'Tapa peso dúo 4 exterior — blanco',
   'TAP 11': 'Tapa peso dúo 4 exterior — negro',
   'TOP 02': 'Tope cadena roller — blanco',
+  'TOP 01': 'Tope cadena roller — blanco F-22',
+  'TOP 04': 'Tope cadena roller — gris',
+  'TOP 05': 'Tope cadena roller — negro',
+  'TOP 06': 'Tope cadena roller — metálico',
   'PCA 01': 'Peso porta cadena — huevo blanco',
   'PCA 02': 'Peso porta cadena — ovalado blanco',
   'PCA 05': 'Peso porta cadena — negro 9,5 cm',
@@ -790,7 +794,10 @@ export const GRUPOS_INSUMO: Record<string, string[]> = {
   'E 26': ['E 27', 'E 28'],
   'TAP 01 -19': ['FABR0003', 'TAP 04-05', 'TAP 10-20'],
   'TAP 09': ['TAP 10', 'TAP 11'],
-  'TOP 03': ['TOP 02'],
+  // Los topes de cadena por color (TOP01 blanco / TOP04 gris / TOP05 negro /
+  // TOP06 metálico) son el MISMO material que el genérico de la receta: se
+  // cobran igual y solo cambia cuál descuenta la bodega.
+  'TOP 03': ['TOP 02', 'TOP 01', 'TOP 04', 'TOP 05', 'TOP 06'],
   'PCA 04': ['PCA 01', 'PCA 02', 'PCA 05', 'PCA 06'],
   'ZUN 06': ['ZUN 01', 'ZUN 02', 'ZUN 03', 'ZUN 04', 'ZUN 08'],
   'MEC 18': ['MEC 05', 'MEC 06', 'MEC 11', 'MEC 13', 'MEC 14'],

@@ -47,6 +47,7 @@ type Props = {
   formulas?: FormulasFamilias;
   cadenas: CadenaInsumo[];
   pesos: CadenaInsumo[];
+  topes: CadenaInsumo[];
   opcionesMecanismo: readonly string[];
   opcionesTuberia: readonly string[];
   notaMecanismo?: string;
@@ -230,6 +231,7 @@ export function WizardTerreno(props: Props) {
               reglas={reglas}
               cadenas={props.cadenas}
               pesos={props.pesos}
+              topes={props.topes}
               opcionesMecanismo={props.opcionesMecanismo}
               opcionesTuberia={props.opcionesTuberia}
               notaMecanismo={props.notaMecanismo}

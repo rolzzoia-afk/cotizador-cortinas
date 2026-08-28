@@ -26,6 +26,7 @@ const DORADO: ColorAccesorio = {
     tapaPesoDer: 'TAP81',
     tapaCuadrada: 'TAP82',
     manilla: 'HER90',
+    topeCadena: 'TOP90',
     pesoRoller: 'E90',
     pesoOscuridad: 'E91',
     zocalo: 'E92',
@@ -133,7 +134,8 @@ describe('insumos y códigos de bodega', () => {
       colores: [...COLORES_BUILTIN, DORADO],
     });
     const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
-    expect(map).toEqual({ TAP80: 1, TAP81: 1, TOR02: 2 });
+    // El tope del color también sale del catálogo: 2 por cadena.
+    expect(map).toEqual({ TAP80: 1, TAP81: 1, TOR02: 2, TOP90: 2 });
   });
 
   it('sin códigos, la tapa igual se emite SIN código y los tornillos NO faltan', () => {
@@ -144,20 +146,25 @@ describe('insumos y códigos de bodega', () => {
       anchoM: 1.5,
       colores: [...COLORES_BUILTIN, DORADO_PELADO],
     });
-    expect(out.filter((i) => !i.codigo)).toHaveLength(2);
+    // Las 2 tapas y el tope: los tres sin código, para que se vea el hueco.
+    expect(out.filter((i) => !i.codigo)).toHaveLength(3);
     expect(out.some((i) => i.descripcion.includes('DOR'))).toBe(true);
     expect(out.find((i) => i.codigo === 'TOR02')?.cantidad).toBe(2);
+    const tope = out.find((i) => !i.codigo && i.descripcion.startsWith('TOPE DE CADENA'));
+    expect(tope?.cantidad).toBe(2);
   });
 
-  it('el metálico conserva su comportamiento de siempre (sin tapas ni tornillos)', () => {
-    expect(insumosDePano(pano({ color: 'MET' }), { categoria: 'ROL', anchoM: 1.5 })).toEqual([]);
+  it('el metálico sigue sin tapas ni tornillos, pero lleva sus 2 topes', () => {
+    // El metálico nunca tuvo tapas de peso roller. El tope sí es suyo (TOP06).
+    const solosTopes = [{ codigo: 'TOP06', descripcion: 'TOPES METALICOS - ROLZZO', color: 'METAL', cantidad: 2 }];
+    expect(insumosDePano(pano({ color: 'MET' }), { categoria: 'ROL', anchoM: 1.5 })).toEqual(solosTopes);
     expect(
       insumosDePano(pano({ color: 'MET' }), {
         categoria: 'ROL',
         anchoM: 1.5,
         colores: COLORES_BUILTIN,
       }),
-    ).toEqual([]);
+    ).toEqual(solosTopes);
   });
 
   it('tapa de cenefa cuadrada y manilla salen con el código del color', () => {

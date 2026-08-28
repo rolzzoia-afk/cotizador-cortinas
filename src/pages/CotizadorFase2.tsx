@@ -77,11 +77,14 @@ import {
   codCadenaAutoPorAlto,
   codCadenaPorLargoColor,
   codPesoAuto,
+  codTopeAuto,
   derivarLargoColor,
   esCadenaRoller,
   esPesoSeleccionable,
+  esTopeSeleccionable,
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
+import { categoriaLlevaTopeCadena } from '@/modules/cotizador/insumosCortina';
 import {
   pendientesFase2,
   pendientesPorVentana,
@@ -119,6 +122,7 @@ import {
   tuberiaCorregidaPorMecanismo,
   tuberiaParaPano,
 } from '@/modules/descuentos/chips';
+import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { tuboPorReglaEs45 } from '@/modules/descuentos/reglas-tuberia';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { InformeVisita } from '@/components/cotizador/visita/InformeVisita';
@@ -183,6 +187,7 @@ export function CotizadorFase2() {
   }, []);
   const [cadenas, setCadenas] = useState<CadenaInsumo[]>([]);
   const [pesos, setPesos] = useState<CadenaInsumo[]>([]);
+  const [topes, setTopes] = useState<CadenaInsumo[]>([]);
   const [editandoId, setEditandoId] = useState<string | number | null>(null);
   const [ventanaForm, setVentanaForm] = useState<Ventana | null>(null);
   const [panoActivo, setPanoActivo] = useState(0);
@@ -242,7 +247,8 @@ export function CotizadorFase2() {
   const esInvertidaV = (v: Ventana) =>
     esVentanaInvertida(v, obtenerAnchoRollo(v.codInt, catalogo, parametros.anchoRolloDefaultM));
 
-  // Cargar las cadenas del inventario (CAD01…) para el selector del paño.
+  // Cargar del inventario lo que el paño elige por código: cadenas (CAD01…),
+  // pesos (PCA…) y topes de cadena (TOP…).
   useEffect(() => {
     if (!empresaId) return;
     let activo = true;
@@ -255,6 +261,7 @@ export function CotizadorFase2() {
         const insumos = data as CadenaInsumo[];
         setCadenas(insumos.filter((i) => esCadenaRoller(i.cod)));
         setPesos(insumos.filter((i) => esPesoSeleccionable(i.cod)));
+        setTopes(insumos.filter((i) => esTopeSeleccionable(i.cod)));
       });
     return () => {
       activo = false;
@@ -429,6 +436,19 @@ export function CotizadorFase2() {
           }
           // Gama B: siempre PCA01 (blanco), sea cual sea el color de accesorios.
           if (!p.codPeso) cadPatch.codPeso = codPesoAuto(lineaB);
+        }
+        // Tope de cadena: sigue al color de accesorios, igual que la cadena, y
+        // va aunque el kit traiga la cadena incorporada. Prefill SOLO si falta
+        // (no pisa lo elegido a mano). La VERTICAL no lo guarda: se calcula al
+        // armar el inventario, como su cadena, para que una ventana convertida
+        // no arrastre el tope viejo.
+        if (
+          categoriaLlevaTopeCadena(v.categoria, reglas.tipos) &&
+          !esCategoriaVertical(v.categoria) &&
+          !p.codTope
+        ) {
+          const codTop = codTopeAuto(colorAccesoriosDePano(p, v.color), reglas.colores);
+          if (codTop) cadPatch.codTope = codTop;
         }
         return {
           ...p,
@@ -861,6 +881,14 @@ export function CotizadorFase2() {
         const pn = nuevo.panos[idx];
         if ((v.categoria || '').toUpperCase().includes('MOTOR') || pn.motorModelo || pn.motorTipo) return;
         if (!categoriaRequiereMecanismo(v.categoria)) return;
+        // El tope sigue al color de accesorios: si el color cambió, se repone
+        // el que corresponde (igual que la cadena, que conserva el largo y
+        // cambia el color). Va antes del MEC 06: ese kit trae la cadena
+        // incorporada, pero los topes se ponen igual.
+        if (categoriaLlevaTopeCadena(v.categoria, reglas.tipos) && !esCategoriaVertical(v.categoria)) {
+          const codTop = codTopeAuto(colorAccesoriosDePano(pn, v.color), reglas.colores);
+          if (codTop && codTop !== pn.codTope) setPano({ codTope: codTop });
+        }
         const lineaB =
           lineaBPorPano(nuevo as Parameters<typeof lineaBPorPano>[0], catalogo)[idx] ?? false;
         // Kit con cadena incorporada (MEC 06): limpiar la cadena y quedarse
@@ -1585,6 +1613,7 @@ export function CotizadorFase2() {
                 formulas={formulas}
                 cadenas={cadenas}
                 pesos={pesos}
+                topes={topes}
                 opcionesMecanismo={opcionesMecVentana}
                 opcionesTuberia={opcionesTubVentana}
                 notaMecanismo={notaMecanismo}
@@ -1817,6 +1846,7 @@ export function CotizadorFase2() {
                   onChange={(patch) => actualizarPano(panoActivo, patch)}
                   cadenas={cadenas}
                   pesos={pesos}
+                  topes={topes}
                   opcionesMecanismo={opcionesMecVentana}
                   opcionesTuberia={opcionesTubVentana}
                   mecanismoFijoNota={notaMecanismo}
