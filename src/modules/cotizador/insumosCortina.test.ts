@@ -264,14 +264,60 @@ describe('cantidadTarugos', () => {
 });
 
 describe('insumosDePano', () => {
-  it('roller blanco → tapas TAP19/TAP01 + 2 tornillos TOR02', () => {
+  it('roller blanco → tapas TAP19/TAP01 + 2 tornillos TOR02 + 2 topes TOP01', () => {
     const out = insumosDePano(pano({ color: 'BCO' }), { categoria: 'ROL', anchoM: 1.5 });
     const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
-    expect(map).toEqual({ TAP19: 1, TAP01: 1, TOR02: 2 });
+    expect(map).toEqual({ TAP19: 1, TAP01: 1, TOR02: 2, TOP01: 2 });
   });
-  it('color de accesorios fuera de mapa (MET) → sin tapas ni tornillos de tapa', () => {
-    expect(insumosDePano(pano({ color: 'MET' }), { categoria: 'ROL', anchoM: 1.5 })).toEqual([]);
+  it('MET: sigue sin tapas ni tornillos, pero SÍ lleva sus 2 topes metálicos', () => {
+    // El metálico nunca tuvo tapas de peso roller; el tope, en cambio, sí
+    // tiene código propio por color (TOP06), así que se emite (2026-08-28).
+    const out = insumosDePano(pano({ color: 'MET' }), { categoria: 'ROL', anchoM: 1.5 });
+    expect(out.map((i) => [i.codigo, i.cantidad])).toEqual([['TOP06', 2]]);
   });
+  it('topes de cadena: 2 por cadena, del color de accesorios', () => {
+    const topes = (p: Partial<Pano>, categoria: string) =>
+      insumosDePano(p, { categoria, anchoM: 1.5 }).filter((i) => i.codigo.startsWith('TOP'));
+    // Los cuatro colores que se venden.
+    expect(topes(pano({ color: 'BCO' }), 'ROL')[0]).toMatchObject({ codigo: 'TOP01', cantidad: 2 });
+    expect(topes(pano({ color: 'GRS' }), 'ROL')[0]).toMatchObject({ codigo: 'TOP04', cantidad: 2 });
+    expect(topes(pano({ color: 'NEG' }), 'ROL')[0]).toMatchObject({ codigo: 'TOP05', cantidad: 2 });
+    expect(topes(pano({ color: 'MET' }), 'ROL')[0]).toMatchObject({ codigo: 'TOP06', cantidad: 2 });
+    // La VERTICAL lleva cadena de roller, así que lleva sus topes.
+    expect(topes(pano({ color: 'NEG' }), 'VERTICAL')[0]).toMatchObject({ codigo: 'TOP05', cantidad: 2 });
+  });
+
+  it('sin cadena no hay topes: motor, beeblack y pletina', () => {
+    const topes = (categoria: string) =>
+      insumosDePano(pano({ color: 'NEG' }), { categoria, anchoM: 1.5 }).filter((i) =>
+        i.codigo.startsWith('TOP'),
+      );
+    // Vendida COMO motor: su precio no trae cadena.
+    expect(topes('ROL_MOTOR_38mm')).toEqual([]);
+    expect(topes('BEEBLACK_ESTANDAR')).toEqual([]);
+    expect(topes('PLETINA_ROLLER_V')).toEqual([]);
+  });
+
+  it('el tope elegido a mano manda; en la VERTICAL se calcula igual', () => {
+    const conTope = (categoria: string) =>
+      insumosDePano(pano({ color: 'NEG', codTope: 'TOP06' }), { categoria, anchoM: 1.5 })
+        .filter((i) => i.codigo.startsWith('TOP'))
+        .map((i) => i.codigo);
+    expect(conTope('ROL')).toEqual(['TOP06']);
+    // La vertical NO lee el tope del paño: así una ventana convertida desde
+    // roller no arrastra el viejo (mismo criterio que su cadena).
+    expect(conTope('VERTICAL')).toEqual(['TOP05']);
+  });
+
+  it('un color nuevo sin tope declarado emite la pieza SIN código, no la esconde', () => {
+    const colores = [
+      { codigo: 'DOR', nombre: 'DORADO', usos: {}, insumos: {} },
+    ] as unknown as Parameters<typeof insumosDePano>[1]['colores'];
+    const out = insumosDePano(pano({ color: 'DOR' }), { categoria: 'ROL', anchoM: 1.5, colores });
+    const tope = out.find((i) => i.descripcion.startsWith('TOPE DE CADENA'));
+    expect(tope).toMatchObject({ codigo: '', cantidad: 2 });
+  });
+
   it('cenefa ovalada → +6 tornillos TOR02 y brackets por ancho', () => {
     const out = insumosDePano(
       pano({ color: 'NEG', cenefa: 'Ovalada', bracketTipo: 'CORTO' }),
@@ -305,9 +351,11 @@ describe('insumosDePano', () => {
     // Sin bracket elegido, el dúo emite el LARGO: su receta cobra BRA02 ×3
     // (decisión del dueño 2026-08-20).
     expect(map.BRA02).toBe(3); // cantidadBrackets(1,5)
+    // El dúo lleva UNA cadena, así que lleva sus 2 topes (negro → TOP05).
+    expect(map.TOP05).toBe(2);
     // Color fuera de mapa (MET): sin tapa exterior, pero la cenefa va igual.
     const met = insumosDePano(pano({ color: 'MET' }), { categoria: 'DUO_MANUAL_38mm', anchoM: 1.5 });
-    expect(met.map((i) => i.codigo)).toEqual(['TAP13', 'TOR02', 'BRA02']);
+    expect(met.map((i) => i.codigo)).toEqual(['TAP13', 'TOP06', 'TOR02', 'BRA02']);
   });
   it('SOFT LIGHT → 2 tapas de peso TAP26/TAP31 por color, a presión (SIN tornillos)', () => {
     const blanco = insumosDePano(pano({ color: 'BCO', cenefa: 'Ovalada' }), { categoria: 'SOFT_LIGHT_38mm', anchoM: 2.5 });
@@ -780,7 +828,7 @@ describe('insumosDePano — tapas de la categoría B (2026-08-14)', () => {
   it('sin lineaB todo queda como siempre (regresión)', () => {
     const out = insumosDePano(pano({ color: 'BCO' }), { categoria: 'ROL', anchoM: 1.5 });
     const map = Object.fromEntries(out.map((i) => [i.codigo, i.cantidad]));
-    expect(map).toEqual({ TAP19: 1, TAP01: 1, TOR02: 2 });
+    expect(map).toEqual({ TAP19: 1, TAP01: 1, TOR02: 2, TOP01: 2 });
   });
 
   it('el overlay del color pisa la tabla B de fábrica', () => {

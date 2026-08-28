@@ -54,6 +54,12 @@ export type Pano = {
   codCadena?: string;
   /** Código del insumo-peso de cadena del inventario (PCA01/PCA04). Enlaza al stock. */
   codPeso?: string;
+  /**
+   * Código del insumo-tope de cadena del inventario (TOP01/04/05/06). Vacío =
+   * lo resuelve el color de accesorios; con valor = el vendedor lo eligió a
+   * mano y manda (igual que la cadena). Van 2 por cadena.
+   */
+  codTope?: string;
   cierreVert?: string;
   manillaCant?: number;
   manillaColor?: string;

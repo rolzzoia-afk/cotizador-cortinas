@@ -16,6 +16,8 @@ import {
   esCategoriaVertical,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
+import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import { TOPES_POR_CADENA, codTopeAuto, textoTopeInventario } from './cadenas';
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import { esAdicionalCenefa } from '@/modules/descuentos/adicionales-cenefa';
 import { esAdicionalPerfil } from '@/modules/descuentos/adicionales-perfil';
@@ -505,6 +507,22 @@ export function cantidadSuplementosAuto(
 }
 
 /**
+ * ¿Esta cortina lleva topes de cadena? Los lleva todo lo que sube y baja con
+ * cadena: roller, dúo y VERTICAL (la vertical también usa cadena de roller).
+ * Quedan fuera el beeblack (corre de lado con manilla) y la pletina (paño
+ * pegado). Las vendidas COMO motor se descartan aparte, con el mismo criterio
+ * por CATEGORÍA que usan la cadena y el peso: un motor asignado a una cortina
+ * manual NO le quita la cadena, así que tampoco sus topes.
+ */
+export function categoriaLlevaTopeCadena(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  if ((categoria || '').toUpperCase().includes('MOTOR')) return false;
+  return !esCategoriaBeeblack(categoria) && !esCategoriaPletina(categoria, tipos);
+}
+
+/**
  * Insumos de instalación del paño (tapas de peso, tornillos, brackets, tarugos).
  * Los del motor van aparte en `insumosMotorDePano`.
  */
@@ -578,6 +596,32 @@ export function insumosDePano(
       color: '',
       cantidad: TAPAS_DUO_INTERNA_POR_PANO,
     });
+  }
+
+  // Topes de cadena: 2 por cadena, del color de accesorios. En la VERTICAL se
+  // calculan SIEMPRE (nunca se leen del paño), igual que su cadena: así una
+  // ventana convertida de roller a vertical no arrastra el tope viejo.
+  if (categoriaLlevaTopeCadena(categoria, tipos)) {
+    const manual = esCategoriaVertical(categoria) ? '' : (p.codTope || '').trim().toUpperCase();
+    const cod = manual || codTopeAuto(colorAcc, colores);
+    const etiqueta = nombreDeColor(colorAcc, colores) || (colorAcc || '').trim().toUpperCase();
+    if (cod) {
+      out.push({
+        codigo: cod,
+        descripcion: textoTopeInventario(cod),
+        color: etiqueta,
+        cantidad: TOPES_POR_CADENA,
+      });
+    } else if (!esColorDeFabrica(colorAcc) && etiqueta) {
+      // Color dado de alta en Admin que no declaró su tope: la pieza igual se
+      // emite, sin código, para que en bodega se vea que falta catalogarla.
+      out.push({
+        codigo: '',
+        descripcion: `TOPE DE CADENA ${etiqueta}`,
+        color: etiqueta,
+        cantidad: TOPES_POR_CADENA,
+      });
+    }
   }
 
   // Tornillos de la cenefa ovalada (6 por cenefa).

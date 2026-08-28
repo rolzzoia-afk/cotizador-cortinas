@@ -208,8 +208,11 @@ describe('la hoja Insumos completa', () => {
   const insumos = REGLAS_PRECIOS_DEFAULT.insumos;
 
   it('trae los 41 que usan las recetas más las variantes de la planilla', () => {
-    // 41 con receta + 39 variantes/sueltos = los 80 que se pueden elegir.
-    expect(Object.keys(insumos).length).toBe(80);
+    // 41 con receta + 43 variantes/sueltos = los 84 que se pueden elegir.
+    // Los 4 topes por color (TOP 01/04/05/06) entraron el 2026-08-28 como
+    // variantes del TOP 03 que cobra la receta: se cobran igual y solo cambia
+    // cuál descuenta la bodega.
+    expect(Object.keys(insumos).length).toBe(84);
   });
 
   it('cada variante cobra lo mismo que el material del que es alternativa', () => {

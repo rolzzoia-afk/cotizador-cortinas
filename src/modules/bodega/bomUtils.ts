@@ -2,10 +2,14 @@
 // matching fuzzy de insumos.
 
 import {
+  TOPES_POR_CADENA,
   codCadenaVertical,
+  codTopeAuto,
   colorCadenaVertical,
   resolverCodCadenaBom,
+  textoTopeInventario,
 } from '@/modules/cotizador/cadenas';
+import { categoriaLlevaTopeCadena } from '@/modules/cotizador/insumosCortina';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 
@@ -429,11 +433,11 @@ export function extraerInsumosBOM(
   };
 
   const processPano = (p: Pano, categoria = '') => {
+    const colorAcc = String(p.colorMecanismo || p.colorPeso || p.colorCadena || p.color || '');
     // La VERTICAL lleva SIEMPRE la cadena de 3 m por color de accesorios
     // (CAD04 negro / CAD06 resto), calculada — nunca la que quedó guardada en
     // el paño. El BEEBLACK no lleva cadena. Espejo de `calcularBOM`.
     if (esCategoriaVertical(categoria)) {
-      const colorAcc = String(p.colorMecanismo || p.colorPeso || p.colorCadena || p.color || '');
       const cadVert = codCadenaVertical(colorAcc);
       const colVert = colorCadenaVertical(colorAcc);
       add(`CAD|${cadVert}|${colVert}`, 'CADENA', 'Cadena 3mts', cadVert, colVert, 1, 'unid.', '');
@@ -449,6 +453,28 @@ export function extraerInsumosBOM(
         const pesoCod = String(p.codPeso || '').trim();
         const pesoColor = String(p.colorPeso || cadColor);
         add(`PESO|${pesoCod || pesoColor}`, 'CADENA', 'Peso de cadena', pesoCod, pesoColor, 1, 'unid.', '');
+      }
+    }
+
+    // Topes de cadena: 2 por cadena, del color de accesorios. Espejo de
+    // `insumosDePano`, que es de donde salen cuando la OT sí tiene su orden de
+    // materiales. En la vertical se calculan, no se leen del paño.
+    if (categoriaLlevaTopeCadena(categoria)) {
+      const manual = esCategoriaVertical(categoria)
+        ? ''
+        : String(p.codTope || '').trim().toUpperCase();
+      const codTop = manual || codTopeAuto(colorAcc);
+      if (codTop) {
+        add(
+          `INS|${codTop}|${colorAcc}`,
+          'INSUMO',
+          textoTopeInventario(codTop),
+          codTop,
+          colorAcc,
+          TOPES_POR_CADENA,
+          'unid.',
+          buscarUbicacion(codTop),
+        );
       }
     }
 

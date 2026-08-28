@@ -58,6 +58,8 @@ En Fase 2 hay dos formas de cargar cada cortina, con el mismo resultado:
 
 Cambiar de vista no pierde nada de lo escrito.
 
+**Los topes de cadena se ponen solos.** En el paso de la cadena, debajo del peso, aparece **Topes (2)**: se eligen por el **color de accesorios** —blanco TOP01, gris TOP04, negro TOP05, metálico TOP06— y **van 2 por cadena**, así que una cortina lleva 2 y una dual, que tiene dos cadenas, lleva 4. Si se cambia el color de la cortina, el tope se cambia solo, igual que la cadena. El selector está para el caso raro en que haya que poner otro; dejándolo en «Por color de accesorios» se resuelve solo. **No los llevan** las cortinas vendidas como motor, el beeblack ni la pletina de velcro, porque no llevan cadena. Salen en la hoja de inventario dentro del cuadro **INSUMOS**, junto a las tapas y los tornillos, y de ahí pasan a la bolsa de bodega. **El precio no cambia**: el tope ya venía cobrado en la cotización; lo nuevo es que ahora la bodega sabe cuál entregar.
+
 #### Antes de medir: ¿qué vas a cargar?
 
 Cada vez que se aprieta **Nueva**, lo primero es decir qué hay en ese muro:

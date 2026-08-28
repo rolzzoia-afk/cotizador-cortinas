@@ -17,6 +17,12 @@ import {
   pesosSeleccionables,
   esPesoSeleccionable,
   textoPesoCadenaInventario,
+  TOPES_POR_CADENA,
+  codTopeAuto,
+  esTopeCadena,
+  esTopeSeleccionable,
+  topesSeleccionables,
+  textoTopeInventario,
   type CadenaInsumo,
 } from './cadenas';
 import { OPCIONES_LARGO_CADENA } from './fase2';
@@ -403,5 +409,74 @@ describe('codPesoAuto — el peso de cadena por gama', () => {
 
   it('gama B: SIEMPRE PCA01 blanco, sea cual sea el color de accesorios', () => {
     expect(codPesoAuto(true)).toBe('PCA01');
+  });
+});
+
+describe('codTopeAuto — el tope de cadena por color de accesorios', () => {
+  it('los cuatro colores que se venden tienen su tope', () => {
+    expect(codTopeAuto('BCO')).toBe('TOP01');
+    expect(codTopeAuto('GRS')).toBe('TOP04');
+    expect(codTopeAuto('NEG')).toBe('TOP05');
+    expect(codTopeAuto('MET')).toBe('TOP06');
+  });
+
+  it('acepta el nombre largo y los plurales tecleados en Fase 1', () => {
+    expect(codTopeAuto('BLANCO')).toBe('TOP01');
+    expect(codTopeAuto('NEGROS')).toBe('TOP05');
+    expect(codTopeAuto('grises')).toBe('TOP04');
+    expect(codTopeAuto('METAL')).toBe('TOP06');
+  });
+
+  it('a diferencia de la cadena, el METÁLICO sí tiene tope propio', () => {
+    // `colorCadenaCorto('MET')` devuelve '' (no hay cadena metálica), pero el
+    // tope TOP06 existe y se vende: por eso el tope tiene su propia tabla.
+    expect(codTopeAuto('MET')).toBe('TOP06');
+  });
+
+  it('un color sin tope catalogado no inventa uno: lo elige el vendedor', () => {
+    expect(codTopeAuto('CAFÉ')).toBeNull();
+    expect(codTopeAuto('DORADO')).toBeNull();
+    expect(codTopeAuto('')).toBeNull();
+    expect(codTopeAuto(null)).toBeNull();
+  });
+
+  it('el catálogo de colores pisa la tabla de fábrica', () => {
+    const colores = [
+      { codigo: 'NEG', nombre: 'NEGRO', usos: {}, insumos: { topeCadena: 'TOP 99' } },
+      { codigo: 'DOR', nombre: 'DORADO', usos: {}, insumos: { topeCadena: 'TOP90' } },
+    ] as unknown as Parameters<typeof codTopeAuto>[1];
+    expect(codTopeAuto('NEG', colores)).toBe('TOP99'); // sin espacios, como el stock
+    expect(codTopeAuto('DOR', colores)).toBe('TOP90'); // color nuevo, sin tabla de fábrica
+  });
+
+  it('van 2 por cadena', () => {
+    expect(TOPES_POR_CADENA).toBe(2);
+  });
+});
+
+describe('topes: identificación y selector', () => {
+  const inventario: CadenaInsumo[] = [
+    { cod: 'TOP05', nemotecnico: 'TOPES NEGROS - ROLZZO', color: '' },
+    { cod: 'TOP01', nemotecnico: 'TOPES /F-22 BLANCOS', color: 'BLANCO' },
+    { cod: 'CAD06', nemotecnico: 'CADENA 3 METROS BLANCA', color: 'BLANCO' },
+  ];
+
+  it('reconoce los códigos TOP y no confunde a la cadena', () => {
+    expect(esTopeCadena('TOP05')).toBe(true);
+    expect(esTopeCadena('TOP 05')).toBe(true);
+    expect(esTopeCadena('CAD06')).toBe(false);
+    expect(esTopeCadena('TOPE')).toBe(false);
+  });
+
+  it('el selector ofrece los topes en su orden, sin la cadena', () => {
+    expect(topesSeleccionables(inventario).map((i) => i.cod)).toEqual(['TOP01', 'TOP05']);
+    expect(esTopeSeleccionable('TOP02')).toBe(false); // agotado: no se ofrece
+  });
+
+  it('el texto del inventario prefiere el nemotécnico del stock', () => {
+    expect(textoTopeInventario('TOP05', inventario)).toBe('TOPES NEGROS - ROLZZO');
+    // Sin catálogo cargado cae a la etiqueta conocida, nunca al código pelado.
+    expect(textoTopeInventario('TOP06')).toBe('TOPES METALICOS - ROLZZO');
+    expect(textoTopeInventario('')).toBe('');
   });
 });
