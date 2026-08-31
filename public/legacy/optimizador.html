@@ -1574,7 +1574,7 @@ function limpiarNumero(valor) {
     return isNaN(num) ? 0 : num;
 }
 
-const VERSION_ACTUAL = "5.27"; // 2026-08-21: los TUBOS de una orden de CATEGORÍA B (columna CATEGORÍA = B) no se reemplazan con tubos de la categoría A — E01 ya no cae a E02/E03/E53/E66: si no hay stock B, sale tubo nuevo E01. Los tubos B (E01 y el E39 compartido) salen de configuracion.reglas_seleccion (reglaLineaB). Y una orden A nunca toma el E01. Antes (v5.26) solo las barras de estructura respetaban la categoría (llaves |B).
+const VERSION_ACTUAL = "5.28"; // 2026-08-31: guards anti-plan-vacío (incidente colmena borrada 28/8). Confirmar sin resultados aborta en vez de guardar un plan en blanco y borrar la colmena; el botón Confirmar muere al usarse y solo revive con un cálculo nuevo; confirmar limpia también las órdenes; recargar la colmena descarta la vista previa vieja; re-exportar un plan sin cortes avisa en vez de bajar un Excel de puros encabezados. Acompaña al guard de BD de sql/20260831_guard_borrado_masivo_plan_atomico.sql.
 // v5.26 — 2026-08-20: (a) regla tubos GRISES vs BLANCO — en una misma ubicación (misma OT + UBIC, o mismo grupo -G#) no se combinan E03 (blanco) con E02/E39/E66/E01 (grises); el reemplazo cross-familia se bloquea cuando la ubicación tiene más de un tubo, y si las órdenes ya vienen mezcladas del Excel se advierte. (b) tubos DESCONTINUADOS — el optimizador lee configuracion.reglas_seleccion (catálogo técnico de Admin) y ningún tubo 'oculto' (hoy E66) se ofrece como reemplazo, aunque el catálogo de reemplazos lo liste; abrir tubo nuevo de un código descontinuado advierte en el log.
 
 const MM_TUBO_ORIGINAL = 5780;
@@ -2714,6 +2714,15 @@ async function cargarColmenasDesdeTabla() {
         usandoColmenaManual                   = false;
         _colmenaSnapshotMedidas               = {};
         try { localStorage.removeItem('sistemaInventario'); } catch(e) {}
+
+        // La vista previa quedó calculada sobre la colmena VIEJA: fuera.
+        // Dejarla a la vista con sus resultados ya vaciados era el otro camino
+        // al plan en blanco (confirmar después de recargar el inventario).
+        const _panelPrev = document.getElementById('panel-vista-previa');
+        if (_panelPrev && _panelPrev.style.display !== 'none') {
+            _panelPrev.style.display = 'none';
+            log('ℹ️ La vista previa anterior se descartó: estaba calculada con el inventario viejo. Vuelve a apretar "Calcular".', 'info');
+        }
 
         const { data, error } = await sbOpt.from('colmena_tubos')
             .select('*')
@@ -6851,6 +6860,12 @@ function renderizarStaging(resultados) {
     panel.style.display = 'block';
     panel.scrollIntoView({ behavior: 'smooth' });
 
+    // Vista previa fresca = el botón de confirmar revive. Es el ÚNICO lugar
+    // que lo habilita: confirmar lo mata hasta el próximo cálculo (guard
+    // anti-plan-vacío del incidente 2026-08-28).
+    const _btnConf = document.getElementById('btnConfirmarGuardar');
+    if (_btnConf) _btnConf.disabled = false;
+
     // Wizard: paso 2 (Revisa el plan)
     setearPasoWizard(2);
 
@@ -7808,6 +7823,35 @@ async function verificarIntegridadPreGuardado() {
 
 // ── Confirmar: guardar en Supabase + descargar Excel ──
 async function confirmarYGuardarStaging() {
+    // ── Guard anti-plan-vacío (incidente 2026-08-28: colmena borrada) ──────
+    // Una confirmación sin resultados no tiene NADA que guardar, pero igual
+    // llegaba a `guardar_plan_atomico`, que reemplaza la colmena con la lista
+    // vacía: 537 tubos borrados sin un solo evento. Pasaba al re-confirmar
+    // durante la cola post-guardado (el estado ya limpio, el botón todavía
+    // vivo) o tras recargar la colmena con la vista previa abierta.
+    if (!SistemaInventario.resultadosOptimizacion || SistemaInventario.resultadosOptimizacion.length === 0) {
+        log('🚫 No hay un plan calculado para guardar. Carga órdenes y aprieta "Calcular" primero.', 'error');
+        document.getElementById('panel-vista-previa').style.display = 'none';
+        alert(
+            '🚫 No hay un plan calculado para guardar.\n\n' +
+            'Este botón guarda el plan que está en la vista previa, y ahora mismo no hay ninguno ' +
+            '(se guardó recién, o el inventario se recargó y el cálculo quedó obsoleto).\n\n' +
+            '→ Carga las órdenes y aprieta "Calcular" de nuevo.'
+        );
+        return;
+    }
+    // ── Anti-doble-confirmación: este botón muere hasta el próximo cálculo ──
+    // La cola post-guardado (Capa 4 + salud + refresco) demora varios segundos
+    // con el panel todavía visible; un segundo clic ahí adentro era el camino
+    // exacto al plan vacío. renderizarStaging lo vuelve a habilitar.
+    const _btnConfirmar = document.getElementById('btnConfirmarGuardar');
+    if (_btnConfirmar) {
+        if (_btnConfirmar.disabled) return; // clic repetido en la misma pasada
+        _btnConfirmar.disabled = true;
+    }
+    // Si el guardado aborta por cualquier rama, el botón revive para reintentar.
+    const _revivirConfirmar = () => { if (_btnConfirmar) _btnConfirmar.disabled = false; };
+
     log('💾 Confirmado. Verificando integridad antes de guardar...', 'info');
 
     // ── Bloqueo preventivo: deshabilitar "Calcular" mientras se persiste ──
@@ -7824,6 +7868,7 @@ async function confirmarYGuardarStaging() {
             log(`🚫 GUARDADO BLOQUEADO — ${integridad.mensaje}`, 'error');
             alert(integridad.mensaje + '\n\n→ Recarga la colmena desde Supabase e intenta optimizar de nuevo.');
             if (btnEjecutar) btnEjecutar.disabled = false;
+            _revivirConfirmar();
             return; // ← No se guarda nada
         }
     } catch(eInteg) {
@@ -7934,6 +7979,7 @@ async function confirmarYGuardarStaging() {
                 );
                 await _eliminarRespaldoHuerfano();
                 if (btnEjecutar) btnEjecutar.disabled = false;
+                _revivirConfirmar();
                 return; // ← ABORTA: no llega a la inserción de planes_corte
             }
         }
@@ -7972,9 +8018,16 @@ async function confirmarYGuardarStaging() {
             }
             await _eliminarRespaldoHuerfano();
             if (btnEjecutar) btnEjecutar.disabled = false;
+            _revivirConfirmar();
             return; // ← ABORTA: no llega a la inserción de planes_corte (línea 5709) ni al resto del flujo
         }
     }
+    // ── El plan YA está commiteado en BD: fuera la vista previa AHORA ──────
+    // Todo lo que sigue (Capa 4 con su espera, salud, refresco) son varios
+    // segundos de verificaciones; dejar el panel con su botón a la vista en
+    // ese lapso fue lo que permitió la re-confirmación vacía del 28/8.
+    document.getElementById('panel-vista-previa').style.display = 'none';
+
     // Limpiar registro de reserva (plan confirmado, ya no se puede descartar)
     if (_reservaActualId) {
         try {
@@ -8037,6 +8090,8 @@ async function confirmarYGuardarStaging() {
 
     // ── Capturar resumen ANTES de limpiar el estado temporal ──
     const resultados = SistemaInventario.resultadosOptimizacion.map(item => item.resultado);
+    // Las órdenes también: el resumen final las nombra y la limpieza las suelta.
+    const ordenesResumen = SistemaInventario.ordenes;
 
     // ── Plan ya guardado en la RPC atómica (Phase 2) ────────────────────────
     // El INSERT a planes_corte se hizo dentro de `guardar_plan_atomico`
@@ -8093,6 +8148,9 @@ async function confirmarYGuardarStaging() {
                         mensaje: 'La base de datos no registró los eventos esperados. El plan fue revertido para evitar inconsistencias. Si vuelve a pasar, contacta al admin.',
                         accion: { texto: 'Reintentar', onClick: () => confirmarYGuardarStaging() }
                     }, 'error', { duracion: 0 });
+                    // El botón revive para que el «Reintentar» del toast no
+                    // choque con el guard anti-doble-confirmación.
+                    _revivirConfirmar();
                     throw new Error('Plan abortado por Capa 4: events no encontrados tras INSERT atómico');
                 } else {
                     log(`✅ Capa 4 OK: ${eventCount} evento(s) verificado(s) para OT(s) ${otsUnicas.join(', ')}`, 'success');
@@ -8164,10 +8222,15 @@ async function confirmarYGuardarStaging() {
     SistemaInventario.colmenasHistorico = [];
     SistemaInventario.colmenasDisponibles = [];
     SistemaInventario.mermas = [];
+    // Las órdenes también: quedaban vivas después de confirmar, y cualquier
+    // guardado posterior con este estado armaba un plan con órdenes y cero
+    // resultados (el Excel en blanco del 28/8 y 31/8).
+    SistemaInventario.ordenes = [];
     SistemaInventario.ordenesCrudas = [];
     SistemaInventario.serialesCrudos = [];
     SistemaInventario.colmenaCruda = [];
     SistemaInventario.overridesNuevos = {};
+    try { actualizarTablaOrdenes(); } catch(e) { /* tabla vacía, no crítico */ }
 
     // ── Limpieza visual de inputs de archivo: forzar re-selección ──
     ['fileOrdenes', 'fileColmenas', 'fileCatalogo', 'fileEstructura'].forEach(id => {
@@ -8220,7 +8283,7 @@ async function confirmarYGuardarStaging() {
         if (r.fuente === 'tubo_nuevo') badge += ' badge-nueva';
         if (r.fuente === 'reemplazo') badge += ' badge-reemplazo';
 
-        const ordenOriginal = SistemaInventario.ordenes[r.orden - 1] || {};
+        const ordenOriginal = ordenesResumen[r.orden - 1] || {};
         const ot = ordenOriginal.ot || '';
         const ubic = ordenOriginal.ubic || '';
         const color = ordenOriginal.color || '';
@@ -8338,6 +8401,13 @@ async function cargarUltimoPlanDesdeSupabase() {
 
         const items = Array.isArray(data.resultados) ? data.resultados : JSON.parse(data.resultados);
         const ordenes = data.ordenes ? (Array.isArray(data.ordenes) ? data.ordenes : JSON.parse(data.ordenes)) : [];
+
+        // Un plan guardado sin cortes no sirve para re-exportar: mejor decirlo
+        // que descargar un Excel con puros encabezados (incidente 2026-08-28).
+        if (items.length === 0) {
+            log('⚠️ El último plan guardado no tiene cortes — no hay nada que exportar.', 'warn');
+            return false;
+        }
 
         SistemaInventario.resultadosOptimizacion = items;
         if (ordenes.length > 0) SistemaInventario.ordenes = ordenes;
