@@ -372,8 +372,12 @@ export function CotizadorFase4() {
         parametros,
         ot.datosGenerales?.corteGeneralColmena?.piezas,
       );
-      const n = generarEtiquetasPanosPDF(pdfRows, metaPDF(), catalogo, (r) =>
-        piezasColmena.has(pieceId(ot.id, r.ventanaId, r.panoIndex)),
+      const n = generarEtiquetasPanosPDF(
+        pdfRows,
+        metaPDF(),
+        catalogo,
+        (r) => piezasColmena.has(pieceId(ot.id, r.ventanaId, r.panoIndex)),
+        parametros,
       );
       if (n === 0) {
         toast.info('Todos los paños salen de la colmena — no hay etiquetas que imprimir.');
