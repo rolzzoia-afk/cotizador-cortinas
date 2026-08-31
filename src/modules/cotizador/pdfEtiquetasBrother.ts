@@ -14,6 +14,9 @@
 import { jsPDF } from 'jspdf';
 import type { CatalogoProductos, Pano } from './types';
 import type { OptimizerRow, PiezaEtiqueta } from './tela';
+import { panoDeCadaFila } from './hojaCorte';
+import { letraPano } from './letras';
+import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
 import { normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
@@ -1813,40 +1816,56 @@ export function cuerpoTextoJunto(
   return { size: 10.5, hScale: Math.max(0.4, libre / anchoA10) };
 }
 
-/** Grupo de cortinas que comparten paño físico (misma letra + N° de paño). */
+/** Grupo de cortinas que comparten paño físico (el mismo tiro de tela). */
 export type GrupoEtiquetaPano = {
   /** Fila representativa: la de mayor alto de corte (define el tiro de tela). */
   row: OptimizerRow;
   /** Todas las filas del paño (para decidir si alguna sale de colmena). */
   rows: OptimizerRow[];
-  /** Texto SE CORTA JUNTO: la letra del paño tal cual ("A", "UUU"). */
+  /** Texto SE CORTA JUNTO: "A" si va sola, "A-A" si viajan 2 cortinas, etc. */
   junto: string;
+  /** N° de paño físico, el mismo que numera la hoja de corte. */
+  pano: number;
   cortinas: number;
 };
 
 /**
- * Agrupa las filas del optimizador en paños físicos: las cortinas que se
- * cortan juntas (misma letra + mismo N° de paño) comparten UNA etiqueta.
- * Filas sin letra o sin N° de paño (planes legacy) quedan cada una con la
- * suya, igual que antes.
+ * Agrupa las filas del optimizador en paños físicos: las cortinas que se cortan
+ * juntas comparten UNA etiqueta.
  *
- * La etiqueta muestra la letra del paño A SECAS: antes un corte en conjunto
- * repetía la letra por cortina ("A-A"), pero con las letras de vuelta la
- * repetición ya viene EN la letra y un dúo de la tercera imprimía «UUU-UUU»
- * — el taller lee la misma letra que la hoja de corte: «UUU».
+ * Quién manda: `panoDeCadaFila` — LA MISMA cuenta que la hoja de corte y el
+ * Dimensionado, así la etiqueta nunca dice otra letra que el papel del cortador.
+ * Antes agrupaba por su cuenta (letra + n° del optimizador) y podía discrepar:
+ * una invertida marcada a mano en Fase 2 comparte paño para el empacador —cabe
+ * a lo ancho— pero el papel le da paño propio, y de ahí en adelante las letras
+ * quedaban corridas.
+ *
+ * La letra se REPITE una vez por cortina del corte en conjunto ("A-A"): en el
+ * Dimensionado esas dos cortinas salen con dos letras A, y la etiqueta tiene que
+ * decir lo mismo — es lo que avisa al cortador que de ese tiro salen dos piezas
+ * (dueño, 2026-08-31). Se había dejado la letra a secas por las letras de vuelta
+ * («UUU-UUU», PR #235); hoy el largo no es problema: `cuerpoTextoJunto` baja el
+ * cuerpo y condensa antes que pisar el N° de OT.
  */
-export function agruparEtiquetasPanos(rows: OptimizerRow[]): GrupoEtiquetaPano[] {
+export function agruparEtiquetasPanos(
+  rows: OptimizerRow[],
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): GrupoEtiquetaPano[] {
+  const panoDe = panoDeCadaFila(rows, params);
   const grupos: GrupoEtiquetaPano[] = [];
-  const porClave = new Map<string, GrupoEtiquetaPano>();
+  const porPano = new Map<number, GrupoEtiquetaPano>();
   rows.forEach((row, i) => {
-    const letra = (row.junto || '').trim();
-    const numero = row.numeroPano == null ? '' : String(row.numeroPano).trim();
-    const esAgrupable = letra !== '' && letra !== '·' && numero !== '';
-    const clave = esAgrupable ? `${numero}|${letra}` : `sola-${i}`;
-    const previo = porClave.get(clave);
+    const pano = panoDe[i] ?? 0;
+    const previo = porPano.get(pano);
     if (!previo) {
-      const g: GrupoEtiquetaPano = { row, rows: [row], junto: row.junto, cortinas: 1 };
-      porClave.set(clave, g);
+      const g: GrupoEtiquetaPano = {
+        row,
+        rows: [row],
+        junto: letraPano(pano),
+        pano,
+        cortinas: 1,
+      };
+      porPano.set(pano, g);
       grupos.push(g);
     } else {
       previo.cortinas += 1;
@@ -1854,13 +1873,16 @@ export function agruparEtiquetasPanos(rows: OptimizerRow[]): GrupoEtiquetaPano[]
       if ((row.altoCorte || 0) > (previo.row.altoCorte || 0)) previo.row = row;
     }
   });
+  for (const g of grupos) {
+    if (g.cortinas > 1) g.junto = Array(g.cortinas).fill(g.junto).join('-');
+  }
   return grupos;
 }
 
 /**
  * Etiquetas de PAÑOS (una por paño FÍSICO de tela cortado), formato oficial.
  * Un corte en conjunto (varias cortinas en el mismo tiro) lleva UNA etiqueta
- * con la letra del paño y el alto mayor del grupo.
+ * con la letra repetida ("A-A") y el alto mayor del grupo.
  */
 export function generarEtiquetasPanosPDF(
   rows: OptimizerRow[],
@@ -1869,11 +1891,13 @@ export function generarEtiquetasPanosPDF(
   /** Si se pasa, los paños con ALGUNA pieza de colmena NO llevan etiqueta (ya
    *  están cortados y etiquetados). Sin este argumento se imprimen todos. */
   esDeColmena?: (r: OptimizerRow) => boolean,
+  /** Los mismos con que se arma la hoja de corte: definen qué se corta junto. */
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): number {
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
-  const todos = agruparEtiquetasPanos(rows);
+  const todos = agruparEtiquetasPanos(rows, params);
   const grupos = esDeColmena
     ? todos.filter((g) => !g.rows.some(esDeColmena))
     : todos;

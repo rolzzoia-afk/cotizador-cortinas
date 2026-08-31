@@ -48,7 +48,8 @@ import {
   tipoCortinaEtiquetaGrupo,
 } from './pdfEtiquetasBrother';
 import { codigoSeparadorPerfil, codigoZocaloPerfil } from '@/modules/descuentos/codigos-estructura';
-import type { OptimizerRow } from './tela';
+import { asignarJuntoEnOrden, buildOptimizerRows, type OptimizerRow } from './tela';
+import { construirHojaCorte } from './hojaCorte';
 
 const pz = (columnaExcel: string, medidaCm: number, cod = '') => ({
   componente: columnaExcel, columnaExcel, medidaCm, cod, color: '',
@@ -192,18 +193,34 @@ describe('textoAccionamiento', () => {
 
 describe('agruparEtiquetasPanos', () => {
   const fila = (junto: string, numeroPano: number | string, altoCorte = 2.65): OptimizerRow =>
-    ({ codInt: 'SC 64', junto, numeroPano, altoCorte }) as unknown as OptimizerRow;
+    ({
+      codInt: 'SC 64',
+      junto,
+      numeroPano,
+      altoCorte,
+      ancho: 1.2,
+      anchoRollo: 2.98,
+    }) as unknown as OptimizerRow;
 
-  it('corte en conjunto → UNA etiqueta con la letra del paño a secas', () => {
+  it('corte en conjunto → UNA etiqueta con la letra REPETIDA por cortina («A-A»)', () => {
+    // En el Dimensionado esas dos cortinas salen con dos letras A: la etiqueta
+    // dice lo mismo, y así el cortador sabe que del tiro salen DOS piezas.
     const grupos = agruparEtiquetasPanos([
       fila('A', 1),
       fila('A', 1),
       fila('B', 2),
     ]);
     expect(grupos).toHaveLength(2);
-    expect(grupos[0].junto).toBe('A');
+    expect(grupos[0].junto).toBe('A-A');
     expect(grupos[0].cortinas).toBe(2);
     expect(grupos[1].junto).toBe('B');
+  });
+
+  it('tres cortinas en el mismo tiro → «A-A-A»', () => {
+    const grupos = agruparEtiquetasPanos([fila('A', 1), fila('A', 1), fila('A', 1)]);
+    expect(grupos).toHaveLength(1);
+    expect(grupos[0].junto).toBe('A-A-A');
+    expect(grupos[0].cortinas).toBe(3);
   });
 
   it('la etiqueta del grupo lleva el alto MAYOR (el tiro se corta a ese alto)', () => {
@@ -212,30 +229,75 @@ describe('agruparEtiquetasPanos', () => {
     expect(grupos[0].row.altoCorte).toBe(2.65);
   });
 
-  it('letra de vuelta: el dúo imprime «UUU» tal cual, NO «UUU-UUU»', () => {
-    // La repetición por cortina ("A-A") venía de las letras simples; con las
-    // letras de vuelta la repetición ya viene EN la letra y confundía.
-    const grupos = agruparEtiquetasPanos([fila('UUU', 73), fila('UUU', 73), fila('UUU', 73)]);
-    expect(grupos).toHaveLength(1);
-    expect(grupos[0].junto).toBe('UUU');
-    expect(grupos[0].cortinas).toBe(3);
-  });
-
-  it('misma letra pero distinto N° de paño NO se agrupa (letras se reciclan tras la Z)', () => {
+  it('la letra es la del PAÑO, no la del plan guardado: dos paños, dos letras', () => {
+    // Un plan viejo podía traer la misma letra en paños distintos (las letras
+    // se reciclaban tras la Z). La hoja de corte los renumera y la etiqueta la
+    // sigue: A y B, nunca dos A para tiros distintos.
     const grupos = agruparEtiquetasPanos([fila('A', 1), fila('A', 27)]);
     expect(grupos).toHaveLength(2);
-    expect(grupos.map((g) => g.junto)).toEqual(['A', 'A']);
+    expect(grupos.map((g) => g.junto)).toEqual(['A', 'B']);
+    expect(grupos.map((g) => g.pano)).toEqual([1, 2]);
   });
 
-  it('filas sin letra o sin N° de paño (planes legacy) van cada una con su etiqueta', () => {
-    const grupos = agruparEtiquetasPanos([
-      fila('', ''),
-      fila('', ''),
-      fila('·', 3),
-      fila('A', ''),
-      fila('A', ''),
-    ]);
-    expect(grupos).toHaveLength(5);
+  it('filas sin letra ni N° de paño (planes legacy) van cada una con su etiqueta', () => {
+    const grupos = agruparEtiquetasPanos([fila('', ''), fila('', ''), fila('·', 3)]);
+    expect(grupos).toHaveLength(3);
+    expect(grupos.map((g) => g.junto)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('una INVERTIDA marcada a mano no comparte etiqueta, igual que en la hoja de corte', () => {
+    // El empacador la mete en un paño compartido (cabe a lo ancho), pero el
+    // papel del cortador le da paño propio: si la etiqueta agrupara por su
+    // cuenta, imprimiría un paño de menos y todas las letras de ahí en adelante
+    // saldrían corridas contra el Dimensionado.
+    const conFlag = {
+      ...fila('A', 1),
+      pano: { invertida: true },
+    } as unknown as OptimizerRow;
+    const grupos = agruparEtiquetasPanos([fila('A', 1), conFlag, fila('B', 2)]);
+    expect(grupos).toHaveLength(3);
+    expect(grupos.map((g) => g.junto)).toEqual(['A', 'B', 'C']);
+  });
+});
+
+// La invariante que motivó todo: la etiqueta y el papel del cortador tienen que
+// decir la MISMA letra para la misma cortina. Se comprueba contra la hoja de
+// corte real, no contra letras escritas a mano.
+describe('etiquetas de paño vs. hoja de corte', () => {
+  const cat = {
+    'SC 64': {
+      cod: 'SC 64', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM',
+      descripcion: '', precio: 0, anchoRollo: 2.98,
+    },
+  };
+  const mkVent = (id: string, ancho: number, invertida?: boolean) => ({
+    id,
+    ubicacion: id,
+    codInt: 'SC 64',
+    producto: 'ROLLER SCREEN PREMIUM',
+    tipo: 'PREMIUM',
+    categoria: 'ROL',
+    grupoId: null,
+    alto: 1.8,
+    precio: 0,
+    cantidad: 1,
+    panos: [{ ancho, alto: 1.8, ...(invertida === undefined ? {} : { invertida }) }],
+  });
+
+  it('cada etiqueta lleva la letra de su paño, repetida una vez por cortina', () => {
+    // v1 + v2 caben juntas (1,40 + 1,45); v3 es la invertida a mano.
+    const ventanas = [mkVent('v1', 1.4), mkVent('v2', 1.45), mkVent('v3', 1.2, true)];
+    const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas as never, cat as never));
+    const hoja = construirHojaCorte(rows, [], { id: 'ot1', storeVentanas: ventanas } as never);
+    const grupos = agruparEtiquetasPanos(rows);
+
+    expect(grupos).toHaveLength(hoja.totalPanos);
+    // Las letras del papel, sin repetir, en el orden en que aparecen.
+    const delPapel = [...new Set(hoja.cortinas.map((c) => c.cortarJunto))];
+    expect(grupos.map((g) => g.pano)).toEqual(hoja.panos.map((p) => p.pano));
+    expect(grupos.map((g) => g.junto.split('-')[0])).toEqual(delPapel);
+    // El paño compartido repite su letra; los de una sola cortina, no.
+    expect(grupos.map((g) => g.junto)).toEqual(['A-A', 'B']);
   });
 });
 
@@ -276,6 +338,8 @@ describe('generarEtiquetasPanosPDF', () => {
         junto,
         numeroPano,
         altoCorte: 2.65,
+        ancho: 1.2,
+        anchoRollo: 2.98,
         pano: { tipoTela: 'SCR' },
       }) as unknown as OptimizerRow;
     generarEtiquetasPanosPDF(
@@ -288,16 +352,20 @@ describe('generarEtiquetasPanosPDF', () => {
   });
   it('páginas exactas de 62×51 mm, sin sobrante (y sin volteo de jsPDF)', () => {
     docsGuardados.length = 0;
-    const row = {
-      codInt: 'SC 93',
-      producto: 'ROLLER SCREEN PREMIUM',
-      tipo: 'PREMIUM',
-      junto: 'A',
-      altoCorte: 2.551,
-      pano: { tipoTela: 'SCR' },
-    } as unknown as OptimizerRow;
+    const row = (junto: string, numeroPano: number) =>
+      ({
+        codInt: 'SC 93',
+        producto: 'ROLLER SCREEN PREMIUM',
+        tipo: 'PREMIUM',
+        junto,
+        numeroPano,
+        altoCorte: 2.551,
+        ancho: 1.2,
+        anchoRollo: 2.98,
+        pano: { tipoTela: 'SCR' },
+      }) as unknown as OptimizerRow;
     generarEtiquetasPanosPDF(
-      [row, row],
+      [row('A', 1), row('B', 2)],
       { ot: '267-3', cliente: 'JEFFI', fecha: '2026-07-03' },
       { 'SC 93': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: 'TEXTURE PERLA 5%', precio: 23820 } },
     );
@@ -323,6 +391,8 @@ describe('generarEtiquetasPanosPDF — omite paños de colmena', () => {
       ventanaId,
       panoIndex,
       altoCorte: 2.65,
+      ancho: 1.2,
+      anchoRollo: 2.98,
       pano: { tipoTela: 'SCR' },
     }) as unknown as OptimizerRow;
   const meta = { ot: '3115', cliente: 'LUIS-VIVIANA', fecha: '2026-07-15' };

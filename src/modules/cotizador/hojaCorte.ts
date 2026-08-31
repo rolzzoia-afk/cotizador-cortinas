@@ -183,6 +183,74 @@ const tipoCorto = (producto: string) => {
 };
 
 /**
+ * ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no está
+ * definido, se auto-marca cuando el ancho + borde supera el rollo. Se compara
+ * contra el ancho CONSUMIDO (el de corte real en oscuridad, el nominal en el
+ * resto): un externo de 2,90 nominal corta 2,9934 de tela y tampoco entra a lo
+ * ancho del rollo.
+ *
+ * La VERTICAL NUNCA se invierte: su tela se corta en lamas de 8,9 cm que
+ * siempre entran a lo ancho del rollo (una ventana ancha = más lamas, en varias
+ * pasadas). Si se invirtiera, las lamas quedarían acostadas.
+ */
+export function esFilaInvertida(
+  r: OptimizerRow,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): boolean {
+  if (r.esVertical) return false;
+  return r.pano?.invertida ?? debeInvertirPano(anchoConsumidoM(r), r.anchoRollo, params.bordeCm);
+}
+
+/**
+ * N.º de PAÑO FÍSICO de cada fila (1..n, por orden de aparición).
+ *
+ * Es la ÚNICA definición de «qué se corta junto»: la hoja de corte, el
+ * Dimensionado y las etiquetas de paño la comparten para no contradecirse. Las
+ * etiquetas agrupaban por su cuenta —solo por letra + n° del optimizador— y una
+ * invertida marcada a mano en Fase 2 (que el empacador SÍ mete en un paño
+ * compartido, porque cabe a lo ancho) salía en una etiqueta que el papel del
+ * cortador partía en dos: desde ahí las letras de la etiqueta y las del
+ * Dimensionado no coincidían.
+ *
+ * Reglas de la clave:
+ *  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
+ *  · resto → letra "cortar junto" del optimizador + N° DE PAÑO. La letra sola
+ *    no basta: los planes GUARDADOS antes del arreglo de letras daban la vuelta
+ *    en la Z, y en una OT con >26 paños la misma letra nombraba paños DISTINTOS
+ *    — la hoja los fusionaba y reservaba un tercio de la tela (OT 268-6: 88
+ *    cortinas de 2 m → decía 26 paños). Con el n° en la clave, la misma letra
+ *    con n° distinto son paños distintos; con el mismo n° (o ambos vacíos, como
+ *    en los grupos armados a mano solo por letra) se siguen cortando juntos.
+ *  · Planes antiguos podían traer junto = "RR" —la marca de «no cabe»— en varias
+ *    filas SIN n° de paño: se separan por índice para que cada una quede en su
+ *    propio paño y no colapsen en uno. Con n° de paño ya no hace falta: hoy "RR"
+ *    es la letra legítima del paño 44 —A…Z, AA, BB… RR— y sus filas deben
+ *    cortarse juntas como cualquier otra.
+ *  · Sufijo ·V: vertical y roller NUNCA comparten paño (van en hojas separadas).
+ *    Aunque el empaque ya los separa, un plan GUARDADO viejo podría traer un
+ *    grupo mixto; el sufijo garantiza que ningún paño quede a caballo entre las
+ *    dos hojas.
+ */
+export function panoDeCadaFila(
+  rows: OptimizerRow[],
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): number[] {
+  const clave = (r: OptimizerRow, idx: number): string => {
+    const suf = r.esVertical ? '·V' : '';
+    if (esFilaInvertida(r, params)) return `INV#${idx}${suf}`;
+    const sinNumero = r.numeroPano == null || r.numeroPano === '';
+    if (r.junto === 'RR' && sinNumero) return `RR#${idx}${suf}`;
+    return `${r.junto || `·${idx}`}#${String(r.numeroPano ?? '')}${suf}`;
+  };
+  const numeroDe = new Map<string, number>();
+  return rows.map((r, idx) => {
+    const k = clave(r, idx);
+    if (!numeroDe.has(k)) numeroDe.set(k, numeroDe.size + 1);
+    return numeroDe.get(k)!;
+  });
+}
+
+/**
  * Construye la hoja de corte de UNA OT cruzando el optimizador de paños con
  * el Plan de Corte (para el origen rollo/sobrante de cada pieza).
  */
@@ -211,18 +279,7 @@ export function construirHojaCorte(
     return piezasSnapshot?.[pid] ?? null;
   };
 
-  // ¿La cortina se corta invertida (rotada)? Manda el flag de Fase 2; si no
-  // está definido, se auto-marca cuando el ancho + borde supera el rollo.
-  // Se compara contra el ancho CONSUMIDO (el de corte real en oscuridad, el
-  // nominal en el resto): un externo de 2,90 nominal corta 2,9934 de tela y
-  // tampoco entra a lo ancho del rollo.
-  // La VERTICAL NUNCA se invierte: su tela se corta en lamas de 8,9 cm que
-  // siempre entran a lo ancho del rollo (una ventana ancha = más lamas, en
-  // varias pasadas). Si se invirtiera, las lamas quedarían acostadas.
-  const esInvertida = (r: OptimizerRow) =>
-    r.esVertical
-      ? false
-      : (r.pano?.invertida ?? debeInvertirPano(anchoConsumidoM(r), r.anchoRollo, params.bordeCm));
+  const esInvertida = (r: OptimizerRow) => esFilaInvertida(r, params);
 
   // Pasadas del rollo para una vertical más ancha que el rollo: se cortan las
   // lamas en varias franjas a lo largo del rollo (ceil(ancho / ancho rollo)).
@@ -231,38 +288,8 @@ export function construirHojaCorte(
       ? Math.ceil(r.ancho / r.anchoRollo)
       : 0;
 
-  // Clave de paño por fila:
-  //  · invertida → cada una su propio paño (rotada, ocupa el rollo a lo largo)
-  //  · resto → letra "cortar junto" del optimizador + N° DE PAÑO. La letra sola
-  //    no basta: los planes GUARDADOS antes del arreglo de letras daban la
-  //    vuelta en la Z, y en una OT con >26 paños la misma letra nombraba paños
-  //    DISTINTOS — la hoja los fusionaba y reservaba un tercio de la tela
-  //    (OT 268-6: 88 cortinas de 2 m → decía 26 paños). Con el n° en la clave,
-  //    la misma letra con n° distinto son paños distintos; con el mismo n° (o
-  //    ambos vacíos, como en los grupos armados a mano solo por letra) se
-  //    siguen cortando juntos.
-  // (Planes antiguos podían traer junto = "RR" —la marca de «no cabe»— en varias
-  //  filas SIN n° de paño: se separan por índice para que cada una quede en su
-  //  propio paño y no colapsen en uno. Con n° de paño ya no hace falta: hoy
-  //  "RR" es la letra legítima del paño 44 —A…Z, AA, BB… RR— y sus filas deben
-  //  cortarse juntas como cualquier otra.)
-  // Sufijo ·V: vertical y roller NUNCA comparten paño (van en hojas separadas).
-  // Aunque el empaque ya los separa, un plan GUARDADO viejo podría traer un grupo
-  // mixto; el sufijo garantiza que ningún paño quede a caballo entre las dos hojas.
-  const claveJunto = (r: OptimizerRow, idx: number) => {
-    const suf = r.esVertical ? '·V' : '';
-    if (esInvertida(r)) return `INV#${idx}${suf}`;
-    const sinNumero = r.numeroPano == null || r.numeroPano === '';
-    if (r.junto === 'RR' && sinNumero) return `RR#${idx}${suf}`;
-    return `${r.junto || `·${idx}`}#${String(r.numeroPano ?? '')}${suf}`;
-  };
-
-  // N.º de paño por clave (orden de aparición): primera clave → 1, etc.
-  const juntoNum = new Map<string, number>();
-  rows.forEach((r, idx) => {
-    const k = claveJunto(r, idx);
-    if (!juntoNum.has(k)) juntoNum.set(k, juntoNum.size + 1);
-  });
+  // N.º de paño físico por fila (la misma cuenta que leen las etiquetas).
+  const panoDe = panoDeCadaFila(rows, params);
   const letra = letraPano; // …Z, AA, BB… — mismas letras que asigna el optimizador
 
   // ── Bloque 1: una fila por cortina ──
@@ -274,7 +301,7 @@ export function construirHojaCorte(
     // se excluye: nunca "no cabe" (se corta en lamas), lleva su propio aviso.
     const noCabe = !inv && !r.esVertical && anchoConsumidoM(r) > r.anchoRollo;
     const pasadas = pasadasVertical(r);
-    const pano = juntoNum.get(claveJunto(r, idx)) ?? 0;
+    const pano = panoDe[idx] ?? 0;
     const colmena = colmenaDePieza(pid);
     return {
       cadena: 0,
@@ -315,11 +342,11 @@ export function construirHojaCorte(
   //    que salen de colmena — se marcan en la columna COLMENA. Antes se
   //    filtraban los grupos 100% colmena y el resumen quedaba vacío (TOTAL
   //    PAÑOS = 0) cuando toda la OT se cortaba de sobrantes. ──
-  const grupos = new Map<string, { rows: OptimizerRow[]; pano: number }>();
+  const grupos = new Map<number, { rows: OptimizerRow[]; pano: number }>();
   rows.forEach((r, idx) => {
-    const k = claveJunto(r, idx);
-    if (!grupos.has(k)) grupos.set(k, { rows: [], pano: juntoNum.get(k) ?? 0 });
-    grupos.get(k)!.rows.push(r);
+    const pano = panoDe[idx] ?? 0;
+    if (!grupos.has(pano)) grupos.set(pano, { rows: [], pano });
+    grupos.get(pano)!.rows.push(r);
   });
   const panos: FilaPanoResumen[] = [];
   // Metros de tela por COD_INT para el OPTIMIZADOR = lo que hay que sacar del
