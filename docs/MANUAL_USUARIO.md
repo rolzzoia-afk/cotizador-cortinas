@@ -58,6 +58,23 @@ En Fase 2 hay dos formas de cargar cada cortina, con el mismo resultado:
 
 Cambiar de vista no pierde nada de lo escrito.
 
+#### Cargar hablando (asistente de voz)
+
+En la vista guiada, arriba del paso, hay un botón **Dictar**. Al tocarlo la app **pregunta en voz alta** lo que falta —«¿Dónde va esta cortina?»— y **escribe lo que se le responde**: se dice «pieza uno» y queda escrito. Está pensado para medir con las manos ocupadas: la huincha en una mano, el teléfono en el bolsillo.
+
+Cómo funciona:
+
+- Pregunta **solo lo que está en blanco**, en el mismo orden en que se ve en pantalla, y **confirma cada dato** («Anoté ancho: 1,85»). Lo que el sistema resuelve solo —el modelo de fabricación, el código del peso inferior, un tubo con una única medida compatible— **lo dice, no lo pregunta**.
+- Las **medidas** se pueden dictar como se hablan: «uno coma ochenta y cinco», «un metro ochenta y cinco», «ciento ochenta y cinco», «185» o «un metro y medio» son todas 1,85 / 1,50 m. Un número suelto mayor que 10 se entiende en **centímetros**.
+- Las **telas** se pueden decir por nombre («blackout blanco») o **deletreando el código** («be ka diez» = BK 10). Si hay más de una que calza, la app **lee dos o tres opciones numeradas** y basta decir «la primera» (o tocarla en pantalla).
+- **Órdenes** que entiende en cualquier momento: **«siguiente»**, **«anterior»**, **«repetir»**, **«saltar»** (deja ese dato pendiente), **«corregir ancho»** (o el nombre de cualquier campo del paso) y **«parar»**.
+- El paso **«Perfiles y guías»** de las cortinas de oscuridad se completa **a mano**: la voz lo avisa y espera un «siguiente». Y **guardar la ventana nunca se hace por voz** — ese botón se aprieta.
+- **El silencio no molesta**: mientras se mide, se busca el metro o se habla con el cliente, el micrófono se reabre solo y calladito. Recién después de un minuto largo sin nada queda **en pausa**, y vuelve con un toque. Si no *entiende* lo dicho tres veces seguidas, también pausa, para no quedar preguntando sola en medio del ruido de una obra.
+- En el recuadro hay un botón **Hablar**: abre el micrófono en el acto. Sirve si el navegador se hace el desentendido, o para contestar antes de que la app termine la pregunta.
+- Abajo del recuadro está el desplegable **Voz**: las marcadas con **★** son las que suenan natural (las que el sistema baja de internet; las otras son las viejas del equipo, metálicas). La elegida **queda guardada en ese equipo**, así que se configura una vez.
+
+**Necesita Chrome o Edge** (en el teléfono también sirve el navegador de Android): en Firefox y en algunos navegadores dentro de otras aplicaciones no existe el reconocimiento de voz, y el botón lo avisa. La vista guiada funciona igual escribiendo a mano. El audio **no se guarda ni se sube a ninguna parte**: lo transcribe el propio navegador.
+
 **Los topes de cadena se ponen solos.** En el paso de la cadena, debajo del peso, aparece **Topes (2)**: se eligen por el **color de accesorios** —blanco TOP01, gris TOP04, negro TOP05, metálico TOP06— y **van 2 por cadena**, así que una cortina lleva 2 y una dual, que tiene dos cadenas, lleva 4. Si se cambia el color de la cortina, el tope se cambia solo, igual que la cadena. El selector está para el caso raro en que haya que poner otro; dejándolo en «Por color de accesorios» se resuelve solo. **No los llevan** las cortinas vendidas como motor, el beeblack ni la pletina de velcro, porque no llevan cadena. Salen en la hoja de inventario dentro del cuadro **INSUMOS**, junto a las tapas y los tornillos, y de ahí pasan a la bolsa de bodega. **El precio no cambia**: el tope ya venía cobrado en la cotización; lo nuevo es que ahora la bodega sabe cuál entregar.
 
 #### Antes de medir: ¿qué vas a cargar?

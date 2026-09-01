@@ -14,6 +14,9 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CortinaViz } from './CortinaViz';
 import { CuerpoPaso } from './PasoWizard';
+import { BotonVoz, PanelVoz } from './PanelVoz';
+import { useVozWizard } from './useVozWizard';
+import type { CtxVoz } from '@/modules/cotizador/wizard/voz';
 import {
   faltantesPaso,
   pasoCompleto,
@@ -107,6 +110,47 @@ export function WizardTerreno(props: Props) {
     if (destino && pasos.some((p) => p.id === destino)) setIdPaso(destino);
   };
 
+  // ── El asistente de voz ──
+  // Recibe el MISMO contexto que se dibuja y despacha por los mismos
+  // `onPano`/`onVentana`/`onCategoria`: dictar y tipear escriben igual.
+  const ctxVoz: CtxVoz = useMemo(
+    () => ({
+      ...ctx,
+      cadenas: props.cadenas,
+      pesos: props.pesos,
+      lineaB: props.lineaB,
+      opcionesMecanismo: props.opcionesMecanismo,
+      opcionesTuberia: props.opcionesTuberia,
+      notaMecanismo: props.notaMecanismo,
+    }),
+    [
+      ctx,
+      props.cadenas,
+      props.pesos,
+      props.lineaB,
+      props.opcionesMecanismo,
+      props.opcionesTuberia,
+      props.notaMecanismo,
+    ],
+  );
+  const pendientesTexto = useMemo(
+    () => pendientesVentana.map((p) => p.mensaje),
+    [pendientesVentana],
+  );
+  const voz = useVozWizard({
+    idPaso,
+    ctx: ctxVoz,
+    pasos,
+    panoActivo,
+    pendientes: pendientesTexto,
+    onAccion: (accion) => {
+      if (accion.categoria !== undefined) props.onCategoria(accion.categoria);
+      if (accion.ventana) props.onVentana(accion.ventana);
+      if (accion.pano) props.onPano(accion.pano);
+    },
+    onIrAPaso: setIdPaso,
+  });
+
   if (!paso) return null;
 
   return (
@@ -175,13 +219,30 @@ export function WizardTerreno(props: Props) {
         )}
 
         <div className="rounded-md border border-border bg-card/40 p-4">
-          <div className="mb-1 flex items-baseline justify-between gap-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold">{paso.titulo}</h4>
-            <span className="font-mono text-[0.65rem] text-muted-foreground">
-              {idx + 1} / {pasos.length}
-            </span>
+            <div className="flex items-center gap-2">
+              <BotonVoz soportado={voz.soportado} fase={voz.estado.fase} onClick={voz.alternar} />
+              <span className="font-mono text-[0.65rem] text-muted-foreground">
+                {idx + 1} / {pasos.length}
+              </span>
+            </div>
           </div>
           <p className="mb-3 text-[0.72rem] text-muted-foreground">{paso.ayuda}</p>
+
+          {voz.encendida && (
+            <div className="mb-3">
+              <PanelVoz
+                estado={voz.estado}
+                voces={voz.voces}
+                vozActual={voz.vozActual}
+                onCambiarVoz={voz.cambiarVoz}
+                onElegirCandidato={voz.elegirCandidato}
+                onEscucharAhora={voz.escucharAhora}
+                onApagar={voz.apagar}
+              />
+            </div>
+          )}
 
           {paso.id === 'resumen' ? (
             <div className="space-y-3">

@@ -45,12 +45,17 @@ import {
   codigoTuberiaDeChip,
   diametroDeCodigoTubo,
 } from '@/modules/descuentos/reglas-tuberia';
+import { CIERRES_BEEBLACK, esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import {
-  CIERRES_BEEBLACK,
-  esCategoriaBeeblack,
-  normalizarInstalacionBeeblack,
-  normalizarVarianteBeeblack,
-} from '@/modules/descuentos/reglas-beeblack';
+  CENEFA_OVALADA_SISTEMA,
+  parcheAcciona,
+  parcheCadena,
+  parcheCenefaSoftLight,
+  parcheCenefaTipo,
+  parcheColorAccesorios,
+  parcheTela,
+  parcheVarianteBeeblack,
+} from '@/modules/cotizador/wizard/parches';
 import {
   cenefaCuadradaTapasFijas,
   llevaCenefaCuadradaImplicita,
@@ -58,14 +63,13 @@ import {
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { categoriasFase1ConTipos } from '@/modules/cotizador/categorias';
 import {
-  derivarLargoColor,
   etiquetaCadena,
   cadenasRoller,
   pesosSeleccionables,
   topesSeleccionables,
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
-import { colorAccesorioCorto, tipoTelaDesdeProducto } from '@/modules/cotizador/fase0-sync';
+import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
@@ -216,17 +220,8 @@ export function CuerpoPaso(props: PropsPaso) {
                 label="Variante"
                 value={(pano.beeblackVariante as string) || ''}
                 options={OPCIONES_VARIANTE_BEEBLACK as unknown as readonly { value: string; label: string }[]}
-                onChange={(v) => {
-                  const nueva = normalizarVarianteBeeblack(v, 'INTERNO');
-                  onPano({
-                    beeblackVariante: nueva,
-                    // La instalación se reajusta sola: cada variante tiene su lista.
-                    beeblackInstalacion: normalizarInstalacionBeeblack(
-                      pano.beeblackInstalacion,
-                      nueva,
-                    ),
-                  });
-                }}
+                // La instalación se reajusta sola: cada variante tiene su lista.
+                onChange={(v) => onPano(parcheVarianteBeeblack(v, pano.beeblackInstalacion))}
               />
               <p className="text-[0.68rem] text-muted-foreground">
                 Del beeblack TODAS las medidas salen de la variante: sin ella no hay componentes.
@@ -243,10 +238,8 @@ export function CuerpoPaso(props: PropsPaso) {
             label="Color"
             value={colorAccesorioCorto(colorAccesoriosDePano(pano, ventana.color))}
             options={coloresAcc}
-            onChange={(v) =>
-              // Un solo control pinta las tres piezas, como en la ficha.
-              onPano({ colorMecanismo: v, colorCadena: v, colorPeso: v })
-            }
+            // Un solo control pinta las tres piezas, como en la ficha.
+            onChange={(v) => onPano(parcheColorAccesorios(v))}
           />
           <RadioRow
             label="Material"
@@ -380,19 +373,10 @@ export function CuerpoPaso(props: PropsPaso) {
               { value: 'CADENA', label: 'Con cadena' },
               { value: 'MOTOR', label: 'Con motor' },
             ]}
-            onChange={(v) => {
-              if (v === 'MOTOR') {
-                // Pasar a motor limpia la cadena: el kit ya no la lleva.
-                onPano({
-                  motorModelo: pano.motorModelo || (cenefaOvalada ? 'DOM38' : 'DOM41'),
-                  codCadena: '',
-                  largoCadena: '',
-                  colorCadena: '',
-                });
-              } else {
-                onPano({ motorModelo: '', motorTipo: '', ladoMotor: '' });
-              }
-            }}
+            // Pasar a motor limpia la cadena: el kit ya no la lleva.
+            onChange={(v) =>
+              onPano(parcheAcciona(v, { motorModelo: pano.motorModelo, cenefaOvalada }))
+            }
           />
           {conMotor ? (
             <>
@@ -449,16 +433,9 @@ export function CuerpoPaso(props: PropsPaso) {
                   <select
                     className="min-w-[220px] flex-1 rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
                     value={pano.codCadena || ''}
-                    onChange={(e) => {
-                      const cod = e.target.value;
-                      if (!cod) return onPano({ codCadena: '', largoCadena: '', colorCadena: '' });
-                      const { largoCadena, colorCadena } = derivarLargoColor(
-                        cod,
-                        props.cadenas,
-                        reglas.cadenas,
-                      );
-                      onPano({ codCadena: cod, largoCadena, colorCadena });
-                    }}
+                    onChange={(e) =>
+                      onPano(parcheCadena(e.target.value, props.cadenas, reglas.cadenas))
+                    }
                   >
                     <option value="">— Sin cadena —</option>
                     {cadenasDisponibles.map((c) => (
@@ -526,24 +503,9 @@ export function CuerpoPaso(props: PropsPaso) {
               value={esDual ? pano.codInt || '' : ventana.codInt}
               catalogo={catalogo}
               onSelect={(sel) => {
-                if (esDual) {
-                  onPano({
-                    codInt: sel.codInt,
-                    producto: sel.producto,
-                    descripcion: sel.descripcion,
-                    tipoTela: tipoTelaDesdeProducto(catalogo[sel.codInt]?.cod, sel.codInt),
-                  });
-                } else {
-                  onVentana({
-                    codInt: sel.codInt,
-                    producto: sel.producto,
-                    tipo: sel.tipo,
-                    descripcion: sel.descripcion,
-                  });
-                  onPano({
-                    tipoTela: tipoTelaDesdeProducto(catalogo[sel.codInt]?.cod, sel.codInt),
-                  });
-                }
+                const parche = parcheTela(sel, catalogo, esDual);
+                if (parche.ventana) onVentana(parche.ventana);
+                if (parche.pano) onPano(parche.pano);
               }}
             />
             {esDual && (
@@ -860,16 +822,17 @@ export function CuerpoPaso(props: PropsPaso) {
       const esSoftLight =
         !!famOscCategoria && !llevaCenefaCuadradaImplicita(ventana.categoria, reglas.tipos);
       if (esSoftLight && pano.cenefa !== 'Ovalada') {
-        const OVALADA_SISTEMA = 'Ovalada (del sistema)';
         return (
           <div className="space-y-3">
             <RadioRow
               label="Tipo"
               value={
-                esCenefaCuadrada(pano.cenefa as string) ? (pano.cenefa as string) : OVALADA_SISTEMA
+                esCenefaCuadrada(pano.cenefa as string)
+                  ? (pano.cenefa as string)
+                  : CENEFA_OVALADA_SISTEMA
               }
-              options={[OVALADA_SISTEMA, 'Cuadrada a muro', 'Cuadrada a techo']}
-              onChange={(v) => onPano({ cenefa: v === OVALADA_SISTEMA ? '' : v })}
+              options={[CENEFA_OVALADA_SISTEMA, 'Cuadrada a muro', 'Cuadrada a techo']}
+              onChange={(v) => onPano(parcheCenefaSoftLight(v))}
             />
             <p className="text-[0.68rem] text-muted-foreground">
               El soft light siempre lleva cenefa: la ovalada viene con el sistema; con «Cuadrada»
@@ -901,12 +864,7 @@ export function CuerpoPaso(props: PropsPaso) {
               label="Tipo"
               value={pano.cenefa || ''}
               options={opcionesCenefaTipo}
-              onChange={(v) =>
-                onPano({
-                  cenefa: v,
-                  cenefaTira: !props.lineaB && v === 'Ovalada' ? 'CON TIRA' : 'SIN TIRA',
-                })
-              }
+              onChange={(v) => onPano(parcheCenefaTipo(v, { lineaB: props.lineaB }))}
             />
           )}
           {esVerticalCenefa && (
