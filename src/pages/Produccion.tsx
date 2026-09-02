@@ -16,6 +16,7 @@ import {
   ClipboardCheck,
   DollarSign,
   Hammer,
+  ListChecks,
   Ruler,
   Scissors,
   Wrench,
@@ -23,11 +24,14 @@ import {
 import { useAuth } from '@/lib/auth';
 import { esRolAdmin } from '@/lib/roles';
 import { useAvanceSubEtapa, useOTPorNumero } from '@/modules/produccion/hooks';
+import type { LoteProduccion } from '@/modules/produccion/lotes';
 import type { AreaProduccion } from '@/modules/produccion/types';
 import BandejaAvisos from './produccion/components/BandejaAvisos';
+import BarraLote from './produccion/components/BarraLote';
 import BuscadorOT from './produccion/components/BuscadorOT';
 import TabButton from './produccion/components/TabButton';
 import VistaCalculo from './produccion/vistas/VistaCalculo';
+import VistaCola from './produccion/vistas/VistaCola';
 // Va con el resto y no en `lazy()` a propósito: un import dinámico acá arrastra
 // el helper de precarga de Vite, que Rollup dejó dentro del chunk de jsPDF. Se
 // ahorraban 18 kB y se bajaban 395.
@@ -37,13 +41,18 @@ import VistaInventario from './produccion/vistas/VistaInventario';
 import VistaPanos from './produccion/vistas/VistaPanos';
 import VistaPrueba from './produccion/vistas/VistaPrueba';
 
-type Tab = AreaProduccion | 'costo';
+// 'cola' es la portada: qué hay en el taller AHORA. Las demás pestañas
+// trabajan la OT que se eligió acá (o se escribió en el buscador).
+type Tab = 'cola' | AreaProduccion | 'costo';
 
 export function Produccion() {
   const { perfil } = useAuth();
   const admin = esRolAdmin(perfil?.rol);
-  const [tab, setTab] = useState<Tab>('estructura');
+  const [tab, setTab] = useState<Tab>('cola');
   const [ot, setOt] = useState('');
+  // El lote que se está trabajando. NO fusiona las áreas —cada OT tiene su plan,
+  // sus marcas y su sub-etapa—: deja sus OTs a un clic en todas las pestañas.
+  const [loteActivo, setLoteActivo] = useState<LoteProduccion | null>(null);
 
   const { ot: otCargada, loading: cargandoOT, refrescar } = useOTPorNumero(ot);
   const { areasListas, sincronizar, refrescar: refrescarAreas } = useAvanceSubEtapa(ot);
@@ -57,6 +66,20 @@ export function Produccion() {
 
   const tick = (area: AreaProduccion) =>
     areasListas[area] ? <span className="text-emerald-400">✓</span> : null;
+
+  /** Desde la cola: la OT queda cargada y se cae en la primera área del taller. */
+  const abrirOT = (numeroOt: string) => {
+    setOt(numeroOt);
+    setTab('estructura');
+  };
+
+  /** «Trabajar el lote»: se fija la barra y se entra por su primera OT. */
+  const trabajarLote = (lote: LoteProduccion) => {
+    setLoteActivo(lote);
+    const primera = lote.ots[0];
+    if (primera) setOt(primera.numeroOt);
+    setTab('estructura');
+  };
 
   return (
     <div className="mx-auto max-w-7xl p-4">
@@ -72,9 +95,36 @@ export function Produccion() {
 
       <BandejaAvisos />
 
-      <BuscadorOT ot={ot} onBuscar={setOt} otCargada={otCargada} loading={cargandoOT} />
+      {/* Buscar desde la portada también saca de ella: si alguien escribió una
+          OT es porque quiere trabajarla, no seguir mirando la cola. */}
+      <BuscadorOT
+        ot={ot}
+        onBuscar={(numero) => {
+          setOt(numero);
+          if (tab === 'cola') setTab('estructura');
+        }}
+        otCargada={otCargada}
+        loading={cargandoOT}
+      />
+
+      {loteActivo && (
+        <BarraLote
+          nombre={loteActivo.nombre}
+          ots={loteActivo.ots}
+          otActual={ot}
+          onElegir={(numeroOt) => {
+            setOt(numeroOt);
+            if (tab === 'cola') setTab('estructura');
+          }}
+          onSalir={() => setLoteActivo(null)}
+        />
+      )}
 
       <div className="mb-4 flex gap-1 overflow-x-auto border-b">
+        <TabButton active={tab === 'cola'} onClick={() => setTab('cola')}>
+          <ListChecks className="h-4 w-4" />
+          Cola
+        </TabButton>
         <TabButton
           active={tab === 'estructura'}
           onClick={() => setTab('estructura')}
@@ -115,6 +165,15 @@ export function Produccion() {
         )}
       </div>
 
+      {tab === 'cola' && (
+        <VistaCola
+          admin={admin}
+          onAbrirOT={abrirOT}
+          onTrabajarLote={trabajarLote}
+          loteActivoId={loteActivo?.id ?? null}
+          onLoteEliminado={(id) => setLoteActivo((l) => (l?.id === id ? null : l))}
+        />
+      )}
       {tab === 'estructura' && <VistaEstructura ot={ot} onAreaCerrada={alCerrarArea} />}
       {tab === 'panos' && (
         <VistaPanos ot={ot} otCargada={otCargada} onAreaCerrada={alCerrarArea} />
@@ -126,6 +185,7 @@ export function Produccion() {
           otCargada={otCargada}
           areasListas={areasListas}
           onAreaCerrada={alCerrarArea}
+          lote={loteActivo}
         />
       )}
       {tab === 'armado' && (
