@@ -5,7 +5,7 @@
 // Reemplaza al rack congelado (telas_slots).
 
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Printer, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -36,6 +36,7 @@ import {
   type SlotGalpon,
   type TipoTela,
 } from '@/modules/telas/colmenaViva';
+import { etiquetaDesdePano, htmlEtiquetasSobrante } from '@/modules/telas/etiquetaSobrante';
 import { tipoBadgeCls } from '../utils/tipo-badge';
 import LegendDot from '../components/LegendDot';
 import type { Falla } from '../Telas.types';
@@ -91,6 +92,20 @@ export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaT
     () => panos.filter((p) => enAlerta(p, hoy, diasAlerta)),
     [panos, hoy, diasAlerta],
   );
+
+  // Reimprimir la etiqueta de un paño que ya está en el rack: se despega, se
+  // moja, o el paño se cambió de lugar. Los que entraron antes del módulo
+  // Producción no tienen marcado el funcional: se recalcula de sus medidas.
+  const imprimirEtiqueta = (p: ColmenaPano) => {
+    const w = window.open('', '_blank', 'width=860,height=680');
+    if (!w) {
+      toast.error('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.');
+      return;
+    }
+    w.document.open();
+    w.document.write(htmlEtiquetasSobrante([etiquetaDesdePano(p, parametros)]));
+    w.document.close();
+  };
 
   // Dar de baja una colmena vieja (Reglas Rolzzo, sección 6): sale del inventario
   // activo y se registra como merma con trazabilidad.
@@ -423,15 +438,25 @@ export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaT
                         {dias != null ? ` · ${dias}d` : ''}
                         {p.ot_asignada ? ` · OT ${p.ot_asignada}` : ''}
                       </div>
-                      {p.disponible && !p.datos_extra?.baja && (
+                      <div className="mt-1 flex items-center justify-end gap-1.5">
                         <button
-                          onClick={() => darDeBaja(p)}
-                          disabled={bajando === p.id}
-                          className="mt-1 rounded border border-destructive/40 px-1.5 py-0.5 text-[10px] text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+                          onClick={() => imprimirEtiqueta(p)}
+                          className="inline-flex items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[10px] text-muted-foreground transition hover:border-accent/50 hover:text-foreground"
+                          title="Imprimir la etiqueta de este sobrante (Brother QL-810W, 62 mm)"
                         >
-                          {bajando === p.id ? '…' : 'Dar de baja'}
+                          <Printer className="h-3 w-3" />
+                          Etiqueta
                         </button>
-                      )}
+                        {p.disponible && !p.datos_extra?.baja && (
+                          <button
+                            onClick={() => darDeBaja(p)}
+                            disabled={bajando === p.id}
+                            className="rounded border border-destructive/40 px-1.5 py-0.5 text-[10px] text-destructive transition hover:bg-destructive/10 disabled:opacity-50"
+                          >
+                            {bajando === p.id ? '…' : 'Dar de baja'}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );

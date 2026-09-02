@@ -14,12 +14,16 @@ import {
   generarPlanCorte,
   resumenPlan,
   rowToPano,
+  secuenciaCortes,
   type GrupoRollo,
   type GrupoSobrante,
   type Placed,
   type Plan,
 } from '@/modules/cotizador/planCorte';
 import { retazoSugerido } from '@/modules/cotizador/colmenaCorte';
+import { metrosPrimerCorte, type OrigenCorte } from '@/modules/produccion/salidasCorte';
+import ConfirmarCorteDialog from '@/pages/produccion/dialogs/ConfirmarCorteDialog';
+import { otsDelPlan, resolverOtsDelPlan, type FilaOTPlan } from '@/modules/cotizador/planScope';
 import { useParametrosCotizador, type ParametrosCorte } from '@/modules/cotizador/parametros';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
@@ -218,10 +222,24 @@ function CardRollo({
   grupo: grupoInicial,
   otNum,
   onConfirmado,
+  conConfirmacionLocal = true,
+  onLayout,
 }: {
   grupo: GrupoRollo;
   otNum: string;
   onConfirmado: () => void;
+  /**
+   * El flujo clásico cierra el corte rollo por rollo, acá mismo. El módulo
+   * Producción lo cierra de una sola vez para todo el plan (un lote corta
+   * varias telas en la misma sesión), así que esconde estos botones.
+   */
+  conConfirmacionLocal?: boolean;
+  /**
+   * Avisa con qué layout quedó la tarjeta. Rechazar una inversión cambia el
+   * alto del paño y, con él, lo que sobra: quien cierre el corte tiene que
+   * registrar lo que está EN PANTALLA, no lo que propuso el motor.
+   */
+  onLayout?: (g: GrupoRollo) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const { empresaId } = useAuth();
@@ -251,6 +269,19 @@ function CardRollo({
       );
     }
   }, [grupo, placed]);
+
+  // Sube el layout vigente (el inicial y el que quede tras decidir inversiones).
+  useEffect(() => {
+    onLayout?.(grupo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grupo]);
+
+  // El orden de los cortes se saca del layout que está EN PANTALLA: si se
+  // rechaza una inversión y se cae al layout vertical, la secuencia lo sigue.
+  const cortes = useMemo(
+    () => secuenciaCortes(placed, grupo.anchoUtil, grupo.altoUtil),
+    [placed, grupo.anchoUtil, grupo.altoUtil],
+  );
 
   const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
   const altoResto = Math.round(grupo.altoCorte - (maxY + MARGEN * 2));
@@ -367,6 +398,14 @@ function CardRollo({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-semibold font-mono">{grupo.codInt}</div>
+          {/* Lo primero que hace el cortador es bajar el paño: el largo va
+              adelante y en metros, que es como se mide el rollo. */}
+          {!conConfirmacionLocal && (
+            <div className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-accent/40 bg-accent/10 px-2 py-1 text-[0.72rem] font-semibold text-accent">
+              <Scissors className="h-3 w-3" />
+              PRIMER CORTE: bajar {metrosPrimerCorte(grupo.altoCorte)}
+            </div>
+          )}
           <div className="mt-1 text-xs text-foreground">
             Paño a cortar:{' '}
             <strong>
@@ -405,6 +444,35 @@ function CardRollo({
       <div className="my-2 flex justify-center">
         <canvas ref={canvasRef} className="rounded border border-border" />
       </div>
+
+      {/* El orden en que la mesa parte el paño. Cada corte cruza la tela de
+          punta a punta y el cambio de sentido significa girar el paño. */}
+      {cortes && cortes.length > 0 && (
+        <div className="mb-2 rounded-md border border-border bg-muted/30 p-2">
+          <div className="mb-1 flex items-center gap-1.5 text-[0.7rem] font-semibold">
+            <Scissors className="h-3 w-3" />
+            Cortes en orden
+          </div>
+          <ol className="space-y-0.5 text-[0.68rem] text-muted-foreground">
+            {cortes.map((c) => (
+              <li key={c.n}>
+                <span className="font-mono font-semibold text-foreground">{c.n}.</span>{' '}
+                {c.girar && <span className="font-semibold text-warning">↻ girar el paño — </span>}
+                corte {c.eje} a <strong className="text-foreground">{c.posicionCm} cm</strong> →{' '}
+                {c.deja[0]} | {c.deja[1]}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {cortes === null && (
+        <div className="mb-2 flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 p-2 text-[0.68rem] text-warning">
+          <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+          Este acomodo no se puede cortar de punta a punta: hay piezas que ninguna cuchilla separa
+          de una pasada. Solo sale así con la cortadora automática configurada en Parámetros de
+          corte.
+        </div>
+      )}
 
       {step === 'rotacion-pendiente' && (
         <div className="mb-2 rounded-lg border border-orange-500/30 bg-warning/15 p-2">
@@ -456,7 +524,7 @@ function CardRollo({
         </div>
       )}
 
-      {step === 'inicial' && (
+      {step === 'inicial' && conConfirmacionLocal && (
         <Button
           size="sm"
           onClick={iniciarConfirmar}
@@ -468,7 +536,7 @@ function CardRollo({
         </Button>
       )}
 
-      {step === 'inputs' && (
+      {step === 'inputs' && conConfirmacionLocal && (
         <div className="space-y-2 border-t border-blue-500/20 pt-2">
           {hayResto && (
             <div>
@@ -629,7 +697,27 @@ function FormSobranteManual({ otNum }: { otNum: string }) {
 // ═════════════════════════════════════════════════════════════════════
 // Componente principal
 // ═════════════════════════════════════════════════════════════════════
-export function PlanCorteSection({ ot }: { ot: OT }) {
+/** El lote que manda en el plan: su nombre y las OTs que el jefe juntó. */
+export type LoteDelPlan = { nombre: string; otIds: string[] };
+
+/**
+ * Desde dónde se abrió el plan. En `clasico` (Optimizador de Tela → una OT)
+ * todo sigue igual que siempre: cada rollo se confirma por su cuenta y los
+ * sobrantes se guardan a mano. En `produccion` (la cola del taller) el corte
+ * se cierra de una vez para todo el plan, registrando también las mermas y
+ * sacando las etiquetas.
+ */
+export type FlujoPlan = 'clasico' | 'produccion';
+
+export function PlanCorteSection({
+  ot,
+  lote,
+  flujo = 'clasico',
+}: {
+  ot?: OT;
+  lote?: LoteDelPlan;
+  flujo?: FlujoPlan;
+}) {
   const { empresaId } = useAuth();
   const { parametros, loading: loadingParams } = useParametrosCotizador();
   const { formulas, loading: loadingFormulas } = useFormulasFamilias();
@@ -638,6 +726,10 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
   const [ots, setOts] = useState<OT[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [generado, setGenerado] = useState(false);
+  // Cuántas OTs del lote quedaron afuera del plan (salieron de producción o no
+  // tienen ventanas). Se avisa: si no, el jefe cree que armó un lote de 4 y ve
+  // los paños de 3 sin entender por qué.
+  const [fueraDelLote, setFueraDelLote] = useState(0);
 
   const cargar = async () => {
     if (!empresaId) return;
@@ -660,38 +752,13 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
         .eq('estado', 'produccion');
       if (otsErr) throw otsErr;
 
-      const otsProd = (
-        (otsData as Array<{
-          id: string;
-          items: unknown;
-          datos_generales: unknown;
-          numero_ot: string | null;
-        }>) || []
-      )
-        .map((row) => {
-          const dgOriginal = (row.datos_generales || {}) as OT['datosGenerales'];
-          // Excluir OTs huérfanas: sin cliente y sin ot en datos_generales
-          // (mismo filtro que useOTs/Panel — evita incluir fantasmas de producción)
-          const tieneDatos =
-            (dgOriginal.cliente || '').trim() !== '' || (dgOriginal.ot || '').trim() !== '';
-          if (!tieneDatos) return null;
-
-          const dg = { ...dgOriginal };
-          // Fallback al numero_ot de la columna si datosGenerales.ot no está
-          if (!dg.ot && row.numero_ot) dg.ot = row.numero_ot;
-          return {
-            id: row.id,
-            storeVentanas: (row.items || []) as OT['storeVentanas'],
-            datosGenerales: dg,
-          } as OT;
-        })
-        .filter((o): o is OT => o !== null && (o.storeVentanas || []).length > 0);
-
-      // La OT desde la que se abrió el optimizador SIEMPRE entra al plan,
-      // aunque no esté en producción (antes se omitía y el usuario veía
-      // solo los paños de OTRAS OTs creyendo que eran de la suya).
-      const yaIncluida = otsProd.some((o) => String(o.id) === String(ot.id));
-      const listaOTs = yaIncluida ? otsProd : [ot, ...otsProd];
+      const otsProd = otsDelPlan((otsData as FilaOTPlan[]) || []);
+      const listaOTs = lote
+        ? resolverOtsDelPlan(otsProd, { otIds: lote.otIds })
+        : ot
+          ? resolverOtsDelPlan(otsProd, { otActual: ot })
+          : otsProd;
+      setFueraDelLote(lote ? lote.otIds.length - listaOTs.length : 0);
       setOts(listaOTs);
       setGenerado(true);
     } catch (e) {
@@ -701,6 +768,16 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
     }
   };
 
+  // En modo lote el plan se arma solo: el jefe ya dijo «plan de tela de este
+  // lote», pedirle otro clic para lo mismo no aporta.
+  const autoCargado = useRef(false);
+  useEffect(() => {
+    if (!lote || !empresaId || autoCargado.current) return;
+    autoCargado.current = true;
+    cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lote, empresaId]);
+
   const plan: Plan | null = useMemo(() => {
     // Espera los parámetros de corte: un plan con defaults no se recalcularía.
     if (!colmenaPanos || !ots || loadingParams || loadingFormulas) return null;
@@ -709,14 +786,50 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
   }, [colmenaPanos, ots, loadingParams, parametros, loadingFormulas, formulas]);
 
   const resumen = plan ? resumenPlan(plan) : null;
-  const otNum = ot.datosGenerales.ot || String(ot.id);
+  // De dónde vienen los sobrantes que se guarden en la colmena. En un lote es
+  // el lote: un mismo rollo sirvió a varias OTs y no hay UNA a la que atribuir
+  // el retazo.
+  const otNum = lote
+    ? `LOTE ${lote.nombre}`
+    : ot
+      ? ot.datosGenerales.ot || String(ot.id)
+      : '';
+
+  // ── Cierre del corte (solo módulo Producción) ──────────────────────
+  // El layout con el que quedó cada tarjeta: si el operario rechazó una
+  // inversión, lo que se registra es ESO y no la propuesta original.
+  const [layouts, setLayouts] = useState<Record<number, GrupoRollo>>({});
+  const [cerrando, setCerrando] = useState(false);
+
+  // Al regenerar el plan las tarjetas se remontan: los layouts viejos ya no
+  // corresponden y quedarían pegados si no se limpian.
+  useEffect(() => {
+    setLayouts((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+  }, [plan]);
+
+  const gruposVigentes = useMemo(
+    () => (plan ? plan.rollo.map((g, i) => layouts[i] ?? g) : []),
+    [plan, layouts],
+  );
+
+  const origenCorte: OrigenCorte | null = lote
+    ? { tipo: 'lote', nombre: lote.nombre, ots: (plan?.otsIncluidas ?? []).map((o) => ({ id: o.id, numero: o.num })) }
+    : ot
+      ? { tipo: 'ot', numero: ot.datosGenerales.ot || String(ot.id) }
+      : null;
+
+  const otIdsDelPlan = plan?.otsIncluidas.map((o) => o.id) ?? [];
+  const puedeCerrar =
+    flujo === 'produccion' && !!origenCorte && !!empresaId && otIdsDelPlan.length > 0;
 
   return (
     <div className="mt-4 rounded-lg border border-border bg-card/40">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-3 py-2">
         <div className="flex items-center gap-2">
           <Ruler className="h-4 w-4 text-blue-300" />
-          <strong className="text-sm">Plan de Corte desde Colmena</strong>
+          <strong className="text-sm">
+            {lote ? `Plan de tela · ${lote.nombre}` : 'Plan de Corte desde Colmena'}
+          </strong>
           {resumen && (
             <span className="text-[0.68rem] text-muted-foreground">
               · {resumen.desdeSobrante} desde sobrante · {resumen.desdeRollo} desde rollo
@@ -739,8 +852,9 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
       {!generado && !loading && (
         <div className="p-6 text-center text-xs text-muted-foreground">
-          Matchea los paños de esta OT (y otras en producción) contra los sobrantes disponibles en
-          colmena y arma el plan de corte optimizado.
+          {lote
+            ? 'Arma el plan de corte con los paños de las OTs de este lote.'
+            : 'Matchea los paños de esta OT (y otras en producción) contra los sobrantes disponibles en colmena y arma el plan de corte optimizado.'}
         </div>
       )}
 
@@ -763,9 +877,33 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
             </div>
           )}
 
+          {/* Una OT del lote que salió de producción (o que quedó sin
+              ventanas) no entra al plan. Se dice, no se esconde. */}
+          {lote && fueraDelLote > 0 && (
+            <div className="mb-2 flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[0.72rem] text-warning">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                {fueraDelLote === 1
+                  ? '1 OT del lote no entra al plan'
+                  : `${fueraDelLote} OTs del lote no entran al plan`}{' '}
+                (salieron de producción o no tienen ventanas).
+              </span>
+            </div>
+          )}
+
+          {lote && plan.otsIncluidas.length === 0 && (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              Ninguna OT de este lote sigue en producción: no hay nada que cortar.
+            </div>
+          )}
+
           {plan.otsIncluidas.length > 1 && (
             <div className="mb-2 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-[0.72rem] text-accent">
-              <strong>Plan combinado · {plan.otsIncluidas.length} OTs en producción:</strong>
+              <strong>
+                {lote
+                  ? `Plan del lote · ${plan.otsIncluidas.length} OTs:`
+                  : `Plan combinado · ${plan.otsIncluidas.length} OTs en producción:`}
+              </strong>
               {plan.otsIncluidas.map((o) => (
                 <span
                   key={o.id}
@@ -796,8 +934,39 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
                 Cortar desde rollo nuevo
               </div>
               {plan.rollo.map((g, gi) => (
-                <CardRollo key={gi} grupo={g} otNum={otNum} onConfirmado={cargar} />
+                <CardRollo
+                  key={gi}
+                  grupo={g}
+                  otNum={otNum}
+                  onConfirmado={cargar}
+                  conConfirmacionLocal={flujo === 'clasico'}
+                  onLayout={
+                    flujo === 'produccion'
+                      ? (efectivo) => setLayouts((prev) => ({ ...prev, [gi]: efectivo }))
+                      : undefined
+                  }
+                />
               ))}
+
+              {/* Un solo cierre para todo el plan: el lote se corta en una
+                  sesión y el registro (sobrantes, mermas, etiquetas y el
+                  sello de «tela cortada») sale de una sola pasada. */}
+              {puedeCerrar && (
+                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-3">
+                  <Button
+                    size="sm"
+                    onClick={() => setCerrando(true)}
+                    className="gap-1.5 bg-success hover:bg-success/90"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    Cerrar el corte
+                  </Button>
+                  <span className="text-[0.7rem] text-muted-foreground">
+                    Registra los sobrantes y la merma, imprime las etiquetas y marca la tela como
+                    cortada en {otIdsDelPlan.length} {otIdsDelPlan.length === 1 ? 'OT' : 'OTs'}.
+                  </span>
+                </div>
+              )}
             </>
           )}
 
@@ -835,6 +1004,18 @@ export function PlanCorteSection({ ot }: { ot: OT }) {
 
           <FormSobranteManual otNum={otNum} />
         </div>
+      )}
+
+      {cerrando && puedeCerrar && origenCorte && empresaId && (
+        <ConfirmarCorteDialog
+          grupos={gruposVigentes}
+          params={parametros}
+          origen={origenCorte}
+          otIds={otIdsDelPlan}
+          empresaId={empresaId}
+          onConfirmado={cargar}
+          onClose={() => setCerrando(false)}
+        />
       )}
     </div>
   );

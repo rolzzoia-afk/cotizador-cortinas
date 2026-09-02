@@ -66,6 +66,19 @@ describe('normalizarParametros', () => {
     expect(normalizarParametros({ usarColmenaPanos: null }).usarColmenaPanos).toBe(true);
   });
 
+  it('modoCorte: solo "multieje" explícito; cualquier otra cosa corta como la mesa', () => {
+    // El default permisivo sería peligroso: un plan multieje NO se puede
+    // ejecutar en las mesas de hoy. Lo guardado por una versión vieja no trae
+    // el campo y tiene que caer en guillotina.
+    expect(PARAMETROS_DEFAULT.modoCorte).toBe('guillotina');
+    expect(normalizarParametros({ modoCorte: 'multieje' }).modoCorte).toBe('multieje');
+    expect(normalizarParametros({ modoCorte: 'guillotina' }).modoCorte).toBe('guillotina');
+    expect(normalizarParametros({}).modoCorte).toBe('guillotina');
+    expect(normalizarParametros({ modoCorte: 'cnc' }).modoCorte).toBe('guillotina');
+    expect(normalizarParametros({ modoCorte: 1 }).modoCorte).toBe('guillotina');
+    expect(normalizarParametros({ modoCorte: null }).modoCorte).toBe('guillotina');
+  });
+
   it('recargoTarjetaFlow: numérico se conserva, inválido cae al default', () => {
     expect(normalizarParametros({ recargoTarjetaFlow: 0.05 }).recargoTarjetaFlow).toBe(0.05);
     expect(normalizarParametros({ recargoTarjetaFlow: 'x' }).recargoTarjetaFlow).toBe(

@@ -179,6 +179,11 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
     // null de una versión vieja) deja el default de fábrica, que es usarla.
     const usarColmena = (raw as Record<string, unknown>).usarColmenaPanos;
     if (typeof usarColmena === 'boolean') out.usarColmenaPanos = usarColmena;
+    // Cómo corta la mesa: string acotado. Cualquier otra cosa (ausente, basura,
+    // guardado por una versión vieja) cae en 'guillotina', que es lo que las
+    // mesas de hoy pueden ejecutar — el modo permisivo se elige a propósito.
+    const modo = (raw as Record<string, unknown>).modoCorte;
+    out.modoCorte = modo === 'multieje' ? 'multieje' : 'guillotina';
   }
   // margenInsumo = 0 dividiría por cero.
   if (out.margenInsumo <= 0) out.margenInsumo = PARAMETROS_DEFAULT.margenInsumo;

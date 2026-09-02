@@ -92,6 +92,17 @@ export type CorteGeneralColmena = {
    * quedó disponible=false y el plan vivo no lo re-asigna).
    */
   piezas?: Record<string, PiezaColmenaSnap>;
+  /**
+   * Quién confirmó el corte. 'fase4' es el corte general clásico (descuenta
+   * colmena); 'produccion' es el del módulo del taller, que con la colmena
+   * apagada no descuenta nada y solo registra lo que salió del rollo. Ausente
+   * en las OTs confirmadas antes de que existiera el módulo → 'fase4'.
+   */
+  fuente?: 'fase4' | 'produccion';
+  /** Nombre del lote, cuando el corte se hizo con varias OTs juntas. */
+  lote?: string;
+  /** Qué dejó el corte: los seriales que se etiquetaron y cuánta merma se anotó. */
+  salidas?: { seriales: string[]; mermas: number };
 };
 
 /** Construye el mapa pieza→sobrante desde un plan (para persistir al confirmar). */

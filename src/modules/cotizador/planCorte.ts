@@ -271,6 +271,273 @@ function mxPack(items: Pieza[], uw: number, uh: number, allowRot = true): Placed
   return placed;
 }
 
+// ── Empaque GUILLOTINA (las mesas de hoy) ────────────────────────────
+//
+// La mesa corta de punta a punta y la otra dirección se consigue GIRANDO el
+// paño (recorrido del taller, 2026-09-01), así que un layout solo sirve si se
+// puede ir partiendo en dos, una y otra vez. MaxRects no garantiza eso: acomoda
+// piezas "a caballo" que ninguna cuchilla separa de una pasada — medido sobre
+// 122 OTs reales, el 4 % de sus layouts es imposible de cortar y el resto no
+// dice en qué orden hacerlo.
+//
+// Acá los libres son DISJUNTOS y cada pieza parte su sobrante con UN corte
+// recto, así que el árbol de cortes existe por construcción y
+// `secuenciaCortes` lo reconstruye para el papel del cortador.
+
+/** Cómo se parte el sobrante después de acomodar una pieza. */
+type ReglaSplit = 'ejeCorto' | 'sobraCorta';
+
+/**
+ * Parte el libre `fr` tras poner una pieza de w×h en su esquina, con UN corte.
+ * Devuelve los dos pedazos (sin los de área cero), siempre disjuntos.
+ */
+function partirLibre(fr: Rect, w: number, h: number, regla: ReglaSplit): Rect[] {
+  const restW = fr.w - w;
+  const restH = fr.h - h;
+  // Corte transversal (línea horizontal): arriba queda la franja de la pieza
+  // con su sobrante al lado; abajo, el resto a todo el ancho.
+  const transversal = regla === 'ejeCorto' ? fr.w < fr.h : restW < restH;
+  const pedazos = transversal
+    ? [
+        { x: fr.x + w, y: fr.y, w: restW, h },
+        { x: fr.x, y: fr.y + h, w: fr.w, h: restH },
+      ]
+    : [
+        { x: fr.x + w, y: fr.y, w: restW, h: fr.h },
+        { x: fr.x, y: fr.y + h, w, h: restH },
+      ];
+  return pedazos.filter((r) => r.w > 0 && r.h > 0);
+}
+
+/** Mejor libre para la pieza: el de menor lado corto sobrante (BSSF). */
+function guillotinaFit(
+  item: Pieza,
+  F: Rect[],
+  allowRot: boolean,
+): { fr: Rect; w: number; h: number; rot: boolean } | null {
+  let mejor: { fr: Rect; w: number; h: number; rot: boolean } | null = null;
+  let mejorSobra = Infinity;
+  for (const fr of F) {
+    if (item.w <= fr.w && item.h <= fr.h) {
+      const s = Math.min(fr.w - item.w, fr.h - item.h);
+      if (s < mejorSobra) {
+        mejorSobra = s;
+        mejor = { fr, w: item.w, h: item.h, rot: false };
+      }
+    }
+    if (allowRot && item.h <= fr.w && item.w <= fr.h) {
+      const s = Math.min(fr.w - item.h, fr.h - item.w);
+      if (s < mejorSobra) {
+        mejorSobra = s;
+        mejor = { fr, w: item.h, h: item.w, rot: true };
+      }
+    }
+  }
+  return mejor;
+}
+
+function guillotinaVariante(
+  items: Pieza[],
+  uw: number,
+  uh: number,
+  allowRot: boolean,
+  orden: (a: Pieza, b: Pieza) => number,
+  regla: ReglaSplit,
+): Placed[] {
+  let F: Rect[] = [{ x: 0, y: 0, w: uw, h: uh }];
+  const placed: Placed[] = [];
+  for (const item of [...items].sort(orden)) {
+    const best = guillotinaFit(item, F, allowRot);
+    if (!best) {
+      placed.push({ ...item, px: -1, py: -1, pw: item.w, ph: item.h, rot: false, failed: true });
+      continue;
+    }
+    placed.push({
+      ...item,
+      px: best.fr.x,
+      py: best.fr.y,
+      pw: best.w,
+      ph: best.h,
+      rot: best.rot,
+      failed: false,
+    });
+    F = F.filter((r) => r !== best.fr).concat(partirLibre(best.fr, best.w, best.h, regla));
+  }
+  return placed;
+}
+
+// Órdenes de entrada que se prueban. Ninguna gana siempre: con cortinas altas
+// y angostas el orden por ALTO arma bandas limpias, y con piezas parejas el de
+// ÁREA aprovecha mejor los rincones. Probarlas todas y quedarse con la que baja
+// menos rollo recupera parte de lo que cuesta la restricción de guillotina.
+const ORDENES_GUILLOTINA: ((a: Pieza, b: Pieza) => number)[] = [
+  (a, b) => b.w * b.h - a.w * a.h,
+  (a, b) => Math.max(b.w, b.h) - Math.max(a.w, a.h),
+  (a, b) => b.h - a.h || b.w - a.w,
+  (a, b) => b.w - a.w || b.h - a.h,
+];
+const REGLAS_SPLIT: ReglaSplit[] = ['sobraCorta', 'ejeCorto'];
+
+/**
+ * Empaque cortable por la mesa: mismo contrato que `mxPack` (un `Placed` por
+ * pieza, con `failed` cuando no entró), probando varias heurísticas y quedándose
+ * con la que gasta menos rollo.
+ */
+export function guillotinaPack(
+  items: Pieza[],
+  uw: number,
+  uh: number,
+  allowRot = true,
+): Placed[] {
+  let mejor: Placed[] | null = null;
+  let mejorAlto = Infinity;
+  for (const orden of ORDENES_GUILLOTINA) {
+    for (const regla of REGLAS_SPLIT) {
+      const pl = guillotinaVariante(items, uw, uh, allowRot, orden, regla);
+      if (pl.some((r) => r.failed)) continue;
+      const alto = pl.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+      if (alto < mejorAlto) {
+        mejorAlto = alto;
+        mejor = pl;
+      }
+    }
+  }
+  // Ninguna variante ubicó todo: se devuelve una con sus `failed` para que el
+  // binary search siga subiendo el alto, igual que hace MaxRects.
+  return (
+    mejor ??
+    guillotinaVariante(items, uw, uh, allowRot, ORDENES_GUILLOTINA[0], REGLAS_SPLIT[0])
+  );
+}
+
+// ── Secuencia de cortes ──────────────────────────────────────────────
+
+export type CorteGuillotina = {
+  /** Orden de ejecución, 1..n. */
+  n: number;
+  /** `transversal` = la cuchilla cruza el ancho; `longitudinal` = a lo largo. */
+  eje: 'transversal' | 'longitudinal';
+  /** Medida (cm) desde el borde de la pieza que se tiene en la mesa. */
+  posicionCm: number;
+  /** Trozo de tela que se está partiendo (para ubicarse en el dibujo). */
+  region: { x: number; y: number; w: number; h: number };
+  /** Qué queda a cada lado del corte. */
+  deja: [string, string];
+  /** El corte va en el otro sentido que el anterior: hay que girar el paño. */
+  girar: boolean;
+};
+
+const rotuloPiezas = (piezas: Placed[]): string => {
+  const nombres = piezas.map((p) => p.nombre);
+  if (nombres.length <= 2) return nombres.join(' + ');
+  return `${nombres.slice(0, 2).join(' + ')} +${nombres.length - 2} más`;
+};
+
+type CorteCrudo = Omit<CorteGuillotina, 'n' | 'girar'>;
+
+/**
+ * Parte la región en dos, una y otra vez, hasta dejar cada cortina sola.
+ * Devuelve null si en algún nivel NINGÚN corte de punta a punta separa las
+ * piezas — o sea, si el layout no es cortable por la mesa.
+ */
+function cortesDeRegion(
+  region: { x: number; y: number; w: number; h: number },
+  piezas: Placed[],
+  presupuesto: { n: number },
+): CorteCrudo[] | null {
+  if (piezas.length <= 1) return [];
+  if (presupuesto.n-- <= 0) return null;
+
+  const candidatos = (
+    ejeInicio: (p: Placed) => number,
+    ejeFin: (p: Placed) => number,
+    desde: number,
+    largo: number,
+  ) =>
+    [...new Set(piezas.map((p) => ejeFin(p)))]
+      .filter((v) => v > desde && v < desde + largo)
+      .sort((a, b) => a - b)
+      .filter((v) => !piezas.some((p) => ejeInicio(p) < v && ejeFin(p) > v));
+
+  // El transversal primero: es el corte natural del rollo (separa una banda).
+  for (const y of candidatos((p) => p.py, (p) => p.py + p.ph, region.y, region.h)) {
+    const arriba = piezas.filter((p) => p.py + p.ph <= y);
+    const abajo = piezas.filter((p) => p.py >= y);
+    if (!arriba.length || !abajo.length) continue;
+    const a = cortesDeRegion({ ...region, h: y - region.y }, arriba, presupuesto);
+    if (!a) continue;
+    const b = cortesDeRegion(
+      { x: region.x, y, w: region.w, h: region.y + region.h - y },
+      abajo,
+      presupuesto,
+    );
+    if (!b) continue;
+    return [
+      {
+        eje: 'transversal',
+        posicionCm: Math.round(y - region.y),
+        region,
+        deja: [rotuloPiezas(arriba), rotuloPiezas(abajo)],
+      },
+      ...a,
+      ...b,
+    ];
+  }
+
+  for (const x of candidatos((p) => p.px, (p) => p.px + p.pw, region.x, region.w)) {
+    const izq = piezas.filter((p) => p.px + p.pw <= x);
+    const der = piezas.filter((p) => p.px >= x);
+    if (!izq.length || !der.length) continue;
+    const a = cortesDeRegion({ ...region, w: x - region.x }, izq, presupuesto);
+    if (!a) continue;
+    const b = cortesDeRegion(
+      { x, y: region.y, w: region.x + region.w - x, h: region.h },
+      der,
+      presupuesto,
+    );
+    if (!b) continue;
+    return [
+      {
+        eje: 'longitudinal',
+        posicionCm: Math.round(x - region.x),
+        region,
+        deja: [rotuloPiezas(izq), rotuloPiezas(der)],
+      },
+      ...a,
+      ...b,
+    ];
+  }
+
+  return null;
+}
+
+/**
+ * El orden en que la mesa corta un paño: cada paso parte en dos lo que el
+ * cortador tiene delante. `null` = el layout NO se puede cortar de punta a
+ * punta (solo pasa en modo multieje, con la cortadora CNC).
+ */
+export function secuenciaCortes(
+  piezas: Placed[],
+  uw: number,
+  uh: number,
+): CorteGuillotina[] | null {
+  const utiles = piezas.filter((p) => !p.failed);
+  if (utiles.length === 0) return [];
+  const crudos = cortesDeRegion({ x: 0, y: 0, w: uw, h: uh }, utiles, { n: 5000 });
+  if (!crudos) return null;
+  let anterior: CorteGuillotina['eje'] | null = null;
+  return crudos.map((c, i) => {
+    const girar = anterior !== null && c.eje !== anterior;
+    anterior = c.eje;
+    return { ...c, n: i + 1, girar };
+  });
+}
+
+/** ¿La mesa puede ejecutar este layout de punta a punta? */
+export function esLayoutGuillotina(piezas: Placed[], uw: number, uh: number): boolean {
+  return secuenciaCortes(piezas, uw, uh) !== null;
+}
+
 // ── Motor principal ────────────────────────────────────────────────
 export function generarPlanCorte(
   ots: OT[],
@@ -283,6 +550,11 @@ export function generarPlanCorte(
   const BORDE = params.bordeCm; // limpieza de bordes al ancho (Regla 5, default 4 cm)
   const ROLL_W_UTIL = params.anchoRolloPlanCm - MARGEN * 2;
   const multiOT = ots.length > 1;
+
+  // Con qué empacador se acomodan las piezas en el rollo. Las mesas de hoy
+  // cortan de punta a punta (guillotina); la cortadora CNC acepta cualquier
+  // acomodo y ahí sí conviene MaxRects, que aprovecha algo más la tela.
+  const empacar = params.modoCorte === 'multieje' ? mxPack : guillotinaPack;
 
   // Colmena apagada en los parámetros de corte: el plan corta TODO de rollo
   // nuevo. Se vacía la lista acá —una sola vez, en el motor— porque este es el
@@ -510,7 +782,7 @@ export function generarPlanCorte(
       let hA = maxH;
       for (let i = 0; i < 18; i++) {
         const mid = Math.floor((loA + hiA) / 2);
-        const pl = mxPack(
+        const pl = empacar(
           piezasOrd.map((p) => ({ ...p })),
           ROLL_W_UTIL,
           mid,
@@ -535,7 +807,7 @@ export function generarPlanCorte(
       let hB = maxH;
       for (let i = 0; i < 18; i++) {
         const mid = Math.floor((loB + hiB) / 2);
-        const pl = mxPack(
+        const pl = empacar(
           piezasOrd.map((p) => ({ ...p })),
           ROLL_W_UTIL,
           mid,

@@ -227,6 +227,17 @@ export type ColmenaPano = {
     baja?: boolean;
     fecha_baja?: string;
     motivo_baja?: string;
+    // ── Sobrantes nacidos de un corte del módulo Producción ──
+    // Código de la etiqueta impresa: es lo que se busca en el rack.
+    serial?: string;
+    // Para qué alcanza el trozo (lo que la etiqueta marca con un visto). Los
+    // paños viejos no lo tienen: se recalcula de las medidas al reimprimir.
+    funcional?: { roller: boolean; vertical: boolean };
+    // De dónde salió dentro del paño: la tira del costado o la faja de abajo.
+    origen_detalle?: 'franja_rollo' | 'resto_rollo';
+    // Cuando el corte fue de un lote: su nombre y las OTs que iban juntas.
+    lote?: string;
+    ots_lote?: { id: string; numero: string }[];
   } | null;
 };
 
