@@ -58,7 +58,7 @@ import {
   parcheTela,
   parcheVarianteBeeblack,
 } from './parches';
-import { numeroHablado, type OpcionVoz } from './vozParsers';
+import { incluyePalabra, normalizarVoz, numeroHablado, type OpcionVoz } from './vozParsers';
 import { REGLAS_SELECCION_DEFAULT } from '@/modules/descuentos/reglasSeleccion';
 import type { Pano, Ventana } from '../types';
 
@@ -817,15 +817,36 @@ export function opcionUnicaAutomatica(campo: CampoVoz, ctx: CtxVoz): OpcionVoz |
   return ops.length === 1 ? ops[0] : null;
 }
 
-/** El campo que nombra un «corregir …», buscado por su etiqueta. */
+/**
+ * El campo que nombra un «corregir …», buscado por su etiqueta.
+ *
+ * Los DOS lados se normalizan con `normalizarVoz`: lo dicho llega sin tildes
+ * (así lo entrega el comando), y una etiqueta con tilde («posición de la
+ * cadena») no calzaba nunca — el asistente contestaba «no encontré ese campo»
+ * a un pedido perfectamente claro.
+ */
 export function campoPorEtiqueta(idPaso: IdPaso, ctx: CtxVoz, dicho: string): CampoVoz | null {
   const campos = camposDelPaso(idPaso, ctx);
-  const t = dicho.trim().toLowerCase();
+  const t = normalizarVoz(dicho);
   if (!t) return null;
+  // Cuando varias etiquetas calzan, gana la MÁS LARGA: «la posición de la
+  // cadena» contiene también la etiqueta 'cadena', y sin este orden el
+  // corregir caía en el campo equivocado.
+  const masLarga = (cs: CampoVoz[]) =>
+    cs.sort((a, b) => b.etiqueta.length - a.etiqueta.length)[0] ?? null;
   return (
-    campos.find((c) => c.etiqueta.toLowerCase() === t) ??
-    campos.find((c) => t.includes(c.etiqueta.toLowerCase())) ??
-    campos.find((c) => c.etiqueta.toLowerCase().includes(t)) ??
+    campos.find((c) => normalizarVoz(c.etiqueta) === t) ??
+    masLarga(campos.filter((c) => incluyePalabra(t, normalizarVoz(c.etiqueta)))) ??
+    masLarga(campos.filter((c) => incluyePalabra(normalizarVoz(c.etiqueta), t))) ??
+    // Último recurso: alguna palabra con peso de la etiqueta («corregir la
+    // posición» encuentra 'posición de la cadena' aunque falte el resto).
+    masLarga(
+      campos.filter((c) =>
+        normalizarVoz(c.etiqueta)
+          .split(' ')
+          .some((p) => p.length > 3 && incluyePalabra(t, p)),
+      ),
+    ) ??
     null
   );
 }

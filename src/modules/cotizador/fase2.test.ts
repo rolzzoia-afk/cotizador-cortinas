@@ -32,6 +32,12 @@ describe('crearPanoVacio', () => {
     expect(p.colorMecanismo).toBe('');
     expect(p.color).toBe('');
   });
+
+  it('el lado de la cadena parte VACÍO: es una decisión de terreno, no un default', () => {
+    // Preseteado en 'Derecha', nadie lo preguntaba y las cortinas salían con
+    // el mando al lado que cayera (pedido del dueño, 2026-09-02).
+    expect(crearPanoVacio().cierreVert).toBe('');
+  });
 });
 
 describe('dual — dos rollos, UNA cortina', () => {

@@ -83,7 +83,9 @@ export function itemToVentana(item: ItemFase1): Ventana {
     armado: 'Interno',
     tipoTela: '',
     largoCadena: '',
-    cierreVert: 'Derecha',
+    // Vacío a propósito: el lado del mando se decide en terreno, no por default
+    // (igual que crearPanoVacio; pedido del dueño, 2026-09-02).
+    cierreVert: '',
     manillaCant: 0,
     manillaColor: '',
     colorPeso: '',
