@@ -316,6 +316,38 @@ const LETRA_HABLADA: Record<string, string> = {
   ve: 'V', equis: 'X', ye: 'Y', zeta: 'Z', ceta: 'Z',
 };
 
+const NOMBRES_LETRA = Object.keys(LETRA_HABLADA).sort((a, b) => b.length - a.length);
+
+/**
+ * Palabra que se arma COMPLETA pegando nombres de letras («beca» = be + ca →
+ * BK): así escribe el reconocedor un deletreo rápido. Devuelve null si sobra
+ * cualquier pedazo, para no convertir palabras normales en códigos («casa» no
+ * se puede armar y queda fuera).
+ */
+function pegadoALetras(t: string): string | null {
+  if (!/^[a-z]{2,10}$/.test(t)) return null;
+  const resolver = (resto: string): string | null => {
+    if (!resto) return '';
+    for (const nombre of NOMBRES_LETRA) {
+      if (resto.startsWith(nombre)) {
+        const cola = resolver(resto.slice(nombre.length));
+        if (cola !== null) return LETRA_HABLADA[nombre] + cola;
+      }
+    }
+    return null;
+  };
+  return resolver(t);
+}
+
+/**
+ * Grupo de consonantes sin vocal («sc», «bk»): el reconocedor escribió las
+ * letras dichas tal cual, pegadas («sc-de» → SC + D). La «y» queda fuera
+ * porque es la conjunción, no una letra deletreada.
+ */
+function grupoDeConsonantes(t: string): string | null {
+  return /^[b-df-hj-np-tv-xz]{1,4}$/.test(t) ? t.toUpperCase() : null;
+}
+
 /**
  * El código deletreado en voz alta: «be ka diez» → «BK 10». Devuelve '' si no
  * se deletreó nada (entonces el ranking usa la frase tal cual).
@@ -341,6 +373,11 @@ export function deletreoACodigo(texto: string): string {
     if (n !== undefined && n !== null) {
       cerrarLetras();
       partes.push(String(n));
+      continue;
+    }
+    const pegadas = grupoDeConsonantes(t) ?? pegadoALetras(t);
+    if (pegadas) {
+      letras += pegadas;
       continue;
     }
     cerrarLetras();

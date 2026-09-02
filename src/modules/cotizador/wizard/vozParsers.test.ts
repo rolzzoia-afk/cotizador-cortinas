@@ -167,6 +167,13 @@ describe('deletreoACodigo', () => {
   it('«be ka diez» es BK 10', () => expect(deletreoACodigo('be ka diez')).toBe('BK 10'));
   it('«ese ce erre cinco» es SCR 5', () => expect(deletreoACodigo('ese ce erre cinco')).toBe('SCR 5'));
   it('sin letras deletreadas no devuelve nada', () => expect(deletreoACodigo('quince')).toBe(''));
+
+  // El reconocedor del teléfono no siempre escribe los nombres de letra
+  // separados: pega las consonantes («sc») o arma una palabra («beca» = be+ka).
+  it('«sc-de» son las letras pegadas: SCD', () => expect(deletreoACodigo('sc-de')).toBe('SCD'));
+  it('«beca 10» era be-ka: BK 10', () => expect(deletreoACodigo('beca 10')).toBe('BK 10'));
+  it('«bk 10» ya viene en letras', () => expect(deletreoACodigo('bk 10')).toBe('BK 10'));
+  it('una palabra normal no se vuelve código', () => expect(deletreoACodigo('la casa este')).toBe(''));
 });
 
 describe('parsearCodigoTela', () => {
@@ -174,6 +181,7 @@ describe('parsearCodigoTela', () => {
     'BK 10': { producto: 'BLACKOUT BLANCO', tipo: 'PREMIUM', cod: 'BLACKOUT' },
     'BK 11': { producto: 'BLACKOUT NEGRO', tipo: 'PREMIUM', cod: 'BLACKOUT' },
     'SCR 5': { producto: 'SCREEN GRIS', tipo: 'STANDARD', cod: 'SCREEN' },
+    'SC-D': { producto: 'ROLLER SCREEN DELUX', tipo: 'DELUX', cod: 'SCREEN' },
     ACC01: { producto: 'SOPORTE', tipo: 'ACCESORIO', cod: 'ACCESORIO' },
   } as unknown as CatalogoProductos;
 
@@ -184,6 +192,16 @@ describe('parsearCodigoTela', () => {
 
   it('el código deletreado', () => {
     const r = parsearCodigoTela('be ka diez', catalogo);
+    expect(r.tipo === 'unica' && r.opcion.codInt).toBe('BK 10');
+  });
+
+  it('el deletreo como lo escribe el teléfono: «sc-de» encuentra SC-D', () => {
+    const r = parsearCodigoTela('sc-de', catalogo);
+    expect(r.tipo === 'unica' && r.opcion.codInt).toBe('SC-D');
+  });
+
+  it('«beca 10» (be-ka pegado) encuentra BK 10', () => {
+    const r = parsearCodigoTela('beca 10', catalogo);
     expect(r.tipo === 'unica' && r.opcion.codInt).toBe('BK 10');
   });
 
