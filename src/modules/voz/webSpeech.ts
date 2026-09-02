@@ -360,6 +360,13 @@ export type CallbacksASR = {
 };
 
 /**
+ * Cuánto se espera, después de un pedazo entendido, por si la frase sigue.
+ * Cubre el cierre y la reapertura de la sesión (~400 ms) más una pausa humana
+ * normal en medio de una frase («dentro del… marco»).
+ */
+export const MS_REMATE_TURNO = 1100;
+
+/**
  * Un reconocedor listo para usar, o null si el navegador no trae la API.
  *
  * `continuous: false` a propósito: se escucha UNA respuesta por pregunta. Con
@@ -382,6 +389,40 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
   // Un corte pedido por nosotros (cambio de paso, apagar, reabrir) NO es un
   // «no te escuché»: sin esta marca, tres cortes seguidos pausaban el asistente.
   let abortando = false;
+  // ── El remate del turno ──
+  // El recortador de Chrome (sobre todo en Android) cierra la escucha con
+  // CUALQUIER pausa chica: «dentro del… marco» llegaba como «dentro del», y
+  // «uno coma ochenta… y cinco» se habría anotado 1,80 — un corte malo en el
+  // taller. Por eso un final NO se entrega al tiro: se guarda el pedazo, se
+  // reabre el micrófono y se espera un momento por si la frase sigue; recién
+  // cuando el hablante se calla de verdad se junta todo y se entrega ENTERO.
+  let fragmentos: string[] = [];
+  let alternativasUltimas: string[] = [];
+  let timerRemate: ReturnType<typeof setTimeout> | null = null;
+
+  const limpiarRemate = () => {
+    if (timerRemate) clearTimeout(timerRemate);
+    timerRemate = null;
+  };
+
+  const cerrarTurno = () => {
+    limpiarRemate();
+    if (destruido || fragmentos.length === 0) return;
+    const texto = fragmentos.join(' ');
+    // Las alternativas solo tienen sentido si la frase salió de una pieza.
+    const alternativas = fragmentos.length === 1 ? alternativasUltimas : [];
+    fragmentos = [];
+    alternativasUltimas = [];
+    if (activo) {
+      abortando = true;
+      try {
+        rec.abort();
+      } catch {
+        /* nada que hacer */
+      }
+    }
+    cbs.onFinal(texto, alternativas);
+  };
 
   rec.onstart = () => {
     activo = true;
@@ -393,19 +434,22 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
       const r = e.results[i];
       const texto = (r[0]?.transcript || '').trim();
       if (!r.isFinal) {
-        if (texto) cbs.onParcial?.(texto);
+        if (texto) cbs.onParcial?.([...fragmentos, texto].join(' '));
         continue;
       }
       // Android repite el mismo final dos veces: se descarta el duplicado.
       if (!texto || texto === ultimoFinal) continue;
       ultimoFinal = texto;
       huboFinal = true;
-      const alternativas: string[] = [];
+      fragmentos.push(texto);
+      alternativasUltimas = [];
       for (let j = 1; j < r.length; j++) {
         const alt = (r[j]?.transcript || '').trim();
-        if (alt) alternativas.push(alt);
+        if (alt) alternativasUltimas.push(alt);
       }
-      cbs.onFinal(texto, alternativas);
+      cbs.onParcial?.(fragmentos.join(' '));
+      limpiarRemate();
+      timerRemate = setTimeout(cerrarTurno, MS_REMATE_TURNO);
     }
   };
 
@@ -413,6 +457,9 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
     if (destruido) return;
     // 'aborted' es nuestro: lo produce cada `abortar()`, no es un problema.
     if (e.error === 'aborted') return;
+    // Con un pedazo ya en la mano, el «no oí más» es justamente lo esperado:
+    // el timer va a cerrar el turno con lo que hay.
+    if (e.error === 'no-speech' && fragmentos.length > 0) return;
     cbs.onError(e.error);
   };
 
@@ -423,6 +470,16 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
       abortando = false;
       return;
     }
+    if (fragmentos.length > 0) {
+      // El turno sigue abierto: se reabre el micrófono por si la frase
+      // continúa. Si no arranca, el timer entrega igual lo que hay.
+      try {
+        rec.start();
+      } catch {
+        /* el timer cierra el turno */
+      }
+      return;
+    }
     // Se cerró sin haber entendido nada: para la máquina es un intento fallido.
     if (!huboFinal) cbs.onError('no-speech');
   };
@@ -431,6 +488,9 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
     escuchar: () => {
       if (destruido) return;
       ultimoFinal = '';
+      fragmentos = [];
+      alternativasUltimas = [];
+      limpiarRemate();
       // `start()` sobre uno ya iniciado lanza InvalidStateError.
       if (activo) {
         abortando = true;
@@ -447,6 +507,9 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
       }
     },
     abortar: () => {
+      limpiarRemate();
+      fragmentos = [];
+      alternativasUltimas = [];
       if (destruido || !activo) return;
       abortando = true;
       try {
@@ -457,6 +520,7 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
     },
     destruir: () => {
       destruido = true;
+      limpiarRemate();
       try {
         rec.abort();
       } catch {
