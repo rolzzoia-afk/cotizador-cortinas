@@ -240,24 +240,62 @@ describe('crearReconocedor', () => {
     expect(onError).toHaveBeenCalledWith('no-speech');
   });
 
-  it('lo entendido no dispara ningún error al cerrarse', () => {
+  it('lo entendido se entrega tras el remate, sin ningún error', () => {
+    vi.useFakeTimers();
     const onError = vi.fn();
     const onFinal = vi.fn();
     const rec = crearReconocedor({ onFinal, onError })!;
     rec.escuchar();
     ReconocedorFalso.ultimo!.decir('pieza uno');
     ReconocedorFalso.ultimo!.onend?.();
+    // Todavía no: se está esperando por si la frase sigue.
+    expect(onFinal).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1200);
     expect(onFinal).toHaveBeenCalledWith('pieza uno', []);
     expect(onError).not.toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
+  it('junta la frase dicha en dos pedazos («dentro del … marco»)', () => {
+    // El recortador de Chrome en Android cierra la escucha con cualquier pausa
+    // chica: sin el remate, «uno coma ochenta… y cinco» se anotaba 1,80.
+    vi.useFakeTimers();
+    const onFinal = vi.fn();
+    const rec = crearReconocedor({ onFinal, onError: vi.fn() })!;
+    rec.escuchar();
+    ReconocedorFalso.ultimo!.decir('dentro del');
+    ReconocedorFalso.ultimo!.onend?.();
+    vi.advanceTimersByTime(400);
+    ReconocedorFalso.ultimo!.decir('marco');
+    vi.advanceTimersByTime(1200);
+    expect(onFinal).toHaveBeenCalledTimes(1);
+    expect(onFinal).toHaveBeenCalledWith('dentro del marco', []);
+    vi.useRealTimers();
   });
 
   it('el final repetido de Android se descarta', () => {
+    vi.useFakeTimers();
     const onFinal = vi.fn();
     const rec = crearReconocedor({ onFinal, onError: vi.fn() })!;
     rec.escuchar();
     ReconocedorFalso.ultimo!.decir('dos metros');
     ReconocedorFalso.ultimo!.decir('dos metros');
+    vi.advanceTimersByTime(1200);
     expect(onFinal).toHaveBeenCalledTimes(1);
+    expect(onFinal).toHaveBeenCalledWith('dos metros', []);
+    vi.useRealTimers();
+  });
+
+  it('un corte nuestro en pleno remate no entrega nada', () => {
+    vi.useFakeTimers();
+    const onFinal = vi.fn();
+    const rec = crearReconocedor({ onFinal, onError: vi.fn() })!;
+    rec.escuchar();
+    ReconocedorFalso.ultimo!.decir('uno coma ochenta');
+    rec.abortar();
+    vi.advanceTimersByTime(2000);
+    expect(onFinal).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 
   it('se configura en castellano de Chile y de a una respuesta', () => {
