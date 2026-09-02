@@ -224,6 +224,10 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
       campos.push(
         { etiqueta: 'ancho', ok: num(ctx.pano.ancho) > 0 },
         { etiqueta: 'alto', ok: num(ctx.pano.alto ?? ctx.ventana.alto) > 0 },
+        // El ARMADO es la CAÍDA: va en la etiqueta Brother del paño y en el PDF
+        // de producción, que ya la reclama por su cuenta («Falta ARMADO»). El
+        // gate de Fase 3 no la mira, pero sin ella el taller no sabe armarla.
+        { etiqueta: 'armado (interno/externo)', ok: !!txt(ctx.pano.armado) },
       );
       return campos;
     },

@@ -61,6 +61,8 @@ const panoLleno = (over: Partial<Pano> = {}): Pano =>
     cortes: 'Nada',
     cenefa: 'No',
     manillaCant: 0,
+    // La caída: va en la etiqueta Brother y en el PDF de producción.
+    armado: 'Interno',
     ...over,
   }) as unknown as Pano;
 
@@ -204,6 +206,15 @@ describe('avance de cada paso', () => {
   it('con todo lleno, todos los pasos quedan completos', () => {
     const ctx = ctxDe(ventLlena());
     for (const p of pasosAplicables(ctx)) expect(pasoCompleto(p, ctx)).toBe(true);
+  });
+
+  it('el ARMADO (la caída) se pide en las medidas: sin él no se puede seguir', () => {
+    // Va en la etiqueta Brother del paño y en el PDF de producción, que ya lo
+    // reclama por su cuenta. El gate de Fase 3 no lo mira, así que si el
+    // wizard tampoco, la cortina llega al taller sin saber cómo se arma.
+    const ctx = ctxDe(ventLlena({}, { armado: '' }));
+    expect(faltantesPaso(pasoPorId('medidas'), ctx)).toEqual(['armado (interno/externo)']);
+    expect(pasoCompleto(pasoPorId('medidas'), ctx)).toBe(false);
   });
 
   it('el MEC 06 trae la cadena incorporada: no se pide elegir una', () => {

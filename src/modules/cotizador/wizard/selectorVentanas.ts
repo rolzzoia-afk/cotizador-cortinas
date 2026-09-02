@@ -94,7 +94,14 @@ export function aplicarSeleccion(base: Ventana, sel: SeleccionVentanas): Resulta
     };
   }
   const n = Math.min(MAX_VENTANAS_ESTANDAR, Math.max(1, Math.round(sel.cantidad || 1)));
-  return { ventana: base, hermanasPendientes: n - 1 };
+  if (n <= 1) return { ventana: base, hermanasPendientes: 0 };
+  // «N ventanas» nace como un MURO persistido: aunque el vendedor navegue
+  // entre las cortinas a media carga (o vuelva mañana), el dibujo sabe que
+  // son N y cuál falta. La primera parte en la posición 0.
+  return {
+    ventana: { ...base, muroId: crypto.randomUUID(), muroTotal: n, muroPos: 0 },
+    hermanasPendientes: n - 1,
+  };
 }
 
 /**
@@ -120,6 +127,10 @@ export function ventanaHermana(origen: Ventana): Ventana {
     // algo que se decide después y no se hereda.
     grupoId: null,
     grupoOrden: 0,
+    // El MURO sí se hereda (es otra cortina del mismo muro), pero SIN posición:
+    // el dibujo la acomoda en el primer lugar libre, y quien necesite una
+    // posición exacta la asigna después.
+    muroPos: undefined,
     alto: 0,
     precio: 0,
     subtotal: undefined,

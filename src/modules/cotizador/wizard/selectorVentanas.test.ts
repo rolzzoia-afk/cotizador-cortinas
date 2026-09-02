@@ -89,6 +89,15 @@ describe('aplicarSeleccion — estándar', () => {
     expect(aplicarSeleccion(enBlanco(), { tipo: 'estandar', cantidad: 0 }).hermanasPendientes)
       .toBe(0);
   });
+
+  it('«N ventanas» estampa el MURO persistido; «1 ventana» no', () => {
+    const r = aplicarSeleccion(enBlanco(), { tipo: 'estandar', cantidad: 3 });
+    expect(r.ventana.muroId).toBeTruthy();
+    expect(r.ventana.muroTotal).toBe(3);
+    expect(r.ventana.muroPos).toBe(0);
+    const solo = aplicarSeleccion(enBlanco(), { tipo: 'estandar', cantidad: 1 });
+    expect(solo.ventana.muroId).toBeFalsy();
+  });
 });
 
 describe('aplicarSeleccion — especial', () => {
@@ -139,6 +148,13 @@ describe('ventanaHermana', () => {
     expect(h.grupoId).toBeNull();
     expect(h.precio).toBe(0);
     expect(h.subtotal).toBeUndefined();
+  });
+
+  it('SÍ hereda el muro (es otra cortina del mismo muro), pero sin posición', () => {
+    const h = ventanaHermana(vent({ muroId: 'm1', muroTotal: 2, muroPos: 0 }));
+    expect(h.muroId).toBe('m1');
+    expect(h.muroTotal).toBe(2);
+    expect(h.muroPos).toBeUndefined(); // toma el primer lugar libre del dibujo
   });
 
   it('es UNA cortina: no hereda el multiplicador comercial del origen', () => {
