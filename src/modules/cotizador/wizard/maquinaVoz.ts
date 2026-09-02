@@ -101,7 +101,11 @@ export function esEco(dicho: string, hablado: string): boolean {
   if (td.length < 3) return false;
   const th = new Set(h.split(' ').filter(Boolean));
   const comunes = td.filter((t) => th.has(t)).length;
-  return comunes / td.length >= 0.8;
+  // Eco de verdad = el micrófono oyó la pregunta (casi) entera. Una respuesta
+  // que CITA una opción de la pregunta («dentro del marco» tras «¿va dentro
+  // del marco, fuera del marco o no aplica?») cubre solo un pedazo de lo
+  // hablado y tiene que llegar al intérprete.
+  return comunes / td.length >= 0.8 && comunes / th.size >= 0.6;
 }
 
 /** Errores del reconocedor que no tienen vuelta: hay que apagar y avisar. */

@@ -84,6 +84,22 @@ describe('el eco del parlante', () => {
     expect(esEco('ancho', '¿Cuánto mide de ancho?')).toBe(false);
     expect(esEco('', 'lo que sea')).toBe(false);
   });
+
+  it('una respuesta que CITA una opción de la pregunta NO es eco', () => {
+    // Regresión: «dentro del marco» tiene sus 3 palabras dentro de la pregunta
+    // y el filtro viejo se la comía; el vendedor la repetía sin resultado.
+    const pregunta = '¿Va dentro del marco, fuera del marco, o no aplica?';
+    expect(esEco('dentro del marco', pregunta)).toBe(false);
+    expect(esEco('fuera del marco', pregunta)).toBe(false);
+    expect(esEco('cuadrada a muro', '¿Cuadrada a muro, cuadrada a techo, ovalada o no lleva?')).toBe(false);
+  });
+
+  it('la pregunta rebotada (entera o su cola) sí es eco', () => {
+    const pregunta = '¿Va dentro del marco, fuera del marco, o no aplica?';
+    expect(esEco('va dentro del marco fuera del marco o no aplica', pregunta)).toBe(true);
+    // El micrófono alcanzó a oír el final del parlante.
+    expect(esEco('fuera del marco o no aplica', pregunta)).toBe(true);
+  });
 });
 
 describe('cuando no se entiende', () => {
