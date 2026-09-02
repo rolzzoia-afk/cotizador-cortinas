@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
+  esLayoutGuillotina,
   extraCmPorTipo,
+  guillotinaPack,
   rowToPano,
   generarPlanCorte,
   resumenPlan,
+  secuenciaCortes,
   type ColmenaPanoRow,
   type PanoColmena,
+  type Pieza,
+  type Placed,
 } from './planCorte';
 import type { OT, VentanaItem } from '@/modules/ots/types';
 import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
@@ -611,5 +616,173 @@ describe('generarPlanCorte — propone rotación cuando ahorra tela', () => {
     const plan = generarPlanCorte([ot], []);
     expect(plan.rollo).toHaveLength(1);
     expect(plan.rollo[0].tieneRotaciones).toBe(false);
+  });
+});
+
+// ── Lo que la MESA puede cortar ──────────────────────────────────────
+// Las mesas de hoy cortan de punta a punta y la otra dirección se consigue
+// girando el paño (recorrido del taller, 2026-09-01). Un acomodo que no se
+// pueda ir partiendo en dos no ahorra tela: obliga al operario a improvisar.
+describe('empaque guillotina', () => {
+  const pieza = (nombre: string, w: number, h: number): Pieza => ({
+    id: nombre,
+    nombre,
+    codInt: 'BK 61',
+    otId: 'ot1',
+    otNum: '268-7',
+    w,
+    h,
+  });
+  const puesta = (nombre: string, px: number, py: number, pw: number, ph: number): Placed => ({
+    ...pieza(nombre, pw, ph),
+    px,
+    py,
+    pw,
+    ph,
+    rot: false,
+    failed: false,
+  });
+
+  it('detecta el acomodo REAL de la OT 268-7 que ninguna cuchilla separa', () => {
+    // Layout que MaxRects proponía para su BK 61: no hay una sola línea recta
+    // que cruce el paño sin partir una cortina por la mitad.
+    const layout = [
+      puesta('BOW W.', 0, 0, 176, 185),
+      puesta('DOR PRIN', 0, 185, 192, 165),
+      puesta('LIVING', 0, 350, 140, 195),
+      puesta('DOR VISITA', 176, 0, 120, 165),
+      puesta('OFICINA', 140, 350, 120, 165),
+      puesta('LAT IZQ VELCRO', 260, 165, 37, 171),
+      puesta('LAT DER VELCRO', 260, 336, 37, 171),
+    ];
+    expect(esLayoutGuillotina(layout, 298, 545)).toBe(false);
+    expect(secuenciaCortes(layout, 298, 545)).toBeNull();
+  });
+
+  it('el molinete de 5 piezas tampoco se puede cortar', () => {
+    const molinete = [
+      puesta('arriba', 0, 0, 60, 40),
+      puesta('derecha', 60, 0, 40, 60),
+      puesta('abajo', 40, 60, 60, 40),
+      puesta('izquierda', 0, 40, 40, 60),
+      puesta('centro', 40, 40, 20, 20),
+    ];
+    expect(esLayoutGuillotina(molinete, 100, 100)).toBe(false);
+  });
+
+  it('acomoda esas MISMAS 7 cortinas de forma cortable', () => {
+    const items = [
+      pieza('BOW W.', 176, 185),
+      pieza('DOR PRIN', 192, 165),
+      pieza('LIVING', 140, 195),
+      pieza('DOR VISITA', 120, 165),
+      pieza('OFICINA', 120, 165),
+      pieza('LAT IZQ VELCRO', 37, 171),
+      pieza('LAT DER VELCRO', 37, 171),
+    ];
+    const pl = guillotinaPack(items, 298, 700, false);
+    expect(pl.every((p) => !p.failed)).toBe(true);
+    expect(esLayoutGuillotina(pl, 298, 700)).toBe(true);
+  });
+
+  it('todo lo que acomoda se puede cortar, y nunca superpone piezas', () => {
+    // Medidas de cortina plausibles, con semilla fija para que el test sea
+    // reproducible: lo que se prueba es la propiedad, no un caso puntual.
+    let semilla = 12345;
+    const rnd = () => ((semilla = (semilla * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let caso = 0; caso < 40; caso++) {
+      const n = 2 + Math.floor(rnd() * 8);
+      const items = Array.from({ length: n }, (_, i) =>
+        pieza(`C${i}`, 40 + Math.round(rnd() * 250), 100 + Math.round(rnd() * 350)),
+      );
+      const pl = guillotinaPack(items, 298, 4000, false);
+      const ok = pl.filter((p) => !p.failed);
+      expect(esLayoutGuillotina(pl, 298, 4000)).toBe(true);
+      for (let i = 0; i < ok.length; i++) {
+        for (let j = i + 1; j < ok.length; j++) {
+          const a = ok[i];
+          const b = ok[j];
+          const separadas =
+            a.px + a.pw <= b.px || b.px + b.pw <= a.px || a.py + a.ph <= b.py || b.py + b.ph <= a.py;
+          expect(separadas).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('una pieza más ancha que el rollo no entra (queda failed, como MaxRects)', () => {
+    const pl = guillotinaPack([pieza('ANCHA', 400, 200)], 298, 1000, false);
+    expect(pl[0].failed).toBe(true);
+  });
+});
+
+describe('secuenciaCortes', () => {
+  const p = (nombre: string, px: number, py: number, pw: number, ph: number): Placed => ({
+    id: nombre, nombre, codInt: 'SC 65', otId: 'ot1', otNum: '1', w: pw, h: ph,
+    px, py, pw, ph, rot: false, failed: false,
+  });
+
+  it('dos cortinas lado a lado: un corte a lo largo', () => {
+    const cortes = secuenciaCortes([p('PPAL', 0, 0, 137, 256), p('DORM', 137, 0, 129, 256)], 298, 256);
+    expect(cortes).toEqual([
+      expect.objectContaining({ n: 1, eje: 'longitudinal', posicionCm: 137, girar: false }),
+    ]);
+    expect(cortes![0].deja).toEqual(['PPAL', 'DORM']);
+  });
+
+  it('dos bandas: primero el transversal y después el otro, avisando el giro', () => {
+    const cortes = secuenciaCortes(
+      [
+        p('PPAL', 0, 0, 137, 256),
+        p('PPAL 2', 137, 0, 137, 256),
+        p('DORM', 0, 256, 129, 258),
+        p('DORM 2', 129, 256, 129, 258),
+      ],
+      298,
+      514,
+    )!;
+    expect(cortes.map((c) => c.eje)).toEqual(['transversal', 'longitudinal', 'longitudinal']);
+    expect(cortes[0].posicionCm).toBe(256);
+    expect(cortes[0].girar).toBe(false);
+    expect(cortes[1].girar).toBe(true); // cambia de sentido → hay que girar
+    expect(cortes[2].girar).toBe(false); // sigue en el mismo sentido
+  });
+
+  it('una sola cortina no lleva ningún corte de separación', () => {
+    expect(secuenciaCortes([p('PPAL', 0, 0, 137, 256)], 298, 256)).toEqual([]);
+  });
+
+  it('la franja que sobra al costado no cuenta como corte', () => {
+    // La cortina usa 137 de 298: el resto se limpia, no separa dos piezas.
+    expect(secuenciaCortes([p('PPAL', 0, 0, 137, 256)], 298, 256)).toHaveLength(0);
+  });
+});
+
+describe('modoCorte', () => {
+  const otMuchas = hacerOT([
+    { producto: 'ROLLER BLACKOUT', codInt: 'BK 61', ubicacion: 'BOW W.', alto: 1.6, panos: [{ ancho: 1.72, alto: 1.6 }] },
+    { producto: 'ROLLER BLACKOUT', codInt: 'BK 61', ubicacion: 'DOR PRIN', alto: 1.4, panos: [{ ancho: 1.88, alto: 1.4 }] },
+    { producto: 'ROLLER BLACKOUT', codInt: 'BK 61', ubicacion: 'LIVING', alto: 1.7, panos: [{ ancho: 1.36, alto: 1.7 }] },
+    { producto: 'ROLLER BLACKOUT', codInt: 'BK 61', ubicacion: 'VISITA', alto: 1.4, panos: [{ ancho: 1.16, alto: 1.4 }] },
+    { producto: 'ROLLER BLACKOUT', codInt: 'BK 61', ubicacion: 'OFICINA', alto: 1.4, panos: [{ ancho: 1.16, alto: 1.4 }] },
+  ]);
+
+  it('de fábrica el plan sale cortable por la mesa', () => {
+    expect(PARAMETROS_CORTE_DEFAULT.modoCorte).toBe('guillotina');
+    const plan = generarPlanCorte([otMuchas], []);
+    for (const g of plan.rollo) {
+      expect(esLayoutGuillotina(g.placed, g.anchoUtil, g.altoUtil)).toBe(true);
+    }
+  });
+
+  it('en multieje se conserva el acomodo libre (la cortadora CNC)', () => {
+    const libre = generarPlanCorte([otMuchas], [], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      modoCorte: 'multieje',
+    });
+    const mesa = generarPlanCorte([otMuchas], []);
+    // La CNC aprovecha igual o mejor: nunca pide más tela que la mesa.
+    const alto = (p: typeof libre) => p.rollo.reduce((s, g) => s + g.altoCorte, 0);
+    expect(alto(libre)).toBeLessThanOrEqual(alto(mesa));
   });
 });

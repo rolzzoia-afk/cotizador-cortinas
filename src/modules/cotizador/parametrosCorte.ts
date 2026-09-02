@@ -52,13 +52,41 @@ export type ParametrosCorte = {
   /** Días sin uso para que una colmena disponible pase a alerta (Reglas Rolzzo v1.0). */
   diasAlertaColmena: number;
   /**
+   * ¿Desde qué medida un sobrante SIRVE para una roller? Es lo que la etiqueta
+   * del sobrante marca como FUNCIONAL, y en el módulo Producción decide si el
+   * remanente entra a la colmena o se anota como merma. Va aparte del mínimo de
+   * colmena de arriba a propósito: aquel es la regla histórica del inventario;
+   * estos dos son la pregunta del cortador —«¿alcanza para algo?»—.
+   */
+  funcionalRollerMinAnchoCm: number;
+  funcionalRollerMinAltoCm: number;
+  /** Lo mismo para una vertical: más angosta pero más larga (da lamas). */
+  funcionalVerticalMinAnchoCm: number;
+  funcionalVerticalMinAltoCm: number;
+  /**
    * ¿El plan de corte puede reutilizar paños de la colmena? Apagado, el
    * optimizador corta TODO de rollo nuevo aunque la colmena tenga paños
    * disponibles (y no los descuenta al confirmar el corte). Los sobrantes se
    * siguen registrando como inventario físico: esto solo decide si se usan.
    */
   usarColmenaPanos: boolean;
+  /**
+   * Cómo corta la mesa, que es lo que decide qué layouts se pueden proponer:
+   *
+   *  · `guillotina` — las mesas de HOY. Cada corte cruza la tela de punta a
+   *    punta y la otra dirección se consigue girando el paño, así que un
+   *    layout solo sirve si se puede ir partiendo en dos, una y otra vez.
+   *  · `multieje` — la cortadora CNC (puente X-Y): corta en todos los ejes sin
+   *    girar la tela, así que acepta cualquier acomodo (MaxRects, el histórico).
+   *
+   * De fábrica va en `guillotina`: un layout que la mesa no puede ejecutar no
+   * ahorra tela, obliga al operario a improvisar.
+   */
+  modoCorte: ModoCorte;
 };
+
+/** Cómo corta la mesa que va a ejecutar el plan. */
+export type ModoCorte = 'guillotina' | 'multieje';
 
 export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   extraAltoCm: 25,
@@ -76,7 +104,15 @@ export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   colmenaMinAnchoCm: 120,
   colmenaMinAltoCm: 180,
   diasAlertaColmena: 90,
+  // Medidas que el dueño fijó mirando el taller (2026-09-02).
+  funcionalRollerMinAnchoCm: 100,
+  funcionalRollerMinAltoCm: 200,
+  funcionalVerticalMinAnchoCm: 80,
+  funcionalVerticalMinAltoCm: 250,
   // De fábrica la colmena SÍ se usa (comportamiento histórico). Se apaga desde
   // el tab "Parámetros de corte" del Optimizador de Tela.
   usarColmenaPanos: true,
+  // Las mesas de hoy cortan de punta a punta y giran el paño. Se cambia a
+  // 'multieje' cuando entre en producción la cortadora CNC.
+  modoCorte: 'guillotina',
 };

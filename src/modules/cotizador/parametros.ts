@@ -30,7 +30,7 @@ export {
   type ParametrosCotizador,
   type ProveedorTarjeta,
 };
-export { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+export { PARAMETROS_CORTE_DEFAULT, type ModoCorte, type ParametrosCorte } from './parametrosCorte';
 
 export const CLAVE_PARAMETROS = 'parametros_cotizador';
 

@@ -23,10 +23,11 @@ import {
   guardarParametros,
   useParametrosCotizador,
   normalizarParametros,
+  type ModoCorte,
   type ParametrosCorte,
 } from '@/modules/cotizador/parametros';
 
-type Grupo = 'corte' | 'rollo' | 'colmena';
+type Grupo = 'corte' | 'rollo' | 'colmena' | 'sobrantes';
 
 /** Los campos con caja de texto son los numéricos; `usarColmenaPanos` es un
  *  interruptor y se dibuja aparte, al final del grupo Colmena. */
@@ -138,12 +139,38 @@ const CAMPOS: CampoDef[] = [
     hint: 'Una colmena disponible sin uso por más de estos días pasa a "en alerta".',
     grupo: 'colmena',
   },
+  // ── Sobrantes del corte (módulo Producción) ──
+  {
+    key: 'funcionalRollerMinAnchoCm',
+    label: 'Roller: ancho mínimo (cm)',
+    hint: 'Desde acá el sobrante se marca FUNCIONAL PARA ROLLER en su etiqueta.',
+    grupo: 'sobrantes',
+  },
+  {
+    key: 'funcionalRollerMinAltoCm',
+    label: 'Roller: alto mínimo (cm)',
+    hint: 'Va junto con el ancho: tienen que cumplirse los dos.',
+    grupo: 'sobrantes',
+  },
+  {
+    key: 'funcionalVerticalMinAnchoCm',
+    label: 'Vertical: ancho mínimo (cm)',
+    hint: 'La vertical acepta trozos más angostos: se corta en lamas.',
+    grupo: 'sobrantes',
+  },
+  {
+    key: 'funcionalVerticalMinAltoCm',
+    label: 'Vertical: alto mínimo (cm)',
+    hint: 'Pero necesita más largo que la roller.',
+    grupo: 'sobrantes',
+  },
 ];
 
 const GRUPOS: { key: Grupo; titulo: string }[] = [
   { key: 'corte', titulo: 'Corte de telas' },
   { key: 'rollo', titulo: 'Rollo / plan de corte' },
   { key: 'colmena', titulo: 'Colmena' },
+  { key: 'sobrantes', titulo: 'Sobrantes del corte (módulo Producción)' },
 ];
 
 export function ParametrosCorteTab() {
@@ -151,6 +178,7 @@ export function ParametrosCorteTab() {
   const { parametros, loading, refresh } = useParametrosCotizador();
   const [valores, setValores] = useState<Record<string, string>>({});
   const [usarColmena, setUsarColmena] = useState(true);
+  const [modoCorte, setModoCorte] = useState<ModoCorte>('guillotina');
   const [saving, setSaving] = useState(false);
   const puedeEditar = esRolAdmin(perfil?.rol);
 
@@ -160,11 +188,12 @@ export function ParametrosCorteTab() {
     for (const c of CAMPOS) v[c.key] = String(parametros[c.key]);
     setValores(v);
     setUsarColmena(parametros.usarColmenaPanos !== false);
+    setModoCorte(parametros.modoCorte === 'multieje' ? 'multieje' : 'guillotina');
   }, [loading, parametros]);
 
   const onGuardar = async () => {
     if (!empresaId || !puedeEditar) return;
-    const nuevos = { ...parametros, usarColmenaPanos: usarColmena };
+    const nuevos = { ...parametros, usarColmenaPanos: usarColmena, modoCorte };
     for (const c of CAMPOS) {
       const n = parseFloat((valores[c.key] ?? '').replace(',', '.'));
       if (!Number.isFinite(n) || n < 0) {
@@ -191,6 +220,7 @@ export function ParametrosCorteTab() {
     for (const c of CAMPOS) v[c.key] = String(PARAMETROS_CORTE_DEFAULT[c.key]);
     setValores(v);
     setUsarColmena(PARAMETROS_CORTE_DEFAULT.usarColmenaPanos);
+    setModoCorte(PARAMETROS_CORTE_DEFAULT.modoCorte);
     toast.info('Valores por defecto cargados. Presiona Guardar para aplicarlos.');
   };
 
@@ -226,6 +256,17 @@ export function ParametrosCorteTab() {
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/80">
                 {g.titulo}
               </h3>
+              {/* Estas cuatro medidas son la pregunta del cortador —«¿para qué
+                  alcanza este trozo?»— y por eso van aparte de los mínimos de
+                  colmena de arriba, que son la regla del inventario. */}
+              {g.key === 'sobrantes' && (
+                <p className="mb-3 text-[12px] leading-tight text-muted-foreground">
+                  Al cerrar un corte en Producción, cada trozo que sobra se mide contra esto: si
+                  alcanza para una roller o para una vertical entra a la colmena con su etiqueta;
+                  si no alcanza para ninguna de las dos, se anota como merma. El cortador puede
+                  corregir la marca antes de imprimir.
+                </p>
+              )}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {CAMPOS.filter((c) => c.grupo === g.key).map((c) => (
                   <div key={c.key} className="space-y-1">
@@ -283,6 +324,62 @@ export function ParametrosCorteTab() {
                     )}
                   </span>
                 </label>
+              )}
+
+              {/* Con qué máquina se corta: decide qué acomodos puede proponer el
+                  plan. Tampoco es un número, va aparte de los campos. */}
+              {g.key === 'rollo' && (
+                <div className="mt-4 rounded-md border border-border bg-secondary/30 p-3 text-xs">
+                  <p className="font-semibold">Cómo corta la mesa</p>
+                  <p className="mb-2 text-[12px] leading-tight text-muted-foreground">
+                    Un acomodo que la máquina no puede ejecutar no ahorra tela: obliga al operario
+                    a improvisar. Esto decide qué acomodos propone el plan de corte.
+                  </p>
+                  <div className="space-y-2">
+                    {(
+                      [
+                        {
+                          v: 'guillotina' as const,
+                          t: 'Mesa actual — corta de punta a punta',
+                          d: 'Cada corte cruza la tela completa y la otra dirección se consigue girando el paño. El plan solo propone acomodos que se pueden ir partiendo en dos, y muestra el orden de los cortes.',
+                        },
+                        {
+                          v: 'multieje' as const,
+                          t: 'Cortadora automática — corta en todos los ejes',
+                          d: 'La CNC corta cualquier acomodo sin girar la tela: aprovecha ~2 % más de tela, pero un plan así NO se puede ejecutar en las mesas de hoy.',
+                        },
+                      ] satisfies { v: ModoCorte; t: string; d: string }[]
+                    ).map((o) => (
+                      <label
+                        key={o.v}
+                        className={`flex items-start gap-2.5 rounded-md border p-2 ${
+                          modoCorte === o.v ? 'border-accent bg-accent/10' : 'border-border'
+                        } ${puedeEditar ? 'cursor-pointer' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="modo-corte"
+                          className="mt-0.5"
+                          disabled={!puedeEditar}
+                          checked={modoCorte === o.v}
+                          onChange={() => setModoCorte(o.v)}
+                        />
+                        <span>
+                          <span className="font-semibold">{o.t}</span>
+                          <span className="block text-[12px] leading-tight text-muted-foreground">
+                            {o.d}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {modoCorte === 'multieje' && (
+                    <p className="mt-2 flex items-center gap-1 font-semibold text-warning">
+                      <AlertTriangle className="h-3 w-3" />
+                      Solo con la cortadora automática andando.
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           ))}
