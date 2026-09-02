@@ -230,7 +230,7 @@ export function WizardTerreno(props: Props) {
           </div>
           <p className="mb-3 text-[0.72rem] text-muted-foreground">{paso.ayuda}</p>
 
-          {voz.encendida && (
+          {(voz.encendida || voz.estado.aviso) && (
             <div className="mb-3">
               <PanelVoz
                 estado={voz.estado}

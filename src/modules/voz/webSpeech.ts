@@ -275,24 +275,37 @@ export function hablar(texto: string, alTerminar: () => void): void {
     // internet mientras suenan, y un texto largo se les corta a los ~15 s: ahí
     // el navegador termina la frase con la voz LOCAL del equipo — que es lo
     // que se escucha como dos voces distintas en la misma pregunta.
+    //
+    // Las frases van UNA POR VEZ, encadenadas por el `onend` de la anterior —
+    // no todas en cola. Encoladas, el primer tropiezo de una (pasa en el
+    // teléfono) botaba a todas las que venían detrás y la lectura quedaba
+    // cortada a mitad de camino; encadenadas, una frase que falla se salta y
+    // la lectura sigue con la siguiente.
     const partes = partirEnFrases(limpio);
-    let pendientes = partes.length;
-    const unaMenos = () => {
-      pendientes -= 1;
-      if (pendientes <= 0) terminar();
-    };
-    for (const parte of partes) {
-      const u = new SpeechSynthesisUtterance(parte);
+    let i = 0;
+    const decirSiguiente = () => {
+      if (miGeneracion !== generacion || terminado) return;
+      if (i >= partes.length) {
+        terminar();
+        return;
+      }
+      const u = new SpeechSynthesisUtterance(partes[i]);
+      i += 1;
       u.lang = voz?.lang || 'es-CL';
       if (voz) u.voice = voz;
       // Un poco más lento que el default y sin subir el tono: leído así se
       // entiende con ruido de obra y suena menos a máquina.
       u.rate = 0.98;
       u.pitch = 1;
-      u.onend = unaMenos;
-      u.onerror = terminar;
+      u.onend = decirSiguiente;
+      u.onerror = (e: { error?: string }) => {
+        // Nuestra propia cancelación no debe relanzar nada.
+        if (e?.error === 'canceled' || e?.error === 'interrupted') return;
+        decirSiguiente();
+      };
       w.speechSynthesis.speak(u);
-    }
+    };
+    decirSiguiente();
     // Red de seguridad por si el navegador se come algún `onend`. Va HOLGADA a
     // propósito (unas 9 letras por segundo, cuando se leen 14): si se quedara
     // corta cortaría la frase para pasar a la siguiente.
@@ -466,6 +479,31 @@ export function crearReconocedor(cbs: CallbacksASR): Reconocedor | null {
  * del usuario, y el reconocedor queda inservible sin decir nada. Pidiéndolo
  * dentro del clic, el permiso ya está dado cuando hace falta.
  */
+/**
+ * En qué quedó el permiso del micrófono para este sitio, sin pedirlo.
+ *
+ * Importa por Android: si el permiso se negó (o el navegador lo negó solo, que
+ * es lo que hace con los pedidos repetidos), Chrome lo deja BLOQUEADO y los
+ * pedidos siguientes fallan EN SILENCIO — no aparece ningún cartel. Desde la
+ * app no se puede desbloquear: lo único honesto es explicarle al vendedor
+ * dónde activarlo.
+ */
+export async function estadoPermisoMicrofono(): Promise<'granted' | 'denied' | 'prompt' | 'desconocido'> {
+  const w = ventana();
+  const permisos = w?.navigator?.permissions;
+  if (!permisos?.query) return 'desconocido';
+  try {
+    const r = await permisos.query({ name: 'microphone' as PermissionName });
+    return r.state === 'granted' || r.state === 'denied' ? r.state : 'prompt';
+  } catch {
+    return 'desconocido';
+  }
+}
+
+/** Cómo desbloquear el micrófono, dicho para el teléfono y para el computador. */
+export const AVISO_MIC_BLOQUEADO =
+  'El micrófono está BLOQUEADO para este sitio, por eso el navegador ya ni pregunta. Para activarlo: toca el ícono junto a la dirección (el candado o los controles) → Permisos → Micrófono → Permitir, y vuelve a tocar Dictar.';
+
 export async function pedirPermisoMicrofono(): Promise<boolean> {
   const w = ventana();
   if (!w?.navigator?.mediaDevices?.getUserMedia) return false;

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { crearReconocedor, elegirVozDe, partirEnFrases, soporteVoz } from './webSpeech';
+import {
+  cancelarHabla,
+  crearReconocedor,
+  elegirVozDe,
+  estadoPermisoMicrofono,
+  hablar,
+  partirEnFrases,
+  soporteVoz,
+} from './webSpeech';
 
 /** Reconocedor de mentira, con la misma coreografía de eventos que Chrome. */
 class ReconocedorFalso {
@@ -87,6 +95,102 @@ describe('elegirVozDe', () => {
       { name: 'Google español', lang: 'es-ES', localService: false },
     ]);
     expect(elegida?.name).toBe('Google español');
+  });
+});
+
+/** Sintetizador de mentira: junta lo hablado y deja disparar onend/onerror. */
+class UtteranceFalsa {
+  static cola: UtteranceFalsa[] = [];
+  text: string;
+  lang = '';
+  voice: unknown = null;
+  rate = 1;
+  pitch = 1;
+  onend: (() => void) | null = null;
+  onerror: ((e: { error?: string }) => void) | null = null;
+  constructor(t: string) {
+    this.text = t;
+  }
+}
+
+describe('hablar — frase por frase', () => {
+  let habladas: string[];
+
+  beforeEach(() => {
+    habladas = [];
+    UtteranceFalsa.cola = [];
+    (globalThis as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance = UtteranceFalsa;
+    (globalThis as { window?: unknown }).window = {
+      speechSynthesis: {
+        speaking: false,
+        speak: (u: UtteranceFalsa) => {
+          habladas.push(u.text);
+          UtteranceFalsa.cola.push(u);
+        },
+        cancel: () => {},
+        getVoices: () => [{ name: 'Google español', lang: 'es-ES', localService: false }],
+        onvoiceschanged: null,
+      },
+    };
+  });
+
+  afterEach(() => {
+    delete (globalThis as { SpeechSynthesisUtterance?: unknown }).SpeechSynthesisUtterance;
+    delete (globalThis as { window?: unknown }).window;
+    cancelarHabla();
+  });
+
+  const ultima = () => UtteranceFalsa.cola[UtteranceFalsa.cola.length - 1];
+
+  it('lee en orden, de a una frase, y avisa el final UNA sola vez', () => {
+    const fin = vi.fn();
+    hablar('Primera frase. Segunda frase. ¿Tercera?', fin);
+    expect(habladas).toEqual(['Primera frase.']);
+    ultima().onend?.();
+    expect(habladas).toEqual(['Primera frase.', 'Segunda frase.']);
+    ultima().onend?.();
+    expect(habladas).toHaveLength(3);
+    expect(fin).not.toHaveBeenCalled();
+    ultima().onend?.();
+    expect(fin).toHaveBeenCalledTimes(1);
+  });
+
+  it('una frase que falla se salta y la lectura SIGUE con la siguiente', () => {
+    // Encoladas de un viaje, este tropiezo botaba todo lo que venía detrás y
+    // la lectura quedaba cortada a mitad de camino.
+    const fin = vi.fn();
+    hablar('Una frase. Otra frase.', fin);
+    ultima().onerror?.({ error: 'synthesis-failed' });
+    expect(habladas).toEqual(['Una frase.', 'Otra frase.']);
+    ultima().onend?.();
+    expect(fin).toHaveBeenCalledTimes(1);
+  });
+
+  it('nuestra propia cancelación no relanza nada', () => {
+    const fin = vi.fn();
+    hablar('Una frase. Otra frase.', fin);
+    cancelarHabla();
+    ultima().onerror?.({ error: 'interrupted' });
+    expect(habladas).toEqual(['Una frase.']);
+    expect(fin).not.toHaveBeenCalled();
+  });
+});
+
+describe('estadoPermisoMicrofono', () => {
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  it('detecta el permiso BLOQUEADO (el navegador ya ni pregunta)', async () => {
+    (globalThis as { window?: unknown }).window = {
+      navigator: { permissions: { query: async () => ({ state: 'denied' }) } },
+    };
+    expect(await estadoPermisoMicrofono()).toBe('denied');
+  });
+
+  it('sin la API de permisos no adivina', async () => {
+    (globalThis as { window?: unknown }).window = { navigator: {} };
+    expect(await estadoPermisoMicrofono()).toBe('desconocido');
   });
 });
 
