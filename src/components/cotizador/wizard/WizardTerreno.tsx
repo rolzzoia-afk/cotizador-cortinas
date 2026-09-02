@@ -9,7 +9,7 @@
 // vistas comparten cascadas, validación y guardado.
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Copy, Loader2, Save, Wrench } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, Loader2, Save, TriangleAlert, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CortinaViz } from './CortinaViz';
@@ -34,6 +34,11 @@ import {
   type VarianteViz,
 } from '@/modules/cotizador/wizard/cortinaViz';
 import { rotuloForma } from '@/modules/cotizador/wizard/selectorVentanas';
+import {
+  colorVentana,
+  type GrupoVentanas,
+  type MiembroGrupo,
+} from '@/modules/cotizador/wizard/grupoVentanas';
 import { PANO_COLORS } from '@/modules/cotizador/fase2';
 import { pendientesFase2 } from '@/modules/cotizador/fase2-completitud';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
@@ -64,6 +69,10 @@ type Props = {
   onCancelar: () => void;
   /** Abre «Replicar información». Sin otras cortinas en la OT no se ofrece. */
   onReplicar?: () => void;
+  /** El grupo de ventanas de este muro («2 ventanas» = 2 cortinas separadas). */
+  grupo?: GrupoVentanas | null;
+  /** Clic en el número de otra ventana del grupo. */
+  onIrAVentanaGrupo?: (miembro: MiembroGrupo, indice: number) => void;
 };
 
 export function WizardTerreno(props: Props) {
@@ -153,6 +162,28 @@ export function WizardTerreno(props: Props) {
     onIrAPaso: setIdPaso,
   });
 
+  // El grupo de ventanas: color propio por cortina del muro. Con una sola
+  // ventana no hay grupo que mostrar y todo esto queda en null.
+  const grupo = props.grupo && props.grupo.total > 1 ? props.grupo : null;
+  const colorGrupo = grupo ? colorVentana(grupo.indice) : null;
+  const grupoViz = useMemo(
+    () =>
+      grupo
+        ? {
+            indice: grupo.indice,
+            colores: grupo.miembros.map((_, i) => colorVentana(i)),
+            abiertas: grupo.miembros.map((m) => m.id != null),
+            onClickVentana: props.onIrAVentanaGrupo
+              ? (i: number) => {
+                  const m = grupo.miembros[i];
+                  if (m && !m.actual) props.onIrAVentanaGrupo!(m, i);
+                }
+              : undefined,
+          }
+        : null,
+    [grupo, props.onIrAVentanaGrupo],
+  );
+
   if (!paso) return null;
 
   return (
@@ -165,6 +196,30 @@ export function WizardTerreno(props: Props) {
           <div className="rounded border border-accent/40 bg-accent/10 px-2 py-1 text-[0.68rem] text-accent">
             <strong className="font-semibold">{rotuloForma(ventana)}</strong> — un paño por cara de
             la ventana.
+          </div>
+        )}
+
+        {/* El grupo del muro: en cuál de las N ventanas se está parado, con el
+            MISMO color que su contorno en el dibujo. */}
+        {grupo && colorGrupo && (
+          <div
+            className="flex items-center gap-2 rounded border px-2 py-1 text-[0.68rem]"
+            style={{
+              borderColor: colorGrupo + '66',
+              background: colorGrupo + '14',
+              color: colorGrupo,
+            }}
+          >
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: colorGrupo }}
+            />
+            <span>
+              <strong className="font-semibold">
+                Ventana {grupo.indice + 1} de {grupo.total}
+              </strong>{' '}
+              — cada una es una cortina aparte; toca los números del dibujo para cambiarte.
+            </span>
           </div>
         )}
 
@@ -220,7 +275,10 @@ export function WizardTerreno(props: Props) {
           </div>
         )}
 
-        <div className="rounded-md border border-border bg-card/40 p-4">
+        <div
+          className="rounded-md border border-border bg-card/40 p-4"
+          style={colorGrupo ? { borderColor: colorGrupo + '59' } : undefined}
+        >
           <div className="mb-1 flex items-center justify-between gap-2">
             <h4 className="text-sm font-semibold">{paso.titulo}</h4>
             <div className="flex items-center gap-2">
@@ -324,8 +382,20 @@ export function WizardTerreno(props: Props) {
             />
           )}
 
+          {/* Lo que falta se dice fuerte y BLOQUEA el «Siguiente»: en terreno un
+              campo en blanco no se nota hasta que la cortina está en el taller.
+              La salida es el rail de arriba: si algo de verdad no se sabe
+              todavía, se salta al paso a mano. */}
           {faltan.length > 0 && (
-            <p className="mt-3 text-[0.7rem] text-amber-500">Falta: {faltan.join(' · ')}</p>
+            <div className="mt-3 flex items-start gap-2 rounded border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-[0.72rem] text-amber-600">
+              <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                <strong className="font-semibold">
+                  {faltan.length === 1 ? 'Falta un dato' : `Faltan ${faltan.length} datos`}
+                </strong>{' '}
+                para seguir: {faltan.join(' · ')}.
+              </span>
+            </div>
           )}
         </div>
 
@@ -344,7 +414,17 @@ export function WizardTerreno(props: Props) {
               Cancelar
             </Button>
             {idx < pasos.length - 1 ? (
-              <Button size="sm" className="gap-1" onClick={() => setIdPaso(pasos[idx + 1].id)}>
+              <Button
+                size="sm"
+                className="gap-1"
+                disabled={faltan.length > 0}
+                title={
+                  faltan.length > 0
+                    ? `Falta: ${faltan.join(' · ')}`
+                    : `Ir a ${pasos[idx + 1].titulo}`
+                }
+                onClick={() => setIdPaso(pasos[idx + 1].id)}
+              >
                 Siguiente <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             ) : (
@@ -364,13 +444,17 @@ export function WizardTerreno(props: Props) {
       {/* ── Columna del dibujo ── */}
       <div className="order-1 lg:order-2">
         <div className="lg:sticky lg:top-3">
-          <div className="overflow-hidden rounded-md border border-border bg-[#1a1b1c]">
+          <div
+            className="overflow-hidden rounded-md border border-border bg-[#1a1b1c]"
+            style={colorGrupo ? { borderColor: colorGrupo + '59' } : undefined}
+          >
             <CortinaViz
               variante={variante}
               progreso={progreso}
               estilo={estilo}
               activa={paso.pieza}
               onClickPieza={irAPieza}
+              grupo={grupoViz}
               className="aspect-[16/9]"
             />
           </div>
@@ -378,6 +462,7 @@ export function WizardTerreno(props: Props) {
             {paso.pieza
               ? `Estás armando: ${NOMBRE_PIEZA[paso.pieza]}. Haz clic en otra pieza para ir a su paso.`
               : 'Haz clic en una pieza del dibujo para ir a su paso.'}
+            {grupo && ' Los números de abajo cambian de ventana.'}
           </p>
         </div>
       </div>

@@ -23,12 +23,26 @@ import {
   r3,
   radioRollo,
   VIZ,
-  VIZ_W,
   type EstiloViz,
   type PerfilesViz,
   type PiezaViz,
   type VarianteViz,
 } from '@/modules/cotizador/wizard/cortinaViz';
+
+/**
+ * El grupo de ventanas («2 ventanas» = 2 cortinas separadas en el mismo muro):
+ * el vidrio se parte en tantos paños como cortinas, cada uno con su color de
+ * contorno, y los números de abajo cambian de cortina con un clic.
+ */
+export type GrupoViz = {
+  /** Cuál de los paños de vidrio es el de ESTA cortina (0-based). */
+  indice: number;
+  /** Un color por ventana del grupo; el largo define cuántos paños se dibujan. */
+  colores: string[];
+  /** true = esa cortina ya existe (se puede abrir); false = falta cargarla. */
+  abiertas: boolean[];
+  onClickVentana?: (i: number) => void;
+};
 
 type Props = {
   variante: VarianteViz;
@@ -38,10 +52,15 @@ type Props = {
   /** Pieza del paso activo: se destaca. */
   activa?: PiezaViz | null;
   onClickPieza?: (p: PiezaViz) => void;
+  /** Sin grupo (o con 1 sola), el vidrio va limpio, sin separaciones. */
+  grupo?: GrupoViz | null;
   className?: string;
 };
 
-const { x0, x1, cy, tr, gx0, gx1, gy0, gy1, cola, caidaMax, dualDy, dualFrente } = VIZ;
+// `x0`/`x1` (los extremos de la cortina) NO se destructuran acá: con un grupo
+// de ventanas la cortina ocupa SOLO su paño de vidrio, así que se calculan
+// dentro del componente.
+const { cy, tr, gx0, gx1, gy0, gy1, cola, caidaMax, dualDy, dualFrente } = VIZ;
 const RMAX = radioRollo(caidaMax);
 
 /** Aclara/oscurece un hex para armar los degradados del herraje. */
@@ -62,8 +81,22 @@ export const CortinaViz = memo(function CortinaViz({
   estilo,
   activa,
   onClickPieza,
+  grupo,
   className,
 }: Props) {
+  // Paños de VIDRIO de la ventana física. Una ventana individual va limpia
+  // (sin travesaño); «2/3/4 ventanas» la parten en 2/3/4.
+  const panesN = Math.max(1, grupo?.colores.length ?? 1);
+  const paneGlassW = (gx1 - gx0) / panesN;
+  const paneX = (i: number) => gx0 + i * paneGlassW;
+  const idxPane = Math.min(Math.max(0, grupo?.indice ?? 0), panesN - 1);
+
+  // LA CORTINA OCUPA SOLO SU PAÑO: cada una del grupo es independiente. Estos
+  // locales le hacen sombra a la geometría de módulo, así que TODO el dibujo
+  // (soportes, tubo, tela, peso, guías, cenefa…) se confina solo.
+  const x0 = panesN > 1 ? r3(paneX(idxPane) - 12) : VIZ.x0;
+  const x1 = panesN > 1 ? r3(paneX(idxPane) + paneGlassW + 12) : VIZ.x1;
+  const VIZ_W = x1 - x0;
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const id = (n: string) => `${n}-${uid}`;
   const url = (n: string) => `url(#${id(n)})`;
@@ -181,7 +214,9 @@ export const CortinaViz = memo(function CortinaViz({
   // cenefa, llega al piso y tapa el borde de la tela: la tela corre por dentro
   // de su canal. El zócalo va ENTRE las guías, no por encima. Se dibujan solo
   // los perfiles que la ficha lleva (el base es opcional).
-  const GUIA_W = 56;
+  // Ancho de la guía proporcional a la cortina (≈8 % del ancho, como el 56 de
+  // la cortina completa): en un paño de grupo no puede comerse media ventana.
+  const GUIA_W = Math.max(24, Math.min(56, Math.round(VIZ_W * 0.08)));
   const guiaTop = cy + 30;
   const guiaBot = gy1 + 18;
   const ZOC_H = 30;
@@ -228,6 +263,34 @@ export const CortinaViz = memo(function CortinaViz({
   const herr = estilo.herrajesHex;
   const peso = estilo.pesoHex;
   const patronTela = url('pTela');
+
+  // ── Dónde va el contorno de color de ESTA cortina ──
+  // Abraza la cortina DIBUJADA, no el hueco del vidrio: una vez armada, el
+  // rectángulo fijo del vano quedaba flotando alrededor y se leía como un
+  // recuadro pegado encima. Mientras no hay nada armado sí marca el vano —
+  // ahí el contorno dice «esta ventana es la que estás cargando».
+  const contornoActual = (() => {
+    const M = 8;
+    const caja = (top: number, bot: number) => ({
+      x: r3(x0 - M),
+      y: r3(top - M),
+      w: r3(VIZ_W + 2 * M),
+      h: r3(Math.max(24, bot - top) + 2 * M),
+    });
+    if (tSop < 0.02 && tTubo < 0.02 && tTela < 0.02) {
+      return {
+        x: r3(paneX(idxPane) + 8),
+        y: gy0 + 8,
+        w: r3(paneGlassW - 16),
+        h: gy1 - gy0 - 16,
+      };
+    }
+    if (esVertical) return caja(cy - 18, tTela > 0.02 ? lamaBot : cy + 40);
+    if (esBee) return caja(beeTop - 16, beeBot + 8);
+    // Con rollo: desde la cenefa (o el rollo desnudo) hasta el peso.
+    const top = tCen > 0.02 ? cy - RMAX - 14 : cy - radio;
+    return caja(top, Math.max(barraY, cy + radio));
+  })();
 
   const defs = useMemo(
     () => (
@@ -624,7 +687,18 @@ export const CortinaViz = memo(function CortinaViz({
           <ellipse cx={gx1 - 150} cy={gy0 + 270} rx={150} ry={110} fill="#6d7d52" opacity={0.42} />
           <rect x={gx0 - 20} y={gy0 + 430} width={gx1 - gx0 + 40} height={200} fill="#b3ac9b" opacity={0.6} />
         </g>
-        <rect x={(gx0 + gx1) / 2 - 5} y={gy0} width={10} height={gy1 - gy0} fill="#2a2724" />
+        {/* Travesaños: uno por división del grupo. La ventana individual va
+            limpia — antes había uno fijo al medio y toda ventana se veía doble. */}
+        {Array.from({ length: panesN - 1 }, (_, i) => (
+          <rect
+            key={i}
+            x={r3(paneX(i + 1) - 5)}
+            y={gy0}
+            width={10}
+            height={gy1 - gy0}
+            fill="#2a2724"
+          />
+        ))}
         <rect x={gx0} y={gy0} width={gx1 - gx0} height={3} fill="#fff" opacity={0.5} />
       </g>
       <g fill="#2a2724">
@@ -633,6 +707,27 @@ export const CortinaViz = memo(function CortinaViz({
         <rect x={gx0 - 16} y={gy0 - 16} width={16} height={gy1 - gy0 + 34} />
         <rect x={gx1} y={gy0 - 16} width={16} height={gy1 - gy0 + 34} />
       </g>
+
+      {/* Las hermanas del grupo que YA están cargadas: su cortina enrollada,
+          en silueta, sobre su propio paño. El muro se lee completo — esta
+          ventana ya tiene la suya — sin dibujar su ficha entera. */}
+      {grupo && panesN > 1 && (
+        <g pointerEvents="none">
+          {/* El borde de color no va acá: lo pone el contorno del grupo. */}
+          {grupo.colores.map((_col, i) => {
+            if (i === idxPane || !(grupo.abiertas[i] ?? false)) return null;
+            const sx0 = r3(paneX(i) - 8);
+            const sw = r3(paneGlassW + 16);
+            return (
+              <g key={i} opacity={0.5}>
+                <rect x={sx0} y={cy - tr} width={sw} height={tr * 2} rx={5} fill="#55524c" />
+                <rect x={sx0 + 2} y={cy + tr} width={sw - 4} height={34} fill="#55524c" opacity={0.55} />
+                <rect x={sx0 + 2} y={cy + tr + 30} width={sw - 4} height={7} rx={2} fill="#3d3a35" />
+              </g>
+            );
+          })}
+        </g>
+      )}
       <path
         d={`M${gx0 - 30} 806 L${gx1 + 30} 806 L${gx1 + 150} 900 L${gx0 - 150} 900 Z`}
         fill={url('gLuz')}
@@ -1085,37 +1180,43 @@ export const CortinaViz = memo(function CortinaViz({
             <rect x={x0 - 2} y={barraY - pesoH} width={VIZ_W + 4} height={pesoH} rx={3} fill={url('gPeso')} />
             <rect x={x0 - 2} y={barraY - pesoH + 2} width={VIZ_W + 4} height={2} fill={tono(peso, 0.45)} opacity={0.4} />
             <rect x={x0 - 2} y={barraY - 6} width={VIZ_W + 4} height={6} fill="#000" opacity={0.35} />
-            {/* La placa ROLZZO va hacia la derecha de la barra, como en las fotos. */}
-            <rect x={x1 - 158} y={barraY - pesoH / 2 - 8.5} width={90} height={17} rx={3} fill={tono(peso, -0.55)} />
-            <text
-              x={x1 - 113}
-              y={barraY - pesoH / 2 + 3.5}
-              textAnchor="middle"
-              fill={tono(peso, 0.75)}
-              opacity={0.85}
-              style={{ font: '500 9px monospace', letterSpacing: '0.3em' }}
-            >
-              ROLZZO
-            </text>
+            {/* La placa ROLZZO va hacia la derecha de la barra, como en las
+                fotos. En un paño angosto de grupo no cabe y se omite. */}
+            {VIZ_W > 260 && (
+              <>
+                <rect x={x1 - 158} y={barraY - pesoH / 2 - 8.5} width={90} height={17} rx={3} fill={tono(peso, -0.55)} />
+                <text
+                  x={x1 - 113}
+                  y={barraY - pesoH / 2 + 3.5}
+                  textAnchor="middle"
+                  fill={tono(peso, 0.75)}
+                  opacity={0.85}
+                  style={{ font: '500 9px monospace', letterSpacing: '0.3em' }}
+                >
+                  ROLZZO
+                </text>
+              </>
+            )}
           </g>
         )}
       </Pieza>
       )}
 
-      {/* Zona de clic del despliegue: el vidrio que la cortina va tapando. */}
+      {/* Zona de clic del despliegue: el vidrio que ESTA cortina va tapando
+          (solo su paño, no el muro entero). */}
       {conRollo && (
-      <Pieza pieza="despliegue" hit={{ x: gx0, y: barraY + 12, w: gx1 - gx0, h: Math.max(20, gy1 - barraY - 12) }}>
+      <Pieza pieza="despliegue" hit={{ x: x0 + 3, y: barraY + 12, w: VIZ_W - 6, h: Math.max(20, gy1 - barraY - 12) }}>
         {tDesp < 0.02 && tTela > 0.02 && (
-          <Fantasma x={gx0 + 6} y={barraY + 20} w={gx1 - gx0 - 12} h={Math.max(24, gy1 - barraY - 30)} />
+          <Fantasma x={x0 + 9} y={barraY + 20} w={VIZ_W - 18} h={Math.max(24, gy1 - barraY - 30)} />
         )}
       </Pieza>
       )}
       {/* Vertical: el despliegue son las lamas girando de canto a cerradas. El
           clic va en el tramo bajo del vidrio para no taparle el clic a la tela. */}
       {esVertical && (
-      <Pieza pieza="despliegue" hit={{ x: gx0, y: gy0 + (gy1 - gy0) * 0.6, w: gx1 - gx0, h: (gy1 - gy0) * 0.4 }}>
+      <Pieza pieza="despliegue" hit={{ x: x0 + 3, y: gy0 + (gy1 - gy0) * 0.6, w: VIZ_W - 6, h: (gy1 - gy0) * 0.4 }}>
         {tDesp < 0.02 && tTela > 0.02 && (
-          <Fantasma x={gx0 + 6} y={gy0 + (gy1 - gy0) * 0.6} w={gx1 - gx0 - 12} h={(gy1 - gy0) * 0.4 - 8} />
+          <Fantasma x={x0 + 9} y={gy0 + (gy1 - gy0) * 0.6} w={VIZ_W - 18} h={(gy1 - gy0) * 0.4 - 8} />
         )}
       </Pieza>
       )}
@@ -1128,15 +1229,15 @@ export const CortinaViz = memo(function CortinaViz({
         pieza="despliegue"
         hit={
           beeVert
-            ? { x: gx0, y: gy0 + (gy1 - gy0) * 0.62, w: gx1 - gx0, h: (gy1 - gy0) * 0.38 }
-            : { x: gx0 + (gx1 - gx0) * 0.62, y: gy0, w: (gx1 - gx0) * 0.38, h: gy1 - gy0 }
+            ? { x: x0 + 3, y: gy0 + (gy1 - gy0) * 0.62, w: VIZ_W - 6, h: (gy1 - gy0) * 0.38 }
+            : { x: x0 + VIZ_W * 0.62, y: gy0, w: VIZ_W * 0.38, h: gy1 - gy0 }
         }
       >
         {tDesp < 0.02 && tTela > 0.02 && (
           beeVert ? (
-            <Fantasma x={gx0 + 8} y={gy0 + (gy1 - gy0) * 0.62} w={gx1 - gx0 - 16} h={(gy1 - gy0) * 0.38 - 8} />
+            <Fantasma x={x0 + 8} y={gy0 + (gy1 - gy0) * 0.62} w={VIZ_W - 16} h={(gy1 - gy0) * 0.38 - 8} />
           ) : (
-            <Fantasma x={gx0 + (gx1 - gx0) * 0.62} y={gy0 + 8} w={(gx1 - gx0) * 0.38 - 8} h={gy1 - gy0 - 16} />
+            <Fantasma x={x0 + VIZ_W * 0.62} y={gy0 + 8} w={VIZ_W * 0.38 - 8} h={gy1 - gy0 - 16} />
           )
         )}
       </Pieza>
@@ -1290,6 +1391,115 @@ export const CortinaViz = memo(function CortinaViz({
             </Pieza>
           );
         })()}
+
+      {/* ── El contorno de color de cada ventana del grupo ──
+          Encima de todo, para que se vea siempre: la actual fuerte, las otras
+          tenues y las que faltan por cargar punteadas (el mismo lenguaje de
+          toda pieza que aún no existe). */}
+      {grupo && panesN > 1 && (
+        <g pointerEvents="none">
+          {grupo.colores.map((col, i) => {
+            const actual = i === grupo.indice;
+            const abierta = grupo.abiertas[i] ?? false;
+            // La actual abraza su cortina; una hermana ya cargada, su silueta
+            // enrollada; un lugar vacío, el vano — que es lo que hay ahí.
+            const caja = actual
+              ? contornoActual
+              : abierta
+                ? {
+                    x: r3(paneX(i) - 14),
+                    y: cy - tr - 6,
+                    w: r3(paneGlassW + 28),
+                    h: tr * 2 + 49,
+                  }
+                : {
+                    x: r3(paneX(i) + 8),
+                    y: gy0 + 8,
+                    w: r3(paneGlassW - 16),
+                    h: gy1 - gy0 - 16,
+                  };
+            return (
+              <rect
+                key={i}
+                x={caja.x}
+                y={caja.y}
+                width={caja.w}
+                height={caja.h}
+                rx={6}
+                fill="none"
+                stroke={col}
+                strokeWidth={actual ? 6 : 3}
+                strokeDasharray={actual || abierta ? undefined : '14 10'}
+                opacity={actual ? 0.9 : 0.5}
+              />
+            );
+          })}
+        </g>
+      )}
+
+      {/* ── Los números del grupo: uno por ventana, clicables ──
+          Van al pie de su paño de vidrio, ENCIMA de la cortina (si no, la tela
+          desplegada los taparía y no habría cómo cambiarse de ventana). */}
+      {grupo && panesN > 1 && (
+        <g>
+          {grupo.colores.map((col, i) => {
+            const actual = i === grupo.indice;
+            const abierta = grupo.abiertas[i] ?? false;
+            const cxB = r3(paneX(i) + paneGlassW / 2);
+            const cyB = gy1 - 44;
+            const rB = Math.min(26, r3(paneGlassW * 0.38));
+            const titulo = actual
+              ? `Ventana ${i + 1} — la que estás cargando`
+              : abierta
+                ? `Ir a la ventana ${i + 1} (ya cargada)`
+                : `Cargar la ventana ${i + 1} ahora`;
+            const click = grupo.onClickVentana;
+            return (
+              <g
+                key={i}
+                role={click ? 'button' : undefined}
+                tabIndex={click ? 0 : undefined}
+                aria-label={titulo}
+                onClick={click ? () => click(i) : undefined}
+                onKeyDown={
+                  click
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          click(i);
+                        }
+                      }
+                    : undefined
+                }
+                style={{ cursor: click && !actual ? 'pointer' : undefined, outline: 'none' }}
+                opacity={actual || abierta ? 1 : 0.72}
+              >
+                <title>{titulo}</title>
+                <circle
+                  cx={cxB}
+                  cy={cyB}
+                  r={rB}
+                  fill={actual ? col : '#1c1d20'}
+                  fillOpacity={actual ? 1 : 0.85}
+                  stroke={col}
+                  strokeWidth={actual ? 0 : 3}
+                  strokeDasharray={actual || abierta ? undefined : '7 6'}
+                />
+                <text
+                  x={cxB}
+                  y={cyB + 1}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill={actual ? '#101113' : col}
+                  style={{ font: `700 ${Math.round(rB * 0.92)}px monospace` }}
+                >
+                  {i + 1}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+      )}
 
       <rect x={0} y={0} width={VIZ.ancho} height={VIZ.alto} fill={url('gVineta')} pointerEvents="none" />
     </svg>

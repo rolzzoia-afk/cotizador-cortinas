@@ -140,6 +140,7 @@ import {
   ventanaHermana,
   type SeleccionVentanas,
 } from '@/modules/cotizador/wizard/selectorVentanas';
+import { grupoVentanasDe, type MiembroGrupo } from '@/modules/cotizador/wizard/grupoVentanas';
 
 type Tab = 'ventanas' | 'visita' | 'post';
 /** Cómo se edita la ventana: la ficha de siempre o el wizard con el dibujo. */
@@ -720,6 +721,47 @@ export function CotizadorFase2() {
     // La misma cascada que el select de la ficha/wizard: modelo de fabricación
     // por color, chips sincronizados y el 2.º rollo si el sistema es dual.
     cambiarCategoria(categoria);
+  };
+
+  // El muro del dibujo del wizard: sale del `muroId` PERSISTIDO en las
+  // cortinas, así que sobrevive a cualquier navegación (volver a la 1 a media
+  // cadena, partir por la 2, reabrir una mañana).
+  const grupoVentanaForm = useMemo(
+    () => (ventanaForm ? grupoVentanasDe(ventanas, ventanaForm) : null),
+    [ventanas, ventanaForm],
+  );
+
+  /** Clic en el número de otra ventana del muro, en el dibujo. */
+  const irAVentanaDelGrupo = (m: MiembroGrupo, indice: number) => {
+    if (m.actual || !ventanaForm) return;
+
+    // Una ya cargada: se abre, igual que el clic en la lista (si había una
+    // cadena a medias, se corta — iniciarEdicion ya lo hace).
+    if (m.id != null) {
+      const v = ventanas.find((x) => String(x.id) === String(m.id));
+      if (v) iniciarEdicion(v);
+      return;
+    }
+
+    // Un lugar vacío del muro.
+    const actualGuardada = ventanas.some((v) => String(v.id) === String(ventanaForm.id));
+    if (!actualGuardada) {
+      // La abierta todavía no se guarda: simplemente se corre a ese lugar
+      // (partir por la ventana 2 y después la 1, por ejemplo).
+      setVentanaForm({ ...ventanaForm, muroPos: indice });
+      toast.info(`Listo: estás cargando la ventana ${indice + 1}.`);
+      return;
+    }
+    // La abierta ya está guardada: se carga la de ese lugar AHORA, con la
+    // misma ficha copiada (el camino de siempre de las hermanas). El resto de
+    // los lugares vacíos sigue encadenándose al guardar.
+    const vacios = grupoVentanaForm
+      ? grupoVentanaForm.miembros.filter((x) => x.id == null).length
+      : 0;
+    setHermanasPendientes(Math.max(0, vacios - 1));
+    setInsertarTrasId(ventanaForm.id);
+    abrirEnEditor({ ...ventanaHermana(ventanaForm), muroPos: indice });
+    toast.info(`Ficha copiada. Toma las medidas de la ventana ${indice + 1}.`);
   };
 
   /** Otra cortina igual a esta, en la misma ventana: solo faltan las medidas. */
@@ -1632,6 +1674,8 @@ export function CotizadorFase2() {
                 onGuardar={guardarVentana}
                 onCancelar={cancelarEdicion}
                 onReplicar={ventanas.length > 1 ? () => setDialogReplicar(true) : undefined}
+                grupo={grupoVentanaForm}
+                onIrAVentanaGrupo={irAVentanaDelGrupo}
               />
             ) : (
               <>
