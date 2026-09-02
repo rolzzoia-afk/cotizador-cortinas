@@ -61,6 +61,11 @@ const CAMPOS_PROPIOS_DE_LA_VENTANA = [
   // La forma es de la ventana física, no de la ficha: replicar una bow window
   // en cortinas rectas les estamparía «BOW WINDOW» en el informe y el corte.
   'formaVentana',
+  // El muro es geografía de ESA cortina: replicar la ficha de una cortina de
+  // «2 ventanas» sobre otra suelta no puede arrastrarla a ese muro.
+  'muroId',
+  'muroTotal',
+  'muroPos',
 ] as const satisfies readonly (keyof Ventana)[];
 
 /** La ficha de un paño sin lo que es propio de su ventana. */

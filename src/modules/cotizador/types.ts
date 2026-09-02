@@ -279,6 +279,17 @@ export type Ventana = {
   modelo?: import('@/modules/descuentos/tipos').ModeloDespiece | null;
   /** Ventana en ángulo (bow window, en L, triangular). Sin valor = recta. */
   formaVentana?: FormaVentana | null;
+  /**
+   * El MURO de «N ventanas»: las cortinas cargadas juntas desde el selector
+   * comparten este id. Distinto de `grupoId` (conjunto de invertidas que se
+   * cortan juntas): esto es geografía —qué cortinas viven en el mismo muro—
+   * y lo usa el dibujo de la vista guiada. Sin valor = ventana suelta.
+   */
+  muroId?: string | null;
+  /** Cuántas cortinas tiene el muro completo (cargadas + por cargar). */
+  muroTotal?: number;
+  /** Posición de ESTA cortina en el muro (0 = la de la izquierda). */
+  muroPos?: number;
 };
 
 // Ítem en construcción dentro de Fase 1 (antes de enviar a Fase 2).
