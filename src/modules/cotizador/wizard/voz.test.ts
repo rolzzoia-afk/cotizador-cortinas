@@ -271,6 +271,24 @@ describe('campoPorEtiqueta', () => {
     expect(campoPorEtiqueta('medidas', ctx, 'ancho')?.clave).toBe('pano.ancho');
   });
 
+  it('«posición de la cadena» se encuentra aunque lo dicho venga sin tilde', () => {
+    // El comando entrega el texto normalizado («posicion…») y la etiqueta
+    // lleva tilde: sin normalizar los DOS lados, contestaba «no encontré ese
+    // campo» a un pedido perfectamente claro.
+    const ctx = ctxDe(ventana({}, { codCadena: 'CAD03' }));
+    expect(campoPorEtiqueta('accionamiento', ctx, 'la posicion de la cadena')?.clave).toBe(
+      'pano.cierreVert',
+    );
+    expect(campoPorEtiqueta('accionamiento', ctx, 'posición de la cadena')?.clave).toBe(
+      'pano.cierreVert',
+    );
+  });
+
+  it('con una palabra con peso alcanza: «corregir la posición»', () => {
+    const ctx = ctxDe(ventana({}, { codCadena: 'CAD03' }));
+    expect(campoPorEtiqueta('accionamiento', ctx, 'la posicion')?.clave).toBe('pano.cierreVert');
+  });
+
   it('«el tipo de cortina» también', () => {
     const ctx = ctxDe(ventana());
     expect(campoPorEtiqueta('medidas', ctx, 'el tipo de cortina')?.clave).toBe('ventana.categoria');

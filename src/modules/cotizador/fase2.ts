@@ -317,7 +317,10 @@ export function crearPanoVacio(): Pano {
     largoCadena: '',
     codCadena: '',
     codPeso: '',
-    cierreVert: 'Derecha',
+    // VACÍO a propósito: el lado de la cadena es una decisión de terreno, no
+    // un default. Preseteado en 'Derecha', nadie lo preguntaba y las cortinas
+    // salían con el mando al lado que cayera (pedido del dueño, 2026-09-02).
+    cierreVert: '',
     manillaCant: 0,
     manillaColor: '',
     colorPeso: '',
