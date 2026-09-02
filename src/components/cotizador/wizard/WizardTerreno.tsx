@@ -9,12 +9,13 @@
 // vistas comparten cascadas, validación y guardado.
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Copy, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Copy, Loader2, Save, Wrench } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CortinaViz } from './CortinaViz';
 import { CuerpoPaso } from './PasoWizard';
 import { BotonVoz, PanelVoz } from './PanelVoz';
+import { DiagnosticoVoz } from './DiagnosticoVoz';
 import { useVozWizard } from './useVozWizard';
 import type { CtxVoz } from '@/modules/cotizador/wizard/voz';
 import {
@@ -82,6 +83,7 @@ export function WizardTerreno(props: Props) {
   );
 
   const [idPaso, setIdPaso] = useState<IdPaso>('medidas');
+  const [diagnosticoAbierto, setDiagnosticoAbierto] = useState(false);
   // Si el paso activo deja de aplicar (cambió la categoría), volver al primero.
   useEffect(() => {
     if (!pasos.some((p) => p.id === idPaso)) setIdPaso(pasos[0]?.id ?? 'medidas');
@@ -223,12 +225,30 @@ export function WizardTerreno(props: Props) {
             <h4 className="text-sm font-semibold">{paso.titulo}</h4>
             <div className="flex items-center gap-2">
               <BotonVoz soportado={voz.soportado} fase={voz.estado.fase} onClick={voz.alternar} />
+              {/* El probador: para cuando «no me escucha» en un aparato que no
+                  tenemos en la mano. Muestra paso a paso qué anda y qué no. */}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-1.5"
+                onClick={() => setDiagnosticoAbierto((v) => !v)}
+                title="Probar el micrófono y el parlante de este aparato"
+              >
+                <Wrench className="h-3.5 w-3.5" />
+              </Button>
               <span className="font-mono text-[0.65rem] text-muted-foreground">
                 {idx + 1} / {pasos.length}
               </span>
             </div>
           </div>
           <p className="mb-3 text-[0.72rem] text-muted-foreground">{paso.ayuda}</p>
+
+          {diagnosticoAbierto && (
+            <div className="mb-3">
+              <DiagnosticoVoz onCerrar={() => setDiagnosticoAbierto(false)} />
+            </div>
+          )}
 
           {(voz.encendida || voz.estado.aviso) && (
             <div className="mb-3">
