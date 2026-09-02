@@ -34,7 +34,18 @@ export function PanelVoz({
   onEscucharAhora: () => void;
   onApagar: () => void;
 }) {
-  if (estado.fase === 'apagado') return null;
+  // Apagado con un aviso pendiente (el micrófono bloqueado en el navegador):
+  // el aviso se queda a la vista, porque un toast se esfuma y el vendedor solo
+  // vería que «no escucha». Se va solo al volver a encender.
+  if (estado.fase === 'apagado') {
+    if (!estado.aviso) return null;
+    return (
+      <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-[0.72rem] text-amber-600">
+        <MicOff className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+        <span>{estado.aviso}</span>
+      </div>
+    );
+  }
   const escuchando = estado.fase === 'escuchando' || estado.fase === 'desambiguando';
   const Icono =
     estado.fase === 'hablando'

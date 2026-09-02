@@ -39,9 +39,11 @@ import {
 } from '@/modules/cotizador/wizard/vozParsers';
 import { faltantesPaso, type IdPaso, type PasoWizard } from '@/modules/cotizador/wizard/pasos';
 import {
+  AVISO_MIC_BLOQUEADO,
   AVISO_SIN_SOPORTE,
   cancelarHabla,
   crearReconocedor,
+  estadoPermisoMicrofono,
   estaHablando,
   fijarVoz,
   hablar,
@@ -124,19 +126,22 @@ export function useVozWizard(opts: Opciones): VozWizard {
   const despacharRef = useRef<(e: EventoVoz) => void>(() => {});
 
   /**
-   * Abre el micrófono en cuanto el parlante se calla.
+   * Abre el micrófono en cuanto el parlante se calla — y NUNCA lo corta.
    *
-   * Espera POCO: `speaking` a veces se queda pegado en true en Chrome, y dejar
-   * el micrófono cerrado «por las dudas» es peor que un eco — el eco lo
-   * descarta la máquina, pero con el micrófono cerrado el vendedor le habla a
-   * una pared. Pasado el respiro se corta el parlante y se escucha igual.
+   * Cortarlo «para escuchar de una vez» era lo que dejaba las frases a mitad
+   * de palabra: si el fin del habla llegaba antes de tiempo (pasa en el
+   * teléfono), este camino degollaba la lectura en curso. Ahora se espera; si
+   * `speaking` se queda pegado en true (bug conocido de Chrome), pasado un
+   * rato se abre el micrófono IGUAL, sin cancelar nada: sobre un parlante
+   * realmente mudo eso no corta nada, y si sonara, el eco lo descarta la
+   * máquina.
    */
   const abrirMicrofono = useCallback((intento = 0) => {
     if (timerEscuchaRef.current) clearTimeout(timerEscuchaRef.current);
     timerEscuchaRef.current = setTimeout(
       () => {
         if (estadoRef.current.fase === 'apagado' || estadoRef.current.fase === 'pausado') return;
-        if (estaHablando() && intento < 5) {
+        if (estaHablando() && intento < 12) {
           abrirMicrofono(intento + 1);
           return;
         }
@@ -145,7 +150,6 @@ export function useVozWizard(opts: Opciones): VozWizard {
         // cierra al instante (que es como se veía «no me escucha»).
         const seguir = () => {
           if (estadoRef.current.fase === 'apagado' || estadoRef.current.fase === 'pausado') return;
-          cancelarHabla();
           recRef.current?.escuchar();
         };
         if (permisoRef.current) {
@@ -156,7 +160,7 @@ export function useVozWizard(opts: Opciones): VozWizard {
         }
         seguir();
       },
-      intento === 0 ? MS_ANTI_ECO : 200,
+      intento === 0 ? MS_ANTI_ECO : 250,
     );
   }, []);
   const abrirMicrofonoRef = useRef(abrirMicrofono);
@@ -604,7 +608,18 @@ export function useVozWizard(opts: Opciones): VozWizard {
     // El permiso del micrófono se pide ACÁ, dentro del clic: pedirlo más tarde
     // (cuando la app termina de hablar) ya no cuenta como gesto del usuario en
     // varios navegadores y el reconocedor arranca muerto.
-    permisoRef.current = pedirPermisoMicrofono().catch(() => false);
+    const permiso = pedirPermisoMicrofono().catch(() => false);
+    permisoRef.current = permiso;
+    // Si el pedido falla, hay que saber POR QUÉ: en el teléfono, un permiso
+    // negado alguna vez queda BLOQUEADO y el navegador ya ni pregunta — sin
+    // este aviso, el vendedor solo ve que «no escucha» y no hay nada que tocar.
+    permiso.then(async (ok) => {
+      if (ok || estadoRef.current.fase === 'apagado') return;
+      const st = await estadoPermisoMicrofono();
+      if (st === 'denied') {
+        despacharRef.current({ tipo: 'ERROR_ASR', error: 'not-allowed', texto: AVISO_MIC_BLOQUEADO });
+      }
+    });
     ecoRef.current = '';
     silenciosRef.current = 0;
     campoRef.current = null;
