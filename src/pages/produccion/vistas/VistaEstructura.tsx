@@ -109,8 +109,11 @@ export default function VistaEstructura({
 
       {!loading && !error && !plan && (
         <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-          No se encontró un plan de corte para la OT {ot}. Si el optimizador todavía no lo generó,
-          esta pantalla se llena sola cuando esté.
+          La OT {ot} todavía no tiene plan de corte de estructura. El plan se genera en el módulo{' '}
+          <strong className="text-foreground">Optimizador</strong> (menú de arriba): se carga la
+          orden, <strong className="text-foreground">Calcular</strong> y{' '}
+          <strong className="text-foreground">Confirmar</strong> — eso descuenta la colmena de
+          tubos y guarda el plan. Apenas exista, esta pantalla se llena sola.
         </p>
       )}
 

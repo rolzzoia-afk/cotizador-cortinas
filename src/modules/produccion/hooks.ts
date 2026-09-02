@@ -21,6 +21,14 @@ import type { OptimizerRow } from '@/modules/cotizador/tela';
 // arrastrar jsPDF (400 KB) a una tablet del galpón.
 import { construirHojaCorte, partirHojaCorte, type HojaCorte } from '@/modules/cotizador/hojaCorte';
 import { rowToPano, type ColmenaPanoRow, type PanoColmena } from '@/modules/cotizador/planCorte';
+import { panosDibujados, type PanoDibujado } from '@/modules/cotizador/layoutPano';
+import {
+  filasDelLote,
+  juntoPorOT,
+  tirosDelLote,
+  type FilaLote,
+  type TiroLote,
+} from './hojaLote';
 import {
   aplicarVariante,
   construirCalculoGeneral,
@@ -47,6 +55,7 @@ import {
 } from '@/modules/planes-corte/construirFilasPlan';
 import { calcularSubEtapa, debeAvanzar, type AreasListas } from './avance';
 import { elegirPlanDeOT, normalizarNumeroOT, planCubreOT } from './buscarPlan';
+import { rowACola, type FilaCola, type ItemCola } from './lotes';
 import type { ConsumoAluminio, CostoBodega, CostoManualOT } from './costoOT';
 import { CLAVE_AREA } from './constants';
 import type { AreaProduccion, CheckProduccion } from './types';
@@ -156,6 +165,79 @@ export function usePlanDeOT(numeroOT: string): {
   }, [empresaId, numeroOT]);
 
   return { plan, loading, error };
+}
+
+// ── La cola del taller ───────────────────────────────────────────────
+
+/**
+ * Las OTs que están HOY en producción, con lo justo para la tarjeta de la cola.
+ *
+ * No usa `useOTs()` a propósito: ese trae la OT COMPLETA (ventanas, adicionales,
+ * visita, informe…) de cientos de órdenes, y esta pantalla es la portada de una
+ * tablet del galpón. Acá se piden cuatro columnas.
+ */
+export function useColaProduccion(): {
+  cola: ItemCola[];
+  loading: boolean;
+  refrescar: () => Promise<void>;
+} {
+  const { empresaId } = useAuth();
+  const [cola, setCola] = useState<ItemCola[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const cargar = useCallback(async () => {
+    if (!empresaId) {
+      setCola([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('ots')
+        .select('id, numero_ot, datos_generales, fecha_entrega')
+        .eq('empresa_id', empresaId)
+        .eq('estado', 'produccion')
+        .order('fecha_entrega', { ascending: true, nullsFirst: false });
+      if (error) throw error;
+      setCola(
+        ((data as unknown as FilaCola[]) || [])
+          .map(rowACola)
+          .filter((i): i is ItemCola => i !== null),
+      );
+    } catch (e) {
+      console.warn('[Producción] No se pudo cargar la cola:', e);
+      setCola([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [empresaId]);
+
+  useEffect(() => {
+    cargar();
+  }, [cargar]);
+
+  // Una OT que entra o sale de producción tiene que aparecer/desaparecer sola:
+  // el taller mira esta pantalla todo el día sin recargarla. Se refetchea entera
+  // en vez de parchear la fila porque el payload de `ots` es pesado y estos
+  // cambios son de a uno cada tanto.
+  useEffect(() => {
+    if (!empresaId) return;
+    const canal = supabase
+      .channel(`cola-prod-${crypto.randomUUID()}`)
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'ots', filter: `empresa_id=eq.${empresaId}` },
+        () => {
+          cargar();
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(canal);
+    };
+  }, [empresaId, cargar]);
+
+  return { cola, loading, refrescar: cargar };
 }
 
 // ── La OT que se está mirando ────────────────────────────────────────
@@ -293,6 +375,120 @@ export function useHojaCorte(ot: OT | null): {
   };
 }
 
+// ── Los paños que bajan del rollo, dibujados ─────────────────────────
+
+/**
+ * Los tiros de tela de la OT con sus cortinas y el orden de los cortes, para
+ * que el dimensionador vea cuántas salen de cada rollo que le entregan.
+ *
+ * Comparte TODO con la hoja del cortador (`useHojaCorte`): mismas filas, mismos
+ * paños, mismas letras. Acá solo se les pone dibujo.
+ */
+export function usePanosDelRollo(ot: OT | null): {
+  panos: PanoDibujado[];
+  loading: boolean;
+  error: string | null;
+} {
+  const { rows, hoja, loading, error } = useHojaCorte(ot);
+  const { parametros } = useParametrosCotizador();
+
+  const panos = useMemo(() => {
+    if (!hoja || rows.length === 0) return [];
+    // Qué paños salen de un sobrante: la hoja lo sabe por cortina (los paños de
+    // colmena no entran a su resumen, así que se leen de las filas de corte).
+    const deColmena = new Map<number, string>();
+    for (const c of hoja.cortinas) {
+      if (!c.medidaColmena) continue;
+      deColmena.set(c.pano, c.ubicColmena ? `${c.ubicColmena} · ${c.medidaColmena}` : c.medidaColmena);
+    }
+    return panosDibujados(rows, parametros, deColmena);
+  }, [rows, hoja, parametros]);
+
+  return { panos, loading, error };
+}
+
+// ── El lote: los tiros que se cortaron juntos ────────────────────────
+
+/**
+ * Las OTs COMPLETAS de un lote (con sus ventanas), que es lo que necesita el
+ * motor para armar los tiros. `useColaProduccion` trae una versión liviana,
+ * sin `items`: sirve para la lista pero no para cortar.
+ */
+export function useOTsDelLote(otIds: string[]): { ots: OT[]; loading: boolean } {
+  const { empresaId } = useAuth();
+  const [ots, setOts] = useState<OT[]>([]);
+  const [loading, setLoading] = useState(false);
+  // Los ids llegan en un array nuevo en cada render; la llave los estabiliza.
+  const llave = otIds.join(',');
+
+  useEffect(() => {
+    let vivo = true;
+    const ids = llave ? llave.split(',').filter(Boolean) : [];
+    if (!empresaId || ids.length === 0) {
+      setOts([]);
+      return;
+    }
+    setLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('ots')
+          .select('*')
+          .eq('empresa_id', empresaId)
+          .in('id', ids);
+        if (error) throw error;
+        if (!vivo) return;
+        const filas = ((data as unknown as OTRow[]) || []).map(rowToOT);
+        // En el orden del lote, que es el que el jefe eligió.
+        filas.sort((a, b) => ids.indexOf(String(a.id)) - ids.indexOf(String(b.id)));
+        setOts(filas);
+      } catch (e) {
+        console.warn('[Producción] No se pudieron cargar las OTs del lote:', e);
+        if (vivo) setOts([]);
+      } finally {
+        if (vivo) setLoading(false);
+      }
+    })();
+    return () => {
+      vivo = false;
+    };
+  }, [empresaId, llave]);
+
+  return { ots, loading };
+}
+
+/**
+ * Los tiros del LOTE: el empaque se hace una sola vez con las cortinas de
+ * todas sus OTs, así que un tiro puede traer cortinas de dos órdenes — que es
+ * exactamente para lo que se armó el lote.
+ *
+ * Devuelve además las letras repartidas por orden, para que la columna
+ * CONJUNTO PAÑOS de cada OT diga la letra del tiro REAL y no la de un empaque
+ * que solo existía en esa pantalla.
+ */
+export function useHojaLote(ots: OT[]): {
+  filas: FilaLote[];
+  tiros: TiroLote[];
+  juntoPorOrden: Map<string, Map<string, JuntoPieza>>;
+  loading: boolean;
+} {
+  const { catalogo, loading: loadingCat } = useCatalogoProductos();
+  const { parametros, loading: loadingParams } = useParametrosCotizador();
+  const { formulas, loading: loadingFormulas } = useFormulasFamilias();
+  const { reglas, loading: loadingReglas } = useReglasSeleccion();
+  const listo = !loadingCat && !loadingParams && !loadingFormulas && !loadingReglas;
+
+  const filas = useMemo(
+    () => (listo && ots.length > 0 ? filasDelLote(ots, catalogo, parametros, formulas, reglas) : []),
+    [listo, ots, catalogo, parametros, formulas, reglas],
+  );
+
+  const tiros = useMemo(() => tirosDelLote(filas, parametros), [filas, parametros]);
+  const juntoPorOrden = useMemo(() => juntoPorOT(filas, parametros), [filas, parametros]);
+
+  return { filas, tiros, juntoPorOrden, loading: !listo };
+}
+
 // ── La hoja de cálculo general / dimensionado ────────────────────────
 
 /**
@@ -307,6 +503,13 @@ export function useHojaCorte(ot: OT | null): {
 export function useCalculoGeneral(
   ot: OT | null,
   variante: VarianteHojaCalculo,
+  /**
+   * Letras de «cortar junto» impuestas desde afuera. Las usa el Dimensionado
+   * cuando la OT se cortó dentro de un LOTE: ahí el tiro lo arma el lote y la
+   * letra tiene que ser la de ese tiro, no la de un empaque hecho con las
+   * cortinas de esta orden sola (que describiría un paño que nunca existió).
+   */
+  juntoExterno?: Map<string, JuntoPieza> | null,
 ): {
   data: CalculoGeneral | null;
   identidad: ColumnaCalculo[];
@@ -320,6 +523,7 @@ export function useCalculoGeneral(
   const listo = !loadingCat && !loadingParams && !loadingFormulas && !loadingReglas;
 
   const juntoPorPieza = useMemo(() => {
+    if (juntoExterno) return juntoExterno;
     if (!ot || !listo) return undefined;
     const filas = filasOptimizadorDeOT(ot, catalogo, parametros, formulas, reglas);
     if (filas.length === 0) return undefined;
@@ -335,7 +539,7 @@ export function useCalculoGeneral(
       }
     });
     return mapa;
-  }, [ot, listo, catalogo, parametros, formulas, reglas]);
+  }, [juntoExterno, ot, listo, catalogo, parametros, formulas, reglas]);
 
   const data = useMemo(() => {
     if (!ot || !listo) return null;

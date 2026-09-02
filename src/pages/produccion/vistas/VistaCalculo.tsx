@@ -19,7 +19,16 @@ import {
 } from '@/modules/cotizador/calculoGeneral';
 import type { OT } from '@/modules/ots/types';
 import { calcularAvance, type AreasListas } from '@/modules/produccion/avance';
-import { useCalculoGeneral, useChecks } from '@/modules/produccion/hooks';
+import {
+  useCalculoGeneral,
+  useChecks,
+  useHojaLote,
+  useOTsDelLote,
+  usePanosDelRollo,
+} from '@/modules/produccion/hooks';
+import type { LoteProduccion } from '@/modules/produccion/lotes';
+import PanosDelRollo from '@/components/cotizador/PanosDelRollo';
+import TirosDelLote from '../components/TirosDelLote';
 import BotonEmergencia from '../components/BotonEmergencia';
 import HojaCalculo from '../components/HojaCalculo';
 
@@ -31,16 +40,37 @@ export default function VistaCalculo({
   otCargada,
   areasListas,
   onAreaCerrada,
+  lote,
 }: {
   area: 'dimensionado' | 'armado';
   ot: string;
   otCargada: OT | null;
   areasListas: AreasListas;
   onAreaCerrada: () => Promise<void>;
+  /** El lote que se está trabajando: su tela se cortó junta. */
+  lote?: LoteProduccion | null;
 }) {
   const esDim = area === 'dimensionado';
   const variante = esDim ? VARIANTE_DIMENSIONADO : VARIANTE_CALCULO_GENERAL;
-  const { data, identidad, bloques, loading } = useCalculoGeneral(otCargada, variante);
+
+  // Dimensionando dentro de un lote, el tiro lo arma el LOTE: hay que traer
+  // sus otras OTs para poder contar las cortinas que viajan en el mismo trozo.
+  const idsLote = useMemo(
+    () => (esDim && lote ? lote.ots.map((o) => o.id) : []),
+    [esDim, lote],
+  );
+  const { ots: otsLote } = useOTsDelLote(idsLote);
+  const { tiros, juntoPorOrden } = useHojaLote(otsLote);
+  // La letra que ve esta OT sale del empaque del lote, no del suyo propio.
+  const juntoDelLote = otCargada ? (juntoPorOrden.get(String(otCargada.id)) ?? null) : null;
+
+  const { data, identidad, bloques, loading } = useCalculoGeneral(
+    otCargada,
+    variante,
+    juntoDelLote,
+  );
+  // Solo Dimensionado dibuja los tiros: Armado ya no toca la tela.
+  const { panos } = usePanosDelRollo(esDim ? otCargada : null);
   const { hechas, quien, areaLista, marcar, marcarAreaLista } = useChecks(area, ot);
   const [cerrando, setCerrando] = useState(false);
 
@@ -154,6 +184,12 @@ export default function VistaCalculo({
         </p>
       )}
 
+      {/* Lo primero que ve el dimensionador cuando la tela se cortó en lote:
+          el trozo real que le llega, con las cortinas de las dos órdenes. */}
+      {esDim && lote && tiros.length > 0 && (
+        <TirosDelLote nombre={lote.nombre} tiros={tiros} otActual={ot} />
+      )}
+
       {loading && <p className="text-sm text-muted-foreground">Armando la hoja…</p>}
 
       {!loading && !data && (
@@ -172,6 +208,20 @@ export default function VistaCalculo({
           onMarcar={alMarcar}
           etiquetaCheck={esDim ? 'Dimensionada' : 'Armada'}
         />
+      )}
+
+      {/* El dimensionador recibe la tela enrollada desde la mesa de corte: acá
+          ve cuántas cortinas salen de cada tiro y por dónde partirlo. Las letras
+          son las mismas de la columna CONJUNTO PAÑOS y de la etiqueta del paño. */}
+      {esDim && panos.length > 0 && (
+        <div className="border-t border-border pt-4">
+          <PanosDelRollo
+            panos={panos}
+            cliente={otCargada?.datosGenerales?.cliente}
+            numeroOT={otCargada?.datosGenerales?.ot || ot}
+            nota="Mismo formato de la pizarra: cada tela con su color, y por cortina el ancho arriba, el alto a la izquierda y la ubicación en su cajón. La letra es la misma de CONJUNTO PAÑOS y de la etiqueta del paño; el corte punteado marca por dónde parte."
+          />
+        </div>
       )}
     </div>
   );
