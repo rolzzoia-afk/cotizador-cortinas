@@ -65,7 +65,7 @@ function cambiarTipo(tipo: CantidadReceta['tipo']): CantidadReceta {
   }
 }
 
-function EditorCantidad({ q, onChange }: { q: CantidadReceta; onChange: (q: CantidadReceta) => void }) {
+export function EditorCantidad({ q, onChange }: { q: CantidadReceta; onChange: (q: CantidadReceta) => void }) {
   const num = (v: string) => (v === '' ? undefined : Number(v));
   const filtro = 'filtroAncho' in q ? q.filtroAncho : undefined;
   const aceptaFiltro = q.tipo === 'porCortina' || q.tipo === 'sumaAnchos';

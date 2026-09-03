@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REGLAS_MECANISMO,
+  categoriaLlevaCadenaMando,
   categoriaLlevaCadenaRoller,
   categoriaRequiereMecanismo,
   kitTraeCadenaIncorporada,
@@ -246,5 +247,23 @@ describe('categoriaLlevaCadenaRoller', () => {
     expect(categoriaLlevaCadenaRoller('')).toBe(true);
     expect(categoriaLlevaCadenaRoller(undefined)).toBe(true);
     expect(categoriaLlevaCadenaRoller(null)).toBe(true);
+  });
+});
+
+describe('categoriaLlevaCadenaMando — el gate del botón de cadena metálica', () => {
+  it('roller, dúo y VERTICAL sí: todas se accionan con cadena', () => {
+    expect(categoriaLlevaCadenaMando('ROL')).toBe(true);
+    expect(categoriaLlevaCadenaMando('DUO_MANUAL_38mm')).toBe(true);
+    // A diferencia de `categoriaLlevaCadenaRoller`, la vertical entra: su
+    // cadena es otra (CAD04/CAD06), pero es cadena y se puede pedir metálica.
+    expect(categoriaLlevaCadenaMando('VERTICAL')).toBe(true);
+    expect(categoriaLlevaCadenaMando('')).toBe(true);
+  });
+
+  it('beeblack, pletina y MOTOR no llevan ninguna', () => {
+    expect(categoriaLlevaCadenaMando('BEEBLACK')).toBe(false);
+    expect(categoriaLlevaCadenaMando('PLETINA_ROLLER_V')).toBe(false);
+    expect(categoriaLlevaCadenaMando('ROL_MOTOR')).toBe(false);
+    expect(categoriaLlevaCadenaMando('DUO_MOTOR_45mm')).toBe(false);
   });
 });

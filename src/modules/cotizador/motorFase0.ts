@@ -32,10 +32,12 @@ import {
   SUFIJO_RECETA_2T,
   SUFIJO_RECETA_B,
   SUFIJO_RECETA_INV,
+  SUFIJO_RECETA_MET,
   claveReceta,
   claveReceta2T,
   claveRecetaB,
   claveRecetaInv,
+  conCadenaMetalica,
   explicarCantidad,
   insumosDeSistema,
   lamasPorPasada,
@@ -48,6 +50,7 @@ import {
   sistemaCategoriaB,
   sistemaDeFila,
   sistemaInvertida,
+  tieneCadenaMando,
   tieneReceta2T,
   type CantidadReceta,
   type FiltroAncho,
@@ -116,6 +119,14 @@ export type FilaFase0 = {
    * tres del beeblack. Un dual roller marcado así se cotiza como siempre.
    */
   segundaTela?: boolean;
+  /**
+   * Cotizar esta cortina con CADENA METÁLICA (el botón de Fase 1). Cambia UNA
+   * línea de la receta —la cadena de mando— por `reglas.cadenaMetalica`
+   * (`CAD 13`, que se cobra POR METRO: 2 × el alto), en un panel propio
+   * `cod|MET`. Las familias cuya receta no lleva cadena (beeblack, pletina) no
+   * ganan panel: marcar el flag ahí no cambia nada.
+   */
+  cadenaMetalica?: boolean;
 };
 
 /**
@@ -123,11 +134,16 @@ export type FilaFase0 = {
  * (corte invertido) o `cod|B|INV` (las dos). Coinciden con los de las recetas
  * (`BLACKOUT_D|B`, `BLACKOUT_D|INV`), pero un panel `cod|B|INV` usa la receta
  * B: la copia B del Excel no tiene panel de invertidas.
+ *
+ * El orden es fijo: `cod|B|INV|2T|MET`, con la cadena metálica SIEMPRE al final
+ * (es lo último que se le hace a la receta ya resuelta).
  */
 export const SUFIJO_PANEL_B = SUFIJO_RECETA_B;
 export const SUFIJO_PANEL_INV = SUFIJO_RECETA_INV;
 /** Panel de la 2.ª tela de un doble (`BEE_BK|2T`): la que no paga el riel. */
 export const SUFIJO_PANEL_2T = SUFIJO_RECETA_2T;
+/** Panel de la cortina con cadena metálica (`BLACKOUT_D|MET`). */
+export const SUFIJO_PANEL_MET = SUFIJO_RECETA_MET;
 
 export type LineaResultado = {
   codInt: string;
@@ -139,6 +155,8 @@ export type LineaResultado = {
   invertida: boolean;
   /** 2.ª tela de un doble: se cobró sin el riel, que pagó la primera (panel `…|2T`). */
   segundaTela: boolean;
+  /** Se cobró con cadena metálica en vez de la plástica de la receta (panel `…|MET`). */
+  cadenaMetalica: boolean;
   ancho: number;
   alto: number;
   cantidad: number;
@@ -185,6 +203,11 @@ export type ResultadoFamilia = {
    * primera, con la receta `|2T` (sin el riel, que ya se cobró en la primera).
    */
   segundaTela: boolean;
+  /**
+   * Panel de la cortina con CADENA METÁLICA: la receta de la familia con su
+   * cadena de mando cambiada por `reglas.cadenaMetalica` (`CAD 13`, por metro).
+   */
+  cadenaMetalica: boolean;
   /**
    * Cortinas con las que se calculó la TARIFA: TODAS las de la familia,
    * configuradas como este panel (como si todas fueran B, o invertidas, o
@@ -394,7 +417,7 @@ function cantidadDeLinea(
  * cálculo anterior hasta el último decimal.
  */
 export function materialesFamilia(
-  receta: LineaReceta[],
+  receta: readonly LineaReceta[],
   piezas: PiezaMaterial[],
   insumos: ReglasPrecios['insumos'],
   margenInsumo: number = MARGEN_INSUMO,
@@ -598,6 +621,13 @@ export const lamasDeCortina = (ancho: number, telaVertical: TelaVertical): numbe
 // - Beeblack: arquetipo vacío A PROPÓSITO → el MAX de la familia, que es el
 //   `MAXIFS` literal del Excel.
 //
+// La tela de referencia (arquetipo o base vertical) es un PISO, no un techo:
+// si alguna tela de la familia vale MÁS, manda esa. Antes la referencia cortaba
+// la cascada, así que una tela nueva y cara se cobraba al precio del arquetipo
+// —el dueño lo detectó poniendo una tela a $100.000 que la cotización ignoró—.
+// La familia solo puede SUBIR con esta regla: si la referencia sigue siendo la
+// más cara, el precio es exactamente el de antes.
+//
 // Si la tela de referencia no está en el catálogo o vale 0, se cae al MÁXIMO de
 // la familia. Antes la rama vertical retornaba 0 y la familia terminaba
 // cobrando la primera tela que hubiera creado el grupo, así que el precio
@@ -626,16 +656,13 @@ export function precioMlPorCod(
   if (typeof tecleado === 'number' && tecleado > 0) {
     return { precio: Math.round(tecleado), arquetipo: '', motivo: 'sistema' };
   }
-  const baseV = reglas.baseVertical[cod];
-  if (baseV) {
-    const pBase = Number(catalogo[baseV]?.precio) || 0;
-    if (pBase > 0) return { precio: Math.round(pBase), arquetipo: baseV, motivo: 'base' };
-  }
-  const arq = reglas.arquetipos[cod];
-  if (arq) {
-    const pArq = Number(catalogo[arq]?.precio) || 0;
-    if (pArq > 0) return { precio: Math.round(pArq), arquetipo: arq, motivo: 'arquetipo' };
-  }
+  // El MÁXIMO de la familia se calcula SIEMPRE, aunque haya tela de
+  // referencia: la referencia es un PISO, no un techo. Una tela más cara que
+  // la de referencia tiene que subir la familia —es la regla que el negocio
+  // enuncia («se cobra la tela con más valor»)— y hasta ahora no lo hacía:
+  // la referencia cortaba la cascada y una tela nueva y cara se cobraba al
+  // precio del arquetipo. Al revés no pasa nada: si la referencia sigue siendo
+  // la más cara, el precio no se mueve, así que ninguna cotización BAJA.
   let max = 0;
   let codIntMax = '';
   for (const k of Object.keys(catalogo)) {
@@ -645,11 +672,25 @@ export function precioMlPorCod(
       if (precio > max) { max = precio; codIntMax = k; }
     }
   }
-  return {
-    precio: Math.round(max),
-    arquetipo: codIntMax,
-    motivo: max > 0 ? 'maximo' : 'sinPrecio',
+
+  const referencia = (clave: string | undefined, motivo: MotivoPrecioMl) => {
+    if (!clave) return null;
+    const p = Number(catalogo[clave]?.precio) || 0;
+    if (p <= 0) return null;
+    // Gana la más cara de las dos, y el desglose dice cuál fue.
+    return max > p
+      ? { precio: Math.round(max), arquetipo: codIntMax, motivo: 'maximo' as const }
+      : { precio: Math.round(p), arquetipo: clave, motivo };
   };
+
+  return (
+    referencia(reglas.baseVertical[cod], 'base') ??
+    referencia(reglas.arquetipos[cod], 'arquetipo') ?? {
+      precio: Math.round(max),
+      arquetipo: codIntMax,
+      motivo: max > 0 ? 'maximo' : 'sinPrecio',
+    }
+  );
 }
 
 // ── Cálculo principal ─────────────────────────────────────────────────
@@ -697,6 +738,8 @@ export function cotizarFase0(
     sistemaInv: boolean;
     /** 2.ª tela de un doble Y su familia cobra distinto la segunda (tiene receta `|2T`). */
     segundaTela: boolean;
+    /** Con cadena metálica Y su receta lleva cadena de mando (si no, no cambia nada). */
+    cadenaMetalica: boolean;
     sistema?: SistemaPrecio;
   };
   type FilaResuelta = {
@@ -716,6 +759,8 @@ export function cotizarFase0(
     sistemaInv: boolean;
     /** Panel de la 2.ª tela de un doble: la receta `|2T`, sin el riel. */
     segundaTela: boolean;
+    /** Panel con cadena metálica: la receta con `CAD 13` en vez de la plástica. */
+    cadenaMetalica: boolean;
     esDuo: boolean;
     esVertical: boolean;
     anchoRollo: number;
@@ -756,27 +801,67 @@ export function cotizarFase0(
   // La 2.ª tela de un doble hace lo mismo con `|2T`, pero SOLO si su familia
   // tiene esa receta: si no la tiene, mandarla a un panel propio partiría la
   // familia en dos paneles idénticos y no cambiaría un peso.
+  //
+  // La CADENA METÁLICA es la última capa: se le aplica a la receta que quedó
+  // (`|2T`, `|B`, `|INV` o la normal) cambiándole la línea de la cadena, así
+  // que su sufijo va siempre al final. Una familia cuya receta no lleva cadena
+  // —el beeblack, la pletina— no gana panel: partirla en dos daría el mismo
+  // precio dos veces.
+  const recetaBaseDe = (
+    cod: string,
+    esVertical: boolean,
+    c: { segundaTela: boolean; lineaB: boolean; sistemaInv: boolean },
+  ): { clave: string; lineas: LineaReceta[] } =>
+    c.segundaTela
+      ? {
+          clave: claveReceta2T(cod, esVertical, reglas.recetas),
+          lineas: resolverReceta2T(cod, esVertical, reglas.recetas),
+        }
+      : c.lineaB
+        ? {
+            clave: claveRecetaB(cod, esVertical, reglas.recetas),
+            lineas: resolverRecetaB(cod, esVertical, reglas.recetas),
+          }
+        : c.sistemaInv
+          ? {
+              clave: claveRecetaInv(cod, esVertical, reglas.recetas),
+              lineas: resolverRecetaInv(cod, esVertical, reglas.recetas),
+            }
+          : {
+              clave: claveReceta(cod, esVertical, reglas.recetas),
+              lineas: resolverReceta(cod, esVertical, reglas.recetas),
+            };
+
   const configDe = (
     cod: string,
     lineaB: boolean,
     invertida: boolean,
     esVertical: boolean,
     segundaTela: boolean,
+    cadenaMetalica: boolean,
   ): Config => {
     const sistema = sistemaDeFila(cod, lineaB, reglas.sistemas, invertida);
     const enB = lineaB && !!sistema && sistema === sistemaCategoriaB(reglas.sistemas);
     const sistemaInv = invertida && !!sistema && sistema === sistemaInvertida(reglas.sistemas);
     const dosTelas = segundaTela && tieneReceta2T(cod, esVertical, reglas.recetas);
+    const base = recetaBaseDe(cod, esVertical, {
+      segundaTela: dosTelas,
+      lineaB: enB,
+      sistemaInv,
+    });
+    const conMetalica = cadenaMetalica && tieneCadenaMando(base.lineas);
     return {
       clave:
         `${cod}` +
         `${enB ? SUFIJO_PANEL_B : ''}` +
         `${invertida ? SUFIJO_PANEL_INV : ''}` +
-        `${dosTelas ? SUFIJO_PANEL_2T : ''}`,
+        `${dosTelas ? SUFIJO_PANEL_2T : ''}` +
+        `${conMetalica ? SUFIJO_PANEL_MET : ''}`,
       lineaB: enB,
       invertida,
       sistemaInv,
       segundaTela: dosTelas,
+      cadenaMetalica: conMetalica,
       sistema,
     };
   };
@@ -820,6 +905,9 @@ export function cotizarFase0(
         !!f.invertida && !esVertical,
         esVertical,
         !!f.segundaTela,
+        // Sin guarda de vertical: su receta también lleva cadena de mando
+        // (`CAD 02`), y la cadena INFERIOR (`VER 15`) no se toca.
+        !!f.cadenaMetalica,
       ),
     };
   });
@@ -894,6 +982,7 @@ export function cotizarFase0(
         invertida: c.invertida,
         sistemaInv: c.sistemaInv,
         segundaTela: c.segundaTela,
+        cadenaMetalica: c.cadenaMetalica,
         esDuo,
         esVertical,
         sistema: c.sistema,
@@ -949,20 +1038,13 @@ export function cotizarFase0(
     // La 2.ª tela de un doble manda sobre las demás variantes: su receta ya es
     // la de su familia sin el riel, y hoy solo la tienen las tres del
     // beeblack, que no van ni a categoría B ni al sistema invertida.
-    const claveRecetaUsada = g.segundaTela
-      ? claveReceta2T(cod, g.esVertical, reglas.recetas)
-      : g.lineaB
-        ? claveRecetaB(cod, g.esVertical, reglas.recetas)
-        : g.sistemaInv
-          ? claveRecetaInv(cod, g.esVertical, reglas.recetas)
-          : claveReceta(cod, g.esVertical, reglas.recetas);
-    const receta = g.segundaTela
-      ? resolverReceta2T(cod, g.esVertical, reglas.recetas)
-      : g.lineaB
-        ? resolverRecetaB(cod, g.esVertical, reglas.recetas)
-        : g.sistemaInv
-          ? resolverRecetaInv(cod, g.esVertical, reglas.recetas)
-          : resolverReceta(cod, g.esVertical, reglas.recetas);
+    const base = recetaBaseDe(cod, g.esVertical, g);
+    // La cadena metálica se le aplica ENCIMA a la receta que quedó: cambia la
+    // línea de la cadena de mando por `CAD 13` (por metro) y deja el resto.
+    const claveRecetaUsada = base.clave + (g.cadenaMetalica ? SUFIJO_RECETA_MET : '');
+    const receta = g.cadenaMetalica
+      ? conCadenaMetalica(base.lineas, reglas.cadenaMetalica)
+      : base.lineas;
     const materiales = materialesFamilia(
       receta,
       g.piezas,
@@ -989,6 +1071,7 @@ export function cotizarFase0(
       invertida: g.invertida,
       sistemaInvertida: g.sistemaInv,
       segundaTela: g.segundaTela,
+      cadenaMetalica: g.cadenaMetalica,
       piezas: g.piezas.length,
       m2Total,
       piezasCobradas: g.piezasCobradas,
@@ -1058,6 +1141,7 @@ export function cotizarFase0(
       lineaB: g?.lineaB ?? false,
       invertida: g?.invertida ?? false,
       segundaTela: g?.segundaTela ?? false,
+      cadenaMetalica: g?.cadenaMetalica ?? false,
       ancho: f.ancho,
       alto: f.alto,
       cantidad: f.cantidad,

@@ -698,6 +698,23 @@ export function categoriaLlevaCadenaRoller(
   );
 }
 
+/**
+ * ¿La categoría lleva CADENA DE MANDO, sea roller o vertical?
+ *
+ * Es el gate del botón «cadena metálica» de Fase 1 y del checkbox de Fase 2:
+ * las verticales también se accionan con cadena (la suya, CAD04/CAD06), así que
+ * entran; las que no llevan ninguna quedan fuera — beeblack (manilla), pletina
+ * (paño fijo) y las categorías vendidas con MOTOR, donde la cadena se suprime.
+ */
+export function categoriaLlevaCadenaMando(
+  categoria: string | null | undefined,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  const c = categoriaEfectiva(categoria, tipos).toUpperCase();
+  if (c.includes('MOTOR')) return false;
+  return categoriaLlevaCadenaRoller(categoria, tipos) || esCategoriaVertical(categoria);
+}
+
 export function categoriaRequiereMecanismo(
   categoria: string,
   reglas: ReglasMecanismo = REGLAS_MECANISMO,

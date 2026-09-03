@@ -1105,6 +1105,108 @@ describe('motorFase0 — categoría B (COTJS-10452-1, CARLOS)', () => {
 // (dueño, 2026-08-21: «siguen cambiando los precios de otras cortinas que no
 // son la que estoy apretando los botones»).
 // ─────────────────────────────────────────────────────────────────────
+// CADENA METÁLICA — el tercer botón de la fila. La receta de la familia con su
+// cadena de mando cambiada por CAD 13, que se cobra POR METRO (725,9) y no por
+// cadena entera como la plástica (1.190): 2 × el alto, porque el lazo mide el
+// doble de la caída (dueño, 2026-09-03).
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — cadena metálica (CAD 13)', () => {
+  const FILA = { codInt: 'BK 18', ancho: 1.5, alto: 2.3, cantidad: 1 };
+  const conMet = (f = FILA) => cotizarFase0([{ ...f, cadenaMetalica: true }], CAT, AR);
+  const sinMet = (f = FILA) => cotizarFase0([f], CAT, AR);
+  const insumos = (r: ReturnType<typeof cotizarFase0>) =>
+    r.familias[0].materiales.map((m) => m.insumo);
+
+  it('cambia SOLO la línea de la cadena y sube el valor unitario', () => {
+    const a = sinMet();
+    const b = conMet();
+    expect(a.familias[0].clave).toBe('BLACKOUT_D');
+    expect(b.familias[0].clave).toBe('BLACKOUT_D|MET');
+    expect(b.familias[0].claveReceta).toBe('BLACKOUT_D|MET');
+    expect(insumos(b)).toContain('CAD 13');
+    expect(insumos(b)).not.toContain('CAD 03');
+    // Misma receta, misma cantidad de líneas y en el mismo orden salvo esa.
+    expect(insumos(b)).toHaveLength(insumos(a).length);
+    expect(insumos(b).indexOf('CAD 13')).toBe(insumos(a).indexOf('CAD 03'));
+    // La tela y los m² no se mueven: la cortina vendida es la misma.
+    expect(b.familias[0].metrosTela).toBeCloseTo(a.familias[0].metrosTela, 6);
+    expect(b.lineas[0].m2).toBeCloseTo(a.lineas[0].m2, 6);
+    expect(b.lineas[0].valorUnit).toBeGreaterThan(a.lineas[0].valorUnit);
+  });
+
+  it('se cobra por metro: 2 × el alto vendido', () => {
+    const cad = conMet().familias[0].materiales.find((m) => m.insumo === 'CAD 13')!;
+    expect(cad.cantidad).toBeCloseTo(4.6, 6);
+    // 725,9 ÷ 0,65 = 1.116,77 el metro (la plástica entera son 1.831).
+    expect(cad.total).toBeCloseTo((725.9 / 0.65) * 4.6, 4);
+  });
+
+  it('la categoría B cambia SU cadena (CAD 05), no la del panel A', () => {
+    const r = cotizarFase0([{ ...FILA, lineaB: true, cadenaMetalica: true }], CAT, AR);
+    expect(r.familias[0].clave).toBe('BLACKOUT_D|B|MET');
+    expect(insumos(r)).toContain('CAD 13');
+    expect(insumos(r)).not.toContain('CAD 05');
+  });
+
+  it('la invertida conserva su herraje propio (E 47 + MEC 28)', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'BK 18', ancho: 3.0, alto: 2.0, cantidad: 1, invertida: true, cadenaMetalica: true }],
+      CAT,
+      AR,
+    );
+    expect(r.familias[0].clave).toBe('BLACKOUT_D|INV|MET');
+    expect(insumos(r)).toContain('E 47');
+    expect(insumos(r)).toContain('MEC 28');
+    expect(insumos(r)).toContain('CAD 13');
+    expect(insumos(r)).not.toContain('CAD 03');
+  });
+
+  it('el dúo cambia su CAD 02', () => {
+    const r = cotizarFase0([{ codInt: 'DU 28', ancho: 1.5, alto: 2.3, cantidad: 1, cadenaMetalica: true }], CAT, AR);
+    expect(r.familias[0].clave).toBe('DUOBK_P|MET');
+    expect(insumos(r)).toContain('CAD 13');
+    expect(insumos(r)).not.toContain('CAD 02');
+  });
+
+  it('la vertical cambia su cadena de mando y CONSERVA la inferior (VER 15)', () => {
+    const r = cotizarFase0([{ codInt: 'SC 34-V', ancho: 1.5, alto: 2.3, cantidad: 1, cadenaMetalica: true }], CAT, AR);
+    expect(insumos(r)).toContain('CAD 13');
+    expect(insumos(r)).not.toContain('CAD 02');
+    expect(insumos(r)).toContain('VER 15');
+  });
+
+  it('el beeblack no tiene cadena: marcarlo no gana panel ni cambia un peso', () => {
+    const fila = { codInt: 'BEE-BK', ancho: 3, alto: 3, cantidad: 1 };
+    const a = cotizarFase0([fila], CAT_BB, AR_BB);
+    const b = cotizarFase0([{ ...fila, cadenaMetalica: true }], CAT_BB, AR_BB);
+    expect(b.familias[0].clave).toBe(a.familias[0].clave);
+    expect(b.familias[0].cadenaMetalica).toBe(false);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+  });
+
+  it('sin el flag (o en false) el resultado es idéntico al de siempre (regresión)', () => {
+    const filas = [
+      { codInt: 'SC 34', ancho: 1.124, alto: 1.3, cantidad: 1 },
+      { codInt: 'BK 18', ancho: 0.992, alto: 1.31, cantidad: 1 },
+    ];
+    const a = cotizarFase0(filas, CAT, AR);
+    const b = cotizarFase0(filas.map((f) => ({ ...f, cadenaMetalica: false })), CAT, AR);
+    expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
+    expect(b.familias.map((f) => f.clave)).toEqual(a.familias.map((f) => f.clave));
+  });
+
+  it('la regla editada manda: con «por cortina» cobra una, no metros', () => {
+    const reglas: ReglasPrecios = {
+      ...REGLAS_PRECIOS_DEFAULT,
+      cadenaMetalica: { insumo: 'CAD 13', precio: 'venta', cantidad: { tipo: 'porCortina' } },
+    };
+    const r = cotizarFase0([{ ...FILA, cadenaMetalica: true }], CAT, AR, [], PARAMETROS_DEFAULT, false, false, reglas);
+    const cad = r.familias[0].materiales.find((m) => m.insumo === 'CAD 13')!;
+    expect(cad.cantidad).toBe(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixto)', () => {
   // La grilla del reclamo: cuatro blackout delux de la misma tela.
   const filas = [
@@ -1114,8 +1216,14 @@ describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixt
     { codInt: 'BK 18', ancho: 2.4, alto: 2.3, cantidad: 1 },
   ];
   const base = cotizarFase0(filas, CAT, AR);
-  const con = (patch: Partial<(typeof filas)[number]> & { lineaB?: boolean; invertida?: boolean }, i = 0) =>
-    cotizarFase0(filas.map((f, k) => (k === i ? { ...f, ...patch } : f)), CAT, AR);
+  const con = (
+    patch: Partial<(typeof filas)[number]> & {
+      lineaB?: boolean;
+      invertida?: boolean;
+      cadenaMetalica?: boolean;
+    },
+    i = 0,
+  ) => cotizarFase0(filas.map((f, k) => (k === i ? { ...f, ...patch } : f)), CAT, AR);
   const valores = (r: ReturnType<typeof cotizarFase0>) => r.lineas.map((l) => l.valorUnit);
   const lasOtras = (r: ReturnType<typeof cotizarFase0>) => valores(r).slice(1);
 
@@ -1197,6 +1305,24 @@ describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixt
     expect(mixta.lineas[0].valorUnit).toBeCloseTo(derechas.lineas[0].valorUnit, 6);
     expect(mixta.lineas[1].valorUnit).toBeCloseTo(todasInv.lineas[1].valorUnit, 6);
     expect(mixta.familias.map((f) => f.clave).sort()).toEqual(['BLACKOUT_S', 'BLACKOUT_S|INV']);
+  });
+
+  it('la cadena metálica de la primera no mueve a las otras tres', () => {
+    const r = con({ cadenaMetalica: true });
+    expect(lasOtras(r)).toEqual(lasOtras(base));
+    expect(valores(r)[0]).toBeGreaterThan(valores(base)[0]);
+    expect(r.lineas[0].clave).toBe('BLACKOUT_D|MET');
+    expect(r.lineas[0].cadenaMetalica).toBe(true);
+    expect(r.lineas.slice(1).every((l) => l.clave === 'BLACKOUT_D')).toBe(true);
+  });
+
+  it('el panel |MET se arma con las cuatro y se cobra a una (como el B)', () => {
+    const r = con({ cadenaMetalica: true });
+    const met = r.familias.find((f) => f.clave === 'BLACKOUT_D|MET')!;
+    expect(met.piezas).toBe(4);
+    expect(met.piezasCobradas).toBe(1);
+    expect(met.cadenaMetalica).toBe(true);
+    expect(met.m2Cobrados).toBeCloseTo(r.lineas[0].m2, 6);
   });
 
   it('una invertida forzada (más ancha que el rollo) no rompe el panel de las derechas', () => {

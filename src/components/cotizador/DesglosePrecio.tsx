@@ -39,13 +39,14 @@ export function nombresDePiezas(
  * panel: es lo que los botones de la grilla deciden fila por fila.
  */
 export function comoSiFueran(
-  f: Pick<ResultadoFamilia, 'lineaB' | 'invertida' | 'segundaTela'>,
+  f: Pick<ResultadoFamilia, 'lineaB' | 'invertida' | 'segundaTela' | 'cadenaMetalica'>,
 ): string {
-  if (f.segundaTela) return 'la 2.ª tela de un doble';
-  if (f.lineaB && f.invertida) return 'de categoría B e invertidas';
-  if (f.lineaB) return 'de categoría B';
-  if (f.invertida) return 'invertidas';
-  return 'de categoría A y derechas';
+  const conCadena = (txt: string) => (f.cadenaMetalica ? `${txt}, con cadena metálica` : txt);
+  if (f.segundaTela) return conCadena('la 2.ª tela de un doble');
+  if (f.lineaB && f.invertida) return conCadena('de categoría B e invertidas');
+  if (f.lineaB) return conCadena('de categoría B');
+  if (f.invertida) return conCadena('invertidas');
+  return conCadena('de categoría A y derechas');
 }
 
 /** De dónde salió el $/m de la familia, en castellano. */
@@ -58,7 +59,12 @@ export function origenDelPrecioMl(f: ResultadoFamilia): string {
     case 'arquetipo':
       return `de ${f.arquetipoCodInt}, la tela de referencia de la familia`;
     case 'maximo':
-      return 'la tela MÁS CARA de la familia (la familia no tiene tela de referencia)';
+      // Gana el máximo tanto cuando la familia no tiene tela de referencia
+      // (beeblack) como cuando una tela supera a la referencia: la referencia
+      // es un piso, no un techo.
+      return f.arquetipoCodInt
+        ? `de ${f.arquetipoCodInt}, la tela MÁS CARA de la familia`
+        : 'la tela MÁS CARA de la familia';
     default:
       return 'ninguna tela de la familia tiene precio: la tela se cotiza en $0';
   }
@@ -102,6 +108,12 @@ export function PanelFamilia({ f, piezas }: { f: ResultadoFamilia; piezas: strin
             {f.sistemaInvertida
               ? 'Invertida: tela a lo largo del rollo (ancho + extra), tubo 63 mm y kit MEC 28, mano de obra y traslado propios'
               : 'Invertida: tela a lo largo del rollo (ancho + extra), un tiro por cortina; herraje de siempre'}
+          </span>
+        )}
+        {f.cadenaMetalica && (
+          <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[0.65rem] text-cyan-700">
+            Cadena metálica: se cobra por metro en vez de la cadena plástica de la receta (se edita
+            en Admin → Precios → Recetas y sistemas)
           </span>
         )}
         <span className="text-xs text-muted-foreground">
