@@ -2,10 +2,14 @@
 // matching fuzzy de insumos.
 
 import {
+  COD_CADENA_METALICA,
+  COLOR_CADENA_METALICA,
   TOPES_POR_CADENA,
   codCadenaVertical,
   codTopeAuto,
   colorCadenaVertical,
+  llevaCadenaMetalica,
+  metrosCadenaMetalica,
   resolverCodCadenaBom,
   textoTopeInventario,
 } from '@/modules/cotizador/cadenas';
@@ -437,7 +441,28 @@ export function extraerInsumosBOM(
     // La VERTICAL lleva SIEMPRE la cadena de 3 m por color de accesorios
     // (CAD04 negro / CAD06 resto), calculada — nunca la que quedó guardada en
     // el paño. El BEEBLACK no lleva cadena. Espejo de `calcularBOM`.
-    if (esCategoriaVertical(categoria)) {
+    // La cadena METÁLICA (CAD13) se corta de un rollo: la cantidad son METROS
+    // (2 × el alto). Va antes que todo lo demás, roller o vertical.
+    if (llevaCadenaMetalica(p) && !esCategoriaBeeblack(categoria)) {
+      const metros = metrosCadenaMetalica(parseFloat(String(p.alto)) || 0);
+      if (metros > 0) {
+        add(
+          `CAD|${COD_CADENA_METALICA}|${COLOR_CADENA_METALICA}`,
+          'CADENA',
+          'Cadena metálica (del rollo, cortar a medida)',
+          COD_CADENA_METALICA,
+          COLOR_CADENA_METALICA,
+          metros,
+          'm',
+          buscarUbicacion(COD_CADENA_METALICA),
+        );
+      }
+      const pesoCodMet = String(p.codPeso || '').trim();
+      const pesoColorMet = String(p.colorPeso || colorAcc || 'BCO');
+      if (!esCategoriaVertical(categoria) && (pesoCodMet || pesoColorMet)) {
+        add(`PESO|${pesoCodMet || pesoColorMet}`, 'CADENA', 'Peso de cadena', pesoCodMet, pesoColorMet, 1, 'unid.', '');
+      }
+    } else if (esCategoriaVertical(categoria)) {
       const cadVert = codCadenaVertical(colorAcc);
       const colVert = colorCadenaVertical(colorAcc);
       add(`CAD|${cadVert}|${colVert}`, 'CADENA', 'Cadena 3mts', cadVert, colVert, 1, 'unid.', '');

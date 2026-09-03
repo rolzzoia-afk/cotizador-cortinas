@@ -96,29 +96,38 @@ export default function FirmaView({
         const ins = buscarInsumoMatchBOM(item, insumos);
         if (!ins) continue;
 
-        const { data: insActual } = await supabase
-          .from('insumos')
-          .select('stock_mp,stock_liberado')
-          .eq('empresa_id', empresaId)
-          .eq('cod', ins.cod!)
-          .single();
-        if (!insActual) continue;
+        // Lo que se corta de un ROLLO (hoy la cadena metálica) se pide en
+        // METROS, pero el stock de ese código se cuenta en ROLLOS y la columna
+        // es entera: restarle 4,6 lo dejaría mal. Se registra el movimiento
+        // —para que quede la trazabilidad del consumo— y el stock no se toca;
+        // los rollos se ajustan en el inventario físico.
+        const porMetro = (item.unidad || '').toLowerCase() === 'm';
 
-        const libActual = Number(insActual.stock_liberado) || 0;
-        const mpActual = Number(insActual.stock_mp) || 0;
-        let resta = cnt.pickeado;
-        const descLib = Math.min(resta, libActual);
-        resta -= descLib;
-        const descMp = Math.min(resta, mpActual);
+        if (!porMetro) {
+          const { data: insActual } = await supabase
+            .from('insumos')
+            .select('stock_mp,stock_liberado')
+            .eq('empresa_id', empresaId)
+            .eq('cod', ins.cod!)
+            .single();
+          if (!insActual) continue;
 
-        await supabase
-          .from('insumos')
-          .update({
-            stock_mp: mpActual - descMp,
-            stock_liberado: libActual - descLib,
-          })
-          .eq('empresa_id', empresaId)
-          .eq('cod', ins.cod!);
+          const libActual = Number(insActual.stock_liberado) || 0;
+          const mpActual = Number(insActual.stock_mp) || 0;
+          let resta = cnt.pickeado;
+          const descLib = Math.min(resta, libActual);
+          resta -= descLib;
+          const descMp = Math.min(resta, mpActual);
+
+          await supabase
+            .from('insumos')
+            .update({
+              stock_mp: mpActual - descMp,
+              stock_liberado: libActual - descLib,
+            })
+            .eq('empresa_id', empresaId)
+            .eq('cod', ins.cod!);
+        }
 
         await supabase.from('movimientos_insumos').insert({
           empresa_id: empresaId,
@@ -128,10 +137,13 @@ export default function FirmaView({
           codigo: ins.cod!,
           producto: ins.nemotecnico || ins.descriptor_proveedor || '',
           almacen: 'MP',
-          cantidad: cnt.pickeado,
+          // La columna es entera: los metros se redondean hacia arriba.
+          cantidad: porMetro ? Math.ceil(cnt.pickeado) : cnt.pickeado,
           ot: ot.numero_ot || ot.id.slice(-6),
           responsable_entrega: nombre.trim(),
-          bitacora: `Despacho OT ${ot.numero_ot || ot.id.slice(-6)}`,
+          bitacora: porMetro
+            ? `Despacho OT ${ot.numero_ot || ot.id.slice(-6)} · ${cnt.pickeado.toLocaleString('es-CL')} m cortados del rollo (el stock en rollos no se descuenta)`
+            : `Despacho OT ${ot.numero_ot || ot.id.slice(-6)}`,
         });
       }
 

@@ -1,8 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   COD_PESO_AUTO,
+  codCadenaDelPano,
   codPesoAuto,
+  esCadenaMetalica,
   esCadenaRoller,
+  llevaCadenaMetalica,
+  metrosCadenaMetalica,
+  patchCadenaMetalica,
+  textoCadenaMetalica,
   codCadenaVertical,
   colorCadenaVertical,
   largoCadenaAuto,
@@ -478,5 +484,83 @@ describe('topes: identificación y selector', () => {
     // Sin catálogo cargado cae a la etiqueta conocida, nunca al código pelado.
     expect(textoTopeInventario('TOP06')).toBe('TOPES METALICOS - ROLZZO');
     expect(textoTopeInventario('')).toBe('');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// CADENA METÁLICA (CAD13): el rollo que el taller corta a medida. No entra en
+// la selección automática por largo + color; la manda el botón de Fase 1.
+// ─────────────────────────────────────────────────────────────────────
+describe('cadena metálica', () => {
+  const CON_METALICA: CadenaInsumo[] = [
+    ...INV_AUTO,
+    { cod: 'CAD13', nemotecnico: 'CADENA ROLLO METALICA', color: 'METAL', status: 'AGOTADO' },
+  ];
+
+  it('reconoce el código con y sin espacio, y no confunde a las plásticas', () => {
+    expect(esCadenaMetalica('CAD13')).toBe(true);
+    expect(esCadenaMetalica('CAD 13')).toBe(true);
+    expect(esCadenaMetalica('cad13')).toBe(true);
+    expect(esCadenaMetalica('CAD03')).toBe(false);
+    expect(esCadenaMetalica('')).toBe(false);
+    expect(esCadenaMetalica(undefined)).toBe(false);
+  });
+
+  it('el flag manda, pero un CAD13 elegido a mano también cuenta', () => {
+    expect(llevaCadenaMetalica({ cadenaMetalica: true })).toBe(true);
+    expect(llevaCadenaMetalica({ codCadena: 'CAD13' })).toBe(true);
+    expect(llevaCadenaMetalica({ cadenaMetalica: false, codCadena: 'CAD06' })).toBe(false);
+    expect(llevaCadenaMetalica({})).toBe(false);
+    expect(llevaCadenaMetalica(null)).toBe(false);
+  });
+
+  it('se corta a 2 × el alto (la cadena hace un lazo)', () => {
+    expect(metrosCadenaMetalica(2.3)).toBe(4.6);
+    expect(metrosCadenaMetalica(1.75)).toBe(3.5);
+    expect(metrosCadenaMetalica(0)).toBe(0);
+    // Con otro factor (si el dueño lo cambia en Admin) sigue la misma cuenta.
+    expect(metrosCadenaMetalica(2, 3)).toBe(6);
+  });
+
+  it('se ofrece en el selector AUNQUE esté agotada (su stock son rollos)', () => {
+    const cods = cadenasRoller(CON_METALICA).map((c) => c.cod);
+    expect(cods).toContain('CAD13');
+    // La agotada plástica sigue escondida: ahí el «agotado» sí significa algo.
+    expect(cods).not.toContain('CAD18');
+  });
+
+  it('se puede esconder declarándola oculta en el catálogo técnico', () => {
+    const reglas: ReglasCadena = {
+      ...REGLAS_CADENA,
+      cadenas: [{ codigo: 'CAD13', largo: 'ROLLO', color: 'MET', estado: 'oculto' }],
+    };
+    expect(cadenasRoller(CON_METALICA, {}, reglas).map((c) => c.cod)).not.toContain('CAD13');
+  });
+
+  it('la cadena de un paño: la metálica manda sobre la automática por alto', () => {
+    const conFlag = codCadenaDelPano({ cadenaMetalica: true }, 2.3, 'NEG', 'ROL', CON_METALICA);
+    expect(conFlag).toBe('CAD13');
+    // Sin flag, la de siempre: 2,3 m de alto → la de 4 m del color que toca.
+    expect(codCadenaDelPano({}, 2.3, 'NEG', 'ROL', CON_METALICA)).toBe('CAD03');
+    // Y nunca sale sola: el color METAL no tiene cadena automática.
+    expect(codCadenaAutoPorAlto(2.3, 'MET', 'ROL', CON_METALICA)).toBeNull();
+  });
+
+  it('los tres campos del paño y el texto del taller', () => {
+    expect(patchCadenaMetalica()).toEqual({
+      codCadena: 'CAD13',
+      largoCadena: 'ROLLO',
+      colorCadena: 'MET',
+    });
+    expect(textoCadenaMetalica(2.3)).toBe('METÁLICA 4,6 M');
+    expect(textoCadenaMetalica(0)).toBe('METÁLICA');
+  });
+
+  it('en la hoja de inventario se describe con sus metros, no con un largo', () => {
+    expect(descripcionCadenaInventario({ codCadena: 'CAD13' }, 4.6)).toBe(
+      '[CAD13] CADENA METÁLICA 4,6 M',
+    );
+    // Sin metros (una OT vieja) no se inventa un número.
+    expect(descripcionCadenaInventario({ codCadena: 'CAD13' })).toBe('[CAD13] CADENA METÁLICA');
   });
 });

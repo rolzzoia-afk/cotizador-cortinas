@@ -46,6 +46,9 @@ export const CAMPOS_PANO_CONJUNTO = [
   'armado',
   'tipoTela',
   'cierreVert',
+  // El TIPO de cadena sí se replica (es una decisión de la cortina entera,
+  // como el color); los metros los calcula cada paño con SU alto.
+  'cadenaMetalica',
   'manillaCant',
   'manillaColor',
   'color',

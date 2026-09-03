@@ -13,7 +13,14 @@ import {
   esCategoriaVertical,
   kitTraeCadenaIncorporada,
 } from '@/modules/descuentos/reglas-mecanismo';
-import { codCadenaVertical, colorCadenaVertical } from './cadenas';
+import {
+  COD_CADENA_METALICA,
+  COLOR_CADENA_METALICA,
+  codCadenaVertical,
+  colorCadenaVertical,
+  llevaCadenaMetalica,
+  metrosCadenaMetalica,
+} from './cadenas';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { calculoVertical, cordonBeeblackDePano } from '@/modules/descuentos/despiece';
@@ -201,9 +208,28 @@ export function calcularBOM(
       const cadCod = (p.codCadena || '').trim();
       const cadLargo = p.largoCadena ? String(p.largoCadena) : '';
       const cadColor = p.colorCadena || '';
-      if ((cadCod || cadLargo) && !kitTraeCadenaIncorporada(p.mecanismo)) {
-        const cadKey = `CAD|${cadCod || cadLargo}|${cadColor}`;
-        add(cadKey, 'CADENA', 'Cadena', cadCod || cadLargo, cadColor, 1, 'unid.');
+      if (!kitTraeCadenaIncorporada(p.mecanismo)) {
+        if (llevaCadenaMetalica(p)) {
+          // La metálica se corta de un ROLLO: la cantidad son METROS, no
+          // unidades. Dos cortinas con metálica suman sus metros en la misma
+          // línea (comparten clave), que es lo que bodega necesita cortar.
+          // El alto sale del paño y, si viene vacío, de la fila (la del papel).
+          const metros = metrosCadenaMetalica(parseFloat(String(p.alto)) || row.alto || 0);
+          if (metros > 0) {
+            add(
+              `CAD|${COD_CADENA_METALICA}|${COLOR_CADENA_METALICA}`,
+              'CADENA',
+              'Cadena metálica (del rollo, cortar a medida)',
+              COD_CADENA_METALICA,
+              COLOR_CADENA_METALICA,
+              metros,
+              'm',
+            );
+          }
+        } else if (cadCod || cadLargo) {
+          const cadKey = `CAD|${cadCod || cadLargo}|${cadColor}`;
+          add(cadKey, 'CADENA', 'Cadena', cadCod || cadLargo, cadColor, 1, 'unid.');
+        }
       }
       // Peso de cadena. Si se eligió el peso real del inventario, su código
       // (PCA01/PCA04) va en la especificación para enlazar al stock.
@@ -286,9 +312,26 @@ export function calcularBOM(
       // Cadena de la vertical: SIEMPRE la de 3 m, color por accesorios
       // (negro CAD04 / resto CAD06). Se calcula, no se lee del paño: así una
       // OT vieja con `codCadena` de roller se corrige sola al recalcular.
-      const cadVert = codCadenaVertical(colorAccVert, reglas.cadenas);
-      const cadVertColor = colorCadenaVertical(colorAccVert, reglas.cadenas);
-      add(`CAD|${cadVert}|${cadVertColor}`, 'CADENA', 'Cadena', cadVert, cadVertColor, 1, 'unid.');
+      // …salvo que se haya vendido con cadena METÁLICA: ahí también se corta
+      // del rollo, igual que en la roller.
+      if (llevaCadenaMetalica(p)) {
+        const metros = metrosCadenaMetalica(parseFloat(String(p.alto)) || row.alto || 0);
+        if (metros > 0) {
+          add(
+            `CAD|${COD_CADENA_METALICA}|${COLOR_CADENA_METALICA}`,
+            'CADENA',
+            'Cadena metálica (del rollo, cortar a medida)',
+            COD_CADENA_METALICA,
+            COLOR_CADENA_METALICA,
+            metros,
+            'm',
+          );
+        }
+      } else {
+        const cadVert = codCadenaVertical(colorAccVert, reglas.cadenas);
+        const cadVertColor = colorCadenaVertical(colorAccVert, reglas.cadenas);
+        add(`CAD|${cadVert}|${cadVertColor}`, 'CADENA', 'Cadena', cadVert, cadVertColor, 1, 'unid.');
+      }
       for (const it of insumosVerticalDePano({
         colorAcc: colorAccVert,
         anchoM,
