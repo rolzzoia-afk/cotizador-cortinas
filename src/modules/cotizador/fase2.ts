@@ -312,7 +312,10 @@ export function crearPanoVacio(): Pano {
   return {
     ancho: '',
     alto: '',
-    armado: 'Interno',
+    // VACÍO a propósito, igual que `cierreVert`: dentro o fuera del vano es una
+    // decisión de terreno. Preseteado en 'Interno' nadie lo elegía y el paso
+    // «Ventana y medidas» lo daba por listo (pedido del dueño, 2026-09-03).
+    armado: '',
     tipoTela: '',
     largoCadena: '',
     codCadena: '',

@@ -38,6 +38,12 @@ describe('crearPanoVacio', () => {
     // el mando al lado que cayera (pedido del dueño, 2026-09-02).
     expect(crearPanoVacio().cierreVert).toBe('');
   });
+
+  it('el armado parte VACÍO: dentro o fuera del vano se elige en terreno', () => {
+    // Preseteado en 'Interno', el paso «Ventana y medidas» lo daba por listo y
+    // nadie lo elegía (pedido del dueño, 2026-09-03).
+    expect(crearPanoVacio().armado).toBe('');
+  });
 });
 
 describe('dual — dos rollos, UNA cortina', () => {

@@ -80,7 +80,10 @@ export function itemToVentana(item: ItemFase1): Ventana {
     ancho: item.ancho,
     alto: item.alto,
     color: item.color || 'Blanco',
-    armado: 'Interno',
+    // Vacío a propósito, igual que `cierreVert`: si Fase 1 trae SENT. CORT.,
+    // `fase0-sync` lo rellena desde ahí; si no, se elige en terreno en vez de
+    // presumir 'Interno' (pedido del dueño, 2026-09-03).
+    armado: '',
     tipoTela: '',
     largoCadena: '',
     // Vacío a propósito: el lado del mando se decide en terreno, no por default

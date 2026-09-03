@@ -99,6 +99,21 @@ describe('fase0-sync', () => {
     expect(out.colorPeso).toBe('BCO');
   });
 
+  it('el armado vacío se rellena con el SENT. CORT. de Fase 1', () => {
+    // Antes `crearPanoVacio`/`itemToVentana` traían 'Interno' duro, así que
+    // este relleno NUNCA corría y el sentido tecleado en Fase 1 se perdía
+    // (pedido del dueño, 2026-09-03).
+    const ventana = { id: '1', sentido: 'EXTERNO', panos: [] } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0({ ...crearPanoVacio(), ancho: 2, alto: 2 }, ventana, {});
+    expect(out.armado).toBe('Externo');
+  });
+
+  it('sin SENT. CORT. el armado queda vacío: lo elige el vendedor en terreno', () => {
+    const ventana = { id: '1', panos: [] } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0({ ...crearPanoVacio(), ancho: 2, alto: 2 }, ventana, {});
+    expect(out.armado ?? '').toBe('');
+  });
+
   it('tipoTelaDesdeVentana sin catálogo usa COD_INT', () => {
     expect(tipoTelaDesdeVentana({ codInt: 'SC 64' })).toBe('SCR');
   });
