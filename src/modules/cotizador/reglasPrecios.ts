@@ -233,6 +233,18 @@ export const SUFIJO_RECETA_INV = '|INV';
  */
 export const SUFIJO_RECETA_2T = '|2T';
 
+/**
+ * Sufijo de la cortina cotizada con CADENA METÁLICA (`BLACKOUT_D|MET`).
+ *
+ * A diferencia de `|B`, `|INV` y `|2T`, NO es una receta guardada en
+ * `reglas.recetas`: es la receta que ya resolvió la cascada (2T → B → INV →
+ * normal) con su línea de cadena de mando reemplazada por `reglas.cadenaMetalica`
+ * (ver `conCadenaMetalica`). Así una familia nueva no necesita su variante y el
+ * Admin no tiene que aprender otro sufijo: la cadena metálica se edita en UN
+ * solo lugar y vale para todas.
+ */
+export const SUFIJO_RECETA_MET = '|MET';
+
 /** Sistemas que se eligen por FILA y no por familia: `sistemaDeFamilia` los salta. */
 const SISTEMAS_POR_FILA = new Set([SISTEMA_CATEGORIA_B_KEY, SISTEMA_INVERTIDA_KEY]);
 
@@ -281,6 +293,16 @@ export type ReglasPrecios = {
   anchoRolloFallbackM: number;
   /** Cómo se cobra la tela de las cortinas verticales. */
   telaVertical: TelaVertical;
+  /**
+   * Con qué se reemplaza la cadena plástica cuando la cortina se cotiza con
+   * CADENA METÁLICA (el botón de Fase 1). Una sola línea para todas las
+   * familias: ver `conCadenaMetalica` y `SUFIJO_RECETA_MET`.
+   *
+   * Va al FINAL del tipo a propósito: `sonReglasPreciosDefault` compara el JSON
+   * serializado, así que el orden de las claves tiene que calzar con el de
+   * `REGLAS_PRECIOS_DEFAULT` y el del `return` de `normalizarReglasPrecios`.
+   */
+  cadenaMetalica: LineaReceta;
 };
 
 // ── Recetas de fábrica ────────────────────────────────────────────────
@@ -567,6 +589,61 @@ export const CODIGOS_RIEL_BEEBLACK = new Set(['SLM01', 'SLM02', 'SLM03']);
 const RECETA_BEEBLACK_2A_TELA: LineaReceta[] = RECETA_BEEBLACK.filter(
   (l) => !CODIGOS_RIEL_BEEBLACK.has(l.insumo),
 );
+
+// ── Cadena metálica ───────────────────────────────────────────────────
+// La cortina que se cotiza con cadena METÁLICA (CAD 13) paga la misma receta
+// de su familia con UNA línea cambiada: la cadena de mando. No es una receta
+// aparte por familia, es una transformación — así vale para las 12 familias,
+// para la vertical y para las variantes |B / |INV sin duplicar nada.
+
+/**
+ * La línea de cadena metálica de fábrica.
+ *
+ * `CAD 13` es un ROLLO que se corta a medida y su VALOR MAXIMO está POR METRO
+ * (725,9), no por cadena entera como la plástica (1.190). Por eso la cantidad
+ * es `2 × la suma de altos`: la cadena hace un lazo, así que mide el doble de
+ * la caída. El factor se edita en Admin → Precios; el taller corta con el
+ * mismo criterio (`FACTOR_LAZO_CADENA` en `cadenas.ts`).
+ */
+export const CADENA_METALICA_DEFAULT: LineaReceta = v(
+  'CAD 13',
+  { tipo: 'sumaAltos', factor: 2 },
+  'Cadena metálica: reemplaza la cadena plástica de la receta cuando la cortina ' +
+    'se cotiza con el botón de Fase 1. CAD 13 se cobra POR METRO, y el lazo mide ' +
+    '2 × el alto vendido.',
+);
+
+/**
+ * ¿Esta línea de receta es la CADENA DE MANDO (la que sube y baja la cortina)?
+ *
+ * Por prefijo y no por lista cerrada: el Admin puede cambiar la `CAD 03` de una
+ * receta por cualquier otra `CAD xx` y la cadena metálica tiene que seguir
+ * reconociéndola. Deja fuera a `VER 15` (cadena INFERIOR de la vertical, que se
+ * queda siempre) y a todo lo que solo la acompaña (`TOP 03`, `MEC 06`, `PCA 04`).
+ */
+export function esCadenaMando(insumo: string): boolean {
+  return (insumo || '').replace(/\s+/g, '').toUpperCase().startsWith('CAD');
+}
+
+/** ¿La receta lleva cadena de mando? (el beeblack y la pletina no). */
+export function tieneCadenaMando(lineas: readonly LineaReceta[]): boolean {
+  return lineas.some((l) => esCadenaMando(l.insumo));
+}
+
+/**
+ * La receta con su cadena de mando cambiada por la metálica, EN SU LUGAR (el
+ * orden de las líneas gobierna el orden de la suma y los goldens).
+ *
+ * Si la receta no lleva cadena devuelve el MISMO arreglo: así el motor puede
+ * comparar por referencia y una familia sin cadena no gana panel propio.
+ */
+export function conCadenaMetalica(
+  lineas: readonly LineaReceta[],
+  metalica: LineaReceta,
+): readonly LineaReceta[] {
+  if (!tieneCadenaMando(lineas)) return lineas;
+  return lineas.map((l) => (esCadenaMando(l.insumo) ? metalica : l));
+}
 
 /** COD de familia que se cotizan como beeblack. */
 export const FAMILIAS_BEEBLACK = ['BEE_BK', 'BEE_MOSQ', 'BEE_TRAS'] as const;
@@ -1192,6 +1269,7 @@ export const REGLAS_PRECIOS_DEFAULT: ReglasPrecios = {
   // tela): último recurso cuando ni el catálogo ni la tabla de anchos lo dicen.
   anchoRolloFallbackM: 2.45,
   telaVertical: TELA_VERTICAL_DEFAULT,
+  cadenaMetalica: CADENA_METALICA_DEFAULT,
 };
 
 /** Cuántas lamas rinde una pasada del rollo (se desprecia la orilla sobrante). */
@@ -1550,6 +1628,11 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
 
   const sistemas = saneaSistemas(o.sistemas);
 
+  // La cadena metálica es UNA línea suelta, no una receta: se sanea con el
+  // mismo colador y cae a la de fábrica si viene rota o no viene (lo guardado
+  // antes de que existiera).
+  const cadenaMetalica = saneaReceta([o.cadenaMetalica])?.[0] ?? CADENA_METALICA_DEFAULT;
+
   // Reponer los insumos de fábrica que alguna receta vigente nombre y que el
   // guardado no traiga: si no, esa línea se cobraría a $0 en silencio. Una
   // receta de sistema busca primero en SU tabla; solo si tampoco está ahí se
@@ -1563,6 +1646,10 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
         if (fabrica[l.insumo]) insumosFinal[l.insumo] = fabrica[l.insumo];
       }
     }
+    // La cadena metálica no vive en ninguna receta: se repone aparte.
+    if (!insumosFinal[cadenaMetalica.insumo] && fabrica[cadenaMetalica.insumo]) {
+      insumosFinal[cadenaMetalica.insumo] = fabrica[cadenaMetalica.insumo];
+    }
   }
 
   const anchoRollo = numeroFinito(o.anchoRolloFallbackM, REGLAS_PRECIOS_DEFAULT.anchoRolloFallbackM);
@@ -1575,6 +1662,7 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
     regalo: Math.max(0, numeroFinito(o.regalo, 0)),
     anchoRolloFallbackM: anchoRollo > 0 ? anchoRollo : REGLAS_PRECIOS_DEFAULT.anchoRolloFallbackM,
     telaVertical: saneaTelaVertical(o.telaVertical),
+    cadenaMetalica,
   };
 }
 
@@ -1738,6 +1826,28 @@ export function validarReglasPrecios(reglas: ReglasPrecios): ResultadoValidacion
           );
         }
       }
+    }
+  }
+
+  // La cadena metálica no está en ninguna receta (es una línea suelta que las
+  // reemplaza), así que se valida aparte y cuenta como insumo USADO.
+  {
+    const cm = reglas.cadenaMetalica;
+    usados.add(cm.insumo);
+    const dónde = `La cadena metálica (${cm.insumo})`;
+    if (!reglas.insumos[cm.insumo]) {
+      errores.push(`${dónde}: ese insumo no está en la lista de precios, así que se cobraría $0.`);
+    }
+    if (cm.cantidad.tipo === 'fijo') {
+      if (!Number.isFinite(cm.cantidad.cantidad) || cm.cantidad.cantidad < 0) {
+        errores.push(`${dónde}: la cantidad fija tiene que ser un número de cero para arriba.`);
+      }
+    } else if (
+      'factor' in cm.cantidad &&
+      cm.cantidad.factor !== undefined &&
+      (!Number.isFinite(cm.cantidad.factor) || cm.cantidad.factor < 0)
+    ) {
+      errores.push(`${dónde}: el factor tiene que ser un número de cero para arriba.`);
     }
   }
 

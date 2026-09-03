@@ -46,17 +46,22 @@ function maxDeFamilia(fam: string, catalogo: CatalogoProductos) {
 
 /**
  * Lo que la app va a cobrar de verdad por metro en esta familia. Misma cascada
- * que `precioMlPorCod` del motor: el código declarado si está en el catálogo
- * con precio, y si no, la tela más cara de la familia. Se calcula acá y no se
- * llama al motor porque esta tabla trabaja sobre el BORRADOR, que todavía no
- * es un `ReglasPrecios` completo.
+ * que `precioMlPorCod` del motor: el código declarado es un PISO —si alguna
+ * tela de la familia vale más, manda esa—, y sin código declarado (o con uno
+ * roto) manda derechamente la más cara. Se calcula acá y no se llama al motor
+ * porque esta tabla trabaja sobre el BORRADOR, que todavía no es un
+ * `ReglasPrecios` completo.
  */
 function precioEfectivo(fam: string, codInt: string, catalogo: CatalogoProductos) {
   const declarado = codInt.trim();
   const pDeclarado = declarado ? Number(catalogo[declarado]?.precio) || 0 : 0;
-  if (pDeclarado > 0) return { precio: pDeclarado, manda: declarado, roto: '' };
   const max = maxDeFamilia(fam, catalogo);
-  return { precio: max.precio, manda: max.codInt, roto: declarado };
+  if (pDeclarado > 0) {
+    return max.precio > pDeclarado
+      ? { precio: max.precio, manda: max.codInt, roto: '', superaAlDeclarado: declarado }
+      : { precio: pDeclarado, manda: declarado, roto: '', superaAlDeclarado: '' };
+  }
+  return { precio: max.precio, manda: max.codInt, roto: declarado, superaAlDeclarado: '' };
 }
 
 function Tabla({
@@ -83,7 +88,11 @@ function Tabla({
           <tbody>
             {claves.map((fam) => {
               const codInt = mapa[fam];
-              const { precio, manda, roto } = precioEfectivo(fam, codInt, catalogo);
+              const { precio, manda, roto, superaAlDeclarado } = precioEfectivo(
+                fam,
+                codInt,
+                catalogo,
+              );
               return (
                 <tr key={fam} className="border-t">
                   <td className="px-2 py-1">
@@ -104,6 +113,13 @@ function Tabla({
                       <div className="mt-0.5 flex items-center gap-1 text-[0.65rem] text-warning">
                         <AlertTriangle className="h-3 w-3" />
                         {manda ? `${roto} no está en el catálogo: manda ${manda}` : `${roto} no está en el catálogo`}
+                      </div>
+                    ) : superaAlDeclarado ? (
+                      // El código escrito es un PISO: si hay una tela más cara
+                      // en la familia, se cobra esa. Decirlo acá evita la
+                      // sorpresa de ver un precio que no es el del código.
+                      <div className="mt-0.5 text-[0.65rem] text-muted-foreground">
+                        referencia {superaAlDeclarado} · hoy manda {manda}, que es más cara
                       </div>
                     ) : !codInt.trim() ? (
                       <div className="mt-0.5 text-[0.65rem] text-muted-foreground">

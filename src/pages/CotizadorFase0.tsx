@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Copy, FileDown, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, FileDown, Link2, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -64,6 +64,7 @@ import {
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0, esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
 import {
+  categoriaLlevaCadenaMando,
   esCategoriaPletina,
   esCategoriaVertical,
   mecLineaB,
@@ -176,6 +177,12 @@ type FilaUI = {
    * igual que `invertida`: undefined = auto según la categoría de la tela.
    */
   lineaB?: boolean;
+  /**
+   * Cotizar con CADENA METÁLICA (CAD13). NO es tri-estado: no hay nada que
+   * calcular solo, ausente = cadena plástica. El botón siempre escribe
+   * `true`/`false` para que apagarla también viaje al paño.
+   */
+  cadenaMetalica?: boolean;
   /** id de la ventana original (si la fila viene de una OT existente). */
   vid?: string;
   /** índice del paño dentro de su ventana (una fila por paño en la cotización). */
@@ -258,14 +265,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [params] = useSearchParams();
   const { id: editOtId } = useParams();
   // Columnas COD SEC / DIRECC. / SENT. solo en la cotización final (Fase 3).
-  // Las columnas INVERTIDA y CATEGORÍA van en ambos modos.
+  // Las columnas INVERTIDA, CATEGORÍA y CADENA van en ambos modos.
   // Cuenta con Fase 3: COD, COD SEC, DIRECC., SENT., CANT, PRODUCTO, COD_INT,
-  // TIPO, DESCRIPCIÓN, INVERTIDA, CATEGORÍA, UBIC., COLOR ACC (13 de
+  // TIPO, DESCRIPCIÓN, INVERTIDA, CATEGORÍA, CADENA, UBIC., COLOR ACC (14 de
   // «Información del producto») + ANCHO, ALTO + M², VAL.UNIT., DCT %, TOTAL +
-  // la del botón = 20. En Fase 1 son 3 menos.
+  // la del botón = 21. En Fase 1 son 3 menos.
   const showCols = modo === 'fase3';
-  const colSpanTotal = showCols ? 20 : 17;
-  const colSpanInfo = showCols ? 13 : 10;
+  const colSpanTotal = showCols ? 21 : 18;
+  const colSpanInfo = showCols ? 14 : 11;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId, perfil } = useAuth();
   // Los precios del catálogo se editan en Admin → Precios. Acá se ven y se
@@ -914,6 +921,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // o por la gama de la tela). La B se cotiza con su propio sistema de
       // precios, en un panel aparte del de la A.
       lineaB: f.lineaB ?? gamaTelaEsB(f.codInt, catalogo),
+      // Cadena metálica: cambia la cadena plástica de la receta por CAD 13, que
+      // se cobra por metro. Sin regla automática: solo si la marcaron.
+      cadenaMetalica: f.cadenaMetalica === true,
       // Para la fila de instalación: en Fase 3 una ventana puede venir partida
       // en varios paños (un dual son dos telas y UNA instalación). En Fase 1
       // las filas no tienen ventana todavía y se cuentan de a una.
@@ -1090,6 +1100,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // enrollado no hay caída (SENT.). Las dos celdas pasan a mostrar "—".
     if ('categoria' in patch && esCategoriaPletina(patch.categoria, reglas.tipos)) {
       conDct = { ...conDct, direccion: '', sentido: '' };
+    }
+    // Si la categoría nueva no lleva cadena de mando (motor, pletina, beeblack),
+    // se apaga la cadena metálica: si no, quedaba marcada e invisible.
+    if ('categoria' in patch && !categoriaLlevaCadenaMando(patch.categoria, reglas.tipos)) {
+      conDct = { ...conDct, cadenaMetalica: false };
     }
     setFilas((prev) => {
       const fila = prev.find((f) => f.id === id);
@@ -2055,6 +2070,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 <Th className="min-w-[10rem]">DESCRIPCIÓN</Th>
                 <Th className="min-w-[4.5rem] text-center">INVERTIDA</Th>
                 <Th className="min-w-[5.5rem] text-center">CATEGORÍA</Th>
+                <Th className="min-w-[4.5rem] text-center">CADENA</Th>
                 <Th className="min-w-[5rem]">UBIC.</Th>
                 <Th className="min-w-[7rem]">COLOR ACCESORIOS</Th>
                 <Th className="min-w-[5rem] border-l border-border">ANCHO</Th>
@@ -2227,6 +2243,39 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                         );
                       })()}
                     </Td>
+                    <Td className="text-center">
+                      {(() => {
+                        // La cadena metálica solo existe donde hay cadena de
+                        // mando: el beeblack corre con manilla, la pletina va
+                        // pegada y el motor no lleva cadena.
+                        if (!categoriaLlevaCadenaMando(f.categoria, reglas.tipos)) {
+                          return (
+                            <span className="text-muted-foreground" title="Este sistema no lleva cadena">
+                              —
+                            </span>
+                          );
+                        }
+                        const metalica = f.cadenaMetalica === true;
+                        return (
+                          <button
+                            onClick={() => setFila(f.id, { cadenaMetalica: !metalica })}
+                            title={
+                              metalica
+                                ? 'Cadena metálica (CAD13): se corta del rollo a 2 × el alto y se cobra por metro. Clic para volver a la plástica.'
+                                : 'Cadena plástica (la de la receta). Clic para cotizarla con cadena metálica (CAD13), que es más cara.'
+                            }
+                            className={cn(
+                              'rounded-md border p-1.5 transition-colors',
+                              metalica
+                                ? 'border-sky-400 bg-sky-500 text-sky-950 shadow-[0_0_8px_rgba(56,189,248,0.55)]'
+                                : 'border-border text-muted-foreground opacity-60 hover:border-sky-500/60 hover:text-sky-400 hover:opacity-100',
+                            )}
+                          >
+                            <Link2 className={cn('h-4 w-4', metalica && 'stroke-[2.5]')} />
+                          </button>
+                        );
+                      })()}
+                    </Td>
                     <Td>
                       {f.vid && (panosPorVid.get(f.vid) || 0) > 1 && (
                         <span className="mb-0.5 block text-[9px] font-semibold uppercase tracking-wide text-accent">
@@ -2353,6 +2402,43 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                               : op.lineaB === false
                                 ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25'
                                 : 'border-border text-muted-foreground hover:bg-muted',
+                          )}
+                        >
+                          {op.txt}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Lo mismo para la cadena: una obra entera con cadena
+                        metálica no se marca cortina por cortina. Solo toca las
+                        que llevan cadena de mando. */}
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>Cadena de todas:</span>
+                      {(
+                        [
+                          { txt: 'Metálica', valor: true, title: 'Cotizar TODAS las cortinas con cadena metálica (CAD13, por metro)' },
+                          { txt: 'Plástica', valor: false, title: 'Volver TODAS a la cadena plástica de su receta' },
+                        ] as { txt: string; valor: boolean; title: string }[]
+                      ).map((op) => (
+                        <button
+                          key={op.txt}
+                          type="button"
+                          title={op.title}
+                          onClick={() => {
+                            const aplica = (f: FilaUI) =>
+                              categoriaLlevaCadenaMando(f.categoria, reglas.tipos);
+                            const n = filas.filter((f) => f.codInt && aplica(f)).length;
+                            setFilas((prev) =>
+                              prev.map((f) => (aplica(f) ? { ...f, cadenaMetalica: op.valor } : f)),
+                            );
+                            toast.success(
+                              `${n} ${n === 1 ? 'cortina' : 'cortinas'} con cadena ${op.txt.toLowerCase()}.`,
+                            );
+                          }}
+                          className={cn(
+                            'rounded-md border px-2 py-0.5 font-mono text-xs font-bold transition-colors',
+                            op.valor
+                              ? 'border-sky-500/40 bg-sky-500/15 text-sky-400 hover:bg-sky-500/25'
+                              : 'border-border text-muted-foreground hover:bg-muted',
                           )}
                         >
                           {op.txt}

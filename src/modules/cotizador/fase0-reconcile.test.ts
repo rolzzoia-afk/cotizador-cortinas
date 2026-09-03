@@ -278,6 +278,46 @@ describe('construirPanosDeGrupo', () => {
     expect(panos[1].lineaB).toBe(true);
     expect('lineaB' in panos[2]).toBe(false);
   });
+
+  it('la cadena metálica viaja igual: apagarla en la grilla apaga la del paño', () => {
+    const base = { id: 'a', vid: 'v1', panoIndex: 0, codInt: '', categoria: '', direccion: '', sentido: '', cantidad: 1, ubicacion: '', colorAcc: '', ancho: 1.5, alto: 2, descuento: 0 };
+    const filas: FilaReconcile[] = [
+      { ...base, cadenaMetalica: false },
+      { ...base, id: 'b', panoIndex: 1, cadenaMetalica: true },
+      { ...base, id: 'c', panoIndex: 2 },
+    ];
+    const panos = construirPanosDeGrupo(filas, [
+      { ancho: 9, alto: 9, cadenaMetalica: true }, // la grilla la apaga
+      { ancho: 9, alto: 9 }, // la grilla la enciende
+      { ancho: 9, alto: 9, cadenaMetalica: true }, // la fila no opina → se preserva
+    ]);
+    expect(panos[0].cadenaMetalica).toBe(false);
+    expect(panos[1].cadenaMetalica).toBe(true);
+    expect(panos[2].cadenaMetalica).toBe(true);
+  });
+
+  it('explotar lee la cadena metálica del paño y deja undefined si no la trae', () => {
+    const { filas } = explotarVentanasAFilas(
+      [
+        {
+          id: 'v1',
+          ubicacion: 'PZA',
+          alto: 2,
+          cantidad: 1,
+          panos: [
+            { ancho: 1, alto: 2, color: 'BCO', cadenaMetalica: true },
+            { ancho: 1, alto: 2, color: 'BCO' },
+          ],
+        } as VentanaItem,
+      ],
+      (() => {
+        let n = 0;
+        return () => `id${n++}`;
+      })(),
+    );
+    expect(filas[0].cadenaMetalica).toBe(true);
+    expect(filas[1].cadenaMetalica).toBeUndefined();
+  });
 });
 
 describe('round-trip explotar → agrupar → construir paños', () => {

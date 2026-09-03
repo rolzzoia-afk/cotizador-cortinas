@@ -52,6 +52,15 @@ export type Pano = {
   largoCadena?: string | number;
   /** Código del insumo-cadena del inventario (CAD01…). Enlaza la OT al stock. */
   codCadena?: string;
+  /**
+   * Esta cortina va con CADENA METÁLICA (CAD13): el botón de Fase 1, que en el
+   * precio cambia la cadena plástica de la receta por `CAD 13` (por metro) y en
+   * el taller manda cortar el rollo metálico a 2 × el alto.
+   *
+   * A diferencia de `invertida`/`lineaB` no es tri-estado: no hay nada que
+   * calcular solo, ausente = cadena plástica.
+   */
+  cadenaMetalica?: boolean;
   /** Código del insumo-peso de cadena del inventario (PCA01/PCA04). Enlaza al stock. */
   codPeso?: string;
   /**

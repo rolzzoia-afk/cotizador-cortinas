@@ -30,7 +30,7 @@ import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { categoriasParaSelect } from '@/modules/descuentos/tiposCortina';
 import { cotizarFase0, textoInstalacion } from '@/modules/cotizador/motorFase0';
-import type { ReglasPrecios } from '@/modules/cotizador/reglasPrecios';
+import { sistemaCategoriaB, type ReglasPrecios } from '@/modules/cotizador/reglasPrecios';
 
 type FilaPrueba = {
   id: string;
@@ -45,16 +45,19 @@ type FilaPrueba = {
   alto: number;
   cantidad: number;
   descuento: number; // 0-100
+  /** Cotizarla con cadena metálica (el botón de Fase 1). */
+  cadenaMetalica: boolean;
 };
 
-const nuevaFila = (codInt = ''): FilaPrueba => ({
+const nuevaFila = (codInt = '', descuento = 0): FilaPrueba => ({
   id: Math.random().toString(36).slice(2),
   codInt,
   categoria: '',
   ancho: 1.5,
   alto: 2.3,
   cantidad: 1,
-  descuento: 0,
+  descuento,
+  cadenaMetalica: false,
 });
 
 export function ProbadorCotizacionSection({
@@ -117,6 +120,7 @@ export function ProbadorCotizacionSection({
         ),
         // Categoría B por la gama de la tela (el probador no tiene el forzado).
         lineaB: gamaTelaEsB(f.codInt, catalogo),
+        cadenaMetalica: f.cadenaMetalica,
       })),
       catalogo,
       anchoRollo,
@@ -136,6 +140,21 @@ export function ProbadorCotizacionSection({
 
   // «bk10» → «BK 10»: la llave real del catálogo, igual que en Fase 1.
   const canonizar = (ci: string) => claveCatalogoCanonica(catalogo, ci) ?? ci;
+
+  /**
+   * El DCT% que Fase 1 le propone a esa tela: el del sistema categoría B si la
+   * tela es de gama B, y si no el del código en el catálogo. Sin esto el
+   * probador arrancaba SIEMPRE en 0 % y parecía dar «otro precio» que la
+   * cotización real, que autollena el descuento de la tela (dueño, 2026-09-03).
+   */
+  const dctParaFila = (ci: string): number => {
+    const cod = canonizar(ci);
+    const dctoB = sistemaCategoriaB(reglas.sistemas)?.descuentoDefault;
+    if (gamaTelaEsB(cod, catalogo) && typeof dctoB === 'number') {
+      return Math.round(dctoB * 10000) / 100;
+    }
+    return Math.round((Number(catalogo[cod]?.descuento) || 0) * 10000) / 100;
+  };
 
   return (
     <section className="rounded-lg border bg-card p-5">
@@ -185,6 +204,7 @@ export function ProbadorCotizacionSection({
               <th className="px-2 py-1.5 text-left font-medium">Alto (m)</th>
               <th className="px-2 py-1.5 text-left font-medium">Cant.</th>
               <th className="px-2 py-1.5 text-left font-medium">Dcto %</th>
+              <th className="px-2 py-1.5 text-left font-medium">Cadena metálica</th>
               <th className="w-8" />
             </tr>
           </thead>
@@ -197,7 +217,13 @@ export function ProbadorCotizacionSection({
                   <Input
                     list="probador-telas"
                     value={f.codInt}
-                    onChange={(e) => editar(f.id, { codInt: canonizar(e.target.value) })}
+                    onChange={(e) =>
+                      editar(f.id, {
+                        codInt: canonizar(e.target.value),
+                        // Igual que Fase 1: al elegir la tela se propone SU DCT%.
+                        descuento: dctParaFila(e.target.value),
+                      })
+                    }
                     placeholder="ej. BK 10"
                     className="h-7 w-40 font-mono text-xs uppercase"
                   />
@@ -240,6 +266,15 @@ export function ProbadorCotizacionSection({
                     onChange={(e) => editar(f.id, { descuento: Number(e.target.value) })}
                     className="h-7 w-16 text-xs" />
                 </td>
+                <td className="px-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked={f.cadenaMetalica}
+                    onChange={(e) => editar(f.id, { cadenaMetalica: e.target.checked })}
+                    title="Cotizarla con CAD 13 en vez de la cadena plástica de la receta"
+                    className="h-4 w-4 accent-sky-500"
+                  />
+                </td>
                 <td className="px-1 py-1">
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0"
                     onClick={() => setFilas((fs) => fs.filter((x) => x.id !== f.id))}
@@ -253,7 +288,12 @@ export function ProbadorCotizacionSection({
         </table>
       </div>
       <Button variant="outline" size="sm" className="mt-2"
-        onClick={() => setFilas((fs) => [...fs, nuevaFila(fs[fs.length - 1]?.codInt)])}>
+        onClick={() =>
+          setFilas((fs) => {
+            const ci = fs[fs.length - 1]?.codInt ?? '';
+            return [...fs, nuevaFila(ci, ci ? dctParaFila(ci) : 0)];
+          })
+        }>
         <Plus className="mr-1 h-3.5 w-3.5" />
         Agregar cortina
       </Button>

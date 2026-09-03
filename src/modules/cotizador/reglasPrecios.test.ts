@@ -1,10 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   BASE_VERTICAL_PROPIA,
+  CADENA_METALICA_DEFAULT,
   FAMILIAS_BEEBLACK,
   GRUPOS_INSUMO,
   REGLAS_PRECIOS_DEFAULT,
   RECETAS_DEFAULT,
+  conCadenaMetalica,
+  esCadenaMando,
+  tieneCadenaMando,
   SISTEMA_CATEGORIA_B_KEY,
   SISTEMA_INVERTIDA_KEY,
   claveReceta,
@@ -34,6 +38,99 @@ import {
 } from './reglasPrecios';
 
 const clonar = (r: ReglasPrecios): ReglasPrecios => JSON.parse(JSON.stringify(r));
+
+describe('cadena metálica — la regla global', () => {
+  it('de fábrica es CAD 13 a precio de venta, 2 × la suma de altos', () => {
+    // CAD 13 es un rollo que se corta a medida y su VALOR MAXIMO está POR
+    // METRO: con «por cortina» saldría MÁS BARATA que la plástica.
+    expect(CADENA_METALICA_DEFAULT.insumo).toBe('CAD 13');
+    expect(CADENA_METALICA_DEFAULT.precio).toBe('venta');
+    expect(CADENA_METALICA_DEFAULT.cantidad).toEqual({ tipo: 'sumaAltos', factor: 2 });
+    expect(CADENA_METALICA_DEFAULT.nota).toBeTruthy();
+    expect(REGLAS_PRECIOS_DEFAULT.cadenaMetalica).toBe(CADENA_METALICA_DEFAULT);
+    // Tiene precio: si no, cada cortina marcada cobraría $0 de cadena.
+    expect(REGLAS_PRECIOS_DEFAULT.insumos['CAD 13'].valorMaximo).toBeGreaterThan(0);
+  });
+
+  it('«cadena de mando» son los CAD, no lo que las acompaña', () => {
+    for (const cod of ['CAD 02', 'CAD 03', 'CAD 05', 'CAD 13', 'CAD13', 'cad 03']) {
+      expect(esCadenaMando(cod)).toBe(true);
+    }
+    // VER 15 es la cadena INFERIOR de la vertical (se queda); el resto solo la acompaña.
+    for (const cod of ['VER 15', 'MEC 06', 'TOP 03', 'PCA 04', 'E 02', '']) {
+      expect(esCadenaMando(cod)).toBe(false);
+    }
+  });
+
+  it('cambia solo la línea de la cadena, en su lugar, en cada receta de fábrica que la tiene', () => {
+    for (const [fam, lineas] of Object.entries(RECETAS_DEFAULT)) {
+      const out = conCadenaMetalica(lineas, CADENA_METALICA_DEFAULT);
+      if (!tieneCadenaMando(lineas)) {
+        // Sin cadena vuelve el MISMO arreglo: el motor lo usa para no crear panel.
+        expect(out).toBe(lineas);
+        continue;
+      }
+      expect(out).toHaveLength(lineas.length);
+      out.forEach((l, i) => {
+        if (esCadenaMando(lineas[i].insumo)) expect(l).toBe(CADENA_METALICA_DEFAULT);
+        else expect(l).toBe(lineas[i]);
+      });
+      expect(out.filter((l) => l.insumo === 'CAD 13')).toHaveLength(
+        lineas.filter((l) => esCadenaMando(l.insumo)).length,
+      );
+      expect(fam).toBeTruthy();
+    }
+  });
+
+  it('el beeblack no lleva cadena: su receta vuelve intacta', () => {
+    expect(tieneCadenaMando(RECETAS_DEFAULT.BEE_BK)).toBe(false);
+    expect(conCadenaMetalica(RECETAS_DEFAULT.BEE_BK, CADENA_METALICA_DEFAULT)).toBe(
+      RECETAS_DEFAULT.BEE_BK,
+    );
+  });
+
+  it('la guardada se sanea, y una rota cae a la de fábrica', () => {
+    const buena = normalizarReglasPrecios({
+      cadenaMetalica: { insumo: 'CAD 13', precio: 'costo', cantidad: { tipo: 'sumaAltos', factor: 3 }, basura: 1 },
+    });
+    expect(buena.cadenaMetalica).toEqual({
+      insumo: 'CAD 13',
+      precio: 'costo',
+      cantidad: { tipo: 'sumaAltos', factor: 3 },
+    });
+    for (const roto of [undefined, null, 'x', {}, { insumo: '' }, { insumo: 'CAD 13' }]) {
+      expect(normalizarReglasPrecios({ cadenaMetalica: roto }).cadenaMetalica).toEqual(
+        CADENA_METALICA_DEFAULT,
+      );
+    }
+  });
+
+  it('repone el precio de la cadena metálica si los insumos guardados no lo traen', () => {
+    // No vive en ninguna receta, así que el barrido de recetas no la alcanza.
+    const r = normalizarReglasPrecios({ insumos: { 'E 02': { valorMaximo: 5000 } } });
+    expect(r.insumos['CAD 13'].valorMaximo).toBe(REGLAS_PRECIOS_DEFAULT.insumos['CAD 13'].valorMaximo);
+  });
+
+  it('un insumo sin precio en la cadena metálica es un ERROR', () => {
+    const r = clonar(REGLAS_PRECIOS_DEFAULT);
+    r.cadenaMetalica = { insumo: 'NO-EXISTE', precio: 'venta', cantidad: { tipo: 'sumaAltos', factor: 2 } };
+    const { errores } = validarReglasPrecios(r);
+    expect(errores.some((e) => e.includes('NO-EXISTE'))).toBe(true);
+
+    const conFactorRoto = clonar(REGLAS_PRECIOS_DEFAULT);
+    conFactorRoto.cadenaMetalica = {
+      insumo: 'CAD 13',
+      precio: 'venta',
+      cantidad: { tipo: 'sumaAltos', factor: -1 },
+    };
+    expect(validarReglasPrecios(conFactorRoto).errores.length).toBeGreaterThan(0);
+  });
+
+  it('no se avisa que CAD 13 «no lo usa ninguna familia»: lo usa la regla', () => {
+    const { avisos } = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT);
+    expect(avisos.some((a) => a.includes('CAD 13'))).toBe(false);
+  });
+});
 
 describe('normalizarReglasPrecios', () => {
   it('sin nada guardado devuelve las reglas de fábrica', () => {

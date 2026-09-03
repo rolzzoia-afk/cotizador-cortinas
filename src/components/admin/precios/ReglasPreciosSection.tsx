@@ -28,6 +28,7 @@ import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   REGLAS_PRECIOS_DEFAULT,
+  esCadenaMando,
   recetasDeSistema,
   sonReglasPreciosDefault,
   validarReglasPrecios,
@@ -41,6 +42,7 @@ import {
   type RespaldoPrecios,
 } from '@/modules/cotizador/reglasPreciosStore';
 import { ProbadorCotizacionSection } from './ProbadorCotizacionSection';
+import { CadenaMetalicaSection } from './CadenaMetalicaSection';
 import { InsumosPreciosSection } from './InsumosPreciosSection';
 import { RecetasFamiliasSection } from './RecetasFamiliasSection';
 import { SistemasPreciosSection } from './SistemasPreciosSection';
@@ -79,8 +81,10 @@ export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } 
   const usados = useMemo(() => {
     const s = new Set<string>();
     for (const lineas of Object.values(draft.recetas)) for (const l of lineas) s.add(l.insumo);
+    // La cadena metálica no vive en ninguna receta y también está en uso.
+    s.add(draft.cadenaMetalica.insumo);
     return s;
-  }, [draft.recetas]);
+  }, [draft.recetas, draft.cadenaMetalica]);
   /** Las familias que de verdad existen en el catálogo de la empresa. */
   const familiasCatalogo = useMemo(() => {
     const s = new Set<string>();
@@ -352,6 +356,19 @@ export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } 
           pasoLamaM={draft.telaVertical.pasoLamaM}
           familiasCatalogo={familiasCatalogo}
           onChange={(recetas) => editar({ recetas })}
+        />
+      )}
+
+      {/* La cadena metálica es una línea suelta que REEMPLAZA a la de la receta
+          cuando la cortina se cotiza con ella: va junto a las recetas porque es
+          de lo que están hechas. */}
+      {tab === 'recetas' && (
+        <CadenaMetalicaSection
+          valor={draft.cadenaMetalica}
+          insumos={draft.insumos}
+          margenInsumo={parametros.margenInsumo}
+          cadenaPlastica={draft.recetas.BLACKOUT_D?.find((l) => esCadenaMando(l.insumo))}
+          onChange={(cadenaMetalica) => editar({ cadenaMetalica })}
         />
       )}
 
