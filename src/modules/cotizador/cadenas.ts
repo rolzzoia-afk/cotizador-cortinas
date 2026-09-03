@@ -64,7 +64,15 @@ export function cadenasRoller(
 ): CadenaInsumo[] {
   return insumos
     .filter((i) => esCadenaRoller(i.cod, reglas))
-    .filter((i) => opts.incluirAgotadas || (i.status || '').toUpperCase() !== 'AGOTADO')
+    // La METÁLICA se ofrece siempre: su stock se cuenta en ROLLOS y la app no
+    // los mueve, así que un «AGOTADO» ahí no significa que no se pueda vender.
+    // Para sacarla del selector se la declara `oculto` en el catálogo técnico.
+    .filter(
+      (i) =>
+        opts.incluirAgotadas ||
+        esCadenaMetalica(i.cod) ||
+        (i.status || '').toUpperCase() !== 'AGOTADO',
+    )
     .filter((i) => opts.incluirAgotadas || cadenaDeclarada(i.cod, reglas)?.estado !== 'oculto')
     .sort((a, b) => (a.cod || '').localeCompare(b.cod || ''));
 }
@@ -285,6 +293,90 @@ export function codCadenaAutoPorAlto(
   return codCadenaPorLargoColor(elegido.largo, colorCod, insumos, reglas);
 }
 
+// ── Cadena METÁLICA ───────────────────────────────────────────────────
+// La cortina que se vende con cadena metálica (el botón de Fase 1). No es una
+// cadena más del catálogo: CAD13 es un ROLLO que el taller corta a medida, así
+// que no entra en la selección automática por largo + color (de hecho
+// `colorCadenaCorto('MET')` devuelve '' justamente para eso) y su cantidad se
+// mide en METROS, no en unidades.
+
+/** El rollo de cadena metálica del inventario. */
+export const COD_CADENA_METALICA = 'CAD13';
+
+/**
+ * La cadena hace un LAZO, así que mide el doble de la caída. Es el mismo
+ * factor que trae de fábrica la regla de precio (`CADENA_METALICA_DEFAULT`);
+ * si el dueño edita el precio en Admin, el taller sigue cortando con este.
+ */
+export const FACTOR_LAZO_CADENA = 2;
+
+/** Largo y color con los que se guarda la metálica en el paño. */
+export const LARGO_CADENA_METALICA = 'ROLLO';
+export const COLOR_CADENA_METALICA = 'MET';
+
+/** ¿Este código es el de la cadena metálica? (tolera «CAD 13» con espacio). */
+export function esCadenaMetalica(cod: string | null | undefined): boolean {
+  return (cod || '').replace(/\s+/g, '').toUpperCase() === COD_CADENA_METALICA;
+}
+
+/** Forma mínima de un paño para las decisiones de cadena. */
+type PanoCadena = { cadenaMetalica?: boolean; codCadena?: string | null };
+
+/**
+ * ¿Esta cortina va con cadena metálica?
+ *
+ * Manda el FLAG (la decisión de Fase 1, que es la que se cobró), pero también
+ * cuenta el código: si alguien eligió CAD13 a mano en la ficha, el taller tiene
+ * que cortarla igual aunque la OT nunca haya vuelto a Fase 1.
+ */
+export function llevaCadenaMetalica(p: PanoCadena | null | undefined): boolean {
+  if (!p) return false;
+  return p.cadenaMetalica === true || esCadenaMetalica(p.codCadena);
+}
+
+/** Metros de cadena metálica que consume una cortina (1 decimal). */
+export function metrosCadenaMetalica(altoM: number, factor = FACTOR_LAZO_CADENA): number {
+  if (!(altoM > 0)) return 0;
+  return Math.round(altoM * factor * 10) / 10;
+}
+
+/** Los tres campos de cadena de un paño que va con la metálica. */
+export function patchCadenaMetalica(): {
+  codCadena: string;
+  largoCadena: string;
+  colorCadena: string;
+} {
+  return {
+    codCadena: COD_CADENA_METALICA,
+    largoCadena: LARGO_CADENA_METALICA,
+    colorCadena: COLOR_CADENA_METALICA,
+  };
+}
+
+/** «METÁLICA 4,6 M» — lo que leen la etiqueta y la hoja de cálculo. */
+export function textoCadenaMetalica(altoM: number): string {
+  const m = metrosCadenaMetalica(altoM);
+  return m > 0 ? `METÁLICA ${m.toLocaleString('es-CL')} M` : 'METÁLICA';
+}
+
+/**
+ * La cadena que le toca a un paño: la metálica si va con ella, si no la
+ * automática por alto + color. Punto único para que la ficha, el inventario y
+ * el banco de pruebas no se contradigan.
+ */
+export function codCadenaDelPano(
+  pano: PanoCadena | null | undefined,
+  altoM: number,
+  colorAcc: string | null | undefined,
+  categoria: string | null | undefined,
+  insumos: CadenaInsumo[],
+  tipos?: readonly TipoCortina[],
+  reglas: ReglasCadena = REGLAS_CADENA,
+): string | null {
+  if (llevaCadenaMetalica(pano)) return COD_CADENA_METALICA;
+  return codCadenaAutoPorAlto(altoM, colorAcc, categoria, insumos, tipos, reglas);
+}
+
 // ── Cadena de la VERTICAL ─────────────────────────────────────────────
 // Regla del usuario (2026-08-03): la cortina vertical SÍ lleva cadena de
 // roller, pero SIEMPRE la de 3 metros — el alto no la cambia, a diferencia del
@@ -423,10 +515,17 @@ export function textoPesoCadenaInventario(
  */
 export function descripcionCadenaInventario(
   p: Partial<{ codCadena?: string; largoCadena?: string | number; colorCadena?: string }>,
+  /** Metros a cortar del rollo, solo para la metálica: «[CAD13] CADENA METÁLICA 4,6 M». */
+  metros?: number,
 ): string {
   const cod = (p.codCadena || '').trim().toUpperCase().replace(/\s+/g, '');
   const largo = String(p.largoCadena ?? '').trim();
   if (!cod) return largo;
+  // La metálica no se mide en peldaños de catálogo sino en metros de rollo.
+  if (esCadenaMetalica(cod)) {
+    const m = metros && metros > 0 ? ` ${metros.toLocaleString('es-CL')} M` : '';
+    return `[${cod}] CADENA METÁLICA${m}`;
+  }
   const palabra = LARGO_DESCRIPCION[largo] || largo;
   const colorCod = normalizar(p.colorCadena);
   const color = COLOR_COD_A_NOMBRE[colorCod] || colorCod;

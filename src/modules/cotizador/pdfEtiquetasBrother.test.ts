@@ -189,6 +189,21 @@ describe('textoAccionamiento', () => {
   it('sin datos devuelve vacío', () => {
     expect(textoAccionamiento({})).toBe('');
   });
+
+  it('la METÁLICA se rotula con los metros a cortar, no con «ROLLO»', () => {
+    // El armador corta del rollo: el largo de catálogo no le sirve de nada.
+    expect(
+      textoAccionamiento({ cadenaMetalica: true, alto: 2.3, largoCadena: 'ROLLO', colorCadena: 'MET' }),
+    ).toBe('METÁLICA 4,6 M');
+    // Elegida a mano en la ficha, sin el flag: igual.
+    expect(textoAccionamiento({ codCadena: 'CAD13', alto: 1.5, largoCadena: 'ROLLO' })).toBe(
+      'METÁLICA 3 M',
+    );
+    // Y el motor le sigue ganando.
+    expect(textoAccionamiento({ cadenaMetalica: true, alto: 2.3, motorTipo: 'Somfy' })).toBe(
+      'MOTOR SOMFY',
+    );
+  });
 });
 
 describe('agruparEtiquetasPanos', () => {

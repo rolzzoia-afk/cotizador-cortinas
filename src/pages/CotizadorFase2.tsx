@@ -79,9 +79,11 @@ import {
   codPesoAuto,
   codTopeAuto,
   derivarLargoColor,
+  esCadenaMetalica,
   esCadenaRoller,
   esPesoSeleccionable,
   esTopeSeleccionable,
+  patchCadenaMetalica,
   type CadenaInsumo,
 } from '@/modules/cotizador/cadenas';
 import { categoriaLlevaTopeCadena } from '@/modules/cotizador/insumosCortina';
@@ -391,8 +393,17 @@ export function CotizadorFase2() {
           }
           if (!p.codPeso) cadPatch.codPeso = codPesoAuto(lineaB);
         }
-        if (llevaCadena && !cadenaIncorporada) {
+        // CADENA METÁLICA: la decisión de Fase 1 manda sobre la selección
+        // automática. Sin este atajo, la de abajo la ve «desalineada» (su color
+        // es METAL y el de los accesorios no) y se la cambia por una plástica
+        // en la primera sincronización.
+        if (llevaCadena && !cadenaIncorporada && p.cadenaMetalica) {
+          if (!esCadenaMetalica(p.codCadena)) Object.assign(cadPatch, patchCadenaMetalica());
+          if (!p.codPeso) cadPatch.codPeso = codPesoAuto(lineaB);
+        } else if (llevaCadena && !cadenaIncorporada) {
           const colorAcc = colorAccesoriosDePano(p, v.color);
+          // Si quedó una metálica sin el flag (la apagaron en Fase 1), se trata
+          // como cualquier cadena de otro color: vuelve la plástica que toca.
           // Se rehace la cadena si falta, y también si la que hay quedó de OTRO
           // color: pasa cuando el vendedor cambia el color de accesorios desde
           // la cotización (Fase 1), donde no hay catálogo de insumos para
@@ -400,7 +411,8 @@ export function CotizadorFase2() {
           // busca el mismo largo en el color correcto.
           const colorActual = p.codCadena ? derivarLargoColor(p.codCadena, cadenas).colorCadena : '';
           const desalineada =
-            !!p.codCadena && !!colorActual && colorActual !== colorAccesorioCorto(colorAcc);
+            (!!p.codCadena && !!colorActual && colorActual !== colorAccesorioCorto(colorAcc)) ||
+            esCadenaMetalica(p.codCadena);
           if (!p.codCadena || desalineada) {
             // El largo GUARDADO en el paño manda sobre el que se deriva del
             // código: si bodega reasignó ese código a otra cadena (pasó con
@@ -408,9 +420,14 @@ export function CotizadorFase2() {
             // el derivado ya no es el largo que se vendió y buscarlo en el
             // color nuevo daría una cadena más corta sin que nadie lo note.
             // Si ese largo ya no existe en el inventario, cae al automático.
-            const largoActual =
-              String(p.largoCadena ?? '').trim() ||
-              (p.codCadena ? derivarLargoColor(p.codCadena, cadenas, reglas.cadenas).largoCadena : '');
+            // Salvo si venía metálica: su largo es 'ROLLO' y buscarlo en otro
+            // color daría un rollo plástico de 200 m. Va al automático por alto.
+            const largoActual = esCadenaMetalica(p.codCadena)
+              ? ''
+              : String(p.largoCadena ?? '').trim() ||
+                (p.codCadena
+                  ? derivarLargoColor(p.codCadena, cadenas, reglas.cadenas).largoCadena
+                  : '');
             const cod =
               (desalineada && largoActual
                 ? codCadenaPorLargoColor(
@@ -939,6 +956,13 @@ export function CotizadorFase2() {
           if (pn.codCadena || pn.largoCadena || pn.colorCadena) {
             setPano({ codCadena: '', largoCadena: '', colorCadena: '' });
           }
+          if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
+          return;
+        }
+        // Con cadena metálica no hay nada que recalcular: es la misma para
+        // cualquier alto y color (se corta del rollo a la medida que haga falta).
+        if (pn.cadenaMetalica) {
+          if (!esCadenaMetalica(pn.codCadena)) setPano(patchCadenaMetalica());
           if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
           return;
         }

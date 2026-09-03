@@ -54,8 +54,12 @@ import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import {
   cadenasRoller,
+  esCadenaMetalica,
   etiquetaCadena,
   derivarLargoColor,
+  llevaCadenaMetalica,
+  metrosCadenaMetalica,
+  patchCadenaMetalica,
   pesosSeleccionables,
   topesSeleccionables,
   type CadenaInsumo,
@@ -282,6 +286,10 @@ export function PanoEditor({
   const anchoPanoM = parseFloat(String(pano.ancho)) || 0;
   const debeInvertir = debeInvertirPano(anchoPanoM, anchoRollo);
   const invertida = pano.invertida ?? debeInvertir;
+  // Cadena metálica: manda el flag de Fase 1, pero una CAD13 elegida a mano en
+  // la ficha también cuenta (el taller la corta igual).
+  const altoM = parseFloat(String(pano.alto)) || 0;
+  const metalica = llevaCadenaMetalica(pano);
   // Línea B: solo hay herrajes en blanco y negro. Sin receta, el gate de Fase 2
   // bloquea el avance; acá se avisa apenas se elige el color.
   const sinRecetaLineaB =
@@ -586,7 +594,29 @@ export function PanoEditor({
           cadena para él) y su cierre es de la VENTANA, en su sección propia. */}
       {!esPletinaCat && !esBeeblack && (
         <Section title="Cadena">
+          {/* La cadena METÁLICA es una decisión de venta (se cobra distinto), no
+              una cadena más del catálogo: es un rollo que el taller corta a la
+              medida de cada cortina, así que no depende del alto ni del color. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Checkbox
+              label="Cadena metálica (CAD13)"
+              checked={metalica}
+              onChange={(v) =>
+                onChange(
+                  v
+                    ? { cadenaMetalica: true, ...patchCadenaMetalica() }
+                    : { cadenaMetalica: false, codCadena: '', largoCadena: '', colorCadena: '' },
+                )
+              }
+            />
+            <span className="text-[0.7rem] text-muted-foreground">
+              {metalica
+                ? `se corta del rollo: ${metrosCadenaMetalica(altoM).toLocaleString('es-CL')} m (2 × el alto)`
+                : 'se cotiza y se corta con la cadena plástica de siempre'}
+            </span>
+          </div>
           {!esVerticalCat &&
+            !metalica &&
             (cadenasDisponibles.length > 0 ? (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
@@ -597,6 +627,12 @@ export function PanoEditor({
                     const cod = e.target.value;
                     if (!cod) {
                       onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
+                      return;
+                    }
+                    // Elegir la metálica a mano enciende el flag: así el precio
+                    // de Fase 1 y el corte del taller quedan de acuerdo.
+                    if (esCadenaMetalica(cod)) {
+                      onChange({ cadenaMetalica: true, ...patchCadenaMetalica() });
                       return;
                     }
                     const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);

@@ -49,6 +49,8 @@ describe('parcheAcciona', () => {
       codCadena: '',
       largoCadena: '',
       colorCadena: '',
+      // Sin cadena tampoco hay cadena metálica que cobrar.
+      cadenaMetalica: false,
     });
   });
 
@@ -75,7 +77,12 @@ describe('parcheCadena', () => {
   const cadenas = [{ cod: 'CAD01', nemotecnico: 'CADENA 1 METRO', color: 'BLANCO' }];
 
   it('sin código limpia los tres campos', () => {
-    expect(parcheCadena('', cadenas)).toEqual({ codCadena: '', largoCadena: '', colorCadena: '' });
+    expect(parcheCadena('', cadenas)).toEqual({
+      codCadena: '',
+      largoCadena: '',
+      colorCadena: '',
+      cadenaMetalica: false,
+    });
   });
 
   it('arrastra largo y color de la cadena elegida', () => {
@@ -83,6 +90,17 @@ describe('parcheCadena', () => {
       codCadena: 'CAD01',
       largoCadena: '1mts',
       colorCadena: 'BCO',
+      cadenaMetalica: false,
+    });
+  });
+
+  it('elegir la METÁLICA enciende el flag que cobra Fase 1', () => {
+    // Y al revés: elegir cualquier otra lo apaga (los dos casos de arriba).
+    expect(parcheCadena('CAD13', cadenas)).toEqual({
+      cadenaMetalica: true,
+      codCadena: 'CAD13',
+      largoCadena: 'ROLLO',
+      colorCadena: 'MET',
     });
   });
 });

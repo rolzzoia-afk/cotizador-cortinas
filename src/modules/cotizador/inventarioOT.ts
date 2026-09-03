@@ -35,6 +35,7 @@ import { construirCalculoGeneral, type FilaCalculo } from './calculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import { construirEtiquetas, type EtiquetaLinea } from './inventario';
 import {
+  COD_CADENA_METALICA,
   codPesoAuto,
   LARGO_CADENA_VERTICAL,
   codCadenaAutoPorAlto,
@@ -42,6 +43,8 @@ import {
   colorCadenaVertical,
   derivarLargoColor,
   descripcionCadenaInventario,
+  llevaCadenaMetalica,
+  metrosCadenaMetalica,
   textoPesoCadenaInventario,
   type CadenaInsumo,
 } from './cadenas';
@@ -332,6 +335,18 @@ export function consolidarInsumos(
           // El MEC 06 trae la cadena incorporada: ni la guardada ni el fallback.
           if (kitTraeCadenaIncorporada(p.mecanismo)) {
             // sin línea de cadena
+          } else if (llevaCadenaMetalica(p)) {
+            // Se corta del rollo: METROS (2 × el alto), no una unidad.
+            const metros = metrosCadenaMetalica(parseFloat(String(p.alto ?? v.alto ?? 0)) || 0);
+            if (metros > 0) {
+              bump(
+                COD_CADENA_METALICA,
+                descripcionCadenaInventario({ codCadena: COD_CADENA_METALICA }, metros),
+                metros,
+                grupoOvalada,
+                'm',
+              );
+            }
           } else if (p.codCadena) {
             bump(p.codCadena.toUpperCase(), descripcionCadenaInventario(p), 1, grupoOvalada);
           } else {

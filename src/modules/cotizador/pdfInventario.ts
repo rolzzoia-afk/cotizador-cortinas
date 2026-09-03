@@ -285,8 +285,12 @@ export function generarPdfInventario(
     ].map((c, i) => ({ ...c, w: w2[i] * sc2 }) as Col);
     // Con cantidad 0 + unidad se muestra SOLO la unidad ("CALCULAR": el cordón y
     // la cadena inferior de la vertical se miden en terreno, sin número fijo).
-    const cantTxt = (m: InsumoConsolidado) =>
-      m.unidad ? (m.cantidad === 0 ? m.unidad : `${m.cantidad} ${m.unidad}`) : String(m.cantidad);
+    // Los metros llevan decimales (la cadena metálica se corta a 4,6 m): con
+    // coma, como se escribe acá.
+    const cantTxt = (m: InsumoConsolidado) => {
+      const n = m.cantidad.toLocaleString('es-CL', { maximumFractionDigits: 2 });
+      return m.unidad ? (m.cantidad === 0 ? m.unidad : `${n} ${m.unidad}`) : n;
+    };
     const rows2 = items.map((m, i) => [
       String(i + 1),
       m.descripcion,

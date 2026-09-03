@@ -41,6 +41,7 @@ import { colorAccesorioCorto } from '../fase0-sync';
 import { categoriasFase1ConTipos } from '../categorias';
 import {
   cadenasRoller,
+  esCadenaMetalica,
   etiquetaCadena,
   pesosSeleccionables,
   type CadenaInsumo,
@@ -454,7 +455,11 @@ const CAMPO_CADENA: CampoVoz = {
     cadenasRoller(c.cadenas ?? [], {}, reglasDe(c).cadenas).map((x) => ({
       value: txt(x.cod),
       label: etiquetaCadena(x),
-      sinonimos: [txt(x.nemotecnico)],
+      // La metálica se pide por su nombre, no por su nemotécnico de bodega:
+      // nadie dicta «cadena rollo metálica».
+      sinonimos: esCadenaMetalica(x.cod)
+        ? [txt(x.nemotecnico), 'metálica', 'cadena metálica', 'metalica']
+        : [txt(x.nemotecnico)],
     })),
   aplicar: (v, c) => ({ pano: parcheCadena(v, c.cadenas ?? [], reglasDe(c).cadenas) }),
 };

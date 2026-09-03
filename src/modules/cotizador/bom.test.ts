@@ -704,3 +704,68 @@ describe('calcularBOM — MEC 06 con cadena incorporada (2026-08-14)', () => {
     expect(bom.some((b) => b.descripcion === 'Cadena')).toBe(true);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// CADENA METÁLICA (CAD13): no es una cadena más, es un ROLLO que el taller
+// corta a 2 × el alto. La bodega la despacha en METROS.
+// ─────────────────────────────────────────────────────────────────────
+describe('calcularBOM — cadena metálica (2026-09-03)', () => {
+  const cadenaDe = (bom: ReturnType<typeof calcularBOM>) =>
+    bom.find((b) => b.categoria === 'CADENA' && b.especificacion === 'CAD13');
+
+  it('sale en metros (2 × el alto) y reemplaza a la plástica', () => {
+    const bom = calcularBOM([
+      row({ cadenaMetalica: true, codPeso: 'PCA04', alto: 2.3 }, { alto: 2.3 }),
+    ] as never);
+    const cad = cadenaDe(bom);
+    expect(cad).toMatchObject({ cantidad: 4.6, unidad: 'm', color: 'MET' });
+    expect(cad?.descripcion).toContain('metálica');
+    // Y la plástica no se emite dos veces.
+    expect(bom.filter((b) => b.categoria === 'CADENA' && b.descripcion === 'Cadena')).toHaveLength(0);
+    // El peso de cadena sigue igual: la metálica cuelga del mismo peso.
+    expect(bom.find((b) => b.descripcion === 'Peso de cadena')?.especificacion).toBe('PCA04');
+  });
+
+  it('dos cortinas suman sus metros en UNA sola línea', () => {
+    const bom = calcularBOM([
+      row({ cadenaMetalica: true, alto: 2.3 }, { alto: 2.3 }),
+      row({ cadenaMetalica: true, alto: 1.5 }, { alto: 1.5, rowIdx: 2, ventanaId: 2 }),
+    ] as never);
+    const cads = bom.filter((b) => b.categoria === 'CADENA' && b.especificacion === 'CAD13');
+    expect(cads).toHaveLength(1);
+    expect(cads[0].cantidad).toBeCloseTo(7.6, 6);
+  });
+
+  it('el código elegido a mano en la ficha basta: no hace falta el flag', () => {
+    const bom = calcularBOM([
+      row({ codCadena: 'CAD13', largoCadena: 'ROLLO', colorCadena: 'MET', alto: 2 }, { alto: 2 }),
+    ] as never);
+    expect(cadenaDe(bom)).toMatchObject({ cantidad: 4, unidad: 'm' });
+  });
+
+  it('la VERTICAL también la corta del rollo, en vez de su cadena de 3 m', () => {
+    const ventanas = [
+      { id: 1, categoria: 'VERTICAL', color: 'BCO', modelo: { tipo_rol: 'VERTICAL' }, panos: [{ ancho: 1.5, alto: 2, cadenaMetalica: true }] },
+    ];
+    const bom = calcularBOM(
+      [row({ cadenaMetalica: true, alto: 2 }, { alto: 2 })],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    expect(bom.some((b) => b.categoria === 'CADENA' && b.especificacion === 'CAD06')).toBe(false);
+    expect(cadenaDe(bom)).toMatchObject({ cantidad: 4, unidad: 'm' });
+  });
+
+  it('con MEC 06 (cadena incorporada) no se emite ninguna, tampoco la metálica', () => {
+    const bom = calcularBOM([
+      row({ cadenaMetalica: true, mecanismo: 'LZ50 BLANCO [MEC 06]', alto: 2 }, { alto: 2 }),
+    ] as never);
+    expect(bom.filter((b) => b.categoria === 'CADENA' && b.especificacion === 'CAD13')).toHaveLength(0);
+  });
+
+  it('sin el flag el BOM es el de siempre (regresión)', () => {
+    const rows = [row({ codCadena: 'CAD01', largoCadena: '1mts', colorCadena: 'BCO', codPeso: 'PCA04' })];
+    const a = calcularBOM(rows as never);
+    const b = calcularBOM([{ ...rows[0], pano: { ...rows[0].pano, cadenaMetalica: false } }] as never);
+    expect(b).toEqual(a);
+  });
+});

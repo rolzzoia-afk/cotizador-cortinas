@@ -19,6 +19,7 @@ import { letraPano } from './letras';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { colorPesoNormalizado } from '@/modules/descuentos/peso-oscuridad';
+import { llevaCadenaMetalica, textoCadenaMetalica } from './cadenas';
 import { normalizarColorAccesorio } from '@/modules/descuentos/reglas-mecanismo';
 import {
   anchoCenefaCuadradaDeclaradoCm,
@@ -201,6 +202,11 @@ export function ladoCadenaEtiqueta(direccion?: string): string {
 /** Descripción del accionamiento: "4 METROS NEGRO" (o "MOTOR <tipo>"). */
 export function textoAccionamiento(p: Partial<Pano>): string {
   if (p.motorTipo) return `MOTOR ${String(p.motorTipo).toUpperCase()}`.trim();
+  // La metálica no tiene largo de catálogo: se corta del rollo a 2 × el alto,
+  // y ese número es lo que el armador necesita leer.
+  if (llevaCadenaMetalica(p)) {
+    return textoCadenaMetalica(parseFloat(String(p.alto ?? 0)) || 0).toUpperCase();
+  }
   const raw = String(p.largoCadena ?? '').trim();
   const num = parseFloat(raw.replace(',', '.'));
   const largo = Number.isFinite(num) && num > 0 ? `${String(num).replace('.', ',')} METROS` : raw;

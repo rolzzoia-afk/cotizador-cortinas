@@ -43,7 +43,12 @@ import {
   REGLAS_SELECCION_DEFAULT,
   type ReglasSeleccion,
 } from '@/modules/descuentos/reglasSeleccion';
-import { colorPesoCadena } from './cadenas';
+import {
+  COD_CADENA_METALICA,
+  colorPesoCadena,
+  llevaCadenaMetalica,
+  textoCadenaMetalica,
+} from './cadenas';
 import { rotuloForma } from './wizard/selectorVentanas';
 import { telaDePano } from './telaPano';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
@@ -431,9 +436,13 @@ export function construirCalculoGeneral(
             ),
         tipoRol: (v.modelo?.tipo_rol as string) || '',
         codMecanismo,
-        accionamiento: codCadena
-          ? `[${codCadena}] ${largoCadena}`.trim()
-          : largoCadena,
+        // La metálica se corta del rollo: en vez del peldaño de catálogo
+        // («ROLLO») va lo que el taller tiene que medir.
+        accionamiento: llevaCadenaMetalica(p)
+          ? `[${COD_CADENA_METALICA}] ${textoCadenaMetalica(parseFloat(String(p.alto ?? v.alto ?? 0)) || 0)}`
+          : codCadena
+            ? `[${codCadena}] ${largoCadena}`.trim()
+            : largoCadena,
         pesoCadena: codPeso ? `[${codPeso}] ${colorPeso}`.trim() : colorPeso,
         codCadena,
         largoCadena,

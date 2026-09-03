@@ -15,7 +15,12 @@ import {
   normalizarInstalacionBeeblack,
   normalizarVarianteBeeblack,
 } from '@/modules/descuentos/reglas-beeblack';
-import { derivarLargoColor, type CadenaInsumo } from '../cadenas';
+import {
+  derivarLargoColor,
+  esCadenaMetalica,
+  patchCadenaMetalica,
+  type CadenaInsumo,
+} from '../cadenas';
 import { tipoTelaDesdeProducto } from '../fase0-sync';
 import type { ReglasCadena } from '@/modules/descuentos/reglasSeleccion';
 import type { CatalogoProductos, Pano, Ventana } from '../types';
@@ -59,6 +64,8 @@ export function parcheAcciona(
       codCadena: '',
       largoCadena: '',
       colorCadena: '',
+      // Sin cadena no hay cadena metálica que cobrar ni que cortar.
+      cadenaMetalica: false,
     };
   }
   return { motorModelo: '', motorTipo: '', ladoMotor: '' };
@@ -73,9 +80,12 @@ export function parcheCadena(
   cadenas: CadenaInsumo[],
   reglas?: ReglasCadena,
 ): Partial<Pano> {
-  if (!cod) return { codCadena: '', largoCadena: '', colorCadena: '' };
+  if (!cod) return { codCadena: '', largoCadena: '', colorCadena: '', cadenaMetalica: false };
+  // Elegir la metálica enciende el flag (y elegir otra lo apaga): así el precio
+  // de Fase 1 y lo que corta el taller dicen lo mismo.
+  if (esCadenaMetalica(cod)) return { cadenaMetalica: true, ...patchCadenaMetalica() };
   const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas);
-  return { codCadena: cod, largoCadena, colorCadena };
+  return { codCadena: cod, largoCadena, colorCadena, cadenaMetalica: false };
 }
 
 /**
