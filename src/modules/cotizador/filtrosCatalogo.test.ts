@@ -48,6 +48,12 @@ describe('chipDeProducto — COD_INT sueltos (motores, soft, oscura)', () => {
     expect(chipDeProducto(p('ACCESORIO'), 'DOM 35')).toBe('MOTOR_GRANDE');
   });
 
+  it('los motores pequeños del alta 2026-09 van al chip MOT, con su hub y sus controles', () => {
+    for (const c of ['DOM 47', 'DOM 48', 'DOM 49', 'DOM 50', 'DOM 51', 'DOM 52', 'DOM 53']) {
+      expect(chipDeProducto(p('ACCESORIO'), c)).toBe('MOT');
+    }
+  });
+
   it('un COD_INT nuevo que el diccionario no conoce cae en OTROS, no desaparece', () => {
     expect(chipDeProducto(p('ACCESORIO'), 'DOM 43')).toBe(CHIP_OTROS);
     expect(chipDeProducto(p(''), 'INS 99')).toBe(CHIP_OTROS);

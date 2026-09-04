@@ -320,7 +320,38 @@ export function esCadenaMetalica(cod: string | null | undefined): boolean {
 }
 
 /** Forma mínima de un paño para las decisiones de cadena. */
-type PanoCadena = { cadenaMetalica?: boolean; codCadena?: string | null };
+type PanoCadena = { cadenaMetalica?: boolean; codCadena?: string | null; cadenaManual?: boolean };
+
+/**
+ * ¿La cadena de este paño la eligió una PERSONA?
+ *
+ * Se exige el flag y que además HAYA código: un flag encendido sin cadena
+ * (apagar la metálica, cambiar a un kit que la trae incorporada) dejaría el paño
+ * trabado sin ninguna y sin que nadie se la reponga.
+ *
+ * Mientras es verdadero, la cadena no se recalcula por alto ni por color: es lo
+ * único que permite poner a propósito una cadena de otro color que el de los
+ * accesorios. Antes se deshacía sola en el primer recálculo.
+ */
+export function cadenaElegidaAMano(p: PanoCadena | null | undefined): boolean {
+  return !!p?.cadenaManual && !!(p.codCadena || '').trim();
+}
+
+/**
+ * ¿La sincronización de Fase 2 tiene que volver a elegir la cadena de este paño?
+ *
+ * Rehace la cadena cuando falta, y cuando la que hay quedó de OTRO color que el
+ * de los accesorios (`desalineada`) — pasa al cambiar el color desde Fase 1,
+ * donde no hay catálogo de insumos para elegir el código nuevo. Nunca si la
+ * eligió una persona.
+ */
+export function debeRehacerCadena(
+  p: PanoCadena | null | undefined,
+  opts: { desalineada: boolean },
+): boolean {
+  if (cadenaElegidaAMano(p)) return false;
+  return !((p?.codCadena || '').trim()) || opts.desalineada;
+}
 
 /**
  * ¿Esta cortina va con cadena metálica?

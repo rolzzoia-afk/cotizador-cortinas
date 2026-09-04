@@ -74,8 +74,10 @@ import { ProductoSelectorFase2 } from '@/components/cotizador/ProductoSelectorFa
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import {
+  cadenaElegidaAMano,
   codCadenaAutoPorAlto,
   codCadenaPorLargoColor,
+  debeRehacerCadena,
   codPesoAuto,
   codTopeAuto,
   derivarLargoColor,
@@ -390,6 +392,10 @@ export function CotizadorFase2() {
             cadPatch.codCadena = '';
             cadPatch.largoCadena = '';
             cadPatch.colorCadena = '';
+            // El kit trae la cadena puesta: no hay elección a mano que sostener,
+            // y dejar el flag encendido con el código vacío congelaría el
+            // automático si mañana cambian de kit.
+            cadPatch.cadenaManual = false;
           }
           if (!p.codPeso) cadPatch.codPeso = codPesoAuto(lineaB);
         }
@@ -413,7 +419,10 @@ export function CotizadorFase2() {
           const desalineada =
             (!!p.codCadena && !!colorActual && colorActual !== colorAccesorioCorto(colorAcc)) ||
             esCadenaMetalica(p.codCadena);
-          if (!p.codCadena || desalineada) {
+          // Una cadena elegida a mano NO se toca: ni por color desalineado ni
+          // por un cambio de accesorios posterior (la regla vive en
+          // `debeRehacerCadena`, que es donde está probada).
+          if (debeRehacerCadena(p, { desalineada })) {
             // El largo GUARDADO en el paño manda sobre el que se deriva del
             // código: si bodega reasignó ese código a otra cadena (pasó con
             // CAD17, que era la blanca de 1,40 m y quedó como la gris de 1,2),
@@ -954,7 +963,7 @@ export function CotizadorFase2() {
         // solo con el peso.
         if (kitTraeCadenaIncorporada(pn.mecanismo)) {
           if (pn.codCadena || pn.largoCadena || pn.colorCadena) {
-            setPano({ codCadena: '', largoCadena: '', colorCadena: '' });
+            setPano({ codCadena: '', largoCadena: '', colorCadena: '', cadenaManual: false });
           }
           if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
           return;
@@ -963,6 +972,12 @@ export function CotizadorFase2() {
         // cualquier alto y color (se corta del rollo a la medida que haga falta).
         if (pn.cadenaMetalica) {
           if (!esCadenaMetalica(pn.codCadena)) setPano(patchCadenaMetalica());
+          if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
+          return;
+        }
+        // Cadena elegida a mano: no se recalcula ni al cambiar el alto ni al
+        // cambiar el color. El peso sí se sigue reponiendo si falta.
+        if (cadenaElegidaAMano(pn)) {
           if (!nuevo.panos[idx].codPeso) setPano({ codPeso: codPesoAuto(lineaB) });
           return;
         }
@@ -1036,7 +1051,20 @@ export function CotizadorFase2() {
 
       // Cambio de color de accesorios → represelecciona el mecanismo (con ancho,
       // para respetar la regla >3 m = MEC 28). Dual: represelecciona chip por color.
-      if (patch.colorMecanismo !== undefined || patch.colorPeso !== undefined || patch.colorCadena !== undefined || patch.color !== undefined) {
+      //
+      // ELEGIR UNA CADENA NO ES UN CAMBIO DE COLOR. El parche de la cadena
+      // arrastra el `colorCadena` que le corresponde a ESE código, y como ese
+      // campo también hace de color de accesorios, entrar acá tenía dos efectos
+      // que nadie pidió: recoloreaba el mecanismo, y `recomputarCadena` volvía a
+      // poner la cadena automática encima de la recién elegida (el vendedor veía
+      // la nota «elegida a mano» pero el desplegable seguía con la anterior).
+      const esEleccionDeCadena = patch.codCadena !== undefined;
+      if (
+        patch.colorMecanismo !== undefined ||
+        patch.colorPeso !== undefined ||
+        (patch.colorCadena !== undefined && !esEleccionDeCadena) ||
+        patch.color !== undefined
+      ) {
         const mec = mecanismoParaPano(nuevo.panos[idx], v.color, nuevo.modelo ?? null, opcSel.mecanismoResolucion, v.categoria, anchoIdx(), usarE78, reglas, lineaBDe(nuevo, idx));
         if (mec && mec !== nuevo.panos[idx].mecanismo) {
           if (esChipDual(mec)) {
@@ -1060,6 +1088,13 @@ export function CotizadorFase2() {
 
       // Cambio de alto → recalcula la cadena auto (el largo depende del alto).
       if (patch.alto !== undefined) recomputarCadena();
+
+      // Volver a «Automática» en el selector (o apagar la metálica): la cadena
+      // se repone EN EL ACTO. Sin esto el desplegable quedaba vacío hasta el
+      // próximo guardado, que es cuando sincroniza la ficha. Pasar la cortina a
+      // motor entra por acá con el mismo parche, pero `recomputarCadena` se
+      // devuelve sola cuando hay motor.
+      if (patch.codCadena === '' && patch.cadenaManual === false) recomputarCadena();
 
       // Cambio de ancho → si cruza 3 m cambia el mecanismo (MEC 28 ↔ kit), y en
       // todo caso ajusta la tubería (E02/E66 y E47/E65).

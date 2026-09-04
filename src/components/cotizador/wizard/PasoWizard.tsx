@@ -59,6 +59,7 @@ import {
   cenefaCuadradaTapasFijas,
   llevaCenefaCuadradaImplicita,
   llevaCenefaOvaladaImplicita,
+  opcionesCargadorMotor,
   opcionesCenefa,
 } from '@/modules/cotizador/insumosCortina';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
@@ -80,17 +81,6 @@ import { panoLlevaMotor, colorAccesorioCanonico } from '@/modules/cotizador/wiza
 import type { IdPaso } from '@/modules/cotizador/wizard/pasos';
 import type { ReglasSeleccion } from '@/modules/descuentos/reglasSeleccion';
 import type { CatalogoProductos, Pano, Ventana } from '@/modules/cotizador/types';
-
-const CARGADOR_DOM38 = [
-  { value: 'NINGUNO', label: 'No lleva' },
-  { value: 'DOM43', label: 'Hub domótica (DOM43)' },
-  { value: 'DOM33', label: 'Adaptador (DOM33)' },
-];
-const CARGADOR_DOM41 = [
-  { value: 'NINGUNO', label: 'No lleva' },
-  { value: 'DOM03', label: 'HUB USB (DOM03)' },
-  { value: 'DOM33', label: 'Adaptador (DOM33)' },
-];
 
 export type PropsPaso = {
   paso: IdPaso;
@@ -360,8 +350,7 @@ export function CuerpoPaso(props: PropsPaso) {
           </div>
         );
       }
-      const cargadorOpts =
-        (pano.motorModelo || '').toUpperCase() === 'DOM38' ? CARGADOR_DOM38 : CARGADOR_DOM41;
+      const cargadorOpts = opcionesCargadorMotor(pano.motorModelo);
       const cadenasDisponibles = cadenasRoller(props.cadenas, {}, reglas.cadenas);
       const pesosDisponibles = pesosSeleccionables(props.pesos);
       const topesDisponibles = topesSeleccionables(props.topes);
@@ -429,22 +418,30 @@ export function CuerpoPaso(props: PropsPaso) {
           ) : (
             <>
               {cadenasDisponibles.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
-                  <select
-                    className="min-w-[220px] flex-1 rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
-                    value={pano.codCadena || ''}
-                    onChange={(e) =>
-                      onPano(parcheCadena(e.target.value, props.cadenas, reglas.cadenas))
-                    }
-                  >
-                    <option value="">— Sin cadena —</option>
-                    {cadenasDisponibles.map((c) => (
-                      <option key={c.cod} value={c.cod as string}>
-                        {etiquetaCadena(c)}
-                      </option>
-                    ))}
-                  </select>
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
+                    <select
+                      className="min-w-[220px] flex-1 rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+                      value={pano.codCadena || ''}
+                      onChange={(e) =>
+                        onPano(parcheCadena(e.target.value, props.cadenas, reglas.cadenas))
+                      }
+                    >
+                      <option value="">— Automática (por alto y color) —</option>
+                      {cadenasDisponibles.map((c) => (
+                        <option key={c.cod} value={c.cod as string}>
+                          {etiquetaCadena(c)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {pano.cadenaManual && !!pano.codCadena && (
+                    <p className="text-[0.68rem] text-muted-foreground">
+                      Elegida a mano: se respeta tal cual, aunque no calce con el color de
+                      accesorios.
+                    </p>
+                  )}
                 </div>
               )}
               <RadioRow

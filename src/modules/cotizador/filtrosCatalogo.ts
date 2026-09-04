@@ -10,8 +10,13 @@ import type { Producto } from '@/modules/cotizador/types';
 const N = (s?: string) => (s || '').toUpperCase();
 
 const CHIP_DE_CODINT: Record<string, string> = {
-  // MOT
+  // MOT — los motores PEQUEÑOS y lo que los acompaña. Acá entran también los
+  // cuatro del alta 2026-09-04 (DOM 47-50), su hub redondo (DOM 51) y sus dos
+  // controles de 15 canales (DOM 52 negro, DOM 53 blanco): son de la misma
+  // familia chica que el DOM 01, no de la línea Merygate.
   'DOM 01': 'MOT', 'DOM 02': 'MOT', 'DOM 03': 'MOT', 'DOM 05': 'MOT', INSTMOT: 'MOT',
+  'DOM 47': 'MOT', 'DOM 48': 'MOT', 'DOM 49': 'MOT', 'DOM 50': 'MOT',
+  'DOM 51': 'MOT', 'DOM 52': 'MOT', 'DOM 53': 'MOT',
   // MOTOR MG (DOM 41 motor Merygate + DOM 42 su control Livorno 15 CH)
   'DOM 33': 'MOTOR_MG', 'DOM 34': 'MOTOR_MG', 'DOM 38': 'MOTOR_MG', 'DOM 39': 'MOTOR_MG',
   'DOM 41': 'MOTOR_MG', 'DOM 42': 'MOTOR_MG', INSTMOTMG: 'MOTOR_MG',

@@ -115,6 +115,20 @@ describe('campos por paso', () => {
     ]);
   });
 
+  it('los motores pequeños se dictan, y el cargador que ofrecen es su DOM51', () => {
+    // El dictado no puede ofrecer un hub que la pantalla no tiene: las dos
+    // leen `opcionesCargadorMotor`.
+    const v = ventana({}, { motorModelo: 'DOM48' });
+    const ctx = ctxDe(v);
+    const campos = camposDelPaso('accionamiento', ctx);
+    const modelo = campos.find((c) => c.clave === 'pano.motorModelo');
+    const valores = modelo?.opciones?.(ctx)?.map((o) => o.value) ?? [];
+    expect(valores).toContain('DOM48');
+    expect(valores).toContain('DOM38'); // los de siempre siguen ahí: conviven
+    const cargador = campos.find((c) => c.clave === 'pano.motorCargador');
+    expect(cargador?.opciones?.(ctx)?.map((o) => o.value)).toEqual(['NINGUNO', 'DOM51', 'DOM33']);
+  });
+
   it('el MEC 06 trae la cadena incorporada: no se pregunta ninguna', () => {
     const v = ventana({}, { mecanismo: 'SINFLEX [MEC 06]' });
     const ctx = ctxDe(v);
