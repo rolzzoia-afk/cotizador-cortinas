@@ -12,6 +12,7 @@ import {
   esAdicionalHubDomotica,
   esCategoriaDuo,
   esCenefaOvalada,
+  esCodigoMotor,
   insumosBeeblackDeCortina,
   insumosDePano,
   insumosMotorDePano,
@@ -20,7 +21,10 @@ import {
   llevaCenefaOvaladaImplicita,
   llevaTapasPeso,
   manillaDesdeAdicional,
+  opcionesCargadorMotor,
   opcionesCenefa,
+  MOTORES,
+  MOTORES_PEQUENOS,
   faltantesDomoticaInventario,
   faltantesManillasInventario,
   otLlevaDomotica,
@@ -690,6 +694,87 @@ describe('insumosMotorDePano', () => {
     expect(porCategoria[0].codigo).toBe('DOM38');
     // Sin cenefa ovalada, DOM41 se mantiene.
     expect(insumosMotorDePano(pano({ motorModelo: 'DOM41' }))[0].codigo).toBe('DOM41');
+  });
+});
+
+// Alta 2026-09-04: cuatro motores pequeños que CONVIVEN con el DOM38 y el
+// DOM41. Dos reglas del dueño: el control lo decide el COLOR del motor y
+// ninguno arrastra cable (los cuatro vienen con el suyo incorporado).
+describe('motores pequeños DOM47-DOM50', () => {
+  const codigos = (p: Partial<Pano>) => insumosMotorDePano(pano(p)).map((i) => i.codigo);
+
+  it('los cuatro conviven con los de siempre en el catálogo de motores', () => {
+    expect(Object.keys(MOTORES)).toEqual(['DOM38', 'DOM41', 'DOM47', 'DOM48', 'DOM49', 'DOM50']);
+  });
+
+  it('ninguno arrastra cable de carga: el DOM34 es del DOM38 y de nadie más', () => {
+    for (const m of MOTORES_PEQUENOS) expect(codigos({ motorModelo: m })).toEqual([m]);
+    expect(codigos({ motorModelo: 'DOM38' })).toContain('DOM34');
+  });
+
+  it('el control lo decide el color del motor: negro → DOM52, blanco → DOM53', () => {
+    expect(codigos({ motorModelo: 'DOM47', motorControlAdicCant: 1 })).toEqual(['DOM47', 'DOM52']);
+    expect(codigos({ motorModelo: 'DOM48', motorControlAdicCant: 1 })).toEqual(['DOM48', 'DOM52']);
+    expect(codigos({ motorModelo: 'DOM49', motorControlAdicCant: 1 })).toEqual(['DOM49', 'DOM53']);
+    expect(codigos({ motorModelo: 'DOM50', motorControlAdicCant: 1 })).toEqual(['DOM50', 'DOM53']);
+  });
+
+  it('el control sigue sin ser automático: sale solo por la cantidad de Fase 2', () => {
+    expect(codigos({ motorModelo: 'DOM47' })).not.toContain('DOM52');
+    const dos = insumosMotorDePano(pano({ motorModelo: 'DOM49', motorControlAdicCant: 3 }));
+    expect(dos.find((i) => i.codigo === 'DOM53')?.cantidad).toBe(3);
+  });
+
+  it('su hub es el DOM51, y como hub arrastra su enchufe DOM04', () => {
+    expect(codigos({ motorModelo: 'DOM48', motorCargador: 'DOM51' })).toEqual([
+      'DOM48',
+      'DOM04',
+      'DOM51',
+    ]);
+    // El adaptador DOM33 sigue sin enchufe: ya es uno.
+    expect(codigos({ motorModelo: 'DOM48', motorCargador: 'DOM33' })).toEqual(['DOM48', 'DOM33']);
+  });
+
+  it('el selector de cargador ofrece el hub que le toca a cada motor', () => {
+    const vals = (m: string) => opcionesCargadorMotor(m).map((o) => o.value);
+    expect(vals('DOM38')).toEqual(['NINGUNO', 'DOM43', 'DOM33']);
+    expect(vals('DOM41')).toEqual(['NINGUNO', 'DOM03', 'DOM33']);
+    for (const m of MOTORES_PEQUENOS) expect(vals(m)).toEqual(['NINGUNO', 'DOM51', 'DOM33']);
+    // Sin motor elegido, la lista de siempre (no revienta).
+    expect(vals('')).toEqual(['NINGUNO', 'DOM03', 'DOM33']);
+  });
+
+  it('las etiquetas del selector nombran el código, que es lo que pide bodega', () => {
+    for (const o of opcionesCargadorMotor('DOM47')) expect(o.label).toBeTruthy();
+    expect(opcionesCargadorMotor('DOM47')[1].label).toContain('DOM51');
+  });
+
+  it('un motor pequeño vendido en Fase 1 y no bajado a un paño llega igual a bodega', () => {
+    const out = faltantesDomoticaInventario(
+      [{ codInt: 'DOM 50', cantidad: 2, descuento: 0, ubicacion: 'LIVING' }],
+      {},
+    );
+    expect(out.find((i) => i.codigo === 'DOM50')?.cantidad).toBe(2);
+    // Y sin cable: el top-up del DOM34 es solo del DOM38.
+    expect(out.some((i) => i.codigo === 'DOM34')).toBe(false);
+  });
+
+  it('los controles nuevos también se reponen por lo VENDIDO', () => {
+    const out = faltantesDomoticaInventario(
+      [{ codInt: 'DOM 52', cantidad: 3, descuento: 0, ubicacion: 'LIVING' }],
+      { DOM52: 1 },
+    );
+    expect(out.find((i) => i.codigo === 'DOM52')?.cantidad).toBe(2);
+    expect(out.find((i) => i.codigo === 'DOM52')?.descripcion).toBe(
+      'CONTROL REMOTO (15 CANALES) - NEGRO',
+    );
+  });
+
+  it('son unidades de motor para el inventario, igual que el DOM38', () => {
+    for (const m of MOTORES_PEQUENOS) expect(esCodigoMotor(m)).toBe(true);
+    // Y el catálogo de Fase 1 los escribe con espacio: «DOM 47».
+    expect(codigoMotorDesdeAdicional('DOM 47')).toBe('DOM47');
+    expect(codigoMotorDesdeAdicional('DOM 52')).toBe(null); // el control no es unidad
   });
 });
 

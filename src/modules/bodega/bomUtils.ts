@@ -14,6 +14,7 @@ import {
   textoTopeInventario,
 } from '@/modules/cotizador/cadenas';
 import { categoriaLlevaTopeCadena } from '@/modules/cotizador/insumosCortina';
+import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 
@@ -437,7 +438,10 @@ export function extraerInsumosBOM(
   };
 
   const processPano = (p: Pano, categoria = '') => {
-    const colorAcc = String(p.colorMecanismo || p.colorPeso || p.colorCadena || p.color || '');
+    // La MISMA cascada que `colorAccesoriosDePano`: una cadena elegida a mano no
+    // define el color de los accesorios (su color es el de la cadena que se
+    // pidió a propósito, no el del mecanismo).
+    const colorAcc = colorAccesoriosDePano(p);
     // La VERTICAL lleva SIEMPRE la cadena de 3 m por color de accesorios
     // (CAD04 negro / CAD06 resto), calculada — nunca la que quedó guardada en
     // el paño. El BEEBLACK no lleva cadena. Espejo de `calcularBOM`.

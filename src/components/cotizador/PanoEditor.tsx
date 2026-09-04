@@ -46,17 +46,18 @@ import { debeInvertirPano } from '@/modules/cotizador/tela';
 import {
   cantidadSuplementosAuto,
   llevaCenefaOvaladaImplicita,
+  opcionesCargadorMotor,
   opcionesCenefa,
+  LABEL_CARGADOR,
 } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { esCategoriaPletina, mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
 import { colorAccesorioCorto } from '@/modules/cotizador/fase0-sync';
 import { coloresParaUso, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
+import { parcheCadena } from '@/modules/cotizador/wizard/parches';
 import {
   cadenasRoller,
-  esCadenaMetalica,
   etiquetaCadena,
-  derivarLargoColor,
   llevaCadenaMetalica,
   metrosCadenaMetalica,
   patchCadenaMetalica,
@@ -165,25 +166,10 @@ type Props = {
 
 // Cargador/hub del motor: OPCIONAL — no todos los motores llevan hub, así que
 // el default es 'No lleva' y el vendedor lo agrega cuando el cliente lo compra.
-// El hub típico depende del motor (DOM38 → hub domótica DOM43; DOM41 → HUB USB
-// DOM03); DOM33 (adaptador) es la alternativa manual en ambos.
-const OPCIONES_CARGADOR_DOM38 = [
-  { value: 'NINGUNO', label: 'No lleva' },
-  { value: 'DOM43', label: 'Hub domótica (DOM43)' },
-  { value: 'DOM33', label: 'Adaptador (DOM33)' },
-] as const;
-const OPCIONES_CARGADOR_DOM41 = [
-  { value: 'NINGUNO', label: 'No lleva' },
-  { value: 'DOM03', label: 'HUB USB (DOM03)' },
-  { value: 'DOM33', label: 'Adaptador (DOM33)' },
-] as const;
-// Etiquetas para mostrar un cargador guardado que no está en las opciones del
+// Qué hub le toca a cada motor lo decide `opcionesCargadorMotor`, que es la
+// MISMA lista que leen la vista guiada y el dictado. `LABEL_CARGADOR` sirve
+// además para mostrar un cargador guardado que no está en las opciones del
 // modelo actual (ej. DOM03 guardado y luego el motor cambió a DOM38).
-const LABEL_CARGADOR: Record<string, string> = {
-  DOM43: 'Hub domótica (DOM43)',
-  DOM03: 'HUB USB (DOM03)',
-  DOM33: 'Adaptador (DOM33)',
-};
 
 const OPCIONES_VARIANTE_BEEBLACK = [
   { value: 'INTERNO', label: 'Interno' },
@@ -393,8 +379,7 @@ export function PanoEditor({
       ? 'DOM38'
       : (pano.motorModelo || '').toUpperCase();
   const cargadorGuardado = (pano.motorCargador || '').toUpperCase();
-  const opcionesCargadorBase =
-    motorModeloEfectivo === 'DOM38' ? OPCIONES_CARGADOR_DOM38 : OPCIONES_CARGADOR_DOM41;
+  const opcionesCargadorBase = opcionesCargadorMotor(motorModeloEfectivo);
   const opcionesCargador: readonly { value: string; label: string }[] =
     LABEL_CARGADOR[cargadorGuardado] && !opcionesCargadorBase.some((o) => o.value === cargadorGuardado)
       ? [...opcionesCargadorBase, { value: cargadorGuardado, label: LABEL_CARGADOR[cargadorGuardado] }]
@@ -605,7 +590,10 @@ export function PanoEditor({
                 onChange(
                   v
                     ? { cadenaMetalica: true, ...patchCadenaMetalica() }
-                    : { cadenaMetalica: false, codCadena: '', largoCadena: '', colorCadena: '' },
+                    : // Apagarla vuelve al automático: se limpia también el flag
+                      // de «elegida a mano», o la ficha quedaría sin cadena y sin
+                      // que nadie se la reponga.
+                      parcheCadena('', cadenas, reglas.cadenas),
                 )
               }
             />
@@ -618,34 +606,31 @@ export function PanoEditor({
           {!esVerticalCat &&
             !metalica &&
             (cadenasDisponibles.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
-                <select
-                  className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
-                  value={pano.codCadena || ''}
-                  onChange={(e) => {
-                    const cod = e.target.value;
-                    if (!cod) {
-                      onChange({ codCadena: '', largoCadena: '', colorCadena: '' });
-                      return;
-                    }
-                    // Elegir la metálica a mano enciende el flag: así el precio
-                    // de Fase 1 y el corte del taller quedan de acuerdo.
-                    if (esCadenaMetalica(cod)) {
-                      onChange({ cadenaMetalica: true, ...patchCadenaMetalica() });
-                      return;
-                    }
-                    const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas.cadenas);
-                    onChange({ codCadena: cod, largoCadena, colorCadena });
-                  }}
-                >
-                  <option value="">— Sin cadena —</option>
-                  {cadenasDisponibles.map((c) => (
-                    <option key={c.cod} value={c.cod as string}>
-                      {etiquetaCadena(c)}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="min-w-[80px] text-[0.72rem] text-muted-foreground">Cadena</span>
+                  <select
+                    className="flex-1 min-w-[200px] rounded border border-border bg-card px-2 py-1 text-[0.72rem] text-foreground"
+                    value={pano.codCadena || ''}
+                    // El MISMO parche que usan la vista guiada y el dictado:
+                    // elegir una la fija a mano, y volver a «Automática» la
+                    // devuelve a la que proponen el alto y el color.
+                    onChange={(e) => onChange(parcheCadena(e.target.value, cadenas, reglas.cadenas))}
+                  >
+                    <option value="">— Automática (por alto y color) —</option>
+                    {cadenasDisponibles.map((c) => (
+                      <option key={c.cod} value={c.cod as string}>
+                        {etiquetaCadena(c)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {pano.cadenaManual && !!pano.codCadena && (
+                  <p className="text-[0.68rem] text-muted-foreground">
+                    Elegida a mano: se respeta tal cual, aunque no calce con el color de accesorios.
+                    Para volver a la automática, elige «Automática» en la lista.
+                  </p>
+                )}
               </div>
             ) : (
               <RadioRow

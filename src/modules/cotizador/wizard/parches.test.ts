@@ -49,8 +49,10 @@ describe('parcheAcciona', () => {
       codCadena: '',
       largoCadena: '',
       colorCadena: '',
-      // Sin cadena tampoco hay cadena metálica que cobrar.
+      // Sin cadena tampoco hay cadena metálica que cobrar, ni una elección a
+      // mano que sostener.
       cadenaMetalica: false,
+      cadenaManual: false,
     });
   });
 
@@ -71,31 +73,42 @@ describe('parcheAcciona', () => {
       ladoMotor: '',
     });
   });
+
+  it('pasar a MOTOR también suelta la cadena elegida a mano', () => {
+    // Con el flag pegado, volver a cadena dejaría la ficha esperando una
+    // elección manual que ya no existe y el automático no la repondría.
+    expect(parcheAcciona('MOTOR', {}).cadenaManual).toBe(false);
+  });
 });
 
 describe('parcheCadena', () => {
   const cadenas = [{ cod: 'CAD01', nemotecnico: 'CADENA 1 METRO', color: 'BLANCO' }];
 
-  it('sin código limpia los tres campos', () => {
+  it('sin código limpia los tres campos y vuelve al automático', () => {
     expect(parcheCadena('', cadenas)).toEqual({
       codCadena: '',
       largoCadena: '',
       colorCadena: '',
       cadenaMetalica: false,
+      cadenaManual: false,
     });
   });
 
-  it('arrastra largo y color de la cadena elegida', () => {
+  it('arrastra largo y color de la cadena elegida, y la marca como elegida a mano', () => {
+    // El flag es lo que impide que Fase 2 la rehaga en la próxima
+    // sincronización cuando su color no calza con el de los accesorios.
     expect(parcheCadena('CAD01', cadenas)).toEqual({
       codCadena: 'CAD01',
       largoCadena: '1mts',
       colorCadena: 'BCO',
       cadenaMetalica: false,
+      cadenaManual: true,
     });
   });
 
   it('elegir la METÁLICA enciende el flag que cobra Fase 1', () => {
     // Y al revés: elegir cualquier otra lo apaga (los dos casos de arriba).
+    // No se marca «a mano»: a la metálica la sostiene su propio flag.
     expect(parcheCadena('CAD13', cadenas)).toEqual({
       cadenaMetalica: true,
       codCadena: 'CAD13',

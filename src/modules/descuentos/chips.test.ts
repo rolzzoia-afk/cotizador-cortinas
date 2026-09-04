@@ -7,6 +7,7 @@ import {
   chipMecanismoPorNumero,
   chipTuberiaDeModelo,
   codigoTuberiaDeChip,
+  colorAccesoriosDePano,
   esChipDual,
   kitPorTuboElegido,
   ladoColorDesdeChipDual,
@@ -125,6 +126,36 @@ describe('mecanismoParaPano — el kit sigue al color de accesorios', () => {
     expect(kit({ mecanismo: REFORZADO_BCO }, 'NEGRAS')).toContain('[MEC 40]');
     expect(kit({}, 'BLANCAS')).toBe(SIMPLE_BCO);
     expect(kit({}, 'GRISES')).toContain('[MEC 34]');
+  });
+
+  it('una cadena elegida A MANO no recolorea el kit', () => {
+    // Poner una cadena negra en una cortina blanca es una decisión sobre LA
+    // CADENA. Como `colorCadena` también hace de color de accesorios, sin el
+    // flag el mecanismo se iba al negro detrás.
+    const aMano = { mecanismo: SIMPLE_BCO, colorCadena: 'NEG', cadenaManual: true };
+    expect(kit(aMano, 'BCO')).toBe(SIMPLE_BCO);
+    // La automática sí cuenta: la puso el color, así que sigue siendo un indicio.
+    expect(kit({ mecanismo: SIMPLE_BCO, colorCadena: 'NEG' }, '')).toContain('[MEC 32]');
+  });
+});
+
+describe('colorAccesoriosDePano — la cascada del color', () => {
+  it('manda el mecanismo, después el peso, después la cadena, la tela y la ventana', () => {
+    expect(colorAccesoriosDePano({ colorMecanismo: 'NEG', colorPeso: 'BCO' })).toBe('NEG');
+    expect(colorAccesoriosDePano({ colorPeso: 'GRS', colorCadena: 'BCO' })).toBe('GRS');
+    expect(colorAccesoriosDePano({ colorCadena: 'BCO', color: 'NEG' })).toBe('BCO');
+    expect(colorAccesoriosDePano({ color: 'NEG' })).toBe('NEG');
+    expect(colorAccesoriosDePano({}, 'BCO')).toBe('BCO');
+    expect(colorAccesoriosDePano({})).toBe('');
+  });
+
+  it('la cadena elegida A MANO se salta: su color es el de la cadena, no el de los accesorios', () => {
+    expect(colorAccesoriosDePano({ colorCadena: 'NEG', cadenaManual: true, color: 'BCO' })).toBe('BCO');
+    expect(colorAccesoriosDePano({ colorCadena: 'NEG', cadenaManual: true }, 'BCO')).toBe('BCO');
+    // Pero si el mecanismo o el peso dicen algo, eso sigue mandando igual.
+    expect(
+      colorAccesoriosDePano({ colorMecanismo: 'GRS', colorCadena: 'NEG', cadenaManual: true }),
+    ).toBe('GRS');
   });
 });
 

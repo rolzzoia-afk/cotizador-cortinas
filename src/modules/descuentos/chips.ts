@@ -172,12 +172,22 @@ export function chipMecanismoPorColor(
   return chipMecanismoPorNumero(num, opciones);
 }
 
-/** Color de accesorios del paño: mecanismo → peso → cadena → tela → ventana. */
+/**
+ * Color de accesorios del paño: mecanismo → peso → cadena → tela → ventana.
+ *
+ * La cadena entra en la cascada porque normalmente la pone el automático a
+ * partir de ese mismo color, así que es un buen indicio. Deja de serlo cuando
+ * la ELIGIÓ una persona: ahí su color es el de la cadena que se pidió a
+ * propósito —una negra en una cortina blanca— y tomarlo como color de
+ * accesorios recolorearía el mecanismo, el peso y los topes detrás. En ese caso
+ * se salta y manda la tela o el color de la ventana.
+ */
 export function colorAccesoriosDePano(
   p: Partial<{
     colorMecanismo?: string | null;
     colorPeso?: string | null;
     colorCadena?: string | null;
+    cadenaManual?: boolean;
     color?: string | null;
   }>,
   ventanaColor?: string | null,
@@ -185,7 +195,7 @@ export function colorAccesoriosDePano(
   return (
     (p.colorMecanismo as string) ||
     (p.colorPeso as string) ||
-    (p.colorCadena as string) ||
+    (p.cadenaManual ? '' : (p.colorCadena as string)) ||
     (p.color as string) ||
     ventanaColor ||
     ''

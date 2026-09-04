@@ -64,8 +64,10 @@ export function parcheAcciona(
       codCadena: '',
       largoCadena: '',
       colorCadena: '',
-      // Sin cadena no hay cadena metálica que cobrar ni que cortar.
+      // Sin cadena no hay cadena metálica que cobrar ni que cortar, ni una
+      // elección a mano que sostener.
       cadenaMetalica: false,
+      cadenaManual: false,
     };
   }
   return { motorModelo: '', motorTipo: '', ladoMotor: '' };
@@ -73,19 +75,31 @@ export function parcheAcciona(
 
 /**
  * Elegir una cadena arrastra su largo y su color, que salen del catálogo (o del
- * nemotécnico, como último recurso). Sin código = sin cadena: se limpian los tres.
+ * nemotécnico, como último recurso).
+ *
+ * Elegir una **enciende `cadenaManual`**: a partir de ahí la sincronización de
+ * Fase 2 no la vuelve a tocar. Sin eso, una cadena de otro color que el de los
+ * accesorios se deshacía sola en el siguiente guardado y no había forma de
+ * cambiarla a mano. Sin código = volver al automático: se limpian los tres
+ * campos y el flag, y la cadena la propone otra vez el alto + el color.
+ *
+ * Lo usan los tres caminos —la ficha, la vista guiada y el dictado—, así que la
+ * regla vive acá y no en cada pantalla.
  */
 export function parcheCadena(
   cod: string,
   cadenas: CadenaInsumo[],
   reglas?: ReglasCadena,
 ): Partial<Pano> {
-  if (!cod) return { codCadena: '', largoCadena: '', colorCadena: '', cadenaMetalica: false };
+  if (!cod) {
+    return { codCadena: '', largoCadena: '', colorCadena: '', cadenaMetalica: false, cadenaManual: false };
+  }
   // Elegir la metálica enciende el flag (y elegir otra lo apaga): así el precio
-  // de Fase 1 y lo que corta el taller dicen lo mismo.
+  // de Fase 1 y lo que corta el taller dicen lo mismo. La metálica la sostiene
+  // su propio flag en cada sincronización, no hace falta marcarla manual.
   if (esCadenaMetalica(cod)) return { cadenaMetalica: true, ...patchCadenaMetalica() };
   const { largoCadena, colorCadena } = derivarLargoColor(cod, cadenas, reglas);
-  return { codCadena: cod, largoCadena, colorCadena, cadenaMetalica: false };
+  return { codCadena: cod, largoCadena, colorCadena, cadenaMetalica: false, cadenaManual: true };
 }
 
 /**

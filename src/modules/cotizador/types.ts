@@ -53,6 +53,21 @@ export type Pano = {
   /** Código del insumo-cadena del inventario (CAD01…). Enlaza la OT al stock. */
   codCadena?: string;
   /**
+   * La cadena la eligió una PERSONA en la ficha, la vista guiada o el dictado.
+   *
+   * Sin esto, Fase 2 rehacía la cadena en cada sincronización cuando su color no
+   * calzaba con el de los accesorios, y elegir a mano una de otro color era
+   * imposible: volvía sola a la propuesta. Con el flag encendido la elección se
+   * respeta tal cual —también si el vendedor cambia después el color de la
+   * cortina—; apagado, la cadena la sigue poniendo el automático por alto y
+   * color, que es lo que pasa en la enorme mayoría de las OTs.
+   *
+   * Se apaga solo al volver a «Automática» en el selector, al cambiar a un kit
+   * que trae la cadena incorporada y al apagar la metálica: así una ficha nunca
+   * queda con el flag puesto y sin cadena.
+   */
+  cadenaManual?: boolean;
+  /**
    * Esta cortina va con CADENA METÁLICA (CAD13): el botón de Fase 1, que en el
    * precio cambia la cadena plástica de la receta por `CAD 13` (por metro) y en
    * el taller manda cortar el rollo metálico a 2 × el alto.
@@ -213,7 +228,9 @@ export type Pano = {
   motorTipo?: string;
   motorControlAdic?: boolean;
   motorHubUsb?: boolean;
-  /** Modelo de motor: 'DOM38' (tronic) | 'DOM41' (inalámbrico) | 'CABLE' (futuro, sin códigos). */
+  /** Modelo de motor: 'DOM38' (tronic) | 'DOM41' (inalámbrico) | los pequeños
+   *  'DOM47'-'DOM50' | 'CABLE' (futuro, sin códigos). El catálogo vivo está en
+   *  `MOTORES` (insumosCortina.ts), que decide también el control de cada uno. */
   motorModelo?: string;
   /** Motor con domótica (agrega 1× DOM43 bridge hub por OT). */
   motorDomotica?: boolean;
@@ -222,8 +239,11 @@ export type Pano = {
   /** Hubs USB (DOM43) adicionales. */
   motorHubUsbCant?: number;
   /**
-   * Cargador del motor (tabla INSTALACIÓN del inventario): 'DOM03' (HUB USB 1 QR,
-   * por defecto) o 'DOM33' (enchufe adaptador motor grande). Ausente = DOM03.
+   * Cargador/hub del motor (tabla INSTALACIÓN del inventario): 'NINGUNO', el hub
+   * que le toca al modelo —'DOM43' (domótica, DOM38), 'DOM03' (HUB USB, DOM41),
+   * 'DOM51' (HUB USB redondo, los pequeños)— o 'DOM33' (enchufe adaptador) como
+   * alternativa manual. Ausente = sin hub. La lista la arma
+   * `opcionesCargadorMotor`, que leen la Ficha, la vista guiada y el dictado.
    */
   motorCargador?: string;
   ladoMotor?: string;
