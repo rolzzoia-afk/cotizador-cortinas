@@ -33,6 +33,7 @@ import {
   esCenefaOvalada,
   llevaCenefaCuadradaImplicita,
   llevaCenefaOvaladaImplicita,
+  opcionesCargadorMotor,
   opcionesCenefa,
 } from '../insumosCortina';
 import { kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
@@ -137,20 +138,9 @@ const opcionesColor = (
     sinonimos: [nombreDeColor(c, reglasDe(ctx).colores)],
   }));
 
-/** El cargador que ofrece cada motor (el DOM38 usa hub de domótica). */
-export function opcionesCargador(motorModelo: string | undefined): { value: string; label: string }[] {
-  return (motorModelo || '').toUpperCase() === 'DOM38'
-    ? [
-        { value: 'NINGUNO', label: 'No lleva' },
-        { value: 'DOM43', label: 'Hub domótica (DOM43)' },
-        { value: 'DOM33', label: 'Adaptador (DOM33)' },
-      ]
-    : [
-        { value: 'NINGUNO', label: 'No lleva' },
-        { value: 'DOM03', label: 'HUB USB (DOM03)' },
-        { value: 'DOM33', label: 'Adaptador (DOM33)' },
-      ];
-}
+/** El cargador que ofrece cada motor. La MISMA lista que dibujan la Ficha y la
+ *  vista guiada: el dictado no puede ofrecer un hub que la pantalla no tenga. */
+export const opcionesCargador = opcionesCargadorMotor;
 
 const cenefaOvaladaDe = (ctx: CtxVoz): boolean =>
   esCenefaOvalada(ctx.pano.cenefa as string, txt(ctx.ventana.categoria), reglasDe(ctx).tipos);
@@ -398,6 +388,13 @@ const CAMPO_MOTOR_MODELO: CampoVoz = {
       {
         DOM41: ['inalambrico', 'inalambrica', 'dom cuarenta y uno'],
         DOM38: ['tronic', 'tronic plus', 'dom treinta y ocho'],
+        // Los cuatro pequeños se dictan por lo que los distingue: si es de
+        // cable o inalámbrico, y de qué color. Sin el «dom …» a secas, que
+        // chocaría con los de arriba.
+        DOM47: ['pequeño cable negro', 'chico cable negro', 'dom cuarenta y siete'],
+        DOM48: ['pequeño inalambrico negro', 'chico inalambrico negro', 'dom cuarenta y ocho'],
+        DOM49: ['pequeño cable blanco', 'chico cable blanco', 'dom cuarenta y nueve'],
+        DOM50: ['pequeño inalambrico blanco', 'chico inalambrico blanco', 'dom cincuenta'],
         CABLE: ['con cable', 'cable'],
       },
     ),

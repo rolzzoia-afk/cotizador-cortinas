@@ -282,10 +282,16 @@ export const OPCIONES_MOTOR_TIPO = [
   'INALAMB. SIN DOMO',
   'CON DOMÓTICA',
 ] as const;
-// Modelo de motor (todos inalámbricos hoy; 'CABLE' queda para el futuro sin códigos).
+// Modelo de motor. Los cuatro «pequeños» son el alta del 2026-09-04 y CONVIVEN
+// con los dos de arriba: el color del nombre (negro/blanco) es el que decide su
+// control (DOM52/DOM53). 'CABLE' queda para el futuro sin códigos.
 export const OPCIONES_MOTOR_MODELO = [
   { value: 'DOM41', label: 'Inalámbrico [DOM41]' },
   { value: 'DOM38', label: 'Tronic Plus [DOM38]' },
+  { value: 'DOM47', label: 'Pequeño cable wifi · negro [DOM47]' },
+  { value: 'DOM48', label: 'Pequeño inalámbrico · negro [DOM48]' },
+  { value: 'DOM49', label: 'Pequeño cable wifi · blanco [DOM49]' },
+  { value: 'DOM50', label: 'Pequeño inalámbrico · blanco [DOM50]' },
   { value: 'CABLE', label: 'Con cable' },
 ] as const;
 export const OPCIONES_LADO_MOTOR = ['IZQUIERDA', 'DERECHA'] as const;
@@ -319,6 +325,9 @@ export function crearPanoVacio(): Pano {
     tipoTela: '',
     largoCadena: '',
     codCadena: '',
+    // Un paño nuevo nace con la cadena AUTOMÁTICA: el flag se enciende recién
+    // cuando alguien elige una de la lista.
+    cadenaManual: false,
     codPeso: '',
     // VACÍO a propósito: el lado de la cadena es una decisión de terreno, no
     // un default. Preseteado en 'Derecha', nadie lo preguntaba y las cortinas

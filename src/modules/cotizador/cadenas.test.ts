@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import {
   COD_PESO_AUTO,
+  cadenaElegidaAMano,
   codCadenaDelPano,
   codPesoAuto,
+  debeRehacerCadena,
   esCadenaMetalica,
   esCadenaRoller,
   llevaCadenaMetalica,
@@ -562,5 +564,59 @@ describe('cadena metálica', () => {
     );
     // Sin metros (una OT vieja) no se inventa un número.
     expect(descripcionCadenaInventario({ codCadena: 'CAD13' })).toBe('[CAD13] CADENA METÁLICA');
+  });
+});
+
+// El vendedor no podía cambiar la cadena a mano: elegir una de otro color
+// duraba hasta el siguiente guardado, porque Fase 2 la veía «desalineada» con
+// el color de accesorios y la rehacía. La preselección se mantiene; lo que
+// cambia es que una elección de una persona ahora se respeta.
+describe('debeRehacerCadena — cuándo Fase 2 vuelve a elegir la cadena', () => {
+  it('sin cadena la pone: es el caso normal de una ficha recién abierta', () => {
+    expect(debeRehacerCadena({}, { desalineada: false })).toBe(true);
+    expect(debeRehacerCadena({ codCadena: '' }, { desalineada: false })).toBe(true);
+    expect(debeRehacerCadena({ codCadena: '   ' }, { desalineada: false })).toBe(true);
+    expect(debeRehacerCadena(null, { desalineada: false })).toBe(true);
+  });
+
+  it('una cadena automática de otro color se rehace (cambiaron los accesorios en Fase 1)', () => {
+    expect(debeRehacerCadena({ codCadena: 'CAD06' }, { desalineada: true })).toBe(true);
+  });
+
+  it('la automática que sí calza se deja tranquila', () => {
+    expect(debeRehacerCadena({ codCadena: 'CAD06' }, { desalineada: false })).toBe(false);
+  });
+
+  it('la elegida a mano NO se toca, aunque su color no calce', () => {
+    // Este es el caso que el vendedor no podía conseguir: una cadena negra en
+    // una cortina de accesorios blancos, a propósito.
+    expect(debeRehacerCadena({ codCadena: 'CAD04', cadenaManual: true }, { desalineada: true }))
+      .toBe(false);
+    expect(debeRehacerCadena({ codCadena: 'CAD04', cadenaManual: true }, { desalineada: false }))
+      .toBe(false);
+  });
+
+  it('el flag a mano SIN cadena no traba la ficha: se repone igual', () => {
+    // Si no, apagar la metálica o cambiar de kit dejaría el paño sin ninguna
+    // cadena y sin nadie que se la ponga.
+    expect(debeRehacerCadena({ cadenaManual: true }, { desalineada: false })).toBe(true);
+    expect(debeRehacerCadena({ cadenaManual: true, codCadena: '' }, { desalineada: true })).toBe(true);
+  });
+
+  it('volver a «Automática» en el selector devuelve el mando al automático', () => {
+    // `parcheCadena('')` apaga el flag y limpia el código: las dos cosas que
+    // hacen que la próxima sincronización vuelva a proponer una.
+    const vuelta = { codCadena: '', cadenaManual: false };
+    expect(debeRehacerCadena(vuelta, { desalineada: false })).toBe(true);
+  });
+});
+
+describe('cadenaElegidaAMano', () => {
+  it('pide el flag Y la cadena: el flag suelto no cuenta', () => {
+    expect(cadenaElegidaAMano({ codCadena: 'CAD04', cadenaManual: true })).toBe(true);
+    expect(cadenaElegidaAMano({ codCadena: 'CAD04' })).toBe(false);
+    expect(cadenaElegidaAMano({ cadenaManual: true })).toBe(false);
+    expect(cadenaElegidaAMano({ cadenaManual: true, codCadena: '  ' })).toBe(false);
+    expect(cadenaElegidaAMano(null)).toBe(false);
   });
 });
