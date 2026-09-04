@@ -731,6 +731,9 @@ function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   const h = 6;
   let yy = y;
   for (const f of FILAS_TOTALES) {
+    // La fila tenue (el neto sin IVA) va más baja, más chica y gris: acompaña
+    // al monto de arriba sin competir con él.
+    const hf = f.tenue ? 4.2 : h;
     if (f.separadorAntes) {
       set(doc, 'draw', LINEA);
       doc.setLineWidth(0.2);
@@ -738,20 +741,21 @@ function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
     }
     if (f.fuerte) {
       set(doc, 'fill', NEGRO);
-      doc.rect(x, yy, w, h, 'F');
+      doc.rect(x, yy, w, hf, 'F');
     }
-    celda(doc, f.label, x + 1, w - 2, yy, h, {
-      bold: true,
-      size: f.fuerte ? 7.6 : 7,
-      color: f.fuerte ? BLANCO : TEXTO,
+    const color = f.fuerte ? BLANCO : f.tenue ? GRIS : TEXTO;
+    celda(doc, f.label, x + 1, w - 2, yy, hf, {
+      bold: !f.tenue,
+      size: f.fuerte ? 7.6 : f.tenue ? 6 : 7,
+      color,
     });
-    celda(doc, formatCLP(f.valor(e.totales)), x + 1, w - 2, yy, h, {
-      bold: true,
+    celda(doc, formatCLP(f.valor(e.totales)), x + 1, w - 2, yy, hf, {
+      bold: !f.tenue,
       align: 'r',
-      size: f.fuerte ? 8.6 : 7.6,
-      color: f.fuerte ? BLANCO : TEXTO,
+      size: f.fuerte ? 8.6 : f.tenue ? 6.4 : 7.6,
+      color,
     });
-    yy += h;
+    yy += hf;
   }
   // La leyenda de las cuotas, pegada al total con tarjeta como el rótulo rojo
   // de la planilla. Con Flow no va: ahí las cuotas y sus intereses los pone el

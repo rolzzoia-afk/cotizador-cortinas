@@ -50,6 +50,7 @@ import { DATOS_EMPRESA_DEFAULT } from './datosEmpresaCotizacion';
 import { TIRA_PROYECTOS, TIRA_PROYECTOS_RATIO } from './fotosProyectos';
 import { SELLO_CUOTAS, SELLO_TARJETAS } from './logoRolzzo';
 import { FILAS_TOTALES, NOTA_IVA } from './filasTotales';
+import { formatCLP } from './calculos';
 import { calcularTotales } from './preciosFase0';
 import {
   ALTO_MAX_TIRA,
@@ -256,10 +257,13 @@ describe('generarPdfCotizacion', () => {
     expect(impreso()).not.toContain('ENVÍO A REGIÓN');
   });
 
-  it('los totales salen del MISMO descriptor que la pantalla, sin desglosar IVA', () => {
+  it('los totales salen del MISMO descriptor que la pantalla: dos montos y el neto en chico', () => {
     generarPdfCotizacion(entradaDemo());
     for (const f of FILAS_TOTALES) expect(impreso()).toContain(f.label);
     expect(impreso()).toContain(NOTA_IVA);
+    // El neto se imprime de verdad (es el subtotal con el que se armó la demo).
+    expect(impreso()).toContain(formatCLP(1158638));
+    // Sigue sin desglose: ni la línea del IVA, ni un «subtotal», ni el abono.
     expect(impreso()).not.toContain('IVA 19%');
     expect(impreso().toUpperCase()).not.toContain('SUBTOTAL');
     expect(impreso().toUpperCase()).not.toContain('ABONO');

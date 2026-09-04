@@ -64,9 +64,9 @@ import {
 } from '@/modules/cotizador/fase0-sync';
 import { emparejarDualesFase0, esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
 import {
-  categoriaLlevaCadenaMando,
   esCategoriaPletina,
   esCategoriaVertical,
+  filaLlevaCadenaMando,
   mecLineaB,
   normalizarColorAccesorio,
 } from '@/modules/descuentos/reglas-mecanismo';
@@ -1068,10 +1068,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     }
     if (esCortinaTipo(prod.tipo)) {
       const descuento = dctParaFila(codInt, gamaTelaEsB(codInt, catalogo));
+      // La fila vacía que se reutiliza puede traer la cadena metálica marcada:
+      // si el producto elegido no lleva cadena, se apaga acá también.
+      const conCadena = filaLlevaCadenaMando({ codInt }, reglas.tipos);
       setFilas((prev) => {
         const last = prev[prev.length - 1];
         if (last && !last.codInt && last.ancho === 0 && last.alto === 0) {
-          return prev.map((f, i) => (i === prev.length - 1 ? { ...f, codInt, descuento } : f));
+          return prev.map((f, i) =>
+            i === prev.length - 1
+              ? { ...f, codInt, descuento, ...(conCadena ? {} : { cadenaMetalica: false }) }
+              : f,
+          );
         }
         return [...prev, { ...nuevaFila(), codInt, descuento }];
       });
@@ -1101,9 +1108,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     if ('categoria' in patch && esCategoriaPletina(patch.categoria, reglas.tipos)) {
       conDct = { ...conDct, direccion: '', sentido: '' };
     }
-    // Si la categoría nueva no lleva cadena de mando (motor, pletina, beeblack),
-    // se apaga la cadena metálica: si no, quedaba marcada e invisible.
-    if ('categoria' in patch && !categoriaLlevaCadenaMando(patch.categoria, reglas.tipos)) {
+    // Si lo nuevo no lleva cadena de mando (motor, pletina, beeblack), se apaga
+    // la cadena metálica: si no, quedaba marcada e invisible. Se mira también el
+    // COD_INT porque en Fase 1 la fila no tiene categoría y el beeblack se
+    // reconoce por su código.
+    if (
+      ('categoria' in patch || 'codInt' in patch) &&
+      !filaLlevaCadenaMando({ categoria: patch.categoria, codInt: conDct.codInt }, reglas.tipos)
+    ) {
       conDct = { ...conDct, cadenaMetalica: false };
     }
     setFilas((prev) => {
@@ -2091,6 +2103,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 // PLETINA (velcro): paño pegado, sin cadena ni enrollado → las dos
                 // columnas de accionamiento/caída no aplican y se muestran "—".
                 const esPletinaFila = esCategoriaPletina(f.categoria, reglas.tipos);
+                // El gate del botón de cadena metálica. Mira el CÓDIGO además de
+                // la categoría: en Fase 1 la fila todavía no tiene categoría.
+                const llevaCadenaFila = filaLlevaCadenaMando(
+                  { categoria: f.categoria, codInt: f.codInt, cod: prod?.cod },
+                  reglas.tipos,
+                );
                 return (
                   <tr key={f.id} className="border-t border-border align-middle">
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
@@ -2247,17 +2265,28 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                       {(() => {
                         // La cadena metálica solo existe donde hay cadena de
                         // mando: el beeblack corre con manilla, la pletina va
-                        // pegada y el motor no lleva cadena.
-                        if (!categoriaLlevaCadenaMando(f.categoria, reglas.tipos)) {
+                        // pegada y el motor no lleva cadena. El botón se muestra
+                        // igual, apagado: así se ve que la opción existe y que
+                        // esta cortina no la admite. El `title` va en el span
+                        // porque Firefox no muestra tooltip sobre un disabled.
+                        if (!llevaCadenaFila) {
                           return (
-                            <span className="text-muted-foreground" title="Este sistema no lleva cadena">
-                              —
+                            <span className="inline-flex" title="Este sistema no lleva cadena">
+                              <button
+                                type="button"
+                                disabled
+                                aria-disabled="true"
+                                className="cursor-not-allowed rounded-md border border-border p-1.5 text-muted-foreground opacity-30"
+                              >
+                                <Link2 className="h-4 w-4" />
+                              </button>
                             </span>
                           );
                         }
                         const metalica = f.cadenaMetalica === true;
                         return (
                           <button
+                            type="button"
                             onClick={() => setFila(f.id, { cadenaMetalica: !metalica })}
                             title={
                               metalica
@@ -2424,9 +2453,21 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                           type="button"
                           title={op.title}
                           onClick={() => {
+                            // El MISMO gate de cada fila, con el código: si no,
+                            // en Fase 1 (sin categoría) marcaba también los
+                            // beeblack. Y las filas sin producto quedan fuera:
+                            // antes el map las escribía aunque no se contaran.
                             const aplica = (f: FilaUI) =>
-                              categoriaLlevaCadenaMando(f.categoria, reglas.tipos);
-                            const n = filas.filter((f) => f.codInt && aplica(f)).length;
+                              !!f.codInt &&
+                              filaLlevaCadenaMando(
+                                {
+                                  categoria: f.categoria,
+                                  codInt: f.codInt,
+                                  cod: catalogo[f.codInt.trim()]?.cod,
+                                },
+                                reglas.tipos,
+                              );
+                            const n = filas.filter(aplica).length;
                             setFilas((prev) =>
                               prev.map((f) => (aplica(f) ? { ...f, cadenaMetalica: op.valor } : f)),
                             );
@@ -2768,7 +2809,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           {FILAS_TOTALES.map((f) => (
             <div key={f.id}>
               {f.separadorAntes && <div className="my-1 border-t border-border" />}
-              <FilaTotal label={f.label} valor={formatCLP(f.valor(t))} fuerte={f.fuerte} />
+              <FilaTotal
+                label={f.label}
+                valor={formatCLP(f.valor(t))}
+                fuerte={f.fuerte}
+                tenue={f.tenue}
+              />
             </div>
           ))}
           {/* La misma leyenda que sale pegada al total con tarjeta en el PDF.

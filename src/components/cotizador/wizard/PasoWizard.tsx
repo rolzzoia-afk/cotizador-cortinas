@@ -9,7 +9,6 @@ import { RadioRow } from '@/components/cotizador/editorPano/controles';
 import { ProductoSelectorFase2 } from '@/components/cotizador/ProductoSelectorFase2';
 import {
   OPCIONES_BRACKET_TIPO,
-  OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
   OPCIONES_CENEFA_TIRA,
   OPCIONES_CIERRE_VERT,
@@ -59,6 +58,8 @@ import {
 import {
   cenefaCuadradaTapasFijas,
   llevaCenefaCuadradaImplicita,
+  llevaCenefaOvaladaImplicita,
+  opcionesCenefa,
 } from '@/modules/cotizador/insumosCortina';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { categoriasFase1ConTipos } from '@/modules/cotizador/categorias';
@@ -841,20 +842,13 @@ export function CuerpoPaso(props: PropsPaso) {
           </div>
         );
       }
-      const cenefaFija = cenefaOvalada && pano.cenefa !== 'Ovalada';
-      // VERTICAL: siempre lleva cenefa cuadrada (el riel cabezal va tapado),
-      // así que «No» y «Ovalada» no se ofrecen — solo dónde se atornilla. Y en
-      // cualquier categoría, el 'Cuadrada' a secas de una OT vieja se muestra
-      // como chip extra para no esconder el dato (igual que la ficha): al
-      // elegir muro/techo queda con el valor nuevo.
-      const esVerticalCenefa = esCategoriaVertical(ventana.categoria ?? '');
-      const opcionesCenefaBase: string[] = esVerticalCenefa
-        ? OPCIONES_CENEFA.filter((o) => o.startsWith('Cuadrada'))
-        : [...OPCIONES_CENEFA];
-      const opcionesCenefaTipo =
-        pano.cenefa && !opcionesCenefaBase.includes(pano.cenefa as string)
-          ? [...opcionesCenefaBase, pano.cenefa as string]
-          : opcionesCenefaBase;
+      // La dúo (y el roller de cenefa ovalada) la llevan por SISTEMA: no se
+      // elige. Se mira la categoría y NO `cenefaOvalada`, que es «chip Ovalada
+      // O implícita» — con eso, una dúo con «Ovalada» ya puesta volvía a
+      // mostrar los cuatro chips y se le podía sacar la cenefa.
+      const cenefaFija = llevaCenefaOvaladaImplicita(ventana.categoria, reglas.tipos);
+      // Las mismas opciones que la ficha y el dictado: una sola lista.
+      const opcionesCenefaTipo = opcionesCenefa(ventana.categoria, pano.cenefa as string, reglas.tipos);
       return (
         <div className="space-y-3">
           {cenefaFija ? (
@@ -866,12 +860,6 @@ export function CuerpoPaso(props: PropsPaso) {
               options={opcionesCenefaTipo}
               onChange={(v) => onPano(parcheCenefaTipo(v, { lineaB: props.lineaB }))}
             />
-          )}
-          {esVerticalCenefa && (
-            <p className="text-[0.68rem] text-muted-foreground">
-              La vertical siempre lleva cenefa cuadrada; acá se elige dónde se atornilla. Una
-              «Cuadrada» a secas de una OT vieja vale igual: su bracket sale de la superficie.
-            </p>
           )}
           {cenefaOvalada && (
             <>

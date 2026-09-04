@@ -471,7 +471,9 @@ export function enriquecerPanoDesdeFase0(
   // adicional que la marque —va dentro del precio de la familia— así que se
   // pone acá, con su tira por default. Sin esto la cortina llegaba a Fase 2 sin
   // cenefa: nadie le pedía tapa ni bracket y el BOM no los emitía (2026-08-20).
-  if (llevaCenefaOvaladaImplicita(ventana.categoria) && !patch.cenefa && (!pano.cenefa || pano.cenefa === 'No')) {
+  // La ovalada del sistema es OBLIGATORIA: si el paño trae otra cosa (una
+  // 'Cuadrada' de cuando la ficha lo permitía), también se corrige.
+  if (llevaCenefaOvaladaImplicita(ventana.categoria) && !patch.cenefa && pano.cenefa !== 'Ovalada') {
     patch.cenefa = 'Ovalada';
   }
   if (

@@ -362,7 +362,7 @@ export const PASOS_WIZARD: readonly PasoWizard[] = [
     id: 'cenefa',
     titulo: 'Cenefa',
     ayuda:
-      'La caja que tapa el rollo. En roller «No lleva» también es una respuesta; los sistemas de oscuridad traen la suya y la vertical la lleva siempre (cuadrada).',
+      'La caja que tapa el rollo. En roller y vertical «No lleva» también es una respuesta; los sistemas de oscuridad traen la suya y la dúo lleva siempre la ovalada.',
     pieza: 'cenefa',
     // El beeblack no lleva cenefa: es un acordeón dentro de su marco.
     aplica: (ctx) => ctx.variante !== 'beeblack',

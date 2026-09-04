@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   REGLAS_MECANISMO,
   categoriaLlevaCadenaMando,
+  filaLlevaCadenaMando,
   categoriaLlevaCadenaRoller,
   categoriaRequiereMecanismo,
   kitTraeCadenaIncorporada,
@@ -265,5 +266,33 @@ describe('categoriaLlevaCadenaMando — el gate del botón de cadena metálica',
     expect(categoriaLlevaCadenaMando('PLETINA_ROLLER_V')).toBe(false);
     expect(categoriaLlevaCadenaMando('ROL_MOTOR')).toBe(false);
     expect(categoriaLlevaCadenaMando('DUO_MOTOR_45mm')).toBe(false);
+  });
+});
+
+describe('filaLlevaCadenaMando — el gate por fila, con o sin categoría', () => {
+  it('en Fase 1 la fila no tiene categoría: el beeblack se reconoce por su código', () => {
+    // Este era el bug: `categoriaLlevaCadenaMando('')` da true a propósito, así
+    // que un BEE-BK tecleado en Fase 1 mostraba el botón vivo.
+    expect(filaLlevaCadenaMando({ categoria: '', codInt: 'BEE-BK' })).toBe(false);
+    expect(filaLlevaCadenaMando({ categoria: '', cod: 'BEE_MOSQ' })).toBe(false);
+    expect(filaLlevaCadenaMando({ categoria: '', codInt: 'bee-sc04' })).toBe(false);
+  });
+
+  it('una tela normal sin categoría sigue siendo un roller con cadena', () => {
+    expect(filaLlevaCadenaMando({ categoria: '', codInt: 'SC 65' })).toBe(true);
+    expect(filaLlevaCadenaMando({ categoria: 'VERTICAL', codInt: 'SC 34-V' })).toBe(true);
+    // Fila vacía: misma regla de siempre (un roller normal).
+    expect(filaLlevaCadenaMando({})).toBe(true);
+  });
+
+  it('el CÓDIGO manda sobre la categoría: es como el motor reconoce el sistema', () => {
+    expect(filaLlevaCadenaMando({ categoria: 'ROL', codInt: 'BEE-BK' })).toBe(false);
+  });
+
+  it('con categoría puesta se comporta igual que el gate de siempre', () => {
+    expect(filaLlevaCadenaMando({ categoria: 'BEEBLACK' })).toBe(false);
+    expect(filaLlevaCadenaMando({ categoria: 'PLETINA_ROLLER_V' })).toBe(false);
+    expect(filaLlevaCadenaMando({ categoria: 'ROL_MOTOR', codInt: 'SC 65' })).toBe(false);
+    expect(filaLlevaCadenaMando({ categoria: 'DUO_MANUAL_38mm', codInt: 'DUO 12' })).toBe(true);
   });
 });

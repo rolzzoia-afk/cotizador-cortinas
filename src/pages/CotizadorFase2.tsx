@@ -360,10 +360,10 @@ export function CotizadorFase2() {
                     : (p.tuberia as string) || '',
               opcSel.tuberiaUI,
             );
-        const cenefa =
-          categoriaImplicaOvalada && (!p.cenefa || p.cenefa === 'No')
-            ? 'Ovalada'
-            : p.cenefa;
+        // La dúo lleva la ovalada SIEMPRE: si viene otra cosa (una 'Cuadrada'
+        // guardada cuando la ficha lo permitía), se normaliza. Producción ya la
+        // fabricaba ovalada por sistema; lo que estaba mal era el dato.
+        const cenefa = categoriaImplicaOvalada ? 'Ovalada' : p.cenefa;
         // La ovalada va CON TIRA por default (la categoría B, siempre sin).
         // Se escribe cuando la cenefa la pone el SISTEMA: si no, quedaba como
         // un pendiente que bloqueaba Fase 3 por un dato que no se elige.

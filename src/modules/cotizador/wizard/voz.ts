@@ -13,7 +13,6 @@
 // ─────────────────────────────────────────────────────────────────────
 import {
   OPCIONES_BRACKET_TIPO,
-  OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
   OPCIONES_CENEFA_TIRA,
   OPCIONES_CIERRE_VERT,
@@ -33,8 +32,10 @@ import {
   cenefaCuadradaTapasFijas,
   esCenefaOvalada,
   llevaCenefaCuadradaImplicita,
+  llevaCenefaOvaladaImplicita,
+  opcionesCenefa,
 } from '../insumosCortina';
-import { esCategoriaVertical, kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
+import { kitTraeCadenaIncorporada } from '@/modules/descuentos/reglas-mecanismo';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { coloresParaUso, nombreDeColor, opcionesColorConGuardado } from '@/modules/descuentos/coloresAccesorio';
 import { colorAccesorioCorto } from '../fase0-sync';
@@ -624,12 +625,11 @@ const CAMPO_CENEFA: CampoVoz = {
   tipo: 'opcion',
   pregunta: () => '¿Qué cenefa lleva?',
   estaVacio: (c) => !txt(c.pano.cenefa),
-  opciones: (c) => {
-    const base = esCategoriaVertical(txt(c.ventana.categoria))
-      ? OPCIONES_CENEFA.filter((o) => o.startsWith('Cuadrada'))
-      : [...OPCIONES_CENEFA];
-    return desdeStrings(base, { No: ['no lleva', 'sin cenefa', 'ninguna'] });
-  },
+  // Las MISMAS opciones que la ficha y la vista guiada (una sola lista).
+  opciones: (c) =>
+    desdeStrings(opcionesCenefa(txt(c.ventana.categoria), txt(c.pano.cenefa)), {
+      No: ['no lleva', 'sin cenefa', 'ninguna'],
+    }),
   aplicar: (v, c) => ({ pano: parcheCenefaTipo(v, { lineaB: c.lineaB }) }),
 };
 
@@ -773,8 +773,13 @@ export const CAMPOS_VOZ: Record<IdPaso, PasoVoz> = {
       const esSoftLight = !!familiaOscuridadDePaso(c) && !llevaCenefaCuadradaImplicita(categoria, tipos);
       if (esSoftLight && c.pano.cenefa !== 'Ovalada') return [CAMPO_CENEFA_SOFT_LIGHT];
       const campos: CampoVoz[] = [];
-      // La ovalada por sistema (la dúo) no se pregunta: ya está decidida.
-      if (!(cenefaOvaladaDe(c) && c.pano.cenefa !== 'Ovalada')) campos.push(CAMPO_CENEFA);
+      // La ovalada por SISTEMA (la dúo) no se pregunta nunca: es obligatoria.
+      // Se mira la categoría y no `cenefaOvaladaDe` —que es «chip Ovalada O
+      // implícita»— por dos motivos: con la condición vieja la dúo dejaba de
+      // preguntar mientras el dato NO fuera «Ovalada» y volvía a preguntar
+      // cuando ya lo era (al revés de lo que corresponde), y una roller que
+      // eligió la ovalada a mano tiene que poder cambiarla.
+      if (!llevaCenefaOvaladaImplicita(categoria, tipos)) campos.push(CAMPO_CENEFA);
       if (cenefaOvaladaDe(c)) {
         if (!c.lineaB) campos.push(CAMPO_CENEFA_TIRA);
         campos.push(CAMPO_COLOR_TAPA, CAMPO_BRACKET);
