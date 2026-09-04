@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { pieceId } from '@/modules/cotizador/hojaCorte';
+
+// El módulo trae el hook, que abre el cliente Supabase al importarse: sin las
+// llaves del entorno (la CI no las tiene) reventaba antes de correr un test.
+// Acá solo se prueba lo PURO, así que el cliente puede ser de mentira.
+vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+
 import { AREA_GIRO, REF_GIRO, otIdDePieza } from './girosColmena';
 
 describe('otIdDePieza — de qué OT es una cortina del plan', () => {
