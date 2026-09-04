@@ -4,6 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   cortesBeeblack,
+  esCodigoBeeblack,
   instalacionDefaultBeeblack,
   manillasActivasBeeblack,
   medidaComponenteBeeblack,
@@ -255,5 +256,24 @@ describe('medidaComponenteBeeblack', () => {
   it('devuelve la medida calculada de la manilla', () => {
     expect(medidaComponenteBeeblack('INTERNO', 'manillaIzq', 200, 130)).toBe(125);
     expect(medidaComponenteBeeblack('SEMI', 'manillaDer', 200, 130)).toBe(128.7);
+  });
+});
+
+describe('esCodigoBeeblack — reconocer el sistema cuando no hay categoría', () => {
+  it('toma el COD_INT de la tela y el COD de familia, con o sin separador', () => {
+    expect(esCodigoBeeblack('BEE-BK')).toBe(true);
+    expect(esCodigoBeeblack('bee-sc04')).toBe(true);
+    expect(esCodigoBeeblack('BEE_TRAS')).toBe(true);
+    expect(esCodigoBeeblack('BEE_MOSQ')).toBe(true);
+    expect(esCodigoBeeblack(' bee bk ')).toBe(true);
+  });
+
+  it('cualquier otra tela no lo es', () => {
+    expect(esCodigoBeeblack('BK 69')).toBe(false);
+    expect(esCodigoBeeblack('SC 65')).toBe(false);
+    expect(esCodigoBeeblack('DUO 12')).toBe(false);
+    expect(esCodigoBeeblack('')).toBe(false);
+    expect(esCodigoBeeblack(undefined)).toBe(false);
+    expect(esCodigoBeeblack(null)).toBe(false);
   });
 });

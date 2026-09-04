@@ -22,7 +22,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
 import { esCategoriaPletina, esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
-import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import { esCategoriaBeeblack, esCodigoBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 
 export type FilaImportadaFase0 = {
@@ -106,7 +106,7 @@ const esValorSimpleDoble = (v: unknown): boolean => VALORES_SIMPLE_DOBLE.include
  * (BEE-BK / BEE-SC / BEE-TRAS…). '' si no se puede deducir.
  */
 export function categoriaImplicita(codInt: string | undefined): string {
-  return norm(codInt).startsWith('BEE') ? 'BEEBLACK' : '';
+  return esCodigoBeeblack(codInt) ? 'BEEBLACK' : '';
 }
 
 // Convierte un valor de medida es-CL a número en metros.

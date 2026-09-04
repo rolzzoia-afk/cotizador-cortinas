@@ -9,7 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import type { Pano, Ventana } from './types';
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
-import { esCenefaCuadrada } from './fase2';
+import { esCenefaCuadrada, OPCIONES_CENEFA } from './fase2';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import {
   esCategoriaPletina,
@@ -366,6 +366,37 @@ export function llevaCenefaOvaladaImplicita(
   return sistemasDeCategoria(categoria ?? '', tipos).some((s) =>
     s.toUpperCase().startsWith('CENEFA_OVALADA'),
   );
+}
+
+/**
+ * Qué cenefas puede llevar esta cortina (los chips del selector de Fase 2).
+ * Es la ÚNICA lista: la comparten la ficha, la vista guiada y el dictado, que
+ * antes decidían cada una por su cuenta y se contradecían.
+ *
+ * Reglas del dueño (2026-09-04):
+ *   · DÚO y roller de cenefa ovalada —las que la traen por SISTEMA—: SOLO
+ *     «Ovalada», obligatoria. Sin chip extra aunque haya un dato viejo distinto:
+ *     ese dato está mal (producción ya fabrica la ovalada igual, por sistema).
+ *   · VERTICAL: «No», «Cuadrada a muro» o «Cuadrada a techo». La cenefa es
+ *     OPCIONAL —hubo una regla que la forzaba y era incorrecta— y la ovalada no
+ *     aplica a un riel de lamas.
+ *   · El resto: las cuatro.
+ *
+ * Fuera del caso dúo, un valor guardado que no esté en la lista se agrega como
+ * chip extra (el 'Cuadrada' a secas de una OT vieja, o una 'Ovalada' que la
+ * ficha dejó poner a una vertical): se muestra en vez de esconderse.
+ */
+export function opcionesCenefa(
+  categoria?: string | null,
+  cenefaActual?: string | null,
+  tipos?: readonly TipoCortina[],
+): string[] {
+  if (llevaCenefaOvaladaImplicita(categoria, tipos)) return ['Ovalada'];
+  const base: string[] = esCategoriaVertical(categoria)
+    ? OPCIONES_CENEFA.filter((o) => o !== 'Ovalada')
+    : [...OPCIONES_CENEFA];
+  const actual = (cenefaActual || '').trim();
+  return actual && !base.includes(actual) ? [...base, actual] : base;
 }
 
 /** ¿La cenefa del paño es ovalada? (chip 'Ovalada' o categoría que la implica). */

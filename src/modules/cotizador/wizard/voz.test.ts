@@ -241,11 +241,38 @@ describe('la cenefa', () => {
     ]);
   });
 
-  it('la vertical no ofrece «No lleva»', () => {
+  it('la vertical SÍ ofrece «No lleva»: su cenefa es opcional, y la ovalada no aplica', () => {
+    // Hubo una regla que la forzaba a cenefa cuadrada. Era incorrecta: la que
+    // lleva cenefa sí o sí es la dúo (abajo).
     const v = ventana({ categoria: 'VERTICAL' });
     const ctx = ctxDe(v, 'vertical');
     const campo = camposDelPaso('cenefa', ctx)[0];
     expect(campo.opciones?.(ctx).map((o) => o.value)).toEqual([
+      'No',
+      'Cuadrada a muro',
+      'Cuadrada a techo',
+    ]);
+  });
+
+  it('a la dúo no se le pregunta el tipo: la ovalada va por sistema y es obligatoria', () => {
+    // Antes la condición estaba al revés: dejaba de preguntar mientras el dato
+    // NO fuera «Ovalada» y volvía a preguntar cuando ya lo era, así que se le
+    // podía dictar «no lleva» a una dúo.
+    const conDato = (cenefa: string) =>
+      claves(camposDelPaso('cenefa', ctxDe(ventana({ categoria: 'DUO_MANUAL_38mm' }, { cenefa }))));
+    expect(conDato('')).not.toContain('pano.cenefa');
+    expect(conDato('Ovalada')).not.toContain('pano.cenefa');
+    expect(conDato('Cuadrada a muro')).not.toContain('pano.cenefa');
+  });
+
+  it('una roller que eligió la ovalada a mano SÍ puede cambiarla', () => {
+    const v = ventana({ categoria: 'ROL' }, { cenefa: 'Ovalada' });
+    const ctx = ctxDe(v);
+    expect(claves(camposDelPaso('cenefa', ctx))).toContain('pano.cenefa');
+    const campo = camposDelPaso('cenefa', ctx)[0];
+    expect(campo.opciones?.(ctx).map((o) => o.value)).toEqual([
+      'No',
+      'Ovalada',
       'Cuadrada a muro',
       'Cuadrada a techo',
     ]);

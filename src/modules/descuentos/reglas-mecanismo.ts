@@ -21,7 +21,7 @@
 
 import { categoriaEfectiva, type TipoCortina } from './tiposCortina';
 // `reglas-beeblack` es leaf (sin imports): se puede traer acá sin ciclo.
-import { esCategoriaBeeblack } from './reglas-beeblack';
+import { esCategoriaBeeblack, esCodigoBeeblack } from './reglas-beeblack';
 
 /**
  * Coincidencia de categoría (case insensitive): exacta, substring o prefijo.
@@ -713,6 +713,32 @@ export function categoriaLlevaCadenaMando(
   const c = categoriaEfectiva(categoria, tipos).toUpperCase();
   if (c.includes('MOTOR')) return false;
   return categoriaLlevaCadenaRoller(categoria, tipos) || esCategoriaVertical(categoria);
+}
+
+/** Lo mínimo que hay que saber de una fila para decidir si lleva cadena de mando. */
+export type FilaCadenaLike = {
+  categoria?: string | null;
+  /** COD_INT de la tela («BEE-BK», «SC 65»). */
+  codInt?: string | null;
+  /** COD de familia del catálogo («BEE_BK», «BEE_MOSQ»). */
+  cod?: string | null;
+};
+
+/**
+ * El gate del botón «cadena metálica» POR FILA.
+ *
+ * En Fase 1 la fila nace sin categoría (la columna CATEGORÍA solo se dibuja en
+ * Fase 3), y `categoriaLlevaCadenaMando('')` devuelve `true` a propósito —una
+ * fila sin ventana es un roller normal—, así que un beeblack quedaba con el
+ * botón vivo. El CÓDIGO es lo único que hay ahí, y es además por donde el motor
+ * reconoce el sistema (`sistemaDeFamilia`, FAMILIAS_BEEBLACK): por eso manda.
+ */
+export function filaLlevaCadenaMando(
+  f: FilaCadenaLike,
+  tipos?: readonly TipoCortina[],
+): boolean {
+  if (esCodigoBeeblack(f.codInt) || esCodigoBeeblack(f.cod)) return false;
+  return categoriaLlevaCadenaMando(f.categoria, tipos);
 }
 
 export function categoriaRequiereMecanismo(

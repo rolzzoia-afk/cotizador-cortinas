@@ -368,7 +368,12 @@ function MaquetaTotales() {
       {FILAS_TOTALES.map((f) => (
         <div key={f.id}>
           {f.separadorAntes && <div className="my-1 border-t border-border" />}
-          <FilaTotal label={f.label} valor={formatCLP(f.valor(TOTALES_EJEMPLO))} fuerte={f.fuerte} />
+          <FilaTotal
+            label={f.label}
+            valor={formatCLP(f.valor(TOTALES_EJEMPLO))}
+            fuerte={f.fuerte}
+            tenue={f.tenue}
+          />
         </div>
       ))}
       <p className="pt-1 text-center text-[11px] text-muted-foreground">{NOTA_IVA}</p>

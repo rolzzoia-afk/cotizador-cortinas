@@ -10,6 +10,12 @@
 // nota), el subtotal neto no se muestra y el abono inicial dejó de imprimirse
 // en la cotización. `calcularTotales` los sigue calculando: esto es solo
 // presentación.
+//
+// AJUSTE (2026-09-04): el TOTAL SIN IVA vuelve, pero en CHICO y debajo de la
+// transferencia. Es el neto —la misma base de los valores unitarios de la
+// tabla, que siempre fueron netos—, así que el vendedor puede cuadrar la
+// columna TOTAL con el recuadro. Sigue sin desglosarse el IVA como línea
+// aparte, y el abono sigue fuera.
 
 import type { TotalesCotizacion } from './preciosFase0';
 
@@ -21,6 +27,8 @@ export type FilaTotalDoc = {
   fuerte?: boolean;
   /** Línea divisoria arriba de la fila. */
   separadorAntes?: boolean;
+  /** Secundaria: chica y gris. No compite con los montos que el cliente paga. */
+  tenue?: boolean;
 };
 
 export const FILAS_TOTALES: FilaTotalDoc[] = [
@@ -29,6 +37,12 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
     label: 'Total transferencia',
     valor: (t) => t.totalTransferencia,
     fuerte: true,
+  },
+  {
+    id: 'neto',
+    label: 'Total sin IVA',
+    valor: (t) => t.subtotalNeto,
+    tenue: true,
   },
   {
     id: 'tarjeta',

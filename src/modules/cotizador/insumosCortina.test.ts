@@ -20,6 +20,7 @@ import {
   llevaCenefaOvaladaImplicita,
   llevaTapasPeso,
   manillaDesdeAdicional,
+  opcionesCenefa,
   faltantesDomoticaInventario,
   faltantesManillasInventario,
   otLlevaDomotica,
@@ -163,6 +164,49 @@ describe('llevaCenefaCuadradaImplicita', () => {
     expect(llevaCenefaCuadradaImplicita('SOFT_LIGHT_38mm')).toBe(false);
     expect(llevaCenefaCuadradaImplicita('ROL')).toBe(false);
     expect(llevaCenefaCuadradaImplicita('')).toBe(false);
+  });
+});
+
+describe('opcionesCenefa — qué chips ofrece cada categoría', () => {
+  const TODAS = ['No', 'Ovalada', 'Cuadrada a muro', 'Cuadrada a techo'];
+
+  it('la DÚO solo ofrece la ovalada: la lleva por sistema y es obligatoria', () => {
+    expect(opcionesCenefa('DUO_MANUAL_38mm')).toEqual(['Ovalada']);
+    expect(opcionesCenefa('DUO_MOTOR_GRANDE_45mm')).toEqual(['Ovalada']);
+    expect(opcionesCenefa('ROL_MANUAL_CENEFA_OVALADA_38mm')).toEqual(['Ovalada']);
+    // Un dato viejo distinto NO abre el selector: ese dato está mal (el
+    // despiece fabrica la ovalada igual, por sistema).
+    expect(opcionesCenefa('DUO_MANUAL_38mm', 'Cuadrada a muro')).toEqual(['Ovalada']);
+    expect(opcionesCenefa('DUO_MANUAL_38mm', 'No')).toEqual(['Ovalada']);
+  });
+
+  it('la VERTICAL no lleva ovalada, y su cenefa es OPCIONAL', () => {
+    // Hubo una regla que la forzaba a cenefa cuadrada: era incorrecta.
+    expect(opcionesCenefa('VERTICAL')).toEqual(['No', 'Cuadrada a muro', 'Cuadrada a techo']);
+    expect(opcionesCenefa('VERTICAL')).toContain('No');
+    expect(opcionesCenefa('VERTICAL')).not.toContain('Ovalada');
+  });
+
+  it('el resto ofrece las cuatro', () => {
+    expect(opcionesCenefa('ROL')).toEqual(TODAS);
+    expect(opcionesCenefa('')).toEqual(TODAS);
+    expect(opcionesCenefa(undefined)).toEqual(TODAS);
+    // La pletina dúo (velcro) no lleva cenefa por sistema: elige como cualquiera.
+    expect(opcionesCenefa('PLETINA_DUO_V')).toEqual(TODAS);
+  });
+
+  it('un valor guardado fuera de lista se muestra como chip extra, sin duplicar', () => {
+    // 'Cuadrada' a secas de una OT vieja, o la 'Ovalada' que la ficha dejó
+    // poner a una vertical cuando no se filtraba.
+    expect(opcionesCenefa('ROL', 'Cuadrada')).toEqual([...TODAS, 'Cuadrada']);
+    expect(opcionesCenefa('VERTICAL', 'Ovalada')).toEqual([
+      'No',
+      'Cuadrada a muro',
+      'Cuadrada a techo',
+      'Ovalada',
+    ]);
+    expect(opcionesCenefa('ROL', 'Ovalada')).toEqual(TODAS);
+    expect(opcionesCenefa('ROL', '  ')).toEqual(TODAS);
   });
 });
 

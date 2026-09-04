@@ -13,7 +13,6 @@ import {
 import {
   OPCIONES_ARMADO,
   OPCIONES_BRACKET_TIPO,
-  OPCIONES_CENEFA,
   OPCIONES_CENEFA_TAPA,
   OPCIONES_CENEFA_TIRA,
   OPCIONES_CIERRE_VERT,
@@ -47,6 +46,7 @@ import { debeInvertirPano } from '@/modules/cotizador/tela';
 import {
   cantidadSuplementosAuto,
   llevaCenefaOvaladaImplicita,
+  opcionesCenefa,
 } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { esCategoriaPletina, mecLineaB } from '@/modules/descuentos/reglas-mecanismo';
@@ -374,9 +374,11 @@ export function PanoEditor({
   const opcionesCierre = esVerticalCat
     ? conCierreGuardado(OPCIONES_CIERRE_VERT)
     : conCierreGuardado(['Izquierda', 'Derecha']);
-  // Cenefa fija Ovalada cuando la categoría la implica (salvo dato legacy distinto).
-  const cenefaFijaOvalada =
-    categoriaImplicaOvalada && !esCenefaCuadrada(pano.cenefa);
+  // Cenefa fija Ovalada cuando la categoría la implica: la dúo lleva SIEMPRE la
+  // ovalada y no se elige. Antes un dato legacy 'Cuadrada' abría el selector y
+  // dejaba la dúo con una cenefa que su sistema no fabrica (el prefill de
+  // Fase 2 lo normaliza a 'Ovalada' al abrir la ficha).
+  const cenefaFijaOvalada = categoriaImplicaOvalada;
   // F15: el motor DOM41 no se usa con cenefa ovalada (se cae a DOM38).
   const cenefaEsOvalada = pano.cenefa === 'Ovalada' || cenefaFijaOvalada;
   const opcionesMotorModelo = cenefaEsOvalada
@@ -400,12 +402,10 @@ export function PanoEditor({
   const cargadorValue = opcionesCargador.some((o) => o.value === cargadorGuardado)
     ? cargadorGuardado
     : 'NINGUNO';
-  // OTs viejas guardan 'Cuadrada' a secas: se muestra como chip extra para
-  // no esconder el dato (al elegir muro/techo queda con el valor nuevo).
-  const opcionesCenefa =
-    pano.cenefa && esCenefaCuadrada(pano.cenefa) && !OPCIONES_CENEFA.includes(pano.cenefa as never)
-      ? [...OPCIONES_CENEFA, pano.cenefa]
-      : OPCIONES_CENEFA;
+  // Las MISMAS opciones que la vista guiada y el dictado: la vertical no lleva
+  // ovalada, y un valor viejo fuera de lista ('Cuadrada' a secas) se muestra
+  // como chip extra para no esconder el dato.
+  const opcionesCenefaTipo = opcionesCenefa(categoria, pano.cenefa as string, reglas.tipos);
   const varianteBeeblack: VarianteBeeblack = normalizarVarianteBeeblack(
     pano.beeblackVariante ?? sentidoVentana,
     'INTERNO',
@@ -771,7 +771,7 @@ export function PanoEditor({
           <RadioRow
             label="Tipo"
             value={pano.cenefa || 'No'}
-            options={opcionesCenefa}
+            options={opcionesCenefaTipo}
             onChange={(v) =>
               onChange({
                 cenefa: v,

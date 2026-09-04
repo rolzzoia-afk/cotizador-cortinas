@@ -207,6 +207,22 @@ export function esCategoriaBeeblack(categoria: string | undefined | null): boole
   return (categoria || '').toUpperCase().includes('BEEBLACK');
 }
 
+/**
+ * ¿El CÓDIGO es de una tela beeblack? Sirve donde todavía no hay categoría —en
+ * Fase 1 la fila nace sin ella— y sus telas llevan prefijo propio: COD_INT
+ * `BEE-BK` / `BEE-SC04` / `BEE-TRAS…` y COD de familia `BEE_BK` / `BEE_MOSQ` /
+ * `BEE_TRAS` (los de `FAMILIAS_BEEBLACK` en reglasPrecios).
+ *
+ * Es la MISMA heurística que ya usaba el importador de Excel: vive acá para que
+ * haya una sola definición y `categoriaImplicita` la reuse.
+ */
+export function esCodigoBeeblack(cod: string | undefined | null): boolean {
+  return (cod || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .startsWith('BEE');
+}
+
 /** Mapea sentido de Fase 1 (o la variante guardada) → variante BEEBLACK.
  *  `EXTERNO_SEMI` es el valor LEGACY de los paños guardados antes de la pizarra
  *  2026-07-29, cuando semi y externo compartían fórmula: cae a EXTERNO. */

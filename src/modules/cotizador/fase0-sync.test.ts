@@ -440,12 +440,26 @@ describe('fase0-sync — la cenefa que trae el sistema', () => {
     expect(out.cenefa).toBeUndefined();
   });
 
-  it('no pisa una cenefa ya elegida en terreno', () => {
+  it('la ovalada del sistema es OBLIGATORIA: corrige una cuadrada guardada', () => {
+    // La dúo lleva la ovalada siempre (su sistema es CENEFA_OVALADA_DUO y el
+    // despiece la fabrica así). Un paño con 'Cuadrada' venía de cuando la ficha
+    // lo permitía: era el dato el que estaba mal, no la cortina.
     const ventana = {
       id: '3', categoria: 'DUO_MANUAL_38mm', codInt: 'DU 12', color: 'NEGRO', panos: [],
     } as unknown as Ventana;
     const out = enriquecerPanoDesdeFase0(
       { ancho: 1.5, alto: 2, color: 'NEGRO', cenefa: 'Cuadrada a muro' } as Pano,
+      ventana,
+    );
+    expect(out.cenefa).toBe('Ovalada');
+  });
+
+  it('en una cortina que NO la trae por sistema, la cenefa elegida se respeta', () => {
+    const ventana = {
+      id: '4', categoria: 'ROL', codInt: 'SC 65', color: 'BLANCO', panos: [],
+    } as unknown as Ventana;
+    const out = enriquecerPanoDesdeFase0(
+      { ancho: 1.5, alto: 2, color: 'BLANCO', cenefa: 'Cuadrada a muro' } as Pano,
       ventana,
     );
     expect(out.cenefa).toBe('Cuadrada a muro');
