@@ -49,7 +49,7 @@ vi.mock('jspdf', async (importOriginal) => {
 import { DATOS_EMPRESA_DEFAULT } from './datosEmpresaCotizacion';
 import { TIRA_PROYECTOS, TIRA_PROYECTOS_RATIO } from './fotosProyectos';
 import { SELLO_CUOTAS, SELLO_TARJETAS } from './logoRolzzo';
-import { FILAS_TOTALES, NOTA_IVA } from './filasTotales';
+import { FILAS_TOTALES } from './filasTotales';
 import { formatCLP } from './calculos';
 import { calcularTotales } from './preciosFase0';
 import {
@@ -257,15 +257,18 @@ describe('generarPdfCotizacion', () => {
     expect(impreso()).not.toContain('ENVÍO A REGIÓN');
   });
 
-  it('los totales salen del MISMO descriptor que la pantalla: dos montos y el neto en chico', () => {
+  it('los totales salen del MISMO descriptor que la pantalla, con el desglose de la planilla', () => {
+    const totales = calcularTotales(1158638);
     generarPdfCotizacion(entradaDemo());
-    for (const f of FILAS_TOTALES) expect(impreso()).toContain(f.label);
-    expect(impreso()).toContain(NOTA_IVA);
-    // El neto se imprime de verdad (es el subtotal con el que se armó la demo).
-    expect(impreso()).toContain(formatCLP(1158638));
-    // Sigue sin desglose: ni la línea del IVA, ni un «subtotal», ni el abono.
-    expect(impreso()).not.toContain('IVA 19%');
-    expect(impreso().toUpperCase()).not.toContain('SUBTOTAL');
+    for (const f of FILAS_TOTALES) {
+      expect(impreso()).toContain(f.label(totales));
+      expect(impreso()).toContain(formatCLP(f.valor(totales)));
+    }
+    // El IVA vuelve a estar a la vista, así que la nota que decía que iba
+    // incluido en los montos ya no se imprime.
+    expect(impreso()).toContain('IVA 19%');
+    expect(impreso().toLowerCase()).not.toContain('incluyen iva');
+    // El abono inicial sigue fuera del documento del cliente.
     expect(impreso().toUpperCase()).not.toContain('ABONO');
   });
 

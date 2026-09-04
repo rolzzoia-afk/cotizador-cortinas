@@ -226,6 +226,10 @@ export type TotalesCotizacion = {
   subtotalTarjeta: number; // subtotal × 1,138
   ivaTarjeta: number;
   totalTarjeta: number;
+  /** La TASA de IVA con la que se calculó (0,19 por defecto). El documento la
+   *  rotula —«IVA 19%»— y es editable por empresa, así que la etiqueta no puede
+   *  llevar el 19 escrito a mano. */
+  iva: number;
   /** Abono para iniciar fabricación. El nombre dice 50 por historia: la parte
    *  la decide `abonoInicial`, que es editable. */
   abono50: number;
@@ -253,6 +257,7 @@ export function calcularTotales(
     subtotalTarjeta,
     ivaTarjeta,
     totalTarjeta,
+    iva,
     abono50: totalTransferencia * abono,
   };
 }

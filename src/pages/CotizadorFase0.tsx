@@ -106,7 +106,7 @@ import { canalParaGuardar, opcionesCanal } from '@/modules/canales/canales';
 import { useCanalesContacto } from '@/modules/canales/hooks';
 import { PanelFamilia, nombresDePiezas } from '@/components/cotizador/DesglosePrecio';
 import FilaTotal from '@/components/cotizador/FilaTotal';
-import { FILAS_TOTALES, NOTA_IVA } from '@/modules/cotizador/filasTotales';
+import { FILAS_TOTALES } from '@/modules/cotizador/filasTotales';
 import {
   Dialog,
   DialogContent,
@@ -2802,30 +2802,25 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               ))}
             </div>
           )}
-          {/* Solo los dos montos que paga el cliente. El IVA no se desglosa
-              (la nota de abajo dice que va incluido) y el abono inicial ya no
-              se imprime en la cotización: `FILAS_TOTALES` manda, y la maqueta
-              de la vista previa del editor lee la misma lista. */}
+          {/* El desglose de la planilla manual: subtotal + IVA + total de cada
+              forma de pago. El abono inicial sigue fuera del documento.
+              `FILAS_TOTALES` manda, y la maqueta de la vista previa del editor
+              lee la misma lista. */}
           {FILAS_TOTALES.map((f) => (
             <div key={f.id}>
               {f.separadorAntes && <div className="my-1 border-t border-border" />}
-              <FilaTotal
-                label={f.label}
-                valor={formatCLP(f.valor(t))}
-                fuerte={f.fuerte}
-                tenue={f.tenue}
-              />
+              <FilaTotal label={f.label(t)} valor={formatCLP(f.valor(t))} fuerte={f.fuerte} />
+              {/* La leyenda va pegada al total con tarjeta, igual que en el PDF.
+                  Con Flow no va: ahí las cuotas las pone el banco del cliente. */}
+              {f.llevaLeyendaCuotas &&
+                paramsEff.proveedorTarjeta !== 'flow' &&
+                datosEmpresa.totales.leyendaCuotas.trim() !== '' && (
+                  <p className="text-right text-[11px] font-semibold text-destructive">
+                    {datosEmpresa.totales.leyendaCuotas}
+                  </p>
+                )}
             </div>
           ))}
-          {/* La misma leyenda que sale pegada al total con tarjeta en el PDF.
-              Con Flow no va: ahí las cuotas las pone el banco del cliente. */}
-          {paramsEff.proveedorTarjeta !== 'flow' &&
-            datosEmpresa.totales.leyendaCuotas.trim() !== '' && (
-              <p className="text-right text-[11px] font-semibold text-destructive">
-                {datosEmpresa.totales.leyendaCuotas}
-              </p>
-            )}
-          <p className="pt-1 text-center text-[11px] text-muted-foreground">{NOTA_IVA}</p>
           <div className="my-1 border-t border-border" />
           {modo === 'fase3' ? (
             readOnlyFase3 ? (
