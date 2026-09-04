@@ -1856,12 +1856,15 @@ export type GrupoEtiquetaPano = {
 export function agruparEtiquetasPanos(
   rows: OptimizerRow[],
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  /** Filas que salen de un paño de COLMENA: no arman paño de rollo. */
+  esDeColmena?: (idx: number) => boolean,
 ): GrupoEtiquetaPano[] {
-  const panoDe = panoDeCadaFila(rows, params);
+  const panoDe = panoDeCadaFila(rows, params, esDeColmena);
   const grupos: GrupoEtiquetaPano[] = [];
   const porPano = new Map<number, GrupoEtiquetaPano>();
   rows.forEach((row, i) => {
     const pano = panoDe[i] ?? 0;
+    if (pano === 0 && esDeColmena) return; // ya cortado y etiquetado
     const previo = porPano.get(pano);
     if (!previo) {
       const g: GrupoEtiquetaPano = {
@@ -1894,8 +1897,12 @@ export function generarEtiquetasPanosPDF(
   rows: OptimizerRow[],
   meta: MetaPDF,
   catalogo: CatalogoProductos,
-  /** Si se pasa, los paños con ALGUNA pieza de colmena NO llevan etiqueta (ya
-   *  están cortados y etiquetados). Sin este argumento se imprimen todos. */
+  /**
+   * Si se pasa, las cortinas que salen de colmena NO llevan etiqueta (ya están
+   * cortadas y etiquetadas). Se filtra por FILA, no por paño: antes bastaba una
+   * pieza de colmena para que el paño entero se quedara sin etiqueta, y su
+   * compañera de rollo salía del taller sin identificar.
+   */
   esDeColmena?: (r: OptimizerRow) => boolean,
   /** Los mismos con que se arma la hoja de corte: definen qué se corta junto. */
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
@@ -1903,10 +1910,11 @@ export function generarEtiquetasPanosPDF(
   if (!rows || rows.length === 0) {
     throw new Error('No hay filas para imprimir. Guarda el plan en Tela primero.');
   }
-  const todos = agruparEtiquetasPanos(rows, params);
-  const grupos = esDeColmena
-    ? todos.filter((g) => !g.rows.some(esDeColmena))
-    : todos;
+  const grupos = agruparEtiquetasPanos(
+    rows,
+    params,
+    esDeColmena ? (idx) => esDeColmena(rows[idx]) : undefined,
+  );
   if (grupos.length === 0) return 0;
   // Página exacta 62×54: orientación 'l' porque jsPDF voltea las páginas
   // "apaisadas" (ancho > alto) cuando se le pide 'p'.

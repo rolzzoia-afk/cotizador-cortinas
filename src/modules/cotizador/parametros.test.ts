@@ -101,10 +101,32 @@ describe('normalizarParametros', () => {
   });
 
   it('parámetros de corte: custom válidos se conservan, garbage cae al default', () => {
-    const out = normalizarParametros({ extraDuoCm: 35, ventanaAltoCm: 'x', bordeCm: -2 });
+    const out = normalizarParametros({ extraDuoCm: 35, ahorroMinRotacionCm: 'x', bordeCm: -2 });
     expect(out.extraDuoCm).toBe(35);
-    expect(out.ventanaAltoCm).toBe(PARAMETROS_DEFAULT.ventanaAltoCm);
+    expect(out.ahorroMinRotacionCm).toBe(PARAMETROS_DEFAULT.ahorroMinRotacionCm);
     expect(out.bordeCm).toBe(PARAMETROS_DEFAULT.bordeCm);
+  });
+
+  it('una clave que ya no existe (ventanaAltoCm) se ignora sin romper nada', () => {
+    // La tolerancia de alto de la colmena murió cuando el motor pasó a empacar
+    // el paño en dos dimensiones; los parámetros GUARDADOS todavía la traen.
+    const out = normalizarParametros({ ventanaAltoCm: 30, extraDuoCm: 35 });
+    expect(out.extraDuoCm).toBe(35);
+    expect('ventanaAltoCm' in out).toBe(false);
+  });
+
+  it('colmena: los dos interruptores solo se apagan con un false explícito', () => {
+    expect(normalizarParametros({}).colmenaPermiteGiro).toBe(true);
+    expect(normalizarParametros({ colmenaPermiteGiro: 'no' }).colmenaPermiteGiro).toBe(true);
+    expect(normalizarParametros({ colmenaPermiteGiro: false }).colmenaPermiteGiro).toBe(false);
+    expect(normalizarParametros({ usarColmenaPanos: false }).usarColmenaPanos).toBe(false);
+  });
+
+  it('la penalidad por paño nuevo acepta 0 y rechaza negativos', () => {
+    expect(normalizarParametros({ colmenaPenalidadNuevoPanoCm2: 0 }).colmenaPenalidadNuevoPanoCm2).toBe(0);
+    expect(normalizarParametros({ colmenaPenalidadNuevoPanoCm2: -1 }).colmenaPenalidadNuevoPanoCm2).toBe(
+      PARAMETROS_DEFAULT.colmenaPenalidadNuevoPanoCm2,
+    );
   });
 
   it('clamps de corte: rollo 0 y plan ≤ 2×margen caen a defaults; días se redondean', () => {

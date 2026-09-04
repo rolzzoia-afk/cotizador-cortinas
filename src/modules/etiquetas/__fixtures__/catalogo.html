@@ -1,0 +1,98 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Etiquetas de catálogo</title>
+<style>
+@page { size: 62mm 52mm; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; }
+.etiqueta {
+  position: relative; width: 62mm; height: 52mm;
+  overflow: hidden; background: #fff; color: #000;
+  font-family: Arial, Helvetica, sans-serif; page-break-after: always;
+  /* Sin esto el navegador descarta los fondos al imprimir y la banda negra de
+     CÓDIGOS sale en blanco. Se hereda a toda la etiqueta. */
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.etiqueta:last-child { page-break-after: auto; }
+/* Una sola línea, como la plantilla: el texto largo encoge (ver ajustar()),
+   nunca se parte en dos ni se sale del recuadro. */
+.etiqueta > div { position: absolute; display: flex; align-items: center; white-space: nowrap; }
+[data-encoger] { overflow: hidden; }
+.logo { position: absolute; object-fit: contain; }
+.cajaCodigos {
+  background: #000; color: #fff; font-size: 12.2pt; font-weight: bold;
+  justify-content: center;
+}
+.codigos { font-weight: bold; }
+.tabla { border: 0.5pt solid #000; display: block !important; }
+.tabla .divV { position: absolute; top: 0; bottom: 0; border-left: 0.5pt solid #000; }
+.tabla .divH { position: absolute; left: 0; right: 0; border-top: 0.5pt solid #000; }
+.tipo, .calidad { font-size: 11pt; font-weight: bold; }
+.rotuloTela, .descripcion, .ancho { font-size: 10pt; font-weight: bold; }
+/* Renglones pegados: si el nombre termina partido en dos, los dos tienen que
+   caber entre la línea de arriba y la del medio. Cada palabra va entera. */
+.descripcion { line-height: 1.1; }
+.descripcion .p { white-space: nowrap; }
+.rotuloAncho { font-size: 11.3pt; }
+.pie {
+  font-size: 6.3pt; line-height: 1.25; text-align: center;
+  justify-content: center; flex-direction: column;
+}
+@media screen {
+  body { background: #e5e7eb; padding: 8mm; }
+  .etiqueta { outline: 1px solid #9ca3af; margin: 0 auto 6mm; }
+}
+</style></head>
+<body>
+<div class="etiqueta">
+  <img class="logo" src="data:image/png;base64,LOGO" alt="Rolzzo" style="left:5.05mm;top:4.37mm;width:17.25mm;height:9.88mm">
+  <div class="cajaCodigos" style="left:31.15mm;top:4.37mm;width:23.28mm;height:4.94mm">CÓDIGOS</div>
+  <div class="codigos" style="left:31.15mm;top:9.31mm;width:29.35mm;height:4.94mm" data-encoger>BK 01</div>
+  <div class="tabla" style="left:1.52mm;top:17.07mm;width:58.57mm;height:22.58mm">
+    <div class="divV" style="left:29.53mm"></div>
+    <div class="divH" style="top:12.59mm"></div>
+  </div>
+  <div class="tipo" style="left:3.6mm;top:18.49mm;width:26.25mm;height:4.45mm" data-encoger>BLACKOUT</div>
+  <div class="rotuloTela" style="left:31.86mm;top:18.49mm;width:27.03mm;height:4.94mm">TELA:</div>
+  <div class="calidad" style="left:3.32mm;top:23.53mm;width:26.53mm;height:4.45mm" data-encoger>PREMIUM</div>
+  <div class="descripcion" style="left:31.86mm;top:22.9mm;width:27.03mm;height:6.16mm" data-parte data-encoger><span class="txt"><span class="p">BLANCO</span> <span class="p">ESTANDAR</span></span></div>
+  <div class="rotuloAncho" style="left:2.22mm;top:31.89mm;width:27.63mm;height:4.94mm">Ancho máximo:</div>
+  <div class="ancho" style="left:33.27mm;top:29.78mm;width:25.62mm;height:9.27mm" data-encoger>2,5</div>
+  <div class="pie" style="left:1.52mm;top:40.4mm;width:58.92mm;height:7.55mm">www.cortinasrolzzo.cl<br>IG: @cortinasrolzzo<br>(56) 9 99428383</div>
+</div>
+<div class="etiqueta">
+  <img class="logo" src="data:image/png;base64,LOGO" alt="Rolzzo" style="left:5.05mm;top:4.37mm;width:17.25mm;height:9.88mm">
+  <div class="cajaCodigos" style="left:31.15mm;top:4.37mm;width:23.28mm;height:4.94mm">CÓDIGOS</div>
+  <div class="codigos" style="left:31.15mm;top:9.31mm;width:29.35mm;height:4.94mm" data-encoger>BK 11 / BK 12</div>
+  <div class="tabla" style="left:1.52mm;top:17.07mm;width:58.57mm;height:22.58mm">
+    <div class="divV" style="left:29.53mm"></div>
+    <div class="divH" style="top:12.59mm"></div>
+  </div>
+  <div class="tipo" style="left:3.6mm;top:18.49mm;width:26.25mm;height:4.45mm" data-encoger>SCREEN</div>
+  <div class="rotuloTela" style="left:31.86mm;top:18.49mm;width:27.03mm;height:4.94mm">TELA:</div>
+  <div class="calidad" style="left:3.32mm;top:23.53mm;width:26.53mm;height:4.45mm" data-encoger>DELUX</div>
+  <div class="descripcion" style="left:31.86mm;top:22.9mm;width:27.03mm;height:6.16mm" data-parte data-encoger><span class="txt"><span class="p">GRIS</span> <span class="p">OSCURO</span> <span class="p">JASPEADO</span> <span class="p">R1002-8</span></span></div>
+  <div class="rotuloAncho" style="left:2.22mm;top:31.89mm;width:27.63mm;height:4.94mm">Ancho máximo:</div>
+  <div class="ancho" style="left:33.27mm;top:29.78mm;width:25.62mm;height:9.27mm" data-encoger>2,97</div>
+  <div class="pie" style="left:1.52mm;top:40.4mm;width:58.92mm;height:7.55mm">www.cortinasrolzzo.cl<br>IG: @cortinasrolzzo<br>(56) 9 99428383</div>
+</div>
+<script>
+function ajustar() {
+  document.querySelectorAll('[data-encoger]').forEach(function (el) {
+    var pt = parseFloat(getComputedStyle(el).fontSize) * 72 / 96;
+    var parte = el.hasAttribute('data-parte');
+    var piso = parte ? 8 : 6;
+    while (pt > piso && el.scrollWidth > el.clientWidth) {
+      pt -= 0.25;
+      el.style.fontSize = pt + 'pt';
+    }
+    if (!parte || el.scrollWidth <= el.clientWidth) return;
+    el.style.whiteSpace = 'normal';
+    while (pt > 6 &&
+      (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      pt -= 0.25;
+      el.style.fontSize = pt + 'pt';
+    }
+  });
+}
+window.onload = () => { ajustar(); setTimeout(() => { window.print(); window.close(); }, 250); };</script>
+</body></html>

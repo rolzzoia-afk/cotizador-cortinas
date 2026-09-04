@@ -17,7 +17,18 @@ import {
   VARIANTE_DIMENSIONADO,
   type ColumnaCalculo,
 } from '@/modules/cotizador/calculoGeneral';
+import { generarPlanCorte } from '@/modules/cotizador/planCorte';
+import { useColmenaDisponible } from '@/modules/cotizador/colmenaPanosStore';
+import { useDecisionesGiro } from '@/modules/produccion/girosColmena';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import type { OT } from '@/modules/ots/types';
+import {
+  panosDelPlan,
+  resumenAcomodo,
+  type ResumenAcomodo,
+} from '@/modules/produccion/acomodoPlan';
 import { calcularAvance, type AreasListas } from '@/modules/produccion/avance';
 import {
   useCalculoGeneral,
@@ -33,6 +44,27 @@ import BotonEmergencia from '../components/BotonEmergencia';
 import HojaCalculo from '../components/HojaCalculo';
 
 const CONJUNTO: ColumnaCalculo = { key: 'conjunto', label: 'CONJUNTO PAÑOS' };
+
+const metrosCL = (cm: number) => (Math.abs(cm) / 100).toFixed(2).replace('.', ',');
+
+/**
+ * El título del acomodo, en el orden en que producción lo lee: primero los
+ * paños que se ahorra, después la tela. «1 paño menos (2 en vez de 3) · ahorra
+ * 1,23 m de rollo», o «mismos paños (18) · ahorra 0,83 m de rollo».
+ */
+function tituloAcomodo(a: ResumenAcomodo): string {
+  const panos =
+    a.ahorroPanos > 0
+      ? `${a.ahorroPanos} ${a.ahorroPanos === 1 ? 'paño menos' : 'paños menos'} (${a.panosPlan} en vez de ${a.panosClasico})`
+      : `mismos paños (${a.panosPlan})`;
+  const tela =
+    a.ahorroCm >= 10
+      ? ` · ahorra ${metrosCL(a.ahorroCm)} m de rollo`
+      : a.ahorroCm <= -10
+        ? ` · gasta ${metrosCL(a.ahorroCm)} m más de rollo`
+        : ' · la misma tela';
+  return `Acomodo optimizado · ${panos}${tela}`;
+}
 
 export default function VistaCalculo({
   area,
@@ -60,7 +92,12 @@ export default function VistaCalculo({
     [esDim, lote],
   );
   const { ots: otsLote } = useOTsDelLote(idsLote);
-  const { tiros, juntoPorOrden } = useHojaLote(otsLote);
+  const {
+    tiros,
+    panos: panosLote,
+    deColmena: colmenaDelLote,
+    juntoPorOrden,
+  } = useHojaLote(otsLote);
   // La letra que ve esta OT sale del empaque del lote, no del suyo propio.
   const juntoDelLote = otCargada ? (juntoPorOrden.get(String(otCargada.id)) ?? null) : null;
 
@@ -70,7 +107,44 @@ export default function VistaCalculo({
     juntoDelLote,
   );
   // Solo Dimensionado dibuja los tiros: Armado ya no toca la tela.
-  const { panos } = usePanosDelRollo(esDim ? otCargada : null);
+  const { panos: panosOT } = usePanosDelRollo(esDim ? otCargada : null);
+  // Dentro de un lote la tela se cortó JUNTA: la pizarra por OT describiría
+  // tiros que no existen, así que manda la del lote.
+  const enLote = esDim && !!lote && panosLote.length > 0;
+  const panos = enLote ? panosLote : panosOT;
+
+  // El acomodo optimizado: el empacador 2D del Plan de Corte, que apila
+  // cortinas chicas en columnas al lado de las grandes. Se muestra solo si
+  // ahorra tela de verdad; la orden de corte sigue siendo la pizarra clásica.
+  const { parametros, loading: loadingParams } = useParametrosCotizador();
+  const { formulas, loading: loadingFormulas } = useFormulasFamilias();
+  const { reglas } = useReglasSeleccion();
+  const otsAcomodo = useMemo(
+    () => (enLote ? otsLote : otCargada ? [otCargada] : []),
+    [enLote, otsLote, otCargada],
+  );
+  const { panos: colmenaPanos } = useColmenaDisponible();
+  // Y con los MISMOS giros: un giro rechazado en el Plan de tela cambia qué
+  // cortinas caben en el rack, así que sin esto el acomodo compara contra un
+  // plan que el operario ya descartó.
+  const { sinGiro } = useDecisionesGiro(otsAcomodo);
+  const panosAcomodo = useMemo(() => {
+    if (!esDim || loadingParams || loadingFormulas || otsAcomodo.length === 0) return [];
+    // Con la MISMA colmena que el resto: si no, el acomodo propondría bajar
+    // rollo para cortinas que la pizarra ya resolvió con un paño del rack, y la
+    // comparación de metros diría cualquier cosa.
+    const plan = generarPlanCorte(otsAcomodo, colmenaPanos, parametros, formulas, reglas.tipos, {
+      sinGiro,
+    });
+    const productos = new Map<string, string>();
+    for (const o of otsAcomodo)
+      for (const v of o.storeVentanas ?? []) {
+        const ci = (v.codInt || '').toUpperCase().trim();
+        if (ci && v.producto && !productos.has(ci)) productos.set(ci, v.producto);
+      }
+    return panosDelPlan(plan, parametros, productos);
+  }, [esDim, loadingParams, loadingFormulas, otsAcomodo, colmenaPanos, parametros, formulas, reglas, sinGiro]);
+  const ahorro = useMemo(() => resumenAcomodo(panosAcomodo, panos), [panosAcomodo, panos]);
   const { hechas, quien, areaLista, marcar, marcarAreaLista } = useChecks(area, ot);
   const [cerrando, setCerrando] = useState(false);
 
@@ -187,7 +261,12 @@ export default function VistaCalculo({
       {/* Lo primero que ve el dimensionador cuando la tela se cortó en lote:
           el trozo real que le llega, con las cortinas de las dos órdenes. */}
       {esDim && lote && tiros.length > 0 && (
-        <TirosDelLote nombre={lote.nombre} tiros={tiros} otActual={ot} />
+        <TirosDelLote
+          nombre={lote.nombre}
+          tiros={tiros}
+          deColmena={colmenaDelLote}
+          otActual={ot}
+        />
       )}
 
       {loading && <p className="text-sm text-muted-foreground">Armando la hoja…</p>}
@@ -217,12 +296,36 @@ export default function VistaCalculo({
         <div className="border-t border-border pt-4">
           <PanosDelRollo
             panos={panos}
-            cliente={otCargada?.datosGenerales?.cliente}
-            numeroOT={otCargada?.datosGenerales?.ot || ot}
-            nota="Mismo formato de la pizarra: cada tela con su color, y por cortina el ancho arriba, el alto a la izquierda y la ubicación en su cajón. La letra es la misma de CONJUNTO PAÑOS y de la etiqueta del paño; el corte punteado marca por dónde parte."
+            titulo={enLote ? `Paños del lote · ${lote!.nombre}` : undefined}
+            cliente={enLote ? undefined : otCargada?.datosGenerales?.cliente}
+            numeroOT={enLote ? undefined : otCargada?.datosGenerales?.ot || ot}
+            nota={
+              enLote
+                ? 'La tela de las OTs del lote se cortó JUNTA: estos son los tiros reales, y cada cajón lleva adelante la OT de esa cortina. El rayado verde o rojo al costado es lo que queda del tiro; las verticales van rayadas porque salen en lamas.'
+                : 'Mismo formato de la pizarra: cada tela con su color, y por cortina el ancho arriba, el alto a la izquierda y la ubicación en su cajón. La letra es la misma de CONJUNTO PAÑOS y de la etiqueta del paño; el corte punteado marca por dónde parte. Al costado, rayado, lo que queda del tiro: verde si vuelve al rack, rojo si es merma.'
+            }
           />
         </div>
       )}
+
+      {/* El acomodo optimizado del Plan de Corte: el empacador 2D apila las
+          chicas en columnas al lado de las grandes. Se mide primero en PAÑOS
+          —producción prefiere bajar menos trozos del rollo— y después en tela:
+          aparece cuando baja paños, o cuando con los mismos paños ahorra rollo.
+          Es una PROPUESTA — la orden de corte y las etiquetas siguen siendo los
+          tiros de arriba, con sus letras. */}
+      {esDim &&
+        panos.length > 0 &&
+        ahorro &&
+        (ahorro.ahorroPanos > 0 || (ahorro.ahorroPanos >= 0 && ahorro.ahorroCm >= 10)) && (
+          <div className="border-t border-border pt-4">
+            <PanosDelRollo
+              panos={panosAcomodo}
+              titulo={tituloAcomodo(ahorro)}
+              nota={`El mismo motor del Plan de Corte, sin girar ninguna tela (los giros se autorizan pieza por pieza en el Plan de Corte): apila cortinas chicas en columnas al lado de las grandes. Se compara primero en paños —cada corte transversal de lado a lado baja un trozo del rollo, y así se cuentan— y después en tela: ${ahorro.panosPlan} ${ahorro.panosPlan === 1 ? 'paño' : 'paños'} y ${ahorro.mPlan.toFixed(2).replace('.', ',')} m de rollo, contra ${ahorro.panosClasico} y ${ahorro.mClasico.toFixed(2).replace('.', ',')} m de los tiros de arriba. Los rótulos R1, R2… son bajadas de rollo por tela. La hoja de corte y las etiquetas siguen mandando con sus letras y sus tiros. Las medidas llevan la limpieza de bordes y el extra de alto del plan (una cortina de 180 acá dice 184); las verticales entran como paños lisos — sus lamas se ven arriba.`}
+            />
+          </div>
+        )}
     </div>
   );
 }

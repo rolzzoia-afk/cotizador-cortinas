@@ -40,7 +40,9 @@ import {
 import { generarPdfCalculoGeneral, generarPdfDimensionado } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
 import { esCadenaRoller, type CadenaInsumo } from '@/modules/cotizador/cadenas';
-import { generarPlanCorte, rowToPano, type ColmenaPanoRow } from '@/modules/cotizador/planCorte';
+import { generarPlanCorte } from '@/modules/cotizador/planCorte';
+import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
+import { useDecisionesGiro } from '@/modules/produccion/girosColmena';
 import { deduccionesColmena, piezasColmenaSnapshot } from '@/modules/cotizador/colmenaCorte';
 import GuardarSobranteRolloDialog, {
   type SobranteRollo,
@@ -297,7 +299,10 @@ export function CotizadorFase4() {
       // junto a la letra en las cortinas oscuranti.
       let juntoPorPieza: Map<string, { letra: string; invertida: boolean }> | undefined;
       if (pdfRows && pdfRows.length > 0) {
-        const cortinas = construirHojaCorte(pdfRows, [], ot, parametros).cortinas;
+        const cortinas = construirHojaCorte(pdfRows, [], ot, parametros, undefined, {
+          formulas,
+          tipos: reglas.tipos,
+        }).cortinas;
         juntoPorPieza = new Map();
         pdfRows.forEach((r, i) => {
           const letra = cortinas[i]?.cortarJunto;
@@ -360,17 +365,13 @@ export function CotizadorFase4() {
       // Paños que salen de COLMENA (ya cortados y etiquetados): no llevan
       // etiqueta nueva. Mismo origen que la hoja de corte (colmena viva +
       // snapshot post-confirmación).
-      const { data: panosData } = await supabase
-        .from('colmena_panos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('disponible', true);
-      const colmenaPanos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
+      const colmenaPanos = await cargarColmenaPanos(empresaId);
       const piezasColmena = piezasConOrigenColmena(
         colmenaPanos,
         ot,
         parametros,
         ot.datosGenerales?.corteGeneralColmena?.piezas,
+        { formulas, tipos: reglas.tipos },
       );
       const n = generarEtiquetasPanosPDF(
         pdfRows,
@@ -403,17 +404,12 @@ export function CotizadorFase4() {
     try {
       // Sobrantes de colmena disponibles (igual que el Plan de Corte) para
       // saber qué pieza sale de qué sobrante.
-      const { data: panosData } = await supabase
-        .from('colmena_panos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('disponible', true);
-      const colmenaPanos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
+      const colmenaPanos = await cargarColmenaPanos(empresaId);
       generarPdfHojaCorte(pdfRows, colmenaPanos, ot, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || '',
         empresa: empresaNombre ?? undefined,
-      }, parametros, ot.datosGenerales?.corteGeneralColmena?.piezas);
+      }, parametros, ot.datosGenerales?.corteGeneralColmena?.piezas, { formulas, tipos: reglas.tipos });
       toast.success('Hoja de corte generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -431,6 +427,10 @@ export function CotizadorFase4() {
   // Sobrantes de rollo pendientes de ubicar (abre el diálogo tras confirmar).
   const [sobrantesRollo, setSobrantesRollo] = useState<SobranteRollo[]>([]);
   const corteGenConfirmado = ot?.datosGenerales?.corteGeneralColmena;
+  // Los giros de colmena que el taller rechazó en Producción. Fase 4 no tiene
+  // el paso de autorización, pero sí tiene que RESPETAR lo ya decidido.
+  const otsDelCorte = useMemo(() => (ot ? [ot] : []), [ot]);
+  const { sinGiro } = useDecisionesGiro(otsDelCorte);
 
   const onConfirmarCorteGeneral = async () => {
     if (!ot || !empresaId) return;
@@ -442,38 +442,55 @@ export function CotizadorFase4() {
     }
     setCorteGenLoading(true);
     try {
-      const { data: panosData } = await supabase
-        .from('colmena_panos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('disponible', true);
-      const panos = ((panosData || []) as ColmenaPanoRow[]).map(rowToPano);
+      const panos = await cargarColmenaPanos(empresaId);
       // Plan y deducción con los MISMOS params: el retazo debe calzar el layout.
-      const plan = generarPlanCorte([ot], panos, parametros, formulas);
+      // Y con los giros que el taller ya rechazó: acá se CORTA, así que una
+      // cortina que el operario mandó al rollo no puede volver acostada al paño.
+      const plan = generarPlanCorte([ot], panos, parametros, formulas, reglas.tipos, { sinGiro });
       const deducciones = deduccionesColmena(plan, parametros);
-      // Sobrantes de rollo reutilizables (≥120×180, ya gateados por planCorte):
-      // se ofrecen para sumar a la colmena con confirmación física del operario.
-      const sobrantesRolloPlan: SobranteRollo[] = plan.rollo
-        .filter((g) => g.sobInterno)
-        .map((g) => ({ codInt: g.codInt, sob: g.sobInterno! }));
+      // Lo que deja el corte y vuelve al rack: la franja del rollo nuevo
+      // (≥120×180, ya gateada por planCorte) y los trozos útiles de cada paño de
+      // colmena que se consumió. Se ofrecen juntos, con confirmación física.
+      const sobrantesRolloPlan: SobranteRollo[] = [
+        ...plan.rollo
+          .filter((g) => g.sobInterno)
+          .map((g) => ({ codInt: g.codInt, sob: g.sobInterno! })),
+        ...deducciones.flatMap((d) =>
+          (d.salidas ?? [])
+            .filter((s) => s.clase === 'sobrante')
+            .map((s) => ({
+              codInt: s.codInt,
+              sob: { ancho: s.ancho, alto: s.alto },
+              colmenaOrigen: {
+                docId: d.docId,
+                ubicacion: d.ubicacion,
+                ancho: d.ancho,
+                alto: d.alto,
+              },
+            })),
+        ),
+      ];
       if (deducciones.length === 0 && sobrantesRolloPlan.length === 0) {
         toast.info('Este corte no usa colmena ni deja sobrantes reutilizables.');
         return;
       }
-      const retazos = deducciones.filter((d) => d.accion === 'retazo').length;
-      const usados = deducciones.filter((d) => d.accion === 'usado').length;
-      const conMerma = deducciones.filter((d) => d.merma).length;
+      const mermasColmena = deducciones.flatMap((d) =>
+        (d.salidas ?? [])
+          .filter((s) => s.clase === 'merma')
+          .map((s) => ({ deduccion: d, salida: s })),
+      );
       const ok = await confirmar({
         titulo: 'Confirmar corte general',
         mensaje:
           (deducciones.length
-            ? `Se descontarán ${deducciones.length} paño(s) de la colmena:\n` +
-              `· ${retazos} quedan como retazo (medida nueva, misma ubicación)\n` +
-              `· ${usados} se marcan como usados\n` +
-              (conMerma ? `· ${conMerma} dejan merma (registrada con trazabilidad)\n` : '')
+            ? `Se van a consumir ${deducciones.length} paño(s) de la colmena:\n` +
+              '· salen del rack (quedan marcados como usados)\n' +
+              (mermasColmena.length
+                ? `· ${mermasColmena.length} trozo(s) se anotan como merma, con trazabilidad al paño\n`
+                : '')
             : 'Este corte no descuenta paños de la colmena.\n') +
           (sobrantesRolloPlan.length
-            ? `\nDeja ${sobrantesRolloPlan.length} sobrante(s) de rollo reutilizable(s); ` +
+            ? `\nDeja ${sobrantesRolloPlan.length} trozo(s) reutilizable(s); ` +
               'después te pido dónde guardaste cada uno.\n'
             : '') +
           '\nEsto actualiza el inventario y no debería repetirse.',
@@ -485,35 +502,27 @@ export function CotizadorFase4() {
       const now = new Date().toISOString();
       const aplicadas = await Promise.all(
         deducciones.map(async (d) => {
-          const res =
-            d.accion === 'retazo'
-              ? await supabase
-                  .from('colmena_panos')
-                  .update({ medida_ancho: d.nuevoAncho, medida_alto: d.nuevoAlto, disponible: true })
-                  .eq('id', d.docId)
-              : await supabase
-                  .from('colmena_panos')
-                  .update({ disponible: false, ot_asignada: otNum, fecha_uso: now })
-                  .eq('id', d.docId);
+          const res = await supabase
+            .from('colmena_panos')
+            .update({ disponible: false, ot_asignada: otNum, fecha_uso: now })
+            .eq('id', d.docId);
           return { ...d, error: res.error ? res.error.message : undefined };
         }),
       );
       const fallidas = aplicadas.filter((d) => d.error);
 
-      // Reglas Rolzzo v1.0: registrar como MERMA los remanentes que no llegan a
-      // 120×180 (con trazabilidad: código, medida, OT y colmena de origen).
-      const mermas = deducciones
-        .filter((d) => d.merma)
-        .map((d) => ({
-          empresa_id: empresaId,
-          codigo: d.cod,
-          medida_ancho: d.merma!.ancho,
-          medida_alto: d.merma!.alto,
-          motivo: 'sobrante_colmena',
-          ot_origen: otNum,
-          colmena_origen_id: d.docId,
-          fecha: now,
-        }));
+      // La tela que se perdió al cortar cada paño, con trazabilidad: código,
+      // medida, OT y el paño de colmena del que salió.
+      const mermas = mermasColmena.map(({ deduccion, salida }) => ({
+        empresa_id: empresaId,
+        codigo: salida.codInt,
+        medida_ancho: salida.ancho,
+        medida_alto: salida.alto,
+        motivo: 'sobrante_colmena',
+        ot_origen: otNum,
+        colmena_origen_id: deduccion.docId,
+        fecha: now,
+      }));
       if (mermas.length) {
         const { error: mErr } = await supabase.from('telas_mermas').insert(mermas);
         if (mErr) console.warn('[CorteGeneral] merma no registrada:', mErr.message);
@@ -524,17 +533,21 @@ export function CotizadorFase4() {
       await guardar({
         datosGenerales: {
           ...(ot.datosGenerales || {}),
-          corteGeneralColmena: { confirmadoEn: now, panos: aplicadas, piezas: piezasColmenaSnapshot(plan) },
+          corteGeneralColmena: {
+            confirmadoEn: now,
+            panos: aplicadas,
+            piezas: piezasColmenaSnapshot(plan, String(ot.id)),
+          },
         },
       });
       if (fallidas.length) {
         toast.error(
           `Corte confirmado, pero ${fallidas.length} paño(s) no se actualizaron ` +
-            `(${fallidas.map((d) => d.cod).join(', ')}). Revisalos en Ojo de Dios → Colmena.`,
+            `(${fallidas.map((d) => d.cod).join(', ')}). Revísalos en Ojo de Dios → Colmena.`,
         );
       } else {
         toast.success(
-          `Colmena descontada: ${retazos} retazo(s), ${usados} usado(s)` +
+          `Colmena descontada: ${deducciones.length} paño(s) usado(s)` +
             (mermas.length ? `, ${mermas.length} merma(s)` : '') +
             '.',
         );

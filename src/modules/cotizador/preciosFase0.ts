@@ -174,11 +174,13 @@ export function normalizarParametros(raw: unknown): ParametrosCotizador {
     // Proveedor de tarjeta: string acotado; cualquier otra cosa → default.
     const prov = (raw as Record<string, unknown>).proveedorTarjeta;
     out.proveedorTarjeta = prov === 'flow' ? 'flow' : 'mercadopago';
-    // Colmena: el único parámetro BOOLEANO, así que no entra en CLAVES_NUMERICAS.
-    // Solo un `false` explícito la apaga; cualquier otra cosa (ausente, string,
-    // null de una versión vieja) deja el default de fábrica, que es usarla.
+    // Colmena: los dos parámetros BOOLEANOS, así que no entran en
+    // CLAVES_NUMERICAS. Solo un `false` explícito los apaga; cualquier otra cosa
+    // (ausente, string, null de una versión vieja) deja el default de fábrica.
     const usarColmena = (raw as Record<string, unknown>).usarColmenaPanos;
     if (typeof usarColmena === 'boolean') out.usarColmenaPanos = usarColmena;
+    const giroColmena = (raw as Record<string, unknown>).colmenaPermiteGiro;
+    if (typeof giroColmena === 'boolean') out.colmenaPermiteGiro = giroColmena;
     // Cómo corta la mesa: string acotado. Cualquier otra cosa (ausente, basura,
     // guardado por una versión vieja) cae en 'guillotina', que es lo que las
     // mesas de hoy pueden ejecutar — el modo permisivo se elige a propósito.

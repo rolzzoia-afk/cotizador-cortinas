@@ -7,6 +7,7 @@ import {
   nombreDeTela,
   tipoLargo,
 } from './etiquetaCatalogo';
+import { PLANTILLA_CATALOGO } from '@/modules/etiquetas/defaults/catalogo';
 import type { Tela } from '@/pages/telas/Telas.types';
 
 const tela = (over: Partial<Tela> = {}): Tela => ({
@@ -121,10 +122,13 @@ describe('encoger para que quepa', () => {
   // lleve el guion que los mide antes de imprimir.
   it('marca los campos de la tela y no los rótulos fijos', () => {
     const html = htmlEtiquetasCatalogo([datosEtiquetaCatalogo(tela())], LOGO);
-    // codigos, tipo, calidad, descripcion y ancho (el `>` deja fuera al CSS
-    // y al selector del guion, que también nombran el atributo).
-    expect(html.match(/data-encoger>/g)).toHaveLength(5);
-    expect(html).not.toMatch(/class="rotuloTela"[^>]*data-encoger/);
+    // Solo el cuerpo: el CSS y el guion también nombran el atributo.
+    const cuerpo = html.slice(html.indexOf('<body>'), html.indexOf('<script>'));
+    // codigos, tipo, calidad, descripcion y ancho.
+    expect(cuerpo.match(/data-encoger/g)).toHaveLength(5);
+    // Los rótulos fijos no encogen: si no caben, es que el diseño está mal.
+    expect(cuerpo).not.toMatch(/data-encoger[^>]*>TELA:/);
+    expect(cuerpo).not.toMatch(/data-encoger[^>]*>Ancho máximo:/);
   });
 
   it('el documento ajusta antes de mandar a la impresora', () => {
@@ -137,9 +141,10 @@ describe('encoger para que quepa', () => {
   // dato largo de verdad (hay descriptores de 46 caracteres en el catálogo).
   it('solo el nombre de la tela puede partirse en dos renglones', () => {
     const html = htmlEtiquetasCatalogo([datosEtiquetaCatalogo(tela())], LOGO);
-    // (el guion también nombra el atributo, por eso se pide el par completo)
-    expect(html.match(/data-parte data-encoger>/g)).toHaveLength(1);
-    expect(html).toMatch(/class="descripcion"[^>]*data-parte/);
+    const cuerpo = html.slice(html.indexOf('<body>'), html.indexOf('<script>'));
+    expect(cuerpo.match(/data-parte/g)).toHaveLength(1);
+    // Y el que se parte es justamente el nombre de la tela.
+    expect(cuerpo).toMatch(/data-parte><span class="txt"><span class="p">BLANCO<\/span>/);
     // Y se parte recién cuando encoger en una línea ya no alcanza.
     expect(html).toContain("el.style.whiteSpace = 'normal'");
     expect(html).toContain('el.scrollHeight > el.clientHeight');
@@ -152,38 +157,35 @@ describe('los datos caen adentro de los recuadros', () => {
   // nombre de la tela terminaba 1 mm más afuera que la tabla. Así, «BLACKOUT»
   // se encogía sin necesidad y «BLANCO ESTANDAR» se salía por el costado en vez
   // de encoger (visto impreso el 2026-08-28).
-  const caja = (html: string, clase: string) => {
-    const m = html.match(
-      new RegExp(
-        `class="${clase}" style="left:([\\d.]+)mm;top:([\\d.]+)mm;` +
-          `width:([\\d.]+)mm;height:([\\d.]+)mm"`,
-      ),
-    );
-    if (!m) throw new Error(`no se encontró la caja de ${clase}`);
-    return { x: +m[1], y: +m[2], ancho: +m[3], alto: +m[4] };
+  //
+  // Ahora la geometría es la PLANTILLA de fábrica, así que se afirma sobre
+  // ella: es la que sale impresa mientras nadie la edite en Admin.
+  const caja = (id: string) => {
+    const e = PLANTILLA_CATALOGO.elementos.find((x) => x.id === id);
+    if (!e) throw new Error(`no está el elemento ${id} en la plantilla`);
+    return e;
   };
 
-  const html = htmlEtiquetasCatalogo([datosEtiquetaCatalogo(tela())], LOGO);
-  const tabla = caja(html, 'tabla');
-  const divX = +html.match(/class="divV" style="left:([\d.]+)mm"/)![1];
-  const divY = +html.match(/class="divH" style="top:([\d.]+)mm"/)![1];
+  const tabla = caja('tabla');
+  const divX = caja('tabla_div_v').x - tabla.x;
+  const divY = caja('tabla_div_h').y - tabla.y;
 
   it('ningún campo se pasa del borde derecho de la tabla', () => {
-    for (const clase of ['tipo', 'calidad', 'rotuloTela', 'descripcion', 'rotuloAncho', 'ancho']) {
-      const c = caja(html, clase);
+    for (const id of ['tipo', 'calidad', 'rotulo_tela', 'descripcion', 'rotulo_ancho', 'ancho']) {
+      const c = caja(id);
       expect(c.x + c.ancho).toBeLessThanOrEqual(tabla.x + tabla.ancho);
     }
   });
 
   it('los datos de la columna izquierda no cruzan la línea del medio', () => {
-    for (const clase of ['tipo', 'calidad', 'rotuloAncho']) {
-      const c = caja(html, clase);
+    for (const id of ['tipo', 'calidad', 'rotulo_ancho']) {
+      const c = caja(id);
       expect(c.x + c.ancho).toBeLessThanOrEqual(tabla.x + divX);
     }
   });
 
   it('el nombre de la tela usa todo el ancho de su celda, no el del ejemplo', () => {
-    const c = caja(html, 'descripcion');
+    const c = caja('descripcion');
     // Lo que sobra hasta el borde es solo el aire; nada de 1 mm afuera.
     expect(tabla.x + tabla.ancho - (c.x + c.ancho)).toBeLessThanOrEqual(1.5);
     // Y de alto llega hasta la línea horizontal, para poder ir en dos renglones.
@@ -192,7 +194,7 @@ describe('los datos caen adentro de los recuadros', () => {
   });
 
   it('la familia tiene el mismo lugar que la calidad, así no encoge sola', () => {
-    expect(caja(html, 'tipo').ancho).toBeCloseTo(caja(html, 'calidad').ancho, 0);
+    expect(caja('tipo').ancho).toBeCloseTo(caja('calidad').ancho, 0);
   });
 });
 

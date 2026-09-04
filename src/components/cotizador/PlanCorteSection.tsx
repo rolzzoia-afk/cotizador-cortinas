@@ -13,21 +13,21 @@ import { useAuth } from '@/lib/auth';
 import {
   generarPlanCorte,
   resumenPlan,
-  rowToPano,
   secuenciaCortes,
   type GrupoRollo,
   type GrupoSobrante,
+  type PanoColmena,
   type Placed,
   type Plan,
 } from '@/modules/cotizador/planCorte';
-import { retazoSugerido } from '@/modules/cotizador/colmenaCorte';
+import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
 import { metrosPrimerCorte, type OrigenCorte } from '@/modules/produccion/salidasCorte';
+import { useDecisionesGiro } from '@/modules/produccion/girosColmena';
 import ConfirmarCorteDialog from '@/pages/produccion/dialogs/ConfirmarCorteDialog';
 import { otsDelPlan, resolverOtsDelPlan, type FilaOTPlan } from '@/modules/cotizador/planScope';
-import { useParametrosCotizador, type ParametrosCorte } from '@/modules/cotizador/parametros';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
-import type { ColmenaPano } from '@/modules/admin/colmena';
 import type { OT } from '@/modules/ots/types';
 import type { Database } from '@/types/database';
 
@@ -124,15 +124,48 @@ function eficClass(efic: number): string {
   return 'text-destructive';
 }
 
+/**
+ * Identidad de una tarjeta del plan: de qué paño/tela sale y qué piezas lleva.
+ *
+ * Con `key={índice}` React reusaba la MISMA tarjeta cuando el plan se
+ * regeneraba con la misma cantidad de grupos, y `CardRollo` —que guarda su
+ * layout en estado interno, inicializado una sola vez— seguía mostrando (y
+ * cerrando) el corte anterior. Con la clave por contenido, un grupo distinto es
+ * una tarjeta distinta y el estado no se hereda.
+ */
+function claveGrupo(raiz: string, placed: Placed[]): string {
+  return `${raiz}:${placed.map((p) => p.id).join(',')}`;
+}
+
 // ═════════════════════════════════════════════════════════════════════
 // Card: usar sobrante de colmena
 // ═════════════════════════════════════════════════════════════════════
-function CardSobrante({ grupo, params }: { grupo: GrupoSobrante; params: ParametrosCorte }) {
+function CardSobrante({
+  grupo,
+  decisiones,
+  onDecidir,
+}: {
+  grupo: GrupoSobrante;
+  /**
+   * Giros ya decididos por el operario (pieceId → autoriza). Viven en el PADRE:
+   * rechazar uno regenera el plan, y con él estas tarjetas.
+   */
+  decisiones?: Record<string, boolean>;
+  onDecidir?: (piezaId: string, autoriza: boolean) => void;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Igual que en el rollo: una cortina acostada se corta solo con el visto
+  // bueno del operario (la tela puede tener dirección o dibujo).
+  const pendientes = onDecidir
+    ? grupo.piezasRotadas.filter((r) => decisiones?.[r.id] === undefined)
+    : [];
 
   const placed = grupo.placed.filter((r) => !r.failed);
-  // Retazo único estimado tras el corte (mismo cálculo que el corte general).
-  const retazo = retazoSugerido(grupo, params);
+  // Lo que deja el corte del paño: los trozos que vuelven al rack y los que se
+  // pierden. Es la MISMA lista que registra el cierre del corte.
+  const vuelven = grupo.libres.filter((r) => r.clase === 'sobrante');
+  const perdidos = grupo.libres.filter((r) => r.clase === 'merma');
+  const mermaCm2 = perdidos.reduce((s, r) => s + r.anchoCm * r.altoCm, 0);
 
   const efic = Math.round(
     (placed.reduce((s, r) => s + r.pw * r.ph, 0) / (grupo.uw * grupo.uh)) * 100,
@@ -159,21 +192,31 @@ function CardSobrante({ grupo, params }: { grupo: GrupoSobrante; params: Paramet
             <span className="font-mono">{grupo.sobrante.cod}</span>
             {grupo.regla === 1 ? (
               <span className="rounded-full border border-success/30 bg-success/15 px-2 py-0.5 text-[0.65rem] text-success">
-                ✓ Regla 1 — exacto
+                ✓ Paño entero — no sobra nada
               </span>
             ) : (
               <span className="rounded-full border border-warning/30 bg-warning/15 px-2 py-0.5 text-[0.65rem] text-warning">
-                ≈ Regla 2 — ajuste (±10cm)
+                ≈ Se corta y sobra {(mermaCm2 / 10000).toFixed(2).replace('.', ',')} m² de merma
+              </span>
+            )}
+            {grupo.tieneRotaciones && (
+              <span className="rounded-full border border-accent/30 bg-accent/15 px-2 py-0.5 text-[0.65rem] text-accent">
+                ↻ {grupo.piezasRotadas.length} girada(s)
               </span>
             )}
           </div>
           <div className="mt-1 text-xs text-muted-foreground">
             {grupo.sobrante.ancho} × {grupo.sobrante.alto} cm
-            {retazo && (
+            {vuelven.length > 0 && (
               <div className="mt-1 text-[0.7rem] text-success">
                 <Scissors className="mr-1 inline h-3 w-3" />
-                Retazo estimado: <strong>{retazo.ancho}×{retazo.alto}cm</strong> — se descuenta en
-                el corte general (Fase 4)
+                Vuelve al rack:{' '}
+                <strong>{vuelven.map((r) => `${r.anchoCm}×${r.altoCm}cm`).join(' · ')}</strong>
+              </div>
+            )}
+            {perdidos.length > 0 && (
+              <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
+                Merma: {perdidos.map((r) => `${r.anchoCm}×${r.altoCm}cm`).join(' · ')}
               </div>
             )}
           </div>
@@ -207,9 +250,80 @@ function CardSobrante({ grupo, params }: { grupo: GrupoSobrante; params: Paramet
         <canvas ref={canvasRef} className="rounded border border-border" />
       </div>
 
+      {pendientes.length > 0 && (
+        <div className="mb-2 rounded-lg border border-orange-500/30 bg-warning/15 p-2">
+          <div className="mb-1 text-xs font-semibold text-warning">
+            <TriangleAlert className="mr-1 inline h-3 w-3" />
+            Cortina acostada — así entra en este paño
+          </div>
+          <div className="mb-2 text-[0.7rem] text-warning/80">
+            Derecha no cabe en el paño. Si la tela tiene dibujo o dirección, rechaza el giro: la
+            cortina se recalcula en otro paño o baja del rollo.
+          </div>
+          {grupo.piezasRotadas.map((r) => {
+            const decision = decisiones?.[r.id];
+            return (
+              <div key={r.id} className="mb-1 flex flex-wrap items-center gap-2">
+                <span className="min-w-[150px] text-[0.7rem] text-warning">
+                  ↺ {r.nombre} — {r.pw}×{r.ph}cm
+                </span>
+                <button
+                  onClick={() => onDecidir?.(r.id, true)}
+                  className={`rounded-md px-3 py-1 text-[0.72rem] font-bold transition-all ${
+                    decision === true
+                      ? 'bg-success text-success-foreground ring-2 ring-success/60 shadow'
+                      : 'bg-success text-success-foreground shadow hover:brightness-110'
+                  }`}
+                >
+                  ✓ Autoriza
+                </button>
+                <button
+                  onClick={() => onDecidir?.(r.id, false)}
+                  className="rounded-md bg-destructive px-3 py-1 text-[0.72rem] font-bold text-destructive-foreground shadow transition-all hover:brightness-110"
+                >
+                  ✗ Rechaza
+                </button>
+              </div>
+            );
+          })}
+          <div className="text-[0.68rem] text-muted-foreground">
+            ⏳ Esperando decisión sobre el giro…
+          </div>
+        </div>
+      )}
+
+      {/* El mismo detalle que la tarjeta de rollo: la mesa corta el paño igual. */}
+      {grupo.cortes && grupo.cortes.length > 0 && (
+        <div className="mb-2 rounded-md border border-border bg-muted/30 p-2">
+          <div className="mb-1 flex items-center gap-1.5 text-[0.7rem] font-semibold">
+            <Scissors className="h-3 w-3" />
+            Cortes en orden
+          </div>
+          <ol className="space-y-0.5 text-[0.68rem] text-muted-foreground">
+            {grupo.cortes.map((c) => (
+              <li key={c.n}>
+                <span className="font-mono font-semibold text-foreground">{c.n}.</span>{' '}
+                {c.girar && <span className="font-semibold text-warning">↻ girar el paño — </span>}
+                corte {c.eje} a <strong className="text-foreground">{c.posicionCm} cm</strong> →{' '}
+                {c.deja[0]} | {c.deja[1]}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {grupo.cortes === null && (
+        <div className="mb-2 flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 p-2 text-[0.68rem] text-warning">
+          <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+          Este acomodo no se puede cortar de punta a punta. Solo sale así con la cortadora
+          automática configurada en Parámetros de corte.
+        </div>
+      )}
+
       <div className="mt-1 border-t border-success/30 pt-2 text-[0.68rem] text-muted-foreground">
-        El descuento de la colmena se hace en <strong>Fase 4 → Confirmar corte general</strong>.
-        Acá es solo referencia de qué paño usar.
+        Al cerrar el corte, este paño sale del rack
+        {vuelven.length > 0
+          ? ` y lo que queda vuelve como ${vuelven.length} paño(s) nuevo(s), con etiqueta y ubicación.`
+          : ' entero.'}
       </div>
     </div>
   );
@@ -722,7 +836,7 @@ export function PlanCorteSection({
   const { parametros, loading: loadingParams } = useParametrosCotizador();
   const { formulas, loading: loadingFormulas } = useFormulasFamilias();
   const { reglas } = useReglasSeleccion();
-  const [colmenaPanos, setColmenaPanos] = useState<ColmenaPano[] | null>(null);
+  const [colmenaPanos, setColmenaPanos] = useState<PanoColmena[] | null>(null);
   const [ots, setOts] = useState<OT[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [generado, setGenerado] = useState(false);
@@ -735,14 +849,9 @@ export function PlanCorteSection({
     if (!empresaId) return;
     setLoading(true);
     try {
-      // Colmena paños disponibles
-      const { data: panosData, error: panosErr } = await supabase
-        .from('colmena_panos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('disponible', true);
-      if (panosErr) throw panosErr;
-      setColmenaPanos((panosData || []) as ColmenaPano[]);
+      // Colmena paños disponibles (paginada: con la colmena llena un select
+      // simple se corta en 1.000 filas y el plan vería media colmena).
+      setColmenaPanos(await cargarColmenaPanos(empresaId));
 
       // OTs en producción (incluye la actual como fallback)
       const { data: otsData, error: otsErr } = await supabase
@@ -778,12 +887,22 @@ export function PlanCorteSection({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lote, empresaId]);
 
+  // Giros de colmena que el operario ya decidió (pieceId → autoriza). Se
+  // GUARDAN (`produccion_checks`, area panos / ref giro): si vivieran en el
+  // estado de esta pantalla, al volver del Dimensionado el plan volvería a
+  // pedir la misma autorización y el Dimensionado dibujaría la cortina girada
+  // que ya se rechazó. Viven acá y no en la tarjeta porque rechazar uno
+  // regenera el plan —la cortina se va a otro paño o al rollo— y con él se
+  // remontan todas las tarjetas.
+  const { decisiones: decisionesColmena, sinGiro, decidir, olvidar } = useDecisionesGiro(ots);
+
   const plan: Plan | null = useMemo(() => {
     // Espera los parámetros de corte: un plan con defaults no se recalcularía.
     if (!colmenaPanos || !ots || loadingParams || loadingFormulas) return null;
-    const panos = colmenaPanos.map(rowToPano);
-    return generarPlanCorte(ots, panos, parametros, formulas, reglas.tipos);
-  }, [colmenaPanos, ots, loadingParams, parametros, loadingFormulas, formulas]);
+    return generarPlanCorte(ots, colmenaPanos, parametros, formulas, reglas.tipos, { sinGiro });
+    // `reglas` faltaba: un tipo de cortina nuevo del catálogo técnico no
+    // recalculaba el plan hasta recargar la página.
+  }, [colmenaPanos, ots, loadingParams, parametros, loadingFormulas, formulas, reglas, sinGiro]);
 
   const resumen = plan ? resumenPlan(plan) : null;
   // De dónde vienen los sobrantes que se guarden en la colmena. En un lote es
@@ -818,9 +937,32 @@ export function PlanCorteSection({
       ? { tipo: 'ot', numero: ot.datosGenerales.ot || String(ot.id) }
       : null;
 
+  // Los giros rechazados que siguen vivos en este plan. La cortina ya se fue al
+  // rollo (o a otro paño), así que su tarjeta de colmena no existe: sin esta
+  // lista no habría cómo deshacer un «Rechaza» apretado por error.
+  const rechazados = useMemo(() => {
+    if (!plan) return [];
+    const nombreDe = new Map<string, string>();
+    for (const g of [...plan.sobrantes, ...plan.rollo])
+      for (const p of g.placed) if (!p.failed) nombreDe.set(p.id, p.nombre);
+    return Object.entries(decisionesColmena)
+      .filter(([id, ok]) => !ok && nombreDe.has(id))
+      .map(([id]) => ({ id, nombre: nombreDe.get(id) as string }));
+  }, [plan, decisionesColmena]);
+
   const otIdsDelPlan = plan?.otsIncluidas.map((o) => o.id) ?? [];
+  // Un giro sin decidir puede mover esa cortina a otro paño o al rollo, así que
+  // el corte no se cierra hasta que estén todos resueltos: lo que se registra
+  // tiene que ser lo que el operario está mirando.
+  const girosPendientes = (plan?.sobrantes ?? []).flatMap((g) =>
+    g.piezasRotadas.filter((r) => decisionesColmena[r.id] === undefined),
+  ).length;
   const puedeCerrar =
-    flujo === 'produccion' && !!origenCorte && !!empresaId && otIdsDelPlan.length > 0;
+    flujo === 'produccion' &&
+    !!origenCorte &&
+    !!empresaId &&
+    otIdsDelPlan.length > 0 &&
+    girosPendientes === 0;
 
   return (
     <div className="mt-4 rounded-lg border border-border bg-card/40">
@@ -915,14 +1057,63 @@ export function PlanCorteSection({
             </div>
           )}
 
+          {/* Los giros rechazados quedan guardados: se listan para poder
+              volver atrás y para que se vea POR QUÉ esa cortina baja rollo. */}
+          {flujo === 'produccion' && rechazados.length > 0 && (
+            <div className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 p-2 text-[0.72rem]">
+              <div className="mb-1 font-semibold text-destructive">
+                Giros rechazados: {rechazados.length}{' '}
+                {rechazados.length === 1 ? 'cortina se corta' : 'cortinas se cortan'} sin acostar
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {rechazados.map((r) => (
+                  <span
+                    key={r.id}
+                    className="flex items-center gap-1.5 rounded-full border border-border bg-card px-2 py-0.5"
+                  >
+                    ↺ {r.nombre}
+                    <button
+                      onClick={() => {
+                        olvidar(r.id).catch((e) =>
+                          toast.error(
+                            'No se pudo deshacer: ' + (e instanceof Error ? e.message : String(e)),
+                          ),
+                        );
+                      }}
+                      className="font-semibold text-accent underline-offset-2 hover:underline"
+                    >
+                      volver a preguntar
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {plan.sobrantes.length > 0 && (
             <>
               <div className="mb-2 flex items-center gap-1 text-xs font-semibold text-success">
                 <Archive className="h-3 w-3" />
                 Usar sobrantes de la Colmena
               </div>
-              {plan.sobrantes.map((g, gi) => (
-                <CardSobrante key={gi} grupo={g} params={parametros} />
+              {plan.sobrantes.map((g) => (
+                <CardSobrante
+                  key={claveGrupo(g.sobrante._docId, g.placed)}
+                  grupo={g}
+                  decisiones={decisionesColmena}
+                  onDecidir={
+                    flujo === 'produccion'
+                      ? (id, ok) => {
+                          decidir(id, ok).catch((e) =>
+                            toast.error(
+                              'No se pudo guardar la decisión del giro: ' +
+                                (e instanceof Error ? e.message : String(e)),
+                            ),
+                          );
+                        }
+                      : undefined
+                  }
+                />
               ))}
             </>
           )}
@@ -935,7 +1126,7 @@ export function PlanCorteSection({
               </div>
               {plan.rollo.map((g, gi) => (
                 <CardRollo
-                  key={gi}
+                  key={claveGrupo(g.codInt, g.placed)}
                   grupo={g}
                   otNum={otNum}
                   onConfirmado={cargar}
@@ -947,27 +1138,31 @@ export function PlanCorteSection({
                   }
                 />
               ))}
-
-              {/* Un solo cierre para todo el plan: el lote se corta en una
-                  sesión y el registro (sobrantes, mermas, etiquetas y el
-                  sello de «tela cortada») sale de una sola pasada. */}
-              {puedeCerrar && (
-                <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-3">
-                  <Button
-                    size="sm"
-                    onClick={() => setCerrando(true)}
-                    className="gap-1.5 bg-success hover:bg-success/90"
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    Cerrar el corte
-                  </Button>
-                  <span className="text-[0.7rem] text-muted-foreground">
-                    Registra los sobrantes y la merma, imprime las etiquetas y marca la tela como
-                    cortada en {otIdsDelPlan.length} {otIdsDelPlan.length === 1 ? 'OT' : 'OTs'}.
-                  </span>
-                </div>
-              )}
             </>
+          )}
+
+          {/* Un solo cierre para todo el plan: el lote se corta en una sesión y
+              el registro (paños usados, sobrantes, mermas, etiquetas y el sello
+              de «tela cortada») sale de una sola pasada. Va FUERA del bloque de
+              rollo: un plan que se resuelve entero con la colmena también se
+              cierra, y antes se quedaba sin botón. */}
+          {puedeCerrar && (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-success/30 bg-success/5 p-3">
+              <Button
+                size="sm"
+                onClick={() => setCerrando(true)}
+                className="gap-1.5 bg-success hover:bg-success/90"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" />
+                Cerrar el corte
+              </Button>
+              <span className="text-[0.7rem] text-muted-foreground">
+                {plan.sobrantes.length > 0 &&
+                  `Saca ${plan.sobrantes.length} paño(s) de la colmena, `}
+                registra los sobrantes y la merma, imprime las etiquetas y marca la tela como
+                cortada en {otIdsDelPlan.length} {otIdsDelPlan.length === 1 ? 'OT' : 'OTs'}.
+              </span>
+            </div>
           )}
 
           {plan.sinStock.length > 0 && (
@@ -1009,6 +1204,7 @@ export function PlanCorteSection({
       {cerrando && puedeCerrar && origenCorte && empresaId && (
         <ConfirmarCorteDialog
           grupos={gruposVigentes}
+          sobrantes={plan?.sobrantes ?? []}
           params={parametros}
           origen={origenCorte}
           otIds={otIdsDelPlan}

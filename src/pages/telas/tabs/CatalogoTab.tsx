@@ -23,6 +23,8 @@ import {
   htmlEtiquetasCatalogo,
 } from '@/modules/telas/etiquetaCatalogo';
 import { LOGO_ROLZZO } from '@/modules/cotizador/logoRolzzo';
+import { usePlantillaEtiqueta } from '@/modules/etiquetas/plantillasStore';
+import { imprimirHtml } from '@/lib/imprimirHtml';
 import { tipoBadgeCls } from '../utils/tipo-badge';
 import type { Colmena, SortDir, Tela, ValidadoresMap } from '../Telas.types';
 
@@ -58,6 +60,9 @@ export default function CatalogoTab({
   // Selección para etiquetas, por código (el id cambia si se recarga la tabla).
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const confirmar = useConfirm();
+  // El diseño de la etiqueta, tal como quedó en Admin → Etiquetas. Se pide al
+  // montar la pestaña para tenerlo listo cuando se apriete Imprimir.
+  const { plantilla } = usePlantillaEtiqueta('catalogo');
 
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -150,14 +155,10 @@ export default function CatalogoTab({
     ) {
       return;
     }
-    const w = window.open('', '_blank', 'width=860,height=680');
-    if (!w) {
-      toast.error('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.');
-      return;
-    }
-    w.document.open();
-    w.document.write(htmlEtiquetasCatalogo(etiquetas, LOGO_ROLZZO));
-    w.document.close();
+    // La plantilla ya está cargada (se pide al montar la pestaña): si se
+    // esperara acá, el `window.open` dejaría de ser parte del click y el
+    // navegador lo bloquearía como popup.
+    imprimirHtml(htmlEtiquetasCatalogo(etiquetas, LOGO_ROLZZO, plantilla));
   };
 
   const sort = (col: keyof Tela) => {

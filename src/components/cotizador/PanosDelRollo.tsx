@@ -15,8 +15,19 @@
 // Se dibuja en SVG (no canvas) para que escale solo en la tablet del galpón y
 // respete el tema; los colores van inline porque son de dato, no de diseño.
 
-import { Scissors, RotateCw, Archive, TriangleAlert } from 'lucide-react';
-import type { PanoDibujado, PiezaDibujada } from '@/modules/cotizador/layoutPano';
+import { useId } from 'react';
+import { Scissors, RotateCw, Archive, Rows3, TriangleAlert } from 'lucide-react';
+import {
+  panosFisicos,
+  type PanoDibujado,
+  type PiezaDibujada,
+  type SobranteDibujado,
+} from '@/modules/cotizador/layoutPano';
+import {
+  resumenLibres,
+  type FuncionalSobrante,
+  type RectLibre,
+} from '@/modules/produccion/salidasCorte';
 
 // Colores de plumón, en orden de aparición de cada tela: azul, naranjo, verde…
 // como los usa la pizarra. El color es DE LA TELA, no de la pieza.
@@ -32,6 +43,39 @@ const PLUMONES = [
 ];
 
 const fmt = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
+/** Los cm² de la tela perdida se leen en metros cuadrados: «1,14 m²». */
+const m2 = (cm2: number) => (cm2 / 10000).toFixed(2).replace('.', ',');
+
+// Lo que queda del tiro se pinta con su semáforo: verde si vuelve al rack,
+// rojo si es pérdida. Son los mismos dos destinos del cierre del corte.
+const VERDE_SOBRANTE = '#22c55e';
+const ROJO_MERMA = '#ef4444';
+const colorSobrante = (s: SobranteDibujado) =>
+  s.clase === 'sobrante' ? VERDE_SOBRANTE : ROJO_MERMA;
+
+/** «SOBRANTE (ROLLER)» · «SOBRANTE (AMBAS)» · «MERMA». */
+function rotuloSobrante(s: SobranteDibujado): string {
+  if (s.clase === 'merma') return 'MERMA';
+  return `SOBRANTE (${paraQue(s.funcional).toUpperCase()})`;
+}
+
+/** «roller y vertical» · «roller» · «vertical» — para qué alcanza el trozo. */
+function paraQue(f: FuncionalSobrante): string {
+  if (f.roller && f.vertical) return 'roller y vertical';
+  return f.roller ? 'roller' : 'vertical';
+}
+
+/** «29 lamas + 2 de repuesto · lama 8,9 cm · alto final 222 cm». */
+function textoLamas(p: PiezaDibujada): string {
+  if (!p.lamas) return 'Se corta en lamas de 8,9 cm.';
+  const { total, repuesto, anchoLamaCm, altoFinalCm } = p.lamas;
+  const partes = [
+    `${total} ${total === 1 ? 'lama' : 'lamas'}${repuesto > 0 ? ` + ${repuesto} de repuesto` : ''}`,
+    `lama ${fmt(anchoLamaCm)} cm`,
+  ];
+  if (altoFinalCm) partes.push(`alto final ${fmt(altoFinalCm)} cm`);
+  return partes.join(' · ');
+}
 
 /**
  * El cajón de la pizarra: ancho arriba, alto a la izquierda, ubicación adentro.
@@ -41,7 +85,21 @@ const fmt = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
  *       │ PPAL │
  *       └──────┘
  */
-function CajonPizarra({ pieza, color }: { pieza: PiezaDibujada; color: string }) {
+function CajonPizarra({
+  pieza,
+  color,
+  esVertical,
+}: {
+  pieza: PiezaDibujada;
+  color: string;
+  esVertical: boolean;
+}) {
+  // La vertical se raya: ese cajón no es un paño, son lamas de 8,9 cm.
+  const rayado = esVertical
+    ? {
+        backgroundImage: `repeating-linear-gradient(90deg, ${color}1f 0 5px, transparent 5px 7px)`,
+      }
+    : undefined;
   return (
     <div className="grid grid-cols-[auto_auto] items-center gap-x-1.5 gap-y-0.5">
       <span />
@@ -53,11 +111,31 @@ function CajonPizarra({ pieza, color }: { pieza: PiezaDibujada; color: string })
       </span>
       <span
         className="rounded-sm border-2 px-2.5 py-1 text-center font-mono text-xs font-bold uppercase"
-        style={{ borderColor: color, color }}
-        title={pieza.invertida ? 'Invertida: se corta girada' : undefined}
+        style={{ borderColor: color, color, ...rayado }}
+        title={
+          esVertical
+            ? `Vertical: se corta en lamas de ${fmt(pieza.lamas?.anchoLamaCm ?? 8.9)} cm`
+            : pieza.invertida
+              ? 'Invertida: viene marcada así en la ficha'
+              : pieza.girada
+                ? 'Girada por el acomodo para que entrara en este paño; en la ficha NO va invertida'
+                : undefined
+        }
       >
         {pieza.invertida && '↺ '}
         {pieza.nombre}
+        {/* El giro del acomodo se rotula con la palabra y no con la flecha de
+            «invertida»: son decisiones distintas y el taller las confundía. */}
+        {!pieza.invertida && pieza.girada && (
+          <span className="ml-1.5 font-sans text-[0.62rem] font-semibold text-warning">
+            ⟳ GIRADA
+          </span>
+        )}
+        {esVertical && pieza.lamas && (
+          <span className="ml-1.5 font-sans text-[0.62rem] font-semibold opacity-80">
+            {pieza.lamas.total} lamas
+          </span>
+        )}
       </span>
     </div>
   );
@@ -65,6 +143,7 @@ function CajonPizarra({ pieza, color }: { pieza: PiezaDibujada; color: string })
 
 /** El tiro con sus cortinas, a escala. Todo en el color de plumón de su tela. */
 function DibujoPano({ pano, color }: { pano: PanoDibujado; color: string }) {
+  const uid = useId().replace(/:/g, '');
   const { anchoRolloCm: W, altoPanoCm: H } = pano;
   if (W <= 0 || H <= 0) return null;
   // El tiro es MUY alargado (300 × 1500 no cabe en pantalla): se dibuja con
@@ -73,6 +152,7 @@ function DibujoPano({ pano, color }: { pano: PanoDibujado; color: string }) {
   const altoPx = Math.max(60, Math.min(340, (H / W) * anchoPx));
   const ex = anchoPx / W;
   const ey = altoPx / H;
+  const sob = pano.sobrante;
 
   return (
     <svg
@@ -81,14 +161,94 @@ function DibujoPano({ pano, color }: { pano: PanoDibujado; color: string }) {
       height={altoPx}
       className="rounded border border-border bg-muted/30"
       role="img"
-      aria-label={`Paño ${pano.letra}: ${pano.piezas.length} cortinas`}
+      aria-label={`Paño ${pano.letra}: ${pano.piezas.length} cortinas${
+        sob ? `, queda ${sob.anchoCm} por ${sob.altoCm} cm de ${sob.clase}` : ''
+      }`}
     >
+      {/* Rayado para lo que NO es cortina: la franja que queda y los huecos. */}
+      <defs>
+        {[
+          ['sob', VERDE_SOBRANTE],
+          ['mer', ROJO_MERMA],
+        ].map(([k, c]) => (
+          <pattern
+            key={k}
+            id={`ray-${k}-${uid}`}
+            width={6}
+            height={6}
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(45)"
+          >
+            <rect width={6} height={6} fill={c} fillOpacity={0.1} />
+            <line x1={0} y1={0} x2={0} y2={6} stroke={c} strokeWidth={1.6} strokeOpacity={0.5} />
+          </pattern>
+        ))}
+      </defs>
+
+      {/* TODO lo que no es cortina, con su semáforo: verde si vuelve al rack,
+          rojo si se perdió. Nada queda en negro ni en gris — la tela del tiro
+          que no se usa es merma, y acá se ve dónde está. */}
+      {pano.libres.map((r, i) => {
+        const x = r.x * ex;
+        const y = r.y * ey;
+        const w = r.anchoCm * ex;
+        const h = r.altoCm * ey;
+        const c = r.clase === 'sobrante' ? VERDE_SOBRANTE : ROJO_MERMA;
+        // El verde dice para qué alcanza: una franja pintada de verde sin
+        // destino no le sirve a nadie en la mesa.
+        const rotulo =
+          r.clase === 'sobrante'
+            ? `SOBRA ${fmt(r.anchoCm)}×${fmt(r.altoCm)} · ${paraQue(r.funcional).toUpperCase()}`
+            : `MERMA ${fmt(r.anchoCm)}×${fmt(r.altoCm)}`;
+        // En una franja alta y angosta el rótulo va girado, como en la pizarra.
+        const girado = h > w;
+        const largo = rotulo.length * 4.3;
+        const cabe = girado ? h > largo && w > 11 : w > largo && h > 11;
+        return (
+          <g key={`libre-${i}`}>
+            <rect
+              x={x}
+              y={y}
+              width={w}
+              height={h}
+              fill={`url(#ray-${r.clase === 'sobrante' ? 'sob' : 'mer'}-${uid})`}
+              stroke={c}
+              strokeWidth={0.8}
+              strokeDasharray="3 2"
+            />
+            {cabe && (
+              <text
+                transform={girado ? `rotate(-90 ${x + w / 2} ${y + h / 2})` : undefined}
+                x={x + w / 2}
+                y={y + h / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill={c}
+                fontSize={7}
+                fontFamily="monospace"
+                fontWeight="bold"
+              >
+                {rotulo}
+              </text>
+            )}
+          </g>
+        );
+      })}
+
       {pano.piezas.map((p, i) => {
         const x = p.px * ex;
         const y = p.py * ey;
         const w = p.pw * ex;
         const h = p.ph * ey;
-        const nombre = p.invertida ? `↺ ${p.nombre}` : p.nombre;
+        const nombre = p.invertida ? `↺ ${p.nombre}` : p.girada ? `⟳ ${p.nombre}` : p.nombre;
+        // La vertical no es un paño liso: de ese trozo salen tiras de 8,9 cm.
+        const pasoLama = pano.esVertical ? (p.lamas?.anchoLamaCm ?? 8.9) * ex : 0;
+        const rayasLama =
+          pasoLama > 2.5 && w / pasoLama < 90
+            ? Array.from({ length: Math.max(0, Math.ceil(w / pasoLama) - 1) }, (_, k) =>
+                x + (k + 1) * pasoLama,
+              )
+            : [];
         return (
           <g key={i}>
             <rect
@@ -100,6 +260,19 @@ function DibujoPano({ pano, color }: { pano: PanoDibujado; color: string }) {
               stroke={color}
               strokeWidth={1}
             />
+            {rayasLama.map((lx, k) => (
+              <line
+                key={k}
+                x1={lx}
+                x2={lx}
+                y1={y}
+                y2={y + h}
+                stroke={color}
+                strokeWidth={0.7}
+                strokeOpacity={0.55}
+                strokeDasharray="2 2"
+              />
+            ))}
             {w > 34 && h > 22 && (
               <>
                 {/* Como en la pizarra: la medida a lo ancho arriba… */}
@@ -189,6 +362,20 @@ function DibujoPano({ pano, color }: { pano: PanoDibujado; color: string }) {
 
 function CardPano({ pano, color }: { pano: PanoDibujado; color: string }) {
   const n = pano.piezas.length;
+  // La cuenta completa del tiro: lo que vuelve al rack y lo que se perdió.
+  const { sobranteCm2, mermaCm2 } = resumenLibres(pano.libres);
+  const areaTiro = pano.anchoRolloCm * pano.altoPanoCm;
+  const pctMerma = areaTiro > 0 ? Math.round((mermaCm2 / areaTiro) * 100) : 0;
+  // Los trozos que vuelven al rack, cada uno con para qué alcanza. La franja
+  // del costado (`pano.sobrante`) ya tiene su propia línea: no se repite.
+  const franja = pano.sobrante;
+  const mismaQueLaFranja = (r: RectLibre) =>
+    !!franja &&
+    Math.abs(r.anchoCm - franja.anchoCm) < 1.5 &&
+    Math.abs(r.altoCm - franja.altoCm) < 1.5;
+  const vuelvenAlRack = pano.libres.filter((r) => r.clase === 'sobrante' && !mismaQueLaFranja(r));
+  // Las que el ACOMODO acostó (≠ invertidas de la ficha, que sí salen en Fase 1).
+  const giradas = pano.piezas.filter((p) => !p.invertida && p.girada);
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -212,15 +399,42 @@ function CardPano({ pano, color }: { pano: PanoDibujado; color: string }) {
             {n === 1 ? 'Sale 1 cortina' : `Salen ${n} cortinas`}
           </p>
           <p className="text-xs text-muted-foreground">
-            Tiro de {fmt(pano.anchoRolloCm)} × <strong>{fmt(pano.altoPanoCm)} cm</strong>
+            {/* El del rack no es un tiro: la tela ya está cortada. */}
+            {pano.colmena ? 'Paño de' : 'Tiro de'} {fmt(pano.anchoRolloCm)} ×{' '}
+            <strong>{fmt(pano.altoPanoCm)} cm</strong>
           </p>
+          {/* Lo que queda del tiro, con el mismo criterio del cierre del corte:
+              es la plata que vuelve al rack o la que se pierde. */}
+          {pano.sobrante && (
+            <p
+              className="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold"
+              style={{
+                color: colorSobrante(pano.sobrante),
+                borderColor: colorSobrante(pano.sobrante) + '66',
+                backgroundColor: colorSobrante(pano.sobrante) + '1a',
+              }}
+            >
+              queda {fmt(pano.sobrante.anchoCm)} × {fmt(pano.sobrante.altoCm)} cm →{' '}
+              {rotuloSobrante(pano.sobrante)}
+            </p>
+          )}
+          {/* Lo que se pierde de VERDAD: la franja más los huecos de adentro. */}
+          {mermaCm2 > 0 && (
+            <p className="mt-1 text-[0.65rem] text-muted-foreground">
+              se pierden{' '}
+              <strong style={{ color: ROJO_MERMA }}>
+                {m2(mermaCm2)} m² ({pctMerma} %)
+              </strong>
+              {sobranteCm2 > 0 && <> · vuelven al rack {m2(sobranteCm2)} m²</>}
+            </p>
+          )}
         </div>
       </div>
 
       {/* Los cajones de la pizarra, uno por cortina. */}
       <div className="mt-3 flex flex-wrap items-end gap-3">
         {pano.piezas.map((p, i) => (
-          <CajonPizarra key={i} pieza={p} color={color} />
+          <CajonPizarra key={i} pieza={p} color={color} esVertical={pano.esVertical} />
         ))}
       </div>
 
@@ -254,6 +468,76 @@ function CardPano({ pano, color }: { pano: PanoDibujado; color: string }) {
                 </li>
               ))}
             </ol>
+          )}
+
+          {/* La vertical no se corta como paño: de ahí salen las tiras. */}
+          {pano.esVertical &&
+            pano.piezas.map((p, i) => (
+              <p
+                key={`lamas-${i}`}
+                className="flex items-start gap-1.5 rounded border border-success/30 bg-success/10 p-1.5 text-[0.7rem] text-success"
+              >
+                <Rows3 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  {n > 1 && <strong>{p.nombre}: </strong>}
+                  {textoLamas(p)}
+                </span>
+              </p>
+            ))}
+
+          {/* El giro del acomodo NO está en la ficha: quien lo busque en Fase 1
+              no lo va a encontrar, así que la tarjeta lo dice. */}
+          {giradas.length > 0 && (
+            <p className="flex items-start gap-1.5 rounded border border-warning/40 bg-warning/10 p-1.5 text-[0.7rem] text-warning">
+              <RotateCw className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                <strong>{giradas.map((p) => p.nombre).join(', ')}</strong>{' '}
+                {giradas.length === 1 ? 'va acostada' : 'van acostadas'} en el paño: el acomodo{' '}
+                {giradas.length === 1 ? 'la giró' : 'las giró'} para que{' '}
+                {giradas.length === 1 ? 'entrara' : 'entraran'}. Es una decisión del taller y se
+                autoriza en el Plan de Corte: no es la columna INVERTIDA de la cotización, que ahí
+                puede ir sin marcar.
+              </span>
+            </p>
+          )}
+
+          {franja && (
+            <p className="text-[0.7rem]" style={{ color: colorSobrante(franja) }}>
+              Del tiro queda una franja de{' '}
+              <strong>
+                {fmt(franja.anchoCm)} × {fmt(franja.altoCm)} cm
+              </strong>
+              {franja.clase === 'sobrante'
+                ? ` → sirve para ${paraQue(franja.funcional)}; se guarda al cerrar el corte.`
+                : ' → merma: no alcanza para otra cortina.'}
+            </p>
+          )}
+
+          {/* Cada trozo verde con su destino: si no, el operario ve una franja
+              pintada de verde y no sabe si guardarla ni para qué sirve. */}
+          {vuelvenAlRack.map((r, i) => (
+            <p key={`rack-${i}`} className="text-[0.7rem]" style={{ color: VERDE_SOBRANTE }}>
+              Vuelve al rack:{' '}
+              <strong>
+                {fmt(r.anchoCm)} × {fmt(r.altoCm)} cm
+              </strong>{' '}
+              → sirve para {paraQue(r.funcional)}; se guarda al cerrar el corte.
+            </p>
+          ))}
+
+          {/* Lo que se pierde de VERDAD: tela pagada que no vuelve a usarse. */}
+          {mermaCm2 > 0 && (
+            <p className="text-[0.7rem]" style={{ color: ROJO_MERMA }}>
+              Se pierden{' '}
+              <strong>
+                {m2(mermaCm2)} m² ({pctMerma} %)
+              </strong>
+              : los rayados rojos del dibujo{' '}
+              {n > 1
+                ? '— lo que queda al costado y entre las cortinas'
+                : '— lo que queda alrededor de la cortina'}
+              . No alcanza para otra.
+            </p>
           )}
         </div>
       </div>
@@ -309,6 +593,11 @@ export default function PanosDelRollo({
   const cortinas = panos.reduce((s, p) => s + p.piezas.length, 0);
   const metros = panos.reduce((s, p) => s + (p.colmena ? 0 : p.altoPanoCm), 0) / 100;
   const grupos = agruparPorTela(panos);
+  const mermaTotal = panos.reduce((s, p) => s + resumenLibres(p.libres).mermaCm2, 0);
+  // Paños = trozos que se bajan del rollo, que es lo que el taller cuenta.
+  const nPanos = panosFisicos(panos);
+  // Los del rack se cuentan aparte: no bajan rollo, pero se van a buscar igual.
+  const nColmena = panos.filter((p) => p.colmena).length;
 
   return (
     <section className="space-y-4">
@@ -318,8 +607,17 @@ export default function PanosDelRollo({
           {titulo}
         </h3>
         <p className="text-xs text-muted-foreground">
-          {panos.length} {panos.length === 1 ? 'paño' : 'paños'} · {cortinas}{' '}
-          {cortinas === 1 ? 'cortina' : 'cortinas'} · {fmt(metros)} m de rollo
+          {nPanos} {nPanos === 1 ? 'paño' : 'paños'} de rollo
+          {nColmena > 0 && (
+            <> + {nColmena} {nColmena === 1 ? 'paño' : 'paños'} del rack</>
+          )}{' '}
+          · {cortinas} {cortinas === 1 ? 'cortina' : 'cortinas'} · {fmt(metros)} m de rollo
+          {mermaTotal > 0 && (
+            <>
+              {' '}
+              · se pierden <strong style={{ color: ROJO_MERMA }}>{m2(mermaTotal)} m²</strong>
+            </>
+          )}
         </p>
       </div>
 
@@ -336,6 +634,7 @@ export default function PanosDelRollo({
       {grupos.map((g) => {
         const nCort = g.panos.reduce((s, p) => s + p.piezas.length, 0);
         const m = g.panos.reduce((s, p) => s + (p.colmena ? 0 : p.altoPanoCm), 0) / 100;
+        const nRack = g.panos.filter((p) => p.colmena).length;
         return (
           <div key={g.codInt} className="space-y-2">
             <div
@@ -350,14 +649,15 @@ export default function PanosDelRollo({
               </span>
               <span className="text-xs text-muted-foreground">{g.producto}</span>
               <span className="ml-auto text-[0.7rem] text-muted-foreground">
-                {g.panos.length} {g.panos.length === 1 ? 'paño' : 'paños'} · {nCort}{' '}
+                {panosFisicos(g.panos)} {panosFisicos(g.panos) === 1 ? 'paño' : 'paños'}
+                {nRack > 0 && <> + {nRack} del rack</>} · {nCort}{' '}
                 {nCort === 1 ? 'cortina' : 'cortinas'}
                 {m > 0 && <> · {fmt(m)} m</>}
               </span>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               {g.panos.map((p) => (
-                <CardPano key={`${p.pano}-${p.codInt}`} pano={p} color={g.color} />
+                <CardPano key={`${p.letra}-${p.pano}-${p.codInt}`} pano={p} color={g.color} />
               ))}
             </div>
           </div>

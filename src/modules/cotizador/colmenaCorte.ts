@@ -1,64 +1,76 @@
 // ─────────────────────────────────────────────────────────────────────
-// Descuento de la colmena al confirmar el CORTE GENERAL (Fase 4).
+// Descuento de la colmena al confirmar el corte (Fase 4 y el taller).
 //
-// El corte general usa los paños (sobrantes) de la colmena. Al confirmarlo,
-// cada paño usado se ACTUALIZA EN SU MISMA UBICACIÓN:
-//   - si queda un retazo usable → el paño se achica a la medida del retazo
-//     (un solo rectángulo, el de mayor área) y sigue disponible.
-//   - si no queda retazo → el paño se marca como Usado (lo hace la capa UI).
+// Un paño que se corta se CONSUME: sale del rack, se marca usado y lo que
+// queda de él se anota como cualquier otro corte —los trozos que sirven vuelven
+// al rack con etiqueta y ubicación nuevas, y el resto es merma con trazabilidad
+// al paño de origen.
+//
+// Antes el paño se "achicaba en su lugar" al mayor rectángulo que quedara: el
+// rack decía que en A-27 había un paño de 130×230 que en realidad estaba en la
+// mesa hecho tres pedazos, y los otros dos trozos no existían para nadie.
 //
 // Lógica pura y testeable: acá solo se CALCULAN las deducciones a partir del
-// Plan de Corte (planCorte.ts). La escritura a Supabase la hace Fase 4.
+// Plan de Corte (planCorte.ts). Las escrituras las hacen Fase 4 y el diálogo de
+// cierre del módulo Producción.
 // ─────────────────────────────────────────────────────────────────────
-import { esColmena } from './planCorte';
 import type { GrupoSobrante, Plan } from './planCorte';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import type { SalidaCorte } from '@/modules/produccion/salidasCorte';
+import { MIN_REGISTRO_CM } from './libresPano';
 
 /**
- * Retazo único sugerido tras cortar las piezas en un sobrante: el rectángulo
- * de MAYOR ÁREA entre la banda de alto (ancho del paño × alto sobrante) y la
- * tira de ancho (`grupo.sobranteAncho`). Reglas Rolzzo v1.0: un retazo solo
- * "sobrevive" como colmena si cumple el mínimo 120×180; si no, devuelve `null`
- * (el paño se marca Usado y el remanente queda como merma — ver `mermaSobrante`).
+ * Lo que queda de un paño de colmena una vez cortado, con el mismo formato que
+ * lo que deja un rollo: así el diálogo de cierre los lista juntos, les pone
+ * ubicación y les imprime la misma etiqueta.
+ *
+ * Se descartan las hilachas de menos de 10 cm (`MIN_REGISTRO_CM`): son recorte
+ * de mesa, no tela que alguien vaya a guardar ni pérdida que valga anotar.
  */
+export function salidasDeColmena(
+  grupo: GrupoSobrante,
+  _params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): SalidaCorte[] {
+  const origen = {
+    docId: grupo.sobrante._docId,
+    ubicacion: grupo.sobrante.ubicacion || '',
+    cod: grupo.sobrante.cod,
+    ancho: grupo.sobrante.ancho,
+    alto: grupo.sobrante.alto,
+  };
+  return grupo.libres
+    .filter((r) => r.anchoCm >= MIN_REGISTRO_CM && r.altoCm >= MIN_REGISTRO_CM)
+    .map((r) => ({
+      codInt: grupo.sobrante.cod,
+      ancho: r.anchoCm,
+      alto: r.altoCm,
+      clase: r.clase,
+      detalle: 'resto_colmena' as const,
+      funcional: r.funcional,
+      colmenaOrigen: origen,
+    }));
+}
+
+/** El trozo más grande que vuelve al rack (para la tarjeta del plan). */
 export function retazoSugerido(
   grupo: GrupoSobrante,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): { ancho: number; alto: number } | null {
-  const placed = grupo.placed.filter((r) => !r.failed);
-  const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-  const altoResto = Math.round(grupo.sobrante.alto - (maxY + params.margenRolloCm * 2));
-  const cands: { ancho: number; alto: number }[] = [];
-  // Banda de alto (ancho del paño × alto restante): colmena solo si 120×180.
-  if (esColmena(grupo.sobrante.ancho, altoResto, params))
-    cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
-  // Tira de ancho: planCorte ya la dejó presente solo si cumple 120×180.
-  if (grupo.sobranteAncho) {
-    cands.push({ ancho: grupo.sobranteAncho.ancho, alto: grupo.sobranteAncho.alto });
-  }
-  if (cands.length === 0) return null;
-  return cands.reduce((a, b) => (b.ancho * b.alto > a.ancho * a.alto ? b : a));
+  const utiles = salidasDeColmena(grupo, params).filter((s) => s.clase === 'sobrante');
+  if (utiles.length === 0) return null;
+  const mayor = utiles.reduce((a, b) => (b.ancho * b.alto > a.ancho * a.alto ? b : a));
+  return { ancho: mayor.ancho, alto: mayor.alto };
 }
 
-/**
- * Remanente que NO califica como colmena → MERMA. Es el rectángulo de mayor
- * área (banda de alto o tira de ancho) cuando ninguno llega a 120×180. `null`
- * si el corte no deja remanente con medida útil o si ya sobrevivió como retazo.
- */
+/** La pérdida más grande del paño (para la tarjeta del plan). */
 export function mermaSobrante(
   grupo: GrupoSobrante,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): { ancho: number; alto: number } | null {
-  if (retazoSugerido(grupo, params)) return null; // sobrevivió como colmena, no es merma
-  const placed = grupo.placed.filter((r) => !r.failed);
-  const maxY = placed.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-  const altoResto = Math.round(grupo.sobrante.alto - (maxY + params.margenRolloCm * 2));
-  const cands: { ancho: number; alto: number }[] = [];
-  if (altoResto > 0) cands.push({ ancho: grupo.sobrante.ancho, alto: altoResto });
-  const anchoResto = Math.round(grupo.uw - grupo.placed.reduce((s, r) => s + (r.failed ? 0 : r.pw), 0));
-  if (anchoResto > 0) cands.push({ ancho: anchoResto, alto: Math.round(grupo.sobrante.alto) });
-  if (cands.length === 0) return null;
-  return cands.reduce((a, b) => (b.ancho * b.alto > a.ancho * a.alto ? b : a));
+  const mermas = salidasDeColmena(grupo, params).filter((s) => s.clase === 'merma');
+  if (mermas.length === 0) return null;
+  const mayor = mermas.reduce((a, b) => (b.ancho * b.alto > a.ancho * a.alto ? b : a));
+  return { ancho: mayor.ancho, alto: mayor.alto };
 }
 
 /** Una deducción concreta a aplicar sobre una fila de `colmena_panos`. */
@@ -69,11 +81,17 @@ export type DeduccionColmena = {
   /** Medidas originales del paño (cm), para mostrar/auditar. */
   ancho: number;
   alto: number;
-  /** 'retazo' → achicar a (nuevoAncho × nuevoAlto); 'usado' → marcar no disponible. */
+  /**
+   * Siempre `'usado'`: el paño sale del rack entero. Lo que queda vuelve como
+   * paños NUEVOS (ver `salidas`). Se conserva el campo —y el valor `'retazo'`
+   * en el tipo— porque las OTs ya confirmadas lo tienen guardado en su sello.
+   */
   accion: 'retazo' | 'usado';
   nuevoAncho?: number;
   nuevoAlto?: number;
-  /** Remanente que NO califica como colmena (120×180) → merma a registrar. */
+  /** Lo que dejó el corte de este paño: trozos para el rack y merma. */
+  salidas?: SalidaCorte[];
+  /** Compatibilidad con los sellos viejos (una sola merma por paño). */
   merma?: { ancho: number; alto: number } | null;
   /** Se completa en la capa UI si la escritura falló. */
   error?: string;
@@ -93,10 +111,9 @@ export type CorteGeneralColmena = {
    */
   piezas?: Record<string, PiezaColmenaSnap>;
   /**
-   * Quién confirmó el corte. 'fase4' es el corte general clásico (descuenta
-   * colmena); 'produccion' es el del módulo del taller, que con la colmena
-   * apagada no descuenta nada y solo registra lo que salió del rollo. Ausente
-   * en las OTs confirmadas antes de que existiera el módulo → 'fase4'.
+   * Quién confirmó el corte. 'fase4' es el corte general clásico; 'produccion'
+   * es el del módulo del taller. Ausente en las OTs confirmadas antes de que
+   * existiera el módulo → 'fase4'.
    */
   fuente?: 'fase4' | 'produccion';
   /** Nombre del lote, cuando el corte se hizo con varias OTs juntas. */
@@ -105,12 +122,22 @@ export type CorteGeneralColmena = {
   salidas?: { seriales: string[]; mermas: number };
 };
 
-/** Construye el mapa pieza→sobrante desde un plan (para persistir al confirmar). */
-export function piezasColmenaSnapshot(plan: Plan): Record<string, PiezaColmenaSnap> {
+/**
+ * Construye el mapa pieza→sobrante desde un plan (para persistir al confirmar).
+ *
+ * `otId` filtra las piezas de UNA orden: en un lote cada OT guarda su propio
+ * sello y `costoOT` cuenta los paños de colmena por orden — sin el filtro, cada
+ * OT del lote se atribuiría los paños de todas.
+ */
+export function piezasColmenaSnapshot(
+  plan: Plan,
+  otId?: string,
+): Record<string, PiezaColmenaSnap> {
   const out: Record<string, PiezaColmenaSnap> = {};
   for (const g of plan.sobrantes) {
     for (const pz of g.placed) {
       if (pz.failed) continue;
+      if (otId !== undefined && pz.otId !== String(otId)) continue;
       out[pz.id] = {
         cod: g.sobrante.cod,
         ancho: g.sobrante.ancho,
@@ -124,25 +151,23 @@ export function piezasColmenaSnapshot(plan: Plan): Record<string, PiezaColmenaSn
 
 /**
  * Calcula la lista de deducciones a la colmena para un Plan de Corte: una por
- * cada sobrante de colmena efectivamente usado (`plan.sobrantes`).
+ * cada paño efectivamente usado (`plan.sobrantes`). Todas son `'usado'` — el
+ * paño se consume— y traen lo que dejó el corte en `salidas`.
  */
 export function deduccionesColmena(
   plan: Plan,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): DeduccionColmena[] {
-  // OJO: usar los MISMOS params con que se generó el plan; con otros, el
-  // retazo calculado no calza con el layout.
-  return plan.sobrantes.map((g: GrupoSobrante) => {
-    const base = {
-      docId: g.sobrante._docId,
-      cod: g.sobrante.cod,
-      ubicacion: g.sobrante.ubicacion || '',
-      ancho: g.sobrante.ancho,
-      alto: g.sobrante.alto,
-    };
-    const retazo = retazoSugerido(g, params);
-    return retazo
-      ? { ...base, accion: 'retazo' as const, nuevoAncho: retazo.ancho, nuevoAlto: retazo.alto, merma: null }
-      : { ...base, accion: 'usado' as const, merma: mermaSobrante(g, params) };
-  });
+  // OJO: usar los MISMOS params con que se generó el plan; con otros, las
+  // salidas calculadas no calzan con el layout.
+  return plan.sobrantes.map((g: GrupoSobrante) => ({
+    docId: g.sobrante._docId,
+    cod: g.sobrante.cod,
+    ubicacion: g.sobrante.ubicacion || '',
+    ancho: g.sobrante.ancho,
+    alto: g.sobrante.alto,
+    accion: 'usado' as const,
+    salidas: salidasDeColmena(g, params),
+    merma: mermaSobrante(g, params),
+  }));
 }

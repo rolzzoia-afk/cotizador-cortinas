@@ -29,13 +29,13 @@ import {
   restorePlanGuardado,
   type OptimizerRow,
 } from '@/modules/cotizador/tela';
-import { rowToPano, type PanoColmena } from '@/modules/cotizador/planCorte';
+import { type PanoColmena } from '@/modules/cotizador/planCorte';
+import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
 import {
   construirFilasCorte,
   descargarCorteXlsx,
   type OTParaCorte,
 } from '@/modules/cotizador/exportCorteExcel';
-import type { ColmenaPano } from '@/modules/admin/colmena';
 import type { OT } from '@/modules/ots/types';
 import type { Ventana } from '@/modules/cotizador/types';
 
@@ -116,12 +116,7 @@ export function CotizadorTela() {
     if (otsProd !== null || !ot || !empresaId) return; // ya cargado / sin sesión
     setLoadingExport(true);
     try {
-      const { data: panosData } = await supabase
-        .from('colmena_panos')
-        .select('*')
-        .eq('empresa_id', empresaId)
-        .eq('disponible', true);
-      setColmenaPanos(((panosData || []) as ColmenaPano[]).map(rowToPano));
+      setColmenaPanos(await cargarColmenaPanos(empresaId));
 
       const { data: otsData } = await supabase
         .from('ots')

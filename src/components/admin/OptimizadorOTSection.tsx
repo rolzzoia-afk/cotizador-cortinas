@@ -21,7 +21,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, ExternalLink, Loader2, Scissors } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { SelectorOTs } from '@/pages/optimizador-tela/SelectorOTs';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
@@ -35,7 +34,8 @@ import {
   restorePlanGuardado,
   type OptimizerRow,
 } from '@/modules/cotizador/tela';
-import { rowToPano, type ColmenaPanoRow, type PanoColmena } from '@/modules/cotizador/planCorte';
+import { type PanoColmena } from '@/modules/cotizador/planCorte';
+import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
 import {
   construirHojaCorte,
   partirHojaCorte,
@@ -309,14 +309,9 @@ export function OptimizadorOTSection() {
     if (!empresaId || !ot) return;
     let vivo = true;
     setColmena(null);
-    supabase
-      .from('colmena_panos')
-      .select('*')
-      .eq('empresa_id', empresaId)
-      .eq('disponible', true)
-      .then(({ data }) => {
-        if (vivo) setColmena(((data || []) as ColmenaPanoRow[]).map(rowToPano));
-      });
+    cargarColmenaPanos(empresaId).then((panos) => {
+      if (vivo) setColmena(panos);
+    });
     return () => {
       vivo = false;
     };

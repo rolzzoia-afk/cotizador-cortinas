@@ -424,7 +424,9 @@ describe('generarEtiquetasPanosPDF — omite paños de colmena', () => {
     expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
   });
 
-  it('si ALGUNA pieza del paño en conjunto sale de colmena, se omite todo el paño', () => {
+  it('el paño MIXTO sí lleva etiqueta: solo se omite la cortina de colmena', () => {
+    // Antes bastaba UNA pieza de colmena para dejar sin etiqueta al paño
+    // entero, y su compañera de rollo salía del taller sin identificar.
     docsGuardados.length = 0;
     const n = generarEtiquetasPanosPDF(
       [fila('A', 1, 'V1'), fila('A', 1, 'V2'), fila('B', 2, 'V3')],
@@ -432,8 +434,8 @@ describe('generarEtiquetasPanosPDF — omite paños de colmena', () => {
       {},
       (r) => r.ventanaId === 'V2', // una de las dos cortinas del paño A
     );
-    expect(n).toBe(1); // solo queda el paño B
-    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(1);
+    expect(n).toBe(2); // el paño A (con V1 sola) y el paño B
+    expect((docsGuardados[0] as jsPDF).getNumberOfPages()).toBe(2);
   });
 
   it('todos los paños de colmena → 0 etiquetas y NO genera PDF', () => {

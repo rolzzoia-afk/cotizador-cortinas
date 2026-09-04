@@ -37,6 +37,8 @@ import {
   type TipoTela,
 } from '@/modules/telas/colmenaViva';
 import { etiquetaDesdePano, htmlEtiquetasSobrante } from '@/modules/telas/etiquetaSobrante';
+import { usePlantillaEtiqueta } from '@/modules/etiquetas/plantillasStore';
+import { imprimirHtml } from '@/lib/imprimirHtml';
 import { tipoBadgeCls } from '../utils/tipo-badge';
 import LegendDot from '../components/LegendDot';
 import type { Falla } from '../Telas.types';
@@ -78,6 +80,9 @@ const fmt = (n: number | null | undefined) => (n == null ? '–' : Math.round(n)
 export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaTabProps) {
   const { empresaId } = useAuth();
   const { parametros } = useParametrosCotizador();
+  // El diseño de la etiqueta, listo antes del click (el popup se bloquea si se
+  // espera una consulta en el medio).
+  const { plantilla } = usePlantillaEtiqueta('sobrante');
   const [filtroTipo, setFiltroTipo] = useState<TipoTela | ''>('');
   const [incluirUsados, setIncluirUsados] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -97,14 +102,7 @@ export default function ColmenaVivaTab({ panos, fallas, onReload }: ColmenaVivaT
   // moja, o el paño se cambió de lugar. Los que entraron antes del módulo
   // Producción no tienen marcado el funcional: se recalcula de sus medidas.
   const imprimirEtiqueta = (p: ColmenaPano) => {
-    const w = window.open('', '_blank', 'width=860,height=680');
-    if (!w) {
-      toast.error('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.');
-      return;
-    }
-    w.document.open();
-    w.document.write(htmlEtiquetasSobrante([etiquetaDesdePano(p, parametros)]));
-    w.document.close();
+    imprimirHtml(htmlEtiquetasSobrante([etiquetaDesdePano(p, parametros)], plantilla));
   };
 
   // Dar de baja una colmena vieja (Reglas Rolzzo, sección 6): sale del inventario

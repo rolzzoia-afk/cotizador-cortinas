@@ -109,12 +109,6 @@ const CAMPOS: CampoDef[] = [
     grupo: 'rollo',
   },
   {
-    key: 'ventanaAltoCm',
-    label: 'Tolerancia de alto en sobrantes (cm)',
-    hint: 'Un sobrante sirve si su alto no supera el de la pieza + este valor.',
-    grupo: 'rollo',
-  },
-  {
     key: 'ahorroMinRotacionCm',
     label: 'Ahorro mínimo para rotar (cm)',
     hint: 'Solo se propone rotar piezas si el layout rotado ahorra al menos esto de rollo.',
@@ -137,6 +131,12 @@ const CAMPOS: CampoDef[] = [
     key: 'diasAlertaColmena',
     label: 'Alerta de antigüedad (días)',
     hint: 'Una colmena disponible sin uso por más de estos días pasa a "en alerta".',
+    grupo: 'colmena',
+  },
+  {
+    key: 'colmenaPenalidadNuevoPanoCm2',
+    label: 'Penalidad por paño nuevo (cm²)',
+    hint: 'Cuánto "cuesta" dejar otro paño en el rack. Sube este valor para gastar los paños justos aunque quede más merma; en 0 solo manda la merma.',
     grupo: 'colmena',
   },
   // ── Sobrantes del corte (módulo Producción) ──
@@ -178,6 +178,7 @@ export function ParametrosCorteTab() {
   const { parametros, loading, refresh } = useParametrosCotizador();
   const [valores, setValores] = useState<Record<string, string>>({});
   const [usarColmena, setUsarColmena] = useState(true);
+  const [permiteGiro, setPermiteGiro] = useState(true);
   const [modoCorte, setModoCorte] = useState<ModoCorte>('guillotina');
   const [saving, setSaving] = useState(false);
   const puedeEditar = esRolAdmin(perfil?.rol);
@@ -188,12 +189,18 @@ export function ParametrosCorteTab() {
     for (const c of CAMPOS) v[c.key] = String(parametros[c.key]);
     setValores(v);
     setUsarColmena(parametros.usarColmenaPanos !== false);
+    setPermiteGiro(parametros.colmenaPermiteGiro !== false);
     setModoCorte(parametros.modoCorte === 'multieje' ? 'multieje' : 'guillotina');
   }, [loading, parametros]);
 
   const onGuardar = async () => {
     if (!empresaId || !puedeEditar) return;
-    const nuevos = { ...parametros, usarColmenaPanos: usarColmena, modoCorte };
+    const nuevos = {
+      ...parametros,
+      usarColmenaPanos: usarColmena,
+      colmenaPermiteGiro: permiteGiro,
+      modoCorte,
+    };
     for (const c of CAMPOS) {
       const n = parseFloat((valores[c.key] ?? '').replace(',', '.'));
       if (!Number.isFinite(n) || n < 0) {
@@ -220,6 +227,7 @@ export function ParametrosCorteTab() {
     for (const c of CAMPOS) v[c.key] = String(PARAMETROS_CORTE_DEFAULT[c.key]);
     setValores(v);
     setUsarColmena(PARAMETROS_CORTE_DEFAULT.usarColmenaPanos);
+    setPermiteGiro(PARAMETROS_CORTE_DEFAULT.colmenaPermiteGiro);
     setModoCorte(PARAMETROS_CORTE_DEFAULT.modoCorte);
     toast.info('Valores por defecto cargados. Presiona Guardar para aplicarlos.');
   };
@@ -322,6 +330,32 @@ export function ParametrosCorteTab() {
                         Los planes nuevos cortarán solo tela nueva.
                       </span>
                     )}
+                  </span>
+                </label>
+              )}
+
+              {/* Giro dentro del paño: igual que en el rollo, se propone y el
+                  operario lo autoriza cortina por cortina. */}
+              {g.key === 'colmena' && (
+                <label
+                  className={`mt-3 flex items-start gap-2.5 rounded-md border border-border bg-secondary/30 p-3 text-xs ${
+                    puedeEditar ? 'cursor-pointer' : ''
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5"
+                    disabled={!puedeEditar || !usarColmena}
+                    checked={permiteGiro && usarColmena}
+                    onChange={(e) => setPermiteGiro(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-semibold">Permitir giro en la colmena</span>
+                    <span className="block text-[12px] leading-tight text-muted-foreground">
+                      Deja que el plan proponga una cortina acostada cuando así entra en un paño
+                      que derecha no la recibe. El operario la autoriza una por una antes de
+                      cortar, igual que en el rollo. Las verticales nunca se giran.
+                    </span>
                   </span>
                 </label>
               )}

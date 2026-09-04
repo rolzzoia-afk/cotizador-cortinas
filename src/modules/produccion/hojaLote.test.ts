@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   clavePieza,
+  colmenaDelLote,
+  cortinasDeColmena,
   esTiroCompartido,
   filasDelLote,
   juntoPorOT,
+  panosDelLote,
   resumenTiros,
+  sobranteDelTiro,
   tirosDelLote,
   type FilaLote,
 } from './hojaLote';
@@ -122,6 +126,55 @@ describe('tirosDelLote — lo que llega a la mesa', () => {
   });
 });
 
+describe('sobranteDelTiro — qué queda al costado', () => {
+  it('descuenta los dos márgenes del rollo, como la pizarra y el cierre del corte', () => {
+    // BK 10: 1,00 + 1,20 = 220 cm ocupados de 298 − 2 = 296 útiles → 76.
+    const bk = tirosDelLote(filasDelLote([OT_A, OT_B], catalogo)).find(
+      (t) => t.codInt === 'BK 10',
+    )!;
+    const s = sobranteDelTiro(bk)!;
+    expect(s.anchoCm).toBe(76);
+    expect(s.altoCm).toBe(bk.altoCorteCm);
+  });
+
+  it('lo clasifica igual que la etiqueta del retazo', () => {
+    const sc = tirosDelLote(filasDelLote([OT_A], catalogo)).find((t) => t.codInt === 'SC 10')!;
+    // 298 − 2 − 120 = 176 de ancho por 200 de alto: da para roller, no para
+    // vertical (que pide 250 de largo).
+    const s = sobranteDelTiro(sc)!;
+    expect(s.clase).toBe('sobrante');
+    expect(s.funcional).toEqual({ roller: true, vertical: false });
+  });
+
+  it('sin franja manipulable devuelve null', () => {
+    const ancha = ot('ot-e', '#5000', [
+      { id: 've1', ubicacion: 'VENTANAL', codInt: 'BK 10', ancho: 2.9, alto: 2.0 },
+    ]);
+    const t = tirosDelLote(filasDelLote([ancha], catalogo))[0];
+    expect(sobranteDelTiro(t)).toBeNull();
+  });
+});
+
+describe('panosDelLote — la pizarra del lote', () => {
+  it('cada cortina lleva su OT adelante: en un tiro compartido es la única pista', () => {
+    const panos = panosDelLote(filasDelLote([OT_A, OT_B], catalogo));
+    const bk = panos.find((p) => p.codInt === 'BK 10')!;
+    expect(bk.piezas.map((x) => x.nombre).sort()).toEqual(['3213·DORM 1', '3215·LIVING']);
+  });
+
+  it('dibuja los mismos tiros que la tarjeta del lote', () => {
+    const filas = filasDelLote([OT_A, OT_B], catalogo);
+    const tiros = tirosDelLote(filas);
+    const panos = panosDelLote(filas);
+    expect(panos.map((p) => p.letra)).toEqual(tiros.map((t) => t.letra));
+    expect(panos.map((p) => p.altoPanoCm)).toEqual(tiros.map((t) => t.altoCorteCm));
+  });
+
+  it('sin filas no hay pizarra', () => {
+    expect(panosDelLote([])).toEqual([]);
+  });
+});
+
 describe('juntoPorOT — la letra que ve cada orden', () => {
   it('las dos órdenes que comparten tiro ven la MISMA letra', () => {
     // Esta es la falla que se está arreglando: antes cada OT calculaba su
@@ -185,5 +238,49 @@ describe('FilaLote', () => {
     expect(f).toHaveProperty('codInt');
     expect(f).toHaveProperty('junto');
     expect(f).toHaveProperty('otNum');
+  });
+});
+
+describe('el lote con COLMENA — las cortinas que ya están cortadas', () => {
+  // La cortina de la OT B (DORM 1) sale de un paño del rack.
+  const piezas = new Set(['ot-b_vb1_p0']);
+  const filas = filasDelLote([OT_A, OT_B], catalogo);
+  const esColmena = colmenaDelLote(filas, piezas);
+
+  it('la pieza de colmena queda FUERA de los tiros', () => {
+    const tiros = tirosDelLote(filas, undefined, esColmena);
+    const bk = tiros.find((t) => t.codInt === 'BK 10')!;
+    expect(bk.cortinas.map((c) => c.ubicacion)).toEqual(['LIVING']);
+    expect(bk.otsNum).toEqual(['#3215']);
+  });
+
+  it('la compañera de tiro NO desaparece: sigue bajando su tela', () => {
+    // El bug caro: bastaba una pieza de colmena en el tiro para que el tiro
+    // entero se diera por cortado y la otra cortina se quedara sin rollo.
+    const tiros = tirosDelLote(filas, undefined, esColmena);
+    expect(tiros.map((t) => t.codInt).sort()).toEqual(['BK 10', 'SC 10']);
+  });
+
+  it('el Dimensionado la rotula COLMENA en vez de darle una letra que no existe', () => {
+    const mapas = juntoPorOT(filas, undefined, esColmena);
+    expect(mapas.get('ot-b')!.get(clavePieza('vb1', 0))!.letra).toBe('COLMENA');
+    expect(mapas.get('ot-a')!.get(clavePieza('va1', 0))!.letra).not.toBe('COLMENA');
+  });
+
+  it('se listan aparte, con la ubicación del paño en el rack', () => {
+    const lista = cortinasDeColmena(filas, esColmena, () => 'MAPA M1-20 · 219X200');
+    expect(lista).toHaveLength(1);
+    expect(lista[0]).toMatchObject({
+      otNum: '#3213',
+      ubicacion: 'DORM 1',
+      codInt: 'BK 10',
+      origen: 'MAPA M1-20 · 219X200',
+    });
+  });
+
+  it('sin piezas de colmena, todo sigue exactamente igual que antes', () => {
+    const vacio = colmenaDelLote(filas, new Set());
+    expect(tirosDelLote(filas, undefined, vacio)).toEqual(tirosDelLote(filas));
+    expect(cortinasDeColmena(filas, vacio, () => '')).toEqual([]);
   });
 });

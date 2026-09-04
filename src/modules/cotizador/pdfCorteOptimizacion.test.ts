@@ -235,6 +235,47 @@ describe('construirHojaCorte — OPTIMIZADOR descuenta los paños de colmena', (
   });
 });
 
+// El bug más caro de la colmena: un paño con DOS cortinas, una de rack y otra
+// de rollo. El paño entero se daba por cortado y la compañera de rollo
+// desaparecía de TOTAL PAÑOS y del OPTIMIZADOR — su tela nunca se bajaba.
+describe('construirHojaCorte — paño MIXTO (una de colmena, una de rollo)', () => {
+  const mkVent = (id: string, ancho: number): VentanaItem => ({
+    id,
+    ubicacion: id,
+    codInt: 'SC 64',
+    producto: 'ROLLER SCREEN PREMIUM',
+    tipo: 'PREMIUM',
+    categoria: 'ROL',
+    grupoId: null,
+    alto: 1.8,
+    precio: 0,
+    cantidad: 1,
+    panos: [{ ancho, alto: 1.8 }],
+  });
+  // 1,40 + 1,45 caben lado a lado en el rollo → un solo paño «cortar junto».
+  const ventanas = [mkVent('IZQ', 1.4), mkVent('DER', 1.45)];
+  const rows = asignarJuntoEnOrden(buildOptimizerRows(ventanas, cat));
+  const snap = { 'ot1_IZQ_p0': { cod: 'BK', ancho: 150, alto: 210, ubic: 'A-19' } };
+  const hoja = construirHojaCorte(rows, [], ot(ventanas), undefined, snap);
+
+  it('la de colmena queda sin letra ni paño; la de rollo conserva los suyos', () => {
+    const izq = hoja.cortinas.find((c) => c.medidaColmena !== '')!;
+    const der = hoja.cortinas.find((c) => c.medidaColmena === '')!;
+    expect(izq.pano).toBe(0);
+    expect(izq.cortarJunto).toBe('');
+    expect(izq.ubicColmena).toBe('A-19');
+    expect(der.pano).toBeGreaterThan(0);
+    expect(der.cortarJunto).not.toBe('');
+  });
+
+  it('la compañera de rollo SÍ cuenta en TOTAL PAÑOS y en el OPTIMIZADOR', () => {
+    expect(hoja.totalPanos).toBe(1);
+    expect(hoja.panos[0].ubicaciones).toContain('DER');
+    const m = Object.fromEntries(hoja.optimizador.map((o) => [o.codInt, o.metros]));
+    expect(m['SC 64']).toBe(2.05);
+  });
+});
+
 describe('construirHojaCorte — telas invertidas', () => {
   function ventBK(ancho: number, invertida?: boolean): VentanaItem {
     return {

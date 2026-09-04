@@ -1,14 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { retazoSugerido, mermaSobrante, deduccionesColmena } from './colmenaCorte';
+import {
+  deduccionesColmena,
+  mermaSobrante,
+  piezasColmenaSnapshot,
+  retazoSugerido,
+  salidasDeColmena,
+} from './colmenaCorte';
+import { libresClasificados } from './libresPano';
 import type { GrupoSobrante, Placed, Plan } from './planCorte';
 
-function placed(py: number, ph: number, pw = 100): Placed {
+function placed(py: number, ph: number, pw = 100, id = 'p1', otId = '1'): Placed {
   return {
-    id: 'p1',
+    id,
     nombre: 'OT1·Living',
     codInt: 'SC 65',
-    otId: '1',
-    otNum: '1',
+    otId,
+    otNum: otId,
     w: pw,
     h: ph,
     px: 0,
@@ -20,8 +27,12 @@ function placed(py: number, ph: number, pw = 100): Placed {
   };
 }
 
+/**
+ * Un grupo de colmena como lo arma el motor: los `libres` salen de la MISMA
+ * función que usa el plan, así el test no inventa una geometría propia.
+ */
 function grupo(over: Partial<GrupoSobrante> = {}): GrupoSobrante {
-  return {
+  const base: GrupoSobrante = {
     sobrante: {
       _docId: 'd1',
       cod: 'SC 65',
@@ -33,10 +44,18 @@ function grupo(over: Partial<GrupoSobrante> = {}): GrupoSobrante {
     },
     placed: [placed(0, 200, 140)],
     regla: 2,
-    sobranteAncho: null,
     uw: 200,
     uh: 420,
+    libres: [],
+    cortes: [],
+    tieneRotaciones: false,
+    piezasRotadas: [],
+    costo: 0,
     ...over,
+  };
+  return {
+    ...base,
+    libres: over.libres ?? libresClasificados(base.placed, base.uw, base.uh),
   };
 }
 
@@ -44,124 +63,120 @@ function plan(sobrantes: GrupoSobrante[]): Plan {
   return { sobrantes, rollo: [], sinStock: [], otsIncluidas: [] };
 }
 
-describe('retazoSugerido (gate colmena 120×180)', () => {
-  it('banda de alto cuando califica como colmena y es la de mayor área', () => {
-    // sobrante 200×420, pieza ph 200 → altoResto = 420-(200+2)=218 ≥180,
-    // ancho 200 ≥120 → banda 200×218 válida como colmena.
-    expect(retazoSugerido(grupo())).toEqual({ ancho: 200, alto: 218 });
+describe('salidasDeColmena', () => {
+  it('lista lo que queda del paño con el mismo formato que un corte de rollo', () => {
+    // Paño 200×420, una cortina de 140×200 en la esquina: queda la tira del
+    // costado (60×420) y la faja de abajo (140×220).
+    const s = salidasDeColmena(grupo());
+    expect(s.map((x) => `${x.ancho}x${x.alto}:${x.clase}`).sort()).toEqual([
+      '140x220:sobrante',
+      '60x420:merma',
+    ]);
+    expect(s.every((x) => x.detalle === 'resto_colmena')).toBe(true);
   });
 
-  it('NO deja retazo si la banda no llega al mínimo de alto (180)', () => {
-    // sobrante 200×260, pieza ph 200 → altoResto = 58 (<180) → no es colmena.
-    const g = grupo({
-      sobrante: { _docId: 'd', cod: 'X', ancho: 200, alto: 260, ubicacion: '', tipo: '', creadoEn: '' },
-      placed: [placed(0, 200)],
-      uh: 260,
+  it('cada salida sabe de qué paño del rack salió', () => {
+    const [s] = salidasDeColmena(grupo());
+    expect(s.colmenaOrigen).toEqual({
+      docId: 'd1',
+      ubicacion: 'A-1',
+      cod: 'SC 65',
+      ancho: 200,
+      alto: 420,
     });
-    expect(retazoSugerido(g)).toBeNull();
+    expect(s.codInt).toBe('SC 65');
   });
 
-  it('usa la tira de ancho (ya gateada por planCorte) cuando no hay banda útil', () => {
-    // sobrante 130×200, pieza ph 190 → altoResto = 8 → sin banda; tira 130×200.
+  it('las hilachas de menos de 10 cm no se anotan', () => {
+    // Paño 205×200 con una cortina de 200×195: quedan 5×200 y 200×5.
     const g = grupo({
-      sobrante: { _docId: 'd', cod: 'X', ancho: 130, alto: 200, ubicacion: '', tipo: '', creadoEn: '' },
-      placed: [placed(0, 190)],
-      sobranteAncho: { cod: 'X', ancho: 130, alto: 200 },
-      uw: 130,
+      sobrante: { _docId: 'd', cod: 'X', ancho: 205, alto: 200, ubicacion: '', tipo: '', creadoEn: '' },
+      placed: [placed(0, 195, 200)],
+      uw: 205,
       uh: 200,
     });
-    expect(retazoSugerido(g)).toEqual({ ancho: 130, alto: 200 });
+    expect(salidasDeColmena(g)).toEqual([]);
   });
 
-  it('elige el de mayor área cuando banda y tira califican', () => {
-    // sobrante 125×450, pieza ph 250 → banda 125×198 (24.750) vs tira 130×250 (32.500)
+  it('un paño usado ENTERO no deja ninguna salida', () => {
     const g = grupo({
-      sobrante: { _docId: 'd', cod: 'X', ancho: 125, alto: 450, ubicacion: '', tipo: '', creadoEn: '' },
-      placed: [placed(0, 250)],
-      sobranteAncho: { cod: 'X', ancho: 130, alto: 250 },
-      uw: 125,
-      uh: 450,
+      sobrante: { _docId: 'd', cod: 'X', ancho: 140, alto: 200, ubicacion: '', tipo: '', creadoEn: '' },
+      placed: [placed(0, 200, 140)],
+      uw: 140,
+      uh: 200,
     });
-    expect(retazoSugerido(g)).toEqual({ ancho: 130, alto: 250 });
-  });
-
-  it('null cuando no queda nada que califique como colmena', () => {
-    const g = grupo({
-      sobrante: { _docId: 'd', cod: 'X', ancho: 100, alto: 120, ubicacion: '', tipo: '', creadoEn: '' },
-      placed: [placed(0, 119)],
-      sobranteAncho: null,
-      uw: 100,
-      uh: 120,
-    });
-    expect(retazoSugerido(g)).toBeNull();
+    expect(g.libres).toEqual([]);
+    expect(salidasDeColmena(g)).toEqual([]);
   });
 });
 
-describe('mermaSobrante', () => {
-  it('es null cuando el remanente sobrevive como colmena', () => {
-    expect(mermaSobrante(grupo())).toBeNull();
+describe('retazoSugerido / mermaSobrante', () => {
+  it('el retazo es el trozo ÚTIL más grande', () => {
+    expect(retazoSugerido(grupo())).toEqual({ ancho: 140, alto: 220 });
   });
 
-  it('devuelve el remanente como merma cuando no califica (banda baja)', () => {
-    // sobrante 200×260, pieza 200 ancho × 200 alto → solo banda 200×58 (<180).
+  it('la merma es la pérdida más grande', () => {
+    expect(mermaSobrante(grupo())).toEqual({ ancho: 60, alto: 420 });
+  });
+
+  it('null cuando el paño no deja nada de esa clase', () => {
+    // Paño 200×260 con una cortina de 200×200: solo queda 200×60, que no sirve
+    // ni para roller (100×200) ni para vertical (80×250) → todo merma.
     const g = grupo({
       sobrante: { _docId: 'd', cod: 'X', ancho: 200, alto: 260, ubicacion: '', tipo: '', creadoEn: '' },
       placed: [placed(0, 200, 200)],
       uw: 200,
       uh: 260,
     });
-    expect(mermaSobrante(g)).toEqual({ ancho: 200, alto: 58 });
-  });
-
-  it('toma la tira de ancho como merma si es la mayor y no califica', () => {
-    // pieza 140 de ancho en sobrante de 200 → tira 60×260 (15.600);
-    // banda 200×58 (11.600). Ninguna es colmena → merma = la mayor (tira).
-    const g = grupo({
-      sobrante: { _docId: 'd', cod: 'X', ancho: 200, alto: 260, ubicacion: '', tipo: '', creadoEn: '' },
-      placed: [placed(0, 200, 140)],
-      uw: 200,
-      uh: 260,
-    });
-    expect(mermaSobrante(g)).toEqual({ ancho: 60, alto: 260 });
+    expect(retazoSugerido(g)).toBeNull();
+    expect(mermaSobrante(g)).toEqual({ ancho: 200, alto: 60 });
   });
 });
 
 describe('deduccionesColmena', () => {
-  it('una deducción por sobrante usado: retazo (con merma null) o usado (con merma)', () => {
-    const gRetazo = grupo(); // → retazo 200×218
-    const gUsado = grupo({
-      sobrante: { _docId: 'd2', cod: 'BK 60', ancho: 200, alto: 260, ubicacion: 'B-2', tipo: '', creadoEn: '' },
-      placed: [placed(0, 200, 200)],
-      sobranteAncho: null,
-      uw: 200,
-      uh: 260,
+  it('el paño SIEMPRE se consume y trae lo que dejó el corte', () => {
+    const res = deduccionesColmena(plan([grupo()]));
+    expect(res).toHaveLength(1);
+    expect(res[0]).toMatchObject({
+      docId: 'd1',
+      cod: 'SC 65',
+      ubicacion: 'A-1',
+      ancho: 200,
+      alto: 420,
+      accion: 'usado',
     });
-    const res = deduccionesColmena(plan([gRetazo, gUsado]));
-    expect(res).toEqual([
-      {
-        docId: 'd1',
-        cod: 'SC 65',
-        ubicacion: 'A-1',
-        ancho: 200,
-        alto: 420,
-        accion: 'retazo',
-        nuevoAncho: 200,
-        nuevoAlto: 218,
-        merma: null,
-      },
-      {
-        docId: 'd2',
-        cod: 'BK 60',
-        ubicacion: 'B-2',
-        ancho: 200,
-        alto: 260,
-        accion: 'usado',
-        merma: { ancho: 200, alto: 58 },
-      },
-    ]);
+    // Ya no se achica el paño en su lugar: el rack no puede decir que en A-1
+    // hay un paño de 140×220 cuando en realidad quedaron dos trozos sueltos.
+    expect(res[0].nuevoAncho).toBeUndefined();
+    expect(res[0].salidas).toHaveLength(2);
   });
 
   it('plan sin sobrantes → sin deducciones', () => {
     expect(deduccionesColmena(plan([]))).toEqual([]);
+  });
+});
+
+describe('piezasColmenaSnapshot', () => {
+  const g = grupo({
+    placed: [placed(0, 200, 140, 'ot1_v1_p0', 'ot1'), placed(0, 200, 60, 'ot2_v9_p0', 'ot2')],
+  });
+
+  it('sin filtro devuelve todas las piezas del plan', () => {
+    expect(Object.keys(piezasColmenaSnapshot(plan([g]))).sort()).toEqual([
+      'ot1_v1_p0',
+      'ot2_v9_p0',
+    ]);
+  });
+
+  it('en un LOTE cada OT sella solo sus piezas', () => {
+    // Sin el filtro, las dos OTs del lote se atribuían los paños de la otra y
+    // `costoOT` cargaba dos veces la misma tela.
+    expect(Object.keys(piezasColmenaSnapshot(plan([g]), 'ot1'))).toEqual(['ot1_v1_p0']);
+    expect(piezasColmenaSnapshot(plan([g]), 'ot1').ot1_v1_p0).toEqual({
+      cod: 'SC 65',
+      ancho: 200,
+      alto: 420,
+      ubic: 'A-1',
+    });
   });
 });
