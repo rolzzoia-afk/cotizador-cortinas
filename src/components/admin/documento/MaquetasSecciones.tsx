@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import FilaTotal from '@/components/cotizador/FilaTotal';
-import { FILAS_TOTALES, NOTA_IVA } from '@/modules/cotizador/filasTotales';
+import { FILAS_TOTALES } from '@/modules/cotizador/filasTotales';
 import { calcularTotales } from '@/modules/cotizador/preciosFase0';
 import { formatCLP } from '@/modules/cotizador/calculos';
 import { FILTROS_CATALOGO } from '@/modules/cotizador/filtrosCatalogo';
@@ -369,14 +369,12 @@ function MaquetaTotales() {
         <div key={f.id}>
           {f.separadorAntes && <div className="my-1 border-t border-border" />}
           <FilaTotal
-            label={f.label}
+            label={f.label(TOTALES_EJEMPLO)}
             valor={formatCLP(f.valor(TOTALES_EJEMPLO))}
             fuerte={f.fuerte}
-            tenue={f.tenue}
           />
         </div>
       ))}
-      <p className="pt-1 text-center text-[11px] text-muted-foreground">{NOTA_IVA}</p>
       <div className="my-1 border-t border-border" />
       <Button className="w-full gap-1.5">Guardar como OT</Button>
     </section>

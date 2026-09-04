@@ -19,7 +19,7 @@
 
 import { jsPDF } from 'jspdf';
 import { formatCLP } from './calculos';
-import { FILAS_TOTALES, NOTA_IVA } from './filasTotales';
+import { FILAS_TOTALES } from './filasTotales';
 import { claveTermino } from './terminos';
 import {
   LOGO_ROLZZO_RATIO,
@@ -728,12 +728,16 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
 function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
   const w = 72;
   const x = MG + ANCHO_TABLA - w;
-  const h = 6;
   let yy = y;
+  // La leyenda de las cuotas, pegada al total con tarjeta como el rótulo rojo
+  // de la planilla. Con Flow no va: ahí las cuotas y sus intereses los pone el
+  // banco del cliente, y prometerlas sería mentir.
+  const leyenda = e.proveedorTarjeta === 'flow' ? '' : (e.empresa.totales.leyendaCuotas ?? '').trim();
   for (const f of FILAS_TOTALES) {
-    // La fila tenue (el neto sin IVA) va más baja, más chica y gris: acompaña
-    // al monto de arriba sin competir con él.
-    const hf = f.tenue ? 4.2 : h;
+    // Las filas del desglose (subtotal e IVA de cada forma de pago) van más
+    // bajas y sin banda: acompañan al total sin competir con él, igual que en
+    // la planilla.
+    const hf = f.fuerte ? 6 : 5;
     if (f.separadorAntes) {
       set(doc, 'draw', LINEA);
       doc.setLineWidth(0.2);
@@ -743,36 +747,28 @@ function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
       set(doc, 'fill', NEGRO);
       doc.rect(x, yy, w, hf, 'F');
     }
-    const color = f.fuerte ? BLANCO : f.tenue ? GRIS : TEXTO;
-    celda(doc, f.label, x + 1, w - 2, yy, hf, {
-      bold: !f.tenue,
-      size: f.fuerte ? 7.6 : f.tenue ? 6 : 7,
+    const color = f.fuerte ? BLANCO : TEXTO;
+    celda(doc, f.label(e.totales), x + 1, w - 2, yy, hf, {
+      bold: f.fuerte,
+      size: f.fuerte ? 7.6 : 6.4,
       color,
     });
     celda(doc, formatCLP(f.valor(e.totales)), x + 1, w - 2, yy, hf, {
-      bold: !f.tenue,
+      bold: f.fuerte,
       align: 'r',
-      size: f.fuerte ? 8.6 : f.tenue ? 6.4 : 7.6,
+      size: f.fuerte ? 8.6 : 7,
       color,
     });
     yy += hf;
+    if (f.llevaLeyendaCuotas && leyenda) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(6.4);
+      set(doc, 'text', ROJO);
+      doc.text(leyenda, x + w, yy + 2.6, { align: 'right' });
+      yy += 3.8;
+    }
   }
-  // La leyenda de las cuotas, pegada al total con tarjeta como el rótulo rojo
-  // de la planilla. Con Flow no va: ahí las cuotas y sus intereses los pone el
-  // banco del cliente, y prometerlas sería mentir.
-  const leyenda = (e.empresa.totales.leyendaCuotas ?? '').trim();
-  if (leyenda && e.proveedorTarjeta !== 'flow') {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(6.4);
-    set(doc, 'text', ROJO);
-    doc.text(leyenda, x + w, yy + 2.6, { align: 'right' });
-    yy += 3.4;
-  }
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(6);
-  set(doc, 'text', GRIS);
-  doc.text(NOTA_IVA, x + w, yy + 3, { align: 'right' });
-  return yy + 5;
+  return yy + 3;
 }
 
 /**

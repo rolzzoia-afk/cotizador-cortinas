@@ -1,55 +1,90 @@
 import { describe, it, expect } from 'vitest';
-import { FILAS_TOTALES, NOTA_IVA } from './filasTotales';
+import { FILAS_TOTALES, rotuloIva } from './filasTotales';
 import { calcularTotales } from './preciosFase0';
 
 describe('las filas del recuadro de totales', () => {
   const t = calcularTotales(760_646);
-  const labels = FILAS_TOTALES.map((f) => f.label);
+  const labels = FILAS_TOTALES.map((f) => f.label(t));
 
-  it('muestra los dos montos que paga el cliente y, en chico, el neto', () => {
-    expect(labels).toEqual(['Total transferencia', 'Total sin IVA', 'Total tarjeta crédito']);
+  it('replica el desglose de la planilla: cada forma de pago con su subtotal, su IVA y su total', () => {
+    expect(labels).toEqual([
+      'Subtotal pago tarjeta d.c.',
+      'IVA 19%',
+      'Tot. tarjeta de crédito',
+      'Subtotal pago transf.',
+      'IVA 19%',
+      'Total pago transf.',
+    ]);
   });
 
-  it('el neto va pegado bajo la transferencia, que es de donde sale', () => {
-    const iTransf = FILAS_TOTALES.findIndex((f) => f.id === 'transferencia');
-    expect(FILAS_TOTALES.findIndex((f) => f.id === 'neto')).toBe(iTransf + 1);
+  it('el orden es el del Excel: primero el bloque de la tarjeta, después el de la transferencia', () => {
+    const ids = FILAS_TOTALES.map((f) => f.id);
+    expect(ids).toEqual([
+      'tarjetaSubtotal',
+      'tarjetaIva',
+      'tarjeta',
+      'transferenciaSubtotal',
+      'transferenciaIva',
+      'transferencia',
+    ]);
   });
 
-  it('no desglosa el IVA como línea aparte, ni el abono, ni un «subtotal»', () => {
-    const texto = labels.join(' | ').toLowerCase();
-    expect(texto).not.toContain('iva 19');
-    expect(texto).not.toContain('19%');
-    expect(texto).not.toContain('abono');
-    expect(texto).not.toContain('subtotal');
-    // La única mención al IVA es la del neto: «sin IVA», no un desglose.
-    expect(labels.filter((l) => /iva/i.test(l))).toEqual(['Total sin IVA']);
-  });
-
-  it('avisa que el IVA va incluido en los montos mostrados', () => {
-    expect(NOTA_IVA).toBe('Todos los precios incluyen IVA.');
+  it('no imprime el abono inicial: `calcularTotales` lo sigue calculando, pero no se muestra', () => {
+    expect(labels.join(' | ').toLowerCase()).not.toContain('abono');
   });
 
   it('toma los montos del cálculo real, sin recalcular nada', () => {
     const porId = Object.fromEntries(FILAS_TOTALES.map((f) => [f.id, f.valor(t)]));
-    expect(porId.transferencia).toBe(t.totalTransferencia);
+    expect(porId.tarjetaSubtotal).toBe(t.subtotalTarjeta);
+    expect(porId.tarjetaIva).toBe(t.ivaTarjeta);
     expect(porId.tarjeta).toBe(t.totalTarjeta);
-    // El neto es la MISMA base de los valores unitarios de la tabla.
-    expect(porId.neto).toBe(t.subtotalNeto);
-    // Los dos montos grandes YA traen el IVA dentro (por eso la nota).
-    expect(porId.transferencia).toBeGreaterThan(porId.neto);
+    expect(porId.transferenciaSubtotal).toBe(t.subtotalNeto);
+    expect(porId.transferenciaIva).toBe(t.ivaTransferencia);
+    expect(porId.transferencia).toBe(t.totalTransferencia);
   });
 
-  it('destaca la transferencia, achica el neto y separa la tarjeta con una línea', () => {
-    const transferencia = FILAS_TOTALES.find((f) => f.id === 'transferencia');
-    const neto = FILAS_TOTALES.find((f) => f.id === 'neto');
-    const tarjeta = FILAS_TOTALES.find((f) => f.id === 'tarjeta');
-    expect(transferencia?.fuerte).toBe(true);
-    expect(neto?.tenue).toBe(true);
-    expect(neto?.fuerte).toBeFalsy();
-    expect(tarjeta?.separadorAntes).toBe(true);
-    // Un solo monto grande y una sola línea chica: si no, el recuadro deja de
-    // tener un precio que el cliente mire primero.
-    expect(FILAS_TOTALES.filter((f) => f.fuerte)).toHaveLength(1);
-    expect(FILAS_TOTALES.filter((f) => f.tenue)).toHaveLength(1);
+  it('cada bloque cuadra: subtotal + IVA = total', () => {
+    const v = Object.fromEntries(FILAS_TOTALES.map((f) => [f.id, f.valor(t)]));
+    expect(v.tarjetaSubtotal + v.tarjetaIva).toBeCloseTo(v.tarjeta, 6);
+    expect(v.transferenciaSubtotal + v.transferenciaIva).toBeCloseTo(v.transferencia, 6);
+  });
+
+  it('el subtotal de transferencia ES el neto: la misma base de la columna TOTAL de la tabla', () => {
+    const neto = FILAS_TOTALES.find((f) => f.id === 'transferenciaSubtotal');
+    expect(neto?.valor(t)).toBe(760_646);
+  });
+
+  it('destaca los dos totales y separa los bloques con una línea', () => {
+    expect(FILAS_TOTALES.filter((f) => f.fuerte).map((f) => f.id)).toEqual([
+      'tarjeta',
+      'transferencia',
+    ]);
+    // Una sola línea divisoria: la que abre el bloque de la transferencia.
+    expect(FILAS_TOTALES.filter((f) => f.separadorAntes).map((f) => f.id)).toEqual([
+      'transferenciaSubtotal',
+    ]);
+  });
+
+  it('la leyenda de cuotas cuelga del total con TARJETA, que es la que la explica', () => {
+    const conLeyenda = FILAS_TOTALES.filter((f) => f.llevaLeyendaCuotas);
+    expect(conLeyenda.map((f) => f.id)).toEqual(['tarjeta']);
+  });
+});
+
+describe('rotuloIva — el % sale del cálculo, no de un 19 escrito a mano', () => {
+  it('usa la tasa real de la empresa', () => {
+    expect(rotuloIva(0.19)).toBe('IVA 19%');
+    expect(rotuloIva(0.1)).toBe('IVA 10%');
+  });
+
+  it('una tasa con decimales se muestra con coma, como el resto de la app (es-CL)', () => {
+    expect(rotuloIva(0.125)).toBe('IVA 12,5%');
+  });
+
+  it('el recuadro rotula la tasa con la que de verdad se calculó', () => {
+    const t = calcularTotales(100_000, { iva: 0.1 });
+    const fila = FILAS_TOTALES.find((f) => f.id === 'transferenciaIva');
+    expect(fila?.label(t)).toBe('IVA 10%');
+    expect(fila?.valor(t)).toBeCloseTo(10_000, 6);
   });
 });
