@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { avisosCatalogo, esCortinaTipo, flujoDeProducto } from './flujoCatalogo';
 import { REGLAS_PRECIOS_DEFAULT } from './reglasPrecios';
-import { cotizarFase0 } from './motorFase0';
+import { cotizarFase0, precioMlPorCod } from './motorFase0';
 import type { CatalogoProductos, Producto } from './types';
 
 const prod = (over: Partial<Producto> = {}): Producto => ({
@@ -87,6 +87,49 @@ describe('flujoDeProducto', () => {
     expect(f.cod).toBe('SUELTA 1');
   });
 
+  it('una tela MÁS CARA que la de referencia manda: la referencia es un piso', () => {
+    // El caso que reportó el dueño: puso una tela a 100.000 y la cotización
+    // seguía cobrando el arquetipo (31.000), porque la referencia cortaba la
+    // cascada antes de mirar la familia.
+    const cara = prod({ precio: 100000, descripcion: 'DICHROIC BEIGE' });
+    const cat: CatalogoProductos = { ...CAT, 'BK 85': cara };
+    const f = flujoDeProducto(cat['BK 10'], 'BK 10', cat);
+    expect(f.precioMl).toBe(100000);
+    expect(f.origenPrecio).toBe('maxFamilia');
+    expect(f.telaReferencia).toBe('BK 85');
+    // La referencia sigue estando bien: que otra tela la supere no la rompe.
+    expect(f.referenciaDeclaradaRota).toBe('');
+  });
+
+  it('si la referencia sigue siendo la más cara, el precio no se mueve', () => {
+    // La otra mitad de la regla: ninguna cotización puede BAJAR.
+    const f = flujoDeProducto(CAT['BK 10'], 'BK 10', CAT);
+    expect(f.precioMl).toBe(31000);
+    expect(f.origenPrecio).toBe('arquetipo');
+  });
+
+  it('la vertical también sube si su familia trae una tela más cara', () => {
+    const caraV = prod({
+      cod: 'BLACKOUT_V_D',
+      producto: 'CORTINA VERTICAL BLACKOUT',
+      tipo: 'DELUX',
+      precio: 88000,
+    });
+    const cat: CatalogoProductos = { ...CAT, 'VER 09': caraV };
+    const f = flujoDeProducto(cat['VER 01'], 'VER 01', cat);
+    expect(f.precioMl).toBe(88000);
+    expect(f.origenPrecio).toBe('maxFamilia');
+    expect(f.telaReferencia).toBe('VER 09');
+  });
+
+  it('el precio TECLEADO del sistema (categoría B) sigue mandando sobre todo', () => {
+    const cat: CatalogoProductos = { ...CAT, 'BK 85': prod({ precio: 100000 }) };
+    const r = precioMlPorCod('BLACKOUT_D', cat, REGLAS_PRECIOS_DEFAULT, {
+      telaPorFamilia: { BLACKOUT_D: 29231 },
+    } as never);
+    expect(r).toEqual({ precio: 29231, arquetipo: '', motivo: 'sistema' });
+  });
+
   it('el precio que muestra es el que cobra el motor', () => {
     // Antídoto contra que la pantalla y la cotización se digan cosas distintas.
     const f = flujoDeProducto(CAT['BK 10'], 'BK 10', CAT);
@@ -105,6 +148,13 @@ describe('avisosCatalogo', () => {
 
   it('marca la familia que se cobra con la tela más cara', () => {
     expect(av.familiasSinReferencia).toEqual([{ cod: 'BEEBLACK', telas: 2, telaMasCara: 'BEE 01' }]);
+  });
+
+  it('una referencia SANA superada por una tela más cara no se avisa como rota', () => {
+    const cat: CatalogoProductos = { ...CAT, 'BK 85': prod({ precio: 100000 }) };
+    const r = avisosCatalogo(cat, {}, REGLAS_PRECIOS_DEFAULT);
+    expect(r.referenciasRotas.some((x) => x.cod === 'BLACKOUT_D')).toBe(false);
+    expect(r.familiasSinReferencia.some((x) => x.cod === 'BLACKOUT_D')).toBe(false);
   });
 
   it('marca las telas de cortina sin ancho de rollo y deja fuera los adicionales', () => {

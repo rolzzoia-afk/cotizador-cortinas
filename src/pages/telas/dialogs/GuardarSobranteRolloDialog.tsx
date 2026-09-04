@@ -1,7 +1,12 @@
-// Al confirmar un corte general que sale de rollo, este diálogo pregunta DÓNDE
-// se guardó cada sobrante reutilizable (≥120×180) antes de sumarlo a la colmena.
-// Captura la ubicación física por sobrante para que el operario lo encuentre y
-// se vea en su lugar dentro de la vista Colmena (zona "Cortes nuevos").
+// Al confirmar un corte general, este diálogo pregunta DÓNDE se guardó cada
+// trozo reutilizable antes de sumarlo a la colmena. Captura la ubicación física
+// por sobrante para que el operario lo encuentre y se vea en su lugar dentro de
+// la vista Colmena (zona "Cortes nuevos").
+//
+// Los trozos vienen del rollo nuevo y también de los PAÑOS de colmena que el
+// corte consumió: un paño que se corta sale del rack entero y lo que queda de
+// él vuelve como paños nuevos, con su ubicación propia. Por eso cada fila dice
+// de dónde salió y la de colmena arrastra el id del paño de origen.
 
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -17,7 +22,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 
-export type SobranteRollo = { codInt: string; sob: { ancho: number; alto: number } };
+export type SobranteRollo = {
+  codInt: string;
+  sob: { ancho: number; alto: number };
+  /** Paño de colmena del que salió, cuando no vino del rollo nuevo. */
+  colmenaOrigen?: { docId: string; ubicacion: string; ancho: number; alto: number };
+};
 
 interface GuardarSobranteRolloDialogProps {
   sobrantes: SobranteRollo[];
@@ -49,8 +59,18 @@ export default function GuardarSobranteRolloDialog({
           medida_ancho: x.sob.ancho,
           medida_alto: x.sob.alto,
           disponible: true,
-          ubicacion: loc || `CORTE OT ${otNum}`,
-          datos_extra: { fuente: 'corte_rollo', zona: 'CORTE', ot_origen: otNum, creadoEn: now },
+          // Sin ubicación nueva, el trozo de un paño se queda donde estaba el
+          // paño: es lo más probable, y no deja un fantasma en «CORTE OT …».
+          ubicacion: loc || x.colmenaOrigen?.ubicacion || `CORTE OT ${otNum}`,
+          datos_extra: {
+            fuente: 'corte_rollo',
+            zona: 'CORTE',
+            ot_origen: otNum,
+            creadoEn: now,
+            ...(x.colmenaOrigen
+              ? { origen_detalle: 'resto_colmena', colmena_origen_id: x.colmenaOrigen.docId }
+              : {}),
+          },
         };
       });
       const { error } = await supabase.from('colmena_panos').insert(filas);
@@ -68,11 +88,12 @@ export default function GuardarSobranteRolloDialog({
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-lg border-border bg-card text-foreground">
         <DialogHeader>
-          <DialogTitle>Guardar sobrantes de rollo a la colmena</DialogTitle>
+          <DialogTitle>Guardar los sobrantes del corte a la colmena</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Este corte dejó {sobrantes.length} sobrante(s) reutilizable(s) (≥120×180). Indicá dónde
-          guardaste cada uno para encontrarlo después. Si lo dejás vacío, queda como “CORTE OT {otNum}”.
+          Este corte dejó {sobrantes.length} trozo(s) reutilizable(s). Indica dónde guardaste cada
+          uno para encontrarlo después. Si lo dejas vacío, queda en la ubicación del paño del que
+          salió, o como “CORTE OT {otNum}” si vino del rollo.
         </p>
         <div className="flex max-h-[55vh] flex-col gap-2 overflow-y-auto py-1">
           {sobrantes.map((x, i) => (
@@ -84,6 +105,11 @@ export default function GuardarSobranteRolloDialog({
                 <div className="text-sm font-bold">{x.codInt}</div>
                 <div className="text-xs text-muted-foreground">
                   {x.sob.ancho}×{x.sob.alto} cm
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  {x.colmenaOrigen
+                    ? `del paño ${x.colmenaOrigen.ubicacion || '—'} · ${x.colmenaOrigen.ancho}×${x.colmenaOrigen.alto}`
+                    : 'del rollo nuevo'}
                 </div>
               </div>
               <div className="w-44">

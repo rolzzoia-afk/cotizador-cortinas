@@ -26,6 +26,7 @@ import {
   type FilaCorteCortina,
   type FilaPanoResumen,
   type HojaCorte,
+  type OpcionesHojaCorte,
 } from './hojaCorte';
 import type { PanoColmena } from './planCorte';
 import type { OptimizerRow } from './tela';
@@ -129,11 +130,12 @@ export function generarPdfHojaCorte(
   meta: MetaCorte,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   piezasSnapshot?: Record<string, PiezaColmenaSnap>,
+  opts?: OpcionesHojaCorte,
 ): void {
   if (!rows || rows.length === 0) {
     throw new Error('No hay paños. Guarda el plan en Tela primero.');
   }
-  const hoja = construirHojaCorte(rows, colmenaPanos, ot, params, piezasSnapshot);
+  const hoja = construirHojaCorte(rows, colmenaPanos, ot, params, piezasSnapshot, opts);
   const { principal, vertical } = partirHojaCorte(hoja);
 
   const doc = new jsPDF('l', 'mm', 'a4'); // 297 × 210

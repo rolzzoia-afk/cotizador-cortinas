@@ -1,0 +1,136 @@
+<!doctype html><html lang="es"><head><meta charset="utf-8">
+<title>Etiquetas de sobrante</title>
+<style>
+@page { size: 62mm 62mm; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #fff; }
+.etiqueta {
+  position: relative; width: 62mm; height: 62mm;
+  overflow: hidden; background: #fff; color: #000;
+  font-family: Arial, Helvetica, sans-serif; page-break-after: always;
+  /* Sin esto el navegador descarta los fondos al imprimir y la banda del
+     código sale en blanco sobre blanco. */
+  -webkit-print-color-adjust: exact; print-color-adjust: exact;
+}
+.etiqueta:last-child { page-break-after: auto; }
+.etiqueta > div { position: absolute; display: flex; align-items: center; white-space: nowrap; }
+[data-encoger] { overflow: hidden; }
+
+.bandaCod {
+  background: #000; color: #fff; font-size: 17pt; font-weight: bold;
+  justify-content: center; letter-spacing: 0.3pt;
+}
+.rotuloFunc { font-size: 6.5pt; font-weight: bold; letter-spacing: 0.4pt; color: #333; }
+
+/* Las tres casillas: el marco se dibuja una vez y las celdas van encima. */
+.marcoFunc { border: 0.6pt solid #000; display: block !important; }
+.marcoFunc .divF { position: absolute; top: 0; bottom: 0; border-left: 0.6pt solid #000; }
+.celdaFunc { justify-content: center; gap: 1.1mm; }
+.cuadro {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 4.6mm; height: 4.6mm; border: 0.8pt solid #000; color: #000;
+}
+.visto { width: 4mm; height: 4mm; }
+.rotFunc { font-size: 6.6pt; font-weight: bold; }
+/* La opción marcada se lee primero: el resto queda como referencia. */
+.rotFunc.on { text-decoration: underline; }
+
+.tablaMed { border: 0.6pt solid #000; display: block !important; }
+.tablaMed .divM { position: absolute; top: 0; bottom: 0; border-left: 0.6pt solid #000; }
+.rotMed { font-size: 6.3pt; font-weight: bold; color: #333; letter-spacing: 0.3pt; }
+.valMed { font-size: 15pt; font-weight: bold; }
+
+.origen { font-size: 8.2pt; gap: 1mm; }
+.origen b { font-size: 9.5pt; }
+.origen .ots { font-size: 6.2pt; color: #333; }
+.pieDato { font-size: 7.2pt; gap: 0.8mm; }
+.serial { font-family: "Courier New", monospace; font-size: 6.8pt; justify-content: flex-end; }
+
+.marcoUbic { border: 1pt solid #000; display: block !important; }
+.rotUbic { font-size: 6.3pt; font-weight: bold; color: #333; letter-spacing: 0.4pt; }
+.valUbic { font-size: 19pt; font-weight: bold; }
+
+@media screen {
+  body { background: #e5e7eb; padding: 8mm; }
+  .etiqueta { outline: 1px solid #9ca3af; margin: 0 auto 6mm; }
+}
+</style></head>
+<body>
+<div class="etiqueta">
+  <div class="bandaCod" style="left:1.5mm;top:1.5mm;width:59mm;height:8mm" data-encoger>SC 96</div>
+  <div class="rotuloFunc" style="left:1.5mm;top:10.3mm;width:59mm;height:3.2mm">FUNCIONAL PARA:</div>
+  <div class="marcoFunc" style="left:1.5mm;top:13.8mm;width:59mm;height:8.5mm">
+    <div class="divF" style="left:19.67mm"></div>
+    <div class="divF" style="left:39.33mm"></div>
+  </div>
+  <div class="celdaFunc" style="left:1.5mm;top:13.8mm;width:19.67mm;height:8.5mm">
+    <span class="cuadro"></span>
+    <span class="rotFunc">VERTICAL</span>
+  </div>
+  <div class="celdaFunc" style="left:21.17mm;top:13.8mm;width:19.67mm;height:8.5mm">
+    <span class="cuadro"><svg class="visto" viewBox="0 0 20 20" aria-hidden="true"><polyline points="3,11 8,16 17,4" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="rotFunc on">ROLLER</span>
+  </div>
+  <div class="celdaFunc" style="left:40.83mm;top:13.8mm;width:19.67mm;height:8.5mm">
+    <span class="cuadro"></span>
+    <span class="rotFunc">AMBAS</span>
+  </div>
+  <div class="tablaMed" style="left:1.5mm;top:23.8mm;width:59mm;height:10.5mm">
+    <div class="divM" style="left:29.5mm"></div>
+  </div>
+  <div class="rotMed" style="left:2.9mm;top:24.6mm;width:27.5mm;height:3mm">ANCHO</div>
+  <div class="valMed" style="left:2.9mm;top:27.4mm;width:26.7mm;height:6mm" data-encoger>102 cm</div>
+  <div class="rotMed" style="left:32.4mm;top:24.6mm;width:27.5mm;height:3mm">ALTO</div>
+  <div class="valMed" style="left:32.4mm;top:27.4mm;width:26.7mm;height:6mm" data-encoger>170 cm</div>
+  <div class="origen" style="left:1.5mm;top:35.4mm;width:59mm;height:6.2mm" data-encoger>SOBRANTE DE: <b>OT 3187-B</b></div>
+  <div class="pieDato" style="left:1.5mm;top:42.2mm;width:27mm;height:5.2mm" data-encoger>FECHA: <b>26-08-26</b></div>
+  <div class="pieDato serial" style="left:30mm;top:42.2mm;width:30.5mm;height:5.2mm" data-encoger>OT3187B-260826-S1</div>
+  <div class="marcoUbic" style="left:1.5mm;top:48.3mm;width:59mm;height:12.2mm"></div>
+  <div class="rotUbic" style="left:3.1mm;top:49.1mm;width:55.8mm;height:3.2mm">UBICACIÓN ASIGNADA</div>
+  <div class="valUbic" style="left:3.1mm;top:52.3mm;width:55.8mm;height:7.4mm" data-encoger>A-54</div>
+</div>
+<div class="etiqueta">
+  <div class="bandaCod" style="left:1.5mm;top:1.5mm;width:59mm;height:8mm" data-encoger>BK 10</div>
+  <div class="rotuloFunc" style="left:1.5mm;top:10.3mm;width:59mm;height:3.2mm">FUNCIONAL PARA:</div>
+  <div class="marcoFunc" style="left:1.5mm;top:13.8mm;width:59mm;height:8.5mm">
+    <div class="divF" style="left:19.67mm"></div>
+    <div class="divF" style="left:39.33mm"></div>
+  </div>
+  <div class="celdaFunc" style="left:1.5mm;top:13.8mm;width:19.67mm;height:8.5mm">
+    <span class="cuadro"></span>
+    <span class="rotFunc">VERTICAL</span>
+  </div>
+  <div class="celdaFunc" style="left:21.17mm;top:13.8mm;width:19.67mm;height:8.5mm">
+    <span class="cuadro"></span>
+    <span class="rotFunc">ROLLER</span>
+  </div>
+  <div class="celdaFunc" style="left:40.83mm;top:13.8mm;width:19.67mm;height:8.5mm">
+    <span class="cuadro"><svg class="visto" viewBox="0 0 20 20" aria-hidden="true"><polyline points="3,11 8,16 17,4" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+    <span class="rotFunc on">AMBAS</span>
+  </div>
+  <div class="tablaMed" style="left:1.5mm;top:23.8mm;width:59mm;height:10.5mm">
+    <div class="divM" style="left:29.5mm"></div>
+  </div>
+  <div class="rotMed" style="left:2.9mm;top:24.6mm;width:27.5mm;height:3mm">ANCHO</div>
+  <div class="valMed" style="left:2.9mm;top:27.4mm;width:26.7mm;height:6mm" data-encoger>159 cm</div>
+  <div class="rotMed" style="left:32.4mm;top:24.6mm;width:27.5mm;height:3mm">ALTO</div>
+  <div class="valMed" style="left:32.4mm;top:27.4mm;width:26.7mm;height:6mm" data-encoger>256 cm</div>
+  <div class="origen" style="left:1.5mm;top:35.4mm;width:59mm;height:6.2mm" data-encoger>SOBRANTE DE: <b>LOTE Corte 02/09</b><span class="ots">OT #3215 · OT #3213</span></div>
+  <div class="pieDato" style="left:1.5mm;top:42.2mm;width:27mm;height:5.2mm" data-encoger>FECHA: <b>02-09-26</b></div>
+  <div class="pieDato serial" style="left:30mm;top:42.2mm;width:30.5mm;height:5.2mm" data-encoger>LCORTE0209-020926-S2</div>
+  <div class="marcoUbic" style="left:1.5mm;top:48.3mm;width:59mm;height:12.2mm"></div>
+  <div class="rotUbic" style="left:3.1mm;top:49.1mm;width:55.8mm;height:3.2mm">UBICACIÓN ASIGNADA</div>
+  <div class="valUbic" style="left:3.1mm;top:52.3mm;width:55.8mm;height:7.4mm" data-encoger>L02</div>
+</div>
+<script>
+function ajustar() {
+  document.querySelectorAll('[data-encoger]').forEach(function (el) {
+    var pt = parseFloat(getComputedStyle(el).fontSize) * 72 / 96;
+    while (pt > 5.5 && (el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight)) {
+      pt -= 0.25;
+      el.style.fontSize = pt + 'pt';
+    }
+  });
+}
+window.onload = () => { ajustar(); setTimeout(() => { window.print(); window.close(); }, 250); };</script>
+</body></html>

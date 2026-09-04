@@ -19,13 +19,30 @@ import { filasOptimizadorDeOT } from '@/modules/cotizador/filasOptimizador';
 import type { OptimizerRow } from '@/modules/cotizador/tela';
 // Del módulo PURO, no del que dibuja el PDF: la pantalla del taller no puede
 // arrastrar jsPDF (400 KB) a una tablet del galpón.
-import { construirHojaCorte, partirHojaCorte, type HojaCorte } from '@/modules/cotizador/hojaCorte';
-import { rowToPano, type ColmenaPanoRow, type PanoColmena } from '@/modules/cotizador/planCorte';
-import { panosDibujados, type PanoDibujado } from '@/modules/cotizador/layoutPano';
 import {
+  construirHojaCorte,
+  partirHojaCorte,
+  pieceId,
+  piezasColmenaDelPlan,
+  type HojaCorte,
+} from '@/modules/cotizador/hojaCorte';
+import { generarPlanCorte, type PanoColmena, type Plan } from '@/modules/cotizador/planCorte';
+import {
+  cargarColmenaPanos,
+  useColmenaDisponible,
+} from '@/modules/cotizador/colmenaPanosStore';
+import { panosDibujados, type PanoDibujado } from '@/modules/cotizador/layoutPano';
+import { panosDeColmena } from './acomodoPlan';
+import { useDecisionesGiro } from './girosColmena';
+import type { PiezaColmenaSnap } from '@/modules/cotizador/colmenaCorte';
+import {
+  colmenaDelLote,
+  cortinasDeColmena,
   filasDelLote,
   juntoPorOT,
+  panosDelLote,
   tirosDelLote,
+  type CortinaDeColmena,
   type FilaLote,
   type TiroLote,
 } from './hojaLote';
@@ -294,11 +311,23 @@ export function useOTPorNumero(numeroOT: string): {
  * misma receta de filas (`filasOptimizadorDeOT`): la pantalla no recalcula
  * nada por su cuenta.
  */
-export function useHojaCorte(ot: OT | null): {
+export function useHojaCorte(
+  ot: OT | null,
+  opts?: {
+    /**
+     * Las OTs que se cortan JUNTAS (el lote). El plan se arma con todas: si se
+     * armara solo con esta orden, podría asignarle un paño del rack que otra OT
+     * del mismo lote ya se llevó, y las dos pantallas dirían cosas distintas.
+     */
+    otsDelPlan?: OT[];
+  },
+): {
   rows: OptimizerRow[];
   hoja: HojaCorte | null;
   principal: HojaCorte | null;
   vertical: HojaCorte | null;
+  /** El plan del que sale la hoja: quien dibuja los paños lee el MISMO. */
+  plan: Plan | null;
   /** Nombre comercial de una tela por su COD_INT, para los totales por tela. */
   nombreDeTela: (codInt: string) => string;
   loading: boolean;
@@ -321,13 +350,8 @@ export function useHojaCorte(ot: OT | null): {
     (async () => {
       setCargandoColmena(true);
       try {
-        const { data, error: err } = await supabase
-          .from('colmena_panos')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .eq('disponible', true);
-        if (err) throw err;
-        if (!cancelado) setColmenaPanos(((data || []) as ColmenaPanoRow[]).map(rowToPano));
+        const panos = await cargarColmenaPanos(empresaId);
+        if (!cancelado) setColmenaPanos(panos);
       } catch (e) {
         if (!cancelado) setError(e instanceof Error ? e.message : String(e));
       } finally {
@@ -346,16 +370,32 @@ export function useHojaCorte(ot: OT | null): {
     return filasOptimizadorDeOT(ot, catalogo, parametros, formulas, reglas);
   }, [ot, listo, catalogo, parametros, formulas, reglas]);
 
-  const hoja = useMemo(() => {
+  const otsDelPlan = opts?.otsDelPlan;
+  const conjunto = useMemo(
+    () => (otsDelPlan?.length ? otsDelPlan : ot ? [ot] : []),
+    [otsDelPlan, ot],
+  );
+  // Los giros que el operario ya rechazó en el Plan de tela. Sin esto, la hoja
+  // y la pizarra dibujan la cortina acostada que él mandó al rollo.
+  const { sinGiro } = useDecisionesGiro(conjunto);
+  const plan = useMemo(() => {
     if (!ot || rows.length === 0) return null;
+    return generarPlanCorte(conjunto, colmenaPanos, parametros, formulas, reglas.tipos, {
+      sinGiro,
+    });
+  }, [ot, rows.length, conjunto, colmenaPanos, parametros, formulas, reglas, sinGiro]);
+
+  const hoja = useMemo(() => {
+    if (!ot || rows.length === 0 || !plan) return null;
     return construirHojaCorte(
       rows,
       colmenaPanos,
       ot,
       parametros,
       ot.datosGenerales?.corteGeneralColmena?.piezas,
+      { plan },
     );
-  }, [ot, rows, colmenaPanos, parametros]);
+  }, [ot, rows, colmenaPanos, parametros, plan]);
 
   const partes = useMemo(() => (hoja ? partirHojaCorte(hoja) : null), [hoja]);
 
@@ -369,6 +409,7 @@ export function useHojaCorte(ot: OT | null): {
     hoja,
     principal: partes?.principal ?? null,
     vertical: partes?.vertical ?? null,
+    plan,
     nombreDeTela,
     loading: !listo || cargandoColmena,
     error,
@@ -384,25 +425,32 @@ export function useHojaCorte(ot: OT | null): {
  * Comparte TODO con la hoja del cortador (`useHojaCorte`): mismas filas, mismos
  * paños, mismas letras. Acá solo se les pone dibujo.
  */
-export function usePanosDelRollo(ot: OT | null): {
+export function usePanosDelRollo(
+  ot: OT | null,
+  opts?: { otsDelPlan?: OT[] },
+): {
   panos: PanoDibujado[];
   loading: boolean;
   error: string | null;
 } {
-  const { rows, hoja, loading, error } = useHojaCorte(ot);
+  const { rows, hoja, plan, loading, error } = useHojaCorte(ot, opts);
+  const { catalogo } = useCatalogoProductos();
   const { parametros } = useParametrosCotizador();
 
   const panos = useMemo(() => {
     if (!hoja || rows.length === 0) return [];
-    // Qué paños salen de un sobrante: la hoja lo sabe por cortina (los paños de
-    // colmena no entran a su resumen, así que se leen de las filas de corte).
-    const deColmena = new Map<number, string>();
-    for (const c of hoja.cortinas) {
-      if (!c.medidaColmena) continue;
-      deColmena.set(c.pano, c.ubicColmena ? `${c.ubicColmena} · ${c.medidaColmena}` : c.medidaColmena);
-    }
-    return panosDibujados(rows, parametros, deColmena);
-  }, [rows, hoja, parametros]);
+    // Qué CORTINA sale de un paño del rack: la hoja lo dice fila por fila
+    // (`rows[i]` ↔ `cortinas[i]`). Esas no arman tiro de rollo; su trozo real lo
+    // dibuja `panosDeColmena` con la medida del paño, no con el ancho del rollo.
+    const deColmena = (idx: number) => !!hoja.cortinas[idx]?.medidaColmena;
+    const productoDe = new Map(
+      Object.entries(catalogo).map(([cod, p]) => [cod, p.producto || cod]),
+    );
+    return [
+      ...(plan ? panosDeColmena(plan, parametros, productoDe) : []),
+      ...panosDibujados(rows, parametros, deColmena),
+    ];
+  }, [rows, hoja, plan, parametros, catalogo]);
 
   return { panos, loading, error };
 }
@@ -469,6 +517,12 @@ export function useOTsDelLote(otIds: string[]): { ots: OT[]; loading: boolean } 
 export function useHojaLote(ots: OT[]): {
   filas: FilaLote[];
   tiros: TiroLote[];
+  /** Los mismos tiros, dibujados como la pizarra (cada cortina con su OT). */
+  panos: PanoDibujado[];
+  /** Las cortinas del lote que salen del rack: no bajan tiro, se van a buscar. */
+  deColmena: CortinaDeColmena[];
+  /** El plan del lote (una sola vez para todas sus OTs). */
+  plan: Plan | null;
   juntoPorOrden: Map<string, Map<string, JuntoPieza>>;
   loading: boolean;
 } {
@@ -476,6 +530,7 @@ export function useHojaLote(ots: OT[]): {
   const { parametros, loading: loadingParams } = useParametrosCotizador();
   const { formulas, loading: loadingFormulas } = useFormulasFamilias();
   const { reglas, loading: loadingReglas } = useReglasSeleccion();
+  const { panos: colmenaPanos, cargando: cargandoColmena } = useColmenaDisponible();
   const listo = !loadingCat && !loadingParams && !loadingFormulas && !loadingReglas;
 
   const filas = useMemo(
@@ -483,10 +538,78 @@ export function useHojaLote(ots: OT[]): {
     [listo, ots, catalogo, parametros, formulas, reglas],
   );
 
-  const tiros = useMemo(() => tirosDelLote(filas, parametros), [filas, parametros]);
-  const juntoPorOrden = useMemo(() => juntoPorOT(filas, parametros), [filas, parametros]);
+  // Los giros que el operario rechazó en el Plan de tela: el lote arma el MISMO
+  // plan que él aprobó, no uno con la cortina acostada de vuelta.
+  const { sinGiro } = useDecisionesGiro(ots);
 
-  return { filas, tiros, juntoPorOrden, loading: !listo };
+  // UN plan para todo el lote: el mismo que ve el Plan de Corte. Antes cada
+  // pantalla armaba el suyo con las cortinas de una sola OT y podía asignar un
+  // paño que otra orden del lote ya se había llevado.
+  const plan = useMemo(
+    () =>
+      listo && ots.length > 0
+        ? generarPlanCorte(ots, colmenaPanos, parametros, formulas, reglas.tipos, { sinGiro })
+        : null,
+    [listo, ots, colmenaPanos, parametros, formulas, reglas, sinGiro],
+  );
+
+  const esColmena = useMemo(() => {
+    if (!plan) return () => false;
+    const piezas = piezasColmenaDelPlan(plan, snapshotDeLasOTs(ots));
+    return colmenaDelLote(filas, piezas);
+  }, [plan, filas, ots]);
+
+  const origenDe = useMemo(() => {
+    const porPieza = new Map<string, string>();
+    for (const g of plan?.sobrantes ?? []) {
+      const ubic = g.sobrante.ubicacion || '';
+      const medida = `${Math.round(g.sobrante.ancho)}X${Math.round(g.sobrante.alto)}`;
+      for (const pz of g.placed) if (!pz.failed) porPieza.set(pz.id, ubic ? `${ubic} · ${medida}` : medida);
+    }
+    return (idx: number) => {
+      const f = filas[idx];
+      return porPieza.get(pieceId(f.otId, f.ventanaId, f.panoIndex)) ?? '';
+    };
+  }, [plan, filas]);
+
+  const tiros = useMemo(() => tirosDelLote(filas, parametros, esColmena), [filas, parametros, esColmena]);
+  // La pizarra del lote son los tiros del rollo MÁS los paños del rack: sin
+  // ellos el dimensionador no ve dónde va cada cortina de colmena ni cuánto se
+  // pierde de ese paño, que es tela que igual se gasta.
+  const panos = useMemo(() => {
+    const productoDe = new Map(
+      Object.entries(catalogo).map(([cod, p]) => [cod, p.producto || cod]),
+    );
+    return [
+      ...(plan ? panosDeColmena(plan, parametros, productoDe, (n) => n.replace(/^OT#?/, '')) : []),
+      ...panosDelLote(filas, parametros, esColmena),
+    ];
+  }, [plan, filas, parametros, esColmena, catalogo]);
+  const deColmena = useMemo(
+    () => cortinasDeColmena(filas, esColmena, origenDe),
+    [filas, esColmena, origenDe],
+  );
+  const juntoPorOrden = useMemo(
+    () => juntoPorOT(filas, parametros, esColmena),
+    [filas, parametros, esColmena],
+  );
+
+  return {
+    filas,
+    tiros,
+    panos,
+    deColmena,
+    plan,
+    juntoPorOrden,
+    loading: !listo || cargandoColmena,
+  };
+}
+
+/** Los orígenes de colmena ya sellados en las OTs del lote (cortes cerrados). */
+function snapshotDeLasOTs(ots: OT[]): Record<string, PiezaColmenaSnap> {
+  const out: Record<string, PiezaColmenaSnap> = {};
+  for (const ot of ots) Object.assign(out, ot.datosGenerales?.corteGeneralColmena?.piezas ?? {});
+  return out;
 }
 
 // ── La hoja de cálculo general / dimensionado ────────────────────────
@@ -527,7 +650,10 @@ export function useCalculoGeneral(
     if (!ot || !listo) return undefined;
     const filas = filasOptimizadorDeOT(ot, catalogo, parametros, formulas, reglas);
     if (filas.length === 0) return undefined;
-    const { cortinas } = construirHojaCorte(filas, [], ot, parametros);
+    const { cortinas } = construirHojaCorte(filas, [], ot, parametros, undefined, {
+      formulas,
+      tipos: reglas.tipos,
+    });
     const mapa = new Map<string, JuntoPieza>();
     filas.forEach((r, i) => {
       const letra = cortinas[i]?.cortarJunto;

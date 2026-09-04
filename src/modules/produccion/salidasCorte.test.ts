@@ -4,7 +4,10 @@ import {
   filasColmenaDeCorte,
   filasMermasDeCorte,
   funcionalDeSobrante,
+  libresClasificados,
   metrosPrimerCorte,
+  rectangulosLibres,
+  resumenLibres,
   prefijoSerial,
   rotuloOrigen,
   salidasDeRollo,
@@ -267,7 +270,7 @@ describe('payloads para la BD', () => {
     });
   });
 
-  it('el sello no descuenta colmena: registra lo que salió', () => {
+  it('sin colmena, el sello solo registra lo que salió', () => {
     const s = stampCorteProduccion(origen, now, ['LCORTE0209-020926-S1'], 2);
     expect(s).toEqual({
       confirmadoEn: now,
@@ -277,5 +280,159 @@ describe('payloads para la BD', () => {
       lote: 'Corte 02/09',
       salidas: { seriales: ['LCORTE0209-020926-S1'], mermas: 2 },
     });
+  });
+
+  it('el sello guarda los paños consumidos y de dónde salió cada cortina', () => {
+    // Es lo que apaga el badge «Tela sin cortar» Y lo que deja la hoja de corte
+    // mostrando el origen después, cuando el paño ya no está disponible.
+    const panos = [
+      {
+        docId: 'd1',
+        cod: 'BK 18',
+        ubicacion: 'A-19',
+        ancho: 219,
+        alto: 200,
+        accion: 'usado' as const,
+        salidas: [],
+      },
+    ];
+    const piezas = { ot1_v1_p0: { cod: 'BK 18', ancho: 219, alto: 200, ubic: 'A-19' } };
+    const s = stampCorteProduccion(origen, now, [], 0, panos, piezas);
+    expect(s.panos).toEqual(panos);
+    expect(s.piezas).toEqual(piezas);
+  });
+
+  // ── Lo que queda de un PAÑO de colmena ──
+  const deColmena: SalidaCorte = {
+    codInt: 'BK 18',
+    ancho: 134,
+    alto: 235,
+    clase: 'sobrante',
+    detalle: 'resto_colmena',
+    funcional: { roller: true, vertical: false },
+    colmenaOrigen: { docId: 'pano-1', ubicacion: 'A-19', cod: 'BK 18', ancho: 280, alto: 235 },
+  };
+
+  it('un trozo nacido de un paño apunta al paño de origen', () => {
+    const [f] = filasColmenaDeCorte(
+      [{ ...deColmena, ubicacion: 'B-3', serial: 'S9' }],
+      'emp-1',
+      origen,
+      now,
+    );
+    expect(f.datos_extra.origen_detalle).toBe('resto_colmena');
+    expect(f.datos_extra.colmena_origen_id).toBe('pano-1');
+  });
+
+  it('la merma de un paño se anota como sobrante_colmena, con trazabilidad', () => {
+    const [f] = filasMermasDeCorte(
+      [{ ...deColmena, clase: 'merma', funcional: { roller: false, vertical: false } }],
+      'emp-1',
+      origen,
+      now,
+    );
+    expect(f.motivo).toBe('sobrante_colmena');
+    expect(f.colmena_origen_id).toBe('pano-1');
+  });
+
+  it('los seriales corren seguidos entre el rollo y la colmena', () => {
+    // Se numeran por posición en la lista final: un mismo corte no puede
+    // repetir un serial aunque los trozos vengan de dos orígenes distintos.
+    const seriales = [1, 2, 3].map((n) => serialSobrante(origen, n, now));
+    expect(new Set(seriales).size).toBe(3);
+    expect(seriales[2]).toMatch(/-S3$/);
+  });
+});
+
+// ── Todo lo que no es cortina ────────────────────────────────────────
+const rect = (px: number, py: number, pw: number, ph: number) => ({ px, py, pw, ph });
+
+describe('rectangulosLibres', () => {
+  it('un tiro de una sola fila deja la franja del costado, entera', () => {
+    // Dos cortinas al hilo en 296 útiles: 137 + 129 = 266 → franja de 30.
+    expect(rectangulosLibres([rect(0, 0, 137, 256), rect(137, 0, 129, 256)], 296, 256)).toEqual([
+      { x: 266, y: 0, anchoCm: 30, altoCm: 256 },
+    ]);
+  });
+
+  it('una cortina más corta deja un hueco DEBAJO, que antes no se contaba', () => {
+    const libres = rectangulosLibres([rect(0, 0, 150, 260), rect(150, 0, 100, 180)], 296, 260);
+    expect(libres).toContainEqual({ x: 150, y: 180, anchoCm: 100, altoCm: 80 });
+    // Y la franja del costado sigue saliendo entera, de arriba abajo.
+    expect(libres).toContainEqual({ x: 250, y: 0, anchoCm: 46, altoCm: 260 });
+  });
+
+  it('en un acomodo apilado cuenta lo que queda AL LADO de la banda angosta', () => {
+    // El caso del dibujo en negro: PPAL 275 arriba, HIJO 257 y VISITA 186 debajo.
+    const libres = rectangulosLibres(
+      [rect(0, 0, 275, 307), rect(0, 307, 257, 195), rect(0, 502, 186, 175)],
+      298,
+      677,
+    );
+    expect(libres).toHaveLength(3);
+    // La franja del costado, entera: la misma que anota el cierre del corte.
+    expect(libres).toContainEqual({ x: 275, y: 0, anchoCm: 23, altoCm: 677 });
+    // Y lo que queda al lado de las dos bandas más angostas (antes, en negro).
+    expect(libres).toContainEqual({ x: 257, y: 307, anchoCm: 18, altoCm: 370 });
+    expect(libres).toContainEqual({ x: 186, y: 502, anchoCm: 71, altoCm: 175 });
+  });
+
+  it('junta en UN trozo lo que se apila con el mismo ancho', () => {
+    // Dos cortinas en columna, del mismo ancho: la franja del lado es una sola.
+    expect(rectangulosLibres([rect(0, 0, 200, 100), rect(0, 100, 200, 150)], 296, 250)).toEqual([
+      { x: 200, y: 0, anchoCm: 96, altoCm: 250 },
+    ]);
+  });
+
+  it('la suma de las áreas es exactamente el tiro menos las cortinas', () => {
+    const piezas = [rect(0, 0, 184, 285), rect(184, 0, 94, 125), rect(184, 125, 94, 125)];
+    const area = rectangulosLibres(piezas, 298, 285).reduce((s, r) => s + r.anchoCm * r.altoCm, 0);
+    const ocupado = piezas.reduce((s, p) => s + p.pw * p.ph, 0);
+    expect(area + ocupado).toBe(298 * 285);
+  });
+
+  it('un tiro sin cortinas es todo libre; sin medidas no hay nada', () => {
+    expect(rectangulosLibres([], 296, 200)).toEqual([{ x: 0, y: 0, anchoCm: 296, altoCm: 200 }]);
+    expect(rectangulosLibres([rect(0, 0, 100, 100)], 0, 200)).toEqual([]);
+  });
+});
+
+describe('libresClasificados', () => {
+  it('cada trozo lleva su semáforo: sirve o se perdió', () => {
+    // Franja de 120 × 260 → sirve para roller; hueco de 100 × 60 → merma.
+    const libres = libresClasificados([rect(0, 0, 176, 260), rect(176, 0, 100, 200)], 296, 260);
+    expect(libres.find((r) => r.x === 276)).toMatchObject({ anchoCm: 20, clase: 'merma' });
+    expect(libres.find((r) => r.x === 176)).toMatchObject({
+      anchoCm: 100,
+      altoCm: 60,
+      clase: 'merma',
+    });
+  });
+
+  it('un hueco grande SÍ sale como sobrante utilizable', () => {
+    const libres = libresClasificados([rect(0, 0, 150, 500), rect(150, 0, 140, 250)], 296, 500);
+    expect(libres.find((r) => r.y === 250)).toMatchObject({
+      anchoCm: 140,
+      altoCm: 250,
+      clase: 'sobrante',
+      funcional: { roller: true, vertical: true },
+    });
+  });
+
+  it('las hilachas de menos de 1 cm no son tela: se descartan', () => {
+    expect(libresClasificados([rect(0, 0, 295.6, 200)], 296, 200)).toEqual([]);
+  });
+});
+
+describe('resumenLibres', () => {
+  it('separa lo que vuelve al rack de lo que se perdió', () => {
+    const libres = libresClasificados([rect(0, 0, 150, 500), rect(150, 0, 140, 250)], 296, 500);
+    const { sobranteCm2, mermaCm2 } = resumenLibres(libres);
+    expect(sobranteCm2).toBe(140 * 250); // el hueco grande, bajo la cortina corta
+    expect(mermaCm2).toBe(6 * 500); // la franja angosta del costado
+  });
+
+  it('sin trozos libres no hay pérdida', () => {
+    expect(resumenLibres([])).toEqual({ sobranteCm2: 0, mermaCm2: 0 });
   });
 });

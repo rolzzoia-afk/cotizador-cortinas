@@ -40,11 +40,25 @@ export type ParametrosCorte = {
   margenRolloCm: number;
   /** Limpieza de bordes al ancho de cada pieza que va a rollo (cm, Regla 5). */
   bordeCm: number;
-  /** Tolerancia de alto (cm) para reusar un sobrante de colmena
-   *  (alto pieza ≤ alto sobrante ≤ pieza + este valor). */
-  ventanaAltoCm: number;
   /** Solo se propone rotar piezas si el layout rotado ahorra ≥ esto (cm). */
   ahorroMinRotacionCm: number;
+  /**
+   * ¿Se puede girar una cortina para que entre en un paño de colmena? Igual que
+   * en el rollo, el giro se PROPONE y el operario lo autoriza pieza por pieza:
+   * la tela puede tener dirección o diseño. Apagado, la colmena solo acomoda
+   * piezas derechas. (Las verticales nunca giran, esté como esté.)
+   */
+  colmenaPermiteGiro: boolean;
+  /**
+   * Cuánto "cuesta" dejar un paño nuevo en el rack, en cm² de tela.
+   *
+   * Es el peso de la regla n.º 1 del dueño («que la colmena se achique cada vez
+   * más») frente a la merma. Sin él, una cortina de 70×225 elegiría el paño
+   * GRANDE de 200×230 —deja 130×230 útil y casi nada de merma, pero el rack
+   * queda igual de lleno— en vez del JUSTO de 80×230, que gasta un paño
+   * ENTERO. Con la penalidad gana el justo. En 0 vuelve a mandar solo la merma.
+   */
+  colmenaPenalidadNuevoPanoCm2: number;
   /** Mínimo de ancho (cm) para que un remanente sea colmena; bajo esto es MERMA. */
   colmenaMinAnchoCm: number;
   /** Mínimo de alto (cm) para que un remanente sea colmena. */
@@ -99,8 +113,11 @@ export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   anchoRolloPlanCm: 300,
   margenRolloCm: 1,
   bordeCm: 4,
-  ventanaAltoCm: 30,
   ahorroMinRotacionCm: 20,
+  colmenaPermiteGiro: true,
+  // ≈ un paño mínimo de roller (100×200). Un acomodo que deja un paño nuevo
+  // tiene que ahorrar MÁS que eso en merma para ganarle al que no lo deja.
+  colmenaPenalidadNuevoPanoCm2: 20000,
   colmenaMinAnchoCm: 120,
   colmenaMinAltoCm: 180,
   diasAlertaColmena: 90,

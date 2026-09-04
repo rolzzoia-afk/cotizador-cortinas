@@ -13,10 +13,31 @@
 // ─────────────────────────────────────────────────────────────────────
 import { debeInvertirPano, type OptimizerRow } from './tela';
 import { letraPano } from './letras';
-import { generarPlanCorte, type PanoColmena } from './planCorte';
+import { generarPlanCorte, type PanoColmena, type Plan } from './planCorte';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
 import type { PiezaColmenaSnap } from './colmenaCorte';
+import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
+import type { TipoCortina } from '@/modules/descuentos/tiposCortina';
 import type { OT } from '@/modules/ots/types';
+
+/**
+ * Con qué recetas se arma el plan del que sale el origen de cada pieza.
+ *
+ * Sin esto la hoja de corte llamaba a `generarPlanCorte` con los defaults de
+ * FÁBRICA mientras el Plan de Corte de la misma OT usaba las fórmulas y los
+ * tipos de cortina GUARDADOS en Admin: dos planes distintos para la misma tela,
+ * y una pieza que el plan daba por colmena la hoja la mandaba al rollo.
+ */
+export type OpcionesHojaCorte = {
+  formulas?: FormulasFamilias;
+  tipos?: readonly TipoCortina[];
+  /**
+   * Un plan YA generado. Lo usan las pantallas que muestran el plan y la hoja a
+   * la vez (el taller): así las dos leen exactamente el mismo, en vez de
+   * recalcularlo cada una por su cuenta. Si viene, `formulas`/`tipos` sobran.
+   */
+  plan?: Plan;
+};
 
 // ── Modelo de datos (puro, testeable) ────────────────────────────────
 export type FilaCorteCortina = {
@@ -151,8 +172,21 @@ export function piezasConOrigenColmena(
   ot: OT,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   piezasSnapshot?: Record<string, PiezaColmenaSnap>,
+  opts?: OpcionesHojaCorte,
 ): Set<string> {
-  const plan = generarPlanCorte([ot], colmenaPanos, params);
+  const plan = generarPlanCorte([ot], colmenaPanos, params, opts?.formulas, opts?.tipos);
+  return piezasColmenaDelPlan(plan, piezasSnapshot);
+}
+
+/**
+ * Los `pieceId` que salen de colmena según un plan YA generado, más los del
+ * snapshot persistido. Es la misma cuenta que hace `construirHojaCorte`, para
+ * que la hoja, el dibujo y las etiquetas no se contradigan.
+ */
+export function piezasColmenaDelPlan(
+  plan: Plan,
+  piezasSnapshot?: Record<string, PiezaColmenaSnap>,
+): Set<string> {
   const set = new Set<string>();
   for (const g of plan.sobrantes)
     for (const pz of g.placed) if (!pz.failed) set.add(pz.id);
@@ -234,6 +268,17 @@ export function esFilaInvertida(
 export function panoDeCadaFila(
   rows: OptimizerRow[],
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  /**
+   * ¿Esta fila sale de un paño de COLMENA? Devuelve el centinela **0**: la
+   * cortina ya está cortada y no ocupa ningún paño del rollo.
+   *
+   * Sin esto, una pieza de colmena que caía en el mismo grupo «cortar junto»
+   * que una de rollo marcaba el paño ENTERO como de colmena, y la compañera de
+   * rollo desaparecía de TOTAL PAÑOS y del OPTIMIZADOR: el cortador no bajaba
+   * su tela. Las filas NO se filtran —`clavesDePano` y el Cálculo General
+   * zipean `rows[i]` con `cortinas[i]`— y por eso se marcan en vez de sacarse.
+   */
+  esColmena?: (idx: number) => boolean,
 ): number[] {
   const clave = (r: OptimizerRow, idx: number): string => {
     const suf = r.esVertical ? '·V' : '';
@@ -244,6 +289,7 @@ export function panoDeCadaFila(
   };
   const numeroDe = new Map<string, number>();
   return rows.map((r, idx) => {
+    if (esColmena?.(idx)) return 0;
     const k = clave(r, idx);
     if (!numeroDe.has(k)) numeroDe.set(k, numeroDe.size + 1);
     return numeroDe.get(k)!;
@@ -262,8 +308,10 @@ export function construirHojaCorte(
   /** Snapshot pieza→sobrante (post-confirmación): muestra el origen colmena aun
    *  cuando el sobrante ya se consumió y el plan vivo no lo re-asigna. */
   piezasSnapshot?: Record<string, PiezaColmenaSnap>,
+  opts?: OpcionesHojaCorte,
 ): HojaCorte {
-  const plan = generarPlanCorte([ot], colmenaPanos, params);
+  const plan =
+    opts?.plan ?? generarPlanCorte([ot], colmenaPanos, params, opts?.formulas, opts?.tipos);
 
   // Sobrante (colmena) que recibió cada pieza (las demás salen de rollo).
   const sobranteDe = new Map<string, PanoColmena>();
@@ -288,8 +336,12 @@ export function construirHojaCorte(
       ? Math.ceil(r.ancho / r.anchoRollo)
       : 0;
 
-  // N.º de paño físico por fila (la misma cuenta que leen las etiquetas).
-  const panoDe = panoDeCadaFila(rows, params);
+  // N.º de paño físico por fila (la misma cuenta que leen las etiquetas). Las
+  // piezas que salen de colmena quedan en 0: no ocupan paño de rollo.
+  const panoDe = panoDeCadaFila(rows, params, (idx) => {
+    const r = rows[idx];
+    return colmenaDePieza(pieceId(ot.id, r.ventanaId, r.panoIndex)) !== null;
+  });
   const letra = letraPano; // …Z, AA, BB… — mismas letras que asigna el optimizador
 
   // ── Bloque 1: una fila por cortina ──
@@ -321,7 +373,9 @@ export function construirHojaCorte(
       alto: aMetros(r.altoCm),
       altoCorteTela: redM(r.altoCorte), // dúo: 2×alto+0,30; resto: alto+0,25
       pano,
-      cortarJunto: letra(pano),
+      // Un paño de colmena no lleva letra: no se corta junto a nada del rollo.
+      // (Es la convención que ya usaba el Excel de corte.)
+      cortarJunto: pano === 0 ? '' : letra(pano),
       comentario: inv
         ? 'INVERTIDA'
         : noCabe
@@ -338,13 +392,17 @@ export function construirHojaCorte(
     };
   });
 
-  // ── Bloque 2: una fila por paño (grupo "cortar junto"). Incluye los paños
-  //    que salen de colmena — se marcan en la columna COLMENA. Antes se
-  //    filtraban los grupos 100% colmena y el resumen quedaba vacío (TOTAL
-  //    PAÑOS = 0) cuando toda la OT se cortaba de sobrantes. ──
+  // ── Bloque 2: una fila por paño de ROLLO (grupo "cortar junto").
+  //
+  //    Las cortinas que salen de colmena tienen `pano === 0` y no arman grupo:
+  //    ya están cortadas. Antes se agrupaban con las demás y bastaba UNA pieza
+  //    de colmena para que el paño ENTERO se diera por cortado — la compañera
+  //    de rollo del mismo grupo desaparecía de TOTAL PAÑOS y del OPTIMIZADOR,
+  //    y su tela nunca se bajaba del rollo. ──
   const grupos = new Map<number, { rows: OptimizerRow[]; pano: number }>();
   rows.forEach((r, idx) => {
     const pano = panoDe[idx] ?? 0;
+    if (pano === 0) return; // de colmena: no ocupa paño de rollo
     if (!grupos.has(pano)) grupos.set(pano, { rows: [], pano });
     grupos.get(pano)!.rows.push(r);
   });
@@ -356,6 +414,14 @@ export function construirHojaCorte(
   // Clave por COD_INT + tipo (vertical/roller): una tela usada por AMBOS lados
   // suma en cada hoja con SUS propios metros (las hojas salen separadas).
   const metrosPorCod = new Map<string, { codInt: string; metros: number; esVertical: boolean }>();
+  // Los códigos que solo salen de colmena igual figuran en el OPTIMIZADOR, en 0:
+  // su fila no puede desaparecer del resumen.
+  rows.forEach((r, idx) => {
+    if ((panoDe[idx] ?? 0) !== 0) return;
+    const clave = `${r.codInt}|${!!r.esVertical}`;
+    if (!metrosPorCod.has(clave))
+      metrosPorCod.set(clave, { codInt: r.codInt, metros: 0, esVertical: !!r.esVertical });
+  });
   for (const { rows: grupo, pano } of grupos.values()) {
     const ref = grupo[0];
     const inv = esInvertida(ref);
@@ -371,47 +437,28 @@ export function construirHojaCorte(
     // ¿El grupo trae ancho de corte propio del despiece (oscuridad)? Solo en ese
     // caso el total del OPTIMIZADOR usa el ancho consumido para las invertidas.
     const conCorteTela = grupo.some((g) => typeof g.anchoCorteTelaCm === 'number');
-    // Origen colmena del paño (si alguna de sus piezas sale de un sobrante):
-    // ubicación · medida, para que la cortadora sepa de dónde tomar la tela.
-    let colmena = '';
-    for (const g of grupo) {
-      const c = colmenaDePieza(pieceId(ot.id, g.ventanaId, g.panoIndex));
-      if (c) {
-        const med = `${Math.round(c.ancho)}X${Math.round(c.alto)}`;
-        colmena = c.ubic ? `${c.ubic} · ${med}` : med;
-        break;
-      }
-    }
     // Para qué ventanas se corta este paño. Un paño puede servir a varias
     // (eso es «cortar junto»), así que van todas, en el orden en que entraron
     // al grupo y compactadas para que quepan en la celda.
     const ubicaciones = compactarUbicaciones(grupo.map((g) => g.ubicacion));
-    // Los paños que salen de COLMENA no van a la tabla TOTAL PAÑOS: ya están
-    // cortados, la cortadora no los corta del rollo. (Igual aparecen en la tabla
-    // de corte de arriba, con su columna COLMENA.) Así TOTAL PAÑOS cuenta solo
-    // los paños a cortar del rollo.
-    if (!colmena) {
-      panos.push({
-        pano,
-        tipo: ref.producto,
-        cod: ref.codInt,
-        altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
-        altoMaxUtilizar: inv ? '' : altoMax,
-        invertida: inv,
-        esVertical: vert,
-        colmena,
-        ubicaciones,
-      });
-    }
-    // Solo los paños de ROLLO suman al OPTIMIZADOR (los de colmena ya están
-    // cortados). El COD_INT se registra igual —aunque sume 0— para que su fila no
-    // desaparezca. La reserva por paño de rollo = "alto máximo a utilizar".
-    // Paño INVERTIDO de oscuridad: el rollo se baja a lo largo del ANCHO de
-    // corte real (lo mismo que muestra TOTAL PAÑOS), no del alto. En roller se
-    // mantiene el criterio manual de siempre (alto de corte).
+    panos.push({
+      pano,
+      tipo: ref.producto,
+      cod: ref.codInt,
+      altoCortePano: inv ? anchoMax : corteReal, // invertida → ancho consumido
+      altoMaxUtilizar: inv ? '' : altoMax,
+      invertida: inv,
+      esVertical: vert,
+      colmena: '',
+      ubicaciones,
+    });
+    // La reserva por paño de rollo = "alto máximo a utilizar". Paño INVERTIDO
+    // de oscuridad: el rollo se baja a lo largo del ANCHO de corte real (lo
+    // mismo que muestra TOTAL PAÑOS), no del alto. En roller se mantiene el
+    // criterio manual de siempre (alto de corte).
     const claveOpt = `${ref.codInt}|${vert}`;
     const prev = metrosPorCod.get(claveOpt);
-    const suma = colmena ? 0 : inv ? (conCorteTela ? anchoMax : corteReal) : altoMax;
+    const suma = inv ? (conCorteTela ? anchoMax : corteReal) : altoMax;
     if (prev) prev.metros += suma;
     else metrosPorCod.set(claveOpt, { codInt: ref.codInt, metros: suma, esVertical: vert });
   }

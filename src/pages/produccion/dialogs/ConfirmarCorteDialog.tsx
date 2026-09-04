@@ -10,8 +10,10 @@
 // todo —sobrantes a la colmena, mermas al registro de pérdidas, el sello de
 // «tela cortada» en cada OT— y sale la etiqueta para pegarle al rollo.
 //
-// Con la colmena de paños apagada este corte NO descuenta nada: solo registra
-// lo que salió. El descuento clásico sigue viviendo en Fase 4.
+// El corte también CONSUME los paños de colmena que usó: salen del rack y lo
+// que queda de ellos entra como paños nuevos, con su etiqueta y su ubicación.
+// Antes esto solo pasaba en Fase 4, así que el taller cortaba un paño y el
+// inventario seguía diciendo que estaba disponible.
 
 import { useState } from 'react';
 import { CheckCircle2, Loader2, Printer, Scissors, TriangleAlert } from 'lucide-react';
@@ -28,8 +30,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
-import type { GrupoRollo } from '@/modules/cotizador/planCorte';
+import type { GrupoRollo, GrupoSobrante } from '@/modules/cotizador/planCorte';
 import type { ParametrosCorte } from '@/modules/cotizador/parametros';
+import {
+  deduccionesColmena,
+  piezasColmenaSnapshot,
+  salidasDeColmena,
+} from '@/modules/cotizador/colmenaCorte';
 import {
   filasColmenaDeCorte,
   filasMermasDeCorte,
@@ -50,6 +57,9 @@ import {
   type EtiquetaSobrante,
   type MarcaFuncional,
 } from '@/modules/telas/etiquetaSobrante';
+import { usePlantillaEtiqueta } from '@/modules/etiquetas/plantillasStore';
+import type { PlantillaEtiqueta } from '@/modules/etiquetas/plantilla';
+import { imprimirHtml } from '@/lib/imprimirHtml';
 
 /** Una salida con lo que el operario decidió encima. */
 type FilaEditable = {
@@ -68,21 +78,24 @@ const OPCIONES: { v: MarcaFuncional; t: string }[] = [
 
 const textoError = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-/** Abre la ventana de impresión con las etiquetas ya dibujadas. */
-function imprimir(etiquetas: EtiquetaSobrante[]): void {
-  if (etiquetas.length === 0) return;
-  const w = window.open('', '_blank', 'width=860,height=680');
-  if (!w) {
-    toast.error('El navegador bloqueó la ventana de impresión. Habilita las ventanas emergentes.');
-    return;
+/** De dónde salió el trozo, en el idioma del cortador. */
+function rotuloDetalle(s: SalidaCorte): string {
+  if (s.detalle === 'resto_colmena') {
+    const o = s.colmenaOrigen;
+    return o ? `del paño ${o.ubicacion || '—'} (${o.ancho}×${o.alto})` : 'de un paño de la colmena';
   }
-  w.document.open();
-  w.document.write(htmlEtiquetasSobrante(etiquetas));
-  w.document.close();
+  return s.detalle === 'franja_rollo' ? 'tira del costado' : 'faja de abajo';
+}
+
+/** Abre la ventana de impresión con las etiquetas ya dibujadas. */
+function imprimir(etiquetas: EtiquetaSobrante[], plantilla: PlantillaEtiqueta): void {
+  if (etiquetas.length === 0) return;
+  imprimirHtml(htmlEtiquetasSobrante(etiquetas, plantilla));
 }
 
 export default function ConfirmarCorteDialog({
   grupos,
+  sobrantes = [],
   params,
   origen,
   otIds,
@@ -92,6 +105,8 @@ export default function ConfirmarCorteDialog({
 }: {
   /** Los rollos TAL COMO quedaron en pantalla (con las inversiones decididas). */
   grupos: GrupoRollo[];
+  /** Los paños de colmena que este corte consume. */
+  sobrantes?: GrupoSobrante[];
   params: ParametrosCorte;
   origen: OrigenCorte;
   /** Las OTs que este corte deja con la tela cortada. */
@@ -102,13 +117,26 @@ export default function ConfirmarCorteDialog({
 }) {
   // Lo que se va a guardar se congela al ABRIR: el operario revisa una lista y
   // confirma ESA, no una que se recalculó por debajo mientras la miraba.
-  const [salidas] = useState<SalidaCorte[]>(() =>
-    grupos.flatMap((g) => salidasDeRollo(g, params)),
+  const [salidas] = useState<SalidaCorte[]>(() => [
+    ...grupos.flatMap((g) => salidasDeRollo(g, params)),
+    ...sobrantes.flatMap((g) => salidasDeColmena(g, params)),
+  ]);
+
+  // Los paños del rack que hay que marcar usados, y de qué paño salió cada
+  // cortina (para que la hoja de corte siga mostrando el origen después).
+  const [deducciones] = useState(() =>
+    deduccionesColmena(
+      { sobrantes, rollo: [], sinStock: [], otsIncluidas: [] },
+      params,
+    ),
   );
 
   // La fecha, igual: un corte empezado a las 23:59 repartiría seriales de dos
   // días distintos si cada uno tomara la hora al confirmarse.
   const [abiertoEn] = useState(() => new Date().toISOString());
+
+  // El diseño de la etiqueta, como quedó en Admin → Etiquetas.
+  const { plantilla } = usePlantillaEtiqueta('sobrante');
 
   const [filas, setFilas] = useState<FilaEditable[]>(() =>
     salidas
@@ -174,7 +202,7 @@ export default function ConfirmarCorteDialog({
         // Sin OTs no hay a qué atribuir el corte ni dónde dejar el sello: si
         // se guardaran los sobrantes igual, quedarían huérfanos y la tela
         // seguiría figurando sin cortar.
-        toast.error('No se encontraron las OTs de este plan. Volvé a generarlo antes de cerrar.');
+        toast.error('No se encontraron las OTs de este plan. Vuelve a generarlo antes de cerrar.');
         setGuardando(false);
         return;
       }
@@ -185,7 +213,7 @@ export default function ConfirmarCorteDialog({
       if (yaCortadas.length > 0) {
         toast.error(
           `Ya tienen la tela cortada: ${yaCortadas.map((o) => `OT ${o.numero_ot}`).join(', ')}. ` +
-            'Sacalas del lote y volvé a armar el plan.',
+            'Sácalas del lote y vuelve a armar el plan.',
         );
         setGuardando(false);
         return;
@@ -206,7 +234,7 @@ export default function ConfirmarCorteDialog({
         if (repetidos && repetidos.length > 0) {
           toast.error(
             `Ya hay sobrantes registrados con el serial ${prefijo}… de hoy. ` +
-              'Revisá la Colmena antes de volver a guardar.',
+              'Revisa la Colmena antes de volver a guardar.',
           );
           setGuardando(false);
           return;
@@ -215,7 +243,41 @@ export default function ConfirmarCorteDialog({
         // Sin pre-chequeo: no es motivo para bloquear el cierre del corte.
       }
 
-      // ── 3. Sobrantes y mermas ─────────────────────────────────────────
+      // ── 3. Los paños de colmena salen del rack ────────────────────────
+      // ANTES de insertar nada: si otro corte ya se llevó uno de estos paños,
+      // este corte se aborta sin haber escrito una sola fila. El `.eq` sobre
+      // `disponible` hace la carrera: solo actualiza los que siguen libres.
+      if (deducciones.length > 0) {
+        const ids = deducciones.map((d) => d.docId);
+        const { data: marcados, error: errMarca } = await supabase
+          .from('colmena_panos')
+          .update({ disponible: false, ot_asignada: rotulo, fecha_uso: abiertoEn })
+          .in('id', ids)
+          .eq('disponible', true)
+          .select('id');
+        if (errMarca) throw errMarca;
+        if ((marcados?.length ?? 0) < ids.length) {
+          // Puede ser un REINTENTO de este mismo corte (ya los marcó con este
+          // rótulo) o un conflicto real con otro corte.
+          const faltan = ids.filter((id) => !(marcados || []).some((m) => m.id === id));
+          const { data: revisados } = await supabase
+            .from('colmena_panos')
+            .select('id, ot_asignada, codigo, medida_ancho, medida_alto')
+            .in('id', faltan);
+          const ajenos = (revisados || []).filter((r) => r.ot_asignada !== rotulo);
+          if (ajenos.length > 0) {
+            toast.error(
+              `Otro corte ya usó ${ajenos.length} paño(s) de este plan ` +
+                `(${ajenos.map((r) => `${r.codigo} ${r.medida_ancho}×${r.medida_alto}`).join(', ')}). ` +
+                'Vuelve a generar el plan: no se guardó nada.',
+            );
+            setGuardando(false);
+            return;
+          }
+        }
+      }
+
+      // ── 4. Sobrantes y mermas ─────────────────────────────────────────
       const editadas: FilaSobranteEditada[] = aGuardar.map((f) => ({
         ...f.salida,
         funcional: funcionalDeMarca(f.marca),
@@ -238,18 +300,23 @@ export default function ConfirmarCorteDialog({
         if (error) problemas.push(`mermas: ${error.message}`);
       }
 
-      // ── 4. El sello, SIEMPRE ──────────────────────────────────────────
+      // ── 5. El sello, SIEMPRE ──────────────────────────────────────────
       // Aunque algo de arriba haya fallado: sin sello, un reintento duplicaría
       // lo que sí se guardó. Los fallos se avisan para arreglarlos a mano.
-      const stamp = stampCorteProduccion(
-        origen,
-        abiertoEn,
-        editadas.map((e) => e.serial),
-        mermas.length,
-      );
+      // En un LOTE cada OT sella SUS piezas: `costoOT` cuenta la tela de
+      // colmena por orden, y sin el filtro cada una se cargaría la de todas.
+      const planColmena = { sobrantes, rollo: [], sinStock: [], otsIncluidas: [] };
       const sellos = await Promise.all(
         filasOT.map(async (o) => {
           const dg = (o.datos_generales || {}) as Record<string, unknown>;
+          const stamp = stampCorteProduccion(
+            origen,
+            abiertoEn,
+            editadas.map((e) => e.serial),
+            mermas.length,
+            deducciones,
+            piezasColmenaSnapshot(planColmena, String(o.id)),
+          );
           const { error } = await supabase
             .from('ots')
             .update({ datos_generales: { ...dg, corteGeneralColmena: stamp } })
@@ -260,16 +327,17 @@ export default function ConfirmarCorteDialog({
       const sinSello = sellos.filter((s): s is string => s !== null);
       if (sinSello.length > 0) problemas.push(`sin marcar: ${sinSello.join(', ')}`);
 
-      // ── 5. Las etiquetas ──────────────────────────────────────────────
+      // ── 6. Las etiquetas ──────────────────────────────────────────────
       const etiquetas = etiquetasDe(aGuardar);
       setListo(etiquetas);
-      imprimir(etiquetas);
+      imprimir(etiquetas, plantilla);
 
       if (problemas.length > 0) {
         toast.error(`Corte cerrado con problemas — ${problemas.join(' · ')}`);
       } else {
         toast.success(
           `Corte de ${rotulo} cerrado: ${editadas.length} sobrante(s) a la colmena` +
+            (deducciones.length ? `, ${deducciones.length} paño(s) usado(s)` : '') +
             (mermas.length ? `, ${mermas.length} merma(s)` : '') +
             '.',
         );
@@ -294,19 +362,38 @@ export default function ConfirmarCorteDialog({
 
         <div className="max-h-[62vh] space-y-3 overflow-y-auto pr-1">
           {/* Qué se bajó del rollo: el primer corte de cada tela. */}
-          <div className="rounded-lg border border-border bg-muted/30 p-2.5">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              Primer corte
+          {grupos.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/30 p-2.5">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Primer corte
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                {grupos.map((g, i) => (
+                  <span key={i}>
+                    <strong className="font-mono">{g.codInt}</strong> ·{' '}
+                    {metrosPrimerCorte(g.altoCorte)}
+                  </span>
+                ))}
+              </div>
             </div>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-              {grupos.map((g, i) => (
-                <span key={i}>
-                  <strong className="font-mono">{g.codInt}</strong> ·{' '}
-                  {metrosPrimerCorte(g.altoCorte)}
-                </span>
-              ))}
+          )}
+
+          {/* Los paños del rack que este corte se lleva. */}
+          {deducciones.length > 0 && (
+            <div className="rounded-lg border border-border bg-muted/30 p-2.5">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Paños de la colmena que salen del rack
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                {deducciones.map((d) => (
+                  <span key={d.docId}>
+                    📍 <strong className="font-mono">{d.ubicacion || '—'}</strong> · {d.cod}{' '}
+                    {d.ancho}×{d.alto}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {listo ? (
             <div className="rounded-lg border border-success/40 bg-success/10 p-3 text-xs text-success">
@@ -328,8 +415,7 @@ export default function ConfirmarCorteDialog({
                     <div className="text-sm">
                       <strong className="font-mono">{f.salida.codInt}</strong>{' '}
                       <span className="text-muted-foreground">
-                        {f.salida.ancho} × {f.salida.alto} cm ·{' '}
-                        {f.salida.detalle === 'franja_rollo' ? 'tira del costado' : 'faja de abajo'}
+                        {f.salida.ancho} × {f.salida.alto} cm · {rotuloDetalle(f.salida)}
                       </span>
                     </div>
                     <span className="font-mono text-[11px] text-muted-foreground">{f.serial}</span>
@@ -412,7 +498,7 @@ export default function ConfirmarCorteDialog({
         <DialogFooter>
           {listo ? (
             <>
-              <Button variant="secondary" onClick={() => imprimir(listo)} disabled={listo.length === 0}>
+              <Button variant="secondary" onClick={() => imprimir(listo, plantilla)} disabled={listo.length === 0}>
                 <Printer className="mr-1.5 h-4 w-4" />
                 Reimprimir etiquetas
               </Button>

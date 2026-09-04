@@ -18,8 +18,14 @@
 // ─────────────────────────────────────────────────────────────────────
 import { autoOptimizar, type OptimizerRow } from '@/modules/cotizador/tela';
 import { filasOptimizadorDeOT } from '@/modules/cotizador/filasOptimizador';
-import { panoDeCadaFila } from '@/modules/cotizador/hojaCorte';
+import { panoDeCadaFila, pieceId } from '@/modules/cotizador/hojaCorte';
+import { panosDibujados, type PanoDibujado, type SobranteDibujado } from '@/modules/cotizador/layoutPano';
 import { letraPano } from '@/modules/cotizador/letras';
+import {
+  esUtilizableProduccion,
+  funcionalDeSobrante,
+  MIN_REGISTRO_CM,
+} from '@/modules/produccion/salidasCorte';
 import type { JuntoPieza } from '@/modules/cotizador/calculoGeneral';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from '@/modules/cotizador/parametrosCorte';
 import type { CatalogoProductos } from '@/modules/cotizador/types';
@@ -37,6 +43,55 @@ export type FilaLote = OptimizerRow & { otId: string; otNum: string };
 /** La misma llave que usa `juntoPorPieza` del cálculo general. */
 export const clavePieza = (ventanaId: string | number, panoIndex: number): string =>
   `${ventanaId}_${panoIndex}`;
+
+/**
+ * Qué filas del lote salen de un paño de COLMENA, según el plan de corte del
+ * lote. La llave es el `pieceId` del motor (`otId_ventanaId_pN`), así que las
+ * dos cuentas —el plan y los tiros— hablan de las mismas cortinas.
+ */
+export function colmenaDelLote(
+  filas: FilaLote[],
+  piezasColmena: ReadonlySet<string>,
+): (idx: number) => boolean {
+  if (piezasColmena.size === 0) return () => false;
+  const marcadas = filas.map((f) =>
+    piezasColmena.has(pieceId(f.otId, f.ventanaId, f.panoIndex)),
+  );
+  return (idx) => marcadas[idx] === true;
+}
+
+/** Una cortina del lote que NO se corta: ya está en el rack, cortada. */
+export type CortinaDeColmena = CortinaDelTiro & {
+  /** «MAPA M1-20 · 219X200», tal como lo dice la hoja de corte. */
+  origen: string;
+};
+
+/**
+ * Las cortinas del lote que salen de la colmena, para listarlas aparte de los
+ * tiros: el dimensionador tiene que ir a buscarlas al rack, no a la mesa.
+ */
+export function cortinasDeColmena(
+  filas: FilaLote[],
+  esColmena: (idx: number) => boolean,
+  origenDe: (idx: number) => string,
+): CortinaDeColmena[] {
+  const out: CortinaDeColmena[] = [];
+  filas.forEach((r, i) => {
+    if (!esColmena(i)) return;
+    out.push({
+      otId: r.otId,
+      otNum: r.otNum,
+      piezaId: clavePieza(r.ventanaId, r.panoIndex),
+      ubicacion: r.ubicacion,
+      producto: r.producto,
+      codInt: r.codInt,
+      anchoCm: anchoOcupadoCm(r),
+      altoCm: cm(r.altoCorte),
+      origen: origenDe(i),
+    });
+  });
+  return out;
+}
 
 /**
  * Las filas de TODAS las OTs del lote, empacadas juntas.
@@ -111,16 +166,19 @@ const anchoOcupadoCm = (r: OptimizerRow): number =>
 export function tirosDelLote(
   filas: FilaLote[],
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  /** Filas que salen de un paño de colmena: no bajan tiro (van aparte). */
+  esColmena?: (idx: number) => boolean,
 ): TiroLote[] {
   if (filas.length === 0) return [];
   // La MISMA cuenta de «qué se corta junto» que usan la hoja de corte, el
   // Dimensionado y las etiquetas: si acá se contara distinto, el taller vería
   // dos verdades.
-  const panoDe = panoDeCadaFila(filas, params);
+  const panoDe = panoDeCadaFila(filas, params, esColmena);
 
   const porPano = new Map<number, TiroLote>();
   filas.forEach((r, i) => {
     const n = panoDe[i];
+    if (n === 0) return; // de colmena: ya cortada
     let tiro = porPano.get(n);
     if (!tiro) {
       tiro = {
@@ -164,6 +222,46 @@ export function esTiroCompartido(t: TiroLote): boolean {
 }
 
 /**
+ * Lo que queda al costado del tiro, con la MISMA cuenta de la pizarra y del
+ * cierre del corte: ancho útil (nominal menos los dos márgenes) menos lo que
+ * ocupan las cortinas. Devuelve null si no queda nada manipulable.
+ */
+export function sobranteDelTiro(
+  t: TiroLote,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): SobranteDibujado | null {
+  const anchoCm = Math.round(t.anchoRolloCm - params.margenRolloCm * 2 - t.anchoUsadoCm);
+  const altoCm = Math.round(t.altoCorteCm);
+  if (anchoCm < MIN_REGISTRO_CM || altoCm < MIN_REGISTRO_CM) return null;
+  return {
+    anchoCm,
+    altoCm,
+    clase: esUtilizableProduccion(anchoCm, altoCm, params) ? 'sobrante' : 'merma',
+    funcional: funcionalDeSobrante(anchoCm, altoCm, params),
+  };
+}
+
+/**
+ * La pizarra del LOTE: los mismos tiros, dibujados.
+ *
+ * Reusa `panosDibujados` sin tocarlo; lo único que cambia es el rótulo de cada
+ * cortina, que pasa a llevar su OT adelante («3213·LIVING»). En un tiro
+ * compartido esa es la única forma de saber cuál cortina es de quién.
+ */
+export function panosDelLote(
+  filas: FilaLote[],
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  esColmena?: (idx: number) => boolean,
+): PanoDibujado[] {
+  if (filas.length === 0) return [];
+  const conOT = filas.map((f) => ({
+    ...f,
+    ubicacion: `${String(f.otNum).replace(/^#/, '')}·${f.ubicacion}`,
+  }));
+  return panosDibujados(conOT, params, esColmena);
+}
+
+/**
  * Las letras del lote, repartidas por orden.
  *
  * El cálculo general de cada OT recibe su propio mapa `${ventanaId}_${panoIndex}`
@@ -173,8 +271,9 @@ export function esTiroCompartido(t: TiroLote): boolean {
 export function juntoPorOT(
   filas: FilaLote[],
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+  esColmena?: (idx: number) => boolean,
 ): Map<string, Map<string, JuntoPieza>> {
-  const panoDe = panoDeCadaFila(filas, params);
+  const panoDe = panoDeCadaFila(filas, params, esColmena);
   const porOT = new Map<string, Map<string, JuntoPieza>>();
   filas.forEach((r, i) => {
     let mapa = porOT.get(r.otId);
@@ -183,7 +282,9 @@ export function juntoPorOT(
       porOT.set(r.otId, mapa);
     }
     mapa.set(clavePieza(r.ventanaId, r.panoIndex), {
-      letra: letraPano(panoDe[i]),
+      // La cortina que sale del rack no comparte tiro con nadie: el
+      // Dimensionado la rotula COLMENA en vez de darle una letra que no existe.
+      letra: panoDe[i] === 0 ? 'COLMENA' : letraPano(panoDe[i]),
       // La inversión la sigue decidiendo la fila, no el lote.
       invertida: false,
     });

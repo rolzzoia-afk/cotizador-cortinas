@@ -148,7 +148,7 @@ describe('generarPlanCorte', () => {
     expect(plan.sinStock).toEqual([]);
   });
 
-  it('Regla 1: match exacto ancho+alto → va a sobrantes', () => {
+  it('calce exacto: el paño se usa entero y no queda nada que anotar', () => {
     const ot = hacerOT([
       {
         codInt: 'SC001',
@@ -157,12 +157,13 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.46, alto: 2.05 }],
       },
     ]);
-    // Pieza: ancho = 1.46m*100 + BORDE(4) = 150, alto = 2.05m*100 + extra(25) = 230
-    const sobrante = pano('SC001', 150, 230);
+    // Pieza: ancho nominal 146 (en colmena no lleva BORDE), alto = 205+25 = 230.
+    const sobrante = pano('SC001', 146, 230);
     const plan = generarPlanCorte([ot], [sobrante]);
     expect(plan.sobrantes).toHaveLength(1);
     expect(plan.sobrantes[0].regla).toBe(1);
-    expect(plan.sobrantes[0].sobranteAncho).toBeNull();
+    expect(plan.sobrantes[0].libres).toEqual([]);
+    expect(plan.sobrantes[0].costo).toBe(0);
     expect(plan.rollo).toHaveLength(0);
     expect(plan.sinStock).toHaveLength(0);
   });
@@ -222,7 +223,7 @@ describe('generarPlanCorte', () => {
     expect(plan.rollo).toHaveLength(1);
   });
 
-  it('Regla 2: remanente de ancho ≥120×180 se registra como colmena', () => {
+  it('lo que sobra del paño y SIRVE vuelve al rack; lo que no, es merma', () => {
     const ot = hacerOT([
       {
         codInt: 'SC001',
@@ -231,16 +232,17 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.46, alto: 2.05 }],
       },
     ]);
-    // Pieza nominal 146 (150 - BORDE 4). Sobrante 280×235 → franja 280-146=134
-    // (≥120) y alto 235 (≥180) → califica como colmena reutilizable.
-    const sobrante = pano('SC001', 280, 235);
-    const plan = generarPlanCorte([ot], [sobrante]);
+    // Pieza nominal 146×230. Paño 280×235 → tira 134×235 (≥100×200: sirve para
+    // otra roller) + faja 146×5, que ni siquiera se anota.
+    const plan = generarPlanCorte([ot], [pano('SC001', 280, 235)]);
     expect(plan.sobrantes).toHaveLength(1);
     expect(plan.sobrantes[0].regla).toBe(2);
-    expect(plan.sobrantes[0].sobranteAncho).toEqual({ cod: 'SC001', ancho: 134, alto: 235 });
+    const utiles = plan.sobrantes[0].libres.filter((r) => r.clase === 'sobrante');
+    expect(utiles).toHaveLength(1);
+    expect([utiles[0].anchoCm, utiles[0].altoCm]).toEqual([134, 235]);
   });
 
-  it('Regla 2: remanente de ancho <120 NO se registra como colmena (sería merma)', () => {
+  it('un trozo que no sirve para nada NO cuenta como paño nuevo, solo como merma', () => {
     const ot = hacerOT([
       {
         codInt: 'SC001',
@@ -249,12 +251,11 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.46, alto: 2.05 }],
       },
     ]);
-    // Sobrante 200×235 → franja 200-146=54 (<120) → no es colmena, no se registra.
-    const sobrante = pano('SC001', 200, 235);
-    const plan = generarPlanCorte([ot], [sobrante]);
+    // Paño 200×235 → tira 54×235: no alcanza ni para roller (100×200) ni para
+    // vertical (80×250). Es pérdida, no inventario.
+    const plan = generarPlanCorte([ot], [pano('SC001', 200, 235)]);
     expect(plan.sobrantes).toHaveLength(1);
-    expect(plan.sobrantes[0].regla).toBe(2);
-    expect(plan.sobrantes[0].sobranteAncho).toBeNull();
+    expect(plan.sobrantes[0].libres.every((r) => r.clase === 'merma')).toBe(true);
   });
 
   it('DUO: la pieza reserva el corte real (2×alto+30) — un sobrante 20 cm más corto NO sirve', () => {
@@ -276,7 +277,7 @@ describe('generarPlanCorte', () => {
     expect(planJusto.sobrantes).toHaveLength(1);
   });
 
-  it('params custom: mínimos de colmena más bajos convierten merma en colmena', () => {
+  it('params custom: bajando el mínimo funcional, la franja vuelve al rack', () => {
     const ot = hacerOT([
       {
         codInt: 'SC001',
@@ -285,34 +286,28 @@ describe('generarPlanCorte', () => {
         panos: [{ ancho: 1.46, alto: 2.05 }],
       },
     ]);
-    // Franja 200−146 = 54: con el mínimo default (120) es merma; bajando
-    // colmenaMinAnchoCm a 50 la franja sobrevive como colmena.
-    const sobrante = pano('SC001', 200, 235);
-    const plan = generarPlanCorte([ot], [sobrante], {
+    // Franja 200−146 = 54: con el mínimo de roller (100 de ancho) es merma;
+    // bajándolo a 50 el trozo pasa a servir y vuelve al inventario.
+    const plan = generarPlanCorte([ot], [pano('SC001', 200, 235)], {
       ...PARAMETROS_CORTE_DEFAULT,
-      colmenaMinAnchoCm: 50,
+      funcionalRollerMinAnchoCm: 50,
     });
-    expect(plan.sobrantes).toHaveLength(1);
-    expect(plan.sobrantes[0].sobranteAncho).toEqual({ cod: 'SC001', ancho: 54, alto: 235 });
+    const utiles = plan.sobrantes[0].libres.filter((r) => r.clase === 'sobrante');
+    expect([utiles[0].anchoCm, utiles[0].altoCm]).toEqual([54, 235]);
   });
 
-  it('params custom: ventanaAltoCm más amplia acepta un sobrante que hoy no matchea', () => {
+  it('ya no hay tolerancia de alto: un paño MÁS alto que la cortina sirve igual', () => {
     const ventana = {
       codInt: 'SC001',
       producto: 'Roller SC',
       ubicacion: 'Living',
       panos: [{ ancho: 1.46, alto: 2.05 }],
     };
-    // Pieza alto 230; sobrante alto 280 excede la ventana default (+30) y se
-    // rechaza; con ventanaAltoCm 60 entra.
-    const sobrante = pano('SC001', 160, 280);
-    const planDefault = generarPlanCorte([hacerOT([ventana])], [sobrante]);
-    expect(planDefault.sobrantes).toHaveLength(0);
-    const planAmplio = generarPlanCorte([hacerOT([ventana])], [sobrante], {
-      ...PARAMETROS_CORTE_DEFAULT,
-      ventanaAltoCm: 60,
-    });
-    expect(planAmplio.sobrantes).toHaveLength(1);
+    // Pieza 146×230 en un paño de 160×280. La ventana de +30 cm lo rechazaba y
+    // mandaba la cortina al rollo teniendo la tela en el rack.
+    const plan = generarPlanCorte([hacerOT([ventana])], [pano('SC001', 160, 280)]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.rollo).toHaveLength(0);
   });
 
   it('params custom: extraDuoCm cambia la reserva del dúo', () => {
@@ -405,8 +400,8 @@ describe('generarPlanCorte', () => {
     // Quedan lado a lado: la más ancha (75) en px=0, la otra (52) a continuación.
     const xs = plan.sobrantes[0].placed.map((p) => p.px).sort((a, b) => a - b);
     expect(xs).toEqual([0, 75]);
-    // Franja restante 140-127=13 cm < 120 → no califica como colmena.
-    expect(plan.sobrantes[0].sobranteAncho).toBeNull();
+    // Franja restante 140−127 = 13 cm: no sirve para otra cortina → merma.
+    expect(plan.sobrantes[0].libres.every((r) => r.clase === 'merma')).toBe(true);
   });
 
   it('Regla 2 mejorada: la cortina que no entra al sobrante cae al rollo', () => {
@@ -755,6 +750,186 @@ describe('secuenciaCortes', () => {
   it('la franja que sobra al costado no cuenta como corte', () => {
     // La cortina usa 137 de 298: el resto se limpia, no separa dos piezas.
     expect(secuenciaCortes([p('PPAL', 0, 0, 137, 256)], 298, 256)).toHaveLength(0);
+  });
+});
+
+// ── El paño de colmena se aprovecha en DOS dimensiones ───────────────
+//
+// Antes las cortinas iban en UNA fila, se rechazaba todo paño más alto que la
+// cortina + 30 cm y se elegía por ancho sobrante. Estos casos son los que ese
+// motor perdía.
+describe('colmena — empaque 2D', () => {
+  const roller = (codInt: string, ubic: string, ancho: number, alto: number) => ({
+    codInt,
+    producto: 'ROLLER BLACKOUT',
+    ubicacion: ubic,
+    alto,
+    panos: [{ ancho, alto }],
+  });
+
+  it('dos cortinas anchas y bajas se APILAN en dos filas', () => {
+    // 2,90×0,95 → 290×120 cada una. En un paño de 300×250 entran una sobre la
+    // otra; con una sola fila el paño se descartaba y las dos iban al rollo.
+    const ot = hacerOT([roller('SC 65', 'COCINA 1', 2.9, 0.95), roller('SC 65', 'COCINA 2', 2.9, 0.95)]);
+    const plan = generarPlanCorte([ot], [pano('SC 65', 300, 250)]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].placed).toHaveLength(2);
+    expect(plan.rollo).toHaveLength(0);
+    const ys = plan.sobrantes[0].placed.map((p) => p.py).sort((a, b) => a - b);
+    expect(ys).toEqual([0, 120]);
+  });
+
+  it('la penalidad por paño nuevo hace ganar al paño JUSTO sobre el GRANDE', () => {
+    // 70×225. El grande deja 130×230, que vuelve al rack: la colmena no baja.
+    const ot = hacerOT([roller('SC001', 'L1', 0.7, 2.0)]);
+    const grande = pano('SC001', 200, 230, { _docId: 'grande' });
+    const justo = pano('SC001', 80, 230, { _docId: 'justo' });
+    expect(generarPlanCorte([ot], [grande, justo]).sobrantes[0].sobrante._docId).toBe('justo');
+    // Con la penalidad en 0 vuelve a mandar solo la merma → gana el grande.
+    const sinPenalidad = generarPlanCorte([ot], [grande, justo], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      colmenaPenalidadNuevoPanoCm2: 0,
+    });
+    expect(sinPenalidad.sobrantes[0].sobrante._docId).toBe('grande');
+  });
+
+  it('no parte un paño grande en dos chicos para ahorrar dos palmos de merma', () => {
+    // 100×175. El 200×400 no deja NADA de merma, pero deja DOS paños nuevos.
+    const ot = hacerOT([roller('SC001', 'L1', 1.0, 1.5)]);
+    const chico = pano('SC001', 110, 185, { _docId: 'chico' });
+    const enorme = pano('SC001', 200, 400, { _docId: 'enorme' });
+    expect(generarPlanCorte([ot], [enorme, chico]).sobrantes[0].sobrante._docId).toBe('chico');
+  });
+
+  it('pero sí prefiere el paño que deja UN trozo útil sobre el que solo deja merma', () => {
+    // 100×175. El 250×185 pierde 150×185 entero (merma, 27.750 cm²); el
+    // 110×400 pierde 10×400 (4.000) y devuelve 100×225 al rack (20.000 de
+    // penalidad) → 24.000 < 27.750.
+    const ot = hacerOT([roller('SC001', 'L1', 1.0, 1.5)]);
+    const anchoInutil = pano('SC001', 250, 185, { _docId: 'ancho' });
+    const largoUtil = pano('SC001', 110, 400, { _docId: 'largo' });
+    expect(generarPlanCorte([ot], [anchoInutil, largoUtil]).sobrantes[0].sobrante._docId).toBe('largo');
+  });
+
+  it('cuatro cortinas iguales caben todas en un paño y no se parten en dos', () => {
+    // 4 × 70×195. En 300×220 entran las cuatro (merma 11.400); en 273×195 solo
+    // tres, y la cuarta se iría al rollo.
+    const ot = hacerOT([1, 2, 3, 4].map((n) => roller('BK 61', `DORM ${n}`, 0.7, 1.7)));
+    const plan = generarPlanCorte([ot], [
+      pano('BK 61', 273, 195, { _docId: 'chico' }),
+      pano('BK 61', 300, 220, { _docId: 'grande' }),
+    ]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].sobrante._docId).toBe('grande');
+    expect(plan.sobrantes[0].placed).toHaveLength(4);
+    expect(plan.rollo).toHaveLength(0);
+  });
+
+  it('una cortina GIRADA entra donde derecha no entraba', () => {
+    // 170×270 en un paño de 273×195: acostada mide 270×170 y calza.
+    const ot = hacerOT([roller('BK 61', 'ESCRITORIO', 1.7, 2.45)]);
+    const plan = generarPlanCorte([ot], [pano('BK 61', 273, 195)]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].tieneRotaciones).toBe(true);
+    expect(plan.sobrantes[0].piezasRotadas).toHaveLength(1);
+    expect(plan.rollo).toHaveLength(0);
+  });
+
+  it('con el giro apagado esa misma cortina se va al rollo', () => {
+    const ot = hacerOT([roller('BK 61', 'ESCRITORIO', 1.7, 2.45)]);
+    const plan = generarPlanCorte([ot], [pano('BK 61', 273, 195)], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      colmenaPermiteGiro: false,
+    });
+    expect(plan.sobrantes).toHaveLength(0);
+    expect(plan.rollo).toHaveLength(1);
+  });
+
+  it('si el operario RECHAZA el giro, la cortina cae al rollo', () => {
+    const ot = hacerOT([roller('BK 61', 'ESCRITORIO', 1.7, 2.45)]);
+    const conGiro = generarPlanCorte([ot], [pano('BK 61', 273, 195)]);
+    const id = conGiro.sobrantes[0].piezasRotadas[0].id;
+    const rechazado = generarPlanCorte([ot], [pano('BK 61', 273, 195)], PARAMETROS_CORTE_DEFAULT, undefined, undefined, {
+      sinGiro: new Set([id]),
+    });
+    expect(rechazado.sobrantes).toHaveLength(0);
+    expect(rechazado.rollo).toHaveLength(1);
+  });
+
+  it('una VERTICAL nunca se acuesta, ni en la colmena ni en el rollo', () => {
+    // Sus lamas van a lo ancho del rollo; girada quedarían atravesadas.
+    const vertical = {
+      codInt: 'BK 18-V',
+      producto: 'CORTINA VERTICAL',
+      tipo: 'VERTICAL',
+      ubicacion: 'VITRINA',
+      alto: 2.45,
+      panos: [{ ancho: 1.7, alto: 2.45 }],
+    };
+    const plan = generarPlanCorte([hacerOT([vertical])], [pano('BK 18-V', 273, 195)]);
+    expect(plan.sobrantes).toHaveLength(0);
+    expect(plan.rollo).toHaveLength(1);
+    expect(plan.rollo[0].placed.every((p) => !p.rot)).toBe(true);
+  });
+
+  it('una pieza sin código no toma los paños que tampoco lo tienen', () => {
+    // `colmena_panos.codigo` viene null en varias filas viejas: '' === '' las
+    // hacía calzar con cualquier tela.
+    const ot = hacerOT([{ codInt: '', producto: 'Roller SC', ubicacion: 'L1', panos: [{ ancho: 1.4, alto: 2.0 }] }]);
+    const plan = generarPlanCorte([ot], [pano('', 200, 250)]);
+    expect(plan.sobrantes).toHaveLength(0);
+  });
+
+  it('el acomodo del paño es siempre cortable por la mesa y sin solapes', () => {
+    const ot = hacerOT([
+      roller('BK 61', 'L1', 0.7, 1.7),
+      roller('BK 61', 'L2', 1.45, 1.9),
+      roller('BK 61', 'L3', 0.52, 1.6),
+      roller('BK 61', 'L4', 1.16, 1.4),
+    ]);
+    const plan = generarPlanCorte([ot], [pano('BK 61', 300, 250), pano('BK 61', 200, 220)]);
+    expect(plan.sobrantes.length).toBeGreaterThan(0);
+    for (const g of plan.sobrantes) {
+      expect(esLayoutGuillotina(g.placed, g.uw, g.uh)).toBe(true);
+      expect(g.cortes).not.toBeNull();
+      for (const a of g.placed) {
+        for (const b of g.placed) {
+          if (a === b) continue;
+          const solapa =
+            a.px < b.px + b.pw && b.px < a.px + a.pw && a.py < b.py + b.ph && b.py < a.py + a.ph;
+          expect(solapa).toBe(false);
+        }
+      }
+      // Todo lo puesto cae DENTRO del paño.
+      for (const p of g.placed) {
+        expect(p.px + p.pw).toBeLessThanOrEqual(g.uw);
+        expect(p.py + p.ph).toBeLessThanOrEqual(g.uh);
+      }
+    }
+  });
+
+  it('en multieje la colmena se sigue usando (la cortadora CNC)', () => {
+    const ot = hacerOT([roller('SC 65', 'COCINA 1', 2.9, 0.95), roller('SC 65', 'COCINA 2', 2.9, 0.95)]);
+    const plan = generarPlanCorte([ot], [pano('SC 65', 300, 250)], {
+      ...PARAMETROS_CORTE_DEFAULT,
+      modoCorte: 'multieje',
+    });
+    expect(plan.sobrantes[0].placed).toHaveLength(2);
+  });
+
+  it('la colmena no toca el plan de rollo: sin paños del código, sale idéntico', () => {
+    const ot = hacerOT([
+      roller('BK 61', 'L1', 1.72, 1.6),
+      roller('BK 61', 'L2', 1.88, 1.4),
+      roller('BK 61', 'L3', 1.36, 1.7),
+    ]);
+    const sinColmena = generarPlanCorte([ot], []);
+    const conOtraTela = generarPlanCorte([ot], [pano('SC 65', 300, 250)]);
+    expect(sinColmena.rollo).toHaveLength(1);
+    expect(sinColmena.rollo[0].placed.filter((p) => !p.failed)).toHaveLength(3);
+    expect(conOtraTela.sobrantes).toEqual([]);
+    expect(conOtraTela.rollo[0].altoCorte).toBe(sinColmena.rollo[0].altoCorte);
+    expect(conOtraTela.rollo[0].placed).toEqual(sinColmena.rollo[0].placed);
   });
 });
 

@@ -23,6 +23,7 @@ import {
   LineChart,
   Package,
   Ruler,
+  Tags,
   Scissors,
   Server,
   Users,
@@ -48,6 +49,14 @@ const OptimizadorOTSection = lazy(() =>
     default: m.OptimizadorOTSection,
   })),
 );
+
+// El editor de etiquetas arrastra el lienzo y el diseño de todas ellas: se
+// carga al abrir su pestaña, no al entrar al panel.
+const EtiquetasSection = lazy(() =>
+  import('@/components/admin/etiquetas/EtiquetasSection').then((m) => ({
+    default: m.EtiquetasSection,
+  })),
+);
 import VistaSistema from './admin/vistas/VistaSistema';
 import VistaInventario from './admin/vistas/VistaInventario';
 import VistaCatalogo from './admin/vistas/VistaCatalogo';
@@ -60,6 +69,7 @@ type Tab =
   | 'precios'
   | 'cotizador'
   | 'catalogo'
+  | 'etiquetas'
   | 'usuarios'
   | 'agente'
   | 'auditoria';
@@ -71,6 +81,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Server }> = [
   { id: 'precios', label: 'Precios', icon: Coins },
   { id: 'cotizador', label: 'Documento', icon: FileText },
   { id: 'catalogo', label: 'Catálogo técnico', icon: Ruler },
+  { id: 'etiquetas', label: 'Etiquetas', icon: Tags },
   { id: 'usuarios', label: 'Usuarios', icon: Users },
   { id: 'agente', label: 'Agente IA', icon: Bot },
   { id: 'auditoria', label: 'Auditoría', icon: ClipboardList },
@@ -146,6 +157,13 @@ export function AdminPanel() {
       )}
       {tab === 'precios' && <VistaPrecios />}
       {tab === 'catalogo' && <VistaCatalogo />}
+      {tab === 'etiquetas' && (
+        <Suspense
+          fallback={<p className="py-12 text-center text-sm text-muted-foreground">Cargando…</p>}
+        >
+          <EtiquetasSection />
+        </Suspense>
+      )}
       {tab === 'usuarios' && (
         <div className="space-y-6">
           <SuscripcionSection />

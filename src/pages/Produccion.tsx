@@ -176,7 +176,12 @@ export function Produccion() {
       )}
       {tab === 'estructura' && <VistaEstructura ot={ot} onAreaCerrada={alCerrarArea} />}
       {tab === 'panos' && (
-        <VistaPanos ot={ot} otCargada={otCargada} onAreaCerrada={alCerrarArea} />
+        <VistaPanos
+          ot={ot}
+          otCargada={otCargada}
+          lote={loteActivo}
+          onAreaCerrada={alCerrarArea}
+        />
       )}
       {tab === 'dimensionado' && (
         <VistaCalculo

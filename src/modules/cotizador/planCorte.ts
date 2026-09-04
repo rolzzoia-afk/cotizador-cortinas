@@ -7,6 +7,7 @@
 
 import type { OT, VentanaItem } from '@/modules/ots/types';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCorte';
+import { libresClasificados, type RectLibre } from './libresPano';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import {
   cortesOscuridad,
@@ -52,6 +53,14 @@ export type Pieza = {
   otNum: string;
   w: number;
   h: number;
+  /**
+   * La cortina NO se puede girar, ni en colmena ni en el rollo. Hoy son las
+   * VERTICALES: su tela se corta en lamas de 8,9 cm que siempre entran a lo
+   * ancho del rollo; acostadas, las lamas quedarían atravesadas. La hoja de
+   * corte ya lo decía (`esFilaInvertida`), pero la pasada con rotación del
+   * rollo las giraba igual.
+   */
+  noGira?: boolean;
 };
 
 export type Placed = Pieza & {
@@ -66,10 +75,19 @@ export type Placed = Pieza & {
 export type GrupoSobrante = {
   sobrante: PanoColmena;
   placed: Placed[];
+  /** 1 = el paño se usó ENTERO (no sobró nada que anotar); 2 = quedó algo. */
   regla: 1 | 2;
-  sobranteAncho: { cod: string; ancho: number; alto: number } | null;
   uw: number;
   uh: number;
+  /** Lo que queda del paño una vez cortado: qué vuelve al rack y qué se perdió. */
+  libres: RectLibre[];
+  /** El orden en que la mesa parte el paño; `null` si no es cortable (multieje). */
+  cortes: CorteGuillotina[] | null;
+  /** Hay piezas propuestas GIRADAS: el operario las autoriza una por una. */
+  tieneRotaciones: boolean;
+  piezasRotadas: Placed[];
+  /** Puntaje con que este paño le ganó a los demás (cm²; menos es mejor). */
+  costo: number;
 };
 
 export type GrupoRollo = {
@@ -91,6 +109,15 @@ export type GrupoRollo = {
 };
 
 export type GrupoSinStock = { codInt: string; piezas: Pieza[] };
+
+/** Ajustes por corrida del motor (los toma la UI, no la configuración). */
+export type OpcionesPlan = {
+  /**
+   * IDs de pieza cuyo GIRO el operario rechazó. Vuelven a empacarse derechas —
+   * en otro paño o en el rollo—, igual que en las tarjetas de rollo.
+   */
+  sinGiro?: ReadonlySet<string>;
+};
 
 export type OTIncluida = { id: string; num: string; cliente: string };
 
@@ -189,6 +216,9 @@ function mxFit(item: Pieza, F: Rect[], allowRot = true): Placed | null {
   let bW = 0;
   let bH = 0;
   let bR = false;
+  // Una pieza marcada `noGira` (vertical, o un giro que el operario rechazó) no
+  // entra a las ramas rotadas por más que la pasada lo permita.
+  const gira = allowRot && !item.noGira;
   for (const fr of F) {
     if (item.w <= fr.w && item.h <= fr.h) {
       const s = Math.min(fr.w - item.w, fr.h - item.h);
@@ -200,7 +230,7 @@ function mxFit(item: Pieza, F: Rect[], allowRot = true): Placed | null {
         bR = false;
       }
     }
-    if (allowRot && item.h <= fr.w && item.w <= fr.h) {
+    if (gira && item.h <= fr.w && item.w <= fr.h) {
       const s = Math.min(fr.w - item.h, fr.h - item.w);
       if (s < bs) {
         bs = s;
@@ -317,6 +347,7 @@ function guillotinaFit(
 ): { fr: Rect; w: number; h: number; rot: boolean } | null {
   let mejor: { fr: Rect; w: number; h: number; rot: boolean } | null = null;
   let mejorSobra = Infinity;
+  const gira = allowRot && !item.noGira;
   for (const fr of F) {
     if (item.w <= fr.w && item.h <= fr.h) {
       const s = Math.min(fr.w - item.w, fr.h - item.h);
@@ -325,7 +356,7 @@ function guillotinaFit(
         mejor = { fr, w: item.w, h: item.h, rot: false };
       }
     }
-    if (allowRot && item.h <= fr.w && item.w <= fr.h) {
+    if (gira && item.h <= fr.w && item.w <= fr.h) {
       const s = Math.min(fr.w - item.h, fr.h - item.w);
       if (s < mejorSobra) {
         mejorSobra = s;
@@ -366,6 +397,27 @@ function guillotinaVariante(
   return placed;
 }
 
+/**
+ * Cuántos paños FÍSICOS baja este acomodo: uno, más una costura por cada
+ * borde de pieza que cruza el rollo de lado a lado sin que otra pieza lo
+ * atraviese. Cada costura es un corte transversal completo — un trozo que se
+ * baja del rollo—, y eso es lo que la mesa cuenta como paño y lo que
+ * producción quiere cortar menos veces.
+ */
+export function bandasDeLayout(placed: readonly Placed[]): number {
+  const puestas = placed.filter((r) => !r.failed);
+  if (puestas.length === 0) return 0;
+  const usedH = puestas.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+  const costuras = new Set<number>();
+  for (const p of puestas) {
+    const y = p.py + p.ph;
+    if (y <= 1e-9 || y >= usedH - 1e-9) continue;
+    if (puestas.some((q) => q.py < y - 1e-9 && q.py + q.ph > y + 1e-9)) continue;
+    costuras.add(Math.round(y * 100) / 100);
+  }
+  return 1 + costuras.size;
+}
+
 // Órdenes de entrada que se prueban. Ninguna gana siempre: con cortinas altas
 // y angostas el orden por ALTO arma bandas limpias, y con piezas parejas el de
 // ÁREA aprovecha mejor los rincones. Probarlas todas y quedarse con la que baja
@@ -391,13 +443,20 @@ export function guillotinaPack(
 ): Placed[] {
   let mejor: Placed[] | null = null;
   let mejorAlto = Infinity;
+  let mejorBandas = Infinity;
   for (const orden of ORDENES_GUILLOTINA) {
     for (const regla of REGLAS_SPLIT) {
       const pl = guillotinaVariante(items, uw, uh, allowRot, orden, regla);
       if (pl.some((r) => r.failed)) continue;
       const alto = pl.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-      if (alto < mejorAlto) {
+      const bandas = bandasDeLayout(pl);
+      // Menos rollo primero; a igual rollo, MENOS PAÑOS. Producción prefiere
+      // bajar menos trozos del rollo (2026-09-03), y este desempate no cuesta
+      // un centímetro de tela: antes, entre dos acomodos del mismo alto, se
+      // quedaba con el primero que apareciera.
+      if (alto < mejorAlto || (alto === mejorAlto && bandas < mejorBandas)) {
         mejorAlto = alto;
+        mejorBandas = bandas;
         mejor = pl;
       }
     }
@@ -408,6 +467,105 @@ export function guillotinaPack(
     mejor ??
     guillotinaVariante(items, uw, uh, allowRot, ORDENES_GUILLOTINA[0], REGLAS_SPLIT[0])
   );
+}
+
+// ── Empaque PARCIAL: acomodar lo que se pueda dentro de un paño ──────
+//
+// Distinto del rollo: el rollo es infinito a lo largo y la pregunta es «¿hasta
+// dónde bajo?». Un paño de colmena tiene las dos medidas fijas, así que la
+// pregunta es «¿cuántas de estas cortinas caben, y qué queda?». Se prueban las
+// mismas heurísticas que en el rollo y gana la que deja el paño mejor
+// aprovechado; las que no entran quedan `failed` y se buscan otro paño.
+
+/** Lo que un paño ofrece para un conjunto de piezas. */
+export type AcomodoPano = {
+  placed: Placed[];
+  /** Cuántas piezas entraron. */
+  n: number;
+  libres: RectLibre[];
+  /** cm² de tela que se pierde (los libres que no sirven para otra cortina). */
+  mermaCm2: number;
+  /** Trozos que vuelven al rack: cada uno es un paño MÁS en la colmena. */
+  sobrantesUtiles: number;
+  /** Área libre total (cm²), para desempatar. */
+  libreCm2: number;
+  /** Puntaje: merma + penalidad por cada paño nuevo. Menos es mejor. */
+  costo: number;
+};
+
+function evaluarAcomodo(
+  placed: Placed[],
+  uw: number,
+  uh: number,
+  params: ParametrosCorte,
+): AcomodoPano {
+  const puestas = placed.filter((p) => !p.failed);
+  const libres = libresClasificados(puestas, uw, uh, params);
+  let mermaCm2 = 0;
+  let libreCm2 = 0;
+  let sobrantesUtiles = 0;
+  for (const r of libres) {
+    const area = r.anchoCm * r.altoCm;
+    libreCm2 += area;
+    if (r.clase === 'sobrante') sobrantesUtiles++;
+    else mermaCm2 += area;
+  }
+  return {
+    placed,
+    n: puestas.length,
+    libres,
+    mermaCm2,
+    sobrantesUtiles,
+    libreCm2,
+    costo: mermaCm2 + sobrantesUtiles * params.colmenaPenalidadNuevoPanoCm2,
+  };
+}
+
+/**
+ * Acomoda dentro de un paño de `uw × uh` todas las piezas que quepan.
+ *
+ * En `guillotina` prueba las mismas 4 órdenes × 2 reglas de partición que el
+ * rollo y se queda con el acomodo de MENOR costo: primero el que mete más
+ * cortinas (un paño que resuelve dos ventanas vale más que uno que resuelve
+ * una), después el de menor puntaje. En `multieje` usa MaxRects, igual que el
+ * rollo con la CNC.
+ */
+export function empacarEnPano(
+  items: Pieza[],
+  uw: number,
+  uh: number,
+  allowRot: boolean,
+  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
+): AcomodoPano {
+  if (params.modoCorte === 'multieje') {
+    return evaluarAcomodo(mxPack(items, uw, uh, allowRot), uw, uh, params);
+  }
+  let mejor: AcomodoPano | null = null;
+  for (const orden of ORDENES_GUILLOTINA) {
+    for (const regla of REGLAS_SPLIT) {
+      const cand = evaluarAcomodo(
+        guillotinaVariante(items, uw, uh, allowRot, orden, regla),
+        uw,
+        uh,
+        params,
+      );
+      if (!mejor) {
+        mejor = cand;
+        continue;
+      }
+      // Más cortinas resueltas manda; a igualdad, el puntaje; después, menos
+      // trozos sueltos y menos tela ociosa.
+      const gana =
+        cand.n > mejor.n ||
+        (cand.n === mejor.n &&
+          (cand.costo < mejor.costo ||
+            (cand.costo === mejor.costo &&
+              (cand.sobrantesUtiles < mejor.sobrantesUtiles ||
+                (cand.sobrantesUtiles === mejor.sobrantesUtiles && cand.libreCm2 < mejor.libreCm2)))));
+      if (gana) mejor = cand;
+    }
+  }
+  return mejor ?? evaluarAcomodo([], uw, uh, params);
 }
 
 // ── Secuencia de cortes ──────────────────────────────────────────────
@@ -545,6 +703,7 @@ export function generarPlanCorte(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   formulas?: FormulasFamilias,
   tipos?: readonly TipoCortina[],
+  opciones?: OpcionesPlan,
 ): Plan {
   const MARGEN = params.margenRolloCm; // margen por lado (default 1 cm)
   const BORDE = params.bordeCm; // limpieza de bordes al ancho (Regla 5, default 4 cm)
@@ -563,17 +722,16 @@ export function generarPlanCorte(
   // sin piezas de origen colmena, ninguno de esos la toca.
   const colmena = params.usarColmenaPanos === false ? [] : colmenaPanos;
 
-  // ── Umbrales de reuso de SOBRANTES (ajustados 2026-06 para igualar el
-  //    corte manual; ver comparación OT ANGELICA) ─────────────────────
-  // Ventana de alto: un sobrante sirve si su alto está dentro de +VENTANA_ALTO
-  // de la pieza. Reglas Rolzzo v1.0: tolerancia máxima +30 cm (alto). En ancho
-  // NO hay tope: se empaquetan varias cortinas en un sobrante ancho (Regla 5).
-  const VENTANA_ALTO = params.ventanaAltoCm;
   // Ancho real que una pieza necesita de un SOBRANTE: al reusar tela ya cortada
   // NO se aplica el margen de corte limpio del rollo (BORDE), basta el ancho
   // nominal de la cortina. Así una cortina de 144 cm entra en un sobrante de
   // 146 (antes 144+4=148 lo rechazaba). El corte del rollo conserva su BORDE.
   const anchoSob = (w: number) => w - BORDE;
+
+  // El giro dentro de un paño se PROPONE y el operario lo autoriza pieza por
+  // pieza, igual que en el rollo. Las verticales quedan fuera por su cuenta
+  // (`Pieza.noGira`), esté el interruptor como esté.
+  const permiteGiroColmena = params.colmenaPermiteGiro !== false;
 
   // ── 1. Armar la lista de piezas desde todas las ventanas ──────────
   const piezas: Pieza[] = [];
@@ -586,6 +744,11 @@ export function generarPlanCorte(
       if (!v.panos || v.panos.length === 0) return;
       const extraCm = extraCmPorTipo(v, params); // Regla 7
       const isDuo = (v.producto || '').toUpperCase().includes('DUO');
+      // La vertical nunca se acuesta: su tela se corta en lamas de 8,9 cm que
+      // van a lo ancho del rollo. Mismo criterio que `esFilaInvertida`.
+      const esVertical =
+        (v.producto || '').toUpperCase().includes('VERTICAL') ||
+        (v.tipo || '').toUpperCase().includes('VERTICAL');
 
       v.panos.forEach((p, pi) => {
         const altoFuente = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
@@ -627,6 +790,7 @@ export function generarPlanCorte(
           otNum,
           w: anchoCm,
           h: altoCm,
+          noGira: esVertical,
         });
       });
     });
@@ -665,105 +829,96 @@ export function generarPlanCorte(
     // (Regla 1 abajo toma la primera del orden). En el best-fit (Regla 2) la
     // antigüedad solo desempata cuando sobra y tipo son idénticos: la decide
     // la optimización (minimizar colmena), no la fecha.
-    const disponiblesOrdenados = colmena
-      .filter((s) => s.cod.toUpperCase().trim() === codInt)
-      .sort(ordenFifo);
+    // Una pieza SIN código (ventana a medio llenar) no puede tomar los paños
+    // que tampoco lo tienen: `colmena_panos.codigo` viene null en varias filas
+    // viejas y '' === '' las hacía calzar con cualquier tela.
+    const disponiblesOrdenados = codInt
+      ? colmena.filter((s) => s.cod.toUpperCase().trim() === codInt).sort(ordenFifo)
+      : [];
 
     const usadosEnPlan = new Set<string>();
 
-    // ── Regla 1: match EXACTO (ancho+alto), una pieza por sobrante ──
-    sinCubrir.forEach((pieza, idx) => {
-      if (!pieza) return;
-      const match = disponiblesOrdenados.find(
-        (s) => !usadosEnPlan.has(s._docId) && s.ancho === pieza.w && s.alto === pieza.h,
-      );
-      if (!match) return;
-      usadosEnPlan.add(match._docId);
-      plan.sobrantes.push({
-        sobrante: match,
-        placed: [{ ...pieza, px: 0, py: 0, pw: pieza.w, ph: pieza.h, rot: false, failed: false }],
-        regla: 1,
-        sobranteAncho: null,
-        uw: match.ancho,
-        uh: match.alto,
-      });
-      sinCubrir[idx] = null;
-    });
-
-    // ── Regla 2 (optimización): empaquetar VARIAS cortinas por sobrante,
-    //    minimizando la cantidad de sobrantes que quedan en la colmena ──
+    // ── Colmena: cada paño se aprovecha EN DOS DIMENSIONES ─────────────
     //
-    // Regla #1 del negocio: optimizar al máximo para que la colmena se achique
-    // cada vez más. En cada ronda se evalúan TODOS los sobrantes disponibles y
-    // se elige el que queda MÁS LLENO (menor sobra), acomodando lado a lado las
-    // cortinas que quepan. Esto da, a la vez:
-    //   · best-fit para piezas sueltas (una cortina chica usa el sobrante más
-    //     justo, no el más grande → no malgasta sobrantes grandes), y
-    //   · consolidación de grupos (dos cortinas chicas caen en un mismo
-    //     sobrante en vez de gastar dos), dejando intactos los que no hacen
-    //     falta. Sin FIFO: la antigüedad ya no influye.
-    const ajusteSobrante = (sob: PanoColmena) => {
-      const idxs: number[] = [];
-      let usado = 0;
-      const cand = sinCubrir
-        .map((p, i) => ({ p, i }))
-        .filter(
-          (c): c is { p: Pieza; i: number } =>
-            c.p !== null && c.p.h <= sob.alto && sob.alto <= c.p.h + VENTANA_ALTO,
-        )
-        .sort((a, b) => b.p.w - a.p.w); // mayor a menor ancho
-      for (const { p, i } of cand) {
-        const w = anchoSob(p.w); // ancho real de tela al reusar el sobrante
-        if (w <= sob.ancho - usado) {
-          idxs.push(i);
-          usado += w;
-        }
-      }
-      return { idxs, usado, sobra: sob.ancho - usado };
-    };
-
+    // Antes había dos reglas separadas: un match exacto (que casi nunca
+    // disparaba, porque el ancho de la pieza traía el BORDE del rollo) y un
+    // ajuste que ponía las cortinas en UNA fila, rechazaba todo paño más alto
+    // que la cortina + 30 cm y elegía por ancho sobrante. Resultado: dos
+    // cortinas de 2,90×0,95 no entraban en un paño de 300×250 —donde caben
+    // apiladas de sobra— y una cortina que solo entraba girada se iba al rollo.
+    //
+    // Ahora, en cada ronda, se prueba el conjunto pendiente contra TODOS los
+    // paños libres del código y gana el de menor `costo`:
+    //
+    //     costo = merma (cm²) + n.º de trozos que vuelven al rack × penalidad
+    //
+    // La penalidad (`colmenaPenalidadNuevoPanoCm2`, ≈ un paño mínimo de roller)
+    // es la regla n.º 1 del dueño puesta en números: entre gastar el paño JUSTO
+    // y partir uno GRANDE dejando otro paño en el rack, gana el justo aunque
+    // deje más merma. Un calce exacto cuesta 0 y gana solo, así que la vieja
+    // Regla 1 sale gratis; entre dos paños empatados sigue mandando el FIFO.
     for (;;) {
-      // El sobrante que queda más lleno; desempate por tipo (Regla 3).
-      let mejor: { sob: PanoColmena; idxs: number[]; usado: number; sobra: number } | null = null;
+      const pendientes = sinCubrir
+        .map((p, i) => ({ p, i }))
+        .filter((c): c is { p: Pieza; i: number } => c.p !== null);
+      if (pendientes.length === 0) break;
+
+      // Piezas tal como se cortan de un paño: al reusar tela ya cortada NO se
+      // aplica la limpieza de bordes del rollo (basta el ancho nominal), y una
+      // pieza cuyo giro el operario rechazó vuelve a entrar como `noGira`.
+      const items = pendientes.map(({ p }) => ({
+        ...p,
+        w: Math.max(1, anchoSob(p.w)),
+        noGira: p.noGira || opciones?.sinGiro?.has(p.id) === true,
+      }));
+
+      let mejor: { sob: PanoColmena; acomodo: AcomodoPano } | null = null;
       for (const sob of disponiblesOrdenados) {
         if (usadosEnPlan.has(sob._docId)) continue;
-        const fit = ajusteSobrante(sob);
-        if (fit.idxs.length === 0) continue;
-        if (
-          !mejor ||
-          fit.sobra < mejor.sobra ||
-          (fit.sobra === mejor.sobra && tipoPrio(sob.tipo) < tipoPrio(mejor.sob.tipo))
-        ) {
-          mejor = { sob, ...fit };
+        if (!(sob.ancho > 0) || !(sob.alto > 0)) continue;
+        const acomodo = empacarEnPano(items, sob.ancho, sob.alto, permiteGiroColmena, params);
+        if (acomodo.n === 0) continue;
+        if (!mejor) {
+          mejor = { sob, acomodo };
+          continue;
         }
+        const a = acomodo;
+        const b = mejor.acomodo;
+        // Menor puntaje; después menos trozos sueltos, menos tela ociosa y —ya
+        // empatado todo— el paño más antiguo (`disponiblesOrdenados` viene en
+        // orden FIFO, así que basta con NO reemplazar en el empate).
+        const gana =
+          a.costo < b.costo ||
+          (a.costo === b.costo &&
+            (a.sobrantesUtiles < b.sobrantesUtiles ||
+              (a.sobrantesUtiles === b.sobrantesUtiles &&
+                (a.libreCm2 < b.libreCm2 ||
+                  (a.libreCm2 === b.libreCm2 && tipoPrio(sob.tipo) < tipoPrio(mejor.sob.tipo))))));
+        if (gana) mejor = { sob, acomodo };
       }
       if (!mejor) break;
 
       usadosEnPlan.add(mejor.sob._docId);
-      let px = 0;
-      const placed: Placed[] = [];
-      for (const i of mejor.idxs) {
-        const p = sinCubrir[i] as Pieza;
-        const w = anchoSob(p.w);
-        placed.push({ ...p, px, py: 0, pw: w, ph: p.h, rot: false, failed: false });
-        px += w;
-        sinCubrir[i] = null;
+      const puestas = mejor.acomodo.placed.filter((pz) => !pz.failed);
+      for (const pz of puestas) {
+        const idx = pendientes.find((c) => c.p.id === pz.id)?.i;
+        if (idx !== undefined) sinCubrir[idx] = null;
       }
-      // El remanente de ancho solo se registra como colmena si cumple el
-      // mínimo 120×180 (Reglas Rolzzo). Por debajo es merma (Fase 4 la registra).
-      const anchoExceso = Math.round(mejor.sobra);
-      const altoRemanente = Math.round(mejor.sob.alto);
-      const sobranteAncho = esColmena(anchoExceso, altoRemanente, params)
-        ? { cod: codInt, ancho: anchoExceso, alto: altoRemanente }
-        : null;
+      const piezasRotadas = puestas.filter((pz) => pz.rot);
 
       plan.sobrantes.push({
         sobrante: mejor.sob,
-        placed,
-        regla: 2,
-        sobranteAncho,
+        placed: puestas,
+        // El paño se usó ENTERO cuando no queda NADA que anotar (ni merma ni
+        // trozo para el rack): es el calce exacto de siempre.
+        regla: mejor.acomodo.libres.length === 0 ? 1 : 2,
         uw: mejor.sob.ancho,
         uh: mejor.sob.alto,
+        libres: mejor.acomodo.libres,
+        cortes: secuenciaCortes(puestas, mejor.sob.ancho, mejor.sob.alto),
+        tieneRotaciones: piezasRotadas.length > 0,
+        piezasRotadas,
+        costo: mejor.acomodo.costo,
       });
     }
 
@@ -771,7 +926,13 @@ export function generarPlanCorte(
 
     // ── 4. Piezas que no matchearon → packing desde rollo ────────
     if (restantes.length) {
-      const piezasOrd = porAltura(restantes);
+      // Un giro que el operario ya rechazó no se vuelve a proponer, ni acá ni
+      // en la colmena: la pieza entra derecha o no entra.
+      const piezasOrd = porAltura(
+        opciones?.sinGiro?.size
+          ? restantes.map((p) => (opciones.sinGiro!.has(p.id) ? { ...p, noGira: true } : p))
+          : restantes,
+      );
       const maxH = piezasOrd.reduce((s, p) => s + Math.max(p.w, p.h), 0) + 50;
       const minH = Math.max(...piezasOrd.map((p) => Math.min(p.w, p.h)));
 

@@ -86,11 +86,13 @@ export function flujoDeProducto(
   const { precio, arquetipo, motivo } = precioMlPorCod(cod, catalogo, reglas);
   const origenPrecio: OrigenPrecio =
     motivo === 'base' ? 'baseVertical' : motivo === 'arquetipo' ? 'arquetipo' : motivo === 'maximo' ? 'maxFamilia' : 'sinPrecio';
-  // Con el precio ya resuelto por el máximo, la referencia declarada que no se
-  // usó es justamente la que está rota.
+  // Rota es la referencia que NO SE PUEDE usar: la que apunta a una tela que
+  // ya no está en el catálogo o que quedó en $0. Que el precio lo haya fijado
+  // otra tela no la rompe —desde que la referencia es un piso, una tela más
+  // cara la supera con toda legitimidad—.
   const declarada = (reglas.baseVertical[cod] || reglas.arquetipos[cod] || '').trim();
   const referenciaDeclaradaRota =
-    declarada && arquetipo !== declarada ? declarada : '';
+    declarada && !(Number(catalogo[declarada]?.precio) > 0) ? declarada : '';
 
   const clave = entra === 'cortina' ? claveReceta(cod, esVertical, reglas.recetas) : null;
 
@@ -184,12 +186,11 @@ export function avisosCatalogo(
     }
 
     if (f.origenPrecio === 'maxFamilia' || f.origenPrecio === 'sinPrecio') {
-      const declarada = reglas.arquetipos[f.cod];
-      if (declarada) {
-        // Hay tela de referencia declarada, pero el catálogo no la tiene (o vale 0)
-        // y por eso cayó al máximo.
-        referenciasRotas.push({ cod: f.cod, codInt: declarada, mandaAhora: f.telaReferencia });
-      } else {
+      // Acá se llega con la referencia SANA (la rota ya salió arriba con su
+      // `continue`): o la familia no declara ninguna, o la declarada quedó
+      // superada por una tela más cara, que es el comportamiento correcto y no
+      // hay nada que avisar.
+      if (!reglas.arquetipos[f.cod] && !reglas.baseVertical[f.cod]) {
         const telas = Object.values(catalogo).filter(
           (q) => q && (q.cod || '') === f.cod && esCortinaTipo(q.tipo),
         ).length;

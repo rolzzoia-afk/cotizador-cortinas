@@ -10,7 +10,8 @@ import { Button } from '@/components/ui/button';
 import { confirmar } from '@/components/ui/confirm';
 import type { OT } from '@/modules/ots/types';
 import { calcularAvance } from '@/modules/produccion/avance';
-import { useChecks, useHojaCorte } from '@/modules/produccion/hooks';
+import { useChecks, useHojaCorte, useOTsDelLote } from '@/modules/produccion/hooks';
+import type { LoteProduccion } from '@/modules/produccion/lotes';
 import { clavesDePano, clavesDeSeccion } from '@/modules/produccion/panos';
 import BotonEmergencia from '../components/BotonEmergencia';
 import HojaCortePanos from '../components/HojaCortePanos';
@@ -18,13 +19,23 @@ import HojaCortePanos from '../components/HojaCortePanos';
 export default function VistaPanos({
   ot,
   otCargada,
+  lote,
   onAreaCerrada,
 }: {
   ot: string;
   otCargada: OT | null;
+  /** El lote que se está trabajando: su tela se corta junta, con un solo plan. */
+  lote?: LoteProduccion | null;
   onAreaCerrada: () => Promise<void>;
 }) {
-  const { rows, hoja, principal, vertical, nombreDeTela, loading, error } = useHojaCorte(otCargada);
+  // Dentro de un lote el plan se arma con TODAS sus OTs: si no, esta pantalla
+  // podría asignarle un paño del rack que otra orden del lote ya se llevó.
+  const idsLote = useMemo(() => (lote ? lote.ots.map((o) => o.id) : []), [lote]);
+  const { ots: otsLote } = useOTsDelLote(idsLote);
+  const { rows, hoja, principal, vertical, nombreDeTela, loading, error } = useHojaCorte(
+    otCargada,
+    { otsDelPlan: otsLote },
+  );
   const { hechas, quien, areaLista, marcar, marcarAreaLista } = useChecks('panos', ot);
   const [cerrando, setCerrando] = useState(false);
 

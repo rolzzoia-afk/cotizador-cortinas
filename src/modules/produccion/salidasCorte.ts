@@ -21,48 +21,29 @@
 // confirmación del módulo Producción.
 // ─────────────────────────────────────────────────────────────────────
 import type { GrupoRollo, Plan } from '@/modules/cotizador/planCorte';
+import type { DeduccionColmena, PiezaColmenaSnap } from '@/modules/cotizador/colmenaCorte';
 import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from '@/modules/cotizador/parametrosCorte';
+// La geometría de los libres vive en `cotizador/libresPano.ts`: la usa también
+// el MOTOR del plan para puntuar los paños de colmena, y el motor no puede
+// depender de este módulo. Se reexporta para no mover a nadie de lugar.
+import {
+  funcionalDeSobrante,
+  MIN_REGISTRO_CM,
+  sirveParaAlgo,
+  type FuncionalSobrante,
+} from '@/modules/cotizador/libresPano';
 
-/** Para qué alcanza un trozo de tela. */
-export type FuncionalSobrante = { roller: boolean; vertical: boolean };
-
-/**
- * Bajo esta medida un rectángulo no es manipulable: ni sobrante ni merma, es
- * recorte de mesa. Anotarlo solo ensuciaría el registro de pérdidas.
- */
-export const MIN_REGISTRO_CM = 10;
-
-/**
- * ¿Para qué sirve este trozo? La app lo propone por medidas y el operario lo
- * corrige en el diálogo antes de imprimir la etiqueta: la tela tiene defectos
- * y direcciones que ninguna medida captura.
- */
-export function funcionalDeSobrante(
-  anchoCm: number,
-  altoCm: number,
-  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
-): FuncionalSobrante {
-  return {
-    roller: anchoCm >= params.funcionalRollerMinAnchoCm && altoCm >= params.funcionalRollerMinAltoCm,
-    vertical:
-      anchoCm >= params.funcionalVerticalMinAnchoCm && altoCm >= params.funcionalVerticalMinAltoCm,
-  };
-}
-
-/** ¿Vale la pena guardarlo? Sirve si alcanza para algo; si no, es merma. */
-export function esUtilizableProduccion(
-  anchoCm: number,
-  altoCm: number,
-  params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
-): boolean {
-  const f = funcionalDeSobrante(anchoCm, altoCm, params);
-  return f.roller || f.vertical;
-}
-
-/** ¿Alguno de los dos usos quedó marcado? (el operario puede desmarcar todo). */
-export function sirveParaAlgo(f: FuncionalSobrante): boolean {
-  return f.roller || f.vertical;
-}
+export {
+  esUtilizableProduccion,
+  funcionalDeSobrante,
+  libresClasificados,
+  MIN_REGISTRO_CM,
+  rectangulosLibres,
+  resumenLibres,
+  sirveParaAlgo,
+  type FuncionalSobrante,
+  type RectLibre,
+} from '@/modules/cotizador/libresPano';
 
 // ── De dónde salió el corte ──────────────────────────────────────────
 
@@ -83,6 +64,15 @@ export function rotuloOrigen(o: OrigenCorte): string {
 
 // ── Qué queda del rollo ──────────────────────────────────────────────
 
+/** De qué paño de colmena salió un trozo (cuando no vino del rollo). */
+export type OrigenColmenaSalida = {
+  docId: string;
+  ubicacion: string;
+  cod: string;
+  ancho: number;
+  alto: number;
+};
+
 /** Un rectángulo que quedó del corte, ya clasificado. */
 export type SalidaCorte = {
   codInt: string;
@@ -91,9 +81,14 @@ export type SalidaCorte = {
   /** cm */
   alto: number;
   clase: 'sobrante' | 'merma';
-  /** Dónde estaba en el paño: la tira del costado o la faja de abajo. */
-  detalle: 'franja_rollo' | 'resto_rollo';
+  /**
+   * De dónde salió: la tira del costado del rollo, la faja de abajo, o lo que
+   * quedó de un paño de COLMENA que se cortó (`resto_colmena`).
+   */
+  detalle: 'franja_rollo' | 'resto_rollo' | 'resto_colmena';
   funcional: FuncionalSobrante;
+  /** Solo en `resto_colmena`: el paño del rack del que se sacó. */
+  colmenaOrigen?: OrigenColmenaSalida;
 };
 
 const clasificar = (
@@ -220,6 +215,8 @@ export type DatosExtraSobrante = {
   serial: string;
   funcional: FuncionalSobrante;
   origen_detalle: SalidaCorte['detalle'];
+  /** Si nació de cortar otro paño del rack: cuál era. */
+  colmena_origen_id?: string;
   lote?: string;
   ots_lote?: { id: string; numero: string }[];
 };
@@ -261,6 +258,7 @@ export function filasColmenaDeCorte(
       serial: f.serial,
       funcional: f.funcional,
       origen_detalle: f.detalle,
+      ...(f.colmenaOrigen ? { colmena_origen_id: f.colmenaOrigen.docId } : {}),
       ...(origen.tipo === 'lote' ? { lote: origen.nombre, ots_lote: origen.ots } : {}),
     },
   }));
@@ -280,7 +278,9 @@ export type FilaMermaCorte = {
 /**
  * Las filas de `telas_mermas`: la tela que se perdió en este corte. Estrena el
  * motivo `sobrante_rollo`, que estaba documentado desde el SQL de mermas y
- * nunca se había escrito porque nadie registraba el rollo nuevo.
+ * nunca se había escrito porque nadie registraba el rollo nuevo. Lo que se
+ * pierde al cortar un paño del rack va con el motivo `sobrante_colmena` y
+ * apuntando al paño de origen, que es lo que da la trazabilidad.
  */
 export function filasMermasDeCorte(
   salidas: SalidaCorte[],
@@ -296,9 +296,9 @@ export function filasMermasDeCorte(
       codigo: s.codInt,
       medida_ancho: s.ancho,
       medida_alto: s.alto,
-      motivo: 'sobrante_rollo',
+      motivo: s.colmenaOrigen ? 'sobrante_colmena' : 'sobrante_rollo',
       ot_origen,
-      colmena_origen_id: null,
+      colmena_origen_id: s.colmenaOrigen?.docId ?? null,
       fecha: nowISO,
     }));
 }
@@ -306,8 +306,8 @@ export function filasMermasDeCorte(
 /** Lo que se estampa en cada OT del plan: guard de idempotencia + rastro. */
 export type StampCorteProduccion = {
   confirmadoEn: string;
-  panos: never[];
-  piezas: Record<string, never>;
+  panos: DeduccionColmena[];
+  piezas: Record<string, PiezaColmenaSnap>;
   fuente: 'produccion';
   lote?: string;
   salidas: { seriales: string[]; mermas: number };
@@ -315,19 +315,24 @@ export type StampCorteProduccion = {
 
 /**
  * El sello que apaga el badge «Tela sin cortar» de la cola y bloquea una
- * segunda confirmación. `panos` va vacío a propósito: con la colmena apagada
- * este corte no descuenta nada, solo registra lo que salió.
+ * segunda confirmación.
+ *
+ * `panos` y `piezas` son los paños de colmena que este corte consumió y de
+ * dónde salió cada cortina. En un LOTE, `piezas` viene filtrado por OT: cada
+ * orden sella lo suyo (`costoOT` cuenta los paños de colmena por orden).
  */
 export function stampCorteProduccion(
   origen: OrigenCorte,
   nowISO: string,
   seriales: string[],
   nMermas: number,
+  panos: DeduccionColmena[] = [],
+  piezas: Record<string, PiezaColmenaSnap> = {},
 ): StampCorteProduccion {
   return {
     confirmadoEn: nowISO,
-    panos: [],
-    piezas: {},
+    panos,
+    piezas,
     fuente: 'produccion',
     ...(origen.tipo === 'lote' ? { lote: origen.nombre } : {}),
     salidas: { seriales, mermas: nMermas },
