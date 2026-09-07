@@ -52,9 +52,11 @@ import { SELLO_CUOTAS, SELLO_TARJETAS } from './logoRolzzo';
 import { FILAS_TOTALES } from './filasTotales';
 import { formatCLP } from './calculos';
 import { calcularTotales } from './preciosFase0';
+import { jsPDF } from 'jspdf';
 import {
   ALTO_MAX_TIRA,
   ANCHO_COLUMNAS,
+  ANCHO_TOTALES,
   ANCHO_UTIL,
   descuentoPesos,
   fmtMedida3,
@@ -271,6 +273,24 @@ describe('generarPdfCotizacion', () => {
     expect(impreso().toLowerCase()).not.toContain('incluyen iva');
     // El abono inicial sigue fuera del documento del cliente.
     expect(impreso().toUpperCase()).not.toContain('ABONO');
+  });
+
+  it('cada rótulo de total cabe junto a su monto en el recuadro (no se monta encima)', () => {
+    // El rótulo y el monto comparten celda: el rótulo se achica hasta caber en
+    // el recuadro ENTERO, así que uno largo no se trunca —se dibuja debajo del
+    // monto—. «Subtotal pago transferencia» es el más largo (dueño, 2026-09-07:
+    // la palabra va completa). Los cuerpos son los de `secTotales`.
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const totales = calcularTotales(1158638);
+    for (const f of FILAS_TOTALES) {
+      doc.setFont('helvetica', f.fuerte ? 'bold' : 'normal');
+      doc.setFontSize(f.fuerte ? 7.6 : 6.4);
+      const wRotulo = doc.getTextWidth(f.label(totales));
+      doc.setFontSize(f.fuerte ? 8.6 : 7);
+      const wMonto = doc.getTextWidth(formatCLP(f.valor(totales)));
+      // 2 mm de margen interno + 1,6 de aire entre los dos textos.
+      expect(wRotulo + wMonto, f.id).toBeLessThan(ANCHO_TOTALES - 3.6);
+    }
   });
 
   it('sin folio se genera igual y el archivo toma el nombre del cliente', () => {

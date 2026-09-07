@@ -11,9 +11,13 @@
 //     SUBTOTAL PAGO TARJETA D.C   →  subtotalTarjeta  (neto × 1,138)
 //     IVA 19%                     →  ivaTarjeta
 //     TOT. TARJETA DE CRÉDITO     →  totalTarjeta
-//     SUBTOTAL PAGO TRANSF.       →  subtotalNeto
+//     SUBTOTAL PAGO TRANSFERENCIA →  subtotalNeto
 //     IVA 19%                     →  ivaTransferencia
-//     TOTAL PAGO TRANSF.          →  totalTransferencia
+//     TOTAL PAGO TRANSFERENCIA    →  totalTransferencia
+//
+// La palabra va ENTERA (dueño, 2026-09-07): abreviada —«transf.»— se leía
+// cortada. `pdfCotizacion.test.ts` verifica que el rótulo y su monto siguen
+// cabiendo juntos en los 72 mm del recuadro.
 //
 // El orden es el del Excel: primero la tarjeta, después la transferencia. Con
 // el IVA desglosado la nota «Todos los precios incluyen IVA» sobra —lo dice el
@@ -75,7 +79,7 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
   },
   {
     id: 'transferenciaSubtotal',
-    label: () => 'Subtotal pago transf.',
+    label: () => 'Subtotal pago transferencia',
     valor: (t) => t.subtotalNeto,
     separadorAntes: true,
   },
@@ -86,7 +90,7 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
   },
   {
     id: 'transferencia',
-    label: () => 'Total pago transf.',
+    label: () => 'Total pago transferencia',
     valor: (t) => t.totalTransferencia,
     fuerte: true,
     tono: 'oscuro',

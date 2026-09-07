@@ -762,9 +762,17 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
   return y + 2;
 }
 
+/**
+ * Ancho del recuadro de totales (mm). El rótulo y el monto se dibujan en la
+ * MISMA celda —uno a la izquierda y el otro a la derecha—, así que los dos
+ * juntos tienen que caber acá: un rótulo largo no se trunca, se monta encima
+ * del monto. Hay un test que lo vigila.
+ */
+export const ANCHO_TOTALES = 72;
+
 /** El recuadro de totales. Devuelve la y a la que llega. */
 function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
-  const w = 72;
+  const w = ANCHO_TOTALES;
   const x = MG + ANCHO_TABLA - w;
   let yy = y;
   // La leyenda de las cuotas, pegada al total con tarjeta como el rótulo rojo
