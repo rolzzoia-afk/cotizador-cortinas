@@ -34,6 +34,12 @@ export type FilaTotalDoc = {
   valor: (t: TotalesCotizacion) => number;
   /** Se dibuja destacada: es uno de los dos montos que el cliente paga. */
   fuerte?: boolean;
+  /**
+   * Con qué color se pinta la banda de una fila `fuerte` (dueño, 2026-09-07):
+   * la tarjeta en rojo claro y la transferencia en negro, para que se
+   * distingan de un vistazo. Sin tono, negro.
+   */
+  tono?: 'oscuro' | 'rojo';
   /** Línea divisoria arriba de la fila (separa los dos bloques de pago). */
   separadorAntes?: boolean;
   /** Debajo de esta fila va la leyenda de cuotas: es el monto que la explica.
@@ -64,6 +70,7 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
     label: () => 'Tot. tarjeta de crédito',
     valor: (t) => t.totalTarjeta,
     fuerte: true,
+    tono: 'rojo',
     llevaLeyendaCuotas: true,
   },
   {
@@ -82,5 +89,6 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
     label: () => 'Total pago transf.',
     valor: (t) => t.totalTransferencia,
     fuerte: true,
+    tono: 'oscuro',
   },
 ];

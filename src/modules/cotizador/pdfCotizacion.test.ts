@@ -58,6 +58,7 @@ import {
   ANCHO_UTIL,
   descuentoPesos,
   fmtMedida3,
+  medidasContain,
   generarPdfCotizacion,
   medidasTira,
   nombreArchivoPdf,
@@ -325,6 +326,43 @@ describe('generarPdfCotizacion', () => {
   it('sin validez propia manda la de la empresa', () => {
     generarPdfCotizacion(entradaDemo());
     expect(impreso()).toContain('VÁLIDO POR 5 DIAS');
+  });
+
+  // La imagen del admin en la banda de validez (cyberday y parecidos).
+  describe('imagen en la banda de validez', () => {
+    // Un JPEG de verdad: jsPDF lo decodifica y la banda se dibuja. Con un
+    // dataURL falso `addImage` lanza y el PDF cae al texto, que es justo el
+    // respaldo que se quiere (pero no lo que este caso prueba).
+    const IMG = TIRA_PROPIA;
+
+    it('reemplaza la banda roja y su texto', () => {
+      generarPdfCotizacion(entradaDemo({ validezImagenDataUrl: IMG }));
+      expect(imagenes).toContain(IMG);
+      expect(impreso()).not.toContain('VÁLIDO POR 5 DIAS');
+    });
+
+    it('la validez escrita en la cotización le gana a la imagen', () => {
+      generarPdfCotizacion(
+        entradaDemo({ validezImagenDataUrl: IMG, validezTitulo: 'CYBER 3 DÍAS' }),
+      );
+      expect(impreso()).toContain('CYBER 3 DÍAS');
+      expect(imagenes).not.toContain(IMG);
+    });
+  });
+
+  describe('medidasContain', () => {
+    it('mete la imagen entera en el recuadro, centrada y sin deformar', () => {
+      // Bien apaisada: ocupa todo el ancho y se centra a lo alto.
+      expect(medidasContain(10, 60, 12)).toEqual({ x: 0, y: 3, ancho: 60, alto: 6 });
+      // Menos apaisada que el recuadro: manda el alto y se centra a lo ancho.
+      expect(medidasContain(4, 60, 12)).toEqual({ x: 6, y: 0, ancho: 48, alto: 12 });
+      const alta = medidasContain(1, 60, 12);
+      expect(alta.alto).toBe(12);
+      expect(alta.ancho).toBe(12);
+      expect(alta.x).toBe(24);
+      // Ratio inválido: se estira al recuadro entero en vez de reventar.
+      expect(medidasContain(0, 60, 12)).toEqual({ x: 0, y: 0, ancho: 60, alto: 12 });
+    });
   });
 
   it('el recuadro de los datos bancarios se puede tocar para copiarlos', () => {

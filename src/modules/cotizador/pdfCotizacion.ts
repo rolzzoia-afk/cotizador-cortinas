@@ -133,7 +133,32 @@ export type EntradaPdfCotizacion = {
    * leer una URL remota). null = la tira de fábrica.
    */
   tiraProyectosDataUrl?: string | null;
+  /**
+   * La imagen que reemplaza la banda roja de validez (cyberday y parecidos),
+   * ya bajada a dataURL. null = el texto de siempre. Una cotización que
+   * escribe su propio `validezTitulo` gana igual: lo puntual manda.
+   */
+  validezImagenDataUrl?: string | null;
 };
+
+/**
+ * Una imagen METIDA dentro de un rectángulo sin deformarla ni salirse: la más
+ * grande que quepa, centrada. `ratio` es ancho ÷ alto.
+ */
+export function medidasContain(
+  ratio: number,
+  wMax: number,
+  hMax: number,
+): { x: number; y: number; ancho: number; alto: number } {
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : wMax / hMax;
+  let ancho = wMax;
+  let alto = ancho / r;
+  if (alto > hMax) {
+    alto = hMax;
+    ancho = alto * r;
+  }
+  return { x: (wMax - ancho) / 2, y: (hMax - alto) / 2, ancho, alto };
+}
 
 // ── Helpers puros (testeables sin dibujar) ───────────────────────────
 
@@ -609,7 +634,20 @@ function secGrillaCliente(doc: jsPDF, e: EntradaPdfCotizacion, y: number): numbe
   }
   // La validez puede cambiar por cotización (un descuento a plazo corto va en
   // amarillo, como en la planilla); si no se dice nada, la de la empresa.
-  const validezTitulo = (e.validezTitulo ?? '').trim() || e.empresa.validez.titulo;
+  const propio = (e.validezTitulo ?? '').trim();
+  const validezTitulo = propio || e.empresa.validez.titulo;
+  // La imagen del admin (cyberday y parecidos) reemplaza la banda entera, pero
+  // solo cuando la cotización no escribió su propio texto: lo puntual manda.
+  const imagen = !propio ? (e.validezImagenDataUrl ?? '') : '';
+  if (imagen) {
+    const m = medidasContain(e.empresa.validez.imagenRatio, wDer, h * 2);
+    try {
+      doc.addImage(imagen, formatoImagen(imagen), xDer + m.x, y + h * 3 + m.y, m.ancho, m.alto);
+      return y + h * 5 + 1.5;
+    } catch {
+      // Una imagen ilegible no puede tumbar la cotización: sigue el texto.
+    }
+  }
   const enAmarillo = !!e.validezAmarilla;
   set(doc, 'fill', enAmarillo ? AMARILLO : ROJO);
   doc.rect(xDer, y + h * 3, wDer, h * 2, 'F');
@@ -743,11 +781,15 @@ function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
       doc.setLineWidth(0.2);
       doc.line(x, yy, x + w, yy);
     }
+    // La tarjeta va en rojo claro y la transferencia en negro (dueño,
+    // 2026-09-07): son los dos montos que el cliente compara, y con la misma
+    // banda había que leer el rótulo para distinguirlos.
+    const enRojo = f.tono === 'rojo';
     if (f.fuerte) {
-      set(doc, 'fill', NEGRO);
+      set(doc, 'fill', enRojo ? ROJO_SUAVE : NEGRO);
       doc.rect(x, yy, w, hf, 'F');
     }
-    const color = f.fuerte ? BLANCO : TEXTO;
+    const color = f.fuerte ? (enRojo ? ROJO : BLANCO) : TEXTO;
     celda(doc, f.label(e.totales), x + 1, w - 2, yy, hf, {
       bold: f.fuerte,
       size: f.fuerte ? 7.6 : 6.4,

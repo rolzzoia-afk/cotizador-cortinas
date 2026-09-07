@@ -372,6 +372,7 @@ function MaquetaTotales() {
             label={f.label(TOTALES_EJEMPLO)}
             valor={formatCLP(f.valor(TOTALES_EJEMPLO))}
             fuerte={f.fuerte}
+            tono={f.tono}
           />
         </div>
       ))}

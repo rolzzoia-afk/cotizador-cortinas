@@ -93,6 +93,7 @@ export function DatosEmpresaSection() {
   const [saving, setSaving] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const [subiendoTira, setSubiendoTira] = useState(false);
+  const [subiendoValidez, setSubiendoValidez] = useState(false);
   const [dirty, setDirty] = useState(false);
 
   useEffect(() => {
@@ -151,6 +152,24 @@ export function DatosEmpresaSection() {
       toast.error('No se pudo subir la tira: ' + (e instanceof Error ? e.message : String(e)));
     } finally {
       setSubiendoTira(false);
+    }
+  };
+
+  /** La imagen de la banda de validez: mismo tratamiento que la tira, más
+   *  chica (el recuadro mide ~62 mm de ancho). */
+  const subirValidez = async (file: File) => {
+    if (!empresaId) return;
+    setSubiendoValidez(true);
+    try {
+      const { prepararImagenTira } = await import('@/modules/cotizador/imagenTira');
+      const { archivo, ratio } = await prepararImagenTira(file, { maxAncho: 600 });
+      const url = await subirImagenDoc(empresaId, archivo);
+      setSeccion('validez', { imagenUrl: url, imagenRatio: ratio });
+      toast.success('Imagen cargada. Presiona Guardar para aplicarla.');
+    } catch (e) {
+      toast.error('No se pudo subir la imagen: ' + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setSubiendoValidez(false);
     }
   };
 
@@ -413,6 +432,54 @@ export function DatosEmpresaSection() {
                 value={draft.validez.detalle}
                 onChange={(v) => setSeccion('validez', { detalle: v })}
               />
+              {/* La banda roja se puede reemplazar por una imagen: es donde el
+                  dueño quiere poner las condiciones de un cyberday. */}
+              <div className="sm:col-span-2">
+                <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted-foreground">
+                  Imagen en la banda de validez
+                </span>
+                <div className="flex flex-wrap items-center gap-3">
+                  {draft.validez.imagenUrl ? (
+                    <img
+                      src={draft.validez.imagenUrl}
+                      alt="Banda de validez"
+                      className="h-10 w-auto max-w-full rounded border bg-white p-1"
+                    />
+                  ) : (
+                    <span className="text-[11px] italic text-muted-foreground">
+                      Sin imagen: se imprime la banda roja con el texto de arriba.
+                    </span>
+                  )}
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-xs hover:bg-secondary">
+                    <Upload className="h-3.5 w-3.5" />
+                    {subiendoValidez ? 'Subiendo…' : 'Subir imagen'}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) subirValidez(f);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  {draft.validez.imagenUrl && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSeccion('validez', { imagenUrl: '', imagenRatio: 0 })}
+                    >
+                      Quitar imagen
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[0.7rem] text-muted-foreground">
+                  Reemplaza la banda roja en el PDF de TODAS las cotizaciones. El recuadro mide unos
+                  62 × 12 mm, así que conviene una imagen apaisada y con poco texto. Si una
+                  cotización escribe su propio texto de validez, gana el texto.
+                </p>
+              </div>
               <Campo
                 label="Contacto (celda de la cabecera)"
                 value={draft.contacto.texto}
