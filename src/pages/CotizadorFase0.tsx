@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Copy, FileDown, Link2, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, FileDown, GripVertical, Link2, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/auth';
 import { esRolAdmin } from '@/lib/roles';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
 import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
+import { moverBloqueDeVentana, moverPorId } from '@/modules/cotizador/moverPorId';
 import {
   DIAMETROS_INVERTIDA,
   rotuloTuboInvertida,
@@ -211,6 +212,9 @@ const CAMPOS_NIVEL_VENTANA: (keyof FilaUI)[] = [
   'codInt', 'categoria', 'direccion', 'sentido', 'oscuridadVariante',
   'cantidad', 'ubicacion',
 ];
+/** Id ficticio de la zona «al final de la lista» al arrastrar. */
+const FIN_LISTA = '__fin__';
+
 const nuevaFila = (): FilaUI => ({
   id: crypto.randomUUID(),
   codInt: '',
@@ -285,9 +289,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // TIPO, DESCRIPCIÓN, INVERTIDA, CATEGORÍA, CADENA, UBIC., COLOR ACC (14 de
   // «Información del producto») + ANCHO, ALTO + M², VAL.UNIT., DCT %, TOTAL +
   // la del botón = 21. En Fase 1 son 3 menos.
+  // +1 por la columna del asa de arrastre, que va al principio en los dos modos.
   const showCols = modo === 'fase3';
-  const colSpanTotal = showCols ? 21 : 18;
-  const colSpanInfo = showCols ? 14 : 11;
+  const colSpanTotal = (showCols ? 21 : 18) + 1;
+  const colSpanInfo = (showCols ? 14 : 11) + 1;
   const { ot: otCargada, guardarCompleto } = useOT(editOtId);
   const { empresaId, perfil } = useAuth();
   // Los precios del catálogo se editan en Admin → Precios. Acá se ven y se
@@ -355,6 +360,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [desgloseCod, setDesgloseCod] = useState<string | null>(null);
   /** Fila con el menú «invertir con tubo de…» abierto (null = ninguno). */
   const [menuTubo, setMenuTubo] = useState<string | null>(null);
+  // Arrastrar para reordenar. Cortinas y adicionales son tablas lógicas
+  // distintas aunque compartan el `<table>`: no se cruzan.
+  const [dragFila, setDragFila] = useState<string | null>(null);
+  const [overFila, setOverFila] = useState<string | null>(null);
+  const [dragAdic, setDragAdic] = useState<string | null>(null);
+  const [overAdic, setOverAdic] = useState<string | null>(null);
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
   // null = ningún filtro (la tabla ni se dibuja) · FILTRO_TODOS = el catálogo
   // entero · id de chip = ese chip. Arranca en null para no cargar la página
@@ -1371,6 +1382,40 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     }
   };
 
+  // ── Reordenar arrastrando ────────────────────────────────────────────
+  // Id ficticio de la zona «al final de la lista» (la fila del botón Agregar).
+  // El orden del array ES el orden de la cotización: viaja al guardar, a la
+  // vuelta y al PDF sin nada más que hacer.
+  const sobreFila = (id: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (overFila !== id) setOverFila(id);
+  };
+  const soltarEnFila = (id?: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const arrastrada = dragFila;
+    setDragFila(null);
+    setOverFila(null);
+    if (!arrastrada) return;
+    // Una ventana de varios paños viaja ENTERA: separar sus filas rompería el
+    // re-agrupado al guardar (se agrupa por primera aparición del `vid`).
+    setFilas((prev) => moverBloqueDeVentana(prev, arrastrada, id));
+  };
+  const sobreAdic = (id: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (overAdic !== id) setOverAdic(id);
+  };
+  const soltarEnAdic = (id?: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const arrastrado = dragAdic;
+    setDragAdic(null);
+    setOverAdic(null);
+    if (arrastrado) setAdicionales((prev) => moverPorId(prev, arrastrado, id));
+  };
+
   const setAdic = (id: string, patch: Partial<AdicionalUI>) => {
     // Mismo criterio que las cortinas: se guarda la llave real del catálogo
     // ("dom42" → "DOM 42"), así el adicional trae producto, precio y DCT%.
@@ -2094,6 +2139,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 <th></th>
               </tr>
               <tr className="border-b border-border">
+                {/* El asa de arrastre: el orden de las filas es el orden del
+                    documento y del PDF, y el dueño lo quiere poder acomodar. */}
+                <th className="w-6" />
                 <Th className="min-w-[6rem]">COD</Th>
                 {showCols && (
                   <>
@@ -2137,7 +2185,23 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   reglas.tipos,
                 );
                 return (
-                  <tr key={f.id} className="border-t border-border align-middle">
+                  <tr
+                    key={f.id}
+                    className={cn(
+                      'border-t border-border align-middle',
+                      overFila === f.id && 'ring-2 ring-inset ring-accent/40',
+                    )}
+                    onDragOver={dragFila ? sobreFila(f.id) : undefined}
+                    onDrop={dragFila ? soltarEnFila(f.id) : undefined}
+                  >
+                    <AsaArrastre
+                      onDragStart={() => setDragFila(f.id)}
+                      onDragEnd={() => {
+                        setDragFila(null);
+                        setOverFila(null);
+                      }}
+                      titulo="Arrastrar para cambiar el orden de esta cortina"
+                    />
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
                     {showCols && (
                       <>
@@ -2467,8 +2531,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   </tr>
                 );
               })}
-              {/* Botón agregar cortina + categoría de todas de una vez */}
-              <tr className="print:hidden">
+              {/* Botón agregar cortina + categoría de todas de una vez. La fila
+                  hace también de zona «al final» del arrastre: sin ella no hay
+                  forma de mandar una cortina al último lugar. */}
+              <tr
+                className={cn('print:hidden', overFila === FIN_LISTA && 'ring-2 ring-inset ring-accent/40')}
+                onDragOver={dragFila ? sobreFila(FIN_LISTA) : undefined}
+                onDrop={dragFila ? soltarEnFila(undefined) : undefined}
+              >
                 <td colSpan={colSpanTotal} className="border-t border-border bg-card/40 px-2 py-2">
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <Button size="sm" variant="outline" className="gap-1"
@@ -2600,7 +2670,23 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 // que lo escribe la vendedora y no siempre es el del paño.
                 const esCenefa = !!tipoCenefaDesdeAdicional(a.codInt ?? '');
                 return (
-                  <tr key={a.id} className="border-t border-border align-middle">
+                  <tr
+                    key={a.id}
+                    className={cn(
+                      'border-t border-border align-middle',
+                      overAdic === a.id && 'ring-2 ring-inset ring-accent/40',
+                    )}
+                    onDragOver={dragAdic ? sobreAdic(a.id) : undefined}
+                    onDrop={dragAdic ? soltarEnAdic(a.id) : undefined}
+                  >
+                    <AsaArrastre
+                      onDragStart={() => setDragAdic(a.id)}
+                      onDragEnd={() => {
+                        setDragAdic(null);
+                        setOverAdic(null);
+                      }}
+                      titulo="Arrastrar para cambiar el orden de este adicional"
+                    />
                     <Td className="text-muted-foreground">
                       {prod?.cod ?? '—'}
                       {a.origen === 'pano' && (
@@ -2705,6 +2791,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   se toca a mano es el %. */}
               {!resultado.instalacion.sinInstalacion && resultado.instalacion.cantidad > 0 && (
                 <tr className="border-t border-border align-middle">
+                  {/* Hueco de la columna del asa: esta fila la arma la app. */}
+                  <td className="w-6" />
                   <Td className="text-muted-foreground">INSTALACION</Td>
                   {showCols && (
                     <>
@@ -2779,6 +2867,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   INST-VERT al 100 % de descuento de la planilla. */}
               {incluidasVisibles(resultado.instalacion.incluidas, adicionales).map((p) => (
                 <tr key={`incl-${p.sistema}`} className="border-t border-border align-middle">
+                  <td className="w-6" />
                   <Td className="text-muted-foreground">INSTALACION</Td>
                   {showCols && (
                     <>
@@ -2824,8 +2913,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   </td>
                 </tr>
               )}
-              {/* Botón agregar adicional */}
-              <tr className="print:hidden">
+              {/* Botón agregar adicional. También es la zona «al final» del
+                  arrastre de los adicionales. */}
+              <tr
+                className={cn('print:hidden', overAdic === FIN_LISTA && 'ring-2 ring-inset ring-accent/40')}
+                onDragOver={dragAdic ? sobreAdic(FIN_LISTA) : undefined}
+                onDrop={dragAdic ? soltarEnAdic(undefined) : undefined}
+              >
                 <td colSpan={colSpanTotal} className="border-t border-border bg-card/40 px-2 py-2">
                   <Button size="sm" variant="outline" className="gap-1"
                     onClick={() => setAdicionales((p) => [...p, nuevoAdicional()])}>
@@ -3022,6 +3116,40 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * La celda con el asa para arrastrar una fila. Solo el asa es `draggable`
+ * —igual que en el editor de documentos—: con la fila entera arrastrable no se
+ * podría seleccionar texto ni usar los campos de adentro.
+ */
+function AsaArrastre({
+  onDragStart,
+  onDragEnd,
+  titulo,
+}: {
+  onDragStart: () => void;
+  onDragEnd: () => void;
+  titulo: string;
+}) {
+  return (
+    <td className="w-6 px-1 align-middle">
+      <span
+        draggable
+        onDragStart={(e) => {
+          // Firefox no inicia el arrastre sin datos en el evento.
+          e.dataTransfer.setData('text/plain', '');
+          e.dataTransfer.effectAllowed = 'move';
+          onDragStart();
+        }}
+        onDragEnd={onDragEnd}
+        title={titulo}
+        className="flex cursor-grab justify-center text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
+      >
+        <GripVertical className="h-4 w-4" />
+      </span>
+    </td>
   );
 }
 

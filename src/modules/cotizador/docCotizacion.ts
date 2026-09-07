@@ -37,6 +37,8 @@ export type PosicionFlotante = {
   y: number;
 };
 
+import { moverPorId } from './moverPorId';
+
 /** Una imagen del carrusel. */
 export type ImagenCarrusel = { url: string; enlace?: string; alt?: string };
 
@@ -234,13 +236,7 @@ export function normalizarLayout(raw: unknown): LayoutDoc {
  * editor esconde bloques (las flotantes no se listan en el flujo).
  */
 export function moverBloqueA(bloques: BloqueDoc[], id: string, antesDeId?: string): BloqueDoc[] {
-  const movido = bloques.find((b) => b.id === id);
-  if (!movido || antesDeId === id) return bloques;
-  const resto = bloques.filter((b) => b.id !== id);
-  const idx = antesDeId ? resto.findIndex((b) => b.id === antesDeId) : -1;
-  if (idx === -1) resto.push(movido);
-  else resto.splice(idx, 0, movido);
-  return resto;
+  return moverPorId(bloques, id, antesDeId);
 }
 
 /** Bloque nuevo del tipo pedido, con valores razonables. */
