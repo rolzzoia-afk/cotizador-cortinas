@@ -227,6 +227,11 @@ export function normalizarTerminos(raw: unknown): ConfigTerminos {
       categorias: Array.isArray(g.categorias)
         ? g.categorias.map(normCat).filter(Boolean)
         : [],
+      // Sin esto, un grupo atado a Mercadopago o a Flow perdía su filtro al
+      // recargar la página y pasaba a salir con cualquier medio de pago.
+      ...(g.proveedorTarjeta === 'mercadopago' || g.proveedorTarjeta === 'flow'
+        ? { proveedorTarjeta: g.proveedorTarjeta }
+        : {}),
       terminos,
     });
   }
