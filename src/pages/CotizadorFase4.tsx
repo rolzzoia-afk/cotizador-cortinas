@@ -42,7 +42,6 @@ import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
 import { esCadenaRoller, type CadenaInsumo } from '@/modules/cotizador/cadenas';
 import { generarPlanCorte } from '@/modules/cotizador/planCorte';
 import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
-import { useDecisionesGiro } from '@/modules/produccion/girosColmena';
 import { deduccionesColmena, piezasColmenaSnapshot } from '@/modules/cotizador/colmenaCorte';
 import GuardarSobranteRolloDialog, {
   type SobranteRollo,
@@ -427,10 +426,6 @@ export function CotizadorFase4() {
   // Sobrantes de rollo pendientes de ubicar (abre el diálogo tras confirmar).
   const [sobrantesRollo, setSobrantesRollo] = useState<SobranteRollo[]>([]);
   const corteGenConfirmado = ot?.datosGenerales?.corteGeneralColmena;
-  // Los giros de colmena que el taller rechazó en Producción. Fase 4 no tiene
-  // el paso de autorización, pero sí tiene que RESPETAR lo ya decidido.
-  const otsDelCorte = useMemo(() => (ot ? [ot] : []), [ot]);
-  const { sinGiro } = useDecisionesGiro(otsDelCorte);
 
   const onConfirmarCorteGeneral = async () => {
     if (!ot || !empresaId) return;
@@ -444,9 +439,7 @@ export function CotizadorFase4() {
     try {
       const panos = await cargarColmenaPanos(empresaId);
       // Plan y deducción con los MISMOS params: el retazo debe calzar el layout.
-      // Y con los giros que el taller ya rechazó: acá se CORTA, así que una
-      // cortina que el operario mandó al rollo no puede volver acostada al paño.
-      const plan = generarPlanCorte([ot], panos, parametros, formulas, reglas.tipos, { sinGiro });
+      const plan = generarPlanCorte([ot], panos, parametros, formulas, reglas.tipos);
       const deducciones = deduccionesColmena(plan, parametros);
       // Lo que deja el corte y vuelve al rack: la franja del rollo nuevo
       // (≥120×180, ya gateada por planCorte) y los trozos útiles de cada paño de

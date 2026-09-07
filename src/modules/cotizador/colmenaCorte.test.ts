@@ -22,7 +22,7 @@ function placed(py: number, ph: number, pw = 100, id = 'p1', otId = '1'): Placed
     py,
     pw,
     ph,
-    rot: false,
+    invertida: false,
     failed: false,
   };
 }
@@ -48,8 +48,6 @@ function grupo(over: Partial<GrupoSobrante> = {}): GrupoSobrante {
     uh: 420,
     libres: [],
     cortes: [],
-    tieneRotaciones: false,
-    piezasRotadas: [],
     costo: 0,
     ...over,
   };

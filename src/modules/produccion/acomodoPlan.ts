@@ -15,7 +15,7 @@
 // Módulo PURO (sin React ni Supabase).
 // ─────────────────────────────────────────────────────────────────────
 import type { Plan } from '@/modules/cotizador/planCorte';
-import { secuenciaCortes } from '@/modules/cotizador/planCorte';
+import { medidasFicha, secuenciaCortes } from '@/modules/cotizador/planCorte';
 import {
   panosFisicos,
   type PanoDibujado,
@@ -38,36 +38,19 @@ export function panosDelPlan(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   productoDe?: Map<string, string>,
 ): PanoDibujado[] {
-  return plan.rollo.map((g0, i) => {
-    // Sin girar tela. El plan PROPONE rotaciones cuando ahorran rollo, y las
-    // autoriza el operario pieza por pieza en el Plan de Corte; acá no hay
-    // ese paso, así que se dibuja el acomodo derecho cuando existe. El girado
-    // queda solo cuando es la única forma (una cortina más ancha que el rollo).
-    const derecho = g0.tieneRotaciones && g0.layoutVertical && g0.altoVertical != null;
-    const g = derecho
-      ? {
-          ...g0,
-          placed: g0.layoutVertical!,
-          altoCorte: g0.altoVertical!,
-          altoUtil: g0.altoVertical! - params.margenRolloCm * 2,
-        }
-      : g0;
+  return plan.rollo.map((g, i) => {
     const puestas = [...g.placed]
       .filter((r) => !r.failed)
       .sort((a, b) => a.py - b.py || a.px - b.px);
-    // El plan no lee el flag de la ficha, pero puede DEDUCIRLO: una cortina más
-    // ancha que el rollo va invertida sí o sí, y la ficha ya la marca así (es la
-    // misma regla de `debeInvertirPano`). El resto de los giros los decide el
-    // ACOMODO, y esos son `girada`: rotularlos «invertida» mandaba al taller a
-    // buscar a Fase 1 una marca que ahí no existe.
+    // El acomodo no gira nada: la que va acostada es la que la FICHA trae
+    // invertida, y sus medidas se muestran como se vendieron (`medidasFicha`).
     const piezas: PiezaDibujada[] = puestas.map((r) => {
-      const noEntraDerecha = r.w > g.anchoUtil;
+      const m = medidasFicha(r);
       return {
         nombre: r.nombre,
-        anchoCm: r.w,
-        altoCorteCm: r.h,
-        invertida: r.rot && noEntraDerecha,
-        girada: r.rot && !noEntraDerecha,
+        anchoCm: m.anchoCm,
+        altoCorteCm: m.altoCm,
+        invertida: r.invertida,
         px: r.px,
         py: r.py,
         pw: r.pw,
@@ -124,21 +107,22 @@ export function panosDeColmena(
     const puestas = [...g.placed]
       .filter((r) => !r.failed)
       .sort((a, b) => a.py - b.py || a.px - b.px);
-    // Acá el giro es SIEMPRE del acomodo: el paño del rack es más chico que el
-    // rollo, así que «no entraba derecha» habla de este trozo y no de la ficha.
-    // Por eso `girada` y nunca `invertida` (ver `panosDelPlan`).
-    const piezas: PiezaDibujada[] = puestas.map((r) => ({
-      nombre: rotulo ? rotulo(r.nombre) : r.nombre,
-      anchoCm: r.w,
-      altoCorteCm: r.h,
-      invertida: false,
-      girada: r.rot,
-      px: r.px,
-      py: r.py,
-      pw: r.pw,
-      ph: r.ph,
-      lamas: null,
-    }));
+    // También en el rack la única acostada es la que viene invertida de la
+    // ficha: el acomodo prueba cada cortina como se vendió y nada más.
+    const piezas: PiezaDibujada[] = puestas.map((r) => {
+      const m = medidasFicha(r);
+      return {
+        nombre: rotulo ? rotulo(r.nombre) : r.nombre,
+        anchoCm: m.anchoCm,
+        altoCorteCm: m.altoCm,
+        invertida: r.invertida,
+        px: r.px,
+        py: r.py,
+        pw: r.pw,
+        ph: r.ph,
+        lamas: null,
+      };
+    });
     const ubic = g.sobrante.ubicacion || '';
     const medida = `${Math.round(g.sobrante.ancho)}X${Math.round(g.sobrante.alto)}`;
     return {

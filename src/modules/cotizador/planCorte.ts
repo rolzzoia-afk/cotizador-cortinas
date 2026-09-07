@@ -51,16 +51,22 @@ export type Pieza = {
   codInt: string;
   otId: string;
   otNum: string;
+  /**
+   * Medidas TAL COMO SE APOYAN en la tela: `w` a lo ancho del rollo (o del paño
+   * de colmena) y `h` a lo largo. Una cortina INVERTIDA ya viene girada acá:
+   * `w` es su alto de corte y `h` su ancho de corte + borde.
+   */
   w: number;
   h: number;
   /**
-   * La cortina NO se puede girar, ni en colmena ni en el rollo. Hoy son las
-   * VERTICALES: su tela se corta en lamas de 8,9 cm que siempre entran a lo
-   * ancho del rollo; acostadas, las lamas quedarían atravesadas. La hoja de
-   * corte ya lo decía (`esFilaInvertida`), pero la pasada con rotación del
-   * rollo las giraba igual.
+   * La cortina se corta ROTADA 90°. **Nunca lo decide el optimizador**: viene
+   * de la ficha —marcada a mano en Fase 1/Fase 2, automática porque no entra
+   * derecha a lo ancho del rollo, o por pertenecer a un conjunto de Fase 2—.
+   * Todas las telas tienen diseño (dueño, 2026-09-07), así que acostar una
+   * cortina por conveniencia del acomodo arruinaría el dibujo. Es la misma
+   * regla de `esFilaInvertida` (hojaCorte.ts), y las verticales nunca la tienen.
    */
-  noGira?: boolean;
+  invertida: boolean;
 };
 
 export type Placed = Pieza & {
@@ -68,9 +74,17 @@ export type Placed = Pieza & {
   py: number;
   pw: number;
   ph: number;
-  rot: boolean;
   failed: boolean;
 };
+
+/**
+ * Las medidas de la FICHA de una pieza: lo que el vendedor escribió, sin el
+ * giro con que se apoya en la tela. Lo usan el dibujo y los avisos, que hablan
+ * de la cortina y no del acomodo.
+ */
+export function medidasFicha(p: Pieza): { anchoCm: number; altoCm: number } {
+  return p.invertida ? { anchoCm: p.h, altoCm: p.w } : { anchoCm: p.w, altoCm: p.h };
+}
 
 export type GrupoSobrante = {
   sobrante: PanoColmena;
@@ -83,9 +97,6 @@ export type GrupoSobrante = {
   libres: RectLibre[];
   /** El orden en que la mesa parte el paño; `null` si no es cortable (multieje). */
   cortes: CorteGuillotina[] | null;
-  /** Hay piezas propuestas GIRADAS: el operario las autoriza una por una. */
-  tieneRotaciones: boolean;
-  piezasRotadas: Placed[];
   /** Puntaje con que este paño le ganó a los demás (cm²; menos es mejor). */
   costo: number;
 };
@@ -99,24 +110,27 @@ export type GrupoRollo = {
   altoCorte: number;
   efic: number;
   sobInterno: { ancho: number; alto: number } | null;
-  tieneRotaciones: boolean;
-  piezasRotadas: Placed[];
-  layoutVertical: Placed[] | null;
-  altoVertical: number | null;
-  eficVertical: number;
-  sobInternoV: { ancho: number; alto: number } | null;
-  decisiones: Record<string, boolean>;
 };
 
-export type GrupoSinStock = { codInt: string; piezas: Pieza[] };
+/**
+ * Por qué una cortina no se puede cortar de este rollo. Todas terminan en la
+ * misma bolsa (`Plan.sinStock`), pero el taller necesita saber cuál arreglar en
+ * la cotización y cuál es un imposible de verdad.
+ */
+export type MotivoNoCabe =
+  /** Más ancha que el rollo y marcada SIN invertir a mano: hay que decidirlo en la ficha. */
+  | 'ancho-sin-invertir'
+  /** Va invertida, pero acostada su ALTO no entra a lo ancho del rollo. */
+  | 'alto-invertida'
+  /** Vertical más ancha que el rollo: sus lamas se cortan en varias pasadas. */
+  | 'vertical-ancha'
+  /** No entra ni derecha ni invertida. */
+  | 'no-entra';
 
-/** Ajustes por corrida del motor (los toma la UI, no la configuración). */
-export type OpcionesPlan = {
-  /**
-   * IDs de pieza cuyo GIRO el operario rechazó. Vuelven a empacarse derechas —
-   * en otro paño o en el rollo—, igual que en las tarjetas de rollo.
-   */
-  sinGiro?: ReadonlySet<string>;
+export type GrupoSinStock = {
+  codInt: string;
+  piezas: Pieza[];
+  motivos: Record<string, MotivoNoCabe>;
 };
 
 export type OTIncluida = { id: string; num: string; cliente: string };
@@ -210,39 +224,23 @@ export function rowToPano(row: ColmenaPanoRow): PanoColmena {
 // ── MaxRects BSSF packing ────────────────────────────────────────────
 type Rect = { x: number; y: number; w: number; h: number };
 
-function mxFit(item: Pieza, F: Rect[], allowRot = true): Placed | null {
+// El empacador NO gira piezas: cada una se apoya como viene (`w` a lo ancho,
+// `h` a lo largo). Si va acostada es porque la ficha la trae INVERTIDA y la
+// pieza ya nació con las medidas cambiadas.
+function mxFit(item: Pieza, F: Rect[]): Placed | null {
   let bs = Infinity;
   let bF: Rect | null = null;
-  let bW = 0;
-  let bH = 0;
-  let bR = false;
-  // Una pieza marcada `noGira` (vertical, o un giro que el operario rechazó) no
-  // entra a las ramas rotadas por más que la pasada lo permita.
-  const gira = allowRot && !item.noGira;
   for (const fr of F) {
     if (item.w <= fr.w && item.h <= fr.h) {
       const s = Math.min(fr.w - item.w, fr.h - item.h);
       if (s < bs) {
         bs = s;
         bF = fr;
-        bW = item.w;
-        bH = item.h;
-        bR = false;
-      }
-    }
-    if (gira && item.h <= fr.w && item.w <= fr.h) {
-      const s = Math.min(fr.w - item.h, fr.h - item.w);
-      if (s < bs) {
-        bs = s;
-        bF = fr;
-        bW = item.h;
-        bH = item.w;
-        bR = true;
       }
     }
   }
   if (!bF) return null;
-  return { ...item, px: bF.x, py: bF.y, pw: bW, ph: bH, rot: bR, failed: false };
+  return { ...item, px: bF.x, py: bF.y, pw: item.w, ph: item.h, failed: false };
 }
 
 function mxSplit(F: Rect[], p: Placed): Rect[] {
@@ -277,25 +275,17 @@ function mxSplit(F: Rect[], p: Placed): Rect[] {
   );
 }
 
-function mxPack(items: Pieza[], uw: number, uh: number, allowRot = true): Placed[] {
+function mxPack(items: Pieza[], uw: number, uh: number): Placed[] {
   let F: Rect[] = [{ x: 0, y: 0, w: uw, h: uh }];
   const placed: Placed[] = [];
   const sorted = [...items].sort((a, b) => b.w * b.h - a.w * a.h);
   for (const item of sorted) {
-    const r = mxFit(item, F, allowRot);
+    const r = mxFit(item, F);
     if (r) {
       placed.push(r);
       F = mxSplit(F, r);
     } else {
-      placed.push({
-        ...item,
-        px: -1,
-        py: -1,
-        pw: item.w,
-        ph: item.h,
-        rot: false,
-        failed: true,
-      });
+      placed.push({ ...item, px: -1, py: -1, pw: item.w, ph: item.h, failed: true });
     }
   }
   return placed;
@@ -340,27 +330,15 @@ function partirLibre(fr: Rect, w: number, h: number, regla: ReglaSplit): Rect[] 
 }
 
 /** Mejor libre para la pieza: el de menor lado corto sobrante (BSSF). */
-function guillotinaFit(
-  item: Pieza,
-  F: Rect[],
-  allowRot: boolean,
-): { fr: Rect; w: number; h: number; rot: boolean } | null {
-  let mejor: { fr: Rect; w: number; h: number; rot: boolean } | null = null;
+function guillotinaFit(item: Pieza, F: Rect[]): Rect | null {
+  let mejor: Rect | null = null;
   let mejorSobra = Infinity;
-  const gira = allowRot && !item.noGira;
   for (const fr of F) {
     if (item.w <= fr.w && item.h <= fr.h) {
       const s = Math.min(fr.w - item.w, fr.h - item.h);
       if (s < mejorSobra) {
         mejorSobra = s;
-        mejor = { fr, w: item.w, h: item.h, rot: false };
-      }
-    }
-    if (gira && item.h <= fr.w && item.w <= fr.h) {
-      const s = Math.min(fr.w - item.h, fr.h - item.w);
-      if (s < mejorSobra) {
-        mejorSobra = s;
-        mejor = { fr, w: item.h, h: item.w, rot: true };
+        mejor = fr;
       }
     }
   }
@@ -371,28 +349,26 @@ function guillotinaVariante(
   items: Pieza[],
   uw: number,
   uh: number,
-  allowRot: boolean,
   orden: (a: Pieza, b: Pieza) => number,
   regla: ReglaSplit,
 ): Placed[] {
   let F: Rect[] = [{ x: 0, y: 0, w: uw, h: uh }];
   const placed: Placed[] = [];
   for (const item of [...items].sort(orden)) {
-    const best = guillotinaFit(item, F, allowRot);
-    if (!best) {
-      placed.push({ ...item, px: -1, py: -1, pw: item.w, ph: item.h, rot: false, failed: true });
+    const fr = guillotinaFit(item, F);
+    if (!fr) {
+      placed.push({ ...item, px: -1, py: -1, pw: item.w, ph: item.h, failed: true });
       continue;
     }
     placed.push({
       ...item,
-      px: best.fr.x,
-      py: best.fr.y,
-      pw: best.w,
-      ph: best.h,
-      rot: best.rot,
+      px: fr.x,
+      py: fr.y,
+      pw: item.w,
+      ph: item.h,
       failed: false,
     });
-    F = F.filter((r) => r !== best.fr).concat(partirLibre(best.fr, best.w, best.h, regla));
+    F = F.filter((r) => r !== fr).concat(partirLibre(fr, item.w, item.h, regla));
   }
   return placed;
 }
@@ -435,18 +411,13 @@ const REGLAS_SPLIT: ReglaSplit[] = ['sobraCorta', 'ejeCorto'];
  * pieza, con `failed` cuando no entró), probando varias heurísticas y quedándose
  * con la que gasta menos rollo.
  */
-export function guillotinaPack(
-  items: Pieza[],
-  uw: number,
-  uh: number,
-  allowRot = true,
-): Placed[] {
+export function guillotinaPack(items: Pieza[], uw: number, uh: number): Placed[] {
   let mejor: Placed[] | null = null;
   let mejorAlto = Infinity;
   let mejorBandas = Infinity;
   for (const orden of ORDENES_GUILLOTINA) {
     for (const regla of REGLAS_SPLIT) {
-      const pl = guillotinaVariante(items, uw, uh, allowRot, orden, regla);
+      const pl = guillotinaVariante(items, uw, uh, orden, regla);
       if (pl.some((r) => r.failed)) continue;
       const alto = pl.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
       const bandas = bandasDeLayout(pl);
@@ -463,10 +434,7 @@ export function guillotinaPack(
   }
   // Ninguna variante ubicó todo: se devuelve una con sus `failed` para que el
   // binary search siga subiendo el alto, igual que hace MaxRects.
-  return (
-    mejor ??
-    guillotinaVariante(items, uw, uh, allowRot, ORDENES_GUILLOTINA[0], REGLAS_SPLIT[0])
-  );
+  return mejor ?? guillotinaVariante(items, uw, uh, ORDENES_GUILLOTINA[0], REGLAS_SPLIT[0]);
 }
 
 // ── Empaque PARCIAL: acomodar lo que se pueda dentro de un paño ──────
@@ -534,17 +502,16 @@ export function empacarEnPano(
   items: Pieza[],
   uw: number,
   uh: number,
-  allowRot: boolean,
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
 ): AcomodoPano {
   if (params.modoCorte === 'multieje') {
-    return evaluarAcomodo(mxPack(items, uw, uh, allowRot), uw, uh, params);
+    return evaluarAcomodo(mxPack(items, uw, uh), uw, uh, params);
   }
   let mejor: AcomodoPano | null = null;
   for (const orden of ORDENES_GUILLOTINA) {
     for (const regla of REGLAS_SPLIT) {
       const cand = evaluarAcomodo(
-        guillotinaVariante(items, uw, uh, allowRot, orden, regla),
+        guillotinaVariante(items, uw, uh, orden, regla),
         uw,
         uh,
         params,
@@ -703,7 +670,6 @@ export function generarPlanCorte(
   params: ParametrosCorte = PARAMETROS_CORTE_DEFAULT,
   formulas?: FormulasFamilias,
   tipos?: readonly TipoCortina[],
-  opciones?: OpcionesPlan,
 ): Plan {
   const MARGEN = params.margenRolloCm; // margen por lado (default 1 cm)
   const BORDE = params.bordeCm; // limpieza de bordes al ancho (Regla 5, default 4 cm)
@@ -722,19 +688,20 @@ export function generarPlanCorte(
   // sin piezas de origen colmena, ninguno de esos la toca.
   const colmena = params.usarColmenaPanos === false ? [] : colmenaPanos;
 
-  // Ancho real que una pieza necesita de un SOBRANTE: al reusar tela ya cortada
+  // Medida real que una pieza necesita de un SOBRANTE: al reusar tela ya cortada
   // NO se aplica el margen de corte limpio del rollo (BORDE), basta el ancho
   // nominal de la cortina. Así una cortina de 144 cm entra en un sobrante de
   // 146 (antes 144+4=148 lo rechazaba). El corte del rollo conserva su BORDE.
-  const anchoSob = (w: number) => w - BORDE;
-
-  // El giro dentro de un paño se PROPONE y el operario lo autoriza pieza por
-  // pieza, igual que en el rollo. Las verticales quedan fuera por su cuenta
-  // (`Pieza.noGira`), esté el interruptor como esté.
-  const permiteGiroColmena = params.colmenaPermiteGiro !== false;
+  // El borde va con el ANCHO de la cortina: en una invertida ese lado es `h`.
+  const sinBorde = (p: Pieza): Pieza =>
+    p.invertida
+      ? { ...p, h: Math.max(1, p.h - BORDE) }
+      : { ...p, w: Math.max(1, p.w - BORDE) };
 
   // ── 1. Armar la lista de piezas desde todas las ventanas ──────────
   const piezas: Pieza[] = [];
+  /** Qué piezas son verticales: solo para explicar por qué una no cabe. */
+  const verticales = new Set<string>();
 
   ots.forEach((otItem) => {
     const ventanas = otItem.storeVentanas || [];
@@ -777,10 +744,17 @@ export function generarPlanCorte(
           : undefined;
         const anchoCm = Math.round(anchoCorteOsc ?? anchoNominalCm) + BORDE;
         if (!anchoCm || !altoCm) return;
+        // ¿Va acostada? Lo dice la FICHA, nunca el acomodo: el flag explícito de
+        // Fase 1/Fase 2 (o el que le puso un conjunto), y si nadie lo tocó, la
+        // regla automática de siempre — no entra derecha a lo ancho del rollo—.
+        // Es `esFilaInvertida` (hojaCorte.ts) con el rollo del plan; se compara
+        // en centímetros enteros para no depender de un decimal en el límite.
+        const invertida = !esVertical && ((p.invertida as boolean | undefined) ?? anchoCm > ROLL_W_UTIL);
         const panoSuffix = v.panos!.length > 1 ? ` P${pi + 1}` : '';
         const label = multiOT
           ? `OT${otNum}·${v.ubicacion}${panoSuffix}`
           : `${v.ubicacion}${panoSuffix}`;
+        if (esVertical) verticales.add(`${otItem.id}_${v.id}_p${pi}`);
         piezas.push({
           id: `${otItem.id}_${v.id}_p${pi}`,
           nombre: label,
@@ -788,9 +762,10 @@ export function generarPlanCorte(
           codInt: ((p.codInt as string) || v.codInt || '').toUpperCase().trim(),
           otId: String(otItem.id),
           otNum,
-          w: anchoCm,
-          h: altoCm,
-          noGira: esVertical,
+          // Invertida: se apoya girada, el alto a lo ancho del rollo.
+          w: invertida ? altoCm : anchoCm,
+          h: invertida ? anchoCm : altoCm,
+          invertida,
         });
       });
     });
@@ -857,6 +832,11 @@ export function generarPlanCorte(
     // y partir uno GRANDE dejando otro paño en el rack, gana el justo aunque
     // deje más merma. Un calce exacto cuesta 0 y gana solo, así que la vieja
     // Regla 1 sale gratis; entre dos paños empatados sigue mandando el FIFO.
+    //
+    // Cada cortina se prueba SOLO como viene de la ficha: la que no está
+    // invertida se acomoda derecha aunque acostada calzara justo, porque todas
+    // las telas tienen diseño (dueño, 2026-09-07). Si así no entra en ningún
+    // paño, baja del rollo.
     for (;;) {
       const pendientes = sinCubrir
         .map((p, i) => ({ p, i }))
@@ -864,19 +844,14 @@ export function generarPlanCorte(
       if (pendientes.length === 0) break;
 
       // Piezas tal como se cortan de un paño: al reusar tela ya cortada NO se
-      // aplica la limpieza de bordes del rollo (basta el ancho nominal), y una
-      // pieza cuyo giro el operario rechazó vuelve a entrar como `noGira`.
-      const items = pendientes.map(({ p }) => ({
-        ...p,
-        w: Math.max(1, anchoSob(p.w)),
-        noGira: p.noGira || opciones?.sinGiro?.has(p.id) === true,
-      }));
+      // aplica la limpieza de bordes del rollo (basta el ancho nominal).
+      const items = pendientes.map(({ p }) => sinBorde(p));
 
       let mejor: { sob: PanoColmena; acomodo: AcomodoPano } | null = null;
       for (const sob of disponiblesOrdenados) {
         if (usadosEnPlan.has(sob._docId)) continue;
         if (!(sob.ancho > 0) || !(sob.alto > 0)) continue;
-        const acomodo = empacarEnPano(items, sob.ancho, sob.alto, permiteGiroColmena, params);
+        const acomodo = empacarEnPano(items, sob.ancho, sob.alto, params);
         if (acomodo.n === 0) continue;
         if (!mejor) {
           mejor = { sob, acomodo };
@@ -904,8 +879,6 @@ export function generarPlanCorte(
         const idx = pendientes.find((c) => c.p.id === pz.id)?.i;
         if (idx !== undefined) sinCubrir[idx] = null;
       }
-      const piezasRotadas = puestas.filter((pz) => pz.rot);
-
       plan.sobrantes.push({
         sobrante: mejor.sob,
         placed: puestas,
@@ -916,8 +889,6 @@ export function generarPlanCorte(
         uh: mejor.sob.alto,
         libres: mejor.acomodo.libres,
         cortes: secuenciaCortes(puestas, mejor.sob.ancho, mejor.sob.alto),
-        tieneRotaciones: piezasRotadas.length > 0,
-        piezasRotadas,
         costo: mejor.acomodo.costo,
       });
     }
@@ -926,126 +897,92 @@ export function generarPlanCorte(
 
     // ── 4. Piezas que no matchearon → packing desde rollo ────────
     if (restantes.length) {
-      // Un giro que el operario ya rechazó no se vuelve a proponer, ni acá ni
-      // en la colmena: la pieza entra derecha o no entra.
-      const piezasOrd = porAltura(
-        opciones?.sinGiro?.size
-          ? restantes.map((p) => (opciones.sinGiro!.has(p.id) ? { ...p, noGira: true } : p))
-          : restantes,
-      );
-      const maxH = piezasOrd.reduce((s, p) => s + Math.max(p.w, p.h), 0) + 50;
-      const minH = Math.max(...piezasOrd.map((p) => Math.min(p.w, p.h)));
-
-      // Pasada A: sin rotación (binary search sobre el alto)
-      let loA = minH;
-      let hiA = maxH;
-      let plA: Placed[] | null = null;
-      let hA = maxH;
-      for (let i = 0; i < 18; i++) {
-        const mid = Math.floor((loA + hiA) / 2);
-        const pl = empacar(
-          piezasOrd.map((p) => ({ ...p })),
-          ROLL_W_UTIL,
-          mid,
-          false,
-        );
-        if (pl.every((r) => !r.failed)) {
-          const usedH = pl.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-          if (usedH < hA) {
-            hA = usedH;
-            plA = pl;
-          }
-          hiA = mid;
-        } else {
-          loA = mid + 1;
+      // Lo que NO entra a lo ancho del rollo se aparta pieza por pieza. Antes
+      // una sola cortina imposible mandaba a `sinStock` a TODAS las de su tela;
+      // con las invertidas decididas en la ficha eso pasaría seguido y sacaría
+      // del rollo a hermanas perfectamente cortables.
+      const noCaben: Pieza[] = [];
+      const motivos: Record<string, MotivoNoCabe> = {};
+      const caben: Pieza[] = [];
+      for (const p of restantes) {
+        if (p.w <= ROLL_W_UTIL) {
+          caben.push(p);
+          continue;
         }
+        noCaben.push(p);
+        // Una vertical nunca se acuesta; una invertida ya está acostada, así que
+        // lo que no entra es su ALTO; y si la ficha dice explícitamente que NO
+        // va invertida, la salida es cambiar esa marca en la cotización.
+        motivos[p.id] = verticales.has(p.id)
+          ? 'vertical-ancha'
+          : p.invertida
+            ? 'alto-invertida'
+            : 'ancho-sin-invertir';
       }
 
-      // Pasada B: con rotación (solo fallback si A falla)
-      let loB = minH;
-      let hiB = maxH;
-      let plB: Placed[] | null = null;
-      let hB = maxH;
-      for (let i = 0; i < 18; i++) {
-        const mid = Math.floor((loB + hiB) / 2);
-        const pl = empacar(
-          piezasOrd.map((p) => ({ ...p })),
-          ROLL_W_UTIL,
-          mid,
-          true,
-        );
-        if (pl.every((r) => !r.failed)) {
-          const usedH = pl.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
-          if (usedH < hB) {
-            hB = usedH;
-            plB = pl;
+      if (caben.length) {
+        const piezasOrd = porAltura(caben);
+        const maxH = piezasOrd.reduce((s, p) => s + p.h, 0) + 50;
+        const minH = Math.max(...piezasOrd.map((p) => p.h));
+
+        // Una sola pasada: el acomodo ya no elige orientaciones, solo hasta
+        // dónde bajar el rollo (binary search sobre el alto).
+        let lo = minH;
+        let hi = maxH;
+        let mejorPl: Placed[] | null = null;
+        let mejorH = maxH;
+        for (let i = 0; i < 18; i++) {
+          const mid = Math.floor((lo + hi) / 2);
+          const pl = empacar(
+            piezasOrd.map((p) => ({ ...p })),
+            ROLL_W_UTIL,
+            mid,
+          );
+          if (pl.every((r) => !r.failed)) {
+            const usedH = pl.reduce((m, r) => Math.max(m, r.py + r.ph), 0);
+            if (usedH < mejorH) {
+              mejorH = usedH;
+              mejorPl = pl;
+            }
+            hi = mid;
+          } else {
+            lo = mid + 1;
           }
-          hiB = mid;
-        } else {
-          loB = mid + 1;
         }
-      }
 
-      // Elegir layout: antes se prefería SIEMPRE la Pasada A (sin rotación)
-      // y la B solo era fallback. Ahora, si rotar ahorra tela de forma
-      // relevante (las telas lisas se pueden rotar), se PROPONE el layout
-      // rotado — el operario lo autoriza pieza por pieza en la UI (flujo
-      // 'rotacion-pendiente' ya existente) y puede volver al layout
-      // vertical si la tela tiene diseño/dirección.
-      const AHORRO_MIN_CM = params.ahorroMinRotacionCm; // proponer rotación solo si ahorra ≥ esto
-      const rotarConviene = plA !== null && plB !== null && hB + AHORRO_MIN_CM <= hA;
-      const bestPl = rotarConviene ? plB : plA || plB;
-      const bestH = rotarConviene ? hB : plA ? hA : hB;
-
-      if (bestPl) {
-        const altoCorte = bestH + MARGEN * 2;
-        const efic = Math.round(
-          (bestPl.reduce((s, r) => s + r.pw * r.ph, 0) / (ROLL_W_UTIL * bestH)) * 100,
-        );
-        const maxX = bestPl.reduce((m, r) => Math.max(m, r.px + r.pw), 0);
-        const anchoFranja = Math.round(ROLL_W_UTIL - maxX);
-        const altoFranja = Math.round(altoCorte);
-        const sobInterno = esColmena(anchoFranja, altoFranja, params)
-          ? { ancho: anchoFranja, alto: altoFranja }
-          : null;
-
-        const piezasRotadas = bestPl.filter((r) => r.rot && !r.failed);
-        const tieneRotaciones = (rotarConviene || !plA) && piezasRotadas.length > 0;
-
-        const altoVertical = plA ? hA + MARGEN * 2 : null;
-        const eficVertical = plA
-          ? Math.round(
-              (plA.reduce((s, r) => s + r.pw * r.ph, 0) / (ROLL_W_UTIL * hA)) * 100,
-            )
-          : 0;
-        const maxXv = plA ? plA.reduce((m, r) => Math.max(m, r.px + r.pw), 0) : 0;
-        const anchoFranjaV = Math.round(ROLL_W_UTIL - maxXv);
-        const altoFranjaV = altoVertical ? Math.round(altoVertical) : 0;
-        const sobInternoV =
-          plA && altoVertical && esColmena(anchoFranjaV, altoFranjaV, params)
-            ? { ancho: anchoFranjaV, alto: altoFranjaV }
+        if (mejorPl) {
+          const altoCorte = mejorH + MARGEN * 2;
+          const efic = Math.round(
+            (mejorPl.reduce((s, r) => s + r.pw * r.ph, 0) / (ROLL_W_UTIL * mejorH)) * 100,
+          );
+          const maxX = mejorPl.reduce((m, r) => Math.max(m, r.px + r.pw), 0);
+          const anchoFranja = Math.round(ROLL_W_UTIL - maxX);
+          const altoFranja = Math.round(altoCorte);
+          const sobInterno = esColmena(anchoFranja, altoFranja, params)
+            ? { ancho: anchoFranja, alto: altoFranja }
             : null;
 
-        plan.rollo.push({
-          codInt,
-          placed: bestPl,
-          anchoUtil: ROLL_W_UTIL,
-          altoUtil: bestH,
-          anchoCorte: params.anchoRolloPlanCm,
-          altoCorte,
-          efic,
-          sobInterno,
-          tieneRotaciones,
-          piezasRotadas,
-          layoutVertical: plA,
-          altoVertical,
-          eficVertical,
-          sobInternoV,
-          decisiones: {},
-        });
-      } else {
-        plan.sinStock.push({ codInt, piezas: restantes });
+          plan.rollo.push({
+            codInt,
+            placed: mejorPl,
+            anchoUtil: ROLL_W_UTIL,
+            altoUtil: mejorH,
+            anchoCorte: params.anchoRolloPlanCm,
+            altoCorte,
+            efic,
+            sobInterno,
+          });
+        } else {
+          // Entran a lo ancho pero el empacador no las ubicó: caso raro, se
+          // avisa igual en vez de perderlas.
+          for (const p of piezasOrd) {
+            noCaben.push(p);
+            motivos[p.id] = 'no-entra';
+          }
+        }
       }
+
+      if (noCaben.length) plan.sinStock.push({ codInt, piezas: noCaben, motivos });
     }
   });
 

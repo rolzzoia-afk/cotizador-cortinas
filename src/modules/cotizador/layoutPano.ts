@@ -68,15 +68,11 @@ export type PiezaDibujada = {
   /**
    * INVERTIDA de la ficha: la cortina se vendió así (o el ancho no entraba en
    * el rollo). Viene de Fase 2 y se ve en la columna INVERTIDA de Fase 1.
+   *
+   * Es la ÚNICA forma de que una cortina salga acostada: el optimizador no gira
+   * telas por su cuenta (dueño, 2026-09-07 — todas tienen diseño).
    */
   invertida: boolean;
-  /**
-   * GIRADA por el ACOMODO: la acostó el empacador para que entrara en este
-   * paño. NO figura en la ficha —quien la busque en Fase 1 no la va a
-   * encontrar— y el giro se autoriza pieza por pieza en el Plan de Corte.
-   * Se dibuja aparte de `invertida` justamente para no confundirlas.
-   */
-  girada?: boolean;
   /** Rectángulo dentro del paño, en cm: x/y desde la esquina, w×h ya rotados. */
   px: number;
   py: number;
@@ -231,7 +227,7 @@ export function panosDibujados(
           py: p.py,
           pw: p.pw,
           ph: p.ph,
-          rot: p.invertida,
+          invertida: p.invertida,
           failed: false,
         }) satisfies Placed,
     );

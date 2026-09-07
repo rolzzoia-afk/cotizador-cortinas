@@ -34,21 +34,19 @@ export type ParametrosCorte = {
   descAnchoCorteCm: number;
   /** Ancho de rollo (m) cuando el producto no define el suyo en catálogo. */
   anchoRolloDefaultM: number;
-  /** Ancho del rollo en el plan de corte (cm); útil = este − 2×margen. */
+  /**
+   * Ancho del rollo en el plan de corte (cm); útil = este − 2×margen.
+   *
+   * Tiene que describir el MISMO rollo que `anchoRolloDefaultM` (300 − 2×1 =
+   * 298 ≈ 2,98 m): con ese ancho útil el plan decide qué cortina no entra
+   * derecha, y la hoja de corte lo decide con el otro. Si se separan, una misma
+   * cortina saldría invertida en un papel y derecha en el otro.
+   */
   anchoRolloPlanCm: number;
   /** Margen de corte del rollo por lado (cm). */
   margenRolloCm: number;
   /** Limpieza de bordes al ancho de cada pieza que va a rollo (cm, Regla 5). */
   bordeCm: number;
-  /** Solo se propone rotar piezas si el layout rotado ahorra ≥ esto (cm). */
-  ahorroMinRotacionCm: number;
-  /**
-   * ¿Se puede girar una cortina para que entre en un paño de colmena? Igual que
-   * en el rollo, el giro se PROPONE y el operario lo autoriza pieza por pieza:
-   * la tela puede tener dirección o diseño. Apagado, la colmena solo acomoda
-   * piezas derechas. (Las verticales nunca giran, esté como esté.)
-   */
-  colmenaPermiteGiro: boolean;
   /**
    * Cuánto "cuesta" dejar un paño nuevo en el rack, en cm² de tela.
    *
@@ -113,8 +111,6 @@ export const PARAMETROS_CORTE_DEFAULT: ParametrosCorte = {
   anchoRolloPlanCm: 300,
   margenRolloCm: 1,
   bordeCm: 4,
-  ahorroMinRotacionCm: 20,
-  colmenaPermiteGiro: true,
   // ≈ un paño mínimo de roller (100×200). Un acomodo que deja un paño nuevo
   // tiene que ahorrar MÁS que eso en merma para ganarle al que no lo deja.
   colmenaPenalidadNuevoPanoCm2: 20000,

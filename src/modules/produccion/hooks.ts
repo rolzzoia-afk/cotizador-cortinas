@@ -33,7 +33,6 @@ import {
 } from '@/modules/cotizador/colmenaPanosStore';
 import { panosDibujados, type PanoDibujado } from '@/modules/cotizador/layoutPano';
 import { panosDeColmena } from './acomodoPlan';
-import { useDecisionesGiro } from './girosColmena';
 import type { PiezaColmenaSnap } from '@/modules/cotizador/colmenaCorte';
 import {
   colmenaDelLote,
@@ -375,15 +374,10 @@ export function useHojaCorte(
     () => (otsDelPlan?.length ? otsDelPlan : ot ? [ot] : []),
     [otsDelPlan, ot],
   );
-  // Los giros que el operario ya rechazó en el Plan de tela. Sin esto, la hoja
-  // y la pizarra dibujan la cortina acostada que él mandó al rollo.
-  const { sinGiro } = useDecisionesGiro(conjunto);
   const plan = useMemo(() => {
     if (!ot || rows.length === 0) return null;
-    return generarPlanCorte(conjunto, colmenaPanos, parametros, formulas, reglas.tipos, {
-      sinGiro,
-    });
-  }, [ot, rows.length, conjunto, colmenaPanos, parametros, formulas, reglas, sinGiro]);
+    return generarPlanCorte(conjunto, colmenaPanos, parametros, formulas, reglas.tipos);
+  }, [ot, rows.length, conjunto, colmenaPanos, parametros, formulas, reglas]);
 
   const hoja = useMemo(() => {
     if (!ot || rows.length === 0 || !plan) return null;
@@ -538,19 +532,15 @@ export function useHojaLote(ots: OT[]): {
     [listo, ots, catalogo, parametros, formulas, reglas],
   );
 
-  // Los giros que el operario rechazó en el Plan de tela: el lote arma el MISMO
-  // plan que él aprobó, no uno con la cortina acostada de vuelta.
-  const { sinGiro } = useDecisionesGiro(ots);
-
   // UN plan para todo el lote: el mismo que ve el Plan de Corte. Antes cada
   // pantalla armaba el suyo con las cortinas de una sola OT y podía asignar un
   // paño que otra orden del lote ya se había llevado.
   const plan = useMemo(
     () =>
       listo && ots.length > 0
-        ? generarPlanCorte(ots, colmenaPanos, parametros, formulas, reglas.tipos, { sinGiro })
+        ? generarPlanCorte(ots, colmenaPanos, parametros, formulas, reglas.tipos)
         : null,
-    [listo, ots, colmenaPanos, parametros, formulas, reglas, sinGiro],
+    [listo, ots, colmenaPanos, parametros, formulas, reglas],
   );
 
   const esColmena = useMemo(() => {

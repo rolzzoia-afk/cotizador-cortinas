@@ -10,20 +10,21 @@ const pieza = (
   py: number,
   pw: number,
   ph: number,
-  rot = false,
+  invertida = false,
 ): Placed => ({
   id: nombre,
   nombre,
   codInt: 'SC 65',
   otId: 'ot-1',
   otNum: '3300',
-  w: rot ? ph : pw,
-  h: rot ? pw : ph,
+  // Una invertida ya nace con las medidas cambiadas: `w`/`h` son como se apoya.
+  w: pw,
+  h: ph,
   px,
   py,
   pw,
   ph,
-  rot,
+  invertida,
   failed: false,
 });
 
@@ -41,13 +42,6 @@ const grupo = (extra: Partial<GrupoRollo> = {}): GrupoRollo => ({
   altoCorte: 287,
   efic: 89,
   sobInterno: null,
-  tieneRotaciones: false,
-  piezasRotadas: [],
-  layoutVertical: null,
-  altoVertical: null,
-  eficVertical: 0,
-  sobInternoV: null,
-  decisiones: {},
   ...extra,
 });
 
@@ -112,49 +106,25 @@ describe('panosDelPlan', () => {
     expect(p.cortes!.some((c) => c.eje === 'transversal')).toBe(true);
   });
 
-  it('una cortina más ancha que el rollo va girada: no hay otra forma', () => {
-    // El plan no tiene acomodo derecho (layoutVertical null): se dibuja el girado.
+  it('la INVERTIDA de la ficha se dibuja acostada y con las medidas de la ficha', () => {
+    // Se apoya 250 de ancho × 344 de largo; como cortina se vendió 344 × 250.
     const g = grupo({
       placed: [pieza('GALERIA', 0, 0, 250, 344, true)],
       altoUtil: 344,
       altoCorte: 346,
-      tieneRotaciones: true,
-      layoutVertical: null,
-      altoVertical: null,
     });
     const [p] = panosDelPlan(plan([g]));
-    // 344 de ancho no entra en los 298 útiles: la ficha ya la marca INVERTIDA,
-    // así que se rotula invertida y no «girada por el acomodo».
     expect(p.piezas[0].invertida).toBe(true);
-    expect(p.piezas[0].girada).toBe(false);
+    expect(p.piezas[0].anchoCm).toBe(344);
+    expect(p.piezas[0].altoCorteCm).toBe(250);
+    expect(p.piezas[0].pw).toBe(250);
   });
 
-  it('la que SÍ entraba derecha y el acomodo acostó va como GIRADA, no invertida', () => {
-    // 184 de ancho entra de sobra en los 298 del rollo: si sale acostada es
-    // decisión del acomodo. La ficha de Fase 1 no dice nada de eso.
+  it('el acomodo dibuja lo que el plan armó: ninguna cortina se gira acá', () => {
     const g = grupo({
-      placed: [pieza('BAÑO', 0, 0, 250, 184, true)],
-      altoUtil: 250,
-      altoCorte: 252,
-      tieneRotaciones: true,
-      layoutVertical: null,
-      altoVertical: null,
-    });
-    const [p] = panosDelPlan(plan([g]));
-    expect(p.piezas[0].girada).toBe(true);
-    expect(p.piezas[0].invertida).toBe(false);
-  });
-
-  it('si el plan PROPONE girar para ahorrar rollo, acá se dibuja el acomodo derecho', () => {
-    // HIJA A girada (195×259) con HIJA B al lado ahorra rollo, pero gira la
-    // tela: el acomodo muestra la versión derecha (dos bandas, 365 de alto).
-    const g = grupo({
-      placed: [pieza('HIJA A', 0, 0, 195, 259, true), pieza('HIJA B', 195, 0, 90, 170)],
-      altoUtil: 259,
-      altoCorte: 261,
-      tieneRotaciones: true,
-      layoutVertical: [pieza('HIJA A', 0, 0, 259, 195), pieza('HIJA B', 0, 195, 90, 170)],
-      altoVertical: 367,
+      placed: [pieza('HIJA A', 0, 0, 259, 195), pieza('HIJA B', 0, 195, 90, 170)],
+      altoUtil: 365,
+      altoCorte: 367,
     });
     const [p] = panosDelPlan(plan([g]));
     expect(p.piezas.every((x) => !x.invertida)).toBe(true);
@@ -163,7 +133,6 @@ describe('panosDelPlan', () => {
       ['HIJA A', 0],
       ['HIJA B', 195],
     ]);
-    // La franja se calcula sobre el acomodo derecho, no sobre el girado.
     expect(p.sobrante).toMatchObject({ anchoCm: 39, altoCm: 367 });
   });
 
@@ -268,8 +237,6 @@ describe('panosDeColmena — el trozo real que hay en el rack', () => {
         uh: 250,
         libres: libresClasificados(puestas, 300, 250),
         cortes: [],
-        tieneRotaciones: false,
-        piezasRotadas: [],
         costo: 0,
       },
     ],
@@ -300,13 +267,14 @@ describe('panosDeColmena — el trozo real que hay en el rack', () => {
     expect(p.sobrante).toBeNull();
   });
 
-  it('el giro dentro de un paño del rack es del ACOMODO, nunca la invertida de la ficha', () => {
+  it('en el rack también la única acostada es la INVERTIDA de la ficha', () => {
     const plan = conPanos();
-    // 150 de ancho entra en el rollo; lo que no entra es el paño de 250 de alto.
     plan.sobrantes[0].placed = [pieza('PPAL', 0, 0, 275, 150, true)];
     const [p] = panosDeColmena(plan);
-    expect(p.piezas[0].girada).toBe(true);
-    expect(p.piezas[0].invertida).toBe(false);
+    expect(p.piezas[0].invertida).toBe(true);
+    // Se apoya 275 × 150; como cortina se vendió 150 de ancho × 275 de alto.
+    expect(p.piezas[0].anchoCm).toBe(150);
+    expect(p.piezas[0].altoCorteCm).toBe(275);
   });
 
   it('el rótulo se adapta a la pizarra que lo muestra (el lote no dice «OT»)', () => {

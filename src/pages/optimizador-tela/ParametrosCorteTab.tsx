@@ -93,7 +93,7 @@ const CAMPOS: CampoDef[] = [
   {
     key: 'anchoRolloPlanCm',
     label: 'Ancho del rollo en plan de corte (cm)',
-    hint: 'Ancho físico del rollo; el útil descuenta 2× el margen.',
+    hint: 'Ancho físico del rollo; el útil descuenta 2× el margen. Tiene que dar el mismo ancho que "Ancho de rollo por defecto": con él se decide qué cortina no entra derecha.',
     grupo: 'rollo',
   },
   {
@@ -106,12 +106,6 @@ const CAMPOS: CampoDef[] = [
     key: 'bordeCm',
     label: 'Limpieza de bordes (cm)',
     hint: 'Se suma al ancho de cada pieza que se corta del rollo (Regla 5).',
-    grupo: 'rollo',
-  },
-  {
-    key: 'ahorroMinRotacionCm',
-    label: 'Ahorro mínimo para rotar (cm)',
-    hint: 'Solo se propone rotar piezas si el layout rotado ahorra al menos esto de rollo.',
     grupo: 'rollo',
   },
   // ── Colmena ──
@@ -178,7 +172,6 @@ export function ParametrosCorteTab() {
   const { parametros, loading, refresh } = useParametrosCotizador();
   const [valores, setValores] = useState<Record<string, string>>({});
   const [usarColmena, setUsarColmena] = useState(true);
-  const [permiteGiro, setPermiteGiro] = useState(true);
   const [modoCorte, setModoCorte] = useState<ModoCorte>('guillotina');
   const [saving, setSaving] = useState(false);
   const puedeEditar = esRolAdmin(perfil?.rol);
@@ -189,7 +182,6 @@ export function ParametrosCorteTab() {
     for (const c of CAMPOS) v[c.key] = String(parametros[c.key]);
     setValores(v);
     setUsarColmena(parametros.usarColmenaPanos !== false);
-    setPermiteGiro(parametros.colmenaPermiteGiro !== false);
     setModoCorte(parametros.modoCorte === 'multieje' ? 'multieje' : 'guillotina');
   }, [loading, parametros]);
 
@@ -198,7 +190,6 @@ export function ParametrosCorteTab() {
     const nuevos = {
       ...parametros,
       usarColmenaPanos: usarColmena,
-      colmenaPermiteGiro: permiteGiro,
       modoCorte,
     };
     for (const c of CAMPOS) {
@@ -227,7 +218,6 @@ export function ParametrosCorteTab() {
     for (const c of CAMPOS) v[c.key] = String(PARAMETROS_CORTE_DEFAULT[c.key]);
     setValores(v);
     setUsarColmena(PARAMETROS_CORTE_DEFAULT.usarColmenaPanos);
-    setPermiteGiro(PARAMETROS_CORTE_DEFAULT.colmenaPermiteGiro);
     setModoCorte(PARAMETROS_CORTE_DEFAULT.modoCorte);
     toast.info('Valores por defecto cargados. Presiona Guardar para aplicarlos.');
   };
@@ -330,32 +320,6 @@ export function ParametrosCorteTab() {
                         Los planes nuevos cortarán solo tela nueva.
                       </span>
                     )}
-                  </span>
-                </label>
-              )}
-
-              {/* Giro dentro del paño: igual que en el rollo, se propone y el
-                  operario lo autoriza cortina por cortina. */}
-              {g.key === 'colmena' && (
-                <label
-                  className={`mt-3 flex items-start gap-2.5 rounded-md border border-border bg-secondary/30 p-3 text-xs ${
-                    puedeEditar ? 'cursor-pointer' : ''
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    disabled={!puedeEditar || !usarColmena}
-                    checked={permiteGiro && usarColmena}
-                    onChange={(e) => setPermiteGiro(e.target.checked)}
-                  />
-                  <span>
-                    <span className="font-semibold">Permitir giro en la colmena</span>
-                    <span className="block text-[12px] leading-tight text-muted-foreground">
-                      Deja que el plan proponga una cortina acostada cuando así entra en un paño
-                      que derecha no la recibe. El operario la autoriza una por una antes de
-                      cortar, igual que en el rollo. Las verticales nunca se giran.
-                    </span>
                   </span>
                 </label>
               )}
