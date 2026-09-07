@@ -190,6 +190,20 @@ export type SistemaPrecio = {
    * donde la A trae 20-25 %. Editable a mano en la fila después.
    */
   descuentoDefault?: number;
+  /**
+   * Al invertir, la receta se calcula con el ancho y el alto CAMBIADOS.
+   *
+   * El beeblack se fabrica del riel para afuera: sus perfiles, zunchos y lamas
+   * se cortan del ancho y del alto de la ventana, así que una cortina girada
+   * gasta otra cantidad de cada uno —el ancho pasa a ser el alto en TODOS sus
+   * componentes (dueño, 2026-09-07)—. Sin esto, invertir un beeblack no movía
+   * el precio ni un peso.
+   *
+   * El roller NO lo lleva: lo único que se gira es el corte de la tela (que el
+   * motor ya calcula aparte), y su herraje se cobra por el ancho de la ventana
+   * igual que siempre.
+   */
+  giraMedidasAlInvertir?: boolean;
 };
 
 /**
@@ -303,7 +317,20 @@ export type ReglasPrecios = {
    * `REGLAS_PRECIOS_DEFAULT` y el del `return` de `normalizarReglasPrecios`.
    */
   cadenaMetalica: LineaReceta;
+  /**
+   * Qué insumos cambia una invertida cortada con TUBO DE 45 mm en vez del de
+   * 63. Como la cadena metálica, es un recambio que se le aplica ENCIMA a la
+   * receta que ya resolvió la cascada, no una receta guardada: así vale para
+   * las cuatro familias invertidas de una vez y no hay que migrar las recetas
+   * `|INV` que cada empresa ya tenga guardadas.
+   *
+   * También al final del tipo, por lo mismo que `cadenaMetalica`.
+   */
+  tuboInvertida45: RecambioInsumo[];
 };
+
+/** «Donde la receta diga `de`, poner `a`»: el recambio de un insumo por otro. */
+export type RecambioInsumo = { de: string; a: string };
 
 // ── Recetas de fábrica ────────────────────────────────────────────────
 // Extraídas 1:1 del hardcode de motorFase0.ts. El ORDEN de las líneas importa:
@@ -645,6 +672,51 @@ export function conCadenaMetalica(
   return lineas.map((l) => (esCadenaMando(l.insumo) ? metalica : l));
 }
 
+/**
+ * El recambio de fábrica para invertir con TUBO DE 45 mm: el mismo `E 05` del
+ * roller grande en lugar del 63 (`E 47`), y su kit `MEC 18` en lugar del
+ * `MEC 28`. Las cantidades no cambian —el tubo se cobra por metro lineal y el
+ * kit por cortina, igual que los del 63—, solo el código y su precio.
+ *
+ * `E 05` y `MEC 18` no están en la tabla del sistema invertida: se cobran con
+ * la tabla general, que es donde el roller ya los tiene. Para ponerles un
+ * precio propio de la invertida, agregarlos al sistema desde Admin.
+ */
+export const TUBO_INVERTIDA_45_DEFAULT: RecambioInsumo[] = [
+  { de: 'E 47', a: 'E 05' },
+  { de: 'MEC 28', a: 'MEC 18' },
+];
+
+/** Sufijo con que el desglose rotula la receta invertida armada con el 45. */
+export const SUFIJO_RECETA_INV_45 = '|45';
+
+/**
+ * La receta de una invertida con el tubo de 45 mm: la del 63 con sus insumos
+ * cambiados EN SU LUGAR (el orden gobierna la suma y los goldens).
+ *
+ * Si ningún recambio aplica devuelve el MISMO arreglo, igual que
+ * `conCadenaMetalica`: una familia invertida que no lleve el 63 (porque su
+ * receta es la de siempre) no cambia nada al elegir 45.
+ */
+export function conTuboInvertida45(
+  lineas: readonly LineaReceta[],
+  recambios: readonly RecambioInsumo[],
+): readonly LineaReceta[] {
+  const mapa = new Map(recambios.map((r) => [r.de, r.a]));
+  if (!lineas.some((l) => mapa.has(l.insumo))) return lineas;
+  return lineas.map((l) => {
+    const nuevo = mapa.get(l.insumo);
+    if (!nuevo) return l;
+    return {
+      ...l,
+      insumo: nuevo,
+      nota:
+        `Invertida con tubo de 45 mm: reemplaza a ${l.insumo} (el de 63 mm) por decisión ` +
+        'de la fila. El recambio se edita en Admin → Precios.',
+    };
+  });
+}
+
 /** COD de familia que se cotizan como beeblack. */
 export const FAMILIAS_BEEBLACK = ['BEE_BK', 'BEE_MOSQ', 'BEE_TRAS'] as const;
 
@@ -952,6 +1024,7 @@ export const SISTEMA_BEEBLACK_DEFAULT: SistemaPrecio = {
   instalacionLinea: 35000,
   codigoInstalacion: 'INST-BB',
   insumos: expandirInsumos(INSUMOS_BEEBLACK_VM, GRUPOS_INSUMO_BEEBLACK),
+  giraMedidasAlInvertir: true,
 };
 
 /**
@@ -1131,6 +1204,26 @@ export function sistemaDeFila(
 }
 
 /**
+ * ¿Tiene sentido preguntarle a esta fila CON QUÉ TUBO se invierte?
+ *
+ * Solo cuando la invertida se cotiza con el sistema INVERTIDA, que es el único
+ * que cambia de herraje (63 mm `E 47` + `MEC 28`, o 45 mm `E 05` + `MEC 18`).
+ * Un beeblack no lleva tubería —se invierte girando ancho y alto—, y una
+ * standard, una dúo o una categoría B invertidas se arman con su receta de
+ * siempre: en todos esos casos elegir diámetro no movería un peso, así que la
+ * grilla ni siquiera ofrece el menú. Es la MISMA condición que el motor usa
+ * para decidir si el tubo entra en la clave del panel (`sistemaInv`).
+ */
+export function eligeTuboInvertida(
+  cod: string,
+  lineaB: boolean | undefined,
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): boolean {
+  const inv = sistemaInvertida(sistemas);
+  return !!inv && sistemaDeFila(cod, lineaB, sistemas, true) === inv;
+}
+
+/**
  * El sistema al que pertenece una RECETA por su clave: las `|B` son del
  * sistema categoría B, las `|INV` del sistema invertida; el resto, el de su
  * familia (beeblack) o ninguno. Lo usan el validador y el «reponer insumos»
@@ -1270,6 +1363,7 @@ export const REGLAS_PRECIOS_DEFAULT: ReglasPrecios = {
   anchoRolloFallbackM: 2.45,
   telaVertical: TELA_VERTICAL_DEFAULT,
   cadenaMetalica: CADENA_METALICA_DEFAULT,
+  tuboInvertida45: TUBO_INVERTIDA_45_DEFAULT,
 };
 
 /** Cuántas lamas rinde una pasada del rollo (se desprecia la orilla sobrante). */
@@ -1593,8 +1687,11 @@ function saneaSistemas(crudo: unknown): Record<string, SistemaPrecio> {
 function saneaExtrasSistema(
   o: Record<string, unknown>,
   base: SistemaPrecio | undefined,
-): Pick<SistemaPrecio, 'telaPorFamilia' | 'descuentoDefault'> {
-  const out: Pick<SistemaPrecio, 'telaPorFamilia' | 'descuentoDefault'> = {};
+): Pick<SistemaPrecio, 'telaPorFamilia' | 'descuentoDefault' | 'giraMedidasAlInvertir'> {
+  const out: Pick<
+    SistemaPrecio,
+    'telaPorFamilia' | 'descuentoDefault' | 'giraMedidasAlInvertir'
+  > = {};
   if (o.telaPorFamilia && typeof o.telaPorFamilia === 'object') {
     const tela: Record<string, number> = {};
     for (const [fam, v] of Object.entries(o.telaPorFamilia as Record<string, unknown>)) {
@@ -1608,6 +1705,11 @@ function saneaExtrasSistema(
   const dcto = numeroFinito(o.descuentoDefault, NaN);
   if (Number.isFinite(dcto)) out.descuentoDefault = Math.max(0, Math.min(1, dcto));
   else if (base?.descuentoDefault !== undefined) out.descuentoDefault = base.descuentoDefault;
+  if (typeof o.giraMedidasAlInvertir === 'boolean') {
+    out.giraMedidasAlInvertir = o.giraMedidasAlInvertir;
+  } else if (base?.giraMedidasAlInvertir !== undefined) {
+    out.giraMedidasAlInvertir = base.giraMedidasAlInvertir;
+  }
   return out;
 }
 
@@ -1644,6 +1746,10 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
   // antes de que existiera).
   const cadenaMetalica = saneaReceta([o.cadenaMetalica])?.[0] ?? CADENA_METALICA_DEFAULT;
 
+  // El recambio del tubo de 45 mm: pares de códigos, sin números que sanear.
+  // Vacío o roto → el de fábrica (lo guardado antes de que existiera).
+  const tuboInvertida45 = saneaRecambios(o.tuboInvertida45) ?? TUBO_INVERTIDA_45_DEFAULT;
+
   // Reponer los insumos de fábrica que alguna receta vigente nombre y que el
   // guardado no traiga: si no, esa línea se cobraría a $0 en silencio. Una
   // receta de sistema busca primero en SU tabla; solo si tampoco está ahí se
@@ -1657,9 +1763,10 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
         if (fabrica[l.insumo]) insumosFinal[l.insumo] = fabrica[l.insumo];
       }
     }
-    // La cadena metálica no vive en ninguna receta: se repone aparte.
-    if (!insumosFinal[cadenaMetalica.insumo] && fabrica[cadenaMetalica.insumo]) {
-      insumosFinal[cadenaMetalica.insumo] = fabrica[cadenaMetalica.insumo];
+    // La cadena metálica no vive en ninguna receta: se repone aparte. Lo mismo
+    // el tubo de 45 de la invertida, que entra por recambio.
+    for (const cod of [cadenaMetalica.insumo, ...tuboInvertida45.map((r) => r.a)]) {
+      if (!insumosFinal[cod] && fabrica[cod]) insumosFinal[cod] = fabrica[cod];
     }
   }
 
@@ -1674,7 +1781,22 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
     anchoRolloFallbackM: anchoRollo > 0 ? anchoRollo : REGLAS_PRECIOS_DEFAULT.anchoRolloFallbackM,
     telaVertical: saneaTelaVertical(o.telaVertical),
     cadenaMetalica,
+    tuboInvertida45,
   };
+}
+
+/** Los pares de recambio guardados, o `null` si no hay ninguno usable. */
+function saneaRecambios(crudo: unknown): RecambioInsumo[] | null {
+  if (!Array.isArray(crudo)) return null;
+  const out: RecambioInsumo[] = [];
+  for (const x of crudo) {
+    if (!x || typeof x !== 'object') continue;
+    const o = x as Record<string, unknown>;
+    const de = String(o.de ?? '').trim();
+    const a = String(o.a ?? '').trim();
+    if (de && a) out.push({ de, a });
+  }
+  return out.length ? out : null;
 }
 
 /** Lo guardado antes de que existiera el cobro por lamas queda en modo paños. */

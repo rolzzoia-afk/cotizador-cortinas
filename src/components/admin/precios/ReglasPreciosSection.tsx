@@ -43,6 +43,7 @@ import {
 } from '@/modules/cotizador/reglasPreciosStore';
 import { ProbadorCotizacionSection } from './ProbadorCotizacionSection';
 import { CadenaMetalicaSection } from './CadenaMetalicaSection';
+import { TuboInvertidaSection } from './TuboInvertidaSection';
 import { InsumosPreciosSection } from './InsumosPreciosSection';
 import { RecetasFamiliasSection } from './RecetasFamiliasSection';
 import { SistemasPreciosSection } from './SistemasPreciosSection';
@@ -369,6 +370,17 @@ export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } 
           margenInsumo={parametros.margenInsumo}
           cadenaPlastica={draft.recetas.BLACKOUT_D?.find((l) => esCadenaMando(l.insumo))}
           onChange={(cadenaMetalica) => editar({ cadenaMetalica })}
+        />
+      )}
+
+      {/* El otro recambio que se aplica encima de la receta: el tubo con que
+          se invierte. Va al lado de la cadena metálica porque funciona igual. */}
+      {tab === 'recetas' && (
+        <TuboInvertidaSection
+          valor={draft.tuboInvertida45}
+          insumos={draft.insumos}
+          margenInsumo={parametros.margenInsumo}
+          onChange={(tuboInvertida45) => editar({ tuboInvertida45 })}
         />
       )}
 

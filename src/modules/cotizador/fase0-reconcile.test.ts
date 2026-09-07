@@ -122,6 +122,33 @@ describe('explotarVentanasAFilas', () => {
     expect(filas.map((f) => f.invertida)).toEqual([true, false, undefined]);
   });
 
+  it('el tubo de la invertida va y vuelve, y apagar el corte lo borra', () => {
+    const v: VentanaItem = {
+      id: 'v1',
+      codInt: 'SC 64',
+      alto: 2,
+      panos: [
+        { ancho: 3.2, alto: 2, invertida: true, invertidaTubo: 45 },
+        { ancho: 3.2, alto: 2, invertida: true, invertidaTubo: 99 }, // basura → se ignora
+        { ancho: 1.5, alto: 2, invertida: true, invertidaTubo: 45 },
+      ],
+    };
+    const { filas } = explotarVentanasAFilas([v], genIdSeq());
+    expect(filas.map((f) => f.invertidaTubo)).toEqual([45, undefined, 45]);
+    // Al guardar: el tubo acompaña al corte; si la fila lo apaga, se borra.
+    const panos = construirPanosDeGrupo(
+      [
+        { ...filas[0] },
+        { ...filas[1], invertidaTubo: 63 as const },
+        { ...filas[2], invertida: false },
+      ],
+      v.panos as Record<string, unknown>[],
+    );
+    expect(panos[0].invertidaTubo).toBe(45);
+    expect(panos[1].invertidaTubo).toBe(63);
+    expect(panos[2].invertidaTubo).toBeUndefined();
+  });
+
   it('la línea B viaja igual: solo el flag explícito, el auto se resuelve al vuelo', () => {
     const v: VentanaItem = {
       id: 'v1',

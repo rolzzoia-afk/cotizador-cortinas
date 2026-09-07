@@ -1,5 +1,7 @@
 // Tipos del cotizador. Portados desde public/legacy/index.html.
 
+import type { TuboInvertidaMm } from './tuboInvertida';
+
 export type Producto = {
   cod: string;
   producto: string;
@@ -197,6 +199,14 @@ export type Pano = {
    * (telas con dirección/diseño no se pueden rotar). Lo lee la hoja de corte.
    */
   invertida?: boolean;
+  /**
+   * Con qué TUBO se invierte: 63 mm (el de siempre, y lo que vale si está
+   * vacío) o 45 mm. Solo cambia el PRECIO —el tubo y su kit— en las familias
+   * roller premium/delux, que son las que van al sistema INVERTIDA; el mapeo a
+   * los códigos de producción (E39) todavía no está hecho.
+   * Ver modules/cotizador/tuboInvertida.ts.
+   */
+  invertidaTubo?: TuboInvertidaMm;
   /**
    * Línea de fabricación B (gama económica): kits MEC 06/15/37/44/45, tubo E01,
    * pesos E40/E69-B, cenefas E60/E72-B y, en dúo, peso U E25/E70-B + peso

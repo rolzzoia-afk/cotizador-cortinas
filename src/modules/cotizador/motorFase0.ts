@@ -32,12 +32,14 @@ import {
   SUFIJO_RECETA_2T,
   SUFIJO_RECETA_B,
   SUFIJO_RECETA_INV,
+  SUFIJO_RECETA_INV_45,
   SUFIJO_RECETA_MET,
   claveReceta,
   claveReceta2T,
   claveRecetaB,
   claveRecetaInv,
   conCadenaMetalica,
+  conTuboInvertida45,
   explicarCantidad,
   insumosDeSistema,
   lamasPorPasada,
@@ -62,6 +64,7 @@ import {
 } from './reglasPrecios';
 import type { CatalogoProductos } from './types';
 import { letraPano } from './letras';
+import { TUBO_INVERTIDA_DEFAULT, tuboInvertidaDe, type TuboInvertidaMm } from './tuboInvertida';
 
 export type FilaFase0 = {
   codInt: string;
@@ -92,6 +95,14 @@ export type FilaFase0 = {
    * medidas vendidas. Una fila B invertida sigue siendo B.
    */
   invertida?: boolean;
+  /**
+   * Con qué TUBO se invierte: 63 mm (el de siempre) o 45 mm, que cambia el
+   * tubo y el kit por los del roller grande (`E 05` + `MEC 18`, ver
+   * `tuboInvertida45` en las reglas). Vacío = 63. Solo cuenta cuando la
+   * familia va al sistema INVERTIDA; en las demás la invertida no cambia de
+   * herraje y el número no se usa.
+   */
+  invertidaTubo?: TuboInvertidaMm;
   /**
    * Categoría B (gama económica): lo que muestra el distintivo A/B de la
    * grilla, forzado a mano o por la gama de la tela. Una fila B se cotiza con
@@ -198,6 +209,8 @@ export type ResultadoFamilia = {
   invertida: boolean;
   /** Cotizado con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
   sistemaInvertida: boolean;
+  /** Con qué tubo se invirtió (63 o 45 mm). Solo significa algo con `sistemaInvertida`. */
+  invertidaTubo: TuboInvertidaMm;
   /**
    * Panel de la 2.ª tela de un doble: mismo sistema y misma tela que la
    * primera, con la receta `|2T` (sin el riel, que ya se cobró en la primera).
@@ -305,9 +318,11 @@ export type InstalacionResultado = {
 export type AvisoCotizacion = {
   /**
    * `catalogo` = la tela no existe · `tela` = no se pudo fijar el $/m ·
-   * `instalacion` = el valor unitario cambió por la instalación.
+   * `instalacion` = el valor unitario cambió por la instalación ·
+   * `rollo` = la pieza no cabe a lo ancho del rollo (el corte no se puede hacer
+   * así, aunque el precio se calcule igual).
    */
-  tipo: 'catalogo' | 'tela' | 'instalacion';
+  tipo: 'catalogo' | 'tela' | 'instalacion' | 'rollo';
   /** COD_INT de la fila (tipo `catalogo`) o COD de la familia (tipo `tela`). */
   codigo: string;
   mensaje: string;
@@ -762,6 +777,8 @@ export function cotizarFase0(
     invertida: boolean;
     /** Cotizada con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
     sistemaInv: boolean;
+    /** Con qué tubo se invierte (63 de siempre, 45 desde 2026-09-07). */
+    invertidaTubo: TuboInvertidaMm;
     /** 2.ª tela de un doble Y su familia cobra distinto la segunda (tiene receta `|2T`). */
     segundaTela: boolean;
     /** Con cadena metálica Y su receta lleva cadena de mando (si no, no cambia nada). */
@@ -783,6 +800,7 @@ export function cotizarFase0(
     lineaB: boolean;
     invertida: boolean;
     sistemaInv: boolean;
+    invertidaTubo: TuboInvertidaMm;
     /** Panel de la 2.ª tela de un doble: la receta `|2T`, sin el riel. */
     segundaTela: boolean;
     /** Panel con cadena metálica: la receta con `CAD 13` en vez de la plástica. */
@@ -862,6 +880,7 @@ export function cotizarFase0(
     cod: string,
     lineaB: boolean,
     invertida: boolean,
+    invertidaTubo: TuboInvertidaMm,
     esVertical: boolean,
     segundaTela: boolean,
     cadenaMetalica: boolean,
@@ -876,16 +895,23 @@ export function cotizarFase0(
       sistemaInv,
     });
     const conMetalica = cadenaMetalica && tieneCadenaMando(base.lineas);
+    // El tubo solo parte el panel cuando el sistema invertida es el que manda:
+    // en una familia que se invierte con su receta de siempre (standard, dúo)
+    // no cambia ningún insumo, y partirla daría dos paneles idénticos. Con 63
+    // la clave es la de siempre, para no mover las cotizaciones guardadas.
+    const tubo = sistemaInv ? invertidaTubo : TUBO_INVERTIDA_DEFAULT;
     return {
       clave:
         `${cod}` +
         `${enB ? SUFIJO_PANEL_B : ''}` +
         `${invertida ? SUFIJO_PANEL_INV : ''}` +
+        `${tubo !== TUBO_INVERTIDA_DEFAULT ? tubo : ''}` +
         `${dosTelas ? SUFIJO_PANEL_2T : ''}` +
         `${conMetalica ? SUFIJO_PANEL_MET : ''}`,
       lineaB: enB,
       invertida,
       sistemaInv,
+      invertidaTubo: tubo,
       segundaTela: dosTelas,
       cadenaMetalica: conMetalica,
       sistema,
@@ -929,6 +955,7 @@ export function cotizarFase0(
         cod,
         !!f.lineaB && !esVertical,
         !!f.invertida && !esVertical,
+        tuboInvertidaDe(f.invertidaTubo),
         esVertical,
         !!f.segundaTela,
         // Sin guarda de vertical: su receta también lleva cadena de mando
@@ -986,20 +1013,54 @@ export function cotizarFase0(
       let piezasCobradas = 0;
       let m2Cobrados = 0;
       for (const r of filasFam) {
-        const altoReal = altoRealM(r.f.alto, esDuo, extraAlto);
+        // Un sistema que se fabrica del riel para afuera (el beeblack) no corta
+        // la tela rotada: al invertirlo, «el alto pasa a ser ancho y el ancho a
+        // ser alto» (dueño, 2026-09-07), y la cortina se cotiza ENTERA con las
+        // medidas cambiadas —tela, m² y materiales—. Invertir un 1,3 × 2,5 sale
+        // exactamente lo mismo que vender un 2,5 × 1,3 derecho. Antes se giraban
+        // solo los materiales y la tela se cobraba rotada: el paño quedaba de
+        // 3,50 m de ancho (2,50 + el metro extra) contra un rollo de 2,98, o
+        // sea un corte imposible que abarataba la cortina.
+        const gira = c.invertida && !!c.sistema?.giraMedidasAlInvertir;
+        const ancho = gira ? r.f.alto : r.f.ancho;
+        const alto = gira ? r.f.ancho : r.f.alto;
+        // El sobreancho de corte (el peor caso de montaje que calcula Fase 1) es
+        // un margen fijo de la categoría: viaja con la medida que ahora hace de
+        // ancho, para que girar no lo pierda.
+        const anchoEmpaqueM =
+          r.f.anchoEmpaqueM === undefined ? undefined : ancho + (r.f.anchoEmpaqueM - r.f.ancho);
+        const altoReal = altoRealM(alto, esDuo, extraAlto);
         // Pieza INVERTIDA (rotada 90°): el alto real ocupa el ancho del rollo y
         // lo que se consume a lo largo es el ancho de la cortina (o su peor caso
         // de oscuridad) MÁS el extra, igual que un alto (Optimizador del Excel
         // de cortinas mayores: `ALTO A UTILIZAR = ancho + 0,25`). Los m² no
         // cambian: la cortina vendida es la misma.
+        const rotada = c.invertida && !gira;
         const pieza: Pieza = {
-          ancho: r.f.ancho,
-          alto: r.f.alto,
+          ancho,
+          alto,
           altoReal,
-          m2: altoReal * r.f.ancho,
-          anchoEmpaque: c.invertida ? altoReal : r.f.anchoEmpaqueM,
-          largoRollo: c.invertida ? (r.f.anchoEmpaqueM ?? r.f.ancho) + extraAlto : undefined,
+          m2: altoReal * ancho,
+          anchoEmpaque: rotada ? altoReal : anchoEmpaqueM,
+          largoRollo: rotada ? (anchoEmpaqueM ?? ancho) + extraAlto : undefined,
         };
+        // El corte tiene que caber a lo ancho del rollo. No cambia el precio
+        // —lo pidió así el dueño—, pero se avisa: si no, una cotización sale
+        // con una tela que el taller no puede cortar así. Solo por las cortinas
+        // que se cobran DE VERDAD con este panel: los demás paneles son tarifas
+        // hipotéticas («como si todas fueran invertidas») y avisarían de más.
+        const ocupa = pieza.anchoEmpaque ?? pieza.ancho;
+        if (r.config.clave === clave && anchoRollo > 0 && ocupa > anchoRollo + 0.001) {
+          avisar({
+            tipo: 'rollo',
+            codigo: r.f.codInt,
+            mensaje:
+              `«${r.f.codInt}» ${r.f.ancho} × ${r.f.alto}${c.invertida ? ' invertida' : ''}: ` +
+              `el paño necesita ${ocupa.toFixed(2)} m a lo ancho y el rollo mide ` +
+              `${anchoRollo.toFixed(2)} m. Se cobra igual, pero esa tela no se puede cortar ` +
+              'así: revisa la medida o el ancho de rollo del catálogo.',
+          });
+        }
         const n = Math.max(1, r.f.cantidad);
         for (let i = 0; i < n; i++) piezas.push({ ...pieza });
         if (r.config.clave === clave) {
@@ -1013,6 +1074,7 @@ export function cotizarFase0(
         lineaB: c.lineaB,
         invertida: c.invertida,
         sistemaInv: c.sistemaInv,
+        invertidaTubo: c.invertidaTubo,
         segundaTela: c.segundaTela,
         cadenaMetalica: c.cadenaMetalica,
         esDuo,
@@ -1071,12 +1133,24 @@ export function cotizarFase0(
     // la de su familia sin el riel, y hoy solo la tienen las tres del
     // beeblack, que no van ni a categoría B ni al sistema invertida.
     const base = recetaBaseDe(cod, g.esVertical, g);
-    // La cadena metálica se le aplica ENCIMA a la receta que quedó: cambia la
-    // línea de la cadena de mando por `CAD 13` (por metro) y deja el resto.
-    const claveRecetaUsada = base.clave + (g.cadenaMetalica ? SUFIJO_RECETA_MET : '');
-    const receta = g.cadenaMetalica
-      ? conCadenaMetalica(base.lineas, reglas.cadenaMetalica)
+    // Dos recambios se le aplican ENCIMA a la receta que quedó, en este orden:
+    // el tubo de 45 mm de la invertida (cambia `E 47`/`MEC 28` por `E 05`/
+    // `MEC 18`) y la cadena metálica (cambia la cadena de mando por `CAD 13`).
+    // Son independientes: tocan líneas distintas.
+    const con45 = g.sistemaInv && g.invertidaTubo === 45;
+    const claveRecetaUsada =
+      base.clave +
+      (con45 ? SUFIJO_RECETA_INV_45 : '') +
+      (g.cadenaMetalica ? SUFIJO_RECETA_MET : '');
+    const conTubo = con45
+      ? conTuboInvertida45(base.lineas, reglas.tuboInvertida45)
       : base.lineas;
+    const receta = g.cadenaMetalica
+      ? conCadenaMetalica(conTubo, reglas.cadenaMetalica)
+      : conTubo;
+    // Las piezas ya vienen con las medidas del panel: en un sistema que gira al
+    // invertirse (el beeblack) el ancho y el alto están cambiados desde arriba,
+    // así que sus perfiles, zunchos y lamas se cortan solos de la medida nueva.
     const materiales = materialesFamilia(
       receta,
       g.piezas,
@@ -1102,6 +1176,7 @@ export function cotizarFase0(
       lineaB: g.lineaB,
       invertida: g.invertida,
       sistemaInvertida: g.sistemaInv,
+      invertidaTubo: g.invertidaTubo,
       segundaTela: g.segundaTela,
       cadenaMetalica: g.cadenaMetalica,
       piezas: g.piezas.length,
@@ -1152,8 +1227,12 @@ export function cotizarFase0(
     const g = clave ? grupos.get(clave) : undefined;
     const cod = g?.cod ?? null;
     const esDuo = g?.esDuo ?? false;
-    const altoReal = altoRealM(f.alto, esDuo, extraAltoDe(g?.sistema));
-    const m2 = altoReal * f.ancho;
+    // Girada (beeblack invertido), la cortina se cobra con las medidas
+    // cambiadas: los m² tienen que salir de las MISMAS que armaron su panel, o
+    // el valor unitario se calcularía con una superficie y la tarifa con otra.
+    const gira = !!g?.invertida && !!g.sistema?.giraMedidasAlInvertir;
+    const altoReal = altoRealM(gira ? f.ancho : f.alto, esDuo, extraAltoDe(g?.sistema));
+    const m2 = altoReal * (gira ? f.alto : f.ancho);
     const precioM2 = clave ? pm2PorCod.get(clave) ?? 0 : 0;
     // Sin instalación: el cliente retira / solo cortina → VAL. UNIT = precio del
     // producto (m² × precio/m²), sin el cargo de instalación embebido.

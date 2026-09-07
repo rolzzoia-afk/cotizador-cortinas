@@ -1,4 +1,11 @@
 import { cn } from '@/lib/utils';
+import {
+  DIAMETROS_INVERTIDA,
+  TUBO_INVERTIDA_DEFAULT,
+  rotuloTuboInvertida,
+  tuboInvertidaDe,
+  type TuboInvertidaMm,
+} from '@/modules/cotizador/tuboInvertida';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 // Chips y filas compartidos con el wizard de terreno (vista interactiva).
@@ -152,6 +159,10 @@ type Props = {
   adicionalesFase0?: AdicionalFase0Persistido[];
   /** Ancho del rollo (m) para auto-sugerir corte invertido. Default 2,98. */
   anchoRollo?: number;
+  /** ¿Esta cortina elige el tubo con que se invierte? Solo las familias del
+   *  sistema INVERTIDA cambian de herraje; el beeblack no lleva tubería y una
+   *  standard/dúo/B se invierte con su receta de siempre (`eligeTuboInvertida`). */
+  puedeElegirTuboInvertida?: boolean;
   /** Fórmulas de corte editadas en Admin (Catálogo técnico). */
   formulas?: FormulasFamilias;
   /** Reglas de tubería/mecanismo editadas en Admin (para leer el diámetro de un
@@ -240,6 +251,7 @@ export function PanoEditor({
   onDireccionVentana,
   adicionalesFase0,
   anchoRollo = 2.98,
+  puedeElegirTuboInvertida = false,
   formulas = FORMULAS_DEFAULT,
   reglas = REGLAS_SELECCION_DEFAULT,
 }: Props) {
@@ -505,6 +517,29 @@ export function PanoEditor({
             </span>
           )}
         </div>
+        {invertida && puedeElegirTuboInvertida && (
+          // Con qué tubo se invierte: cambia el tubo y el kit del PRECIO (el
+          // de 45 usa E 05 + MEC 18 en vez del 63 mm E 47 + MEC 28). Es el
+          // mismo dato que elige el menú del botón INVERTIDA de Fase 1, y solo
+          // se pregunta donde cambia el herraje: el beeblack no lleva tubería.
+          <div className="mt-2">
+            <RadioRow
+              label="Tubo"
+              value={String(tuboInvertidaDe(pano.invertidaTubo))}
+              options={DIAMETROS_INVERTIDA.map((mm) => ({
+                value: String(mm),
+                label: rotuloTuboInvertida(mm),
+              }))}
+              onChange={(v) =>
+                onChange({
+                  invertidaTubo: v
+                    ? (Number(v) as TuboInvertidaMm)
+                    : TUBO_INVERTIDA_DEFAULT,
+                })
+              }
+            />
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-2">
           <Checkbox
             label="Categoría B (gama económica)"

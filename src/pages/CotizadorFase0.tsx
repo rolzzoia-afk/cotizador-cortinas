@@ -11,6 +11,12 @@ import { useAuth } from '@/lib/auth';
 import { esRolAdmin } from '@/lib/roles';
 import { useCatalogoProductos, useAnchoRollo } from '@/modules/cotizador/catalogo';
 import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
+import {
+  DIAMETROS_INVERTIDA,
+  rotuloTuboInvertida,
+  tuboInvertidaDe,
+  type TuboInvertidaMm,
+} from '@/modules/cotizador/tuboInvertida';
 import { claveCatalogoCanonica } from '@/modules/cotizador/importarCatalogo';
 import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
 import type { Ventana as VentanaFase2 } from '@/modules/cotizador/types';
@@ -77,7 +83,11 @@ import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
-import { codigosInstalacionAutomatica, sistemaCategoriaB } from '@/modules/cotizador/reglasPrecios';
+import {
+  codigosInstalacionAutomatica,
+  eligeTuboInvertida,
+  sistemaCategoriaB,
+} from '@/modules/cotizador/reglasPrecios';
 import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
 import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
@@ -172,6 +182,12 @@ type FilaUI = {
    * PanoEditor: undefined = auto según ancho de rollo; el click lo fija.
    */
   invertida?: boolean;
+  /**
+   * Con qué tubo se invierte (63 / 45 mm). Se elige en el menú del botón
+   * INVERTIDA; vacío = el de 63, el de siempre. Es por PAÑO, no de la ventana:
+   * dos paños de la misma ventana pueden ir con tubos distintos.
+   */
+  invertidaTubo?: TuboInvertidaMm;
   /**
    * Línea de fabricación B (gama económica) EXPLÍCITA — por paño, tri-estado
    * igual que `invertida`: undefined = auto según la categoría de la tela.
@@ -338,6 +354,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [filas, setFilas] = useState<FilaUI[]>([nuevaFila()]);
   /** Familia cuyo desglose de precio se está mirando (null = ninguno). */
   const [desgloseCod, setDesgloseCod] = useState<string | null>(null);
+  /** Fila con el menú «invertir con tubo de…» abierto (null = ninguno). */
+  const [menuTubo, setMenuTubo] = useState<string | null>(null);
   const [adicionales, setAdicionales] = useState<AdicionalUI[]>([]);
   // null = ningún filtro (la tabla ni se dibuja) · FILTRO_TODOS = el catálogo
   // entero · id de chip = ese chip. Arranca en null para no cargar la página
@@ -401,6 +419,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // datos ricos de Fase 2 al volver a guardar) y bandera de carga única.
   const [origVentanas, setOrigVentanas] = useState<Record<string, Record<string, unknown>>>({});
   const [cargadoEdit, setCargadoEdit] = useState(false);
+
+  // El menú del tubo de la invertida se cierra con Escape (el clic afuera lo
+  // cierra su propio fondo transparente).
+  useEffect(() => {
+    if (!menuTubo) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuTubo(null);
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [menuTubo]);
 
   useEffect(() => {
     if (!editOtId || !otCargada || cargadoEdit) return;
@@ -917,6 +946,8 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           f.ancho,
           resolverAnchoRollo(f.codInt, anchoRollo, catalogo, parametros.anchoRolloDefaultM),
         ),
+      // Con qué tubo se invierte: cambia el tubo y el kit de la receta.
+      invertidaTubo: f.invertidaTubo,
       // Categoría B: lo MISMO que muestra el distintivo A/B de la grilla (forzado
       // o por la gama de la tela). La B se cotiza con su propio sistema de
       // precios, en un panel aparte del de la A.
@@ -2188,19 +2219,78 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                           f.codInt, anchoRollo, catalogo, parametros.anchoRolloDefaultM,
                         );
                         const invEfectiva = f.invertida ?? debeInvertirPano(f.ancho, rollo);
+                        const tubo = tuboInvertidaDe(f.invertidaTubo);
+                        // El tubo solo se pregunta donde cambia el herraje: un
+                        // beeblack no lleva tubería (se invierte girando ancho y
+                        // alto) y una standard, una dúo o una B se invierten con
+                        // su receta de siempre. Ahí el botón es un interruptor.
+                        const eligeTubo = eligeTuboInvertida(
+                          prod?.cod || f.codInt,
+                          f.lineaB ?? gamaTelaEsB(f.codInt, catalogo),
+                          reglasPrecios.sistemas,
+                        );
+                        const abierto = eligeTubo && menuTubo === f.id;
                         return (
-                          <button
-                            onClick={() => setFila(f.id, { invertida: !invEfectiva })}
-                            title={`Corte invertido (rotado): no entra normal en el rollo (${rollo.toFixed(2)} m)`}
-                            className={cn(
-                              'rounded-md border p-1.5 transition-colors',
-                              invEfectiva
-                                ? 'border-amber-400 bg-amber-500 text-amber-950 shadow-[0_0_8px_rgba(245,158,11,0.55)]'
-                                : 'border-border text-muted-foreground opacity-60 hover:border-amber-500/60 hover:text-amber-500 hover:opacity-100',
+                          <div className="relative inline-flex items-center gap-1">
+                            <button
+                              onClick={() =>
+                                invEfectiva
+                                  ? (setFila(f.id, { invertida: false, invertidaTubo: undefined }),
+                                    setMenuTubo(null))
+                                  : eligeTubo
+                                    ? setMenuTubo(abierto ? null : f.id)
+                                    : setFila(f.id, { invertida: true })
+                              }
+                              title={`Corte invertido (rotado): no entra normal en el rollo (${rollo.toFixed(2)} m)`}
+                              className={cn(
+                                'rounded-md border p-1.5 transition-colors',
+                                invEfectiva
+                                  ? 'border-amber-400 bg-amber-500 text-amber-950 shadow-[0_0_8px_rgba(245,158,11,0.55)]'
+                                  : 'border-border text-muted-foreground opacity-60 hover:border-amber-500/60 hover:text-amber-500 hover:opacity-100',
+                              )}
+                            >
+                              <RotateCw className={cn('h-4 w-4', invEfectiva && 'stroke-[2.5]')} />
+                            </button>
+                            {invEfectiva && eligeTubo && (
+                              // El diámetro a la vista: es lo que cambia el tubo
+                              // y el kit, y sin esto no se sabe con cuál quedó.
+                              <button
+                                onClick={() => setMenuTubo(abierto ? null : f.id)}
+                                title="Con qué tubo se invierte"
+                                className="rounded border border-amber-400/60 px-1 py-0.5 text-[0.6rem] font-semibold text-amber-500 hover:bg-amber-500/10"
+                              >
+                                {tubo}
+                              </button>
                             )}
-                          >
-                            <RotateCw className={cn('h-4 w-4', invEfectiva && 'stroke-[2.5]')} />
-                          </button>
+                            {abierto && (
+                              <>
+                                <div
+                                  className="fixed inset-0 z-30"
+                                  onClick={() => setMenuTubo(null)}
+                                />
+                                <div className="absolute left-0 top-full z-40 mt-1 w-40 overflow-hidden rounded-md border bg-popover text-left shadow-lg">
+                                  <div className="border-b px-2 py-1 text-[0.6rem] uppercase tracking-wide text-muted-foreground">
+                                    Invertir con tubo
+                                  </div>
+                                  {DIAMETROS_INVERTIDA.map((mm) => (
+                                    <button
+                                      key={mm}
+                                      onClick={() => {
+                                        setFila(f.id, { invertida: true, invertidaTubo: mm });
+                                        setMenuTubo(null);
+                                      }}
+                                      className={cn(
+                                        'block w-full px-2 py-1.5 text-xs hover:bg-accent/60',
+                                        invEfectiva && tubo === mm && 'font-semibold text-amber-500',
+                                      )}
+                                    >
+                                      {rotuloTuboInvertida(mm)}
+                                    </button>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
                         );
                       })()}
                     </Td>

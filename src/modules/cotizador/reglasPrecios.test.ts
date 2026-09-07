@@ -7,6 +7,8 @@ import {
   REGLAS_PRECIOS_DEFAULT,
   RECETAS_DEFAULT,
   conCadenaMetalica,
+  conTuboInvertida45,
+  TUBO_INVERTIDA_45_DEFAULT,
   esCadenaMando,
   tieneCadenaMando,
   SISTEMA_CATEGORIA_B_KEY,
@@ -18,6 +20,7 @@ import {
   recetasDeSistema,
   resolverRecetaInv,
   sistemaCategoriaB,
+  eligeTuboInvertida,
   sistemaDeFila,
   sistemaDeReceta,
   sistemaInvertida,
@@ -209,6 +212,17 @@ describe('normalizarReglasPrecios', () => {
       const lineas = normalizarReglasPrecios({}).recetas[clave];
       expect(lineas.find((l) => l.insumo === 'MEC 05')?.cantidad).toMatchObject({ filtroAncho: { menorQue: 2.1 } });
       expect(lineas.find((l) => l.insumo === 'MEC 18')?.cantidad).toMatchObject({ filtroAncho: { mayorQue: 2.1 } });
+    }
+  });
+
+  it('el recambio del tubo de 45 se conserva, y sin él vuelve el de fábrica', () => {
+    const propio = [{ de: 'E 47', a: 'E 39' }];
+    expect(normalizarReglasPrecios({ tuboInvertida45: propio }).tuboInvertida45).toEqual(propio);
+    // Vacío, roto o ausente (lo guardado antes de que existiera) → fábrica.
+    for (const crudo of [undefined, [], 'x', [{ de: '', a: 'E 05' }]]) {
+      expect(normalizarReglasPrecios({ tuboInvertida45: crudo }).tuboInvertida45).toEqual(
+        TUBO_INVERTIDA_45_DEFAULT,
+      );
     }
   });
 
@@ -760,6 +774,20 @@ describe('sistema invertida', () => {
     expect(sistemaDeFila('BEE_BK', false, sistemas, true)?.nombre).toBe('Beeblack');
   });
 
+  it('el TUBO solo se pregunta donde cambia el herraje (el beeblack no lleva tubería)', () => {
+    const sistemas = REGLAS_PRECIOS_DEFAULT.sistemas;
+    expect(eligeTuboInvertida('BLACKOUT_D', false, sistemas)).toBe(true);
+    expect(eligeTuboInvertida('SCREEN_P', false, sistemas)).toBe(true);
+    // El beeblack se invierte girando ancho y alto, sin tubo que elegir.
+    expect(eligeTuboInvertida('BEE_BK', false, sistemas)).toBe(false);
+    // Standard y dúo se invierten con su receta de siempre; la B, con la suya.
+    expect(eligeTuboInvertida('BLACKOUT_S', false, sistemas)).toBe(false);
+    expect(eligeTuboInvertida('DUOBK_P', false, sistemas)).toBe(false);
+    expect(eligeTuboInvertida('BLACKOUT_D', true, sistemas)).toBe(false);
+    // Apagar el sistema invertida (se puede borrar) apaga también la pregunta.
+    expect(eligeTuboInvertida('BLACKOUT_D', false, {})).toBe(false);
+  });
+
   it('sus recetas |INV llevan el tubo 63 mm y el kit MEC 28 en vez de E 02/E 05 + MEC 18', () => {
     for (const fam of inv.familias) {
       expect(claveRecetaInv(fam, false), fam).toBe(`${fam}|INV`);
@@ -791,6 +819,29 @@ describe('sistema invertida', () => {
     const { errores, avisos } = validarReglasPrecios(r);
     expect(errores).toEqual([]);
     expect(avisos.some((a) => a.includes('Invertida') && a.includes('familia'))).toBe(false);
+  });
+
+  it('el recambio a 45 mm cambia los dos códigos EN SU LUGAR y no toca nada más', () => {
+    const base = resolverRecetaInv('BLACKOUT_D', false);
+    const con45 = conTuboInvertida45(base, TUBO_INVERTIDA_45_DEFAULT);
+    expect(con45.map((l) => l.insumo)).toEqual(
+      base.map((l) => (l.insumo === 'E 47' ? 'E 05' : l.insumo === 'MEC 28' ? 'MEC 18' : l.insumo)),
+    );
+    // Las cantidades y el tipo de precio no se tocan: solo el código.
+    con45.forEach((l, i) => {
+      expect(l.cantidad).toEqual(base[i].cantidad);
+      expect(l.precio).toBe(base[i].precio);
+    });
+    // Los dos códigos del 45 se cobran con la tabla GENERAL (la del roller).
+    expect(REGLAS_PRECIOS_DEFAULT.insumos['E 05']?.valorMaximo).toBeGreaterThan(0);
+    expect(REGLAS_PRECIOS_DEFAULT.insumos['MEC 18']?.valorMaximo).toBeGreaterThan(0);
+  });
+
+  it('una receta que no lleva el 63 vuelve TAL CUAL (misma referencia)', () => {
+    // Igual que la cadena metálica: así una familia sin nada que cambiar no
+    // gana panel propio ni se recalcula de más.
+    const s = RECETAS_DEFAULT.BLACKOUT_S;
+    expect(conTuboInvertida45(s, TUBO_INVERTIDA_45_DEFAULT)).toBe(s);
   });
 
   it('sacarle E 47 a su tabla avisa (se cobraría al precio general… que no existe)', () => {
