@@ -35,8 +35,17 @@ export const esCortinaTipo = (tipo: string | undefined): boolean =>
  * precio— la tela MÁS CARA de la familia. Este último caso es el riesgoso:
  * basta que entre un código ajeno con ese mismo COD para que suba el precio de
  * todas. `sinPrecio` es peor: ninguna tela de la familia tiene precio.
+ *
+ * `masCaraQueLaReferencia`: la familia SÍ declara referencia, pero esta tela
+ * vale más, así que cuando se vende ELLA fija el precio del grupo (el motor
+ * solo mira las telas de la cotización, nunca el catálogo entero).
  */
-export type OrigenPrecio = 'baseVertical' | 'arquetipo' | 'maxFamilia' | 'sinPrecio';
+export type OrigenPrecio =
+  | 'baseVertical'
+  | 'arquetipo'
+  | 'maxFamilia'
+  | 'masCaraQueLaReferencia'
+  | 'sinPrecio';
 
 export type FlujoProducto = {
   entra: 'cortina' | 'adicional';
@@ -83,9 +92,26 @@ export function flujoDeProducto(
 
   // El motivo lo decide el propio motor: acá no se vuelve a deducir para que no
   // pueda decir una cosa distinta de la que se cobra.
-  const { precio, arquetipo, motivo } = precioMlPorCod(cod, catalogo, reglas);
+  // Se cotiza como si la única tela vendida fuera ESTA: así la ficha dice lo
+  // que va a pagar quien la compre (su propio precio si supera a la
+  // referencia), no lo que pagaría por culpa de otra tela del grupo.
+  const { precio, arquetipo, motivo } = precioMlPorCod(
+    cod,
+    catalogo,
+    reglas,
+    undefined,
+    new Set([codInt]),
+  );
   const origenPrecio: OrigenPrecio =
-    motivo === 'base' ? 'baseVertical' : motivo === 'arquetipo' ? 'arquetipo' : motivo === 'maximo' ? 'maxFamilia' : 'sinPrecio';
+    motivo === 'base'
+      ? 'baseVertical'
+      : motivo === 'arquetipo'
+        ? 'arquetipo'
+        : motivo === 'maximo'
+          ? 'maxFamilia'
+          : motivo === 'masCaraVendida'
+            ? 'masCaraQueLaReferencia'
+            : 'sinPrecio';
   // Rota es la referencia que NO SE PUEDE usar: la que apunta a una tela que
   // ya no está en el catálogo o que quedó en $0. Que el precio lo haya fijado
   // otra tela no la rompe —desde que la referencia es un piso, una tela más

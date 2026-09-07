@@ -148,10 +148,13 @@ export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: O
   };
 
   // Con qué tela se le fija el precio a un código. Es el MISMO motor que cotiza,
-  // así que el costo hereda por donde hereda el precio.
+  // así que el costo hereda por donde hereda el precio. Se le pasa el propio
+  // código como «tela vendida»: si vale más que la de referencia, en la
+  // cotización mandó él.
   const telaReferencia = useMemo(
     () => (codInt: string) =>
-      precioMlPorCod(catalogo[codInt]?.cod || codInt, catalogo, reglas).arquetipo,
+      precioMlPorCod(catalogo[codInt]?.cod || codInt, catalogo, reglas, undefined, new Set([codInt]))
+        .arquetipo,
     [catalogo, reglas],
   );
 

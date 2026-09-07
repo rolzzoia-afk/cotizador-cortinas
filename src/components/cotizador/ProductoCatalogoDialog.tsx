@@ -408,6 +408,8 @@ export default function ProductoCatalogoDialog({
                     <span className="font-mono">{flujo.telaReferencia}</span>
                     {flujo.origenPrecio === 'maxFamilia' &&
                       ', que es la tela más cara de la familia porque no hay ninguna declarada como referencia'}
+                    {flujo.origenPrecio === 'masCaraQueLaReferencia' &&
+                      ': vale más que la tela de referencia de la familia, así que cuando esta tela va en la cotización manda ella'}
                     .
                   </>
                 ) : (

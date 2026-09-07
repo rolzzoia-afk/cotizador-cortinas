@@ -59,12 +59,14 @@ export function origenDelPrecioMl(f: ResultadoFamilia): string {
     case 'arquetipo':
       return `de ${f.arquetipoCodInt}, la tela de referencia de la familia`;
     case 'maximo':
-      // Gana el máximo tanto cuando la familia no tiene tela de referencia
-      // (beeblack) como cuando una tela supera a la referencia: la referencia
-      // es un piso, no un techo.
+      // Sin tela de referencia declarada (beeblack) manda el máximo del
+      // catálogo: es el `MAXIFS` literal del Excel.
       return f.arquetipoCodInt
         ? `de ${f.arquetipoCodInt}, la tela MÁS CARA de la familia`
         : 'la tela MÁS CARA de la familia';
+    case 'masCaraVendida':
+      // La referencia es un piso: una tela de esta cotización la superó.
+      return `de ${f.arquetipoCodInt}, la tela más cara de las que van en esta cotización (le gana a la tela de referencia de la familia)`;
     default:
       return 'ninguna tela de la familia tiene precio: la tela se cotiza en $0';
   }

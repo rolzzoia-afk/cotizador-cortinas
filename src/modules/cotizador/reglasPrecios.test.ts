@@ -185,6 +185,33 @@ describe('normalizarReglasPrecios', () => {
     expect(r.anchoRolloFallbackM).toBe(REGLAS_PRECIOS_DEFAULT.anchoRolloFallbackM);
   });
 
+  it('conserva los extremos ESTRICTOS del filtro de ancho (los dos kits de la B)', () => {
+    // El saneador guardaba solo min/max: al guardar precios desde Admin, las
+    // dos líneas de kit de la categoría B quedaban SIN filtro y cada roller B
+    // pagaba los dos. `sql/20260907_reparar_filtros_kit_b.sql` repara lo ya
+    // guardado; esto evita que vuelva a pasar.
+    const r = normalizarReglasPrecios({
+      recetas: {
+        SCREEN_P: [
+          { insumo: 'MEC 05', precio: 'venta', cantidad: { tipo: 'porCortina', filtroAncho: { menorQue: 2.1 } } },
+          { insumo: 'MEC 18', precio: 'venta', cantidad: { tipo: 'porCortina', filtroAncho: { mayorQue: 2.1 } } },
+          { insumo: 'E 02', precio: 'venta', cantidad: { tipo: 'sumaAnchos', filtroAncho: { max: 2.19 } } },
+        ],
+      },
+    });
+    expect(r.recetas.SCREEN_P.map((l) => l.cantidad)).toEqual([
+      { tipo: 'porCortina', factor: undefined, filtroAncho: { menorQue: 2.1 } },
+      { tipo: 'porCortina', factor: undefined, filtroAncho: { mayorQue: 2.1 } },
+      { tipo: 'sumaAnchos', factor: undefined, masFijoM: undefined, filtroAncho: { max: 2.19 } },
+    ]);
+    // Y las recetas B de fábrica llegan enteras: un kit por tramo, no los dos.
+    for (const clave of ['BLACKOUT_D|B', 'BLACKOUT_P|B', 'BLACKOUT_S|B', 'SCREEN_D|B', 'SCREEN_P|B', 'SCREEN_S|B']) {
+      const lineas = normalizarReglasPrecios({}).recetas[clave];
+      expect(lineas.find((l) => l.insumo === 'MEC 05')?.cantidad).toMatchObject({ filtroAncho: { menorQue: 2.1 } });
+      expect(lineas.find((l) => l.insumo === 'MEC 18')?.cantidad).toMatchObject({ filtroAncho: { mayorQue: 2.1 } });
+    }
+  });
+
   it('los arquetipos se mezclan por clave: lo guardado pisa, el resto queda de fábrica', () => {
     const r = normalizarReglasPrecios({ arquetipos: { SCREEN_P: 'SC-OTRO' } });
     expect(r.arquetipos.SCREEN_P).toBe('SC-OTRO');

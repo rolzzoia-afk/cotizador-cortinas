@@ -87,28 +87,38 @@ describe('flujoDeProducto', () => {
     expect(f.cod).toBe('SUELTA 1');
   });
 
-  it('una tela MÁS CARA que la de referencia manda: la referencia es un piso', () => {
+  it('la ficha de una tela MÁS CARA que la referencia muestra su propio precio', () => {
     // El caso que reportó el dueño: puso una tela a 100.000 y la cotización
     // seguía cobrando el arquetipo (31.000), porque la referencia cortaba la
-    // cascada antes de mirar la familia.
+    // cascada. La referencia es un piso: esta tela lo levanta.
     const cara = prod({ precio: 100000, descripcion: 'DICHROIC BEIGE' });
     const cat: CatalogoProductos = { ...CAT, 'BK 85': cara };
-    const f = flujoDeProducto(cat['BK 10'], 'BK 10', cat);
+    const f = flujoDeProducto(cat['BK 85'], 'BK 85', cat);
     expect(f.precioMl).toBe(100000);
-    expect(f.origenPrecio).toBe('maxFamilia');
+    expect(f.origenPrecio).toBe('masCaraQueLaReferencia');
     expect(f.telaReferencia).toBe('BK 85');
     // La referencia sigue estando bien: que otra tela la supere no la rompe.
     expect(f.referenciaDeclaradaRota).toBe('');
   });
 
+  it('una tela cara que NADIE compró no le sube el precio a la familia', () => {
+    // La regla del dueño (2026-09-07): el techo son las telas de la cotización,
+    // no el catálogo entero. Con el catálogo entero, una DELUX archivada por
+    // error bajo SCREEN_P le subía el precio a todas las screen.
+    const cat: CatalogoProductos = { ...CAT, 'BK 85': prod({ precio: 100000 }) };
+    const f = flujoDeProducto(cat['BK 10'], 'BK 10', cat);
+    expect(f.precioMl).toBe(31000);
+    expect(f.origenPrecio).toBe('arquetipo');
+    expect(f.telaReferencia).toBe('BK-D');
+  });
+
   it('si la referencia sigue siendo la más cara, el precio no se mueve', () => {
-    // La otra mitad de la regla: ninguna cotización puede BAJAR.
     const f = flujoDeProducto(CAT['BK 10'], 'BK 10', CAT);
     expect(f.precioMl).toBe(31000);
     expect(f.origenPrecio).toBe('arquetipo');
   });
 
-  it('la vertical también sube si su familia trae una tela más cara', () => {
+  it('la vertical también sube cuando la tela cara es la que se vende', () => {
     const caraV = prod({
       cod: 'BLACKOUT_V_D',
       producto: 'CORTINA VERTICAL BLACKOUT',
@@ -116,10 +126,17 @@ describe('flujoDeProducto', () => {
       precio: 88000,
     });
     const cat: CatalogoProductos = { ...CAT, 'VER 09': caraV };
-    const f = flujoDeProducto(cat['VER 01'], 'VER 01', cat);
-    expect(f.precioMl).toBe(88000);
-    expect(f.origenPrecio).toBe('maxFamilia');
-    expect(f.telaReferencia).toBe('VER 09');
+    expect(flujoDeProducto(cat['VER 09'], 'VER 09', cat)).toMatchObject({
+      precioMl: 88000,
+      origenPrecio: 'masCaraQueLaReferencia',
+      telaReferencia: 'VER 09',
+    });
+    // Y la barata de la misma familia sigue en la tela base del roller.
+    expect(flujoDeProducto(cat['VER 01'], 'VER 01', cat)).toMatchObject({
+      precioMl: 31000,
+      origenPrecio: 'baseVertical',
+      telaReferencia: 'BK-D',
+    });
   });
 
   it('el precio TECLEADO del sistema (categoría B) sigue mandando sobre todo', () => {
