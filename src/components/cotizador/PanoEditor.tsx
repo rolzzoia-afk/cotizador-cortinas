@@ -1,4 +1,11 @@
 import { cn } from '@/lib/utils';
+import {
+  DIAMETROS_INVERTIDA,
+  TUBO_INVERTIDA_DEFAULT,
+  rotuloTuboInvertida,
+  tuboInvertidaDe,
+  type TuboInvertidaMm,
+} from '@/modules/cotizador/tuboInvertida';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 // Chips y filas compartidos con el wizard de terreno (vista interactiva).
@@ -505,6 +512,28 @@ export function PanoEditor({
             </span>
           )}
         </div>
+        {invertida && (
+          // Con qué tubo se invierte: cambia el tubo y el kit del PRECIO (el
+          // de 45 usa E 05 + MEC 18 en vez del 63 mm E 47 + MEC 28). Es el
+          // mismo dato que elige el menú del botón INVERTIDA de Fase 1.
+          <div className="mt-2">
+            <RadioRow
+              label="Tubo"
+              value={String(tuboInvertidaDe(pano.invertidaTubo))}
+              options={DIAMETROS_INVERTIDA.map((mm) => ({
+                value: String(mm),
+                label: rotuloTuboInvertida(mm),
+              }))}
+              onChange={(v) =>
+                onChange({
+                  invertidaTubo: v
+                    ? (Number(v) as TuboInvertidaMm)
+                    : TUBO_INVERTIDA_DEFAULT,
+                })
+              }
+            />
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-2">
           <Checkbox
             label="Categoría B (gama económica)"

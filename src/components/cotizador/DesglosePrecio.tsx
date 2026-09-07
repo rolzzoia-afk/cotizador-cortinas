@@ -11,6 +11,7 @@
 import { AlertTriangle } from 'lucide-react';
 import { formatCLP } from '@/lib/formatters';
 import type { ResultadoFamilia } from '@/modules/cotizador/motorFase0';
+import { rotuloTuboInvertida } from '@/modules/cotizador/tuboInvertida';
 
 export const m2 = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 2 });
 export const mts = (n: number) => n.toLocaleString('es-CL', { maximumFractionDigits: 3 });
@@ -39,13 +40,21 @@ export function nombresDePiezas(
  * panel: es lo que los botones de la grilla deciden fila por fila.
  */
 export function comoSiFueran(
-  f: Pick<ResultadoFamilia, 'lineaB' | 'invertida' | 'segundaTela' | 'cadenaMetalica'>,
+  f: Pick<
+    ResultadoFamilia,
+    'lineaB' | 'invertida' | 'segundaTela' | 'cadenaMetalica' | 'sistemaInvertida' | 'invertidaTubo'
+  >,
 ): string {
   const conCadena = (txt: string) => (f.cadenaMetalica ? `${txt}, con cadena metálica` : txt);
+  // El tubo solo se nombra cuando de verdad cambia el herraje (sistema
+  // INVERTIDA); en las demás familias la invertida es solo el corte de la tela.
+  const inv = f.sistemaInvertida
+    ? `invertidas con tubo de ${rotuloTuboInvertida(f.invertidaTubo)}`
+    : 'invertidas';
   if (f.segundaTela) return conCadena('la 2.ª tela de un doble');
-  if (f.lineaB && f.invertida) return conCadena('de categoría B e invertidas');
+  if (f.lineaB && f.invertida) return conCadena(`de categoría B e ${inv}`);
   if (f.lineaB) return conCadena('de categoría B');
-  if (f.invertida) return conCadena('invertidas');
+  if (f.invertida) return conCadena(inv);
   return conCadena('de categoría A y derechas');
 }
 

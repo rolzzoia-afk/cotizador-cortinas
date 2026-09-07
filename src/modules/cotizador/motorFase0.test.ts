@@ -1047,6 +1047,68 @@ describe('motorFase0 — invertida (Excel «COTIZADOR PARA CORTINAS MAYORES A 3,
     expect(dos.familias[0].manoObra).toBe(60000);
     expect(dos.familias[0].traslado).toBe(50000);
   });
+
+  // ── Tubo de 45 mm (dueño, 2026-09-07) ──────────────────────────────
+  describe('invertida con tubo de 45 mm', () => {
+    const con45 = cotizarFase0([{ ...fila, invertidaTubo: 45 as const }], CAT, AR_INV);
+    const f45 = con45.familias[0];
+    const cant45 = (ins: string) => f45.materiales.find((m) => m.insumo === ins)?.cantidad;
+
+    it('cambia el tubo y el kit por los del 45, y deja el resto del panel igual', () => {
+      // Mismas cantidades que el 63 —el tubo por metro, el kit por cortina—:
+      // lo único que cambia es el código y, con él, el precio.
+      expect(cant45('E 05')).toBeCloseTo(4.2, 6);
+      expect(cant45('MEC 18')).toBe(1);
+      expect(f45.materiales.map((m) => m.insumo)).not.toEqual(
+        expect.arrayContaining(['E 47', 'MEC 28']),
+      );
+      // Sigue siendo el sistema INVERTIDA: tela, mano de obra y traslado propios.
+      expect(f45.sistemaInvertida).toBe(true);
+      expect(f45.invertidaTubo).toBe(45);
+      expect(f45.manoObra).toBe(30000);
+      expect(f45.traslado).toBe(50000);
+      expect(f45.metrosTela).toBeCloseTo(4.45, 6);
+      // El desglose dice con qué receta se armó.
+      expect(f45.claveReceta).toBe('BLACKOUT_D|INV|45');
+      // Y sale más barata que con el 63, que es de lo que se trata.
+      expect(f45.costoTotal).toBeLessThan(f.costoTotal);
+    });
+
+    it('el 63 explícito da EXACTAMENTE el golden de siempre', () => {
+      const g = cotizarFase0([{ ...fila, invertidaTubo: 63 as const }], CAT, AR_INV);
+      expect(g.familias[0].clave).toBe('BLACKOUT_D|INV');
+      expect(g.familias[0].claveReceta).toBe('BLACKOUT_D|INV');
+      expect(g.familias[0].costoTotal).toBeCloseTo(562354.53, 0);
+      // Y sin elegir nada, lo mismo: el default es el de siempre.
+      expect(f.invertidaTubo).toBe(63);
+    });
+
+    it('63 y 45 de la misma familia son paneles distintos', () => {
+      const mixta = cotizarFase0(
+        [fila, { ...fila, ancho: 3.5, invertidaTubo: 45 as const }],
+        CAT,
+        AR_INV,
+      );
+      expect(mixta.familias.map((x) => x.clave).sort()).toEqual([
+        'BLACKOUT_D|INV',
+        'BLACKOUT_D|INV45',
+      ]);
+      expect(mixta.lineas[0].valorUnit).not.toBeCloseTo(mixta.lineas[1].valorUnit, 0);
+    });
+
+    it('en una familia que NO va al sistema invertida, el tubo no parte el panel', () => {
+      // La standard se invierte con su receta de siempre: no hay 63 que cambiar.
+      const s = cotizarFase0(
+        [
+          { codInt: 'BK 50', ancho: 3.2, alto: 1.7, cantidad: 1, invertida: true },
+          { codInt: 'BK 50', ancho: 3.3, alto: 1.7, cantidad: 1, invertida: true, invertidaTubo: 45 as const },
+        ],
+        CAT,
+        AR,
+      );
+      expect(s.familias.map((x) => x.clave)).toEqual(['BLACKOUT_S|INV']);
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1832,6 +1894,48 @@ describe('motorFase0 — beeblack (COTAP-8003, la copia canónica)', () => {
     const r = cotizarFase0(FILAS, CAT_COTAP, AR_COTAP, [], PARAMETROS_DEFAULT, false, false, undefined, 1);
     expect(Math.round(r.subtotalNeto)).toBe(1835123);
     expect(Math.round(r.totales.totalTransferencia)).toBe(2183796);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// BEEBLACK INVERTIDO — el dueño (2026-09-07): «si invierto el beeblack no
+// pasa nada en el precio, debería cambiar porque el ancho pasa a ser alto, en
+// todos sus componentes». El beeblack se fabrica del riel para afuera, así que
+// girarlo cambia cuánto se corta de cada perfil.
+// ─────────────────────────────────────────────────────────────────────
+describe('motorFase0 — beeblack invertido gira ancho y alto', () => {
+  const FILA = { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 1 };
+  const derecha = cotizarFase0([FILA], CAT_BB, AR_BB).familias[0];
+  const girada = cotizarFase0([{ ...FILA, invertida: true }], CAT_BB, AR_BB).familias[0];
+  const cant = (f: typeof derecha, ins: string) =>
+    f.materiales.find((m) => m.insumo === ins)?.cantidad ?? 0;
+
+  it('las líneas por ancho pasan a medir el alto, y al revés', () => {
+    // SML10 va por suma de ALTOS: derecha mide 0,493 y girada 0,82.
+    expect(cant(derecha, 'SML10')).toBeCloseTo(0.493, 6);
+    expect(cant(girada, 'SML10')).toBeCloseTo(0.82, 6);
+    // SML34 (×4) y SML38 (×16) siguen al mismo alto.
+    expect(cant(girada, 'SML34')).toBeCloseTo(0.82 * 4, 6);
+    expect(cant(girada, 'SML38')).toBeCloseTo(0.82 * 16, 6);
+    // El riel (por suma de ANCHOS × 2) pasa a medir el alto.
+    expect(cant(derecha, 'SLM01')).toBeCloseTo(0.82 * 2, 6);
+    expect(cant(girada, 'SLM01')).toBeCloseTo(0.493 * 2, 6);
+  });
+
+  it('lo que se cuenta por cortina no cambia, y el precio sí', () => {
+    expect(cant(girada, 'SML13')).toBe(cant(derecha, 'SML13'));
+    expect(girada.costoMateriales).not.toBeCloseTo(derecha.costoMateriales, 2);
+    // Los m² vendidos son los mismos: la cortina es la misma.
+    expect(girada.m2Total).toBeCloseTo(derecha.m2Total, 6);
+  });
+
+  it('el roller invertido NO gira: su herraje se sigue cobrando por el ancho', () => {
+    const r = cotizarFase0(
+      [{ codInt: 'BK-D', ancho: 4.2, alto: 1.7, cantidad: 1, invertida: true }],
+      CAT,
+      { ...AR, 'BK-D': 2.95 },
+    );
+    expect(r.familias[0].materiales.find((m) => m.insumo === 'E 47')?.cantidad).toBeCloseTo(4.2, 6);
   });
 });
 

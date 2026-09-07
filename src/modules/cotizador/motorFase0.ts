@@ -32,12 +32,14 @@ import {
   SUFIJO_RECETA_2T,
   SUFIJO_RECETA_B,
   SUFIJO_RECETA_INV,
+  SUFIJO_RECETA_INV_45,
   SUFIJO_RECETA_MET,
   claveReceta,
   claveReceta2T,
   claveRecetaB,
   claveRecetaInv,
   conCadenaMetalica,
+  conTuboInvertida45,
   explicarCantidad,
   insumosDeSistema,
   lamasPorPasada,
@@ -62,6 +64,7 @@ import {
 } from './reglasPrecios';
 import type { CatalogoProductos } from './types';
 import { letraPano } from './letras';
+import { TUBO_INVERTIDA_DEFAULT, tuboInvertidaDe, type TuboInvertidaMm } from './tuboInvertida';
 
 export type FilaFase0 = {
   codInt: string;
@@ -92,6 +95,14 @@ export type FilaFase0 = {
    * medidas vendidas. Una fila B invertida sigue siendo B.
    */
   invertida?: boolean;
+  /**
+   * Con qué TUBO se invierte: 63 mm (el de siempre) o 45 mm, que cambia el
+   * tubo y el kit por los del roller grande (`E 05` + `MEC 18`, ver
+   * `tuboInvertida45` en las reglas). Vacío = 63. Solo cuenta cuando la
+   * familia va al sistema INVERTIDA; en las demás la invertida no cambia de
+   * herraje y el número no se usa.
+   */
+  invertidaTubo?: TuboInvertidaMm;
   /**
    * Categoría B (gama económica): lo que muestra el distintivo A/B de la
    * grilla, forzado a mano o por la gama de la tela. Una fila B se cotiza con
@@ -198,6 +209,8 @@ export type ResultadoFamilia = {
   invertida: boolean;
   /** Cotizado con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
   sistemaInvertida: boolean;
+  /** Con qué tubo se invirtió (63 o 45 mm). Solo significa algo con `sistemaInvertida`. */
+  invertidaTubo: TuboInvertidaMm;
   /**
    * Panel de la 2.ª tela de un doble: mismo sistema y misma tela que la
    * primera, con la receta `|2T` (sin el riel, que ya se cobró en la primera).
@@ -762,6 +775,8 @@ export function cotizarFase0(
     invertida: boolean;
     /** Cotizada con el sistema INVERTIDA: tubo 63 mm + MEC 28, mano de obra y traslado propios. */
     sistemaInv: boolean;
+    /** Con qué tubo se invierte (63 de siempre, 45 desde 2026-09-07). */
+    invertidaTubo: TuboInvertidaMm;
     /** 2.ª tela de un doble Y su familia cobra distinto la segunda (tiene receta `|2T`). */
     segundaTela: boolean;
     /** Con cadena metálica Y su receta lleva cadena de mando (si no, no cambia nada). */
@@ -783,6 +798,7 @@ export function cotizarFase0(
     lineaB: boolean;
     invertida: boolean;
     sistemaInv: boolean;
+    invertidaTubo: TuboInvertidaMm;
     /** Panel de la 2.ª tela de un doble: la receta `|2T`, sin el riel. */
     segundaTela: boolean;
     /** Panel con cadena metálica: la receta con `CAD 13` en vez de la plástica. */
@@ -862,6 +878,7 @@ export function cotizarFase0(
     cod: string,
     lineaB: boolean,
     invertida: boolean,
+    invertidaTubo: TuboInvertidaMm,
     esVertical: boolean,
     segundaTela: boolean,
     cadenaMetalica: boolean,
@@ -876,16 +893,23 @@ export function cotizarFase0(
       sistemaInv,
     });
     const conMetalica = cadenaMetalica && tieneCadenaMando(base.lineas);
+    // El tubo solo parte el panel cuando el sistema invertida es el que manda:
+    // en una familia que se invierte con su receta de siempre (standard, dúo)
+    // no cambia ningún insumo, y partirla daría dos paneles idénticos. Con 63
+    // la clave es la de siempre, para no mover las cotizaciones guardadas.
+    const tubo = sistemaInv ? invertidaTubo : TUBO_INVERTIDA_DEFAULT;
     return {
       clave:
         `${cod}` +
         `${enB ? SUFIJO_PANEL_B : ''}` +
         `${invertida ? SUFIJO_PANEL_INV : ''}` +
+        `${tubo !== TUBO_INVERTIDA_DEFAULT ? tubo : ''}` +
         `${dosTelas ? SUFIJO_PANEL_2T : ''}` +
         `${conMetalica ? SUFIJO_PANEL_MET : ''}`,
       lineaB: enB,
       invertida,
       sistemaInv,
+      invertidaTubo: tubo,
       segundaTela: dosTelas,
       cadenaMetalica: conMetalica,
       sistema,
@@ -929,6 +953,7 @@ export function cotizarFase0(
         cod,
         !!f.lineaB && !esVertical,
         !!f.invertida && !esVertical,
+        tuboInvertidaDe(f.invertidaTubo),
         esVertical,
         !!f.segundaTela,
         // Sin guarda de vertical: su receta también lleva cadena de mando
@@ -1013,6 +1038,7 @@ export function cotizarFase0(
         lineaB: c.lineaB,
         invertida: c.invertida,
         sistemaInv: c.sistemaInv,
+        invertidaTubo: c.invertidaTubo,
         segundaTela: c.segundaTela,
         cadenaMetalica: c.cadenaMetalica,
         esDuo,
@@ -1071,15 +1097,33 @@ export function cotizarFase0(
     // la de su familia sin el riel, y hoy solo la tienen las tres del
     // beeblack, que no van ni a categoría B ni al sistema invertida.
     const base = recetaBaseDe(cod, g.esVertical, g);
-    // La cadena metálica se le aplica ENCIMA a la receta que quedó: cambia la
-    // línea de la cadena de mando por `CAD 13` (por metro) y deja el resto.
-    const claveRecetaUsada = base.clave + (g.cadenaMetalica ? SUFIJO_RECETA_MET : '');
-    const receta = g.cadenaMetalica
-      ? conCadenaMetalica(base.lineas, reglas.cadenaMetalica)
+    // Dos recambios se le aplican ENCIMA a la receta que quedó, en este orden:
+    // el tubo de 45 mm de la invertida (cambia `E 47`/`MEC 28` por `E 05`/
+    // `MEC 18`) y la cadena metálica (cambia la cadena de mando por `CAD 13`).
+    // Son independientes: tocan líneas distintas.
+    const con45 = g.sistemaInv && g.invertidaTubo === 45;
+    const claveRecetaUsada =
+      base.clave +
+      (con45 ? SUFIJO_RECETA_INV_45 : '') +
+      (g.cadenaMetalica ? SUFIJO_RECETA_MET : '');
+    const conTubo = con45
+      ? conTuboInvertida45(base.lineas, reglas.tuboInvertida45)
       : base.lineas;
+    const receta = g.cadenaMetalica
+      ? conCadenaMetalica(conTubo, reglas.cadenaMetalica)
+      : conTubo;
+    // Un sistema que se fabrica del riel para afuera (el beeblack) cotiza la
+    // cortina GIRADA con el ancho y el alto cambiados: sus perfiles, zunchos y
+    // lamas se cortan de esas dos medidas, así que invertirla cambia cuánto se
+    // gasta de cada uno. La tela ya se calculó rotada más arriba y los m² son
+    // los mismos: acá solo cambian los materiales.
+    const piezasMateriales =
+      g.invertida && g.sistema?.giraMedidasAlInvertir
+        ? g.piezas.map((p) => ({ ...p, ancho: p.alto, alto: p.ancho }))
+        : g.piezas;
     const materiales = materialesFamilia(
       receta,
-      g.piezas,
+      piezasMateriales,
       insumosDeSistema(g.sistema, reglas),
       margenInsumo,
       reglas.telaVertical.pasoLamaM,
@@ -1102,6 +1146,7 @@ export function cotizarFase0(
       lineaB: g.lineaB,
       invertida: g.invertida,
       sistemaInvertida: g.sistemaInv,
+      invertidaTubo: g.invertidaTubo,
       segundaTela: g.segundaTela,
       cadenaMetalica: g.cadenaMetalica,
       piezas: g.piezas.length,

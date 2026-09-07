@@ -129,6 +129,14 @@ function Sistema({
       <div className="mb-2 flex flex-wrap items-baseline gap-2">
         <span className="text-xs font-semibold">{sistema.nombre}</span>
         <span className="font-mono text-[0.65rem] text-muted-foreground">{clave}</span>
+        {/* No es editable: es cómo se fabrica el sistema, no un parámetro
+            comercial. Se dice para que el cambio de precio al invertir no
+            parezca un error. */}
+        {sistema.giraMedidasAlInvertir && (
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
+            al invertir, sus materiales se calculan con el ancho y el alto cambiados
+          </span>
+        )}
       </div>
 
       {/* Qué familias cotiza. Se edita acá porque es lo que decide a qué
