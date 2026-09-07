@@ -27,11 +27,11 @@ import {
 } from '@/modules/cotizador/catalogoEdicion';
 import { flujoDeProducto } from '@/modules/cotizador/flujoCatalogo';
 import {
-  CHIP_IDS,
-  FILTROS_CATALOGO,
   chipDeProducto,
+  filtrosCatalogoCon,
   labelChip,
 } from '@/modules/cotizador/filtrosCatalogo';
+import { useChipsCustom } from '@/modules/cotizador/chipsCustomStore';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
 import { formatCLP } from '@/lib/formatters';
 import { FotosInformeEditor, fotosHuerfanas } from '@/components/admin/FotosInformeEditor';
@@ -86,12 +86,17 @@ export default function ProductoCatalogoDialog({
     const g = String(prev?.categoria ?? '').trim().toUpperCase();
     return g === 'A' || g === 'B' ? g : '';
   });
+  // Las categorías del catálogo, con las PROPIAS de la empresa incluidas: sin
+  // ellas, un producto asignado a una categoría propia perdería su asignación
+  // al abrir su ficha (el chip no estaría en la lista de ids válidos).
+  const { chips: chipsPropios } = useChipsCustom();
+  const filtros = useMemo(() => filtrosCatalogoCon(chipsPropios), [chipsPropios]);
+  const idsChip = useMemo(() => filtros.map((f) => f.id), [filtros]);
   // Chip del catálogo de Fase 1. '' = automático (se deduce del COD_INT o de la
   // familia); un id explícito lo fija a mano.
-  const [chip, setChip] = useState(() => {
-    const c = String(prev?.chip ?? '').trim().toUpperCase();
-    return CHIP_IDS.includes(c) ? c : '';
-  });
+  const [chip, setChip] = useState(() =>
+    String(prev?.chip ?? '').trim().toUpperCase(),
+  );
   // Ficha de la tela: la lámina que va en la sección de esa habitación del
   // INFORME CLIENTE. Se maneja como lista de una para reusar el cargador.
   const [foto, setFoto] = useState<string[]>(prev?.foto ? [prev.foto] : []);
@@ -104,8 +109,9 @@ export default function ProductoCatalogoDialog({
       chipDeProducto(
         { cod: cod.trim(), producto: nombre.trim(), tipo: '', descripcion: '', precio: 0 },
         normCod(ci),
+        idsChip,
       ),
-    [cod, nombre, ci],
+    [cod, nombre, ci, idsChip],
   );
 
   const familias = useMemo(() => familiasDelCatalogo(catalogo), [catalogo]);
@@ -339,8 +345,13 @@ export default function ProductoCatalogoDialog({
               onChange={(e) => setChip(e.target.value)}
               className="h-9 w-full rounded-md border border-border bg-secondary px-2 text-sm"
             >
-              <option value="">— automático ({labelChip(chipAuto)}) —</option>
-              {FILTROS_CATALOGO.map((f) => (
+              <option value="">— automático ({labelChip(chipAuto, chipsPropios)}) —</option>
+              {/* Una categoría propia que alguien borró: se muestra para que
+                  se vea por qué el producto dejó de aparecer donde estaba. */}
+              {chip && !idsChip.includes(chip) && (
+                <option value={chip}>{chip} (ya no existe)</option>
+              )}
+              {filtros.map((f) => (
                 <option key={f.id} value={f.id}>
                   {f.label}
                 </option>

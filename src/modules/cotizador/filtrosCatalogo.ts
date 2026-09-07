@@ -71,16 +71,24 @@ const REGLAS_POR_COD: { chip: string; test: (cod: string) => boolean }[] = [
  *  3. Las reglas por familia.
  *  4. `OTROS`.
  */
-export function chipDeProducto(p: Producto, codInt: string): string {
+export function chipDeProducto(
+  p: Producto,
+  codInt: string,
+  /** Ids que se aceptan como chip elegido a mano. Con las categorías propias
+   *  de la empresa, para que un producto asignado a una de ellas no se caiga
+   *  de vuelta a su chip automático. */
+  idsValidos: readonly string[] = CHIP_IDS,
+): string {
   const explicito = N(p.chip).trim();
-  if (explicito && CHIP_IDS.includes(explicito)) return explicito;
+  if (explicito && idsValidos.includes(explicito)) return explicito;
   const porCodInt = CHIP_DE_CODINT[(codInt || '').trim()];
   if (porCodInt) return porCodInt;
   const cod = N(p.cod).trim();
   return REGLAS_POR_COD.find((r) => r.test(cod))?.chip ?? CHIP_OTROS;
 }
 
-export const FILTROS_CATALOGO: Filtro[] = [
+/** Los chips de fábrica, sin su `match` (que depende de la lista completa). */
+const CHIPS_FABRICA: Omit<Filtro, 'match'>[] = [
   { id: 'BK', label: 'BK', cls: 'bg-amber-100 text-amber-900 border-amber-400', hexDefault: '#fef3c7' },
   { id: 'BK_V', label: 'BK VERT', cls: 'bg-orange-200 text-orange-900 border-orange-400', hexDefault: '#fed7aa' },
   { id: 'SCR', label: 'SCR', cls: 'bg-green-200 text-green-900 border-green-500', hexDefault: '#bbf7d0' },
@@ -94,11 +102,38 @@ export const FILTROS_CATALOGO: Filtro[] = [
   { id: 'MOTOR_GRANDE', label: 'MOTOR GRANDE', cls: 'bg-fuchsia-500 text-white border-fuchsia-700', hexDefault: '#d946ef' },
   { id: 'MOTOR_MG', label: 'MOTOR MG', cls: 'bg-gray-400 text-gray-950 border-gray-600', hexDefault: '#9ca3af' },
   { id: CHIP_OTROS, label: 'Otros', cls: 'bg-stone-300 text-stone-900 border-stone-500', hexDefault: '#d6d3d1' },
-].map((f) => ({ ...f, match: (p: Producto, ci: string) => chipDeProducto(p, ci) === f.id }));
+];
 
-/** Ids válidos de chip (para validar el `chip` guardado en un producto). */
-export const CHIP_IDS: string[] = FILTROS_CATALOGO.map((f) => f.id);
+/** Ids de chip de FÁBRICA (para validar el `chip` guardado en un producto). */
+export const CHIP_IDS: string[] = CHIPS_FABRICA.map((f) => f.id);
+
+/**
+ * La lista de chips con la que se dibuja y se filtra el catálogo: los de
+ * fábrica más las categorías PROPIAS de la empresa, con «Otros» siempre al
+ * final (es el cajón de sastre, y ahí también caen los productos cuyo chip
+ * propio alguien borró).
+ *
+ * Los `match` se arman con la lista COMPLETA de ids: si se armaran solo con
+ * los de fábrica, un producto asignado a una categoría propia no calzaría en
+ * ninguna —ni en la suya ni en su chip automático— y desaparecería.
+ */
+export function filtrosCatalogoCon(propias: readonly { id: string; label: string; hex: string }[]): Filtro[] {
+  const custom = propias.map((c) => ({ id: c.id, label: c.label, cls: '', hexDefault: c.hex }));
+  const sinOtros = CHIPS_FABRICA.filter((f) => f.id !== CHIP_OTROS);
+  const otros = CHIPS_FABRICA.filter((f) => f.id === CHIP_OTROS);
+  const todos = [...sinOtros, ...custom, ...otros];
+  const ids = todos.map((f) => f.id);
+  return todos.map((f) => ({
+    ...f,
+    match: (p: Producto, ci: string) => chipDeProducto(p, ci, ids) === f.id,
+  }));
+}
+
+/** Los chips de fábrica, sin categorías propias. */
+export const FILTROS_CATALOGO: Filtro[] = filtrosCatalogoCon([]);
 
 /** Label visible de un chip; si el id no existe, el id crudo. */
-export const labelChip = (id: string): string =>
-  FILTROS_CATALOGO.find((f) => f.id === id)?.label ?? id;
+export const labelChip = (id: string, propias: readonly { id: string; label: string }[] = []): string =>
+  propias.find((c) => c.id === id)?.label ??
+  FILTROS_CATALOGO.find((f) => f.id === id)?.label ??
+  id;
