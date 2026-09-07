@@ -622,11 +622,23 @@ export const lamasDeCortina = (ancho: number, telaVertical: TelaVertical): numbe
 //   `MAXIFS` literal del Excel.
 //
 // La tela de referencia (arquetipo o base vertical) es un PISO, no un techo:
-// si alguna tela de la familia vale MÁS, manda esa. Antes la referencia cortaba
-// la cascada, así que una tela nueva y cara se cobraba al precio del arquetipo
-// —el dueño lo detectó poniendo una tela a $100.000 que la cotización ignoró—.
-// La familia solo puede SUBIR con esta regla: si la referencia sigue siendo la
-// más cara, el precio es exactamente el de antes.
+// si alguna tela QUE SE VENDE en esta cotización vale MÁS, manda esa. Antes la
+// referencia cortaba la cascada, así que una tela nueva y cara se cobraba al
+// precio del arquetipo —el dueño lo detectó poniendo una tela a $100.000 que la
+// cotización ignoró—.
+//
+// **El techo son las telas VENDIDAS, no el catálogo entero** (dueño,
+// 2026-09-07). Con el catálogo entero, una sola tela cara mal archivada le
+// subía el precio a toda la familia aunque nadie la comprara: SCREEN_P se
+// cobraba a 38.942 (SC 48, una DELUX archivada bajo SCREEN_P) en vez de los
+// 31.582 del arquetipo, +2.957 $/m² en CADA cortina screen, y la app dejaba de
+// cuadrar con la planilla manual (que cobra la constante del arquetipo,
+// `Cotizador!CL141`). Con las vendidas, la cotización que no lleva la tela cara
+// vuelve a la planilla, y la que SÍ la lleva la paga.
+//
+// `vendidos` = los COD_INT de la familia presentes en la cotización. Sin esa
+// lista (Admin, ficha de producto) el techo no existe y manda la referencia:
+// esas pantallas muestran el precio BASE de la familia.
 //
 // Si la tela de referencia no está en el catálogo o vale 0, se cae al MÁXIMO de
 // la familia. Antes la rama vertical retornaba 0 y la familia terminaba
@@ -642,7 +654,13 @@ export const lamasDeCortina = (ancho: number, telaVertical: TelaVertical): numbe
 // es el que cobra la app).
 
 /** De dónde salió el $/m de una familia. */
-export type MotivoPrecioMl = 'base' | 'arquetipo' | 'maximo' | 'sistema' | 'sinPrecio';
+export type MotivoPrecioMl =
+  | 'base'
+  | 'arquetipo'
+  | 'maximo'
+  | 'masCaraVendida'
+  | 'sistema'
+  | 'sinPrecio';
 
 export function precioMlPorCod(
   cod: string,
@@ -650,26 +668,34 @@ export function precioMlPorCod(
   reglas: ReglasPrecios,
   /** El sistema con que se cotiza el grupo: su tela tecleada por familia manda. */
   sistema?: SistemaPrecio,
+  /**
+   * COD_INT de las telas que van EN LA COTIZACIÓN. La más cara de estas le gana
+   * a la tela de referencia. Sin lista, manda la referencia (precio base).
+   */
+  vendidos?: ReadonlySet<string>,
 ): { precio: number; arquetipo: string; motivo: MotivoPrecioMl } {
   // La celda «PRECIO REAL» tecleada del panel (categoría B): gana sobre todo.
   const tecleado = sistema?.telaPorFamilia?.[cod];
   if (typeof tecleado === 'number' && tecleado > 0) {
     return { precio: Math.round(tecleado), arquetipo: '', motivo: 'sistema' };
   }
-  // El MÁXIMO de la familia se calcula SIEMPRE, aunque haya tela de
-  // referencia: la referencia es un PISO, no un techo. Una tela más cara que
-  // la de referencia tiene que subir la familia —es la regla que el negocio
-  // enuncia («se cobra la tela con más valor»)— y hasta ahora no lo hacía:
-  // la referencia cortaba la cascada y una tela nueva y cara se cobraba al
-  // precio del arquetipo. Al revés no pasa nada: si la referencia sigue siendo
-  // la más cara, el precio no se mueve, así que ninguna cotización BAJA.
+  // Dos máximos de la familia, con papeles distintos:
+  // - `max` (catálogo entero) es el precio de las familias SIN tela de
+  //   referencia. El beeblack no tiene arquetipo A PROPÓSITO: su regla es el
+  //   `MAXIFS` literal del Excel y no se toca.
+  // - `maxVendido` (solo las telas de esta cotización) es el techo de las
+  //   familias que SÍ tienen referencia: la referencia es un piso, pero solo
+  //   una tela que alguien está comprando puede levantarlo.
   let max = 0;
   let codIntMax = '';
+  let maxVendido = 0;
+  let codIntMaxVendido = '';
   for (const k of Object.keys(catalogo)) {
     const p = catalogo[k];
     if (p && p.cod === cod) {
       const precio = Number(p.precio) || 0;
       if (precio > max) { max = precio; codIntMax = k; }
+      if (precio > maxVendido && vendidos?.has(k)) { maxVendido = precio; codIntMaxVendido = k; }
     }
   }
 
@@ -678,8 +704,8 @@ export function precioMlPorCod(
     const p = Number(catalogo[clave]?.precio) || 0;
     if (p <= 0) return null;
     // Gana la más cara de las dos, y el desglose dice cuál fue.
-    return max > p
-      ? { precio: Math.round(max), arquetipo: codIntMax, motivo: 'maximo' as const }
+    return maxVendido > p
+      ? { precio: Math.round(maxVendido), arquetipo: codIntMaxVendido, motivo: 'masCaraVendida' as const }
       : { precio: Math.round(p), arquetipo: clave, motivo };
   };
 
@@ -938,8 +964,14 @@ export function cotizarFase0(
     for (const r of filasFam) if (!configs.has(r.config.clave)) configs.set(r.config.clave, r.config);
     // Dúo/vertical y ancho de rollo son de la familia: los de su primera fila.
     const { esDuo, esVertical, anchoRollo } = filasFam[0];
+    // Las telas de la familia que van EN ESTA COTIZACIÓN: la más cara de ellas
+    // es el techo del precio (la de referencia es el piso). Se miran TODAS las
+    // filas de la familia, no las del panel: un panel se arma con toda la
+    // familia configurada como él, así que su tarifa se cobra por los mismos
+    // metros y tiene que salir del mismo grupo de telas.
+    const vendidos = new Set(filasFam.map((r) => r.f.codInt));
     for (const [clave, c] of configs) {
-      const tela = precioMlPorCod(cod, catalogo, reglas, c.sistema);
+      const tela = precioMlPorCod(cod, catalogo, reglas, c.sistema, vendidos);
       if (tela.motivo === 'sinPrecio') {
         avisar({
           tipo: 'tela',

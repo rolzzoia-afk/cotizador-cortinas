@@ -1444,13 +1444,24 @@ const numeroFinito = (x: unknown, porDefecto: number): number =>
 /** Margen del roller: último recurso para un sistema inventado sin margen. */
 const MARGEN_POR_DEFECTO = 0.65;
 
+// Los CUATRO campos, no solo min/max: los extremos ESTRICTOS son los que
+// separan los dos kits de la categoría B (`MEC 05` bajo 2,10 y `MEC 18` sobre
+// 2,10). Al perderlos, las dos líneas quedaban sin filtro y cada roller B
+// pagaba LOS DOS kits; se notó recién al cuadrar contra la planilla.
 function saneaFiltro(crudo: unknown): FiltroAncho | undefined {
   if (!crudo || typeof crudo !== 'object') return undefined;
   const o = crudo as Record<string, unknown>;
   const f: FiltroAncho = {};
   if (typeof o.min === 'number' && Number.isFinite(o.min)) f.min = o.min;
   if (typeof o.max === 'number' && Number.isFinite(o.max)) f.max = o.max;
-  return f.min === undefined && f.max === undefined ? undefined : f;
+  if (typeof o.mayorQue === 'number' && Number.isFinite(o.mayorQue)) f.mayorQue = o.mayorQue;
+  if (typeof o.menorQue === 'number' && Number.isFinite(o.menorQue)) f.menorQue = o.menorQue;
+  return f.min === undefined &&
+    f.max === undefined &&
+    f.mayorQue === undefined &&
+    f.menorQue === undefined
+    ? undefined
+    : f;
 }
 
 function saneaCantidad(crudo: unknown): CantidadReceta | null {

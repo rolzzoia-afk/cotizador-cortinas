@@ -505,6 +505,72 @@ describe('motorFase0 — validación al peso contra cotizaciones reales', () => 
   });
 });
 
+describe('motorFase0 — la tela más cara VENDIDA (piso: la de referencia)', () => {
+  // La regla del dueño (2026-09-07): la tela de referencia de la familia es un
+  // piso, y solo lo levanta una tela que vaya EN LA COTIZACIÓN. Con el máximo
+  // del catálogo entero, una tela cara mal archivada le subía el precio a toda
+  // la familia aunque nadie la comprara: SCREEN_P se cobraba a 38.942 (SC 48,
+  // una DELUX archivada bajo SCREEN_P) en vez de los 31.582 del arquetipo, y la
+  // app dejaba de cuadrar con la planilla manual.
+  const CARAS: CatalogoProductos = {
+    ...CAT,
+    'BK 85': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: 'DICHROIC', precio: 100000 },
+    'SC 48': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN DELUX', tipo: 'DELUX', descripcion: '', precio: 38942 },
+  };
+  const AR_CARAS = { ...AR, 'BK 85': 2.98, 'SC 48': 2.98 };
+  const cotiza = (filas: Parameters<typeof cotizarFase0>[0]) =>
+    cotizarFase0(filas, CARAS, AR_CARAS);
+  const fam = (r: ReturnType<typeof cotizarFase0>, cod: string) =>
+    r.familias.find((f) => f.cod === cod)!;
+
+  it('una tela cara que NO se vende deja el precio en la tela de referencia', () => {
+    const f = fam(cotiza([{ codInt: 'BK 60', ancho: 1.5, alto: 2, cantidad: 1 }]), 'BLACKOUT_D');
+    expect(f.precioMl).toBe(41868);
+    expect(f.motivoPrecioMl).toBe('arquetipo');
+    expect(f.arquetipoCodInt).toBe('BK-D');
+  });
+
+  it('la misma tela cara SÍ manda cuando va en la cotización', () => {
+    const r = cotiza([
+      { codInt: 'BK 60', ancho: 1.5, alto: 2, cantidad: 1 },
+      { codInt: 'BK 85', ancho: 1.5, alto: 2, cantidad: 1 },
+    ]);
+    const f = fam(r, 'BLACKOUT_D');
+    expect(f.precioMl).toBe(100000);
+    expect(f.motivoPrecioMl).toBe('masCaraVendida');
+    expect(f.arquetipoCodInt).toBe('BK 85');
+    // Toda la familia se cobra a esa tarifa: es UN panel, con los mismos metros.
+    expect(r.lineas[0].precioM2).toBe(r.lineas[1].precioM2);
+  });
+
+  it('la screen mal archivada solo cobra de más si alguien la compra', () => {
+    const soloBarata = fam(cotiza([{ codInt: 'SC 65', ancho: 1.5, alto: 2, cantidad: 1 }]), 'SCREEN_P');
+    expect(soloBarata.precioMl).toBe(31582);
+    const conCara = fam(
+      cotiza([
+        { codInt: 'SC 65', ancho: 1.5, alto: 2, cantidad: 1 },
+        { codInt: 'SC 48', ancho: 1.5, alto: 2, cantidad: 1 },
+      ]),
+      'SCREEN_P',
+    );
+    expect(conCara.precioMl).toBe(38942);
+    expect(conCara.motivoPrecioMl).toBe('masCaraVendida');
+  });
+
+  it('una tela cara de OTRA familia no toca a nadie', () => {
+    const f = fam(cotiza([{ codInt: 'SC 65', ancho: 1.5, alto: 2, cantidad: 1 }]), 'SCREEN_P');
+    expect(f.precioMl).toBe(31582);
+    expect(f.motivoPrecioMl).toBe('arquetipo');
+  });
+
+  it('sin tela de referencia (beeblack) sigue mandando el máximo del catálogo', () => {
+    // La excepción obligatoria: el beeblack no declara arquetipo A PROPÓSITO,
+    // su regla ES el `MAXIFS` del Excel. Lo cubren los goldens TRINA y
+    // COTAP-8003, donde manda BEE-BK sin que nadie la venda.
+    expect(REGLAS_PRECIOS_DEFAULT.arquetipos.BEEBLACK ?? '').toBe('');
+  });
+});
+
 describe('motorFase0 — instalación gratis 4+ / región (Fase 2)', () => {
   const cortina = (n: number) =>
     Array.from({ length: n }, () => ({ codInt: 'SC 34', ancho: 1.3, alto: 2.3, cantidad: 1 }));

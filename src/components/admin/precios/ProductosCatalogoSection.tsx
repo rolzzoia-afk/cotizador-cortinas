@@ -328,6 +328,12 @@ export function ProductosCatalogoSection() {
                                 {f.origenPrecio === 'maxFamilia' && (
                                   <span className="text-warning"> (la más cara del grupo)</span>
                                 )}
+                                {f.origenPrecio === 'masCaraQueLaReferencia' && (
+                                  <span className="text-warning">
+                                    {' '}
+                                    (más cara que la referencia: manda cuando se vende)
+                                  </span>
+                                )}
                               </>
                             ) : (
                               <span className="text-warning">sin tela que fije el precio</span>
