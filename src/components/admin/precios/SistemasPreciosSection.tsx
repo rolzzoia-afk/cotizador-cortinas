@@ -18,6 +18,7 @@ import {
   FAMILIAS_CON_RECETA,
   SISTEMA_CATEGORIA_B_KEY,
   SISTEMA_INVERTIDA_KEY,
+  esSoloInsumos,
   type SistemaPrecio,
 } from '@/modules/cotizador/reglasPrecios';
 import { nombreFamilia } from './nombresFamilias';
@@ -102,6 +103,7 @@ function Sistema({
     onChange({ ...sistema, [campo]: v });
   const esCategoriaB = clave === SISTEMA_CATEGORIA_B_KEY;
   const esInvertida = clave === SISTEMA_INVERTIDA_KEY;
+  const soloInsumos = esSoloInsumos(sistema);
   // Tela de referencia por familia: las 12 de siempre más las que ya traiga guardadas.
   const familiasTela = Array.from(
     new Set([...FAMILIAS_CON_RECETA, ...Object.keys(sistema.telaPorFamilia ?? {})]),
@@ -201,31 +203,45 @@ function Sistema({
       </div>
       )}
 
-      <div className="flex flex-wrap items-end gap-3">
-        {CAMPOS.map(({ campo, label, ancho, moneda }) => (
-          <label key={campo} className="text-xs">
-            <span className="mb-1 block text-muted-foreground">{label}</span>
-            <InputDecimal
-              value={sistema[campo]}
-              onChange={num(campo)}
-              className={`h-8 ${ancho} text-right text-xs`}
-            />
-            {moneda && (
-              <span className="mt-0.5 block text-right text-[0.65rem] text-muted-foreground">
-                {formatCLP(Math.round(sistema[campo]))}
-              </span>
-            )}
-          </label>
-        ))}
-      </div>
+      {/* Un sistema de SOLO INSUMOS no cotiza la cortina: solo le pone precio a
+          sus materiales. Mostrar acá su mano de obra o su traslado invitaría a
+          editar campos que el motor no lee. */}
+      {soloInsumos ? (
+        <p className="text-[0.7rem] text-muted-foreground">
+          Este sistema aporta <strong>solo la tabla de precios de insumo</strong> (más abajo, en
+          «Precios de insumo — {sistema.nombre}»). La mano de obra, el traslado, la instalación y el
+          margen de estas cortinas se siguen editando en{' '}
+          <strong>Valores comerciales → Parámetros de cotización</strong>.
+        </p>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-end gap-3">
+            {CAMPOS.map(({ campo, label, ancho, moneda }) => (
+              <label key={campo} className="text-xs">
+                <span className="mb-1 block text-muted-foreground">{label}</span>
+                <InputDecimal
+                  value={sistema[campo]}
+                  onChange={num(campo)}
+                  className={`h-8 ${ancho} text-right text-xs`}
+                />
+                {moneda && (
+                  <span className="mt-0.5 block text-right text-[0.65rem] text-muted-foreground">
+                    {formatCLP(Math.round(sistema[campo]))}
+                  </span>
+                )}
+              </label>
+            ))}
+          </div>
 
-      <ul className="mt-2 ml-4 list-disc space-y-0.5 text-[0.7rem] text-muted-foreground">
-        {CAMPOS.map(({ campo, label, ayuda }) => (
-          <li key={campo}>
-            <strong>{label}:</strong> {ayuda}
-          </li>
-        ))}
-      </ul>
+          <ul className="mt-2 ml-4 list-disc space-y-0.5 text-[0.7rem] text-muted-foreground">
+            {CAMPOS.map(({ campo, label, ayuda }) => (
+              <li key={campo}>
+                <strong>{label}:</strong> {ayuda}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       {esCategoriaB && (
         <div className="mt-3 space-y-3 border-t pt-3">

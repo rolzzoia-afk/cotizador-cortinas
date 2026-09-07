@@ -8,6 +8,10 @@ import {
   RECETAS_DEFAULT,
   conCadenaMetalica,
   conTuboInvertida45,
+  esInsumoVertical,
+  insumosParaGrupo,
+  sistemaInsumosDeFamilia,
+  SISTEMA_VERTICAL_KEY,
   TUBO_INVERTIDA_45_DEFAULT,
   esCadenaMando,
   tieneCadenaMando,
@@ -343,7 +347,12 @@ describe('tela de las verticales', () => {
 });
 
 describe('la hoja Insumos completa', () => {
-  const insumos = REGLAS_PRECIOS_DEFAULT.insumos;
+  // La tabla general MÁS la de las verticales, que desde el 2026-09-07 vive
+  // aparte (el dueño pidió separar los precios de roller y de vertical).
+  const insumos = {
+    ...REGLAS_PRECIOS_DEFAULT.insumos,
+    ...REGLAS_PRECIOS_DEFAULT.sistemas[SISTEMA_VERTICAL_KEY].insumos,
+  };
 
   it('trae los 41 que usan las recetas más las variantes de la planilla', () => {
     // 41 con receta + 43 variantes/sueltos = los 84 que se pueden elegir.
@@ -351,6 +360,8 @@ describe('la hoja Insumos completa', () => {
     // variantes del TOP 03 que cobra la receta: se cobran igual y solo cambia
     // cuál descuenta la bodega.
     expect(Object.keys(insumos).length).toBe(84);
+    // Y ninguna ferretería de vertical quedó en la tabla general.
+    expect(Object.keys(REGLAS_PRECIOS_DEFAULT.insumos).filter(esInsumoVertical)).toEqual([]);
   });
 
   it('cada variante cobra lo mismo que el material del que es alternativa', () => {
@@ -849,6 +860,66 @@ describe('sistema invertida', () => {
     delete r.sistemas[SISTEMA_INVERTIDA_KEY].insumos['PUB 01'];
     const { avisos } = validarReglasPrecios(r);
     expect(avisos.some((a) => a.includes('Invertida') && a.includes('PUB 01'))).toBe(true);
+  });
+});
+
+describe('sistema vertical (solo insumos)', () => {
+  const vert = REGLAS_PRECIOS_DEFAULT.sistemas[SISTEMA_VERTICAL_KEY];
+
+  it('se lleva TODA la ferretería de vertical y ninguna otra', () => {
+    expect(vert.alcance).toBe('soloInsumos');
+    expect(Object.keys(vert.insumos).every(esInsumoVertical)).toBe(true);
+    // Los VER* de las recetas y sus variantes de grupo, con los mismos precios.
+    expect(vert.insumos['VER 35'].valorMaximo).toBeCloseTo(16495.78, 2);
+    expect(vert.insumos['VER 01'].valorMaximo).toBe(vert.insumos['VER 35'].valorMaximo);
+    expect(vert.insumos['VER 11'].valorMaximo).toBe(7735);
+    expect(REGLAS_PRECIOS_DEFAULT.insumos['VER 35']).toBeUndefined();
+  });
+
+  it('NO cotiza la cortina: la mano de obra y el traslado siguen en los parámetros', () => {
+    // Si se devolviera como sistema de familia, la vertical dejaría de leer
+    // `parametros_cotizador` y sus valores quedarían congelados acá.
+    expect(sistemaDeFamilia('BLACKOUT_V_P')).toBeUndefined();
+    expect(sistemaDeFila('BLACKOUT_V_P', false)).toBeUndefined();
+    expect(sistemaInsumosDeFamilia('BLACKOUT_V_P')).toBe(vert);
+    expect(sistemaInsumosDeFamilia('BLACKOUT_D')).toBeUndefined();
+  });
+
+  it('sus precios se le aplican a la vertical y a nadie más', () => {
+    const r = normalizarReglasPrecios({
+      sistemas: { [SISTEMA_VERTICAL_KEY]: { insumos: { 'VER 35': { valorMaximo: 1 } } } },
+    });
+    expect(insumosParaGrupo('BLACKOUT_V_P', undefined, r)['VER 35'].valorMaximo).toBe(1);
+    expect(insumosParaGrupo('BLACKOUT_D', undefined, r)['VER 35']).toBeUndefined();
+  });
+
+  it('el validador encuentra los VER* de la receta vertical en la tabla del sistema', () => {
+    expect(sistemaDeReceta('VERTICAL')).toBe(vert);
+    const { errores } = validarReglasPrecios(REGLAS_PRECIOS_DEFAULT);
+    expect(errores).toEqual([]);
+    expect(recetasDeSistema(SISTEMA_VERTICAL_KEY, vert, RECETAS_DEFAULT)).toEqual(['VERTICAL']);
+  });
+
+  it('MIGRACIÓN: unas reglas guardadas antes se llevan sus VER* editados al sistema', () => {
+    const r = normalizarReglasPrecios({
+      insumos: { 'E 02': { valorMaximo: 4462.5 }, 'VER 11': { valorMaximo: 9999 } },
+    });
+    // El precio editado viaja al sistema y sale de la general.
+    expect(r.sistemas[SISTEMA_VERTICAL_KEY].insumos['VER 11'].valorMaximo).toBe(9999);
+    expect(r.insumos['VER 11']).toBeUndefined();
+    // Lo que no estaba guardado sigue con el de fábrica.
+    expect(r.sistemas[SISTEMA_VERTICAL_KEY].insumos['VER 35'].valorMaximo).toBeCloseTo(16495.78, 2);
+    // Y una vertical se cotiza con eso.
+    expect(insumosParaGrupo('BLACKOUT_V_P', undefined, r)['VER 11'].valorMaximo).toBe(9999);
+  });
+
+  it('MIGRACIÓN: guardado YA con el sistema adentro, no se vuelve a mover nada', () => {
+    const r = normalizarReglasPrecios({
+      insumos: { 'E 02': { valorMaximo: 4462.5 }, 'VER 11': { valorMaximo: 1 } },
+      sistemas: { [SISTEMA_VERTICAL_KEY]: { insumos: { 'VER 11': { valorMaximo: 2 } } } },
+    });
+    expect(r.sistemas[SISTEMA_VERTICAL_KEY].insumos['VER 11'].valorMaximo).toBe(2);
+    expect(r.insumos['VER 11']?.valorMaximo).toBe(1);
   });
 });
 

@@ -204,6 +204,20 @@ export type SistemaPrecio = {
    * igual que siempre.
    */
   giraMedidasAlInvertir?: boolean;
+  /**
+   * Hasta dónde manda este sistema.
+   *
+   * - `completo` (lo de siempre, y lo que vale si está vacío): la cortina se
+   *   cotiza ENTERA con él — su tabla de insumos, su margen, su mano de obra,
+   *   su traslado y su instalación.
+   * - `soloInsumos`: solo aporta la TABLA DE PRECIOS. Todo lo demás sigue
+   *   saliendo de donde salía. Es lo que necesitan las VERTICALES: el dueño
+   *   pidió separar sus precios de insumo de los de la roller, pero su mano de
+   *   obra, su traslado y su instalación se editan en «Valores comerciales →
+   *   Parámetros de cotización» y ahí se tienen que quedar (moverlos al
+   *   sistema los congelaría en una copia).
+   */
+  alcance?: 'completo' | 'soloInsumos';
 };
 
 /**
@@ -234,6 +248,17 @@ export const SISTEMA_INVERTIDA_KEY = 'invertida';
 export const SUFIJO_RECETA_INV = '|INV';
 
 /**
+ * Clave del sistema VERTICAL en `reglas.sistemas`: la tabla de precios de
+ * insumo propia de las cortinas verticales (dueño, 2026-09-07: «debes separar
+ * lo que es precio de insumos de roller y precios de insumos de verticales»).
+ *
+ * Es de alcance `soloInsumos`: sus VER* dejan de vivir en la tabla general y se
+ * editan aparte, pero la mano de obra, el traslado y la instalación de una
+ * vertical siguen saliendo de los parámetros de cotización, como siempre.
+ */
+export const SISTEMA_VERTICAL_KEY = 'vertical';
+
+/**
  * Sufijo de las recetas de la SEGUNDA TELA de una cortina de dos telas
  * (`BEE_BK|2T`): la que comparte estructura con la primera, así que trae todo
  * lo suyo —su tela, su manilla, su kit, su caja— pero NO vuelve a pagar el
@@ -261,6 +286,10 @@ export const SUFIJO_RECETA_MET = '|MET';
 
 /** Sistemas que se eligen por FILA y no por familia: `sistemaDeFamilia` los salta. */
 const SISTEMAS_POR_FILA = new Set([SISTEMA_CATEGORIA_B_KEY, SISTEMA_INVERTIDA_KEY]);
+
+/** ¿Este sistema solo aporta precios de insumo (y no mano de obra, traslado…)? */
+export const esSoloInsumos = (s: SistemaPrecio | undefined): boolean =>
+  s?.alcance === 'soloInsumos';
 
 /**
  * COD_INT de instalación que el motor calcula SOLO: el de la roller (`INST`)
@@ -967,15 +996,22 @@ const INSUMOS_SUELTOS: Record<string, number> = {
   MER0014: 59.5,
 };
 
+/** ¿Este código es de la ferretería de las VERTICALES? (`VER 35`, `VER 02`…) */
+export const esInsumoVertical = (cod: string): boolean =>
+  /^VER\s*\d/i.test((cod || '').trim());
+
 const insumosDeFabrica = (): Record<string, InsumoPrecio> => {
   const out: Record<string, InsumoPrecio> = {};
   for (const [cod, valorMaximo] of Object.entries(INSUMO_VALOR_MAXIMO)) {
+    // Los VER* viven en la tabla del sistema VERTICAL, no en la general
+    // (dueño: los precios de la vertical se editan aparte de los de la roller).
+    if (esInsumoVertical(cod)) continue;
     out[cod] = { valorMaximo, descripcion: DESCRIPCIONES[cod] };
   }
   // Las variantes heredan el precio de su grupo, que es lo que hace el Excel.
   for (const [representante, variantes] of Object.entries(GRUPOS_INSUMO)) {
     const valorMaximo = INSUMO_VALOR_MAXIMO[representante];
-    if (valorMaximo === undefined) continue;
+    if (valorMaximo === undefined || esInsumoVertical(representante)) continue;
     for (const cod of variantes) out[cod] = { valorMaximo, descripcion: DESCRIPCIONES[cod] };
   }
   for (const [cod, valorMaximo] of Object.entries(INSUMOS_SUELTOS)) {
@@ -983,6 +1019,16 @@ const insumosDeFabrica = (): Record<string, InsumoPrecio> => {
   }
   return out;
 };
+
+/** La ferretería de las verticales, tal como venía en la tabla general. */
+const INSUMOS_VERTICAL_VM: Record<string, number> = Object.fromEntries(
+  Object.entries(INSUMO_VALOR_MAXIMO).filter(([cod]) => esInsumoVertical(cod)),
+);
+
+/** Los grupos que son solo de verticales: viajan con ellas a su tabla. */
+const GRUPOS_INSUMO_VERTICAL: Record<string, string[]> = Object.fromEntries(
+  Object.entries(GRUPOS_INSUMO).filter(([rep]) => esInsumoVertical(rep)),
+);
 
 /** Insumos de un sistema: su tabla de precios más las variantes de su grupo. */
 const expandirInsumos = (
@@ -1142,10 +1188,33 @@ export const SISTEMA_INVERTIDA_DEFAULT: SistemaPrecio = {
   insumos: expandirInsumos(INSUMOS_INV_VM, {}),
 };
 
+/**
+ * El sistema VERTICAL de fábrica: SOLO la tabla de precios de su ferretería,
+ * con los mismos valores que tenía en la tabla general (no cambia ni un peso
+ * el día que se estrena). Todo lo demás —mano de obra 62.000, traslado 55.000,
+ * instalación 40.000, margen y extra de alto— sigue en «Valores comerciales →
+ * Parámetros de cotización», que es donde el dueño los edita hoy; por eso los
+ * campos de acá van en 0 y no se usan (`alcance: 'soloInsumos'`).
+ */
+export const SISTEMA_VERTICAL_DEFAULT: SistemaPrecio = {
+  nombre: 'Vertical',
+  familias: [...FAMILIAS_VERTICALES],
+  margenInsumo: 0.65,
+  extraAltoM: 0.25,
+  manoObra: 0,
+  traslado: 0,
+  instalacionEmbebida: 0,
+  instalacionLinea: 0,
+  codigoInstalacion: '',
+  insumos: expandirInsumos(INSUMOS_VERTICAL_VM, GRUPOS_INSUMO_VERTICAL),
+  alcance: 'soloInsumos',
+};
+
 export const SISTEMAS_DEFAULT: Record<string, SistemaPrecio> = {
   beeblack: SISTEMA_BEEBLACK_DEFAULT,
   [SISTEMA_CATEGORIA_B_KEY]: SISTEMA_CATEGORIA_B_DEFAULT,
   [SISTEMA_INVERTIDA_KEY]: SISTEMA_INVERTIDA_DEFAULT,
+  [SISTEMA_VERTICAL_KEY]: SISTEMA_VERTICAL_DEFAULT,
 };
 
 /**
@@ -1160,7 +1229,25 @@ export function sistemaDeFamilia(
 ): SistemaPrecio | undefined {
   for (const [clave, s] of Object.entries(sistemas)) {
     if (SISTEMAS_POR_FILA.has(clave)) continue;
+    // Un sistema de SOLO INSUMOS no cotiza la cortina: solo le pone precio a
+    // sus materiales. Si se devolviera acá, la vertical pasaría a cobrar la
+    // mano de obra y el traslado del sistema en vez de los parámetros.
+    if (esSoloInsumos(s)) continue;
     if (s.familias.includes(cod)) return s;
+  }
+  return undefined;
+}
+
+/**
+ * El sistema de SOLO INSUMOS de una familia (hoy, el vertical): la tabla de
+ * precios que se le superpone a la general sin cambiarle nada más.
+ */
+export function sistemaInsumosDeFamilia(
+  cod: string,
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): SistemaPrecio | undefined {
+  for (const s of Object.values(sistemas)) {
+    if (esSoloInsumos(s) && s.familias.includes(cod)) return s;
   }
   return undefined;
 }
@@ -1242,7 +1329,11 @@ export function sistemaDeReceta(
   }
   if (claveReceta.endsWith(SUFIJO_RECETA_B)) return sistemaCategoriaB(sistemas);
   if (claveReceta.endsWith(SUFIJO_RECETA_INV)) return sistemaInvertida(sistemas);
-  return sistemaDeFamilia(claveReceta, sistemas);
+  // La receta VERTICAL es una sola para las seis familias: su tabla es la del
+  // sistema vertical (si no, el validador daría por no cotizables los VER*,
+  // que ya no están en la general).
+  if (claveReceta === RECETA_VERTICAL_KEY) return sistemas[SISTEMA_VERTICAL_KEY];
+  return sistemaDeFamilia(claveReceta, sistemas) ?? sistemaInsumosDeFamilia(claveReceta, sistemas);
 }
 
 /**
@@ -1260,6 +1351,9 @@ export function recetasDeSistema(
   if (clave === SISTEMA_INVERTIDA_KEY) {
     return sistema.familias.map((f) => `${f}${SUFIJO_RECETA_INV}`);
   }
+  // Las seis familias verticales comparten UNA receta: el menú «usar en…»
+  // tiene que apuntar a esa, no a seis claves que no existen.
+  if (clave === SISTEMA_VERTICAL_KEY) return [RECETA_VERTICAL_KEY];
   // Las familias del sistema y, si la tienen, su receta de segunda tela: el
   // menú «usar en…» tiene que poder meter un insumo en las dos, o agregar una
   // línea al beeblack la dejaría fuera de sus dobles.
@@ -1277,13 +1371,28 @@ export function insumosDeSistema(
   return sistema ? { ...reglas.insumos, ...sistema.insumos } : reglas.insumos;
 }
 
+/**
+ * Precios de insumo de un panel: la tabla general, encima la del sistema de
+ * SOLO INSUMOS de su familia (la vertical) y encima la del sistema con que se
+ * cotiza (beeblack, categoría B, invertida). En ese orden: el que cotiza es el
+ * que manda.
+ */
+export function insumosParaGrupo(
+  cod: string,
+  sistema: SistemaPrecio | undefined,
+  reglas: Pick<ReglasPrecios, 'insumos' | 'sistemas'>,
+): Record<string, InsumoPrecio> {
+  const propios = sistemaInsumosDeFamilia(cod, reglas.sistemas);
+  const base = propios ? { ...reglas.insumos, ...propios.insumos } : reglas.insumos;
+  return sistema ? { ...base, ...sistema.insumos } : base;
+}
+
 /** Precios de insumo que se usan para una familia: los del sistema ganan. */
 export function insumosParaFamilia(
   cod: string,
   reglas: Pick<ReglasPrecios, 'insumos' | 'sistemas'>,
 ): Record<string, InsumoPrecio> {
-  const sis = sistemaDeFamilia(cod, reglas.sistemas);
-  return sis ? { ...reglas.insumos, ...sis.insumos } : reglas.insumos;
+  return insumosParaGrupo(cod, sistemaDeFamilia(cod, reglas.sistemas), reglas);
 }
 
 /** Con qué otros códigos comparte precio este insumo en el Excel. */
@@ -1373,14 +1482,25 @@ export function lamasPorPasada(t: TelaVertical): number {
 
 /** Las mismas reglas de fábrica con otros VALOR MAXIMO (para recalcular cotizaciones viejas). */
 export function conValoresMaximos(overrides: Record<string, number>): ReglasPrecios {
-  const insumos: Record<string, InsumoPrecio> = {};
-  for (const [cod, ins] of Object.entries(REGLAS_PRECIOS_DEFAULT.insumos)) {
-    insumos[cod] = { ...ins, valorMaximo: overrides[cod] ?? ins.valorMaximo };
-  }
+  const conOverrides = (tabla: Record<string, InsumoPrecio>) => {
+    const out: Record<string, InsumoPrecio> = {};
+    for (const [cod, ins] of Object.entries(tabla)) {
+      out[cod] = { ...ins, valorMaximo: overrides[cod] ?? ins.valorMaximo };
+    }
+    return out;
+  };
+  const insumos = conOverrides(REGLAS_PRECIOS_DEFAULT.insumos);
   for (const [cod, valorMaximo] of Object.entries(overrides)) {
     if (!insumos[cod]) insumos[cod] = { valorMaximo };
   }
-  return { ...REGLAS_PRECIOS_DEFAULT, insumos };
+  // Los sistemas tienen su PROPIA tabla y le ganan a la general: sin pisarlos
+  // también, un precio de otra época no le llegaba a la vertical ni al
+  // beeblack (su tabla seguía con el de hoy y el golden dejaba de calzar).
+  const sistemas: Record<string, SistemaPrecio> = {};
+  for (const [clave, s] of Object.entries(REGLAS_PRECIOS_DEFAULT.sistemas)) {
+    sistemas[clave] = { ...s, insumos: conOverrides(s.insumos) };
+  }
+  return { ...REGLAS_PRECIOS_DEFAULT, insumos, sistemas };
 }
 
 // ── Qué receta le toca a una familia ──────────────────────────────────
@@ -1687,10 +1807,13 @@ function saneaSistemas(crudo: unknown): Record<string, SistemaPrecio> {
 function saneaExtrasSistema(
   o: Record<string, unknown>,
   base: SistemaPrecio | undefined,
-): Pick<SistemaPrecio, 'telaPorFamilia' | 'descuentoDefault' | 'giraMedidasAlInvertir'> {
+): Pick<
+  SistemaPrecio,
+  'telaPorFamilia' | 'descuentoDefault' | 'giraMedidasAlInvertir' | 'alcance'
+> {
   const out: Pick<
     SistemaPrecio,
-    'telaPorFamilia' | 'descuentoDefault' | 'giraMedidasAlInvertir'
+    'telaPorFamilia' | 'descuentoDefault' | 'giraMedidasAlInvertir' | 'alcance'
   > = {};
   if (o.telaPorFamilia && typeof o.telaPorFamilia === 'object') {
     const tela: Record<string, number> = {};
@@ -1710,6 +1833,8 @@ function saneaExtrasSistema(
   } else if (base?.giraMedidasAlInvertir !== undefined) {
     out.giraMedidasAlInvertir = base.giraMedidasAlInvertir;
   }
+  if (o.alcance === 'soloInsumos' || o.alcance === 'completo') out.alcance = o.alcance;
+  else if (base?.alcance !== undefined) out.alcance = base.alcance;
   return out;
 }
 
@@ -1740,6 +1865,30 @@ export function normalizarReglasPrecios(crudo: unknown): ReglasPrecios {
   }
 
   const sistemas = saneaSistemas(o.sistemas);
+
+  // MIGRACIÓN de los VER*: hasta el 2026-09-07 vivían en la tabla general, y
+  // ahí es donde el dueño los editó. Cuando lo guardado NO trae todavía el
+  // sistema vertical, sus precios se mueven de la general a la tabla del
+  // sistema —conservando lo editado— y se sacan de la general, que es la
+  // separación que se pidió. Una vez guardado con el sistema adentro, esto no
+  // vuelve a correr.
+  const guardados = (o.sistemas && typeof o.sistemas === 'object'
+    ? (o.sistemas as Record<string, unknown>)
+    : {}) as Record<string, unknown>;
+  if (usarInsumosGuardados && !guardados[SISTEMA_VERTICAL_KEY]) {
+    const vertical = sistemas[SISTEMA_VERTICAL_KEY];
+    if (vertical) {
+      const propios = { ...vertical.insumos };
+      let movidos = 0;
+      for (const cod of Object.keys(insumosFinal)) {
+        if (!esInsumoVertical(cod)) continue;
+        propios[cod] = insumosFinal[cod];
+        delete insumosFinal[cod];
+        movidos++;
+      }
+      if (movidos) sistemas[SISTEMA_VERTICAL_KEY] = { ...vertical, insumos: propios };
+    }
+  }
 
   // La cadena metálica es UNA línea suelta, no una receta: se sanea con el
   // mismo colador y cae a la de fábrica si viene rota o no viene (lo guardado

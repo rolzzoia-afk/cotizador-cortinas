@@ -82,10 +82,12 @@ export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } 
   const usados = useMemo(() => {
     const s = new Set<string>();
     for (const lineas of Object.values(draft.recetas)) for (const l of lineas) s.add(l.insumo);
-    // La cadena metálica no vive en ninguna receta y también está en uso.
+    // La cadena metálica no vive en ninguna receta y también está en uso, y lo
+    // mismo el tubo con que se arma la invertida de 45 mm.
     s.add(draft.cadenaMetalica.insumo);
+    for (const r of draft.tuboInvertida45) s.add(r.a);
     return s;
-  }, [draft.recetas, draft.cadenaMetalica]);
+  }, [draft.recetas, draft.cadenaMetalica, draft.tuboInvertida45]);
   /** Las familias que de verdad existen en el catálogo de la empresa. */
   const familiasCatalogo = useMemo(() => {
     const s = new Set<string>();
