@@ -83,7 +83,11 @@ import { OPCIONES_MECANISMO_DUAL } from '@/modules/cotizador/fase2';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
-import { codigosInstalacionAutomatica, sistemaCategoriaB } from '@/modules/cotizador/reglasPrecios';
+import {
+  codigosInstalacionAutomatica,
+  eligeTuboInvertida,
+  sistemaCategoriaB,
+} from '@/modules/cotizador/reglasPrecios';
 import { anchoEmpaquePeorCasoM } from '@/modules/cotizador/empaqueFase0';
 import { derivarOpciones } from '@/modules/descuentos/reglasSeleccion';
 import { debeInvertirPano, resolverAnchoRollo } from '@/modules/cotizador/tela';
@@ -2216,7 +2220,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                         );
                         const invEfectiva = f.invertida ?? debeInvertirPano(f.ancho, rollo);
                         const tubo = tuboInvertidaDe(f.invertidaTubo);
-                        const abierto = menuTubo === f.id;
+                        // El tubo solo se pregunta donde cambia el herraje: un
+                        // beeblack no lleva tubería (se invierte girando ancho y
+                        // alto) y una standard, una dúo o una B se invierten con
+                        // su receta de siempre. Ahí el botón es un interruptor.
+                        const eligeTubo = eligeTuboInvertida(
+                          prod?.cod || f.codInt,
+                          f.lineaB ?? gamaTelaEsB(f.codInt, catalogo),
+                          reglasPrecios.sistemas,
+                        );
+                        const abierto = eligeTubo && menuTubo === f.id;
                         return (
                           <div className="relative inline-flex items-center gap-1">
                             <button
@@ -2224,7 +2237,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                                 invEfectiva
                                   ? (setFila(f.id, { invertida: false, invertidaTubo: undefined }),
                                     setMenuTubo(null))
-                                  : setMenuTubo(abierto ? null : f.id)
+                                  : eligeTubo
+                                    ? setMenuTubo(abierto ? null : f.id)
+                                    : setFila(f.id, { invertida: true })
                               }
                               title={`Corte invertido (rotado): no entra normal en el rollo (${rollo.toFixed(2)} m)`}
                               className={cn(
@@ -2236,7 +2251,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                             >
                               <RotateCw className={cn('h-4 w-4', invEfectiva && 'stroke-[2.5]')} />
                             </button>
-                            {invEfectiva && (
+                            {invEfectiva && eligeTubo && (
                               // El diámetro a la vista: es lo que cambia el tubo
                               // y el kit, y sin esto no se sabe con cuál quedó.
                               <button

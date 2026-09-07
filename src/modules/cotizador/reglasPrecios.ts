@@ -1204,6 +1204,26 @@ export function sistemaDeFila(
 }
 
 /**
+ * ¿Tiene sentido preguntarle a esta fila CON QUÉ TUBO se invierte?
+ *
+ * Solo cuando la invertida se cotiza con el sistema INVERTIDA, que es el único
+ * que cambia de herraje (63 mm `E 47` + `MEC 28`, o 45 mm `E 05` + `MEC 18`).
+ * Un beeblack no lleva tubería —se invierte girando ancho y alto—, y una
+ * standard, una dúo o una categoría B invertidas se arman con su receta de
+ * siempre: en todos esos casos elegir diámetro no movería un peso, así que la
+ * grilla ni siquiera ofrece el menú. Es la MISMA condición que el motor usa
+ * para decidir si el tubo entra en la clave del panel (`sistemaInv`).
+ */
+export function eligeTuboInvertida(
+  cod: string,
+  lineaB: boolean | undefined,
+  sistemas: Record<string, SistemaPrecio> = SISTEMAS_DEFAULT,
+): boolean {
+  const inv = sistemaInvertida(sistemas);
+  return !!inv && sistemaDeFila(cod, lineaB, sistemas, true) === inv;
+}
+
+/**
  * El sistema al que pertenece una RECETA por su clave: las `|B` son del
  * sistema categoría B, las `|INV` del sistema invertida; el resto, el de su
  * familia (beeblack) o ninguno. Lo usan el validador y el «reponer insumos»

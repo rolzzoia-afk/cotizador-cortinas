@@ -20,6 +20,7 @@ import {
   recetasDeSistema,
   resolverRecetaInv,
   sistemaCategoriaB,
+  eligeTuboInvertida,
   sistemaDeFila,
   sistemaDeReceta,
   sistemaInvertida,
@@ -771,6 +772,20 @@ describe('sistema invertida', () => {
     // La B gana sobre la invertida; el beeblack, sobre todo.
     expect(sistemaDeFila('BLACKOUT_D', true, sistemas, true)?.nombre).toBe('Categoría B');
     expect(sistemaDeFila('BEE_BK', false, sistemas, true)?.nombre).toBe('Beeblack');
+  });
+
+  it('el TUBO solo se pregunta donde cambia el herraje (el beeblack no lleva tubería)', () => {
+    const sistemas = REGLAS_PRECIOS_DEFAULT.sistemas;
+    expect(eligeTuboInvertida('BLACKOUT_D', false, sistemas)).toBe(true);
+    expect(eligeTuboInvertida('SCREEN_P', false, sistemas)).toBe(true);
+    // El beeblack se invierte girando ancho y alto, sin tubo que elegir.
+    expect(eligeTuboInvertida('BEE_BK', false, sistemas)).toBe(false);
+    // Standard y dúo se invierten con su receta de siempre; la B, con la suya.
+    expect(eligeTuboInvertida('BLACKOUT_S', false, sistemas)).toBe(false);
+    expect(eligeTuboInvertida('DUOBK_P', false, sistemas)).toBe(false);
+    expect(eligeTuboInvertida('BLACKOUT_D', true, sistemas)).toBe(false);
+    // Apagar el sistema invertida (se puede borrar) apaga también la pregunta.
+    expect(eligeTuboInvertida('BLACKOUT_D', false, {})).toBe(false);
   });
 
   it('sus recetas |INV llevan el tubo 63 mm y el kit MEC 28 en vez de E 02/E 05 + MEC 18', () => {

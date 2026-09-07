@@ -41,6 +41,8 @@ import {
 import { llevaCenefaOvaladaImplicita } from '@/modules/cotizador/insumosCortina';
 import { useCatalogoProductos } from '@/modules/cotizador/catalogo';
 import { esLineaB, lineaBPorPano } from '@/modules/cotizador/lineaB';
+import { eligeTuboInvertida } from '@/modules/cotizador/reglasPrecios';
+import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
 import {
   esKit45,
   esKitInventarioMec,
@@ -162,6 +164,9 @@ export function CotizadorFase2() {
   // gate de la página: al abrir una ventana se sincronizan y GUARDAN chips, así
   // que no puede correr con las reglas de fábrica si la empresa tiene otras.
   const { reglas, loading: loadingReglas } = useReglasSeleccion();
+  // Solo para saber si esta cortina elige el tubo con que se invierte: las
+  // familias del sistema INVERTIDA se pueden editar en Admin → Precios.
+  const { reglas: reglasPrecios } = useReglasPrecios();
 
   const { empresaId } = useAuth();
   const { modelos } = useDescuentosModelo();
@@ -596,6 +601,27 @@ export function CotizadorFase2() {
     }
     return base;
   }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, reglaFijaPorAncho, opcSel, reglas]);
+
+  // ¿Esta cortina elige con qué TUBO se invierte? Solo las familias del sistema
+  // INVERTIDA cambian de herraje (63 mm o 45 mm). El beeblack no lleva tubería
+  // —se invierte girando ancho y alto— y una standard/dúo/B se invierte con su
+  // receta de siempre: preguntarles el diámetro no cambiaría nada.
+  const eligeTuboVentana = useMemo(() => {
+    if (!ventanaForm) return false;
+    const ci = String(panoEnEdicion?.codInt || ventanaForm.codInt || '');
+    return eligeTuboInvertida(
+      catalogo[ci]?.cod || ci,
+      esLineaB(
+        panoEnEdicion ?? null,
+        ventanaForm.codInt,
+        catalogo,
+        ventanaForm.categoria,
+        reglas.mecanismo,
+        reglas.tipos,
+      ),
+      reglasPrecios.sistemas,
+    );
+  }, [ventanaForm, panoEnEdicion, catalogo, reglas, reglasPrecios]);
 
   // Pre-seleccionar mecanismo inventario al editar o cambiar paño/color accesorios
   useEffect(() => {
@@ -1964,6 +1990,7 @@ export function CotizadorFase2() {
                   adicionalesFase0={ot?.datosGenerales.adicionalesFase0}
                   formulas={formulas}
                   reglas={reglas}
+                  puedeElegirTuboInvertida={eligeTuboVentana}
                   anchoRollo={obtenerAnchoRollo(
                     (categoriaEsDual(ventanaForm.categoria || '', reglas.tipos)
                       ? ventanaForm.panos[panoActivo]?.codInt
