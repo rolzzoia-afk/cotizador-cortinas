@@ -1925,8 +1925,52 @@ describe('motorFase0 — beeblack invertido gira ancho y alto', () => {
   it('lo que se cuenta por cortina no cambia, y el precio sí', () => {
     expect(cant(girada, 'SML13')).toBe(cant(derecha, 'SML13'));
     expect(girada.costoMateriales).not.toBeCloseTo(derecha.costoMateriales, 2);
-    // Los m² vendidos son los mismos: la cortina es la misma.
-    expect(girada.m2Total).toBeCloseTo(derecha.m2Total, 6);
+  });
+
+  it('girar = vender la cortina con las medidas cambiadas (tela y m² incluidos)', () => {
+    // Dueño (2026-09-07): «el alto pasa a ser ancho y el ancho a ser alto,
+    // entonces el precio cambia porque las medidas cambiarían». Un 0,82 × 0,493
+    // invertido tiene que costar lo MISMO que un 0,493 × 0,82 derecho.
+    const inv = cotizarFase0([{ ...FILA, invertida: true }], CAT_BB, AR_BB);
+    const alReves = cotizarFase0(
+      [{ ...FILA, ancho: FILA.alto, alto: FILA.ancho }],
+      CAT_BB,
+      AR_BB,
+    );
+    expect(inv.familias[0].metrosTela).toBeCloseTo(alReves.familias[0].metrosTela, 6);
+    expect(inv.familias[0].m2Total).toBeCloseTo(alReves.familias[0].m2Total, 6);
+    expect(inv.familias[0].costoMateriales).toBeCloseTo(alReves.familias[0].costoMateriales, 6);
+    expect(inv.lineas[0].m2).toBeCloseTo(alReves.lineas[0].m2, 6);
+    expect(inv.lineas[0].valorUnit).toBeCloseTo(alReves.lineas[0].valorUnit, 6);
+    // Y la fila sigue mostrando la ventana real, no la girada.
+    expect(inv.lineas[0].ancho).toBe(0.82);
+    expect(inv.lineas[0].alto).toBe(0.493);
+  });
+
+  it('la tela NO se corta rotada: el paño mide el alto, no el alto + el metro extra', () => {
+    // El caso del dueño: 1,3 × 2,5. Girado, el paño es de 2,50 × 2,30 y CABE en
+    // el rollo de 2,98; con el corte rotado de antes medía 3,50 de ancho —el
+    // metro extra caía sobre el lado equivocado— y no se podía cortar.
+    const r = cotizarFase0(
+      [{ codInt: 'BEE-SC', ancho: 1.3, alto: 2.5, cantidad: 1, invertida: true }],
+      CAT_BB,
+      AR_BB,
+    );
+    const [pano] = r.familias[0].panos;
+    expect(pano.ancho).toBeCloseTo(2.5, 6);
+    expect(pano.alto).toBeCloseTo(2.3, 6);
+    expect(r.avisos.filter((a) => a.tipo === 'rollo')).toHaveLength(0);
+  });
+
+  it('si ni así cabe en el rollo, avisa (y no toca el precio)', () => {
+    const fila = { codInt: 'BEE-SC', ancho: 1.2, alto: 3.2, cantidad: 1, invertida: true };
+    const r = cotizarFase0([fila], CAT_BB, AR_BB);
+    const aviso = r.avisos.find((a) => a.tipo === 'rollo');
+    expect(aviso?.mensaje).toContain('3.20');
+    expect(aviso?.mensaje).toContain('2.98');
+    // El precio es el mismo que sin el aviso: solo informa.
+    const sinAviso = cotizarFase0([fila], CAT_BB, { ...AR_BB, 'BEE-SC': 4 });
+    expect(r.lineas[0].valorUnit).toBeCloseTo(sinAviso.lineas[0].valorUnit, 6);
   });
 
   it('el roller invertido NO gira: su herraje se sigue cobrando por el ancho', () => {

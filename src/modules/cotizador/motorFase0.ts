@@ -318,9 +318,11 @@ export type InstalacionResultado = {
 export type AvisoCotizacion = {
   /**
    * `catalogo` = la tela no existe · `tela` = no se pudo fijar el $/m ·
-   * `instalacion` = el valor unitario cambió por la instalación.
+   * `instalacion` = el valor unitario cambió por la instalación ·
+   * `rollo` = la pieza no cabe a lo ancho del rollo (el corte no se puede hacer
+   * así, aunque el precio se calcule igual).
    */
-  tipo: 'catalogo' | 'tela' | 'instalacion';
+  tipo: 'catalogo' | 'tela' | 'instalacion' | 'rollo';
   /** COD_INT de la fila (tipo `catalogo`) o COD de la familia (tipo `tela`). */
   codigo: string;
   mensaje: string;
@@ -1011,20 +1013,54 @@ export function cotizarFase0(
       let piezasCobradas = 0;
       let m2Cobrados = 0;
       for (const r of filasFam) {
-        const altoReal = altoRealM(r.f.alto, esDuo, extraAlto);
+        // Un sistema que se fabrica del riel para afuera (el beeblack) no corta
+        // la tela rotada: al invertirlo, «el alto pasa a ser ancho y el ancho a
+        // ser alto» (dueño, 2026-09-07), y la cortina se cotiza ENTERA con las
+        // medidas cambiadas —tela, m² y materiales—. Invertir un 1,3 × 2,5 sale
+        // exactamente lo mismo que vender un 2,5 × 1,3 derecho. Antes se giraban
+        // solo los materiales y la tela se cobraba rotada: el paño quedaba de
+        // 3,50 m de ancho (2,50 + el metro extra) contra un rollo de 2,98, o
+        // sea un corte imposible que abarataba la cortina.
+        const gira = c.invertida && !!c.sistema?.giraMedidasAlInvertir;
+        const ancho = gira ? r.f.alto : r.f.ancho;
+        const alto = gira ? r.f.ancho : r.f.alto;
+        // El sobreancho de corte (el peor caso de montaje que calcula Fase 1) es
+        // un margen fijo de la categoría: viaja con la medida que ahora hace de
+        // ancho, para que girar no lo pierda.
+        const anchoEmpaqueM =
+          r.f.anchoEmpaqueM === undefined ? undefined : ancho + (r.f.anchoEmpaqueM - r.f.ancho);
+        const altoReal = altoRealM(alto, esDuo, extraAlto);
         // Pieza INVERTIDA (rotada 90°): el alto real ocupa el ancho del rollo y
         // lo que se consume a lo largo es el ancho de la cortina (o su peor caso
         // de oscuridad) MÁS el extra, igual que un alto (Optimizador del Excel
         // de cortinas mayores: `ALTO A UTILIZAR = ancho + 0,25`). Los m² no
         // cambian: la cortina vendida es la misma.
+        const rotada = c.invertida && !gira;
         const pieza: Pieza = {
-          ancho: r.f.ancho,
-          alto: r.f.alto,
+          ancho,
+          alto,
           altoReal,
-          m2: altoReal * r.f.ancho,
-          anchoEmpaque: c.invertida ? altoReal : r.f.anchoEmpaqueM,
-          largoRollo: c.invertida ? (r.f.anchoEmpaqueM ?? r.f.ancho) + extraAlto : undefined,
+          m2: altoReal * ancho,
+          anchoEmpaque: rotada ? altoReal : anchoEmpaqueM,
+          largoRollo: rotada ? (anchoEmpaqueM ?? ancho) + extraAlto : undefined,
         };
+        // El corte tiene que caber a lo ancho del rollo. No cambia el precio
+        // —lo pidió así el dueño—, pero se avisa: si no, una cotización sale
+        // con una tela que el taller no puede cortar así. Solo por las cortinas
+        // que se cobran DE VERDAD con este panel: los demás paneles son tarifas
+        // hipotéticas («como si todas fueran invertidas») y avisarían de más.
+        const ocupa = pieza.anchoEmpaque ?? pieza.ancho;
+        if (r.config.clave === clave && anchoRollo > 0 && ocupa > anchoRollo + 0.001) {
+          avisar({
+            tipo: 'rollo',
+            codigo: r.f.codInt,
+            mensaje:
+              `«${r.f.codInt}» ${r.f.ancho} × ${r.f.alto}${c.invertida ? ' invertida' : ''}: ` +
+              `el paño necesita ${ocupa.toFixed(2)} m a lo ancho y el rollo mide ` +
+              `${anchoRollo.toFixed(2)} m. Se cobra igual, pero esa tela no se puede cortar ` +
+              'así: revisa la medida o el ancho de rollo del catálogo.',
+          });
+        }
         const n = Math.max(1, r.f.cantidad);
         for (let i = 0; i < n; i++) piezas.push({ ...pieza });
         if (r.config.clave === clave) {
@@ -1112,18 +1148,12 @@ export function cotizarFase0(
     const receta = g.cadenaMetalica
       ? conCadenaMetalica(conTubo, reglas.cadenaMetalica)
       : conTubo;
-    // Un sistema que se fabrica del riel para afuera (el beeblack) cotiza la
-    // cortina GIRADA con el ancho y el alto cambiados: sus perfiles, zunchos y
-    // lamas se cortan de esas dos medidas, así que invertirla cambia cuánto se
-    // gasta de cada uno. La tela ya se calculó rotada más arriba y los m² son
-    // los mismos: acá solo cambian los materiales.
-    const piezasMateriales =
-      g.invertida && g.sistema?.giraMedidasAlInvertir
-        ? g.piezas.map((p) => ({ ...p, ancho: p.alto, alto: p.ancho }))
-        : g.piezas;
+    // Las piezas ya vienen con las medidas del panel: en un sistema que gira al
+    // invertirse (el beeblack) el ancho y el alto están cambiados desde arriba,
+    // así que sus perfiles, zunchos y lamas se cortan solos de la medida nueva.
     const materiales = materialesFamilia(
       receta,
-      piezasMateriales,
+      g.piezas,
       insumosDeSistema(g.sistema, reglas),
       margenInsumo,
       reglas.telaVertical.pasoLamaM,
@@ -1197,8 +1227,12 @@ export function cotizarFase0(
     const g = clave ? grupos.get(clave) : undefined;
     const cod = g?.cod ?? null;
     const esDuo = g?.esDuo ?? false;
-    const altoReal = altoRealM(f.alto, esDuo, extraAltoDe(g?.sistema));
-    const m2 = altoReal * f.ancho;
+    // Girada (beeblack invertido), la cortina se cobra con las medidas
+    // cambiadas: los m² tienen que salir de las MISMAS que armaron su panel, o
+    // el valor unitario se calcularía con una superficie y la tarifa con otra.
+    const gira = !!g?.invertida && !!g.sistema?.giraMedidasAlInvertir;
+    const altoReal = altoRealM(gira ? f.ancho : f.alto, esDuo, extraAltoDe(g?.sistema));
+    const m2 = altoReal * (gira ? f.alto : f.ancho);
     const precioM2 = clave ? pm2PorCod.get(clave) ?? 0 : 0;
     // Sin instalación: el cliente retira / solo cortina → VAL. UNIT = precio del
     // producto (m² × precio/m²), sin el cargo de instalación embebido.
