@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { FileText, Plus, RotateCcw, Save } from 'lucide-react';
 import { toast } from 'sonner';
+import { BarraGuardarSticky } from '@/components/admin/BarraGuardarSticky';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/auth';
 import {
@@ -147,6 +148,16 @@ export function TerminosSection() {
               ))}
             </ol>
           </div>
+
+          {/* La lista de términos es larga: el botón de arriba desaparece de
+              la pantalla apenas se baja a editar uno. */}
+          <BarraGuardarSticky
+            visible={dirty}
+            guardando={saving}
+            puedeGuardar={!!empresaId}
+            etiquetaGuardar="Guardar términos"
+            onGuardar={onGuardar}
+          />
         </>
       )}
     </section>

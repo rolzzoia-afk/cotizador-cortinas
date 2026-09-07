@@ -41,6 +41,7 @@ import {
   useReglasPrecios,
   type RespaldoPrecios,
 } from '@/modules/cotizador/reglasPreciosStore';
+import { BarraGuardarSticky } from '@/components/admin/BarraGuardarSticky';
 import { ProbadorCotizacionSection } from './ProbadorCotizacionSection';
 import { CadenaMetalicaSection } from './CadenaMetalicaSection';
 import { TuboInvertidaSection } from './TuboInvertidaSection';
@@ -397,6 +398,23 @@ export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } 
           onChange={editar}
         />
       )}
+
+      {/* Estas tablas son largas: el botón de arriba queda fuera de pantalla
+          apenas se baja a editar una fila, y sin nada a la vista parece que
+          los cambios se guardaran solos. No se guardan. */}
+      <BarraGuardarSticky
+        visible={dirty}
+        guardando={guardando}
+        puedeGuardar={!!empresaId && errores.length === 0}
+        etiquetaGuardar="Guardar precios"
+        mensaje={errores.length > 0 ? 'Hay errores que corregir más arriba.' : undefined}
+        onGuardar={onGuardar}
+        onDescartar={() => {
+          setDraft(reglas);
+          setDirty(false);
+          toast.info('Se descartaron los cambios: quedó lo último guardado.');
+        }}
+      />
 
       <Dialog open={verRespaldos} onOpenChange={setVerRespaldos}>
         <DialogContent className="max-w-lg">

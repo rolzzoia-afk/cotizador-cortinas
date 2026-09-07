@@ -259,7 +259,9 @@ export function ProductosCatalogoSection() {
 
         <div className="max-h-[32rem] overflow-y-auto rounded-md border">
           <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-muted/60 text-muted-foreground">
+            {/* Fondo opaco y z-index: con el translúcido las filas se leían
+                por debajo del título al hacer scroll. */}
+            <thead className="sticky top-0 z-10 bg-card text-muted-foreground shadow-[0_1px_0_0_hsl(var(--border))]">
               <tr>
                 <th className="px-2 py-1.5 text-left font-medium">Código</th>
                 <th className="px-2 py-1.5 text-left font-medium">Producto</th>

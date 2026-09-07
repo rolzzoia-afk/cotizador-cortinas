@@ -8,8 +8,9 @@
 // FABRICA una cortina, esto dice cuánto CUESTA. Antes esta mitad solo existía
 // dentro del código y en el Excel de las vendedoras.
 
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Blinds, Coins, FlaskConical, Package, Scroll } from 'lucide-react';
+import { ProveedorNavegacionPrecios } from '@/components/admin/precios/navegacionPrecios';
 import TabButton from '@/pages/historial-tubos/components/TabButton';
 import {
   ReglasPreciosSection,
@@ -32,7 +33,19 @@ const TABS: Array<{ id: TabPrecios; label: string; icon: typeof Coins }> = [
 
 export default function VistaPrecios() {
   const [tab, setTab] = useState<TabPrecios>('probador');
+  // Ir a otra pestaña y quedar mirando el campo: el destino se monta recién
+  // después del cambio de pestaña, por eso el scroll va en el siguiente frame.
+  const irA = useCallback((destino: TabPrecios, ancla?: string) => {
+    setTab(destino);
+    if (!ancla) return;
+    requestAnimationFrame(() => {
+      const el = document.getElementById(ancla);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, []);
+  const navegacion = useMemo(() => ({ irA }), [irA]);
   return (
+    <ProveedorNavegacionPrecios value={navegacion}>
     <div className="space-y-6">
       <div className="flex flex-wrap gap-1 border-b">
         {TABS.map((t) => (
@@ -57,5 +70,6 @@ export default function VistaPrecios() {
         </>
       )}
     </div>
+    </ProveedorNavegacionPrecios>
   );
 }

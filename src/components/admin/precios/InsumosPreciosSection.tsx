@@ -29,6 +29,7 @@ import {
   type LineaReceta,
 } from '@/modules/cotizador/reglasPrecios';
 import { nombreFamilia } from './nombresFamilias';
+import { EnlaceAlMargen } from './navegacionPrecios';
 
 type Props = {
   valor: Record<string, InsumoPrecio>;
@@ -281,6 +282,13 @@ export function InsumosPreciosSection({
         alguna familia. Las variantes de color o de proveedor de un mismo material comparten precio:
         aparecen en la lista para poder cambiar una por otra, y por eso muchas figuran «sin uso».
       </p>
+      {/* El dueño cambió un valor y la cotización no se movió: nunca lo había
+          guardado. Nada de esta pantalla se guarda solo. */}
+      <p className="mb-3 text-xs text-warning-foreground">
+        Los cambios <strong>no se guardan solos</strong>: se aplican con el botón «Guardar precios»
+        (arriba de la pantalla, o en la barra que aparece abajo apenas se edita algo). Hasta
+        entonces, las cotizaciones siguen con el valor anterior.
+      </p>
       {sistema ? (
         <p className="mb-3 text-xs text-muted-foreground">
           Estos precios son <strong>solo del {sistema.nombre.toLowerCase()}</strong> y{' '}
@@ -370,18 +378,23 @@ export function InsumosPreciosSection({
 
       <div className="max-h-[28rem] overflow-y-auto rounded-md border">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-muted/60 text-muted-foreground">
+          {/* Fondo OPACO y z-index: con `bg-muted/60` las filas se veían por
+              debajo del título al hacer scroll (el dueño lo reportó). */}
+          <thead className="sticky top-0 z-10 bg-card text-muted-foreground shadow-[0_1px_0_0_hsl(var(--border))]">
             <tr>
               <th className="px-2 py-1.5 text-left font-medium">Código</th>
               <th className="px-2 py-1.5 text-left font-medium">Descripción</th>
               <th className="px-2 py-1.5 text-right font-medium">Valor máximo</th>
               {/* La cuenta va en el título de la columna porque «de dónde sale
                   este número» era la pregunta que nadie podía contestar
-                  mirando la tabla. */}
+                  mirando la tabla. Y el margen se edita en otra pestaña: el
+                  enlace lleva directo, para no tener que buscarlo. */}
               <th className="px-2 py-1.5 text-right font-medium">
                 Precio de venta
                 <span className="block font-normal text-[0.65rem]">
-                  = valor máximo ÷ {textoDivisor(margenInsumo)}
+                  = valor máximo ÷ {textoDivisor(margenInsumo)} · margen{' '}
+                  {Math.round((1 - margenInsumo) * 100)} %{' '}
+                  <EnlaceAlMargen sistema={sistema?.clave} />
                 </span>
               </th>
               <th className="px-2 py-1.5 text-left font-medium">Se usa en</th>

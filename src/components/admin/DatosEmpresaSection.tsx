@@ -8,6 +8,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Building2, RotateCcw, Save, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { BarraGuardarSticky } from '@/components/admin/BarraGuardarSticky';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth';
@@ -541,6 +542,16 @@ export function DatosEmpresaSection() {
               Restaurar default
             </Button>
           </div>
+
+          {/* Misma razón que en precios: el formulario es largo y el botón de
+              arriba queda fuera de pantalla mientras se edita. */}
+          <BarraGuardarSticky
+            visible={dirty}
+            guardando={saving}
+            puedeGuardar={!!empresaId}
+            etiquetaGuardar="Guardar datos"
+            onGuardar={onGuardar}
+          />
         </>
       )}
     </section>

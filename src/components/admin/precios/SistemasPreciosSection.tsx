@@ -11,6 +11,7 @@
 // `ReglasPreciosSection`, igual que las demás secciones de esta pantalla.
 // ─────────────────────────────────────────────────────────────────────
 import { Layers, X } from 'lucide-react';
+import { anclaSistema } from './navegacionPrecios';
 import { Input } from '@/components/ui/input';
 import { InputDecimal } from '@/components/ui/input-decimal';
 import { formatCLP } from '@/lib/formatters';
@@ -127,7 +128,7 @@ function Sistema({
   };
 
   return (
-    <div className="rounded-md border p-3">
+    <div id={anclaSistema(clave)} className="scroll-mt-24 rounded-md border p-3">
       <div className="mb-2 flex flex-wrap items-baseline gap-2">
         <span className="text-xs font-semibold">{sistema.nombre}</span>
         <span className="font-mono text-[0.65rem] text-muted-foreground">{clave}</span>
