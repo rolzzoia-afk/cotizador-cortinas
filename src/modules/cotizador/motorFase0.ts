@@ -41,7 +41,7 @@ import {
   conCadenaMetalica,
   conTuboInvertida45,
   explicarCantidad,
-  insumosDeSistema,
+  insumosParaGrupo,
   lamasPorPasada,
   recetaBEsExacta,
   recetaInvEsExacta,
@@ -1154,7 +1154,9 @@ export function cotizarFase0(
     const materiales = materialesFamilia(
       receta,
       g.piezas,
-      insumosDeSistema(g.sistema, reglas),
+      // La tabla general, encima la propia de la familia (las verticales
+      // tienen la suya) y encima la del sistema con que se cotiza.
+      insumosParaGrupo(cod, g.sistema, reglas),
       margenInsumo,
       reglas.telaVertical.pasoLamaM,
     );
