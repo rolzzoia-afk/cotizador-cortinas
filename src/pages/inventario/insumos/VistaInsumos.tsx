@@ -7,6 +7,7 @@
 // vive en su archivo bajo ./inventario/.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
   AlertTriangle,
@@ -56,9 +57,13 @@ import CellRackDialog from './dialogs/CellRackDialog';
 import DetalleMovDialog from './dialogs/DetalleMovDialog';
 import LightboxFotoDialog from './dialogs/LightboxFotoDialog';
 import QRInsumoDialog from './dialogs/QRInsumoDialog';
+import { useInventario } from '../InventarioLayout';
 
 export function Inventario() {
   const { empresaId } = useAuth();
+  const { queryRol } = useInventario();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const [tab, setTab] = useState<Tab>('catalogo');
   const [loading, setLoading] = useState(true);
@@ -579,17 +584,41 @@ export function Inventario() {
     return u?.codigo_insumo || null;
   };
 
+  // La ficha de un artículo. El código lleva espacios («MEC 18»), así que va
+  // codificado; el `?rol=` se conserva para no sacar al admin del «ver como».
+  const rutaFicha = (codigo: string) =>
+    `/inventario/insumos/${encodeURIComponent(codigo)}${queryRol}`;
+
+  // La ficha manda acá con `?editar=<cod>` para abrir el formulario completo,
+  // que vive en esta pantalla junto con la subida de fotos.
+  useEffect(() => {
+    const pedido = searchParams.get('editar');
+    if (!pedido || loading || insumoDialog.open) return;
+    const ins = insumos.find(
+      (i) => (i.cod || '').trim().toUpperCase() === pedido.trim().toUpperCase(),
+    );
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('editar');
+        return next;
+      },
+      { replace: true },
+    );
+    if (ins) abrirEditarInsumo(ins);
+    else toast.error(`No se encontró el artículo ${pedido}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, loading, insumos]);
+
   const insumoByCod = useMemo(() => {
     const m = new Map<string, Insumo>();
     for (const i of insumos) if (i.cod) m.set(i.cod, i);
     return m;
   }, [insumos]);
 
-  const verEnCatalogo = (codigo: string) => {
-    setTab('catalogo');
-    setBusqueda(codigo);
-    setFiltroEstado('');
-  };
+  // «Ver ítem» abre la ficha del artículo, que es donde está todo junto. Antes
+  // solo filtraba el catálogo por el código.
+  const abrirFicha = (codigo: string) => navigate(rutaFicha(codigo));
 
   if (loading) {
     return (
@@ -660,6 +689,7 @@ export function Inventario() {
             onQR={setQrInsumo}
             onNuevoMov={abrirNuevoMov}
             onLightbox={setLightboxFoto}
+            rutaFicha={rutaFicha}
           />
         )}
         {tab === 'movimientos' && (
@@ -677,7 +707,7 @@ export function Inventario() {
           <AlertasTab
             alertasOrdenadas={alertasOrdenadas}
             insumoByCod={insumoByCod}
-            onVerEnCatalogo={verEnCatalogo}
+            onVerEnCatalogo={abrirFicha}
             onRegistrarReposicion={registrarReposicion}
           />
         )}
@@ -725,7 +755,7 @@ export function Inventario() {
         onClose={() => setCellModal(null)}
         codigoPorSlot={codigoPorSlot}
         insumoByCod={insumoByCod}
-        onVerEnCatalogo={verEnCatalogo}
+        onVerEnCatalogo={abrirFicha}
         onRegistrarEntrada={(codigo) => abrirNuevoMov('NUEVO INGRESO', codigo)}
       />
 

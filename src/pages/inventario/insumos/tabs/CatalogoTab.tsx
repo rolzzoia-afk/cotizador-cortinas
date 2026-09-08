@@ -1,5 +1,9 @@
 // Tab "Catálogo": stats arriba + filtros + tabla ordenable de insumos.
+//
+// Cada fila abre la ficha del artículo. Los botones de la fila (foto, editar,
+// QR, entrada) cortan el clic para que no se lleven a la ficha de paso.
 
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -55,6 +59,8 @@ interface CatalogoTabProps {
   onQR: (ins: Insumo) => void;
   onNuevoMov: (tipo: MovTipo, codigo?: string) => void;
   onLightbox: (foto: { url: string; cod: string }) => void;
+  /** A dónde lleva cada fila: la ficha del artículo. */
+  rutaFicha: (cod: string) => string;
 }
 
 export default function CatalogoTab({
@@ -78,7 +84,9 @@ export default function CatalogoTab({
   onQR,
   onNuevoMov,
   onLightbox,
+  rutaFicha,
 }: CatalogoTabProps) {
+  const navigate = useNavigate();
   return (
     <>
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
@@ -209,12 +217,19 @@ export default function CatalogoTab({
             {insumosFiltrados.map((i) => {
               const st = getStockTotal(i);
               return (
-                <tr key={i.id} className="border-t border-border hover:bg-card">
+                <tr
+                  key={i.id}
+                  onClick={() => navigate(rutaFicha(i.cod || ''))}
+                  className="cursor-pointer border-t border-border hover:bg-card"
+                >
                   <td className="p-1 text-center">
                     {i.foto_url ? (
                       <button
                         type="button"
-                        onClick={() => onLightbox({ url: i.foto_url!, cod: i.cod || '' })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLightbox({ url: i.foto_url!, cod: i.cod || '' });
+                        }}
                         className="mx-auto block rounded transition-transform hover:scale-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         title="Ver imagen ampliada"
                       >
@@ -231,7 +246,15 @@ export default function CatalogoTab({
                       </div>
                     )}
                   </td>
-                  <td className="p-2 font-mono font-semibold text-foreground">{i.cod}</td>
+                  <td className="p-2 font-mono font-semibold text-foreground">
+                    <Link
+                      to={rutaFicha(i.cod || '')}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {i.cod}
+                    </Link>
+                  </td>
                   <td className="p-2 max-w-[220px] truncate">
                     {i.nemotecnico || i.descriptor_proveedor || '—'}
                   </td>
@@ -259,7 +282,7 @@ export default function CatalogoTab({
                     <StockBadge insumo={i} />
                   </td>
                   <td className="p-2 text-center">
-                    <div className="flex justify-center gap-1">
+                    <div className="flex justify-center gap-1" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => onEditarInsumo(i)}
                         className="rounded border border-border bg-card p-1 text-foreground hover:bg-card"

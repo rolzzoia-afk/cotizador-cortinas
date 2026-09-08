@@ -52,6 +52,7 @@ export type UbicacionRack = {
   columna: string;
   codigo_insumo: string | null;
   almacen: string | null;
+  notas?: string | null;
 };
 
 export type Validador = {
@@ -89,7 +90,8 @@ export function calcularAlertas(insumos: Insumo[]): Alerta[] {
   return alertas;
 }
 
-const MESES = [
+/** Como se escribe el mes en `movimientos_insumos.mes`. */
+export const MESES = [
   'ENERO',
   'FEBRERO',
   'MARZO',
