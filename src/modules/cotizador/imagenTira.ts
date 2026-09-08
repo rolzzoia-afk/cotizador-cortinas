@@ -67,11 +67,16 @@ function cargarImagen(file: File): Promise<HTMLImageElement> {
  * Reduce, recomprime y mide la imagen elegida por el admin. Devuelve el
  * archivo que hay que subir y su proporción.
  */
-export async function prepararImagenTira(file: File): Promise<TiraPreparada> {
+export async function prepararImagenTira(
+  file: File,
+  opts?: { maxAncho?: number },
+): Promise<TiraPreparada> {
   const img = await cargarImagen(file);
   const anchoReal = img.naturalWidth || img.width;
   const altoReal = img.naturalHeight || img.height;
-  const destino = medidasReducidas(anchoReal, altoReal);
+  // La banda de validez se imprime a ~62 mm: no necesita los 1600 px de la
+  // tira, y bajarle el ancho la deja aún más liviana.
+  const destino = medidasReducidas(anchoReal, altoReal, opts?.maxAncho ?? ANCHO_MAX_TIRA_PX);
   if (!destino.ancho || !destino.alto) throw new Error('La imagen no tiene medidas válidas.');
 
   const canvas = document.createElement('canvas');

@@ -1500,12 +1500,17 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
 
       // Las imágenes propias del admin viajan como dataURL: jsPDF no sabe leer
       // una URL. Si alguna no se puede bajar, se usa la de fábrica.
-      const [logoPropio, tiraPropia] = await Promise.all([
+      const [logoPropio, tiraPropia, validezImagen] = await Promise.all([
         datosEmpresa.encabezado.logoUrl
           ? cargarImagenDataUrl(datosEmpresa.encabezado.logoUrl)
           : null,
         datosEmpresa.fotosProyectos.imagenUrl && datosEmpresa.fotosProyectos.visible
           ? cargarImagenDataUrl(datosEmpresa.fotosProyectos.imagenUrl)
+          : null,
+        // La imagen de la banda de validez: solo hace falta si esta cotización
+        // no escribió su propio texto, que le gana.
+        datosEmpresa.validez.imagenUrl && !validezTexto.trim()
+          ? cargarImagenDataUrl(datosEmpresa.validez.imagenUrl)
           : null,
       ]);
 
@@ -1633,6 +1638,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         empresa: datosEmpresa,
         logoDataUrl: logoPropio ?? LOGO_ROLZZO,
         tiraProyectosDataUrl: tiraPropia,
+        validezImagenDataUrl: validezImagen,
       });
     } catch (e) {
       toast.error('No se pudo generar el PDF: ' + (e instanceof Error ? e.message : String(e)));
@@ -2889,7 +2895,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           {FILAS_TOTALES.map((f) => (
             <div key={f.id}>
               {f.separadorAntes && <div className="my-1 border-t border-border" />}
-              <FilaTotal label={f.label(t)} valor={formatCLP(f.valor(t))} fuerte={f.fuerte} />
+              <FilaTotal label={f.label(t)} valor={formatCLP(f.valor(t))} fuerte={f.fuerte} tono={f.tono} />
               {/* La leyenda va pegada al total con tarjeta, igual que en el PDF.
                   Con Flow no va: ahí las cuotas las pone el banco del cliente. */}
               {f.llevaLeyendaCuotas &&

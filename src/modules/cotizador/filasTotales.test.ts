@@ -11,9 +11,9 @@ describe('las filas del recuadro de totales', () => {
       'Subtotal pago tarjeta d.c.',
       'IVA 19%',
       'Tot. tarjeta de crédito',
-      'Subtotal pago transf.',
+      'Subtotal pago transferencia',
       'IVA 19%',
-      'Total pago transf.',
+      'Total pago transferencia',
     ]);
   });
 

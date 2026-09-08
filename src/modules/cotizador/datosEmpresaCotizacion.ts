@@ -45,8 +45,17 @@ export type DatosEmpresaCotizacion = {
    * la gama de las cortinas.
    */
   banda: { titulo: string; tituloCategoriaB: string; leyendaTarjetas: string };
-  /** La banda roja del encabezado. */
-  validez: { titulo: string; detalle: string };
+  /**
+   * La banda roja del encabezado.
+   *
+   * `imagenUrl` la REEMPLAZA por una imagen (dueño, 2026-09-07: «por ejemplo
+   * en días de cyberday, poder subir una imagen ahí y colocar las condiciones
+   * de cyberday»), y `imagenRatio` es su proporción ancho/alto —medida al
+   * subirla— para que el PDF no la deforme. Una cotización que escriba su
+   * propio texto de validez gana sobre la imagen: es lo puntual contra lo
+   * general.
+   */
+  validez: { titulo: string; detalle: string; imagenUrl: string; imagenRatio: number };
   /** La celda CONTACTO de la grilla del cliente. */
   contacto: { texto: string; url: string };
   transferencia: {
@@ -112,6 +121,8 @@ export const DATOS_EMPRESA_DEFAULT: DatosEmpresaCotizacion = {
   validez: {
     titulo: 'VÁLIDO POR 5 DIAS',
     detalle: 'De aprobar después de este rango debe actualizar cotización',
+    imagenUrl: '',
+    imagenRatio: 0,
   },
   contacto: {
     texto: 'INSTAGRAM',
@@ -245,6 +256,8 @@ export function normalizarDatosEmpresa(raw: unknown): DatosEmpresaCotizacion {
     validez: {
       titulo: txtOpcional(val.titulo, d.validez.titulo),
       detalle: txtOpcional(val.detalle, d.validez.detalle),
+      imagenUrl: txtOpcional(val.imagenUrl, ''),
+      imagenRatio: normalizarRatioTira(val.imagenRatio),
     },
     contacto: {
       texto: txtOpcional(con.texto, d.contacto.texto),

@@ -11,9 +11,13 @@
 //     SUBTOTAL PAGO TARJETA D.C   →  subtotalTarjeta  (neto × 1,138)
 //     IVA 19%                     →  ivaTarjeta
 //     TOT. TARJETA DE CRÉDITO     →  totalTarjeta
-//     SUBTOTAL PAGO TRANSF.       →  subtotalNeto
+//     SUBTOTAL PAGO TRANSFERENCIA →  subtotalNeto
 //     IVA 19%                     →  ivaTransferencia
-//     TOTAL PAGO TRANSF.          →  totalTransferencia
+//     TOTAL PAGO TRANSFERENCIA    →  totalTransferencia
+//
+// La palabra va ENTERA (dueño, 2026-09-07): abreviada —«transf.»— se leía
+// cortada. `pdfCotizacion.test.ts` verifica que el rótulo y su monto siguen
+// cabiendo juntos en los 72 mm del recuadro.
 //
 // El orden es el del Excel: primero la tarjeta, después la transferencia. Con
 // el IVA desglosado la nota «Todos los precios incluyen IVA» sobra —lo dice el
@@ -34,6 +38,12 @@ export type FilaTotalDoc = {
   valor: (t: TotalesCotizacion) => number;
   /** Se dibuja destacada: es uno de los dos montos que el cliente paga. */
   fuerte?: boolean;
+  /**
+   * Con qué color se pinta la banda de una fila `fuerte` (dueño, 2026-09-07):
+   * la tarjeta en rojo claro y la transferencia en negro, para que se
+   * distingan de un vistazo. Sin tono, negro.
+   */
+  tono?: 'oscuro' | 'rojo';
   /** Línea divisoria arriba de la fila (separa los dos bloques de pago). */
   separadorAntes?: boolean;
   /** Debajo de esta fila va la leyenda de cuotas: es el monto que la explica.
@@ -64,11 +74,12 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
     label: () => 'Tot. tarjeta de crédito',
     valor: (t) => t.totalTarjeta,
     fuerte: true,
+    tono: 'rojo',
     llevaLeyendaCuotas: true,
   },
   {
     id: 'transferenciaSubtotal',
-    label: () => 'Subtotal pago transf.',
+    label: () => 'Subtotal pago transferencia',
     valor: (t) => t.subtotalNeto,
     separadorAntes: true,
   },
@@ -79,8 +90,9 @@ export const FILAS_TOTALES: FilaTotalDoc[] = [
   },
   {
     id: 'transferencia',
-    label: () => 'Total pago transf.',
+    label: () => 'Total pago transferencia',
     valor: (t) => t.totalTransferencia,
     fuerte: true,
+    tono: 'oscuro',
   },
 ];

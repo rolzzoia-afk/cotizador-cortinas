@@ -9,23 +9,34 @@ export default function FilaTotal({
   label,
   valor,
   fuerte,
+  tono,
 }: {
   label: string;
   valor: string;
   /** Uno de los dos montos que paga el cliente (el resto es el desglose). */
   fuerte?: boolean;
+  /** Cómo se pinta el monto fuerte: el de tarjeta en rojo, como en el PDF. */
+  tono?: 'oscuro' | 'rojo';
 }) {
+  const rojo = fuerte && tono === 'rojo';
   return (
     // `gap-6`: el recuadro se ancha según su fila más larga, así que sin una
     // separación mínima la etiqueta y el monto quedaban pegados.
     <div className="flex items-center justify-between gap-6">
-      <span className={cn('text-muted-foreground', fuerte && 'font-semibold text-foreground')}>
+      <span
+        className={cn(
+          'text-muted-foreground',
+          fuerte && 'font-semibold text-foreground',
+          rojo && 'text-destructive',
+        )}
+      >
         {label}
       </span>
       <span
         className={cn(
           'tabular-nums',
           fuerte ? 'text-base font-bold text-foreground' : 'text-foreground',
+          rojo && 'rounded bg-destructive/10 px-1 text-destructive',
         )}
       >
         {valor}
