@@ -60,6 +60,8 @@ type Props = {
   opcionesMecanismo: readonly string[];
   opcionesTuberia: readonly string[];
   notaMecanismo?: string;
+  /** El tubo lo eligió el taller a mano (categoría B). */
+  tuboManual?: boolean;
   lineaB: boolean;
   guardando: boolean;
   onVentana: (patch: Partial<Ventana>) => void;
@@ -374,6 +376,7 @@ export function WizardTerreno(props: Props) {
               opcionesMecanismo={props.opcionesMecanismo}
               opcionesTuberia={props.opcionesTuberia}
               notaMecanismo={props.notaMecanismo}
+              tuboManual={props.tuboManual}
               lineaB={props.lineaB}
               formulas={props.formulas}
               onVentana={props.onVentana}

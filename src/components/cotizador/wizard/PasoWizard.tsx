@@ -97,6 +97,8 @@ export type PropsPaso = {
   opcionesMecanismo: readonly string[];
   opcionesTuberia: readonly string[];
   notaMecanismo?: string;
+  /** El tubo lo eligió el taller a mano (categoría B). */
+  tuboManual?: boolean;
   lineaB: boolean;
   /** Fórmulas de corte editadas en Admin (las usan las medidas de los perfiles). */
   formulas?: FormulasFamilias;
@@ -273,6 +275,18 @@ export function CuerpoPaso(props: PropsPaso) {
           {props.opcionesTuberia.length === 1 && (
             <p className="text-[0.68rem] text-amber-500">
               El ancho de esta cortina fija el tubo: no hay otra opción compatible.
+            </p>
+          )}
+          {props.tuboManual && !!pano.tuberia && (
+            <p className="text-[0.68rem] text-muted-foreground">
+              Elegido a mano: se respeta aunque el ancho pida el otro tubo.{' '}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-foreground"
+                onClick={() => onPano({ tuboManual: false })}
+              >
+                Volver al automático
+              </button>
             </p>
           )}
         </div>

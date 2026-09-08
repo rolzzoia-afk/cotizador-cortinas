@@ -62,8 +62,12 @@ export type ReglaTubo63 = {
  */
 export type ReglaTuboLineaB = {
   descripcion: string;
-  /** Ancho máximo (m) INCLUSIVE para el tubo delgado. Por encima → el grueso. */
-  anchoMaxM: number;
+  /**
+   * Ancho (m) desde el cual, INCLUSIVE, entra el tubo grueso. Por debajo va el
+   * delgado. Con 3,0: una cortina de 2,99 lleva el delgado y una de 3,00 el
+   * grueso.
+   */
+  anchoDesdeM: number;
   codigoHasta: string;
   codigoDesde: string;
   /**
@@ -102,7 +106,7 @@ export type ReglasTuberia = {
   reglasCategoria: readonly ReglaTuboCategoria[];
   /** Catálogo de tubos con estado (activo | oculto | opt_in). */
   tubos: readonly TuboCatalogo[];
-  /** CATEGORÍA B: E01 (Ø38 0,8) hasta el tope · E39 (Ø45 0,44) por encima. */
+  /** CATEGORÍA B: E01 (Ø38 0,8) bajo el corte · E39 (Ø45 1,2) desde el corte. */
   reglaLineaB: ReglaTuboLineaB;
 };
 
@@ -194,15 +198,22 @@ export const REGLAS_TUBERIA = {
   ] as readonly TuboCatalogo[],
 
   /**
-   * CATEGORÍA B: hasta 2,5 m → E01 (Ø38 0,8); más ancho → E39 (Ø45 1,2), pero
+   * CATEGORÍA B: bajo 3,0 m → E01 (Ø38 0,8); desde 3,0 m → E39 (Ø45 1,2), pero
    * el E39 SOLO se fabrica en roller simple. En la ovalada y el dúo B no hay
    * tubo para esos anchos: se quedan en E01 y su ancho máximo los corta.
    * Es su ÚNICA regla de ancho: no participa de las bandas de la categoría A
    * (E02/E66, la de 45 mm por OT, ni la de 63 mm sobre 3 m).
+   *
+   * El corte pasó de 2,5 a 3,0 el 2026-09-08 (decisión del dueño): la gama
+   * económica trabaja con E01 y el Ø45 queda para las cortinas anchas de
+   * verdad. El ancho máximo de las filas B del catálogo lo acompaña
+   * (`sql/20260908_categoria_b_e39_desde_3m.sql`): roller simple hasta 3,5 m,
+   * ovalada y dúo hasta 3,0 — si no, el tramo del E39 quedaría sin ningún
+   * ancho fabricable.
    */
   reglaLineaB: {
-    descripcion: 'Categoría B: hasta 2,5 m → E01 (Ø38) · más de 2,5 m → E39 (Ø45), solo en roller simple',
-    anchoMaxM: 2.5,
+    descripcion: 'Categoría B: bajo 3,0 m → E01 (Ø38) · desde 3,0 m → E39 (Ø45), solo en roller simple',
+    anchoDesdeM: 3.0,
     codigoHasta: 'E01',
     codigoDesde: 'E39',
     // Match EXACTO: 'ROL_MANUAL_CENEFA_OVALADA_38mm' también empieza con "ROL".
@@ -311,9 +322,9 @@ export function aplicaRegla63(
  * mecanismo placeholder es un "kit simple 38MM" que no debe fijar el tubo.
  */
 /**
- * Tubo de una cortina de CATEGORÍA B según su ancho: E01 (Ø38) hasta el tope,
- * E39 (Ø45) por encima. Sin ancho todavía (ventana recién creada) cae al
- * delgado, que es el caso normal.
+ * Tubo de una cortina de CATEGORÍA B según su ancho: E01 (Ø38) bajo el corte,
+ * E39 (Ø45) desde el corte (inclusive). Sin ancho todavía (ventana recién
+ * creada) cae al delgado, que es el caso normal.
  *
  * El tramo ancho solo existe en la categoría que fija `categoriaDesde` (hoy el
  * roller simple): la ovalada y el dúo B no tienen tubo para esos anchos, así
@@ -327,7 +338,7 @@ export function codigoTuboLineaB(
 ): string {
   const r = reglas.reglaLineaB;
   if (!r) return '';
-  if (anchoM <= r.anchoMaxM) return r.codigoHasta;
+  if (anchoM < r.anchoDesdeM) return r.codigoHasta;
   // Un tipo de cortina propio se comporta como su molde: si está calcado del
   // roller simple, también llega al tubo ancho.
   const cat = categoriaEfectiva(categoria, tipos);
@@ -341,8 +352,8 @@ export function codigoTuboPorAncho(
   reglas: ReglasTuberia = REGLAS_TUBERIA,
   lineaB = false,
 ): string {
-  // CATEGORÍA B: tiene su PROPIA banda por ancho (E01 hasta 2,5 m · E39 por
-  // encima, y el E39 solo en roller simple) y no participa de ninguna de las de
+  // CATEGORÍA B: tiene su PROPIA banda por ancho (E01 bajo 3,0 m · E39 desde
+  // ahí, y el E39 solo en roller simple) y no participa de ninguna de las de
   // la categoría A. Va primero justamente por eso: ni la regla de categoría ni
   // E02/E66/E78/E65 la tocan.
   if (lineaB) return codigoTuboLineaB(anchoM, categoria, reglas);
@@ -573,6 +584,19 @@ function tubosAutoPorAncho(reglas: ReglasTuberia): Set<string> {
 }
 
 /**
+ * ¿El taller eligió el TUBO a mano en Fase 2? Hoy solo la categoría B ofrece
+ * esa elección (E01 o E39), porque su banda pisaba el chip guardado en cada
+ * sincronización. Igual que `cadenaElegidaAMano`, exige el flag Y que HAYA
+ * tubería: un flag encendido sin chip dejaría la ficha trabada sin ninguno y
+ * sin nadie que se lo reponga.
+ */
+export function tuboElegidoAMano(
+  p: { tuboManual?: boolean; tuberia?: unknown } | null | undefined,
+): boolean {
+  return !!p?.tuboManual && !!String(p?.tuberia ?? '').trim();
+}
+
+/**
  * Tubería que debe quedar en el paño: pre-selecciona según reglas;
  * corrige defaults erróneos; respeta elección manual distinta.
  */
@@ -584,12 +608,19 @@ export function tuberiaParaPano(
   categoria?: string,
   reglas: ReglasTuberia = REGLAS_TUBERIA,
   lineaB = false,
+  /** El taller eligió el tubo a mano (`tuboElegidoAMano`): no se recalcula. */
+  manual = false,
 ): string {
-  // CATEGORÍA B: su tubo sale de SU banda (E01 hasta 2,5 m · E39 por encima
+  // CATEGORÍA B: su tubo sale de SU banda (E01 bajo 3,0 m · E39 desde ahí,
   // solo en roller simple) y se pone aunque no haya modelo todavía (la cortina
   // B nace con su tubo). Los dos están ocultos en el catálogo, así que el chip
   // se arma desde ahí cuando el selector no los ofrece.
   if (lineaB) {
+    // Elegido a mano: manda el chip guardado. La banda es la que pisaba una
+    // elección manual en cada sincronización de Fase 2 y en cada re-guardado
+    // de Fase 1, así que sin esta salida no había forma de fijar el tubo.
+    const aMano = (stored || '').trim();
+    if (manual && aMano) return canonizarChipTuberia(aMano, opciones);
     const cod = codigoTuboLineaB(anchoM, categoria, reglas);
     if (cod) {
       return (
@@ -738,9 +769,10 @@ export function diametroDesdeChipMecanismo(
   if (s.includes('LZ')) return valido(38);
   if (s.includes('DUAL')) return valido(38);
   // CATEGORÍA B: 38 es el diámetro de su FILA de despiece (y el del E01, su tubo
-  // hasta 2,5 m). Sobre 2,5 m el tubo real es el E39, de 45 — pero esto es solo
-  // el último recurso para filtrar el selector, y en una cortina B el tubo no
-  // se elige del selector: lo pone la banda (ver `codigoTuboLineaB`).
+  // bajo 3,0 m). Desde 3,0 m el tubo real es el E39, de 45 — pero esto es solo
+  // el último recurso para filtrar el selector, y en una cortina B el selector
+  // no llega hasta acá: la rama de categoría B de `opcionesTuberiaFiltradas`
+  // ofrece sus dos tubos y sale antes.
   if (s.includes('CAT.B')) return valido(38);
   return null;
 }
@@ -796,9 +828,10 @@ function diametroEfectivo(
 
 /**
  * Opciones de tubería visibles según mecanismo/modelo/categoría (cascada
- * mecanismo→tubería del editor de paños). Prioridad: regla de categoría
- * (OSCURANTI→E47) → pletina→VELCRO → diámetro efectivo (categoría con mm →
- * chip explícito → modelo → heurística) → sin datos: todas. La tubería guardada
+ * mecanismo→tubería del editor de paños). Prioridad: categoría B (sus dos
+ * tubos) → regla de categoría (OSCURANTI→E47) → pletina→VELCRO → diámetro
+ * efectivo (categoría con mm → chip explícito → modelo → heurística) → sin
+ * datos: todas. La tubería guardada
  * SIEMPRE se conserva (escape para OTs viejas, incluso chips retirados).
  * Fail-open: ante cualquier hueco de datos devuelve todas las opciones,
  * nunca deja al operario sin alternativas.
@@ -810,6 +843,8 @@ export function opcionesTuberiaFiltradas(
     modelo?: ModeloTubo | null;
     categoria?: string;
     tuberiaActual?: string | null;
+    /** Cortina de categoría B: solo se ofrecen los dos tubos de su banda. */
+    lineaB?: boolean;
   },
   reglas: ReglasTuberia = REGLAS_TUBERIA,
 ): readonly string[] {
@@ -825,6 +860,25 @@ export function opcionesTuberiaFiltradas(
     out.push(stored);
     return out;
   };
+
+  // 0. CATEGORÍA B: sus dos tubos, SIEMPRE los dos (el ancho propone, el taller
+  //    dispone). Va primero porque su banda no participa de ninguna regla de la
+  //    categoría A: sin esto el selector le ofrecía E02/E66, que son tubos A y
+  //    que el optimizador rechaza en una orden B. Los dos están OCULTOS en el
+  //    catálogo, así que el chip se arma desde la descripción cuando el selector
+  //    no los trae.
+  if (ctx.lineaB) {
+    const desc = descripcionesTuberia(reglas);
+    const chipB = (cod: string): string | null => {
+      const c = (cod || '').trim().toUpperCase();
+      if (!c) return null;
+      return chipTuberiaPorCodigo(c, opciones) ?? desc[c] ?? null;
+    };
+    const rB = reglas.reglaLineaB;
+    const chips = [chipB(rB?.codigoHasta ?? ''), chipB(rB?.codigoDesde ?? '')];
+    const salida = conStored(chips);
+    return salida.length > 0 ? salida : [...opciones];
+  }
 
   // 1. Regla por categoría (gana sobre el mecanismo, igual que en codigoTuboPorAncho).
   const codCat = codigoTuboPorCategoria(ctx.categoria || '', reglas);

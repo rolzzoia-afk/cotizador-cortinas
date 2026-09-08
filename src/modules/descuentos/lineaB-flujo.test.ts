@@ -21,7 +21,13 @@ import {
   mecLineaB,
   numeroMecDeChip,
 } from './reglas-mecanismo';
-import { codigoTuboPorAncho, tuberiaCodigoCorto, tuberiaParaPano } from './reglas-tuberia';
+import {
+  codigoTuboPorAncho,
+  opcionesTuberiaFiltradas,
+  tuberiaCodigoCorto,
+  tuberiaParaPano,
+  tuboElegidoAMano,
+} from './reglas-tuberia';
 import { esFilaLineaB, modelosParaCategoria } from './tipos';
 import {
   OPCIONES_MECANISMO,
@@ -53,11 +59,15 @@ const fila = (o: Partial<ModeloDespiece> & { mecanismo: string }): ModeloDespiec
 
 const NOTA_B = 'LINEA B — gama económica';
 
-// Roller simple
+// Roller simple. Los anchos máximos son los de producción tras el SQL
+// 20260908: el roller simple B llega a 3,5 m con el E39; la ovalada y el dúo B,
+// que no tienen tubo de 45, se cortan en 3,0 con el E01.
 const A_SIMPLE_BCO = fila({ mecanismo: 'MEC_33_KIT_SIMPLE_BLANCO' });
-const B_SIMPLE_MEC06 = fila({ mecanismo: 'MEC_06_LZ50_BLANCO', dcto_tubo_cm: 3.8, notas: NOTA_B });
-const B_SIMPLE_MEC44 = fila({ mecanismo: 'MEC_44_LZ50_B_BLANCO', dcto_tubo_cm: 3.4, notas: NOTA_B });
-const B_SIMPLE_MEC15 = fila({ mecanismo: 'MEC_15_LZ50_B_NEGRO', dcto_tubo_cm: 3.3, notas: NOTA_B });
+const rollerB = (o: Partial<ModeloDespiece> & { mecanismo: string }) =>
+  fila({ ancho_max_m: 3.5, notas: NOTA_B, ...o });
+const B_SIMPLE_MEC06 = rollerB({ mecanismo: 'MEC_06_LZ50_BLANCO', dcto_tubo_cm: 3.8 });
+const B_SIMPLE_MEC44 = rollerB({ mecanismo: 'MEC_44_LZ50_B_BLANCO', dcto_tubo_cm: 3.4 });
+const B_SIMPLE_MEC15 = rollerB({ mecanismo: 'MEC_15_LZ50_B_NEGRO', dcto_tubo_cm: 3.3 });
 
 // Cenefa ovalada roller
 const ovalada = (o: Partial<ModeloDespiece> & { mecanismo: string }) =>
@@ -70,8 +80,8 @@ const ovalada = (o: Partial<ModeloDespiece> & { mecanismo: string }) =>
     ...o,
   });
 const A_OVAL_BCO = ovalada({ mecanismo: 'MEC_10_OVALADA_BLANCO' });
-const B_OVAL_BCO = ovalada({ mecanismo: 'MEC_37_OVALADA_B_BLANCO', dcto_tubo_cm: 1.5, notas: NOTA_B });
-const B_OVAL_NEG = ovalada({ mecanismo: 'MEC_45_OVALADA_B_NEGRO', dcto_tubo_cm: 1.5, notas: NOTA_B });
+const B_OVAL_BCO = ovalada({ mecanismo: 'MEC_37_OVALADA_B_BLANCO', dcto_tubo_cm: 1.5, ancho_max_m: 3.0, notas: NOTA_B });
+const B_OVAL_NEG = ovalada({ mecanismo: 'MEC_45_OVALADA_B_NEGRO', dcto_tubo_cm: 1.5, ancho_max_m: 3.0, notas: NOTA_B });
 
 // Dúo cenefa ovalada
 const duo = (o: Partial<ModeloDespiece> & { mecanismo: string }) =>
@@ -87,8 +97,8 @@ const duo = (o: Partial<ModeloDespiece> & { mecanismo: string }) =>
     ancho_max_m: 2.5,
     ...o,
   });
-const B_DUO_BCO = duo({ mecanismo: 'MEC_37_DUO_B_BLANCO', notas: NOTA_B });
-const B_DUO_NEG = duo({ mecanismo: 'MEC_45_DUO_B_NEGRO', notas: NOTA_B });
+const B_DUO_BCO = duo({ mecanismo: 'MEC_37_DUO_B_BLANCO', ancho_max_m: 3.0, notas: NOTA_B });
+const B_DUO_NEG = duo({ mecanismo: 'MEC_45_DUO_B_NEGRO', ancho_max_m: 3.0, notas: NOTA_B });
 
 const CATALOGO = [
   A_SIMPLE_BCO, B_SIMPLE_MEC06, B_SIMPLE_MEC44, B_SIMPLE_MEC15,
@@ -236,44 +246,49 @@ describe('línea B — la fila del catálogo y sus medidas de corte', () => {
   });
 });
 
-// La categoría B tiene UNA sola banda por ancho, la suya: hasta 2,5 m el tubo
-// delgado E01 (Ø38 0,8) y por encima el E39 (Ø45 1,2), porque el E01 no aguanta
-// esos anchos. No participa de ninguna banda de la categoría A. El tramo ancho
-// SOLO existe en roller simple: la ovalada y el dúo B no tienen tubo para eso.
+// La categoría B tiene UNA sola banda por ancho, la suya: bajo 3,0 m el tubo
+// delgado E01 (Ø38 0,8) y desde 3,0 m —inclusive— el E39 (Ø45 1,2), porque el
+// E01 no aguanta esos anchos. El corte pasó de 2,5 a 3,0 el 2026-09-08 por
+// decisión del dueño: la gama económica trabaja con E01 y el Ø45 queda para las
+// cortinas anchas de verdad. No participa de ninguna banda de la categoría A.
+// El tramo ancho SOLO existe en roller simple: la ovalada y el dúo B no tienen
+// tubo para eso.
 describe('categoría B — su propia banda de tubo (E01 / E39)', () => {
   const tuboB = (ancho: number, categoria = 'ROL', modelo = B_SIMPLE_MEC06) =>
     codigoTuboPorAncho(modelo, ancho, categoria, undefined, true);
 
-  it('hasta 2,5 m va el E01; el 2,50 exacto todavía es E01', () => {
+  it('bajo 3,0 m va el E01; el 2,99 todavía es E01', () => {
     expect(tuboB(1.0)).toBe('E01');
-    expect(tuboB(2.2)).toBe('E01');
     expect(tuboB(2.5)).toBe('E01');
+    expect(tuboB(2.99)).toBe('E01');
   });
 
-  it('sobre 2,5 m el roller simple pasa al E39', () => {
-    expect(tuboB(2.51)).toBe('E39');
-    expect(tuboB(2.8)).toBe('E39');
+  it('desde 3,0 m el roller simple pasa al E39, y el 3,00 exacto ya es E39', () => {
     expect(tuboB(3.0)).toBe('E39');
+    expect(tuboB(3.2)).toBe('E39');
+    expect(tuboB(3.5)).toBe('E39');
   });
 
   it('el E39 SOLO existe en roller simple: la ovalada y el dúo se quedan en E01', () => {
     const oval = 'ROL_MANUAL_CENEFA_OVALADA_38mm';
-    expect(tuboB(2.8, oval, B_OVAL_BCO)).toBe('E01');
-    expect(tuboB(3.0, oval, B_OVAL_NEG)).toBe('E01');
-    expect(tuboB(2.8, 'DUO_MANUAL_38mm', B_DUO_BCO)).toBe('E01');
+    expect(tuboB(3.0, oval, B_OVAL_BCO)).toBe('E01');
+    expect(tuboB(3.2, oval, B_OVAL_NEG)).toBe('E01');
+    expect(tuboB(3.0, 'DUO_MANUAL_38mm', B_DUO_BCO)).toBe('E01');
     // Lo que corta a esas cortinas es el ancho máximo de su fila, no el tubo.
-    expect(B_OVAL_BCO.ancho_max_m).toBeLessThanOrEqual(2.5);
+    // El SQL 20260908 se lo subió de 2,5 a 3,0: el tubo delgado les alcanza
+    // hasta ahí y no hay tramo ancho que las salve más allá.
+    expect(B_OVAL_BCO.ancho_max_m).toBeLessThanOrEqual(3.0);
   });
 
   it('el match de la categoría es EXACTO: «ROL_MANUAL_…» no es «ROL»', () => {
     // Con un `includes` en vez de igualdad, la ovalada se llevaría el E39 solo
     // porque su nombre empieza con ROL. Este test fija justamente eso.
-    expect(tuboB(2.8, 'ROL')).toBe('E39');
-    expect(tuboB(2.8, 'ROL_MANUAL_CENEFA_OVALADA_38mm', B_OVAL_BCO)).toBe('E01');
+    expect(tuboB(3.2, 'ROL')).toBe('E39');
+    expect(tuboB(3.2, 'ROL_MANUAL_CENEFA_OVALADA_38mm', B_OVAL_BCO)).toBe('E01');
   });
 
   it('no participa de las bandas de la categoría A (E66/E78/E65)', () => {
-    for (const ancho of [1.0, 2.5, 2.8, 3.5]) {
+    for (const ancho of [1.0, 2.5, 2.99, 3.0, 3.5]) {
       expect(['E01', 'E39']).toContain(tuboB(ancho));
     }
     // La misma cortina en la categoría A sí obedece la regla E02/E66.
@@ -282,8 +297,8 @@ describe('categoría B — su propia banda de tubo (E01 / E39)', () => {
   });
 
   it('el ancho mueve el TUBO pero no el KIT', () => {
-    expect(numeroMecDeChip(mecB({}, 'BLANCO', 'ROL', 2.8))).toBe(6);
-    expect(numeroMecDeChip(mecB({}, 'NEGRO', 'ROL', 2.8))).toBe(15);
+    expect(numeroMecDeChip(mecB({}, 'BLANCO', 'ROL', 3.2))).toBe(6);
+    expect(numeroMecDeChip(mecB({}, 'NEGRO', 'ROL', 3.2))).toBe(15);
   });
 
   it('el chip sale del catálogo aunque los dos tubos estén ocultos', () => {
@@ -292,12 +307,12 @@ describe('categoría B — su propia banda de tubo (E01 / E39)', () => {
     );
     expect(chipAngosto).toContain('E01');
     const chipAncho = tuberiaParaPano(
-      2.8, B_SIMPLE_MEC06, '', OPCIONES_TUBERIA, 'ROL', undefined, true,
+      3.2, B_SIMPLE_MEC06, '', OPCIONES_TUBERIA, 'ROL', undefined, true,
     );
     expect(chipAncho).toContain('E39');
     // La ovalada ancha se queda con su E01.
     const chipOval = tuberiaParaPano(
-      2.8, B_OVAL_BCO, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_38mm', undefined, true,
+      3.0, B_OVAL_BCO, '', OPCIONES_TUBERIA, 'ROL_MANUAL_CENEFA_OVALADA_38mm', undefined, true,
     );
     expect(chipOval).toContain('E01');
   });
@@ -305,9 +320,99 @@ describe('categoría B — su propia banda de tubo (E01 / E39)', () => {
   it('el rótulo lleva el diámetro REAL del tubo, no el de la fila de despiece', () => {
     // La fila del catálogo es de 38 mm y sirve para los dos tubos; el E39 es de 45.
     expect(tuberiaCodigoCorto(B_SIMPLE_MEC06, '', 1.5, 'ROL', undefined, true)).toBe('38mm_E01');
-    expect(tuberiaCodigoCorto(B_SIMPLE_MEC06, '', 2.8, 'ROL', undefined, true)).toBe('45mm_E39');
+    expect(tuberiaCodigoCorto(B_SIMPLE_MEC06, '', 3.2, 'ROL', undefined, true)).toBe('45mm_E39');
     // En la categoría A manda el diámetro del modelo, como siempre.
     expect(tuberiaCodigoCorto(A_SIMPLE_BCO, '', 1.5, 'ROL')).toBe('38mm_E02');
+  });
+});
+
+// El tubo de una cortina B se puede elegir a mano en Fase 2 (E01 o E39) y esa
+// elección tiene que sobrevivir a TODO lo que recalcula chips: abrir la ficha,
+// guardarla, cambiar el ancho y re-guardar desde Fase 1. Antes la banda pisaba
+// el chip en cada una de esas pasadas.
+describe('categoría B — el tubo elegido a mano', () => {
+  const E39 = 'E39 - TUBO .43 - ESP 1.2 (TUBO .45)';
+  const E01 = 'E01 - TUBO 0.8 / Ø 38 mm';
+
+  it('con la marca puesta, el E39 sobrevive en una cortina angosta', () => {
+    const chip = tuberiaParaPano(
+      1.5, B_SIMPLE_MEC06, E39, OPCIONES_TUBERIA, 'ROL', undefined, true, true,
+    );
+    expect(chip).toContain('E39');
+  });
+
+  it('con la marca puesta, el E01 sobrevive en una cortina ancha', () => {
+    const chip = tuberiaParaPano(
+      3.2, B_SIMPLE_MEC06, E01, OPCIONES_TUBERIA, 'ROL', undefined, true, true,
+    );
+    expect(chip).toContain('E01');
+  });
+
+  it('sin la marca, la banda repone el tubo del ancho', () => {
+    expect(
+      tuberiaParaPano(1.5, B_SIMPLE_MEC06, E39, OPCIONES_TUBERIA, 'ROL', undefined, true, false),
+    ).toContain('E01');
+    expect(
+      tuberiaParaPano(3.2, B_SIMPLE_MEC06, E01, OPCIONES_TUBERIA, 'ROL', undefined, true, false),
+    ).toContain('E39');
+  });
+
+  it('la marca SIN tubo no cuenta: la ficha no queda trabada sin ninguno', () => {
+    expect(tuboElegidoAMano({ tuboManual: true, tuberia: '' })).toBe(false);
+    expect(tuboElegidoAMano({ tuboManual: true, tuberia: '   ' })).toBe(false);
+    expect(tuboElegidoAMano({ tuboManual: true, tuberia: E39 })).toBe(true);
+    expect(tuboElegidoAMano({ tuberia: E39 })).toBe(false);
+    expect(tuboElegidoAMano(null)).toBe(false);
+    // Con la marca pero sin chip, la banda vuelve a mandar.
+    expect(
+      tuberiaParaPano(3.2, B_SIMPLE_MEC06, '', OPCIONES_TUBERIA, 'ROL', undefined, true, false),
+    ).toContain('E39');
+  });
+
+  it('el selector de Fase 2 ofrece los DOS tubos de la gama B y ninguno de la A', () => {
+    const opts = opcionesTuberiaFiltradas(OPCIONES_TUBERIA, {
+      modelo: B_SIMPLE_MEC06,
+      categoria: 'ROL',
+      tuberiaActual: E01,
+      lineaB: true,
+    });
+    expect(opts.some((o) => o.includes('E01'))).toBe(true);
+    expect(opts.some((o) => o.includes('E39'))).toBe(true);
+    expect(opts.some((o) => o.includes('E02') || o.includes('E66'))).toBe(false);
+    expect(opts).toHaveLength(2);
+  });
+
+  it('un chip guardado de otra época no duplica el tubo en el selector', () => {
+    const opts = opcionesTuberiaFiltradas(OPCIONES_TUBERIA, {
+      modelo: B_SIMPLE_MEC06,
+      categoria: 'ROL',
+      tuberiaActual: 'E39 - TUBO .43 - ESP 1.2 (TUBO .45) (GAMA B)',
+      lineaB: true,
+    });
+    expect(opts.filter((o) => o.includes('E39'))).toHaveLength(1);
+    expect(opts).toHaveLength(2);
+  });
+
+  it('el re-guardado de Fase 1 conserva el tubo elegido a mano', () => {
+    const panos: Array<Record<string, unknown>> = [
+      { ancho: 1.5, alto: 2, tuberia: E39, tuboManual: true, mecanismo: '' },
+    ];
+    resincronizarChipsPanos(
+      panos, 'BLANCO', B_SIMPLE_MEC06, 'ROL',
+      OPCIONES_MECANISMO, OPCIONES_TUBERIA, false, undefined, [true],
+    );
+    expect(String(panos[0].tuberia)).toContain('E39');
+  });
+
+  it('sin la marca, el re-guardado de Fase 1 devuelve el tubo del ancho', () => {
+    const panos: Array<Record<string, unknown>> = [
+      { ancho: 1.5, alto: 2, tuberia: E39, mecanismo: '' },
+    ];
+    resincronizarChipsPanos(
+      panos, 'BLANCO', B_SIMPLE_MEC06, 'ROL',
+      OPCIONES_MECANISMO, OPCIONES_TUBERIA, false, undefined, [true],
+    );
+    expect(String(panos[0].tuberia)).toContain('E01');
   });
 });
 

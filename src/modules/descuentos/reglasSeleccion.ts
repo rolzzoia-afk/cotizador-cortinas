@@ -456,7 +456,12 @@ function normalizarTuberia(crudo: unknown): ReglasTuberia {
     tubos: filas(crudo.tubos, d.tubos, saneaTubo, 'tubos'),
     reglaLineaB: {
       descripcion: texto(rB.descripcion) || d.reglaLineaB.descripcion,
-      anchoMaxM: num(rB.anchoMaxM, d.reglaLineaB.anchoMaxM),
+      // El campo se llamaba `anchoMaxM` y era el último ancho del tubo delgado;
+      // hoy es `anchoDesdeM`, el primero del grueso. Un guardado viejo NO se
+      // traduce a propósito: su 2,5 significaba «hasta 2,5 inclusive» y leerlo
+      // como «desde 2,5» correría la banda medio metro sin que nadie lo pida.
+      // Cae a fábrica (3,0) y el admin lo reajusta si quiere otro corte.
+      anchoDesdeM: num(rB.anchoDesdeM, d.reglaLineaB.anchoDesdeM),
       codigoHasta:
         texto(rB.codigoHasta).toUpperCase() || tuboLineaBLegacy || d.reglaLineaB.codigoHasta,
       codigoDesde: texto(rB.codigoDesde).toUpperCase() || d.reglaLineaB.codigoDesde,
@@ -834,8 +839,8 @@ export function validarReglasSeleccion(r: ReglasSeleccion): ResultadoValidacion 
   }
 
   // ── Categoría B
-  if (!(t.reglaLineaB.anchoMaxM > 0)) {
-    errores.push('En la categoría B, el ancho de corte entre los dos tubos debe ser mayor que cero.');
+  if (!(t.reglaLineaB.anchoDesdeM > 0)) {
+    errores.push('En la categoría B, el ancho desde el cual entra el tubo de 45 mm debe ser mayor que cero.');
   }
   // Un código de bodega declarado para un kit que no existe no rompe nada, pero
   // significa que la línea del inventario nunca va a salir con ese código.

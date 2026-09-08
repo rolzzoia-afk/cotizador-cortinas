@@ -129,7 +129,7 @@ import {
   tuberiaParaPano,
 } from '@/modules/descuentos/chips';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
-import { tuboPorReglaEs45 } from '@/modules/descuentos/reglas-tuberia';
+import { tuboElegidoAMano, tuboPorReglaEs45 } from '@/modules/descuentos/reglas-tuberia';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { InformeVisita } from '@/components/cotizador/visita/InformeVisita';
 import type { VisitaTerreno } from '@/modules/ots/types';
@@ -138,6 +138,7 @@ import { ReplicarDialog } from '@/components/cotizador/wizard/ReplicarDialog';
 import { SelectorNuevaVentana } from '@/components/cotizador/wizard/SelectorNuevaVentana';
 import { SelectorTipoCortina } from '@/components/cotizador/wizard/SelectorTipoCortina';
 import { ResumenVentanas } from '@/components/cotizador/wizard/ResumenVentanas';
+import { parcheTuboLineaB } from '@/modules/cotizador/wizard/parches';
 import { varianteViz } from '@/modules/cotizador/wizard/cortinaViz';
 import { replicarEnVentanas } from '@/modules/cotizador/wizard/replicar';
 import {
@@ -356,9 +357,10 @@ export function CotizadorFase2() {
         const tuberia = esBeeblackV
           ? ''
           : canonizarChipTuberia(
-              // La línea B fija su tubo (E01) aunque todavía no haya modelo.
+              // La línea B fija su tubo (E01) aunque todavía no haya modelo,
+              // salvo que el taller lo haya elegido a mano en esta cortina.
               lineaB
-                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, true)
+                ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, true, tuboElegidoAMano(p))
                 : modeloEf && anchoM > 0
                   ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia)
                   : forzarTuberia && modeloEf
@@ -498,12 +500,34 @@ export function CotizadorFase2() {
 
   const panoEnEdicion = ventanaForm?.panos[panoActivo];
 
+  // ¿La cortina en edición es de categoría B? Su tubo y su kit salen de reglas
+  // propias, así que varias cascadas de la categoría A tienen que apartarse.
+  const lineaBEnEdicion = useMemo(
+    () =>
+      ventanaForm
+        ? esLineaB(
+            panoEnEdicion ?? null,
+            ventanaForm.codInt,
+            catalogo,
+            ventanaForm.categoria,
+            reglas.mecanismo,
+            reglas.tipos,
+          )
+        : false,
+    [ventanaForm, panoEnEdicion, catalogo, reglas],
+  );
+
   // Reglas por ANCHO que fijan mecanismo y tubo: roller >3 m → 63 mm (MEC 28 ·
   // E65); banda 2,2–3,0 m → kit 45 por color (MEC 18/23 · E78; gris en ROL
   // queda manual). Devuelve la regla aplicada + MEC, o null. Se usa para
   // mostrar un solo chip (no los kits que "rebotan") y una nota al usuario.
   const reglaFijaPorAncho = useMemo(() => {
     if (!ventanaForm || panoEnEdicion?.dual) return null;
+    // La categoría B no participa de NINGUNA banda de la A: sin esta salida un
+    // roller B de más de 3 m mostraba la nota del MEC 28 y el tubo E65 (el kit
+    // no cambiaba —`mecanismoParaPano` corta antes en B— pero la nota y el
+    // filtro del selector sí, y dejaban la ficha diciendo algo falso).
+    if (lineaBEnEdicion) return null;
     const anchoM = parseFloat(String(panoEnEdicion?.ancho ?? 0)) || 0;
     const color = colorAccesoriosDePano(panoEnEdicion || {}, ventanaForm.color);
     // La banda también se abre cuando la regla de tubería ya asigna un Ø45 a
@@ -523,6 +547,7 @@ export function CotizadorFase2() {
     panoEnEdicion?.color,
     usarE78,
     reglas,
+    lineaBEnEdicion,
   ]);
   const mecFijoPorAncho = reglaFijaPorAncho?.mec ?? null;
   // Nota bajo el mecanismo: la regla por ancho si aplica; si no, el 45 pedido a
@@ -590,6 +615,7 @@ export function CotizadorFase2() {
       modelo: ventanaForm.modelo ?? null,
       categoria: ventanaForm.categoria,
       tuberiaActual: (panoEnEdicion?.tuberia as string) || null,
+      lineaB: lineaBEnEdicion,
     }, reglas.tuberia);
     // Fijo por ancho: el tubo queda en el de la regla (>3 m → E65 · banda
     // 2,2–3,0 → E78); no se ofrecen los demás.
@@ -600,7 +626,7 @@ export function CotizadorFase2() {
       if (soloFijo.length > 0) return soloFijo;
     }
     return base;
-  }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, reglaFijaPorAncho, opcSel, reglas]);
+  }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, reglaFijaPorAncho, lineaBEnEdicion, opcSel, reglas]);
 
   // ¿Esta cortina elige con qué TUBO se invierte? Solo las familias del sistema
   // INVERTIDA cambian de herraje (63 mm o 45 mm). El beeblack no lleva tubería
@@ -878,6 +904,13 @@ export function CotizadorFase2() {
       const eraDual = categoriaEsDual(v.categoria || '', reglas.tipos);
       const seraDual = categoriaEsDual(categoria, reglas.tipos);
       let base: Ventana = { ...v, categoria, modelo: nuevoModelo };
+      // Cambiar de sistema suelta el tubo elegido a mano: los tubos disponibles
+      // son otros (una ovalada B no tiene Ø45) y arrastrar la marca dejaría un
+      // chip que la nueva categoría no admite y que nadie volvería a calcular.
+      // Mismo criterio que la cadena al pasar a motor.
+      if (v.categoria !== categoria) {
+        base = { ...base, panos: base.panos.map((p) => ({ ...p, tuboManual: false })) };
+      }
       if (seraDual) base = asegurarPanosDual(base, reglas.tipos);
       else if (eraDual && !esCategoriaBeeblack(categoria)) base = quitarPanoDualAutomatico(base);
       return sincronizarChips(base, nuevoModelo, !actualSirve);
@@ -928,7 +961,13 @@ export function CotizadorFase2() {
       : tuberiaCorregidaPorMecanismo(chip, tuberiaActual, anchoMidx, opcSel.tuberiaUI, nuevo.categoria, nm ?? nuevo.modelo, reglas.tuberia);
     const tub = corregida ??
       (nm || lineaB
-        ? tuberiaParaPano(anchoMidx, nm, tuberiaActual, opcSel.tuberiaUI, nuevo.categoria, reglas.tuberia, lineaB)
+        ? tuberiaParaPano(
+            anchoMidx, nm, tuberiaActual, opcSel.tuberiaUI, nuevo.categoria, reglas.tuberia, lineaB,
+            // En la categoría B el kit no decide el tubo (los dos cuelgan de la
+            // misma fila de despiece), así que cambiar de kit no deshace un tubo
+            // elegido a mano.
+            tuboElegidoAMano(nuevo.panos[idx]),
+          )
         : null);
     if (tub && tub !== tuberiaActual) {
       nuevo = { ...nuevo, panos: nuevo.panos.map((p, i) => (i === idx ? { ...p, tuberia: tub } : p)) };
@@ -1143,8 +1182,33 @@ export function CotizadorFase2() {
           setPano({ mecanismo: mec });
           nuevo = aplicarCascadaMecanismo(nuevo, idx, mec);
         } else if (nuevo.modelo) {
-          const tub = tuberiaParaPano(anchoIdx(), nuevo.modelo, nuevo.panos[idx].tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, lineaBDe(nuevo, idx));
+          const tub = tuberiaParaPano(
+            anchoIdx(), nuevo.modelo, nuevo.panos[idx].tuberia as string, opcSel.tuberiaUI,
+            v.categoria, reglas.tuberia, lineaBDe(nuevo, idx),
+            tuboElegidoAMano(nuevo.panos[idx]),
+          );
           if (tub && tub !== nuevo.panos[idx].tuberia) setPano({ tuberia: tub });
+        }
+      }
+
+      // CATEGORÍA B: el tubo se elige a mano (E01 o E39) y esa elección se
+      // marca, porque su banda por ancho pisaba el chip en la siguiente
+      // sincronización. El kit B no cambia con el tubo —los dos cuelgan de la
+      // misma fila de despiece—, así que acá no hay ninguna cascada que aplicar
+      // (`kitPorTuboElegido` devuelve null para la categoría B).
+      // Con `tuboManual: false` («Volver al automático») la banda repone su
+      // tubo en el acto: un paño sin tubería traba la orden en Fase 2.
+      if (
+        (typeof patch.tuberia === 'string' && patch.tuberia) ||
+        patch.tuboManual === false
+      ) {
+        if (lineaBDe(nuevo, idx)) {
+          const auto = tuberiaParaPano(
+            anchoIdx(), nuevo.modelo ?? null, '', opcSel.tuberiaUI,
+            v.categoria, reglas.tuberia, true, false,
+          );
+          const chip = patch.tuboManual === false ? '' : (patch.tuberia as string);
+          setPano(parcheTuboLineaB(chip, auto));
         }
       }
 
@@ -1744,14 +1808,8 @@ export function CotizadorFase2() {
                 opcionesMecanismo={opcionesMecVentana}
                 opcionesTuberia={opcionesTubVentana}
                 notaMecanismo={notaMecanismo}
-                lineaB={esLineaB(
-                  ventanaForm.panos[panoActivo] ?? null,
-                  ventanaForm.codInt,
-                  catalogo,
-                  ventanaForm.categoria,
-                  reglas.mecanismo,
-                  reglas.tipos,
-                )}
+                tuboManual={tuboElegidoAMano(panoEnEdicion)}
+                lineaB={lineaBEnEdicion}
                 guardando={savingVentana}
                 onVentana={actualizarVentana}
                 onPano={(patch) => actualizarPano(panoActivo, patch)}
@@ -1979,7 +2037,8 @@ export function CotizadorFase2() {
                   opcionesMecanismo={opcionesMecVentana}
                   opcionesTuberia={opcionesTubVentana}
                   mecanismoFijoNota={notaMecanismo}
-                  lineaB={esLineaB(ventanaForm.panos[panoActivo] ?? null, ventanaForm.codInt, catalogo, ventanaForm.categoria, reglas.mecanismo, reglas.tipos)}
+                  tuboManual={tuboElegidoAMano(panoEnEdicion)}
+                  lineaB={lineaBEnEdicion}
                   ocultarMecanismo={!categoriaRequiereMecanismo(ventanaForm.categoria)}
                   categoria={ventanaForm.categoria}
                   colorVentana={ventanaForm.color}

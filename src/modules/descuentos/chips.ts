@@ -42,6 +42,7 @@ import {
   codigoTuberiaDeChip,
   diametroTuboPorCodigo,
   tuberiaParaPano,
+  tuboElegidoAMano,
   tuboPorReglaEs45,
   type ReglasTuberia,
 } from './reglas-tuberia';
@@ -79,6 +80,7 @@ export {
   opcionesTuberiaFiltradas,
   tuberiaCorregidaPorMecanismo,
   tuberiaParaPano,
+  tuboElegidoAMano,
 } from './reglas-tuberia';
 
 /** @deprecated Usar REGLAS_MECANISMO.colorAMec */
@@ -636,8 +638,10 @@ export function modeloPorAncho(
    *  descontinuado → E39), la cortina es de 45 aunque nadie lo pida. */
   reglasTuberia?: ReglasTuberia,
 ): ModeloDespiece | null {
-  // LÍNEA B: no participa de las bandas por ancho (su tubo es E01 siempre). Su
-  // fila se elige por el número del kit B; el ancho máximo lo acota la fila.
+  // LÍNEA B: no participa de las bandas por ancho de la categoría A. Su fila se
+  // elige por el número del kit B y el ancho máximo la acota; el TUBO lo decide
+  // aparte su propia banda (E01 bajo 3,0 m · E39 desde ahí, `codigoTuboLineaB`),
+  // que no cambia de fila ni de kit.
   if (lineaB) {
     const numB = mecLineaB(categoria || '', color, reglas, tipos);
     if (numB == null) return modeloActual;
@@ -878,7 +882,9 @@ export function resincronizarChipsPanos(
       b,
     );
     if (mec) p.mecanismo = mec;
-    // La línea B fija su tubo aunque todavía no haya modelo (no depende de él).
+    // La línea B fija su tubo aunque todavía no haya modelo (no depende de él),
+    // salvo que el taller lo haya elegido a mano en Fase 2: re-guardar desde
+    // Fase 1 es uno de los caminos por donde la banda pisaba esa elección.
     if (b || (modelo && anchoM > 0)) {
       p.tuberia = canonizarChipTuberia(
         tuberiaParaPano(
@@ -889,6 +895,7 @@ export function resincronizarChipsPanos(
           categoria,
           reglas.tuberia,
           b,
+          tuboElegidoAMano(p as Parameters<typeof tuboElegidoAMano>[0]),
         ),
         opcionesTub,
       );

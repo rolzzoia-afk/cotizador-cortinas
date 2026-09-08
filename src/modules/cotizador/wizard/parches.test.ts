@@ -7,6 +7,7 @@ import {
   parcheCenefaTipo,
   parcheColorAccesorios,
   parcheTela,
+  parcheTuboLineaB,
   parcheVarianteBeeblack,
 } from './parches';
 import type { CatalogoProductos } from '../types';
@@ -115,6 +116,24 @@ describe('parcheCadena', () => {
       largoCadena: 'ROLLO',
       colorCadena: 'MET',
     });
+  });
+});
+
+describe('parcheTuboLineaB', () => {
+  const E39 = 'E39 - TUBO .43 - ESP 1.2 (TUBO .45)';
+  const E01 = 'E01 - TUBO 0.8 / Ø 38 mm';
+
+  it('elegir un tubo lo marca como elegido a mano', () => {
+    // El flag es lo que impide que la banda por ancho de la categoría B lo
+    // vuelva a cambiar al guardar, al reabrir o al re-guardar desde Fase 1.
+    expect(parcheTuboLineaB(E39, E01)).toEqual({ tuberia: E39, tuboManual: true });
+  });
+
+  it('sin chip vuelve al automático y repone el tubo de la banda en el acto', () => {
+    // Dejarlo vacío trabaría la orden: `pendientesFase2` exige tubería.
+    expect(parcheTuboLineaB('', E01)).toEqual({ tuberia: E01, tuboManual: false });
+    expect(parcheTuboLineaB(null, E39)).toEqual({ tuberia: E39, tuboManual: false });
+    expect(parcheTuboLineaB('   ', E01)).toEqual({ tuberia: E01, tuboManual: false });
   });
 });
 

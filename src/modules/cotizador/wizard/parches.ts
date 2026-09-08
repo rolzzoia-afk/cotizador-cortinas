@@ -103,6 +103,30 @@ export function parcheCadena(
 }
 
 /**
+ * Tubo de una cortina de CATEGORÍA B elegido en Fase 2 (E01 Ø38 · E39 Ø45).
+ *
+ * Elegir uno **enciende `tuboManual`**: desde ahí ninguna sincronización lo
+ * recalcula por ancho. Sin eso, la banda de la categoría B pisaba el chip en
+ * el siguiente guardado —y también al reabrir la ficha o al re-guardar desde
+ * Fase 1—, así que no había forma de poner a propósito el Ø45 en una cortina
+ * angosta ni de dejar el Ø38 en una ancha.
+ *
+ * Sin chip = volver al automático: se repone el tubo de la banda EN EL ACTO,
+ * porque un paño sin tubería traba la orden en `pendientesFase2`.
+ *
+ * Lo usan los tres caminos —la ficha, la vista guiada y el dictado—, así que la
+ * regla vive acá y no en cada pantalla.
+ */
+export function parcheTuboLineaB(
+  chip: string | null | undefined,
+  tuboAutomatico: string,
+): Partial<Pano> {
+  const elegido = (chip || '').trim();
+  if (!elegido) return { tuberia: tuboAutomatico, tuboManual: false };
+  return { tuberia: elegido, tuboManual: true };
+}
+
+/**
  * Tipo de cenefa. La OVALADA nace CON TIRA salvo en categoría B, que va siempre
  * SIN TIRA (decisión de producto: las cenefas de la gama económica no la llevan).
  */

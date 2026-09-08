@@ -30,6 +30,7 @@ import {
   mecanismoParaPano,
   normalizarColorAccesorio,
   tuberiaParaPano,
+  tuboElegidoAMano,
 } from '@/modules/descuentos/chips';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
@@ -191,6 +192,7 @@ export function construirFilasCortinas(
             v.categoria as string,
             reglas.tuberia,
             lineaB,
+            tuboElegidoAMano(p),
           );
       filas.push({
         id,
