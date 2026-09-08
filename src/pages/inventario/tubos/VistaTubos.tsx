@@ -9,8 +9,10 @@
 // (qué hay en cada ubicación, en vivo); el resto son consultas puntuales.
 
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Clock, Grid3x3, Link2, Ruler, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { PageHeader } from '@/components/ui/page-header';
 
 import TabButton from './components/TabButton';
 import VistaColmena from './vistas/VistaColmena';
@@ -25,18 +27,29 @@ export function HistorialTubos() {
   const [tab, setTab] = useState<Tab>('colmena');
 
   return (
-    <div className={`mx-auto p-4 ${tab === 'colmena' ? 'max-w-7xl' : 'max-w-5xl'}`}>
-      <header className="mb-4 flex items-center gap-2">
-        <Ruler className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-lg font-bold">Tubos</h1>
-          <p className="text-xs text-muted-foreground">
-            Colmena · Trazabilidad · Merma mensual
-          </p>
-        </div>
-      </header>
+    <div className={tab === 'colmena' ? 'max-w-7xl' : 'max-w-5xl'}>
+      <PageHeader
+        miga="Inventario"
+        titulo="Tubos"
+        hint="Cada tubo es una pieza con su largo y su historia."
+        acciones={
+          <Link
+            to="/optimizador"
+            className="inline-flex h-10 items-center gap-2 rounded-lg bg-foreground px-4 text-[0.845rem] font-medium text-background"
+          >
+            <Ruler className="h-4 w-4" />
+            Abrir optimizador de corte
+          </Link>
+        }
+      />
 
-      <div className="mb-4 flex gap-1 border-b">
+      <div className="mt-4 rounded-lg border border-accent/35 bg-accent/[0.09] px-4 py-3 text-xs leading-relaxed">
+        El <b className="font-semibold">optimizador de corte no se toca</b>: sigue siendo la
+        pantalla de siempre y es el único que escribe los tubos. Acá se mira, se busca y se
+        corrige a mano.
+      </div>
+
+      <div className="mb-4 mt-4 flex gap-1 border-b">
         <TabButton active={tab === 'colmena'} onClick={() => setTab('colmena')}>
           <Grid3x3 className="h-4 w-4" />
           Colmena

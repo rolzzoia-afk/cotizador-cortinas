@@ -36,6 +36,13 @@ const CotizadorJefe = lazy(() => import('@/pages/CotizadorJefe').then((m) => ({ 
 // Módulo /inventario: un armazón con barra lateral y un submódulo adentro.
 const InventarioLayout = lazy(() => import('@/pages/inventario/InventarioLayout').then((m) => ({ default: m.InventarioLayout })));
 const VistaTablero = lazy(() => import('@/pages/inventario/tablero/VistaTablero').then((m) => ({ default: m.VistaTablero })));
+const VistaColmena = lazy(() => import('@/pages/inventario/colmena/VistaColmena').then((m) => ({ default: m.VistaColmena })));
+const VistaMovimientos = lazy(() => import('@/pages/inventario/movimientos/VistaMovimientos').then((m) => ({ default: m.VistaMovimientos })));
+const VistaConteo = lazy(() => import('@/pages/inventario/conteo/VistaConteo').then((m) => ({ default: m.VistaConteo })));
+const VistaMermas = lazy(() => import('@/pages/inventario/mermas/VistaMermas').then((m) => ({ default: m.VistaMermas })));
+const VistaAlertas = lazy(() => import('@/pages/inventario/alertas/VistaAlertas').then((m) => ({ default: m.VistaAlertas })));
+const VistaConfiguracion = lazy(() => import('@/pages/inventario/configuracion/VistaConfiguracion').then((m) => ({ default: m.VistaConfiguracion })));
+const VistaAuditoria = lazy(() => import('@/pages/inventario/auditoria/VistaAuditoria').then((m) => ({ default: m.VistaAuditoria })));
 
 /**
  * Redirección que CONSERVA la query. Sin esto, un admin que anda mirando con
@@ -131,11 +138,20 @@ export function App() {
           <Route path="inventario" element={<InventarioLayout />}>
             <Route index element={<VistaTablero />} />
             <Route path="insumos" element={<VistaInsumos />} />
+            <Route path="insumos/ubicaciones" element={<VistaInsumos />} />
             <Route path="telas" element={<VistaTelas />} />
+            <Route path="colmena" element={<VistaColmena />} />
             <Route path="tubos" element={<VistaTubos />} />
             <Route path="camionetas" element={<VistaCamionetas />} />
             <Route path="despacho" element={<VistaDespacho />} />
+            <Route path="movimientos" element={<VistaMovimientos />} />
+            <Route path="conteo" element={<VistaConteo />} />
+            <Route path="conteo/tubos" element={<VistaConteo />} />
             <Route path="conteo/contar" element={<VistaContar />} />
+            <Route path="mermas" element={<VistaMermas />} />
+            <Route path="alertas" element={<VistaAlertas />} />
+            <Route path="configuracion" element={<VistaConfiguracion />} />
+            <Route path="auditoria" element={<VistaAuditoria />} />
             {/* Una ruta que no existe dentro del módulo vuelve al tablero, no a
                 la pantalla de 404 de toda la app. */}
             <Route path="*" element={<Navigate to="/inventario" replace />} />

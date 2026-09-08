@@ -53,7 +53,18 @@ export function Camionetas() {
   }, [camionetaActual, vista]);
 
   return (
-    <div className="mx-auto max-w-2xl p-4">
+    <div className="mx-auto max-w-2xl">
+      {/* Cargar una camioneta escribe hoy en `insumos.stock_total`, que es una
+          columna GENERADA: la base descarta la escritura sin avisar y el stock
+          de bodega queda igual. Por eso la camioneta figura con 0 líneas aunque
+          la pantalla se use. Se arregla en la entrega del kardex, donde la carga
+          pasa a ser un traslado de verdad. */}
+      <div className="mb-4 rounded-lg border border-warning/40 bg-warning/[0.09] px-4 py-3 text-xs leading-relaxed">
+        <b className="font-semibold">Ojo con el stock.</b> Cargar o devolver material acá
+        todavía no descuenta ni devuelve nada en la bodega: la escritura se pierde. Lo que sí
+        queda bien registrado es qué lleva cada camioneta. El descuento real llega con el
+        kardex, en la próxima entrega.
+      </div>
       <header className="mb-4 flex items-center gap-2">
         {vista !== 'main' && (
           <Button size="sm" variant="ghost" onClick={volverMain}>

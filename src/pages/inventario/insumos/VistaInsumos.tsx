@@ -7,10 +7,9 @@
 // vive en su archivo bajo ./inventario/.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+
 import {
   AlertTriangle,
-  ArrowLeft,
   Grid3x3,
   Loader2,
   Package,
@@ -44,7 +43,9 @@ import type {
   ValidadoresMap,
 } from './Insumos.types';
 import { EMPTY_INSUMO_FORM, EMPTY_MOV_FORM } from './Insumos.config';
-import TabBtn from './components/TabBtn';
+import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { TabButton } from '@/components/ui/tab-button';
 import CatalogoTab from './tabs/CatalogoTab';
 import MovimientosTab from './tabs/MovimientosTab';
 import AlertasTab from './tabs/AlertasTab';
@@ -58,7 +59,7 @@ import QRInsumoDialog from './dialogs/QRInsumoDialog';
 
 export function Inventario() {
   const { empresaId } = useAuth();
-  const navigate = useNavigate();
+
   const [tab, setTab] = useState<Tab>('catalogo');
   const [loading, setLoading] = useState(true);
 
@@ -599,47 +600,44 @@ export function Inventario() {
   }
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border bg-card/60 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="rounded p-1.5 text-muted-foreground hover:bg-card hover:text-foreground"
-            title="Volver"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-          <div>
-            <h2 className="text-base font-semibold">Inventario</h2>
-            <p className="text-xs text-muted-foreground">
-              {statsCatalogo.total} insumos · {alertas.length} alerta
-              {alertas.length === 1 ? '' : 's'}
-            </p>
-          </div>
-        </div>
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        miga="Inventario"
+        titulo="Insumos"
+        hint={`${statsCatalogo.total.toLocaleString('es-CL')} artículos · ${alertas.length} con alerta`}
+      />
 
-        <nav className="flex items-center gap-1 rounded-full border border-border bg-card p-1">
-          <TabBtn active={tab === 'catalogo'} onClick={() => setTab('catalogo')}>
-            <Package className="h-3.5 w-3.5" /> Catálogo
-          </TabBtn>
-          <TabBtn active={tab === 'rack'} onClick={() => setTab('rack')}>
-            <Grid3x3 className="h-3.5 w-3.5" /> Mapa Rack
-          </TabBtn>
-          <TabBtn active={tab === 'movimientos'} onClick={() => setTab('movimientos')}>
-            <PencilRuler className="h-3.5 w-3.5" /> Movimientos
-          </TabBtn>
-          <TabBtn active={tab === 'alertas'} onClick={() => setTab('alertas')}>
-            <AlertTriangle className="h-3.5 w-3.5" /> Alertas
-            {alertas.length > 0 && (
-              <span className="ml-1 rounded-full bg-destructive px-1.5 text-[0.6rem] font-semibold text-foreground">
-                {alertas.length}
-              </span>
-            )}
-          </TabBtn>
-        </nav>
-      </header>
+      <div className="flex items-center gap-5 overflow-x-auto border-b border-border">
+        <TabButton
+          variante="subrayado"
+          active={tab === 'catalogo'}
+          onClick={() => setTab('catalogo')}
+        >
+          <Package className="h-3.5 w-3.5" /> Catálogo
+        </TabButton>
+        <TabButton variante="subrayado" active={tab === 'rack'} onClick={() => setTab('rack')}>
+          <Grid3x3 className="h-3.5 w-3.5" /> Ubicaciones en rack
+        </TabButton>
+        <TabButton
+          variante="subrayado"
+          active={tab === 'movimientos'}
+          onClick={() => setTab('movimientos')}
+        >
+          <PencilRuler className="h-3.5 w-3.5" /> Movimientos
+        </TabButton>
+        <TabButton
+          variante="subrayado"
+          active={tab === 'alertas'}
+          onClick={() => setTab('alertas')}
+          badge={
+            alertas.length > 0 ? <Badge variant="destructive">{alertas.length}</Badge> : undefined
+          }
+        >
+          <AlertTriangle className="h-3.5 w-3.5" /> Alertas
+        </TabButton>
+      </div>
 
-      <div className="flex-1 overflow-auto px-4 py-4">
+      <div>
         {tab === 'catalogo' && (
           <CatalogoTab
             insumosFiltrados={insumosFiltrados}

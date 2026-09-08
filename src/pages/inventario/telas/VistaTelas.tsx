@@ -1,241 +1,106 @@
-// Orquestador de la pantalla Inventario de Telas.
+// Catálogo de telas: el saldo en metros de cada código y sus fallas.
 //
-// 5 tabs: Catálogo / Colmena (rack visual) / Movimientos / Fallas / Mermas.
-// Carga los datasets en paralelo y construye el mapa de colmena combinando
-// telas.posicion con telas_slots. Cada tab vive en su archivo bajo
-// ./telas/tabs/, y los modales bajo ./telas/dialogs/.
+// Los movimientos, las mermas y la colmena de paños salieron de acá y son
+// submódulos propios; la lectura la comparten todos por `telasStore`, que ya no
+// trae los más de 2.000 paños salvo que se los pidan.
 
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import {
-  AlertTriangle,
-  ArrowLeft,
-  ArrowLeftRight,
-  Boxes,
-  Loader2,
-  PencilRuler,
-  Recycle,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { supabase } from '@/lib/supabase';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, ArrowUpRight, Boxes, Loader2, PencilRuler } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { PageHeader } from '@/components/ui/page-header';
+import { TabButton } from '@/components/ui/tab-button';
 import { useAuth } from '@/lib/auth';
-
-import type {
-  Colmena,
-  Falla,
-  Merma,
-  Movimiento,
-  Slot,
-  Tab,
-  Tela,
-  Validador,
-  ValidadoresMap,
-} from './Telas.types';
-import { cargarTodosLosPanos, type ColmenaPano } from '@/modules/admin/colmena';
+import { useDatosTelas } from '@/modules/inventario/telasStore';
 import CatalogoTab from './tabs/CatalogoTab';
-import ColmenaVivaTab from './tabs/ColmenaVivaTab';
-import MovimientosTab from './tabs/MovimientosTab';
 import FallasTab from './tabs/FallasTab';
-import MermasTab from './tabs/MermasTab';
+
+type Pestana = 'catalogo' | 'fallas';
 
 export function Telas() {
   const { empresaId } = useAuth();
-  const navigate = useNavigate();
-  const [tab, setTab] = useState<Tab>('catalogo');
-  const [loading, setLoading] = useState(true);
-
-  const [telas, setTelas] = useState<Tela[]>([]);
-  const [movimientos, setMovimientos] = useState<Movimiento[]>([]);
-  const [fallas, setFallas] = useState<Falla[]>([]);
-  const [validadores, setValidadores] = useState<ValidadoresMap>({});
-  const [colmena, setColmena] = useState<Colmena>({});
-  const [panos, setPanos] = useState<ColmenaPano[]>([]);
-  const [mermas, setMermas] = useState<Merma[]>([]);
-
-  const cargarTodo = async () => {
-    if (!empresaId) return;
-    setLoading(true);
-    try {
-      const [rTelas, rSlots, rMov, rFallas, rVal, rPanos, rMermas] = await Promise.all([
-        supabase.from('telas_catalogo').select('*').eq('empresa_id', empresaId).order('codigo'),
-        supabase
-          .from('telas_slots')
-          .select('posicion,codigo,almacen')
-          .eq('empresa_id', empresaId),
-        supabase
-          .from('movimientos_telas')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .order('fecha', { ascending: false })
-          .limit(500),
-        supabase
-          .from('telas_fallas')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .order('fecha_reporte', { ascending: false }),
-        supabase
-          .from('validadores_telas')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .order('orden'),
-        // Colmena viva (optimizador): retazos reales con medidas. Alimenta el
-        // tab "Colmena". Paginado: la tabla supera las 1000 filas de PostgREST.
-        cargarTodosLosPanos(empresaId),
-        // Mermas registradas (Reglas Rolzzo): sobrantes < 120×180 y bajas.
-        supabase
-          .from('telas_mermas')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .order('fecha', { ascending: false }),
-      ]);
-
-      const telasData = (rTelas.data as Tela[]) || [];
-      setTelas(telasData);
-      setMovimientos((rMov.data as Movimiento[]) || []);
-      setFallas((rFallas.data as Falla[]) || []);
-      setPanos(rPanos);
-      setMermas((rMermas.data as Merma[]) || []);
-
-      const vmap: ValidadoresMap = {};
-      ((rVal.data as Validador[]) || []).forEach((v) => {
-        if (!vmap[v.campo]) vmap[v.campo] = [];
-        vmap[v.campo].push(v.valor);
-      });
-      setValidadores(vmap);
-
-      // Colmena: arranca desde telas.posicion (legacy), después sobreescribe
-      // con telas_slots si hay datos ahí. Los slots son la fuente de verdad
-      // moderna pero algunas empresas todavía no las usan.
-      const catMap: Record<string, Tela> = {};
-      telasData.forEach((t) => {
-        catMap[t.codigo] = t;
-      });
-
-      let col: Colmena = {};
-      telasData.forEach((t) => {
-        if (t.posicion) {
-          col[t.posicion.toUpperCase()] = {
-            codigo: t.codigo,
-            tipo: t.tipo,
-            nemotecnico: t.nemotecnico,
-            almacen: t.almacen,
-            id: t.id,
-          };
-        }
-      });
-      const slotsData = (rSlots.data as Slot[]) || [];
-      if (slotsData.length) {
-        col = {};
-        slotsData.forEach((s) => {
-          if (!s.posicion || !s.codigo) return;
-          const cat = catMap[s.codigo];
-          col[s.posicion.toUpperCase()] = {
-            codigo: s.codigo,
-            tipo: cat?.tipo ?? null,
-            nemotecnico: cat?.nemotecnico ?? null,
-            almacen: s.almacen || cat?.almacen || null,
-            id: cat?.id ?? null,
-          };
-        });
-      }
-      setColmena(col);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    cargarTodo();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId]);
+  const [tab, setTab] = useState<Pestana>('catalogo');
+  const { telas, fallas, validadores, colmena, loading, error, recargar } = useDatosTelas();
 
   const fallasPendientes = useMemo(
     () => fallas.filter((f) => f.resuelto === 'NO').length,
     [fallas],
   );
-
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center bg-background text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
+  const conStock = useMemo(
+    () => telas.filter((t) => (t.stock_mp || 0) + (t.stock_liberado || 0) > 0).length,
+    [telas],
+  );
 
   return (
-    <div className="min-h-full bg-background text-foreground">
-      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-border bg-background/95 px-5 py-3 backdrop-blur">
-        <button
-          onClick={() => navigate('/landing')}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        miga="Inventario"
+        titulo="Telas"
+        hint={
+          loading
+            ? 'Cargando…'
+            : `${telas.length.toLocaleString('es-CL')} códigos · ${conStock.toLocaleString('es-CL')} con stock · el saldo se lleva en metros`
+        }
+      />
+
+      {/* Movimientos, mermas y la colmena de paños ahora son submódulos
+          propios: acá quedan el catálogo y las fallas, que son de la tela. */}
+      <div className="flex items-center gap-5 overflow-x-auto border-b border-border">
+        <TabButton
+          variante="subrayado"
+          active={tab === 'catalogo'}
+          onClick={() => setTab('catalogo')}
         >
-          <ArrowLeft className="h-4 w-4" /> Inicio
-        </button>
-        <h1 className="flex-1 text-base font-bold">Inventario de Telas</h1>
+          <Boxes className="h-4 w-4" /> Catálogo
+        </TabButton>
+        <TabButton
+          variante="subrayado"
+          active={tab === 'fallas'}
+          onClick={() => setTab('fallas')}
+          badge={
+            fallasPendientes > 0 ? (
+              <Badge variant="destructive">{fallasPendientes}</Badge>
+            ) : undefined
+          }
+        >
+          <AlertTriangle className="h-4 w-4" /> Fallas
+        </TabButton>
+        <Link
+          to="/inventario/colmena"
+          className="flex items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-0.5 py-2.5 text-[0.845rem] font-medium text-muted-foreground hover:text-foreground"
+        >
+          <PencilRuler className="h-4 w-4" /> Colmena de paños
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
-      <div className="border-b border-border bg-background px-5">
-        <div className="flex gap-1 overflow-x-auto">
-          {(
-            [
-              { k: 'catalogo', l: 'Catálogo', i: <Boxes className="h-4 w-4" /> },
-              { k: 'rack', l: 'Colmena', i: <PencilRuler className="h-4 w-4" /> },
-              { k: 'movimientos', l: 'Movimientos', i: <ArrowLeftRight className="h-4 w-4" /> },
-              { k: 'fallas', l: 'Fallas', i: <AlertTriangle className="h-4 w-4" /> },
-              { k: 'mermas', l: 'Mermas', i: <Recycle className="h-4 w-4" /> },
-            ] as const
-          ).map((t) => (
-            <button
-              key={t.k}
-              onClick={() => setTab(t.k)}
-              className={cn(
-                'relative flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-sm font-semibold transition',
-                tab === t.k
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t.i}
-              {t.l}
-              {t.k === 'fallas' && fallasPendientes > 0 && (
-                <span className="ml-1 rounded-full bg-destructive/15 px-1.5 py-0.5 text-[12px] font-bold text-destructive">
-                  {fallasPendientes}
-                </span>
-              )}
-            </button>
-          ))}
+      {error ? (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/[0.09] px-4 py-3 text-sm">
+          {error}
         </div>
-      </div>
-
-      {tab === 'catalogo' && (
+      ) : loading ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : tab === 'catalogo' ? (
         <CatalogoTab
           telas={telas}
           validadores={validadores}
           empresaId={empresaId || ''}
-          onReload={cargarTodo}
+          onReload={recargar}
           colmena={colmena}
         />
-      )}
-      {tab === 'rack' && <ColmenaVivaTab panos={panos} fallas={fallas} onReload={cargarTodo} />}
-      {tab === 'movimientos' && (
-        <MovimientosTab
-          movimientos={movimientos}
-          telas={telas}
-          validadores={validadores}
-          empresaId={empresaId || ''}
-          onReload={cargarTodo}
-        />
-      )}
-      {tab === 'fallas' && (
+      ) : (
         <FallasTab
           fallas={fallas}
           telas={telas}
           validadores={validadores}
           empresaId={empresaId || ''}
-          onReload={cargarTodo}
+          onReload={recargar}
         />
       )}
-      {tab === 'mermas' && <MermasTab mermas={mermas} />}
     </div>
   );
 }
+
+export default Telas;
