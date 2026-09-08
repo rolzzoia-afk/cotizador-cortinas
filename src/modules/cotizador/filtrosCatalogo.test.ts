@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { CHIP_OTROS, FILTROS_CATALOGO, chipDeProducto, labelChip } from './filtrosCatalogo';
+import {
+  CHIP_OTROS,
+  FILTROS_CATALOGO,
+  chipDeProducto,
+  filtrosCatalogoCon,
+  labelChip,
+} from './filtrosCatalogo';
 import type { CatalogoProductos, Producto } from './types';
 
 const p = (cod: string, extra: Partial<Producto> = {}): Producto => ({
@@ -75,9 +81,8 @@ describe('chipDeProducto — chip elegido a mano', () => {
   });
 });
 
-describe('FILTROS_CATALOGO', () => {
-  const catalogo: CatalogoProductos = {
-    'BK 18': p('BLACKOUT_P'),
+const catalogoDemo: CatalogoProductos = {
+  'BK 18': p('BLACKOUT_P'),
     'BK 60-V': p('BLACKOUT_V_P'),
     'SC 65': p('SCREEN_P'),
     'SC 03-V': p('SCREEN_V_D'),
@@ -87,8 +92,11 @@ describe('FILTROS_CATALOGO', () => {
     'CENF O': p('ACCESORIO'),
     'DOM 43': p('ACCESORIO'), // motor nuevo, sin chip todavía
     'TER 01': p('TERMICO_P'), // familia inédita
-    'MOT MG X': p('ACCESORIO', { chip: 'MOTOR_MG' }),
-  };
+  'MOT MG X': p('ACCESORIO', { chip: 'MOTOR_MG' }),
+};
+
+describe('FILTROS_CATALOGO', () => {
+  const catalogo = catalogoDemo;
 
   it('cada producto matchea EXACTAMENTE un chip (partición, sin huecos ni duplicados)', () => {
     for (const [ci, prod] of Object.entries(catalogo)) {
@@ -116,5 +124,31 @@ describe('FILTROS_CATALOGO', () => {
       expect(f.id).toMatch(/^[A-Z_]+$/);
       expect(f.hexDefault).toMatch(/^#[0-9a-f]{6}$/i);
     }
+  });
+});
+
+describe('categorías propias de la empresa', () => {
+  const PROPIAS = [{ id: 'CUSTOM-PROMO', label: 'Promo', hex: '#ff0000' }];
+  const filtros = filtrosCatalogoCon(PROPIAS);
+  const enPromo = p('BLACKOUT_P', { chip: 'CUSTOM-PROMO' });
+
+  it('un producto asignado a una categoría propia cae ahí y en ningún otro chip', () => {
+    const chips = filtros.filter((f) => f.match(enPromo, 'BK 18')).map((f) => f.id);
+    expect(chips).toEqual(['CUSTOM-PROMO']);
+    expect(chipDeProducto(enPromo, 'BK 18', filtros.map((f) => f.id))).toBe('CUSTOM-PROMO');
+  });
+
+  it('sin esa categoría (la borraron) vuelve a la suya automática', () => {
+    expect(chipDeProducto(enPromo, 'BK 18')).toBe('BK');
+    const chips = FILTROS_CATALOGO.filter((f) => f.match(enPromo, 'BK 18')).map((f) => f.id);
+    expect(chips).toEqual(['BK']);
+  });
+
+  it('la partición se conserva con categorías propias, y «Otros» sigue al final', () => {
+    for (const [ci, prod] of Object.entries({ ...catalogoDemo, 'BK 77': enPromo })) {
+      expect(filtros.filter((f) => f.match(prod, ci)), ci).toHaveLength(1);
+    }
+    expect(filtros[filtros.length - 1].id).toBe(CHIP_OTROS);
+    expect(labelChip('CUSTOM-PROMO', PROPIAS)).toBe('Promo');
   });
 });

@@ -128,7 +128,8 @@ import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialo
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
 import BloqueDocRender, { SeccionDocumento } from '@/components/cotizador/BloquesDocumento';
 import { estiloChipHex, useChipsColores } from '@/modules/cotizador/chipsColores';
-import { CHIP_OTROS, FILTROS_CATALOGO, chipDeProducto } from '@/modules/cotizador/filtrosCatalogo';
+import { useChipsCustom } from '@/modules/cotizador/chipsCustomStore';
+import { CHIP_OTROS, chipDeProducto, filtrosCatalogoCon } from '@/modules/cotizador/filtrosCatalogo';
 import { COMUNAS_SANTIAGO } from '@/modules/cotizador/comunas';
 import {
   REGIONES_CHILE,
@@ -377,6 +378,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // Editor de colores de los chips de categoría.
   const [editarColores, setEditarColores] = useState(false);
   const { colores: chipsColores, guardar: guardarColoresChips } = useChipsColores();
+  // Categorías PROPIAS del catálogo: se agregan desde el mismo diálogo de
+  // colores y se asignan a mano en la ficha de cada producto.
+  const { chips: chipsPropios, guardar: guardarChipsPropios } = useChipsCustom();
+  const filtrosCatalogo = useMemo(() => filtrosCatalogoCon(chipsPropios), [chipsPropios]);
+  const idsChip = useMemo(() => filtrosCatalogo.map((f) => f.id), [filtrosCatalogo]);
   // Cotización a región: la instalación no es gratis por 4+ (usa el % de región).
   const [region, setRegion] = useState(false);
   // Descuento de instalación región de ESTA cotización, en % (0–100). null =
@@ -1054,7 +1060,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     // TODOS no filtra: lista el catálogo entero (con tope de filas más abajo).
     const filtro =
       filtroActivo && filtroActivo !== FILTRO_TODOS
-        ? FILTROS_CATALOGO.find((f) => f.id === filtroActivo)
+        ? filtrosCatalogo.find((f) => f.id === filtroActivo)
         : null;
     return Object.entries(catalogo)
       .filter(([ci, p]) => {
@@ -1066,16 +1072,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         return true;
       })
       .sort((a, b) => (a[1].producto || '').localeCompare(b[1].producto || ''));
-  }, [catalogo, filtroActivo, busqueda]);
+  }, [catalogo, filtroActivo, busqueda, filtrosCatalogo]);
 
   // Chips a dibujar: «Otros» solo aparece si de verdad hay algo ahí, para no
   // mostrarle a la vendedora una categoría vacía.
   const chipsVisibles = useMemo(() => {
     const hayOtros = Object.entries(catalogo).some(
-      ([ci, p]) => chipDeProducto(p, ci) === CHIP_OTROS,
+      ([ci, p]) => chipDeProducto(p, ci, idsChip) === CHIP_OTROS,
     );
-    return hayOtros ? FILTROS_CATALOGO : FILTROS_CATALOGO.filter((f) => f.id !== CHIP_OTROS);
-  }, [catalogo]);
+    return hayOtros ? filtrosCatalogo : filtrosCatalogo.filter((f) => f.id !== CHIP_OTROS);
+  }, [catalogo, filtrosCatalogo, idsChip]);
 
   // COD_INT tal como vive en el catálogo ("DOM42" tecleado → "DOM 42"). Si no
   // existe se devuelve lo escrito (para que la celda quede marcada en rojo).
@@ -3060,13 +3066,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
 
         {editarColores && (
           <ChipsColoresDialog
-            chips={FILTROS_CATALOGO.map((f) => ({
+            chips={filtrosCatalogo.map((f) => ({
               id: f.id,
               label: f.label,
               hexDefault: f.hexDefault,
             }))}
             colores={chipsColores}
+            propias={chipsPropios}
             onGuardar={guardarColoresChips}
+            onGuardarPropias={guardarChipsPropios}
             onClose={() => setEditarColores(false)}
           />
         )}
