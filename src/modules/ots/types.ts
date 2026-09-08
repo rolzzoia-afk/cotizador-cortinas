@@ -71,6 +71,11 @@ export type AdicionalFase0Persistido = {
    * el motor ni siquiera recibe este campo.
    */
   tipo?: string;
+  /**
+   * Fondo de la fila en la grilla de la cotización y en el PDF del cliente: hex
+   * de `PALETA_FILA` (modules/cotizador/coloresFila.ts). Solo presentación.
+   */
+  colorFila?: string;
 };
 
 export type DatosGenerales = {
