@@ -376,4 +376,54 @@ describe('round-trip explotar → agrupar → construir paños', () => {
       undefined,
     ]);
   });
+
+  // El color con que se pinta una fila en la grilla vive en el paño. A
+  // diferencia de `invertida` y `lineaB`, la grilla es su ÚNICA fuente: por eso
+  // se escribe siempre, también vacío. Si no, quitarlo no tendría efecto —
+  // `...base` repondría el que traía el paño guardado.
+  describe('el color de la fila', () => {
+    const conColor = (color?: string): VentanaItem => ({
+      id: 'v1',
+      ubicacion: 'PZA',
+      alto: 2,
+      cantidad: 1,
+      panos: [{ ancho: 1.0, alto: 2, color: 'BCO', ...(color ? { colorFila: color } : {}) }],
+    });
+
+    const ida = (v: VentanaItem) => {
+      const { filas, orig } = explotarVentanasAFilas([v], genIdSeq());
+      return { filas, orig };
+    };
+
+    const vuelta = (filas: FilaReconcile[], orig: ReturnType<typeof ida>['orig']) => {
+      const grupos = agruparFilasPorVentana(filas);
+      return construirPanosDeGrupo(grupos[0].filas, orig[grupos[0].vid!].panos as never);
+    };
+
+    it('sobrevive el ciclo guardar → reabrir', () => {
+      const { filas, orig } = ida(conColor('#FFD966'));
+      expect(filas[0].colorFila).toBe('#FFD966');
+      expect((vuelta(filas, orig)[0] as { colorFila?: string }).colorFila).toBe('#FFD966');
+    });
+
+    it('quitarlo en la grilla lo BORRA del paño', () => {
+      const { filas, orig } = ida(conColor('#FFD966'));
+      const sinColor = filas.map((f) => ({ ...f, colorFila: undefined }));
+      expect((vuelta(sinColor, orig)[0] as { colorFila?: string }).colorFila).toBeUndefined();
+    });
+
+    it('cambiarlo lo reemplaza, no lo acumula', () => {
+      const { filas, orig } = ida(conColor('#FFD966'));
+      const otro = filas.map((f) => ({ ...f, colorFila: '#9DC3E6' }));
+      expect((vuelta(otro, orig)[0] as { colorFila?: string }).colorFila).toBe('#9DC3E6');
+    });
+
+    it('un paño guardado con basura en el campo se abre sin color', () => {
+      const v = {
+        ...conColor(),
+        panos: [{ ancho: 1, alto: 2, color: 'BCO', colorFila: 'amarillo' }],
+      } as VentanaItem;
+      expect(ida(v).filas[0].colorFila).toBeUndefined();
+    });
+  });
 });

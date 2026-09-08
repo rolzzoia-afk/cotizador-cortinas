@@ -19,6 +19,8 @@ import {
   type TuboInvertidaMm,
 } from '@/modules/cotizador/tuboInvertida';
 import { claveCatalogoCanonica } from '@/modules/cotizador/importarCatalogo';
+import { estiloFilaPintada } from '@/modules/cotizador/coloresFila';
+import { BotonColorFila } from '@/components/cotizador/BotonColorFila';
 import { pendientesFase2, resumenPendientes } from '@/modules/cotizador/fase2-completitud';
 import type { Ventana as VentanaFase2 } from '@/modules/cotizador/types';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
@@ -104,6 +106,8 @@ import {
 import {
   adicionalesFromPersist,
   adicionalesToPersist,
+  claveColorDerivado,
+  coloresDerivadosPersistidos,
   incluidasVisibles,
   instalacionTipoFromPersist,
   instalacionTipoParaGuardar,
@@ -200,11 +204,36 @@ type FilaUI = {
    * `true`/`false` para que apagarla también viaje al paño.
    */
   cadenaMetalica?: boolean;
+  /**
+   * Fondo de la fila (hex de `PALETA_FILA`), para agrupar de un vistazo las
+   * cortinas de una misma pieza como se hace en la planilla a mano. Viaja al
+   * paño y al PDF del cliente; no toca el precio ni la fabricación.
+   */
+  colorFila?: string;
   /** id de la ventana original (si la fila viene de una OT existente). */
   vid?: string;
   /** índice del paño dentro de su ventana (una fila por paño en la cotización). */
   panoIndex?: number;
 };
+
+/**
+ * El navegador NO imprime fondos por defecto. Sin esto, las filas pintadas salen
+ * en blanco al hacer Ctrl+P (el PDF que genera la app sí las pinta: lo dibuja
+ * jsPDF, no el navegador).
+ */
+const FORZAR_COLOR_AL_IMPRIMIR = {
+  printColorAdjust: 'exact',
+  WebkitPrintColorAdjust: 'exact',
+} as const;
+
+/**
+ * Los campos de la grilla llevan `bg-card` propio: sobre una fila pintada
+ * quedarían como parches del color de siempre. Se transparentan y heredan el
+ * color de texto que fijó la fila (oscuro sobre el pastel, también en modo
+ * oscuro). El foco y los bordes no se tocan.
+ */
+const CAMPOS_SOBRE_FILA_PINTADA =
+  '[&_input]:bg-transparent [&_input]:text-inherit [&_select]:bg-transparent [&_select]:text-inherit';
 
 // Campos de nivel VENTANA: al editarlos en una fila-paño se replican a los
 // demás paños de la misma ventana (`vid`) para que no diverjan (el re-agrupado
@@ -361,6 +390,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [desgloseCod, setDesgloseCod] = useState<string | null>(null);
   /** Fila con el menú «invertir con tubo de…» abierto (null = ninguno). */
   const [menuTubo, setMenuTubo] = useState<string | null>(null);
+  /**
+   * Fila con la paleta de color abierta (null = ninguna). Los adicionales van
+   * con el prefijo `adic:` para no chocar con el id de una cortina.
+   */
+  const [menuColor, setMenuColor] = useState<string | null>(null);
   // Arrastrar para reordenar. Cortinas y adicionales son tablas lógicas
   // distintas aunque compartan el `<table>`: no se cruzan.
   const [dragFila, setDragFila] = useState<string | null>(null);
@@ -447,6 +481,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     return () => window.removeEventListener('keydown', alTeclear);
   }, [menuTubo]);
 
+  // Ídem para la paleta de color de fila.
+  useEffect(() => {
+    if (!menuColor) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuColor(null);
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [menuColor]);
+
   useEffect(() => {
     if (!editOtId || !otCargada || cargadoEdit) return;
     const dg = (otCargada.datosGenerales || {}) as Record<string, string> & {
@@ -513,6 +557,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       derivarAdicionalesCenefaDesdeVentanas(vts, reglas.tipos),
       manuales,
     );
+    // El color con que se pintó una cenefa derivada en la sesión anterior. Se
+    // rescata por código + ubicación porque la línea se regenera con id nuevo.
+    const coloresDerivados = coloresDerivadosPersistidos(persistidos);
     const derivadosUI: AdicionalUI[] = derivados.map((d) => ({
       id: crypto.randomUUID(),
       codInt: d.codInt,
@@ -522,6 +569,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       colorAcc: d.colorAcc || '',
       conTira: d.conTira,
       origen: 'pano',
+      colorFila: coloresDerivados.get(claveColorDerivado(d.codInt, d.ubicacion)),
     }));
     setAdicionales([...manuales, ...derivadosUI]);
     setRegion(!!dg.region);
@@ -1583,6 +1631,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           valorUnit: ln.valorUnit,
           descuento: ln.descuento,
           total: ln.total,
+          // El fondo con que se pintó la fila en la grilla, para que el cliente
+          // vea los mismos grupos que armó la vendedora.
+          colorFila: f.colorFila,
         };
       });
 
@@ -1603,6 +1654,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             valorUnit: r.precioUnit,
             descuento: r.descuento,
             total: r.total,
+            colorFila: a.colorFila,
           };
         });
 
@@ -2190,13 +2242,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   { categoria: f.categoria, codInt: f.codInt, cod: prod?.cod },
                   reglas.tipos,
                 );
+                const pintada = estiloFilaPintada(f.colorFila);
                 return (
                   <tr
                     key={f.id}
                     className={cn(
                       'border-t border-border align-middle',
                       overFila === f.id && 'ring-2 ring-inset ring-accent/40',
+                      pintada && CAMPOS_SOBRE_FILA_PINTADA,
                     )}
+                    style={pintada ? { ...pintada, ...FORZAR_COLOR_AL_IMPRIMIR } : undefined}
                     onDragOver={dragFila ? sobreFila(f.id) : undefined}
                     onDrop={dragFila ? soltarEnFila(f.id) : undefined}
                   >
@@ -2207,7 +2262,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                         setOverFila(null);
                       }}
                       titulo="Arrastrar para cambiar el orden de esta cortina"
-                    />
+                    >
+                      <BotonColorFila
+                        color={f.colorFila}
+                        abierto={menuColor === f.id}
+                        onAbrir={() => setMenuColor(f.id)}
+                        onCerrar={() => setMenuColor(null)}
+                        onElegir={(hex) => setFila(f.id, { colorFila: hex })}
+                      />
+                    </AsaArrastre>
                     <Td className="text-muted-foreground">{prod?.cod ?? '—'}</Td>
                     {showCols && (
                       <>
@@ -2675,13 +2738,16 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 // cortina: en el soft light la cenefa va por el ancho de tela,
                 // que lo escribe la vendedora y no siempre es el del paño.
                 const esCenefa = !!tipoCenefaDesdeAdicional(a.codInt ?? '');
+                const pintada = estiloFilaPintada(a.colorFila);
                 return (
                   <tr
                     key={a.id}
                     className={cn(
                       'border-t border-border align-middle',
                       overAdic === a.id && 'ring-2 ring-inset ring-accent/40',
+                      pintada && CAMPOS_SOBRE_FILA_PINTADA,
                     )}
+                    style={pintada ? { ...pintada, ...FORZAR_COLOR_AL_IMPRIMIR } : undefined}
                     onDragOver={dragAdic ? sobreAdic(a.id) : undefined}
                     onDrop={dragAdic ? soltarEnAdic(a.id) : undefined}
                   >
@@ -2692,7 +2758,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                         setOverAdic(null);
                       }}
                       titulo="Arrastrar para cambiar el orden de este adicional"
-                    />
+                    >
+                      <BotonColorFila
+                        color={a.colorFila}
+                        abierto={menuColor === `adic:${a.id}`}
+                        onAbrir={() => setMenuColor(`adic:${a.id}`)}
+                        onCerrar={() => setMenuColor(null)}
+                        onElegir={(hex) => setAdic(a.id, { colorFila: hex })}
+                      />
+                    </AsaArrastre>
                     <Td className="text-muted-foreground">
                       {prod?.cod ?? '—'}
                       {a.origen === 'pano' && (
@@ -3136,27 +3210,34 @@ function AsaArrastre({
   onDragStart,
   onDragEnd,
   titulo,
+  children,
 }: {
   onDragStart: () => void;
   onDragEnd: () => void;
   titulo: string;
+  /** Botón de color de la fila: comparte celda con el asa para no agregar una
+   *  columna (los colSpan de la tabla están escritos a mano). */
+  children?: React.ReactNode;
 }) {
   return (
-    <td className="w-6 px-1 align-middle">
-      <span
-        draggable
-        onDragStart={(e) => {
-          // Firefox no inicia el arrastre sin datos en el evento.
-          e.dataTransfer.setData('text/plain', '');
-          e.dataTransfer.effectAllowed = 'move';
-          onDragStart();
-        }}
-        onDragEnd={onDragEnd}
-        title={titulo}
-        className="flex cursor-grab justify-center text-muted-foreground/60 hover:text-foreground active:cursor-grabbing"
-      >
-        <GripVertical className="h-4 w-4" />
-      </span>
+    <td className="w-12 px-1 align-middle">
+      <div className="flex items-center gap-0.5">
+        <span
+          draggable
+          onDragStart={(e) => {
+            // Firefox no inicia el arrastre sin datos en el evento.
+            e.dataTransfer.setData('text/plain', '');
+            e.dataTransfer.effectAllowed = 'move';
+            onDragStart();
+          }}
+          onDragEnd={onDragEnd}
+          title={titulo}
+          className="flex cursor-grab justify-center text-muted-foreground/60 hover:text-foreground active:cursor-grabbing print:hidden"
+        >
+          <GripVertical className="h-4 w-4" />
+        </span>
+        {children}
+      </div>
     </td>
   );
 }

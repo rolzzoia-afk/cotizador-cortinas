@@ -12,34 +12,13 @@ export const CLAVE_CHIPS_COLORES = 'chips_catalogo_colores';
 
 export type ChipsColores = Record<string, string>; // chipId → '#rrggbb'
 
-/** ¿Es un color hex válido (#rgb o #rrggbb)? */
-export function esHexValido(s: unknown): s is string {
-  return typeof s === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s.trim());
-}
-
-/**
- * Estilo inline para un chip a partir de su color de fondo: texto negro o
- * blanco según luminancia, borde un poco más oscuro que el fondo.
- */
-export function estiloChipHex(hex: string): {
-  backgroundColor: string;
-  color: string;
-  borderColor: string;
-} {
-  const h = hex.trim().replace('#', '');
-  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
-  const r = parseInt(full.slice(0, 2), 16);
-  const g = parseInt(full.slice(2, 4), 16);
-  const b = parseInt(full.slice(4, 6), 16);
-  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-  const dark = (n: number) => Math.max(0, Math.round(n * 0.72));
-  const toHex = (n: number) => n.toString(16).padStart(2, '0');
-  return {
-    backgroundColor: `#${full.toLowerCase()}`,
-    color: lum > 150 ? '#1c1917' : '#ffffff',
-    borderColor: `#${toHex(dark(r))}${toHex(dark(g))}${toHex(dark(b))}`,
-  };
-}
+// Las dos funciones de color son puras y las necesita también el generador del
+// PDF, que se carga aparte y no debe arrastrar React ni Supabase. Viven en
+// `coloresFila.ts` y se re-exportan acá para no tocar a quien ya las importaba.
+// El `export {...} from` no crea binding local, así que además se importan: este
+// módulo usa `esHexValido` más abajo.
+export { esHexValido, estiloChipHex } from './coloresFila';
+import { esHexValido } from './coloresFila';
 
 export async function guardarChipsColores(
   empresaId: string,

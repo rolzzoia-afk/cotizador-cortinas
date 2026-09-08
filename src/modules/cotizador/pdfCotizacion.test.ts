@@ -8,6 +8,11 @@ const textosImpresos = vi.hoisted(() => [] as string[]);
 const imagenes = vi.hoisted(() => [] as string[]);
 const enlaces = vi.hoisted(() => [] as string[]);
 const guardadosCon = vi.hoisted(() => [] as string[]);
+// Rectángulos rellenos, con el color de relleno vigente al dibujarlos: es lo
+// único que delata el fondo de una fila (el color de fila no imprime texto).
+const rellenos = vi.hoisted(
+  () => [] as Array<{ x: number; y: number; w: number; h: number; color: string }>,
+);
 
 vi.mock('jspdf', async (importOriginal) => {
   const mod = await importOriginal<typeof import('jspdf')>();
@@ -35,6 +40,17 @@ vi.mock('jspdf', async (importOriginal) => {
       self.addImage = ((data: string, ...rest: never[]) => {
         imagenes.push(typeof data === 'string' ? data : 'no-string');
         return addImageOriginal(data as never, ...rest);
+      }) as never;
+      let relleno = '';
+      const setFillOriginal = self.setFillColor.bind(this);
+      self.setFillColor = ((...a: never[]) => {
+        relleno = a.join(',');
+        return setFillOriginal(...a);
+      }) as never;
+      const rectOriginal = self.rect.bind(this);
+      self.rect = ((x: number, y: number, w: number, h: number, ...rest: never[]) => {
+        if (String(rest[0]) === 'F') rellenos.push({ x, y, w, h, color: relleno });
+        return rectOriginal(x as never, y as never, w as never, h as never, ...rest);
       }) as never;
       self.save = ((nombre: string) => {
         guardadosCon.push(nombre);
@@ -142,6 +158,57 @@ beforeEach(() => {
   imagenes.length = 0;
   enlaces.length = 0;
   guardadosCon.length = 0;
+  rellenos.length = 0;
+});
+
+// Las vendedoras pintan filas en la planilla para agrupar las cortinas de una
+// misma pieza. El color elegido en la grilla de Fase 1/3 tiene que llegar al
+// documento del cliente; si no, el PDF no se parece a lo que ellas ven.
+describe('generarPdfCotizacion — el color de fila que se eligió en la grilla', () => {
+  /** ¿Se pintó una franja del ancho de la tabla con este color? */
+  const pintoFilaCon = (rgb: string) =>
+    rellenos.some((r) => r.color === rgb && r.h > 0 && r.h < 8);
+
+  it('la cortina pintada sale con su color y la de al lado no', () => {
+    generarPdfCotizacion(
+      entradaDemo({
+        cortinas: [
+          { ...CORTINA, colorFila: '#FFD966' },
+          { ...CORTINA, ubicacion: 'PZ PPAL 2' },
+        ],
+      }),
+    );
+    expect(pintoFilaCon('255,217,102')).toBe(true);
+  });
+
+  it('sin color, ninguna fila usa un fondo de la paleta', () => {
+    generarPdfCotizacion(entradaDemo());
+    expect(pintoFilaCon('255,217,102')).toBe(false);
+    expect(pintoFilaCon('169,209,142')).toBe(false);
+  });
+
+  it('el adicional pintado gana sobre el rojo automático de la instalación', () => {
+    const e = entradaDemo();
+    generarPdfCotizacion({
+      ...e,
+      adicionales: [{ ...e.adicionales[0], colorFila: '#9DC3E6' }],
+    });
+    expect(pintoFilaCon('157,195,230')).toBe(true);
+  });
+
+  it('un adicional destacado y SIN color conserva el rojo de siempre', () => {
+    generarPdfCotizacion(entradaDemo());
+    // ROJO_SUAVE del módulo: la instalación gratis va destacada.
+    expect(rellenos.some((r) => r.color === '252,226,226')).toBe(true);
+  });
+
+  it('un color inválido no pinta nada: la fila cae en el fondo alternado', () => {
+    generarPdfCotizacion(
+      entradaDemo({ cortinas: [{ ...CORTINA, colorFila: 'amarillo' }] }),
+    );
+    expect(rellenos.some((r) => r.color === 'amarillo')).toBe(false);
+    expect(docsGuardados).toHaveLength(1);
+  });
 });
 
 describe('generarPdfCotizacion', () => {
