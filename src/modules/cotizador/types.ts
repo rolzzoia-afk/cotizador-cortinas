@@ -217,6 +217,16 @@ export type Pano = {
    * Fase 1/3 o en el editor de paño. Ver modules/cotizador/lineaB.ts.
    */
   lineaB?: boolean;
+  /**
+   * Fondo de esta fila en la grilla de la cotización (Fase 1/3) y en el PDF del
+   * cliente: hex de `PALETA_FILA` (modules/cotizador/coloresFila.ts).
+   * `undefined` = sin pintar. Replica lo que las vendedoras hacen en la planilla
+   * a mano para agrupar de un vistazo las cortinas de una misma pieza.
+   *
+   * Es PRESENTACIÓN: no entra al motor de precios, ni al Excel de órdenes, ni a
+   * Fase 2, ni a producción.
+   */
+  colorFila?: string;
   retiro?: number;
   superficie?: string;
   materialTipo?: string;
