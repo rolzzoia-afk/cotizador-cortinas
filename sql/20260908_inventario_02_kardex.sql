@@ -247,6 +247,12 @@ DECLARE
   v_desde_mp    numeric(12,3);
   v_cam_org     numeric(12,3);
   v_cam_dst     numeric(12,3);
+
+  -- Los renglones que se anotan por esta línea. Casi siempre uno; dos cuando la
+  -- salida se repartió entre liberado y materias primas.
+  v_tramos      jsonb;
+  v_tramo       jsonb;
+
   v_mov_id      uuid;
   v_salida      jsonb := '[]'::jsonb;
 BEGIN
@@ -352,6 +358,12 @@ BEGIN
       RAISE EXCEPTION 'Una salida no tiene almacén de destino: si va a otro almacén es un traslado'
         USING ERRCODE = 'IN006';
     END IF;
+    -- Una salida sin origen se reparte sola (liberado primero). Si ese reparto
+    -- está apagado hay que decidir de dónde sale, o no saldría de ninguna parte
+    -- y el movimiento quedaría en nada sin que nadie se entere.
+    IF v_tipo = 'SALIDA' AND v_origen IS NULL AND NOT v_lib_primero THEN
+      v_origen := 'MP';
+    END IF;
 
     SELECT id INTO v_org_id FROM almacenes
      WHERE empresa_id = v_empresa AND codigo = v_origen AND v_origen IS NOT NULL;
@@ -366,7 +378,10 @@ BEGIN
       RAISE EXCEPTION 'No conozco el almacén de destino "%"', v_linea ->> 'destino'
         USING ERRCODE = 'IN006';
     END IF;
-    IF v_org_id IS NULL AND v_dst_id IS NULL THEN
+    -- La salida que se reparte sola es la única que puede llegar acá sin
+    -- almacenes: los suyos los eligen los saldos, más abajo.
+    IF v_org_id IS NULL AND v_dst_id IS NULL
+       AND NOT (v_tipo = 'SALIDA' AND v_origen IS NULL) THEN
       RAISE EXCEPTION 'El movimiento no dice de dónde sale ni a dónde va'
         USING ERRCODE = 'IN006';
     END IF;
@@ -458,75 +473,108 @@ BEGIN
     v_saldo_org := CASE WHEN v_origen  = 'LIB' THEN v_lib
                         WHEN v_origen  = 'MP'  THEN v_mp
                         WHEN v_origen LIKE 'CAM-%' THEN v_cam_org
-                        WHEN v_origen IS NULL AND v_tipo = 'SALIDA' THEN v_mp + v_lib
                         ELSE NULL END;
     v_saldo_dst := CASE WHEN v_destino = 'LIB' THEN v_lib
                         WHEN v_destino = 'MP'  THEN v_mp
                         WHEN v_destino LIKE 'CAM-%' THEN v_cam_dst
                         ELSE NULL END;
 
-    -- ── Anotar en el libro ─────────────────────────────────────────────────
-    INSERT INTO inventario_movimientos (
-      empresa_id, dominio, item_cod, item_nombre, tipo, cantidad, unidad,
-      almacen_origen_id, almacen_destino_id, saldo_origen_post, saldo_destino_post,
-      motivo, referencia_tipo, referencia_id, ot, area,
-      usuario_id, usuario_email, responsable, recibe, notas, lote_id
-    ) VALUES (
-      v_empresa, v_dominio, upper(v_cod), v_item_nombre, v_tipo, v_cant, v_unidad,
-      v_org_id, v_dst_id, v_saldo_org, v_saldo_dst,
-      v_linea ->> 'motivo',
-      COALESCE(v_linea ->> 'referencia_tipo', 'manual'),
-      v_linea ->> 'referencia_id',
-      v_linea ->> 'ot',
-      v_linea ->> 'area',
-      v_user_id, v_email,
-      v_linea ->> 'responsable', v_linea ->> 'recibe', v_linea ->> 'notas',
-      v_lote
-    )
-    RETURNING id INTO v_mov_id;
-
-    -- ── Copia en el registro viejo, mientras convivan los dos ──────────────
-    IF v_dual AND v_dominio = 'insumo' THEN
-      INSERT INTO movimientos_insumos (
-        empresa_id, fecha, tipo, codigo, producto, almacen, cantidad, ot,
-        responsable_entrega, bitacora
-      ) VALUES (
-        v_empresa, now(),
-        CASE v_tipo WHEN 'INGRESO' THEN 'NUEVO INGRESO'
-                    WHEN 'SALIDA'  THEN 'SALIDA PRODUCCION'
-                    ELSE v_tipo END,
-        upper(v_cod), v_item_nombre,
-        COALESCE(v_origen, v_destino), v_cant::int,
-        v_linea ->> 'ot',
-        v_linea ->> 'responsable',
-        'kardex ' || v_mov_id::text
-      );
-    ELSIF v_dual AND v_dominio = 'tela' THEN
-      INSERT INTO movimientos_telas (
-        empresa_id, fecha, tipo, codigo, metros, almacen, ot, responsable, notas
-      ) VALUES (
-        v_empresa, now(), v_tipo, upper(v_cod), v_cant,
-        COALESCE(v_origen, v_destino), v_linea ->> 'ot',
-        v_linea ->> 'responsable', 'kardex ' || v_mov_id::text
-      );
+    -- ── Los renglones que se van a anotar ──────────────────────────────────
+    --
+    -- Casi siempre uno. La excepción es la salida que se repartió: cada bodega
+    -- tiene que quedar anotada por separado. Un solo renglón sin origen no le
+    -- descontaría a ninguna, y el libro terminaría diciendo que hay más stock
+    -- del que hay — que es justo lo que este script viene a impedir.
+    IF v_tipo = 'SALIDA' AND v_origen IS NULL THEN
+      v_tramos := '[]'::jsonb;
+      IF v_desde_lib > 0 THEN
+        v_tramos := v_tramos || jsonb_build_object(
+          'origen', 'LIB', 'cantidad', v_desde_lib, 'saldo_origen_post', v_lib,
+          'origen_id', (SELECT id FROM almacenes
+                         WHERE empresa_id = v_empresa AND codigo = 'LIB'));
+      END IF;
+      IF v_desde_mp > 0 THEN
+        v_tramos := v_tramos || jsonb_build_object(
+          'origen', 'MP', 'cantidad', v_desde_mp, 'saldo_origen_post', v_mp,
+          'origen_id', (SELECT id FROM almacenes
+                         WHERE empresa_id = v_empresa AND codigo = 'MP'));
+      END IF;
+    ELSE
+      v_tramos := jsonb_build_array(jsonb_build_object(
+        'origen', v_origen, 'origen_id', v_org_id, 'saldo_origen_post', v_saldo_org,
+        'destino', v_destino, 'destino_id', v_dst_id, 'saldo_destino_post', v_saldo_dst,
+        'cantidad', v_cant));
     END IF;
 
-    v_salida := v_salida || jsonb_build_object(
-      'id', v_mov_id,
-      'item_cod', upper(v_cod),
-      'tipo', v_tipo,
-      'origen', v_origen,
-      'destino', v_destino,
-      'cantidad', v_cant,
-      'saldo_mp', v_mp,
-      'saldo_liberado', v_lib,
-      'saldo_origen_post', v_saldo_org,
-      'saldo_destino_post', v_saldo_dst,
-      -- Cuando la salida se partió, la app lo dice en pantalla en vez de que
-      -- la persona descubra después que salió de dos lados.
-      'desde_liberado', v_desde_lib,
-      'desde_materias_primas', v_desde_mp
-    );
+    -- ── Anotar en el libro ─────────────────────────────────────────────────
+    FOR v_tramo IN SELECT * FROM jsonb_array_elements(v_tramos) LOOP
+      INSERT INTO inventario_movimientos (
+        empresa_id, dominio, item_cod, item_nombre, tipo, cantidad, unidad,
+        almacen_origen_id, almacen_destino_id, saldo_origen_post, saldo_destino_post,
+        motivo, referencia_tipo, referencia_id, ot, area,
+        usuario_id, usuario_email, responsable, recibe, notas, lote_id
+      ) VALUES (
+        v_empresa, v_dominio, upper(v_cod), v_item_nombre, v_tipo,
+        (v_tramo ->> 'cantidad')::numeric, v_unidad,
+        (v_tramo ->> 'origen_id')::uuid,
+        (v_tramo ->> 'destino_id')::uuid,
+        (v_tramo ->> 'saldo_origen_post')::numeric,
+        (v_tramo ->> 'saldo_destino_post')::numeric,
+        v_linea ->> 'motivo',
+        COALESCE(v_linea ->> 'referencia_tipo', 'manual'),
+        v_linea ->> 'referencia_id',
+        v_linea ->> 'ot',
+        v_linea ->> 'area',
+        v_user_id, v_email,
+        v_linea ->> 'responsable', v_linea ->> 'recibe', v_linea ->> 'notas',
+        v_lote
+      )
+      RETURNING id INTO v_mov_id;
+
+      -- ── Copia en el registro viejo, mientras convivan los dos ────────────
+      IF v_dual AND v_dominio = 'insumo' THEN
+        INSERT INTO movimientos_insumos (
+          empresa_id, fecha, tipo, codigo, producto, almacen, cantidad, ot,
+          responsable_entrega, bitacora
+        ) VALUES (
+          v_empresa, now(),
+          CASE v_tipo WHEN 'INGRESO' THEN 'NUEVO INGRESO'
+                      WHEN 'SALIDA'  THEN 'SALIDA PRODUCCION'
+                      ELSE v_tipo END,
+          upper(v_cod), v_item_nombre,
+          COALESCE(v_tramo ->> 'origen', v_tramo ->> 'destino'),
+          (v_tramo ->> 'cantidad')::numeric::int,
+          v_linea ->> 'ot',
+          v_linea ->> 'responsable',
+          'kardex ' || v_mov_id::text
+        );
+      ELSIF v_dual AND v_dominio = 'tela' THEN
+        INSERT INTO movimientos_telas (
+          empresa_id, fecha, tipo, codigo, metros, almacen, ot, responsable, notas
+        ) VALUES (
+          v_empresa, now(), v_tipo, upper(v_cod), (v_tramo ->> 'cantidad')::numeric,
+          COALESCE(v_tramo ->> 'origen', v_tramo ->> 'destino'), v_linea ->> 'ot',
+          v_linea ->> 'responsable', 'kardex ' || v_mov_id::text
+        );
+      END IF;
+
+      v_salida := v_salida || jsonb_build_object(
+        'id', v_mov_id,
+        'item_cod', upper(v_cod),
+        'tipo', v_tipo,
+        'origen', v_tramo ->> 'origen',
+        'destino', v_tramo ->> 'destino',
+        'cantidad', (v_tramo ->> 'cantidad')::numeric,
+        'saldo_mp', v_mp,
+        'saldo_liberado', v_lib,
+        'saldo_origen_post', (v_tramo ->> 'saldo_origen_post')::numeric,
+        'saldo_destino_post', (v_tramo ->> 'saldo_destino_post')::numeric,
+        -- Cuando la salida se partió, la app lo dice en pantalla en vez de que
+        -- la persona descubra después que salió de dos lados.
+        'desde_liberado', v_desde_lib,
+        'desde_materias_primas', v_desde_mp
+      );
+    END LOOP;
   END LOOP;
 
   RETURN jsonb_build_object('lote_id', v_lote, 'movimientos', v_salida);
@@ -888,6 +936,14 @@ NOTIFY pgrst, 'reload schema';
 --    SELECT inventario_registrar(
 --      '[{"dominio":"insumo","item_cod":"MEC 18","tipo":"SALIDA",
 --         "cantidad":999999}]'::jsonb);
+--
+-- 3b) Una salida SIN origen (la del taller) tiene que salir de LIBERADO primero
+--    y, si no alcanza, seguir por MATERIAS PRIMAS — dejando UN RENGLÓN POR
+--    BODEGA. Si devolviera un solo movimiento, o uno sin bodega de origen, el
+--    libro empezaría a decir que hay más stock del que hay:
+--    SELECT jsonb_array_length(inventario_registrar(
+--      '[{"dominio":"insumo","item_cod":"MEC 18","tipo":"SALIDA",
+--         "cantidad":5}]'::jsonb) -> 'movimientos');
 --
 -- 4) Después de las pruebas, el libro tiene que seguir cuadrando:
 --    SELECT count(*) FROM v_inventario_saldos_kardex;              -- 0
