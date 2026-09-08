@@ -20,7 +20,14 @@ const RAIZ = fileURLToPath(new URL('../../..', import.meta.url));
 
 /** Las columnas reales de cada tabla, del bloque `Row` de los tipos. */
 function columnasPorTabla(): Map<string, Set<string>> {
-  const src = fs.readFileSync(path.join(RAIZ, 'src/types/database.ts'), 'utf8');
+  // Los finales de línea se normalizan SIEMPRE: `npm run types:gen` escribe el
+  // archivo con \n, pero en cuanto Git lo vuelve a sacar en Windows queda con
+  // \r\n y los `\n` de la expresión dejan de calzar. El lector devolvía CERO
+  // tablas y el guardián pasaba sin revisar nada — un test verde que no
+  // revisa es peor que no tenerlo.
+  const src = fs
+    .readFileSync(path.join(RAIZ, 'src/types/database.ts'), 'utf8')
+    .replace(/\r\n/g, '\n');
   const tablas = new Map<string, Set<string>>();
   const re = /^ {6}(\w+): \{\n {8}Row: \{\n([\s\S]*?)\n {8}\}/gm;
   let m: RegExpExecArray | null;
