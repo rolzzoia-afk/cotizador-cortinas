@@ -2,6 +2,7 @@
 // Si cambias quién puede entrar a qué ruta, estos tests son tu red de
 // seguridad: documentan el comportamiento esperado por rol.
 import { describe, expect, it } from 'vitest';
+import { SUBMODULOS_INVENTARIO, rolesDeSubmodulo } from '@/modules/inventario/navegacion';
 import { esRolAdmin, puedeAccederRuta, ROLES_DISPONIBLES } from './roles';
 
 describe('esRolAdmin', () => {
@@ -44,9 +45,25 @@ describe('puedeAccederRuta — ventas', () => {
     }
   });
   it('ventas NO accede al taller ni al admin', () => {
-    for (const ruta of ['/admin', '/optimizador', '/bodeguero', '/inventario', '/historial-corte']) {
-      expect(puedeAccederRuta('ventas', ruta)).toBe(false);
+    for (const ruta of [
+      '/admin',
+      '/optimizador',
+      '/bodeguero',
+      '/historial-corte',
+      '/inventario/insumos',
+      '/inventario/camionetas',
+      '/inventario/tubos',
+    ]) {
+      expect(puedeAccederRuta('ventas', ruta), ruta).toBe(false);
     }
+  });
+
+  // Decisión del dueño en la lámina del mapa: ventas mira el tablero del
+  // inventario y el catálogo de telas (para «descontar por venta» en terreno),
+  // pero no entra a la bodega.
+  it('ventas SÍ mira el tablero del inventario y las telas', () => {
+    expect(puedeAccederRuta('ventas', '/inventario')).toBe(true);
+    expect(puedeAccederRuta('ventas', '/inventario/telas')).toBe(true);
   });
 });
 
@@ -115,5 +132,53 @@ describe('puedeAccederRuta — prefijos no se confunden', () => {
     expect(puedeAccederRuta('dimensionado', '/optimizador-tela')).toBe(true);
     // telas NO entra al optimizador de tubos
     expect(puedeAccederRuta('telas', '/optimizador')).toBe(false);
+  });
+});
+
+// Las reglas de /inventario/* se GENERAN desde SUBMODULOS_INVENTARIO. Estos
+// tests son el puente: que lo que dice el registro sea lo que bloquea la app.
+describe('puedeAccederRuta — submódulos de /inventario', () => {
+  it('cada submódulo deja entrar exactamente a los roles de su registro', () => {
+    for (const sub of SUBMODULOS_INVENTARIO) {
+      if (sub.estado !== 'listo') continue;
+      for (const rol of ROLES_DISPONIBLES) {
+        const esperado = rol === 'admin' || rolesDeSubmodulo(sub).includes(rol);
+        expect(puedeAccederRuta(rol, sub.ruta), `${rol} → ${sub.ruta}`).toBe(esperado);
+      }
+    }
+  });
+
+  it('una ruta más larga manda sobre la más corta que la contiene', () => {
+    // Contar es de bodega; el resto de Conteo lo abre y lo cierra el admin.
+    expect(puedeAccederRuta('bodeguero', '/inventario/conteo/contar')).toBe(true);
+    expect(puedeAccederRuta('bodeguero', '/inventario/conteo')).toBe(true);
+    expect(puedeAccederRuta('produccion', '/inventario/conteo/contar')).toBe(false);
+    // Y el Tablero no le abre la puerta a sus hijos.
+    expect(puedeAccederRuta('dimensionado', '/inventario')).toBe(true);
+    expect(puedeAccederRuta('dimensionado', '/inventario/insumos')).toBe(false);
+    expect(puedeAccederRuta('ventas', '/inventario/telas')).toBe(true);
+    expect(puedeAccederRuta('ventas', '/inventario/camionetas')).toBe(false);
+  });
+
+  it('una subruta hereda el permiso de su submódulo', () => {
+    expect(puedeAccederRuta('bodeguero', '/inventario/insumos/MEC 18')).toBe(true);
+    expect(puedeAccederRuta('bodeguero', '/inventario/insumos/ubicaciones')).toBe(true);
+    expect(puedeAccederRuta('ventas', '/inventario/insumos/MEC 18')).toBe(false);
+  });
+
+  it('las rutas viejas parecidas siguen con su propia regla', () => {
+    // Se parecen a /inventario pero NO cuelgan de él: la regla generada pide
+    // que después venga una barra o el final.
+    expect(puedeAccederRuta('bodeguero', '/inventario-conteo')).toBe(true);
+    expect(puedeAccederRuta('bodeguero', '/inventario-telas-prueba')).toBe(false);
+    expect(puedeAccederRuta('produccion', '/inventario-conteo')).toBe(false);
+  });
+
+  it('un submódulo pendiente no le abre la puerta a nadie más que al admin', () => {
+    for (const rol of ROLES_DISPONIBLES) {
+      if (rol === 'admin') continue;
+      expect(puedeAccederRuta(rol, '/inventario/compras'), rol).toBe(false);
+    }
+    expect(puedeAccederRuta('admin', '/inventario/compras')).toBe(true);
   });
 });

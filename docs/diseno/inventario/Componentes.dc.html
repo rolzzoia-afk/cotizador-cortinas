@@ -1,0 +1,281 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+    .t{--bg:hsl(36 47% 93%);--fg:hsl(28 17% 15%);--card:hsl(36 45% 96%);--sec:hsl(36 32% 87%);--mfg:hsl(28 14% 37%);--acc:hsl(28 41% 51%);--accfg:hsl(36 45% 96%);--des:hsl(353 51% 46%);--suc:hsl(152 27% 38%);--war:hsl(32 62% 48%);--bor:hsl(34 20% 80%);--sh:28 17% 15%}
+    .t.dark{--bg:hsl(28 17% 9%);--fg:hsl(36 47% 93%);--card:hsl(28 17% 12%);--sec:hsl(28 16% 18%);--mfg:hsl(30 16% 68%);--acc:hsl(28 49% 59%);--accfg:hsl(28 17% 9%);--des:hsl(353 56% 56%);--suc:hsl(152 30% 55%);--war:hsl(32 68% 60%);--bor:hsl(28 19% 20%);--sh:0 0% 0%}
+    *{box-sizing:border-box}
+    body{margin:0;background:hsl(36 47% 93%);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+    .t{background:var(--bg);color:var(--fg)}
+    h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;letter-spacing:-.02em;margin:0;font-weight:500}
+    .card{background:var(--card);border:1px solid var(--bor);border-radius:10px;box-shadow:0 1px 0 hsl(var(--sh)/.04),0 1px 3px hsl(var(--sh)/.04)}
+    .lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 20px;border-radius:8px;font-size:14px;font-weight:500;letter-spacing:-.025em;border:0;white-space:nowrap}
+    .btn-sm{height:36px;padding:0 14px;font-size:13px}
+    .b-pri{background:var(--fg);color:var(--bg)}
+    .b-acc{background:var(--acc);color:var(--accfg)}
+    .b-out{background:transparent;color:var(--fg);border:1px solid var(--bor)}
+    .b-sec{background:var(--sec);color:var(--fg)}
+    .b-gho{background:transparent;color:var(--mfg)}
+    .b-des{background:var(--des);color:hsl(36 45% 96%)}
+    .bdg{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;border:1px solid transparent;padding:2px 10px;font-size:11px;font-weight:500;letter-spacing:.02em}
+    .g-acc{background:hsl(28 41% 51%/.15);color:var(--acc)}
+    .g-des{background:hsl(353 51% 46%/.15);color:var(--des)}
+    .g-suc{background:hsl(152 27% 38%/.15);color:var(--suc)}
+    .g-war{background:hsl(32 62% 48%/.15);color:var(--war)}
+    .g-mut{background:var(--sec);color:var(--mfg)}
+    .g-out{border-color:var(--bor);color:var(--fg)}
+    .g-fg{background:var(--fg);color:var(--bg)}
+    table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+    th{height:42px;padding:0 10px;text-align:left;font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg);border-bottom:1px solid var(--bor)}
+    td{padding:9px 10px;border-bottom:1px solid var(--bor)}
+    tr:last-child td{border-bottom:0}
+    .mono{font-family:'Geist Mono',ui-monospace,monospace}
+    .tab{padding:9px 2px;margin-right:20px;font-size:13.5px;font-weight:500;color:var(--mfg);border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:7px}
+    .tab-on{color:var(--acc);border-bottom-color:var(--acc)}
+    .vacio{border:1px dashed var(--bor);border-radius:10px;padding:26px 18px;display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;color:var(--mfg)}
+    .sec{display:flex;flex-direction:column;gap:11px}
+  </style>
+</helmet>
+
+<div style="width:1440px;height:1000px;overflow:hidden;display:flex;flex-direction:column">
+
+  <!-- CLARO -->
+  <div class="t" style="flex:1;padding:26px 30px;display:flex;flex-direction:column;gap:16px;min-height:0">
+    <div style="display:flex;align-items:flex-end;gap:14px">
+      <div>
+        <div class="lbl">Rediseño del inventario · artboard 18 de 18</div>
+        <h1 style="font-size:28px;margin-top:5px">Piezas y estados</h1>
+      </div>
+      <div style="margin-left:auto;font-size:12.5px;color:var(--mfg);text-align:right">Todo sale del sistema visual que la app ya tiene.<br>Ninguna pieza nueva inventa color ni tipografía.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;flex:1;min-height:0">
+
+      <!-- Col 1: estados -->
+      <div class="sec">
+        <div class="lbl">Cuando no hay nada que mostrar</div>
+        <div class="card" style="padding:12px">
+          <div class="vacio">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/></svg>
+            <div style="font-size:13.5px;font-weight:500;color:var(--fg)">Sin movimientos todavía</div>
+            <div style="font-size:12px">Cuando registres el primero va a aparecer acá</div>
+            <span class="btn b-out btn-sm" style="margin-top:4px">Registrar movimiento</span>
+          </div>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Cargando</div>
+        <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:9px">
+          <div style="height:11px;border-radius:5px;background:var(--sec);width:60%"></div>
+          <div style="height:11px;border-radius:5px;background:var(--sec);width:88%"></div>
+          <div style="height:11px;border-radius:5px;background:var(--sec);width:74%"></div>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Cuando algo falla</div>
+        <div style="border-radius:10px;border:1px solid hsl(353 51% 46%/.4);background:hsl(353 51% 46%/.09);padding:13px 14px;display:flex;gap:10px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" style="color:var(--des);flex-shrink:0"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+          <div style="font-size:12.5px;line-height:1.5"><b style="font-weight:600">No se pudo guardar el movimiento.</b><br><span style="color:var(--mfg)">El artículo cambió mientras escribías. Vuelve a intentarlo.</span></div>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Sin permiso</div>
+        <div style="border-radius:10px;border:1px solid var(--bor);background:var(--sec);padding:13px 14px;display:flex;gap:10px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" style="color:var(--mfg);flex-shrink:0"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+          <div style="font-size:12.5px;line-height:1.5;color:var(--mfg)">Solo un administrador edita estos valores. Los ves en modo lectura.</div>
+        </div>
+      </div>
+
+      <!-- Col 2: KPI + tabs + botones -->
+      <div class="sec">
+        <div class="lbl">Número grande</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+          <div class="card" style="padding:14px 15px">
+            <div class="lbl">Movimientos hoy</div>
+            <div style="font-family:Fraunces,serif;font-size:28px;font-weight:500;letter-spacing:-.03em;margin:6px 0 2px">18</div>
+            <div style="font-size:11.5px;color:var(--mfg)">14 salidas · 4 ingresos</div>
+          </div>
+          <div class="card" style="padding:14px 15px;border-color:hsl(353 51% 46%/.4)">
+            <div class="lbl" style="color:var(--des)">Alertas</div>
+            <div style="font-family:Fraunces,serif;font-size:28px;font-weight:500;letter-spacing:-.03em;margin:6px 0 2px;color:var(--des)">37</div>
+            <div style="font-size:11.5px;color:var(--mfg)">12 sin stock</div>
+          </div>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Pestañas</div>
+        <div style="border-bottom:1px solid var(--bor)">
+          <span class="tab tab-on">Catálogo <span class="bdg g-acc">1.012</span></span>
+          <span class="tab">Ubicaciones</span>
+          <span class="tab" style="margin-right:0">Fallas</span>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Botones</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span class="btn b-acc">Registrar</span>
+          <span class="btn b-pri">Guardar</span>
+          <span class="btn b-out">Exportar</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span class="btn b-sec btn-sm">Secundario</span>
+          <span class="btn b-gho btn-sm">Descartar</span>
+          <span class="btn b-des btn-sm">Dar de baja</span>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Campos</div>
+        <div style="display:flex;gap:9px">
+          <div style="flex:1;height:40px;border-radius:8px;border:1px solid var(--bor);background:hsl(36 47% 93%/.35);display:flex;align-items:center;padding:0 14px;font-size:13.5px;color:var(--mfg)">Sin foco</div>
+          <div style="flex:1;height:40px;border-radius:8px;border:1px solid var(--acc);background:var(--card);display:flex;align-items:center;padding:0 14px;font-size:13.5px;box-shadow:0 0 0 3px hsl(28 41% 51%/.18)">Con foco</div>
+        </div>
+        <div style="display:flex;gap:9px">
+          <div style="flex:1;height:40px;border-radius:8px;border:1px solid hsl(353 51% 46%/.6);background:var(--card);display:flex;align-items:center;padding:0 14px;font-size:13.5px;color:var(--des)">Valor inválido</div>
+          <div style="flex:1;height:40px;border-radius:8px;border:1px solid var(--bor);background:var(--sec);display:flex;align-items:center;padding:0 14px;font-size:13.5px;color:var(--mfg);opacity:.6">Bloqueado</div>
+        </div>
+      </div>
+
+      <!-- Col 3: badges y chips -->
+      <div class="sec">
+        <div class="lbl">Tipo de movimiento</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <span class="bdg g-suc">Ingreso</span>
+          <span class="bdg g-des">Salida</span>
+          <span class="bdg g-acc">Traslado</span>
+          <span class="bdg g-suc">Devolución</span>
+          <span class="bdg g-war">Ajuste</span>
+          <span class="bdg g-fg">Merma</span>
+          <span class="bdg g-war">Conteo</span>
+          <span class="bdg g-mut">Corte</span>
+          <span class="bdg g-mut">Sobrante</span>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Estado del artículo</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <span class="bdg g-suc">Con stock</span>
+          <span class="bdg g-war">Bajo mínimo</span>
+          <span class="bdg g-des">Sin stock</span>
+          <span class="bdg g-des">Negativo</span>
+          <span class="bdg g-mut">Sin mínimo</span>
+          <span class="bdg g-mut">Descontinuado</span>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Almacenes</div>
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <span class="bdg g-out"><b class="mono" style="font-weight:600">MP</b> Materias primas</span>
+          <span class="bdg g-out"><b class="mono" style="font-weight:600">LIB</b> Liberado</span>
+          <span class="bdg g-out"><b class="mono" style="font-weight:600">CAM-1</b> Camioneta</span>
+          <span class="bdg g-out"><b class="mono" style="font-weight:600">MERMA</b></span>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Barra de guardar</div>
+        <div style="border-radius:10px;border:1px solid var(--bor);background:var(--card);box-shadow:0 -3px 12px hsl(var(--sh)/.06);padding:11px 13px;display:flex;align-items:center;gap:10px">
+          <span class="bdg g-war"><span style="width:6px;height:6px;border-radius:9999px;background:var(--war);display:inline-block"></span> Sin guardar</span>
+          <span class="btn b-gho btn-sm" style="margin-left:auto;height:32px">Descartar</span>
+          <span class="btn b-pri btn-sm" style="height:32px">Guardar</span>
+        </div>
+
+        <div class="lbl" style="margin-top:4px">Progreso</div>
+        <div>
+          <div style="height:8px;border-radius:9999px;background:var(--sec);overflow:hidden"><div style="width:62%;height:100%;background:var(--acc);border-radius:9999px"></div></div>
+          <div style="font-size:11.5px;color:var(--mfg);margin-top:5px">255 de 412 · 62 %</div>
+        </div>
+      </div>
+
+      <!-- Col 4: tabla -->
+      <div class="sec" style="min-height:0">
+        <div class="lbl">Tabla densa</div>
+        <div class="card" style="overflow:hidden;flex:1;min-height:0">
+          <table>
+            <thead><tr><th style="width:70px">Código</th><th>Artículo</th><th style="width:56px;text-align:right">Total</th><th style="width:88px">Estado</th></tr></thead>
+            <tbody>
+              <tr><td class="mono" style="font-weight:500">MEC 05</td><td>Kit roller 38</td><td align="right" class="mono">178</td><td><span class="bdg g-suc">Con stock</span></td></tr>
+              <tr><td class="mono" style="font-weight:500">MEC 18</td><td>Kit roller 45</td><td align="right" class="mono">27</td><td><span class="bdg g-war">Bajo mín.</span></td></tr>
+              <tr style="background:hsl(28 41% 51%/.07)"><td class="mono" style="font-weight:500">MEC 28</td><td>Kit invertida 63</td><td align="right" class="mono" style="color:var(--des)">0</td><td><span class="bdg g-des">Sin stock</span></td></tr>
+              <tr><td class="mono" style="font-weight:500">CAD 13</td><td>Cadena metálica</td><td align="right" class="mono">10</td><td><span class="bdg g-suc">Con stock</span></td></tr>
+              <tr><td class="mono" style="font-weight:500">TOP 05</td><td>Tope blanco</td><td align="right" class="mono" style="color:var(--des)">−3</td><td><span class="bdg g-des">Negativo</span></td></tr>
+              <tr><td class="mono" style="font-weight:500">E 39</td><td>Tubo 45 gris</td><td align="right" class="mono">62</td><td><span class="bdg g-suc">Con stock</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div style="font-size:11.5px;color:var(--mfg);line-height:1.5">
+          Fila de 41 px, números alineados a la derecha y con ancho fijo, cabecera en versalitas. Es la misma tabla del resto de la app.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OSCURO -->
+  <div class="t dark" style="height:296px;flex-shrink:0;padding:20px 30px;display:flex;flex-direction:column;gap:14px;border-top:1px solid hsl(34 20% 80%)">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h2 style="font-size:18px">De noche</h2>
+      <span style="font-size:12.5px;color:var(--mfg)">La app ya tiene modo oscuro; el módulo lo hereda sin decisiones nuevas</span>
+      <span class="bdg g-mut" style="margin-left:auto">Fondo negro cálido · terracota más luminosa · gris al 68 % para que se lea</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;flex:1;min-height:0">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+        <div class="card" style="padding:14px 15px">
+          <div class="lbl">Movimientos hoy</div>
+          <div style="font-family:Fraunces,serif;font-size:28px;font-weight:500;letter-spacing:-.03em;margin:6px 0 2px">18</div>
+          <div style="font-size:11.5px;color:var(--mfg)">14 salidas · 4 ingresos</div>
+        </div>
+        <div class="card" style="padding:14px 15px;border-color:hsl(353 56% 56%/.45)">
+          <div class="lbl" style="color:var(--des)">Alertas</div>
+          <div style="font-family:Fraunces,serif;font-size:28px;font-weight:500;letter-spacing:-.03em;margin:6px 0 2px;color:var(--des)">37</div>
+          <div style="font-size:11.5px;color:var(--mfg)">12 sin stock</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;flex-wrap:wrap;gap:7px">
+          <span class="bdg" style="background:hsl(152 30% 55%/.2);color:var(--suc)">Ingreso</span>
+          <span class="bdg" style="background:hsl(353 56% 56%/.2);color:var(--des)">Salida</span>
+          <span class="bdg" style="background:hsl(28 49% 59%/.2);color:var(--acc)">Traslado</span>
+          <span class="bdg" style="background:hsl(32 68% 60%/.2);color:var(--war)">Ajuste</span>
+          <span class="bdg g-fg">Merma</span>
+          <span class="bdg g-mut">Corte</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <span class="btn b-acc btn-sm">Registrar</span>
+          <span class="btn b-pri btn-sm">Guardar</span>
+          <span class="btn b-out btn-sm">Exportar</span>
+        </div>
+        <div style="height:40px;border-radius:8px;border:1px solid var(--acc);background:var(--card);display:flex;align-items:center;padding:0 14px;font-size:13.5px;box-shadow:0 0 0 3px hsl(28 49% 59%/.2)">Campo con foco</div>
+      </div>
+
+      <div class="card" style="overflow:hidden">
+        <table>
+          <thead><tr><th style="width:70px">Código</th><th>Artículo</th><th style="width:56px;text-align:right">Total</th><th style="width:88px">Estado</th></tr></thead>
+          <tbody>
+            <tr><td class="mono" style="font-weight:500">MEC 05</td><td>Kit roller 38</td><td align="right" class="mono">178</td><td><span class="bdg" style="background:hsl(152 30% 55%/.2);color:var(--suc)">Con stock</span></td></tr>
+            <tr><td class="mono" style="font-weight:500">MEC 18</td><td>Kit roller 45</td><td align="right" class="mono">27</td><td><span class="bdg" style="background:hsl(32 68% 60%/.2);color:var(--war)">Bajo mín.</span></td></tr>
+            <tr style="background:hsl(28 49% 59%/.09)"><td class="mono" style="font-weight:500">MEC 28</td><td>Kit invertida 63</td><td align="right" class="mono" style="color:var(--des)">0</td><td><span class="bdg" style="background:hsl(353 56% 56%/.2);color:var(--des)">Sin stock</span></td></tr>
+            <tr><td class="mono" style="font-weight:500">TOP 05</td><td>Tope blanco</td><td align="right" class="mono" style="color:var(--des)">−3</td><td><span class="bdg" style="background:hsl(353 56% 56%/.2);color:var(--des)">Negativo</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" style="padding:13px 15px">
+        <div class="lbl">Colmena de noche</div>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:10px">
+          <div style="height:32px;border-radius:5px;background:hsl(36 47% 93%/.14);border:1px solid var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;background:hsl(28 49% 59%/.24);border:1px solid var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;border:1px dashed var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;background:hsl(152 30% 55%/.24);border:1px solid var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;border:1px dashed var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;background:hsl(32 68% 60%/.24);border:1px solid var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;border:1px dashed var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;background:hsl(36 47% 93%/.14);border:1px solid var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;background:hsl(28 49% 59%/.24);border:1px solid var(--bor)"></div>
+          <div style="height:32px;border-radius:5px;border:1px dashed var(--bor)"></div>
+        </div>
+        <div style="font-size:11.5px;color:var(--mfg);margin-top:10px">Los tintes de familia suben de opacidad para no perderse contra el fondo oscuro.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

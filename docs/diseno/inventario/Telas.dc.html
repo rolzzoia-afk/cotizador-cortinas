@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+    :root{--bg:hsl(36 47% 93%);--fg:hsl(28 17% 15%);--card:hsl(36 45% 96%);--sec:hsl(36 32% 87%);--mfg:hsl(28 14% 37%);--acc:hsl(28 41% 51%);--accfg:hsl(36 45% 96%);--des:hsl(353 51% 46%);--suc:hsl(152 27% 38%);--war:hsl(32 62% 48%);--bor:hsl(34 20% 80%)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+    h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;letter-spacing:-.02em;margin:0;font-weight:500}
+    a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+    .card{background:var(--card);border:1px solid var(--bor);border-radius:10px;box-shadow:0 1px 0 hsl(28 17% 15%/.04),0 1px 3px hsl(28 17% 15%/.04)}
+    .lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:40px;padding:0 18px;border-radius:8px;font-size:14px;font-weight:500;letter-spacing:-.025em;border:0;white-space:nowrap}
+    .b-acc{background:var(--acc);color:var(--accfg)}
+    .b-out{background:transparent;color:var(--fg);border:1px solid var(--bor)}
+    .bdg{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;border:1px solid transparent;padding:2px 10px;font-size:11px;font-weight:500;letter-spacing:.02em}
+    .g-acc{background:hsl(28 41% 51%/.15);color:var(--acc)}
+    .g-des{background:hsl(353 51% 46%/.15);color:var(--des)}
+    .g-suc{background:hsl(152 27% 38%/.15);color:var(--suc)}
+    .g-war{background:hsl(32 62% 48%/.15);color:var(--war)}
+    .g-mut{background:var(--sec);color:var(--mfg)}
+    table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+    th{height:42px;padding:0 10px;text-align:left;font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg);border-bottom:1px solid var(--bor)}
+    td{padding:9px 10px;border-bottom:1px solid var(--bor);vertical-align:middle}
+    .mono{font-family:'Geist Mono',ui-monospace,monospace}
+    .tab{padding:10px 2px;margin-right:22px;font-size:13.5px;font-weight:500;color:var(--mfg);border-bottom:2px solid transparent;display:inline-flex;align-items:center;gap:7px}
+    .tab-on{color:var(--acc);border-bottom-color:var(--acc)}
+    .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--bor);font-size:12.5px;color:var(--mfg);background:hsl(36 47% 93%/.5)}
+    .chip-on{border-color:var(--acc);background:hsl(28 41% 51%/.12);color:var(--acc);font-weight:500}
+    .bar{height:6px;border-radius:9999px;background:var(--sec);overflow:hidden;min-width:70px}
+    .bar>i{display:block;height:100%;border-radius:9999px}
+  </style>
+</helmet>
+
+<div style="width:1192px;height:832px;padding:22px 26px;display:flex;flex-direction:column;gap:13px;overflow:hidden">
+
+  <div style="display:flex;align-items:flex-start;gap:16px">
+    <div>
+      <div style="font-size:12px;color:var(--mfg)">Inventario</div>
+      <h1 style="font-size:28px;line-height:1.15;margin-top:4px">Telas</h1>
+      <div style="font-size:12.5px;color:var(--mfg);margin-top:5px">214 códigos · 124 con stock · 9 bajo mínimo · el saldo se lleva en <b style="color:var(--fg);font-weight:500">metros</b></div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:9px">
+      <span class="btn b-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6M6 18h12v3H6zM6 14h12a2 2 0 0 0 2-2v-1a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v1a2 2 0 0 0 2 2Z"/></svg> Etiquetas</span>
+      <span class="btn b-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21V9M8 13l4-4 4 4M4 3h16"/></svg> Importar catálogo</span>
+      <span class="btn b-acc"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Nueva tela</span>
+    </div>
+  </div>
+
+  <div style="border-bottom:1px solid var(--bor);display:flex;align-items:center">
+    <span class="tab tab-on">Catálogo <span class="bdg g-acc">214</span></span>
+    <span class="tab">Fallas <span class="bdg g-mut">6</span></span>
+    <span class="tab">Colmena de paños <span class="bdg g-mut">2.033</span> <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 17 17 7M9 7h8v8"/></svg></span>
+  </div>
+
+  <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+    <span class="chip chip-on">Grupo: Blackout <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+    <span class="chip">Tipo <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="chip">Almacén <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="chip">Proveedor <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+    <span class="chip">Solo bajo mínimo</span>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:8px;height:36px;width:210px;border-radius:8px;border:1px solid var(--bor);background:hsl(36 47% 93%/.6);padding:0 12px;color:var(--mfg);font-size:13px">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      Código o descripción
+    </div>
+  </div>
+
+  <div class="card" style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column">
+    <table>
+      <thead><tr>
+        <th style="width:74px">Código</th>
+        <th>Descripción</th>
+        <th style="width:96px">Grupo</th>
+        <th style="width:62px;text-align:right">Ancho</th>
+        <th style="width:78px;text-align:right">Mat. pr.</th>
+        <th style="width:78px;text-align:right">Liberado</th>
+        <th style="width:150px">Total en metros</th>
+        <th style="width:78px;text-align:right">Rollos</th>
+        <th style="width:104px">Estado</th>
+        <th style="width:56px"></th>
+      </tr></thead>
+      <tbody>
+        <tr><td class="mono" style="font-weight:500">BK 07</td><td>Blackout arena</td><td style="color:var(--mfg)">Blackout</td><td align="right" class="mono">2,98</td><td align="right" class="mono">42,00</td><td align="right" class="mono">44,20</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">86,20</b><div class="bar" style="flex:1"><i style="width:72%;background:var(--suc)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">≈ 3</td><td><span class="bdg g-suc">Con stock</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr><td class="mono" style="font-weight:500">BK 41</td><td>Blackout blanco textura</td><td style="color:var(--mfg)">Blackout</td><td align="right" class="mono" style="color:var(--des)">sin dato</td><td align="right" class="mono">18,50</td><td align="right" class="mono">0,00</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">18,50</b><div class="bar" style="flex:1"><i style="width:24%;background:var(--war)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">≈ 1</td><td><span class="bdg g-war">Bajo mínimo</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr><td class="mono" style="font-weight:500">BK 90</td><td>Blackout gris plomo</td><td style="color:var(--mfg)">Blackout</td><td align="right" class="mono" style="color:var(--des)">sin dato</td><td align="right" class="mono">0,00</td><td align="right" class="mono">6,80</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">6,80</b><div class="bar" style="flex:1"><i style="width:9%;background:var(--des)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">&lt; 1</td><td><span class="bdg g-des">Crítico</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr><td class="mono" style="font-weight:500">DU 12</td><td>Dúo blackout beige</td><td style="color:var(--mfg)">Dúo</td><td align="right" class="mono">2,80</td><td align="right" class="mono">31,00</td><td align="right" class="mono">12,40</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">43,40</b><div class="bar" style="flex:1"><i style="width:55%;background:var(--suc)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">≈ 2</td><td><span class="bdg g-suc">Con stock</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr><td class="mono" style="font-weight:500">SC 12</td><td>Screen 3 % gris</td><td style="color:var(--mfg)">Screen</td><td align="right" class="mono">2,98</td><td align="right" class="mono">22,00</td><td align="right" class="mono">22,60</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">44,60</b><div class="bar" style="flex:1"><i style="width:58%;background:var(--suc)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">≈ 2</td><td><span class="bdg g-suc">Con stock</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr style="background:hsl(32 62% 48%/.08)"><td class="mono" style="font-weight:500">SC 48</td><td>Delux screen blanco <span class="bdg g-war" style="margin-left:6px">revisar familia</span></td><td style="color:var(--mfg)">Screen</td><td align="right" class="mono">2,98</td><td align="right" class="mono">9,00</td><td align="right" class="mono">0,00</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">9,00</b><div class="bar" style="flex:1"><i style="width:12%;background:var(--war)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">&lt; 1</td><td><span class="bdg g-war">Bajo mínimo</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr><td class="mono" style="font-weight:500">TR 04</td><td>Translúcida lino</td><td style="color:var(--mfg)">Translúcida</td><td align="right" class="mono">2,45</td><td align="right" class="mono">14,20</td><td align="right" class="mono">3,00</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">17,20</b><div class="bar" style="flex:1"><i style="width:22%;background:var(--war)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">≈ 1</td><td><span class="bdg g-war">Bajo mínimo</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr><td class="mono" style="font-weight:500">BEE-SC</td><td>Bee-black screen negro</td><td style="color:var(--mfg)">Bee-black</td><td align="right" class="mono">2,98</td><td align="right" class="mono">26,00</td><td align="right" class="mono">8,00</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">34,00</b><div class="bar" style="flex:1"><i style="width:44%;background:var(--suc)"></i></div></div></td><td align="right" class="mono" style="color:var(--mfg)">≈ 2</td><td><span class="bdg g-suc">Con stock</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+        <tr style="opacity:.7"><td class="mono" style="font-weight:500">VE 21</td><td>Vertical lino crudo</td><td style="color:var(--mfg)">Vertical</td><td align="right" class="mono">2,80</td><td align="right" class="mono">0,00</td><td align="right" class="mono">0,00</td><td><div style="display:flex;align-items:center;gap:8px"><b class="mono" style="font-weight:600;width:52px">0,00</b><div class="bar" style="flex:1"></div></div></td><td align="right" class="mono" style="color:hsl(34 20% 70%)">—</td><td><span class="bdg g-mut">Sin stock</span></td><td align="right" style="color:var(--mfg)">···</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:auto;display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--bor);font-size:12px;color:var(--mfg)">
+      <span>9 de 214 códigos</span>
+      <span class="bdg g-des" style="margin-left:auto">3 sin ancho de rollo registrado: el corte asume 2,98 en silencio</span>
+    </div>
+  </div>
+
+  <!-- Nota de unificación -->
+  <div style="display:flex;gap:12px">
+    <div style="flex:1;border-radius:10px;border:1px solid hsl(28 41% 51%/.35);background:hsl(28 41% 51%/.09);padding:12px 14px;font-size:12.5px;line-height:1.55">
+      <b style="font-weight:600;color:var(--acc)">Este pasa a ser el único inventario de telas.</b>
+      Hoy el saldo vive en tres lugares que no se hablan: este catálogo, la tabla de «Stock Telas» del Ojo de Dios (hoy vacía) y el módulo de prueba de los vendedores (50 rollos, 4 usuarios). Los tres se juntan acá, con una migración que primero muestra el informe y recién después escribe.
+    </div>
+    <div style="width:300px;border-radius:10px;border:1px solid var(--bor);background:var(--card);padding:12px 14px;font-size:12.5px;line-height:1.55">
+      <b style="font-weight:600">Rollos equivalentes</b><br>
+      <span style="color:var(--mfg)">Se calculan al mostrar (metros ÷ metros por rollo). No se guardan: el rollo es una forma de mirar, el metro es la verdad.</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

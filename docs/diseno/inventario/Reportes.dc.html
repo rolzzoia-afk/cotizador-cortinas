@@ -1,0 +1,228 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+    :root{--bg:hsl(36 47% 93%);--fg:hsl(28 17% 15%);--card:hsl(36 45% 96%);--sec:hsl(36 32% 87%);--mfg:hsl(28 14% 37%);--acc:hsl(28 41% 51%);--accfg:hsl(36 45% 96%);--des:hsl(353 51% 46%);--suc:hsl(152 27% 38%);--war:hsl(32 62% 48%);--bor:hsl(34 20% 80%)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+    h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;letter-spacing:-.02em;margin:0;font-weight:500}
+    a{color:var(--acc);text-decoration:none}
+    .card{background:var(--card);border:1px solid var(--bor);border-radius:10px;box-shadow:0 1px 0 hsl(28 17% 15%/.04),0 1px 3px hsl(28 17% 15%/.04)}
+    .lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg)}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:38px;padding:0 16px;border-radius:8px;font-size:13.5px;font-weight:500;letter-spacing:-.025em;border:0;white-space:nowrap}
+    .b-acc{background:var(--acc);color:var(--accfg)}
+    .b-out{background:transparent;color:var(--fg);border:1px solid var(--bor)}
+    .bdg{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;border:1px solid transparent;padding:2px 10px;font-size:11px;font-weight:500;letter-spacing:.02em}
+    .g-acc{background:hsl(28 41% 51%/.15);color:var(--acc)}
+    .g-des{background:hsl(353 51% 46%/.15);color:var(--des)}
+    .g-suc{background:hsl(152 27% 38%/.15);color:var(--suc)}
+    .g-war{background:hsl(32 62% 48%/.15);color:var(--war)}
+    .g-mut{background:var(--sec);color:var(--mfg)}
+    .mono{font-family:'Geist Mono',ui-monospace,monospace}
+    .tab{padding:9px 2px;margin-right:20px;font-size:13.5px;font-weight:500;color:var(--mfg);border-bottom:2px solid transparent}
+    .tab-on{color:var(--acc);border-bottom-color:var(--acc)}
+    .hb{height:12px;border-radius:0 4px 4px 0;background:var(--acc)}
+    .vb{border-radius:4px 4px 0 0;background:var(--acc);width:100%}
+    .gl{height:1px;background:hsl(34 20% 80%/.7)}
+    .row{display:flex;align-items:center;gap:10px;font-size:12.5px}
+  </style>
+</helmet>
+
+<div style="width:1192px;height:1180px;padding:22px 26px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+
+  <div style="display:flex;align-items:flex-start;gap:16px">
+    <div>
+      <div style="font-size:12px;color:var(--mfg)">Inventario</div>
+      <h1 style="font-size:28px;line-height:1.15;margin-top:4px">Reportes</h1>
+      <div style="font-size:12.5px;color:var(--mfg);margin-top:5px">Cuánto vale lo que hay, en qué se va, qué no se mueve y qué se pierde</div>
+    </div>
+    <div style="margin-left:auto;display:flex;align-items:center;gap:9px">
+      <span class="btn b-out">Últimos 12 meses <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg></span>
+      <span class="btn b-out"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4M4 21h16"/></svg> Exportar</span>
+    </div>
+  </div>
+
+  <!-- Valorización -->
+  <div class="card" style="padding:17px 19px">
+    <div style="display:flex;align-items:flex-start;gap:20px">
+      <div style="width:250px;flex-shrink:0">
+        <div class="lbl">Valor del inventario</div>
+        <div style="font-family:Fraunces,serif;font-size:40px;font-weight:500;letter-spacing:-.035em;line-height:1.05;margin:8px 0 4px">$ 48.312.900</div>
+        <div style="font-size:12.5px;color:var(--mfg)">al 08-09-2026 · saldo × costo unitario</div>
+        <div style="display:flex;gap:16px;margin-top:16px">
+          <div><div class="lbl">Insumos</div><div class="mono" style="font-size:16px;font-weight:600;margin-top:3px">$ 21,4 M</div></div>
+          <div><div class="lbl">Telas</div><div class="mono" style="font-size:16px;font-weight:600;margin-top:3px">$ 19,8 M</div></div>
+          <div><div class="lbl">Tubos</div><div class="mono" style="font-size:16px;font-weight:600;margin-top:3px">$ 7,1 M</div></div>
+        </div>
+        <div style="margin-top:14px;font-size:11.5px;color:var(--mfg);line-height:1.5">Los paños de la colmena no entran: son sobrantes ya pagados dentro de otra OT.</div>
+      </div>
+
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <h2 style="font-size:15px">Dónde está la plata</h2>
+          <span style="font-size:12px;color:var(--mfg);margin-left:auto">Valor por categoría, en millones de pesos</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div class="row"><span style="width:118px;color:var(--mfg)">Telas</span><div class="hb" style="width:340px"></div><b class="mono" style="font-weight:600">19,8</b></div>
+          <div class="row"><span style="width:118px;color:var(--mfg)">Mecanismos</span><div class="hb" style="width:198px"></div><b class="mono" style="font-weight:600">11,5</b></div>
+          <div class="row"><span style="width:118px;color:var(--mfg)">Tubos</span><div class="hb" style="width:122px"></div><b class="mono" style="font-weight:600">7,1</b></div>
+          <div class="row"><span style="width:118px;color:var(--mfg)">Motores</span><div class="hb" style="width:86px"></div><b class="mono" style="font-weight:600">5,0</b></div>
+          <div class="row"><span style="width:118px;color:var(--mfg)">Accesorios</span><div class="hb" style="width:48px"></div><b class="mono" style="font-weight:600">2,8</b></div>
+          <div class="row"><span style="width:118px;color:var(--mfg)">Ferretería</span><div class="hb" style="width:36px"></div><b class="mono" style="font-weight:600">2,1</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Consumo y rotación -->
+  <div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:14px">
+
+    <div class="card" style="padding:17px 19px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h2 style="font-size:15px">Consumo mensual</h2>
+        <span style="font-size:12px;color:var(--mfg);margin-left:auto">Salidas a OT, en millones de pesos</span>
+      </div>
+      <div style="position:relative;height:150px;margin-top:16px">
+        <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between">
+          <div class="gl"></div><div class="gl"></div><div class="gl"></div><div class="gl"></div>
+        </div>
+        <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:8px">
+          <div style="flex:1"><div class="vb" style="height:62px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:78px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:54px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:90px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:104px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:82px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:118px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:96px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:126px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:110px"></div></div>
+          <div style="flex:1"><div class="vb" style="height:134px"></div></div>
+          <div style="flex:1;position:relative">
+            <div class="vb" style="height:46px;background:hsl(28 41% 51%/.45)"></div>
+            <span class="mono" style="position:absolute;top:16px;left:50%;transform:translateX(-50%);font-size:10.5px;color:var(--mfg);white-space:nowrap">en curso</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:7px">
+        <span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Oct</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Nov</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Dic</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Ene</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Feb</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Mar</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Abr</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">May</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Jun</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Jul</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Ago</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--fg);font-weight:500">Sep</span>
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:var(--mfg);border-top:1px solid var(--bor);padding-top:10px">
+        Se puede abrir por <b style="color:var(--fg);font-weight:500">área</b> (armado, estructura, instalación), por <b style="color:var(--fg);font-weight:500">OT</b> o por artículo.
+      </div>
+    </div>
+
+    <div class="card" style="padding:17px 19px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <h2 style="font-size:15px">Lo que no se mueve</h2>
+        <span style="font-size:12px;color:var(--mfg);margin-left:auto">Meses sin salir</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:9px;margin-top:16px">
+        <div class="row"><span style="width:82px" class="mono">E 66</span><div class="hb" style="width:196px"></div><b class="mono" style="font-weight:600">13</b></div>
+        <div class="row"><span style="width:82px" class="mono">VE 21</span><div class="hb" style="width:166px"></div><b class="mono" style="font-weight:600">11</b></div>
+        <div class="row"><span style="width:82px" class="mono">MEC 37</span><div class="hb" style="width:136px"></div><b class="mono" style="font-weight:600">9</b></div>
+        <div class="row"><span style="width:82px" class="mono">INS 22</span><div class="hb" style="width:106px"></div><b class="mono" style="font-weight:600">7</b></div>
+        <div class="row"><span style="width:82px" class="mono">TR 11</span><div class="hb" style="width:90px"></div><b class="mono" style="font-weight:600">6</b></div>
+        <div class="row"><span style="width:82px" class="mono">DOM 05</span><div class="hb" style="width:76px"></div><b class="mono" style="font-weight:600">5</b></div>
+      </div>
+      <div style="margin-top:16px;padding:10px 12px;border-radius:8px;background:hsl(32 62% 48%/.1);border:1px solid hsl(32 62% 48%/.3);font-size:12px;line-height:1.5">
+        <b style="font-weight:600">$ 3,4 M</b> parados en artículos que no salen hace más de medio año.
+      </div>
+    </div>
+  </div>
+
+  <!-- Merma -->
+  <div class="card" style="padding:17px 19px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <h2 style="font-size:15px">Merma</h2>
+      <span class="bdg g-mut">Tela en metros cuadrados</span>
+      <span style="font-size:12px;color:var(--mfg);margin-left:auto">Promedio 4,2 m² al mes · 2,1 % de lo cortado</span>
+    </div>
+    <div style="position:relative;height:96px;margin-top:16px">
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between"><div class="gl"></div><div class="gl"></div><div class="gl"></div></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:8px">
+        <div style="flex:1"><div class="vb" style="height:44px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:52px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:36px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:60px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:48px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:70px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:40px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:56px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:32px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:64px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:50px"></div></div>
+        <div style="flex:1"><div class="vb" style="height:22px;background:hsl(28 41% 51%/.45)"></div></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:7px">
+      <span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Oct</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Nov</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Dic</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Ene</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Feb</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Mar</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Abr</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">May</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Jun</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Jul</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--mfg)">Ago</span><span style="flex:1;text-align:center;font-size:10.5px;color:var(--fg);font-weight:500">Sep</span>
+    </div>
+  </div>
+
+  <!-- Configuración -->
+  <div style="border-top:1px solid var(--bor);padding-top:16px;margin-top:2px">
+    <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:12px">
+      <h1 style="font-size:24px">Configuración</h1>
+      <span style="font-size:12.5px;color:var(--mfg)">Lo que hoy está escrito a mano en cada fila pasa a ser una lista que se administra</span>
+      <span class="bdg g-mut" style="margin-left:auto">Solo admin</span>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px">
+
+      <div class="card" style="padding:14px 15px">
+        <div style="display:flex;align-items:center;gap:7px"><h2 style="font-size:14px">Almacenes</h2><span class="bdg g-mut" style="margin-left:auto">4</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:11px;font-size:12.5px">
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--bor);border-radius:7px;padding:7px 9px"><b class="mono" style="font-size:11.5px;font-weight:600">MP</b><span style="color:var(--mfg)">Materias primas</span></div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--bor);border-radius:7px;padding:7px 9px"><b class="mono" style="font-size:11.5px;font-weight:600">LIB</b><span style="color:var(--mfg)">Liberado</span></div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--bor);border-radius:7px;padding:7px 9px"><b class="mono" style="font-size:11.5px;font-weight:600">CAM-1</b><span style="color:var(--mfg)">Camioneta 1</span></div>
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid var(--bor);border-radius:7px;padding:7px 9px"><b class="mono" style="font-size:11.5px;font-weight:600">MERMA</b><span style="color:var(--mfg)">Lo que se pierde</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--mfg);margin-top:10px;line-height:1.45">Hoy el mismo almacén se escribe de tres formas distintas según la pantalla.</div>
+      </div>
+
+      <div class="card" style="padding:14px 15px">
+        <div style="display:flex;align-items:center;gap:7px"><h2 style="font-size:14px">Unidades</h2><span class="bdg g-mut" style="margin-left:auto">7</span></div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:11px">
+          <span class="bdg g-mut">unidad</span><span class="bdg g-mut">metro</span><span class="bdg g-acc">rollo</span><span class="bdg g-mut">par</span><span class="bdg g-mut">caja</span><span class="bdg g-mut">kilo</span><span class="bdg g-mut">m²</span>
+        </div>
+        <div style="margin-top:12px;padding:9px 10px;border-radius:7px;background:hsl(28 41% 51%/.09);border:1px solid hsl(28 41% 51%/.3);font-size:11.5px;line-height:1.45">
+          <b style="font-weight:600">El caso de la cadena:</b> se compra en rollos de 50 m y se usa por metro. Con la unidad y su contenido, el descuento por fin cuadra.
+        </div>
+      </div>
+
+      <div class="card" style="padding:14px 15px">
+        <div style="display:flex;align-items:center;gap:7px"><h2 style="font-size:14px">Categorías</h2><span class="bdg g-mut" style="margin-left:auto">28</span></div>
+        <div style="display:flex;flex-direction:column;gap:5px;margin-top:11px;font-size:12.5px">
+          <div style="display:flex;align-items:center;gap:8px;color:var(--mfg)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>Mecanismos</div>
+          <div style="display:flex;align-items:center;gap:8px;color:var(--mfg)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>Tubos y perfiles</div>
+          <div style="display:flex;align-items:center;gap:8px;color:var(--mfg)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>Motores y controles</div>
+          <div style="display:flex;align-items:center;gap:8px;color:var(--mfg)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>Accesorios</div>
+          <div style="display:flex;align-items:center;gap:8px;color:var(--mfg)"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 8h16M4 12h16M4 16h16"/></svg>Ferretería</div>
+        </div>
+        <div style="font-size:11px;color:var(--mfg);margin-top:10px;line-height:1.45">Se arrastran para ordenarlas. Son las mismas listas que ya alimentan los desplegables.</div>
+      </div>
+
+      <div class="card" style="padding:14px 15px">
+        <div style="display:flex;align-items:center;gap:7px"><h2 style="font-size:14px">Interruptores</h2><span class="bdg g-acc" style="margin-left:auto">3 de 4</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:11px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:32px;height:19px;border-radius:9999px;background:var(--acc);position:relative;flex-shrink:0"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:9999px;background:var(--accfg)"></span></span>Registrar todo en el kardex</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:32px;height:19px;border-radius:9999px;background:var(--acc);position:relative;flex-shrink:0"><span style="position:absolute;right:2px;top:2px;width:15px;height:15px;border-radius:9999px;background:var(--accfg)"></span></span>Escribir también en las tablas viejas</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:32px;height:19px;border-radius:9999px;background:var(--sec);position:relative;flex-shrink:0;border:1px solid var(--bor)"><span style="position:absolute;left:2px;top:1px;width:15px;height:15px;border-radius:9999px;background:var(--card);border:1px solid var(--bor)"></span></span><span style="color:var(--mfg)">Bloquear cambios directos de stock</span></div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:32px;height:19px;border-radius:9999px;background:var(--sec);position:relative;flex-shrink:0;border:1px solid var(--bor)"><span style="position:absolute;left:2px;top:1px;width:15px;height:15px;border-radius:9999px;background:var(--card);border:1px solid var(--bor)"></span></span><span style="color:var(--mfg)">Mostrar Compras</span></div>
+        </div>
+        <div style="font-size:11px;color:var(--mfg);margin-top:11px;line-height:1.45">Cada uno se puede prender por empresa y volver atrás sin tocar código.</div>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -1,0 +1,108 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+    :root{--bg:hsl(36 47% 93%);--fg:hsl(28 17% 15%);--card:hsl(36 45% 96%);--sec:hsl(36 32% 87%);--mfg:hsl(28 14% 37%);--acc:hsl(28 41% 51%);--accfg:hsl(36 45% 96%);--des:hsl(353 51% 46%);--suc:hsl(152 27% 38%);--war:hsl(32 62% 48%);--bor:hsl(34 20% 80%)}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:15px;-webkit-font-smoothing:antialiased}
+    h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;letter-spacing:-.02em;margin:0;font-weight:500}
+    .lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg)}
+    .bdg{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;border:1px solid transparent;padding:2px 10px;font-size:11px;font-weight:500}
+    .g-acc{background:hsl(28 41% 51%/.15);color:var(--acc)}
+    .g-suc{background:hsl(152 27% 38%/.15);color:var(--suc)}
+    .g-mut{background:var(--sec);color:var(--mfg)}
+    .mono{font-family:'Geist Mono',ui-monospace,monospace}
+    .btn{display:flex;align-items:center;justify-content:center;gap:9px;min-height:52px;border-radius:11px;font-size:16px;font-weight:500;letter-spacing:-.02em}
+    .tec{display:flex;align-items:center;justify-content:center;min-height:56px;border-radius:11px;border:1px solid var(--bor);background:var(--card);font-family:'Geist Mono',monospace;font-size:22px;font-weight:500}
+    .fila{display:flex;align-items:center;gap:11px;min-height:52px;padding:9px 12px;border-radius:9px;border:1px solid var(--bor);background:var(--card)}
+  </style>
+</helmet>
+
+<div style="width:390px;height:844px;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)">
+
+  <div style="padding:14px 16px 12px;border-bottom:1px solid var(--bor);background:hsl(36 45% 96%/.85)">
+    <div style="display:flex;align-items:center;gap:11px">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18 9 12l6-6"/></svg>
+      <div style="min-width:0">
+        <div style="font-size:15.5px;font-weight:500">Contando insumos</div>
+        <div style="font-size:12px;color:var(--mfg);margin-top:2px">Materias primas · mecanismos</div>
+      </div>
+      <span class="bdg g-acc" style="margin-left:auto">255 / 412</span>
+    </div>
+    <div style="height:6px;border-radius:9999px;background:var(--sec);margin-top:12px;overflow:hidden"><div style="width:62%;height:100%;background:var(--acc)"></div></div>
+  </div>
+
+  <div style="flex:1;overflow:hidden;padding:16px;display:flex;flex-direction:column;gap:14px">
+
+    <!-- Artículo en curso -->
+    <div style="border-radius:12px;border:1px solid var(--acc);background:hsl(28 41% 51%/.07);padding:16px">
+      <div style="display:flex;align-items:center;gap:9px">
+        <span class="lbl" style="color:var(--acc)">Artículo 256 de 412</span>
+        <span class="bdg g-mut" style="margin-left:auto">R3 · Q · 5</span>
+      </div>
+      <div class="mono" style="font-size:26px;font-weight:600;margin-top:9px;letter-spacing:-.02em">MEC 18</div>
+      <div style="font-size:14px;color:var(--mfg);margin-top:2px">Kit roller 45 mm blanco</div>
+
+      <div style="margin-top:16px;display:flex;align-items:center;gap:12px">
+        <div style="flex:1;height:66px;border-radius:11px;border:1.5px solid var(--acc);background:var(--card);display:flex;align-items:center;justify-content:flex-end;padding:0 18px;box-shadow:0 0 0 3px hsl(28 41% 51%/.16)">
+          <span class="mono" style="font-size:32px;font-weight:600">19</span>
+        </div>
+        <span style="font-size:13px;color:var(--mfg);width:56px">unidades</span>
+      </div>
+
+      <div style="margin-top:12px;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mfg)">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/><path d="m3 3 18 18"/></svg>
+        No ves lo que dice el sistema ni lo que contó el otro
+      </div>
+    </div>
+
+    <!-- Teclado numérico propio -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px">
+      <div class="tec">1</div><div class="tec">2</div><div class="tec">3</div>
+      <div class="tec">4</div><div class="tec">5</div><div class="tec">6</div>
+      <div class="tec">7</div><div class="tec">8</div><div class="tec">9</div>
+      <div class="tec" style="font-size:17px">,</div>
+      <div class="tec">0</div>
+      <div class="tec">
+        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6H9l-6 6 6 6h11a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1Z"/><path d="m18 9-6 6M12 9l6 6"/></svg>
+      </div>
+    </div>
+
+    <!-- Contados recientes -->
+    <div>
+      <div class="lbl" style="margin-bottom:8px">Recién contados</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="fila">
+          <b class="mono" style="font-size:14px;font-weight:600">MEC 05</b>
+          <span style="font-size:12.5px;color:var(--mfg);min-width:0">Kit roller 38</span>
+          <span class="mono" style="margin-left:auto;font-size:16px;font-weight:600">144</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--mfg)"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+        </div>
+        <div class="fila">
+          <b class="mono" style="font-size:14px;font-weight:600">INS 43</b>
+          <span style="font-size:12.5px;color:var(--mfg);min-width:0">Tornillo 8×1/2</span>
+          <span class="mono" style="margin-left:auto;font-size:16px;font-weight:600">21</span>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--mfg)"><path d="M11 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/><path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4Z"/></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:13px 16px 18px;border-top:1px solid var(--bor);background:hsl(36 45% 96%/.96);display:flex;gap:10px">
+    <div class="btn" style="flex:1;border:1px solid var(--bor);background:var(--card);font-size:15px;color:var(--mfg)">Saltar</div>
+    <div class="btn" style="flex:2;background:var(--acc);color:var(--accfg)">
+      Guardar y seguir
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 12h14M14 7l5 5-5 5"/></svg>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
