@@ -57,6 +57,7 @@ import CellRackDialog from './dialogs/CellRackDialog';
 import DetalleMovDialog from './dialogs/DetalleMovDialog';
 import LightboxFotoDialog from './dialogs/LightboxFotoDialog';
 import QRInsumoDialog from './dialogs/QRInsumoDialog';
+import { DialogoReposicion } from '@/components/inventario/DialogoReposicion';
 import { useInventario } from '../InventarioLayout';
 
 export function Inventario() {
@@ -108,6 +109,8 @@ export function Inventario() {
     form: { ...EMPTY_MOV_FORM },
   });
   const [savingMov, setSavingMov] = useState(false);
+  const [pedido, setPedido] = useState<{ insumo: Insumo; sugerida: number } | null>(null);
+  const [guardandoPedido, setGuardandoPedido] = useState(false);
 
   // Refs efímeras para uploads de foto en el insumo dialog. Mantener acá
   // (no en el dialog) permite resetearlas tras subir sin re-renderizar.
@@ -155,11 +158,14 @@ export function Inventario() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
-  // Realtime: refrescar en cambios de insumos
+  // Realtime: refrescar en cambios de insumos.
+  // El canal lleva un nombre distinto en cada montaje: con uno fijo, el doble
+  // efecto del modo estricto de React rompe con «cannot add postgres_changes
+  // callbacks after subscribe()» y la pantalla deja de actualizarse sola.
   useEffect(() => {
     if (!empresaId) return;
     const channel = supabase
-      .channel('insumos-inv-react')
+      .channel(`insumos-inv-${crypto.randomUUID()}`)
       .on(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         'postgres_changes' as any,
@@ -526,22 +532,28 @@ export function Inventario() {
     }
   };
 
-  // Reposición (pedido)
-  const registrarReposicion = async (codigo: string, faltaSugerida: number) => {
-    if (!empresaId) return;
+  // Reposición (pedido). El `window.prompt` de antes no dejaba escribir con
+  // coma, no mostraba cuánto había ni cuánto faltaba, y en el celular tapaba
+  // la pantalla entera: ahora es el mismo diálogo que usa el submódulo de
+  // Alertas.
+  const abrirReposicion = (codigo: string, faltaSugerida: number) => {
     const ins = insumos.find((i) => i.cod === codigo);
     if (!ins) return;
+    setPedido({ insumo: ins, sugerida: Math.max(1, Math.ceil(faltaSugerida || 1)) });
+  };
+
+  const confirmarReposicion = async (cantidadCruda: number) => {
+    if (!empresaId || !pedido) return;
+    const ins = pedido.insumo;
+    const codigo = ins.cod || '';
     const nemo = ins.nemotecnico || ins.descriptor_proveedor || codigo;
-    const input = window.prompt(
-      `Registrar pedido de reposición\n\n${nemo}\n\nCantidad a pedir:`,
-      String(faltaSugerida || 1),
-    );
-    if (input === null) return;
-    const cant = parseInt(input, 10);
+    // La columna es entera: un pedido de 2,5 cajas no se puede guardar.
+    const cant = Math.round(cantidadCruda);
     if (!cant || cant <= 0) {
       toast.error('Cantidad inválida');
       return;
     }
+    setGuardandoPedido(true);
     try {
       const { data, error } = await supabase
         .from('movimientos_insumos')
@@ -562,9 +574,12 @@ export function Inventario() {
       if (error) throw error;
       setMovimientos((prev) => [data as Movimiento, ...prev]);
       toast.success(`Pedido registrado: ${cant} de ${nemo}`);
+      setPedido(null);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error al registrar pedido: ' + msg);
+    } finally {
+      setGuardandoPedido(false);
     }
   };
 
@@ -708,7 +723,7 @@ export function Inventario() {
             alertasOrdenadas={alertasOrdenadas}
             insumoByCod={insumoByCod}
             onVerEnCatalogo={abrirFicha}
-            onRegistrarReposicion={registrarReposicion}
+            onRegistrarReposicion={abrirReposicion}
           />
         )}
         {tab === 'rack' && (
@@ -762,6 +777,22 @@ export function Inventario() {
       <DetalleMovDialog mov={detalleMov} onClose={() => setDetalleMov(null)} />
       <LightboxFotoDialog foto={lightboxFoto} onClose={() => setLightboxFoto(null)} />
       <QRInsumoDialog insumo={qrInsumo} ubicaciones={ubicaciones} onClose={() => setQrInsumo(null)} />
+
+      {pedido ? (
+        <DialogoReposicion
+          abierto
+          codigo={pedido.insumo.cod || ''}
+          nombre={
+            pedido.insumo.nemotecnico || pedido.insumo.descriptor_proveedor || pedido.insumo.cod || ''
+          }
+          stockActual={getStockTotal(pedido.insumo)}
+          minimo={Number(pedido.insumo.minimo || 0)}
+          sugerida={pedido.sugerida}
+          guardando={guardandoPedido}
+          onCerrar={() => setPedido(null)}
+          onConfirmar={({ cantidad }) => void confirmarReposicion(cantidad)}
+        />
+      ) : null}
     </div>
   );
 }

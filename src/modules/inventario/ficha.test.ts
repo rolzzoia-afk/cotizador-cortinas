@@ -6,6 +6,7 @@ import {
   faltanParaMinimo,
   movimientosDeArticulo,
   promedioMensual,
+  resumenPanos,
   saldosDeInsumo,
 } from './ficha';
 import type { Movimiento } from './helpers';
@@ -52,6 +53,32 @@ describe('saldosDeInsumo — dónde está lo que hay', () => {
 
   it('un negativo se muestra tal cual: es el dato real', () => {
     expect(saldosDeInsumo({ stock_mp: -3, stock_liberado: 0 }).total).toBe(-3);
+  });
+});
+
+describe('resumenPanos — los retazos de una tela', () => {
+  it('separa lo disponible de lo usado y suma los m² en metros', () => {
+    const r = resumenPanos([
+      { disponible: true, medida_ancho: 100, medida_alto: 200 }, // 2 m²
+      { disponible: true, medida_ancho: 50, medida_alto: 100 }, // 0,5 m²
+      { disponible: false, medida_ancho: 300, medida_alto: 300 },
+    ]);
+    expect(r.disponibles).toBe(2);
+    expect(r.usados).toBe(1);
+    expect(r.m2).toBe(2.5);
+  });
+
+  // Un paño dado de baja dejó de existir: no es ni disponible ni usado.
+  it('los paños dados de baja no cuentan para ningún lado', () => {
+    const r = resumenPanos([
+      { disponible: true, medida_ancho: 100, medida_alto: 100, datos_extra: { baja: true } },
+      { disponible: false, datos_extra: { baja: 'sí' } },
+    ]);
+    expect(r).toEqual({ disponibles: 0, usados: 0, m2: 0 });
+  });
+
+  it('sin medidas no inventa superficie', () => {
+    expect(resumenPanos([{ disponible: true }]).m2).toBe(0);
   });
 });
 

@@ -14,11 +14,13 @@ import { useAuth } from '@/lib/auth';
 import { useDatosTelas } from '@/modules/inventario/telasStore';
 import CatalogoTab from './tabs/CatalogoTab';
 import FallasTab from './tabs/FallasTab';
+import { useInventario } from '../InventarioLayout';
 
 type Pestana = 'catalogo' | 'fallas';
 
 export function Telas() {
   const { empresaId } = useAuth();
+  const { queryRol } = useInventario();
   const [tab, setTab] = useState<Pestana>('catalogo');
   const { telas, fallas, validadores, colmena, loading, error, recargar } = useDatosTelas();
 
@@ -89,6 +91,7 @@ export function Telas() {
           empresaId={empresaId || ''}
           onReload={recargar}
           colmena={colmena}
+          rutaFicha={(codigo) => `/inventario/telas/${encodeURIComponent(codigo)}${queryRol}`}
         />
       ) : (
         <FallasTab

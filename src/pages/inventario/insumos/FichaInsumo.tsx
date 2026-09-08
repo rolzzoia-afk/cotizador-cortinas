@@ -28,8 +28,8 @@ import { EMPTY_MOV_FORM } from './Insumos.config';
 import type { MovForm } from './Insumos.types';
 import MovDialog from './dialogs/MovDialog';
 import QRInsumoDialog from './dialogs/QRInsumoDialog';
-import ConsumoMeses from './ficha/ConsumoMeses';
-import TablaMovimientos from './ficha/TablaMovimientos';
+import ConsumoMeses from '@/components/inventario/ConsumoMeses';
+import TablaMovimientos from '@/components/inventario/TablaMovimientos';
 import {
   DatosArticulo,
   EtiquetasArticulo,

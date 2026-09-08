@@ -1,7 +1,9 @@
 // Tab Catálogo: stats arriba + filtros + tabla ordenable. Click en una fila
-// abre TelaDialog; click en el QR abre QRTelaDialog.
+// abre la ficha de la tela; los botones de la fila (editar, QR, etiqueta) y la
+// casilla de selección cortan el clic para no llevarse a nadie de paso.
 
 import { useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Copy, FileUp, Layers, Pencil, Plus, Printer, QrCode, Search, Tags } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -38,6 +40,8 @@ interface CatalogoTabProps {
   empresaId: string;
   onReload: () => void;
   colmena: Colmena;
+  /** A dónde lleva cada fila: la ficha de la tela. */
+  rutaFicha: (codigo: string) => string;
 }
 
 export default function CatalogoTab({
@@ -46,7 +50,9 @@ export default function CatalogoTab({
   empresaId,
   onReload,
   colmena,
+  rutaFicha,
 }: CatalogoTabProps) {
+  const navigate = useNavigate();
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [filtroGrupo, setFiltroGrupo] = useState('');
@@ -334,12 +340,13 @@ export default function CatalogoTab({
               lista.map((t) => (
                 <tr
                   key={t.id}
+                  onClick={() => navigate(rutaFicha(t.codigo))}
                   className={cn(
-                    'border-b border-border hover:bg-secondary/40',
+                    'cursor-pointer border-b border-border hover:bg-secondary/40',
                     seleccion.has(t.codigo) && 'bg-accent/10',
                   )}
                 >
-                  <td className="px-2.5 py-2">
+                  <td className="px-2.5 py-2" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={seleccion.has(t.codigo)}
@@ -347,7 +354,15 @@ export default function CatalogoTab({
                       className="h-3.5 w-3.5 cursor-pointer align-middle accent-accent"
                     />
                   </td>
-                  <td className="whitespace-nowrap px-2.5 py-2 font-bold">{t.codigo || '—'}</td>
+                  <td className="whitespace-nowrap px-2.5 py-2 font-bold">
+                    <Link
+                      to={rutaFicha(t.codigo)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-accent hover:underline"
+                    >
+                      {t.codigo || '—'}
+                    </Link>
+                  </td>
                   <td className="px-2.5 py-2">
                     {t.tipo ? (
                       <span
@@ -397,7 +412,10 @@ export default function CatalogoTab({
                   <td className="px-2.5 py-2 text-center text-[11px] text-muted-foreground">
                     {t.estado || '—'}
                   </td>
-                  <td className="whitespace-nowrap px-2.5 py-2 text-center">
+                  <td
+                    className="whitespace-nowrap px-2.5 py-2 text-center"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       onClick={() => setModalTela(t)}
                       className="mr-1 rounded-md border border-border bg-secondary p-1.5 hover:border-accent/40 hover:bg-accent/10"

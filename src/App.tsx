@@ -21,6 +21,7 @@ const VistaDespacho = lazy(() => import('@/pages/inventario/despacho/VistaDespac
 const VistaTelas = lazy(() => import('@/pages/inventario/telas/VistaTelas').then((m) => ({ default: m.Telas })));
 const VistaInsumos = lazy(() => import('@/pages/inventario/insumos/VistaInsumos').then((m) => ({ default: m.Inventario })));
 const FichaInsumo = lazy(() => import('@/pages/inventario/insumos/FichaInsumo').then((m) => ({ default: m.FichaInsumo })));
+const FichaTela = lazy(() => import('@/pages/inventario/telas/FichaTela').then((m) => ({ default: m.FichaTela })));
 const Panel = lazy(() => import('@/pages/Panel').then((m) => ({ default: m.Panel })));
 // Cotizador compartido: Fase 1 (entrada, columnas reducidas) y Fase 3
 // (cotización final tras Terreno) son el MISMO componente con distinto `modo`.
@@ -144,6 +145,7 @@ export function App() {
                 esa palabra no se lea como un código. */}
             <Route path="insumos/:cod" element={<FichaInsumo />} />
             <Route path="telas" element={<VistaTelas />} />
+            <Route path="telas/:codigo" element={<FichaTela />} />
             <Route path="colmena" element={<VistaColmena />} />
             <Route path="tubos" element={<VistaTubos />} />
             <Route path="camionetas" element={<VistaCamionetas />} />

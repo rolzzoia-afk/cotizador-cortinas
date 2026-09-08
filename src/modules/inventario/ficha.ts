@@ -9,7 +9,44 @@
 
 import { tipoMovimientoCanonico } from './badges';
 import { etiquetaAlmacen, normalizarAlmacen } from './almacenes';
-import type { Insumo, Movimiento } from './helpers';
+import type { Insumo } from './helpers';
+
+/**
+ * Un movimiento, venga de insumos o de telas. Las dos tablas guardan lo mismo
+ * con nombres distintos —la cantidad de una tela se llama `metros`, quien lo
+ * hizo es `responsable` en vez de `responsable_entrega`— y la ficha muestra
+ * las dos igual.
+ */
+export type MovimientoFicha = {
+  id?: string | null;
+  fecha?: string | null;
+  tipo?: string | null;
+  codigo?: string | null;
+  almacen?: string | null;
+  cantidad?: number | null;
+  metros?: number | null;
+  ot?: string | null;
+  responsable_entrega?: string | null;
+  responsable?: string | null;
+  operario?: string | null;
+  bitacora?: string | null;
+  notas?: string | null;
+};
+
+/** La cantidad del movimiento, se llame como se llame en su tabla. */
+export function cantidadMovida(m: MovimientoFicha): number {
+  return Number(m.cantidad ?? m.metros ?? 0);
+}
+
+/** Quién lo hizo. Vacío si no quedó registrado: no se inventa un nombre. */
+export function quienMovio(m: MovimientoFicha): string {
+  return String(m.responsable_entrega || m.responsable || m.operario || '').trim();
+}
+
+/** La nota que dejó, si dejó alguna. */
+export function notaDelMovimiento(m: MovimientoFicha): string {
+  return String(m.bitacora || m.notas || '').trim();
+}
 
 const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
@@ -72,7 +109,7 @@ function claveMes(d: Date): string {
  * ajuste tampoco: corrige lo que ya estaba mal contado.
  */
 export function consumoUltimosMeses(
-  movimientos: Movimiento[],
+  movimientos: MovimientoFicha[],
   hoy: Date = new Date(),
   meses = 6,
 ): MesConsumo[] {
@@ -92,7 +129,7 @@ export function consumoUltimosMeses(
     const d = new Date(mov.fecha);
     if (Number.isNaN(d.getTime())) continue;
     const mes = indice.get(claveMes(d));
-    if (mes) mes.salidas += Math.abs(Number(mov.cantidad || 0));
+    if (mes) mes.salidas += Math.abs(cantidadMovida(mov));
   }
   return fila;
 }
@@ -114,6 +151,42 @@ export function coberturaMeses(total: number, promedio: number): number | null {
   return Math.round((total / promedio) * 10) / 10;
 }
 
+// ── Paños de una tela ─────────────────────────────────────────────────
+
+export type PanoFicha = {
+  disponible?: boolean;
+  medida_ancho?: number | null;
+  medida_alto?: number | null;
+  datos_extra?: { baja?: unknown } | null;
+};
+
+export type ResumenPanos = {
+  disponibles: number;
+  usados: number;
+  /** Metros cuadrados disponibles. Las medidas vienen en centímetros. */
+  m2: number;
+};
+
+/**
+ * Los retazos de esta tela que quedan en la colmena. Un paño dado de baja no
+ * cuenta como disponible ni como usado: dejó de existir.
+ */
+export function resumenPanos(panos: PanoFicha[]): ResumenPanos {
+  let disponibles = 0;
+  let usados = 0;
+  let cm2 = 0;
+  for (const p of panos) {
+    if (p.datos_extra?.baja) continue;
+    if (p.disponible) {
+      disponibles += 1;
+      cm2 += (p.medida_ancho || 0) * (p.medida_alto || 0);
+    } else {
+      usados += 1;
+    }
+  }
+  return { disponibles, usados, m2: Math.round((cm2 / 10000) * 10) / 10 };
+}
+
 // ── Movimientos del artículo ──────────────────────────────────────────
 
 function mismoCodigo(a: string | null | undefined, b: string | null | undefined): boolean {
@@ -122,7 +195,7 @@ function mismoCodigo(a: string | null | undefined, b: string | null | undefined)
 }
 
 /** Lo que le pasó a este código, lo más nuevo primero. */
-export function movimientosDeArticulo(movimientos: Movimiento[], cod: string): Movimiento[] {
+export function movimientosDeArticulo<T extends MovimientoFicha>(movimientos: T[], cod: string): T[] {
   return movimientos
     .filter((m) => mismoCodigo(m.codigo, cod))
     .slice()
@@ -134,7 +207,7 @@ export function movimientosDeArticulo(movimientos: Movimiento[], cod: string): M
  * Es el origen y el destino, que en la tabla vieja viajan en un solo campo:
  * `almacen` es de DÓNDE sale o a dónde entra, según el tipo.
  */
-export function descripcionMovimiento(m: Movimiento): string {
+export function descripcionMovimiento(m: MovimientoFicha): string {
   const lugar = etiquetaAlmacen(normalizarAlmacen(m.almacen) ?? m.almacen ?? '');
   const ot = String(m.ot ?? '').trim();
   const tipo = tipoMovimientoCanonico(m.tipo);

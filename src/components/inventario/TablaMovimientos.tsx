@@ -8,10 +8,15 @@
 
 import { Badge } from '@/components/ui/badge';
 import { badgeTipoMovimiento } from '@/modules/inventario/badges';
-import { descripcionMovimiento } from '@/modules/inventario/ficha';
-import type { Movimiento } from '@/modules/inventario/helpers';
+import {
+  cantidadMovida,
+  descripcionMovimiento,
+  notaDelMovimiento,
+  quienMovio,
+  type MovimientoFicha,
+} from '@/modules/inventario/ficha';
 
-function fechaCorta(f: string | null): string {
+function fechaCorta(f: string | null | undefined): string {
   if (!f) return '—';
   const d = new Date(f);
   if (Number.isNaN(d.getTime())) return '—';
@@ -21,7 +26,14 @@ function fechaCorta(f: string | null): string {
   return `${dia}-${mes} ${hora}`;
 }
 
-export function TablaMovimientos({ filas }: { filas: Movimiento[] }) {
+export function TablaMovimientos({
+  filas,
+  unidad = '',
+}: {
+  filas: MovimientoFicha[];
+  /** «m» en las telas; los insumos van en unidades y no llevan sufijo. */
+  unidad?: string;
+}) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-[0.8125rem] tabular-nums">
@@ -37,6 +49,7 @@ export function TablaMovimientos({ filas }: { filas: Movimiento[] }) {
         <tbody>
           {filas.map((m) => {
             const badge = badgeTipoMovimiento(m.tipo);
+            const nota = notaDelMovimiento(m);
             return (
               <tr key={m.id} className="border-b border-border last:border-0">
                 <td className="whitespace-nowrap px-3 py-2 font-mono text-muted-foreground">
@@ -47,16 +60,13 @@ export function TablaMovimientos({ filas }: { filas: Movimiento[] }) {
                 </td>
                 <td className="px-3 py-2">
                   {descripcionMovimiento(m)}
-                  {m.bitacora ? (
-                    <span className="text-muted-foreground"> · {m.bitacora}</span>
-                  ) : null}
+                  {nota ? <span className="text-muted-foreground"> · {nota}</span> : null}
                 </td>
-                <td className="px-3 py-2 text-right font-mono">
-                  {(m.cantidad ?? 0).toLocaleString('es-CL')}
+                <td className="whitespace-nowrap px-3 py-2 text-right font-mono">
+                  {cantidadMovida(m).toLocaleString('es-CL')}
+                  {unidad ? ` ${unidad}` : ''}
                 </td>
-                <td className="px-3 py-2 text-muted-foreground">
-                  {m.responsable_entrega || m.recepcion || '—'}
-                </td>
+                <td className="px-3 py-2 text-muted-foreground">{quienMovio(m) || '—'}</td>
               </tr>
             );
           })}
