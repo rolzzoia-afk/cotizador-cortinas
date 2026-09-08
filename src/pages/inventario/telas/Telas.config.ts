@@ -11,6 +11,7 @@ export const EMPTY_TELA: Omit<Tela, 'id'> = {
   cod_ext: null,
   descriptor: null,
   ancho: null,
+  metros_rollo: null,
   calidad: null,
   status_stock: null,
   stock_minimo: null,

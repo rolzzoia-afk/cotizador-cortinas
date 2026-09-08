@@ -52,6 +52,7 @@ export default function TelaDialog({
           cod_ext: tela.cod_ext,
           descriptor: tela.descriptor,
           ancho: tela.ancho,
+          metros_rollo: tela.metros_rollo,
           calidad: tela.calidad,
           status_stock: tela.status_stock,
           stock_minimo: tela.stock_minimo,
@@ -226,6 +227,15 @@ export default function TelaDialog({
             value={form.ancho}
             onChange={(v) => set('ancho', v)}
             step={0.01}
+          />
+          {/* Solo para MOSTRAR el equivalente en rollos en el catálogo. El
+              saldo se sigue llevando en metros; si esto queda vacío, la
+              columna de rollos dice «—» en vez de suponer un largo. */}
+          <FieldNumber
+            label="Metros por rollo"
+            value={form.metros_rollo}
+            onChange={(v) => set('metros_rollo', v)}
+            step={0.5}
           />
           <FieldText
             label="Calidad"

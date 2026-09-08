@@ -17,6 +17,7 @@ const telaBase: Tela = {
   cod_ext: null,
   descriptor: 'Blackout negro 3m',
   ancho: 3,
+  metros_rollo: null,
   calidad: null,
   status_stock: null,
   stock_minimo: null,

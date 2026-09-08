@@ -10,6 +10,9 @@ export type Tela = {
   cod_ext: string | null;
   descriptor: string | null;
   ancho: number | null;
+  /** Cuántos metros trae un rollo entero. Solo para MOSTRAR el equivalente en
+   *  rollos: el saldo se lleva en metros y nadie supone un largo por la tela. */
+  metros_rollo: number | null;
   calidad: string | null;
   status_stock: string | null;
   stock_minimo: number | null;

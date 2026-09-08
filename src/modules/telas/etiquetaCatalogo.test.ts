@@ -20,6 +20,7 @@ const tela = (over: Partial<Tela> = {}): Tela => ({
   cod_ext: null,
   descriptor: 'BLANCO 1%',
   ancho: 2.5,
+  metros_rollo: null,
   calidad: 'PREMIUM',
   status_stock: null,
   stock_minimo: null,
