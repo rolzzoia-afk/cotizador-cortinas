@@ -128,9 +128,7 @@ export function VistaAlertas() {
         <AlertasTab
           alertasOrdenadas={alertasOrdenadas}
           insumoByCod={insumoByCod}
-          onVerEnCatalogo={(codigo) =>
-            navigate(`/inventario/insumos${queryRol ? `${queryRol}&` : '?'}buscar=${encodeURIComponent(codigo)}`)
-          }
+          onVerEnCatalogo={() => navigate(`/inventario/insumos${queryRol}`)}
           onRegistrarReposicion={puedeEditar ? abrirPedido : () => {}}
         />
       )}
