@@ -19,13 +19,16 @@ export type InsumoTablero = {
 
 export type TelaTablero = {
   codigo?: string | null;
-  descripcion?: string | null;
   stock_mp?: number | null;
   stock_liberado?: number | null;
   stock_minimo?: number | null;
 };
 
-/** Una fila de `movimientos_insumos` o de `movimientos_telas`. */
+/**
+ * Una fila de `movimientos_insumos` o de `movimientos_telas`. Las dos tablas
+ * guardan lo mismo con nombres distintos: la cantidad de una tela se llama
+ * `metros`, y el nombre del artículo (`producto`) solo existe en los insumos.
+ */
 export type MovimientoCrudo = {
   id?: string | null;
   fecha?: string | null;
@@ -34,6 +37,7 @@ export type MovimientoCrudo = {
   producto?: string | null;
   almacen?: string | null;
   cantidad?: number | null;
+  metros?: number | null;
   ot?: string | null;
   responsable_entrega?: string | null;
 };
@@ -154,7 +158,7 @@ export function movimientosDelDia(
       nombre: String(m.producto ?? '').trim(),
       tipo: String(m.tipo ?? ''),
       almacen: normalizarAlmacen(m.almacen) ?? String(m.almacen ?? '').trim(),
-      cantidad: Number(m.cantidad ?? 0),
+      cantidad: Number(m.cantidad ?? m.metros ?? 0),
       unidad: dominio === 'tela' ? 'm' : '',
       ot: String(m.ot ?? '').trim(),
       dominio,

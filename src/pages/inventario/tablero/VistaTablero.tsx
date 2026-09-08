@@ -47,14 +47,22 @@ export function VistaTablero() {
         <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
           <StatBox
             rotulo="Alertas de stock"
-            valor={numero(kpis.alertas)}
-            tono={kpis.alertas > 0 ? 'destructive' : 'neutro'}
-            hint={`${numero(kpis.alertasSinStock)} sin stock · ${numero(kpis.alertasBajoMinimo)} bajo mínimo`}
+            valor={error ? '—' : numero(kpis.alertas)}
+            tono={!error && kpis.alertas > 0 ? 'destructive' : 'neutro'}
+            hint={
+              error
+                ? 'No se pudo consultar'
+                : `${numero(kpis.alertasSinStock)} sin stock · ${numero(kpis.alertasBajoMinimo)} bajo mínimo`
+            }
           />
           <StatBox
             rotulo="Movimientos hoy"
-            valor={numero(kpis.movimientosHoy)}
-            hint={`${numero(kpis.entradasHoy)} entradas · ${numero(kpis.salidasHoy)} salidas`}
+            valor={error ? '—' : numero(kpis.movimientosHoy)}
+            hint={
+              error
+                ? 'No se pudo consultar'
+                : `${numero(kpis.entradasHoy)} entradas · ${numero(kpis.salidasHoy)} salidas`
+            }
           />
           <StatBox
             rotulo="Conteo activo"
@@ -69,16 +77,28 @@ export function VistaTablero() {
           />
           <StatBox
             rotulo="Telas bajo mínimo"
-            valor={numero(kpis.telasBajoMinimo)}
-            tono={kpis.telasBajoMinimo > 0 ? 'warning' : 'neutro'}
-            hint={`${numero(kpis.telasTotal)} códigos · ${numero(kpis.telasSinMinimo)} sin mínimo definido`}
+            valor={error ? '—' : numero(kpis.telasBajoMinimo)}
+            tono={!error && kpis.telasBajoMinimo > 0 ? 'warning' : 'neutro'}
+            hint={
+              error
+                ? 'No se pudo consultar'
+                : `${numero(kpis.telasTotal)} códigos · ${numero(kpis.telasSinMinimo)} sin mínimo definido`
+            }
           />
           <StatBox
             rotulo="Paños sobre 90 días"
-            valor={numero(kpis.panosAlerta)}
-            hint={`de ${numero(kpis.panosTotal)} disponibles en la colmena`}
+            valor={error ? '—' : numero(kpis.panosAlerta)}
+            hint={
+              error
+                ? 'No se pudo consultar'
+                : `de ${numero(kpis.panosTotal)} disponibles en la colmena`
+            }
           />
-          <StatBox rotulo="Tubos en colmena" valor={numero(kpis.tubos)} hint="piezas con medida" />
+          <StatBox
+            rotulo="Tubos en colmena"
+            valor={error ? '—' : numero(kpis.tubos)}
+            hint={error ? 'No se pudo consultar' : 'piezas con medida'}
+          />
         </div>
       )}
 
@@ -96,8 +116,18 @@ export function VistaTablero() {
           {movimientos.length === 0 ? (
             <div className="px-4 pb-4">
               <EmptyState
-                titulo={loading ? 'Cargando…' : 'Todavía no se movió nada hoy'}
-                texto={loading ? undefined : 'Acá van a aparecer las entradas y salidas del día.'}
+                titulo={
+                  loading
+                    ? 'Cargando…'
+                    : error
+                      ? 'No se pudieron leer los movimientos'
+                      : 'Todavía no se movió nada hoy'
+                }
+                texto={
+                  loading || error
+                    ? undefined
+                    : 'Acá van a aparecer las entradas y salidas del día.'
+                }
               />
             </div>
           ) : (

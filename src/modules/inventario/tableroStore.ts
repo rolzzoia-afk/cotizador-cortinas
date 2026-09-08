@@ -77,7 +77,7 @@ export function useTablero(): DatosTablero & { refrescar: () => Promise<void> } 
           .eq('empresa_id', empresaId),
         supabase
           .from('telas_catalogo')
-          .select('codigo,descripcion,stock_mp,stock_liberado,stock_minimo')
+          .select('codigo,stock_mp,stock_liberado,stock_minimo')
           .eq('empresa_id', empresaId),
         supabase
           .from('movimientos_insumos')
@@ -86,9 +86,11 @@ export function useTablero(): DatosTablero & { refrescar: () => Promise<void> } 
           .gte('fecha', hoy)
           .order('fecha', { ascending: false })
           .limit(200),
+        // Las telas NO tienen `cantidad` ni `producto`: la cantidad se llama
+        // `metros` y el nombre del artículo no viaja en el movimiento.
         supabase
           .from('movimientos_telas')
-          .select('id,fecha,tipo,codigo,producto,almacen,cantidad,ot')
+          .select('id,fecha,tipo,codigo,almacen,metros,ot')
           .eq('empresa_id', empresaId)
           .gte('fecha', hoy)
           .order('fecha', { ascending: false })

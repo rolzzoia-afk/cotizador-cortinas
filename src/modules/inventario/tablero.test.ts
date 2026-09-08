@@ -87,8 +87,10 @@ describe('kpisTablero — movimientos del día', () => {
 });
 
 describe('movimientosDelDia — la tabla del tablero', () => {
+  // Las dos filas son tal como salen de la base: `movimientos_telas` no tiene
+  // `cantidad` ni `producto` — la cantidad se llama `metros`.
   const insumo = { id: '1', fecha: '2026-09-08T11:42:00Z', tipo: 'SALIDA PRODUCCION', codigo: 'MEC 18', producto: 'Kit roller 45', almacen: 'LIBERADO', cantidad: 4, ot: '3221' }; // prettier-ignore
-  const tela = { id: '2', fecha: '2026-09-08T11:20:00Z', tipo: 'SALIDA PRODUCCION', codigo: 'BK 07', producto: 'Blackout arena', almacen: 'MATERIAS PRIMAS', cantidad: 12.4, ot: '3221' }; // prettier-ignore
+  const tela = { id: '2', fecha: '2026-09-08T11:20:00Z', tipo: 'SALIDA PRODUCCION', codigo: 'BK 07', almacen: 'MATERIAS PRIMAS', metros: 12.4, ot: '3221' }; // prettier-ignore
 
   it('junta insumos y telas en una sola lista', () => {
     const filas = movimientosDelDia([insumo], [tela]);
@@ -100,6 +102,18 @@ describe('movimientosDelDia — la tabla del tablero', () => {
     const filas = movimientosDelDia([insumo], [tela]);
     expect(filas.find((f) => f.codigo === 'MEC 18')?.almacen).toBe('LIB');
     expect(filas.find((f) => f.codigo === 'BK 07')?.almacen).toBe('MP');
+  });
+
+  it('la cantidad de la tela sale de `metros`', () => {
+    const filas = movimientosDelDia([insumo], [tela]);
+    expect(filas.find((f) => f.dominio === 'tela')?.cantidad).toBe(12.4);
+    expect(filas.find((f) => f.dominio === 'insumo')?.cantidad).toBe(4);
+  });
+
+  it('el movimiento de tela no trae nombre de artículo: queda el código solo', () => {
+    const filas = movimientosDelDia([insumo], [tela]);
+    expect(filas.find((f) => f.dominio === 'tela')?.nombre).toBe('');
+    expect(filas.find((f) => f.dominio === 'tela')?.codigo).toBe('BK 07');
   });
 
   it('la tela lleva su unidad en metros y el insumo no', () => {
