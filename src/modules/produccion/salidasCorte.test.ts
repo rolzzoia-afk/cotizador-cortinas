@@ -33,7 +33,7 @@ const pieza = (px: number, py: number, pw: number, ph: number): Placed => ({
   py,
   pw,
   ph,
-  rot: false,
+  invertida: false,
   failed: false,
 });
 
@@ -50,13 +50,6 @@ const rollo = (usaAncho: number, usaAlto: number, altoCorte: number): GrupoRollo
   altoCorte,
   efic: 80,
   sobInterno: null,
-  tieneRotaciones: false,
-  piezasRotadas: [],
-  layoutVertical: null,
-  altoVertical: null,
-  eficVertical: 0,
-  sobInternoV: null,
-  decisiones: {},
 });
 
 describe('funcionalDeSobrante — para qué alcanza el trozo', () => {

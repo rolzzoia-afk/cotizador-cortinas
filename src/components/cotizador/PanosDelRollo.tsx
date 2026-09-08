@@ -117,20 +117,11 @@ function CajonPizarra({
             ? `Vertical: se corta en lamas de ${fmt(pieza.lamas?.anchoLamaCm ?? 8.9)} cm`
             : pieza.invertida
               ? 'Invertida: viene marcada así en la ficha'
-              : pieza.girada
-                ? 'Girada por el acomodo para que entrara en este paño; en la ficha NO va invertida'
-                : undefined
+              : undefined
         }
       >
         {pieza.invertida && '↺ '}
         {pieza.nombre}
-        {/* El giro del acomodo se rotula con la palabra y no con la flecha de
-            «invertida»: son decisiones distintas y el taller las confundía. */}
-        {!pieza.invertida && pieza.girada && (
-          <span className="ml-1.5 font-sans text-[0.62rem] font-semibold text-warning">
-            ⟳ GIRADA
-          </span>
-        )}
         {esVertical && pieza.lamas && (
           <span className="ml-1.5 font-sans text-[0.62rem] font-semibold opacity-80">
             {pieza.lamas.total} lamas
@@ -240,7 +231,7 @@ function DibujoPano({ pano, color }: { pano: PanoDibujado; color: string }) {
         const y = p.py * ey;
         const w = p.pw * ex;
         const h = p.ph * ey;
-        const nombre = p.invertida ? `↺ ${p.nombre}` : p.girada ? `⟳ ${p.nombre}` : p.nombre;
+        const nombre = p.invertida ? `↺ ${p.nombre}` : p.nombre;
         // La vertical no es un paño liso: de ese trozo salen tiras de 8,9 cm.
         const pasoLama = pano.esVertical ? (p.lamas?.anchoLamaCm ?? 8.9) * ex : 0;
         const rayasLama =
@@ -374,8 +365,6 @@ function CardPano({ pano, color }: { pano: PanoDibujado; color: string }) {
     Math.abs(r.anchoCm - franja.anchoCm) < 1.5 &&
     Math.abs(r.altoCm - franja.altoCm) < 1.5;
   const vuelvenAlRack = pano.libres.filter((r) => r.clase === 'sobrante' && !mismaQueLaFranja(r));
-  // Las que el ACOMODO acostó (≠ invertidas de la ficha, que sí salen en Fase 1).
-  const giradas = pano.piezas.filter((p) => !p.invertida && p.girada);
   return (
     <div className="rounded-lg border border-border bg-card p-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -484,22 +473,6 @@ function CardPano({ pano, color }: { pano: PanoDibujado; color: string }) {
                 </span>
               </p>
             ))}
-
-          {/* El giro del acomodo NO está en la ficha: quien lo busque en Fase 1
-              no lo va a encontrar, así que la tarjeta lo dice. */}
-          {giradas.length > 0 && (
-            <p className="flex items-start gap-1.5 rounded border border-warning/40 bg-warning/10 p-1.5 text-[0.7rem] text-warning">
-              <RotateCw className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>
-                <strong>{giradas.map((p) => p.nombre).join(', ')}</strong>{' '}
-                {giradas.length === 1 ? 'va acostada' : 'van acostadas'} en el paño: el acomodo{' '}
-                {giradas.length === 1 ? 'la giró' : 'las giró'} para que{' '}
-                {giradas.length === 1 ? 'entrara' : 'entraran'}. Es una decisión del taller y se
-                autoriza en el Plan de Corte: no es la columna INVERTIDA de la cotización, que ahí
-                puede ir sin marcar.
-              </span>
-            </p>
-          )}
 
           {franja && (
             <p className="text-[0.7rem]" style={{ color: colorSobrante(franja) }}>

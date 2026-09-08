@@ -101,9 +101,9 @@ describe('normalizarParametros', () => {
   });
 
   it('parámetros de corte: custom válidos se conservan, garbage cae al default', () => {
-    const out = normalizarParametros({ extraDuoCm: 35, ahorroMinRotacionCm: 'x', bordeCm: -2 });
+    const out = normalizarParametros({ extraDuoCm: 35, margenRolloCm: 'x', bordeCm: -2 });
     expect(out.extraDuoCm).toBe(35);
-    expect(out.ahorroMinRotacionCm).toBe(PARAMETROS_DEFAULT.ahorroMinRotacionCm);
+    expect(out.margenRolloCm).toBe(PARAMETROS_DEFAULT.margenRolloCm);
     expect(out.bordeCm).toBe(PARAMETROS_DEFAULT.bordeCm);
   });
 
@@ -115,10 +115,22 @@ describe('normalizarParametros', () => {
     expect('ventanaAltoCm' in out).toBe(false);
   });
 
-  it('colmena: los dos interruptores solo se apagan con un false explícito', () => {
-    expect(normalizarParametros({}).colmenaPermiteGiro).toBe(true);
-    expect(normalizarParametros({ colmenaPermiteGiro: 'no' }).colmenaPermiteGiro).toBe(true);
-    expect(normalizarParametros({ colmenaPermiteGiro: false }).colmenaPermiteGiro).toBe(false);
+  it('los dos parámetros del giro también se ignoran: el optimizador ya no gira', () => {
+    // Dueño, 2026-09-07: todas las telas tienen diseño. Los blobs guardados
+    // siguen trayendo `colmenaPermiteGiro` y `ahorroMinRotacionCm`.
+    const out = normalizarParametros({
+      colmenaPermiteGiro: false,
+      ahorroMinRotacionCm: 40,
+      extraDuoCm: 35,
+    });
+    expect(out.extraDuoCm).toBe(35);
+    expect('colmenaPermiteGiro' in out).toBe(false);
+    expect('ahorroMinRotacionCm' in out).toBe(false);
+  });
+
+  it('colmena: el interruptor solo se apaga con un false explícito', () => {
+    expect(normalizarParametros({}).usarColmenaPanos).toBe(true);
+    expect(normalizarParametros({ usarColmenaPanos: 'no' }).usarColmenaPanos).toBe(true);
     expect(normalizarParametros({ usarColmenaPanos: false }).usarColmenaPanos).toBe(false);
   });
 

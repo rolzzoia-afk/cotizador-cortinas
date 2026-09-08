@@ -3,6 +3,7 @@ import {
   esLayoutGuillotina,
   extraCmPorTipo,
   guillotinaPack,
+  medidasFicha,
   rowToPano,
   generarPlanCorte,
   resumenPlan,
@@ -14,6 +15,7 @@ import {
 } from './planCorte';
 import type { OT, VentanaItem } from '@/modules/ots/types';
 import { PARAMETROS_CORTE_DEFAULT } from './parametrosCorte';
+import { debeInvertirPano } from './tela';
 
 // ── extraCmPorTipo (Regla 7) ─────────────────────────────────────────
 describe('extraCmPorTipo', () => {
@@ -585,9 +587,15 @@ describe('resumenPlan', () => {
   });
 });
 
-// ── Rotación proactiva (caso real OT 266-1 de Eduardo) ──────────────
-describe('generarPlanCorte — propone rotación cuando ahorra tela', () => {
-  it('dos screen ~150×185 → rotados consumen ~306cm de rollo en vez de ~422', () => {
+// ── Inversión: SOLO la que trae la ficha ────────────────────────────
+// Dueño, 2026-09-07: todas las telas tienen diseño, así que el optimizador no
+// acuesta una cortina por conveniencia del acomodo. La única invertida es la
+// que llega marcada de Fase 1/Fase 2 (a mano, por conjunto, o automática
+// porque no entra derecha en el rollo).
+describe('generarPlanCorte — solo invierte lo que trae la ficha', () => {
+  it('dos screen ~150×185 se cortan DERECHAS aunque acostadas ahorren rollo', () => {
+    // Caso real OT 266-1: rotadas bajaban ~306 cm en vez de ~422. Se paga esa
+    // tela a cambio de no arruinar el dibujo de la tela.
     const ot = hacerOT([
       { producto: 'ROLLER SCREEN - TRASLUCIDA PREMIUM', codInt: 'TR 02', ubicacion: 'TERRAZA IZQ', alto: 1.85, panos: [{ ancho: 1.501, alto: 1.85 }] },
       { producto: 'ROLLER SCREEN - TRASLUCIDA PREMIUM', codInt: 'TR 02', ubicacion: 'TERRAZA DER', alto: 1.85, panos: [{ ancho: 1.475, alto: 1.85 }] },
@@ -595,22 +603,79 @@ describe('generarPlanCorte — propone rotación cuando ahorra tela', () => {
     const plan = generarPlanCorte([ot], []);
     expect(plan.rollo).toHaveLength(1);
     const g = plan.rollo[0];
-    // El layout propuesto rota las piezas (210 de ancho cabe en el rollo)
-    expect(g.tieneRotaciones).toBe(true);
-    expect(g.piezasRotadas.length).toBe(2);
-    expect(g.altoCorte).toBeLessThan(330); // ~306-310 vs ~422 sin rotar
-    // La alternativa vertical (sin rotación) sigue disponible para rechazar
-    expect(g.layoutVertical).not.toBeNull();
-    expect(g.altoVertical).toBeGreaterThan(400);
+    expect(g.placed.every((p) => !p.invertida)).toBe(true);
+    expect(g.altoCorte).toBeGreaterThan(400);
   });
 
-  it('si rotar no ahorra (≥20cm), se mantiene el layout sin rotación', () => {
+  it('marcada INVERTIDA en la ficha, entra acostada: el alto va a lo ancho del rollo', () => {
     const ot = hacerOT([
-      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'V1', alto: 2.0, panos: [{ ancho: 2.8, alto: 2.0 }] },
+      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'V1', alto: 1.85, panos: [{ ancho: 1.5, alto: 1.85, invertida: true }] },
+    ]);
+    const g = generarPlanCorte([ot], []).rollo[0];
+    expect(g.placed[0].invertida).toBe(true);
+    // 185 + 25 de extra a lo ancho; 150 + 4 de borde a lo largo.
+    expect(g.placed[0].pw).toBe(210);
+    expect(g.placed[0].ph).toBe(154);
+  });
+
+  it('más ancha que el rollo y sin marca: se invierte sola, como en la grilla', () => {
+    const ot = hacerOT([
+      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'V1', alto: 2.0, panos: [{ ancho: 3.1, alto: 2.0 }] },
+    ]);
+    const g = generarPlanCorte([ot], []).rollo[0];
+    expect(g.placed[0].invertida).toBe(true);
+    expect(g.placed[0].pw).toBe(225);
+    expect(g.placed[0].ph).toBe(314);
+  });
+
+  it('más ancha que el rollo y marcada SIN invertir: no se corta, y sus hermanas sí', () => {
+    const ot = hacerOT([
+      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'ANCHA', alto: 2.0, panos: [{ ancho: 3.1, alto: 2.0, invertida: false }] },
+      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'NORMAL', alto: 2.0, panos: [{ ancho: 1.0, alto: 2.0 }] },
     ]);
     const plan = generarPlanCorte([ot], []);
     expect(plan.rollo).toHaveLength(1);
-    expect(plan.rollo[0].tieneRotaciones).toBe(false);
+    expect(plan.rollo[0].placed.map((p) => p.nombre)).toEqual(['NORMAL']);
+    expect(plan.sinStock).toHaveLength(1);
+    const fuera = plan.sinStock[0];
+    expect(fuera.piezas.map((p) => p.nombre)).toEqual(['ANCHA']);
+    expect(fuera.motivos[fuera.piezas[0].id]).toBe('ancho-sin-invertir');
+  });
+
+  it('invertida cuyo ALTO no entra a lo ancho del rollo: avisa en vez de cortarla mal', () => {
+    const ot = hacerOT([
+      { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'ALTA', alto: 2.8, panos: [{ ancho: 1.5, alto: 2.8, invertida: true }] },
+    ]);
+    const plan = generarPlanCorte([ot], []);
+    expect(plan.rollo).toHaveLength(0);
+    const fuera = plan.sinStock[0];
+    expect(fuera.motivos[fuera.piezas[0].id]).toBe('alto-invertida');
+    // El aviso habla de la cortina como se vendió, no de cómo se apoya.
+    expect(medidasFicha(fuera.piezas[0])).toEqual({ anchoCm: 154, altoCm: 305 });
+  });
+
+  it('la vertical nunca se invierte, aunque la ficha lo diga', () => {
+    const ot = hacerOT([
+      { producto: 'CORTINA VERTICAL', codInt: 'SC 34-V', ubicacion: 'V1', alto: 2.0, panos: [{ ancho: 1.5, alto: 2.0, invertida: true }] },
+    ]);
+    const g = generarPlanCorte([ot], []).rollo[0];
+    expect(g.placed[0].invertida).toBe(false);
+    expect(g.placed[0].pw).toBe(154);
+  });
+
+  it('la regla automática es la MISMA de la grilla y la hoja de corte', () => {
+    // `debeInvertirPano` compara en metros y el plan en centímetros enteros:
+    // tienen que decidir igual en todo el tramo del límite.
+    for (let anchoCm = 250; anchoCm <= 320; anchoCm++) {
+      const ot = hacerOT([
+        { producto: 'ROLLER SCREEN', codInt: 'TR 02', ubicacion: 'V1', alto: 2.0, panos: [{ ancho: anchoCm / 100, alto: 2.0 }] },
+      ]);
+      const plan = generarPlanCorte([ot], []);
+      const pieza = plan.rollo[0]?.placed[0] ?? plan.sinStock[0]?.piezas[0];
+      expect(pieza.invertida, `${anchoCm} cm`).toBe(
+        debeInvertirPano(anchoCm / 100, 2.98, PARAMETROS_CORTE_DEFAULT.bordeCm),
+      );
+    }
   });
 });
 
@@ -627,6 +692,7 @@ describe('empaque guillotina', () => {
     otNum: '268-7',
     w,
     h,
+    invertida: false,
   });
   const puesta = (nombre: string, px: number, py: number, pw: number, ph: number): Placed => ({
     ...pieza(nombre, pw, ph),
@@ -634,7 +700,6 @@ describe('empaque guillotina', () => {
     py,
     pw,
     ph,
-    rot: false,
     failed: false,
   });
 
@@ -675,7 +740,7 @@ describe('empaque guillotina', () => {
       pieza('LAT IZQ VELCRO', 37, 171),
       pieza('LAT DER VELCRO', 37, 171),
     ];
-    const pl = guillotinaPack(items, 298, 700, false);
+    const pl = guillotinaPack(items, 298, 700);
     expect(pl.every((p) => !p.failed)).toBe(true);
     expect(esLayoutGuillotina(pl, 298, 700)).toBe(true);
   });
@@ -690,7 +755,7 @@ describe('empaque guillotina', () => {
       const items = Array.from({ length: n }, (_, i) =>
         pieza(`C${i}`, 40 + Math.round(rnd() * 250), 100 + Math.round(rnd() * 350)),
       );
-      const pl = guillotinaPack(items, 298, 4000, false);
+      const pl = guillotinaPack(items, 298, 4000);
       const ok = pl.filter((p) => !p.failed);
       expect(esLayoutGuillotina(pl, 298, 4000)).toBe(true);
       for (let i = 0; i < ok.length; i++) {
@@ -706,7 +771,7 @@ describe('empaque guillotina', () => {
   });
 
   it('una pieza más ancha que el rollo no entra (queda failed, como MaxRects)', () => {
-    const pl = guillotinaPack([pieza('ANCHA', 400, 200)], 298, 1000, false);
+    const pl = guillotinaPack([pieza('ANCHA', 400, 200)], 298, 1000);
     expect(pl[0].failed).toBe(true);
   });
 });
@@ -714,7 +779,7 @@ describe('empaque guillotina', () => {
 describe('secuenciaCortes', () => {
   const p = (nombre: string, px: number, py: number, pw: number, ph: number): Placed => ({
     id: nombre, nombre, codInt: 'SC 65', otId: 'ot1', otNum: '1', w: pw, h: ph,
-    px, py, pw, ph, rot: false, failed: false,
+    px, py, pw, ph, invertida: false, failed: false,
   });
 
   it('dos cortinas lado a lado: un corte a lo largo', () => {
@@ -825,35 +890,31 @@ describe('colmena — empaque 2D', () => {
     expect(plan.rollo).toHaveLength(0);
   });
 
-  it('una cortina GIRADA entra donde derecha no entraba', () => {
-    // 170×270 en un paño de 273×195: acostada mide 270×170 y calza.
+  it('la que solo entraría GIRADA no se acuesta: baja del rollo', () => {
+    // 170×270 en un paño de 273×195: acostada mediría 270×170 y calzaría, pero
+    // el acomodo ya no gira telas (todas tienen diseño).
     const ot = hacerOT([roller('BK 61', 'ESCRITORIO', 1.7, 2.45)]);
     const plan = generarPlanCorte([ot], [pano('BK 61', 273, 195)]);
-    expect(plan.sobrantes).toHaveLength(1);
-    expect(plan.sobrantes[0].tieneRotaciones).toBe(true);
-    expect(plan.sobrantes[0].piezasRotadas).toHaveLength(1);
-    expect(plan.rollo).toHaveLength(0);
-  });
-
-  it('con el giro apagado esa misma cortina se va al rollo', () => {
-    const ot = hacerOT([roller('BK 61', 'ESCRITORIO', 1.7, 2.45)]);
-    const plan = generarPlanCorte([ot], [pano('BK 61', 273, 195)], {
-      ...PARAMETROS_CORTE_DEFAULT,
-      colmenaPermiteGiro: false,
-    });
     expect(plan.sobrantes).toHaveLength(0);
     expect(plan.rollo).toHaveLength(1);
   });
 
-  it('si el operario RECHAZA el giro, la cortina cae al rollo', () => {
-    const ot = hacerOT([roller('BK 61', 'ESCRITORIO', 1.7, 2.45)]);
-    const conGiro = generarPlanCorte([ot], [pano('BK 61', 273, 195)]);
-    const id = conGiro.sobrantes[0].piezasRotadas[0].id;
-    const rechazado = generarPlanCorte([ot], [pano('BK 61', 273, 195)], PARAMETROS_CORTE_DEFAULT, undefined, undefined, {
-      sinGiro: new Set([id]),
-    });
-    expect(rechazado.sobrantes).toHaveLength(0);
-    expect(rechazado.rollo).toHaveLength(1);
+  it('una INVERTIDA de la ficha sí entra acostada al paño', () => {
+    // La misma cortina, marcada invertida en Fase 2: se apoya 270×170 y calza.
+    const ot = hacerOT([
+      {
+        codInt: 'BK 61',
+        producto: 'Roller BK',
+        ubicacion: 'ESCRITORIO',
+        alto: 2.45,
+        panos: [{ ancho: 1.7, alto: 2.45, invertida: true }],
+      },
+    ]);
+    const plan = generarPlanCorte([ot], [pano('BK 61', 273, 195)]);
+    expect(plan.sobrantes).toHaveLength(1);
+    expect(plan.sobrantes[0].placed[0].invertida).toBe(true);
+    expect(plan.sobrantes[0].placed[0].pw).toBe(270);
+    expect(plan.rollo).toHaveLength(0);
   });
 
   it('una VERTICAL nunca se acuesta, ni en la colmena ni en el rollo', () => {
@@ -869,7 +930,7 @@ describe('colmena — empaque 2D', () => {
     const plan = generarPlanCorte([hacerOT([vertical])], [pano('BK 18-V', 273, 195)]);
     expect(plan.sobrantes).toHaveLength(0);
     expect(plan.rollo).toHaveLength(1);
-    expect(plan.rollo[0].placed.every((p) => !p.rot)).toBe(true);
+    expect(plan.rollo[0].placed.every((p) => !p.invertida)).toBe(true);
   });
 
   it('una pieza sin código no toma los paños que tampoco lo tienen', () => {

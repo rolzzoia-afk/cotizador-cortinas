@@ -19,7 +19,6 @@ import {
 } from '@/modules/cotizador/calculoGeneral';
 import { generarPlanCorte } from '@/modules/cotizador/planCorte';
 import { useColmenaDisponible } from '@/modules/cotizador/colmenaPanosStore';
-import { useDecisionesGiro } from '@/modules/produccion/girosColmena';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useFormulasFamilias } from '@/modules/descuentos/formulasStore';
 import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
@@ -124,18 +123,12 @@ export default function VistaCalculo({
     [enLote, otsLote, otCargada],
   );
   const { panos: colmenaPanos } = useColmenaDisponible();
-  // Y con los MISMOS giros: un giro rechazado en el Plan de tela cambia qué
-  // cortinas caben en el rack, así que sin esto el acomodo compara contra un
-  // plan que el operario ya descartó.
-  const { sinGiro } = useDecisionesGiro(otsAcomodo);
   const panosAcomodo = useMemo(() => {
     if (!esDim || loadingParams || loadingFormulas || otsAcomodo.length === 0) return [];
     // Con la MISMA colmena que el resto: si no, el acomodo propondría bajar
     // rollo para cortinas que la pizarra ya resolvió con un paño del rack, y la
     // comparación de metros diría cualquier cosa.
-    const plan = generarPlanCorte(otsAcomodo, colmenaPanos, parametros, formulas, reglas.tipos, {
-      sinGiro,
-    });
+    const plan = generarPlanCorte(otsAcomodo, colmenaPanos, parametros, formulas, reglas.tipos);
     const productos = new Map<string, string>();
     for (const o of otsAcomodo)
       for (const v of o.storeVentanas ?? []) {
@@ -143,7 +136,7 @@ export default function VistaCalculo({
         if (ci && v.producto && !productos.has(ci)) productos.set(ci, v.producto);
       }
     return panosDelPlan(plan, parametros, productos);
-  }, [esDim, loadingParams, loadingFormulas, otsAcomodo, colmenaPanos, parametros, formulas, reglas, sinGiro]);
+  }, [esDim, loadingParams, loadingFormulas, otsAcomodo, colmenaPanos, parametros, formulas, reglas]);
   const ahorro = useMemo(() => resumenAcomodo(panosAcomodo, panos), [panosAcomodo, panos]);
   const { hechas, quien, areaLista, marcar, marcarAreaLista } = useChecks(area, ot);
   const [cerrando, setCerrando] = useState(false);
@@ -322,7 +315,7 @@ export default function VistaCalculo({
             <PanosDelRollo
               panos={panosAcomodo}
               titulo={tituloAcomodo(ahorro)}
-              nota={`El mismo motor del Plan de Corte, sin girar ninguna tela (los giros se autorizan pieza por pieza en el Plan de Corte): apila cortinas chicas en columnas al lado de las grandes. Se compara primero en paños —cada corte transversal de lado a lado baja un trozo del rollo, y así se cuentan— y después en tela: ${ahorro.panosPlan} ${ahorro.panosPlan === 1 ? 'paño' : 'paños'} y ${ahorro.mPlan.toFixed(2).replace('.', ',')} m de rollo, contra ${ahorro.panosClasico} y ${ahorro.mClasico.toFixed(2).replace('.', ',')} m de los tiros de arriba. Los rótulos R1, R2… son bajadas de rollo por tela. La hoja de corte y las etiquetas siguen mandando con sus letras y sus tiros. Las medidas llevan la limpieza de bordes y el extra de alto del plan (una cortina de 180 acá dice 184); las verticales entran como paños lisos — sus lamas se ven arriba.`}
+              nota={`El mismo motor del Plan de Corte, que nunca gira una tela por su cuenta —solo va acostada la que la ficha trae INVERTIDA—: apila cortinas chicas en columnas al lado de las grandes. Se compara primero en paños —cada corte transversal de lado a lado baja un trozo del rollo, y así se cuentan— y después en tela: ${ahorro.panosPlan} ${ahorro.panosPlan === 1 ? 'paño' : 'paños'} y ${ahorro.mPlan.toFixed(2).replace('.', ',')} m de rollo, contra ${ahorro.panosClasico} y ${ahorro.mClasico.toFixed(2).replace('.', ',')} m de los tiros de arriba. Los rótulos R1, R2… son bajadas de rollo por tela. La hoja de corte y las etiquetas siguen mandando con sus letras y sus tiros. Las medidas llevan la limpieza de bordes y el extra de alto del plan (una cortina de 180 acá dice 184); las verticales entran como paños lisos — sus lamas se ven arriba.`}
             />
           </div>
         )}
