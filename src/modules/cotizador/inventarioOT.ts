@@ -59,6 +59,7 @@ import {
   mecanismoParaPano,
   numeroMecDeChip,
   tuberiaParaPano,
+  tuboElegidoAMano,
 } from '@/modules/descuentos/chips';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import {
@@ -297,7 +298,10 @@ export function consolidarInsumos(
       // Armadura mixta del tubo de 45 mm. Se aceptan los DOS códigos: E39 es el
       // nombre desde 2026-08-14 y E78 el que quedó guardado en las OTs viejas.
       const codTuboPano = codigoTuberiaDeChip(
-        tuberiaParaPano(anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia, lineaB),
+        tuberiaParaPano(
+          anchoM, modelo, p.tuberia as string, opcTub, v.categoria, reglas.tuberia, lineaB,
+          tuboElegidoAMano(p),
+        ),
       );
       const esE78Mixta = ovaladaSistema && (codTuboPano === 'E39' || codTuboPano === 'E78');
 

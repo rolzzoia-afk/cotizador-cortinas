@@ -137,6 +137,9 @@ type Props = {
   opcionesTuberia?: readonly string[];
   /** Nota cuando el mecanismo quedó fijo (p.ej. roller >3 m → 63 mm). */
   mecanismoFijoNota?: string;
+  /** El tubo lo eligió el taller a mano (categoría B): se muestra el aviso y
+   *  el botón para devolverle el mando a la regla por ancho. */
+  tuboManual?: boolean;
   /** Línea de fabricación B (gama económica) efectiva de este paño. La resuelve
    *  Fase 2 con el catálogo de telas; acá solo se muestra y se deja forzar. */
   lineaB?: boolean;
@@ -241,6 +244,7 @@ export function PanoEditor({
   opcionesMecanismo = OPCIONES_MECANISMO,
   opcionesTuberia = OPCIONES_TUBERIA,
   mecanismoFijoNota,
+  tuboManual = false,
   lineaB = false,
   ocultarMecanismo = false,
   categoria,
@@ -1543,6 +1547,18 @@ export function PanoEditor({
             options={opcionesTuberia}
             onChange={(v) => onChange({ tuberia: v })}
           />
+          {tuboManual && !!pano.tuberia && (
+            <p className="mt-1 text-[0.68rem] text-muted-foreground">
+              Elegido a mano: se respeta aunque el ancho pida el otro tubo.{' '}
+              <button
+                type="button"
+                className="underline underline-offset-2 hover:text-foreground"
+                onClick={() => onChange({ tuboManual: false })}
+              >
+                Volver al automático
+              </button>
+            </p>
+          )}
         </Section>
       )}
 

@@ -299,18 +299,19 @@ export function SeleccionCategoriaB({ mecanismo, tuberia, colores, onChange }: P
         <div className="rounded-md border p-3 text-xs">
           <div className="mb-2 font-medium">Qué tubo entra según el ancho</div>
           <div className="flex flex-wrap items-center gap-2">
-            hasta
+            desde
             <Input
               className="h-8 w-20 text-xs"
-              value={String(tuberia.reglaLineaB.anchoMaxM).replace('.', ',')}
+              value={String(tuberia.reglaLineaB.anchoDesdeM).replace('.', ',')}
               onChange={(e) => {
                 const n = parseFloat(e.target.value.replace(',', '.'));
-                if (Number.isFinite(n)) setBanda({ anchoMaxM: n });
+                if (Number.isFinite(n)) setBanda({ anchoDesdeM: n });
               }}
             />
-            m →{selTubo(tuberia.reglaLineaB.codigoHasta, (c) => setBanda({ codigoHasta: c }))}
-            · sobre ese ancho →
+            m (inclusive) →
             {selTubo(tuberia.reglaLineaB.codigoDesde, (c) => setBanda({ codigoDesde: c }))}
+            · más angosta →
+            {selTubo(tuberia.reglaLineaB.codigoHasta, (c) => setBanda({ codigoHasta: c }))}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span className="text-muted-foreground">pero solo donde la categoría</span>
@@ -320,9 +321,11 @@ export function SeleccionCategoriaB({ mecanismo, tuberia, colores, onChange }: P
             />
           </div>
           <p className="mt-2 text-[11px] text-muted-foreground">
-            El tubo ancho existe solo en esa categoría. En las demás, la categoría B usa el tubo
-            angosto en todo su rango y lo que la corta es el ancho máximo de su fila del catálogo.
-            La categoría B no participa de ninguna otra regla por ancho.
+            El ancho es inclusive: con 3 m, una cortina de 2,99 lleva el tubo angosto y una de 3,00
+            el ancho. El tubo ancho existe solo en esa categoría. En las demás, la categoría B usa
+            el tubo angosto en todo su rango y lo que la corta es el ancho máximo de su fila del
+            catálogo. La categoría B no participa de ninguna otra regla por ancho. En Fase 2 el
+            taller puede elegir cualquiera de los dos a mano para una cortina puntual.
           </p>
         </div>
 

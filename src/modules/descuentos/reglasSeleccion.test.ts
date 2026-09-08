@@ -373,9 +373,9 @@ describe('validarReglasSeleccion', () => {
 describe('validarReglasSeleccion — categoría B', () => {
   it('rechaza un ancho de corte que no separa los dos tubos', () => {
     const r = clonar();
-    r.tuberia.reglaLineaB = { ...r.tuberia.reglaLineaB, anchoMaxM: 0 };
+    r.tuberia.reglaLineaB = { ...r.tuberia.reglaLineaB, anchoDesdeM: 0 };
     expect(
-      validarReglasSeleccion(r).errores.some((e) => e.includes('ancho de corte')),
+      validarReglasSeleccion(r).errores.some((e) => e.includes('tubo de 45 mm')),
     ).toBe(true);
   });
 

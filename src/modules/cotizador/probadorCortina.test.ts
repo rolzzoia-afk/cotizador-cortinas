@@ -363,9 +363,9 @@ describe('categoría B (gama económica)', () => {
     expect(codigo(r, 'Peso')).toBe('E69-B');
   });
 
-  it('sobre el ancho de corte pasa al E39', () => {
-    expect(probar({ anchoM: 2.8 }).tubo).toContain('E39');
-    expect(probar({ anchoM: 2.4 }).tubo).toContain('E01');
+  it('desde el ancho de corte pasa al E39', () => {
+    expect(probar({ anchoM: 3.2 }).tubo).toContain('E39');
+    expect(probar({ anchoM: 2.8 }).tubo).toContain('E01');
   });
 
   it('el gris no tiene receta: sin kit y con aviso de bloqueo', () => {

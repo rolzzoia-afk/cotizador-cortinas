@@ -869,16 +869,22 @@ describe('generarOrdenesOptimizador — columna CATEGORIA (gama económica)', ()
     expect(generarOrdenesOptimizador('266-2', [v], { catalogo: CAT }).aoa[1][idxCAT]).toBe('');
   });
 
-  it('hasta 2,5 m la tubería es el E01 (no la banda E66 de la categoría A)', () => {
+  it('bajo 3,0 m la tubería es el E01 (no la banda E66 de la categoría A)', () => {
     const v = ventana('');
     v.panos[0].ancho = 2.4; // en la categoría A este ancho ya pediría E66
     const { aoa } = generarOrdenesOptimizador('266-2', [v], { catalogo: CAT });
     expect(aoa[1][idxTUBERIA]).toBe('38mm_E01');
+    // El corte pasó de 2,5 a 3,0 el 2026-09-08: este ancho, que antes iba al
+    // E39, hoy vuelve al E01.
+    v.panos[0].ancho = 2.8;
+    expect(
+      generarOrdenesOptimizador('266-2', [v], { catalogo: CAT }).aoa[1][idxTUBERIA],
+    ).toBe('38mm_E01');
   });
 
-  it('sobre 2,5 m pasa al E39, y el rótulo dice su diámetro real (45)', () => {
+  it('desde 3,0 m pasa al E39, y el rótulo dice su diámetro real (45)', () => {
     const v = ventana('');
-    v.panos[0].ancho = 2.8;
+    v.panos[0].ancho = 3.2;
     const { aoa } = generarOrdenesOptimizador('266-2', [v], { catalogo: CAT });
     expect(aoa[1][idxTUBERIA]).toBe('45mm_E39');
     expect(aoa[1][idxCAT]).toBe('B');

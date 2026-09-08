@@ -6,7 +6,11 @@
 import type { AdicionalFase0Persistido, BomItem } from '@/modules/ots/types';
 import type { VentanaItem } from '@/modules/ots/types';
 import { mecanismoParaPano, colorAccesoriosDePano } from '@/modules/descuentos/chips';
-import { codigoTuberiaDeChip, tuberiaParaPano } from '@/modules/descuentos/reglas-tuberia';
+import {
+  codigoTuberiaDeChip,
+  tuberiaParaPano,
+  tuboElegidoAMano,
+} from '@/modules/descuentos/reglas-tuberia';
 import {
   categoriaLlevaCadenaRoller,
   esCategoriaPletina,
@@ -144,6 +148,7 @@ export function calcularBOM(
       categoria,
       reglas.tuberia,
       lineaB,
+      tuboElegidoAMano(p),
     );
     // El chip de tubería ahora es una descripción larga sin corchetes; el
     // código (E02…) es la especificación del stock. Fallback a extraerSpec

@@ -102,6 +102,16 @@ export type Pano = {
    * elegido a mano quedaba con un kit de 38 que no calza en ese tubo (OT 3195).
    */
   tubo45Manual?: boolean;
+  /**
+   * El taller eligió el TUBO a mano en Fase 2. Hoy solo lo usa la CATEGORÍA B,
+   * que ofrece sus dos tubos (E01 Ø38 · E39 Ø45) y cuya banda por ancho pisaba
+   * el chip guardado en cada sincronización y en cada re-guardado de Fase 1.
+   * Con el flag encendido —y tubería no vacía, ver `tuboElegidoAMano`— ninguna
+   * regla lo recalcula. Se apaga con «Volver al automático» y al cambiar de
+   * sistema (una ovalada B no tiene tubo de 45). En la categoría A se ignora:
+   * ahí la elección manual ya se respeta por `autoPorAncho` y `tubo45Manual`.
+   */
+  tuboManual?: boolean;
   cenefa?: string;
   /** 'CON TIRA' | 'SIN TIRA' — cenefa ovalada (Excel órdenes / optimizador). */
   cenefaTira?: string;
