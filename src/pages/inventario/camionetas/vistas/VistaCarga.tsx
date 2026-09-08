@@ -10,6 +10,9 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { lineasDeCamioneta } from '@/modules/inventario/kardex';
+import { codigoBodegaDeCamioneta, registrarMovimientos } from '@/modules/inventario/kardexStore';
 import SectionTitle from '../components/SectionTitle';
 import type { Camioneta, Insumo } from '../Camionetas.types';
 
@@ -24,6 +27,7 @@ export default function VistaCarga({ camioneta, empresaId, onDone }: VistaCargaP
   const [cantidades, setCantidades] = useState<Record<string, number>>({});
   const [responsable, setResponsable] = useState('');
   const [saving, setSaving] = useState(false);
+  const { flags } = useFlagsInventario();
 
   useEffect(() => {
     const run = async () => {
@@ -70,6 +74,41 @@ export default function VistaCarga({ camioneta, empresaId, onDone }: VistaCargaP
     if (error) {
       toast.error('Error al registrar movimientos');
       setSaving(false);
+      return;
+    }
+
+    // ── Con el kardex encendido, el traslado lo hace la base ───────────────
+    //
+    // Acá estaba el error de fondo: el camino de abajo le escribe a
+    // `insumos.stock_total`, que es una columna CALCULADA a partir de las otras
+    // dos. La base descarta esa escritura sin decir nada, así que la camioneta
+    // se cargaba y el stock de bodega no bajaba nunca.
+    if (flags.kardexRpc) {
+      const bodega = await codigoBodegaDeCamioneta(camioneta.id);
+      if (!bodega) {
+        toast.error('Esta camioneta todavía no tiene bodega en el inventario.');
+        setSaving(false);
+        return;
+      }
+      const lineas = lineasDeCamioneta(
+        'cargar',
+        bodega,
+        items.map(([insumo_id, cantidad]) => ({
+          codigo: insumos.find((i) => i.id === insumo_id)?.cod || '',
+          cantidad,
+        })),
+        { responsable: responsable.trim() },
+      );
+      const r = await registrarMovimientos(lineas);
+      if (!r.ok) {
+        toast.error(r.motivo);
+        setSaving(false);
+        return;
+      }
+      toast.success(
+        `${items.length} insumo${items.length > 1 ? 's' : ''} cargado${items.length > 1 ? 's' : ''} · descontado de bodega`,
+      );
+      onDone();
       return;
     }
 

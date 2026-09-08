@@ -1,8 +1,9 @@
 // Kardex: todo lo que entró, salió o se movió.
 //
-// En esta entrega son las dos listas que ya existían —insumos y telas— puestas
-// una al lado de la otra. El kardex de verdad, con un solo registro para las
-// dos y el saldo después de cada movimiento, llega con la RPC de la Entrega B.
+// Con el interruptor `kardexRpc` encendido aparece el LIBRO: un solo registro
+// para insumos y telas, con el saldo que quedó después de cada movimiento.
+// Apagado —y siempre, en las otras dos pestañas— están los dos registros
+// viejos, que siguen ahí para poder mirar lo de antes.
 
 import { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
@@ -16,14 +17,20 @@ import { useDatosTelas } from '@/modules/inventario/telasStore';
 import MovimientosInsumosTab from '../insumos/tabs/MovimientosTab';
 import MovimientosTelasTab from '../telas/tabs/MovimientosTab';
 import DetalleMovDialog from '../insumos/dialogs/DetalleMovDialog';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import TablaKardex from './TablaKardex';
 import { useInventario } from '../InventarioLayout';
 
-type Pestana = 'insumos' | 'telas';
+type Pestana = 'libro' | 'insumos' | 'telas';
 
 export function VistaMovimientos() {
   useInventario(); // asegura que la vista corre dentro del layout del módulo
   const { empresaId } = useAuth();
-  const [pestana, setPestana] = useState<Pestana>('insumos');
+  const { flags, loading: cargandoFlags } = useFlagsInventario();
+  // Con el libro encendido, es lo primero que se ve; los registros viejos
+  // quedan a un clic, para consultar lo de antes.
+  const [pestana, setPestana] = useState<Pestana | null>(null);
+  const activa: Pestana = pestana ?? (flags.kardexRpc ? 'libro' : 'insumos');
   const [busqueda, setBusqueda] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
   const [detalle, setDetalle] = useState<Movimiento | null>(null);
@@ -46,8 +53,8 @@ export function VistaMovimientos() {
 
   const hoy = new Date().toISOString().split('T')[0];
   const deHoy = insumos.movimientos.filter((m) => (m.fecha || '').startsWith(hoy));
-  const cargando = pestana === 'insumos' ? insumos.loading : telas.loading;
-  const error = pestana === 'insumos' ? insumos.error : telas.error;
+  const cargando = activa === 'insumos' ? insumos.loading : activa === 'telas' ? telas.loading : false;
+  const error = activa === 'insumos' ? insumos.error : activa === 'telas' ? telas.error : null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -61,34 +68,47 @@ export function VistaMovimientos() {
         }
       />
 
-      <div className="rounded-lg border border-accent/35 bg-accent/[0.09] px-4 py-3 text-xs leading-relaxed">
-        Los movimientos de insumos y de telas todavía se guardan por separado.
-        El registro único —con el saldo que queda después de cada movimiento y el
-        histórico de tubos y paños en solo lectura— llega en la próxima entrega.
-      </div>
+      {!flags.kardexRpc && !cargandoFlags && (
+        <div className="rounded-lg border border-accent/35 bg-accent/[0.09] px-4 py-3 text-xs leading-relaxed">
+          Los movimientos de insumos y de telas todavía se guardan por separado, y ninguno dice en
+          cuánto quedó el artículo. Para tener el registro único hay que encender «Registrar los
+          movimientos en la base», en Inventario → Configuración.
+        </div>
+      )}
 
       <div className="flex items-center gap-5 border-b border-border">
+        {flags.kardexRpc && (
+          <TabButton
+            variante="subrayado"
+            active={activa === 'libro'}
+            onClick={() => setPestana('libro')}
+          >
+            Libro
+          </TabButton>
+        )}
         <TabButton
           variante="subrayado"
-          active={pestana === 'insumos'}
+          active={activa === 'insumos'}
           onClick={() => setPestana('insumos')}
           badge={
             <Badge variant="muted">{insumos.movimientos.length.toLocaleString('es-CL')}</Badge>
           }
         >
-          Insumos
+          {flags.kardexRpc ? 'Insumos (registro viejo)' : 'Insumos'}
         </TabButton>
         <TabButton
           variante="subrayado"
-          active={pestana === 'telas'}
+          active={activa === 'telas'}
           onClick={() => setPestana('telas')}
           badge={<Badge variant="muted">{telas.movimientos.length.toLocaleString('es-CL')}</Badge>}
         >
-          Telas
+          {flags.kardexRpc ? 'Telas (registro viejo)' : 'Telas'}
         </TabButton>
       </div>
 
-      {error ? (
+      {activa === 'libro' ? (
+        <TablaKardex />
+      ) : error ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/[0.09] px-4 py-3 text-sm">
           {error}
         </div>
@@ -96,7 +116,7 @@ export function VistaMovimientos() {
         <div className="flex items-center justify-center py-16 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
-      ) : pestana === 'insumos' ? (
+      ) : activa === 'insumos' ? (
         <MovimientosInsumosTab
           movimientosFiltrados={movimientosFiltrados}
           busquedaMov={busqueda}

@@ -8,6 +8,11 @@
 // - devolucion: incrementa stock_mp con referencia obligatoria a OT,
 //   registra `DEVOLUCION` con motivo.
 //
+// Con el interruptor `kardexRpc` encendido los tres son UNA llamada a la base,
+// que bloquea el artículo mientras lo mueve. El camino de abajo lee el saldo,
+// resta en el navegador y lo vuelve a escribir: si dos personas sacan lo mismo
+// a la vez, la segunda pisa a la primera.
+//
 // Tiene varias guardas para evitar bugs encontrados en producción:
 // - procesandoRef: anti-reentrada del scanner que dispara onScan cada
 //   ~100ms y resetearía qty a 1 en cada frame.
@@ -37,6 +42,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useQRScanner } from '@/modules/bodega/useQRScanner';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import {
+  resumenDeMovimientos,
+  saldosFinales,
+  type LineaKardex,
+} from '@/modules/inventario/kardex';
+import { registrarMovimientos } from '@/modules/inventario/kardexStore';
 import {
   AREAS_BODEGA,
   AREA_LABEL,
@@ -68,6 +80,7 @@ export default function AdHocView({ modo, empresaId, onCerrar }: AdHocViewProps)
   const [area, setArea] = useState<AreaBodega>('general');
   const [recibe, setRecibe] = useState('');
   const [saving, setSaving] = useState(false);
+  const { flags } = useFlagsInventario();
   const [resumen, setResumen] = useState<{ msg: string; sub: string } | null>(null);
 
   // Anti-reentrada: el scanner dispara onScan cada ~100ms mientras el QR
@@ -180,6 +193,73 @@ export default function AdHocView({ modo, empresaId, onCerrar }: AdHocViewProps)
       setModalNombre(true);
       return;
     }
+    if (modo === 'devolucion' && !otRef.trim()) {
+      toast.warning('Ingresa la OT de origen');
+      return;
+    }
+
+    // ── Con el kardex encendido, los tres modos son una sola llamada ───────
+    //
+    // La diferencia que se nota: la salida ya no lee el saldo, resta en el
+    // navegador y vuelve a escribirlo. Si dos personas sacan lo mismo a la vez,
+    // antes la segunda pisaba a la primera; ahora la base bloquea el artículo.
+    if (flags.kardexRpc) {
+      const recibeTrim = recibe.trim();
+      const detalleArea = `Área: ${AREA_LABEL[area]}${recibeTrim ? ' · Recibe: ' + recibeTrim : ''}`;
+      const comun = {
+        dominio: 'insumo' as const,
+        item_cod: insumo.cod,
+        cantidad: qty,
+        area,
+        responsable: nombre,
+        recibe: recibeTrim || undefined,
+        ot: otRef.trim() || undefined,
+      };
+      const linea: LineaKardex =
+        modo === 'salida'
+          ? { ...comun, tipo: 'SALIDA', motivo: 'Salida rápida', notas: `Salida rápida — ${nombre} · ${detalleArea}` }
+          : modo === 'entrada'
+            ? {
+                ...comun,
+                tipo: 'INGRESO',
+                destino: 'MP',
+                referencia_tipo: 'recepcion',
+                referencia_id: docRef.trim() || undefined,
+                motivo: proveedor.trim() ? `Compra a ${proveedor.trim()}` : 'Ingreso rápido',
+                notas: `Ingreso rápido — ${nombre} · ${detalleArea}${docRef.trim() ? ' · Doc: ' + docRef.trim() : ''}`,
+              }
+            : {
+                ...comun,
+                tipo: 'DEVOLUCION',
+                destino: 'MP',
+                referencia_tipo: 'ot',
+                referencia_id: otRef.trim(),
+                motivo,
+                notas: `Devolución — Motivo: ${motivo} · Devolvió: ${nombre} · ${detalleArea}`,
+              };
+
+      setSaving(true);
+      try {
+        const r = await registrarMovimientos([linea]);
+        if (!r.ok) {
+          toast.error(r.motivo);
+          return;
+        }
+        const saldos = saldosFinales(r.respuesta).get(String(insumo.cod).toUpperCase());
+        const total = saldos ? saldos.stock_mp + saldos.stock_liberado : null;
+        setResumen({
+          msg: `${modo === 'salida' ? '' : '+'}${qty}× ${insumo.nemotecnico || insumo.cod}`,
+          sub:
+            `${resumenDeMovimientos(r.respuesta)} · Registrado por ${nombre} · ${detalleArea}` +
+            (total !== null ? ` · Stock: ${total}` : ''),
+        });
+        setFase('ok');
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: insActual } = await supabase

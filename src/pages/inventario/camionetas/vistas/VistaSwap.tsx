@@ -9,6 +9,9 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { lineasDeCamioneta } from '@/modules/inventario/kardex';
+import { codigoBodegaDeCamioneta, registrarMovimientos } from '@/modules/inventario/kardexStore';
 import Select from '../components/Select';
 import type { Camioneta, Insumo, StockItem } from '../Camionetas.types';
 
@@ -26,6 +29,7 @@ export default function VistaSwap({ camioneta, stock, empresaId, onDone }: Vista
   const [motivo, setMotivo] = useState('');
   const [responsable, setResponsable] = useState('');
   const [saving, setSaving] = useState(false);
+  const { flags } = useFlagsInventario();
 
   useEffect(() => {
     const run = async () => {
@@ -82,6 +86,45 @@ export default function VistaSwap({ camioneta, stock, empresaId, onDone }: Vista
     if (error) {
       toast.error('Error al registrar swap');
       setSaving(false);
+      return;
+    }
+
+    // ── Con el kardex encendido: uno se gastó, el otro salió de bodega ─────
+    //
+    // El que sale de la camioneta se usó en la obra: es una salida. El que
+    // entra viene de bodega: es un traslado. Antes, esa reposición le restaba a
+    // `insumos.stock_total`, columna CALCULADA, y la base la descartaba: la
+    // bodega nunca se enteraba de que había entregado una pieza.
+    if (flags.kardexRpc) {
+      const bodega = await codigoBodegaDeCamioneta(camioneta.id);
+      const codSalida = todos.find((i) => i.id === salida)?.cod || '';
+      const codEntrada = todos.find((i) => i.id === entrada)?.cod || '';
+      if (!bodega || !codSalida || !codEntrada) {
+        toast.error(
+          bodega
+            ? 'A uno de los dos insumos le falta el código: no se puede registrar el cambio.'
+            : 'Esta camioneta todavía no tiene bodega en el inventario.',
+        );
+        setSaving(false);
+        return;
+      }
+      const r = await registrarMovimientos([
+        ...lineasDeCamioneta('baja', bodega, [{ codigo: codSalida, cantidad: 1 }], {
+          responsable: responsable.trim(),
+          motivo: motivo.trim() || 'Reemplazado en obra',
+        }),
+        ...lineasDeCamioneta('cargar', bodega, [{ codigo: codEntrada, cantidad: 1 }], {
+          responsable: responsable.trim(),
+          motivo: motivo.trim() || `Repone a ${codSalida}`,
+        }),
+      ]);
+      if (!r.ok) {
+        toast.error(r.motivo);
+        setSaving(false);
+        return;
+      }
+      toast.success('Cambio registrado');
+      onDone();
       return;
     }
 

@@ -7,9 +7,11 @@
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { ETIQUETAS_ALMACEN } from '@/modules/inventario/almacenes';
-import type { FlagsInventario } from '@/modules/inventario/flags';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import { RACKS_LIBERADO, RACKS_MATERIAS_PRIMAS } from '@/modules/inventario/rackConfig';
+import { useInventario } from '../InventarioLayout';
+import InterruptoresSection from './InterruptoresSection';
+import SaldosVsKardexSection from './SaldosVsKardexSection';
 
 function TablaRacks({ titulo, racks }: { titulo: string; racks: typeof RACKS_LIBERADO }) {
   const celdas = racks.reduce((n, r) => n + r.filas * r.columnas.length, 0);
@@ -45,33 +47,9 @@ function TablaRacks({ titulo, racks }: { titulo: string; racks: typeof RACKS_LIB
   );
 }
 
-const ROTULOS_FLAGS: Array<{ id: keyof FlagsInventario; titulo: string; detalle: string }> = [
-  {
-    id: 'kardexRpc',
-    titulo: 'Registrar los movimientos en la base',
-    detalle:
-      'Hoy el stock se ajusta desde el navegador con dos escrituras sueltas: si dos personas registran a la vez, una se pierde. Con esto encendido lo hace la base en una sola operación.',
-  },
-  {
-    id: 'dualWrite',
-    titulo: 'Escribir también en el registro viejo',
-    detalle:
-      'Copia de respaldo mientras conviven los dos registros, para que ninguna pantalla quede ciega.',
-  },
-  {
-    id: 'bloqueoDirecto',
-    titulo: 'Rechazar escrituras que no pasen por la base',
-    detalle: 'Primero se avisa en un registro aparte; recién después se bloquea.',
-  },
-  {
-    id: 'compras',
-    titulo: 'Mostrar Compras',
-    detalle: 'Proveedores, órdenes de compra y recepción de facturas. Espera a la jefatura.',
-  },
-];
-
 export function VistaConfiguracion() {
-  const { flags, loading } = useFlagsInventario();
+  const { flags } = useFlagsInventario();
+  const { puedeEditar } = useInventario();
 
   return (
     <div className="flex flex-col gap-4">
@@ -81,30 +59,8 @@ export function VistaConfiguracion() {
         hint="Cómo está armada la bodega por dentro. Los racks se cambian en el código; los almacenes y las unidades pasan a ser editables en la próxima entrega."
       />
 
-      <div className="rounded-lg border border-border bg-card p-4">
-        <h2 className="font-serif text-[0.9375rem] font-medium">Interruptores del módulo</h2>
-        <p className="mt-1.5 text-xs text-muted-foreground">
-          El cambio de cómo se guarda el stock se enciende por partes y se puede apagar en el
-          acto. Todavía no hay nada que encender: se activan cuando el registro nuevo esté en la
-          base.
-        </p>
-        <div className="mt-3 flex flex-col divide-y divide-border">
-          {ROTULOS_FLAGS.map((f) => (
-            <div key={f.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
-              <div className="min-w-0">
-                <div className="text-[0.845rem] font-medium">{f.titulo}</div>
-                <p className="mt-0.5 text-xs text-muted-foreground">{f.detalle}</p>
-              </div>
-              <Badge
-                variant={flags[f.id] ? 'success' : 'muted'}
-                className="ml-auto mt-0.5 shrink-0"
-              >
-                {loading ? '…' : flags[f.id] ? 'Encendido' : 'Apagado'}
-              </Badge>
-            </div>
-          ))}
-        </div>
-      </div>
+      <InterruptoresSection puedeEditar={puedeEditar} />
+      <SaldosVsKardexSection activo={flags.kardexRpc} />
 
       <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="font-serif text-[0.9375rem] font-medium">Almacenes</h2>

@@ -1,8 +1,12 @@
 // Vista de firma + confirmación de despacho. Hace 3 cosas en serie:
 //  1. UPDATE ots: estado='entregado' + firma_b64 + firma_nombre + bom_despachado.
-//  2. UPDATE insumos: descontar stock_liberado primero, después stock_mp,
-//     y registrar un movimiento `SALIDA PRODUCCION` por cada insumo.
+//  2. Descontar el stock y dejar la salida registrada.
 //  3. UPDATE orden_materiales: marcar cada fila como completado/parcial.
+//
+// El paso 2 tiene dos caminos. Con el interruptor `kardexRpc` encendido es UNA
+// llamada con todas las líneas: la base descuenta liberado primero, sigue por
+// materias primas y anota todo junto, o no hace nada. Apagado, sigue el camino
+// viejo: tres viajes a la base por material, sin nada que los una.
 
 import { useRef, useState } from 'react';
 import {
@@ -24,6 +28,9 @@ import {
   type OT,
   buscarInsumoMatchBOM,
 } from '@/modules/bodega/bomUtils';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { lineasDeDespacho, resumenDeMovimientos } from '@/modules/inventario/kardex';
+import { registrarMovimientos } from '@/modules/inventario/kardexStore';
 import { MESES_A } from '../Bodeguero.config';
 import type { Contador } from '../Bodeguero.types';
 
@@ -49,9 +56,27 @@ export default function FirmaView({
   const sigRef = useRef<SignatureCanvas>(null);
   const [nombre, setNombre] = useState('');
   const [saving, setSaving] = useState(false);
+  const { flags } = useFlagsInventario();
 
   const limpiar = () => {
     sigRef.current?.clear();
+  };
+
+  /** Marca cada línea del BOM como completada o parcial. */
+  const actualizarOrdenMateriales = async () => {
+    for (let idx = 0; idx < bomItems.length; idx++) {
+      const item = bomItems[idx];
+      const cnt = contadores[idx];
+      if (typeof item.id === 'string' && item.id.length > 10) {
+        await supabase
+          .from('orden_materiales')
+          .update({
+            cantidad_despachada: cnt.pickeado,
+            estado: cnt.estado === 'completo' ? 'completado' : 'parcial',
+          })
+          .eq('id', item.id);
+      }
+    }
   };
 
   const confirmar = async () => {
@@ -89,6 +114,70 @@ export default function FirmaView({
       if (otErr) throw otErr;
 
       // 2. Descontar stock + registrar movimientos
+      //
+      // Con el kardex encendido, TODO el despacho va en UNA sola llamada. Hoy
+      // son tres viajes a la base por material y, si el quinto falla, los
+      // cuatro anteriores ya descontaron: la OT queda a medio despachar y el
+      // stock, mal, sin que nadie se entere. La función los hace o no los hace.
+      if (flags.kardexRpc) {
+        const otRef = ot.numero_ot || ot.id.slice(-6);
+        const aDescontar: Array<{ codigo: string; cantidad: number }> = [];
+
+        for (let idx = 0; idx < bomItems.length; idx++) {
+          const item = bomItems[idx];
+          const cnt = contadores[idx];
+          if (!cnt || cnt.pickeado <= 0) continue;
+          const ins = buscarInsumoMatchBOM(item, insumos);
+          if (!ins) continue;
+
+          // Lo que se corta de un ROLLO se sigue anotando aparte, sin tocar el
+          // stock: el código se cuenta en rollos y el consumo viene en metros.
+          // Descontar 4,6 de una columna de rollos enteros sería peor que no
+          // descontar nada.
+          if ((item.unidad || '').toLowerCase() === 'm') {
+            await supabase.from('movimientos_insumos').insert({
+              empresa_id: empresaId,
+              fecha: new Date().toISOString(),
+              mes: MESES_A[new Date().getMonth()],
+              tipo: 'SALIDA PRODUCCION',
+              codigo: ins.cod!,
+              producto: ins.nemotecnico || ins.descriptor_proveedor || '',
+              almacen: 'MP',
+              cantidad: Math.ceil(cnt.pickeado),
+              ot: otRef,
+              responsable_entrega: nombre.trim(),
+              bitacora: `Despacho OT ${otRef} · ${cnt.pickeado.toLocaleString('es-CL')} m cortados del rollo (el stock en rollos no se descuenta)`,
+            });
+            continue;
+          }
+          aDescontar.push({ codigo: ins.cod!, cantidad: cnt.pickeado });
+        }
+
+        if (aDescontar.length > 0) {
+          const r = await registrarMovimientos(
+            lineasDeDespacho(aDescontar, {
+              ot: otRef,
+              responsable: nombre.trim(),
+              recibe: nombre.trim(),
+              area: 'despacho',
+            }),
+          );
+          if (!r.ok) {
+            // La OT ya quedó firmada arriba; el stock, no. Se dice cuál de las
+            // dos cosas falló en vez de un «error» a secas.
+            toast.error(`La firma quedó guardada, pero el stock no se descontó: ${r.motivo}`);
+            return;
+          }
+          toast.success(`Despacho confirmado · ${resumenDeMovimientos(r.respuesta)}`);
+        } else {
+          toast.success('Despacho confirmado');
+        }
+
+        await actualizarOrdenMateriales();
+        setTimeout(() => onDone(), 1200);
+        return;
+      }
+
       for (let idx = 0; idx < bomItems.length; idx++) {
         const item = bomItems[idx];
         const cnt = contadores[idx];
@@ -148,19 +237,7 @@ export default function FirmaView({
       }
 
       // 3. Actualizar orden_materiales (filas con id UUID)
-      for (let idx = 0; idx < bomItems.length; idx++) {
-        const item = bomItems[idx];
-        const cnt = contadores[idx];
-        if (typeof item.id === 'string' && item.id.length > 10) {
-          await supabase
-            .from('orden_materiales')
-            .update({
-              cantidad_despachada: cnt.pickeado,
-              estado: cnt.estado === 'completo' ? 'completado' : 'parcial',
-            })
-            .eq('id', item.id);
-        }
-      }
+      await actualizarOrdenMateriales();
 
       toast.success('Despacho confirmado y stock actualizado');
       setTimeout(() => onDone(), 1200);

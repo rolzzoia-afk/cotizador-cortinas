@@ -5,7 +5,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
+import { useFlagsInventario } from './flagsStore';
 import type { Insumo, Movimiento, UbicacionRack, Validador } from './helpers';
+import {
+  comoMovimientoViejo,
+  lineaDeMovimientoManual,
+  resumenDeMovimientos,
+  saldosFinales,
+  type RespuestaKardex,
+} from './kardex';
+import { registrarMovimientos } from './kardexStore';
 import {
   filaMovimiento,
   problemaDelMovimiento,
@@ -145,17 +154,44 @@ export function useFichaInsumo(cod: string): DatosFicha & {
   return { ...datos, refrescar: cargar, aplicarCambio };
 }
 
+/**
+ * La fila que se muestra en la tabla de la ficha. Con el kardex encendido la
+ * salida puede haberse repartido en dos renglones: se muestra el ÚLTIMO, que es
+ * el que deja el saldo final, y el resumen explica el reparto completo.
+ */
+function movimientoParaLaPantalla(
+  r: RespuestaKardex,
+  entrada: EntradaMovimiento,
+  insumo: Insumo | null,
+  empresaId: string,
+): Movimiento {
+  const ultimo = r.movimientos[r.movimientos.length - 1];
+  return {
+    ...comoMovimientoViejo(ultimo, {
+      producto: insumo?.nemotecnico || insumo?.descriptor_proveedor || null,
+      ot: (entrada.ot || '').trim() || null,
+      responsable: entrada.responsable_entrega || null,
+      notas: (entrada.bitacora || '').trim() || null,
+    }),
+    empresa_id: empresaId,
+  };
+}
+
 export type ResultadoMovimiento = {
   movimiento: Movimiento;
   parcheInsumo: Partial<Insumo>;
   /** La cuenta daba negativo y se guardó 0: hay que decirlo. */
   recortado: boolean;
+  /** Con el kardex encendido: qué pasó, en una frase. */
+  resumen?: string;
 };
 
 /**
- * Guarda un movimiento y ajusta el stock, igual que la pantalla de Insumos:
- * dos escrituras sueltas, sin transacción. La Entrega B lo cambia por una
- * función de la base detrás del interruptor `kardexRpc`.
+ * Guarda un movimiento y ajusta el stock.
+ *
+ * Con el interruptor `kardexRpc` encendido lo hace la base en una sola
+ * operación, con el artículo bloqueado. Apagado, sigue el camino de siempre:
+ * dos escrituras sueltas sin transacción, que es lo que hay que reemplazar.
  */
 export function useGuardarMovimiento(): {
   guardando: boolean;
@@ -165,12 +201,39 @@ export function useGuardarMovimiento(): {
   ) => Promise<{ ok: true; resultado: ResultadoMovimiento } | { ok: false; motivo: string }>;
 } {
   const { empresaId } = useAuth();
+  const { flags } = useFlagsInventario();
   const [guardando, setGuardando] = useState(false);
 
   const guardar = async (entrada: EntradaMovimiento, insumo: Insumo | null) => {
     if (!empresaId) return { ok: false as const, motivo: 'No hay sesión' };
     const problema = problemaDelMovimiento(entrada);
     if (problema) return { ok: false as const, motivo: problema };
+
+    // ── El camino nuevo: una sola operación de la base ────────────────────
+    if (flags.kardexRpc) {
+      const linea = lineaDeMovimientoManual({ ...entrada, almacen: entrada.almacen });
+      if ('error' in linea) return { ok: false as const, motivo: linea.error };
+
+      setGuardando(true);
+      try {
+        const r = await registrarMovimientos([linea]);
+        if (!r.ok) return { ok: false as const, motivo: r.motivo };
+        const saldos = saldosFinales(r.respuesta).get(linea.item_cod.toUpperCase());
+        return {
+          ok: true as const,
+          resultado: {
+            // La fila del kardex no tiene la forma del registro viejo: se arma
+            // una equivalente para que la tabla de la ficha la muestre igual.
+            movimiento: movimientoParaLaPantalla(r.respuesta, entrada, insumo, empresaId),
+            parcheInsumo: saldos || {},
+            recortado: false,
+            resumen: resumenDeMovimientos(r.respuesta),
+          },
+        };
+      } finally {
+        setGuardando(false);
+      }
+    }
 
     setGuardando(true);
     try {

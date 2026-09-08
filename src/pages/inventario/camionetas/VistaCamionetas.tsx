@@ -9,6 +9,7 @@ import { ArrowLeft, Plus, Truck } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 
 import type { Camioneta, StockItem, Vista } from './Camionetas.types';
 import VistaMain from './vistas/VistaMain';
@@ -24,6 +25,7 @@ export function Camionetas() {
   const [camionetaActual, setCamionetaActual] = useState<Camioneta | null>(null);
   const [stockCamioneta, setStockCamioneta] = useState<StockItem[]>([]);
   const [abrirNueva, setAbrirNueva] = useState(false);
+  const { flags } = useFlagsInventario();
 
   const volverMain = () => {
     setCamionetaActual(null);
@@ -54,17 +56,19 @@ export function Camionetas() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      {/* Cargar una camioneta escribe hoy en `insumos.stock_total`, que es una
-          columna GENERADA: la base descarta la escritura sin avisar y el stock
-          de bodega queda igual. Por eso la camioneta figura con 0 líneas aunque
-          la pantalla se use. Se arregla en la entrega del kardex, donde la carga
-          pasa a ser un traslado de verdad. */}
-      <div className="mb-4 rounded-lg border border-warning/40 bg-warning/[0.09] px-4 py-3 text-xs leading-relaxed">
-        <b className="font-semibold">Ojo con el stock.</b> Cargar o devolver material acá
-        todavía no descuenta ni devuelve nada en la bodega: la escritura se pierde. Lo que sí
-        queda bien registrado es qué lleva cada camioneta. El descuento real llega con el
-        kardex, en la próxima entrega.
-      </div>
+      {/* Sin el kardex, cargar una camioneta le escribe a `insumos.stock_total`,
+          que es una columna GENERADA: la base descarta la escritura sin avisar y
+          el stock de bodega queda igual. Por eso la camioneta figuraba con 0
+          líneas aunque la pantalla se usara todos los días. Con el kardex
+          encendido, cargar y devolver son traslados de verdad. */}
+      {!flags.kardexRpc && (
+        <div className="mb-4 rounded-lg border border-warning/40 bg-warning/[0.09] px-4 py-3 text-xs leading-relaxed">
+          <b className="font-semibold">Ojo con el stock.</b> Cargar o devolver material acá
+          todavía no descuenta ni devuelve nada en la bodega: la escritura se pierde. Lo que sí
+          queda bien registrado es qué lleva cada camioneta. Para que descuente de verdad hay que
+          encender «Registrar los movimientos en la base», en Inventario → Configuración.
+        </div>
+      )}
       <header className="mb-4 flex items-center gap-2">
         {vista !== 'main' && (
           <Button size="sm" variant="ghost" onClick={volverMain}>

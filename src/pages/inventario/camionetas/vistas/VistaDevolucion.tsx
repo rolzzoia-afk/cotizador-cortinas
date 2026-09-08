@@ -11,6 +11,9 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { lineasDeCamioneta } from '@/modules/inventario/kardex';
+import { codigoBodegaDeCamioneta, registrarMovimientos } from '@/modules/inventario/kardexStore';
 import SectionTitle from '../components/SectionTitle';
 import EmptyState from '../components/EmptyState';
 import type { Camioneta, EstadoDev, StockItem } from '../Camionetas.types';
@@ -35,6 +38,7 @@ export default function VistaDevolucion({
   });
   const [responsable, setResponsable] = useState('');
   const [saving, setSaving] = useState(false);
+  const { flags } = useFlagsInventario();
 
   const stockConQty = stock.filter((s) => s.cantidad > 0);
 
@@ -70,6 +74,46 @@ export default function VistaDevolucion({
         setSaving(false);
         return;
       }
+    }
+
+    // ── Con el kardex encendido, los dos destinos se registran de verdad ───
+    //
+    // Lo que vuelve OK es un TRASLADO de la camioneta a bodega; lo defectuoso
+    // es una MERMA. Antes, lo que volvía sumaba a `insumos.stock_total`, que es
+    // una columna CALCULADA: la base descartaba la escritura y el material
+    // desaparecía del sistema al bajarlo de la camioneta.
+    if (flags.kardexRpc) {
+      const bodega = await codigoBodegaDeCamioneta(camioneta.id);
+      if (!bodega) {
+        toast.error('Esta camioneta todavía no tiene bodega en el inventario.');
+        setSaving(false);
+        return;
+      }
+      const item = (s: StockItem) => ({ codigo: s.insumos?.cod || '', cantidad: s.cantidad });
+      const vuelven = stockConQty.filter((s) => (estados[s.insumo_id] ?? 'ok') === 'ok');
+      const rotos = stockConQty.filter((s) => estados[s.insumo_id] === 'defectuoso');
+
+      const lineas = [
+        ...lineasDeCamioneta('devolver', bodega, vuelven.map(item), {
+          responsable: responsable.trim(),
+        }),
+        ...lineasDeCamioneta('baja', bodega, rotos.map(item), {
+          responsable: responsable.trim(),
+          motivo: 'Devuelto defectuoso desde la camioneta',
+        }),
+      ];
+
+      if (lineas.length > 0) {
+        const r = await registrarMovimientos(lineas);
+        if (!r.ok) {
+          toast.error(r.motivo);
+          setSaving(false);
+          return;
+        }
+      }
+      toast.success('Devolución registrada');
+      onDone();
+      return;
     }
 
     for (const s of stockConQty) {

@@ -12,6 +12,43 @@ import {
   type FlagsInventario,
 } from './flags';
 
+// Los interruptores los pregunta CADA pantalla que mueve stock: el despacho,
+// las camionetas, la ficha, los insumos, las telas. Sin esto serían seis
+// consultas iguales cada vez que alguien abre el módulo.
+//
+// La caché guarda la promesa, no el resultado: dos pantallas que montan a la
+// vez comparten una sola consulta en lugar de disparar dos.
+const cacheFlags = new Map<string, Promise<FlagsInventario>>();
+
+function leerFlags(empresaId: string): Promise<FlagsInventario> {
+  const guardada = cacheFlags.get(empresaId);
+  if (guardada) return guardada;
+
+  const pedido = (async () => {
+    try {
+      const { data } = await supabase
+        .from('configuracion')
+        .select('valor')
+        .eq('empresa_id', empresaId)
+        .eq('clave', CLAVE_FLAGS_INVENTARIO)
+        .maybeSingle<{ valor: string }>();
+      return sanearFlags(data?.valor);
+    } catch {
+      // Si no se pueden leer, el módulo funciona como hoy. Nunca al revés.
+      return { ...FLAGS_APAGADOS };
+    }
+  })();
+
+  cacheFlags.set(empresaId, pedido);
+  return pedido;
+}
+
+/** Olvida lo leído: se llama al guardar, para que las demás pantallas se enteren. */
+export function olvidarFlagsInventario(empresaId?: string) {
+  if (empresaId) cacheFlags.delete(empresaId);
+  else cacheFlags.clear();
+}
+
 export function useFlagsInventario(): {
   flags: FlagsInventario;
   loading: boolean;
@@ -29,16 +66,7 @@ export function useFlagsInventario(): {
     }
     setLoading(true);
     try {
-      const { data } = await supabase
-        .from('configuracion')
-        .select('valor')
-        .eq('empresa_id', empresaId)
-        .eq('clave', CLAVE_FLAGS_INVENTARIO)
-        .maybeSingle<{ valor: string }>();
-      setFlags(sanearFlags(data?.valor));
-    } catch {
-      // Si no se pueden leer, el módulo funciona como hoy. Nunca al revés.
-      setFlags(FLAGS_APAGADOS);
+      setFlags(await leerFlags(empresaId));
     } finally {
       setLoading(false);
     }
@@ -61,6 +89,7 @@ export function useFlagsInventario(): {
       { onConflict: 'empresa_id,clave' },
     );
     if (error) throw error;
+    olvidarFlagsInventario(empresaId);
     setFlags(nuevos);
   };
 

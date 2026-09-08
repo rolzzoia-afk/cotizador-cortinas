@@ -1,5 +1,9 @@
 // Modal de registrar movimiento de tela (ingreso/salida/traslado/ajuste).
-// Inserta una fila en `movimientos_telas`.
+//
+// Con el interruptor `kardexRpc` apagado solo inserta una fila en
+// `movimientos_telas`: deja la anotación y NO mueve los metros del catálogo,
+// así que el registro y el stock dicen cosas distintas desde el primer
+// movimiento. Encendido, lo mueve la base y las dos cosas coinciden.
 
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -16,6 +20,9 @@ import {
 import FieldText from '../components/fields/FieldText';
 import FieldSelect from '../components/fields/FieldSelect';
 import FieldSelectValidador from '../components/fields/FieldSelectValidador';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { lineaDeTela, resumenDeMovimientos } from '@/modules/inventario/kardex';
+import { registrarMovimientos } from '@/modules/inventario/kardexStore';
 import type { MovTipo, Tela, ValidadoresMap } from '../Telas.types';
 
 interface MovimientoDialogProps {
@@ -50,17 +57,59 @@ export default function MovimientoDialog({
   const [operario, setOperario] = useState('');
   const [notas, setNotas] = useState('');
   const [saving, setSaving] = useState(false);
+  // Un ajuste puede sumar o restar metros; hasta ahora la pantalla no lo
+  // preguntaba porque no movía el saldo. Ahora sí lo mueve.
+  const [sentido, setSentido] = useState<'suma' | 'resta'>('suma');
+  const { flags } = useFlagsInventario();
 
   const guardar = async () => {
     if (!codigo) {
       toast.warning('Selecciona la tela');
       return;
     }
-    const m = Number(metros);
+    // Los metros se escriben con coma en Chile: «12,5» daba NaN y el aviso
+    // decía «metros inválidos» sin explicar por qué.
+    const m = Number(String(metros).replace(',', '.'));
     if (!Number.isFinite(m) || m <= 0) {
-      toast.warning('Metros inválidos');
+      toast.warning('Escribe los metros, por ejemplo 12,5');
       return;
     }
+
+    // ── Con el kardex encendido, el movimiento MUEVE el saldo ──────────────
+    //
+    // Hasta ahora esta pantalla solo dejaba la anotación: los metros de
+    // `telas_catalogo` no se tocaban, así que el registro y el stock decían
+    // cosas distintas desde el primer movimiento.
+    if (flags.kardexRpc) {
+      const linea = lineaDeTela({
+        codigo,
+        tipo,
+        metros: m,
+        almacen,
+        sentido,
+        ot,
+        responsable,
+        notas,
+      });
+      if ('error' in linea) {
+        toast.warning(linea.error);
+        return;
+      }
+      setSaving(true);
+      try {
+        const r = await registrarMovimientos([linea]);
+        if (!r.ok) {
+          toast.error(r.motivo);
+          return;
+        }
+        toast.success(resumenDeMovimientos(r.respuesta));
+        onSaved();
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     const { error } = await supabase.from('movimientos_telas').insert({
       empresa_id: empresaId,
@@ -105,9 +154,9 @@ export default function MovimientoDialog({
               ))}
             </select>
           </div>
-          <FieldText label="Metros *" value={metros} onChange={setMetros} placeholder="1" />
+          <FieldText label="Metros *" value={metros} onChange={setMetros} placeholder="12,5" />
           <FieldSelect
-            label="Almacén"
+            label={tipo === 'TRASLADO' ? 'Almacén de destino' : 'Almacén'}
             value={almacen}
             onChange={setAlmacen}
             options={[
@@ -115,6 +164,17 @@ export default function MovimientoDialog({
               { v: 'MATERIAS PRIMAS', l: 'Materias Primas' },
             ]}
           />
+          {tipo === 'AJUSTE' && flags.kardexRpc && (
+            <FieldSelect
+              label="El ajuste…"
+              value={sentido}
+              onChange={(v) => setSentido(v as 'suma' | 'resta')}
+              options={[
+                { v: 'suma', l: 'Suma metros (había más de lo anotado)' },
+                { v: 'resta', l: 'Resta metros (había menos)' },
+              ]}
+            />
+          )}
           <FieldText label="OT (opcional)" value={ot} onChange={setOt} placeholder="#OT-001" />
           <FieldSelectValidador
             label="Responsable"

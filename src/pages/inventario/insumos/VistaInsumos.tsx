@@ -33,6 +33,14 @@ import {
   type Validador,
 } from '@/modules/inventario/helpers';
 import type { AlmacenRack } from '@/modules/inventario/rackConfig';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import {
+  comoMovimientoViejo,
+  lineaDeMovimientoManual,
+  resumenDeMovimientos,
+  saldosFinales,
+} from '@/modules/inventario/kardex';
+import { registrarMovimientos } from '@/modules/inventario/kardexStore';
 
 import type {
   InsumoForm,
@@ -62,6 +70,7 @@ import { useInventario } from '../InventarioLayout';
 
 export function Inventario() {
   const { empresaId } = useAuth();
+  const { flags } = useFlagsInventario();
   const { queryRol } = useInventario();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -412,7 +421,27 @@ export function Inventario() {
 
         // Stock inicial → movimiento MP
         const stockInicial = parseInt(f.stock_inicial, 10) || 0;
-        if (stockInicial > 0) {
+        if (stockInicial > 0 && flags.kardexRpc) {
+          // El insumo acaba de nacer en cero: esto es su primer ingreso.
+          const r = await registrarMovimientos([
+            {
+              dominio: 'insumo',
+              item_cod: cod,
+              tipo: 'INGRESO',
+              cantidad: stockInicial,
+              destino: 'MP',
+              motivo: 'Stock inicial al crear el insumo',
+              referencia_tipo: 'manual',
+            },
+          ]);
+          if (r.ok) {
+            nuevo = { ...nuevo, stock_mp: stockInicial };
+          } else {
+            // El insumo ya está creado: se avisa y queda en cero, que es
+            // recuperable con un ingreso a mano.
+            toast.warning(`El insumo se creó, pero su stock inicial no: ${r.motivo}`);
+          }
+        } else if (stockInicial > 0) {
           const mov = {
             empresa_id: empresaId,
             fecha: new Date().toISOString(),
@@ -481,6 +510,49 @@ export function Inventario() {
       return;
     }
     const insumo = insumos.find((i) => i.cod === f.codigo);
+
+    // ── Con el kardex encendido, lo hace la base en una sola operación ─────
+    //
+    // La diferencia que se nota: una salida sin bodega elegida sale de
+    // Liberado primero y sigue por Materias primas, en vez de recortarse a
+    // cero en silencio cuando no alcanza.
+    if (flags.kardexRpc) {
+      const linea = lineaDeMovimientoManual(f);
+      if ('error' in linea) {
+        toast.error(linea.error);
+        return;
+      }
+      setSavingMov(true);
+      try {
+        const r = await registrarMovimientos([linea]);
+        if (!r.ok) {
+          toast.error(r.motivo);
+          return;
+        }
+        const saldos = saldosFinales(r.respuesta).get(linea.item_cod.toUpperCase());
+        if (insumo && saldos) {
+          setInsumos((arr) => arr.map((i) => (i.id === insumo.id ? { ...i, ...saldos } : i)));
+        }
+        setMovimientos((prev) => [
+          {
+            ...comoMovimientoViejo(r.respuesta.movimientos[r.respuesta.movimientos.length - 1], {
+              producto: insumo?.nemotecnico || insumo?.descriptor_proveedor || null,
+              ot: f.ot.trim() || null,
+              responsable: f.responsable_entrega || null,
+              notas: f.bitacora.trim() || null,
+            }),
+            empresa_id: empresaId,
+          } as Movimiento,
+          ...prev,
+        ]);
+        toast.success(resumenDeMovimientos(r.respuesta));
+        cerrarMovDialog();
+      } finally {
+        setSavingMov(false);
+      }
+      return;
+    }
+
     const mov = {
       empresa_id: empresaId,
       fecha: new Date().toISOString(),
