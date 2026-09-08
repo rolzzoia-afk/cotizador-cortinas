@@ -26,8 +26,8 @@ import {
 } from '@/components/ui/dialog';
 import { formatCLP } from '@/lib/formatters';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
-import ClonarCodigoDialog from '@/pages/telas/dialogs/ClonarCodigoDialog';
-import ImportarCatalogoDialog from '@/pages/telas/dialogs/ImportarCatalogoDialog';
+import ClonarCodigoDialog from '@/pages/inventario/telas/dialogs/ClonarCodigoDialog';
+import ImportarCatalogoDialog from '@/pages/inventario/telas/dialogs/ImportarCatalogoDialog';
 import {
   guardarAnchoRollo,
   guardarCatalogoProductos,

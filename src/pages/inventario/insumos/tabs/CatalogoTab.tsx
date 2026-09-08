@@ -26,7 +26,7 @@ import {
 import StatCard from '../components/StatCard';
 import SortTh from '../components/SortTh';
 import StockBadge from '../components/StockBadge';
-import type { MovTipo, SortCol, SortDir } from '../Inventario.types';
+import type { MovTipo, SortCol, SortDir } from '../Insumos.types';
 
 interface CatalogoTabProps {
   insumosFiltrados: Insumo[];

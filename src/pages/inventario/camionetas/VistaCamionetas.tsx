@@ -10,13 +10,13 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 
-import type { Camioneta, StockItem, Vista } from './camionetas/Camionetas.types';
-import VistaMain from './camionetas/vistas/VistaMain';
-import VistaDetalle from './camionetas/vistas/VistaDetalle';
-import VistaCarga from './camionetas/vistas/VistaCarga';
-import VistaSwap from './camionetas/vistas/VistaSwap';
-import VistaDevolucion from './camionetas/vistas/VistaDevolucion';
-import VistaHistorial from './camionetas/vistas/VistaHistorial';
+import type { Camioneta, StockItem, Vista } from './Camionetas.types';
+import VistaMain from './vistas/VistaMain';
+import VistaDetalle from './vistas/VistaDetalle';
+import VistaCarga from './vistas/VistaCarga';
+import VistaSwap from './vistas/VistaSwap';
+import VistaDevolucion from './vistas/VistaDevolucion';
+import VistaHistorial from './vistas/VistaHistorial';
 
 export function Camionetas() {
   const { empresaId } = useAuth();

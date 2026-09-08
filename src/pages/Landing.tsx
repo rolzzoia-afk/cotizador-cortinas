@@ -32,6 +32,7 @@ import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/lib/marca';
 import { esRolAdmin } from '@/lib/roles';
 import { supabase } from '@/lib/supabase';
+import { esMovimientoEntrada, esMovimientoSalida } from '@/modules/inventario/badges';
 import Sparkline from './inteligencia/components/Sparkline';
 import FlowFieldBackground from '@/components/FlowFieldBackground';
 
@@ -197,8 +198,11 @@ function useBriefing(empresaId: string | null | undefined): Briefing {
           if (idx >= 0 && idx < 7) buckets[idx]++;
         }
 
-        const movsEntrada = movsHoyArr.filter((m) => (m.tipo || '').toLowerCase() === 'entrada').length;
-        const movsSalida = movsHoyArr.filter((m) => (m.tipo || '').toLowerCase() === 'salida').length;
+        // Los tipos que existen de verdad son 'NUEVO INGRESO', 'SALIDA
+        // PRODUCCION', 'AJUSTE' y 'DEVOLUCION'. Comparar contra 'entrada' y
+        // 'salida' daba SIEMPRE 0 en los dos contadores.
+        const movsEntrada = movsHoyArr.filter((m) => esMovimientoEntrada(m.tipo)).length;
+        const movsSalida = movsHoyArr.filter((m) => esMovimientoSalida(m.tipo)).length;
 
         setData({
           loading: false,

@@ -42,19 +42,19 @@ import type {
   SortDir,
   Tab,
   ValidadoresMap,
-} from './inventario/Inventario.types';
-import { EMPTY_INSUMO_FORM, EMPTY_MOV_FORM } from './inventario/Inventario.config';
-import TabBtn from './inventario/components/TabBtn';
-import CatalogoTab from './inventario/tabs/CatalogoTab';
-import MovimientosTab from './inventario/tabs/MovimientosTab';
-import AlertasTab from './inventario/tabs/AlertasTab';
-import RackTab from './inventario/tabs/RackTab';
-import InsumoDialog from './inventario/dialogs/InsumoDialog';
-import MovDialog from './inventario/dialogs/MovDialog';
-import CellRackDialog from './inventario/dialogs/CellRackDialog';
-import DetalleMovDialog from './inventario/dialogs/DetalleMovDialog';
-import LightboxFotoDialog from './inventario/dialogs/LightboxFotoDialog';
-import QRInsumoDialog from './inventario/dialogs/QRInsumoDialog';
+} from './Insumos.types';
+import { EMPTY_INSUMO_FORM, EMPTY_MOV_FORM } from './Insumos.config';
+import TabBtn from './components/TabBtn';
+import CatalogoTab from './tabs/CatalogoTab';
+import MovimientosTab from './tabs/MovimientosTab';
+import AlertasTab from './tabs/AlertasTab';
+import RackTab from './tabs/RackTab';
+import InsumoDialog from './dialogs/InsumoDialog';
+import MovDialog from './dialogs/MovDialog';
+import CellRackDialog from './dialogs/CellRackDialog';
+import DetalleMovDialog from './dialogs/DetalleMovDialog';
+import LightboxFotoDialog from './dialogs/LightboxFotoDialog';
+import QRInsumoDialog from './dialogs/QRInsumoDialog';
 
 export function Inventario() {
   const { empresaId } = useAuth();

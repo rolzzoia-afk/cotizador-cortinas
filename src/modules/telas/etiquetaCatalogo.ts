@@ -22,7 +22,7 @@
 import { htmlDeEtiquetas } from '@/modules/etiquetas/etiquetaHtml';
 import { PLANTILLA_CATALOGO } from '@/modules/etiquetas/defaults/catalogo';
 import type { PlantillaEtiqueta } from '@/modules/etiquetas/plantilla';
-import type { Tela } from '@/pages/telas/Telas.types';
+import type { Tela } from '@/pages/inventario/telas/Telas.types';
 
 // Los textos fijos y el mínimo de cuerpo se mudaron a la plantilla de fábrica;
 // se reexportan porque varias pantallas y pruebas los nombran desde acá.

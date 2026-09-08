@@ -8,7 +8,7 @@ import {
   tipoLargo,
 } from './etiquetaCatalogo';
 import { PLANTILLA_CATALOGO } from '@/modules/etiquetas/defaults/catalogo';
-import type { Tela } from '@/pages/telas/Telas.types';
+import type { Tela } from '@/pages/inventario/telas/Telas.types';
 
 const tela = (over: Partial<Tela> = {}): Tela => ({
   id: '1',

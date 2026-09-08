@@ -16,7 +16,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import SelectValidador from '../components/SelectValidador';
-import type { InsumoForm, ValidadoresMap } from '../Inventario.types';
+import type { InsumoForm, ValidadoresMap } from '../Insumos.types';
 
 interface InsumoDialogProps {
   open: boolean;

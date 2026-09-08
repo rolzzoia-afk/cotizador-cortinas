@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import type { Insumo } from '@/modules/inventario/helpers';
 import SelectValidador from '../components/SelectValidador';
-import type { MovForm, MovTipo, ValidadoresMap } from '../Inventario.types';
+import type { MovForm, MovTipo, ValidadoresMap } from '../Insumos.types';
 
 interface MovDialogProps {
   open: boolean;

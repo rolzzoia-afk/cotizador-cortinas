@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { type Movimiento, esEntrada, formatFecha } from '@/modules/inventario/helpers';
-import type { MovTipo } from '../Inventario.types';
+import type { MovTipo } from '../Insumos.types';
 
 interface MovimientosTabProps {
   movimientosFiltrados: Movimiento[];

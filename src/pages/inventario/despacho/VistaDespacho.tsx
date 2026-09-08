@@ -25,13 +25,13 @@ import {
   getUbicacionBOM,
 } from '@/modules/bodega/bomUtils';
 
-import { ESTADOS_BODEGUERO } from './bodeguero/Bodeguero.config';
-import type { Contador, ScanFase, Vista } from './bodeguero/Bodeguero.types';
-import ListaOTs from './bodeguero/vistas/ListaOTs';
-import DespachoView from './bodeguero/vistas/DespachoView';
-import ScannerView from './bodeguero/vistas/ScannerView';
-import FirmaView from './bodeguero/vistas/FirmaView';
-import AdHocView from './bodeguero/vistas/AdHocView';
+import { ESTADOS_BODEGUERO } from './Bodeguero.config';
+import type { Contador, ScanFase, Vista } from './Bodeguero.types';
+import ListaOTs from './vistas/ListaOTs';
+import DespachoView from './vistas/DespachoView';
+import ScannerView from './vistas/ScannerView';
+import FirmaView from './vistas/FirmaView';
+import AdHocView from './vistas/AdHocView';
 
 export function Bodeguero() {
   const { empresaId } = useAuth();

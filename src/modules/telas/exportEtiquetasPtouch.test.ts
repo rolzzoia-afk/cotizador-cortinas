@@ -5,7 +5,7 @@ import {
   construirFilasEtiquetas,
   etiquetasToWorkbook,
 } from './exportEtiquetasPtouch';
-import type { Colmena, Tela } from '@/pages/telas/Telas.types';
+import type { Colmena, Tela } from '@/pages/inventario/telas/Telas.types';
 
 const telaBase: Tela = {
   id: '1',

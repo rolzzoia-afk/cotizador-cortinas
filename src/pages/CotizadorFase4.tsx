@@ -45,7 +45,7 @@ import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
 import { deduccionesColmena, piezasColmenaSnapshot } from '@/modules/cotizador/colmenaCorte';
 import GuardarSobranteRolloDialog, {
   type SobranteRollo,
-} from './telas/dialogs/GuardarSobranteRolloDialog';
+} from './inventario/telas/dialogs/GuardarSobranteRolloDialog';
 import type { SubEtapaProd } from '@/modules/ots/types';
 import type { Ventana as VentanaCotizador } from '@/modules/cotizador/types';
 import { descargarExcelOrdenes, generarOrdenesOptimizador } from '@/modules/descuentos/excel-ordenes';

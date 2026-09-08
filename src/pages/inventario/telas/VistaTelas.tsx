@@ -30,13 +30,13 @@ import type {
   Tela,
   Validador,
   ValidadoresMap,
-} from './telas/Telas.types';
+} from './Telas.types';
 import { cargarTodosLosPanos, type ColmenaPano } from '@/modules/admin/colmena';
-import CatalogoTab from './telas/tabs/CatalogoTab';
-import ColmenaVivaTab from './telas/tabs/ColmenaVivaTab';
-import MovimientosTab from './telas/tabs/MovimientosTab';
-import FallasTab from './telas/tabs/FallasTab';
-import MermasTab from './telas/tabs/MermasTab';
+import CatalogoTab from './tabs/CatalogoTab';
+import ColmenaVivaTab from './tabs/ColmenaVivaTab';
+import MovimientosTab from './tabs/MovimientosTab';
+import FallasTab from './tabs/FallasTab';
+import MermasTab from './tabs/MermasTab';
 
 export function Telas() {
   const { empresaId } = useAuth();

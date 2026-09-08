@@ -1,6 +1,6 @@
 // Defaults de los formularios del Inventario.
 
-import type { InsumoForm, MovForm } from './Inventario.types';
+import type { InsumoForm, MovForm } from './Insumos.types';
 
 export const EMPTY_INSUMO_FORM: InsumoForm = {
   cod: '',

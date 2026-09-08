@@ -12,11 +12,11 @@ import { useState } from 'react';
 import { Clock, Grid3x3, Link2, Ruler, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 
-import TabButton from './historial-tubos/components/TabButton';
-import VistaColmena from './historial-tubos/vistas/VistaColmena';
-import VistaTrazabilidad from './historial-tubos/vistas/VistaTrazabilidad';
-import VistaHistorial from './historial-tubos/vistas/VistaHistorial';
-import VistaMerma from './historial-tubos/vistas/VistaMerma';
+import TabButton from './components/TabButton';
+import VistaColmena from './vistas/VistaColmena';
+import VistaTrazabilidad from './vistas/VistaTrazabilidad';
+import VistaHistorial from './vistas/VistaHistorial';
+import VistaMerma from './vistas/VistaMerma';
 
 type Tab = 'colmena' | 'trazabilidad' | 'historial' | 'merma';
 

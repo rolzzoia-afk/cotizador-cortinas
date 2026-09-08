@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react';
-import { Routes, Route, Outlet } from 'react-router-dom';
+import { Routes, Route, Outlet, Navigate, useLocation } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { TopBar } from '@/components/TopBar';
@@ -10,16 +10,16 @@ const Registro = lazy(() => import('@/pages/Registro').then((m) => ({ default: m
 const Setup = lazy(() => import('@/pages/Setup').then((m) => ({ default: m.Setup })));
 const Landing = lazy(() => import('@/pages/Landing').then((m) => ({ default: m.Landing })));
 const AdminPanel = lazy(() => import('@/pages/AdminPanel').then((m) => ({ default: m.AdminPanel })));
-const HistorialTubos = lazy(() => import('@/pages/HistorialTubos').then((m) => ({ default: m.HistorialTubos })));
-const Camionetas = lazy(() => import('@/pages/Camionetas').then((m) => ({ default: m.Camionetas })));
+const VistaTubos = lazy(() => import('@/pages/inventario/tubos/VistaTubos').then((m) => ({ default: m.HistorialTubos })));
+const VistaCamionetas = lazy(() => import('@/pages/inventario/camionetas/VistaCamionetas').then((m) => ({ default: m.Camionetas })));
 const Ventas = lazy(() => import('@/pages/Ventas').then((m) => ({ default: m.Ventas })));
 const LeadsPipeline = lazy(() => import('@/pages/LeadsPipeline').then((m) => ({ default: m.LeadsPipeline })));
 const Inteligencia = lazy(() => import('@/pages/Inteligencia').then((m) => ({ default: m.Inteligencia })));
 const HistorialCorte = lazy(() => import('@/pages/HistorialCorte').then((m) => ({ default: m.HistorialCorte })));
 const Produccion = lazy(() => import('@/pages/Produccion').then((m) => ({ default: m.Produccion })));
-const Bodeguero = lazy(() => import('@/pages/Bodeguero').then((m) => ({ default: m.Bodeguero })));
-const Telas = lazy(() => import('@/pages/Telas').then((m) => ({ default: m.Telas })));
-const Inventario = lazy(() => import('@/pages/Inventario').then((m) => ({ default: m.Inventario })));
+const VistaDespacho = lazy(() => import('@/pages/inventario/despacho/VistaDespacho').then((m) => ({ default: m.Bodeguero })));
+const VistaTelas = lazy(() => import('@/pages/inventario/telas/VistaTelas').then((m) => ({ default: m.Telas })));
+const VistaInsumos = lazy(() => import('@/pages/inventario/insumos/VistaInsumos').then((m) => ({ default: m.Inventario })));
 const Panel = lazy(() => import('@/pages/Panel').then((m) => ({ default: m.Panel })));
 // Cotizador compartido: Fase 1 (entrada, columnas reducidas) y Fase 3
 // (cotización final tras Terreno) son el MISMO componente con distinto `modo`.
@@ -29,9 +29,23 @@ const CotizadorFase4 = lazy(() => import('@/pages/CotizadorFase4').then((m) => (
 const CotizadorTela = lazy(() => import('@/pages/CotizadorTela').then((m) => ({ default: m.CotizadorTela })));
 const OptimizadorTela = lazy(() => import('@/pages/OptimizadorTela').then((m) => ({ default: m.OptimizadorTela })));
 const OjoDeDios = lazy(() => import('@/pages/OjoDeDios').then((m) => ({ default: m.OjoDeDios })));
-const InventarioConteo = lazy(() => import('@/pages/InventarioConteo').then((m) => ({ default: m.InventarioConteo })));
+const VistaContar = lazy(() => import('@/pages/inventario/conteo/VistaContar').then((m) => ({ default: m.InventarioConteo })));
 const InventarioTelasPrueba = lazy(() => import('@/pages/inventario-telas-prueba/Pagina'));
 const CotizadorJefe = lazy(() => import('@/pages/CotizadorJefe').then((m) => ({ default: m.CotizadorJefe })));
+
+// Módulo /inventario: un armazón con barra lateral y un submódulo adentro.
+const InventarioLayout = lazy(() => import('@/pages/inventario/InventarioLayout').then((m) => ({ default: m.InventarioLayout })));
+const VistaTablero = lazy(() => import('@/pages/inventario/tablero/VistaTablero').then((m) => ({ default: m.VistaTablero })));
+
+/**
+ * Redirección que CONSERVA la query. Sin esto, un admin que anda mirando con
+ * `?rol=bodeguero` lo pierde al entrar por una ruta vieja y la pantalla le
+ * cambia sola.
+ */
+function Redirigir({ a }: { a: string }) {
+  const { search } = useLocation();
+  return <Navigate to={`${a}${search}`} replace />;
+}
 
 function Shell() {
   return (
@@ -111,21 +125,38 @@ export function App() {
           <Route path="ventas" element={<Ventas />} />
           <Route path="leads" element={<LeadsPipeline />} />
           <Route path="inteligencia" element={<Inteligencia />} />
-          <Route path="telas" element={<Telas />} />
-          <Route path="inventario" element={<Inventario />} />
+          {/* Inventario: los submódulos cuelgan del layout con la barra lateral.
+              El registro de src/modules/inventario/navegacion.ts dice quién ve
+              cada uno; acá solo se declara dónde vive. */}
+          <Route path="inventario" element={<InventarioLayout />}>
+            <Route index element={<VistaTablero />} />
+            <Route path="insumos" element={<VistaInsumos />} />
+            <Route path="telas" element={<VistaTelas />} />
+            <Route path="tubos" element={<VistaTubos />} />
+            <Route path="camionetas" element={<VistaCamionetas />} />
+            <Route path="despacho" element={<VistaDespacho />} />
+            <Route path="conteo/contar" element={<VistaContar />} />
+            {/* Una ruta que no existe dentro del módulo vuelve al tablero, no a
+                la pantalla de 404 de toda la app. */}
+            <Route path="*" element={<Navigate to="/inventario" replace />} />
+          </Route>
+
+          {/* Rutas viejas: siguen funcionando y llevan a su nueva casa. */}
+          <Route path="telas" element={<Redirigir a="/inventario/telas" />} />
+          <Route path="bodeguero" element={<Redirigir a="/inventario/despacho" />} />
+          <Route path="camionetas" element={<Redirigir a="/inventario/camionetas" />} />
+          <Route path="historial-tubos" element={<Redirigir a="/inventario/tubos" />} />
+          <Route path="inventario-conteo" element={<Redirigir a="/inventario/conteo/contar" />} />
+
           <Route
             path="optimizador"
             element={<LegacyFrame src="/legacy/optimizador.html" title="Optimizador" />}
           />
-          <Route path="bodeguero" element={<Bodeguero />} />
-          <Route path="camionetas" element={<Camionetas />} />
           <Route path="historial-corte" element={<HistorialCorte />} />
           <Route path="produccion" element={<Produccion />} />
           <Route path="cotizador-jefe" element={<CotizadorJefe />} />
-          <Route path="historial-tubos" element={<HistorialTubos />} />
           <Route path="admin" element={<AdminPanel />} />
           <Route path="ojo-de-dios" element={<OjoDeDios />} />
-          <Route path="inventario-conteo" element={<InventarioConteo />} />
         </Route>
 
         <Route path="*" element={<div className="p-8">404 · Ruta no encontrada</div>} />
