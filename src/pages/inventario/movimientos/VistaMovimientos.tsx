@@ -1,144 +1,179 @@
 // Kardex: todo lo que entró, salió o se movió.
 //
-// Con el interruptor `kardexRpc` encendido aparece el LIBRO: un solo registro
-// para insumos y telas, con el saldo que quedó después de cada movimiento.
-// Apagado —y siempre, en las otras dos pestañas— están los dos registros
-// viejos, que siguen ahí para poder mirar lo de antes.
+// Un solo libro para insumos y telas, con el saldo que quedó después de cada
+// movimiento. El interruptor de la derecha suma lo que se movió ANTES de que el
+// kardex existiera —los registros viejos, los cortes de tubos y los paños—: esas
+// filas se ven en gris porque se consultan, no se corrigen desde acá.
+//
+// Sin el kardex encendido no hay libro que mostrar, así que la pantalla lo dice
+// y ofrece el camino: Inventario → Configuración.
 
-import { useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { useEffect, useMemo, useState } from 'react';
+import { Download, Plus } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
-import { TabButton } from '@/components/ui/tab-button';
-import { useAuth } from '@/lib/auth';
-import { esEntrada, type Movimiento } from '@/modules/inventario/helpers';
-import { useInsumos } from '@/modules/inventario/insumosStore';
-import { useDatosTelas } from '@/modules/inventario/telasStore';
-import MovimientosInsumosTab from '../insumos/tabs/MovimientosTab';
-import MovimientosTelasTab from '../telas/tabs/MovimientosTab';
-import DetalleMovDialog from '../insumos/dialogs/DetalleMovDialog';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
-import TablaKardex from './TablaKardex';
+import { useKardex } from '@/modules/inventario/kardexStore';
+import {
+  almacenesPresentes,
+  companerosDeLote,
+  csvDeKardex,
+  desdeDelRango,
+  filtrarFilas,
+  FILTROS_VACIOS,
+  textoRango,
+  usuariosPresentes,
+  type FilaKardexVista,
+  type FiltrosVista,
+  type Rango,
+} from '@/modules/inventario/kardexVista';
 import { useInventario } from '../InventarioLayout';
+import DetalleMovimiento from './DetalleMovimiento';
+import FiltrosKardex from './FiltrosKardex';
+import NuevoMovimientoDialog from './NuevoMovimientoDialog';
+import TablaKardex from './TablaKardex';
 
-type Pestana = 'libro' | 'insumos' | 'telas';
+function descargarCsv(texto: string, nombre: string) {
+  const url = URL.createObjectURL(new Blob([texto], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nombre;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export function VistaMovimientos() {
-  useInventario(); // asegura que la vista corre dentro del layout del módulo
-  const { empresaId } = useAuth();
+  const { queryRol, puedeEditar } = useInventario();
   const { flags, loading: cargandoFlags } = useFlagsInventario();
-  // Con el libro encendido, es lo primero que se ve; los registros viejos
-  // quedan a un clic, para consultar lo de antes.
-  const [pestana, setPestana] = useState<Pestana | null>(null);
-  const activa: Pestana = pestana ?? (flags.kardexRpc ? 'libro' : 'insumos');
-  const [busqueda, setBusqueda] = useState('');
-  const [filtroTipo, setFiltroTipo] = useState('');
-  const [detalle, setDetalle] = useState<Movimiento | null>(null);
 
-  const insumos = useInsumos();
-  const telas = useDatosTelas();
+  const [rango, setRango] = useState<Rango>('7d');
+  const [tipo, setTipo] = useState('');
+  const [historico, setHistorico] = useState(false);
+  const [filtros, setFiltros] = useState<FiltrosVista>(FILTROS_VACIOS);
+  const [seleccionadaId, setSeleccionadaId] = useState<string | null>(null);
+  const [abrirNuevo, setAbrirNuevo] = useState(false);
 
-  const movimientosFiltrados = useMemo(() => {
-    const q = busqueda.trim().toUpperCase();
-    return insumos.movimientos.filter((m) => {
-      if (filtroTipo && m.tipo !== filtroTipo) return false;
-      if (!q) return true;
-      return (
-        (m.codigo || '').toUpperCase().includes(q) ||
-        (m.producto || '').toUpperCase().includes(q) ||
-        (m.ot || '').toUpperCase().includes(q)
-      );
-    });
-  }, [insumos.movimientos, busqueda, filtroTipo]);
+  const desde = useMemo(() => desdeDelRango(rango), [rango]);
+  const { movimientos, total, loading, error, refrescar } = useKardex({
+    desde,
+    tipo: tipo as never,
+    incluirHistorico: historico,
+  });
 
-  const hoy = new Date().toISOString().split('T')[0];
-  const deHoy = insumos.movimientos.filter((m) => (m.fecha || '').startsWith(hoy));
-  const cargando = activa === 'insumos' ? insumos.loading : activa === 'telas' ? telas.loading : false;
-  const error = activa === 'insumos' ? insumos.error : activa === 'telas' ? telas.error : null;
+  const filas = useMemo(() => filtrarFilas(movimientos, filtros), [movimientos, filtros]);
+  const almacenes = useMemo(() => almacenesPresentes(movimientos), [movimientos]);
+  const usuarios = useMemo(() => usuariosPresentes(movimientos), [movimientos]);
+
+  // La fila elegida se busca por id: si un filtro la sacó de la lista, el panel
+  // se vacía en vez de seguir mostrando algo que ya no está en pantalla.
+  const seleccionada = useMemo(
+    () => filas.find((f) => f.id === seleccionadaId) ?? null,
+    [filas, seleccionadaId],
+  );
+  useEffect(() => {
+    if (filas.length > 0 && !seleccionada) setSeleccionadaId(filas[0].id);
+  }, [filas, seleccionada]);
+
+  const verLote = (m: FilaKardexVista) => {
+    if (!m.lote_id) return;
+    // Se busca por la OT porque es lo que la persona reconoce; el lote es un
+    // número interno que no le dice nada a nadie.
+    setFiltros({ ...FILTROS_VACIOS, busqueda: m.ot || '' });
+    toast.info(`Mostrando los ${companerosDeLote(movimientos, m) + 1} movimientos del despacho`);
+  };
+
+  const exportar = () => {
+    if (filas.length === 0) {
+      toast.warning('No hay movimientos que exportar con estos filtros.');
+      return;
+    }
+    descargarCsv(csvDeKardex(filas), `kardex-${new Date().toISOString().slice(0, 10)}.csv`);
+    toast.success(`${filas.length.toLocaleString('es-CL')} movimientos exportados`);
+  };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <PageHeader
         miga="Inventario"
         titulo="Kardex"
-        hint={
-          insumos.loading
-            ? 'Cargando…'
-            : `${deHoy.length} movimientos hoy · ${deHoy.filter((m) => esEntrada(m.tipo)).length} entradas · se muestran los últimos 500`
+        hint="Todo lo que entró, salió o se movió. No se edita ni se borra: se corrige con otro movimiento."
+        acciones={
+          <>
+            <Button variant="outline" onClick={exportar}>
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </Button>
+            {puedeEditar && flags.kardexRpc && (
+              <Button onClick={() => setAbrirNuevo(true)}>
+                <Plus className="h-4 w-4" />
+                Nuevo movimiento
+              </Button>
+            )}
+          </>
         }
       />
 
       {!flags.kardexRpc && !cargandoFlags && (
         <div className="rounded-lg border border-accent/35 bg-accent/[0.09] px-4 py-3 text-xs leading-relaxed">
-          Los movimientos de insumos y de telas todavía se guardan por separado, y ninguno dice en
-          cuánto quedó el artículo. Para tener el registro único hay que encender «Registrar los
+          El libro todavía no está encendido: acá se ve solo lo que quedó registrado antes, sin el
+          saldo que dejó cada movimiento. Para empezar a llevarlo hay que encender «Registrar los
           movimientos en la base», en Inventario → Configuración.
         </div>
       )}
 
-      <div className="flex items-center gap-5 border-b border-border">
-        {flags.kardexRpc && (
-          <TabButton
-            variante="subrayado"
-            active={activa === 'libro'}
-            onClick={() => setPestana('libro')}
-          >
-            Libro
-          </TabButton>
-        )}
-        <TabButton
-          variante="subrayado"
-          active={activa === 'insumos'}
-          onClick={() => setPestana('insumos')}
-          badge={
-            <Badge variant="muted">{insumos.movimientos.length.toLocaleString('es-CL')}</Badge>
-          }
-        >
-          {flags.kardexRpc ? 'Insumos (registro viejo)' : 'Insumos'}
-        </TabButton>
-        <TabButton
-          variante="subrayado"
-          active={activa === 'telas'}
-          onClick={() => setPestana('telas')}
-          badge={<Badge variant="muted">{telas.movimientos.length.toLocaleString('es-CL')}</Badge>}
-        >
-          {flags.kardexRpc ? 'Telas (registro viejo)' : 'Telas'}
-        </TabButton>
-      </div>
+      <FiltrosKardex
+        filtros={filtros}
+        onFiltros={setFiltros}
+        rango={rango}
+        onRango={setRango}
+        tipo={tipo}
+        onTipo={setTipo}
+        historico={historico}
+        onHistorico={setHistorico}
+        almacenes={almacenes}
+        usuarios={usuarios}
+      />
 
-      {activa === 'libro' ? (
-        <TablaKardex />
-      ) : error ? (
+      {error ? (
         <div className="rounded-lg border border-destructive/40 bg-destructive/[0.09] px-4 py-3 text-sm">
           {error}
         </div>
-      ) : cargando ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </div>
-      ) : activa === 'insumos' ? (
-        <MovimientosInsumosTab
-          movimientosFiltrados={movimientosFiltrados}
-          busquedaMov={busqueda}
-          setBusquedaMov={setBusqueda}
-          filtroTipoMov={filtroTipo}
-          setFiltroTipoMov={setFiltroTipo}
-          // Registrar un movimiento se hace desde Insumos, que es donde está el
-          // artículo y su saldo. Acá solo se mira lo que ya pasó.
-          onNuevoMov={() => {}}
-          onSeleccionar={setDetalle}
-        />
       ) : (
-        <MovimientosTelasTab
-          movimientos={telas.movimientos}
-          telas={telas.telas}
-          validadores={telas.validadores}
-          empresaId={empresaId || ''}
-          onReload={telas.recargar}
-        />
+        <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_296px]">
+          <TablaKardex
+            filas={filas}
+            total={total}
+            loading={loading}
+            seleccionada={seleccionada}
+            onSeleccionar={(m) => setSeleccionadaId(m.id)}
+            hayHistorico={historico}
+            textoRango={textoRango(rango)}
+          />
+          <div className="hidden min-h-0 lg:flex lg:flex-col">
+            <DetalleMovimiento
+              m={seleccionada}
+              companeros={seleccionada ? companerosDeLote(movimientos, seleccionada) : 0}
+              queryRol={queryRol}
+              onVerLote={() => seleccionada && verLote(seleccionada)}
+              onCorregir={() => {
+                if (seleccionada) setAbrirNuevo(true);
+              }}
+            />
+          </div>
+        </div>
       )}
 
-      {detalle ? <DetalleMovDialog mov={detalle} onClose={() => setDetalle(null)} /> : null}
+      {abrirNuevo && (
+        <NuevoMovimientoDialog
+          corrigiendo={seleccionada}
+          onClose={() => setAbrirNuevo(false)}
+          onGuardado={() => {
+            setAbrirNuevo(false);
+            void refrescar();
+          }}
+        />
+      )}
     </div>
   );
 }

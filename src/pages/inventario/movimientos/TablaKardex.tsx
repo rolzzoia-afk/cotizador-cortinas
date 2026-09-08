@@ -1,170 +1,174 @@
-// El libro único: insumos y telas en la misma lista, con el saldo que quedó
-// después de cada movimiento y de dónde salió a dónde fue.
+// La tabla del Kardex (lámina «Kardex»).
 //
-// Es lo que los dos registros viejos no podían dar: ahí cada fila dice una
-// cantidad, pero no en cuánto quedó el artículo, así que la historia de un
-// código no se puede reconstruir.
+// Ocho columnas y una fila por movimiento. Las filas atenuadas vienen del
+// historial de tubos y paños: se ven porque son parte de la historia de un
+// artículo, pero no se corrigen desde acá — las escribe el optimizador.
 
-import { useMemo, useState } from 'react';
-import { Loader2, Search } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { badgeTipoMovimiento } from '@/modules/inventario/badges';
-import { formatFecha } from '@/modules/inventario/helpers';
-import { useKardex, type FilaKardex } from '@/modules/inventario/kardexStore';
+import {
+  origenDestino,
+  textoCantidad,
+  textoSaldo,
+  type FilaKardexVista,
+} from '@/modules/inventario/kardexVista';
 
-const TIPOS = ['INGRESO', 'SALIDA', 'TRASLADO', 'DEVOLUCION', 'AJUSTE', 'MERMA', 'CONTEO'];
+/** «08-09 11:42», que es como se lee de un vistazo en una lista larga. */
+function fechaCorta(iso: string): string {
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mi = String(d.getMinutes()).padStart(2, '0');
+  return `${dd}-${mm} ${hh}:${mi}`;
+}
 
-export function TablaKardex() {
-  const [dominio, setDominio] = useState<'' | 'insumo' | 'tela'>('');
-  const [tipo, setTipo] = useState('');
-  const [busqueda, setBusqueda] = useState('');
+function Fila({
+  m,
+  activa,
+  onClick,
+}: {
+  m: FilaKardexVista;
+  activa: boolean;
+  onClick: () => void;
+}) {
+  const badge = badgeTipoMovimiento(m.tipo);
+  const { desde, hacia } = origenDestino(m);
+  const saldo = textoSaldo(m);
+  const negativo = m.saldo_post != null && m.saldo_post < 0;
 
-  const { movimientos, almacenes, loading, error } = useKardex({
-    dominio: dominio || undefined,
-    tipo: (tipo || undefined) as never,
-    limite: 300,
-  });
+  return (
+    <tr
+      onClick={onClick}
+      className={cn(
+        'cursor-pointer border-b border-border transition-colors last:border-0 hover:bg-accent/[0.05]',
+        activa && 'bg-accent/[0.09]',
+        // El historial de tubos y paños se ve, pero no se toca desde acá.
+        !m.editable && 'opacity-[0.72]',
+      )}
+    >
+      <td className="whitespace-nowrap px-2.5 py-2 font-mono text-muted-foreground">
+        {fechaCorta(m.fecha)}
+      </td>
+      <td className="px-2.5 py-2">
+        <div className="font-mono font-medium">{m.item_cod}</div>
+        {m.item_nombre && (
+          <div className="text-[0.6875rem] text-muted-foreground">{m.item_nombre}</div>
+        )}
+      </td>
+      <td className="px-2.5 py-2">
+        <Badge variant={badge.variante}>{badge.texto}</Badge>
+      </td>
+      <td className="px-2.5 py-2 text-muted-foreground">
+        {desde}
+        {hacia && (
+          <>
+            {' → '}
+            <span className="text-foreground">{hacia}</span>
+          </>
+        )}
+      </td>
+      <td className="whitespace-nowrap px-2.5 py-2 text-right font-mono">{textoCantidad(m)}</td>
+      <td
+        className={cn(
+          'whitespace-nowrap px-2.5 py-2 text-right font-mono',
+          negativo && 'text-destructive',
+          saldo === '—' && 'text-muted-foreground/60',
+        )}
+      >
+        {saldo}
+      </td>
+      <td className="px-2.5 py-2">
+        {m.ot ? (
+          <span className="font-mono text-accent">OT {m.ot}</span>
+        ) : (
+          <span className="text-muted-foreground">{m.referencia || '—'}</span>
+        )}
+      </td>
+      <td className="px-2.5 py-2 text-muted-foreground">{m.quien || '—'}</td>
+    </tr>
+  );
+}
 
-  // El movimiento guarda el id de la bodega; en pantalla va su código.
-  const codigoDe = useMemo(() => {
-    const m = new Map(almacenes.map((a) => [a.id, a.codigo]));
-    return (id: string | null) => (id ? m.get(id) || '—' : '—');
-  }, [almacenes]);
-
-  const filtrados = useMemo(() => {
-    const q = busqueda.trim().toUpperCase();
-    if (!q) return movimientos;
-    return movimientos.filter(
-      (m) =>
-        m.item_cod.toUpperCase().includes(q) ||
-        (m.item_nombre || '').toUpperCase().includes(q) ||
-        (m.ot || '').toUpperCase().includes(q),
-    );
-  }, [movimientos, busqueda]);
-
-  if (error) {
+export function TablaKardex({
+  filas,
+  total,
+  loading,
+  seleccionada,
+  onSeleccionar,
+  hayHistorico,
+  textoRango,
+}: {
+  filas: FilaKardexVista[];
+  total: number;
+  loading: boolean;
+  seleccionada: FilaKardexVista | null;
+  onSeleccionar: (m: FilaKardexVista) => void;
+  hayHistorico: boolean;
+  textoRango: string;
+}) {
+  if (loading) {
     return (
-      <div className="rounded-lg border border-destructive/40 bg-destructive/[0.09] px-4 py-3 text-sm">
-        {error}
+      <div className="flex flex-1 items-center justify-center rounded-lg border border-border bg-card py-16 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (filas.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col justify-center rounded-lg border border-border bg-card">
+        <EmptyState
+          titulo="No hay movimientos"
+          texto="Nada calza con los filtros de arriba. Prueba con un rango de fechas más amplio o enciende el histórico."
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-full sm:w-[240px]">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Código, nombre u OT…"
-            className="pl-8"
-          />
-        </div>
-        <select
-          value={dominio}
-          onChange={(e) => setDominio(e.target.value as '' | 'insumo' | 'tela')}
-          className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
-        >
-          <option value="">Insumos y telas</option>
-          <option value="insumo">Solo insumos</option>
-          <option value="tela">Solo telas</option>
-        </select>
-        <select
-          value={tipo}
-          onChange={(e) => setTipo(e.target.value)}
-          className="rounded-lg border border-border bg-secondary px-3 py-2 text-sm"
-        >
-          <option value="">Todos los tipos</option>
-          {TIPOS.map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-        </select>
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
+      <div className="min-h-0 flex-1 overflow-auto">
+        <table className="w-full min-w-[880px] text-[0.78rem] tabular-nums">
+          <thead className="sticky top-0 z-10 bg-card">
+            <tr className="border-b border-border text-[0.65rem] uppercase tracking-[0.08em] text-muted-foreground">
+              <th className="h-10 w-[104px] px-2.5 text-left font-medium">Fecha</th>
+              <th className="h-10 w-[150px] px-2.5 text-left font-medium">Artículo</th>
+              <th className="h-10 w-[88px] px-2.5 text-left font-medium">Tipo</th>
+              <th className="h-10 px-2.5 text-left font-medium">Origen → destino</th>
+              <th className="h-10 w-[86px] px-2.5 text-right font-medium">Cantidad</th>
+              <th className="h-10 w-[72px] px-2.5 text-right font-medium">Saldo</th>
+              <th className="h-10 w-[96px] px-2.5 text-left font-medium">Referencia</th>
+              <th className="h-10 w-[82px] px-2.5 text-left font-medium">Quién</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filas.map((m) => (
+              <Fila
+                key={`${m.fuente}-${m.id}`}
+                m={m}
+                activa={seleccionada?.id === m.id}
+                onClick={() => onSeleccionar(m)}
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
-
-      {loading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </div>
-      ) : filtrados.length === 0 ? (
-        <EmptyState
-          titulo="No hay movimientos"
-          texto={
-            busqueda || tipo || dominio
-              ? 'Ningún movimiento calza con lo que buscas.'
-              : 'Todavía no se ha registrado ningún movimiento en el libro.'
-          }
-        />
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full min-w-[860px] text-[0.8125rem]">
-            <thead>
-              <tr className="border-b border-border text-[0.6875rem] uppercase tracking-[0.08em] text-muted-foreground">
-                <th className="h-9 px-3 text-left font-medium">Fecha</th>
-                <th className="h-9 px-3 text-left font-medium">Artículo</th>
-                <th className="h-9 px-3 text-left font-medium">Tipo</th>
-                <th className="h-9 px-3 text-left font-medium">De → a</th>
-                <th className="h-9 px-3 text-right font-medium">Cantidad</th>
-                <th className="h-9 px-3 text-right font-medium">Saldo después</th>
-                <th className="h-9 px-3 text-left font-medium">OT / motivo</th>
-                <th className="h-9 px-3 text-left font-medium">Quién</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map((m) => (
-                <Fila key={m.id} m={m} codigoDe={codigoDe} />
-              ))}
-            </tbody>
-          </table>
-          <div className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
-            Mostrando {filtrados.length.toLocaleString('es-CL')} de{' '}
-            {movimientos.length.toLocaleString('es-CL')} · se traen los 300 más recientes
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Fila({ m, codigoDe }: { m: FilaKardex; codigoDe: (id: string | null) => string }) {
-  const badge = badgeTipoMovimiento(m.tipo);
-  // El saldo que importa es el del lado que se movió: si algo entró, en cuánto
-  // quedó el destino; si salió, en cuánto quedó el origen.
-  const saldo = m.saldo_destino_post ?? m.saldo_origen_post;
-  return (
-    <tr className="border-b border-border last:border-0">
-      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{formatFecha(m.fecha)}</td>
-      <td className="px-3 py-2">
-        <div className="font-mono font-medium">{m.item_cod}</div>
-        {m.item_nombre && (
-          <div className="text-xs text-muted-foreground">{m.item_nombre}</div>
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-border px-3.5 py-2.5 text-xs text-muted-foreground">
+        <span>
+          {filas.length.toLocaleString('es-CL')} de {total.toLocaleString('es-CL')} movimientos ·{' '}
+          {textoRango.toLowerCase()}
+        </span>
+        {hayHistorico && (
+          <Badge variant="muted" className="ml-auto">
+            Las filas atenuadas vienen del historial de tubos y paños: se ven, no se editan acá
+          </Badge>
         )}
-      </td>
-      <td className="px-3 py-2">
-        <Badge variant={badge.variante}>{badge.texto}</Badge>
-      </td>
-      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
-        {codigoDe(m.almacen_origen_id)} → {codigoDe(m.almacen_destino_id)}
-      </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right font-mono">
-        {Number(m.cantidad).toLocaleString('es-CL')}
-        {m.unidad === 'm' ? ' m' : ''}
-      </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right font-mono">
-        {saldo === null ? '—' : Number(saldo).toLocaleString('es-CL')}
-      </td>
-      <td className="px-3 py-2 text-xs text-muted-foreground">
-        {m.ot ? <span className="font-mono">OT {m.ot}</span> : m.motivo || '—'}
-      </td>
-      <td className="px-3 py-2 text-xs text-muted-foreground">
-        {m.responsable || m.usuario_email || '—'}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 

@@ -14,6 +14,7 @@ import {
   type RespuestaKardex,
   type TipoKardex,
 } from './kardex';
+import type { FilaKardexVista } from './kardexVista';
 
 export type ResultadoKardex =
   | { ok: true; respuesta: RespuestaKardex }
@@ -91,70 +92,51 @@ export function useRegistrarKardex(): {
 // Leer el libro
 // ─────────────────────────────────────────────────────────────────────
 
-export type FilaKardex = {
-  id: string;
-  fecha: string;
-  /** La base lo guarda con un CHECK; acá llega como texto y así se muestra. */
-  dominio: string;
-  item_cod: string;
-  item_nombre: string | null;
-  tipo: string;
-  cantidad: number;
-  unidad: string | null;
-  almacen_origen_id: string | null;
-  almacen_destino_id: string | null;
-  saldo_origen_post: number | null;
-  saldo_destino_post: number | null;
-  motivo: string | null;
-  referencia_tipo: string | null;
-  ot: string | null;
-  usuario_email: string | null;
-  responsable: string | null;
-  recibe: string | null;
-  notas: string | null;
-  lote_id: string | null;
-};
-
 export type FiltrosKardex = {
-  dominio?: 'insumo' | 'tela';
+  /** Qué tanto para atrás se pide. `null` = sin tope. */
+  desde?: string | null;
+  tipo?: TipoKardex | '';
   itemCod?: string;
-  tipo?: TipoKardex;
-  desde?: string;
-  hasta?: string;
-  ot?: string;
+  /** `false` = solo el libro; `true` = también lo anterior al kardex. */
+  incluirHistorico?: boolean;
   limite?: number;
 };
-
-export type Almacen = { id: string; codigo: string; nombre: string; tipo: string };
 
 function mensajeError(e: unknown): string {
   const code = (e as { code?: string })?.code || '';
   // La tabla no existe todavía: falta correr la migración, no es una falla.
   if (code === 'PGRST205' || code === '42P01') {
-    return 'Falta correr la migración sql/20260908_inventario_02_kardex.sql para ver el kardex.';
+    return 'Falta correr la migración sql/20260908_inventario_03_kardex_historico.sql para ver el kardex.';
   }
   const msg = (e as { message?: string })?.message;
   return msg ? `No se pudo cargar el kardex: ${msg}` : 'No se pudo cargar el kardex.';
 }
 
 /**
- * El libro, con sus filtros. Trae también los almacenes, porque el movimiento
- * guarda el id y en pantalla hay que mostrar «MP» o «CAM-1».
+ * El libro. Se lee siempre de `v_kardex_historico`, que junta los movimientos
+ * nuevos con todo lo que se movió antes de que el kardex existiera; el
+ * interruptor de la pantalla decide si esas filas viejas entran o no.
+ *
+ * Los filtros que reducen MUCHO —la fecha y el tipo— los hace la base. Los
+ * demás se resuelven en pantalla sobre lo que ya llegó: son instantáneos y
+ * evitan ir y volver a la base por cada clic en un chip.
  */
 export function useKardex(filtros: FiltrosKardex = {}): {
-  movimientos: FilaKardex[];
-  almacenes: Almacen[];
+  movimientos: FilaKardexVista[];
+  /** Cuántas hay en total, para el «N de M» del pie. */
+  total: number;
   loading: boolean;
   error: string | null;
   refrescar: () => Promise<void>;
 } {
   const { empresaId } = useAuth();
-  const [movimientos, setMovimientos] = useState<FilaKardex[]>([]);
-  const [almacenes, setAlmacenes] = useState<Almacen[]>([]);
+  const [movimientos, setMovimientos] = useState<FilaKardexVista[]>([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { dominio, itemCod, tipo, desde, hasta, ot, limite } = filtros;
+  const { desde, tipo, itemCod, incluirHistorico, limite } = filtros;
+  const tope = limite || 500;
 
   const cargar = useCallback(async () => {
     if (!empresaId) {
@@ -164,41 +146,44 @@ export function useKardex(filtros: FiltrosKardex = {}): {
     setLoading(true);
     setError(null);
     try {
-      let q = supabase
-        .from('inventario_movimientos')
-        .select('id,fecha,dominio,item_cod,item_nombre,tipo,cantidad,unidad,almacen_origen_id,almacen_destino_id,saldo_origen_post,saldo_destino_post,motivo,referencia_tipo,ot,usuario_email,responsable,recibe,notas,lote_id')
-        .eq('empresa_id', empresaId)
-        .order('fecha', { ascending: false })
-        .limit(limite || 300);
+      const columnas =
+        'id,fuente,editable,fecha,dominio,item_cod,item_nombre,tipo,cantidad,unidad,cantidad_texto,origen,destino,saldo_post,ot,referencia,quien,notas,lote_id';
 
-      if (dominio) q = q.eq('dominio', dominio);
-      if (tipo) q = q.eq('tipo', tipo);
-      if (itemCod) q = q.eq('item_cod', itemCod.trim().toUpperCase());
-      if (ot) q = q.eq('ot', ot.trim());
-      if (desde) q = q.gte('fecha', desde);
-      if (hasta) q = q.lte('fecha', hasta);
+      // `as any` hasta que corra el SQL 03 y se regeneren los tipos: la vista
+      // que hay en `database.ts` es todavía la de tres fuentes, sin `editable`.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const vista = () => supabase.from('v_kardex_historico' as any);
 
-      const [rMov, rAlm] = await Promise.all([
-        q,
-        supabase.from('almacenes').select('id,codigo,nombre,tipo').eq('empresa_id', empresaId),
-      ]);
-      if (rMov.error) throw rMov.error;
+      const armar = (conteo: boolean) => {
+        let q = conteo
+          ? vista().select('id', { count: 'exact', head: true })
+          : vista().select(columnas);
+        q = q.eq('empresa_id', empresaId);
+        if (!incluirHistorico) q = q.eq('editable', true);
+        if (tipo) q = q.eq('tipo', tipo);
+        if (itemCod) q = q.eq('item_cod', itemCod.trim().toUpperCase());
+        if (desde) q = q.gte('fecha', desde);
+        return conteo ? q : q.order('fecha', { ascending: false }).limit(tope);
+      };
 
-      setMovimientos((rMov.data as FilaKardex[] | null) || []);
-      setAlmacenes((rAlm.data as Almacen[] | null) || []);
+      const [rFilas, rTotal] = await Promise.all([armar(false), armar(true)]);
+      if (rFilas.error) throw rFilas.error;
+
+      setMovimientos((rFilas.data as unknown as FilaKardexVista[] | null) || []);
+      setTotal(rTotal.count ?? 0);
       setLoading(false);
     } catch (e) {
       setError(mensajeError(e));
       setMovimientos([]);
       setLoading(false);
     }
-  }, [empresaId, dominio, itemCod, tipo, desde, hasta, ot, limite]);
+  }, [empresaId, desde, tipo, itemCod, incluirHistorico, tope]);
 
   useEffect(() => {
     void cargar();
   }, [cargar]);
 
-  return { movimientos, almacenes, loading, error, refrescar: cargar };
+  return { movimientos, total, loading, error, refrescar: cargar };
 }
 
 /**
