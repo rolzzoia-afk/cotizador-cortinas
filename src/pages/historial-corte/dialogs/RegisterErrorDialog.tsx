@@ -310,9 +310,11 @@ export default function RegisterErrorDialog({
       p_destino_original: destino as string,
       p_med_recuperar: medRecupVal,
       p_responsable: responsable.trim(),
-      p_tubo_nuevo_colmena: esNuevo ? nuevoColmena.trim().toUpperCase() : null,
-      p_tubo_nuevo_cod: esNuevo ? nuevoCod.trim().toUpperCase() : null,
-      p_tubo_nuevo_medida_cm: esNuevo ? Number(nuevoMedida) : null,
+      // Los tres del tubo nuevo tienen DEFAULT NULL en la función: no mandarlos
+      // es exactamente lo mismo que mandar nulo, y así el tipo no miente.
+      p_tubo_nuevo_colmena: esNuevo ? nuevoColmena.trim().toUpperCase() : undefined,
+      p_tubo_nuevo_cod: esNuevo ? nuevoCod.trim().toUpperCase() : undefined,
+      p_tubo_nuevo_medida_cm: esNuevo ? Number(nuevoMedida) : undefined,
     });
 
     setSaving(false);
