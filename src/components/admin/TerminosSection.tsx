@@ -5,19 +5,33 @@
 // unidos y sin repetir, según lo que tenga la cotización.
 
 import { useEffect, useState } from 'react';
-import { FileText, Plus, RotateCcw, Save } from 'lucide-react';
+import { FileText, History, Plus, RotateCcw, Save, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarraGuardarSticky } from '@/components/admin/BarraGuardarSticky';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useAuth } from '@/lib/auth';
 import {
   TERMINOS_DEFAULT,
+  claveTermino,
   terminosParaCotizacion,
   type ConfigTerminos,
   type GrupoTerminos,
 } from '@/modules/cotizador/terminos';
 import { guardarTerminos, useTerminos } from '@/modules/cotizador/terminosStore';
+import {
+  cargarRespaldosTerminos,
+  terminosDelRespaldo,
+  type RespaldoTerminos,
+} from '@/modules/cotizador/terminosRespaldos';
 import GrupoTerminosEditor from './terminos/GrupoTerminosEditor';
+import ImportarTerminosDialog from './terminos/ImportarTerminosDialog';
 
 /** Id estable a partir del nombre (o uno aleatorio si queda vacío). */
 function nuevoId(): string {
@@ -30,6 +44,49 @@ export function TerminosSection() {
   const [draft, setDraft] = useState<ConfigTerminos>(TERMINOS_DEFAULT);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [respaldos, setRespaldos] = useState<RespaldoTerminos[]>([]);
+  const [verRespaldos, setVerRespaldos] = useState(false);
+
+  useEffect(() => {
+    if (empresaId) cargarRespaldosTerminos(empresaId).then(setRespaldos);
+  }, [empresaId, terminos]);
+
+  /**
+   * Carga en el borrador los términos leídos de una planilla. A un grupo nuevo
+   * van tal cual; a uno existente, reemplazando los suyos o agregándose al
+   * final sin repetir (misma comparación que usa la cotización para no listar
+   * dos veces el mismo término).
+   */
+  const importarTerminos = (
+    destino: string,
+    terminos: string[],
+    modo: 'reemplazar' | 'agregar',
+  ) => {
+    setDraft((d) => {
+      if (!destino) {
+        return {
+          grupos: [
+            ...d.grupos,
+            { id: nuevoId(), nombre: 'Importados', siempre: false, telas: [], categorias: [], terminos },
+          ],
+        };
+      }
+      return {
+        grupos: d.grupos.map((g) => {
+          if (g.id !== destino) return g;
+          if (modo === 'reemplazar') return { ...g, terminos };
+          const vistos = new Set(g.terminos.map(claveTermino));
+          const nuevos = terminos.filter((t) => !vistos.has(claveTermino(t)));
+          return { ...g, terminos: [...g.terminos, ...nuevos] };
+        }),
+      };
+    });
+    setDirty(true);
+    toast.success(
+      `${terminos.length} términos cargados. Revísalos y presiona «Guardar términos».`,
+    );
+  };
 
   useEffect(() => {
     if (!loading) {
@@ -119,9 +176,22 @@ export function TerminosSection() {
               <Plus className="mr-1.5 h-3.5 w-3.5" />
               Agregar grupo
             </Button>
+            <Button onClick={() => setImportando(true)} variant="secondary" size="sm">
+              <Upload className="mr-1.5 h-3.5 w-3.5" />
+              Importar desde planilla
+            </Button>
             <Button onClick={onGuardar} disabled={saving || !empresaId || !dirty} size="sm">
               <Save className="mr-1.5 h-3.5 w-3.5" />
               {saving ? 'Guardando…' : 'Guardar términos'}
+            </Button>
+            <Button
+              onClick={() => setVerRespaldos(true)}
+              variant="ghost"
+              size="sm"
+              disabled={!respaldos.length}
+            >
+              <History className="mr-1.5 h-3.5 w-3.5" />
+              Respaldos ({respaldos.length})
             </Button>
             <Button
               onClick={() => {
@@ -158,6 +228,56 @@ export function TerminosSection() {
             etiquetaGuardar="Guardar términos"
             onGuardar={onGuardar}
           />
+
+          {importando && (
+            <ImportarTerminosDialog
+              grupos={draft.grupos}
+              onClose={() => setImportando(false)}
+              onImportar={importarTerminos}
+            />
+          )}
+
+          <Dialog open={verRespaldos} onOpenChange={setVerRespaldos}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Respaldos de los términos</DialogTitle>
+                <DialogDescription>
+                  Cada vez que se guarda queda una foto de cómo estaban antes. Al restaurar una se
+                  carga en pantalla: todavía hay que presionar Guardar para aplicarla.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="max-h-80 space-y-1 overflow-y-auto">
+                {respaldos.map((r, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-md border p-2 text-xs">
+                    <div>
+                      <div className="font-medium">
+                        {new Date(r.fecha).toLocaleString('es-CL', {
+                          dateStyle: 'short',
+                          timeStyle: 'short',
+                        })}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {r.motivo} · {terminosDelRespaldo(r)} términos en {r.config.grupos.length}{' '}
+                        grupos
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => {
+                        setDraft(r.config);
+                        setDirty(true);
+                        setVerRespaldos(false);
+                        toast.info('Respaldo cargado. Presiona Guardar para aplicarlo.');
+                      }}
+                    >
+                      Restaurar
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </section>

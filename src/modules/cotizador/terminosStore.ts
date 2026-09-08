@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { TERMINOS_DEFAULT, normalizarTerminos, type ConfigTerminos } from './terminos';
+import { respaldarTerminos } from './terminosRespaldos';
 
 export const CLAVE_TERMINOS = 'terminos_condiciones';
 
@@ -29,7 +30,14 @@ export async function cargarTerminos(empresaId: string): Promise<ConfigTerminos>
   }
 }
 
-export async function guardarTerminos(empresaId: string, config: ConfigTerminos): Promise<void> {
+export async function guardarTerminos(
+  empresaId: string,
+  config: ConfigTerminos,
+  motivo = 'Guardado desde Admin',
+): Promise<void> {
+  // Foto de lo que había ANTES: importar desde una planilla puede reemplazar
+  // los términos de un grupo entero, y son los que se le mandan al cliente.
+  await respaldarTerminos(empresaId, motivo);
   const { error } = await supabase.from('configuracion').upsert(
     { empresa_id: empresaId, clave: CLAVE_TERMINOS, valor: JSON.stringify(config) },
     { onConflict: 'empresa_id,clave' },

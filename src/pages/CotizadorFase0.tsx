@@ -43,8 +43,7 @@ import {
   type AdicionalResultado,
 } from '@/modules/cotizador/motorFase0';
 import { formatCLP } from '@/modules/cotizador/calculos';
-import { categoriasTela } from '@/modules/cotizador/categoriaTela';
-import { categoriasDeVentanas } from '@/modules/cotizador/terminos';
+import { categoriasParaTerminos } from '@/modules/cotizador/terminosContexto';
 import { useTerminos } from '@/modules/cotizador/terminosStore';
 import {
   conTerminoTarjeta,
@@ -1419,23 +1418,14 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const t = resultado.totales;
   const hayFiltro = filtroActivo !== null || busqueda.trim().length > 0;
 
-  // Categorías de tela (A/B) de las CORTINAS de la cotización — distintivo en
-  // la cabecera (también al importar una orden desde Excel). Los adicionales
-  // (accesorios, cenefas) no cuentan: la categoría es un atributo de la tela.
-  const catsTela = useMemo(
-    () =>
-      categoriasTela(
-        filas.map((f) => f.codInt),
-        catalogo,
-      ),
+  // Con qué se eligen los términos: las categorías de PRODUCTO (ROL,
+  // BEEBLACK, DARK_38mm…) y las gamas de TELA (A/B) de las CORTINAS. Los
+  // adicionales (accesorios, cenefas) no cuentan: la gama es de la tela. El
+  // beeblack se reconoce por su código aunque la fila no tenga categoría, y no
+  // aporta gama de tela: trae sus propios términos (ver terminosContexto.ts).
+  const { catsProducto, catsTela } = useMemo(
+    () => categoriasParaTerminos(filas, catalogo),
     [filas, catalogo],
-  );
-
-  // Categorías de PRODUCTO de la cotización (ROL, BEEBLACK, DARK_38mm…): con
-  // ellas y con las de tela se eligen los términos y condiciones que aplican.
-  const catsProducto = useMemo(
-    () => categoriasDeVentanas(filas.map((f) => ({ categoria: f.categoria }))),
-    [filas],
   );
 
   // Lo que necesitan los bloques configurables para dibujarse.
