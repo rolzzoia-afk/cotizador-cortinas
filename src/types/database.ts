@@ -5990,15 +5990,25 @@ export type Database = {
       v_kardex_historico: {
         Row: {
           cantidad: number | null
+          cantidad_texto: string | null
+          destino: string | null
           dominio: string | null
+          editable: boolean | null
           empresa_id: string | null
           fecha: string | null
           fuente: string | null
+          id: string | null
           item_cod: string | null
+          item_nombre: string | null
+          lote_id: string | null
           notas: string | null
+          origen: string | null
           ot: string | null
-          responsable: string | null
+          quien: string | null
+          referencia: string | null
+          saldo_post: number | null
           tipo: string | null
+          unidad: string | null
         }
         Relationships: []
       }

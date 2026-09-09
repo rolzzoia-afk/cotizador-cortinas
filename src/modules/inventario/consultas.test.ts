@@ -112,6 +112,12 @@ describe('las columnas que pide el inventario existen en la base', () => {
     expect(tablas.get('telas_catalogo')?.has('descripcion')).toBe(false);
     expect(tablas.get('movimientos_telas')?.has('metros')).toBe(true);
     expect(tablas.get('movimientos_telas')?.has('cantidad')).toBe(false);
+    // Las VISTAS también entran al mapa: el kardex se lee de una, y si esta
+    // línea falla es que se revirtió el SQL 03 o que los tipos quedaron
+    // viejos. Sin la vista en el mapa, el guardián se saltaría en silencio
+    // las 19 columnas que pide la pantalla del Kardex.
+    expect(tablas.get('v_kardex_historico')?.has('editable')).toBe(true);
+    expect(tablas.get('v_kardex_historico')?.has('saldo_post')).toBe(true);
   });
 
   it('hay consultas que revisar', () => {

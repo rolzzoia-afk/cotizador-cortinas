@@ -41,9 +41,7 @@ export function useResumenInventario(): ResumenInventario & { refrescar: () => P
           .from('insumos')
           .select('stock_mp,stock_liberado,minimo,status')
           .eq('empresa_id', empresaId),
-        // `inventarios` todavía no está en los tipos generados.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any)
+        supabase
           .from('inventarios')
           .select('id')
           .eq('empresa_id', empresaId)

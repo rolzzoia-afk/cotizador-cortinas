@@ -39,8 +39,7 @@ export function InventarioConteo() {
     (async () => {
       setLoadingColmenas(true);
       const { data, error } = await supabase
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .from('tubos_inventario_snapshot' as any)
+        .from('tubos_inventario_snapshot')
         .select('n_colmena')
         .eq('inventario_id', activo.id);
       if (cancel) return;
@@ -49,8 +48,7 @@ export function InventarioConteo() {
         setColmenas([]);
       } else {
         const setN = new Set<string>();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ((data as any[]) || []).forEach((r) => {
+        (data || []).forEach((r) => {
           if (r.n_colmena) setN.add(String(r.n_colmena));
         });
         const arr = Array.from(setN).sort((a, b) =>

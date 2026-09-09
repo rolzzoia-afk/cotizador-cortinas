@@ -149,10 +149,7 @@ export function useKardex(filtros: FiltrosKardex = {}): {
       const columnas =
         'id,fuente,editable,fecha,dominio,item_cod,item_nombre,tipo,cantidad,unidad,cantidad_texto,origen,destino,saldo_post,ot,referencia,quien,notas,lote_id';
 
-      // `as any` hasta que corra el SQL 03 y se regeneren los tipos: la vista
-      // que hay en `database.ts` es todavía la de tres fuentes, sin `editable`.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const vista = () => supabase.from('v_kardex_historico' as any);
+      const vista = () => supabase.from('v_kardex_historico');
 
       const armar = (conteo: boolean) => {
         let q = conteo
