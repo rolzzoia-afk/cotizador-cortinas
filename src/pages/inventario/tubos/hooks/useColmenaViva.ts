@@ -1,8 +1,13 @@
 // Datos de la vista "Colmena de tubería", EN VIVO.
 //
-// Tres consultas: el stock (`colmena_tubos`), los eventos `ingreso` de
+// Dos consultas: el stock (`colmena_tubos`) y los eventos `ingreso` de
 // `tubos_historial` (única fuente confiable de antigüedad — ver el comentario
-// de colmenaTubos.ts) y los últimos movimientos para el panel lateral.
+// de colmenaTubos.ts).
+//
+// Los últimos movimientos ya NO se piden acá: el panel de la derecha pasó a
+// mostrar la ficha del tubo elegido, y la lista de eventos es exactamente la
+// pestaña Historial. Traerlos igual era 50 filas por cada refresco y cada
+// sondeo, para nada.
 //
 // El refresco es por realtime sobre `colmena_tubos`: TODO movimiento del
 // optimizador termina tocando esa tabla (el trigger `trg_auto_remove_consumed_tube`
@@ -23,17 +28,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { TuboColmena } from '@/modules/tubos/colmenaTubos';
 import { mapaPrimerIngreso } from '@/modules/tubos/colmenaTubos';
-import type { Evento } from '../HistorialTubos.types';
 
-/** Cuántos movimientos recientes se muestran en el panel lateral. */
-export const LIMITE_MOVIMIENTOS = 50;
 /** Sondeo de respaldo (ver la nota de arriba sobre la publicación realtime). */
 const INTERVALO_SONDEO_MS = 60_000;
 
 export type DatosColmenaViva = {
   tubos: TuboColmena[];
   ingresos: Map<string, string>;
-  movimientos: Evento[];
   loading: boolean;
   online: boolean;
   refrescar: () => Promise<void>;
@@ -42,7 +43,6 @@ export type DatosColmenaViva = {
 export function useColmenaViva(empresaId: string | null | undefined): DatosColmenaViva {
   const [tubos, setTubos] = useState<TuboColmena[]>([]);
   const [ingresos, setIngresos] = useState<Map<string, string>>(new Map());
-  const [movimientos, setMovimientos] = useState<Evento[]>([]);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(false);
   // Debounce: un sync del optimizador dispara cientos de eventos de realtime
@@ -52,7 +52,7 @@ export function useColmenaViva(empresaId: string | null | undefined): DatosColme
   const cargar = useCallback(async () => {
     if (!empresaId) return;
     try {
-      const [stock, ing, movs] = await Promise.all([
+      const [stock, ing] = await Promise.all([
         supabase
           .from('colmena_tubos')
           .select('id, n_colmena, cod, medida_cm, serial, tubo_raiz_id, created_at')
@@ -64,12 +64,6 @@ export function useColmenaViva(empresaId: string | null | undefined): DatosColme
           .select('tubo_raiz_id, created_at')
           .eq('empresa_id', empresaId)
           .eq('evento', 'ingreso'),
-        supabase
-          .from('tubos_historial')
-          .select('*')
-          .eq('empresa_id', empresaId)
-          .order('created_at', { ascending: false })
-          .limit(LIMITE_MOVIMIENTOS),
       ]);
       setTubos((stock.data || []) as TuboColmena[]);
       setIngresos(
@@ -77,7 +71,6 @@ export function useColmenaViva(empresaId: string | null | undefined): DatosColme
           (ing.data || []) as Array<{ tubo_raiz_id: string | null; created_at: string | null }>,
         ),
       );
-      setMovimientos((movs.data || []) as Evento[]);
     } finally {
       setLoading(false);
     }
@@ -129,5 +122,5 @@ export function useColmenaViva(empresaId: string | null | undefined): DatosColme
     return () => clearInterval(id);
   }, [empresaId, cargar]);
 
-  return { tubos, ingresos, movimientos, loading, online, refrescar: cargar };
+  return { tubos, ingresos, loading, online, refrescar: cargar };
 }

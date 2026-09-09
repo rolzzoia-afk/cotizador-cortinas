@@ -1,7 +1,7 @@
 // Vista "Trazabilidad": buscador de tubos por código/colmena/medida/OT
 // + ficha completa al seleccionar uno. Permite navegar la cadena padre-hijo.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Ruler, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
@@ -20,11 +20,16 @@ import FichaCard from '../components/FichaCard';
 import EmptyState from '../components/EmptyState';
 import type { FichaTuboResp, TuboResultado } from '../HistorialTubos.types';
 
+/** Lo que trae el «Ver historial» de una pieza de la colmena. */
+export type BusquedaInicial = { cod: string; colmena: string; medida: string };
+
 interface VistaTrazabilidadProps {
   empresaId: string | null | undefined;
+  /** Si viene, la búsqueda se escribe y se lanza sola al entrar. */
+  inicial?: BusquedaInicial | null;
 }
 
-export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps) {
+export default function VistaTrazabilidad({ empresaId, inicial }: VistaTrazabilidadProps) {
   const [cod, setCod] = useState('');
   const [colmena, setColmena] = useState('');
   const [medida, setMedida] = useState('');
@@ -36,17 +41,22 @@ export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps)
   const [ficha, setFicha] = useState<FichaTuboResp | null>(null);
   const [loadingFicha, setLoadingFicha] = useState(false);
 
-  const buscar = async () => {
+  // Los criterios se pueden pasar a mano: al llegar desde «Ver historial» de
+  // una pieza, el estado todavía no se aplicó cuando hay que buscar.
+  const buscar = async (over?: Partial<BusquedaInicial>) => {
     if (!empresaId) return;
+    const cod2 = over?.cod ?? cod;
+    const colmena2 = over?.colmena ?? colmena;
+    const medida2 = over?.medida ?? medida;
     setError(null);
-    if (!cod.trim() && !colmena.trim() && !medida.trim() && !otBuscar.trim()) {
+    if (!cod2.trim() && !colmena2.trim() && !medida2.trim() && !otBuscar.trim()) {
       setError('Ingresa al menos un criterio: código, colmena, medida o número de OT.');
       setResultados(null);
       return;
     }
     let medidaNum: number | null = null;
-    if (medida.trim()) {
-      medidaNum = parseFloat(medida.trim().replace(',', '.'));
+    if (medida2.trim()) {
+      medidaNum = parseFloat(medida2.trim().replace(',', '.'));
       if (!Number.isFinite(medidaNum) || medidaNum <= 0) {
         setError('La medida debe ser un número positivo (ej: 156 o 156.5).');
         setResultados(null);
@@ -58,8 +68,8 @@ export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps)
     setFicha(null);
     // (supabase.rpc as any): RPCs nuevos, todavía no están en database.ts.
     const { data, error: err } = await (supabase.rpc as any)('buscar_tubos', {
-      p_cod: cod.trim() || null,
-      p_colmena: colmena.trim() || null,
+      p_cod: cod2.trim() || null,
+      p_colmena: colmena2.trim() || null,
       p_medida: medidaNum,
       p_ot: otBuscar.trim() || null,
       p_limit: 100,
@@ -90,6 +100,22 @@ export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps)
       document.getElementById('ficha-tubo')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 50);
   };
+
+  // Al llegar desde una pieza de la colmena: se escriben los criterios y se
+  // busca sola. `ref` para no repetir la búsqueda en cada render.
+  const ultimaInicial = useRef<string | null>(null);
+  useEffect(() => {
+    if (!inicial) return;
+    const clave = `${inicial.cod}|${inicial.colmena}|${inicial.medida}`;
+    if (ultimaInicial.current === clave) return;
+    ultimaInicial.current = clave;
+    setCod(inicial.cod);
+    setColmena(inicial.colmena);
+    setMedida(inicial.medida);
+    setOTBuscar('');
+    void buscar(inicial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inicial]);
 
   const limpiar = () => {
     setCod('');
@@ -138,7 +164,7 @@ export default function VistaTrazabilidad({ empresaId }: VistaTrazabilidadProps)
           />
         </div>
         <div className="mt-2 flex gap-2">
-          <Button onClick={buscar} disabled={loading}>
+          <Button onClick={() => void buscar()} disabled={loading}>
             <Search className="h-4 w-4" />
             {loading ? 'Buscando...' : 'Buscar tubo'}
           </Button>
