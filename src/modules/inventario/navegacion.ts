@@ -231,7 +231,8 @@ export const SUBMODULOS_INVENTARIO: readonly SubmoduloInventario[] = [
 
   // ── Administración ─────────────────────────────────────────────────
   {
-    // Diseñado, NO se programa hasta que la jefatura apruebe.
+    // La pantalla existe para acordar el alcance; el módulo NO se programa
+    // hasta que la jefatura apruebe. Por eso entra pero no opera.
     id: 'compras',
     ruta: '/inventario/compras',
     titulo: 'Compras',
@@ -239,7 +240,7 @@ export const SUBMODULOS_INVENTARIO: readonly SubmoduloInventario[] = [
     icono: 'ShoppingCart',
     roles: [],
     modo: 'escritorio',
-    estado: 'pendiente',
+    estado: 'listo',
     enMenu: true,
   },
   {
@@ -250,7 +251,7 @@ export const SUBMODULOS_INVENTARIO: readonly SubmoduloInventario[] = [
     icono: 'BarChart3',
     roles: [],
     modo: 'escritorio',
-    estado: 'pendiente',
+    estado: 'listo',
     enMenu: true,
   },
   {

@@ -43,6 +43,8 @@ const VistaMovimientos = lazy(() => import('@/pages/inventario/movimientos/Vista
 const VistaConteo = lazy(() => import('@/pages/inventario/conteo/VistaConteo').then((m) => ({ default: m.VistaConteo })));
 const VistaMermas = lazy(() => import('@/pages/inventario/mermas/VistaMermas').then((m) => ({ default: m.VistaMermas })));
 const VistaAlertas = lazy(() => import('@/pages/inventario/alertas/VistaAlertas').then((m) => ({ default: m.VistaAlertas })));
+const VistaReportes = lazy(() => import('@/pages/inventario/reportes/VistaReportes').then((m) => ({ default: m.VistaReportes })));
+const VistaCompras = lazy(() => import('@/pages/inventario/compras/VistaCompras').then((m) => ({ default: m.VistaCompras })));
 const VistaConfiguracion = lazy(() => import('@/pages/inventario/configuracion/VistaConfiguracion').then((m) => ({ default: m.VistaConfiguracion })));
 const VistaAuditoria = lazy(() => import('@/pages/inventario/auditoria/VistaAuditoria').then((m) => ({ default: m.VistaAuditoria })));
 
@@ -156,6 +158,8 @@ export function App() {
             <Route path="conteo/contar" element={<VistaContar />} />
             <Route path="mermas" element={<VistaMermas />} />
             <Route path="alertas" element={<VistaAlertas />} />
+            <Route path="reportes" element={<VistaReportes />} />
+            <Route path="compras" element={<VistaCompras />} />
             <Route path="configuracion" element={<VistaConfiguracion />} />
             <Route path="auditoria" element={<VistaAuditoria />} />
             {/* Una ruta que no existe dentro del módulo vuelve al tablero, no a
