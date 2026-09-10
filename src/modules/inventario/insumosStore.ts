@@ -18,6 +18,7 @@ import type {
   UbicacionRack,
   Validador,
 } from '@/modules/inventario/helpers';
+import { mapaDeValidadores } from '@/modules/inventario/validadores';
 
 export type ValidadoresMap = Record<string, string[]>;
 
@@ -78,11 +79,7 @@ export function useInsumos(): DatosInsumos & {
       const primerError = rIns.error || rMov.error || rUbi.error;
       if (primerError) throw primerError;
 
-      const validadores: ValidadoresMap = {};
-      for (const v of (rVal.data as Validador[] | null) || []) {
-        if (!validadores[v.campo]) validadores[v.campo] = [];
-        validadores[v.campo].push(v.valor);
-      }
+      const validadores = mapaDeValidadores(rVal.data as Validador[] | null);
 
       setDatos({
         insumos: ((rIns.data as Insumo[] | null) || []) as Insumo[],

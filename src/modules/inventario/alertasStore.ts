@@ -53,10 +53,10 @@ export function useAlertas(): {
       desde.setMonth(desde.getMonth() - MESES_CONSUMO);
       const desdeISO = desde.toISOString();
 
-      const [rIns, rTel, rSal, rPed] = await Promise.all([
+      const [rIns, rTel, rSal, rPed, rPedTel] = await Promise.all([
         supabase
           .from('insumos')
-          .select('id,cod,nemotecnico,descriptor_proveedor,minimo,stock_maximo,stock_mp,stock_liberado,status')
+          .select('id,cod,nemotecnico,descriptor_proveedor,color,minimo,stock_maximo,stock_mp,stock_liberado,status')
           .eq('empresa_id', empresaId),
         supabase
           .from('telas_catalogo')
@@ -68,8 +68,17 @@ export function useAlertas(): {
           .eq('empresa_id', empresaId)
           .ilike('tipo', 'SALIDA%')
           .gte('fecha', desdeISO),
+        // Los pedidos viven en la tabla de su dominio, así que se preguntan las
+        // dos: contando solo los insumos, el que pidió una tela ve el KPI en
+        // cero y vuelve a pedirla.
         supabase
           .from('movimientos_insumos')
+          .select('fecha')
+          .eq('empresa_id', empresaId)
+          .eq('tipo', 'PEDIDO REPOSICION')
+          .order('fecha'),
+        supabase
+          .from('movimientos_telas')
           .select('fecha')
           .eq('empresa_id', empresaId)
           .eq('tipo', 'PEDIDO REPOSICION')
@@ -87,6 +96,7 @@ export function useAlertas(): {
         dominio: 'insumo',
         codigo: i.cod || '',
         nombre: i.nemotecnico || i.descriptor_proveedor || i.cod || '',
+        color: i.color,
         ahora: Number(i.stock_mp ?? 0) + Number(i.stock_liberado ?? 0),
         minimo: i.minimo ?? null,
         maximo: i.stock_maximo ?? null,
@@ -110,7 +120,9 @@ export function useAlertas(): {
         consumoMes: deCodigo(t.codigo),
       }));
 
-      const fechas = (rPed.data || []).map((p) => Date.parse(String(p.fecha ?? ''))).filter((n) => !Number.isNaN(n));
+      const fechas = [...(rPed.data || []), ...(rPedTel.data || [])]
+        .map((p) => Date.parse(String(p.fecha ?? '')))
+        .filter((n) => !Number.isNaN(n));
       setPedidos({
         total: fechas.length,
         masViejoDias:

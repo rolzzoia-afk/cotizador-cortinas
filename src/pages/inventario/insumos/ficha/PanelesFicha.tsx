@@ -25,7 +25,7 @@ const oNada = (v: string | number | null | undefined) => {
   return s === '' ? <span className="text-muted-foreground">—</span> : s;
 };
 
-export function DatosArticulo({ insumo, esAdmin }: { insumo: Insumo; esAdmin: boolean }) {
+export function DatosArticulo({ insumo, verMontos }: { insumo: Insumo; verMontos: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3">
       <h2 className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
@@ -51,7 +51,7 @@ export function DatosArticulo({ insumo, esAdmin }: { insumo: Insumo; esAdmin: bo
             )
           }
         />
-        {esAdmin ? (
+        {verMontos ? (
           <Dato
             rotulo="Costo"
             valor={
@@ -162,7 +162,7 @@ export function EtiquetasArticulo({
   );
 }
 
-export function ProveedorArticulo({ insumo, esAdmin }: { insumo: Insumo; esAdmin: boolean }) {
+export function ProveedorArticulo({ insumo, verMontos }: { insumo: Insumo; verMontos: boolean }) {
   return (
     <div className="rounded-lg border border-border bg-card px-4 py-3">
       <div className="flex flex-col">
@@ -174,7 +174,7 @@ export function ProveedorArticulo({ insumo, esAdmin }: { insumo: Insumo; esAdmin
           rotulo="Unidades por paquete"
           valor={<span className="font-mono">{insumo.can_x_paquete || 1}</span>}
         />
-        {esAdmin ? (
+        {verMontos ? (
           <>
             <Dato
               rotulo="Costo neto"
@@ -187,7 +187,7 @@ export function ProveedorArticulo({ insumo, esAdmin }: { insumo: Insumo; esAdmin
           </>
         ) : null}
       </div>
-      {!esAdmin ? (
+      {!verMontos ? (
         <p className="mt-2 text-[0.6875rem] text-muted-foreground">
           Los costos los ve solo quien administra.
         </p>

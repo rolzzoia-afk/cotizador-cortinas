@@ -34,6 +34,10 @@ import {
 } from '@/modules/inventario/helpers';
 import type { AlmacenRack } from '@/modules/inventario/rackConfig';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { compararCodigos } from '@/modules/inventario/codigosInsumo';
+import { useFamiliasInsumo, useUnidades } from '@/modules/inventario/familiasStore';
+import { mapaDeValidadores } from '@/modules/inventario/validadores';
+import { puedeVerMontos } from '@/modules/inventario/navegacion';
 import {
   comoMovimientoViejo,
   lineaDeMovimientoManual,
@@ -41,6 +45,11 @@ import {
   saldosFinales,
 } from '@/modules/inventario/kardex';
 import { registrarMovimientos } from '@/modules/inventario/kardexStore';
+import {
+  actualizarInsumoDesdeForm,
+  crearInsumoDesdeForm,
+  subirFotoInsumo,
+} from './insumoMutations';
 
 import type {
   InsumoForm,
@@ -71,7 +80,11 @@ import { useInventario } from '../InventarioLayout';
 export function Inventario() {
   const { empresaId } = useAuth();
   const { flags } = useFlagsInventario();
-  const { queryRol } = useInventario();
+  const { queryRol, rol } = useInventario();
+  // Los montos de dinero salen de la misma tabla que el menú y el gate.
+  const verMontos = puedeVerMontos(rol);
+  const { familias } = useFamiliasInsumo();
+  const { unidades } = useUnidades();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -145,12 +158,7 @@ export function Inventario() {
         supabase.from('ubicaciones_rack').select('*').eq('empresa_id', empresaId),
       ]);
 
-      const vmap: ValidadoresMap = {};
-      for (const v of (rVal.data as Validador[] | null) || []) {
-        if (!vmap[v.campo]) vmap[v.campo] = [];
-        vmap[v.campo].push(v.valor);
-      }
-      setValidadores(vmap);
+      setValidadores(mapaDeValidadores(rVal.data as Validador[] | null));
       setInsumos(((rIns.data as Insumo[] | null) || []) as Insumo[]);
       setMovimientos(((rMov.data as Movimiento[] | null) || []) as Movimiento[]);
       setUbicaciones(((rUbi.data as UbicacionRack[] | null) || []) as UbicacionRack[]);
@@ -243,6 +251,12 @@ export function Inventario() {
     });
     const arr = [...filtrados];
     arr.sort((a, b) => {
+      // El código se ordena natural: como texto, INS100 se cuela antes de
+      // INS99 y la tabla queda ilegible justo en las familias más grandes.
+      if (sortCol === 'cod') {
+        const c = compararCodigos(a.cod, b.cod);
+        return sortDir === 'asc' ? c : -c;
+      }
       const va = (a[sortCol] ?? '') as string | number;
       const vb = (b[sortCol] ?? '') as string | number;
       if (typeof va === 'number' && typeof vb === 'number') {
@@ -275,7 +289,7 @@ export function Inventario() {
     arr.sort((a, b) => {
       if (a.severity === 'danger' && b.severity !== 'danger') return -1;
       if (b.severity === 'danger' && a.severity !== 'danger') return 1;
-      return a.codigo.localeCompare(b.codigo);
+      return compararCodigos(a.codigo, b.codigo);
     });
     return arr;
   }, [alertas]);
@@ -301,7 +315,10 @@ export function Inventario() {
       open: true,
       editId: ins.id,
       form: {
+        familia: '',
+        codManual: false,
         cod: ins.cod || '',
+        unidad: ins.unidad || 'un',
         nemotecnico: ins.nemotecnico || '',
         categoria: ins.categoria || '',
         sub_categoria: ins.sub_categoria || '',
@@ -339,25 +356,14 @@ export function Inventario() {
     if (!file || !empresaId || cargandoFotoRef.current) return;
     cargandoFotoRef.current = true;
     setFotoEstado({ msg: 'Subiendo foto…', tone: 'text-warning' });
-    try {
-      const ext = file.name.split('.').pop() || 'jpg';
-      const codVal = (insumoDialog.form.cod || 'insumo').trim().toUpperCase() || 'insumo';
-      const path = `${empresaId}/${codVal}_${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from('fotos-insumos')
-        .upload(path, file, { upsert: true, contentType: file.type });
-      if (upErr) throw upErr;
-      const { data } = supabase.storage.from('fotos-insumos').getPublicUrl(path);
-      const publicUrl = data?.publicUrl;
-      if (!publicUrl) throw new Error('No se pudo obtener la URL pública');
-      actualizarFormInsumo({ foto_url: publicUrl });
+    const r = await subirFotoInsumo(empresaId, insumoDialog.form.cod, file);
+    if (r.ok) {
+      actualizarFormInsumo({ foto_url: r.url });
       setFotoEstado({ msg: 'Foto guardada', tone: 'text-success' });
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setFotoEstado({ msg: 'No se pudo subir: ' + msg, tone: 'text-destructive' });
-    } finally {
-      cargandoFotoRef.current = false;
+    } else {
+      setFotoEstado({ msg: 'No se pudo subir: ' + r.motivo, tone: 'text-destructive' });
     }
+    cargandoFotoRef.current = false;
   };
 
   const quitarFoto = () => {
@@ -365,118 +371,50 @@ export function Inventario() {
     setFotoEstado({ msg: '', tone: '' });
   };
 
-  // Guardar insumo
+  // Guardar insumo. El código de un artículo NUEVO lo asigna la base (ver
+  // insumoMutations); acá solo se refleja lo que quedó guardado.
   const guardarInsumo = async () => {
     if (!empresaId) return;
     const f = insumoDialog.form;
-    const cod = (f.cod || '').trim().toUpperCase();
-    if (!cod) {
-      toast.error('El código es obligatorio');
-      return;
-    }
-    const costoNum = parseFloat(f.costo) || 0;
-    const payload: Partial<Insumo> & { empresa_id: string; cod: string } = {
-      empresa_id: empresaId,
-      cod,
-      nemotecnico: f.nemotecnico.trim() || null,
-      categoria: f.categoria || null,
-      sub_categoria: f.sub_categoria || null,
-      producto: f.producto || null,
-      proveedor: f.proveedor || null,
-      compra: f.compra || null,
-      color: f.color || null,
-      minimo: parseInt(f.minimo, 10) || 0,
-      can_x_paquete: parseInt(f.can_x_paquete, 10) || 1,
-      costo: costoNum,
-      costo_iva: Math.round(costoNum * 1.19 * 100) / 100,
-      ubicacion: f.ubicacion || null,
-      cod_proveedor: f.cod_proveedor.trim() || null,
-      estado_inventario: f.estado_inventario || 'ACTIVO',
-      descriptor_proveedor: f.descriptor_proveedor.trim() || null,
-      comentarios: f.comentarios.trim() || null,
-      foto_url: f.foto_url.trim() || null,
-    };
     setSavingInsumo(true);
     try {
       if (insumoDialog.editId) {
-        const { error } = await supabase
-          .from('insumos')
-          .update(payload)
-          .eq('id', insumoDialog.editId);
-        if (error) throw error;
+        const r = await actualizarInsumoDesdeForm(insumoDialog.editId, f, verMontos);
+        if (!r.ok) {
+          toast.error('Error guardando: ' + r.motivo);
+          return;
+        }
         setInsumos((prev) =>
-          prev.map((i) =>
-            i.id === insumoDialog.editId ? ({ ...i, ...payload } as Insumo) : i,
-          ),
+          prev.map((i) => (i.id === insumoDialog.editId ? ({ ...i, ...r.patch } as Insumo) : i)),
         );
         toast.success('Insumo actualizado');
       } else {
-        const { data, error } = await supabase
-          .from('insumos')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw error;
-        let nuevo = data as Insumo;
-
-        // Stock inicial → movimiento MP
-        const stockInicial = parseInt(f.stock_inicial, 10) || 0;
-        if (stockInicial > 0 && flags.kardexRpc) {
-          // El insumo acaba de nacer en cero: esto es su primer ingreso.
-          const r = await registrarMovimientos([
-            {
-              dominio: 'insumo',
-              item_cod: cod,
-              tipo: 'INGRESO',
-              cantidad: stockInicial,
-              destino: 'MP',
-              motivo: 'Stock inicial al crear el insumo',
-              referencia_tipo: 'manual',
-            },
-          ]);
-          if (r.ok) {
-            nuevo = { ...nuevo, stock_mp: stockInicial };
-          } else {
-            // El insumo ya está creado: se avisa y queda en cero, que es
-            // recuperable con un ingreso a mano.
-            toast.warning(`El insumo se creó, pero su stock inicial no: ${r.motivo}`);
-          }
-        } else if (stockInicial > 0) {
-          const mov = {
-            empresa_id: empresaId,
-            fecha: new Date().toISOString(),
-            mes: mesActual(),
-            tipo: 'NUEVO INGRESO',
-            codigo: cod,
-            producto: payload.nemotecnico || payload.descriptor_proveedor || '',
-            almacen: 'MP',
-            cantidad: stockInicial,
-            ot: '',
-            responsable_entrega: '',
-            recepcion: '',
-            bitacora: 'Stock inicial al crear insumo',
-          };
-          const { data: movData } = await supabase
-            .from('movimientos_insumos')
-            .insert(mov)
-            .select()
-            .single();
-          if (movData) setMovimientos((m) => [movData as Movimiento, ...m]);
-          const { error: upErr } = await supabase
-            .from('insumos')
-            .update({ stock_mp: stockInicial })
-            .eq('id', nuevo.id);
-          if (!upErr) {
-            nuevo = { ...nuevo, stock_mp: stockInicial };
-          }
+        if (!f.codManual && !f.familia) {
+          toast.error('Elige la familia del artículo: de ahí sale su código.');
+          return;
         }
-        setInsumos((prev) => [...prev, nuevo]);
-        toast.success('Insumo creado');
+        const r = await crearInsumoDesdeForm({
+          empresaId,
+          form: f,
+          kardexRpc: flags.kardexRpc,
+        });
+        if (!r.ok) {
+          toast.error(r.motivo);
+          return;
+        }
+        setInsumos((prev) => [...prev, r.insumo]);
+        if (r.movimiento) setMovimientos((m) => [r.movimiento as Movimiento, ...m]);
+        if (r.aviso) toast.warning(r.aviso);
+        // El código puede no ser el que se previsualizó: si alguien dio de alta
+        // en la misma familia mientras se llenaba el formulario, este es el
+        // siguiente. Decirlo evita buscar un artículo que no existe.
+        toast.success(
+          r.insumo.cod && r.insumo.cod !== f.cod
+            ? `Artículo creado como ${r.insumo.cod}`
+            : `Artículo ${r.insumo.cod} creado`,
+        );
       }
       cerrarInsumoDialog();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      toast.error('Error guardando: ' + msg);
     } finally {
       setSavingInsumo(false);
     }
@@ -777,6 +715,7 @@ export function Inventario() {
             onNuevoMov={abrirNuevoMov}
             onLightbox={setLightboxFoto}
             rutaFicha={rutaFicha}
+            verMontos={verMontos}
           />
         )}
         {tab === 'movimientos' && (
@@ -817,6 +756,10 @@ export function Inventario() {
         editId={insumoDialog.editId}
         form={insumoDialog.form}
         validadores={validadores}
+        familias={familias}
+        unidades={unidades}
+        puedeCodigoManual={rol === 'admin' || rol === 'superadmin'}
+        verMontos={verMontos}
         fotoEstado={fotoEstado}
         saving={savingInsumo}
         onClose={cerrarInsumoDialog}

@@ -37,12 +37,15 @@ import TelaDialog from './dialogs/TelaDialog';
 import FallasTab from './tabs/FallasTab';
 import type { Tela } from './Telas.types';
 import { useInventario } from '../InventarioLayout';
+import { puedeVerMontos } from '@/modules/inventario/navegacion';
 
 type Pestana = 'catalogo' | 'fallas';
 
 export function Telas() {
   const { empresaId } = useAuth();
-  const { queryRol, puedeEditar } = useInventario();
+  const { queryRol, puedeEditar, rol } = useInventario();
+  // Importar el catálogo y clonar un código tocan precios.
+  const verMontos = puedeVerMontos(rol);
   const [tab, setTab] = useState<Pestana>('catalogo');
   const { telas, fallas, validadores, colmena, loading, error, recargar } = useDatosTelas();
   const { imprimir, exportarPtouch } = useEtiquetasTelas();
@@ -121,6 +124,7 @@ export function Telas() {
               marcadas={seleccion.size}
               visibles={lista.length}
               puedeEditar={puedeEditar}
+              verMontos={verMontos}
               onImprimirCatalogo={() => void imprimir(seleccion.size ? marcadas : lista)}
               onCombinar={() => void imprimir(marcadas, true)}
               onExportarPtouch={() => exportarPtouch(lista, colmena)}

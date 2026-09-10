@@ -22,6 +22,8 @@ export type ArticuloAlerta = {
   dominio: DominioAlerta;
   codigo: string;
   nombre: string;
+  /** El color del artículo, para mostrar el código como se imprime. */
+  color?: string | null;
   /** Saldo de hoy: unidades en los insumos, metros en las telas. */
   ahora: number;
   minimo: number | null;

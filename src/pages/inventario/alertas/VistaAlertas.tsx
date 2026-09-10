@@ -27,6 +27,7 @@ import {
   resumenCambios,
   textoCantidad,
   textoCobertura,
+  unidadDe,
   type ArticuloAlerta,
   type BorradorAlertas,
   type DominioAlerta,
@@ -122,28 +123,53 @@ export function VistaAlertas() {
     await recargar();
   };
 
-  // Un pedido de reposición se guarda hoy como una fila de `movimientos_insumos`
-  // que NO mueve stock: es una anotación. Las solicitudes con estado (pendiente,
-  // en orden, recibida) llegan con su tabla, junto con Compras.
+  // Un pedido de reposición se guarda hoy como una fila del registro de
+  // movimientos que NO mueve stock: es una anotación. Las solicitudes con
+  // estado (pendiente, en orden, recibida) llegan con su tabla, junto con
+  // Compras.
+  //
+  // CADA DOMINIO EN SU TABLA: la ficha de una tela lee `movimientos_telas` y la
+  // de un insumo `movimientos_insumos`. Un pedido de tela anotado del lado de
+  // los insumos no aparece en ninguna parte donde alguien lo vaya a buscar.
   const confirmarPedido = async (cantidad: number) => {
     if (!pedido || !empresaId) return;
     setPidiendo(true);
+    const fecha = new Date().toISOString();
+    const nota = `Pedido de reposición: ${pedido.nombre}`;
     try {
-      const { error: err } = await supabase.from('movimientos_insumos').insert({
-        empresa_id: empresaId,
-        fecha: new Date().toISOString(),
-        mes: mesActual(),
-        tipo: 'PEDIDO REPOSICION',
-        codigo: pedido.codigo,
-        producto: pedido.nombre,
-        almacen: 'MP',
-        // La columna es entera: un pedido de 2,5 cajas no se puede guardar.
-        cantidad: Math.round(cantidad),
-        responsable_entrega: 'Inventario',
-        bitacora: `Pedido de reposición: ${pedido.nombre}`,
-      });
-      if (err) throw err;
-      toast.success(`Pedido registrado: ${Math.round(cantidad)} de ${pedido.nombre}`);
+      if (pedido.dominio === 'tela') {
+        // Los metros llevan decimales y la columna los admite: no se redondea.
+        const { error: err } = await supabase.from('movimientos_telas').insert({
+          empresa_id: empresaId,
+          fecha,
+          tipo: 'PEDIDO REPOSICION',
+          codigo: pedido.codigo,
+          almacen: 'MP',
+          metros: cantidad,
+          responsable: 'Inventario',
+          notas: nota,
+        });
+        if (err) throw err;
+      } else {
+        const { error: err } = await supabase.from('movimientos_insumos').insert({
+          empresa_id: empresaId,
+          fecha,
+          mes: mesActual(),
+          tipo: 'PEDIDO REPOSICION',
+          codigo: pedido.codigo,
+          producto: pedido.nombre,
+          almacen: 'MP',
+          // La columna es entera: un pedido de 2,5 cajas no se puede guardar.
+          cantidad: Math.round(cantidad),
+          responsable_entrega: 'Inventario',
+          bitacora: nota,
+        });
+        if (err) throw err;
+      }
+      const guardada = pedido.dominio === 'tela' ? cantidad : Math.round(cantidad);
+      toast.success(
+        `Pedido registrado: ${textoCantidad(guardada, pedido.dominio)} ${unidadDe(pedido.dominio)} de ${pedido.nombre}`,
+      );
       setPedido(null);
       await recargar();
     } catch (e) {
@@ -328,7 +354,14 @@ export function VistaAlertas() {
           nombre={pedido.nombre}
           stockActual={pedido.ahora}
           minimo={Number(pedido.minimo || 0)}
-          sugerida={Math.max(1, Math.ceil(cantidadSugerida(pedido) ?? 1))}
+          sugerida={
+            // Los insumos se piden en unidades enteras; las telas, en metros con
+            // decimales: redondear la sugerencia de una tela a la unidad pide de
+            // más sin decirlo.
+            pedido.dominio === 'tela'
+              ? Math.max(0.1, cantidadSugerida(pedido) ?? 1)
+              : Math.max(1, Math.ceil(cantidadSugerida(pedido) ?? 1))
+          }
           guardando={pidiendo}
           onCerrar={() => setPedido(null)}
           onConfirmar={({ cantidad }) => void confirmarPedido(cantidad)}

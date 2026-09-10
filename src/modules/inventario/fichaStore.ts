@@ -21,6 +21,7 @@ import {
   stockDespues,
   type EntradaMovimiento,
 } from './movimientos';
+import { mapaDeValidadores } from './validadores';
 
 export type CamionetaConStock = { id: string; nombre: string; cantidad: number };
 
@@ -118,11 +119,7 @@ export function useFichaInsumo(cod: string): DatosFicha & {
           .filter((c) => porCamioneta.has(c.id));
       }
 
-      const validadores: Record<string, string[]> = {};
-      for (const v of ((rVal.data as Validador[] | null) || [])) {
-        if (!validadores[v.campo]) validadores[v.campo] = [];
-        validadores[v.campo].push(v.valor);
-      }
+      const validadores = mapaDeValidadores(rVal.data as Validador[] | null);
 
       setDatos({
         insumo,

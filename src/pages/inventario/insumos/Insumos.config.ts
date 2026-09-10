@@ -3,7 +3,10 @@
 import type { InsumoForm, MovForm } from './Insumos.types';
 
 export const EMPTY_INSUMO_FORM: InsumoForm = {
+  familia: '',
+  codManual: false,
   cod: '',
+  unidad: 'un',
   nemotecnico: '',
   categoria: '',
   sub_categoria: '',

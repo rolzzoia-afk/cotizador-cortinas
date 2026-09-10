@@ -15,6 +15,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StatBox, type TonoStat } from '@/components/ui/stat-box';
 import { TabButton } from '@/components/ui/tab-button';
 import { badgeEstadoArticulo } from '@/modules/inventario/badges';
+import { codigoVisible } from '@/modules/inventario/codigosInsumo';
+import { puedeVerMontos } from '@/modules/inventario/navegacion';
 import {
   coberturaMeses,
   consumoUltimosMeses,
@@ -108,7 +110,8 @@ export function FichaInsumo() {
   const estado = badgeEstadoArticulo({ total, minimo: insumo.minimo, status: insumo.status });
   const cobertura = coberturaMeses(total, promedio);
   const nombre = insumo.nemotecnico || insumo.descriptor_proveedor || '';
-  const esAdmin = rol === 'admin' || rol === 'superadmin';
+  // La misma regla que el catálogo y el formulario, en un solo lugar.
+  const verMontos = puedeVerMontos(rol);
 
   const abrirMovimiento = () =>
     setMovDialog({
@@ -146,12 +149,17 @@ export function FichaInsumo() {
               Insumos
             </Link>
             {' · '}
-            <span className="text-foreground">{insumo.cod}</span>
+            <span className="text-foreground">{codigoVisible(insumo.cod, insumo.color)}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            {/* Arriba el código con su color, que es como se lee y se imprime;
+                al lado la llave, que es lo que se busca en el kardex. */}
             <h1 className="font-mono text-[1.6rem] font-semibold leading-tight tracking-tight">
-              {insumo.cod}
+              {codigoVisible(insumo.cod, insumo.color)}
             </h1>
+            {codigoVisible(insumo.cod, insumo.color) !== insumo.cod && (
+              <span className="font-mono text-xs text-muted-foreground">{insumo.cod}</span>
+            )}
             <span className="font-serif text-[1.6rem] font-medium leading-tight tracking-[-0.02em]">
               {nombre}
             </span>
@@ -270,7 +278,7 @@ export function FichaInsumo() {
                 <span className="text-xs text-muted-foreground">Sin foto</span>
               )}
             </div>
-            <DatosArticulo insumo={insumo} esAdmin={esAdmin} />
+            <DatosArticulo insumo={insumo} verMontos={verMontos} />
           </div>
           <div className="flex flex-col gap-3.5">
             <ConsumoMeses consumo={consumo} promedio={promedio} cobertura={cobertura} />
@@ -332,7 +340,7 @@ export function FichaInsumo() {
         />
       ) : null}
 
-      {tab === 'proveedor' ? <ProveedorArticulo insumo={insumo} esAdmin={esAdmin} /> : null}
+      {tab === 'proveedor' ? <ProveedorArticulo insumo={insumo} verMontos={verMontos} /> : null}
 
       {qrAbierto ? (
         <QRInsumoDialog insumo={insumo} ubicaciones={ubicaciones} onClose={() => setQrAbierto(false)} />

@@ -1,4 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────
 // Reportes del inventario (lámina «Reportes»).
 //
 // Cuatro preguntas: cuánto vale lo que hay, en qué se va, qué no se mueve y
@@ -12,8 +11,12 @@
 // quedó fuera y la pantalla lo dice al lado del número grande.
 // ─────────────────────────────────────────────────────────────────────
 
+import { codigoVisible } from './codigosInsumo';
+
 export type ArticuloValorizable = {
   codigo: string;
+  /** Para el código visible en las barras: «CAD04-NEG» y no «CAD04». */
+  color?: string | null;
   /** Con qué se agrupa la barra: la subcategoría del insumo. */
   grupo: string | null;
   saldo: number;
@@ -136,6 +139,8 @@ export function consumoMensual(
 
 export type ArticuloQuieto = {
   codigo: string;
+  /** El código como se ve e imprime; igual a `codigo` si el artículo no tiene color. */
+  codigoVisible: string;
   nombre: string;
   /** Meses desde la última salida. `null` = nunca salió. */
   meses: number | null;
@@ -171,7 +176,13 @@ export function loQueNoSeMueve(
     const meses = fecha ? mesesEntre(fecha, hoyISO) : null;
     if (meses != null && meses < mesesQuieto) continue;
     const valor = costo > 0 ? Math.round(saldo * costo) : 0;
-    quietos.push({ codigo: a.codigo, nombre: a.nombre, meses, valor });
+    quietos.push({
+      codigo: a.codigo,
+      codigoVisible: codigoVisible(a.codigo, a.color),
+      nombre: a.nombre,
+      meses,
+      valor,
+    });
     valorParado += valor;
   }
   quietos.sort((x, y) => (y.meses ?? 999) - (x.meses ?? 999) || y.valor - x.valor);

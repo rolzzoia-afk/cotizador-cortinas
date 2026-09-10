@@ -202,3 +202,24 @@ describe('formato', () => {
     expect(millones(375187620)).toBe('375,2');
   });
 });
+
+describe('lo que no se mueve — código visible', () => {
+  it('la barra lleva el color, y la llave queda igual al lado', () => {
+    const { articulos } = loQueNoSeMueve(
+      [{ codigo: 'CAD04', color: 'NEGRO', nombre: 'CADENA 3 M', grupo: 'CADENA', saldo: 5, costo: 1000 }],
+      new Map(),
+      '2026-09-09T00:00:00.000Z',
+    );
+    expect(articulos[0].codigoVisible).toBe('CAD04-NEG');
+    expect(articulos[0].codigo).toBe('CAD04');
+  });
+
+  it('sin color, el visible es la llave sola', () => {
+    const { articulos } = loQueNoSeMueve(
+      [{ codigo: 'TOR02', color: null, nombre: 'TORNILLO', grupo: null, saldo: 5, costo: 10 }],
+      new Map(),
+      '2026-09-09T00:00:00.000Z',
+    );
+    expect(articulos[0].codigoVisible).toBe('TOR02');
+  });
+});

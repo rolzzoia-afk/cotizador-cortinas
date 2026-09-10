@@ -72,7 +72,7 @@ export function useReportes(meses = 12): DatosReportes {
       const [rIns, rSal, rMer, rTel, rTub] = await Promise.all([
         supabase
           .from('insumos')
-          .select('cod,nemotecnico,descriptor_proveedor,sub_categoria,stock_mp,stock_liberado,costo')
+          .select('cod,nemotecnico,descriptor_proveedor,sub_categoria,color,stock_mp,stock_liberado,costo')
           .eq('empresa_id', empresaId),
         supabase
           .from('movimientos_insumos')
@@ -104,6 +104,7 @@ export function useReportes(meses = 12): DatosReportes {
         .map((i) => ({
           codigo: String(i.cod),
           nombre: i.nemotecnico || i.descriptor_proveedor || String(i.cod),
+          color: i.color,
           grupo: i.sub_categoria,
           saldo: Number(i.stock_mp ?? 0) + Number(i.stock_liberado ?? 0),
           costo: i.costo,

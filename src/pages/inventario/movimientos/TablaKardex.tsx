@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/utils';
 import { badgeTipoMovimiento } from '@/modules/inventario/badges';
+import { codigoVisibleDe } from '@/modules/inventario/codigosInsumo';
 import {
   origenDestino,
   textoCantidad,
@@ -28,10 +29,12 @@ function fechaCorta(iso: string): string {
 
 function Fila({
   m,
+  colores,
   activa,
   onClick,
 }: {
   m: FilaKardexVista;
+  colores: Map<string, string>;
   activa: boolean;
   onClick: () => void;
 }) {
@@ -54,7 +57,13 @@ function Fila({
         {fechaCorta(m.fecha)}
       </td>
       <td className="px-2.5 py-2">
-        <div className="font-mono font-medium">{m.item_cod}</div>
+        {/* El kardex anota la llave pelada («MEC32»); el color sale del
+            catálogo. El `title` deja ver la llave, que es con lo que se busca
+            y lo que lleva el QR. Solo los insumos: una tela o un tubo no
+            tienen ficha en `insumos`. */}
+        <div className="font-mono font-medium" title={m.item_cod}>
+          {m.dominio === 'insumo' ? codigoVisibleDe(m.item_cod, colores) : m.item_cod}
+        </div>
         {m.item_nombre && (
           <div className="text-[0.6875rem] text-muted-foreground">{m.item_nombre}</div>
         )}
@@ -95,6 +104,7 @@ function Fila({
 
 export function TablaKardex({
   filas,
+  colores,
   total,
   loading,
   seleccionada,
@@ -103,6 +113,8 @@ export function TablaKardex({
   textoRango,
 }: {
   filas: FilaKardexVista[];
+  /** `MEC32 → BLANCO`, para mostrar el código como se imprime en la etiqueta. */
+  colores: Map<string, string>;
   total: number;
   loading: boolean;
   seleccionada: FilaKardexVista | null;
@@ -150,6 +162,7 @@ export function TablaKardex({
               <Fila
                 key={`${m.fuente}-${m.id}`}
                 m={m}
+                colores={colores}
                 activa={seleccionada?.id === m.id}
                 onClick={() => onSeleccionar(m)}
               />

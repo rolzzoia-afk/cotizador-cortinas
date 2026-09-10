@@ -13,6 +13,7 @@ export function AccionesTelas({
   marcadas,
   visibles,
   puedeEditar,
+  verMontos,
   onImprimirCatalogo,
   onCombinar,
   onExportarPtouch,
@@ -25,6 +26,8 @@ export function AccionesTelas({
   /** Cuántas se ven con los filtros puestos. */
   visibles: number;
   puedeEditar: boolean;
+  /** Importar y clonar tocan precios: solo quien ve la plata. */
+  verMontos: boolean;
   onImprimirCatalogo: () => void;
   onCombinar: () => void;
   onExportarPtouch: () => void;
@@ -76,14 +79,17 @@ export function AccionesTelas({
 
       {puedeEditar && (
         <>
-          <Button variant="outline" onClick={onImportar}>
-            <FileUp className="h-4 w-4" />
-            Importar catálogo
-          </Button>
+          {verMontos && (
+            <Button variant="outline" onClick={onImportar}>
+              <FileUp className="h-4 w-4" />
+              Importar catálogo
+            </Button>
+          )}
           <Button onClick={onNueva}>
             <Plus className="h-4 w-4" />
             Nueva tela
           </Button>
+          {verMontos && (
           <MenuAcciones
             etiqueta="Más acciones del catálogo"
             className="rounded-lg border border-border p-2.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
@@ -96,6 +102,7 @@ export function AccionesTelas({
               Clonar un código de cortina
             </ItemMenu>
           </MenuAcciones>
+          )}
         </>
       )}
     </>

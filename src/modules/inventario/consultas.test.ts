@@ -118,6 +118,12 @@ describe('las columnas que pide el inventario existen en la base', () => {
     // las 19 columnas que pide la pantalla del Kardex.
     expect(tablas.get('v_kardex_historico')?.has('editable')).toBe(true);
     expect(tablas.get('v_kardex_historico')?.has('saldo_post')).toBe(true);
+    // Las familias de código: si esta línea falla, o se revirtió el SQL
+    // 20260910_insumos_01_familias.sql o los tipos quedaron viejos, y el alta
+    // de un artículo dejaría de proponer código sin decir por qué.
+    expect(tablas.get('familias_insumo')?.has('siguiente')).toBe(true);
+    expect(tablas.get('familias_insumo')?.has('digitos')).toBe(true);
+    expect(tablas.get('insumos')?.has('unidad')).toBe(true);
   });
 
   it('hay consultas que revisar', () => {

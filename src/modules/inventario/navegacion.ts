@@ -284,6 +284,63 @@ export const GRUPOS_INVENTARIO: ReadonlyArray<{ id: GrupoInventario; titulo: str
   { id: 'administracion', titulo: 'Administración' },
 ];
 
+// ── Datos que se esconden DENTRO de una pantalla ──────────────────────
+//
+// Los submódulos de arriba deciden a qué pantalla se entra. Esto decide qué
+// se ve una vez adentro: un bodeguero necesita el catálogo de insumos para
+// trabajar, pero no tiene por qué saber cuánto costó cada tornillo.
+//
+// Va en la MISMA tabla que la navegación a propósito. La regla vivía repartida
+// —la ficha del insumo tenía su propio `esAdmin`, la tabla del catálogo no
+// tenía ninguno y mostraba el costo a todo el mundo—, y una regla escrita en
+// tres lugares es una regla que se cumple en dos.
+
+export type IdDatoSensible = 'montos';
+
+export type DatoSensible = {
+  id: IdDatoSensible;
+  titulo: string;
+  /** Qué es, en una línea. */
+  detalle: string;
+  /** Roles que lo ven ADEMÁS de admin. Vacío = solo admin. */
+  roles: readonly string[];
+  /** Dónde aparece, para poder revisarlo desde la pantalla. */
+  donde: readonly string[];
+};
+
+export const DATOS_SENSIBLES: readonly DatoSensible[] = [
+  {
+    id: 'montos',
+    titulo: 'Montos de dinero',
+    detalle: 'Costos, precios y valorización del inventario.',
+    roles: [],
+    donde: [
+      'Columna «Costo» del catálogo de insumos',
+      'Costo neto y con IVA en la ficha del artículo',
+      'Campo «Costo» al crear o editar un artículo',
+      'Precios y costos del catálogo de telas (importar y clonar)',
+      'Reportes: valorización y plata parada',
+    ],
+  },
+] as const;
+
+/** ¿Este rol ve este dato sensible? (admin siempre puede) */
+export function puedeVerDato(rol: string | null | undefined, id: IdDatoSensible): boolean {
+  if (esAdmin(rol)) return true;
+  const dato = DATOS_SENSIBLES.find((d) => d.id === id);
+  if (!dato) return false;
+  const r = normalizarRol(rol);
+  return r !== '' && dato.roles.includes(r);
+}
+
+/**
+ * ¿Este rol ve la plata? Es la pregunta que hacen las pantallas, así que tiene
+ * nombre propio: hoy es solo admin, y si mañana cambia se cambia en la tabla.
+ */
+export function puedeVerMontos(rol: string | null | undefined): boolean {
+  return puedeVerDato(rol, 'montos');
+}
+
 function normalizarRol(rol: string | null | undefined): string {
   return (rol || '').toLowerCase().trim();
 }

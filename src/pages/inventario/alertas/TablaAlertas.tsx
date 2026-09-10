@@ -17,6 +17,7 @@ import {
   textoCobertura,
   type ArticuloAlerta,
 } from '@/modules/inventario/alertas';
+import { codigoVisible } from '@/modules/inventario/codigosInsumo';
 
 /** Una celda editable. El vacío es «sin definir», no cero. */
 function CeldaNumero({
@@ -134,7 +135,12 @@ export function TablaAlertas({
                       className="h-3.5 w-3.5 cursor-pointer align-middle accent-accent"
                     />
                   </td>
-                  <td className="whitespace-nowrap px-2.5 py-2 font-mono font-medium">{a.codigo}</td>
+                  <td
+                    className="whitespace-nowrap px-2.5 py-2 font-mono font-medium"
+                    title={a.codigo}
+                  >
+                    {codigoVisible(a.codigo, a.color)}
+                  </td>
                   <td className="px-2.5 py-2">{a.nombre}</td>
                   <td className="px-2.5 py-2">
                     <Badge variant="muted">{a.dominio === 'tela' ? 'Tela' : 'Insumo'}</Badge>

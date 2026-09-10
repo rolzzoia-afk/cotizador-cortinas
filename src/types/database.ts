@@ -2429,6 +2429,51 @@ export type Database = {
         }
         Relationships: []
       }
+      familias_insumo: {
+        Row: {
+          activo: boolean
+          actualizado_en: string
+          categoria: string | null
+          creado_en: string
+          descripcion: string | null
+          digitos: number
+          empresa_id: string
+          id: string
+          nombre: string
+          prefijo: string
+          siguiente: number
+          sub_categoria: string | null
+        }
+        Insert: {
+          activo?: boolean
+          actualizado_en?: string
+          categoria?: string | null
+          creado_en?: string
+          descripcion?: string | null
+          digitos?: number
+          empresa_id: string
+          id?: string
+          nombre: string
+          prefijo: string
+          siguiente?: number
+          sub_categoria?: string | null
+        }
+        Update: {
+          activo?: boolean
+          actualizado_en?: string
+          categoria?: string | null
+          creado_en?: string
+          descripcion?: string | null
+          digitos?: number
+          empresa_id?: string
+          id?: string
+          nombre?: string
+          prefijo?: string
+          siguiente?: number
+          sub_categoria?: string | null
+        }
+        Relationships: []
+      }
       insumos: {
         Row: {
           can_x_paquete: number | null
@@ -6112,6 +6157,11 @@ export type Database = {
         Args: { p_n_colmena?: string; p_notas?: string }
         Returns: string
       }
+      insumo_crear: {
+        Args: { p_cod_manual?: string; p_datos?: Json; p_prefijo: string }
+        Returns: Json
+      }
+      insumo_siguiente_codigo: { Args: { p_prefijo: string }; Returns: string }
       inventario_ajuste_sql: {
         Args: {
           p_almacen: string

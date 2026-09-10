@@ -15,6 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { codigoVisible } from '@/modules/inventario/codigosInsumo';
 import type { Insumo, UbicacionRack } from '@/modules/inventario/helpers';
 
 const asciiPuro = (s: string | number | null | undefined): string =>
@@ -54,7 +55,11 @@ export default function QRInsumoDialog({ insumo, ubicaciones, onClose }: QRInsum
     ubicacionQR = `LOC:${asciiPuro(insumo.ubicacion)}`;
   }
 
+  // El QR sigue llevando la LLAVE («INS:MEC32»): las etiquetas ya pegadas en
+  // el galpón se leen igual. Lo que cambia es lo IMPRESO, que muestra el
+  // código con su color para que se distinga sin escanear.
   const codQR = asciiPuro(insumo.cod);
+  const codImpreso = codigoVisible(insumo.cod, insumo.color);
   const nombre = insumo.nemotecnico || insumo.descriptor_proveedor || insumo.cod || '';
 
   const imprimir = () => {
@@ -83,14 +88,14 @@ ${imgItem ? `<div class="etiqueta">
   <div class="tipo">CAJA / CONTENEDOR</div>
   <img src="${imgItem}" alt="QR Item">
   <div class="titulo">${nombre}</div>
-  <div class="sub">Código: ${insumo.cod}</div>
+  <div class="sub">Código: ${codImpreso}</div>
   <div class="sub">INS:${insumo.cod}</div>
 </div>` : ''}
 ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
   <div class="tipo">UBICACIÓN</div>
   <img src="${imgLoc}" alt="QR Loc">
   <div class="titulo">${ubicacionDisplay}</div>
-  <div class="sub">Insumo: ${insumo.cod}</div>
+  <div class="sub">Insumo: ${codImpreso}</div>
   <div class="sub">${ubicacionQR}</div>
 </div>` : ''}
 <script>window.onload = () => setTimeout(() => { window.print(); window.close(); }, 250);</script>
@@ -105,7 +110,7 @@ ${imgLoc && ubicacionDisplay ? `<div class="etiqueta">
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{nombre}</DialogTitle>
-          <p className="text-xs text-muted-foreground">Código: {insumo.cod}</p>
+          <p className="text-xs text-muted-foreground">Código: {codImpreso}</p>
         </DialogHeader>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col items-center gap-2 rounded-lg border border-border bg-card/40 p-3">

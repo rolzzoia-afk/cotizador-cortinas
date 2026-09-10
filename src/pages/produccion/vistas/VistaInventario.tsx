@@ -22,7 +22,7 @@ import ColumnaBodega from '../components/ColumnaBodega';
 import UbicacionDialog from '../components/UbicacionDialog';
 
 export default function VistaInventario({ ot, otCargada }: { ot: string; otCargada: OT | null }) {
-  const { insumos, loading } = useInsumosOT(otCargada);
+  const { insumos, colores, loading } = useInsumosOT(otCargada);
   const { insumosCat, racks, tubos } = useCatalogoBodega();
   const { hechas, notaDe, marcar } = useChecks('bodega', ot);
   const [verMapa, setVerMapa] = useState<InsumoConsolidado | null>(null);
@@ -119,6 +119,7 @@ export default function VistaInventario({ ot, otCargada }: { ot: string; otCarga
             <ColumnaBodega
               key={c.columna}
               col={c}
+              colores={colores}
               ot={ot}
               hechas={hechas}
               rack={notaDe.get(claveRack(c.columna)) ?? ''}

@@ -16,6 +16,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import SelectValidador from '../components/SelectValidador';
+import CampoCodigoInsumo from '../components/CampoCodigoInsumo';
+import type { FamiliaInsumo } from '@/modules/inventario/codigosInsumo';
+import type { Unidad } from '@/modules/inventario/familiasStore';
 import type { InsumoForm, ValidadoresMap } from '../Insumos.types';
 
 interface InsumoDialogProps {
@@ -23,6 +26,12 @@ interface InsumoDialogProps {
   editId: string | null;
   form: InsumoForm;
   validadores: ValidadoresMap;
+  familias: FamiliaInsumo[];
+  unidades: Unidad[];
+  /** Solo un admin puede saltarse el código propuesto. */
+  puedeCodigoManual: boolean;
+  /** Los montos de dinero solo los ve quien administra. */
+  verMontos: boolean;
   fotoEstado: { msg: string; tone: string };
   saving: boolean;
   onClose: () => void;
@@ -37,6 +46,10 @@ export default function InsumoDialog({
   editId,
   form,
   validadores,
+  familias,
+  unidades,
+  puedeCodigoManual,
+  verMontos,
   fotoEstado,
   saving,
   onClose,
@@ -55,16 +68,14 @@ export default function InsumoDialog({
           <DialogTitle>{editId ? `Editar insumo: ${form.cod}` : 'Nuevo insumo'}</DialogTitle>
         </DialogHeader>
         <div className="grid max-h-[70vh] grid-cols-1 gap-3 overflow-y-auto py-1 sm:grid-cols-2">
-          <div className="sm:col-span-2 flex gap-3">
-            <div className="flex-1">
-              <Label>Código *</Label>
-              <Input
-                value={form.cod}
-                onChange={(e) => onChange({ cod: e.target.value.toUpperCase() })}
-                disabled={!!editId}
-                placeholder="Ej: INS-1234"
-              />
-            </div>
+          <div className="sm:col-span-2 flex flex-col gap-3 sm:flex-row">
+            <CampoCodigoInsumo
+              editId={editId}
+              form={form}
+              familias={familias}
+              puedeCodigoManual={puedeCodigoManual}
+              onChange={onChange}
+            />
             <div className="flex-1">
               <Label>Nemotécnico</Label>
               <Input
@@ -139,13 +150,36 @@ export default function InsumoDialog({
             />
           </div>
           <div>
-            <Label>Costo (sin IVA)</Label>
-            <Input
-              type="number"
-              value={form.costo}
-              onChange={(e) => onChange({ costo: e.target.value })}
-            />
+            <Label>Unidad</Label>
+            <select
+              value={form.unidad}
+              onChange={(e) => onChange({ unidad: e.target.value })}
+              className="w-full rounded-md border border-border bg-card px-2 py-2 text-sm"
+            >
+              {unidades.length === 0 && <option value={form.unidad}>{form.unidad}</option>}
+              {unidades.map((u) => (
+                <option key={u.codigo} value={u.codigo}>
+                  {u.nombre} ({u.codigo})
+                </option>
+              ))}
+            </select>
+            <p className="mt-0.5 text-[0.7rem] text-muted-foreground">
+              Cómo se cuenta el artículo. Faltaba en el formulario y todo entraba como unidad.
+            </p>
           </div>
+          {/* La plata solo la ve quien administra. Cuando el campo no está,
+              el guardado tampoco manda `costo`: así un bodeguero que edita el
+              nemotécnico no puede dejar el costo en cero sin querer. */}
+          {verMontos && (
+            <div>
+              <Label>Costo (sin IVA)</Label>
+              <Input
+                type="number"
+                value={form.costo}
+                onChange={(e) => onChange({ costo: e.target.value })}
+              />
+            </div>
+          )}
           <div>
             <Label>Ubicación</Label>
             <SelectValidador

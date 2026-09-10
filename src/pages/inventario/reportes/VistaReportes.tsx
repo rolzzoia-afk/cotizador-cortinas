@@ -201,7 +201,7 @@ export function VistaReportes() {
                 <>
                   <BarrasHorizontales
                     filas={quietos.articulos.slice(0, TOPE_QUIETOS).map((a) => ({
-                      nombre: a.codigo,
+                      nombre: a.codigoVisible,
                       valor: a.valor,
                     }))}
                     maximo={Math.max(1, ...quietos.articulos.slice(0, TOPE_QUIETOS).map((a) => a.valor))}

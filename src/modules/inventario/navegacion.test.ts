@@ -5,12 +5,15 @@
 import { describe, expect, it } from 'vitest';
 import { ROLES_DISPONIBLES } from '@/lib/roles';
 import {
+  DATOS_SENSIBLES,
   GRUPOS_INVENTARIO,
   SUBMODULOS_INVENTARIO,
   esRutaPlena,
   itemsMenuInferior,
   puedeEditar,
   puedeVer,
+  puedeVerDato,
+  puedeVerMontos,
   rolesDeSubmodulo,
   submoduloDeRuta,
   submodulosVisibles,
@@ -222,5 +225,45 @@ describe('el menú de abajo del celular', () => {
         expect(s.estado, `${rol} → ${s.id}`).toBe('listo');
       }
     }
+  });
+});
+
+describe('la plata la ve solo quien administra', () => {
+  it('admin y superadmin ven los montos', () => {
+    expect(puedeVerMontos('admin')).toBe(true);
+    expect(puedeVerMontos('superadmin')).toBe(true);
+    expect(puedeVerMontos('ADMIN')).toBe(true);
+  });
+
+  it('ningún otro rol los ve, ni siquiera el que edita el catálogo', () => {
+    for (const rol of ROLES_DISPONIBLES.filter((r) => r !== 'admin')) {
+      expect(puedeVerMontos(rol), rol).toBe(false);
+    }
+  });
+
+  it('sin rol tampoco', () => {
+    expect(puedeVerMontos(null)).toBe(false);
+    expect(puedeVerMontos(undefined)).toBe(false);
+    expect(puedeVerMontos('')).toBe(false);
+  });
+
+  it('un dato que no está en la tabla no se abre por descuido', () => {
+    expect(puedeVerDato('bodeguero', 'inventado' as never)).toBe(false);
+    // Admin es la excepción: puede todo, exista o no la fila.
+    expect(puedeVerDato('admin', 'inventado' as never)).toBe(true);
+  });
+
+  it('cada dato sensible dice qué es y dónde aparece', () => {
+    expect(DATOS_SENSIBLES.length).toBeGreaterThan(0);
+    for (const d of DATOS_SENSIBLES) {
+      expect(d.titulo, d.id).toBeTruthy();
+      expect(d.detalle, d.id).toBeTruthy();
+      expect(d.donde.length, d.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('los ids no se repiten', () => {
+    const ids = DATOS_SENSIBLES.map((d) => d.id);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 });

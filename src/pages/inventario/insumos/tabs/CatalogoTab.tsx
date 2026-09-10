@@ -27,6 +27,7 @@ import {
   formatCLP,
   getStockTotal,
 } from '@/modules/inventario/helpers';
+import { codigoVisible } from '@/modules/inventario/codigosInsumo';
 import StatCard from '../components/StatCard';
 import SortTh from '../components/SortTh';
 import StockBadge from '../components/StockBadge';
@@ -61,6 +62,8 @@ interface CatalogoTabProps {
   onLightbox: (foto: { url: string; cod: string }) => void;
   /** A dónde lleva cada fila: la ficha del artículo. */
   rutaFicha: (cod: string) => string;
+  /** La columna «Costo» solo la ve quien administra (`puedeVerMontos`). */
+  verMontos: boolean;
 }
 
 export default function CatalogoTab({
@@ -85,6 +88,7 @@ export default function CatalogoTab({
   onNuevoMov,
   onLightbox,
   rutaFicha,
+  verMontos,
 }: CatalogoTabProps) {
   const navigate = useNavigate();
   return (
@@ -123,7 +127,7 @@ export default function CatalogoTab({
           <Input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por código, nemotécnico, color…"
+            placeholder="Buscar por código (MEC32 o MEC32-BCO), nemotécnico, color…"
             className="pl-8"
           />
         </div>
@@ -201,7 +205,7 @@ export default function CatalogoTab({
               <SortTh col="minimo" current={sortCol} dir={sortDir} onSort={onSort} align="center">
                 Mín
               </SortTh>
-              <th className="p-2 text-right">Costo</th>
+              {verMontos && <th className="p-2 text-right">Costo</th>}
               <th className="p-2 text-center">Estado</th>
               <th className="p-2 text-center">Acciones</th>
             </tr>
@@ -209,7 +213,7 @@ export default function CatalogoTab({
           <tbody>
             {insumosFiltrados.length === 0 && (
               <tr>
-                <td colSpan={14} className="p-6 text-center text-muted-foreground">
+                <td colSpan={verMontos ? 14 : 13} className="p-6 text-center text-muted-foreground">
                   No hay insumos que coincidan con el filtro.
                 </td>
               </tr>
@@ -246,13 +250,17 @@ export default function CatalogoTab({
                       </div>
                     )}
                   </td>
+                  {/* Se muestra el código con su color («MEC32-BCO»): así se
+                      distinguen de un vistazo las variantes que solo cambian
+                      de número. El enlace usa el código de verdad. */}
                   <td className="p-2 font-mono font-semibold text-foreground">
                     <Link
                       to={rutaFicha(i.cod || '')}
                       onClick={(e) => e.stopPropagation()}
                       className="hover:text-accent hover:underline"
+                      title={i.cod || ''}
                     >
-                      {i.cod}
+                      {codigoVisible(i.cod, i.color)}
                     </Link>
                   </td>
                   <td className="p-2 max-w-[220px] truncate">
@@ -277,7 +285,9 @@ export default function CatalogoTab({
                   <td className="p-2 text-center text-muted-foreground">{i.stock_mp || 0}</td>
                   <td className="p-2 text-center text-muted-foreground">{i.stock_liberado || 0}</td>
                   <td className="p-2 text-center text-muted-foreground">{i.minimo || 0}</td>
-                  <td className="p-2 text-right text-muted-foreground">${formatCLP(i.costo)}</td>
+                  {verMontos && (
+                    <td className="p-2 text-right text-muted-foreground">${formatCLP(i.costo)}</td>
+                  )}
                   <td className="p-2 text-center">
                     <StockBadge insumo={i} />
                   </td>

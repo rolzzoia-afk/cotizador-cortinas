@@ -9,6 +9,7 @@
 // ─────────────────────────────────────────────────────────────────────
 
 import { etiquetaAlmacen } from './almacenes';
+import { codigoVisibleDe } from './codigosInsumo';
 
 /** Una fila de `v_kardex_historico`, que junta el libro con lo anterior. */
 export type FilaKardexVista = {
@@ -194,6 +195,10 @@ export function companerosDeLote(filas: FilaKardexVista[], fila: FilaKardexVista
 const COLUMNAS_CSV = [
   'Fecha',
   'Artículo',
+  // El código visible va en su PROPIA columna y no reemplaza al anterior: el
+  // «Artículo» es la llave con la que se vuelve a importar y con la que se
+  // cruza contra cualquier otra planilla. Pisarla rompería eso.
+  'Código visible',
   'Nombre',
   'Tipo',
   'Origen',
@@ -217,13 +222,18 @@ function celda(v: unknown): string {
  * El CSV que se baja. Separador `;` y BOM, que es lo que Excel en español
  * abre sin preguntar nada: con coma parte todo en una sola columna.
  */
-export function csvDeKardex(filas: FilaKardexVista[]): string {
+export function csvDeKardex(
+  filas: FilaKardexVista[],
+  /** `MEC32 → BLANCO`. Sin mapa, la columna del visible sale igual a la llave. */
+  colores?: Map<string, string> | null,
+): string {
   const lineas = [COLUMNAS_CSV.join(';')];
   for (const f of filas) {
     lineas.push(
       [
         f.fecha,
         f.item_cod,
+        f.dominio === 'insumo' ? codigoVisibleDe(f.item_cod, colores) : f.item_cod,
         f.item_nombre,
         f.tipo,
         f.origen ? etiquetaAlmacen(f.origen) : '',

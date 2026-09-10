@@ -178,12 +178,31 @@ describe('csvDeKardex', () => {
   it('sale con BOM y separado por punto y coma, que es lo que abre Excel en español', () => {
     const csv = csvDeKardex([fila()]);
     expect(csv.startsWith('﻿')).toBe(true);
-    expect(csv.split('\r\n')[0]).toContain('Fecha;Artículo');
-    expect(csv).toContain('MEC 18;Kit roller 45;SALIDA;Liberado;;4;un;27;3221');
+    expect(csv.split('\r\n')[0]).toContain('Fecha;Artículo;Código visible;Nombre');
+    expect(csv).toContain('MEC 18;MEC18;Kit roller 45;SALIDA;Liberado;;4;un;27;3221');
   });
 
   it('un texto con punto y coma no parte la fila en dos', () => {
     const csv = csvDeKardex([fila({ referencia: 'Rotura; se cortó mal' })]);
     expect(csv).toContain('"Rotura; se cortó mal"');
+  });
+
+  // La columna «Artículo» es la LLAVE con la que la planilla se vuelve a
+  // cruzar o a importar: el código visible va aparte y no la pisa.
+  it('el visible lleva el color y la llave se conserva intacta', () => {
+    const csv = csvDeKardex([fila()], new Map([['MEC18', 'BLANCO']]));
+    expect(csv).toContain('MEC 18;MEC18-BCO;Kit roller 45');
+  });
+
+  it('sin mapa de colores, el visible sale igual a la llave normalizada', () => {
+    expect(csvDeKardex([fila()])).toContain('MEC 18;MEC18;');
+  });
+
+  it('lo que no es un insumo se copia tal cual: una tela no tiene ficha en insumos', () => {
+    const csv = csvDeKardex(
+      [fila({ dominio: 'tela', item_cod: 'BK 74' })],
+      new Map([['BK74', 'NEGRO']]),
+    );
+    expect(csv).toContain('BK 74;BK 74;');
   });
 });

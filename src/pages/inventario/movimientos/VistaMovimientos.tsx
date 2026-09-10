@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { useCodigosInsumo } from '@/modules/inventario/familiasStore';
 import { useKardex } from '@/modules/inventario/kardexStore';
 import {
   almacenesPresentes,
@@ -61,6 +62,10 @@ export function VistaMovimientos() {
     incluirHistorico: historico,
   });
 
+  // El kardex anota la llave pelada. El color, para el código visible, sale
+  // del catálogo: son dos columnas de `insumos`, no las fichas completas.
+  const { colores } = useCodigosInsumo();
+
   const filas = useMemo(() => filtrarFilas(movimientos, filtros), [movimientos, filtros]);
   const almacenes = useMemo(() => almacenesPresentes(movimientos), [movimientos]);
   const usuarios = useMemo(() => usuariosPresentes(movimientos), [movimientos]);
@@ -88,7 +93,7 @@ export function VistaMovimientos() {
       toast.warning('No hay movimientos que exportar con estos filtros.');
       return;
     }
-    descargarCsv(csvDeKardex(filas), `kardex-${new Date().toISOString().slice(0, 10)}.csv`);
+    descargarCsv(csvDeKardex(filas, colores), `kardex-${new Date().toISOString().slice(0, 10)}.csv`);
     toast.success(`${filas.length.toLocaleString('es-CL')} movimientos exportados`);
   };
 
@@ -143,6 +148,7 @@ export function VistaMovimientos() {
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_296px]">
           <TablaKardex
             filas={filas}
+            colores={colores}
             total={total}
             loading={loading}
             seleccionada={seleccionada}

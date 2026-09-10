@@ -9,7 +9,12 @@ export type ValidadoresMap = Record<string, string[]>;
 export type MovTipo = 'NUEVO INGRESO' | 'SALIDA PRODUCCION' | 'AJUSTE' | 'DEVOLUCION';
 
 export type InsumoForm = {
+  /** Prefijo de la familia elegida: de ahí sale el código propuesto. */
+  familia: string;
+  /** true = un admin escribió el código a mano en vez de tomar el propuesto. */
+  codManual: boolean;
   cod: string;
+  unidad: string;
   nemotecnico: string;
   categoria: string;
   sub_categoria: string;

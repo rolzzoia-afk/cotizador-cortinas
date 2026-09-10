@@ -1,17 +1,24 @@
-// Configuración del módulo. Por ahora dos cosas: los racks tal como están
-// definidos (solo lectura) y los interruptores del módulo.
+// Configuración del módulo: cómo se numeran los códigos, qué ofrecen los
+// desplegables del formulario, los interruptores y los racks (solo lectura).
 //
-// Almacenes, unidades y validadores editables llegan con las tablas de la
-// Entrega C; hoy los almacenes son texto suelto en cada fila.
+// Las dos primeras secciones son las que sostienen el orden del catálogo: sin
+// familias los códigos se elegían a ojo, y sin listas completas todo lo nuevo
+// caía en MATERIALES.
 
+import { useMemo } from 'react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Badge } from '@/components/ui/badge';
 import { ETIQUETAS_ALMACEN } from '@/modules/inventario/almacenes';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import { RACKS_LIBERADO, RACKS_MATERIAS_PRIMAS } from '@/modules/inventario/rackConfig';
+import { mapaDeValidadores } from '@/modules/inventario/validadores';
+import { useValidadores } from '@/modules/inventario/validadoresStore';
 import { useInventario } from '../InventarioLayout';
+import FamiliasSection from './FamiliasSection';
 import InterruptoresSection from './InterruptoresSection';
+import QuienVeQueSection from './QuienVeQueSection';
 import SaldosVsKardexSection from './SaldosVsKardexSection';
+import ValidadoresSection from './ValidadoresSection';
 
 function TablaRacks({ titulo, racks }: { titulo: string; racks: typeof RACKS_LIBERADO }) {
   const celdas = racks.reduce((n, r) => n + r.filas * r.columnas.length, 0);
@@ -49,16 +56,29 @@ function TablaRacks({ titulo, racks }: { titulo: string; racks: typeof RACKS_LIB
 
 export function VistaConfiguracion() {
   const { flags } = useFlagsInventario();
-  const { puedeEditar } = useInventario();
+  const { puedeEditar, rol } = useInventario();
+  const { filas } = useValidadores();
+
+  // Las familias proponen categoría y subcategoría al dar de alta, así que su
+  // diálogo elige de las mismas listas que el formulario del artículo.
+  const listas = useMemo(() => mapaDeValidadores(filas), [filas]);
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
         miga="Inventario"
         titulo="Configuración"
-        hint="Cómo está armada la bodega por dentro. Los racks se cambian en el código; los almacenes y las unidades pasan a ser editables en la próxima entrega."
+        hint="Cómo se numeran los códigos, qué ofrecen los desplegables y cómo está armada la bodega por dentro."
       />
 
+      <FamiliasSection
+        puedeEditar={puedeEditar}
+        categorias={listas.CATEGORIA || []}
+        subCategorias={listas.SUB_CATEGORIA || []}
+      />
+      <ValidadoresSection puedeEditar={puedeEditar} />
+
+      <QuienVeQueSection rolActual={rol} />
       <InterruptoresSection puedeEditar={puedeEditar} />
       <SaldosVsKardexSection activo={flags.kardexRpc} />
 
