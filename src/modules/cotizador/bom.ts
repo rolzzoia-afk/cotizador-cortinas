@@ -250,7 +250,7 @@ export function calcularBOM(
     if (tieneMotor) {
       // Motor nuevo (DOM38/DOM41): kit con códigos DOM. Motor legacy o 'CABLE'
       // futuro: línea genérica como antes.
-      const motorInsumos = insumosMotorDePano(p, categoria, reglas.tipos);
+      const motorInsumos = insumosMotorDePano(p);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
           add(`MOT|${ins.codigo}|${ins.color}`, 'MOTOR', ins.descripcion, ins.codigo, ins.color, ins.cantidad, 'unid.');

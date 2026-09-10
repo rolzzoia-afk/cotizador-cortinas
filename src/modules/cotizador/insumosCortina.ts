@@ -1078,17 +1078,15 @@ export function codigoManillaPorColor(
  * OPCIONAL (elección del vendedor en Fase 2): si se elige un hub (DOM43/DOM03)
  * va acompañado de su enchufe DOM04; con DOM33 o sin elección no va ni hub ni
  * DOM04. Vacío si es 'CABLE' o no hay motor.
- * F15: la cenefa ovalada NO admite DOM41 → cae a DOM38. La regla vive acá (en la
- * derivación del BOM), no solo en la UI, para que una OT importada o cargada sin
- * re-editar la cenefa tampoco emita el kit DOM41 prohibido.
+ * EL MOTOR QUE SE COBRA ES EL QUE SE USA (dueño, 2026-09-10). Hasta ese día la
+ * regla F15 cambiaba un DOM41 por DOM38 cuando la cenefa era ovalada, acá y en
+ * las tres pantallas. El resultado era peor que el problema: la cotización
+ * vendía un motor, la ficha no lo ofrecía —y no decía por qué—, y el taller
+ * recibía otro. Ahora no se sustituye nada; el modelo se cambia a mano en
+ * Fase 2 si en terreno no calza.
  */
-export function insumosMotorDePano(
-  p: Partial<Pano>,
-  categoria?: string,
-  tipos?: readonly TipoCortina[],
-): InsumoCortina[] {
-  let modelo = (p.motorModelo || '').toUpperCase();
-  if (modelo === 'DOM41' && esCenefaOvalada(p.cenefa, categoria, tipos)) modelo = 'DOM38';
+export function insumosMotorDePano(p: Partial<Pano>): InsumoCortina[] {
+  const modelo = (p.motorModelo || '').toUpperCase();
   const m = MOTORES[modelo];
   if (!m) return [];
   const out: InsumoCortina[] = [

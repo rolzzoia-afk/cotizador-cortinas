@@ -496,10 +496,13 @@ describe('construirInventario — clasificación por cenefa ovalada', () => {
     } as unknown as Ventana;
     const d = construirInventario([v]);
     const grupo = (c: string) => d.insumos.find((i) => i.codigo === c)?.grupo;
-    // DOM41 en cenefa ovalada degrada a DOM38 (Tronic Plus con cable).
-    expect(grupo('DOM38')).toBe('PRODUCCION'); // el motor
-    expect(grupo('DOM39')).toBe('INSTALACION'); // control
-    expect(grupo('DOM34')).toBe('INSTALACION'); // cable
+    // El DOM41 se queda: desde el 2026-09-10 la cenefa ovalada ya no lo cambia
+    // por un DOM38 (el motor que se cobra es el que se usa). Sin DOM34: el
+    // cable de carga es del DOM38.
+    expect(grupo('DOM41')).toBe('PRODUCCION'); // el motor
+    expect(grupo('DOM38')).toBeUndefined();
+    expect(grupo('DOM34')).toBeUndefined();
+    expect(grupo('DOM42')).toBe('INSTALACION'); // su control
     expect(grupo('DOM04')).toBe('INSTALACION'); // enchufe del hub
   });
 

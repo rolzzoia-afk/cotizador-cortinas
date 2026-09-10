@@ -57,14 +57,15 @@ describe('parcheAcciona', () => {
     });
   });
 
-  it('con cenefa ovalada el motor por defecto es el DOM38', () => {
-    expect(parcheAcciona('MOTOR', { cenefaOvalada: true }).motorModelo).toBe('DOM38');
+  // La cenefa ovalada forzaba el DOM38 (regla F15) hasta el 2026-09-10: el
+  // dueño la sacó para que el motor cobrado sea el que se usa.
+  it('la cenefa ovalada ya no cambia el motor por defecto', () => {
+    expect(parcheAcciona('MOTOR', {}).motorModelo).toBe('DOM41');
   });
 
-  it('respeta el motor ya elegido', () => {
-    expect(parcheAcciona('MOTOR', { motorModelo: 'CABLE', cenefaOvalada: true }).motorModelo).toBe(
-      'CABLE',
-    );
+  it('respeta el motor ya elegido: es el que se cobró', () => {
+    expect(parcheAcciona('MOTOR', { motorModelo: 'CABLE' }).motorModelo).toBe('CABLE');
+    expect(parcheAcciona('MOTOR', { motorModelo: 'DOM48' }).motorModelo).toBe('DOM48');
   });
 
   it('volver a CADENA limpia todo lo del motor', () => {

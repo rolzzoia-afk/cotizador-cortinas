@@ -366,10 +366,7 @@ const CAMPO_ACCIONA: CampoVoz = {
       { CADENA: ['cadena', 'manual'], MOTOR: ['motor', 'motorizada', 'eléctrica'] },
     ),
   aplicar: (v, c) => ({
-    pano: parcheAcciona(v, {
-      motorModelo: c.pano.motorModelo,
-      cenefaOvalada: cenefaOvaladaDe(c),
-    }),
+    pano: parcheAcciona(v, { motorModelo: c.pano.motorModelo }),
   }),
 };
 
@@ -379,12 +376,11 @@ const CAMPO_MOTOR_MODELO: CampoVoz = {
   tipo: 'opcion',
   pregunta: () => '¿Qué modelo de motor?',
   estaVacio: (c) => !txt(c.pano.motorModelo),
-  // La cenefa ovalada no admite el DOM41: no cabe en la caja.
-  opciones: (c) =>
+  // Los seis modelos se pueden dictar, con cualquier cenefa: el que se cobró
+  // en Fase 1 tiene que poder decirse (dueño, 2026-09-10).
+  opciones: () =>
     desdePares(
-      cenefaOvaladaDe(c)
-        ? OPCIONES_MOTOR_MODELO.filter((o) => o.value !== 'DOM41')
-        : OPCIONES_MOTOR_MODELO,
+      OPCIONES_MOTOR_MODELO,
       {
         DOM41: ['inalambrico', 'inalambrica', 'dom cuarenta y uno'],
         DOM38: ['tronic', 'tronic plus', 'dom treinta y ocho'],

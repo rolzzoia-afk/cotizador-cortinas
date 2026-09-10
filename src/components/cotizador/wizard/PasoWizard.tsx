@@ -378,20 +378,15 @@ export function CuerpoPaso(props: PropsPaso) {
               { value: 'MOTOR', label: 'Con motor' },
             ]}
             // Pasar a motor limpia la cadena: el kit ya no la lleva.
-            onChange={(v) =>
-              onPano(parcheAcciona(v, { motorModelo: pano.motorModelo, cenefaOvalada }))
-            }
+            onChange={(v) => onPano(parcheAcciona(v, { motorModelo: pano.motorModelo }))}
           />
           {conMotor ? (
             <>
+              {/* Los seis modelos, siempre: el que se cobró tiene que estar. */}
               <RadioRow
                 label="Modelo"
                 value={pano.motorModelo || ''}
-                options={
-                  cenefaOvalada
-                    ? OPCIONES_MOTOR_MODELO.filter((o) => o.value !== 'DOM41')
-                    : OPCIONES_MOTOR_MODELO
-                }
+                options={OPCIONES_MOTOR_MODELO}
                 onChange={(v) => onPano({ motorModelo: v })}
               />
               <RadioRow

@@ -51,16 +51,21 @@ export function parcheVarianteBeeblack(v: string, instalacionActual?: string): P
 
 /**
  * CADENA ↔ MOTOR. Pasar a motor limpia la cadena (el kit ya no la lleva) y
- * viceversa. El modelo por defecto depende de la cenefa: la OVALADA no admite
- * el DOM41 (no cabe), así que ahí el default es el DOM38.
+ * viceversa.
+ *
+ * El modelo que ya trae el paño MANDA: es el que se cobró en Fase 1 y llegó
+ * por el prefill. Solo si no hay ninguno se propone el DOM41, y se cambia a
+ * mano. Antes la cenefa ovalada forzaba el DOM38 (regla F15); se sacó el
+ * 2026-09-10 por orden del dueño —«el motor que cobre, se use»— porque la
+ * sustitución dejaba la cotización y el taller pidiendo motores distintos.
  */
 export function parcheAcciona(
   v: 'CADENA' | 'MOTOR' | string,
-  opts: { motorModelo?: string; cenefaOvalada?: boolean } = {},
+  opts: { motorModelo?: string } = {},
 ): Partial<Pano> {
   if (v === 'MOTOR') {
     return {
-      motorModelo: opts.motorModelo || (opts.cenefaOvalada ? 'DOM38' : 'DOM41'),
+      motorModelo: opts.motorModelo || 'DOM41',
       codCadena: '',
       largoCadena: '',
       colorCadena: '',
