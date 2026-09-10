@@ -231,14 +231,20 @@ export const SUBMODULOS_INVENTARIO: readonly SubmoduloInventario[] = [
 
   // ── Administración ─────────────────────────────────────────────────
   {
-    // La pantalla existe para acordar el alcance; el módulo NO se programa
-    // hasta que la jefatura apruebe. Por eso entra pero no opera.
+    // Bodega levanta la solicitud de lo que falta y recibe lo que llega; las
+    // órdenes las emite Gerencia en otro sistema. Producción solo mira: le
+    // sirve saber qué viene en camino, pero no pide ni recibe.
+    //
+    // Sincronizar con Finanzas, editar los alias de un proveedor y cerrar una
+    // orden con faltantes son de administración, y eso lo comprueba cada
+    // función de la base, no solo la pantalla.
     id: 'compras',
     ruta: '/inventario/compras',
     titulo: 'Compras',
     grupo: 'administracion',
     icono: 'ShoppingCart',
-    roles: [],
+    roles: BODEGA,
+    lectura: ['produccion'],
     modo: 'escritorio',
     estado: 'listo',
     enMenu: true,

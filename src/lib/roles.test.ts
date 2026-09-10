@@ -174,11 +174,19 @@ describe('puedeAccederRuta — submódulos de /inventario', () => {
     expect(puedeAccederRuta('produccion', '/inventario-conteo')).toBe(false);
   });
 
-  it('un submódulo pendiente no le abre la puerta a nadie más que al admin', () => {
+  it('Compras la abre bodega y la mira producción; el resto no entra', () => {
+    // Bodega pide lo que falta y recibe lo que llega; producción solo quiere
+    // saber qué viene en camino. Ventas, dimensionado, telas y pruebas no
+    // tienen nada que hacer ahí.
+    for (const rol of ['bodeguero', 'operario', 'produccion', 'admin']) {
+      expect(puedeAccederRuta(rol, '/inventario/compras'), rol).toBe(true);
+    }
     for (const rol of ROLES_DISPONIBLES) {
-      if (rol === 'admin') continue;
+      if (['admin', 'bodeguero', 'operario', 'produccion'].includes(rol)) continue;
       expect(puedeAccederRuta(rol, '/inventario/compras'), rol).toBe(false);
     }
-    expect(puedeAccederRuta('admin', '/inventario/compras')).toBe(true);
+    // La ficha de una orden hereda el mismo permiso que la lista.
+    expect(puedeAccederRuta('bodeguero', '/inventario/compras/abc-123')).toBe(true);
+    expect(puedeAccederRuta('ventas', '/inventario/compras/abc-123')).toBe(false);
   });
 });

@@ -179,7 +179,7 @@ export type Atajo = {
   texto: string;
   /** Ruta interna, o `externa` si sale del módulo. */
   ruta: string;
-  icono: 'QrCode' | 'Plus' | 'Layers' | 'AlignJustify';
+  icono: 'QrCode' | 'Plus' | 'Layers' | 'AlignJustify' | 'ShoppingCart';
   roles: readonly string[];
 };
 
@@ -212,12 +212,31 @@ const ATAJOS: readonly Atajo[] = [
     icono: 'AlignJustify',
     roles: ['produccion', 'operario'],
   },
+  {
+    // El camino corto para el mesón: llegó el camión, hay que encontrar la
+    // orden. Solo aparece con el módulo encendido — lo filtra `atajosPorRol`.
+    id: 'compras',
+    texto: 'Recibir mercadería',
+    ruta: '/inventario/compras',
+    icono: 'ShoppingCart',
+    roles: ['bodeguero', 'operario'],
+  },
 ];
 
-/** Los atajos que le sirven a este rol. El admin los ve todos. */
-export function atajosPorRol(rol: string | null | undefined): Atajo[] {
+/**
+ * Los atajos que le sirven a este rol. El admin los ve todos.
+ *
+ * `comprasEncendido` saca el de recibir mercadería cuando el módulo está
+ * apagado: un atajo que lleva a una pantalla que dice «esto todavía no opera»
+ * es peor que no tenerlo.
+ */
+export function atajosPorRol(
+  rol: string | null | undefined,
+  comprasEncendido = false,
+): Atajo[] {
   const r = (rol || '').toLowerCase().trim();
-  if (r === 'admin' || r === 'superadmin') return [...ATAJOS];
+  const disponibles = ATAJOS.filter((a) => a.id !== 'compras' || comprasEncendido);
+  if (r === 'admin' || r === 'superadmin') return disponibles;
   if (!r) return [];
-  return ATAJOS.filter((a) => a.roles.includes(r));
+  return disponibles.filter((a) => a.roles.includes(r));
 }

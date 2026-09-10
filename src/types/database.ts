@@ -1591,6 +1591,27 @@ export type Database = {
         }
         Relationships: []
       }
+      configuracion_backup_codigos_20260910: {
+        Row: {
+          clave: string | null
+          empresa_id: string | null
+          id: string | null
+          valor: string | null
+        }
+        Insert: {
+          clave?: string | null
+          empresa_id?: string | null
+          id?: string | null
+          valor?: string | null
+        }
+        Update: {
+          clave?: string | null
+          empresa_id?: string | null
+          id?: string | null
+          valor?: string | null
+        }
+        Relationships: []
+      }
       configuracion_backup_e78_20260714: {
         Row: {
           clave: string | null
@@ -1609,6 +1630,158 @@ export type Database = {
           empresa_id?: string | null
           id?: string | null
           valor?: string | null
+        }
+        Relationships: []
+      }
+      conteo_lineas: {
+        Row: {
+          ajustada: boolean
+          conteo_id: string
+          empresa_id: string
+          id: string
+          item_cod: string
+          item_nombre: string | null
+          saldo_final: number | null
+          saldo_sistema: number
+        }
+        Insert: {
+          ajustada?: boolean
+          conteo_id: string
+          empresa_id: string
+          id?: string
+          item_cod: string
+          item_nombre?: string | null
+          saldo_final?: number | null
+          saldo_sistema?: number
+        }
+        Update: {
+          ajustada?: boolean
+          conteo_id?: string
+          empresa_id?: string
+          id?: string
+          item_cod?: string
+          item_nombre?: string | null
+          saldo_final?: number | null
+          saldo_sistema?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conteo_lineas_conteo_id_fkey"
+            columns: ["conteo_id"]
+            isOneToOne: false
+            referencedRelation: "conteos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conteo_tallies: {
+        Row: {
+          cantidad: number
+          contado_en: string
+          contador: string
+          conteo_id: string
+          empresa_id: string
+          id: string
+          linea_id: string
+          usuario_email: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          cantidad: number
+          contado_en?: string
+          contador: string
+          conteo_id: string
+          empresa_id: string
+          id?: string
+          linea_id: string
+          usuario_email?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          cantidad?: number
+          contado_en?: string
+          contador?: string
+          conteo_id?: string
+          empresa_id?: string
+          id?: string
+          linea_id?: string
+          usuario_email?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conteo_tallies_conteo_id_fkey"
+            columns: ["conteo_id"]
+            isOneToOne: false
+            referencedRelation: "conteos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conteo_tallies_linea_id_fkey"
+            columns: ["linea_id"]
+            isOneToOne: false
+            referencedRelation: "conteo_lineas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      conteos: {
+        Row: {
+          ajustadas: number | null
+          almacen: string
+          categoria: string | null
+          cerrado_en: string | null
+          cerrado_por: string | null
+          cerrado_por_email: string | null
+          dominio: string
+          empresa_id: string
+          estado: string
+          firma_png: string | null
+          id: string
+          iniciado_en: string
+          iniciado_por: string | null
+          iniciado_por_email: string | null
+          lineas_total: number
+          modo: string
+          notas: string | null
+        }
+        Insert: {
+          ajustadas?: number | null
+          almacen: string
+          categoria?: string | null
+          cerrado_en?: string | null
+          cerrado_por?: string | null
+          cerrado_por_email?: string | null
+          dominio: string
+          empresa_id: string
+          estado?: string
+          firma_png?: string | null
+          id?: string
+          iniciado_en?: string
+          iniciado_por?: string | null
+          iniciado_por_email?: string | null
+          lineas_total?: number
+          modo?: string
+          notas?: string | null
+        }
+        Update: {
+          ajustadas?: number | null
+          almacen?: string
+          categoria?: string | null
+          cerrado_en?: string | null
+          cerrado_por?: string | null
+          cerrado_por_email?: string | null
+          dominio?: string
+          empresa_id?: string
+          estado?: string
+          firma_png?: string | null
+          id?: string
+          iniciado_en?: string
+          iniciado_por?: string | null
+          iniciado_por_email?: string | null
+          lineas_total?: number
+          modo?: string
+          notas?: string | null
         }
         Relationships: []
       }
@@ -2429,6 +2602,27 @@ export type Database = {
         }
         Relationships: []
       }
+      familias_backup_defaults_20260910: {
+        Row: {
+          categoria: string | null
+          id: string | null
+          prefijo: string | null
+          sub_categoria: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          id?: string | null
+          prefijo?: string | null
+          sub_categoria?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          id?: string | null
+          prefijo?: string | null
+          sub_categoria?: string | null
+        }
+        Relationships: []
+      }
       familias_insumo: {
         Row: {
           activo: boolean
@@ -2471,6 +2665,54 @@ export type Database = {
           prefijo?: string
           siguiente?: number
           sub_categoria?: string | null
+        }
+        Relationships: []
+      }
+      insumo_codigos_proveedor: {
+        Row: {
+          actualizada_en: string
+          clave: string
+          clave_tipo: string
+          creada_en: string
+          descriptor_visto: string | null
+          dominio: string
+          empresa_id: string
+          factor: number | null
+          id: string
+          item_cod: string
+          origen: string
+          proveedor_rut: string
+          veces_visto: number
+        }
+        Insert: {
+          actualizada_en?: string
+          clave: string
+          clave_tipo: string
+          creada_en?: string
+          descriptor_visto?: string | null
+          dominio: string
+          empresa_id: string
+          factor?: number | null
+          id?: string
+          item_cod: string
+          origen?: string
+          proveedor_rut: string
+          veces_visto?: number
+        }
+        Update: {
+          actualizada_en?: string
+          clave?: string
+          clave_tipo?: string
+          creada_en?: string
+          descriptor_visto?: string | null
+          dominio?: string
+          empresa_id?: string
+          factor?: number | null
+          id?: string
+          item_cod?: string
+          origen?: string
+          proveedor_rut?: string
+          veces_visto?: number
         }
         Relationships: []
       }
@@ -2836,6 +3078,126 @@ export type Database = {
           sub_categoria?: string | null
           ubicacion?: string | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      insumos_backup_codigos_20260910: {
+        Row: {
+          can_x_paquete: number | null
+          categoria: string | null
+          cod: string | null
+          cod_proveedor: string | null
+          color: string | null
+          comentarios: string | null
+          compra: string | null
+          contenido_por_unidad: number | null
+          costo: number | null
+          costo_iva: number | null
+          created_at: string | null
+          descriptor_proveedor: string | null
+          empresa_id: string | null
+          estado_inventario: string | null
+          foto_url: string | null
+          id: string | null
+          minimo: number | null
+          nemotecnico: string | null
+          producto: string | null
+          proveedor: string | null
+          status: string | null
+          stock_liberado: number | null
+          stock_maximo: number | null
+          stock_mp: number | null
+          stock_total: number | null
+          sub_categoria: string | null
+          ubicacion: string | null
+          unidad: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          can_x_paquete?: number | null
+          categoria?: string | null
+          cod?: string | null
+          cod_proveedor?: string | null
+          color?: string | null
+          comentarios?: string | null
+          compra?: string | null
+          contenido_por_unidad?: number | null
+          costo?: number | null
+          costo_iva?: number | null
+          created_at?: string | null
+          descriptor_proveedor?: string | null
+          empresa_id?: string | null
+          estado_inventario?: string | null
+          foto_url?: string | null
+          id?: string | null
+          minimo?: number | null
+          nemotecnico?: string | null
+          producto?: string | null
+          proveedor?: string | null
+          status?: string | null
+          stock_liberado?: number | null
+          stock_maximo?: number | null
+          stock_mp?: number | null
+          stock_total?: number | null
+          sub_categoria?: string | null
+          ubicacion?: string | null
+          unidad?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          can_x_paquete?: number | null
+          categoria?: string | null
+          cod?: string | null
+          cod_proveedor?: string | null
+          color?: string | null
+          comentarios?: string | null
+          compra?: string | null
+          contenido_por_unidad?: number | null
+          costo?: number | null
+          costo_iva?: number | null
+          created_at?: string | null
+          descriptor_proveedor?: string | null
+          empresa_id?: string | null
+          estado_inventario?: string | null
+          foto_url?: string | null
+          id?: string | null
+          minimo?: number | null
+          nemotecnico?: string | null
+          producto?: string | null
+          proveedor?: string | null
+          status?: string | null
+          stock_liberado?: number | null
+          stock_maximo?: number | null
+          stock_mp?: number | null
+          stock_total?: number | null
+          sub_categoria?: string | null
+          ubicacion?: string | null
+          unidad?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      insumos_backup_reclasif_20260910: {
+        Row: {
+          categoria: string | null
+          cod: string | null
+          color: string | null
+          id: string | null
+          sub_categoria: string | null
+        }
+        Insert: {
+          categoria?: string | null
+          cod?: string | null
+          color?: string | null
+          id?: string | null
+          sub_categoria?: string | null
+        }
+        Update: {
+          categoria?: string | null
+          cod?: string | null
+          color?: string | null
+          id?: string | null
+          sub_categoria?: string | null
         }
         Relationships: []
       }
@@ -4083,6 +4445,227 @@ export type Database = {
         }
         Relationships: []
       }
+      ordenes_compra: {
+        Row: {
+          anulada: boolean
+          aprobada_en: string | null
+          aprobada_por: string | null
+          cerrada_en: string | null
+          cerrada_motivo: string | null
+          cerrada_por: string | null
+          comentarios: string | null
+          conflicto: string | null
+          creada_en: string
+          empresa_id: string
+          estado: string
+          estado_finanzas: string | null
+          factura_folio: string | null
+          factura_tipo: string | null
+          fecha_emision: string | null
+          fecha_esperada: string | null
+          finanzas_id: string
+          guia: string | null
+          id: string
+          numero: string
+          proveedor_id: string | null
+          proveedor_nombre: string | null
+          proveedor_rut: string | null
+          sincronizada_en: string
+          solicitado_por: string | null
+          solicitud_id: string | null
+          solicitud_ref: string | null
+        }
+        Insert: {
+          anulada?: boolean
+          aprobada_en?: string | null
+          aprobada_por?: string | null
+          cerrada_en?: string | null
+          cerrada_motivo?: string | null
+          cerrada_por?: string | null
+          comentarios?: string | null
+          conflicto?: string | null
+          creada_en?: string
+          empresa_id: string
+          estado?: string
+          estado_finanzas?: string | null
+          factura_folio?: string | null
+          factura_tipo?: string | null
+          fecha_emision?: string | null
+          fecha_esperada?: string | null
+          finanzas_id: string
+          guia?: string | null
+          id?: string
+          numero: string
+          proveedor_id?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rut?: string | null
+          sincronizada_en?: string
+          solicitado_por?: string | null
+          solicitud_id?: string | null
+          solicitud_ref?: string | null
+        }
+        Update: {
+          anulada?: boolean
+          aprobada_en?: string | null
+          aprobada_por?: string | null
+          cerrada_en?: string | null
+          cerrada_motivo?: string | null
+          cerrada_por?: string | null
+          comentarios?: string | null
+          conflicto?: string | null
+          creada_en?: string
+          empresa_id?: string
+          estado?: string
+          estado_finanzas?: string | null
+          factura_folio?: string | null
+          factura_tipo?: string | null
+          fecha_emision?: string | null
+          fecha_esperada?: string | null
+          finanzas_id?: string
+          guia?: string | null
+          id?: string
+          numero?: string
+          proveedor_id?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rut?: string | null
+          sincronizada_en?: string
+          solicitado_por?: string | null
+          solicitud_id?: string | null
+          solicitud_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordenes_compra_proveedor_id_fkey"
+            columns: ["proveedor_id"]
+            isOneToOne: false
+            referencedRelation: "proveedores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ordenes_compra_solicitud_id_fkey"
+            columns: ["solicitud_id"]
+            isOneToOne: false
+            referencedRelation: "solicitudes_reposicion"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordenes_compra_lineas: {
+        Row: {
+          cantidad_pedida: number
+          cantidad_recibida: number
+          codigo_interno: string | null
+          codigo_proveedor: string | null
+          conflicto: string | null
+          creada_en: string
+          descripcion: string | null
+          dominio: string | null
+          empresa_id: string
+          estado_linea: string
+          factor: number
+          finanzas_linea_id: string
+          id: string
+          item_cod: string | null
+          nota: string | null
+          orden_id: string
+          posicion: number
+          unidad: string | null
+          vinculo: string | null
+        }
+        Insert: {
+          cantidad_pedida?: number
+          cantidad_recibida?: number
+          codigo_interno?: string | null
+          codigo_proveedor?: string | null
+          conflicto?: string | null
+          creada_en?: string
+          descripcion?: string | null
+          dominio?: string | null
+          empresa_id: string
+          estado_linea?: string
+          factor?: number
+          finanzas_linea_id: string
+          id?: string
+          item_cod?: string | null
+          nota?: string | null
+          orden_id: string
+          posicion?: number
+          unidad?: string | null
+          vinculo?: string | null
+        }
+        Update: {
+          cantidad_pedida?: number
+          cantidad_recibida?: number
+          codigo_interno?: string | null
+          codigo_proveedor?: string | null
+          conflicto?: string | null
+          creada_en?: string
+          descripcion?: string | null
+          dominio?: string | null
+          empresa_id?: string
+          estado_linea?: string
+          factor?: number
+          finanzas_linea_id?: string
+          id?: string
+          item_cod?: string | null
+          nota?: string | null
+          orden_id?: string
+          posicion?: number
+          unidad?: string | null
+          vinculo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ordenes_compra_lineas_orden_id_fkey"
+            columns: ["orden_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ordenes_compra_sync: {
+        Row: {
+          actualizadas: number
+          ejecutada_por: string | null
+          empresa_id: string
+          error: string | null
+          fin: string | null
+          id: string
+          inicio: string
+          lineas: number
+          nuevas: number
+          ok: boolean | null
+          vinculadas: number
+        }
+        Insert: {
+          actualizadas?: number
+          ejecutada_por?: string | null
+          empresa_id: string
+          error?: string | null
+          fin?: string | null
+          id?: string
+          inicio?: string
+          lineas?: number
+          nuevas?: number
+          ok?: boolean | null
+          vinculadas?: number
+        }
+        Update: {
+          actualizadas?: number
+          ejecutada_por?: string | null
+          empresa_id?: string
+          error?: string | null
+          fin?: string | null
+          id?: string
+          inicio?: string
+          lineas?: number
+          nuevas?: number
+          ok?: boolean | null
+          vinculadas?: number
+        }
+        Relationships: []
+      }
       ot_contadores: {
         Row: {
           empresa_id: string
@@ -4259,6 +4842,51 @@ export type Database = {
         Relationships: []
       }
       ots_backup_20260810_tira: {
+        Row: {
+          cliente_id: string | null
+          creado_por: string | null
+          datos_generales: Json | null
+          empresa_id: string | null
+          estado: string | null
+          fecha_creacion: string | null
+          fecha_entrega: string | null
+          fecha_modificacion: string | null
+          id: string | null
+          items: Json | null
+          numero_ot: string | null
+          total: number | null
+        }
+        Insert: {
+          cliente_id?: string | null
+          creado_por?: string | null
+          datos_generales?: Json | null
+          empresa_id?: string | null
+          estado?: string | null
+          fecha_creacion?: string | null
+          fecha_entrega?: string | null
+          fecha_modificacion?: string | null
+          id?: string | null
+          items?: Json | null
+          numero_ot?: string | null
+          total?: number | null
+        }
+        Update: {
+          cliente_id?: string | null
+          creado_por?: string | null
+          datos_generales?: Json | null
+          empresa_id?: string | null
+          estado?: string | null
+          fecha_creacion?: string | null
+          fecha_entrega?: string | null
+          fecha_modificacion?: string | null
+          id?: string | null
+          items?: Json | null
+          numero_ot?: string | null
+          total?: number | null
+        }
+        Relationships: []
+      }
+      ots_backup_codigos_20260910: {
         Row: {
           cliente_id: string | null
           creado_por: string | null
@@ -4824,6 +5452,45 @@ export type Database = {
         }
         Relationships: []
       }
+      proveedores: {
+        Row: {
+          activo: boolean
+          actualizado_en: string
+          alias: string[]
+          creado_en: string
+          empresa_id: string
+          finanzas_id: string | null
+          id: string
+          nombre: string | null
+          razon_social: string
+          rut: string
+        }
+        Insert: {
+          activo?: boolean
+          actualizado_en?: string
+          alias?: string[]
+          creado_en?: string
+          empresa_id: string
+          finanzas_id?: string | null
+          id?: string
+          nombre?: string | null
+          razon_social: string
+          rut: string
+        }
+        Update: {
+          activo?: boolean
+          actualizado_en?: string
+          alias?: string[]
+          creado_en?: string
+          empresa_id?: string
+          finanzas_id?: string | null
+          id?: string
+          nombre?: string | null
+          razon_social?: string
+          rut?: string
+        }
+        Relationships: []
+      }
       reversas_planes_corte: {
         Row: {
           actor: string | null
@@ -4862,6 +5529,125 @@ export type Database = {
           resumen?: Json
         }
         Relationships: []
+      }
+      solicitudes_reposicion: {
+        Row: {
+          actualizada_en: string
+          creada_en: string
+          creada_por: string | null
+          creada_por_id: string | null
+          empresa_id: string
+          enviada_en: string | null
+          enviada_por: string | null
+          error_envio: string | null
+          estado: string
+          finanzas_id: string | null
+          id: string
+          motivo_rechazo: string | null
+          notas: string | null
+          numero: string
+        }
+        Insert: {
+          actualizada_en?: string
+          creada_en?: string
+          creada_por?: string | null
+          creada_por_id?: string | null
+          empresa_id: string
+          enviada_en?: string | null
+          enviada_por?: string | null
+          error_envio?: string | null
+          estado?: string
+          finanzas_id?: string | null
+          id?: string
+          motivo_rechazo?: string | null
+          notas?: string | null
+          numero: string
+        }
+        Update: {
+          actualizada_en?: string
+          creada_en?: string
+          creada_por?: string | null
+          creada_por_id?: string | null
+          empresa_id?: string
+          enviada_en?: string | null
+          enviada_por?: string | null
+          error_envio?: string | null
+          estado?: string
+          finanzas_id?: string | null
+          id?: string
+          motivo_rechazo?: string | null
+          notas?: string | null
+          numero?: string
+        }
+        Relationships: []
+      }
+      solicitudes_reposicion_lineas: {
+        Row: {
+          cantidad: number
+          creada_en: string
+          dominio: string
+          empresa_id: string
+          estado_linea: string
+          id: string
+          item_cod: string
+          minimo_al_pedir: number | null
+          motivo: string
+          nombre: string | null
+          nota: string | null
+          oc_numero: string | null
+          orden: number
+          proveedor_sugerido: string | null
+          solicitud_id: string
+          stock_al_pedir: number | null
+          unidad: string | null
+        }
+        Insert: {
+          cantidad: number
+          creada_en?: string
+          dominio: string
+          empresa_id: string
+          estado_linea?: string
+          id?: string
+          item_cod: string
+          minimo_al_pedir?: number | null
+          motivo?: string
+          nombre?: string | null
+          nota?: string | null
+          oc_numero?: string | null
+          orden?: number
+          proveedor_sugerido?: string | null
+          solicitud_id: string
+          stock_al_pedir?: number | null
+          unidad?: string | null
+        }
+        Update: {
+          cantidad?: number
+          creada_en?: string
+          dominio?: string
+          empresa_id?: string
+          estado_linea?: string
+          id?: string
+          item_cod?: string
+          minimo_al_pedir?: number | null
+          motivo?: string
+          nombre?: string | null
+          nota?: string | null
+          oc_numero?: string | null
+          orden?: number
+          proveedor_sugerido?: string | null
+          solicitud_id?: string
+          stock_al_pedir?: number | null
+          unidad?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitudes_reposicion_lineas_solicitud_id_fkey"
+            columns: ["solicitud_id"]
+            isOneToOne: false
+            referencedRelation: "solicitudes_reposicion"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       telas: {
         Row: {
@@ -5924,6 +6710,33 @@ export type Database = {
         }
         Relationships: []
       }
+      validadores_backup_reclasif_20260910: {
+        Row: {
+          activo: boolean | null
+          campo: string | null
+          empresa_id: string | null
+          id: string | null
+          orden: number | null
+          valor: string | null
+        }
+        Insert: {
+          activo?: boolean | null
+          campo?: string | null
+          empresa_id?: string | null
+          id?: string | null
+          orden?: number | null
+          valor?: string | null
+        }
+        Update: {
+          activo?: boolean | null
+          campo?: string | null
+          empresa_id?: string | null
+          id?: string | null
+          orden?: number | null
+          valor?: string | null
+        }
+        Relationships: []
+      }
       validadores_insumos: {
         Row: {
           activo: boolean | null
@@ -6118,6 +6931,64 @@ export type Database = {
           p_firma_png?: string
           p_inventario_id: string
           p_notas?: string
+        }
+        Returns: undefined
+      }
+      compras_cod_norm: { Args: { p_cod: string }; Returns: string }
+      compras_rut_norm: { Args: { p_rut: string }; Returns: string }
+      compras_sesion: {
+        Args: { p_roles: string[] }
+        Returns: {
+          email: string
+          empresa_id: string
+          rol: string
+        }[]
+      }
+      compras_siguiente_numero: {
+        Args: { p_empresa: string; p_prefijo: string; p_tabla: string }
+        Returns: string
+      }
+      conteo_cancelar: {
+        Args: { p_conteo_id: string; p_motivo?: string }
+        Returns: undefined
+      }
+      conteo_cerrar: {
+        Args: {
+          p_conteo_id: string
+          p_firma_png?: string
+          p_resoluciones?: Json
+        }
+        Returns: Json
+      }
+      conteo_diff: {
+        Args: { p_conteo_id: string }
+        Returns: {
+          conteo_a: number
+          conteo_b: number
+          diferencia: number
+          estado: string
+          item_cod: string
+          item_nombre: string
+          saldo_final: number
+          saldo_sistema: number
+        }[]
+      }
+      conteo_iniciar: {
+        Args: {
+          p_almacen?: string
+          p_categoria?: string
+          p_dominio: string
+          p_modo?: string
+          p_notas?: string
+        }
+        Returns: string
+      }
+      conteo_tally_set: {
+        Args: {
+          p_cantidad: number
+          p_contador: string
+          p_conteo_id: string
+          p_item_cod: string
         }
         Returns: undefined
       }
@@ -6348,6 +7219,21 @@ export type Database = {
         Args: { p_dias_tendencia?: number; p_limite_anomalias?: number }
         Returns: Json
       }
+      oc_autovincular: { Args: { p_empresa?: string }; Returns: number }
+      oc_cerrar: {
+        Args: { p_motivo: string; p_orden_id: string }
+        Returns: Json
+      }
+      oc_vincular_linea: {
+        Args: {
+          p_aprender?: boolean
+          p_dominio: string
+          p_factor?: number
+          p_item_cod: string
+          p_linea_id: string
+        }
+        Returns: Json
+      }
       registrar_error_corte: {
         Args: {
           p_cod_original: string
@@ -6447,6 +7333,20 @@ export type Database = {
         Args: { p_nota?: string; p_plan_id: string }
         Returns: Json
       }
+      solicitud_abrir_o_sumar: { Args: { p_lineas: Json }; Returns: Json }
+      solicitud_cancelar: {
+        Args: { p_motivo?: string; p_solicitud_id: string }
+        Returns: Json
+      }
+      solicitud_marcar_enviada: {
+        Args: {
+          p_error?: string
+          p_finanzas_id: string
+          p_solicitud_id: string
+        }
+        Returns: Json
+      }
+      solicitud_quitar_linea: { Args: { p_linea_id: string }; Returns: Json }
       sync_colmena_tubos: {
         Args: {
           p_empresa_id: string

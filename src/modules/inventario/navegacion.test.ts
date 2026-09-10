@@ -35,7 +35,10 @@ const MATRIZ: Record<string, Record<string, '●' | '◐' | '—'>> = {
   contar: { ventas: '—', bodeguero: '●', produccion: '—', dimensionado: '—', telas: '—', operario: '●', pruebas: '—' }, // prettier-ignore
   mermas: { ventas: '—', bodeguero: '●', produccion: '●', dimensionado: '●', telas: '●', operario: '●', pruebas: '—' }, // prettier-ignore
   alertas: { ventas: '—', bodeguero: '●', produccion: '◐', dimensionado: '—', telas: '—', operario: '●', pruebas: '—' }, // prettier-ignore
-  compras: { ventas: '—', bodeguero: '—', produccion: '—', dimensionado: '—', telas: '—', operario: '—', pruebas: '—' }, // prettier-ignore
+  // Bodega levanta la solicitud de lo que falta y recibe lo que llega;
+  // producción solo mira qué viene en camino. Las órdenes las emite Gerencia
+  // en otro sistema, y sincronizar con él es de admin.
+  compras: { ventas: '—', bodeguero: '●', produccion: '◐', dimensionado: '—', telas: '—', operario: '●', pruebas: '—' }, // prettier-ignore
   reportes: { ventas: '—', bodeguero: '—', produccion: '—', dimensionado: '—', telas: '—', operario: '—', pruebas: '—' }, // prettier-ignore
   configuracion: { ventas: '—', bodeguero: '—', produccion: '—', dimensionado: '—', telas: '—', operario: '—', pruebas: '—' }, // prettier-ignore
   auditoria: { ventas: '—', bodeguero: '—', produccion: '—', dimensionado: '—', telas: '—', operario: '—', pruebas: '—' }, // prettier-ignore
@@ -137,7 +140,7 @@ describe('la barra lateral', () => {
     }
   });
 
-  it('le muestra al bodeguero sus siete lugares, con Compras y Reportes fuera', () => {
+  it('le muestra al bodeguero sus lugares: entra a Compras, no a Reportes', () => {
     expect(submodulosVisibles('bodeguero').map((s) => s.id)).toEqual([
       'tablero',
       'insumos',
@@ -150,6 +153,9 @@ describe('la barra lateral', () => {
       'conteo',
       'mermas',
       'alertas',
+      // Bodega pide lo que falta y recibe lo que llega. Reportes, Configuración
+      // y Auditoría siguen siendo de administración.
+      'compras',
     ]);
   });
 

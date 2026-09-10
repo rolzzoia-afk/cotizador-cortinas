@@ -2,7 +2,7 @@
 // los movimientos del día, el conteo abierto y los atajos del rol.
 
 import { Link } from 'react-router-dom';
-import { AlignJustify, Layers, Plus, QrCode } from 'lucide-react';
+import { AlignJustify, Layers, Plus, QrCode, ShoppingCart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
@@ -10,10 +10,11 @@ import { StatBox } from '@/components/ui/stat-box';
 import { badgeTipoMovimiento } from '@/modules/inventario/badges';
 import { etiquetaAlmacen } from '@/modules/inventario/almacenes';
 import { atajosPorRol } from '@/modules/inventario/tablero';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import { useTablero } from '@/modules/inventario/tableroStore';
 import { useInventario } from '../InventarioLayout';
 
-const ICONOS_ATAJO = { QrCode, Plus, Layers, AlignJustify } as const;
+const ICONOS_ATAJO = { QrCode, Plus, Layers, AlignJustify, ShoppingCart } as const;
 
 function numero(n: number): string {
   return n.toLocaleString('es-CL');
@@ -22,7 +23,8 @@ function numero(n: number): string {
 export function VistaTablero() {
   const { rol, queryRol, resumen } = useInventario();
   const { kpis, movimientos, loading, error } = useTablero();
-  const atajos = atajosPorRol(rol);
+  const { flags } = useFlagsInventario();
+  const atajos = atajosPorRol(rol, flags.compras);
 
   return (
     <div className="flex flex-col gap-5">
