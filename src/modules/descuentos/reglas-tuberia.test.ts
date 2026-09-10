@@ -13,7 +13,9 @@ import {
   descripcionTuberia,
   diametroDesdeCategoria,
   diametroDesdeChipMecanismo,
+  diametroTuboElegidoAMano,
   opcionesTuberiaFiltradas,
+  tubosDeOtrosDiametros,
   tuberiaCodigoCorto,
   tuberiaCorregidaPorMecanismo,
   tuberiaParaPano,
@@ -325,6 +327,71 @@ describe('tubo de la banda 2,2–3,0 m (modelo 45 forzado)', () => {
   });
   it('cortina que baja de la banda (modelo vuelto a 38): E78 guardado → E02', () => {
     expect(cod(tuberiaParaPano(2.0, soft38, E78, OPCIONES_TUBERIA, 'ROL'))).toBe('E02');
+  });
+});
+
+// El taller eligió el tubo: desde ahí ninguna regla lo recalcula, en NINGUNA
+// categoría. Antes esto solo valía para la línea B, así que un E02 puesto a
+// mano en una cortina de 2,5 m volvía a E39 al apretar «Guardar ventana».
+describe('tubo elegido a mano (todas las categorías)', () => {
+  it('E02 a mano en la banda 2,2–3,0 se respeta, con modelo de 45 o de 38', () => {
+    expect(cod(tuberiaParaPano(2.5, roller45, E02, OPCIONES_TUBERIA, 'ROL', undefined, false, true))).toBe('E02');
+    expect(cod(tuberiaParaPano(2.5, soft38, E02, OPCIONES_TUBERIA, 'ROL', undefined, false, true))).toBe('E02');
+  });
+  it('sin la marca, la banda lo devuelve a E39 (comportamiento de siempre)', () => {
+    expect(cod(tuberiaParaPano(2.5, roller45, E02, OPCIONES_TUBERIA, 'ROL'))).toBe('E39');
+  });
+  it('también frena la regla de 63 mm y la de categoría (OSCURANTI)', () => {
+    expect(cod(tuberiaParaPano(3.5, roller63, E47, OPCIONES_TUBERIA, 'ROL', undefined, false, true))).toBe('E47');
+    expect(cod(tuberiaParaPano(2.5, oscuranti63, E65, OPCIONES_TUBERIA, 'OSCURANTI', undefined, false, true))).toBe('E65');
+  });
+  it('la marca sin chip guardado no traba nada: decide la regla', () => {
+    expect(cod(tuberiaParaPano(2.5, roller45, '', OPCIONES_TUBERIA, 'ROL', undefined, false, true))).toBe('E39');
+    expect(cod(tuberiaParaPano(2.5, roller45, '   ', OPCIONES_TUBERIA, 'ROL', undefined, false, true))).toBe('E39');
+  });
+  it('canoniza igual el chip viejo guardado (migra el texto, no el código)', () => {
+    expect(
+      tuberiaParaPano(2.5, roller45, '0,38mm [E02] 1,2mm', OPCIONES_TUBERIA, 'ROL', undefined, false, true),
+    ).toBe(E02);
+  });
+  it('la línea B sigue igual que antes', () => {
+    expect(cod(tuberiaParaPano(3.5, null, DESCRIPCION_TUBERIA.E01, OPCIONES_TUBERIA, 'ROL', undefined, true, true))).toBe('E01');
+    expect(cod(tuberiaParaPano(3.5, null, DESCRIPCION_TUBERIA.E01, OPCIONES_TUBERIA, 'ROL', undefined, true, false))).toBe('E39');
+  });
+});
+
+describe('diametroTuboElegidoAMano', () => {
+  it('devuelve el diámetro del chip solo con la marca puesta', () => {
+    expect(diametroTuboElegidoAMano({ tuboManual: true, tuberia: E02 })).toBe(38);
+    expect(diametroTuboElegidoAMano({ tuboManual: true, tuberia: E78 })).toBe(45);
+    expect(diametroTuboElegidoAMano({ tuboManual: true, tuberia: E47 })).toBe(63);
+  });
+  it('null sin marca, sin chip o con un chip que no es un tubo', () => {
+    expect(diametroTuboElegidoAMano({ tuberia: E02 })).toBeNull();
+    expect(diametroTuboElegidoAMano({ tuboManual: true, tuberia: '' })).toBeNull();
+    expect(diametroTuboElegidoAMano({ tuboManual: true, tuberia: 'VELCRO' })).toBeNull();
+    expect(diametroTuboElegidoAMano(null)).toBeNull();
+  });
+});
+
+// Sin esto, una cortina que la banda por ancho llevó a 45 mm solo ofrecía tubos
+// de 45: no había forma de bajarla a 38 desde la ficha.
+describe('tubosDeOtrosDiametros', () => {
+  it('ofrece un tubo por diámetro: 38 → E02 · 45 → E39 · 63 → E47', () => {
+    expect(tubosDeOtrosDiametros(OPCIONES_TUBERIA, { categoria: 'ROL', modelo: roller45 }).map(cod)).toEqual([
+      'E02', 'E39', 'E47',
+    ]);
+  });
+  it('vacío donde la elección no es del taller: OSCURANTI, línea B y pletina', () => {
+    expect(tubosDeOtrosDiametros(OPCIONES_TUBERIA, { categoria: 'OSCURANTI', modelo: oscuranti63 })).toEqual([]);
+    expect(tubosDeOtrosDiametros(OPCIONES_TUBERIA, { categoria: 'ROL', modelo: roller45, lineaB: true })).toEqual([]);
+    expect(tubosDeOtrosDiametros(OPCIONES_TUBERIA, { categoria: 'PLETINA', modelo: pletina0 })).toEqual([]);
+  });
+  it('no ofrece tubos ocultos (E78, E01) ni el histórico E05', () => {
+    const codigos = tubosDeOtrosDiametros(OPCIONES_TUBERIA, { categoria: 'ROL', modelo: roller45 }).map(cod);
+    expect(codigos).not.toContain('E78');
+    expect(codigos).not.toContain('E01');
+    expect(codigos).not.toContain('E05');
   });
 });
 
