@@ -7,6 +7,7 @@
 // el armado.
 
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { BarraGuardarSticky } from '@/components/admin/BarraGuardarSticky';
@@ -23,6 +24,7 @@ import {
   filtrarAlertas,
   FILTROS_ALERTAS,
   ordenarAlertas,
+  pideAtencion,
   resumenAlertas,
   resumenCambios,
   textoCantidad,
@@ -34,6 +36,9 @@ import {
   type FiltroAlertas,
 } from '@/modules/inventario/alertas';
 import { guardarPuntosDeReposicion, useAlertas } from '@/modules/inventario/alertasStore';
+import { lineasParaSolicitud } from '@/modules/inventario/comprasSolicitud';
+import { sumarASolicitud } from '@/modules/inventario/comprasStore';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import { mesActual } from '@/modules/inventario/helpers';
 import TablaAlertas from './TablaAlertas';
 import { useInventario } from '../InventarioLayout';
@@ -45,6 +50,52 @@ function descargarCsv(texto: string, nombre: string) {
   a.download = nombre;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+/**
+ * El camino de antes: una fila que NO mueve stock, solo para dejar constancia.
+ * Se conserva para cuando el módulo de Compras está apagado.
+ *
+ * CADA DOMINIO EN SU TABLA: la ficha de una tela lee `movimientos_telas` y la
+ * de un insumo `movimientos_insumos`. Un pedido de tela anotado del lado de los
+ * insumos no aparece en ninguna parte donde alguien lo vaya a buscar.
+ */
+async function anotarPedidoViejo(
+  pedido: ArticuloAlerta,
+  cantidad: number,
+  empresaId: string,
+): Promise<void> {
+  const fecha = new Date().toISOString();
+  const nota = `Pedido de reposición: ${pedido.nombre}`;
+  if (pedido.dominio === 'tela') {
+    // Los metros llevan decimales y la columna los admite: no se redondea.
+    const { error } = await supabase.from('movimientos_telas').insert({
+      empresa_id: empresaId,
+      fecha,
+      tipo: 'PEDIDO REPOSICION',
+      codigo: pedido.codigo,
+      almacen: 'MP',
+      metros: cantidad,
+      responsable: 'Inventario',
+      notas: nota,
+    });
+    if (error) throw error;
+    return;
+  }
+  const { error } = await supabase.from('movimientos_insumos').insert({
+    empresa_id: empresaId,
+    fecha,
+    mes: mesActual(),
+    tipo: 'PEDIDO REPOSICION',
+    codigo: pedido.codigo,
+    producto: pedido.nombre,
+    almacen: 'MP',
+    // La columna es entera: un pedido de 2,5 cajas no se puede guardar.
+    cantidad: Math.round(cantidad),
+    responsable_entrega: 'Inventario',
+    bitacora: nota,
+  });
+  if (error) throw error;
 }
 
 /** BOM + punto y coma + CRLF: así lo abre Excel en español sin pelear. */
@@ -69,8 +120,10 @@ function csvDeAlertas(filas: ArticuloAlerta[]): string {
 
 export function VistaAlertas() {
   const { empresaId } = useAuth();
-  const { puedeEditar } = useInventario();
+  const { puedeEditar, queryRol } = useInventario();
   const { articulos, pedidosEnCamino, loading, error, recargar } = useAlertas();
+  const { flags } = useFlagsInventario();
+  const comprasEncendido = flags.compras;
 
   const [filtro, setFiltro] = useState<FiltroAlertas>('atencion');
   const [busqueda, setBusqueda] = useState('');
@@ -123,53 +176,44 @@ export function VistaAlertas() {
     await recargar();
   };
 
-  // Un pedido de reposición se guarda hoy como una fila del registro de
-  // movimientos que NO mueve stock: es una anotación. Las solicitudes con
-  // estado (pendiente, en orden, recibida) llegan con su tabla, junto con
-  // Compras.
+  // Pedir reposición SUMA A LA SOLICITUD ABIERTA, la que bodega le manda a
+  // Gerencia. Antes esto escribía una fila `PEDIDO REPOSICION` en el registro
+  // viejo de movimientos: una anotación que no movía stock, sin estado y que
+  // nadie contestaba nunca.
   //
-  // CADA DOMINIO EN SU TABLA: la ficha de una tela lee `movimientos_telas` y la
-  // de un insumo `movimientos_insumos`. Un pedido de tela anotado del lado de
-  // los insumos no aparece en ninguna parte donde alguien lo vaya a buscar.
+  // Con el módulo de Compras apagado se conserva el camino de antes, para no
+  // dejar a la bodega sin ninguna forma de anotar lo que falta.
   const confirmarPedido = async (cantidad: number) => {
     if (!pedido || !empresaId) return;
     setPidiendo(true);
-    const fecha = new Date().toISOString();
-    const nota = `Pedido de reposición: ${pedido.nombre}`;
     try {
-      if (pedido.dominio === 'tela') {
-        // Los metros llevan decimales y la columna los admite: no se redondea.
-        const { error: err } = await supabase.from('movimientos_telas').insert({
-          empresa_id: empresaId,
-          fecha,
-          tipo: 'PEDIDO REPOSICION',
-          codigo: pedido.codigo,
-          almacen: 'MP',
-          metros: cantidad,
-          responsable: 'Inventario',
-          notas: nota,
-        });
-        if (err) throw err;
+      if (comprasEncendido) {
+        const r = await sumarASolicitud(
+          lineasParaSolicitud([
+            {
+              dominio: pedido.dominio,
+              codigo: pedido.codigo,
+              nombre: pedido.nombre,
+              ahora: pedido.ahora,
+              minimo: pedido.minimo,
+              cantidad,
+              proveedor: proveedorDe(pedido.id),
+              bajoMinimo: pedido.minimo != null && pedido.ahora <= pedido.minimo,
+            },
+          ]),
+        );
+        toast.success(
+          `${pedido.nombre} en el pedido ${r.numero}` +
+            (r.creada ? ' (recién abierto)' : '') +
+            '. Se manda a Gerencia desde Compras.',
+        );
       } else {
-        const { error: err } = await supabase.from('movimientos_insumos').insert({
-          empresa_id: empresaId,
-          fecha,
-          mes: mesActual(),
-          tipo: 'PEDIDO REPOSICION',
-          codigo: pedido.codigo,
-          producto: pedido.nombre,
-          almacen: 'MP',
-          // La columna es entera: un pedido de 2,5 cajas no se puede guardar.
-          cantidad: Math.round(cantidad),
-          responsable_entrega: 'Inventario',
-          bitacora: nota,
-        });
-        if (err) throw err;
+        await anotarPedidoViejo(pedido, cantidad, empresaId);
+        const guardada = pedido.dominio === 'tela' ? cantidad : Math.round(cantidad);
+        toast.success(
+          `Pedido anotado: ${textoCantidad(guardada, pedido.dominio)} ${unidadDe(pedido.dominio)} de ${pedido.nombre}`,
+        );
       }
-      const guardada = pedido.dominio === 'tela' ? cantidad : Math.round(cantidad);
-      toast.success(
-        `Pedido registrado: ${textoCantidad(guardada, pedido.dominio)} ${unidadDe(pedido.dominio)} de ${pedido.nombre}`,
-      );
       setPedido(null);
       await recargar();
     } catch (e) {
@@ -179,7 +223,12 @@ export function VistaAlertas() {
     }
   };
 
-  const crearSolicitud = () => {
+  /** El proveedor anotado en el artículo, para que Gerencia sepa a quién pedirle. */
+  const proveedorDe = (id: string): string | null =>
+    (articulos.find((a) => a.id === id) as { proveedor?: string | null } | undefined)?.proveedor ??
+    null;
+
+  const crearSolicitud = async () => {
     const elegidos = filas.filter((f) => marcados.has(f.id));
     if (elegidos.length === 0) {
       toast.warning('Marca al menos un artículo.');
@@ -192,13 +241,46 @@ export function VistaAlertas() {
       );
       return;
     }
-    descargarCsv(
-      csvDeAlertas(elegidos),
-      `reposicion-${new Date().toISOString().slice(0, 10)}.csv`,
-    );
-    toast.success(
-      `${elegidos.length} artículos exportados. La solicitud con estado llega junto con Compras.`,
-    );
+
+    // Sin el módulo encendido no hay a quién mandarle el pedido: queda el CSV,
+    // que es lo que se venía haciendo.
+    if (!comprasEncendido) {
+      descargarCsv(
+        csvDeAlertas(elegidos),
+        `reposicion-${new Date().toISOString().slice(0, 10)}.csv`,
+      );
+      toast.success(
+        `${elegidos.length} artículos exportados. Con Compras encendido esto arma la solicitud.`,
+      );
+      return;
+    }
+
+    setPidiendo(true);
+    try {
+      const r = await sumarASolicitud(
+        lineasParaSolicitud(
+          elegidos.map((a) => ({
+            dominio: a.dominio,
+            codigo: a.codigo,
+            nombre: a.nombre,
+            ahora: a.ahora,
+            minimo: a.minimo,
+            cantidad: cantidadSugerida(a) ?? 0,
+            proveedor: proveedorDe(a.id),
+            bajoMinimo: pideAtencion(a),
+          })),
+        ),
+      );
+      toast.success(
+        `${r.nuevas + r.sumadas} artículos en el pedido ${r.numero}. Se manda a Gerencia desde Compras.`,
+      );
+      setMarcados(new Set());
+      await recargar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPidiendo(false);
+    }
   };
 
   return (
@@ -214,7 +296,9 @@ export function VistaAlertas() {
               Exportar
             </Button>
             {puedeEditar && (
-              <Button onClick={crearSolicitud}>Crear solicitud con lo marcado</Button>
+              <Button onClick={() => void crearSolicitud()} disabled={pidiendo}>
+                {comprasEncendido ? 'Sumar lo marcado al pedido' : 'Crear solicitud con lo marcado'}
+              </Button>
             )}
           </>
         }
@@ -332,10 +416,23 @@ export function VistaAlertas() {
       )}
 
       <div className="rounded-lg border border-border bg-secondary/40 px-3.5 py-2.5 text-xs leading-relaxed text-muted-foreground">
-        <b className="font-medium text-foreground">Las solicitudes con estado</b> —pendiente, en
-        orden, recibida— llegan junto con Compras, que espera el visto bueno de la jefatura. Por
-        ahora «Pedir» deja la anotación de siempre y «Crear solicitud» baja la lista marcada.
-        {pedidosEnCamino.total === 0 && ' Hoy no hay ningún pedido registrado.'}
+        {comprasEncendido ? (
+          <>
+            <b className="font-medium text-foreground">Lo que se marca acá arma el pedido</b> que
+            bodega le manda a Gerencia. Se revisa y se manda desde{' '}
+            <Link to={`/inventario/compras${queryRol}`} className="text-accent hover:underline">
+              Compras
+            </Link>
+            , donde también se ve en qué orden quedó cada artículo.
+          </>
+        ) : (
+          <>
+            <b className="font-medium text-foreground">El módulo de Compras está apagado.</b> Por
+            ahora «Pedir» deja la anotación de siempre y «Crear solicitud» baja la lista marcada.
+            Encendido, las dos cosas arman el pedido que se le manda a Gerencia.
+            {pedidosEnCamino.total === 0 && ' Hoy no hay ningún pedido registrado.'}
+          </>
+        )}
       </div>
 
       <BarraGuardarSticky

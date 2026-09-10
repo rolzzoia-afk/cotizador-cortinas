@@ -1,19 +1,198 @@
 // Compras (lámina «Compras»).
 //
-// Este submódulo está DISEÑADO y no construido: espera el visto bueno de la
-// jefatura. La pantalla existe para acordar el alcance —qué se guarda de un
-// proveedor, cómo se pide y cómo entra la mercadería al stock—, no para
-// operar.
+// El circuito completo, y de dónde sale cada pieza:
 //
-// Lo único que muestra con datos de verdad son los proveedores, porque ya
-// están escritos en cada artículo. Las órdenes de compra NO se inventan: una
-// pantalla con órdenes de mentira se lee como si el módulo funcionara.
+//   Inventario ve los faltantes  →  levanta una SOLICITUD  →  Gerencia la
+//   recibe en Rolzzo-Finanzas  →  emite y aprueba la ORDEN DE COMPRA  →  la
+//   bodega la ve en espera  →  llega la mercadería  →  la recibe pieza por pieza
+//
+// Las órdenes NACEN EN OTRO SISTEMA: acá vive una copia de trabajo que se
+// refresca desde allá. Por eso no hay «nueva orden»: eso lo hace Gerencia.
+//
+// SIN MONTOS: en la copia no hay ninguna columna de plata, así que esta
+// pantalla se le puede mostrar al taller completo.
+//
+// Con el interruptor apagado se muestra el aviso de siempre y ninguna de las
+// funciones de la base deja escribir nada.
 
-import { useMemo } from 'react';
+import { useState } from 'react';
 import { Clock, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
-import { useProveedores } from '@/modules/inventario/proveedoresStore';
+import { TabButton } from '@/components/ui/tab-button';
+import { esRolAdmin } from '@/lib/roles';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { useOrdenesCompra, useProveedoresCompras, useSolicitudes } from '@/modules/inventario/comprasStore';
+import { useInventario } from '../InventarioLayout';
+import OrdenesTab from './OrdenesTab';
+import ProveedoresTab from './ProveedoresTab';
+import SolicitudesTab from './SolicitudesTab';
+
+type Pestana = 'solicitudes' | 'ordenes' | 'proveedores';
+
+export function VistaCompras() {
+  const { queryRol, puedeEditar, rol } = useInventario();
+  const { flags, loading: cargandoFlags } = useFlagsInventario();
+  const encendido = flags.compras;
+  // Hablar con Finanzas y editar los alias es de administración: es la puerta
+  // a otro sistema y a datos que la bodega no puede arreglar sola.
+  const esAdmin = esRolAdmin(rol);
+
+  const [tab, setTab] = useState<Pestana>('ordenes');
+
+  const solicitudes = useSolicitudes(encendido);
+  const ordenes = useOrdenesCompra(encendido);
+  const proveedores = useProveedoresCompras(encendido);
+
+  const recargarTodo = async () => {
+    await Promise.all([solicitudes.recargar(), ordenes.recargar(), proveedores.recargar()]);
+  };
+
+  if (cargandoFlags) {
+    return (
+      <div className="flex items-center justify-center py-16 text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!encendido) {
+    return <ComprasApagado />;
+  }
+
+  const abierta = solicitudes.abierta;
+  const error = solicitudes.error || ordenes.error || proveedores.error;
+  const cargando = solicitudes.loading || ordenes.loading;
+
+  return (
+    <div className="flex flex-col gap-3.5">
+      <PageHeader
+        miga="Inventario"
+        titulo="Compras"
+        hint="Bodega pide lo que falta, Gerencia emite la orden, y acá se ve qué está por llegar."
+      />
+
+      {error && (
+        <div className="rounded-lg border border-destructive/40 bg-destructive/[0.09] px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      <div className="flex items-center gap-5 overflow-x-auto border-b border-border">
+        <TabButton
+          variante="subrayado"
+          active={tab === 'solicitudes'}
+          onClick={() => setTab('solicitudes')}
+          badge={
+            abierta ? (
+              <Badge variant="accent">{(abierta.lineas ?? []).length}</Badge>
+            ) : (
+              <Badge variant="muted">{solicitudes.solicitudes.length}</Badge>
+            )
+          }
+        >
+          Lo que pedimos
+        </TabButton>
+        <TabButton
+          variante="subrayado"
+          active={tab === 'ordenes'}
+          onClick={() => setTab('ordenes')}
+          badge={<Badge variant={tab === 'ordenes' ? 'accent' : 'muted'}>{ordenes.ordenes.length}</Badge>}
+        >
+          Órdenes de compra
+        </TabButton>
+        <TabButton
+          variante="subrayado"
+          active={tab === 'proveedores'}
+          onClick={() => setTab('proveedores')}
+          badge={<Badge variant="muted">{proveedores.proveedores.length}</Badge>}
+        >
+          Proveedores
+        </TabButton>
+      </div>
+
+      {cargando ? (
+        <div className="flex items-center justify-center py-16 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </div>
+      ) : tab === 'solicitudes' ? (
+        <SolicitudesTab
+          solicitudes={solicitudes.solicitudes}
+          puedeEditar={puedeEditar}
+          queryRol={queryRol}
+          onCambio={recargarTodo}
+        />
+      ) : tab === 'ordenes' ? (
+        <OrdenesTab
+          ordenes={ordenes.ordenes}
+          ultimaSync={ordenes.ultimaSync}
+          errorSync={ordenes.errorSync}
+          puedeSincronizar={esAdmin}
+          queryRol={queryRol}
+          onCambio={recargarTodo}
+        />
+      ) : (
+        <ProveedoresTab
+          proveedores={proveedores.proveedores}
+          ordenes={ordenes.ordenes}
+          puedeEditar={esAdmin}
+          onCambio={recargarTodo}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Con el interruptor apagado: el alcance acordado, sin datos de mentira. Una
+ * pantalla con órdenes inventadas se lee como si el módulo funcionara.
+ */
+function ComprasApagado() {
+  return (
+    <div className="flex flex-col gap-3.5">
+      <div className="flex flex-wrap items-start gap-3 rounded-lg border border-warning/35 bg-warning/[0.09] px-4 py-3 text-xs leading-relaxed">
+        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+        <span className="min-w-0 flex-1">
+          <b className="font-semibold">El módulo está construido, pero apagado.</b> Se enciende en
+          Inventario → Configuración → Interruptores, y antes hay que correr los dos SQL y dejar
+          configurada la llave del proyecto de Finanzas.
+        </span>
+        <Badge variant="warning">Apagado</Badge>
+      </div>
+
+      <PageHeader
+        miga="Inventario"
+        titulo="Compras"
+        hint="Bodega pide lo que falta, Gerencia emite la orden, y acá se ve qué está por llegar."
+      />
+
+      <div className="grid gap-2.5 lg:grid-cols-3">
+        <Paso numero={1} titulo="Bodega pide">
+          Lo que está bajo el mínimo se marca en Alertas y se suma a una solicitud. Se revisa,
+          se agrupa por proveedor y se manda a Gerencia.
+        </Paso>
+        <Paso numero={2} titulo="Gerencia compra">
+          La orden se emite y se aprueba en Finanzas, que es donde vive la plata. Acá llega una
+          copia <b className="font-medium text-foreground">sin montos</b>, con lo que hay que
+          esperar.
+        </Paso>
+        <Paso numero={3} titulo="Bodega recibe">
+          Llega el camión, se busca la orden por el número de guía y se recibe pieza por pieza.
+          Entra al stock por el mismo camino que todo lo demás.
+        </Paso>
+      </div>
+
+      <div className="rounded-lg border border-border bg-card p-4 text-xs leading-relaxed text-muted-foreground">
+        <b className="font-medium text-foreground">Lo que falta para encenderlo:</b> correr{' '}
+        <span className="font-mono">sql/finanzas/20260911_bodega_contrato.sql</span> en el proyecto
+        de Rolzzo-Finanzas, <span className="font-mono">sql/20260911_compras_01_solicitudes_ordenes.sql</span>{' '}
+        en el nuestro, y configurar los secretos{' '}
+        <span className="font-mono">FINANZAS_URL</span> y{' '}
+        <span className="font-mono">FINANZAS_SERVICE_KEY</span>.
+      </div>
+    </div>
+  );
+}
 
 function Paso({
   numero,
@@ -25,7 +204,7 @@ function Paso({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex-1 rounded-lg border border-border bg-background/50 p-3.5">
+    <div className="rounded-lg border border-border bg-card p-3.5">
       <div className="mb-2 flex items-center gap-2">
         <span className="flex h-6 w-6 items-center justify-center rounded-full bg-accent/[0.15] font-mono text-[0.72rem] font-semibold text-accent">
           {numero}
@@ -33,122 +212,6 @@ function Paso({
         <b className="text-[0.84rem] font-medium">{titulo}</b>
       </div>
       <p className="text-xs leading-relaxed text-muted-foreground">{children}</p>
-    </div>
-  );
-}
-
-export function VistaCompras() {
-  const { proveedores, loading, error } = useProveedores();
-
-  const total = useMemo(
-    () => proveedores.reduce((s, p) => s + p.insumos + p.telas, 0),
-    [proveedores],
-  );
-
-  return (
-    <div className="flex flex-col gap-3.5">
-      <div className="flex flex-wrap items-start gap-3 rounded-lg border border-warning/35 bg-warning/[0.09] px-4 py-3 text-xs leading-relaxed">
-        <Clock className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-        <span className="min-w-0 flex-1">
-          <b className="font-semibold">Diseñado, todavía no construido.</b> Este submódulo espera
-          el visto bueno de la jefatura. Está acá para acordar el alcance: qué se guarda de un
-          proveedor, cómo se pide y cómo entra la mercadería al stock. Nada de esta pantalla
-          escribe ni pide nada todavía.
-        </span>
-        <Badge variant="warning">Pendiente de aprobación</Badge>
-      </div>
-
-      <PageHeader
-        miga="Inventario"
-        titulo="Compras"
-        hint="Hoy el proveedor es un texto suelto en cada artículo y «pedir» es solo una anotación. Acá pasa a tener nombre, orden y recepción."
-      />
-
-      {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/[0.09] px-4 py-3 text-sm">
-          {error}
-        </div>
-      )}
-
-      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)]">
-        {/* Proveedores: esto SÍ es real */}
-        <div className="rounded-lg border border-border bg-card p-4">
-          <div className="flex items-baseline gap-2">
-            <h2 className="font-serif text-base font-medium">Proveedores</h2>
-            <Badge variant="muted" className="ml-auto">
-              {proveedores.length}
-            </Badge>
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Salen de los nombres que ya están escritos en los artículos. Son{' '}
-            {total.toLocaleString('es-CL')} artículos con proveedor anotado.
-          </p>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-10 text-muted-foreground">
-              <Loader2 className="h-5 w-5 animate-spin" />
-            </div>
-          ) : (
-            <div className="mt-3 flex max-h-[420px] flex-col gap-1.5 overflow-y-auto">
-              {proveedores.map((p) => (
-                <div key={p.nombre} className="rounded-lg border border-border px-3 py-2">
-                  <div className="text-[0.84rem] font-medium">{p.nombre}</div>
-                  <div className="text-[0.72rem] text-muted-foreground">
-                    {p.insumos > 0 && `${p.insumos} insumo${p.insumos === 1 ? '' : 's'}`}
-                    {p.insumos > 0 && p.telas > 0 && ' · '}
-                    {p.telas > 0 && `${p.telas} tela${p.telas === 1 ? '' : 's'}`}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <p className="mt-3 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
-            Del proveedor se guardaría RUT, contacto y condiciones. El artículo queda enlazado sin
-            perder el texto que ya tenía.
-          </p>
-        </div>
-
-        {/* El alcance */}
-        <div className="flex flex-col gap-3.5">
-          <div className="rounded-lg border border-border bg-card p-4">
-            <h2 className="font-serif text-base font-medium">Órdenes de compra</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              Se armarían con lo que quedó marcado en Alertas y reposición: número, proveedor,
-              fecha de emisión, fecha esperada, líneas y estado (borrador, enviada, recibida en
-              parte, recibida).
-            </p>
-            <div className="mt-3 rounded-lg border border-dashed border-border bg-secondary/30 px-3.5 py-6 text-center text-xs text-muted-foreground">
-              Todavía no hay órdenes: la tabla se crea cuando el módulo se apruebe.
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-border bg-card p-4">
-            <div className="flex flex-wrap items-baseline gap-2">
-              <h2 className="font-serif text-base font-medium">Recepción de mercadería</h2>
-              <Badge variant="muted">Se haría desde el celular, en el mesón</Badge>
-            </div>
-            <div className="mt-3 flex flex-col gap-2.5 lg:flex-row">
-              <Paso numero={1} titulo="Sacar la foto">
-                Papel o PDF. Se lee sola y saca proveedor, folio y las líneas.{' '}
-                <b className="font-medium text-foreground">Sin precios.</b>
-              </Paso>
-              <Paso numero={2} titulo="Revisar línea por línea">
-                Lo que no reconoce se enlaza a mano una vez y queda aprendido para la próxima.
-              </Paso>
-              <Paso numero={3} titulo="Firmar y entra al stock">
-                Suma a Materias primas con un solo movimiento agrupado, cierra las líneas de la
-                orden y avisa a Finanzas.
-              </Paso>
-            </div>
-            <p className="mt-3 border-t border-border pt-3 text-xs leading-relaxed text-muted-foreground">
-              La recepción entraría al stock por el mismo camino que todo lo demás: la función de
-              la base. Nada escribe el saldo por su cuenta. El paso de Finanzas necesita la llave
-              de ese proyecto.
-            </p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

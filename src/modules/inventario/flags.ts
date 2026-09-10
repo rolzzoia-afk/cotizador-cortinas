@@ -11,8 +11,11 @@
 //                  que las pantallas que todavía no migran no queden ciegas.
 //   bloqueoDirecto Rechazar en la base cualquier escritura de stock que no pase
 //                  por la función. Primero se avisa, después se bloquea.
-//   compras        Mostrar el submódulo de Compras. Espera la aprobación de la
-//                  jefatura: no se enciende sin eso.
+//   compras        Encender el módulo de Compras: bodega levanta solicitudes y
+//                  recibe contra las órdenes que Gerencia aprueba en el sistema
+//                  de Finanzas. Antes de encenderlo hay que correr los dos SQL
+//                  y dejar configurada la llave de ese proyecto; apagado, la
+//                  pantalla explica el circuito y la base rechaza toda escritura.
 //
 // Se guardan como un JSON en `configuracion`, con el mismo patrón que el resto
 // de las claves de la empresa.
