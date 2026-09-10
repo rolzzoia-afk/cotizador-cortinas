@@ -3,6 +3,7 @@
 // variante; las lamas son UNIDADES (ancho / divisor + 10, entero hacia arriba).
 import { describe, expect, it } from 'vitest';
 import {
+  cierreDePanoBeeblack,
   cortesBeeblack,
   esCodigoBeeblack,
   instalacionDefaultBeeblack,
@@ -275,5 +276,32 @@ describe('esCodigoBeeblack — reconocer el sistema cuando no hay categoría', (
     expect(esCodigoBeeblack('')).toBe(false);
     expect(esCodigoBeeblack(undefined)).toBe(false);
     expect(esCodigoBeeblack(null)).toBe(false);
+  });
+});
+
+// Las dos telas de un beeblack doble se estacionan en lados opuestos y se
+// juntan al medio: el cierre de la segunda es el espejo del de la ventana.
+describe('cierreDePanoBeeblack', () => {
+  it('el primer paño lleva el cierre de la ventana, tal cual', () => {
+    expect(cierreDePanoBeeblack('IZQUIERDA-DERECHA', 0)).toBe('IZQUIERDA-DERECHA');
+    expect(cierreDePanoBeeblack('DERECHA-IZQUIERDA')).toBe('DERECHA-IZQUIERDA');
+  });
+
+  it('el segundo cierra al revés', () => {
+    expect(cierreDePanoBeeblack('IZQUIERDA-DERECHA', 1)).toBe('DERECHA-IZQUIERDA');
+    expect(cierreDePanoBeeblack('DERECHA-IZQUIERDA', 1)).toBe('IZQUIERDA-DERECHA');
+  });
+
+  it('DE ARRIBA ABAJO no tiene contrario: las dos telas quedan igual', () => {
+    expect(cierreDePanoBeeblack('DE ARRIBA ABAJO', 1)).toBe('DE ARRIBA ABAJO');
+  });
+
+  it('sin cierre escrito no se inventa uno', () => {
+    expect(cierreDePanoBeeblack('', 1)).toBe('');
+    expect(cierreDePanoBeeblack(null, 1)).toBe('');
+  });
+
+  it('un cierre fuera de la lista se deja como está: no se sabe su contrario', () => {
+    expect(cierreDePanoBeeblack('CENTRAL', 1)).toBe('CENTRAL');
   });
 });

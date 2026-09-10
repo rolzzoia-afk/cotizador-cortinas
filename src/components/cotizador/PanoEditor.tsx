@@ -101,6 +101,7 @@ import {
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
   CIERRES_BEEBLACK,
+  cierreDePanoBeeblack,
   cortesBeeblack,
   esCategoriaBeeblack,
   esCierreVerticalBeeblack,
@@ -1241,7 +1242,21 @@ export function PanoEditor({
               GIRA las fórmulas 90° cuando es DE ARRIBA ABAJO. Antes era un chip
               de solo lectura: una OT nacida en Terreno no tenía dónde fijarlo
               hasta Fase 3 (incongruencia reportada 2026-08-20). */}
-          {onDireccionVentana ? (
+          {panoNum > 1 ? (
+            /* Segunda tela de un beeblack doble: las dos comparten riel y se
+               estacionan en lados opuestos, así que su cierre es el contrario
+               del de la primera. Se deriva y se muestra; editarlo por separado
+               dejaría las dos telas corriendo hacia el mismo lado. */
+            <div className="flex items-center gap-2 rounded border border-border/60 bg-card/40 px-2 py-1 text-[0.7rem]">
+              <span className="text-muted-foreground">Cierre:</span>
+              <span className="text-foreground">
+                {cierreDePanoBeeblack(direccionVentana, panoNum - 1) || '—'}
+              </span>
+              <span className="text-muted-foreground">
+                — opuesto al del paño 1, se edita ahí
+              </span>
+            </div>
+          ) : onDireccionVentana ? (
             <div className="space-y-1">
               <RadioRow
                 label="Cierre"

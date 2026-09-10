@@ -37,6 +37,7 @@ import { normalizarVarianteOscuridad } from '@/modules/descuentos/reglas-oscurid
 import { categoriaEfectiva, type TipoCortina } from '@/modules/descuentos/tiposCortina';
 import type { ColorAccesorio } from '@/modules/descuentos/coloresAccesorio';
 import {
+  cierreDePanoBeeblack,
   esCategoriaBeeblack,
   LABEL_INSTALACION_BEEBLACK,
   normalizarInstalacionBeeblack,
@@ -1560,7 +1561,15 @@ function dibujarEstructuraBeeblack(
   );
   doc.rect(30.4, 76.3, 29.5, 9.9, 'S');
   txt(doc, `ACCESORIOS: ${colorAcc}`, 32, 79.3, 6.5, { max: 26, hScale: 0.8 });
-  txt(doc, `CIERRE: ${ladoCadenaEtiqueta(row.direccion)}`, 32, 82.2, 6.5, { max: 28, hScale: 0.75 });
+  // En un beeblack de dos telas cada una corre hacia SU lado: la segunda lleva
+  // el cierre contrario. Si las dos etiquetas dijeran lo mismo, el que arma en
+  // terreno montaría las dos telas hacia el mismo lado.
+  txt(
+    doc,
+    `CIERRE: ${ladoCadenaEtiqueta(cierreDePanoBeeblack(row.direccion, row.panoIndex))}`,
+    32, 82.2, 6.5,
+    { max: 28, hScale: 0.75 },
+  );
   txt(
     doc,
     `INST.: ${LABEL_INSTALACION_BEEBLACK[instalacionBee].toUpperCase()}`,

@@ -147,6 +147,33 @@ describe('flujoDeProducto', () => {
     expect(r).toEqual({ precio: 29231, arquetipo: '', motivo: 'sistema' });
   });
 
+  // El beeblack no tiene tela de referencia (es el MAXIFS del Excel), así que
+  // antes cobraba la más cara de su familia EN EL CATÁLOGO: en la traslúcida
+  // ganaba la fila genérica `BEE-TRAS` (78.848) y no la tela que se vende,
+  // `BEE-TR01` (52.565), y salía 50 % arriba de la OT real.
+  it('el beeblack cobra su tela TECLEADA, no la fila más cara del catálogo', () => {
+    const cat: CatalogoProductos = {
+      'BEE-TRAS': prod({ cod: 'BEE_TRAS', precio: 78848 }),
+      'BEE-TR01': prod({ cod: 'BEE_TRAS', precio: 52565 }),
+      'BEE-BK': prod({ cod: 'BEE_BK', precio: 48500 }),
+      'BEE-BK05': prod({ cod: 'BEE_BK', precio: 7839 }),
+    };
+    const bb = REGLAS_PRECIOS_DEFAULT.sistemas.beeblack;
+    expect(precioMlPorCod('BEE_TRAS', cat, REGLAS_PRECIOS_DEFAULT, bb)).toEqual({
+      precio: 52600,
+      arquetipo: '',
+      motivo: 'sistema',
+    });
+    // El blackout no se mueve: su tecleado es el mismo que ya cobraba.
+    expect(precioMlPorCod('BEE_BK', cat, REGLAS_PRECIOS_DEFAULT, bb).precio).toBe(48500);
+    // Sin el sistema en la mano sigue mandando el máximo, que es la regla vieja.
+    expect(precioMlPorCod('BEE_TRAS', cat, REGLAS_PRECIOS_DEFAULT)).toEqual({
+      precio: 78848,
+      arquetipo: 'BEE-TRAS',
+      motivo: 'maximo',
+    });
+  });
+
   it('el precio que muestra es el que cobra el motor', () => {
     // Antídoto contra que la pantalla y la cotización se digan cosas distintas.
     const f = flujoDeProducto(CAT['BK 10'], 'BK 10', CAT);

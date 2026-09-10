@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Copy, FileDown, GripVertical, Link2, Palette, Pencil, Plus, RotateCw, Save, Trash2, Printer, Search, FileUp } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpDown, Combine, Copy, FileDown, GripVertical, Link2, Palette, Pencil, Plus, RotateCw, Save, Split, Trash2, Printer, Search, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
@@ -69,7 +69,15 @@ import {
   enriquecerVentanaDesdeFase0,
   tipoTelaDesdeProducto,
 } from '@/modules/cotizador/fase0-sync';
-import { emparejarDualesFase0, esGrupoDobleTela } from '@/modules/cotizador/fase0-dual';
+import {
+  candidataParaUnir,
+  emparejarDualesFase0,
+  esGrupoDobleTela,
+  intercambiarPanos,
+  quitarDeGrupo,
+  separarGrupo,
+  unirFilas,
+} from '@/modules/cotizador/fase0-dual';
 import {
   esCategoriaPletina,
   esCategoriaVertical,
@@ -146,7 +154,11 @@ import {
   norm,
   type CampoFase0,
 } from '@/modules/cotizador/importarExcelFase0';
-import { CIERRES_BEEBLACK, esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+import {
+  CIERRES_BEEBLACK,
+  cierreDePanoBeeblack,
+  esCategoriaBeeblack,
+} from '@/modules/descuentos/reglas-beeblack';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -1222,8 +1234,48 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       return next;
     });
   };
+  // Sacar una fila que era la mitad de una cortina de dos telas deja a la otra
+  // sola: `quitarDeGrupo` la devuelve a cortina completa. Sin eso seguiría
+  // cotizando como 2.ª tela —sin riel, a mitad de precio— de una primera que ya
+  // no existe, y no se notaría hasta el taller.
   const quitarFila = (id: string) =>
-    setFilas((prev) => (prev.length > 1 ? prev.filter((f) => f.id !== id) : prev));
+    setFilas((prev) => (prev.length > 1 ? quitarDeGrupo(prev, id) : prev));
+
+  // ── Beeblack de dos telas ───────────────────────────────────────────
+  // Dos filas de la misma ubicación son UNA cortina con dos telas sobre el
+  // mismo riel: una cierra de izquierda a derecha y la otra al revés, y se
+  // juntan al medio. La planilla lo marca con su columna DOBLE; escrita a mano
+  // no hay quien lo diga, así que se une acá.
+  const tipoTelaDeFila = (f: FilaUI) =>
+    tipoTelaDesdeProducto(catalogo[f.codInt.trim()]?.cod, f.codInt);
+
+  // Con qué otra fila puede unirse cada una. Se calcula de una vez porque el
+  // botón lo pregunta fila por fila.
+  const candidataPorFila = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const f of filas) {
+      const otra = candidataParaUnir(filas, f.id);
+      if (otra) m.set(f.id, otra.id);
+    }
+    return m;
+  }, [filas]);
+
+  const unirConCandidata = (id: string) => {
+    const otra = candidataParaUnir(filas, id);
+    if (!otra) return;
+    setFilas((prev) => unirFilas(prev, id, otra.id, tipoTelaDeFila));
+    const ubic = (filas.find((f) => f.id === id)?.ubicacion || '').trim();
+    toast.success(
+      `Beeblack de dos telas${ubic ? ` en ${ubic}` : ''}: la 2.ª tela no vuelve a pagar el riel.`,
+    );
+  };
+
+  const separarFila = (vid: string) => {
+    setFilas((prev) => separarGrupo(prev, vid));
+    toast.info('Separadas: cada tela vuelve a cotizarse como una cortina completa.');
+  };
+
+  const intercambiarFila = (vid: string) => setFilas((prev) => intercambiarPanos(prev, vid));
   // Duplica una fila completa (con sus datos) justo debajo, con nuevo id,
   // para cargar varias cortinas parecidas sin reescribir todo.
   const duplicarFila = (id: string) =>
@@ -2199,6 +2251,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                   { categoria: f.categoria, codInt: f.codInt, cod: prod?.cod },
                   reglas.tipos,
                 );
+                // Cortina de dos telas: cuántos paños tiene y si esta es la
+                // segunda (la que comparte riel y no vuelve a pagarlo).
+                const panosDelGrupo = f.vid ? panosPorVid.get(f.vid) || 0 : 0;
+                const enGrupo = panosDelGrupo > 1;
+                const esSegundaTelaBb = enGrupo && (f.panoIndex ?? 0) > 0;
                 return (
                   <tr
                     key={f.id}
@@ -2232,6 +2289,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                               title="La cortina de velcro no lleva cadena: no tiene lado de accionamiento"
                             >
                               —
+                            </span>
+                          ) : esSegundaTelaBb ? (
+                            /* Las dos telas de un beeblack comparten riel y se
+                               estacionan en lados opuestos, así que el cierre de
+                               la segunda es el contrario del de la primera: se
+                               deriva, no se escribe (una copia a mano se
+                               desincroniza al cambiar la de arriba). */
+                            <span
+                              className="text-muted-foreground"
+                              title="Cierre opuesto al de la 1.ª tela: las dos se juntan al medio. Se edita en la 1.ª tela."
+                            >
+                              {cierreDePanoBeeblack(f.direccion, f.panoIndex ?? 0) || '—'}
                             </span>
                           ) : (
                             <SelectCell value={f.direccion} onChange={(v) => setFila(f.id, { direccion: v })} opciones={esCategoriaBeeblack(f.categoria) ? DIRECCIONES_BEEBLACK : DIRECCIONES} invalido={errs?.has('direccion')} />
@@ -2531,6 +2600,34 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     <Td className="text-right font-semibold">{ln ? formatCLP(ln.total) : '—'}</Td>
                     <Td className="text-right print:hidden">
                       <div className="flex items-center justify-end gap-0.5">
+                        {/* Beeblack de dos telas: unir dos filas de la misma
+                            ubicación en UNA cortina (un solo riel, receta |2T
+                            en la segunda), y deshacerlo. El botón solo aparece
+                            cuando hay con quién unirse. */}
+                        {enGrupo ? (
+                          <>
+                            {panosDelGrupo === 2 && (
+                              <button onClick={() => intercambiarFila(f.vid!)}
+                                className="rounded p-1 text-accent hover:bg-accent/10"
+                                title="Cambiar cuál tela va al vidrio (es la que paga el riel)">
+                                <ArrowUpDown className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            <button onClick={() => separarFila(f.vid!)}
+                              className="rounded p-1 text-accent hover:bg-accent/10"
+                              title="Separar: cada tela vuelve a cotizarse como una cortina completa">
+                              <Split className="h-3.5 w-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          candidataPorFila.has(f.id) && (
+                            <button onClick={() => unirConCandidata(f.id)}
+                              className="rounded p-1 text-muted-foreground hover:bg-accent/10 hover:text-accent"
+                              title="Unir con la otra tela de esta ubicación: una sola cortina beeblack de dos telas sobre un mismo riel">
+                              <Combine className="h-3.5 w-3.5" />
+                            </button>
+                          )
+                        )}
                         <button onClick={() => duplicarFila(f.id)}
                           className="rounded p-1 text-muted-foreground hover:bg-accent/10 hover:text-accent"
                           title="Duplicar fila">

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { emparejarDualesFase0, esGrupoDobleTela, type FilaEmparejable } from './fase0-dual';
+import {
+  candidataParaUnir,
+  emparejarDualesFase0,
+  esFilaBeeblack,
+  esGrupoDobleTela,
+  intercambiarPanos,
+  quitarDeGrupo,
+  separarGrupo,
+  unirFilas,
+  type FilaAgrupable,
+  type FilaEmparejable,
+} from './fase0-dual';
 
 // tipo de tela por COD_INT: SC*→SCR, BK*→BK.
 const tipoTelaDe = (f: FilaEmparejable): string => {
@@ -145,5 +156,179 @@ describe('esGrupoDobleTela', () => {
     expect(esGrupoDobleTela('BEEBLACK')).toBe(true);
     expect(esGrupoDobleTela('BEEBLACK_MOSQ')).toBe(true);
     expect(esGrupoDobleTela('ROL')).toBe(false);
+  });
+});
+
+// ── Unir / separar a mano en la grilla ───────────────────────────────
+
+// Las telas de la OT ANDREA: blackout + traslúcida sobre el mismo riel.
+const tipoBb = (f: FilaAgrupable): string => {
+  const c = f.codInt.toUpperCase();
+  if (c.startsWith('BEE-SC')) return 'SCR';
+  return c.startsWith('BEE-') ? 'BK' : '';
+};
+
+const ag = (p: Partial<FilaAgrupable> & { id: string }): FilaAgrupable => ({
+  categoria: 'BEEBLACK',
+  ubicacion: 'PPAL',
+  codInt: 'BEE-BK05',
+  ancho: 2.97,
+  alto: 1.884,
+  ...p,
+});
+
+describe('esFilaBeeblack', () => {
+  it('por categoría o, si todavía no hay, por el código', () => {
+    expect(esFilaBeeblack({ categoria: 'BEEBLACK', codInt: '' })).toBe(true);
+    expect(esFilaBeeblack({ categoria: '', codInt: 'BEE-TR01' })).toBe(true);
+    expect(esFilaBeeblack({ categoria: 'ROL', codInt: 'SC 54' })).toBe(false);
+  });
+});
+
+describe('candidataParaUnir', () => {
+  it('la otra tela de la misma ubicación y medidas', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b', codInt: 'BEE-TR01' })];
+    expect(candidataParaUnir(filas, 'a')?.id).toBe('b');
+  });
+
+  it('el botón sale en las DOS filas del par: también busca hacia arriba', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b', codInt: 'BEE-TR01' })];
+    expect(candidataParaUnir(filas, 'b')?.id).toBe('a');
+  });
+
+  it('otra ubicación no es la misma cortina', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b', ubicacion: 'HIJA', codInt: 'BEE-TR01' })];
+    expect(candidataParaUnir(filas, 'a')).toBeNull();
+  });
+
+  it('la ubicación calza sin importar mayúsculas ni espacios de más', () => {
+    const filas = [ag({ id: 'a', ubicacion: 'ppal  l' }), ag({ id: 'b', ubicacion: 'PPAL L' })];
+    expect(candidataParaUnir(filas, 'a')?.id).toBe('b');
+  });
+
+  it('dos telas de un mismo riel miden igual: si no, no son la misma cortina', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b', alto: 1.9, codInt: 'BEE-TR01' })];
+    expect(candidataParaUnir(filas, 'a')).toBeNull();
+  });
+
+  it('una fila que ya está en un grupo no se ofrece ni se une', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b', vid: 'v1', panoIndex: 0, codInt: 'BEE-TR01' })];
+    expect(candidataParaUnir(filas, 'a')).toBeNull();
+    expect(candidataParaUnir(filas, 'b')).toBeNull();
+  });
+
+  it('un roller no se une aunque calce todo lo demás', () => {
+    const filas = [
+      ag({ id: 'a', categoria: 'ROL', codInt: 'SC 54' }),
+      ag({ id: 'b', categoria: 'ROL', codInt: 'BK 43' }),
+    ];
+    expect(candidataParaUnir(filas, 'a')).toBeNull();
+  });
+
+  it('la más cercana hacia abajo, no la del final', () => {
+    const filas = [
+      ag({ id: 'a' }),
+      ag({ id: 'cerca', codInt: 'BEE-TR01' }),
+      ag({ id: 'lejos', codInt: 'BEE-TR01' }),
+    ];
+    expect(candidataParaUnir(filas, 'a')?.id).toBe('cerca');
+  });
+});
+
+describe('unirFilas', () => {
+  it('mismo vid, paños 0 y 1, y las deja pegadas', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'otra', ubicacion: 'HIJA' }), ag({ id: 'b' })];
+    const r = unirFilas(filas, 'a', 'b', tipoBb);
+    expect(r.map((f) => f.id)).toEqual(['a', 'b', 'otra']);
+    expect(r[0].vid).toBeTruthy();
+    expect(r[1].vid).toBe(r[0].vid);
+    expect([r[0].panoIndex, r[1].panoIndex]).toEqual([0, 1]);
+    expect(r[2].vid).toBeUndefined();
+  });
+
+  it('el mosquitero va al vidrio, aunque se haya pulsado en el blackout', () => {
+    const filas = [ag({ id: 'bk' }), ag({ id: 'sc', codInt: 'BEE-SC01' })];
+    const r = unirFilas(filas, 'bk', 'sc', tipoBb);
+    expect(r.map((f) => f.id)).toEqual(['sc', 'bk']);
+    expect(r[0].panoIndex).toBe(0);
+  });
+
+  it('blackout + traslúcida: manda la fila desde la que se pulsó', () => {
+    const filas = [ag({ id: 'bk' }), ag({ id: 'tr', codInt: 'BEE-TR01' })];
+    expect(unirFilas(filas, 'tr', 'bk', tipoBb).map((f) => f.id)).toEqual(['tr', 'bk']);
+    expect(unirFilas(filas, 'bk', 'tr', tipoBb).map((f) => f.id)).toEqual(['bk', 'tr']);
+  });
+
+  it('el par se queda donde estaba la primera de las dos', () => {
+    const filas = [ag({ id: 'x', ubicacion: 'HIJA' }), ag({ id: 'a' }), ag({ id: 'b' })];
+    expect(unirFilas(filas, 'b', 'a', tipoBb).map((f) => f.id)).toEqual(['x', 'b', 'a']);
+  });
+
+  it('unir una fila consigo misma o con una que no existe no hace nada', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b' })];
+    expect(unirFilas(filas, 'a', 'a', tipoBb)).toBe(filas);
+    expect(unirFilas(filas, 'a', 'fantasma', tipoBb)).toBe(filas);
+  });
+});
+
+describe('separarGrupo', () => {
+  it('las dos vuelven a ser cortinas completas', () => {
+    const filas = [
+      ag({ id: 'a', vid: 'v1', panoIndex: 0 }),
+      ag({ id: 'b', vid: 'v1', panoIndex: 1 }),
+      ag({ id: 'c', vid: 'v2', panoIndex: 0, ubicacion: 'HIJA' }),
+    ];
+    const r = separarGrupo(filas, 'v1');
+    expect(r.slice(0, 2).every((f) => f.vid === undefined && f.panoIndex === undefined)).toBe(true);
+    expect(r[2].vid).toBe('v2');
+  });
+});
+
+describe('intercambiarPanos', () => {
+  it('cambia cuál paga el riel, y el orden de la grilla lo muestra', () => {
+    const filas = [
+      ag({ id: 'a', vid: 'v1', panoIndex: 0 }),
+      ag({ id: 'b', vid: 'v1', panoIndex: 1, codInt: 'BEE-TR01' }),
+    ];
+    const r = intercambiarPanos(filas, 'v1');
+    expect(r.map((f) => f.id)).toEqual(['b', 'a']);
+    expect(r.map((f) => f.panoIndex)).toEqual([0, 1]);
+  });
+
+  it('un grupo que no tiene exactamente dos paños se deja quieto', () => {
+    const filas = [ag({ id: 'a', vid: 'v1', panoIndex: 0 })];
+    expect(intercambiarPanos(filas, 'v1')).toBe(filas);
+  });
+});
+
+describe('quitarDeGrupo', () => {
+  it('sacar una tela deja a la otra como cortina suelta, no como 2.ª tela huérfana', () => {
+    const filas = [
+      ag({ id: 'a', vid: 'v1', panoIndex: 0 }),
+      ag({ id: 'b', vid: 'v1', panoIndex: 1 }),
+    ];
+    const r = quitarDeGrupo(filas, 'a');
+    expect(r).toHaveLength(1);
+    expect(r[0].id).toBe('b');
+    expect(r[0].vid).toBeUndefined();
+    expect(r[0].panoIndex).toBeUndefined();
+  });
+
+  it('con tres paños se renumera y el grupo sigue en pie', () => {
+    const filas = [
+      ag({ id: 'a', vid: 'v1', panoIndex: 0 }),
+      ag({ id: 'b', vid: 'v1', panoIndex: 1 }),
+      ag({ id: 'c', vid: 'v1', panoIndex: 2 }),
+    ];
+    const r = quitarDeGrupo(filas, 'b');
+    expect(r.map((f) => f.id)).toEqual(['a', 'c']);
+    expect(r.map((f) => f.panoIndex)).toEqual([0, 1]);
+  });
+
+  it('una fila suelta se saca y nadie más se entera', () => {
+    const filas = [ag({ id: 'a' }), ag({ id: 'b', vid: 'v1', panoIndex: 0 })];
+    const r = quitarDeGrupo(filas, 'a');
+    expect(r.map((f) => f.id)).toEqual(['b']);
+    expect(r[0].vid).toBe('v1');
   });
 });

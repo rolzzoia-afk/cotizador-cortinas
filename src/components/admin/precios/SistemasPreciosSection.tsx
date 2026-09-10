@@ -105,10 +105,19 @@ function Sistema({
   const esCategoriaB = clave === SISTEMA_CATEGORIA_B_KEY;
   const esInvertida = clave === SISTEMA_INVERTIDA_KEY;
   const soloInsumos = esSoloInsumos(sistema);
-  // Tela de referencia por familia: las 12 de siempre más las que ya traiga guardadas.
+  // Tela tecleada por familia. La categoría B se aplica por FILA, no por
+  // familia, así que ahí se ofrecen las 12 de siempre; cualquier otro sistema
+  // —el beeblack, que teclea sus tres telas— solo muestra las suyas, más las
+  // que ya traiga guardadas.
   const familiasTela = Array.from(
-    new Set([...FAMILIAS_CON_RECETA, ...Object.keys(sistema.telaPorFamilia ?? {})]),
+    new Set([
+      ...(esCategoriaB ? FAMILIAS_CON_RECETA : sistema.familias),
+      ...Object.keys(sistema.telaPorFamilia ?? {}),
+    ]),
   );
+  // La tabla no aplica a un sistema que solo aporta insumos (la vertical cobra
+  // su tela por lamas, en su propia sección).
+  const muestraTela = !soloInsumos && familiasTela.length > 0;
   const setTela = (fam: string, v: string) => {
     const tela = { ...(sistema.telaPorFamilia ?? {}) };
     // Vaciar la celda BORRA la tela de esa familia (vuelve a cobrar la de la
@@ -245,7 +254,7 @@ function Sistema({
       )}
 
       {esCategoriaB && (
-        <div className="mt-3 space-y-3 border-t pt-3">
+        <div className="mt-3 border-t pt-3">
           <label className="block text-xs">
             <span className="mb-1 block text-muted-foreground">DCT % que se propone al marcar B</span>
             <InputDecimal
@@ -260,10 +269,16 @@ function Sistema({
               cambiarla de categoría; en la fila se puede pisar a mano.
             </span>
           </label>
+        </div>
+      )}
+
+      {muestraTela && (
+        <div className="mt-3 border-t pt-3">
           <div>
             <p className="mb-1 text-xs text-muted-foreground">
-              Tela de referencia B — $ por metro, por familia (la celda «PRECIO REAL» del panel B).
-              Vacío = esa familia cobra la tela de la A.
+              {esCategoriaB
+                ? 'Tela de referencia B — $ por metro, por familia (la celda «PRECIO REAL» del panel B). Vacío = esa familia cobra la tela de la A.'
+                : 'Tela por familia — $ por metro (la celda «PRECIO REAL» del panel). Manda sobre la tela de referencia y sobre el máximo del catálogo; vacío = el precio se resuelve como siempre.'}
             </p>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 sm:grid-cols-3">
               {familiasTela.map((fam) => (

@@ -629,21 +629,46 @@ const RECETA_BEEBLACK: LineaReceta[] = [
 
 /**
  * Los códigos del RIEL lateral del beeblack (blanco, negro, café). Los 4
- * perfiles de la cortina salen de este mismo fierro —arriba y abajo por el
- * ancho, los costados por el alto—, y por eso son las dos únicas líneas que la
- * segunda tela de un doble NO paga: la estructura es una sola.
+ * perfiles de la cortina salen de este mismo fierro: arriba y abajo por el
+ * ancho, los costados por el alto.
  */
 export const CODIGOS_RIEL_BEEBLACK = new Set(['SLM01', 'SLM02', 'SLM03']);
 
 /**
- * BEEBLACK, SEGUNDA TELA de un doble. Es la receta de arriba SIN el riel.
+ * Lo que la SEGUNDA tela de un beeblack doble NO paga, porque ya lo pagó la
+ * primera: las dos telas corren por la MISMA estructura.
+ *
+ * No es una lista de criterio propio — es exactamente lo que el Excel manual
+ * deja en blanco en el panel de la 2.ª tela (OT COTLG-05994-2, ANDREA, panel
+ * `Cotizador!CT`, celdas de cantidad borradas a mano sobre la lista beeblack):
+ *
+ * - `SLM01/02/03` · riel lateral, las dos líneas (ancho y alto).
+ * - `SML10/11/12` · agarraderas «magnetic bidirectional track shift»: son el
+ *   carril por el que corren las dos telas, no una manilla por tela.
+ * - `CIN0002` · cinta doble contacto: pega la estructura a la ventana, y la
+ *   estructura se pega una sola vez.
+ *
+ * Todo lo demás se cobra POR TELA, igual que en la planilla: kit de armado
+ * (las dos líneas), zuncho magnético, cuerda, zuncho simple, publicidad,
+ * materiales varios, caja, y la mano de obra y el traslado enteros.
+ *
+ * Con esto los materiales de la 2.ª tela de la OT ANDREA dan 409.157,17 para
+ * las tres cortinas: el mismo peso que `Cotizador!DD137` de la planilla.
  *
  * Se deriva de `RECETA_BEEBLACK` en vez de copiarla para que agregar o cambiar
- * una línea allá llegue sola acá: todo lo que no sea el riel se cobra por tela
- * (dos telas = dos manillas, dos kits, dos cajas, dos zunchos).
+ * una línea allá llegue sola acá.
  */
+export const CODIGOS_ESTRUCTURA_BEEBLACK = new Set([
+  ...CODIGOS_RIEL_BEEBLACK,
+  'SML10',
+  'SML11',
+  'SML12',
+  'CIN0002',
+]);
+
+/** BEEBLACK, SEGUNDA TELA de un doble: la receta de arriba sin la estructura. */
 const RECETA_BEEBLACK_2A_TELA: LineaReceta[] = RECETA_BEEBLACK.filter(
-  (l) => !CODIGOS_RIEL_BEEBLACK.has(l.insumo),
+  (l) => !CODIGOS_ESTRUCTURA_BEEBLACK.has(l.insumo),
 );
 
 // ── Cadena metálica ───────────────────────────────────────────────────
@@ -945,7 +970,12 @@ const INSUMOS_BEEBLACK_VM: Record<string, number> = {
   'PUB 01': 3076.8,
   MAT00001: 30768,
   CAJA0001: 10768.8,
-  CIN0002: 15470,
+  // 13.000 × 1,5384, la fórmula de la columna VALOR MAXIMO. Las copias TRINA y
+  // «D SOLO BK» traen 15.470 tecleado en esa celda —un valor viejo que nunca se
+  // recalculó, con el mismo costo de 13.000—; la de ANDREA (COTLG-05994-2) la
+  // trae al día. Se corrige el 2026-09-10 por decisión del dueño. Los goldens
+  // anteriores se corren con 15.470, que es el precio con que se vendieron.
+  CIN0002: 19999.2,
 };
 
 /** Variantes de color del beeblack: comparten VALOR MAXIMO con su representante. */
@@ -1071,6 +1101,17 @@ export const SISTEMA_BEEBLACK_DEFAULT: SistemaPrecio = {
   codigoInstalacion: 'INST-BB',
   insumos: expandirInsumos(INSUMOS_BEEBLACK_VM, GRUPOS_INSUMO_BEEBLACK),
   giraMedidasAlInvertir: true,
+  // La celda «PRECIO REAL» de cada panel del Excel beeblack (OT COTLG-05994-2,
+  // ANDREA, 2026-09-10): HONEY BLACKOUT WATERPROOF 48.500 · ROLLER SCREEN DELUX
+  // —por donde el Excel cotiza la traslúcida— 52.600 · HONEY SCREEN 48.500.
+  //
+  // El beeblack no tiene tela de referencia (`ARQUETIPOS_DEFAULT` lo deja en
+  // blanco a propósito, es el `MAXIFS` del Excel), así que sin esto cobraba la
+  // MÁS CARA de su familia en el catálogo. En BEE_TRAS esa era la fila genérica
+  // `BEE-TRAS` (78.848) y no la tela que se vende, `BEE-TR01` (52.565): la
+  // traslúcida salía 50 % arriba de la OT real. Tecleado, deja de importar qué
+  // filas tenga el catálogo.
+  telaPorFamilia: { BEE_BK: 48500, BEE_TRAS: 52600, BEE_MOSQ: 48500 },
 };
 
 /**
