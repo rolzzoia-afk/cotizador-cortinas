@@ -145,7 +145,9 @@ export type ZonaConfig = {
 export const ZONAS: Record<string, ZonaConfig> = {
   GALPON: { label: 'Galpón', filaPrefix: 'M', filaDesc: true, modo: 'grid' },
   LIBERADO: { label: 'Liberado', filaPrefix: '', filaDesc: false, modo: 'grid' },
-  ROLZZO: { label: 'Galpón (ROLZZO)', filaPrefix: '', filaDesc: false, modo: 'slots' },
+  // «Rolzzo» a secas: la pestaña vive al lado de «Galpón» y llamarla
+  // «Galpón (ROLZZO)» hacía parecer que era el mismo lugar.
+  ROLZZO: { label: 'Rolzzo', filaPrefix: '', filaDesc: false, modo: 'slots' },
   // Sobrantes de rollo nuevos guardados desde Fase 4 (fuente 'corte_rollo'). La
   // ubicación la escribe el operario al confirmar; se agrupan como estantes.
   CORTE: { label: 'Cortes nuevos', filaPrefix: '', filaDesc: false, modo: 'slots' },

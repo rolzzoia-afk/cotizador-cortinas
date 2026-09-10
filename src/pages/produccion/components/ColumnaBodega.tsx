@@ -17,6 +17,7 @@ import {
   type ColumnaConItems,
 } from '@/modules/produccion/bodega';
 import { getRacks } from '@/modules/inventario/rackConfig';
+import { partirLineaConCodigo } from '@/modules/inventario/codigosInsumo';
 
 const COLOR_ESTADO: Record<string, string> = {
   EMPEZAR: 'bg-secondary text-muted-foreground',
@@ -29,6 +30,7 @@ const RACKS = [...getRacks('LIBERADO'), ...getRacks('MATERIAS_PRIMAS')].map((r) 
 
 export default function ColumnaBodega({
   col,
+  colores,
   ot,
   hechas,
   rack,
@@ -40,6 +42,8 @@ export default function ColumnaBodega({
   onFinalizar,
 }: {
   col: ColumnaConItems;
+  /** `CAD01 → GRIS`, para escribir el código como dice la etiqueta del estante. */
+  colores: Map<string, string>;
   ot: string;
   hechas: Set<string>;
   rack: string;
@@ -128,6 +132,10 @@ body { font-family: sans-serif; margin: 0; padding: 20px; }
               {sec.items.map((i) => {
                 const clave = claveCheckBodega(col.columna, i);
                 const ok = hechas.has(clave);
+                const { codigo: codigoVisibleLinea, resto: restoLinea } = partirLineaConCodigo(
+                  i.descripcion,
+                  colores,
+                );
                 return (
                   <li
                     key={clave}
@@ -148,9 +156,13 @@ body { font-family: sans-serif; margin: 0; padding: 20px; }
                       {ok ? <Check className="h-5 w-5" /> : <span className="text-[10px]">OK</span>}
                     </button>
                     <div className={cn('min-w-0 flex-1', ok && 'opacity-50')}>
-                      <p className="truncate text-xs">
-                        {i.codigo && <strong>[{i.codigo}] </strong>}
-                        {i.descripcion}
+                      <p className="truncate text-xs" title={i.codigo || i.descripcion}>
+                        {/* La descripción YA trae el código adentro
+                            («[CAD01] CADENA…»), así que se parte en vez de
+                            escribirlo aparte: antes salía dos veces. El código
+                            va con su color, como en la etiqueta del estante. */}
+                        {codigoVisibleLinea && <strong>[{codigoVisibleLinea}] </strong>}
+                        {restoLinea}
                       </p>
                       <p className="text-[11px] tabular-nums text-muted-foreground">
                         {i.cantidad}

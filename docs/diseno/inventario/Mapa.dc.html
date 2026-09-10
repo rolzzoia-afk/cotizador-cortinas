@@ -1,0 +1,141 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap');
+    :root{--bg:hsl(36 47% 93%);--fg:hsl(28 17% 15%);--card:hsl(36 45% 96%);--sec:hsl(36 32% 87%);--mfg:hsl(28 14% 37%);--acc:hsl(28 41% 51%);--accfg:hsl(36 45% 96%);--des:hsl(353 51% 46%);--suc:hsl(152 27% 38%);--war:hsl(32 62% 48%);--bor:hsl(34 20% 80%);--r:10px}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--fg);font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:14px;-webkit-font-smoothing:antialiased}
+    h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;letter-spacing:-.02em;margin:0;font-weight:500}
+    a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+    .card{background:var(--card);border:1px solid var(--bor);border-radius:var(--r);box-shadow:0 1px 0 hsl(28 17% 15%/.04),0 1px 3px hsl(28 17% 15%/.04)}
+    .lbl{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--mfg)}
+    .bdg{display:inline-flex;align-items:center;gap:4px;border-radius:9999px;border:1px solid transparent;padding:2px 10px;font-size:11px;font-weight:500;letter-spacing:.02em}
+    .g-acc{background:hsl(28 41% 51%/.15);color:var(--acc)}
+    .g-suc{background:hsl(152 27% 38%/.15);color:var(--suc)}
+    .g-war{background:hsl(32 62% 48%/.15);color:var(--war)}
+    .g-des{background:hsl(353 51% 46%/.15);color:var(--des)}
+    .g-mut{background:var(--sec);color:var(--mfg)}
+    .mono{font-family:'Geist Mono',ui-monospace,monospace}
+    table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+    th{height:38px;padding:0 8px;text-align:left;font-size:10.5px;font-weight:500;text-transform:uppercase;letter-spacing:.07em;color:var(--mfg);border-bottom:1px solid var(--bor)}
+    td{padding:7px 8px;border-bottom:1px solid var(--bor)}
+    tr:last-child td{border-bottom:0}
+    .ruta{font-family:'Geist Mono',monospace;font-size:12px;color:var(--acc)}
+    .si{color:var(--suc);font-weight:600}
+    .ro{color:var(--mfg)}
+    .no{color:hsl(34 20% 72%)}
+    .box{border:1px solid var(--bor);border-radius:8px;padding:10px 12px;background:var(--card)}
+  </style>
+</helmet>
+
+<div style="width:1440px;height:1100px;padding:30px 32px;display:flex;flex-direction:column;gap:18px;overflow:hidden">
+
+  <div style="display:flex;align-items:flex-end;gap:16px">
+    <div>
+      <div class="lbl">Rediseño del inventario · artboard 1 de 18</div>
+      <h1 style="font-size:32px;margin-top:6px">Mapa del módulo</h1>
+    </div>
+    <div style="margin-left:auto;font-size:12.5px;color:var(--mfg);text-align:right;line-height:1.6">
+      Un solo módulo <span class="mono" style="color:var(--acc)">/inventario</span> con 15 submódulos.<br>
+      Las 14 rutas de hoy siguen funcionando: redirigen.
+    </div>
+  </div>
+
+  <!-- Sitemap -->
+  <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+
+    <div class="card" style="padding:16px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:9999px;background:var(--acc)"></span><h2 style="font-size:15px">Operación</h2><span class="bdg g-mut" style="margin-left:auto">Taller y bodega</span></div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">
+        <div class="box"><div style="font-weight:500">Tablero</div><div class="ruta">/inventario</div></div>
+        <div class="box"><div style="font-weight:500">Insumos</div><div class="ruta">/inventario/insumos · /:cod · /ubicaciones</div></div>
+        <div class="box"><div style="font-weight:500">Telas</div><div class="ruta">/inventario/telas · /:codigo</div></div>
+        <div class="box"><div style="font-weight:500">Colmena de paños</div><div class="ruta">/inventario/colmena</div></div>
+        <div class="box"><div style="font-weight:500">Tubos</div><div class="ruta">/inventario/tubos</div></div>
+        <div class="box"><div style="font-weight:500">Camionetas</div><div class="ruta">/inventario/camionetas</div></div>
+        <div class="box" style="border-color:hsl(28 41% 51%/.45)"><div style="font-weight:500;display:flex;align-items:center;gap:8px">Despacho por OT <span class="bdg g-acc">Pantalla plena</span></div><div class="ruta">/inventario/despacho</div></div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:9999px;background:var(--war)"></span><h2 style="font-size:15px">Control</h2><span class="bdg g-mut" style="margin-left:auto">Qué pasó y qué falta</span></div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">
+        <div class="box"><div style="font-weight:500">Kardex</div><div class="ruta">/inventario/movimientos</div><div style="font-size:12px;color:var(--mfg);margin-top:4px">Insumos + telas + camionetas, y el histórico de tubos y paños en solo lectura</div></div>
+        <div class="box" style="border-color:hsl(28 41% 51%/.45)"><div style="font-weight:500;display:flex;align-items:center;gap:8px">Conteo físico <span class="bdg g-acc">Pantalla plena</span></div><div class="ruta">/inventario/conteo · /contar · /tubos</div><div style="font-size:12px;color:var(--mfg);margin-top:4px">Doble ciego; los tubos conservan su ciclo actual</div></div>
+        <div class="box"><div style="font-weight:500">Mermas y fallas</div><div class="ruta">/inventario/mermas</div></div>
+        <div class="box"><div style="font-weight:500">Alertas y reposición</div><div class="ruta">/inventario/alertas</div><div style="font-size:12px;color:var(--mfg);margin-top:4px">Punto de reposición, máximo y solicitudes con estado</div></div>
+      </div>
+      <div style="margin-top:14px;padding:12px;border-radius:8px;background:hsl(32 62% 48%/.1);border:1px solid hsl(32 62% 48%/.3);font-size:12.5px;line-height:1.5">
+        <b style="font-weight:600">Fuera del módulo, enlazados:</b> el optimizador de tubos (sigue en su pantalla actual, sin tocar), el optimizador de tela, el historial de corte y la pestaña Inventario de Producción.
+      </div>
+    </div>
+
+    <div class="card" style="padding:16px">
+      <div style="display:flex;align-items:center;gap:8px"><span style="width:8px;height:8px;border-radius:9999px;background:var(--fg)"></span><h2 style="font-size:15px">Administración</h2><span class="bdg g-mut" style="margin-left:auto">Solo admin</span></div>
+      <div style="display:flex;flex-direction:column;gap:7px;margin-top:12px">
+        <div class="box" style="border-style:dashed;opacity:.75"><div style="font-weight:500;display:flex;align-items:center;gap:8px">Compras <span class="bdg g-war">Pendiente de aprobación</span></div><div class="ruta">/inventario/compras</div><div style="font-size:12px;color:var(--mfg);margin-top:4px">Proveedores · órdenes de compra · recepción de facturas. Diseñado ahora, se programa cuando la jefatura apruebe</div></div>
+        <div class="box"><div style="font-weight:500">Reportes</div><div class="ruta">/inventario/reportes</div><div style="font-size:12px;color:var(--mfg);margin-top:4px">Valorización · consumo · rotación · merma</div></div>
+        <div class="box"><div style="font-weight:500">Configuración</div><div class="ruta">/inventario/configuracion</div><div style="font-size:12px;color:var(--mfg);margin-top:4px">Almacenes · unidades · categorías · racks · interruptores</div></div>
+        <div class="box"><div style="font-weight:500">Auditoría</div><div class="ruta">/inventario/auditoria</div></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="lbl" style="margin-bottom:8px">Rutas viejas → redirigen</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11.5px" class="mono">
+          <span class="bdg g-mut">/telas → /inventario/telas</span>
+          <span class="bdg g-mut">/bodeguero → /despacho</span>
+          <span class="bdg g-mut">/camionetas</span>
+          <span class="bdg g-mut">/historial-tubos → /tubos</span>
+          <span class="bdg g-mut">/inventario-conteo → /conteo/tubos</span>
+          <span class="bdg g-des">/inventario-telas-prueba → se retira</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matriz rol × submódulo -->
+  <div class="card" style="padding:16px 18px;flex:1;min-height:0">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+      <h2 style="font-size:16px">Quién ve qué</h2>
+      <span style="font-size:12.5px;color:var(--mfg)">El gate real y el menú salen de la misma tabla, como hoy</span>
+      <div style="margin-left:auto;display:flex;gap:14px;font-size:12px;color:var(--mfg)">
+        <span><b class="si">●</b> entra y edita</span><span><b class="ro">◐</b> solo mira</span><span><b class="no">—</b> no lo ve</span>
+      </div>
+    </div>
+    <table>
+      <thead><tr>
+        <th style="width:230px">Submódulo</th>
+        <th style="text-align:center">Admin</th><th style="text-align:center">Ventas</th><th style="text-align:center">Bodeguero</th>
+        <th style="text-align:center">Producción</th><th style="text-align:center">Dimensionado</th><th style="text-align:center">Telas</th>
+        <th style="text-align:center">Operario</th><th style="text-align:center">Pruebas</th>
+        <th>Nota</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><b style="font-weight:500">Tablero</b></td><td align="center" class="si">●</td><td align="center" class="ro">◐</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Los atajos cambian según el rol</td></tr>
+        <tr><td><b style="font-weight:500">Insumos</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="ro">◐</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">El costo y la valorización, solo admin</td></tr>
+        <tr><td><b style="font-weight:500">Telas</b></td><td align="center" class="si">●</td><td align="center" class="ro">◐</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Ventas puede «descontar por venta» en terreno</td></tr>
+        <tr><td><b style="font-weight:500">Colmena de paños</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Importar y editar paños: solo admin</td></tr>
+        <tr><td><b style="font-weight:500">Tubos</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="ro">◐</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Editar y carga base: solo admin</td></tr>
+        <tr><td><b style="font-weight:500">Camionetas</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">—</td></tr>
+        <tr><td><b style="font-weight:500">Despacho por OT</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Mismo flujo y mismos QR de hoy</td></tr>
+        <tr><td><b style="font-weight:500">Kardex</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Nadie borra: solo se agregan movimientos</td></tr>
+        <tr><td><b style="font-weight:500">Conteo físico</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="ro">◐</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="ro">◐</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Abrir y cerrar: admin. Contar: bodeguero y operario</td></tr>
+        <tr><td><b style="font-weight:500">Mermas y fallas</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">—</td></tr>
+        <tr><td><b style="font-weight:500">Alertas y reposición</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="ro">◐</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="si">●</td><td align="center" class="no">—</td><td style="color:var(--mfg)">—</td></tr>
+        <tr><td><b style="font-weight:500">Compras</b> <span class="bdg g-war">Pendiente</span></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="ro">◐</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="ro">◐</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Bodega solo la parte de recepción</td></tr>
+        <tr><td><b style="font-weight:500">Reportes</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td style="color:var(--mfg)">Llevan plata: quedan en admin</td></tr>
+        <tr><td><b style="font-weight:500">Configuración</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td style="color:var(--mfg)">—</td></tr>
+        <tr><td><b style="font-weight:500">Auditoría</b></td><td align="center" class="si">●</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td align="center" class="no">—</td><td style="color:var(--mfg)">—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

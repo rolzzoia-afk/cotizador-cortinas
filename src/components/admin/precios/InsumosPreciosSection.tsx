@@ -62,7 +62,17 @@ type FilaInventario = { nemotecnico: string; costoIva: number; porPaquete: numbe
 
 const ORDEN_FAMILIAS = [...FAMILIAS_CON_RECETA, RECETA_VERTICAL_KEY, RECETA_DUO_GENERICO_KEY];
 
-/** Sin espacios ni guiones: así calzan «E 02» del cálculo y «E02» de la bodega. */
+/**
+ * Sin espacios ni guiones: así calzan «E 02» del cálculo y «E02» de la bodega.
+ *
+ * NO usa `normalizarCodigoInsumo` a propósito, aunque el resto del sistema sí.
+ * Este es MÁS LAXO: come también los puntos y los guiones, así que colapsa
+ * «MEC44-B» con «MEC44B» y con «MEC.44.B». Las recetas de precios llevan años
+ * escritas con esas tres grafías y ajustarlo a la regla estricta movería la
+ * paridad con el Excel de las vendedoras en artículos de categoría B. Si
+ * alguna vez se endurece, hay que revisar una cotización de referencia antes y
+ * después.
+ */
 const clave = (cod: string) => String(cod ?? '').toUpperCase().replace(/[\s.\-]/g, '');
 
 /** Número con coma decimal, para escribir la cuenta tal como se lee acá. */

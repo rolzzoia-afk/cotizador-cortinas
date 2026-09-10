@@ -103,13 +103,19 @@ export type Pano = {
    */
   tubo45Manual?: boolean;
   /**
-   * El taller eligió el TUBO a mano en Fase 2. Hoy solo lo usa la CATEGORÍA B,
-   * que ofrece sus dos tubos (E01 Ø38 · E39 Ø45) y cuya banda por ancho pisaba
-   * el chip guardado en cada sincronización y en cada re-guardado de Fase 1.
-   * Con el flag encendido —y tubería no vacía, ver `tuboElegidoAMano`— ninguna
-   * regla lo recalcula. Se apaga con «Volver al automático» y al cambiar de
-   * sistema (una ovalada B no tiene tubo de 45). En la categoría A se ignora:
-   * ahí la elección manual ya se respeta por `autoPorAncho` y `tubo45Manual`.
+   * El taller eligió el TUBO a mano en Fase 2, en CUALQUIER categoría. Con el
+   * flag encendido —y tubería no vacía, ver `tuboElegidoAMano`— ninguna regla
+   * lo recalcula, y su DIÁMETRO manda sobre la banda por ancho: el kit y la
+   * fila de despiece siguen al tubo elegido, no al revés.
+   *
+   * Sin esto, las bandas por ancho —la de 38 mm, que desde que el E66 se
+   * descontinuó nombra al E39 (Ø45), y la de la línea B— devolvían su tubo en
+   * cada sincronización de Fase 2 y en cada re-guardado de Fase 1: elegir E02
+   * en una cortina de 2,5 m y apretar «Guardar ventana» la dejaba en E39.
+   *
+   * Se apaga con «Volver al automático», al cambiar de sistema (una ovalada B
+   * no tiene tubo de 45) y cuando un kit nuevo obliga a otro diámetro — ahí el
+   * tubo lo puso el kit, no la persona.
    */
   tuboManual?: boolean;
   cenefa?: string;

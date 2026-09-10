@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
+  Boxes,
   BriefcaseBusiness,
   Calculator,
   ClipboardCheck,
@@ -32,6 +33,7 @@ import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/lib/marca';
 import { esRolAdmin } from '@/lib/roles';
 import { supabase } from '@/lib/supabase';
+import { esMovimientoEntrada, esMovimientoSalida } from '@/modules/inventario/badges';
 import Sparkline from './inteligencia/components/Sparkline';
 import FlowFieldBackground from '@/components/FlowFieldBackground';
 
@@ -85,10 +87,11 @@ type Role = {
 };
 
 const ROLES: Role[] = [
-  { title: 'Bodeguero', desc: 'Despacho y recepción de materiales con escaneo QR.', to: '/bodeguero?rol=bodeguero', icon: Package, tags: ['Despacho', 'QR', 'Stock', 'Camionetas'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'operario'] },
+  { title: 'Bodeguero', desc: 'Despacho y recepción de materiales con escaneo QR.', to: '/inventario/despacho?rol=bodeguero', icon: Package, tags: ['Despacho', 'QR', 'Stock', 'Camionetas'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'operario'] },
   { title: 'Producción', desc: 'Optimizador de corte de tubos, historial y trazabilidad de materiales.', to: '/optimizador?rol=produccion', icon: Wrench, tags: ['Optimizador', 'Historial corte', 'Tubos'], categoria: 'operaciones', rolesVisibles: ['produccion', 'operario'] },
   { title: 'Taller', desc: 'La OT en pantalla: plan de corte, avance por área y aviso de problemas.', to: '/produccion?rol=produccion', icon: Hammer, tags: ['Plan de corte', 'Avance', 'Avisos'], categoria: 'operaciones', rolesVisibles: ['produccion', 'dimensionado', 'telas', 'operario', 'pruebas', 'bodeguero'] },
-  { title: 'Telas', desc: 'Gestión y control de stock de telas por rollo.', to: '/telas?rol=telas', icon: Layers, tags: ['Stock telas', 'Colmena'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario'] },
+  { title: 'Inventario', desc: 'Bodega, telas, colmena de paños y tubos en un solo lugar.', to: '/inventario', icon: Boxes, tags: ['Insumos', 'Telas', 'Colmena', 'Tubos', 'Kardex'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario', 'ventas'] },
+  { title: 'Telas', desc: 'Gestión y control de stock de telas por rollo.', to: '/inventario/telas?rol=telas', icon: Layers, tags: ['Stock telas', 'Colmena'], categoria: 'operaciones', rolesVisibles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario'] },
   { title: 'Dimensionado', desc: 'Corte de tela por cortina según planes de producción.', to: '/historial-corte?rol=dimensionado', icon: Ruler, tags: ['Corte tela', 'Planes de corte'], categoria: 'operaciones', rolesVisibles: ['produccion', 'dimensionado', 'operario'] },
   { title: 'Pruebas', desc: 'Control de calidad final antes de enviar a instalación.', to: '/panel?rol=pruebas', icon: ClipboardCheck, tags: ['Panel OTs', 'Control calidad'], categoria: 'operaciones', rolesVisibles: ['pruebas'] },
   { title: 'Ventas', desc: 'KPIs diarios del equipo comercial: llamadas, visitas, cierres y fuentes.', to: '/ventas?rol=ventas', icon: LineChart, tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'], categoria: 'comercial', rolesVisibles: ['ventas'] },
@@ -197,8 +200,11 @@ function useBriefing(empresaId: string | null | undefined): Briefing {
           if (idx >= 0 && idx < 7) buckets[idx]++;
         }
 
-        const movsEntrada = movsHoyArr.filter((m) => (m.tipo || '').toLowerCase() === 'entrada').length;
-        const movsSalida = movsHoyArr.filter((m) => (m.tipo || '').toLowerCase() === 'salida').length;
+        // Los tipos que existen de verdad son 'NUEVO INGRESO', 'SALIDA
+        // PRODUCCION', 'AJUSTE' y 'DEVOLUCION'. Comparar contra 'entrada' y
+        // 'salida' daba SIEMPRE 0 en los dos contadores.
+        const movsEntrada = movsHoyArr.filter((m) => esMovimientoEntrada(m.tipo)).length;
+        const movsSalida = movsHoyArr.filter((m) => esMovimientoSalida(m.tipo)).length;
 
         setData({
           loading: false,

@@ -1,6 +1,8 @@
 // Lógica pura para inventario de insumos.
 // Portado desde public/legacy/inventario.html (getStockTotal + calcularAlertas).
 
+import { coincideBusquedaInsumo } from './codigosInsumo';
+
 export type Insumo = {
   id: string;
   empresa_id?: string | null;
@@ -26,6 +28,8 @@ export type Insumo = {
   status: string | null;
   foto_url: string | null;
   comentarios: string | null;
+  /** Cómo se cuenta: 'un', 'm', 'rollo'… (tabla `unidades`). */
+  unidad?: string | null;
 };
 
 export type Movimiento = {
@@ -52,6 +56,7 @@ export type UbicacionRack = {
   columna: string;
   codigo_insumo: string | null;
   almacen: string | null;
+  notas?: string | null;
 };
 
 export type Validador = {
@@ -60,6 +65,12 @@ export type Validador = {
   campo: string;
   valor: string;
   orden: number | null;
+  /**
+   * Un valor desactivado deja de OFRECERSE en el alta, pero no se borra: los
+   * artículos que ya lo tienen lo conservan. `null` cuenta como activo, que es
+   * como quedaron las filas viejas.
+   */
+  activo?: boolean | null;
 };
 
 export type Alerta = {
@@ -89,7 +100,8 @@ export function calcularAlertas(insumos: Insumo[]): Alerta[] {
   return alertas;
 }
 
-const MESES = [
+/** Como se escribe el mes en `movimientos_insumos.mes`. */
+export const MESES = [
   'ENERO',
   'FEBRERO',
   'MARZO',
@@ -147,14 +159,9 @@ export function filtrarCatalogo(
   const { busqueda, categoria, subCategoria, estado } = opts;
   const q = busqueda.trim().toUpperCase();
   return insumos.filter((i) => {
-    if (q) {
-      const hit =
-        (i.cod || '').toUpperCase().includes(q) ||
-        (i.nemotecnico || '').toUpperCase().includes(q) ||
-        (i.color || '').toUpperCase().includes(q) ||
-        (i.descriptor_proveedor || '').toUpperCase().includes(q);
-      if (!hit) return false;
-    }
+    // Busca por la llave, por el código visible («MEC32-BCO») y por el nombre;
+    // el código se compara sin espacios, porque la gente escribe «MEC 32».
+    if (q && !coincideBusquedaInsumo(i, q)) return false;
     if (categoria && i.categoria !== categoria) return false;
     if (subCategoria && i.sub_categoria !== subCategoria) return false;
     if (estado === 'con_stock' && !(getStockTotal(i) > 0)) return false;

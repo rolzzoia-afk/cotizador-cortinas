@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   agruparPorColmena,
+  codigoNormalizado,
   coincideBusqueda,
   compararColmenas,
   diasEnColmena,
@@ -48,6 +49,24 @@ describe('familiaCod', () => {
   it('tolera espacios y minúsculas', () => {
     expect(familiaCod(' e 02 ')).toBe('TUBO');
     expect(familiaCod('ver61')).toBe('VERTICAL');
+  });
+});
+
+describe('codigoNormalizado — el mismo que usan el catálogo y la bodega', () => {
+  it('quita espacios de adentro y de los bordes, y sube a mayúsculas', () => {
+    expect(codigoNormalizado(' e 02 ')).toBe('E02');
+    expect(codigoNormalizado('ver63')).toBe('VER63');
+    // El código con espacio que arrastraba la tabla insumos hasta el SQL 01.
+    expect(codigoNormalizado('DOM 18')).toBe('DOM18');
+  });
+
+  it('conserva el guion del sufijo: MEC44-B no es MEC44B', () => {
+    expect(codigoNormalizado('mec 44-b')).toBe('MEC44-B');
+  });
+
+  it('tolera null y undefined', () => {
+    expect(codigoNormalizado(null)).toBe('');
+    expect(codigoNormalizado(undefined)).toBe('');
   });
 });
 

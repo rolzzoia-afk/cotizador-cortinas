@@ -34,6 +34,7 @@ import {
   useHojaCorte,
   useInsumosOT,
 } from '@/modules/produccion/hooks';
+import { partirLineaConCodigo } from '@/modules/inventario/codigosInsumo';
 
 const m2 = (n: number) => n.toFixed(2).replace('.', ',');
 
@@ -109,7 +110,7 @@ export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: O
   // El catálogo trae el costo por metro de cada tela (columna Costo del Excel).
   const { catalogo } = useCatalogoProductos();
   const { hoja, loading: cargandoHoja } = useHojaCorte(otCargada);
-  const { insumos, loading: cargandoInsumos } = useInsumosOT(otCargada);
+  const { insumos, colores, loading: cargandoInsumos } = useInsumosOT(otCargada);
   const { consumo, loading: cargandoAluminio } = useConsumoAluminio(ot);
   const { costos } = useCostosBodega(!!ot);
   const { guardar } = useGuardarCostosOT(ot);
@@ -477,11 +478,15 @@ export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: O
                 </tr>
               </thead>
               <tbody>
-                {costo.insumos.map((i, n) => (
+                {costo.insumos.map((i, n) => {
+                  // La descripción ya trae el código adentro: se parte para no
+                  // escribirlo dos veces, y sale con su color.
+                  const linea = partirLineaConCodigo(i.descripcion, colores);
+                  return (
                   <tr key={`${i.codigo || i.descripcion}-${n}`} className="border-t">
-                    <td className="px-2 py-1">
-                      {i.codigo && <span className="font-mono font-semibold">[{i.codigo}] </span>}
-                      {i.descripcion}
+                    <td className="px-2 py-1" title={i.codigo || i.descripcion}>
+                      {linea.codigo && <span className="font-mono font-semibold">[{linea.codigo}] </span>}
+                      {linea.resto}
                     </td>
                     <td className="px-2 py-1 text-right tabular-nums">{i.cantidad}</td>
                     <td className="px-2 py-1 text-right tabular-nums">
@@ -495,7 +500,8 @@ export default function VistaCosto({ ot, otCargada }: { ot: string; otCargada: O
                     </td>
                     <td className="px-2 py-1 text-right tabular-nums">{formatCLP(i.costo)}</td>
                   </tr>
-                ))}
+                  );
+                })}
                 {costo.insumos.length === 0 && (
                   <tr>
                     <td colSpan={4} className="px-2 py-6 text-center text-muted-foreground">

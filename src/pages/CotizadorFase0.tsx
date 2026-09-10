@@ -25,6 +25,7 @@ import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import { useDescuentosModelo } from '@/modules/descuentos/hooks';
 import {
   chipDualPorLadoColor,
+  diametroTuboElegidoAMano,
   modeloDesdeChipMecanismo,
   modeloPorAncho,
   modeloVentanaPorAncho,
@@ -673,6 +674,13 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         const tubo45Manual = (
           (orig?.panos as Record<string, unknown>[] | undefined) ?? []
         ).some((p) => !!p.tubo45Manual);
+        // Tubo elegido a mano en Fase 2: su diámetro manda sobre la banda por
+        // ancho, así re-guardar la cotización no le cambia la fila de despiece
+        // (ni el kit) por debajo a una cortina cuyo tubo se fijó en el taller.
+        const diamTuboManual =
+          ((orig?.panos as Record<string, unknown>[] | undefined) ?? [])
+            .map((p) => diametroTuboElegidoAMano(p, reglas.tuberia))
+            .find((d) => d != null) ?? null;
         const modeloFinal = esDual
           ? (origModelo ?? modeloCalc)
           : origModelo
@@ -688,6 +696,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                 lineaBVentana,
                 tubo45Manual,
                 reglas.tuberia,
+                diamTuboManual,
               )
             : modeloCalc;
         // Re-sincroniza los chips de mecanismo/tubería de los paños con el modelo

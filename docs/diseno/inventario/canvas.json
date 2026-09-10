@@ -1,0 +1,68 @@
+{
+  "pages": [
+    { "id": "page-1", "name": "Escritorio" },
+    { "id": "page-2", "name": "Celular" },
+    { "id": "page-3", "name": "Piezas" }
+  ],
+  "artboards": [
+    { "file": "Mapa.dc.html",          "page": "page-1", "x": 0,    "y": 0,    "w": 1440, "h": 1100, "title": "1 · Mapa del módulo" },
+    { "file": "Main.dc.html",          "page": "page-1", "x": 1560, "y": 0,    "w": 1440, "h": 900,  "title": "2 · Shell y tablero" },
+    { "file": "Insumos.dc.html",       "page": "page-1", "x": 3120, "y": 0,    "w": 1192, "h": 832,  "title": "3 · Insumos · catálogo" },
+
+    { "file": "Ficha.dc.html",         "page": "page-1", "x": 0,    "y": 1240, "w": 1192, "h": 832,  "title": "4 · Ficha del artículo" },
+    { "file": "Kardex.dc.html",        "page": "page-1", "x": 1352, "y": 1240, "w": 1192, "h": 832,  "title": "5 · Kardex" },
+    { "file": "Movimiento.dc.html",    "page": "page-1", "x": 2704, "y": 1240, "w": 1192, "h": 832,  "title": "6 · Nuevo movimiento" },
+
+    { "file": "Telas.dc.html",         "page": "page-1", "x": 0,    "y": 2212, "w": 1192, "h": 832,  "title": "7 · Telas" },
+    { "file": "Colmena.dc.html",       "page": "page-1", "x": 1352, "y": 2212, "w": 1192, "h": 832,  "title": "8 · Colmena de paños" },
+    { "file": "Tubos.dc.html",         "page": "page-1", "x": 2704, "y": 2212, "w": 1192, "h": 832,  "title": "9 · Tubos de aluminio" },
+
+    { "file": "Conteo.dc.html",        "page": "page-1", "x": 0,    "y": 3184, "w": 1192, "h": 832,  "title": "10 · Conteo físico" },
+    { "file": "Alertas.dc.html",       "page": "page-1", "x": 1352, "y": 3184, "w": 1192, "h": 832,  "title": "11 · Alertas y reposición" },
+    { "file": "Compras.dc.html",       "page": "page-1", "x": 2704, "y": 3184, "w": 1192, "h": 832,  "title": "12 · Compras (pendiente)" },
+
+    { "file": "Reportes.dc.html",      "page": "page-1", "x": 0,    "y": 4156, "w": 1192, "h": 1180, "title": "13 · Reportes y configuración" },
+
+    { "file": "MovilInicio.dc.html",   "page": "page-2", "x": 0,    "y": 0,    "w": 390,  "h": 844,  "title": "14 · Inicio en el celular" },
+    { "file": "MovilDespacho.dc.html", "page": "page-2", "x": 490,  "y": 0,    "w": 390,  "h": 844,  "title": "15 · Despacho por OT" },
+    { "file": "MovilContar.dc.html",   "page": "page-2", "x": 980,  "y": 0,    "w": 390,  "h": 844,  "title": "16 · Contar" },
+    { "file": "MovilVenta.dc.html",    "page": "page-2", "x": 1470, "y": 0,    "w": 390,  "h": 844,  "title": "17 · Descontar por venta" },
+
+    { "file": "Componentes.dc.html",   "page": "page-3", "x": 0,    "y": 0,    "w": 1440, "h": 1000, "title": "18 · Piezas y estados" }
+  ],
+  "annotations": [
+    {
+      "id": "intro",
+      "page": "page-1",
+      "x": 0,
+      "y": -150,
+      "w": 900,
+      "text": "Inventario Rolzzo — propuesta de rediseño, 8 de septiembre de 2026.\nHoy el inventario vive en 14 pantallas y 4 formas distintas de guardar el stock. Acá se junta en un módulo con 15 submódulos.\nEmpieza por el artboard 1 (el mapa) y sigue el orden numerado. Los datos son reales, tomados de la base de producción."
+    },
+    {
+      "id": "nota-compras",
+      "page": "page-1",
+      "x": 2704,
+      "y": 4060,
+      "w": 400,
+      "text": "Compras se dibuja pero no se programa hasta que la jefatura apruebe. Está en el mapa para acordar el alcance."
+    },
+    {
+      "id": "nota-movil",
+      "page": "page-2",
+      "x": 0,
+      "y": -130,
+      "w": 860,
+      "text": "En el celular trabajan bodega y terreno: despachar, contar y descontar metros.\nBotones de 52 px para el dedo, y ningún cambio en los códigos QR que ya están pegados en los estantes."
+    },
+    {
+      "id": "nota-piezas",
+      "page": "page-3",
+      "x": 0,
+      "y": -130,
+      "w": 860,
+      "text": "Todo sale del sistema visual que la app ya usa: crema y terracota, Geist para los datos y Fraunces para los títulos.\nNinguna pantalla nueva inventa un color o una tipografía."
+    }
+  ],
+  "launch": { "view": "canvas", "page": "page-1" }
+}

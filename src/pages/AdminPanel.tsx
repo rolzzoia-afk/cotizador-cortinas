@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
-import TabButton from '@/pages/historial-tubos/components/TabButton';
+import TabButton from '@/pages/inventario/tubos/components/TabButton';
 import { AuditLogSection } from '@/components/admin/AuditLogSection';
 import { AgenteIASection } from '@/components/admin/AgenteIASection';
 import { UsuariosRolesSection } from '@/components/admin/UsuariosRolesSection';

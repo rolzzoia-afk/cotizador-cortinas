@@ -5,7 +5,7 @@ import {
   construirFilasEtiquetas,
   etiquetasToWorkbook,
 } from './exportEtiquetasPtouch';
-import type { Colmena, Tela } from '@/pages/telas/Telas.types';
+import type { Colmena, Tela } from '@/pages/inventario/telas/Telas.types';
 
 const telaBase: Tela = {
   id: '1',
@@ -17,6 +17,7 @@ const telaBase: Tela = {
   cod_ext: null,
   descriptor: 'Blackout negro 3m',
   ancho: 3,
+  metros_rollo: null,
   calidad: null,
   status_stock: null,
   stock_minimo: null,

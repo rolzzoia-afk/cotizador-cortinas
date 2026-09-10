@@ -17,6 +17,9 @@ import { categoriaLlevaTopeCadena } from '@/modules/cotizador/insumosCortina';
 import { colorAccesoriosDePano } from '@/modules/descuentos/chips';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
 import { esCategoriaBeeblack } from '@/modules/descuentos/reglas-beeblack';
+// El mismo normalizador que usan el catálogo y la colmena: un código es el
+// mismo código lo escriba quien lo escriba («E 02», « e02» y «E02»).
+import { normalizarCodigoInsumo } from '@/modules/inventario/codigosInsumo';
 
 export type OT = {
   id: string;
@@ -109,10 +112,8 @@ export function getRackUbicacion(
   racks: Rack[],
 ): { display: string; qr: string } | null {
   if (!cod || !racks.length) return null;
-  const codNorm = cod.toUpperCase().replace(/\s/g, '');
-  const u = racks.find(
-    (r) => (r.codigo_insumo || '').toUpperCase().replace(/\s/g, '') === codNorm,
-  );
+  const codNorm = normalizarCodigoInsumo(cod);
+  const u = racks.find((r) => normalizarCodigoInsumo(r.codigo_insumo) === codNorm);
   if (!u) return null;
   return {
     display: rackToDisplayLabel(u.rack, u.fila, u.columna),
@@ -125,9 +126,9 @@ export function getRackUbicacionPorSpec(
   racks: Rack[],
 ): { display: string; qr: string } | null {
   if (!spec || !racks.length) return null;
-  const specNorm = spec.toUpperCase().replace(/\s/g, '');
+  const specNorm = normalizarCodigoInsumo(spec);
   const u = racks.find((r) => {
-    const rc = (r.codigo_insumo || '').toUpperCase().replace(/\s/g, '');
+    const rc = normalizarCodigoInsumo(r.codigo_insumo);
     return rc === specNorm || rc.includes(specNorm) || specNorm.includes(rc);
   });
   if (!u) return null;

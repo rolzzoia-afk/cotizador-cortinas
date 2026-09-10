@@ -8,7 +8,7 @@ import {
   tipoLargo,
 } from './etiquetaCatalogo';
 import { PLANTILLA_CATALOGO } from '@/modules/etiquetas/defaults/catalogo';
-import type { Tela } from '@/pages/telas/Telas.types';
+import type { Tela } from '@/pages/inventario/telas/Telas.types';
 
 const tela = (over: Partial<Tela> = {}): Tela => ({
   id: '1',
@@ -20,6 +20,7 @@ const tela = (over: Partial<Tela> = {}): Tela => ({
   cod_ext: null,
   descriptor: 'BLANCO 1%',
   ancho: 2.5,
+  metros_rollo: null,
   calidad: 'PREMIUM',
   status_stock: null,
   stock_minimo: null,

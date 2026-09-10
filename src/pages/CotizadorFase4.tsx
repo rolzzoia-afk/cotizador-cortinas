@@ -39,13 +39,14 @@ import {
 } from '@/modules/cotizador/pdfCorteOptimizacion';
 import { generarPdfCalculoGeneral, generarPdfDimensionado } from '@/modules/cotizador/pdfCalculoGeneral';
 import { generarPdfInventario } from '@/modules/cotizador/pdfInventario';
+import { mapaColoresPorCodigo } from '@/modules/inventario/codigosInsumo';
 import { esCadenaRoller, type CadenaInsumo } from '@/modules/cotizador/cadenas';
 import { generarPlanCorte } from '@/modules/cotizador/planCorte';
 import { cargarColmenaPanos } from '@/modules/cotizador/colmenaPanosStore';
 import { deduccionesColmena, piezasColmenaSnapshot } from '@/modules/cotizador/colmenaCorte';
 import GuardarSobranteRolloDialog, {
   type SobranteRollo,
-} from './telas/dialogs/GuardarSobranteRolloDialog';
+} from './inventario/telas/dialogs/GuardarSobranteRolloDialog';
 import type { SubEtapaProd } from '@/modules/ots/types';
 import type { Ventana as VentanaCotizador } from '@/modules/cotizador/types';
 import { descargarExcelOrdenes, generarOrdenesOptimizador } from '@/modules/descuentos/excel-ordenes';
@@ -172,18 +173,24 @@ export function CotizadorFase4() {
       // Catálogo de cadenas: si un paño no guardó su codCadena (OT que no pasó
       // por Fase 2), el inventario la resuelve por alto + color con este catálogo.
       let cadenas: CadenaInsumo[] = [];
+      // Con la misma consulta se arma el mapa de colores del código visible:
+      // «[CAD01-GRS]» en vez de «[CAD01]», que es lo que distingue las tres
+      // cadenas de 3 metros frente al estante.
+      let colores = new Map<string, string>();
       if (empresaId) {
         const { data } = await supabase
           .from('insumos')
           .select('cod,nemotecnico,color,status')
           .eq('empresa_id', empresaId);
-        cadenas = ((data || []) as CadenaInsumo[]).filter((i) => esCadenaRoller(i.cod));
+        const filas = (data || []) as CadenaInsumo[];
+        cadenas = filas.filter((i) => esCadenaRoller(i.cod));
+        colores = mapaColoresPorCodigo(filas);
       }
       generarPdfInventario(ventanas, catalogo, {
         ot: ot.datosGenerales.ot || String(ot.id),
         cliente: ot.datosGenerales.cliente || undefined,
         empresa: empresaNombre ?? undefined,
-      }, parametros, cadenas, !!ot.datosGenerales.usarTuboE78, ot.datosGenerales.adicionalesFase0, formulas, reglas);
+      }, parametros, cadenas, !!ot.datosGenerales.usarTuboE78, ot.datosGenerales.adicionalesFase0, formulas, reglas, colores);
       toast.success('Hoja de inventario generada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

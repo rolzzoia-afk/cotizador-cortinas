@@ -11,6 +11,8 @@
 // - El parámetro ?rol= (ver-como) es solo visual y solo para admins.
 // ─────────────────────────────────────────────────────────────────────
 
+import { SUBMODULOS_INVENTARIO, rolesDeSubmodulo } from '@/modules/inventario/navegacion';
+
 export const ROLES_DISPONIBLES = [
   'admin',
   'ventas',
@@ -25,6 +27,25 @@ export const ROLES_DISPONIBLES = [
 export function esRolAdmin(rol: string | null | undefined): boolean {
   const r = (rol || '').toLowerCase().trim();
   return r === 'admin' || r === 'superadmin';
+}
+
+/**
+ * Las reglas de `/inventario/*` salen del registro de submódulos, para que la
+ * barra lateral y el permiso real no puedan decir cosas distintas.
+ *
+ * Van ORDENADAS DE RUTA MÁS LARGA A MÁS CORTA porque acá gana la primera que
+ * calza: si `/inventario` quedara antes, `/inventario/conteo/contar` heredaría
+ * los roles del Tablero.
+ *
+ * Los submódulos «pendiente» (Compras, Reportes) también generan su regla, aunque
+ * todavía no tengan pantalla: así nacen cerrados. Si no, su ruta caería en la del
+ * Tablero y el día que alguien la conecte quedaría abierta al taller entero.
+ */
+function reglasDeInventario(): Array<{ patron: RegExp; roles: string[] }> {
+  const escapar = (ruta: string) => ruta.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return SUBMODULOS_INVENTARIO.slice()
+    .sort((a, b) => b.ruta.length - a.ruta.length)
+    .map((s) => ({ patron: new RegExp(`^${escapar(s.ruta)}(/|$)`), roles: rolesDeSubmodulo(s) }));
 }
 
 // Rutas → roles permitidos (además de admin, que siempre puede).
@@ -44,7 +65,7 @@ const REGLAS: Array<{ patron: RegExp; roles: string[] }> = [
   // Taller / bodega
   { patron: /^\/telas/, roles: ['bodeguero', 'produccion', 'telas', 'dimensionado', 'operario'] },
   { patron: /^\/inventario-conteo/, roles: ['bodeguero', 'operario'] },
-  { patron: /^\/inventario/, roles: ['bodeguero', 'operario'] },
+  ...reglasDeInventario(),
   { patron: /^\/optimizador-tela/, roles: ['produccion', 'dimensionado', 'telas', 'operario'] },
   { patron: /^\/optimizador/, roles: ['produccion', 'operario'] },
   { patron: /^\/bodeguero/, roles: ['bodeguero', 'operario'] },

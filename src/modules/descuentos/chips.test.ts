@@ -1123,4 +1123,43 @@ describe('E66 descontinuado → la regla de tubería asigna E39 (Ø45) sobre 2,2
     expect(panos[0].mecanismo).toContain('[MEC 18]');
     expect(codigoTuberiaDeChip(panos[0].tuberia as string)).toBe('E39');
   });
+
+  // El taller vuelve a mandar: eligió el tubo de 38 y toda la cortina lo sigue.
+  describe('…y el TUBO ELEGIDO A MANO manda sobre esa regla', () => {
+    const E02chip = REGLAS_TUBERIA.tubos.find((t) => t.codigo === 'E02')!.descripcion;
+    const K45_BCO = '0,45mm BCO [MEC 18]';
+    const aMano38 = { tuboManual: true, tuberia: E02chip };
+
+    it('modeloPorAncho: un Ø38 a mano devuelve la fila de 38 en plena banda', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol45b, 'BCO', false, RM, undefined, false, false, reglasTub39, 38)).toBe(rol38);
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'GRS', false, RM, undefined, false, false, reglasTub39, 38)).toBe(rol38);
+    });
+
+    it('modeloPorAncho: un Ø38 a mano también gana al interruptor de la OT y a la marca «45 a mano»', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol45b, 'BCO', true, RM, undefined, false, true, reglasTub39, 38)).toBe(rol38);
+    });
+
+    it('modeloPorAncho: un Ø45 a mano abre la banda con la regla de fábrica (E66)', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'BCO', false, RM, undefined, false, false, REGLAS_TUBERIA, 45)).toBe(rol45b);
+    });
+
+    it('modeloPorAncho: sin diámetro a mano nada cambia (regresión)', () => {
+      expect(modeloPorAncho(modelosRol, 'ROL', 2.47, rol38, 'BCO', false, RM, undefined, false, false, reglasTub39, null)).toBe(rol45b);
+    });
+
+    it('mecanismoParaPano: con el Ø38 a mano el kit vuelve al de 38 por color', () => {
+      expect(mecanismoParaPano({ mecanismo: K45_BCO, ...aMano38 }, 'BCO', rol38, OPC, 'ROL', 2.47, false, reglasSel39)).toBe(SIMPLE_BCO);
+      // Y sin la marca, el mismo paño se va al kit de 45 (regresión).
+      expect(mecanismoParaPano({ mecanismo: K45_BCO }, 'BCO', rol38, OPC, 'ROL', 2.47, false, reglasSel39)).toContain('[MEC 18]');
+    });
+
+    it('resincronizarChipsPanos: al re-guardar desde Fase 1, el E02 a mano se queda y el kit baja', () => {
+      const panos: Array<Record<string, unknown>> = [
+        { ancho: 2.47, alto: 2.0, mecanismo: K45_BCO, tuberia: E02chip, tuboManual: true },
+      ];
+      resincronizarChipsPanos(panos, 'BCO', rol38, 'ROL', OPC, OPCIONES_TUBERIA, false, reglasSel39);
+      expect(codigoTuberiaDeChip(panos[0].tuberia as string)).toBe('E02');
+      expect(panos[0].mecanismo).toBe(SIMPLE_BCO);
+    });
+  });
 });

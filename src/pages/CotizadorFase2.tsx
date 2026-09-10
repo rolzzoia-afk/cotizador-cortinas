@@ -129,7 +129,13 @@ import {
   tuberiaParaPano,
 } from '@/modules/descuentos/chips';
 import { esCategoriaVertical } from '@/modules/descuentos/reglas-mecanismo';
-import { tuboElegidoAMano, tuboPorReglaEs45 } from '@/modules/descuentos/reglas-tuberia';
+import {
+  diametroTuboElegidoAMano,
+  diametroTuboPorCodigo,
+  tubosDeOtrosDiametros,
+  tuboElegidoAMano,
+  tuboPorReglaEs45,
+} from '@/modules/descuentos/reglas-tuberia';
 import type { ModeloDespiece } from '@/modules/descuentos/tipos';
 import { InformeVisita } from '@/components/cotizador/visita/InformeVisita';
 import type { VisitaTerreno } from '@/modules/ots/types';
@@ -337,9 +343,15 @@ export function CotizadorFase2() {
     // 45 mm pedido a mano en algún paño (tubo E39 / kit 45 elegido en Fase 2):
     // mantiene la ventana en 45 aunque el interruptor de la OT esté apagado.
     const tubo45ManualRef = (v.panos || []).some((p) => !!p.tubo45Manual);
+    // Tubo elegido a mano: su diámetro manda sobre la banda por ancho, para que
+    // la fila de despiece y el kit sigan al tubo que se puso y no al revés. El
+    // modelo es uno por ventana, así que decide el primer paño que lo tenga.
+    const diamManualRef =
+      (v.panos || []).map((p) => diametroTuboElegidoAMano(p, reglas.tuberia)).find((d) => d != null) ??
+      null;
     const modeloEf = esDualV
       ? modelo
-      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos, lineaBRef, tubo45ManualRef, reglas.tuberia);
+      : modeloPorAncho(modelos, v.categoria || '', anchoRef, modelo, colorRef, usarE78, reglas.mecanismo, reglas.tipos, lineaBRef, tubo45ManualRef, reglas.tuberia, diamManualRef);
     return {
       ...v,
       modelo: modeloEf,
@@ -357,14 +369,16 @@ export function CotizadorFase2() {
         const tuberia = esBeeblackV
           ? ''
           : canonizarChipTuberia(
-              // La línea B fija su tubo (E01) aunque todavía no haya modelo,
-              // salvo que el taller lo haya elegido a mano en esta cortina.
+              // La línea B fija su tubo (E01) aunque todavía no haya modelo.
+              // En TODAS las categorías, un tubo elegido a mano se respeta: es
+              // esta sincronización —que corre al abrir y al guardar— la que lo
+              // devolvía al de la banda apenas se apretaba «Guardar ventana».
               lineaB
                 ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, true, tuboElegidoAMano(p))
                 : modeloEf && anchoM > 0
-                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia)
+                  ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, false, tuboElegidoAMano(p))
                   : forzarTuberia && modeloEf
-                    ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia) ||
+                    ? tuberiaParaPano(anchoM, modeloEf, p.tuberia as string, opcSel.tuberiaUI, v.categoria, reglas.tuberia, false, tuboElegidoAMano(p)) ||
                       (p.tuberia as string)
                     : (p.tuberia as string) || '',
               opcSel.tuberiaUI,
@@ -617,15 +631,26 @@ export function CotizadorFase2() {
       tuberiaActual: (panoEnEdicion?.tuberia as string) || null,
       lineaB: lineaBEnEdicion,
     }, reglas.tuberia);
-    // Fijo por ancho: el tubo queda en el de la regla (>3 m → E65 · banda
-    // 2,2–3,0 → E78); no se ofrecen los demás.
+    // Fijo por ancho: el tubo de la regla va primero y solo (>3 m → E65 · banda
+    // 2,2–3,0 → E39); no se ofrecen los otros del mismo diámetro, que "rebotan".
+    let lista: readonly string[] = base;
     if (reglaFijaPorAncho != null) {
       const soloFijo = base.filter(
         (o) => codigoTuberiaDeChip(o) === reglaFijaPorAncho.regla.tubo,
       );
-      if (soloFijo.length > 0) return soloFijo;
+      if (soloFijo.length > 0) lista = soloFijo;
     }
-    return base;
+    // …pero el taller dispone: los otros DIÁMETROS quedan siempre a mano. Sin
+    // esto, una cortina que la banda llevó a 45 mm solo ofrecía tubos de 45 y no
+    // había forma de bajarla a 38 desde la ficha. Elegir uno arrastra el kit.
+    const otros = tubosDeOtrosDiametros(
+      opcSel.tuberiaUI,
+      { categoria: ventanaForm.categoria, modelo: ventanaForm.modelo ?? null, lineaB: lineaBEnEdicion },
+      reglas.tuberia,
+    );
+    const codigos = new Set(lista.map((o) => codigoTuberiaDeChip(o)));
+    const extra = otros.filter((o) => !codigos.has(codigoTuberiaDeChip(o)));
+    return extra.length > 0 ? [...lista, ...extra] : lista;
   }, [ventanaForm, panoEnEdicion?.mecanismo, panoEnEdicion?.tuberia, reglaFijaPorAncho, lineaBEnEdicion, opcSel, reglas]);
 
   // ¿Esta cortina elige con qué TUBO se invierte? Solo las familias del sistema
@@ -970,7 +995,18 @@ export function CotizadorFase2() {
           )
         : null);
     if (tub && tub !== tuberiaActual) {
-      nuevo = { ...nuevo, panos: nuevo.panos.map((p, i) => (i === idx ? { ...p, tuberia: tub } : p)) };
+      // El KIT nuevo obliga a otro diámetro (`corregida`): el tubo que había se
+      // cambia, así que la marca de «elegido a mano» se suelta. Dejarla puesta
+      // diría que el taller eligió un tubo que en realidad puso el kit, y
+      // congelaría ese tubo para siempre. Un ajuste fino dentro del mismo
+      // diámetro (E02↔E66) no llega acá: `corregida` devuelve null.
+      const sueltaMarca = !!corregida && tuboElegidoAMano(nuevo.panos[idx]);
+      nuevo = {
+        ...nuevo,
+        panos: nuevo.panos.map((p, i) =>
+          i === idx ? { ...p, tuberia: tub, ...(sueltaMarca ? { tuboManual: false } : {}) } : p,
+        ),
+      };
     }
     return nuevo;
   };
@@ -1174,6 +1210,9 @@ export function CotizadorFase2() {
             colorAccesoriosDePano(nuevo.panos[idx], v.color),
             usarE78, reglas.mecanismo, reglas.tipos, lineaBDe(nuevo, idx),
             !!nuevo.panos[idx].tubo45Manual, reglas.tuberia,
+            // Con el tubo elegido a mano, cruzar de banda al mover el ancho
+            // cambiaría la fila y el kit por debajo de un tubo que se fijó.
+            diametroTuboElegidoAMano(nuevo.panos[idx], reglas.tuberia),
           );
           if (nmAncho && nmAncho !== nuevo.modelo) nuevo = { ...nuevo, modelo: nmAncho };
         }
@@ -1191,34 +1230,22 @@ export function CotizadorFase2() {
         }
       }
 
-      // CATEGORÍA B: el tubo se elige a mano (E01 o E39) y esa elección se
-      // marca, porque su banda por ancho pisaba el chip en la siguiente
-      // sincronización. El kit B no cambia con el tubo —los dos cuelgan de la
-      // misma fila de despiece—, así que acá no hay ninguna cascada que aplicar
-      // (`kitPorTuboElegido` devuelve null para la categoría B).
-      // Con `tuboManual: false` («Volver al automático») la banda repone su
-      // tubo en el acto: un paño sin tubería traba la orden en Fase 2.
-      if (
-        (typeof patch.tuberia === 'string' && patch.tuberia) ||
-        patch.tuboManual === false
-      ) {
-        if (lineaBDe(nuevo, idx)) {
-          const auto = tuberiaParaPano(
-            anchoIdx(), nuevo.modelo ?? null, '', opcSel.tuberiaUI,
-            v.categoria, reglas.tuberia, true, false,
-          );
-          const chip = patch.tuboManual === false ? '' : (patch.tuberia as string);
-          setPano(parcheTuboLineaB(chip, auto));
-        }
-      }
-
-      // Cambio manual del TUBO → el kit sigue al diámetro (un Ø45 lleva el kit
-      // de 45 por color; un Ø38 devuelve el kit por color) y la cortina queda
-      // marcada como «45 pedido a mano»: eso es lo que la mantiene en 45 al
-      // guardar y reabrir aunque el interruptor de la OT esté apagado. Antes el
-      // E39 elegido acá quedaba con un kit de 38 que no calza en ese tubo.
-      if (typeof patch.tuberia === 'string' && patch.tuberia && !nuevo.panos[idx].dual) {
+      // ── Cambio manual del TUBO ────────────────────────────────────────────
+      //
+      // Elegir un tubo en el selector es una DECISIÓN, no una preselección: se
+      // marca (`tuboManual`) y desde ahí ninguna regla lo recalcula. Sin la
+      // marca, la banda por ancho —que desde que el E66 se descontinuó nombra
+      // al E39 en toda cortina sobre 2,2 m— lo devolvía a su tubo apenas se
+      // guardaba la ventana, en cualquier categoría.
+      //
+      // Y el resto del flujo sigue al tubo elegido: el kit pasa al de su
+      // diámetro (un kit de 38 no calza en un Ø45, ni al revés) y la fila de
+      // despiece cruza a la banda que corresponda. En la dual, la ovalada y la
+      // dúo el kit sirve en los dos diámetros y no se toca — pero la marca se
+      // pone igual, que es lo que hace que el tubo dure.
+      if (typeof patch.tuberia === 'string' && patch.tuberia) {
         const lineaB = lineaBDe(nuevo, idx);
+        setPano({ tuboManual: true });
         const r = kitPorTuboElegido(
           nuevo.panos[idx], v.color, v.categoria, patch.tuberia, opcSel.mecanismoResolucion, reglas, lineaB,
         );
@@ -1236,10 +1263,24 @@ export function CotizadorFase2() {
               modelos, v.categoria || '', anchoIdx(), nuevo.modelo ?? null,
               colorAccesoriosDePano(nuevo.panos[idx], v.color),
               usarE78, reglas.mecanismo, reglas.tipos, lineaB, r.tubo45Manual, reglas.tuberia,
+              diametroTuboPorCodigo(codigoTuberiaDeChip(patch.tuberia), reglas.tuberia),
             );
             if (nm && nm !== nuevo.modelo) nuevo = { ...nuevo, modelo: nm };
           }
         }
+      }
+
+      // «Volver al automático»: la regla repone su tubo EN EL ACTO. Sin esto el
+      // chip quedaba congelado en el que se había elegido hasta el próximo
+      // guardado, y un paño sin tubería traba la orden en Fase 2.
+      if (patch.tuboManual === false) {
+        const lineaB = lineaBDe(nuevo, idx);
+        const auto = tuberiaParaPano(
+          anchoIdx(), nuevo.modelo ?? null, '', opcSel.tuberiaUI,
+          v.categoria, reglas.tuberia, lineaB, false,
+        );
+        if (lineaB) setPano(parcheTuboLineaB('', auto));
+        else if (auto && auto !== nuevo.panos[idx].tuberia) setPano({ tuberia: auto });
       }
 
       // Cambio manual del chip de MECANISMO → modelo + tubería (y lado/color si dual).

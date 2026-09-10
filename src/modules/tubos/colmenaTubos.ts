@@ -18,6 +18,8 @@
 // src/pages/historial-tubos/vistas/VistaColmena.tsx.
 // ─────────────────────────────────────────────────────────────────────
 
+import { normalizarCodigoInsumo } from '@/modules/inventario/codigosInsumo';
+
 /** Forma mínima de un tubo de `colmena_tubos` que necesita esta vista. */
 export type TuboColmena = {
   id: string;
@@ -50,9 +52,15 @@ const CENEFAS = new Set(['E26', 'E27', 'E28', 'E29', 'E30', 'E31']);
 /** Perfiles de oscuridad: zócalo E32-E34, separador E41-E43, superior E49/E50/E52. */
 const PERFILES = new Set(['E32', 'E33', 'E34', 'E41', 'E42', 'E43', 'E49', 'E50', 'E52']);
 
-/** Normaliza un código: mayúsculas, sin espacios ("e 02" → "E02"). */
+/**
+ * Normaliza un código: mayúsculas, sin espacios ("e 02" → "E02").
+ *
+ * Delega en el normalizador del inventario para que la colmena, la bodega y el
+ * catálogo entiendan lo mismo por un código. Había tres copias de esta regla y
+ * la tercera se olvidó del `trim`, así que « E02» no calzaba con «E02».
+ */
 export function codigoNormalizado(cod: string | null | undefined): string {
-  return String(cod ?? '').toUpperCase().replace(/\s+/g, '');
+  return normalizarCodigoInsumo(cod);
 }
 
 /** Familia de un código de la colmena, para color y filtro. */

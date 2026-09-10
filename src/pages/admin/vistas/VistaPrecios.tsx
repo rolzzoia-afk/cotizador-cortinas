@@ -11,7 +11,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Blinds, Coins, FlaskConical, Package, Scroll } from 'lucide-react';
 import { ProveedorNavegacionPrecios } from '@/components/admin/precios/navegacionPrecios';
-import TabButton from '@/pages/historial-tubos/components/TabButton';
+import TabButton from '@/pages/inventario/tubos/components/TabButton';
 import {
   ReglasPreciosSection,
   type TabPrecios,

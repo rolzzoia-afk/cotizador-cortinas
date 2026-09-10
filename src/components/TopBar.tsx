@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Link, NavLink, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Eye, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { APP_NAME } from '@/lib/marca';
 import { esRolAdmin, puedeAccederRuta } from '@/lib/roles';
+import { useRolEfectivo } from '@/lib/useRolEfectivo';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { cn } from '@/lib/utils';
 
@@ -14,15 +15,13 @@ const links: Array<{ to: string; label: string }> = [
   { to: '/ventas', label: 'Ventas' },
   { to: '/leads', label: 'Leads' },
   { to: '/inteligencia', label: 'Inteligencia' },
-  { to: '/telas', label: 'Telas' },
+  // Telas, Bodega, Camionetas y Tubos ahora son submódulos de Inventario y se
+  // llegan por su barra lateral. Sus rutas viejas siguen funcionando: redirigen.
   { to: '/inventario', label: 'Inventario' },
   { to: '/optimizador', label: 'Optimizador' },
   { to: '/optimizador-tela', label: 'Optim. Tela' },
-  { to: '/bodeguero', label: 'Bodega' },
-  { to: '/camionetas', label: 'Camionetas' },
   { to: '/produccion', label: 'Producción' },
   { to: '/historial-corte', label: 'Historial Corte' },
-  { to: '/historial-tubos', label: 'Tubos' },
   { to: '/ojo-de-dios', label: 'Ojo de Dios' },
   { to: '/admin', label: 'Admin' },
 ];
@@ -32,19 +31,13 @@ export function TopBar() {
   const marca = empresaNombre || APP_NAME;
   const navigate = useNavigate();
   const location = useLocation();
-  const [params] = useSearchParams();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const rolReal = (perfil?.rol || '').toLowerCase().trim();
-  const esAdminReal = esRolAdmin(rolReal);
-  // "Ver como" (?rol=) es solo una vista previa para ADMINS. Antes cualquier
-  // usuario podía ponerse ?rol=admin en la URL y ver el menú completo.
-  const viewAs = esAdminReal ? (params.get('rol') || '').toLowerCase().trim() : '';
-  const rolEfectivo = viewAs || rolReal;
+  // "Ver como" (?rol=) es solo una vista previa para ADMINS: ver useRolEfectivo.
+  const { rolEfectivo, viendoComo: viewAs, queryRol: queryStr } = useRolEfectivo();
   const linksVisibles = esRolAdmin(rolEfectivo)
     ? links
     : links.filter((l) => puedeAccederRuta(rolEfectivo, l.to));
-  const queryStr = viewAs ? `?rol=${viewAs}` : '';
 
   useEffect(() => {
     setMenuOpen(false);

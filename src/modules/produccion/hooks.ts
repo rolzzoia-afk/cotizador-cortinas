@@ -55,6 +55,7 @@ import {
   type VarianteHojaCalculo,
 } from '@/modules/cotizador/calculoGeneral';
 import type { Ventana } from '@/modules/cotizador/types';
+import { mapaColoresPorCodigo } from '@/modules/inventario/codigosInsumo';
 import { construirInventario, type InsumoConsolidado } from '@/modules/cotizador/inventarioOT';
 import { esCadenaRoller, type CadenaInsumo } from '@/modules/cotizador/cadenas';
 import type {
@@ -860,6 +861,8 @@ export function useChecks(area: AreaProduccion, ot: string, ref: string = ''): U
  */
 export function useInsumosOT(ot: OT | null): {
   insumos: InsumoConsolidado[];
+  /** `CAD01 → GRIS`, para escribir el código como se imprime en la etiqueta. */
+  colores: Map<string, string>;
   loading: boolean;
 } {
   const { empresaId } = useAuth();
@@ -868,6 +871,7 @@ export function useInsumosOT(ot: OT | null): {
   const { formulas, loading: loadingFormulas } = useFormulasFamilias();
   const { reglas, loading: loadingReglas } = useReglasSeleccion();
   const [cadenas, setCadenas] = useState<CadenaInsumo[]>([]);
+  const [colores, setColores] = useState<Map<string, string>>(() => new Map());
   const [cargandoCadenas, setCargandoCadenas] = useState(false);
 
   // Catálogo de cadenas: si un paño no guardó su codCadena (OT que no pasó por
@@ -883,7 +887,12 @@ export function useInsumosOT(ot: OT | null): {
           .select('cod,nemotecnico,color,status')
           .eq('empresa_id', empresaId);
         if (!cancelado) {
-          setCadenas(((data || []) as CadenaInsumo[]).filter((i) => esCadenaRoller(i.cod)));
+          const filas = (data || []) as CadenaInsumo[];
+          setCadenas(filas.filter((i) => esCadenaRoller(i.cod)));
+          // Con la misma consulta se arma el mapa de colores: la hoja de
+          // materiales escribe «[CAD01] CADENA…» y el color lo pone la ficha
+          // del artículo, que el motor de la OT no conoce.
+          setColores(mapaColoresPorCodigo(filas));
         }
       } finally {
         if (!cancelado) setCargandoCadenas(false);
@@ -912,7 +921,7 @@ export function useInsumosOT(ot: OT | null): {
     ).insumos;
   }, [ot, listo, catalogo, parametros, cadenas, formulas, reglas]);
 
-  return { insumos, loading: !listo || cargandoCadenas };
+  return { insumos, colores, loading: !listo || cargandoCadenas };
 }
 
 /**

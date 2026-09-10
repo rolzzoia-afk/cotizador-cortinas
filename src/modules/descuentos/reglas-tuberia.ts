@@ -584,9 +584,10 @@ function tubosAutoPorAncho(reglas: ReglasTuberia): Set<string> {
 }
 
 /**
- * ¿El taller eligió el TUBO a mano en Fase 2? Hoy solo la categoría B ofrece
- * esa elección (E01 o E39), porque su banda pisaba el chip guardado en cada
- * sincronización. Igual que `cadenaElegidaAMano`, exige el flag Y que HAYA
+ * ¿El taller eligió el TUBO a mano en Fase 2? Vale para CUALQUIER categoría:
+ * las bandas por ancho (38 mm, 63 mm y la de la línea B) pisaban el chip
+ * guardado en cada sincronización, así que sin esta marca no había forma de
+ * fijar un tubo. Igual que `cadenaElegidaAMano`, exige el flag Y que HAYA
  * tubería: un flag encendido sin chip dejaría la ficha trabada sin ninguno y
  * sin nadie que se lo reponga.
  */
@@ -597,8 +598,30 @@ export function tuboElegidoAMano(
 }
 
 /**
+ * Diámetro (mm) del tubo que el taller eligió A MANO en este paño, o `null` si
+ * lo puso el automático o el chip no se reconoce.
+ *
+ * Es lo que deja que la elección arrastre al resto del flujo: un Ø38 puesto a
+ * mano CIERRA la banda de 45 para esa cortina (fila de despiece y kit vuelven a
+ * 38) y un Ø45 la abre, igual que `Pano.tubo45Manual`. Sin esto el tubo se
+ * quedaba pero el kit y la fila seguían siendo los de la banda, que es la
+ * incongruencia de la OT 3195 al revés.
+ */
+export function diametroTuboElegidoAMano(
+  p: { tuboManual?: boolean; tuberia?: unknown } | null | undefined,
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): number | null {
+  if (!tuboElegidoAMano(p)) return null;
+  return diametroTuboPorCodigo(codigoTuberiaDeChip(String(p?.tuberia ?? '')), reglas);
+}
+
+/**
  * Tubería que debe quedar en el paño: pre-selecciona según reglas;
  * corrige defaults erróneos; respeta elección manual distinta.
+ *
+ * Con `manual` (ver `tuboElegidoAMano`) NINGUNA regla lo recalcula, sea cual
+ * sea la categoría. Es la única forma de dejar un E02 en una cortina de 2,5 m,
+ * cuya banda de 38 mm hoy nombra al E39.
  */
 export function tuberiaParaPano(
   anchoM: number,
@@ -611,16 +634,20 @@ export function tuberiaParaPano(
   /** El taller eligió el tubo a mano (`tuboElegidoAMano`): no se recalcula. */
   manual = false,
 ): string {
+  // ELEGIDO A MANO: manda el chip guardado, en CUALQUIER categoría. Las reglas
+  // por ancho —la de 38 mm, que desde que el E66 se descontinuó nombra al E39;
+  // la de 63 mm; la de la línea B— corrían en cada sincronización de Fase 2 y
+  // en cada re-guardado de Fase 1, así que sin esta salida no había forma de
+  // fijar un tubo: volvía solo al de la banda apenas se guardaba. Se canoniza
+  // igual, para migrar el texto de un chip viejo sin tocarle el código.
+  const aMano = (stored || '').trim();
+  if (manual && aMano) return canonizarChipTuberia(aMano, opciones);
+
   // CATEGORÍA B: su tubo sale de SU banda (E01 bajo 3,0 m · E39 desde ahí,
   // solo en roller simple) y se pone aunque no haya modelo todavía (la cortina
   // B nace con su tubo). Los dos están ocultos en el catálogo, así que el chip
   // se arma desde ahí cuando el selector no los ofrece.
   if (lineaB) {
-    // Elegido a mano: manda el chip guardado. La banda es la que pisaba una
-    // elección manual en cada sincronización de Fase 2 y en cada re-guardado
-    // de Fase 1, así que sin esta salida no había forma de fijar el tubo.
-    const aMano = (stored || '').trim();
-    if (manual && aMano) return canonizarChipTuberia(aMano, opciones);
     const cod = codigoTuboLineaB(anchoM, categoria, reglas);
     if (cod) {
       return (
@@ -824,6 +851,49 @@ function diametroEfectivo(
   const explicito = diametroExplicitoDesdeChip(mecanismoChip, reglas);
   if (explicito != null) return explicito;
   return diametroDesdeChipMecanismo(mecanismoChip, reglas); // heurística (explícito ya fue null)
+}
+
+/**
+ * EL TALLER DISPONE: un tubo por cada OTRO diámetro del catálogo, para ofrecer
+ * en Fase 2 junto a los que calzan con el kit de ahora.
+ *
+ * `opcionesTuberiaFiltradas` deja solo los del diámetro del kit, así que una
+ * cortina que la banda por ancho llevó a 45 mm ofrecía únicamente tubos de 45:
+ * no había forma de volver a 38 desde la ficha. Elegir uno de estos arrastra el
+ * kit a ese diámetro (`kitPorTuboElegido`), así que el par tubo+kit nunca queda
+ * descalzado — y «Volver al automático» devuelve todo a la regla.
+ *
+ * De cada diámetro se ofrece el PRIMER tubo activo del catálogo (que es el
+ * orden del selector): 38 → E02 · 45 → E39 · 63 → E47. No se aplica el ajuste
+ * fino por ancho a propósito: acá se elige un DIÁMETRO, y el de 38 a más de
+ * 2,2 m hoy nombra a un tubo de 45, que es justo lo que se está esquivando.
+ *
+ * Vacío cuando la elección no es del taller: categoría con tubo fijo
+ * (OSCURANTI → E47), pletina/vertical (no llevan tubo redondo) y línea B, que
+ * ya ofrece sus dos.
+ */
+export function tubosDeOtrosDiametros(
+  opciones: readonly string[],
+  ctx: { categoria?: string; modelo?: ModeloTubo | null; lineaB?: boolean },
+  reglas: ReglasTuberia = REGLAS_TUBERIA,
+): readonly string[] {
+  if (ctx.lineaB) return [];
+  if (codigoTuboPorCategoria(ctx.categoria || '', reglas)) return [];
+  // Sin tubo redondo: el modelo lo marca con diámetro 0 y nada más aporta uno.
+  if (
+    ctx.modelo &&
+    ctx.modelo.diametro_tubo_mm <= 0 &&
+    diametroDesdeCategoria(ctx.categoria, reglas) == null
+  ) {
+    return [];
+  }
+  const out: string[] = [];
+  for (const d of diametrosDelCatalogo(reglas)) {
+    const t = reglas.tubos.find((x) => x.diametroMm === d && x.estado === 'activo');
+    const chip = t ? chipTuberiaPorCodigo(t.codigo, opciones) : null;
+    if (chip) out.push(chip);
+  }
+  return out;
 }
 
 /**

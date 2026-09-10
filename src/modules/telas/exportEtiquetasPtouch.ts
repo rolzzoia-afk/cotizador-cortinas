@@ -16,7 +16,7 @@
 // ─────────────────────────────────────────────────────────────────────
 import * as XLSX from 'xlsx';
 import { telaToQRContent } from './rackMaps';
-import type { Colmena, Tela } from '@/pages/telas/Telas.types';
+import type { Colmena, Tela } from '@/pages/inventario/telas/Telas.types';
 
 /** Una fila = una etiqueta. Claves = nombres de campo en P-touch Editor. */
 export type FilaEtiquetaPtouch = {

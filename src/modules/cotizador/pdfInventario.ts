@@ -18,6 +18,7 @@ import { PARAMETROS_CORTE_DEFAULT, type ParametrosCorte } from './parametrosCort
 import type { CadenaInsumo } from './cadenas';
 import type { FormulasFamilias } from '@/modules/descuentos/formulasFamilias';
 import { REGLAS_SELECCION_DEFAULT, type ReglasSeleccion } from '@/modules/descuentos/reglasSeleccion';
+import { lineaConCodigoVisible } from '@/modules/inventario/codigosInsumo';
 
 export * from './inventarioOT';
 
@@ -180,6 +181,8 @@ export function generarPdfInventario(
   adicionalesFase0?: AdicionalFase0Persistido[],
   formulas?: FormulasFamilias,
   reglas: ReglasSeleccion = REGLAS_SELECCION_DEFAULT,
+  /** `CAD01 → GRIS`, para imprimir el código como dice la etiqueta del estante. */
+  colores?: Map<string, string> | null,
 ): void {
   const data = construirInventario(
     ventanas,
@@ -202,9 +205,13 @@ export function generarPdfInventario(
   // Ancho de las TABLAS (los títulos de bloque usan el mismo para no desalinearse).
   // Dimensionado para que NINGUNA celda parta en dos líneas: la descripción más
   // larga del catálogo ([PCA04] PESO PORTA CADENA TRANSPARENTE / CUADRADA 7.5 CM)
-  // mide 92,8 mm a 8 pt, así que DESCRIPCIÓN necesita ≥ 95 mm. Con una sola línea
-  // por fila el alto baja a 6 mm, que es lo que realmente comprime la hoja.
-  const tablaW = Math.min(usable, 261);
+  // mide 92,8 mm a 8 pt. Con el color en el código («[PCA07-TRA] …») esa misma
+  // línea pasa a 99,3 mm y la peor de una OT —un sufijo -CAFE— a 100,4 mm
+  // (medido con `doc.getTextWidth` a 8 pt), así que la tabla creció de 261 a
+  // 268 mm y DESCRIPCIÓN de 96 a 103. Caben: el ancho útil de una A4 apaisada
+  // con márgenes de 8 mm es 281. Con una sola línea por fila el alto baja a
+  // 6 mm, que es lo que realmente comprime la hoja.
+  const tablaW = Math.min(usable, 268);
 
   // ── Encabezado (se repite en cada página) ──────────────────────────
   let pagina = 0;
@@ -266,10 +273,10 @@ export function generarPdfInventario(
     y += titH;
 
     // Anchos en mm reales (suman tablaW, así que sc2 = 1). Cada uno está tomado
-    // del texto más largo que puede recibir a 8 pt: DESCRIPCIÓN 92,8 + margen;
-    // CANTIDAD/TOTAL 14,5 ("4 PIVOTES") + margen; ADICIONAL por su cabecera
-    // (16,1 a 8,5 pt). El resto son casillas de firma.
-    const w2 = [8, 96, 17, 18, 17, 24, 24, 21, 36];
+    // del texto más largo que puede recibir a 8 pt: DESCRIPCIÓN 100,4 con el
+    // color en el código + margen; CANTIDAD/TOTAL 14,5 ("4 PIVOTES") + margen;
+    // ADICIONAL por su cabecera (16,1 a 8,5 pt). El resto son casillas de firma.
+    const w2 = [8, 103, 17, 18, 17, 24, 24, 21, 36];
     const sum2 = w2.reduce((a, b) => a + b, 0);
     const sc2 = tablaW / sum2;
     const cols2: Col[] = [
@@ -293,7 +300,11 @@ export function generarPdfInventario(
     };
     const rows2 = items.map((m, i) => [
       String(i + 1),
-      m.descripcion,
+      // El código sale con su color («[CAD01-GRS] CADENA…»): la hoja se lee
+      // frente al estante, y las tres cadenas de 3 metros solo se distinguen
+      // por ahí. El texto lo arma el cotizador, que no conoce la ficha del
+      // artículo, así que el color se pega acá con el mapa del catálogo.
+      lineaConCodigoVisible(m.descripcion, colores),
       cantTxt(m),
       '',
       cantTxt(m),

@@ -238,6 +238,14 @@ export type ColmenaPano = {
     // Cuando el corte fue de un lote: su nombre y las OTs que iban juntas.
     lote?: string;
     ots_lote?: { id: string; numero: string }[];
+    // ── Copia del catálogo al momento de la carga ──
+    // La importación del Excel guarda cómo se llamaba la tela, para poder
+    // mostrar el paño aunque el código se haya archivado después.
+    nemotecnico?: string;
+    grupo?: string;
+    proveedor?: string;
+    // Cuándo alguien lo cambió de sitio desde la pantalla de la colmena.
+    movido_en?: string;
   } | null;
 };
 
