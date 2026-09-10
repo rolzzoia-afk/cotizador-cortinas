@@ -101,6 +101,7 @@ import {
 import { colorPesoInfOscuridadExcel } from '@/modules/descuentos/peso-oscuridad';
 import {
   CIERRES_BEEBLACK,
+  cierreDePanoBeeblack,
   cortesBeeblack,
   esCategoriaBeeblack,
   esCierreVerticalBeeblack,
@@ -381,21 +382,17 @@ export function PanoEditor({
   // dejaba la dúo con una cenefa que su sistema no fabrica (el prefill de
   // Fase 2 lo normaliza a 'Ovalada' al abrir la ficha).
   const cenefaFijaOvalada = categoriaImplicaOvalada;
-  // F15: el motor DOM41 no se usa con cenefa ovalada (se cae a DOM38).
   const cenefaEsOvalada = pano.cenefa === 'Ovalada' || cenefaFijaOvalada;
-  const opcionesMotorModelo = cenefaEsOvalada
-    ? OPCIONES_MOTOR_MODELO.filter((o) => o.value !== 'DOM41')
-    : OPCIONES_MOTOR_MODELO;
-  // Cargador/hub del motor: opciones según el motor EFECTIVO (DOM41 con cenefa
-  // ovalada cae a DOM38). Default 'No lleva' — no todos los motores llevan hub.
-  // Un cargador guardado que no está en las opciones del modelo (cambio de motor)
-  // se agrega como opción extra para no esconder el dato ni desalinear el kit.
-  const motorModeloEfectivo =
-    (pano.motorModelo || '').toUpperCase() === 'DOM41' && cenefaEsOvalada
-      ? 'DOM38'
-      : (pano.motorModelo || '').toUpperCase();
+  // Los SEIS modelos, siempre. El motor que se cobró en Fase 1 tiene que
+  // aparecer acá y poder cambiarse a mano; esconder uno dejaba la fila sin
+  // ningún chip encendido y sin explicación (dueño, 2026-09-10).
+  const opcionesMotorModelo = OPCIONES_MOTOR_MODELO;
+  // Cargador/hub del motor: opciones del modelo elegido. Default 'No lleva' —
+  // no todos los motores llevan hub. Un cargador guardado que no está en las
+  // opciones del modelo (cambio de motor) se agrega como opción extra para no
+  // esconder el dato ni desalinear el kit.
   const cargadorGuardado = (pano.motorCargador || '').toUpperCase();
-  const opcionesCargadorBase = opcionesCargadorMotor(motorModeloEfectivo);
+  const opcionesCargadorBase = opcionesCargadorMotor((pano.motorModelo || '').toUpperCase());
   const opcionesCargador: readonly { value: string; label: string }[] =
     LABEL_CARGADOR[cargadorGuardado] && !opcionesCargadorBase.some((o) => o.value === cargadorGuardado)
       ? [...opcionesCargadorBase, { value: cargadorGuardado, label: LABEL_CARGADOR[cargadorGuardado] }]
@@ -1241,7 +1238,21 @@ export function PanoEditor({
               GIRA las fórmulas 90° cuando es DE ARRIBA ABAJO. Antes era un chip
               de solo lectura: una OT nacida en Terreno no tenía dónde fijarlo
               hasta Fase 3 (incongruencia reportada 2026-08-20). */}
-          {onDireccionVentana ? (
+          {panoNum > 1 ? (
+            /* Segunda tela de un beeblack doble: las dos comparten riel y se
+               estacionan en lados opuestos, así que su cierre es el contrario
+               del de la primera. Se deriva y se muestra; editarlo por separado
+               dejaría las dos telas corriendo hacia el mismo lado. */
+            <div className="flex items-center gap-2 rounded border border-border/60 bg-card/40 px-2 py-1 text-[0.7rem]">
+              <span className="text-muted-foreground">Cierre:</span>
+              <span className="text-foreground">
+                {cierreDePanoBeeblack(direccionVentana, panoNum - 1) || '—'}
+              </span>
+              <span className="text-muted-foreground">
+                — opuesto al del paño 1, se edita ahí
+              </span>
+            </div>
+          ) : onDireccionVentana ? (
             <div className="space-y-1">
               <RadioRow
                 label="Cierre"
@@ -1465,7 +1476,7 @@ export function PanoEditor({
       )}
 
       {/* 11. MOTOR — modelo (todos inalámbricos hoy), domótica y adicionales.
-          DOM41 no se ofrece con cenefa ovalada (regla F15). */}
+          El modelo llega de lo COBRADO en Fase 1 y se cambia acá si hace falta. */}
       {(esMotorCat || !!pano.motorModelo || !!pano.motorTipo || !!pano.ladoMotor) && (
         <Section title="Motor">
           <RadioRow

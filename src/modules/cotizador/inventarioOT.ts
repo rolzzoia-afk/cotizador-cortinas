@@ -471,7 +471,7 @@ export function consolidarInsumos(
       // El MOTOR de una cortina con cenefa ovalada va a PRODUCCIÓN; el resto del
       // kit (control, cable, enchufe) y los motores de cortinas normales, a
       // INSTALACIÓN (grupo por defecto).
-      const motorInsumos = insumosMotorDePano(p, v.categoria, reglas.tipos);
+      const motorInsumos = insumosMotorDePano(p);
       if (motorInsumos.length > 0) {
         for (const ins of motorInsumos) {
           const esUnidad = esCodigoMotor(ins.codigo);

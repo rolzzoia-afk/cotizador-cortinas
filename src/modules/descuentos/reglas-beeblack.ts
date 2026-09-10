@@ -262,6 +262,34 @@ export function esCierreVerticalBeeblack(direccion: string | undefined | null): 
     .includes('ARRIBA');
 }
 
+/**
+ * El cierre de UN PAÑO de un beeblack de dos telas.
+ *
+ * Las dos telas comparten el riel y se estacionan en lados OPUESTOS: una corre
+ * de izquierda a derecha y la otra de derecha a izquierda, y se juntan al
+ * medio. Por eso el cierre de la segunda no es un dato nuevo que alguien tenga
+ * que escribir —sería una copia que se puede desincronizar—: es el espejo del
+ * de la ventana, y se deriva.
+ *
+ * DE ARRIBA ABAJO no tiene espejo en la lista (no existe «de abajo arriba»):
+ * las dos telas quedan con el mismo rótulo, que es lo que además necesita el
+ * despiece, porque ahí lo único que mira es si la cortina va girada 90°.
+ */
+export function cierreDePanoBeeblack(
+  direccionVentana: string | undefined | null,
+  panoIndex = 0,
+): string {
+  const cierre = (direccionVentana || '').trim();
+  if (panoIndex <= 0 || !cierre || esCierreVerticalBeeblack(cierre)) return cierre;
+  const [izqDer, derIzq] = CIERRES_BEEBLACK;
+  const u = cierre.toUpperCase();
+  if (u === izqDer) return derIzq;
+  if (u === derIzq) return izqDer;
+  // Un cierre escrito a mano que no está en la lista se deja como está: no hay
+  // forma de saber cuál es su contrario.
+  return cierre;
+}
+
 type MedidasCalculadas = {
   perfilSupAncho: number;
   perfilInfAncho: number;

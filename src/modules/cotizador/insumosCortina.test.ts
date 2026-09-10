@@ -684,16 +684,23 @@ describe('insumosMotorDePano', () => {
     expect(insumosMotorDePano(pano({ motorModelo: 'CABLE' }))).toEqual([]);
     expect(insumosMotorDePano(pano({}))).toEqual([]);
   });
-  it('F15: DOM41 con cenefa ovalada (chip o categoría) cae a DOM38 (+cable)', () => {
+  // Hasta el 2026-09-10 la regla F15 cambiaba acá el DOM41 por un DOM38 cuando
+  // la cenefa era ovalada. El dueño la sacó: «el motor que cobre, se use, con
+  // opción de poder cambiarlo manualmente». El taller pide lo que dice la
+  // ficha, y la ficha dice lo que se vendió.
+  it('el motor NO se sustituye: DOM41 con cenefa ovalada sigue siendo DOM41', () => {
     const porChip = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada' }));
-    expect(porChip.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34']);
-    // Y el control pedido pasa a ser el del DOM38 (DOM39), no el DOM42.
-    const conControl = insumosMotorDePano(pano({ motorModelo: 'DOM41', cenefa: 'Ovalada', motorControlAdicCant: 1 }));
-    expect(conControl.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34', 'DOM39']);
-    const porCategoria = insumosMotorDePano(pano({ motorModelo: 'DOM41' }), 'ROL_CENEFA_OVALADA_MOTOR_GRANDE');
-    expect(porCategoria[0].codigo).toBe('DOM38');
-    // Sin cenefa ovalada, DOM41 se mantiene.
+    // Sin DOM34: el cable de carga es del DOM38, que ya no aparece solo.
+    expect(porChip.map((i) => i.codigo)).toEqual(['DOM41']);
+    // Y el control que se pide es el SUYO (DOM42), no el del DOM38.
+    const conControl = insumosMotorDePano(
+      pano({ motorModelo: 'DOM41', cenefa: 'Ovalada', motorControlAdicCant: 1 }),
+    );
+    expect(conControl.map((i) => i.codigo)).toEqual(['DOM41', 'DOM42']);
     expect(insumosMotorDePano(pano({ motorModelo: 'DOM41' }))[0].codigo).toBe('DOM41');
+    // Cambiarlo a mano en Fase 2 sigue funcionando, y ahí sí sale el DOM38.
+    const aMano = insumosMotorDePano(pano({ motorModelo: 'DOM38', cenefa: 'Ovalada' }));
+    expect(aMano.map((i) => i.codigo)).toEqual(['DOM38', 'DOM34']);
   });
 });
 

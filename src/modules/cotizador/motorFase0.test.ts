@@ -9,6 +9,7 @@ import {
 } from './motorFase0';
 import { PARAMETROS_DEFAULT } from './preciosFase0';
 import {
+  CODIGOS_ESTRUCTURA_BEEBLACK,
   RECETAS_DEFAULT,
   REGLAS_PRECIOS_DEFAULT,
   TELA_VERTICAL_DEFAULT,
@@ -1488,11 +1489,26 @@ const CAT_BB: CatalogoProductos = {
   'BEE-BK': { cod: 'BEE_BK', producto: 'BEEBLACK-BLACKOUT WATERPROFF', tipo: 'PREMIUM', descripcion: '', precio: 48500 },
   'BEE-SC01': { cod: 'BEE_MOSQ', producto: 'BEEBLACK MOSQUITERO', tipo: 'PREMIUM', descripcion: '', precio: 16138.54 },
   'BEE-SC': { cod: 'BEE_MOSQ', producto: 'BEEBLACK-MOSQUITERO', tipo: 'PREMIUM', descripcion: '', precio: 48500 },
+  // Las dos telas de la OT ANDREA (COTLG-05994-2). La fila genérica `BEE-TRAS`
+  // es la más cara de su familia y ya NO manda: la tela va tecleada.
+  'BEE-TR01': { cod: 'BEE_TRAS', producto: 'BEEBLACK TRASLUCIDA SIMPLE', tipo: 'DELUX', descripcion: 'C-012 - BLANCO TRASLUCIDO', precio: 52565 },
+  'BEE-TRAS': { cod: 'BEE_TRAS', producto: 'BEEBLACK-TRASLUCIDA', tipo: 'DELUX', descripcion: 'C-012 - BLANCO TRASLUCIDO', precio: 78848 },
+  'BEE-BK05': { cod: 'BEE_BK', producto: 'BEEBLACK BLACKOUT WATERPROOF', tipo: 'PREMIUM', descripcion: 'FB-6627-GREIGE', precio: 7839 },
 };
 const AR_BB: Record<string, number> = {
   ...AR,
   'BEE-BK01': 2.98, 'BEE-BK': 2.98, 'BEE-SC01': 2.98, 'BEE-SC': 2.98,
+  'BEE-TR01': 2.98, 'BEE-TRAS': 2.98, 'BEE-BK05': 2.98,
 };
+
+/**
+ * La cinta doble contacto con el precio con que se VENDIERON las cotizaciones
+ * beeblack de julio y agosto de 2026. El 2026-09-10 subió a 19.999,2 (13.000 ×
+ * 1,5384, la fórmula de la columna); las copias TRINA y «D SOLO BK» traían
+ * 15.470 tecleado a mano en esa celda. Mismo criterio que los tubos de julio:
+ * cada golden se corre con los precios de su época.
+ */
+const REGLAS_CIN_VIEJA = conValoresMaximos({ CIN0002: 15470 });
 
 // La copia de TRINA tiene la celda del riel ROTA: la fila «ALTO» copia el
 // total de la de «ANCHO» (=U115*W115), así que el riel se cobra dos veces por
@@ -1501,9 +1517,9 @@ const AR_BB: Record<string, number> = {
 // reproduce con la receta de SU copia, igual que los goldens con los insumos
 // de su época.
 const REGLAS_TRINA: ReglasPrecios = {
-  ...REGLAS_PRECIOS_DEFAULT,
+  ...REGLAS_CIN_VIEJA,
   recetas: {
-    ...REGLAS_PRECIOS_DEFAULT.recetas,
+    ...REGLAS_CIN_VIEJA.recetas,
     BEE_BK: RECETAS_DEFAULT.BEE_BK.map((l) =>
       l.insumo === 'SLM01' ? { ...l, cantidad: { tipo: 'sumaAnchos' as const, factor: 2 } } : l,
     ),
@@ -1548,10 +1564,12 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(f.exacto).toBe(true);
   });
 
-  it('la tela se cobra al MÁXIMO de la familia, no a una tela de referencia', () => {
+  it('la tela se cobra al precio TECLEADO del sistema, no a una del catálogo', () => {
     const f = cotizar().familias[0];
-    // BEE-BK (48.500) le gana a la tela elegida, BEE-BK01 (8.760,92).
-    expect(f.arquetipoCodInt).toBe('BEE-BK');
+    // 48.500 es la celda «PRECIO REAL» del panel del Excel. Ni la tela elegida
+    // (BEE-BK01, 8.760,92) ni la fila más cara del catálogo la mueven, así que
+    // no hay tela de referencia que mostrar.
+    expect(f.arquetipoCodInt).toBe('');
     expect(f.precioMl).toBe(48500);
     expect(f.costoTela).toBeCloseTo(72410.5, 3);
   });
@@ -1591,15 +1609,31 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.totales.totalTransferencia).toBeCloseTo(435817.3219, 3);
   });
 
-  it('con el 48.415,15 que el catálogo traía hasta el 2026-08-19 la tela baja $126,91', () => {
+  // Hasta el 2026-09-10 el beeblack cobraba el MÁXIMO de su familia en el
+  // catálogo: una fila mal cargada le cambiaba el precio a TODAS sus cortinas,
+  // y en la traslúcida eso significaba cobrar 78.848 donde la OT real cobró
+  // 52.600. Ahora manda el tecleado del sistema y el catálogo no lo mueve.
+  it('cambiar la fila del catálogo ya NO mueve la tela: está tecleada', () => {
     const cat = { ...CAT_BB, 'BEE-BK': { ...CAT_BB['BEE-BK'], precio: 48415.153846 } };
     const r = cotizarFase0([FILA], cat, AR_BB, [], PARAMETROS_DEFAULT, false, false, REGLAS_TRINA);
-    // El 48.500 del panel estaba tecleado a mano; el máximo calculado era
-    // 48.415,15, que el motor redondea al peso como hace el Excel.
+    expect(r.familias[0].precioMl).toBe(48500);
+    expect(r.lineas[0].valorUnit).toBeCloseTo(552055.0727, 3);
+  });
+
+  // Sin el tecleado vuelve la regla vieja, que es lo que verá una empresa que
+  // borre esa tabla en Admin → Precios → Sistemas.
+  it('sin tela tecleada vuelve el máximo del catálogo', () => {
+    const reglas: ReglasPrecios = {
+      ...REGLAS_TRINA,
+      sistemas: {
+        ...REGLAS_TRINA.sistemas,
+        beeblack: { ...REGLAS_TRINA.sistemas.beeblack, telaPorFamilia: {} },
+      },
+    };
+    const cat = { ...CAT_BB, 'BEE-BK': { ...CAT_BB['BEE-BK'], precio: 48415.153846 } };
+    const r = cotizarFase0([FILA], cat, AR_BB, [], PARAMETROS_DEFAULT, false, false, reglas);
     expect(r.familias[0].precioMl).toBe(48415);
-    expect(r.lineas[0].valorUnit).toBeCloseTo(551928.1677, 3);
-    // La diferencia es solo la tela: (48.500 − 48.415) × 1,493 m.
-    expect(552055.0727 - r.lineas[0].valorUnit).toBeCloseTo(85 * 1.493, 3);
+    expect(r.familias[0].arquetipoCodInt).toBe('BEE-BK');
   });
 
   // El beeblack se arma en obra y se cobra aparte: llegar a 4 cortinas no lo
@@ -1647,8 +1681,12 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
   it('el panel plantilla de 3,00 × 3,00 da el VALOR M2 de la copia (90.765,59)', () => {
     // Cortina de ejemplo de la copia «SOLO BK O SOLO MOSQUITERO»: su celda
     // T147 dice 90.765,59377777779. Va con la receta de fábrica: en una
-    // cortina cuadrada (ancho = alto) la celda del riel rota no se nota.
-    const r = cotizarFase0([{ codInt: 'BEE-BK', ancho: 3, alto: 3, cantidad: 1 }], CAT_BB, AR_BB);
+    // cortina cuadrada (ancho = alto) la celda del riel rota no se nota. Y con
+    // la cinta al precio de ESA copia (15.470), que es con el que se calculó.
+    const r = cotizarFase0(
+      [{ codInt: 'BEE-BK', ancho: 3, alto: 3, cantidad: 1 }],
+      CAT_BB, AR_BB, [], PARAMETROS_DEFAULT, false, false, REGLAS_CIN_VIEJA,
+    );
     expect(r.familias[0].m2Total).toBeCloseTo(12, 6);
     expect(r.familias[0].metrosTela).toBeCloseTo(4, 6);
     expect(r.familias[0].precioM2).toBeCloseTo(90765.5938, 3);
@@ -1710,6 +1748,11 @@ describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
     f.materiales.filter((l) => l.insumo === 'SLM01');
   const totalRiel = (f: { materiales: { insumo: string; total: number }[] }) =>
     rielesDe(f).reduce((s, l) => s + l.total, 0);
+  /** Todo lo que las dos telas comparten: riel, agarraderas y cinta. */
+  const totalEstructura = (f: { materiales: { insumo: string; total: number }[] }) =>
+    f.materiales
+      .filter((l) => CODIGOS_ESTRUCTURA_BEEBLACK.has(l.insumo))
+      .reduce((s, l) => s + l.total, 0);
 
   it('la 2.ª tela va a su propio panel |2T y la 1.ª se queda en el de siempre', () => {
     const r = cotizar();
@@ -1736,11 +1779,24 @@ describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
     expect(totalRiel(bk)).toBe(0);
   });
 
-  it('todo lo demás sí se cobra por tela: dos manillas, dos kits, dos cajas', () => {
+  it('la agarradera y la cinta tampoco: son la estructura, no la tela', () => {
     const r = cotizar();
     const mosq = r.familias.find((f) => f.clave === 'BEE_MOSQ')!;
     const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
-    for (const cod of ['SML10', 'SML13', 'SML34', 'SML35', 'SML38', 'CAJA0001', 'CIN0002']) {
+    // El carril por el que corren las dos telas (SML10) y la cinta que pega la
+    // estructura a la ventana (CIN0002) van en blanco en el panel de la 2.ª
+    // tela del Excel manual, igual que el riel.
+    for (const cod of ['SML10', 'CIN0002']) {
+      expect(mosq.materiales.some((l) => l.insumo === cod), cod).toBe(true);
+      expect(bk.materiales.some((l) => l.insumo === cod), cod).toBe(false);
+    }
+  });
+
+  it('todo lo demás sí se cobra por tela: dos kits, dos cajas, dos zunchos', () => {
+    const r = cotizar();
+    const mosq = r.familias.find((f) => f.clave === 'BEE_MOSQ')!;
+    const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
+    for (const cod of ['SML13', 'SML34', 'SML35', 'SML38', 'PUB 01', 'MAT00001', 'CAJA0001']) {
       const enMosq = mosq.materiales.filter((l) => l.insumo === cod);
       const enBk = bk.materiales.filter((l) => l.insumo === cod);
       expect(enBk, cod).toHaveLength(enMosq.length);
@@ -1754,14 +1810,16 @@ describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
     expect(mosq.manoObra).toBe(83300);
   });
 
-  it('la ventana paga un riel, no dos: la diferencia contra el cobro viejo', () => {
+  it('la ventana paga una estructura, no dos: la diferencia contra el cobro viejo', () => {
     const conRegla = cotizar();
     // Lo mismo sin declarar la 2.ª tela es el comportamiento anterior.
     const antes = cotizar(DOBLE.map((f) => ({ ...f, segundaTela: false })));
+    const viejo = antes.familias.find((f) => f.clave === 'BEE_BK')!;
     const riel = (6.4 * 24999) / 0.6;
-    expect(totalRiel(antes.familias.find((f) => f.clave === 'BEE_BK')!)).toBeCloseTo(riel, 3);
-    // Un riel entero menos, repartido en los m² de esa tela.
-    const bajaEsperada = riel / conRegla.familias.find((f) => f.clave === 'BEE_BK|2T')!.m2Total;
+    expect(totalRiel(viejo)).toBeCloseTo(riel, 3);
+    // Una estructura entera menos, repartida en los m² de esa tela.
+    const bajaEsperada =
+      totalEstructura(viejo) / conRegla.familias.find((f) => f.clave === 'BEE_BK|2T')!.m2Total;
     const antesM2 = antes.familias.find((f) => f.clave === 'BEE_BK')!.precioM2;
     const ahoraM2 = conRegla.familias.find((f) => f.clave === 'BEE_BK|2T')!.precioM2;
     expect(antesM2 - ahoraM2).toBeCloseTo(bajaEsperada, 3);
@@ -1817,6 +1875,107 @@ describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
     expect(b.lineas[0].segundaTela).toBe(false);
     expect(b.subtotalNeto).toBeCloseTo(a.subtotalNeto, 6);
   });
+
+  // Lo que arma el botón «Unir» de Fase 1 con la OT ANDREA (COTLG-05994-2):
+  // blackout + traslúcida en la misma ubicación, sin mosquitero de por medio.
+  // Es el caso que la app cobraba como DOS cortinas completas, y por eso la
+  // traslúcida salía más cara que el blackout.
+  // Las tres ventanas de la OT, tal como están tecleadas en el Excel
+  // (`Cotizador!S10:T12`): HIJA, PPAL y PPAL L, cada una con su blackout y su
+  // traslúcida sobre el mismo riel.
+  describe('blackout + traslúcida (la OT ANDREA)', () => {
+    const MED = [
+      { ancho: 1.093, alto: 1.885 },
+      { ancho: 2.013, alto: 1.901 },
+      { ancho: 2.97, alto: 1.884 },
+    ];
+    const sueltas = MED.flatMap((m) => [
+      { codInt: 'BEE-BK05', ...m, cantidad: 1 },
+      { codInt: 'BEE-TR01', ...m, cantidad: 1 },
+    ]);
+    const unidas = MED.flatMap((m, i) => [
+      { codInt: 'BEE-BK05', ...m, cantidad: 1, ventanaId: `v${i}`, segundaTela: false },
+      { codInt: 'BEE-TR01', ...m, cantidad: 1, ventanaId: `v${i}`, segundaTela: true },
+    ]);
+
+    it('unir NO le mueve un peso a la primera tela', () => {
+      const a = cotizarFase0(sueltas, CAT_BB, AR_BB);
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      expect(b.lineas[0].valorUnit).toBeCloseTo(a.lineas[0].valorUnit, 6);
+    });
+
+    it('la traslúcida baja, y lo que baja es exactamente la estructura', () => {
+      const a = cotizarFase0(sueltas, CAT_BB, AR_BB);
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      const suelta = a.familias.find((f) => f.clave === 'BEE_TRAS')!;
+      const segunda = b.familias.find((f) => f.clave === 'BEE_TRAS|2T')!;
+      expect(totalEstructura(segunda)).toBe(0);
+      expect(suelta.costoTotal - segunda.costoTotal).toBeCloseTo(totalEstructura(suelta), 3);
+      expect(b.lineas[1].valorUnit).toBeLessThan(a.lineas[1].valorUnit);
+    });
+
+    // El peso exacto de la planilla, no un parecido: el dueño pidió que «los
+    // cálculos y parámetros fueran como el del excel manual» (2026-09-10).
+    it('la 2.ª tela sale al PESO del Excel manual', () => {
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      const tr = b.familias.find((f) => f.clave === 'BEE_TRAS|2T')!;
+      // Materiales de las tres cortinas = `Cotizador!DD137` del panel de la 2.ª
+      // tela: la lista beeblack sin riel, sin agarraderas y sin cinta.
+      expect(tr.costoMateriales).toBeCloseTo(409157.17152, 4);
+      expect(tr.manoObra).toBe(249900); // MAN 01 83.300 × 3 cortinas (`CV146`)
+      expect(tr.traslado).toBe(47600); // TRAS (`CV149`)
+      expect(tr.costoTela).toBeCloseTo(456042, 4); // 52.600 × 8,67 (`DA141`)
+      expect(tr.costoTotal).toBeCloseTo(1162699.17152, 4); // `CV150`
+      expect(tr.precioM2).toBeCloseTo(66218.6009031, 4); // `CZ147`
+      // Y las tres filas, con la instalación embebida (`DD153:DD155`).
+      const trasl = b.lineas.filter((l) => l.clave === 'BEE_TRAS|2T');
+      expect(trasl.map((l) => l.valorUnit)).toEqual([
+        expect.closeTo(250457.4453207713, 4),
+        expect.closeTo(428347.6245356848, 4),
+        expect.closeTo(608844.1016635437, 4),
+      ]);
+    });
+
+    // El blackout queda ~1,3 % bajo el Excel de ANDREA (6.076 · 11.252 ·
+    // 16.504), y la diferencia es UNA sola, ajena a esta regla: la fila «ALTO»
+    // del riel. Esa copia tiene la celda rota (su total apunta a la fila
+    // «ANCHO» y cobra los anchos dos veces, 33.831,98 de más). La receta sigue
+    // a la copia canónica por decisión del dueño del 2026-08-19 — ver
+    // `NOTA_SLM01_ALTO`. La otra diferencia que había, `CIN0002` a 15.470, se
+    // cerró el 2026-09-10 subiéndola a los 19.999,2 de la fórmula.
+    it('el blackout no cambia al unir, y sigue siendo la 1.ª tela entera', () => {
+      const a = cotizarFase0(sueltas, CAT_BB, AR_BB);
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      const bk = b.lineas.filter((l) => l.clave === 'BEE_BK');
+      expect(bk.map((l) => l.valorUnit)).toEqual([
+        expect.closeTo(470447.4215065134, 4),
+        expect.closeTo(835754.5591016619, 4),
+        expect.closeTo(1206413.8709118245, 4),
+      ]);
+      expect(a.lineas.filter((l) => l.clave === 'BEE_BK').map((l) => l.valorUnit)).toEqual(
+        bk.map((l) => expect.closeTo(l.valorUnit, 6)),
+      );
+    });
+
+    it('y deja de costar más que el blackout, como en la OT de verdad', () => {
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      expect(b.lineas[1].valorUnit).toBeLessThan(b.lineas[0].valorUnit);
+    });
+
+    it('las dos telas se cobran al precio tecleado, no al del catálogo', () => {
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      const bk = b.familias.find((f) => f.clave === 'BEE_BK')!;
+      const tr = b.familias.find((f) => f.clave === 'BEE_TRAS|2T')!;
+      expect(bk.precioMl).toBe(48500);
+      // 52.600, no los 78.848 de la fila genérica `BEE-TRAS` del catálogo.
+      expect(tr.precioMl).toBe(52600);
+    });
+
+    it('tres instalaciones, no seis: son tres cortinas', () => {
+      expect(cotizarFase0(unidas, CAT_BB, AR_BB).instalacion.cantidad).toBe(3);
+      expect(cotizarFase0(sueltas, CAT_BB, AR_BB).instalacion.cantidad).toBe(6);
+    });
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1839,7 +1998,10 @@ describe('motorFase0 — beeblack (COTAP-8003, la copia canónica)', () => {
     { codInt: 'BEE-BK03', ancho: 1.188, alto: 1.726, cantidad: 1, descuento: 0.4 },
     { codInt: 'BEE-BK03', ancho: 1.476, alto: 1.729, cantidad: 1, descuento: 0.4 },
   ];
-  const cotizar = () => cotizarFase0(FILAS, CAT_COTAP, AR_COTAP);
+  // Con la cinta al precio de su época (ver `REGLAS_CIN_VIEJA`): esta
+  // cotización se vendió antes de que subiera.
+  const cotizar = () =>
+    cotizarFase0(FILAS, CAT_COTAP, AR_COTAP, [], PARAMETROS_DEFAULT, false, false, REGLAS_CIN_VIEJA);
 
   it('el riel cobra los anchos ×2 y los altos ×2 (la celda corregida)', () => {
     const f = cotizar().familias[0];
@@ -1891,7 +2053,9 @@ describe('motorFase0 — beeblack (COTAP-8003, la copia canónica)', () => {
   });
 
   it('con la instalación regalada a mano vuelve a dar los totales de la copia', () => {
-    const r = cotizarFase0(FILAS, CAT_COTAP, AR_COTAP, [], PARAMETROS_DEFAULT, false, false, undefined, 1);
+    const r = cotizarFase0(
+      FILAS, CAT_COTAP, AR_COTAP, [], PARAMETROS_DEFAULT, false, false, REGLAS_CIN_VIEJA, 1,
+    );
     expect(Math.round(r.subtotalNeto)).toBe(1835123);
     expect(Math.round(r.totales.totalTransferencia)).toBe(2183796);
   });
