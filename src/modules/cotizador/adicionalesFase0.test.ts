@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   adicionalesFromPersist,
   adicionalesToPersist,
+  claveColorDerivado,
+  coloresDerivadosPersistidos,
   hayInstalacionVerticalManual,
   incluidasVisibles,
   instalacionTipoFromPersist,
@@ -82,6 +84,53 @@ describe('adicionales — guardar y volver a abrir', () => {
     expect(guardado.codInt).toBe('CENF O'); // se sigue limpiando el código
     expect(guardado.cantidad).toBe(3);
     expect(guardado.descuento).toBe(0.25);
+  });
+
+  it('el color de la fila sobrevive el viaje completo', () => {
+    const [guardado] = adicionalesToPersist([linea({ colorFila: '#9dc3e6' })]);
+    expect(guardado.colorFila).toBe('#9DC3E6');
+    expect(adicionalesFromPersist([guardado])[0].colorFila).toBe('#9DC3E6');
+  });
+
+  it('sin color, o con basura, la línea no guarda el campo', () => {
+    for (const malo of ['', '   ', 'celeste', undefined]) {
+      const [guardado] = adicionalesToPersist([linea({ colorFila: malo })]);
+      expect('colorFila' in guardado, String(malo)).toBe(false);
+      expect(adicionalesFromPersist([guardado])[0].colorFila).toBeUndefined();
+    }
+  });
+
+  it('el color no toca lo que decide el precio', () => {
+    const [guardado] = adicionalesToPersist([
+      linea({ codInt: 'CENF O', cantidad: 3, descuento: 0.25, colorFila: '#FFD966' }),
+    ]);
+    expect(guardado.cantidad).toBe(3);
+    expect(guardado.descuento).toBe(0.25);
+    expect(guardado.origen).toBeUndefined();
+  });
+});
+
+// Las cenefas derivadas de un paño no se conservan entre aperturas: se tiran y
+// se vuelven a armar desde las cortinas, con id nuevo. Sin este rescate, pintar
+// una se perdía al recargar la OT.
+describe('coloresDerivadosPersistidos — el color de una cenefa derivada', () => {
+  it('rescata el color por código y ubicación', () => {
+    const mapa = coloresDerivadosPersistidos([
+      linea({ codInt: 'CENF O', ubicacion: 'LIVING', origen: 'pano', colorFila: '#FFD966' }),
+      linea({ codInt: 'CENF O', ubicacion: 'ESCRITORIO', origen: 'pano', colorFila: '#A9D18E' }),
+    ]);
+    expect(mapa.get(claveColorDerivado('CENF O', 'LIVING'))).toBe('#FFD966');
+    expect(mapa.get(claveColorDerivado('CENF O', 'ESCRITORIO'))).toBe('#A9D18E');
+    // La llave no distingue mayúsculas ni espacios: la ubicación se teclea.
+    expect(mapa.get(claveColorDerivado(' cenf o ', ' living '))).toBe('#FFD966');
+  });
+
+  it('ignora las líneas manuales y las que no están pintadas', () => {
+    const mapa = coloresDerivadosPersistidos([
+      linea({ codInt: 'CENF O', ubicacion: 'LIVING', origen: 'manual', colorFila: '#FFD966' }),
+      linea({ codInt: 'DOM 38', ubicacion: 'PIEZA', origen: 'pano' }),
+    ]);
+    expect(mapa.size).toBe(0);
   });
 });
 

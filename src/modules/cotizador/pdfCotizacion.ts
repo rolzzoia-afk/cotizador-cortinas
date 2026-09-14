@@ -19,6 +19,7 @@
 
 import { jsPDF } from 'jspdf';
 import { formatCLP } from './calculos';
+import { rgbDeHex } from './coloresFila';
 import { FILAS_TOTALES } from './filasTotales';
 import { claveTermino } from './terminos';
 import {
@@ -51,6 +52,11 @@ export type FilaPdfCortina = {
   descuento: number;
   /** El total del motor. No se recalcula. */
   total: number;
+  /**
+   * Fondo de la fila elegido en la grilla (hex de `PALETA_FILA`). Reemplaza al
+   * fondo alternado; vacío = el de siempre.
+   */
+  colorFila?: string;
 };
 
 export type FilaPdfAdicional = {
@@ -67,6 +73,8 @@ export type FilaPdfAdicional = {
   total: number;
   /** La fila de instalación gratis va destacada en rojo, como en el Excel. */
   destacadoRojo?: boolean;
+  /** Fondo elegido en la grilla (hex). Le gana al rojo de la instalación. */
+  colorFila?: string;
 };
 
 export type EntradaPdfCotizacion = {
@@ -246,7 +254,7 @@ export function nombreArchivoPdf(numero: string | null, nombreCliente: string): 
 
 // ── Paleta y geometría ───────────────────────────────────────────────
 
-type RGB = [number, number, number];
+type RGB = readonly [number, number, number];
 
 const NEGRO: RGB = [22, 22, 24];
 const BLANCO: RGB = [255, 255, 255];
@@ -716,7 +724,9 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
   let i = 0;
   for (const f of ctx.cortinas) {
     if (y + ALTO_FILA > PIE_PAGINA) y = cabeceraTabla(doc, ctx.nuevaPagina());
-    y = filaTabla(doc, y, { celdas: celdasDeCortina(f) }, i++);
+    // La fila pintada en la grilla se imprime con su color; el resto conserva
+    // el fondo alternado de siempre (lo resuelve `filaTabla`).
+    y = filaTabla(doc, y, { celdas: celdasDeCortina(f), fondo: rgbDeHex(f.colorFila) }, i++);
   }
 
   if (ctx.adicionales.length) {
@@ -735,7 +745,12 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
       y = filaTabla(
         doc,
         y,
-        { celdas: celdasDeAdicional(a), fondo: a.destacadoRojo ? ROJO_SUAVE : undefined },
+        {
+          celdas: celdasDeAdicional(a),
+          // Un color elegido a mano manda sobre el rojo automático de la
+          // instalación gratis: si la vendedora la pintó, es a propósito.
+          fondo: rgbDeHex(a.colorFila) ?? (a.destacadoRojo ? ROJO_SUAVE : undefined),
+        },
         i++,
       );
     }

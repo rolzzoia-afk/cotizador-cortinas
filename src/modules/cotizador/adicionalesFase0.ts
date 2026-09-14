@@ -6,6 +6,7 @@
 // probar sola. El render vive en CotizadorFase0.
 
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
+import { colorFilaSaneado } from './coloresFila';
 import { COD_INSTALACION_VERTICAL } from './reglasPrecios';
 
 export type AdicionalUI = {
@@ -30,6 +31,12 @@ export type AdicionalUI = {
    * cliente lee esa columna en el PDF. Vacío = manda el catálogo.
    */
   tipo?: string;
+  /**
+   * Fondo de la fila en la grilla y en el PDF (hex de `PALETA_FILA`). Solo
+   * presentación: no toca el precio ni el origen de la línea. Por eso NO está
+   * en la lista de campos que pasan un adicional derivado a 'manual'.
+   */
+  colorFila?: string;
 };
 
 export const nuevoAdicional = (): AdicionalUI => ({
@@ -54,6 +61,7 @@ export function adicionalesToPersist(list: AdicionalUI[]): AdicionalFase0Persist
       origen,
       ubicacionDerivada,
       tipo,
+      colorFila,
     }) => ({
       id,
       codInt: codInt.trim(),
@@ -67,6 +75,8 @@ export function adicionalesToPersist(list: AdicionalUI[]): AdicionalFase0Persist
       // Un tipo en blanco no se guarda: así la línea vuelve a leer el catálogo
       // en vez de quedar pegada a un rótulo vacío.
       ...(tipo?.trim() ? { tipo: tipo.trim() } : {}),
+      // Un color inválido o vacío tampoco: la fila vuelve al fondo de siempre.
+      ...(colorFilaSaneado(colorFila) ? { colorFila: colorFilaSaneado(colorFila) } : {}),
     }),
   );
 }
@@ -86,8 +96,37 @@ export function adicionalesFromPersist(raw: unknown): AdicionalUI[] {
       origen: row.origen,
       ubicacionDerivada: row.ubicacionDerivada,
       tipo: row.tipo,
+      colorFila: colorFilaSaneado(row.colorFila),
     };
   });
+}
+
+/**
+ * Los colores de fila de los adicionales DERIVADOS de un paño (las cenefas),
+ * indexados por código + ubicación.
+ *
+ * Esas líneas no sobreviven a una apertura: se descartan y se vuelven a armar
+ * desde los paños, con id nuevo. Sin este rescate, pintar una cenefa derivada
+ * se perdía al recargar. Se emparejan por código + ubicación porque el id
+ * cambia, y no se las promueve a 'manual' —eso las desconectaría del ancho de
+ * su cortina, que es lo que las hace derivadas.
+ */
+export function coloresDerivadosPersistidos(
+  persistidos: readonly AdicionalUI[],
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const a of persistidos) {
+    if (a.origen !== 'pano') continue;
+    const color = colorFilaSaneado(a.colorFila);
+    if (!color) continue;
+    out.set(claveColorDerivado(a.codInt, a.ubicacion), color);
+  }
+  return out;
+}
+
+/** Llave de emparejamiento de un adicional derivado entre dos aperturas. */
+export function claveColorDerivado(codInt: string, ubicacion?: string): string {
+  return `${(codInt || '').trim().toUpperCase()}|${(ubicacion || '').trim().toUpperCase()}`;
 }
 
 /**
