@@ -33,8 +33,13 @@ import {
 } from '@/modules/cotizador/filtrosCatalogo';
 import { useChipsCustom } from '@/modules/cotizador/chipsCustomStore';
 import { useReglasPrecios } from '@/modules/cotizador/reglasPreciosStore';
+import { useParametrosCotizador } from '@/modules/cotizador/parametros';
+import { useReglasSeleccion } from '@/modules/descuentos/reglasSeleccionStore';
+import { categoriasParaSelect } from '@/modules/descuentos/tiposCortina';
+import { precioDesdeCosto } from '@/modules/cotizador/nuevaCategoria';
 import { formatCLP } from '@/lib/formatters';
-import { FotosInformeEditor, fotosHuerfanas } from '@/components/admin/FotosInformeEditor';
+import { fotosHuerfanas } from '@/components/admin/FotosInformeEditor';
+import ProductoCatalogoFicha from '@/components/cotizador/ProductoCatalogoFicha';
 import { borrarFotoInforme } from '@/modules/visita/informeAssetsStore';
 import type { CatalogoProductos, Producto } from '@/modules/cotizador/types';
 
@@ -100,6 +105,26 @@ export default function ProductoCatalogoDialog({
   // Ficha de la tela: la lámina que va en la sección de esa habitación del
   // INFORME CLIENTE. Se maneja como lista de una para reusar el cargador.
   const [foto, setFoto] = useState<string[]>(prev?.foto ? [prev.foto] : []);
+  // Las columnas del Excel maestro que no cotizan: cuándo entró el código,
+  // quién la vende y con qué margen se sacó el precio.
+  const [fechaAlta, setFechaAlta] = useState(prev?.fechaAlta ?? '');
+  const [proveedor, setProveedor] = useState(prev?.proveedor ?? '');
+  const { parametros } = useParametrosCotizador();
+  const [gananciaPct, setGananciaPct] = useState(
+    prev?.ganancia ? String(Math.round(prev.ganancia * 1000) / 10) : '',
+  );
+  const { reglas: seleccion } = useReglasSeleccion();
+  const categoriasFabricacion = useMemo(
+    () => categoriasParaSelect(seleccion.tipos),
+    [seleccion.tipos],
+  );
+  const [catFabricacion, setCatFabricacion] = useState(prev?.categoriaFabricacion ?? '');
+  // El precio que saldría de la cuenta del Excel con lo escrito ahora.
+  const precioSugerido = useMemo(() => {
+    const c = num(costo) ?? 0;
+    const g = (num(gananciaPct) ?? Math.round(parametros.margenInsumo * 100)) / 100;
+    return precioDesdeCosto(c, g, parametros.iva);
+  }, [costo, gananciaPct, parametros]);
   const [saving, setSaving] = useState(false);
   const [confirmandoBorrado, setConfirmandoBorrado] = useState(false);
 
@@ -110,8 +135,9 @@ export default function ProductoCatalogoDialog({
         { cod: cod.trim(), producto: nombre.trim(), tipo: '', descripcion: '', precio: 0 },
         normCod(ci),
         idsChip,
+        chipsPropios,
       ),
-    [cod, nombre, ci, idsChip],
+    [cod, nombre, ci, idsChip, chipsPropios],
   );
 
   const familias = useMemo(() => familiasDelCatalogo(catalogo), [catalogo]);
@@ -169,6 +195,12 @@ export default function ProductoCatalogoDialog({
       return;
     }
 
+    const gananciaNum = gananciaPct.trim() === '' ? null : num(gananciaPct);
+    if (gananciaNum != null && (gananciaNum <= 0 || gananciaNum > 100)) {
+      toast.error('Ganancia inválida (1 a 100 %).');
+      return;
+    }
+
     const cambios: Producto = {
       cod: cod.trim(),
       producto: nombre.trim(),
@@ -178,6 +210,11 @@ export default function ProductoCatalogoDialog({
       // `undefined` = sin costo cargado; el Costo total lo dice en vez de suponer 0.
       costo: costoNum || undefined,
       descuento: dctoNum / 100,
+      // Siempre presentes: `undefined` borra lo que hubiera (ver `guardarProductoEnCatalogo`).
+      fechaAlta: fechaAlta.trim() || undefined,
+      proveedor: proveedor.trim() || undefined,
+      ganancia: gananciaNum ? gananciaNum / 100 : undefined,
+      categoriaFabricacion: catFabricacion.trim() || undefined,
       // Siempre presente: `undefined` es «sin clasificar» y borra la gama previa.
       categoria: gama || undefined,
       // Ídem: `undefined` devuelve el producto al chip automático.
@@ -329,6 +366,48 @@ export default function ProductoCatalogoDialog({
             />
           </div>
           <div>
+            <Label className="mb-1 text-xs">Ganancia (%)</Label>
+            <Input
+              inputMode="decimal"
+              value={gananciaPct}
+              onChange={(e) => setGananciaPct(e.target.value)}
+              placeholder={String(Math.round(parametros.margenInsumo * 100))}
+              className="border-border bg-secondary text-right"
+            />
+            {precioSugerido > 0 && (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Con este costo el precio sería{' '}
+                <strong>{formatCLP(precioSugerido)}</strong>{' '}
+                <button
+                  type="button"
+                  onClick={() => setPrecio(String(precioSugerido))}
+                  className="text-accent underline"
+                >
+                  usar
+                </button>{' '}
+                (costo ÷ ganancia × IVA {Math.round(parametros.iva * 100)} %).
+              </p>
+            )}
+          </div>
+          <div>
+            <Label className="mb-1 text-xs">Fecha de alta</Label>
+            <Input
+              type="date"
+              value={fechaAlta}
+              onChange={(e) => setFechaAlta(e.target.value)}
+              className="border-border bg-secondary"
+            />
+          </div>
+          <div>
+            <Label className="mb-1 text-xs">Proveedor</Label>
+            <Input
+              value={proveedor}
+              onChange={(e) => setProveedor(e.target.value)}
+              placeholder="Proveedor 1"
+              className="border-border bg-secondary"
+            />
+          </div>
+          <div>
             <Label className="mb-1 text-xs">Ancho de rollo (m)</Label>
             <Input
               inputMode="decimal"
@@ -338,65 +417,20 @@ export default function ProductoCatalogoDialog({
               className="border-border bg-secondary text-right"
             />
           </div>
-          <div className="col-span-2">
-            <Label className="mb-1 text-xs">Chip del catálogo (Fase 1)</Label>
-            <select
-              value={chip}
-              onChange={(e) => setChip(e.target.value)}
-              className="h-9 w-full rounded-md border border-border bg-secondary px-2 text-sm"
-            >
-              <option value="">— automático ({labelChip(chipAuto, chipsPropios)}) —</option>
-              {/* Una categoría propia que alguien borró: se muestra para que
-                  se vea por qué el producto dejó de aparecer donde estaba. */}
-              {chip && !idsChip.includes(chip) && (
-                <option value={chip}>{chip} (ya no existe)</option>
-              )}
-              {filtros.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              En qué categoría del catálogo de Fase 1 se ve este código. En automático se deduce de
-              la familia; lo que no calza en ninguna cae en «Otros». Elige uno a mano cuando el
-              automático no acierte (un motor nuevo, por ejemplo, para que salga junto a sus
-              hermanos).
-            </p>
-          </div>
-          <div className="col-span-2">
-            <Label className="mb-1 text-xs">Ficha de la tela (informe de visita)</Label>
-            <FotosInformeEditor
-              fotos={foto}
-              onChange={setFoto}
-              grupo={`tela-${normCod(ci) || 'nueva'}`}
-              max={1}
-              etiqueta="Subir ficha"
-            />
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              La lámina del producto (nombre, gama, código, ancho máximo). Sale en la sección de la
-              habitación del INFORME CLIENTE de la visita, igual que en el correo que se manda a
-              mano. Sin ficha, esa habitación va sin imagen. No se usa en la cotización ni en
-              producción.
-            </p>
-          </div>
-          <div className="col-span-2">
-            <Label className="mb-1 text-xs">Gama (categoría comercial)</Label>
-            <select
-              value={gama}
-              onChange={(e) => setGama(e.target.value)}
-              className="h-9 w-full rounded-md border border-border bg-secondary px-2 text-sm"
-            >
-              <option value="">— sin clasificar —</option>
-              <option value="A">A (estándar)</option>
-              <option value="B">B (gama económica)</option>
-            </select>
-            <p className="mt-1 text-[11px] text-muted-foreground">
-              Una tela de gama B hace que la cortina nazca en categoría B, con su propio juego de
-              herrajes, en las categorías que tienen receta (roller simple, cenefa ovalada 38 y dúo
-              38). Al reimportar el Excel del catálogo, la gama se vuelve a leer de la planilla.
-            </p>
-          </div>
+          <ProductoCatalogoFicha
+            chip={chip}
+            onChip={setChip}
+            chipAutoLabel={labelChip(chipAuto, chipsPropios)}
+            filtros={filtros}
+            foto={foto}
+            onFoto={setFoto}
+            grupoFoto={`tela-${normCod(ci) || 'nueva'}`}
+            categoriaFabricacion={catFabricacion}
+            onCategoriaFabricacion={setCatFabricacion}
+            categoriasFabricacion={categoriasFabricacion}
+            gama={gama}
+            onGama={setGama}
+          />
         </div>
 
         {flujo && (

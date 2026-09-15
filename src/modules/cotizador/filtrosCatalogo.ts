@@ -5,6 +5,7 @@
 // editor del documento (Admin → Documento), y así el panel de administrador no
 // arrastra el bundle del cotizador.
 
+import { chipPropioDeFamilia } from '@/modules/cotizador/chipsCustom';
 import type { Producto } from '@/modules/cotizador/types';
 
 const N = (s?: string) => (s || '').toUpperCase();
@@ -68,8 +69,11 @@ const REGLAS_POR_COD: { chip: string; test: (cod: string) => boolean }[] = [
  *  1. `p.chip` elegido a mano en el diálogo del producto (gana siempre).
  *  2. El diccionario de COD_INT sueltos (motores, soft, oscura…), cuyo `cod`
  *     no alcanza para agruparlos (todos son ACCESORIO).
- *  3. Las reglas por familia.
- *  4. `OTROS`.
+ *  3. La categoría PROPIA que reclame su familia (asistente «Nueva categoría»).
+ *     Va antes que los prefijos para que una familia propia que empiece con
+ *     BLACKOUT no se vaya al chip BK.
+ *  4. Las reglas por familia.
+ *  5. `OTROS`.
  */
 export function chipDeProducto(
   p: Producto,
@@ -78,12 +82,16 @@ export function chipDeProducto(
    *  de la empresa, para que un producto asignado a una de ellas no se caiga
    *  de vuelta a su chip automático. */
   idsValidos: readonly string[] = CHIP_IDS,
+  /** Las categorías propias con sus familias, para el paso 3. */
+  propias: readonly { id: string; familias?: string[] }[] = [],
 ): string {
   const explicito = N(p.chip).trim();
   if (explicito && idsValidos.includes(explicito)) return explicito;
   const porCodInt = CHIP_DE_CODINT[(codInt || '').trim()];
   if (porCodInt) return porCodInt;
   const cod = N(p.cod).trim();
+  const porFamilia = chipPropioDeFamilia(cod, propias);
+  if (porFamilia && idsValidos.includes(porFamilia)) return porFamilia;
   return REGLAS_POR_COD.find((r) => r.test(cod))?.chip ?? CHIP_OTROS;
 }
 
@@ -117,7 +125,9 @@ export const CHIP_IDS: string[] = CHIPS_FABRICA.map((f) => f.id);
  * los de fábrica, un producto asignado a una categoría propia no calzaría en
  * ninguna —ni en la suya ni en su chip automático— y desaparecería.
  */
-export function filtrosCatalogoCon(propias: readonly { id: string; label: string; hex: string }[]): Filtro[] {
+export function filtrosCatalogoCon(
+  propias: readonly { id: string; label: string; hex: string; familias?: string[] }[],
+): Filtro[] {
   const custom = propias.map((c) => ({ id: c.id, label: c.label, cls: '', hexDefault: c.hex }));
   const sinOtros = CHIPS_FABRICA.filter((f) => f.id !== CHIP_OTROS);
   const otros = CHIPS_FABRICA.filter((f) => f.id === CHIP_OTROS);
@@ -125,7 +135,7 @@ export function filtrosCatalogoCon(propias: readonly { id: string; label: string
   const ids = todos.map((f) => f.id);
   return todos.map((f) => ({
     ...f,
-    match: (p: Producto, ci: string) => chipDeProducto(p, ci, ids) === f.id,
+    match: (p: Producto, ci: string) => chipDeProducto(p, ci, ids, propias) === f.id,
   }));
 }
 

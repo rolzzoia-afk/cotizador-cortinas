@@ -6,11 +6,13 @@ import {
   metrosTelaVertical,
   metrosTelaVerticalPorLamas,
   textoInstalacion,
+  textoParteInstalacion,
 } from './motorFase0';
 import { PARAMETROS_DEFAULT } from './preciosFase0';
 import {
   CODIGOS_ESTRUCTURA_BEEBLACK,
   RECETAS_DEFAULT,
+  RECETA_BEEBLACK_2A_TELA_CON_CAJA,
   REGLAS_PRECIOS_DEFAULT,
   TELA_VERTICAL_DEFAULT,
   conValoresMaximos,
@@ -655,12 +657,14 @@ describe('motorFase0 — instalación gratis 4+ / región (Fase 2)', () => {
       const r = cotizarFase0(verticales(4), CAT, AR);
       expect(r.instalacion.incluidas).toEqual([
         {
+          codigo: 'INST-VERT',
           sistema: 'Vertical',
           cantidad: 4,
           precioUnit: 40000,
           descuento: 0,
           total: 160000,
           siempreSeCobra: false,
+          descuentoManual: false,
         },
       ]);
     });
@@ -1001,7 +1005,7 @@ describe('motorFase0 — invertida (Excel «COTIZADOR PARA CORTINAS MAYORES A 3,
     expect(d.familias[0].manoObra).toBe(PARAMETROS_DEFAULT.manoObraRoller);
   });
 
-  it('la derecha y la invertida de la misma tela son paneles distintos, y la derecha no se mueve', () => {
+  it('la derecha y la invertida son DOS PLANILLAS: cada una vale lo que valdría sin la otra', () => {
     const filas = [
       { codInt: 'BK 18', ancho: 1.5, alto: 2.0, cantidad: 1 },
       { codInt: 'BK 18', ancho: 3.2, alto: 2.0, cantidad: 1 },
@@ -1009,11 +1013,20 @@ describe('motorFase0 — invertida (Excel «COTIZADOR PARA CORTINAS MAYORES A 3,
     const derechas = cotizarFase0(filas, CAT, AR);
     const mixta = cotizarFase0([filas[0], { ...filas[1], invertida: true }], CAT, AR);
     expect(mixta.familias.map((x) => x.clave).sort()).toEqual(['BLACKOUT_D', 'BLACKOUT_D|INV']);
-    // La derecha vale lo mismo que si la otra no estuviera invertida.
-    expect(mixta.lineas[0].valorUnit).toBeCloseTo(derechas.lineas[0].valorUnit, 6);
     expect(mixta.lineas[0].invertida).toBe(false);
     expect(mixta.lineas[1].invertida).toBe(true);
-    expect(mixta.lineas[1].valorUnit).not.toBeCloseTo(derechas.lineas[1].valorUnit, 0);
+    // Cada una, exactamente lo que daría su planilla con ella sola.
+    expect(mixta.lineas[0].valorUnit).toBeCloseTo(
+      cotizarFase0([filas[0]], CAT, AR).lineas[0].valorUnit,
+      6,
+    );
+    expect(mixta.lineas[1].valorUnit).toBeCloseTo(
+      cotizarFase0([{ ...filas[1], invertida: true }], CAT, AR).lineas[0].valorUnit,
+      6,
+    );
+    // La derecha SUBE al quedarse sola en su archivo: ya no reparte la mano de
+    // obra ni el traslado con la que se fue a la planilla de mayores.
+    expect(mixta.lineas[0].valorUnit).toBeGreaterThan(derechas.lineas[0].valorUnit);
   });
 
   it('una B invertida sigue siendo B (la copia B no tiene panel de invertidas), pero gasta la tela a lo largo', () => {
@@ -1108,6 +1121,66 @@ describe('motorFase0 — invertida (Excel «COTIZADOR PARA CORTINAS MAYORES A 3,
         AR,
       );
       expect(s.familias.map((x) => x.clave)).toEqual(['BLACKOUT_S|INV']);
+    });
+  });
+
+  // La invertida se cotiza en OTRA PLANILLA (dueño, 2026-09-14). Antes su panel
+  // se armaba con toda la familia —la derecha incluida, «como si» también
+  // estuviera invertida— y le repartía la mano de obra y el traslado: la
+  // invertida salía más barata que en el Excel de cortinas mayores y la derecha
+  // más barata que en el cotizador normal. Ahora cada archivo cotiza lo suyo.
+  describe('la invertida se cotiza en su propia planilla', () => {
+    const inv = { codInt: 'BK-D', ancho: 3.2, alto: 2.3, cantidad: 1, invertida: true };
+    const der = { codInt: 'BK 18', ancho: 2.8, alto: 2.3, cantidad: 1 };
+    const sola = (f: Parameters<typeof cotizarFase0>[0][number]) =>
+      cotizarFase0([f], CAT, AR).lineas[0].valorUnit;
+
+    it('la invertida vale lo que vale sola, y su compañera derecha también', () => {
+      const juntas = cotizarFase0([inv, der], CAT, AR);
+      expect(juntas.lineas[0].valorUnit).toBeCloseTo(sola(inv), 6);
+      expect(juntas.lineas[1].valorUnit).toBeCloseTo(sola(der), 6);
+      expect(juntas.familias.find((f) => f.clave === 'BLACKOUT_D')!.piezas).toBe(1);
+      expect(juntas.familias.find((f) => f.clave === 'BLACKOUT_D|INV')!.piezas).toBe(1);
+    });
+
+    it('dos invertidas SÍ se reparten su traslado: comparten planilla', () => {
+      const dos = cotizarFase0([inv, { ...inv, ancho: 3.5 }], CAT, AR);
+      expect(dos.lineas[0].valorUnit).toBeLessThan(sola(inv));
+      expect(dos.familias).toHaveLength(1);
+      expect(dos.familias[0].piezas).toBe(2);
+      expect(dos.familias[0].traslado).toBe(50000);
+    });
+
+    it('cambiar el tubo de una invertida no mueve a la otra invertida', () => {
+      const otra = { ...inv, ancho: 3.5 };
+      const con63 = cotizarFase0([inv, otra], CAT, AR);
+      const con45 = cotizarFase0([inv, { ...otra, invertidaTubo: 45 as const }], CAT, AR);
+      expect(con45.lineas[0].valorUnit).toBeCloseTo(con63.lineas[0].valorUnit, 6);
+      expect(con45.lineas[1].valorUnit).not.toBeCloseTo(con63.lineas[1].valorUnit, 0);
+    });
+
+    it('la B invertida se arma con las invertidas, como si todas fueran B', () => {
+      const bInv = { ...inv, lineaB: true };
+      const otraInv = { ...inv, ancho: 3.5 };
+      const r = cotizarFase0([der, bInv, otraInv], CAT, AR);
+      expect(r.familias.find((f) => f.clave === 'BLACKOUT_D|B|INV')!.piezas).toBe(2);
+      expect(r.familias.find((f) => f.clave === 'BLACKOUT_D|INV')!.piezas).toBe(2);
+      expect(r.familias.find((f) => f.clave === 'BLACKOUT_D')!.piezas).toBe(1);
+      expect(r.lineas[0].valorUnit).toBeCloseTo(sola(der), 6);
+      expect(r.lineas[1].valorUnit).toBeCloseTo(
+        cotizarFase0([bInv, otraInv], CAT, AR).lineas[0].valorUnit,
+        6,
+      );
+    });
+
+    it('el techo del $/m es de la planilla: una tela cara vendida derecha no encarece la invertida', () => {
+      const cat: CatalogoProductos = {
+        ...CAT,
+        'BK 99': { ...CAT['BK 18'], precio: 60000 },
+      };
+      const r = cotizarFase0([inv, { ...der, codInt: 'BK 99' }], cat, { ...AR, 'BK 99': 2.98 });
+      expect(r.familias.find((f) => f.clave === 'BLACKOUT_D|INV')!.precioMl).toBe(41868);
+      expect(r.familias.find((f) => f.clave === 'BLACKOUT_D')!.precioMl).toBe(60000);
     });
   });
 });
@@ -1364,29 +1437,43 @@ describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixt
     expect(r.lineas.slice(1).every((l) => l.clave === 'BLACKOUT_D')).toBe(true);
   });
 
-  it('invertir la primera no mueve a las otras tres', () => {
+  it('invertir la primera la saca de la planilla de las otras tres', () => {
     const r = con({ invertida: true });
-    expect(lasOtras(r)).toEqual(lasOtras(base));
-    expect(valores(r)[0]).not.toBeCloseTo(valores(base)[0], 0);
     expect(r.lineas[0].clave).toBe('BLACKOUT_D|INV');
+    // Las otras tres quedan solas en el cotizador de siempre: valen lo que
+    // valdrían si la invertida no estuviera en la cotización.
+    const sinElla = cotizarFase0(filas.slice(1), CAT, AR);
+    lasOtras(r).forEach((v, i) => expect(v).toBeCloseTo(valores(sinElla)[i], 6));
+    // Y ella, lo que da la planilla de mayores con ella sola.
+    expect(valores(r)[0]).toBeCloseTo(
+      cotizarFase0([{ ...filas[0], invertida: true }], CAT, AR).lineas[0].valorUnit,
+      6,
+    );
   });
 
-  it('B e invertida a la vez: panel `cod|B|INV`, y las otras tres quietas', () => {
+  it('B e invertida a la vez: panel `cod|B|INV`, armado solo con las invertidas', () => {
     const r = con({ lineaB: true, invertida: true });
-    expect(lasOtras(r)).toEqual(lasOtras(base));
     expect(r.lineas[0].clave).toBe('BLACKOUT_D|B|INV');
     expect(r.lineas[0].lineaB).toBe(true);
     expect(r.lineas[0].invertida).toBe(true);
+    const sinElla = cotizarFase0(filas.slice(1), CAT, AR);
+    lasOtras(r).forEach((v, i) => expect(v).toBeCloseTo(valores(sinElla)[i], 6));
+    expect(r.familias.find((f) => f.clave === 'BLACKOUT_D|B|INV')!.piezas).toBe(1);
   });
 
-  it('cada cortina vale lo que valdría si toda la familia fuera como ella', () => {
+  it('cada cortina vale lo que valdría si toda SU PLANILLA fuera como ella', () => {
     const todasB = cotizarFase0(filas.map((f) => ({ ...f, lineaB: true })), CAT, AR);
-    const todasInv = cotizarFase0(filas.map((f) => ({ ...f, invertida: true })), CAT, AR);
     expect(valores(con({ lineaB: true }))[0]).toBeCloseTo(valores(todasB)[0], 6);
-    expect(valores(con({ invertida: true }, 2))[2]).toBeCloseTo(valores(todasInv)[2], 6);
-    // Y la B de una familia mixta NO paga el traslado entero ella sola.
-    const sola = cotizarFase0([{ ...filas[0], lineaB: true }], CAT, AR);
-    expect(valores(con({ lineaB: true }))[0]).toBeLessThan(valores(sola)[0]);
+    // Y la B de una familia mixta NO paga el traslado entero ella sola: la
+    // categoría B se cotiza en el MISMO archivo que la A.
+    const solaB = cotizarFase0([{ ...filas[0], lineaB: true }], CAT, AR);
+    expect(valores(con({ lineaB: true }))[0]).toBeLessThan(valores(solaB)[0]);
+    // La invertida, en cambio, se fue a la otra planilla: vale lo que vale sola
+    // y no lo que valdría si las cuatro estuvieran invertidas.
+    const todasInv = cotizarFase0(filas.map((f) => ({ ...f, invertida: true })), CAT, AR);
+    const solaInv = cotizarFase0([{ ...filas[2], invertida: true }], CAT, AR);
+    expect(valores(con({ invertida: true }, 2))[2]).toBeCloseTo(solaInv.lineas[0].valorUnit, 6);
+    expect(valores(con({ invertida: true }, 2))[2]).not.toBeCloseTo(valores(todasInv)[2], 0);
   });
 
   it('marcar B una segunda fila tampoco mueve a la primera B', () => {
@@ -1423,17 +1510,21 @@ describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixt
     expect(todasB.familias[0].piezasCobradas).toBe(4);
   });
 
-  it('la gama standard invertida (sin sistema propio) tampoco mueve a su compañera', () => {
+  it('la gama standard invertida (sin sistema propio) también se va a la otra planilla', () => {
     const dosS = [
       { codInt: 'BK 50', ancho: 1.5, alto: 2.0, cantidad: 1 },
       { codInt: 'BK 50', ancho: 3.2, alto: 1.7, cantidad: 1 },
     ];
-    const derechas = cotizarFase0(dosS, CAT, AR);
     const mixta = cotizarFase0([dosS[0], { ...dosS[1], invertida: true }], CAT, AR);
-    const todasInv = cotizarFase0(dosS.map((f) => ({ ...f, invertida: true })), CAT, AR);
-    expect(mixta.lineas[0].valorUnit).toBeCloseTo(derechas.lineas[0].valorUnit, 6);
-    expect(mixta.lineas[1].valorUnit).toBeCloseTo(todasInv.lineas[1].valorUnit, 6);
     expect(mixta.familias.map((f) => f.clave).sort()).toEqual(['BLACKOUT_S', 'BLACKOUT_S|INV']);
+    expect(mixta.lineas[0].valorUnit).toBeCloseTo(
+      cotizarFase0([dosS[0]], CAT, AR).lineas[0].valorUnit,
+      6,
+    );
+    expect(mixta.lineas[1].valorUnit).toBeCloseTo(
+      cotizarFase0([{ ...dosS[1], invertida: true }], CAT, AR).lineas[0].valorUnit,
+      6,
+    );
   });
 
   it('la cadena metálica de la primera no mueve a las otras tres', () => {
@@ -1464,10 +1555,13 @@ describe('motorFase0 — los botones de una fila mueven solo esa fila (caso mixt
       { ...AR, 'BK-D': 2.95 },
     );
     const a = r.familias.find((f) => f.clave === 'BLACKOUT_D')!;
-    expect(a.piezas).toBe(2);
+    // El panel de las derechas se arma solo con la derecha: la invertida está
+    // en la otra planilla.
+    expect(a.piezas).toBe(1);
     expect(a.piezasCobradas).toBe(1);
     expect(Number.isFinite(a.precioM2)).toBe(true);
     expect(r.lineas[0].valorUnit).toBeGreaterThan(0);
+    expect(r.familias.find((f) => f.clave === 'BLACKOUT_D|INV')!.piezas).toBe(1);
   });
 });
 
@@ -1593,12 +1687,14 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.instalacion.gratis).toBe(false);
     expect(r.instalacion.partes).toEqual([
       {
+        codigo: 'INST-BB',
         sistema: 'Beeblack',
         cantidad: 1,
         precioUnit: 35000,
         descuento: 0,
         total: 35000,
         siempreSeCobra: true,
+        descuentoManual: false,
       },
     ]);
   });
@@ -1714,6 +1810,85 @@ describe('motorFase0 — beeblack (COTJS-10384, cliente TRINA)', () => {
     expect(r.instalacion.partes.find((p) => p.sistema === 'Beeblack')?.total).toBe(35000);
     expect(r.instalacion.partes.find((p) => p.sistema === 'Roller')?.total).toBe(17500);
     expect(r.instalacion.total).toBe(52500);
+    // Cada tramo trae su CÓDIGO: es la llave de su fila y de su descuento.
+    expect(r.instalacion.partes.map((p) => p.codigo).sort()).toEqual(['INST', 'INST-BB']);
+  });
+
+  // Una cosa es la roller y otra el beeblack (dueño, 2026-09-14): cada fila se
+  // negocia por separado, y la fila única de antes no podía.
+  describe('el % a mano va POR TRAMO', () => {
+    const dosSistemas = [
+      { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 2 },
+      { codInt: 'BK 09', ancho: 1.5, alto: 1.5, cantidad: 2 },
+    ];
+    const CAT_MIX = {
+      ...CAT_BB,
+      'BK 09': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: '', precio: 27176 },
+    };
+    const cotizar = (dct: Parameters<typeof cotizarFase0>[8]) =>
+      cotizarFase0(dosSistemas, CAT_MIX, AR_BB, [], PARAMETROS_DEFAULT, false, false, undefined, dct);
+    const tramo = (r: ReturnType<typeof cotizarFase0>, codigo: string) =>
+      r.instalacion.partes.find((p) => p.codigo === codigo)!;
+
+    it('la roller gratis y el beeblack entero', () => {
+      const r = cotizar({ INST: 1, 'INST-BB': 0 });
+      expect(tramo(r, 'INST').total).toBe(0);
+      expect(tramo(r, 'INST').descuentoManual).toBe(true);
+      expect(tramo(r, 'INST-BB').total).toBe(2 * 35000);
+      expect(tramo(r, 'INST-BB').descuento).toBe(0);
+      expect(r.instalacion.total).toBe(70000);
+      expect(r.instalacion.descuentoManual).toBe(true);
+      // No es «gratis»: el beeblack se está cobrando.
+      expect(r.instalacion.gratis).toBe(false);
+    });
+
+    it('un tramo sin % escrito sigue con la regla automática', () => {
+      const r = cotizar({ 'INST-BB': 0.5 });
+      // 4 cortinas en total → la roller llega al mínimo y sale gratis sola.
+      expect(tramo(r, 'INST').descuento).toBe(1);
+      expect(tramo(r, 'INST').descuentoManual).toBe(false);
+      expect(tramo(r, 'INST-BB').total).toBe(2 * 35000 * 0.5);
+      expect(tramo(r, 'INST-BB').descuentoManual).toBe(true);
+    });
+
+    it('el número suelto de una cotización vieja vale para los dos tramos', () => {
+      const r = cotizar(1);
+      expect(r.instalacion.total).toBe(0);
+      expect(r.instalacion.gratis).toBe(true);
+      expect(r.instalacion.partes.every((p) => p.descuentoManual)).toBe(true);
+    });
+
+    it('la llave es el CÓDIGO, no el nombre: renombrar el sistema en Admin no borra el descuento', () => {
+      const reglas: ReglasPrecios = {
+        ...REGLAS_PRECIOS_DEFAULT,
+        sistemas: {
+          ...REGLAS_PRECIOS_DEFAULT.sistemas,
+          beeblack: { ...REGLAS_PRECIOS_DEFAULT.sistemas.beeblack, nombre: 'Bee Black' },
+        },
+      };
+      const conReglas = (dct: Parameters<typeof cotizarFase0>[8]) =>
+        cotizarFase0(dosSistemas, CAT_MIX, AR_BB, [], PARAMETROS_DEFAULT, false, false, reglas, dct);
+      expect(tramo(conReglas({ 'INST-BB': 1 }), 'INST-BB').total).toBe(0);
+      // Escrito con el nombre viejo no aplica nada: la regla sigue mandando.
+      expect(tramo(conReglas({ Beeblack: 1 }), 'INST-BB').total).toBe(2 * 35000);
+      // Y un código que no existe tampoco molesta.
+      expect(tramo(conReglas({ 'INST-XX': 1 }), 'INST-BB').total).toBe(2 * 35000);
+    });
+
+    it('el mínimo sigue contando TODAS las cortinas, no las del tramo', () => {
+      const r = cotizarFase0(
+        [
+          { codInt: 'BEE-BK01', ancho: 0.82, alto: 0.493, cantidad: 1 },
+          { codInt: 'BK 09', ancho: 1.5, alto: 1.5, cantidad: 3 },
+        ],
+        CAT_MIX, AR_BB, [], PARAMETROS_DEFAULT, false, false, undefined, { 'INST-BB': 1 },
+      );
+      expect(r.instalacion.cantidad).toBe(4);
+      // Las 3 roller llegan al mínimo gracias al beeblack.
+      expect(tramo(r, 'INST').descuento).toBe(1);
+      expect(r.instalacion.total).toBe(0);
+      expect(r.instalacion.gratis).toBe(true);
+    });
   });
 
   it('sin instalación no se embebe ni se cobra', () => {
@@ -1779,24 +1954,25 @@ describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
     expect(totalRiel(bk)).toBe(0);
   });
 
-  it('la agarradera y la cinta tampoco: son la estructura, no la tela', () => {
+  it('la agarradera, la cinta y la caja tampoco: son de la cortina, no de la tela', () => {
     const r = cotizar();
     const mosq = r.familias.find((f) => f.clave === 'BEE_MOSQ')!;
     const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
-    // El carril por el que corren las dos telas (SML10) y la cinta que pega la
-    // estructura a la ventana (CIN0002) van en blanco en el panel de la 2.ª
-    // tela del Excel manual, igual que el riel.
-    for (const cod of ['SML10', 'CIN0002']) {
+    // El carril por el que corren las dos telas (SML10), la cinta que pega la
+    // estructura a la ventana (CIN0002) y la caja de embalaje (CAJA0001, las
+    // dos telas son UNA cortina y van en la misma) quedan en blanco en el panel
+    // de la 2.ª tela del Excel manual, igual que el riel.
+    for (const cod of ['SML10', 'CIN0002', 'CAJA0001']) {
       expect(mosq.materiales.some((l) => l.insumo === cod), cod).toBe(true);
       expect(bk.materiales.some((l) => l.insumo === cod), cod).toBe(false);
     }
   });
 
-  it('todo lo demás sí se cobra por tela: dos kits, dos cajas, dos zunchos', () => {
+  it('todo lo demás sí se cobra por tela: dos kits, dos zunchos, dos cuerdas', () => {
     const r = cotizar();
     const mosq = r.familias.find((f) => f.clave === 'BEE_MOSQ')!;
     const bk = r.familias.find((f) => f.clave === 'BEE_BK|2T')!;
-    for (const cod of ['SML13', 'SML34', 'SML35', 'SML38', 'PUB 01', 'MAT00001', 'CAJA0001']) {
+    for (const cod of ['SML13', 'SML34', 'SML35', 'SML38', 'PUB 01', 'MAT00001']) {
       const enMosq = mosq.materiales.filter((l) => l.insumo === cod);
       const enBk = bk.materiales.filter((l) => l.insumo === cod);
       expect(enBk, cod).toHaveLength(enMosq.length);
@@ -1914,10 +2090,25 @@ describe('motorFase0 — beeblack doble (un riel, dos telas)', () => {
       expect(b.lineas[1].valorUnit).toBeLessThan(a.lineas[1].valorUnit);
     });
 
+    // ANDREA se vendió cuando la 2.ª tela pagaba SU PROPIA caja de embalaje.
+    // Desde el 2026-09-15 se cobra una por cortina (la copia del Excel con la
+    // que el dueño revisó el beeblack de 3,45 la deja en blanco), así que el
+    // golden se corre con la receta de su época — el mismo idioma que los
+    // tubos de julio: cada cotización con las reglas que tenía al venderse.
+    const REGLAS_ANDREA: ReglasPrecios = {
+      ...REGLAS_PRECIOS_DEFAULT,
+      recetas: {
+        ...RECETAS_DEFAULT,
+        'BEE_BK|2T': RECETA_BEEBLACK_2A_TELA_CON_CAJA,
+        'BEE_MOSQ|2T': RECETA_BEEBLACK_2A_TELA_CON_CAJA,
+        'BEE_TRAS|2T': RECETA_BEEBLACK_2A_TELA_CON_CAJA,
+      },
+    };
+
     // El peso exacto de la planilla, no un parecido: el dueño pidió que «los
     // cálculos y parámetros fueran como el del excel manual» (2026-09-10).
     it('la 2.ª tela sale al PESO del Excel manual', () => {
-      const b = cotizarFase0(unidas, CAT_BB, AR_BB);
+      const b = cotizarFase0(unidas, CAT_BB, AR_BB, [], PARAMETROS_DEFAULT, false, false, REGLAS_ANDREA);
       const tr = b.familias.find((f) => f.clave === 'BEE_TRAS|2T')!;
       // Materiales de las tres cortinas = `Cotizador!DD137` del panel de la 2.ª
       // tela: la lista beeblack sin riel, sin agarraderas y sin cinta.
@@ -2144,6 +2335,71 @@ describe('motorFase0 — beeblack invertido gira ancho y alto', () => {
       { ...AR, 'BK-D': 2.95 },
     );
     expect(r.familias[0].materiales.find((m) => m.insumo === 'E 47')?.cantidad).toBeCloseTo(4.2, 6);
+  });
+
+  // ── Cuando la inversión NO es una decisión, sino la única forma de cortar ──
+  // Dueño (2026-09-15), sobre un beeblack de 3,45 en un rollo de 2,98: «se
+  // corta invertido cuando el ancho no da» y ahí «solo gira la tela». El marco
+  // se arma con el ancho y el alto de la ventana, porque la cortina se instala
+  // derecha. Girarla entera cobraba las agarraderas y los zunchos sobre 3,45 en
+  // vez de 1,65: 67.401 de más en la primera tela.
+  describe('si no cabe en el rollo, la inversión es obligada y gira SOLO la tela', () => {
+    const ANCHA = { codInt: 'BEE-BK', ancho: 3.45, alto: 1.65, cantidad: 1, invertida: true };
+    const fam = cotizarFase0([ANCHA], CAT_BB, AR_BB).familias[0];
+    const cant = (ins: string) => fam.materiales.find((m) => m.insumo === ins)?.cantidad ?? 0;
+
+    it('los herrajes se cortan de la ventana real, no de la girada', () => {
+      // Las tres líneas que siguen al ALTO: 1,65, no 3,45 (`Cotizador!DC117-121`
+      // de la planilla del dueño).
+      expect(cant('SML10')).toBeCloseTo(1.65, 6);
+      expect(cant('SML34')).toBeCloseTo(1.65 * 4, 6);
+      expect(cant('SML38')).toBeCloseTo(1.65 * 16, 6);
+      // Y el riel sigue partido en ancho (×2) y alto (×2), sin cambiarlos.
+      const riel = fam.materiales.filter((m) => m.insumo === 'SLM01');
+      expect(riel.map((m) => m.cantidad).sort((a, b) => a - b)).toEqual([
+        expect.closeTo(1.65 * 2, 6),
+        expect.closeTo(3.45 * 2, 6),
+      ]);
+    });
+
+    it('la tela se cobra POR EL ALTO: un solo paño de 2,65 aunque el corte vaya rotado', () => {
+      // Dueño (2026-09-15): «el alto 1.65+1 = 2.65, no los 3.45, porque eso
+      // sería el ancho y nosotros cobramos por alto». Es el paño único que le
+      // asigna la hoja `Optimizador` de su planilla, y con esto el mosquitero
+      // de 3,45 × 1,65 sale a los 418.218 exactos de su Excel.
+      expect(fam.metrosTela).toBeCloseTo(2.65, 6); // 1,65 + 1
+      expect(fam.panos).toHaveLength(1);
+      const [pano] = fam.panos;
+      expect(pano.alto).toBeCloseTo(2.65, 6);
+      expect(pano.ancho).toBeCloseTo(2.65, 6); // entra en el rollo de 2,98
+      expect(cotizarFase0([ANCHA], CAT_BB, AR_BB).avisos.filter((a) => a.tipo === 'rollo')).toHaveLength(0);
+    });
+
+    it('la invertida de roller NO cambia: esa sigue cobrando el ancho + el extra', () => {
+      // El beeblack es la excepción; el resto se cotiza con el Excel de
+      // cortinas mayores a 3,00 m, que cobra `ancho + 0,25` (dueño, 2026-08-21).
+      const rol = cotizarFase0(
+        [{ codInt: 'BK-D', ancho: 4.2, alto: 1.7, cantidad: 1, invertida: true }],
+        CAT,
+        { ...AR, 'BK-D': 2.95 },
+      ).familias[0];
+      expect(rol.metrosTela).toBeCloseTo(4.45, 6); // 4,20 + 0,25
+    });
+
+    it('los m² son los de la ventana vendida (3,45 × 2,65), como en la planilla', () => {
+      expect(fam.m2Total).toBeCloseTo(3.45 * 2.65, 6);
+    });
+
+    it('la que SÍ cabe y viene invertida la giró alguien: esa gira entera', () => {
+      // 1,3 de ancho entra sobrado en el rollo de 2,98 → decisión, no obligación.
+      const girada = cotizarFase0(
+        [{ codInt: 'BEE-BK', ancho: 1.3, alto: 2.5, cantidad: 1, invertida: true }],
+        CAT_BB,
+        AR_BB,
+      ).familias[0];
+      // SML10 sigue al ALTO, que al girar pasa a ser el 1,3.
+      expect(girada.materiales.find((m) => m.insumo === 'SML10')?.cantidad).toBeCloseTo(1.3, 6);
+    });
   });
 });
 
@@ -2382,8 +2638,8 @@ describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () =>
     partes: [], incluidas: [],
   };
   const tramoBeeblack = {
-    sistema: 'Beeblack', cantidad: 1, precioUnit: 35000, descuento: 0,
-    total: 35000, siempreSeCobra: true,
+    codigo: 'INST-BB', sistema: 'Beeblack', cantidad: 1, precioUnit: 35000, descuento: 0,
+    total: 35000, siempreSeCobra: true, descuentoManual: false,
   };
   it('bajo el mínimo lo dice', () => {
     expect(textoInstalacion(base, 4)).toBe('2 cortinas, bajo el mínimo de 4');
@@ -2422,5 +2678,78 @@ describe('textoInstalacion — el motivo, no siempre «bajo el mínimo»', () =>
         4,
       ),
     ).toBe('6 cortinas, región: sin costo; Beeblack se cobra aparte');
+  });
+});
+
+// Cada FILA de instalación explica lo suyo: la de las roller su gratis por
+// cantidad y la del beeblack que se cobra aparte. Antes una sola frase tenía
+// que hablar por las dos, y contaba «7 cortinas» en una fila que mezclaba seis
+// roller con un beeblack.
+describe('textoParteInstalacion — la descripción de cada fila', () => {
+  const inst = { cantidad: 6, region: false, sinInstalacion: false };
+  const roller = {
+    codigo: 'INST', sistema: 'Roller', cantidad: 6, precioUnit: 17500,
+    descuento: 0, total: 105000, siempreSeCobra: false, descuentoManual: false,
+  };
+  const beeblack = {
+    ...roller, codigo: 'INST-BB', sistema: 'Beeblack', cantidad: 1,
+    precioUnit: 35000, siempreSeCobra: true, total: 35000,
+  };
+
+  it('la roller dice por qué se cobra o no', () => {
+    expect(textoParteInstalacion(roller, { ...inst, cantidad: 3 }, 4)).toBe(
+      '6 cortinas, bajo el mínimo de 4',
+    );
+    expect(textoParteInstalacion({ ...roller, descuento: 1 }, inst, 4)).toBe(
+      '6 cortinas, 4 o más: sin costo',
+    );
+    expect(textoParteInstalacion(roller, { ...inst, region: true }, 4)).toBe(
+      '6 cortinas, región: 0 % de descuento',
+    );
+  });
+
+  it('dos roller que llegan al mínimo gracias al beeblack lo dicen', () => {
+    expect(
+      textoParteInstalacion({ ...roller, cantidad: 2, descuento: 1 }, { ...inst, cantidad: 4 }, 4),
+    ).toBe('2 cortinas, 4 o más en total: sin costo');
+  });
+
+  it('el beeblack dice que se cobra aparte', () => {
+    expect(textoParteInstalacion(beeblack, inst, 4)).toBe('1 cortina, se cobra aparte');
+  });
+
+  it('con % a mano, cada fila cuenta el suyo', () => {
+    expect(textoParteInstalacion({ ...roller, descuentoManual: true, descuento: 1 }, inst, 4)).toBe(
+      '6 cortinas, sin costo',
+    );
+    expect(
+      textoParteInstalacion({ ...beeblack, descuentoManual: true, descuento: 0.4 }, inst, 4),
+    ).toBe('1 cortina, 40 % de descuento');
+    // Cobrarla entera a mano teniendo el gratis automático también se dice.
+    expect(textoParteInstalacion({ ...roller, descuentoManual: true, descuento: 0 }, inst, 4)).toBe(
+      '6 cortinas, sin descuento',
+    );
+  });
+
+  it('sin instalación lo dice en todas', () => {
+    expect(textoParteInstalacion(roller, { ...inst, sinInstalacion: true }, 4)).toBe(
+      '6 cortinas, sin instalación',
+    );
+  });
+
+  it('el resumen enumera los tramos cuando cada uno lleva su %', () => {
+    expect(
+      textoInstalacion(
+        {
+          cantidad: 7, precioUnit: 17500, descuento: 0, total: 35000, gratis: false,
+          region: false, sinInstalacion: false, descuentoManual: true, incluidas: [],
+          partes: [
+            { ...roller, descuentoManual: true, descuento: 1, total: 0 },
+            { ...beeblack, descuentoManual: true, descuento: 0 },
+          ],
+        },
+        4,
+      ),
+    ).toBe('Roller: 6 cortinas, sin costo · Beeblack: 1 cortina, sin descuento');
   });
 });

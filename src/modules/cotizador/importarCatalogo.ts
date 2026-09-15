@@ -28,7 +28,11 @@ export type CampoCatalogo =
   | 'costo'
   | 'descuento'
   | 'anchoRollo'
-  | 'categoria';
+  | 'categoria'
+  | 'fechaAlta'
+  | 'proveedor'
+  | 'ganancia'
+  | 'categoriaFabricacion';
 
 export type FilaCatalogo = {
   codInt: string;
@@ -72,8 +76,31 @@ export function claveCatalogoCanonica(
   return porSinEspacios;
 }
 /** Normaliza una cabecera: minúsculas sin acentos, para mapear columnas. */
-const normHeader = (s: unknown) =>
+export const normHeader = (s: unknown) =>
   String(s ?? '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/**
+ * Qué campo del catálogo trae cada columna de una fila de cabeceras. Lo usa el
+ * importador de Excel y también el pegado del asistente de categoría nueva, para
+ * que «DCTO» signifique lo mismo en los dos lados.
+ */
+export function mapearCabeceras(celdas: readonly unknown[]): Map<CampoCatalogo | 'codInt', number> {
+  const col: Record<string, number> = {};
+  celdas.forEach((c, j) => {
+    const h = normHeader(c);
+    if (h && !(h in col)) col[h] = j;
+  });
+  const out = new Map<CampoCatalogo | 'codInt', number>();
+  for (const campo of Object.keys(ALIAS) as Array<CampoCatalogo | 'codInt'>) {
+    for (const alias of ALIAS[campo]) {
+      if (col[alias] != null) {
+        out.set(campo, col[alias]);
+        break;
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * Los nombres con los que cada columna puede venir escrita. Las planillas que
@@ -93,24 +120,36 @@ const ALIAS: Record<CampoCatalogo | 'codInt', string[]> = {
   descuento: ['descuento', 'dcto', 'dcto %', '% dcto', 'descuento %', '% descuento', 'dct %', 'dct'],
   anchoRollo: ['ancho de panos', 'ancho de paños', 'ancho rollo', 'rollo', 'ancho'],
   categoria: ['categoria', 'gama'],
+  // Las cuatro columnas del Excel maestro que hasta ahora se leían y se
+  // botaban. El IVA sigue afuera a propósito: es uno por empresa
+  // (`parametros.iva`), no un dato de cada tela.
+  fechaAlta: ['fecha alta', 'fecha de alta', 'alta'],
+  proveedor: ['proveedor'],
+  ganancia: ['ganancia', 'ganancia %', '% ganancia', 'margen'],
+  categoriaFabricacion: [
+    'categoria fabricacion',
+    'categoria de fabricacion',
+    'cod sec',
+    'fabricacion',
+  ],
 };
 
-/** Localiza la fila de cabecera (la que tiene COD_INT) y mapea columnas por nombre. */
-function mapaColumnas(rows: unknown[][]): { headerIdx: number; col: Record<string, number> } | null {
+/** Los campos que se copian al producto, en el orden en que se escriben. */
+const CAMPOS_CATALOGO: readonly CampoCatalogo[] = [
+  'cod', 'producto', 'tipo', 'descripcion', 'precio', 'costo', 'descuento',
+  'anchoRollo', 'categoria', 'fechaAlta', 'proveedor', 'ganancia',
+  'categoriaFabricacion',
+];
+
+/** Localiza la fila de cabecera (la que tiene COD_INT). */
+function mapaColumnas(rows: unknown[][]): { headerIdx: number; cabecera: unknown[] } | null {
   for (let i = 0; i < Math.min(rows.length, 30); i++) {
     const r = rows[i] || [];
     const hasCodInt = r.some((c) => {
       const h = normHeader(c);
       return h === 'cod_int' || h === 'cod int';
     });
-    if (hasCodInt) {
-      const col: Record<string, number> = {};
-      r.forEach((c, j) => {
-        const h = normHeader(c);
-        if (h && !(h in col)) col[h] = j;
-      });
-      return { headerIdx: i, col };
-    }
+    if (hasCodInt) return { headerIdx: i, cabecera: r };
   }
   return null;
 }
@@ -141,25 +180,15 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
     }
   }
   if (!m) return [];
-  const { headerIdx, col } = m;
-  /** Índice de la columna de un campo, buscando por todos sus nombres. */
-  const indice = (campo: CampoCatalogo | 'codInt'): number | null => {
-    for (const alias of ALIAS[campo]) if (col[alias] != null) return col[alias];
-    return null;
-  };
-  const columnas = new Map<CampoCatalogo | 'codInt', number>();
-  for (const campo of Object.keys(ALIAS) as Array<CampoCatalogo | 'codInt'>) {
-    const j = indice(campo);
-    if (j != null) columnas.set(campo, j);
-  }
+  const { headerIdx, cabecera } = m;
+  const columnas = mapearCabeceras(cabecera);
   const cell = (r: unknown[], campo: CampoCatalogo | 'codInt') => {
     const j = columnas.get(campo);
     return j != null ? r[j] : undefined;
   };
   // Solo se toca lo que la planilla trae: un Excel de puros descuentos no puede
   // dejar sin producto ni descripción a los códigos que actualiza.
-  const campos = (['cod', 'producto', 'tipo', 'descripcion', 'precio', 'costo', 'descuento', 'anchoRollo', 'categoria'] as const)
-    .filter((c) => columnas.has(c));
+  const campos = CAMPOS_CATALOGO.filter((c) => columnas.has(c));
 
   const out: FilaCatalogo[] = [];
   const vistos = new Set<string>();
@@ -179,6 +208,10 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
     const anchoRollo = Number(cell(r, 'anchoRollo')) || null;
     const catRaw = normCod(cell(r, 'categoria'));
     const categoria = catRaw === 'A' || catRaw === 'B' ? catRaw : undefined;
+    const fechaAlta = leerFechaAlta(cell(r, 'fechaAlta'));
+    const proveedor = String(cell(r, 'proveedor') ?? '').trim();
+    const ganancia = leerGanancia(cell(r, 'ganancia'));
+    const categoriaFabricacion = String(cell(r, 'categoriaFabricacion') ?? '').trim();
     const producto: Producto = {
       cod,
       producto: String(cell(r, 'producto') ?? '').trim(),
@@ -189,6 +222,10 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
       ...(costo ? { costo } : {}),
       ...(anchoRollo ? { anchoRollo } : {}),
       ...(categoria ? { categoria } : {}),
+      ...(fechaAlta ? { fechaAlta } : {}),
+      ...(proveedor ? { proveedor } : {}),
+      ...(ganancia ? { ganancia } : {}),
+      ...(categoriaFabricacion ? { categoriaFabricacion } : {}),
     };
     out.push({
       codInt,
@@ -208,6 +245,50 @@ export function parsearCatalogoExcel(wb: WorkBook, hoja = 'Productos'): FilaCata
  * El 1 se lee como 100 %: es lo que ya significa en el catálogo (la fila de
  * instalación regalada viene con `descuento: 1`).
  */
+/**
+ * La fecha de alta de una celda, como 'AAAA-MM-DD'. El Excel la manda de tres
+ * formas distintas según cómo esté formateada la columna: un número de serie
+ * (45028), el texto chileno «12-04-2023» o un ISO. Lo que no se entiende se
+ * descarta: una fecha inventada es peor que ninguna.
+ */
+export function leerFechaAlta(bruto: unknown): string | undefined {
+  if (bruto == null || bruto === '') return undefined;
+  const iso = (y: number, m: number, d: number) =>
+    `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  if (bruto instanceof Date && !Number.isNaN(bruto.getTime())) {
+    return iso(bruto.getFullYear(), bruto.getMonth() + 1, bruto.getDate());
+  }
+  if (typeof bruto === 'number' && Number.isFinite(bruto) && bruto > 0) {
+    const f = XLSX.SSF.parse_date_code(bruto);
+    return f ? iso(f.y, f.m, f.d) : undefined;
+  }
+  const s = String(bruto).trim();
+  const isoDirecto = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (isoDirecto) return isoDirecto[0].slice(0, 10);
+  // dd-mm-aaaa o dd/mm/aaaa (lo que escribe la gente acá).
+  const chileno = /^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/.exec(s);
+  if (chileno) {
+    const d = Number(chileno[1]);
+    const m = Number(chileno[2]);
+    const y = Number(chileno[3]) < 100 ? 2000 + Number(chileno[3]) : Number(chileno[3]);
+    if (d >= 1 && d <= 31 && m >= 1 && m <= 12) return iso(y, m, d);
+  }
+  return undefined;
+}
+
+/**
+ * La ganancia (el DIVISOR del precio) de una celda: «65», «65 %» y «0,65» son
+ * lo mismo. Fuera de (0, 1] no se acepta: ahí el precio saldría disparado o
+ * negativo, y es mejor dejar el que trae la planilla.
+ */
+export function leerGanancia(bruto: unknown): number | undefined {
+  if (bruto == null || bruto === '') return undefined;
+  const n = Number(String(bruto).replace('%', '').replace(',', '.').trim());
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const frac = n > 1 ? n / 100 : n;
+  return frac > 0 && frac <= 1 ? frac : undefined;
+}
+
 export function leerDescuento(bruto: unknown): { descuento: number; eraPorcentaje: boolean } {
   const n = Number(bruto);
   if (!Number.isFinite(n) || n <= 0) return { descuento: 0, eraPorcentaje: false };
@@ -236,6 +317,9 @@ export type CambioExistente = {
   cambiaCosto: boolean;
   cambiaDescuento: boolean;
   cambiaCategoria: boolean;
+  /** Cambia algo de la ficha: fecha de alta, proveedor, ganancia o categoría
+   *  de fabricación. Van juntas porque ninguna mueve un peso. */
+  cambiaFicha: boolean;
 };
 
 export type DiffCatalogo = {
@@ -297,7 +381,16 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
     // Una categoría ausente en el Excel no borra la existente (merge conservador).
     const cambiaCategoria =
       trae(f, 'categoria') && categoriaNueva != null && categoriaNueva !== categoriaVieja;
-    if (cambiaPrecio || cambiaCosto || cambiaDescuento || cambiaCategoria) {
+    // La ficha (fecha de alta, proveedor, ganancia, categoría de fabricación):
+    // un valor ausente en la planilla tampoco borra el que ya está.
+    const cambiaFicha = (['fechaAlta', 'proveedor', 'ganancia', 'categoriaFabricacion'] as const).some(
+      (c) => {
+        if (!trae(f, c)) return false;
+        const nuevo = f.producto[c];
+        return nuevo != null && nuevo !== '' && nuevo !== prev[c];
+      },
+    );
+    if (cambiaPrecio || cambiaCosto || cambiaDescuento || cambiaCategoria || cambiaFicha) {
       cambios.push({
         codInt: realKey,
         producto: f.producto,
@@ -315,6 +408,7 @@ export function diffCatalogo(actual: CatalogoProductos, filas: FilaCatalogo[]): 
         cambiaCosto,
         cambiaDescuento,
         cambiaCategoria,
+        cambiaFicha,
       });
     } else {
       sinCambio++;
@@ -436,6 +530,16 @@ export const INSTRUCCIONES_IMPORTACION: string[][] = [
   ['• DESCUENTO %', 'El descuento: 30 o 0,3.', 'DCTO · % DCTO · DESCUENTO'],
   ['• ANCHO DE PAÑOS', 'Ancho del rollo en metros.', 'ANCHO ROLLO · ROLLO · ANCHO'],
   ['• CATEGORIA', 'A o B.', 'GAMA'],
+  ['• FECHA ALTA', 'Cuándo entró el código. 12-04-2023 o 2023-04-12.', 'FECHA DE ALTA · ALTA'],
+  ['• PROVEEDOR', 'Quién vende la tela.', ''],
+  ['• GANANCIA %', 'El margen con que se sacó el precio: 65 o 0,65.', 'MARGEN'],
+  [
+    '• CATEGORIA FABRICACION',
+    'Con qué categoría nace la cortina (ROL, VERTICAL…).',
+    'COD SEC · FABRICACION',
+  ],
+  [],
+  ['El IVA no es columna: es uno solo para la empresa y se configura en Admin → Precios.'],
 ];
 
 export function filasParaPlantilla(
@@ -457,5 +561,11 @@ export function filasParaPlantilla(
       'DESCUENTO %': Math.round((Number(p.descuento) || 0) * 1000) / 10,
       'ANCHO DE PAÑOS': Number(anchoRollo[codInt] ?? p.anchoRollo) || '',
       CATEGORIA: p.categoria ?? '',
+      // La ficha. La fecha va como texto ISO: `leerFechaAlta` la reconoce, así
+      // que bajar la plantilla y volver a subirla sigue dando «0 cambios».
+      'FECHA ALTA': p.fechaAlta ?? '',
+      PROVEEDOR: p.proveedor ?? '',
+      'GANANCIA %': p.ganancia ? Math.round(p.ganancia * 1000) / 10 : '',
+      'CATEGORIA FABRICACION': p.categoriaFabricacion ?? '',
     }));
 }

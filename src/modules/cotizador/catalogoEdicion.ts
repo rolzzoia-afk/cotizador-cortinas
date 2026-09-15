@@ -56,6 +56,11 @@ export function guardarProductoEnCatalogo(
   if ('chip' in cambios && cambios.chip === undefined) {
     delete nuevoCat[keyNueva].chip;
   }
+  // Y para la ficha: vaciar el proveedor o la categoría de fabricación en el
+  // formulario tiene que borrarlos, no dejar el valor anterior escondido.
+  for (const campo of ['fechaAlta', 'proveedor', 'ganancia', 'categoriaFabricacion'] as const) {
+    if (campo in cambios && cambios[campo] === undefined) delete nuevoCat[keyNueva][campo];
+  }
   if (anchoRolloM != null && anchoRolloM > 0) {
     nuevoAncho[keyNueva] = anchoRolloM;
     nuevoCat[keyNueva].anchoRollo = anchoRolloM;
@@ -84,4 +89,21 @@ export function familiasDelCatalogo(catalogo: CatalogoProductos): string[] {
 /** Tipos distintos del catálogo, orden alfabético — para el datalist. */
 export function tiposDelCatalogo(catalogo: CatalogoProductos): string[] {
   return [...new Set(Object.values(catalogo).map((p) => (p.tipo || '').trim()).filter(Boolean))].sort();
+}
+
+/**
+ * Con qué categoría de FABRICACIÓN nace una cortina de este producto, o `''`.
+ *
+ * Se valida contra las categorías vigentes a propósito: un tipo propio que
+ * alguien borró en Admin dejaría filas con una categoría que ya no existe, y
+ * eso revienta en Fase 2 (sin modelo de despiece) en vez de acá.
+ */
+export function categoriaFabricacionDe(
+  producto: Producto | undefined,
+  categorias: readonly string[],
+): string {
+  const cat = (producto?.categoriaFabricacion || '').trim();
+  if (!cat) return '';
+  const n = (s: string) => s.trim().toUpperCase();
+  return categorias.some((c) => n(c) === n(cat)) ? cat : '';
 }
