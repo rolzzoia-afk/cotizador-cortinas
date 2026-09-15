@@ -3,7 +3,7 @@
 // Los desplegables ofrecen solo lo que existe en el catálogo cargado: preguntar
 // por un proveedor que no vende ninguna de estas telas es una pregunta perdida.
 
-import { X } from 'lucide-react';
+import { Camera, X } from 'lucide-react';
 import {
   ChipBusqueda,
   ChipFiltro,
@@ -16,10 +16,13 @@ export function FiltrosTelas({
   filtros,
   onFiltros,
   opciones,
+  onReconocer,
 }: {
   filtros: Filtros;
   onFiltros: (f: Filtros) => void;
   opciones: OpcionesTelas;
+  /** Buscar una tela sacándole una foto. Ausente = el interruptor está apagado. */
+  onReconocer?: () => void;
 }) {
   const set = (patch: Partial<Filtros>) => onFiltros({ ...filtros, ...patch });
 
@@ -82,7 +85,16 @@ export function FiltrosTelas({
         Solo bajo mínimo
       </ChipFiltro>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1.5">
+        {onReconocer && (
+          <ChipFiltro
+            activo={false}
+            onClick={onReconocer}
+            titulo="Sacarle una foto a la tela para saber cuál es"
+          >
+            <Camera className="h-3.5 w-3.5" /> Reconocer
+          </ChipFiltro>
+        )}
         <ChipBusqueda
           valor={filtros.busqueda}
           onChange={(v) => set({ busqueda: v })}

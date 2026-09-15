@@ -49,6 +49,14 @@ const ROTULOS: Rotulo[] = [
     titulo: 'Mostrar Compras',
     detalle: 'Proveedores, órdenes de compra y recepción de facturas. Espera a la jefatura.',
   },
+  {
+    id: 'reconocimiento',
+    titulo: 'Reconocer artículos con la cámara',
+    detalle:
+      'Agrega un botón de cámara al buscador de Insumos y de Telas: se saca una foto y el sistema propone hasta cinco artículos parecidos, entre los que ya se le enseñaron. Apagado, el botón no aparece y no se gasta nada.',
+    aviso:
+      'Antes de encenderlo tiene que estar corrido el SQL del reconocimiento, desplegada la función y puesta la llave del servicio de huellas. Cada foto reconocida tiene un costo chico; apagarlo lo corta en el acto.',
+  },
 ];
 
 export function InterruptoresSection({ puedeEditar }: { puedeEditar: boolean }) {

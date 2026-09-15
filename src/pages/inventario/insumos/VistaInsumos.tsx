@@ -6,8 +6,12 @@
 // reposición) y compone los 4 tabs + 6 diálogos. Cada tab y cada diálogo
 // vive en su archivo bajo ./inventario/.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+
+// El reconocimiento por cámara se descarga SOLO cuando alguien toca el botón:
+// así esta pantalla pesa lo mismo que antes para quien no lo usa.
+const ReconocerArticuloDialog = lazy(() => import('../reconocimiento/ReconocerArticuloDialog'));
 
 import {
   AlertTriangle,
@@ -81,6 +85,7 @@ export function Inventario() {
   const { empresaId } = useAuth();
   const { flags } = useFlagsInventario();
   const { queryRol, rol } = useInventario();
+  const [reconociendo, setReconociendo] = useState(false);
   // Los montos de dinero salen de la misma tabla que el menú y el gate.
   const verMontos = puedeVerMontos(rol);
   const { familias } = useFamiliasInsumo();
@@ -716,6 +721,7 @@ export function Inventario() {
             onLightbox={setLightboxFoto}
             rutaFicha={rutaFicha}
             verMontos={verMontos}
+            onReconocer={flags.reconocimiento ? () => setReconociendo(true) : undefined}
           />
         )}
         {tab === 'movimientos' && (
@@ -768,6 +774,17 @@ export function Inventario() {
         onFotoArchivo={onFotoArchivo}
         onQuitarFoto={quitarFoto}
       />
+
+      {reconociendo && (
+        <Suspense fallback={null}>
+          <ReconocerArticuloDialog
+            abierto
+            dominio="insumo"
+            onElegir={(_d, cod) => abrirFicha(cod)}
+            onCerrar={() => setReconociendo(false)}
+          />
+        </Suspense>
+      )}
 
       <MovDialog
         open={movDialog.open}

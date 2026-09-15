@@ -232,6 +232,57 @@ export type Database = {
           },
         ]
       }
+      articulo_fotos: {
+        Row: {
+          angulo: string
+          bucket: string | null
+          cod: string
+          creada_en: string
+          creado_por: string | null
+          creado_por_email: string | null
+          dominio: string
+          embedding: string
+          empresa_id: string
+          id: string
+          modelo: string
+          origen: string
+          path: string
+          path_min: string | null
+        }
+        Insert: {
+          angulo?: string
+          bucket?: string | null
+          cod: string
+          creada_en?: string
+          creado_por?: string | null
+          creado_por_email?: string | null
+          dominio: string
+          embedding: string
+          empresa_id: string
+          id?: string
+          modelo: string
+          origen?: string
+          path: string
+          path_min?: string | null
+        }
+        Update: {
+          angulo?: string
+          bucket?: string | null
+          cod?: string
+          creada_en?: string
+          creado_por?: string | null
+          creado_por_email?: string | null
+          dominio?: string
+          embedding?: string
+          empresa_id?: string
+          id?: string
+          modelo?: string
+          origen?: string
+          path?: string
+          path_min?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           accion: string
@@ -5718,6 +5769,87 @@ export type Database = {
           },
         ]
       }
+      reconocimientos: {
+        Row: {
+          candidatos: Json
+          confirmada_en: string | null
+          consulta_path: string | null
+          consulta_path_min: string | null
+          creada_en: string
+          dominio: string | null
+          elegido: string | null
+          elegido_dominio: string | null
+          embedding: string | null
+          empresa_id: string
+          id: string
+          juez_codigo_leido: string | null
+          juez_confianza: string | null
+          juez_eleccion: string | null
+          juez_usado: boolean
+          modelo: string | null
+          ms_busqueda: number | null
+          ms_embedding: number | null
+          ms_juez: number | null
+          ms_total: number | null
+          resultado: string
+          sugerido: string | null
+          usuario_email: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          candidatos?: Json
+          confirmada_en?: string | null
+          consulta_path?: string | null
+          consulta_path_min?: string | null
+          creada_en?: string
+          dominio?: string | null
+          elegido?: string | null
+          elegido_dominio?: string | null
+          embedding?: string | null
+          empresa_id: string
+          id?: string
+          juez_codigo_leido?: string | null
+          juez_confianza?: string | null
+          juez_eleccion?: string | null
+          juez_usado?: boolean
+          modelo?: string | null
+          ms_busqueda?: number | null
+          ms_embedding?: number | null
+          ms_juez?: number | null
+          ms_total?: number | null
+          resultado?: string
+          sugerido?: string | null
+          usuario_email?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          candidatos?: Json
+          confirmada_en?: string | null
+          consulta_path?: string | null
+          consulta_path_min?: string | null
+          creada_en?: string
+          dominio?: string | null
+          elegido?: string | null
+          elegido_dominio?: string | null
+          embedding?: string | null
+          empresa_id?: string
+          id?: string
+          juez_codigo_leido?: string | null
+          juez_confianza?: string | null
+          juez_eleccion?: string | null
+          juez_usado?: boolean
+          modelo?: string | null
+          ms_busqueda?: number | null
+          ms_embedding?: number | null
+          ms_juez?: number | null
+          ms_total?: number | null
+          resultado?: string
+          sugerido?: string | null
+          usuario_email?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       reversas_planes_corte: {
         Row: {
           actor: string | null
@@ -7142,6 +7274,43 @@ export type Database = {
         Args: { p_empresa_id: string }
         Returns: number
       }
+      articulo_foto_borrar: { Args: { p_id: string }; Returns: undefined }
+      articulo_foto_indexar: {
+        Args: {
+          p_angulo: string
+          p_bucket: string
+          p_cod: string
+          p_dominio: string
+          p_email?: string
+          p_embedding: string
+          p_empresa_id: string
+          p_modelo: string
+          p_origen: string
+          p_path: string
+          p_path_min: string
+          p_usuario_id?: string
+        }
+        Returns: string
+      }
+      articulos_parecidos: {
+        Args: {
+          p_dominio?: string
+          p_embedding: string
+          p_empresa_id: string
+          p_k?: number
+          p_modelo?: string
+        }
+        Returns: {
+          cod: string
+          dominio: string
+          foto_bucket: string
+          foto_path: string
+          foto_url: string
+          n_fotos: number
+          nombre: string
+          similitud: number
+        }[]
+      }
       buscar_tubos: {
         Args: {
           p_cod?: string
@@ -7485,6 +7654,47 @@ export type Database = {
           p_recepcion_id: string
         }
         Returns: Json
+      }
+      reconocimiento_confirmar: {
+        Args: {
+          p_dominio?: string
+          p_elegido?: string
+          p_id: string
+          p_path?: string
+          p_path_min?: string
+        }
+        Returns: undefined
+      }
+      reconocimiento_empresa_ok: {
+        Args: { p_empresa_id: string }
+        Returns: boolean
+      }
+      reconocimiento_juez: {
+        Args: {
+          p_candidatos: Json
+          p_codigo_leido: string
+          p_confianza: string
+          p_eleccion: string
+          p_id: string
+          p_ms_juez?: number
+        }
+        Returns: undefined
+      }
+      reconocimiento_registrar: {
+        Args: {
+          p_candidatos: Json
+          p_dominio: string
+          p_email: string
+          p_embedding: string
+          p_empresa_id: string
+          p_modelo: string
+          p_ms_busqueda?: number
+          p_ms_embedding?: number
+          p_ms_total?: number
+          p_sugerido: string
+          p_usuario_id: string
+        }
+        Returns: string
       }
       registrar_error_corte: {
         Args: {

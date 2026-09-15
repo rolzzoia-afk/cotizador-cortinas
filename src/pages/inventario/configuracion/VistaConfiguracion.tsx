@@ -18,6 +18,7 @@ import FamiliasSection from './FamiliasSection';
 import InterruptoresSection from './InterruptoresSection';
 import QuienVeQueSection from './QuienVeQueSection';
 import SaldosVsKardexSection from './SaldosVsKardexSection';
+import ReconocimientoSection from './ReconocimientoSection';
 import ValidadoresSection from './ValidadoresSection';
 
 function TablaRacks({ titulo, racks }: { titulo: string; racks: typeof RACKS_LIBERADO }) {
@@ -81,6 +82,7 @@ export function VistaConfiguracion() {
       <QuienVeQueSection rolActual={rol} />
       <InterruptoresSection puedeEditar={puedeEditar} />
       <SaldosVsKardexSection activo={flags.kardexRpc} />
+      <ReconocimientoSection activo={flags.reconocimiento} />
 
       <div className="rounded-lg border border-border bg-card p-4">
         <h2 className="font-serif text-[0.9375rem] font-medium">Almacenes</h2>
