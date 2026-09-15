@@ -5,7 +5,7 @@
 // va en la URL (`/inventario/insumos/MEC%2018`) para que el enlace se pueda
 // mandar por WhatsApp y abra la ficha exacta.
 
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Pencil, Printer, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
@@ -39,8 +39,13 @@ import {
   UbicacionesArticulo,
 } from './ficha/PanelesFicha';
 import { useInventario } from '../InventarioLayout';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 
-type TabFicha = 'resumen' | 'kardex' | 'ubicaciones' | 'etiquetas' | 'proveedor';
+// La galería del reconocimiento se carga SOLO al abrir su pestaña: así la ficha
+// de siempre no arrastra ni una línea de código nuevo.
+const GaleriaFotosArticulo = lazy(() => import('../reconocimiento/GaleriaFotosArticulo'));
+
+type TabFicha = 'resumen' | 'kardex' | 'ubicaciones' | 'etiquetas' | 'proveedor' | 'fotos';
 
 /**
  * El recuadro del total se pinta según el estado del artículo. Cuando está
@@ -58,6 +63,7 @@ export function FichaInsumo() {
   const { cod = '' } = useParams();
   const codigo = decodeURIComponent(cod);
   const { queryRol, puedeEditar, rol } = useInventario();
+  const { flags } = useFlagsInventario();
   const { insumo, movimientos, ubicaciones, camionetas, validadores, loading, error, aplicarCambio } =
     useFichaInsumo(codigo);
   const { guardando, guardar } = useGuardarMovimiento();
@@ -261,6 +267,11 @@ export function FichaInsumo() {
         >
           Proveedor
         </TabButton>
+        {flags.reconocimiento && (
+          <TabButton variante="subrayado" active={tab === 'fotos'} onClick={() => setTab('fotos')}>
+            Fotos
+          </TabButton>
+        )}
       </div>
 
       {tab === 'resumen' ? (
@@ -341,6 +352,17 @@ export function FichaInsumo() {
       ) : null}
 
       {tab === 'proveedor' ? <ProveedorArticulo insumo={insumo} verMontos={verMontos} /> : null}
+
+      {tab === 'fotos' ? (
+        <Suspense fallback={<p className="text-xs text-muted-foreground">Cargando…</p>}>
+          <GaleriaFotosArticulo
+            dominio="insumo"
+            cod={insumo.cod ?? codigo}
+            nombre={nombre}
+            puedeEditar={puedeEditar}
+          />
+        </Suspense>
+      ) : null}
 
       {qrAbierto ? (
         <QRInsumoDialog insumo={insumo} ubicaciones={ubicaciones} onClose={() => setQrAbierto(false)} />

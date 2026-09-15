@@ -9,6 +9,7 @@ import {
   ArrowDownCircle,
   ArrowUpCircle,
   Boxes,
+  Camera,
   Image as ImageIcon,
   Package,
   Pencil,
@@ -64,6 +65,8 @@ interface CatalogoTabProps {
   rutaFicha: (cod: string) => string;
   /** La columna «Costo» solo la ve quien administra (`puedeVerMontos`). */
   verMontos: boolean;
+  /** Buscar sacándole una foto al artículo. Ausente = el interruptor está apagado. */
+  onReconocer?: () => void;
 }
 
 export default function CatalogoTab({
@@ -89,6 +92,7 @@ export default function CatalogoTab({
   onLightbox,
   rutaFicha,
   verMontos,
+  onReconocer,
 }: CatalogoTabProps) {
   const navigate = useNavigate();
   return (
@@ -131,6 +135,17 @@ export default function CatalogoTab({
             className="pl-8"
           />
         </div>
+        {onReconocer && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={onReconocer}
+            title="Sacarle una foto al artículo para saber cuál es"
+          >
+            <Camera className="h-4 w-4" /> Reconocer
+          </Button>
+        )}
         <select
           value={filtroCategoria}
           onChange={(e) => setFiltroCategoria(e.target.value)}

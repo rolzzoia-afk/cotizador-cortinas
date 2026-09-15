@@ -232,6 +232,57 @@ export type Database = {
           },
         ]
       }
+      articulo_fotos: {
+        Row: {
+          angulo: string
+          bucket: string | null
+          cod: string
+          creada_en: string
+          creado_por: string | null
+          creado_por_email: string | null
+          dominio: string
+          embedding: string
+          empresa_id: string
+          id: string
+          modelo: string
+          origen: string
+          path: string
+          path_min: string | null
+        }
+        Insert: {
+          angulo?: string
+          bucket?: string | null
+          cod: string
+          creada_en?: string
+          creado_por?: string | null
+          creado_por_email?: string | null
+          dominio: string
+          embedding: string
+          empresa_id: string
+          id?: string
+          modelo: string
+          origen?: string
+          path: string
+          path_min?: string | null
+        }
+        Update: {
+          angulo?: string
+          bucket?: string | null
+          cod?: string
+          creada_en?: string
+          creado_por?: string | null
+          creado_por_email?: string | null
+          dominio?: string
+          embedding?: string
+          empresa_id?: string
+          id?: string
+          modelo?: string
+          origen?: string
+          path?: string
+          path_min?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           accion: string
@@ -5491,6 +5542,314 @@ export type Database = {
         }
         Relationships: []
       }
+      recepciones: {
+        Row: {
+          cancelada_en: string | null
+          cancelada_motivo: string | null
+          cancelada_por: string | null
+          contada_en: string | null
+          contada_por: string | null
+          contada_por_id: string | null
+          creada_en: string
+          diferencias: Json
+          doc_fecha: string | null
+          doc_mime: string | null
+          doc_numero: string
+          doc_path: string
+          doc_tipo: string
+          empresa_id: string
+          envio_finanzas: string | null
+          envio_finanzas_detalle: string | null
+          envio_finanzas_en: string | null
+          envio_finanzas_intentos: number
+          escaneada_por: string | null
+          escaneada_por_id: string | null
+          escaneo_error: string | null
+          estado: string
+          extraccion: Json | null
+          firma_geo: Json | null
+          firma_geo_motivo: string | null
+          firma_png: string | null
+          id: string
+          lineas_danadas: number
+          lote_id: string | null
+          modelo: string | null
+          notas: string | null
+          numero: string
+          orden_id: string | null
+          proveedor_nombre: string | null
+          proveedor_rut: string | null
+          recibe_nombre: string | null
+          resultado: string | null
+          unidades_ingresadas: number
+        }
+        Insert: {
+          cancelada_en?: string | null
+          cancelada_motivo?: string | null
+          cancelada_por?: string | null
+          contada_en?: string | null
+          contada_por?: string | null
+          contada_por_id?: string | null
+          creada_en?: string
+          diferencias?: Json
+          doc_fecha?: string | null
+          doc_mime?: string | null
+          doc_numero: string
+          doc_path: string
+          doc_tipo: string
+          empresa_id: string
+          envio_finanzas?: string | null
+          envio_finanzas_detalle?: string | null
+          envio_finanzas_en?: string | null
+          envio_finanzas_intentos?: number
+          escaneada_por?: string | null
+          escaneada_por_id?: string | null
+          escaneo_error?: string | null
+          estado?: string
+          extraccion?: Json | null
+          firma_geo?: Json | null
+          firma_geo_motivo?: string | null
+          firma_png?: string | null
+          id?: string
+          lineas_danadas?: number
+          lote_id?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero: string
+          orden_id?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rut?: string | null
+          recibe_nombre?: string | null
+          resultado?: string | null
+          unidades_ingresadas?: number
+        }
+        Update: {
+          cancelada_en?: string | null
+          cancelada_motivo?: string | null
+          cancelada_por?: string | null
+          contada_en?: string | null
+          contada_por?: string | null
+          contada_por_id?: string | null
+          creada_en?: string
+          diferencias?: Json
+          doc_fecha?: string | null
+          doc_mime?: string | null
+          doc_numero?: string
+          doc_path?: string
+          doc_tipo?: string
+          empresa_id?: string
+          envio_finanzas?: string | null
+          envio_finanzas_detalle?: string | null
+          envio_finanzas_en?: string | null
+          envio_finanzas_intentos?: number
+          escaneada_por?: string | null
+          escaneada_por_id?: string | null
+          escaneo_error?: string | null
+          estado?: string
+          extraccion?: Json | null
+          firma_geo?: Json | null
+          firma_geo_motivo?: string | null
+          firma_png?: string | null
+          id?: string
+          lineas_danadas?: number
+          lote_id?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero?: string
+          orden_id?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rut?: string | null
+          recibe_nombre?: string | null
+          resultado?: string | null
+          unidades_ingresadas?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recepciones_orden_id_fkey"
+            columns: ["orden_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recepciones_lineas: {
+        Row: {
+          accion: string
+          cantidad_buena: number
+          cantidad_danada: number
+          creada_en: string
+          dominio: string | null
+          empresa_id: string
+          fact_cantidad: number | null
+          fact_codigo: string | null
+          fact_descripcion: string | null
+          fact_paquete: number | null
+          fact_unidad: string | null
+          factor: number
+          fotos_paths: string[]
+          id: string
+          item_cod: string | null
+          motivo_exclusion: string | null
+          movimiento_id: string | null
+          nota: string | null
+          orden_linea_id: string | null
+          origen: string
+          posicion: number
+          recepcion_id: string
+          unidades_ingresadas: number
+          vinculo: string | null
+        }
+        Insert: {
+          accion?: string
+          cantidad_buena?: number
+          cantidad_danada?: number
+          creada_en?: string
+          dominio?: string | null
+          empresa_id: string
+          fact_cantidad?: number | null
+          fact_codigo?: string | null
+          fact_descripcion?: string | null
+          fact_paquete?: number | null
+          fact_unidad?: string | null
+          factor?: number
+          fotos_paths?: string[]
+          id?: string
+          item_cod?: string | null
+          motivo_exclusion?: string | null
+          movimiento_id?: string | null
+          nota?: string | null
+          orden_linea_id?: string | null
+          origen?: string
+          posicion?: number
+          recepcion_id: string
+          unidades_ingresadas?: number
+          vinculo?: string | null
+        }
+        Update: {
+          accion?: string
+          cantidad_buena?: number
+          cantidad_danada?: number
+          creada_en?: string
+          dominio?: string | null
+          empresa_id?: string
+          fact_cantidad?: number | null
+          fact_codigo?: string | null
+          fact_descripcion?: string | null
+          fact_paquete?: number | null
+          fact_unidad?: string | null
+          factor?: number
+          fotos_paths?: string[]
+          id?: string
+          item_cod?: string | null
+          motivo_exclusion?: string | null
+          movimiento_id?: string | null
+          nota?: string | null
+          orden_linea_id?: string | null
+          origen?: string
+          posicion?: number
+          recepcion_id?: string
+          unidades_ingresadas?: number
+          vinculo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recepciones_lineas_orden_linea_id_fkey"
+            columns: ["orden_linea_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra_lineas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recepciones_lineas_recepcion_id_fkey"
+            columns: ["recepcion_id"]
+            isOneToOne: false
+            referencedRelation: "recepciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reconocimientos: {
+        Row: {
+          candidatos: Json
+          confirmada_en: string | null
+          consulta_path: string | null
+          consulta_path_min: string | null
+          creada_en: string
+          dominio: string | null
+          elegido: string | null
+          elegido_dominio: string | null
+          embedding: string | null
+          empresa_id: string
+          id: string
+          juez_codigo_leido: string | null
+          juez_confianza: string | null
+          juez_eleccion: string | null
+          juez_usado: boolean
+          modelo: string | null
+          ms_busqueda: number | null
+          ms_embedding: number | null
+          ms_juez: number | null
+          ms_total: number | null
+          resultado: string
+          sugerido: string | null
+          usuario_email: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          candidatos?: Json
+          confirmada_en?: string | null
+          consulta_path?: string | null
+          consulta_path_min?: string | null
+          creada_en?: string
+          dominio?: string | null
+          elegido?: string | null
+          elegido_dominio?: string | null
+          embedding?: string | null
+          empresa_id: string
+          id?: string
+          juez_codigo_leido?: string | null
+          juez_confianza?: string | null
+          juez_eleccion?: string | null
+          juez_usado?: boolean
+          modelo?: string | null
+          ms_busqueda?: number | null
+          ms_embedding?: number | null
+          ms_juez?: number | null
+          ms_total?: number | null
+          resultado?: string
+          sugerido?: string | null
+          usuario_email?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          candidatos?: Json
+          confirmada_en?: string | null
+          consulta_path?: string | null
+          consulta_path_min?: string | null
+          creada_en?: string
+          dominio?: string | null
+          elegido?: string | null
+          elegido_dominio?: string | null
+          embedding?: string | null
+          empresa_id?: string
+          id?: string
+          juez_codigo_leido?: string | null
+          juez_confianza?: string | null
+          juez_eleccion?: string | null
+          juez_usado?: boolean
+          modelo?: string | null
+          ms_busqueda?: number | null
+          ms_embedding?: number | null
+          ms_juez?: number | null
+          ms_total?: number | null
+          resultado?: string
+          sugerido?: string | null
+          usuario_email?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       reversas_planes_corte: {
         Row: {
           actor: string | null
@@ -6915,6 +7274,43 @@ export type Database = {
         Args: { p_empresa_id: string }
         Returns: number
       }
+      articulo_foto_borrar: { Args: { p_id: string }; Returns: undefined }
+      articulo_foto_indexar: {
+        Args: {
+          p_angulo: string
+          p_bucket: string
+          p_cod: string
+          p_dominio: string
+          p_email?: string
+          p_embedding: string
+          p_empresa_id: string
+          p_modelo: string
+          p_origen: string
+          p_path: string
+          p_path_min: string
+          p_usuario_id?: string
+        }
+        Returns: string
+      }
+      articulos_parecidos: {
+        Args: {
+          p_dominio?: string
+          p_embedding: string
+          p_empresa_id: string
+          p_k?: number
+          p_modelo?: string
+        }
+        Returns: {
+          cod: string
+          dominio: string
+          foto_bucket: string
+          foto_path: string
+          foto_url: string
+          n_fotos: number
+          nombre: string
+          similitud: number
+        }[]
+      }
       buscar_tubos: {
         Args: {
           p_cod?: string
@@ -6935,6 +7331,8 @@ export type Database = {
         Returns: undefined
       }
       compras_cod_norm: { Args: { p_cod: string }; Returns: string }
+      compras_codigo_neutro: { Args: { p_cod: string }; Returns: boolean }
+      compras_doc_norm: { Args: { p_num: string }; Returns: string }
       compras_rut_norm: { Args: { p_rut: string }; Returns: string }
       compras_sesion: {
         Args: { p_roles: string[] }
@@ -7233,6 +7631,70 @@ export type Database = {
           p_linea_id: string
         }
         Returns: Json
+      }
+      recepcion_abrir: {
+        Args: {
+          p_documento: Json
+          p_extraccion?: Json
+          p_lineas: Json
+          p_modelo?: string
+          p_orden_id: string
+        }
+        Returns: Json
+      }
+      recepcion_cancelar: {
+        Args: { p_motivo: string; p_recepcion_id: string }
+        Returns: Json
+      }
+      recepcion_confirmar: {
+        Args: {
+          p_diferencias?: Json
+          p_firma: Json
+          p_lineas: Json
+          p_recepcion_id: string
+        }
+        Returns: Json
+      }
+      reconocimiento_confirmar: {
+        Args: {
+          p_dominio?: string
+          p_elegido?: string
+          p_id: string
+          p_path?: string
+          p_path_min?: string
+        }
+        Returns: undefined
+      }
+      reconocimiento_empresa_ok: {
+        Args: { p_empresa_id: string }
+        Returns: boolean
+      }
+      reconocimiento_juez: {
+        Args: {
+          p_candidatos: Json
+          p_codigo_leido: string
+          p_confianza: string
+          p_eleccion: string
+          p_id: string
+          p_ms_juez?: number
+        }
+        Returns: undefined
+      }
+      reconocimiento_registrar: {
+        Args: {
+          p_candidatos: Json
+          p_dominio: string
+          p_email: string
+          p_embedding: string
+          p_empresa_id: string
+          p_modelo: string
+          p_ms_busqueda?: number
+          p_ms_embedding?: number
+          p_ms_total?: number
+          p_sugerido: string
+          p_usuario_id: string
+        }
+        Returns: string
       }
       registrar_error_corte: {
         Args: {

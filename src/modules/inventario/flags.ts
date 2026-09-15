@@ -1,4 +1,4 @@
-// Los cuatro interruptores del módulo de inventario.
+// Los cinco interruptores del módulo de inventario.
 //
 // El cambio de fondo —que el stock deje de moverse desde el navegador y pase a
 // hacerlo una función de la base— no se puede hacer de un día para otro sin
@@ -16,6 +16,11 @@
 //                  de Finanzas. Antes de encenderlo hay que correr los dos SQL
 //                  y dejar configurada la llave de ese proyecto; apagado, la
 //                  pantalla explica el circuito y la base rechaza toda escritura.
+//   reconocimiento Identificar un insumo o una tela con la cámara. Apagado, los
+//                  botones de cámara no aparecen y la función responde 409 —así
+//                  se corta el gasto del servicio de huellas en el acto—. Antes
+//                  de encenderlo: correr el SQL, desplegar `reconocer-articulo`
+//                  y dejar puesta la llave VOYAGE_API_KEY.
 //
 // Se guardan como un JSON en `configuracion`, con el mismo patrón que el resto
 // de las claves de la empresa.
@@ -27,6 +32,7 @@ export type FlagsInventario = {
   dualWrite: boolean;
   bloqueoDirecto: boolean;
   compras: boolean;
+  reconocimiento: boolean;
 };
 
 /** Todo apagado: es como funciona el sistema hoy. */
@@ -35,6 +41,7 @@ export const FLAGS_APAGADOS: FlagsInventario = {
   dualWrite: false,
   bloqueoDirecto: false,
   compras: false,
+  reconocimiento: false,
 };
 
 /**
@@ -58,6 +65,7 @@ export function sanearFlags(valor: unknown): FlagsInventario {
     dualWrite: o.dualWrite === true,
     bloqueoDirecto: o.bloqueoDirecto === true,
     compras: o.compras === true,
+    reconocimiento: o.reconocimiento === true,
   };
 }
 

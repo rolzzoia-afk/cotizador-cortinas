@@ -7,8 +7,11 @@
 // submódulos propios; la lectura la comparten todos por `telasStore`, que ya no
 // trae los más de 2.000 paños salvo que se los pidan.
 
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { lazy, Suspense, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
+// Solo se descarga al tocar el botón de cámara.
+const ReconocerArticuloDialog = lazy(() => import('../reconocimiento/ReconocerArticuloDialog'));
 import { AlertTriangle, ArrowUpRight, Boxes, Loader2, PencilRuler } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/ui/page-header';
@@ -27,6 +30,7 @@ import {
 } from '@/modules/inventario/telasCatalogo';
 import AccionesTelas from './catalogo/AccionesTelas';
 import FiltrosTelas from './catalogo/FiltrosTelas';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import NotasTelas from './catalogo/NotasTelas';
 import TablaTelas from './catalogo/TablaTelas';
 import { useEtiquetasTelas } from './catalogo/useEtiquetasTelas';
@@ -44,6 +48,9 @@ type Pestana = 'catalogo' | 'fallas';
 export function Telas() {
   const { empresaId } = useAuth();
   const { queryRol, puedeEditar, rol } = useInventario();
+  const { flags } = useFlagsInventario();
+  const navigate = useNavigate();
+  const [reconociendo, setReconociendo] = useState(false);
   // Importar el catálogo y clonar un código tocan precios.
   const verMontos = puedeVerMontos(rol);
   const [tab, setTab] = useState<Pestana>('catalogo');
@@ -178,7 +185,12 @@ export function Telas() {
         </div>
       ) : tab === 'catalogo' ? (
         <>
-          <FiltrosTelas filtros={filtros} onFiltros={setFiltros} opciones={opciones} />
+          <FiltrosTelas
+            filtros={filtros}
+            onFiltros={setFiltros}
+            opciones={opciones}
+            onReconocer={flags.reconocimiento ? () => setReconociendo(true) : undefined}
+          />
           <TablaTelas
             filas={lista}
             total={resumen.total}
@@ -222,6 +234,18 @@ export function Telas() {
       {qr && <QRTelaDialog tela={qr} colmena={colmena} onClose={() => setQr(null)} />}
       {clonar && <ClonarCodigoDialog onClose={() => setClonar(false)} onSaved={recargar} />}
       {importar && <ImportarCatalogoDialog onClose={() => setImportar(false)} onSaved={recargar} />}
+      {reconociendo && (
+        <Suspense fallback={null}>
+          <ReconocerArticuloDialog
+            abierto
+            dominio="tela"
+            onElegir={(_d, cod) =>
+              navigate(`/inventario/telas/${encodeURIComponent(cod)}${queryRol}`)
+            }
+            onCerrar={() => setReconociendo(false)}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

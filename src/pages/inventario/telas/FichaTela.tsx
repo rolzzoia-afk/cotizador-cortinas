@@ -3,7 +3,7 @@
 // cortados que esperan en la colmena. Las dos se muestran juntas porque para
 // el taller son el mismo material.
 
-import { useMemo, useState } from 'react';
+import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, ArrowUpRight, Printer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -26,15 +26,20 @@ import { armarColmena } from '@/modules/inventario/telasStore';
 import { Dato } from '../insumos/ficha/PanelesFicha';
 import QRTelaDialog from './dialogs/QRTelaDialog';
 import { useInventario } from '../InventarioLayout';
+import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 
-type TabFicha = 'resumen' | 'kardex' | 'panos' | 'fallas' | 'ubicaciones';
+// Solo se carga al abrir su pestaña: la ficha de siempre no crece.
+const GaleriaFotosArticulo = lazy(() => import('../reconocimiento/GaleriaFotosArticulo'));
+
+type TabFicha = 'resumen' | 'kardex' | 'panos' | 'fallas' | 'ubicaciones' | 'fotos';
 
 const metros = (n: number) => `${n.toLocaleString('es-CL', { maximumFractionDigits: 2 })} m`;
 
 export function FichaTela() {
   const { codigo: crudo = '' } = useParams();
   const codigo = decodeURIComponent(crudo);
-  const { queryRol } = useInventario();
+  const { queryRol, puedeEditar } = useInventario();
+  const { flags } = useFlagsInventario();
   const { tela, movimientos, slots, fallas, mermas, panos, loading, error } = useFichaTela(codigo);
 
   const [tab, setTab] = useState<TabFicha>('resumen');
@@ -202,7 +207,23 @@ export function FichaTela() {
         >
           Ubicaciones
         </TabButton>
+        {flags.reconocimiento && (
+          <TabButton variante="subrayado" active={tab === 'fotos'} onClick={() => setTab('fotos')}>
+            Fotos
+          </TabButton>
+        )}
       </div>
+
+      {tab === 'fotos' ? (
+        <Suspense fallback={<p className="text-xs text-muted-foreground">Cargando…</p>}>
+          <GaleriaFotosArticulo
+            dominio="tela"
+            cod={tela.codigo}
+            nombre={tela.nemotecnico || tela.descriptor || tela.codigo}
+            puedeEditar={puedeEditar}
+          />
+        </Suspense>
+      ) : null}
 
       {tab === 'resumen' ? (
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">

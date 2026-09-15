@@ -2,10 +2,28 @@ import { describe, expect, it } from 'vitest';
 import { FLAGS_APAGADOS, problemasDeFlags, sanearFlags } from './flags';
 
 describe('sanearFlags — no confiar en lo guardado', () => {
-  it('lee los cuatro interruptores', () => {
+  it('lee los cinco interruptores', () => {
     expect(
-      sanearFlags({ kardexRpc: true, dualWrite: true, bloqueoDirecto: false, compras: true }),
-    ).toEqual({ kardexRpc: true, dualWrite: true, bloqueoDirecto: false, compras: true });
+      sanearFlags({
+        kardexRpc: true,
+        dualWrite: true,
+        bloqueoDirecto: false,
+        compras: true,
+        reconocimiento: true,
+      }),
+    ).toEqual({
+      kardexRpc: true,
+      dualWrite: true,
+      bloqueoDirecto: false,
+      compras: true,
+      reconocimiento: true,
+    });
+  });
+
+  // Los interruptores se agregan de a uno: lo guardado ANTES de que existiera
+  // el reconocimiento no puede encenderlo por omisión.
+  it('un interruptor que no estaba guardado nace apagado', () => {
+    expect(sanearFlags({ kardexRpc: true }).reconocimiento).toBe(false);
   });
 
   it('acepta el JSON como texto, que es como viene de la base', () => {
@@ -49,6 +67,7 @@ describe('problemasDeFlags — combinaciones que dejarían el taller parado', ()
         dualWrite: true,
         bloqueoDirecto: true,
         compras: false,
+        reconocimiento: false,
       }),
     ).toEqual([]);
   });
@@ -59,5 +78,9 @@ describe('problemasDeFlags — combinaciones que dejarían el taller parado', ()
 
   it('compras no depende de los otros', () => {
     expect(problemasDeFlags({ ...FLAGS_APAGADOS, compras: true })).toEqual([]);
+  });
+
+  it('el reconocimiento tampoco: no toca el stock', () => {
+    expect(problemasDeFlags({ ...FLAGS_APAGADOS, reconocimiento: true })).toEqual([]);
   });
 });
