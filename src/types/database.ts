@@ -5491,6 +5491,233 @@ export type Database = {
         }
         Relationships: []
       }
+      recepciones: {
+        Row: {
+          cancelada_en: string | null
+          cancelada_motivo: string | null
+          cancelada_por: string | null
+          contada_en: string | null
+          contada_por: string | null
+          contada_por_id: string | null
+          creada_en: string
+          diferencias: Json
+          doc_fecha: string | null
+          doc_mime: string | null
+          doc_numero: string
+          doc_path: string
+          doc_tipo: string
+          empresa_id: string
+          envio_finanzas: string | null
+          envio_finanzas_detalle: string | null
+          envio_finanzas_en: string | null
+          envio_finanzas_intentos: number
+          escaneada_por: string | null
+          escaneada_por_id: string | null
+          escaneo_error: string | null
+          estado: string
+          extraccion: Json | null
+          firma_geo: Json | null
+          firma_geo_motivo: string | null
+          firma_png: string | null
+          id: string
+          lineas_danadas: number
+          lote_id: string | null
+          modelo: string | null
+          notas: string | null
+          numero: string
+          orden_id: string | null
+          proveedor_nombre: string | null
+          proveedor_rut: string | null
+          recibe_nombre: string | null
+          resultado: string | null
+          unidades_ingresadas: number
+        }
+        Insert: {
+          cancelada_en?: string | null
+          cancelada_motivo?: string | null
+          cancelada_por?: string | null
+          contada_en?: string | null
+          contada_por?: string | null
+          contada_por_id?: string | null
+          creada_en?: string
+          diferencias?: Json
+          doc_fecha?: string | null
+          doc_mime?: string | null
+          doc_numero: string
+          doc_path: string
+          doc_tipo: string
+          empresa_id: string
+          envio_finanzas?: string | null
+          envio_finanzas_detalle?: string | null
+          envio_finanzas_en?: string | null
+          envio_finanzas_intentos?: number
+          escaneada_por?: string | null
+          escaneada_por_id?: string | null
+          escaneo_error?: string | null
+          estado?: string
+          extraccion?: Json | null
+          firma_geo?: Json | null
+          firma_geo_motivo?: string | null
+          firma_png?: string | null
+          id?: string
+          lineas_danadas?: number
+          lote_id?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero: string
+          orden_id?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rut?: string | null
+          recibe_nombre?: string | null
+          resultado?: string | null
+          unidades_ingresadas?: number
+        }
+        Update: {
+          cancelada_en?: string | null
+          cancelada_motivo?: string | null
+          cancelada_por?: string | null
+          contada_en?: string | null
+          contada_por?: string | null
+          contada_por_id?: string | null
+          creada_en?: string
+          diferencias?: Json
+          doc_fecha?: string | null
+          doc_mime?: string | null
+          doc_numero?: string
+          doc_path?: string
+          doc_tipo?: string
+          empresa_id?: string
+          envio_finanzas?: string | null
+          envio_finanzas_detalle?: string | null
+          envio_finanzas_en?: string | null
+          envio_finanzas_intentos?: number
+          escaneada_por?: string | null
+          escaneada_por_id?: string | null
+          escaneo_error?: string | null
+          estado?: string
+          extraccion?: Json | null
+          firma_geo?: Json | null
+          firma_geo_motivo?: string | null
+          firma_png?: string | null
+          id?: string
+          lineas_danadas?: number
+          lote_id?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero?: string
+          orden_id?: string | null
+          proveedor_nombre?: string | null
+          proveedor_rut?: string | null
+          recibe_nombre?: string | null
+          resultado?: string | null
+          unidades_ingresadas?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recepciones_orden_id_fkey"
+            columns: ["orden_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recepciones_lineas: {
+        Row: {
+          accion: string
+          cantidad_buena: number
+          cantidad_danada: number
+          creada_en: string
+          dominio: string | null
+          empresa_id: string
+          fact_cantidad: number | null
+          fact_codigo: string | null
+          fact_descripcion: string | null
+          fact_paquete: number | null
+          fact_unidad: string | null
+          factor: number
+          fotos_paths: string[]
+          id: string
+          item_cod: string | null
+          motivo_exclusion: string | null
+          movimiento_id: string | null
+          nota: string | null
+          orden_linea_id: string | null
+          origen: string
+          posicion: number
+          recepcion_id: string
+          unidades_ingresadas: number
+          vinculo: string | null
+        }
+        Insert: {
+          accion?: string
+          cantidad_buena?: number
+          cantidad_danada?: number
+          creada_en?: string
+          dominio?: string | null
+          empresa_id: string
+          fact_cantidad?: number | null
+          fact_codigo?: string | null
+          fact_descripcion?: string | null
+          fact_paquete?: number | null
+          fact_unidad?: string | null
+          factor?: number
+          fotos_paths?: string[]
+          id?: string
+          item_cod?: string | null
+          motivo_exclusion?: string | null
+          movimiento_id?: string | null
+          nota?: string | null
+          orden_linea_id?: string | null
+          origen?: string
+          posicion?: number
+          recepcion_id: string
+          unidades_ingresadas?: number
+          vinculo?: string | null
+        }
+        Update: {
+          accion?: string
+          cantidad_buena?: number
+          cantidad_danada?: number
+          creada_en?: string
+          dominio?: string | null
+          empresa_id?: string
+          fact_cantidad?: number | null
+          fact_codigo?: string | null
+          fact_descripcion?: string | null
+          fact_paquete?: number | null
+          fact_unidad?: string | null
+          factor?: number
+          fotos_paths?: string[]
+          id?: string
+          item_cod?: string | null
+          motivo_exclusion?: string | null
+          movimiento_id?: string | null
+          nota?: string | null
+          orden_linea_id?: string | null
+          origen?: string
+          posicion?: number
+          recepcion_id?: string
+          unidades_ingresadas?: number
+          vinculo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recepciones_lineas_orden_linea_id_fkey"
+            columns: ["orden_linea_id"]
+            isOneToOne: false
+            referencedRelation: "ordenes_compra_lineas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recepciones_lineas_recepcion_id_fkey"
+            columns: ["recepcion_id"]
+            isOneToOne: false
+            referencedRelation: "recepciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reversas_planes_corte: {
         Row: {
           actor: string | null
@@ -6935,6 +7162,8 @@ export type Database = {
         Returns: undefined
       }
       compras_cod_norm: { Args: { p_cod: string }; Returns: string }
+      compras_codigo_neutro: { Args: { p_cod: string }; Returns: boolean }
+      compras_doc_norm: { Args: { p_num: string }; Returns: string }
       compras_rut_norm: { Args: { p_rut: string }; Returns: string }
       compras_sesion: {
         Args: { p_roles: string[] }
@@ -7231,6 +7460,29 @@ export type Database = {
           p_factor?: number
           p_item_cod: string
           p_linea_id: string
+        }
+        Returns: Json
+      }
+      recepcion_abrir: {
+        Args: {
+          p_documento: Json
+          p_extraccion?: Json
+          p_lineas: Json
+          p_modelo?: string
+          p_orden_id: string
+        }
+        Returns: Json
+      }
+      recepcion_cancelar: {
+        Args: { p_motivo: string; p_recepcion_id: string }
+        Returns: Json
+      }
+      recepcion_confirmar: {
+        Args: {
+          p_diferencias?: Json
+          p_firma: Json
+          p_lineas: Json
+          p_recepcion_id: string
         }
         Returns: Json
       }

@@ -46,6 +46,7 @@ const VistaAlertas = lazy(() => import('@/pages/inventario/alertas/VistaAlertas'
 const VistaReportes = lazy(() => import('@/pages/inventario/reportes/VistaReportes').then((m) => ({ default: m.VistaReportes })));
 const VistaCompras = lazy(() => import('@/pages/inventario/compras/VistaCompras').then((m) => ({ default: m.VistaCompras })));
 const FichaOrden = lazy(() => import('@/pages/inventario/compras/FichaOrden').then((m) => ({ default: m.FichaOrden })));
+const FichaRecepcion = lazy(() => import('@/pages/inventario/compras/FichaRecepcion').then((m) => ({ default: m.FichaRecepcion })));
 const VistaConfiguracion = lazy(() => import('@/pages/inventario/configuracion/VistaConfiguracion').then((m) => ({ default: m.VistaConfiguracion })));
 const VistaAuditoria = lazy(() => import('@/pages/inventario/auditoria/VistaAuditoria').then((m) => ({ default: m.VistaAuditoria })));
 
@@ -161,6 +162,8 @@ export function App() {
             <Route path="alertas" element={<VistaAlertas />} />
             <Route path="reportes" element={<VistaReportes />} />
             <Route path="compras" element={<VistaCompras />} />
+            {/* Antes de «compras/:id»: si no, «recepciones» se leería como el id de una orden. */}
+            <Route path="compras/recepciones/:id" element={<FichaRecepcion />} />
             <Route path="compras/:id" element={<FichaOrden />} />
             <Route path="configuracion" element={<VistaConfiguracion />} />
             <Route path="auditoria" element={<VistaAuditoria />} />

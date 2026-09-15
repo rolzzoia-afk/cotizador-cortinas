@@ -7,38 +7,42 @@
 // queda aprendida para la próxima orden del mismo proveedor.
 
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Loader2, PackageCheck, TriangleAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { confirmar } from '@/components/ui/confirm';
 import { esRolAdmin } from '@/lib/roles';
-import {
-  ESTADOS_LINEA_ORDEN,
-  etiquetaOrden,
-  formatearCantidad,
-  pendienteDeLinea,
-  progresoDeOrden,
-  textoConversion,
-  textoEspera,
-  type LineaOrden,
-} from '@/modules/inventario/compras';
+import { etiquetaOrden, progresoDeOrden, textoEspera } from '@/modules/inventario/compras';
 import { cerrarOrden, useOrdenesCompra } from '@/modules/inventario/comprasStore';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
+import { lineasPorRecibir, motivoNoRecibible, rutaFichaRecepcion } from '@/modules/inventario/recepcion';
+import { useRecepcionesDeOrden } from '@/modules/inventario/recepcionesLecturaStore';
 import { useInventario } from '../InventarioLayout';
-import VincularArticulo from './VincularArticulo';
+import EscanearFacturaDialog from './EscanearFacturaDialog';
+import HistorialRecepciones from './HistorialRecepciones';
+import TablaLineasOrden from './TablaLineasOrden';
 
 export function FichaOrden() {
   const { id } = useParams<{ id: string }>();
   const { queryRol, puedeEditar, rol } = useInventario();
   const { flags } = useFlagsInventario();
   const { ordenes, loading, error, recargar } = useOrdenesCompra(flags.compras);
+  const recepciones = useRecepcionesDeOrden(id);
+  const navigate = useNavigate();
   const [cerrando, setCerrando] = useState(false);
+  const [recibiendo, setRecibiendo] = useState(false);
 
   const orden = useMemo(() => ordenes.find((o) => o.id === id), [ordenes, id]);
   const progreso = useMemo(() => (orden ? progresoDeOrden(orden) : null), [orden]);
+  // Las que se pueden recibir de verdad: con algo pendiente Y con artículo.
+  const recibibles = useMemo(
+    () => (orden ? lineasPorRecibir(orden).filter((l) => !motivoNoRecibible(l)).length : 0),
+    [orden],
+  );
   const esAdmin = esRolAdmin(rol);
+  const porContar = recepciones.recepciones.filter((r) => r.estado === 'por_contar');
 
   const cerrar = async () => {
     if (!orden) return;
@@ -125,7 +129,15 @@ export function FichaOrden() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {puedeEditar && abierta && (
-              <Button disabled title="Llega en la siguiente entrega">
+              <Button
+                onClick={() => setRecibiendo(true)}
+                disabled={recibibles === 0}
+                title={
+                  recibibles === 0
+                    ? 'Las líneas que faltan no tienen artículo: vincúlalas primero'
+                    : undefined
+                }
+              >
                 <PackageCheck className="h-4 w-4" />
                 Recibir mercadería
               </Button>
@@ -202,97 +214,38 @@ export function FichaOrden() {
         </div>
       )}
 
-      {/* ── Las líneas ── */}
-      <TablaLineas
-        lineas={orden.lineas ?? []}
-        puedeEditar={puedeEditar}
-        onVinculada={recargar}
-      />
-    </div>
-  );
-}
+      {porContar.length > 0 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-accent/40 bg-accent/[0.07] px-4 py-2.5 text-xs leading-relaxed">
+          <b className="font-semibold">Hay papeles escaneados que falta contar:</b>
+          {porContar.map((r) => (
+            <Link key={r.id} to={rutaFichaRecepcion(r.id, queryRol)} className="font-mono underline underline-offset-2">
+              {r.numero}
+            </Link>
+          ))}
+          <span className="text-muted-foreground">Hasta contarlos y firmar, no entra nada al stock.</span>
+        </div>
+      )}
 
-function TablaLineas({
-  lineas,
-  puedeEditar,
-  onVinculada,
-}: {
-  lineas: LineaOrden[];
-  puedeEditar: boolean;
-  onVinculada: () => Promise<void>;
-}) {
-  if (lineas.length === 0) {
-    return (
-      <div className="rounded-lg border border-dashed border-border bg-secondary/30 px-4 py-8 text-center text-sm text-muted-foreground">
-        Esta orden no trae líneas. Puede ser que Finanzas todavía no las tenga cargadas.
-      </div>
-    );
-  }
-  return (
-    <div className="overflow-hidden rounded-lg border border-border bg-card">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[860px] text-[0.8125rem]">
-          <thead>
-            <tr className="border-b border-border text-[0.6875rem] uppercase tracking-[0.08em] text-muted-foreground">
-              <th className="h-9 px-4 text-left font-medium">#</th>
-              <th className="h-9 px-3 text-left font-medium">Lo que dice la orden</th>
-              <th className="h-9 px-3 text-left font-medium">Artículo nuestro</th>
-              <th className="h-9 px-3 text-right font-medium">Pedido</th>
-              <th className="h-9 px-3 text-right font-medium">Recibido</th>
-              <th className="h-9 px-3 text-right font-medium">Falta</th>
-              <th className="h-9 px-4 text-left font-medium">Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lineas.map((l) => {
-              const e = ESTADOS_LINEA_ORDEN[l.estado_linea] ?? {
-                texto: l.estado_linea,
-                variante: 'muted' as const,
-              };
-              const falta = pendienteDeLinea(l);
-              return (
-                <tr key={l.id} className="border-b border-border last:border-0 align-top">
-                  <td className="px-4 py-2.5 font-mono text-muted-foreground">{l.posicion}</td>
-                  <td className="px-3 py-2.5">
-                    <div>{l.descripcion || '—'}</div>
-                    <div className="mt-0.5 flex flex-wrap gap-x-3 font-mono text-[0.68rem] text-muted-foreground">
-                      {l.codigo_interno && <span>interno {l.codigo_interno}</span>}
-                      {l.codigo_proveedor && <span>proveedor {l.codigo_proveedor}</span>}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <VincularArticulo
-                      linea={l}
-                      puedeEditar={puedeEditar}
-                      onVinculada={onVinculada}
-                    />
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <div className="font-mono">{formatearCantidad(l.cantidad_pedida)}</div>
-                    {l.factor > 1 && (
-                      <div className="text-[0.68rem] text-muted-foreground">
-                        {textoConversion(l.cantidad_pedida, l.factor, l.unidad)}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono">
-                    {formatearCantidad(l.cantidad_recibida)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right font-mono">
-                    {falta > 0 ? formatearCantidad(falta) : '—'}
-                  </td>
-                  <td className="px-4 py-2.5">
-                    <Badge variant={e.variante}>{e.texto}</Badge>
-                    {l.nota && (
-                      <div className="mt-1 text-[0.68rem] text-muted-foreground">{l.nota}</div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* ── Las líneas ── */}
+      <TablaLineasOrden lineas={orden.lineas ?? []} puedeEditar={puedeEditar} onVinculada={recargar} />
+
+      <HistorialRecepciones
+        recepciones={recepciones.recepciones}
+        loading={recepciones.loading}
+        error={recepciones.error}
+        queryRol={queryRol}
+      />
+
+      {recibiendo && (
+        <EscanearFacturaDialog
+          orden={orden}
+          onCerrar={() => setRecibiendo(false)}
+          onAbierta={(recepcionId, contarAhora) => {
+            setRecibiendo(false);
+            navigate(rutaFichaRecepcion(recepcionId, queryRol, contarAhora));
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -27,6 +27,8 @@ export function DialogoReposicion({
   minimo,
   sugerida,
   guardando,
+  descripcion = 'Queda anotado como pedido en el historial del artículo. No mueve el stock.',
+  etiquetaConfirmar = 'Registrar pedido',
   onCerrar,
   onConfirmar,
 }: {
@@ -38,6 +40,9 @@ export function DialogoReposicion({
   /** Lo que falta para llegar al mínimo. Se propone, no se impone. */
   sugerida: number;
   guardando?: boolean;
+  /** Adónde va el pedido. Con Compras encendido no es una anotación: se suma a la solicitud. */
+  descripcion?: string;
+  etiquetaConfirmar?: string;
   onCerrar: () => void;
   onConfirmar: (pedido: PedidoReposicion) => void;
 }) {
@@ -55,9 +60,7 @@ export function DialogoReposicion({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Pedir reposición</DialogTitle>
-          <DialogDescription>
-            Queda anotado como pedido en el historial del artículo. No mueve el stock.
-          </DialogDescription>
+          <DialogDescription>{descripcion}</DialogDescription>
         </DialogHeader>
 
         <div className="rounded-lg border border-border bg-muted/40 px-3.5 py-3">
@@ -99,7 +102,7 @@ export function DialogoReposicion({
             onClick={() => onConfirmar({ codigo, nombre, cantidad })}
             disabled={!valida || guardando}
           >
-            {guardando ? 'Registrando…' : 'Registrar pedido'}
+            {guardando ? 'Registrando…' : etiquetaConfirmar}
           </Button>
         </DialogFooter>
       </DialogContent>

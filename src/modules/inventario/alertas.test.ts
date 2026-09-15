@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  cantidadInicialParaPedir,
   cantidadSugerida,
   coberturaMeses,
   conBorrador,
@@ -76,6 +77,33 @@ describe('cantidadSugerida', () => {
 
   it('si ya hay más de lo que se quería dejar, no sugiere comprar', () => {
     expect(cantidadSugerida(art({ id: 'x', codigo: 'X', ahora: 200, maximo: 120 }))).toBe(0);
+  });
+});
+
+describe('cantidadInicialParaPedir', () => {
+  it('arranca en la sugerida', () => {
+    expect(cantidadInicialParaPedir(LISTA[0])).toBe(20);
+    expect(cantidadInicialParaPedir(LISTA[1])).toBe(13);
+  });
+
+  it('las telas conservan los decimales', () => {
+    expect(cantidadInicialParaPedir(LISTA[2])).toBe(53.2);
+  });
+
+  it('un insumo con fracción se redondea HACIA ARRIBA', () => {
+    expect(
+      cantidadInicialParaPedir(art({ id: 'x', codigo: 'X', ahora: 7.5, maximo: 10 })),
+    ).toBe(3);
+  });
+
+  it('sin «dejar en» arranca en 0: lo escribe la persona', () => {
+    expect(cantidadInicialParaPedir(LISTA[4])).toBe(0);
+  });
+
+  it('si ya está sobre el objetivo, arranca en 0', () => {
+    expect(
+      cantidadInicialParaPedir(art({ id: 'x', codigo: 'X', ahora: 200, maximo: 120 })),
+    ).toBe(0);
   });
 });
 
