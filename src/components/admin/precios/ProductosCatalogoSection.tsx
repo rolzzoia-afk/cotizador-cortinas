@@ -11,7 +11,7 @@
 // que reusa (nuevo/editar, clonar, importar) guardan solos, igual que en Fase 0.
 // ─────────────────────────────────────────────────────────────────────
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Copy, History, Pencil, Plus, Search, Upload } from 'lucide-react';
+import { AlertTriangle, Copy, FolderPlus, History, Pencil, Plus, Search, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { formatCLP } from '@/lib/formatters';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
+import NuevaCategoriaDialog from '@/components/cotizador/nuevaCategoria/NuevaCategoriaDialog';
 import ClonarCodigoDialog from '@/pages/inventario/telas/dialogs/ClonarCodigoDialog';
 import ImportarCatalogoDialog from '@/pages/inventario/telas/dialogs/ImportarCatalogoDialog';
 import {
@@ -72,6 +73,8 @@ export function ProductosCatalogoSection() {
   const [editar, setEditar] = useState<string | null | undefined>(undefined);
   const [clonar, setClonar] = useState(false);
   const [importar, setImportar] = useState(false);
+  /** `undefined` = cerrado · '' = categoría nueva · 'SCREEN_P' = sumarle productos. */
+  const [nuevaCategoria, setNuevaCategoria] = useState<string | undefined>(undefined);
   const [respaldos, setRespaldos] = useState<RespaldoCatalogo[]>([]);
   const [verRespaldos, setVerRespaldos] = useState(false);
   const [restaurando, setRestaurando] = useState(false);
@@ -177,6 +180,12 @@ export function ProductosCatalogoSection() {
             <Button variant="ghost" size="sm" onClick={() => setClonar(true)}>
               <Copy className="mr-1 h-3.5 w-3.5" />
               Clonar código
+            </Button>
+            {/* Con una familia filtrada, el asistente entra directo a la grilla
+                para sumarle productos; sin filtro, crea la categoría entera. */}
+            <Button variant="secondary" size="sm" onClick={() => setNuevaCategoria(familia || '')}>
+              <FolderPlus className="mr-1 h-3.5 w-3.5" />
+              {familia ? `Agregar productos a ${familia}` : 'Nueva categoría'}
             </Button>
             <Button size="sm" onClick={() => setEditar(null)}>
               <Plus className="mr-1 h-3.5 w-3.5" />
@@ -383,6 +392,13 @@ export function ProductosCatalogoSection() {
           catalogo={catalogo}
           anchoRollo={anchoRollo}
           onClose={() => setEditar(undefined)}
+          onSaved={refrescarTodo}
+        />
+      )}
+      {nuevaCategoria !== undefined && (
+        <NuevaCategoriaDialog
+          familiaInicial={nuevaCategoria || undefined}
+          onClose={() => setNuevaCategoria(undefined)}
           onSaved={refrescarTodo}
         />
       )}

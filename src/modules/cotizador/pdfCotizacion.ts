@@ -42,6 +42,13 @@ export type FilaPdfCortina = {
   codInt: string;
   tipo: string;
   descripcion: string;
+  /**
+   * Con qué CATEGORÍA se cotizó, para el recuadro de la columna CAT: gama B (si
+   * no, A) y corte invertido. Salen de la línea del motor —el panel que de
+   * verdad fijó el precio—, no de una cuenta aparte.
+   */
+  lineaB?: boolean;
+  invertida?: boolean;
   ubicacion: string;
   colorAcc: string;
   /** Metros. */
@@ -259,6 +266,8 @@ type RGB = readonly [number, number, number];
 const NEGRO: RGB = [22, 22, 24];
 const BLANCO: RGB = [255, 255, 255];
 const AMARILLO: RGB = [255, 214, 0];
+/** El amarillo destacador del total con tarjeta (texto negro encima). */
+const AMARILLO_SUAVE: RGB = [255, 235, 125];
 const AZUL: RGB = [29, 79, 145]; // el #1d4f91 del banner de cuotas en pantalla
 const ROJO: RGB = [226, 32, 40];
 const ROJO_SUAVE: RGB = [252, 226, 226];
@@ -275,6 +284,48 @@ function set(doc: jsPDF, fn: 'fill' | 'draw' | 'text', c: RGB) {
   if (fn === 'fill') doc.setFillColor(c[0], c[1], c[2]);
   else if (fn === 'draw') doc.setDrawColor(c[0], c[1], c[2]);
   else doc.setTextColor(c[0], c[1], c[2]);
+}
+
+/**
+ * Cómo entra un texto en una celda SIN cambiar de tamaño: se parte en las
+ * líneas permitidas y, si aun así sobra, se corta con «…».
+ *
+ * La única excepción es una PALABRA sola que no cabe (un total de ocho cifras,
+ * un código largo): esa se achica lo justo —y nada más— porque partirla o
+ * cortarla dejaría un número a medio leer. Devuelve el tamaño con el que hay
+ * que dibujar.
+ */
+function ajustarTexto(
+  doc: jsPDF,
+  s: string,
+  w: number,
+  size: number,
+  bold: boolean,
+  maxLineas: number,
+): { lineas: string[]; size: number } {
+  const maxW = w - 1.6;
+  const txt = String(s ?? '');
+  doc.setFont('helvetica', bold ? 'bold' : 'normal');
+  if (!txt) return { lineas: [''], size };
+  let tam = size;
+  const partir = () => {
+    doc.setFontSize(tam);
+    return doc.splitTextToSize(txt, maxW) as string[];
+  };
+  let lineas = partir();
+  // Una palabra que no cabe la parte jsPDF a mitad («INV» → «IN» + «V»), así
+  // que el aviso de que hay que achicar es que salgan MÁS líneas de las
+  // permitidas, no que alguna se pase de ancho.
+  while (tam > 5 && (lineas.length > maxLineas || lineas.some((l) => doc.getTextWidth(l) > maxW))) {
+    tam -= 0.2;
+    lineas = partir();
+  }
+  if (lineas.length <= maxLineas) return { lineas, size: tam };
+  const cortadas = lineas.slice(0, maxLineas);
+  let ultima = cortadas[maxLineas - 1];
+  while (ultima.length > 1 && doc.getTextWidth(`${ultima}…`) > maxW) ultima = ultima.slice(0, -1);
+  cortadas[maxLineas - 1] = `${ultima}…`;
+  return { lineas: cortadas, size: tam };
 }
 
 /**
@@ -295,6 +346,12 @@ function celda(
     align?: 'l' | 'c' | 'r';
     /** Cuántas líneas se permiten antes de truncar (por defecto una). */
     lineas?: number;
+    /**
+     * No achicar la letra para que quepa: se parte en las líneas permitidas y,
+     * si aun así sobra, se corta con puntos suspensivos. Es lo que usa el
+     * cuerpo de la tabla, donde TODO va del mismo tamaño (dueño, 2026-09-14).
+     */
+    sinAchicar?: boolean;
   } = {},
 ) {
   const { bold = false, color = TEXTO, align = 'l' } = opts;
@@ -310,6 +367,16 @@ function celda(
     else if (align === 'r') doc.text(t, x + w - 0.8, yBase, { align: 'right' });
     else doc.text(t, x + 0.8, yBase, { align: 'left' });
   };
+
+  // Tamaño fijo: el texto se parte y, si no cabe, se corta con «…».
+  if (opts.sinAchicar) {
+    const ajuste = ajustarTexto(doc, txtOriginal, w, size, bold, Math.max(1, opts.lineas ?? 1));
+    doc.setFontSize(ajuste.size);
+    const lh = ajuste.size * 0.42;
+    const y1 = yTop + h / 2 + ajuste.size * 0.17 - (lh * (ajuste.lineas.length - 1)) / 2;
+    ajuste.lineas.forEach((l, i) => dibujar(l, y1 + i * lh));
+    return;
+  }
 
   // Con varias líneas permitidas se achica menos antes de partir: es lo que
   // hace legible un rótulo largo como COLOR ACCESORIOS en 16 mm, o la OT
@@ -363,24 +430,38 @@ function textoConEnlace(
 // ── Tabla de la cotización ───────────────────────────────────────────
 
 type ColPdf = { label: string; w: number; align?: 'l' | 'c' | 'r' };
-type CeldaPdf = { txt: string; align?: 'l' | 'c' | 'r'; bold?: boolean; color?: RGB };
+/** Un recuadro chico dentro de una celda (la columna CAT: A, B, INV). */
+type DistintivoPdf = { txt: string; fondo: RGB };
+type CeldaPdf = {
+  txt: string;
+  align?: 'l' | 'c' | 'r';
+  bold?: boolean;
+  color?: RGB;
+  /** En vez de texto suelto, uno o dos recuadros con su color. */
+  distintivos?: DistintivoPdf[];
+};
 type FilaPdf = { celdas: CeldaPdf[]; fondo?: RGB };
 
-/** Las 14 columnas del Excel. Suman los 194 mm del ancho útil. */
+/** Las 15 columnas del Excel, más la CAT. Suman los 194 mm del ancho útil. */
 const COLS: ColPdf[] = [
-  { label: 'COD', w: 15 },
+  { label: 'COD', w: 16 },
   { label: 'CANT', w: 7, align: 'c' },
-  { label: 'PRODUCTO', w: 27 },
+  { label: 'PRODUCTO', w: 25 },
   { label: 'COD_INT', w: 11 },
-  { label: 'TIPO', w: 13 },
-  { label: 'DESCRIPCIÓN', w: 20 },
-  { label: 'UBIC.', w: 14 },
-  { label: 'COLOR ACCESORIOS', w: 16 },
-  { label: 'ANCHO', w: 10, align: 'r' },
-  { label: 'ALTO', w: 10, align: 'r' },
-  { label: 'VAL. UNIT.', w: 15, align: 'r' },
+  { label: 'TIPO', w: 16 },
+  // 22 mm: con 20, «BLANCO 5% ROSC 95 85 (ESTANDAR)» necesitaba TRES líneas y
+  // estiraba toda la fila.
+  { label: 'DESCRIPCIÓN', w: 22 },
+  // La categoría de la cortina (A, B o invertida), en un recuadro chico: es lo
+  // mismo que el distintivo de la grilla, y en el papel también hace falta.
+  { label: 'CAT', w: 6, align: 'c' },
+  { label: 'UBIC.', w: 12 },
+  { label: 'COLOR ACCESORIOS', w: 14 },
+  { label: 'ANCHO', w: 8, align: 'r' },
+  { label: 'ALTO', w: 8, align: 'r' },
+  { label: 'VAL. UNIT.', w: 13, align: 'r' },
   { label: 'DCT%', w: 8, align: 'c' },
-  // 15 mm y no 13: con menos, el rótulo se partía a mitad de palabra.
+  // 15 mm y no menos: con menos, el rótulo se parte a mitad de palabra.
   { label: 'DESCUENTO $', w: 15, align: 'r' },
   { label: 'TOTAL', w: 13, align: 'r' },
 ];
@@ -391,13 +472,29 @@ export const ANCHO_UTIL = ANCHO_TABLA;
 
 /** Los tres bloques que agrupan las columnas en la cabecera. */
 const GRUPOS: Array<{ label: string; desde: number; hasta: number }> = [
-  { label: 'INFORMACIÓN DEL PRODUCTO', desde: 0, hasta: 7 },
-  { label: 'MEDIDAS', desde: 8, hasta: 9 },
-  { label: 'PRECIO', desde: 10, hasta: 13 },
+  { label: 'INFORMACIÓN DEL PRODUCTO', desde: 0, hasta: 8 },
+  { label: 'MEDIDAS', desde: 9, hasta: 10 },
+  { label: 'PRECIO', desde: 11, hasta: 14 },
 ];
 
 const ALTO_FILA = 5;
 const ALTO_CAB = 4.6;
+/**
+ * TODO el cuerpo de la tabla va a este tamaño (dueño, 2026-09-14: «las letras
+ * de la cotización deben ser del mismo tamaño»). Antes cada celda se achicaba
+ * sola hasta 4,2 pt para que su texto entrara en una línea, así que la
+ * descripción larga salía en letra chica al lado de un TIPO en letra normal —y
+ * encima cortada a mitad de palabra—. Ahora lo largo se parte en varias líneas
+ * y la fila crece.
+ */
+const TAM_CUERPO = 6;
+/** Cuánto mide cada línea del cuerpo, y hasta cuántas puede tener una fila. */
+const ALTO_LINEA = 2.5;
+const LINEAS_FILA = 3;
+/** Los colores de los recuadros de la columna CAT. */
+const VERDE_SUAVE: RGB = [198, 231, 186];
+const AMBAR_SUAVE: RGB = [255, 224, 138];
+const CELESTE_SUAVE: RGB = [187, 218, 244];
 
 function anchoDe(desde: number, hasta: number): number {
   return COLS.slice(desde, hasta + 1).reduce((a, c) => a + c.w, 0);
@@ -437,27 +534,73 @@ function cabeceraTabla(doc: jsPDF, y: number): number {
   return y + ALTO_CAB;
 }
 
-function filaTabla(doc: jsPDF, y: number, fila: FilaPdf, indice: number): number {
+/** Lo que mide una fila: crece con la celda que más líneas necesita. */
+function altoDeFila(doc: jsPDF, fila: FilaPdf): number {
+  let n = 1;
+  COLS.forEach((c, j) => {
+    const cel = fila.celdas[j];
+    if (!cel || cel.distintivos) return;
+    n = Math.max(
+      n,
+      ajustarTexto(doc, cel.txt, c.w, TAM_CUERPO, !!cel.bold, LINEAS_FILA).lineas.length,
+    );
+  });
+  return Math.max(ALTO_FILA, 1.9 + n * ALTO_LINEA);
+}
+
+/** Los recuadros de la columna CAT, centrados y uno debajo del otro. */
+function dibujarDistintivos(
+  doc: jsPDF,
+  ds: DistintivoPdf[],
+  x: number,
+  w: number,
+  y: number,
+  h: number,
+) {
+  const alto = 2.6;
+  const aire = 0.6;
+  const total = ds.length * alto + (ds.length - 1) * aire;
+  let yy = y + (h - total) / 2;
+  const wRec = Math.min(w - 1.4, 5.2);
+  for (const d of ds) {
+    set(doc, 'fill', d.fondo);
+    doc.roundedRect(x + (w - wRec) / 2, yy, wRec, alto, 0.5, 0.5, 'F');
+    celda(doc, d.txt, x + (w - wRec) / 2, wRec, yy, alto, {
+      align: 'c',
+      bold: true,
+      size: 5.2,
+      color: TEXTO,
+      sinAchicar: true,
+    });
+    yy += alto + aire;
+  }
+}
+
+function filaTabla(doc: jsPDF, y: number, fila: FilaPdf, indice: number, alto: number): number {
   const fondo = fila.fondo ?? (indice % 2 === 0 ? FONDO_SUAVE : BLANCO);
   let cx = MG;
   COLS.forEach((c, j) => {
     set(doc, 'fill', fondo);
-    doc.rect(cx, y, c.w, ALTO_FILA, 'F');
+    doc.rect(cx, y, c.w, alto, 'F');
     set(doc, 'draw', LINEA);
     doc.setLineWidth(0.15);
-    doc.rect(cx, y, c.w, ALTO_FILA);
+    doc.rect(cx, y, c.w, alto);
     const cel = fila.celdas[j];
-    if (cel) {
-      celda(doc, cel.txt, cx, c.w, y, ALTO_FILA, {
+    if (cel?.distintivos?.length) {
+      dibujarDistintivos(doc, cel.distintivos, cx, c.w, y, alto);
+    } else if (cel) {
+      celda(doc, cel.txt, cx, c.w, y, alto, {
         align: cel.align ?? c.align ?? 'l',
         bold: cel.bold,
         color: cel.color,
-        size: 6,
+        size: TAM_CUERPO,
+        lineas: LINEAS_FILA,
+        sinAchicar: true,
       });
     }
     cx += c.w;
   });
-  return y + ALTO_FILA;
+  return y + alto;
 }
 
 // ── Secciones ────────────────────────────────────────────────────────
@@ -675,6 +818,19 @@ function secGrillaCliente(doc: jsPDF, e: EntradaPdfCotizacion, y: number): numbe
   return y + h * 5 + 1.5;
 }
 
+/**
+ * Los recuadros de la columna CAT: la gama de la tela (A o B) y, si la cortina
+ * se corta rotada, el de invertida. Salen de la línea que el motor cotizó, no
+ * de una cuenta aparte: lo que se lee es la categoría con la que se cobró.
+ */
+function distintivosDeCortina(f: FilaPdfCortina): DistintivoPdf[] {
+  const ds: DistintivoPdf[] = [
+    f.lineaB ? { txt: 'B', fondo: AMBAR_SUAVE } : { txt: 'A', fondo: VERDE_SUAVE },
+  ];
+  if (f.invertida) ds.push({ txt: 'INV', fondo: CELESTE_SUAVE });
+  return ds;
+}
+
 function celdasDeCortina(f: FilaPdfCortina): CeldaPdf[] {
   const dct = f.descuento > 0 ? `${Math.round(f.descuento * 100)}%` : '';
   return [
@@ -684,6 +840,7 @@ function celdasDeCortina(f: FilaPdfCortina): CeldaPdf[] {
     { txt: f.codInt },
     { txt: f.tipo },
     { txt: f.descripcion },
+    { txt: '', distintivos: distintivosDeCortina(f) },
     { txt: f.ubicacion },
     { txt: f.colorAcc },
     { txt: fmtMedida3(f.ancho) },
@@ -705,6 +862,8 @@ function celdasDeAdicional(a: FilaPdfAdicional): CeldaPdf[] {
     { txt: a.codInt, color: rojo, bold: !!rojo },
     { txt: a.tipo, color: rojo, bold: !!rojo },
     { txt: a.descripcion, color: rojo, bold: !!rojo },
+    // CAT: un adicional no tiene gama ni corte.
+    { txt: '' },
     { txt: a.ubicacion ?? '', color: rojo },
     { txt: a.colorAcc ?? '', color: rojo },
     { txt: '' },
@@ -723,10 +882,12 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
   y = cabeceraTabla(doc, y);
   let i = 0;
   for (const f of ctx.cortinas) {
-    if (y + ALTO_FILA > PIE_PAGINA) y = cabeceraTabla(doc, ctx.nuevaPagina());
     // La fila pintada en la grilla se imprime con su color; el resto conserva
     // el fondo alternado de siempre (lo resuelve `filaTabla`).
-    y = filaTabla(doc, y, { celdas: celdasDeCortina(f), fondo: rgbDeHex(f.colorFila) }, i++);
+    const fila = { celdas: celdasDeCortina(f), fondo: rgbDeHex(f.colorFila) };
+    const alto = altoDeFila(doc, fila);
+    if (y + alto > PIE_PAGINA) y = cabeceraTabla(doc, ctx.nuevaPagina());
+    y = filaTabla(doc, y, fila, i++, alto);
   }
 
   if (ctx.adicionales.length) {
@@ -741,18 +902,15 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
     });
     y += ALTO_CAB;
     for (const a of ctx.adicionales) {
-      if (y + ALTO_FILA > PIE_PAGINA) y = cabeceraTabla(doc, ctx.nuevaPagina());
-      y = filaTabla(
-        doc,
-        y,
-        {
-          celdas: celdasDeAdicional(a),
-          // Un color elegido a mano manda sobre el rojo automático de la
-          // instalación gratis: si la vendedora la pintó, es a propósito.
-          fondo: rgbDeHex(a.colorFila) ?? (a.destacadoRojo ? ROJO_SUAVE : undefined),
-        },
-        i++,
-      );
+      const fila = {
+        celdas: celdasDeAdicional(a),
+        // Un color elegido a mano manda sobre el rojo automático de la
+        // instalación gratis: si la vendedora la pintó, es a propósito.
+        fondo: rgbDeHex(a.colorFila) ?? (a.destacadoRojo ? ROJO_SUAVE : undefined),
+      };
+      const alto = altoDeFila(doc, fila);
+      if (y + alto > PIE_PAGINA) y = cabeceraTabla(doc, ctx.nuevaPagina());
+      y = filaTabla(doc, y, fila, i++, alto);
     }
   }
 
@@ -782,8 +940,12 @@ function secTabla(doc: jsPDF, ctx: Ctx, y: number): number {
  * MISMA celda —uno a la izquierda y el otro a la derecha—, así que los dos
  * juntos tienen que caber acá: un rótulo largo no se trunca, se monta encima
  * del monto. Hay un test que lo vigila.
+ *
+ * 80 y no 72 desde el 2026-09-14: el total con tarjeta nombra el medio de pago
+ * («Pago con tarjeta de crédito (Mercadopago)») y con 72 se montaba encima del
+ * monto.
  */
-export const ANCHO_TOTALES = 72;
+export const ANCHO_TOTALES = 80;
 
 /** El recuadro de totales. Devuelve la y a la que llega. */
 function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
@@ -804,16 +966,17 @@ function secTotales(doc: jsPDF, e: EntradaPdfCotizacion, y: number): number {
       doc.setLineWidth(0.2);
       doc.line(x, yy, x + w, yy);
     }
-    // La tarjeta va en rojo claro y la transferencia en negro (dueño,
-    // 2026-09-07): son los dos montos que el cliente compara, y con la misma
-    // banda había que leer el rótulo para distinguirlos.
-    const enRojo = f.tono === 'rojo';
+    // Los dos montos que el cliente compara van con banda propia: la de la
+    // tarjeta en AZUL (arriba) y la de la transferencia en AMARILLO (abajo),
+    // en ese orden (dueño, 2026-09-14). En rojo y negro, lo primero que
+    // saltaba a la vista al abrir el documento era el monto más alto.
+    const esTarjeta = f.tono === 'tarjeta';
     if (f.fuerte) {
-      set(doc, 'fill', enRojo ? ROJO_SUAVE : NEGRO);
+      set(doc, 'fill', esTarjeta ? AZUL : AMARILLO_SUAVE);
       doc.rect(x, yy, w, hf, 'F');
     }
-    const color = f.fuerte ? (enRojo ? ROJO : BLANCO) : TEXTO;
-    celda(doc, f.label(e.totales), x + 1, w - 2, yy, hf, {
+    const color = f.fuerte ? (esTarjeta ? BLANCO : TEXTO) : TEXTO;
+    celda(doc, f.labelPdf?.(e.totales, e.proveedorTarjeta) ?? f.label(e.totales), x + 1, w - 2, yy, hf, {
       bold: f.fuerte,
       size: f.fuerte ? 7.6 : 6.4,
       color,

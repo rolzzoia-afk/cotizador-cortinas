@@ -15,10 +15,13 @@ export default function FilaTotal({
   valor: string;
   /** Uno de los dos montos que paga el cliente (el resto es el desglose). */
   fuerte?: boolean;
-  /** Cómo se pinta el monto fuerte: el de tarjeta en rojo, como en el PDF. */
-  tono?: 'oscuro' | 'rojo';
+  /**
+   * Cuál de los dos montos es: el de la tarjeta va en rojo. En el PDF esos dos
+   * se pintan distinto (amarillo y azul); en pantalla se quedan como estaban.
+   */
+  tono?: 'transferencia' | 'tarjeta';
 }) {
-  const rojo = fuerte && tono === 'rojo';
+  const rojo = fuerte && tono === 'tarjeta';
   return (
     // `gap-6`: el recuadro se ancha según su fila más larga, así que sin una
     // separación mínima la etiqueta y el monto quedaban pegados.

@@ -13,6 +13,9 @@ const guardadosCon = vi.hoisted(() => [] as string[]);
 const rellenos = vi.hoisted(
   () => [] as Array<{ x: number; y: number; w: number; h: number; color: string }>,
 );
+// Cada texto con el TAMAÑO con que se dibujó: es lo único que delata que una
+// celda se achicó para caber (lo que el dueño pidió que dejara de pasar).
+const impresos = vi.hoisted(() => [] as Array<{ txt: string; size: number }>);
 
 vi.mock('jspdf', async (importOriginal) => {
   const mod = await importOriginal<typeof import('jspdf')>();
@@ -20,9 +23,17 @@ vi.mock('jspdf', async (importOriginal) => {
     constructor(...args: ConstructorParameters<typeof mod.jsPDF>) {
       super(...args);
       const self = this as unknown as Record<string, (...a: never[]) => unknown>;
+      let tam = 0;
+      const setFontSizeOriginal = self.setFontSize.bind(this);
+      self.setFontSize = ((n: number) => {
+        tam = n;
+        return setFontSizeOriginal(n as never);
+      }) as never;
       const textOriginal = self.text.bind(this);
       self.text = ((s: string | string[], ...rest: never[]) => {
-        textosImpresos.push(Array.isArray(s) ? s.join(' ') : String(s));
+        const txt = Array.isArray(s) ? s.join(' ') : String(s);
+        textosImpresos.push(txt);
+        impresos.push({ txt, size: tam });
         return textOriginal(s as never, ...rest);
       }) as never;
       const linkTextoOriginal = self.textWithLink.bind(this);
@@ -51,6 +62,12 @@ vi.mock('jspdf', async (importOriginal) => {
       self.rect = ((x: number, y: number, w: number, h: number, ...rest: never[]) => {
         if (String(rest[0]) === 'F') rellenos.push({ x, y, w, h, color: relleno });
         return rectOriginal(x as never, y as never, w as never, h as never, ...rest);
+      }) as never;
+      // Los recuadros de la columna CAT van con esquinas redondeadas.
+      const roundedOriginal = self.roundedRect.bind(this);
+      self.roundedRect = ((x: number, y: number, w: number, h: number, ...rest: never[]) => {
+        if (String(rest[2]) === 'F') rellenos.push({ x, y, w, h, color: relleno });
+        return roundedOriginal(x as never, y as never, w as never, h as never, ...rest);
       }) as never;
       self.save = ((nombre: string) => {
         guardadosCon.push(nombre);
@@ -159,6 +176,92 @@ beforeEach(() => {
   enlaces.length = 0;
   guardadosCon.length = 0;
   rellenos.length = 0;
+  impresos.length = 0;
+});
+
+// «Las letras de la cotización deben ser del mismo tamaño» (dueño, 2026-09-14).
+// Antes cada celda se achicaba sola hasta 4,2 pt para meter su texto en una
+// línea y después lo cortaba: la DESCRIPCIÓN salía en letra chica —y a medio
+// escribir, con un paréntesis suelto al final— al lado de un TIPO en letra
+// normal.
+describe('generarPdfCotizacion — el cuerpo de la tabla, todo del mismo tamaño', () => {
+  const LARGA = 'BLANCO 5% ROSC 95 85 (ESTANDAR)';
+  const cotizarConLarga = () =>
+    generarPdfCotizacion(
+      entradaDemo({
+        // Sin la banda de la gama B, que se dibuja en 19 pt y no es el cuerpo.
+        soloTelasB: false,
+        hayTelaB: false,
+        cortinas: [
+          {
+            ...CORTINA,
+            producto: 'BEEBLACK-BLACKOUT WATERPROFF',
+            descripcion: LARGA,
+            ubicacion: 'PRUEBA 2',
+          },
+        ],
+      }),
+    );
+
+  it('ninguna celda del cuerpo se achica: todas van a 6 pt', () => {
+    cotizarConLarga();
+    const cuerpo = impresos.filter((i) =>
+      /WATERPROFF|BEEBLACK|BLACKOUT|ROSC|ESTANDAR|DUOBK_P|PREMIUM|PRUEBA/.test(i.txt),
+    );
+    expect(cuerpo.length).toBeGreaterThan(4);
+    expect([...new Set(cuerpo.map((i) => i.size))]).toEqual([6]);
+  });
+
+  it('lo largo se parte en líneas y no se corta a mitad de palabra', () => {
+    cotizarConLarga();
+    const junto = impresos.map((i) => i.txt).join(' ');
+    expect(junto).toContain('(ESTANDAR)');
+    expect(junto).toContain('WATERPROFF');
+    expect(junto).not.toContain('…');
+  });
+
+  it('la fila crece con el texto: la tabla ya no cabe en el alto de antes', () => {
+    cotizarConLarga();
+    const filas = rellenos.filter((r) => r.w > 20 && r.h >= 5 && r.h < 12);
+    expect(filas.some((r) => r.h > 5)).toBe(true);
+  });
+});
+
+// La categoría se lee de un vistazo en la grilla; en el papel también hacía
+// falta (dueño, 2026-09-14: «que diga categoría A o B o invertida en un cuadro
+// pequeño»).
+describe('generarPdfCotizacion — la columna CAT', () => {
+  const VERDE = '198,231,186';
+  const AMBAR = '255,224,138';
+  const CELESTE = '187,218,244';
+  const pinto = (rgb: string) => rellenos.some((r) => r.color === rgb && r.w < 6 && r.h < 3);
+
+  it('una cortina de gama A lleva su recuadro verde, y ninguno más', () => {
+    generarPdfCotizacion(entradaDemo({ cortinas: [CORTINA] }));
+    expect(pinto(VERDE)).toBe(true);
+    expect(pinto(AMBAR)).toBe(false);
+    expect(pinto(CELESTE)).toBe(false);
+  });
+
+  it('la categoría B lleva el ámbar', () => {
+    generarPdfCotizacion(entradaDemo({ cortinas: [{ ...CORTINA, lineaB: true }] }));
+    expect(pinto(AMBAR)).toBe(true);
+    expect(pinto(VERDE)).toBe(false);
+  });
+
+  it('la invertida suma su recuadro al de la gama', () => {
+    generarPdfCotizacion(entradaDemo({ cortinas: [{ ...CORTINA, invertida: true }] }));
+    expect(pinto(VERDE)).toBe(true);
+    expect(pinto(CELESTE)).toBe(true);
+    expect(impreso()).toContain('INV');
+  });
+
+  it('los adicionales no llevan categoría', () => {
+    generarPdfCotizacion(entradaDemo({ cortinas: [] }));
+    expect(pinto(VERDE)).toBe(false);
+    expect(pinto(AMBAR)).toBe(false);
+    expect(pinto(CELESTE)).toBe(false);
+  });
 });
 
 // Las vendedoras pintan filas en la planilla para agrupar las cortinas de una
@@ -283,9 +386,9 @@ describe('generarPdfCotizacion', () => {
     expect(imagenes.some((i) => i === SELLO_TARJETAS)).toBe(false);
   });
 
-  it('dibuja las 14 columnas del Excel, agrupadas', () => {
+  it('dibuja las columnas del Excel más la CAT, agrupadas', () => {
     generarPdfCotizacion(entradaDemo());
-    for (const c of ['COD', 'CANT', 'PRODUCTO', 'COD_INT', 'DCT%', 'DESCUENTO $', 'TOTAL']) {
+    for (const c of ['COD', 'CANT', 'PRODUCTO', 'COD_INT', 'CAT', 'DCT%', 'DESCUENTO $', 'TOTAL']) {
       expect(impreso()).toContain(c);
     }
     expect(impreso()).toContain('INFORMACIÓN DEL PRODUCTO');
@@ -306,7 +409,10 @@ describe('generarPdfCotizacion', () => {
   it('la instalación gratis sale como adicional con 100% y total en guion', () => {
     generarPdfCotizacion(entradaDemo());
     expect(impreso()).toContain('ADICIONALES');
-    expect(impreso()).toContain('INSTALACION ROLLER');
+    // El producto largo se parte en dos líneas de la celda (el cuerpo va todo
+    // del mismo tamaño y ya no se achica).
+    expect(impreso()).toContain('INSTALACION');
+    expect(impreso()).toContain('ROLLER');
     expect(impreso()).toContain('GRATIS');
     expect(impreso()).toContain('100%');
     expect(impreso()).toContain('$122.500'); // 17.500 × 7 × 100%
@@ -331,7 +437,8 @@ describe('generarPdfCotizacion', () => {
     const totales = calcularTotales(1158638);
     generarPdfCotizacion(entradaDemo());
     for (const f of FILAS_TOTALES) {
-      expect(impreso()).toContain(f.label(totales));
+      // El total con tarjeta nombra el medio de pago solo en el documento.
+      expect(impreso()).toContain(f.labelPdf?.(totales, 'mercadopago') ?? f.label(totales));
       expect(impreso()).toContain(formatCLP(f.valor(totales)));
     }
     // El IVA vuelve a estar a la vista, así que la nota que decía que iba
@@ -345,19 +452,52 @@ describe('generarPdfCotizacion', () => {
   it('cada rótulo de total cabe junto a su monto en el recuadro (no se monta encima)', () => {
     // El rótulo y el monto comparten celda: el rótulo se achica hasta caber en
     // el recuadro ENTERO, así que uno largo no se trunca —se dibuja debajo del
-    // monto—. «Subtotal pago transferencia» es el más largo (dueño, 2026-09-07:
-    // la palabra va completa). Los cuerpos son los de `secTotales`.
+    // monto—. El más largo es el del documento con Mercadopago («Pago con
+    // tarjeta de crédito (Mercadopago)»). Los cuerpos son los de `secTotales`.
     const doc = new jsPDF('p', 'mm', 'a4');
     const totales = calcularTotales(1158638);
     for (const f of FILAS_TOTALES) {
       doc.setFont('helvetica', f.fuerte ? 'bold' : 'normal');
       doc.setFontSize(f.fuerte ? 7.6 : 6.4);
-      const wRotulo = doc.getTextWidth(f.label(totales));
+      const wRotulo = Math.max(
+        ...(['mercadopago', 'flow'] as const).map((p) =>
+          doc.getTextWidth(f.labelPdf?.(totales, p) ?? f.label(totales)),
+        ),
+      );
       doc.setFontSize(f.fuerte ? 8.6 : 7);
       const wMonto = doc.getTextWidth(formatCLP(f.valor(totales)));
       // 2 mm de margen interno + 1,6 de aire entre los dos textos.
       expect(wRotulo + wMonto, f.id).toBeLessThan(ANCHO_TOTALES - 3.6);
     }
+  });
+
+  // Al abrir el documento, lo primero que saltaba a la vista era el monto MÁS
+  // ALTO, en rojo (dueño, 2026-09-14). Ahora la tarjeta va resaltada en AZUL
+  // (arriba) y la transferencia en AMARILLO (abajo), en ese orden, y solo en el
+  // papel: la pantalla queda como estaba.
+  it('el total con tarjeta va en azul arriba y el de transferencia en amarillo abajo', () => {
+    generarPdfCotizacion(entradaDemo());
+    const banda = (rgb: string) => rellenos.find((r) => r.color === rgb && r.w === ANCHO_TOTALES);
+    const azul = banda('29,79,145'); // AZUL: tarjeta
+    const amarillo = banda('255,235,125'); // AMARILLO_SUAVE: transferencia
+    expect(azul).toBeDefined();
+    expect(amarillo).toBeDefined();
+    expect(azul!.y).toBeLessThan(amarillo!.y);
+    // Y ya no queda ninguna banda del recuadro en rojo ni en negro.
+    expect(banda('252,226,226')).toBeUndefined();
+    expect(banda('22,22,24')).toBeUndefined();
+  });
+
+  it('el total con tarjeta dice con qué se paga, y nombra el medio elegido', () => {
+    generarPdfCotizacion(entradaDemo());
+    expect(impreso()).toContain('Pago con tarjeta de crédito (Mercadopago)');
+    expect(impreso()).not.toContain('Tot. tarjeta de crédito');
+
+    textosImpresos.length = 0;
+    generarPdfCotizacion(entradaDemo({ proveedorTarjeta: 'flow' }));
+    expect(impreso()).toContain('Pago con tarjeta de crédito (Flow)');
+    // Con Flow las cuotas las pone el banco: la leyenda roja no se promete.
+    expect(impreso()).not.toContain('HASTA 12 CUOTAS SIN INTERÉS');
   });
 
   it('sin folio se genera igual y el archivo toma el nombre del cliente', () => {

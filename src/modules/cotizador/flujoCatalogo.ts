@@ -70,9 +70,12 @@ export type FlujoProducto = {
 
 // El motor deduce vertical y dúo así (motorFase0.ts, dentro de cotizarFase0).
 // Se replica acá para poder mostrarlo sin cotizar; el test lo mantiene alineado.
-const esDuoDe = (cod: string, nombre: string): boolean =>
+// Se exportan para que el asistente de categoría nueva valide los nombres con
+// ESTA regla y no con una parecida: un roller que se llame «DUO …» se cobraría
+// como dúo (el doble de tela) sin que nadie lo haya pedido.
+export const esDuoDe = (cod: string, nombre: string): boolean =>
   cod.startsWith('DUO') || nombre.includes('DUO');
-const esVerticalDe = (cod: string, nombre: string): boolean =>
+export const esVerticalDe = (cod: string, nombre: string): boolean =>
   /(_V_|-V$|-V-)/.test(cod) || nombre.includes('VERTICAL');
 
 /** Qué le pasa a este producto cuando alguien lo cotiza. */

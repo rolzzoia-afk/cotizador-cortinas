@@ -1,13 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
-
-// chipsCustom.ts toma `esHexValido` de chipsColores.ts, que importa el cliente
-// supabase (para su hook); en CI no hay VITE_SUPABASE_* y el módulo real lanza
-// al importarse. Mismo mock que en chipsColores.test.ts.
-vi.mock('@/lib/supabase', () => ({ supabase: {} }));
+import { describe, expect, it } from 'vitest';
 
 import {
   HEX_CHIP_CUSTOM_DEFAULT,
   MAX_CHIPS_CUSTOM,
+  chipPropioDeFamilia,
   esChipCustom,
   idChipCustom,
   saneaChipsCustom,
@@ -66,5 +62,38 @@ describe('saneaChipsCustom', () => {
     expect(saneaChipsCustom(muchas)).toHaveLength(MAX_CHIPS_CUSTOM);
     expect(saneaChipsCustom(null)).toEqual([]);
     expect(saneaChipsCustom({ label: 'X' })).toEqual([]);
+  });
+
+  // Las categorías que nacen del asistente agrupan por FAMILIA: sin conservar
+  // esa lista, un código nuevo de la familia no aparecería en su pastilla.
+  it('conserva las familias, en mayúsculas y sin repetidas', () => {
+    const [c] = saneaChipsCustom([
+      { label: 'Lino', familias: [' lino_p ', 'LINO_P', 'lino_d', '', null] },
+    ]);
+    expect(c.familias).toEqual(['LINO_P', 'LINO_D']);
+  });
+
+  it('sin familias no inventa la clave', () => {
+    expect(saneaChipsCustom([{ label: 'Promo' }])[0]).not.toHaveProperty('familias');
+    expect(saneaChipsCustom([{ label: 'Promo', familias: 'no es lista' }])[0]).not.toHaveProperty(
+      'familias',
+    );
+  });
+});
+
+describe('chipPropioDeFamilia', () => {
+  const propias = [
+    { id: 'CUSTOM-PROMO', familias: [] as string[] },
+    { id: 'CUSTOM-LINO', familias: ['LINO_P', 'LINO_D'] },
+  ];
+
+  it('encuentra la categoría que reclama la familia', () => {
+    expect(chipPropioDeFamilia('LINO_D', propias)).toBe('CUSTOM-LINO');
+    expect(chipPropioDeFamilia(' lino_p ', propias)).toBe('CUSTOM-LINO');
+  });
+
+  it('una familia que nadie reclama no cae en ninguna', () => {
+    expect(chipPropioDeFamilia('BLACKOUT_P', propias)).toBeUndefined();
+    expect(chipPropioDeFamilia('', propias)).toBeUndefined();
   });
 });

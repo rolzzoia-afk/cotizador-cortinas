@@ -28,6 +28,7 @@ import { esCortinaTipo } from '@/modules/cotizador/flujoCatalogo';
 import { useParametrosCotizador } from '@/modules/cotizador/parametros';
 import {
   REGLAS_PRECIOS_DEFAULT,
+  SUFIJO_RECETA_B,
   esCadenaMando,
   recetasDeSistema,
   sonReglasPreciosDefault,
@@ -311,6 +312,9 @@ export function ReglasPreciosSection({ tab = 'probador' }: { tab?: TabPrecios } 
         <SistemasPreciosSection
           valor={draft.sistemas}
           familiasCatalogo={familiasCatalogo}
+          familiasConRecetaB={Object.keys(draft.recetas)
+            .filter((k) => k.endsWith(SUFIJO_RECETA_B))
+            .map((k) => k.slice(0, -SUFIJO_RECETA_B.length))}
           onChange={(sistemas) => editar({ sistemas })}
         />
       )}

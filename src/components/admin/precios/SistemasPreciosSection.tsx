@@ -28,6 +28,12 @@ type Props = {
   valor: Record<string, SistemaPrecio>;
   /** COD de familia que existen en el catálogo, para poder asignarlas. */
   familiasCatalogo?: string[];
+  /**
+   * Familias que tienen receta de categoría B. Las 12 de fábrica están
+   * siempre; acá llegan las creadas después (el asistente de categoría nueva
+   * copia la `|B` del molde), que si no, no tendrían dónde teclear su tela B.
+   */
+  familiasConRecetaB?: string[];
   onChange: (v: Record<string, SistemaPrecio>) => void;
 };
 
@@ -92,12 +98,14 @@ function Sistema({
   clave,
   sistema,
   familiasDisponibles,
+  familiasConRecetaB,
   onChange,
 }: {
   clave: string;
   sistema: SistemaPrecio;
   /** COD de familia que existen en el catálogo y no están tomadas por otro sistema. */
   familiasDisponibles: string[];
+  familiasConRecetaB: string[];
   onChange: (s: SistemaPrecio) => void;
 }) {
   const num = (campo: (typeof CAMPOS)[number]['campo']) => (v: number) =>
@@ -111,7 +119,7 @@ function Sistema({
   // que ya traiga guardadas.
   const familiasTela = Array.from(
     new Set([
-      ...(esCategoriaB ? FAMILIAS_CON_RECETA : sistema.familias),
+      ...(esCategoriaB ? [...FAMILIAS_CON_RECETA, ...familiasConRecetaB] : sistema.familias),
       ...Object.keys(sistema.telaPorFamilia ?? {}),
     ]),
   );
@@ -146,7 +154,9 @@ function Sistema({
             parezca un error. */}
         {sistema.giraMedidasAlInvertir && (
           <span className="rounded bg-muted px-1.5 py-0.5 text-[0.65rem] text-muted-foreground">
-            al invertir, sus materiales se calculan con el ancho y el alto cambiados
+            girada a propósito, sus materiales se calculan con el ancho y el alto cambiados; si se
+            invierte porque no cabe en el rollo, gira solo el corte de la tela y la tela se sigue
+            cobrando por el alto
           </span>
         )}
       </div>
@@ -308,7 +318,12 @@ function Sistema({
   );
 }
 
-export function SistemasPreciosSection({ valor, familiasCatalogo = [], onChange }: Props) {
+export function SistemasPreciosSection({
+  valor,
+  familiasCatalogo = [],
+  familiasConRecetaB = [],
+  onChange,
+}: Props) {
   const claves = Object.keys(valor).sort((a, b) => a.localeCompare(b, 'es'));
   if (!claves.length) {
     return (
@@ -348,6 +363,7 @@ export function SistemasPreciosSection({ valor, familiasCatalogo = [], onChange 
             clave={k}
             sistema={valor[k]}
             familiasDisponibles={familiasCatalogo.filter((f) => !tomadas.has(f))}
+            familiasConRecetaB={familiasConRecetaB}
             onChange={(s) => onChange({ ...valor, [k]: s })}
           />
         ))}

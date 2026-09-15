@@ -115,11 +115,16 @@ export type DatosGenerales = {
   /** Descuento de instalación (0–1) para esta OT a región; si falta usa el global. */
   instalacionDescuentoRegion?: number;
   /**
-   * Descuento de instalación (0–1) puesto A MANO en su fila de ADICIONALES.
+   * Descuento de instalación (0–1) puesto A MANO en sus filas de ADICIONALES.
    * Le gana a la regla automática (gratis por cantidad / región).
    * `null`/ausente = manda la regla.
+   *
+   * Un NÚMERO vale para todas las filas de instalación: es lo que guardaban las
+   * cotizaciones anteriores al 2026-09-14, cuando había una sola. Un OBJETO
+   * lleva un % por código de tramo (`{ INST: 1, 'INST-BB': 0 }` = la roller
+   * gratis y el beeblack entero), porque cada sistema se negocia aparte.
    */
-  instalacionDescuentoManual?: number | null;
+  instalacionDescuentoManual?: number | Record<string, number> | null;
   /**
    * TIPO escrito a mano para la fila de INSTALACIÓN. Solo cambia el rótulo que
    * se lee en la grilla y en el PDF: la cantidad y el cobro los sigue

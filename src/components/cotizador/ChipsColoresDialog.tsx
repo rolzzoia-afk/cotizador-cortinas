@@ -28,6 +28,8 @@ interface ChipsColoresDialogProps {
   propias: ChipCustom[];
   onGuardar: (nuevos: ChipsColores) => Promise<void>;
   onGuardarPropias: (nuevos: ChipCustom[]) => Promise<void>;
+  /** Abre el asistente que crea la categoría CON sus productos (solo admin). */
+  onNuevaCategoria?: () => void;
   onClose: () => void;
 }
 
@@ -37,6 +39,7 @@ export default function ChipsColoresDialog({
   propias,
   onGuardar,
   onGuardarPropias,
+  onNuevaCategoria,
   onClose,
 }: ChipsColoresDialogProps) {
   const [draft, setDraft] = useState<ChipsColores>({ ...colores });
@@ -96,8 +99,9 @@ export default function ChipsColoresDialog({
 
         <div className="flex max-h-[50vh] flex-col gap-1.5 overflow-y-auto">
           {chips.map((c) => {
+            const propia = draftPropias.find((x) => x.id === c.id);
             const hex = esPropio(c.id)
-              ? (draftPropias.find((x) => x.id === c.id)?.hex ?? c.hexDefault)
+              ? (propia?.hex ?? c.hexDefault)
               : (draft[c.id] ?? c.hexDefault);
             return (
               <div key={c.id} className="flex items-center gap-2 rounded-md px-1 py-0.5">
@@ -107,6 +111,16 @@ export default function ChipsColoresDialog({
                 >
                   {c.label}
                 </span>
+                {/* Las categorías que nacen del asistente agrupan familias
+                    enteras: se dice cuáles, para que borrarla no sea a ciegas. */}
+                {!!propia?.familias?.length && (
+                  <span
+                    className="max-w-28 truncate font-mono text-[10px] text-muted-foreground"
+                    title={propia.familias.join(', ')}
+                  >
+                    {propia.familias.join(', ')}
+                  </span>
+                )}
                 <input
                   type="color"
                   value={hex}
@@ -163,6 +177,18 @@ export default function ChipsColoresDialog({
               Agregar categoría
             </Button>
           </div>
+          {onNuevaCategoria && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onNuevaCategoria();
+              }}
+              className="mt-2 text-[11px] text-accent underline"
+            >
+              Crear una categoría CON sus productos (familia, precios y telas)…
+            </button>
+          )}
         </div>
 
         <DialogFooter className="flex items-center gap-2">
