@@ -158,7 +158,13 @@ SET search_path = public
 AS $fn$
 DECLARE
   v_dominio text := CASE TG_TABLE_NAME WHEN 'insumos' THEN 'insumo' ELSE 'tela' END;
-  v_cod     text := upper(btrim(CASE TG_TABLE_NAME WHEN 'insumos' THEN NEW.cod ELSE NEW.codigo END));
+  -- OJO: por JSON, no con `NEW.cod` / `NEW.codigo`. Cada tabla tiene solo una
+  -- de las dos, y nombrar la otra —aunque sea en la rama que no se cumple—
+  -- rompía TODA actualización del saldo (arreglado por
+  -- `20260911_fix_stock_bloqueado.sql`).
+  v_cod     text := upper(btrim(
+                 to_jsonb(NEW) ->> CASE TG_TABLE_NAME WHEN 'insumos' THEN 'cod' ELSE 'codigo' END
+               ));
   v_conteo  uuid;
 BEGIN
   -- El cierre del propio conteo es lo único que puede mover estos saldos.
