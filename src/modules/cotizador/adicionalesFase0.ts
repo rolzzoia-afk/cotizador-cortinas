@@ -7,6 +7,8 @@
 
 import type { AdicionalFase0Persistido } from '@/modules/ots/types';
 import { colorFilaSaneado } from './coloresFila';
+import type { InstalacionResultado } from './motorFase0';
+import type { FilaPdfAdicional } from './pdfCotizacion';
 import { COD_INSTALACION_VERTICAL } from './reglasPrecios';
 
 export type AdicionalUI = {
@@ -203,4 +205,41 @@ export function incluidasVisibles<T extends { sistema: string }>(
 ): T[] {
   if (!hayInstalacionVerticalManual(adicionales)) return [...incluidas];
   return incluidas.filter((p) => !esSistemaVertical(p.sistema));
+}
+
+/**
+ * Las filas de INSTALACIÓN que van al documento del cliente: UNA POR SISTEMA
+ * (dueño, 2026-09-14: «una cosa es beeblack y otra roller»). Antes iba una sola
+ * fila con la suma de todos los tramos, y su CANT × VAL. UNIT no daba el TOTAL
+ * —7 cortinas × $17.500 no son $140.000 cuando una de ellas es un beeblack de
+ * $35.000—.
+ *
+ * La DESCRIPCIÓN va VACÍA a propósito (dueño, 2026-09-14): el porqué del cobro
+ * («bajo el mínimo de 4», «se cobra aparte») es cuenta de la casa y en la grilla
+ * se sigue viendo; al cliente le basta la cantidad, el valor y el descuento.
+ *
+ * Vive acá, puro, para poder probar que cada fila cuadra sin levantar la página.
+ */
+export function filasPdfInstalacion(
+  inst: InstalacionResultado,
+  tipoManual: string | undefined,
+): FilaPdfAdicional[] {
+  if (inst.sinInstalacion) return [];
+  return inst.partes.map((p) => ({
+    cod: 'INSTALACION',
+    cantidad: p.cantidad,
+    producto: `INSTALACION ${p.sistema}`.toUpperCase(),
+    // El COD_INT dice de qué instalación se trata: `INST` la roller,
+    // `INST-BB` el beeblack.
+    codInt: p.codigo,
+    // Lo único de estas filas que se escribe a mano.
+    tipo: rotuloManual(tipoManual, 'INSTALACION'),
+    descripcion: '',
+    ubicacion: '',
+    colorAcc: '',
+    valorUnit: p.precioUnit,
+    descuento: p.descuento,
+    total: p.total,
+    destacadoRojo: true,
+  }));
 }

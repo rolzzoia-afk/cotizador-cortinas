@@ -9,6 +9,9 @@ import {
   filasEjemplo,
   INSTRUCCIONES_IMPORTACION,
   leerDescuento,
+  leerFechaAlta,
+  leerGanancia,
+  mapearCabeceras,
   normCod,
 } from './importarCatalogo';
 import type { CatalogoProductos } from './types';
@@ -96,9 +99,13 @@ describe('parsearCatalogoExcel', () => {
 });
 
 describe('diffCatalogo', () => {
+  // La ficha (fecha de alta, proveedor, ganancia) va puesta con lo mismo que
+  // trae la planilla de prueba: así estos casos miden SOLO lo que dicen medir
+  // —precio, costo, descuento, categoría— y no el estreno de esas columnas.
+  const ficha = { fechaAlta: '2023-04-12', proveedor: 'Prov', ganancia: 0.65 };
   const actual: CatalogoProductos = {
-    'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: 'x', precio: 23782 },
-    'SC 64': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: 'x', precio: 21786, descuento: 0.2 },
+    'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BLACKOUT DELUX', tipo: 'DELUX', descripcion: 'x', precio: 23782, ...ficha },
+    'SC 64': { cod: 'SCREEN_P', producto: 'ROLLER SCREEN PREMIUM', tipo: 'PREMIUM', descripcion: 'x', precio: 21786, descuento: 0.2, ...ficha },
   };
 
   it('separa nuevos, cambios de descuento y sin-cambio', () => {
@@ -326,10 +333,91 @@ describe('leerDescuento — 0-1 o 0-100', () => {
   });
 });
 
+// Las cuatro columnas del Excel maestro que hasta el 2026-09-14 se botaban.
+describe('la ficha del Excel: fecha de alta, proveedor y ganancia', () => {
+  it('la fecha llega como número de serie, como texto chileno o como ISO', () => {
+    expect(leerFechaAlta(45028)).toBe('2023-04-12');
+    expect(leerFechaAlta('12-04-2023')).toBe('2023-04-12');
+    expect(leerFechaAlta('12/04/2023')).toBe('2023-04-12');
+    expect(leerFechaAlta('2023-04-12')).toBe('2023-04-12');
+    expect(leerFechaAlta(new Date(2023, 3, 12))).toBe('2023-04-12');
+  });
+
+  it('lo que no se entiende no se inventa', () => {
+    expect(leerFechaAlta('')).toBeUndefined();
+    expect(leerFechaAlta('abril')).toBeUndefined();
+    expect(leerFechaAlta('45-13-2023')).toBeUndefined();
+    expect(leerFechaAlta(null)).toBeUndefined();
+  });
+
+  it('la ganancia se escribe 65, «65 %» o 0,65 y siempre queda como divisor', () => {
+    expect(leerGanancia(65)).toBe(0.65);
+    expect(leerGanancia('65 %')).toBe(0.65);
+    expect(leerGanancia(0.65)).toBe(0.65);
+    expect(leerGanancia('0,65')).toBe(0.65);
+    expect(leerGanancia(0)).toBeUndefined();
+    expect(leerGanancia(-1)).toBeUndefined();
+    expect(leerGanancia('no')).toBeUndefined();
+  });
+
+  it('el Excel maestro las trae y ahora se guardan', () => {
+    const [f] = parsearCatalogoExcel(
+      wbProductos([fila('BLACKOUT_D', 'BK 68', 'DELUX', 0.25, 23782, 2.98)]),
+    );
+    expect(f.producto.fechaAlta).toBe('2023-04-12');
+    expect(f.producto.proveedor).toBe('Prov');
+    expect(f.producto.ganancia).toBe(0.65);
+    // El IVA NO: es uno por empresa, no un dato de cada tela.
+    expect(f.producto).not.toHaveProperty('iva');
+  });
+
+  it('estrenar la ficha cuenta como cambio, y una columna ausente no la borra', () => {
+    const viejo: CatalogoProductos = {
+      'BK 68': { cod: 'BLACKOUT_D', producto: 'P', tipo: 'DELUX', descripcion: 'x', precio: 23782 },
+    };
+    const filas = parsearCatalogoExcel(
+      wbProductos([fila('BLACKOUT_D', 'BK 68', 'DELUX', 0, 23782, 2.98)]),
+    );
+    const d = diffCatalogo(viejo, filas);
+    expect(d.cambios).toHaveLength(1);
+    expect(d.cambios[0].cambiaFicha).toBe(true);
+    expect(aplicarCatalogo(viejo, {}, filas).catalogo['BK 68'].proveedor).toBe('Prov');
+
+    // Una planilla de puros descuentos no toca la ficha ya cargada.
+    const soloDcto = [{ codInt: 'BK 68', producto: { ...filas[0].producto }, anchoRollo: null, campos: ['descuento'] as const }];
+    expect(diffCatalogo({ ...viejo, 'BK 68': { ...viejo['BK 68'], proveedor: 'Otro' } }, soloDcto)[
+      'cambios'
+    ][0]?.cambiaFicha).not.toBe(true);
+  });
+
+  it('mapearCabeceras entiende los mismos nombres que el importador', () => {
+    const m = mapearCabeceras(['COD_INT', 'Dcto %', 'Ancho de Paños', 'Fecha Alta', 'Margen']);
+    expect(m.get('codInt')).toBe(0);
+    expect(m.get('descuento')).toBe(1);
+    expect(m.get('anchoRollo')).toBe(2);
+    expect(m.get('fechaAlta')).toBe(3);
+    expect(m.get('ganancia')).toBe(4);
+    expect(m.has('precio')).toBe(false);
+  });
+});
+
 describe('filasParaPlantilla', () => {
   const CAT: CatalogoProductos = {
-    'BK 68': { cod: 'BLACKOUT_D', producto: 'ROLLER BK DELUX', tipo: 'DELUX', descripcion: 'X', precio: 23782, descuento: 0.25, costo: 6000 },
+    'BK 68': {
+      cod: 'BLACKOUT_D', producto: 'ROLLER BK DELUX', tipo: 'DELUX', descripcion: 'X',
+      precio: 23782, descuento: 0.25, costo: 6000,
+      fechaAlta: '2023-04-12', proveedor: 'Proveedor 1', ganancia: 0.65,
+      categoriaFabricacion: 'ROL',
+    },
   };
+
+  it('baja la ficha completa del Excel maestro', () => {
+    const [f] = filasParaPlantilla(CAT, {});
+    expect(f['FECHA ALTA']).toBe('2023-04-12');
+    expect(f.PROVEEDOR).toBe('Proveedor 1');
+    expect(f['GANANCIA %']).toBe(65);
+    expect(f['CATEGORIA FABRICACION']).toBe('ROL');
+  });
 
   it('baja también el costo por metro, para poder editarlo en el Excel', () => {
     expect(filasParaPlantilla(CAT, {})[0].COSTO).toBe(6000);

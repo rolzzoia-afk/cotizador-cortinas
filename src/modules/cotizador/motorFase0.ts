@@ -27,6 +27,8 @@ import {
   type TotalesCotizacion,
 } from './preciosFase0';
 import {
+  COD_INSTALACION_ROLLER,
+  COD_INSTALACION_VERTICAL,
   PASO_LAMA_M,
   REGLAS_PRECIOS_DEFAULT,
   SUFIJO_RECETA_2T,
@@ -38,6 +40,7 @@ import {
   claveReceta2T,
   claveRecetaB,
   claveRecetaInv,
+  codigoInstalacionDe,
   conCadenaMetalica,
   conTuboInvertida45,
   explicarCantidad,
@@ -93,6 +96,17 @@ export type FilaFase0 = {
    * INVERTIDA (tubo 63 mm E 47 + kit MEC 28, mano de obra y traslado propios,
    * en un panel aparte `cod|INV`). Los m² de la línea siguen saliendo de las
    * medidas vendidas. Una fila B invertida sigue siendo B.
+   *
+   * El BEEBLACK se aparta en los metros: su tiro se cobra por el ALTO + extra,
+   * no por el ancho (dueño, 2026-09-15; ver `giraMedidasAlInvertir`). Sigue
+   * siendo su propio paño, y el corte sigue saliendo rotado en el taller.
+   *
+   * Se cotiza en la OTRA PLANILLA (dueño, 2026-09-14): los paneles `…|INV` se
+   * arman solo con las invertidas de la familia y los demás solo con las
+   * derechas, así que una invertida vale exactamente lo que da el Excel de
+   * cortinas mayores con ella sola. Invertir una fila SÍ mueve el precio de sus
+   * compañeras derechas: se va del archivo de ellas y deja de repartirles la
+   * mano de obra y el traslado. Es a propósito.
    */
   invertida?: boolean;
   /**
@@ -222,9 +236,10 @@ export type ResultadoFamilia = {
    */
   cadenaMetalica: boolean;
   /**
-   * Cortinas con las que se calculó la TARIFA: TODAS las de la familia,
-   * configuradas como este panel (como si todas fueran B, o invertidas, o
-   * ninguna). Los paños y los materiales de abajo son de esas piezas.
+   * Cortinas con las que se calculó la TARIFA: todas las de su PLANILLA (las
+   * derechas de la familia, o las invertidas), configuradas como este panel
+   * (como si todas fueran B, o llevaran tubo de 45…). Los paños y los
+   * materiales de abajo son de esas piezas.
    */
   piezas: number;
   m2Total: number;
@@ -273,15 +288,24 @@ export type ResultadoFamilia = {
 // replica la fila del Excel: cantidad = nº de cortinas roller/dúo, precio =
 // instalación por cortina, con descuento 100% (gratis) al llegar al mínimo en
 // RM, o el % de región (editable). Total 0 → no altera el subtotal (RM 4+).
-/** Un tramo de la fila de instalación: las cortinas que se instalan al mismo precio. */
+/** Un tramo de la instalación: las cortinas que se instalan al mismo precio. */
 export type ParteInstalacion = {
+  /**
+   * COD_INT de este tramo: `INST` la roller, `INST-BB` el beeblack, `INST-VERT`
+   * las que ya van cobradas en el precio. Es la llave ESTABLE del tramo —la que
+   * guarda su % escrito a mano y la que se imprime en el documento—, porque el
+   * nombre del sistema se puede cambiar en Admin.
+   */
+  codigo: string;
   /** Nombre del sistema, o 'Roller' para las que van con las reglas normales. */
   sistema: string;
   cantidad: number;
   precioUnit: number;
-  /** El 0-1 que se le aplicó a ESTE tramo (puede diferir del de la fila). */
+  /** El 0-1 que se le aplicó a ESTE tramo (puede diferir del de otro). */
   descuento: number;
   total: number;
+  /** El % de ESTE tramo lo escribió la vendedora: le ganó a la regla. */
+  descuentoManual: boolean;
   /**
    * Este tramo NO toma el descuento automático (llegar al mínimo de cortinas o
    * el % de región): su instalación se cobra siempre. Son los sistemas con
@@ -292,17 +316,30 @@ export type ParteInstalacion = {
   siempreSeCobra: boolean;
 };
 
+/**
+ * El % de instalación escrito a mano: uno solo para todos los tramos (lo que
+ * guardan las cotizaciones anteriores al 2026-09-14) o uno por CÓDIGO de tramo
+ * (`{ INST: 1, 'INST-BB': 0 }` = la roller gratis y el beeblack entero).
+ */
+export type DescuentoInstalacionManual = number | Partial<Record<string, number>> | null;
+
 export type InstalacionResultado = {
-  cantidad: number; // nº de cortinas roller/dúo instalables
-  precioUnit: number; // instalación por cortina
-  descuento: number; // 0-1 aplicado a la línea
-  total: number; // cantidad × precioUnit × (1 − descuento)
-  gratis: boolean; // descuento >= 1
+  cantidad: number; // nº de cortinas instalables (todos los sistemas)
+  /** Instalación por cortina. Solo tiene sentido con UN tramo; con varios, cada uno trae el suyo. */
+  precioUnit: number;
+  /** 0-1 de la regla automática (o el % único escrito a mano). Por tramo, ver `partes`. */
+  descuento: number;
+  total: number; // la suma de los tramos
+  gratis: boolean; // no se cobra nada y cada tramo tiene su motivo
   region: boolean; // si se cotizó como región
   sinInstalacion: boolean; // true = cliente retira / solo cortina (sin instalación)
-  /** El % lo puso la vendedora a mano y le ganó a la regla automática. */
+  /** Algún tramo lleva un % escrito a mano. */
   descuentoManual: boolean;
-  /** Desglose cuando conviven sistemas que cobran distinto (roller + beeblack). */
+  /**
+   * Un tramo por sistema: cada uno es una FILA de la cotización, con su
+   * cantidad, su precio y su descuento. Una cosa es la roller y otra el
+   * beeblack (dueño, 2026-09-14): cobran distinto y se negocian por separado.
+   */
   partes: ParteInstalacion[];
   /**
    * Instalaciones que YA están dentro del valor unitario de cada cortina y por
@@ -328,15 +365,61 @@ export type AvisoCotizacion = {
   mensaje: string;
 };
 
+/** «6 cortinas» / «1 cortina». */
+function cuentaCortinas(n: number): string {
+  return `${n} ${n === 1 ? 'cortina' : 'cortinas'}`;
+}
+
 /**
- * Por qué la fila de instalación vale lo que vale, para el recuadro de totales.
+ * Por qué UN tramo de instalación vale lo que vale: es la DESCRIPCIÓN de su
+ * fila, en la grilla y en el documento del cliente. Cada sistema explica lo
+ * suyo, que es lo que pidió el dueño al ver «7 cortinas» en una fila que
+ * mezclaba 6 roller con un beeblack.
+ */
+export function textoParteInstalacion(
+  p: ParteInstalacion,
+  i: Pick<InstalacionResultado, 'cantidad' | 'region' | 'sinInstalacion'>,
+  minGratis: number,
+): string {
+  const n = cuentaCortinas(p.cantidad);
+  const pct = Math.round(p.descuento * 100);
+  if (i.sinInstalacion) return `${n}, sin instalación`;
+  if (p.descuentoManual) {
+    if (pct >= 100) return `${n}, sin costo`;
+    return pct <= 0 ? `${n}, sin descuento` : `${n}, ${pct} % de descuento`;
+  }
+  // El que instala aparte (el beeblack) no entra al gratis por cantidad.
+  if (p.siempreSeCobra) return `${n}, se cobra aparte`;
+  if (i.region) {
+    return pct >= 100 ? `${n}, región: sin costo` : `${n}, región: ${pct} % de descuento`;
+  }
+  // El mínimo lo cumplen TODAS las cortinas de la cotización, no solo las de
+  // este tramo: dos roller salen gratis si el beeblack completa las cuatro.
+  if (i.cantidad >= minGratis) {
+    return `${n}, ${minGratis} o más${p.cantidad < minGratis ? ' en total' : ''}: sin costo`;
+  }
+  return `${n}, bajo el mínimo de ${minGratis}`;
+}
+
+/**
+ * Por qué la instalación vale lo que vale, mirando la cotización entera (el
+ * recuadro de totales y el probador de Admin). Cada FILA usa el texto de su
+ * tramo; este resume.
+ *
  * El texto viejo decía «bajo el mínimo» siempre, incluso en una cotización de
  * región con más cortinas que el mínimo, y le contaba eso al cliente.
  */
 export function textoInstalacion(i: InstalacionResultado, minGratis: number): string {
-  const n = `${i.cantidad} ${i.cantidad === 1 ? 'cortina' : 'cortinas'}`;
+  const n = cuentaCortinas(i.cantidad);
   if (i.sinInstalacion) return `${n}, sin instalación`;
   if (i.descuentoManual) {
+    // Con un % por tramo no hay un solo número que contar: se enumeran.
+    if (i.partes.length === 1) return textoParteInstalacion(i.partes[0], i, minGratis);
+    if (i.partes.length > 1) {
+      return i.partes
+        .map((p) => `${p.sistema}: ${textoParteInstalacion(p, i, minGratis)}`)
+        .join(' · ');
+    }
     const pct = Math.round(i.descuento * 100);
     return pct >= 100 ? `${n}, sin costo` : `${n}, ${pct} % de descuento`;
   }
@@ -749,8 +832,12 @@ export function cotizarFase0(
    * regla automática (gratis por cantidad / región). `null` = la regla manda.
    * Existe porque la instalación es una línea más de ADICIONALES y la
    * vendedora la negocia como cualquier otra, sobre todo a región.
+   *
+   * Un número vale para TODOS los tramos (es lo que guardan las cotizaciones
+   * anteriores al 2026-09-14); un objeto lleva un % por CÓDIGO de tramo
+   * (`{ INST: 1, 'INST-BB': 0 }` = roller gratis, beeblack entero).
    */
-  descuentoInstalacionManual: number | null = null,
+  descuentoInstalacionManual: DescuentoInstalacionManual = null,
 ): ResultadoCotizacion {
   const validas = filas.filter((f) => f.codInt && f.ancho > 0 && f.alto > 0);
 
@@ -814,7 +901,7 @@ export function cotizarFase0(
     motivoPrecioMl: MotivoPrecioMl;
     /** Metros que se le suman al alto vendido de cada cortina. */
     extraAlto: number;
-    /** TODAS las cortinas de la familia, configuradas como este panel. */
+    /** Las cortinas de su planilla (derechas o invertidas), como este panel. */
     piezas: Pieza[];
     /** Cuántas de esas piezas se cobran de verdad con este panel, y sus m². */
     piezasCobradas: number;
@@ -833,6 +920,42 @@ export function cotizarFase0(
 
   /** Metros que se suman al alto vendido: el sistema manda sobre el parámetro. */
   const extraAltoDe = (sis?: SistemaPrecio) => sis?.extraAltoM ?? params.extraAltoCm / 100;
+
+  /**
+   * La inversión es OBLIGADA: el paño más su borde no entra a lo ancho del
+   * rollo. Es la misma regla que enciende sola el icono de Fase 1
+   * (`debeInvertirPano` en tela.ts), repetida acá porque importarla arrastraría
+   * medio módulo de descuentos al motor de precios; si allá cambia, acá también.
+   */
+  const noCabeEnElRollo = (anchoM: number, anchoRolloM: number) =>
+    anchoM > 0 && anchoM + params.bordeCm / 100 > anchoRolloM;
+
+  /**
+   * ¿Esta fila gira la CORTINA ENTERA, o solo el corte de la tela?
+   *
+   * El beeblack se fabrica del riel para afuera, así que girarlo de verdad
+   * cambia cuánto se corta de cada perfil: un 1,3 × 2,5 girado a propósito vale
+   * lo mismo que un 2,5 × 1,3 derecho (dueño, 2026-09-07).
+   *
+   * Pero una cortina que NO CABE a lo ancho del rollo no se gira: se gira SOLO
+   * SU CORTE, y el marco se sigue armando con el ancho y el alto de la ventana
+   * —«solo gira la tela» (dueño, 2026-09-15)—. Un beeblack de 3,45 × 1,65 en un
+   * rollo de 2,98 es este caso: se instala derecho, la tela sale rotada.
+   *
+   * Las dos se distinguen sin preguntar: la grilla enciende el icono sola
+   * cuando el paño no entra, así que una invertida que SÍ cabía la giró alguien
+   * a mano. Girar una que no cabe la dejaría de 1,65 de ancho — y esa sí entra
+   * en el rollo, o sea que ya no sería el mismo problema.
+   */
+  const giraLaCortina = (
+    invertida: boolean,
+    sistema: SistemaPrecio | undefined,
+    anchoM: number,
+    anchoRolloM: number,
+  ) =>
+    invertida &&
+    !!sistema?.giraMedidasAlInvertir &&
+    !noCabeEnElRollo(anchoM, anchoRolloM);
 
   // La categoría B es un sistema que se elige POR FILA, no por familia: la
   // misma tela va al panel A o al panel B según el distintivo de la grilla.
@@ -968,16 +1091,24 @@ export function cotizarFase0(
   const codDeFila: (string | null)[] = resueltas.map((r) => r?.config.clave ?? null);
 
   // ── 2. Paneles ────────────────────────────────────────────────────────
-  // Por familia, un panel por configuración presente, y CADA panel se arma con
-  // TODAS las cortinas de la familia configuradas como él: la fila B se cobra a
-  // la tarifa que tendría la familia si todas fueran B (la copia B del Excel
-  // cotiza el libro entero como B), la invertida como si todas fueran
-  // invertidas (la planilla de cortinas mayores solo tiene invertidas), y las
-  // demás como si ninguna estuviera marcada. Así marcar o invertir una cortina
-  // mueve SOLO su precio —antes sacaba la pieza del panel de las otras, que
-  // se repartían la tela y el traslado entre menos metros y se movían todas
-  // (dueño, 2026-08-21)—, el traslado nunca se cobra dos veces y una
-  // cotización toda-A, toda-B o toda-invertida da exactamente lo de siempre.
+  // Cada familia se cotiza en DOS PLANILLAS, como lo hace la empresa a mano:
+  // las cortinas derechas van en el cotizador de siempre y las INVERTIDAS en el
+  // «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS», que es otro archivo. Un panel
+  // se arma solo con las filas de SU planilla (dueño, 2026-09-14: «que la
+  // decisión que pongamos deje el precio igual que en el Excel manual»): así una
+  // invertida sola vale exactamente lo que da esa planilla —no se abarata
+  // repartiendo su traslado de $50.000 con las cortinas derechas de la misma
+  // tela, que nunca estuvieron en ella—.
+  //
+  // Dentro de una planilla se mantiene la regla del 2026-08-21: un panel por
+  // configuración presente, armado con TODAS las filas de la planilla
+  // configuradas como él (la B a la tarifa que tendría la planilla si todas
+  // fueran B, la de tubo 45 como si todas llevaran 45…). Así apretar B, la
+  // cadena metálica o el tubo en una fila mueve SOLO su precio, el traslado
+  // nunca se cobra dos veces, y una planilla toda-A o toda-B da lo de siempre.
+  // Lo único que sí mueve a las compañeras es INVERTIR una fila: se va a la
+  // otra planilla y deja de repartir gastos con ellas, igual que si la
+  // vendedora la pasara al otro archivo.
   const porFamilia = new Map<string, FilaResuelta[]>();
   for (const r of resueltas) {
     if (!r) continue;
@@ -991,13 +1122,22 @@ export function cotizarFase0(
     for (const r of filasFam) if (!configs.has(r.config.clave)) configs.set(r.config.clave, r.config);
     // Dúo/vertical y ancho de rollo son de la familia: los de su primera fila.
     const { esDuo, esVertical, anchoRollo } = filasFam[0];
-    // Las telas de la familia que van EN ESTA COTIZACIÓN: la más cara de ellas
-    // es el techo del precio (la de referencia es el piso). Se miran TODAS las
-    // filas de la familia, no las del panel: un panel se arma con toda la
-    // familia configurada como él, así que su tarifa se cobra por los mismos
-    // metros y tiene que salir del mismo grupo de telas.
-    const vendidos = new Set(filasFam.map((r) => r.f.codInt));
+    // Las filas de cada planilla: las derechas y las invertidas. Se mira
+    // `config.invertida` —la tela cortada rotada— y no `sistemaInv`: la
+    // categoría B invertida, la standard, el dúo y el beeblack girado también
+    // se cotizan en la planilla de mayores, aunque no usen el sistema de
+    // precios propio de la invertida.
+    const planillaDe = (invertida: boolean) =>
+      filasFam.filter((r) => r.config.invertida === invertida);
     for (const [clave, c] of configs) {
+      // Nunca vacía: esta configuración salió de una fila de esta planilla.
+      const filasPanel = planillaDe(c.invertida);
+      // Las telas de ESTA PLANILLA que van en la cotización: la más cara de
+      // ellas es el techo del precio (la de referencia es el piso). Son las de
+      // la planilla y no las de la familia entera, porque la tarifa del panel
+      // se cobra por los metros de la planilla: una tela cara vendida derecha
+      // no puede encarecer la invertida, que vive en el otro archivo.
+      const vendidos = new Set(filasPanel.map((r) => r.f.codInt));
       const tela = precioMlPorCod(cod, catalogo, reglas, c.sistema, vendidos);
       if (tela.motivo === 'sinPrecio') {
         avisar({
@@ -1012,16 +1152,12 @@ export function cotizarFase0(
       const piezas: Pieza[] = [];
       let piezasCobradas = 0;
       let m2Cobrados = 0;
-      for (const r of filasFam) {
-        // Un sistema que se fabrica del riel para afuera (el beeblack) no corta
-        // la tela rotada: al invertirlo, «el alto pasa a ser ancho y el ancho a
-        // ser alto» (dueño, 2026-09-07), y la cortina se cotiza ENTERA con las
-        // medidas cambiadas —tela, m² y materiales—. Invertir un 1,3 × 2,5 sale
-        // exactamente lo mismo que vender un 2,5 × 1,3 derecho. Antes se giraban
-        // solo los materiales y la tela se cobraba rotada: el paño quedaba de
-        // 3,50 m de ancho (2,50 + el metro extra) contra un rollo de 2,98, o
-        // sea un corte imposible que abarataba la cortina.
-        const gira = c.invertida && !!c.sistema?.giraMedidasAlInvertir;
+      for (const r of filasPanel) {
+        // Girada a propósito (beeblack que SÍ cabía en el rollo): la cortina se
+        // cotiza ENTERA con las medidas cambiadas —tela, m² y materiales—, que
+        // es lo mismo que venderla al revés. Si la inversión fue obligada
+        // porque no cabía, `giraLaCortina` dice que no y solo se rota el corte.
+        const gira = giraLaCortina(c.invertida, c.sistema, r.f.ancho, anchoRollo);
         const ancho = gira ? r.f.alto : r.f.ancho;
         const alto = gira ? r.f.ancho : r.f.alto;
         // El sobreancho de corte (el peor caso de montaje que calcula Fase 1) es
@@ -1036,13 +1172,33 @@ export function cotizarFase0(
         // de cortinas mayores: `ALTO A UTILIZAR = ancho + 0,25`). Los m² no
         // cambian: la cortina vendida es la misma.
         const rotada = c.invertida && !gira;
+        // El BEEBLACK es la excepción: aunque el corte salga rotado, su tela se
+        // cobra POR EL ALTO —un solo paño de `alto + extra`— porque así la
+        // cobra el dueño (2026-09-15): «el alto 1,65 + 1 = 2,65, no los 3,45,
+        // porque eso sería el ancho y nosotros cobramos por alto». Es lo que
+        // hace la hoja `Optimizador` de su planilla, que le asigna UN paño a
+        // una cortina más ancha que el rollo y le cobra una sola caída; con eso
+        // el mosquitero de 3,45 × 1,65 calza al peso con su Excel.
+        //
+        // No se extiende a la invertida de roller/oscuridad: esa se cotiza con
+        // el Excel «COTIZADOR PARA CORTINAS MAYORES A 3,00 MTS», que sí cobra
+        // `ancho + 0,25` por cortina (dueño, 2026-08-21). Por eso el interruptor
+        // es `giraMedidasAlInvertir`, que solo lleva el beeblack.
+        //
+        // Sigue sin compartir tiro con otras piezas: cada invertida es su
+        // propio paño, como el Optimizador de esa planilla.
+        const telaPorAlto = rotada && !!c.sistema?.giraMedidasAlInvertir;
         const pieza: Pieza = {
           ancho,
           alto,
           altoReal,
           m2: altoReal * ancho,
           anchoEmpaque: rotada ? altoReal : anchoEmpaqueM,
-          largoRollo: rotada ? (anchoEmpaqueM ?? ancho) + extraAlto : undefined,
+          largoRollo: !rotada
+            ? undefined
+            : telaPorAlto
+              ? altoReal
+              : (anchoEmpaqueM ?? ancho) + extraAlto,
         };
         // El corte tiene que caber a lo ancho del rollo. No cambia el precio
         // —lo pidió así el dueño—, pero se avisa: si no, una cotización sale
@@ -1232,7 +1388,7 @@ export function cotizarFase0(
     // Girada (beeblack invertido), la cortina se cobra con las medidas
     // cambiadas: los m² tienen que salir de las MISMAS que armaron su panel, o
     // el valor unitario se calcularía con una superficie y la tarifa con otra.
-    const gira = !!g?.invertida && !!g.sistema?.giraMedidasAlInvertir;
+    const gira = giraLaCortina(!!g?.invertida, g?.sistema, f.ancho, g?.anchoRollo ?? 0);
     const altoReal = altoRealM(gira ? f.ancho : f.alto, esDuo, extraAltoDe(g?.sistema));
     const m2 = altoReal * (gira ? f.alto : f.ancho);
     const precioM2 = clave ? pm2PorCod.get(clave) ?? 0 : 0;
@@ -1291,50 +1447,55 @@ export function cotizarFase0(
   //   • RM y nº ≥ mínimo → descuento RM (default 100% → total 0, no suma).
   //   • RM y nº < mínimo → sin descuento (se cobra la instalación aparte).
   //   • Región           → descuento de región (editable por empresa).
-  // Las cortinas instalables se cuentan por SISTEMA: el beeblack se cobra a
-  // otro precio que el roller (35.000 vs 17.500), así que la fila lleva un
-  // tramo por cada uno. El MÍNIMO para que salga gratis se mira sobre el
-  // total, como el `SUM(F25:F32)` del Excel, que suma todas las filas.
+  // Las cortinas instalables se cuentan por SISTEMA, y cada sistema es una FILA
+  // propia de la cotización: el beeblack se instala distinto y cobra otro precio
+  // que el roller (35.000 vs 17.500), así que mezclarlos en una sola fila daba
+  // una cantidad y un precio unitario que no multiplicaban el total (dueño,
+  // 2026-09-14). El MÍNIMO para que salga gratis se mira sobre el TOTAL de
+  // cortinas, como el `SUM(F25:F32)` del Excel, que suma todas las filas.
   // Se cuenta por VENTANA cuando las filas la declaran (`ventanaId`): un dual
   // son dos telas en la misma ventana y se instala UNA vez, que es como lo
   // cuenta el Excel. Las filas sin `ventanaId` cuentan por pieza, como siempre.
   const porSistema = new Map<
     string,
-    { cantidad: number; precioUnit: number; siempreSeCobra: boolean }
+    { sistema: string; cantidad: number; precioUnit: number; siempreSeCobra: boolean }
   >();
   const ventanasVistas = new Set<string>();
   let nInstalables = 0;
   const sumar = (
-    clave: string,
+    codigo: string,
+    sistema: string,
     precioUnit: number,
     cuantas: number,
     siempreSeCobra: boolean,
   ) => {
     nInstalables += cuantas;
-    const prev = porSistema.get(clave);
+    const prev = porSistema.get(codigo);
     if (prev) prev.cantidad += cuantas;
-    else porSistema.set(clave, { cantidad: cuantas, precioUnit, siempreSeCobra });
+    else porSistema.set(codigo, { sistema, cantidad: cuantas, precioUnit, siempreSeCobra });
   };
   validas.forEach((f, i) => {
     const cod = codDeFila[i];
     const g = cod ? grupos.get(cod) : undefined;
     if (!g || g.esVertical) return;
     const precioUnit = g.sistema?.instalacionLinea ?? params.instalacionRoller;
-    // La categoría B se instala como una roller: si cobra lo mismo, va en el
-    // mismo tramo (la fila INSTALACIÓN del Excel no las separa).
-    const comoRoller = precioUnit === params.instalacionRoller;
-    const clave = g.lineaB && comoRoller ? 'Roller' : (g.sistema?.nombre ?? 'Roller');
+    // Todo lo que se instala al precio de la roller va en el tramo de la roller:
+    // la categoría B y la invertida se instalan igual que una cortina normal, y
+    // la fila INSTALACIÓN del Excel no las separa.
+    const comoRoller = !g.sistema || precioUnit === params.instalacionRoller;
+    const codigo = comoRoller ? COD_INSTALACION_ROLLER : codigoInstalacionDe(g.sistema!);
+    const sistema = comoRoller ? 'Roller' : g.sistema!.nombre;
     // Un sistema que instala a su propio precio (el beeblack, 35.000) no entra
     // al «gratis por llegar al mínimo»: se cobra siempre. Sí sigue SUMANDO al
     // mínimo, para que las roller de la misma cotización lleguen a los 4.
-    const siempreSeCobra = !!g.sistema && !comoRoller;
+    const siempreSeCobra = !comoRoller;
     if (f.ventanaId) {
       if (ventanasVistas.has(f.ventanaId)) return;
       ventanasVistas.add(f.ventanaId);
-      sumar(clave, precioUnit, 1, siempreSeCobra);
+      sumar(codigo, sistema, precioUnit, 1, siempreSeCobra);
       return;
     }
-    sumar(clave, precioUnit, Math.max(1, f.cantidad), siempreSeCobra);
+    sumar(codigo, sistema, precioUnit, Math.max(1, f.cantidad), siempreSeCobra);
   });
   // Las verticales instalan aparte y su cargo ya va dentro del valor unitario
   // de cada una, así que no entran a la fila que se cobra; pero sin mostrarlas
@@ -1368,32 +1529,45 @@ export function cotizarFase0(
   // parámetro editable del Admin no hacía nada. Verificado contra la copia
   // COTAP-83447, que con 2 cortinas la cobra.
   const alcanzaMinimo = nInstalables >= minGratis;
+  // El % automático, el mismo para toda la cotización.
+  const descAuto = region ? clamp01(descRegion) : alcanzaMinimo ? clamp01(descRM) : 0;
   // El % a mano le gana a la regla: la instalación se negocia como cualquier
-  // otro adicional. «Sin instalación» no: ahí no hay nada que cobrar.
-  const hayManual = !sinInstalacion && descuentoInstalacionManual != null;
-  const descInstal = sinInstalacion
-    ? 1
-    : hayManual
-      ? clamp01(descuentoInstalacionManual as number)
-      : region
-        ? clamp01(descRegion)
-        : alcanzaMinimo
-          ? clamp01(descRM)
-          : 0;
+  // otro adicional, y desde el 2026-09-14 tramo por tramo (se puede regalar la
+  // de las roller y cobrar entera la del beeblack). Un número suelto es lo que
+  // guardan las cotizaciones anteriores: vale para todos los tramos.
+  // «Sin instalación» no: ahí no hay nada que cobrar.
+  const manualEscalar =
+    !sinInstalacion && typeof descuentoInstalacionManual === 'number'
+      ? clamp01(descuentoInstalacionManual)
+      : null;
+  const manualPorCodigo = new Map<string, number>(
+    !sinInstalacion && descuentoInstalacionManual && typeof descuentoInstalacionManual === 'object'
+      ? Object.entries(descuentoInstalacionManual).flatMap(([k, v]) =>
+          typeof v === 'number' && Number.isFinite(v)
+            ? ([[k.trim().toUpperCase(), clamp01(v)]] as [string, number][])
+            : [],
+        )
+      : [],
+  );
+  const manualDe = (codigo: string): number | null =>
+    manualEscalar ?? manualPorCodigo.get(codigo) ?? null;
   const partes: ParteInstalacion[] =
     sinInstalacion || nInstalables === 0
       ? []
-      : [...porSistema].map(([sistema, p]) => {
+      : [...porSistema].map(([codigo, p]) => {
           // El descuento automático no le llega a los sistemas que cobran su
           // propia instalación; uno puesto a mano sí, que para eso se pone.
-          const desc = p.siempreSeCobra && !hayManual ? 0 : descInstal;
+          const manual = manualDe(codigo);
+          const desc = manual ?? (p.siempreSeCobra ? 0 : descAuto);
           return {
-            sistema,
+            codigo,
+            sistema: p.sistema,
             cantidad: p.cantidad,
             precioUnit: p.precioUnit,
             descuento: desc,
             total: p.precioUnit * p.cantidad * (1 - desc),
             siempreSeCobra: p.siempreSeCobra,
+            descuentoManual: manual != null,
           };
         });
   const totalInstal = partes.reduce((s, p) => s + p.total, 0);
@@ -1402,6 +1576,7 @@ export function cotizarFase0(
       ? []
       : [
           {
+            codigo: COD_INSTALACION_VERTICAL,
             sistema: 'Vertical',
             cantidad: nVerticales,
             precioUnit: params.instalacionVertical,
@@ -1410,6 +1585,7 @@ export function cotizarFase0(
             // NO se suma al subtotal, solo se muestra.
             total: params.instalacionVertical * nVerticales,
             siempreSeCobra: false,
+            descuentoManual: false,
           },
         ];
   const instalacion: InstalacionResultado = {
@@ -1418,15 +1594,21 @@ export function cotizarFase0(
     // El precio por cortina solo tiene sentido con un sistema en juego; con
     // varios manda el desglose de `partes`.
     precioUnit: partes.length === 1 ? partes[0].precioUnit : params.instalacionRoller,
-    descuento: descInstal,
+    // El % de la regla (o el único escrito a mano). Con un % por tramo no hay un
+    // solo número que lo diga: cada tramo trae el suyo.
+    descuento: sinInstalacion ? 1 : manualEscalar ?? descAuto,
     total: totalInstal,
     partes,
-    // "GRATIS" sólo si no se cobra extra y (es región 100% off o llega al mínimo
-    // de cortinas en RM).
-    gratis: !sinInstalacion && totalInstal === 0 && (region || alcanzaMinimo || hayManual),
+    // "GRATIS" sólo si no se cobra nada Y cada tramo tiene su motivo para no
+    // cobrarse: con el beeblack cobrado aparte, la cotización no es gratis.
+    gratis:
+      !sinInstalacion &&
+      partes.length > 0 &&
+      totalInstal === 0 &&
+      partes.every((p) => p.descuento >= 1),
     region,
     sinInstalacion,
-    descuentoManual: hayManual,
+    descuentoManual: partes.some((p) => p.descuentoManual),
   };
 
   // «Sin instalación» no solo borra la fila de abajo: también saca de cada

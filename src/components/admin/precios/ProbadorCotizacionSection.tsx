@@ -326,9 +326,12 @@ export function ProbadorCotizacionSection({
             <PanelFamilia
               key={f.clave}
               f={f}
-              // Los paños apuntan a todas las cortinas de la familia: la tarifa
-              // de cada panel se calcula con todas, se cobre con él o no.
-              piezas={nombresDePiezas(resultado.lineas.filter((l) => l.cod === f.cod))}
+              // Los paños apuntan a las cortinas de su planilla (las derechas
+              // de la familia, o las invertidas): la tarifa de cada panel se
+              // calcula con todas ellas, se cobre con él o no.
+              piezas={nombresDePiezas(
+                resultado.lineas.filter((l) => l.cod === f.cod && l.invertida === f.invertida),
+              )}
             />
           ))}
 
@@ -387,9 +390,9 @@ export function ProbadorCotizacionSection({
                 {/* Los tramos: con dos sistemas en juego el precio por cortina
                     no es uno solo (roller 17.500 vs beeblack 35.000). */}
                 {resultado.instalacion.partes.map((p) => (
-                  <div key={p.sistema} className="flex justify-between pl-3 text-[0.7rem] text-muted-foreground">
+                  <div key={p.codigo} className="flex justify-between pl-3 text-[0.7rem] text-muted-foreground">
                     <span>
-                      {p.sistema}: {p.cantidad} × {formatCLP(p.precioUnit)}
+                      {p.sistema} ({p.codigo}): {p.cantidad} × {formatCLP(p.precioUnit)}
                       {p.siempreSeCobra && p.total > 0 && ' (se cobra siempre)'}
                     </span>
                     <span>{formatCLP(p.total)}</span>

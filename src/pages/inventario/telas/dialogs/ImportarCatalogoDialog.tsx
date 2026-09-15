@@ -392,6 +392,18 @@ export default function ImportarCatalogoDialog({ onClose, onSaved }: ImportarCat
                               ? `${pct(c.descuentoViejo)} → ${pct(c.descuentoNuevo)}`
                               : pct(c.descuentoViejo)}
                           </span>
+                          {/* La ficha (fecha de alta, proveedor, ganancia): no
+                              mueve ningún precio, pero si no se dice, la fila
+                              aparecería sin motivo a la vista. */}
+                          <span
+                            className={
+                              'w-16 text-right text-[10px] ' +
+                              (c.cambiaFicha ? 'text-amber-300' : 'text-muted-foreground')
+                            }
+                            title="Fecha de alta, proveedor, ganancia o categoría de fabricación"
+                          >
+                            {c.cambiaFicha ? 'ficha' : ''}
+                          </span>
                         </label>
                       ))}
                     </div>

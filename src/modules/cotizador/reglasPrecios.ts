@@ -191,17 +191,32 @@ export type SistemaPrecio = {
    */
   descuentoDefault?: number;
   /**
-   * Al invertir, la receta se calcula con el ancho y el alto CAMBIADOS.
+   * Al girar la cortina A PROPÓSITO, la receta se calcula con el ancho y el
+   * alto CAMBIADOS.
    *
    * El beeblack se fabrica del riel para afuera: sus perfiles, zunchos y lamas
    * se cortan del ancho y del alto de la ventana, así que una cortina girada
    * gasta otra cantidad de cada uno —el ancho pasa a ser el alto en TODOS sus
-   * componentes (dueño, 2026-09-07)—. Sin esto, invertir un beeblack no movía
-   * el precio ni un peso.
+   * componentes (dueño, 2026-09-07)—. Sin esto, girar un beeblack no movía el
+   * precio ni un peso.
+   *
+   * ⚠ SOLO cuando la giró alguien: una cortina que NO CABE a lo ancho del
+   * rollo se invierte OBLIGADA, y ahí «solo gira la tela» (dueño, 2026-09-15).
+   * El marco se sigue armando con el ancho y el alto de la ventana, porque la
+   * cortina se instala derecha: lo único rotado es el corte. Quién decide cuál
+   * de las dos es: `cotizarFase0`, con la misma regla que enciende el icono de
+   * Fase 1 (`debeInvertirPano`).
+   *
+   * Y en ESE caso la tela se sigue cobrando POR EL ALTO: un solo paño de
+   * `alto + extra`, no los metros que de verdad se descuelgan del rollo (dueño,
+   * 2026-09-15: «nosotros cobramos por alto»). Es lo que hace la hoja
+   * `Optimizador` de su planilla. El flag hace las dos cosas: decide si gira la
+   * cortina entera y, cuando la inversión fue obligada, cómo se mide la tela.
    *
    * El roller NO lo lleva: lo único que se gira es el corte de la tela (que el
-   * motor ya calcula aparte), y su herraje se cobra por el ancho de la ventana
-   * igual que siempre.
+   * motor ya calcula aparte), su herraje se cobra por el ancho de la ventana
+   * igual que siempre y su tela se cobra por los metros rotados —`ancho + 0,25`,
+   * como el Excel de cortinas mayores a 3,00 m (dueño, 2026-08-21)—.
    */
   giraMedidasAlInvertir?: boolean;
   /**
@@ -298,6 +313,18 @@ export const esSoloInsumos = (s: SistemaPrecio | undefined): boolean =>
  * cenefa —INSTMOT, INSTSOFT, INSTCENF…— siguen siendo manuales.
  */
 export const COD_INSTALACION_ROLLER = 'INST';
+
+/**
+ * COD_INT del tramo de instalación de un sistema. Es la llave ESTABLE de su
+ * fila: la que guarda el % escrito a mano y la que se imprime en el documento.
+ * Va el código y no el nombre porque el nombre se edita en Admin, y renombrar
+ * un sistema haría que su descuento guardado dejara de aplicarse en silencio.
+ * Un sistema sin código declarado igual tiene el suyo, derivado del nombre.
+ */
+export function codigoInstalacionDe(s: SistemaPrecio): string {
+  const c = (s.codigoInstalacion || '').trim().toUpperCase();
+  return c || `INST-${s.nombre.trim().toUpperCase().replace(/\s+/g, '-')}`;
+}
 
 export function codigosInstalacionAutomatica(
   sistemas: Record<string, SistemaPrecio>,
@@ -647,13 +674,20 @@ export const CODIGOS_RIEL_BEEBLACK = new Set(['SLM01', 'SLM02', 'SLM03']);
  *   carril por el que corren las dos telas, no una manilla por tela.
  * - `CIN0002` · cinta doble contacto: pega la estructura a la ventana, y la
  *   estructura se pega una sola vez.
+ * - `CAJA0001` · caja de embalaje: las dos telas van en la misma cortina y en
+ *   la misma caja (dueño, 2026-09-15, «como en el excel manual»).
  *
  * Todo lo demás se cobra POR TELA, igual que en la planilla: kit de armado
  * (las dos líneas), zuncho magnético, cuerda, zuncho simple, publicidad,
- * materiales varios, caja, y la mano de obra y el traslado enteros.
+ * materiales varios, y la mano de obra y el traslado enteros.
  *
- * Con esto los materiales de la 2.ª tela de la OT ANDREA dan 409.157,17 para
- * las tres cortinas: el mismo peso que `Cotizador!DD137` de la planilla.
+ * ⚠ LAS DOS COPIAS DEL EXCEL NO COINCIDEN EN LA CAJA. La de ANDREA (OT
+ * COTLG-05994-2) se la cobra a las dos telas —sus materiales dan 409.157,17,
+ * el peso de `Cotizador!DD137`, con las tres cajas adentro— y la copia con la
+ * que el dueño revisó esto el 2026-09-15 la deja en blanco. Manda la segunda.
+ * El golden de ANDREA se sigue corriendo con la receta de su época
+ * (`RECETA_BEEBLACK_2A_TELA_CON_CAJA`), como los tubos de julio: cada
+ * cotización con las reglas que tenía cuando se vendió.
  *
  * Se deriva de `RECETA_BEEBLACK` en vez de copiarla para que agregar o cambiar
  * una línea allá llegue sola acá.
@@ -664,11 +698,21 @@ export const CODIGOS_ESTRUCTURA_BEEBLACK = new Set([
   'SML11',
   'SML12',
   'CIN0002',
+  'CAJA0001',
 ]);
 
 /** BEEBLACK, SEGUNDA TELA de un doble: la receta de arriba sin la estructura. */
 const RECETA_BEEBLACK_2A_TELA: LineaReceta[] = RECETA_BEEBLACK.filter(
   (l) => !CODIGOS_ESTRUCTURA_BEEBLACK.has(l.insumo),
+);
+
+/**
+ * La 2.ª tela COMO SE COTIZABA HASTA EL 2026-09-15: con su propia caja de
+ * embalaje. Solo la usan los goldens de las OT vendidas con esa regla (ANDREA
+ * COTLG-05994-2), para que sigan reproduciendo su planilla al peso.
+ */
+export const RECETA_BEEBLACK_2A_TELA_CON_CAJA: LineaReceta[] = RECETA_BEEBLACK.filter(
+  (l) => !CODIGOS_ESTRUCTURA_BEEBLACK.has(l.insumo) || l.insumo === 'CAJA0001',
 );
 
 // ── Cadena metálica ───────────────────────────────────────────────────

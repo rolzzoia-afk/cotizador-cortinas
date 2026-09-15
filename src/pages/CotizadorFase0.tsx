@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { InputDecimal } from '@/components/ui/input-decimal';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -42,10 +43,18 @@ import { puertoSupabaseNumeroOT } from '@/modules/ots/numeroOTStore';
 import type { AdicionalFase0Persistido, OT, VentanaItem } from '@/modules/ots/types';
 import {
   cotizarFase0,
-  textoInstalacion,
+  textoParteInstalacion,
   type LineaResultado,
   type AdicionalResultado,
 } from '@/modules/cotizador/motorFase0';
+import {
+  conDctManual,
+  dctManualDeTramo,
+  dctManualFromPersist,
+  dctManualParaMotor,
+  sinDctManual,
+  type DctInstalacionManual,
+} from '@/modules/cotizador/instalacionManual';
 import { formatCLP } from '@/modules/cotizador/calculos';
 import { categoriasParaTerminos } from '@/modules/cotizador/terminosContexto';
 import { useTerminos } from '@/modules/cotizador/terminosStore';
@@ -117,6 +126,7 @@ import {
   adicionalesToPersist,
   claveColorDerivado,
   coloresDerivadosPersistidos,
+  filasPdfInstalacion,
   incluidasVisibles,
   instalacionTipoFromPersist,
   instalacionTipoParaGuardar,
@@ -139,6 +149,8 @@ import {
 } from '@/components/ui/dialog';
 import ProductoCatalogoDialog from '@/components/cotizador/ProductoCatalogoDialog';
 import ChipsColoresDialog from '@/components/cotizador/ChipsColoresDialog';
+import NuevaCategoriaDialog from '@/components/cotizador/nuevaCategoria/NuevaCategoriaDialog';
+import { categoriaFabricacionDe } from '@/modules/cotizador/catalogoEdicion';
 import BloqueDocRender, { SeccionDocumento } from '@/components/cotizador/BloquesDocumento';
 import { estiloChipHex, useChipsColores } from '@/modules/cotizador/chipsColores';
 import { useChipsCustom } from '@/modules/cotizador/chipsCustomStore';
@@ -240,13 +252,18 @@ const FORZAR_COLOR_AL_IMPRIMIR = {
 } as const;
 
 /**
- * Los campos de la grilla llevan `bg-card` propio: sobre una fila pintada
- * quedarían como parches del color de siempre. Se transparentan y heredan el
- * color de texto que fijó la fila (oscuro sobre el pastel, también en modo
- * oscuro). El foco y los bordes no se tocan.
+ * Lo que cambia DENTRO de una fila pintada:
+ *
+ * · `fila-pintada` (en `index.css`) devuelve el tema a su versión CLARA: los
+ *   ocho pasteles son colores claros, y sin esto las letras seguían siendo las
+ *   del modo oscuro —gris claro sobre verde claro, ilegible— porque cada celda
+ *   trae su propio `text-muted-foreground` y ese gana sobre el color heredado.
+ * · Los campos llevan `bg-card` propio: sobre el pastel quedarían como parches.
+ *   Se transparentan y heredan el color de texto que fijó la fila. El foco y
+ *   los bordes no se tocan.
  */
-const CAMPOS_SOBRE_FILA_PINTADA =
-  '[&_input]:bg-transparent [&_input]:text-inherit [&_select]:bg-transparent [&_select]:text-inherit';
+const CLASES_FILA_PINTADA =
+  'fila-pintada [&_input]:bg-transparent [&_input]:text-inherit [&_select]:bg-transparent [&_select]:text-inherit';
 
 // Campos de nivel VENTANA: al editarlos en una fila-paño se replican a los
 // demás paños de la misma ventana (`vid`) para que no diverjan (el re-agrupado
@@ -424,6 +441,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [editarProducto, setEditarProducto] = useState<string | null | undefined>(undefined);
   // Editor de colores de los chips de categoría.
   const [editarColores, setEditarColores] = useState(false);
+  const [nuevaCategoria, setNuevaCategoria] = useState(false);
   const { colores: chipsColores, guardar: guardarColoresChips } = useChipsColores();
   // Categorías PROPIAS del catálogo: se agregan desde el mismo diálogo de
   // colores y se asignan a mano en la ficha de cada producto.
@@ -439,9 +457,11 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   const [sinInstalacion, setSinInstalacion] = useState(false);
   // Envío: gratis o cobro en destino (lo paga el cliente al courier; no suma al total).
   const [envio, setEnvio] = useState<'gratis' | 'cobro_destino'>('gratis');
-  // % de descuento de la instalación puesto a mano en su fila de ADICIONALES
-  // (0–100). null = manda la regla automática (gratis por cantidad / región).
-  const [instalDctManual, setInstalDctManual] = useState<number | null>(null);
+  // % de descuento de la instalación puesto a mano en sus filas de ADICIONALES
+  // (0–100), por tramo: la roller y el beeblack se negocian por separado. Un
+  // número suelto es lo que guardaban las cotizaciones anteriores y vale para
+  // todos. null = manda la regla automática (gratis por cantidad / región).
+  const [instalDctManual, setInstalDctManual] = useState<DctInstalacionManual | null>(null);
   // El TIPO escrito a mano de la fila de INSTALACIÓN. La fila la arma el motor,
   // así que no se edita como un adicional cualquiera: solo su rótulo, sin
   // tocar la cantidad ni lo que se cobra.
@@ -510,7 +530,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       adicionalesFase0?: AdicionalFase0Persistido[];
       region?: boolean;
       instalacionDescuentoRegion?: number;
-      instalacionDescuentoManual?: number | null;
+      instalacionDescuentoManual?: number | Record<string, number> | null;
       instalacionTipo?: string;
       sinInstalacion?: boolean;
       envio?: 'gratis' | 'cobro_destino';
@@ -593,11 +613,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
     );
     setSinInstalacion(!!dg.sinInstalacion);
     setEnvio(dg.envio === 'cobro_destino' ? 'cobro_destino' : 'gratis');
-    setInstalDctManual(
-      typeof dg.instalacionDescuentoManual === 'number'
-        ? Math.round(dg.instalacionDescuentoManual * 100)
-        : null,
-    );
+    setInstalDctManual(dctManualFromPersist(dg.instalacionDescuentoManual));
     setInstalTipo(instalacionTipoFromPersist(dg.instalacionTipo));
     setProvTarjetaOT(
       dg.proveedorTarjeta === 'flow' || dg.proveedorTarjeta === 'mercadopago'
@@ -835,8 +851,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
-          instalacionDescuentoManual:
-            instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
+          instalacionDescuentoManual: dctManualParaMotor(instalDctManual),
           instalacionTipo: instalacionTipoParaGuardar(instalTipo),
           sinInstalacion,
           envio,
@@ -915,8 +930,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
-          instalacionDescuentoManual:
-            instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
+          instalacionDescuentoManual: dctManualParaMotor(instalDctManual),
           instalacionTipo: instalacionTipoParaGuardar(instalTipo),
           sinInstalacion,
           envio,
@@ -1063,19 +1077,23 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       }));
     return cotizarFase0(
       filasMotor, catalogo, anchoRollo, adicMotor, paramsEff, region, sinInstalacion, reglasPrecios,
-      instalDctManual == null ? null : Math.max(0, Math.min(1, instalDctManual / 100)),
+      dctManualParaMotor(instalDctManual),
     );
   }, [filas, adicionales, catalogo, anchoRollo, paramsEff, parametros, region, sinInstalacion, reglasPrecios, formulas, reglas.tipos, instalDctManual]);
 
-  // Lo que la app escribiría sola en la fila de INSTALACIÓN. Se usa de
-  // placeholder mientras nadie escriba nada, y es lo que se imprime en ese
-  // caso: así lo que se ve en gris es exactamente lo que va a salir.
-  const instalProductoAuto = `INSTALACION ${
-    resultado.instalacion.partes.map((p) => p.sistema).join(' + ') || 'ROLLER'
-  }`;
-  const instalDescripcionAuto = textoInstalacion(
-    resultado.instalacion,
-    parametros.instalacionGratisMinCortinas,
+  /**
+   * Las filas de INSTALACIÓN, una por sistema: lo mismo que se ve en la grilla
+   * y lo que se imprime. La roller y el beeblack cobran distinto, así que cada
+   * una lleva su cantidad, su precio y su descuento (dueño, 2026-09-14).
+   */
+  const filasInstalacion = useMemo(
+    () => filasPdfInstalacion(resultado.instalacion, instalTipo),
+    [resultado.instalacion, instalTipo],
+  );
+  /** Los códigos de los tramos que hay hoy: la llave del % escrito a mano. */
+  const codigosInstalacion = useMemo(
+    () => resultado.instalacion.partes.map((p) => p.codigo),
+    [resultado.instalacion],
   );
 
   /** La familia que está mirando el desglose, si el diálogo está abierto. */
@@ -1147,10 +1165,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
   // mostrarle a la vendedora una categoría vacía.
   const chipsVisibles = useMemo(() => {
     const hayOtros = Object.entries(catalogo).some(
-      ([ci, p]) => chipDeProducto(p, ci, idsChip) === CHIP_OTROS,
+      ([ci, p]) => chipDeProducto(p, ci, idsChip, chipsPropios) === CHIP_OTROS,
     );
     return hayOtros ? filtrosCatalogo : filtrosCatalogo.filter((f) => f.id !== CHIP_OTROS);
-  }, [catalogo, filtrosCatalogo, idsChip]);
+  }, [catalogo, filtrosCatalogo, idsChip, chipsPropios]);
 
   // COD_INT tal como vive en el catálogo ("DOM42" tecleado → "DOM 42"). Si no
   // existe se devuelve lo escrito (para que la celda quede marcada en rojo).
@@ -1187,16 +1205,26 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
       // La fila vacía que se reutiliza puede traer la cadena metálica marcada:
       // si el producto elegido no lleva cadena, se apaga acá también.
       const conCadena = filaLlevaCadenaMando({ codInt }, reglas.tipos);
+      // La categoría de fabricación que propone el producto (la eligió quien
+      // creó su categoría). Es una propuesta: se puede cambiar en la fila.
+      const categoria = categoriaFabricacionDe(prod, categoriasSelect);
       setFilas((prev) => {
         const last = prev[prev.length - 1];
         if (last && !last.codInt && last.ancho === 0 && last.alto === 0) {
           return prev.map((f, i) =>
             i === prev.length - 1
-              ? { ...f, codInt, descuento, ...(conCadena ? {} : { cadenaMetalica: false }) }
+              ? {
+                  ...f,
+                  codInt,
+                  descuento,
+                  // En una fila que ya tenía categoría no se pisa lo elegido.
+                  ...(categoria && !f.categoria ? { categoria } : {}),
+                  ...(conCadena ? {} : { cadenaMetalica: false }),
+                }
               : f,
           );
         }
-        return [...prev, { ...nuevaFila(), codInt, descuento }];
+        return [...prev, { ...nuevaFila(), codInt, descuento, ...(categoria ? { categoria } : {}) }];
       });
     } else {
       const descuento = dctDeCodigo(codInt);
@@ -1387,8 +1415,12 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
         c.codInt = canonizarCodInt(c.codInt);
         // La planilla de beeblack no trae COD SEC (renombró esa columna a TIPO DE
         // INSTALACIÓN): la categoría se deduce de sus códigos BEE-*.
+        // Y si el producto trae categoría de fabricación propuesta (asistente
+        // de categoría nueva), esa es el último respaldo.
         const categoria =
-          canonizar(c.categoria, categoriasSelect) || categoriaImplicita(c.codInt);
+          canonizar(c.categoria, categoriasSelect) ||
+          categoriaImplicita(c.codInt) ||
+          categoriaFabricacionDe(catalogo[c.codInt], categoriasSelect);
         const esBeeblack = esCategoriaBeeblack(categoria);
         // PLETINA (velcro): paño pegado, sin cadena ni enrollado → ni dirección
         // ni caída, aunque la planilla traiga algo escrito en esas columnas.
@@ -1685,6 +1717,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           codInt: f.codInt.trim(),
           tipo: prod?.tipo ?? '',
           descripcion: prod?.descripcion ?? '',
+          // La categoría con la que se COBRÓ (la del panel del motor), para el
+          // recuadro de la columna CAT.
+          lineaB: ln.lineaB,
+          invertida: ln.invertida,
           ubicacion: f.ubicacion,
           colorAcc: f.colorAcc,
           ancho: ln.ancho,
@@ -1719,28 +1755,10 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           };
         });
 
-      // La instalación no vive en la grilla (se muestra en el recuadro), pero en
-      // el documento del cliente va como una fila más de ADICIONALES.
+      // La instalación va como fila de ADICIONALES, UNA POR SISTEMA: es lo
+      // mismo que muestra la grilla.
       const inst = resultado.instalacion;
-      if (!inst.sinInstalacion && inst.cantidad > 0) {
-        adicionalesPdf.push({
-          cod: 'INSTALACION',
-          cantidad: inst.cantidad,
-          producto: instalProductoAuto.toUpperCase(),
-          codInt: 'INST',
-          // Lo único de esta fila que se escribe a mano.
-          tipo: rotuloManual(instalTipo, 'INSTALACION'),
-          descripcion: inst.gratis
-            ? 'GRATIS'
-            : textoInstalacion(inst, parametros.instalacionGratisMinCortinas),
-          ubicacion: '',
-          colorAcc: '',
-          valorUnit: inst.precioUnit,
-          descuento: inst.descuento,
-          total: inst.total,
-          destacadoRojo: true,
-        });
-      }
+      adicionalesPdf.push(...filasInstalacion);
       // La instalación de las verticales ya está dentro del precio de cada
       // cortina: va como fila al 100 % para que el cliente vea que se instalan
       // (es la fila INST-VERT de la planilla, con TOTAL en $ -).
@@ -1749,7 +1767,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           cod: 'INSTALACION',
           cantidad: p.cantidad,
           producto: `INSTALACION ${p.sistema}`.toUpperCase(),
-          codInt: 'INST',
+          codInt: p.codigo,
           tipo: 'INSTALACION',
           descripcion: 'INCLUIDA EN EL PRECIO',
           ubicacion: '',
@@ -2315,7 +2333,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     className={cn(
                       'border-t border-border align-middle',
                       overFila === f.id && 'ring-2 ring-inset ring-accent/40',
-                      pintada && CAMPOS_SOBRE_FILA_PINTADA,
+                      pintada && CLASES_FILA_PINTADA,
                     )}
                     style={pintada ? { ...pintada, ...FORZAR_COLOR_AL_IMPRIMIR } : undefined}
                     onDragOver={dragFila ? sobreFila(f.id) : undefined}
@@ -2851,7 +2869,7 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
                     className={cn(
                       'border-t border-border align-middle',
                       overAdic === a.id && 'ring-2 ring-inset ring-accent/40',
-                      pintada && CAMPOS_SOBRE_FILA_PINTADA,
+                      pintada && CLASES_FILA_PINTADA,
                     )}
                     style={pintada ? { ...pintada, ...FORZAR_COLOR_AL_IMPRIMIR } : undefined}
                     onDragOver={dragAdic ? sobreAdic(a.id) : undefined}
@@ -2972,80 +2990,94 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               })}
               {/* La instalación es una línea de ADICIONALES más, como en la
                   planilla: se ve junto a las cenefas y los motores, y su DCT%
-                  se negocia igual que el de ellas (sobre todo a región). El
-                  motor sigue calculando la cantidad y el precio; lo único que
-                  se toca a mano es el %. */}
-              {!resultado.instalacion.sinInstalacion && resultado.instalacion.cantidad > 0 && (
-                <tr className="border-t border-border align-middle">
-                  {/* Hueco de la columna del asa: esta fila la arma la app. */}
-                  <td className="w-6" />
-                  <Td className="text-muted-foreground">INSTALACION</Td>
-                  {showCols && (
-                    <>
-                      <Td className="text-center text-muted-foreground">—</Td>
-                      <Td className="text-center text-muted-foreground">—</Td>
-                      <Td className="text-center text-muted-foreground">—</Td>
-                    </>
-                  )}
-                  {/* Todo lo demás lo arma el motor: la cantidad y la plata
-                      salen de cuántas cortinas se instalan, del mínimo de 4 y
-                      del % de región, y el texto explica esa cuenta. Lo único
-                      que se escribe es el TIPO (y el DCT %, más abajo). */}
-                  <Td className="text-right">{resultado.instalacion.cantidad}</Td>
-                  <Td className="text-muted-foreground">{instalProductoAuto}</Td>
-                  <Td className="text-muted-foreground">INST</Td>
-                  <Td>
-                    <CellInput
-                      value={instalTipo}
-                      onChange={(e) => setInstalTipo(e.target.value)}
-                      placeholder="INSTALACION"
-                      title="Cómo se lee el tipo de esta instalación en la cotización y en el PDF. Vacío = INSTALACION. No cambia el precio."
-                      className="w-36" />
-                  </Td>
-                  <Td className="text-muted-foreground">{instalDescripcionAuto}</Td>
-                  {/* INVERTIDA · CATEGORÍA · UBIC. · COLOR ACC */}
-                  <Td className="text-center text-muted-foreground">—</Td>
-                  <Td className="text-center text-muted-foreground">—</Td>
-                  <Td className="text-center text-muted-foreground">—</Td>
-                  <Td className="text-center text-muted-foreground">—</Td>
-                  <Td className="border-l border-border text-center text-muted-foreground">—</Td>
-                  <Td className="text-center text-muted-foreground">—</Td>
-                  <Td className="border-l border-border text-center text-muted-foreground">—</Td>
-                  <Td className="text-right">
-                    {resultado.instalacion.partes.length > 1
-                      ? '—'
-                      : formatCLP(resultado.instalacion.precioUnit)}
-                  </Td>
-                  <Td>
-                    <CellInput
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.5"
-                      value={
-                        instalDctManual ?? Math.round(resultado.instalacion.descuento * 1000) / 10
-                      }
-                      onChange={(e) => setInstalDctManual(parseFloat(e.target.value) || 0)}
-                      className="w-14 text-right"
-                      title="Descuento de la instalación. Si lo dejas como viene, manda la regla automática (gratis por cantidad o el % de región)."
-                    />
-                  </Td>
-                  <Td className="text-right font-semibold">
-                    {formatCLP(resultado.instalacion.total)}
-                  </Td>
-                  <Td className="text-right print:hidden">
-                    {instalDctManual != null && (
-                      <button
-                        onClick={() => setInstalDctManual(null)}
-                        className="rounded px-1 text-[10px] text-muted-foreground hover:text-foreground"
-                        title="Volver al descuento automático"
-                      >
-                        auto
-                      </button>
+                  se negocia igual que el de ellas (sobre todo a región). Va UNA
+                  FILA POR SISTEMA (dueño, 2026-09-14): la roller y el beeblack
+                  cobran distinto y se negocian por separado. El motor sigue
+                  calculando la cantidad y el precio; a mano se tocan el TIPO y
+                  el % de cada fila. */}
+              {resultado.instalacion.partes.map((p, iTramo) => {
+                const dctManual = dctManualDeTramo(instalDctManual, p.codigo);
+                return (
+                  <tr key={p.codigo} className="border-t border-border align-middle">
+                    {/* Hueco de la columna del asa: esta fila la arma la app. */}
+                    <td className="w-6" />
+                    <Td className="text-muted-foreground">INSTALACION</Td>
+                    {showCols && (
+                      <>
+                        <Td className="text-center text-muted-foreground">—</Td>
+                        <Td className="text-center text-muted-foreground">—</Td>
+                        <Td className="text-center text-muted-foreground">—</Td>
+                      </>
                     )}
-                  </Td>
-                </tr>
-              )}
+                    {/* Todo lo demás lo arma el motor: la cantidad y la plata
+                        salen de cuántas cortinas se instalan, del mínimo de 4 y
+                        del % de región, y el texto explica esa cuenta. */}
+                    <Td className="text-right">{p.cantidad}</Td>
+                    <Td className="text-muted-foreground">INSTALACION {p.sistema}</Td>
+                    <Td className="text-muted-foreground">{p.codigo}</Td>
+                    <Td>
+                      {/* El TIPO es uno solo para todas las filas: rotula el
+                          servicio, no el sistema. Se escribe en la primera. */}
+                      {iTramo === 0 ? (
+                        <CellInput
+                          value={instalTipo}
+                          onChange={(e) => setInstalTipo(e.target.value)}
+                          placeholder="INSTALACION"
+                          title="Cómo se lee el tipo de las instalaciones en la cotización y en el PDF. Vacío = INSTALACION. No cambia el precio."
+                          className="w-36" />
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {rotuloManual(instalTipo, 'INSTALACION')}
+                        </span>
+                      )}
+                    </Td>
+                    <Td className="text-muted-foreground">
+                      {textoParteInstalacion(
+                        p,
+                        resultado.instalacion,
+                        parametros.instalacionGratisMinCortinas,
+                      )}
+                    </Td>
+                    {/* INVERTIDA · CATEGORÍA · CADENA · UBIC. · COLOR ACC */}
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                    <Td className="text-center text-muted-foreground">—</Td>
+                    <Td className="border-l border-border text-center text-muted-foreground">—</Td>
+                    <Td className="text-right">{formatCLP(p.precioUnit)}</Td>
+                    <Td>
+                      <InputDecimal
+                        value={dctManual ?? Math.round(p.descuento * 1000) / 10}
+                        onChange={(v: number) =>
+                          setInstalDctManual((s) =>
+                            conDctManual(s, p.codigo, v, codigosInstalacion),
+                          )
+                        }
+                        className="h-7 w-14 rounded-md border-border bg-card px-2 py-0 text-right text-xs focus:border-accent"
+                        title="Descuento de esta instalación. Si lo dejas como viene, manda la regla automática (gratis por cantidad o el % de región)."
+                      />
+                    </Td>
+                    <Td className="text-right font-semibold">{formatCLP(p.total)}</Td>
+                    <Td className="text-right print:hidden">
+                      {dctManual != null && (
+                        <button
+                          onClick={() =>
+                            setInstalDctManual((s) =>
+                              sinDctManual(s, p.codigo, codigosInstalacion),
+                            )
+                          }
+                          className="rounded px-1 text-[10px] text-muted-foreground hover:text-foreground"
+                          title="Volver al descuento automático"
+                        >
+                          auto
+                        </button>
+                      )}
+                    </Td>
+                  </tr>
+                );
+              })}
               {/* La instalación de las verticales ya va DENTRO del valor
                   unitario de cada una, así que no se puede cobrar de nuevo;
                   pero sin esta fila la cotización no mostraba en ninguna parte
@@ -3255,7 +3287,18 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
             propias={chipsPropios}
             onGuardar={guardarColoresChips}
             onGuardarPropias={guardarChipsPropios}
+            onNuevaCategoria={esAdmin ? () => setNuevaCategoria(true) : undefined}
             onClose={() => setEditarColores(false)}
+          />
+        )}
+
+        {nuevaCategoria && (
+          <NuevaCategoriaDialog
+            onClose={() => setNuevaCategoria(false)}
+            onSaved={() => {
+              refreshCatalogo();
+              refreshAnchoRollo();
+            }}
           />
         )}
 
@@ -3278,11 +3321,15 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
               {familiaDesglose && (
                 <PanelFamilia
                   f={familiaDesglose}
-                  // Los paños del panel apuntan a TODAS las cortinas de la
-                  // familia (la tarifa se calcula con todas), no solo a las que
-                  // se cobran con él.
+                  // Los paños del panel apuntan a las cortinas de su PLANILLA
+                  // (las derechas de la familia, o las invertidas): la tarifa
+                  // se calcula con todas ellas, se cobren con este panel o no.
                   piezas={nombresDePiezas(
-                    resultado.lineas.filter((l) => l.cod === familiaDesglose.cod),
+                    resultado.lineas.filter(
+                      (l) =>
+                        l.cod === familiaDesglose.cod &&
+                        l.invertida === familiaDesglose.invertida,
+                    ),
                   )}
                 />
               )}

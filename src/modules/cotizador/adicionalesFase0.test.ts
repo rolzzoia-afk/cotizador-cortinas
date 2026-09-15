@@ -4,6 +4,7 @@ import {
   adicionalesToPersist,
   claveColorDerivado,
   coloresDerivadosPersistidos,
+  filasPdfInstalacion,
   hayInstalacionVerticalManual,
   incluidasVisibles,
   instalacionTipoFromPersist,
@@ -13,6 +14,7 @@ import {
   tipoDeAdicional,
   type AdicionalUI,
 } from './adicionalesFase0';
+import type { InstalacionResultado } from './motorFase0';
 
 const linea = (patch: Partial<AdicionalUI> = {}): AdicionalUI => ({
   ...nuevoAdicional(),
@@ -208,5 +210,68 @@ describe('el TIPO de la fila de INSTALACIÓN — lo único que se escribe ahí',
     expect(instalacionTipoFromPersist({ tipo: 'x' })).toBe('');
     expect(instalacionTipoFromPersist(42)).toBe('');
     expect(instalacionTipoFromPersist('  EN ALTURA ')).toBe('EN ALTURA');
+  });
+});
+
+// Una cosa es la instalación de las roller y otra la del beeblack (dueño,
+// 2026-09-14). Con una sola fila, CANT × VAL. UNIT no daba el TOTAL: 7 cortinas
+// × $17.500 no son $140.000 cuando una de las siete es un beeblack de $35.000.
+describe('filasPdfInstalacion — una fila por sistema, y cada una cuadra', () => {
+  const inst: InstalacionResultado = {
+    cantidad: 7,
+    precioUnit: 17500,
+    descuento: 1,
+    total: 35000,
+    gratis: false,
+    region: false,
+    sinInstalacion: false,
+    descuentoManual: false,
+    incluidas: [],
+    partes: [
+      {
+        codigo: 'INST', sistema: 'Roller', cantidad: 6, precioUnit: 17500,
+        descuento: 1, total: 0, siempreSeCobra: false, descuentoManual: false,
+      },
+      {
+        codigo: 'INST-BB', sistema: 'Beeblack', cantidad: 1, precioUnit: 35000,
+        descuento: 0, total: 35000, siempreSeCobra: true, descuentoManual: false,
+      },
+    ],
+  };
+
+  it('sale una fila por tramo, con su código y su producto', () => {
+    const filas = filasPdfInstalacion(inst, '');
+    expect(filas.map((f) => f.codInt)).toEqual(['INST', 'INST-BB']);
+    expect(filas.map((f) => f.producto)).toEqual([
+      'INSTALACION ROLLER',
+      'INSTALACION BEEBLACK',
+    ]);
+    expect(filas.every((f) => f.cod === 'INSTALACION' && f.destacadoRojo)).toBe(true);
+  });
+
+  it('en cada fila, CANT × VAL. UNIT × (1 − DCT) da su TOTAL', () => {
+    for (const f of filasPdfInstalacion(inst, '')) {
+      expect(f.cantidad * f.valorUnit * (1 - f.descuento), f.codInt).toBeCloseTo(f.total, 6);
+    }
+  });
+
+  it('ninguna fila lleva descripción: el porqué del cobro no sale al cliente', () => {
+    // Dueño, 2026-09-14: «puedes borrar la descripción de la instalación». En
+    // la grilla se sigue viendo.
+    expect(filasPdfInstalacion(inst, '').map((f) => f.descripcion)).toEqual(['', '']);
+  });
+
+  it('el TIPO escrito a mano vale para todas las filas', () => {
+    const filas = filasPdfInstalacion(inst, 'INSTALACION EN ALTURA');
+    expect(filas.map((f) => f.tipo)).toEqual([
+      'INSTALACION EN ALTURA',
+      'INSTALACION EN ALTURA',
+    ]);
+    expect(filasPdfInstalacion(inst, '')[0].tipo).toBe('INSTALACION');
+  });
+
+  it('sin instalación no va ninguna fila', () => {
+    expect(filasPdfInstalacion({ ...inst, sinInstalacion: true }, '')).toEqual([]);
+    expect(filasPdfInstalacion({ ...inst, partes: [] }, '')).toEqual([]);
   });
 });

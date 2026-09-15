@@ -152,3 +152,40 @@ describe('categorías propias de la empresa', () => {
     expect(labelChip('CUSTOM-PROMO', PROPIAS)).toBe('Promo');
   });
 });
+
+// Las categorías que crea el asistente reclaman FAMILIAS: un código nuevo de
+// esa familia aparece ahí sin que nadie abra su ficha.
+describe('categorías propias que agrupan por familia', () => {
+  const PROPIAS = [
+    { id: 'CUSTOM-LINO', label: 'Lino', hex: '#a8a29e', familias: ['LINO_P', 'LINO_D'] },
+  ];
+  const filtros = filtrosCatalogoCon(PROPIAS);
+  const ids = filtros.map((f) => f.id);
+
+  it('la familia manda, sin tocar el producto', () => {
+    expect(chipDeProducto(p('LINO_P'), 'LN 01', ids, PROPIAS)).toBe('CUSTOM-LINO');
+    expect(filtros.filter((f) => f.match(p('LINO_D'), 'LN 02')).map((f) => f.id)).toEqual([
+      'CUSTOM-LINO',
+    ]);
+  });
+
+  it('le gana a la regla por prefijo: una familia propia que empieza con BLACKOUT no se va a BK', () => {
+    const conBlackout = [{ ...PROPIAS[0], familias: ['BLACKOUT_LINO_P'] }];
+    expect(
+      chipDeProducto(p('BLACKOUT_LINO_P'), 'BL 01', filtrosCatalogoCon(conBlackout).map((f) => f.id), conBlackout),
+    ).toBe('CUSTOM-LINO');
+  });
+
+  it('el COD_INT del diccionario y el chip a mano siguen ganando', () => {
+    expect(chipDeProducto(p('LINO_P'), 'DOM 01', ids, PROPIAS)).toBe('MOT');
+    expect(chipDeProducto(p('LINO_P', { chip: 'SOFT' }), 'LN 01', ids, PROPIAS)).toBe('SOFT');
+  });
+
+  it('una familia que ninguna categoría propia reclama no cambia de chip', () => {
+    expect(chipDeProducto(p('BLACKOUT_P'), 'BK 18', ids, PROPIAS)).toBe('BK');
+    // Y la partición se mantiene con la familia nueva adentro.
+    for (const [ci, prod] of Object.entries({ ...catalogoDemo, 'LN 01': p('LINO_P') })) {
+      expect(filtros.filter((f) => f.match(prod, ci)), ci).toHaveLength(1);
+    }
+  });
+});

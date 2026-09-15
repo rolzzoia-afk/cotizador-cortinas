@@ -3,7 +3,18 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /*
+   * `.fila-pintada` es una fila de la cotización pintada a mano por la
+   * vendedora: los ocho pasteles de la paleta son colores CLAROS, así que
+   * dentro de ella el tema vuelve a su versión clara aunque la app esté en
+   * modo oscuro. Sin esto el fondo se pintaba pero las letras seguían siendo
+   * las del modo oscuro (gris claro sobre verde claro: ilegible).
+   *
+   * Va en la misma lista que `:root` a propósito: la paleta clara se escribe
+   * UNA vez. `.dark .fila-pintada` (dos clases) le gana a `.dark`.
+   */
+  :root,
+  .dark .fila-pintada {
     /* Editorial Wellness — Light mode (cream + warm brown + terracota accent) */
     --background: 36 47% 93%;
     --foreground: 28 17% 15%;
@@ -130,5 +141,23 @@
     box-shadow:
       0 1px 0 hsl(var(--foreground) / 0.04),
       0 1px 3px hsl(var(--foreground) / 0.04);
+  }
+
+  /*
+   * Las pastillas de la grilla (categoría A/B, cadena, tubo de la invertida)
+   * están pintadas con colores fijos de Tailwind, que NO siguen al tema: sobre
+   * una fila pintada, un tono 400 pensado para el fondo oscuro se pierde. Se
+   * bajan a un 700, que contrasta con cualquiera de los ocho pasteles.
+   * Las variantes `hover:` llevan otro nombre de clase y no las toca.
+   */
+  .fila-pintada .text-emerald-400 {
+    @apply text-emerald-700;
+  }
+  .fila-pintada .text-sky-400 {
+    @apply text-sky-700;
+  }
+  .fila-pintada .text-amber-400,
+  .fila-pintada .text-amber-500 {
+    @apply text-amber-700;
   }
 }

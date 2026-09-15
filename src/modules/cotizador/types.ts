@@ -36,6 +36,32 @@ export type Producto = {
    * habitación va sin imagen.
    */
   foto?: string;
+  /**
+   * Cuándo entró este código al catálogo ('AAAA-MM-DD'), la columna «Fecha Alta»
+   * del Excel maestro. No la usa ningún cálculo: es para saber qué tan vieja es
+   * una tela cuando se revisan precios. Ausente = los códigos de antes de que se
+   * empezara a registrar.
+   */
+  fechaAlta?: string;
+  /** Quién vende esta tela («Proveedor 1»), del Excel maestro. Informativo. */
+  proveedor?: string;
+  /**
+   * El DIVISOR con el que se sacó el precio de venta: precio = costo ÷ ganancia
+   * × (1 + IVA). En el Excel es la columna «Ganancia 65 %», que no es un
+   * recargo sino el margen de la casa —el mismo `margenInsumo` con el que se
+   * cobran los insumos—. Se guarda por producto para poder recalcular el precio
+   * cuando cambia el costo; el IVA NO se guarda, es el de la empresa
+   * (`parametros.iva`), uno solo para todos.
+   */
+  ganancia?: number;
+  /**
+   * Con qué categoría de FABRICACIÓN nace una cortina de esta tela en la grilla
+   * (ROL, DUO_MANUAL_38mm, VERTICAL, un tipo propio…). Es una propuesta: la
+   * vendedora la puede cambiar en la fila. Ausente = la fila nace sin categoría,
+   * como toda la vida. Se valida contra las categorías vigentes antes de usarla,
+   * así un tipo propio borrado en Admin no deja filas con una categoría fantasma.
+   */
+  categoriaFabricacion?: string;
 };
 
 // Mapa de catálogo: COD_INT → Producto. Se guarda en Supabase `configuracion`
