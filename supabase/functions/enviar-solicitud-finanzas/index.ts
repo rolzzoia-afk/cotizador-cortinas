@@ -30,10 +30,20 @@ function limpiarSecret(v: string | undefined): string {
   return (v ?? "").trim().replace(/^["']|["']$/g, "").trim();
 }
 
+/**
+ * La base del proyecto de Finanzas, venga como venga pegada. El panel de
+ * Supabase muestra la URL del API con el `/rest/v1` incluido, así que es lo
+ * natural de copiar — y entonces la ruta sale `/rest/v1/rest/v1/…` y PostgREST
+ * contesta 404 `PGRST125` (pasó de verdad el 2026-09-10).
+ */
+function urlBaseFinanzas(v: string): string {
+  return v.trim().replace(/\/+$/, "").replace(/\/rest\/v1$/i, "").replace(/\/+$/, "");
+}
+
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const FINANZAS_URL = limpiarSecret(Deno.env.get("FINANZAS_URL"));
+const FINANZAS_URL = urlBaseFinanzas(limpiarSecret(Deno.env.get("FINANZAS_URL")));
 const FINANZAS_KEY = limpiarSecret(Deno.env.get("FINANZAS_SERVICE_KEY"));
 
 /** Lo que se le dice a la bodega cuando el pedido se queda en nuestro sistema. */
@@ -182,7 +192,7 @@ Deno.serve(async (req) => {
     let finanzasId = "";
     try {
       const res = await fetch(
-        `${FINANZAS_URL.replace(/\/$/, "")}/rest/v1/rpc/bodega_crear_solicitud`,
+        `${FINANZAS_URL}/rest/v1/rpc/bodega_crear_solicitud`,
         {
           method: "POST",
           headers: {

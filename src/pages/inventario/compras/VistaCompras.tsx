@@ -23,12 +23,14 @@ import { TabButton } from '@/components/ui/tab-button';
 import { esRolAdmin } from '@/lib/roles';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import { useOrdenesCompra, useProveedoresCompras, useSolicitudes } from '@/modules/inventario/comprasStore';
+import { useRecepcionesEmpresa } from '@/modules/inventario/recepcionesLecturaStore';
 import { useInventario } from '../InventarioLayout';
 import OrdenesTab from './OrdenesTab';
 import ProveedoresTab from './ProveedoresTab';
+import RecepcionesTab from './RecepcionesTab';
 import SolicitudesTab from './SolicitudesTab';
 
-type Pestana = 'solicitudes' | 'ordenes' | 'proveedores';
+type Pestana = 'solicitudes' | 'ordenes' | 'recepciones' | 'proveedores';
 
 export function VistaCompras() {
   const { queryRol, puedeEditar, rol } = useInventario();
@@ -43,9 +45,11 @@ export function VistaCompras() {
   const solicitudes = useSolicitudes(encendido);
   const ordenes = useOrdenesCompra(encendido);
   const proveedores = useProveedoresCompras(encendido);
+  const recepciones = useRecepcionesEmpresa(encendido);
+  const porContar = recepciones.recepciones.filter((r) => r.estado === 'por_contar').length;
 
   const recargarTodo = async () => {
-    await Promise.all([solicitudes.recargar(), ordenes.recargar(), proveedores.recargar()]);
+    await Promise.all([solicitudes.recargar(), ordenes.recargar(), proveedores.recargar(), recepciones.recargar()]);
   };
 
   if (cargandoFlags) {
@@ -61,7 +65,7 @@ export function VistaCompras() {
   }
 
   const abierta = solicitudes.abierta;
-  const error = solicitudes.error || ordenes.error || proveedores.error;
+  const error = solicitudes.error || ordenes.error || proveedores.error || recepciones.error;
   const cargando = solicitudes.loading || ordenes.loading;
 
   return (
@@ -103,6 +107,20 @@ export function VistaCompras() {
         </TabButton>
         <TabButton
           variante="subrayado"
+          active={tab === 'recepciones'}
+          onClick={() => setTab('recepciones')}
+          badge={
+            porContar > 0 ? (
+              <Badge variant="accent">{porContar}</Badge>
+            ) : (
+              <Badge variant="muted">{recepciones.recepciones.length}</Badge>
+            )
+          }
+        >
+          Lo que llegó
+        </TabButton>
+        <TabButton
+          variante="subrayado"
           active={tab === 'proveedores'}
           onClick={() => setTab('proveedores')}
           badge={<Badge variant="muted">{proveedores.proveedores.length}</Badge>}
@@ -130,6 +148,14 @@ export function VistaCompras() {
           puedeSincronizar={esAdmin}
           queryRol={queryRol}
           onCambio={recargarTodo}
+        />
+      ) : tab === 'recepciones' ? (
+        <RecepcionesTab
+          recepciones={recepciones.recepciones}
+          ordenes={ordenes.ordenes}
+          puedeEditar={puedeEditar}
+          esAdmin={esAdmin}
+          queryRol={queryRol}
         />
       ) : (
         <ProveedoresTab
@@ -177,8 +203,8 @@ function ComprasApagado() {
           esperar.
         </Paso>
         <Paso numero={3} titulo="Bodega recibe">
-          Llega el camión, se busca la orden por el número de guía y se recibe pieza por pieza.
-          Entra al stock por el mismo camino que todo lo demás.
+          Llega el camión: se escanea la factura, se cuenta a mano y quien recibe firma. Lo bueno
+          entra al stock y Gerencia recibe el resultado, esté todo bien o con diferencias.
         </Paso>
       </div>
 

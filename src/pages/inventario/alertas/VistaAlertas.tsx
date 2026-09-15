@@ -40,6 +40,7 @@ import { lineasParaSolicitud } from '@/modules/inventario/comprasSolicitud';
 import { sumarASolicitud } from '@/modules/inventario/comprasStore';
 import { useFlagsInventario } from '@/modules/inventario/flagsStore';
 import { mesActual } from '@/modules/inventario/helpers';
+import DialogoPedirMarcados from './DialogoPedirMarcados';
 import TablaAlertas from './TablaAlertas';
 import { useInventario } from '../InventarioLayout';
 
@@ -133,6 +134,8 @@ export function VistaAlertas() {
   const [guardando, setGuardando] = useState(false);
   const [pedido, setPedido] = useState<ArticuloAlerta | null>(null);
   const [pidiendo, setPidiendo] = useState(false);
+  /** Lo marcado, abierto para revisar cantidades antes de sumarlo al pedido. */
+  const [revisando, setRevisando] = useState<ArticuloAlerta[] | null>(null);
 
   // Todo se calcula sobre el artículo CON el borrador encima: al bajar un
   // mínimo, la alerta tiene que apagarse antes de guardar, o no se ve el
@@ -228,17 +231,12 @@ export function VistaAlertas() {
     (articulos.find((a) => a.id === id) as { proveedor?: string | null } | undefined)?.proveedor ??
     null;
 
-  const crearSolicitud = async () => {
-    const elegidos = filas.filter((f) => marcados.has(f.id));
+  const crearSolicitud = () => {
+    // De TODA la lista, no de lo que se ve: con una búsqueda puesta, lo marcado
+    // antes quedaba afuera sin avisar aunque el chip dijera «2 marcados».
+    const elegidos = conCambios.filter((a) => marcados.has(a.id));
     if (elegidos.length === 0) {
       toast.warning('Marca al menos un artículo.');
-      return;
-    }
-    const sinObjetivo = elegidos.filter((a) => cantidadSugerida(a) == null);
-    if (sinObjetivo.length > 0) {
-      toast.warning(
-        `${sinObjetivo.length} de los marcados no tiene «dejar en» definido: sin eso no hay cuánto pedir.`,
-      );
       return;
     }
 
@@ -255,26 +253,37 @@ export function VistaAlertas() {
       return;
     }
 
+    // Antes se negaba entero si uno no tenía «dejar en». Ahora se revisa la
+    // lista y se escribe lo que falta.
+    setRevisando(elegidos);
+  };
+
+  const confirmarMarcados = async (cantidades: Record<string, number>) => {
+    if (!revisando) return;
     setPidiendo(true);
     try {
       const r = await sumarASolicitud(
         lineasParaSolicitud(
-          elegidos.map((a) => ({
+          revisando.map((a) => ({
             dominio: a.dominio,
             codigo: a.codigo,
             nombre: a.nombre,
             ahora: a.ahora,
             minimo: a.minimo,
-            cantidad: cantidadSugerida(a) ?? 0,
+            cantidad: cantidades[a.id] ?? 0,
             proveedor: proveedorDe(a.id),
             bajoMinimo: pideAtencion(a),
           })),
         ),
       );
+      const n = r.nuevas + r.sumadas;
       toast.success(
-        `${r.nuevas + r.sumadas} artículos en el pedido ${r.numero}. Se manda a Gerencia desde Compras.`,
+        `${n === 1 ? '1 artículo' : `${n} artículos`} en el pedido ${r.numero}` +
+          (r.creada ? ' (recién abierto)' : '') +
+          '. Se manda a Gerencia desde Compras.',
       );
       setMarcados(new Set());
+      setRevisando(null);
       await recargar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
@@ -296,7 +305,7 @@ export function VistaAlertas() {
               Exportar
             </Button>
             {puedeEditar && (
-              <Button onClick={() => void crearSolicitud()} disabled={pidiendo}>
+              <Button onClick={crearSolicitud} disabled={pidiendo}>
                 {comprasEncendido ? 'Sumar lo marcado al pedido' : 'Crear solicitud con lo marcado'}
               </Button>
             )}
@@ -460,8 +469,23 @@ export function VistaAlertas() {
               : Math.max(1, Math.ceil(cantidadSugerida(pedido) ?? 1))
           }
           guardando={pidiendo}
+          descripcion={
+            comprasEncendido
+              ? 'Se suma al pedido abierto que bodega le manda a Gerencia. No mueve el stock.'
+              : undefined
+          }
+          etiquetaConfirmar={comprasEncendido ? 'Sumar al pedido' : undefined}
           onCerrar={() => setPedido(null)}
           onConfirmar={({ cantidad }) => void confirmarPedido(cantidad)}
+        />
+      )}
+
+      {revisando && (
+        <DialogoPedirMarcados
+          articulos={revisando}
+          guardando={pidiendo}
+          onCerrar={() => setRevisando(null)}
+          onConfirmar={(c) => void confirmarMarcados(c)}
         />
       )}
     </div>

@@ -181,9 +181,12 @@ export function TablaAlertas({
                     <Badge variant={cobertura.variante}>{cobertura.texto}</Badge>
                   </td>
                   <td className="px-2.5 py-1.5 text-right">
+                    {/* Siempre «Pedir»: sin «dejar en» el diálogo pide la
+                        cantidad igual. Decía «Definir» y parecía que primero
+                        había que llenar el objetivo. */}
                     {puedeEditar && (
                       <Button variant="outline" size="sm" onClick={() => onPedir(a)}>
-                        {sugerido == null ? 'Definir' : 'Pedir'}
+                        Pedir
                       </Button>
                     )}
                   </td>

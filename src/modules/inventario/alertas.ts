@@ -68,6 +68,20 @@ export function cantidadSugerida(a: ArticuloAlerta): number | null {
   return falta > 0 ? Math.round(falta * 100) / 100 : 0;
 }
 
+/**
+ * Con qué cantidad arranca la casilla al pedir varios de una vez. Es la
+ * sugerida, en la unidad en que se compra: los insumos enteros hacia arriba
+ * (pedir 2,4 cajas no existe) y las telas en metros con dos decimales.
+ *
+ * Sin «dejar en» arranca en 0 y no en un número cualquiera: la persona lo
+ * escribe o ese artículo no se pide. Antes eso trababa el lote entero.
+ */
+export function cantidadInicialParaPedir(a: ArticuloAlerta): number {
+  const s = cantidadSugerida(a);
+  if (s == null || !(s > 0)) return 0;
+  return a.dominio === 'tela' ? Math.round(s * 100) / 100 : Math.ceil(s - 1e-9);
+}
+
 // ── Cobertura ────────────────────────────────────────────────────────
 
 export type Cobertura = { texto: string; variante: VarianteBadge };

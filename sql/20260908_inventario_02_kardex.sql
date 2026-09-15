@@ -331,7 +331,7 @@ BEGIN
     IF v_item_id IS NULL THEN
       RAISE EXCEPTION 'No existe el artículo % (%)', v_cod, v_dominio
         USING ERRCODE = 'IN002',
-              HINT = 'Revisá que el código esté escrito igual que en el catálogo';
+              HINT = 'Revisa que el código esté escrito igual que en el catálogo';
     END IF;
 
     -- El stock de los insumos se guarda en columnas ENTERAS: aceptar 2,5 lo
@@ -410,7 +410,7 @@ BEGIN
         RAISE EXCEPTION 'No alcanza el stock de %: hay % en materias primas y % en liberado, y se piden %',
           v_cod, v_mp, v_lib, v_cant
           USING ERRCODE = 'IN003',
-                HINT = 'Sacá solo lo que hay, registrá primero el ingreso que falta, o contá el artículo';
+                HINT = 'Saca solo lo que hay, registra primero el ingreso que falta, o cuenta el artículo';
       END IF;
     END IF;
 
@@ -549,11 +549,23 @@ BEGIN
           'kardex ' || v_mov_id::text
         );
       ELSIF v_dual AND v_dominio = 'tela' THEN
+        -- El registro viejo de telas habla OTRO idioma: sus CHECK solo aceptan
+        -- 'MATERIAS PRIMAS' / 'LIBERADO' y cuatro tipos. Copiar 'MP' o
+        -- 'DEVOLUCION' tal cual hacía fallar el movimiento ENTERO, no solo la
+        -- copia (arreglado por `20260911_fix_stock_bloqueado.sql`).
         INSERT INTO movimientos_telas (
           empresa_id, fecha, tipo, codigo, metros, almacen, ot, responsable, notas
         ) VALUES (
-          v_empresa, now(), v_tipo, upper(v_cod), (v_tramo ->> 'cantidad')::numeric,
-          COALESCE(v_tramo ->> 'origen', v_tramo ->> 'destino'), v_linea ->> 'ot',
+          v_empresa, now(),
+          CASE v_tipo WHEN 'DEVOLUCION' THEN 'INGRESO'
+                      WHEN 'MERMA'      THEN 'SALIDA'
+                      WHEN 'CONTEO'     THEN 'AJUSTE'
+                      ELSE v_tipo END,
+          upper(v_cod), (v_tramo ->> 'cantidad')::numeric,
+          CASE COALESCE(v_tramo ->> 'origen', v_tramo ->> 'destino')
+            WHEN 'LIB' THEN 'LIBERADO'
+            ELSE 'MATERIAS PRIMAS' END,
+          v_linea ->> 'ot',
           v_linea ->> 'responsable', 'kardex ' || v_mov_id::text
         );
       END IF;
