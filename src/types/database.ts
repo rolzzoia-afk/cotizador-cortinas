@@ -3908,31 +3908,41 @@ export type Database = {
       }
       leads: {
         Row: {
+          anuncio: string | null
           archivado: boolean
           asignado_a: string | null
           asignado_at: string | null
           cantidad_ventanas: number | null
           comentarios: string | null
           comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
           created_at: string
           detalle_personal: string | null
           email: string | null
           empresa_id: string
           estado: string
+          estado_cotizacion: string
           etapa_seguimiento: number
           fecha_archivado: string | null
           fecha_cierre: string | null
           fecha_cotizacion: string | null
           fuente: string
           id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
           monto: number | null
           motivo_derivacion: string | null
           necesita_instalacion: boolean | null
           nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
           ot_id: string | null
           presupuesto_rango: string | null
           prioridad: string
           producto_interes: string | null
+          region: string | null
           resumen_para_vendedor: string | null
           rut: string | null
           scoring: number | null
@@ -3945,37 +3955,50 @@ export type Database = {
           tiene_medidas: boolean | null
           tomado_at: string | null
           ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
           updated_at: string
           urgencia: string | null
+          visita_por: string | null
           whatsapp_phone: string | null
           whatsapp_wa_id: string | null
         }
         Insert: {
+          anuncio?: string | null
           archivado?: boolean
           asignado_a?: string | null
           asignado_at?: string | null
           cantidad_ventanas?: number | null
           comentarios?: string | null
           comuna?: string | null
+          cotizacion_version?: number
+          cotizado_por?: string | null
           created_at?: string
           detalle_personal?: string | null
           email?: string | null
           empresa_id: string
           estado?: string
+          estado_cotizacion?: string
           etapa_seguimiento?: number
           fecha_archivado?: string | null
           fecha_cierre?: string | null
           fecha_cotizacion?: string | null
           fuente?: string
           id?: string
+          instagram?: string | null
+          llamada_por?: string | null
+          mensaje?: string | null
           monto?: number | null
           motivo_derivacion?: string | null
           necesita_instalacion?: boolean | null
           nombre?: string | null
+          numero_cotizacion?: string | null
+          origen_ot?: boolean
           ot_id?: string | null
           presupuesto_rango?: string | null
           prioridad?: string
           producto_interes?: string | null
+          region?: string | null
           resumen_para_vendedor?: string | null
           rut?: string | null
           scoring?: number | null
@@ -3988,37 +4011,50 @@ export type Database = {
           tiene_medidas?: boolean | null
           tomado_at?: string | null
           ultima_actividad_at?: string
+          ultima_actividad_por?: string | null
+          ultima_actividad_tipo?: string | null
           updated_at?: string
           urgencia?: string | null
+          visita_por?: string | null
           whatsapp_phone?: string | null
           whatsapp_wa_id?: string | null
         }
         Update: {
+          anuncio?: string | null
           archivado?: boolean
           asignado_a?: string | null
           asignado_at?: string | null
           cantidad_ventanas?: number | null
           comentarios?: string | null
           comuna?: string | null
+          cotizacion_version?: number
+          cotizado_por?: string | null
           created_at?: string
           detalle_personal?: string | null
           email?: string | null
           empresa_id?: string
           estado?: string
+          estado_cotizacion?: string
           etapa_seguimiento?: number
           fecha_archivado?: string | null
           fecha_cierre?: string | null
           fecha_cotizacion?: string | null
           fuente?: string
           id?: string
+          instagram?: string | null
+          llamada_por?: string | null
+          mensaje?: string | null
           monto?: number | null
           motivo_derivacion?: string | null
           necesita_instalacion?: boolean | null
           nombre?: string | null
+          numero_cotizacion?: string | null
+          origen_ot?: boolean
           ot_id?: string | null
           presupuesto_rango?: string | null
           prioridad?: string
           producto_interes?: string | null
+          region?: string | null
           resumen_para_vendedor?: string | null
           rut?: string | null
           scoring?: number | null
@@ -4031,8 +4067,11 @@ export type Database = {
           tiene_medidas?: boolean | null
           tomado_at?: string | null
           ultima_actividad_at?: string
+          ultima_actividad_por?: string | null
+          ultima_actividad_tipo?: string | null
           updated_at?: string
           urgencia?: string | null
+          visita_por?: string | null
           whatsapp_phone?: string | null
           whatsapp_wa_id?: string | null
         }
@@ -4056,6 +4095,13 @@ export type Database = {
             columns: ["ot_id"]
             isOneToOne: false
             referencedRelation: "ots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_ultima_actividad_por_fkey"
+            columns: ["ultima_actividad_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -4183,6 +4229,99 @@ export type Database = {
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads_ot_omitidas: {
+        Row: {
+          created_at: string
+          empresa_id: string
+          omitida_por: string | null
+          ot_id: string
+        }
+        Insert: {
+          created_at?: string
+          empresa_id: string
+          omitida_por?: string | null
+          ot_id: string
+        }
+        Update: {
+          created_at?: string
+          empresa_id?: string
+          omitida_por?: string | null
+          ot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_ot_omitidas_omitida_por_fkey"
+            columns: ["omitida_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_ot_omitidas_ot_id_fkey"
+            columns: ["ot_id"]
+            isOneToOne: true
+            referencedRelation: "ots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      leads_seguimientos: {
+        Row: {
+          created_at: string
+          empresa_id: string
+          etapa: number | null
+          fecha: string
+          id: string
+          lead_id: string
+          medio: string | null
+          n: number
+          nota: string | null
+          registrado_por: string | null
+          resultado: string
+        }
+        Insert: {
+          created_at?: string
+          empresa_id: string
+          etapa?: number | null
+          fecha?: string
+          id?: string
+          lead_id: string
+          medio?: string | null
+          n: number
+          nota?: string | null
+          registrado_por?: string | null
+          resultado: string
+        }
+        Update: {
+          created_at?: string
+          empresa_id?: string
+          etapa?: number | null
+          fecha?: string
+          id?: string
+          lead_id?: string
+          medio?: string | null
+          n?: number
+          nota?: string | null
+          registrado_por?: string | null
+          resultado?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leads_seguimientos_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_seguimientos_registrado_por_fkey"
+            columns: ["registrado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
             referencedColumns: ["id"]
           },
         ]
@@ -7484,39 +7623,44 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      lead_cambiar_estado: {
-        Args: {
-          p_comentario?: string
-          p_lead_id: string
-          p_motivo?: string
-          p_nuevo_estado: string
-        }
+      lead_asignar: {
+        Args: { p_lead_id: string; p_perfil_id: string }
         Returns: {
+          anuncio: string | null
           archivado: boolean
           asignado_a: string | null
           asignado_at: string | null
           cantidad_ventanas: number | null
           comentarios: string | null
           comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
           created_at: string
           detalle_personal: string | null
           email: string | null
           empresa_id: string
           estado: string
+          estado_cotizacion: string
           etapa_seguimiento: number
           fecha_archivado: string | null
           fecha_cierre: string | null
           fecha_cotizacion: string | null
           fuente: string
           id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
           monto: number | null
           motivo_derivacion: string | null
           necesita_instalacion: boolean | null
           nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
           ot_id: string | null
           presupuesto_rango: string | null
           prioridad: string
           producto_interes: string | null
+          region: string | null
           resumen_para_vendedor: string | null
           rut: string | null
           scoring: number | null
@@ -7529,8 +7673,11 @@ export type Database = {
           tiene_medidas: boolean | null
           tomado_at: string | null
           ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
           updated_at: string
           urgencia: string | null
+          visita_por: string | null
           whatsapp_phone: string | null
           whatsapp_wa_id: string | null
         }
@@ -7541,34 +7688,49 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      lead_vincular_ot: {
-        Args: { p_lead_id: string; p_ot_id: string }
+      lead_cambiar_estado: {
+        Args: {
+          p_comentario?: string
+          p_lead_id: string
+          p_motivo?: string
+          p_nuevo_estado: string
+        }
         Returns: {
+          anuncio: string | null
           archivado: boolean
           asignado_a: string | null
           asignado_at: string | null
           cantidad_ventanas: number | null
           comentarios: string | null
           comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
           created_at: string
           detalle_personal: string | null
           email: string | null
           empresa_id: string
           estado: string
+          estado_cotizacion: string
           etapa_seguimiento: number
           fecha_archivado: string | null
           fecha_cierre: string | null
           fecha_cotizacion: string | null
           fuente: string
           id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
           monto: number | null
           motivo_derivacion: string | null
           necesita_instalacion: boolean | null
           nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
           ot_id: string | null
           presupuesto_rango: string | null
           prioridad: string
           producto_interes: string | null
+          region: string | null
           resumen_para_vendedor: string | null
           rut: string | null
           scoring: number | null
@@ -7581,8 +7743,11 @@ export type Database = {
           tiene_medidas: boolean | null
           tomado_at: string | null
           ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
           updated_at: string
           urgencia: string | null
+          visita_por: string | null
           whatsapp_phone: string | null
           whatsapp_wa_id: string | null
         }
@@ -7592,6 +7757,290 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      lead_cotizacion_aplicar: {
+        Args: {
+          p_estado: string
+          p_lead_id: string
+          p_nota: string
+          p_origen: string
+        }
+        Returns: {
+          anuncio: string | null
+          archivado: boolean
+          asignado_a: string | null
+          asignado_at: string | null
+          cantidad_ventanas: number | null
+          comentarios: string | null
+          comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
+          created_at: string
+          detalle_personal: string | null
+          email: string | null
+          empresa_id: string
+          estado: string
+          estado_cotizacion: string
+          etapa_seguimiento: number
+          fecha_archivado: string | null
+          fecha_cierre: string | null
+          fecha_cotizacion: string | null
+          fuente: string
+          id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
+          monto: number | null
+          motivo_derivacion: string | null
+          necesita_instalacion: boolean | null
+          nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
+          ot_id: string | null
+          presupuesto_rango: string | null
+          prioridad: string
+          producto_interes: string | null
+          region: string | null
+          resumen_para_vendedor: string | null
+          rut: string | null
+          scoring: number | null
+          seg1_fecha: string | null
+          seg1_resultado: string | null
+          seg2_fecha: string | null
+          seg2_resultado: string | null
+          seg3_fecha: string | null
+          seg3_resultado: string | null
+          tiene_medidas: boolean | null
+          tomado_at: string | null
+          ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
+          updated_at: string
+          urgencia: string | null
+          visita_por: string | null
+          whatsapp_phone: string | null
+          whatsapp_wa_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      lead_cotizacion_estado: {
+        Args: { p_estado: string; p_lead_id: string; p_nota?: string }
+        Returns: {
+          anuncio: string | null
+          archivado: boolean
+          asignado_a: string | null
+          asignado_at: string | null
+          cantidad_ventanas: number | null
+          comentarios: string | null
+          comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
+          created_at: string
+          detalle_personal: string | null
+          email: string | null
+          empresa_id: string
+          estado: string
+          estado_cotizacion: string
+          etapa_seguimiento: number
+          fecha_archivado: string | null
+          fecha_cierre: string | null
+          fecha_cotizacion: string | null
+          fuente: string
+          id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
+          monto: number | null
+          motivo_derivacion: string | null
+          necesita_instalacion: boolean | null
+          nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
+          ot_id: string | null
+          presupuesto_rango: string | null
+          prioridad: string
+          producto_interes: string | null
+          region: string | null
+          resumen_para_vendedor: string | null
+          rut: string | null
+          scoring: number | null
+          seg1_fecha: string | null
+          seg1_resultado: string | null
+          seg2_fecha: string | null
+          seg2_resultado: string | null
+          seg3_fecha: string | null
+          seg3_resultado: string | null
+          tiene_medidas: boolean | null
+          tomado_at: string | null
+          ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
+          updated_at: string
+          urgencia: string | null
+          visita_por: string | null
+          whatsapp_phone: string | null
+          whatsapp_wa_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      lead_desde_ot: {
+        Args: {
+          p_ot: Database["public"]["Tables"]["ots"]["Row"]
+          p_relleno?: boolean
+        }
+        Returns: string
+      }
+      lead_editar: {
+        Args: { p_lead_id: string; p_patch: Json }
+        Returns: {
+          anuncio: string | null
+          archivado: boolean
+          asignado_a: string | null
+          asignado_at: string | null
+          cantidad_ventanas: number | null
+          comentarios: string | null
+          comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
+          created_at: string
+          detalle_personal: string | null
+          email: string | null
+          empresa_id: string
+          estado: string
+          estado_cotizacion: string
+          etapa_seguimiento: number
+          fecha_archivado: string | null
+          fecha_cierre: string | null
+          fecha_cotizacion: string | null
+          fuente: string
+          id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
+          monto: number | null
+          motivo_derivacion: string | null
+          necesita_instalacion: boolean | null
+          nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
+          ot_id: string | null
+          presupuesto_rango: string | null
+          prioridad: string
+          producto_interes: string | null
+          region: string | null
+          resumen_para_vendedor: string | null
+          rut: string | null
+          scoring: number | null
+          seg1_fecha: string | null
+          seg1_resultado: string | null
+          seg2_fecha: string | null
+          seg2_resultado: string | null
+          seg3_fecha: string | null
+          seg3_resultado: string | null
+          tiene_medidas: boolean | null
+          tomado_at: string | null
+          ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
+          updated_at: string
+          urgencia: string | null
+          visita_por: string | null
+          whatsapp_phone: string | null
+          whatsapp_wa_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      lead_estado_desde_ot: {
+        Args: { p_actual: string; p_estado_ot: string }
+        Returns: string
+      }
+      lead_estado_rango: { Args: { p_estado: string }; Returns: number }
+      lead_vincular_ot: {
+        Args: { p_lead_id: string; p_ot_id: string }
+        Returns: {
+          anuncio: string | null
+          archivado: boolean
+          asignado_a: string | null
+          asignado_at: string | null
+          cantidad_ventanas: number | null
+          comentarios: string | null
+          comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
+          created_at: string
+          detalle_personal: string | null
+          email: string | null
+          empresa_id: string
+          estado: string
+          estado_cotizacion: string
+          etapa_seguimiento: number
+          fecha_archivado: string | null
+          fecha_cierre: string | null
+          fecha_cotizacion: string | null
+          fuente: string
+          id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
+          monto: number | null
+          motivo_derivacion: string | null
+          necesita_instalacion: boolean | null
+          nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
+          ot_id: string | null
+          presupuesto_rango: string | null
+          prioridad: string
+          producto_interes: string | null
+          region: string | null
+          resumen_para_vendedor: string | null
+          rut: string | null
+          scoring: number | null
+          seg1_fecha: string | null
+          seg1_resultado: string | null
+          seg2_fecha: string | null
+          seg2_resultado: string | null
+          seg3_fecha: string | null
+          seg3_resultado: string | null
+          tiene_medidas: boolean | null
+          tomado_at: string | null
+          ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
+          updated_at: string
+          urgencia: string | null
+          visita_por: string | null
+          whatsapp_phone: string | null
+          whatsapp_wa_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "leads"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      leads_sync_desde_ot: {
+        Args: {
+          p_estado_antes: string
+          p_ot: Database["public"]["Tables"]["ots"]["Row"]
+        }
+        Returns: undefined
       }
       limpiar_zombies_colmena: {
         Args: { p_dry_run?: boolean }
@@ -7612,6 +8061,13 @@ export type Database = {
         Returns: Json
       }
       mi_empresa_id: { Args: never; Returns: string }
+      nombres_perfiles_empresa: {
+        Args: never
+        Returns: {
+          id: string
+          nombre: string
+        }[]
+      }
       normalizar_almacen: { Args: { p_texto: string }; Returns: string }
       obtener_reconciliacion_inventario: {
         Args: { p_dias_tendencia?: number; p_limite_anomalias?: number }
@@ -7723,33 +8179,48 @@ export type Database = {
         Returns: Json
       }
       registrar_seguimiento: {
-        Args: { p_lead_id: string; p_nota?: string; p_resultado: string }
+        Args: {
+          p_lead_id: string
+          p_medio?: string
+          p_nota?: string
+          p_resultado: string
+        }
         Returns: {
+          anuncio: string | null
           archivado: boolean
           asignado_a: string | null
           asignado_at: string | null
           cantidad_ventanas: number | null
           comentarios: string | null
           comuna: string | null
+          cotizacion_version: number
+          cotizado_por: string | null
           created_at: string
           detalle_personal: string | null
           email: string | null
           empresa_id: string
           estado: string
+          estado_cotizacion: string
           etapa_seguimiento: number
           fecha_archivado: string | null
           fecha_cierre: string | null
           fecha_cotizacion: string | null
           fuente: string
           id: string
+          instagram: string | null
+          llamada_por: string | null
+          mensaje: string | null
           monto: number | null
           motivo_derivacion: string | null
           necesita_instalacion: boolean | null
           nombre: string | null
+          numero_cotizacion: string | null
+          origen_ot: boolean
           ot_id: string | null
           presupuesto_rango: string | null
           prioridad: string
           producto_interes: string | null
+          region: string | null
           resumen_para_vendedor: string | null
           rut: string | null
           scoring: number | null
@@ -7762,8 +8233,11 @@ export type Database = {
           tiene_medidas: boolean | null
           tomado_at: string | null
           ultima_actividad_at: string
+          ultima_actividad_por: string | null
+          ultima_actividad_tipo: string | null
           updated_at: string
           urgencia: string | null
+          visita_por: string | null
           whatsapp_phone: string | null
           whatsapp_wa_id: string | null
         }
@@ -7822,6 +8296,7 @@ export type Database = {
         Args: { p_conteo: number; p_inventario_id: string; p_n_colmena: string }
         Returns: undefined
       }
+      telefono_normalizado: { Args: { p: string }; Returns: string }
       verificar_eventos_recientes_ot: {
         Args: {
           p_empresa_id: string

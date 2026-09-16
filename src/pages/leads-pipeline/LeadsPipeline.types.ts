@@ -1,4 +1,6 @@
-// Tipos privados de la pantalla LeadsPipeline.
+// Tipos privados de la pantalla Clientes (LeadsPipeline).
 
-export type Vista = 'tabla' | 'kanban' | 'metricas' | 'seguimientos' | 'coaching';
-export type FiltroOrigen = 'todos' | 'bot' | 'manual';
+export type Vista = 'planilla' | 'tabla' | 'kanban' | 'metricas' | 'seguimientos' | 'coaching';
+
+/** De dónde salió la fila: una OT (cotización), a mano o el bot. */
+export type FiltroOrigen = 'todos' | 'ot' | 'manual' | 'bot';

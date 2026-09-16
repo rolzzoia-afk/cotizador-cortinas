@@ -4,7 +4,20 @@ import {
   canalParaGuardar,
   esCanalReal,
   opcionesCanal,
+  opcionesEquipo,
 } from './canales';
+
+describe('opcionesEquipo', () => {
+  it('la lista del engranaje, sin repetir', () => {
+    expect(opcionesEquipo(['Génesis', 'Juan', 'génesis', ' '])).toEqual(['Génesis', 'Juan']);
+  });
+
+  it('conserva a quien ya no está en la lista', () => {
+    expect(opcionesEquipo(['Juan'], 'Luisanna')).toEqual(['Juan', 'Luisanna']);
+    expect(opcionesEquipo(['Juan'], 'Juan')).toEqual(['Juan']);
+    expect(opcionesEquipo(null, null)).toEqual([]);
+  });
+});
 
 const CONFIG = ['Instagram', 'WhatsApp 1', 'WhatsApp 2', 'Shopify'];
 

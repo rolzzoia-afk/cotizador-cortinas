@@ -96,6 +96,11 @@ export type DatosGenerales = {
   otDetallada?: string;
   canal?: string;
   fecha?: string;
+  /**
+   * Cliente (fila de `leads`) desde el que se creó la OT. Lo lee el trigger
+   * `trg_ots_lead_insert`: enlaza ese cliente en vez de crear otra fila.
+   */
+  leadId?: string;
   notas?: string;
   cotizacionCount?: number;
   subEtapa?: SubEtapaProd | null;

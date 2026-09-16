@@ -1,6 +1,6 @@
-// Barra de filtros del Pipeline: búsqueda de texto, dropdown de vendedora,
-// dropdown de canal, toggle bot/manual, ordenar por scoring, chips de
-// estado para filtrar por uno o varios estados a la vez.
+// Barra de filtros de Clientes: búsqueda de texto, dropdown de vendedora,
+// dropdown de canal, origen (con cotización / a mano / bot), ordenar por
+// scoring, chips de estado para filtrar por uno o varios estados a la vez.
 
 import { Bot, Search, Star, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -13,6 +13,20 @@ import {
 } from '@/modules/leads/types';
 import type { FiltroOrigen } from '../LeadsPipeline.types';
 import { TONO_CLS } from '../LeadsPipeline.config';
+
+const ORIGENES: FiltroOrigen[] = ['todos', 'ot', 'manual', 'bot'];
+const ORIGEN_TEXTO: Record<FiltroOrigen, string> = {
+  todos: 'Todos',
+  ot: 'Con cotización',
+  manual: 'A mano',
+  bot: 'Bot',
+};
+const ORIGEN_AYUDA: Record<FiltroOrigen, string> = {
+  todos: 'Todos los clientes',
+  ot: 'Solo los que tienen una OT (cotización)',
+  manual: 'Solo los cargados a mano, sin OT',
+  bot: 'Solo los derivados por el bot de WhatsApp',
+};
 
 interface FiltrosBarProps {
   busqueda: string;
@@ -94,34 +108,28 @@ export default function FiltrosBar({
         <option value="Referido">Referido</option>
       </select>
 
+      <div className="flex overflow-hidden rounded-md border border-border">
+        {(hayLeadsDeBot ? ORIGENES : ORIGENES.filter((o) => o !== 'bot')).map((o, idx) => (
+          <button
+            key={o}
+            onClick={() => setFiltroOrigen(o)}
+            className={cn(
+              'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors',
+              idx > 0 && 'border-l border-border',
+              filtroOrigen === o
+                ? 'bg-accent/15 text-accent'
+                : 'bg-transparent text-muted-foreground hover:text-foreground',
+            )}
+            title={ORIGEN_AYUDA[o]}
+          >
+            {o === 'bot' && <Bot className="h-3 w-3" />}
+            {ORIGEN_TEXTO[o]}
+          </button>
+        ))}
+      </div>
+
       {hayLeadsDeBot && (
         <>
-          <div className="flex overflow-hidden rounded-md border border-border">
-            {(['todos', 'bot', 'manual'] as FiltroOrigen[]).map((o, idx) => (
-              <button
-                key={o}
-                onClick={() => setFiltroOrigen(o)}
-                className={cn(
-                  'inline-flex items-center gap-1 px-2.5 py-1.5 text-xs transition-colors',
-                  idx > 0 && 'border-l border-border',
-                  filtroOrigen === o
-                    ? 'bg-accent/15 text-accent'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground',
-                )}
-                title={
-                  o === 'bot'
-                    ? 'Solo leads derivados por el bot de WhatsApp'
-                    : o === 'manual'
-                      ? 'Solo leads cargados manualmente'
-                      : 'Todos los leads'
-                }
-              >
-                {o === 'bot' && <Bot className="h-3 w-3" />}
-                {o === 'todos' ? 'Todos' : o === 'bot' ? 'Bot' : 'Manual'}
-              </button>
-            ))}
-          </div>
-
           <button
             onClick={() => setOrdenarPorScoring((v) => !v)}
             className={cn(

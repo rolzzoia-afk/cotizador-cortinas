@@ -1,13 +1,15 @@
-// Diálogo de detalle/edición de un lead.
+// Diálogo de detalle/edición de un cliente.
 //
 // Maneja: state local (drafts de estado, vendedora, prioridad, detalle,
-// comentario), las 5 mutaciones a Supabase, y compone las 9 secciones
-// hijas con sus props.
+// comentario), las mutaciones a Supabase, y compone las secciones hijas.
 // Cada sección hija vive bajo ./lead-detalle/components/.
+//
+// Todo cambio que ve el equipo pasa por una RPC que lo firma (`leadsRpc.ts`):
+// el historial de la columna derecha dice qué cambió y quién.
 
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ExternalLink, FileText, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,11 +24,14 @@ import { useLeadDetalle, useVendedoras } from '@/modules/leads/hooks';
 import {
   ESTADOS_LABEL,
   ESTADO_ES_PERDIDO,
+  esLeadDeBot,
   type Lead,
   type LeadEstado,
   type Prioridad,
 } from '@/modules/leads/types';
 import { actualizarPrioridadDetalle } from '@/modules/leads/seguimientos';
+import { asignarLead } from '@/modules/leads/leadsRpc';
+import { useNombresPerfiles } from '@/modules/leads/planillaStore';
 import { confirmar } from '@/components/ui/confirm';
 
 import ActividadColumn from './lead-detalle/components/ActividadColumn';
@@ -35,6 +40,7 @@ import AsignarVendedoraSection from './lead-detalle/components/AsignarVendedoraS
 import CambioEstadoSection from './lead-detalle/components/CambioEstadoSection';
 import CoachingContextual from './lead-detalle/components/CoachingContextual';
 import ContactoSection from './lead-detalle/components/ContactoSection';
+import CotizacionSection from './lead-detalle/components/CotizacionSection';
 import PrioridadDetalleSection from './lead-detalle/components/PrioridadDetalleSection';
 import SeguimientosTimeline from './lead-detalle/components/SeguimientosTimeline';
 
@@ -59,8 +65,9 @@ export function LeadDetalleDialog({
 }: Props) {
   const navigate = useNavigate();
   const { empresaId } = useAuth();
-  const { lead, actividad, loading, refresh, agregarComentario } = useLeadDetalle(leadId);
+  const { lead, actividad, seguimientos, loading, refresh, agregarComentario } = useLeadDetalle(leadId);
   const { vendedoras } = useVendedoras();
+  const nombres = useNombresPerfiles();
   const [comentario, setComentario] = useState('');
   const [savingComentario, setSavingComentario] = useState(false);
   const [estadoDraft, setEstadoDraft] = useState<LeadEstado | null>(null);
@@ -84,19 +91,14 @@ export function LeadDetalleDialog({
 
   const vendedoraNombre = useMemo(() => {
     if (!lead?.asignado_a) return null;
-    return vendedoras.find((v) => v.id === lead.asignado_a)?.nombre ?? '—';
-  }, [vendedoras, lead?.asignado_a]);
+    return vendedoras.find((v) => v.id === lead.asignado_a)?.nombre ?? nombres.get(lead.asignado_a) ?? '—';
+  }, [vendedoras, nombres, lead?.asignado_a]);
 
-  // Detecta si vino del agente: tiene whatsapp_phone o scoring o resumen
+  // Solo lo que de verdad trajo el agente: una fila creada desde una OT
+  // también tiene teléfono, y mostraría la sección del bot vacía.
   const tieneDatosAgente = useMemo(() => {
     if (!lead) return false;
-    return (
-      !!lead.whatsapp_phone ||
-      !!lead.whatsapp_wa_id ||
-      lead.scoring != null ||
-      !!lead.resumen_para_vendedor ||
-      !!lead.producto_interes
-    );
+    return esLeadDeBot(lead) || !!lead.resumen_para_vendedor || !!lead.producto_interes;
   }, [lead]);
 
   if (!lead) {
@@ -104,12 +106,17 @@ export function LeadDetalleDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl border-border bg-card text-foreground">
           <div className="flex items-center justify-center py-12 text-muted-foreground">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Lead no encontrado'}
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Cliente no encontrado'}
           </div>
         </DialogContent>
       </Dialog>
     );
   }
+
+  const trasCambio = async () => {
+    await refresh();
+    onChanged?.();
+  };
 
   const handleGuardarEstado = async () => {
     if (!estadoDraft || estadoDraft === lead.estado) return;
@@ -124,8 +131,7 @@ export function LeadDetalleDialog({
       if (err) throw new Error(err.message);
       setMotivoDraft('');
       setComentarioCambio('');
-      await refresh();
-      onChanged?.();
+      await trasCambio();
       toast.success('Estado actualizado');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -138,23 +144,8 @@ export function LeadDetalleDialog({
   const handleGuardarVendedora = async () => {
     if (vendedoraDraft === (lead.asignado_a || '')) return;
     try {
-      const { error: err } = await supabase
-        .from('leads' as any)
-        .update({
-          asignado_a: vendedoraDraft || null,
-          asignado_at: vendedoraDraft ? new Date().toISOString() : null,
-          ultima_actividad_at: new Date().toISOString(),
-        })
-        .eq('id', lead.id);
-      if (err) throw new Error(err.message);
-      await supabase.from('leads_actividad' as any).insert({
-        lead_id: lead.id,
-        empresa_id: empresaId,
-        tipo: 'asignacion',
-        detalle: { asignado_a: vendedoraDraft || null },
-      });
-      await refresh();
-      onChanged?.();
+      await asignarLead(lead.id, vendedoraDraft || null);
+      await trasCambio();
       toast.success('Vendedora asignada');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -167,10 +158,9 @@ export function LeadDetalleDialog({
     try {
       await actualizarPrioridadDetalle(lead.id, {
         prioridad: prioridadDraft,
-        detalle_personal: detalleDraft,
+        detalle_personal: detalleDraft.trim() || null,
       });
-      await refresh();
-      onChanged?.();
+      await trasCambio();
       toast.success('Prioridad y detalle guardados');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -224,9 +214,12 @@ export function LeadDetalleDialog({
           mail: lead.email || '',
           telefono: lead.whatsapp_phone || '',
           comuna: lead.comuna || '',
+          regionNombre: lead.region || '',
           canal: lead.fuente || '',
           fecha: now.split('T')[0],
           ot: numeroOT,
+          // La base enlaza ESTE cliente con la OT en vez de crear otra fila.
+          leadId: lead.id,
         },
         items: [],
         total: 0,
@@ -235,7 +228,7 @@ export function LeadDetalleDialog({
       });
       if (errOT) throw new Error(errOT.message);
 
-      const { error: errLink } = await supabase.rpc('lead_vincular_ot' as any, {
+      const { error: errLink } = await supabase.rpc('lead_vincular_ot', {
         p_lead_id: lead.id,
         p_ot_id: otId,
       });
@@ -253,12 +246,14 @@ export function LeadDetalleDialog({
   };
 
   const handleEliminar = async () => {
-    if (!await confirmar(`¿Eliminar el lead "${lead.nombre || '(sin nombre)'}"? Esto NO se puede deshacer.`))
-      return;
+    const aviso = lead.ot_id
+      ? `¿Eliminar a "${lead.nombre || '(sin nombre)'}" de Clientes? La OT NO se borra y su fila no vuelve a aparecer. Esto no se puede deshacer.`
+      : `¿Eliminar a "${lead.nombre || '(sin nombre)'}"? Esto no se puede deshacer.`;
+    if (!(await confirmar(aviso))) return;
     try {
       await onDelete(lead.id);
       onOpenChange(false);
-      toast.success('Lead eliminado');
+      toast.success('Cliente eliminado');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       toast.error('Error: ' + msg);
@@ -280,9 +275,22 @@ export function LeadDetalleDialog({
         <div className="grid gap-5 md:grid-cols-[1.2fr_1fr]">
           {/* Columna izquierda */}
           <div className="space-y-4">
+            <CotizacionSection
+              lead={lead}
+              creandoOT={creandoOT}
+              onCrearOT={handleCrearCotizacion}
+              onAbrirOT={() => {
+                onOpenChange(false);
+                navigate(`/ots/${lead.ot_id}/fase1`);
+              }}
+              onCambio={trasCambio}
+            />
+
             <ContactoSection lead={lead} vendedoraNombre={vendedoraNombre} />
 
             {tieneDatosAgente && <AgenteDataSection lead={lead} />}
+
+            <SeguimientosTimeline lead={lead} seguimientos={seguimientos} nombres={nombres} />
 
             <PrioridadDetalleSection
               lead={lead}
@@ -293,8 +301,6 @@ export function LeadDetalleDialog({
               guardando={guardandoPD}
               onGuardar={handleGuardarPrioridadDetalle}
             />
-
-            <SeguimientosTimeline lead={lead} />
 
             <CoachingContextual estado={lead.estado} />
 
@@ -318,30 +324,6 @@ export function LeadDetalleDialog({
               onAsignar={handleGuardarVendedora}
             />
 
-            {!lead.ot_id ? (
-              <Button
-                onClick={handleCrearCotizacion}
-                disabled={creandoOT}
-                className="w-full gap-1.5"
-              >
-                {creandoOT && <Loader2 className="h-4 w-4 animate-spin" />}
-                <FileText className="h-4 w-4" />
-                Crear cotización (OT)
-              </Button>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  onOpenChange(false);
-                  navigate(`/ots/${lead.ot_id}/fase1`);
-                }}
-                className="w-full gap-1.5"
-              >
-                <ExternalLink className="h-4 w-4" />
-                Abrir OT vinculada
-              </Button>
-            )}
-
             <div className="flex gap-2 pt-2">
               <Button variant="outline" size="sm" onClick={() => onEdit(lead)} className="flex-1">
                 Editar datos
@@ -361,6 +343,7 @@ export function LeadDetalleDialog({
           <ActividadColumn
             lead={lead}
             actividad={actividad}
+            nombres={nombres}
             comentario={comentario}
             setComentario={setComentario}
             savingComentario={savingComentario}

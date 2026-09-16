@@ -927,6 +927,9 @@ export function CotizadorFase0({ modo = 'fase1' }: { modo?: 'fase1' | 'fase3' } 
           // dónde llegó el cliente: pisaba el canal y el dato no servía.
           canal: canalParaGuardar(canal),
           fecha: now.split('T')[0],
+          // Vino de la ficha de un cliente (/cotizar?lead=…): la base enlaza
+          // ese cliente con esta OT en vez de crear otra fila en Clientes.
+          leadId: params.get('lead') || undefined,
           adicionalesFase0: adicionalesGuardados,
           region,
           instalacionDescuentoRegion: Math.max(0, Math.min(1, regionPctEff / 100)),
