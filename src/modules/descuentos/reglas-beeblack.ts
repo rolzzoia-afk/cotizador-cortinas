@@ -38,10 +38,15 @@ export type VarianteBeeblack = 'INTERNO' | 'SEMI' | 'EXTERNO';
 export type InstalacionBeeblack = 'DENTRO_DEL_MARCO' | 'TECHO_A_MURO' | 'FUERA_DEL_MARCO';
 
 export type TogglesBeeblack = {
-  /** Manillas (hasta 2: un beeblack puede llevar screen + blackout, una manilla
-   *  por tela). La IZQUIERDA es estructura: va sola si nadie decidió nada
-   *  (`undefined` en ambas ⇒ `cortesBeeblack` la emite igual); un `false`
-   *  explícito la apaga. La DERECHA sigue siendo opt-in. */
+  /** Manillas de la CORTINA (hasta 2, izquierda y derecha). La IZQUIERDA es
+   *  estructura: va sola si nadie decidió nada (`undefined` en ambas ⇒
+   *  `cortesBeeblack` la emite igual); un `false` explícito la apaga. La
+   *  DERECHA sigue siendo opt-in.
+   *
+   *  ⚠ NO son "una por tela": en un beeblack doble las dos manillas van con la
+   *  PRIMERA tela, que es la que se lleva toda la estructura. La receta `|2T`
+   *  de la segunda tela no incluye la agarradera SML10, y quien decide qué
+   *  paño aporta estructura es la hoja de órdenes (dueño, OT #3238). */
   manillaIzq?: boolean;
   manillaDer?: boolean;
   /** Perfiles SEPARADORES (E41/E42/E43) por lado — opt-in, como en oscuridad. */

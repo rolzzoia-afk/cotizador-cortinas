@@ -4,6 +4,7 @@ import {
   COD_TELA_VELCRO_DARK,
   construirCalculoGeneral,
   envolverEtiqueta,
+  lineasDeCelda,
   pesoColumna,
   seccionesDeHoja,
   textoDespiece,
@@ -86,6 +87,127 @@ function ventVertical(): Ventana {
   v.modelo = modeloVertical;
   return v;
 }
+
+/** Beeblack doble como lo guarda Fase 2: una ventana con DOS paños. */
+function ventBeeblackDoble(varianteSegunda = 'INTERNO'): Ventana {
+  return {
+    id: 'v-bb-doble',
+    ubicacion: 'HIJA',
+    codInt: 'BEE-BK05',
+    producto: 'BEEBLACK BLACKOUT',
+    tipo: '',
+    categoria: 'BEEBLACK',
+    color: 'NEGRO',
+    alto: 1.901,
+    precio: 0,
+    cantidad: 1,
+    grupoId: null,
+    sentido: 'INTERNO',
+    direccion: 'IZQUIERDA-DERECHA',
+    modelo: null,
+    panos: [
+      {
+        ancho: 2.013, alto: 1.901, color: 'NEGRO',
+        codInt: 'BEE-BK05', producto: 'BEEBLACK BLACKOUT', descripcion: 'FB-6627-GREIGE',
+        beeblackVariante: 'INTERNO', beeblackManillaIzq: true, beeblackManillaDer: true,
+      },
+      {
+        ancho: 2.013, alto: 1.901, color: 'NEGRO',
+        codInt: 'BEE-TR01', producto: 'BEEBLACK TRASLUCIDA', descripcion: 'C-012 - BLANCO',
+        beeblackVariante: varianteSegunda,
+      },
+    ],
+  } as unknown as Ventana;
+}
+
+// El dueño, mirando la OT #3238: «tiene que aparecer una sola fila con el
+// nombre de ambas telas separadas por un "/" y una columna al lado que diga
+// que es doble». Las dos telas van en el mismo marco: son UNA cortina.
+describe('construirCalculoGeneral — beeblack doble en UNA fila', () => {
+  const opts = { fusionarDobles: true };
+
+  it('junta las dos telas, marca DOBLE y deja la UBIC. sin el sufijo de paño', () => {
+    const { filas } = construirCalculoGeneral(
+      [ventBeeblackDoble()], {}, PARAMETROS_CORTE_DEFAULT, undefined, opts,
+    );
+    expect(filas).toHaveLength(1);
+    const [f] = filas;
+    expect(f.codInt).toBe('BEE-BK05 / BEE-TR01');
+    expect(f.producto).toBe('BEEBLACK BLACKOUT / BEEBLACK TRASLUCIDA');
+    expect(f.descripcion).toBe('FB-6627-GREIGE / C-012 - BLANCO');
+    expect(f.doble).toBe('DOBLE');
+    expect(f.ubic).toBe('HIJA');
+  });
+
+  it('la estructura es del PRIMER paño: una sola manilla izq y una sola der', () => {
+    const { filas } = construirCalculoGeneral(
+      [ventBeeblackDoble()], {}, PARAMETROS_CORTE_DEFAULT, undefined, opts,
+    );
+    const d = filas[0].despiece;
+    // Con las dos telas en la misma variante, la segunda no aporta nada nuevo.
+    expect(String(d.get('MANILLA IZQ (ALTO)'))).not.toContain('/');
+    expect(String(d.get('MANILLA DER (ALTO)'))).not.toContain('/');
+    expect(String(d.get('PERFIL SUPERIOR (ANCHO)'))).not.toContain('/');
+    expect(String(d.get('TIPO DE BEEBLACK'))).not.toContain('/');
+  });
+
+  it('si las telas NO miden igual se ven las DOS, no se pierde una', () => {
+    // Variantes distintas en el mismo marco es un error de Fase 2; la hoja lo
+    // muestra en vez de taparlo quedándose con la primera.
+    const { filas } = construirCalculoGeneral(
+      [ventBeeblackDoble('SEMI')], {}, PARAMETROS_CORTE_DEFAULT, undefined, opts,
+    );
+    const ancho = String(filas[0].despiece.get('ANCHO TELA'));
+    expect(ancho).toContain('/');
+    // Con coma, como el resto de la hoja: salía «200.3 / 196.6» al lado de «292,3».
+    expect(ancho).not.toContain('.');
+    expect(ancho).toMatch(/^[\d,]+ \/ [\d,]+$/);
+  });
+
+  it('sin la opción (inventario) siguen siendo DOS filas, una por tela', () => {
+    const { filas } = construirCalculoGeneral([ventBeeblackDoble()]);
+    expect(filas).toHaveLength(2);
+    expect(filas[0].doble).toBe('');
+    expect(filas[0].ubic).toBe('HIJA-G1');
+  });
+});
+
+// «Las letras se cortan o cambian el tamaño, eso no debería pasar; agranda los
+// cuadros hacia abajo» (dueño, 2026-09-16). Medidor de juguete: 1 mm por letra.
+describe('lineasDeCelda — el texto baja de línea, nunca se recorta', () => {
+  const medir = (s: string) => s.length;
+
+  it('lo que cabe queda en una sola línea', () => {
+    expect(lineasDeCelda(medir, 'NEGRO', 10)).toEqual(['NEGRO']);
+    expect(lineasDeCelda(medir, '', 10)).toEqual([]);
+  });
+
+  it('en un doble, el «/» queda al final de la línea de arriba', () => {
+    expect(lineasDeCelda(medir, 'BEE-BK05 / BEE-TR01', 10)).toEqual(['BEE-BK05 /', 'BEE-TR01']);
+  });
+
+  it('si ni el «/» cabe al lado, el código queda ENTERO y el «/» baja solo', () => {
+    // Antes salía «BEE-» / «BK05 /»: el código partido en el guion.
+    expect(lineasDeCelda(medir, 'BEE-BK05 / BEE-TR01', 8)).toEqual(['BEE-BK05', '/', 'BEE-TR01']);
+  });
+
+  it('una palabra que sola no cabe se corta después de un guion', () => {
+    expect(lineasDeCelda(medir, 'FB-6627-GREIGE', 9)).toEqual(['FB-6627-', 'GREIGE']);
+  });
+
+  it('sin guion, se corta por letras', () => {
+    expect(lineasDeCelda(medir, 'ABCDEFGHIJ', 4)).toEqual(['ABCD', 'EFGH', 'IJ']);
+  });
+
+  it('no se pierde ni una letra, por angosta que sea la columna', () => {
+    const texto = 'BEEBLACK BLACKOUT WATERPROOF / BEEBLACK TRASLUCIDA SIMPLE';
+    for (const ancho of [3, 6, 11, 20, 80]) {
+      const lineas = lineasDeCelda(medir, texto, ancho);
+      expect(lineas.join('').replace(/\s/g, ''), `ancho ${ancho}`).toBe(texto.replace(/\s/g, ''));
+      for (const ln of lineas) expect(medir(ln), `«${ln}» en ${ancho}`).toBeLessThanOrEqual(ancho);
+    }
+  });
+});
 
 describe('construirCalculoGeneral', () => {
   it('una fila por cortina con identidad y despiece del mismo motor', () => {

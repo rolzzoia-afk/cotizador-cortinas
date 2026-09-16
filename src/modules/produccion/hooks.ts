@@ -664,6 +664,7 @@ export function useCalculoGeneral(
     if (ventanas.length === 0) return null;
     return construirCalculoGeneral(ventanas, catalogo, parametros, juntoPorPieza, {
       altoMesaCorteDuo: variante.altoMesaCorteDuo,
+      fusionarDobles: variante.fusionarDobles,
       usarTuboE78: !!ot.datosGenerales?.usarTuboE78,
       formulas,
       reglas,

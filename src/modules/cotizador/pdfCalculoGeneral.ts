@@ -79,6 +79,66 @@ export function envolverEtiqueta(
 }
 
 /**
+ * Parte el texto de una CELDA en líneas que caben en `maxW`. La letra nunca se
+ * achica ni se recorta con «…»: lo que no cabe baja de línea y la fila crece
+ * hacia abajo (dueño, 2026-09-16: «las letras se cortan o cambian el tamaño,
+ * eso no debería pasar»).
+ *
+ * Quiebra por espacios y deja el «/» al final de la línea de arriba, así una
+ * celda de doble se lee «BEE-BK05 /» y debajo «BEE-TR01». Una palabra que sola
+ * no cabe (un código largo) se corta por letras, de preferencia después de un
+ * guion. Puro y testeable (medidor inyectable).
+ */
+export function lineasDeCelda(
+  medir: (s: string) => number,
+  texto: string,
+  maxW: number,
+): string[] {
+  const limpio = (texto ?? '').trim();
+  if (!limpio) return [];
+
+  // Un «/» suelto se pega a la palabra anterior.
+  const tokens: string[] = [];
+  for (const t of limpio.split(/\s+/)) {
+    if (t === '/' && tokens.length > 0) tokens[tokens.length - 1] += ' /';
+    else tokens.push(t);
+  }
+
+  const lineas: string[] = [];
+  // Corta una palabra demasiado ancha y devuelve el pedazo que sobra, que
+  // todavía puede compartir línea con lo que viene.
+  const partirPalabra = (palabra: string): string => {
+    let resto = palabra;
+    while (resto.length > 1 && medir(resto) > maxW) {
+      let corte = resto.length - 1;
+      while (corte > 1 && medir(resto.slice(0, corte)) > maxW) corte--;
+      // Si lo que cabe termina justo antes de un espacio («BEE-BK05 /»), ese es
+      // el corte: partir el código en el guion («BEE-» / «BK05») se lee peor.
+      if (resto[corte] !== ' ') {
+        const quiebre = Math.max(resto.lastIndexOf('-', corte - 1), resto.lastIndexOf(' ', corte - 1));
+        if (quiebre > 0) corte = quiebre + 1;
+      }
+      lineas.push(resto.slice(0, corte).trim());
+      resto = resto.slice(corte).trim();
+    }
+    return resto;
+  };
+
+  let cur = '';
+  for (const t of tokens) {
+    const probe = cur ? `${cur} ${t}` : t;
+    if (medir(probe) <= maxW) {
+      cur = probe;
+      continue;
+    }
+    if (cur) lineas.push(cur);
+    cur = partirPalabra(t);
+  }
+  if (cur) lineas.push(cur);
+  return lineas;
+}
+
+/**
  * Cabecera de columna a tamaño FIJO (9, el de "TUBERIA"), envuelta en varias
  * líneas si no cabe — para que todas las cabeceras luzcan igual, en vez de que
  * `celda` encoja las etiquetas largas.
@@ -243,6 +303,7 @@ function renderHojaCalculo(
   }
   const data = construirCalculoGeneral(ventanas, catalogo, params, juntoPorPieza, {
     altoMesaCorteDuo: variante.altoMesaCorteDuo,
+    fusionarDobles: variante.fusionarDobles,
     usarTuboE78,
     formulas,
     reglas,
@@ -295,30 +356,61 @@ function renderHojaCalculo(
   let y = M;
   let pagina = 0;
 
-  // Celda a tamaño FIJO: lo que no cabe se recorta con "…". Con `minSize` primero
-  // ENCOGE la fuente (hasta minSize) para tratar de que quepa entero — útil para
-  // tokens largos ("240 INT / 240 EXT") que no deben perder dato por elipsis.
+  // ── Celdas de datos: tamaño fijo, bajan de línea, la fila crece ──
+  /** Alto de una línea de texto (mm) para un tamaño en puntos. */
+  const altoLinea = (size: number) => size * 0.39;
+  /** Aire arriba y abajo del texto dentro de la celda (mm). */
+  const AIRE_V = 2.5;
+  /** Alto que necesita una celda de `n` líneas. */
+  const altoCelda = (n: number, size: number) => n * altoLinea(size) + AIRE_V * 2;
+  /** Las líneas de una celda, medidas con la misma letra con que se dibujan. */
+  const lineasDe = (txt: string, w: number, size: number, bold: boolean): string[] => {
+    doc.setFont('helvetica', bold ? 'bold' : 'normal');
+    doc.setFontSize(size);
+    return lineasDeCelda((s) => doc.getTextWidth(s), txt, w - 1.4);
+  };
+  /** Dibuja las líneas centradas a lo ancho y a lo alto de la celda. */
+  const dibujarLineas = (
+    lineas: string[],
+    x: number,
+    w: number,
+    yTop: number,
+    h: number,
+    size: number,
+    o: { bold?: boolean; color?: RGB } = {},
+  ) => {
+    if (lineas.length === 0) return;
+    doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
+    doc.setFontSize(size);
+    const c = o.color ?? [25, 25, 30];
+    doc.setTextColor(c[0], c[1], c[2]);
+    const lh = altoLinea(size);
+    // Primera línea base: el bloque centrado en la celda, y cada línea con su
+    // letra mayúscula (≈0,254 mm por punto) centrada en su propio renglón.
+    let yBase = yTop + (h - lineas.length * lh) / 2 + (lh + size * 0.254) / 2;
+    for (const ln of lineas) {
+      doc.text(ln, x + w / 2, yBase, { align: 'center' });
+      yBase += lh;
+    }
+  };
+
+  // Rótulo de UNA línea (el nombre del sistema en la franja negra): son textos
+  // cortos que siempre caben. Las celdas de datos NO pasan por acá: usan
+  // `lineasDeCelda` y crecen hacia abajo.
   const celdaFija = (
     txt: string,
     x: number,
     w: number,
     yText: number,
     size: number,
-    o: { bold?: boolean; color?: RGB; minSize?: number } = {},
+    o: { bold?: boolean; color?: RGB } = {},
   ) => {
     if (!txt) return;
     doc.setFont('helvetica', o.bold ? 'bold' : 'normal');
     const c = o.color ?? [25, 25, 30];
     doc.setTextColor(c[0], c[1], c[2]);
     const maxW = w - 1.4;
-    let fSize = size;
-    doc.setFontSize(fSize);
-    if (o.minSize) {
-      while (fSize > o.minSize && doc.getTextWidth(txt) > maxW) {
-        fSize -= 0.5;
-        doc.setFontSize(fSize);
-      }
-    }
+    doc.setFontSize(size);
     let t = txt;
     if (doc.getTextWidth(t) > maxW) {
       while (t.length > 1 && doc.getTextWidth(t + '…') > maxW) t = t.slice(0, -1);
@@ -419,51 +511,49 @@ function renderHojaCalculo(
     cabecerasSeccion();
 
     for (const f of sec.filas) {
-      if (y + rowH > BOTTOM) {
+      // Cada celda se parte en líneas a SU tamaño fijo: la letra no se achica ni
+      // se recorta. La celda más alta decide cuánto crece la fila, y todas las
+      // de la fila quedan del mismo alto. El texto lo decide el modelo
+      // (`textoIdentidad`/`textoDespiece`): papel y pantalla no se contradicen.
+      const celdasIdent = sec.identidad.map((c, i) =>
+        lineasDe(textoIdentidad(f, c.key), identWidths[i], SIZE_TEXTO, false),
+      );
+      const celdasDesp = sec.columnas.map((c, j) => {
+        const val = textoDespiece(f, c.key);
+        // TIPO DE SOFT.LIGHT va en negrita y verde: se mide en negrita.
+        const resalta = c.key === 'TIPO SOFT LIGHT' && !!val;
+        return { resalta, lineas: lineasDe(val, despWidths[j], SIZE_NUM, resalta) };
+      });
+      const altoFila = Math.max(
+        rowH,
+        ...celdasIdent.map((l) => altoCelda(l.length, SIZE_TEXTO)),
+        ...celdasDesp.map((d) => altoCelda(d.lineas.length, SIZE_NUM)),
+      );
+
+      if (y + altoFila > BOTTOM) {
         doc.addPage();
         y = M;
         encabezado();
         cabecerasSeccion();
       }
-      // Identidad (texto de tamaño uniforme).
-      sec.identidad.forEach((c, i) => {
-        rect(doc, identXs[i], y, identWidths[i], rowH);
-        // El texto de la celda lo decide el modelo: es la única regla que el
-        // papel y la pantalla del taller no pueden contradecirse.
-        const val = textoIdentidad(f, c.key);
-        // El conjunto puede llevar el sufijo "(INVERTIDA)" y el codInt del
-        // beeblack es largo ("BEE-SC02"): encogen antes que recortarse, para no
-        // perder el final del texto.
-        celdaFija(
-          val,
-          identXs[i],
-          identWidths[i],
-          y + 7.4,
-          SIZE_TEXTO,
-          c.key === 'conjunto' || c.key === 'codInt' ? { minSize: 6 } : undefined,
-        );
+      sec.identidad.forEach((_c, i) => {
+        rect(doc, identXs[i], y, identWidths[i], altoFila);
+        dibujarLineas(celdasIdent[i], identXs[i], identWidths[i], y, altoFila, SIZE_TEXTO);
       });
-      // Despiece (números de tamaño uniforme; TIPO DE SOFT.LIGHT en verde).
-      sec.columnas.forEach((c, j) => {
-        const esTipo = c.key === 'TIPO SOFT LIGHT';
-        const esNum = typeof f.despiece.get(c.key) === 'number';
-        const val = textoDespiece(f, c.key);
-        rect(doc, despXs[j], y, despWidths[j], rowH, esTipo && val ? VERDE : undefined);
-        // Los números quedan a SIZE_NUM; los tokens string (perfiles "240 INT /
-        // 240 EXT", TIPO) encogen hasta 6,5 antes de recortar para no perder dato.
-        celdaFija(
-          val,
+      sec.columnas.forEach((_c, j) => {
+        const d = celdasDesp[j];
+        rect(doc, despXs[j], y, despWidths[j], altoFila, d.resalta ? VERDE : undefined);
+        dibujarLineas(
+          d.lineas,
           despXs[j],
           despWidths[j],
-          y + 7.4,
+          y,
+          altoFila,
           SIZE_NUM,
-          {
-            ...(esTipo && val ? { bold: true, color: VERDE_TXT } : {}),
-            ...(esNum ? {} : { minSize: 6.5 }),
-          },
+          d.resalta ? { bold: true, color: VERDE_TXT } : {},
         );
       });
-      y += rowH;
+      y += altoFila;
     }
     y += 2.5; // separación entre secciones
   }

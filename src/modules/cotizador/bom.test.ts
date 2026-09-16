@@ -234,6 +234,29 @@ describe('calcularBOM', () => {
     expect(spec.SML47?.cantidad).toBe(4); // sus tapas, tampoco doblan
   });
 
+  it('BEEBLACK doble con `dual` en false: igual pide la ferretería de las DOS telas', () => {
+    // OT #3238: en el beeblack la marca `dual` no se persiste y llegaba en
+    // `false`. El kit se pedía como si fuera una cortina de una sola tela y al
+    // taller le faltaba la mitad de la ferretería. Lo que manda es cuántos
+    // paños tiene la ventana.
+    const ventanas = [{
+      id: 1, categoria: 'BEEBLACK', color: 'BLANCO', modelo: null,
+      panos: [
+        { ancho: 2, alto: 1.3, color: 'BLANCO', dual: false },
+        { ancho: 2, alto: 1.3, color: 'BLANCO', dual: false },
+      ],
+    }];
+    const bom = calcularBOM(
+      [row({ color: 'BLANCO' }, { panoIndex: 0 }), row({ color: 'BLANCO' }, { panoIndex: 1 })],
+      ventanas as Parameters<typeof calcularBOM>[1],
+    );
+    const spec = Object.fromEntries(
+      bom.filter((i) => (i.especificacion || '').startsWith('SML')).map((i) => [i.especificacion, i]),
+    );
+    expect(spec.SML45?.cantidad).toBe(4); // ferretería de cada tela: ×2
+    expect(spec.SML16?.cantidad).toBe(4); // esquineros: siguen siendo de UNA estructura
+  });
+
   it('agrupa tubos con mismo largo + spec + color', () => {
     const bom = calcularBOM([row({ color: 'Blanco' }), row({ color: 'Blanco' })]);
     const tubos = bom.filter((i) => i.categoria === 'TUBERÍA');
