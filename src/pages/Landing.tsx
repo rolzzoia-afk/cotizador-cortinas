@@ -25,6 +25,7 @@ import {
   Package,
   Ruler,
   ShieldCheck,
+  Users,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -96,6 +97,7 @@ const ROLES: Role[] = [
   { title: 'Pruebas', desc: 'Control de calidad final antes de enviar a instalación.', to: '/panel?rol=pruebas', icon: ClipboardCheck, tags: ['Panel OTs', 'Control calidad'], categoria: 'operaciones', rolesVisibles: ['pruebas'] },
   { title: 'Ventas', desc: 'KPIs diarios del equipo comercial: llamadas, visitas, cierres y fuentes.', to: '/ventas?rol=ventas', icon: LineChart, tags: ['KPIs', 'Llamadas', 'Cierres', 'Terreno'], categoria: 'comercial', rolesVisibles: ['ventas'] },
   { title: 'Cotizaciones', desc: 'Gestión de OTs, cotizaciones y seguimiento de despachos.', to: '/panel?rol=ventas', icon: BriefcaseBusiness, tags: ['Panel OTs', 'Cotizador'], categoria: 'comercial', rolesVisibles: ['ventas'] },
+  { title: 'Clientes', desc: 'La planilla de seguimiento: cada cotización con su estado, sus seguimientos y quién hizo cada cambio.', to: '/leads?rol=ventas', icon: Users, tags: ['Planilla', 'Seguimientos', 'Por actualizar'], categoria: 'comercial', rolesVisibles: ['ventas'] },
   { title: 'Inventario de Telas', desc: 'App de la jefa para vendedores en terreno: descuentos de metraje de rollos por venta.', to: '/inventario-telas-prueba', icon: FlaskConical, tags: ['Rollos', 'Vendedores', 'Terreno', 'Beta'], categoria: 'comercial', rolesVisibles: ['ventas'] },
   { title: 'Cotizador Jefe', desc: 'Sistema de cotización OLZZO v1.1 con lista de precios, composición de modelos, cotizador y costo de producción.', to: '/cotizador-jefe', icon: Calculator, tags: ['Lista de precios', 'Modelos', 'Cotizador', 'Costos'], categoria: 'comercial', rolesVisibles: ['ventas'] },
   { title: 'Administrador', desc: 'Acceso completo al sistema. Inventario, inteligencia de negocio, panel admin y todos los módulos.', to: '/panel?rol=admin', icon: ShieldCheck, tags: ['Panel', 'Cotizador', 'Ventas', 'Bodega', 'Insumos', 'Telas', 'Producción', 'Inteligencia'], categoria: 'admin', wide: true, rolesVisibles: [] },

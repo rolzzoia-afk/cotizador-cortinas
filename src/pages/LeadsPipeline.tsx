@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -25,6 +25,7 @@ import { MetricasLeadsView } from '@/components/leads/MetricasLeadsView';
 import { SeguimientosView } from '@/components/leads/SeguimientosView';
 import { CoachingView } from '@/components/coaching/CoachingView';
 import { resumenBandeja } from '@/modules/leads/seguimientos';
+import { contarPorActualizar } from '@/modules/leads/cotizacionEstado';
 
 import type { Vista, FiltroOrigen } from './leads-pipeline/LeadsPipeline.types';
 import Metrica from './leads-pipeline/components/Metrica';
@@ -32,6 +33,9 @@ import TablaVista from './leads-pipeline/components/TablaVista';
 import KanbanVista from './leads-pipeline/components/KanbanVista';
 import VistaTabsBar from './leads-pipeline/components/VistaTabsBar';
 import FiltrosBar from './leads-pipeline/components/FiltrosBar';
+import PlanillaVista from './leads-pipeline/components/PlanillaVista';
+
+const VISTAS: Vista[] = ['planilla', 'tabla', 'kanban', 'metricas', 'seguimientos', 'coaching'];
 
 export function LeadsPipeline() {
   const navigate = useNavigate();
@@ -49,10 +53,10 @@ export function LeadsPipeline() {
   } = useLeads();
   const { vendedoras } = useVendedoras();
 
+  // Por defecto la Planilla: es la que reemplaza al Excel del equipo.
   const [vista, setVista] = useState<Vista>(() => {
     const v = params.get('vista') as Vista;
-    if (v === 'kanban' || v === 'metricas' || v === 'seguimientos' || v === 'coaching') return v;
-    return 'tabla';
+    return VISTAS.includes(v) ? v : 'planilla';
   });
   const [busqueda, setBusqueda] = useState('');
   const [filtroVendedora, setFiltroVendedora] = useState<string>('');
@@ -103,9 +107,10 @@ export function LeadsPipeline() {
       }
       if (filtroCanal && l.fuente !== filtroCanal) return false;
       if (filtroOrigen === 'bot' && !esLeadDeBot(l)) return false;
-      if (filtroOrigen === 'manual' && esLeadDeBot(l)) return false;
+      if (filtroOrigen === 'ot' && !l.ot_id) return false;
+      if (filtroOrigen === 'manual' && (esLeadDeBot(l) || l.ot_id)) return false;
       if (!q) return true;
-      const hay = [l.nombre, l.whatsapp_phone, l.email, l.rut, l.comuna]
+      const hay = [l.nombre, l.whatsapp_phone, l.email, l.rut, l.comuna, l.instagram, l.numero_cotizacion]
         .filter(Boolean)
         .some((s) => String(s).toLowerCase().includes(q));
       return hay;
@@ -148,6 +153,14 @@ export function LeadsPipeline() {
     return r.atrasados + r.hoy;
   }, [leads, perfil]);
 
+  // Cotizaciones que alguien tiene que actualizar (globo de la Planilla).
+  const porActualizar = useMemo(() => contarPorActualizar(leads), [leads]);
+
+  const abrirDetalle = useCallback((id: string) => {
+    setDetalleId(id);
+    setDetalleOpen(true);
+  }, []);
+
   const handleCrearOEditar = async (input: LeadInput) => {
     if (leadEnEdicion) {
       await actualizar(leadEnEdicion.id, input);
@@ -183,7 +196,7 @@ export function LeadsPipeline() {
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-background text-muted-foreground">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando leads…
+        <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Cargando clientes…
       </div>
     );
   }
@@ -201,11 +214,16 @@ export function LeadsPipeline() {
           </button>
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-accent" />
-            <span className="text-base font-bold text-foreground">Pipeline de Leads</span>
+            <span className="text-base font-bold text-foreground">Clientes</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <VistaTabsBar vista={vista} onCambio={setVista} segPendientes={segPendientes} />
+        <div className="flex flex-wrap items-center gap-2">
+          <VistaTabsBar
+            vista={vista}
+            onCambio={setVista}
+            segPendientes={segPendientes}
+            porActualizar={porActualizar}
+          />
           <Button
             onClick={() => navigate('/cotizar')}
             size="sm"
@@ -222,7 +240,7 @@ export function LeadsPipeline() {
             size="sm"
             className="gap-1.5"
           >
-            <Plus className="h-4 w-4" /> Nuevo lead
+            <Plus className="h-4 w-4" /> Nuevo cliente
           </Button>
         </div>
       </div>
@@ -266,20 +284,14 @@ export function LeadsPipeline() {
 
       {/* CONTENIDO */}
       <div className="px-5 py-5">
-        {vista === 'metricas' ? (
+        {vista === 'planilla' ? (
+          <PlanillaVista leads={leadsFiltrados} onAbrir={abrirDetalle} onRefresh={refresh} />
+        ) : vista === 'metricas' ? (
           <MetricasLeadsView vendedoras={vendedoras} />
         ) : vista === 'coaching' ? (
           <CoachingView />
         ) : vista === 'seguimientos' ? (
-          <SeguimientosView
-            leads={leads}
-            vendedoras={vendedoras}
-            onRefresh={refresh}
-            onAbrir={(id) => {
-              setDetalleId(id);
-              setDetalleOpen(true);
-            }}
-          />
+          <SeguimientosView leads={leads} vendedoras={vendedoras} onRefresh={refresh} onAbrir={abrirDetalle} />
         ) : vista === 'tabla' ? (
           <TablaVista
             leads={leadsFiltrados}
@@ -324,6 +336,7 @@ export function LeadsPipeline() {
           setDialogOpen(true);
         }}
         onDelete={handleEliminar}
+        onChanged={refresh}
       />
     </div>
   );

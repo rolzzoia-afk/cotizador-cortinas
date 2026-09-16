@@ -31,13 +31,20 @@ export default function KanbanVista({
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<LeadEstado | null>(null);
 
-  const porEstado = useMemo(() => {
+  // El Kanban es para lo que está en curso: las cotizaciones archivadas por
+  // falta de respuesta (la mayoría de la carga inicial) se ven en la Planilla.
+  const { porEstado, archivados } = useMemo(() => {
     const map: Record<LeadEstado, Lead[]> = {} as Record<LeadEstado, Lead[]>;
     for (const e of ESTADOS_ORDEN) map[e] = [];
+    let ocultos = 0;
     for (const l of leads) {
+      if (l.archivado) {
+        ocultos++;
+        continue;
+      }
       if (map[l.estado]) map[l.estado].push(l);
     }
-    return map;
+    return { porEstado: map, archivados: ocultos };
   }, [leads]);
 
   const vendedoraNombre = (id: string | null): string => {
@@ -57,6 +64,11 @@ export default function KanbanVista({
 
   return (
     <div className="overflow-x-auto pb-2">
+      {archivados > 0 && (
+        <p className="mb-2 text-xs text-muted-foreground">
+          {archivados} archivado{archivados === 1 ? '' : 's'} por falta de respuesta no se muestra{archivados === 1 ? '' : 'n'} acá: están en la Planilla.
+        </p>
+      )}
       <div className="flex gap-3" style={{ minWidth: 'max-content' }}>
         {ESTADOS_ORDEN.map((estado) => {
           const items = porEstado[estado] || [];

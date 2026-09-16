@@ -64,6 +64,40 @@ export type Lead = {
   // Metas / dinero
   monto: number | null;        // monto de la venta/cotización en CLP
   fecha_cierre: string | null; // cuándo pasó a 'ganado'
+  // Columnas de la planilla de seguimiento (el Excel del equipo comercial)
+  instagram: string | null;
+  region: string | null;
+  anuncio: string | null;       // qué anuncio lo trajo
+  mensaje: string | null;       // lo que pidió el cliente
+  llamada_por: string | null;   // nombres de las listas del engranaje de /ventas
+  cotizado_por: string | null;
+  visita_por: string | null;
+  numero_cotizacion: string | null; // lo mantiene la OT (otDetallada o numero_ot)
+  estado_cotizacion: EstadoCotizacion;
+  cotizacion_version: number;   // cuántas veces se envió (1 = enviada, ≥2 = actualizada)
+  origen_ot: boolean;           // la fila la creó una OT, no una persona
+  ultima_actividad_por: string | null;
+  ultima_actividad_tipo: string | null;
+};
+
+/** Qué pasa con el DOCUMENTO de la cotización (distinto del estado del cliente). */
+export type EstadoCotizacion = 'sin_enviar' | 'enviada' | 'por_actualizar' | 'actualizada';
+
+/** Por dónde se hizo un seguimiento. */
+export type Medio = 'llamada' | 'whatsapp' | 'mail' | 'instagram' | 'otro';
+
+export type LeadSeguimiento = {
+  id: string;
+  lead_id: string;
+  empresa_id: string;
+  n: number;              // correlativo del cliente: 1, 2, 3, 4…
+  etapa: number | null;   // etapa de la cadencia (1-3) o null si fue uno extra
+  fecha: string;
+  medio: Medio | null;
+  resultado: SeguimientoResultado;
+  nota: string | null;
+  registrado_por: string | null;
+  created_at: string;
 };
 
 export type Prioridad = 'alta' | 'media' | 'baja';
@@ -111,7 +145,8 @@ export type LeadActividadTipo =
   | 'conversion_ot'
   | 'edicion'
   | 'agente_ingreso'
-  | 'seguimiento';
+  | 'seguimiento'
+  | 'cotizacion';
 
 export type LeadActividad = {
   id: string;
@@ -135,6 +170,15 @@ export type LeadInput = {
   estado?: LeadEstado;
   presupuesto_rango?: string;
   comentarios?: string;
+  instagram?: string;
+  region?: string;
+  anuncio?: string;
+  mensaje?: string;
+  llamada_por?: string;
+  cotizado_por?: string;
+  visita_por?: string;
+  /** Solo se guarda si la fila no tiene OT: con OT, el monto lo manda la OT. */
+  monto?: number | null;
 };
 
 export const ESTADOS_ORDEN: LeadEstado[] = [

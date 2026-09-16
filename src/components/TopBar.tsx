@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 const links: Array<{ to: string; label: string }> = [
   { to: '/panel', label: 'Panel' },
   { to: '/ventas', label: 'Ventas' },
-  { to: '/leads', label: 'Leads' },
+  { to: '/leads', label: 'Clientes' },
   { to: '/inteligencia', label: 'Inteligencia' },
   // Telas, Bodega, Camionetas y Tubos ahora son submódulos de Inventario y se
   // llegan por su barra lateral. Sus rutas viejas siguen funcionando: redirigen.

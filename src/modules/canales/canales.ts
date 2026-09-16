@@ -63,6 +63,27 @@ export function opcionesCanal(
 }
 
 /**
+ * Opciones de un desplegable de personas del equipo (Llamada, Cotiza, Salida
+ * a visita): la lista del engranaje, sin repetir, y al final el nombre
+ * guardado si ya no está en la lista — sacar a alguien del equipo no puede
+ * borrar en silencio quién atendió a un cliente viejo.
+ */
+export function opcionesEquipo(
+  lista: readonly string[] | null | undefined,
+  guardado?: string | null,
+): string[] {
+  const out: string[] = [];
+  const vistos = new Set<string>();
+  for (const nombre of [...(lista ?? []), guardado ?? '']) {
+    const v = normalizarCanal(nombre);
+    if (!v || vistos.has(v.toUpperCase())) continue;
+    vistos.add(v.toUpperCase());
+    out.push(v);
+  }
+  return out;
+}
+
+/**
  * Lo que se guarda desde el desplegable: vacío = sin definir (no se escribe
  * un canal falso solo por llenar la celda).
  */
