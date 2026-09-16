@@ -5121,6 +5121,179 @@ export type Database = {
         }
         Relationships: []
       }
+      ots_costos: {
+        Row: {
+          auto: number
+          cobrado_con_iva: number
+          cobrado_neto: number
+          costo_con_fallas: number
+          costo_total: number
+          created_at: string
+          empresa_id: string
+          ganancia: number
+          ganancia_real: number
+          guardado_at: string
+          guardado_por: string | null
+          iva: number
+          largo_barra_m: number
+          mano_obra: number
+          margen: number | null
+          nota: string | null
+          numero_ot: string
+          ot_estado: string
+          ot_id: string
+          otros: number
+          perdida_fallas: number
+          sin_costo: Json
+          tag: number
+          total_aluminio: number
+          total_insumos: number
+          total_telas: number
+          version: number
+        }
+        Insert: {
+          auto?: number
+          cobrado_con_iva?: number
+          cobrado_neto?: number
+          costo_con_fallas?: number
+          costo_total?: number
+          created_at?: string
+          empresa_id: string
+          ganancia?: number
+          ganancia_real?: number
+          guardado_at?: string
+          guardado_por?: string | null
+          iva: number
+          largo_barra_m: number
+          mano_obra?: number
+          margen?: number | null
+          nota?: string | null
+          numero_ot: string
+          ot_estado: string
+          ot_id: string
+          otros?: number
+          perdida_fallas?: number
+          sin_costo?: Json
+          tag?: number
+          total_aluminio?: number
+          total_insumos?: number
+          total_telas?: number
+          version?: number
+        }
+        Update: {
+          auto?: number
+          cobrado_con_iva?: number
+          cobrado_neto?: number
+          costo_con_fallas?: number
+          costo_total?: number
+          created_at?: string
+          empresa_id?: string
+          ganancia?: number
+          ganancia_real?: number
+          guardado_at?: string
+          guardado_por?: string | null
+          iva?: number
+          largo_barra_m?: number
+          mano_obra?: number
+          margen?: number | null
+          nota?: string | null
+          numero_ot?: string
+          ot_estado?: string
+          ot_id?: string
+          otros?: number
+          perdida_fallas?: number
+          sin_costo?: Json
+          tag?: number
+          total_aluminio?: number
+          total_insumos?: number
+          total_telas?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ots_costos_guardado_por_fkey"
+            columns: ["guardado_por"]
+            isOneToOne: false
+            referencedRelation: "perfiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ots_costos_ot_id_fkey"
+            columns: ["ot_id"]
+            isOneToOne: true
+            referencedRelation: "ots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ots_costos_lineas: {
+        Row: {
+          cantidad: number
+          codigo: string | null
+          costo: number
+          costo_unitario: number | null
+          descripcion: string | null
+          empresa_id: string
+          fallas: number
+          fuente: string | null
+          id: string
+          merma: number
+          orden: number
+          ot_id: string
+          panos_colmena: number
+          perdida: number
+          referencia: string | null
+          tipo: string
+          unidad: string
+        }
+        Insert: {
+          cantidad?: number
+          codigo?: string | null
+          costo?: number
+          costo_unitario?: number | null
+          descripcion?: string | null
+          empresa_id: string
+          fallas?: number
+          fuente?: string | null
+          id?: string
+          merma?: number
+          orden: number
+          ot_id: string
+          panos_colmena?: number
+          perdida?: number
+          referencia?: string | null
+          tipo: string
+          unidad: string
+        }
+        Update: {
+          cantidad?: number
+          codigo?: string | null
+          costo?: number
+          costo_unitario?: number | null
+          descripcion?: string | null
+          empresa_id?: string
+          fallas?: number
+          fuente?: string | null
+          id?: string
+          merma?: number
+          orden?: number
+          ot_id?: string
+          panos_colmena?: number
+          perdida?: number
+          referencia?: string | null
+          tipo?: string
+          unidad?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ots_costos_lineas_ot_id_fkey"
+            columns: ["ot_id"]
+            isOneToOne: false
+            referencedRelation: "ots_costos"
+            referencedColumns: ["ot_id"]
+          },
+        ]
+      }
       perfiles: {
         Row: {
           activo: boolean | null
@@ -8087,6 +8260,51 @@ export type Database = {
           p_linea_id: string
         }
         Returns: Json
+      }
+      ot_costo_guardar: {
+        Args: {
+          p_esperado: Json
+          p_iva: number
+          p_lineas: Json
+          p_manual: Json
+          p_ot_id: string
+          p_sin_costo: Json
+        }
+        Returns: {
+          auto: number
+          cobrado_con_iva: number
+          cobrado_neto: number
+          costo_con_fallas: number
+          costo_total: number
+          created_at: string
+          empresa_id: string
+          ganancia: number
+          ganancia_real: number
+          guardado_at: string
+          guardado_por: string | null
+          iva: number
+          largo_barra_m: number
+          mano_obra: number
+          margen: number | null
+          nota: string | null
+          numero_ot: string
+          ot_estado: string
+          ot_id: string
+          otros: number
+          perdida_fallas: number
+          sin_costo: Json
+          tag: number
+          total_aluminio: number
+          total_insumos: number
+          total_telas: number
+          version: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "ots_costos"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       recepcion_abrir: {
         Args: {
