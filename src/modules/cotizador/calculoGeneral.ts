@@ -37,6 +37,7 @@ import {
 } from '@/modules/descuentos/reglas-mecanismo';
 import { descripcionTuberia, tuberiaCodigoCorto } from '@/modules/descuentos/reglas-tuberia';
 import { tiraCenefaOvalada, ubicPanoVentana } from '@/modules/descuentos/adicionales-cenefa';
+import { esGrupoDobleTela } from './fase0-dual';
 import { mecanismoParaPano } from '@/modules/descuentos/chips';
 import { opcionesMecanismoResolucion } from '@/modules/descuentos/reglas-mecanismo';
 import {
@@ -152,6 +153,8 @@ export type FilaCalculo = {
   producto: string;
   codInt: string;
   descripcion: string;
+  /** "DOBLE" cuando la fila junta las dos telas de un beeblack; si no, vacío. */
+  doble: string;
   ubic: string;
   colorAcc: string;
   cadena: string;
@@ -191,6 +194,7 @@ const IDENTIDAD: { key: keyof FilaCalculo; label: string }[] = [
   { key: 'producto', label: 'PRODUCTO' },
   { key: 'codInt', label: 'COD_IN' },
   { key: 'descripcion', label: 'DESCRIPCIÓN' },
+  { key: 'doble', label: 'DOBLE' },
   { key: 'ubic', label: 'UBIC.' },
   { key: 'colorAcc', label: 'COLOR ACCESORIOS' },
   { key: 'cadena', label: 'CADENA/CIERRE' },
@@ -219,6 +223,8 @@ export function construirCalculoGeneral(
     formulas?: FormulasFamilias;
     /** Reglas de tubería/mecanismo editadas en Admin (sin esto, las de fábrica). */
     reglas?: ReglasSeleccion;
+    /** Un beeblack doble en UNA fila con sus dos telas (ver `fusionarBeeblackDoble`). */
+    fusionarDobles?: boolean;
   },
 ): CalculoGeneral {
   const reglas = opts?.reglas ?? REGLAS_SELECCION_DEFAULT;
@@ -230,6 +236,9 @@ export function construirCalculoGeneral(
     // Bow window / en L / en U / triangular: el rótulo acompaña a la ubicación
     // en todas las filas de la ventana (ver la columna UBIC más abajo).
     const rotuloVentana = rotuloForma(v) ? `(${rotuloForma(v)})` : '';
+    // Se juntan las del mismo marco antes de pasarlas a la hoja: un beeblack
+    // doble sale en una sola fila.
+    const filasVentana: FilaCalculo[] = [];
     panos.forEach((p, i) => {
       const anchoM = parseFloat(String(p.ancho ?? 0)) || 0;
       const altoM = parseFloat(String(p.alto ?? v.alto ?? 0)) || 0;
@@ -416,7 +425,7 @@ export function construirCalculoGeneral(
         (p.mecanismo as string) ||
         '';
 
-      filas.push({
+      filasVentana.push({
         piezaId: `${v.id}_${i}`,
         codSec: v.categoria || '',
         // Descripción larga del tubo ("E02-TUBO 1.2 / Ø 38 mm"). El código
@@ -461,6 +470,7 @@ export function construirCalculoGeneral(
         producto: tela.producto || '',
         codInt: tela.codInt || '',
         descripcion: catalogo[tela.codInt]?.descripcion || tela.descripcion || '',
+        doble: '',
         // Ventana en ángulo: el taller tiene que ver que estos paños arman UNA
         // sola ventana, no cortinas sueltas que se instalan por separado.
         ubic: [ubicPanoVentana(v.ubicacion || '', i, panos.length), rotuloVentana]
@@ -479,6 +489,20 @@ export function construirCalculoGeneral(
         despiece,
       });
     });
+
+    // Las dos telas de un beeblack doble son UNA cortina: una fila, las dos
+    // telas separadas por «/» y la columna DOBLE. El inventario NO pide esto:
+    // ahí cada tela se cuenta aparte.
+    const esBeeDoble =
+      esCategoriaBeeblack(v.categoria) &&
+      filasVentana.length > 1 &&
+      esGrupoDobleTela(v.categoria || '', panos.length, reglas.tipos);
+    if (opts?.fusionarDobles && esBeeDoble) {
+      const ubicVentana = [v.ubicacion || '', rotuloVentana].filter(Boolean).join(' ');
+      filas.push(fusionarBeeblackDoble(filasVentana, ubicVentana));
+    } else {
+      filas.push(...filasVentana);
+    }
   }
 
   // Columnas de identidad con datos.
@@ -564,11 +588,16 @@ export type VarianteHojaCalculo = {
   conjuntoPanos?: boolean;
   /** En filas dúo, reemplaza la columna ALTO por ALTO MESA DE CORTE (tela doblada). */
   altoMesaCorteDuo?: boolean;
+  /** Un beeblack doble se muestra en UNA fila con sus dos telas (ver
+   *  `fusionarBeeblackDoble`). Las hojas que se imprimen sí; el INVENTARIO no,
+   *  que necesita una fila por tela para contar. */
+  fusionarDobles?: boolean;
 };
 
 export const VARIANTE_CALCULO_GENERAL: VarianteHojaCalculo = {
   titulo: 'CÁLCULO GENERAL',
   archivo: 'CalculoGeneral',
+  fusionarDobles: true,
 };
 
 /**
@@ -601,9 +630,11 @@ const SIN_DIMENSIONADO_OSCURIDAD = new Set([
   'PERFIL LATERAL', 'PERFIL BASE', 'PERFIL SUPERIOR', 'TIPO DE SOFT.LIGHT',
 ]);
 
-// BEEBLACK: la mesa de tela solo ve el paño de acordeón (ancho/alto de tela) y
-// las LAMAS, que indican dónde cortar el ancho. Perfiles y manillas son aluminio
-// de taller; los separadores ya se filtran por prefijo en `sinDespiece`.
+// BEEBLACK: lo que es ALUMINIO DE TALLER, no tela. Se usa en dos lados: el
+// Dimensionado no lo muestra (la mesa de tela solo ve el paño de acordeón y las
+// LAMAS, que indican dónde cortar el ancho) y, en un doble, es lo que aporta
+// SOLO el primer paño. Los separadores ya se filtran por prefijo en
+// `sinDespiece`.
 const SIN_DIMENSIONADO_BEEBLACK = new Set([
   'PERFIL SUPERIOR (ANCHO)',
   'PERFIL INFERIOR (ANCHO)',
@@ -612,6 +643,65 @@ const SIN_DIMENSIONADO_BEEBLACK = new Set([
   'MANILLA IZQ (ALTO)',
   'MANILLA DER (ALTO)',
 ]);
+
+/** Lo anterior + la variante: todo lo que en un doble aporta SOLO el 1.er paño. */
+const ESTRUCTURA_BEEBLACK = new Set([...SIN_DIMENSIONADO_BEEBLACK, 'TIPO DE BEEBLACK']);
+
+/** Dos valores de la misma columna: uno solo si coinciden, «a / b» si no. */
+function unirCelda(a: unknown, b: unknown): string | number {
+  // Los números se escriben como en el resto de la hoja (con coma): unirlos con
+  // `String()` dejaba «200.3 / 196.6» al lado de un «292,3».
+  const texto = (v: unknown) =>
+    v === undefined || v === null ? '' : typeof v === 'number' ? num(v) : String(v).trim();
+  const x = texto(a);
+  const y = texto(b);
+  if (!x) return (b as string | number) ?? '';
+  if (!y || x === y) return (a as string | number) ?? '';
+  return `${x} / ${y}`;
+}
+
+/**
+ * Un beeblack doble es UNA cortina de dos telas en el mismo marco, así que va
+ * en UNA fila con las dos telas separadas por «/» y la columna DOBLE marcada
+ * (dueño, 2026-09-15, revisando la OT #3238).
+ *
+ * Qué aporta cada paño:
+ * - La ESTRUCTURA (perfiles, manillas, variante) es del PRIMERO, que es el que
+ *   la lleva: la receta `|2T` de la segunda tela no paga riel ni agarradera.
+ * - Lo demás se une celda a celda. Las dos telas de un mismo marco deberían
+ *   medir igual y entonces queda UN número; si no coinciden —pasa cuando los
+ *   dos paños quedaron con variantes distintas, que es un error de Fase 2— se
+ *   ven LAS DOS en vez de perderse una en silencio.
+ *
+ * No la usa el INVENTARIO: ahí cada tela tiene que contarse por separado.
+ */
+export function fusionarBeeblackDoble(filas: FilaCalculo[], ubic: string): FilaCalculo {
+  const [primera, ...resto] = filas;
+  if (resto.length === 0) return primera;
+
+  const despiece = new Map(primera.despiece);
+  for (const otra of resto) {
+    for (const [col, valor] of otra.despiece) {
+      if (ESTRUCTURA_BEEBLACK.has(col)) continue;
+      despiece.set(col, unirCelda(despiece.get(col), valor));
+    }
+  }
+  const unirCampo = (campo: 'producto' | 'codInt' | 'descripcion' | 'conjunto'): string =>
+    String(resto.reduce<string | number>((acc, f) => unirCelda(acc, f[campo]), primera[campo]));
+
+  return {
+    ...primera,
+    producto: unirCampo('producto'),
+    codInt: unirCampo('codInt'),
+    descripcion: unirCampo('descripcion'),
+    // Las letras de «cortar junto» son de cada tela: son dos piezas distintas.
+    conjunto: unirCampo('conjunto'),
+    doble: 'DOBLE',
+    // Sin el sufijo -G1/-G2: ya no hay dos paños que distinguir.
+    ubic,
+    despiece,
+  };
+}
 
 export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
   titulo: 'DIMENSIONADO',
@@ -626,6 +716,7 @@ export const VARIANTE_DIMENSIONADO: VarianteHojaCalculo = {
     SIN_DIMENSIONADO_BEEBLACK.has(label),
   conjuntoPanos: true,
   altoMesaCorteDuo: true,
+  fusionarDobles: true,
 };
 
 /** Aplica la variante a las columnas (puro, para test). */

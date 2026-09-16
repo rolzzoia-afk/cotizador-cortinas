@@ -60,6 +60,12 @@ const ALLOWED_ORIGINS = (Deno.env.get("ALLOWED_ORIGINS") ??
 
 export function corsFor(origin: string | null) {
   const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  // Un origen fuera de la lista no produce ningún error acá: el navegador
+  // simplemente descarta la respuesta y muestra «failed to send a request»,
+  // sin decir nunca desde dónde venía. Anotarlo es la única forma de saberlo.
+  if (origin && origin !== allowed) {
+    console.log(`CORS: origen NO autorizado "${origin}" — agrégalo a ALLOWED_ORIGINS`);
+  }
   return {
     "Access-Control-Allow-Origin": allowed,
     "Vary": "Origin",

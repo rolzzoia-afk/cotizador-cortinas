@@ -361,7 +361,11 @@ export function calcularBOM(
     if (esCategoriaBeeblack(categoria) && (row.panoIndex ?? 0) === 0) {
       for (const it of insumosBeeblackDeCortina(
         colorAccesoriosDePano(p, ventanaColor),
-        beeblackEsDoble(p),
+        // Cuántos paños tiene la ventana, no la marca `dual`: en el beeblack esa
+        // marca no se persiste y llega en `false` aunque la cortina sea doble
+        // (OT #3238). Sin el total de paños, un doble pedía la ferretería de una
+        // sola tela y al taller le faltaba la mitad.
+        beeblackEsDoble(p, v?.panos?.length),
         v ? cordonBeeblackDePano(v, { ...p, ancho: anchoM }, formulas) : 0,
       )) {
         add(

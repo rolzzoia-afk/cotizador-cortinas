@@ -600,7 +600,7 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     expect(aoa[1][enc.indexOf('SEPARADOR (DER)')]).toBe('');
   });
 
-  it('doble (screen + blackout): una sola estructura, pero la manilla de CADA tela', () => {
+  it('doble (screen + blackout): UNA estructura y nada más — ni perfiles ni manilla en la 2.ª tela', () => {
     const v = ventanaBeeblack(2, 1.3, 'INTERNO');
     v.panos = [
       { ...v.panos[0], dual: true, codInt: 'SC 64' },
@@ -609,28 +609,44 @@ describe('generarOrdenesOptimizador — BEEBLACK', () => {
     const { aoa } = generarOrdenesOptimizador('888', [v]);
     expect(aoa).toHaveLength(3); // encabezado + 2 paños
     expect(aoa[1][idxPerfilSupAncho]).toBe(194.3);
+    expect(aoa[1][idxManillaIzq]).toBe(125);
     expect(aoa[2][idxPerfilSupAncho]).toBe(''); // no repite los perfiles
     expect(aoa[2][2]).toBe('BK 18'); // COD_INT: cada paño con su tela
-    // La manilla es POR TELA y su toggle vive en el paño: la del blackout se
-    // perdía porque el 2º paño descartaba todos sus cortes.
-    expect(aoa[2][idxManillaIzq]).toBe(125);
+    // Las dos manillas son del PRIMER paño: la receta `|2T` de la segunda tela
+    // no lleva la agarradera SML10, así que cortarla sería material que nadie
+    // compró (dueño, OT #3238).
+    expect(aoa[2][idxManillaIzq]).toBe('');
   });
 
-  it('el 2º paño con la manilla APAGADA a mano no la corta', () => {
+  it('OT #3238: el 2.º paño no repite nada aunque `dual` venga en false', () => {
+    // En el beeblack la marca `dual` NO se persiste —el doble se deduce del
+    // grupo, ver `esGrupoDobleTela`— y en producción llegaba `false` en TODOS
+    // los segundos paños. La hoja mandaba a cortar una manilla y un juego de
+    // perfiles de más por cada cortina doble: 9 manillas donde iban 6.
     const v = ventanaBeeblack(2, 1.3, 'INTERNO');
     v.panos = [
-      { ...v.panos[0], dual: true, codInt: 'SC 64' },
+      { ...v.panos[0], dual: false, codInt: 'BEE-BK05' },
       {
         ...v.panos[0],
-        dual: true,
-        codInt: 'BK 18',
-        beeblackManillaIzq: false,
-        beeblackManillaDer: false,
+        dual: false,
+        codInt: 'BEE-TR01',
+        // "Sin decidir", como lo guarda Fase 2 cuando nadie toca la casilla:
+        // en un beeblack simple eso PRENDE la izquierda (es estructura).
+        beeblackManillaIzq: undefined,
+        beeblackManillaDer: undefined,
       },
     ] as Pano[];
     const { aoa } = generarOrdenesOptimizador('888', [v]);
     expect(aoa[1][idxManillaIzq]).toBe(125);
     expect(aoa[2][idxManillaIzq]).toBe('');
+    expect(aoa[2][idxPerfilSupAncho]).toBe('');
+  });
+
+  it('el beeblack SIMPLE no se ve afectado: sigue con su estructura completa', () => {
+    const { aoa } = generarOrdenesOptimizador('888', [ventanaBeeblack(2, 1.3, 'INTERNO')]);
+    expect(aoa).toHaveLength(2);
+    expect(aoa[1][idxPerfilSupAncho]).toBe(194.3);
+    expect(aoa[1][idxManillaIzq]).toBe(125);
   });
 
   it('sin tocar ninguna casilla la manilla sale igual: es estructura', () => {
